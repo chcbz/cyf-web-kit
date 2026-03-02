@@ -9,6 +9,7 @@ export interface HttpOptions {
   autoLoading?: boolean
   needAuth?: boolean
   responseType?: 'json' | 'stream'
+  timeout?: number
   onSuccess?: (data: any, response: any) => void
   onError?: (errorMessage: string, error: any) => void
   onFinally?: () => void

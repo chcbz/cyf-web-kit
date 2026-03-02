@@ -47,6 +47,7 @@ function createTimeoutSignal (milliseconds) {
  * @param {boolean} options.autoLoading - 是否自动管理loading状态，默认为true
  * @param {boolean} options.needAuth - 是否需要认证，默认为true
  * @param {string} options.responseType - 响应类型，支持 'json'（默认）、'text'（文本）和 'stream'（流式响应）
+ * @param {number} options.timeout - 请求超时时间（毫秒），默认为环境变量 VITE_HTTP_TIMEOUT 或 60000（60秒）
  * @param {Function} options.onSuccess - 成功回调
  * @param {Function} options.onError - 错误回调
  * @param {Function} options.onFinally - 最终回调
@@ -83,6 +84,7 @@ export function useHttp (options = {}) {
       autoLoading,
       needAuth,
       responseType = 'json',
+      timeout,
       onSuccess,
       onError,
       onFinally,
@@ -143,7 +145,11 @@ export function useHttp (options = {}) {
       }
 
       // 使用 fetch API 替代 axios，特别是为了支持 stream
-      timeoutSignal = createTimeoutSignal(180000) // 180秒超时
+      // 计算超时时间：优先使用选项中的timeout，其次使用环境变量VITE_HTTP_TIMEOUT，最后使用默认值60000
+      const timeoutValue = timeout || 
+                          (import.meta.env.VITE_HTTP_TIMEOUT ? parseInt(import.meta.env.VITE_HTTP_TIMEOUT, 10) : null) || 
+                          60000
+      timeoutSignal = createTimeoutSignal(timeoutValue)
       const fetchConfig = {
         method: config.method,
         headers: config.headers,
