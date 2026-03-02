@@ -396,7 +396,7 @@ const sendMessage = async () => {
       {
         responseType: 'stream',
         autoLoading: false,
-        timeout: 600000,
+        timeout: 1800000,
         onStream: (eventData) => {
           console.log('Stream data received:', eventData);
           processBotResponse(eventData);
