@@ -66,7 +66,7 @@
       <div class="chat-input">
         <var-input
           v-model="inputMessage"
-          @keyup.enter="handleSendOrCancel"
+          @keydown.enter="handleEnterKey"
           placeholder="给我发消息"
           textarea
           rows="3"
@@ -485,6 +485,17 @@ const scrollToBottom = () => {
       messagesRef.value.scrollTop = messagesRef.value.scrollHeight;
     }
   });
+};
+
+const handleEnterKey = (event) => {
+  // 如果按下了 Shift 键，允许换行
+  if (event.shiftKey) {
+    return; // 允许默认行为（换行）
+  }
+  
+  // 否则，阻止默认行为（换行）并发送消息
+  event.preventDefault();
+  handleSendOrCancel();
 };
 
 const handleSendOrCancel = () => {
