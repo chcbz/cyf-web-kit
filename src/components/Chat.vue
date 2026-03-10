@@ -274,6 +274,9 @@ const loadConversation = async (id) => {
               timestamp: msg.metadata.timestamp || new Date().getTime(),
               conversationId: id
             }));
+            
+            // 加载完成后自动滚动到底部
+            scrollToBottom();
           } else {
             // 如果服务端没有消息，清空消息
             messages.value = [];
