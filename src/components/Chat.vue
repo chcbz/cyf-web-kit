@@ -170,6 +170,7 @@ const showSidebar = ref(false);
 const randomPhrase = ref('输入您的问题或想法，我将尽力为您解答'); // 默认文本
 const userScrolledUp = ref(false); // 用户是否手动向上滚动
 const lastScrollTop = ref(0); // 上一次滚动位置
+const isMobile = ref(false); // 是否为移动设备
 
 // 工具函数
 const utilStore = useUtilStore();
@@ -496,7 +497,12 @@ const handleEnterKey = (event) => {
     return; // 允许默认行为（换行）
   }
   
-  // 否则，阻止默认行为（换行）并发送消息
+  // 如果是移动设备，允许换行而不触发发送
+  if (isMobile.value) {
+    return; // 允许默认行为（换行）
+  }
+  
+  // 否则（桌面设备且没有按Shift键），阻止默认行为（换行）并发送消息
   event.preventDefault();
   handleSendOrCancel();
 };
@@ -580,9 +586,26 @@ watch(
   }
 );
 
+// 检测是否为移动设备
+const checkIsMobile = () => {
+  // 使用768px作为移动端断点，与CSS媒体查询保持一致
+  isMobile.value = window.innerWidth <= 768;
+};
+
+// 监听窗口大小变化
+const handleResize = () => {
+  checkIsMobile();
+};
+
 // 生命周期钩子
 onMounted(() => {
   initializeApp();
+  
+  // 初始化屏幕大小检测
+  checkIsMobile();
+  
+  // 添加窗口大小变化监听器
+  window.addEventListener('resize', handleResize);
   
   // 添加滚动事件监听器
   const setupScrollListener = () => {
@@ -600,6 +623,9 @@ onUnmounted(() => {
   if (messagesRef.value) {
     messagesRef.value.removeEventListener('scroll', handleScroll);
   }
+  
+  // 移除窗口大小变化监听器
+  window.removeEventListener('resize', handleResize);
 });
 </script>
 
