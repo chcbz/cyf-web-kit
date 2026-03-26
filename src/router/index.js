@@ -134,5 +134,5 @@ export default [
     path: '/hello',
     name: 'HellowList',
     component: () => import('@/components/HelloWorld')
-  },
+  }
 ]

@@ -1,11 +1,11 @@
 <template>
   <var-action-sheet
-    :actions="actionSheetActions"
     v-model:show="showActionSheet"
+    :actions="actionSheetActions"
     @select="handleActionSelect"
     @update:show="onActionSheetShowChange"
   />
-  <div class="calendar-container" v-if="showCalendar">
+  <div v-if="showCalendar" class="calendar-container">
     <div class="calendar-header">
       <var-button text @click="prevMonth">
         <var-icon name="chevron-left" />
@@ -41,23 +41,23 @@
           <div class="day-number">{{ day.day }}</div>
           <div v-if="day.taskCount > 0" class="task-indicator">
             <div v-if="day.taskCount > 0" class="task-type-dots">
-              <span 
-                v-if="day.typeCounts.notify > 0" 
+              <span
+                v-if="day.typeCounts.notify > 0"
                 class="type-dot type-notify"
                 :style="{ opacity: Math.min(day.typeCounts.notify / 3, 1) }"
               ></span>
-              <span 
-                v-if="day.typeCounts.target > 0" 
+              <span
+                v-if="day.typeCounts.target > 0"
                 class="type-dot type-target"
                 :style="{ opacity: Math.min(day.typeCounts.target / 3, 1) }"
               ></span>
-              <span 
-                v-if="day.typeCounts.repayment > 0" 
+              <span
+                v-if="day.typeCounts.repayment > 0"
                 class="type-dot type-repayment"
                 :style="{ opacity: Math.min(day.typeCounts.repayment / 3, 1) }"
               ></span>
-              <span 
-                v-if="day.typeCounts.income > 0" 
+              <span
+                v-if="day.typeCounts.income > 0"
                 class="type-dot type-income"
                 :style="{ opacity: Math.min(day.typeCounts.income / 3, 1) }"
               ></span>
@@ -69,7 +69,7 @@
   </div>
 
   <!-- 任务列表区域 -->
-  <div class="tasks-section" v-if="listPlan.length > 0">
+  <div v-if="listPlan.length > 0" class="tasks-section">
     <div class="tasks-header">
       <h3>{{ formatSelectedDate }}</h3>
       <span class="tasks-count">{{ listPlan.length }} 个任务</span>
@@ -115,24 +115,29 @@
   </div>
 
   <!-- 任务详情弹窗 -->
-  <var-dialog v-model:show="taskDetailShow" :title="currentTask?.name" :confirm-button="false" :cancel-button="false">
-    <div class="task-detail-content" v-if="currentTask">
+  <var-dialog
+    v-model:show="taskDetailShow"
+    :title="currentTask?.name"
+    :confirm-button="false"
+    :cancel-button="false"
+  >
+    <div v-if="currentTask" class="task-detail-content">
       <div class="detail-section">
         <h4>任务信息</h4>
         <div class="detail-item">
           <span class="detail-label">任务类型:</span>
           <span class="detail-value">{{ typeDict(currentTask.type) }}</span>
         </div>
-        <div class="detail-item" v-if="currentTask.description">
+        <div v-if="currentTask.description" class="detail-item">
           <span class="detail-label">描述:</span>
           <span class="detail-value">{{ currentTask.description }}</span>
         </div>
-        <div class="detail-item" v-if="currentTask.amount > 0">
+        <div v-if="currentTask.amount > 0" class="detail-item">
           <span class="detail-label">金额:</span>
           <span class="detail-value amount">￥{{ formatAmount(currentTask.amount) }}</span>
         </div>
       </div>
-      
+
       <div class="detail-section">
         <h4>时间信息</h4>
         <div class="detail-item">
@@ -141,12 +146,12 @@
             {{ formatTaskTime(currentTask, true) }}
           </span>
         </div>
-        <div class="detail-item" v-if="taskDetailData.periodText">
+        <div v-if="taskDetailData.periodText" class="detail-item">
           <span class="detail-label">重复周期:</span>
           <span class="detail-value">{{ taskDetailData.periodText }}</span>
         </div>
       </div>
-      
+
       <div class="detail-actions">
         <var-button type="primary" block @click="taskDetailShow = false">
           关闭
@@ -217,10 +222,10 @@ const calendarDays = computed(() => {
   const endOfMonth = currentDate.value.endOf('month')
   const startDay = startOfMonth.day()
   const daysInMonth = endOfMonth.date()
-  
+
   const daysArray = []
   const today = dayjs().format('YYYY-MM-DD')
-  
+
   // 上个月的最后几天
   const prevMonthDays = startDay
   for (let i = prevMonthDays - 1; i >= 0; i--) {
@@ -229,7 +234,7 @@ const calendarDays = computed(() => {
     const dayTasks = getTasksForDate(dateStr)
     daysArray.push(createDayObject(date, dateStr, today, dayTasks, false))
   }
-  
+
   // 当前月的天数
   for (let i = 1; i <= daysInMonth; i++) {
     const date = startOfMonth.date(i)
@@ -237,7 +242,7 @@ const calendarDays = computed(() => {
     const dayTasks = getTasksForDate(dateStr)
     daysArray.push(createDayObject(date, dateStr, today, dayTasks, true))
   }
-  
+
   // 下个月的前几天
   const remainingCells = 42 - daysArray.length
   for (let i = 1; i <= remainingCells; i++) {
@@ -246,7 +251,7 @@ const calendarDays = computed(() => {
     const dayTasks = getTasksForDate(dateStr)
     daysArray.push(createDayObject(date, dateStr, today, dayTasks, false))
   }
-  
+
   return daysArray
 })
 
@@ -259,11 +264,11 @@ const createDayObject = (date, dateStr, today, dayTasks, isCurrentMonth) => {
     repayment: dayTasks.filter(task => task.type === 3).length,
     income: dayTasks.filter(task => task.type === 4).length
   }
-  
+
   // 向后兼容：payCount 和 notifyCount
   const payCount = typeCounts.target + typeCounts.repayment + typeCounts.income
   const notifyCount = typeCounts.notify
-  
+
   return {
     date: dateStr,
     day: date.date(),
@@ -280,8 +285,8 @@ const getTasksForDate = (dateStr) => {
   return monthTasks.value.filter(task => {
     try {
       return dayjs(task.executeTime).format('YYYY-MM-DD') === dateStr
-    } catch (error) {
-      console.warn('日期解析错误:', task.executeTime, error)
+    } catch (_error) {
+      console.warn('日期解析错误:', task.executeTime, _error)
       return false
     }
   })
@@ -305,7 +310,7 @@ const selectCalendarDay = (day) => {
     fetchTasks()
     return
   }
-  
+
   selectedDate.value = day.date
   const dayTasks = getTasksForDate(day.date)
   listPlan.value = dayTasks
@@ -319,32 +324,32 @@ const fetchTasks = async () => {
 
     taskApi.search('/item/search', {
       search: {
-        jiacn: jiacn,
+        jiacn,
         timeStart: firstDay.valueOf(),
         timeEnd: lastDay.valueOf()
       }
     }, {
       onSuccess: (data) => {
         monthTasks.value = Array.isArray(data.data) ? data.data : []
-        
+
         // 更新选中日期的任务列表
         const dayTasks = getTasksForDate(selectedDate.value)
         listPlan.value = dayTasks
       },
-      onError: (error) => {
-        console.error('获取任务失败:', error)
+      onError: (_error) => {
+        console.error('获取任务失败:', _error)
         monthTasks.value = []
         listPlan.value = []
       }
     })
-  } catch (error) {
-    console.error('任务请求异常:', error)
+  } catch (_error) {
+    console.error('任务请求异常:', _error)
   }
 }
 
 const doShowDetail = async (item) => {
   currentTask.value = item
-  
+
   try {
     const data = await taskApi.getById('/get', item.planId)
     if (data?.data) {
@@ -354,13 +359,13 @@ const doShowDetail = async (item) => {
         endTime: data.data.endTime
       }
     }
-  } catch (error) {
-    console.warn('获取任务详情失败:', error)
+  } catch (_error) {
+    console.warn('获取任务详情失败:', _error)
     taskDetailData.value = {
       periodText: item.crond || periodMap[item.period] || '一次性任务'
     }
   }
-  
+
   taskDetailShow.value = true
 }
 
@@ -393,13 +398,13 @@ const formatTaskTime = (task, full = false) => {
       // 通知任务显示时间段
       const start = dayjs(taskDetailData.value.startTime || task.executeTime)
       const end = dayjs(taskDetailData.value.endTime || task.executeTime)
-      
+
       if (full) {
         return `${start.format('YYYY-MM-DD HH:mm')} ~ ${end.format('YYYY-MM-DD HH:mm')}`
       }
       return `${start.format('HH:mm')}~${end.format('HH:mm')}`
     }
-  } catch (error) {
+  } catch {
     return '时间未知'
   }
 }
@@ -446,7 +451,7 @@ onMounted(() => {
   globalStore.setTitle(t('app.title'))
   globalStore.setShowBack(false)
   globalStore.setShowMore(true)
-  
+
   fetchTasks()
 })
 </script>
@@ -797,19 +802,19 @@ onMounted(() => {
     margin: 12px;
     padding: 16px;
   }
-  
+
   .calendar-days {
     gap: 6px;
   }
-  
+
   .day-number {
     font-size: 13px;
   }
-  
+
   .tasks-section {
     min-height: 160px;
   }
-  
+
   .tasks-header {
     padding: 16px 16px 12px;
   }

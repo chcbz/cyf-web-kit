@@ -12,12 +12,12 @@
     </div>
     <var-list class="options-list">
       <var-button
-        class="option-button"
         v-for="(item, i) in question.items"
         :key="item.opt"
-        @click="toTick(item.opt)"
+        class="option-button"
         block
         ripple
+        @click="toTick(item.opt)"
       >
         <span class="option-label">{{ opts[i] }}.</span>
         <span class="option-content">{{ item.content }}</span>
@@ -27,47 +27,56 @@
 </template>
 
 <script>
-import { useGlobalStore } from '../stores/global';
-import { Dialog } from '@varlet/ui';
-import { voteApi } from '../composables/useHttp';
+import { useGlobalStore } from '../stores/global'
+import { Dialog } from '@varlet/ui'
+import { voteApi } from '../composables/useHttp'
 
 export default {
+  data() {
+    return {
+      question: {},
+      showOpMenu: false,
+      opts: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'],
+      totalNum: 0,
+      rightNum: 0
+    }
+  },
   created() {
-    this.globalStore = useGlobalStore();
-    this.globalStore.setTitle(this.$t('vote.title'));
-    this.globalStore.setShowBack(false);
-    this.globalStore.setShowMore(false);
-    var jiacn = this.globalStore.getJiacn;
-    const _this = this;
-    
+    this.globalStore = useGlobalStore()
+    this.globalStore.setTitle(this.$t('vote.title'))
+    this.globalStore.setShowBack(false)
+    this.globalStore.setShowMore(false)
+    const jiacn = this.globalStore.getJiacn
+    const _this = this
+
     // 使用 voteApi 替换 $http
     voteApi.get('/get/random', {
-        jiacn: jiacn
+      jiacn
     }, {
       onSuccess: (data) => {
-        _this.question = data.data;
-        for (var i = 0; i < _this.question.items.length; i++) {
-          _this.totalNum += _this.question.items[i].num;
+        _this.question = data.data
+        for (let i = 0; i < _this.question.items.length; i++) {
+          _this.totalNum += _this.question.items[i].num
           if (_this.question.items[i].tick === 1) {
-            _this.rightNum = _this.question.items[i].num;
+            _this.rightNum = _this.question.items[i].num
           }
         }
       }
-    });
+    })
   },
   methods: {
     onClickOpMenu(key, item) {
-      console.log(item);
+      console.log(item)
     },
     toTick(opt) {
-      var jiacn = this.globalStore.getJiacn;
-      const _this = this;
-      
+      const jiacn = this.globalStore.getJiacn
+      const _this = this
+
       // 使用 voteApi 替换 $http
       voteApi.update('/tick', {
-        jiacn: jiacn,
+        jiacn,
         questionId: this.question.id,
-        opt: opt
+        opt
       }, {
         onSuccess: (data) => {
           if (data.data) {
@@ -78,9 +87,9 @@ export default {
               }),
               confirmButtonText: _this.$t('app.confirm'),
               onConfirm: () => {
-                _this.$router.go(0);
+                _this.$router.go(0)
               }
-            });
+            })
           } else {
             Dialog({
               title: _this.$t('app.alert'),
@@ -88,22 +97,13 @@ export default {
                 opt: _this.question.opt
               }),
               confirmButtonText: _this.$t('app.confirm')
-            });
+            })
           }
         }
-      });
+      })
     }
-  },
-  data() {
-    return {
-      question: {},
-      showOpMenu: false,
-      opts: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'],
-      totalNum: 0,
-      rightNum: 0
-    };
   }
-};
+}
 </script>
 <style scoped>
 .vote-tick-container {

@@ -1,17 +1,17 @@
 <template>
   <div class="task-list-container">
-    <var-action-sheet 
-      :actions="opMenu" 
-      v-model:show="showOpMenu" 
+    <var-action-sheet
+      v-model:show="showOpMenu"
+      :actions="opMenu"
       @select="onClickOpMenu"
     />
-    
-    <div class="tasks-section" v-if="list.length > 0">
+
+    <div v-if="list.length > 0" class="tasks-section">
       <div class="tasks-header">
         <h3>{{ t('app.task_list') }}</h3>
         <span class="tasks-count">{{ list.length }} 个任务</span>
       </div>
-      
+
       <div class="tasks-list-container">
         <var-list>
           <var-cell
@@ -57,23 +57,21 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useGlobalStore } from '../stores/global'
-import { useApiStore } from '../stores/api'
 import { useUtilStore } from '../stores/util'
 import dayjs from 'dayjs'
-import { Dialog } from '@varlet/ui';
+import { Dialog } from '@varlet/ui'
 import { taskApi } from '../composables/useHttp'
 
-// 路由器
-const router = useRouter()
+// 路由器 (预留)
+// const router = useRouter()
 const { t } = useI18n()
 
 // Pinia stores
 const globalStore = useGlobalStore()
-const apiStore = useApiStore()
+// const apiStore = useApiStore() // 预留
 const utilStore = useUtilStore()
 
 // 响应式数据
@@ -86,18 +84,18 @@ const showOpMenu = ref(false)
 const selectId = ref(0)
 const currentTask = ref(null)
 
-// 常量
-const periodMap = {
-  0: '长期',
-  1: '每年',
-  2: '每月',
-  3: '每周',
-  5: '每日',
-  11: '每小时',
-  12: '每分钟',
-  13: '每秒',
-  6: '指定日期'
-}
+// 常量 (预留)
+// const periodMap = {
+//   0: '长期',
+//   1: '每年',
+//   2: '每月',
+//   3: '每周',
+//   5: '每日',
+//   11: '每小时',
+//   12: '每分钟',
+//   13: '每秒',
+//   6: '指定日期'
+// }
 
 // 方法
 const doShowOpMenu = (item) => {
@@ -130,7 +128,7 @@ const formatTaskTime = (task) => {
   try {
     const start = dayjs(utilStore.fromTimeStamp(task.startTime))
     const end = dayjs(utilStore.fromTimeStamp(task.endTime))
-    
+
     if (task.type > 1) {
       // 支付任务显示执行时间
       return start.format('YYYY-MM-DD HH:mm')
@@ -138,7 +136,7 @@ const formatTaskTime = (task) => {
       // 通知任务显示时间段
       return `${start.format('YYYY-MM-DD HH:mm')} ~ ${end.format('YYYY-MM-DD HH:mm')}`
     }
-  } catch (error) {
+  } catch {
     return '时间未知'
   }
 }
@@ -238,10 +236,10 @@ const onClickOpMenu = (action) => {
 const fetchTasks = () => {
   const jiacn = globalStore.getJiacn
   const now = utilStore.toTimeStamp(new Date())
-  
+
   taskApi.search('/search', {
     search: {
-      jiacn: jiacn,
+      jiacn,
       status: 1,
       endTimeStart: now
     }
@@ -261,7 +259,7 @@ onMounted(() => {
   globalStore.setTitle(t('app.task_list'))
   globalStore.setShowBack(true)
   globalStore.setShowMore(false)
-  
+
   fetchTasks()
 })
 </script>
@@ -388,11 +386,11 @@ onMounted(() => {
   .task-list-container {
     padding: 12px;
   }
-  
+
   .tasks-header {
     padding: 16px 16px 10px;
   }
-  
+
   .tasks-header h3 {
     font-size: 15px;
   }

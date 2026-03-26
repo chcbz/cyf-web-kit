@@ -4,7 +4,10 @@
  */
 
 import { ref } from 'vue'
-import { useHttp, taskApi, phraseApi } from './useHttp'
+import { useHttp, phraseApi } from './useHttp'
+import { useGlobalStore } from '../stores/global'
+
+const globalStore = useGlobalStore()
 
 // 示例 1: 基本用法
 export function useTaskList () {
@@ -41,13 +44,13 @@ export function usePhraseOperations () {
     loading: phraseLoading,
     error: phraseError,
     data: phraseData,
-    execute: getRandomPhrase
+    execute: _getRandomPhrase
   } = useHttp()
 
   const {
     loading: voteLoading,
     error: voteError,
-    execute: submitVote
+    execute: _submitVote
   } = useHttp()
 
   const loadRandomPhrase = async () => {
@@ -141,7 +144,7 @@ export function useUserProfile () {
       console.log('Profile loaded successfully:', responseData)
       // 可以在这里更新全局状态或其他操作
     },
-    onError: (errorMessage, error) => {
+    onError: (errorMessage, _error) => {
       console.error('Failed to load profile:', errorMessage)
       // 可以在这里显示错误提示
     },
@@ -217,7 +220,7 @@ export function useFileUpload () {
 
 // 示例 7: 流式响应 (Server-Sent Events)
 export function useStreamingChat () {
-  const { loading, error, data, execute } = useHttp()
+  const { loading, error, execute } = useHttp()
   const messages = ref([])
   const currentMessage = ref('')
 

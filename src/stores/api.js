@@ -33,21 +33,10 @@ export const useApiStore = defineStore('api', {
   actions: {
     async token () {
       const utilStore = useUtilStore()
-      const globalStore = useGlobalStore()
+      const _globalStore = useGlobalStore() // 预留用于未来功能
 
-      let accessToken = utilStore.getLocalStorage('api_token')
+      const accessToken = utilStore.getLocalStorage('api_token')
       if (!accessToken) {
-        // if (globalStore.getOpenid) {
-        //   // 保留原有密码模式作为fallback
-        //   const xhr = new XMLHttpRequest()
-        //   xhr.open('POST', `${this.baseUrl}/oauth2/token?grant_type=password&username=wx-${globalStore.getOpenid}&password=wxpwd`, false)
-        //   xhr.setRequestHeader('Content-Type', 'application/json')
-        //   xhr.setRequestHeader('Authorization', 'Basic amlhX2NsaWVudDpqaWFfc2VjcmV0')
-        //   xhr.send(null)
-        //   const data = JSON.parse(xhr.responseText)
-        //   accessToken = data.access_token
-        //   utilStore.setLocalStorage('api_token', accessToken, new Date().getTime() + data.expires_in * 1000 - 60000)
-        // } else {
         // PKCE流程
         const codeVerifier = generateRandomString(64)
         const codeChallenge = await generateCodeChallenge(codeVerifier)
@@ -65,7 +54,6 @@ export const useApiStore = defineStore('api', {
         })
 
         window.location.href = `${this.baseUrl}/oauth2/authorize?${params.toString()}`
-        // }
       }
       return accessToken
     },

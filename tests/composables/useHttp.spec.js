@@ -4,10 +4,10 @@ import { cleanup } from '../setup.js'
 // Mock the useHttp composable for testing
 const mockUseHttp = () => {
   return {
-    get: async (url) => {
+    get: async (_url) => {
       return { data: { message: 'Mock response' } }
     },
-    post: async (url, data) => {
+    post: async (_url, data) => {
       return { data: { ...data, id: 1 } }
     }
   }

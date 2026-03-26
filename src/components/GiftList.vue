@@ -1,17 +1,17 @@
 <template>
   <div class="gift-list-container">
-    <var-action-sheet 
-      :actions="actionSheetActions"
+    <var-action-sheet
       v-model:show="showActionSheet"
+      :actions="actionSheetActions"
       @select="handleActionSelect"
     />
-    
-    <div class="gifts-section" v-if="giftList.length > 0">
+
+    <div v-if="giftList.length > 0" class="gifts-section">
       <div class="gifts-header">
         <h3>{{ $t('gift.title') }}</h3>
         <span class="gifts-count">{{ giftList.length }} 个礼品</span>
       </div>
-      
+
       <div class="gifts-list-container">
         <var-list>
           <var-cell
@@ -33,10 +33,10 @@
                   <div class="gift-description">{{ gift.description }}</div>
                   <div class="gift-meta">
                     <div class="gift-price-section">
-                      <span class="gift-point" v-if="gift.point > 0">
+                      <span v-if="gift.point > 0" class="gift-point">
                         {{ gift.point }}{{ $t('gift.point') }}
                       </span>
-                      <span class="gift-price" v-if="gift.price > 0">
+                      <span v-if="gift.price > 0" class="gift-price">
                         ￥{{ formatPrice(gift.price) }}
                       </span>
                     </div>
@@ -61,7 +61,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useGlobalStore } from '@/stores/global'
@@ -100,13 +100,6 @@ const handleActionSelect = (action) => {
   }
 }
 
-const onActionSheetShowChange = (show) => {
-  // 当 action sheet 隐藏且右侧边栏当前显示时，触发 toggleRightSidebar
-  if (!show && globalStore.showRightSidebar) {
-    globalStore.toggleRightSidebar()
-  }
-}
-
 // 监听右侧边栏显示状态
 watch(
   () => globalStore.showRightSidebar,
@@ -117,7 +110,7 @@ watch(
 
 const fetchGiftList = () => {
   const jiacn = globalStore.getJiacn
-  
+
   if (!jiacn) {
     Dialog({
       title: t('app.notify'),
@@ -162,7 +155,7 @@ onMounted(() => {
   globalStore.setTitle(t('gift.title'))
   globalStore.setShowBack(false)
   globalStore.setShowMore(true)
-  
+
   fetchGiftList()
 })
 </script>
@@ -328,24 +321,24 @@ onMounted(() => {
   .gift-list-container {
     padding: 12px;
   }
-  
+
   .gifts-header {
     padding: 16px 16px 10px;
   }
-  
+
   .gifts-header h3 {
     font-size: 15px;
   }
-  
+
   .gift-image-container {
     width: 70px;
     height: 70px;
   }
-  
+
   .gift-name {
     font-size: 14px;
   }
-  
+
   .gift-description {
     font-size: 12px;
   }
@@ -364,7 +357,7 @@ onMounted(() => {
     margin: 0 auto;
     padding: 24px;
   }
-  
+
   .gift-image-container {
     width: 100px;
     height: 100px;

@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { useApiStore } from '../stores/api'
-import { useGlobalStore } from '../stores/global'
-import { useUtilStore } from '../stores/util'
+// import { useGlobalStore } from '../stores/global' // 预留
+// import { useUtilStore } from '../stores/util' // 预留
 
 /**
  * 创建超时信号，兼容不支持 AbortSignal.timeout() 的浏览器
@@ -62,8 +62,8 @@ export function useHttp (options = {}) {
   const response = ref(null)
 
   const apiStore = useApiStore()
-  const globalStore = useGlobalStore()
-  const utilStore = useUtilStore()
+  // const globalStore = useGlobalStore() // 预留
+  // const utilStore = useUtilStore() // 预留
 
   const defaultOptions = {
     method: 'GET',
@@ -146,8 +146,8 @@ export function useHttp (options = {}) {
 
       // 使用 fetch API 替代 axios，特别是为了支持 stream
       // 计算超时时间：优先使用选项中的timeout，其次使用环境变量VITE_HTTP_TIMEOUT，最后使用默认值60000
-      const timeoutValue = timeout || 
-                          (import.meta.env.VITE_HTTP_TIMEOUT ? parseInt(import.meta.env.VITE_HTTP_TIMEOUT, 10) : null) || 
+      const timeoutValue = timeout ||
+                          (import.meta.env.VITE_HTTP_TIMEOUT ? parseInt(import.meta.env.VITE_HTTP_TIMEOUT, 10) : null) ||
                           60000
       timeoutSignal = createTimeoutSignal(timeoutValue)
       const fetchConfig = {
@@ -176,8 +176,8 @@ export function useHttp (options = {}) {
           } else if (errorData && errorData.message) {
             errorMessage = errorData.message
           }
-        } catch (jsonError) {
-          // 如果无法解析为 JSON，使用默认错误消息
+        } catch {
+        // 如果无法解析为 JSON，使用默认错误消息
         }
 
         const error = new Error(errorMessage)
@@ -257,7 +257,7 @@ export function useHttp (options = {}) {
       // 处理响应数据
       let result
       let resultObj
-      
+
       // 首先读取响应文本
       const responseText = await response.text()
       if (responseType === 'text') {
@@ -283,9 +283,8 @@ export function useHttp (options = {}) {
             headers: Object.fromEntries(response.headers.entries()),
             config: fetchConfig
           }
-        } catch (jsonError) {
-          // JSON 解析失败，作为文本处理
-          console.warn('Failed to parse response as JSON, treating as text:', jsonError.message)
+        } catch {
+        // JSON 解析失败，作为文本处理
           result = responseText
           resultObj = {
             data: responseText,
@@ -316,7 +315,7 @@ export function useHttp (options = {}) {
         // 清理旧的 token
         apiStore.cleanToken()
         console.warn('Authentication expired, token cleaned')
-        
+
         // 如果还没有重试过，尝试重新获取 token 并重试请求
         if (retryCount === 0) {
           console.log('Attempting to refresh token and retry request...')
@@ -345,7 +344,7 @@ export function useHttp (options = {}) {
       if (timeoutSignal && timeoutSignal.cleanup) {
         timeoutSignal.cleanup()
       }
-      
+
       if (autoLoading) {
         loading.value = false
       }
@@ -360,7 +359,7 @@ export function useHttp (options = {}) {
   const post = (url, data, options = {}) => execute({ ...options, url, method: 'POST', data })
   const put = (url, data, options = {}) => execute({ ...options, url, method: 'PUT', data })
   const patch = (url, data, options = {}) => execute({ ...options, url, method: 'PATCH', data })
-  const del = (url, options = {}) => execute({ ...options, url, method: 'DELETE' });
+  const del = (url, options = {}) => execute({ ...options, url, method: 'DELETE' })
 
   return {
     // 响应式状态

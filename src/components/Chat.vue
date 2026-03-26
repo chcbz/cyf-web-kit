@@ -1,7 +1,7 @@
 <template>
   <div class="chat-container">
     <div class="chat-main-content">
-      <div class="chat-messages" ref="messagesRef">
+      <div ref="messagesRef" class="chat-messages">
         <div v-if="shouldShowEmptyState" class="chat-empty-state">
           <p>开始与JiA智能助手对话吧！</p>
           <div class="chat-capabilities">
@@ -66,17 +66,17 @@
       <div class="chat-input">
         <var-input
           v-model="inputMessage"
-          @keydown.enter="handleEnterKey"
           placeholder="给我发消息"
           textarea
           rows="3"
+          @keydown.enter="handleEnterKey"
         />
         <var-button
-          @click="handleSendOrCancel"
           :disabled="isSendButtonDisabled"
           type="success"
           round
           icon-container
+          @click="handleSendOrCancel"
         >
           <var-icon :name="isStreaming ? 'close' : 'chevron-up'" class="send-icon" />
         </var-button>
@@ -89,11 +89,10 @@
         <h3>历史会话</h3>
         <div>
           <var-button
-            @click="generateNewConversationId"
             type="primary"
             class="chat-new-conversation-btn"
-            >+ 新会话</var-button
-          >
+            @click="generateNewConversationId"
+          >+ 新会话</var-button>
           <!-- <var-button @click="toggleSidebar" class="chat-close-btn" type="default">×</var-button> -->
         </div>
       </div>
@@ -114,10 +113,9 @@
           </div>
           <var-button
             class="chat-delete-btn"
-            @click.stop.prevent="deleteConversation(conv.id)"
             type="danger"
-            >删除</var-button
-          >
+            @click.stop.prevent="deleteConversation(conv.id)"
+          >删除</var-button>
         </div>
       </div>
     </div>
@@ -125,14 +123,14 @@
 </template>
 
 <script setup>
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
-import { ref, onMounted, computed, watch, onUnmounted } from 'vue';
-import { useUtilStore } from '../stores/util';
-import { useGlobalStore } from '../stores/global';
-import { useApiStore } from '../stores/api';
-import { useI18n } from 'vue-i18n';
-import { mcpApi, kefuApi, phraseApi } from '../composables/useHttp';
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
+import { ref, onMounted, computed, watch, onUnmounted } from 'vue'
+import { useUtilStore } from '../stores/util'
+import { useGlobalStore } from '../stores/global'
+// import { useApiStore } from '../stores/api' // 预留
+import { useI18n } from 'vue-i18n'
+import { mcpApi, kefuApi, phraseApi } from '../composables/useHttp'
 
 // 配置marked
 marked.setOptions({
@@ -140,62 +138,63 @@ marked.setOptions({
   gfm: true,
   headerIds: false,
   sanitize: false // 禁用marked内置的sanitize，使用DOMPurify
-});
+})
 
-// 错误类型常量
-const ERROR_TYPES = {
-  NETWORK: 'network',
-  SERVER: 'server',
-  VALIDATION: 'validation'
-};
+// 错误类型常量 (预留)
+// const ERROR_TYPES = {
+//   NETWORK: 'network',
+//   SERVER: 'server',
+//   VALIDATION: 'validation'
+// }
 
-// 消息类型常量
-const MESSAGE_TYPES = {
-  USER: 'user',
-  BOT: 'bot',
-  SYSTEM: 'system'
-};
+// 消息类型常量 (预留)
+// const MESSAGE_TYPES = {
+//   USER: 'user',
+//   BOT: 'bot',
+//   SYSTEM: 'system'
+// }
 
 // 响应式状态
-const messages = ref([]);
-const inputMessage = ref('');
-const messagesRef = ref(null);
-const isLoading = ref(false);
-const isStreaming = ref(false);
-const readerRef = ref(null);
-const error = ref(null);
-const conversationId = ref('');
-const conversations = ref([]);
-const showSidebar = ref(false);
-const randomPhrase = ref('输入您的问题或想法，我将尽力为您解答'); // 默认文本
-const userScrolledUp = ref(false); // 用户是否手动向上滚动
-const lastScrollTop = ref(0); // 上一次滚动位置
+const messages = ref([])
+const inputMessage = ref('')
+const messagesRef = ref(null)
+const isLoading = ref(false)
+const isStreaming = ref(false)
+const readerRef = ref(null)
+const error = ref(null)
+const conversationId = ref('')
+const conversations = ref([])
+const showSidebar = ref(false)
+const randomPhrase = ref('输入您的问题或想法，我将尽力为您解答') // 默认文本
+const userScrolledUp = ref(false) // 用户是否手动向上滚动
+const lastScrollTop = ref(0) // 上一次滚动位置
 
 // 工具函数
-const utilStore = useUtilStore();
-const globalStore = useGlobalStore();
-const apiStore = useApiStore();
-const { t } = useI18n();
+const utilStore = useUtilStore()
+const globalStore = useGlobalStore()
+// const apiStore = useApiStore() // 预留
+const { t } = useI18n()
 
 // 计算属性
-const hasMessages = computed(() => messages.value.length > 0);
-const isSendButtonDisabled = computed(() => isLoading.value || !inputMessage.value.trim());
-const sortedConversations = computed(() =>
-  [...conversations.value].sort((a, b) => new Date(b.lastUpdated) - new Date(a.lastUpdated))
-);
-const shouldShowEmptyState = computed(() => !hasMessages.value && !isLoading.value);
+const hasMessages = computed(() => messages.value.length > 0)
+const isSendButtonDisabled = computed(() => isLoading.value || !inputMessage.value.trim())
+// sortedConversations 预留用于未来排序功能
+// const sortedConversations = computed(() =>
+//   [...conversations.value].sort((a, b) => new Date(b.lastUpdated) - new Date(a.lastUpdated))
+// )
+const shouldShowEmptyState = computed(() => !hasMessages.value && !isLoading.value)
 
 // 初始化
 const initializeApp = async () => {
-  globalStore.setTitle(t('chat.new_session'));
-  globalStore.setShowBack(false);
-  globalStore.setShowMore(true);
+  globalStore.setTitle(t('chat.new_session'))
+  globalStore.setShowBack(false)
+  globalStore.setShowMore(true)
 
   // 加载随机短语
-  await loadRandomPhrase();
-  
-  loadConversations();
-};
+  await loadRandomPhrase()
+
+  loadConversations()
+}
 
 // 加载随机短语
 const loadRandomPhrase = async () => {
@@ -207,24 +206,24 @@ const loadRandomPhrase = async () => {
       onSuccess: (data) => {
         if (data && data.data) {
           randomPhrase.value = data.data.content
-          phraseApi.getById('/read', data.data.id);
+          phraseApi.getById('/read', data.data.id)
         }
       },
       onError: (error) => {
-        console.warn('从服务端加载会话失败:', error);
+        console.warn('从服务端加载会话失败:', error)
       }
-    });
+    })
   } catch (error) {
-    console.warn('加载随机短语失败:', error);
+    console.warn('加载随机短语失败:', error)
     // 保持默认文本
   }
-};
+}
 
 // 会话管理函数
 const loadConversations = async () => {
   try {
     // 从服务端加载会话列表
-    const result = await kefuApi.list('/message/list', {
+    await kefuApi.list('/message/list', {
       pageNum: 1,
       pageSize: 100,
       orderBy: 'update_time desc',
@@ -240,138 +239,138 @@ const loadConversations = async () => {
             title: conv.title || '新会话',
             lastUpdated: conv.updateTime,
             messages: []
-          }));
+          }))
         }
       },
       onError: (error) => {
-        console.warn('从服务端加载会话失败:', error);
+        console.warn('从服务端加载会话失败:', error)
       }
-    });
+    })
   } catch (error) {
-    console.warn('加载会话失败:', error);
+    console.warn('加载会话失败:', error)
   }
-};
+}
 
 const loadConversation = async (id) => {
-  const conversation = conversations.value.find((c) => c.id === id);
+  const conversation = conversations.value.find((c) => c.id === id)
   if (conversation) {
-    conversationId.value = id;
-    globalStore.setTitle(conversation.title);
-    
+    conversationId.value = id
+    globalStore.setTitle(conversation.title)
+
     // 从服务端加载会话内容
     try {
-      const result = await mcpApi.getById('/conversation/content', id, {
+      await mcpApi.getById('/conversation/content', id, {
         autoLoading: false,
         onSuccess: (data) => {
           if (data && data.data) {
             // 根据接口返回的数据结构处理会话内容
-            const msgList = data.data || [];
-            
+            const msgList = data.data || []
+
             // 确保消息格式正确
             messages.value = msgList.map(msg => ({
               sender: msg.metadata.role || 'user',
               content: msg.text || '',
               timestamp: msg.metadata.timestamp || new Date().getTime(),
               conversationId: id
-            }));
-            
+            }))
+
             // 加载完成后自动滚动到底部
-            scrollToBottom();
+            scrollToBottom()
           } else {
             // 如果服务端没有消息，清空消息
-            messages.value = [];
+            messages.value = []
           }
         },
         onError: (error) => {
-          console.warn('从服务端加载会话内容失败:', error);
-          messages.value = [];
+          console.warn('从服务端加载会话内容失败:', error)
+          messages.value = []
         }
-      });
+      })
     } catch (error) {
-      console.warn('加载会话内容失败:', error);
-      messages.value = [];
+      console.warn('加载会话内容失败:', error)
+      messages.value = []
     }
   }
-};
+}
 
 const generateNewConversationId = () => {
-  globalStore.setTitle(t('chat.new_session'));
-  conversationId.value = '';
-  messages.value = [];
-};
+  globalStore.setTitle(t('chat.new_session'))
+  conversationId.value = ''
+  messages.value = []
+}
 
 // 消息处理函数
 const updateBotMessage = async (content) => {
-  const lastMessage = messages.value[messages.value.length - 1];
-  let botMessage;
-  
+  const lastMessage = messages.value[messages.value.length - 1]
+  let botMessage
+
   if (lastMessage?.sender === 'bot') {
-    lastMessage.content += content;
-    botMessage = lastMessage;
+    lastMessage.content += content
+    botMessage = lastMessage
   } else {
     botMessage = {
       sender: 'bot',
       content,
       timestamp: new Date().getTime()
-    };
-    messages.value.push(botMessage);
+    }
+    messages.value.push(botMessage)
   }
-  scrollToBottom();
-};
+  scrollToBottom()
+}
 
 const processBotResponse = (eventData) => {
-  console.log('Received event data:', eventData);
+  console.log('Received event data:', eventData)
 
   // 处理多种可能的数据格式
-  let payload = '';
+  let payload = ''
 
   // 如果是SSE格式 (data: {...})
   if (eventData.startsWith('data:')) {
     for (const line of eventData.split(/\n/)) {
       if (line.startsWith('data:')) {
-        payload += line.slice(5).trim() + '\n';
+        payload += line.slice(5).trim() + '\n'
       }
     }
   } else {
     // 如果不是SSE格式，直接使用原始数据
-    payload = eventData;
+    payload = eventData
   }
 
-  payload = payload.trim();
+  payload = payload.trim()
 
   if (payload === '[DONE]' || payload === '[EOM]' || !payload) {
-    console.log('Stream completed or empty payload');
-    return;
+    console.log('Stream completed or empty payload')
+    return
   }
 
   try {
     // 尝试解析为JSON
-    const data = JSON.parse(payload);
+    const data = JSON.parse(payload)
     if (data.v) {
-      updateBotMessage(data.v);
+      updateBotMessage(data.v)
     } else if (data.conversationId) {
-      conversationId.value = data.conversationId;
+      conversationId.value = data.conversationId
     } else if (data.t) {
-      globalStore.setTitle(data.t);
-      loadConversations();
+      globalStore.setTitle(data.t)
+      loadConversations()
     } else {
-      console.log('No message content found in JSON:', data);
+      console.log('No message content found in JSON:', data)
     }
-  } catch (error) {
-    console.log('Not JSON, treating as plain text:', payload);
+  } catch {
+    console.log('Not JSON, treating as plain text:', payload)
     // 如果不是JSON，直接作为文本显示
-    updateBotMessage(payload);
+    updateBotMessage(payload)
   }
-};
+}
 
 // 消息发送和流处理
 const sendMessage = async () => {
-  const message = inputMessage.value.trim();
-  if (!message || isLoading.value) return;
+  const message = inputMessage.value.trim()
+  if (!message || isLoading.value) return
 
-  isLoading.value = true;
-  isStreaming.value = true;
-  inputMessage.value = '';
+  isLoading.value = true
+  isStreaming.value = true
+  inputMessage.value = ''
 
   try {
     // 添加用户消息
@@ -380,17 +379,17 @@ const sendMessage = async () => {
       content: message,
       timestamp: new Date().getTime(),
       conversationId: conversationId.value
-    };
-    
+    }
+
     messages.value = [
       ...messages.value,
       userMessage
-    ];
+    ]
 
-    scrollToBottom();
+    scrollToBottom()
 
     // 使用新的 useHttp 流式功能
-    const result = await mcpApi.create(
+    const streamResult = await mcpApi.create(
       '/chat/stream',
       {
         content: message,
@@ -401,31 +400,31 @@ const sendMessage = async () => {
         autoLoading: false,
         timeout: 1800000,
         onStream: (eventData) => {
-          console.log('Stream data received:', eventData);
-          processBotResponse(eventData);
+          console.log('Stream data received:', eventData)
+          processBotResponse(eventData)
         },
         onStreamEnd: () => {
-          console.log('Stream ended');
-          isStreaming.value = false;
-          isLoading.value = false;
-          readerRef.value = null;
+          console.log('Stream ended')
+          isStreaming.value = false
+          isLoading.value = false
+          readerRef.value = null
         },
         onError: (errorMessage) => {
-          console.error('发送消息失败:', errorMessage);
-          throw new Error(errorMessage);
+          console.error('发送消息失败:', errorMessage)
+          throw new Error(errorMessage)
         }
       }
-    );
+    )
 
     // 保存reader引用以便后续取消
-    if (result && result.stream) {
-      readerRef.value = result.stream.reader;
+    if (streamResult && streamResult.stream) {
+      readerRef.value = streamResult.stream.reader
     }
   } catch (err) {
-    console.error('发送消息失败:', err);
-    isStreaming.value = false;
-    isLoading.value = false;
-    error.value = '发送消息失败，请重试';
+    console.error('发送消息失败:', err)
+    isStreaming.value = false
+    isLoading.value = false
+    error.value = '发送消息失败，请重试'
     messages.value = [
       ...messages.value,
       {
@@ -434,14 +433,14 @@ const sendMessage = async () => {
         isError: true,
         timestamp: new Date().getTime()
       }
-    ];
+    ]
   }
-};
+}
 
 const stopStream = async () => {
   if (readerRef.value) {
     try {
-      await readerRef.value.cancel();
+      await readerRef.value.cancel()
       messages.value = [
         ...messages.value,
         {
@@ -450,89 +449,89 @@ const stopStream = async () => {
           isInfo: true,
           timestamp: new Date().getTime()
         }
-      ];
+      ]
     } catch (err) {
-      console.error('取消请求失败:', err);
+      console.error('取消请求失败:', err)
     } finally {
-      isStreaming.value = false;
-      isLoading.value = false;
-      readerRef.value = null;
+      isStreaming.value = false
+      isLoading.value = false
+      readerRef.value = null
     }
   }
-};
+}
 
 // 处理滚动事件
 const handleScroll = () => {
-  if (!messagesRef.value) return;
-  
-  const currentScrollTop = messagesRef.value.scrollTop;
-  const scrollHeight = messagesRef.value.scrollHeight;
-  const clientHeight = messagesRef.value.clientHeight;
-  
+  if (!messagesRef.value) return
+
+  const currentScrollTop = messagesRef.value.scrollTop
+  const scrollHeight = messagesRef.value.scrollHeight
+  const clientHeight = messagesRef.value.clientHeight
+
   // 检测用户是否向上滚动
   if (currentScrollTop < lastScrollTop.value) {
     // 用户向上滚动
-    userScrolledUp.value = true;
+    userScrolledUp.value = true
   } else if (currentScrollTop + clientHeight >= scrollHeight - 10) {
     // 用户滚动到底部（留10px的容差）
-    userScrolledUp.value = false;
+    userScrolledUp.value = false
   }
-  
-  lastScrollTop.value = currentScrollTop;
-};
+
+  lastScrollTop.value = currentScrollTop
+}
 
 // UI 交互函数
 const scrollToBottom = () => {
   requestAnimationFrame(() => {
     if (messagesRef.value && !userScrolledUp.value) {
-      messagesRef.value.scrollTop = messagesRef.value.scrollHeight;
+      messagesRef.value.scrollTop = messagesRef.value.scrollHeight
     }
-  });
-};
+  })
+}
 
 const handleEnterKey = (event) => {
   // 如果按下了 Shift 键，允许换行
   if (event.shiftKey) {
-    return; // 允许默认行为（换行）
+    return // 允许默认行为（换行）
   }
-  
+
   // 否则，阻止默认行为（换行）并发送消息
-  event.preventDefault();
-  handleSendOrCancel();
-};
+  event.preventDefault()
+  handleSendOrCancel()
+}
 
 const handleSendOrCancel = () => {
   if (isStreaming.value) {
-    stopStream();
+    stopStream()
   } else {
-    sendMessage();
+    sendMessage()
   }
-};
+}
 
 const toggleSidebar = () => {
-  globalStore.toggleRightSidebar();
-};
+  globalStore.toggleRightSidebar()
+}
 
 // 删除会话（带重试机制）
 const deleteConversation = async (id, retryCount = 0) => {
   try {
-    console.log('删除会话:', id);
+    console.log('删除会话:', id)
     await mcpApi.delete('/conversation/delete', id, {
       onSuccess: () => {
-        console.log('删除会话成功:', id);
-        const index = conversations.value.findIndex((c) => c.id === id);
+        console.log('删除会话成功:', id)
+        const index = conversations.value.findIndex((c) => c.id === id)
         if (index !== -1) {
-          conversations.value.splice(index, 1);
+          conversations.value.splice(index, 1)
         }
         if (id === conversationId.value) {
-          console.log('当前会话被删除，生成新会话ID');
-          generateNewConversationId();
+          console.log('当前会话被删除，生成新会话ID')
+          generateNewConversationId()
         }
       },
       onError: (errorMessage) => {
-        console.error('删除会话失败:', errorMessage);
+        console.error('删除会话失败:', errorMessage)
 
-        const lastMessage = messages.value[messages.value.length - 1];
+        const lastMessage = messages.value[messages.value.length - 1]
         if (!lastMessage || !lastMessage.isError) {
           messages.value = [
             ...messages.value,
@@ -542,18 +541,18 @@ const deleteConversation = async (id, retryCount = 0) => {
               isError: true,
               timestamp: new Date().getTime()
             }
-          ];
+          ]
         }
 
         if (retryCount < 3) {
-          setTimeout(() => deleteConversation(id, retryCount + 1), 1000 * (retryCount + 1));
+          setTimeout(() => deleteConversation(id, retryCount + 1), 1000 * (retryCount + 1))
         }
       }
-    });
+    })
   } catch (error) {
-    console.error('删除会话失败:', error);
+    console.error('删除会话失败:', error)
 
-    const lastMessage = messages.value[messages.value.length - 1];
+    const lastMessage = messages.value[messages.value.length - 1]
     if (!lastMessage || !lastMessage.isError) {
       messages.value = [
         ...messages.value,
@@ -563,44 +562,44 @@ const deleteConversation = async (id, retryCount = 0) => {
           isError: true,
           timestamp: new Date().getTime()
         }
-      ];
+      ]
     }
 
     if (retryCount < 3) {
-      setTimeout(() => deleteConversation(id, retryCount + 1), 1000 * (retryCount + 1));
+      setTimeout(() => deleteConversation(id, retryCount + 1), 1000 * (retryCount + 1))
     }
   }
-};
+}
 
 // 监听全局store中的右侧边栏状态变化
 watch(
   () => globalStore.showRightSidebar,
   (newValue) => {
-    showSidebar.value = newValue;
+    showSidebar.value = newValue
   }
-);
+)
 
 // 生命周期钩子
 onMounted(() => {
-  initializeApp();
-  
+  initializeApp()
+
   // 添加滚动事件监听器
   const setupScrollListener = () => {
     if (messagesRef.value) {
-      messagesRef.value.addEventListener('scroll', handleScroll);
+      messagesRef.value.addEventListener('scroll', handleScroll)
     }
-  };
-  
+  }
+
   // 使用 nextTick 确保 DOM 已渲染
-  setTimeout(setupScrollListener, 100);
-});
+  setTimeout(setupScrollListener, 100)
+})
 
 // 组件卸载时移除事件监听器
 onUnmounted(() => {
   if (messagesRef.value) {
-    messagesRef.value.removeEventListener('scroll', handleScroll);
+    messagesRef.value.removeEventListener('scroll', handleScroll)
   }
-});
+})
 </script>
 
 <style scoped>
@@ -1351,33 +1350,33 @@ onUnmounted(() => {
   .chat-capabilities {
     margin: 12px 0;
   }
-  
+
   .chat-capabilities h3 {
     font-size: 15px;
     margin-bottom: 10px;
   }
-  
+
   .capabilities-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 8px;
     margin-bottom: 12px;
   }
-  
+
   .capability-item {
     padding: 8px;
   }
-  
+
   .capability-icon {
     font-size: 16px;
     width: 28px;
     height: 28px;
     margin-right: 8px;
   }
-  
+
   .capability-content h4 {
     font-size: 13px;
   }
-  
+
   .capability-content p {
     font-size: 11px;
   }
@@ -1387,23 +1386,23 @@ onUnmounted(() => {
   .chat-capabilities {
     margin: 10px 0;
   }
-  
+
   .chat-capabilities h3 {
     font-size: 14px;
     margin-bottom: 8px;
   }
-  
+
   .capabilities-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 6px;
     margin-bottom: 10px;
   }
-  
+
   .capability-item {
     padding: 6px;
     border-radius: 6px;
   }
-  
+
   .capability-icon {
     font-size: 14px;
     width: 24px;
@@ -1411,12 +1410,12 @@ onUnmounted(() => {
     margin-right: 6px;
     border-radius: 4px;
   }
-  
+
   .capability-content h4 {
     font-size: 12px;
     margin-bottom: 2px;
   }
-  
+
   .capability-content p {
     font-size: 10px;
     line-height: 1.3;
@@ -1428,22 +1427,22 @@ onUnmounted(() => {
     grid-template-columns: 1fr;
     gap: 6px;
   }
-  
+
   .capability-item {
     padding: 8px;
   }
-  
+
   .capability-icon {
     font-size: 16px;
     width: 28px;
     height: 28px;
     margin-right: 10px;
   }
-  
+
   .capability-content h4 {
     font-size: 13px;
   }
-  
+
   .capability-content p {
     font-size: 11px;
   }

@@ -1,17 +1,17 @@
 <template>
   <div class="order-list-container">
-    <var-action-sheet 
-      :actions="opMenu" 
-      v-model:show="showOpMenu" 
-      @select="onClickOpMenu" 
+    <var-action-sheet
+      v-model:show="showOpMenu"
+      :actions="opMenu"
+      @select="onClickOpMenu"
     />
-    
-    <div class="orders-section" v-if="list.length > 0">
+
+    <div v-if="list.length > 0" class="orders-section">
       <div class="orders-header">
         <h3>{{ $t('gift.order_list') }}</h3>
         <span class="orders-count">{{ list.length }} 个订单</span>
       </div>
-      
+
       <div class="orders-list-container">
         <var-list>
           <var-cell
@@ -22,7 +22,7 @@
           >
             <template #default>
               <div class="order-item">
-                <div class="order-image-container" v-if="item.picUrl">
+                <div v-if="item.picUrl" class="order-image-container">
                   <img :src="item.picUrl" :alt="item.title" class="order-image" />
                 </div>
                 <div class="order-info">
@@ -63,14 +63,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import { Dialog } from '@varlet/ui'
 import { useGlobalStore } from '@/stores/global'
-import { useApiStore } from '@/stores/api'
-import { useUtilStore } from '@/stores/util'
+// import { useApiStore } from '@/stores/api' // 预留
+// import { useUtilStore } from '@/stores/util' // 预留
 import { giftApi } from '@/composables/useHttp'
 
 // 路由器
@@ -79,8 +79,8 @@ const { t } = useI18n()
 
 // Pinia stores
 const globalStore = useGlobalStore()
-const apiStore = useApiStore()
-const utilStore = useUtilStore()
+// const apiStore = useApiStore() // 预留
+// const utilStore = useUtilStore() // 预留
 
 // 响应式数据
 const list = ref([])
@@ -175,7 +175,7 @@ const fetchOrders = () => {
   giftApi.search('/usage/list/user/' + jiacn, {
     pageNum: 1,
     pageSize: 999,
-    orderBy: 'create_time desc',
+    orderBy: 'create_time desc'
   }, {
     onSuccess: (data) => {
       list.value = []
@@ -392,24 +392,24 @@ onMounted(() => {
   .order-list-container {
     padding: 12px;
   }
-  
+
   .orders-header {
     padding: 16px 16px 10px;
   }
-  
+
   .orders-header h3 {
     font-size: 15px;
   }
-  
+
   .order-image-container {
     width: 70px;
     height: 70px;
   }
-  
+
   .order-name {
     font-size: 14px;
   }
-  
+
   .order-description {
     font-size: 12px;
   }
@@ -428,7 +428,7 @@ onMounted(() => {
     margin: 0 auto;
     padding: 24px;
   }
-  
+
   .order-image-container {
     width: 100px;
     height: 100px;

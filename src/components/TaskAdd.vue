@@ -5,66 +5,66 @@
         <div class="form-section">
           <h3 class="section-title">{{ t('task.basic_info') }}</h3>
           <var-select
+            v-model="type"
             :placeholder="t('task.type')"
             :options="typeOptions"
-            v-model="type"
-            @change="changeType"
             class="form-field"
             label-key="text"
             value-key="value"
+            @change="changeType"
           />
           <var-select
+            v-model="period"
             :placeholder="t('task.period')"
             :options="periodOptions"
-            v-model="period"
-            @change="changePeriod"
             class="form-field"
             label-key="text"
             value-key="value"
+            @change="changePeriod"
           />
-          <var-input 
-            :label="t('task.name')" 
-            v-model="name" 
+          <var-input
+            v-model="name"
+            :label="t('task.name')"
             class="form-field"
             :placeholder="t('task.name_placeholder')"
           />
-          <var-input 
-            :label="t('task.description')" 
-            v-model="description" 
-            textarea 
-            :rows="3" 
+          <var-input
+            v-model="description"
+            :label="t('task.description')"
+            textarea
+            :rows="3"
             class="form-field"
             :placeholder="t('task.description_placeholder')"
           />
         </div>
 
-        <div class="form-section" v-show="startTimeShow">
+        <div v-show="startTimeShow" class="form-section">
           <h3 class="section-title">{{ t('task.start_time') }}</h3>
           <var-input
             v-model="start_time"
             readonly
-            @click="openStartDatePicker"
             class="form-field"
             :placeholder="t('task.select_date_time')"
+            @click="openStartDatePicker"
           />
         </div>
 
-        <div class="form-section" v-show="endTimeShow">
+        <div v-show="endTimeShow" class="form-section">
           <h3 class="section-title">{{ t('task.end_time') }}</h3>
           <var-input
             v-model="end_time"
             readonly
-            @click="openEndDatePicker"
             class="form-field"
             :placeholder="t('task.select_date_time')"
+            @click="openEndDatePicker"
           />
         </div>
 
         <!-- 日期选择器弹窗 -->
         <var-dialog
+          v-model:show="showDatePicker"
           style="width: 90%; margin: 0 auto;"
           dialog-class="date-picker-dialog"
-          v-model:show="showDatePicker"
           :title="t('task.select_date')"
           @confirm="onPickerDateConfirm"
           @cancel="showDatePicker = false"
@@ -77,9 +77,9 @@
 
         <!-- 时间选择器弹窗 -->
         <var-dialog
+          v-model:show="showTimePicker"
           width="100%"
           dialog-class="time-picker-dialog"
-          v-model:show="showTimePicker"
           :title="t('task.select_time')"
           @confirm="onPickerTimeConfirm"
           @cancel="showTimePicker = false"
@@ -94,19 +94,19 @@
           <h3 class="section-title">{{ t('task.other_info') }}</h3>
           <div class="form-field">
             {{ t('task.lunar') }}
-            <var-switch 
-              v-model="lunar" 
-              :active-value="1" 
+            <var-switch
+              v-model="lunar"
+              :active-value="1"
               :inactive-value="0"
             />
           </div>
-          <div class="form-field" v-show="amountShow">
+          <div v-show="amountShow" class="form-field">
             {{ t('task.amount') }}
             <var-input
+              v-show="amountShow"
               v-model="amount"
               type="tel"
               :maxlength="6"
-              v-show="amountShow"
               :placeholder="t('task.amount_placeholder')"
             />
           </div>
@@ -122,12 +122,12 @@
       </div>
 
       <div class="form-actions">
-        <var-button 
-          type="primary" 
-          block 
-          @click="doAdd" 
+        <var-button
+          type="primary"
+          block
           :loading="loading"
           class="submit-button"
+          @click="doAdd"
         >
           {{ t('app.save') }}
         </var-button>
@@ -137,12 +137,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Dialog } from '@varlet/ui'
 import { useGlobalStore } from '../stores/global'
-import { useApiStore } from '../stores/api'
+// import { useApiStore } from '../stores/api' // 预留
 import { useUtilStore } from '../stores/util'
 import { taskApi } from '../composables/useHttp'
 import dayjs from 'dayjs'
@@ -153,7 +153,7 @@ const { t } = useI18n()
 
 // Pinia stores
 const globalStore = useGlobalStore()
-const apiStore = useApiStore()
+// const apiStore = useApiStore() // 预留
 const utilStore = useUtilStore()
 
 // 响应式数据
@@ -271,10 +271,10 @@ const doAdd = () => {
 
   loading.value = true
   const jiacn = globalStore.getJiacn
-  
+
   // 准备数据
   const taskData = {
-    jiacn: jiacn,
+    jiacn,
     type: type.value || '',
     period: period.value || '',
     name: name.value.trim(),
@@ -522,16 +522,16 @@ onMounted(() => {
   .task-add-container {
     padding: 12px;
   }
-  
+
   .form-card {
     padding: 20px;
   }
-  
+
   .form-section {
     margin-bottom: 20px;
     padding-bottom: 16px;
   }
-  
+
   .section-title {
     font-size: 15px;
     margin-bottom: 12px;

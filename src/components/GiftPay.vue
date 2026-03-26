@@ -1,8 +1,8 @@
 <template>
   <div class="gift-pay-container">
     <var-action-sheet
-      :actions="actionSheetActions"
       v-model:show="showActionSheet"
+      :actions="actionSheetActions"
       @select="handleActionSelect"
       @update:show="onActionSheetShowChange"
     />
@@ -37,55 +37,65 @@
               </var-radio>
             </var-radio-group>
           </div>
-          
+
           <div class="address-form">
             <var-input
+              v-model="consignee"
               :label="$t('gift.consignee')"
               :placeholder="$t('gift.consignee_tips')"
-              v-model="consignee"
               :rules="[(v) => !!v || $t('gift.consignee_tips')]"
               class="form-input"
             >
               <template #extra>
-                <var-button type="primary" size="small" @click="wxAddress" class="address-button">
+                <var-button
+                  type="primary"
+                  size="small"
+                  class="address-button"
+                  @click="wxAddress"
+                >
                   {{ $t('app.select') }}
                 </var-button>
               </template>
             </var-input>
-            
+
             <var-input
+              v-model="phone"
               :label="$t('gift.phone')"
               type="tel"
               :placeholder="$t('gift.phone_tips')"
-              v-model="phone"
               :rules="[(v) => !!v || $t('gift.phone_tips')]"
               class="form-input"
             />
-            
+
             <var-input
               v-if="virtual != 1"
+              v-model="address"
               type="textarea"
               :label="$t('gift.address')"
               :placeholder="$t('gift.address_tips')"
-              v-model="address"
               :rows="2"
               :rules="[(v) => !!v || $t('gift.address_tips')]"
               class="form-input"
             />
           </div>
-          <var-button block type="primary" @click="toPay" class="submit-button">
+          <var-button
+            block
+            type="primary"
+            class="submit-button"
+            @click="toPay"
+          >
             {{ $t('app.submit') }}
           </var-button>
         </div>
       </var-tab-item>
-      
+
       <var-tab-item>
         <div class="qrcode-section">
           <div class="price-display">
             ￥<span class="price-amount">{{ price }}</span>
           </div>
           <div class="qrcode-container">
-            <img :src="qrcodeImage" class="qrcode-image" v-if="qrcodeImage" />
+            <img v-if="qrcodeImage" :src="qrcodeImage" class="qrcode-image" />
             <div v-else class="qrcode-loading">生成二维码中...</div>
           </div>
           <p class="qrcode-tip">{{ $t('gift.qrcode_tip') }}</p>
@@ -102,14 +112,14 @@ import { useI18n } from 'vue-i18n'
 import QRCode from 'qrcode'
 import { Dialog } from '@varlet/ui'
 import { useGlobalStore } from '@/stores/global'
-import { useApiStore } from '@/stores/api'
+// import { useApiStore } from '@/stores/api' // 预留
 import { giftApi, wxApi } from '@/composables/useHttp'
 
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 const globalStore = useGlobalStore()
-const apiStore = useApiStore()
+// const apiStore = useApiStore() // 预留
 
 // 响应式数据
 const showActionSheet = ref(false)
@@ -167,7 +177,7 @@ const onActionSheetShowChange = (show) => {
 const toPay = () => {
   const jiacn = globalStore.getJiacn
   const appid = globalStore.user?.appid
-  
+
   if (!jiacn) {
     Dialog({
       title: t('app.notify'),
@@ -181,7 +191,7 @@ const toPay = () => {
   }
 
   giftApi.create('/usage/add', {
-    jiacn: jiacn,
+    jiacn,
     giftId: giftId.value,
     quantity: 1,
     price: payMoney.value * 100,
@@ -205,7 +215,7 @@ const toPay = () => {
           wxApi.get('/pay/createOrder', {
             outTradeNo: 'GIF' + (Array(7).join('0') + data.data.data.id).slice(-7),
             tradeType: 'JSAPI',
-            appid: appid
+            appid
           }, {
             onSuccess: (wxData) => {
               if (wxData.data) {
@@ -216,6 +226,9 @@ const toPay = () => {
                   message: wxData.msg
                 })
               }
+            },
+            onError: (_errorMessage, _error) => {
+              // 错误处理
             }
           })
         }
@@ -237,7 +250,7 @@ const wxAddress = () => {
         phone.value = res.telNumber
         address.value = res.provinceName + res.cityName + res.countryName + res.detailInfo
       },
-      cancel(res) {
+      cancel(_res) {
         console.log('cancel weixin address selecting')
       }
     })
@@ -275,7 +288,7 @@ const onBridgeReady = (data) => {
       paySign: data.paySign,
       jsApiList: ['chooseWXPay']
     },
-    function (res) {
+    (res) => {
       if (res.err_msg === 'get_brand_wcpay_request:ok') {
         Dialog({
           title: t('app.notify'),
@@ -318,9 +331,9 @@ onMounted(() => {
   globalStore.setTitle(t('gift.title'))
   globalStore.setShowBack(true)
   globalStore.setShowMore(true)
-  
+
   const appid = globalStore.user?.appid
-  
+
   // 获取礼品详情
   giftApi.getById('/get', route.query.id, {
     onSuccess: (data) => {
@@ -336,11 +349,11 @@ onMounted(() => {
       document.title = name.value + ' - ' + globalStore.title
     }
   })
-  
+
   // 生成二维码
   wxApi.get('/pay/scanPay/qrcodeLink', {
     productId: 'GIF' + (Array(7).join('0') + route.query.id).slice(-7),
-    appid: appid
+    appid
   }, {
     responseType: 'text',
     onSuccess: (data) => {
@@ -526,27 +539,27 @@ onMounted(() => {
     padding-bottom: 40px; /* Increased bottom padding for very small screens */
     min-height: calc(100vh - 48px); /* Smaller adjustment for small screens */
   }
-  
+
   .gift-image {
     height: 160px;
   }
-  
+
   .payment-options {
     flex-direction: column;
     align-items: center;
     gap: 12px;
   }
-  
+
   .payment-option {
     max-width: 100%;
     width: 100%;
   }
-  
+
   .qrcode-image {
     width: 180px;
     height: 180px;
   }
-  
+
   .submit-button {
     margin-bottom: 32px; /* Increased bottom margin */
   }
@@ -564,7 +577,7 @@ onMounted(() => {
     margin: 0 auto;
     padding: 24px;
   }
-  
+
   .gift-image {
     height: 240px;
   }

@@ -5,52 +5,50 @@
         <var-icon
           v-if="leftOptions.showBack"
           name="chevron-left"
-          @click.stop="$router.back()"
           class="back-icon"
+          @click.stop="$router.back()"
         />
         <var-icon
           v-if="!leftOptions.showBack"
           name="menu"
-          @click.stop="toggleMenu"
           class="menu-icon"
+          @click.stop="toggleMenu"
         />
       </template>
       <template #right>
         <var-icon
           v-if="showMore"
           name="dots-vertical"
-          @click.stop="handleMoreClick"
           class="more-icon"
+          @click.stop="handleMoreClick"
         />
       </template>
     </var-app-bar>
 
-    <side-menu v-model="showSideMenu" style="height: 0px;"/>
+    <side-menu v-model="showSideMenu" style="height: 0px;" />
 
     <div class="app-content" :class="{'show-menu': showSideMenu}">
-      <router-view/>
+      <router-view />
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, watch } from 'vue'
 import SideMenu from '@/components/SideMenu'
 import { useGlobalStore } from '@/stores/global'
-import { useUtilStore } from '@/stores/util'
 
 const globalStore = useGlobalStore()
-const utilStore = useUtilStore()
 
-// Action Sheet 相关状态
-const showActionMenu = ref(false)
-const actionMenu = ref([])
+// Action Sheet 相关状态 (预留功能)
+// const showActionMenu = ref(false)
+// const actionMenu = ref([])
 
 const toggleMenu = () => {
   globalStore.toggleSideMenu()
 }
 
-const isLoading = computed(() => utilStore.isLoading)
+// const isLoading = computed(() => utilStore.isLoading)
 const leftOptions = computed(() => ({
   showBack: globalStore.showBack
 }))
@@ -69,7 +67,7 @@ const handleMoreClick = () => {
 // 监听全局标题变化，自动更新 document.title
 watch(() => globalStore.title, (newTitle) => {
   if (newTitle) {
-    document.title = newTitle + ' - ' + import.meta.env.VITE_APP_TITLE;
+    document.title = newTitle + ' - ' + import.meta.env.VITE_APP_TITLE
   }
 })
 </script>

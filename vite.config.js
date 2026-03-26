@@ -11,6 +11,9 @@ import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { VarletImportResolver } from '@varlet/import-resolver'
 
+// 预留用于组件自动导入
+const _varletResolver = VarletImportResolver()
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 

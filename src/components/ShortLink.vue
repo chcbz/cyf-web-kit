@@ -9,18 +9,17 @@
       <var-tab-item>
         <div>
           <var-input
-            textarea 
-            v-model="originalUrl"
             id="originalUrl"
+            v-model="originalUrl"
+            textarea
             :placeholder="$t('dwz.long_url_placeholder')"
             rows="3"
-          >
-          </var-input>
+          />
 
           <var-select
+            v-model="expireYear"
             :placeholder="$t('dwz.expire')"
             :options="expireList"
-            v-model="expireYear"
             label-key="name"
             value-key="value"
           />
@@ -33,15 +32,15 @@
         <div class="result-container">
           <span id="shortUrl">{{ shortUrl }}</span>
           <var-button
+            v-if="shortUrl != ''"
             id="copyBtn"
             size="small"
-            @click="copyContent"
-            v-if="shortUrl != ''"
             class="copy-btn"
+            @click="copyContent"
           >
             {{ $t('app.copy') }}
           </var-button>
-          <div class="qrcode-container" v-if="qrcodeUrl">
+          <div v-if="qrcodeUrl" class="qrcode-container">
             <img :src="qrcodeUrl" class="qrcode-img" />
           </div>
         </div>
@@ -50,13 +49,12 @@
       <var-tab-item>
         <div>
           <var-input
-            textarea 
-            v-model="uri"
             id="uri"
+            v-model="uri"
+            textarea
             :placeholder="$t('dwz.short_url_placeholder')"
             rows="3"
-          >
-          </var-input>
+          />
 
           <var-button type="primary" block @click="toLong">
             {{ $t('dwz.restore') }}
@@ -72,190 +70,14 @@
 </template>
 
 <script>
-import QRCode from 'qrcode';
-import { Dialog } from '@varlet/ui';
-import { useGlobalStore } from '../stores/global';
-import { useApiStore } from '../stores/api';
-import { useUtilStore } from '../stores/util';
-import { dwzApi } from '../composables/useHttp';
+import QRCode from 'qrcode'
+import { Dialog } from '@varlet/ui'
+import { useGlobalStore } from '../stores/global'
+import { useApiStore } from '../stores/api'
+import { useUtilStore } from '../stores/util'
+import { dwzApi } from '../composables/useHttp'
 
 export default {
-  created() {
-    const globalStore = useGlobalStore();
-    globalStore.setTitle(this.$t('dwz.title'));
-    globalStore.setShowBack(false);
-    globalStore.setShowMore(false);
-  },
-  methods: {
-    async generateQRCode(text) {
-      console.log('Generating QR code for:', text);
-      try {
-        return await QRCode.toDataURL(text, { width: 200 });
-      } catch (error) {
-        console.error('Failed to generate QR code:', error);
-        return '';
-      }
-    },
-    toShort() {
-      const apiStore = useApiStore();
-      const globalStore = useGlobalStore();
-      const utilStore = useUtilStore();
-      var baseUrl = apiStore.baseUrl;
-      var jiacn = globalStore.getJiacn;
-      const _this = this;
-
-      if (!this.originalUrl) {
-        Dialog({
-          title: this.$t('app.alert'),
-          message: this.$t('dwz.long_url_empty'),
-          confirmButtonText: this.$t('app.confirm')
-        });
-        return;
-      }
-
-      if (!jiacn) {
-        Dialog({
-          title: _this.$t('app.notify'),
-          message: _this.$t('dwz.subscribe_notify'),
-          confirmButtonText: _this.$t('app.confirm'),
-          onConfirm: () => {
-            window.location.href =
-              'https://mp.weixin.qq.com/mp/profile_ext?action=home&__biz=MzU2OTU3Njk5MQ==&scene=110#wechat_redirect';
-          }
-        });
-        return;
-      }
-
-      // Calculate expire time considering leap years
-      const now = new Date();
-      const futureDate = new Date(
-        now.getFullYear() + parseInt(_this.expireYear),
-        now.getMonth(),
-        now.getDate()
-      );
-      const expireTime = utilStore.toTimeStamp(futureDate);
-
-      dwzApi.create('/gen', {
-        jiacn: jiacn,
-        orig: _this.originalUrl,
-        expireTime: expireTime
-      }, {
-        onSuccess: (data) => {
-          if (data.code === 'E0') {
-            _this.shortUrl = apiStore.dwzDomain + data.data;
-          } else {
-            Dialog({
-              title: _this.$t('app.alert'),
-              message: data.msg,
-              confirmButtonText: _this.$t('app.confirm')
-            });
-          }
-        },
-        onError: (errorMessage, error) => {
-          Dialog({
-            title: _this.$t('app.alert'),
-            message: _this.$t('dwz.network_error'),
-            confirmButtonText: _this.$t('app.confirm')
-          });
-        }
-      });
-    },
-    toLong() {
-      const apiStore = useApiStore();
-      const globalStore = useGlobalStore();
-      var baseUrl = apiStore.baseUrl;
-      var jiacn = globalStore.getJiacn;
-      const _this = this;
-
-      if (!this.uri) {
-        Dialog({
-          title: this.$t('app.alert'),
-          message: this.$t('dwz.short_url_empty'),
-          confirmButtonText: this.$t('app.confirm')
-        });
-        return;
-      }
-
-      if (!jiacn) {
-        Dialog({
-          title: _this.$t('app.notify'),
-          message: _this.$t('dwz.subscribe_notify'),
-          confirmButtonText: _this.$t('app.confirm'),
-          onConfirm: () => {
-            window.location.href =
-              'https://mp.weixin.qq.com/mp/profile_ext?action=home&__biz=MzU2OTU3Njk5MQ==&scene=110#wechat_redirect';
-          }
-        });
-        return;
-      }
-      var uri = _this.uri;
-      if (uri.indexOf('/') !== -1) {
-        uri = uri.substring(uri.lastIndexOf('/') + 1);
-      }
-      dwzApi.get('/restore', { uri: uri }, {
-        onSuccess: (data) => {
-          if (data.code === 'E0') {
-            _this.longUrl = data.data;
-          } else {
-            Dialog({
-              title: _this.$t('app.alert'),
-              message: data.msg,
-              confirmButtonText: _this.$t('app.confirm')
-            });
-          }
-        },
-        onError: (errorMessage, error) => {
-          Dialog({
-            title: _this.$t('app.alert'),
-            message: _this.$t('dwz.network_error'),
-            confirmButtonText: _this.$t('app.confirm')
-          });
-        }
-      });
-    },
-    copyContent() {
-      if (!navigator.clipboard) {
-        // Fallback for older browsers
-        const textarea = document.createElement('textarea');
-        textarea.value = this.shortUrl;
-        document.body.appendChild(textarea);
-        textarea.select();
-        try {
-          document.execCommand('copy');
-          Dialog({
-            title: this.$t('app.notify'),
-            message: this.$t('phrase.copy_success'),
-            confirmButtonText: this.$t('app.confirm')
-          });
-        } catch (err) {
-          Dialog({
-            title: this.$t('app.alert'),
-            message: this.$t('phrase.copy_failed'),
-            confirmButtonText: this.$t('app.confirm')
-          });
-        }
-        document.body.removeChild(textarea);
-        return;
-      }
-
-      navigator.clipboard
-        .writeText(this.shortUrl)
-        .then(() => {
-          Dialog({
-            title: this.$t('app.notify'),
-            message: this.$t('phrase.copy_success'),
-            confirmButtonText: this.$t('app.confirm')
-          });
-        })
-        .catch((err) => {
-          Dialog({
-            title: this.$t('app.alert'),
-            message: this.$t('phrase.copy_failed'),
-            confirmButtonText: this.$t('app.confirm')
-          });
-        });
-    }
-  },
   data() {
     return {
       index: 0, // 默认显示第一个面板
@@ -275,18 +97,191 @@ export default {
       shortUrl: '',
       longUrl: '',
       qrcodeUrl: '' // 存储生成的二维码URL
-    };
+    }
   },
   watch: {
     async shortUrl(newUrl) {
       if (newUrl) {
-        this.qrcodeUrl = await this.generateQRCode(newUrl);
+        this.qrcodeUrl = await this.generateQRCode(newUrl)
       } else {
-        this.qrcodeUrl = '';
+        this.qrcodeUrl = ''
       }
     }
+  },
+  created() {
+    const globalStore = useGlobalStore()
+    globalStore.setTitle(this.$t('dwz.title'))
+    globalStore.setShowBack(false)
+    globalStore.setShowMore(false)
+  },
+  methods: {
+    async generateQRCode(text) {
+      console.log('Generating QR code for:', text)
+      try {
+        return await QRCode.toDataURL(text, { width: 200 })
+      } catch (error) {
+        console.error('Failed to generate QR code:', error)
+        return ''
+      }
+    },
+    toShort() {
+      const apiStore = useApiStore()
+      const globalStore = useGlobalStore()
+      const utilStore = useUtilStore()
+      const jiacn = globalStore.getJiacn
+      const _this = this
+
+      if (!this.originalUrl) {
+        Dialog({
+          title: this.$t('app.alert'),
+          message: this.$t('dwz.long_url_empty'),
+          confirmButtonText: this.$t('app.confirm')
+        })
+        return
+      }
+
+      if (!jiacn) {
+        Dialog({
+          title: _this.$t('app.notify'),
+          message: _this.$t('dwz.subscribe_notify'),
+          confirmButtonText: _this.$t('app.confirm'),
+          onConfirm: () => {
+            window.location.href =
+              'https://mp.weixin.qq.com/mp/profile_ext?action=home&__biz=MzU2OTU3Njk5MQ==&scene=110#wechat_redirect'
+          }
+        })
+        return
+      }
+
+      // Calculate expire time considering leap years
+      const now = new Date()
+      const futureDate = new Date(
+        now.getFullYear() + parseInt(_this.expireYear),
+        now.getMonth(),
+        now.getDate()
+      )
+      const expireTime = utilStore.toTimeStamp(futureDate)
+
+      dwzApi.create('/gen', {
+        jiacn,
+        orig: _this.originalUrl,
+        expireTime
+      }, {
+        onSuccess: (data) => {
+          if (data.code === 'E0') {
+            _this.shortUrl = apiStore.dwzDomain + data.data
+          } else {
+            Dialog({
+              title: _this.$t('app.alert'),
+              message: data.msg,
+              confirmButtonText: _this.$t('app.confirm')
+            })
+          }
+        },
+        onError: (_errorMessage, _error) => {
+          Dialog({
+            title: _this.$t('app.alert'),
+            message: _this.$t('dwz.network_error'),
+            confirmButtonText: _this.$t('app.confirm')
+          })
+        }
+      })
+    },
+    toLong() {
+      const globalStore = useGlobalStore()
+      const jiacn = globalStore.getJiacn
+      const _this = this
+
+      if (!this.uri) {
+        Dialog({
+          title: this.$t('app.alert'),
+          message: this.$t('dwz.short_url_empty'),
+          confirmButtonText: this.$t('app.confirm')
+        })
+        return
+      }
+
+      if (!jiacn) {
+        Dialog({
+          title: _this.$t('app.notify'),
+          message: _this.$t('dwz.subscribe_notify'),
+          confirmButtonText: _this.$t('app.confirm'),
+          onConfirm: () => {
+            window.location.href =
+              'https://mp.weixin.qq.com/mp/profile_ext?action=home&__biz=MzU2OTU3Njk5MQ==&scene=110#wechat_redirect'
+          }
+        })
+        return
+      }
+      let uri = _this.uri
+      if (uri.indexOf('/') !== -1) {
+        uri = uri.substring(uri.lastIndexOf('/') + 1)
+      }
+      dwzApi.get('/restore', { uri }, {
+        onSuccess: (data) => {
+          if (data.code === 'E0') {
+            _this.longUrl = data.data
+          } else {
+            Dialog({
+              title: _this.$t('app.alert'),
+              message: data.msg,
+              confirmButtonText: _this.$t('app.confirm')
+            })
+          }
+        },
+        onError: (_errorMessage, _error) => {
+          Dialog({
+            title: _this.$t('app.alert'),
+            message: _this.$t('dwz.network_error'),
+            confirmButtonText: _this.$t('app.confirm')
+          })
+        }
+      })
+    },
+    copyContent() {
+      if (!navigator.clipboard) {
+        // Fallback for older browsers
+        const textarea = document.createElement('textarea')
+        textarea.value = this.shortUrl
+        document.body.appendChild(textarea)
+        textarea.select()
+        try {
+          document.execCommand('copy')
+          Dialog({
+            title: this.$t('app.notify'),
+            message: this.$t('phrase.copy_success'),
+            confirmButtonText: this.$t('app.confirm')
+          })
+        } catch {
+          Dialog({
+            title: this.$t('app.alert'),
+            message: this.$t('phrase.copy_failed'),
+            confirmButtonText: this.$t('app.confirm')
+          })
+        }
+        document.body.removeChild(textarea)
+        return
+      }
+
+      navigator.clipboard
+        .writeText(this.shortUrl)
+        .then(() => {
+          Dialog({
+            title: this.$t('app.notify'),
+            message: this.$t('phrase.copy_success'),
+            confirmButtonText: this.$t('app.confirm')
+          })
+        })
+        .catch((_err) => {
+          Dialog({
+            title: this.$t('app.alert'),
+            message: this.$t('phrase.copy_failed'),
+            confirmButtonText: this.$t('app.confirm')
+          })
+        })
+    }
   }
-};
+}
 </script>
 
 <style scoped>
