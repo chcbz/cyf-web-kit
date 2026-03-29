@@ -96,7 +96,7 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks: {
             vue: ['vue', 'vue-router', 'pinia'],
-            vendor: ['axios', 'lodash']
+            vendor: ['lodash']
           }
         }
       }
