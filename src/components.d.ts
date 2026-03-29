@@ -8,7 +8,14 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
-    Chat: typeof import('./components/Chat.vue')['default']
+    Chat: typeof import('./components/chat/Chat.vue')['default']
+    ChatCapabilities: typeof import('./components/chat/ChatCapabilities.vue')['default']
+    ChatEmptyState: typeof import('./components/chat/ChatEmptyState.vue')['default']
+    ChatInput: typeof import('./components/chat/ChatInput.vue')['default']
+    ChatMessage: typeof import('./components/chat/ChatMessage.vue')['default']
+    ChatMessageList: typeof import('./components/chat/ChatMessageList.vue')['default']
+    ChatSidebar: typeof import('./components/chat/ChatSidebar.vue')['default']
+    copy: typeof import('./components/Chat copy.vue')['default']
     DateRangePicker: typeof import('./components/DateRangePicker.vue')['default']
     DateRangePickerDialog: typeof import('./components/DateRangePickerDialog.vue')['default']
     GiftList: typeof import('./components/GiftList.vue')['default']

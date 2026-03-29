@@ -28,7 +28,7 @@ export default [
   {
     path: '/',
     name: 'Chat',
-    component: () => import('@/components/Chat'),
+    component: () => import('@/components/chat/Chat'),
     meta: {
       title: 'chat.title',
       showInMenu: true,
