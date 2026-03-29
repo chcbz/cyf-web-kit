@@ -76,6 +76,7 @@ import { useGlobalStore } from '../stores/global'
 import { useApiStore } from '../stores/api'
 import { useUtilStore } from '../stores/util'
 import { dwzApi } from '../composables/useHttp'
+import { log } from '@/utils/logger'
 
 export default {
   data() {
@@ -116,11 +117,11 @@ export default {
   },
   methods: {
     async generateQRCode(text) {
-      console.log('Generating QR code for:', text)
+      log.debug('Generating QR code for:', text)
       try {
         return await QRCode.toDataURL(text, { width: 200 })
       } catch (error) {
-        console.error('Failed to generate QR code:', error)
+        log.error('Failed to generate QR code:', error)
         return ''
       }
     },

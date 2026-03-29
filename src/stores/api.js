@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { useUtilStore } from './util'
 import { useGlobalStore } from './global'
+import { log } from '@/utils/logger'
 
 // PKCE工具方法
 function generateRandomString (length) {
@@ -62,8 +63,8 @@ export const useApiStore = defineStore('api', {
       const utilStore = useUtilStore()
       const codeVerifier = utilStore.getLocalStorage('pkce_code_verifier')
       if (!codeVerifier) throw new Error('No code verifier found')
-      console.log('Exchanging code for token with verifier:', codeVerifier)
-      console.log('Authorization code:', code)
+      log.debug('Exchanging code for token with verifier:', codeVerifier)
+      log.debug('Authorization code:', code)
       const params = new URLSearchParams({
         grant_type: 'authorization_code',
         code,
@@ -81,7 +82,7 @@ export const useApiStore = defineStore('api', {
       if (!response.ok) throw new Error('Token exchange failed')
 
       const data = await response.json()
-      console.log('Token exchange successful:', data)
+      log.info('Token exchange successful')
       utilStore.removeLocalStorage('pkce_code_verifier')
       utilStore.setLocalStorage('api_token', data.access_token, new Date().getTime() + data.expires_in * 1000 - 60000)
       return data.access_token
@@ -125,7 +126,7 @@ export const useApiStore = defineStore('api', {
       if (!response.ok) throw new Error('Failed to get user info')
 
       const result = await response.json()
-      console.log('User info retrieved:', result)
+      log.debug('User info retrieved:', result)
       const data = result.data
       if (data.jiacn) {
         globalStore.setJiacn(data.jiacn)

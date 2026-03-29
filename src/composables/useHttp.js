@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { useApiStore } from '../stores/api'
+import { log } from '@/utils/logger'
 // import { useGlobalStore } from '../stores/global' // 预留
 // import { useUtilStore } from '../stores/util' // 预留
 
@@ -236,7 +237,7 @@ export function useHttp (options = {}) {
           try {
             await reader.cancel()
           } catch (cancelError) {
-            console.warn('Failed to cancel stream reader:', cancelError)
+            log.warn('Failed to cancel stream reader:', cancelError)
           }
         }
 
@@ -314,22 +315,22 @@ export function useHttp (options = {}) {
       } else if (err.status === 401 && needAuth) {
         // 清理旧的 token
         apiStore.cleanToken()
-        console.warn('Authentication expired, token cleaned')
+        log.warn('Authentication expired, token cleaned')
 
         // 如果还没有重试过，尝试重新获取 token 并重试请求
         if (retryCount === 0) {
-          console.log('Attempting to refresh token and retry request...')
+          log.debug('Attempting to refresh token and retry request...')
           try {
             // 重新获取 token
             await apiStore.token()
             // 重试请求，增加重试计数
             return await execute(executeOptions, retryCount + 1)
           } catch (refreshError) {
-            console.error('Failed to refresh token:', refreshError)
+            log.error('Failed to refresh token:', refreshError)
             // token 刷新失败，继续抛出原始错误
           }
         } else {
-          console.warn('Already retried once, not retrying again')
+          log.warn('Already retried once, not retrying again')
         }
       }
 

@@ -168,6 +168,7 @@ import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import { useGlobalStore } from '../stores/global'
 import { taskApi } from '../composables/useHttp'
+import { log } from '@/utils/logger'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -286,7 +287,7 @@ const getTasksForDate = (dateStr) => {
     try {
       return dayjs(task.executeTime).format('YYYY-MM-DD') === dateStr
     } catch (_error) {
-      console.warn('日期解析错误:', task.executeTime, _error)
+      log.warn('日期解析错误:', task.executeTime, _error)
       return false
     }
   })
@@ -337,13 +338,13 @@ const fetchTasks = async () => {
         listPlan.value = dayTasks
       },
       onError: (_error) => {
-        console.error('获取任务失败:', _error)
+        log.error('获取任务失败:', _error)
         monthTasks.value = []
         listPlan.value = []
       }
     })
   } catch (_error) {
-    console.error('任务请求异常:', _error)
+    log.error('任务请求异常:', _error)
   }
 }
 
@@ -360,7 +361,7 @@ const doShowDetail = async (item) => {
       }
     }
   } catch (_error) {
-    console.warn('获取任务详情失败:', _error)
+    log.warn('获取任务详情失败:', _error)
     taskDetailData.value = {
       periodText: item.crond || periodMap[item.period] || '一次性任务'
     }

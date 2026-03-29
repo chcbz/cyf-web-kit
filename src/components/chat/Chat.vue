@@ -39,6 +39,7 @@ import { useGlobalStore } from '../../stores/global'
 // import { useApiStore } from '../../stores/api' // 预留
 import { useI18n } from 'vue-i18n'
 import { mcpApi, kefuApi, phraseApi } from '../../composables/useHttp'
+import { log } from '@/utils/logger'
 
 // 导入子组件
 import ChatMessageList from './ChatMessageList.vue'
@@ -120,11 +121,11 @@ const loadRandomPhrase = async () => {
         }
       },
       onError: (error) => {
-        console.warn('从服务端加载会话失败:', error)
+        log.warn('从服务端加载会话失败:', error)
       }
     })
   } catch (error) {
-    console.warn('加载随机短语失败:', error)
+    log.warn('加载随机短语失败:', error)
     // 保持默认文本
   }
 }
@@ -157,7 +158,7 @@ const loadConversations = async () => {
       }
     })
   } catch (error) {
-    console.warn('加载会话失败:', error)
+    log.warn('加载会话失败:', error)
   }
 }
 
@@ -192,12 +193,12 @@ const loadConversation = async (id) => {
           }
         },
         onError: (error) => {
-          console.warn('从服务端加载会话内容失败:', error)
+          log.warn('从服务端加载会话内容失败:', error)
           messages.value = []
         }
       })
     } catch (error) {
-      console.warn('加载会话内容失败:', error)
+      log.warn('加载会话内容失败:', error)
       messages.value = []
     }
   }
@@ -229,7 +230,7 @@ const updateBotMessage = async (content) => {
 }
 
 const processBotResponse = (eventData) => {
-  console.log('Received event data:', eventData)
+  log.debug('Received event data:', eventData)
 
   // 处理多种可能的数据格式
   let payload = ''
@@ -249,7 +250,7 @@ const processBotResponse = (eventData) => {
   payload = payload.trim()
 
   if (payload === '[DONE]' || payload === '[EOM]' || !payload) {
-    console.log('Stream completed or empty payload')
+    log.debug('Stream completed or empty payload')
     return
   }
 
@@ -264,10 +265,10 @@ const processBotResponse = (eventData) => {
       globalStore.setTitle(data.t)
       loadConversations()
     } else {
-      console.log('No message content found in JSON:', data)
+      log.debug('No message content found in JSON:', data)
     }
   } catch {
-    console.log('Not JSON, treating as plain text:', payload)
+    log.debug('Not JSON, treating as plain text:', payload)
     // 如果不是JSON，直接作为文本显示
     updateBotMessage(payload)
   }
@@ -308,17 +309,17 @@ const sendMessage = async (message) => {
         autoLoading: false,
         timeout: 1800000,
         onStream: (eventData) => {
-          console.log('Stream data received:', eventData)
+          log.debug('Stream data received:', eventData)
           processBotResponse(eventData)
         },
         onStreamEnd: () => {
-          console.log('Stream ended')
+          log.debug('Stream ended')
           isStreaming.value = false
           isLoading.value = false
           readerRef.value = null
         },
         onError: (errorMessage) => {
-          console.error('发送消息失败:', errorMessage)
+          log.error('发送消息失败:', errorMessage)
           throw new Error(errorMessage)
         }
       }
@@ -329,7 +330,7 @@ const sendMessage = async (message) => {
       readerRef.value = streamResult.stream.reader
     }
   } catch (err) {
-    console.error('发送消息失败:', err)
+    log.error('发送消息失败:', err)
     isStreaming.value = false
     isLoading.value = false
     error.value = '发送消息失败，请重试'
@@ -359,7 +360,7 @@ const stopStream = async () => {
         }
       ]
     } catch (err) {
-      console.error('取消请求失败:', err)
+      log.error('取消请求失败:', err)
     } finally {
       isStreaming.value = false
       isLoading.value = false
@@ -388,21 +389,21 @@ const toggleSidebar = () => {
 // 删除会话（带重试机制）
 const deleteConversation = async (id, retryCount = 0) => {
   try {
-    console.log('删除会话:', id)
+    log.debug('删除会话:', id)
     await mcpApi.delete('/conversation/delete', id, {
       onSuccess: () => {
-        console.log('删除会话成功:', id)
+        log.debug('删除会话成功:', id)
         const index = conversations.value.findIndex((c) => c.id === id)
         if (index !== -1) {
           conversations.value.splice(index, 1)
         }
         if (id === conversationId.value) {
-          console.log('当前会话被删除，生成新会话ID')
+          log.debug('当前会话被删除，生成新会话ID')
           generateNewConversationId()
         }
       },
       onError: (errorMessage) => {
-        console.error('删除会话失败:', errorMessage)
+        log.error('删除会话失败:', errorMessage)
 
         const lastMessage = messages.value[messages.value.length - 1]
         if (!lastMessage || !lastMessage.isError) {
@@ -423,7 +424,7 @@ const deleteConversation = async (id, retryCount = 0) => {
       }
     })
   } catch (error) {
-    console.error('删除会话失败:', error)
+    log.error('删除会话失败:', error)
 
     const lastMessage = messages.value[messages.value.length - 1]
     if (!lastMessage || !lastMessage.isError) {

@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { log } from '@/utils/logger'
 
 export const useUtilStore = defineStore('util', {
   state: () => ({
@@ -12,7 +13,7 @@ export const useUtilStore = defineStore('util', {
       if (data) {
         const dataObj = JSON.parse(data)
         if (new Date().getTime() > dataObj.expTime) {
-          console.log('信息已过期')
+          log.debug('信息已过期')
           localStorage.removeItem(key)
         } else {
           return dataObj.data

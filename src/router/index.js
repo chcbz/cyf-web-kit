@@ -1,4 +1,5 @@
 import { useApiStore } from '@/stores/api'
+import { log } from '@/utils/logger'
 
 export default [
   {
@@ -14,7 +15,7 @@ export default [
           await apiStore.getUserInfo()
           next(to.query.state || '/')
         } catch (error) {
-          console.error('OAuth callback error:', error)
+          log.error('OAuth callback error:', error)
           next('/')
         }
       },

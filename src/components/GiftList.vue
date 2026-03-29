@@ -67,6 +67,7 @@ import { useI18n } from 'vue-i18n'
 import { useGlobalStore } from '@/stores/global'
 import { giftApi } from '@/composables/useHttp'
 import { Dialog } from '@varlet/ui'
+import { log } from '@/utils/logger'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -140,7 +141,7 @@ const fetchGiftList = () => {
       }
     },
     onError: (error) => {
-      console.error('获取礼品列表失败:', error)
+      log.error('获取礼品列表失败:', error)
       Dialog({
         title: t('app.error'),
         message: t('app.network_error')

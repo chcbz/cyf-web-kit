@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { useUtilStore } from './util'
+import { log } from '@/utils/logger'
 
 export const useGlobalStore = defineStore('global', {
   state: () => ({
@@ -34,7 +35,7 @@ export const useGlobalStore = defineStore('global', {
   },
   actions: {
     setOpenid (id) {
-      console.log('Setting openid:', id)
+      log.debug('Setting openid:', id)
       const utilStore = useUtilStore()
       utilStore.setLocalStorage('openid', id, new Date().getTime() + 7 * 24 * 60 * 60 * 1000)
       this.user.openid = id
@@ -45,7 +46,7 @@ export const useGlobalStore = defineStore('global', {
       this.user.wxToken = payload.accessToken
     },
     setJiacn (id) {
-      console.log('Setting jiacn:', id)
+      log.debug('Setting jiacn:', id)
       const utilStore = useUtilStore()
       utilStore.setLocalStorage('jiacn', id, new Date().getTime() + 7 * 24 * 60 * 60 * 1000)
       this.user.jiacn = id

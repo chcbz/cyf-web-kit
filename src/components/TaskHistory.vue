@@ -64,6 +64,7 @@ import { useUtilStore } from '../stores/util'
 import dayjs from 'dayjs'
 import { Dialog } from '@varlet/ui'
 import { taskApi } from '../composables/useHttp'
+import { log } from '@/utils/logger'
 
 // 路由器 (预留)
 // const router = useRouter()
@@ -178,7 +179,7 @@ const onClickOpMenu = (key) => {
               message: t('app.network_error'),
               confirmButtonText: t('app.confirm')
             })
-            console.error('删除历史任务失败:', error)
+            log.error('删除历史任务失败:', error)
           }
         })
       }
@@ -200,7 +201,7 @@ const fetchTasks = () => {
       list.value = Array.isArray(data.data) ? data.data : []
     },
     onError: (error) => {
-      console.error('获取历史任务失败:', error)
+      log.error('获取历史任务失败:', error)
       list.value = []
     }
   })

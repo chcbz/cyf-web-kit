@@ -145,6 +145,7 @@ import { useGlobalStore } from '../stores/global'
 // import { useApiStore } from '../stores/api' // 预留
 import { useUtilStore } from '../stores/util'
 import { taskApi } from '../composables/useHttp'
+import { log } from '@/utils/logger'
 import dayjs from 'dayjs'
 
 // 路由器
@@ -325,7 +326,7 @@ const doAdd = () => {
         message: t('app.network_error'),
         confirmButtonText: t('app.confirm')
       })
-      console.error('创建任务失败:', error)
+      log.error('创建任务失败:', error)
     }
   })
 }
@@ -363,7 +364,7 @@ const openStartDatePicker = () => {
       pickerDate.value = dateTime.format('YYYY-MM-DD')
       pickerTime.value = dateTime.format('HH:mm')
     } catch (error) {
-      console.warn('解析开始时间失败:', error)
+      log.warn('解析开始时间失败:', error)
       pickerDate.value = dayjs().format('YYYY-MM-DD')
       pickerTime.value = dayjs().format('HH:mm')
     }
@@ -383,7 +384,7 @@ const openEndDatePicker = () => {
       pickerDate.value = dateTime.format('YYYY-MM-DD')
       pickerTime.value = dateTime.format('HH:mm')
     } catch (error) {
-      console.warn('解析结束时间失败:', error)
+      log.warn('解析结束时间失败:', error)
       pickerDate.value = dayjs().add(1, 'day').format('YYYY-MM-DD')
       pickerTime.value = dayjs().format('HH:mm')
     }

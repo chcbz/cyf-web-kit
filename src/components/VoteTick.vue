@@ -30,6 +30,7 @@
 import { useGlobalStore } from '../stores/global'
 import { Dialog } from '@varlet/ui'
 import { voteApi } from '../composables/useHttp'
+import { log } from '@/utils/logger'
 
 export default {
   data() {
@@ -66,7 +67,7 @@ export default {
   },
   methods: {
     onClickOpMenu(key, item) {
-      console.log(item)
+      log.debug('Option menu clicked:', item)
     },
     toTick(opt) {
       const jiacn = this.globalStore.getJiacn

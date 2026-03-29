@@ -114,6 +114,7 @@ import { Dialog } from '@varlet/ui'
 import { useGlobalStore } from '@/stores/global'
 // import { useApiStore } from '@/stores/api' // 预留
 import { giftApi, wxApi } from '@/composables/useHttp'
+import { log } from '@/utils/logger'
 
 const route = useRoute()
 const router = useRouter()
@@ -148,7 +149,7 @@ const generateQRCode = async (text) => {
   try {
     return await QRCode.toDataURL(text, { width: 200 })
   } catch (error) {
-    console.error('生成二维码失败:', error)
+    log.error('生成二维码失败:', error)
     return ''
   }
 }
@@ -251,7 +252,7 @@ const wxAddress = () => {
         address.value = res.provinceName + res.cityName + res.countryName + res.detailInfo
       },
       cancel(_res) {
-        console.log('cancel weixin address selecting')
+        log.debug('cancel weixin address selecting')
       }
     })
   } else {
