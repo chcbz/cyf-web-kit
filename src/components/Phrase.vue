@@ -1,71 +1,10 @@
 <template>
   <div class="phrase-container">
-    <var-dialog v-model:show="addDialogShow">
-      <div class="cell-group">
-        <var-input
-          v-model="newContent"
-          type="textarea"
-          :placeholder="$t('phrase.content_placeholder')"
-          :maxlength="200"
-        />
-        <var-button
-          type="primary"
-          block
-          :disabled="newContent == ''"
-          @click="addContent"
-        >
-          {{ $t('app.submit') }}
-        </var-button>
-        <var-button type="default" block @click="addDialogShow = false">
-          {{ $t('app.cancel') }}
-        </var-button>
-      </div>
-    </var-dialog>
+    <!-- 添加内容弹窗 -->
+    <PhraseAddDialog v-model:show="addDialogShow" @success="refreshPage" />
 
-    <var-dialog v-model:show="fbDialogShow">
-      <div class="cell-group">
-        <var-input
-          v-model="fbTitle"
-          :placeholder="$t('phrase.feedback_title_placeholder')"
-          :maxlength="50"
-        />
-        <var-input
-          v-model="fbContent"
-          type="textarea"
-          :placeholder="$t('phrase.feedback_content_placeholder')"
-          :maxlength="500"
-        />
-        <var-input
-          v-model="fbName"
-          :placeholder="$t('phrase.feedback_name_placeholder')"
-          :maxlength="20"
-        />
-        <var-input
-          v-model="fbPhone"
-          :placeholder="$t('phrase.feedback_phone_placeholder')"
-          type="tel"
-          :rules="[(v) => /^1[3-9]\d{9}$/.test(v) || '请输入正确手机号']"
-        />
-        <var-input
-          v-model="fbEmail"
-          :placeholder="$t('phrase.feedback_email_placeholder')"
-          :maxlength="100"
-          type="email"
-          :rules="[(v) => /.+@.+\..+/.test(v) || '请输入正确邮箱']"
-        />
-        <var-button
-          type="primary"
-          block
-          :disabled="fbTitle == ''"
-          @click="feedback"
-        >
-          {{ $t('app.submit') }}
-        </var-button>
-        <var-button type="default" block @click="fbDialogShow = false">
-          {{ $t('app.cancel') }}
-        </var-button>
-      </div>
-    </var-dialog>
+    <!-- 反馈弹窗 -->
+    <PhraseFeedbackDialog v-model:show="fbDialogShow" />
 
     <div class="phrase-content">
       <h2 id="content" class="phrase-text">{{ phrase.content }}</h2>
@@ -83,11 +22,11 @@
         <var-icon name="heart" size="26px" class="action-icon" />
         <div class="action-label">{{ $t('phrase.tips') }}</div>
       </div>
-      <div ref="upvote" class="action-item" @click="toTick(1)">
+      <div ref="upvote" class="action-item" :class="{ voted: upVoted }" @click="toTick(1)">
         <var-icon name="thumb-up" size="26px" class="action-icon" />
         <div class="action-label">{{ $t('phrase.up') }}{{ phrase.up }}</div>
       </div>
-      <div ref="downvote" class="action-item" @click="toTick(0)">
+      <div ref="downvote" class="action-item" :class="{ voted: downVoted }" @click="toTick(0)">
         <var-icon name="thumb-down" size="26px" class="action-icon" />
         <div class="action-label">{{ $t('phrase.down') }}{{ phrase.down }}</div>
       </div>
@@ -122,287 +61,217 @@
   </div>
 </template>
 
-<script>
+<script setup>
+import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import Clipboard from 'clipboard'
+import { Dialog } from '@varlet/ui'
 import { useGlobalStore } from '../stores/global'
 import { useUtilStore } from '../stores/util'
-import { phraseApi, userApi, kefuApi, tipApi, wxApi } from '../composables/useHttp'
-import { Dialog } from '@varlet/ui'
+import { phraseApi, userApi, tipApi, wxApi } from '../composables/useHttp'
+import PhraseAddDialog from './phrase/PhraseAddDialog.vue'
+import PhraseFeedbackDialog from './phrase/PhraseFeedbackDialog.vue'
 
-export default {
-  data() {
-    return {
-      phrase: {},
-      showOpMenu: false,
-      hasTick: false,
-      addDialogShow: false,
-      newContent: '',
-      author: '',
-      fbDialogShow: false,
-      fbTitle: '',
-      fbContent: '',
-      fbName: '',
-      fbPhone: '',
-      fbEmail: ''
-    }
-  },
-  created() {
-    this.globalStore = useGlobalStore()
-    const utilStore = useUtilStore()
-    this.globalStore.setTitle(this.$t('phrase.title'))
-    document.title = this.$t('phrase.title_sub')
-    this.globalStore.setShowBack(false)
-    this.globalStore.setShowMore(false)
-    this.utilStore = utilStore
-    const jiacn = this.globalStore.getJiacn
-    const _this = this
+const { t } = useI18n()
+const globalStore = useGlobalStore()
+const utilStore = useUtilStore()
 
-    // 使用 phraseApi 替换 $http
-    phraseApi.list('/get/random', {
-      jiacn
-    }, {
-      onSuccess: (data) => {
-        _this.phrase = data.data
-        // 阅读计数
-        phraseApi.getById('/read', data.data.id, {
-          onSuccess: () => {
-            _this.phrase.pv++
-          }
-        })
-        if (_this.phrase.jiacn) {
-          // 获取作者信息
-          userApi.get('/get', {
-            type: 'cn',
-            key: _this.phrase.jiacn
-          }, {
-            onSuccess: (userData) => {
-              if (userData.code === 'E0') {
-                _this.author = userData.data.nickname
-              }
-            }
-          })
-        }
+// 响应式数据
+const phrase = ref({})
+const author = ref('')
+const hasTick = ref(false)
+const upVoted = ref(false)
+const downVoted = ref(false)
+const addDialogShow = ref(false)
+const fbDialogShow = ref(false)
+const upvote = ref(null)
+const downvote = ref(null)
+
+// 方法
+const formatTime = (timestamp) => {
+  return utilStore.fromTimeStamp(timestamp, 'YYYY-MM-DD')
+}
+
+const refreshPage = () => {
+  window.history.go(0)
+}
+
+const closeWindow = () => {
+  utilStore.closeWindow()
+}
+
+const copyContent = () => {
+  const clipboard = new Clipboard('#copyBtn')
+  clipboard.on('success', (e) => {
+    Dialog({
+      title: t('app.notify'),
+      message: t('phrase.copy_success')
+    })
+    e.clearSelection()
+  })
+}
+
+const checkLogin = () => {
+  const jiacn = globalStore.getJiacn
+  if (!jiacn) {
+    Dialog({
+      title: t('app.notify'),
+      message: t('phrase.subscribe_notify'),
+      onConfirm: () => {
+        window.location.href =
+          'https://mp.weixin.qq.com/mp/profile_ext?action=home&__biz=MzU2OTU3Njk5MQ==&scene=110#wechat_redirect'
       }
     })
-  },
-  methods: {
-    toTick(opt) {
-      if (this.hasTick) return false
-      this.hasTick = true
-      const jiacn = this.globalStore.getJiacn
-      const _this = this
-      if (!jiacn) {
-        Dialog({
-          title: _this.$t('app.notify'),
-          message: _this.$t('phrase.subscribe_notify'),
-          onConfirm: () => {
-            window.location.href =
-              'https://mp.weixin.qq.com/mp/profile_ext?action=home&__biz=MzU2OTU3Njk5MQ==&scene=110#wechat_redirect'
-          }
-        })
-        return false
+    return false
+  }
+  return true
+}
+
+const toTick = (opt) => {
+  if (hasTick.value) return
+  if (!checkLogin()) return
+
+  const jiacn = globalStore.getJiacn
+
+  phraseApi.list('/vote', {
+    jiacn,
+    phraseId: phrase.value.id,
+    vote: opt
+  }, {
+    onSuccess: (data) => {
+      if (data.code === 'E0') {
+        hasTick.value = true
+        if (opt === 1) {
+          phrase.value.up++
+          upVoted.value = true
+        } else {
+          phrase.value.down++
+          downVoted.value = true
+        }
       }
-      // 使用 phraseApi 替换 $http
-      phraseApi.list('/vote', {
-        jiacn,
-        phraseId: this.phrase.id,
-        vote: opt
-      }, {
-        onSuccess: (data) => {
-          if (data.code === 'E0') {
-            if (opt === 1) {
-              _this.phrase.up++
-              _this.$refs.upvote.$el.classList.add('voted')
+    }
+  })
+}
+
+const payTips = () => {
+  if (!checkLogin()) return
+
+  const jiacn = globalStore.getJiacn
+  const appid = globalStore.user.appid
+
+  tipApi.post('/create', {
+    type: 1,
+    entityId: phrase.value.id,
+    price: 100,
+    jiacn,
+    status: 0
+  }, {
+    onSuccess: (data) => {
+      if (data.code === 'E0') {
+        wxApi.get('/pay/createOrder', {
+          outTradeNo: 'TIP' + (Array(7).join('0') + data.data.id).slice(-7),
+          tradeType: 'JSAPI',
+          appid
+        }, {
+          onSuccess: (wxData) => {
+            if (wxData.data) {
+              weixinPay(wxData.data)
             } else {
-              _this.phrase.down++
-              _this.$refs.downvote.$el.classList.add('voted')
+              Dialog({
+                title: t('app.alert'),
+                message: wxData.msg
+              })
             }
           }
-        }
-      })
-    },
-    copyContent() {
-      const clipboard = new Clipboard('#copyBtn')
-      const _this = this
-      clipboard.on('success', (e) => {
-        Dialog({
-          title: _this.$t('app.notify'),
-          message: _this.$t('phrase.copy_success')
         })
-        e.clearSelection()
-      })
-    },
-    refreshPage() {
-      window.history.go(0)
-    },
-    closeWindow() {
-      const utilStore = useUtilStore()
-      utilStore.closeWindow()
-    },
-    formatTime(timestamp) {
-      const utilStore = useUtilStore()
-      return utilStore.fromTimeStamp(timestamp, 'YYYY-MM-DD')
-    },
-    addContent() {
-      const jiacn = this.globalStore.getJiacn
-      const _this = this
-      // 使用 phraseApi 替换 $http
-      phraseApi.create('/create', {
-        jiacn,
-        content: this.newContent.trim(),
-        tag: '毒鸡汤'
-      }, {
-        onSuccess: (data) => {
-          if (data.code === 'E0') {
-            _this.newContent = ''
-            _this.addDialogShow = false
-            Dialog({
-              title: _this.$t('app.notify'),
-              message: _this.$t('phrase.add_success')
-            })
-          } else {
-            _this.addDialogShow = false
-            Dialog({
-              title: _this.$t('app.alert'),
-              message: data.msg
-            })
-          }
-        }
-      })
-    },
-    feedback() {
-      const jiacn = this.globalStore.getJiacn
-      const _this = this
-      if (!jiacn) {
-        Dialog({
-          title: _this.$t('app.notify'),
-          message: _this.$t('phrase.subscribe_notify'),
-          onConfirm: () => {
-            window.location.href =
-              'https://mp.weixin.qq.com/mp/profile_ext?action=home&__biz=MzU2OTU3Njk5MQ==&scene=110#wechat_redirect'
-          }
-        })
-        return false
-      }
-      const formData = new FormData()
-      formData.append('jiacn', jiacn)
-      formData.append('resourceId', 'phrase')
-      formData.append('name', _this.fbName)
-      formData.append('phone', _this.fbPhone)
-      formData.append('email', _this.fbEmail)
-      formData.append('title', _this.fbTitle)
-      formData.append('content', _this.fbContent)
-      // 使用 kefuApi 替换 $http
-      kefuApi.post('/message/create', formData, {
-        onSuccess: (data) => {
-          if (data.code === 'E0') {
-            _this.fbTitle = ''
-            _this.fbContent = ''
-            _this.fbDialogShow = false
-            Dialog({
-              title: _this.$t('app.notify'),
-              message: _this.$t('phrase.feedback_success')
-            })
-          }
-        }
-      })
-    },
-    payTips() {
-      const jiacn = this.globalStore.getJiacn
-      const appid = this.globalStore.user.appid
-      const _this = this
-
-      if (!jiacn) {
-        Dialog({
-          title: _this.$t('app.notify'),
-          message: _this.$t('phrase.subscribe_notify'),
-          onConfirm: () => {
-            window.location.href =
-              'https://mp.weixin.qq.com/mp/profile_ext?action=home&__biz=MzU2OTU3Njk5MQ==&scene=110#wechat_redirect'
-          }
-        })
-        return false
-      }
-      // 使用 tipApi 替换 $http
-      tipApi.post('/create', {
-        type: 1,
-        entityId: this.phrase.id,
-        price: 100,
-        jiacn,
-        status: 0
-      }, {
-        onSuccess: (data) => {
-          if (data.code === 'E0') {
-            // 使用 wxApi 调用微信支付 API
-            wxApi.get('/pay/createOrder', {
-              outTradeNo: 'TIP' + (Array(7).join('0') + data.data.id).slice(-7),
-              tradeType: 'JSAPI',
-              appid
-            }, {
-              onSuccess: (wxData) => {
-                if (wxData.data) {
-                  _this.weixinPay(wxData.data)
-                } else {
-                  Dialog({
-                    title: _this.$t('app.alert'),
-                    message: wxData.msg
-                  })
-                }
-              }
-            })
-          } else {
-            Dialog({
-              title: _this.$t('app.alert'),
-              message: data.msg
-            })
-          }
-        }
-      })
-    },
-    weixinPay(data) {
-      const vm = this
-      if (typeof WeixinJSBridge === 'undefined') {
-        if (document.addEventListener) {
-          document.addEventListener('WeixinJSBridgeReady', vm.onBridgeReady(data), false)
-        } else if (document.attachEvent) {
-          document.attachEvent('WeixinJSBridgeReady', vm.onBridgeReady(data))
-          document.attachEvent('onWeixinJSBridgeReady', vm.onBridgeReady(data))
-        }
       } else {
-        vm.onBridgeReady(data)
+        Dialog({
+          title: t('app.alert'),
+          message: data.msg
+        })
       }
-    },
-    onBridgeReady(data) {
-      const vm = this
-      WeixinJSBridge.invoke(
-        'getBrandWCPayRequest',
-        {
-          debug: true,
-          appId: data.appId,
-          timeStamp: data.timeStamp,
-          nonceStr: data.nonceStr,
-          package: data.packageValue,
-          signType: data.signType,
-          paySign: data.paySign,
-          jsApiList: ['chooseWXPay']
-        },
-        (res) => {
-          if (res.err_msg === 'get_brand_wcpay_request:ok') {
-            Dialog({
-              title: vm.$t('app.notify'),
-              message: vm.$t('phrase.pay_notify')
-            })
-          } else {
-            Dialog({
-              title: vm.$t('app.alert'),
-              message: vm.$t('phrase.pay_cancel')
-            })
-          }
-        }
-      )
     }
+  })
+}
+
+const weixinPay = (data) => {
+  if (typeof WeixinJSBridge === 'undefined') {
+    if (document.addEventListener) {
+      document.addEventListener('WeixinJSBridgeReady', () => onBridgeReady(data), false)
+    } else if (document.attachEvent) {
+      document.attachEvent('WeixinJSBridgeReady', () => onBridgeReady(data))
+      document.attachEvent('onWeixinJSBridgeReady', () => onBridgeReady(data))
+    }
+  } else {
+    onBridgeReady(data)
   }
 }
+
+const onBridgeReady = (data) => {
+  WeixinJSBridge.invoke(
+    'getBrandWCPayRequest',
+    {
+      debug: true,
+      appId: data.appId,
+      timeStamp: data.timeStamp,
+      nonceStr: data.nonceStr,
+      package: data.packageValue,
+      signType: data.signType,
+      paySign: data.paySign,
+      jsApiList: ['chooseWXPay']
+    },
+    (res) => {
+      if (res.err_msg === 'get_brand_wcpay_request:ok') {
+        Dialog({
+          title: t('app.notify'),
+          message: t('phrase.pay_notify')
+        })
+      } else {
+        Dialog({
+          title: t('app.alert'),
+          message: t('phrase.pay_cancel')
+        })
+      }
+    }
+  )
+}
+
+// 生命周期
+onMounted(() => {
+  globalStore.setTitle(t('phrase.title'))
+  document.title = t('phrase.title_sub')
+  globalStore.setShowBack(false)
+  globalStore.setShowMore(false)
+
+  const jiacn = globalStore.getJiacn
+
+  phraseApi.list('/get/random', {
+    jiacn
+  }, {
+    onSuccess: (data) => {
+      phrase.value = data.data
+      // 阅读计数
+      phraseApi.getById('/read', data.data.id, {
+        onSuccess: () => {
+          phrase.value.pv++
+        }
+      })
+      if (data.data.jiacn) {
+        // 获取作者信息
+        userApi.get('/get', {
+          type: 'cn',
+          key: data.data.jiacn
+        }, {
+          onSuccess: (userData) => {
+            if (userData.code === 'E0') {
+              author.value = userData.data.nickname
+            }
+          }
+        })
+      }
+    }
+  })
+})
 </script>
 
 <style scoped>

@@ -5,178 +5,47 @@
     @select="handleActionSelect"
     @update:show="onActionSheetShowChange"
   />
-  <div v-if="showCalendar" class="calendar-container">
-    <div class="calendar-header">
-      <var-button text @click="prevMonth">
-        <var-icon name="chevron-left" />
-      </var-button>
-      <h2>{{ currentMonth }}</h2>
-      <var-button text @click="nextMonth">
-        <var-icon name="chevron-right" />
-      </var-button>
-    </div>
 
-    <div class="calendar-grid">
-      <div class="calendar-weekdays">
-        <div v-for="day in weekdays" :key="day" class="weekday">
-          {{ day }}
-        </div>
-      </div>
+  <!-- 日历面板 -->
+  <CalendarPanel
+    v-model="selectedDate"
+    :month-tasks="monthTasks"
+    @month-change="onMonthChange"
+  />
 
-      <div class="calendar-days">
-        <div
-          v-for="day in calendarDays"
-          :key="day.date"
-          :class="[
-            'day',
-            {
-              today: day.isToday,
-              'current-month': day.isCurrentMonth,
-              'has-tasks': day.taskCount > 0,
-              'selected': selectedDate === day.date && day.isCurrentMonth
-            }
-          ]"
-          @click="selectCalendarDay(day)"
-        >
-          <div class="day-number">{{ day.day }}</div>
-          <div v-if="day.taskCount > 0" class="task-indicator">
-            <div v-if="day.taskCount > 0" class="task-type-dots">
-              <span
-                v-if="day.typeCounts.notify > 0"
-                class="type-dot type-notify"
-                :style="{ opacity: Math.min(day.typeCounts.notify / 3, 1) }"
-              ></span>
-              <span
-                v-if="day.typeCounts.target > 0"
-                class="type-dot type-target"
-                :style="{ opacity: Math.min(day.typeCounts.target / 3, 1) }"
-              ></span>
-              <span
-                v-if="day.typeCounts.repayment > 0"
-                class="type-dot type-repayment"
-                :style="{ opacity: Math.min(day.typeCounts.repayment / 3, 1) }"
-              ></span>
-              <span
-                v-if="day.typeCounts.income > 0"
-                class="type-dot type-income"
-                :style="{ opacity: Math.min(day.typeCounts.income / 3, 1) }"
-              ></span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- 任务列表区域 -->
-  <div v-if="listPlan.length > 0" class="tasks-section">
-    <div class="tasks-header">
-      <h3>{{ formatSelectedDate }}</h3>
-      <span class="tasks-count">{{ listPlan.length }} 个任务</span>
-    </div>
-    <!-- 添加滚动容器 -->
-    <var-list class="tasks-list">
-      <var-cell
-        v-for="item in listPlan"
-        :key="item.id"
-        ripple
-        @click="doShowDetail(item)"
-      >
-        <template #default>
-          <div class="task-title">
-            <span class="task-type-badge" :class="getTaskTypeClass(item.type)">
-              {{ typeDict(item.type) }}
-            </span>
-            <span class="task-name">{{ item.name }}</span>
-          </div>
-        </template>
-        <template #description>
-          <div class="task-description">
-            <span class="task-time">
-              {{ formatTaskTime(item) }}
-            </span>
-            <span v-if="item.description" class="task-desc-text">{{ item.description }}</span>
-          </div>
-        </template>
-        <template #extra>
-          <div class="task-extra">
-            <span v-if="item.amount > 0" class="task-amount">
-              ￥{{ formatAmount(item.amount) }}
-            </span>
-            <var-icon name="chevron-right" size="16" />
-          </div>
-        </template>
-      </var-cell>
-    </var-list>
-  </div>
-
-  <div v-else class="empty-tasks">
-    <var-empty description="暂无任务" />
-  </div>
+  <!-- 任务列表 -->
+  <TaskListPanel
+    :tasks="listPlan"
+    :selected-date="selectedDate"
+    :task-detail-data="taskDetailData"
+    @select="doShowDetail"
+  />
 
   <!-- 任务详情弹窗 -->
-  <var-dialog
+  <TaskDetailDialog
     v-model:show="taskDetailShow"
-    :title="currentTask?.name"
-    :confirm-button="false"
-    :cancel-button="false"
-  >
-    <div v-if="currentTask" class="task-detail-content">
-      <div class="detail-section">
-        <h4>任务信息</h4>
-        <div class="detail-item">
-          <span class="detail-label">任务类型:</span>
-          <span class="detail-value">{{ typeDict(currentTask.type) }}</span>
-        </div>
-        <div v-if="currentTask.description" class="detail-item">
-          <span class="detail-label">描述:</span>
-          <span class="detail-value">{{ currentTask.description }}</span>
-        </div>
-        <div v-if="currentTask.amount > 0" class="detail-item">
-          <span class="detail-label">金额:</span>
-          <span class="detail-value amount">￥{{ formatAmount(currentTask.amount) }}</span>
-        </div>
-      </div>
-
-      <div class="detail-section">
-        <h4>时间信息</h4>
-        <div class="detail-item">
-          <span class="detail-label">执行时间:</span>
-          <span class="detail-value">
-            {{ formatTaskTime(currentTask, true) }}
-          </span>
-        </div>
-        <div v-if="taskDetailData.periodText" class="detail-item">
-          <span class="detail-label">重复周期:</span>
-          <span class="detail-value">{{ taskDetailData.periodText }}</span>
-        </div>
-      </div>
-
-      <div class="detail-actions">
-        <var-button type="primary" block @click="taskDetailShow = false">
-          关闭
-        </var-button>
-      </div>
-    </div>
-  </var-dialog>
+    :task="currentTask"
+    :detail-data="taskDetailData"
+  />
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import { useGlobalStore } from '../stores/global'
 import { taskApi } from '../composables/useHttp'
 import { log } from '@/utils/logger'
+import CalendarPanel from './task/CalendarPanel.vue'
+import TaskListPanel from './task/TaskListPanel.vue'
+import TaskDetailDialog from './task/TaskDetailDialog.vue'
 
 const router = useRouter()
 const { t } = useI18n()
 const globalStore = useGlobalStore()
 
 // 响应式数据
-const showCalendar = ref(true)
-const currentDate = ref(dayjs())
 const selectedDate = ref(dayjs().format('YYYY-MM-DD'))
 const monthTasks = ref([])
 const listPlan = ref([])
@@ -184,14 +53,8 @@ const currentTask = ref(null)
 const taskDetailShow = ref(false)
 const taskDetailData = ref({})
 const showActionSheet = ref(false)
-const actionSheetActions = ref([
-  { name: t('task.add'), key: 'add' },
-  { name: t('app.task_list'), key: 'list' },
-  { name: t('app.task_history'), key: 'history' }
-])
 
 // 常量
-const weekdays = ['日', '一', '二', '三', '四', '五', '六']
 const periodMap = {
   0: '长期',
   1: '每年',
@@ -204,84 +67,13 @@ const periodMap = {
   6: '指定日期'
 }
 
-// 计算属性
-const currentMonth = computed(() => {
-  return currentDate.value.format('YYYY年MM月')
-})
-
-const formatSelectedDate = computed(() => {
-  const date = dayjs(selectedDate.value)
-  const today = dayjs()
-  if (date.isSame(today, 'day')) {
-    return `今天 (${date.format('MM月DD日')})`
-  }
-  return date.format('MM月DD日 dddd')
-})
-
-const calendarDays = computed(() => {
-  const startOfMonth = currentDate.value.startOf('month')
-  const endOfMonth = currentDate.value.endOf('month')
-  const startDay = startOfMonth.day()
-  const daysInMonth = endOfMonth.date()
-
-  const daysArray = []
-  const today = dayjs().format('YYYY-MM-DD')
-
-  // 上个月的最后几天
-  const prevMonthDays = startDay
-  for (let i = prevMonthDays - 1; i >= 0; i--) {
-    const date = startOfMonth.subtract(i + 1, 'day')
-    const dateStr = date.format('YYYY-MM-DD')
-    const dayTasks = getTasksForDate(dateStr)
-    daysArray.push(createDayObject(date, dateStr, today, dayTasks, false))
-  }
-
-  // 当前月的天数
-  for (let i = 1; i <= daysInMonth; i++) {
-    const date = startOfMonth.date(i)
-    const dateStr = date.format('YYYY-MM-DD')
-    const dayTasks = getTasksForDate(dateStr)
-    daysArray.push(createDayObject(date, dateStr, today, dayTasks, true))
-  }
-
-  // 下个月的前几天
-  const remainingCells = 42 - daysArray.length
-  for (let i = 1; i <= remainingCells; i++) {
-    const date = endOfMonth.add(i, 'day')
-    const dateStr = date.format('YYYY-MM-DD')
-    const dayTasks = getTasksForDate(dateStr)
-    daysArray.push(createDayObject(date, dateStr, today, dayTasks, false))
-  }
-
-  return daysArray
-})
+const actionSheetActions = ref([
+  { name: t('task.add'), key: 'add' },
+  { name: t('app.task_list'), key: 'list' },
+  { name: t('app.task_history'), key: 'history' }
+])
 
 // 方法
-const createDayObject = (date, dateStr, today, dayTasks, isCurrentMonth) => {
-  // 统计各种类型的任务数量
-  const typeCounts = {
-    notify: dayTasks.filter(task => task.type === 1).length,
-    target: dayTasks.filter(task => task.type === 2).length,
-    repayment: dayTasks.filter(task => task.type === 3).length,
-    income: dayTasks.filter(task => task.type === 4).length
-  }
-
-  // 向后兼容：payCount 和 notifyCount
-  const payCount = typeCounts.target + typeCounts.repayment + typeCounts.income
-  const notifyCount = typeCounts.notify
-
-  return {
-    date: dateStr,
-    day: date.date(),
-    isCurrentMonth,
-    isToday: dateStr === today,
-    taskCount: dayTasks.length,
-    payCount,
-    notifyCount,
-    typeCounts
-  }
-}
-
 const getTasksForDate = (dateStr) => {
   return monthTasks.value.filter(task => {
     try {
@@ -293,34 +85,10 @@ const getTasksForDate = (dateStr) => {
   })
 }
 
-const prevMonth = () => {
-  currentDate.value = currentDate.value.subtract(1, 'month')
-  fetchTasks()
-}
-
-const nextMonth = () => {
-  currentDate.value = currentDate.value.add(1, 'month')
-  fetchTasks()
-}
-
-const selectCalendarDay = (day) => {
-  if (!day.isCurrentMonth) {
-    // 点击非当前月日期，切换到该月
-    currentDate.value = dayjs(day.date)
-    selectedDate.value = day.date
-    fetchTasks()
-    return
-  }
-
-  selectedDate.value = day.date
-  const dayTasks = getTasksForDate(day.date)
-  listPlan.value = dayTasks
-}
-
 const fetchTasks = async () => {
   try {
-    const firstDay = currentDate.value.startOf('month')
-    const lastDay = currentDate.value.endOf('month')
+    const firstDay = dayjs().startOf('month')
+    const lastDay = dayjs().endOf('month')
     const jiacn = globalStore.getJiacn
 
     taskApi.search('/item/search', {
@@ -348,6 +116,32 @@ const fetchTasks = async () => {
   }
 }
 
+const onMonthChange = (newDate) => {
+  // 月份变化时重新获取任务
+  const firstDay = newDate.startOf('month')
+  const lastDay = newDate.endOf('month')
+  const jiacn = globalStore.getJiacn
+
+  taskApi.search('/item/search', {
+    search: {
+      jiacn,
+      timeStart: firstDay.valueOf(),
+      timeEnd: lastDay.valueOf()
+    }
+  }, {
+    onSuccess: (data) => {
+      monthTasks.value = Array.isArray(data.data) ? data.data : []
+      const dayTasks = getTasksForDate(selectedDate.value)
+      listPlan.value = dayTasks
+    },
+    onError: (_error) => {
+      log.error('获取任务失败:', _error)
+      monthTasks.value = []
+      listPlan.value = []
+    }
+  })
+}
+
 const doShowDetail = async (item) => {
   currentTask.value = item
 
@@ -368,53 +162,6 @@ const doShowDetail = async (item) => {
   }
 
   taskDetailShow.value = true
-}
-
-const typeDict = (type) => {
-  const typeMap = {
-    1: t('task.type_notify'),
-    2: t('task.type_target'),
-    3: t('task.type_repayment'),
-    4: t('task.type_fixed_income')
-  }
-  return typeMap[type] || t('task.type_notify')
-}
-
-const getTaskTypeClass = (type) => {
-  const classMap = {
-    1: 'type-notify',
-    2: 'type-target',
-    3: 'type-repayment',
-    4: 'type-income'
-  }
-  return classMap[type] || 'type-notify'
-}
-
-const formatTaskTime = (task, full = false) => {
-  try {
-    if (task.type > 1) {
-      // 支付任务显示执行时间
-      return dayjs(task.executeTime).format(full ? 'YYYY-MM-DD HH:mm' : 'HH:mm')
-    } else {
-      // 通知任务显示时间段
-      const start = dayjs(taskDetailData.value.startTime || task.executeTime)
-      const end = dayjs(taskDetailData.value.endTime || task.executeTime)
-
-      if (full) {
-        return `${start.format('YYYY-MM-DD HH:mm')} ~ ${end.format('YYYY-MM-DD HH:mm')}`
-      }
-      return `${start.format('HH:mm')}~${end.format('HH:mm')}`
-    }
-  } catch {
-    return '时间未知'
-  }
-}
-
-const formatAmount = (amount) => {
-  return Number(amount).toLocaleString('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })
 }
 
 // ActionSheet 处理
@@ -439,6 +186,12 @@ const onActionSheetShowChange = (show) => {
   }
 }
 
+// 监听选中日期变化
+watch(selectedDate, (newDate) => {
+  const dayTasks = getTasksForDate(newDate)
+  listPlan.value = dayTasks
+})
+
 // 监听右侧边栏显示状态
 watch(
   () => globalStore.showRightSidebar,
@@ -456,368 +209,3 @@ onMounted(() => {
   fetchTasks()
 })
 </script>
-
-<style scoped>
-.calendar-container {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 16px;
-  padding: 20px;
-  margin: 16px;
-  margin-bottom: 24px;
-  color: white;
-  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.2);
-}
-
-.calendar-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.calendar-header h2 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: white;
-}
-
-.calendar-header .var-button {
-  color: white;
-}
-
-.calendar-grid {
-  display: flex;
-  flex-direction: column;
-}
-
-.calendar-weekdays {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  text-align: center;
-  margin-bottom: 12px;
-  font-weight: 500;
-  opacity: 0.9;
-}
-
-.calendar-days {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 8px;
-}
-
-.day {
-  aspect-ratio: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12px;
-  cursor: pointer;
-  position: relative;
-  transition: all 0.3s ease;
-  padding: 4px;
-}
-
-.day:hover {
-  background: rgba(255, 255, 255, 0.1);
-  transform: translateY(-2px);
-}
-
-.day.current-month {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.day.today {
-  background: rgba(255, 255, 255, 0.2);
-  font-weight: bold;
-}
-
-.day.selected {
-  background: rgba(255, 255, 255, 0.3);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-.day-number {
-  font-size: 14px;
-  font-weight: 500;
-  margin-bottom: 2px;
-}
-
-.day:not(.current-month) .day-number {
-  opacity: 0.5;
-}
-
-.task-indicator {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1px;
-}
-
-.task-type-dots {
-  display: flex;
-  gap: 2px;
-  justify-content: center;
-}
-
-.type-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
-
-.type-dot.type-notify {
-  background: #4dabf7;
-}
-
-.type-dot.type-target {
-  background: #fa8c16;
-}
-
-.type-dot.type-repayment {
-  background: #f5222d;
-}
-
-.type-dot.type-income {
-  background: #52c41a;
-}
-
-/* 任务列表样式 */
-.tasks-section {
-  margin: 0 16px 16px;
-  background: white;
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  display: flex;
-  flex-direction: column;
-  /* 使用 flex 布局填充剩余空间 */
-  flex: 1 1 auto;
-  min-height: 160px;
-  max-height: none;
-}
-
-.tasks-header {
-  padding: 20px 20px 12px;
-  border-bottom: 1px solid #f0f0f0;
-  flex-shrink: 0; /* 防止头部被压缩 */
-}
-
-.tasks-header h3 {
-  margin: 0 0 8px 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #333;
-}
-
-.tasks-count {
-  font-size: 12px;
-  color: #999;
-}
-
-.tasks-list {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  position: relative;
-  position: relative;
-}
-
-/* 任务单元格样式 */
-.task-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.task-type-badge {
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-weight: 500;
-  flex-shrink: 0;
-}
-
-.task-type-badge.type-notify {
-  background: #f0f9ff;
-  color: #4dabf7;
-}
-
-.task-type-badge.type-target {
-  background: #fff7e6;
-  color: #fa8c16;
-}
-
-.task-type-badge.type-repayment {
-  background: #fff2f0;
-  color: #f5222d;
-}
-
-.task-type-badge.type-income {
-  background: #f6ffed;
-  color: #52c41a;
-}
-
-.task-name {
-  flex: 1;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.task-description {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-  flex-wrap: wrap;
-}
-
-.task-desc-text {
-  font-size: 13px;
-  color: #666;
-  line-height: 1.4;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.task-time {
-  font-size: 12px;
-  color: #999;
-  flex-shrink: 0;
-}
-
-.task-extra {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.task-amount {
-  font-weight: 600;
-  color: #ff6b6b;
-  font-size: 14px;
-}
-
-.empty-tasks {
-  margin: 32px 16px;
-  text-align: center;
-}
-
-/* 任务详情样式 */
-.task-detail-content {
-  padding: 0 4px;
-}
-
-.detail-section {
-  margin-bottom: 20px;
-}
-
-.detail-section h4 {
-  margin: 0 0 12px 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: #333;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.detail-item {
-  display: flex;
-  margin-bottom: 10px;
-  font-size: 14px;
-}
-
-.detail-label {
-  width: 80px;
-  color: #666;
-  flex-shrink: 0;
-}
-
-.detail-value {
-  flex: 1;
-  color: #333;
-  word-break: break-word;
-}
-
-.detail-value.amount {
-  font-weight: 600;
-  color: #ff6b6b;
-}
-
-.detail-actions {
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid #f0f0f0;
-}
-
-/* 滚动条样式 */
-.tasks-list::-webkit-scrollbar {
-  width: 6px;
-}
-
-.tasks-list::-webkit-scrollbar-track {
-  background: #f5f5f5;
-  border-radius: 3px;
-}
-
-.tasks-list::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
-  transition: background 0.3s;
-}
-
-.tasks-list::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
-}
-
-/* Firefox 滚动条样式 */
-.tasks-list {
-  scrollbar-width: thin;
-  scrollbar-color: #c1c1c1 #f5f5f5;
-}
-
-/* VarList 单元格样式调整 */
-.tasks-list :deep(.var-cell) {
-  padding: 12px 16px;
-  min-height: 60px;
-}
-
-.tasks-list :deep(.var-cell__title) {
-  flex: 1;
-  min-width: 0;
-}
-
-/* 响应式调整 */
-@media (max-width: 375px) {
-  .calendar-container {
-    margin: 12px;
-    padding: 16px;
-  }
-
-  .calendar-days {
-    gap: 6px;
-  }
-
-  .day-number {
-    font-size: 13px;
-  }
-
-  .tasks-section {
-    min-height: 160px;
-  }
-
-  .tasks-header {
-    padding: 16px 16px 12px;
-  }
-}
-</style>
