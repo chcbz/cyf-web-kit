@@ -38,7 +38,7 @@ import { useUtilStore } from '../../stores/util'
 import { useGlobalStore } from '../../stores/global'
 // import { useApiStore } from '../../stores/api' // 预留
 import { useI18n } from 'vue-i18n'
-import { mcpApi, kefuApi, phraseApi } from '../../composables/useHttp'
+import { chatApi, phraseApi } from '../../composables/useHttp'
 
 // 导入子组件
 import ChatMessageList from './ChatMessageList.vue'
@@ -133,7 +133,7 @@ const loadRandomPhrase = async () => {
 const loadConversations = async () => {
   try {
     // 从服务端加载会话列表
-    await kefuApi.list('/message/list', {
+    await chatApi.list('/conversation/list', {
       pageNum: 1,
       pageSize: 100,
       orderBy: 'update_time desc',
@@ -169,7 +169,7 @@ const loadConversation = async (id) => {
 
     // 从服务端加载会话内容
     try {
-      await mcpApi.getById('/conversation/content', id, {
+      await chatApi.getById('/conversation/content', id, {
         autoLoading: false,
         onSuccess: (data) => {
           if (data && data.data) {
@@ -178,9 +178,9 @@ const loadConversation = async (id) => {
 
             // 确保消息格式正确
             messages.value = msgList.map(msg => ({
-              sender: msg.metadata.role || 'user',
-              content: msg.text || '',
-              timestamp: msg.metadata.timestamp || new Date().getTime(),
+              sender: msg.messageType || 'USER',
+              content: msg.content || '',
+              timestamp: msg.createTime || new Date().getTime(),
               conversationId: id
             }))
 
@@ -214,12 +214,12 @@ const updateBotMessage = async (content) => {
   const lastMessage = messages.value[messages.value.length - 1]
   let botMessage
 
-  if (lastMessage?.sender === 'bot') {
+  if (lastMessage?.sender === 'ASSISTANT') {
     lastMessage.content += content
     botMessage = lastMessage
   } else {
     botMessage = {
-      sender: 'bot',
+      sender: 'ASSISTANT',
       content,
       timestamp: new Date().getTime()
     }
@@ -283,7 +283,7 @@ const sendMessage = async (message) => {
   try {
     // 添加用户消息
     const userMessage = {
-      sender: 'user',
+      sender: 'USER',
       content: message,
       timestamp: new Date().getTime(),
       conversationId: conversationId.value
@@ -297,8 +297,7 @@ const sendMessage = async (message) => {
     scrollToBottom()
 
     // 使用新的 useHttp 流式功能
-    const streamResult = await mcpApi.create(
-      '/chat/stream',
+    const streamResult = await chatApi.create('/stream',
       {
         content: message,
         conversationId: conversationId.value
@@ -336,7 +335,7 @@ const sendMessage = async (message) => {
     messages.value = [
       ...messages.value,
       {
-        sender: 'system',
+        sender: 'SYSTEM',
         content: '消息发送失败',
         isError: true,
         timestamp: new Date().getTime()
@@ -352,7 +351,7 @@ const stopStream = async () => {
       messages.value = [
         ...messages.value,
         {
-          sender: 'system',
+          sender: 'SYSTEM',
           content: '已取消当前请求',
           isInfo: true,
           timestamp: new Date().getTime()
@@ -389,7 +388,7 @@ const toggleSidebar = () => {
 const deleteConversation = async (id, retryCount = 0) => {
   try {
     console.log('删除会话:', id)
-    await mcpApi.delete('/conversation/delete', id, {
+    await chatApi.delete('/conversation/delete', id, {
       onSuccess: () => {
         console.log('删除会话成功:', id)
         const index = conversations.value.findIndex((c) => c.id === id)
@@ -409,7 +408,7 @@ const deleteConversation = async (id, retryCount = 0) => {
           messages.value = [
             ...messages.value,
             {
-              sender: 'system',
+              sender: 'SYSTEM',
               content: `删除会话失败${retryCount > 0 ? ` (重试 ${retryCount}/3)` : ''}`,
               isError: true,
               timestamp: new Date().getTime()
@@ -430,7 +429,7 @@ const deleteConversation = async (id, retryCount = 0) => {
       messages.value = [
         ...messages.value,
         {
-          sender: 'system',
+          sender: 'SYSTEM',
           content: `删除会话失败${retryCount > 0 ? ` (重试 ${retryCount}/3)` : ''}`,
           isError: true,
           timestamp: new Date().getTime()

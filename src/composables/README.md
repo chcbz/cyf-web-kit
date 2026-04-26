@@ -238,7 +238,7 @@ export default {
 - `userApi`: `/user` 端点操作
 - `voteApi`: `/vote` 端点操作
 - `tipApi`: `/tip` 端点操作
-- `kefuApi`: `/kefu` 端点操作
+- `chatApi`: `/chat` 端点操作
 
 ## 迁移指南
 
