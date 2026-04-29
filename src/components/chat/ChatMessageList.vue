@@ -4,11 +4,15 @@
       v-if="shouldShowEmptyState"
       :random-phrase="randomPhrase"
     />
-    <ChatMessage
-      v-for="(msg, index) in messages"
-      :key="index"
-      :message="msg"
-    />
+    <template v-for="(msg, index) in messages" :key="index">
+      <ChatMessageTime
+        v-if="shouldShowTime(index)"
+        :timestamp="msg.timestamp"
+      />
+      <ChatMessage
+        :message="msg"
+      />
+    </template>
   </div>
 </template>
 
@@ -16,6 +20,7 @@
 import { ref, onMounted, onUnmounted, defineExpose } from 'vue'
 import ChatEmptyState from './ChatEmptyState.vue'
 import ChatMessage from './ChatMessage.vue'
+import ChatMessageTime from './ChatMessageTime.vue'
 
 const props = defineProps({
   messages: {
@@ -37,6 +42,22 @@ const emit = defineEmits(['scroll'])
 const messagesRef = ref(null)
 const userScrolledUp = ref(false)
 const lastScrollTop = ref(0)
+
+// 判断是否需要显示时间戳
+const shouldShowTime = (index) => {
+  if (index === 0) return true
+
+  const currentMsg = props.messages[index]
+  const prevMsg = props.messages[index - 1]
+
+  if (!currentMsg.timestamp || !prevMsg.timestamp) return false
+
+  const currentTime = new Date(currentMsg.timestamp).getTime()
+  const prevTime = new Date(prevMsg.timestamp).getTime()
+
+  // 超过5分钟显示时间戳
+  return currentTime - prevTime > 5 * 60 * 1000
+}
 
 const handleScroll = () => {
   if (!messagesRef.value) return
