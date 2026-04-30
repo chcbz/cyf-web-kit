@@ -2,7 +2,7 @@
   <div
     :class="[
       'chat-message',
-      message.sender === 'user' ? 'chat-user-message' : 'chat-bot-message',
+      message.sender === 'USER' ? 'chat-user-message' : 'chat-bot-message',
       { streaming: message.isStreaming, error: message.isError, info: message.isInfo }
     ]"
     v-html="sanitizedContent"
@@ -27,7 +27,7 @@ const props = defineProps({
     type: Object,
     required: true,
     default: () => ({
-      sender: 'user',
+      sender: 'USER',
       content: '',
       isStreaming: false,
       isError: false,

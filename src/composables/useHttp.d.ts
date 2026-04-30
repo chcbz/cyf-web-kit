@@ -50,4 +50,4 @@ export declare const phraseApi: ApiClient
 export declare const userApi: ApiClient
 export declare const voteApi: ApiClient
 export declare const tipApi: ApiClient
-export declare const kefuApi: ApiClient
+export declare const chatApi: ApiClient

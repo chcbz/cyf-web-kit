@@ -425,11 +425,11 @@ export function createApi (basePath) {
 // 预定义的API端点
 export const taskApi = createApi('/task')
 export const phraseApi = createApi('/phrase')
+export const kefuApi = createApi('/kefu')
 export const userApi = createApi('/user')
 export const voteApi = createApi('/vote')
 export const tipApi = createApi('/tip')
-export const kefuApi = createApi('/kefu')
-export const mcpApi = createApi('/mcp')
+export const chatApi = createApi('/chat')
 export const dwzApi = createApi('/dwz')
 export const giftApi = createApi('/gift')
 export const wxApi = createApi('/wx')
