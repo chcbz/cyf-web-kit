@@ -8,12 +8,14 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    CalendarPanel: typeof import('./components/task/CalendarPanel.vue')['default']
     Chat: typeof import('./components/chat/Chat.vue')['default']
     ChatCapabilities: typeof import('./components/chat/ChatCapabilities.vue')['default']
     ChatEmptyState: typeof import('./components/chat/ChatEmptyState.vue')['default']
     ChatInput: typeof import('./components/chat/ChatInput.vue')['default']
     ChatMessage: typeof import('./components/chat/ChatMessage.vue')['default']
     ChatMessageList: typeof import('./components/chat/ChatMessageList.vue')['default']
+    ChatMessageTime: typeof import('./components/chat/ChatMessageTime.vue')['default']
     ChatSidebar: typeof import('./components/chat/ChatSidebar.vue')['default']
     copy: typeof import('./components/Chat copy.vue')['default']
     DateRangePicker: typeof import('./components/DateRangePicker.vue')['default']
@@ -23,14 +25,18 @@ declare module 'vue' {
     HelloWorld: typeof import('./components/HelloWorld.vue')['default']
     OrderList: typeof import('./components/OrderList.vue')['default']
     Phrase: typeof import('./components/Phrase.vue')['default']
+    PhraseAddDialog: typeof import('./components/phrase/PhraseAddDialog.vue')['default']
+    PhraseFeedbackDialog: typeof import('./components/phrase/PhraseFeedbackDialog.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     ShortLink: typeof import('./components/ShortLink.vue')['default']
     SideMenu: typeof import('./components/SideMenu.vue')['default']
     TaskAdd: typeof import('./components/TaskAdd.vue')['default']
+    TaskDetailDialog: typeof import('./components/task/TaskDetailDialog.vue')['default']
     TaskHistory: typeof import('./components/TaskHistory.vue')['default']
     TaskIndex: typeof import('./components/TaskIndex.vue')['default']
     TaskList: typeof import('./components/TaskList.vue')['default']
+    TaskListPanel: typeof import('./components/task/TaskListPanel.vue')['default']
     VoteTick: typeof import('./components/VoteTick.vue')['default']
   }
 }
