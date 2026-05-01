@@ -39,6 +39,7 @@ import { useGlobalStore } from '../../stores/global'
 // import { useApiStore } from '../../stores/api' // 预留
 import { useI18n } from 'vue-i18n'
 import { chatApi, phraseApi } from '../../composables/useHttp'
+import { log } from '../../utils/logger'
 
 // 导入子组件
 import ChatMessageList from './ChatMessageList.vue'
@@ -153,7 +154,7 @@ const loadConversations = async () => {
         }
       },
       onError: (error) => {
-        console.warn('从服务端加载会话失败:', error)
+        log.warn('从服务端加载会话失败:', error)
       }
     })
   } catch (error) {
@@ -387,7 +388,7 @@ const toggleSidebar = () => {
 // 删除会话（带重试机制）
 const deleteConversation = async (id, retryCount = 0) => {
   try {
-    console.log('删除会话:', id)
+    log.info('删除会话:', id)
     await chatApi.delete('/conversation/delete', id, {
       onSuccess: () => {
         log.debug('删除会话成功:', id)

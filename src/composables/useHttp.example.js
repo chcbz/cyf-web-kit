@@ -6,6 +6,7 @@
 import { ref } from 'vue'
 import { useHttp, phraseApi } from './useHttp'
 import { useGlobalStore } from '../stores/global'
+import { log } from '../utils/logger'
 
 const globalStore = useGlobalStore()
 
@@ -22,10 +23,10 @@ export function useTaskList () {
       const result = await execute({
         data: { search: searchParams }
       })
-      console.log('Tasks loaded:', result.data)
+      log.debug('Tasks loaded:', result.data)
       return result.data
     } catch (err) {
-      console.error('Failed to load tasks:', err)
+      log.error('Failed to load tasks:', err)
       throw err
     }
   }
@@ -60,7 +61,7 @@ export function usePhraseOperations () {
       })
       return result.data
     } catch (err) {
-      console.error('Failed to load phrase:', err)
+      log.error('Failed to load phrase:', err)
       throw err
     }
   }
@@ -74,7 +75,7 @@ export function usePhraseOperations () {
       })
       return result.data
     } catch (err) {
-      console.error('Failed to vote:', err)
+      log.error('Failed to vote:', err)
       throw err
     }
   }
@@ -120,7 +121,7 @@ export default {
       try {
         await execute()
       } catch (err) {
-        console.error('Failed to load data:', err)
+        log.error('Failed to load data:', err)
       }
     }
 
@@ -141,15 +142,15 @@ export function useUserProfile () {
     url: '/user/profile',
     method: 'GET',
     onSuccess: (responseData) => {
-      console.log('Profile loaded successfully:', responseData)
+      log.info('Profile loaded successfully:', responseData)
       // 可以在这里更新全局状态或其他操作
     },
     onError: (errorMessage, _error) => {
-      console.error('Failed to load profile:', errorMessage)
+      log.error('Failed to load profile:', errorMessage)
       // 可以在这里显示错误提示
     },
     onFinally: () => {
-      console.log('Profile request completed')
+      log.debug('Profile request completed')
     }
   })
 
@@ -205,7 +206,7 @@ export function useFileUpload () {
       })
       return result.data
     } catch (err) {
-      console.error('Upload failed:', err)
+      log.error('Upload failed:', err)
       throw err
     }
   }
@@ -267,12 +268,12 @@ export function useStreamingChat () {
           }
         },
         onError: (errorMessage) => {
-          console.error('Stream error:', errorMessage)
+          log.error('Stream error:', errorMessage)
           messages.value.push({ role: 'system', content: `Error: ${errorMessage}`, isError: true })
         }
       })
     } catch (err) {
-      console.error('Failed to send message:', err)
+      log.error('Failed to send message:', err)
       messages.value.push({ role: 'system', content: 'Failed to send message', isError: true })
     }
   }

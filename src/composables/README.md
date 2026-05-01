@@ -32,7 +32,7 @@ export default {
       try {
         await execute()
       } catch (err) {
-        console.error('Failed to load data:', err)
+        log.error('Failed to load data:', err)
       }
     }
 
@@ -138,7 +138,7 @@ const startStream = async () => {
     autoLoading: false, // 流式请求通常不需要自动loading
     onStream: (eventData) => {
       // 处理 SSE 事件数据
-      console.log('Received stream data:', eventData)
+          log.debug('Received stream data:', eventData)
 
       // 解析 SSE 格式
       let content = ''
@@ -155,16 +155,16 @@ const startStream = async () => {
 
       try {
         const data = JSON.parse(content)
-        console.log('Parsed data:', data)
+        log.debug('Parsed data:', data)
       } catch {
-        console.log('Raw content:', content)
+        log.debug('Raw content:', content)
       }
     },
     onStreamEnd: () => {
-      console.log('Stream ended')
+      log.debug('Stream ended')
     },
     onError: (errorMessage) => {
-      console.error('Stream error:', errorMessage)
+      log.error('Stream error:', errorMessage)
     }
   })
 }
