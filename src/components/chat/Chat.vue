@@ -26,6 +26,7 @@
       @new-conversation="generateNewConversationId"
       @select-conversation="loadConversation"
       @delete-conversation="deleteConversation"
+      @update-title="updateConversationTitle"
     />
   </div>
 </template>
@@ -441,6 +442,42 @@ const deleteConversation = async (id, retryCount = 0) => {
     if (retryCount < 3) {
       setTimeout(() => deleteConversation(id, retryCount + 1), 1000 * (retryCount + 1))
     }
+  }
+}
+
+// 修改会话标题
+const updateConversationTitle = async (id, newTitle) => {
+  try {
+    log.info('修改会话标题:', id, newTitle)
+    await chatApi.update('/conversation/update', { id, title: newTitle }, {
+      autoLoading: false,
+      onSuccess: () => {
+        log.debug('修改会话标题成功:', id)
+        // 更新本地会话列表中的标题
+        const conversation = conversations.value.find((c) => c.id === id)
+        if (conversation) {
+          conversation.title = newTitle
+        }
+        // 如果当前正在查看这个会话，也更新全局标题
+        if (id === conversationId.value) {
+          globalStore.setTitle(newTitle)
+        }
+      },
+      onError: (errorMessage) => {
+        log.error('修改会话标题失败:', errorMessage)
+        messages.value = [
+          ...messages.value,
+          {
+            sender: 'SYSTEM',
+            content: '修改标题失败',
+            isError: true,
+            timestamp: new Date().getTime()
+          }
+        ]
+      }
+    })
+  } catch (error) {
+    log.error('修改会话标题失败:', error)
   }
 }
 

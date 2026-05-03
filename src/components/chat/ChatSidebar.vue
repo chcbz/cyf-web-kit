@@ -19,24 +19,50 @@
       >
         <div class="chat-conversation-content">
           <div class="chat-conversation-title">
-            {{ conv.title || '新会话' }}
+            <span v-if="editingId !== conv.id">{{ conv.title || '新会话' }}</span>
+            <var-input
+              v-else
+              v-model="editingTitle"
+              size="small"
+              @click.stop
+              @keyup.enter="saveTitle(conv.id)"
+              @blur="saveTitle(conv.id)"
+            />
           </div>
           <div class="chat-conversation-date">
             {{ formatDate(conv.lastUpdated) }}
           </div>
         </div>
-        <var-button
-          class="chat-delete-btn"
-          type="danger"
-          @click.stop.prevent="emit('delete-conversation', conv.id)"
-        >删除</var-button>
+        <div class="chat-conversation-actions">
+          <var-button
+            v-if="editingId !== conv.id"
+            class="chat-edit-btn"
+            type="primary"
+            text
+            @click.stop.prevent="startEdit(conv)"
+          >编辑</var-button>
+          <var-button
+            v-else
+            class="chat-edit-btn"
+            type="success"
+            text
+            @click.stop.prevent="saveTitle(conv.id)"
+          >保存</var-button>
+          <var-button
+            class="chat-delete-btn"
+            type="danger"
+            text
+            @click.stop.prevent="emit('delete-conversation', conv.id)"
+          >删除</var-button>
+        </div>
       </div>
     </div>
   </div>
 </template>
+      REPLACE
 
 <script setup>
-import { defineProps, defineEmits } from 'vue'
+import { ref, defineProps, defineEmits } from 'vue'
 
 const props = defineProps({
   showSidebar: {
@@ -66,8 +92,28 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['new-conversation', 'select-conversation', 'delete-conversation'])
+const emit = defineEmits(['new-conversation', 'select-conversation', 'delete-conversation', 'update-title'])
+
+// 编辑状态
+const editingId = ref(null)
+const editingTitle = ref('')
+
+// 开始编辑标题
+const startEdit = (conv) => {
+  editingId.value = conv.id
+  editingTitle.value = conv.title || '新会话'
+}
+
+// 保存标题
+const saveTitle = (id) => {
+  if (editingTitle.value.trim()) {
+    emit('update-title', id, editingTitle.value.trim())
+  }
+  editingId.value = null
+  editingTitle.value = ''
+}
 </script>
+      REPLACE
 
 <style scoped>
 .chat-sidebar {
@@ -176,26 +222,33 @@ const emit = defineEmits(['new-conversation', 'select-conversation', 'delete-con
   line-height: 1.3;
 }
 
-.chat-delete-btn {
-  padding: 6px 12px;
-  font-size: 12px;
-  opacity: 0;
-  visibility: hidden;
+.chat-conversation-actions {
   position: absolute;
-  left: 10px;
+  right: 10px;
   top: 50%;
   transform: translateY(-50%);
   z-index: 1;
+  opacity: 0;
+  visibility: hidden;
   transition: all 0.2s ease;
-  border-radius: 6px;
+  display: flex;
+  gap: 4px;
 }
 
-.chat-conversation-item:hover .chat-delete-btn {
+.chat-conversation-item:hover .chat-conversation-actions {
   opacity: 1;
   visibility: visible;
 }
 
+.chat-edit-btn,
+.chat-delete-btn {
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 4px;
+}
+
 /* 响应式设计 */
+      REPLACE
 @media (max-width: 1024px) {
   .chat-sidebar {
     width: 380px;
