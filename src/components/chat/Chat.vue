@@ -27,6 +27,7 @@
       @select-conversation="loadConversation"
       @delete-conversation="deleteConversation"
       @update-title="updateConversationTitle"
+      @close-sidebar="toggleSidebar"
     />
   </div>
 </template>
