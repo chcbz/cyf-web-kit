@@ -178,7 +178,7 @@ interface Task {
 
 ## 五、前端组件设计
 
-### 5.1 目录结构
+### 5.1 梁山泊开放世界目录结构
 
 ```
 src/components/world/
@@ -193,6 +193,18 @@ src/components/world/
     ├── useWorld.js         # 世界状态管理
     ├── useAgent.js          # Agent 状态管理
     └── useTask.js           # 任务管理
+```
+
+### 5.2 Chat 组件目录结构
+
+```
+src/components/chat/
+├── Chat.vue                # 聊天主容器
+├── ChatSidebar.vue         # 侧边栏（会话列表）
+├── ChatMessageList.vue     # 消息列表
+├── ChatMessageTime.vue     # 消息时间戳显示
+├── ChatInput.vue           # 消息输入框
+└── README.md               # 组件文档
 ```
 
 ### 5.2 核心组件
@@ -217,6 +229,83 @@ src/components/world/
    - 实时聊天
    - @提及 Agent
    - 消息历史
+
+### 5.3 Chat 组件详细设计
+
+#### 5.3.1 Chat.vue 主容器
+
+**功能职责：**
+- 聊天会话主容器
+- 协调子组件通信
+- 管理会话状态和消息流
+
+**核心功能：**
+| 功能 | 说明 |
+|------|------|
+| 会话管理 | 新建、切换、删除、编辑会话 |
+| 消息发送 | 支持流式响应、取消请求 |
+| 侧边栏控制 | 显示/隐藏历史会话列表 |
+| 标题更新 | 自动/手动更新会话标题 |
+
+**API 接口：**
+```typescript
+// 会话列表
+POST /chat/conversation/list
+Request: { pageNum, pageSize, orderBy, search: { jiacn } }
+Response: { data: [{ id, title, updateTime }] }
+
+// 会话内容
+GET /chat/conversation/content/{id}
+Response: { data: [{ messageType, content, createTime }] }
+
+// 发送消息（流式）
+POST /chat/stream
+Request: { content, conversationId }
+Response: Stream (SSE)
+
+// 删除会话
+DELETE /chat/conversation/delete/{id}
+
+// 更新会话
+PUT /chat/conversation/update
+Request: { id, title }
+```
+
+#### 5.3.2 ChatSidebar.vue 侧边栏
+
+**功能职责：**
+- 历史会话列表展示
+- 会话搜索过滤
+- 会话标题编辑
+- 会话删除确认
+
+**交互设计：**
+| 操作 | 触发方式 |
+|------|----------|
+| 新建会话 | 点击「+ 新会话」按钮 |
+| 选择会话 | 点击会话项 |
+| 编辑标题 | 点击标题或编辑图标 |
+| 保存标题 | 点击保存按钮或失焦 |
+| 删除会话 | 点击删除图标 → 确认对话框 |
+| 关闭侧边栏 | 按 ESC / 点击遮罩 |
+| 搜索会话 | 输入框实时过滤 |
+
+**UI 状态：**
+- 默认状态：会话列表
+- 搜索状态：过滤后的会话列表
+- 编辑状态：标题输入框
+- 删除确认：对话框
+
+#### 5.3.3 ChatMessageTime.vue 时间显示
+
+**时间显示规则：**
+| 场景 | 格式示例 |
+|------|----------|
+| 今天消息 | `14:30` |
+| 昨天消息 | `昨天 14:30` |
+| 一周内 | `周二 14:30` |
+| 更早消息 | `4月17日 14:30` |
+| 间隔超过5分钟 | 显示时间分隔线 |
 
 ---
 
