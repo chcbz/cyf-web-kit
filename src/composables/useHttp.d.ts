@@ -32,13 +32,16 @@ export interface HttpReturn {
 }
 
 export interface ApiClient {
-  list: (params?: Record<string, any>, options?: HttpOptions) => Promise<any>
-  get: (id: string | number, options?: HttpOptions) => Promise<any>
-  create: (data: any, options?: HttpOptions) => Promise<any>
-  update: (id: string | number, data: any, options?: HttpOptions) => Promise<any>
-  patch: (id: string | number, data: any, options?: HttpOptions) => Promise<any>
-  delete: (id: string | number, options?: HttpOptions) => Promise<any>
-  search: (data: any, options?: HttpOptions) => Promise<any>
+  list: (uri: string, data?: any, options?: HttpOptions) => Promise<any>
+  getById: (uri: string, id: string | number, options?: HttpOptions) => Promise<any>
+  get: (uri: string, params?: Record<string, any>, options?: HttpOptions) => Promise<any>
+  post: (uri: string, data?: any, options?: HttpOptions) => Promise<any>
+  put: (uri: string, data?: any, options?: HttpOptions) => Promise<any>
+  create: (uri: string, data?: any, options?: HttpOptions) => Promise<any>
+  update: (uri: string, data?: any, options?: HttpOptions) => Promise<any>
+  patch: (uri: string, id: string | number, data?: any, options?: HttpOptions) => Promise<any>
+  delete: (uri: string, id: string | number, options?: HttpOptions) => Promise<any>
+  search: (uri: string, data?: any, options?: HttpOptions) => Promise<any>
 }
 
 export declare function useHttp(options?: HttpOptions): HttpReturn
@@ -47,7 +50,13 @@ export declare function createApi(basePath: string): ApiClient
 
 export declare const taskApi: ApiClient
 export declare const phraseApi: ApiClient
+export declare const kefuApi: ApiClient
 export declare const userApi: ApiClient
+export declare const msgApi: ApiClient
+export declare const agentApi: ApiClient
 export declare const voteApi: ApiClient
 export declare const tipApi: ApiClient
 export declare const chatApi: ApiClient
+export declare const dwzApi: ApiClient
+export declare const giftApi: ApiClient
+export declare const wxApi: ApiClient

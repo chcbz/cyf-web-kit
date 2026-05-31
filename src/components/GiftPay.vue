@@ -228,7 +228,7 @@ const toPay = () => {
                 })
               }
             },
-            onError: (_errorMessage, _error) => {
+            onError: () => {
               // 错误处理
             }
           })
@@ -251,7 +251,7 @@ const wxAddress = () => {
         phone.value = res.telNumber
         address.value = res.provinceName + res.cityName + res.countryName + res.detailInfo
       },
-      cancel(_res) {
+      cancel() {
         log.debug('cancel weixin address selecting')
       }
     })
@@ -264,7 +264,7 @@ const wxAddress = () => {
 }
 
 const weixinPay = (data) => {
-  if (typeof WeixinJSBridge === 'undefined') {
+  if (typeof window.WeixinJSBridge === 'undefined') {
     if (document.addEventListener) {
       document.addEventListener('WeixinJSBridgeReady', () => onBridgeReady(data), false)
     } else if (document.attachEvent) {
@@ -277,7 +277,7 @@ const weixinPay = (data) => {
 }
 
 const onBridgeReady = (data) => {
-  WeixinJSBridge.invoke(
+  window.WeixinJSBridge.invoke(
     'getBrandWCPayRequest',
     {
       debug: true,

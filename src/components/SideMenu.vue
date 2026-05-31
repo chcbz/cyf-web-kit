@@ -27,6 +27,12 @@
             >
               <var-icon :name="route.meta.icon || 'menu'" />
               <span>{{ $t(route.meta.title) }}</span>
+              <span
+                v-if="route.name === 'MessageCenter' && messageStore.unreadTotal"
+                class="menu-badge"
+              >
+                {{ formatUnreadTotal(messageStore.unreadTotal) }}
+              </span>
             </router-link>
           </div>
         </div>
@@ -36,10 +42,11 @@
 </template>
 
 <script setup>
-import { computed, watch } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useWindowSize } from '@vueuse/core'
 import { useGlobalStore } from '@/stores/global'
+import { useMessageStore } from '@/stores/message'
 
 const props = defineProps({
   modelValue: {
@@ -53,6 +60,7 @@ const emit = defineEmits(['update:modelValue', 'close'])
 const router = useRouter()
 const { width } = useWindowSize()
 const globalStore = useGlobalStore()
+const messageStore = useMessageStore()
 
 const isMobile = computed(() => width.value < 768)
 const menuPlacement = computed(() => (isMobile.value ? 'bottom' : 'right'))
@@ -83,6 +91,8 @@ const handleOverlayClick = (event) => {
   }
 }
 
+const formatUnreadTotal = (total) => total > 99 ? '99+' : total
+
 watch(
   () => props.modelValue,
   (newVal) => {
@@ -100,6 +110,10 @@ const showSideMenu = computed({
   set(value) {
     globalStore.showSideMenu = value
   }
+})
+
+onMounted(() => {
+  messageStore.fetchUnreadTotal()
 })
 </script>
 
@@ -194,6 +208,19 @@ const showSideMenu = computed({
 .menu-item i {
   margin-right: 12px;
   font-size: 20px;
+}
+
+.menu-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: auto;
+  border-radius: 999px;
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
 }
 
 @media (max-width: 768px) {

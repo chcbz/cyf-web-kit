@@ -1,12 +1,22 @@
 <template>
-  <div
-    :class="[
-      'chat-message',
-      message.sender === 'USER' ? 'chat-user-message' : 'chat-bot-message',
-      { streaming: message.isStreaming, error: message.isError, info: message.isInfo }
-    ]"
-    v-html="sanitizedContent"
-  ></div>
+  <div class="chat-message-wrapper">
+    <div v-if="senderLabel" class="chat-sender-meta">
+      <span v-if="message.senderAvatar" class="chat-sender-avatar">
+        <img :src="message.senderAvatar" :alt="senderLabel" />
+      </span>
+      <span class="chat-sender-badge" :class="senderClass">
+        {{ senderLabel }}
+      </span>
+    </div>
+    <div
+      :class="[
+        'chat-message',
+        messageClass,
+        { streaming: message.isStreaming, error: message.isError, info: message.isInfo }
+      ]"
+      v-html="sanitizedContent"
+    ></div>
+  </div>
 </template>
 
 <script setup>
@@ -31,7 +41,10 @@ const props = defineProps({
       content: '',
       isStreaming: false,
       isError: false,
-      isInfo: false
+      isInfo: false,
+      senderType: '',
+      senderName: '',
+      senderAvatar: ''
     })
   }
 })
@@ -39,9 +52,90 @@ const props = defineProps({
 const sanitizedContent = computed(() => {
   return DOMPurify.sanitize(marked(props.message.content || ''))
 })
+
+const senderLabel = computed(() => {
+  const type = props.message.senderType
+  if (!type) return ''
+  if (type === 'agent') {
+    return props.message.senderName || 'Agent'
+  }
+  if (type === 'user') return '用户'
+  if (type === 'system') return '系统'
+  if (type === 'assistant') return '助手'
+  return ''
+})
+
+const senderClass = computed(() => {
+  const type = props.message.senderType
+  return type ? `sender-${type}` : ''
+})
+
+const messageClass = computed(() => {
+  const type = props.message.senderType
+  if (type === 'agent') return 'chat-agent-message'
+  if (type === 'system') return 'chat-system-message'
+  if (props.message.sender === 'USER') return 'chat-user-message'
+  return 'chat-bot-message'
+})
 </script>
 
 <style scoped>
+.chat-message-wrapper {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 8px;
+}
+
+.chat-sender-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  padding: 0 4px;
+}
+
+.chat-sender-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.chat-sender-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.chat-sender-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  line-height: 1.4;
+}
+
+.sender-user {
+  background: #eff6ff;
+  color: #1e40af;
+}
+
+.sender-agent {
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.sender-system {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.sender-assistant {
+  background: #f3e8ff;
+  color: #6b21a8;
+}
+
 .chat-message {
   margin-bottom: 20px;
   padding: 16px 20px;
@@ -89,6 +183,33 @@ const sanitizedContent = computed(() => {
   max-width: fit-content;
   min-width: auto;
   width: auto;
+}
+
+.chat-agent-message {
+  background: #ecfdf5;
+  color: #065f46;
+  margin-right: auto;
+  margin-left: 0;
+  border-bottom-left-radius: 8px;
+  text-align: left;
+  border: 1px solid #a7f3d0;
+  box-shadow: 0 2px 8px rgba(6, 95, 70, 0.08);
+  max-width: fit-content;
+  min-width: auto;
+  width: auto;
+}
+
+.chat-system-message {
+  background: #fffbeb;
+  color: #92400e;
+  margin-left: auto;
+  margin-right: auto;
+  border-radius: 12px;
+  text-align: center;
+  border: 1px solid #fde68a;
+  box-shadow: none;
+  font-size: 13px;
+  padding: 10px 16px;
 }
 
 /* 高亮当前正在输入的消息 */

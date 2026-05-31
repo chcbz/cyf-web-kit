@@ -22,13 +22,12 @@ export default [
   // Vue 3 推荐配置
   ...pluginVue.configs['flat/recommended'],
   {
-    files: ['**/*.{js,mjs,cjs,vue}'],
+    files: ['**/*.{js,mjs,cjs}'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
-      parser: vueParser,
+      parser: babelParser,
       parserOptions: {
-        parser: babelParser,
         requireConfigFile: false,
         babelOptions: {
           presets: ['@babel/preset-env']
@@ -120,6 +119,18 @@ export default [
   // Vue 文件特殊规则
   {
     files: ['**/*.vue'],
+    languageOptions: {
+      parser: vueParser,
+      parserOptions: {
+        parser: babelParser,
+        requireConfigFile: false,
+        babelOptions: {
+          presets: ['@babel/preset-env']
+        },
+        ecmaVersion: 'latest',
+        sourceType: 'module'
+      }
+    },
     rules: {
       // Vue 规则
       'vue/multi-word-component-names': 'off',

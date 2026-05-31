@@ -74,13 +74,24 @@ export default [
     }
   },
   {
+    path: '/juyiting',
+    name: 'JuyiHall',
+    component: () => import('@/components/juyiting/JuyiHall'),
+    meta: {
+      title: 'juyiting.title',
+      showInMenu: true,
+      menuOrder: 3,
+      icon: 'account-group'
+    }
+  },
+  {
     path: '/gift',
     name: 'GiftList',
     component: () => import('@/components/GiftList'),
     meta: {
       title: 'gift.title',
       showInMenu: true,
-      menuOrder: 3
+      menuOrder: 4
     }
   },
   {
@@ -102,13 +113,35 @@ export default [
     }
   },
   {
+    path: '/messages',
+    name: 'MessageCenter',
+    component: () => import('@/components/MessageCenter'),
+    meta: {
+      title: 'message.title',
+      showInMenu: true,
+      menuOrder: 5,
+      icon: 'bell'
+    }
+  },
+  {
+    path: '/help',
+    name: 'HelpCenter',
+    component: () => import('@/components/HelpCenter'),
+    meta: {
+      title: 'help.title',
+      showInMenu: true,
+      menuOrder: 6,
+      icon: 'help-circle'
+    }
+  },
+  {
     path: '/vote',
     name: 'VoteTick',
     component: () => import('@/components/VoteTick'),
     meta: {
       title: 'vote.title',
       showInMenu: true,
-      menuOrder: 4
+      menuOrder: 7
     }
   },
   {
@@ -118,7 +151,7 @@ export default [
     meta: {
       title: 'phrase.title',
       showInMenu: true,
-      menuOrder: 5
+      menuOrder: 8
     }
   },
   {
@@ -128,7 +161,7 @@ export default [
     meta: {
       title: 'dwz.title',
       showInMenu: true,
-      menuOrder: 6
+      menuOrder: 9
     }
   },
   {

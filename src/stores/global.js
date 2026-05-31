@@ -5,9 +5,13 @@ import { log } from '@/utils/logger'
 export const useGlobalStore = defineStore('global', {
   state: () => ({
     user: {
+      id: null,
       appid: import.meta.env.VITE_WXMP_APPID,
+      username: null,
+      nickname: null,
       openid: null,
       jiacn: null,
+      avatar: null,
       wxToken: null
     },
     menu: {},
@@ -31,9 +35,23 @@ export const useGlobalStore = defineStore('global', {
     getWxToken () {
       const utilStore = useUtilStore()
       return utilStore.getLocalStorage('wxToken') || this.user.wxToken
+    },
+    getUserId () {
+      const utilStore = useUtilStore()
+      return utilStore.getLocalStorage('userId') || this.user.id
     }
   },
   actions: {
+    setUser (user = {}) {
+      if (user.id) {
+        const utilStore = useUtilStore()
+        utilStore.setLocalStorage('userId', user.id, new Date().getTime() + 7 * 24 * 60 * 60 * 1000)
+      }
+      this.user = {
+        ...this.user,
+        ...user
+      }
+    },
     setOpenid (id) {
       log.debug('Setting openid:', id)
       const utilStore = useUtilStore()

@@ -3,6 +3,7 @@
     <ChatEmptyState
       v-if="shouldShowEmptyState"
       :random-phrase="randomPhrase"
+      :conversation-type="conversationType"
     />
     <template v-for="(msg, index) in messages" :key="index">
       <ChatMessageTime
@@ -34,6 +35,10 @@ const props = defineProps({
   randomPhrase: {
     type: String,
     default: '输入您的问题或想法，我将尽力为您解答'
+  },
+  conversationType: {
+    type: String,
+    default: ''
   }
 })
 

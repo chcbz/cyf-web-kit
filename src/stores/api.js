@@ -128,6 +128,7 @@ export const useApiStore = defineStore('api', {
       const result = await response.json()
       log.debug('User info retrieved:', result)
       const data = result.data
+      globalStore.setUser(data)
       if (data.jiacn) {
         globalStore.setJiacn(data.jiacn)
       }

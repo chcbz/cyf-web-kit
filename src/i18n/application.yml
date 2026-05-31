@@ -18,6 +18,7 @@ en:
     read: Read
     copy: Copy
     confirm: Confirm
+    refresh: Refresh
     error: Error
     network_error: Network error
   task:
@@ -136,6 +137,89 @@ en:
     send: Send
     message_failed: Message sending failed
     request_canceled: Request canceled
+  message:
+    title: Messages
+    subtitle: Total {total} messages
+    filter_all: All
+    filter_unread: Unread
+    filter_read: Read
+    mark_all_read: Mark all read
+    empty: No messages
+    untitled: Untitled message
+    no_content: No content
+  help:
+    title: Help & Feedback
+    subtitle: Search common questions or send a feedback ticket
+    search_placeholder: Search FAQ
+    faq_empty: No FAQ entries
+    faq_unavailable: FAQ is unavailable
+    untitled_faq: Untitled question
+    no_answer: No answer yet
+    feedback_title: Feedback
+    feedback_subtitle: Send product issues, suggestions, or service requests
+    feedback_subject: Subject
+    feedback_content: Describe the issue or suggestion
+    feedback_name: Your name (optional)
+    feedback_phone: Phone (optional)
+    feedback_email: Email (optional)
+    submit_feedback: Submit feedback
+    feedback_success: Feedback submitted
+    feedback_failed: Failed to submit feedback
+  juyiting:
+    title: Juyi Hall
+    subtitle: Coordinate agents, assign reward tasks, and review hall events
+    agent: Agent
+    agent_list: Agents
+    agent_detail: Agent Detail
+    agent_summary: "{online} online, {total} total"
+    total_agents: Agents
+    online_agents: Online
+    busy_agents: Busy
+    reward_tasks: Tasks
+    status: Status
+    status_all: All
+    status_online: Online
+    status_busy: Busy
+    status_offline: Offline
+    status_error: Error
+    status_unknown: Unknown
+    ability_filter: Filter by ability
+    empty_agents: No agents
+    fallback_note: Showing local sample data until the Agent backend is available.
+    detail: Detail
+    score: Score
+    success_count: Success
+    failure_count: Failure
+    abilities: Abilities
+    current_task: Current task
+    endpoint: Endpoint
+    error_message: Error message
+    reward_board: Reward Board
+    reward_summary: "{total} reward tasks"
+    task_search: Search tasks
+    task_status: Task status
+    empty_tasks: No reward tasks
+    no_description: No description
+    reward: Reward
+    unassigned: Unassigned
+    assign_agent: Select agent
+    assign: Assign
+    assign_success: Task assigned
+    assign_failed: Failed to assign task
+    priority_high: High
+    priority_medium: Medium
+    priority_low: Low
+    task_pending: Pending
+    task_assigned: Assigned
+    task_running: Running
+    task_done: Done
+    task_failed: Failed
+    hall_chat: Hall Chat
+    chat_subtitle: Conversation entry uses conversationType=juyiting
+    open_chat: Open chat
+    no_current_task: No current task
+    task_assigned_to: Assigned to {agent}
+    task_waiting: Waiting for assignment
   order:
     status_unpaid: Unpaid
     status_paid: Paid
@@ -143,6 +227,61 @@ en:
     status_unknown: Unknown
     empty: No orders
 zh-CN:
+  juyiting:
+    title: 聚义厅
+    subtitle: 统筹 Agent、分配悬赏任务，并查看厅内状态事件
+    agent: Agent
+    agent_list: Agent 列表
+    agent_detail: Agent 详情
+    agent_summary: "{online} 在线，共 {total} 个"
+    total_agents: Agent 总数
+    online_agents: 在线
+    busy_agents: 忙碌
+    reward_tasks: 悬赏任务
+    status: 状态
+    status_all: 全部
+    status_online: 在线
+    status_busy: 忙碌
+    status_offline: 离线
+    status_error: 异常
+    status_unknown: 未知
+    ability_filter: 按能力筛选
+    empty_agents: 暂无 Agent
+    fallback_note: 当前显示本地示例数据，Agent 后端就绪后会自动切换为接口数据。
+    detail: 详情
+    score: 评分
+    success_count: 成功
+    failure_count: 失败
+    abilities: 能力
+    current_task: 当前任务
+    endpoint: 接入端点
+    error_message: 错误信息
+    reward_board: 悬赏榜
+    reward_summary: 共 {total} 个悬赏任务
+    task_search: 搜索任务
+    task_status: 任务状态
+    empty_tasks: 暂无悬赏任务
+    no_description: 暂无描述
+    reward: 悬赏
+    unassigned: 未分配
+    assign_agent: 选择 Agent
+    assign: 分配
+    assign_success: 任务已分配
+    assign_failed: 任务分配失败
+    priority_high: 高
+    priority_medium: 中
+    priority_low: 低
+    task_pending: 待分配
+    task_assigned: 已分配
+    task_running: 执行中
+    task_done: 已完成
+    task_failed: 失败
+    hall_chat: 聚义厅会话
+    chat_subtitle: 会话入口携带 conversationType=juyiting
+    open_chat: 进入会话
+    no_current_task: 暂无当前任务
+    task_assigned_to: 已分配给 {agent}
+    task_waiting: 等待分配
   app:
     start_date: 开始日期
     total: 合计
@@ -162,6 +301,7 @@ zh-CN:
     read: 阅读
     copy: 复制
     confirm: 确认
+    refresh: 刷新
     error: 错误
     network_error: 网络错误
   task:
@@ -280,6 +420,34 @@ zh-CN:
     send: 发送
     message_failed: 消息发送失败
     request_canceled: 请求已取消
+  message:
+    title: 消息中心
+    subtitle: 共 {total} 条消息
+    filter_all: 全部
+    filter_unread: 未读
+    filter_read: 已读
+    mark_all_read: 全部已读
+    empty: 暂无消息
+    untitled: 未命名消息
+    no_content: 暂无内容
+  help:
+    title: 帮助与反馈
+    subtitle: 搜索常见问题，或提交反馈工单
+    search_placeholder: 搜索常见问题
+    faq_empty: 暂无常见问题
+    faq_unavailable: 常见问题暂不可用
+    untitled_faq: 未命名问题
+    no_answer: 暂无回答
+    feedback_title: 意见反馈
+    feedback_subtitle: 提交产品问题、功能建议或服务请求
+    feedback_subject: 反馈标题
+    feedback_content: 请描述问题或建议
+    feedback_name: 您的姓名（选填）
+    feedback_phone: 联系电话（选填）
+    feedback_email: 邮箱地址（选填）
+    submit_feedback: 提交反馈
+    feedback_success: 反馈已提交
+    feedback_failed: 反馈提交失败
   order:
     status_unpaid: 未支付
     status_paid: 已支付

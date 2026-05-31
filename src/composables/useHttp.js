@@ -104,7 +104,8 @@ export function useHttp (options = {}) {
     try {
       // 准备请求配置
       const headers = { ...customHeaders }
-      if (!headers['Content-Type']) {
+      const isFormData = typeof FormData !== 'undefined' && requestData instanceof FormData
+      if (!headers['Content-Type'] && !isFormData) {
         headers['Content-Type'] = 'application/json'
       }
 
@@ -115,7 +116,7 @@ export function useHttp (options = {}) {
 
       // 添加请求数据
       if (requestData && ['POST', 'PUT', 'PATCH'].includes(config.method)) {
-        config.body = JSON.stringify(requestData)
+        config.body = isFormData ? requestData : JSON.stringify(requestData)
       }
 
       // 添加URL参数和baseURL
@@ -405,6 +406,12 @@ export function createApi (basePath) {
     get: (uri, params, options = {}) =>
       useHttp().get(`${basePath}${uri}`, params, options),
 
+    post: (uri, data, options = {}) =>
+      useHttp().post(`${basePath}${uri}`, data, options),
+
+    put: (uri, data, options = {}) =>
+      useHttp().put(`${basePath}${uri}`, data, options),
+
     create: (uri, data, options = {}) =>
       useHttp().post(`${basePath}${uri}`, data, options),
 
@@ -427,6 +434,8 @@ export const taskApi = createApi('/task')
 export const phraseApi = createApi('/phrase')
 export const kefuApi = createApi('/kefu')
 export const userApi = createApi('/user')
+export const msgApi = createApi('/msg')
+export const agentApi = createApi('/agent')
 export const voteApi = createApi('/vote')
 export const tipApi = createApi('/tip')
 export const chatApi = createApi('/chat')

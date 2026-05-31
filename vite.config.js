@@ -9,13 +9,11 @@ import viteCompression from 'vite-plugin-compression'
 import legacy from '@vitejs/plugin-legacy'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
-import { VarletImportResolver } from '@varlet/import-resolver'
-
-// 预留用于组件自动导入
-const _varletResolver = VarletImportResolver()
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
+  const enableAnalyze = env.VITE_ANALYZE === 'true' || process.env.ANALYZE === 'true'
+  const enableLegacy = env.VITE_LEGACY_BUILD === 'true' || process.env.LEGACY_BUILD === 'true'
 
   return {
     plugins: [
@@ -29,12 +27,15 @@ export default defineConfig(({ mode }) => {
       }),
       vueJsx(),
       yaml(),
-      legacy({
+      enableLegacy && legacy({
         targets: ['defaults', 'not IE 11']
       }),
-      viteCompression(),
-      visualizer({
-        open: true,
+      viteCompression({
+        verbose: false
+      }),
+      enableAnalyze && visualizer({
+        open: false,
+        filename: 'dist/stats.html',
         gzipSize: true,
         brotliSize: true
       }),
@@ -45,7 +46,7 @@ export default defineConfig(({ mode }) => {
       Components({
         dts: 'src/components.d.ts'
       })
-    ],
+    ].filter(Boolean),
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
@@ -74,9 +75,28 @@ export default defineConfig(({ mode }) => {
         passphrase: 'changeit'
       },
       proxy: {
-        '/api': {
-          target: env.VITE_API_BASE_URL,
+        '/api/oauth2': {
+          target: env.VITE_OAUTH_PROXY_TARGET || env.VITE_API_PROXY_TARGET || env.VITE_API_BASE_URL,
           changeOrigin: true,
+          secure: false,
+          rewrite: path => path.replace(/^\/api/, '')
+        },
+        '/api/oauth': {
+          target: env.VITE_OAUTH_PROXY_TARGET || env.VITE_API_PROXY_TARGET || env.VITE_API_BASE_URL,
+          changeOrigin: true,
+          secure: false,
+          rewrite: path => path.replace(/^\/api/, '')
+        },
+        '/api/login': {
+          target: env.VITE_OAUTH_PROXY_TARGET || env.VITE_API_PROXY_TARGET || env.VITE_API_BASE_URL,
+          changeOrigin: true,
+          secure: false,
+          rewrite: path => path.replace(/^\/api/, '')
+        },
+        '/api': {
+          target: env.VITE_API_PROXY_TARGET || env.VITE_API_BASE_URL,
+          changeOrigin: true,
+          secure: false,
           rewrite: path => path.replace(/^\/api/, '')
         }
       }
@@ -84,7 +104,8 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       assetsDir: 'static',
-      sourcemap: true,
+      sourcemap: env.VITE_BUILD_SOURCEMAP === 'true',
+      chunkSizeWarningLimit: 650,
       minify: 'terser',
       terserOptions: {
         compress: {
@@ -96,7 +117,9 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks: {
             vue: ['vue', 'vue-router', 'pinia'],
-            vendor: ['lodash']
+            ui: ['@varlet/ui'],
+            markdown: ['marked', 'dompurify'],
+            utilities: ['@vueuse/core', 'dayjs', 'qrcode', 'clipboard', 'consola']
           }
         }
       }

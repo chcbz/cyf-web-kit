@@ -64,7 +64,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import dayjs from 'dayjs'
 
 const props = defineProps({
@@ -164,7 +164,7 @@ const getTasksForDate = (dateStr) => {
   return props.monthTasks.filter(task => {
     try {
       return dayjs(task.executeTime).format('YYYY-MM-DD') === dateStr
-    } catch (_error) {
+    } catch {
       return false
     }
   })

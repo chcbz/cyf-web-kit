@@ -22,11 +22,21 @@
         <var-icon name="heart" size="26px" class="action-icon" />
         <div class="action-label">{{ $t('phrase.tips') }}</div>
       </div>
-      <div ref="upvote" class="action-item" :class="{ voted: upVoted }" @click="toTick(1)">
+      <div
+        ref="upvote"
+        class="action-item"
+        :class="{ voted: upVoted }"
+        @click="toTick(1)"
+      >
         <var-icon name="thumb-up" size="26px" class="action-icon" />
         <div class="action-label">{{ $t('phrase.up') }}{{ phrase.up }}</div>
       </div>
-      <div ref="downvote" class="action-item" :class="{ voted: downVoted }" @click="toTick(0)">
+      <div
+        ref="downvote"
+        class="action-item"
+        :class="{ voted: downVoted }"
+        @click="toTick(0)"
+      >
         <var-icon name="thumb-down" size="26px" class="action-icon" />
         <div class="action-label">{{ $t('phrase.down') }}{{ phrase.down }}</div>
       </div>
@@ -195,7 +205,7 @@ const payTips = () => {
 }
 
 const weixinPay = (data) => {
-  if (typeof WeixinJSBridge === 'undefined') {
+  if (typeof window.WeixinJSBridge === 'undefined') {
     if (document.addEventListener) {
       document.addEventListener('WeixinJSBridgeReady', () => onBridgeReady(data), false)
     } else if (document.attachEvent) {
@@ -208,7 +218,7 @@ const weixinPay = (data) => {
 }
 
 const onBridgeReady = (data) => {
-  WeixinJSBridge.invoke(
+  window.WeixinJSBridge.invoke(
     'getBrandWCPayRequest',
     {
       debug: true,

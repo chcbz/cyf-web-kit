@@ -32,7 +32,7 @@
     </div>
 
 
-    <div class="chat-conversation-list" ref="listRef">
+    <div ref="listRef" class="chat-conversation-list">
       <!-- 空状态 -->
       <div v-if="sortedAndFilteredConversations.length === 0" class="chat-empty-state">
         <var-icon name="chat-outline" size="64px" class="chat-empty-icon" />
@@ -48,13 +48,21 @@
         @click.stop="handleItemClick(conv.id)"
       >
         <div class="chat-conversation-icon">
-          <var-icon :name="conv.id === activeConversationId ? 'chat-processing' : 'chat'" size="24px" />
+          <var-icon
+            :name="conv.id === activeConversationId ? 'chat-processing' : 'chat'"
+            size="24px"
+          />
         </div>
         <div class="chat-conversation-content" @click.stop="handleItemClick(conv.id)">
-        <div class="chat-conversation-title" @click.stop="startEdit(conv)">
+          <div class="chat-conversation-title" @click.stop="startEdit(conv)">
             <span v-if="editingId !== conv.id" class="title-text">
               {{ conv.title || '新会话' }}
-              <var-icon v-if="editingId !== conv.id" name="pencil" size="12px" class="edit-hint" />
+              <var-icon
+                v-if="editingId !== conv.id"
+                name="pencil"
+                size="12px"
+                class="edit-hint"
+              />
             </span>
             <var-input
               v-else
@@ -159,7 +167,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['new-conversation', 'select-conversation', 'delete-conversation', 'update-title'])
+const emit = defineEmits(['new-conversation', 'select-conversation', 'delete-conversation', 'update-title', 'close-sidebar'])
 
 // 搜索
 const searchQuery = ref('')

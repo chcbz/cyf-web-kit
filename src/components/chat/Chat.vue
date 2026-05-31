@@ -6,12 +6,14 @@
         :messages="messages"
         :should-show-empty-state="shouldShowEmptyState"
         :random-phrase="randomPhrase"
+        :conversation-type="conversationType"
         @scroll="handleScroll"
       />
       <ChatInput
         ref="chatInputRef"
         :is-streaming="isStreaming"
         :is-loading="isLoading"
+        :conversation-type="conversationType"
         @send="sendMessage"
         @cancel="stopStream"
       />
@@ -19,6 +21,7 @@
 
     <div :class="['chat-overlay', { show: showSidebar }]" @click="toggleSidebar"></div>
     <ChatSidebar
+      v-if="!isJuyiting"
       :show-sidebar="showSidebar"
       :conversations="conversations"
       :active-conversation-id="conversationId"
@@ -34,8 +37,8 @@
 
 <script setup>
 import { marked } from 'marked'
-import DOMPurify from 'dompurify'
-import { ref, onMounted, computed, watch, onUnmounted } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useUtilStore } from '../../stores/util'
 import { useGlobalStore } from '../../stores/global'
 // import { useApiStore } from '../../stores/api' // 预留
@@ -83,6 +86,10 @@ const conversations = ref([])
 const showSidebar = ref(false)
 const randomPhrase = ref('输入您的问题或想法，我将尽力为您解答') // 默认文本
 
+// 路由参数
+const route = useRoute()
+const conversationType = ref(route.query.conversationType || '')
+
 // 工具函数
 const utilStore = useUtilStore()
 const globalStore = useGlobalStore()
@@ -91,6 +98,7 @@ const { t } = useI18n()
 
 // 计算属性
 const hasMessages = computed(() => messages.value.length > 0)
+const isJuyiting = computed(() => conversationType.value === 'juyiting')
 // sortedConversations 预留用于未来排序功能
 // const sortedConversations = computed(() =>
 //   [...conversations.value].sort((a, b) => new Date(b.lastUpdated) - new Date(a.lastUpdated))
@@ -99,9 +107,17 @@ const shouldShowEmptyState = computed(() => !hasMessages.value && !isLoading.val
 
 // 初始化
 const initializeApp = async () => {
-  globalStore.setTitle(t('chat.new_session'))
+  // 同步路由查询参数
+  conversationType.value = route.query.conversationType || ''
+
+  if (isJuyiting.value) {
+    globalStore.setTitle(t('juyiting.title'))
+    globalStore.setShowMore(false)
+  } else {
+    globalStore.setTitle(t('chat.new_session'))
+    globalStore.setShowMore(true)
+  }
   globalStore.setShowBack(false)
-  globalStore.setShowMore(true)
 
   // 加载随机短语
   await loadRandomPhrase()
@@ -135,14 +151,18 @@ const loadRandomPhrase = async () => {
 // 会话管理函数
 const loadConversations = async () => {
   try {
+    const searchFilter = {
+      jiacn: globalStore.getJiacn
+    }
+    if (conversationType.value) {
+      searchFilter.conversationType = conversationType.value
+    }
     // 从服务端加载会话列表
     await chatApi.list('/conversation/list', {
       pageNum: 1,
       pageSize: 100,
       orderBy: 'update_time desc',
-      search: {
-        jiacn: globalStore.getJiacn
-      }
+      search: searchFilter
     }, {
       autoLoading: false,
       onSuccess: (data) => {
@@ -151,7 +171,8 @@ const loadConversations = async () => {
             id: conv.id.toString(),
             title: conv.title || '新会话',
             lastUpdated: conv.updateTime,
-            messages: []
+            messages: [],
+            conversationType: conv.conversationType || conversationType.value
           }))
         }
       },
@@ -184,7 +205,10 @@ const loadConversation = async (id) => {
               sender: msg.messageType || 'USER',
               content: msg.content || '',
               timestamp: msg.createTime || new Date().getTime(),
-              conversationId: id
+              conversationId: id,
+              senderName: msg.senderName || '',
+              senderAvatar: msg.senderAvatar || '',
+              senderType: msg.senderType || msg.messageType || 'USER'
             }))
 
             // 加载完成后自动滚动到底部
@@ -207,7 +231,11 @@ const loadConversation = async (id) => {
 }
 
 const generateNewConversationId = () => {
-  globalStore.setTitle(t('chat.new_session'))
+  if (isJuyiting.value) {
+    globalStore.setTitle(t('juyiting.title'))
+  } else {
+    globalStore.setTitle(t('chat.new_session'))
+  }
   conversationId.value = ''
   messages.value = []
 }
@@ -224,7 +252,8 @@ const updateBotMessage = async (content) => {
     botMessage = {
       sender: 'ASSISTANT',
       content,
-      timestamp: new Date().getTime()
+      timestamp: new Date().getTime(),
+      senderType: 'assistant'
     }
     messages.value.push(botMessage)
   }
@@ -266,6 +295,18 @@ const processBotResponse = (eventData) => {
     } else if (data.t) {
       globalStore.setTitle(data.t)
       loadConversations()
+    } else if (data.senderType && data.content) {
+      // 处理带 sender 元数据的消息（聚义厅 agent 消息等）
+      const msg = {
+        sender: data.senderType === 'agent' ? 'AGENT' : (data.senderType === 'system' ? 'SYSTEM' : 'ASSISTANT'),
+        content: data.content,
+        timestamp: new Date().getTime(),
+        senderType: data.senderType,
+        senderName: data.senderName || '',
+        senderAvatar: data.senderAvatar || ''
+      }
+      messages.value.push(msg)
+      scrollToBottom()
     } else {
       log.debug('No message content found in JSON:', data)
     }
@@ -289,7 +330,8 @@ const sendMessage = async (message) => {
       sender: 'USER',
       content: message,
       timestamp: new Date().getTime(),
-      conversationId: conversationId.value
+      conversationId: conversationId.value,
+      senderType: 'user'
     }
 
     messages.value = [
@@ -303,7 +345,8 @@ const sendMessage = async (message) => {
     const streamResult = await chatApi.create('/stream',
       {
         content: message,
-        conversationId: conversationId.value
+        conversationId: conversationId.value,
+        conversationType: conversationType.value
       },
       {
         responseType: 'stream',
@@ -341,7 +384,8 @@ const sendMessage = async (message) => {
         sender: 'SYSTEM',
         content: '消息发送失败',
         isError: true,
-        timestamp: new Date().getTime()
+        timestamp: new Date().getTime(),
+        senderType: 'system'
       }
     ]
   }
@@ -357,7 +401,8 @@ const stopStream = async () => {
           sender: 'SYSTEM',
           content: '已取消当前请求',
           isInfo: true,
-          timestamp: new Date().getTime()
+          timestamp: new Date().getTime(),
+          senderType: 'system'
         }
       ]
     } catch (err) {
@@ -371,7 +416,7 @@ const stopStream = async () => {
 }
 
 // 处理滚动事件
-const handleScroll = (scrollData) => {
+const handleScroll = () => {
   // 这里可以处理滚动事件，如果需要的话
   // 目前我们不需要做特殊处理，因为滚动逻辑已经在ChatMessageList组件中处理了
 }
@@ -384,7 +429,9 @@ const scrollToBottom = () => {
 }
 
 const toggleSidebar = () => {
-  globalStore.toggleRightSidebar()
+  if (!isJuyiting.value) {
+    globalStore.toggleRightSidebar()
+  }
 }
 
 // 删除会话（带重试机制）
@@ -414,7 +461,8 @@ const deleteConversation = async (id, retryCount = 0) => {
               sender: 'SYSTEM',
               content: `删除会话失败${retryCount > 0 ? ` (重试 ${retryCount}/3)` : ''}`,
               isError: true,
-              timestamp: new Date().getTime()
+              timestamp: new Date().getTime(),
+              senderType: 'system'
             }
           ]
         }
@@ -435,7 +483,8 @@ const deleteConversation = async (id, retryCount = 0) => {
           sender: 'SYSTEM',
           content: `删除会话失败${retryCount > 0 ? ` (重试 ${retryCount}/3)` : ''}`,
           isError: true,
-          timestamp: new Date().getTime()
+          timestamp: new Date().getTime(),
+          senderType: 'system'
         }
       ]
     }
@@ -472,7 +521,8 @@ const updateConversationTitle = async (id, newTitle) => {
             sender: 'SYSTEM',
             content: '修改标题失败',
             isError: true,
-            timestamp: new Date().getTime()
+            timestamp: new Date().getTime(),
+            senderType: 'system'
           }
         ]
       }
@@ -486,7 +536,21 @@ const updateConversationTitle = async (id, newTitle) => {
 watch(
   () => globalStore.showRightSidebar,
   (newValue) => {
-    showSidebar.value = newValue
+    if (!isJuyiting.value) {
+      showSidebar.value = newValue
+    }
+  }
+)
+
+// 监听路由查询参数变化（处理从聚义厅跳转过来的情况）
+watch(
+  () => route.query.conversationType,
+  (newType) => {
+    if (newType !== conversationType.value) {
+      conversationType.value = newType || ''
+      // 重新初始化以加载对应类型的会话
+      initializeApp()
+    }
   }
 )
 

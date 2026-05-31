@@ -2,7 +2,7 @@
   <div class="chat-input">
     <var-input
       v-model="inputMessage"
-      placeholder="给我发消息"
+      :placeholder="placeholderText"
       textarea
       rows="3"
       @keydown.enter="handleEnterKey"
@@ -30,6 +30,10 @@ const props = defineProps({
   isLoading: {
     type: Boolean,
     default: false
+  },
+  conversationType: {
+    type: String,
+    default: ''
   }
 })
 
@@ -38,6 +42,13 @@ const emit = defineEmits(['send', 'cancel', 'update:modelValue'])
 const inputMessage = ref('')
 
 const isSendButtonDisabled = computed(() => props.isLoading || !inputMessage.value.trim())
+
+const placeholderText = computed(() => {
+  if (props.conversationType === 'juyiting') {
+    return '各位兄弟，有何高见？在聚义厅中议定...'
+  }
+  return '给我发消息'
+})
 
 const handleEnterKey = (event) => {
   // 如果按下了 Shift 键，允许换行

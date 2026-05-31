@@ -4,6 +4,7 @@
     "./tests/setup.js"
   ],
   "timeout": 10000,
+  "exit": true,
   "recursive": false,
   "spec": [
     "./tests/*.test.js",

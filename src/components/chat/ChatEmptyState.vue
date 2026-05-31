@@ -1,20 +1,28 @@
 <template>
   <div class="chat-empty-state">
-    <p>开始与JiA智能助手对话吧！</p>
+    <p v-if="isJuyiting">聚义厅中，各位兄弟齐聚，有何高见尽管道来！</p>
+    <p v-else>开始与JiA智能助手对话吧！</p>
     <ChatCapabilities />
     <p class="chat-empty-hint">{{ randomPhrase }}</p>
   </div>
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import ChatCapabilities from './ChatCapabilities.vue'
 
-defineProps({
+const props = defineProps({
   randomPhrase: {
     type: String,
     default: '输入您的问题或想法，我将尽力为您解答'
+  },
+  conversationType: {
+    type: String,
+    default: ''
   }
 })
+
+const isJuyiting = computed(() => props.conversationType === 'juyiting')
 </script>
 
 <style scoped>

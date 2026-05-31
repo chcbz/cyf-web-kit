@@ -179,7 +179,7 @@ export default {
             })
           }
         },
-        onError: (_errorMessage, _error) => {
+        onError: () => {
           Dialog({
             title: _this.$t('app.alert'),
             message: _this.$t('dwz.network_error'),
@@ -230,7 +230,7 @@ export default {
             })
           }
         },
-        onError: (_errorMessage, _error) => {
+        onError: () => {
           Dialog({
             title: _this.$t('app.alert'),
             message: _this.$t('dwz.network_error'),
@@ -273,7 +273,7 @@ export default {
             confirmButtonText: this.$t('app.confirm')
           })
         })
-        .catch((_err) => {
+        .catch(() => {
           Dialog({
             title: this.$t('app.alert'),
             message: this.$t('phrase.copy_failed'),
