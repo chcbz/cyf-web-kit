@@ -136,6 +136,8 @@ en:
     send: Send
     message_failed: Message sending failed
     request_canceled: Request canceled
+  juyiting:
+    title: Juyi Hall
   order:
     status_unpaid: Unpaid
     status_paid: Paid
@@ -280,6 +282,8 @@ zh-CN:
     send: 发送
     message_failed: 消息发送失败
     request_canceled: 请求已取消
+  juyiting:
+    title: 聚义厅
   order:
     status_unpaid: 未支付
     status_paid: 已支付

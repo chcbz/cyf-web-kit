@@ -32,8 +32,22 @@ export default [
     component: () => import('@/components/chat/Chat'),
     meta: {
       title: 'chat.title',
+      icon: 'chat-processing-outline',
+      iconColor: '#2563eb',
       showInMenu: true,
       menuOrder: 1
+    }
+  },
+  {
+    path: '/juyiting',
+    name: 'JuyiHall',
+    component: () => import('@/components/world/JuyiHall'),
+    meta: {
+      title: 'juyiting.title',
+      icon: 'account-circle',
+      iconColor: '#8b3a1f',
+      showInMenu: true,
+      menuOrder: 2
     }
   },
   {
@@ -42,8 +56,10 @@ export default [
     component: () => import('@/components/TaskIndex'),
     meta: {
       title: 'app.title',
+      icon: 'calendar-month-outline',
+      iconColor: '#0f766e',
       showInMenu: true,
-      menuOrder: 2
+      menuOrder: 3
     }
   },
   {
@@ -79,8 +95,10 @@ export default [
     component: () => import('@/components/GiftList'),
     meta: {
       title: 'gift.title',
+      icon: 'shopping-outline',
+      iconColor: '#be185d',
       showInMenu: true,
-      menuOrder: 3
+      menuOrder: 4
     }
   },
   {
@@ -107,8 +125,10 @@ export default [
     component: () => import('@/components/VoteTick'),
     meta: {
       title: 'vote.title',
+      icon: 'check-circle-outline',
+      iconColor: '#7c3aed',
       showInMenu: true,
-      menuOrder: 4
+      menuOrder: 5
     }
   },
   {
@@ -117,8 +137,10 @@ export default [
     component: () => import('@/components/Phrase'),
     meta: {
       title: 'phrase.title',
+      icon: 'message-text-outline',
+      iconColor: '#b45309',
       showInMenu: true,
-      menuOrder: 5
+      menuOrder: 6
     }
   },
   {
@@ -127,8 +149,10 @@ export default [
     component: () => import('@/components/ShortLink'),
     meta: {
       title: 'dwz.title',
+      icon: 'share-outline',
+      iconColor: '#475569',
       showInMenu: true,
-      menuOrder: 6
+      menuOrder: 7
     }
   },
   {

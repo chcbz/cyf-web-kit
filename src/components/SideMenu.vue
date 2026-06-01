@@ -23,9 +23,12 @@
               :key="route.path"
               :to="route.path"
               class="menu-item"
+              :style="menuItemStyle(route)"
               @click="close"
             >
-              <var-icon :name="route.meta.icon || 'menu'" />
+              <span class="menu-icon-wrap">
+                <var-icon :name="route.meta.icon || 'menu'" />
+              </span>
               <span>{{ $t(route.meta.title) }}</span>
             </router-link>
           </div>
@@ -68,6 +71,10 @@ const menuRoutes = computed(() => {
       const orderB = b.meta?.menuOrder || 999
       return orderA - orderB
     })
+})
+
+const menuItemStyle = (route) => ({
+  '--menu-icon-color': route.meta?.iconColor || '#475569'
 })
 
 const close = () => {
@@ -127,8 +134,8 @@ const showSideMenu = computed({
 .side-menu {
   width: 250px;
   height: 100vh;
-  background: var(--color-body);
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(180deg, #fffdf8 0%, var(--color-body) 100%);
+  box-shadow: 0 10px 30px rgba(35, 28, 20, 0.14);
   transform: translateX(-100%);
   transition: transform 0.3s ease;
   position: fixed;
@@ -141,7 +148,7 @@ const showSideMenu = computed({
 }
 
 .menu-header {
-  padding: 16px;
+  padding: 16px 16px 8px;
   display: flex;
   justify-content: flex-end;
 }
@@ -158,41 +165,57 @@ const showSideMenu = computed({
 }
 
 .menu-items {
-  padding: 8px 0;
+  padding: 8px 10px;
 }
 
 .menu-item {
   display: flex;
   align-items: center;
-  padding: 12px 16px;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px 10px;
   color: var(--color-text);
   text-decoration: none;
   transition: all 0.2s ease;
   border-radius: 8px;
-  margin: 0 8px;
+  margin: 0 0 8px;
 }
 
 .menu-item:hover {
-  background: rgba(var(--color-primary-rgb), 0.1);
+  background: color-mix(in srgb, var(--menu-icon-color) 12%, transparent);
   transform: translateX(4px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 14px rgba(35, 28, 20, 0.1);
 }
 
-.menu-item i {
+.menu-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--menu-icon-color) 14%, #ffffff);
+  color: var(--menu-icon-color);
   transition: transform 0.2s ease;
 }
 
-.menu-item:hover i {
+.menu-item:hover .menu-icon-wrap {
   transform: scale(1.1);
 }
 
 .menu-item.router-link-active {
-  color: var(--color-primary);
-  background: rgba(var(--color-primary-rgb), 0.1);
+  color: var(--menu-icon-color);
+  background: color-mix(in srgb, var(--menu-icon-color) 16%, #ffffff);
+  font-weight: 600;
 }
 
-.menu-item i {
-  margin-right: 12px;
+.menu-item.router-link-active .menu-icon-wrap {
+  background: var(--menu-icon-color);
+  color: #ffffff;
+}
+
+.menu-icon-wrap i {
   font-size: 20px;
 }
 
