@@ -24,7 +24,7 @@ declare module 'vue' {
     GiftPay: typeof import('./components/GiftPay.vue')['default']
     HelloWorld: typeof import('./components/HelloWorld.vue')['default']
     HelpCenter: typeof import('./components/HelpCenter.vue')['default']
-    JuyiHall: typeof import('./components/juyiting/JuyiHall.vue')['default']
+    JuyiHall: typeof import('./components/world/JuyiHall.vue')['default']
     MessageCenter: typeof import('./components/MessageCenter.vue')['default']
     OrderList: typeof import('./components/OrderList.vue')['default']
     Phrase: typeof import('./components/Phrase.vue')['default']
