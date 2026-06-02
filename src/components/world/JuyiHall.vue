@@ -20,28 +20,40 @@
             <var-icon name="refresh" />
           </button>
           <button class="icon-action" title="新建聚义会话" @click="newHallConversation">
-            <var-icon name="add" />
+            <var-icon name="plus" />
           </button>
         </div>
       </div>
 
-      <div class="hall-board">
-        <div class="beam beam-top"></div>
+      <div ref="hallBoardRef" class="hall-board">
+        <div ref="mapWorldRef" class="map-world" :style="mapWorldStyle">
+          <div class="map-region region-water"></div>
+          <div class="map-region region-forest"></div>
+          <div class="map-region region-village"></div>
+          <div class="map-road road-main"></div>
+          <div class="map-road road-branch"></div>
+          <button class="hall-room room-main" @click="resetMap">
+            <strong>聚义厅</strong>
+            <small>议事中庭</small>
+          </button>
+          <button class="hall-room room-agents" @click="openPanel('agents')">
+            <strong>名册房</strong>
+            <small>好汉调度</small>
+          </button>
+          <button class="hall-room room-tasks" @click="openPanel('tasks')">
+            <strong>悬赏房</strong>
+            <small>{{ tasks.length }} 件</small>
+          </button>
+          <button class="hall-room room-chat" @click="openPanel('chat')">
+            <strong>传令房</strong>
+            <small>厅内会话</small>
+          </button>
+          <div class="hall-room room-back">
+            <strong>后堂</strong>
+            <small>整备</small>
+          </div>
+          <div class="beam beam-top"></div>
         <div class="banner">替天行道</div>
-        <button
-          v-for="task in visibleTaskSprites"
-          :key="task.id"
-          class="task-sprite"
-          :class="taskSpriteClass(task)"
-          :style="taskSpriteStyle(task)"
-          @click="selectTaskFromStage(task)"
-        >
-          <span class="task-sprite-icon">
-            <var-icon :name="taskSpriteIcon(task)" />
-          </span>
-          <span class="task-sprite-title">{{ task.title }}</span>
-          <span class="task-sprite-status">{{ taskStatusText(task.status) }}</span>
-        </button>
         <button
           v-for="agent in visibleAgents"
           :key="agent.agentId"
@@ -92,6 +104,20 @@
           <var-icon name="message-text-outline" />
           <span>传令</span>
         </button>
+        </div>
+
+        <div class="map-controls" aria-label="地图方向控制">
+          <button
+            v-for="control in mapControls"
+            :key="control.key"
+            class="map-control"
+            :class="`control-${control.key}`"
+            :title="control.label"
+            @click="control.action()"
+          >
+            <var-icon :name="control.icon" />
+          </button>
+        </div>
       </div>
 
       <div class="quick-bar">
@@ -389,11 +415,59 @@ const draft = ref('')
 const isStreaming = ref(false)
 const toast = ref('')
 const messageBoxRef = ref(null)
+const hallBoardRef = ref(null)
+const mapWorldRef = ref(null)
 const activePanel = ref('')
 const physicsFrame = ref(0)
+const viewportOffset = ref({ x: 0, y: 0 })
 const agentPhysics = new Map()
 let physicsRaf = 0
 let lastPhysicsTime = 0
+
+const mapPanStep = 92
+const mapPanPadding = 2
+
+const mapWorldStyle = computed(() => ({
+  '--map-offset-x': `${viewportOffset.value.x}px`,
+  '--map-offset-y': `${viewportOffset.value.y}px`
+}))
+
+const panMap = (direction) => {
+  const next = { ...viewportOffset.value }
+  if (direction === 'left') next.x += mapPanStep
+  if (direction === 'right') next.x -= mapPanStep
+  if (direction === 'up') next.y += mapPanStep
+  if (direction === 'down') next.y -= mapPanStep
+  const bounds = mapOffsetBounds()
+  viewportOffset.value = {
+    x: clamp(next.x, -bounds.x, bounds.x),
+    y: clamp(next.y, -bounds.y, bounds.y)
+  }
+}
+
+const mapOffsetBounds = () => {
+  const board = hallBoardRef.value?.getBoundingClientRect()
+  const world = mapWorldRef.value?.getBoundingClientRect()
+  if (!board || !world) {
+    return { x: 0, y: 0 }
+  }
+  return {
+    x: Math.max(0, (world.width - board.width) / 2 - mapPanPadding),
+    y: Math.max(0, (world.height - board.height) / 2 - mapPanPadding)
+  }
+}
+
+const resetMap = () => {
+  viewportOffset.value = { x: 0, y: 0 }
+}
+
+const mapControls = [
+  { key: 'up', icon: 'chevron-up', label: '上移视野', action: () => panMap('up') },
+  { key: 'left', icon: 'chevron-left', label: '左移视野', action: () => panMap('left') },
+  { key: 'center', icon: 'crosshairs-gps', label: '回到中心', action: resetMap },
+  { key: 'right', icon: 'chevron-right', label: '右移视野', action: () => panMap('right') },
+  { key: 'down', icon: 'chevron-down', label: '下移视野', action: () => panMap('down') }
+]
 
 const statusFilters = [
   { label: '全部', value: 'all' },
@@ -436,7 +510,6 @@ const filteredAgents = computed(() => {
 })
 
 const visibleAgents = computed(() => filteredAgents.value.slice(0, 12))
-const visibleTaskSprites = computed(() => tasks.value.slice(0, 6))
 const taskAbilityOptions = computed(() => {
   const abilities = new Set()
   tasks.value.forEach(task => (task.requiredAbilities || []).forEach(ability => abilities.add(ability)))
@@ -502,22 +575,6 @@ const taskStateClass = (status = '') => {
   if (value === 'running') return 'task-state-running'
   if (value === 'assigned') return 'task-state-assigned'
   return 'task-state-open'
-}
-
-const taskSpriteClass = (task) => {
-  const status = normalizeStatus(task.status)
-  if (status === 'running') return 'is-running'
-  if (status === 'completed') return 'is-completed'
-  if (status === 'failed') return 'is-failed'
-  return 'is-pending'
-}
-
-const taskSpriteIcon = (task) => {
-  const status = normalizeStatus(task.status)
-  if (status === 'running') return 'refresh'
-  if (status === 'completed') return 'check-circle-outline'
-  if (status === 'failed') return 'alert-circle-outline'
-  return 'notebook'
 }
 
 const agentSeed = (agent) => {
@@ -765,38 +822,6 @@ const agentStyle = (agent) => {
     '--step-lift': `${2 + walkActivity * 2}px`,
     '--shadow-scale': 0.88 + walkActivity * 0.16
   }
-}
-
-const taskSpriteStyle = (task) => {
-  const source = `${task.id || ''}${task.title || ''}`
-  const seed = Array.from(source).reduce((sum, char) => sum + char.charCodeAt(0), 0)
-  const orbit = seed % 3
-  const orbitX = 96 + (seed % 5) * 18
-  const orbitY = 34 + (seed % 4) * 10
-  return {
-    '--orbit-x': `${orbitX}px`,
-    '--orbit-y': `${orbitY}px`,
-    '--orbit-x-left': `${orbitX * -0.65}px`,
-    '--orbit-x-mid': `${orbitX * 0.42}px`,
-    '--orbit-x-left-soft': `${orbitX * -0.48}px`,
-    '--orbit-x-right-soft': `${orbitX * 0.35}px`,
-    '--orbit-y-high': `${orbitY * -1.25}px`,
-    '--orbit-y-up-soft': `${orbitY * -0.8}px`,
-    '--orbit-y-down-soft': `${orbitY * 0.7}px`,
-    '--wander-x': `${((seed % 11) - 5) * 5}px`,
-    '--wander-y': `${((seed % 7) - 3) * 4}px`,
-    '--sprite-tilt': `${-10 + (seed % 21)}deg`,
-    left: `${28 + (seed * 13) % 44}%`,
-    top: `${38 + (seed * 19) % 24}%`,
-    animationName: orbit === 0 ? 'taskOrbitA' : orbit === 1 ? 'taskOrbitB' : 'taskOrbitC',
-    animationDelay: `${(seed % 9) * -0.46}s`,
-    animationDuration: `${7.4 + (seed % 6) * 0.65}s`
-  }
-}
-
-const selectTaskFromStage = (task) => {
-  selectTask(task)
-  openPanel('tasks')
 }
 
 const selectTask = (task) => {
@@ -1164,12 +1189,285 @@ button:disabled {
   overflow: hidden;
   border-radius: 0;
   background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px) 0 0 / 52px 52px,
-    linear-gradient(0deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px) 0 0 / 52px 52px,
-    radial-gradient(circle at 50% 44%, rgba(240, 184, 74, 0.48), transparent 24%),
-    radial-gradient(circle at 15% 24%, rgba(142, 40, 28, 0.46), transparent 22%),
-    radial-gradient(circle at 85% 30%, rgba(37, 89, 73, 0.42), transparent 20%),
-    linear-gradient(135deg, #7b5530, #2f241b 58%, #17100d);
+    radial-gradient(circle at 50% 48%, rgba(255, 238, 180, 0.16), transparent 32%),
+    linear-gradient(135deg, #17231d, #1b271f 50%, #0e1411);
+}
+
+.hall-board::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  box-shadow: inset 0 0 90px rgba(0, 0, 0, 0.58);
+}
+
+.map-world {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 162%;
+  height: 148%;
+  transform: translate3d(calc(-50% + var(--map-offset-x, 0px)), calc(-50% + var(--map-offset-y, 0px)), 0);
+  transform-origin: center;
+  transition: transform 0.28s ease;
+  background:
+    linear-gradient(90deg, rgba(99, 61, 31, 0.24) 1px, transparent 1px) 0 0 / 72px 72px,
+    linear-gradient(0deg, rgba(99, 61, 31, 0.22) 1px, transparent 1px) 0 0 / 72px 72px,
+    repeating-linear-gradient(90deg, rgba(169, 114, 58, 0.12) 0 18px, rgba(89, 54, 28, 0.12) 18px 36px),
+    radial-gradient(ellipse at 52% 54%, rgba(229, 177, 92, 0.34), transparent 28%),
+    linear-gradient(145deg, #8a6032 0%, #5b3923 38%, #6f4a2a 68%, #3a291f 100%);
+  will-change: transform;
+}
+
+.map-world::before,
+.map-world::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+}
+
+.map-world::before {
+  inset: 8% 10%;
+  border: 8px solid rgba(64, 35, 18, 0.62);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(64, 35, 18, 0.46) 2px, transparent 2px) 0 0 / 25% 100%,
+    linear-gradient(0deg, rgba(64, 35, 18, 0.44) 2px, transparent 2px) 0 0 / 100% 34%,
+    rgba(255, 238, 194, 0.08);
+}
+
+.map-world::after {
+  left: 15%;
+  right: 15%;
+  top: 46%;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(238, 190, 111, 0.48);
+  box-shadow:
+    0 -116px 0 rgba(238, 190, 111, 0.24),
+    0 116px 0 rgba(238, 190, 111, 0.2);
+}
+
+.map-region,
+.map-road {
+  position: absolute;
+  pointer-events: none;
+}
+
+.map-region {
+  z-index: 0;
+  opacity: 0.88;
+}
+
+.region-water {
+  left: 13%;
+  bottom: 14%;
+  width: 22%;
+  height: 22%;
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(255, 239, 188, 0.18) 1px, transparent 1px) 0 0 / 18px 18px,
+    linear-gradient(135deg, rgba(87, 51, 27, 0.58), rgba(48, 31, 22, 0.5));
+}
+
+.region-forest {
+  right: 13%;
+  top: 14%;
+  width: 24%;
+  height: 24%;
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 28% 36%, rgba(244, 200, 76, 0.24), transparent 16%),
+    linear-gradient(135deg, rgba(35, 72, 62, 0.64), rgba(28, 52, 44, 0.56));
+}
+
+.region-village {
+  left: 13%;
+  top: 14%;
+  width: 24%;
+  height: 24%;
+  border-radius: 8px;
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 239, 188, 0.16) 0 10px, transparent 10px 20px),
+    linear-gradient(135deg, rgba(124, 31, 27, 0.46), rgba(92, 45, 99, 0.42));
+}
+
+.map-road {
+  z-index: 1;
+  height: 16px;
+  border-radius: 999px;
+  background: rgba(239, 195, 115, 0.56);
+  box-shadow: 0 0 0 5px rgba(83, 55, 29, 0.1);
+}
+
+.road-main {
+  left: 20%;
+  top: 50%;
+  width: 62%;
+  transform: rotate(-13deg);
+}
+
+.road-branch {
+  left: 45%;
+  top: 42%;
+  width: 32%;
+  transform: rotate(42deg);
+}
+
+.hall-room {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px;
+  border: 2px solid rgba(64, 35, 18, 0.68);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(255, 244, 212, 0.14) 1px, transparent 1px) 0 0 / 20px 20px,
+    linear-gradient(145deg, rgba(255, 237, 190, 0.72), rgba(188, 132, 67, 0.64));
+  color: #3c2716;
+  text-align: center;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 250, 232, 0.22),
+    0 12px 26px rgba(0, 0, 0, 0.18);
+}
+
+button.hall-room {
+  cursor: pointer;
+}
+
+.hall-room:hover {
+  border-color: rgba(244, 200, 76, 0.84);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 250, 232, 0.3),
+    0 0 0 3px rgba(244, 200, 76, 0.18),
+    0 14px 28px rgba(0, 0, 0, 0.2);
+}
+
+.hall-room strong,
+.hall-room small {
+  overflow: hidden;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hall-room strong {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.hall-room small {
+  color: rgba(60, 39, 22, 0.78);
+  font-size: 12px;
+}
+
+.room-main {
+  left: 37%;
+  top: 35%;
+  width: 26%;
+  height: 32%;
+  background:
+    radial-gradient(circle at 50% 52%, rgba(244, 200, 76, 0.28), transparent 44%),
+    linear-gradient(145deg, rgba(255, 239, 188, 0.82), rgba(192, 138, 70, 0.74));
+}
+
+.room-agents {
+  left: 14%;
+  top: 36%;
+  width: 19%;
+  height: 24%;
+}
+
+.room-tasks {
+  right: 14%;
+  top: 36%;
+  width: 19%;
+  height: 24%;
+}
+
+.room-chat {
+  left: 40%;
+  top: 14%;
+  width: 20%;
+  height: 17%;
+  background:
+    linear-gradient(145deg, rgba(230, 235, 205, 0.76), rgba(116, 151, 110, 0.58));
+}
+
+.room-back {
+  left: 40%;
+  bottom: 13%;
+  width: 20%;
+  height: 16%;
+  background:
+    linear-gradient(145deg, rgba(235, 218, 184, 0.74), rgba(112, 76, 47, 0.56));
+}
+
+.map-controls {
+  position: absolute;
+  left: 14px;
+  bottom: 96px;
+  z-index: 12;
+  display: grid;
+  grid-template-columns: repeat(3, 30px);
+  grid-template-rows: repeat(3, 30px);
+  gap: 4px;
+  padding: 7px;
+  border: 1px solid rgba(255, 244, 212, 0.18);
+  border-radius: 8px;
+  background: rgba(20, 26, 22, 0.3);
+  color: #fff4d4;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.map-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: 8px;
+  background: rgba(255, 244, 212, 0.18);
+  color: #fff8e8;
+  transition: background 0.16s ease, transform 0.16s ease;
+}
+
+.map-control:hover {
+  background: rgba(244, 200, 76, 0.46);
+  transform: translateY(-1px);
+}
+
+.control-up {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.control-left {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.control-center {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.control-right {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.control-down {
+  grid-column: 2;
+  grid-row: 3;
 }
 
 .beam {
@@ -1200,12 +1498,12 @@ button:disabled {
 
 .table-core {
   position: absolute;
-  z-index: 1;
+  z-index: 3;
   left: 50%;
-  bottom: 12%;
+  top: 55%;
   width: clamp(190px, 24vw, 320px);
   height: clamp(64px, 8vw, 102px);
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   border: 10px solid #5e371f;
   border-radius: 50%;
   background: #c08a46;
@@ -1213,6 +1511,15 @@ button:disabled {
   display: grid;
   place-items: center;
   font-weight: 700;
+}
+
+.table-core span {
+  font-size: 0;
+}
+
+.table-core span::before {
+  content: '议事圆桌';
+  font-size: 16px;
 }
 
 .agent-token {
@@ -1854,7 +2161,7 @@ button:disabled {
 .scene-hotspot {
   position: absolute;
   z-index: 3;
-  display: inline-flex;
+  display: none;
   align-items: center;
   gap: 6px;
   min-height: 36px;
@@ -2573,7 +2880,14 @@ button:disabled {
 
   .stage-actions {
     justify-content: flex-end;
-    max-width: 176px;
+    flex-wrap: nowrap;
+    max-width: none;
+    gap: 6px;
+  }
+
+  .icon-action {
+    width: 34px;
+    min-height: 34px;
   }
 
   .panel-toolbar {
@@ -2639,7 +2953,7 @@ button:disabled {
   .table-core {
     width: 170px;
     height: 58px;
-    bottom: 22%;
+    top: 56%;
   }
 
   .banner {
@@ -2682,6 +2996,72 @@ button:disabled {
     right: 8px;
     bottom: 8px;
     max-width: none;
+  }
+
+  .map-world {
+    width: 164%;
+    height: 146%;
+  }
+
+  .room-main {
+    left: 35%;
+    top: 36%;
+    width: 30%;
+    height: 31%;
+  }
+
+  .room-agents {
+    left: 15%;
+    top: 38%;
+    width: 18%;
+    height: 22%;
+  }
+
+  .room-tasks {
+    right: 15%;
+    top: 38%;
+    width: 18%;
+    height: 22%;
+  }
+
+  .room-chat {
+    left: 39%;
+    top: 14%;
+    width: 22%;
+    height: 16%;
+  }
+
+  .room-back {
+    left: 39%;
+    bottom: 13%;
+    width: 22%;
+    height: 15%;
+  }
+
+  .hall-room {
+    padding: 7px;
+  }
+
+  .hall-room strong {
+    font-size: 13px;
+  }
+
+  .hall-room small {
+    font-size: 10px;
+  }
+
+  .map-controls {
+    left: 8px;
+    bottom: 154px;
+    grid-template-columns: repeat(3, 28px);
+    grid-template-rows: repeat(3, 28px);
+    gap: 4px;
+    padding: 6px;
+  }
+
+  .map-control {
+    min-width: 28px;
+    min-height: 28px;
   }
 
   .bottom-dock {
