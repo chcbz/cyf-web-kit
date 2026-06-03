@@ -25,6 +25,7 @@ declare module 'vue' {
     HelloWorld: typeof import('./components/HelloWorld.vue')['default']
     HelpCenter: typeof import('./components/HelpCenter.vue')['default']
     JuyiHall: typeof import('./components/world/JuyiHall.vue')['default']
+    JuyiHallClassic: typeof import('./components/juyiting/JuyiHallClassic.vue')['default']
     MessageCenter: typeof import('./components/MessageCenter.vue')['default']
     OrderList: typeof import('./components/OrderList.vue')['default']
     Phrase: typeof import('./components/Phrase.vue')['default']

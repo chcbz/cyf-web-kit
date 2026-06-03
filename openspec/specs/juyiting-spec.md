@@ -1,10 +1,10 @@
 # 聚义厅 - Agent 管理模块规格说明书
 
-> **文档状态**：实施版 v0.5
+> **文档状态**：实施版 v0.6
 > **创建日期**：2025-05
 > **最后更新**：2026-06-03
 > **目标读者**：产品团队、前端开发、后端开发
-> **版本范围**：线上聚义厅 v0.5
+> **版本范围**：线上聚义厅 v0.6
 > **依赖关系**：基于 `app-spec.md` 扩展
 
 ---
@@ -230,7 +230,7 @@ MVP 范围：
 
 当前线上文件：`src/components/world/JuyiHall.vue`
 
-兼容组件：`src/components/juyiting/JuyiHall.vue` 保留为结构化组件方案，但线上路由 `/juyiting` 当前指向 `world/JuyiHall.vue`。
+兼容组件：`src/components/juyiting/JuyiHallClassic.vue` 保留为结构化组件方案，但线上路由 `/juyiting` 当前指向 `world/JuyiHall.vue`。
 
 布局：
 
@@ -290,7 +290,7 @@ src/components/
 │   ├── AgentDetail.vue
 │   └── AgentList.vue
 ├── juyiting/
-│   ├── JuyiHall.vue        # 备用结构化组件
+│   ├── JuyiHallClassic.vue # 备用结构化组件
 │   └── RewardBoard.vue
 ├── chat/
 │   └── ...复用现有聊天组件
@@ -299,6 +299,13 @@ src/components/
 
 src/stores/
 └── agent.js
+
+src/composables/juyiting/
+├── useHallPhysics.js       # 大厅小人运动、避障、分离力和行走样式
+└── useWaterMarginRoles.js  # 水浒人物原型映射和头像样式
+
+src/constants/
+└── juyiting.js             # 聚义厅菜单、筛选项、角色池、路线和障碍物配置
 
 src/types/
 └── agent.ts
@@ -548,6 +555,20 @@ const waterMarginDialogues = {
 - 大厅人物为 CSS/图片组合和前端物理近似，不是 3D 模型。
 - `/agent/active` 需要登录态或有效授权；未登录直接访问会被安全配置拒绝。
 
+## 10.3 2026-06-03 前端结构优化状态
+
+已实施：
+
+- 将聚义厅常量配置抽到 `src/constants/juyiting.js`，包括菜单控制、快捷操作、状态筛选、任务筛选、水浒角色池、路线和障碍物。
+- 将水浒人物原型匹配、头像图集定位和角色 class 计算抽到 `src/composables/juyiting/useWaterMarginRoles.js`。
+- 将大厅小人运动、目标路线、边界约束、障碍规避、Agent 间分离力和行走样式计算抽到 `src/composables/juyiting/useHallPhysics.js`。
+- 将备用结构化聚义厅组件改名为 `JuyiHallClassic.vue`，消除和线上 `world/JuyiHall.vue` 的自动组件注册同名冲突。
+
+后续拆分建议：
+
+- 拆 `AgentPanel.vue`、`BountyPanel.vue`、`ChatPanel.vue`，把三个弹窗的模板和交互继续从页面容器中移出。
+- 拆 `HallStage.vue` 和 `AgentToken.vue`，但需要同步迁移 scoped CSS，避免父组件样式无法作用到子组件内部。
+
 后续增强：
 
 - Chat 组件继续消费 `conversationType=juyiting`，并在消息 DTO 或 metadata 中区分 `user/agent/system` 发送者。
@@ -565,6 +586,7 @@ const waterMarginDialogues = {
 | v0.3 | 2026-05-23 | 修复乱码，重构规格结构，补充功能边界、API、数据模型和验收标准 | AI |
 | v0.4 | 2026-05-30 | 记录 `cyf-web-kit` 聚义厅 MVP 前端实施状态、接口兼容策略和后续增强项 | AI |
 | v0.5 | 2026-06-03 | 同步线上聚义厅实现：菜单首位、活跃 WebSocket Agent、游戏化大厅、水浒人物小人、悬赏榜操作、移除议事圆桌和 `/agent/active` 接口 | AI |
+| v0.6 | 2026-06-03 | 记录前端结构优化：抽离常量、水浒角色映射和大厅物理运动 composable，备用组件改名消除同名冲突 | AI |
 
 ---
 

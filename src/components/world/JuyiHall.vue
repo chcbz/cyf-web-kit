@@ -393,8 +393,15 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useGlobalStore } from '@/stores/global'
 import { agentApi, chatApi } from '@/composables/useHttp'
+import { useHallPhysics } from '@/composables/juyiting/useHallPhysics'
+import { portraitName, portraitShortName, portraitStyle, roleClass } from '@/composables/juyiting/useWaterMarginRoles'
+import {
+  mapControlsConfig,
+  quickActions,
+  statusFilters,
+  taskStatusFilters
+} from '@/constants/juyiting'
 import { log } from '@/utils/logger'
-import waterMarginAgents from '@/assets/juyiting/water-margin-agents.png'
 
 const globalStore = useGlobalStore()
 
@@ -415,11 +422,7 @@ const messageBoxRef = ref(null)
 const hallBoardRef = ref(null)
 const mapWorldRef = ref(null)
 const activePanel = ref('')
-const physicsFrame = ref(0)
 const viewportOffset = ref({ x: 0, y: 0 })
-const agentPhysics = new Map()
-let physicsRaf = 0
-let lastPhysicsTime = 0
 
 const mapPanStep = 92
 const mapPanPadding = 2
@@ -458,45 +461,10 @@ const resetMap = () => {
   viewportOffset.value = { x: 0, y: 0 }
 }
 
-const mapControls = [
-  { key: 'up', icon: 'chevron-up', label: '上移视野', action: () => panMap('up') },
-  { key: 'left', icon: 'chevron-left', label: '左移视野', action: () => panMap('left') },
-  { key: 'center', icon: 'crosshairs-gps', label: '回到中心', action: resetMap },
-  { key: 'right', icon: 'chevron-right', label: '右移视野', action: () => panMap('right') },
-  { key: 'down', icon: 'chevron-down', label: '下移视野', action: () => panMap('down') }
-]
-
-const statusFilters = [
-  { label: '全部', value: 'all' },
-  { label: '空闲', value: 'idle' },
-  { label: '忙碌', value: 'busy' },
-  { label: '异常', value: 'error' }
-]
-
-const taskStatusFilters = [
-  { label: '全部', value: '' },
-  { label: '待接取', value: 'open' },
-  { label: '已指派', value: 'assigned' },
-  { label: '进行中', value: 'running' },
-  { label: '已完成', value: 'completed' },
-  { label: '失败', value: 'failed' }
-]
-
-const quickActions = [
-  { key: 'summon', icon: 'bell-outline', label: '点将', text: '请各位好汉报上当前状态和可接任务。' },
-  { key: 'bounty', icon: 'format-list-checkbox', label: '看榜', text: '请汇总当前悬赏榜中最适合优先处理的任务。' },
-  { key: 'review', icon: 'check-circle-outline', label: '复盘', text: '请复盘最近一次任务协作，列出风险和下一步。' },
-  { key: 'tea', icon: 'message-text-outline', label: '闲谈', text: '今日聚义厅中，哪位好汉有新的见闻？' }
-]
-
-const portraitRoles = [
-  { slug: 'songjiang', name: '宋江', title: '统领型', x: 0, y: 0, robe: '#7c1f1b', trim: '#f4c84c', scale: 1, step: 0.86 },
-  { slug: 'wuyong', name: '吴用', title: '谋略型', x: 1, y: 0, robe: '#23483e', trim: '#d7b875', scale: 0.96, step: 0.78 },
-  { slug: 'linchong', name: '林冲', title: '攻坚型', x: 2, y: 0, robe: '#3f4f78', trim: '#c08a46', scale: 1.04, step: 0.72 },
-  { slug: 'luzhishen', name: '鲁智深', title: '护法型', x: 0, y: 1, robe: '#8b5a1f', trim: '#d9d0be', scale: 1.12, step: 0.92 },
-  { slug: 'yanqing', name: '燕青', title: '机动型', x: 1, y: 1, robe: '#5c2d63', trim: '#7a9e7e', scale: 0.92, step: 0.62 },
-  { slug: 'likui', name: '李逵', title: '先锋型', x: 2, y: 1, robe: '#6d3f1f', trim: '#b93622', scale: 1.08, step: 0.68 }
-]
+const mapControls = computed(() => mapControlsConfig.map(control => ({
+  ...control,
+  action: () => control.direction === 'center' ? resetMap() : panMap(control.direction)
+})))
 
 const filteredAgents = computed(() => {
   if (agentFilter.value === 'all') return agents.value
@@ -574,44 +542,6 @@ const taskStateClass = (status = '') => {
   return 'task-state-open'
 }
 
-const agentSeed = (agent) => {
-  const source = agent?.personaName || agent?.name || agent?.agentId || ''
-  return Array.from(source).reduce((sum, char) => sum + char.charCodeAt(0), 0)
-}
-
-const portraitRole = (agent) => {
-  const explicitName = `${agent?.personaName || ''}${agent?.name || ''}`
-  const matched = portraitRoles.find(role => explicitName.includes(role.name))
-  if (matched) return matched
-  return portraitRoles[agentSeed(agent) % portraitRoles.length]
-}
-
-const portraitName = (agent) => {
-  const role = portraitRole(agent)
-  return `${role.name}${role.title ? `·${role.title}` : ''}`
-}
-
-const portraitShortName = (agent) => portraitRole(agent).name
-
-const roleClass = (agent) => `role-${portraitRole(agent).slug}`
-
-const portraitStyle = (agent) => {
-  if (agent?.avatar) {
-    return {
-      backgroundImage: `url("${agent.avatar}")`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center'
-    }
-  }
-
-  const role = portraitRole(agent)
-  return {
-    backgroundImage: `url("${waterMarginAgents}")`,
-    backgroundSize: '300% 200%',
-    backgroundPosition: `${role.x * 50}% ${role.y * 100}%`
-  }
-}
-
 const abilityText = (agent) => {
   const abilities = agent.abilities || []
   return abilities.length ? abilities.slice(0, 3).join(' / ') : '未登记能力'
@@ -632,193 +562,9 @@ const formatTime = (timestamp) => {
   return `${date.getMonth() + 1}-${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
-const hallRoutes = [
-  [[12, 72], [16, 45], [34, 28], [62, 28], [82, 44], [86, 70], [58, 73], [28, 76]],
-  [[18, 38], [38, 24], [72, 30], [86, 50], [78, 70], [63, 62], [42, 61], [22, 68]],
-  [[78, 36], [58, 24], [31, 30], [14, 52], [24, 72], [41, 64], [61, 62], [84, 68]],
-  [[27, 80], [18, 64], [26, 43], [48, 31], [73, 40], [84, 58], [70, 76], [43, 78]],
-  [[52, 24], [78, 33], [88, 52], [73, 66], [61, 55], [39, 55], [25, 66], [12, 50]],
-  [[15, 58], [24, 33], [49, 24], [77, 34], [86, 62], [66, 73], [50, 60], [34, 73]]
-]
-
-const routePoint = (route, index, seed) => {
-  const [x, y] = route[index % route.length]
-  const jitterX = ((seed + index * 7) % 7) - 3
-  const jitterY = ((seed + index * 5) % 5) - 2
-  return {
-    x: Math.min(90, Math.max(10, x + jitterX)),
-    y: Math.min(82, Math.max(22, y + jitterY))
-  }
-}
-
-const hallObstacles = [
-  { x: 50, y: 23, rx: 12, ry: 8, strength: 1.7 },
-  { x: 8, y: 63, rx: 12, ry: 9, strength: 1.4 },
-  { x: 88, y: 63, rx: 12, ry: 9, strength: 1.4 },
-  { x: 84, y: 22, rx: 12, ry: 9, strength: 1.3 }
-]
-
-const walkBounds = {
-  minX: 9,
-  maxX: 91,
-  minY: 22,
-  maxY: 84
-}
-
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
-const limitVector = (vector, maxLength) => {
-  const length = Math.hypot(vector.x, vector.y)
-  if (!length || length <= maxLength) return vector
-  const scale = maxLength / length
-  return { x: vector.x * scale, y: vector.y * scale }
-}
-
-const createPhysicsState = (agent) => {
-  const seed = agentSeed(agent)
-  const route = hallRoutes[seed % hallRoutes.length]
-  const startOffset = seed % route.length
-  const points = Array.from({ length: 8 }, (_, index) => routePoint(route, startOffset + index, seed))
-  const start = points[0]
-  return {
-    seed,
-    points,
-    targetIndex: 1,
-    x: start.x,
-    y: start.y,
-    vx: (((seed % 5) - 2) * 0.02),
-    vy: (((seed % 7) - 3) * 0.015),
-    face: points[1].x >= start.x ? 1 : -1,
-    speed: 0
-  }
-}
-
-const physicsKey = (agent) => agent?.agentId || agent?.name || agent?.personaName || `${agentSeed(agent)}`
-
-const getPhysicsState = (agent) => {
-  const key = physicsKey(agent)
-  if (!agentPhysics.has(key)) {
-    agentPhysics.set(key, createPhysicsState(agent))
-  }
-  return agentPhysics.get(key)
-}
-
-const syncPhysicsAgents = () => {
-  const activeKeys = new Set(visibleAgents.value.map(physicsKey))
-  for (const key of agentPhysics.keys()) {
-    if (!activeKeys.has(key)) agentPhysics.delete(key)
-  }
-  visibleAgents.value.forEach(getPhysicsState)
-}
-
-const obstacleAvoidance = (state) => {
-  return hallObstacles.reduce((force, obstacle) => {
-    const dx = state.x - obstacle.x
-    const dy = state.y - obstacle.y
-    const normalized = Math.hypot(dx / obstacle.rx, dy / obstacle.ry)
-    if (normalized >= 1.18) return force
-    const falloff = (1.18 - Math.max(normalized, 0.08)) / 1.18
-    const length = Math.hypot(dx, dy) || 1
-    force.x += (dx / length) * falloff * obstacle.strength
-    force.y += (dy / length) * falloff * obstacle.strength
-    return force
-  }, { x: 0, y: 0 })
-}
-
-const separationForce = (state, allStates) => {
-  return allStates.reduce((force, other) => {
-    if (other === state) return force
-    const dx = state.x - other.x
-    const dy = state.y - other.y
-    const distance = Math.hypot(dx, dy) || 1
-    if (distance > 8.5) return force
-    const strength = (8.5 - distance) / 8.5
-    force.x += (dx / distance) * strength * 1.8
-    force.y += (dy / distance) * strength * 1.2
-    return force
-  }, { x: 0, y: 0 })
-}
-
-const updatePhysics = (time) => {
-  if (!lastPhysicsTime) lastPhysicsTime = time
-  const dt = clamp((time - lastPhysicsTime) / 1000, 0.001, 0.05)
-  lastPhysicsTime = time
-
-  syncPhysicsAgents()
-  const states = visibleAgents.value.map(getPhysicsState)
-  states.forEach((state, index) => {
-    const target = state.points[state.targetIndex]
-    const dx = target.x - state.x
-    const dy = target.y - state.y
-    const distance = Math.hypot(dx, dy) || 1
-    if (distance < 2.4) {
-      state.targetIndex = (state.targetIndex + 1) % state.points.length
-    }
-
-    const nextTarget = state.points[state.targetIndex]
-    const toTargetX = nextTarget.x - state.x
-    const toTargetY = nextTarget.y - state.y
-    const targetDistance = Math.hypot(toTargetX, toTargetY) || 1
-    const role = portraitRole(visibleAgents.value[index])
-    const status = normalizeStatus(visibleAgents.value[index]?.status)
-    const maxSpeed = (status === 'busy' || status === 'running' ? 9.4 : 7.2) * (1.12 - (role.scale - 0.9) * 0.25)
-    const desiredSpeed = targetDistance < 8 ? maxSpeed * 0.58 : maxSpeed
-    const desired = {
-      x: (toTargetX / targetDistance) * desiredSpeed,
-      y: (toTargetY / targetDistance) * desiredSpeed
-    }
-    const avoid = obstacleAvoidance(state)
-    const separate = separationForce(state, states)
-    const steering = limitVector({
-      x: (desired.x - state.vx) * 1.5 + avoid.x + separate.x,
-      y: (desired.y - state.vy) * 1.5 + avoid.y + separate.y
-    }, 9.5)
-
-    state.vx += steering.x * dt
-    state.vy += steering.y * dt
-    const velocity = limitVector({ x: state.vx, y: state.vy }, maxSpeed)
-    state.vx = velocity.x * 0.982
-    state.vy = velocity.y * 0.982
-    state.x = clamp(state.x + state.vx * dt, walkBounds.minX, walkBounds.maxX)
-    state.y = clamp(state.y + state.vy * dt, walkBounds.minY, walkBounds.maxY)
-    state.speed = Math.hypot(state.vx, state.vy)
-    if (Math.abs(state.vx) > 0.08) state.face = state.vx > 0 ? 1 : -1
-  })
-
-  physicsFrame.value += 1
-  physicsRaf = requestAnimationFrame(updatePhysics)
-}
-
-const startPhysics = () => {
-  if (physicsRaf) return
-  lastPhysicsTime = 0
-  physicsRaf = requestAnimationFrame(updatePhysics)
-}
-
-const stopPhysics = () => {
-  if (!physicsRaf) return
-  cancelAnimationFrame(physicsRaf)
-  physicsRaf = 0
-}
-
-const agentStyle = (agent) => {
-  physicsFrame.value
-  const state = getPhysicsState(agent)
-  const role = portraitRole(agent)
-  const walkActivity = clamp(state.speed / 7, 0.25, 1)
-  return {
-    left: `${state.x}%`,
-    top: `${state.y}%`,
-    zIndex: 4 + Math.round(state.y / 6),
-    '--face': state.face,
-    '--robe-color': role.robe,
-    '--trim-color': role.trim,
-    '--body-scale': role.scale,
-    '--step-speed': `${clamp(role.step / Math.max(walkActivity, 0.35), 0.48, 1.15)}s`,
-    '--step-lift': `${2 + walkActivity * 2}px`,
-    '--shadow-scale': 0.88 + walkActivity * 0.16
-  }
-}
+const { agentStyle, startPhysics, stopPhysics } = useHallPhysics(visibleAgents, normalizeStatus)
 
 const selectTask = (task) => {
   selectedTask.value = task
