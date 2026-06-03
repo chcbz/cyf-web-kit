@@ -60,6 +60,7 @@
             :active="selectedAgent?.agentId === agent.agentId"
             :agent="agent"
             :agent-style="agentStyle"
+            :bubble-text="agentBubbles[agentKey(agent)]"
             :portrait-name="portraitName"
             :portrait-short-name="portraitShortName"
             :portrait-style="portraitStyle"
@@ -225,7 +226,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useGlobalStore } from '@/stores/global'
 import { agentApi, chatApi } from '@/composables/useHttp'
 import { useHallPhysics } from '@/composables/juyiting/useHallPhysics'
-import { portraitName, portraitShortName, portraitStyle, roleClass } from '@/composables/juyiting/useWaterMarginRoles'
+import { portraitName, portraitRole, portraitShortName, portraitStyle, roleClass } from '@/composables/juyiting/useWaterMarginRoles'
 import AgentPanel from '@/components/juyiting/AgentPanel.vue'
 import AgentToken from '@/components/juyiting/AgentToken.vue'
 import BountyPanel from '@/components/juyiting/BountyPanel.vue'
@@ -233,6 +234,7 @@ import ChatPanel from '@/components/juyiting/ChatPanel.vue'
 import SelectedAgentCard from '@/components/juyiting/SelectedAgentCard.vue'
 import {
   mapControlsConfig,
+  roleDialogues,
   statusFilters,
   taskStatusFilters
 } from '@/constants/juyiting'
@@ -257,6 +259,10 @@ const hallBoardRef = ref(null)
 const mapWorldRef = ref(null)
 const activePanel = ref('')
 const viewportOffset = ref({ x: 0, y: 0 })
+const agentBubbles = ref({})
+let bubbleTimer = null
+let bubbleInitialTimer = null
+let bubbleClearTimer = null
 
 const mapPanStep = 92
 const mapPanPadding = 2
@@ -393,6 +399,7 @@ const formatTime = (timestamp) => {
 }
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
+const agentKey = (agent) => agent?.agentId || agent?.name || agent?.personaName || ''
 
 const { agentStyle, startPhysics, stopPhysics } = useHallPhysics(visibleAgents, normalizeStatus)
 
@@ -475,6 +482,36 @@ const showToast = (message) => {
   setTimeout(() => {
     if (toast.value === message) toast.value = ''
   }, 2200)
+}
+
+const startDialogueBubbles = () => {
+  stopDialogueBubbles()
+  bubbleTimer = window.setInterval(showRandomAgentBubble, 5200)
+  bubbleInitialTimer = window.setTimeout(showRandomAgentBubble, 1800)
+}
+
+const stopDialogueBubbles = () => {
+  if (bubbleTimer) window.clearInterval(bubbleTimer)
+  if (bubbleInitialTimer) window.clearTimeout(bubbleInitialTimer)
+  if (bubbleClearTimer) window.clearTimeout(bubbleClearTimer)
+  bubbleTimer = null
+  bubbleInitialTimer = null
+  bubbleClearTimer = null
+}
+
+const showRandomAgentBubble = () => {
+  const pool = visibleAgents.value
+  if (!pool.length || activePanel.value) return
+  const agent = pool[Math.floor(Math.random() * pool.length)]
+  const role = portraitRole(agent)
+  const lines = roleDialogues[role.slug] || roleDialogues.default
+  const text = lines[Math.floor(Math.random() * lines.length)]
+  const key = agentKey(agent)
+  agentBubbles.value = { [key]: text }
+  if (bubbleClearTimer) window.clearTimeout(bubbleClearTimer)
+  bubbleClearTimer = window.setTimeout(() => {
+    agentBubbles.value = {}
+  }, 3600)
 }
 
 const loadAgents = async () => {
@@ -673,10 +710,12 @@ onMounted(async () => {
   globalStore.setShowMore(false)
   await refreshHall()
   startPhysics()
+  startDialogueBubbles()
 })
 
 onUnmounted(() => {
   stopPhysics()
+  stopDialogueBubbles()
 })
 </script>
 

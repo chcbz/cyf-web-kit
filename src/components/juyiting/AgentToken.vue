@@ -5,6 +5,7 @@
     :style="agentStyle(agent)"
     @click="$emit('select-agent', agent)"
   >
+    <span v-if="bubbleText" class="agent-dialogue">{{ bubbleText }}</span>
     <span class="agent-shadow"></span>
     <span class="agent-figure" :title="portraitName(agent)">
       <span class="agent-weapon"></span>
@@ -36,6 +37,7 @@ defineProps({
   active: { type: Boolean, default: false },
   agent: { type: Object, required: true },
   agentStyle: { type: Function, required: true },
+  bubbleText: { type: String, default: '' },
   portraitName: { type: Function, required: true },
   portraitShortName: { type: Function, required: true },
   portraitStyle: { type: Function, required: true },
@@ -71,6 +73,40 @@ defineEmits(['select-agent'])
 
 .agent-token.active .agent-figure {
   filter: drop-shadow(0 0 10px rgba(244, 200, 76, 0.78));
+}
+
+.agent-dialogue {
+  position: absolute;
+  left: 50%;
+  bottom: 92px;
+  z-index: 8;
+  max-width: 146px;
+  padding: 7px 9px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(96, 57, 28, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 250, 236, 0.96);
+  color: #3c2716;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.22);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  pointer-events: none;
+  white-space: normal;
+  animation: dialoguePop 0.22s ease-out;
+}
+
+.agent-dialogue::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 12px;
+  height: 12px;
+  transform: translateX(-50%) rotate(45deg);
+  border-right: 1px solid rgba(96, 57, 28, 0.18);
+  border-bottom: 1px solid rgba(96, 57, 28, 0.18);
+  background: rgba(255, 250, 236, 0.96);
 }
 
 .agent-shadow {
@@ -559,6 +595,17 @@ defineEmits(['select-agent'])
   }
 }
 
+@keyframes dialoguePop {
+  from {
+    transform: translateX(-50%) translateY(6px) scale(0.94);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(-50%) translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .agent-token,
   .agent-figure,
@@ -566,6 +613,10 @@ defineEmits(['select-agent'])
   .agent-arm,
   .agent-leg {
     animation: none !important;
+  }
+
+  .agent-dialogue {
+    animation: none;
   }
 }
 
@@ -605,6 +656,13 @@ defineEmits(['select-agent'])
   .agent-status-badge {
     max-width: 66px;
     font-size: 10px;
+  }
+
+  .agent-dialogue {
+    bottom: 84px;
+    max-width: 118px;
+    padding: 6px 8px;
+    font-size: 11px;
   }
 }
 </style>
