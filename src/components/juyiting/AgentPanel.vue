@@ -82,6 +82,7 @@ defineEmits(['update:agentFilter', 'select-agent'])
 .agent-panel {
   display: flex;
   flex: 1;
+  min-width: 0;
   min-height: 0;
   flex-direction: column;
 }
@@ -94,10 +95,11 @@ button {
 
 .panel-toolbar {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 0 16px 14px;
+  padding: 12px 16px;
   color: #765f40;
   font-size: 13px;
 }
@@ -126,9 +128,10 @@ button {
 
 .agent-panel-body {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(240px, 320px);
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
   gap: 12px;
   flex: 1;
+  min-width: 0;
   min-height: 0;
   padding: 0 12px 12px;
   overflow: hidden;
@@ -136,13 +139,14 @@ button {
 
 .agent-list {
   overflow: auto;
+  min-width: 0;
   min-height: 0;
   padding: 0;
 }
 
 .agent-row {
   display: grid;
-  grid-template-columns: 40px 1fr auto;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
   width: 100%;
@@ -219,8 +223,11 @@ button {
 }
 
 .detail-card {
+  min-width: 0;
+  min-height: 0;
   margin: 0;
   padding: 12px;
+  overflow: auto;
   border-radius: 8px;
   background: #f4e2c3;
 }
@@ -230,6 +237,10 @@ button {
   align-items: center;
   gap: 10px;
   margin-bottom: 10px;
+}
+
+.detail-head > div {
+  min-width: 0;
 }
 
 .ability-tags {

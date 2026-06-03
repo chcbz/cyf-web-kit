@@ -1354,6 +1354,7 @@ button.hall-room {
   display: flex;
   flex-direction: column;
   width: min(860px, 100%);
+  min-height: 0;
   max-height: 100%;
   border: 1px solid rgba(71, 44, 23, 0.2);
   border-radius: 8px;
@@ -1368,14 +1369,24 @@ button.hall-room {
 
 .panel-title {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 14px 16px;
+  border-bottom: 1px solid rgba(71, 44, 23, 0.12);
+  background: #fffaf0;
 }
 
 .panel-title {
   font-weight: 700;
+}
+
+.panel-title > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .panel-title button {

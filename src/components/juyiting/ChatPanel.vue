@@ -91,10 +91,11 @@ button:disabled {
 
 .panel-toolbar {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 0 16px 14px;
+  padding: 12px 16px;
   color: #765f40;
   font-size: 13px;
 }
@@ -112,6 +113,7 @@ button:disabled {
 
 .mention-strip {
   display: flex;
+  flex: 0 0 auto;
   gap: 8px;
   padding: 0 14px 12px;
   overflow-x: auto;
@@ -136,7 +138,7 @@ button:disabled {
 
 .hall-messages {
   flex: 1;
-  min-height: 260px;
+  min-height: 0;
   padding: 0 14px;
   overflow: auto;
 }
@@ -197,12 +199,6 @@ button:disabled {
 .empty-list {
   padding: 16px;
   color: #765f40;
-}
-
-@media (max-width: 900px) {
-  .hall-messages {
-    min-height: 320px;
-  }
 }
 
 @media (max-width: 620px) {

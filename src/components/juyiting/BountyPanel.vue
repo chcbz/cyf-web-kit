@@ -158,6 +158,7 @@ defineEmits([
 .bounty-panel {
   display: flex;
   flex: 1;
+  min-width: 0;
   min-height: 0;
   flex-direction: column;
 }
@@ -175,10 +176,11 @@ button:disabled {
 
 .panel-toolbar {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 0 16px 14px;
+  padding: 12px 16px;
   color: #765f40;
   font-size: 13px;
 }
@@ -216,6 +218,7 @@ button:disabled {
 
 .task-status-tabs {
   display: flex;
+  flex: 0 0 auto;
   gap: 8px;
   padding: 0 12px 12px;
   overflow-x: auto;
@@ -248,9 +251,10 @@ button:disabled {
 
 .task-panel-body {
   display: grid;
-  grid-template-columns: minmax(280px, 1fr) minmax(280px, 360px);
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
   gap: 12px;
   flex: 1;
+  min-width: 0;
   min-height: 0;
   padding: 0 12px 12px;
   overflow: hidden;
@@ -258,6 +262,7 @@ button:disabled {
 
 .task-list {
   overflow: auto;
+  min-width: 0;
   min-height: 0;
   padding: 0;
 }
@@ -276,12 +281,21 @@ button:disabled {
 .task-card p {
   color: #765f40;
   font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .task-head {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 12px;
+}
+
+.task-head strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .task-head span {
@@ -314,6 +328,7 @@ button:disabled {
 }
 
 .task-detail-card {
+  min-width: 0;
   min-height: 0;
   padding: 12px;
   overflow: auto;
@@ -322,16 +337,23 @@ button:disabled {
 }
 
 .task-detail-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 10px;
   margin-bottom: 10px;
+}
+
+.task-detail-head > div {
+  min-width: 0;
 }
 
 .task-detail-head strong,
 .task-detail-head small {
   display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .task-detail-head small {
@@ -342,7 +364,7 @@ button:disabled {
 
 .task-operation-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin: 12px 0;
 }
@@ -352,11 +374,15 @@ button:disabled {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  min-width: 0;
   min-height: 38px;
-  padding: 0 10px;
+  padding: 7px 10px;
   border-radius: 8px;
   background: #7c1f1b;
   color: #fff8e8;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
 }
 
 .task-operation-grid button + button {
@@ -406,6 +432,7 @@ button:disabled {
 }
 
 .recommended-agents em {
+  white-space: nowrap;
   font-style: normal;
   color: #23483e;
   font-weight: 700;
@@ -481,7 +508,7 @@ button:disabled {
   color: #765f40;
 }
 
-@media (max-width: 620px) {
+@media (max-width: 900px) {
   .panel-toolbar {
     align-items: stretch;
     flex-direction: column;
