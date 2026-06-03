@@ -80,7 +80,9 @@ defineEmits(['select-agent'])
   left: 50%;
   bottom: 92px;
   z-index: 8;
-  max-width: 146px;
+  width: max-content;
+  min-width: 112px;
+  max-width: 210px;
   padding: 7px 9px;
   transform: translateX(-50%);
   border: 1px solid rgba(96, 57, 28, 0.22);
@@ -93,6 +95,8 @@ defineEmits(['select-agent'])
   line-height: 1.35;
   pointer-events: none;
   white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: break-word;
   animation: dialoguePop 0.22s ease-out;
 }
 
@@ -660,7 +664,8 @@ defineEmits(['select-agent'])
 
   .agent-dialogue {
     bottom: 84px;
-    max-width: 118px;
+    min-width: 104px;
+    max-width: min(190px, 62vw);
     padding: 6px 8px;
     font-size: 11px;
   }
