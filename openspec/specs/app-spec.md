@@ -429,17 +429,20 @@ interface ShortLink {
 
 | 路径 | 名称 | 组件 | 菜单显示 | 菜单顺序 |
 |------|------|------|----------|----------|
+| `/juyiting` | JuyiHall | `world/JuyiHall.vue` | ✓ | 0 |
 | `/` | Chat | `Chat.vue` | ✓ | 1 |
-| `/task` | TaskIndex | `TaskIndex.vue` | ✓ | 2 |
+| `/task` | TaskIndex | `TaskIndex.vue` | ✓ | 3 |
 | `/list` | TaskList | `TaskList.vue` | ✗ | - |
 | `/history` | TaskHistory | `TaskHistory.vue` | ✗ | - |
 | `/add` | TaskAdd | `TaskAdd.vue` | ✗ | - |
-| `/gift` | GiftList | `GiftList.vue` | ✓ | 3 |
+| `/gift` | GiftList | `GiftList.vue` | ✓ | 4 |
 | `/pay` | GiftPay | `GiftPay.vue` | ✗ | - |
 | `/order/list` | OrderList | `OrderList.vue` | ✗ | - |
-| `/vote` | VoteTick | `VoteTick.vue` | ✓ | 4 |
-| `/phrase` | Phrase | `Phrase.vue` | ✓ | 5 |
-| `/dwz` | ShortLink | `ShortLink.vue` | ✓ | 6 |
+| `/messages` | MessageCenter | `MessageCenter.vue` | ✓ | 5 |
+| `/help` | HelpCenter | `HelpCenter.vue` | ✓ | 6 |
+| `/vote` | VoteTick | `VoteTick.vue` | ✓ | 7 |
+| `/phrase` | Phrase | `Phrase.vue` | ✓ | 8 |
+| `/dwz` | ShortLink | `ShortLink.vue` | ✓ | 9 |
 | `/oauth2/callback` | OAuthCallback | 内联组件 | ✗ | - |
 
 ---

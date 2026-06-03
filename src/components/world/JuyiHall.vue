@@ -89,9 +89,6 @@
         <div v-if="!visibleAgents.length" class="empty-hall">
           暂无 Agent 入厅，先在右侧刷新或等待上线
         </div>
-        <div class="table-core">
-          <span>悬赏议事桌</span>
-        </div>
         <button class="scene-hotspot hotspot-agents" @click="openPanel('agents')">
           <var-icon name="account-circle" />
           <span>名册</span>
@@ -655,7 +652,6 @@ const routePoint = (route, index, seed) => {
 }
 
 const hallObstacles = [
-  { x: 50, y: 76, rx: 19, ry: 12, strength: 2.8 },
   { x: 50, y: 23, rx: 12, ry: 8, strength: 1.7 },
   { x: 8, y: 63, rx: 12, ry: 9, strength: 1.4 },
   { x: 88, y: 63, rx: 12, ry: 9, strength: 1.4 },
@@ -1494,32 +1490,6 @@ button.hall-room {
   color: #fff1c1;
   text-align: center;
   font-weight: 700;
-}
-
-.table-core {
-  position: absolute;
-  z-index: 3;
-  left: 50%;
-  top: 55%;
-  width: clamp(190px, 24vw, 320px);
-  height: clamp(64px, 8vw, 102px);
-  transform: translate(-50%, -50%);
-  border: 10px solid #5e371f;
-  border-radius: 50%;
-  background: #c08a46;
-  color: #3c2716;
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-}
-
-.table-core span {
-  font-size: 0;
-}
-
-.table-core span::before {
-  content: '议事圆桌';
-  font-size: 16px;
 }
 
 .agent-token {
@@ -2948,12 +2918,6 @@ button.hall-room {
   .agent-status-badge {
     max-width: 66px;
     font-size: 10px;
-  }
-
-  .table-core {
-    width: 170px;
-    height: 58px;
-    top: 56%;
   }
 
   .banner {

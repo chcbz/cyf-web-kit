@@ -68,9 +68,6 @@
           <div class="dais">
             <span>主座</span>
           </div>
-          <div class="round-table">
-            <span>议事桌</span>
-          </div>
           <button
             class="reward-board-prop"
             type="button"
@@ -540,7 +537,6 @@ onMounted(async () => {
 }
 
 .dais,
-.round-table,
 .reward-board-prop {
   position: absolute;
   z-index: 2;
@@ -559,20 +555,6 @@ onMounted(async () => {
   background: linear-gradient(180deg, #f8d493, #c9874c);
   display: grid;
   place-items: center;
-}
-
-.round-table {
-  top: 53%;
-  left: 50%;
-  width: 132px;
-  height: 82px;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  background: radial-gradient(circle at 50% 36%, #f4d08a, #a65d35 72%);
-  display: grid;
-  place-items: center;
-  color: #4f2a1c;
-  box-shadow: 0 18px 28px rgba(82, 43, 26, 0.2);
 }
 
 .reward-board-prop {

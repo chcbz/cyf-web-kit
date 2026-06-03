@@ -47,7 +47,7 @@ export default [
       icon: 'account-circle',
       iconColor: '#8b3a1f',
       showInMenu: true,
-      menuOrder: 2
+      menuOrder: 0
     }
   },
   {
