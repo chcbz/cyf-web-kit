@@ -22,13 +22,6 @@ export const taskStatusFilters = [
   { label: '失败', value: 'failed' }
 ]
 
-export const quickActions = [
-  { key: 'summon', icon: 'bell-outline', label: '点将', text: '请各位好汉报上当前状态和可接任务。' },
-  { key: 'bounty', icon: 'format-list-checkbox', label: '看榜', text: '请汇总当前悬赏榜中最适合优先处理的任务。' },
-  { key: 'review', icon: 'check-circle-outline', label: '复盘', text: '请复盘最近一次任务协作，列出风险和下一步。' },
-  { key: 'tea', icon: 'message-text-outline', label: '闲谈', text: '今日聚义厅中，哪位好汉有新的见闻？' }
-]
-
 export const portraitRoles = [
   { slug: 'songjiang', name: '宋江', title: '统领型', x: 0, y: 0, robe: '#7c1f1b', trim: '#f4c84c', scale: 1, step: 0.86 },
   { slug: 'wuyong', name: '吴用', title: '谋略型', x: 1, y: 0, robe: '#23483e', trim: '#d7b875', scale: 0.96, step: 0.78 },

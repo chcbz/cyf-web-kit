@@ -1,8 +1,19 @@
 <template>
   <div class="chat-panel">
     <div class="panel-toolbar">
-      <span>厅内传令会带上当前好汉和悬赏上下文。</span>
+      <span>对话对象：{{ targetText }}</span>
       <button @click="$emit('load-messages')">同步</button>
+    </div>
+    <div v-if="agents.length" class="mention-strip" aria-label="选择要提及的 Agent">
+      <button
+        v-for="agent in agents"
+        :key="agent.agentId"
+        type="button"
+        :class="{ active: selectedAgent?.agentId === agent.agentId }"
+        @click="$emit('mention-agent', agent)"
+      >
+        @{{ mentionLabel(agent) }}
+      </button>
     </div>
     <div ref="messageBoxRef" class="hall-messages">
       <div
@@ -19,9 +30,10 @@
     <form class="hall-input" @submit.prevent="$emit('send-message')">
       <input
         :value="draft"
+        autofocus
         :disabled="isStreaming"
         placeholder="向聚义厅发令，或 @某位好汉"
-        @input="$emit('update:draft', $event.target.value.trim())"
+        @input="$emit('update:draft', $event.target.value)"
       />
       <button :disabled="!draft || isStreaming">
         <var-icon :name="isStreaming ? 'refresh' : 'chevron-right'" />
@@ -34,13 +46,17 @@
 import { nextTick, ref, watch } from 'vue'
 
 const props = defineProps({
+  agents: { type: Array, default: () => [] },
   draft: { type: String, default: '' },
   isStreaming: { type: Boolean, default: false },
+  mentionLabel: { type: Function, required: true },
   messages: { type: Array, default: () => [] },
-  senderText: { type: Function, required: true }
+  selectedAgent: { type: Object, default: null },
+  senderText: { type: Function, required: true },
+  targetText: { type: String, default: '全体好汉' }
 })
 
-defineEmits(['load-messages', 'send-message', 'update:draft'])
+defineEmits(['load-messages', 'mention-agent', 'send-message', 'update:draft'])
 
 const messageBoxRef = ref(null)
 
@@ -92,6 +108,30 @@ button:disabled {
   border-radius: 8px;
   background: #efe0c6;
   color: #4a3423;
+}
+
+.mention-strip {
+  display: flex;
+  gap: 8px;
+  padding: 0 14px 12px;
+  overflow-x: auto;
+}
+
+.mention-strip button {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid #d7c3a2;
+  border-radius: 8px;
+  background: #fff8e8;
+  color: #6d3f1f;
+  white-space: nowrap;
+}
+
+.mention-strip button.active {
+  border-color: #b93622;
+  background: #b93622;
+  color: #fff8e8;
 }
 
 .hall-messages {

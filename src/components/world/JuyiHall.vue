@@ -66,7 +66,7 @@
             :role-class="roleClass"
             :status-class="statusClass"
             :status-text="statusText"
-            @select-agent="selectAgent"
+            @select-agent="startAgentConversation"
           />
           <div v-if="!visibleAgents.length" class="empty-hall">
             暂无 Agent 入厅，先在右侧刷新或等待上线
@@ -100,15 +100,37 @@
       </div>
 
       <div class="quick-bar">
-        <button
-          v-for="action in quickActions"
-          :key="action.key"
-          class="quick-action"
-          @click="runQuickAction(action)"
-        >
-          <var-icon :name="action.icon" />
-          <span>{{ action.label }}</span>
-        </button>
+        <div class="dock-summary">
+          <span>
+            <strong>{{ agents.length }}</strong>
+            好汉在线
+          </span>
+          <span>
+            <strong>{{ tasks.length }}</strong>
+            悬赏在榜
+          </span>
+          <span class="dock-focus">
+            {{ selectedAgent ? `${portraitShortName(selectedAgent)} / ${selectedAgent.name || selectedAgent.agentId}` : '未选中好汉' }}
+          </span>
+        </div>
+        <div class="dock-actions">
+          <button class="quick-action" @click="openPanel('agents')">
+            <var-icon name="account-circle" />
+            <span>名册</span>
+          </button>
+          <button class="quick-action" @click="openPanel('tasks')">
+            <var-icon name="format-list-checkbox" />
+            <span>悬赏</span>
+          </button>
+          <button class="quick-action primary" @click="openPanel('chat')">
+            <var-icon name="message-text-outline" />
+            <span>传令</span>
+          </button>
+          <button class="quick-action" @click="refreshHall">
+            <var-icon name="refresh" />
+            <span>刷新</span>
+          </button>
+        </div>
       </div>
     </section>
 
@@ -177,10 +199,15 @@
           <ChatPanel
             v-if="activePanel === 'chat'"
             v-model:draft="draft"
+            :agents="agents"
             :is-streaming="isStreaming"
             :messages="messages"
+            :mention-label="portraitShortName"
+            :selected-agent="selectedAgent"
             :sender-text="senderText"
+            :target-text="chatTargetText"
             @load-messages="loadHallMessages"
+            @mention-agent="mentionAgent"
             @send-message="sendHallMessage"
           />
         </section>
@@ -206,7 +233,6 @@ import ChatPanel from '@/components/juyiting/ChatPanel.vue'
 import SelectedAgentCard from '@/components/juyiting/SelectedAgentCard.vue'
 import {
   mapControlsConfig,
-  quickActions,
   statusFilters,
   taskStatusFilters
 } from '@/constants/juyiting'
@@ -304,6 +330,10 @@ const activePanelTitle = computed(() => {
   if (activePanel.value === 'chat') return '厅内传令'
   return ''
 })
+const chatTargetText = computed(() => {
+  if (!selectedAgent.value) return '全体好汉'
+  return `${portraitShortName(selectedAgent.value)} / ${selectedAgent.value.name || selectedAgent.value.agentId}`
+})
 
 const normalizeStatus = (status = '') => status.toLowerCase()
 
@@ -373,6 +403,32 @@ const selectTask = (task) => {
 const selectAgent = (agent) => {
   selectedAgent.value = agent
   showToast(`已选中 ${portraitShortName(agent)} / ${agent.name || agent.personaName || agent.agentId}`)
+}
+
+const startAgentConversation = (agent) => {
+  selectedAgent.value = agent
+  insertAgentMention(agent, '请汇报当前状态、可承接任务和需要协助的事项。')
+  openPanel('chat')
+  showToast(`正在与 ${portraitShortName(agent)} 对话`)
+}
+
+const mentionAgent = (agent) => {
+  selectedAgent.value = agent
+  insertAgentMention(agent)
+}
+
+const insertAgentMention = (agent, suffix = '') => {
+  const mention = `@${portraitShortName(agent)}`
+  const current = draft.value.trim()
+  if (!current) {
+    draft.value = suffix ? `${mention} ${suffix}` : `${mention} `
+    return
+  }
+  if (current.includes(mention)) {
+    draft.value = suffix && current === mention ? `${mention} ${suffix}` : draft.value
+    return
+  }
+  draft.value = `${current} ${mention}${suffix ? ` ${suffix}` : ' '}`
 }
 
 const openPanel = (panel) => {
@@ -587,11 +643,6 @@ const sendHallMessage = async () => {
       timestamp: Date.now()
     })
   }
-}
-
-const runQuickAction = (action) => {
-  draft.value = action.text
-  sendHallMessage()
 }
 
 const assignTask = async (task) => {
@@ -1151,10 +1202,13 @@ button.hall-room {
 .quick-bar {
   position: relative;
   z-index: 8;
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) auto;
+  align-items: center;
+  gap: 12px;
   flex: 0 0 auto;
   width: 100%;
   padding: 10px max(18px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
-  justify-content: center;
   border: 1px solid rgba(255, 240, 202, 0.18);
   border-right: 0;
   border-bottom: 0;
@@ -1164,12 +1218,55 @@ button.hall-room {
   backdrop-filter: blur(8px);
 }
 
+.dock-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #fff4d4;
+}
+
+.dock-summary span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 244, 212, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 244, 212, 0.08);
+  color: #d7b875;
+  white-space: nowrap;
+}
+
+.dock-summary strong {
+  margin-right: 4px;
+  color: #fff8e8;
+  font-size: 18px;
+}
+
+.dock-focus {
+  min-width: 0;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dock-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .quick-action {
-  flex: 1 1 120px;
-  max-width: 172px;
+  flex: 0 0 auto;
   min-width: 86px;
   gap: 6px;
   background: rgba(35, 72, 62, 0.92);
+}
+
+.quick-action.primary {
+  background: #b93622;
+  color: #fff8e8;
 }
 
 .scene-hotspot {
@@ -1392,6 +1489,7 @@ button.hall-room {
 
 @media (max-width: 640px) {
   .juyi-page {
+    --bottom-action-bar-height: 108px;
     background: #211812;
   }
 
@@ -1440,10 +1538,33 @@ button.hall-room {
   }
 
   .quick-bar {
+    grid-template-columns: 1fr;
+    gap: 8px;
     padding: 8px max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
-    justify-content: flex-start;
+  }
+
+  .dock-summary {
     overflow-x: auto;
     flex-wrap: nowrap;
+  }
+
+  .dock-summary span {
+    min-height: 34px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
+  .dock-summary strong {
+    font-size: 16px;
+  }
+
+  .dock-focus {
+    max-width: none;
+  }
+
+  .dock-actions {
+    justify-content: flex-start;
+    overflow-x: auto;
   }
 
   .quick-action {
