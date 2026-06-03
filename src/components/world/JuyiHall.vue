@@ -551,7 +551,6 @@ const loadTasks = async () => {
         if (selectedTask.value && !tasks.value.some(task => task.id === selectedTask.value.id)) {
           selectedTask.value = null
         }
-        selectedTask.value = selectedTask.value || tasks.value[0] || null
       }
     })
   } catch (error) {

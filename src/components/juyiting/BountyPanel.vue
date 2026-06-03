@@ -34,7 +34,7 @@
       </button>
     </div>
 
-    <div class="task-panel-body">
+    <div class="task-panel-body" :class="{ 'has-selection': selectedTask }">
       <div class="task-list">
         <article
           v-for="task in tasks"
@@ -61,60 +61,57 @@
         <div v-if="!tasks.length" class="empty-list">暂无悬赏，调整筛选或刷新后再试</div>
       </div>
 
-      <aside class="task-detail-card">
-        <template v-if="selectedTask">
-          <div class="task-detail-head">
-            <div>
-              <strong>{{ selectedTask.title }}</strong>
-              <small>{{ selectedTask.id }} / {{ taskStatusText(selectedTask.status) }}</small>
-            </div>
-            <span :class="taskStateClass(selectedTask.status)">{{ taskStatusText(selectedTask.status) }}</span>
+      <aside v-if="selectedTask" class="task-detail-card">
+        <div class="task-detail-head">
+          <div>
+            <strong>{{ selectedTask.title }}</strong>
+            <small>{{ selectedTask.id }} / {{ taskStatusText(selectedTask.status) }}</small>
           </div>
+          <span :class="taskStateClass(selectedTask.status)">{{ taskStatusText(selectedTask.status) }}</span>
+        </div>
 
-          <p>{{ selectedTask.description || '暂无任务描述' }}</p>
+        <p>{{ selectedTask.description || '暂无任务描述' }}</p>
 
-          <div class="ability-tags">
-            <span v-for="ability in selectedTask.requiredAbilities || []" :key="ability">{{ ability }}</span>
-            <span v-if="!(selectedTask.requiredAbilities || []).length">不限能力</span>
-          </div>
+        <div class="ability-tags">
+          <span v-for="ability in selectedTask.requiredAbilities || []" :key="ability">{{ ability }}</span>
+          <span v-if="!(selectedTask.requiredAbilities || []).length">不限能力</span>
+        </div>
 
-          <div class="task-operation-grid">
-            <button
-              :disabled="!canAssign(selectedTask)"
-              @click="$emit('assign-task', selectedTask)"
-            >
-              <var-icon name="account-circle" />
-              <span>指派当前好汉</span>
-            </button>
-            <button @click="$emit('brief-selected-task')">
-              <var-icon name="message-text-outline" />
-              <span>传令议事</span>
-            </button>
-          </div>
+        <div class="task-operation-grid">
+          <button
+            :disabled="!canAssign(selectedTask)"
+            @click="$emit('assign-task', selectedTask)"
+          >
+            <var-icon name="account-circle" />
+            <span>指派当前好汉</span>
+          </button>
+          <button @click="$emit('brief-selected-task')">
+            <var-icon name="message-text-outline" />
+            <span>传令议事</span>
+          </button>
+        </div>
 
-          <div class="recommended-agents">
-            <div class="section-label">适配好汉</div>
-            <button
-              v-for="agent in recommendedAgents"
-              :key="agent.agentId"
-              :class="{ active: selectedAgent?.agentId === agent.agentId }"
-              @click="$emit('select-agent', agent)"
-            >
-              <span
-                class="mini-avatar portrait-avatar"
-                :style="portraitStyle(agent)"
-                :title="portraitName(agent)"
-              ></span>
-              <span>
-                <strong>{{ agent.name || agent.personaName || agent.agentId }}</strong>
-                <small>{{ abilityText(agent) }}</small>
-              </span>
-              <em>{{ taskAgentMatchScore(selectedTask, agent) }}%</em>
-            </button>
-            <p v-if="!recommendedAgents.length">暂无活跃好汉可接令。</p>
-          </div>
-        </template>
-        <p v-else>选择一条悬赏后查看详情和可用操作。</p>
+        <div class="recommended-agents">
+          <div class="section-label">适配好汉</div>
+          <button
+            v-for="agent in recommendedAgents"
+            :key="agent.agentId"
+            :class="{ active: selectedAgent?.agentId === agent.agentId }"
+            @click="$emit('select-agent', agent)"
+          >
+            <span
+              class="mini-avatar portrait-avatar"
+              :style="portraitStyle(agent)"
+              :title="portraitName(agent)"
+            ></span>
+            <span>
+              <strong>{{ agent.name || agent.personaName || agent.agentId }}</strong>
+              <small>{{ abilityText(agent) }}</small>
+            </span>
+            <em>{{ taskAgentMatchScore(selectedTask, agent) }}%</em>
+          </button>
+          <p v-if="!recommendedAgents.length">暂无活跃好汉可接令。</p>
+        </div>
       </aside>
     </div>
   </div>
@@ -251,13 +248,17 @@ button:disabled {
 
 .task-panel-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   flex: 1;
   min-width: 0;
   min-height: 0;
   padding: 0 12px 12px;
   overflow: hidden;
+}
+
+.task-panel-body.has-selection {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
 }
 
 .task-list {
@@ -516,6 +517,10 @@ button:disabled {
 
   .task-search,
   .task-panel-body {
+    grid-template-columns: 1fr;
+  }
+
+  .task-panel-body.has-selection {
     grid-template-columns: 1fr;
   }
 
