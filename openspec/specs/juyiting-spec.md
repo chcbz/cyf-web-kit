@@ -1,10 +1,10 @@
 # 聚义厅 - Agent 管理模块规格说明书
 
-> **文档状态**：实施版 v0.7
+> **文档状态**：实施版 v0.8
 > **创建日期**：2025-05
 > **最后更新**：2026-06-03
 > **目标读者**：产品团队、前端开发、后端开发
-> **版本范围**：线上聚义厅 v0.7
+> **版本范围**：线上聚义厅 v0.8
 > **依赖关系**：基于 `app-spec.md` 扩展
 
 ---
@@ -291,10 +291,13 @@ src/components/
 │   └── AgentList.vue
 ├── juyiting/
 │   ├── AgentPanel.vue      # 好汉名册弹窗
+│   ├── AgentToken.vue      # 大厅行走小人和水浒角色外观
+│   ├── BottomDock.vue      # 大厅底部功能入口
 │   ├── BountyPanel.vue     # 悬赏榜弹窗
 │   ├── ChatPanel.vue       # 厅内传令弹窗
 │   ├── JuyiHallClassic.vue # 备用结构化组件
-│   └── RewardBoard.vue
+│   ├── RewardBoard.vue
+│   └── SelectedAgentCard.vue # 当前选中 Agent 摘要入口
 ├── chat/
 │   └── ...复用现有聊天组件
 └── task/
@@ -569,8 +572,8 @@ const waterMarginDialogues = {
 
 后续拆分建议：
 
-- 拆 `AgentPanel.vue`、`BountyPanel.vue`、`ChatPanel.vue`，把三个弹窗的模板和交互继续从页面容器中移出。
-- 拆 `HallStage.vue` 和 `AgentToken.vue`，但需要同步迁移 scoped CSS，避免父组件样式无法作用到子组件内部。
+- 继续评估是否拆 `HallStage.vue`，把大厅地图、房间、热点和地图控制从页面容器中移出。
+- 拆大厅地图时需要同步迁移 scoped CSS，避免父组件样式无法作用到子组件内部。
 
 ## 10.4 2026-06-03 面板组件化状态
 
@@ -584,8 +587,24 @@ const waterMarginDialogues = {
 
 后续拆分建议：
 
-- 继续拆 `HallStage.vue`、`AgentToken.vue` 和 `SelectedAgentCard.vue`。
-- 若继续拆大厅地图，应优先把人物外观和地图样式迁入对应组件，避免父 scoped CSS 无法穿透子组件。
+- 继续拆 `HallStage.vue`，把大厅地图、场景热点、地图控制和空状态收敛为独立舞台组件。
+- 若继续拆大厅地图，应优先把地图样式迁入对应组件，避免父 scoped CSS 无法穿透子组件。
+
+## 10.5 2026-06-03 大厅部件组件化状态
+
+已实施：
+
+- 将大厅行走小人拆为 `src/components/juyiting/AgentToken.vue`，小人的水浒角色外观、状态徽标、姓名牌、步行动画和移动端尺寸随组件迁移。
+- 将当前选中 Agent 摘要入口拆为 `src/components/juyiting/SelectedAgentCard.vue`，父页面只传入选中 Agent 和展示计算函数。
+- 将底部名册、悬赏、传令入口拆为 `src/components/juyiting/BottomDock.vue`，窄屏保持隐藏以避免和快捷操作区域重叠。
+- `src/components/world/JuyiHall.vue` 进一步收敛为页面编排层，保留大厅地图、数据加载、弹窗容器和业务动作入口。
+- 已删除父页面中被迁移的小人外观、头像和步行动画死样式，降低重复样式和 scoped CSS 误判风险。
+
+后续拆分建议：
+
+- 下一步优先拆 `HallStage.vue`，将地图场景、房间热点、悬赏道具和方向控制一起迁入舞台组件。
+- 拆舞台组件时需要明确事件边界：打开弹窗、选择 Agent、刷新大厅、地图重置和地图平移应通过 emits 暴露。
+- 对悬赏榜操作可继续补充前端测试，覆盖筛选、指派、传令议事和空状态。
 
 后续增强：
 
@@ -606,6 +625,7 @@ const waterMarginDialogues = {
 | v0.5 | 2026-06-03 | 同步线上聚义厅实现：菜单首位、活跃 WebSocket Agent、游戏化大厅、水浒人物小人、悬赏榜操作、移除议事圆桌和 `/agent/active` 接口 | AI |
 | v0.6 | 2026-06-03 | 记录前端结构优化：抽离常量、水浒角色映射和大厅物理运动 composable，备用组件改名消除同名冲突 | AI |
 | v0.7 | 2026-06-03 | 记录面板组件化：拆出好汉名册、悬赏榜和厅内传令面板，清理父页面面板死样式 | AI |
+| v0.8 | 2026-06-03 | 记录大厅部件组件化：拆出行走小人、选中 Agent 摘要和底部入口，父页面继续收敛为编排层 | AI |
 
 ---
 
