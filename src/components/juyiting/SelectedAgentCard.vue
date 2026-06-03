@@ -31,7 +31,7 @@ defineEmits(['open-agents'])
 .selected-agent-card {
   position: absolute;
   right: 18px;
-  bottom: 18px;
+  bottom: calc(var(--bottom-action-bar-height, 68px) + 14px);
   z-index: 6;
   display: flex;
   align-items: center;
@@ -95,7 +95,7 @@ defineEmits(['open-agents'])
   .selected-agent-card {
     left: 12px;
     right: 12px;
-    bottom: 72px;
+    bottom: calc(var(--bottom-action-bar-height, 68px) + 12px);
     width: auto;
   }
 }

@@ -121,11 +121,6 @@
       @open-agents="openPanel('agents')"
     />
 
-    <BottomDock
-      :active-panel="activePanel"
-      @open-panel="openPanel"
-    />
-
     <transition name="panel">
       <div v-if="activePanel" class="panel-overlay" @click.self="closePanel">
         <section class="floating-panel" :class="`panel-${activePanel}`">
@@ -207,7 +202,6 @@ import { portraitName, portraitShortName, portraitStyle, roleClass } from '@/com
 import AgentPanel from '@/components/juyiting/AgentPanel.vue'
 import AgentToken from '@/components/juyiting/AgentToken.vue'
 import BountyPanel from '@/components/juyiting/BountyPanel.vue'
-import BottomDock from '@/components/juyiting/BottomDock.vue'
 import ChatPanel from '@/components/juyiting/ChatPanel.vue'
 import SelectedAgentCard from '@/components/juyiting/SelectedAgentCard.vue'
 import {
@@ -637,6 +631,7 @@ onUnmounted(() => {
 
 <style scoped>
 .juyi-page {
+  --bottom-action-bar-height: 68px;
   position: relative;
   display: flex;
   flex: 1;
@@ -1154,21 +1149,24 @@ button.hall-room {
 }
 
 .quick-bar {
-  position: absolute;
-  left: 50%;
-  bottom: 18px;
-  z-index: 5;
-  width: min(720px, calc(100% - 160px));
-  padding: 10px;
-  transform: translateX(-50%);
+  position: relative;
+  z-index: 8;
+  flex: 0 0 auto;
+  width: 100%;
+  padding: 10px max(18px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  justify-content: center;
   border: 1px solid rgba(255, 240, 202, 0.18);
-  border-radius: 8px;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  border-radius: 0;
   background: rgba(35, 24, 16, 0.72);
   backdrop-filter: blur(8px);
 }
 
 .quick-action {
-  flex: 1;
+  flex: 1 1 120px;
+  max-width: 172px;
   min-width: 86px;
   gap: 6px;
   background: rgba(35, 72, 62, 0.92);
@@ -1442,11 +1440,8 @@ button.hall-room {
   }
 
   .quick-bar {
-    left: 8px;
-    right: 8px;
-    bottom: 76px;
-    width: auto;
-    transform: none;
+    padding: 8px max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    justify-content: flex-start;
     overflow-x: auto;
     flex-wrap: nowrap;
   }
