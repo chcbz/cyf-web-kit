@@ -75,8 +75,8 @@ const menuRoutes = computed(() => {
     .getRoutes()
     .filter((route) => route.meta?.title && route.meta?.showInMenu !== false)
     .sort((a, b) => {
-      const orderA = a.meta?.menuOrder || 999
-      const orderB = b.meta?.menuOrder || 999
+      const orderA = a.meta?.menuOrder ?? 999
+      const orderB = b.meta?.menuOrder ?? 999
       return orderA - orderB
     })
 })

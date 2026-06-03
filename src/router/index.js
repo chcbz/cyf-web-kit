@@ -28,6 +28,13 @@ export default [
   },
   {
     path: '/',
+    redirect: '/juyiting',
+    meta: {
+      showInMenu: false
+    }
+  },
+  {
+    path: '/chat',
     name: 'Chat',
     component: () => import('@/components/chat/Chat'),
     meta: {

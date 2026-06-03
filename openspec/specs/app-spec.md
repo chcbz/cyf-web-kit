@@ -430,7 +430,8 @@ interface ShortLink {
 | 路径 | 名称 | 组件 | 菜单显示 | 菜单顺序 |
 |------|------|------|----------|----------|
 | `/juyiting` | JuyiHall | `world/JuyiHall.vue` | ✓ | 0 |
-| `/` | Chat | `Chat.vue` | ✓ | 1 |
+| `/` | - | 重定向到 `/juyiting` | ✗ | - |
+| `/chat` | Chat | `Chat.vue` | ✓ | 1 |
 | `/task` | TaskIndex | `TaskIndex.vue` | ✓ | 3 |
 | `/list` | TaskList | `TaskList.vue` | ✗ | - |
 | `/history` | TaskHistory | `TaskHistory.vue` | ✗ | - |
