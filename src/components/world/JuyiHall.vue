@@ -179,206 +179,58 @@
             </button>
           </div>
 
-          <template v-if="activePanel === 'agents'">
-            <div class="panel-toolbar">
-              <div class="status-filter">
-                <button
-                  v-for="item in statusFilters"
-                  :key="item.value"
-                  :class="{ active: agentFilter === item.value }"
-                  @click="agentFilter = item.value"
-                >
-                  {{ item.label }}
-                </button>
-              </div>
-              <span>{{ agents.length }} 人</span>
-            </div>
-            <div class="agent-panel-body">
-              <div class="agent-list">
-                <button
-                  v-for="agent in filteredAgents"
-                  :key="agent.agentId"
-                  class="agent-row"
-                  :class="{ active: selectedAgent?.agentId === agent.agentId }"
-                  @click="selectAgent(agent)"
-                >
-                  <span
-                    class="mini-avatar portrait-avatar"
-                    :style="portraitStyle(agent)"
-                    :title="portraitName(agent)"
-                  ></span>
-                  <span>
-                    <strong>{{ agent.name || agent.personaName || agent.agentId }}</strong>
-                    <small>{{ portraitName(agent) }} / {{ agent.currentTaskTitle || abilityText(agent) }}</small>
-                  </span>
-                  <em :class="statusClass(agent.status)">{{ statusText(agent.status) }}</em>
-                </button>
-              </div>
-              <div class="detail-card">
-                <template v-if="selectedAgent">
-                  <div class="detail-head">
-                    <span
-                      class="large-avatar portrait-avatar"
-                      :style="portraitStyle(selectedAgent)"
-                      :title="portraitName(selectedAgent)"
-                    ></span>
-                    <div>
-                      <strong>{{ selectedAgent.name || selectedAgent.personaName }}</strong>
-                      <small>{{ portraitName(selectedAgent) }} / {{ selectedAgent.agentId }}</small>
-                    </div>
-                  </div>
-                  <div class="ability-tags">
-                    <span v-for="ability in selectedAgent.abilities || []" :key="ability">{{ ability }}</span>
-                    <span v-if="!(selectedAgent.abilities || []).length">未登记能力</span>
-                  </div>
-                  <p>{{ selectedAgent.errorMessage || selectedAgent.currentTaskTitle || '正在厅中候命，可从悬赏榜指派任务。' }}</p>
-                </template>
-                <p v-else>点击厅中人物查看状态、能力和当前任务。</p>
-              </div>
-            </div>
-          </template>
+          <AgentPanel
+            v-if="activePanel === 'agents'"
+            v-model:agent-filter="agentFilter"
+            :ability-text="abilityText"
+            :agents="agents"
+            :filtered-agents="filteredAgents"
+            :portrait-name="portraitName"
+            :portrait-style="portraitStyle"
+            :selected-agent="selectedAgent"
+            :status-class="statusClass"
+            :status-filters="statusFilters"
+            :status-text="statusText"
+            @select-agent="selectAgent"
+          />
 
-          <template v-if="activePanel === 'tasks'">
-            <div class="panel-toolbar">
-              <div class="task-search">
-                <input
-                  v-model.trim="taskKeyword"
-                  placeholder="搜索悬赏编号"
-                  @keyup.enter="loadTasks"
-                />
-                <select v-model="taskAbilityFilter" @change="loadTasks">
-                  <option value="">全部能力</option>
-                  <option v-for="ability in taskAbilityOptions" :key="ability" :value="ability">{{ ability }}</option>
-                </select>
-              </div>
-              <button @click="loadTasks">
-                <var-icon name="refresh" />
-                <span>刷新</span>
-              </button>
-            </div>
-            <div class="task-status-tabs">
-              <button
-                v-for="item in taskStatusFilters"
-                :key="item.value"
-                :class="{ active: taskStatusFilter === item.value }"
-                @click="setTaskStatusFilter(item.value)"
-              >
-                {{ item.label }}
-                <small>{{ taskStatusCount(item.value) }}</small>
-              </button>
-            </div>
-            <div class="task-panel-body">
-              <div class="task-list">
-                <article
-                  v-for="task in tasks"
-                  :key="task.id"
-                  class="task-card"
-                  :class="{ selected: selectedTask?.id === task.id }"
-                  @click="selectTask(task)"
-                >
-                  <div class="task-head">
-                    <strong>{{ task.title }}</strong>
-                    <span :class="taskStateClass(task.status)">{{ taskStatusText(task.status) }}</span>
-                  </div>
-                  <p>{{ task.description || '暂无任务描述' }}</p>
-                  <div class="task-meta">
-                    <span>{{ task.id }}</span>
-                    <span v-if="task.assignedAgentName">承接：{{ task.assignedAgentName }}</span>
-                    <span v-if="task.updatedAt">{{ formatTime(task.updatedAt) }}</span>
-                  </div>
-                  <div class="ability-tags">
-                    <span v-for="ability in task.requiredAbilities || []" :key="ability">{{ ability }}</span>
-                    <span v-if="!(task.requiredAbilities || []).length">不限能力</span>
-                  </div>
-                </article>
-                <div v-if="!tasks.length" class="empty-list">暂无悬赏，调整筛选或刷新后再试</div>
-              </div>
+          <BountyPanel
+            v-if="activePanel === 'tasks'"
+            v-model:task-ability-filter="taskAbilityFilter"
+            v-model:task-keyword="taskKeyword"
+            :ability-text="abilityText"
+            :can-assign="canAssign"
+            :format-time="formatTime"
+            :portrait-name="portraitName"
+            :portrait-style="portraitStyle"
+            :recommended-agents="recommendedAgents"
+            :selected-agent="selectedAgent"
+            :selected-task="selectedTask"
+            :task-ability-options="taskAbilityOptions"
+            :task-agent-match-score="taskAgentMatchScore"
+            :task-state-class="taskStateClass"
+            :task-status-count="taskStatusCount"
+            :task-status-filter="taskStatusFilter"
+            :task-status-filters="taskStatusFilters"
+            :task-status-text="taskStatusText"
+            :tasks="tasks"
+            @assign-task="assignTask"
+            @brief-selected-task="briefSelectedTask"
+            @load-tasks="loadTasks"
+            @select-agent="selectAgent"
+            @select-task="selectTask"
+            @set-status-filter="setTaskStatusFilter"
+          />
 
-              <aside class="task-detail-card">
-                <template v-if="selectedTask">
-                  <div class="task-detail-head">
-                    <div>
-                      <strong>{{ selectedTask.title }}</strong>
-                      <small>{{ selectedTask.id }} / {{ taskStatusText(selectedTask.status) }}</small>
-                    </div>
-                    <span :class="taskStateClass(selectedTask.status)">{{ taskStatusText(selectedTask.status) }}</span>
-                  </div>
-
-                  <p>{{ selectedTask.description || '暂无任务描述' }}</p>
-
-                  <div class="ability-tags">
-                    <span v-for="ability in selectedTask.requiredAbilities || []" :key="ability">{{ ability }}</span>
-                    <span v-if="!(selectedTask.requiredAbilities || []).length">不限能力</span>
-                  </div>
-
-                  <div class="task-operation-grid">
-                    <button
-                      :disabled="!canAssign(selectedTask)"
-                      @click="assignTask(selectedTask)"
-                    >
-                      <var-icon name="account-circle" />
-                      <span>指派当前好汉</span>
-                    </button>
-                    <button @click="briefSelectedTask">
-                      <var-icon name="message-text-outline" />
-                      <span>传令议事</span>
-                    </button>
-                  </div>
-
-                  <div class="recommended-agents">
-                    <div class="section-label">适配好汉</div>
-                    <button
-                      v-for="agent in recommendedAgents"
-                      :key="agent.agentId"
-                      :class="{ active: selectedAgent?.agentId === agent.agentId }"
-                      @click="selectAgent(agent)"
-                    >
-                      <span
-                        class="mini-avatar portrait-avatar"
-                        :style="portraitStyle(agent)"
-                        :title="portraitName(agent)"
-                      ></span>
-                      <span>
-                        <strong>{{ agent.name || agent.personaName || agent.agentId }}</strong>
-                        <small>{{ abilityText(agent) }}</small>
-                      </span>
-                      <em>{{ taskAgentMatchScore(selectedTask, agent) }}%</em>
-                    </button>
-                    <p v-if="!recommendedAgents.length">暂无活跃好汉可接令。</p>
-                  </div>
-                </template>
-                <p v-else>选择一条悬赏后查看详情和可用操作。</p>
-              </aside>
-            </div>
-          </template>
-          <template v-if="activePanel === 'chat'">
-            <div class="panel-toolbar">
-              <span>厅内传令会带上当前好汉和悬赏上下文。</span>
-              <button @click="loadHallMessages">同步</button>
-            </div>
-            <div ref="messageBoxRef" class="hall-messages">
-              <div
-                v-for="message in messages"
-                :key="message.localId || message.timestamp"
-                class="hall-message"
-                :class="message.sender"
-              >
-                <strong>{{ senderText(message) }}</strong>
-                <p>{{ message.content }}</p>
-              </div>
-              <div v-if="!messages.length" class="empty-list">厅中尚无传令，发起一句开始议事。</div>
-            </div>
-            <form class="hall-input" @submit.prevent="sendHallMessage">
-              <input
-                v-model.trim="draft"
-                :disabled="isStreaming"
-                placeholder="向聚义厅发令，或 @某位好汉"
-              />
-              <button :disabled="!draft || isStreaming">
-                <var-icon :name="isStreaming ? 'refresh' : 'chevron-right'" />
-              </button>
-            </form>
-          </template>
+          <ChatPanel
+            v-if="activePanel === 'chat'"
+            v-model:draft="draft"
+            :is-streaming="isStreaming"
+            :messages="messages"
+            :sender-text="senderText"
+            @load-messages="loadHallMessages"
+            @send-message="sendHallMessage"
+          />
         </section>
       </div>
     </transition>
@@ -390,11 +242,14 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useGlobalStore } from '@/stores/global'
 import { agentApi, chatApi } from '@/composables/useHttp'
 import { useHallPhysics } from '@/composables/juyiting/useHallPhysics'
 import { portraitName, portraitShortName, portraitStyle, roleClass } from '@/composables/juyiting/useWaterMarginRoles'
+import AgentPanel from '@/components/juyiting/AgentPanel.vue'
+import BountyPanel from '@/components/juyiting/BountyPanel.vue'
+import ChatPanel from '@/components/juyiting/ChatPanel.vue'
 import {
   mapControlsConfig,
   quickActions,
@@ -418,7 +273,6 @@ const conversationId = ref('')
 const draft = ref('')
 const isStreaming = ref(false)
 const toast = ref('')
-const messageBoxRef = ref(null)
 const hallBoardRef = ref(null)
 const mapWorldRef = ref(null)
 const activePanel = ref('')
@@ -496,14 +350,6 @@ const activePanelTitle = computed(() => {
   if (activePanel.value === 'chat') return '厅内传令'
   return ''
 })
-
-watch(messages, () => {
-  nextTick(() => {
-    if (messageBoxRef.value) {
-      messageBoxRef.value.scrollTop = messageBoxRef.value.scrollHeight
-    }
-  })
-}, { deep: true })
 
 const normalizeStatus = (status = '') => status.toLowerCase()
 
@@ -883,8 +729,7 @@ h1 {
 }
 
 .stage-actions,
-.quick-bar,
-.status-filter {
+.quick-bar {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
@@ -903,11 +748,7 @@ button:disabled {
 
 .icon-action,
 .quick-action,
-.panel-title button,
-.panel-toolbar button,
-.status-filter button,
-.task-card button,
-.hall-input button {
+.panel-title button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1932,8 +1773,7 @@ button.hall-room {
   width: min(760px, 100%);
 }
 
-.panel-title,
-.panel-toolbar {
+.panel-title {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1945,9 +1785,7 @@ button.hall-room {
   font-weight: 700;
 }
 
-.panel-title button,
-.panel-toolbar button,
-.status-filter button {
+.panel-title button {
   padding: 0 12px;
   background: #efe0c6;
   color: #4a3423;
@@ -1956,122 +1794,6 @@ button.hall-room {
 .panel-close {
   width: 36px;
   padding: 0;
-}
-
-.panel-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding-top: 0;
-  color: #765f40;
-  font-size: 13px;
-}
-
-.panel-toolbar .status-filter {
-  padding: 0;
-}
-
-.status-filter {
-  padding: 0 16px 12px;
-}
-
-.status-filter button.active {
-  background: #23483e;
-  color: #fff;
-}
-
-.task-search {
-  display: grid;
-  grid-template-columns: minmax(160px, 1fr) minmax(118px, 150px);
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-}
-
-.task-search input,
-.task-search select {
-  min-width: 0;
-  height: 36px;
-  padding: 0 10px;
-  border: 1px solid #d7c3a2;
-  border-radius: 8px;
-  background: #fffdf6;
-  color: #3f2815;
-  outline: none;
-}
-
-.task-status-tabs {
-  display: flex;
-  gap: 8px;
-  padding: 0 12px 12px;
-  overflow-x: auto;
-}
-
-.task-status-tabs button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 34px;
-  padding: 0 10px;
-  border-radius: 8px;
-  background: #efe0c6;
-  color: #4a3423;
-  white-space: nowrap;
-}
-
-.task-status-tabs button.active {
-  background: #7c1f1b;
-  color: #fff8e8;
-}
-
-.task-status-tabs small {
-  min-width: 18px;
-  padding: 1px 5px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.28);
-  font-size: 11px;
-}
-
-.agent-list,
-.task-list,
-.hall-messages {
-  overflow: auto;
-  min-height: 0;
-}
-
-.agent-panel-body {
-  display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(240px, 320px);
-  gap: 12px;
-  flex: 1;
-  min-height: 0;
-  padding: 0 12px 12px;
-  overflow: hidden;
-}
-
-.agent-list {
-  flex: 1;
-  padding: 0;
-}
-
-.agent-row {
-  display: grid;
-  grid-template-columns: 40px 1fr auto;
-  gap: 10px;
-  align-items: center;
-  width: 100%;
-  padding: 10px;
-  margin-bottom: 8px;
-  border-radius: 8px;
-  background: #f7ecd7;
-  color: inherit;
-  text-align: left;
-}
-
-.agent-row.active,
-.task-card.selected {
-  background: #ead3a9;
 }
 
 .mini-avatar {
@@ -2083,294 +1805,6 @@ button.hall-room {
   width: 58px;
   height: 58px;
   font-size: 22px;
-}
-
-.agent-row strong,
-.agent-row small,
-.detail-head small {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.agent-row small,
-.detail-head small,
-.task-card p {
-  color: #765f40;
-  font-size: 12px;
-}
-
-.agent-row em {
-  font-style: normal;
-  font-size: 12px;
-}
-
-.detail-card {
-  margin: 0;
-  padding: 12px;
-  border-radius: 8px;
-  background: #f4e2c3;
-}
-
-.detail-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.ability-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.ability-tags span {
-  padding: 3px 7px;
-  border-radius: 8px;
-  background: rgba(35, 72, 62, 0.12);
-  color: #23483e;
-  font-size: 12px;
-}
-
-.task-list {
-  flex: 1;
-  padding: 0 12px 12px;
-}
-
-.task-panel-body {
-  display: grid;
-  grid-template-columns: minmax(280px, 1fr) minmax(280px, 360px);
-  gap: 12px;
-  flex: 1;
-  min-height: 0;
-  padding: 0 12px 12px;
-  overflow: hidden;
-}
-
-.task-panel-body .task-list {
-  padding: 0;
-}
-
-.task-card {
-  padding: 12px;
-  margin-bottom: 10px;
-  border-radius: 8px;
-  background: #f7ecd7;
-}
-
-.task-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.task-head span {
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.task-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  margin-top: 8px;
-  color: #8b6b44;
-  font-size: 12px;
-}
-
-.task-detail-card {
-  min-height: 0;
-  padding: 12px;
-  overflow: auto;
-  border-radius: 8px;
-  background: #f4e2c3;
-}
-
-.task-detail-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.task-detail-head strong,
-.task-detail-head small {
-  display: block;
-}
-
-.task-detail-head small {
-  margin-top: 3px;
-  color: #765f40;
-  font-size: 12px;
-}
-
-.task-operation-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin: 12px 0;
-}
-
-.task-operation-grid button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 38px;
-  padding: 0 10px;
-  border-radius: 8px;
-  background: #7c1f1b;
-  color: #fff8e8;
-}
-
-.task-operation-grid button + button {
-  background: #23483e;
-}
-
-.recommended-agents {
-  display: grid;
-  gap: 8px;
-}
-
-.section-label {
-  color: #765f40;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.recommended-agents button {
-  display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-  width: 100%;
-  padding: 8px;
-  border-radius: 8px;
-  background: #f7ecd7;
-  color: #2f261c;
-  text-align: left;
-}
-
-.recommended-agents button.active {
-  outline: 2px solid #7c1f1b;
-}
-
-.recommended-agents strong,
-.recommended-agents small {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.recommended-agents small,
-.recommended-agents p {
-  color: #765f40;
-  font-size: 12px;
-}
-
-.recommended-agents em {
-  font-style: normal;
-  color: #23483e;
-  font-weight: 700;
-}
-
-.task-state-open,
-.task-state-assigned,
-.task-state-running,
-.task-state-done,
-.task-state-failed {
-  display: inline-flex;
-  align-items: center;
-  min-height: 22px;
-  padding: 0 7px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.task-state-open {
-  background: rgba(124, 31, 27, 0.12);
-  color: #7c1f1b;
-}
-
-.task-state-assigned,
-.task-state-running {
-  background: rgba(154, 91, 0, 0.14);
-  color: #875200;
-}
-
-.task-state-done {
-  background: rgba(46, 125, 50, 0.14);
-  color: #2e7d32;
-}
-
-.task-state-failed {
-  background: rgba(179, 38, 30, 0.14);
-  color: #b3261e;
-}
-
-.chat-panel {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.hall-messages {
-  flex: 1;
-  min-height: 260px;
-  padding: 0 14px;
-}
-
-.hall-message {
-  max-width: 86%;
-  margin: 0 0 10px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: #f7ecd7;
-}
-
-.hall-message.USER {
-  margin-left: auto;
-  background: #dceadf;
-}
-
-.hall-message.SYSTEM {
-  max-width: 100%;
-  background: #eee5d7;
-}
-
-.hall-message p {
-  margin: 4px 0 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.hall-input {
-  display: grid;
-  grid-template-columns: 1fr 44px;
-  gap: 8px;
-  padding: 12px 14px 14px;
-}
-
-.hall-input input {
-  min-width: 0;
-  height: 42px;
-  padding: 0 12px;
-  border: 1px solid #d7c3a2;
-  border-radius: 8px;
-  background: #fffdf6;
-  color: #2f261c;
-  outline: none;
-}
-
-.hall-input button {
-  width: 44px;
-  min-height: 42px;
 }
 
 .toast {
@@ -2606,29 +2040,6 @@ button.hall-room {
     min-height: 34px;
   }
 
-  .panel-toolbar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .task-search {
-    grid-template-columns: 1fr;
-  }
-
-  .task-panel-body {
-    grid-template-columns: 1fr;
-    overflow: auto;
-  }
-
-  .task-panel-body .task-list,
-  .task-detail-card {
-    overflow: visible;
-  }
-
-  .task-operation-grid {
-    grid-template-columns: 1fr;
-  }
-
   .agent-token {
     width: 58px;
     height: 86px;
@@ -2791,17 +2202,5 @@ button.hall-room {
     border-radius: 8px 8px 0 0;
   }
 
-  .agent-panel-body {
-    grid-template-columns: 1fr;
-    overflow: auto;
-  }
-
-  .detail-card {
-    order: -1;
-  }
-
-  .hall-messages {
-    min-height: 320px;
-  }
 }
 </style>

@@ -1,10 +1,10 @@
 # 聚义厅 - Agent 管理模块规格说明书
 
-> **文档状态**：实施版 v0.6
+> **文档状态**：实施版 v0.7
 > **创建日期**：2025-05
 > **最后更新**：2026-06-03
 > **目标读者**：产品团队、前端开发、后端开发
-> **版本范围**：线上聚义厅 v0.6
+> **版本范围**：线上聚义厅 v0.7
 > **依赖关系**：基于 `app-spec.md` 扩展
 
 ---
@@ -290,6 +290,9 @@ src/components/
 │   ├── AgentDetail.vue
 │   └── AgentList.vue
 ├── juyiting/
+│   ├── AgentPanel.vue      # 好汉名册弹窗
+│   ├── BountyPanel.vue     # 悬赏榜弹窗
+│   ├── ChatPanel.vue       # 厅内传令弹窗
 │   ├── JuyiHallClassic.vue # 备用结构化组件
 │   └── RewardBoard.vue
 ├── chat/
@@ -569,6 +572,21 @@ const waterMarginDialogues = {
 - 拆 `AgentPanel.vue`、`BountyPanel.vue`、`ChatPanel.vue`，把三个弹窗的模板和交互继续从页面容器中移出。
 - 拆 `HallStage.vue` 和 `AgentToken.vue`，但需要同步迁移 scoped CSS，避免父组件样式无法作用到子组件内部。
 
+## 10.4 2026-06-03 面板组件化状态
+
+已实施：
+
+- 将好汉名册弹窗拆为 `src/components/juyiting/AgentPanel.vue`。
+- 将悬赏榜弹窗拆为 `src/components/juyiting/BountyPanel.vue`。
+- 将厅内传令弹窗拆为 `src/components/juyiting/ChatPanel.vue`，消息滚动逻辑随组件迁移。
+- 父页面 `src/components/world/JuyiHall.vue` 只保留弹窗容器、数据编排和业务动作入口。
+- 已清理父页面中被迁移的面板死样式，降低 scoped CSS 误用风险。
+
+后续拆分建议：
+
+- 继续拆 `HallStage.vue`、`AgentToken.vue` 和 `SelectedAgentCard.vue`。
+- 若继续拆大厅地图，应优先把人物外观和地图样式迁入对应组件，避免父 scoped CSS 无法穿透子组件。
+
 后续增强：
 
 - Chat 组件继续消费 `conversationType=juyiting`，并在消息 DTO 或 metadata 中区分 `user/agent/system` 发送者。
@@ -587,6 +605,7 @@ const waterMarginDialogues = {
 | v0.4 | 2026-05-30 | 记录 `cyf-web-kit` 聚义厅 MVP 前端实施状态、接口兼容策略和后续增强项 | AI |
 | v0.5 | 2026-06-03 | 同步线上聚义厅实现：菜单首位、活跃 WebSocket Agent、游戏化大厅、水浒人物小人、悬赏榜操作、移除议事圆桌和 `/agent/active` 接口 | AI |
 | v0.6 | 2026-06-03 | 记录前端结构优化：抽离常量、水浒角色映射和大厅物理运动 composable，备用组件改名消除同名冲突 | AI |
+| v0.7 | 2026-06-03 | 记录面板组件化：拆出好汉名册、悬赏榜和厅内传令面板，清理父页面面板死样式 | AI |
 
 ---
 
