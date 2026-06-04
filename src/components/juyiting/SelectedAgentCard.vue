@@ -31,7 +31,7 @@ defineEmits(['open-agents'])
 .selected-agent-card {
   position: absolute;
   right: 18px;
-  bottom: calc(var(--bottom-action-bar-height, 68px) + 14px);
+  bottom: calc(var(--bottom-action-bar-height, 68px) + 6px);
   z-index: 6;
   display: flex;
   align-items: center;
@@ -93,10 +93,12 @@ defineEmits(['open-agents'])
 
 @media (max-width: 620px) {
   .selected-agent-card {
-    left: 12px;
+    left: calc(var(--map-controls-footprint, 0px) + 12px);
     right: 12px;
-    bottom: calc(var(--bottom-action-bar-height, 68px) + 12px);
+    bottom: calc(var(--bottom-action-bar-height, 68px) + 4px);
     width: auto;
+    min-height: 64px;
+    padding: 10px 12px;
   }
 }
 </style>

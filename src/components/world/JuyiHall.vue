@@ -114,7 +114,7 @@
             {{ selectedAgent ? `${portraitShortName(selectedAgent)} / ${selectedAgent.name || selectedAgent.agentId}` : '未选中好汉' }}
           </span>
         </div>
-        <div class="dock-actions">
+        <div v-if="false" class="dock-actions">
           <button class="quick-action" @click="openPanel('agents')">
             <var-icon name="account-circle" />
             <span>名册</span>
@@ -828,6 +828,7 @@ onUnmounted(() => {
 <style scoped>
 .juyi-page {
   --bottom-action-bar-height: 68px;
+  --map-controls-footprint: 0px;
   position: relative;
   display: flex;
   flex: 1;
@@ -1781,6 +1782,7 @@ button.hall-room {
   }
 
   .map-controls {
+    --map-controls-footprint: 96px;
     left: 8px;
     bottom: 154px;
     grid-template-columns: repeat(3, 28px);
