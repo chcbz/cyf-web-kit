@@ -2,7 +2,7 @@
   <div class="chat-panel">
     <div class="panel-toolbar">
       <span>对话对象：{{ targetText }}</span>
-      <button @click="$emit('load-messages')">同步</button>
+      <span class="panel-status">{{ isAwaitingReply ? pendingLabel : '实时同步中' }}</span>
     </div>
     <div v-if="agents.length" class="mention-strip" aria-label="选择要提及的 Agent">
       <button
@@ -20,10 +20,17 @@
         v-for="message in messages"
         :key="message.localId || message.timestamp"
         class="hall-message"
-        :class="message.sender"
+        :class="[message.sender, { 'is-streaming': message.streaming }]"
       >
-        <strong>{{ senderText(message) }}</strong>
+        <div class="message-head">
+          <strong>{{ senderText(message) }}</strong>
+          <span v-if="message.streaming" class="message-state">回话中</span>
+        </div>
         <p>{{ message.content }}</p>
+      </div>
+      <div v-if="isAwaitingReply" class="hall-message SYSTEM is-pending">
+        <strong>{{ pendingAuthor }}</strong>
+        <p>{{ pendingLabel }}</p>
       </div>
       <div v-if="!messages.length" class="empty-list">厅中尚无传令，发起一句开始议事。</div>
     </div>
@@ -43,22 +50,29 @@
 </template>
 
 <script setup>
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 
 const props = defineProps({
   agents: { type: Array, default: () => [] },
   draft: { type: String, default: '' },
+  isAwaitingReply: { type: Boolean, default: false },
   isStreaming: { type: Boolean, default: false },
   mentionLabel: { type: Function, required: true },
   messages: { type: Array, default: () => [] },
+  pendingAgentName: { type: String, default: '' },
   selectedAgent: { type: Object, default: null },
   senderText: { type: Function, required: true },
   targetText: { type: String, default: '全体好汉' }
 })
 
-defineEmits(['load-messages', 'mention-agent', 'send-message', 'update:draft'])
+defineEmits(['mention-agent', 'send-message', 'update:draft'])
 
 const messageBoxRef = ref(null)
+const pendingAuthor = '聚义厅'
+const pendingLabel = computed(() => {
+  if (props.pendingAgentName) return `${props.pendingAgentName} 正在回话...`
+  return '正在整理回报...'
+})
 
 watch(() => props.messages, () => {
   nextTick(() => {
@@ -100,15 +114,9 @@ button:disabled {
   font-size: 13px;
 }
 
-.panel-toolbar button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 36px;
-  padding: 0 12px;
-  border-radius: 8px;
-  background: #efe0c6;
-  color: #4a3423;
+.panel-status {
+  color: #9a6e40;
+  font-size: 12px;
 }
 
 .mention-strip {
@@ -149,6 +157,7 @@ button:disabled {
   padding: 10px 12px;
   border-radius: 8px;
   background: #f7ecd7;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .hall-message.USER {
@@ -159,6 +168,45 @@ button:disabled {
 .hall-message.SYSTEM {
   max-width: 100%;
   background: #eee5d7;
+}
+
+.hall-message.is-streaming {
+  background: #f3e2be;
+  box-shadow: 0 0 0 1px rgba(185, 54, 34, 0.18), 0 10px 24px rgba(109, 63, 31, 0.10);
+  transform: translateY(-1px);
+}
+
+.message-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.message-state {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(185, 54, 34, 0.12);
+  color: #a02d1d;
+  font-size: 11px;
+  line-height: 1;
+  animation: hall-pulse 1.4s ease-in-out infinite;
+}
+
+.hall-message.is-streaming::after,
+.hall-message.is-pending::after {
+  display: inline-block;
+  width: 0.7ch;
+  margin-left: 3px;
+  color: #b93622;
+  content: '▎';
+  animation: hall-caret 0.8s steps(1) infinite;
+}
+
+.hall-message.is-pending {
+  opacity: 0.82;
 }
 
 .hall-message p {
@@ -199,6 +247,19 @@ button:disabled {
 .empty-list {
   padding: 16px;
   color: #765f40;
+}
+
+@keyframes hall-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes hall-pulse {
+  50% {
+    background: rgba(185, 54, 34, 0.2);
+    transform: translateY(-1px);
+  }
 }
 
 @media (max-width: 620px) {

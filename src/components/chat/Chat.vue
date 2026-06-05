@@ -37,11 +37,12 @@
 
 <script setup>
 import { marked } from 'marked'
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useUtilStore } from '../../stores/util'
 import { useGlobalStore } from '../../stores/global'
-// import { useApiStore } from '../../stores/api' // 预留
+import { useApiStore } from '../../stores/api'
+import { useAgentStore } from '../../stores/agent'
 import { useI18n } from 'vue-i18n'
 import { chatApi, phraseApi } from '../../composables/useHttp'
 import { log } from '../../utils/logger'
@@ -93,8 +94,12 @@ const conversationType = ref(route.query.conversationType || '')
 // 工具函数
 const utilStore = useUtilStore()
 const globalStore = useGlobalStore()
-// const apiStore = useApiStore() // 预留
+const apiStore = useApiStore()
+const agentStore = useAgentStore()
 const { t } = useI18n()
+let conversationEventController = null
+let conversationEventReconnectTimer = null
+let activeEventConversationId = ''
 
 // 计算属性
 const hasMessages = computed(() => messages.value.length > 0)
@@ -104,6 +109,109 @@ const isJuyiting = computed(() => conversationType.value === 'juyiting')
 //   [...conversations.value].sort((a, b) => new Date(b.lastUpdated) - new Date(a.lastUpdated))
 // )
 const shouldShowEmptyState = computed(() => !hasMessages.value && !isLoading.value)
+
+const apiStreamUrl = (path, params = {}) => {
+  const baseURL = import.meta.env.VITE_API_BASE_URL || ''
+  const requestPath = baseURL
+    ? `${baseURL}${path.startsWith('/') ? path : `/${path}`}`
+    : path
+  const searchParams = new URLSearchParams(params).toString()
+  return searchParams ? `${requestPath}?${searchParams}` : requestPath
+}
+
+const normalizeLoadedMessage = (message, currentConversationId) => {
+  const senderType = message.senderType || message.messageType || ''
+  return {
+    sender: senderType === 'agent' ? 'AGENT' : (message.messageType || 'USER'),
+    content: message.content || '',
+    timestamp: message.createTime || new Date().getTime(),
+    conversationId: currentConversationId,
+    localId: `${message.id || `${currentConversationId}-${message.createTime || Date.now()}`}`,
+    senderName: message.senderName || '',
+    senderAvatar: message.senderAvatar || '',
+    senderType
+  }
+}
+
+const appendConversationEventMessage = (event = {}) => {
+  if (!event.content || event.conversationId?.toString() !== conversationId.value?.toString()) return
+
+  const localId = `${event.messageId || `${event.senderType || 'event'}-${event.agentId || 'unknown'}-${event.timestamp || Date.now()}`}`
+  if (messages.value.some(message => message.localId === localId)) return
+
+  messages.value.push({
+    sender: event.senderType === 'agent' ? 'AGENT' : (event.messageType || 'ASSISTANT'),
+    content: event.content,
+    timestamp: event.timestamp || Date.now(),
+    conversationId: conversationId.value,
+    localId,
+    senderName: event.senderName || '',
+    senderAvatar: event.senderAvatar || '',
+    senderType: event.senderType || ''
+  })
+  scrollToBottom()
+}
+
+const stopConversationEventStream = () => {
+  if (conversationEventReconnectTimer) {
+    window.clearTimeout(conversationEventReconnectTimer)
+  }
+  conversationEventReconnectTimer = null
+  if (conversationEventController) {
+    conversationEventController.abort()
+  }
+  conversationEventController = null
+  activeEventConversationId = ''
+}
+
+const startConversationEventStream = async () => {
+  if (!isJuyiting.value) return
+
+  const id = conversationId.value?.toString()
+  if (!id || activeEventConversationId === id) return
+
+  stopConversationEventStream()
+  activeEventConversationId = id
+  conversationEventController = new AbortController()
+
+  try {
+    const token = await apiStore.token()
+    const response = await fetch(apiStreamUrl('/chat/conversation/events', { id }), {
+      method: 'GET',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      signal: conversationEventController.signal
+    })
+    if (!response.ok || !response.body) {
+      throw new Error(`Conversation event stream failed: ${response.status}`)
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      let eventEndIndex
+      while ((eventEndIndex = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.substring(0, eventEndIndex).trim()
+        buffer = buffer.substring(eventEndIndex + 1)
+        if (!line.startsWith('data:')) continue
+        const payload = line.slice(5).trim()
+        if (!payload) continue
+        appendConversationEventMessage(JSON.parse(payload))
+      }
+    }
+  } catch (error) {
+    if (error.name !== 'AbortError') {
+      log.warn('聚义厅会话事件流中断:', error)
+      conversationEventReconnectTimer = window.setTimeout(() => {
+        activeEventConversationId = ''
+        startConversationEventStream()
+      }, 2500)
+    }
+  }
+}
 
 // 初始化
 const initializeApp = async () => {
@@ -174,6 +282,9 @@ const loadConversations = async () => {
             messages: [],
             conversationType: conv.conversationType || conversationType.value
           }))
+          if (isJuyiting.value && conversations.value.length) {
+            loadConversation(conversations.value[0].id)
+          }
         }
       },
       onError: (error) => {
@@ -201,21 +312,15 @@ const loadConversation = async (id) => {
             const msgList = data.data || []
 
             // 确保消息格式正确
-            messages.value = msgList.map(msg => ({
-              sender: msg.messageType || 'USER',
-              content: msg.content || '',
-              timestamp: msg.createTime || new Date().getTime(),
-              conversationId: id,
-              senderName: msg.senderName || '',
-              senderAvatar: msg.senderAvatar || '',
-              senderType: msg.senderType || msg.messageType || 'USER'
-            }))
+            messages.value = msgList.map(msg => normalizeLoadedMessage(msg, id))
 
             // 加载完成后自动滚动到底部
             scrollToBottom()
+            startConversationEventStream()
           } else {
             // 如果服务端没有消息，清空消息
             messages.value = []
+            startConversationEventStream()
           }
         },
         onError: (error) => {
@@ -231,6 +336,7 @@ const loadConversation = async (id) => {
 }
 
 const generateNewConversationId = () => {
+  stopConversationEventStream()
   if (isJuyiting.value) {
     globalStore.setTitle(t('juyiting.title'))
   } else {
@@ -290,8 +396,27 @@ const processBotResponse = (eventData) => {
     const data = JSON.parse(payload)
     if (data.v) {
       updateBotMessage(data.v)
+    } else if (data.agentDelivery) {
+      if (data.agentDelivery.delivered === false) {
+        messages.value = [
+          ...messages.value,
+          {
+            sender: 'SYSTEM',
+            content: '当前未连接可回话的 Agent，请稍后再试',
+            isError: true,
+            timestamp: new Date().getTime(),
+            senderType: 'system'
+          }
+        ]
+      }
     } else if (data.conversationId) {
-      conversationId.value = data.conversationId
+      const nextConversationId = data.conversationId?.toString() || ''
+      const shouldReconnect = isJuyiting.value && nextConversationId && nextConversationId !== conversationId.value?.toString()
+      conversationId.value = nextConversationId
+      if (shouldReconnect) {
+        startConversationEventStream()
+        loadConversations()
+      }
     } else if (data.t) {
       globalStore.setTitle(data.t)
       loadConversations()
@@ -301,6 +426,7 @@ const processBotResponse = (eventData) => {
         sender: data.senderType === 'agent' ? 'AGENT' : (data.senderType === 'system' ? 'SYSTEM' : 'ASSISTANT'),
         content: data.content,
         timestamp: new Date().getTime(),
+        localId: `${data.messageId || `${data.senderType || 'msg'}-${data.timestamp || Date.now()}`}`,
         senderType: data.senderType,
         senderName: data.senderName || '',
         senderAvatar: data.senderAvatar || ''
@@ -331,6 +457,7 @@ const sendMessage = async (message) => {
       content: message,
       timestamp: new Date().getTime(),
       conversationId: conversationId.value,
+      localId: `user-${Date.now()}`,
       senderType: 'user'
     }
 
@@ -346,7 +473,12 @@ const sendMessage = async (message) => {
       {
         content: message,
         conversationId: conversationId.value,
-        conversationType: conversationType.value
+        conversationType: conversationType.value,
+        senderType: 'user',
+        senderName: globalStore.getJiacn || '用户',
+        metadata: conversationType.value === 'juyiting' && agentStore.selectedAgentId
+          ? { selectedAgentId: agentStore.selectedAgentId }
+          : undefined
       },
       {
         responseType: 'stream',
@@ -547,6 +679,7 @@ watch(
   () => route.query.conversationType,
   (newType) => {
     if (newType !== conversationType.value) {
+      stopConversationEventStream()
       conversationType.value = newType || ''
       // 重新初始化以加载对应类型的会话
       initializeApp()
@@ -557,6 +690,10 @@ watch(
 // 生命周期钩子
 onMounted(() => {
   initializeApp()
+})
+
+onBeforeUnmount(() => {
+  stopConversationEventStream()
 })
 </script>
 

@@ -201,13 +201,14 @@
             v-if="activePanel === 'chat'"
             v-model:draft="draft"
             :agents="agents"
+            :is-awaiting-reply="isAwaitingReply"
             :is-streaming="isStreaming"
             :messages="messages"
             :mention-label="portraitShortName"
+            :pending-agent-name="pendingAgentName"
             :selected-agent="selectedAgent"
             :sender-text="senderText"
             :target-text="chatTargetText"
-            @load-messages="loadHallMessages"
             @mention-agent="mentionAgent"
             @send-message="sendHallMessage"
           />
@@ -256,6 +257,7 @@ const taskKeyword = ref('')
 const conversationId = ref('')
 const draft = ref('')
 const isStreaming = ref(false)
+const isAwaitingReply = ref(false)
 const toast = ref('')
 const hallBoardRef = ref(null)
 const mapWorldRef = ref(null)
@@ -268,6 +270,8 @@ let bubbleClearTimer = null
 let hallEventController = null
 let hallEventConversationId = ''
 let hallEventReconnectTimer = null
+let hallReplyTimers = []
+let hallReplyPollTimer = null
 
 const mapPanStep = 92
 const mapPanPadding = 2
@@ -344,6 +348,10 @@ const activePanelTitle = computed(() => {
 const chatTargetText = computed(() => {
   if (!selectedAgent.value) return '全体好汉'
   return `${portraitShortName(selectedAgent.value)} / ${selectedAgent.value.name || selectedAgent.value.agentId}`
+})
+const pendingAgentName = computed(() => {
+  if (!selectedAgent.value) return ''
+  return portraitShortName(selectedAgent.value) || selectedAgent.value.name || selectedAgent.value.agentId || ''
 })
 
 const normalizeStatus = (status = '') => status.toLowerCase()
@@ -500,22 +508,101 @@ const normalizeHallMessage = (item, index = 0) => {
     senderName: item.senderName || metadata.senderName,
     agentId: metadata.agentId,
     content: item.content || '',
-    timestamp: item.createTime || metadata.timestamp || Date.now()
+    timestamp: item.createTime || metadata.timestamp || Date.now(),
+    streaming: false
   }
+}
+
+const currentStreamingAgentMessage = (event) => {
+  return messages.value.find(message =>
+    message.sender === 'AGENT' &&
+    message.streaming &&
+    (!event.agentId || message.agentId === event.agentId)
+  ) || null
+}
+
+const stopHallReplyStreaming = () => {
+  hallReplyTimers.forEach(timer => window.clearTimeout(timer))
+  hallReplyTimers = []
+}
+
+const stopHallReplyPolling = () => {
+  if (hallReplyPollTimer) {
+    window.clearInterval(hallReplyPollTimer)
+    hallReplyPollTimer = null
+  }
+}
+
+const hasResolvedAgentReply = (list = messages.value) => {
+  let latestUserTimestamp = 0
+  for (const message of list) {
+    if (message.sender === 'USER') {
+      latestUserTimestamp = Math.max(latestUserTimestamp, Number(message.timestamp) || 0)
+    }
+  }
+  return list.some(message =>
+    message.sender === 'AGENT' &&
+    !message.streaming &&
+    (Number(message.timestamp) || 0) >= latestUserTimestamp
+  )
 }
 
 const appendHallEventMessage = (event) => {
   if (!event || event.conversationId?.toString() !== conversationId.value?.toString()) return
+  if (event.type === 'agent_message_delta') {
+    let pendingMessage = currentStreamingAgentMessage(event)
+    if (!pendingMessage) {
+      pendingMessage = {
+        localId: `delta-${event.agentId || 'agent'}-${event.timestamp || Date.now()}`,
+        sender: 'AGENT',
+        senderName: event.senderName,
+        agentId: event.agentId,
+        content: '',
+        timestamp: event.timestamp || Date.now(),
+        streaming: true
+      }
+      messages.value.push(pendingMessage)
+    }
+    pendingMessage.content += event.content || ''
+    pendingMessage.timestamp = event.timestamp || pendingMessage.timestamp
+    pendingMessage.senderName = event.senderName || pendingMessage.senderName
+    isAwaitingReply.value = false
+    return
+  }
+
   const localId = `${event.messageId || `${event.agentId}-${event.timestamp || Date.now()}`}`
+  const streamingMessage = event.senderType === 'agent' ? currentStreamingAgentMessage(event) : null
+  if (streamingMessage && event.senderType === 'agent') {
+    streamingMessage.localId = localId
+    streamingMessage.content = event.content || streamingMessage.content
+    streamingMessage.timestamp = event.timestamp || streamingMessage.timestamp
+    streamingMessage.senderName = event.senderName || streamingMessage.senderName
+    streamingMessage.agentId = event.agentId || streamingMessage.agentId
+    streamingMessage.streaming = false
+    isAwaitingReply.value = false
+    isStreaming.value = false
+    stopHallReplyPolling()
+    if (event.senderName) {
+      showToast(`${event.senderName} 已回话`)
+    }
+    return
+  }
   if (messages.value.some(message => message.localId === localId)) return
-  messages.value.push({
+  const incomingMessage = {
     localId,
     sender: event.senderType === 'agent' ? 'AGENT' : (event.messageType || 'ASSISTANT'),
     senderName: event.senderName,
     agentId: event.agentId,
     content: event.content || '',
-    timestamp: event.timestamp || Date.now()
-  })
+    timestamp: event.timestamp || Date.now(),
+    streaming: false
+  }
+  messages.value.push(incomingMessage)
+  if (event.senderType !== 'agent') {
+    isAwaitingReply.value = false
+    isStreaming.value = false
+    stopHallReplyPolling()
+  }
   if (event.senderName) {
     showToast(`${event.senderName} 已回话`)
   }
@@ -683,18 +770,54 @@ const loadHallMessages = async () => {
         const hallConversation = result?.data?.[0]
         if (!hallConversation) return
         conversationId.value = hallConversation.id?.toString() || ''
-        await chatApi.getById('/conversation/content', conversationId.value, {
-          autoLoading: false,
-          onSuccess: (contentResult) => {
-            messages.value = (contentResult?.data || []).map(normalizeHallMessage)
-            startHallEventStream()
-          }
-        })
+        await loadHallConversationContent(conversationId.value)
       }
     })
   } catch (error) {
     log.warn('加载聚义厅会话失败:', error)
   }
+}
+
+const loadHallConversationContent = async (id = conversationId.value) => {
+  if (!id) return
+  await chatApi.getById('/conversation/content', id, {
+    autoLoading: false,
+    onSuccess: (contentResult) => {
+      messages.value = (contentResult?.data || []).map(normalizeHallMessage)
+      if (hasResolvedAgentReply(messages.value)) {
+        isAwaitingReply.value = false
+        isStreaming.value = false
+        stopHallReplyPolling()
+      }
+      startHallEventStream()
+    }
+  })
+}
+
+const startHallReplyPolling = (id = conversationId.value) => {
+  if (!id) return
+  stopHallReplyPolling()
+  hallReplyPollTimer = window.setInterval(() => {
+    if (!isAwaitingReply.value || conversationId.value?.toString() !== id.toString()) {
+      stopHallReplyPolling()
+      return
+    }
+    loadHallConversationContent(id)
+  }, 2000)
+}
+
+const scheduleHallConversationSync = (id) => {
+  if (!id) return
+  window.setTimeout(() => {
+    if (conversationId.value?.toString() === id.toString()) {
+      loadHallConversationContent(id)
+    }
+  }, 1500)
+  window.setTimeout(() => {
+    if (conversationId.value?.toString() === id.toString()) {
+      loadHallConversationContent(id)
+    }
+  }, 5000)
 }
 
 const refreshHall = async () => {
@@ -704,8 +827,11 @@ const refreshHall = async () => {
 
 const newHallConversation = () => {
   stopHallEventStream()
+  stopHallReplyStreaming()
+  stopHallReplyPolling()
   conversationId.value = ''
   messages.value = []
+  isAwaitingReply.value = false
   showToast('已开启新的聚义议事')
 }
 
@@ -715,11 +841,18 @@ const processStream = (eventData) => {
 
   try {
     const data = JSON.parse(payload)
+    if (data.type === 'agent_message_delta' || data.type === 'agent_message') {
+      appendHallEventMessage(data)
+      return
+    }
     if (data.conversationId) {
       const nextConversationId = data.conversationId?.toString() || ''
       const shouldReconnect = nextConversationId && nextConversationId !== conversationId.value?.toString()
       conversationId.value = nextConversationId
-      if (shouldReconnect) startHallEventStream()
+      if (shouldReconnect) {
+        startHallEventStream()
+        scheduleHallConversationSync(nextConversationId)
+      }
       return
     }
     payload = data.v || data.content || ''
@@ -736,7 +869,8 @@ const processStream = (eventData) => {
       localId: `assistant-${Date.now()}`,
       sender: 'ASSISTANT',
       content: payload,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      streaming: false
     })
   }
 }
@@ -745,13 +879,17 @@ const sendHallMessage = async () => {
   if (!draft.value || isStreaming.value) return
   const content = draft.value
   draft.value = ''
+  stopHallReplyStreaming()
   messages.value.push({
     localId: `user-${Date.now()}`,
     sender: 'USER',
     content,
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    streaming: false
   })
   isStreaming.value = true
+  isAwaitingReply.value = true
+  stopHallReplyPolling()
 
   try {
     await chatApi.create('/stream', {
@@ -770,6 +908,9 @@ const sendHallMessage = async () => {
       onStream: processStream,
       onStreamEnd: () => {
         isStreaming.value = false
+        if (isAwaitingReply.value && conversationId.value) {
+          startHallReplyPolling(conversationId.value)
+        }
       },
       onError: (message) => {
         throw new Error(message)
@@ -778,11 +919,14 @@ const sendHallMessage = async () => {
   } catch (error) {
     log.error('聚义厅消息发送失败:', error)
     isStreaming.value = false
+    isAwaitingReply.value = false
+    stopHallReplyPolling()
     messages.value.push({
       localId: `system-${Date.now()}`,
       sender: 'SYSTEM',
       content: '传令失败，请稍后再试',
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      streaming: false
     })
   }
 }
@@ -820,6 +964,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
   stopHallEventStream()
+  stopHallReplyStreaming()
+  stopHallReplyPolling()
   stopPhysics()
   stopDialogueBubbles()
 })
