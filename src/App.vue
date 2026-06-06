@@ -16,6 +16,22 @@
         />
       </template>
       <template #right>
+        <button
+          v-if="isInstallable"
+          class="pwa-action"
+          type="button"
+          @click="handleInstall"
+        >
+          安装
+        </button>
+        <button
+          v-if="hasUpdate"
+          class="pwa-action pwa-action-update"
+          type="button"
+          @click="handleUpdate"
+        >
+          更新
+        </button>
         <var-icon
           v-if="showMore"
           name="dots-vertical"
@@ -30,6 +46,36 @@
     <div class="app-content" :class="{'show-menu': showSideMenu}">
       <router-view />
     </div>
+
+    <div v-if="isOfflineReady || hasUpdate" class="pwa-banner">
+      <span>{{ hasUpdate ? '发现新版本，可立即刷新更新。' : '已启用离线缓存，可作为桌面应用安装。' }}</span>
+      <div class="pwa-banner-actions">
+        <button
+          v-if="hasUpdate"
+          class="pwa-banner-button"
+          type="button"
+          @click="handleUpdate"
+        >
+          立即更新
+        </button>
+        <button
+          v-else-if="isInstallable"
+          class="pwa-banner-button"
+          type="button"
+          @click="handleInstall"
+        >
+          立即安装
+        </button>
+        <button
+          v-else
+          class="pwa-banner-button pwa-banner-button-secondary"
+          type="button"
+          @click="dismissBanner"
+        >
+          知道了
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -37,8 +83,10 @@
 import { computed, watch } from 'vue'
 import SideMenu from '@/components/SideMenu'
 import { useGlobalStore } from '@/stores/global'
+import { applyAppUpdate, dismissOfflineReady, promptInstall, usePwaState } from '@/utils/pwa'
 
 const globalStore = useGlobalStore()
+const { hasUpdate, isInstallable, isOfflineReady } = usePwaState()
 
 // Action Sheet 相关状态 (预留功能)
 // const showActionMenu = ref(false)
@@ -62,6 +110,18 @@ const showMore = computed(() => globalStore.showMore)
 const handleMoreClick = () => {
   // 同时更新右侧边栏状态
   globalStore.showRightSidebar = true
+}
+
+const handleInstall = async () => {
+  await promptInstall()
+}
+
+const handleUpdate = () => {
+  applyAppUpdate()
+}
+
+const dismissBanner = () => {
+  dismissOfflineReady()
 }
 
 // 监听全局标题变化，自动更新 document.title
@@ -117,10 +177,84 @@ html, body {
   transition: transform 0.2s ease;
 }
 
+.pwa-action {
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 12px;
+  margin-left: 8px;
+  background: rgba(139, 30, 30, 0.12);
+  color: #8b1e1e;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pwa-action-update {
+  background: rgba(27, 94, 32, 0.14);
+  color: #1b5e20;
+}
+
 .menu-icon:hover,
 .back-icon:hover,
 .more-icon:hover {
   transform: scale(1.1);
+}
+
+.pwa-banner {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(39, 27, 20, 0.92);
+  color: #f8efe2;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(10px);
+}
+
+.pwa-banner span {
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.pwa-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pwa-banner-button {
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: #f4c84c;
+  color: #472b00;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pwa-banner-button-secondary {
+  background: rgba(255, 255, 255, 0.14);
+  color: #f8efe2;
+}
+
+@media (max-width: 767px) {
+  .pwa-banner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pwa-banner-actions {
+    justify-content: flex-end;
+  }
 }
 
 @media (min-width: 768px) {

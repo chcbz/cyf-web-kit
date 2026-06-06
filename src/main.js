@@ -5,6 +5,7 @@ import routes from './router/index'
 import './assets/icon/iconfont.css'
 import Varlet from '@varlet/ui'
 import '@varlet/ui/es/style'
+import { registerPwa } from './utils/pwa'
 
 // 创建应用实例
 const app = createApp(App)
@@ -37,3 +38,7 @@ app.use(router)
 
 // 挂载应用
 app.mount('#app')
+
+registerPwa().catch(error => {
+  console.warn('PWA registration failed:', error)
+})
