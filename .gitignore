@@ -16,3 +16,4 @@ vite-dev*.log
 *.sln
 .cline
 .clinerules
+.tmp*

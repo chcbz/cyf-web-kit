@@ -157,6 +157,7 @@ defineEmits([
   flex: 1;
   min-width: 0;
   min-height: 0;
+  box-sizing: border-box;
   flex-direction: column;
 }
 
@@ -254,6 +255,7 @@ button:disabled {
   min-width: 0;
   min-height: 0;
   padding: 0 12px 12px;
+  box-sizing: border-box;
   overflow: hidden;
 }
 
@@ -269,6 +271,8 @@ button:disabled {
 }
 
 .task-card {
+  box-sizing: border-box;
+  max-width: 100%;
   padding: 12px;
   margin-bottom: 10px;
   border-radius: 8px;
@@ -331,7 +335,9 @@ button:disabled {
 .task-detail-card {
   min-width: 0;
   min-height: 0;
+  max-width: 100%;
   padding: 12px;
+  box-sizing: border-box;
   overflow: auto;
   border-radius: 8px;
   background: #f4e2c3;

@@ -25,7 +25,16 @@
         </div>
       </div>
 
-      <div ref="hallBoardRef" class="hall-board">
+      <div
+        ref="hallBoardRef"
+        class="hall-board"
+        :class="{ 'is-dragging': mapDrag.active }"
+        @pointerdown="startMapDrag"
+        @pointermove="moveMapDrag"
+        @pointerup="endMapDrag"
+        @pointerleave="endMapDrag"
+        @pointercancel="endMapDrag"
+      >
         <div ref="mapWorldRef" class="map-world" :style="mapWorldStyle">
           <div class="map-region region-water"></div>
           <div class="map-region region-forest"></div>
@@ -67,7 +76,7 @@
             :role-class="roleClass"
             :status-class="statusClass"
             :status-text="statusText"
-            @select-agent="startAgentConversation"
+            @select-agent="selectAgent"
           />
           <div v-if="!visibleAgents.length" class="empty-hall">
             暂无 Agent 入厅，先在右侧刷新或等待上线
@@ -86,21 +95,21 @@
           </button>
         </div>
 
-        <div class="map-controls" aria-label="地图方向控制">
-          <button
-            v-for="control in mapControls"
-            :key="control.key"
-            class="map-control"
-            :class="`control-${control.key}`"
-            :title="control.label"
-            @click="control.action()"
-          >
-            <var-icon :name="control.icon" />
-          </button>
-        </div>
       </div>
 
       <div class="quick-bar">
+        <transition name="agent-card">
+          <SelectedAgentCard
+            :ability-text="abilityText"
+            :agent="selectedAgent"
+            :portrait-name="portraitName"
+            :portrait-style="portraitStyle"
+            :status-text="statusText"
+            @close-card="selectedAgent = null"
+            @open-agents="openPanel('agents')"
+            @start-chat="startAgentConversation(selectedAgent)"
+          />
+        </transition>
         <div class="dock-summary">
           <span>
             <strong>{{ agents.length }}</strong>
@@ -110,7 +119,7 @@
             <strong>{{ tasks.length }}</strong>
             悬赏在榜
           </span>
-          <span class="dock-focus">
+          <span v-if="false" class="dock-focus">
             {{ selectedAgent ? `${portraitShortName(selectedAgent)} / ${selectedAgent.name || selectedAgent.agentId}` : '未选中好汉' }}
           </span>
         </div>
@@ -134,15 +143,6 @@
         </div>
       </div>
     </section>
-
-    <SelectedAgentCard
-      :ability-text="abilityText"
-      :agent="selectedAgent"
-      :portrait-name="portraitName"
-      :portrait-style="portraitStyle"
-      :status-text="statusText"
-      @open-agents="openPanel('agents')"
-    />
 
     <transition name="panel">
       <div v-if="activePanel" class="panel-overlay" @click.self="closePanel">
@@ -209,7 +209,9 @@
             :selected-agent="selectedAgent"
             :sender-text="senderText"
             :target-text="chatTargetText"
+            @load-messages="loadHallMessages(conversationId)"
             @mention-agent="mentionAgent"
+            @new-conversation="newHallConversation"
             @send-message="sendHallMessage"
           />
         </section>
@@ -235,7 +237,6 @@ import BountyPanel from '@/components/juyiting/BountyPanel.vue'
 import ChatPanel from '@/components/juyiting/ChatPanel.vue'
 import SelectedAgentCard from '@/components/juyiting/SelectedAgentCard.vue'
 import {
-  mapControlsConfig,
   roleDialogues,
   statusFilters,
   taskStatusFilters
@@ -263,6 +264,7 @@ const hallBoardRef = ref(null)
 const mapWorldRef = ref(null)
 const activePanel = ref('')
 const viewportOffset = ref({ x: 0, y: 0 })
+const mapDrag = ref({ active: false, dragging: false, pointerId: null, startX: 0, startY: 0, originX: 0, originY: 0 })
 const agentBubbles = ref({})
 let bubbleTimer = null
 let bubbleInitialTimer = null
@@ -273,20 +275,15 @@ let hallEventReconnectTimer = null
 let hallReplyTimers = []
 let hallReplyPollTimer = null
 
-const mapPanStep = 92
 const mapPanPadding = 2
+const mapDragThreshold = 3
 
 const mapWorldStyle = computed(() => ({
   '--map-offset-x': `${viewportOffset.value.x}px`,
   '--map-offset-y': `${viewportOffset.value.y}px`
 }))
 
-const panMap = (direction) => {
-  const next = { ...viewportOffset.value }
-  if (direction === 'left') next.x += mapPanStep
-  if (direction === 'right') next.x -= mapPanStep
-  if (direction === 'up') next.y += mapPanStep
-  if (direction === 'down') next.y -= mapPanStep
+const applyMapOffset = (next) => {
   const bounds = mapOffsetBounds()
   viewportOffset.value = {
     x: clamp(next.x, -bounds.x, bounds.x),
@@ -310,10 +307,44 @@ const resetMap = () => {
   viewportOffset.value = { x: 0, y: 0 }
 }
 
-const mapControls = computed(() => mapControlsConfig.map(control => ({
-  ...control,
-  action: () => control.direction === 'center' ? resetMap() : panMap(control.direction)
-})))
+const isInteractiveMapTarget = (target) => {
+  if (!target?.closest) return false
+  return Boolean(target.closest('button, a, input, select, textarea, [role="button"]'))
+}
+
+const startMapDrag = (event) => {
+  if (event.button !== undefined && event.button !== 0) return
+  if (isInteractiveMapTarget(event.target)) return
+  mapDrag.value = {
+    active: true,
+    dragging: false,
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    originX: viewportOffset.value.x,
+    originY: viewportOffset.value.y
+  }
+  event.currentTarget?.setPointerCapture?.(event.pointerId)
+}
+
+const moveMapDrag = (event) => {
+  if (!mapDrag.value.active || mapDrag.value.pointerId !== event.pointerId) return
+  const deltaX = event.clientX - mapDrag.value.startX
+  const deltaY = event.clientY - mapDrag.value.startY
+  if (!mapDrag.value.dragging && Math.hypot(deltaX, deltaY) < mapDragThreshold) return
+  mapDrag.value.dragging = true
+  applyMapOffset({
+    x: mapDrag.value.originX + deltaX,
+    y: mapDrag.value.originY + deltaY
+  })
+  event.preventDefault()
+}
+
+const endMapDrag = (event) => {
+  if (!mapDrag.value.active || mapDrag.value.pointerId !== event.pointerId) return
+  event.currentTarget?.releasePointerCapture?.(event.pointerId)
+  mapDrag.value = { active: false, dragging: false, pointerId: null, startX: 0, startY: 0, originX: 0, originY: 0 }
+}
 
 const filteredAgents = computed(() => {
   if (agentFilter.value === 'all') return agents.value
@@ -422,10 +453,10 @@ const selectTask = (task) => {
 
 const selectAgent = (agent) => {
   selectedAgent.value = agent
-  showToast(`已选中 ${portraitShortName(agent)} / ${agent.name || agent.personaName || agent.agentId}`)
 }
 
 const startAgentConversation = (agent) => {
+  if (!agent) return
   selectedAgent.value = agent
   insertAgentMention(agent, '请汇报当前状态、可承接任务和需要协助的事项。')
   openPanel('chat')
@@ -509,7 +540,8 @@ const normalizeHallMessage = (item, index = 0) => {
     agentId: metadata.agentId,
     content: item.content || '',
     timestamp: item.createTime || metadata.timestamp || Date.now(),
-    streaming: false
+    streaming: false,
+    statusText: ''
   }
 }
 
@@ -559,13 +591,16 @@ const appendHallEventMessage = (event) => {
         agentId: event.agentId,
         content: '',
         timestamp: event.timestamp || Date.now(),
-        streaming: true
+        streaming: true,
+        statusText: '\u6b63\u5728\u56de\u590d'
       }
       messages.value.push(pendingMessage)
     }
     pendingMessage.content += event.content || ''
     pendingMessage.timestamp = event.timestamp || pendingMessage.timestamp
     pendingMessage.senderName = event.senderName || pendingMessage.senderName
+    pendingMessage.streaming = true
+    pendingMessage.statusText = '\u6b63\u5728\u56de\u590d'
     isAwaitingReply.value = false
     return
   }
@@ -579,35 +614,36 @@ const appendHallEventMessage = (event) => {
     streamingMessage.senderName = event.senderName || streamingMessage.senderName
     streamingMessage.agentId = event.agentId || streamingMessage.agentId
     streamingMessage.streaming = false
+    streamingMessage.statusText = '\u56de\u590d\u5b8c\u6210'
     isAwaitingReply.value = false
     isStreaming.value = false
     stopHallReplyPolling()
     if (event.senderName) {
-      showToast(`${event.senderName} 已回话`)
+      showToast(`${event.senderName} \u5df2\u56de\u8bdd`)
     }
     return
   }
   if (messages.value.some(message => message.localId === localId)) return
-  const incomingMessage = {
+
+  messages.value.push({
     localId,
     sender: event.senderType === 'agent' ? 'AGENT' : (event.messageType || 'ASSISTANT'),
     senderName: event.senderName,
     agentId: event.agentId,
     content: event.content || '',
     timestamp: event.timestamp || Date.now(),
-    streaming: false
-  }
-  messages.value.push(incomingMessage)
+    streaming: false,
+    statusText: event.type === 'agent_message' ? '\u56de\u590d\u5b8c\u6210' : ''
+  })
   if (event.senderType !== 'agent') {
     isAwaitingReply.value = false
     isStreaming.value = false
     stopHallReplyPolling()
   }
   if (event.senderName) {
-    showToast(`${event.senderName} 已回话`)
+    showToast(`${event.senderName} \u5df2\u56de\u8bdd`)
   }
 }
-
 const apiStreamUrl = (path, params = {}) => {
   const baseURL = import.meta.env.VITE_API_BASE_URL || ''
   const requestPath = baseURL
@@ -716,9 +752,6 @@ const loadAgents = async () => {
         agents.value = result?.data || []
         if (selectedAgent.value && !agents.value.some(agent => agent.agentId === selectedAgent.value.agentId)) {
           selectedAgent.value = null
-        }
-        if (!selectedAgent.value && agents.value.length) {
-          selectedAgent.value = agents.value[0]
         }
       }
     })
@@ -832,15 +865,28 @@ const newHallConversation = () => {
   conversationId.value = ''
   messages.value = []
   isAwaitingReply.value = false
-  showToast('已开启新的聚义议事')
+  showToast('\u5df2\u5f00\u542f\u65b0\u7684\u805a\u4e49\u8bae\u4e8b')
 }
-
 const processStream = (eventData) => {
   let payload = eventData.startsWith('data:') ? eventData.slice(5).trim() : eventData.trim()
   if (!payload || payload === '[DONE]' || payload === '[EOM]') return
 
   try {
     const data = JSON.parse(payload)
+    if (data.agentDelivery) {
+      const agentId = data.agentDelivery.agentId || selectedAgent.value?.agentId || 'agent'
+      const delivered = data.agentDelivery.delivered === true
+      const localId = `delivery-${agentId}-${Date.now()}`
+      messages.value.push({
+        localId,
+        sender: 'SYSTEM',
+        content: delivered ? '\u6d88\u606f\u5df2\u6295\u9012\u7ed9\u76ee\u6807\u597d\u6c49\u3002' : '\u76ee\u6807\u597d\u6c49\u6682\u672a\u5728\u7ebf\uff0c\u6295\u9012\u5931\u8d25\u3002',
+        timestamp: Date.now(),
+        streaming: false,
+        statusText: delivered ? '\u5df2\u6295\u9012' : '\u6295\u9012\u5931\u8d25'
+      })
+      return
+    }
     if (data.type === 'agent_message_delta' || data.type === 'agent_message') {
       appendHallEventMessage(data)
       return
@@ -870,11 +916,11 @@ const processStream = (eventData) => {
       sender: 'ASSISTANT',
       content: payload,
       timestamp: Date.now(),
-      streaming: false
+      streaming: false,
+      statusText: ''
     })
   }
 }
-
 const sendHallMessage = async () => {
   if (!draft.value || isStreaming.value) return
   const content = draft.value
@@ -896,9 +942,12 @@ const sendHallMessage = async () => {
       content,
       conversationId: conversationId.value,
       conversationType: 'juyiting',
+      senderType: 'user',
+      senderName: globalStore.user?.name || globalStore.user?.nickname || '用户',
       metadata: {
         scene: 'juyiting',
         selectedAgentId: selectedAgent.value?.agentId,
+        mentionAgentIds: selectedAgent.value?.agentId ? [selectedAgent.value.agentId] : [],
         selectedTaskId: selectedTask.value?.id
       }
     }, {
@@ -974,7 +1023,6 @@ onUnmounted(() => {
 <style scoped>
 .juyi-page {
   --bottom-action-bar-height: 68px;
-  --map-controls-footprint: 0px;
   position: relative;
   display: flex;
   flex: 1;
@@ -1069,9 +1117,15 @@ button:disabled {
   margin: 0;
   overflow: hidden;
   border-radius: 0;
+  cursor: grab;
+  touch-action: none;
   background:
     radial-gradient(circle at 50% 48%, rgba(255, 238, 180, 0.16), transparent 32%),
     linear-gradient(135deg, #17231d, #1b271f 50%, #0e1411);
+}
+
+.hall-board.is-dragging {
+  cursor: grabbing;
 }
 
 .hall-board::after {
@@ -1291,66 +1345,6 @@ button.hall-room {
     linear-gradient(145deg, rgba(235, 218, 184, 0.74), rgba(112, 76, 47, 0.56));
 }
 
-.map-controls {
-  position: absolute;
-  left: 14px;
-  bottom: 96px;
-  z-index: 12;
-  display: grid;
-  grid-template-columns: repeat(3, 30px);
-  grid-template-rows: repeat(3, 30px);
-  gap: 4px;
-  padding: 7px;
-  border: 1px solid rgba(255, 244, 212, 0.18);
-  border-radius: 8px;
-  background: rgba(20, 26, 22, 0.3);
-  color: #fff4d4;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
-}
-
-.map-control {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 30px;
-  min-height: 30px;
-  border-radius: 8px;
-  background: rgba(255, 244, 212, 0.18);
-  color: #fff8e8;
-  transition: background 0.16s ease, transform 0.16s ease;
-}
-
-.map-control:hover {
-  background: rgba(244, 200, 76, 0.46);
-  transform: translateY(-1px);
-}
-
-.control-up {
-  grid-column: 2;
-  grid-row: 1;
-}
-
-.control-left {
-  grid-column: 1;
-  grid-row: 2;
-}
-
-.control-center {
-  grid-column: 2;
-  grid-row: 2;
-}
-
-.control-right {
-  grid-column: 3;
-  grid-row: 2;
-}
-
-.control-down {
-  grid-column: 2;
-  grid-row: 3;
-}
-
 .beam {
   position: absolute;
   left: 0;
@@ -1492,15 +1486,19 @@ button.hall-room {
 }
 
 .quick-bar {
-  position: relative;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 8;
-  display: grid;
-  grid-template-columns: minmax(240px, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
   width: 100%;
+  max-width: 100%;
   padding: 10px max(18px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  box-sizing: border-box;
   border: 1px solid rgba(255, 240, 202, 0.18);
   border-right: 0;
   border-bottom: 0;
@@ -1534,13 +1532,6 @@ button.hall-room {
   margin-right: 4px;
   color: #fff8e8;
   font-size: 18px;
-}
-
-.dock-focus {
-  min-width: 0;
-  max-width: 280px;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .dock-actions {
@@ -1600,6 +1591,7 @@ button.hall-room {
   align-items: center;
   justify-content: center;
   padding: 72px 20px 92px;
+  box-sizing: border-box;
   background: rgba(18, 13, 10, 0.42);
 }
 
@@ -1607,8 +1599,10 @@ button.hall-room {
   display: flex;
   flex-direction: column;
   width: min(860px, 100%);
+  max-width: 100%;
   min-height: 0;
   max-height: 100%;
+  box-sizing: border-box;
   border: 1px solid rgba(71, 44, 23, 0.2);
   border-radius: 8px;
   background: #fffaf0;
@@ -1626,7 +1620,9 @@ button.hall-room {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
   padding: 14px 16px;
+  box-sizing: border-box;
   border-bottom: 1px solid rgba(71, 44, 23, 0.12);
   background: #fffaf0;
 }
@@ -1649,7 +1645,9 @@ button.hall-room {
 }
 
 .panel-close {
+  flex: 0 0 36px;
   width: 36px;
+  min-width: 36px;
   padding: 0;
 }
 
@@ -1674,6 +1672,17 @@ button.hall-room {
 .toast-leave-to {
   opacity: 0;
   transform: translate(-50%, 8px);
+}
+
+.agent-card-enter-active,
+.agent-card-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.agent-card-enter-from,
+.agent-card-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
 }
 
 .panel-enter-active,
@@ -1861,10 +1870,6 @@ button.hall-room {
     font-size: 16px;
   }
 
-  .dock-focus {
-    max-width: none;
-  }
-
   .dock-actions {
     justify-content: flex-start;
     overflow-x: auto;
@@ -1927,28 +1932,19 @@ button.hall-room {
     font-size: 10px;
   }
 
-  .map-controls {
-    --map-controls-footprint: 96px;
-    left: 8px;
-    bottom: 154px;
-    grid-template-columns: repeat(3, 28px);
-    grid-template-rows: repeat(3, 28px);
-    gap: 4px;
-    padding: 6px;
-  }
-
-  .map-control {
-    min-width: 28px;
-    min-height: 28px;
-  }
-
   .panel-overlay {
     align-items: flex-end;
     padding: 0;
   }
 
+  .agent-card-enter-from,
+  .agent-card-leave-to {
+    transform: translateY(8px);
+  }
+
   .floating-panel {
-    width: 100%;
+    width: calc(100% - 16px);
+    max-width: calc(100% - 16px);
     max-height: 82%;
     border-radius: 8px 8px 0 0;
   }

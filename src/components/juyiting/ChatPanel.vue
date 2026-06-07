@@ -1,8 +1,14 @@
 <template>
   <div class="chat-panel">
     <div class="panel-toolbar">
-      <span>对话对象：{{ targetText }}</span>
-      <span class="panel-status">{{ isAwaitingReply ? pendingLabel : '实时同步中' }}</span>
+      <div class="toolbar-meta">
+        <span>对话对象：{{ targetText }}</span>
+        <span class="panel-status">{{ isAwaitingReply ? pendingLabel : '实时同步中' }}</span>
+      </div>
+      <div class="toolbar-actions">
+        <button class="new-chat" type="button" @click="$emit('new-conversation')">新建聚义会话</button>
+        <button type="button" @click="$emit('load-messages')">同步</button>
+      </div>
     </div>
     <div v-if="agents.length" class="mention-strip" aria-label="选择要提及的 Agent">
       <button
@@ -27,12 +33,13 @@
           <span v-if="message.streaming" class="message-state">回话中</span>
         </div>
         <p>{{ message.content }}</p>
+        <small v-if="message.statusText" class="message-status">{{ message.statusText }}</small>
       </div>
       <div v-if="isAwaitingReply" class="hall-message SYSTEM is-pending">
         <strong>{{ pendingAuthor }}</strong>
         <p>{{ pendingLabel }}</p>
       </div>
-      <div v-if="!messages.length" class="empty-list">厅中尚无传令，发起一句开始议事。</div>
+      <div v-if="!messages.length" class="empty-list">厅中暂无传令，发起一句开始议事。</div>
     </div>
     <form class="hall-input" @submit.prevent="$emit('send-message')">
       <input
@@ -65,7 +72,7 @@ const props = defineProps({
   targetText: { type: String, default: '全体好汉' }
 })
 
-defineEmits(['mention-agent', 'send-message', 'update:draft'])
+defineEmits(['load-messages', 'mention-agent', 'new-conversation', 'send-message', 'update:draft'])
 
 const messageBoxRef = ref(null)
 const pendingAuthor = '聚义厅'
@@ -106,7 +113,7 @@ button:disabled {
 .panel-toolbar {
   display: flex;
   flex: 0 0 auto;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
   padding: 12px 16px;
@@ -114,9 +121,37 @@ button:disabled {
   font-size: 13px;
 }
 
+.toolbar-meta {
+  display: grid;
+  gap: 4px;
+}
+
 .panel-status {
   color: #9a6e40;
   font-size: 12px;
+}
+
+.toolbar-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  min-width: 132px;
+}
+
+.panel-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: #efe0c6;
+  color: #4a3423;
+}
+
+.panel-toolbar .new-chat {
+  background: #6d3f1f;
+  color: #fff8e8;
 }
 
 .mention-strip {
@@ -170,6 +205,10 @@ button:disabled {
   background: #eee5d7;
 }
 
+.hall-message.AGENT {
+  background: #eef2dd;
+}
+
 .hall-message.is-streaming {
   background: #f3e2be;
   box-shadow: 0 0 0 1px rgba(185, 54, 34, 0.18), 0 10px 24px rgba(109, 63, 31, 0.10);
@@ -213,6 +252,13 @@ button:disabled {
   margin: 4px 0 0;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.message-status {
+  display: block;
+  margin-top: 6px;
+  color: #856d4a;
+  font-size: 11px;
 }
 
 .hall-input {
@@ -266,6 +312,10 @@ button:disabled {
   .panel-toolbar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .toolbar-actions {
+    min-width: 0;
   }
 }
 </style>
