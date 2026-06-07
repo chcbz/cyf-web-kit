@@ -10,5 +10,7 @@ Object.defineProperty(global, 'window', { value: dom.window, writable: true })
 Object.defineProperty(global, 'document', { value: dom.window.document, writable: true })
 Object.defineProperty(global, 'navigator', { value: dom.window.navigator, writable: true })
 
-// 导出 cleanup 函数，让测试文件可以在 afterEach 中使用
-export { cleanup } from '@testing-library/vue'
+// 导出轻量 cleanup，避免在 jsdom 初始化前加载 Vue runtime。
+export const cleanup = () => {
+  document.body.innerHTML = ''
+}
