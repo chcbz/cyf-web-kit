@@ -3,7 +3,8 @@
     <div class="panel-toolbar">
       <div class="toolbar-meta">
         <span>对话对象：{{ targetText }}</span>
-        <span class="panel-status">{{ isAwaitingReply ? pendingLabel : '实时同步中' }}</span>
+        <span>当前悬赏：{{ taskText }}</span>
+        <span class="panel-status">{{ connectionStatus || (isAwaitingReply ? pendingLabel : '实时同步中') }}</span>
       </div>
       <div class="toolbar-actions">
         <button class="new-chat" type="button" @click="$emit('new-conversation')">新建聚义会话</button>
@@ -19,6 +20,16 @@
         @click="$emit('mention-agent', agent)"
       >
         @{{ mentionLabel(agent) }}
+      </button>
+    </div>
+    <div class="command-templates" aria-label="传令快捷模板">
+      <button
+        v-for="template in commandTemplates"
+        :key="template.key"
+        type="button"
+        @click="$emit('apply-template', template.key)"
+      >
+        {{ template.label }}
       </button>
     </div>
     <div ref="messageBoxRef" class="hall-messages">
@@ -61,6 +72,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 
 const props = defineProps({
   agents: { type: Array, default: () => [] },
+  connectionStatus: { type: String, default: '' },
   draft: { type: String, default: '' },
   isAwaitingReply: { type: Boolean, default: false },
   isStreaming: { type: Boolean, default: false },
@@ -68,14 +80,21 @@ const props = defineProps({
   messages: { type: Array, default: () => [] },
   pendingAgentName: { type: String, default: '' },
   selectedAgent: { type: Object, default: null },
+  selectedTask: { type: Object, default: null },
   senderText: { type: Function, required: true },
   targetText: { type: String, default: '全体好汉' }
 })
 
-defineEmits(['load-messages', 'mention-agent', 'new-conversation', 'send-message', 'update:draft'])
+defineEmits(['apply-template', 'load-messages', 'mention-agent', 'new-conversation', 'send-message', 'update:draft'])
 
 const messageBoxRef = ref(null)
 const pendingAuthor = '聚义厅'
+const commandTemplates = [
+  { key: 'status', label: '汇报状态' },
+  { key: 'risk', label: '评估风险' },
+  { key: 'confirm', label: '接令确认' }
+]
+const taskText = computed(() => props.selectedTask?.title || '未选悬赏')
 const pendingLabel = computed(() => {
   if (props.pendingAgentName) return `${props.pendingAgentName} 正在回话...`
   return '正在整理回报...'
@@ -177,6 +196,24 @@ button:disabled {
   border-color: #b93622;
   background: #b93622;
   color: #fff8e8;
+}
+
+.command-templates {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  padding: 0 14px 12px;
+  overflow-x: auto;
+}
+
+.command-templates button {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: #23483e;
+  color: #fff8e8;
+  white-space: nowrap;
 }
 
 .hall-messages {

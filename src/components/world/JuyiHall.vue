@@ -81,6 +81,9 @@
           <div v-if="!visibleAgents.length" class="empty-hall">
             暂无 Agent 入厅，先在右侧刷新或等待上线
           </div>
+          <button v-if="hiddenAgentCount" class="hall-overflow" type="button" @click="openPanel('agents')">
+            另有 {{ hiddenAgentCount }} 位在偏厅候命
+          </button>
           <button class="scene-hotspot hotspot-agents" @click="openPanel('agents')">
             <var-icon name="account-circle" />
             <span>名册</span>
@@ -110,6 +113,17 @@
             @start-chat="startAgentConversation(selectedAgent)"
           />
         </transition>
+        <BottomDock
+          :active-panel="activePanel"
+          :agent-label="selectedAgent ? portraitShortName(selectedAgent) : ''"
+          :agents-total="agents.length"
+          :selected-agent="selectedAgent"
+          :selected-task="selectedTask"
+          :tasks-total="tasks.length"
+          @clear-agent="selectedAgent = null"
+          @clear-task="selectedTask = null"
+          @open-panel="openPanel"
+        />
         <div class="dock-summary">
           <span>
             <strong>{{ agents.length }}</strong>
@@ -207,8 +221,11 @@
             :mention-label="portraitShortName"
             :pending-agent-name="pendingAgentName"
             :selected-agent="selectedAgent"
+            :selected-task="selectedTask"
             :sender-text="senderText"
+            :connection-status="chatConnectionStatus"
             :target-text="chatTargetText"
+            @apply-template="applyCommandTemplate"
             @load-messages="loadHallMessages(conversationId)"
             @mention-agent="mentionAgent"
             @new-conversation="newHallConversation"
@@ -233,6 +250,7 @@ import { useHallPhysics } from '@/composables/juyiting/useHallPhysics'
 import { portraitName, portraitRole, portraitShortName, portraitStyle, roleClass } from '@/composables/juyiting/useWaterMarginRoles'
 import AgentPanel from '@/components/juyiting/AgentPanel.vue'
 import AgentToken from '@/components/juyiting/AgentToken.vue'
+import BottomDock from '@/components/juyiting/BottomDock.vue'
 import BountyPanel from '@/components/juyiting/BountyPanel.vue'
 import ChatPanel from '@/components/juyiting/ChatPanel.vue'
 import SelectedAgentCard from '@/components/juyiting/SelectedAgentCard.vue'
@@ -355,6 +373,7 @@ const filteredAgents = computed(() => {
 })
 
 const visibleAgents = computed(() => filteredAgents.value.slice(0, 12))
+const hiddenAgentCount = computed(() => Math.max(filteredAgents.value.length - visibleAgents.value.length, 0))
 const taskAbilityOptions = computed(() => {
   const abilities = new Set()
   tasks.value.forEach(task => (task.requiredAbilities || []).forEach(ability => abilities.add(ability)))
@@ -383,6 +402,11 @@ const chatTargetText = computed(() => {
 const pendingAgentName = computed(() => {
   if (!selectedAgent.value) return ''
   return portraitShortName(selectedAgent.value) || selectedAgent.value.name || selectedAgent.value.agentId || ''
+})
+const chatConnectionStatus = computed(() => {
+  if (isStreaming.value) return '传令中'
+  if (isAwaitingReply.value) return pendingAgentName.value ? `${pendingAgentName.value} 回话中` : '等待回报'
+  return '实时同步中'
 })
 
 const normalizeStatus = (status = '') => status.toLowerCase()
@@ -490,10 +514,10 @@ const closePanel = () => {
   activePanel.value = ''
 }
 
-const canAssign = (task) => {
-  if (!selectedAgent.value) return false
+const canAssign = (task, agent = selectedAgent.value) => {
+  if (!task || !agent) return false
   if (!['open', 'pending', ''].includes(normalizeStatus(task.status))) return false
-  return ['idle', 'online', ''].includes(normalizeStatus(selectedAgent.value.status || 'online'))
+  return ['idle', 'online', ''].includes(normalizeStatus(agent.status || 'online'))
 }
 
 const setTaskStatusFilter = async (status) => {
@@ -506,12 +530,25 @@ const taskStatusCount = (status) => {
   return tasks.value.filter(task => normalizeStatus(task.status) === status).length
 }
 
-const briefSelectedTask = () => {
-  if (!selectedTask.value) return
-  const abilities = (selectedTask.value.requiredAbilities || []).join(' / ') || '不限能力'
-  draft.value = `请围绕悬赏「${selectedTask.value.title}」议事：任务编号 ${selectedTask.value.id}，状态 ${taskStatusText(selectedTask.value.status)}，所需能力 ${abilities}。请给出适合承接的好汉、风险和下一步安排。`
+const briefSelectedTask = (task = selectedTask.value, agent = selectedAgent.value) => {
+  if (!task) return
+  selectedTask.value = task
+  if (agent) selectedAgent.value = agent
+  const abilities = (task.requiredAbilities || []).join(' / ') || '不限能力'
+  const target = agent ? `建议由 ${portraitShortName(agent)} / ${agent.name || agent.personaName || agent.agentId} 承接。` : '请给出适合承接的好汉。'
+  draft.value = `请围绕悬赏「${task.title}」议事：任务编号 ${task.id}，状态 ${taskStatusText(task.status)}，所需能力 ${abilities}。${target}请说明风险和下一步安排。`
   openPanel('chat')
   showToast('已生成传令内容')
+}
+
+const applyCommandTemplate = (key) => {
+  const taskTitle = selectedTask.value?.title || '当前议题'
+  const templates = {
+    status: `请汇报「${taskTitle}」当前进展、阻塞点和下一步。`,
+    risk: `请评估「${taskTitle}」的主要风险、依赖和可回滚方案。`,
+    confirm: `请确认是否接令「${taskTitle}」，并说明预计完成方式。`
+  }
+  draft.value = templates[key] || ''
 }
 
 const senderText = (message) => {
@@ -980,20 +1017,23 @@ const sendHallMessage = async () => {
   }
 }
 
-const assignTask = async (task) => {
-  if (!canAssign(task)) return
+const assignTask = async (task, agent = selectedAgent.value) => {
+  const targetAgent = agent
+  if (!canAssign(task, targetAgent)) return
   try {
     await agentApi.create(`/tasks/${task.id}/assign`, {
-      agentId: selectedAgent.value.agentId
+      agentId: targetAgent.agentId
     }, {
       autoLoading: false,
       onSuccess: () => {
         task.status = 'assigned'
-        task.assignedAgentId = selectedAgent.value.agentId
-        task.assignedAgentName = selectedAgent.value.name
-        selectedAgent.value.status = 'busy'
-        selectedAgent.value.currentTaskTitle = task.title
-        showToast(`${task.title} 已指派给 ${selectedAgent.value.name || selectedAgent.value.agentId}`)
+        task.assignedAgentId = targetAgent.agentId
+        task.assignedAgentName = targetAgent.name || targetAgent.personaName || targetAgent.agentId
+        targetAgent.status = 'busy'
+        targetAgent.currentTaskTitle = task.title
+        selectedAgent.value = targetAgent
+        selectedTask.value = task
+        showToast(`${task.title} 已指派给 ${task.assignedAgentName}`)
       }
     })
   } catch (error) {
@@ -1483,6 +1523,21 @@ button.hall-room {
   color: #856d4a;
   text-align: center;
   padding: 18px;
+}
+
+.hall-overflow {
+  position: absolute;
+  right: 18px;
+  bottom: 118px;
+  z-index: 5;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 244, 212, 0.2);
+  border-radius: 999px;
+  background: rgba(35, 24, 16, 0.72);
+  color: #fff4d4;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(8px);
 }
 
 .quick-bar {

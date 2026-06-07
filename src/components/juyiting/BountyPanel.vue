@@ -79,13 +79,13 @@
 
         <div class="task-operation-grid">
           <button
-            :disabled="!canAssign(selectedTask)"
-            @click="$emit('assign-task', selectedTask)"
+            :disabled="!canAssign(selectedTask, selectedAgent)"
+            @click="$emit('assign-task', selectedTask, selectedAgent)"
           >
             <var-icon name="account-circle" />
-            <span>指派当前好汉</span>
+            <span>指派给当前好汉：{{ agentDisplayName(selectedAgent) || '未选好汉' }}</span>
           </button>
-          <button @click="$emit('brief-selected-task')">
+          <button @click="$emit('brief-selected-task', selectedTask, selectedAgent)">
             <var-icon name="message-text-outline" />
             <span>传令议事</span>
           </button>
@@ -93,23 +93,36 @@
 
         <div class="recommended-agents">
           <div class="section-label">适配好汉</div>
-          <button
+          <div
             v-for="agent in recommendedAgents"
             :key="agent.agentId"
+            class="recommended-agent-row"
             :class="{ active: selectedAgent?.agentId === agent.agentId }"
-            @click="$emit('select-agent', agent)"
           >
-            <span
-              class="mini-avatar portrait-avatar"
-              :style="portraitStyle(agent)"
-              :title="portraitName(agent)"
-            ></span>
-            <span>
-              <strong>{{ agent.name || agent.personaName || agent.agentId }}</strong>
-              <small>{{ abilityText(agent) }}</small>
-            </span>
-            <em>{{ taskAgentMatchScore(selectedTask, agent) }}%</em>
-          </button>
+            <button class="recommended-agent-main" type="button" @click="$emit('select-agent', agent)">
+              <span
+                class="mini-avatar portrait-avatar"
+                :style="portraitStyle(agent)"
+                :title="portraitName(agent)"
+              ></span>
+              <span>
+                <strong>{{ agentDisplayName(agent) }}</strong>
+                <small>{{ abilityText(agent) }}</small>
+              </span>
+              <em>{{ taskAgentMatchScore(selectedTask, agent) }}%</em>
+            </button>
+            <div class="recommended-agent-actions">
+              <button type="button" @click="$emit('select-agent', agent)">选中</button>
+              <button
+                type="button"
+                :disabled="!canAssign(selectedTask, agent)"
+                @click="$emit('assign-task', selectedTask, agent)"
+              >
+                指派给 {{ agentDisplayName(agent) }}
+              </button>
+              <button type="button" @click="$emit('brief-selected-task', selectedTask, agent)">传令</button>
+            </div>
+          </div>
           <p v-if="!recommendedAgents.length">暂无活跃好汉可接令。</p>
         </div>
       </aside>
@@ -149,6 +162,8 @@ defineEmits([
   'update:taskAbilityFilter',
   'update:taskKeyword'
 ])
+
+const agentDisplayName = (agent) => agent?.name || agent?.personaName || agent?.agentId || ''
 </script>
 
 <style scoped>
@@ -407,7 +422,19 @@ button:disabled {
   font-weight: 700;
 }
 
-.recommended-agents button {
+.recommended-agent-row {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 8px;
+  background: #f7ecd7;
+}
+
+.recommended-agent-row.active {
+  outline: 2px solid #7c1f1b;
+}
+
+.recommended-agent-main {
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr) auto;
   gap: 8px;
@@ -415,13 +442,29 @@ button:disabled {
   width: 100%;
   padding: 8px;
   border-radius: 8px;
-  background: #f7ecd7;
+  background: rgba(255, 253, 246, 0.72);
   color: #2f261c;
   text-align: left;
 }
 
-.recommended-agents button.active {
-  outline: 2px solid #7c1f1b;
+.recommended-agent-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.recommended-agent-actions button {
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: 7px;
+  background: #efe0c6;
+  color: #4a3423;
+  font-size: 12px;
+}
+
+.recommended-agent-actions button:nth-child(2) {
+  background: #7c1f1b;
+  color: #fff8e8;
 }
 
 .recommended-agents strong,
