@@ -1,18 +1,20 @@
 import { ref } from 'vue'
-import { hallObstacles, hallRoutes, walkBounds } from '@/constants/juyiting'
+import { hallObstacles, hallPatrolAnchors, walkBounds } from '@/constants/juyiting'
 import { agentSeed, portraitRole } from '@/composables/juyiting/useWaterMarginRoles'
 
-const routePoint = (route, index, seed) => {
-  const [x, y] = route[index % route.length]
-  const jitterX = ((seed + index * 7) % 7) - 3
-  const jitterY = ((seed + index * 5) % 5) - 2
-  return {
-    x: Math.min(90, Math.max(10, x + jitterX)),
-    y: Math.min(82, Math.max(22, y + jitterY))
-  }
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
+
+const randomFromSeed = (seed, offset = 0) => {
+  const value = Math.sin((seed + 1) * 127.1 + offset * 311.7) * 43758.5453123
+  return value - Math.floor(value)
 }
 
-const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
+const sampleRange = (seed, min, max, offset = 0) => min + (max - min) * randomFromSeed(seed, offset)
+
+const createAnchorPoint = (anchor, seed, offset = 0) => ({
+  x: clamp(sampleRange(seed, anchor.x - anchor.radiusX, anchor.x + anchor.radiusX, offset), walkBounds.minX, walkBounds.maxX),
+  y: clamp(sampleRange(seed, anchor.y - anchor.radiusY, anchor.y + anchor.radiusY, offset + 1), walkBounds.minY, walkBounds.maxY)
+})
 
 const limitVector = (vector, maxLength) => {
   const length = Math.hypot(vector.x, vector.y)
@@ -29,20 +31,30 @@ export const useHallPhysics = (visibleAgents, normalizeStatus) => {
 
   const createPhysicsState = (agent) => {
     const seed = agentSeed(agent)
-    const route = hallRoutes[seed % hallRoutes.length]
-    const startOffset = seed % route.length
-    const points = Array.from({ length: 8 }, (_, index) => routePoint(route, startOffset + index, seed))
-    const start = points[0]
+    const anchorCount = Math.min(5, hallPatrolAnchors.length)
+    const startIndex = seed % hallPatrolAnchors.length
+    const stride = 2 + (seed % 3)
+    const anchorIndexes = Array.from({ length: anchorCount }, (_, index) => (
+      (startIndex + index * stride) % hallPatrolAnchors.length
+    ))
+    const currentAnchorIndex = anchorIndexes[0]
+    const currentAnchor = hallPatrolAnchors[currentAnchorIndex]
+    const start = createAnchorPoint(currentAnchor, seed, 0)
     return {
       seed,
-      points,
-      targetIndex: 1,
+      anchorIndexes,
+      currentAnchorIndex,
+      targetAnchorIndex: currentAnchorIndex,
+      target: start,
       x: start.x,
       y: start.y,
-      vx: (((seed % 5) - 2) * 0.02),
-      vy: (((seed % 7) - 3) * 0.015),
-      face: points[1].x >= start.x ? 1 : -1,
-      speed: 0
+      vx: 0,
+      vy: 0,
+      face: randomFromSeed(seed, 2) >= 0.5 ? 1 : -1,
+      speed: 0,
+      restUntil: sampleRange(seed, 900, 2600, 3),
+      travelCount: 0,
+      isResting: true
     }
   }
 
@@ -92,6 +104,32 @@ export const useHallPhysics = (visibleAgents, normalizeStatus) => {
     }, { x: 0, y: 0 })
   }
 
+  const chooseNextAnchor = (state, time) => {
+    const options = state.anchorIndexes.filter(index => index !== state.currentAnchorIndex)
+    const pool = options.length ? options : state.anchorIndexes
+    const nextIndex = pool[Math.floor(randomFromSeed(state.seed, state.travelCount + time * 0.001) * pool.length)]
+    const anchor = hallPatrolAnchors[nextIndex]
+    state.targetAnchorIndex = nextIndex
+    state.target = createAnchorPoint(anchor, state.seed, state.travelCount + 10)
+    state.travelCount += 1
+    state.isResting = false
+  }
+
+  const startRest = (state, time, status) => {
+    const anchor = hallPatrolAnchors[state.targetAnchorIndex]
+    const [minLinger, maxLinger] = anchor.linger
+    const lingerScale = status === 'busy' || status === 'running' ? 0.72 : 1
+    const linger = sampleRange(state.seed, minLinger, maxLinger, state.travelCount + 20) * lingerScale
+    state.x = state.target.x
+    state.y = state.target.y
+    state.vx = 0
+    state.vy = 0
+    state.speed = 0
+    state.restUntil = time + linger
+    state.currentAnchorIndex = state.targetAnchorIndex
+    state.isResting = true
+  }
+
   const updatePhysics = (time) => {
     if (!lastPhysicsTime) lastPhysicsTime = time
     const dt = clamp((time - lastPhysicsTime) / 1000, 0.001, 0.05)
@@ -100,22 +138,28 @@ export const useHallPhysics = (visibleAgents, normalizeStatus) => {
     syncPhysicsAgents()
     const states = visibleAgents.value.map(getPhysicsState)
     states.forEach((state, index) => {
-      const target = state.points[state.targetIndex]
-      const dx = target.x - state.x
-      const dy = target.y - state.y
-      const distance = Math.hypot(dx, dy) || 1
-      if (distance < 2.4) {
-        state.targetIndex = (state.targetIndex + 1) % state.points.length
-      }
-
-      const nextTarget = state.points[state.targetIndex]
-      const toTargetX = nextTarget.x - state.x
-      const toTargetY = nextTarget.y - state.y
-      const targetDistance = Math.hypot(toTargetX, toTargetY) || 1
       const role = portraitRole(visibleAgents.value[index])
       const status = normalizeStatus(visibleAgents.value[index]?.status)
+      if (state.isResting) {
+        state.vx = 0
+        state.vy = 0
+        state.speed = 0
+        if (time >= state.restUntil) {
+          chooseNextAnchor(state, time)
+        }
+        return
+      }
+
+      const toTargetX = state.target.x - state.x
+      const toTargetY = state.target.y - state.y
+      const targetDistance = Math.hypot(toTargetX, toTargetY) || 1
+      if (targetDistance < 1.35) {
+        startRest(state, time, status)
+        return
+      }
+
       const maxSpeed = (status === 'busy' || status === 'running' ? 9.4 : 7.2) * (1.12 - (role.scale - 0.9) * 0.25)
-      const desiredSpeed = targetDistance < 8 ? maxSpeed * 0.58 : maxSpeed
+      const desiredSpeed = targetDistance < 7 ? maxSpeed * 0.46 : maxSpeed
       const desired = {
         x: (toTargetX / targetDistance) * desiredSpeed,
         y: (toTargetY / targetDistance) * desiredSpeed
@@ -158,7 +202,8 @@ export const useHallPhysics = (visibleAgents, normalizeStatus) => {
     physicsFrame.value
     const state = getPhysicsState(agent)
     const role = portraitRole(agent)
-    const walkActivity = clamp(state.speed / 7, 0.25, 1)
+    const isMoving = state.speed > 0.18 && !state.isResting
+    const walkActivity = isMoving ? clamp(state.speed / 7, 0.25, 1) : 0
     return {
       left: `${state.x}%`,
       top: `${state.y}%`,
@@ -168,8 +213,9 @@ export const useHallPhysics = (visibleAgents, normalizeStatus) => {
       '--trim-color': role.trim,
       '--body-scale': role.scale,
       '--step-speed': `${clamp(role.step / Math.max(walkActivity, 0.35), 0.48, 1.15)}s`,
-      '--step-lift': `${2 + walkActivity * 2}px`,
-      '--shadow-scale': 0.88 + walkActivity * 0.16
+      '--step-lift': `${isMoving ? 2 + walkActivity * 2 : 0}px`,
+      '--shadow-scale': isMoving ? 0.88 + walkActivity * 0.16 : 0.88,
+      '--motion-play-state': isMoving ? 'running' : 'paused'
     }
   }
 

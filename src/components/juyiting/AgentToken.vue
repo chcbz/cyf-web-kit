@@ -124,6 +124,7 @@ defineEmits(['select-agent'])
   background: rgba(0, 0, 0, 0.25);
   filter: blur(2px);
   animation: agentShadowPulse var(--step-speed, 0.72s) ease-in-out infinite;
+  animation-play-state: var(--motion-play-state, running);
 }
 
 .agent-figure {
@@ -135,6 +136,7 @@ defineEmits(['select-agent'])
   transform: translateX(-50%) scaleX(var(--face, 1)) scale(calc(var(--body-scale, 1) * 0.76));
   transform-origin: 50% 100%;
   animation: agentStepBob var(--step-speed, 0.72s) ease-in-out infinite;
+  animation-play-state: var(--motion-play-state, running);
 }
 
 .agent-head {
@@ -257,11 +259,13 @@ defineEmits(['select-agent'])
 .agent-arm-left {
   left: 8px;
   animation: agentArmLeft var(--step-speed, 0.72s) ease-in-out infinite;
+  animation-play-state: var(--motion-play-state, running);
 }
 
 .agent-arm-right {
   right: 8px;
   animation: agentArmRight var(--step-speed, 0.72s) ease-in-out infinite;
+  animation-play-state: var(--motion-play-state, running);
 }
 
 .agent-leg {
@@ -287,11 +291,13 @@ defineEmits(['select-agent'])
 .agent-leg-left {
   left: 19px;
   animation: agentLegLeft var(--step-speed, 0.72s) ease-in-out infinite;
+  animation-play-state: var(--motion-play-state, running);
 }
 
 .agent-leg-right {
   right: 19px;
   animation: agentLegRight var(--step-speed, 0.72s) ease-in-out infinite;
+  animation-play-state: var(--motion-play-state, running);
 }
 
 .role-songjiang .agent-hat {

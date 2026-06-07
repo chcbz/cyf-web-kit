@@ -69,13 +69,19 @@ export const roleDialogues = {
   ]
 }
 
-export const hallRoutes = [
-  [[12, 72], [16, 45], [34, 28], [62, 28], [82, 44], [86, 70], [58, 73], [28, 76]],
-  [[18, 38], [38, 24], [72, 30], [86, 50], [78, 70], [63, 62], [42, 61], [22, 68]],
-  [[78, 36], [58, 24], [31, 30], [14, 52], [24, 72], [41, 64], [61, 62], [84, 68]],
-  [[27, 80], [18, 64], [26, 43], [48, 31], [73, 40], [84, 58], [70, 76], [43, 78]],
-  [[52, 24], [78, 33], [88, 52], [73, 66], [61, 55], [39, 55], [25, 66], [12, 50]],
-  [[15, 58], [24, 33], [49, 24], [77, 34], [86, 62], [66, 73], [50, 60], [34, 73]]
+export const hallPatrolAnchors = [
+  { x: 16, y: 71, radiusX: 3, radiusY: 2.5, linger: [2800, 5200] },
+  { x: 18, y: 50, radiusX: 2.5, radiusY: 3, linger: [2200, 4200] },
+  { x: 28, y: 32, radiusX: 3, radiusY: 2.5, linger: [1800, 3600] },
+  { x: 43, y: 27, radiusX: 4, radiusY: 2.5, linger: [1800, 3400] },
+  { x: 58, y: 28, radiusX: 4, radiusY: 2.5, linger: [1800, 3400] },
+  { x: 74, y: 35, radiusX: 3, radiusY: 3, linger: [2000, 3600] },
+  { x: 84, y: 49, radiusX: 2.5, radiusY: 3, linger: [2000, 3800] },
+  { x: 80, y: 67, radiusX: 3, radiusY: 3, linger: [2600, 4800] },
+  { x: 64, y: 68, radiusX: 3.5, radiusY: 2.5, linger: [2200, 4200] },
+  { x: 50, y: 61, radiusX: 4, radiusY: 3, linger: [1600, 3000] },
+  { x: 36, y: 66, radiusX: 3.5, radiusY: 3, linger: [2200, 4200] },
+  { x: 24, y: 73, radiusX: 3, radiusY: 2.5, linger: [2600, 4800] }
 ]
 
 export const hallObstacles = [
