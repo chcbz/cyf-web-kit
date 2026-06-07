@@ -1,104 +1,24 @@
 <template>
   <div class="juyi-page">
-    <section class="hall-stage">
-      <div class="stage-header">
-        <div>
-          <div class="eyebrow">梁山泊协作中枢</div>
-          <h1>聚义厅</h1>
-        </div>
-        <div class="stage-actions">
-          <button class="icon-action" title="好汉名册" @click="openPanel('agents')">
-            <var-icon name="account-circle" />
-          </button>
-          <button class="icon-action" title="悬赏榜" @click="openPanel('tasks')">
-            <var-icon name="format-list-checkbox" />
-          </button>
-          <button class="icon-action" title="厅内传令" @click="openPanel('chat')">
-            <var-icon name="message-text-outline" />
-          </button>
-          <button class="icon-action" title="刷新大厅" @click="refreshHall">
-            <var-icon name="refresh" />
-          </button>
-          <button class="icon-action" title="新建聚义会话" @click="newHallConversation">
-            <var-icon name="plus" />
-          </button>
-        </div>
-      </div>
-
-      <div
-        ref="hallBoardRef"
-        class="hall-board"
-        :class="{ 'is-dragging': mapDrag.active }"
-        @pointerdown="startMapDrag"
-        @pointermove="moveMapDrag"
-        @pointerup="endMapDrag"
-        @pointerleave="endMapDrag"
-        @pointercancel="endMapDrag"
-      >
-        <div ref="mapWorldRef" class="map-world" :style="mapWorldStyle">
-          <div class="map-region region-water"></div>
-          <div class="map-region region-forest"></div>
-          <div class="map-region region-village"></div>
-          <div class="map-road road-main"></div>
-          <div class="map-road road-branch"></div>
-          <button class="hall-room room-main" @click="resetMap">
-            <strong>聚义厅</strong>
-            <small>议事中庭</small>
-          </button>
-          <button class="hall-room room-agents" @click="openPanel('agents')">
-            <strong>名册房</strong>
-            <small>好汉调度</small>
-          </button>
-          <button class="hall-room room-tasks" @click="openPanel('tasks')">
-            <strong>悬赏房</strong>
-            <small>{{ tasks.length }} 件</small>
-          </button>
-          <button class="hall-room room-chat" @click="openPanel('chat')">
-            <strong>传令房</strong>
-            <small>厅内会话</small>
-          </button>
-          <div class="hall-room room-back">
-            <strong>后堂</strong>
-            <small>整备</small>
-          </div>
-          <div class="beam beam-top"></div>
-          <div class="banner">替天行道</div>
-          <AgentToken
-            v-for="agent in visibleAgents"
-            :key="agent.agentId"
-            :active="selectedAgent?.agentId === agent.agentId"
-            :agent="agent"
-            :agent-style="agentStyle"
-            :bubble-text="agentBubbles[agentKey(agent)]"
-            :portrait-name="portraitName"
-            :portrait-short-name="portraitShortName"
-            :portrait-style="portraitStyle"
-            :role-class="roleClass"
-            :status-class="statusClass"
-            :status-text="statusText"
-            @select-agent="selectAgent"
-          />
-          <div v-if="!visibleAgents.length" class="empty-hall">
-            暂无 Agent 入厅，先在右侧刷新或等待上线
-          </div>
-          <button v-if="hiddenAgentCount" class="hall-overflow" type="button" @click="openPanel('agents')">
-            另有 {{ hiddenAgentCount }} 位在偏厅候命
-          </button>
-          <button class="scene-hotspot hotspot-agents" @click="openPanel('agents')">
-            <var-icon name="account-circle" />
-            <span>名册</span>
-          </button>
-          <button class="scene-hotspot hotspot-tasks" @click="openPanel('tasks')">
-            <var-icon name="format-list-checkbox" />
-            <span>悬赏</span>
-          </button>
-          <button class="scene-hotspot hotspot-chat" @click="openPanel('chat')">
-            <var-icon name="message-text-outline" />
-            <span>传令</span>
-          </button>
-        </div>
-
-      </div>
+    <HallStage
+      :agent-bubbles="agentBubbles"
+      :agent-key="agentKey"
+      :agent-style="agentStyle"
+      :hidden-agent-count="hiddenAgentCount"
+      :portrait-name="portraitName"
+      :portrait-short-name="portraitShortName"
+      :portrait-style="portraitStyle"
+      :role-class="roleClass"
+      :selected-agent="selectedAgent"
+      :status-class="statusClass"
+      :status-text="statusText"
+      :tasks-total="tasks.length"
+      :visible-agents="visibleAgents"
+      @new-conversation="newHallConversation"
+      @open-panel="openPanel"
+      @refresh-hall="refreshHall"
+      @select-agent="selectAgent"
+    >
 
       <div class="quick-bar">
         <transition name="agent-card">
@@ -156,7 +76,7 @@
           </button>
         </div>
       </div>
-    </section>
+    </HallStage>
 
     <transition name="panel">
       <div v-if="activePanel" class="panel-overlay" @click.self="closePanel">
@@ -246,13 +166,15 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useGlobalStore } from '@/stores/global'
 import { useApiStore } from '@/stores/api'
 import { agentApi, chatApi } from '@/composables/useHttp'
+import { useHallConversation } from '@/composables/juyiting/useHallConversation'
+import { useHallData } from '@/composables/juyiting/useHallData'
 import { useHallPhysics } from '@/composables/juyiting/useHallPhysics'
 import { portraitName, portraitRole, portraitShortName, portraitStyle, roleClass } from '@/composables/juyiting/useWaterMarginRoles'
 import AgentPanel from '@/components/juyiting/AgentPanel.vue'
-import AgentToken from '@/components/juyiting/AgentToken.vue'
 import BottomDock from '@/components/juyiting/BottomDock.vue'
 import BountyPanel from '@/components/juyiting/BountyPanel.vue'
 import ChatPanel from '@/components/juyiting/ChatPanel.vue'
+import HallStage from '@/components/juyiting/HallStage.vue'
 import SelectedAgentCard from '@/components/juyiting/SelectedAgentCard.vue'
 import {
   roleDialogues,
@@ -264,131 +186,15 @@ import { log } from '@/utils/logger'
 const globalStore = useGlobalStore()
 const apiStore = useApiStore()
 
-const agents = ref([])
-const tasks = ref([])
-const messages = ref([])
 const selectedAgent = ref(null)
 const selectedTask = ref(null)
-const agentFilter = ref('all')
-const taskStatusFilter = ref('')
-const taskAbilityFilter = ref('')
-const taskKeyword = ref('')
-const conversationId = ref('')
-const draft = ref('')
-const isStreaming = ref(false)
-const isAwaitingReply = ref(false)
 const toast = ref('')
-const hallBoardRef = ref(null)
-const mapWorldRef = ref(null)
 const activePanel = ref('')
-const viewportOffset = ref({ x: 0, y: 0 })
-const mapDrag = ref({ active: false, dragging: false, pointerId: null, startX: 0, startY: 0, originX: 0, originY: 0 })
 const agentBubbles = ref({})
 let bubbleTimer = null
 let bubbleInitialTimer = null
 let bubbleClearTimer = null
-let hallEventController = null
-let hallEventConversationId = ''
-let hallEventReconnectTimer = null
-let hallReplyTimers = []
-let hallReplyPollTimer = null
 
-const mapPanPadding = 2
-const mapDragThreshold = 3
-
-const mapWorldStyle = computed(() => ({
-  '--map-offset-x': `${viewportOffset.value.x}px`,
-  '--map-offset-y': `${viewportOffset.value.y}px`
-}))
-
-const applyMapOffset = (next) => {
-  const bounds = mapOffsetBounds()
-  viewportOffset.value = {
-    x: clamp(next.x, -bounds.x, bounds.x),
-    y: clamp(next.y, -bounds.y, bounds.y)
-  }
-}
-
-const mapOffsetBounds = () => {
-  const board = hallBoardRef.value?.getBoundingClientRect()
-  const world = mapWorldRef.value?.getBoundingClientRect()
-  if (!board || !world) {
-    return { x: 0, y: 0 }
-  }
-  return {
-    x: Math.max(0, (world.width - board.width) / 2 - mapPanPadding),
-    y: Math.max(0, (world.height - board.height) / 2 - mapPanPadding)
-  }
-}
-
-const resetMap = () => {
-  viewportOffset.value = { x: 0, y: 0 }
-}
-
-const isInteractiveMapTarget = (target) => {
-  if (!target?.closest) return false
-  return Boolean(target.closest('button, a, input, select, textarea, [role="button"]'))
-}
-
-const startMapDrag = (event) => {
-  if (event.button !== undefined && event.button !== 0) return
-  if (isInteractiveMapTarget(event.target)) return
-  mapDrag.value = {
-    active: true,
-    dragging: false,
-    pointerId: event.pointerId,
-    startX: event.clientX,
-    startY: event.clientY,
-    originX: viewportOffset.value.x,
-    originY: viewportOffset.value.y
-  }
-  event.currentTarget?.setPointerCapture?.(event.pointerId)
-}
-
-const moveMapDrag = (event) => {
-  if (!mapDrag.value.active || mapDrag.value.pointerId !== event.pointerId) return
-  const deltaX = event.clientX - mapDrag.value.startX
-  const deltaY = event.clientY - mapDrag.value.startY
-  if (!mapDrag.value.dragging && Math.hypot(deltaX, deltaY) < mapDragThreshold) return
-  mapDrag.value.dragging = true
-  applyMapOffset({
-    x: mapDrag.value.originX + deltaX,
-    y: mapDrag.value.originY + deltaY
-  })
-  event.preventDefault()
-}
-
-const endMapDrag = (event) => {
-  if (!mapDrag.value.active || mapDrag.value.pointerId !== event.pointerId) return
-  event.currentTarget?.releasePointerCapture?.(event.pointerId)
-  mapDrag.value = { active: false, dragging: false, pointerId: null, startX: 0, startY: 0, originX: 0, originY: 0 }
-}
-
-const filteredAgents = computed(() => {
-  if (agentFilter.value === 'all') return agents.value
-  if (agentFilter.value === 'busy') {
-    return agents.value.filter(agent => ['busy', 'running'].includes(normalizeStatus(agent.status)))
-  }
-  return agents.value.filter(agent => normalizeStatus(agent.status) === agentFilter.value)
-})
-
-const visibleAgents = computed(() => filteredAgents.value.slice(0, 12))
-const hiddenAgentCount = computed(() => Math.max(filteredAgents.value.length - visibleAgents.value.length, 0))
-const taskAbilityOptions = computed(() => {
-  const abilities = new Set()
-  tasks.value.forEach(task => (task.requiredAbilities || []).forEach(ability => abilities.add(ability)))
-  agents.value.forEach(agent => (agent.abilities || []).forEach(ability => abilities.add(ability)))
-  return [...abilities].sort()
-})
-const recommendedAgents = computed(() => {
-  if (!selectedTask.value) return []
-  return agents.value
-    .filter(agent => ['idle', 'online', ''].includes(normalizeStatus(agent.status || 'online')))
-    .map(agent => ({ agent, score: taskAgentMatchScore(selectedTask.value, agent) }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 5)
-    .map(item => item.agent)
-})
 const activePanelTitle = computed(() => {
   if (activePanel.value === 'agents') return '好汉名册'
   if (activePanel.value === 'tasks') return '悬赏榜'
@@ -398,15 +204,6 @@ const activePanelTitle = computed(() => {
 const chatTargetText = computed(() => {
   if (!selectedAgent.value) return '全体好汉'
   return `${portraitShortName(selectedAgent.value)} / ${selectedAgent.value.name || selectedAgent.value.agentId}`
-})
-const pendingAgentName = computed(() => {
-  if (!selectedAgent.value) return ''
-  return portraitShortName(selectedAgent.value) || selectedAgent.value.name || selectedAgent.value.agentId || ''
-})
-const chatConnectionStatus = computed(() => {
-  if (isStreaming.value) return '传令中'
-  if (isAwaitingReply.value) return pendingAgentName.value ? `${pendingAgentName.value} 回话中` : '等待回报'
-  return '实时同步中'
 })
 
 const normalizeStatus = (status = '') => status.toLowerCase()
@@ -459,6 +256,32 @@ const taskAgentMatchScore = (task, agent) => {
   return Math.round((matched / requiredAbilities.length) * 100)
 }
 
+const {
+  agentFilter,
+  agents,
+  canAssign,
+  filteredAgents,
+  hiddenAgentCount,
+  loadAgents,
+  loadTasks,
+  recommendedAgents,
+  setTaskStatusFilter,
+  taskAbilityFilter,
+  taskAbilityOptions,
+  taskKeyword,
+  tasks,
+  taskStatusCount,
+  taskStatusFilter,
+  visibleAgents
+} = useHallData({
+  agentApi,
+  log,
+  normalizeStatus,
+  selectedAgent,
+  selectedTask,
+  taskAgentMatchScore
+})
+
 const formatTime = (timestamp) => {
   if (!timestamp) return ''
   const date = new Date(Number(timestamp))
@@ -466,7 +289,6 @@ const formatTime = (timestamp) => {
   return `${date.getMonth() + 1}-${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
-const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 const agentKey = (agent) => agent?.agentId || agent?.name || agent?.personaName || ''
 
 const { agentStyle, startPhysics, stopPhysics } = useHallPhysics(visibleAgents, normalizeStatus)
@@ -479,55 +301,12 @@ const selectAgent = (agent) => {
   selectedAgent.value = agent
 }
 
-const startAgentConversation = (agent) => {
-  if (!agent) return
-  selectedAgent.value = agent
-  insertAgentMention(agent, '请汇报当前状态、可承接任务和需要协助的事项。')
-  openPanel('chat')
-  showToast(`正在与 ${portraitShortName(agent)} 对话`)
-}
-
-const mentionAgent = (agent) => {
-  selectedAgent.value = agent
-  insertAgentMention(agent)
-}
-
-const insertAgentMention = (agent, suffix = '') => {
-  const mention = `@${portraitShortName(agent)}`
-  const current = draft.value.trim()
-  if (!current) {
-    draft.value = suffix ? `${mention} ${suffix}` : `${mention} `
-    return
-  }
-  if (current.includes(mention)) {
-    draft.value = suffix && current === mention ? `${mention} ${suffix}` : draft.value
-    return
-  }
-  draft.value = `${current} ${mention}${suffix ? ` ${suffix}` : ' '}`
-}
-
 const openPanel = (panel) => {
   activePanel.value = panel
 }
 
 const closePanel = () => {
   activePanel.value = ''
-}
-
-const canAssign = (task, agent = selectedAgent.value) => {
-  if (!task || !agent) return false
-  if (!['open', 'pending', ''].includes(normalizeStatus(task.status))) return false
-  return ['idle', 'online', ''].includes(normalizeStatus(agent.status || 'online'))
-}
-
-const setTaskStatusFilter = async (status) => {
-  taskStatusFilter.value = status
-  await loadTasks()
-}
-
-const taskStatusCount = (status) => {
-  if (!status) return tasks.value.length
-  return tasks.value.filter(task => normalizeStatus(task.status) === status).length
 }
 
 const briefSelectedTask = (task = selectedTask.value, agent = selectedAgent.value) => {
@@ -551,205 +330,42 @@ const applyCommandTemplate = (key) => {
   draft.value = templates[key] || ''
 }
 
-const senderText = (message) => {
-  if (message.senderName) return message.senderName
-  if (message.sender === 'USER') return '你'
-  if (message.sender === 'SYSTEM') return '系统'
-  return '聚义厅'
-}
-
-const parseMessageMetadata = (metadata) => {
-  if (!metadata) return {}
-  if (typeof metadata === 'object') return metadata
-  try {
-    return JSON.parse(metadata)
-  } catch {
-    return {}
-  }
-}
-
-const normalizeHallMessage = (item, index = 0) => {
-  const metadata = parseMessageMetadata(item.metadata)
-  return {
-    localId: `${item.id || metadata.messageId || index}`,
-    sender: item.senderType === 'agent' ? 'AGENT' : (item.messageType || item.senderType || 'SYSTEM'),
-    senderName: item.senderName || metadata.senderName,
-    agentId: metadata.agentId,
-    content: item.content || '',
-    timestamp: item.createTime || metadata.timestamp || Date.now(),
-    streaming: false,
-    statusText: ''
-  }
-}
-
-const currentStreamingAgentMessage = (event) => {
-  return messages.value.find(message =>
-    message.sender === 'AGENT' &&
-    message.streaming &&
-    (!event.agentId || message.agentId === event.agentId)
-  ) || null
-}
-
-const stopHallReplyStreaming = () => {
-  hallReplyTimers.forEach(timer => window.clearTimeout(timer))
-  hallReplyTimers = []
-}
-
-const stopHallReplyPolling = () => {
-  if (hallReplyPollTimer) {
-    window.clearInterval(hallReplyPollTimer)
-    hallReplyPollTimer = null
-  }
-}
-
-const hasResolvedAgentReply = (list = messages.value) => {
-  let latestUserTimestamp = 0
-  for (const message of list) {
-    if (message.sender === 'USER') {
-      latestUserTimestamp = Math.max(latestUserTimestamp, Number(message.timestamp) || 0)
-    }
-  }
-  return list.some(message =>
-    message.sender === 'AGENT' &&
-    !message.streaming &&
-    (Number(message.timestamp) || 0) >= latestUserTimestamp
-  )
-}
-
-const appendHallEventMessage = (event) => {
-  if (!event || event.conversationId?.toString() !== conversationId.value?.toString()) return
-  if (event.type === 'agent_message_delta') {
-    let pendingMessage = currentStreamingAgentMessage(event)
-    if (!pendingMessage) {
-      pendingMessage = {
-        localId: `delta-${event.agentId || 'agent'}-${event.timestamp || Date.now()}`,
-        sender: 'AGENT',
-        senderName: event.senderName,
-        agentId: event.agentId,
-        content: '',
-        timestamp: event.timestamp || Date.now(),
-        streaming: true,
-        statusText: '\u6b63\u5728\u56de\u590d'
-      }
-      messages.value.push(pendingMessage)
-    }
-    pendingMessage.content += event.content || ''
-    pendingMessage.timestamp = event.timestamp || pendingMessage.timestamp
-    pendingMessage.senderName = event.senderName || pendingMessage.senderName
-    pendingMessage.streaming = true
-    pendingMessage.statusText = '\u6b63\u5728\u56de\u590d'
-    isAwaitingReply.value = false
-    return
-  }
-
-  const localId = `${event.messageId || `${event.agentId}-${event.timestamp || Date.now()}`}`
-  const streamingMessage = event.senderType === 'agent' ? currentStreamingAgentMessage(event) : null
-  if (streamingMessage && event.senderType === 'agent') {
-    streamingMessage.localId = localId
-    streamingMessage.content = event.content || streamingMessage.content
-    streamingMessage.timestamp = event.timestamp || streamingMessage.timestamp
-    streamingMessage.senderName = event.senderName || streamingMessage.senderName
-    streamingMessage.agentId = event.agentId || streamingMessage.agentId
-    streamingMessage.streaming = false
-    streamingMessage.statusText = '\u56de\u590d\u5b8c\u6210'
-    isAwaitingReply.value = false
-    isStreaming.value = false
-    stopHallReplyPolling()
-    if (event.senderName) {
-      showToast(`${event.senderName} \u5df2\u56de\u8bdd`)
-    }
-    return
-  }
-  if (messages.value.some(message => message.localId === localId)) return
-
-  messages.value.push({
-    localId,
-    sender: event.senderType === 'agent' ? 'AGENT' : (event.messageType || 'ASSISTANT'),
-    senderName: event.senderName,
-    agentId: event.agentId,
-    content: event.content || '',
-    timestamp: event.timestamp || Date.now(),
-    streaming: false,
-    statusText: event.type === 'agent_message' ? '\u56de\u590d\u5b8c\u6210' : ''
-  })
-  if (event.senderType !== 'agent') {
-    isAwaitingReply.value = false
-    isStreaming.value = false
-    stopHallReplyPolling()
-  }
-  if (event.senderName) {
-    showToast(`${event.senderName} \u5df2\u56de\u8bdd`)
-  }
-}
-const apiStreamUrl = (path, params = {}) => {
-  const baseURL = import.meta.env.VITE_API_BASE_URL || ''
-  const requestPath = baseURL
-    ? `${baseURL}${path.startsWith('/') ? path : `/${path}`}`
-    : path
-  const searchParams = new URLSearchParams(params).toString()
-  return searchParams ? `${requestPath}?${searchParams}` : requestPath
-}
-
-const startHallEventStream = async () => {
-  const id = conversationId.value?.toString()
-  if (!id || hallEventConversationId === id) return
-  stopHallEventStream()
-  hallEventConversationId = id
-  hallEventController = new AbortController()
-
-  try {
-    const token = await apiStore.token()
-    const response = await fetch(apiStreamUrl('/chat/conversation/events', { id }), {
-      method: 'GET',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      signal: hallEventController.signal
-    })
-    if (!response.ok || !response.body) {
-      throw new Error(`Hall event stream failed: ${response.status}`)
-    }
-
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      let eventEndIndex
-      while ((eventEndIndex = buffer.indexOf('\n')) !== -1) {
-        const line = buffer.substring(0, eventEndIndex).trim()
-        buffer = buffer.substring(eventEndIndex + 1)
-        if (!line.startsWith('data:')) continue
-        const payload = line.slice(5).trim()
-        if (!payload) continue
-        appendHallEventMessage(JSON.parse(payload))
-      }
-    }
-  } catch (error) {
-    if (error.name !== 'AbortError') {
-      log.warn('聚义厅实时消息连接中断:', error)
-      hallEventReconnectTimer = window.setTimeout(() => {
-        hallEventConversationId = ''
-        startHallEventStream()
-      }, 2500)
-    }
-  }
-}
-
-const stopHallEventStream = () => {
-  if (hallEventReconnectTimer) window.clearTimeout(hallEventReconnectTimer)
-  hallEventReconnectTimer = null
-  if (hallEventController) hallEventController.abort()
-  hallEventController = null
-  hallEventConversationId = ''
-}
-
 const showToast = (message) => {
   toast.value = message
   setTimeout(() => {
     if (toast.value === message) toast.value = ''
   }, 2200)
 }
+
+const {
+  chatConnectionStatus,
+  conversationId,
+  draft,
+  insertAgentMention,
+  isAwaitingReply,
+  isStreaming,
+  loadHallMessages,
+  mentionAgent,
+  messages,
+  newHallConversation,
+  pendingAgentName,
+  sendHallMessage,
+  senderText,
+  startAgentConversation,
+  stopHallEventStream,
+  stopHallReplyPolling,
+  stopHallReplyStreaming
+} = useHallConversation({
+  apiStore,
+  chatApi,
+  globalStore,
+  log,
+  openPanel,
+  portraitShortName,
+  selectedAgent,
+  selectedTask,
+  showToast
+})
 
 const startDialogueBubbles = () => {
   stopDialogueBubbles()
@@ -781,241 +397,6 @@ const showRandomAgentBubble = () => {
   }, 3600)
 }
 
-const loadAgents = async () => {
-  try {
-    await agentApi.get('/active', {}, {
-      autoLoading: false,
-      onSuccess: (result) => {
-        agents.value = result?.data || []
-        if (selectedAgent.value && !agents.value.some(agent => agent.agentId === selectedAgent.value.agentId)) {
-          selectedAgent.value = null
-        }
-      }
-    })
-  } catch (error) {
-    log.warn('加载活跃 Agent 列表失败:', error)
-    agents.value = []
-    selectedAgent.value = null
-  }
-}
-
-const loadTasks = async () => {
-  try {
-    await agentApi.search('/tasks/search', {
-      status: taskStatusFilter.value || undefined,
-      ability: taskAbilityFilter.value || undefined,
-      keyword: taskKeyword.value || undefined,
-      pageNum: 1,
-      pageSize: 30
-    }, {
-      autoLoading: false,
-      onSuccess: (result) => {
-        const list = result?.data || []
-        tasks.value = list
-        if (selectedTask.value && !tasks.value.some(task => task.id === selectedTask.value.id)) {
-          selectedTask.value = null
-        }
-      }
-    })
-  } catch (error) {
-    log.warn('加载悬赏榜失败:', error)
-    tasks.value = []
-    selectedTask.value = null
-  }
-}
-
-const loadHallMessages = async () => {
-  try {
-    await chatApi.list('/conversation/list', {
-      pageNum: 1,
-      pageSize: 1,
-      orderBy: 'update_time desc',
-      search: {
-        jiacn: globalStore.getJiacn,
-        conversationType: 'juyiting'
-      }
-    }, {
-      autoLoading: false,
-      onSuccess: async (result) => {
-        const hallConversation = result?.data?.[0]
-        if (!hallConversation) return
-        conversationId.value = hallConversation.id?.toString() || ''
-        await loadHallConversationContent(conversationId.value)
-      }
-    })
-  } catch (error) {
-    log.warn('加载聚义厅会话失败:', error)
-  }
-}
-
-const loadHallConversationContent = async (id = conversationId.value) => {
-  if (!id) return
-  await chatApi.getById('/conversation/content', id, {
-    autoLoading: false,
-    onSuccess: (contentResult) => {
-      messages.value = (contentResult?.data || []).map(normalizeHallMessage)
-      if (hasResolvedAgentReply(messages.value)) {
-        isAwaitingReply.value = false
-        isStreaming.value = false
-        stopHallReplyPolling()
-      }
-      startHallEventStream()
-    }
-  })
-}
-
-const startHallReplyPolling = (id = conversationId.value) => {
-  if (!id) return
-  stopHallReplyPolling()
-  hallReplyPollTimer = window.setInterval(() => {
-    if (!isAwaitingReply.value || conversationId.value?.toString() !== id.toString()) {
-      stopHallReplyPolling()
-      return
-    }
-    loadHallConversationContent(id)
-  }, 2000)
-}
-
-const scheduleHallConversationSync = (id) => {
-  if (!id) return
-  window.setTimeout(() => {
-    if (conversationId.value?.toString() === id.toString()) {
-      loadHallConversationContent(id)
-    }
-  }, 1500)
-  window.setTimeout(() => {
-    if (conversationId.value?.toString() === id.toString()) {
-      loadHallConversationContent(id)
-    }
-  }, 5000)
-}
-
-const refreshHall = async () => {
-  await Promise.all([loadAgents(), loadTasks(), loadHallMessages()])
-  showToast('聚义厅已刷新')
-}
-
-const newHallConversation = () => {
-  stopHallEventStream()
-  stopHallReplyStreaming()
-  stopHallReplyPolling()
-  conversationId.value = ''
-  messages.value = []
-  isAwaitingReply.value = false
-  showToast('\u5df2\u5f00\u542f\u65b0\u7684\u805a\u4e49\u8bae\u4e8b')
-}
-const processStream = (eventData) => {
-  let payload = eventData.startsWith('data:') ? eventData.slice(5).trim() : eventData.trim()
-  if (!payload || payload === '[DONE]' || payload === '[EOM]') return
-
-  try {
-    const data = JSON.parse(payload)
-    if (data.agentDelivery) {
-      const agentId = data.agentDelivery.agentId || selectedAgent.value?.agentId || 'agent'
-      const delivered = data.agentDelivery.delivered === true
-      const localId = `delivery-${agentId}-${Date.now()}`
-      messages.value.push({
-        localId,
-        sender: 'SYSTEM',
-        content: delivered ? '\u6d88\u606f\u5df2\u6295\u9012\u7ed9\u76ee\u6807\u597d\u6c49\u3002' : '\u76ee\u6807\u597d\u6c49\u6682\u672a\u5728\u7ebf\uff0c\u6295\u9012\u5931\u8d25\u3002',
-        timestamp: Date.now(),
-        streaming: false,
-        statusText: delivered ? '\u5df2\u6295\u9012' : '\u6295\u9012\u5931\u8d25'
-      })
-      return
-    }
-    if (data.type === 'agent_message_delta' || data.type === 'agent_message') {
-      appendHallEventMessage(data)
-      return
-    }
-    if (data.conversationId) {
-      const nextConversationId = data.conversationId?.toString() || ''
-      const shouldReconnect = nextConversationId && nextConversationId !== conversationId.value?.toString()
-      conversationId.value = nextConversationId
-      if (shouldReconnect) {
-        startHallEventStream()
-        scheduleHallConversationSync(nextConversationId)
-      }
-      return
-    }
-    payload = data.v || data.content || ''
-  } catch {
-    // plain text stream
-  }
-
-  if (!payload) return
-  const last = messages.value[messages.value.length - 1]
-  if (last?.sender === 'ASSISTANT') {
-    last.content += payload
-  } else {
-    messages.value.push({
-      localId: `assistant-${Date.now()}`,
-      sender: 'ASSISTANT',
-      content: payload,
-      timestamp: Date.now(),
-      streaming: false,
-      statusText: ''
-    })
-  }
-}
-const sendHallMessage = async () => {
-  if (!draft.value || isStreaming.value) return
-  const content = draft.value
-  draft.value = ''
-  stopHallReplyStreaming()
-  messages.value.push({
-    localId: `user-${Date.now()}`,
-    sender: 'USER',
-    content,
-    timestamp: Date.now(),
-    streaming: false
-  })
-  isStreaming.value = true
-  isAwaitingReply.value = true
-  stopHallReplyPolling()
-
-  try {
-    await chatApi.create('/stream', {
-      content,
-      conversationId: conversationId.value,
-      conversationType: 'juyiting',
-      senderType: 'user',
-      senderName: globalStore.user?.name || globalStore.user?.nickname || '用户',
-      metadata: {
-        scene: 'juyiting',
-        selectedAgentId: selectedAgent.value?.agentId,
-        mentionAgentIds: selectedAgent.value?.agentId ? [selectedAgent.value.agentId] : [],
-        selectedTaskId: selectedTask.value?.id
-      }
-    }, {
-      responseType: 'stream',
-      autoLoading: false,
-      timeout: 1800000,
-      onStream: processStream,
-      onStreamEnd: () => {
-        isStreaming.value = false
-        if (isAwaitingReply.value && conversationId.value) {
-          startHallReplyPolling(conversationId.value)
-        }
-      },
-      onError: (message) => {
-        throw new Error(message)
-      }
-    })
-  } catch (error) {
-    log.error('聚义厅消息发送失败:', error)
-    isStreaming.value = false
-    isAwaitingReply.value = false
-    stopHallReplyPolling()
-    messages.value.push({
-      localId: `system-${Date.now()}`,
-      sender: 'SYSTEM',
-      content: '传令失败，请稍后再试',
-      timestamp: Date.now(),
-      streaming: false
-    })
-  }
-}
 
 const assignTask = async (task, agent = selectedAgent.value) => {
   const targetAgent = agent

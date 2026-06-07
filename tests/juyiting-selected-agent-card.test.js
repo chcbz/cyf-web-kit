@@ -9,6 +9,10 @@ const hallSource = readFileSync(
   new URL('../src/components/world/JuyiHall.vue', import.meta.url),
   'utf8'
 )
+const hallStageSource = readFileSync(
+  new URL('../src/components/juyiting/HallStage.vue', import.meta.url),
+  'utf8'
+)
 const bountySource = readFileSync(
   new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url),
   'utf8'
@@ -54,10 +58,10 @@ describe('SelectedAgentCard interaction contract', () => {
     expect(hallSource).not.to.include('class="map-control"')
     expect(hallSource).not.to.include('.map-controls')
     expect(hallSource).not.to.include('.map-control')
-    expect(hallSource).to.include('@pointerdown="startMapDrag"')
-    expect(hallSource).to.include('@pointermove="moveMapDrag"')
-    expect(hallSource).to.include('@pointerup="endMapDrag"')
-    expect(hallSource).to.include('@pointercancel="endMapDrag"')
+    expect(hallStageSource).to.include('@pointerdown="startMapDrag"')
+    expect(hallStageSource).to.include('@pointermove="moveMapDrag"')
+    expect(hallStageSource).to.include('@pointerup="endMapDrag"')
+    expect(hallStageSource).to.include('@pointercancel="endMapDrag"')
   })
 
   it('does not auto-select the first loaded agent', () => {
@@ -103,7 +107,7 @@ describe('SelectedAgentCard interaction contract', () => {
 
   it('selects an agent without showing a toast', () => {
     const selectAgentStart = hallSource.indexOf('const selectAgent = (agent) => {')
-    const selectAgentEnd = hallSource.indexOf('const startAgentConversation', selectAgentStart)
+    const selectAgentEnd = hallSource.indexOf('const openPanel', selectAgentStart)
     const selectAgentSource = hallSource.slice(selectAgentStart, selectAgentEnd)
 
     expect(selectAgentSource).to.include('selectedAgent.value = agent')

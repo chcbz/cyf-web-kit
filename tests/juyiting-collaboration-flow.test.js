@@ -1,4 +1,4 @@
-import { readFileSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import { expect } from 'chai'
 
 const hallSource = readFileSync(
@@ -17,6 +17,11 @@ const dockSource = readFileSync(
   new URL('../src/components/juyiting/BottomDock.vue', import.meta.url),
   'utf8'
 )
+const hallStageUrl = new URL('../src/components/juyiting/HallStage.vue', import.meta.url)
+const hallDataUrl = new URL('../src/composables/juyiting/useHallData.js', import.meta.url)
+const hallConversationUrl = new URL('../src/composables/juyiting/useHallConversation.js', import.meta.url)
+const hallDataSource = readFileSync(hallDataUrl, 'utf8')
+const hallConversationSource = readFileSync(hallConversationUrl, 'utf8')
 
 describe('JuyiHall collaboration flow contract', () => {
   it('uses the persistent dock as the primary action surface', () => {
@@ -42,13 +47,22 @@ describe('JuyiHall collaboration flow contract', () => {
   })
 
   it('keeps both agent and task context in outgoing chat metadata', () => {
-    expect(hallSource).to.include('selectedAgentId: selectedAgent.value?.agentId')
-    expect(hallSource).to.include('mentionAgentIds: selectedAgent.value?.agentId ? [selectedAgent.value.agentId] : []')
-    expect(hallSource).to.include('selectedTaskId: selectedTask.value?.id')
+    expect(hallConversationSource).to.include('selectedAgentId: selectedAgent.value?.agentId')
+    expect(hallConversationSource).to.include('mentionAgentIds: selectedAgent.value?.agentId ? [selectedAgent.value.agentId] : []')
+    expect(hallConversationSource).to.include('selectedTaskId: selectedTask.value?.id')
   })
 
   it('shows an overflow hint when more than twelve agents are available', () => {
     expect(hallSource).to.include('hiddenAgentCount')
-    expect(hallSource).to.match(/slice\(0,\s*12\)/)
+    expect(hallDataSource).to.match(/slice\(0,\s*12\)/)
+  })
+
+  it('splits hall stage, data, and conversation responsibilities into dedicated units', () => {
+    expect(existsSync(hallStageUrl)).to.equal(true)
+    expect(existsSync(hallDataUrl)).to.equal(true)
+    expect(existsSync(hallConversationUrl)).to.equal(true)
+    expect(hallSource).to.include("import HallStage from '@/components/juyiting/HallStage.vue'")
+    expect(hallSource).to.include("import { useHallData } from '@/composables/juyiting/useHallData'")
+    expect(hallSource).to.include("import { useHallConversation } from '@/composables/juyiting/useHallConversation'")
   })
 })

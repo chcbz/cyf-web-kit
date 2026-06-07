@@ -1,0 +1,680 @@
+<template>
+  <section class="hall-stage">
+    <div class="stage-header">
+      <div>
+        <div class="eyebrow">梁山泊协作中枢</div>
+        <h1>聚义厅</h1>
+      </div>
+      <div class="stage-actions">
+        <button class="icon-action" title="好汉名册" @click="$emit('open-panel', 'agents')">
+          <var-icon name="account-circle" />
+        </button>
+        <button class="icon-action" title="悬赏榜" @click="$emit('open-panel', 'tasks')">
+          <var-icon name="format-list-checkbox" />
+        </button>
+        <button class="icon-action" title="厅内传令" @click="$emit('open-panel', 'chat')">
+          <var-icon name="message-text-outline" />
+        </button>
+        <button class="icon-action" title="刷新大厅" @click="$emit('refresh-hall')">
+          <var-icon name="refresh" />
+        </button>
+        <button class="icon-action" title="新建聚义会话" @click="$emit('new-conversation')">
+          <var-icon name="plus" />
+        </button>
+      </div>
+    </div>
+
+    <div
+      ref="hallBoardRef"
+      class="hall-board"
+      :class="{ 'is-dragging': mapDrag.active }"
+      @pointerdown="startMapDrag"
+      @pointermove="moveMapDrag"
+      @pointerup="endMapDrag"
+      @pointerleave="endMapDrag"
+      @pointercancel="endMapDrag"
+    >
+      <div ref="mapWorldRef" class="map-world" :style="mapWorldStyle">
+        <div class="map-region region-water"></div>
+        <div class="map-region region-forest"></div>
+        <div class="map-region region-village"></div>
+        <div class="map-road road-main"></div>
+        <div class="map-road road-branch"></div>
+        <button class="hall-room room-main" @click="resetMap">
+          <strong>聚义厅</strong>
+          <small>议事中庭</small>
+        </button>
+        <button class="hall-room room-agents" @click="$emit('open-panel', 'agents')">
+          <strong>名册房</strong>
+          <small>好汉调度</small>
+        </button>
+        <button class="hall-room room-tasks" @click="$emit('open-panel', 'tasks')">
+          <strong>悬赏房</strong>
+          <small>{{ tasksTotal }} 件</small>
+        </button>
+        <button class="hall-room room-chat" @click="$emit('open-panel', 'chat')">
+          <strong>传令房</strong>
+          <small>厅内会话</small>
+        </button>
+        <div class="hall-room room-back">
+          <strong>后堂</strong>
+          <small>整备</small>
+        </div>
+        <div class="beam beam-top"></div>
+        <div class="banner">替天行道</div>
+        <AgentToken
+          v-for="agent in visibleAgents"
+          :key="agent.agentId"
+          :active="selectedAgent?.agentId === agent.agentId"
+          :agent="agent"
+          :agent-style="agentStyle"
+          :bubble-text="agentBubbles[agentKey(agent)]"
+          :portrait-name="portraitName"
+          :portrait-short-name="portraitShortName"
+          :portrait-style="portraitStyle"
+          :role-class="roleClass"
+          :status-class="statusClass"
+          :status-text="statusText"
+          @select-agent="$emit('select-agent', $event)"
+        />
+        <div v-if="!visibleAgents.length" class="empty-hall">
+          暂无 Agent 入厅，先在右侧刷新或等待上线
+        </div>
+        <button v-if="hiddenAgentCount" class="hall-overflow" type="button" @click="$emit('open-panel', 'agents')">
+          另有 {{ hiddenAgentCount }} 位在偏厅候命
+        </button>
+        <button class="scene-hotspot hotspot-agents" @click="$emit('open-panel', 'agents')">
+          <var-icon name="account-circle" />
+          <span>名册</span>
+        </button>
+        <button class="scene-hotspot hotspot-tasks" @click="$emit('open-panel', 'tasks')">
+          <var-icon name="format-list-checkbox" />
+          <span>悬赏</span>
+        </button>
+        <button class="scene-hotspot hotspot-chat" @click="$emit('open-panel', 'chat')">
+          <var-icon name="message-text-outline" />
+          <span>传令</span>
+        </button>
+      </div>
+    </div>
+
+    <slot></slot>
+  </section>
+</template>
+
+<script setup>
+import { computed, ref } from 'vue'
+import AgentToken from '@/components/juyiting/AgentToken.vue'
+
+defineProps({
+  agentBubbles: { type: Object, default: () => ({}) },
+  agentKey: { type: Function, required: true },
+  agentStyle: { type: Function, required: true },
+  hiddenAgentCount: { type: Number, default: 0 },
+  portraitName: { type: Function, required: true },
+  portraitShortName: { type: Function, required: true },
+  portraitStyle: { type: Function, required: true },
+  roleClass: { type: Function, required: true },
+  selectedAgent: { type: Object, default: null },
+  statusClass: { type: Function, required: true },
+  statusText: { type: Function, required: true },
+  tasksTotal: { type: Number, default: 0 },
+  visibleAgents: { type: Array, default: () => [] }
+})
+
+defineEmits(['new-conversation', 'open-panel', 'refresh-hall', 'select-agent'])
+
+const hallBoardRef = ref(null)
+const mapWorldRef = ref(null)
+const viewportOffset = ref({ x: 0, y: 0 })
+const mapDrag = ref({ active: false, dragging: false, pointerId: null, startX: 0, startY: 0, originX: 0, originY: 0 })
+
+const mapPanPadding = 2
+const mapDragThreshold = 3
+
+const mapWorldStyle = computed(() => ({
+  '--map-offset-x': `${viewportOffset.value.x}px`,
+  '--map-offset-y': `${viewportOffset.value.y}px`
+}))
+
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
+
+const mapOffsetBounds = () => {
+  const board = hallBoardRef.value?.getBoundingClientRect()
+  const world = mapWorldRef.value?.getBoundingClientRect()
+  if (!board || !world) {
+    return { x: 0, y: 0 }
+  }
+  return {
+    x: Math.max(0, (world.width - board.width) / 2 - mapPanPadding),
+    y: Math.max(0, (world.height - board.height) / 2 - mapPanPadding)
+  }
+}
+
+const applyMapOffset = (next) => {
+  const bounds = mapOffsetBounds()
+  viewportOffset.value = {
+    x: clamp(next.x, -bounds.x, bounds.x),
+    y: clamp(next.y, -bounds.y, bounds.y)
+  }
+}
+
+const resetMap = () => {
+  viewportOffset.value = { x: 0, y: 0 }
+}
+
+const isInteractiveMapTarget = (target) => {
+  if (!target?.closest) return false
+  return Boolean(target.closest('button, a, input, select, textarea, [role="button"]'))
+}
+
+const startMapDrag = (event) => {
+  if (event.button !== undefined && event.button !== 0) return
+  if (isInteractiveMapTarget(event.target)) return
+  mapDrag.value = {
+    active: true,
+    dragging: false,
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    originX: viewportOffset.value.x,
+    originY: viewportOffset.value.y
+  }
+  event.currentTarget?.setPointerCapture?.(event.pointerId)
+}
+
+const moveMapDrag = (event) => {
+  if (!mapDrag.value.active || mapDrag.value.pointerId !== event.pointerId) return
+  const deltaX = event.clientX - mapDrag.value.startX
+  const deltaY = event.clientY - mapDrag.value.startY
+  if (!mapDrag.value.dragging && Math.hypot(deltaX, deltaY) < mapDragThreshold) return
+  mapDrag.value.dragging = true
+  applyMapOffset({
+    x: mapDrag.value.originX + deltaX,
+    y: mapDrag.value.originY + deltaY
+  })
+  event.preventDefault()
+}
+
+const endMapDrag = (event) => {
+  if (!mapDrag.value.active || mapDrag.value.pointerId !== event.pointerId) return
+  event.currentTarget?.releasePointerCapture?.(event.pointerId)
+  mapDrag.value = { active: false, dragging: false, pointerId: null, startX: 0, startY: 0, originX: 0, originY: 0 }
+}
+</script>
+
+<style scoped>
+.hall-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  background: #211812;
+}
+
+.stage-header {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  right: 18px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 240, 202, 0.22);
+  border-radius: 8px;
+  background: rgba(35, 24, 16, 0.72);
+  color: #fff4d4;
+  backdrop-filter: blur(8px);
+}
+
+.eyebrow {
+  font-size: 12px;
+  color: #d7b875;
+}
+
+h1 {
+  margin: 2px 0 0;
+  font-size: 28px;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
+.stage-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+button {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.icon-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  min-height: 36px;
+  border-radius: 8px;
+  background: rgba(255, 244, 212, 0.16);
+  color: #fff4d4;
+}
+
+.hall-board {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 0;
+  cursor: grab;
+  touch-action: none;
+  background:
+    radial-gradient(circle at 50% 48%, rgba(255, 238, 180, 0.16), transparent 32%),
+    linear-gradient(135deg, #17231d, #1b271f 50%, #0e1411);
+}
+
+.hall-board.is-dragging {
+  cursor: grabbing;
+}
+
+.hall-board::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  box-shadow: inset 0 0 90px rgba(0, 0, 0, 0.58);
+}
+
+.map-world {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 162%;
+  height: 148%;
+  transform: translate3d(calc(-50% + var(--map-offset-x, 0px)), calc(-50% + var(--map-offset-y, 0px)), 0);
+  transform-origin: center;
+  transition: transform 0.28s ease;
+  background:
+    linear-gradient(90deg, rgba(99, 61, 31, 0.24) 1px, transparent 1px) 0 0 / 72px 72px,
+    linear-gradient(0deg, rgba(99, 61, 31, 0.22) 1px, transparent 1px) 0 0 / 72px 72px,
+    repeating-linear-gradient(90deg, rgba(169, 114, 58, 0.12) 0 18px, rgba(89, 54, 28, 0.12) 18px 36px),
+    radial-gradient(ellipse at 52% 54%, rgba(229, 177, 92, 0.34), transparent 28%),
+    linear-gradient(145deg, #8a6032 0%, #5b3923 38%, #6f4a2a 68%, #3a291f 100%);
+  will-change: transform;
+}
+
+.map-world::before,
+.map-world::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+}
+
+.map-world::before {
+  inset: 8% 10%;
+  border: 8px solid rgba(64, 35, 18, 0.62);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(64, 35, 18, 0.46) 2px, transparent 2px) 0 0 / 25% 100%,
+    linear-gradient(0deg, rgba(64, 35, 18, 0.44) 2px, transparent 2px) 0 0 / 100% 34%,
+    rgba(255, 238, 194, 0.08);
+}
+
+.map-world::after {
+  left: 15%;
+  right: 15%;
+  top: 46%;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(238, 190, 111, 0.48);
+  box-shadow:
+    0 -116px 0 rgba(238, 190, 111, 0.24),
+    0 116px 0 rgba(238, 190, 111, 0.2);
+}
+
+.map-region,
+.map-road {
+  position: absolute;
+  pointer-events: none;
+}
+
+.map-region {
+  z-index: 0;
+  opacity: 0.88;
+}
+
+.region-water {
+  left: 13%;
+  bottom: 14%;
+  width: 22%;
+  height: 22%;
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(255, 239, 188, 0.18) 1px, transparent 1px) 0 0 / 18px 18px,
+    linear-gradient(135deg, rgba(87, 51, 27, 0.58), rgba(48, 31, 22, 0.5));
+}
+
+.region-forest {
+  right: 13%;
+  top: 14%;
+  width: 24%;
+  height: 24%;
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 28% 36%, rgba(244, 200, 76, 0.24), transparent 16%),
+    linear-gradient(135deg, rgba(35, 72, 62, 0.64), rgba(28, 52, 44, 0.56));
+}
+
+.region-village {
+  left: 13%;
+  top: 14%;
+  width: 24%;
+  height: 24%;
+  border-radius: 8px;
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 239, 188, 0.16) 0 10px, transparent 10px 20px),
+    linear-gradient(135deg, rgba(124, 31, 27, 0.46), rgba(92, 45, 99, 0.42));
+}
+
+.map-road {
+  z-index: 1;
+  height: 16px;
+  border-radius: 999px;
+  background: rgba(239, 195, 115, 0.56);
+  box-shadow: 0 0 0 5px rgba(83, 55, 29, 0.1);
+}
+
+.road-main {
+  left: 20%;
+  top: 50%;
+  width: 62%;
+  transform: rotate(-13deg);
+}
+
+.road-branch {
+  left: 45%;
+  top: 42%;
+  width: 32%;
+  transform: rotate(42deg);
+}
+
+.hall-room {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px;
+  border: 2px solid rgba(64, 35, 18, 0.68);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(255, 244, 212, 0.14) 1px, transparent 1px) 0 0 / 20px 20px,
+    linear-gradient(145deg, rgba(255, 237, 190, 0.72), rgba(188, 132, 67, 0.64));
+  color: #3c2716;
+  text-align: center;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 250, 232, 0.22),
+    0 12px 26px rgba(0, 0, 0, 0.18);
+}
+
+button.hall-room {
+  cursor: pointer;
+}
+
+.hall-room:hover {
+  border-color: rgba(244, 200, 76, 0.84);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 250, 232, 0.3),
+    0 0 0 3px rgba(244, 200, 76, 0.18),
+    0 14px 28px rgba(0, 0, 0, 0.2);
+}
+
+.hall-room strong,
+.hall-room small {
+  overflow: hidden;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hall-room strong {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.hall-room small {
+  color: rgba(60, 39, 22, 0.78);
+  font-size: 12px;
+}
+
+.room-main {
+  left: 37%;
+  top: 35%;
+  width: 26%;
+  height: 32%;
+  background:
+    radial-gradient(circle at 50% 52%, rgba(244, 200, 76, 0.28), transparent 44%),
+    linear-gradient(145deg, rgba(255, 239, 188, 0.82), rgba(192, 138, 70, 0.74));
+}
+
+.room-agents {
+  left: 14%;
+  top: 36%;
+  width: 19%;
+  height: 24%;
+}
+
+.room-tasks {
+  right: 14%;
+  top: 36%;
+  width: 19%;
+  height: 24%;
+}
+
+.room-chat {
+  left: 40%;
+  top: 14%;
+  width: 20%;
+  height: 17%;
+  background:
+    linear-gradient(145deg, rgba(230, 235, 205, 0.76), rgba(116, 151, 110, 0.58));
+}
+
+.room-back {
+  left: 40%;
+  bottom: 13%;
+  width: 20%;
+  height: 16%;
+  background:
+    linear-gradient(145deg, rgba(235, 218, 184, 0.74), rgba(112, 76, 47, 0.56));
+}
+
+.beam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 18px;
+  background: #4a2716;
+}
+
+.beam-top {
+  top: 0;
+}
+
+.banner {
+  position: absolute;
+  top: 86px;
+  left: 50%;
+  width: 116px;
+  padding: 10px 0;
+  transform: translateX(-50%);
+  border-radius: 0 0 8px 8px;
+  background: #b93622;
+  color: #fff1c1;
+  text-align: center;
+  font-weight: 700;
+}
+
+.empty-hall {
+  color: #856d4a;
+  text-align: center;
+  padding: 18px;
+}
+
+.hall-overflow {
+  position: absolute;
+  right: 18px;
+  bottom: 118px;
+  z-index: 5;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 244, 212, 0.2);
+  border-radius: 999px;
+  background: rgba(35, 24, 16, 0.72);
+  color: #fff4d4;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(8px);
+}
+
+.scene-hotspot {
+  position: absolute;
+  z-index: 3;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 240, 202, 0.3);
+  border-radius: 8px;
+  background: rgba(255, 250, 240, 0.9);
+  color: #4a3423;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+}
+
+.hotspot-agents {
+  left: 8%;
+  top: 58%;
+}
+
+.hotspot-tasks {
+  left: 50%;
+  bottom: 25%;
+  transform: translateX(-50%);
+}
+
+.hotspot-chat {
+  right: 8%;
+  top: 58%;
+}
+
+@media (max-width: 640px) {
+  .stage-header {
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    padding: 12px;
+    align-items: flex-start;
+  }
+
+  h1 {
+    font-size: 24px;
+  }
+
+  .stage-actions {
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+    max-width: none;
+    gap: 6px;
+  }
+
+  .icon-action {
+    width: 34px;
+    min-height: 34px;
+  }
+
+  .banner {
+    top: 92px;
+  }
+
+  .scene-hotspot {
+    min-height: 32px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
+  .hotspot-agents {
+    left: 5%;
+    top: 63%;
+  }
+
+  .hotspot-chat {
+    right: 5%;
+    top: 63%;
+  }
+
+  .map-world {
+    width: 164%;
+    height: 146%;
+  }
+
+  .room-main {
+    left: 35%;
+    top: 36%;
+    width: 30%;
+    height: 31%;
+  }
+
+  .room-agents {
+    left: 15%;
+    top: 38%;
+    width: 18%;
+    height: 22%;
+  }
+
+  .room-tasks {
+    right: 15%;
+    top: 38%;
+    width: 18%;
+    height: 22%;
+  }
+
+  .room-chat {
+    left: 39%;
+    top: 14%;
+    width: 22%;
+    height: 16%;
+  }
+
+  .room-back {
+    left: 39%;
+    bottom: 13%;
+    width: 22%;
+    height: 15%;
+  }
+
+  .hall-room {
+    padding: 7px;
+  }
+
+  .hall-room strong {
+    font-size: 13px;
+  }
+
+  .hall-room small {
+    font-size: 10px;
+  }
+}
+</style>

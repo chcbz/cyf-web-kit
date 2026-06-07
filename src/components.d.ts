@@ -27,6 +27,7 @@ declare module 'vue' {
     ChatSidebar: typeof import('./components/chat/ChatSidebar.vue')['default']
     GiftList: typeof import('./components/GiftList.vue')['default']
     GiftPay: typeof import('./components/GiftPay.vue')['default']
+    HallStage: typeof import('./components/juyiting/HallStage.vue')['default']
     HelloWorld: typeof import('./components/HelloWorld.vue')['default']
     HelpCenter: typeof import('./components/HelpCenter.vue')['default']
     JuyiHall: typeof import('./components/world/JuyiHall.vue')['default']
