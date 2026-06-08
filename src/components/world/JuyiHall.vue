@@ -33,17 +33,6 @@
             @start-chat="startAgentConversation(selectedAgent)"
           />
         </transition>
-        <BottomDock
-          :active-panel="activePanel"
-          :agent-label="selectedAgent ? portraitShortName(selectedAgent) : ''"
-          :agents-total="agents.length"
-          :selected-agent="selectedAgent"
-          :selected-task="selectedTask"
-          :tasks-total="tasks.length"
-          @clear-agent="selectedAgent = null"
-          @clear-task="selectedTask = null"
-          @open-panel="openPanel"
-        />
         <div class="dock-summary">
           <span>
             <strong>{{ agents.length }}</strong>
@@ -171,7 +160,6 @@ import { useHallData } from '@/composables/juyiting/useHallData'
 import { useHallPhysics } from '@/composables/juyiting/useHallPhysics'
 import { portraitName, portraitRole, portraitShortName, portraitStyle, roleClass } from '@/composables/juyiting/useWaterMarginRoles'
 import AgentPanel from '@/components/juyiting/AgentPanel.vue'
-import BottomDock from '@/components/juyiting/BottomDock.vue'
 import BountyPanel from '@/components/juyiting/BountyPanel.vue'
 import ChatPanel from '@/components/juyiting/ChatPanel.vue'
 import HallStage from '@/components/juyiting/HallStage.vue'
@@ -281,6 +269,10 @@ const {
   selectedTask,
   taskAgentMatchScore
 })
+
+const refreshHall = async () => {
+  await Promise.all([loadAgents(), loadTasks()])
+}
 
 const formatTime = (timestamp) => {
   if (!timestamp) return ''
