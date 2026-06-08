@@ -84,12 +84,7 @@ export const registerPwa = async () => {
     bindWaitingWorker(registration.installing)
   })
 
-  window.setTimeout(() => {
-    isOfflineReady.value = true
-    updateDismissTimer = window.setTimeout(() => {
-      isOfflineReady.value = false
-    }, 4000)
-  }, 1200)
+  // 不再自动弹出“已启用离线缓存”提示
 
   window.setInterval(() => {
     registration.update().catch(() => {})
