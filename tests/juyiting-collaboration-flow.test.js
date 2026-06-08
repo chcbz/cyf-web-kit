@@ -25,7 +25,8 @@ const hallConversationSource = readFileSync(hallConversationUrl, 'utf8')
 
 describe('JuyiHall collaboration flow contract', () => {
   it('uses the persistent dock as the primary action surface', () => {
-    expect(hallSource).to.include('<BottomDock')
+    expect(hallSource).to.include('dock-summary')
+    expect(hallSource).to.include('dock-actions')
     expect(dockSource).to.include('agentsTotal')
     expect(dockSource).to.include('tasksTotal')
     expect(dockSource).to.include('selectedAgent')
