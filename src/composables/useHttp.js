@@ -62,7 +62,6 @@ export function useHttp (options = {}) {
   const data = ref(null)
   const response = ref(null)
 
-  const apiStore = useApiStore()
   // const globalStore = useGlobalStore() // 预留
   // const utilStore = useUtilStore() // 预留
 
@@ -137,6 +136,7 @@ export function useHttp (options = {}) {
       let token = null
       if (needAuth) {
         try {
+          const apiStore = useApiStore()
           token = await apiStore.token()
           if (token) {
             config.headers.Authorization = `Bearer ${token}`
@@ -315,6 +315,7 @@ export function useHttp (options = {}) {
         error.value = '请求超时'
       } else if (err.status === 401 && needAuth) {
         // 清理旧的 token
+        const apiStore = useApiStore()
         apiStore.cleanToken()
         log.warn('Authentication expired, token cleaned')
 

@@ -163,14 +163,8 @@ const resetMap = () => {
   viewportOffset.value = { x: 0, y: 0 }
 }
 
-const isInteractiveMapTarget = (target) => {
-  if (!target?.closest) return false
-  return Boolean(target.closest('button, a, input, select, textarea, [role="button"]'))
-}
-
 const startMapDrag = (event) => {
   if (event.button !== undefined && event.button !== 0) return
-  if (isInteractiveMapTarget(event.target)) return
   mapDrag.value = {
     active: true,
     dragging: false,
@@ -199,7 +193,11 @@ const moveMapDrag = (event) => {
 const endMapDrag = (event) => {
   if (!mapDrag.value.active || mapDrag.value.pointerId !== event.pointerId) return
   event.currentTarget?.releasePointerCapture?.(event.pointerId)
+  const wasDragging = mapDrag.value.dragging
   mapDrag.value = { active: false, dragging: false, pointerId: null, startX: 0, startY: 0, originX: 0, originY: 0 }
+  if (wasDragging) {
+    event.preventDefault()
+  }
 }
 </script>
 
