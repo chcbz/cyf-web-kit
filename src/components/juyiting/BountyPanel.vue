@@ -34,7 +34,7 @@
       </button>
     </div>
 
-    <div class="task-panel-body" :class="{ 'has-selection': selectedTask }">
+    <div class="task-panel-body">
       <div class="task-list">
         <article
           v-for="task in tasks"
@@ -60,73 +60,86 @@
         </article>
         <div v-if="!tasks.length" class="empty-list">暂无悬赏，调整筛选或刷新后再试</div>
       </div>
+    </div>
 
-      <aside v-if="selectedTask" class="task-detail-card">
-        <div class="task-detail-head">
-          <div>
-            <strong>{{ selectedTask.title }}</strong>
-            <small>{{ selectedTask.id }} / {{ taskStatusText(selectedTask.status) }}</small>
-          </div>
-          <span :class="taskStateClass(selectedTask.status)">{{ taskStatusText(selectedTask.status) }}</span>
-        </div>
-
-        <p>{{ selectedTask.description || '暂无任务描述' }}</p>
-
-        <div class="ability-tags">
-          <span v-for="ability in selectedTask.requiredAbilities || []" :key="ability">{{ ability }}</span>
-          <span v-if="!(selectedTask.requiredAbilities || []).length">不限能力</span>
-        </div>
-
-        <div class="task-operation-grid">
-          <button
-            :disabled="!canAssign(selectedTask, selectedAgent)"
-            @click="$emit('assign-task', selectedTask, selectedAgent)"
-          >
-            <var-icon name="account-circle" />
-            <span>指派给当前好汉：{{ agentDisplayName(selectedAgent) || '未选好汉' }}</span>
-          </button>
-          <button @click="$emit('brief-selected-task', selectedTask, selectedAgent)">
-            <var-icon name="message-text-outline" />
-            <span>传令议事</span>
-          </button>
-        </div>
-
-        <div class="recommended-agents">
-          <div class="section-label">适配好汉</div>
-          <div
-            v-for="agent in recommendedAgents"
-            :key="agent.agentId"
-            class="recommended-agent-row"
-            :class="{ active: selectedAgent?.agentId === agent.agentId }"
-          >
-            <button class="recommended-agent-main" type="button" @click="$emit('select-agent', agent)">
-              <span
-                class="mini-avatar portrait-avatar"
-                :style="portraitStyle(agent)"
-                :title="portraitName(agent)"
-              ></span>
-              <span>
-                <strong>{{ agentDisplayName(agent) }}</strong>
-                <small>{{ abilityText(agent) }}</small>
-              </span>
-              <em>{{ taskAgentMatchScore(selectedTask, agent) }}%</em>
+    <transition name="modal">
+      <div v-if="selectedTask" class="bounty-modal-overlay" @click.self="$emit('select-task', null)">
+        <section class="bounty-modal">
+          <div class="bounty-modal-header">
+            <h3>悬赏分派</h3>
+            <button class="modal-close" @click="$emit('select-task', null)">
+              <var-icon name="close-circle-outline" />
             </button>
-            <div class="recommended-agent-actions">
-              <button type="button" @click="$emit('select-agent', agent)">选中</button>
+          </div>
+
+          <div class="bounty-modal-body">
+            <div class="task-detail-head">
+              <div>
+                <strong>{{ selectedTask.title }}</strong>
+                <small>{{ selectedTask.id }} / {{ taskStatusText(selectedTask.status) }}</small>
+              </div>
+              <span :class="taskStateClass(selectedTask.status)">{{ taskStatusText(selectedTask.status) }}</span>
+            </div>
+
+            <p>{{ selectedTask.description || '暂无任务描述' }}</p>
+
+            <div class="ability-tags">
+              <span v-for="ability in selectedTask.requiredAbilities || []" :key="ability">{{ ability }}</span>
+              <span v-if="!(selectedTask.requiredAbilities || []).length">不限能力</span>
+            </div>
+
+            <div class="task-operation-grid">
               <button
-                type="button"
-                :disabled="!canAssign(selectedTask, agent)"
-                @click="$emit('assign-task', selectedTask, agent)"
+                :disabled="!canAssign(selectedTask, selectedAgent)"
+                @click="$emit('assign-task', selectedTask, selectedAgent)"
               >
-                指派给 {{ agentDisplayName(agent) }}
+                <var-icon name="account-circle" />
+                <span>指派给当前好汉：{{ agentDisplayName(selectedAgent) || '未选好汉' }}</span>
               </button>
-              <button type="button" @click="$emit('brief-selected-task', selectedTask, agent)">传令</button>
+              <button @click="$emit('brief-selected-task', selectedTask, selectedAgent)">
+                <var-icon name="message-text-outline" />
+                <span>传令议事</span>
+              </button>
+            </div>
+
+            <div class="recommended-agents">
+              <div class="section-label">适配好汉</div>
+              <div
+                v-for="agent in recommendedAgents"
+                :key="agent.agentId"
+                class="recommended-agent-row"
+                :class="{ active: selectedAgent?.agentId === agent.agentId }"
+              >
+                <button class="recommended-agent-main" type="button" @click="$emit('select-agent', agent)">
+                  <span
+                    class="mini-avatar portrait-avatar"
+                    :style="portraitStyle(agent)"
+                    :title="portraitName(agent)"
+                  ></span>
+                  <span>
+                    <strong>{{ agentDisplayName(agent) }}</strong>
+                    <small>{{ abilityText(agent) }}</small>
+                  </span>
+                  <em>{{ taskAgentMatchScore(selectedTask, agent) }}%</em>
+                </button>
+                <div class="recommended-agent-actions">
+                  <button type="button" @click="$emit('select-agent', agent)">选中</button>
+                  <button
+                    type="button"
+                    :disabled="!canAssign(selectedTask, agent)"
+                    @click="$emit('assign-task', selectedTask, agent)"
+                  >
+                    指派给 {{ agentDisplayName(agent) }}
+                  </button>
+                  <button type="button" @click="$emit('brief-selected-task', selectedTask, agent)">传令</button>
+                </div>
+              </div>
+              <p v-if="!recommendedAgents.length">暂无活跃好汉可接令。</p>
             </div>
           </div>
-          <p v-if="!recommendedAgents.length">暂无活跃好汉可接令。</p>
-        </div>
-      </aside>
-    </div>
+        </section>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -272,10 +285,6 @@ button:disabled {
   padding: 0 12px 12px;
   box-sizing: border-box;
   overflow: hidden;
-}
-
-.task-panel-body.has-selection {
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
 }
 
 .task-list {
@@ -558,6 +567,99 @@ button:disabled {
   color: #765f40;
 }
 
+/* Modal Styles */
+.bounty-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 10, 6, 0.72);
+  backdrop-filter: blur(4px);
+  padding: 16px;
+}
+
+.bounty-modal {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 560px;
+  max-height: min(90vh, 720px);
+  border: 1px solid rgba(255, 240, 202, 0.28);
+  border-radius: 12px;
+  background:
+    linear-gradient(155deg, #fdf6ea 0%, #f2e0bd 100%);
+  color: #2f261c;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 18px 48px rgba(0, 0, 0, 0.42);
+  overflow: hidden;
+}
+
+.bounty-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(124, 31, 27, 0.16);
+  background: linear-gradient(135deg, rgba(124, 31, 27, 0.06), transparent);
+}
+
+.bounty-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #7c1f1b;
+}
+
+.modal-close {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(124, 31, 27, 0.1);
+  color: #7c1f1b;
+  transition: background 0.18s;
+}
+
+.modal-close:hover {
+  background: rgba(124, 31, 27, 0.2);
+}
+
+.bounty-modal-body {
+  flex: 1;
+  min-height: 0;
+  padding: 14px 16px 16px;
+  overflow: auto;
+}
+
+/* Modal Transition */
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 0.22s ease;
+}
+
+.modal-enter-active .bounty-modal,
+.modal-leave-active .bounty-modal {
+  transition: transform 0.22s ease, opacity 0.22s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+
+.modal-enter-from .bounty-modal {
+  transform: scale(0.94) translateY(8px);
+  opacity: 0;
+}
+
+.modal-leave-to .bounty-modal {
+  transform: scale(0.94) translateY(8px);
+  opacity: 0;
+}
+
 @media (max-width: 900px) {
   .panel-toolbar {
     align-items: stretch;
@@ -566,10 +668,6 @@ button:disabled {
 
   .task-search,
   .task-panel-body {
-    grid-template-columns: 1fr;
-  }
-
-  .task-panel-body.has-selection {
     grid-template-columns: 1fr;
   }
 
@@ -584,6 +682,11 @@ button:disabled {
 
   .task-operation-grid {
     grid-template-columns: 1fr;
+  }
+
+  .bounty-modal {
+    max-width: 100%;
+    max-height: 85vh;
   }
 }
 </style>
