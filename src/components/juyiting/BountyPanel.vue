@@ -73,36 +73,38 @@
           </div>
 
           <div class="bounty-modal-body">
-            <div class="task-detail-head">
-              <div>
-                <strong>{{ selectedTask.title }}</strong>
-                <small>{{ selectedTask.id }} / {{ taskStatusText(selectedTask.status) }}</small>
+            <div class="modal-task-info">
+              <div class="task-detail-head">
+                <div>
+                  <strong>{{ selectedTask.title }}</strong>
+                  <small>{{ selectedTask.id }} / {{ taskStatusText(selectedTask.status) }}</small>
+                </div>
+                <span :class="taskStateClass(selectedTask.status)">{{ taskStatusText(selectedTask.status) }}</span>
               </div>
-              <span :class="taskStateClass(selectedTask.status)">{{ taskStatusText(selectedTask.status) }}</span>
+
+              <p>{{ selectedTask.description || '暂无任务描述' }}</p>
+
+              <div class="ability-tags">
+                <span v-for="ability in selectedTask.requiredAbilities || []" :key="ability">{{ ability }}</span>
+                <span v-if="!(selectedTask.requiredAbilities || []).length">不限能力</span>
+              </div>
+
+              <div class="task-operation-grid">
+                <button
+                  :disabled="!canAssign(selectedTask, selectedAgent)"
+                  @click="$emit('assign-task', selectedTask, selectedAgent)"
+                >
+                  <var-icon name="account-circle" />
+                  <span>指派给当前好汉：{{ agentDisplayName(selectedAgent) || '未选好汉' }}</span>
+                </button>
+                <button @click="$emit('brief-selected-task', selectedTask, selectedAgent)">
+                  <var-icon name="message-text-outline" />
+                  <span>传令议事</span>
+                </button>
+              </div>
             </div>
 
-            <p>{{ selectedTask.description || '暂无任务描述' }}</p>
-
-            <div class="ability-tags">
-              <span v-for="ability in selectedTask.requiredAbilities || []" :key="ability">{{ ability }}</span>
-              <span v-if="!(selectedTask.requiredAbilities || []).length">不限能力</span>
-            </div>
-
-            <div class="task-operation-grid">
-              <button
-                :disabled="!canAssign(selectedTask, selectedAgent)"
-                @click="$emit('assign-task', selectedTask, selectedAgent)"
-              >
-                <var-icon name="account-circle" />
-                <span>指派给当前好汉：{{ agentDisplayName(selectedAgent) || '未选好汉' }}</span>
-              </button>
-              <button @click="$emit('brief-selected-task', selectedTask, selectedAgent)">
-                <var-icon name="message-text-outline" />
-                <span>传令议事</span>
-              </button>
-            </div>
-
-            <div class="recommended-agents">
+            <div class="modal-agent-scroll">
               <div class="section-label">适配好汉</div>
               <div
                 v-for="agent in recommendedAgents"
@@ -630,8 +632,22 @@ button:disabled {
 .bounty-modal-body {
   flex: 1;
   min-height: 0;
-  padding: 14px 16px 16px;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-task-info {
+  flex: 0 0 auto;
+  padding: 14px 16px 0;
+}
+
+.modal-agent-scroll {
+  flex: 1;
+  min-height: 0;
+  margin-top: 12px;
+  padding: 0 16px 16px;
+  overflow-y: auto;
 }
 
 /* Modal Transition */
