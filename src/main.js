@@ -1,18 +1,16 @@
 import { createApp } from 'vue'
-import { createPinia } from 'pinia'
 import App from './App.vue'
 import routes from './router/index'
 import './assets/icon/iconfont.css'
 import Varlet from '@varlet/ui'
 import '@varlet/ui/es/style'
 import { registerPwa } from './utils/pwa'
+import { pinia } from './stores/pinia'
 
 // 创建应用实例
 const app = createApp(App)
 app.use(Varlet)
 
-// 初始化Pinia
-const pinia = createPinia()
 app.use(pinia)
 
 // 全局配置

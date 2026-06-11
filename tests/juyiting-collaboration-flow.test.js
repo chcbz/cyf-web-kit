@@ -48,8 +48,9 @@ describe('JuyiHall collaboration flow contract', () => {
   })
 
   it('keeps both agent and task context in outgoing chat metadata', () => {
-    expect(hallConversationSource).to.include('selectedAgentId: selectedAgent.value?.agentId')
-    expect(hallConversationSource).to.include('mentionAgentIds: selectedAgent.value?.agentId ? [selectedAgent.value.agentId] : []')
+    expect(hallConversationSource).to.include('const targetAgent = selectedAgent.value || resolveMentionedAgent(content)')
+    expect(hallConversationSource).to.include('selectedAgentId: targetAgent?.agentId')
+    expect(hallConversationSource).to.include('mentionAgentIds: targetAgent?.agentId ? [targetAgent.agentId] : []')
     expect(hallConversationSource).to.include('selectedTaskId: selectedTask.value?.id')
   })
 
@@ -68,6 +69,14 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallSource).to.include('<strong>{{ mapAgents.length }}</strong>')
     expect(hallSource).not.to.include('<strong>{{ agents.length }}</strong>')
     expect(hallSource).to.include('@set-agent-filter="setAgentFilter"')
+  })
+
+  it('uses map agents as the hall command mention candidates', () => {
+    const chatPanelBlock = hallSource.match(/<ChatPanel[\s\S]*?\/>/)?.[0] || ''
+    expect(chatPanelBlock).to.include(':agents="mapAgents"')
+    expect(chatPanelBlock).not.to.include(':agents="agents"')
+    expect(hallSource).to.include('mentionAgents: mapAgents')
+    expect(hallConversationSource).to.include('resolveMentionedAgent')
   })
 
   it('splits hall stage, data, and conversation responsibilities into dedicated units', () => {

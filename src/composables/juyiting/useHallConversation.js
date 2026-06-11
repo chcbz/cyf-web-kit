@@ -5,6 +5,7 @@ export const useHallConversation = ({
   chatApi,
   globalStore,
   log,
+  mentionAgents,
   openPanel,
   portraitShortName,
   selectedAgent,
@@ -39,6 +40,22 @@ export const useHallConversation = ({
     if (message.sender === 'USER') return '你'
     if (message.sender === 'SYSTEM') return '系统'
     return '聚义厅'
+  }
+
+  const mentionAliases = (agent) => {
+    return [
+      portraitShortName(agent),
+      agent?.name,
+      agent?.personaName,
+      agent?.agentId
+    ].filter(Boolean).map(String)
+  }
+
+  const resolveMentionedAgent = (content) => {
+    const candidates = mentionAgents?.value || []
+    return candidates.find(agent =>
+      mentionAliases(agent).some(alias => content.includes(`@${alias}`))
+    ) || null
   }
 
   const parseMessageMetadata = (metadata) => {
@@ -320,6 +337,20 @@ export const useHallConversation = ({
         })
         return
       }
+      if (data.error) {
+        messages.value.push({
+          localId: `system-error-${Date.now()}`,
+          sender: 'SYSTEM',
+          content: data.error || '回话失败，请稍后再试',
+          timestamp: Date.now(),
+          streaming: false,
+          statusText: '回话失败'
+        })
+        isAwaitingReply.value = false
+        isStreaming.value = false
+        stopHallReplyPolling()
+        return
+      }
       if (data.type === 'agent_message_delta' || data.type === 'agent_message') {
         appendHallEventMessage(data)
         return
@@ -358,6 +389,10 @@ export const useHallConversation = ({
   const sendHallMessage = async () => {
     if (!draft.value || isStreaming.value) return
     const content = draft.value
+    const targetAgent = selectedAgent.value || resolveMentionedAgent(content)
+    if (targetAgent && !selectedAgent.value) {
+      selectedAgent.value = targetAgent
+    }
     draft.value = ''
     stopHallReplyStreaming()
     messages.value.push({
@@ -380,8 +415,8 @@ export const useHallConversation = ({
         senderName: globalStore.user?.name || globalStore.user?.nickname || '用户',
         metadata: {
           scene: 'juyiting',
-          selectedAgentId: selectedAgent.value?.agentId,
-          mentionAgentIds: selectedAgent.value?.agentId ? [selectedAgent.value.agentId] : [],
+          selectedAgentId: targetAgent?.agentId,
+          mentionAgentIds: targetAgent?.agentId ? [targetAgent.agentId] : [],
           selectedTaskId: selectedTask.value?.id
         }
       }, {

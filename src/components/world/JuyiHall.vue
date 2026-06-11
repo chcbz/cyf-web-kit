@@ -125,7 +125,7 @@
           <ChatPanel
             v-if="activePanel === 'chat'"
             v-model:draft="draft"
-            :agents="agents"
+            :agents="mapAgents"
             :is-awaiting-reply="isAwaitingReply"
             :is-streaming="isStreaming"
             :messages="messages"
@@ -356,6 +356,7 @@ const {
   chatApi,
   globalStore,
   log,
+  mentionAgents: mapAgents,
   openPanel,
   portraitShortName,
   selectedAgent,
