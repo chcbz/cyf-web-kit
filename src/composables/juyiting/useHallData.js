@@ -9,22 +9,17 @@ export const useHallData = ({
   taskAgentMatchScore
 }) => {
   const agents = ref([])
+  const mapAgents = ref([])
   const tasks = ref([])
   const agentFilter = ref('all')
   const taskStatusFilter = ref('')
   const taskAbilityFilter = ref('')
   const taskKeyword = ref('')
 
-  const filteredAgents = computed(() => {
-    if (agentFilter.value === 'all') return agents.value
-    if (agentFilter.value === 'busy') {
-      return agents.value.filter(agent => ['busy', 'running'].includes(normalizeStatus(agent.status)))
-    }
-    return agents.value.filter(agent => normalizeStatus(agent.status) === agentFilter.value)
-  })
+  const filteredAgents = computed(() => agents.value)
 
-  const visibleAgents = computed(() => filteredAgents.value.slice(0, 12))
-  const hiddenAgentCount = computed(() => Math.max(filteredAgents.value.length - visibleAgents.value.length, 0))
+  const visibleAgents = computed(() => mapAgents.value.slice(0, 12))
+  const hiddenAgentCount = computed(() => Math.max(mapAgents.value.length - visibleAgents.value.length, 0))
 
   const taskAbilityOptions = computed(() => {
     const abilities = new Set()
@@ -36,7 +31,7 @@ export const useHallData = ({
   const recommendedAgents = computed(() => {
     if (!selectedTask.value) return []
     return agents.value
-      .filter(agent => ['idle', 'online', ''].includes(normalizeStatus(agent.status || 'online')))
+      .filter(agent => normalizeStatus(agent.status) === 'online')
       .map(agent => ({ agent, score: taskAgentMatchScore(selectedTask.value, agent) }))
       .sort((a, b) => b.score - a.score)
       .slice(0, 5)
@@ -45,8 +40,8 @@ export const useHallData = ({
 
   const canAssign = (task, agent = selectedAgent.value) => {
     if (!task || !agent) return false
-    if (!['open', 'pending', ''].includes(normalizeStatus(task.status))) return false
-    return ['idle', 'online', ''].includes(normalizeStatus(agent.status || 'online'))
+    if (normalizeStatus(task.status) !== 'open') return false
+    return normalizeStatus(agent.status) === 'online'
   }
 
   const taskStatusCount = (status) => {
@@ -54,22 +49,44 @@ export const useHallData = ({
     return tasks.value.filter(task => normalizeStatus(task.status) === status).length
   }
 
-  const loadAgents = async () => {
+  const loadMapAgents = async () => {
     try {
-      await agentApi.get('/active', {}, {
+      await agentApi.get('/map', {}, {
         autoLoading: false,
         onSuccess: (result) => {
-          agents.value = result?.data || []
-          if (selectedAgent.value && !agents.value.some(agent => agent.agentId === selectedAgent.value.agentId)) {
+          mapAgents.value = result?.data || []
+          if (selectedAgent.value && !mapAgents.value.some(agent => agent.agentId === selectedAgent.value.agentId)) {
             selectedAgent.value = null
           }
         }
       })
     } catch (error) {
-      log.warn('加载活跃 Agent 列表失败:', error)
-      agents.value = []
+      log.warn('load map agents failed:', error)
+      mapAgents.value = []
       selectedAgent.value = null
     }
+  }
+
+  const loadRosterAgents = async () => {
+    try {
+      await agentApi.search('/roster', {
+        status: agentFilter.value === 'all' ? undefined : agentFilter.value,
+        pageNum: 1,
+        pageSize: 100
+      }, {
+        autoLoading: false,
+        onSuccess: (result) => {
+          agents.value = result?.data || []
+        }
+      })
+    } catch (error) {
+      log.warn('load roster agents failed:', error)
+      agents.value = []
+    }
+  }
+
+  const loadAgents = async () => {
+    await Promise.all([loadMapAgents(), loadRosterAgents()])
   }
 
   const loadTasks = async () => {
@@ -91,10 +108,15 @@ export const useHallData = ({
         }
       })
     } catch (error) {
-      log.warn('加载悬赏榜失败:', error)
+      log.warn('load bounty tasks failed:', error)
       tasks.value = []
       selectedTask.value = null
     }
+  }
+
+  const setAgentFilter = async (status) => {
+    agentFilter.value = status
+    await loadRosterAgents()
   }
 
   const setTaskStatusFilter = async (status) => {
@@ -109,8 +131,12 @@ export const useHallData = ({
     filteredAgents,
     hiddenAgentCount,
     loadAgents,
+    loadMapAgents,
+    loadRosterAgents,
     loadTasks,
+    mapAgents,
     recommendedAgents,
+    setAgentFilter,
     setTaskStatusFilter,
     taskAbilityFilter,
     taskAbilityOptions,

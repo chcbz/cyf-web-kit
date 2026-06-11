@@ -8,8 +8,9 @@ export const mapControlsConfig = [
 
 export const statusFilters = [
   { label: '全部', value: 'all' },
-  { label: '空闲', value: 'idle' },
+  { label: '候命', value: 'online' },
   { label: '忙碌', value: 'busy' },
+  { label: '出征', value: 'offline' },
   { label: '异常', value: 'error' }
 ]
 

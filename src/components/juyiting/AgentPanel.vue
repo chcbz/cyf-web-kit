@@ -6,12 +6,12 @@
           v-for="item in statusFilters"
           :key="item.value"
           :class="{ active: agentFilter === item.value }"
-          @click="$emit('update:agentFilter', item.value)"
+          @click="$emit('set-agent-filter', item.value)"
         >
           {{ item.label }}
         </button>
       </div>
-      <span>{{ agents.length }} 人</span>
+      <span>名册 {{ agents.length }} / 地图 {{ mapAgents.length }}</span>
     </div>
 
     <div class="agent-panel-body">
@@ -65,6 +65,7 @@
 defineProps({
   agents: { type: Array, default: () => [] },
   filteredAgents: { type: Array, default: () => [] },
+  mapAgents: { type: Array, default: () => [] },
   selectedAgent: { type: Object, default: null },
   agentFilter: { type: String, default: 'all' },
   statusFilters: { type: Array, default: () => [] },
@@ -75,7 +76,7 @@ defineProps({
   statusText: { type: Function, required: true }
 })
 
-defineEmits(['update:agentFilter', 'select-agent'])
+defineEmits(['set-agent-filter', 'select-agent'])
 </script>
 
 <style scoped>

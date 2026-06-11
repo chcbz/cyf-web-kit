@@ -58,6 +58,18 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallDataSource).to.match(/slice\(0,\s*12\)/)
   })
 
+  it('keeps roster status filtering independent from map agents', () => {
+    expect(hallDataSource).to.not.include("'/active'")
+    expect(hallDataSource).to.include("agentApi.get('/map'")
+    expect(hallDataSource).to.include("agentApi.search('/roster'")
+    expect(hallDataSource).to.include('mapAgents')
+    expect(hallDataSource).to.match(/visibleAgents\s*=\s*computed\(\(\)\s*=>\s*mapAgents\.value\.slice\(0,\s*12\)/)
+    expect(hallSource).to.include(':map-agents="mapAgents"')
+    expect(hallSource).to.include('<strong>{{ mapAgents.length }}</strong>')
+    expect(hallSource).not.to.include('<strong>{{ agents.length }}</strong>')
+    expect(hallSource).to.include('@set-agent-filter="setAgentFilter"')
+  })
+
   it('splits hall stage, data, and conversation responsibilities into dedicated units', () => {
     expect(existsSync(hallStageUrl)).to.equal(true)
     expect(existsSync(hallDataUrl)).to.equal(true)

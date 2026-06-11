@@ -35,7 +35,7 @@
         </transition>
         <div class="dock-summary">
           <span>
-            <strong>{{ agents.length }}</strong>
+            <strong>{{ mapAgents.length }}</strong>
             好汉在线
           </span>
           <span>
@@ -79,16 +79,18 @@
 
           <AgentPanel
             v-if="activePanel === 'agents'"
-            v-model:agent-filter="agentFilter"
             :ability-text="abilityText"
             :agents="agents"
             :filtered-agents="filteredAgents"
+            :map-agents="mapAgents"
             :portrait-name="portraitName"
             :portrait-style="portraitStyle"
             :selected-agent="selectedAgent"
             :status-class="statusClass"
             :status-filters="statusFilters"
             :status-text="statusText"
+            :agent-filter="agentFilter"
+            @set-agent-filter="setAgentFilter"
             @select-agent="selectAgent"
           />
 
@@ -198,17 +200,17 @@ const normalizeStatus = (status = '') => status.toLowerCase()
 
 const statusClass = (status = '') => {
   const value = normalizeStatus(status)
-  if (['busy', 'running'].includes(value)) return 'is-busy'
-  if (['error', 'failed'].includes(value)) return 'is-error'
-  if (['offline'].includes(value)) return 'is-offline'
+  if (value === 'busy') return 'is-busy'
+  if (value === 'error') return 'is-error'
+  if (value === 'offline') return 'is-offline'
   return 'is-idle'
 }
 
 const statusText = (status = '') => {
   const value = normalizeStatus(status)
-  if (['busy', 'running'].includes(value)) return '出征'
-  if (['error', 'failed'].includes(value)) return '异常'
-  if (value === 'offline') return '离线'
+  if (value === 'busy') return '忙碌'
+  if (value === 'offline') return '出征'
+  if (value === 'error') return '异常'
   return '候命'
 }
 
@@ -252,7 +254,9 @@ const {
   hiddenAgentCount,
   loadAgents,
   loadTasks,
+  mapAgents,
   recommendedAgents,
+  setAgentFilter,
   setTaskStatusFilter,
   taskAbilityFilter,
   taskAbilityOptions,
@@ -418,6 +422,7 @@ const assignTask = async (task, agent = selectedAgent.value) => {
 onMounted(async () => {
   globalStore.setTitle('聚义厅')
   globalStore.setShowBack(false)
+  globalStore.setShowAppBar(false)
   globalStore.setShowMore(false)
   await refreshHall()
   startPhysics()
@@ -430,6 +435,7 @@ onUnmounted(() => {
   stopHallReplyPolling()
   stopPhysics()
   stopDialogueBubbles()
+  globalStore.setShowAppBar(true)
 })
 </script>
 

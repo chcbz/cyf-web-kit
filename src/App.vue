@@ -1,6 +1,6 @@
 <template>
   <div class="app-container">
-    <var-app-bar :title="title">
+    <var-app-bar v-if="showAppBar" :title="title">
       <template #left>
         <var-icon
           v-if="leftOptions.showBack"
@@ -106,6 +106,7 @@ const showSideMenu = computed({
   set: (value) => { globalStore.showSideMenu = value }
 })
 const showMore = computed(() => globalStore.showMore)
+const showAppBar = computed(() => globalStore.showAppBar)
 
 const handleMoreClick = () => {
   // 同时更新右侧边栏状态

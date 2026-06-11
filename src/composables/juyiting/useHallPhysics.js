@@ -118,10 +118,8 @@ export const useHallPhysics = (visibleAgents, normalizeStatus) => {
   const startRest = (state, time, status) => {
     const anchor = hallPatrolAnchors[state.targetAnchorIndex]
     const [minLinger, maxLinger] = anchor.linger
-    const lingerScale = status === 'busy' || status === 'running' ? 0.72 : 1
+    const lingerScale = status === 'busy' ? 0.72 : 1
     const linger = sampleRange(state.seed, minLinger, maxLinger, state.travelCount + 20) * lingerScale
-    state.x = state.target.x
-    state.y = state.target.y
     state.vx = 0
     state.vy = 0
     state.speed = 0
@@ -158,7 +156,7 @@ export const useHallPhysics = (visibleAgents, normalizeStatus) => {
         return
       }
 
-      const maxSpeed = (status === 'busy' || status === 'running' ? 9.4 : 7.2) * (1.12 - (role.scale - 0.9) * 0.25)
+      const maxSpeed = (status === 'busy' ? 9.4 : 7.2) * (1.12 - (role.scale - 0.9) * 0.25)
       const desiredSpeed = targetDistance < 7 ? maxSpeed * 0.46 : maxSpeed
       const desired = {
         x: (toTargetX / targetDistance) * desiredSpeed,

@@ -17,6 +17,7 @@ export const useGlobalStore = defineStore('global', {
     menu: {},
     title: import.meta.env.VITE_APP_TITLE,
     showBack: false,
+    showAppBar: true,
     showMore: false,
     showSideMenu: false,
     showRightSidebar: false,
@@ -74,6 +75,9 @@ export const useGlobalStore = defineStore('global', {
     },
     setShowBack (showBack) {
       this.showBack = showBack
+    },
+    setShowAppBar (showAppBar) {
+      this.showAppBar = showAppBar
     },
     setShowMore (showMore) {
       this.showMore = showMore
