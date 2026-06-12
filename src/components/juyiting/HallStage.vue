@@ -6,6 +6,9 @@
         <h1>聚义厅</h1>
       </div>
       <div class="stage-actions">
+        <button class="icon-action" title="宋江号令" @click="$emit('open-panel', 'command')">
+          <var-icon name="account-circle-outline" />
+        </button>
         <button class="icon-action" title="好汉名册" @click="$emit('open-panel', 'agents')">
           <var-icon name="account-circle" />
         </button>
@@ -14,6 +17,12 @@
         </button>
         <button class="icon-action" title="厅内传令" @click="$emit('open-panel', 'chat')">
           <var-icon name="message-text-outline" />
+        </button>
+        <button class="icon-action" title="协同会办" @click="$emit('open-panel', 'coordination')">
+          <var-icon name="share" />
+        </button>
+        <button class="icon-action" title="藏经阁" @click="$emit('open-panel', 'library')">
+          <var-icon name="notebook" />
         </button>
         <button class="icon-action" title="刷新大厅" @click="$emit('refresh-hall')">
           <var-icon name="refresh" />
@@ -56,6 +65,10 @@
           <strong>传令房</strong>
           <small>厅内会话</small>
         </button>
+        <button class="hall-room room-library" @click="$emit('open-panel', 'library')">
+          <strong>藏经阁</strong>
+          <small>资料检索</small>
+        </button>
         <div class="hall-room room-back">
           <strong>后堂</strong>
           <small>整备</small>
@@ -94,6 +107,10 @@
         <button class="scene-hotspot hotspot-chat" @click="$emit('open-panel', 'chat')">
           <var-icon name="message-text-outline" />
           <span>传令</span>
+        </button>
+        <button class="scene-hotspot hotspot-library" @click="$emit('open-panel', 'library')">
+          <var-icon name="notebook" />
+          <span>藏经阁</span>
         </button>
       </div>
     </div>
@@ -491,6 +508,15 @@ button.hall-room {
     linear-gradient(145deg, rgba(230, 235, 205, 0.76), rgba(116, 151, 110, 0.58));
 }
 
+.room-library {
+  left: 64%;
+  top: 62%;
+  width: 16%;
+  height: 15%;
+  background:
+    linear-gradient(145deg, rgba(226, 235, 224, 0.78), rgba(69, 111, 96, 0.58));
+}
+
 .room-back {
   left: 40%;
   bottom: 13%;
@@ -578,6 +604,11 @@ button.hall-room {
   top: 58%;
 }
 
+.hotspot-library {
+  right: 8%;
+  bottom: 25%;
+}
+
 @media (max-width: 640px) {
   .stage-header {
     top: 8px;
@@ -623,6 +654,11 @@ button.hall-room {
     top: 63%;
   }
 
+  .hotspot-library {
+    right: 5%;
+    bottom: 20%;
+  }
+
   .map-world {
     width: 164%;
     height: 146%;
@@ -654,6 +690,13 @@ button.hall-room {
     top: 14%;
     width: 22%;
     height: 16%;
+  }
+
+  .room-library {
+    left: 66%;
+    top: 62%;
+    width: 17%;
+    height: 14%;
   }
 
   .room-back {

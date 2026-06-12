@@ -9,6 +9,9 @@ let Vue
 let BottomDock
 let BountyPanel
 let ChatPanel
+let CommandPanel
+let CoordinationPanel
+let LibraryPanel
 
 const vueImportToVar = (_line, imports) => {
   const vueBindings = imports.split(',').map((part) => {
@@ -55,6 +58,9 @@ describe('JuyiHall component behavior', () => {
     BottomDock = loadSfc('../src/components/juyiting/BottomDock.vue')
     BountyPanel = loadSfc('../src/components/juyiting/BountyPanel.vue')
     ChatPanel = loadSfc('../src/components/juyiting/ChatPanel.vue')
+    CommandPanel = loadSfc('../src/components/juyiting/CommandPanel.vue')
+    CoordinationPanel = loadSfc('../src/components/juyiting/CoordinationPanel.vue')
+    LibraryPanel = loadSfc('../src/components/juyiting/LibraryPanel.vue')
   })
 
   it('opens panels and clears locked contexts from BottomDock', async () => {
@@ -72,10 +78,10 @@ describe('JuyiHall component behavior', () => {
 
     const buttons = wrapper.findAll('button')
     await buttons[0].trigger('click')
-    await buttons[3].trigger('click')
-    await buttons[4].trigger('click')
+    await buttons[6].trigger('click')
+    await buttons[7].trigger('click')
 
-    expect(wrapper.emitted('open-panel')[0]).to.deep.equal(['agents'])
+    expect(wrapper.emitted('open-panel')[0]).to.deep.equal(['command'])
     expect(wrapper.emitted('clear-agent')).to.have.length(1)
     expect(wrapper.emitted('clear-task')).to.have.length(1)
     expect(wrapper.text()).to.include('Strategist / Wu Yong')
@@ -154,5 +160,74 @@ describe('JuyiHall component behavior', () => {
       ['confirm']
     ])
     expect(wrapper.emitted('send-message')).to.equal(undefined)
+  })
+
+  it('emits SongJiang management commands from CommandPanel', async () => {
+    const wrapper = mount(CommandPanel, {
+      global: { stubs },
+      props: {
+        agentsTotal: 10,
+        chiefAgent: { agentId: 'songjiang', name: '宋江' },
+        portraitStyle: () => ({}),
+        selectedAgent: null,
+        selectedTask: { id: 'task-1', title: 'Inspect the camp' },
+        tasksTotal: 3
+      }
+    })
+
+    expect(wrapper.text()).to.include('巡检悬赏榜')
+    expect(wrapper.text()).to.include('整备好汉名册')
+    expect(wrapper.text()).to.include('全厅传令')
+
+    await wrapper.findAll('.command-grid button')[0].trigger('click')
+    expect(wrapper.emitted('issue-command')[0]).to.deep.equal(['reviewBounties'])
+  })
+
+  it('emits relay and coordination actions from CoordinationPanel', async () => {
+    const agents = [
+      { agentId: 'wuyong', name: '吴用', abilities: ['planning'] },
+      { agentId: 'linchong', name: '林冲', abilities: ['execute'] }
+    ]
+    const wrapper = mount(CoordinationPanel, {
+      global: { stubs },
+      props: {
+        abilityText: agent => (agent.abilities || []).join(' / '),
+        agents,
+        fromAgentId: 'wuyong',
+        message: '请同步风险',
+        portraitStyle: () => ({}),
+        selectedTask: { id: 'task-1', title: 'Inspect the camp' },
+        toAgentId: 'linchong'
+      }
+    })
+
+    const actionButtons = wrapper.findAll('.action-row button')
+    await actionButtons[0].trigger('click')
+    await actionButtons[1].trigger('click')
+
+    expect(wrapper.text()).to.include('互相传话')
+    expect(wrapper.text()).to.include('配合办事')
+    expect(wrapper.emitted('relay-message')).to.have.length(1)
+    expect(wrapper.emitted('coordinate-work')).to.have.length(1)
+  })
+
+  it('searches and cites vector library results from LibraryPanel', async () => {
+    const wrapper = mount(LibraryPanel, {
+      global: { stubs },
+      props: {
+        formatTime: value => String(value),
+        keyword: 'deploy',
+        loading: false,
+        results: [{ id: 'm1', content: 'Deployment notes', summaryType: 'project', score: 0.8 }],
+        sourceType: 'project'
+      }
+    })
+
+    await wrapper.find('form').trigger('submit')
+    await wrapper.find('.result-card button').trigger('click')
+
+    expect(wrapper.text()).to.include('向量检索')
+    expect(wrapper.emitted('search-library')).to.have.length(1)
+    expect(wrapper.emitted('cite-library')[0][0].content).to.equal('Deployment notes')
   })
 })

@@ -35,7 +35,7 @@ describe('SelectedAgentCard interaction contract', () => {
   })
 
   it('renders inside the quick bar instead of as a map overlay', () => {
-    const quickBarStart = hallSource.indexOf('<div class="quick-bar">')
+    const quickBarStart = hallSource.indexOf('<div v-if="selectedAgent" class="quick-bar">')
     const quickBarEnd = hallSource.indexOf('</div>\n    </section>', quickBarStart)
     const quickBarSource = hallSource.slice(quickBarStart, quickBarEnd)
     const cardRule = cssRule(cardSource, '.selected-agent-card')
@@ -44,11 +44,13 @@ describe('SelectedAgentCard interaction contract', () => {
     expect(cardRule).not.to.include('bottom: calc')
   })
 
-  it('places the selected agent card above dock summary and removes dock focus text', () => {
-    const quickBarStart = hallSource.indexOf('<div class="quick-bar">')
+  it('keeps the selected agent card without rendering the duplicate bottom dock', () => {
+    const quickBarStart = hallSource.indexOf('<div v-if="selectedAgent" class="quick-bar">')
     const quickBarEnd = hallSource.indexOf('</div>\n    </section>', quickBarStart)
     const quickBarSource = hallSource.slice(quickBarStart, quickBarEnd)
-    expect(quickBarSource.indexOf('<SelectedAgentCard')).to.be.lessThan(quickBarSource.indexOf('<div class="dock-summary">'))
+    expect(quickBarSource).to.include('<SelectedAgentCard')
+    expect(quickBarSource).not.to.include('<BottomDock')
+    expect(hallSource).not.to.include("import BottomDock")
     expect(quickBarSource).not.to.include('<span class="dock-focus"')
     expect(hallSource).not.to.include('.dock-focus')
   })

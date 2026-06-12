@@ -6,6 +6,7 @@ export const useHallConversation = ({
   globalStore,
   log,
   openPanel,
+  outgoingMetadata,
   portraitShortName,
   selectedAgent,
   selectedTask,
@@ -382,7 +383,8 @@ export const useHallConversation = ({
           scene: 'juyiting',
           selectedAgentId: selectedAgent.value?.agentId,
           mentionAgentIds: selectedAgent.value?.agentId ? [selectedAgent.value.agentId] : [],
-          selectedTaskId: selectedTask.value?.id
+          selectedTaskId: selectedTask.value?.id,
+          ...(outgoingMetadata?.value || {})
         }
       }, {
         responseType: 'stream',
@@ -399,6 +401,9 @@ export const useHallConversation = ({
           throw new Error(message)
         }
       })
+      if (outgoingMetadata) {
+        outgoingMetadata.value = {}
+      }
     } catch (error) {
       log.error('聚义厅消息发送失败', error)
       isStreaming.value = false

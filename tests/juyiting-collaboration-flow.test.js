@@ -13,8 +13,16 @@ const chatSource = readFileSync(
   new URL('../src/components/juyiting/ChatPanel.vue', import.meta.url),
   'utf8'
 )
-const dockSource = readFileSync(
-  new URL('../src/components/juyiting/BottomDock.vue', import.meta.url),
+const commandSource = readFileSync(
+  new URL('../src/components/juyiting/CommandPanel.vue', import.meta.url),
+  'utf8'
+)
+const coordinationSource = readFileSync(
+  new URL('../src/components/juyiting/CoordinationPanel.vue', import.meta.url),
+  'utf8'
+)
+const librarySource = readFileSync(
+  new URL('../src/components/juyiting/LibraryPanel.vue', import.meta.url),
   'utf8'
 )
 const hallStageUrl = new URL('../src/components/juyiting/HallStage.vue', import.meta.url)
@@ -24,13 +32,13 @@ const hallDataSource = readFileSync(hallDataUrl, 'utf8')
 const hallConversationSource = readFileSync(hallConversationUrl, 'utf8')
 
 describe('JuyiHall collaboration flow contract', () => {
-  it('uses the persistent dock as the primary action surface', () => {
-    expect(hallSource).to.include('dock-summary')
-    expect(hallSource).to.include('dock-actions')
-    expect(dockSource).to.include('agentsTotal')
-    expect(dockSource).to.include('tasksTotal')
-    expect(dockSource).to.include('selectedAgent')
-    expect(dockSource).to.include('selectedTask')
+  it('uses the stage header as the primary action surface without the duplicate dock', () => {
+    expect(hallSource).not.to.include('<BottomDock')
+    expect(hallSource).not.to.include("import BottomDock")
+    expect(hallStageUrl).to.not.equal(undefined)
+    expect(readFileSync(hallStageUrl, 'utf8')).to.include("title=\"宋江号令\"")
+    expect(readFileSync(hallStageUrl, 'utf8')).to.include("title=\"协同会办\"")
+    expect(readFileSync(hallStageUrl, 'utf8')).to.include("title=\"藏经阁\"")
   })
 
   it('assigns a bounty to an explicit agent instead of hidden selectedAgent only', () => {
@@ -51,6 +59,20 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallConversationSource).to.include('selectedAgentId: selectedAgent.value?.agentId')
     expect(hallConversationSource).to.include('mentionAgentIds: selectedAgent.value?.agentId ? [selectedAgent.value.agentId] : []')
     expect(hallConversationSource).to.include('selectedTaskId: selectedTask.value?.id')
+    expect(hallConversationSource).to.include('...(outgoingMetadata?.value || {})')
+  })
+
+  it('adds SongJiang management, agent coordination, and library retrieval panels', () => {
+    expect(hallSource).to.include('<CommandPanel')
+    expect(hallSource).to.include('<CoordinationPanel')
+    expect(hallSource).to.include('<LibraryPanel')
+    expect(commandSource).to.include('巡检悬赏榜')
+    expect(commandSource).to.include('整备好汉名册')
+    expect(commandSource).to.include('全厅传令')
+    expect(coordinationSource).to.include('互相传话')
+    expect(coordinationSource).to.include('配合办事')
+    expect(librarySource).to.include('向量检索')
+    expect(hallSource).to.include("chatApi.search('/library/search'")
   })
 
   it('shows an overflow hint when more than twelve agents are available', () => {
@@ -65,7 +87,7 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallDataSource).to.include('mapAgents')
     expect(hallDataSource).to.match(/visibleAgents\s*=\s*computed\(\(\)\s*=>\s*mapAgents\.value\.slice\(0,\s*12\)/)
     expect(hallSource).to.include(':map-agents="mapAgents"')
-    expect(hallSource).to.include('<strong>{{ mapAgents.length }}</strong>')
+    expect(hallSource).to.include(':tasks-total="tasks.length"')
     expect(hallSource).not.to.include('<strong>{{ agents.length }}</strong>')
     expect(hallSource).to.include('@set-agent-filter="setAgentFilter"')
   })
@@ -79,3 +101,5 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallSource).to.include("import { useHallConversation } from '@/composables/juyiting/useHallConversation'")
   })
 })
+
+const hallStageSource = () => readFileSync(hallStageUrl, 'utf8')
