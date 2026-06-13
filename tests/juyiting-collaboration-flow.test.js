@@ -13,14 +13,6 @@ const chatSource = readFileSync(
   new URL('../src/components/juyiting/ChatPanel.vue', import.meta.url),
   'utf8'
 )
-const commandSource = readFileSync(
-  new URL('../src/components/juyiting/CommandPanel.vue', import.meta.url),
-  'utf8'
-)
-const coordinationSource = readFileSync(
-  new URL('../src/components/juyiting/CoordinationPanel.vue', import.meta.url),
-  'utf8'
-)
 const librarySource = readFileSync(
   new URL('../src/components/juyiting/LibraryPanel.vue', import.meta.url),
   'utf8'
@@ -36,8 +28,8 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallSource).not.to.include('<BottomDock')
     expect(hallSource).not.to.include("import BottomDock")
     expect(hallStageUrl).to.not.equal(undefined)
-    expect(readFileSync(hallStageUrl, 'utf8')).to.include("title=\"宋江号令\"")
-    expect(readFileSync(hallStageUrl, 'utf8')).to.include("title=\"协同会办\"")
+    expect(readFileSync(hallStageUrl, 'utf8')).not.to.include("title=\"宋江号令\"")
+    expect(readFileSync(hallStageUrl, 'utf8')).not.to.include("title=\"协同会办\"")
     expect(readFileSync(hallStageUrl, 'utf8')).to.include("title=\"藏经阁\"")
   })
 
@@ -62,15 +54,12 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallConversationSource).to.include('...(outgoingMetadata?.value || {})')
   })
 
-  it('adds SongJiang management, agent coordination, and library retrieval panels', () => {
-    expect(hallSource).to.include('<CommandPanel')
-    expect(hallSource).to.include('<CoordinationPanel')
+  it('keeps low-value SongJiang and coordination panels out of the primary hall surface', () => {
+    expect(hallSource).not.to.include('<CommandPanel')
+    expect(hallSource).not.to.include('<CoordinationPanel')
+    expect(hallSource).not.to.include("import CommandPanel")
+    expect(hallSource).not.to.include("import CoordinationPanel")
     expect(hallSource).to.include('<LibraryPanel')
-    expect(commandSource).to.include('巡检悬赏榜')
-    expect(commandSource).to.include('整备好汉名册')
-    expect(commandSource).to.include('全厅传令')
-    expect(coordinationSource).to.include('互相传话')
-    expect(coordinationSource).to.include('配合办事')
     expect(librarySource).to.include('向量检索')
     expect(hallSource).to.include("chatApi.search('/library/search'")
   })

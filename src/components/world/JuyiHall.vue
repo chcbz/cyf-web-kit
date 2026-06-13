@@ -63,18 +63,6 @@
             @select-agent="selectAgent"
           />
 
-          <CommandPanel
-            v-if="activePanel === 'command'"
-            :agents-total="agents.length"
-            :chief-agent="songjiangAgent"
-            :portrait-style="portraitStyle"
-            :selected-agent="selectedAgent"
-            :selected-task="selectedTask"
-            :tasks-total="tasks.length"
-            @issue-command="issueSongjiangCommand"
-            @open-panel="openPanel"
-          />
-
           <BountyPanel
             v-if="activePanel === 'tasks'"
             v-model:task-ability-filter="taskAbilityFilter"
@@ -101,20 +89,6 @@
             @select-agent="selectAgent"
             @select-task="selectTask"
             @set-status-filter="setTaskStatusFilter"
-          />
-
-          <CoordinationPanel
-            v-if="activePanel === 'coordination'"
-            v-model:from-agent-id="coordinationFromAgentId"
-            v-model:message="coordinationMessage"
-            v-model:to-agent-id="coordinationToAgentId"
-            :ability-text="abilityText"
-            :agents="agents"
-            :portrait-style="portraitStyle"
-            :selected-task="selectedTask"
-            @coordinate-work="coordinateAgents"
-            @pick-agent="pickCoordinationAgent"
-            @relay-message="relayAgentMessage"
           />
 
           <ChatPanel
@@ -170,8 +144,6 @@ import { portraitName, portraitRole, portraitShortName, portraitStyle, roleClass
 import AgentPanel from '@/components/juyiting/AgentPanel.vue'
 import BountyPanel from '@/components/juyiting/BountyPanel.vue'
 import ChatPanel from '@/components/juyiting/ChatPanel.vue'
-import CommandPanel from '@/components/juyiting/CommandPanel.vue'
-import CoordinationPanel from '@/components/juyiting/CoordinationPanel.vue'
 import HallStage from '@/components/juyiting/HallStage.vue'
 import LibraryPanel from '@/components/juyiting/LibraryPanel.vue'
 import SelectedAgentCard from '@/components/juyiting/SelectedAgentCard.vue'
@@ -190,9 +162,6 @@ const selectedTask = ref(null)
 const toast = ref('')
 const activePanel = ref('')
 const agentBubbles = ref({})
-const coordinationFromAgentId = ref('')
-const coordinationToAgentId = ref('')
-const coordinationMessage = ref('')
 const libraryKeyword = ref('')
 const librarySourceType = ref('')
 const libraryResults = ref([])
@@ -203,10 +172,8 @@ let bubbleInitialTimer = null
 let bubbleClearTimer = null
 
 const activePanelTitle = computed(() => {
-  if (activePanel.value === 'command') return '宋江号令'
   if (activePanel.value === 'agents') return '好汉名册'
   if (activePanel.value === 'tasks') return '悬赏榜'
-  if (activePanel.value === 'coordination') return '协同会办'
   if (activePanel.value === 'chat') return '厅内传令'
   if (activePanel.value === 'library') return '藏经阁'
   return ''
@@ -257,18 +224,6 @@ const abilityText = (agent) => {
   const abilities = agent.abilities || []
   return abilities.length ? abilities.slice(0, 3).join(' / ') : '未登记能力'
 }
-
-const songjiangAgent = computed(() =>
-  agents.value.find(agent => agent.agentId === 'songjiang' || agent.name === '宋江' || agent.personaName === '宋江') ||
-  mapAgents.value.find(agent => agent.agentId === 'songjiang' || agent.name === '宋江' || agent.personaName === '宋江') ||
-  {
-    agentId: 'songjiang',
-    name: '宋江',
-    personaName: '宋江',
-    abilities: ['coordination', 'dispatch', 'planning', 'briefing'],
-    status: 'online'
-  }
-)
 
 const taskAgentMatchScore = (task, agent) => {
   const requiredAbilities = task?.requiredAbilities || []
@@ -329,10 +284,6 @@ const selectAgent = (agent) => {
   selectedAgent.value = agent
 }
 
-const agentDisplayName = (agent) => agent?.name || agent?.personaName || agent?.agentId || ''
-
-const findAgentById = (agentId) => agents.value.find(agent => agent.agentId === agentId) || null
-
 const openPanel = (panel) => {
   activePanel.value = panel
 }
@@ -360,77 +311,6 @@ const applyCommandTemplate = (key) => {
     confirm: `请确认是否接令「${taskTitle}」，并说明预计完成方式。`
   }
   draft.value = templates[key] || ''
-}
-
-const issueSongjiangCommand = (key) => {
-  const focusedAgent = selectedAgent.value
-  selectedAgent.value = songjiangAgent.value
-  const taskText = selectedTask.value ? `当前悬赏「${selectedTask.value.title}」` : '当前未锁定悬赏'
-  const agentText = focusedAgent && focusedAgent.agentId !== songjiangAgent.value.agentId
-    ? `当前好汉 ${agentDisplayName(focusedAgent)}`
-    : '当前未锁定具体好汉'
-  const commandDrafts = {
-    reviewBounties: `@宋江 请巡检悬赏榜：在榜 ${tasks.value.length} 件，${taskText}。请梳理优先级、风险和承接安排。`,
-    reviewRoster: `@宋江 请整备好汉名册：入册 ${agents.value.length} 位，在线 ${mapAgents.value.length} 位。请指出忙碌、异常和能力缺口。`,
-    broadcastOrder: '@宋江 请向全厅传令：围绕当前项目目标统一分工、同步风险，并要求各位好汉回报阻塞点。',
-    summonReport: `@宋江 请收拢回报：${agentText}，${taskText}。请要求相关好汉说明进展、阻塞和下一步。`
-  }
-  outgoingMetadata.value = {
-    hallCommand: key,
-    commandIssuerAgentId: songjiangAgent.value.agentId,
-    focusedAgentId: focusedAgent?.agentId,
-    selectedTaskId: selectedTask.value?.id
-  }
-  draft.value = commandDrafts[key] || commandDrafts.broadcastOrder
-  openPanel('chat')
-  showToast('宋江号令已写入传令')
-}
-
-const pickCoordinationAgent = (agent) => {
-  if (!coordinationFromAgentId.value) {
-    coordinationFromAgentId.value = agent.agentId
-    return
-  }
-  if (!coordinationToAgentId.value && coordinationFromAgentId.value !== agent.agentId) {
-    coordinationToAgentId.value = agent.agentId
-    return
-  }
-  coordinationFromAgentId.value = agent.agentId
-  coordinationToAgentId.value = ''
-}
-
-const relayAgentMessage = () => {
-  const fromAgent = findAgentById(coordinationFromAgentId.value)
-  const toAgent = findAgentById(coordinationToAgentId.value)
-  if (!fromAgent || !toAgent || !coordinationMessage.value.trim()) return
-  selectedAgent.value = toAgent
-  outgoingMetadata.value = {
-    hallCommand: 'agentRelay',
-    relayFromAgentId: fromAgent.agentId,
-    relayToAgentId: toAgent.agentId,
-    mentionAgentIds: [fromAgent.agentId, toAgent.agentId],
-    selectedTaskId: selectedTask.value?.id
-  }
-  draft.value = `请代 ${agentDisplayName(fromAgent)} 向 ${agentDisplayName(toAgent)} 传话：${coordinationMessage.value.trim()}`
-  openPanel('chat')
-  showToast('互相传话已写入传令')
-}
-
-const coordinateAgents = () => {
-  const fromAgent = findAgentById(coordinationFromAgentId.value)
-  const toAgent = findAgentById(coordinationToAgentId.value)
-  if (!fromAgent || !toAgent || !selectedTask.value) return
-  selectedAgent.value = toAgent
-  outgoingMetadata.value = {
-    hallCommand: 'agentCoordinate',
-    coordinatorAgentIds: [fromAgent.agentId, toAgent.agentId],
-    mentionAgentIds: [fromAgent.agentId, toAgent.agentId],
-    selectedTaskId: selectedTask.value.id
-  }
-  const extra = coordinationMessage.value.trim()
-  draft.value = `请安排 ${agentDisplayName(fromAgent)} 与 ${agentDisplayName(toAgent)} 配合处理悬赏「${selectedTask.value.title}」。${extra ? `协同要求：${extra}` : '请拆分职责、确认接口人和下一步交付。'}`
-  openPanel('chat')
-  showToast('协同安排已写入传令')
 }
 
 const searchLibrary = async () => {

@@ -6,9 +6,6 @@
         <h1>聚义厅</h1>
       </div>
       <div class="stage-actions">
-        <button class="icon-action" title="宋江号令" @click="$emit('open-panel', 'command')">
-          <var-icon name="account-circle-outline" />
-        </button>
         <button class="icon-action" title="好汉名册" @click="$emit('open-panel', 'agents')">
           <var-icon name="account-circle" />
         </button>
@@ -17,9 +14,6 @@
         </button>
         <button class="icon-action" title="厅内传令" @click="$emit('open-panel', 'chat')">
           <var-icon name="message-text-outline" />
-        </button>
-        <button class="icon-action" title="协同会办" @click="$emit('open-panel', 'coordination')">
-          <var-icon name="share" />
         </button>
         <button class="icon-action" title="藏经阁" @click="$emit('open-panel', 'library')">
           <var-icon name="notebook" />
