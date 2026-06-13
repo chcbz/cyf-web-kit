@@ -94,7 +94,7 @@
           <ChatPanel
             v-if="activePanel === 'chat'"
             v-model:draft="draft"
-            :agents="agents"
+            :agents="mapAgents"
             :is-awaiting-reply="isAwaitingReply"
             :is-streaming="isStreaming"
             :messages="messages"
@@ -106,11 +106,9 @@
             :connection-status="chatConnectionStatus"
             :target-text="chatTargetText"
             @apply-template="applyCommandTemplate"
-            @coordinate-work="coordinateAgentsFromChat"
             @load-messages="loadHallMessages(conversationId)"
             @mention-agent="mentionAgent"
             @new-conversation="newHallConversation"
-            @relay-message="relayAgentMessageFromChat"
             @send-message="sendHallMessage"
           />
 
@@ -227,17 +225,6 @@ const abilityText = (agent) => {
   return abilities.length ? abilities.slice(0, 3).join(' / ') : '未登记能力'
 }
 
-const songjiangAgent = computed(() =>
-  agents.value.find(agent => agent.agentId === 'songjiang' || agent.name === '宋江' || agent.personaName === '宋江') ||
-  mapAgents.value.find(agent => agent.agentId === 'songjiang' || agent.name === '宋江' || agent.personaName === '宋江') ||
-  {
-    agentId: 'songjiang',
-    name: '宋江',
-    personaName: '宋江',
-    abilities: ['coordination', 'dispatch', 'planning', 'briefing'],
-    status: 'online'
-  }
-)
 
 const taskAgentMatchScore = (task, agent) => {
   const requiredAbilities = task?.requiredAbilities || []
@@ -298,9 +285,6 @@ const selectAgent = (agent) => {
   selectedAgent.value = agent
 }
 
-const agentDisplayName = (agent) => agent?.name || agent?.personaName || agent?.agentId || ''
-
-const findAgentById = (agentId) => agents.value.find(agent => agent.agentId === agentId) || null
 
 const openPanel = (panel) => {
   activePanel.value = panel
@@ -323,62 +307,12 @@ const briefSelectedTask = (task = selectedTask.value, agent = selectedAgent.valu
 
 const applyCommandTemplate = (key) => {
   const taskTitle = selectedTask.value?.title || '当前议题'
-  const focusedAgent = selectedAgent.value
-  const taskText = selectedTask.value ? `当前悬赏「${selectedTask.value.title}」` : '当前未锁定悬赏'
-  const agentText = focusedAgent && focusedAgent.agentId !== songjiangAgent.value.agentId
-    ? `当前好汉 ${agentDisplayName(focusedAgent)}`
-    : '当前未锁定具体好汉'
   const templates = {
     status: `请汇报「${taskTitle}」当前进展、阻塞点和下一步。`,
     risk: `请评估「${taskTitle}」的主要风险、依赖和可回滚方案。`,
-    confirm: `请确认是否接令「${taskTitle}」，并说明预计完成方式。`,
-    reviewBounties: `@宋江 请巡检悬赏榜：在榜 ${tasks.value.length} 件，${taskText}。请梳理优先级、风险和承接安排。`,
-    reviewRoster: `@宋江 请整备好汉名册：入册 ${agents.value.length} 位，在线 ${mapAgents.value.length} 位。请指出忙碌、异常和能力缺口。`,
-    broadcastOrder: '@宋江 请向全厅传令：围绕当前项目目标统一分工、同步风险，并要求各位好汉回报阻塞点。',
-    summonReport: `@宋江 请收拢回报：${agentText}，${taskText}。请要求相关好汉说明进展、阻塞和下一步。`
-  }
-  if (['reviewBounties', 'reviewRoster', 'broadcastOrder', 'summonReport'].includes(key)) {
-    selectedAgent.value = songjiangAgent.value
-    outgoingMetadata.value = {
-      hallCommand: key,
-      commandIssuerAgentId: songjiangAgent.value.agentId,
-      focusedAgentId: focusedAgent?.agentId,
-      selectedTaskId: selectedTask.value?.id
-    }
+    confirm: `请确认是否接令「${taskTitle}」，并说明预计完成方式。`
   }
   draft.value = templates[key] || ''
-}
-
-const relayAgentMessageFromChat = ({ fromAgentId, toAgentId, message }) => {
-  const fromAgent = findAgentById(fromAgentId)
-  const toAgent = findAgentById(toAgentId)
-  if (!fromAgent || !toAgent || !message) return
-  selectedAgent.value = toAgent
-  outgoingMetadata.value = {
-    hallCommand: 'agentRelay',
-    relayFromAgentId: fromAgent.agentId,
-    relayToAgentId: toAgent.agentId,
-    mentionAgentIds: [fromAgent.agentId, toAgent.agentId],
-    selectedTaskId: selectedTask.value?.id
-  }
-  draft.value = `请代 ${agentDisplayName(fromAgent)} 向 ${agentDisplayName(toAgent)} 传话：${message}`
-  showToast('互相传话已写入传令')
-}
-
-const coordinateAgentsFromChat = ({ fromAgentId, toAgentId, message }) => {
-  const fromAgent = findAgentById(fromAgentId)
-  const toAgent = findAgentById(toAgentId)
-  if (!fromAgent || !toAgent || !selectedTask.value) return
-  selectedAgent.value = toAgent
-  outgoingMetadata.value = {
-    hallCommand: 'agentCoordinate',
-    coordinatorAgentIds: [fromAgent.agentId, toAgent.agentId],
-    mentionAgentIds: [fromAgent.agentId, toAgent.agentId],
-    selectedTaskId: selectedTask.value.id
-  }
-  const extra = message ? `协同要求：${message}` : '请拆分职责、确认接口人和下一步交付。'
-  draft.value = `请安排 ${agentDisplayName(fromAgent)} 与 ${agentDisplayName(toAgent)} 配合处理悬赏「${selectedTask.value.title}」。${extra}`
-  showToast('协同安排已写入传令')
 }
 
 const searchLibrary = async () => {

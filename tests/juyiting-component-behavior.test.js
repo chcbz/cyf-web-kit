@@ -201,7 +201,7 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.emitted('send-message')).to.equal(undefined)
   })
 
-  it('emits SongJiang and coordination actions from ChatPanel', async () => {
+  it('keeps low-value SongJiang and coordination actions out of ChatPanel', async () => {
     const agents = [
       { agentId: 'wuyong', name: '吴用' },
       { agentId: 'linchong', name: '林冲' }
@@ -220,31 +220,16 @@ describe('JuyiHall component behavior', () => {
       }
     })
 
-    await wrapper.findAll('.chief-templates button')[0].trigger('click')
-    expect(wrapper.emitted('apply-template')[0]).to.deep.equal(['reviewBounties'])
+    await wrapper.findAll('.command-templates button')[0].trigger('click')
 
-    const selects = wrapper.findAll('.coordination-inline select')
-    await selects[0].setValue('wuyong')
-    await selects[1].setValue('linchong')
-    await wrapper.find('.coordination-inline input').setValue('请同步风险')
-
-    const actionButtons = wrapper.findAll('.coordination-inline button')
-    await actionButtons[0].trigger('click')
-    await actionButtons[1].trigger('click')
-
-    expect(wrapper.text()).to.include('宋江号令')
-    expect(wrapper.text()).to.include('互相传话')
-    expect(wrapper.text()).to.include('配合办事')
-    expect(wrapper.emitted('relay-message')[0][0]).to.deep.equal({
-      fromAgentId: 'wuyong',
-      toAgentId: 'linchong',
-      message: '请同步风险'
-    })
-    expect(wrapper.emitted('coordinate-work')[0][0]).to.deep.equal({
-      fromAgentId: 'wuyong',
-      toAgentId: 'linchong',
-      message: '请同步风险'
-    })
+    expect(wrapper.emitted('apply-template')[0]).to.deep.equal(['status'])
+    expect(wrapper.find('.chief-templates').exists()).to.equal(false)
+    expect(wrapper.find('.coordination-inline').exists()).to.equal(false)
+    expect(wrapper.text()).not.to.include('宋江号令')
+    expect(wrapper.text()).not.to.include('互相传话')
+    expect(wrapper.text()).not.to.include('配合办事')
+    expect(wrapper.emitted('relay-message')).to.equal(undefined)
+    expect(wrapper.emitted('coordinate-work')).to.equal(undefined)
   })
 
   it('emits SongJiang management commands from CommandPanel', async () => {

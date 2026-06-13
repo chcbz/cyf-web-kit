@@ -50,17 +50,10 @@ describe('JuyiHall collaboration flow contract', () => {
 
   it('offers task-aware command templates in chat', () => {
     expect(chatSource).to.include('commandTemplates')
-    expect(chatSource).to.include('chiefTemplates')
-    expect(chatSource).to.include('coordination-inline')
     expect(chatSource).to.include('汇报状态')
     expect(chatSource).to.include('评估风险')
     expect(chatSource).to.include('接令确认')
-    expect(chatSource).to.include('宋江号令')
-    expect(chatSource).to.include('互相传话')
-    expect(chatSource).to.include('配合办事')
     expect(chatSource).to.include("$emit('apply-template'")
-    expect(hallSource).to.include('relayAgentMessageFromChat')
-    expect(hallSource).to.include('coordinateAgentsFromChat')
   })
 
   it('keeps both agent and task context in outgoing chat metadata', () => {
@@ -68,6 +61,11 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallConversationSource).to.include('mentionAgentIds: selectedAgent.value?.agentId ? [selectedAgent.value.agentId] : []')
     expect(hallConversationSource).to.include('selectedTaskId: selectedTask.value?.id')
     expect(hallConversationSource).to.include('...(outgoingMetadata?.value || {})')
+  })
+
+  it('limits hall chat mention choices to map agents', () => {
+    expect(hallSource).to.include('<ChatPanel')
+    expect(hallSource).to.include(':agents="mapAgents"')
   })
 
   it('keeps low-value SongJiang and coordination panels out of the primary hall surface', () => {
@@ -78,6 +76,15 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallSource).to.include('<LibraryPanel')
     expect(librarySource).to.include('向量检索')
     expect(hallSource).to.include("chatApi.search('/library/search'")
+  })
+
+  it('keeps low-value SongJiang and coordination actions out of chat panel', () => {
+    expect(chatSource).not.to.include('chiefTemplates')
+    expect(chatSource).not.to.include('coordination-inline')
+    expect(chatSource).not.to.include('relay-message')
+    expect(chatSource).not.to.include('coordinate-work')
+    expect(hallSource).not.to.include('relayAgentMessageFromChat')
+    expect(hallSource).not.to.include('coordinateAgentsFromChat')
   })
 
   it('shows an overflow hint when more than twelve agents are available', () => {
