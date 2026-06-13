@@ -41,7 +41,7 @@
           :key="task.id"
           class="task-card"
           :class="{ selected: selectedTask?.id === task.id }"
-          @click="$emit('select-task', task)"
+          @click="openTask(task)"
         >
           <div class="task-head">
             <strong>{{ task.title }}</strong>
@@ -63,11 +63,11 @@
     </div>
 
     <transition name="modal">
-      <div v-if="selectedTask" class="bounty-modal-overlay" @click.self="$emit('select-task', null)">
+      <div v-if="detailTask" class="bounty-modal-overlay" @click.self="closeTask">
         <section class="bounty-modal">
           <div class="bounty-modal-header">
             <h3>悬赏分派</h3>
-            <button class="modal-close" @click="$emit('select-task', null)">
+            <button class="modal-close" @click="closeTask">
               <var-icon name="close-circle-outline" />
             </button>
           </div>
@@ -76,28 +76,28 @@
             <div class="modal-task-info">
               <div class="task-detail-head">
                 <div>
-                  <strong>{{ selectedTask.title }}</strong>
-                  <small>{{ selectedTask.id }} / {{ taskStatusText(selectedTask.status) }}</small>
+                  <strong>{{ detailTask.title }}</strong>
+                  <small>{{ detailTask.id }} / {{ taskStatusText(detailTask.status) }}</small>
                 </div>
-                <span :class="taskStateClass(selectedTask.status)">{{ taskStatusText(selectedTask.status) }}</span>
+                <span :class="taskStateClass(detailTask.status)">{{ taskStatusText(detailTask.status) }}</span>
               </div>
 
-              <p>{{ selectedTask.description || '暂无任务描述' }}</p>
+              <p>{{ detailTask.description || '暂无任务描述' }}</p>
 
               <div class="ability-tags">
-                <span v-for="ability in selectedTask.requiredAbilities || []" :key="ability">{{ ability }}</span>
-                <span v-if="!(selectedTask.requiredAbilities || []).length">不限能力</span>
+                <span v-for="ability in detailTask.requiredAbilities || []" :key="ability">{{ ability }}</span>
+                <span v-if="!(detailTask.requiredAbilities || []).length">不限能力</span>
               </div>
 
               <div class="task-operation-grid">
                 <button
-                  :disabled="!canAssign(selectedTask, selectedAgent)"
-                  @click="$emit('assign-task', selectedTask, selectedAgent)"
+                  :disabled="!canAssign(detailTask, selectedAgent)"
+                  @click="$emit('assign-task', detailTask, selectedAgent)"
                 >
                   <var-icon name="account-circle" />
                   <span>指派给当前好汉：{{ agentDisplayName(selectedAgent) || '未选好汉' }}</span>
                 </button>
-                <button @click="$emit('brief-selected-task', selectedTask, selectedAgent)">
+                <button @click="$emit('brief-selected-task', detailTask, selectedAgent)">
                   <var-icon name="message-text-outline" />
                   <span>传令议事</span>
                 </button>
@@ -122,18 +122,18 @@
                     <strong>{{ agentDisplayName(agent) }}</strong>
                     <small>{{ abilityText(agent) }}</small>
                   </span>
-                  <em>{{ taskAgentMatchScore(selectedTask, agent) }}%</em>
+                  <em>{{ taskAgentMatchScore(detailTask, agent) }}%</em>
                 </button>
                 <div class="recommended-agent-actions">
                   <button type="button" @click="$emit('select-agent', agent)">选中</button>
                   <button
                     type="button"
-                    :disabled="!canAssign(selectedTask, agent)"
-                    @click="$emit('assign-task', selectedTask, agent)"
+                    :disabled="!canAssign(detailTask, agent)"
+                    @click="$emit('assign-task', detailTask, agent)"
                   >
                     指派给 {{ agentDisplayName(agent) }}
                   </button>
-                  <button type="button" @click="$emit('brief-selected-task', selectedTask, agent)">传令</button>
+                  <button type="button" @click="$emit('brief-selected-task', detailTask, agent)">传令</button>
                 </div>
               </div>
               <p v-if="!recommendedAgents.length">暂无活跃好汉可接令。</p>
@@ -146,7 +146,9 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed, ref, watch } from 'vue'
+
+const props = defineProps({
   tasks: { type: Array, default: () => [] },
   selectedTask: { type: Object, default: null },
   selectedAgent: { type: Object, default: null },
@@ -167,7 +169,7 @@ defineProps({
   taskStatusText: { type: Function, required: true }
 })
 
-defineEmits([
+const emit = defineEmits([
   'assign-task',
   'brief-selected-task',
   'load-tasks',
@@ -178,7 +180,31 @@ defineEmits([
   'update:taskKeyword'
 ])
 
+const modalTask = ref(null)
+const detailTask = computed(() => modalTask.value)
+
 const agentDisplayName = (agent) => agent?.name || agent?.personaName || agent?.agentId || ''
+
+const openTask = (task) => {
+  modalTask.value = task
+  emit('select-task', task)
+}
+
+const closeTask = () => {
+  modalTask.value = null
+  emit('select-task', null)
+}
+
+watch(() => props.selectedTask, (task) => {
+  if (!task) {
+    modalTask.value = null
+    return
+  }
+
+  if (modalTask.value?.id === task.id) {
+    modalTask.value = task
+  }
+})
 </script>
 
 <style scoped>
@@ -653,12 +679,16 @@ button:disabled {
 /* Modal Transition */
 .modal-enter-active,
 .modal-leave-active {
-  transition: opacity 0.22s ease;
+  transition: opacity 0.16s ease-out;
 }
 
 .modal-enter-active .bounty-modal,
 .modal-leave-active .bounty-modal {
-  transition: transform 0.22s ease, opacity 0.22s ease;
+  transform-origin: center bottom;
+  transition:
+    transform 0.18s cubic-bezier(0.2, 0, 0, 1),
+    opacity 0.14s ease-out;
+  will-change: transform, opacity;
 }
 
 .modal-enter-from,
@@ -667,13 +697,22 @@ button:disabled {
 }
 
 .modal-enter-from .bounty-modal {
-  transform: scale(0.94) translateY(8px);
+  transform: translate3d(0, 6px, 0) scale(0.985);
   opacity: 0;
 }
 
 .modal-leave-to .bounty-modal {
-  transform: scale(0.94) translateY(8px);
+  transform: translate3d(0, 6px, 0) scale(0.985);
   opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-enter-active,
+  .modal-leave-active,
+  .modal-enter-active .bounty-modal,
+  .modal-leave-active .bounty-modal {
+    transition: none;
+  }
 }
 
 @media (max-width: 900px) {

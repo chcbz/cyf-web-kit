@@ -22,15 +22,52 @@
         @{{ mentionLabel(agent) }}
       </button>
     </div>
-    <div class="command-templates" aria-label="传令快捷模板">
-      <button
-        v-for="template in commandTemplates"
-        :key="template.key"
-        type="button"
-        @click="$emit('apply-template', template.key)"
-      >
-        {{ template.label }}
-      </button>
+    <div class="command-groups" aria-label="传令快捷模板">
+      <div class="command-group command-templates">
+        <span>议事</span>
+        <button
+          v-for="template in commandTemplates"
+          :key="template.key"
+          type="button"
+          @click="$emit('apply-template', template.key)"
+        >
+          {{ template.label }}
+        </button>
+      </div>
+      <div class="command-group chief-templates">
+        <span>宋江号令</span>
+        <button
+          v-for="template in chiefTemplates"
+          :key="template.key"
+          type="button"
+          @click="$emit('apply-template', template.key)"
+        >
+          {{ template.label }}
+        </button>
+      </div>
+    </div>
+    <div v-if="agents.length" class="coordination-inline" aria-label="协同会办">
+      <label>
+        <span>发话</span>
+        <select v-model="relayFromAgentId">
+          <option value="">请选择</option>
+          <option v-for="agent in agents" :key="`from-${agent.agentId}`" :value="agent.agentId">
+            {{ agentName(agent) }}
+          </option>
+        </select>
+      </label>
+      <label>
+        <span>接话</span>
+        <select v-model="relayToAgentId">
+          <option value="">请选择</option>
+          <option v-for="agent in agents" :key="`to-${agent.agentId}`" :value="agent.agentId">
+            {{ agentName(agent) }}
+          </option>
+        </select>
+      </label>
+      <input v-model="relayMessage" placeholder="转达内容或协同要求" />
+      <button type="button" :disabled="!canRelay" @click="emitRelay">互相传话</button>
+      <button type="button" :disabled="!canCoordinate" @click="emitCoordinate">配合办事</button>
     </div>
     <div ref="messageBoxRef" class="hall-messages">
       <div
@@ -85,20 +122,58 @@ const props = defineProps({
   targetText: { type: String, default: '全体好汉' }
 })
 
-defineEmits(['apply-template', 'load-messages', 'mention-agent', 'new-conversation', 'send-message', 'update:draft'])
+const emit = defineEmits([
+  'apply-template',
+  'coordinate-work',
+  'load-messages',
+  'mention-agent',
+  'new-conversation',
+  'relay-message',
+  'send-message',
+  'update:draft'
+])
 
 const messageBoxRef = ref(null)
+const relayFromAgentId = ref('')
+const relayToAgentId = ref('')
+const relayMessage = ref('')
 const pendingAuthor = '聚义厅'
 const commandTemplates = [
   { key: 'status', label: '汇报状态' },
   { key: 'risk', label: '评估风险' },
   { key: 'confirm', label: '接令确认' }
 ]
+const chiefTemplates = [
+  { key: 'reviewBounties', label: '巡检悬赏' },
+  { key: 'reviewRoster', label: '整备名册' },
+  { key: 'broadcastOrder', label: '全厅传令' },
+  { key: 'summonReport', label: '收拢回报' }
+]
 const taskText = computed(() => props.selectedTask?.title || '未选悬赏')
+const canRelay = computed(() => relayFromAgentId.value && relayToAgentId.value && relayMessage.value.trim())
+const canCoordinate = computed(() => relayFromAgentId.value && relayToAgentId.value && props.selectedTask)
 const pendingLabel = computed(() => {
   if (props.pendingAgentName) return `${props.pendingAgentName} 正在回话...`
   return '正在整理回报...'
 })
+
+const agentName = (agent) => agent?.name || agent?.personaName || agent?.agentId || ''
+
+const coordinationPayload = () => ({
+  fromAgentId: relayFromAgentId.value,
+  toAgentId: relayToAgentId.value,
+  message: relayMessage.value.trim()
+})
+
+const emitRelay = () => {
+  if (!canRelay.value) return
+  emit('relay-message', coordinationPayload())
+}
+
+const emitCoordinate = () => {
+  if (!canCoordinate.value) return
+  emit('coordinate-work', coordinationPayload())
+}
 
 watch(() => props.messages, () => {
   nextTick(() => {
@@ -198,20 +273,76 @@ button:disabled {
   color: #fff8e8;
 }
 
-.command-templates {
-  display: flex;
+.command-groups {
+  display: grid;
   flex: 0 0 auto;
   gap: 8px;
   padding: 0 14px 12px;
+}
+
+.command-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   overflow-x: auto;
 }
 
-.command-templates button {
+.command-group > span {
+  flex: 0 0 auto;
+  color: #8a6f4b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.command-group button {
   flex: 0 0 auto;
   min-height: 32px;
   padding: 0 10px;
   border-radius: 8px;
   background: #23483e;
+  color: #fff8e8;
+  white-space: nowrap;
+}
+
+.coordination-inline {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: 120px 120px minmax(160px, 1fr) auto auto;
+  gap: 8px;
+  padding: 0 14px 12px;
+}
+
+.coordination-inline label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: #8a6f4b;
+  font-size: 12px;
+}
+
+.coordination-inline select,
+.coordination-inline input {
+  min-width: 0;
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid #d7c3a2;
+  border-radius: 8px;
+  background: #fffdf6;
+  color: #3f2815;
+  font: inherit;
+  outline: none;
+}
+
+.coordination-inline input {
+  align-self: end;
+}
+
+.coordination-inline button {
+  align-self: end;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: #6d3f1f;
   color: #fff8e8;
   white-space: nowrap;
 }
@@ -353,6 +484,10 @@ button:disabled {
 
   .toolbar-actions {
     min-width: 0;
+  }
+
+  .coordination-inline {
+    grid-template-columns: 1fr;
   }
 }
 </style>

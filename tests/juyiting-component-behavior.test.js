@@ -123,6 +123,8 @@ describe('JuyiHall component behavior', () => {
       }
     })
 
+    await wrapper.find('.task-card').trigger('click')
+
     const actionButtons = wrapper.findAll('.recommended-agent-actions button')
     await actionButtons[0].trigger('click')
     await actionButtons[1].trigger('click')
@@ -131,6 +133,43 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.emitted('select-agent')[0]).to.deep.equal([agent])
     expect(wrapper.emitted('assign-task')[0]).to.deep.equal([selectedTask, agent])
     expect(wrapper.emitted('brief-selected-task')[0]).to.deep.equal([selectedTask, agent])
+  })
+
+  it('does not reopen BountyPanel detail modal from a stale selected task', async () => {
+    const selectedTask = {
+      id: 'task-1',
+      title: 'Inspect the camp',
+      status: 'open',
+      description: 'Inspect every outpost',
+      requiredAbilities: ['planning']
+    }
+    const wrapper = mount(BountyPanel, {
+      global: { stubs },
+      props: {
+        tasks: [selectedTask],
+        selectedTask,
+        selectedAgent: null,
+        recommendedAgents: [],
+        taskAbilityOptions: ['planning'],
+        taskStatusFilters: [],
+        abilityText: item => (item.abilities || []).join(' / '),
+        canAssign: (task, targetAgent) => Boolean(task && targetAgent),
+        formatTime: value => value,
+        portraitName: item => item.name,
+        portraitStyle: () => ({}),
+        taskAgentMatchScore: () => 98,
+        taskStateClass: () => 'is-open',
+        taskStatusCount: () => 1,
+        taskStatusText: status => status
+      }
+    })
+
+    expect(wrapper.find('.bounty-modal-overlay').exists()).to.equal(false)
+
+    await wrapper.find('.task-card').trigger('click')
+
+    expect(wrapper.find('.bounty-modal-overlay').exists()).to.equal(true)
+    expect(wrapper.emitted('select-task')[0]).to.deep.equal([selectedTask])
   })
 
   it('emits command template selections from ChatPanel without sending', async () => {
@@ -160,6 +199,52 @@ describe('JuyiHall component behavior', () => {
       ['confirm']
     ])
     expect(wrapper.emitted('send-message')).to.equal(undefined)
+  })
+
+  it('emits SongJiang and coordination actions from ChatPanel', async () => {
+    const agents = [
+      { agentId: 'wuyong', name: '吴用' },
+      { agentId: 'linchong', name: '林冲' }
+    ]
+    const wrapper = mount(ChatPanel, {
+      global: { stubs },
+      props: {
+        agents,
+        draft: '',
+        messages: [],
+        mentionLabel: agent => agent.name,
+        senderText: message => message.sender,
+        selectedTask: { id: 'task-1', title: 'Inspect the camp' },
+        targetText: '全体好汉',
+        connectionStatus: 'Synced'
+      }
+    })
+
+    await wrapper.findAll('.chief-templates button')[0].trigger('click')
+    expect(wrapper.emitted('apply-template')[0]).to.deep.equal(['reviewBounties'])
+
+    const selects = wrapper.findAll('.coordination-inline select')
+    await selects[0].setValue('wuyong')
+    await selects[1].setValue('linchong')
+    await wrapper.find('.coordination-inline input').setValue('请同步风险')
+
+    const actionButtons = wrapper.findAll('.coordination-inline button')
+    await actionButtons[0].trigger('click')
+    await actionButtons[1].trigger('click')
+
+    expect(wrapper.text()).to.include('宋江号令')
+    expect(wrapper.text()).to.include('互相传话')
+    expect(wrapper.text()).to.include('配合办事')
+    expect(wrapper.emitted('relay-message')[0][0]).to.deep.equal({
+      fromAgentId: 'wuyong',
+      toAgentId: 'linchong',
+      message: '请同步风险'
+    })
+    expect(wrapper.emitted('coordinate-work')[0][0]).to.deep.equal({
+      fromAgentId: 'wuyong',
+      toAgentId: 'linchong',
+      message: '请同步风险'
+    })
   })
 
   it('emits SongJiang management commands from CommandPanel', async () => {

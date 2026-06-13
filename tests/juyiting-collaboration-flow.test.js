@@ -20,6 +20,7 @@ const librarySource = readFileSync(
 const hallStageUrl = new URL('../src/components/juyiting/HallStage.vue', import.meta.url)
 const hallDataUrl = new URL('../src/composables/juyiting/useHallData.js', import.meta.url)
 const hallConversationUrl = new URL('../src/composables/juyiting/useHallConversation.js', import.meta.url)
+const hallStageSource = readFileSync(hallStageUrl, 'utf8')
 const hallDataSource = readFileSync(hallDataUrl, 'utf8')
 const hallConversationSource = readFileSync(hallConversationUrl, 'utf8')
 
@@ -28,23 +29,38 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallSource).not.to.include('<BottomDock')
     expect(hallSource).not.to.include("import BottomDock")
     expect(hallStageUrl).to.not.equal(undefined)
-    expect(readFileSync(hallStageUrl, 'utf8')).not.to.include("title=\"宋江号令\"")
-    expect(readFileSync(hallStageUrl, 'utf8')).not.to.include("title=\"协同会办\"")
-    expect(readFileSync(hallStageUrl, 'utf8')).to.include("title=\"藏经阁\"")
+    expect(hallStageSource).not.to.include("title=\"宋江号令\"")
+    expect(hallStageSource).not.to.include("title=\"协同会办\"")
+    expect(hallStageSource).to.include("title=\"藏经阁\"")
+  })
+
+  it('keeps bounty panel opening isolated from map drag and enter flicker', () => {
+    expect(hallStageSource).to.include('class="hall-room room-tasks" @pointerdown.stop @pointerup.stop @click.stop')
+    expect(hallStageSource).to.include('class="scene-hotspot hotspot-tasks" @pointerdown.stop @pointerup.stop @click.stop')
+    expect(hallSource).to.include('.panel-enter-from .floating-panel')
+    expect(hallSource).to.include('transform: translate3d(0, 8px, 0) scale(0.995);')
+    expect(hallSource).not.to.include('.panel-enter-from .floating-panel {\n  opacity: 0;')
   })
 
   it('assigns a bounty to an explicit agent instead of hidden selectedAgent only', () => {
-    expect(bountySource).to.include("$emit('assign-task', selectedTask, agent)")
+    expect(bountySource).to.include("$emit('assign-task', detailTask, agent)")
     expect(hallSource).to.include('const assignTask = async (task, agent')
     expect(hallSource).to.include('agentId: targetAgent.agentId')
   })
 
   it('offers task-aware command templates in chat', () => {
     expect(chatSource).to.include('commandTemplates')
+    expect(chatSource).to.include('chiefTemplates')
+    expect(chatSource).to.include('coordination-inline')
     expect(chatSource).to.include('汇报状态')
     expect(chatSource).to.include('评估风险')
     expect(chatSource).to.include('接令确认')
+    expect(chatSource).to.include('宋江号令')
+    expect(chatSource).to.include('互相传话')
+    expect(chatSource).to.include('配合办事')
     expect(chatSource).to.include("$emit('apply-template'")
+    expect(hallSource).to.include('relayAgentMessageFromChat')
+    expect(hallSource).to.include('coordinateAgentsFromChat')
   })
 
   it('keeps both agent and task context in outgoing chat metadata', () => {
@@ -90,5 +106,3 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallSource).to.include("import { useHallConversation } from '@/composables/juyiting/useHallConversation'")
   })
 })
-
-const hallStageSource = () => readFileSync(hallStageUrl, 'utf8')

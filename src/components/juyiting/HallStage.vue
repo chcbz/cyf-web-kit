@@ -47,19 +47,19 @@
           <strong>聚义厅</strong>
           <small>议事中庭</small>
         </button>
-        <button class="hall-room room-agents" @click="$emit('open-panel', 'agents')">
+        <button class="hall-room room-agents" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'agents')">
           <strong>名册房</strong>
           <small>好汉调度</small>
         </button>
-        <button class="hall-room room-tasks" @click="$emit('open-panel', 'tasks')">
+        <button class="hall-room room-tasks" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'tasks')">
           <strong>悬赏房</strong>
           <small>{{ tasksTotal }} 件</small>
         </button>
-        <button class="hall-room room-chat" @click="$emit('open-panel', 'chat')">
+        <button class="hall-room room-chat" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'chat')">
           <strong>传令房</strong>
           <small>厅内会话</small>
         </button>
-        <button class="hall-room room-library" @click="$emit('open-panel', 'library')">
+        <button class="hall-room room-library" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'library')">
           <strong>藏经阁</strong>
           <small>资料检索</small>
         </button>
@@ -87,22 +87,22 @@
         <div v-if="!visibleAgents.length" class="empty-hall">
           暂无 Agent 入厅，先在右侧刷新或等待上线
         </div>
-        <button v-if="hiddenAgentCount" class="hall-overflow" type="button" @click="$emit('open-panel', 'agents')">
+        <button v-if="hiddenAgentCount" class="hall-overflow" type="button" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'agents')">
           另有 {{ hiddenAgentCount }} 位在偏厅候命
         </button>
-        <button class="scene-hotspot hotspot-agents" @click="$emit('open-panel', 'agents')">
+        <button class="scene-hotspot hotspot-agents" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'agents')">
           <var-icon name="account-circle" />
           <span>名册</span>
         </button>
-        <button class="scene-hotspot hotspot-tasks" @click="$emit('open-panel', 'tasks')">
+        <button class="scene-hotspot hotspot-tasks" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'tasks')">
           <var-icon name="format-list-checkbox" />
           <span>悬赏</span>
         </button>
-        <button class="scene-hotspot hotspot-chat" @click="$emit('open-panel', 'chat')">
+        <button class="scene-hotspot hotspot-chat" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'chat')">
           <var-icon name="message-text-outline" />
           <span>传令</span>
         </button>
-        <button class="scene-hotspot hotspot-library" @click="$emit('open-panel', 'library')">
+        <button class="scene-hotspot hotspot-library" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'library')">
           <var-icon name="notebook" />
           <span>藏经阁</span>
         </button>
