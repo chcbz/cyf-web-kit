@@ -108,12 +108,15 @@ cd D:\workspace\chcbz\project\jia\api
 .\gradlew.bat :chat:jia-chat-service:test --tests cn.jia.chat.api.ChatControllerTest --tests cn.jia.chat.service.HallActionDispatcherTest --tests cn.jia.chat.handler.AgentWebSocketHandlerTest --rerun-tasks
 ```
 
+注意：上述两条后端 `--rerun-tasks` 命令应顺序执行，不要并行执行。并行执行可能同时重建 `common` 模块产物，导致另一个 Gradle 进程临时读不到 `BaseEntity.class`。
+
 ## 当前已验证结果
 
+- 完整门禁最近验证时间：`2026-06-15 00:35:12 +08:00`
 - 前端组件/契约测试：`42 passing`
 - 前端构建：`vite build` 成功
 - 浏览器 UI smoke：`聚义厅 UI smoke 验证通过`，最近验证页面 `https://localhost:8080/juyiting?transition=none`
-- 在线 Agent 派发 smoke：`聚义厅在线 Agent 派发 smoke 验证通过: public-beta-smoke-1781454383763`
+- 在线 Agent 派发 smoke：`聚义厅在线 Agent 派发 smoke 验证通过: public-beta-smoke-1781454630517`
 - 在线 Agent 派发 smoke 前置修复：灰度库 `oauth_api_key` 已补 `my-secret-api-key-123`，`status=1`，`expire_time=1775444943016`。
 - 藏经阁种子资料：`juyiting library public beta seed completed: 5 documents`
 - 藏经阁实际检索：关键词 `juyiting` 返回 `5` 条 `project` 资料
@@ -151,6 +154,11 @@ cd D:\workspace\chcbz\project\jia\api
 - `7cb4596`：`docs(juyiting): record online agent smoke gate`
 - `de43bf6`：`test(juyiting): verify online agent dispatch gate`
 - `1fcd781`：`docs(juyiting): record online dispatch verification commit`
+- `2651de7`：`docs(juyiting): record latest public beta smoke evidence`
+
+## 受控公测结论
+
+截至 `2026-06-15 00:35:12 +08:00`，聚义厅主链路、悬赏任务管理、藏经阁检索、厅内传令、在线 Agent 派发和前后端关键测试均已通过本地灰度验证，可进入受控公测。开放式公测前仍建议补充线上监控、告警、回滚预案和更完整的生产配置巡检。
 
 ## 本地剩余状态
 
