@@ -84,7 +84,13 @@ function openAgentSocket() {
     ws.emit('error', new Error(`websocket handshake rejected: ${detail}`))
   })
 
-  ws.waitFor = predicate => new Promise(resolve => waiters.push({ predicate, resolve }))
+  ws.waitFor = predicate => {
+    const matched = messages.find(predicate)
+    if (matched) {
+      return Promise.resolve(matched)
+    }
+    return new Promise(resolve => waiters.push({ predicate, resolve }))
+  }
   ws.messages = messages
   return ws
 }
@@ -110,6 +116,7 @@ async function main() {
     await withTimeout(ws.waitFor(text => text.includes('"type":"agent_registered"') && text.includes(agentId)), 'agent register')
 
     const intentId = `intent-${Date.now()}`
+    const directMessagePromise = ws.waitFor(text => text.includes('"type":"agent_direct_message"') && text.includes(intentId))
     const dispatchResponse = await request(`/juyiting/actions/${intentId}/dispatch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -133,10 +140,7 @@ async function main() {
       throw new Error(`dispatch response did not report dispatched: ${dispatchBody}`)
     }
 
-    const directMessage = await withTimeout(
-      ws.waitFor(text => text.includes('"type":"agent_direct_message"') && text.includes(intentId)),
-      'agent direct message'
-    )
+    const directMessage = await withTimeout(directMessagePromise, 'agent direct message')
     if (!directMessage.includes('"actionType":"task_briefing"')) {
       throw new Error(`direct message missing task_briefing action: ${directMessage}`)
     }

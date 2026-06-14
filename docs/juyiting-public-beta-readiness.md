@@ -72,14 +72,24 @@ where api_key = 'my-secret-api-key-123';
 
 insert into oauth_api_key
     (id, api_key, client_id, jiacn, key_name, expire_time, status, description, create_time, update_time)
-values
-    ('juyiting-public-beta-smoke', 'my-secret-api-key-123', 'jia_client', 'oH2zD1El9hvjnWu-LRmCr-JiTuXI',
-     'juyiting-public-beta-smoke', 1775444943016, 1, '聚义厅公测在线 Agent 派发 smoke', unix_timestamp(now(3)) * 1000,
-     unix_timestamp(now(3)) * 1000)
-on duplicate key update
-    status = values(status),
-    expire_time = values(expire_time),
-    update_time = values(update_time);
+select seed.next_id, 'my-secret-api-key-123', 'jia_client', 'oH2zD1El9hvjnWu-LRmCr-JiTuXI',
+       'juyiting-public-beta-smoke', 1775444943016, 1, '聚义厅公测在线 Agent 派发 smoke',
+       unix_timestamp(now(3)) * 1000, unix_timestamp(now(3)) * 1000
+from (
+    select coalesce(max(id), 0) + 1 as next_id
+    from oauth_api_key
+) seed
+where not exists (
+    select 1
+    from oauth_api_key
+    where api_key = 'my-secret-api-key-123'
+);
+
+update oauth_api_key
+set status = 1,
+    expire_time = 1775444943016,
+    update_time = unix_timestamp(now(3)) * 1000
+where api_key = 'my-secret-api-key-123';
 ```
 
 藏经阁种子资料与 API smoke：
@@ -103,8 +113,8 @@ cd D:\workspace\chcbz\project\jia\api
 - 前端组件/契约测试：`42 passing`
 - 前端构建：`vite build` 成功
 - 浏览器 UI smoke：`聚义厅 UI smoke 验证通过`
-- 在线 Agent 派发 smoke：新增为发布门禁，需在本地灰度后端启动且有有效 `oauth_api_key` 时执行。
-- 在线 Agent 派发 smoke 最近执行结果：脚本语法通过；当前灰度库默认 key 握手返回 401，需先补有效 `oauth_api_key` 后复跑。
+- 在线 Agent 派发 smoke：`聚义厅在线 Agent 派发 smoke 验证通过: public-beta-smoke-1781454283489`
+- 在线 Agent 派发 smoke 前置修复：灰度库 `oauth_api_key` 已补 `my-secret-api-key-123`，`status=1`，`expire_time=1775444943016`。
 - 藏经阁种子资料：`juyiting library public beta seed completed: 5 documents`
 - 藏经阁实际检索：关键词 `juyiting` 返回 `5` 条 `project` 资料
 - API smoke：退出码 `0`
@@ -138,6 +148,7 @@ cd D:\workspace\chcbz\project\jia\api
 - `c40ca4c`：`docs(juyiting): track public beta release handoff`
 - `d8a8bab`：`docs(juyiting): record public beta audit evidence`
 - `40a327b`：`test(juyiting): add online agent dispatch smoke`
+- `7cb4596`：`docs(juyiting): record online agent smoke gate`
 
 ## 本地剩余状态
 
@@ -149,5 +160,5 @@ cd D:\workspace\chcbz\project\jia\api
 
 ## 后续优化入口
 
-- 公测范围内继续优先跑通并保留在线 Agent WebSocket `dispatched` 运行时验证证据。
+- 公测范围内继续保留在线 Agent WebSocket `dispatched` 运行时验证证据，并在灰度数据变更后复跑 `npm.cmd run test:juyiting:agent-smoke`。
 - 若需要把顶层 `D:\workspace\chcbz\project\jia\docs` 中的详设文档长期维护，应迁移或复制到已跟踪仓库。
