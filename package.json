@@ -13,7 +13,8 @@
     "lint": "eslint src",
     "test": "mocha --config .mocharc.json",
     "test:watch": "mocha --config .mocharc.json --watch",
-    "test:run": "mocha --config .mocharc.json"
+    "test:run": "mocha --config .mocharc.json",
+    "test:juyiting:ui-smoke": "node tests/juyiting-public-beta-ui-smoke.mjs"
   },
   "dependencies": {
     "@varlet/ui": "^3.10.9",
