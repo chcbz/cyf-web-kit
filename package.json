@@ -15,7 +15,8 @@
     "test:watch": "mocha --config .mocharc.json --watch",
     "test:run": "mocha --config .mocharc.json",
     "test:juyiting:ui-smoke": "node tests/juyiting-public-beta-ui-smoke.mjs",
-    "test:juyiting:agent-smoke": "node tests/juyiting-agent-online-smoke.mjs"
+    "test:juyiting:agent-smoke": "node tests/juyiting-agent-online-smoke.mjs",
+    "test:juyiting:preflight": "node tests/juyiting-public-beta-preflight.mjs"
   },
   "dependencies": {
     "@varlet/ui": "^3.10.9",

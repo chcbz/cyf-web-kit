@@ -49,6 +49,13 @@ cd D:\workspace\chcbz\project\jia\web\jia-web-kit
 npm.cmd run test:juyiting:ui-smoke
 ```
 
+发布前快速巡检：
+
+```powershell
+cd D:\workspace\chcbz\project\jia\web\jia-web-kit
+npm.cmd run test:juyiting:preflight
+```
+
 在线 Agent 派发 smoke：
 
 ```powershell
@@ -112,11 +119,12 @@ cd D:\workspace\chcbz\project\jia\api
 
 ## 当前已验证结果
 
-- 完整门禁最近验证时间：`2026-06-15 00:35:12 +08:00`
+- 完整门禁最近验证时间：`2026-06-15 00:40:50 +08:00`
 - 前端组件/契约测试：`42 passing`
 - 前端构建：`vite build` 成功
+- 发布前快速巡检：`聚义厅公测 preflight 验证通过`，覆盖发布手册、后端登录、地图宋江、悬赏接口、藏经阁检索、前端入口和 Agent WebSocket API key。
 - 浏览器 UI smoke：`聚义厅 UI smoke 验证通过`，最近验证页面 `https://localhost:8080/juyiting?transition=none`
-- 在线 Agent 派发 smoke：`聚义厅在线 Agent 派发 smoke 验证通过: public-beta-smoke-1781454630517`
+- 在线 Agent 派发 smoke：`聚义厅在线 Agent 派发 smoke 验证通过: public-beta-smoke-1781455236675`
 - 在线 Agent 派发 smoke 前置修复：灰度库 `oauth_api_key` 已补 `my-secret-api-key-123`，`status=1`，`expire_time=1775444943016`。
 - 藏经阁种子资料：`juyiting library public beta seed completed: 5 documents`
 - 藏经阁实际检索：关键词 `juyiting` 返回 `5` 条 `project` 资料
@@ -158,7 +166,17 @@ cd D:\workspace\chcbz\project\jia\api
 
 ## 受控公测结论
 
-截至 `2026-06-15 00:35:12 +08:00`，聚义厅主链路、悬赏任务管理、藏经阁检索、厅内传令、在线 Agent 派发和前后端关键测试均已通过本地灰度验证，可进入受控公测。开放式公测前仍建议补充线上监控、告警、回滚预案和更完整的生产配置巡检。
+截至 `2026-06-15 00:40:50 +08:00`，聚义厅主链路、悬赏任务管理、藏经阁检索、厅内传令、在线 Agent 派发和前后端关键测试均已通过本地灰度验证，可进入受控公测。开放式公测前已补发布前快速巡检和检查清单，仍需在真实生产发布流程中确认监控、告警和回滚责任人。
+
+## 开放公测前检查清单
+
+- 监控：确认后端进程、`/agent/map`、`/agent/tasks/status-counts`、`/chat/library/search`、`/ws/agent/channel` 有可观测的可用性指标。
+- 告警：确认登录失败率、WebSocket 401/5xx、藏经阁检索失败、悬赏接口 5xx、ES `chat_memory` yellow/red 状态有告警通道。
+- 回滚：确认前端静态资源、后端 `develop` 发布包、灰度 `application-grey.properties` 和 `oauth_api_key` 变更均有回滚记录。
+- 配置巡检：发布前执行 `npm.cmd run test:juyiting:preflight`、`npm.cmd run test:juyiting:ui-smoke`、`npm.cmd run test:juyiting:agent-smoke`，并顺序执行后端 Agent/Chat 关键测试。
+- 数据巡检：确认 `chat_memory` 中至少有聚义厅公测资料，藏经阁关键词 `聚义厅` 或 `juyiting` 可查回资料。
+- 权限巡检：确认悬赏议事只对分派人开放，厅内传令人选来自地图人物，名册状态切换不影响地图人物。
+- 运行边界：确认受控公测账号、API key 和本地/灰度服务地址没有写死到生产前端产物中。
 
 ## 本地剩余状态
 
