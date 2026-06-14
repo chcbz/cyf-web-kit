@@ -149,6 +149,7 @@ cd D:\workspace\chcbz\project\jia\api
 - `d8a8bab`：`docs(juyiting): record public beta audit evidence`
 - `40a327b`：`test(juyiting): add online agent dispatch smoke`
 - `7cb4596`：`docs(juyiting): record online agent smoke gate`
+- `de43bf6`：`test(juyiting): verify online agent dispatch gate`
 
 ## 本地剩余状态
 
