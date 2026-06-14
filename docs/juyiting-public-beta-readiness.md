@@ -165,6 +165,8 @@ cd D:\workspace\chcbz\project\jia\api
 - `2651de7`：`docs(juyiting): record latest public beta smoke evidence`
 - `bd05d33`：`docs(juyiting): record public beta readiness gate`
 - `1a79864`：`test(juyiting): add public beta preflight gate`
+- `dffc820`：`docs(juyiting): record preflight gate commit`
+- `63287a9`：`docs(juyiting): add public beta release runbook`
 
 ## 受控公测结论
 
