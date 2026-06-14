@@ -49,6 +49,39 @@ cd D:\workspace\chcbz\project\jia\web\jia-web-kit
 npm.cmd run test:juyiting:ui-smoke
 ```
 
+在线 Agent 派发 smoke：
+
+```powershell
+cd D:\workspace\chcbz\project\jia\web\jia-web-kit
+$env:JIA_AGENT_API_KEY="本地 oauth_api_key 中有效的 api_key"
+npm.cmd run test:juyiting:agent-smoke
+```
+
+说明：
+
+- 脚本会登录本地后端、连接 `wss://localhost:10018/ws/agent/channel`、注册临时 Agent、调用 `/juyiting/actions/{intentId}/dispatch`，并验证 WebSocket 收到 `agent_direct_message`。
+- 如果本地测试库沿用 `oauth` 测试种子，可不设置 `JIA_AGENT_API_KEY`，脚本默认尝试 `my-secret-api-key-123`。
+- 若握手返回 401，先检查 `oauth_api_key` 是否存在有效记录、`status=1`、`expire_time` 未过期。
+
+本地灰度库可用以下 SQL 检查或初始化测试 key：
+
+```sql
+select id, client_id, jiacn, key_name, status, expire_time
+from oauth_api_key
+where api_key = 'my-secret-api-key-123';
+
+insert into oauth_api_key
+    (id, api_key, client_id, jiacn, key_name, expire_time, status, description, create_time, update_time)
+values
+    ('juyiting-public-beta-smoke', 'my-secret-api-key-123', 'jia_client', 'oH2zD1El9hvjnWu-LRmCr-JiTuXI',
+     'juyiting-public-beta-smoke', 1775444943016, 1, '聚义厅公测在线 Agent 派发 smoke', unix_timestamp(now(3)) * 1000,
+     unix_timestamp(now(3)) * 1000)
+on duplicate key update
+    status = values(status),
+    expire_time = values(expire_time),
+    update_time = values(update_time);
+```
+
 藏经阁种子资料与 API smoke：
 
 ```powershell
@@ -70,6 +103,7 @@ cd D:\workspace\chcbz\project\jia\api
 - 前端组件/契约测试：`42 passing`
 - 前端构建：`vite build` 成功
 - 浏览器 UI smoke：`聚义厅 UI smoke 验证通过`
+- 在线 Agent 派发 smoke：新增为发布门禁，需在本地灰度后端启动且有有效 `oauth_api_key` 时执行。
 - 藏经阁种子资料：`juyiting library public beta seed completed: 5 documents`
 - 藏经阁实际检索：关键词 `juyiting` 返回 `5` 条 `project` 资料
 - API smoke：退出码 `0`
@@ -101,6 +135,7 @@ cd D:\workspace\chcbz\project\jia\api
 - `cbe9431`：`test(juyiting): add public beta ui smoke`
 - `6e9dbad`：`chore(juyiting): ignore local vite smoke logs`
 - `c40ca4c`：`docs(juyiting): track public beta release handoff`
+- `d8a8bab`：`docs(juyiting): record public beta audit evidence`
 
 ## 本地剩余状态
 
@@ -108,8 +143,9 @@ cd D:\workspace\chcbz\project\jia\api
 
 - `api/starter/src/main/resources/application-grey.properties` 有一个灰度模型名配置改动，未提交。
 - `web/jia-web-kit/src/components.d.ts` 仅显示本地生成/换行状态。
+- 手册文件是 UTF-8；如果 PowerShell 直接 `Get-Content` 出现中文乱码，使用 `Get-Content -Encoding UTF8` 查看。
 
 ## 后续优化入口
 
-- 公测范围内继续优先补充真实在线 Agent WebSocket `dispatched` 运行时验证。
+- 公测范围内继续优先跑通并保留在线 Agent WebSocket `dispatched` 运行时验证证据。
 - 若需要把顶层 `D:\workspace\chcbz\project\jia\docs` 中的详设文档长期维护，应迁移或复制到已跟踪仓库。
