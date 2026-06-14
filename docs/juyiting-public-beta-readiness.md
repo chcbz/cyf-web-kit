@@ -170,6 +170,8 @@ cd D:\workspace\chcbz\project\jia\api
 
 截至 `2026-06-15 00:40:50 +08:00`，聚义厅主链路、悬赏任务管理、藏经阁检索、厅内传令、在线 Agent 派发和前后端关键测试均已通过本地灰度验证，可进入受控公测。开放式公测前已补发布前快速巡检和检查清单，仍需在真实生产发布流程中确认监控、告警和回滚责任人。
 
+开放公测发布当天使用 `docs/juyiting-public-beta-runbook.md` 执行，发布完成后把执行时间、责任人和结果回填到本文档。
+
 ## 开放公测前检查清单
 
 - 监控：确认后端进程、`/agent/map`、`/agent/tasks/status-counts`、`/chat/library/search`、`/ws/agent/channel` 有可观测的可用性指标。
