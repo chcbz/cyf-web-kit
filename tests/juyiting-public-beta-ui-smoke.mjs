@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { createHash, randomBytes } from 'node:crypto'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,7 +8,8 @@ import { setTimeout as delay } from 'node:timers/promises'
 const FRONTEND_URL = process.env.JUYITING_FRONTEND_URL || 'https://localhost:8080'
 const BACKEND_URL = process.env.JUYITING_BACKEND_URL || 'https://localhost:10018'
 const OAUTH_CLIENT_ID = process.env.JUYITING_OAUTH_CLIENT_ID || 'jiafewnnv58ec2379c'
-const OAUTH_CLIENT_SECRET = process.env.JUYITING_OAUTH_CLIENT_SECRET || '9h68u32e9eb4x3twhmnub3yixctrx891'
+const LOGIN_USERNAME = process.env.JUYITING_USERNAME || 'chcbz'
+const LOGIN_PASSWORD = process.env.JUYITING_PASSWORD || '123'
 const CHROME_CANDIDATES = [
   process.env.CHROME_PATH,
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -18,6 +20,32 @@ const CHROME_CANDIDATES = [
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
+const absoluteUrl = (location) => {
+  if (!location) return ''
+  return location.startsWith('http') ? location : `${BACKEND_URL}${location.startsWith('/') ? '' : '/'}${location}`
+}
+
+class CookieJar {
+  constructor () {
+    this.cookies = new Map()
+  }
+
+  store (response) {
+    const setCookie = response.headers.getSetCookie?.() || []
+    for (const cookie of setCookie) {
+      const [pair] = cookie.split(';')
+      const index = pair.indexOf('=')
+      if (index > 0) {
+        this.cookies.set(pair.slice(0, index), pair.slice(index + 1))
+      }
+    }
+  }
+
+  header () {
+    return [...this.cookies.entries()].map(([key, value]) => `${key}=${value}`).join('; ')
+  }
+}
+
 const requestJson = async (url, options = {}) => {
   const response = await fetch(url, options)
   if (!response.ok) {
@@ -26,15 +54,79 @@ const requestJson = async (url, options = {}) => {
   return response.json()
 }
 
+const base64Url = (buffer) => buffer
+  .toString('base64')
+  .replace(/\+/g, '-')
+  .replace(/\//g, '_')
+  .replace(/=+$/, '')
+
+const fetchWithCookies = async (jar, url, options = {}) => {
+  const headers = new Headers(options.headers || {})
+  const cookie = jar.header()
+  if (cookie) headers.set('Cookie', cookie)
+  const response = await fetch(url, {
+    ...options,
+    headers,
+    redirect: 'manual'
+  })
+  jar.store(response)
+  return response
+}
+
 const getToken = async () => {
-  const basic = Buffer.from(`${OAUTH_CLIENT_ID}:${OAUTH_CLIENT_SECRET}`).toString('base64')
+  const jar = new CookieJar()
+  const codeVerifier = base64Url(randomBytes(48))
+  const codeChallenge = base64Url(createHash('sha256').update(codeVerifier).digest())
+  const redirectUri = `${FRONTEND_URL}/oauth2/callback`
+  const authorizeUrl = `${BACKEND_URL}/oauth2/authorize?${new URLSearchParams({
+    response_type: 'code',
+    client_id: OAUTH_CLIENT_ID,
+    scope: 'openid',
+    redirect_uri: redirectUri,
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
+    state: '/juyiting',
+    access_type: 'offline'
+  })}`
+
+  await fetchWithCookies(jar, authorizeUrl)
+  const loginResponse = await fetchWithCookies(jar, `${BACKEND_URL}/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: new URLSearchParams({
+      loginType: 'password',
+      username: LOGIN_USERNAME,
+      password: LOGIN_PASSWORD,
+      redirect_uri: ''
+    })
+  })
+
+  let nextUrl = absoluteUrl(loginResponse.headers.get('location')) || authorizeUrl
+  let code = ''
+  for (let i = 0; i < 8 && nextUrl; i++) {
+    if (nextUrl.startsWith(redirectUri)) {
+      code = new URL(nextUrl).searchParams.get('code') || ''
+      break
+    }
+    const response = await fetchWithCookies(jar, nextUrl)
+    nextUrl = absoluteUrl(response.headers.get('location'))
+  }
+  if (!code) throw new Error('OAuth authorization code was not returned')
+
   const data = await requestJson(`${BACKEND_URL}/oauth2/token`, {
     method: 'POST',
     headers: {
-      Authorization: `Basic ${basic}`,
       'Content-Type': 'application/x-www-form-urlencoded'
     },
-    body: 'grant_type=client_credentials&scope=openid'
+    body: new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: redirectUri,
+      client_id: OAUTH_CLIENT_ID,
+      code_verifier: codeVerifier
+    })
   })
   if (!data.access_token) throw new Error('OAuth token response did not include access_token')
   return data.access_token
