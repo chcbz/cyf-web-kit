@@ -163,6 +163,8 @@ cd D:\workspace\chcbz\project\jia\api
 - `de43bf6`：`test(juyiting): verify online agent dispatch gate`
 - `1fcd781`：`docs(juyiting): record online dispatch verification commit`
 - `2651de7`：`docs(juyiting): record latest public beta smoke evidence`
+- `bd05d33`：`docs(juyiting): record public beta readiness gate`
+- `1a79864`：`test(juyiting): add public beta preflight gate`
 
 ## 受控公测结论
 
