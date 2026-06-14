@@ -104,6 +104,7 @@ cd D:\workspace\chcbz\project\jia\api
 - 前端构建：`vite build` 成功
 - 浏览器 UI smoke：`聚义厅 UI smoke 验证通过`
 - 在线 Agent 派发 smoke：新增为发布门禁，需在本地灰度后端启动且有有效 `oauth_api_key` 时执行。
+- 在线 Agent 派发 smoke 最近执行结果：脚本语法通过；当前灰度库默认 key 握手返回 401，需先补有效 `oauth_api_key` 后复跑。
 - 藏经阁种子资料：`juyiting library public beta seed completed: 5 documents`
 - 藏经阁实际检索：关键词 `juyiting` 返回 `5` 条 `project` 资料
 - API smoke：退出码 `0`
@@ -136,6 +137,7 @@ cd D:\workspace\chcbz\project\jia\api
 - `6e9dbad`：`chore(juyiting): ignore local vite smoke logs`
 - `c40ca4c`：`docs(juyiting): track public beta release handoff`
 - `d8a8bab`：`docs(juyiting): record public beta audit evidence`
+- `40a327b`：`test(juyiting): add online agent dispatch smoke`
 
 ## 本地剩余状态
 
