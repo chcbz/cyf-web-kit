@@ -11,6 +11,7 @@ export const useHallData = ({
   const agents = ref([])
   const mapAgents = ref([])
   const tasks = ref([])
+  const taskStatusCounts = ref({})
   const agentFilter = ref('all')
   const taskStatusFilter = ref('')
   const taskAbilityFilter = ref('')
@@ -45,8 +46,36 @@ export const useHallData = ({
   }
 
   const taskStatusCount = (status) => {
+    if (Object.keys(taskStatusCounts.value).length) {
+      return Number(taskStatusCounts.value[status || 'total'] || 0)
+    }
     if (!status) return tasks.value.length
     return tasks.value.filter(task => normalizeStatus(task.status) === status).length
+  }
+
+  const searchTasks = async (params) => {
+    let list = []
+    await agentApi.search('/tasks/search', params, {
+      autoLoading: false,
+      onSuccess: (result) => {
+        list = result?.data || []
+      }
+    })
+    return list
+  }
+
+  const loadTaskStatusCounts = async () => {
+    let counts = {}
+    await agentApi.search('/tasks/status-counts', {
+      ability: taskAbilityFilter.value || undefined,
+      keyword: taskKeyword.value || undefined
+    }, {
+      autoLoading: false,
+      onSuccess: (result) => {
+        counts = result?.data || {}
+      }
+    })
+    return counts
   }
 
   const loadMapAgents = async () => {
@@ -91,25 +120,30 @@ export const useHallData = ({
 
   const loadTasks = async () => {
     try {
-      await agentApi.search('/tasks/search', {
-        status: taskStatusFilter.value || undefined,
+      const baseParams = {
         ability: taskAbilityFilter.value || undefined,
         keyword: taskKeyword.value || undefined,
         pageNum: 1,
         pageSize: 30
-      }, {
-        autoLoading: false,
-        onSuccess: (result) => {
-          const list = result?.data || []
-          tasks.value = list
-          if (selectedTask.value && !tasks.value.some(task => task.id === selectedTask.value.id)) {
-            selectedTask.value = null
-          }
-        }
-      })
+      }
+      const displayParams = {
+        ...baseParams,
+        status: taskStatusFilter.value || undefined
+      }
+      const [list, counts] = await Promise.all([
+        searchTasks(displayParams),
+        loadTaskStatusCounts()
+      ])
+
+      tasks.value = list
+      taskStatusCounts.value = counts
+      if (selectedTask.value && !tasks.value.some(task => task.id === selectedTask.value.id)) {
+        selectedTask.value = null
+      }
     } catch (error) {
       log.warn('load bounty tasks failed:', error)
       tasks.value = []
+      taskStatusCounts.value = {}
       selectedTask.value = null
     }
   }

@@ -37,8 +37,11 @@
         </div>
         <button type="button" @click="$emit('cite-library', item)">引用到传令</button>
       </article>
-      <div v-if="!results.length" class="empty-list">
-        输入关键词后检索藏经阁资料。
+      <div v-if="errorMessage" class="empty-list error-list">
+        {{ errorMessage }}
+      </div>
+      <div v-else-if="!results.length" class="empty-list">
+        {{ hasSearched ? '暂未检索到资料' : '输入关键词后检索藏经阁资料。' }}
       </div>
     </div>
   </div>
@@ -46,7 +49,9 @@
 
 <script setup>
 defineProps({
+  errorMessage: { type: String, default: '' },
   formatTime: { type: Function, required: true },
+  hasSearched: { type: Boolean, default: false },
   keyword: { type: String, default: '' },
   loading: { type: Boolean, default: false },
   results: { type: Array, default: () => [] },
@@ -181,6 +186,10 @@ button:disabled {
   background: #fff8e8;
   color: #8a6f4b;
   text-align: center;
+}
+
+.error-list {
+  color: #9b2f26;
 }
 
 @media (max-width: 720px) {

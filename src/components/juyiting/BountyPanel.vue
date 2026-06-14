@@ -20,7 +20,18 @@
         <var-icon name="refresh" />
         <span>刷新</span>
       </button>
+      <button class="new-task-button" type="button" @click="showCreateForm = !showCreateForm">
+        <var-icon name="plus" />
+        <span>新建</span>
+      </button>
     </div>
+
+    <form v-if="showCreateForm" class="task-create-form" @submit.prevent="submitCreateTask">
+      <input v-model.trim="taskForm.title" name="taskTitle" placeholder="悬赏标题" />
+      <textarea v-model.trim="taskForm.description" name="taskDescription" placeholder="悬赏说明"></textarea>
+      <input v-model.trim="taskForm.requiredAbilities" name="requiredAbilities" placeholder="能力要求，逗号分隔" />
+      <button type="submit" :disabled="!taskForm.title">发布悬赏</button>
+    </form>
 
     <div class="task-status-tabs">
       <button
@@ -58,7 +69,7 @@
             <span v-if="!(task.requiredAbilities || []).length">不限能力</span>
           </div>
         </article>
-        <div v-if="!tasks.length" class="empty-list">暂无悬赏，调整筛选或刷新后再试</div>
+        <div v-if="!tasks.length" class="empty-list">暂无悬赏，调整筛选或刷新后再试。</div>
       </div>
     </div>
 
@@ -101,7 +112,33 @@
                   <var-icon name="message-text-outline" />
                   <span>传令议事</span>
                 </button>
+                <button
+                  class="assign-selected-agents"
+                  type="button"
+                  :disabled="!selectedAssignees.length"
+                  @click="$emit('assign-task', detailTask, selectedAssignees)"
+                >
+                  <var-icon name="account-multiple-check" />
+                  <span>分派给已选 {{ selectedAssignees.length }} 人</span>
+                </button>
+                <button
+                  class="discuss-task-button"
+                  type="button"
+                  :disabled="!taskAssigneeIds(detailTask).length"
+                  :title="!taskAssigneeIds(detailTask).length ? unassignedDiscussHint : ''"
+                  @click="$emit('discuss-task', detailTask)"
+                >
+                  <var-icon name="forum-outline" />
+                  <span>围绕悬赏议事</span>
+                </button>
+                <button class="archive-task-button" type="button" @click="$emit('archive-task', detailTask)">
+                  <var-icon name="archive-outline" />
+                  <span>归档</span>
+                </button>
               </div>
+              <p v-if="!taskAssigneeIds(detailTask).length" class="task-operation-hint">
+                {{ unassignedDiscussHint }}
+              </p>
             </div>
 
             <div class="modal-agent-scroll">
@@ -113,11 +150,14 @@
                 :class="{ active: selectedAgent?.agentId === agent.agentId }"
               >
                 <button class="recommended-agent-main" type="button" @click="$emit('select-agent', agent)">
-                  <span
-                    class="mini-avatar portrait-avatar"
-                    :style="portraitStyle(agent)"
-                    :title="portraitName(agent)"
-                  ></span>
+                  <input
+                    class="assignee-check"
+                    type="checkbox"
+                    :checked="selectedAssigneeIds.includes(agent.agentId)"
+                    @click.stop
+                    @change="toggleAssignee(agent)"
+                  />
+                  <span class="mini-avatar portrait-avatar" :style="portraitStyle(agent)" :title="portraitName(agent)"></span>
                   <span>
                     <strong>{{ agentDisplayName(agent) }}</strong>
                     <small>{{ abilityText(agent) }}</small>
@@ -126,11 +166,7 @@
                 </button>
                 <div class="recommended-agent-actions">
                   <button type="button" @click="$emit('select-agent', agent)">选中</button>
-                  <button
-                    type="button"
-                    :disabled="!canAssign(detailTask, agent)"
-                    @click="$emit('assign-task', detailTask, agent)"
-                  >
+                  <button type="button" :disabled="!canAssign(detailTask, agent)" @click="$emit('assign-task', detailTask, agent)">
                     指派给 {{ agentDisplayName(agent) }}
                   </button>
                   <button type="button" @click="$emit('brief-selected-task', detailTask, agent)">传令</button>
@@ -171,7 +207,10 @@ const props = defineProps({
 
 const emit = defineEmits([
   'assign-task',
+  'archive-task',
   'brief-selected-task',
+  'create-task',
+  'discuss-task',
   'load-tasks',
   'select-agent',
   'select-task',
@@ -181,12 +220,54 @@ const emit = defineEmits([
 ])
 
 const modalTask = ref(null)
+const showCreateForm = ref(false)
+const selectedAssigneeIds = ref([])
+const taskForm = ref({
+  title: '',
+  description: '',
+  requiredAbilities: ''
+})
 const detailTask = computed(() => modalTask.value)
+const unassignedDiscussHint = '该悬赏还未分派，暂不能进入议事'
+const selectedAssignees = computed(() => {
+  const selected = new Set(selectedAssigneeIds.value)
+  return props.recommendedAgents.filter(agent => selected.has(agent.agentId))
+})
 
 const agentDisplayName = (agent) => agent?.name || agent?.personaName || agent?.agentId || ''
+const taskAssigneeIds = (task) => {
+  if (!task) return []
+  if (Array.isArray(task.assignedAgentIds)) return task.assignedAgentIds
+  return task.assignedAgentId ? [task.assignedAgentId] : []
+}
+
+const submitCreateTask = () => {
+  if (!taskForm.value.title) return
+  emit('create-task', {
+    title: taskForm.value.title,
+    description: taskForm.value.description,
+    requiredAbilities: taskForm.value.requiredAbilities
+      .split(',')
+      .map(item => item.trim())
+      .filter(Boolean)
+  })
+  taskForm.value = { title: '', description: '', requiredAbilities: '' }
+  showCreateForm.value = false
+}
+
+const toggleAssignee = (agent) => {
+  const id = agent?.agentId
+  if (!id) return
+  if (selectedAssigneeIds.value.includes(id)) {
+    selectedAssigneeIds.value = selectedAssigneeIds.value.filter(item => item !== id)
+  } else {
+    selectedAssigneeIds.value = [...selectedAssigneeIds.value, id]
+  }
+}
 
 const openTask = (task) => {
   modalTask.value = task
+  selectedAssigneeIds.value = taskAssigneeIds(task)
   emit('select-task', task)
 }
 
@@ -203,10 +284,10 @@ watch(() => props.selectedTask, (task) => {
 
   if (modalTask.value?.id === task.id) {
     modalTask.value = task
+    selectedAssigneeIds.value = taskAssigneeIds(task)
   }
 })
 </script>
-
 <style scoped>
 .bounty-panel {
   display: flex;
@@ -259,7 +340,9 @@ button:disabled {
 }
 
 .task-search input,
-.task-search select {
+.task-search select,
+.task-create-form input,
+.task-create-form textarea {
   min-width: 0;
   height: 36px;
   padding: 0 10px;
@@ -268,6 +351,28 @@ button:disabled {
   background: #fffdf6;
   color: #3f2815;
   outline: none;
+}
+
+.task-create-form {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: minmax(150px, 1fr) minmax(180px, 1.4fr) minmax(140px, 0.8fr) auto;
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+
+.task-create-form textarea {
+  height: 36px;
+  padding-top: 8px;
+  resize: vertical;
+}
+
+.task-create-form button {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: #7c1f1b;
+  color: #fff8e8;
 }
 
 .task-status-tabs {
@@ -448,6 +553,12 @@ button:disabled {
   background: #23483e;
 }
 
+.task-operation-hint {
+  margin: -4px 0 10px;
+  color: #8a5d26;
+  font-size: 12px;
+}
+
 .recommended-agents {
   display: grid;
   gap: 8px;
@@ -473,7 +584,7 @@ button:disabled {
 
 .recommended-agent-main {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) auto;
+  grid-template-columns: 22px 38px minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
   width: 100%;
@@ -482,6 +593,12 @@ button:disabled {
   background: rgba(255, 253, 246, 0.72);
   color: #2f261c;
   text-align: left;
+}
+
+.assignee-check {
+  width: 16px;
+  height: 16px;
+  accent-color: #7c1f1b;
 }
 
 .recommended-agent-actions {
@@ -736,6 +853,10 @@ button:disabled {
   }
 
   .task-operation-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .task-create-form {
     grid-template-columns: 1fr;
   }
 

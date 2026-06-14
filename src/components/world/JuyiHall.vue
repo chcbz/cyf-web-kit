@@ -84,7 +84,10 @@
             :task-status-text="taskStatusText"
             :tasks="tasks"
             @assign-task="assignTask"
+            @archive-task="archiveTask"
             @brief-selected-task="briefSelectedTask"
+            @create-task="createTask"
+            @discuss-task="discussTask"
             @load-tasks="loadTasks"
             @select-agent="selectAgent"
             @select-task="selectTask"
@@ -94,7 +97,8 @@
           <ChatPanel
             v-if="activePanel === 'chat'"
             v-model:draft="draft"
-            :agents="mapAgents"
+            :agents="chatMentionAgents"
+            :event-stream-recovering="eventStreamRecovering"
             :is-awaiting-reply="isAwaitingReply"
             :is-streaming="isStreaming"
             :messages="messages"
@@ -116,7 +120,9 @@
             v-if="activePanel === 'library'"
             v-model:keyword="libraryKeyword"
             v-model:source-type="librarySourceType"
+            :error-message="libraryErrorMessage"
             :format-time="formatTime"
+            :has-searched="libraryHasSearched"
             :loading="libraryLoading"
             :results="libraryResults"
             @cite-library="citeLibraryItem"
@@ -166,7 +172,10 @@ const libraryKeyword = ref('')
 const librarySourceType = ref('')
 const libraryResults = ref([])
 const libraryLoading = ref(false)
+const libraryHasSearched = ref(false)
+const libraryErrorMessage = ref('')
 const outgoingMetadata = ref({})
+const taskDiscussionAgentIds = ref([])
 let bubbleTimer = null
 let bubbleInitialTimer = null
 let bubbleClearTimer = null
@@ -181,6 +190,12 @@ const activePanelTitle = computed(() => {
 const chatTargetText = computed(() => {
   if (!selectedAgent.value) return '全体好汉'
   return `${portraitShortName(selectedAgent.value)} / ${selectedAgent.value.name || selectedAgent.value.agentId}`
+})
+
+const chatMentionAgents = computed(() => {
+  if (!taskDiscussionAgentIds.value.length) return mapAgents.value
+  const allowed = new Set(taskDiscussionAgentIds.value)
+  return mapAgents.value.filter(agent => allowed.has(agent.agentId))
 })
 
 const normalizeStatus = (status = '') => status.toLowerCase()
@@ -203,18 +218,20 @@ const statusText = (status = '') => {
 
 const taskStatusText = (status = '') => {
   const value = normalizeStatus(status)
-  if (value === 'open') return '待接取'
-  if (value === 'assigned') return '已指派'
+  if (value === 'open') return '待分派'
+  if (value === 'assigned') return '已分派'
   if (value === 'running') return '进行中'
   if (value === 'completed') return '已完成'
   if (value === 'failed') return '失败'
-  return '待接取'
+  if (value === 'archived') return '已归档'
+  return '待分派'
 }
 
 const taskStateClass = (status = '') => {
   const value = normalizeStatus(status)
   if (value === 'completed') return 'task-state-done'
   if (value === 'failed') return 'task-state-failed'
+  if (value === 'archived') return 'task-state-done'
   if (value === 'running') return 'task-state-running'
   if (value === 'assigned') return 'task-state-assigned'
   return 'task-state-open'
@@ -287,6 +304,7 @@ const selectAgent = (agent) => {
 
 
 const openPanel = (panel) => {
+  if (panel !== 'chat') taskDiscussionAgentIds.value = []
   activePanel.value = panel
 }
 
@@ -297,12 +315,46 @@ const closePanel = () => {
 const briefSelectedTask = (task = selectedTask.value, agent = selectedAgent.value) => {
   if (!task) return
   selectedTask.value = task
+  taskDiscussionAgentIds.value = []
   if (agent) selectedAgent.value = agent
   const abilities = (task.requiredAbilities || []).join(' / ') || '不限能力'
   const target = agent ? `建议由 ${portraitShortName(agent)} / ${agent.name || agent.personaName || agent.agentId} 承接。` : '请给出适合承接的好汉。'
   draft.value = `请围绕悬赏「${task.title}」议事：任务编号 ${task.id}，状态 ${taskStatusText(task.status)}，所需能力 ${abilities}。${target}请说明风险和下一步安排。`
   openPanel('chat')
   showToast('已生成传令内容')
+}
+
+const taskAssigneeIds = (task) => {
+  if (!task) return []
+  if (Array.isArray(task.assignedAgentIds)) return task.assignedAgentIds
+  return task.assignedAgentId ? [task.assignedAgentId] : []
+}
+
+const createTask = async (payload) => {
+  try {
+    await agentApi.create('/tasks', payload, {
+      autoLoading: false,
+      onSuccess: (result) => {
+        const task = result?.data
+        if (task) {
+          tasks.value = [task, ...tasks.value.filter(item => item.id !== task.id)]
+          selectedTask.value = task
+        }
+        showToast('悬赏已发布')
+      }
+    })
+  } catch (error) {
+    log.warn('create bounty task failed:', error)
+    showToast('发布悬赏失败')
+  }
+}
+
+const discussTask = (task) => {
+  if (!task) return
+  selectedTask.value = task
+  taskDiscussionAgentIds.value = taskAssigneeIds(task)
+  draft.value = `请围绕悬赏「${task.title}」议事。`
+  openPanel('chat')
 }
 
 const applyCommandTemplate = (key) => {
@@ -318,6 +370,8 @@ const applyCommandTemplate = (key) => {
 const searchLibrary = async () => {
   if (!libraryKeyword.value.trim()) return
   libraryLoading.value = true
+  libraryHasSearched.value = true
+  libraryErrorMessage.value = ''
   try {
     await chatApi.search('/library/search', {
       keyword: libraryKeyword.value.trim(),
@@ -330,8 +384,9 @@ const searchLibrary = async () => {
       }
     })
   } catch (error) {
-    log.warn('藏经阁检索失败', error)
+    log.warn('library search failed', error)
     libraryResults.value = []
+    libraryErrorMessage.value = '藏经阁暂不可用，主流程不受影响'
     showToast('藏经阁检索失败')
   } finally {
     libraryLoading.value = false
@@ -363,6 +418,7 @@ const {
   chatConnectionStatus,
   conversationId,
   draft,
+  eventStreamRecovering,
   insertAgentMention,
   isAwaitingReply,
   isStreaming,
@@ -422,27 +478,51 @@ const showRandomAgentBubble = () => {
 
 
 const assignTask = async (task, agent = selectedAgent.value) => {
-  const targetAgent = agent
-  if (!canAssign(task, targetAgent)) return
+  const targetAgents = Array.isArray(agent) ? agent : [agent].filter(Boolean)
+  const targetAgent = targetAgents[0]
+  if (!task || !targetAgents.length) return
+  if (targetAgents.some(item => !canAssign(task, item))) return
   try {
     await agentApi.create(`/tasks/${task.id}/assign`, {
-      agentId: targetAgent.agentId
+      agentId: targetAgent.agentId,
+      agentIds: targetAgents.map(item => item.agentId)
     }, {
       autoLoading: false,
       onSuccess: () => {
         task.status = 'assigned'
-        task.assignedAgentId = targetAgent.agentId
-        task.assignedAgentName = targetAgent.name || targetAgent.personaName || targetAgent.agentId
-        targetAgent.status = 'busy'
-        targetAgent.currentTaskTitle = task.title
+        task.assignedAgentIds = targetAgents.map(item => item.agentId)
+        task.assignedAgentId = task.assignedAgentIds[0]
+        task.assignedAgentName = targetAgents.map(item => item.name || item.personaName || item.agentId).join('、')
+        targetAgents.forEach(item => {
+          item.status = 'busy'
+          item.currentTaskTitle = task.title
+        })
         selectedAgent.value = targetAgent
         selectedTask.value = task
         showToast(`${task.title} 已指派给 ${task.assignedAgentName}`)
       }
     })
   } catch (error) {
-    log.warn('指派任务失败:', error)
+    log.warn('assign bounty task failed:', error)
     showToast('指派失败，请刷新状态后重试')
+  }
+}
+
+const archiveTask = async (task) => {
+  if (!task) return
+  try {
+    await agentApi.create(`/tasks/${task.id}/archive`, {}, {
+      autoLoading: false,
+      onSuccess: (result) => {
+        const archived = result?.data || { ...task, status: 'archived' }
+        tasks.value = tasks.value.map(item => item.id === task.id ? archived : item)
+        selectedTask.value = archived
+        showToast('悬赏已归档')
+      }
+    })
+  } catch (error) {
+    log.warn('archive bounty task failed:', error)
+    showToast('归档悬赏失败')
   }
 }
 
@@ -1072,7 +1152,8 @@ button.hall-room {
 }
 
 .panel-chat {
-  width: min(760px, 100%);
+  width: min(920px, calc(100vw - 32px));
+  height: min(760px, calc(100vh - 48px));
 }
 
 .panel-title {
@@ -1428,6 +1509,13 @@ button.hall-room {
     max-width: calc(100% - 16px);
     max-height: 82%;
     border-radius: 8px 8px 0 0;
+  }
+
+  .floating-panel.panel-chat {
+    width: calc(100% - 16px);
+    max-width: calc(100% - 16px);
+    height: calc(100dvh - 16px);
+    max-height: calc(100dvh - 16px);
   }
 
 }

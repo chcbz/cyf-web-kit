@@ -172,6 +172,98 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.emitted('select-task')[0]).to.deep.equal([selectedTask])
   })
 
+  it('emits create, multi-assign, discussion and archive actions from BountyPanel', async () => {
+    const selectedTask = {
+      id: 'task-1',
+      title: 'Inspect the camp',
+      status: 'assigned',
+      description: 'Inspect every outpost',
+      assignedAgentIds: ['agent-wuyong']
+    }
+    const agents = [
+      { agentId: 'agent-wuyong', name: 'Wu Yong', status: 'online', abilities: ['planning'] },
+      { agentId: 'agent-linchong', name: 'Lin Chong', status: 'online', abilities: ['execute'] }
+    ]
+    const wrapper = mount(BountyPanel, {
+      global: { stubs },
+      props: {
+        tasks: [selectedTask],
+        selectedTask,
+        selectedAgent: null,
+        recommendedAgents: agents,
+        taskAbilityOptions: ['planning'],
+        taskStatusFilters: [],
+        abilityText: item => (item.abilities || []).join(' / '),
+        canAssign: () => true,
+        formatTime: value => value,
+        portraitName: item => item.name,
+        portraitStyle: () => ({}),
+        taskAgentMatchScore: () => 98,
+        taskStateClass: () => 'is-open',
+        taskStatusCount: () => 1,
+        taskStatusText: status => status
+      }
+    })
+
+    await wrapper.find('.new-task-button').trigger('click')
+    await wrapper.find('input[name="taskTitle"]').setValue('Review reports')
+    await wrapper.find('textarea[name="taskDescription"]').setValue('Summarize reports')
+    await wrapper.find('.task-create-form').trigger('submit')
+    await wrapper.find('.task-card').trigger('click')
+    await wrapper.findAll('.assignee-check')[0].setChecked(true)
+    await wrapper.findAll('.assignee-check')[1].setChecked(true)
+    await wrapper.find('.assign-selected-agents').trigger('click')
+    await wrapper.find('.discuss-task-button').trigger('click')
+    await wrapper.find('.archive-task-button').trigger('click')
+
+    expect(wrapper.emitted('create-task')[0][0]).to.include({
+      title: 'Review reports',
+      description: 'Summarize reports'
+    })
+    expect(wrapper.emitted('assign-task')[0]).to.deep.equal([selectedTask, agents])
+    expect(wrapper.emitted('discuss-task')[0]).to.deep.equal([selectedTask])
+    expect(wrapper.emitted('archive-task')[0]).to.deep.equal([selectedTask])
+  })
+
+  it('keeps discussion disabled for unassigned bounty tasks with a readable hint', async () => {
+    const selectedTask = {
+      id: 'task-1',
+      title: 'Inspect the camp',
+      status: 'open',
+      description: 'Inspect every outpost',
+      assignedAgentIds: []
+    }
+    const wrapper = mount(BountyPanel, {
+      global: { stubs },
+      props: {
+        tasks: [selectedTask],
+        selectedTask,
+        selectedAgent: null,
+        recommendedAgents: [],
+        taskAbilityOptions: ['planning'],
+        taskStatusFilters: [],
+        abilityText: item => (item.abilities || []).join(' / '),
+        canAssign: () => false,
+        formatTime: value => value,
+        portraitName: item => item.name,
+        portraitStyle: () => ({}),
+        taskAgentMatchScore: () => 98,
+        taskStateClass: () => 'is-open',
+        taskStatusCount: () => 1,
+        taskStatusText: status => status
+      }
+    })
+
+    await wrapper.find('.task-card').trigger('click')
+
+    const discussButton = wrapper.find('.discuss-task-button')
+    await discussButton.trigger('click')
+
+    expect(discussButton.attributes('disabled')).to.not.equal(undefined)
+    expect(wrapper.text()).to.include('该悬赏还未分派，暂不能进入议事')
+    expect(wrapper.emitted('discuss-task')).to.equal(undefined)
+  })
+
   it('emits command template selections from ChatPanel without sending', async () => {
     const wrapper = mount(ChatPanel, {
       global: { stubs },
@@ -199,6 +291,24 @@ describe('JuyiHall component behavior', () => {
       ['confirm']
     ])
     expect(wrapper.emitted('send-message')).to.equal(undefined)
+  })
+
+  it('keeps ChatPanel composer as a dedicated bottom region', () => {
+    const wrapper = mount(ChatPanel, {
+      global: { stubs },
+      props: {
+        agents: [],
+        draft: '',
+        messages: [],
+        mentionLabel: agent => agent.name,
+        senderText: message => message.sender,
+        targetText: 'All agents',
+        connectionStatus: 'Synced'
+      }
+    })
+
+    expect(wrapper.find('.chat-composer').exists()).to.equal(true)
+    expect(wrapper.find('.hall-messages').exists()).to.equal(true)
   })
 
   it('keeps low-value SongJiang and coordination actions out of ChatPanel', async () => {
@@ -230,6 +340,23 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.text()).not.to.include('配合办事')
     expect(wrapper.emitted('relay-message')).to.equal(undefined)
     expect(wrapper.emitted('coordinate-work')).to.equal(undefined)
+  })
+
+  it('shows a readable recovery status while chat event stream reconnects', () => {
+    const wrapper = mount(ChatPanel, {
+      global: { stubs },
+      props: {
+        agents: [],
+        draft: '',
+        eventStreamRecovering: true,
+        messages: [],
+        mentionLabel: agent => agent.name,
+        senderText: message => message.sender,
+        targetText: '全体好汉'
+      }
+    })
+
+    expect(wrapper.text()).to.include('正在尝试恢复回话')
   })
 
   it('emits SongJiang management commands from CommandPanel', async () => {
@@ -299,5 +426,36 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.text()).to.include('向量检索')
     expect(wrapper.emitted('search-library')).to.have.length(1)
     expect(wrapper.emitted('cite-library')[0][0].content).to.equal('Deployment notes')
+  })
+
+  it('shows public beta empty and error states for LibraryPanel', async () => {
+    const emptyWrapper = mount(LibraryPanel, {
+      global: { stubs },
+      props: {
+        formatTime: value => String(value),
+        hasSearched: true,
+        keyword: 'unknown',
+        loading: false,
+        results: [],
+        sourceType: 'project'
+      }
+    })
+
+    expect(emptyWrapper.text()).to.include('暂未检索到资料')
+
+    const errorWrapper = mount(LibraryPanel, {
+      global: { stubs },
+      props: {
+        errorMessage: '藏经阁暂不可用，主流程不受影响',
+        formatTime: value => String(value),
+        hasSearched: true,
+        keyword: 'deploy',
+        loading: false,
+        results: [],
+        sourceType: 'project'
+      }
+    })
+
+    expect(errorWrapper.text()).to.include('藏经阁暂不可用，主流程不受影响')
   })
 })

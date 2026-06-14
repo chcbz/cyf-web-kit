@@ -17,6 +17,7 @@ export const useHallConversation = ({
   const draft = ref('')
   const isStreaming = ref(false)
   const isAwaitingReply = ref(false)
+  const eventStreamRecovering = ref(false)
 
   let hallEventController = null
   let hallEventConversationId = ''
@@ -30,6 +31,7 @@ export const useHallConversation = ({
   })
 
   const chatConnectionStatus = computed(() => {
+    if (eventStreamRecovering.value) return '正在尝试恢复回话'
     if (isStreaming.value) return '传令中'
     if (isAwaitingReply.value) return pendingAgentName.value ? `${pendingAgentName.value} 回话中` : '等待回报'
     return '实时同步中'
@@ -188,6 +190,7 @@ export const useHallConversation = ({
       if (!response.ok || !response.body) {
         throw new Error(`Hall event stream failed: ${response.status}`)
       }
+      eventStreamRecovering.value = false
 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
@@ -209,6 +212,7 @@ export const useHallConversation = ({
     } catch (error) {
       if (error.name !== 'AbortError') {
         log.warn('聚义厅实时消息连接中断', error)
+        eventStreamRecovering.value = true
         hallEventReconnectTimer = window.setTimeout(() => {
           hallEventConversationId = ''
           startHallEventStream()
@@ -223,6 +227,7 @@ export const useHallConversation = ({
     if (hallEventController) hallEventController.abort()
     hallEventController = null
     hallEventConversationId = ''
+    eventStreamRecovering.value = false
   }
 
   const loadHallConversationContent = async (id = conversationId.value) => {
@@ -450,6 +455,7 @@ export const useHallConversation = ({
     chatConnectionStatus,
     conversationId,
     draft,
+    eventStreamRecovering,
     insertAgentMention,
     isAwaitingReply,
     isStreaming,

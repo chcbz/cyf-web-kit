@@ -65,7 +65,18 @@ describe('JuyiHall collaboration flow contract', () => {
 
   it('limits hall chat mention choices to map agents', () => {
     expect(hallSource).to.include('<ChatPanel')
-    expect(hallSource).to.include(':agents="mapAgents"')
+    expect(hallSource).to.include(':agents="chatMentionAgents"')
+  })
+
+  it('supports task management actions from the bounty board', () => {
+    expect(hallSource).to.include('@create-task="createTask"')
+    expect(hallSource).to.include('@archive-task="archiveTask"')
+    expect(hallSource).to.include('@discuss-task="discussTask"')
+    expect(hallSource).to.include('chatMentionAgents')
+    expect(bountySource).to.include('new-task-button')
+    expect(bountySource).to.include('assign-selected-agents')
+    expect(bountySource).to.include("$emit('archive-task'")
+    expect(bountySource).to.include("$emit('discuss-task'")
   })
 
   it('keeps low-value SongJiang and coordination panels out of the primary hall surface', () => {

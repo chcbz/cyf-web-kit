@@ -4,7 +4,7 @@
       <div class="toolbar-meta">
         <span>对话对象：{{ targetText }}</span>
         <span>当前悬赏：{{ taskText }}</span>
-        <span class="panel-status">{{ connectionStatus || (isAwaitingReply ? pendingLabel : '实时同步中') }}</span>
+        <span class="panel-status">{{ displayStatus }}</span>
       </div>
       <div class="toolbar-actions">
         <button class="new-chat" type="button" @click="$emit('new-conversation')">新建聚义会话</button>
@@ -59,7 +59,7 @@
       <div v-if="!messages.length" class="empty-list">厅中暂无传令，发起一句开始议事。</div>
     </div>
 
-    <form class="hall-input" @submit.prevent="$emit('send-message')">
+    <form class="hall-input chat-composer" @submit.prevent="$emit('send-message')">
       <input
         :value="draft"
         autofocus
@@ -81,6 +81,7 @@ const props = defineProps({
   agents: { type: Array, default: () => [] },
   connectionStatus: { type: String, default: '' },
   draft: { type: String, default: '' },
+  eventStreamRecovering: { type: Boolean, default: false },
   isAwaitingReply: { type: Boolean, default: false },
   isStreaming: { type: Boolean, default: false },
   mentionLabel: { type: Function, required: true },
@@ -109,6 +110,10 @@ const commandTemplates = [
   { key: 'confirm', label: '接令确认' }
 ]
 const taskText = computed(() => props.selectedTask?.title || '未选悬赏')
+const displayStatus = computed(() => {
+  if (props.eventStreamRecovering) return '正在尝试恢复回话'
+  return props.connectionStatus || (props.isAwaitingReply ? pendingLabel.value : '实时同步中')
+})
 const pendingLabel = computed(() => {
   if (props.pendingAgentName) return `${props.pendingAgentName} 正在回话...`
   return '正在整理回报...'
@@ -130,6 +135,7 @@ watch(() => props.messages, () => {
   min-width: 0;
   min-height: 0;
   flex-direction: column;
+  background: #fffaf0;
 }
 
 button {
@@ -146,40 +152,59 @@ button:disabled {
 .panel-toolbar {
   display: flex;
   flex: 0 0 auto;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 12px 16px;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(116, 75, 35, 0.12);
   color: #765f40;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .toolbar-meta {
-  display: grid;
-  gap: 4px;
+  display: flex;
+  flex: 1 1 260px;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.toolbar-meta span {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 26px;
+  padding: 0 8px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #f5ead6;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .panel-status {
   color: #9a6e40;
-  font-size: 12px;
 }
 
 .toolbar-actions {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
-  min-width: 132px;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  min-width: 0;
 }
 
 .panel-toolbar button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 36px;
-  padding: 0 12px;
+  min-height: 30px;
+  padding: 0 10px;
   border-radius: 8px;
   background: #efe0c6;
   color: #4a3423;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .panel-toolbar .new-chat {
@@ -190,15 +215,15 @@ button:disabled {
 .mention-strip {
   display: flex;
   flex: 0 0 auto;
-  gap: 8px;
-  padding: 0 14px 12px;
+  gap: 6px;
+  padding: 8px 12px 6px;
   overflow-x: auto;
 }
 
 .mention-strip button {
   flex: 0 0 auto;
-  min-height: 34px;
-  padding: 0 12px;
+  min-height: 30px;
+  padding: 0 10px;
   border: 1px solid #d7c3a2;
   border-radius: 999px;
   background: #fffdf6;
@@ -215,8 +240,8 @@ button:disabled {
 .command-groups {
   display: flex;
   flex: 0 0 auto;
-  gap: 10px;
-  padding: 0 14px 12px;
+  gap: 8px;
+  padding: 0 12px 8px;
   overflow-x: auto;
 }
 
@@ -234,7 +259,7 @@ button:disabled {
 
 .command-group button {
   flex: 0 0 auto;
-  min-height: 32px;
+  min-height: 30px;
   padding: 0 10px;
   border-radius: 8px;
   background: #23483e;
@@ -245,24 +270,31 @@ button:disabled {
 .hall-messages {
   flex: 1;
   min-height: 0;
-  padding: 12px 14px;
+  padding: 14px 16px;
   overflow-y: auto;
+  background:
+    linear-gradient(180deg, rgba(239, 224, 198, 0.44), rgba(255, 250, 240, 0) 82px),
+    #fbf3e4;
 }
 
 .hall-message {
+  max-width: 88%;
   margin-bottom: 10px;
   padding: 10px 12px;
   border-radius: 8px;
   background: #fff8e8;
   color: #4a3423;
+  box-shadow: 0 1px 0 rgba(71, 44, 23, 0.08);
 }
 
 .hall-message.USER {
+  margin-left: auto;
   background: #e8f2ed;
 }
 
 .hall-message.AGENT,
 .hall-message.SYSTEM {
+  margin-right: auto;
   background: #fffdf6;
 }
 
@@ -310,15 +342,16 @@ button:disabled {
 .hall-input {
   display: grid;
   flex: 0 0 auto;
-  grid-template-columns: 1fr 42px;
+  grid-template-columns: minmax(0, 1fr) 44px;
   gap: 8px;
-  padding: 12px 14px 14px;
+  padding: 10px 12px;
   border-top: 1px solid rgba(116, 75, 35, 0.16);
+  background: #fffaf0;
 }
 
 .hall-input input {
   min-width: 0;
-  height: 42px;
+  height: 44px;
   padding: 0 12px;
   border: 1px solid #d7c3a2;
   border-radius: 8px;
@@ -339,12 +372,19 @@ button:disabled {
 
 @media (max-width: 640px) {
   .panel-toolbar {
-    align-items: stretch;
-    flex-direction: column;
+    align-items: center;
   }
 
   .toolbar-actions {
-    min-width: 0;
+    width: 100%;
+  }
+
+  .toolbar-actions button {
+    flex: 1 1 0;
+  }
+
+  .hall-message {
+    max-width: 94%;
   }
 }
 </style>

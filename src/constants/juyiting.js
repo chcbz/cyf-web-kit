@@ -16,11 +16,12 @@ export const statusFilters = [
 
 export const taskStatusFilters = [
   { label: '全部', value: '' },
-  { label: '待接取', value: 'open' },
-  { label: '已指派', value: 'assigned' },
+  { label: '待分派', value: 'open' },
+  { label: '已分派', value: 'assigned' },
   { label: '进行中', value: 'running' },
   { label: '已完成', value: 'completed' },
-  { label: '失败', value: 'failed' }
+  { label: '失败', value: 'failed' },
+  { label: '已归档', value: 'archived' }
 ]
 
 export const portraitRoles = [
