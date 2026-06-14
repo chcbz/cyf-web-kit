@@ -112,12 +112,12 @@ cd D:\workspace\chcbz\project\jia\api
 
 - 前端组件/契约测试：`42 passing`
 - 前端构建：`vite build` 成功
-- 浏览器 UI smoke：`聚义厅 UI smoke 验证通过`
-- 在线 Agent 派发 smoke：`聚义厅在线 Agent 派发 smoke 验证通过: public-beta-smoke-1781454283489`
+- 浏览器 UI smoke：`聚义厅 UI smoke 验证通过`，最近验证页面 `https://localhost:8080/juyiting?transition=none`
+- 在线 Agent 派发 smoke：`聚义厅在线 Agent 派发 smoke 验证通过: public-beta-smoke-1781454383763`
 - 在线 Agent 派发 smoke 前置修复：灰度库 `oauth_api_key` 已补 `my-secret-api-key-123`，`status=1`，`expire_time=1775444943016`。
 - 藏经阁种子资料：`juyiting library public beta seed completed: 5 documents`
 - 藏经阁实际检索：关键词 `juyiting` 返回 `5` 条 `project` 资料
-- API smoke：退出码 `0`
+- API smoke：`聚义厅受控公测 smoke 验证通过`，退出码 `0`
 - 后端 Agent 测试：`BUILD SUCCESSFUL`
 - 后端 Chat 测试：`BUILD SUCCESSFUL`
 
@@ -150,6 +150,7 @@ cd D:\workspace\chcbz\project\jia\api
 - `40a327b`：`test(juyiting): add online agent dispatch smoke`
 - `7cb4596`：`docs(juyiting): record online agent smoke gate`
 - `de43bf6`：`test(juyiting): verify online agent dispatch gate`
+- `1fcd781`：`docs(juyiting): record online dispatch verification commit`
 
 ## 本地剩余状态
 
