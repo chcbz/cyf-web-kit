@@ -167,6 +167,7 @@ cd D:\workspace\chcbz\project\jia\api
 - `1a79864`：`test(juyiting): add public beta preflight gate`
 - `dffc820`：`docs(juyiting): record preflight gate commit`
 - `63287a9`：`docs(juyiting): add public beta release runbook`
+- `0fb9a5a`：`docs(juyiting): record release runbook commit`
 
 ## 受控公测结论
 
