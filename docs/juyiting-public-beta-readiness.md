@@ -71,6 +71,7 @@ cd D:\workspace\chcbz\project\jia\api
 - 前端构建：`vite build` 成功
 - 浏览器 UI smoke：`聚义厅 UI smoke 验证通过`
 - 藏经阁种子资料：`juyiting library public beta seed completed: 5 documents`
+- 藏经阁实际检索：关键词 `juyiting` 返回 `5` 条 `project` 资料
 - API smoke：退出码 `0`
 - 后端 Agent 测试：`BUILD SUCCESSFUL`
 - 后端 Chat 测试：`BUILD SUCCESSFUL`
@@ -99,6 +100,7 @@ cd D:\workspace\chcbz\project\jia\api
 - `4391079`：`feat(juyiting): prepare public beta frontend`
 - `cbe9431`：`test(juyiting): add public beta ui smoke`
 - `6e9dbad`：`chore(juyiting): ignore local vite smoke logs`
+- `c40ca4c`：`docs(juyiting): track public beta release handoff`
 
 ## 本地剩余状态
 
