@@ -64,6 +64,23 @@ const DEMO_AGENTS = [
       failure: 0,
       totalScore: 80
     }
+  },
+  {
+    id: 'agent-husanniang',
+    agentId: 'agent-husanniang',
+    name: '扈三娘',
+    title: '一丈青',
+    status: AGENT_STATUS.ONLINE,
+    avatar: '',
+    abilities: ['突击', '协同', '任务执行'],
+    endpoint: 'local-demo',
+    personaName: '扈三娘',
+    slogan: '若要速破阵脚，我愿先行。',
+    stats: {
+      success: 21,
+      failure: 1,
+      totalScore: 89
+    }
   }
 ]
 

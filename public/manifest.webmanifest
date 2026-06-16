@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "CYF Web Kit",
-  "short_name": "CYF",
-  "description": "CYF Web Kit progressive web app",
+  "name": "聚义厅 Agent 协作台",
+  "short_name": "聚义厅",
+  "description": "梁山风格的多 Agent 协作工作台",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -28,6 +28,12 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "/pwa/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }

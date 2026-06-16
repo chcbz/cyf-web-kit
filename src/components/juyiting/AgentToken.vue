@@ -430,6 +430,87 @@ defineEmits(['select-agent'])
   transform: rotate(14deg);
 }
 
+.role-husanniang .agent-cape {
+  display: block;
+  top: 32px;
+  width: 44px;
+  height: 44px;
+  border-radius: 18px 18px 24px 24px;
+  background: linear-gradient(180deg, rgba(47, 111, 106, 0.78), rgba(22, 56, 52, 0.52));
+}
+
+.role-husanniang .agent-hat {
+  display: block;
+  width: 18px;
+  height: 32px;
+  border-radius: 14px 14px 6px 6px;
+  background: linear-gradient(180deg, #1d1713, #4b3020 42%, rgba(29, 23, 19, 0));
+}
+
+.role-husanniang .agent-hat::before,
+.role-husanniang .agent-hat::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  width: 15px;
+  height: 7px;
+  border-radius: 7px;
+  background: linear-gradient(90deg, #d4a949, #f0ddb0);
+}
+
+.role-husanniang .agent-hat::before {
+  right: 11px;
+  transform: rotate(-34deg);
+}
+
+.role-husanniang .agent-hat::after {
+  left: 11px;
+  transform: rotate(34deg);
+}
+
+.role-husanniang .agent-body {
+  width: 34px;
+  height: 42px;
+  border-radius: 18px 18px 12px 12px;
+}
+
+.role-husanniang .agent-sash {
+  top: 16px;
+  height: 6px;
+  transform: rotate(9deg);
+}
+
+.role-husanniang .agent-weapon {
+  display: block;
+  right: -6px;
+  top: 12px;
+  width: 34px;
+  height: 34px;
+  transform: rotate(18deg);
+}
+
+.role-husanniang .agent-weapon::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 6px;
+  width: 6px;
+  height: 28px;
+  border-radius: 5px;
+  background: linear-gradient(180deg, #784e23, #3c2417);
+}
+
+.role-husanniang .agent-weapon::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 5px solid #e4dcc4;
+  border-top-color: transparent;
+  border-left-color: transparent;
+  border-radius: 50%;
+  box-shadow: inset -1px -1px 0 rgba(0, 0, 0, 0.16);
+}
+
 .role-likui .agent-body {
   width: 41px;
   height: 45px;

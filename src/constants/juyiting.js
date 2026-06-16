@@ -30,7 +30,8 @@ export const portraitRoles = [
   { slug: 'linchong', name: '林冲', title: '攻坚型', x: 2, y: 0, robe: '#3f4f78', trim: '#c08a46', scale: 1.04, step: 0.72 },
   { slug: 'luzhishen', name: '鲁智深', title: '护法型', x: 0, y: 1, robe: '#8b5a1f', trim: '#d9d0be', scale: 1.12, step: 0.92 },
   { slug: 'yanqing', name: '燕青', title: '机动型', x: 1, y: 1, robe: '#5c2d63', trim: '#7a9e7e', scale: 0.92, step: 0.62 },
-  { slug: 'likui', name: '李逵', title: '先锋型', x: 2, y: 1, robe: '#6d3f1f', trim: '#b93622', scale: 1.08, step: 0.68 }
+  { slug: 'likui', name: '李逵', title: '先锋型', x: 2, y: 1, robe: '#6d3f1f', trim: '#b93622', scale: 1.08, step: 0.68 },
+  { slug: 'husanniang', name: '扈三娘', title: '疾锋型', x: 1, y: 1, robe: '#2f6f6a', trim: '#d4a949', scale: 0.98, step: 0.66 }
 ]
 
 export const roleDialogues = {
@@ -58,6 +59,11 @@ export const roleDialogues = {
     '我去探一探消息。',
     '此事宜快不宜迟。',
     '且听我细说来路。'
+  ],
+  husanniang: [
+    '前锋一线，我可先行破阵。',
+    '轻骑快进，最忌迟疑。',
+    '若要擒拿要点，交给我便是。'
   ],
   likui: [
     '哥哥吩咐便是！',
