@@ -6,6 +6,13 @@
         <h1>聚义厅</h1>
       </div>
       <div class="stage-actions">
+        <button
+          class="icon-action sound-toggle"
+          :title="soundEnabled ? '关闭音效' : '开启音效'"
+          @click="$emit('toggle-sound')"
+        >
+          <var-icon :name="soundEnabled ? 'volume-high' : 'volume-off'" />
+        </button>
         <button class="icon-action" title="好汉名册" @click="$emit('open-panel', 'agents')">
           <var-icon name="account-circle" />
         </button>
@@ -127,13 +134,14 @@ defineProps({
   portraitStyle: { type: Function, required: true },
   roleClass: { type: Function, required: true },
   selectedAgent: { type: Object, default: null },
+  soundEnabled: { type: Boolean, default: true },
   statusClass: { type: Function, required: true },
   statusText: { type: Function, required: true },
   tasksTotal: { type: Number, default: 0 },
   visibleAgents: { type: Array, default: () => [] }
 })
 
-defineEmits(['new-conversation', 'open-panel', 'refresh-hall', 'select-agent'])
+defineEmits(['new-conversation', 'open-panel', 'refresh-hall', 'select-agent', 'toggle-sound'])
 
 const hallBoardRef = ref(null)
 const mapWorldRef = ref(null)
@@ -274,6 +282,11 @@ button {
   border-radius: 8px;
   background: rgba(255, 244, 212, 0.16);
   color: #fff4d4;
+}
+
+.sound-toggle {
+  background: rgba(215, 184, 117, 0.24);
+  color: #fff8de;
 }
 
 .hall-board {

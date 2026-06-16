@@ -10,14 +10,16 @@
       :portrait-style="portraitStyle"
       :role-class="roleClass"
       :selected-agent="selectedAgent"
+      :sound-enabled="soundEnabled"
       :status-class="statusClass"
       :status-text="statusText"
       :tasks-total="tasks.length"
       :visible-agents="visibleAgents"
-      @new-conversation="newHallConversation"
+      @new-conversation="handleNewHallConversation"
       @open-panel="openPanel"
       @refresh-hall="refreshHall"
       @select-agent="selectAgent"
+      @toggle-sound="toggleHallSound"
     >
 
       <div v-if="selectedAgent" class="quick-bar">
@@ -28,9 +30,9 @@
             :portrait-name="portraitName"
             :portrait-style="portraitStyle"
             :status-text="statusText"
-            @close-card="selectedAgent = null"
+            @close-card="closeSelectedAgentCard"
             @open-agents="openPanel('agents')"
-            @start-chat="startAgentConversation(selectedAgent)"
+            @start-chat="handleStartAgentConversation(selectedAgent)"
           />
         </transition>
       </div>
@@ -111,9 +113,9 @@
             :target-text="chatTargetText"
             @apply-template="applyCommandTemplate"
             @load-messages="loadHallMessages(conversationId)"
-            @mention-agent="mentionAgent"
-            @new-conversation="newHallConversation"
-            @send-message="sendHallMessage"
+            @mention-agent="handleMentionAgent"
+            @new-conversation="handleNewHallConversation"
+            @send-message="handleSendHallMessage"
           />
 
           <LibraryPanel
@@ -146,6 +148,7 @@ import { agentApi, chatApi } from '@/composables/useHttp'
 import { useHallConversation } from '@/composables/juyiting/useHallConversation'
 import { useHallData } from '@/composables/juyiting/useHallData'
 import { useHallPhysics } from '@/composables/juyiting/useHallPhysics'
+import { useHallSound } from '@/composables/juyiting/useHallSound'
 import { portraitName, portraitRole, portraitShortName, portraitStyle, roleClass } from '@/composables/juyiting/useWaterMarginRoles'
 import AgentPanel from '@/components/juyiting/AgentPanel.vue'
 import BountyPanel from '@/components/juyiting/BountyPanel.vue'
@@ -179,6 +182,18 @@ const taskDiscussionAgentIds = ref([])
 let bubbleTimer = null
 let bubbleInitialTimer = null
 let bubbleClearTimer = null
+
+const {
+  playAgentSelect,
+  playError,
+  playPanelOpen,
+  playRefresh,
+  playSend,
+  playSuccess,
+  playTap,
+  setSoundEnabled,
+  soundEnabled
+} = useHallSound()
 
 const activePanelTitle = computed(() => {
   if (activePanel.value === 'agents') return '好汉名册'
@@ -279,7 +294,8 @@ const {
   taskAgentMatchScore
 })
 
-const refreshHall = async () => {
+const refreshHall = async ({ silent = false } = {}) => {
+  if (!silent) playRefresh()
   await Promise.all([loadAgents(), loadTasks()])
 }
 
@@ -296,20 +312,29 @@ const { agentStyle, startPhysics, stopPhysics } = useHallPhysics(visibleAgents, 
 
 const selectTask = (task) => {
   selectedTask.value = task
+  playTap()
 }
 
 const selectAgent = (agent) => {
   selectedAgent.value = agent
+  playAgentSelect()
 }
 
 
-const openPanel = (panel) => {
+const openPanel = (panel, options = {}) => {
   if (panel !== 'chat') taskDiscussionAgentIds.value = []
   activePanel.value = panel
+  if (!options.silent) playPanelOpen()
 }
 
 const closePanel = () => {
   activePanel.value = ''
+  playTap()
+}
+
+const closeSelectedAgentCard = () => {
+  selectedAgent.value = null
+  playTap()
 }
 
 const briefSelectedTask = (task = selectedTask.value, agent = selectedAgent.value) => {
@@ -340,11 +365,13 @@ const createTask = async (payload) => {
           tasks.value = [task, ...tasks.value.filter(item => item.id !== task.id)]
           selectedTask.value = task
         }
+        playSuccess()
         showToast('悬赏已发布')
       }
     })
   } catch (error) {
     log.warn('create bounty task failed:', error)
+    playError()
     showToast('发布悬赏失败')
   }
 }
@@ -365,6 +392,7 @@ const applyCommandTemplate = (key) => {
     confirm: `请确认是否接令「${taskTitle}」，并说明预计完成方式。`
   }
   draft.value = templates[key] || ''
+  playTap()
 }
 
 const searchLibrary = async () => {
@@ -404,7 +432,19 @@ const citeLibraryItem = (item) => {
   const excerpt = content.length > 120 ? `${content.slice(0, 120)}...` : content
   draft.value = `${draft.value ? `${draft.value}\n\n` : ''}参考藏经阁资料：${excerpt}`
   openPanel('chat')
+  playSuccess()
   showToast('资料已引用到传令')
+}
+
+const toggleHallSound = () => {
+  const nextEnabled = !soundEnabled.value
+  setSoundEnabled(nextEnabled)
+  if (nextEnabled) {
+    playTap()
+    showToast('已开启厅内音效')
+    return
+  }
+  showToast('已关闭厅内音效')
 }
 
 const showToast = (message) => {
@@ -499,11 +539,13 @@ const assignTask = async (task, agent = selectedAgent.value) => {
         })
         selectedAgent.value = targetAgent
         selectedTask.value = task
+        playSuccess()
         showToast(`${task.title} 已指派给 ${task.assignedAgentName}`)
       }
     })
   } catch (error) {
     log.warn('assign bounty task failed:', error)
+    playError()
     showToast('指派失败，请刷新状态后重试')
   }
 }
@@ -517,13 +559,35 @@ const archiveTask = async (task) => {
         const archived = result?.data || { ...task, status: 'archived' }
         tasks.value = tasks.value.map(item => item.id === task.id ? archived : item)
         selectedTask.value = archived
+        playSuccess()
         showToast('悬赏已归档')
       }
     })
   } catch (error) {
     log.warn('archive bounty task failed:', error)
+    playError()
     showToast('归档悬赏失败')
   }
+}
+
+const handleNewHallConversation = () => {
+  playPanelOpen()
+  newHallConversation()
+}
+
+const handleSendHallMessage = async () => {
+  playSend()
+  await sendHallMessage()
+}
+
+const handleMentionAgent = (agent) => {
+  playTap()
+  mentionAgent(agent)
+}
+
+const handleStartAgentConversation = (agent) => {
+  playAgentSelect()
+  startAgentConversation(agent)
 }
 
 onMounted(async () => {
@@ -531,7 +595,7 @@ onMounted(async () => {
   globalStore.setShowBack(false)
   globalStore.setShowAppBar(false)
   globalStore.setShowMore(false)
-  await refreshHall()
+  await refreshHall({ silent: true })
   startPhysics()
   startDialogueBubbles()
 })
