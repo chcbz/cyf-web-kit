@@ -1,35 +1,18 @@
 <template>
   <section class="hall-stage">
     <div class="stage-header">
-      <div>
+      <div class="stage-heading">
         <div class="eyebrow">梁山泊协作中枢</div>
         <h1>聚义厅</h1>
       </div>
-      <div class="stage-actions">
+      <div class="stage-tools">
         <button
-          class="icon-action sound-toggle"
+          class="tool-action sound-toggle"
           :title="soundEnabled ? '关闭音效' : '开启音效'"
           @click="$emit('toggle-sound')"
         >
-          <var-icon :name="soundEnabled ? 'volume-high' : 'volume-off'" />
-        </button>
-        <button class="icon-action" title="好汉名册" @click="$emit('open-panel', 'agents')">
-          <var-icon name="account-circle" />
-        </button>
-        <button class="icon-action" title="悬赏榜" @click="$emit('open-panel', 'tasks')">
-          <var-icon name="format-list-checkbox" />
-        </button>
-        <button class="icon-action" title="厅内传令" @click="$emit('open-panel', 'chat')">
-          <var-icon name="message-text-outline" />
-        </button>
-        <button class="icon-action" title="藏经阁" @click="$emit('open-panel', 'library')">
-          <var-icon name="notebook" />
-        </button>
-        <button class="icon-action" title="刷新大厅" @click="$emit('refresh-hall')">
-          <var-icon name="refresh" />
-        </button>
-        <button class="icon-action" title="新建聚义会话" @click="$emit('new-conversation')">
-          <var-icon name="plus" />
+          <var-icon :name="soundEnabled ? 'bell' : 'bell-outline'" />
+          <span>{{ soundEnabled ? '音效开' : '音效关' }}</span>
         </button>
       </div>
     </div>
@@ -92,7 +75,7 @@
           @select-agent="$emit('select-agent', $event)"
         />
         <div v-if="!visibleAgents.length" class="empty-hall">
-          暂无 Agent 入厅，先在右侧刷新或等待上线
+          暂无 Agent 入厅，稍后会自动同步
         </div>
         <button v-if="hiddenAgentCount" class="hall-overflow" type="button" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'agents')">
           另有 {{ hiddenAgentCount }} 位在偏厅候命
@@ -233,12 +216,12 @@ const endMapDrag = (event) => {
 
 .stage-header {
   position: absolute;
-  top: 18px;
+  top: 10px;
   left: 18px;
   right: 18px;
   z-index: 5;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
@@ -261,10 +244,16 @@ h1 {
   letter-spacing: 0;
 }
 
-.stage-actions {
+.stage-heading {
+  min-width: 0;
+}
+
+.stage-tools {
   display: flex;
+  align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex: 0 0 auto;
+  margin-top: 1px;
 }
 
 button {
@@ -273,20 +262,31 @@ button {
   font: inherit;
 }
 
-.icon-action {
+.tool-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
+  gap: 6px;
   min-height: 36px;
+  padding: 0 10px;
   border-radius: 8px;
   background: rgba(255, 244, 212, 0.16);
   color: #fff4d4;
+  white-space: nowrap;
 }
 
 .sound-toggle {
   background: rgba(215, 184, 117, 0.24);
   color: #fff8de;
+}
+
+.tool-action :deep(.var-icon) {
+  font-size: 18px;
+}
+
+.tool-action span {
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .hall-board {
@@ -618,7 +618,7 @@ button.hall-room {
 
 @media (max-width: 640px) {
   .stage-header {
-    top: 8px;
+    top: 4px;
     left: 8px;
     right: 8px;
     padding: 12px;
@@ -629,15 +629,39 @@ button.hall-room {
     font-size: 24px;
   }
 
-  .stage-actions {
-    justify-content: flex-end;
-    flex-wrap: nowrap;
-    max-width: none;
+  .stage-tools {
     gap: 6px;
   }
 
-  .icon-action {
-    width: 34px;
+  .tool-action {
+    min-height: 34px;
+    padding: 0 9px;
+  }
+
+  .tool-action span {
+    display: none;
+  }
+
+  .tool-action :deep(.var-icon) {
+    font-size: 17px;
+  }
+}
+
+@media (max-width: 420px) {
+  .stage-header {
+    top: 2px;
+  }
+
+  .stage-tools {
+    align-self: flex-end;
+  }
+
+  .eyebrow {
+    font-size: 11px;
+  }
+
+  h1 {
+    font-size: 22px;
     min-height: 34px;
   }
 

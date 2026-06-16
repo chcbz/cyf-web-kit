@@ -8,6 +8,7 @@ const publicDir = path.join(workspaceRoot, 'public')
 const outputDir = path.join(publicDir, 'pwa')
 const logoPath = path.join(workspaceRoot, 'src/assets/logo.png')
 const faviconPath = path.join(publicDir, 'favicon.ico')
+const assetVersion = 'shuihu-v2'
 
 const ensureDir = (dir) => {
   fs.mkdirSync(dir, { recursive: true })
@@ -100,11 +101,11 @@ ensureDir(outputDir)
 
 const source = readPng(sourcePath)
 const targets = [
-  ['icon-192.png', 192],
-  ['icon-512.png', 512],
-  ['icon-maskable-512.png', 512],
-  ['apple-touch-icon.png', 180],
-  ['favicon-32.png', 32]
+  [`icon-192-${assetVersion}.png`, 192],
+  [`icon-512-${assetVersion}.png`, 512],
+  [`icon-maskable-512-${assetVersion}.png`, 512],
+  [`apple-touch-icon-${assetVersion}.png`, 180],
+  [`favicon-32-${assetVersion}.png`, 32]
 ]
 
 for (const [filename, size] of targets) {
