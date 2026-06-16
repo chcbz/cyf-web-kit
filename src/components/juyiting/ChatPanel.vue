@@ -49,12 +49,12 @@
           <strong>{{ senderText(message) }}</strong>
           <span v-if="message.streaming" class="message-state">回话中</span>
         </div>
-        <p>{{ message.content }}</p>
+        <div class="message-content" v-html="renderMarkdown(message.content)"></div>
         <small v-if="message.statusText" class="message-status">{{ message.statusText }}</small>
       </div>
       <div v-if="isAwaitingReply" class="hall-message SYSTEM is-pending">
         <strong>{{ pendingAuthor }}</strong>
-        <p>{{ pendingLabel }}</p>
+        <div class="message-content" v-html="renderMarkdown(pendingLabel)"></div>
       </div>
       <div v-if="!messages.length" class="empty-list">厅中暂无传令，发起一句开始议事。</div>
     </div>
@@ -76,6 +76,15 @@
 
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
+
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+  headerIds: false,
+  sanitize: false
+})
 
 const props = defineProps({
   agents: { type: Array, default: () => [] },
@@ -118,6 +127,7 @@ const pendingLabel = computed(() => {
   if (props.pendingAgentName) return `${props.pendingAgentName} 正在回话...`
   return '正在整理回报...'
 })
+const renderMarkdown = (content = '') => DOMPurify.sanitize(marked(String(content || '')))
 
 watch(() => props.messages, () => {
   nextTick(() => {
@@ -324,10 +334,94 @@ button:disabled {
   font-size: 12px;
 }
 
-.hall-message p {
-  margin: 0;
+.message-content {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   line-height: 1.55;
-  white-space: pre-wrap;
+}
+
+.message-content :deep(*) {
+  max-width: 100%;
+}
+
+.message-content :deep(p),
+.message-content :deep(ul),
+.message-content :deep(ol),
+.message-content :deep(blockquote),
+.message-content :deep(pre),
+.message-content :deep(table) {
+  margin: 0 0 8px;
+}
+
+.message-content :deep(:first-child) {
+  margin-top: 0;
+}
+
+.message-content :deep(:last-child) {
+  margin-bottom: 0;
+}
+
+.message-content :deep(ul),
+.message-content :deep(ol) {
+  padding-left: 20px;
+}
+
+.message-content :deep(li + li) {
+  margin-top: 3px;
+}
+
+.message-content :deep(a) {
+  color: #7f4a22;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.message-content :deep(code) {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(127, 74, 34, 0.1);
+  color: #3f2815;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.92em;
+}
+
+.message-content :deep(pre) {
+  overflow-x: auto;
+  padding: 8px 10px;
+  border: 1px solid rgba(116, 75, 35, 0.16);
+  border-radius: 8px;
+  background: #f5ead6;
+  white-space: pre;
+}
+
+.message-content :deep(pre code) {
+  padding: 0;
+  background: transparent;
+  white-space: pre;
+}
+
+.message-content :deep(blockquote) {
+  padding-left: 10px;
+  border-left: 3px solid #c8a96e;
+  color: #765f40;
+}
+
+.message-content :deep(table) {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.message-content :deep(th),
+.message-content :deep(td) {
+  padding: 5px 8px;
+  border: 1px solid rgba(116, 75, 35, 0.2);
+}
+
+.message-content :deep(th) {
+  background: #f5ead6;
+  font-weight: 700;
 }
 
 .empty-list {
