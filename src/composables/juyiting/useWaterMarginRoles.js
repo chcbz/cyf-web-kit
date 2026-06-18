@@ -32,6 +32,14 @@ export const portraitStyle = (agent) => {
   }
 
   const role = portraitRole(agent)
+  if (role.avatar) {
+    return {
+      backgroundImage: `url("${role.avatar}")`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center'
+    }
+  }
+
   return {
     backgroundImage: `url("${waterMarginAgents}")`,
     backgroundSize: '300% 200%',

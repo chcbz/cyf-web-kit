@@ -719,13 +719,29 @@ button:disabled {
   z-index: 1000;
   display: grid;
   place-items: center;
-  background: rgba(15, 10, 6, 0.72);
-  backdrop-filter: blur(4px);
+  background: transparent;
   padding: 16px;
+  isolation: isolate;
+  contain: layout paint;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+}
+
+.bounty-modal-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: rgba(15, 10, 6, 0.72);
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  pointer-events: none;
 }
 
 .bounty-modal {
   position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -740,6 +756,12 @@ button:disabled {
     0 0 0 1px rgba(255, 255, 255, 0.18),
     0 18px 48px rgba(0, 0, 0, 0.42);
   overflow: hidden;
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  transform-origin: center bottom;
+  backface-visibility: hidden;
+  contain: layout paint;
+  will-change: transform, opacity;
 }
 
 .bounty-modal-header {
@@ -796,36 +818,43 @@ button:disabled {
 /* Modal Transition */
 .modal-enter-active,
 .modal-leave-active {
+  transition: none;
+}
+
+.modal-enter-active::before,
+.modal-leave-active::before {
   transition: opacity 0.16s ease-out;
+  will-change: opacity;
 }
 
 .modal-enter-active .bounty-modal,
 .modal-leave-active .bounty-modal {
-  transform-origin: center bottom;
   transition:
     transform 0.18s cubic-bezier(0.2, 0, 0, 1),
     opacity 0.14s ease-out;
   will-change: transform, opacity;
 }
 
-.modal-enter-from,
-.modal-leave-to {
+.modal-enter-from::before,
+.modal-leave-to::before {
   opacity: 0;
 }
 
 .modal-enter-from .bounty-modal {
-  transform: translate3d(0, 6px, 0) scale(0.985);
   opacity: 0;
+  transform: translate3d(0, 10px, 0);
 }
 
 .modal-leave-to .bounty-modal {
-  transform: translate3d(0, 6px, 0) scale(0.985);
   opacity: 0;
+  transform: translate3d(0, 10px, 0);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .modal-enter-active,
   .modal-leave-active,
+  .modal-enter-active::before,
+  .modal-leave-active::before,
   .modal-enter-active .bounty-modal,
   .modal-leave-active .bounty-modal {
     transition: none;

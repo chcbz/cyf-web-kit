@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'cyf-pwa-v20260612-2'
+const CACHE_VERSION = 'cyf-pwa-v20260618-logo-v4'
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest']
 
 self.addEventListener('message', event => {

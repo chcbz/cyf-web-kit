@@ -38,9 +38,9 @@
       </div>
     </HallStage>
 
-    <transition name="panel">
+    <transition name="panel" @after-leave="handlePanelAfterLeave">
       <div v-if="activePanel" class="panel-overlay" @click.self="closePanel">
-        <section class="floating-panel" :class="`panel-${activePanel}`">
+        <section class="floating-panel" :class="`panel-${renderedPanel}`">
           <div class="panel-title">
             <span>{{ activePanelTitle }}</span>
             <button class="panel-close" @click="closePanel">
@@ -49,7 +49,7 @@
           </div>
 
           <AgentPanel
-            v-if="activePanel === 'agents'"
+            v-if="renderedPanel === 'agents'"
             :ability-text="abilityText"
             :agents="agents"
             :filtered-agents="filteredAgents"
@@ -66,7 +66,7 @@
           />
 
           <BountyPanel
-            v-if="activePanel === 'tasks'"
+            v-if="renderedPanel === 'tasks'"
             v-model:task-ability-filter="taskAbilityFilter"
             v-model:task-keyword="taskKeyword"
             :ability-text="abilityText"
@@ -97,7 +97,7 @@
           />
 
           <ChatPanel
-            v-if="activePanel === 'chat'"
+            v-if="renderedPanel === 'chat'"
             v-model:draft="draft"
             :agents="chatMentionAgents"
             :event-stream-recovering="eventStreamRecovering"
@@ -119,7 +119,7 @@
           />
 
           <LibraryPanel
-            v-if="activePanel === 'library'"
+            v-if="renderedPanel === 'library'"
             v-model:keyword="libraryKeyword"
             v-model:source-type="librarySourceType"
             :error-message="libraryErrorMessage"
@@ -170,6 +170,7 @@ const selectedAgent = ref(null)
 const selectedTask = ref(null)
 const toast = ref('')
 const activePanel = ref('')
+const renderedPanel = ref('')
 const agentBubbles = ref({})
 const libraryKeyword = ref('')
 const librarySourceType = ref('')
@@ -196,10 +197,10 @@ const {
 } = useHallSound()
 
 const activePanelTitle = computed(() => {
-  if (activePanel.value === 'agents') return '好汉名册'
-  if (activePanel.value === 'tasks') return '悬赏榜'
-  if (activePanel.value === 'chat') return '厅内传令'
-  if (activePanel.value === 'library') return '藏经阁'
+  if (renderedPanel.value === 'agents') return '好汉名册'
+  if (renderedPanel.value === 'tasks') return '悬赏榜'
+  if (renderedPanel.value === 'chat') return '厅内传令'
+  if (renderedPanel.value === 'library') return '藏经阁'
   return ''
 })
 const chatTargetText = computed(() => {
@@ -323,6 +324,7 @@ const selectAgent = (agent) => {
 
 const openPanel = (panel, options = {}) => {
   if (panel !== 'chat') taskDiscussionAgentIds.value = []
+  renderedPanel.value = panel
   activePanel.value = panel
   if (!options.silent) playPanelOpen()
 }
@@ -330,6 +332,10 @@ const openPanel = (panel, options = {}) => {
 const closePanel = () => {
   activePanel.value = ''
   playTap()
+}
+
+const handlePanelAfterLeave = () => {
+  if (!activePanel.value) renderedPanel.value = ''
 }
 
 const closeSelectedAgentCard = () => {
@@ -1197,10 +1203,28 @@ button.hall-room {
   justify-content: center;
   padding: 72px 20px 92px;
   box-sizing: border-box;
+  background: transparent;
+  isolation: isolate;
+  contain: layout paint;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+}
+
+.panel-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
   background: rgba(18, 13, 10, 0.42);
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  pointer-events: none;
 }
 
 .floating-panel {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   width: min(860px, 100%);
@@ -1213,6 +1237,12 @@ button.hall-room {
   background: #fffaf0;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.34);
   overflow: hidden;
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  transform-origin: center bottom;
+  backface-visibility: hidden;
+  contain: layout paint;
+  will-change: transform, opacity;
 }
 
 .panel-chat {
@@ -1293,39 +1323,43 @@ button.hall-room {
 
 .panel-enter-active,
 .panel-leave-active {
-  transition: background-color 0.16s ease-out;
+  transition: none;
+}
+
+.panel-enter-active::before,
+.panel-leave-active::before {
+  transition: opacity 0.16s ease-out;
+  will-change: opacity;
 }
 
 .panel-enter-active .floating-panel,
 .panel-leave-active .floating-panel {
-  transform-origin: center bottom;
   transition:
     transform 0.18s cubic-bezier(0.2, 0, 0, 1),
     opacity 0.14s ease-out;
   will-change: transform, opacity;
 }
 
-.panel-enter-from {
-  background: rgba(18, 13, 10, 0);
+.panel-enter-from::before,
+.panel-leave-to::before {
+  opacity: 0;
 }
 
 .panel-enter-from .floating-panel {
-  opacity: 1;
-  transform: translate3d(0, 8px, 0) scale(0.995);
-}
-
-.panel-leave-to {
-  background: rgba(18, 13, 10, 0);
+  opacity: 0;
+  transform: translate3d(0, 10px, 0);
 }
 
 .panel-leave-to .floating-panel {
   opacity: 0;
-  transform: translate3d(0, 6px, 0) scale(0.995);
+  transform: translate3d(0, 10px, 0);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .panel-enter-active,
   .panel-leave-active,
+  .panel-enter-active::before,
+  .panel-leave-active::before,
   .panel-enter-active .floating-panel,
   .panel-leave-active .floating-panel {
     transition: none;
