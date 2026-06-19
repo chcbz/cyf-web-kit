@@ -9,6 +9,7 @@
       :portrait-short-name="portraitShortName"
       :portrait-style="portraitStyle"
       :role-class="roleClass"
+      :refreshing="hallRefreshing"
       :selected-agent="selectedAgent"
       :sound-enabled="soundEnabled"
       :status-class="statusClass"
@@ -171,6 +172,7 @@ const selectedTask = ref(null)
 const toast = ref('')
 const activePanel = ref('')
 const renderedPanel = ref('')
+const hallRefreshing = ref(false)
 const agentBubbles = ref({})
 const libraryKeyword = ref('')
 const librarySourceType = ref('')
@@ -296,8 +298,15 @@ const {
 })
 
 const refreshHall = async ({ silent = false } = {}) => {
+  if (hallRefreshing.value) return
+  hallRefreshing.value = true
   if (!silent) playRefresh()
-  await Promise.all([loadAgents(), loadTasks()])
+  try {
+    await Promise.all([loadAgents(), loadTasks()])
+    if (!silent) showToast('人物状态已刷新')
+  } finally {
+    hallRefreshing.value = false
+  }
 }
 
 const formatTime = (timestamp) => {

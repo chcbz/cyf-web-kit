@@ -7,6 +7,16 @@
       </div>
       <div class="stage-tools">
         <button
+          class="tool-action refresh-action"
+          :class="{ 'is-refreshing': refreshing }"
+          :disabled="refreshing"
+          title="刷新人物状态"
+          @click="$emit('refresh-hall')"
+        >
+          <var-icon name="refresh" />
+          <span>{{ refreshing ? '刷新中' : '刷新' }}</span>
+        </button>
+        <button
           class="tool-action sound-toggle"
           :title="soundEnabled ? '关闭音效' : '开启音效'"
           @click="$emit('toggle-sound')"
@@ -115,6 +125,7 @@ defineProps({
   portraitName: { type: Function, required: true },
   portraitShortName: { type: Function, required: true },
   portraitStyle: { type: Function, required: true },
+  refreshing: { type: Boolean, default: false },
   roleClass: { type: Function, required: true },
   selectedAgent: { type: Object, default: null },
   soundEnabled: { type: Boolean, default: true },
@@ -278,6 +289,19 @@ button {
 .sound-toggle {
   background: rgba(215, 184, 117, 0.24);
   color: #fff8de;
+}
+
+.refresh-action {
+  background: rgba(255, 244, 212, 0.2);
+}
+
+.tool-action:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.refresh-action.is-refreshing :deep(.var-icon) {
+  animation: refreshSpin 0.8s linear infinite;
 }
 
 .tool-action :deep(.var-icon) {
@@ -614,6 +638,12 @@ button.hall-room {
 .hotspot-library {
   right: 8%;
   bottom: 25%;
+}
+
+@keyframes refreshSpin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 640px) {
