@@ -31,15 +31,23 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallStageUrl).to.not.equal(undefined)
     expect(hallStageSource).not.to.include("title=\"宋江号令\"")
     expect(hallStageSource).not.to.include("title=\"协同会办\"")
-    expect(hallStageSource).to.include("title=\"藏经阁\"")
+    expect(hallStageSource).to.include('class="hall-room room-library"')
+    expect(hallStageSource).to.include('class="scene-hotspot hotspot-library"')
+    expect(hallStageSource).to.include("@click.stop=\"$emit('open-panel', 'library')\"")
   })
 
   it('keeps bounty panel opening isolated from map drag and enter flicker', () => {
     expect(hallStageSource).to.include('class="hall-room room-tasks" @pointerdown.stop @pointerup.stop @click.stop')
     expect(hallStageSource).to.include('class="scene-hotspot hotspot-tasks" @pointerdown.stop @pointerup.stop @click.stop')
+    expect(hallSource).to.include(':class="{ \'is-panel-open\': activePanel }"')
+    expect(hallSource).to.include('.juyi-page.is-panel-open :deep(.hall-board)')
+    expect(hallSource).to.include('animation-play-state: paused !important;')
     expect(hallSource).to.include('.panel-enter-from .floating-panel')
-    expect(hallSource).to.include('transform: translate3d(0, 8px, 0) scale(0.995);')
+    expect(hallSource).not.to.include('scale(0.995)')
+    expect(hallSource).not.to.include('transition: background-color 0.16s ease-out;')
     expect(hallSource).not.to.include('.panel-enter-from .floating-panel {\n  opacity: 0;')
+    expect(bountySource).not.to.include('backdrop-filter: blur(4px);')
+    expect(bountySource).not.to.include('scale(0.985)')
   })
 
   it('assigns a bounty to an explicit agent instead of hidden selectedAgent only', () => {

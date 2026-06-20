@@ -762,6 +762,7 @@ button:disabled {
   backface-visibility: hidden;
   contain: layout paint;
   will-change: transform, opacity;
+  isolation: isolate;
 }
 
 .bounty-modal-header {

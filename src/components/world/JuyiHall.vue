@@ -1,5 +1,5 @@
 <template>
-  <div class="juyi-page">
+  <div class="juyi-page" :class="{ 'is-panel-open': activePanel }">
     <HallStage
       :agent-bubbles="agentBubbles"
       :agent-key="agentKey"
@@ -1229,6 +1229,7 @@ button.hall-room {
   transform: translate3d(0, 0, 0);
   backface-visibility: hidden;
   pointer-events: none;
+  contain: layout paint;
 }
 
 .floating-panel {
@@ -1252,6 +1253,7 @@ button.hall-room {
   backface-visibility: hidden;
   contain: layout paint;
   will-change: transform, opacity;
+  isolation: isolate;
 }
 
 .panel-chat {
@@ -1355,13 +1357,23 @@ button.hall-room {
 }
 
 .panel-enter-from .floating-panel {
-  opacity: 0;
   transform: translate3d(0, 10px, 0);
 }
 
 .panel-leave-to .floating-panel {
   opacity: 0;
   transform: translate3d(0, 10px, 0);
+}
+
+.juyi-page.is-panel-open :deep(.hall-board),
+.juyi-page.is-panel-open :deep(.map-world),
+.juyi-page.is-panel-open :deep(.agent-token),
+.juyi-page.is-panel-open :deep(.agent-token *) {
+  animation-play-state: paused !important;
+}
+
+.juyi-page.is-panel-open :deep(.map-world) {
+  transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
