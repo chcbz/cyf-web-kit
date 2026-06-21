@@ -59,6 +59,120 @@ describe('useHallConversation scoped message loading', () => {
     expect(conversation.messages.value).to.deep.equal([])
   })
 
+  it('clears only the draft while keeping scoped target agents intact', () => {
+    const chatContext = ref({
+      conversationScopeType: 'bounty',
+      conversationScopeKey: 'task:task-2',
+      mode: 'bounty',
+      participantAgentIds: ['wuyong'],
+      selectedTaskId: 'task-2',
+      targetAgentIds: ['wuyong'],
+      taskId: 'task-2',
+      targetAgentId: 'wuyong'
+    })
+    const conversation = useHallConversation({
+      apiStore: { token: async () => '' },
+      chatApi: {},
+      chatContext,
+      chatMode: ref('bounty'),
+      globalStore: { getJiacn: 'jia-user', user: {} },
+      log: { warn: () => {}, error: () => {} },
+      openPanel: () => {},
+      outgoingMetadata: ref({}),
+      portraitShortName: agent => agent?.name || agent?.agentId || '',
+      selectedAgent: ref(null),
+      selectedTask: ref({ id: 'task-2', title: 'Task 2' }),
+      showToast: () => {}
+    })
+
+    conversation.setDraft('  @Wu Yong inspect logs  ')
+    conversation.clearDraft()
+
+    expect(conversation.draft.value).to.equal('')
+    expect(chatContext.value.targetAgentIds).to.deep.equal(['wuyong'])
+  })
+
+  it('replaces an active @ trigger when inserting an agent mention', () => {
+    const chatContext = ref({
+      conversationScopeType: 'public',
+      conversationScopeKey: 'public',
+      mode: 'public',
+      participantAgentIds: [],
+      selectedTaskId: undefined,
+      targetAgentIds: ['songjiang'],
+      taskId: undefined,
+      targetAgentId: 'songjiang'
+    })
+    const conversation = useHallConversation({
+      apiStore: { token: async () => '' },
+      chatApi: {},
+      chatContext,
+      chatMode: ref('public'),
+      globalStore: { getJiacn: 'jia-user', user: {} },
+      log: { warn: () => {}, error: () => {} },
+      openPanel: () => {},
+      outgoingMetadata: ref({}),
+      portraitShortName: agent => agent?.name || agent?.agentId || '',
+      selectedAgent: ref(null),
+      selectedTask: ref(null),
+      showToast: () => {}
+    })
+
+    conversation.setDraft('@')
+    conversation.mentionAgent({ agentId: 'songjiang', name: '宋江' })
+
+    expect(conversation.draft.value).to.equal('@宋江 ')
+  })
+
+  it('trims sent hall messages while preserving scoped payload fields', async () => {
+    const chatContext = ref({
+      conversationScopeType: 'private',
+      conversationScopeKey: 'task:task-2:agent:wuyong',
+      mode: 'private',
+      participantAgentIds: ['wuyong'],
+      selectedTaskId: 'task-2',
+      targetAgentIds: ['wuyong'],
+      taskId: 'task-2',
+      targetAgentId: 'wuyong'
+    })
+    const payloads = []
+    const conversation = useHallConversation({
+      apiStore: { token: async () => '' },
+      chatApi: {
+        create: async (_path, payload, options) => {
+          payloads.push(payload)
+          options.onStream('{"conversationId":"1003"}')
+          options.onStreamEnd()
+        }
+      },
+      chatContext,
+      chatMode: ref('private'),
+      globalStore: { getJiacn: 'jia-user', user: { name: 'Tester' } },
+      log: { warn: () => {}, error: () => {} },
+      openPanel: () => {},
+      outgoingMetadata: ref({}),
+      portraitShortName: agent => agent?.name || agent?.agentId || '',
+      selectedAgent: ref({ agentId: 'wuyong', name: 'Wu Yong' }),
+      selectedTask: ref({ id: 'task-2', title: 'Task 2' }),
+      showToast: () => {}
+    })
+
+    conversation.setDraft('  discuss this task  ')
+    await conversation.sendHallMessage()
+
+    expect(payloads[0]).to.deep.include({
+      content: 'discuss this task',
+      conversationType: 'juyiting',
+      conversationScopeType: 'private',
+      conversationScopeKey: 'task:task-2:agent:wuyong',
+      targetAgentId: 'wuyong',
+      taskId: 'task-2'
+    })
+    expect(payloads[0].targetAgentIds).to.deep.equal(['wuyong'])
+    expect(payloads[0].metadata.mentionAgentIds).to.deep.equal(['wuyong'])
+    expect(conversation.messages.value[0].content).to.equal('discuss this task')
+  })
+
   it('normalizes persisted agent messages with metadata', () => {
     const message = normalizeHallMessage({
       id: 12,

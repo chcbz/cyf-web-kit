@@ -75,6 +75,14 @@ export const useHallConversation = ({
     }
   }
 
+  const setDraft = (value = '') => {
+    draft.value = String(value || '')
+  }
+
+  const clearDraft = () => {
+    setDraft('')
+  }
+
   const appendHallEventMessage = (event) => {
     const state = {
       conversationId: conversationId.value,
@@ -267,9 +275,9 @@ export const useHallConversation = ({
   }
 
   const sendHallMessage = async () => {
-    if (!draft.value || isStreaming.value) return
-    const content = draft.value
-    draft.value = ''
+    const content = String(draft.value || '').trim()
+    if (!content || isStreaming.value) return
+    clearDraft()
     stopHallReplyStreaming()
     messages.value.push({
       localId: `user-${Date.now()}`,
@@ -342,12 +350,17 @@ export const useHallConversation = ({
   const insertAgentMention = (agent, suffix = '') => {
     const mention = `@${portraitShortName(agent)}`
     const current = draft.value.trim()
+    const replacement = suffix ? `${mention} ${suffix}` : `${mention} `
     if (!current) {
-      draft.value = suffix ? `${mention} ${suffix}` : `${mention} `
+      draft.value = replacement
       return
     }
     if (current.includes(mention)) {
       draft.value = suffix && current === mention ? `${mention} ${suffix}` : draft.value
+      return
+    }
+    if (/(^|\s)@\S*$/.test(current)) {
+      draft.value = current.replace(/(^|\s)@\S*$/, (_, prefix) => `${prefix}${replacement}`)
       return
     }
     draft.value = `${current} ${mention}${suffix ? ` ${suffix}` : ' '}`
@@ -370,6 +383,7 @@ export const useHallConversation = ({
   return {
     chatConnectionStatus,
     conversationId,
+    clearDraft,
     draft,
     eventStreamRecovering,
     insertAgentMention,
@@ -382,6 +396,7 @@ export const useHallConversation = ({
     pendingAgentName,
     sendHallMessage,
     senderText,
+    setDraft,
     startAgentConversation,
     stopHallEventStream,
     stopHallReplyPolling,

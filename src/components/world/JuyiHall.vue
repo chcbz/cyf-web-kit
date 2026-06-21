@@ -113,6 +113,7 @@
             :connection-status="chatConnectionStatus"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
+            @clear-target="handleClearChatTarget"
             @load-messages="loadHallMessages(conversationId)"
             @mention-agent="handleMentionAgent"
             @new-conversation="handleNewHallConversation"
@@ -135,6 +136,7 @@
             :connection-status="chatConnectionStatus"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
+            @clear-target="handleClearChatTarget"
             @load-messages="loadHallMessages(conversationId)"
             @mention-agent="handleMentionAgent"
             @new-conversation="handleNewHallConversation"
@@ -157,6 +159,7 @@
             :connection-status="chatConnectionStatus"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
+            @clear-target="handleClearChatTarget"
             @load-messages="loadHallMessages(conversationId)"
             @mention-agent="handleMentionAgent"
             @new-conversation="handleNewHallConversation"
@@ -569,6 +572,14 @@ const handleMentionAgent = (agent) => {
   playTap()
   setMentionAgent(agent)
   mentionAgent(agent)
+}
+
+const handleClearChatTarget = () => {
+  playTap()
+  setMentionAgent(null)
+  if (chatMode.value === 'public') {
+    selectedAgent.value = null
+  }
 }
 
 const handleStartAgentConversation = (agent) => {
@@ -1565,6 +1576,7 @@ button.hall-room {
 
   .panel-overlay {
     align-items: flex-end;
+    bottom: 10px;
     padding: 0;
   }
 
@@ -1583,8 +1595,8 @@ button.hall-room {
   .floating-panel.panel-chat {
     width: calc(100% - 16px);
     max-width: calc(100% - 16px);
-    height: calc(100dvh - 16px);
-    max-height: calc(100dvh - 16px);
+    height: calc(100dvh - 32px);
+    max-height: calc(100dvh - 32px);
   }
 
 }

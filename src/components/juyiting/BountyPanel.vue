@@ -102,38 +102,54 @@
 
               <div class="task-operation-grid">
                 <button
+                  :aria-label="agentDisplayName(selectedAgent) ? `分派给当前好汉 ${agentDisplayName(selectedAgent)}` : '先选择好汉再分派'"
                   :disabled="!canAssign(detailTask, selectedAgent)"
+                  :title="agentDisplayName(selectedAgent) ? `分派给当前好汉：${agentDisplayName(selectedAgent)}` : '先选择好汉再分派'"
                   @click="$emit('assign-task', detailTask, selectedAgent)"
                 >
-                  <var-icon name="account-circle" />
-                  <span>指派给当前好汉：{{ agentDisplayName(selectedAgent) || '未选好汉' }}</span>
+                  <var-icon name="account-circle-outline" />
+                  <span class="visually-hidden">{{ agentDisplayName(selectedAgent) ? '分派当前' : '选择好汉' }}</span>
                 </button>
-                <button @click="$emit('brief-selected-task', detailTask, selectedAgent)">
+                <button
+                  aria-label="议事"
+                  title="围绕当前好汉议事"
+                  @click="$emit('brief-selected-task', detailTask, selectedAgent)"
+                >
                   <var-icon name="message-text-outline" />
-                  <span>单独议事</span>
+                  <span class="visually-hidden">议事</span>
                 </button>
                 <button
                   class="assign-selected-agents"
                   type="button"
+                  :aria-label="`分派给已选 ${selectedAssignees.length} 人`"
                   :disabled="!selectedAssignees.length"
+                  :title="`分派给已选 ${selectedAssignees.length} 人`"
                   @click="$emit('assign-task', detailTask, selectedAssignees)"
                 >
-                  <var-icon name="account-multiple-check" />
-                  <span>分派给已选 {{ selectedAssignees.length }} 人</span>
+                  <var-icon name="format-list-checkbox" />
+                  <span class="count-badge">{{ selectedAssignees.length }}</span>
+                  <span class="visually-hidden">分派已选 {{ selectedAssignees.length }}</span>
                 </button>
                 <button
                   class="discuss-task-button"
                   type="button"
+                  aria-label="悬赏议事"
                   :disabled="!taskAssigneeIds(detailTask).length"
                   :title="!taskAssigneeIds(detailTask).length ? unassignedDiscussHint : ''"
                   @click="$emit('discuss-task', detailTask)"
                 >
-                  <var-icon name="forum-outline" />
-                  <span>悬赏议事</span>
+                  <var-icon name="chat-processing-outline" />
+                  <span class="visually-hidden">悬赏议事</span>
                 </button>
-                <button class="archive-task-button" type="button" @click="$emit('archive-task', detailTask)">
-                  <var-icon name="archive-outline" />
-                  <span>归档</span>
+                <button
+                  class="archive-task-button"
+                  type="button"
+                  aria-label="归档"
+                  title="归档悬赏"
+                  @click="$emit('archive-task', detailTask)"
+                >
+                  <var-icon name="download-outline" />
+                  <span class="visually-hidden">归档</span>
                 </button>
               </div>
               <p v-if="!taskAssigneeIds(detailTask).length" class="task-operation-hint">
@@ -165,11 +181,18 @@
                   <em>{{ taskAgentMatchScore(detailTask, agent) }}%</em>
                 </button>
                 <div class="recommended-agent-actions">
-                  <button type="button" @click="$emit('select-agent', agent)">选中</button>
-                  <button type="button" :disabled="!canAssign(detailTask, agent)" @click="$emit('assign-task', detailTask, agent)">
-                    指派给 {{ agentDisplayName(agent) }}
+                  <button type="button" :aria-label="`选中 ${agentDisplayName(agent)}`" :title="`选中 ${agentDisplayName(agent)}`" @click="$emit('select-agent', agent)">
+                    <var-icon name="check-circle-outline" />
+                    <span class="visually-hidden">选中</span>
                   </button>
-                  <button type="button" @click="$emit('brief-selected-task', detailTask, agent)">单独议事</button>
+                  <button type="button" :aria-label="`分派给 ${agentDisplayName(agent)}`" :disabled="!canAssign(detailTask, agent)" :title="`分派给 ${agentDisplayName(agent)}`" @click="$emit('assign-task', detailTask, agent)">
+                    <var-icon name="account-circle-outline" />
+                    <span class="visually-hidden">分派</span>
+                  </button>
+                  <button type="button" :aria-label="`与 ${agentDisplayName(agent)} 议事`" :title="`与 ${agentDisplayName(agent)} 议事`" @click="$emit('brief-selected-task', detailTask, agent)">
+                    <var-icon name="message-text-outline" />
+                    <span class="visually-hidden">议事</span>
+                  </button>
                 </div>
               </div>
               <p v-if="!recommendedAgents.length">暂无活跃好汉可接令。</p>
@@ -290,12 +313,14 @@ watch(() => props.selectedTask, (task) => {
 </script>
 <style scoped>
 .bounty-panel {
+  position: relative;
   display: flex;
   flex: 1;
   min-width: 0;
   min-height: 0;
   box-sizing: border-box;
   flex-direction: column;
+  overflow: hidden;
 }
 
 button {
@@ -527,34 +552,59 @@ button:disabled {
 }
 
 .task-operation-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin: 12px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0;
 }
 
 .task-operation-grid button {
-  display: inline-flex;
+  position: relative;
+  display: inline-grid;
+  place-items: center;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-width: 0;
-  min-height: 38px;
-  padding: 7px 10px;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
   border-radius: 8px;
   background: #7c1f1b;
   color: #fff8e8;
-  line-height: 1.2;
-  text-align: center;
-  white-space: normal;
+  line-height: 1;
 }
 
 .task-operation-grid button + button {
   background: #23483e;
 }
 
+.task-operation-grid button:disabled,
+.recommended-agent-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.count-badge {
+  position: absolute;
+  right: -4px;
+  top: -5px;
+  display: inline-grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border: 1px solid #fff8e8;
+  border-radius: 999px;
+  background: #d8a33a;
+  color: #2f261c;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
 .task-operation-hint {
-  margin: -4px 0 10px;
+  margin: -2px 0 10px;
   color: #8a5d26;
   font-size: 12px;
 }
@@ -572,7 +622,9 @@ button:disabled {
 
 .recommended-agent-row {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
+  align-items: center;
   padding: 8px;
   border-radius: 8px;
   background: #f7ecd7;
@@ -602,18 +654,23 @@ button:disabled {
 }
 
 .recommended-agent-actions {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: nowrap;
   gap: 6px;
+  width: 100%;
 }
 
 .recommended-agent-actions button {
-  min-height: 32px;
-  padding: 0 8px;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  padding: 0;
   border-radius: 7px;
   background: #efe0c6;
   color: #4a3423;
-  font-size: 12px;
+  line-height: 1;
 }
 
 .recommended-agent-actions button:nth-child(2) {
@@ -640,6 +697,18 @@ button:disabled {
   font-style: normal;
   color: #23483e;
   font-weight: 700;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .mini-avatar {
@@ -714,7 +783,7 @@ button:disabled {
 
 /* Modal Styles */
 .bounty-modal-overlay {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 1000;
   display: grid;
@@ -725,6 +794,12 @@ button:disabled {
   contain: layout paint;
   transform: translate3d(0, 0, 0);
   backface-visibility: hidden;
+}
+
+.bounty-modal-overlay,
+.bounty-modal,
+.bounty-modal * {
+  box-sizing: border-box;
 }
 
 .bounty-modal-overlay::before {
@@ -863,6 +938,10 @@ button:disabled {
 }
 
 @media (max-width: 900px) {
+  .bounty-modal-overlay {
+    padding: 10px;
+  }
+
   .panel-toolbar {
     align-items: stretch;
     flex-direction: column;
@@ -883,7 +962,27 @@ button:disabled {
   }
 
   .task-operation-grid {
+    justify-content: flex-start;
+  }
+
+  .recommended-agent-row {
     grid-template-columns: 1fr;
+  }
+
+  .recommended-agent-main {
+    grid-template-columns: 22px 38px minmax(0, 1fr) auto;
+  }
+
+  .recommended-agent-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    justify-content: stretch;
+  }
+
+  .recommended-agent-actions button {
+    width: 100%;
+    min-width: 0;
+    height: 34px;
   }
 
   .task-create-form {
@@ -891,8 +990,9 @@ button:disabled {
   }
 
   .bounty-modal {
+    width: 100%;
     max-width: 100%;
-    max-height: 85vh;
+    max-height: 100%;
   }
 }
 </style>

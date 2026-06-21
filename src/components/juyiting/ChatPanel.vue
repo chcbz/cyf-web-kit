@@ -10,36 +10,10 @@
         <button class="icon-button" type="button" title="同步" aria-label="同步" @click="$emit('load-messages')">
           <var-icon name="refresh" />
         </button>
-        <button class="icon-button primary" type="button" title="新建会话" aria-label="新建会话" @click="$emit('new-conversation')">
+        <button class="icon-button primary" type="button" title="新建议事" aria-label="新建议事" @click="$emit('new-conversation')">
           <var-icon name="plus" />
         </button>
       </div>
-    </div>
-
-    <div v-if="showTargetPicker && agents.length" class="discussion-target-controls">
-      <button
-        class="target-toggle"
-        type="button"
-        title="选择目标"
-        aria-label="选择目标"
-        :class="{ active: showTargets }"
-        @click="showTargets = !showTargets"
-      >
-        <var-icon name="account-circle" />
-        <span>{{ targetBadgeText }}</span>
-      </button>
-    </div>
-
-    <div v-if="showTargets && agents.length" class="compact-mention-strip" aria-label="选择要提及的地图人物">
-      <button
-        v-for="agent in agents"
-        :key="agent.agentId"
-        type="button"
-        :class="{ active: selectedAgent?.agentId === agent.agentId }"
-        @click="$emit('mention-agent', agent)"
-      >
-        @{{ mentionLabel(agent) }}
-      </button>
     </div>
 
     <div ref="messageBoxRef" class="hall-messages">
@@ -63,18 +37,20 @@
       <div v-if="!messages.length" class="empty-list">{{ emptyText }}</div>
     </div>
 
-    <form class="hall-input chat-composer" @submit.prevent="$emit('send-message')">
-      <input
-        :value="draft"
-        autofocus
-        :disabled="isStreaming"
-        :placeholder="placeholder"
-        @input="$emit('update:draft', $event.target.value)"
-      />
-      <button :disabled="!draft || isStreaming">
-        <var-icon :name="isStreaming ? 'refresh' : 'chevron-right'" />
-      </button>
-    </form>
+    <HallChatComposer
+      :agents="agents"
+      :discussion-variant="discussionVariant"
+      :draft="draft"
+      :is-streaming="isStreaming"
+      :mention-label="mentionLabel"
+      :placeholder="placeholder"
+      :selected-agent="selectedAgent"
+      :target-text="targetText"
+      @clear-target="$emit('clear-target', $event)"
+      @mention-agent="$emit('mention-agent', $event)"
+      @send-message="$emit('send-message')"
+      @update:draft="$emit('update:draft', $event)"
+    />
   </div>
 </template>
 
@@ -82,6 +58,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import HallChatComposer from './HallChatComposer.vue'
 
 marked.setOptions({
   breaks: true,
@@ -95,7 +72,7 @@ const props = defineProps({
   connectionStatus: { type: String, default: '' },
   discussionVariant: { type: String, default: 'public' },
   draft: { type: String, default: '' },
-  emptyText: { type: String, default: '厅中暂无议事，发起一句开始讨论。' },
+  emptyText: { type: String, default: '厅内暂无议事，发起一句开始讨论。' },
   eventStreamRecovering: { type: Boolean, default: false },
   isAwaitingReply: { type: Boolean, default: false },
   isStreaming: { type: Boolean, default: false },
@@ -106,7 +83,6 @@ const props = defineProps({
   selectedAgent: { type: Object, default: null },
   selectedTask: { type: Object, default: null },
   senderText: { type: Function, required: true },
-  showTargetPicker: { type: Boolean, default: true },
   scopeHint: { type: String, default: 'public' },
   subtitle: { type: String, default: '' },
   title: { type: String, default: '议事' },
@@ -114,6 +90,7 @@ const props = defineProps({
 })
 
 defineEmits([
+  'clear-target',
   'load-messages',
   'mention-agent',
   'new-conversation',
@@ -122,7 +99,6 @@ defineEmits([
 ])
 
 const messageBoxRef = ref(null)
-const showTargets = ref(false)
 const pendingAuthor = '聚义厅'
 const taskText = computed(() => props.selectedTask?.title || '未选悬赏')
 const resolvedSubtitle = computed(() => {
@@ -132,11 +108,6 @@ const resolvedSubtitle = computed(() => {
   if (props.selectedTask) return taskText.value
   if (props.selectedAgent) return props.targetText
   return props.scopeHint === 'public' ? '未 @ 时交由宋江分流' : props.scopeHint
-})
-const targetBadgeText = computed(() => {
-  if (props.selectedAgent) return mentionLabel(props.selectedAgent)
-  if (props.discussionVariant === 'bounty') return `${props.agents.length} 人`
-  return '@'
 })
 const displayStatus = computed(() => {
   if (props.eventStreamRecovering) return '正在尝试恢复回话'
@@ -229,8 +200,7 @@ button:disabled {
   min-width: 0;
 }
 
-.icon-button,
-.target-toggle {
+.icon-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -245,65 +215,6 @@ button:disabled {
 
 .icon-button.primary {
   background: #6d3f1f;
-  color: #fff8e8;
-}
-
-.discussion-target-controls {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px 8px;
-  overflow-x: auto;
-}
-
-.target-toggle {
-  border: 1px solid #d7c3a2;
-  background: #fffdf6;
-  color: #5b432a;
-}
-
-.target-toggle.active {
-  border-color: #23483e;
-  background: #23483e;
-  color: #fff8e8;
-}
-
-.target-toggle {
-  width: auto;
-  max-width: 120px;
-  gap: 4px;
-  padding: 0 8px;
-  font-size: 12px;
-}
-
-.target-toggle span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.compact-mention-strip {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 6px;
-  padding: 0 10px 8px;
-  overflow-x: auto;
-}
-
-.compact-mention-strip button {
-  flex: 0 0 auto;
-  min-height: 30px;
-  padding: 0 10px;
-  border: 1px solid #d7c3a2;
-  border-radius: 999px;
-  background: #fffdf6;
-  color: #5b432a;
-  white-space: nowrap;
-}
-
-.compact-mention-strip button.active {
-  border-color: #7f4a22;
-  background: #7f4a22;
   color: #fff8e8;
 }
 
@@ -461,37 +372,6 @@ button:disabled {
   color: #a88b62;
   font-size: 13px;
   text-align: center;
-}
-
-.hall-input {
-  display: grid;
-  flex: 0 0 auto;
-  grid-template-columns: minmax(0, 1fr) 44px;
-  gap: 8px;
-  padding: 10px 12px;
-  border-top: 1px solid rgba(116, 75, 35, 0.16);
-  background: #fffaf0;
-}
-
-.hall-input input {
-  min-width: 0;
-  height: 44px;
-  padding: 0 12px;
-  border: 1px solid #d7c3a2;
-  border-radius: 8px;
-  background: #fffdf6;
-  color: #3f2815;
-  font: inherit;
-  outline: none;
-}
-
-.hall-input button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  background: #7f4a22;
-  color: #fff8e8;
 }
 
 @media (max-width: 640px) {

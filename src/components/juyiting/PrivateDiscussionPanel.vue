@@ -16,6 +16,7 @@
       :subtitle="privateSubtitle"
       title="议事"
       v-bind="chatProps"
+      @clear-target="$emit('clear-target', $event)"
       @load-messages="$emit('load-messages')"
       @mention-agent="$emit('mention-agent', $event)"
       @new-conversation="$emit('new-conversation')"
@@ -46,6 +47,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits([
+  'clear-target',
   'load-messages',
   'mention-agent',
   'new-conversation',

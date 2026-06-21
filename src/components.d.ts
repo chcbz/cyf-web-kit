@@ -30,6 +30,7 @@ declare module 'vue' {
     CoordinationPanel: typeof import('./components/juyiting/CoordinationPanel.vue')['default']
     GiftList: typeof import('./components/GiftList.vue')['default']
     GiftPay: typeof import('./components/GiftPay.vue')['default']
+    HallChatComposer: typeof import('./components/juyiting/HallChatComposer.vue')['default']
     HallStage: typeof import('./components/juyiting/HallStage.vue')['default']
     HelloWorld: typeof import('./components/HelloWorld.vue')['default']
     HelpCenter: typeof import('./components/HelpCenter.vue')['default']

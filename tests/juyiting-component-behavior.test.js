@@ -11,6 +11,7 @@ let BountyPanel
 let ChatPanel
 let CommandPanel
 let CoordinationPanel
+let HallChatComposer
 let HallStage
 let LibraryPanel
 
@@ -41,11 +42,12 @@ const loadSfc = (relativePath) => {
   const scriptBody = script
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace(/^import\s+AgentToken\s+from\s+['"]@\/components\/juyiting\/AgentToken\.vue['"];?\s*$/gm, 'var AgentToken = { template: \'<span />\', props: [\'agent\'] }')
+    .replace(/^import\s+HallChatComposer\s+from\s+['"].\/HallChatComposer\.vue['"];?\s*$/gm, 'var HallChatComposer = arguments[1]')
     .replace(/^import\s+\{\s*marked\s*\}\s+from\s+['"]marked['"];?\s*$/gm, 'var marked = { setOptions: () => {}, parse: value => value }')
     .replace(/^import\s+DOMPurify\s+from\s+['"]dompurify['"];?\s*$/gm, 'var DOMPurify = { sanitize: value => value }')
     .replace('export default', 'return')
 
-  return new Function('Vue', scriptBody)(Vue)
+  return new Function('Vue', 'HallChatComposer', scriptBody)(Vue, HallChatComposer)
 }
 
 const stubs = {
@@ -61,6 +63,7 @@ describe('JuyiHall component behavior', () => {
     Vue = await import('vue')
     BottomDock = loadSfc('../src/components/juyiting/BottomDock.vue')
     BountyPanel = loadSfc('../src/components/juyiting/BountyPanel.vue')
+    HallChatComposer = loadSfc('../src/components/juyiting/HallChatComposer.vue')
     ChatPanel = loadSfc('../src/components/juyiting/ChatPanel.vue')
     CommandPanel = loadSfc('../src/components/juyiting/CommandPanel.vue')
     CoordinationPanel = loadSfc('../src/components/juyiting/CoordinationPanel.vue')
@@ -158,8 +161,9 @@ describe('JuyiHall component behavior', () => {
 
     await wrapper.find('.task-card').trigger('click')
 
-    expect(wrapper.text()).to.include('单独议事')
+    expect(wrapper.text()).to.include('议事')
     expect(wrapper.text()).to.include('悬赏议事')
+    expect(wrapper.text()).not.to.include('单独议事')
     expect(wrapper.text()).not.to.include('传令议事')
 
     const actionButtons = wrapper.findAll('.recommended-agent-actions button')
@@ -322,7 +326,7 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.emitted('send-message')).to.equal(undefined)
   })
 
-  it('keeps ChatPanel targets collapsed behind a local target action', async () => {
+  it('integrates mentions and clearing into the ChatPanel composer', async () => {
     const agents = [
       { agentId: 'wuyong', name: 'Wu Yong' },
       { agentId: 'linchong', name: 'Lin Chong' }
@@ -340,13 +344,74 @@ describe('JuyiHall component behavior', () => {
       }
     })
 
-    expect(wrapper.find('.discussion-target-controls').exists()).to.equal(true)
+    expect(wrapper.find('.discussion-target-controls').exists()).to.equal(false)
     expect(wrapper.find('.compact-mention-strip').exists()).to.equal(false)
+    expect(wrapper.find('.hall-chat-composer').exists(), 'composer mounted').to.equal(true)
 
-    await wrapper.find('.target-toggle').trigger('click')
-    await wrapper.findAll('.compact-mention-strip button')[1].trigger('click')
+    await wrapper.find('.composer-textarea').trigger('focus')
+    await wrapper.find('.composer-textarea').setValue('@')
+    await wrapper.setProps({ draft: '@' })
+    expect(wrapper.find('.composer-mention-menu').exists(), 'mention menu opens after @').to.equal(true)
 
+    await wrapper.findAll('.composer-mention-option')[0].trigger('click')
     expect(wrapper.emitted('mention-agent')[0]).to.deep.equal([agents[1]])
+
+    const clearWrapper = mount(ChatPanel, {
+      global: { stubs },
+      props: {
+        agents,
+        draft: '@Lin Chong ready',
+        messages: [],
+        mentionLabel: agent => agent.name,
+        senderText: message => message.sender,
+        targetText: 'All agents',
+        connectionStatus: 'Synced'
+      }
+    })
+
+    expect(clearWrapper.find('.composer-clear').exists(), 'clear button appears with draft').to.equal(true)
+    await clearWrapper.find('.composer-clear').trigger('click')
+    expect(clearWrapper.emitted('update:draft').at(-1)).to.deep.equal([''])
+  })
+
+  it('renders variant-specific target chips in ChatPanel composer', () => {
+    const agents = [
+      { agentId: 'wuyong', name: 'Wu Yong' },
+      { agentId: 'linchong', name: 'Lin Chong' }
+    ]
+    const bountyWrapper = mount(ChatPanel, {
+      global: { stubs },
+      props: {
+        agents,
+        draft: '',
+        discussionVariant: 'bounty',
+        messages: [],
+        mentionLabel: agent => agent.name,
+        senderText: message => message.sender,
+        targetText: 'Inspect camp / 2 participants',
+        connectionStatus: 'Synced'
+      }
+    })
+    const privateWrapper = mount(ChatPanel, {
+      global: { stubs },
+      props: {
+        agents,
+        draft: '',
+        discussionVariant: 'private',
+        messages: [],
+        mentionLabel: agent => agent.name,
+        selectedAgent: agents[0],
+        senderText: message => message.sender,
+        targetText: 'Wu Yong',
+        connectionStatus: 'Synced'
+      }
+    })
+
+    expect(bountyWrapper.find('.composer-context.is-bounty').exists()).to.equal(true)
+    expect(bountyWrapper.findAll('.composer-target-chip')).to.have.length(2)
+    expect(privateWrapper.find('.composer-context.is-private').exists()).to.equal(true)
+    expect(privateWrapper.find('.composer-target-chip.is-locked').exists()).to.equal(true)
+    expect(privateWrapper.find('.composer-target-remove').exists()).to.equal(false)
   })
 
   it('does not expose a cross-scope mode switch inside the shared ChatPanel', () => {
