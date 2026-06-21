@@ -43,9 +43,9 @@
         <div class="map-region region-village"></div>
         <div class="map-road road-main"></div>
         <div class="map-road road-branch"></div>
-        <button class="hall-room room-main" @click="resetMap">
+        <button class="hall-room room-main" @click="openPublicDiscussion">
           <strong>聚义厅</strong>
-          <small>议事中庭</small>
+          <small>议事中庭 / 全员议事</small>
         </button>
         <button class="hall-room room-agents" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'agents')">
           <strong>名册房</strong>
@@ -54,10 +54,6 @@
         <button class="hall-room room-tasks" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'tasks')">
           <strong>悬赏房</strong>
           <small>{{ tasksTotal }} 件</small>
-        </button>
-        <button class="hall-room room-chat" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'chat')">
-          <strong>传令房</strong>
-          <small>厅内会话</small>
         </button>
         <button class="hall-room room-library" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'library')">
           <strong>藏经阁</strong>
@@ -98,10 +94,6 @@
           <var-icon name="format-list-checkbox" />
           <span>悬赏</span>
         </button>
-        <button class="scene-hotspot hotspot-chat" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'chat')">
-          <var-icon name="message-text-outline" />
-          <span>传令</span>
-        </button>
         <button class="scene-hotspot hotspot-library" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'library')">
           <var-icon name="notebook" />
           <span>藏经阁</span>
@@ -135,7 +127,7 @@ defineProps({
   visibleAgents: { type: Array, default: () => [] }
 })
 
-defineEmits(['new-conversation', 'open-panel', 'refresh-hall', 'select-agent', 'toggle-sound'])
+const emit = defineEmits(['new-conversation', 'open-panel', 'refresh-hall', 'select-agent', 'toggle-sound'])
 
 const hallBoardRef = ref(null)
 const mapWorldRef = ref(null)
@@ -174,6 +166,11 @@ const applyMapOffset = (next) => {
 
 const resetMap = () => {
   viewportOffset.value = { x: 0, y: 0 }
+}
+
+const openPublicDiscussion = () => {
+  resetMap()
+  emit('open-panel', 'chat')
 }
 
 const startMapDrag = (event) => {
@@ -530,15 +527,6 @@ button.hall-room {
   height: 24%;
 }
 
-.room-chat {
-  left: 40%;
-  top: 14%;
-  width: 20%;
-  height: 17%;
-  background:
-    linear-gradient(145deg, rgba(230, 235, 205, 0.76), rgba(116, 151, 110, 0.58));
-}
-
 .room-library {
   left: 64%;
   top: 62%;
@@ -630,11 +618,6 @@ button.hall-room {
   transform: translateX(-50%);
 }
 
-.hotspot-chat {
-  right: 8%;
-  top: 58%;
-}
-
 .hotspot-library {
   right: 8%;
   bottom: 25%;
@@ -710,11 +693,6 @@ button.hall-room {
     top: 63%;
   }
 
-  .hotspot-chat {
-    right: 5%;
-    top: 63%;
-  }
-
   .hotspot-library {
     right: 5%;
     bottom: 20%;
@@ -744,13 +722,6 @@ button.hall-room {
     top: 38%;
     width: 18%;
     height: 22%;
-  }
-
-  .room-chat {
-    left: 39%;
-    top: 14%;
-    width: 22%;
-    height: 16%;
   }
 
   .room-library {

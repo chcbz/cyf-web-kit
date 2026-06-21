@@ -336,8 +336,8 @@ const run = async () => {
     await evaluate(cdp, closePanel)
     await waitForExpression(cdp, '!document.querySelector(".panel-overlay")')
 
-    if (!await evaluate(cdp, clickByText('厅内传令'))) throw new Error('厅内传令入口不可点击')
-    await waitForExpression(cdp, '(document.body.innerText || "").includes("厅中暂无传令") || (document.body.innerText || "").includes("实时同步中")')
+    if (!await evaluate(cdp, clickByText('全员议事'))) throw new Error('全员议事入口不可点击')
+    await waitForExpression(cdp, '(document.body.innerText || "").includes("厅中暂无议事") || (document.body.innerText || "").includes("实时同步中")')
 
     const finalState = await evaluate(cdp, `(() => {
       const text = document.body.innerText || '';

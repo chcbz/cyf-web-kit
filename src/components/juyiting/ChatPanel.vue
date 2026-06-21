@@ -1,18 +1,36 @@
 <template>
-  <div class="chat-panel">
+  <div class="chat-panel discussion-surface" :class="`discussion-${discussionVariant}`">
     <div class="panel-toolbar">
-      <div class="toolbar-meta">
-        <span>对话对象：{{ targetText }}</span>
-        <span>当前悬赏：{{ taskText }}</span>
-        <span class="panel-status">{{ displayStatus }}</span>
+      <div class="context-summary">
+        <strong>{{ title }}</strong>
+        <small>{{ resolvedSubtitle }}</small>
+        <em>{{ displayStatus }}</em>
       </div>
       <div class="toolbar-actions">
-        <button class="new-chat" type="button" @click="$emit('new-conversation')">新建聚义会话</button>
-        <button type="button" @click="$emit('load-messages')">同步</button>
+        <button class="icon-button" type="button" title="同步" aria-label="同步" @click="$emit('load-messages')">
+          <var-icon name="refresh" />
+        </button>
+        <button class="icon-button primary" type="button" title="新建会话" aria-label="新建会话" @click="$emit('new-conversation')">
+          <var-icon name="plus" />
+        </button>
       </div>
     </div>
 
-    <div v-if="agents.length" class="mention-strip" aria-label="选择要提及的地图人物">
+    <div v-if="showTargetPicker && agents.length" class="discussion-target-controls">
+      <button
+        class="target-toggle"
+        type="button"
+        title="选择目标"
+        aria-label="选择目标"
+        :class="{ active: showTargets }"
+        @click="showTargets = !showTargets"
+      >
+        <var-icon name="account-circle" />
+        <span>{{ targetBadgeText }}</span>
+      </button>
+    </div>
+
+    <div v-if="showTargets && agents.length" class="compact-mention-strip" aria-label="选择要提及的地图人物">
       <button
         v-for="agent in agents"
         :key="agent.agentId"
@@ -22,20 +40,6 @@
       >
         @{{ mentionLabel(agent) }}
       </button>
-    </div>
-
-    <div class="command-groups" aria-label="传令快捷模板">
-      <div class="command-group command-templates">
-        <span>议事</span>
-        <button
-          v-for="template in commandTemplates"
-          :key="template.key"
-          type="button"
-          @click="$emit('apply-template', template.key)"
-        >
-          {{ template.label }}
-        </button>
-      </div>
     </div>
 
     <div ref="messageBoxRef" class="hall-messages">
@@ -56,7 +60,7 @@
         <strong>{{ pendingAuthor }}</strong>
         <div class="message-content" v-html="renderMarkdown(pendingLabel)"></div>
       </div>
-      <div v-if="!messages.length" class="empty-list">厅中暂无传令，发起一句开始议事。</div>
+      <div v-if="!messages.length" class="empty-list">{{ emptyText }}</div>
     </div>
 
     <form class="hall-input chat-composer" @submit.prevent="$emit('send-message')">
@@ -64,7 +68,7 @@
         :value="draft"
         autofocus
         :disabled="isStreaming"
-        placeholder="向聚义厅发令，或 @某位好汉"
+        :placeholder="placeholder"
         @input="$emit('update:draft', $event.target.value)"
       />
       <button :disabled="!draft || isStreaming">
@@ -89,21 +93,27 @@ marked.setOptions({
 const props = defineProps({
   agents: { type: Array, default: () => [] },
   connectionStatus: { type: String, default: '' },
+  discussionVariant: { type: String, default: 'public' },
   draft: { type: String, default: '' },
+  emptyText: { type: String, default: '厅中暂无议事，发起一句开始讨论。' },
   eventStreamRecovering: { type: Boolean, default: false },
   isAwaitingReply: { type: Boolean, default: false },
   isStreaming: { type: Boolean, default: false },
   mentionLabel: { type: Function, required: true },
   messages: { type: Array, default: () => [] },
   pendingAgentName: { type: String, default: '' },
+  placeholder: { type: String, default: '向聚义厅发起议事，或 @某位好汉' },
   selectedAgent: { type: Object, default: null },
   selectedTask: { type: Object, default: null },
   senderText: { type: Function, required: true },
+  showTargetPicker: { type: Boolean, default: true },
+  scopeHint: { type: String, default: 'public' },
+  subtitle: { type: String, default: '' },
+  title: { type: String, default: '议事' },
   targetText: { type: String, default: '全体好汉' }
 })
 
 defineEmits([
-  'apply-template',
   'load-messages',
   'mention-agent',
   'new-conversation',
@@ -112,13 +122,22 @@ defineEmits([
 ])
 
 const messageBoxRef = ref(null)
+const showTargets = ref(false)
 const pendingAuthor = '聚义厅'
-const commandTemplates = [
-  { key: 'status', label: '汇报状态' },
-  { key: 'risk', label: '评估风险' },
-  { key: 'confirm', label: '接令确认' }
-]
 const taskText = computed(() => props.selectedTask?.title || '未选悬赏')
+const resolvedSubtitle = computed(() => {
+  if (props.subtitle) return props.subtitle
+  if (props.discussionVariant === 'bounty') return taskText.value
+  if (props.discussionVariant === 'private') return props.targetText
+  if (props.selectedTask) return taskText.value
+  if (props.selectedAgent) return props.targetText
+  return props.scopeHint === 'public' ? '未 @ 时交由宋江分流' : props.scopeHint
+})
+const targetBadgeText = computed(() => {
+  if (props.selectedAgent) return mentionLabel(props.selectedAgent)
+  if (props.discussionVariant === 'bounty') return `${props.agents.length} 人`
+  return '@'
+})
 const displayStatus = computed(() => {
   if (props.eventStreamRecovering) return '正在尝试恢复回话'
   return props.connectionStatus || (props.isAwaitingReply ? pendingLabel.value : '实时同步中')
@@ -165,35 +184,41 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  flex-wrap: wrap;
-  padding: 8px 12px;
+  padding: 8px 10px 6px;
   border-bottom: 1px solid rgba(116, 75, 35, 0.12);
   color: #765f40;
   font-size: 12px;
 }
 
-.toolbar-meta {
+.context-summary {
   display: flex;
-  flex: 1 1 260px;
+  flex: 1 1 auto;
+  align-items: baseline;
   min-width: 0;
-  flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
 
-.toolbar-meta span {
-  display: inline-flex;
-  align-items: center;
+.context-summary strong {
+  flex: 0 0 auto;
+  color: #3f2815;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.context-summary small,
+.context-summary em {
   max-width: 100%;
-  min-height: 26px;
-  padding: 0 8px;
   overflow: hidden;
-  border-radius: 8px;
-  background: #f5ead6;
+  color: #8a6f4b;
+  font-size: 12px;
+  font-style: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.panel-status {
+.context-summary em {
+  flex: 0 0 auto;
   color: #9a6e40;
 }
 
@@ -204,33 +229,68 @@ button:disabled {
   min-width: 0;
 }
 
-.panel-toolbar button {
+.icon-button,
+.target-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 30px;
-  padding: 0 10px;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
   border-radius: 8px;
   background: #efe0c6;
   color: #4a3423;
-  font-size: 12px;
   white-space: nowrap;
 }
 
-.panel-toolbar .new-chat {
+.icon-button.primary {
   background: #6d3f1f;
   color: #fff8e8;
 }
 
-.mention-strip {
+.discussion-target-controls {
   display: flex;
   flex: 0 0 auto;
+  align-items: center;
   gap: 6px;
-  padding: 8px 12px 6px;
+  padding: 6px 10px 8px;
   overflow-x: auto;
 }
 
-.mention-strip button {
+.target-toggle {
+  border: 1px solid #d7c3a2;
+  background: #fffdf6;
+  color: #5b432a;
+}
+
+.target-toggle.active {
+  border-color: #23483e;
+  background: #23483e;
+  color: #fff8e8;
+}
+
+.target-toggle {
+  width: auto;
+  max-width: 120px;
+  gap: 4px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.target-toggle span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compact-mention-strip {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  padding: 0 10px 8px;
+  overflow-x: auto;
+}
+
+.compact-mention-strip button {
   flex: 0 0 auto;
   min-height: 30px;
   padding: 0 10px;
@@ -241,40 +301,10 @@ button:disabled {
   white-space: nowrap;
 }
 
-.mention-strip button.active {
+.compact-mention-strip button.active {
   border-color: #7f4a22;
   background: #7f4a22;
   color: #fff8e8;
-}
-
-.command-groups {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 8px;
-  padding: 0 12px 8px;
-  overflow-x: auto;
-}
-
-.command-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.command-group span {
-  color: #8a6f4b;
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.command-group button {
-  flex: 0 0 auto;
-  min-height: 30px;
-  padding: 0 10px;
-  border-radius: 8px;
-  background: #23483e;
-  color: #fff8e8;
-  white-space: nowrap;
 }
 
 .hall-messages {
@@ -469,12 +499,12 @@ button:disabled {
     align-items: center;
   }
 
-  .toolbar-actions {
-    width: 100%;
+  .context-summary {
+    gap: 6px;
   }
 
-  .toolbar-actions button {
-    flex: 1 1 0;
+  .context-summary em {
+    display: none;
   }
 
   .hall-message {

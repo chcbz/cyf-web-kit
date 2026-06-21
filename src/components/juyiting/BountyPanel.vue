@@ -110,7 +110,7 @@
                 </button>
                 <button @click="$emit('brief-selected-task', detailTask, selectedAgent)">
                   <var-icon name="message-text-outline" />
-                  <span>传令议事</span>
+                  <span>单独议事</span>
                 </button>
                 <button
                   class="assign-selected-agents"
@@ -129,7 +129,7 @@
                   @click="$emit('discuss-task', detailTask)"
                 >
                   <var-icon name="forum-outline" />
-                  <span>围绕悬赏议事</span>
+                  <span>悬赏议事</span>
                 </button>
                 <button class="archive-task-button" type="button" @click="$emit('archive-task', detailTask)">
                   <var-icon name="archive-outline" />
@@ -169,7 +169,7 @@
                   <button type="button" :disabled="!canAssign(detailTask, agent)" @click="$emit('assign-task', detailTask, agent)">
                     指派给 {{ agentDisplayName(agent) }}
                   </button>
-                  <button type="button" @click="$emit('brief-selected-task', detailTask, agent)">传令</button>
+                  <button type="button" @click="$emit('brief-selected-task', detailTask, agent)">单独议事</button>
                 </div>
               </div>
               <p v-if="!recommendedAgents.length">暂无活跃好汉可接令。</p>

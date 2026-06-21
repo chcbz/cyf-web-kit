@@ -17,7 +17,7 @@
       :tasks-total="tasks.length"
       :visible-agents="visibleAgents"
       @new-conversation="handleNewHallConversation"
-      @open-panel="openPanel"
+      @open-panel="handleStagePanelOpen"
       @refresh-hall="refreshHall"
       @select-agent="selectAgent"
       @toggle-sound="toggleHallSound"
@@ -97,8 +97,8 @@
             @set-status-filter="setTaskStatusFilter"
           />
 
-          <ChatPanel
-            v-if="renderedPanel === 'chat'"
+          <PublicDiscussionPanel
+            v-if="renderedPanel === 'chat' && chatMode === 'public'"
             v-model:draft="draft"
             :agents="chatMentionAgents"
             :event-stream-recovering="eventStreamRecovering"
@@ -112,7 +112,51 @@
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
             :target-text="chatTargetText"
-            @apply-template="applyCommandTemplate"
+            :scope-hint="chatContext.conversationScopeKey"
+            @load-messages="loadHallMessages(conversationId)"
+            @mention-agent="handleMentionAgent"
+            @new-conversation="handleNewHallConversation"
+            @send-message="handleSendHallMessage"
+          />
+
+          <BountyDiscussionPanel
+            v-if="renderedPanel === 'chat' && chatMode === 'bounty'"
+            v-model:draft="draft"
+            :agents="chatMentionAgents"
+            :event-stream-recovering="eventStreamRecovering"
+            :is-awaiting-reply="isAwaitingReply"
+            :is-streaming="isStreaming"
+            :messages="messages"
+            :mention-label="portraitShortName"
+            :pending-agent-name="pendingAgentName"
+            :selected-agent="selectedAgent"
+            :selected-task="selectedTask"
+            :sender-text="senderText"
+            :connection-status="chatConnectionStatus"
+            :target-text="chatTargetText"
+            :scope-hint="chatContext.conversationScopeKey"
+            @load-messages="loadHallMessages(conversationId)"
+            @mention-agent="handleMentionAgent"
+            @new-conversation="handleNewHallConversation"
+            @send-message="handleSendHallMessage"
+          />
+
+          <PrivateDiscussionPanel
+            v-if="renderedPanel === 'chat' && chatMode === 'private'"
+            v-model:draft="draft"
+            :agents="chatMentionAgents"
+            :event-stream-recovering="eventStreamRecovering"
+            :is-awaiting-reply="isAwaitingReply"
+            :is-streaming="isStreaming"
+            :messages="messages"
+            :mention-label="portraitShortName"
+            :pending-agent-name="pendingAgentName"
+            :selected-agent="selectedAgent"
+            :selected-task="selectedTask"
+            :sender-text="senderText"
+            :connection-status="chatConnectionStatus"
+            :target-text="chatTargetText"
+            :scope-hint="chatContext.conversationScopeKey"
             @load-messages="loadHallMessages(conversationId)"
             @mention-agent="handleMentionAgent"
             @new-conversation="handleNewHallConversation"
@@ -146,16 +190,21 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useGlobalStore } from '@/stores/global'
 import { useApiStore } from '@/stores/api'
 import { agentApi, chatApi } from '@/composables/useHttp'
+import { useHallChatContext } from '@/composables/juyiting/useHallChatContext'
 import { useHallConversation } from '@/composables/juyiting/useHallConversation'
 import { useHallData } from '@/composables/juyiting/useHallData'
+import { useHallLibrary } from '@/composables/juyiting/useHallLibrary'
 import { useHallPhysics } from '@/composables/juyiting/useHallPhysics'
 import { useHallSound } from '@/composables/juyiting/useHallSound'
+import { useHallTaskActions } from '@/composables/juyiting/useHallTaskActions'
 import { portraitName, portraitRole, portraitShortName, portraitStyle, roleClass } from '@/composables/juyiting/useWaterMarginRoles'
 import AgentPanel from '@/components/juyiting/AgentPanel.vue'
+import BountyDiscussionPanel from '@/components/juyiting/BountyDiscussionPanel.vue'
 import BountyPanel from '@/components/juyiting/BountyPanel.vue'
-import ChatPanel from '@/components/juyiting/ChatPanel.vue'
 import HallStage from '@/components/juyiting/HallStage.vue'
 import LibraryPanel from '@/components/juyiting/LibraryPanel.vue'
+import PrivateDiscussionPanel from '@/components/juyiting/PrivateDiscussionPanel.vue'
+import PublicDiscussionPanel from '@/components/juyiting/PublicDiscussionPanel.vue'
 import SelectedAgentCard from '@/components/juyiting/SelectedAgentCard.vue'
 import {
   roleDialogues,
@@ -174,14 +223,7 @@ const activePanel = ref('')
 const renderedPanel = ref('')
 const hallRefreshing = ref(false)
 const agentBubbles = ref({})
-const libraryKeyword = ref('')
-const librarySourceType = ref('')
-const libraryResults = ref([])
-const libraryLoading = ref(false)
-const libraryHasSearched = ref(false)
-const libraryErrorMessage = ref('')
 const outgoingMetadata = ref({})
-const taskDiscussionAgentIds = ref([])
 let bubbleTimer = null
 let bubbleInitialTimer = null
 let bubbleClearTimer = null
@@ -201,19 +243,9 @@ const {
 const activePanelTitle = computed(() => {
   if (renderedPanel.value === 'agents') return '好汉名册'
   if (renderedPanel.value === 'tasks') return '悬赏榜'
-  if (renderedPanel.value === 'chat') return '厅内传令'
+  if (renderedPanel.value === 'chat') return '厅内议事'
   if (renderedPanel.value === 'library') return '藏经阁'
   return ''
-})
-const chatTargetText = computed(() => {
-  if (!selectedAgent.value) return '全体好汉'
-  return `${portraitShortName(selectedAgent.value)} / ${selectedAgent.value.name || selectedAgent.value.agentId}`
-})
-
-const chatMentionAgents = computed(() => {
-  if (!taskDiscussionAgentIds.value.length) return mapAgents.value
-  const allowed = new Set(taskDiscussionAgentIds.value)
-  return mapAgents.value.filter(agent => allowed.has(agent.agentId))
 })
 
 const normalizeStatus = (status = '') => status.toLowerCase()
@@ -297,6 +329,22 @@ const {
   taskAgentMatchScore
 })
 
+const {
+  chatContext,
+  chatMentionAgents,
+  chatMode,
+  chatTargetText,
+  enterBountyDiscussion,
+  enterPrivateConversation,
+  resetToPublic,
+  setMentionAgent
+} = useHallChatContext({
+  mapAgents,
+  portraitShortName,
+  selectedAgent,
+  selectedTask
+})
+
 const refreshHall = async ({ silent = false } = {}) => {
   if (hallRefreshing.value) return
   hallRefreshing.value = true
@@ -332,10 +380,26 @@ const selectAgent = (agent) => {
 
 
 const openPanel = (panel, options = {}) => {
-  if (panel !== 'chat') taskDiscussionAgentIds.value = []
+  if (panel !== 'chat') {
+    resetToPublic()
+  }
+  if (panel === 'chat' && options.mode === 'public') {
+    resetToPublic({ clearSelection: true })
+  }
   renderedPanel.value = panel
   activePanel.value = panel
   if (!options.silent) playPanelOpen()
+  if (panel === 'chat') {
+    window.setTimeout(() => loadHallMessages(), 0)
+  }
+}
+
+const handleStagePanelOpen = (panel) => {
+  if (panel === 'chat') {
+    openPanel('chat', { mode: 'public', resetContext: true })
+    return
+  }
+  openPanel(panel)
 }
 
 const closePanel = () => {
@@ -355,100 +419,23 @@ const closeSelectedAgentCard = () => {
 const briefSelectedTask = (task = selectedTask.value, agent = selectedAgent.value) => {
   if (!task) return
   selectedTask.value = task
-  taskDiscussionAgentIds.value = []
-  if (agent) selectedAgent.value = agent
+  if (agent) {
+    enterPrivateConversation(agent)
+  } else {
+    enterBountyDiscussion(task)
+  }
   const abilities = (task.requiredAbilities || []).join(' / ') || '不限能力'
   const target = agent ? `建议由 ${portraitShortName(agent)} / ${agent.name || agent.personaName || agent.agentId} 承接。` : '请给出适合承接的好汉。'
   draft.value = `请围绕悬赏「${task.title}」议事：任务编号 ${task.id}，状态 ${taskStatusText(task.status)}，所需能力 ${abilities}。${target}请说明风险和下一步安排。`
   openPanel('chat')
-  showToast('已生成传令内容')
-}
-
-const taskAssigneeIds = (task) => {
-  if (!task) return []
-  if (Array.isArray(task.assignedAgentIds)) return task.assignedAgentIds
-  return task.assignedAgentId ? [task.assignedAgentId] : []
-}
-
-const createTask = async (payload) => {
-  try {
-    await agentApi.create('/tasks', payload, {
-      autoLoading: false,
-      onSuccess: (result) => {
-        const task = result?.data
-        if (task) {
-          tasks.value = [task, ...tasks.value.filter(item => item.id !== task.id)]
-          selectedTask.value = task
-        }
-        playSuccess()
-        showToast('悬赏已发布')
-      }
-    })
-  } catch (error) {
-    log.warn('create bounty task failed:', error)
-    playError()
-    showToast('发布悬赏失败')
-  }
+  showToast('已生成议事内容')
 }
 
 const discussTask = (task) => {
   if (!task) return
-  selectedTask.value = task
-  taskDiscussionAgentIds.value = taskAssigneeIds(task)
+  enterBountyDiscussion(task)
   draft.value = `请围绕悬赏「${task.title}」议事。`
   openPanel('chat')
-}
-
-const applyCommandTemplate = (key) => {
-  const taskTitle = selectedTask.value?.title || '当前议题'
-  const templates = {
-    status: `请汇报「${taskTitle}」当前进展、阻塞点和下一步。`,
-    risk: `请评估「${taskTitle}」的主要风险、依赖和可回滚方案。`,
-    confirm: `请确认是否接令「${taskTitle}」，并说明预计完成方式。`
-  }
-  draft.value = templates[key] || ''
-  playTap()
-}
-
-const searchLibrary = async () => {
-  if (!libraryKeyword.value.trim()) return
-  libraryLoading.value = true
-  libraryHasSearched.value = true
-  libraryErrorMessage.value = ''
-  try {
-    await chatApi.search('/library/search', {
-      keyword: libraryKeyword.value.trim(),
-      sourceType: librarySourceType.value || undefined,
-      topK: 8
-    }, {
-      autoLoading: false,
-      onSuccess: (result) => {
-        libraryResults.value = result?.data || []
-      }
-    })
-  } catch (error) {
-    log.warn('library search failed', error)
-    libraryResults.value = []
-    libraryErrorMessage.value = '藏经阁暂不可用，主流程不受影响'
-    showToast('藏经阁检索失败')
-  } finally {
-    libraryLoading.value = false
-  }
-}
-
-const citeLibraryItem = (item) => {
-  const content = String(item?.content || '').trim()
-  if (!content) return
-  outgoingMetadata.value = {
-    ...(outgoingMetadata.value || {}),
-    libraryCitationId: item.id || item.conversationId,
-    librarySourceType: item.summaryType || item.sourceType || 'memory'
-  }
-  const excerpt = content.length > 120 ? `${content.slice(0, 120)}...` : content
-  draft.value = `${draft.value ? `${draft.value}\n\n` : ''}参考藏经阁资料：${excerpt}`
-  openPanel('chat')
-  playSuccess()
-  showToast('资料已引用到传令')
 }
 
 const toggleHallSound = () => {
@@ -470,6 +457,22 @@ const showToast = (message) => {
 }
 
 const {
+  archiveTask,
+  assignTask,
+  createTask
+} = useHallTaskActions({
+  agentApi,
+  canAssign,
+  log,
+  playError,
+  playSuccess,
+  selectedAgent,
+  selectedTask,
+  showToast,
+  tasks
+})
+
+const {
   chatConnectionStatus,
   conversationId,
   draft,
@@ -484,12 +487,13 @@ const {
   pendingAgentName,
   sendHallMessage,
   senderText,
-  startAgentConversation,
   stopHallEventStream,
   stopHallReplyPolling,
   stopHallReplyStreaming
 } = useHallConversation({
   apiStore,
+  chatContext,
+  chatMode,
   chatApi,
   globalStore,
   log,
@@ -498,6 +502,25 @@ const {
   portraitShortName,
   selectedAgent,
   selectedTask,
+  showToast
+})
+
+const {
+  citeLibraryItem,
+  libraryErrorMessage,
+  libraryHasSearched,
+  libraryKeyword,
+  libraryLoading,
+  libraryResults,
+  librarySourceType,
+  searchLibrary
+} = useHallLibrary({
+  chatApi,
+  draft,
+  log,
+  openPanel,
+  outgoingMetadata,
+  playSuccess,
   showToast
 })
 
@@ -532,59 +555,6 @@ const showRandomAgentBubble = () => {
 }
 
 
-const assignTask = async (task, agent = selectedAgent.value) => {
-  const targetAgents = Array.isArray(agent) ? agent : [agent].filter(Boolean)
-  const targetAgent = targetAgents[0]
-  if (!task || !targetAgents.length) return
-  if (targetAgents.some(item => !canAssign(task, item))) return
-  try {
-    await agentApi.create(`/tasks/${task.id}/assign`, {
-      agentId: targetAgent.agentId,
-      agentIds: targetAgents.map(item => item.agentId)
-    }, {
-      autoLoading: false,
-      onSuccess: () => {
-        task.status = 'assigned'
-        task.assignedAgentIds = targetAgents.map(item => item.agentId)
-        task.assignedAgentId = task.assignedAgentIds[0]
-        task.assignedAgentName = targetAgents.map(item => item.name || item.personaName || item.agentId).join('、')
-        targetAgents.forEach(item => {
-          item.status = 'busy'
-          item.currentTaskTitle = task.title
-        })
-        selectedAgent.value = targetAgent
-        selectedTask.value = task
-        playSuccess()
-        showToast(`${task.title} 已指派给 ${task.assignedAgentName}`)
-      }
-    })
-  } catch (error) {
-    log.warn('assign bounty task failed:', error)
-    playError()
-    showToast('指派失败，请刷新状态后重试')
-  }
-}
-
-const archiveTask = async (task) => {
-  if (!task) return
-  try {
-    await agentApi.create(`/tasks/${task.id}/archive`, {}, {
-      autoLoading: false,
-      onSuccess: (result) => {
-        const archived = result?.data || { ...task, status: 'archived' }
-        tasks.value = tasks.value.map(item => item.id === task.id ? archived : item)
-        selectedTask.value = archived
-        playSuccess()
-        showToast('悬赏已归档')
-      }
-    })
-  } catch (error) {
-    log.warn('archive bounty task failed:', error)
-    playError()
-    showToast('归档悬赏失败')
-  }
-}
-
 const handleNewHallConversation = () => {
   playPanelOpen()
   newHallConversation()
@@ -597,12 +567,18 @@ const handleSendHallMessage = async () => {
 
 const handleMentionAgent = (agent) => {
   playTap()
+  setMentionAgent(agent)
   mentionAgent(agent)
 }
 
 const handleStartAgentConversation = (agent) => {
+  if (!agent) return
   playAgentSelect()
-  startAgentConversation(agent)
+  enterPrivateConversation(agent)
+  draft.value = ''
+  insertAgentMention(agent, '请汇报当前状态、可承接任务和需要协助的事项。')
+  openPanel('chat')
+  showToast(`正在与 ${portraitShortName(agent)} 议事`)
 }
 
 onMounted(async () => {
@@ -932,15 +908,6 @@ button.hall-room {
   height: 24%;
 }
 
-.room-chat {
-  left: 40%;
-  top: 14%;
-  width: 20%;
-  height: 17%;
-  background:
-    linear-gradient(145deg, rgba(230, 235, 205, 0.76), rgba(116, 151, 110, 0.58));
-}
-
 .room-back {
   left: 40%;
   bottom: 13%;
@@ -1196,11 +1163,6 @@ button.hall-room {
   left: 50%;
   bottom: 25%;
   transform: translateX(-50%);
-}
-
-.hotspot-chat {
-  right: 8%;
-  top: 58%;
 }
 
 .panel-overlay {
@@ -1525,11 +1487,6 @@ button.hall-room {
     top: 63%;
   }
 
-  .hotspot-chat {
-    right: 5%;
-    top: 63%;
-  }
-
   .quick-bar {
     grid-template-columns: 1fr;
     gap: 8px;
@@ -1585,13 +1542,6 @@ button.hall-room {
     top: 38%;
     width: 18%;
     height: 22%;
-  }
-
-  .room-chat {
-    left: 39%;
-    top: 14%;
-    width: 22%;
-    height: 16%;
   }
 
   .room-back {

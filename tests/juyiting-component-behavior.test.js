@@ -11,6 +11,7 @@ let BountyPanel
 let ChatPanel
 let CommandPanel
 let CoordinationPanel
+let HallStage
 let LibraryPanel
 
 const vueImportToVar = (_line, imports) => {
@@ -39,6 +40,7 @@ const loadSfc = (relativePath) => {
 
   const scriptBody = script
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
+    .replace(/^import\s+AgentToken\s+from\s+['"]@\/components\/juyiting\/AgentToken\.vue['"];?\s*$/gm, 'var AgentToken = { template: \'<span />\', props: [\'agent\'] }')
     .replace(/^import\s+\{\s*marked\s*\}\s+from\s+['"]marked['"];?\s*$/gm, 'var marked = { setOptions: () => {}, parse: value => value }')
     .replace(/^import\s+DOMPurify\s+from\s+['"]dompurify['"];?\s*$/gm, 'var DOMPurify = { sanitize: value => value }')
     .replace('export default', 'return')
@@ -62,7 +64,36 @@ describe('JuyiHall component behavior', () => {
     ChatPanel = loadSfc('../src/components/juyiting/ChatPanel.vue')
     CommandPanel = loadSfc('../src/components/juyiting/CommandPanel.vue')
     CoordinationPanel = loadSfc('../src/components/juyiting/CoordinationPanel.vue')
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
     LibraryPanel = loadSfc('../src/components/juyiting/LibraryPanel.vue')
+  })
+
+  it('uses the central courtyard as the all-hands discussion entrance without a command room', async () => {
+    const wrapper = mount(HallStage, {
+      global: { stubs },
+      props: {
+        agentKey: agent => agent.agentId,
+        agentStyle: () => ({}),
+        portraitName: agent => agent.name,
+        portraitShortName: agent => agent.name,
+        portraitStyle: () => ({}),
+        roleClass: () => '',
+        statusClass: () => '',
+        statusText: () => '',
+        tasksTotal: 3,
+        visibleAgents: []
+      }
+    })
+
+    expect(wrapper.text()).to.include('议事中庭')
+    expect(wrapper.text()).to.include('全员议事')
+    expect(wrapper.text()).not.to.include('传令房')
+    expect(wrapper.find('.room-chat').exists()).to.equal(false)
+    expect(wrapper.find('.hotspot-chat').exists()).to.equal(false)
+
+    await wrapper.find('.room-main').trigger('click')
+
+    expect(wrapper.emitted('open-panel')[0]).to.deep.equal(['chat'])
   })
 
   it('opens panels and clears locked contexts from BottomDock', async () => {
@@ -126,6 +157,10 @@ describe('JuyiHall component behavior', () => {
     })
 
     await wrapper.find('.task-card').trigger('click')
+
+    expect(wrapper.text()).to.include('单独议事')
+    expect(wrapper.text()).to.include('悬赏议事')
+    expect(wrapper.text()).not.to.include('传令议事')
 
     const actionButtons = wrapper.findAll('.recommended-agent-actions button')
     await actionButtons[0].trigger('click')
@@ -266,7 +301,7 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.emitted('discuss-task')).to.equal(undefined)
   })
 
-  it('emits command template selections from ChatPanel without sending', async () => {
+  it('keeps persistent command templates out of ChatPanel', async () => {
     const wrapper = mount(ChatPanel, {
       global: { stubs },
       props: {
@@ -281,18 +316,57 @@ describe('JuyiHall component behavior', () => {
       }
     })
 
-    const templateButtons = wrapper.findAll('.command-templates button')
-    await templateButtons[0].trigger('click')
-    await templateButtons[1].trigger('click')
-    await templateButtons[2].trigger('click')
-
+    expect(wrapper.find('.command-templates').exists()).to.equal(false)
     expect(wrapper.text()).to.include('Inspect the camp')
-    expect(wrapper.emitted('apply-template')).to.deep.equal([
-      ['status'],
-      ['risk'],
-      ['confirm']
-    ])
+    expect(wrapper.emitted('apply-template')).to.equal(undefined)
     expect(wrapper.emitted('send-message')).to.equal(undefined)
+  })
+
+  it('keeps ChatPanel targets collapsed behind a local target action', async () => {
+    const agents = [
+      { agentId: 'wuyong', name: 'Wu Yong' },
+      { agentId: 'linchong', name: 'Lin Chong' }
+    ]
+    const wrapper = mount(ChatPanel, {
+      global: { stubs },
+      props: {
+        agents,
+        draft: '',
+        messages: [],
+        mentionLabel: agent => agent.name,
+        senderText: message => message.sender,
+        targetText: 'All agents',
+        connectionStatus: 'Synced'
+      }
+    })
+
+    expect(wrapper.find('.discussion-target-controls').exists()).to.equal(true)
+    expect(wrapper.find('.compact-mention-strip').exists()).to.equal(false)
+
+    await wrapper.find('.target-toggle').trigger('click')
+    await wrapper.findAll('.compact-mention-strip button')[1].trigger('click')
+
+    expect(wrapper.emitted('mention-agent')[0]).to.deep.equal([agents[1]])
+  })
+
+  it('does not expose a cross-scope mode switch inside the shared ChatPanel', () => {
+    const wrapper = mount(ChatPanel, {
+      global: { stubs },
+      props: {
+        agents: [],
+        draft: '',
+        messages: [],
+        mentionLabel: agent => agent.name,
+        senderText: message => message.sender,
+        targetText: 'All agents',
+        connectionStatus: 'Synced'
+      }
+    })
+
+    expect(wrapper.find('.mode-switch').exists()).to.equal(false)
+    expect(wrapper.find('.mode-icon-button').exists()).to.equal(false)
+    expect(wrapper.text()).not.to.include('公开会谈')
+    expect(wrapper.text()).not.to.include('私聊')
   })
 
   it('keeps ChatPanel composer as a dedicated bottom region', () => {
@@ -332,9 +406,8 @@ describe('JuyiHall component behavior', () => {
       }
     })
 
-    await wrapper.findAll('.command-templates button')[0].trigger('click')
-
-    expect(wrapper.emitted('apply-template')[0]).to.deep.equal(['status'])
+    expect(wrapper.find('.command-templates').exists()).to.equal(false)
+    expect(wrapper.emitted('apply-template')).to.equal(undefined)
     expect(wrapper.find('.chief-templates').exists()).to.equal(false)
     expect(wrapper.find('.coordination-inline').exists()).to.equal(false)
     expect(wrapper.text()).not.to.include('宋江号令')
@@ -376,7 +449,7 @@ describe('JuyiHall component behavior', () => {
 
     expect(wrapper.text()).to.include('巡检悬赏榜')
     expect(wrapper.text()).to.include('整备好汉名册')
-    expect(wrapper.text()).to.include('全厅传令')
+    expect(wrapper.text()).to.include('全员议事')
 
     await wrapper.findAll('.command-grid button')[0].trigger('click')
     expect(wrapper.emitted('issue-command')[0]).to.deep.equal(['reviewBounties'])

@@ -32,6 +32,8 @@ describe('SelectedAgentCard interaction contract', () => {
     expect(cardSource).to.include("defineEmits(['open-agents', 'start-chat', 'close-card'])")
     expect(cardSource).to.include("$emit('start-chat')")
     expect(cardSource).to.include("$emit('open-agents')")
+    expect(cardSource).to.include('<span>议事</span>')
+    expect(cardSource).not.to.include('单独议事')
   })
 
   it('renders inside the quick bar instead of as a map overlay', () => {
@@ -116,5 +118,16 @@ describe('SelectedAgentCard interaction contract', () => {
     expect(selectAgentSource).not.to.include('showToast')
     expect(hallSource).not.to.include('已选中')
     expect(hallSource).not.to.include('\\u5df2\\u9009\\u4e2d')
+  })
+
+  it('starts card discussion through the private conversation context boundary', () => {
+    const handlerStart = hallSource.indexOf('const handleStartAgentConversation = (agent) => {')
+    const handlerEnd = hallSource.indexOf('onMounted', handlerStart)
+    const handlerSource = hallSource.slice(handlerStart, handlerEnd)
+
+    expect(handlerSource).to.include('enterPrivateConversation(agent)')
+    expect(handlerSource).to.include("draft.value =")
+    expect(handlerSource).to.include("openPanel('chat')")
+    expect(handlerSource).not.to.include('startAgentConversation(agent)')
   })
 })

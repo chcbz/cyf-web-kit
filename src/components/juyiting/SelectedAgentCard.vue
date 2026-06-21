@@ -15,7 +15,7 @@
       <div class="card-actions">
         <button type="button" class="card-action primary" @click="$emit('start-chat')">
           <var-icon name="message-text-outline" />
-          <span>传令</span>
+          <span>议事</span>
         </button>
         <button type="button" class="card-action" @click="$emit('open-agents')">
           <var-icon name="account-circle" />

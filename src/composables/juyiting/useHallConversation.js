@@ -1,7 +1,15 @@
 import { computed, ref } from 'vue'
+import {
+  appendHallEventMessage as reduceHallEventMessage,
+  appendStreamPayload,
+  hasResolvedAgentReply,
+  normalizeHallMessage
+} from './hallConversationMessages.js'
 
 export const useHallConversation = ({
   apiStore,
+  chatContext,
+  chatMode,
   chatApi,
   globalStore,
   log,
@@ -30,6 +38,17 @@ export const useHallConversation = ({
     return portraitShortName(selectedAgent.value) || selectedAgent.value.name || selectedAgent.value.agentId || ''
   })
 
+  const currentChatContext = computed(() => chatContext?.value || {
+    conversationScopeType: 'public',
+    conversationScopeKey: 'public',
+    mode: 'public',
+    participantAgentIds: [],
+    selectedTaskId: selectedTask.value?.id,
+    targetAgentIds: selectedAgent.value?.agentId ? [selectedAgent.value.agentId] : [],
+    taskId: selectedTask.value?.id,
+    targetAgentId: selectedAgent.value?.agentId || ''
+  })
+
   const chatConnectionStatus = computed(() => {
     if (eventStreamRecovering.value) return '正在尝试恢复回话'
     if (isStreaming.value) return '传令中'
@@ -44,38 +63,6 @@ export const useHallConversation = ({
     return '聚义厅'
   }
 
-  const parseMessageMetadata = (metadata) => {
-    if (!metadata) return {}
-    if (typeof metadata === 'object') return metadata
-    try {
-      return JSON.parse(metadata)
-    } catch {
-      return {}
-    }
-  }
-
-  const normalizeHallMessage = (item, index = 0) => {
-    const metadata = parseMessageMetadata(item.metadata)
-    return {
-      localId: `${item.id || metadata.messageId || index}`,
-      sender: item.senderType === 'agent' ? 'AGENT' : (item.messageType || item.senderType || 'SYSTEM'),
-      senderName: item.senderName || metadata.senderName,
-      agentId: metadata.agentId,
-      content: item.content || '',
-      timestamp: item.createTime || metadata.timestamp || Date.now(),
-      streaming: false,
-      statusText: ''
-    }
-  }
-
-  const currentStreamingAgentMessage = (event) => {
-    return messages.value.find(message =>
-      message.sender === 'AGENT' &&
-      message.streaming &&
-      (!event.agentId || message.agentId === event.agentId)
-    ) || null
-  }
-
   const stopHallReplyStreaming = () => {
     hallReplyTimers.forEach(timer => window.clearTimeout(timer))
     hallReplyTimers = []
@@ -88,80 +75,22 @@ export const useHallConversation = ({
     }
   }
 
-  const hasResolvedAgentReply = (list = messages.value) => {
-    let latestUserTimestamp = 0
-    for (const message of list) {
-      if (message.sender === 'USER') {
-        latestUserTimestamp = Math.max(latestUserTimestamp, Number(message.timestamp) || 0)
-      }
-    }
-    return list.some(message =>
-      message.sender === 'AGENT' &&
-      !message.streaming &&
-      (Number(message.timestamp) || 0) >= latestUserTimestamp
-    )
-  }
-
   const appendHallEventMessage = (event) => {
-    if (!event || event.conversationId?.toString() !== conversationId.value?.toString()) return
-    if (event.type === 'agent_message_delta') {
-      let pendingMessage = currentStreamingAgentMessage(event)
-      if (!pendingMessage) {
-        pendingMessage = {
-          localId: `delta-${event.agentId || 'agent'}-${event.timestamp || Date.now()}`,
-          sender: 'AGENT',
-          senderName: event.senderName,
-          agentId: event.agentId,
-          content: '',
-          timestamp: event.timestamp || Date.now(),
-          streaming: true,
-          statusText: '正在回复'
-        }
-        messages.value.push(pendingMessage)
-      }
-      pendingMessage.content += event.content || ''
-      pendingMessage.timestamp = event.timestamp || pendingMessage.timestamp
-      pendingMessage.senderName = event.senderName || pendingMessage.senderName
-      pendingMessage.streaming = true
-      pendingMessage.statusText = '正在回复'
-      isAwaitingReply.value = false
-      return
+    const state = {
+      conversationId: conversationId.value,
+      messages: messages.value,
+      isAwaitingReply: isAwaitingReply.value,
+      isStreaming: isStreaming.value
     }
-
-    const localId = `${event.messageId || `${event.agentId}-${event.timestamp || Date.now()}`}`
-    const streamingMessage = event.senderType === 'agent' ? currentStreamingAgentMessage(event) : null
-    if (streamingMessage && event.senderType === 'agent') {
-      streamingMessage.localId = localId
-      streamingMessage.content = event.content || streamingMessage.content
-      streamingMessage.timestamp = event.timestamp || streamingMessage.timestamp
-      streamingMessage.senderName = event.senderName || streamingMessage.senderName
-      streamingMessage.agentId = event.agentId || streamingMessage.agentId
-      streamingMessage.streaming = false
-      streamingMessage.statusText = '回复完成'
-      isAwaitingReply.value = false
-      isStreaming.value = false
-      stopHallReplyPolling()
-      if (event.senderName) showToast(`${event.senderName} 已回话`)
-      return
-    }
-    if (messages.value.some(message => message.localId === localId)) return
-
-    messages.value.push({
-      localId,
-      sender: event.senderType === 'agent' ? 'AGENT' : (event.messageType || 'ASSISTANT'),
-      senderName: event.senderName,
-      agentId: event.agentId,
-      content: event.content || '',
-      timestamp: event.timestamp || Date.now(),
-      streaming: false,
-      statusText: event.type === 'agent_message' ? '回复完成' : ''
-    })
-    if (event.senderType !== 'agent') {
-      isAwaitingReply.value = false
-      isStreaming.value = false
+    const result = reduceHallEventMessage(state, event)
+    conversationId.value = state.conversationId
+    messages.value = state.messages
+    isAwaitingReply.value = state.isAwaitingReply
+    isStreaming.value = state.isStreaming
+    if (result.shouldStopPolling) {
       stopHallReplyPolling()
     }
-    if (event.senderName) showToast(`${event.senderName} 已回话`)
+    if (result.toastName) showToast(`${result.toastName} 已回话`)
   }
 
   const apiStreamUrl = (path, params = {}) => {
@@ -247,6 +176,13 @@ export const useHallConversation = ({
   }
 
   const loadHallMessages = async () => {
+    stopHallEventStream()
+    stopHallReplyStreaming()
+    stopHallReplyPolling()
+    conversationId.value = ''
+    messages.value = []
+    isAwaitingReply.value = false
+    isStreaming.value = false
     try {
       await chatApi.list('/conversation/list', {
         pageNum: 1,
@@ -254,7 +190,9 @@ export const useHallConversation = ({
         orderBy: 'update_time desc',
         search: {
           jiacn: globalStore.getJiacn,
-          conversationType: 'juyiting'
+          conversationType: 'juyiting',
+          conversationScopeType: chatContext.value.conversationScopeType,
+          conversationScopeKey: chatContext.value.conversationScopeKey
         }
       }, {
         autoLoading: false,
@@ -307,57 +245,24 @@ export const useHallConversation = ({
   }
 
   const processStream = (eventData) => {
-    let payload = eventData.startsWith('data:') ? eventData.slice(5).trim() : eventData.trim()
-    if (!payload || payload === '[DONE]' || payload === '[EOM]') return
-
-    try {
-      const data = JSON.parse(payload)
-      if (data.agentDelivery) {
-        const agentId = data.agentDelivery.agentId || selectedAgent.value?.agentId || 'agent'
-        const delivered = data.agentDelivery.delivered === true
-        const localId = `delivery-${agentId}-${Date.now()}`
-        messages.value.push({
-          localId,
-          sender: 'SYSTEM',
-          content: delivered ? '消息已投递给目标好汉。' : '目标好汉暂未在线，投递失败。',
-          timestamp: Date.now(),
-          streaming: false,
-          statusText: delivered ? '已投递' : '投递失败'
-        })
-        return
-      }
-      if (data.type === 'agent_message_delta' || data.type === 'agent_message') {
-        appendHallEventMessage(data)
-        return
-      }
-      if (data.conversationId) {
-        const nextConversationId = data.conversationId?.toString() || ''
-        const shouldReconnect = nextConversationId && nextConversationId !== conversationId.value?.toString()
-        conversationId.value = nextConversationId
-        if (shouldReconnect) {
-          startHallEventStream()
-          scheduleHallConversationSync(nextConversationId)
-        }
-        return
-      }
-      payload = data.v || data.content || ''
-    } catch {
-      // plain text stream
+    const state = {
+      conversationId: conversationId.value,
+      messages: messages.value,
+      isAwaitingReply: isAwaitingReply.value,
+      isStreaming: isStreaming.value
     }
-
-    if (!payload) return
-    const last = messages.value[messages.value.length - 1]
-    if (last?.sender === 'ASSISTANT') {
-      last.content += payload
-    } else {
-      messages.value.push({
-        localId: `assistant-${Date.now()}`,
-        sender: 'ASSISTANT',
-        content: payload,
-        timestamp: Date.now(),
-        streaming: false,
-        statusText: ''
-      })
+    const result = appendStreamPayload(state, eventData)
+    conversationId.value = state.conversationId
+    messages.value = state.messages
+    isAwaitingReply.value = state.isAwaitingReply
+    isStreaming.value = state.isStreaming
+    if (result.shouldStopPolling) {
+      stopHallReplyPolling()
+    }
+    if (result.toastName) showToast(`${result.toastName} 已回话`)
+    if (result.shouldReconnect) {
+      startHallEventStream()
+      scheduleHallConversationSync(result.conversationId)
     }
   }
 
@@ -382,12 +287,22 @@ export const useHallConversation = ({
         content,
         conversationId: conversationId.value,
         conversationType: 'juyiting',
+        conversationScopeType: chatContext.value.conversationScopeType,
+        conversationScopeKey: chatContext.value.conversationScopeKey,
+        targetAgentIds: chatContext.value.targetAgentIds,
+        targetAgentId: chatContext.value.targetAgentId,
+        taskId: chatContext.value.taskId,
+        forceNewConversation: !conversationId.value,
         senderType: 'user',
         senderName: globalStore.user?.name || globalStore.user?.nickname || '用户',
         metadata: {
           scene: 'juyiting',
+          mode: currentChatContext.value.mode,
+          scopeKey: currentChatContext.value.conversationScopeKey,
           selectedAgentId: selectedAgent.value?.agentId,
-          mentionAgentIds: selectedAgent.value?.agentId ? [selectedAgent.value.agentId] : [],
+          mentionAgentIds: currentChatContext.value.targetAgentIds,
+          participantAgentIds: currentChatContext.value.participantAgentIds,
+          targetAgentIds: currentChatContext.value.targetAgentIds,
           selectedTaskId: selectedTask.value?.id,
           ...(outgoingMetadata?.value || {})
         }
@@ -445,6 +360,7 @@ export const useHallConversation = ({
 
   const startAgentConversation = (agent) => {
     if (!agent) return
+    if (chatMode) chatMode.value = 'private'
     selectedAgent.value = agent
     insertAgentMention(agent, '请汇报当前状态、可承接任务和需要协助的事项。')
     openPanel('chat')

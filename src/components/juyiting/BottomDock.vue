@@ -43,7 +43,7 @@ const items = [
   { key: 'agents', icon: 'account-circle', label: '名册' },
   { key: 'tasks', icon: 'format-list-checkbox', label: '悬赏' },
   { key: 'coordination', icon: 'share', label: '协同' },
-  { key: 'chat', icon: 'message-text-outline', label: '传令' },
+  { key: 'chat', icon: 'message-text-outline', label: '议事' },
   { key: 'library', icon: 'notebook', label: '藏经阁' }
 ]
 </script>

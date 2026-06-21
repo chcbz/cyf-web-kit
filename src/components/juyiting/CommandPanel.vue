@@ -5,7 +5,7 @@
       <div>
         <small>寨主统领</small>
         <strong>{{ chiefName }}</strong>
-        <p>统一管理悬赏榜、好汉名册和厅内传令。</p>
+        <p>统一查看悬赏榜、好汉名册和厅内议事。</p>
       </div>
     </section>
 
@@ -19,7 +19,7 @@
         <strong>{{ agentsTotal }}</strong>
       </button>
       <button type="button" @click="$emit('open-panel', 'chat')">
-        <small>厅内传令</small>
+        <small>厅内议事</small>
         <strong>可发</strong>
       </button>
     </div>
@@ -71,7 +71,7 @@ defineEmits(['issue-command', 'open-panel'])
 const commands = [
   { key: 'reviewBounties', icon: 'format-list-checkbox', label: '巡检悬赏榜', description: '梳理悬赏状态、风险和承接安排' },
   { key: 'reviewRoster', icon: 'account-circle', label: '整备好汉名册', description: '检查在线、忙碌、异常和能力缺口' },
-  { key: 'broadcastOrder', icon: 'message-text-outline', label: '全厅传令', description: '向所有好汉发布议事号令' },
+  { key: 'broadcastOrder', icon: 'message-text-outline', label: '全员议事', description: '向所有好汉发起议题' },
   { key: 'summonReport', icon: 'account-circle-outline', label: '收拢回报', description: '要求当前好汉围绕当前悬赏回报' }
 ]
 
