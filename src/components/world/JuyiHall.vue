@@ -1575,8 +1575,8 @@ button.hall-room {
   }
 
   .panel-overlay {
+    --mobile-chat-panel-top-gap: 18px;
     align-items: flex-end;
-    bottom: 10px;
     padding: 0;
   }
 
@@ -1595,8 +1595,8 @@ button.hall-room {
   .floating-panel.panel-chat {
     width: calc(100% - 16px);
     max-width: calc(100% - 16px);
-    height: calc(100dvh - 32px);
-    max-height: calc(100dvh - 32px);
+    height: min(760px, calc(100% - var(--mobile-chat-panel-top-gap)));
+    max-height: calc(100% - var(--mobile-chat-panel-top-gap));
   }
 
 }
