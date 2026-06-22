@@ -28,6 +28,7 @@
           <SelectedAgentCard
             :ability-text="abilityText"
             :agent="selectedAgent"
+            :can-start-chat="canStartAgentConversation(selectedAgent)"
             :portrait-name="portraitName"
             :portrait-style="portraitStyle"
             :status-text="statusText"
@@ -95,6 +96,15 @@
             @select-agent="selectAgent"
             @select-task="selectTask"
             @set-status-filter="setTaskStatusFilter"
+          />
+
+          <PersonaCatalogPanel
+            v-if="renderedPanel === 'catalog'"
+            :personas="personaCatalog"
+            :portrait-name="portraitName"
+            :portrait-style="portraitStyle"
+            @bind-persona="handleBindPersona"
+            @unbind-persona="handleUnbindPersona"
           />
 
           <PublicDiscussionPanel
@@ -206,6 +216,7 @@ import BountyDiscussionPanel from '@/components/juyiting/BountyDiscussionPanel.v
 import BountyPanel from '@/components/juyiting/BountyPanel.vue'
 import HallStage from '@/components/juyiting/HallStage.vue'
 import LibraryPanel from '@/components/juyiting/LibraryPanel.vue'
+import PersonaCatalogPanel from '@/components/juyiting/PersonaCatalogPanel.vue'
 import PrivateDiscussionPanel from '@/components/juyiting/PrivateDiscussionPanel.vue'
 import PublicDiscussionPanel from '@/components/juyiting/PublicDiscussionPanel.vue'
 import SelectedAgentCard from '@/components/juyiting/SelectedAgentCard.vue'
@@ -245,6 +256,7 @@ const {
 
 const activePanelTitle = computed(() => {
   if (renderedPanel.value === 'agents') return '好汉名册'
+  if (renderedPanel.value === 'catalog') return '招募好汉'
   if (renderedPanel.value === 'tasks') return '悬赏榜'
   if (renderedPanel.value === 'chat') return '厅内议事'
   if (renderedPanel.value === 'library') return '藏经阁'
@@ -307,12 +319,14 @@ const taskAgentMatchScore = (task, agent) => {
 const {
   agentFilter,
   agents,
+  bindPersona,
   canAssign,
   filteredAgents,
   hiddenAgentCount,
   loadAgents,
   loadTasks,
   mapAgents,
+  personaCatalog,
   recommendedAgents,
   setAgentFilter,
   setTaskStatusFilter,
@@ -322,6 +336,7 @@ const {
   tasks,
   taskStatusCount,
   taskStatusFilter,
+  unbindPersona,
   visibleAgents
 } = useHallData({
   agentApi,
@@ -342,7 +357,7 @@ const {
   resetToPublic,
   setMentionAgent
 } = useHallChatContext({
-  mapAgents,
+  agents,
   portraitShortName,
   selectedAgent,
   selectedTask
@@ -584,12 +599,43 @@ const handleClearChatTarget = () => {
 
 const handleStartAgentConversation = (agent) => {
   if (!agent) return
+  if (!canStartAgentConversation(agent)) {
+    showToast(agent.systemAgent ? '宋江为公共议事中控' : '只能与自己绑定的好汉私聊')
+    return
+  }
   playAgentSelect()
   enterPrivateConversation(agent)
   draft.value = ''
   insertAgentMention(agent, '请汇报当前状态、可承接任务和需要协助的事项。')
   openPanel('chat')
   showToast(`正在与 ${portraitShortName(agent)} 议事`)
+}
+
+const canStartAgentConversation = (agent) => Boolean(agent?.boundToMe && !agent?.systemAgent && agent?.canOperate !== false)
+
+const handleBindPersona = async (persona) => {
+  try {
+    await bindPersona(persona)
+    playSuccess()
+    showToast(`${portraitShortName(persona)} 已入名册`)
+  } catch (error) {
+    log.warn('bind persona failed:', error)
+    playError()
+    showToast(error.message || '绑定失败')
+  }
+}
+
+const handleUnbindPersona = async (persona) => {
+  try {
+    await unbindPersona(persona)
+    if (selectedAgent.value?.personaCode === persona.personaCode) selectedAgent.value = null
+    playSuccess()
+    showToast(`${portraitShortName(persona)} 已离开名册`)
+  } catch (error) {
+    log.warn('unbind persona failed:', error)
+    playError()
+    showToast(error.message || '解绑失败')
+  }
 }
 
 onMounted(async () => {

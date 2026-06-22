@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { hallObstacles, hallPatrolAnchors, walkBounds } from '@/constants/juyiting'
+import { hallObstacles, hallPatrolAnchors, trainingRoomAnchor, walkBounds } from '@/constants/juyiting'
 import { agentSeed, portraitRole } from '@/composables/juyiting/useWaterMarginRoles'
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
@@ -115,6 +115,15 @@ export const useHallPhysics = (visibleAgents, normalizeStatus) => {
     state.isResting = false
   }
 
+  const placeInTrainingRoom = (state) => {
+    state.x = clamp(sampleRange(state.seed, trainingRoomAnchor.x - trainingRoomAnchor.radiusX, trainingRoomAnchor.x + trainingRoomAnchor.radiusX, 31), walkBounds.minX, walkBounds.maxX)
+    state.y = clamp(sampleRange(state.seed, trainingRoomAnchor.y - trainingRoomAnchor.radiusY, trainingRoomAnchor.y + trainingRoomAnchor.radiusY, 32), walkBounds.minY, walkBounds.maxY)
+    state.vx = 0
+    state.vy = 0
+    state.speed = 0
+    state.isResting = true
+  }
+
   const startRest = (state, time, status) => {
     const anchor = hallPatrolAnchors[state.targetAnchorIndex]
     const [minLinger, maxLinger] = anchor.linger
@@ -138,6 +147,10 @@ export const useHallPhysics = (visibleAgents, normalizeStatus) => {
     states.forEach((state, index) => {
       const role = portraitRole(visibleAgents.value[index])
       const status = normalizeStatus(visibleAgents.value[index]?.status)
+      if (status === 'busy') {
+        placeInTrainingRoom(state)
+        return
+      }
       if (state.isResting) {
         state.vx = 0
         state.vy = 0

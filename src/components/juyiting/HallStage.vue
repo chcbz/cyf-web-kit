@@ -51,6 +51,10 @@
           <strong>名册房</strong>
           <small>好汉调度</small>
         </button>
+        <button class="hall-room room-catalog" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'catalog')">
+          <strong>招贤馆</strong>
+          <small>人物卡池</small>
+        </button>
         <button class="hall-room room-tasks" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'tasks')">
           <strong>悬赏房</strong>
           <small>{{ tasksTotal }} 件</small>
@@ -89,6 +93,10 @@
         <button class="scene-hotspot hotspot-agents" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'agents')">
           <var-icon name="account-circle" />
           <span>名册</span>
+        </button>
+        <button class="scene-hotspot hotspot-catalog" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'catalog')">
+          <var-icon name="account-plus" />
+          <span>招募</span>
         </button>
         <button class="scene-hotspot hotspot-tasks" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'tasks')">
           <var-icon name="format-list-checkbox" />
@@ -520,6 +528,15 @@ button.hall-room {
   height: 24%;
 }
 
+.room-catalog {
+  left: 18%;
+  top: 64%;
+  width: 16%;
+  height: 15%;
+  background:
+    linear-gradient(145deg, rgba(230, 222, 202, 0.78), rgba(126, 80, 57, 0.55));
+}
+
 .room-tasks {
   right: 14%;
   top: 36%;
@@ -610,6 +627,11 @@ button.hall-room {
 .hotspot-agents {
   left: 8%;
   top: 58%;
+}
+
+.hotspot-catalog {
+  left: 24%;
+  bottom: 18%;
 }
 
 .hotspot-tasks {

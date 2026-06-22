@@ -422,8 +422,12 @@ export function createApi (basePath) {
     patch: (uri, id, data, options = {}) =>
       useHttp().patch(`${basePath}${uri}/${id}`, data, options),
 
-    delete: (uri, id, options = {}) =>
-      useHttp().delete(`${basePath}${uri}?id=${id}`, options),
+    delete: (uri, id, options = {}) => {
+      if (id === undefined || id === null || typeof id === 'object') {
+        return useHttp().delete(`${basePath}${uri}`, id || options)
+      }
+      return useHttp().delete(`${basePath}${uri}?id=${id}`, options)
+    },
 
     search: (uri, data, options = {}) =>
       useHttp().post(`${basePath}${uri}`, data, options)

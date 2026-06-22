@@ -13,7 +13,12 @@
       <small>{{ portraitName(agent) }} / {{ statusText(agent.status) }}</small>
       <p>{{ agent.currentTaskTitle || abilityText(agent) }}</p>
       <div class="card-actions">
-        <button type="button" class="card-action primary" @click="$emit('start-chat')">
+        <button
+          v-if="canStartChat"
+          type="button"
+          class="card-action primary"
+          @click="$emit('start-chat')"
+        >
           <var-icon name="message-text-outline" />
           <span>议事</span>
         </button>
@@ -30,6 +35,7 @@
 defineProps({
   abilityText: { type: Function, required: true },
   agent: { type: Object, default: null },
+  canStartChat: { type: Boolean, default: true },
   portraitName: { type: Function, required: true },
   portraitStyle: { type: Function, required: true },
   statusText: { type: Function, required: true }

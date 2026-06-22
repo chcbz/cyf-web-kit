@@ -161,10 +161,11 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(chatSource).not.to.include('toolbar-meta')
   })
 
-  it('limits hall chat mention choices to map agents', () => {
+  it('limits hall chat mention choices to roster agents', () => {
     expect(hallSource).to.include('<PublicDiscussionPanel')
     expect(hallSource).to.include('<BountyDiscussionPanel')
     expect(hallSource).to.include(':agents="chatMentionAgents"')
+    expect(hallSource).to.include('useHallChatContext({\n  agents,')
   })
 
   it('supports task management actions from the bounty board', () => {
@@ -207,10 +208,13 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallDataSource).to.not.include("'/active'")
     expect(hallDataSource).to.include("agentApi.get('/map'")
     expect(hallDataSource).to.include("agentApi.search('/roster'")
+    expect(hallDataSource).to.include("agentApi.get('/personas/catalog'")
     expect(hallDataSource).to.include('mapAgents')
-    expect(hallDataSource).to.match(/visibleAgents\s*=\s*computed\(\(\)\s*=>\s*mapAgents\.value\.slice\(0,\s*12\)/)
+    expect(hallDataSource).to.include("['online', 'busy'].includes(normalizeStatus(agent.status))")
+    expect(hallDataSource).to.match(/slice\(0,\s*12\)/)
     expect(hallSource).to.include(':map-agents="mapAgents"')
     expect(hallSource).to.include(':tasks-total="tasks.length"')
+    expect(hallSource).to.include('<PersonaCatalogPanel')
     expect(hallSource).not.to.include('<strong>{{ agents.length }}</strong>')
     expect(hallSource).to.include('@set-agent-filter="setAgentFilter"')
   })

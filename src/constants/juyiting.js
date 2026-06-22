@@ -94,6 +94,13 @@ export const hallPatrolAnchors = [
   { x: 24, y: 73, radiusX: 3, radiusY: 2.5, linger: [2600, 4800] }
 ]
 
+export const trainingRoomAnchor = {
+  x: 74,
+  y: 49,
+  radiusX: 4,
+  radiusY: 4
+}
+
 export const hallObstacles = [
   { x: 50, y: 23, rx: 12, ry: 8, strength: 1.7 },
   { x: 8, y: 63, rx: 12, ry: 9, strength: 1.4 },

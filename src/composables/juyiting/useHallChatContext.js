@@ -7,6 +7,7 @@ export const taskAssigneeIds = (task) => {
 }
 
 export const useHallChatContext = ({
+  agents,
   mapAgents,
   portraitShortName,
   selectedAgent,
@@ -16,10 +17,12 @@ export const useHallChatContext = ({
   const taskDiscussionAgentIds = ref([])
   const chatMentionAgentIds = ref([])
 
+  const mentionSourceAgents = computed(() => agents?.value || mapAgents?.value || [])
+
   const chatMentionAgents = computed(() => {
-    if (!taskDiscussionAgentIds.value.length) return mapAgents.value
+    if (!taskDiscussionAgentIds.value.length) return mentionSourceAgents.value
     const allowed = new Set(taskDiscussionAgentIds.value)
-    return mapAgents.value.filter(agent => allowed.has(agent.agentId))
+    return mentionSourceAgents.value.filter(agent => allowed.has(agent.agentId))
   })
 
   const chatTargetText = computed(() => {

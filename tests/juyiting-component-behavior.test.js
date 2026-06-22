@@ -14,6 +14,7 @@ let CoordinationPanel
 let HallChatComposer
 let HallStage
 let LibraryPanel
+let PersonaCatalogPanel
 
 const vueImportToVar = (_line, imports) => {
   const vueBindings = imports.split(',').map((part) => {
@@ -69,6 +70,7 @@ describe('JuyiHall component behavior', () => {
     CoordinationPanel = loadSfc('../src/components/juyiting/CoordinationPanel.vue')
     HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
     LibraryPanel = loadSfc('../src/components/juyiting/LibraryPanel.vue')
+    PersonaCatalogPanel = loadSfc('../src/components/juyiting/PersonaCatalogPanel.vue')
   })
 
   it('uses the central courtyard as the all-hands discussion entrance without a command room', async () => {
@@ -97,6 +99,54 @@ describe('JuyiHall component behavior', () => {
     await wrapper.find('.room-main').trigger('click')
 
     expect(wrapper.emitted('open-panel')[0]).to.deep.equal(['chat'])
+  })
+
+  it('renders the recruit entry and persona catalog actions', async () => {
+    const stage = mount(HallStage, {
+      global: { stubs },
+      props: {
+        agentKey: agent => agent.agentId,
+        agentStyle: () => ({}),
+        portraitName: agent => agent.name,
+        portraitShortName: agent => agent.name,
+        portraitStyle: () => ({}),
+        roleClass: () => '',
+        statusClass: () => '',
+        statusText: () => '',
+        tasksTotal: 3,
+        visibleAgents: []
+      }
+    })
+
+    expect(stage.text()).to.include('招贤馆')
+    expect(stage.text()).to.include('人物卡池')
+    await stage.find('.room-catalog').trigger('click')
+    expect(stage.emitted('open-panel')[0]).to.deep.equal(['catalog'])
+
+    const personas = [
+      { personaCode: 'songjiang', name: '宋江', title: '及时雨', rankNo: 1, starName: '天魁星', systemAgent: true, abilities: ['dispatch'] },
+      { personaCode: 'wuyong', name: '吴用', title: '智多星', rankNo: 3, starName: '天机星', canBind: true, abilities: ['planning'] },
+      { personaCode: 'linchong', name: '林冲', title: '豹子头', rankNo: 6, starName: '天雄星', boundToMe: true, abilities: ['battle'] }
+    ]
+    const catalog = mount(PersonaCatalogPanel, {
+      global: { stubs },
+      props: {
+        personas,
+        portraitName: persona => `${persona.name}·${persona.title}`,
+        portraitStyle: () => ({})
+      }
+    })
+
+    expect(catalog.text()).to.include('3 位好汉')
+    expect(catalog.text()).to.include('宋江')
+    expect(catalog.text()).to.include('中控')
+    expect(catalog.text()).to.include('吴用')
+    expect(catalog.text()).to.include('绑定')
+    expect(catalog.text()).to.include('林冲')
+    expect(catalog.text()).to.include('解绑')
+
+    await catalog.find('.catalog-action.primary').trigger('click')
+    expect(catalog.emitted('bind-persona')[0]).to.deep.equal([personas[1]])
   })
 
   it('opens panels and clears locked contexts from BottomDock', async () => {

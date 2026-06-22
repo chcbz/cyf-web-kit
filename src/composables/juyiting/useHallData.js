@@ -10,6 +10,7 @@ export const useHallData = ({
 }) => {
   const agents = ref([])
   const mapAgents = ref([])
+  const personaCatalog = ref([])
   const tasks = ref([])
   const taskStatusCounts = ref({})
   const agentFilter = ref('all')
@@ -19,7 +20,9 @@ export const useHallData = ({
 
   const filteredAgents = computed(() => agents.value)
 
-  const visibleAgents = computed(() => mapAgents.value.slice(0, 12))
+  const visibleAgents = computed(() => mapAgents.value
+    .filter(agent => ['online', 'busy'].includes(normalizeStatus(agent.status)))
+    .slice(0, 12))
   const hiddenAgentCount = computed(() => Math.max(mapAgents.value.length - visibleAgents.value.length, 0))
 
   const taskAbilityOptions = computed(() => {
@@ -32,7 +35,7 @@ export const useHallData = ({
   const recommendedAgents = computed(() => {
     if (!selectedTask.value) return []
     return agents.value
-      .filter(agent => normalizeStatus(agent.status) === 'online')
+      .filter(agent => agent.canOperate !== false && normalizeStatus(agent.status) === 'online')
       .map(agent => ({ agent, score: taskAgentMatchScore(selectedTask.value, agent) }))
       .sort((a, b) => b.score - a.score)
       .slice(0, 5)
@@ -42,6 +45,7 @@ export const useHallData = ({
   const canAssign = (task, agent = selectedAgent.value) => {
     if (!task || !agent) return false
     if (normalizeStatus(task.status) !== 'open') return false
+    if (agent.canOperate === false || agent.systemAgent) return false
     return normalizeStatus(agent.status) === 'online'
   }
 
@@ -83,7 +87,7 @@ export const useHallData = ({
       await agentApi.get('/map', {}, {
         autoLoading: false,
         onSuccess: (result) => {
-          mapAgents.value = result?.data || []
+          mapAgents.value = (result?.data || []).filter(agent => ['online', 'busy'].includes(normalizeStatus(agent.status)))
           if (selectedAgent.value && !mapAgents.value.some(agent => agent.agentId === selectedAgent.value.agentId)) {
             selectedAgent.value = null
           }
@@ -114,8 +118,38 @@ export const useHallData = ({
     }
   }
 
+  const loadPersonaCatalog = async () => {
+    try {
+      await agentApi.get('/personas/catalog', {}, {
+        autoLoading: false,
+        onSuccess: (result) => {
+          personaCatalog.value = result?.data || []
+        }
+      })
+    } catch (error) {
+      log.warn('load persona catalog failed:', error)
+      personaCatalog.value = []
+    }
+  }
+
+  const bindPersona = async (persona) => {
+    if (!persona?.personaCode || persona.systemAgent || persona.bound) return
+    await agentApi.post(`/personas/${persona.personaCode}/bind`, {}, {
+      autoLoading: false
+    })
+    await Promise.all([loadPersonaCatalog(), loadRosterAgents(), loadMapAgents()])
+  }
+
+  const unbindPersona = async (persona) => {
+    if (!persona?.personaCode || !persona.boundToMe || persona.systemAgent) return
+    await agentApi.delete(`/personas/${persona.personaCode}/bind`, {
+      autoLoading: false
+    })
+    await Promise.all([loadPersonaCatalog(), loadRosterAgents(), loadMapAgents()])
+  }
+
   const loadAgents = async () => {
-    await Promise.all([loadMapAgents(), loadRosterAgents()])
+    await Promise.all([loadMapAgents(), loadRosterAgents(), loadPersonaCatalog()])
   }
 
   const loadTasks = async () => {
@@ -161,14 +195,17 @@ export const useHallData = ({
   return {
     agentFilter,
     agents,
+    bindPersona,
     canAssign,
     filteredAgents,
     hiddenAgentCount,
     loadAgents,
     loadMapAgents,
+    loadPersonaCatalog,
     loadRosterAgents,
     loadTasks,
     mapAgents,
+    personaCatalog,
     recommendedAgents,
     setAgentFilter,
     setTaskStatusFilter,
@@ -178,6 +215,7 @@ export const useHallData = ({
     tasks,
     taskStatusCount,
     taskStatusFilter,
+    unbindPersona,
     visibleAgents
   }
 }

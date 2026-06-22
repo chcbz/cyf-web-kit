@@ -39,6 +39,7 @@ declare module 'vue' {
     LibraryPanel: typeof import('./components/juyiting/LibraryPanel.vue')['default']
     MessageCenter: typeof import('./components/MessageCenter.vue')['default']
     OrderList: typeof import('./components/OrderList.vue')['default']
+    PersonaCatalogPanel: typeof import('./components/juyiting/PersonaCatalogPanel.vue')['default']
     Phrase: typeof import('./components/Phrase.vue')['default']
     PhraseAddDialog: typeof import('./components/phrase/PhraseAddDialog.vue')['default']
     PhraseFeedbackDialog: typeof import('./components/phrase/PhraseFeedbackDialog.vue')['default']
