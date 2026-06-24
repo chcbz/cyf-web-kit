@@ -4,7 +4,7 @@
       <div class="task-search">
         <input
           :value="taskKeyword"
-          placeholder="搜索悬赏编号"
+          placeholder="查榜号"
           @input="$emit('update:taskKeyword', $event.target.value.trim())"
           @keyup.enter="$emit('load-tasks')"
         />
@@ -12,25 +12,25 @@
           :value="taskAbilityFilter"
           @change="$emit('update:taskAbilityFilter', $event.target.value); $emit('load-tasks')"
         >
-          <option value="">全部能力</option>
+          <option value="">不拘本领</option>
           <option v-for="ability in taskAbilityOptions" :key="ability" :value="ability">{{ ability }}</option>
         </select>
       </div>
       <button @click="$emit('load-tasks')">
         <var-icon name="refresh" />
-        <span>刷新</span>
+        <span>重查</span>
       </button>
       <button class="new-task-button" type="button" @click="showCreateForm = !showCreateForm">
         <var-icon name="plus" />
-        <span>新建</span>
+        <span>张榜</span>
       </button>
     </div>
 
     <form v-if="showCreateForm" class="task-create-form" @submit.prevent="submitCreateTask">
-      <input v-model.trim="taskForm.title" name="taskTitle" placeholder="悬赏标题" />
-      <textarea v-model.trim="taskForm.description" name="taskDescription" placeholder="悬赏说明"></textarea>
-      <input v-model.trim="taskForm.requiredAbilities" name="requiredAbilities" placeholder="能力要求，逗号分隔" />
-      <button type="submit" :disabled="!taskForm.title">发布悬赏</button>
+      <input v-model.trim="taskForm.title" name="taskTitle" placeholder="榜文名目" />
+      <textarea v-model.trim="taskForm.description" name="taskDescription" placeholder="榜文缘由"></textarea>
+      <input v-model.trim="taskForm.requiredAbilities" name="requiredAbilities" placeholder="所需本领，逗号分隔" />
+      <button type="submit" :disabled="!taskForm.title">张榜悬赏</button>
     </form>
 
     <div class="task-status-tabs">
@@ -58,18 +58,18 @@
             <strong>{{ task.title }}</strong>
             <span :class="taskStateClass(task.status)">{{ taskStatusText(task.status) }}</span>
           </div>
-          <p>{{ task.description || '暂无任务描述' }}</p>
+          <p>{{ task.description || '榜文尚未写明缘由' }}</p>
           <div class="task-meta">
             <span>{{ task.id }}</span>
-            <span v-if="task.assignedAgentName">承接：{{ task.assignedAgentName }}</span>
+            <span v-if="task.assignedAgentName">领令：{{ task.assignedAgentName }}</span>
             <span v-if="task.updatedAt">{{ formatTime(task.updatedAt) }}</span>
           </div>
           <div class="ability-tags">
             <span v-for="ability in task.requiredAbilities || []" :key="ability">{{ ability }}</span>
-            <span v-if="!(task.requiredAbilities || []).length">不限能力</span>
+            <span v-if="!(task.requiredAbilities || []).length">不拘本领</span>
           </div>
         </article>
-        <div v-if="!tasks.length" class="empty-list">暂无悬赏，调整筛选或刷新后再试。</div>
+        <div v-if="!tasks.length" class="empty-list">榜上暂无悬赏，可换个筛法或重查一遍。</div>
       </div>
     </div>
 
@@ -77,7 +77,7 @@
       <div v-if="detailTask" class="bounty-modal-overlay" @click.self="closeTask">
         <section class="bounty-modal">
           <div class="bounty-modal-header">
-            <h3>悬赏分派</h3>
+            <h3>榜文点将</h3>
             <button class="modal-close" @click="closeTask">
               <var-icon name="close-circle-outline" />
             </button>
@@ -93,63 +93,74 @@
                 <span :class="taskStateClass(detailTask.status)">{{ taskStatusText(detailTask.status) }}</span>
               </div>
 
-              <p>{{ detailTask.description || '暂无任务描述' }}</p>
+              <p>{{ detailTask.description || '榜文尚未写明缘由' }}</p>
 
               <div class="ability-tags">
                 <span v-for="ability in detailTask.requiredAbilities || []" :key="ability">{{ ability }}</span>
-                <span v-if="!(detailTask.requiredAbilities || []).length">不限能力</span>
+                <span v-if="!(detailTask.requiredAbilities || []).length">不拘本领</span>
               </div>
 
               <div class="task-operation-grid">
                 <button
-                  :aria-label="agentDisplayName(selectedAgent) ? `分派给当前好汉 ${agentDisplayName(selectedAgent)}` : '先选择好汉再分派'"
+                  :aria-label="agentDisplayName(selectedAgent) ? `点当前好汉 ${agentDisplayName(selectedAgent)} 领令` : '先择好汉再点将'"
                   :disabled="!canAssign(detailTask, selectedAgent)"
-                  :title="agentDisplayName(selectedAgent) ? `分派给当前好汉：${agentDisplayName(selectedAgent)}` : '先选择好汉再分派'"
+                  :title="agentDisplayName(selectedAgent) ? `点当前好汉领令：${agentDisplayName(selectedAgent)}` : '先择好汉再点将'"
                   @click="$emit('assign-task', detailTask, selectedAgent)"
                 >
                   <var-icon name="account-circle-outline" />
-                  <span class="visually-hidden">{{ agentDisplayName(selectedAgent) ? '分派当前' : '选择好汉' }}</span>
+                  <span class="visually-hidden">{{ agentDisplayName(selectedAgent) ? '点将当前' : '选择好汉' }}</span>
                 </button>
                 <button
-                  aria-label="议事"
-                  title="围绕当前好汉议事"
+                  aria-label="密议"
+                  title="与当前好汉密议"
                   @click="$emit('brief-selected-task', detailTask, selectedAgent)"
                 >
                   <var-icon name="message-text-outline" />
-                  <span class="visually-hidden">议事</span>
+                  <span class="visually-hidden">密议</span>
                 </button>
                 <button
                   class="assign-selected-agents"
                   type="button"
-                  :aria-label="`分派给已选 ${selectedAssignees.length} 人`"
+                  :aria-label="`点已选 ${selectedAssignees.length} 人领令`"
                   :disabled="!selectedAssignees.length"
-                  :title="`分派给已选 ${selectedAssignees.length} 人`"
+                  :title="`点已选 ${selectedAssignees.length} 人领令`"
                   @click="$emit('assign-task', detailTask, selectedAssignees)"
                 >
                   <var-icon name="format-list-checkbox" />
                   <span class="count-badge">{{ selectedAssignees.length }}</span>
-                  <span class="visually-hidden">分派已选 {{ selectedAssignees.length }}</span>
+                  <span class="visually-hidden">点将已选 {{ selectedAssignees.length }}</span>
+                </button>
+                <button
+                  class="auto-assign-task"
+                  type="button"
+                  aria-label="宋江代为点将"
+                  :disabled="detailTask.status !== 'open' || !recommendedAgents.length"
+                  title="宋江代为点将"
+                  @click="$emit('auto-assign-task', detailTask)"
+                >
+                  <var-icon name="account-tie-outline" />
+                  <span class="visually-hidden">宋江代为点将</span>
                 </button>
                 <button
                   class="discuss-task-button"
                   type="button"
-                  aria-label="悬赏议事"
+                  aria-label="榜文议事"
                   :disabled="!taskAssigneeIds(detailTask).length"
                   :title="!taskAssigneeIds(detailTask).length ? unassignedDiscussHint : ''"
                   @click="$emit('discuss-task', detailTask)"
                 >
                   <var-icon name="chat-processing-outline" />
-                  <span class="visually-hidden">悬赏议事</span>
+                  <span class="visually-hidden">榜文议事</span>
                 </button>
                 <button
                   class="archive-task-button"
                   type="button"
-                  aria-label="归档"
-                  title="归档悬赏"
+                  aria-label="收入案卷"
+                  title="收入案卷"
                   @click="$emit('archive-task', detailTask)"
                 >
                   <var-icon name="download-outline" />
-                  <span class="visually-hidden">归档</span>
+                  <span class="visually-hidden">收入案卷</span>
                 </button>
               </div>
               <p v-if="!taskAssigneeIds(detailTask).length" class="task-operation-hint">
@@ -158,7 +169,7 @@
             </div>
 
             <div class="modal-agent-scroll">
-              <div class="section-label">适配好汉</div>
+              <div class="section-label">可点好汉</div>
               <div
                 v-for="agent in recommendedAgents"
                 :key="agent.agentId"
@@ -178,24 +189,27 @@
                     <strong>{{ agentDisplayName(agent) }}</strong>
                     <small>{{ abilityText(agent) }}</small>
                   </span>
-                  <em>{{ taskAgentMatchScore(detailTask, agent) }}%</em>
+                  <em>{{ recommendationScore(detailTask, agent) }}%</em>
                 </button>
+                <p v-if="recommendationReason(agent)" class="recommendation-reason">
+                  {{ recommendationReason(agent) }}
+                </p>
                 <div class="recommended-agent-actions">
-                  <button type="button" :aria-label="`选中 ${agentDisplayName(agent)}`" :title="`选中 ${agentDisplayName(agent)}`" @click="$emit('select-agent', agent)">
+                  <button type="button" :aria-label="`选定 ${agentDisplayName(agent)}`" :title="`选定 ${agentDisplayName(agent)}`" @click="$emit('select-agent', agent)">
                     <var-icon name="check-circle-outline" />
-                    <span class="visually-hidden">选中</span>
+                    <span class="visually-hidden">选定</span>
                   </button>
-                  <button type="button" :aria-label="`分派给 ${agentDisplayName(agent)}`" :disabled="!canAssign(detailTask, agent)" :title="`分派给 ${agentDisplayName(agent)}`" @click="$emit('assign-task', detailTask, agent)">
+                  <button type="button" :aria-label="`点 ${agentDisplayName(agent)} 领令`" :disabled="!canAssign(detailTask, agent)" :title="`点 ${agentDisplayName(agent)} 领令`" @click="$emit('assign-task', detailTask, agent)">
                     <var-icon name="account-circle-outline" />
-                    <span class="visually-hidden">分派</span>
+                    <span class="visually-hidden">点将</span>
                   </button>
-                  <button type="button" :aria-label="`与 ${agentDisplayName(agent)} 议事`" :title="`与 ${agentDisplayName(agent)} 议事`" @click="$emit('brief-selected-task', detailTask, agent)">
+                  <button type="button" :aria-label="`与 ${agentDisplayName(agent)} 密议`" :title="`与 ${agentDisplayName(agent)} 密议`" @click="$emit('brief-selected-task', detailTask, agent)">
                     <var-icon name="message-text-outline" />
-                    <span class="visually-hidden">议事</span>
+                    <span class="visually-hidden">密议</span>
                   </button>
                 </div>
               </div>
-              <p v-if="!recommendedAgents.length">暂无活跃好汉可接令。</p>
+              <p v-if="!recommendedAgents.length">暂未寻得可领令的好汉。</p>
             </div>
           </div>
         </section>
@@ -231,6 +245,7 @@ const props = defineProps({
 const emit = defineEmits([
   'assign-task',
   'archive-task',
+  'auto-assign-task',
   'brief-selected-task',
   'create-task',
   'discuss-task',
@@ -251,13 +266,15 @@ const taskForm = ref({
   requiredAbilities: ''
 })
 const detailTask = computed(() => modalTask.value)
-const unassignedDiscussHint = '该悬赏还未分派，暂不能进入议事'
+const unassignedDiscussHint = '此榜文尚未点将，暂不可开议'
 const selectedAssignees = computed(() => {
   const selected = new Set(selectedAssigneeIds.value)
   return props.recommendedAgents.filter(agent => selected.has(agent.agentId))
 })
 
 const agentDisplayName = (agent) => agent?.name || agent?.personaName || agent?.agentId || ''
+const recommendationReason = (agent) => agent?.recommendationReason || ''
+const recommendationScore = (task, agent) => agent?.recommendationScore ?? props.taskAgentMatchScore(task, agent)
 const taskAssigneeIds = (task) => {
   if (!task) return []
   if (Array.isArray(task.assignedAgentIds)) return task.assignedAgentIds
@@ -658,6 +675,12 @@ button:disabled {
   flex-wrap: nowrap;
   gap: 6px;
   width: 100%;
+}
+
+.recommendation-reason {
+  grid-column: 1 / -1;
+  margin: -2px 4px 0 68px;
+  overflow-wrap: anywhere;
 }
 
 .recommended-agent-actions button {

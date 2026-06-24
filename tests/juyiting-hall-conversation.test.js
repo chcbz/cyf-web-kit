@@ -250,7 +250,7 @@ describe('useHallConversation scoped message loading', () => {
       agentId: 'wuyong',
       content: '先查日志',
       streaming: false,
-      statusText: '回复完成'
+      statusText: '回话已毕'
     })
     expect(state.isAwaitingReply).to.equal(false)
     expect(state.isStreaming).to.equal(false)
@@ -275,8 +275,8 @@ describe('useHallConversation scoped message loading', () => {
     expect(state.conversationId).to.equal('1002')
     expect(state.messages[0]).to.deep.include({
       sender: 'SYSTEM',
-      content: '目标好汉暂未在线，投递失败。',
-      statusText: '投递失败'
+      content: '目标好汉暂未候令，传令未达。',
+      statusText: '未递到'
     })
     expect(state.messages[1]).to.deep.include({
       sender: 'ASSISTANT',

@@ -7,10 +7,10 @@
         <em>{{ displayStatus }}</em>
       </div>
       <div class="toolbar-actions">
-        <button class="icon-button" type="button" title="同步" aria-label="同步" @click="$emit('load-messages')">
+        <button class="icon-button" type="button" title="重取回话" aria-label="重取回话" @click="$emit('load-messages')">
           <var-icon name="refresh" />
         </button>
-        <button class="icon-button primary" type="button" title="新建议事" aria-label="新建议事" @click="$emit('new-conversation')">
+        <button class="icon-button primary" type="button" title="另起话头" aria-label="另起话头" @click="$emit('new-conversation')">
           <var-icon name="plus" />
         </button>
       </div>
@@ -25,7 +25,7 @@
       >
         <div class="message-head">
           <strong>{{ senderText(message) }}</strong>
-          <span v-if="message.streaming" class="message-state">回话中</span>
+          <span v-if="message.streaming" class="message-state">回话未尽</span>
         </div>
         <div class="message-content" v-html="renderMarkdown(message.content)"></div>
         <small v-if="message.statusText" class="message-status">{{ message.statusText }}</small>
@@ -72,21 +72,21 @@ const props = defineProps({
   connectionStatus: { type: String, default: '' },
   discussionVariant: { type: String, default: 'public' },
   draft: { type: String, default: '' },
-  emptyText: { type: String, default: '厅内暂无议事，发起一句开始讨论。' },
+  emptyText: { type: String, default: '厅中暂无话头，可先传一句。' },
   eventStreamRecovering: { type: Boolean, default: false },
   isAwaitingReply: { type: Boolean, default: false },
   isStreaming: { type: Boolean, default: false },
   mentionLabel: { type: Function, required: true },
   messages: { type: Array, default: () => [] },
   pendingAgentName: { type: String, default: '' },
-  placeholder: { type: String, default: '向聚义厅发起议事，或 @某位好汉' },
+  placeholder: { type: String, default: '向聚义厅传话，或 @某位好汉' },
   selectedAgent: { type: Object, default: null },
   selectedTask: { type: Object, default: null },
   senderText: { type: Function, required: true },
   scopeHint: { type: String, default: 'public' },
   subtitle: { type: String, default: '' },
   title: { type: String, default: '议事' },
-  targetText: { type: String, default: '全体好汉' }
+  targetText: { type: String, default: '众好汉' }
 })
 
 defineEmits([
@@ -100,18 +100,18 @@ defineEmits([
 
 const messageBoxRef = ref(null)
 const pendingAuthor = '聚义厅'
-const taskText = computed(() => props.selectedTask?.title || '未选悬赏')
+const taskText = computed(() => props.selectedTask?.title || '未选榜文')
 const resolvedSubtitle = computed(() => {
   if (props.subtitle) return props.subtitle
   if (props.discussionVariant === 'bounty') return taskText.value
   if (props.discussionVariant === 'private') return props.targetText
   if (props.selectedTask) return taskText.value
   if (props.selectedAgent) return props.targetText
-  return props.scopeHint === 'public' ? '未 @ 时交由宋江分流' : props.scopeHint
+  return props.scopeHint === 'public' ? '未 @ 时由宋江分拨' : props.scopeHint
 })
 const displayStatus = computed(() => {
-  if (props.eventStreamRecovering) return '正在尝试恢复回话'
-  return props.connectionStatus || (props.isAwaitingReply ? pendingLabel.value : '实时同步中')
+  if (props.eventStreamRecovering) return '正在续上传令'
+  return props.connectionStatus || (props.isAwaitingReply ? pendingLabel.value : '传令畅通')
 })
 const pendingLabel = computed(() => {
   if (props.pendingAgentName) return `${props.pendingAgentName} 正在回话...`

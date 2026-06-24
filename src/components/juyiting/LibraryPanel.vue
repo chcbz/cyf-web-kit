@@ -3,24 +3,24 @@
     <form class="library-search" @submit.prevent="$emit('search-library')">
       <input
         :value="keyword"
-        placeholder="查项目资料、议事纪要、历史回报"
+        placeholder="查项目案卷、议事旧录、往日回报"
         @input="$emit('update:keyword', $event.target.value)"
       />
       <select :value="sourceType" @change="$emit('update:sourceType', $event.target.value)">
-        <option value="">全部资料</option>
-        <option value="project">项目资料</option>
-        <option value="meeting">议事纪要</option>
-        <option value="memory">长期记忆</option>
+        <option value="">全部案卷</option>
+        <option value="project">项目案卷</option>
+        <option value="meeting">议事旧录</option>
+        <option value="memory">长记</option>
       </select>
       <button :disabled="loading || !keyword.trim()">
         <var-icon name="magnify" />
-        <span>检索</span>
+        <span>查卷</span>
       </button>
     </form>
 
     <div class="library-hint">
-      <span>向量检索</span>
-      <span>命中 {{ results.length }} 条</span>
+      <span>藏书查卷</span>
+      <span>得 {{ results.length }} 条</span>
     </div>
 
     <div class="result-list">
@@ -32,16 +32,16 @@
         <p>{{ item.content }}</p>
         <div class="result-meta">
           <span>{{ sourceText(item.summaryType || item.sourceType) }}</span>
-          <span v-if="item.conversationId">会话 {{ item.conversationId }}</span>
+          <span v-if="item.conversationId">话头 {{ item.conversationId }}</span>
           <span v-if="item.timestamp">{{ formatTime(item.timestamp) }}</span>
         </div>
-        <button type="button" @click="$emit('cite-library', item)">引用到传令</button>
+        <button type="button" @click="$emit('cite-library', item)">引入传令</button>
       </article>
       <div v-if="errorMessage" class="empty-list error-list">
         {{ errorMessage }}
       </div>
       <div v-else-if="!results.length" class="empty-list">
-        {{ hasSearched ? '暂未检索到资料' : '输入关键词后检索藏经阁资料。' }}
+        {{ hasSearched ? '暂未查得案卷' : '输入关键词后查阅藏书阁。' }}
       </div>
     </div>
   </div>
@@ -61,17 +61,17 @@ defineProps({
 defineEmits(['cite-library', 'search-library', 'update:keyword', 'update:sourceType'])
 
 const sourceText = (type = '') => {
-  if (type === 'project') return '项目资料'
-  if (type === 'meeting') return '议事纪要'
-  if (type === 'conversation') return '议事纪要'
-  if (type === 'daily_summary') return '日汇总'
-  if (type === 'weekly_summary') return '周汇总'
-  if (type === 'monthly_summary') return '月汇总'
-  return '长期记忆'
+  if (type === 'project') return '项目案卷'
+  if (type === 'meeting') return '议事旧录'
+  if (type === 'conversation') return '议事旧录'
+  if (type === 'daily_summary') return '日录'
+  if (type === 'weekly_summary') return '周录'
+  if (type === 'monthly_summary') return '月录'
+  return '长记'
 }
 
 const scoreText = (score) => {
-  if (score === undefined || score === null) return '相关'
+  if (score === undefined || score === null) return '相合'
   return `${Math.round(Number(score) * 100)}%`
 }
 </script>

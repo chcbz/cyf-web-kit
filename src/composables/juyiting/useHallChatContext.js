@@ -26,9 +26,9 @@ export const useHallChatContext = ({
   })
 
   const chatTargetText = computed(() => {
-    if (chatMode.value === 'bounty' && selectedTask.value) return `悬赏议事 / ${selectedTask.value.title || selectedTask.value.id}`
-    if (chatMode.value === 'private' && selectedAgent.value) return `私聊 / ${portraitShortName(selectedAgent.value)}`
-    if (!selectedAgent.value) return '全体好汉'
+    if (chatMode.value === 'bounty' && selectedTask.value) return `榜文议事 / ${selectedTask.value.title || selectedTask.value.id}`
+    if (chatMode.value === 'private' && selectedAgent.value) return `密议 / ${portraitShortName(selectedAgent.value)}`
+    if (!selectedAgent.value) return '众好汉'
     return `${portraitShortName(selectedAgent.value)} / ${selectedAgent.value.name || selectedAgent.value.agentId}`
   })
 

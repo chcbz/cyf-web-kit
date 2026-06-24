@@ -32,7 +32,7 @@ describe('SelectedAgentCard interaction contract', () => {
     expect(cardSource).to.include("defineEmits(['open-agents', 'start-chat', 'close-card'])")
     expect(cardSource).to.include("$emit('start-chat')")
     expect(cardSource).to.include("$emit('open-agents')")
-    expect(cardSource).to.include('<span>议事</span>')
+    expect(cardSource).to.include('<span>密议</span>')
     expect(cardSource).not.to.include('单独议事')
   })
 

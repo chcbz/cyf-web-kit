@@ -2,18 +2,18 @@
   <div class="coordination-panel">
     <div class="selector-grid">
       <label>
-        <span>发话人</span>
+        <span>发话好汉</span>
         <select :value="fromAgentId" @change="$emit('update:fromAgentId', $event.target.value)">
-          <option value="">请选择</option>
+          <option value="">且选一位</option>
           <option v-for="agent in agents" :key="agent.agentId" :value="agent.agentId">
             {{ agentDisplayName(agent) }}
           </option>
         </select>
       </label>
       <label>
-        <span>接话人</span>
+        <span>接话好汉</span>
         <select :value="toAgentId" @change="$emit('update:toAgentId', $event.target.value)">
-          <option value="">请选择</option>
+          <option value="">且选一位</option>
           <option v-for="agent in agents" :key="agent.agentId" :value="agent.agentId">
             {{ agentDisplayName(agent) }}
           </option>
@@ -23,28 +23,28 @@
 
     <textarea
       :value="message"
-      placeholder="输入要转达的内容，或围绕当前悬赏安排协同事项"
+      placeholder="写下要转达的话，或就当前榜文安排照应"
       @input="$emit('update:message', $event.target.value)"
     ></textarea>
 
     <div class="action-row">
       <button type="button" :disabled="!canRelay" @click="$emit('relay-message')">
         <var-icon name="message-text-outline" />
-        <span>互相传话</span>
+        <span>往来传话</span>
       </button>
       <button type="button" :disabled="!canCoordinate" @click="$emit('coordinate-work')">
         <var-icon name="share" />
-        <span>配合办事</span>
+        <span>结伴办事</span>
       </button>
     </div>
 
-    <div class="section-label">当前悬赏</div>
+    <div class="section-label">当前榜文</div>
     <article class="task-card">
-      <strong>{{ selectedTask?.title || '未选悬赏' }}</strong>
-      <p>{{ selectedTask?.description || '可先到悬赏榜选定任务，再安排两位好汉协同。' }}</p>
+      <strong>{{ selectedTask?.title || '未选榜文' }}</strong>
+      <p>{{ selectedTask?.description || '可先到榜文房选定榜文，再安排两位好汉照应。' }}</p>
     </article>
 
-    <div class="section-label">在线好汉</div>
+    <div class="section-label">候令好汉</div>
     <div class="agent-grid">
       <button
         v-for="agent in agents"

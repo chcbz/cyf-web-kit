@@ -20,13 +20,13 @@ export const useHallTaskActions = ({
             selectedTask.value = task
           }
           playSuccess()
-          showToast('悬赏已发布')
+          showToast('榜文已张')
         }
       })
     } catch (error) {
       log.warn('create bounty task failed:', error)
       playError()
-      showToast('发布悬赏失败')
+      showToast('张榜未成')
     }
   }
 
@@ -53,13 +53,35 @@ export const useHallTaskActions = ({
           selectedAgent.value = targetAgent
           selectedTask.value = task
           playSuccess()
-          showToast(`${task.title} 已指派给 ${task.assignedAgentName}`)
+          showToast(`${task.title} 已点给 ${task.assignedAgentName}`)
         }
       })
     } catch (error) {
       log.warn('assign bounty task failed:', error)
       playError()
-      showToast('指派失败，请刷新状态后重试')
+      showToast('点将未成，请重查厅中动静')
+    }
+  }
+
+  const autoAssignTask = async (task) => {
+    if (!task || task.status !== 'open') return
+    try {
+      await agentApi.create(`/tasks/${task.id}/auto-assign`, {}, {
+        autoLoading: false,
+        onSuccess: (result) => {
+          const assigned = result?.data || { ...task, status: 'assigned' }
+          tasks.value = tasks.value.map(item => item.id === task.id ? { ...item, ...assigned } : item)
+          selectedTask.value = { ...task, ...assigned }
+          const assignedIds = assigned.assignedAgentIds || (assigned.assignedAgentId ? [assigned.assignedAgentId] : [])
+          const assignedNames = assigned.assignees?.map(item => item.agentName || item.agentId).filter(Boolean)
+          playSuccess()
+          showToast(`宋江已点 ${assignedNames?.length ? assignedNames.join('、') : assignedIds.join('、')} 领令`)
+        }
+      })
+    } catch (error) {
+      log.warn('auto assign bounty task failed:', error)
+      playError()
+      showToast('宋江点将未成，请看荐单后手动点将')
     }
   }
 
@@ -73,18 +95,19 @@ export const useHallTaskActions = ({
           tasks.value = tasks.value.map(item => item.id === task.id ? archived : item)
           selectedTask.value = archived
           playSuccess()
-          showToast('悬赏已归档')
+          showToast('榜文已收入案卷')
         }
       })
     } catch (error) {
       log.warn('archive bounty task failed:', error)
       playError()
-      showToast('归档悬赏失败')
+      showToast('收入案卷未成')
     }
   }
 
   return {
     archiveTask,
+    autoAssignTask,
     assignTask,
     createTask
   }

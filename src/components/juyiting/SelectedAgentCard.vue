@@ -1,6 +1,6 @@
 <template>
   <aside v-if="agent" class="selected-agent-card">
-    <button class="card-close" type="button" title="关闭人物卡片" @click="$emit('close-card')">
+    <button class="card-close" type="button" title="收起好汉牌" @click="$emit('close-card')">
       <var-icon name="close-circle-outline" />
     </button>
     <span
@@ -20,11 +20,11 @@
           @click="$emit('start-chat')"
         >
           <var-icon name="message-text-outline" />
-          <span>议事</span>
+          <span>密议</span>
         </button>
         <button type="button" class="card-action" @click="$emit('open-agents')">
           <var-icon name="account-circle" />
-          <span>详情</span>
+          <span>看牌</span>
         </button>
       </div>
     </div>

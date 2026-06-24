@@ -35,8 +35,8 @@ export const useHallLibrary = ({
     } catch (error) {
       log.warn('library search failed', error)
       libraryResults.value = []
-      libraryErrorMessage.value = '藏经阁暂不可用，主流程不受影响'
-      showToast('藏经阁检索失败')
+      libraryErrorMessage.value = '藏书阁暂不可查，主线不受影响'
+      showToast('藏书阁查卷未成')
     } finally {
       libraryLoading.value = false
     }
@@ -51,10 +51,10 @@ export const useHallLibrary = ({
       librarySourceType: item.summaryType || item.sourceType || 'memory'
     }
     const excerpt = content.length > 120 ? `${content.slice(0, 120)}...` : content
-    draft.value = `${draft.value ? `${draft.value}\n\n` : ''}参考藏经阁资料：${excerpt}`
+    draft.value = `${draft.value ? `${draft.value}\n\n` : ''}参看藏书阁案卷：${excerpt}`
     openPanel('chat')
     playSuccess()
-    showToast('资料已引用到传令')
+    showToast('案卷已引入传令')
   }
 
   return {

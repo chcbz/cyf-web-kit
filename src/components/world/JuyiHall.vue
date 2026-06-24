@@ -87,6 +87,7 @@
             :task-status-filters="taskStatusFilters"
             :task-status-text="taskStatusText"
             :tasks="tasks"
+            @auto-assign-task="autoAssignTask"
             @assign-task="assignTask"
             @archive-task="archiveTask"
             @brief-selected-task="briefSelectedTask"
@@ -103,7 +104,9 @@
             :personas="personaCatalog"
             :portrait-name="portraitName"
             :portrait-style="portraitStyle"
+            :setup-result="personaSetupResult"
             @bind-persona="handleBindPersona"
+            @clear-setup-result="personaSetupResult = null"
             @unbind-persona="handleUnbindPersona"
           />
 
@@ -232,6 +235,7 @@ const apiStore = useApiStore()
 
 const selectedAgent = ref(null)
 const selectedTask = ref(null)
+const personaSetupResult = ref(null)
 const toast = ref('')
 const activePanel = ref('')
 const renderedPanel = ref('')
@@ -255,11 +259,11 @@ const {
 } = useHallSound()
 
 const activePanelTitle = computed(() => {
-  if (renderedPanel.value === 'agents') return '好汉名册'
-  if (renderedPanel.value === 'catalog') return '招募好汉'
-  if (renderedPanel.value === 'tasks') return '悬赏榜'
-  if (renderedPanel.value === 'chat') return '厅内议事'
-  if (renderedPanel.value === 'library') return '藏经阁'
+  if (renderedPanel.value === 'agents') return '好汉簿'
+  if (renderedPanel.value === 'catalog') return '招贤帖'
+  if (renderedPanel.value === 'tasks') return '悬赏榜文'
+  if (renderedPanel.value === 'chat') return '厅前议事'
+  if (renderedPanel.value === 'library') return '藏书阁'
   return ''
 })
 
@@ -275,21 +279,21 @@ const statusClass = (status = '') => {
 
 const statusText = (status = '') => {
   const value = normalizeStatus(status)
-  if (value === 'busy') return '忙碌'
+  if (value === 'busy') return '办事'
   if (value === 'offline') return '出征'
-  if (value === 'error') return '异常'
+  if (value === 'error') return '失联'
   return '候命'
 }
 
 const taskStatusText = (status = '') => {
   const value = normalizeStatus(status)
-  if (value === 'open') return '待分派'
-  if (value === 'assigned') return '已分派'
-  if (value === 'running') return '进行中'
-  if (value === 'completed') return '已完成'
-  if (value === 'failed') return '失败'
-  if (value === 'archived') return '已归档'
-  return '待分派'
+  if (value === 'open') return '待点将'
+  if (value === 'assigned') return '已点将'
+  if (value === 'running') return '在办'
+  if (value === 'completed') return '交令'
+  if (value === 'failed') return '失手'
+  if (value === 'archived') return '入档'
+  return '待点将'
 }
 
 const taskStateClass = (status = '') => {
@@ -304,7 +308,7 @@ const taskStateClass = (status = '') => {
 
 const abilityText = (agent) => {
   const abilities = agent.abilities || []
-  return abilities.length ? abilities.slice(0, 3).join(' / ') : '未登记能力'
+  return abilities.length ? abilities.slice(0, 3).join(' / ') : '未录本领'
 }
 
 
@@ -325,6 +329,7 @@ const {
   hiddenAgentCount,
   loadAgents,
   loadTasks,
+  loadTaskRecommendations,
   mapAgents,
   personaCatalog,
   recommendedAgents,
@@ -369,7 +374,7 @@ const refreshHall = async ({ silent = false } = {}) => {
   if (!silent) playRefresh()
   try {
     await Promise.all([loadAgents(), loadTasks()])
-    if (!silent) showToast('人物状态已刷新')
+    if (!silent) showToast('厅中动静已点验')
   } finally {
     hallRefreshing.value = false
   }
@@ -386,8 +391,11 @@ const agentKey = (agent) => agent?.agentId || agent?.name || agent?.personaName 
 
 const { agentStyle, startPhysics, stopPhysics } = useHallPhysics(visibleAgents, normalizeStatus)
 
-const selectTask = (task) => {
+const selectTask = async (task) => {
   selectedTask.value = task
+  if (task) {
+    await loadTaskRecommendations(task)
+  }
   playTap()
 }
 
@@ -442,17 +450,17 @@ const briefSelectedTask = (task = selectedTask.value, agent = selectedAgent.valu
   } else {
     enterBountyDiscussion(task)
   }
-  const abilities = (task.requiredAbilities || []).join(' / ') || '不限能力'
-  const target = agent ? `建议由 ${portraitShortName(agent)} / ${agent.name || agent.personaName || agent.agentId} 承接。` : '请给出适合承接的好汉。'
-  draft.value = `请围绕悬赏「${task.title}」议事：任务编号 ${task.id}，状态 ${taskStatusText(task.status)}，所需能力 ${abilities}。${target}请说明风险和下一步安排。`
+  const abilities = (task.requiredAbilities || []).join(' / ') || '不拘本领'
+  const target = agent ? `可请 ${portraitShortName(agent)} / ${agent.name || agent.personaName || agent.agentId} 领令。` : '请点一位合适好汉领令。'
+  draft.value = `请就榜文「${task.title}」议事：榜号 ${task.id}，眼下 ${taskStatusText(task.status)}，所需本领 ${abilities}。${target}请说明险处与下一步章程。`
   openPanel('chat')
-  showToast('已生成议事内容')
+  showToast('议事话头已备')
 }
 
 const discussTask = (task) => {
   if (!task) return
   enterBountyDiscussion(task)
-  draft.value = `请围绕悬赏「${task.title}」议事。`
+  draft.value = `请就榜文「${task.title}」议事。`
   openPanel('chat')
 }
 
@@ -461,10 +469,10 @@ const toggleHallSound = () => {
   setSoundEnabled(nextEnabled)
   if (nextEnabled) {
     playTap()
-    showToast('已开启厅内音效')
+    showToast('厅中声响已开')
     return
   }
-  showToast('已关闭厅内音效')
+  showToast('厅中声响已歇')
 }
 
 const showToast = (message) => {
@@ -476,6 +484,7 @@ const showToast = (message) => {
 
 const {
   archiveTask,
+  autoAssignTask,
   assignTask,
   createTask
 } = useHallTaskActions({
@@ -600,28 +609,28 @@ const handleClearChatTarget = () => {
 const handleStartAgentConversation = (agent) => {
   if (!agent) return
   if (!canStartAgentConversation(agent)) {
-    showToast(agent.systemAgent ? '宋江为公共议事中控' : '只能与自己绑定的好汉私聊')
+    showToast(agent.systemAgent ? '宋江坐镇公议' : '只可与自家好汉密议')
     return
   }
   playAgentSelect()
   enterPrivateConversation(agent)
   draft.value = ''
-  insertAgentMention(agent, '请汇报当前状态、可承接任务和需要协助的事项。')
+  insertAgentMention(agent, '请报眼下动静、可领何榜、还需哪路照应。')
   openPanel('chat')
-  showToast(`正在与 ${portraitShortName(agent)} 议事`)
+  showToast(`正与 ${portraitShortName(agent)} 密议`)
 }
 
 const canStartAgentConversation = (agent) => Boolean(agent?.boundToMe && !agent?.systemAgent && agent?.canOperate !== false)
 
-const handleBindPersona = async (persona) => {
+const handleBindPersona = async (persona, mode = 'local') => {
   try {
-    await bindPersona(persona)
+    personaSetupResult.value = await bindPersona(persona, mode)
     playSuccess()
-    showToast(`${portraitShortName(persona)} 已入名册`)
+    showToast(mode === 'server' ? `${portraitShortName(persona)} 已在山寨安顿` : `${portraitShortName(persona)} 自家接应文书已备`)
   } catch (error) {
     log.warn('bind persona failed:', error)
     playError()
-    showToast(error.message || '绑定失败')
+    showToast(error.message || '请贤未成')
   }
 }
 
@@ -629,12 +638,13 @@ const handleUnbindPersona = async (persona) => {
   try {
     await unbindPersona(persona)
     if (selectedAgent.value?.personaCode === persona.personaCode) selectedAgent.value = null
+    if (personaSetupResult.value?.agent?.personaCode === persona.personaCode) personaSetupResult.value = null
     playSuccess()
-    showToast(`${portraitShortName(persona)} 已离开名册`)
+    showToast(`${portraitShortName(persona)} 已除名下山`)
   } catch (error) {
     log.warn('unbind persona failed:', error)
     playError()
-    showToast(error.message || '解绑失败')
+    showToast(error.message || '除名未成')
   }
 }
 

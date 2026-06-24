@@ -90,8 +90,8 @@ describe('JuyiHall component behavior', () => {
       }
     })
 
-    expect(wrapper.text()).to.include('议事中庭')
-    expect(wrapper.text()).to.include('全员议事')
+    expect(wrapper.text()).to.include('厅前公议')
+    expect(wrapper.text()).to.include('众好汉')
     expect(wrapper.text()).not.to.include('传令房')
     expect(wrapper.find('.room-chat').exists()).to.equal(false)
     expect(wrapper.find('.hotspot-chat').exists()).to.equal(false)
@@ -119,7 +119,7 @@ describe('JuyiHall component behavior', () => {
     })
 
     expect(stage.text()).to.include('招贤馆')
-    expect(stage.text()).to.include('人物卡池')
+    expect(stage.text()).to.include('遍请豪杰')
     await stage.find('.room-catalog').trigger('click')
     expect(stage.emitted('open-panel')[0]).to.deep.equal(['catalog'])
 
@@ -137,16 +137,21 @@ describe('JuyiHall component behavior', () => {
       }
     })
 
-    expect(catalog.text()).to.include('3 位好汉')
+    expect(catalog.text()).to.include('3 位待请豪杰')
     expect(catalog.text()).to.include('宋江')
-    expect(catalog.text()).to.include('中控')
+    expect(catalog.text()).to.include('头领')
     expect(catalog.text()).to.include('吴用')
-    expect(catalog.text()).to.include('绑定')
+    expect(catalog.text()).to.include('请上梁山')
     expect(catalog.text()).to.include('林冲')
-    expect(catalog.text()).to.include('解绑')
+    expect(catalog.text()).to.include('除名下山')
 
     await catalog.find('.catalog-action.primary').trigger('click')
-    expect(catalog.emitted('bind-persona')[0]).to.deep.equal([personas[1]])
+    expect(catalog.text()).to.include('择个接应去处')
+    expect(catalog.text()).to.include('山寨安顿')
+    expect(catalog.text()).to.include('自家接应')
+
+    await catalog.find('.catalog-action.primary').trigger('click')
+    expect(catalog.emitted('bind-persona')[0]).to.deep.equal([personas[1], 'server'])
   })
 
   it('opens panels and clears locked contexts from BottomDock', async () => {
@@ -212,7 +217,7 @@ describe('JuyiHall component behavior', () => {
     await wrapper.find('.task-card').trigger('click')
 
     expect(wrapper.text()).to.include('议事')
-    expect(wrapper.text()).to.include('悬赏议事')
+    expect(wrapper.text()).to.include('榜文议事')
     expect(wrapper.text()).not.to.include('单独议事')
     expect(wrapper.text()).not.to.include('传令议事')
 
@@ -220,10 +225,12 @@ describe('JuyiHall component behavior', () => {
     await actionButtons[0].trigger('click')
     await actionButtons[1].trigger('click')
     await actionButtons[2].trigger('click')
+    await wrapper.find('.auto-assign-task').trigger('click')
 
     expect(wrapper.emitted('select-agent')[0]).to.deep.equal([agent])
     expect(wrapper.emitted('assign-task')[0]).to.deep.equal([selectedTask, agent])
     expect(wrapper.emitted('brief-selected-task')[0]).to.deep.equal([selectedTask, agent])
+    expect(wrapper.emitted('auto-assign-task')[0]).to.deep.equal([selectedTask])
   })
 
   it('does not reopen BountyPanel detail modal from a stale selected task', async () => {
@@ -351,7 +358,7 @@ describe('JuyiHall component behavior', () => {
     await discussButton.trigger('click')
 
     expect(discussButton.attributes('disabled')).to.not.equal(undefined)
-    expect(wrapper.text()).to.include('该悬赏还未分派，暂不能进入议事')
+    expect(wrapper.text()).to.include('此榜文尚未点将，暂不可开议')
     expect(wrapper.emitted('discuss-task')).to.equal(undefined)
   })
 
@@ -516,7 +523,7 @@ describe('JuyiHall component behavior', () => {
         mentionLabel: agent => agent.name,
         senderText: message => message.sender,
         selectedTask: { id: 'task-1', title: 'Inspect the camp' },
-        targetText: '全体好汉',
+        targetText: '众好汉',
         connectionStatus: 'Synced'
       }
     })
@@ -526,8 +533,8 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.find('.chief-templates').exists()).to.equal(false)
     expect(wrapper.find('.coordination-inline').exists()).to.equal(false)
     expect(wrapper.text()).not.to.include('宋江号令')
-    expect(wrapper.text()).not.to.include('互相传话')
-    expect(wrapper.text()).not.to.include('配合办事')
+    expect(wrapper.text()).not.to.include('往来传话')
+    expect(wrapper.text()).not.to.include('结伴办事')
     expect(wrapper.emitted('relay-message')).to.equal(undefined)
     expect(wrapper.emitted('coordinate-work')).to.equal(undefined)
   })
@@ -542,11 +549,11 @@ describe('JuyiHall component behavior', () => {
         messages: [],
         mentionLabel: agent => agent.name,
         senderText: message => message.sender,
-        targetText: '全体好汉'
+        targetText: '众好汉'
       }
     })
 
-    expect(wrapper.text()).to.include('正在尝试恢复回话')
+    expect(wrapper.text()).to.include('正在续上传令')
   })
 
   it('emits SongJiang management commands from CommandPanel', async () => {
@@ -562,9 +569,9 @@ describe('JuyiHall component behavior', () => {
       }
     })
 
-    expect(wrapper.text()).to.include('巡检悬赏榜')
-    expect(wrapper.text()).to.include('整备好汉名册')
-    expect(wrapper.text()).to.include('全员议事')
+    expect(wrapper.text()).to.include('巡看榜文')
+    expect(wrapper.text()).to.include('整点好汉簿')
+    expect(wrapper.text()).to.include('厅前发话')
 
     await wrapper.findAll('.command-grid button')[0].trigger('click')
     expect(wrapper.emitted('issue-command')[0]).to.deep.equal(['reviewBounties'])
@@ -592,8 +599,8 @@ describe('JuyiHall component behavior', () => {
     await actionButtons[0].trigger('click')
     await actionButtons[1].trigger('click')
 
-    expect(wrapper.text()).to.include('互相传话')
-    expect(wrapper.text()).to.include('配合办事')
+    expect(wrapper.text()).to.include('往来传话')
+    expect(wrapper.text()).to.include('结伴办事')
     expect(wrapper.emitted('relay-message')).to.have.length(1)
     expect(wrapper.emitted('coordinate-work')).to.have.length(1)
   })
@@ -613,7 +620,7 @@ describe('JuyiHall component behavior', () => {
     await wrapper.find('form').trigger('submit')
     await wrapper.find('.result-card button').trigger('click')
 
-    expect(wrapper.text()).to.include('向量检索')
+    expect(wrapper.text()).to.include('藏书查卷')
     expect(wrapper.emitted('search-library')).to.have.length(1)
     expect(wrapper.emitted('cite-library')[0][0].content).to.equal('Deployment notes')
   })
@@ -631,12 +638,12 @@ describe('JuyiHall component behavior', () => {
       }
     })
 
-    expect(emptyWrapper.text()).to.include('暂未检索到资料')
+    expect(emptyWrapper.text()).to.include('暂未查得案卷')
 
     const errorWrapper = mount(LibraryPanel, {
       global: { stubs },
       props: {
-        errorMessage: '藏经阁暂不可用，主流程不受影响',
+        errorMessage: '藏书阁暂不可查，主线不受影响',
         formatTime: value => String(value),
         hasSearched: true,
         keyword: 'deploy',
@@ -646,6 +653,6 @@ describe('JuyiHall component behavior', () => {
       }
     })
 
-    expect(errorWrapper.text()).to.include('藏经阁暂不可用，主流程不受影响')
+    expect(errorWrapper.text()).to.include('藏书阁暂不可查，主线不受影响')
   })
 })

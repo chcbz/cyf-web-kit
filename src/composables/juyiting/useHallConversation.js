@@ -50,16 +50,16 @@ export const useHallConversation = ({
   })
 
   const chatConnectionStatus = computed(() => {
-    if (eventStreamRecovering.value) return '正在尝试恢复回话'
+    if (eventStreamRecovering.value) return '正在续上传令'
     if (isStreaming.value) return '传令中'
     if (isAwaitingReply.value) return pendingAgentName.value ? `${pendingAgentName.value} 回话中` : '等待回报'
-    return '实时同步中'
+    return '传令畅通'
   })
 
   const senderText = (message) => {
     if (message.senderName) return message.senderName
     if (message.sender === 'USER') return '你'
-    if (message.sender === 'SYSTEM') return '系统'
+    if (message.sender === 'SYSTEM') return '传令牌'
     return '聚义厅'
   }
 
@@ -249,7 +249,7 @@ export const useHallConversation = ({
     conversationId.value = ''
     messages.value = []
     isAwaitingReply.value = false
-    showToast('已开启新的聚义议事')
+    showToast('已另起厅前话头')
   }
 
   const processStream = (eventData) => {
@@ -302,7 +302,7 @@ export const useHallConversation = ({
         taskId: chatContext.value.taskId,
         forceNewConversation: !conversationId.value,
         senderType: 'user',
-        senderName: globalStore.user?.name || globalStore.user?.nickname || '用户',
+        senderName: globalStore.user?.name || globalStore.user?.nickname || '寨中来客',
         metadata: {
           scene: 'juyiting',
           mode: currentChatContext.value.mode,
@@ -340,7 +340,7 @@ export const useHallConversation = ({
       messages.value.push({
         localId: `system-${Date.now()}`,
         sender: 'SYSTEM',
-        content: '传令失败，请稍后再试',
+        content: '传令未达，请稍后再试',
         timestamp: Date.now(),
         streaming: false
       })
@@ -375,9 +375,9 @@ export const useHallConversation = ({
     if (!agent) return
     if (chatMode) chatMode.value = 'private'
     selectedAgent.value = agent
-    insertAgentMention(agent, '请汇报当前状态、可承接任务和需要协助的事项。')
+    insertAgentMention(agent, '请报眼下动静、可领何榜、还需哪路照应。')
     openPanel('chat')
-    showToast(`正在与 ${portraitShortName(agent)} 对话`)
+    showToast(`正与 ${portraitShortName(agent)} 密议`)
   }
 
   return {

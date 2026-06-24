@@ -59,7 +59,7 @@ export const appendHallEventMessage = (state, event) => {
         content: '',
         timestamp: event.timestamp || Date.now(),
         streaming: true,
-        statusText: '正在回复'
+        statusText: '正在回话'
       }
       state.messages.push(pendingMessage)
     }
@@ -67,7 +67,7 @@ export const appendHallEventMessage = (state, event) => {
     pendingMessage.timestamp = event.timestamp || pendingMessage.timestamp
     pendingMessage.senderName = event.senderName || pendingMessage.senderName
     pendingMessage.streaming = true
-    pendingMessage.statusText = '正在回复'
+    pendingMessage.statusText = '正在回话'
     state.isAwaitingReply = false
     return { type: 'delta', message: pendingMessage }
   }
@@ -81,7 +81,7 @@ export const appendHallEventMessage = (state, event) => {
     streamingMessage.senderName = event.senderName || streamingMessage.senderName
     streamingMessage.agentId = event.agentId || streamingMessage.agentId
     streamingMessage.streaming = false
-    streamingMessage.statusText = '回复完成'
+    streamingMessage.statusText = '回话已毕'
     state.isAwaitingReply = false
     state.isStreaming = false
     return { type: 'final', message: streamingMessage, shouldStopPolling: true, toastName: event.senderName }
@@ -98,7 +98,7 @@ export const appendHallEventMessage = (state, event) => {
     content: event.content || '',
     timestamp: event.timestamp || Date.now(),
     streaming: false,
-    statusText: event.type === 'agent_message' ? '回复完成' : ''
+    statusText: event.type === 'agent_message' ? '回话已毕' : ''
   }
   state.messages.push(message)
   if (event.senderType !== 'agent') {
@@ -121,10 +121,10 @@ export const appendStreamPayload = (state, eventData) => {
       const message = {
         localId: `delivery-${agentId}-${Date.now()}`,
         sender: 'SYSTEM',
-        content: delivered ? '消息已投递给目标好汉。' : '目标好汉暂未在线，投递失败。',
+        content: delivered ? '传令已递到目标好汉处。' : '目标好汉暂未候令，传令未达。',
         timestamp: Date.now(),
         streaming: false,
-        statusText: delivered ? '已投递' : '投递失败'
+        statusText: delivered ? '已递到' : '未递到'
       }
       state.messages.push(message)
       return { type: 'delivery', message }

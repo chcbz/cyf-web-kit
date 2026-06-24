@@ -3,28 +3,28 @@
     <section class="chief-card">
       <span class="chief-avatar" :style="portraitStyle(chiefAgent)"></span>
       <div>
-        <small>寨主统领</small>
+        <small>寨主坐镇</small>
         <strong>{{ chiefName }}</strong>
-        <p>统一查看悬赏榜、好汉名册和厅内议事。</p>
+        <p>总看榜文、好汉簿与厅前话头。</p>
       </div>
     </section>
 
     <div class="command-stats">
       <button type="button" @click="$emit('open-panel', 'tasks')">
-        <small>悬赏在榜</small>
+        <small>榜文在榜</small>
         <strong>{{ tasksTotal }}</strong>
       </button>
       <button type="button" @click="$emit('open-panel', 'agents')">
-        <small>好汉入册</small>
+        <small>好汉入簿</small>
         <strong>{{ agentsTotal }}</strong>
       </button>
       <button type="button" @click="$emit('open-panel', 'chat')">
-        <small>厅内议事</small>
-        <strong>可发</strong>
+        <small>厅前话头</small>
+        <strong>可传</strong>
       </button>
     </div>
 
-    <div class="section-label">号令</div>
+    <div class="section-label">将令</div>
     <div class="command-grid">
       <button
         v-for="item in commands"
@@ -40,15 +40,15 @@
       </button>
     </div>
 
-    <div class="section-label">当前上下文</div>
+    <div class="section-label">眼下所指</div>
     <div class="context-list">
       <button type="button" @click="$emit('open-panel', selectedAgent ? 'chat' : 'agents')">
-        <small>当前好汉</small>
-        <strong>{{ selectedAgent ? agentDisplayName(selectedAgent) : '未选好汉' }}</strong>
+        <small>所点好汉</small>
+        <strong>{{ selectedAgent ? agentDisplayName(selectedAgent) : '未点好汉' }}</strong>
       </button>
       <button type="button" @click="$emit('open-panel', selectedTask ? 'chat' : 'tasks')">
-        <small>当前悬赏</small>
-        <strong>{{ selectedTask?.title || '未选悬赏' }}</strong>
+        <small>所看榜文</small>
+        <strong>{{ selectedTask?.title || '未选榜文' }}</strong>
       </button>
     </div>
   </div>
@@ -69,10 +69,10 @@ const props = defineProps({
 defineEmits(['issue-command', 'open-panel'])
 
 const commands = [
-  { key: 'reviewBounties', icon: 'format-list-checkbox', label: '巡检悬赏榜', description: '梳理悬赏状态、风险和承接安排' },
-  { key: 'reviewRoster', icon: 'account-circle', label: '整备好汉名册', description: '检查在线、忙碌、异常和能力缺口' },
-  { key: 'broadcastOrder', icon: 'message-text-outline', label: '全员议事', description: '向所有好汉发起议题' },
-  { key: 'summonReport', icon: 'account-circle-outline', label: '收拢回报', description: '要求当前好汉围绕当前悬赏回报' }
+  { key: 'reviewBounties', icon: 'format-list-checkbox', label: '巡看榜文', description: '梳理榜文、险处与领令人手' },
+  { key: 'reviewRoster', icon: 'account-circle', label: '整点好汉簿', description: '查候令、办事、失联与本领缺口' },
+  { key: 'broadcastOrder', icon: 'message-text-outline', label: '厅前发话', description: '向众好汉起一个话头' },
+  { key: 'summonReport', icon: 'account-circle-outline', label: '收拢回报', description: '催当前好汉就榜文回话' }
 ]
 
 const chiefName = computed(() => agentDisplayName(props.chiefAgent) || '宋江')

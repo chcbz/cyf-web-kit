@@ -3,18 +3,18 @@
     <div class="discussion-brief">
       <var-icon name="account-circle" />
       <div>
-        <strong>议事</strong>
+        <strong>密议</strong>
         <small>{{ privateSubtitle }}</small>
       </div>
     </div>
     <ChatPanel
       v-model:draft="draftProxy"
       discussion-variant="private"
-      empty-text="还没有议事记录，先问一句当前进展。"
-      placeholder="向当前好汉发起议事"
+      empty-text="尚无密议记录，可先问一声眼下动静。"
+      placeholder="向当前好汉传一句话"
       :show-target-picker="false"
       :subtitle="privateSubtitle"
-      title="议事"
+      title="密议"
       v-bind="chatProps"
       @clear-target="$emit('clear-target', $event)"
       @load-messages="$emit('load-messages')"

@@ -11,7 +11,7 @@
           {{ item.label }}
         </button>
       </div>
-      <span>名册 {{ agents.length }} / 地图 {{ mapAgents.length }}</span>
+      <span>簿上 {{ agents.length }} / 厅中 {{ mapAgents.length }}</span>
     </div>
 
     <div class="agent-panel-body">
@@ -51,11 +51,11 @@
           </div>
           <div class="ability-tags">
             <span v-for="ability in selectedAgent.abilities || []" :key="ability">{{ ability }}</span>
-            <span v-if="!(selectedAgent.abilities || []).length">未登记能力</span>
+            <span v-if="!(selectedAgent.abilities || []).length">未录本领</span>
           </div>
-          <p>{{ selectedAgent.errorMessage || selectedAgent.currentTaskTitle || '正在厅中候命，可从悬赏榜指派任务。' }}</p>
+          <p>{{ selectedAgent.errorMessage || selectedAgent.currentTaskTitle || '正在厅中候令，可从榜文房点将。' }}</p>
         </template>
-        <p v-else>点击厅中人物查看状态、能力和当前任务。</p>
+        <p v-else>点一位厅中好汉，查看动静、本领与所领榜文。</p>
       </div>
     </div>
   </div>

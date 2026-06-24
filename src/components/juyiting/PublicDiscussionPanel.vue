@@ -3,17 +3,17 @@
     <div class="discussion-brief">
       <var-icon name="message-text-outline" />
       <div>
-        <strong>全员议事</strong>
-        <small>议事中庭面向全体好汉，未指定目标时交由宋江分流。</small>
+        <strong>厅前公议</strong>
+        <small>厅前面向众好汉，未点名时由宋江分拨。</small>
       </div>
     </div>
     <ChatPanel
       v-model:draft="draftProxy"
       discussion-variant="public"
-      empty-text="中庭暂无议事，发起一句让全体好汉接上。"
-      placeholder="向全体好汉发起议事，或 @某位好汉"
-      subtitle="议事中庭"
-      title="全员议事"
+      empty-text="厅前暂无话头，先发一句请众好汉接话。"
+      placeholder="向众好汉传话，或 @某位好汉"
+      subtitle="厅前公议"
+      title="厅前公议"
       v-bind="chatProps"
       @clear-target="$emit('clear-target', $event)"
       @load-messages="$emit('load-messages')"
@@ -42,7 +42,7 @@ const props = defineProps({
   selectedTask: { type: Object, default: null },
   senderText: { type: Function, required: true },
   scopeHint: { type: String, default: 'public' },
-  targetText: { type: String, default: '全体好汉' }
+  targetText: { type: String, default: '众好汉' }
 })
 
 const emit = defineEmits([

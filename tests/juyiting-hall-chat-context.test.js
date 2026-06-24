@@ -20,7 +20,7 @@ describe('useHallChatContext', () => {
     context.setMentionAgent(agents[2])
 
     expect(context.chatMode.value).to.equal('public')
-    expect(context.chatTargetText.value).to.equal('全体好汉')
+    expect(context.chatTargetText.value).to.equal('众好汉')
     expect(context.chatContext.value).to.deep.include({
       conversationScopeType: 'public',
       conversationScopeKey: 'public',
@@ -69,7 +69,7 @@ describe('useHallChatContext', () => {
     context.enterPrivateConversation(agents[0])
 
     expect(context.chatMode.value).to.equal('private')
-    expect(context.chatTargetText.value).to.equal('私聊 / 吴用')
+    expect(context.chatTargetText.value).to.equal('密议 / 吴用')
     expect(context.chatContext.value).to.deep.include({
       conversationScopeType: 'private',
       conversationScopeKey: 'task:task-3:agent:wuyong',

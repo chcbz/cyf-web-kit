@@ -2,7 +2,7 @@
   <form class="hall-chat-composer chat-composer" :class="composerClass" @submit.prevent="submit">
     <div class="composer-context" :class="`is-${discussionVariant}`">
       <span class="composer-context-label">{{ contextLabel }}</span>
-      <div v-if="targetChips.length" class="composer-targets" aria-label="议事目标">
+      <div v-if="targetChips.length" class="composer-targets" aria-label="传话对象">
         <button
           v-for="chip in targetChips"
           :key="chip.id"
@@ -37,8 +37,8 @@
           v-if="canClear"
           class="composer-clear"
           type="button"
-          title="清空内容"
-          aria-label="清空内容"
+          title="清空话头"
+          aria-label="清空话头"
           @click="clearDraft"
         >
           <var-icon name="close-circle-outline" />
@@ -47,15 +47,15 @@
           class="composer-send"
           type="submit"
           :disabled="!canSend"
-          :title="isStreaming ? '回话中' : '发送'"
-          :aria-label="isStreaming ? '回话中' : '发送'"
+          :title="isStreaming ? '回话中' : '传令'"
+          :aria-label="isStreaming ? '回话中' : '传令'"
         >
           <var-icon :name="isStreaming ? 'refresh' : 'chevron-right'" />
         </button>
       </div>
     </div>
 
-    <div v-if="showMentionMenu" class="composer-mention-menu" aria-label="选择要提及的好汉">
+    <div v-if="showMentionMenu" class="composer-mention-menu" aria-label="选择要点名的好汉">
       <button
         v-for="agent in orderedAgents"
         :key="agent.agentId"
@@ -64,13 +64,13 @@
         @click="selectMention(agent)"
       >
         <span>@{{ mentionLabel(agent) }}</span>
-        <small>{{ agent.status === 'online' ? '在线' : '候选' }}</small>
+        <small>{{ agent.status === 'online' ? '候令' : '候选' }}</small>
       </button>
     </div>
 
     <div class="composer-meta">
       <span>{{ draftLength }}/{{ maxLength }}</span>
-      <span v-if="isStreaming">等待回应中</span>
+      <span v-if="isStreaming">候回话</span>
       <span v-else>{{ hintText }}</span>
     </div>
   </form>
@@ -85,9 +85,9 @@ const props = defineProps({
   draft: { type: String, default: '' },
   isStreaming: { type: Boolean, default: false },
   mentionLabel: { type: Function, required: true },
-  placeholder: { type: String, default: '向聚义厅发起议事，或 @某位好汉' },
+  placeholder: { type: String, default: '向聚义厅传话，或 @某位好汉' },
   selectedAgent: { type: Object, default: null },
-  targetText: { type: String, default: '全体好汉' },
+  targetText: { type: String, default: '众好汉' },
   maxLength: { type: Number, default: 1200 }
 })
 
@@ -153,15 +153,15 @@ const targetChips = computed(() => {
 })
 
 const contextLabel = computed(() => {
-  if (props.discussionVariant === 'bounty') return props.targetText || '悬赏议事'
+  if (props.discussionVariant === 'bounty') return props.targetText || '榜文议事'
   if (props.discussionVariant === 'private') return props.targetText || '当前好汉'
-  return targetChips.value.length ? '指定回应' : '全员议事'
+  return targetChips.value.length ? '点名回话' : '厅前公议'
 })
 
 const hintText = computed(() => {
-  if (props.discussionVariant === 'bounty') return '候选仅限悬赏参与人'
-  if (props.discussionVariant === 'private') return '当前议事对象已固定'
-  return '输入 @ 可指定回应人'
+  if (props.discussionVariant === 'bounty') return '只点本榜领令人'
+  if (props.discussionVariant === 'private') return '密议对象已定'
+  return '输入 @ 可点名回话'
 })
 
 const resizeTextarea = () => {

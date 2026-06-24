@@ -13,14 +13,14 @@
     </div>
     <div class="dock-contexts">
       <span class="dock-count"><strong>{{ agentsTotal }}</strong> 好汉</span>
-      <span class="dock-count"><strong>{{ tasksTotal }}</strong> 悬赏</span>
+      <span class="dock-count"><strong>{{ tasksTotal }}</strong> 榜文</span>
       <button class="context-chip" type="button" @click="selectedAgent ? $emit('clear-agent') : $emit('open-panel', 'agents')">
-        <small>当前好汉</small>
-        <strong>{{ agentLabel || selectedAgent?.name || selectedAgent?.personaName || selectedAgent?.agentId || '未选好汉' }}</strong>
+        <small>所点好汉</small>
+        <strong>{{ agentLabel || selectedAgent?.name || selectedAgent?.personaName || selectedAgent?.agentId || '未点好汉' }}</strong>
       </button>
       <button class="context-chip" type="button" @click="selectedTask ? $emit('clear-task') : $emit('open-panel', 'tasks')">
-        <small>当前悬赏</small>
-        <strong>{{ selectedTask?.title || '未选悬赏' }}</strong>
+        <small>所看榜文</small>
+        <strong>{{ selectedTask?.title || '未选榜文' }}</strong>
       </button>
     </div>
   </div>
@@ -40,11 +40,11 @@ defineEmits(['open-panel', 'clear-agent', 'clear-task'])
 
 const items = [
   { key: 'command', icon: 'account-circle-outline', label: '宋江' },
-  { key: 'agents', icon: 'account-circle', label: '名册' },
-  { key: 'tasks', icon: 'format-list-checkbox', label: '悬赏' },
-  { key: 'coordination', icon: 'share', label: '协同' },
+  { key: 'agents', icon: 'account-circle', label: '好汉簿' },
+  { key: 'tasks', icon: 'format-list-checkbox', label: '榜文' },
+  { key: 'coordination', icon: 'share', label: '照应' },
   { key: 'chat', icon: 'message-text-outline', label: '议事' },
-  { key: 'library', icon: 'notebook', label: '藏经阁' }
+  { key: 'library', icon: 'notebook', label: '藏书阁' }
 ]
 </script>
 

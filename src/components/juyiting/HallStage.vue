@@ -2,7 +2,7 @@
   <section class="hall-stage">
     <div class="stage-header">
       <div class="stage-heading">
-        <div class="eyebrow">梁山泊协作中枢</div>
+        <div class="eyebrow">梁山泊传令中枢</div>
         <h1>聚义厅</h1>
       </div>
       <div class="stage-tools">
@@ -10,19 +10,19 @@
           class="tool-action refresh-action"
           :class="{ 'is-refreshing': refreshing }"
           :disabled="refreshing"
-          title="刷新人物状态"
+          title="点验厅中动静"
           @click="$emit('refresh-hall')"
         >
           <var-icon name="refresh" />
-          <span>{{ refreshing ? '刷新中' : '刷新' }}</span>
+          <span>{{ refreshing ? '点验中' : '点验' }}</span>
         </button>
         <button
           class="tool-action sound-toggle"
-          :title="soundEnabled ? '关闭音效' : '开启音效'"
+          :title="soundEnabled ? '歇下声响' : '开起声响'"
           @click="$emit('toggle-sound')"
         >
           <var-icon :name="soundEnabled ? 'bell' : 'bell-outline'" />
-          <span>{{ soundEnabled ? '音效开' : '音效关' }}</span>
+          <span>{{ soundEnabled ? '声响开' : '声响歇' }}</span>
         </button>
       </div>
     </div>
@@ -45,27 +45,27 @@
         <div class="map-road road-branch"></div>
         <button class="hall-room room-main" @click="openPublicDiscussion">
           <strong>聚义厅</strong>
-          <small>议事中庭 / 全员议事</small>
+          <small>厅前公议 / 众好汉</small>
         </button>
         <button class="hall-room room-agents" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'agents')">
-          <strong>名册房</strong>
-          <small>好汉调度</small>
+          <strong>好汉簿</strong>
+          <small>点将调遣</small>
         </button>
         <button class="hall-room room-catalog" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'catalog')">
           <strong>招贤馆</strong>
-          <small>人物卡池</small>
+          <small>遍请豪杰</small>
         </button>
         <button class="hall-room room-tasks" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'tasks')">
-          <strong>悬赏房</strong>
+          <strong>榜文房</strong>
           <small>{{ tasksTotal }} 件</small>
         </button>
         <button class="hall-room room-library" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'library')">
-          <strong>藏经阁</strong>
-          <small>资料检索</small>
+          <strong>藏书阁</strong>
+          <small>查卷问典</small>
         </button>
         <div class="hall-room room-back">
           <strong>后堂</strong>
-          <small>整备</small>
+          <small>整装</small>
         </div>
         <div class="beam beam-top"></div>
         <div class="banner">替天行道</div>
@@ -85,26 +85,26 @@
           @select-agent="$emit('select-agent', $event)"
         />
         <div v-if="!visibleAgents.length" class="empty-hall">
-          暂无 Agent 入厅，稍后会自动同步
+          厅中暂未见好汉入座，稍后自会传到
         </div>
         <button v-if="hiddenAgentCount" class="hall-overflow" type="button" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'agents')">
-          另有 {{ hiddenAgentCount }} 位在偏厅候命
+          另有 {{ hiddenAgentCount }} 位在偏厅候令
         </button>
         <button class="scene-hotspot hotspot-agents" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'agents')">
           <var-icon name="account-circle" />
-          <span>名册</span>
+          <span>好汉簿</span>
         </button>
         <button class="scene-hotspot hotspot-catalog" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'catalog')">
           <var-icon name="account-plus" />
-          <span>招募</span>
+          <span>招贤</span>
         </button>
         <button class="scene-hotspot hotspot-tasks" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'tasks')">
           <var-icon name="format-list-checkbox" />
-          <span>悬赏</span>
+          <span>榜文</span>
         </button>
         <button class="scene-hotspot hotspot-library" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'library')">
           <var-icon name="notebook" />
-          <span>藏经阁</span>
+          <span>藏书阁</span>
         </button>
       </div>
     </div>

@@ -12,6 +12,7 @@ export const useHallData = ({
   const mapAgents = ref([])
   const personaCatalog = ref([])
   const tasks = ref([])
+  const taskRecommendations = ref({})
   const taskStatusCounts = ref({})
   const agentFilter = ref('all')
   const taskStatusFilter = ref('')
@@ -34,6 +35,24 @@ export const useHallData = ({
 
   const recommendedAgents = computed(() => {
     if (!selectedTask.value) return []
+    const serverRecommendations = taskRecommendations.value[selectedTask.value.id] || []
+    if (serverRecommendations.length) {
+      return serverRecommendations
+        .map(recommendation => ({
+          ...(recommendation.agent || {}),
+          recommendationScore: recommendation.score,
+          recommendationReason: recommendation.reason,
+          recommendationParts: {
+            ability: recommendation.abilityScore,
+            status: recommendation.statusScore,
+            success: recommendation.successScore,
+            load: recommendation.loadScore,
+            recent: recommendation.recentScore
+          },
+          matchedAbilities: recommendation.matchedAbilities || [],
+          capability: recommendation.capability || null
+        }))
+    }
     return agents.value
       .filter(agent => agent.canOperate !== false && normalizeStatus(agent.status) === 'online')
       .map(agent => ({ agent, score: taskAgentMatchScore(selectedTask.value, agent) }))
@@ -80,6 +99,30 @@ export const useHallData = ({
       }
     })
     return counts
+  }
+
+  const loadTaskRecommendations = async (task = selectedTask.value) => {
+    if (!task?.id) return []
+    let recommendations = []
+    try {
+      await agentApi.create(`/tasks/${task.id}/recommend`, {}, {
+        autoLoading: false,
+        onSuccess: (result) => {
+          recommendations = result?.data || []
+          taskRecommendations.value = {
+            ...taskRecommendations.value,
+            [task.id]: recommendations
+          }
+        }
+      })
+    } catch (error) {
+      log.warn('load task recommendations failed:', error)
+      taskRecommendations.value = {
+        ...taskRecommendations.value,
+        [task.id]: []
+      }
+    }
+    return recommendations
   }
 
   const loadMapAgents = async () => {
@@ -132,12 +175,17 @@ export const useHallData = ({
     }
   }
 
-  const bindPersona = async (persona) => {
-    if (!persona?.personaCode || persona.systemAgent || persona.bound) return
-    await agentApi.post(`/personas/${persona.personaCode}/bind`, {}, {
-      autoLoading: false
+  const bindPersona = async (persona, mode = 'local') => {
+    if (!persona?.personaCode || persona.systemAgent || (persona.bound && !persona.boundToMe)) return
+    let bindResult = null
+    await agentApi.post(`/personas/${persona.personaCode}/bind`, { mode }, {
+      autoLoading: false,
+      onSuccess: (result) => {
+        bindResult = result?.data || null
+      }
     })
     await Promise.all([loadPersonaCatalog(), loadRosterAgents(), loadMapAgents()])
+    return bindResult
   }
 
   const unbindPersona = async (persona) => {
@@ -173,6 +221,8 @@ export const useHallData = ({
       taskStatusCounts.value = counts
       if (selectedTask.value && !tasks.value.some(task => task.id === selectedTask.value.id)) {
         selectedTask.value = null
+      } else if (selectedTask.value) {
+        await loadTaskRecommendations(selectedTask.value)
       }
     } catch (error) {
       log.warn('load bounty tasks failed:', error)
@@ -203,6 +253,7 @@ export const useHallData = ({
     loadMapAgents,
     loadPersonaCatalog,
     loadRosterAgents,
+    loadTaskRecommendations,
     loadTasks,
     mapAgents,
     personaCatalog,
@@ -212,6 +263,7 @@ export const useHallData = ({
     taskAbilityFilter,
     taskAbilityOptions,
     taskKeyword,
+    taskRecommendations,
     tasks,
     taskStatusCount,
     taskStatusFilter,
