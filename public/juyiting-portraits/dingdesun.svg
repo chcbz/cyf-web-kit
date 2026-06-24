@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="丁得孙 中箭虎">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f5e8c8"/>
+      <stop offset="1" stop-color="#2f6f6a"/>
+    </linearGradient>
+    <clipPath id="round"><circle cx="40" cy="40" r="38"/></clipPath>
+  </defs>
+  <g clip-path="url(#round)">
+    <rect width="80" height="80" fill="url(#bg)"/>
+    <path d="M0 64q20-9 40 0t40 0v16H0Z" fill="#1f2f2a" opacity=".2"/>
+    <circle cx="40" cy="35" r="19" fill="#b9794f" stroke="#7a9e7e" stroke-width="2"/>
+    <path d="M23 31q17-20 34 0l-3 8H26Z" fill="#2f6f6a" stroke="#7a9e7e" stroke-width="2"/><path d="M40 13v13" stroke="#7a9e7e" stroke-width="4" stroke-linecap="round"/>
+    <path d="M18 80q3-25 22-25t22 25Z" fill="#2f6f6a" stroke="#7a9e7e" stroke-width="2"/>
+    <path d="M29 41q4 3 8 0M43 41q4 3 8 0" stroke="#2b2018" stroke-width="2" stroke-linecap="round"/>
+    <path d="M39 44q-2 5 2 6" stroke="#8a5638" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <path d="M34 54q6 4 12 0" stroke="#8a2f2f" stroke-width="2" stroke-linecap="round"/>
+    <path d="M18 70L62 26" stroke="#7a9e7e" stroke-width="4" stroke-linecap="round"/><path d="M58 22l7 8-12 4Z" fill="#f7ead0" stroke="#7a9e7e" stroke-width="2"/>
+    <circle cx="64" cy="17" r="11" fill="#f7ead0" stroke="#7a9e7e" stroke-width="2"/>
+    <text x="64" y="21" text-anchor="middle" font-family="serif" font-size="10" font-weight="700" fill="#3b2a1d">79</text>
+    <path d="M8 66h30q5 0 5 5t-5 5H8Z" fill="#f7ead0" stroke="#7a9e7e" stroke-width="1.5" opacity=".96"/>
+    <text x="25" y="74" text-anchor="middle" font-family="serif" font-size="8" font-weight="700" fill="#3b2a1d">中箭虎</text>
+  </g>
+</svg>
