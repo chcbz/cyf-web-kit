@@ -21,20 +21,22 @@ describe('JuyiHall portrait roles', () => {
     expect(portraitSource).to.include('data:image/svg+xml')
     expect(portraitSource).not.to.include('water-margin-agents')
     expect(portraitSource).not.to.include("backgroundSize: '300% 200%'")
+    expect(portraitSource).not.to.include('juyiting/portraits')
   })
 
-  it('has detailed specialty portraits for the default visible prototypes', () => {
+  it('uses realistic PNG portraits for the default visible prototypes', () => {
     expect(portraitSource).to.include('const realisticPortraits = new Map')
+    expect(portraitSource).to.include('const realisticAtlasPortraits = new Map')
+    expect(portraitSource).to.include('backgroundSize: \'200% 200%\'')
     expect(portraitSource).to.include('songjiang-realistic.png')
-    expect(portraitSource).to.include('wuyong-realistic.png')
-    expect(portraitSource).to.include('wusong-realistic.png')
-    expect(portraitSource).to.include('husanniang-realistic.png')
+    expect(portraitSource).to.include('water-margin-atlas-')
+    expect(portraitSource).to.include('staticPortrait(role)')
     expect(portraitRoles.find(role => role.slug === 'songjiang').title).to.equal('及时雨')
     expect(portraitRoles.find(role => role.slug === 'wuyong').title).to.equal('智多星')
     expect(portraitRoles.find(role => role.slug === 'husanniang').title).to.equal('一丈青')
   })
 
-  it('keeps realistic portrait assets available for the current visible roles', () => {
+  it('keeps single realistic portrait assets available and referenced by default', () => {
     for (const filename of [
       'songjiang-realistic.png',
       'wuyong-realistic.png',
@@ -43,6 +45,21 @@ describe('JuyiHall portrait roles', () => {
     ]) {
       expect(existsSync(new URL(`../public/juyiting-portraits/${filename}`, import.meta.url))).to.equal(true)
     }
+  })
+
+  it('keeps all realistic atlas portrait assets available for the 104 non-single roles', () => {
+    for (let index = 1; index <= 26; index += 1) {
+      const filename = `water-margin-atlas-${String(index).padStart(3, '0')}.png`
+      expect(existsSync(new URL(`../public/juyiting-portraits/${filename}`, import.meta.url))).to.equal(true)
+    }
+
+    const atlasRoleCount = portraitRoles.filter(role => ![
+      'songjiang',
+      'wuyong',
+      'wusong',
+      'husanniang'
+    ].includes(role.slug)).length
+    expect(atlasRoleCount).to.equal(104)
   })
 
   it('keeps one static SVG portrait asset for every Water Margin prototype', () => {

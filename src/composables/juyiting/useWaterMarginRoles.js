@@ -18,14 +18,35 @@ const parseVisualConfig = (agent) => {
 const roleBySlug = new Map(portraitRoles.map(role => [role.slug, role]))
 const portraitCache = new Map()
 const publicAsset = (path) => `${import.meta.env.BASE_URL}${path.replace(/^\/+/, '')}`
+const staticPortrait = (role) => publicAsset(`juyiting-portraits/${role.slug}.svg`)
+
 const realisticPortraits = new Map([
-  ['songjiang', publicAsset('juyiting-portraits/songjiang-realistic.png')],
-  ['wuyong', publicAsset('juyiting-portraits/wuyong-realistic.png')],
-  ['wusong', publicAsset('juyiting-portraits/wusong-realistic.png')],
-  ['husanniang', publicAsset('juyiting-portraits/husanniang-realistic.png')]
+  ['songjiang', 'songjiang-realistic.png'],
+  ['wuyong', 'wuyong-realistic.png'],
+  ['wusong', 'wusong-realistic.png'],
+  ['husanniang', 'husanniang-realistic.png']
 ])
 
-const staticPortrait = (role) => publicAsset(`juyiting-portraits/${role.slug}.svg`)
+const atlasCellPosition = [
+  ['0%', '0%'],
+  ['100%', '0%'],
+  ['0%', '100%'],
+  ['100%', '100%']
+]
+
+const realisticAtlasPortraits = new Map(
+  portraitRoles
+    .filter(role => !realisticPortraits.has(role.slug))
+    .map((role, index) => {
+      const atlasNo = Math.floor(index / 4) + 1
+      const cell = index % 4
+      const [x, y] = atlasCellPosition[cell]
+      return [role.slug, {
+        filename: `water-margin-atlas-${String(atlasNo).padStart(3, '0')}.png`,
+        position: `${x} ${y}`
+      }]
+    })
+)
 
 const normalizeRoleCode = (value) => String(value || '')
   .trim()
@@ -250,6 +271,25 @@ const generatedPortrait = (role) => {
   return style
 }
 
+const realisticPortrait = (role) => {
+  const filename = realisticPortraits.get(role.slug)
+  if (filename) {
+    return {
+      backgroundImage: `url("${publicAsset(`juyiting-portraits/${filename}`)}")`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center'
+    }
+  }
+
+  const atlas = realisticAtlasPortraits.get(role.slug)
+  if (!atlas) return null
+  return {
+    backgroundImage: `url("${publicAsset(`juyiting-portraits/${atlas.filename}`)}")`,
+    backgroundSize: '200% 200%',
+    backgroundPosition: atlas.position
+  }
+}
+
 export const portraitRole = (agent) => {
   const personaCode = agent?.personaCode || ''
   const explicitName = `${agent?.personaName || ''}${agent?.name || ''}${agent?.title || ''}${agent?.personaCode || ''}${agent?.agentId || ''}${agent?.starName || ''}`
@@ -291,14 +331,8 @@ export const portraitStyle = (agent) => {
   const visual = parseVisualConfig(agent)
   if (visual?.robe || visual?.color || visual?.trim || visual?.motif) return generatedPortrait(role)
 
-  const realisticPortrait = realisticPortraits.get(role.slug)
-  if (realisticPortrait) {
-    return {
-      backgroundImage: `url("${realisticPortrait}")`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center'
-    }
-  }
+  const realistic = realisticPortrait(role)
+  if (realistic) return realistic
 
   return {
     backgroundImage: `url("${staticPortrait(role)}")`,
