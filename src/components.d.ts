@@ -14,6 +14,7 @@ declare module 'vue' {
     AgentPanel: typeof import('./components/juyiting/AgentPanel.vue')['default']
     AgentToken: typeof import('./components/juyiting/AgentToken.vue')['default']
     BottomDock: typeof import('./components/juyiting/BottomDock.vue')['default']
+    BountyActionIcon: typeof import('./components/juyiting/BountyActionIcon.vue')['default']
     BountyDiscussionPanel: typeof import('./components/juyiting/BountyDiscussionPanel.vue')['default']
     BountyPanel: typeof import('./components/juyiting/BountyPanel.vue')['default']
     CalendarPanel: typeof import('./components/task/CalendarPanel.vue')['default']

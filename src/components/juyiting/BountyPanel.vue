@@ -17,11 +17,11 @@
         </select>
       </div>
       <button @click="$emit('load-tasks')">
-        <var-icon name="refresh" />
+        <BountyActionIcon name="refresh" />
         <span>重查</span>
       </button>
       <button class="new-task-button" type="button" @click="showCreateForm = !showCreateForm">
-        <var-icon name="plus" />
+        <BountyActionIcon name="plus" />
         <span>张榜</span>
       </button>
     </div>
@@ -79,7 +79,7 @@
           <div class="bounty-modal-header">
             <h3>榜文点将</h3>
             <button class="modal-close" @click="closeTask">
-              <var-icon name="close-circle-outline" />
+              <BountyActionIcon name="close" />
             </button>
           </div>
 
@@ -107,7 +107,7 @@
                   :title="agentDisplayName(selectedAgent) ? `点当前好汉领令：${agentDisplayName(selectedAgent)}` : '先择好汉再点将'"
                   @click="$emit('assign-task', detailTask, selectedAgent)"
                 >
-                  <var-icon name="account-circle-outline" />
+                  <BountyActionIcon name="assign" />
                   <span class="visually-hidden">{{ agentDisplayName(selectedAgent) ? '点将当前' : '选择好汉' }}</span>
                 </button>
                 <button
@@ -115,7 +115,7 @@
                   title="与当前好汉密议"
                   @click="$emit('brief-selected-task', detailTask, selectedAgent)"
                 >
-                  <var-icon name="message-text-outline" />
+                  <BountyActionIcon name="whisper" />
                   <span class="visually-hidden">密议</span>
                 </button>
                 <button
@@ -126,7 +126,7 @@
                   :title="`点已选 ${selectedAssignees.length} 人领令`"
                   @click="$emit('assign-task', detailTask, selectedAssignees)"
                 >
-                  <var-icon name="format-list-checkbox" />
+                  <BountyActionIcon name="group" />
                   <span class="count-badge">{{ selectedAssignees.length }}</span>
                   <span class="visually-hidden">点将已选 {{ selectedAssignees.length }}</span>
                 </button>
@@ -138,7 +138,7 @@
                   title="宋江代为点将"
                   @click="$emit('auto-assign-task', detailTask)"
                 >
-                  <var-icon name="account-tie-outline" />
+                  <BountyActionIcon name="strategist" />
                   <span class="visually-hidden">宋江代为点将</span>
                 </button>
                 <button
@@ -149,7 +149,7 @@
                   :title="!taskAssigneeIds(detailTask).length ? unassignedDiscussHint : ''"
                   @click="$emit('discuss-task', detailTask)"
                 >
-                  <var-icon name="chat-processing-outline" />
+                  <BountyActionIcon name="discuss" />
                   <span class="visually-hidden">榜文议事</span>
                 </button>
                 <button
@@ -159,7 +159,7 @@
                   title="收入案卷"
                   @click="$emit('archive-task', detailTask)"
                 >
-                  <var-icon name="download-outline" />
+                  <BountyActionIcon name="archive" />
                   <span class="visually-hidden">收入案卷</span>
                 </button>
               </div>
@@ -196,15 +196,15 @@
                 </p>
                 <div class="recommended-agent-actions">
                   <button type="button" :aria-label="`选定 ${agentDisplayName(agent)}`" :title="`选定 ${agentDisplayName(agent)}`" @click="$emit('select-agent', agent)">
-                    <var-icon name="check-circle-outline" />
+                    <BountyActionIcon name="select" />
                     <span class="visually-hidden">选定</span>
                   </button>
                   <button type="button" :aria-label="`点 ${agentDisplayName(agent)} 领令`" :disabled="!canAssign(detailTask, agent)" :title="`点 ${agentDisplayName(agent)} 领令`" @click="$emit('assign-task', detailTask, agent)">
-                    <var-icon name="account-circle-outline" />
+                    <BountyActionIcon name="assign" />
                     <span class="visually-hidden">点将</span>
                   </button>
                   <button type="button" :aria-label="`与 ${agentDisplayName(agent)} 密议`" :title="`与 ${agentDisplayName(agent)} 密议`" @click="$emit('brief-selected-task', detailTask, agent)">
-                    <var-icon name="message-text-outline" />
+                    <BountyActionIcon name="whisper" />
                     <span class="visually-hidden">密议</span>
                   </button>
                 </div>
@@ -220,6 +220,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
+import BountyActionIcon from './BountyActionIcon.vue'
 
 const props = defineProps({
   tasks: { type: Array, default: () => [] },
