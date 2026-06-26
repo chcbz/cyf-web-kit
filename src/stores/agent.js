@@ -84,33 +84,6 @@ const DEMO_AGENTS = [
   }
 ]
 
-const DEMO_TASKS = [
-  {
-    id: 'task-review-api',
-    title: '梳理 Agent API 契约',
-    description: '确认 /agent/list、/agent/{id}、/agent/tasks/search 的前后端字段一致性。',
-    status: 'running',
-    priority: 'high',
-    reward: 80,
-    requiredAbilities: ['分析', '代码审查'],
-    assignedAgentId: 'agent-wuyong',
-    assignedAgentName: '吴用',
-    updatedAt: Date.now() - 1000 * 60 * 25
-  },
-  {
-    id: 'task-verify-hall',
-    title: '验证聚义厅页面状态联动',
-    description: '模拟在线、忙碌、离线和异常状态，确认卡片、详情和任务榜同步。',
-    status: 'pending',
-    priority: 'medium',
-    reward: 50,
-    requiredAbilities: ['验证', '异常排查'],
-    assignedAgentId: '',
-    assignedAgentName: '',
-    updatedAt: Date.now() - 1000 * 60 * 60
-  }
-]
-
 const unwrapPayload = (result) => {
   const body = result?.data ?? result
   if (body && typeof body === 'object' && 'data' in body) {
@@ -240,8 +213,8 @@ export const useAgentStore = defineStore('agent', {
     },
 
     setFallbackTasks () {
-      this.tasks = DEMO_TASKS.map(normalizeTask)
-      this.taskTotal = this.tasks.length
+      this.tasks = []
+      this.taskTotal = 0
     },
 
     async fetchAgents (options = {}) {
@@ -323,7 +296,7 @@ export const useAgentStore = defineStore('agent', {
         this.tasks = tasks
         this.taskTotal = normalizeTotal(result, tasks.length)
       } catch (error) {
-        this.taskError = error.message || '悬赏榜加载失败，当前显示本地示例'
+        this.taskError = error.message || '悬赏榜加载失败'
         this.setFallbackTasks()
         log.warn('Failed to fetch reward tasks:', error)
       } finally {
