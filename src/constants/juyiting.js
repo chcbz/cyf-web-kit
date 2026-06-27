@@ -250,87 +250,186 @@ export const roleBodyPartProfiles = {
     head: { width: 15, height: 19, y: 10 },
     neck: { width: 8, height: 8 },
     shoulder: { width: 13, height: 12 },
+    pelvis: { width: 30, height: 16 },
+    robeSkirt: { width: 34, height: 30 },
     torso: { widthBias: 0, heightBias: 0, waist: 0.9, chest: 1 },
-    arm: { width: 9, hand: 10, sleeve: 1 },
-    leg: { width: 10, foot: 15, stride: 1 },
+    upperArm: { width: 10, length: 24, sleeve: 1 },
+    forearm: { width: 9, length: 22, sleeve: 1 },
+    hand: { width: 10, height: 9 },
+    thigh: { width: 10, length: 27, stride: 1 },
+    shin: { width: 9, length: 25 },
+    foot: { width: 15, height: 6 },
     prop: { scale: 1, grip: 'right' }
   },
   strategist: {
     head: { width: 14, height: 18, y: 10 },
     neck: { width: 7, height: 8 },
     shoulder: { width: 11, height: 11 },
+    pelvis: { width: 27, height: 15 },
+    robeSkirt: { width: 31, height: 31 },
     torso: { widthBias: -2, heightBias: -1, waist: 0.86, chest: 0.92 },
-    arm: { width: 8, hand: 9, sleeve: 0.9 },
-    leg: { width: 8, foot: 13, stride: 0.76 },
+    upperArm: { width: 8, length: 22, sleeve: 0.9 },
+    forearm: { width: 8, length: 20, sleeve: 0.9 },
+    hand: { width: 9, height: 8 },
+    thigh: { width: 8, length: 25, stride: 0.76 },
+    shin: { width: 8, length: 24 },
+    foot: { width: 13, height: 6 },
     prop: { scale: 0.92, grip: 'right' }
   },
   general: {
     head: { width: 15, height: 19, y: 9 },
     neck: { width: 9, height: 8 },
     shoulder: { width: 15, height: 13 },
+    pelvis: { width: 33, height: 17 },
+    robeSkirt: { width: 37, height: 29 },
     torso: { widthBias: 2, heightBias: 2, waist: 0.94, chest: 1.08 },
-    arm: { width: 10, hand: 11, sleeve: 1.05 },
-    leg: { width: 11, foot: 16, stride: 1.18 },
+    upperArm: { width: 11, length: 26, sleeve: 1.05 },
+    forearm: { width: 10, length: 24, sleeve: 1.05 },
+    hand: { width: 11, height: 10 },
+    thigh: { width: 11, length: 29, stride: 1.18 },
+    shin: { width: 10, length: 26 },
+    foot: { width: 16, height: 7 },
     prop: { scale: 1.08, grip: 'left' }
   },
   brute: {
     head: { width: 16, height: 20, y: 9 },
     neck: { width: 10, height: 9 },
     shoulder: { width: 16, height: 14 },
+    pelvis: { width: 36, height: 18 },
+    robeSkirt: { width: 40, height: 29 },
     torso: { widthBias: 4, heightBias: 3, waist: 1, chest: 1.16 },
-    arm: { width: 11, hand: 12, sleeve: 1.1 },
-    leg: { width: 12, foot: 17, stride: 1.08 },
+    upperArm: { width: 12, length: 28, sleeve: 1.1 },
+    forearm: { width: 11, length: 25, sleeve: 1.1 },
+    hand: { width: 12, height: 11 },
+    thigh: { width: 12, length: 30, stride: 1.08 },
+    shin: { width: 11, length: 27 },
+    foot: { width: 17, height: 7 },
     prop: { scale: 1.14, grip: 'both' }
   },
   river: {
     head: { width: 14, height: 18, y: 10 },
     neck: { width: 8, height: 8 },
     shoulder: { width: 13, height: 12 },
+    pelvis: { width: 30, height: 16 },
+    robeSkirt: { width: 33, height: 27 },
     torso: { widthBias: 0, heightBias: -1, waist: 0.88, chest: 0.98 },
-    arm: { width: 9, hand: 10, sleeve: 0.92 },
-    leg: { width: 10, foot: 15, stride: 1.2 },
+    upperArm: { width: 10, length: 24, sleeve: 0.92 },
+    forearm: { width: 9, length: 22, sleeve: 0.92 },
+    hand: { width: 10, height: 9 },
+    thigh: { width: 10, length: 27, stride: 1.2 },
+    shin: { width: 9, length: 25 },
+    foot: { width: 15, height: 6 },
     prop: { scale: 1.04, grip: 'left' }
   },
   scout: {
     head: { width: 13, height: 18, y: 10 },
     neck: { width: 7, height: 8 },
     shoulder: { width: 10, height: 11 },
+    pelvis: { width: 26, height: 15 },
+    robeSkirt: { width: 29, height: 25 },
     torso: { widthBias: -3, heightBias: -2, waist: 0.82, chest: 0.9 },
-    arm: { width: 8, hand: 9, sleeve: 0.84 },
-    leg: { width: 8, foot: 13, stride: 1.32 },
+    upperArm: { width: 8, length: 22, sleeve: 0.84 },
+    forearm: { width: 8, length: 20, sleeve: 0.84 },
+    hand: { width: 9, height: 8 },
+    thigh: { width: 8, length: 25, stride: 1.32 },
+    shin: { width: 8, length: 24 },
+    foot: { width: 13, height: 6 },
     prop: { scale: 0.9, grip: 'right' }
   },
   healer: {
     head: { width: 14, height: 18, y: 10 },
     neck: { width: 7, height: 8 },
     shoulder: { width: 11, height: 11 },
+    pelvis: { width: 27, height: 15 },
+    robeSkirt: { width: 31, height: 30 },
     torso: { widthBias: -1, heightBias: -1, waist: 0.88, chest: 0.94 },
-    arm: { width: 8, hand: 9, sleeve: 0.88 },
-    leg: { width: 8, foot: 13, stride: 0.82 },
+    upperArm: { width: 8, length: 22, sleeve: 0.88 },
+    forearm: { width: 8, length: 20, sleeve: 0.88 },
+    hand: { width: 9, height: 8 },
+    thigh: { width: 8, length: 25, stride: 0.82 },
+    shin: { width: 8, length: 24 },
+    foot: { width: 13, height: 6 },
     prop: { scale: 0.92, grip: 'right' }
   },
   heroine: {
     head: { width: 13, height: 18, y: 10 },
     neck: { width: 7, height: 8 },
     shoulder: { width: 10, height: 11 },
+    pelvis: { width: 26, height: 15 },
+    robeSkirt: { width: 30, height: 29 },
     torso: { widthBias: -2, heightBias: -2, waist: 0.8, chest: 0.92 },
-    arm: { width: 8, hand: 9, sleeve: 0.86 },
-    leg: { width: 8, foot: 13, stride: 1.08 },
+    upperArm: { width: 8, length: 22, sleeve: 0.86 },
+    forearm: { width: 8, length: 20, sleeve: 0.86 },
+    hand: { width: 9, height: 8 },
+    thigh: { width: 8, length: 25, stride: 1.08 },
+    shin: { width: 8, length: 24 },
+    foot: { width: 13, height: 6 },
     prop: { scale: 0.98, grip: 'right' }
   },
   monk: {
     head: { width: 16, height: 20, y: 8 },
     neck: { width: 9, height: 9 },
     shoulder: { width: 15, height: 13 },
+    pelvis: { width: 34, height: 17 },
+    robeSkirt: { width: 38, height: 29 },
     torso: { widthBias: 2, heightBias: 1, waist: 0.96, chest: 1.08 },
-    arm: { width: 10, hand: 11, sleeve: 1 },
-    leg: { width: 10, foot: 15, stride: 0.96 },
+    upperArm: { width: 11, length: 26, sleeve: 1 },
+    forearm: { width: 10, length: 24, sleeve: 1 },
+    hand: { width: 11, height: 10 },
+    thigh: { width: 10, length: 28, stride: 0.96 },
+    shin: { width: 10, length: 25 },
+    foot: { width: 15, height: 7 },
     prop: { scale: 1.08, grip: 'right' }
   }
 }
 
+const makeBodyRig = ({
+  head,
+  torso,
+  leftArm,
+  rightArm,
+  leftLeg,
+  rightLeg,
+  leftFoot,
+  rightFoot,
+  prop,
+  pelvisSway = 3,
+  robeSway = 3,
+  forearmBend = 12,
+  shinBend = 14
+}) => ({
+  head,
+  neck: { x: head.x, y: head.y + 20 },
+  torso,
+  pelvis: { x: torso.x, y: torso.y + torso.height - 6, sway: pelvisSway },
+  robeSkirt: { x: torso.x, y: torso.y + torso.height - 1, sway: robeSway },
+  leftUpperArm: { x: leftArm.x, y: leftArm.y, rest: leftArm.rest, swing: leftArm.swing },
+  leftForearm: {
+    x: leftArm.x + Math.round(Math.sin((leftArm.rest * Math.PI) / 180) * 18),
+    y: leftArm.y + 20,
+    rest: Math.round(leftArm.rest * 0.62),
+    bend: forearmBend
+  },
+  leftHand: { x: leftArm.x + Math.round(Math.sin((leftArm.rest * Math.PI) / 180) * 28), y: leftArm.y + 43 },
+  rightUpperArm: { x: rightArm.x, y: rightArm.y, rest: rightArm.rest, swing: rightArm.swing },
+  rightForearm: {
+    x: rightArm.x + Math.round(Math.sin((rightArm.rest * Math.PI) / 180) * 18),
+    y: rightArm.y + 20,
+    rest: Math.round(rightArm.rest * 0.62),
+    bend: forearmBend
+  },
+  rightHand: { x: rightArm.x + Math.round(Math.sin((rightArm.rest * Math.PI) / 180) * 28), y: rightArm.y + 43 },
+  leftThigh: { x: leftLeg.x, y: leftLeg.y, rest: leftLeg.rest, stride: leftLeg.stride },
+  leftShin: { x: leftLeg.x + Math.round(Math.sin((leftLeg.rest * Math.PI) / 180) * 14), y: leftLeg.y + 25, rest: Math.round(leftLeg.rest * 0.5), bend: shinBend },
+  rightThigh: { x: rightLeg.x, y: rightLeg.y, rest: rightLeg.rest, stride: rightLeg.stride },
+  rightShin: { x: rightLeg.x + Math.round(Math.sin((rightLeg.rest * Math.PI) / 180) * 14), y: rightLeg.y + 25, rest: Math.round(rightLeg.rest * 0.5), bend: shinBend },
+  leftFoot,
+  rightFoot,
+  prop
+})
+
 export const roleBodyRigs = {
-  leader: {
+  leader: makeBodyRig({
     head: { x: 50, y: 10, turn: 3 },
     torso: { x: 50, y: 40, width: 35, height: 48, tilt: -1 },
     leftArm: { x: 18, y: 47, length: 34, rest: 12, swing: 9 },
@@ -340,8 +439,8 @@ export const roleBodyRigs = {
     leftFoot: { x: 23, y: 113, step: 3 },
     rightFoot: { x: 39, y: 113, step: 3 },
     prop: { x: 54, y: 40, angle: -12, swing: 4 }
-  },
-  strategist: {
+  }),
+  strategist: makeBodyRig({
     head: { x: 50, y: 10, turn: 4 },
     torso: { x: 50, y: 40, width: 31, height: 46, tilt: 0 },
     leftArm: { x: 21, y: 47, length: 31, rest: 8, swing: 6 },
@@ -351,8 +450,8 @@ export const roleBodyRigs = {
     leftFoot: { x: 24, y: 112, step: 2 },
     rightFoot: { x: 38, y: 112, step: 2 },
     prop: { x: 60, y: 38, angle: -22, swing: 10 }
-  },
-  general: {
+  }),
+  general: makeBodyRig({
     head: { x: 50, y: 9, turn: 3 },
     torso: { x: 50, y: 39, width: 38, height: 50, tilt: -2 },
     leftArm: { x: 15, y: 47, length: 36, rest: 17, swing: 16 },
@@ -362,8 +461,8 @@ export const roleBodyRigs = {
     leftFoot: { x: 21, y: 114, step: 5 },
     rightFoot: { x: 42, y: 114, step: 5 },
     prop: { x: 18, y: 5, angle: 12, swing: 8 }
-  },
-  brute: {
+  }),
+  brute: makeBodyRig({
     head: { x: 50, y: 9, turn: 2 },
     torso: { x: 50, y: 39, width: 41, height: 51, tilt: 3 },
     leftArm: { x: 13, y: 47, length: 38, rest: 22, swing: 20 },
@@ -373,8 +472,8 @@ export const roleBodyRigs = {
     leftFoot: { x: 20, y: 115, step: 5 },
     rightFoot: { x: 44, y: 115, step: 5 },
     prop: { x: 19, y: 46, angle: -24, swing: 14 }
-  },
-  river: {
+  }),
+  river: makeBodyRig({
     head: { x: 50, y: 10, turn: 4 },
     torso: { x: 50, y: 40, width: 34, height: 46, tilt: -4 },
     leftArm: { x: 17, y: 47, length: 34, rest: 15, swing: 18 },
@@ -384,8 +483,8 @@ export const roleBodyRigs = {
     leftFoot: { x: 22, y: 113, step: 6 },
     rightFoot: { x: 41, y: 113, step: 6 },
     prop: { x: 17, y: 14, angle: 10, swing: 10 }
-  },
-  scout: {
+  }),
+  scout: makeBodyRig({
     head: { x: 50, y: 10, turn: 6 },
     torso: { x: 50, y: 40, width: 30, height: 44, tilt: -6 },
     leftArm: { x: 21, y: 47, length: 31, rest: 18, swing: 22 },
@@ -395,8 +494,8 @@ export const roleBodyRigs = {
     leftFoot: { x: 23, y: 112, step: 8 },
     rightFoot: { x: 39, y: 112, step: 8 },
     prop: { x: 59, y: 45, angle: 18, swing: 16 }
-  },
-  healer: {
+  }),
+  healer: makeBodyRig({
     head: { x: 50, y: 10, turn: 3 },
     torso: { x: 50, y: 40, width: 31, height: 46, tilt: 1 },
     leftArm: { x: 21, y: 48, length: 30, rest: 7, swing: 5 },
@@ -406,8 +505,8 @@ export const roleBodyRigs = {
     leftFoot: { x: 24, y: 112, step: 2 },
     rightFoot: { x: 38, y: 112, step: 2 },
     prop: { x: 60, y: 47, angle: 6, swing: 3 }
-  },
-  heroine: {
+  }),
+  heroine: makeBodyRig({
     head: { x: 50, y: 10, turn: 5 },
     torso: { x: 50, y: 40, width: 32, height: 44, tilt: -3 },
     leftArm: { x: 20, y: 47, length: 31, rest: 14, swing: 14 },
@@ -417,8 +516,8 @@ export const roleBodyRigs = {
     leftFoot: { x: 23, y: 112, step: 5 },
     rightFoot: { x: 39, y: 112, step: 5 },
     prop: { x: 60, y: 39, angle: 18, swing: 11 }
-  },
-  monk: {
+  }),
+  monk: makeBodyRig({
     head: { x: 50, y: 8, turn: 2 },
     torso: { x: 50, y: 39, width: 38, height: 49, tilt: 2 },
     leftArm: { x: 16, y: 47, length: 35, rest: 16, swing: 13 },
@@ -428,7 +527,7 @@ export const roleBodyRigs = {
     leftFoot: { x: 22, y: 114, step: 4 },
     rightFoot: { x: 41, y: 114, step: 4 },
     prop: { x: 60, y: 25, angle: -10, swing: 7 }
-  }
+  })
 }
 
 const robePalette = [

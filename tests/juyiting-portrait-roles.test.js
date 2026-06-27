@@ -133,7 +133,26 @@ describe('JuyiHall portrait roles', () => {
   })
 
   it('defines articulated body rigs for every realistic body type', () => {
-    const requiredParts = ['head', 'torso', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg', 'leftFoot', 'rightFoot', 'prop']
+    const requiredParts = [
+      'head',
+      'neck',
+      'torso',
+      'pelvis',
+      'robeSkirt',
+      'leftUpperArm',
+      'leftForearm',
+      'leftHand',
+      'rightUpperArm',
+      'rightForearm',
+      'rightHand',
+      'leftThigh',
+      'leftShin',
+      'leftFoot',
+      'rightThigh',
+      'rightShin',
+      'rightFoot',
+      'prop'
+    ]
     const roleBodyRigs = juyitingConstants.roleBodyRigs
 
     expect(roleBodyRigs).to.be.an('object')
@@ -145,16 +164,21 @@ describe('JuyiHall portrait roles', () => {
         expect(rig[part], `missing ${part} rig for ${bodyType}`).to.be.an('object')
       }
       expect(rig.torso.tilt).to.be.within(-8, 8)
-      expect(rig.leftArm.swing).to.be.within(4, 26)
-      expect(rig.rightArm.swing).to.be.within(4, 26)
-      expect(rig.leftLeg.stride).to.be.within(4, 24)
-      expect(rig.rightLeg.stride).to.be.within(4, 24)
+      expect(rig.pelvis.sway).to.be.within(1, 6)
+      expect(rig.leftUpperArm.swing).to.be.within(4, 26)
+      expect(rig.leftForearm.bend).to.be.within(4, 28)
+      expect(rig.rightUpperArm.swing).to.be.within(4, 26)
+      expect(rig.rightForearm.bend).to.be.within(4, 28)
+      expect(rig.leftThigh.stride).to.be.within(4, 24)
+      expect(rig.leftShin.bend).to.be.within(4, 30)
+      expect(rig.rightThigh.stride).to.be.within(4, 24)
+      expect(rig.rightShin.bend).to.be.within(4, 30)
       expect(rig.prop.swing).to.be.within(0, 22)
     }
   })
 
   it('defines realistic body part profiles for every body type', () => {
-    const requiredParts = ['head', 'neck', 'shoulder', 'torso', 'arm', 'leg', 'prop']
+    const requiredParts = ['head', 'neck', 'shoulder', 'torso', 'pelvis', 'robeSkirt', 'upperArm', 'forearm', 'hand', 'thigh', 'shin', 'foot', 'prop']
     expect(roleBodyPartProfiles).to.be.an('object')
 
     for (const bodyType of Object.keys(roleBodyVisuals)) {
@@ -165,8 +189,12 @@ describe('JuyiHall portrait roles', () => {
       }
       expect(profile.head.height).to.be.within(18, 20)
       expect(profile.torso.chest).to.be.within(0.9, 1.18)
-      expect(profile.arm.hand).to.be.within(9, 12)
-      expect(profile.leg.foot).to.be.within(13, 17)
+      expect(profile.upperArm.length).to.be.within(20, 30)
+      expect(profile.forearm.length).to.be.within(18, 28)
+      expect(profile.hand.width).to.be.within(8, 12)
+      expect(profile.thigh.length).to.be.within(22, 34)
+      expect(profile.shin.length).to.be.within(20, 32)
+      expect(profile.foot.width).to.be.within(13, 17)
     }
   })
 
@@ -176,9 +204,13 @@ describe('JuyiHall portrait roles', () => {
     expect(agentTokenSource).to.include('rigStyle')
     expect(agentTokenSource).to.include('agent-rig-part')
     expect(agentTokenSource).to.include('--part-head-width')
-    expect(agentTokenSource).to.include('--left-arm-swing')
-    expect(agentTokenSource).to.include('--left-leg-stride')
+    expect(agentTokenSource).to.include('--left-upper-arm-swing')
+    expect(agentTokenSource).to.include('--left-forearm-bend')
+    expect(agentTokenSource).to.include('--left-thigh-stride')
+    expect(agentTokenSource).to.include('--left-shin-bend')
     expect(agentTokenSource).to.include('--prop-anchor-x')
+    expect(agentTokenSource).not.to.include('liangshan-character-atlas')
+    expect(agentTokenSource).not.to.include('agent-costume')
     expect(agentTokenSource).not.to.include('characterBodyAtlas')
     expect(agentTokenSource).not.to.include('agent-body-sprite')
   })
