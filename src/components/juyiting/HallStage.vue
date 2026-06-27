@@ -64,6 +64,10 @@
             @click.stop="openZone(zone)"
           >
             <span class="sr-only">{{ objectAriaLabel(zone) }}</span>
+            <span class="hall-room-label" aria-hidden="true">
+              <span>{{ zone.title }}</span>
+              <span class="hall-room-subtitle">{{ zoneSubtitle(zone) }}</span>
+            </span>
           </button>
           <div
             v-else
@@ -557,7 +561,7 @@ button.hall-room {
   content: '';
   position: absolute;
   pointer-events: none;
-  opacity: 0;
+  opacity: 0.38;
   transition:
     opacity 0.16s ease,
     transform 0.16s ease,
@@ -573,7 +577,7 @@ button.hall-room {
     inset 0 0 16px rgba(255, 238, 178, 0.24),
     0 0 18px rgba(235, 178, 62, 0.2);
   mix-blend-mode: screen;
-  transform: scale(0.94);
+  transform: scale(0.96);
 }
 
 .hall-room::after {
@@ -587,18 +591,89 @@ button.hall-room {
   filter: blur(8px);
 }
 
+.hall-room-label {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 2px);
+  z-index: 2;
+  display: grid;
+  min-width: 52px;
+  max-width: 94px;
+  padding: 3px 6px 4px;
+  transform: translateX(-50%) rotate(calc(var(--object-tilt, 0deg) * -1));
+  border: 1px solid rgba(91, 52, 24, 0.4);
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg, rgba(255, 250, 226, 0.94), rgba(230, 199, 139, 0.88));
+  color: #432813;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 244, 210, 0.36),
+    0 5px 10px rgba(48, 28, 14, 0.2);
+  font-family: serif;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: 0;
+  opacity: 0.86;
+  pointer-events: none;
+  text-align: center;
+  text-shadow: 0 1px 0 rgba(255, 244, 210, 0.72);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    filter 0.16s ease;
+}
+
+.hall-room-label::before,
+.hall-room-label::after {
+  content: '';
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  height: 1px;
+  background: rgba(91, 52, 24, 0.42);
+}
+
+.hall-room-label::before {
+  top: 2px;
+}
+
+.hall-room-label::after {
+  bottom: 2px;
+}
+
+.hall-room-subtitle {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: rgba(67, 40, 19, 0.76);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 button.hall-room:hover::before,
 button.hall-room:focus-visible::before,
 button.hall-room:active::before {
-  opacity: 1;
+  opacity: 0.95;
   transform: scale(1);
 }
 
 button.hall-room:hover::after,
 button.hall-room:focus-visible::after,
 button.hall-room:active::after {
-  opacity: 1;
+  opacity: 0.9;
   transform: translateX(-50%) scaleX(1);
+}
+
+button.hall-room:hover .hall-room-label,
+button.hall-room:focus-visible .hall-room-label,
+button.hall-room:active .hall-room-label {
+  opacity: 1;
+  filter: saturate(1.08);
+  transform: translateX(-50%) translateY(-2px) rotate(calc(var(--object-tilt, 0deg) * -1));
 }
 
 button.hall-room:focus-visible {

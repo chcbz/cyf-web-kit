@@ -230,6 +230,105 @@ export const roleBodyVisuals = {
   }
 }
 
+export const bodyPartAnatomy = {
+  anchor: 'feet-center',
+  heightUnitPx: 128,
+  proportions: {
+    head: { height: [0.14, 0.155], width: [0.095, 0.13] },
+    neck: { height: [0.045, 0.07], width: [0.045, 0.07] },
+    shoulders: { width: [0.28, 0.38] },
+    torso: { height: [0.34, 0.4], width: [0.24, 0.36] },
+    arm: { height: [0.26, 0.32], width: [0.055, 0.09] },
+    hand: { height: [0.06, 0.08], width: [0.055, 0.08] },
+    leg: { height: [0.23, 0.28], width: [0.06, 0.09] },
+    foot: { height: [0.045, 0.06], width: [0.11, 0.16] }
+  }
+}
+
+export const roleBodyPartProfiles = {
+  leader: {
+    head: { width: 15, height: 19, y: 10 },
+    neck: { width: 8, height: 8 },
+    shoulder: { width: 13, height: 12 },
+    torso: { widthBias: 0, heightBias: 0, waist: 0.9, chest: 1 },
+    arm: { width: 9, hand: 10, sleeve: 1 },
+    leg: { width: 10, foot: 15, stride: 1 },
+    prop: { scale: 1, grip: 'right' }
+  },
+  strategist: {
+    head: { width: 14, height: 18, y: 10 },
+    neck: { width: 7, height: 8 },
+    shoulder: { width: 11, height: 11 },
+    torso: { widthBias: -2, heightBias: -1, waist: 0.86, chest: 0.92 },
+    arm: { width: 8, hand: 9, sleeve: 0.9 },
+    leg: { width: 8, foot: 13, stride: 0.76 },
+    prop: { scale: 0.92, grip: 'right' }
+  },
+  general: {
+    head: { width: 15, height: 19, y: 9 },
+    neck: { width: 9, height: 8 },
+    shoulder: { width: 15, height: 13 },
+    torso: { widthBias: 2, heightBias: 2, waist: 0.94, chest: 1.08 },
+    arm: { width: 10, hand: 11, sleeve: 1.05 },
+    leg: { width: 11, foot: 16, stride: 1.18 },
+    prop: { scale: 1.08, grip: 'left' }
+  },
+  brute: {
+    head: { width: 16, height: 20, y: 9 },
+    neck: { width: 10, height: 9 },
+    shoulder: { width: 16, height: 14 },
+    torso: { widthBias: 4, heightBias: 3, waist: 1, chest: 1.16 },
+    arm: { width: 11, hand: 12, sleeve: 1.1 },
+    leg: { width: 12, foot: 17, stride: 1.08 },
+    prop: { scale: 1.14, grip: 'both' }
+  },
+  river: {
+    head: { width: 14, height: 18, y: 10 },
+    neck: { width: 8, height: 8 },
+    shoulder: { width: 13, height: 12 },
+    torso: { widthBias: 0, heightBias: -1, waist: 0.88, chest: 0.98 },
+    arm: { width: 9, hand: 10, sleeve: 0.92 },
+    leg: { width: 10, foot: 15, stride: 1.2 },
+    prop: { scale: 1.04, grip: 'left' }
+  },
+  scout: {
+    head: { width: 13, height: 18, y: 10 },
+    neck: { width: 7, height: 8 },
+    shoulder: { width: 10, height: 11 },
+    torso: { widthBias: -3, heightBias: -2, waist: 0.82, chest: 0.9 },
+    arm: { width: 8, hand: 9, sleeve: 0.84 },
+    leg: { width: 8, foot: 13, stride: 1.32 },
+    prop: { scale: 0.9, grip: 'right' }
+  },
+  healer: {
+    head: { width: 14, height: 18, y: 10 },
+    neck: { width: 7, height: 8 },
+    shoulder: { width: 11, height: 11 },
+    torso: { widthBias: -1, heightBias: -1, waist: 0.88, chest: 0.94 },
+    arm: { width: 8, hand: 9, sleeve: 0.88 },
+    leg: { width: 8, foot: 13, stride: 0.82 },
+    prop: { scale: 0.92, grip: 'right' }
+  },
+  heroine: {
+    head: { width: 13, height: 18, y: 10 },
+    neck: { width: 7, height: 8 },
+    shoulder: { width: 10, height: 11 },
+    torso: { widthBias: -2, heightBias: -2, waist: 0.8, chest: 0.92 },
+    arm: { width: 8, hand: 9, sleeve: 0.86 },
+    leg: { width: 8, foot: 13, stride: 1.08 },
+    prop: { scale: 0.98, grip: 'right' }
+  },
+  monk: {
+    head: { width: 16, height: 20, y: 8 },
+    neck: { width: 9, height: 9 },
+    shoulder: { width: 15, height: 13 },
+    torso: { widthBias: 2, heightBias: 1, waist: 0.96, chest: 1.08 },
+    arm: { width: 10, hand: 11, sleeve: 1 },
+    leg: { width: 10, foot: 15, stride: 0.96 },
+    prop: { scale: 1.08, grip: 'right' }
+  }
+}
+
 export const roleBodyRigs = {
   leader: {
     head: { x: 50, y: 10, turn: 3 },

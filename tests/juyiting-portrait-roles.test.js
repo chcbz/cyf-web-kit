@@ -3,10 +3,12 @@ import { expect } from 'chai'
 import * as juyitingConstants from '../src/constants/juyiting.js'
 
 const {
+  bodyPartAnatomy,
   bodyTypeByMotif,
   hallPhysicalScene,
   hallScale,
   portraitRoles,
+  roleBodyPartProfiles,
   roleBodyVisuals
 } = juyitingConstants
 
@@ -89,7 +91,7 @@ describe('JuyiHall portrait roles', () => {
     expect(portraitSource).to.include('roleByCode(agent?.agentId)')
   })
 
-  it('maps every role motif to a realistic full-body atlas posture', () => {
+  it('maps every role motif to a realistic articulated body posture', () => {
     const visualKeys = new Set(Object.keys(roleBodyVisuals))
 
     for (const motif of new Set(portraitRoles.map(role => role.motif))) {
@@ -105,7 +107,7 @@ describe('JuyiHall portrait roles', () => {
     }
   })
 
-  it('keeps full-body atlas and hall scale proportions physically plausible', () => {
+  it('keeps articulated body metadata and hall scale proportions physically plausible', () => {
     expect(hallScale.personHeightPct).to.be.within(9, 13)
     expect(hallScale.personFootprintPct.width / hallScale.personHeightPct).to.be.within(0.2, 0.3)
     expect(hallScale.personFootprintPct.height / hallScale.personHeightPct).to.be.within(0.08, 0.12)
@@ -118,10 +120,11 @@ describe('JuyiHall portrait roles', () => {
     expect(hallScale.propRatios.recruitDrum).to.be.within(0.6, 0.7)
     expect(hallScale.propRatios.weaponRack).to.be.within(1.25, 1.4)
     expect(hallScale.propRatios.pillarDiameter).to.be.within(0.22, 0.28)
+    expect(bodyPartAnatomy.anchor).to.equal('feet-center')
+    expect(bodyPartAnatomy.proportions.head.height[0]).to.be.greaterThan(0.13)
+    expect(bodyPartAnatomy.proportions.foot.width[1]).to.be.lessThan(0.18)
 
     for (const visual of Object.values(roleBodyVisuals)) {
-      expect(visual.column).to.be.within(0, 2)
-      expect(visual.row).to.be.within(0, 2)
       expect(visual.width).to.be.within(0.54, 0.74)
       expect(visual.height).to.be.within(0.98, 1.05)
       expect(visual.headScale).to.be.within(0.84, 0.95)
@@ -150,13 +153,34 @@ describe('JuyiHall portrait roles', () => {
     }
   })
 
-  it('renders agent bodies from articulated rig variables instead of hardcoded limb motion only', () => {
+  it('defines realistic body part profiles for every body type', () => {
+    const requiredParts = ['head', 'neck', 'shoulder', 'torso', 'arm', 'leg', 'prop']
+    expect(roleBodyPartProfiles).to.be.an('object')
+
+    for (const bodyType of Object.keys(roleBodyVisuals)) {
+      const profile = roleBodyPartProfiles[bodyType]
+      expect(profile, `missing body part profile for ${bodyType}`).to.be.an('object')
+      for (const part of requiredParts) {
+        expect(profile[part], `missing ${part} profile for ${bodyType}`).to.be.an('object')
+      }
+      expect(profile.head.height).to.be.within(18, 20)
+      expect(profile.torso.chest).to.be.within(0.9, 1.18)
+      expect(profile.arm.hand).to.be.within(9, 12)
+      expect(profile.leg.foot).to.be.within(13, 17)
+    }
+  })
+
+  it('renders agent bodies from articulated body metadata instead of a full-body background atlas', () => {
     expect(agentTokenSource).to.include('roleBodyRigs')
+    expect(agentTokenSource).to.include('roleBodyPartProfiles')
     expect(agentTokenSource).to.include('rigStyle')
     expect(agentTokenSource).to.include('agent-rig-part')
+    expect(agentTokenSource).to.include('--part-head-width')
     expect(agentTokenSource).to.include('--left-arm-swing')
     expect(agentTokenSource).to.include('--left-leg-stride')
     expect(agentTokenSource).to.include('--prop-anchor-x')
+    expect(agentTokenSource).not.to.include('characterBodyAtlas')
+    expect(agentTokenSource).not.to.include('agent-body-sprite')
   })
 
   it('keeps the physical hall scene walkable and wired to known panels', () => {
