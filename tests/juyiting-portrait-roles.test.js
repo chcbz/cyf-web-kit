@@ -1,15 +1,21 @@
 import { existsSync, readFileSync } from 'fs'
 import { expect } from 'chai'
-import {
+import * as juyitingConstants from '../src/constants/juyiting.js'
+
+const {
   bodyTypeByMotif,
   hallPhysicalScene,
   hallScale,
   portraitRoles,
   roleBodyVisuals
-} from '../src/constants/juyiting.js'
+} = juyitingConstants
 
 const portraitSource = readFileSync(
   new URL('../src/composables/juyiting/useWaterMarginRoles.js', import.meta.url),
+  'utf8'
+)
+const agentTokenSource = readFileSync(
+  new URL('../src/components/juyiting/AgentToken.vue', import.meta.url),
   'utf8'
 )
 
@@ -121,6 +127,36 @@ describe('JuyiHall portrait roles', () => {
       expect(visual.headScale).to.be.within(0.84, 0.95)
       expect(visual.shoulderWidth).to.be.within(0.27, 0.38)
     }
+  })
+
+  it('defines articulated body rigs for every realistic body type', () => {
+    const requiredParts = ['head', 'torso', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg', 'leftFoot', 'rightFoot', 'prop']
+    const roleBodyRigs = juyitingConstants.roleBodyRigs
+
+    expect(roleBodyRigs).to.be.an('object')
+
+    for (const bodyType of Object.keys(roleBodyVisuals)) {
+      const rig = roleBodyRigs[bodyType]
+      expect(rig, `missing rig for ${bodyType}`).to.be.an('object')
+      for (const part of requiredParts) {
+        expect(rig[part], `missing ${part} rig for ${bodyType}`).to.be.an('object')
+      }
+      expect(rig.torso.tilt).to.be.within(-8, 8)
+      expect(rig.leftArm.swing).to.be.within(4, 26)
+      expect(rig.rightArm.swing).to.be.within(4, 26)
+      expect(rig.leftLeg.stride).to.be.within(4, 24)
+      expect(rig.rightLeg.stride).to.be.within(4, 24)
+      expect(rig.prop.swing).to.be.within(0, 22)
+    }
+  })
+
+  it('renders agent bodies from articulated rig variables instead of hardcoded limb motion only', () => {
+    expect(agentTokenSource).to.include('roleBodyRigs')
+    expect(agentTokenSource).to.include('rigStyle')
+    expect(agentTokenSource).to.include('agent-rig-part')
+    expect(agentTokenSource).to.include('--left-arm-swing')
+    expect(agentTokenSource).to.include('--left-leg-stride')
+    expect(agentTokenSource).to.include('--prop-anchor-x')
   })
 
   it('keeps the physical hall scene walkable and wired to known panels', () => {

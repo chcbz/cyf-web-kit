@@ -7,38 +7,38 @@
   >
     <span v-if="bubbleText" class="agent-dialogue">{{ bubbleText }}</span>
     <span class="agent-shadow"></span>
-    <span class="agent-figure" :title="portraitName(agent)">
+    <span class="agent-figure" :style="rigStyle" :title="portraitName(agent)">
       <span
-        class="agent-body-sprite"
+        class="agent-body-sprite agent-rig-part rig-body-sprite"
         :class="bodyClass"
         :style="bodySpriteStyle"
       ></span>
-      <span class="agent-weapon"></span>
-      <span class="agent-cape"></span>
-      <span class="agent-hat"></span>
-      <span class="agent-neck"></span>
+      <span class="agent-weapon agent-rig-part rig-prop"></span>
+      <span class="agent-cape agent-rig-part rig-cape"></span>
+      <span class="agent-hat agent-rig-part rig-headwear"></span>
+      <span class="agent-neck agent-rig-part rig-neck"></span>
       <span
-        class="agent-costume"
+        class="agent-costume agent-rig-part rig-costume"
         :class="costumeClass"
         :style="costumeStyle"
       ></span>
       <span
-        class="agent-head portrait-avatar"
+        class="agent-head portrait-avatar agent-rig-part rig-head"
         :style="portraitStyle(agent)"
       ></span>
-      <span class="agent-shoulder agent-shoulder-left"></span>
-      <span class="agent-shoulder agent-shoulder-right"></span>
-      <span class="agent-arm agent-arm-left"></span>
-      <span class="agent-arm agent-arm-right"></span>
-      <span class="agent-body">
+      <span class="agent-shoulder agent-shoulder-left agent-rig-part rig-shoulder-left"></span>
+      <span class="agent-shoulder agent-shoulder-right agent-rig-part rig-shoulder-right"></span>
+      <span class="agent-arm agent-arm-left agent-rig-part rig-arm-left"></span>
+      <span class="agent-arm agent-arm-right agent-rig-part rig-arm-right"></span>
+      <span class="agent-body agent-rig-part rig-torso">
         <span class="agent-sash"></span>
         <span class="agent-emblem"></span>
       </span>
-      <span class="agent-leg agent-leg-left"></span>
-      <span class="agent-leg agent-leg-right"></span>
-      <span class="agent-boot agent-boot-left"></span>
-      <span class="agent-boot agent-boot-right"></span>
-      <span class="agent-accessory"></span>
+      <span class="agent-leg agent-leg-left agent-rig-part rig-leg-left"></span>
+      <span class="agent-leg agent-leg-right agent-rig-part rig-leg-right"></span>
+      <span class="agent-boot agent-boot-left agent-rig-part rig-foot-left"></span>
+      <span class="agent-boot agent-boot-right agent-rig-part rig-foot-right"></span>
+      <span class="agent-accessory agent-rig-part rig-prop-secondary"></span>
     </span>
     <span class="agent-name-tag">{{ portraitShortName(agent) }}</span>
     <span class="agent-status-badge">{{ statusText(agent.status) }}</span>
@@ -49,7 +49,7 @@
 import { computed } from 'vue'
 import characterBodyAtlas from '@/assets/juyiting/liangshan-character-body-atlas-v1.png'
 import characterAtlas from '@/assets/juyiting/liangshan-character-atlas-v2.png'
-import { roleBodyVisuals, roleCostumeVisuals } from '@/constants/juyiting'
+import { roleBodyRigs, roleBodyVisuals, roleCostumeVisuals } from '@/constants/juyiting'
 import { portraitRole } from '@/composables/juyiting/useWaterMarginRoles'
 
 const props = defineProps({
@@ -81,7 +81,56 @@ const bodyConfig = computed(() => {
   return roleBodyVisuals[role.bodyType] || roleBodyVisuals.leader
 })
 
+const rigConfig = computed(() => {
+  const role = portraitRole(props.agent)
+  return roleBodyRigs[role.bodyType] || roleBodyRigs.leader
+})
+
 const bodyClass = computed(() => `body-${portraitRole(props.agent).bodyType || 'leader'}`)
+
+const rigStyle = computed(() => {
+  const rig = rigConfig.value
+  return {
+    '--head-x': `${rig.head.x}%`,
+    '--head-y': `${rig.head.y}px`,
+    '--head-turn': `${rig.head.turn}deg`,
+    '--torso-x': `${rig.torso.x}%`,
+    '--torso-y': `${rig.torso.y}px`,
+    '--torso-width': `${rig.torso.width}px`,
+    '--torso-height': `${rig.torso.height}px`,
+    '--torso-tilt': `${rig.torso.tilt}deg`,
+    '--left-arm-x': `${rig.leftArm.x}px`,
+    '--left-arm-y': `${rig.leftArm.y}px`,
+    '--left-arm-length': `${rig.leftArm.length}px`,
+    '--left-arm-rest': `${rig.leftArm.rest}deg`,
+    '--left-arm-swing': `${rig.leftArm.swing}deg`,
+    '--right-arm-x': `${rig.rightArm.x}px`,
+    '--right-arm-y': `${rig.rightArm.y}px`,
+    '--right-arm-length': `${rig.rightArm.length}px`,
+    '--right-arm-rest': `${rig.rightArm.rest}deg`,
+    '--right-arm-swing': `${rig.rightArm.swing}deg`,
+    '--left-leg-x': `${rig.leftLeg.x}px`,
+    '--left-leg-y': `${rig.leftLeg.y}px`,
+    '--left-leg-length': `${rig.leftLeg.length}px`,
+    '--left-leg-rest': `${rig.leftLeg.rest}deg`,
+    '--left-leg-stride': `${rig.leftLeg.stride}deg`,
+    '--right-leg-x': `${rig.rightLeg.x}px`,
+    '--right-leg-y': `${rig.rightLeg.y}px`,
+    '--right-leg-length': `${rig.rightLeg.length}px`,
+    '--right-leg-rest': `${rig.rightLeg.rest}deg`,
+    '--right-leg-stride': `${rig.rightLeg.stride}deg`,
+    '--left-foot-x': `${rig.leftFoot.x}px`,
+    '--left-foot-y': `${rig.leftFoot.y}px`,
+    '--left-foot-step': `${rig.leftFoot.step}px`,
+    '--right-foot-x': `${rig.rightFoot.x}px`,
+    '--right-foot-y': `${rig.rightFoot.y}px`,
+    '--right-foot-step': `${rig.rightFoot.step}px`,
+    '--prop-anchor-x': `${rig.prop.x}px`,
+    '--prop-anchor-y': `${rig.prop.y}px`,
+    '--prop-angle': `${rig.prop.angle}deg`,
+    '--prop-swing': `${rig.prop.swing}deg`
+  }
+})
 
 const bodySpriteStyle = computed(() => {
   const config = bodyConfig.value
@@ -233,10 +282,14 @@ const costumeStyle = computed(() => {
   pointer-events: none;
 }
 
+.agent-rig-part {
+  pointer-events: none;
+}
+
 .agent-head {
   position: absolute;
-  left: 50%;
-  top: 10px;
+  left: var(--head-x, 50%);
+  top: var(--head-y, 10px);
   width: calc(17px * var(--head-scale, 0.9));
   height: calc(20px * var(--head-scale, 0.9));
   transform: translateX(-50%) scaleX(var(--face, 1));
@@ -268,8 +321,8 @@ const costumeStyle = computed(() => {
 
 .agent-neck {
   position: absolute;
-  left: 50%;
-  top: 29px;
+  left: var(--head-x, 50%);
+  top: calc(var(--head-y, 10px) + 19px);
   z-index: 5;
   width: 8px;
   height: 8px;
@@ -313,15 +366,21 @@ const costumeStyle = computed(() => {
 
 .agent-weapon {
   z-index: 1;
+  left: var(--prop-anchor-x, 0);
+  top: var(--prop-anchor-y, 14px);
+  transform-origin: 50% 88%;
 }
 
 .agent-accessory {
   z-index: 7;
+  left: var(--prop-anchor-x, 54px);
+  top: var(--prop-anchor-y, 42px);
+  transform-origin: 50% 88%;
   animation: propGesture var(--idle-speed, 2.8s) ease-in-out infinite;
 }
 
 .agent-shoulder {
-  top: 36px;
+  top: calc(var(--torso-y, 40px) - 4px);
   z-index: 6;
   width: 13px;
   height: 12px;
@@ -331,20 +390,20 @@ const costumeStyle = computed(() => {
 }
 
 .agent-shoulder-left {
-  left: 9px;
+  left: calc(var(--left-arm-x, 17px) - 8px);
 }
 
 .agent-shoulder-right {
-  right: 9px;
+  left: calc(var(--right-arm-x, 59px) - 5px);
 }
 
 .agent-body {
   position: absolute;
-  left: 50%;
-  top: 40px;
-  width: calc(30px + (var(--shoulder-width, 0.32) * 16px));
-  height: 48px;
-  transform: translateX(-50%) skewX(calc(var(--body-stance, 0.2) * -2deg));
+  left: var(--torso-x, 50%);
+  top: var(--torso-y, 40px);
+  width: var(--torso-width, calc(30px + (var(--shoulder-width, 0.32) * 16px)));
+  height: var(--torso-height, 48px);
+  transform: translateX(-50%) rotate(var(--torso-tilt, 0deg)) skewX(calc(var(--body-stance, 0.2) * -2deg));
   border-radius: 13px 13px 11px 11px;
   background:
     linear-gradient(135deg, transparent 42%, rgba(255, 255, 255, 0.26) 43%, transparent 47%),
@@ -387,9 +446,9 @@ const costumeStyle = computed(() => {
 }
 
 .agent-arm {
-  top: 48px;
+  top: var(--left-arm-y, 48px);
   width: 8px;
-  height: 35px;
+  height: var(--left-arm-length, 35px);
   border-radius: 8px;
   transform-origin: 50% 4px;
   z-index: 5;
@@ -410,21 +469,23 @@ const costumeStyle = computed(() => {
 }
 
 .agent-arm-left {
-  left: calc(17px - var(--body-stance, 0.2) * 4px);
+  left: var(--left-arm-x, 17px);
   animation: agentArmLeft var(--step-speed, 0.72s) ease-in-out infinite;
   animation-play-state: var(--walk-play-state, running);
 }
 
 .agent-arm-right {
-  right: calc(17px - var(--body-stance, 0.2) * 4px);
+  left: var(--right-arm-x, 59px);
+  top: var(--right-arm-y, 48px);
+  height: var(--right-arm-length, 35px);
   animation: agentArmRight var(--step-speed, 0.72s) ease-in-out infinite;
   animation-play-state: var(--walk-play-state, running);
 }
 
 .agent-leg {
-  top: 82px;
+  top: var(--left-leg-y, 82px);
   width: 9px;
-  height: 31px;
+  height: var(--left-leg-length, 31px);
   border-radius: 8px 8px 6px 6px;
   transform-origin: 50% 2px;
   z-index: 2;
@@ -432,20 +493,22 @@ const costumeStyle = computed(() => {
 }
 
 .agent-leg-left {
-  left: calc(26px - var(--body-stance, 0.2) * 5px);
+  left: var(--left-leg-x, 26px);
   animation: agentLegLeft var(--step-speed, 0.72s) ease-in-out infinite;
   animation-play-state: var(--walk-play-state, running);
 }
 
 .agent-leg-right {
-  right: calc(26px - var(--body-stance, 0.2) * 5px);
+  left: var(--right-leg-x, 41px);
+  top: var(--right-leg-y, 82px);
+  height: var(--right-leg-length, 31px);
   animation: agentLegRight var(--step-speed, 0.72s) ease-in-out infinite;
   animation-play-state: var(--walk-play-state, running);
 }
 
 .agent-boot {
   position: absolute;
-  top: 113px;
+  top: var(--left-foot-y, 113px);
   z-index: 7;
   width: 15px;
   height: 6px;
@@ -457,14 +520,15 @@ const costumeStyle = computed(() => {
 }
 
 .agent-boot-left {
-  left: calc(22px - var(--body-stance, 0.2) * 5px);
+  left: var(--left-foot-x, 22px);
   transform-origin: 75% 50%;
   animation: agentBootLeft var(--step-speed, 0.72s) ease-in-out infinite;
   animation-play-state: var(--walk-play-state, running);
 }
 
 .agent-boot-right {
-  right: calc(22px - var(--body-stance, 0.2) * 5px);
+  left: var(--right-foot-x, 39px);
+  top: var(--right-foot-y, 113px);
   transform-origin: 25% 50%;
   animation: agentBootRight var(--step-speed, 0.72s) ease-in-out infinite;
   animation-play-state: var(--walk-play-state, running);
@@ -702,6 +766,8 @@ const costumeStyle = computed(() => {
 
 .role-likui .agent-accessory {
   right: 2px;
+  left: auto;
+  --prop-angle: 24deg;
   transform: rotate(24deg);
 }
 
@@ -944,13 +1010,13 @@ const costumeStyle = computed(() => {
 @keyframes agentLook {
   0%,
   100% {
-    translate: 0 0;
+    transform: translateX(-50%) scaleX(var(--face, 1)) rotate(0);
   }
   42% {
-    translate: 1px -0.5px;
+    transform: translateX(-50%) scaleX(var(--face, 1)) rotate(var(--head-turn, 3deg));
   }
   72% {
-    translate: -1px 0;
+    transform: translateX(-50%) scaleX(var(--face, 1)) rotate(calc(var(--head-turn, 3deg) * -0.7));
   }
 }
 
@@ -987,90 +1053,90 @@ const costumeStyle = computed(() => {
 @keyframes agentArmLeft {
   0%,
   100% {
-    transform: rotate(calc(10deg + var(--body-stance, 0.2) * 24deg));
+    transform: rotate(calc(var(--left-arm-rest, 10deg) + var(--left-arm-swing, 10deg)));
   }
   50% {
-    transform: rotate(calc(-10deg - var(--body-stance, 0.2) * 22deg));
+    transform: rotate(calc(var(--left-arm-rest, 10deg) - var(--left-arm-swing, 10deg)));
   }
 }
 
 @keyframes agentArmRight {
   0%,
   100% {
-    transform: rotate(calc(-10deg - var(--body-stance, 0.2) * 22deg));
+    transform: rotate(calc(var(--right-arm-rest, -10deg) - var(--right-arm-swing, 10deg)));
   }
   50% {
-    transform: rotate(calc(10deg + var(--body-stance, 0.2) * 24deg));
+    transform: rotate(calc(var(--right-arm-rest, -10deg) + var(--right-arm-swing, 10deg)));
   }
 }
 
 @keyframes agentLegLeft {
   0%,
   100% {
-    transform: rotate(calc(-5deg - var(--body-stance, 0.2) * 18deg));
+    transform: rotate(calc(var(--left-leg-rest, -5deg) - var(--left-leg-stride, 8deg)));
   }
   50% {
-    transform: rotate(calc(5deg + var(--body-stance, 0.2) * 18deg));
+    transform: rotate(calc(var(--left-leg-rest, -5deg) + var(--left-leg-stride, 8deg)));
   }
 }
 
 @keyframes agentLegRight {
   0%,
   100% {
-    transform: rotate(calc(5deg + var(--body-stance, 0.2) * 18deg));
+    transform: rotate(calc(var(--right-leg-rest, 5deg) + var(--right-leg-stride, 8deg)));
   }
   50% {
-    transform: rotate(calc(-5deg - var(--body-stance, 0.2) * 18deg));
+    transform: rotate(calc(var(--right-leg-rest, 5deg) - var(--right-leg-stride, 8deg)));
   }
 }
 
 @keyframes agentBootLeft {
   0%,
   100% {
-    transform: translateX(-2px) rotate(-7deg);
+    transform: translateX(calc(var(--left-foot-step, 3px) * -0.7)) rotate(calc(var(--left-leg-rest, -5deg) - 2deg));
   }
   50% {
-    transform: translateX(3px) rotate(8deg);
+    transform: translateX(var(--left-foot-step, 3px)) rotate(calc(var(--left-leg-rest, -5deg) + 12deg));
   }
 }
 
 @keyframes agentBootRight {
   0%,
   100% {
-    transform: translateX(3px) rotate(8deg);
+    transform: translateX(var(--right-foot-step, 3px)) rotate(calc(var(--right-leg-rest, 5deg) + 3deg));
   }
   50% {
-    transform: translateX(-2px) rotate(-7deg);
+    transform: translateX(calc(var(--right-foot-step, 3px) * -0.7)) rotate(calc(var(--right-leg-rest, 5deg) - 12deg));
   }
 }
 
 @keyframes propGesture {
   0%,
   100% {
-    translate: 0 0;
+    transform: rotate(var(--prop-angle, 0deg)) translateY(0);
   }
   50% {
-    translate: 0 -2px;
+    transform: rotate(calc(var(--prop-angle, 0deg) + var(--prop-swing, 4deg))) translateY(-2px);
   }
 }
 
 @keyframes propGestureScroll {
   0%,
   100% {
-    transform: rotate(-22deg) translateY(0);
+    transform: rotate(var(--prop-angle, -22deg)) translateY(0);
   }
   50% {
-    transform: rotate(-15deg) translateY(-3px);
+    transform: rotate(calc(var(--prop-angle, -22deg) + var(--prop-swing, 8deg))) translateY(-3px);
   }
 }
 
 @keyframes weaponGuard {
   0%,
   100% {
-    translate: 0 0;
+    transform: rotate(var(--prop-angle, 0deg)) translateY(0);
   }
   50% {
-    translate: 0 -1px;
+    transform: rotate(calc(var(--prop-angle, 0deg) + var(--prop-swing, 4deg))) translateY(-1px);
   }
 }
 

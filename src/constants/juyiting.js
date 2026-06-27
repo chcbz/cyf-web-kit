@@ -230,6 +230,108 @@ export const roleBodyVisuals = {
   }
 }
 
+export const roleBodyRigs = {
+  leader: {
+    head: { x: 50, y: 10, turn: 3 },
+    torso: { x: 50, y: 40, width: 35, height: 48, tilt: -1 },
+    leftArm: { x: 18, y: 47, length: 34, rest: 12, swing: 9 },
+    rightArm: { x: 58, y: 47, length: 34, rest: -10, swing: 8 },
+    leftLeg: { x: 27, y: 82, length: 30, rest: -5, stride: 8 },
+    rightLeg: { x: 40, y: 82, length: 30, rest: 5, stride: 8 },
+    leftFoot: { x: 23, y: 113, step: 3 },
+    rightFoot: { x: 39, y: 113, step: 3 },
+    prop: { x: 54, y: 40, angle: -12, swing: 4 }
+  },
+  strategist: {
+    head: { x: 50, y: 10, turn: 4 },
+    torso: { x: 50, y: 40, width: 31, height: 46, tilt: 0 },
+    leftArm: { x: 21, y: 47, length: 31, rest: 8, swing: 6 },
+    rightArm: { x: 56, y: 46, length: 30, rest: -7, swing: 5 },
+    leftLeg: { x: 28, y: 82, length: 28, rest: -4, stride: 6 },
+    rightLeg: { x: 39, y: 82, length: 28, rest: 4, stride: 6 },
+    leftFoot: { x: 24, y: 112, step: 2 },
+    rightFoot: { x: 38, y: 112, step: 2 },
+    prop: { x: 60, y: 38, angle: -22, swing: 10 }
+  },
+  general: {
+    head: { x: 50, y: 9, turn: 3 },
+    torso: { x: 50, y: 39, width: 38, height: 50, tilt: -2 },
+    leftArm: { x: 15, y: 47, length: 36, rest: 17, swing: 16 },
+    rightArm: { x: 61, y: 47, length: 36, rest: -14, swing: 14 },
+    leftLeg: { x: 25, y: 82, length: 32, rest: -8, stride: 14 },
+    rightLeg: { x: 42, y: 82, length: 32, rest: 8, stride: 14 },
+    leftFoot: { x: 21, y: 114, step: 5 },
+    rightFoot: { x: 42, y: 114, step: 5 },
+    prop: { x: 18, y: 5, angle: 12, swing: 8 }
+  },
+  brute: {
+    head: { x: 50, y: 9, turn: 2 },
+    torso: { x: 50, y: 39, width: 41, height: 51, tilt: 3 },
+    leftArm: { x: 13, y: 47, length: 38, rest: 22, swing: 20 },
+    rightArm: { x: 63, y: 47, length: 38, rest: -20, swing: 20 },
+    leftLeg: { x: 24, y: 82, length: 33, rest: -10, stride: 12 },
+    rightLeg: { x: 43, y: 82, length: 33, rest: 10, stride: 12 },
+    leftFoot: { x: 20, y: 115, step: 5 },
+    rightFoot: { x: 44, y: 115, step: 5 },
+    prop: { x: 19, y: 46, angle: -24, swing: 14 }
+  },
+  river: {
+    head: { x: 50, y: 10, turn: 4 },
+    torso: { x: 50, y: 40, width: 34, height: 46, tilt: -4 },
+    leftArm: { x: 17, y: 47, length: 34, rest: 15, swing: 18 },
+    rightArm: { x: 59, y: 47, length: 34, rest: -13, swing: 16 },
+    leftLeg: { x: 26, y: 82, length: 30, rest: -7, stride: 16 },
+    rightLeg: { x: 41, y: 82, length: 30, rest: 7, stride: 16 },
+    leftFoot: { x: 22, y: 113, step: 6 },
+    rightFoot: { x: 41, y: 113, step: 6 },
+    prop: { x: 17, y: 14, angle: 10, swing: 10 }
+  },
+  scout: {
+    head: { x: 50, y: 10, turn: 6 },
+    torso: { x: 50, y: 40, width: 30, height: 44, tilt: -6 },
+    leftArm: { x: 21, y: 47, length: 31, rest: 18, swing: 22 },
+    rightArm: { x: 56, y: 47, length: 31, rest: -16, swing: 22 },
+    leftLeg: { x: 28, y: 81, length: 29, rest: -8, stride: 22 },
+    rightLeg: { x: 39, y: 81, length: 29, rest: 8, stride: 22 },
+    leftFoot: { x: 23, y: 112, step: 8 },
+    rightFoot: { x: 39, y: 112, step: 8 },
+    prop: { x: 59, y: 45, angle: 18, swing: 16 }
+  },
+  healer: {
+    head: { x: 50, y: 10, turn: 3 },
+    torso: { x: 50, y: 40, width: 31, height: 46, tilt: 1 },
+    leftArm: { x: 21, y: 48, length: 30, rest: 7, swing: 5 },
+    rightArm: { x: 56, y: 48, length: 30, rest: -8, swing: 5 },
+    leftLeg: { x: 28, y: 82, length: 28, rest: -3, stride: 6 },
+    rightLeg: { x: 39, y: 82, length: 28, rest: 3, stride: 6 },
+    leftFoot: { x: 24, y: 112, step: 2 },
+    rightFoot: { x: 38, y: 112, step: 2 },
+    prop: { x: 60, y: 47, angle: 6, swing: 3 }
+  },
+  heroine: {
+    head: { x: 50, y: 10, turn: 5 },
+    torso: { x: 50, y: 40, width: 32, height: 44, tilt: -3 },
+    leftArm: { x: 20, y: 47, length: 31, rest: 14, swing: 14 },
+    rightArm: { x: 57, y: 47, length: 31, rest: -12, swing: 14 },
+    leftLeg: { x: 28, y: 81, length: 29, rest: -6, stride: 14 },
+    rightLeg: { x: 39, y: 81, length: 29, rest: 6, stride: 14 },
+    leftFoot: { x: 23, y: 112, step: 5 },
+    rightFoot: { x: 39, y: 112, step: 5 },
+    prop: { x: 60, y: 39, angle: 18, swing: 11 }
+  },
+  monk: {
+    head: { x: 50, y: 8, turn: 2 },
+    torso: { x: 50, y: 39, width: 38, height: 49, tilt: 2 },
+    leftArm: { x: 16, y: 47, length: 35, rest: 16, swing: 13 },
+    rightArm: { x: 60, y: 47, length: 35, rest: -15, swing: 12 },
+    leftLeg: { x: 26, y: 82, length: 31, rest: -7, stride: 10 },
+    rightLeg: { x: 41, y: 82, length: 31, rest: 7, stride: 10 },
+    leftFoot: { x: 22, y: 114, step: 4 },
+    rightFoot: { x: 41, y: 114, step: 4 },
+    prop: { x: 60, y: 25, angle: -10, swing: 7 }
+  }
+}
+
 const robePalette = [
   '#7c1f1b', '#23483e', '#3f4f78', '#8b5a1f', '#5c2d63', '#6d3f1f',
   '#2f6f6a', '#6f2e2e', '#315f3e', '#384f7a', '#865335', '#4f5d2f'
