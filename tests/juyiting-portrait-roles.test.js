@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'fs'
 import { expect } from 'chai'
 import {
   bodyTypeByMotif,
+  hallPhysicalScene,
   hallScale,
   portraitRoles,
   roleBodyVisuals
@@ -119,6 +120,49 @@ describe('JuyiHall portrait roles', () => {
       expect(visual.height).to.be.within(0.98, 1.05)
       expect(visual.headScale).to.be.within(0.84, 0.95)
       expect(visual.shoulderWidth).to.be.within(0.27, 0.38)
+    }
+  })
+
+  it('keeps the physical hall scene walkable and wired to known panels', () => {
+    const validPanels = new Set(['chat', 'agents', 'catalog', 'tasks', 'library', null])
+    const obstacleKeys = new Set()
+    const insideObstacle = (point, obstacle, padding = 0) => {
+      if (obstacle.type === 'rect') {
+        return point.x >= obstacle.x - obstacle.w / 2 - padding &&
+          point.x <= obstacle.x + obstacle.w / 2 + padding &&
+          point.y >= obstacle.y - obstacle.h / 2 - padding &&
+          point.y <= obstacle.y + obstacle.h / 2 + padding
+      }
+      return Math.hypot(
+        (point.x - obstacle.x) / (obstacle.rx + padding),
+        (point.y - obstacle.y) / (obstacle.ry + padding)
+      ) <= 1
+    }
+
+    for (const zone of hallPhysicalScene.interactiveZones) {
+      expect(validPanels.has(zone.panel), `bad panel ${zone.panel}`).to.equal(true)
+      expect(zone.w).to.be.greaterThan(0)
+      expect(zone.h).to.be.greaterThan(0)
+    }
+
+    for (const obstacle of hallPhysicalScene.solidObstacles) {
+      expect(obstacleKeys.has(obstacle.key), `duplicate obstacle ${obstacle.key}`).to.equal(false)
+      obstacleKeys.add(obstacle.key)
+      expect(obstacle.heightRatio).to.be.within(0.4, 2.1)
+    }
+
+    const walkablePoints = [
+      ...hallPhysicalScene.patrolAnchors.map(anchor => ({ x: anchor.x, y: anchor.y })),
+      hallPhysicalScene.trainingAnchor,
+      ...hallPhysicalScene.waypoints
+    ]
+
+    for (const point of walkablePoints) {
+      expect(point.x).to.be.within(hallPhysicalScene.walkBounds.minX, hallPhysicalScene.walkBounds.maxX)
+      expect(point.y).to.be.within(hallPhysicalScene.walkBounds.minY, hallPhysicalScene.walkBounds.maxY)
+      for (const obstacle of hallPhysicalScene.solidObstacles) {
+        expect(insideObstacle(point, obstacle, 0.7), `point ${point.x},${point.y} inside ${obstacle.key}`).to.equal(false)
+      }
     }
   })
 })

@@ -423,38 +423,83 @@ export const roleDialogues = {
   ]
 }
 
-export const hallPatrolAnchors = [
-  { x: 16, y: 71, radiusX: 3, radiusY: 2.5, linger: [2800, 5200] },
-  { x: 18, y: 50, radiusX: 2.5, radiusY: 3, linger: [2200, 4200] },
-  { x: 28, y: 32, radiusX: 3, radiusY: 2.5, linger: [1800, 3600] },
-  { x: 43, y: 27, radiusX: 4, radiusY: 2.5, linger: [1800, 3400] },
-  { x: 58, y: 28, radiusX: 4, radiusY: 2.5, linger: [1800, 3400] },
-  { x: 74, y: 35, radiusX: 3, radiusY: 3, linger: [2000, 3600] },
-  { x: 84, y: 49, radiusX: 2.5, radiusY: 3, linger: [2000, 3800] },
-  { x: 80, y: 67, radiusX: 3, radiusY: 3, linger: [2600, 4800] },
-  { x: 64, y: 68, radiusX: 3.5, radiusY: 2.5, linger: [2200, 4200] },
-  { x: 50, y: 61, radiusX: 4, radiusY: 3, linger: [1600, 3000] },
-  { x: 36, y: 66, radiusX: 3.5, radiusY: 3, linger: [2200, 4200] },
-  { x: 24, y: 73, radiusX: 3, radiusY: 2.5, linger: [2600, 4800] }
-]
-
-export const trainingRoomAnchor = {
-  x: 74,
-  y: 49,
-  radiusX: 4,
-  radiusY: 4
+export const hallPhysicalScene = {
+  walkBounds: {
+    minX: 8,
+    maxX: 92,
+    minY: 24,
+    maxY: 86
+  },
+  solidObstacles: [
+    { key: 'main-seat', type: 'rect', x: 49, y: 28, w: 17, h: 10, strength: 2.2, heightRatio: 0.9 },
+    { key: 'main-table', type: 'rect', x: 50, y: 43, w: 25, h: 7.2, strength: 2.4, heightRatio: hallScale.propRatios.mainTable },
+    { key: 'left-bookcase', type: 'rect', x: 20, y: 38, w: 22, h: 20, strength: 2.2, heightRatio: hallScale.propRatios.bookcase },
+    { key: 'left-planning-table', type: 'rect', x: 18, y: 58, w: 22, h: 9, strength: 1.8, heightRatio: 0.55 },
+    { key: 'recruit-drum', type: 'ellipse', x: 13, y: 77, rx: 8, ry: 7, strength: 2.1, heightRatio: hallScale.propRatios.recruitDrum },
+    { key: 'left-weapon-rack', type: 'rect', x: 5.5, y: 75, w: 9, h: 22, strength: 1.6, heightRatio: hallScale.propRatios.weaponRack },
+    { key: 'bounty-rack', type: 'rect', x: 76, y: 47, w: 18, h: 16, strength: 2.1, heightRatio: hallScale.propRatios.bountyRack },
+    { key: 'bounty-desk', type: 'rect', x: 73, y: 60, w: 16, h: 8, strength: 1.8, heightRatio: 0.55 },
+    { key: 'library-desk', type: 'rect', x: 78, y: 77, w: 21, h: 14, strength: 2, heightRatio: 0.7 },
+    { key: 'library-shelf', type: 'rect', x: 93, y: 68, w: 11, h: 26, strength: 1.8, heightRatio: hallScale.propRatios.bookcase },
+    { key: 'left-pillar-front', type: 'ellipse', x: 35, y: 39, rx: 4, ry: 7, strength: 2.3, heightRatio: 2 },
+    { key: 'right-pillar-front', type: 'ellipse', x: 62, y: 39, rx: 4, ry: 7, strength: 2.3, heightRatio: 2 },
+    { key: 'far-left-pillar', type: 'ellipse', x: 5, y: 56, rx: 4, ry: 13, strength: 2, heightRatio: 2 },
+    { key: 'far-right-pillar', type: 'ellipse', x: 91, y: 55, rx: 4, ry: 13, strength: 2, heightRatio: 2 }
+  ],
+  interactiveZones: [
+    { key: 'main', panel: 'chat', title: '聚义厅', subtitle: '厅前公议 / 众好汉', x: 50, y: 36, w: 12, h: 7, label: 'plaque' },
+    { key: 'agents', panel: 'agents', title: '好汉簿', subtitle: '点将调遣', x: 21, y: 32, w: 13, h: 7, label: 'book-tag' },
+    { key: 'tasks', panel: 'tasks', title: '榜文房', subtitle: '榜文', x: 75, y: 39, w: 13, h: 7, label: 'notice-tag' },
+    { key: 'catalog', panel: 'catalog', title: '招贤馆', subtitle: '遍请豪杰', x: 14, y: 68, w: 12, h: 7, label: 'drum-tag' },
+    { key: 'library', panel: 'library', title: '藏书阁', subtitle: '查卷问典', x: 81, y: 69, w: 12, h: 7, label: 'scroll-tag' },
+    { key: 'back', panel: null, title: '后堂', subtitle: '整装', x: 67, y: 26, w: 10, h: 6, label: 'rear-tag' }
+  ],
+  patrolAnchors: [
+    { x: 26, y: 73, radiusX: 4, radiusY: 3, linger: [2600, 4800] },
+    { x: 33, y: 57, radiusX: 2.5, radiusY: 3, linger: [2200, 4200] },
+    { x: 32, y: 46, radiusX: 3, radiusY: 2.5, linger: [1800, 3600] },
+    { x: 42, y: 54, radiusX: 4, radiusY: 3, linger: [1800, 3400] },
+    { x: 50, y: 61, radiusX: 4, radiusY: 3.5, linger: [1600, 3000] },
+    { x: 58, y: 54, radiusX: 4, radiusY: 3, linger: [1800, 3400] },
+    { x: 63, y: 52, radiusX: 2.5, radiusY: 3, linger: [2000, 3600] },
+    { x: 61, y: 72, radiusX: 3, radiusY: 3, linger: [2200, 4200] },
+    { x: 55, y: 76, radiusX: 5, radiusY: 3, linger: [2200, 4200] },
+    { x: 42, y: 76, radiusX: 4, radiusY: 3, linger: [2600, 4800] },
+    { x: 24, y: 68, radiusX: 2.5, radiusY: 2.5, linger: [2600, 4800] },
+    { x: 83, y: 58, radiusX: 2.5, radiusY: 3, linger: [2000, 3800] }
+  ],
+  trainingAnchor: {
+    x: 66,
+    y: 30,
+    radiusX: 5,
+    radiusY: 3
+  },
+  waypoints: [
+    { key: 'center-front', x: 50, y: 72 },
+    { key: 'center-mid', x: 50, y: 58 },
+    { key: 'center-back', x: 50, y: 49 },
+    { key: 'left-front', x: 30, y: 72 },
+    { key: 'left-mid', x: 31, y: 56 },
+    { key: 'left-back', x: 33, y: 47 },
+    { key: 'right-front', x: 63, y: 78 },
+    { key: 'right-mid', x: 63, y: 58 },
+    { key: 'right-back', x: 64, y: 50 },
+    { key: 'rear-left', x: 36, y: 30 },
+    { key: 'rear-right', x: 63, y: 30 }
+  ],
+  occlusionZones: [
+    { key: 'table-front', x: 50, y: 46, w: 27, h: 7, thresholdY: 45 },
+    { key: 'drum-front', x: 13, y: 78, w: 16, h: 12, thresholdY: 73 },
+    { key: 'library-front', x: 79, y: 78, w: 22, h: 13, thresholdY: 72 },
+    { key: 'left-pillar', x: 35, y: 45, w: 7, h: 17, thresholdY: 42 },
+    { key: 'right-pillar', x: 62, y: 45, w: 7, h: 17, thresholdY: 42 }
+  ]
 }
 
-export const hallObstacles = [
-  { x: 50, y: 23, rx: 12, ry: 8, strength: 1.7 },
-  { x: 8, y: 63, rx: 12, ry: 9, strength: 1.4 },
-  { x: 88, y: 63, rx: 12, ry: 9, strength: 1.4 },
-  { x: 84, y: 22, rx: 12, ry: 9, strength: 1.3 }
-]
+export const hallPatrolAnchors = hallPhysicalScene.patrolAnchors
 
-export const walkBounds = {
-  minX: 9,
-  maxX: 91,
-  minY: 22,
-  maxY: 84
-}
+export const trainingRoomAnchor = hallPhysicalScene.trainingAnchor
+
+export const hallObstacles = hallPhysicalScene.solidObstacles
+
+export const walkBounds = hallPhysicalScene.walkBounds

@@ -45,7 +45,7 @@ const loadSfc = (relativePath) => {
     .replace(/^import\s+AgentToken\s+from\s+['"]@\/components\/juyiting\/AgentToken\.vue['"];?\s*$/gm, 'var AgentToken = { template: \'<span />\', props: [\'agent\'] }')
     .replace(/^import\s+BountyActionIcon\s+from\s+['"].\/BountyActionIcon\.vue['"];?\s*$/gm, 'var BountyActionIcon = { template: \'<span />\', props: [\'status\'] }')
     .replace(/^import\s+(\w+)\s+from\s+['"]@\/assets\/juyiting\/[^'"]+['"];?\s*$/gm, 'var $1 = \'/mock-juyiting-asset.png\'')
-    .replace(/^import\s+\{\s*hallRoomPropVisuals\s*\}\s+from\s+['"]@\/constants\/juyiting['"];?\s*$/gm, 'var hallRoomPropVisuals = []')
+    .replace(/^import\s+\{\s*hallPhysicalScene,\s*hallRoomPropVisuals\s*\}\s+from\s+['"]@\/constants\/juyiting['"];?\s*$/gm, 'var hallRoomPropVisuals = []; var hallPhysicalScene = { interactiveZones: [{ key: \'main\', panel: \'chat\', title: \'聚义厅\', subtitle: \'厅前公议 / 众好汉\', x: 50, y: 36, w: 12, h: 7, label: \'plaque\' }, { key: \'agents\', panel: \'agents\', title: \'好汉簿\', subtitle: \'点将调遣\', x: 21, y: 32, w: 13, h: 7, label: \'book-tag\' }, { key: \'catalog\', panel: \'catalog\', title: \'招贤馆\', subtitle: \'遍请豪杰\', x: 14, y: 68, w: 12, h: 7, label: \'drum-tag\' }] }')
     .replace(/^import\s+HallChatComposer\s+from\s+['"].\/HallChatComposer\.vue['"];?\s*$/gm, 'var HallChatComposer = arguments[1]')
     .replace(/^import\s+\{\s*marked\s*\}\s+from\s+['"]marked['"];?\s*$/gm, 'var marked = { setOptions: () => {}, parse: value => value }')
     .replace(/^import\s+DOMPurify\s+from\s+['"]dompurify['"];?\s*$/gm, 'var DOMPurify = { sanitize: value => value }')

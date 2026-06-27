@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { hallObstacles, hallPatrolAnchors, hallScale, trainingRoomAnchor, walkBounds } from '@/constants/juyiting'
+import { hallObstacles, hallPatrolAnchors, hallPhysicalScene, hallScale, trainingRoomAnchor, walkBounds } from '@/constants/juyiting'
 import { agentSeed, portraitRole } from '@/composables/juyiting/useWaterMarginRoles'
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
@@ -11,7 +11,66 @@ const randomFromSeed = (seed, offset = 0) => {
 
 const sampleRange = (seed, min, max, offset = 0) => min + (max - min) * randomFromSeed(seed, offset)
 
-const createAnchorPoint = (anchor, seed, offset = 0) => ({
+const insideRect = (point, obstacle, padding = 0) => (
+  point.x >= obstacle.x - obstacle.w / 2 - padding &&
+  point.x <= obstacle.x + obstacle.w / 2 + padding &&
+  point.y >= obstacle.y - obstacle.h / 2 - padding &&
+  point.y <= obstacle.y + obstacle.h / 2 + padding
+)
+
+const insideEllipse = (point, obstacle, padding = 0) => (
+  Math.hypot(
+    (point.x - obstacle.x) / (obstacle.rx + padding),
+    (point.y - obstacle.y) / (obstacle.ry + padding)
+  ) <= 1
+)
+
+const pointInObstacle = (point, obstacle, padding = 0) => (
+  obstacle.type === 'rect'
+    ? insideRect(point, obstacle, padding)
+    : insideEllipse(point, obstacle, padding)
+)
+
+const pointInAnyObstacle = (point, padding = 0) => hallObstacles.some(obstacle => pointInObstacle(point, obstacle, padding))
+
+const projectOutOfObstacle = (point, obstacle, padding = 0.75) => {
+  if (!pointInObstacle(point, obstacle, padding)) return point
+  if (obstacle.type === 'rect') {
+    const halfW = obstacle.w / 2 + padding
+    const halfH = obstacle.h / 2 + padding
+    const dx = point.x - obstacle.x
+    const dy = point.y - obstacle.y
+    const pushX = halfW - Math.abs(dx)
+    const pushY = halfH - Math.abs(dy)
+    if (pushX < pushY) {
+      return { x: obstacle.x + Math.sign(dx || 1) * halfW, y: point.y }
+    }
+    return { x: point.x, y: obstacle.y + Math.sign(dy || 1) * halfH }
+  }
+
+  const dx = point.x - obstacle.x
+  const dy = point.y - obstacle.y
+  const angle = Math.atan2(dy / obstacle.ry, dx / obstacle.rx)
+  return {
+    x: obstacle.x + Math.cos(angle) * (obstacle.rx + padding),
+    y: obstacle.y + Math.sin(angle) * (obstacle.ry + padding)
+  }
+}
+
+const keepWalkable = (point) => {
+  let next = {
+    x: clamp(point.x, walkBounds.minX, walkBounds.maxX),
+    y: clamp(point.y, walkBounds.minY, walkBounds.maxY)
+  }
+  hallObstacles.forEach((obstacle) => {
+    next = projectOutOfObstacle(next, obstacle)
+    next.x = clamp(next.x, walkBounds.minX, walkBounds.maxX)
+    next.y = clamp(next.y, walkBounds.minY, walkBounds.maxY)
+  })
+  return next
+}
+
+const createAnchorPoint = (anchor, seed, offset = 0) => keepWalkable({
   x: clamp(sampleRange(seed, anchor.x - anchor.radiusX, anchor.x + anchor.radiusX, offset), walkBounds.minX, walkBounds.maxX),
   y: clamp(sampleRange(seed, anchor.y - anchor.radiusY, anchor.y + anchor.radiusY, offset + 1), walkBounds.minY, walkBounds.maxY)
 })
@@ -21,6 +80,53 @@ const limitVector = (vector, maxLength) => {
   if (!length || length <= maxLength) return vector
   const scale = maxLength / length
   return { x: vector.x * scale, y: vector.y * scale }
+}
+
+const segmentCrossesObstacle = (from, to, obstacle, padding = 0.7) => {
+  const steps = Math.max(6, Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / 2))
+  for (let index = 1; index < steps; index += 1) {
+    const point = {
+      x: from.x + (to.x - from.x) * (index / steps),
+      y: from.y + (to.y - from.y) * (index / steps)
+    }
+    if (pointInObstacle(point, obstacle, padding)) return true
+  }
+  return false
+}
+
+const hasLineOfSight = (from, to) => !hallObstacles.some(obstacle => segmentCrossesObstacle(from, to, obstacle))
+
+const planRoute = (from, to) => {
+  const target = keepWalkable(to)
+  if (hasLineOfSight(from, target)) return [target]
+
+  const nodes = hallPhysicalScene.waypoints || []
+  const usableNodes = nodes.filter(point => !pointInAnyObstacle(point, 0.8))
+  const candidates = usableNodes
+    .filter(point => hasLineOfSight(from, point) && hasLineOfSight(point, target))
+    .map(point => ({
+      point,
+      score: Math.hypot(point.x - from.x, point.y - from.y) + Math.hypot(target.x - point.x, target.y - point.y)
+    }))
+    .sort((a, b) => a.score - b.score)
+
+  if (candidates.length) return [candidates[0].point, target]
+
+  const startNodes = usableNodes.filter(point => hasLineOfSight(from, point))
+  const endNodes = usableNodes.filter(point => hasLineOfSight(point, target))
+  let best = null
+  startNodes.forEach((start) => {
+    endNodes.forEach((end) => {
+      if (!hasLineOfSight(start, end)) return
+      const score = Math.hypot(start.x - from.x, start.y - from.y) +
+        Math.hypot(end.x - start.x, end.y - start.y) +
+        Math.hypot(target.x - end.x, target.y - end.y)
+      if (!best || score < best.score) best = { start, end, score }
+    })
+  })
+
+  if (best) return best.start === best.end ? [best.start, target] : [best.start, best.end, target]
+  return [target]
 }
 
 export const useHallPhysics = (visibleAgents, normalizeStatus) => {
@@ -50,6 +156,7 @@ export const useHallPhysics = (visibleAgents, normalizeStatus) => {
       y: start.y,
       vx: 0,
       vy: 0,
+      route: [],
       face: randomFromSeed(seed, 2) >= 0.5 ? 1 : -1,
       speed: 0,
       restUntil: sampleRange(seed, 900, 2600, 3),
@@ -80,7 +187,9 @@ export const useHallPhysics = (visibleAgents, normalizeStatus) => {
     return hallObstacles.reduce((force, obstacle) => {
       const dx = state.x - obstacle.x
       const dy = state.y - obstacle.y
-      const normalized = Math.hypot(dx / obstacle.rx, dy / obstacle.ry)
+      const rx = obstacle.type === 'rect' ? obstacle.w / 2 : obstacle.rx
+      const ry = obstacle.type === 'rect' ? obstacle.h / 2 : obstacle.ry
+      const normalized = Math.hypot(dx / rx, dy / ry)
       if (normalized >= 1.18) return force
       const falloff = (1.18 - Math.max(normalized, 0.08)) / 1.18
       const length = Math.hypot(dx, dy) || 1
@@ -111,15 +220,21 @@ export const useHallPhysics = (visibleAgents, normalizeStatus) => {
     const anchor = hallPatrolAnchors[nextIndex]
     state.targetAnchorIndex = nextIndex
     state.target = createAnchorPoint(anchor, state.seed, state.travelCount + 10)
+    state.route = planRoute({ x: state.x, y: state.y }, state.target)
     state.travelCount += 1
     state.isResting = false
   }
 
   const placeInTrainingRoom = (state) => {
-    state.x = clamp(sampleRange(state.seed, trainingRoomAnchor.x - trainingRoomAnchor.radiusX, trainingRoomAnchor.x + trainingRoomAnchor.radiusX, 31), walkBounds.minX, walkBounds.maxX)
-    state.y = clamp(sampleRange(state.seed, trainingRoomAnchor.y - trainingRoomAnchor.radiusY, trainingRoomAnchor.y + trainingRoomAnchor.radiusY, 32), walkBounds.minY, walkBounds.maxY)
+    const point = keepWalkable({
+      x: clamp(sampleRange(state.seed, trainingRoomAnchor.x - trainingRoomAnchor.radiusX, trainingRoomAnchor.x + trainingRoomAnchor.radiusX, 31), walkBounds.minX, walkBounds.maxX),
+      y: clamp(sampleRange(state.seed, trainingRoomAnchor.y - trainingRoomAnchor.radiusY, trainingRoomAnchor.y + trainingRoomAnchor.radiusY, 32), walkBounds.minY, walkBounds.maxY)
+    })
+    state.x = point.x
+    state.y = point.y
     state.vx = 0
     state.vy = 0
+    state.route = []
     state.speed = 0
     state.isResting = true
   }
@@ -161,10 +276,16 @@ export const useHallPhysics = (visibleAgents, normalizeStatus) => {
         return
       }
 
-      const toTargetX = state.target.x - state.x
-      const toTargetY = state.target.y - state.y
+      const routeTarget = state.route?.length ? state.route[0] : state.target
+      const toTargetX = routeTarget.x - state.x
+      const toTargetY = routeTarget.y - state.y
       const targetDistance = Math.hypot(toTargetX, toTargetY) || 1
       if (targetDistance < 1.35) {
+        if (state.route?.length > 1) {
+          state.route.shift()
+          return
+        }
+        state.route = []
         startRest(state, time, status)
         return
       }
@@ -187,8 +308,12 @@ export const useHallPhysics = (visibleAgents, normalizeStatus) => {
       const velocity = limitVector({ x: state.vx, y: state.vy }, maxSpeed)
       state.vx = velocity.x * 0.982
       state.vy = velocity.y * 0.982
-      state.x = clamp(state.x + state.vx * dt, walkBounds.minX, walkBounds.maxX)
-      state.y = clamp(state.y + state.vy * dt, walkBounds.minY, walkBounds.maxY)
+      const nextPoint = keepWalkable({
+        x: clamp(state.x + state.vx * dt, walkBounds.minX, walkBounds.maxX),
+        y: clamp(state.y + state.vy * dt, walkBounds.minY, walkBounds.maxY)
+      })
+      state.x = nextPoint.x
+      state.y = nextPoint.y
       state.speed = Math.hypot(state.vx, state.vy)
       if (Math.abs(state.vx) > 0.08) state.face = state.vx > 0 ? 1 : -1
     })

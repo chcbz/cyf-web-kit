@@ -52,30 +52,29 @@
             :style="roomPropStyle(prop)"
           ></span>
         </div>
-        <button class="hall-room room-main" @click="openPublicDiscussion">
-          <strong>聚义厅</strong>
-          <small>厅前公议 / 众好汉</small>
-        </button>
-        <button class="hall-room room-agents" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'agents')">
-          <strong>好汉簿</strong>
-          <small>点将调遣</small>
-        </button>
-        <button class="hall-room room-catalog" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'catalog')">
-          <strong>招贤馆</strong>
-          <small>遍请豪杰</small>
-        </button>
-        <button class="hall-room room-tasks" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'tasks')">
-          <strong>榜文房</strong>
-          <small>{{ tasksTotal }} 件</small>
-        </button>
-        <button class="hall-room room-library" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'library')">
-          <strong>藏书阁</strong>
-          <small>查卷问典</small>
-        </button>
-        <div class="hall-room room-back">
-          <strong>后堂</strong>
-          <small>整装</small>
-        </div>
+        <template v-for="zone in hallInteractiveZones" :key="zone.key">
+          <button
+            v-if="zone.panel"
+            class="hall-room"
+            :class="[`room-${zone.key}`, `label-${zone.label}`]"
+            :style="zoneStyle(zone)"
+            @pointerdown.stop
+            @pointerup.stop
+            @click.stop="openZone(zone)"
+          >
+            <strong>{{ zone.title }}</strong>
+            <small>{{ zoneSubtitle(zone) }}</small>
+          </button>
+          <div
+            v-else
+            class="hall-room is-static"
+            :class="[`room-${zone.key}`, `label-${zone.label}`]"
+            :style="zoneStyle(zone)"
+          >
+            <strong>{{ zone.title }}</strong>
+            <small>{{ zone.subtitle }}</small>
+          </div>
+        </template>
         <div class="beam beam-top"></div>
         <div class="banner">替天行道</div>
         <AgentToken
@@ -93,27 +92,25 @@
           :status-text="statusText"
           @select-agent="$emit('select-agent', $event)"
         />
+        <div class="hall-foreground" aria-hidden="true"></div>
         <div v-if="!visibleAgents.length" class="empty-hall">
           厅中暂未见好汉入座，稍后自会传到
         </div>
         <button v-if="hiddenAgentCount" class="hall-overflow" type="button" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'agents')">
           另有 {{ hiddenAgentCount }} 位在偏厅候令
         </button>
-        <button class="scene-hotspot hotspot-agents" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'agents')">
-          <var-icon name="account-circle" />
-          <span>好汉簿</span>
-        </button>
-        <button class="scene-hotspot hotspot-catalog" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'catalog')">
-          <var-icon name="account-plus" />
-          <span>招贤</span>
-        </button>
-        <button class="scene-hotspot hotspot-tasks" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'tasks')">
-          <var-icon name="format-list-checkbox" />
-          <span>榜文</span>
-        </button>
-        <button class="scene-hotspot hotspot-library" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'library')">
-          <var-icon name="notebook" />
-          <span>藏书阁</span>
+        <button
+          v-for="hotspot in panelHotspots"
+          :key="hotspot.key"
+          class="scene-hotspot"
+          :class="`hotspot-${hotspot.key}`"
+          :style="hotspotStyle(hotspot)"
+          @pointerdown.stop
+          @pointerup.stop
+          @click.stop="openZone(hotspot)"
+        >
+          <var-icon :name="hotspotIcon(hotspot)" />
+          <span>{{ hotspot.title }}</span>
         </button>
       </div>
     </div>
@@ -125,11 +122,12 @@
 <script setup>
 import { computed, ref } from 'vue'
 import AgentToken from '@/components/juyiting/AgentToken.vue'
-import hallBackground from '@/assets/juyiting/liangshan-hall-bg-v2.png'
+import hallBackground from '@/assets/juyiting/liangshan-hall-physical-bg-v1.png'
+import hallForeground from '@/assets/juyiting/liangshan-hall-foreground-v1.png'
 import roomPropsAtlas from '@/assets/juyiting/liangshan-room-props-v2.png'
-import { hallRoomPropVisuals } from '@/constants/juyiting'
+import { hallPhysicalScene, hallRoomPropVisuals } from '@/constants/juyiting'
 
-defineProps({
+const props = defineProps({
   agentBubbles: { type: Object, default: () => ({}) },
   agentKey: { type: Function, required: true },
   agentStyle: { type: Function, required: true },
@@ -161,8 +159,13 @@ const mapWorldStyle = computed(() => ({
   '--map-offset-x': `${viewportOffset.value.x}px`,
   '--map-offset-y': `${viewportOffset.value.y}px`,
   '--hall-bg-image': `url("${hallBackground}")`,
+  '--hall-foreground-image': `url("${hallForeground}")`,
   '--room-props-image': `url("${roomPropsAtlas}")`
 }))
+
+const hallInteractiveZones = computed(() => hallPhysicalScene.interactiveZones)
+
+const panelHotspots = computed(() => hallPhysicalScene.interactiveZones.filter(zone => zone.panel && zone.panel !== 'chat'))
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
@@ -178,6 +181,38 @@ const roomPropStyle = (prop) => {
     backgroundPosition: `${x}% ${y}%`,
     backgroundSize: `${columns * 100}% ${rows * 100}%`
   }
+}
+
+const zoneStyle = (zone) => ({
+  left: `${zone.x}%`,
+  top: `${zone.y}%`,
+  width: `${zone.w}%`,
+  height: `${zone.h}%`
+})
+
+const hotspotStyle = (zone) => ({
+  left: `${zone.x}%`,
+  top: `${zone.y}%`
+})
+
+const zoneSubtitle = (zone) => {
+  if (zone.key === 'tasks') return `${props.tasksTotal} 件`
+  return zone.subtitle
+}
+
+const hotspotIcon = (zone) => ({
+  agents: 'account-circle',
+  catalog: 'account-plus',
+  tasks: 'format-list-checkbox',
+  library: 'notebook'
+})[zone.key] || 'map-marker'
+
+const openZone = (zone) => {
+  if (zone.panel === 'chat') {
+    openPublicDiscussion()
+    return
+  }
+  emit('open-panel', zone.panel)
 }
 
 const mapOffsetBounds = () => {
@@ -383,8 +418,7 @@ button {
   transform-origin: center;
   transition: transform 0.28s ease;
   background:
-    radial-gradient(ellipse at 50% 53%, rgba(255, 231, 177, 0.13), transparent 34%),
-    linear-gradient(180deg, rgba(27, 20, 16, 0.08), rgba(27, 20, 16, 0.22)),
+    linear-gradient(180deg, rgba(27, 20, 16, 0.04), rgba(27, 20, 16, 0.14)),
     var(--hall-bg-image) center / cover no-repeat;
   will-change: transform;
 }
@@ -401,8 +435,8 @@ button {
   border: 1px solid rgba(255, 236, 190, 0.12);
   border-radius: 0;
   background:
-    radial-gradient(ellipse at 50% 54%, transparent 34%, rgba(8, 6, 4, 0.18) 74%, rgba(8, 6, 4, 0.42)),
-    linear-gradient(180deg, rgba(255, 236, 190, 0.05), transparent 22%, transparent 72%, rgba(0, 0, 0, 0.2));
+    radial-gradient(ellipse at 50% 54%, transparent 38%, rgba(8, 6, 4, 0.12) 78%, rgba(8, 6, 4, 0.34)),
+    linear-gradient(180deg, rgba(255, 236, 190, 0.03), transparent 24%, transparent 72%, rgba(0, 0, 0, 0.18));
 }
 
 .map-world::after {
@@ -472,6 +506,7 @@ button {
   position: absolute;
   inset: 0;
   z-index: 2;
+  display: none;
   pointer-events: none;
 }
 
@@ -519,26 +554,28 @@ button {
 
 .hall-room {
   position: absolute;
-  z-index: 3;
+  z-index: 8;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 1px;
   min-width: 0;
   min-height: 0;
-  padding: 8px;
-  border: 1px solid rgba(249, 218, 144, 0.34);
-  border-radius: 8px;
+  padding: 4px 7px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(73, 43, 22, 0.64);
+  border-radius: 4px;
   background:
-    linear-gradient(180deg, rgba(255, 248, 218, 0.2), rgba(96, 57, 28, 0.18)),
-    rgba(29, 20, 14, 0.52);
-  color: #fff3c9;
+    linear-gradient(180deg, rgba(248, 224, 165, 0.88), rgba(132, 81, 37, 0.88)),
+    rgba(67, 39, 22, 0.9);
+  color: #33200f;
   text-align: center;
   box-shadow:
-    inset 0 0 0 1px rgba(255, 250, 232, 0.12),
-    0 10px 22px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(2px);
+    inset 0 1px 0 rgba(255, 246, 211, 0.42),
+    inset 0 -2px 0 rgba(54, 29, 13, 0.28),
+    0 7px 13px rgba(0, 0, 0, 0.26);
+  backdrop-filter: none;
 }
 
 button.hall-room {
@@ -546,14 +583,14 @@ button.hall-room {
 }
 
 .hall-room:hover {
-  border-color: rgba(244, 200, 76, 0.88);
+  border-color: rgba(244, 200, 76, 0.9);
   background:
-    linear-gradient(180deg, rgba(255, 248, 218, 0.28), rgba(96, 57, 28, 0.24)),
-    rgba(45, 28, 17, 0.62);
+    linear-gradient(180deg, rgba(255, 235, 177, 0.95), rgba(155, 91, 40, 0.92)),
+    rgba(84, 48, 24, 0.95);
   box-shadow:
-    inset 0 0 0 1px rgba(255, 250, 232, 0.18),
-    0 0 0 3px rgba(244, 200, 76, 0.18),
-    0 14px 28px rgba(0, 0, 0, 0.2);
+    inset 0 1px 0 rgba(255, 250, 232, 0.4),
+    0 0 0 3px rgba(244, 200, 76, 0.22),
+    0 10px 19px rgba(0, 0, 0, 0.24);
 }
 
 .hall-room strong,
@@ -565,67 +602,44 @@ button.hall-room {
 }
 
 .hall-room strong {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 800;
 }
 
 .hall-room small {
+  color: rgba(57, 32, 13, 0.74);
+  font-size: 10px;
+}
+
+.label-plaque {
+  border-color: rgba(111, 48, 26, 0.78);
+  background:
+    linear-gradient(180deg, rgba(152, 43, 31, 0.9), rgba(82, 39, 20, 0.92)),
+    #642a1d;
+  color: #fff1c1;
+}
+
+.label-plaque small {
   color: rgba(255, 231, 179, 0.78);
-  font-size: 12px;
 }
 
-.room-main {
-  left: 43%;
-  top: 35%;
-  width: 14%;
-  height: 9%;
+.label-book-tag,
+.label-scroll-tag {
   background:
-    linear-gradient(180deg, rgba(175, 49, 34, 0.32), rgba(64, 35, 18, 0.34)),
-    rgba(39, 26, 17, 0.58);
+    linear-gradient(180deg, rgba(229, 210, 167, 0.92), rgba(151, 113, 68, 0.9)),
+    #8f6a40;
 }
 
-.room-agents {
-  left: 20%;
-  top: 43%;
-  width: 13%;
-  height: 9%;
-}
-
-.room-catalog {
-  left: 22%;
-  top: 74%;
-  width: 12%;
-  height: 8%;
+.label-drum-tag {
+  border-radius: 999px;
   background:
-    linear-gradient(180deg, rgba(196, 49, 35, 0.28), rgba(64, 35, 18, 0.2)),
-    rgba(39, 26, 17, 0.54);
+    linear-gradient(180deg, rgba(179, 55, 37, 0.9), rgba(88, 43, 24, 0.94)),
+    #7a2a21;
+  color: #fff1c1;
 }
 
-.room-tasks {
-  right: 17%;
-  top: 42%;
-  width: 13%;
-  height: 9%;
-}
-
-.room-library {
-  left: 69%;
-  top: 73%;
-  width: 12%;
-  height: 8%;
-  background:
-    linear-gradient(180deg, rgba(69, 111, 96, 0.28), rgba(64, 35, 18, 0.2)),
-    rgba(39, 26, 17, 0.54);
-}
-
-.room-back {
-  left: 43%;
-  bottom: 15%;
-  width: 14%;
-  height: 8%;
-  background:
-    linear-gradient(180deg, rgba(112, 76, 47, 0.3), rgba(35, 24, 16, 0.2)),
-    rgba(39, 26, 17, 0.54);
+.label-drum-tag small {
+  color: rgba(255, 231, 179, 0.78);
 }
 
 .beam {
@@ -649,11 +663,23 @@ button.hall-room {
   padding: 10px 0;
   transform: translateX(-50%);
   border-radius: 0 0 8px 8px;
-  z-index: 3;
+  z-index: 4;
   background: rgba(148, 42, 28, 0.86);
   color: #fff1c1;
   text-align: center;
   font-weight: 700;
+}
+
+.hall-foreground {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  background: var(--hall-foreground-image) center / cover no-repeat;
+  pointer-events: none;
+  filter:
+    drop-shadow(0 8px 12px rgba(0, 0, 0, 0.26))
+    saturate(0.96)
+    contrast(1.02);
 }
 
 .empty-hall {
@@ -679,7 +705,7 @@ button.hall-room {
 
 .scene-hotspot {
   position: absolute;
-  z-index: 3;
+  z-index: 9;
   display: none;
   align-items: center;
   gap: 6px;
@@ -693,24 +719,20 @@ button.hall-room {
 }
 
 .hotspot-agents {
-  left: 8%;
-  top: 58%;
+  transform: translate(-50%, -50%);
 }
 
 .hotspot-catalog {
-  left: 24%;
-  bottom: 18%;
+  transform: translate(-50%, -50%);
 }
 
 .hotspot-tasks {
-  left: 50%;
-  bottom: 25%;
   transform: translateX(-50%);
+  transform: translate(-50%, -50%);
 }
 
 .hotspot-library {
-  right: 8%;
-  bottom: 25%;
+  transform: translate(-50%, -50%);
 }
 
 @keyframes refreshSpin {
