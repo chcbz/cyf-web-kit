@@ -56,23 +56,23 @@
           <button
             v-if="zone.panel"
             class="hall-room"
-            :class="[`room-${zone.key}`, `label-${zone.label}`]"
-            :style="zoneStyle(zone)"
+            :class="[`room-${zone.key}`, `object-${zone.object}`, `shape-${zone.hitShape || 'rect'}`]"
+            :style="objectHitboxStyle(zone)"
+            :aria-label="objectAriaLabel(zone)"
             @pointerdown.stop
             @pointerup.stop
             @click.stop="openZone(zone)"
           >
-            <strong>{{ zone.title }}</strong>
-            <small>{{ zoneSubtitle(zone) }}</small>
+            <span class="sr-only">{{ objectAriaLabel(zone) }}</span>
           </button>
           <div
             v-else
             class="hall-room is-static"
-            :class="[`room-${zone.key}`, `label-${zone.label}`]"
-            :style="zoneStyle(zone)"
+            :class="[`room-${zone.key}`, `object-${zone.object}`, `shape-${zone.hitShape || 'rect'}`]"
+            :style="objectHitboxStyle(zone)"
+            :aria-label="objectAriaLabel(zone)"
           >
-            <strong>{{ zone.title }}</strong>
-            <small>{{ zone.subtitle }}</small>
+            <span class="sr-only">{{ objectAriaLabel(zone) }}</span>
           </div>
         </template>
         <div class="beam beam-top"></div>
@@ -98,19 +98,6 @@
         </div>
         <button v-if="hiddenAgentCount" class="hall-overflow" type="button" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'agents')">
           另有 {{ hiddenAgentCount }} 位在偏厅候令
-        </button>
-        <button
-          v-for="hotspot in panelHotspots"
-          :key="hotspot.key"
-          class="scene-hotspot"
-          :class="`hotspot-${hotspot.key}`"
-          :style="hotspotStyle(hotspot)"
-          @pointerdown.stop
-          @pointerup.stop
-          @click.stop="openZone(hotspot)"
-        >
-          <var-icon :name="hotspotIcon(hotspot)" />
-          <span>{{ hotspot.title }}</span>
         </button>
       </div>
     </div>
@@ -165,8 +152,6 @@ const mapWorldStyle = computed(() => ({
 
 const hallInteractiveZones = computed(() => hallPhysicalScene.interactiveZones)
 
-const panelHotspots = computed(() => hallPhysicalScene.interactiveZones.filter(zone => zone.panel && zone.panel !== 'chat'))
-
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
 const roomPropStyle = (prop) => {
@@ -183,16 +168,12 @@ const roomPropStyle = (prop) => {
   }
 }
 
-const zoneStyle = (zone) => ({
+const objectHitboxStyle = (zone) => ({
   left: `${zone.x}%`,
   top: `${zone.y}%`,
   width: `${zone.w}%`,
-  height: `${zone.h}%`
-})
-
-const hotspotStyle = (zone) => ({
-  left: `${zone.x}%`,
-  top: `${zone.y}%`
+  height: `${zone.h}%`,
+  '--object-tilt': `${zone.tilt || 0}deg`
 })
 
 const zoneSubtitle = (zone) => {
@@ -200,12 +181,7 @@ const zoneSubtitle = (zone) => {
   return zone.subtitle
 }
 
-const hotspotIcon = (zone) => ({
-  agents: 'account-circle',
-  catalog: 'account-plus',
-  tasks: 'format-list-checkbox',
-  library: 'notebook'
-})[zone.key] || 'map-marker'
+const objectAriaLabel = (zone) => `${zone.title}，${zoneSubtitle(zone)}`
 
 const openZone = (zone) => {
   if (zone.panel === 'chat') {
@@ -555,91 +531,126 @@ button {
 .hall-room {
   position: absolute;
   z-index: 8;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1px;
+  display: block;
   min-width: 0;
   min-height: 0;
-  padding: 4px 7px;
-  transform: translate(-50%, -50%);
-  border: 1px solid rgba(73, 43, 22, 0.64);
-  border-radius: 4px;
-  background:
-    linear-gradient(180deg, rgba(248, 224, 165, 0.88), rgba(132, 81, 37, 0.88)),
-    rgba(67, 39, 22, 0.9);
-  color: #33200f;
-  text-align: center;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 246, 211, 0.42),
-    inset 0 -2px 0 rgba(54, 29, 13, 0.28),
-    0 7px 13px rgba(0, 0, 0, 0.26);
+  padding: 0;
+  transform: translate(-50%, -50%) rotate(var(--object-tilt, 0deg));
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: transparent;
   backdrop-filter: none;
+  touch-action: manipulation;
 }
 
 button.hall-room {
   cursor: pointer;
 }
 
-.hall-room:hover {
-  border-color: rgba(244, 200, 76, 0.9);
+.hall-room.is-static {
+  pointer-events: none;
+}
+
+.hall-room::before,
+.hall-room::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    filter 0.16s ease;
+}
+
+.hall-room::before {
+  inset: 8%;
+  border-radius: 9px;
   background:
-    linear-gradient(180deg, rgba(255, 235, 177, 0.95), rgba(155, 91, 40, 0.92)),
-    rgba(84, 48, 24, 0.95);
+    radial-gradient(ellipse at 50% 45%, rgba(255, 232, 159, 0.34), rgba(255, 207, 87, 0.12) 48%, transparent 74%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 250, 232, 0.4),
-    0 0 0 3px rgba(244, 200, 76, 0.22),
-    0 10px 19px rgba(0, 0, 0, 0.24);
+    inset 0 0 16px rgba(255, 238, 178, 0.24),
+    0 0 18px rgba(235, 178, 62, 0.2);
+  mix-blend-mode: screen;
+  transform: scale(0.94);
 }
 
-.hall-room strong,
-.hall-room small {
+.hall-room::after {
+  left: 50%;
+  bottom: 8%;
+  width: 56%;
+  height: 8%;
+  transform: translateX(-50%) scaleX(0.82);
+  border-radius: 50%;
+  background: rgba(255, 221, 130, 0.26);
+  filter: blur(8px);
+}
+
+button.hall-room:hover::before,
+button.hall-room:focus-visible::before,
+button.hall-room:active::before {
+  opacity: 1;
+  transform: scale(1);
+}
+
+button.hall-room:hover::after,
+button.hall-room:focus-visible::after,
+button.hall-room:active::after {
+  opacity: 1;
+  transform: translateX(-50%) scaleX(1);
+}
+
+button.hall-room:focus-visible {
+  outline: 2px solid rgba(255, 232, 159, 0.84);
+  outline-offset: 3px;
+}
+
+.shape-ellipse {
+  border-radius: 50%;
+  clip-path: ellipse(50% 50% at 50% 50%);
+}
+
+.shape-plaque {
+  clip-path: polygon(6% 12%, 94% 12%, 100% 50%, 94% 88%, 6% 88%, 0 50%);
+}
+
+.object-plaque::before {
+  inset: 5% 2%;
+  border-radius: 6px;
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 232, 159, 0.36) 50%, transparent),
+    radial-gradient(ellipse at 50% 50%, rgba(255, 214, 113, 0.2), transparent 68%);
+}
+
+.object-ledger::before,
+.object-notice-rack::before,
+.object-scroll-shelf::before {
+  inset: 4% 7%;
+  border-radius: 7px;
+}
+
+.object-drum::before {
+  inset: 2%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 45% 42%, rgba(255, 232, 159, 0.38), rgba(182, 58, 36, 0.12) 52%, transparent 74%);
+}
+
+.object-rear-gear::before {
+  inset: 6% 10%;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
   overflow: hidden;
-  max-width: 100%;
-  text-overflow: ellipsis;
+  clip: rect(0, 0, 0, 0);
   white-space: nowrap;
-}
-
-.hall-room strong {
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.hall-room small {
-  color: rgba(57, 32, 13, 0.74);
-  font-size: 10px;
-}
-
-.label-plaque {
-  border-color: rgba(111, 48, 26, 0.78);
-  background:
-    linear-gradient(180deg, rgba(152, 43, 31, 0.9), rgba(82, 39, 20, 0.92)),
-    #642a1d;
-  color: #fff1c1;
-}
-
-.label-plaque small {
-  color: rgba(255, 231, 179, 0.78);
-}
-
-.label-book-tag,
-.label-scroll-tag {
-  background:
-    linear-gradient(180deg, rgba(229, 210, 167, 0.92), rgba(151, 113, 68, 0.9)),
-    #8f6a40;
-}
-
-.label-drum-tag {
-  border-radius: 999px;
-  background:
-    linear-gradient(180deg, rgba(179, 55, 37, 0.9), rgba(88, 43, 24, 0.94)),
-    #7a2a21;
-  color: #fff1c1;
-}
-
-.label-drum-tag small {
-  color: rgba(255, 231, 179, 0.78);
+  border: 0;
 }
 
 .beam {
@@ -703,38 +714,6 @@ button.hall-room {
   backdrop-filter: blur(8px);
 }
 
-.scene-hotspot {
-  position: absolute;
-  z-index: 9;
-  display: none;
-  align-items: center;
-  gap: 6px;
-  min-height: 36px;
-  padding: 0 10px;
-  border: 1px solid rgba(255, 240, 202, 0.3);
-  border-radius: 8px;
-  background: rgba(255, 250, 240, 0.9);
-  color: #4a3423;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
-}
-
-.hotspot-agents {
-  transform: translate(-50%, -50%);
-}
-
-.hotspot-catalog {
-  transform: translate(-50%, -50%);
-}
-
-.hotspot-tasks {
-  transform: translateX(-50%);
-  transform: translate(-50%, -50%);
-}
-
-.hotspot-library {
-  transform: translate(-50%, -50%);
-}
-
 @keyframes refreshSpin {
   to {
     transform: rotate(360deg);
@@ -794,22 +773,6 @@ button.hall-room {
     top: 92px;
   }
 
-  .scene-hotspot {
-    min-height: 32px;
-    padding: 0 8px;
-    font-size: 12px;
-  }
-
-  .hotspot-agents {
-    left: 5%;
-    top: 63%;
-  }
-
-  .hotspot-library {
-    right: 5%;
-    bottom: 20%;
-  }
-
   .map-world {
     width: 164%;
     height: 146%;
@@ -848,18 +811,6 @@ button.hall-room {
     bottom: 13%;
     width: 22%;
     height: 15%;
-  }
-
-  .hall-room {
-    padding: 7px;
-  }
-
-  .hall-room strong {
-    font-size: 13px;
-  }
-
-  .hall-room small {
-    font-size: 10px;
   }
 }
 </style>

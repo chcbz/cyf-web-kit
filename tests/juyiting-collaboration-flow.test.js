@@ -63,11 +63,19 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(bountySource).not.to.include('>传令<')
   })
 
+  it('uses in-scene objects as click targets instead of visible label boxes', () => {
+    expect(hallStageSource).to.include('objectHitboxStyle(zone)')
+    expect(hallStageSource).to.include('object-${zone.object}')
+    expect(hallStageSource).to.include('sr-only')
+    expect(hallStageSource).not.to.include('<strong>{{ zone.title }}</strong>')
+    expect(hallStageSource).not.to.include('<small>{{ zoneSubtitle(zone) }}</small>')
+    expect(hallStageSource).not.to.include('scene-hotspot')
+  })
+
   it('keeps bounty panel opening isolated from map drag and enter flicker', () => {
     expect(hallStageSource).to.include('@pointerdown.stop')
     expect(hallStageSource).to.include('@pointerup.stop')
     expect(hallStageSource).to.include('@click.stop="openZone(zone)"')
-    expect(hallStageSource).to.include('@click.stop="openZone(hotspot)"')
     expect(hallSource).to.include(':class="{ \'is-panel-open\': activePanel }"')
     expect(hallSource).to.include('.juyi-page.is-panel-open :deep(.hall-board)')
     expect(hallSource).to.include('animation-play-state: paused !important;')

@@ -447,12 +447,12 @@ export const hallPhysicalScene = {
     { key: 'far-right-pillar', type: 'ellipse', x: 91, y: 55, rx: 4, ry: 13, strength: 2, heightRatio: 2 }
   ],
   interactiveZones: [
-    { key: 'main', panel: 'chat', title: '聚义厅', subtitle: '厅前公议 / 众好汉', x: 50, y: 36, w: 12, h: 7, label: 'plaque' },
-    { key: 'agents', panel: 'agents', title: '好汉簿', subtitle: '点将调遣', x: 21, y: 32, w: 13, h: 7, label: 'book-tag' },
-    { key: 'tasks', panel: 'tasks', title: '榜文房', subtitle: '榜文', x: 75, y: 39, w: 13, h: 7, label: 'notice-tag' },
-    { key: 'catalog', panel: 'catalog', title: '招贤馆', subtitle: '遍请豪杰', x: 14, y: 68, w: 12, h: 7, label: 'drum-tag' },
-    { key: 'library', panel: 'library', title: '藏书阁', subtitle: '查卷问典', x: 81, y: 69, w: 12, h: 7, label: 'scroll-tag' },
-    { key: 'back', panel: null, title: '后堂', subtitle: '整装', x: 67, y: 26, w: 10, h: 6, label: 'rear-tag' }
+    { key: 'main', panel: 'chat', title: '聚义厅', subtitle: '厅前公议 / 众好汉', x: 50, y: 36, w: 18, h: 11, object: 'plaque', hitShape: 'plaque', tilt: 0 },
+    { key: 'agents', panel: 'agents', title: '好汉簿', subtitle: '点将调遣', x: 21, y: 35, w: 18, h: 15, object: 'ledger', hitShape: 'rect', tilt: -2 },
+    { key: 'tasks', panel: 'tasks', title: '榜文房', subtitle: '榜文', x: 76, y: 47, w: 19, h: 18, object: 'notice-rack', hitShape: 'rect', tilt: 1 },
+    { key: 'catalog', panel: 'catalog', title: '招贤馆', subtitle: '遍请豪杰', x: 13, y: 77, w: 17, h: 15, object: 'drum', hitShape: 'ellipse', tilt: 0 },
+    { key: 'library', panel: 'library', title: '藏书阁', subtitle: '查卷问典', x: 82, y: 76, w: 22, h: 18, object: 'scroll-shelf', hitShape: 'rect', tilt: -1 },
+    { key: 'back', panel: null, title: '后堂', subtitle: '整装', x: 67, y: 26, w: 12, h: 8, object: 'rear-gear', hitShape: 'rect', tilt: 0 }
   ],
   patrolAnchors: [
     { x: 26, y: 73, radiusX: 4, radiusY: 3, linger: [2600, 4800] },
