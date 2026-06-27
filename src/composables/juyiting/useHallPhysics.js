@@ -224,9 +224,10 @@ export const useHallPhysics = (visibleAgents, normalizeStatus) => {
       '--trim-color': role.trim,
       '--body-scale': role.scale,
       '--step-speed': `${clamp(role.step / Math.max(walkActivity, 0.35), 0.48, 1.15)}s`,
+      '--idle-speed': `${clamp(role.step * 3.8, 2.25, 3.8)}s`,
       '--step-lift': `${isMoving ? 2 + walkActivity * 2 : 0}px`,
       '--shadow-scale': isMoving ? 0.88 + walkActivity * 0.16 : 0.88,
-      '--motion-play-state': isMoving ? 'running' : 'paused'
+      '--walk-play-state': isMoving ? 'running' : 'paused'
     }
   }
 
