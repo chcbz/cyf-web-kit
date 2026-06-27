@@ -87,6 +87,149 @@ export const roleCostumeVisuals = {
   default: { column: 0, row: 0, scale: 1.04 }
 }
 
+export const hallScale = {
+  personHeightPct: 10.8,
+  personFootprintPct: { width: 2.6, height: 1.1 },
+  depthScaleMin: 0.82,
+  depthScaleMax: 1.12,
+  depthReference: { minY: 22, maxY: 84 },
+  propRatios: {
+    mainTable: 0.45,
+    bookcase: 1.42,
+    bountyRack: 1.1,
+    recruitDrum: 0.66,
+    weaponRack: 1.34,
+    pillarDiameter: 0.25
+  }
+}
+
+export const bodyTypeByMotif = {
+  scroll: 'strategist',
+  craft: 'healer',
+  weapon: 'general',
+  wave: 'river',
+  beast: 'brute',
+  spirit: 'brute',
+  wind: 'scout',
+  flourish: 'heroine',
+  crest: 'leader'
+}
+
+export const roleBodyOverrides = {
+  songjiang: 'leader',
+  wuyong: 'strategist',
+  guansheng: 'general',
+  linchong: 'general',
+  qinming: 'general',
+  luzhishen: 'monk',
+  likui: 'brute',
+  daizong: 'scout',
+  andaoquan: 'healer',
+  husanniang: 'heroine'
+}
+
+export const roleBodyVisuals = {
+  leader: {
+    column: 0,
+    row: 0,
+    width: 0.6,
+    height: 1,
+    headScale: 0.92,
+    shoulderWidth: 0.31,
+    stance: 0.18,
+    gaitWeight: 0.82,
+    propType: 'seal'
+  },
+  strategist: {
+    column: 1,
+    row: 0,
+    width: 0.58,
+    height: 1,
+    headScale: 0.9,
+    shoulderWidth: 0.29,
+    stance: 0.12,
+    gaitWeight: 0.72,
+    propType: 'fan'
+  },
+  general: {
+    column: 2,
+    row: 0,
+    width: 0.66,
+    height: 1.03,
+    headScale: 0.88,
+    shoulderWidth: 0.36,
+    stance: 0.32,
+    gaitWeight: 1.05,
+    propType: 'blade'
+  },
+  brute: {
+    column: 0,
+    row: 1,
+    width: 0.72,
+    height: 1.04,
+    headScale: 0.92,
+    shoulderWidth: 0.38,
+    stance: 0.42,
+    gaitWeight: 1.18,
+    propType: 'club'
+  },
+  river: {
+    column: 1,
+    row: 1,
+    width: 0.62,
+    height: 0.99,
+    headScale: 0.88,
+    shoulderWidth: 0.32,
+    stance: 0.28,
+    gaitWeight: 0.96,
+    propType: 'polearm'
+  },
+  scout: {
+    column: 2,
+    row: 1,
+    width: 0.56,
+    height: 0.99,
+    headScale: 0.86,
+    shoulderWidth: 0.28,
+    stance: 0.34,
+    gaitWeight: 0.66,
+    propType: 'shortblade'
+  },
+  healer: {
+    column: 0,
+    row: 2,
+    width: 0.58,
+    height: 1,
+    headScale: 0.9,
+    shoulderWidth: 0.29,
+    stance: 0.16,
+    gaitWeight: 0.78,
+    propType: 'case'
+  },
+  heroine: {
+    column: 1,
+    row: 2,
+    width: 0.55,
+    height: 1,
+    headScale: 0.87,
+    shoulderWidth: 0.27,
+    stance: 0.24,
+    gaitWeight: 0.74,
+    propType: 'spear'
+  },
+  monk: {
+    column: 2,
+    row: 2,
+    width: 0.64,
+    height: 1.02,
+    headScale: 0.93,
+    shoulderWidth: 0.35,
+    stance: 0.34,
+    gaitWeight: 0.92,
+    propType: 'staff'
+  }
+}
+
 const robePalette = [
   '#7c1f1b', '#23483e', '#3f4f78', '#8b5a1f', '#5c2d63', '#6d3f1f',
   '#2f6f6a', '#6f2e2e', '#315f3e', '#384f7a', '#865335', '#4f5d2f'
@@ -229,6 +372,10 @@ export const portraitRoles = personaPortraitSeeds.map(([slug, rankNo, starName, 
   scale: 0.94 + ((index % 7) * 0.025),
   step: 0.6 + ((index % 9) * 0.035),
   faceTone: index % 5,
+  bodyType: roleBodyOverrides[slug] || bodyTypeByMotif[motifFor(name, title)] || 'leader',
+  stance: roleBodyVisuals[roleBodyOverrides[slug] || bodyTypeByMotif[motifFor(name, title)] || 'leader'].stance,
+  propType: roleBodyVisuals[roleBodyOverrides[slug] || bodyTypeByMotif[motifFor(name, title)] || 'leader'].propType,
+  gaitWeight: roleBodyVisuals[roleBodyOverrides[slug] || bodyTypeByMotif[motifFor(name, title)] || 'leader'].gaitWeight,
   beard: /宋江|卢俊义|关胜|林冲|朱仝|鲁智深|杨志|朱武|裴宣|宋万|杜迁|郁保四|段景住/.test(name),
   headwear: /军师|书生|神算|神医|孔目|铁扇子|圣手/.test(title) ? 'cap' : (/和尚|行者/.test(title) ? 'band' : 'helm')
 }))

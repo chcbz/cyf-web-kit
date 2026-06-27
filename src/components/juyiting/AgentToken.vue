@@ -8,6 +8,11 @@
     <span v-if="bubbleText" class="agent-dialogue">{{ bubbleText }}</span>
     <span class="agent-shadow"></span>
     <span class="agent-figure" :title="portraitName(agent)">
+      <span
+        class="agent-body-sprite"
+        :class="bodyClass"
+        :style="bodySpriteStyle"
+      ></span>
       <span class="agent-weapon"></span>
       <span class="agent-cape"></span>
       <span class="agent-hat"></span>
@@ -42,8 +47,9 @@
 
 <script setup>
 import { computed } from 'vue'
+import characterBodyAtlas from '@/assets/juyiting/liangshan-character-body-atlas-v1.png'
 import characterAtlas from '@/assets/juyiting/liangshan-character-atlas-v2.png'
-import { roleCostumeVisuals } from '@/constants/juyiting'
+import { roleBodyVisuals, roleCostumeVisuals } from '@/constants/juyiting'
 import { portraitRole } from '@/composables/juyiting/useWaterMarginRoles'
 
 const props = defineProps({
@@ -70,6 +76,32 @@ const costumeClass = computed(() => `costume-${portraitRole(props.agent).motif |
 
 const motifClass = computed(() => `motif-${portraitRole(props.agent).motif || 'crest'}`)
 
+const bodyConfig = computed(() => {
+  const role = portraitRole(props.agent)
+  return roleBodyVisuals[role.bodyType] || roleBodyVisuals.leader
+})
+
+const bodyClass = computed(() => `body-${portraitRole(props.agent).bodyType || 'leader'}`)
+
+const bodySpriteStyle = computed(() => {
+  const config = bodyConfig.value
+  const columns = 3
+  const rows = 3
+  const x = (config.column / (columns - 1)) * 100
+  const y = (config.row / (rows - 1)) * 100
+  return {
+    '--body-image': `url("${characterBodyAtlas}")`,
+    '--body-x': `${x}%`,
+    '--body-y': `${y}%`,
+    '--real-body-width': config.width,
+    '--real-body-height': config.height,
+    '--head-scale': config.headScale,
+    '--shoulder-width': config.shoulderWidth,
+    '--body-stance': config.stance,
+    '--body-gait-weight': config.gaitWeight
+  }
+})
+
 const costumeStyle = computed(() => {
   const config = costumeConfig.value
   const columns = 4
@@ -89,10 +121,10 @@ const costumeStyle = computed(() => {
 .agent-token {
   position: absolute;
   z-index: 4;
-  width: 76px;
-  height: 108px;
+  width: 88px;
+  height: 146px;
   padding: 0;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -100%);
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -116,7 +148,7 @@ const costumeStyle = computed(() => {
 .agent-dialogue {
   position: absolute;
   left: 50%;
-  bottom: 92px;
+  bottom: 126px;
   z-index: 8;
   width: max-content;
   min-width: 112px;
@@ -154,9 +186,9 @@ const costumeStyle = computed(() => {
 .agent-shadow {
   position: absolute;
   left: 50%;
-  bottom: 14px;
-  width: calc(48px * var(--body-scale, 1) * 0.76);
-  height: 12px;
+  bottom: 3px;
+  width: calc(34px * var(--body-scale, 1) * var(--depth-scale, 1));
+  height: 9px;
   transform: translateX(-50%);
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.25);
@@ -168,33 +200,56 @@ const costumeStyle = computed(() => {
 .agent-figure {
   position: absolute;
   left: 50%;
-  bottom: 19px;
-  width: 68px;
-  height: 98px;
-  transform: translateX(-50%) scaleX(var(--face, 1)) scale(calc(var(--body-scale, 1) * 0.76));
+  bottom: 8px;
+  width: 76px;
+  height: 128px;
+  transform: translateX(-50%) scaleX(var(--face, 1)) scale(calc(var(--body-scale, 1) * var(--depth-scale, 1) * 0.78));
   transform-origin: 50% 100%;
   animation:
-    agentStepBob var(--step-speed, 0.72s) ease-in-out infinite,
+    agentStepShift var(--step-speed, 0.72s) ease-in-out infinite,
     agentBreath var(--idle-speed, 2.8s) ease-in-out infinite;
   animation-play-state: var(--walk-play-state, running), running;
+}
+
+.agent-body-sprite {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  z-index: 3;
+  width: calc(92px * var(--real-body-width, 0.6));
+  height: calc(124px * var(--real-body-height, 1));
+  transform: translateX(-50%);
+  transform-origin: 50% 100%;
+  background-image: var(--body-image);
+  background-position: var(--body-x) var(--body-y);
+  background-repeat: no-repeat;
+  background-size: 300% 300%;
+  filter:
+    drop-shadow(0 9px 9px rgba(0, 0, 0, 0.24))
+    saturate(0.94)
+    contrast(1.02);
+  animation: bodyWeightShift var(--step-speed, 0.72s) ease-in-out infinite;
+  animation-play-state: var(--walk-play-state, running);
+  pointer-events: none;
 }
 
 .agent-head {
   position: absolute;
   left: 50%;
-  top: 3px;
-  width: 40px;
-  height: 40px;
+  top: 10px;
+  width: calc(17px * var(--head-scale, 0.9));
+  height: calc(20px * var(--head-scale, 0.9));
   transform: translateX(-50%) scaleX(var(--face, 1));
-  border-radius: 50% 50% 46% 46%;
+  border-radius: 48% 48% 46% 46%;
   z-index: 8;
   animation: agentLook var(--idle-speed, 2.8s) ease-in-out infinite;
+  opacity: 0.88;
 }
 
 .agent-hat {
   position: absolute;
   left: 50%;
-  top: -6px;
+  top: 5px;
   z-index: 9;
   display: none;
   transform: translateX(-50%);
@@ -204,7 +259,7 @@ const costumeStyle = computed(() => {
 .agent-cape {
   position: absolute;
   left: 50%;
-  top: 35px;
+  top: 40px;
   z-index: 0;
   display: none;
   transform: translateX(-50%);
@@ -214,10 +269,10 @@ const costumeStyle = computed(() => {
 .agent-neck {
   position: absolute;
   left: 50%;
-  top: 35px;
+  top: 29px;
   z-index: 5;
-  width: 14px;
-  height: 11px;
+  width: 8px;
+  height: 8px;
   transform: translateX(-50%);
   border-radius: 0 0 8px 8px;
   background: #b98258;
@@ -227,22 +282,22 @@ const costumeStyle = computed(() => {
 .agent-costume {
   position: absolute;
   left: 50%;
-  top: 31px;
+  top: 29px;
   z-index: 4;
-  width: 78px;
-  height: 58px;
-  transform: translateX(-50%) scale(calc(var(--costume-scale, 1) * 0.78));
+  width: 58px;
+  height: 82px;
+  transform: translateX(-50%) scale(calc(var(--costume-scale, 1) * 0.82));
   transform-origin: 50% 18%;
   background-image: var(--costume-image);
   background-position: var(--costume-x) var(--costume-y);
   background-repeat: no-repeat;
   background-size: 400% 300%;
-  border-radius: 18px 18px 16px 16px;
+  border-radius: 15px 15px 22px 22px;
   filter:
     drop-shadow(0 5px 6px rgba(0, 0, 0, 0.26))
     saturate(0.92)
     contrast(1.04);
-  opacity: 0.72;
+  opacity: 0.2;
   pointer-events: none;
   mix-blend-mode: multiply;
   animation: costumeSettle var(--idle-speed, 2.8s) ease-in-out infinite;
@@ -286,19 +341,19 @@ const costumeStyle = computed(() => {
 .agent-body {
   position: absolute;
   left: 50%;
-  top: 34px;
-  width: 36px;
-  height: 44px;
-  transform: translateX(-50%);
-  border-radius: 16px 16px 10px 10px;
+  top: 40px;
+  width: calc(30px + (var(--shoulder-width, 0.32) * 16px));
+  height: 48px;
+  transform: translateX(-50%) skewX(calc(var(--body-stance, 0.2) * -2deg));
+  border-radius: 13px 13px 11px 11px;
   background:
     linear-gradient(135deg, transparent 42%, rgba(255, 255, 255, 0.26) 43%, transparent 47%),
     linear-gradient(180deg, color-mix(in srgb, var(--robe-color) 78%, #ffffff), var(--robe-color));
   box-shadow:
     inset 0 0 0 2px rgba(255, 244, 212, 0.34),
     0 6px 10px rgba(0, 0, 0, 0.18);
-  z-index: 3;
-  opacity: 0.88;
+  z-index: 5;
+  opacity: 0.2;
 }
 
 .agent-sash {
@@ -332,12 +387,13 @@ const costumeStyle = computed(() => {
 }
 
 .agent-arm {
-  top: 42px;
-  width: 10px;
-  height: 30px;
+  top: 48px;
+  width: 8px;
+  height: 35px;
   border-radius: 8px;
   transform-origin: 50% 4px;
   z-index: 5;
+  opacity: 0.36;
   box-shadow: inset 0 -8px 0 rgba(255, 237, 200, 0.12);
 }
 
@@ -354,44 +410,45 @@ const costumeStyle = computed(() => {
 }
 
 .agent-arm-left {
-  left: 8px;
+  left: calc(17px - var(--body-stance, 0.2) * 4px);
   animation: agentArmLeft var(--step-speed, 0.72s) ease-in-out infinite;
   animation-play-state: var(--walk-play-state, running);
 }
 
 .agent-arm-right {
-  right: 8px;
+  right: calc(17px - var(--body-stance, 0.2) * 4px);
   animation: agentArmRight var(--step-speed, 0.72s) ease-in-out infinite;
   animation-play-state: var(--walk-play-state, running);
 }
 
 .agent-leg {
-  top: 72px;
-  width: 11px;
-  height: 22px;
+  top: 82px;
+  width: 9px;
+  height: 31px;
   border-radius: 8px 8px 6px 6px;
   transform-origin: 50% 2px;
   z-index: 2;
+  opacity: 0.34;
 }
 
 .agent-leg-left {
-  left: 19px;
+  left: calc(26px - var(--body-stance, 0.2) * 5px);
   animation: agentLegLeft var(--step-speed, 0.72s) ease-in-out infinite;
   animation-play-state: var(--walk-play-state, running);
 }
 
 .agent-leg-right {
-  right: 19px;
+  right: calc(26px - var(--body-stance, 0.2) * 5px);
   animation: agentLegRight var(--step-speed, 0.72s) ease-in-out infinite;
   animation-play-state: var(--walk-play-state, running);
 }
 
 .agent-boot {
   position: absolute;
-  top: 91px;
+  top: 113px;
   z-index: 7;
-  width: 18px;
-  height: 8px;
+  width: 15px;
+  height: 6px;
   border-radius: 50% 50% 6px 6px;
   background: #251711;
   box-shadow:
@@ -400,14 +457,14 @@ const costumeStyle = computed(() => {
 }
 
 .agent-boot-left {
-  left: 15px;
+  left: calc(22px - var(--body-stance, 0.2) * 5px);
   transform-origin: 75% 50%;
   animation: agentBootLeft var(--step-speed, 0.72s) ease-in-out infinite;
   animation-play-state: var(--walk-play-state, running);
 }
 
 .agent-boot-right {
-  right: 15px;
+  right: calc(22px - var(--body-stance, 0.2) * 5px);
   transform-origin: 25% 50%;
   animation: agentBootRight var(--step-speed, 0.72s) ease-in-out infinite;
   animation-play-state: var(--walk-play-state, running);
@@ -415,8 +472,8 @@ const costumeStyle = computed(() => {
 
 .role-songjiang .agent-hat {
   display: block;
-  width: 40px;
-  height: 13px;
+  width: 21px;
+  height: 7px;
   border-radius: 12px 12px 6px 6px;
   background: #1f1712;
   box-shadow: inset 0 4px 0 rgba(255, 244, 212, 0.18);
@@ -426,9 +483,9 @@ const costumeStyle = computed(() => {
   content: '';
   position: absolute;
   left: 50%;
-  top: -7px;
-  width: 12px;
-  height: 12px;
+  top: -5px;
+  width: 8px;
+  height: 8px;
   transform: translateX(-50%);
   border-radius: 50% 50% 3px 3px;
   background: #1f1712;
@@ -436,8 +493,8 @@ const costumeStyle = computed(() => {
 
 .role-songjiang .agent-cape {
   display: block;
-  width: 46px;
-  height: 50px;
+  width: 38px;
+  height: 78px;
   border-radius: 18px 18px 14px 14px;
   background: linear-gradient(180deg, rgba(122, 31, 27, 0.86), rgba(63, 24, 18, 0.64));
 }
@@ -448,10 +505,10 @@ const costumeStyle = computed(() => {
 
 .role-wuyong .agent-accessory {
   display: block;
-  right: -10px;
-  top: 38px;
-  width: 28px;
-  height: 24px;
+  right: 4px;
+  top: 39px;
+  width: 22px;
+  height: 20px;
   transform: rotate(-22deg);
   border-radius: 100% 0 100% 0;
   background:
@@ -461,16 +518,16 @@ const costumeStyle = computed(() => {
 }
 
 .role-wuyong .agent-body {
-  width: 32px;
+  width: 29px;
   border-radius: 20px 20px 12px 12px;
 }
 
 .role-linchong .agent-weapon {
   display: block;
-  left: -2px;
-  top: -10px;
-  width: 5px;
-  height: 106px;
+  left: 2px;
+  top: 3px;
+  width: 4px;
+  height: 118px;
   transform: rotate(13deg);
   border-radius: 5px;
   background: linear-gradient(180deg, #d9d0be 0 10px, #51341d 10px 100%);
@@ -493,17 +550,17 @@ const costumeStyle = computed(() => {
 }
 
 .role-luzhishen .agent-body {
-  width: 42px;
-  height: 46px;
+  width: 38px;
+  height: 49px;
   border-radius: 18px 18px 12px 12px;
 }
 
 .role-luzhishen .agent-weapon {
   display: block;
-  right: -2px;
-  top: 5px;
-  width: 7px;
-  height: 86px;
+  right: 6px;
+  top: 26px;
+  width: 6px;
+  height: 92px;
   transform: rotate(-10deg);
   border-radius: 6px;
   background: linear-gradient(180deg, #d9d0be, #6d3f1f 34%, #3a2418);
@@ -523,9 +580,9 @@ const costumeStyle = computed(() => {
 
 .role-yanqing .agent-cape {
   display: block;
-  top: 38px;
-  width: 38px;
-  height: 38px;
+  top: 42px;
+  width: 30px;
+  height: 60px;
   border-radius: 14px 14px 20px 20px;
   background: linear-gradient(180deg, rgba(92, 45, 99, 0.74), rgba(35, 72, 62, 0.58));
 }
@@ -545,17 +602,17 @@ const costumeStyle = computed(() => {
 
 .role-husanniang .agent-cape {
   display: block;
-  top: 32px;
-  width: 44px;
-  height: 44px;
+  top: 38px;
+  width: 34px;
+  height: 68px;
   border-radius: 18px 18px 24px 24px;
   background: linear-gradient(180deg, rgba(47, 111, 106, 0.78), rgba(22, 56, 52, 0.52));
 }
 
 .role-husanniang .agent-hat {
   display: block;
-  width: 18px;
-  height: 32px;
+  width: 12px;
+  height: 24px;
   border-radius: 14px 14px 6px 6px;
   background: linear-gradient(180deg, #1d1713, #4b3020 42%, rgba(29, 23, 19, 0));
 }
@@ -595,10 +652,10 @@ const costumeStyle = computed(() => {
 
 .role-husanniang .agent-weapon {
   display: block;
-  right: -6px;
-  top: 12px;
-  width: 34px;
-  height: 34px;
+  right: 2px;
+  top: 39px;
+  width: 28px;
+  height: 28px;
   transform: rotate(18deg);
 }
 
@@ -625,26 +682,26 @@ const costumeStyle = computed(() => {
 }
 
 .role-likui .agent-body {
-  width: 41px;
-  height: 45px;
+  width: 39px;
+  height: 50px;
   border-radius: 15px 15px 11px 11px;
 }
 
 .role-likui .agent-accessory,
 .role-likui .agent-weapon {
   display: block;
-  top: 38px;
+  top: 48px;
   width: 20px;
   height: 26px;
 }
 
 .role-likui .agent-weapon {
-  left: -8px;
+  left: 2px;
   transform: rotate(-24deg);
 }
 
 .role-likui .agent-accessory {
-  right: -8px;
+  right: 2px;
   transform: rotate(24deg);
 }
 
@@ -772,6 +829,13 @@ const costumeStyle = computed(() => {
     contrast(1.04);
 }
 
+.is-idle .agent-body-sprite {
+  filter:
+    drop-shadow(0 9px 9px rgba(0, 0, 0, 0.24))
+    saturate(0.98)
+    contrast(1.02);
+}
+
 .is-busy {
   color: #9a5b00;
 }
@@ -782,6 +846,14 @@ const costumeStyle = computed(() => {
     saturate(0.86)
     sepia(0.12)
     contrast(1.04);
+}
+
+.is-busy .agent-body-sprite {
+  filter:
+    drop-shadow(0 9px 9px rgba(0, 0, 0, 0.28))
+    saturate(0.9)
+    sepia(0.08)
+    contrast(1.03);
 }
 
 .is-busy .agent-head,
@@ -802,7 +874,7 @@ const costumeStyle = computed(() => {
 
 .is-error .agent-figure {
   animation:
-    agentStepBob var(--step-speed, 0.72s) ease-in-out infinite,
+    agentStepShift var(--step-speed, 0.72s) ease-in-out infinite,
     agentAlert 0.82s steps(2, end) infinite;
 }
 
@@ -811,12 +883,14 @@ const costumeStyle = computed(() => {
 }
 
 .is-offline .agent-costume,
+.is-offline .agent-body-sprite,
 .is-offline .portrait-avatar {
   filter: grayscale(0.86) saturate(0.62);
   opacity: 0.76;
 }
 
 .is-offline .agent-figure,
+.is-offline .agent-body-sprite,
 .is-offline .agent-head,
 .is-offline .agent-hat,
 .is-offline .agent-cape,
@@ -825,13 +899,23 @@ const costumeStyle = computed(() => {
   animation-play-state: paused;
 }
 
-@keyframes agentStepBob {
+@keyframes agentStepShift {
   0%,
   100% {
-    transform: translateX(-50%) translateY(0) scaleX(var(--face, 1)) scale(calc(var(--body-scale, 1) * 0.76));
+    transform: translateX(-50%) translateY(0) scaleX(var(--face, 1)) scale(calc(var(--body-scale, 1) * var(--depth-scale, 1) * 0.78));
   }
   50% {
-    transform: translateX(-50%) translateY(calc(var(--step-lift, 3px) * -1)) scaleX(var(--face, 1)) scale(calc(var(--body-scale, 1) * 0.76));
+    transform: translateX(-50%) translateY(calc(var(--step-lift, 2px) * -1)) scaleX(var(--face, 1)) scale(calc(var(--body-scale, 1) * var(--depth-scale, 1) * 0.78));
+  }
+}
+
+@keyframes bodyWeightShift {
+  0%,
+  100% {
+    transform: translateX(-50%) rotate(calc(var(--body-stance, 0.2) * -0.8deg));
+  }
+  50% {
+    transform: translateX(calc(-50% + (var(--body-stance, 0.2) * 2px))) rotate(calc(var(--body-stance, 0.2) * 0.8deg));
   }
 }
 
@@ -903,40 +987,40 @@ const costumeStyle = computed(() => {
 @keyframes agentArmLeft {
   0%,
   100% {
-    transform: rotate(24deg);
+    transform: rotate(calc(10deg + var(--body-stance, 0.2) * 24deg));
   }
   50% {
-    transform: rotate(-26deg);
+    transform: rotate(calc(-10deg - var(--body-stance, 0.2) * 22deg));
   }
 }
 
 @keyframes agentArmRight {
   0%,
   100% {
-    transform: rotate(-26deg);
+    transform: rotate(calc(-10deg - var(--body-stance, 0.2) * 22deg));
   }
   50% {
-    transform: rotate(24deg);
+    transform: rotate(calc(10deg + var(--body-stance, 0.2) * 24deg));
   }
 }
 
 @keyframes agentLegLeft {
   0%,
   100% {
-    transform: rotate(-18deg);
+    transform: rotate(calc(-5deg - var(--body-stance, 0.2) * 18deg));
   }
   50% {
-    transform: rotate(20deg);
+    transform: rotate(calc(5deg + var(--body-stance, 0.2) * 18deg));
   }
 }
 
 @keyframes agentLegRight {
   0%,
   100% {
-    transform: rotate(20deg);
+    transform: rotate(calc(5deg + var(--body-stance, 0.2) * 18deg));
   }
   50% {
-    transform: rotate(-18deg);
+    transform: rotate(calc(-5deg - var(--body-stance, 0.2) * 18deg));
   }
 }
 
@@ -1014,6 +1098,7 @@ const costumeStyle = computed(() => {
 @media (prefers-reduced-motion: reduce) {
   .agent-token,
   .agent-figure,
+  .agent-body-sprite,
   .agent-shadow,
   .agent-head,
   .agent-hat,
@@ -1034,54 +1119,60 @@ const costumeStyle = computed(() => {
 
 @media (max-width: 640px) {
   .agent-token {
-    width: 66px;
-    height: 96px;
+    width: 76px;
+    height: 126px;
   }
 
   .agent-figure {
-    width: 60px;
-    height: 88px;
+    width: 66px;
+    height: 110px;
+  }
+
+  .agent-body-sprite {
+    width: calc(80px * var(--real-body-width, 0.6));
+    height: calc(108px * var(--real-body-height, 1));
   }
 
   .agent-head {
-    width: 36px;
-    height: 36px;
+    top: 9px;
+    width: calc(15px * var(--head-scale, 0.9));
+    height: calc(18px * var(--head-scale, 0.9));
   }
 
   .agent-costume {
-    top: 29px;
-    width: 70px;
-    height: 52px;
+    top: 26px;
+    width: 52px;
+    height: 72px;
   }
 
   .agent-body {
-    top: 31px;
-    width: 32px;
-    height: 41px;
+    top: 35px;
+    width: calc(27px + (var(--shoulder-width, 0.32) * 14px));
+    height: 42px;
   }
 
   .agent-arm {
-    top: 38px;
-    height: 27px;
+    top: 42px;
+    height: 30px;
   }
 
   .agent-leg {
-    top: 67px;
-    height: 20px;
+    top: 72px;
+    height: 27px;
   }
 
   .agent-boot {
-    top: 84px;
-    width: 16px;
-    height: 7px;
+    top: 99px;
+    width: 13px;
+    height: 6px;
   }
 
   .agent-boot-left {
-    left: 13px;
+    left: calc(19px - var(--body-stance, 0.2) * 4px);
   }
 
   .agent-boot-right {
-    right: 13px;
+    right: calc(19px - var(--body-stance, 0.2) * 4px);
   }
 
   .agent-name-tag,
@@ -1091,7 +1182,7 @@ const costumeStyle = computed(() => {
   }
 
   .agent-dialogue {
-    bottom: 84px;
+    bottom: 110px;
     min-width: 104px;
     max-width: min(190px, 62vw);
     padding: 6px 8px;

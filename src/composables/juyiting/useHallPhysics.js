@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { hallObstacles, hallPatrolAnchors, trainingRoomAnchor, walkBounds } from '@/constants/juyiting'
+import { hallObstacles, hallPatrolAnchors, hallScale, trainingRoomAnchor, walkBounds } from '@/constants/juyiting'
 import { agentSeed, portraitRole } from '@/composables/juyiting/useWaterMarginRoles'
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
@@ -215,6 +215,13 @@ export const useHallPhysics = (visibleAgents, normalizeStatus) => {
     const role = portraitRole(agent)
     const isMoving = state.speed > 0.18 && !state.isResting
     const walkActivity = isMoving ? clamp(state.speed / 7, 0.25, 1) : 0
+    const depthProgress = clamp(
+      (state.y - hallScale.depthReference.minY) / (hallScale.depthReference.maxY - hallScale.depthReference.minY),
+      0,
+      1
+    )
+    const depthScale = hallScale.depthScaleMin + (hallScale.depthScaleMax - hallScale.depthScaleMin) * depthProgress
+    const gaitWeight = role.gaitWeight || 1
     return {
       left: `${state.x}%`,
       top: `${state.y}%`,
@@ -223,9 +230,15 @@ export const useHallPhysics = (visibleAgents, normalizeStatus) => {
       '--robe-color': role.robe,
       '--trim-color': role.trim,
       '--body-scale': role.scale,
-      '--step-speed': `${clamp(role.step / Math.max(walkActivity, 0.35), 0.48, 1.15)}s`,
+      '--depth-scale': depthScale.toFixed(3),
+      '--person-height-pct': hallScale.personHeightPct,
+      '--footprint-width-pct': hallScale.personFootprintPct.width,
+      '--footprint-height-pct': hallScale.personFootprintPct.height,
+      '--gait-weight': gaitWeight,
+      '--stance': role.stance || 0.2,
+      '--step-speed': `${clamp((role.step * gaitWeight) / Math.max(walkActivity, 0.35), 0.52, 1.28)}s`,
       '--idle-speed': `${clamp(role.step * 3.8, 2.25, 3.8)}s`,
-      '--step-lift': `${isMoving ? 2 + walkActivity * 2 : 0}px`,
+      '--step-lift': `${isMoving ? 1 + walkActivity * 2 : 0}px`,
       '--shadow-scale': isMoving ? 0.88 + walkActivity * 0.16 : 0.88,
       '--walk-play-state': isMoving ? 'running' : 'paused'
     }

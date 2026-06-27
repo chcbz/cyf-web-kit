@@ -1,6 +1,11 @@
 import { existsSync, readFileSync } from 'fs'
 import { expect } from 'chai'
-import { portraitRoles } from '../src/constants/juyiting.js'
+import {
+  bodyTypeByMotif,
+  hallScale,
+  portraitRoles,
+  roleBodyVisuals
+} from '../src/constants/juyiting.js'
 
 const portraitSource = readFileSync(
   new URL('../src/composables/juyiting/useWaterMarginRoles.js', import.meta.url),
@@ -75,5 +80,45 @@ describe('JuyiHall portrait roles', () => {
     expect(portraitSource).to.include("replace(/^agent-/, '')")
     expect(portraitSource).to.include("replace(/^jyt-[^-]+-/, '')")
     expect(portraitSource).to.include('roleByCode(agent?.agentId)')
+  })
+
+  it('maps every role motif to a realistic full-body atlas posture', () => {
+    const visualKeys = new Set(Object.keys(roleBodyVisuals))
+
+    for (const motif of new Set(portraitRoles.map(role => role.motif))) {
+      expect(bodyTypeByMotif[motif], `missing body type for motif ${motif}`).to.be.a('string')
+      expect(visualKeys.has(bodyTypeByMotif[motif]), `missing visual for motif ${motif}`).to.equal(true)
+    }
+
+    for (const role of portraitRoles) {
+      expect(visualKeys.has(role.bodyType), `missing body visual for ${role.slug}`).to.equal(true)
+      expect(role.stance).to.be.within(0.1, 0.45)
+      expect(role.gaitWeight).to.be.within(0.6, 1.2)
+      expect(role.propType).to.be.a('string')
+    }
+  })
+
+  it('keeps full-body atlas and hall scale proportions physically plausible', () => {
+    expect(hallScale.personHeightPct).to.be.within(9, 13)
+    expect(hallScale.personFootprintPct.width / hallScale.personHeightPct).to.be.within(0.2, 0.3)
+    expect(hallScale.personFootprintPct.height / hallScale.personHeightPct).to.be.within(0.08, 0.12)
+    expect(hallScale.depthScaleMin).to.be.lessThan(1)
+    expect(hallScale.depthScaleMax).to.be.greaterThan(1)
+
+    expect(hallScale.propRatios.mainTable).to.be.within(0.4, 0.5)
+    expect(hallScale.propRatios.bookcase).to.be.within(1.35, 1.5)
+    expect(hallScale.propRatios.bountyRack).to.be.within(1.05, 1.15)
+    expect(hallScale.propRatios.recruitDrum).to.be.within(0.6, 0.7)
+    expect(hallScale.propRatios.weaponRack).to.be.within(1.25, 1.4)
+    expect(hallScale.propRatios.pillarDiameter).to.be.within(0.22, 0.28)
+
+    for (const visual of Object.values(roleBodyVisuals)) {
+      expect(visual.column).to.be.within(0, 2)
+      expect(visual.row).to.be.within(0, 2)
+      expect(visual.width).to.be.within(0.54, 0.74)
+      expect(visual.height).to.be.within(0.98, 1.05)
+      expect(visual.headScale).to.be.within(0.84, 0.95)
+      expect(visual.shoulderWidth).to.be.within(0.27, 0.38)
+    }
   })
 })
