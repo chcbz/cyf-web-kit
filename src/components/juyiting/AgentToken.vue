@@ -12,6 +12,11 @@
       <span class="agent-cape"></span>
       <span class="agent-hat"></span>
       <span
+        class="agent-costume"
+        :class="costumeClass"
+        :style="costumeStyle"
+      ></span>
+      <span
         class="agent-head portrait-avatar"
         :style="portraitStyle(agent)"
       ></span>
@@ -33,7 +38,12 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue'
+import characterAtlas from '@/assets/juyiting/liangshan-character-atlas-v2.png'
+import { roleCostumeVisuals } from '@/constants/juyiting'
+import { portraitRole } from '@/composables/juyiting/useWaterMarginRoles'
+
+const props = defineProps({
   active: { type: Boolean, default: false },
   agent: { type: Object, required: true },
   agentStyle: { type: Function, required: true },
@@ -47,14 +57,35 @@ defineProps({
 })
 
 defineEmits(['select-agent'])
+
+const costumeConfig = computed(() => {
+  const role = portraitRole(props.agent)
+  return roleCostumeVisuals[role.slug] || roleCostumeVisuals[role.motif] || roleCostumeVisuals.default
+})
+
+const costumeClass = computed(() => `costume-${portraitRole(props.agent).motif || 'crest'}`)
+
+const costumeStyle = computed(() => {
+  const config = costumeConfig.value
+  const columns = 4
+  const rows = 3
+  const x = (config.column / (columns - 1)) * 100
+  const y = (config.row / (rows - 1)) * 100
+  return {
+    '--costume-image': `url("${characterAtlas}")`,
+    '--costume-x': `${x}%`,
+    '--costume-y': `${y}%`,
+    '--costume-scale': config.scale || 1
+  }
+})
 </script>
 
 <style scoped>
 .agent-token {
   position: absolute;
   z-index: 4;
-  width: 66px;
-  height: 96px;
+  width: 76px;
+  height: 108px;
   padding: 0;
   transform: translate(-50%, -50%);
   border: 0;
@@ -72,7 +103,9 @@ defineEmits(['select-agent'])
 }
 
 .agent-token.active .agent-figure {
-  filter: drop-shadow(0 0 10px rgba(244, 200, 76, 0.78));
+  filter:
+    drop-shadow(0 0 10px rgba(244, 200, 76, 0.78))
+    drop-shadow(0 8px 12px rgba(0, 0, 0, 0.24));
 }
 
 .agent-dialogue {
@@ -116,9 +149,9 @@ defineEmits(['select-agent'])
 .agent-shadow {
   position: absolute;
   left: 50%;
-  bottom: 16px;
-  width: calc(36px * var(--body-scale, 1) * 0.76);
-  height: 10px;
+  bottom: 14px;
+  width: calc(48px * var(--body-scale, 1) * 0.76);
+  height: 12px;
   transform: translateX(-50%);
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.25);
@@ -130,9 +163,9 @@ defineEmits(['select-agent'])
 .agent-figure {
   position: absolute;
   left: 50%;
-  bottom: 21px;
-  width: 58px;
-  height: 88px;
+  bottom: 19px;
+  width: 68px;
+  height: 98px;
   transform: translateX(-50%) scaleX(var(--face, 1)) scale(calc(var(--body-scale, 1) * 0.76));
   transform-origin: 50% 100%;
   animation: agentStepBob var(--step-speed, 0.72s) ease-in-out infinite;
@@ -142,11 +175,11 @@ defineEmits(['select-agent'])
 .agent-head {
   position: absolute;
   left: 50%;
-  top: 0;
-  width: 42px;
-  height: 42px;
+  top: 3px;
+  width: 40px;
+  height: 40px;
   transform: translateX(-50%) scaleX(var(--face, 1));
-  z-index: 3;
+  z-index: 6;
 }
 
 .agent-hat {
@@ -165,6 +198,26 @@ defineEmits(['select-agent'])
   z-index: 0;
   display: none;
   transform: translateX(-50%);
+}
+
+.agent-costume {
+  position: absolute;
+  left: 50%;
+  top: 19px;
+  z-index: 4;
+  width: 82px;
+  height: 80px;
+  transform: translateX(-50%) scale(calc(var(--costume-scale, 1) * 0.78));
+  transform-origin: 50% 12%;
+  background-image: var(--costume-image);
+  background-position: var(--costume-x) var(--costume-y);
+  background-repeat: no-repeat;
+  background-size: 400% 300%;
+  filter:
+    drop-shadow(0 5px 6px rgba(0, 0, 0, 0.26))
+    saturate(0.92)
+    contrast(1.04);
+  pointer-events: none;
 }
 
 .agent-weapon,
@@ -216,6 +269,7 @@ defineEmits(['select-agent'])
     inset 0 0 0 2px rgba(255, 244, 212, 0.34),
     0 6px 10px rgba(0, 0, 0, 0.18);
   z-index: 2;
+  opacity: 0.36;
 }
 
 .agent-sash {
@@ -245,6 +299,7 @@ defineEmits(['select-agent'])
   position: absolute;
   display: block;
   background: color-mix(in srgb, var(--robe-color) 82%, #000000);
+  opacity: 0.34;
 }
 
 .agent-arm {
@@ -595,8 +650,9 @@ defineEmits(['select-agent'])
   background-repeat: no-repeat;
   background-color: #7c1f1b;
   box-shadow:
-    inset 0 0 0 2px rgba(255, 244, 212, 0.72),
-    inset 0 -4px 0 rgba(0, 0, 0, 0.14);
+    inset 0 0 0 2px rgba(255, 244, 212, 0.82),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.14),
+    0 3px 8px rgba(0, 0, 0, 0.24);
 }
 
 .portrait-avatar::after {
@@ -612,16 +668,44 @@ defineEmits(['select-agent'])
   color: #2e7d32;
 }
 
+.is-idle .agent-costume {
+  filter:
+    drop-shadow(0 5px 6px rgba(0, 0, 0, 0.26))
+    saturate(0.96)
+    contrast(1.04);
+}
+
 .is-busy {
   color: #9a5b00;
+}
+
+.is-busy .agent-costume {
+  filter:
+    drop-shadow(0 5px 6px rgba(0, 0, 0, 0.28))
+    saturate(0.86)
+    sepia(0.12)
+    contrast(1.04);
 }
 
 .is-error {
   color: #b3261e;
 }
 
+.is-error .agent-costume {
+  filter:
+    drop-shadow(0 0 8px rgba(179, 38, 30, 0.42))
+    saturate(0.75)
+    contrast(1.08);
+}
+
 .is-offline {
   color: #777;
+}
+
+.is-offline .agent-costume,
+.is-offline .portrait-avatar {
+  filter: grayscale(0.86) saturate(0.62);
+  opacity: 0.76;
 }
 
 @keyframes agentStepBob {
@@ -713,18 +797,24 @@ defineEmits(['select-agent'])
 
 @media (max-width: 640px) {
   .agent-token {
-    width: 58px;
-    height: 86px;
+    width: 66px;
+    height: 96px;
   }
 
   .agent-figure {
-    width: 52px;
-    height: 82px;
+    width: 60px;
+    height: 88px;
   }
 
   .agent-head {
-    width: 38px;
-    height: 38px;
+    width: 36px;
+    height: 36px;
+  }
+
+  .agent-costume {
+    top: 17px;
+    width: 74px;
+    height: 74px;
   }
 
   .agent-body {
@@ -745,7 +835,7 @@ defineEmits(['select-agent'])
 
   .agent-name-tag,
   .agent-status-badge {
-    max-width: 66px;
+    max-width: 70px;
     font-size: 10px;
   }
 

@@ -24,6 +24,69 @@ export const taskStatusFilters = [
   { label: '入档', value: 'archived' }
 ]
 
+export const hallRoomPropVisuals = [
+  {
+    key: 'main',
+    className: 'prop-main-seat',
+    atlas: { columns: 3, rows: 2, column: 0, row: 0 },
+    style: { left: 50, top: 32, width: 23, height: 16 }
+  },
+  {
+    key: 'agents',
+    className: 'prop-roster-rack',
+    atlas: { columns: 3, rows: 2, column: 1, row: 0 },
+    style: { left: 25, top: 38, width: 20, height: 18 }
+  },
+  {
+    key: 'tasks',
+    className: 'prop-bounty-board',
+    atlas: { columns: 3, rows: 2, column: 2, row: 0 },
+    style: { left: 77, top: 37, width: 20, height: 18 }
+  },
+  {
+    key: 'catalog',
+    className: 'prop-recruit-drum',
+    atlas: { columns: 3, rows: 2, column: 0, row: 1 },
+    style: { left: 24, top: 69, width: 18, height: 18 }
+  },
+  {
+    key: 'library',
+    className: 'prop-library-shelf',
+    atlas: { columns: 3, rows: 2, column: 1, row: 1 },
+    style: { left: 68, top: 69, width: 20, height: 18 }
+  },
+  {
+    key: 'back',
+    className: 'prop-rear-armory',
+    atlas: { columns: 3, rows: 2, column: 2, row: 1 },
+    style: { left: 51, top: 79, width: 18, height: 18 }
+  }
+]
+
+export const roleCostumeVisuals = {
+  songjiang: { column: 0, row: 0, scale: 1.06 },
+  wuyong: { column: 1, row: 0, scale: 1.03 },
+  guansheng: { column: 2, row: 0, scale: 1.07 },
+  linchong: { column: 2, row: 0, scale: 1.06 },
+  luzhishen: { column: 3, row: 0, scale: 1.08 },
+  huarong: { column: 0, row: 1, scale: 1.05 },
+  husanniang: { column: 1, row: 1, scale: 1.04 },
+  likui: { column: 2, row: 1, scale: 1.1 },
+  andaoquan: { column: 0, row: 2, scale: 1.03 },
+  daizong: { column: 1, row: 2, scale: 1.05 },
+  qinming: { column: 3, row: 2, scale: 1.07 },
+  scroll: { column: 1, row: 0, scale: 1.03 },
+  craft: { column: 0, row: 2, scale: 1.03 },
+  weapon: { column: 2, row: 0, scale: 1.06 },
+  wave: { column: 3, row: 1, scale: 1.05 },
+  beast: { column: 2, row: 2, scale: 1.08 },
+  spirit: { column: 3, row: 2, scale: 1.07 },
+  wind: { column: 1, row: 2, scale: 1.05 },
+  flourish: { column: 1, row: 1, scale: 1.04 },
+  crest: { column: 0, row: 0, scale: 1.04 },
+  default: { column: 0, row: 0, scale: 1.04 }
+}
+
 const robePalette = [
   '#7c1f1b', '#23483e', '#3f4f78', '#8b5a1f', '#5c2d63', '#6d3f1f',
   '#2f6f6a', '#6f2e2e', '#315f3e', '#384f7a', '#865335', '#4f5d2f'

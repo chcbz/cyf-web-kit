@@ -43,6 +43,15 @@
         <div class="map-region region-village"></div>
         <div class="map-road road-main"></div>
         <div class="map-road road-branch"></div>
+        <div class="room-prop-layer" aria-hidden="true">
+          <span
+            v-for="prop in hallRoomPropVisuals"
+            :key="prop.key"
+            class="room-prop"
+            :class="prop.className"
+            :style="roomPropStyle(prop)"
+          ></span>
+        </div>
         <button class="hall-room room-main" @click="openPublicDiscussion">
           <strong>聚义厅</strong>
           <small>厅前公议 / 众好汉</small>
@@ -116,6 +125,9 @@
 <script setup>
 import { computed, ref } from 'vue'
 import AgentToken from '@/components/juyiting/AgentToken.vue'
+import hallBackground from '@/assets/juyiting/liangshan-hall-bg-v2.png'
+import roomPropsAtlas from '@/assets/juyiting/liangshan-room-props-v2.png'
+import { hallRoomPropVisuals } from '@/constants/juyiting'
 
 defineProps({
   agentBubbles: { type: Object, default: () => ({}) },
@@ -147,10 +159,26 @@ const mapDragThreshold = 3
 
 const mapWorldStyle = computed(() => ({
   '--map-offset-x': `${viewportOffset.value.x}px`,
-  '--map-offset-y': `${viewportOffset.value.y}px`
+  '--map-offset-y': `${viewportOffset.value.y}px`,
+  '--hall-bg-image': `url("${hallBackground}")`,
+  '--room-props-image': `url("${roomPropsAtlas}")`
 }))
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
+
+const roomPropStyle = (prop) => {
+  const { columns, rows, column, row } = prop.atlas
+  const x = columns === 1 ? 0 : (column / (columns - 1)) * 100
+  const y = rows === 1 ? 0 : (row / (rows - 1)) * 100
+  return {
+    left: `${prop.style.left}%`,
+    top: `${prop.style.top}%`,
+    width: `${prop.style.width}%`,
+    height: `${prop.style.height}%`,
+    backgroundPosition: `${x}% ${y}%`,
+    backgroundSize: `${columns * 100}% ${rows * 100}%`
+  }
+}
 
 const mapOffsetBounds = () => {
   const board = hallBoardRef.value?.getBoundingClientRect()
@@ -328,8 +356,8 @@ button {
   cursor: grab;
   touch-action: none;
   background:
-    radial-gradient(circle at 50% 48%, rgba(255, 238, 180, 0.16), transparent 32%),
-    linear-gradient(135deg, #17231d, #1b271f 50%, #0e1411);
+    radial-gradient(circle at 50% 48%, rgba(239, 197, 118, 0.2), transparent 34%),
+    linear-gradient(135deg, #14100c, #23170f 54%, #0d0b09);
 }
 
 .hall-board.is-dragging {
@@ -355,11 +383,9 @@ button {
   transform-origin: center;
   transition: transform 0.28s ease;
   background:
-    linear-gradient(90deg, rgba(99, 61, 31, 0.24) 1px, transparent 1px) 0 0 / 72px 72px,
-    linear-gradient(0deg, rgba(99, 61, 31, 0.22) 1px, transparent 1px) 0 0 / 72px 72px,
-    repeating-linear-gradient(90deg, rgba(169, 114, 58, 0.12) 0 18px, rgba(89, 54, 28, 0.12) 18px 36px),
-    radial-gradient(ellipse at 52% 54%, rgba(229, 177, 92, 0.34), transparent 28%),
-    linear-gradient(145deg, #8a6032 0%, #5b3923 38%, #6f4a2a 68%, #3a291f 100%);
+    radial-gradient(ellipse at 50% 53%, rgba(255, 231, 177, 0.13), transparent 34%),
+    linear-gradient(180deg, rgba(27, 20, 16, 0.08), rgba(27, 20, 16, 0.22)),
+    var(--hall-bg-image) center / cover no-repeat;
   will-change: transform;
 }
 
@@ -371,25 +397,21 @@ button {
 }
 
 .map-world::before {
-  inset: 8% 10%;
-  border: 8px solid rgba(64, 35, 18, 0.62);
-  border-radius: 8px;
+  inset: 0;
+  border: 1px solid rgba(255, 236, 190, 0.12);
+  border-radius: 0;
   background:
-    linear-gradient(90deg, rgba(64, 35, 18, 0.46) 2px, transparent 2px) 0 0 / 25% 100%,
-    linear-gradient(0deg, rgba(64, 35, 18, 0.44) 2px, transparent 2px) 0 0 / 100% 34%,
-    rgba(255, 238, 194, 0.08);
+    radial-gradient(ellipse at 50% 54%, transparent 34%, rgba(8, 6, 4, 0.18) 74%, rgba(8, 6, 4, 0.42)),
+    linear-gradient(180deg, rgba(255, 236, 190, 0.05), transparent 22%, transparent 72%, rgba(0, 0, 0, 0.2));
 }
 
 .map-world::after {
-  left: 15%;
-  right: 15%;
-  top: 46%;
-  height: 18px;
-  border-radius: 999px;
-  background: rgba(238, 190, 111, 0.48);
-  box-shadow:
-    0 -116px 0 rgba(238, 190, 111, 0.24),
-    0 116px 0 rgba(238, 190, 111, 0.2);
+  left: 32%;
+  right: 32%;
+  top: 49%;
+  height: 26%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(244, 200, 76, 0.08), transparent 72%);
 }
 
 .map-region,
@@ -400,7 +422,8 @@ button {
 
 .map-region {
   z-index: 0;
-  opacity: 0.88;
+  display: none;
+  opacity: 0;
 }
 
 .region-water {
@@ -438,10 +461,46 @@ button {
 
 .map-road {
   z-index: 1;
+  display: none;
   height: 16px;
   border-radius: 999px;
   background: rgba(239, 195, 115, 0.56);
   box-shadow: 0 0 0 5px rgba(83, 55, 29, 0.1);
+}
+
+.room-prop-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.room-prop {
+  position: absolute;
+  display: block;
+  transform: translate(-50%, -50%);
+  background-image: var(--room-props-image);
+  background-repeat: no-repeat;
+  filter:
+    drop-shadow(0 12px 18px rgba(0, 0, 0, 0.28))
+    saturate(0.9)
+    contrast(1.02);
+  opacity: 0.82;
+}
+
+.prop-main-seat {
+  opacity: 0.42;
+}
+
+.prop-roster-rack,
+.prop-bounty-board,
+.prop-library-shelf {
+  opacity: 0.46;
+}
+
+.prop-recruit-drum,
+.prop-rear-armory {
+  opacity: 0.52;
 }
 
 .road-main {
@@ -460,7 +519,7 @@ button {
 
 .hall-room {
   position: absolute;
-  z-index: 2;
+  z-index: 3;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -468,17 +527,18 @@ button {
   gap: 4px;
   min-width: 0;
   min-height: 0;
-  padding: 10px;
-  border: 2px solid rgba(64, 35, 18, 0.68);
+  padding: 8px;
+  border: 1px solid rgba(249, 218, 144, 0.34);
   border-radius: 8px;
   background:
-    linear-gradient(90deg, rgba(255, 244, 212, 0.14) 1px, transparent 1px) 0 0 / 20px 20px,
-    linear-gradient(145deg, rgba(255, 237, 190, 0.72), rgba(188, 132, 67, 0.64));
-  color: #3c2716;
+    linear-gradient(180deg, rgba(255, 248, 218, 0.2), rgba(96, 57, 28, 0.18)),
+    rgba(29, 20, 14, 0.52);
+  color: #fff3c9;
   text-align: center;
   box-shadow:
-    inset 0 0 0 1px rgba(255, 250, 232, 0.22),
-    0 12px 26px rgba(0, 0, 0, 0.18);
+    inset 0 0 0 1px rgba(255, 250, 232, 0.12),
+    0 10px 22px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(2px);
 }
 
 button.hall-room {
@@ -486,9 +546,12 @@ button.hall-room {
 }
 
 .hall-room:hover {
-  border-color: rgba(244, 200, 76, 0.84);
+  border-color: rgba(244, 200, 76, 0.88);
+  background:
+    linear-gradient(180deg, rgba(255, 248, 218, 0.28), rgba(96, 57, 28, 0.24)),
+    rgba(45, 28, 17, 0.62);
   box-shadow:
-    inset 0 0 0 1px rgba(255, 250, 232, 0.3),
+    inset 0 0 0 1px rgba(255, 250, 232, 0.18),
     0 0 0 3px rgba(244, 200, 76, 0.18),
     0 14px 28px rgba(0, 0, 0, 0.2);
 }
@@ -507,59 +570,62 @@ button.hall-room {
 }
 
 .hall-room small {
-  color: rgba(60, 39, 22, 0.78);
+  color: rgba(255, 231, 179, 0.78);
   font-size: 12px;
 }
 
 .room-main {
-  left: 37%;
+  left: 43%;
   top: 35%;
-  width: 26%;
-  height: 32%;
+  width: 14%;
+  height: 9%;
   background:
-    radial-gradient(circle at 50% 52%, rgba(244, 200, 76, 0.28), transparent 44%),
-    linear-gradient(145deg, rgba(255, 239, 188, 0.82), rgba(192, 138, 70, 0.74));
+    linear-gradient(180deg, rgba(175, 49, 34, 0.32), rgba(64, 35, 18, 0.34)),
+    rgba(39, 26, 17, 0.58);
 }
 
 .room-agents {
-  left: 14%;
-  top: 36%;
-  width: 19%;
-  height: 24%;
+  left: 20%;
+  top: 43%;
+  width: 13%;
+  height: 9%;
 }
 
 .room-catalog {
-  left: 18%;
-  top: 64%;
-  width: 16%;
-  height: 15%;
+  left: 22%;
+  top: 74%;
+  width: 12%;
+  height: 8%;
   background:
-    linear-gradient(145deg, rgba(230, 222, 202, 0.78), rgba(126, 80, 57, 0.55));
+    linear-gradient(180deg, rgba(196, 49, 35, 0.28), rgba(64, 35, 18, 0.2)),
+    rgba(39, 26, 17, 0.54);
 }
 
 .room-tasks {
-  right: 14%;
-  top: 36%;
-  width: 19%;
-  height: 24%;
+  right: 17%;
+  top: 42%;
+  width: 13%;
+  height: 9%;
 }
 
 .room-library {
-  left: 64%;
-  top: 62%;
-  width: 16%;
-  height: 15%;
+  left: 69%;
+  top: 73%;
+  width: 12%;
+  height: 8%;
   background:
-    linear-gradient(145deg, rgba(226, 235, 224, 0.78), rgba(69, 111, 96, 0.58));
+    linear-gradient(180deg, rgba(69, 111, 96, 0.28), rgba(64, 35, 18, 0.2)),
+    rgba(39, 26, 17, 0.54);
 }
 
 .room-back {
-  left: 40%;
-  bottom: 13%;
-  width: 20%;
-  height: 16%;
+  left: 43%;
+  bottom: 15%;
+  width: 14%;
+  height: 8%;
   background:
-    linear-gradient(145deg, rgba(235, 218, 184, 0.74), rgba(112, 76, 47, 0.56));
+    linear-gradient(180deg, rgba(112, 76, 47, 0.3), rgba(35, 24, 16, 0.2)),
+    rgba(39, 26, 17, 0.54);
 }
 
 .beam {
@@ -567,7 +633,8 @@ button.hall-room {
   left: 0;
   right: 0;
   height: 18px;
-  background: #4a2716;
+  z-index: 3;
+  background: linear-gradient(180deg, rgba(32, 19, 12, 0.72), rgba(67, 39, 22, 0.55));
 }
 
 .beam-top {
@@ -576,13 +643,14 @@ button.hall-room {
 
 .banner {
   position: absolute;
-  top: 86px;
+  top: 8.5%;
   left: 50%;
   width: 116px;
   padding: 10px 0;
   transform: translateX(-50%);
   border-radius: 0 0 8px 8px;
-  background: #b93622;
+  z-index: 3;
+  background: rgba(148, 42, 28, 0.86);
   color: #fff1c1;
   text-align: center;
   font-weight: 700;
