@@ -7,6 +7,7 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 const backend = process.env.JIA_BACKEND_URL || process.env.JUYITING_BACKEND_URL || 'https://localhost:10018'
 const frontend = process.env.JIA_FRONTEND_URL || process.env.JUYITING_FRONTEND_URL || 'https://localhost:8080'
 const apiKey = process.env.JIA_AGENT_API_KEY || 'my-secret-api-key-123'
+const agentId = process.env.JIA_AGENT_WS_AGENT_ID || process.env.JIA_AGENT_SMOKE_AGENT_ID || 'jyt-jia_client-wuyong'
 const username = process.env.JIA_LOGIN_USER || process.env.JUYITING_USERNAME || 'chcbz'
 const password = process.env.JIA_LOGIN_PASSWORD || process.env.JUYITING_PASSWORD || '123'
 const timeoutMs = Number(process.env.JUYITING_PREFLIGHT_TIMEOUT_MS || 12000)
@@ -83,7 +84,7 @@ async function login() {
 
 async function checkAgentWebSocket() {
   const wsBackend = backend.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:')
-  const ws = new WebSocket(`${wsBackend}/ws/agent/channel?api_key=${encodeURIComponent(apiKey)}`, {
+  const ws = new WebSocket(`${wsBackend}/ws/agent/channel?api_key=${encodeURIComponent(apiKey)}&agent_id=${encodeURIComponent(agentId)}`, {
     rejectUnauthorized: false
   })
   try {

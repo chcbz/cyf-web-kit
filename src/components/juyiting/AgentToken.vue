@@ -1,7 +1,18 @@
 <template>
   <button
     class="agent-token"
-    :class="[statusClass(agent.status), roleClass(agent), motifClass, { active }]"
+    :class="[
+      statusClass(agent.status),
+      roleClass(agent),
+      motifClass,
+      sceneClass,
+      {
+        active,
+        'is-scene-agent': mode === 'scene',
+        'is-selected': sceneState?.selected,
+        'is-focused': sceneState?.focused
+      }
+    ]"
     :style="agentStyle(agent)"
     @click="$emit('select-agent', agent)"
   >
@@ -57,10 +68,12 @@ const props = defineProps({
   agent: { type: Object, required: true },
   agentStyle: { type: Function, required: true },
   bubbleText: { type: String, default: '' },
+  mode: { type: String, default: 'token' },
   portraitName: { type: Function, required: true },
   portraitShortName: { type: Function, required: true },
   portraitStyle: { type: Function, required: true },
   roleClass: { type: Function, required: true },
+  sceneState: { type: Object, default: null },
   statusClass: { type: Function, required: true },
   statusText: { type: Function, required: true }
 })
@@ -68,6 +81,17 @@ const props = defineProps({
 defineEmits(['select-agent'])
 
 const motifClass = computed(() => `motif-${portraitRole(props.agent).motif || 'crest'}`)
+
+const sceneClass = computed(() => {
+  if (props.mode !== 'scene') return ''
+  const facing = props.sceneState?.facing || 'right'
+  const motion = props.sceneState?.sceneStatus || 'idle'
+  return [
+    `is-facing-${facing}`,
+    `is-motion-${motion}`,
+    props.sceneState?.prominentMotion ? 'has-prominent-motion' : ''
+  ].filter(Boolean)
+})
 
 const bodyConfig = computed(() => {
   const role = portraitRole(props.agent)
@@ -215,6 +239,49 @@ const rigStyle = computed(() => {
   filter:
     drop-shadow(0 0 10px rgba(244, 200, 76, 0.78))
     drop-shadow(0 8px 12px rgba(0, 0, 0, 0.24));
+}
+
+.agent-token.is-scene-agent {
+  pointer-events: auto;
+  transition:
+    left 0.72s ease,
+    top 0.72s ease,
+    filter 0.18s ease;
+}
+
+.agent-token.is-scene-agent.is-selected .agent-name-tag,
+.agent-token.is-scene-agent.is-focused .agent-name-tag {
+  background: rgba(255, 239, 188, 0.98);
+  color: #3c2716;
+}
+
+.agent-token.is-scene-agent.is-focused .agent-figure {
+  filter:
+    drop-shadow(0 0 8px rgba(255, 221, 130, 0.52))
+    drop-shadow(0 8px 12px rgba(0, 0, 0, 0.24));
+}
+
+.agent-token.is-motion-busy .agent-shadow,
+.agent-token.is-motion-talk .agent-shadow,
+.agent-token.is-motion-discuss .agent-shadow {
+  opacity: 0.86;
+}
+
+.agent-token.is-motion-talk .agent-head,
+.agent-token.is-motion-discuss .agent-head {
+  animation-duration: calc(var(--idle-speed, 2.8s) * 0.72);
+}
+
+.agent-token.has-prominent-motion .agent-figure,
+.agent-token.has-prominent-motion .agent-shadow,
+.agent-token.has-prominent-motion .agent-body,
+.agent-token.has-prominent-motion .agent-pelvis,
+.agent-token.has-prominent-motion .agent-upper-arm,
+.agent-token.has-prominent-motion .agent-forearm,
+.agent-token.has-prominent-motion .agent-thigh,
+.agent-token.has-prominent-motion .agent-shin,
+.agent-token.has-prominent-motion .agent-boot {
+  animation-play-state: running;
 }
 
 .agent-dialogue {

@@ -117,6 +117,7 @@ import hallBackground from '@/assets/juyiting/liangshan-hall-physical-bg-v1.png'
 import hallForeground from '@/assets/juyiting/liangshan-hall-foreground-v1.png'
 import roomPropsAtlas from '@/assets/juyiting/liangshan-room-props-v2.png'
 import { hallPhysicalScene, hallRoomPropVisuals } from '@/constants/juyiting'
+import { juyitingGame } from '@/game/index.js'
 
 const props = defineProps({
   agentBubbles: { type: Object, default: () => ({}) },
@@ -260,6 +261,69 @@ const endMapDrag = (event) => {
     event.preventDefault()
   }
 }
+
+
+
+
+// === melonJS Canvas �������� ===
+const melonContainerRef = ref(null)
+const melonReady = ref(false)
+
+onMounted(async () => {
+  const el = document.getElementById("melon-container")
+  if (!el) {
+    // Insert container div after hall-board
+    const board = document.querySelector(".hall-board")
+    if (board) {
+      const div = document.createElement("div")
+      div.id = "melon-container"
+      div.style.cssText = "position:absolute;inset:0;z-index:6;pointer-events:none"
+      board.appendChild(div)
+    }
+  }
+  const container = document.getElementById("melon-container")
+  if (!container) return
+
+  try {
+    await juyitingGame.mount(container, {
+      onAgentClick: (agentData) => {
+        const full = (props.sceneAgents || []).find(a =>
+          a.agentId === agentData.agentId || a.personaCode === agentData.personaCode
+        ) || agentData
+        emit("select-agent", full)
+      },
+      onHotspotClick: (hotspot) => {
+        emit("open-panel", hotspot.panel)
+      },
+      onReady: () => {
+        melonReady.value = true
+        if (props.sceneAgents && props.sceneAgents.length) {
+          juyitingGame.syncAgents(props.sceneAgents)
+        }
+        if (props.selectedAgent) {
+          juyitingGame.setSelectedAgent(props.selectedAgent.agentId || null)
+        }
+      },
+    })
+    juyitingGame.start()
+  } catch (err) {
+    console.warn("[HallStage] melonJS:", err.message || err)
+  }
+})
+
+onBeforeUnmount(() => { juyitingGame.destroy() })
+
+watch(() => props.sceneAgents, (agents) => {
+  if (melonReady.value) juyitingGame.syncAgents(agents || [])
+}, { deep: true })
+
+watch(() => props.selectedAgent, (agent) => {
+  if (melonReady.value) juyitingGame.setSelectedAgent(agent && agent.agentId || null)
+})
+// === end melonJS ===
+
+
+
 </script>
 
 <style scoped>
@@ -888,4 +952,5 @@ button.hall-room:focus-visible {
     height: 15%;
   }
 }
+
 </style>

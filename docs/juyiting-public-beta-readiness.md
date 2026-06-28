@@ -68,6 +68,7 @@ npm.cmd run test:juyiting:agent-smoke
 
 - 脚本会登录本地后端、连接 `wss://localhost:10018/ws/agent/channel`、注册临时 Agent、调用 `/juyiting/actions/{intentId}/dispatch`，并验证 WebSocket 收到 `agent_direct_message`。
 - 如果本地测试库沿用 `oauth` 测试种子，可不设置 `JIA_AGENT_API_KEY`，脚本默认尝试 `my-secret-api-key-123`。
+- WebSocket 预检还会携带 `agent_id`。默认使用公测种子 `jyt-jia_client-wuyong`，如本地绑定不同，可设置 `JIA_AGENT_WS_AGENT_ID` 覆盖。
 - 若握手返回 401，先检查 `oauth_api_key` 是否存在有效记录、`status=1`、`expire_time` 未过期。
 
 本地灰度库可用以下 SQL 检查或初始化测试 key：

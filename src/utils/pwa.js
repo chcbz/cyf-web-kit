@@ -13,6 +13,16 @@ const isPwaSupported = () => {
   return 'serviceWorker' in navigator && (window.isSecureContext || isLocalhost)
 }
 
+const cleanupDevelopmentCache = async () => {
+  if (!('serviceWorker' in navigator)) return
+  const registrations = await navigator.serviceWorker.getRegistrations()
+  await Promise.all(registrations.map(registration => registration.unregister()))
+  if ('caches' in window) {
+    const cacheNames = await window.caches.keys()
+    await Promise.all(cacheNames.map(cacheName => window.caches.delete(cacheName)))
+  }
+}
+
 export const dismissOfflineReady = () => {
   isOfflineReady.value = false
 }
@@ -51,6 +61,11 @@ const bindWaitingWorker = worker => {
 }
 
 export const registerPwa = async () => {
+  if (import.meta.env.DEV) {
+    await cleanupDevelopmentCache().catch(() => {})
+    return null
+  }
+
   if (!isPwaSupported()) {
     return null
   }

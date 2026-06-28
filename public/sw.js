@@ -1,5 +1,14 @@
 const CACHE_VERSION = 'cyf-pwa-v20260618-logo-v4'
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest']
+const DEVELOPMENT_HOSTS = ['localhost', '127.0.0.1']
+
+const isDevelopmentOrigin = () => DEVELOPMENT_HOSTS.includes(self.location.hostname)
+
+const cleanupDevelopmentCache = async () => {
+  const keys = await caches.keys()
+  await Promise.all(keys.map(key => caches.delete(key)))
+  await self.registration.unregister()
+}
 
 self.addEventListener('message', event => {
   if (event.data?.type === 'SKIP_WAITING') {
@@ -8,12 +17,22 @@ self.addEventListener('message', event => {
 })
 
 self.addEventListener('install', event => {
+  if (isDevelopmentOrigin()) {
+    event.waitUntil(cleanupDevelopmentCache().then(() => self.skipWaiting()))
+    return
+  }
+
   event.waitUntil(
     caches.open(CACHE_VERSION).then(cache => cache.addAll(APP_SHELL)).then(() => self.skipWaiting())
   )
 })
 
 self.addEventListener('activate', event => {
+  if (isDevelopmentOrigin()) {
+    event.waitUntil(cleanupDevelopmentCache().then(() => self.clients.claim()))
+    return
+  }
+
   event.waitUntil(
     caches.keys().then(keys => Promise.all(
       keys
@@ -24,6 +43,10 @@ self.addEventListener('activate', event => {
 })
 
 self.addEventListener('fetch', event => {
+  if (isDevelopmentOrigin()) {
+    return
+  }
+
   const { request } = event
 
   if (request.method !== 'GET') {

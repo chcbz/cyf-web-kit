@@ -3,13 +3,15 @@
     <HallStage
       :agent-bubbles="agentBubbles"
       :agent-key="agentKey"
-      :agent-style="agentStyle"
+      :agent-style="sceneAgentStyle"
       :hidden-agent-count="hiddenAgentCount"
       :portrait-name="portraitName"
       :portrait-short-name="portraitShortName"
       :portrait-style="portraitStyle"
       :role-class="roleClass"
       :refreshing="hallRefreshing"
+      :scene-agents="sceneAgents"
+      :scene-hotspots="sceneHotspots"
       :selected-agent="selectedAgent"
       :sound-enabled="soundEnabled"
       :status-class="statusClass"
@@ -210,7 +212,7 @@ import { useHallChatContext } from '@/composables/juyiting/useHallChatContext'
 import { useHallConversation } from '@/composables/juyiting/useHallConversation'
 import { useHallData } from '@/composables/juyiting/useHallData'
 import { useHallLibrary } from '@/composables/juyiting/useHallLibrary'
-import { useHallPhysics } from '@/composables/juyiting/useHallPhysics'
+import { useHallScene } from '@/composables/juyiting/useHallScene'
 import { useHallSound } from '@/composables/juyiting/useHallSound'
 import { useHallTaskActions } from '@/composables/juyiting/useHallTaskActions'
 import { portraitName, portraitRole, portraitShortName, portraitStyle, roleClass } from '@/composables/juyiting/useWaterMarginRoles'
@@ -362,6 +364,9 @@ const {
   resetToPublic,
   setMentionAgent
 } = useHallChatContext({
+  /* useHallChatContext({
+  agents,
+  }) */
   agents,
   portraitShortName,
   selectedAgent,
@@ -389,12 +394,33 @@ const formatTime = (timestamp) => {
 
 const agentKey = (agent) => agent?.agentId || agent?.name || agent?.personaName || ''
 
-const { agentStyle, startPhysics, stopPhysics } = useHallPhysics(visibleAgents, normalizeStatus)
+const {
+  markAgentSpeaking,
+  markDiscussionStarted,
+  markLibraryCitation,
+  markLibrarySearching,
+  markRecommendedAgents,
+  markTaskArchived,
+  markTaskAssigned,
+  markTaskAutoAssigned,
+  markTaskCreated,
+  resetSceneFeedback,
+  sceneAgents,
+  sceneAgentStyle,
+  sceneHotspots,
+  syncAfterPersonaChanged
+} = useHallScene({
+  mapAgents,
+  normalizeStatus,
+  selectedAgent,
+  selectedTask
+})
 
 const selectTask = async (task) => {
   selectedTask.value = task
   if (task) {
     await loadTaskRecommendations(task)
+    markRecommendedAgents(recommendedAgents.value)
   }
   playTap()
 }
@@ -460,6 +486,7 @@ const briefSelectedTask = (task = selectedTask.value, agent = selectedAgent.valu
 const discussTask = (task) => {
   if (!task) return
   enterBountyDiscussion(task)
+  markDiscussionStarted(task, chatContext.participantAgentIds || [])
   draft.value = `请就榜文「${task.title}」议事。`
   openPanel('chat')
 }
@@ -483,10 +510,10 @@ const showToast = (message) => {
 }
 
 const {
-  archiveTask,
-  autoAssignTask,
-  assignTask,
-  createTask
+  archiveTask: runArchiveTask,
+  autoAssignTask: runAutoAssignTask,
+  assignTask: runAssignTask,
+  createTask: runCreateTask
 } = useHallTaskActions({
   agentApi,
   canAssign,
@@ -498,6 +525,36 @@ const {
   showToast,
   tasks
 })
+
+const createTask = async (payload) => {
+  await runCreateTask(payload)
+  markTaskCreated(selectedTask.value)
+}
+
+const assignTask = async (task, agent = selectedAgent.value) => {
+  const targetAgents = Array.isArray(agent) ? agent : [agent].filter(Boolean)
+  await runAssignTask(task, agent)
+  if (task?.status === 'assigned' && targetAgents.length) {
+    markTaskAssigned(task, targetAgents)
+  }
+}
+
+const autoAssignTask = async (task) => {
+  await runAutoAssignTask(task)
+  const currentTask = selectedTask.value || task
+  const assignedIds = currentTask?.assignedAgentIds || (currentTask?.assignedAgentId ? [currentTask.assignedAgentId] : [])
+  const assignedAgents = assignedIds
+    .map(agentId => mapAgents.value.find(agent => agent.agentId === agentId) || agents.value.find(agent => agent.agentId === agentId) || agentId)
+    .filter(Boolean)
+  markTaskAutoAssigned(currentTask, assignedAgents)
+}
+
+const archiveTask = async (task) => {
+  await runArchiveTask(task)
+  if (selectedTask.value?.status === 'archived') {
+    markTaskArchived(selectedTask.value)
+  }
+}
 
 const {
   chatConnectionStatus,
@@ -533,14 +590,14 @@ const {
 })
 
 const {
-  citeLibraryItem,
+  citeLibraryItem: runCiteLibraryItem,
   libraryErrorMessage,
   libraryHasSearched,
   libraryKeyword,
   libraryLoading,
   libraryResults,
   librarySourceType,
-  searchLibrary
+  searchLibrary: runSearchLibrary
 } = useHallLibrary({
   chatApi,
   draft,
@@ -550,6 +607,17 @@ const {
   playSuccess,
   showToast
 })
+
+const searchLibrary = async () => {
+  markLibrarySearching('searching')
+  await runSearchLibrary()
+  markLibrarySearching(libraryErrorMessage.value ? 'error' : 'success')
+}
+
+const citeLibraryItem = (item) => {
+  runCiteLibraryItem(item)
+  markLibraryCitation(item)
+}
 
 const startDialogueBubbles = () => {
   stopDialogueBubbles()
@@ -575,6 +643,7 @@ const showRandomAgentBubble = () => {
   const text = lines[Math.floor(Math.random() * lines.length)]
   const key = agentKey(agent)
   agentBubbles.value = { [key]: text }
+  markAgentSpeaking(agent, text, 'speech')
   if (bubbleClearTimer) window.clearTimeout(bubbleClearTimer)
   bubbleClearTimer = window.setTimeout(() => {
     agentBubbles.value = {}
@@ -585,10 +654,13 @@ const showRandomAgentBubble = () => {
 const handleNewHallConversation = () => {
   playPanelOpen()
   newHallConversation()
+  resetSceneFeedback()
 }
 
 const handleSendHallMessage = async () => {
   playSend()
+  const targets = chatContext.targetAgentIds?.length ? chatContext.targetAgentIds : chatContext.participantAgentIds
+  targets?.slice(0, 3).forEach(agentId => markAgentSpeaking(agentId, '收到传令', 'system'))
   await sendHallMessage()
 }
 
@@ -596,6 +668,7 @@ const handleMentionAgent = (agent) => {
   playTap()
   setMentionAgent(agent)
   mentionAgent(agent)
+  markAgentSpeaking(agent, '收到传令', 'system')
 }
 
 const handleClearChatTarget = () => {
@@ -614,6 +687,7 @@ const handleStartAgentConversation = (agent) => {
   }
   playAgentSelect()
   enterPrivateConversation(agent)
+  markAgentSpeaking(agent, '入席密议', 'system')
   draft.value = ''
   insertAgentMention(agent, '请报眼下动静、可领何榜、还需哪路照应。')
   openPanel('chat')
@@ -625,6 +699,7 @@ const canStartAgentConversation = (agent) => Boolean(agent?.boundToMe && !agent?
 const handleBindPersona = async (persona, mode = 'local') => {
   try {
     personaSetupResult.value = await bindPersona(persona, mode)
+    syncAfterPersonaChanged()
     playSuccess()
     showToast(mode === 'server' ? `${portraitShortName(persona)} 已在山寨安顿` : `${portraitShortName(persona)} 自家接应文书已备`)
   } catch (error) {
@@ -639,6 +714,7 @@ const handleUnbindPersona = async (persona) => {
     await unbindPersona(persona)
     if (selectedAgent.value?.personaCode === persona.personaCode) selectedAgent.value = null
     if (personaSetupResult.value?.agent?.personaCode === persona.personaCode) personaSetupResult.value = null
+    syncAfterPersonaChanged()
     playSuccess()
     showToast(`${portraitShortName(persona)} 已除名下山`)
   } catch (error) {
@@ -654,7 +730,6 @@ onMounted(async () => {
   globalStore.setShowAppBar(false)
   globalStore.setShowMore(false)
   await refreshHall({ silent: true })
-  startPhysics()
   startDialogueBubbles()
 })
 
@@ -662,7 +737,6 @@ onUnmounted(() => {
   stopHallEventStream()
   stopHallReplyStreaming()
   stopHallReplyPolling()
-  stopPhysics()
   stopDialogueBubbles()
   globalStore.setShowAppBar(true)
 })

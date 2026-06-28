@@ -58,6 +58,9 @@ export default defineConfig(({ mode }) => {
       },
       extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json', '.vue']
     },
+    optimizeDeps: {
+      include: ['melonjs'],
+    },
     css: {
       preprocessorOptions: {
         less: {
@@ -104,8 +107,7 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       assetsDir: 'static',
-      sourcemap: env.VITE_BUILD_SOURCEMAP === 'true',
-      chunkSizeWarningLimit: 650,
+      sourcemap: env.VITE_BUILD_SOURCEMAP === 'true',      chunkSizeWarningLimit: 650,
       minify: 'terser',
       terserOptions: {
         compress: {
@@ -116,6 +118,7 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks: {
+            melonjs: ['melonjs'],
             vue: ['vue', 'vue-router', 'pinia'],
             ui: ['@varlet/ui'],
             markdown: ['marked', 'dompurify'],
@@ -129,3 +132,5 @@ export default defineConfig(({ mode }) => {
     }
   }
 })
+
+
