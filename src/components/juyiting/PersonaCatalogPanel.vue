@@ -32,8 +32,20 @@
           <dd>{{ setupResult.workdir }}</dd>
         </div>
       </dl>
+      <div v-if="setupVariables.length" class="setup-variables">
+        <strong>接应变量</strong>
+        <div class="setup-variable-grid">
+          <div v-for="item in setupVariables" :key="item.key">
+            <dt>{{ item.label }}</dt>
+            <dd>{{ item.value }}</dd>
+          </div>
+        </div>
+      </div>
       <div v-if="isLocalSetup" class="setup-note">
-        <strong>安装说明</strong>
+        <strong>
+          安装说明
+          <a :href="INSTALL_GUIDE_URL" target="_blank" rel="noopener noreferrer">codex-ws-agent-install</a>
+        </strong>
         <ol>
           <li v-for="step in installSteps" :key="step">{{ step }}</li>
         </ol>
@@ -46,8 +58,8 @@
         <span>codex-profiles.conf</span>
         <pre>{{ setupResult.profileExample }}</pre>
       </div>
-      <ol v-if="setupResult.commands?.length" class="setup-commands">
-        <li v-for="command in setupResult.commands" :key="command">{{ command }}</li>
+      <ol v-if="displayCommands.length" class="setup-commands">
+        <li v-for="command in displayCommands" :key="command">{{ command }}</li>
       </ol>
     </section>
 
@@ -129,6 +141,8 @@
 import { computed, onUnmounted, ref } from 'vue'
 
 const PUBLIC_AGENT_WS_URL = 'wss://api.chaoyoufan.cn/ws/agent/channel'
+const INSTALL_GUIDE_URL = 'https://gitee.com/chcbz/isp-install/blob/master/skills/codex-ws-agent-install/SKILL.md'
+const LOCAL_API_KEY_PLACEHOLDER = '<key>'
 
 const props = defineProps({
   personas: { type: Array, default: () => [] },
@@ -147,17 +161,35 @@ const setupTitle = computed(() => props.setupResult?.mode === 'server' ? '山寨
 const isLocalSetup = computed(() => props.setupResult?.mode === 'local')
 const normalizedEnvExample = computed(() => normalizeEnvExample(props.setupResult))
 const installSteps = computed(() => [
-  '安装 codex-ws-agent 前确认 Node.js 版本 >= 20。',
-  '按安装脚本部署应用后，编辑 .env，填入 OPENCLAW_API_KEY，并确认 WS_URL 为公网 WSS 地址。',
-  '把下方 profile 追加到 codex-profiles.conf，再执行 node agent-client.mjs --validate 校验。',
-  '验证通过后启动 agent-client.mjs 或重启 codex-ws-agent 服务。'
+  '目标机器需已有 Node.js >= 20，并可执行 codex CLI。',
+  '在 isp-install 仓库执行 sudo ./install.sh --profile agent，或直接执行 sudo ./shell/codex_ws_agent_install.sh。',
+  '编辑 /home/isp/apps/codex-ws-agent/.env，填入 OPENCLAW_API_KEY，并确认 WS_URL、DEFAULT_CODEX_PROFILE、CODEX_PROFILES_FILE。',
+  '把下方 profile 追加到 /home/isp/apps/codex-ws-agent/codex-profiles.conf。',
+  '执行 node agent-client.mjs --validate 校验，通过后用 /home/isp/bin/codex_ws_agent.sh start 启动。'
 ])
+const displayCommands = computed(() => {
+  if (!isLocalSetup.value) return props.setupResult?.commands || []
+  return [
+    'sudo ./install.sh --profile agent',
+    '或 sudo ./shell/codex_ws_agent_install.sh',
+    'cd /home/isp/apps/codex-ws-agent && node agent-client.mjs --validate',
+    '/home/isp/bin/codex_ws_agent.sh start',
+    'systemctl status codex-ws-agent',
+    'journalctl -u codex-ws-agent -f'
+  ]
+})
+const setupVariables = computed(() => buildSetupVariables(props.setupResult, normalizedEnvExample.value))
 const setupCopyText = computed(() => {
   if (!props.setupResult) return ''
   const sections = [
+    setupVariables.value.length ? [
+      'variables',
+      ...setupVariables.value.map(item => `${item.key}=${item.value}`)
+    ].join('\n') : '',
+    isLocalSetup.value ? ['install guide', INSTALL_GUIDE_URL].join('\n') : '',
     normalizedEnvExample.value ? ['.env', normalizedEnvExample.value].join('\n') : '',
     props.setupResult.profileExample ? ['codex-profiles.conf', props.setupResult.profileExample].join('\n') : '',
-    props.setupResult.commands?.length ? ['commands', props.setupResult.commands.join('\n')].join('\n') : ''
+    displayCommands.value.length ? ['commands', displayCommands.value.join('\n')].join('\n') : ''
   ].filter(Boolean)
   return sections.join('\n\n')
 })
@@ -169,21 +201,58 @@ const normalizeEnvExample = (setupResult) => {
   if (!setupResult.envExample && setupResult.mode !== 'local') return ''
   const rawEnv = setupResult.envExample || [
     `WS_URL=${PUBLIC_AGENT_WS_URL}`,
-    'OPENCLAW_API_KEY=<向管理员获取 API Key>',
-    `DEFAULT_CODEX_PROFILE=${setupResult.profileId || ''}`,
-    'CODEX_PROFILES_FILE=$PWD/codex-profiles.conf',
+    `OPENCLAW_API_KEY=${LOCAL_API_KEY_PLACEHOLDER}`,
+    'DEFAULT_CODEX_PROFILE=codex-default',
+    'CODEX_PROFILES_FILE=/home/isp/apps/codex-ws-agent/codex-profiles.conf',
     'HEARTBEAT_MS=30000',
     'RECONNECT_MAX_MS=1800000'
   ].join('\n')
   const lines = rawEnv.split(/\r?\n/)
-  const wsIndex = lines.findIndex(line => line.trim().startsWith('WS_URL='))
-  const wsLine = `WS_URL=${PUBLIC_AGENT_WS_URL}`
-  if (wsIndex >= 0) {
-    lines[wsIndex] = wsLine
-  } else {
-    lines.unshift(wsLine)
+  upsertEnvLine(lines, 'WS_URL', PUBLIC_AGENT_WS_URL)
+  if (setupResult.mode === 'local') {
+    upsertEnvLine(lines, 'OPENCLAW_API_KEY', parseConfigValue(rawEnv, 'OPENCLAW_API_KEY') || LOCAL_API_KEY_PLACEHOLDER)
+    upsertEnvLine(lines, 'DEFAULT_CODEX_PROFILE', 'codex-default')
+    upsertEnvLine(lines, 'CODEX_PROFILES_FILE', '/home/isp/apps/codex-ws-agent/codex-profiles.conf')
   }
   return lines.join('\n').trim()
+}
+
+const upsertEnvLine = (lines, key, value) => {
+  const index = lines.findIndex(line => line.trim().startsWith(`${key}=`))
+  const nextLine = `${key}=${value}`
+  if (index >= 0) {
+    lines[index] = nextLine
+  } else {
+    lines.unshift(nextLine)
+  }
+}
+
+const parseConfigValue = (text = '', key) => {
+  const line = String(text || '').split(/\r?\n/).find(item => item.trim().startsWith(`${key}=`))
+  if (!line) return ''
+  return line.slice(line.indexOf('=') + 1).trim()
+}
+
+const buildSetupVariables = (setupResult, envText) => {
+  if (!setupResult) return []
+  const agent = setupResult.agent || {}
+  const profileText = setupResult.profileExample || ''
+  const apiKey = parseConfigValue(profileText, 'apiKey') ||
+    parseConfigValue(envText, 'OPENCLAW_API_KEY') ||
+    LOCAL_API_KEY_PLACEHOLDER
+  const variables = [
+    ['agentId', 'agentId', setupResult.agentId || agent.agentId || parseConfigValue(profileText, 'agentId')],
+    ['agentName', 'agentName', agent.name || parseConfigValue(profileText, 'agentName')],
+    ['personaName', 'personaName', agent.personaName || parseConfigValue(profileText, 'personaName')],
+    ['profileId', 'profileId', setupResult.profileId],
+    ['apiKey', 'apiKey', apiKey],
+    ['WS_URL', 'WS_URL', parseConfigValue(envText, 'WS_URL') || PUBLIC_AGENT_WS_URL],
+    ['DEFAULT_CODEX_PROFILE', 'DEFAULT_CODEX_PROFILE', parseConfigValue(envText, 'DEFAULT_CODEX_PROFILE')],
+    ['CODEX_PROFILES_FILE', 'CODEX_PROFILES_FILE', parseConfigValue(envText, 'CODEX_PROFILES_FILE')]
+  ]
+  return variables
+    .filter(([, , value]) => value)
+    .map(([key, label, value]) => ({ key, label, value }))
 }
 
 const copyText = async (text) => {
@@ -339,12 +408,41 @@ onUnmounted(() => {
   background: rgba(35, 72, 62, 0.08);
 }
 
+.setup-variables {
+  margin: 8px 0 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(255, 248, 232, 0.56);
+}
+
 .setup-note strong,
+.setup-variables > strong,
 .setup-block span {
   display: block;
   color: #23483e;
   font-size: 12px;
   font-weight: 700;
+}
+
+.setup-note a {
+  margin-left: 6px;
+  color: #7c3b20;
+  text-decoration: none;
+}
+
+.setup-note a:hover {
+  text-decoration: underline;
+}
+
+.setup-variable-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.setup-variable-grid div {
+  min-width: 0;
 }
 
 .setup-note ol {
@@ -525,6 +623,10 @@ onUnmounted(() => {
 
 @media (max-width: 620px) {
   .setup-result dl {
+    grid-template-columns: 1fr;
+  }
+
+  .setup-variable-grid {
     grid-template-columns: 1fr;
   }
 
