@@ -8,9 +8,15 @@
     <section v-if="setupResult" class="setup-result">
       <div class="setup-head">
         <strong>{{ setupResult.message || setupTitle }}</strong>
-        <button type="button" class="setup-close" @click="$emit('clear-setup-result')">
-          <var-icon name="close-circle-outline" />
-        </button>
+        <div class="setup-tools">
+          <button type="button" class="setup-copy" @click="copySetupResult">
+            <var-icon name="content-copy" />
+            <span>{{ copied ? '已复制' : '复制' }}</span>
+          </button>
+          <button type="button" class="setup-close" @click="$emit('clear-setup-result')">
+            <var-icon name="close-circle-outline" />
+          </button>
+        </div>
       </div>
       <dl>
         <div>
@@ -26,9 +32,21 @@
           <dd>{{ setupResult.workdir }}</dd>
         </div>
       </dl>
-      <pre v-if="setupResult.envExample">{{ setupResult.envExample }}</pre>
-      <pre v-if="setupResult.profileExample">{{ setupResult.profileExample }}</pre>
-      <ol v-if="setupResult.commands?.length">
+      <div v-if="isLocalSetup" class="setup-note">
+        <strong>安装说明</strong>
+        <ol>
+          <li v-for="step in installSteps" :key="step">{{ step }}</li>
+        </ol>
+      </div>
+      <div v-if="normalizedEnvExample" class="setup-block">
+        <span>.env</span>
+        <pre>{{ normalizedEnvExample }}</pre>
+      </div>
+      <div v-if="setupResult.profileExample" class="setup-block">
+        <span>codex-profiles.conf</span>
+        <pre>{{ setupResult.profileExample }}</pre>
+      </div>
+      <ol v-if="setupResult.commands?.length" class="setup-commands">
         <li v-for="command in setupResult.commands" :key="command">{{ command }}</li>
       </ol>
     </section>
@@ -108,7 +126,9 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
+
+const PUBLIC_AGENT_WS_URL = 'wss://api.chaoyoufan.cn/ws/agent/channel'
 
 const props = defineProps({
   personas: { type: Array, default: () => [] },
@@ -120,10 +140,87 @@ const props = defineProps({
 const emit = defineEmits(['bind-persona', 'unbind-persona', 'clear-setup-result'])
 
 const activePersonaCode = ref(null)
+const copied = ref(false)
+let copiedTimer = null
 const boundToMeCount = computed(() => props.personas.filter(persona => persona.boundToMe).length)
 const setupTitle = computed(() => props.setupResult?.mode === 'server' ? '山寨安顿文书已备' : '自家接应文书已备')
+const isLocalSetup = computed(() => props.setupResult?.mode === 'local')
+const normalizedEnvExample = computed(() => normalizeEnvExample(props.setupResult))
+const installSteps = computed(() => [
+  '安装 codex-ws-agent 前确认 Node.js 版本 >= 20。',
+  '按安装脚本部署应用后，编辑 .env，填入 OPENCLAW_API_KEY，并确认 WS_URL 为公网 WSS 地址。',
+  '把下方 profile 追加到 codex-profiles.conf，再执行 node agent-client.mjs --validate 校验。',
+  '验证通过后启动 agent-client.mjs 或重启 codex-ws-agent 服务。'
+])
+const setupCopyText = computed(() => {
+  if (!props.setupResult) return ''
+  const sections = [
+    normalizedEnvExample.value ? ['.env', normalizedEnvExample.value].join('\n') : '',
+    props.setupResult.profileExample ? ['codex-profiles.conf', props.setupResult.profileExample].join('\n') : '',
+    props.setupResult.commands?.length ? ['commands', props.setupResult.commands.join('\n')].join('\n') : ''
+  ].filter(Boolean)
+  return sections.join('\n\n')
+})
 
 const canShowActions = (persona) => Boolean(persona.canBind || (persona.boundToMe && !persona.systemAgent))
+
+const normalizeEnvExample = (setupResult) => {
+  if (!setupResult) return ''
+  if (!setupResult.envExample && setupResult.mode !== 'local') return ''
+  const rawEnv = setupResult.envExample || [
+    `WS_URL=${PUBLIC_AGENT_WS_URL}`,
+    'OPENCLAW_API_KEY=<向管理员获取 API Key>',
+    `DEFAULT_CODEX_PROFILE=${setupResult.profileId || ''}`,
+    'CODEX_PROFILES_FILE=$PWD/codex-profiles.conf',
+    'HEARTBEAT_MS=30000',
+    'RECONNECT_MAX_MS=1800000'
+  ].join('\n')
+  const lines = rawEnv.split(/\r?\n/)
+  const wsIndex = lines.findIndex(line => line.trim().startsWith('WS_URL='))
+  const wsLine = `WS_URL=${PUBLIC_AGENT_WS_URL}`
+  if (wsIndex >= 0) {
+    lines[wsIndex] = wsLine
+  } else {
+    lines.unshift(wsLine)
+  }
+  return lines.join('\n').trim()
+}
+
+const copyText = async (text) => {
+  if (!text) return false
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return true
+  }
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  const ok = document.execCommand('copy')
+  document.body.removeChild(textarea)
+  return ok
+}
+
+const copySetupResult = async () => {
+  let ok = false
+  try {
+    ok = await copyText(setupCopyText.value)
+  } catch {
+    ok = false
+  }
+  if (!ok) {
+    copied.value = false
+    return
+  }
+  copied.value = true
+  if (copiedTimer) window.clearTimeout(copiedTimer)
+  copiedTimer = window.setTimeout(() => {
+    copied.value = false
+  }, 1800)
+}
 
 const selectAccess = (persona, mode) => {
   activePersonaCode.value = null
@@ -136,6 +233,10 @@ const stateText = (persona) => {
   if (persona.bound) return '别处入伙'
   return '未到请时'
 }
+
+onUnmounted(() => {
+  if (copiedTimer) window.clearTimeout(copiedTimer)
+})
 </script>
 
 <style scoped>
@@ -180,17 +281,34 @@ const stateText = (persona) => {
   font-size: 14px;
 }
 
+.setup-tools {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.setup-copy,
 .setup-close {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
+  gap: 4px;
+  min-width: 30px;
   height: 30px;
+  padding: 0 8px;
   border: 0;
   border-radius: 8px;
   background: rgba(35, 72, 62, 0.1);
   color: #23483e;
+  font: inherit;
+  font-size: 12px;
   cursor: pointer;
+}
+
+.setup-close {
+  width: 30px;
+  padding: 0;
 }
 
 .setup-result dl {
@@ -214,8 +332,35 @@ const stateText = (persona) => {
   white-space: nowrap;
 }
 
-.setup-result pre,
-.setup-result ol {
+.setup-note {
+  margin: 8px 0 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(35, 72, 62, 0.08);
+}
+
+.setup-note strong,
+.setup-block span {
+  display: block;
+  color: #23483e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.setup-note ol {
+  margin: 6px 0 0;
+  padding-left: 20px;
+  color: #4c5a4f;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.setup-block {
+  margin-top: 8px;
+}
+
+.setup-block pre,
+.setup-commands {
   margin: 8px 0 0;
   padding: 10px;
   border-radius: 8px;
@@ -226,7 +371,7 @@ const stateText = (persona) => {
   overflow: auto;
 }
 
-.setup-result ol {
+.setup-commands {
   padding-left: 28px;
 }
 
