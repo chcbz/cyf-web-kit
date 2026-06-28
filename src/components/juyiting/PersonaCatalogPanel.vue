@@ -237,7 +237,8 @@ const buildSetupVariables = (setupResult, envText) => {
   if (!setupResult) return []
   const agent = setupResult.agent || {}
   const profileText = setupResult.profileExample || ''
-  const apiKey = parseConfigValue(profileText, 'apiKey') ||
+  const apiKey = setupResult.apiKey ||
+    parseConfigValue(profileText, 'apiKey') ||
     parseConfigValue(envText, 'OPENCLAW_API_KEY') ||
     LOCAL_API_KEY_PLACEHOLDER
   const variables = [
