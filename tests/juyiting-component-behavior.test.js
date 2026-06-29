@@ -267,6 +267,87 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.emitted('select-agent')[0]).to.deep.equal([sceneAgents[0]])
   })
 
+  it('zooms the map through wheel, keyboard, and touch gestures without visible zoom buttons', async () => {
+    hallGameMock = {
+      destroy: () => {},
+      mount: async (_container, options = {}) => {
+        options.onReady?.()
+      },
+      setSelectedAgent: () => {},
+      start: () => {},
+      syncAgents: () => {},
+      syncHotspots: () => {}
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+    const wrapper = mount(HallStage, {
+      attachTo: document.body,
+      global: { stubs },
+      props: {
+        agentKey: agent => agent.agentId,
+        agentStyle: () => ({}),
+        portraitName: agent => agent.name,
+        portraitShortName: agent => agent.name,
+        portraitStyle: () => ({}),
+        roleClass: () => '',
+        statusClass: () => '',
+        statusText: () => '',
+        visibleAgents: []
+      }
+    })
+    await Vue.nextTick()
+
+    const board = wrapper.find('.hall-board')
+    const world = wrapper.find('.map-world')
+    board.element.getBoundingClientRect = () => ({
+      left: 0,
+      top: 0,
+      width: 500,
+      height: 400,
+      right: 500,
+      bottom: 400
+    })
+    world.element.getBoundingClientRect = () => ({
+      left: -150,
+      top: -96,
+      width: 810,
+      height: 592,
+      right: 660,
+      bottom: 496
+    })
+
+    const currentZoom = () => Number((world.attributes('style') || '').match(/--map-zoom:\s*([0-9.]+)/)?.[1])
+    const dispatchMapEvent = async (type, detail) => {
+      const event = new window.Event(type, { bubbles: true, cancelable: true })
+      Object.defineProperties(event, Object.fromEntries(
+        Object.entries(detail).map(([key, value]) => [key, { value }])
+      ))
+      board.element.dispatchEvent(event)
+      await Vue.nextTick()
+    }
+
+    expect(wrapper.find('.map-controls').exists()).to.equal(false)
+    expect(wrapper.find('.map-control').exists()).to.equal(false)
+    expect(board.attributes('tabindex')).to.equal('0')
+    expect(currentZoom()).to.equal(1)
+
+    await dispatchMapEvent('wheel', { deltaY: -120, clientX: 250, clientY: 200 })
+    expect(currentZoom()).to.be.greaterThan(1)
+
+    await board.trigger('keydown', { key: '0' })
+    await Vue.nextTick()
+    expect(currentZoom()).to.equal(1)
+
+    await board.trigger('keydown', { key: '+' })
+    await Vue.nextTick()
+    expect(currentZoom()).to.be.greaterThan(1)
+
+    await board.trigger('keydown', { key: '0' })
+    await dispatchMapEvent('pointerdown', { pointerId: 1, pointerType: 'touch', button: 0, clientX: 180, clientY: 200 })
+    await dispatchMapEvent('pointerdown', { pointerId: 2, pointerType: 'touch', button: 0, clientX: 280, clientY: 200 })
+    await dispatchMapEvent('pointermove', { pointerId: 2, pointerType: 'touch', clientX: 330, clientY: 200 })
+    expect(currentZoom()).to.be.greaterThan(1)
+  })
+
   it('wires melonJS agent clicks back to Vue selection', async () => {
     let clickHandler
     hallGameMock = {

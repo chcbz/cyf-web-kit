@@ -31,11 +31,15 @@
       ref="hallBoardRef"
       class="hall-board"
       :class="{ 'is-dragging': mapDrag.active, 'is-melon-ready': melonReady }"
+      tabindex="0"
+      aria-label="聚义厅地图，可拖拽平移，滚轮或双指缩放，键盘加减号缩放，0 复位"
       @pointerdown="startMapDrag"
       @pointermove="moveMapDrag"
       @pointerup="endMapDrag"
       @pointerleave="endMapDrag"
       @pointercancel="endMapDrag"
+      @wheel.prevent="zoomMapByWheel"
+      @keydown="handleMapKeydown"
       @click="routeBoardClick"
     >
       <div
@@ -158,15 +162,22 @@ const emit = defineEmits(['new-conversation', 'open-panel', 'refresh-hall', 'sel
 const hallBoardRef = ref(null)
 const mapWorldRef = ref(null)
 const viewportOffset = ref({ x: 0, y: 0 })
+const mapZoom = ref(1)
 const mapDrag = ref({ active: false, dragging: false, pointerId: null, startX: 0, startY: 0, originX: 0, originY: 0 })
+const activeTouchPointers = new Map()
+const pinchGesture = ref({ active: false, startDistance: 0, startZoom: 1 })
 const suppressNextBoardClick = ref(false)
 
 const mapPanPadding = 2
 const mapDragThreshold = 3
+const minMapZoom = 0.75
+const maxMapZoom = 1.65
+const mapZoomStep = 0.12
 
 const mapWorldStyle = computed(() => ({
   '--map-offset-x': `${viewportOffset.value.x}px`,
   '--map-offset-y': `${viewportOffset.value.y}px`,
+  '--map-zoom': mapZoom.value.toFixed(2),
   '--hall-bg-image': `url("${hallBackground}")`,
   '--hall-foreground-image': `url("${hallForeground}")`,
   '--room-props-image': `url("${roomPropsAtlas}")`
@@ -213,28 +224,103 @@ const openZone = (zone) => {
   emit('open-panel', zone.panel)
 }
 
-const mapOffsetBounds = () => {
+const mapOffsetBounds = (zoom = mapZoom.value) => {
   const board = hallBoardRef.value?.getBoundingClientRect()
   const world = mapWorldRef.value?.getBoundingClientRect()
   if (!board || !world) {
     return { x: 0, y: 0 }
   }
+  const currentZoom = mapZoom.value || 1
+  const worldWidth = (world.width / currentZoom) * zoom
+  const worldHeight = (world.height / currentZoom) * zoom
   return {
-    x: Math.max(0, (world.width - board.width) / 2 - mapPanPadding),
-    y: Math.max(0, (world.height - board.height) / 2 - mapPanPadding)
+    x: Math.max(0, (worldWidth - board.width) / 2 - mapPanPadding),
+    y: Math.max(0, (worldHeight - board.height) / 2 - mapPanPadding)
   }
 }
 
-const applyMapOffset = (next) => {
-  const bounds = mapOffsetBounds()
+const applyMapOffset = (next, zoom = mapZoom.value) => {
+  const bounds = mapOffsetBounds(zoom)
   viewportOffset.value = {
     x: clamp(next.x, -bounds.x, bounds.x),
     y: clamp(next.y, -bounds.y, bounds.y)
   }
 }
 
+const applyMapZoom = (nextZoom) => {
+  const zoom = clamp(nextZoom, minMapZoom, maxMapZoom)
+  mapZoom.value = Number(zoom.toFixed(2))
+  applyMapOffset(viewportOffset.value, mapZoom.value)
+}
+
 const resetMap = () => {
   viewportOffset.value = { x: 0, y: 0 }
+  mapZoom.value = 1
+  activeTouchPointers.clear()
+  pinchGesture.value = { active: false, startDistance: 0, startZoom: 1 }
+}
+
+const zoomMapByWheel = (event) => {
+  const direction = event.deltaY > 0 ? -1 : 1
+  applyMapZoom(mapZoom.value + direction * mapZoomStep)
+}
+
+const handleMapKeydown = (event) => {
+  if (event.defaultPrevented) return
+  if (event.key === '+' || event.key === '=') {
+    applyMapZoom(mapZoom.value + mapZoomStep)
+    event.preventDefault()
+    return
+  }
+  if (event.key === '-' || event.key === '_') {
+    applyMapZoom(mapZoom.value - mapZoomStep)
+    event.preventDefault()
+    return
+  }
+  if (event.key === '0') {
+    resetMap()
+    event.preventDefault()
+  }
+}
+
+const touchDistance = () => {
+  const points = [...activeTouchPointers.values()]
+  if (points.length < 2) return 0
+  return Math.hypot(points[0].clientX - points[1].clientX, points[0].clientY - points[1].clientY)
+}
+
+const trackTouchPointer = (event) => {
+  if (event.pointerType !== 'touch') return false
+  activeTouchPointers.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY })
+  if (activeTouchPointers.size >= 2) {
+    const distance = touchDistance()
+    if (!pinchGesture.value.active && distance > 0) {
+      pinchGesture.value = { active: true, startDistance: distance, startZoom: mapZoom.value }
+    }
+    mapDrag.value = { active: false, dragging: false, pointerId: null, startX: 0, startY: 0, originX: 0, originY: 0 }
+    suppressNextBoardClick.value = true
+  }
+  return activeTouchPointers.size >= 2
+}
+
+const updatePinchZoom = (event) => {
+  if (event.pointerType !== 'touch' || !activeTouchPointers.has(event.pointerId)) return false
+  activeTouchPointers.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY })
+  if (!pinchGesture.value.active) return false
+  const distance = touchDistance()
+  if (distance <= 0 || pinchGesture.value.startDistance <= 0) return false
+  applyMapZoom(pinchGesture.value.startZoom * (distance / pinchGesture.value.startDistance))
+  suppressNextBoardClick.value = true
+  event.preventDefault()
+  return true
+}
+
+const releaseTouchPointer = (event) => {
+  if (event.pointerType !== 'touch') return
+  activeTouchPointers.delete(event.pointerId)
+  if (activeTouchPointers.size < 2) {
+    pinchGesture.value = { active: false, startDistance: 0, startZoom: mapZoom.value }
+  }
 }
 
 const openPublicDiscussion = () => {
@@ -244,6 +330,10 @@ const openPublicDiscussion = () => {
 
 const startMapDrag = (event) => {
   if (event.button !== undefined && event.button !== 0) return
+  if (trackTouchPointer(event)) {
+    event.preventDefault()
+    return
+  }
   mapDrag.value = {
     active: true,
     dragging: false,
@@ -257,6 +347,7 @@ const startMapDrag = (event) => {
 }
 
 const moveMapDrag = (event) => {
+  if (updatePinchZoom(event)) return
   if (!mapDrag.value.active || mapDrag.value.pointerId !== event.pointerId) return
   const deltaX = event.clientX - mapDrag.value.startX
   const deltaY = event.clientY - mapDrag.value.startY
@@ -270,6 +361,7 @@ const moveMapDrag = (event) => {
 }
 
 const endMapDrag = (event) => {
+  releaseTouchPointer(event)
   if (!mapDrag.value.active || mapDrag.value.pointerId !== event.pointerId) return
   event.currentTarget?.releasePointerCapture?.(event.pointerId)
   const wasDragging = mapDrag.value.dragging
@@ -541,7 +633,9 @@ button {
   top: 50%;
   width: 162%;
   height: 148%;
-  transform: translate3d(calc(-50% + var(--map-offset-x, 0px)), calc(-50% + var(--map-offset-y, 0px)), 0);
+  transform:
+    translate3d(calc(-50% + var(--map-offset-x, 0px)), calc(-50% + var(--map-offset-y, 0px)), 0)
+    scale(var(--map-zoom, 1));
   transform-origin: center;
   transition: transform 0.28s ease;
   background:
