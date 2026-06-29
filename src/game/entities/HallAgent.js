@@ -2,7 +2,7 @@
  * ��������ɫʵ�� ���� melonJS sprite + animation state machine
  */
 
-import { ANIM_STATES, CHAR_VISUALS, ATLAS_COLS } from "../config.js"
+import { ANIM_STATES, ATLAS_COLS, ATLAS_ROWS, CHAR_VISUALS } from '../config.js'
 
 export function createHallAgentClass(me) {
   return class HallAgent extends me.Sprite {
@@ -12,7 +12,7 @@ export function createHallAgentClass(me) {
       const x = (agentData.x || 50) / 100 * vpW
       const y = (agentData.y || 60) / 100 * vpH
 
-      const atlasImg = me.loader.getImage("character-atlas")
+      const atlasImg = me.loader.getImage('character-atlas')
       const atlasW = atlasImg ? atlasImg.width : 1402
       const atlasH = atlasImg ? atlasImg.height : 1122
       const cellW = Math.floor(atlasW / ATLAS_COLS)
@@ -20,21 +20,21 @@ export function createHallAgentClass(me) {
       super(x, y, {
         image: atlasImg,
         framewidth: cellW,
-        frameheight: cellH,
+        frameheight: cellH
       })
 
-      this.agentId      = agentData.agentId || ""
-      this.agentName    = agentData.name || ""
-      this.personaCode  = agentData.personaCode || ""
+      this.agentId = agentData.agentId || ''
+      this.agentName = agentData.name || ''
+      this.personaCode = agentData.personaCode || ''
 
-      const code = (agentData.personaCode || "").toLowerCase()
+      const code = (agentData.personaCode || '').toLowerCase()
       this._visual = CHAR_VISUALS[code] || CHAR_VISUALS.default
 
       // Set initial frame from atlas position
       const frameIdx = this._visual.row * ATLAS_COLS + this._visual.col
-      if (typeof this.renderable?.setCurrentAnimation === "function") {
-        this.renderable.addAnimation("idle", [frameIdx])
-        this.renderable.setCurrentAnimation("idle")
+      if (typeof this.renderable?.setCurrentAnimation === 'function') {
+        this.renderable.addAnimation('idle', [frameIdx])
+        this.renderable.setCurrentAnimation('idle')
       }
 
       this.scale = this._visual.scale
@@ -49,7 +49,7 @@ export function createHallAgentClass(me) {
       this.targetX = x
       this.targetY = y
       this.speed = 0
-      this._bubbleText = ""
+      this._bubbleText = ''
       this._bubbleTimer = 0
       this._highlighted = false
       this.depth = y
@@ -65,7 +65,7 @@ export function createHallAgentClass(me) {
     }
 
     setBubble(text, durationMs = 5000) {
-      this._bubbleText = text || ""
+      this._bubbleText = text || ''
       this._bubbleTimer = text ? durationMs : 0
     }
 
@@ -75,14 +75,14 @@ export function createHallAgentClass(me) {
     }
 
     setFacing(dir) {
-      const f = dir === "left" ? -1 : 1
+      const f = dir === 'left' ? -1 : 1
       if (f !== this.facing) {
         this.facing = f
         this.renderable.flipX(f < 0)
       }
     }
 
-    _moveTowardTarget(dt) {
+    _moveTowardTarget(_dt) {
       const dx = this.targetX - this.pos.x
       const dy = this.targetY - this.pos.y
       const dist = Math.hypot(dx, dy)
@@ -97,7 +97,7 @@ export function createHallAgentClass(me) {
       const spd = Math.min(80, dist * 3.5)
       this.body.setVelocity((dx / dist) * spd, (dy / dist) * spd)
       this.speed = spd
-      if (Math.abs(dx) > 2) this.setFacing(dx > 0 ? "right" : "left")
+      if (Math.abs(dx) > 2) this.setFacing(dx > 0 ? 'right' : 'left')
       this.setAnimState(ANIM_STATES.WALK)
     }
 
@@ -107,7 +107,7 @@ export function createHallAgentClass(me) {
       this.depth = this.pos.y
       if (this._bubbleTimer > 0) {
         this._bubbleTimer -= dt
-        if (this._bubbleTimer <= 0) this._bubbleText = ""
+        if (this._bubbleTimer <= 0) this._bubbleText = ''
       }
       return true
     }
@@ -121,10 +121,10 @@ export function createHallAgentClass(me) {
       // Name label
       if (this.agentName) {
         ctx.save()
-        ctx.font = "bold 11px sans-serif"
-        ctx.fillStyle = "#fff4d4"
-        ctx.textAlign = "center"
-        ctx.textBaseline = "top"
+        ctx.font = 'bold 11px sans-serif'
+        ctx.fillStyle = '#fff4d4'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'top'
         ctx.fillText(this.agentName, this.pos.x, this.pos.y - this.height * this.scale - 18)
         ctx.restore()
       }
@@ -132,20 +132,20 @@ export function createHallAgentClass(me) {
       // Bubble
       if (this._bubbleText) {
         ctx.save()
-        ctx.font = "11px sans-serif"
+        ctx.font = '11px sans-serif'
         const tw = ctx.measureText(this._bubbleText).width
         const bx = this.pos.x - tw / 2 - 6
         const by = this.pos.y - this.height * this.scale - 38
-        ctx.fillStyle = "rgba(30, 18, 10, 0.88)"
-        ctx.strokeStyle = "rgba(255, 220, 130, 0.45)"
+        ctx.fillStyle = 'rgba(30, 18, 10, 0.88)'
+        ctx.strokeStyle = 'rgba(255, 220, 130, 0.45)'
         ctx.lineWidth = 1
         ctx.beginPath()
         ctx.rect(bx, by, tw + 12, 20)
         ctx.fill()
         ctx.stroke()
-        ctx.fillStyle = "#fff4d4"
-        ctx.textAlign = "left"
-        ctx.textBaseline = "middle"
+        ctx.fillStyle = '#fff4d4'
+        ctx.textAlign = 'left'
+        ctx.textBaseline = 'middle'
         ctx.fillText(this._bubbleText, bx + 6, by + 10)
         ctx.restore()
       }

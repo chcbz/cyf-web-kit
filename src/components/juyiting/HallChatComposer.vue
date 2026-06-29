@@ -31,7 +31,7 @@
         @focus="handleFocus"
         @input="handleInput"
         @keydown="handleKeydown"
-      />
+      ></textarea>
       <div class="composer-actions">
         <button
           v-if="canClear"

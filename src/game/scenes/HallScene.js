@@ -2,8 +2,8 @@
  * ������������ ���� melonJS Stage (manual asset loading)
  */
 
-import { DEPTH_LAYERS } from "../config.js"
-import { HALL_HOTSPOTS } from "../resources.js"
+import { DEPTH_LAYERS } from '../config.js'
+import { HALL_HOTSPOTS } from '../resources.js'
 
 export function createHallSceneClass(me, HallAgentClass) {
   return class HallScene extends me.Stage {
@@ -51,18 +51,18 @@ export function createHallSceneClass(me, HallAgentClass) {
 
       // === Background layer ===
       try {
-        const bgImg = me.loader.getImage("liangshan-hall-bg")
+        const bgImg = me.loader.getImage('liangshan-hall-bg')
         if (bgImg) {
           const bg = new me.Sprite(vpW / 2, vpH / 2, {
             image: bgImg,
-            anchorPoint: new me.Vector2d(0.5, 0.5),
+            anchorPoint: new me.Vector2d(0.5, 0.5)
           })
           bg.floating = true
           bg.scale(vpW / bg.width, vpH / bg.height)
           me.game.world.addChild(bg, DEPTH_LAYERS.BACKGROUND)
         }
       } catch (e) {
-        console.warn("[HallScene] BG failed:", e.message)
+        console.warn('[HallScene] BG failed:', e.message)
       }
 
       // === Hotspot layer ===
@@ -73,7 +73,7 @@ export function createHallSceneClass(me, HallAgentClass) {
         const oh = h.h / 100 * vpH
 
         const hitArea = new me.Rect(ox, oy, ow, oh)
-        me.input.registerPointerEvent("pointerdown", hitArea, () => {
+        me.input.registerPointerEvent('pointerdown', hitArea, () => {
           if (this._onHotspotClick) {
             this._onHotspotClick({ id: h.id, panel: h.panel })
           }
@@ -89,18 +89,18 @@ export function createHallSceneClass(me, HallAgentClass) {
 
       // === Foreground layer ===
       try {
-        const fgImg = me.loader.getImage("liangshan-hall-fg")
+        const fgImg = me.loader.getImage('liangshan-hall-fg')
         if (fgImg) {
           const fg = new me.Sprite(vpW / 2, vpH / 2, {
             image: fgImg,
-            anchorPoint: new me.Vector2d(0.5, 0.5),
+            anchorPoint: new me.Vector2d(0.5, 0.5)
           })
           fg.floating = true
           fg.scale(vpW / fg.width, vpH / fg.height)
           me.game.world.addChild(fg, DEPTH_LAYERS.FOREGROUND)
         }
       } catch (e) {
-        console.warn("[HallScene] FG failed:", e.message)
+        console.warn('[HallScene] FG failed:', e.message)
       }
 
       this._needsSync = true
@@ -110,7 +110,7 @@ export function createHallSceneClass(me, HallAgentClass) {
     _fullSyncAgents() {
       const keepIds = new Set()
       this._pendingAgents.forEach(data => {
-        const id = data.agentId || data.personaCode || ""
+        const id = data.agentId || data.personaCode || ''
         if (!id) return
         keepIds.add(id)
         let agent = this._agents.get(id)
@@ -148,7 +148,11 @@ export function createHallSceneClass(me, HallAgentClass) {
 
     onDestroyEvent() {
       this._hotspots.forEach(h => {
-        try { me.input.releaseAllPointerEvents(h.hitArea) } catch (_) {}
+        try {
+          me.input.releaseAllPointerEvents(h.hitArea)
+        } catch (err) {
+          console.warn('[HallScene] pointer cleanup failed:', err?.message || err)
+        }
       })
       this._hotspots = []
       this._agents.clear()

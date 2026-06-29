@@ -2,10 +2,10 @@
  * ������ melonJS game instance manager
  */
 
-import { createGameConfig } from "./config.js"
-import { HALL_RESOURCES } from "./resources.js"
-import { createHallSceneClass } from "./scenes/HallScene.js"
-import { createHallAgentClass } from "./entities/HallAgent.js"
+import { createGameConfig } from './config.js'
+import { HALL_RESOURCES } from './resources.js'
+import { createHallSceneClass } from './scenes/HallScene.js'
+import { createHallAgentClass } from './entities/HallAgent.js'
 
 class JuyitingGame {
   constructor() {
@@ -18,7 +18,7 @@ class JuyitingGame {
 
   async _loadMelonJS() {
     if (this._me) return this._me
-    const m = await import("melonjs")
+    const m = await import('melonjs')
     this._me = m.default || m
     return this._me
   }
@@ -26,13 +26,13 @@ class JuyitingGame {
   async mount(container, options = {}) {
     if (this._initialized) return
     const me = await this._loadMelonJS()
-    if (!container) throw new Error("container required")
+    if (!container) throw new Error('container required')
 
     this._container = container
     this._callbacks = {
       onAgentClick: options.onAgentClick || null,
       onHotspotClick: options.onHotspotClick || null,
-      onReady: options.onReady || null,
+      onReady: options.onReady || null
     }
 
     const config = createGameConfig()
@@ -48,13 +48,13 @@ class JuyitingGame {
       ...config,
       parent: container,
       renderer: me.video.CANVAS,
-      scale: "auto",
-      scaleMethod: "fit",
+      scale: 'auto',
+      scaleMethod: 'fit'
     })
 
     // Make canvas background transparent to show DOM underneath
-    const canvas = container.querySelector("canvas")
-    if (canvas) canvas.style.background = "transparent"
+    const canvas = container.querySelector('canvas')
+    if (canvas) canvas.style.background = 'transparent'
 
     // === Load all resources, then start ===
     let loaded = 0
@@ -77,12 +77,12 @@ class JuyitingGame {
           res,
           () => checkDone(),       // success
           (err) => {               // error
-            console.warn("[JuyitingGame] Failed:", res.name, err)
+            console.warn('[JuyitingGame] Failed:', res.name, err)
             checkDone()
           }
         )
       } catch (e) {
-        console.warn("[JuyitingGame] Load error:", res.name, e.message)
+        console.warn('[JuyitingGame] Load error:', res.name, e.message)
         checkDone()
       }
     })

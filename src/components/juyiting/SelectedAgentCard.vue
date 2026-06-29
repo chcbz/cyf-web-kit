@@ -1,6 +1,11 @@
 <template>
   <aside v-if="agent" class="selected-agent-card">
-    <button class="card-close" type="button" title="收起好汉牌" @click="$emit('close-card')">
+    <button
+      class="card-close"
+      type="button"
+      title="收起好汉牌"
+      @click="$emit('close-card')"
+    >
       <var-icon name="close-circle-outline" />
     </button>
     <span

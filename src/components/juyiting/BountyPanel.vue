@@ -195,15 +195,31 @@
                   {{ recommendationReason(agent) }}
                 </p>
                 <div class="recommended-agent-actions">
-                  <button type="button" :aria-label="`选定 ${agentDisplayName(agent)}`" :title="`选定 ${agentDisplayName(agent)}`" @click="$emit('select-agent', agent)">
+                  <button
+                    type="button"
+                    :aria-label="`选定 ${agentDisplayName(agent)}`"
+                    :title="`选定 ${agentDisplayName(agent)}`"
+                    @click="$emit('select-agent', agent)"
+                  >
                     <BountyActionIcon name="select" />
                     <span class="visually-hidden">选定</span>
                   </button>
-                  <button type="button" :aria-label="`点 ${agentDisplayName(agent)} 领令`" :disabled="!canAssign(detailTask, agent)" :title="`点 ${agentDisplayName(agent)} 领令`" @click="$emit('assign-task', detailTask, agent)">
+                  <button
+                    type="button"
+                    :aria-label="`点 ${agentDisplayName(agent)} 领令`"
+                    :disabled="!canAssign(detailTask, agent)"
+                    :title="`点 ${agentDisplayName(agent)} 领令`"
+                    @click="$emit('assign-task', detailTask, agent)"
+                  >
                     <BountyActionIcon name="assign" />
                     <span class="visually-hidden">点将</span>
                   </button>
-                  <button type="button" :aria-label="`与 ${agentDisplayName(agent)} 密议`" :title="`与 ${agentDisplayName(agent)} 密议`" @click="$emit('brief-selected-task', detailTask, agent)">
+                  <button
+                    type="button"
+                    :aria-label="`与 ${agentDisplayName(agent)} 密议`"
+                    :title="`与 ${agentDisplayName(agent)} 密议`"
+                    @click="$emit('brief-selected-task', detailTask, agent)"
+                  >
                     <BountyActionIcon name="whisper" />
                     <span class="visually-hidden">密议</span>
                   </button>

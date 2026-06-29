@@ -7,10 +7,22 @@
         <em>{{ displayStatus }}</em>
       </div>
       <div class="toolbar-actions">
-        <button class="icon-button" type="button" title="重取回话" aria-label="重取回话" @click="$emit('load-messages')">
+        <button
+          class="icon-button"
+          type="button"
+          title="重取回话"
+          aria-label="重取回话"
+          @click="$emit('load-messages')"
+        >
           <var-icon name="refresh" />
         </button>
-        <button class="icon-button primary" type="button" title="另起话头" aria-label="另起话头" @click="$emit('new-conversation')">
+        <button
+          class="icon-button primary"
+          type="button"
+          title="另起话头"
+          aria-label="另起话头"
+          @click="$emit('new-conversation')"
+        >
           <var-icon name="plus" />
         </button>
       </div>

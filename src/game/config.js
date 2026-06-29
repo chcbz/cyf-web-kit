@@ -8,7 +8,7 @@ export const DEPTH_LAYERS = {
   HOTSPOTS: 1,
   AGENTS: 3,
   FOREGROUND: 5,
-  BUBBLES: 10,
+  BUBBLES: 10
 }
 
 /** Character atlas grid */
@@ -23,17 +23,17 @@ export const CHAR_VISUALS = {
   lujunyi:    { col: 3, row: 0, scale: 1.05 },
   husanniang: { col: 1, row: 1, scale: 1.04 },
   likui:      { col: 2, row: 1, scale: 1.10 },
-  default:    { col: 0, row: 0, scale: 1.04 },
+  default:    { col: 0, row: 0, scale: 1.04 }
 }
 
 /** Animation states */
 export const ANIM_STATES = {
-  IDLE:    "idle",
-  WALK:    "walk",
-  TALK:    "talk",
-  BUSY:    "busy",
-  OFFLINE: "offline",
-  ERROR:   "error",
+  IDLE:    'idle',
+  WALK:    'walk',
+  TALK:    'talk',
+  BUSY:    'busy',
+  OFFLINE: 'offline',
+  ERROR:   'error'
 }
 
 /** melonJS game config */
@@ -41,8 +41,8 @@ export function createGameConfig() {
   return {
     width: 960,
     height: 640,
-    scale: "auto",
+    scale: 'auto',
     doubleBuffering: true,
-    antiAlias: true,
+    antiAlias: true
   }
 }

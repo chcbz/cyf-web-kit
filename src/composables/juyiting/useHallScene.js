@@ -116,7 +116,7 @@ export const useHallScene = ({
   mapAgents,
   normalizeStatus = value => String(value || '').toLowerCase(),
   selectedAgent,
-  selectedTask
+  selectedTask: _selectedTask
 }) => {
   const transientAgents = ref({})
   const transientHotspots = ref({})

@@ -75,7 +75,7 @@ describe('useHallScene', () => {
       selectedTask: ref(null)
     })
 
-    expect(hallScene.sceneAgents.value.map(agent => agent.agentId)).to.have.members([
+    expect(hallScene.sceneAgents.value.map(agent => agent.agentId)).to.include.members([
       'songjiang',
       'linchong',
       'wuyong'

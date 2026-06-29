@@ -15,6 +15,7 @@ let HallChatComposer
 let HallStage
 let LibraryPanel
 let PersonaCatalogPanel
+let hallGameMock
 
 const vueImportToVar = (_line, imports) => {
   const vueBindings = imports.split(',').map((part) => {
@@ -43,6 +44,7 @@ const loadSfc = (relativePath) => {
   const scriptBody = script
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace(/^import\s+AgentToken\s+from\s+['"]@\/components\/juyiting\/AgentToken\.vue['"];?\s*$/gm, 'var AgentToken = { template: \'<span />\', props: [\'agent\'] }')
+    .replace(/^import\s+\{\s*juyitingGame\s*\}\s+from\s+['"]@\/game\/index\.js['"];?\s*$/gm, 'var juyitingGame = arguments[2]')
     .replace(/^import\s+BountyActionIcon\s+from\s+['"].\/BountyActionIcon\.vue['"];?\s*$/gm, 'var BountyActionIcon = { template: \'<span />\', props: [\'status\'] }')
     .replace(/^import\s+(\w+)\s+from\s+['"]@\/assets\/juyiting\/[^'"]+['"];?\s*$/gm, 'var $1 = \'/mock-juyiting-asset.png\'')
     .replace(/^import\s+\{\s*hallPhysicalScene,\s*hallRoomPropVisuals\s*\}\s+from\s+['"]@\/constants\/juyiting['"];?\s*$/gm, 'var hallRoomPropVisuals = []; var hallPhysicalScene = { interactiveZones: [{ key: \'main\', panel: \'chat\', title: \'聚义厅\', subtitle: \'厅前公议 / 众好汉\', x: 50, y: 36, w: 12, h: 7, label: \'plaque\' }, { key: \'agents\', panel: \'agents\', title: \'好汉簿\', subtitle: \'点将调遣\', x: 21, y: 32, w: 13, h: 7, label: \'book-tag\' }, { key: \'catalog\', panel: \'catalog\', title: \'招贤馆\', subtitle: \'遍请豪杰\', x: 14, y: 68, w: 12, h: 7, label: \'drum-tag\' }] }')
@@ -51,7 +53,7 @@ const loadSfc = (relativePath) => {
     .replace(/^import\s+DOMPurify\s+from\s+['"]dompurify['"];?\s*$/gm, 'var DOMPurify = { sanitize: value => value }')
     .replace('export default', 'return')
 
-  return new Function('Vue', 'HallChatComposer', scriptBody)(Vue, HallChatComposer)
+  return new Function('Vue', 'HallChatComposer', 'juyitingGame', scriptBody)(Vue, HallChatComposer, hallGameMock)
 }
 
 const stubs = {
@@ -65,6 +67,15 @@ describe('JuyiHall component behavior', () => {
     global.Node = global.window?.Node
     ;({ mount } = await import('@vue/test-utils'))
     Vue = await import('vue')
+    hallGameMock = {
+      destroy: () => {},
+      mount: async (_container, options = {}) => {
+        options.onReady?.()
+      },
+      setSelectedAgent: () => {},
+      start: () => {},
+      syncAgents: () => {}
+    }
     BottomDock = loadSfc('../src/components/juyiting/BottomDock.vue')
     BountyPanel = loadSfc('../src/components/juyiting/BountyPanel.vue')
     HallChatComposer = loadSfc('../src/components/juyiting/HallChatComposer.vue')
@@ -155,6 +166,44 @@ describe('JuyiHall component behavior', () => {
 
     await catalog.find('.catalog-action.primary').trigger('click')
     expect(catalog.emitted('bind-persona')[0]).to.deep.equal([personas[1], 'server'])
+  })
+
+  it('syncs scene agents to the melonJS game layer when ready', async () => {
+    const syncedAgents = []
+    hallGameMock = {
+      destroy: () => {},
+      mount: async (_container, options = {}) => {
+        options.onReady?.()
+      },
+      setSelectedAgent: () => {},
+      start: () => {},
+      syncAgents: agents => syncedAgents.push(agents)
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+    const sceneAgents = [
+      { agentId: 'songjiang', name: '宋江', x: 50, y: 45 },
+      { agentId: 'linchong', name: '林冲', x: 34, y: 63 }
+    ]
+
+    mount(HallStage, {
+      global: { stubs },
+      props: {
+        agentKey: agent => agent.agentId,
+        agentStyle: () => ({}),
+        portraitName: agent => agent.name,
+        portraitShortName: agent => agent.name,
+        portraitStyle: () => ({}),
+        roleClass: () => '',
+        sceneAgents,
+        statusClass: () => '',
+        statusText: () => '',
+        tasksTotal: 3,
+        visibleAgents: []
+      }
+    })
+    await Vue.nextTick()
+
+    expect(syncedAgents).to.deep.include(sceneAgents)
   })
 
   it('opens panels and clears locked contexts from BottomDock', async () => {

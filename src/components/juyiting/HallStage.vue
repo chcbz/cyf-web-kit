@@ -100,10 +100,18 @@
         <div v-if="!visibleAgents.length" class="empty-hall">
           厅中暂未见好汉入座，稍后自会传到
         </div>
-        <button v-if="hiddenAgentCount" class="hall-overflow" type="button" @pointerdown.stop @pointerup.stop @click.stop="$emit('open-panel', 'agents')">
+        <button
+          v-if="hiddenAgentCount"
+          class="hall-overflow"
+          type="button"
+          @pointerdown.stop
+          @pointerup.stop
+          @click.stop="$emit('open-panel', 'agents')"
+        >
           另有 {{ hiddenAgentCount }} 位在偏厅候令
         </button>
       </div>
+      <div ref="melonContainerRef" class="melon-layer" aria-hidden="true"></div>
     </div>
 
     <slot></slot>
@@ -111,7 +119,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AgentToken from '@/components/juyiting/AgentToken.vue'
 import hallBackground from '@/assets/juyiting/liangshan-hall-physical-bg-v1.png'
 import hallForeground from '@/assets/juyiting/liangshan-hall-foreground-v1.png'
@@ -129,6 +137,8 @@ const props = defineProps({
   portraitStyle: { type: Function, required: true },
   refreshing: { type: Boolean, default: false },
   roleClass: { type: Function, required: true },
+  sceneAgents: { type: Array, default: () => [] },
+  sceneHotspots: { type: Array, default: () => [] },
   selectedAgent: { type: Object, default: null },
   soundEnabled: { type: Boolean, default: true },
   statusClass: { type: Function, required: true },
@@ -265,23 +275,11 @@ const endMapDrag = (event) => {
 
 
 
-// === melonJS Canvas �������� ===
 const melonContainerRef = ref(null)
 const melonReady = ref(false)
 
 onMounted(async () => {
-  const el = document.getElementById("melon-container")
-  if (!el) {
-    // Insert container div after hall-board
-    const board = document.querySelector(".hall-board")
-    if (board) {
-      const div = document.createElement("div")
-      div.id = "melon-container"
-      div.style.cssText = "position:absolute;inset:0;z-index:6;pointer-events:none"
-      board.appendChild(div)
-    }
-  }
-  const container = document.getElementById("melon-container")
+  const container = melonContainerRef.value
   if (!container) return
 
   try {
@@ -290,24 +288,20 @@ onMounted(async () => {
         const full = (props.sceneAgents || []).find(a =>
           a.agentId === agentData.agentId || a.personaCode === agentData.personaCode
         ) || agentData
-        emit("select-agent", full)
+        emit('select-agent', full)
       },
       onHotspotClick: (hotspot) => {
-        emit("open-panel", hotspot.panel)
+        emit('open-panel', hotspot.panel)
       },
       onReady: () => {
         melonReady.value = true
-        if (props.sceneAgents && props.sceneAgents.length) {
-          juyitingGame.syncAgents(props.sceneAgents)
-        }
-        if (props.selectedAgent) {
-          juyitingGame.setSelectedAgent(props.selectedAgent.agentId || null)
-        }
-      },
+        juyitingGame.syncAgents(props.sceneAgents)
+        juyitingGame.setSelectedAgent(props.selectedAgent?.agentId || null)
+      }
     })
     juyitingGame.start()
   } catch (err) {
-    console.warn("[HallStage] melonJS:", err.message || err)
+    console.warn('[HallStage] melonJS:', err.message || err)
   }
 })
 
@@ -318,12 +312,8 @@ watch(() => props.sceneAgents, (agents) => {
 }, { deep: true })
 
 watch(() => props.selectedAgent, (agent) => {
-  if (melonReady.value) juyitingGame.setSelectedAgent(agent && agent.agentId || null)
+  if (melonReady.value) juyitingGame.setSelectedAgent(agent?.agentId || null)
 })
-// === end melonJS ===
-
-
-
 </script>
 
 <style scoped>
@@ -450,6 +440,13 @@ button {
   z-index: 4;
   pointer-events: none;
   box-shadow: inset 0 0 90px rgba(0, 0, 0, 0.58);
+}
+
+.melon-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
 }
 
 .map-world {

@@ -67,6 +67,18 @@
                             "vite":  "^6.3.5",
                             "vite-plugin-compression":  "^0.5.1"
                         },
+    "overrides":  {
+                      "minimatch@3.1.5":  {
+                                                "brace-expansion":  "^1.1.13"
+                                            },
+                      "mocha":  {
+                                    "diff":  "^8.0.3",
+                                    "serialize-javascript":  "^7.0.5"
+                                },
+                      "mochawesome":  {
+                                           "uuid":  "^11.1.1"
+                                       }
+                  },
     "engines":  {
                     "node":  "\u003e= 18.0.0",
                     "npm":  "\u003e= 9.0.0"
