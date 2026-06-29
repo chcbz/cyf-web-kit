@@ -121,7 +121,7 @@
           另有 {{ hiddenAgentCount }} 位在偏厅候令
         </button>
       </div>
-      <div ref="melonContainerRef" class="melon-layer" aria-hidden="true"></div>
+      <div ref="melonContainerRef" class="melon-layer" :style="mapWorldStyle" aria-hidden="true"></div>
     </div>
 
     <slot></slot>
@@ -619,6 +619,12 @@ button {
   inset: 0;
   z-index: 6;
   pointer-events: auto;
+  transform:
+    translate3d(var(--map-offset-x, 0px), var(--map-offset-y, 0px), 0)
+    scale(var(--map-zoom, 1));
+  transform-origin: center;
+  transition: transform 0.28s ease;
+  will-change: transform;
 }
 
 .melon-layer :deep(canvas) {

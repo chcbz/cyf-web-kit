@@ -298,6 +298,7 @@ describe('JuyiHall component behavior', () => {
 
     const board = wrapper.find('.hall-board')
     const world = wrapper.find('.map-world')
+    const melonLayer = wrapper.find('.melon-layer')
     board.element.getBoundingClientRect = () => ({
       left: 0,
       top: 0,
@@ -329,9 +330,11 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.find('.map-control').exists()).to.equal(false)
     expect(board.attributes('tabindex')).to.equal('0')
     expect(currentZoom()).to.equal(1)
+    expect(melonLayer.attributes('style')).to.include('--map-zoom: 1.00')
 
     await dispatchMapEvent('wheel', { deltaY: -120, clientX: 250, clientY: 200 })
     expect(currentZoom()).to.be.greaterThan(1)
+    expect(melonLayer.attributes('style')).to.include(`--map-zoom: ${currentZoom().toFixed(2)}`)
 
     await board.trigger('keydown', { key: '0' })
     await Vue.nextTick()
