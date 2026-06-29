@@ -616,11 +616,14 @@ button {
 
 .melon-layer {
   position: absolute;
-  inset: 0;
+  left: 50%;
+  top: 50%;
+  width: 162%;
+  height: 148%;
   z-index: 6;
   pointer-events: auto;
   transform:
-    translate3d(var(--map-offset-x, 0px), var(--map-offset-y, 0px), 0)
+    translate3d(calc(-50% + var(--map-offset-x, 0px)), calc(-50% + var(--map-offset-y, 0px)), 0)
     scale(var(--map-zoom, 1));
   transform-origin: center;
   transition: transform 0.28s ease;
@@ -1124,6 +1127,11 @@ button.hall-room:focus-visible {
   }
 
   .map-world {
+    width: 164%;
+    height: 146%;
+  }
+
+  .melon-layer {
     width: 164%;
     height: 146%;
   }

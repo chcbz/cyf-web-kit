@@ -60,6 +60,12 @@ const stubs = {
   'var-icon': { template: '<i />' }
 }
 
+const cssRule = (source, selector) => {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = source.match(new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`))
+  return match?.[1] || ''
+}
+
 describe('JuyiHall component behavior', () => {
   before(async () => {
     global.SVGElement = global.window?.SVGElement
@@ -349,6 +355,17 @@ describe('JuyiHall component behavior', () => {
     await dispatchMapEvent('pointerdown', { pointerId: 2, pointerType: 'touch', button: 0, clientX: 280, clientY: 200 })
     await dispatchMapEvent('pointermove', { pointerId: 2, pointerType: 'touch', clientX: 330, clientY: 200 })
     expect(currentZoom()).to.be.greaterThan(1)
+  })
+
+  it('keeps the melonJS interaction layer aligned to the oversized map world on portrait screens', () => {
+    const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
+    const melonRule = cssRule(source, '.melon-layer')
+
+    expect(melonRule).to.include('left: 50%')
+    expect(melonRule).to.include('top: 50%')
+    expect(melonRule).to.include('width: 162%')
+    expect(melonRule).to.include('height: 148%')
+    expect(melonRule).to.include('translate3d(calc(-50% + var(--map-offset-x, 0px)), calc(-50% + var(--map-offset-y, 0px)), 0)')
   })
 
   it('wires melonJS agent clicks back to Vue selection', async () => {
