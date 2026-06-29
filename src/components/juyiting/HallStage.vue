@@ -36,11 +36,12 @@
       @pointerup="endMapDrag"
       @pointerleave="endMapDrag"
       @pointercancel="endMapDrag"
+      @click="routeBoardClick"
     >
       <div
         ref="mapWorldRef"
         class="map-world"
-        :class="{ 'is-dom-fallback-hidden': melonReady }"
+        :class="{ 'is-melon-enhanced': melonReady }"
         :style="mapWorldStyle"
       >
         <div class="map-region region-water"></div>
@@ -158,6 +159,7 @@ const hallBoardRef = ref(null)
 const mapWorldRef = ref(null)
 const viewportOffset = ref({ x: 0, y: 0 })
 const mapDrag = ref({ active: false, dragging: false, pointerId: null, startX: 0, startY: 0, originX: 0, originY: 0 })
+const suppressNextBoardClick = ref(false)
 
 const mapPanPadding = 2
 const mapDragThreshold = 3
@@ -273,6 +275,74 @@ const endMapDrag = (event) => {
   const wasDragging = mapDrag.value.dragging
   mapDrag.value = { active: false, dragging: false, pointerId: null, startX: 0, startY: 0, originX: 0, originY: 0 }
   if (wasDragging) {
+    suppressNextBoardClick.value = true
+    event.preventDefault()
+  }
+}
+
+const pointInZone = (point, zone) => {
+  const halfW = zone.w / 2
+  const halfH = zone.h / 2
+  const dx = Math.abs(point.x - zone.x)
+  const dy = Math.abs(point.y - zone.y)
+  if (zone.hitShape === 'ellipse') {
+    return ((dx * dx) / (halfW * halfW)) + ((dy * dy) / (halfH * halfH)) <= 1
+  }
+  return dx <= halfW && dy <= halfH
+}
+
+const boardPointFromEvent = (event) => {
+  const rect = mapWorldRef.value?.getBoundingClientRect?.()
+  if (!rect || rect.width <= 0 || rect.height <= 0) return null
+  return {
+    x: ((event.clientX - rect.left) / rect.width) * 100,
+    y: ((event.clientY - rect.top) / rect.height) * 100
+  }
+}
+
+const agentHitbox = (agent) => {
+  const y = Number(agent.y ?? agent.sceneY ?? 60)
+  const depthBoost = clamp((y - 42) / 40, 0, 1)
+  return {
+    x: Number(agent.x ?? agent.sceneX ?? 50),
+    y,
+    w: 5.8 + depthBoost * 2.4,
+    h: 12 + depthBoost * 6
+  }
+}
+
+const findAgentAtPoint = (point) => {
+  const agents = props.sceneAgents?.length ? props.sceneAgents : props.visibleAgents
+  return [...(agents || [])].reverse().find((agent) => {
+    const box = agentHitbox(agent)
+    return Math.abs(point.x - box.x) <= box.w / 2 &&
+      point.y <= box.y + 2 &&
+      point.y >= box.y - box.h
+  })
+}
+
+const routeBoardClick = (event) => {
+  if (suppressNextBoardClick.value) {
+    suppressNextBoardClick.value = false
+    return
+  }
+  if (event.defaultPrevented) return
+  const directControl = event.target?.closest?.('button, a, input, textarea, select')
+  if (directControl && directControl !== event.currentTarget) return
+
+  const point = boardPointFromEvent(event)
+  if (!point) return
+
+  const agent = findAgentAtPoint(point)
+  if (agent) {
+    emit('select-agent', agent)
+    event.preventDefault()
+    return
+  }
+
+  const zone = [...hallInteractiveZones.value].reverse().find(item => item.panel && pointInZone(point, item))
+  if (zone) {
+    openZone(zone)
     event.preventDefault()
   }
 }
@@ -342,7 +412,7 @@ watch(() => props.selectedAgent, (agent) => {
   top: 10px;
   left: 18px;
   right: 18px;
-  z-index: 5;
+  z-index: 12;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -480,15 +550,32 @@ button {
   will-change: transform;
 }
 
-.map-world.is-dom-fallback-hidden .agent-token,
-.map-world.is-dom-fallback-hidden .hall-foreground,
-.map-world.is-dom-fallback-hidden .room-prop-layer,
-.map-world.is-dom-fallback-hidden .map-region,
-.map-world.is-dom-fallback-hidden .map-road,
-.map-world.is-dom-fallback-hidden .hall-room,
-.map-world.is-dom-fallback-hidden .empty-hall {
+.map-world.is-melon-enhanced {
+  filter: saturate(1.04) contrast(1.02);
+}
+
+.map-world.is-melon-enhanced .agent-token {
   opacity: 0;
   pointer-events: none;
+}
+
+.map-world.is-melon-enhanced .hall-room {
+  opacity: 0.78;
+}
+
+.map-world.is-melon-enhanced .hall-room::before {
+  opacity: 0.46;
+}
+
+.map-world.is-melon-enhanced .hall-room-label {
+  opacity: 0.9;
+}
+
+.map-world.is-melon-enhanced .room-prop-layer,
+.map-world.is-melon-enhanced .map-region,
+.map-world.is-melon-enhanced .map-road,
+.map-world.is-melon-enhanced .hall-foreground {
+  opacity: 1;
 }
 
 .map-world::before,

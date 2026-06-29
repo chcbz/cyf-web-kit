@@ -43,6 +43,7 @@ export function createGameConfig() {
     height: 640,
     scale: 'auto',
     doubleBuffering: true,
-    antiAlias: true
+    antiAlias: true,
+    transparent: true
   }
 }

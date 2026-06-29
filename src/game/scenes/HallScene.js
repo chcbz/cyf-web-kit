@@ -106,25 +106,6 @@ export function createHallSceneClass(me, HallAgentClass) {
         }
       }
 
-      const addImageLayer = (fallbackName, depth) => {
-        try {
-          const image = me.loader.getImage(fallbackName)
-          if (!image) return
-          const sprite = new me.Sprite(vpW / 2, vpH / 2, {
-            image,
-            anchorPoint: new me.Vector2d(0.5, 0.5)
-          })
-          sprite.floating = true
-          sprite.scale(vpW / sprite.width, vpH / sprite.height)
-          me.game.world.addChild(sprite, depth)
-        } catch (e) {
-          console.warn('[HallScene] image layer failed:', fallbackName, e.message)
-        }
-      }
-
-      // === Background layer ===
-      addImageLayer('liangshan-hall-bg', DEPTH_LAYERS.BACKGROUND)
-
       // === Hotspot layer ===
       hotspots.forEach(h => {
         const ox = (h.x - h.w / 2) / 100 * vpW
@@ -132,21 +113,20 @@ export function createHallSceneClass(me, HallAgentClass) {
         const ow = h.w / 100 * vpW
         const oh = h.h / 100 * vpH
 
-        const hitArea = new me.Rect(ox, oy, ow, oh)
-        me.input.registerPointerEvent('pointerdown', hitArea, () => {
+        const marker = new HotspotMarker(ox + ow / 2, oy + oh / 2, ow, oh, h)
+        marker.setFeedback(this._hotspotState.get(h.id))
+        me.input.registerPointerEvent('pointerdown', marker, () => {
           if (this._onHotspotClick) {
             this._onHotspotClick({ id: h.id, panel: h.panel })
           }
+          return false
         })
 
-        const marker = new HotspotMarker(ox + ow / 2, oy + oh / 2, ow, oh, h)
-        marker.setFeedback(this._hotspotState.get(h.id))
         me.game.world.addChild(marker, DEPTH_LAYERS.HOTSPOTS)
-        this._hotspots.push({ marker, hitArea, data: h })
+        this._hotspots.push({ marker, hitArea: marker, data: h })
       })
 
-      const stageHitArea = new me.Rect(0, 0, vpW, vpH)
-      me.input.registerPointerEvent('pointerdown', stageHitArea, (event) => {
+      me.input.registerPointerEvent('pointerdown', me.game.viewport, (event) => {
         const x = event.gameX ?? event.clientX
         const y = event.gameY ?? event.clientY
         const hit = [...this._agents.values()].reverse().find(agent => agent.containsPoint(x, y))
@@ -156,10 +136,7 @@ export function createHallSceneClass(me, HallAgentClass) {
         }
         return true
       })
-      this._hotspots.push({ hitArea: stageHitArea, stage: true })
-
-      // === Foreground layer ===
-      addImageLayer('liangshan-hall-fg', DEPTH_LAYERS.FOREGROUND)
+      this._hotspots.push({ hitArea: me.game.viewport, stage: true })
 
       this._needsSync = true
       if (this._onReady) this._onReady()

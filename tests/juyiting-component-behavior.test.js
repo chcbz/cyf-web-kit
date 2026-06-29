@@ -43,7 +43,7 @@ const loadSfc = (relativePath) => {
 
   const scriptBody = script
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
-    .replace(/^import\s+AgentToken\s+from\s+['"]@\/components\/juyiting\/AgentToken\.vue['"];?\s*$/gm, 'var AgentToken = { template: \'<span />\', props: [\'agent\'] }')
+    .replace(/^import\s+AgentToken\s+from\s+['"]@\/components\/juyiting\/AgentToken\.vue['"];?\s*$/gm, 'var AgentToken = { template: \'<button class="agent-token" type="button" @click="$emit(\\\'select-agent\\\', agent)"></button>\', props: [\'agent\'] }')
     .replace(/^import\s+\{\s*juyitingGame\s*\}\s+from\s+['"]@\/game\/index\.js['"];?\s*$/gm, 'var juyitingGame = arguments[2]')
     .replace(/^import\s+BountyActionIcon\s+from\s+['"].\/BountyActionIcon\.vue['"];?\s*$/gm, 'var BountyActionIcon = { template: \'<span />\', props: [\'status\'] }')
     .replace(/^import\s+(\w+)\s+from\s+['"]@\/assets\/juyiting\/[^'"]+['"];?\s*$/gm, 'var $1 = \'/mock-juyiting-asset.png\'')
@@ -212,7 +212,59 @@ describe('JuyiHall component behavior', () => {
     expect(syncedAgents).to.deep.include(sceneAgents)
     expect(syncedHotspots).to.deep.include(sceneHotspots)
     expect(wrapper.find('.hall-board').classes()).to.include('is-melon-ready')
-    expect(wrapper.find('.map-world').classes()).to.include('is-dom-fallback-hidden')
+    expect(wrapper.find('.map-world').classes()).to.include('is-melon-enhanced')
+    expect(wrapper.find('.map-world').classes()).not.to.include('is-dom-fallback-hidden')
+  })
+
+  it('keeps scene and agent hit routing usable when the melonJS layer is ready', async () => {
+    hallGameMock = {
+      destroy: () => {},
+      mount: async (_container, options = {}) => {
+        options.onReady?.()
+      },
+      setSelectedAgent: () => {},
+      start: () => {},
+      syncAgents: () => {},
+      syncHotspots: () => {}
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+    const sceneAgents = [{ agentId: 'linchong', name: '林冲', x: 34, y: 63 }]
+    const wrapper = mount(HallStage, {
+      attachTo: document.body,
+      global: { stubs },
+      props: {
+        agentKey: agent => agent.agentId,
+        agentStyle: () => ({}),
+        portraitName: agent => agent.name,
+        portraitShortName: agent => agent.name,
+        portraitStyle: () => ({}),
+        roleClass: () => '',
+        sceneAgents,
+        statusClass: () => '',
+        statusText: () => '',
+        tasksTotal: 3,
+        visibleAgents: sceneAgents
+      }
+    })
+    await Vue.nextTick()
+
+    wrapper.find('.map-world').element.getBoundingClientRect = () => ({
+      left: 0,
+      top: 0,
+      width: 1000,
+      height: 1000,
+      right: 1000,
+      bottom: 1000
+    })
+
+    expect(wrapper.find('.map-world').classes()).to.include('is-melon-enhanced')
+    expect(wrapper.find('.map-world').classes()).not.to.include('is-dom-fallback-hidden')
+
+    await wrapper.find('.hall-board').trigger('click', { clientX: 130, clientY: 680 })
+    expect(wrapper.emitted('open-panel')[0]).to.deep.equal(['catalog'])
+
+    await wrapper.find('.hall-board').trigger('click', { clientX: 340, clientY: 630 })
+    expect(wrapper.emitted('select-agent')[0]).to.deep.equal([sceneAgents[0]])
   })
 
   it('wires melonJS agent clicks back to Vue selection', async () => {
