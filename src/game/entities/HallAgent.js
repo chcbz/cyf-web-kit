@@ -49,9 +49,14 @@ export function createHallAgentClass(me) {
       this.targetX = x
       this.targetY = y
       this.speed = 0
+      this._sourceData = agentData
       this._bubbleText = ''
       this._bubbleTimer = 0
       this._highlighted = false
+      this._selected = false
+      this._focused = false
+      this._animTimer = 0
+      this._animFrame = 0
       this.depth = y
     }
 
@@ -67,6 +72,23 @@ export function createHallAgentClass(me) {
     setBubble(text, durationMs = 5000) {
       this._bubbleText = text || ''
       this._bubbleTimer = text ? durationMs : 0
+    }
+
+    syncState(agentData = {}) {
+      this._sourceData = { ...this._sourceData, ...agentData }
+      if (agentData.name) this.agentName = agentData.name
+      if (agentData.personaCode) this.personaCode = agentData.personaCode
+      if (agentData.x !== undefined && agentData.y !== undefined) this.setDestination(agentData.x, agentData.y)
+      if (agentData.sceneStatus) this.setAnimState(agentData.sceneStatus)
+      if (agentData.bubble) this.setBubble(agentData.bubble.text, agentData.bubble.ttlMs || 5000)
+      this._focused = Boolean(agentData.focused || agentData.recommended)
+      this.setSelected(Boolean(agentData.selected))
+      if (agentData.facing) this.setFacing(agentData.facing)
+    }
+
+    setSelected(on) {
+      this._selected = !!on
+      this.setHighlighted(this._selected || this._focused)
     }
 
     setHighlighted(on) {
@@ -91,7 +113,7 @@ export function createHallAgentClass(me) {
         this.pos.y = this.targetY
         this.body.setVelocity(0, 0)
         this.speed = 0
-        this.setAnimState(ANIM_STATES.IDLE)
+        if (this.currentAnim === ANIM_STATES.WALK) this.setAnimState(ANIM_STATES.IDLE)
         return
       }
       const spd = Math.min(80, dist * 3.5)
@@ -101,9 +123,23 @@ export function createHallAgentClass(me) {
       this.setAnimState(ANIM_STATES.WALK)
     }
 
+    containsPoint(x, y) {
+      const width = this.width * this.scale
+      const height = this.height * this.scale
+      return x >= this.pos.x - width / 2 &&
+        x <= this.pos.x + width / 2 &&
+        y >= this.pos.y - height &&
+        y <= this.pos.y
+    }
+
     update(dt) {
       super.update(dt)
       this._moveTowardTarget(dt)
+      this._animTimer += dt
+      if (this._animTimer > 160) {
+        this._animTimer = 0
+        this._animFrame = (this._animFrame + 1) % 4
+      }
       this.depth = this.pos.y
       if (this._bubbleTimer > 0) {
         this._bubbleTimer -= dt
@@ -113,10 +149,25 @@ export function createHallAgentClass(me) {
     }
 
     draw(renderer) {
+      const bob = this.currentAnim === ANIM_STATES.WALK || this.currentAnim === ANIM_STATES.BUSY
+        ? Math.sin(this._animFrame * Math.PI / 2) * 2
+        : Math.sin(this._animFrame * Math.PI / 2) * 0.8
+      this.pos.y += bob
       super.draw(renderer)
-      const r = me.video.renderer
+      this.pos.y -= bob
+      const r = renderer || me.video.renderer
       if (!r || !r.getContext) return
       const ctx = r.getContext()
+
+      if (this._selected || this._focused) {
+        ctx.save()
+        ctx.strokeStyle = this._selected ? 'rgba(255, 221, 130, 0.85)' : 'rgba(255, 244, 212, 0.42)'
+        ctx.lineWidth = this._selected ? 3 : 2
+        ctx.beginPath()
+        ctx.ellipse(this.pos.x, this.pos.y - 8, 24 * this.scale, 9 * this.scale, 0, 0, Math.PI * 2)
+        ctx.stroke()
+        ctx.restore()
+      }
 
       // Name label
       if (this.agentName) {

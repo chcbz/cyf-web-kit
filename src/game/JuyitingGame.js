@@ -3,7 +3,8 @@
  */
 
 import { createGameConfig } from './config.js'
-import { HALL_RESOURCES } from './resources.js'
+import { HALL_MAP_RESOURCE, HALL_RESOURCES } from './resources.js'
+import { parseJuyiHallTmx } from './tiledMap.js'
 import { createHallSceneClass } from './scenes/HallScene.js'
 import { createHallAgentClass } from './entities/HallAgent.js'
 
@@ -14,6 +15,8 @@ class JuyitingGame {
     this._hallScene = null
     this._callbacks = {}
     this._initialized = false
+    this._mapData = null
+    this._pendingStart = false
   }
 
   async _loadMelonJS() {
@@ -67,6 +70,7 @@ class JuyitingGame {
     const checkDone = () => {
       loaded++
       if (loaded >= total) {
+        this._prepareMapData(me)
         this._startGame(me)
       }
     }
@@ -88,10 +92,25 @@ class JuyitingGame {
     })
   }
 
+  _prepareMapData(me) {
+    const tmx = me.loader.getTMX?.(HALL_MAP_RESOURCE.name)
+    try {
+      this._mapData = tmx ? parseJuyiHallTmx(tmx) : null
+    } catch (error) {
+      console.warn('[JuyitingGame] TMX parse failed:', error?.message || error)
+      this._mapData = null
+    }
+    this._hallScene?.setMapData(this._mapData)
+  }
+
   _startGame(me) {
     // Register and switch to PLAY state
     me.state.set(me.state.PLAY, this._hallScene, true)
     this._initialized = true
+    if (this._pendingStart) {
+      this._pendingStart = false
+      me.state.change(me.state.PLAY, true)
+    }
     // Emit ready again if onResetEvent didn't call it
     setTimeout(() => {
       if (this._callbacks.onReady) this._callbacks.onReady()
@@ -100,7 +119,11 @@ class JuyitingGame {
 
   start() {
     if (!this._me) return
-    this._me.state.restart()
+    if (!this._initialized) {
+      this._pendingStart = true
+      return
+    }
+    this._me.state.change(this._me.state.PLAY, true)
   }
 
   pause() {
@@ -116,10 +139,16 @@ class JuyitingGame {
     }
     this._me = null
     this._initialized = false
+    this._mapData = null
+    this._pendingStart = false
   }
 
   syncAgents(list) {
     if (this._hallScene) this._hallScene.syncAgents(list)
+  }
+
+  syncHotspots(list) {
+    if (this._hallScene) this._hallScene.syncHotspots(list)
   }
 
   updateAgentSceneState(agentId, state) {

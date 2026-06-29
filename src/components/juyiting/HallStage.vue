@@ -30,14 +30,19 @@
     <div
       ref="hallBoardRef"
       class="hall-board"
-      :class="{ 'is-dragging': mapDrag.active }"
+      :class="{ 'is-dragging': mapDrag.active, 'is-melon-ready': melonReady }"
       @pointerdown="startMapDrag"
       @pointermove="moveMapDrag"
       @pointerup="endMapDrag"
       @pointerleave="endMapDrag"
       @pointercancel="endMapDrag"
     >
-      <div ref="mapWorldRef" class="map-world" :style="mapWorldStyle">
+      <div
+        ref="mapWorldRef"
+        class="map-world"
+        :class="{ 'is-dom-fallback-hidden': melonReady }"
+        :style="mapWorldStyle"
+      >
         <div class="map-region region-water"></div>
         <div class="map-region region-forest"></div>
         <div class="map-region region-village"></div>
@@ -296,6 +301,7 @@ onMounted(async () => {
       onReady: () => {
         melonReady.value = true
         juyitingGame.syncAgents(props.sceneAgents)
+        juyitingGame.syncHotspots?.(props.sceneHotspots)
         juyitingGame.setSelectedAgent(props.selectedAgent?.agentId || null)
       }
     })
@@ -309,6 +315,10 @@ onBeforeUnmount(() => { juyitingGame.destroy() })
 
 watch(() => props.sceneAgents, (agents) => {
   if (melonReady.value) juyitingGame.syncAgents(agents || [])
+}, { deep: true })
+
+watch(() => props.sceneHotspots, (hotspots) => {
+  if (melonReady.value) juyitingGame.syncHotspots?.(hotspots || [])
 }, { deep: true })
 
 watch(() => props.selectedAgent, (agent) => {
@@ -446,7 +456,13 @@ button {
   position: absolute;
   inset: 0;
   z-index: 6;
-  pointer-events: none;
+  pointer-events: auto;
+}
+
+.melon-layer :deep(canvas) {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .map-world {
@@ -462,6 +478,17 @@ button {
     linear-gradient(180deg, rgba(27, 20, 16, 0.04), rgba(27, 20, 16, 0.14)),
     var(--hall-bg-image) center / cover no-repeat;
   will-change: transform;
+}
+
+.map-world.is-dom-fallback-hidden .agent-token,
+.map-world.is-dom-fallback-hidden .hall-foreground,
+.map-world.is-dom-fallback-hidden .room-prop-layer,
+.map-world.is-dom-fallback-hidden .map-region,
+.map-world.is-dom-fallback-hidden .map-road,
+.map-world.is-dom-fallback-hidden .hall-room,
+.map-world.is-dom-fallback-hidden .empty-hall {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .map-world::before,

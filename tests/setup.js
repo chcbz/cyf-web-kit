@@ -9,6 +9,7 @@ const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
 Object.defineProperty(global, 'window', { value: dom.window, writable: true })
 Object.defineProperty(global, 'document', { value: dom.window.document, writable: true })
 Object.defineProperty(global, 'navigator', { value: dom.window.navigator, writable: true })
+Object.defineProperty(global, 'DOMParser', { value: dom.window.DOMParser, writable: true })
 
 // 导出轻量 cleanup，避免在 jsdom 初始化前加载 Vue runtime。
 export const cleanup = () => {

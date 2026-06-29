@@ -170,6 +170,7 @@ describe('JuyiHall component behavior', () => {
 
   it('syncs scene agents to the melonJS game layer when ready', async () => {
     const syncedAgents = []
+    const syncedHotspots = []
     hallGameMock = {
       destroy: () => {},
       mount: async (_container, options = {}) => {
@@ -177,15 +178,59 @@ describe('JuyiHall component behavior', () => {
       },
       setSelectedAgent: () => {},
       start: () => {},
-      syncAgents: agents => syncedAgents.push(agents)
+      syncAgents: agents => syncedAgents.push(agents),
+      syncHotspots: hotspots => syncedHotspots.push(hotspots)
     }
     HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
     const sceneAgents = [
       { agentId: 'songjiang', name: '宋江', x: 50, y: 45 },
       { agentId: 'linchong', name: '林冲', x: 34, y: 63 }
     ]
+    const sceneHotspots = [
+      { id: 'bountyBoard', state: 'active', feedbackText: '荐单已出' }
+    ]
 
-    mount(HallStage, {
+    const wrapper = mount(HallStage, {
+      global: { stubs },
+      props: {
+        agentKey: agent => agent.agentId,
+        agentStyle: () => ({}),
+        portraitName: agent => agent.name,
+        portraitShortName: agent => agent.name,
+        portraitStyle: () => ({}),
+        roleClass: () => '',
+        sceneAgents,
+        sceneHotspots,
+        statusClass: () => '',
+        statusText: () => '',
+        tasksTotal: 3,
+        visibleAgents: []
+      }
+    })
+    await Vue.nextTick()
+
+    expect(syncedAgents).to.deep.include(sceneAgents)
+    expect(syncedHotspots).to.deep.include(sceneHotspots)
+    expect(wrapper.find('.hall-board').classes()).to.include('is-melon-ready')
+    expect(wrapper.find('.map-world').classes()).to.include('is-dom-fallback-hidden')
+  })
+
+  it('wires melonJS agent clicks back to Vue selection', async () => {
+    let clickHandler
+    hallGameMock = {
+      destroy: () => {},
+      mount: async (_container, options = {}) => {
+        clickHandler = options.onAgentClick
+        options.onReady?.()
+      },
+      setSelectedAgent: () => {},
+      start: () => {},
+      syncAgents: () => {},
+      syncHotspots: () => {}
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+    const sceneAgents = [{ agentId: 'linchong', name: '林冲', x: 34, y: 63 }]
+    const wrapper = mount(HallStage, {
       global: { stubs },
       props: {
         agentKey: agent => agent.agentId,
@@ -197,13 +242,13 @@ describe('JuyiHall component behavior', () => {
         sceneAgents,
         statusClass: () => '',
         statusText: () => '',
-        tasksTotal: 3,
         visibleAgents: []
       }
     })
-    await Vue.nextTick()
 
-    expect(syncedAgents).to.deep.include(sceneAgents)
+    clickHandler({ agentId: 'linchong' })
+
+    expect(wrapper.emitted('select-agent')[0]).to.deep.equal([sceneAgents[0]])
   })
 
   it('opens panels and clears locked contexts from BottomDock', async () => {
