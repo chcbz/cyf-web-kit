@@ -220,7 +220,8 @@ const rigStyle = computed(() => {
   width: 88px;
   height: 146px;
   padding: 0;
-  transform: translate(-50%, -100%);
+  transform: translate(-50%, -100%) scale(var(--scene-fit-scale, 1));
+  transform-origin: 50% 100%;
   border: 0;
   border-radius: 0;
   background: transparent;

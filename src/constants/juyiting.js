@@ -749,11 +749,11 @@ export const hallPhysicalScene = {
   ],
   interactiveZones: [
     { key: 'main', panel: 'chat', title: '忠义堂公议', subtitle: '厅前公议 / 众好汉', x: 50, y: 30, w: 20, h: 13, object: 'plaque', hitShape: 'plaque', tilt: 0 },
-    { key: 'agents', panel: 'agents', title: '点将册', subtitle: '点将调遣', x: 25, y: 52, w: 25, h: 17, object: 'ledger', hitShape: 'rect', tilt: -3 },
-    { key: 'tasks', panel: 'tasks', title: '悬赏榜', subtitle: '榜文', x: 78, y: 47, w: 22, h: 24, object: 'notice-rack', hitShape: 'rect', tilt: 2 },
-    { key: 'catalog', panel: 'catalog', title: '招贤令', subtitle: '遍请豪杰', x: 8, y: 72, w: 11, h: 27, object: 'banner-flag', hitShape: 'rect', tilt: -3 },
-    { key: 'library', panel: 'library', title: '案卷阁', subtitle: '查卷问典', x: 78, y: 77, w: 25, h: 24, object: 'scroll-shelf', hitShape: 'rect', tilt: -1 },
-    { key: 'back', panel: null, title: '整装处', subtitle: '兵甲行囊', x: 68, y: 28, w: 23, h: 18, object: 'rear-gear', hitShape: 'rect', tilt: 0 }
+    { key: 'agents', panel: 'agents', title: '点将册', subtitle: '点将调遣', x: 25, y: 52, w: 25, h: 17, object: 'ledger', hitShape: 'ledger', tilt: -3 },
+    { key: 'tasks', panel: 'tasks', title: '悬赏榜', subtitle: '榜文', x: 78, y: 47, w: 22, h: 24, object: 'notice-rack', hitShape: 'notice-board', tilt: 2 },
+    { key: 'catalog', panel: 'catalog', title: '招贤令', subtitle: '遍请豪杰', x: 8, y: 72, w: 11, h: 27, object: 'banner-flag', hitShape: 'banner-flag', tilt: -3 },
+    { key: 'library', panel: 'library', title: '案卷阁', subtitle: '查卷问典', x: 78, y: 77, w: 25, h: 24, object: 'scroll-shelf', hitShape: 'scroll-desk', tilt: -1 },
+    { key: 'back', panel: null, title: '整装处', subtitle: '兵甲行囊', x: 68, y: 28, w: 23, h: 18, object: 'rear-gear', hitShape: 'gear-rack', tilt: 0 }
   ],
   patrolAnchors: [
     { x: 26, y: 73, radiusX: 4, radiusY: 3, linger: [2600, 4800] },

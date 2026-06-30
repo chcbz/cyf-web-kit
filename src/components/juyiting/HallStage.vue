@@ -74,10 +74,7 @@
             @click.stop="openZone(zone)"
           >
             <span class="sr-only">{{ objectAriaLabel(zone) }}</span>
-            <span class="hall-room-label" aria-hidden="true">
-              <span>{{ zone.title }}</span>
-              <span class="hall-room-subtitle">{{ zoneSubtitle(zone) }}</span>
-            </span>
+            <span class="object-highlight" aria-hidden="true"></span>
           </button>
           <div
             v-else
@@ -87,6 +84,7 @@
             :aria-label="objectAriaLabel(zone)"
           >
             <span class="sr-only">{{ objectAriaLabel(zone) }}</span>
+            <span class="object-highlight" aria-hidden="true"></span>
           </div>
         </template>
         <div class="beam beam-top"></div>
@@ -373,12 +371,44 @@ const endMapDrag = (event) => {
 const pointInZone = (point, zone) => {
   const halfW = zone.w / 2
   const halfH = zone.h / 2
+  const localX = ((point.x - (zone.x - halfW)) / zone.w) * 100
+  const localY = ((point.y - (zone.y - halfH)) / zone.h) * 100
   const dx = Math.abs(point.x - zone.x)
   const dy = Math.abs(point.y - zone.y)
   if (zone.hitShape === 'ellipse') {
     return ((dx * dx) / (halfW * halfW)) + ((dy * dy) / (halfH * halfH)) <= 1
   }
+  if (zone.hitShape === 'plaque') {
+    return pointInPolygon(localX, localY, [[6, 12], [94, 12], [100, 50], [94, 88], [6, 88], [0, 50]])
+  }
+  if (zone.hitShape === 'ledger') {
+    return pointInPolygon(localX, localY, [[6, 24], [88, 10], [100, 74], [18, 94]])
+  }
+  if (zone.hitShape === 'notice-board') {
+    return pointInPolygon(localX, localY, [[8, 4], [96, 12], [88, 96], [0, 84]])
+  }
+  if (zone.hitShape === 'banner-flag') {
+    return pointInPolygon(localX, localY, [[34, 0], [76, 6], [68, 72], [92, 96], [28, 88], [8, 22]])
+  }
+  if (zone.hitShape === 'scroll-desk') {
+    return pointInPolygon(localX, localY, [[18, 2], [92, 18], [100, 78], [72, 100], [6, 82], [0, 22]])
+  }
+  if (zone.hitShape === 'gear-rack') {
+    return pointInPolygon(localX, localY, [[10, 8], [96, 0], [86, 92], [0, 100]])
+  }
   return dx <= halfW && dy <= halfH
+}
+
+const pointInPolygon = (x, y, polygon) => {
+  let inside = false
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [xi, yi] = polygon[i]
+    const [xj, yj] = polygon[j]
+    const intersects = ((yi > y) !== (yj > y)) &&
+      x < ((xj - xi) * (y - yi)) / (yj - yi || 1) + xi
+    if (intersects) inside = !inside
+  }
+  return inside
 }
 
 const boardPointFromEvent = (event) => {
@@ -638,6 +668,7 @@ button {
   position: absolute;
   left: 50%;
   top: 50%;
+  --scene-fit-scale: 1;
   width: 162%;
   height: 148%;
   transform:
@@ -666,10 +697,6 @@ button {
 
 .map-world.is-melon-enhanced .hall-room::before {
   opacity: 0.46;
-}
-
-.map-world.is-melon-enhanced .hall-room-label {
-  opacity: 0.9;
 }
 
 .map-world.is-melon-enhanced .room-prop-layer,
@@ -833,11 +860,11 @@ button.hall-room {
 }
 
 .hall-room::before,
-.hall-room::after {
+.hall-room::after,
+.object-highlight {
   content: '';
   position: absolute;
   pointer-events: none;
-  opacity: 0.38;
   transition:
     opacity 0.16s ease,
     transform 0.16s ease,
@@ -845,13 +872,14 @@ button.hall-room {
 }
 
 .hall-room::before {
-  inset: 8%;
-  border-radius: 9px;
+  inset: 2%;
+  opacity: 0.18;
+  border-radius: 12px;
   background:
-    radial-gradient(ellipse at 50% 45%, rgba(255, 232, 159, 0.34), rgba(255, 207, 87, 0.12) 48%, transparent 74%);
+    radial-gradient(ellipse at 50% 48%, rgba(255, 238, 178, 0.36), rgba(255, 207, 87, 0.12) 54%, transparent 76%);
   box-shadow:
-    inset 0 0 16px rgba(255, 238, 178, 0.24),
-    0 0 18px rgba(235, 178, 62, 0.2);
+    inset 0 0 0 1px rgba(255, 238, 178, 0.34),
+    0 0 18px rgba(235, 178, 62, 0.22);
   mix-blend-mode: screen;
   transform: scale(0.96);
 }
@@ -865,69 +893,22 @@ button.hall-room {
   border-radius: 50%;
   background: rgba(255, 221, 130, 0.26);
   filter: blur(8px);
+  opacity: 0.28;
 }
 
-.hall-room-label {
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 2px);
-  z-index: 2;
-  display: grid;
-  min-width: 52px;
-  max-width: 94px;
-  padding: 3px 6px 4px;
-  transform: translateX(-50%) rotate(calc(var(--object-tilt, 0deg) * -1));
-  border: 1px solid rgba(91, 52, 24, 0.4);
-  border-radius: 4px;
-  background:
-    linear-gradient(180deg, rgba(255, 250, 226, 0.94), rgba(230, 199, 139, 0.88));
-  color: #432813;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 244, 210, 0.36),
-    0 5px 10px rgba(48, 28, 14, 0.2);
-  font-family: serif;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.05;
-  letter-spacing: 0;
-  opacity: 0.86;
-  pointer-events: none;
-  text-align: center;
-  text-shadow: 0 1px 0 rgba(255, 244, 210, 0.72);
-  transition:
-    opacity 0.16s ease,
-    transform 0.16s ease,
-    filter 0.16s ease;
-}
-
-.hall-room-label::before,
-.hall-room-label::after {
-  content: '';
-  position: absolute;
-  left: 7px;
-  right: 7px;
-  height: 1px;
-  background: rgba(91, 52, 24, 0.42);
-}
-
-.hall-room-label::before {
-  top: 2px;
-}
-
-.hall-room-label::after {
-  bottom: 2px;
-}
-
-.hall-room-subtitle {
+.object-highlight {
+  inset: 0;
   display: block;
-  margin-top: 2px;
-  overflow: hidden;
-  color: rgba(67, 40, 19, 0.76);
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 1.1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  opacity: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(120deg, transparent 8%, rgba(255, 245, 190, 0.24) 42%, transparent 70%),
+    radial-gradient(ellipse at 50% 48%, rgba(255, 226, 130, 0.28), transparent 70%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 232, 159, 0.44),
+    0 0 20px rgba(255, 203, 88, 0.28);
+  filter: saturate(1.12) brightness(1.08);
+  mix-blend-mode: screen;
 }
 
 button.hall-room:hover::before,
@@ -944,12 +925,12 @@ button.hall-room:active::after {
   transform: translateX(-50%) scaleX(1);
 }
 
-button.hall-room:hover .hall-room-label,
-button.hall-room:focus-visible .hall-room-label,
-button.hall-room:active .hall-room-label {
+button.hall-room:hover .object-highlight,
+button.hall-room:focus-visible .object-highlight,
+button.hall-room:active .object-highlight {
   opacity: 1;
-  filter: saturate(1.08);
-  transform: translateX(-50%) translateY(-2px) rotate(calc(var(--object-tilt, 0deg) * -1));
+  filter: saturate(1.22) brightness(1.16);
+  transform: scale(1.02);
 }
 
 button.hall-room:focus-visible {
@@ -964,6 +945,26 @@ button.hall-room:focus-visible {
 
 .shape-plaque {
   clip-path: polygon(6% 12%, 94% 12%, 100% 50%, 94% 88%, 6% 88%, 0 50%);
+}
+
+.shape-ledger {
+  clip-path: polygon(6% 24%, 88% 10%, 100% 74%, 18% 94%);
+}
+
+.shape-notice-board {
+  clip-path: polygon(8% 4%, 96% 12%, 88% 96%, 0 84%);
+}
+
+.shape-banner-flag {
+  clip-path: polygon(34% 0, 76% 6%, 68% 72%, 92% 96%, 28% 88%, 8% 22%);
+}
+
+.shape-scroll-desk {
+  clip-path: polygon(18% 2%, 92% 18%, 100% 78%, 72% 100%, 6% 82%, 0 22%);
+}
+
+.shape-gear-rack {
+  clip-path: polygon(10% 8%, 96% 0, 86% 92%, 0 100%);
 }
 
 .object-plaque::before {
@@ -1182,6 +1183,7 @@ button.hall-room:focus-visible {
   }
 
   .map-world {
+    --scene-fit-scale: 0.62;
     background-size: auto, contain;
     background-position: center, center;
     background-repeat: no-repeat, no-repeat;

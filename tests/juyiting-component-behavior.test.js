@@ -395,6 +395,30 @@ describe('JuyiHall component behavior', () => {
     expect(portraitMedia).to.include('background-size: auto, contain')
   })
 
+  it('uses object-shaped hotspots with highlight treatment instead of visible text labels', () => {
+    const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
+    const constants = readFileSync(new URL('../src/constants/juyiting.js', import.meta.url), 'utf8')
+
+    expect(source).not.to.include('class="hall-room-label"')
+    expect(source).not.to.include('class="hall-room-subtitle"')
+    expect(source).to.include('object-highlight')
+    for (const shape of ['shape-ledger', 'shape-notice-board', 'shape-banner-flag', 'shape-scroll-desk', 'shape-gear-rack']) {
+      expect(source).to.include(`.${shape}`)
+      expect(constants).to.include(`hitShape: '${shape.replace('shape-', '')}'`)
+    }
+  })
+
+  it('scales agents and speech bubbles with the fitted portrait hall scene', () => {
+    const stageSource = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
+    const tokenSource = readFileSync(new URL('../src/components/juyiting/AgentToken.vue', import.meta.url), 'utf8')
+    const portraitMedia = stageSource.slice(stageSource.indexOf('@media (max-width: 640px) and (orientation: portrait)'))
+
+    expect(portraitMedia).to.include('--scene-fit-scale: 0.62')
+    expect(tokenSource).to.include('scale(var(--scene-fit-scale, 1))')
+    expect(tokenSource).to.include('transform-origin: 50% 100%')
+    expect(tokenSource).to.include('.agent-dialogue')
+  })
+
   it('wires melonJS agent clicks back to Vue selection', async () => {
     let clickHandler
     hallGameMock = {
