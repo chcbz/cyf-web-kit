@@ -4,6 +4,7 @@
 
 import { DEPTH_LAYERS } from '../config.js'
 import { FALLBACK_HALL_HOTSPOTS } from '../resources.js'
+import { clampSceneTransform, screenToWorldPoint } from '../sceneTransform.js'
 
 export function createHallSceneClass(me, HallAgentClass) {
   return class HallScene extends me.Stage {
@@ -20,6 +21,14 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._mapData = null
       this._hotspotState = new Map()
       this._sceneBuilt = false
+      this._minZoom = 0.75
+      this._maxZoom = 3.3
+      this._transform = { offsetX: 0, offsetY: 0, zoom: 1 }
+      this._dragState = {
+        active: false,
+        lastX: 0,
+        lastY: 0
+      }
     }
 
     onAgentClick(cb)   { this._onAgentClick = cb }
@@ -60,6 +69,66 @@ export function createHallSceneClass(me, HallAgentClass) {
     }
 
     getAgent(id) { return this._agents.get(id) }
+
+    getTransform() {
+      return { ...this._transform }
+    }
+
+    _getViewportBounds() {
+      const vp = me.game.viewport
+      return {
+        viewportWidth: vp?.width || 0,
+        viewportHeight: vp?.height || 0,
+        minZoom: this._minZoom,
+        maxZoom: this._maxZoom
+      }
+    }
+
+    _clampTransform(next) {
+      return clampSceneTransform(next, this._getViewportBounds())
+    }
+
+    panBy(dx, dy) {
+      const next = {
+        ...this._transform,
+        offsetX: this._transform.offsetX + dx,
+        offsetY: this._transform.offsetY + dy
+      }
+
+      this._transform = this._transform.zoom > 1
+        ? this._clampTransform(next)
+        : next
+      return this.getTransform()
+    }
+
+    zoomBy(delta) {
+      this._transform = this._clampTransform({
+        ...this._transform,
+        zoom: this._transform.zoom + delta
+      })
+      return this.getTransform()
+    }
+
+    resetTransform() {
+      this._transform = { offsetX: 0, offsetY: 0, zoom: 1 }
+      this._dragState = {
+        active: false,
+        lastX: 0,
+        lastY: 0
+      }
+      return this.getTransform()
+    }
+
+    _screenToWorld(x, y) {
+      const { viewportWidth, viewportHeight } = this._getViewportBounds()
+      return screenToWorldPoint({
+        x,
+        y,
+        viewportWidth,
+        viewportHeight,
+        ...this._transform
+      })
+    }
 
     /**
      * Build the full scene (image layers, hotspots, pointer events).
@@ -161,7 +230,8 @@ export function createHallSceneClass(me, HallAgentClass) {
       me.input.registerPointerEvent('pointerdown', me.game.viewport, (event) => {
         const x = event.gameX ?? event.clientX
         const y = event.gameY ?? event.clientY
-        const hit = [...this._agents.values()].reverse().find(agent => agent.containsPoint(x, y))
+        const point = this._screenToWorld(x, y)
+        const hit = [...this._agents.values()].reverse().find(agent => agent.containsPoint(point.x, point.y))
         if (hit) {
           hit.onPointerDown?.()
           return false

@@ -98,6 +98,21 @@ const createFakeMelon = () => {
 }
 
 describe('HallScene melonJS pointer routing', () => {
+  it('keeps transform state inside the melonJS scene', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+
+    scene.onResetEvent()
+    scene.panBy(120, -80)
+    scene.zoomBy(0.5)
+
+    expect(scene.getTransform()).to.include({ offsetX: 120, offsetY: -80, zoom: 1.5 })
+
+    scene.resetTransform()
+    expect(scene.getTransform()).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 1 })
+  })
+
   it('registers clickable hotspots on renderables and the agent hit router on the viewport', () => {
     const me = createFakeMelon()
     const HallScene = createHallSceneClass(me, class {})
