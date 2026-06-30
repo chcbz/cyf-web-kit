@@ -75,7 +75,6 @@
           >
             <span class="sr-only">{{ objectAriaLabel(zone) }}</span>
             <span class="object-visual" aria-hidden="true"></span>
-            <span class="object-highlight" aria-hidden="true"></span>
           </button>
           <div
             v-else
@@ -86,7 +85,6 @@
           >
             <span class="sr-only">{{ objectAriaLabel(zone) }}</span>
             <span class="object-visual" aria-hidden="true"></span>
-            <span class="object-highlight" aria-hidden="true"></span>
           </div>
         </template>
         <div class="beam beam-top"></div>
@@ -916,8 +914,7 @@ button.hall-room {
 
 .hall-room::before,
 .hall-room::after,
-.object-visual,
-.object-highlight {
+.object-visual {
   content: '';
   position: absolute;
   pointer-events: none;
@@ -962,44 +959,6 @@ button.hall-room {
   background: rgba(255, 221, 130, 0.26);
   filter: blur(8px);
   opacity: 0.28;
-}
-
-.object-highlight {
-  inset: 0;
-  z-index: 3;
-  display: block;
-  opacity: 0;
-  border-radius: inherit;
-  background:
-    linear-gradient(120deg, transparent 8%, rgba(255, 245, 190, 0.24) 42%, transparent 70%),
-    radial-gradient(ellipse at 50% 48%, rgba(255, 226, 130, 0.28), transparent 70%);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 232, 159, 0.44),
-    0 0 20px rgba(255, 203, 88, 0.28);
-  filter: saturate(1.12) brightness(1.08);
-  mix-blend-mode: screen;
-}
-
-button.hall-room:hover::before,
-button.hall-room:focus-visible::before,
-button.hall-room:active::before {
-  opacity: 0.95;
-  transform: scale(1);
-}
-
-button.hall-room:hover::after,
-button.hall-room:focus-visible::after,
-button.hall-room:active::after {
-  opacity: 0.9;
-  transform: translateX(-50%) scaleX(1);
-}
-
-button.hall-room:hover .object-highlight,
-button.hall-room:focus-visible .object-highlight,
-button.hall-room:active .object-highlight {
-  opacity: 1;
-  filter: saturate(1.22) brightness(1.16);
-  transform: scale(1.02);
 }
 
 button.hall-room:focus-visible {

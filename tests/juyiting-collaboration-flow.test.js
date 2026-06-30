@@ -63,11 +63,11 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(bountySource).not.to.include('>传令<')
   })
 
-  it('uses in-scene objects as click targets with integrated title hints', () => {
+  it('uses in-scene objects as click targets without visible labels or highlight overlays', () => {
     expect(hallStageSource).to.include('objectHitboxStyle(zone)')
     expect(hallStageSource).to.include('object-${zone.object}')
     expect(hallStageSource).to.include('sr-only')
-    expect(hallStageSource).to.include('object-highlight')
+    expect(hallStageSource).not.to.include('object-highlight')
     expect(hallStageSource).to.include('objectAriaLabel(zone)')
     expect(hallStageSource).not.to.include('hall-room-label')
     expect(hallStageSource).not.to.include('<strong>{{ zone.title }}</strong>')

@@ -483,13 +483,13 @@ describe('JuyiHall component behavior', () => {
     expect(portraitMedia).to.include('background-size: auto, contain')
   })
 
-  it('uses object-shaped hotspots with highlight treatment instead of visible text labels', () => {
+  it('uses object-shaped hotspots without visible text labels or highlight overlays', () => {
     const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
     const constants = readFileSync(new URL('../src/constants/juyiting.js', import.meta.url), 'utf8')
 
     expect(source).not.to.include('class="hall-room-label"')
     expect(source).not.to.include('class="hall-room-subtitle"')
-    expect(source).to.include('object-highlight')
+    expect(source).not.to.include('object-highlight')
     for (const shape of ['shape-ledger', 'shape-notice-board', 'shape-banner-flag', 'shape-scroll-desk', 'shape-gear-rack']) {
       expect(source).to.include(`.${shape}`)
       expect(constants).to.include(`hitShape: '${shape.replace('shape-', '')}'`)
