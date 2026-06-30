@@ -496,6 +496,22 @@ describe('JuyiHall component behavior', () => {
     }
   })
 
+  it('preserves object visual aspect ratios and keeps hotspot buttons backgroundless', () => {
+    const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
+    const objectVisualRule = cssRule(source, '.object-visual')
+    const buttonRoomRule = cssRule(source, 'button.hall-room')
+
+    expect(source).to.include('--object-visual-width')
+    expect(source).to.include('--object-visual-height')
+    expect(objectVisualRule).to.include('aspect-ratio: var(--object-aspect-ratio, 1 / 1)')
+    expect(objectVisualRule).to.include('width: var(--object-visual-width, 100%)')
+    expect(objectVisualRule).to.include('height: var(--object-visual-height, 100%)')
+    expect(objectVisualRule).to.include('max-width: 100%')
+    expect(objectVisualRule).to.include('max-height: 100%')
+    expect(objectVisualRule).to.include('background-size: var(--object-background-size, 300% 200%)')
+    expect(buttonRoomRule).to.include('background: none')
+  })
+
   it('scales agents and speech bubbles with the fitted portrait hall scene', () => {
     const stageSource = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
     const tokenSource = readFileSync(new URL('../src/components/juyiting/AgentToken.vue', import.meta.url), 'utf8')

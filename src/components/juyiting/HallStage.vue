@@ -174,6 +174,7 @@ const mapDragThreshold = 3
 const defaultMinMapZoom = 0.75
 const defaultMaxMapZoom = 3.3
 const mapZoomStep = 0.12
+const hallSceneAspect = 1672 / 941
 
 const mapWorldStyle = computed(() => ({
   '--map-offset-x': `${viewportOffset.value.x}px`,
@@ -189,6 +190,11 @@ const mapWorldStyle = computed(() => ({
 const hallInteractiveZones = computed(() => hallPhysicalScene.interactiveZones)
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
+
+const objectAspectRatios = {
+  plaque: { css: '640 / 260', value: 640 / 260 },
+  'scroll-shelf': { css: '760 / 620', value: 760 / 620 }
+}
 
 const mapWorldBaseSize = (zoom = mapZoom.value) => {
   const world = mapWorldRef.value?.getBoundingClientRect()
@@ -235,13 +241,22 @@ const roomPropStyle = (prop) => {
   }
 }
 
-const objectHitboxStyle = (zone) => ({
-  left: `${zone.x}%`,
-  top: `${zone.y}%`,
-  width: `${zone.w}%`,
-  height: `${zone.h}%`,
-  '--object-tilt': `${zone.tilt || 0}deg`
-})
+const objectHitboxStyle = (zone) => {
+  const objectRatio = objectAspectRatios[zone.object] || { css: '1 / 1', value: 1 }
+  const hitboxRatio = ((zone.w || 1) * hallSceneAspect) / (zone.h || 1)
+  const visualWidth = hitboxRatio > objectRatio.value ? (objectRatio.value / hitboxRatio) * 100 : 100
+  const visualHeight = hitboxRatio > objectRatio.value ? 100 : (hitboxRatio / objectRatio.value) * 100
+  return {
+    left: `${zone.x}%`,
+    top: `${zone.y}%`,
+    width: `${zone.w}%`,
+    height: `${zone.h}%`,
+    '--object-tilt': `${zone.tilt || 0}deg`,
+    '--object-aspect-ratio': objectRatio.css,
+    '--object-visual-width': `${visualWidth.toFixed(2)}%`,
+    '--object-visual-height': `${visualHeight.toFixed(2)}%`
+  }
+}
 
 const zoneSubtitle = (zone) => {
   if (zone.key === 'tasks') return `${props.tasksTotal} 件`
@@ -905,6 +920,7 @@ button {
 }
 
 button.hall-room {
+  background: none;
   cursor: pointer;
 }
 
@@ -913,8 +929,7 @@ button.hall-room {
 }
 
 .hall-room::before,
-.hall-room::after,
-.object-visual {
+.hall-room::after {
   content: '';
   position: absolute;
   pointer-events: none;
@@ -925,12 +940,21 @@ button.hall-room {
 }
 
 .object-visual {
-  inset: 0;
+  position: absolute;
+  left: 50%;
+  top: 50%;
   z-index: 1;
   display: block;
+  width: var(--object-visual-width, 100%);
+  height: var(--object-visual-height, 100%);
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: var(--object-aspect-ratio, 1 / 1);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
   background-image: var(--hall-object-atlas-image);
   background-repeat: no-repeat;
-  background-size: 300% 200%;
+  background-size: var(--object-background-size, 300% 200%);
   filter: drop-shadow(0 12px 16px rgba(0, 0, 0, 0.28));
 }
 
