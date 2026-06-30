@@ -74,6 +74,7 @@
             @click.stop="openZone(zone)"
           >
             <span class="sr-only">{{ objectAriaLabel(zone) }}</span>
+            <span class="object-visual" aria-hidden="true"></span>
             <span class="object-highlight" aria-hidden="true"></span>
           </button>
           <div
@@ -84,6 +85,7 @@
             :aria-label="objectAriaLabel(zone)"
           >
             <span class="sr-only">{{ objectAriaLabel(zone) }}</span>
+            <span class="object-visual" aria-hidden="true"></span>
             <span class="object-highlight" aria-hidden="true"></span>
           </div>
         </template>
@@ -129,7 +131,8 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AgentToken from '@/components/juyiting/AgentToken.vue'
-import hallBackground from '@/assets/juyiting/liangshan-hall-functional-bg-v1.png'
+import hallBackground from '@/assets/juyiting/liangshan-hall-empty-bg-v1.png'
+import hallObjectAtlas from '@/assets/juyiting/liangshan-hall-object-atlas-v1.png'
 import roomPropsAtlas from '@/assets/juyiting/liangshan-room-props-v2.png'
 import { hallPhysicalScene, hallRoomPropVisuals } from '@/constants/juyiting'
 import { juyitingGame } from '@/game/index.js'
@@ -176,6 +179,7 @@ const mapWorldStyle = computed(() => ({
   '--map-offset-y': `${viewportOffset.value.y}px`,
   '--map-zoom': mapZoom.value.toFixed(2),
   '--hall-bg-image': `url("${hallBackground}")`,
+  '--hall-object-atlas-image': `url("${hallObjectAtlas}")`,
   '--room-props-image': `url("${roomPropsAtlas}")`
 }))
 
@@ -388,7 +392,7 @@ const pointInZone = (point, zone) => {
     return pointInPolygon(localX, localY, [[8, 4], [96, 12], [88, 96], [0, 84]])
   }
   if (zone.hitShape === 'banner-flag') {
-    return pointInPolygon(localX, localY, [[34, 0], [76, 6], [68, 72], [92, 96], [28, 88], [8, 22]])
+    return pointInPolygon(localX, localY, [[28, 0], [76, 4], [72, 62], [98, 98], [16, 94], [0, 62], [10, 24]])
   }
   if (zone.hitShape === 'scroll-desk') {
     return pointInPolygon(localX, localY, [[18, 2], [92, 18], [100, 78], [72, 100], [6, 82], [0, 22]])
@@ -861,6 +865,7 @@ button.hall-room {
 
 .hall-room::before,
 .hall-room::after,
+.object-visual,
 .object-highlight {
   content: '';
   position: absolute;
@@ -871,8 +876,19 @@ button.hall-room {
     filter 0.16s ease;
 }
 
+.object-visual {
+  inset: 0;
+  z-index: 1;
+  display: block;
+  background-image: var(--hall-object-atlas-image);
+  background-repeat: no-repeat;
+  background-size: 300% 200%;
+  filter: drop-shadow(0 12px 16px rgba(0, 0, 0, 0.28));
+}
+
 .hall-room::before {
   inset: 2%;
+  z-index: 2;
   opacity: 0.18;
   border-radius: 12px;
   background:
@@ -887,6 +903,7 @@ button.hall-room {
 .hall-room::after {
   left: 50%;
   bottom: 8%;
+  z-index: 0;
   width: 56%;
   height: 8%;
   transform: translateX(-50%) scaleX(0.82);
@@ -898,6 +915,7 @@ button.hall-room {
 
 .object-highlight {
   inset: 0;
+  z-index: 3;
   display: block;
   opacity: 0;
   border-radius: inherit;
@@ -956,7 +974,7 @@ button.hall-room:focus-visible {
 }
 
 .shape-banner-flag {
-  clip-path: polygon(34% 0, 76% 6%, 68% 72%, 92% 96%, 28% 88%, 8% 22%);
+  clip-path: polygon(28% 0, 76% 4%, 72% 62%, 98% 98%, 16% 94%, 0 62%, 10% 24%);
 }
 
 .shape-scroll-desk {
@@ -973,6 +991,30 @@ button.hall-room:focus-visible {
   background:
     linear-gradient(90deg, transparent, rgba(255, 232, 159, 0.36) 50%, transparent),
     radial-gradient(ellipse at 50% 50%, rgba(255, 214, 113, 0.2), transparent 68%);
+}
+
+.object-plaque .object-visual {
+  background-position: 0 0;
+}
+
+.object-ledger .object-visual {
+  background-position: 50% 0;
+}
+
+.object-notice-rack .object-visual {
+  background-position: 100% 0;
+}
+
+.object-banner-flag .object-visual {
+  background-position: 0 100%;
+}
+
+.object-scroll-shelf .object-visual {
+  background-position: 50% 100%;
+}
+
+.object-rear-gear .object-visual {
+  background-position: 100% 100%;
 }
 
 .object-ledger::before,

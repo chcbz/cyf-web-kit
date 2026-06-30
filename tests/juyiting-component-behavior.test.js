@@ -188,7 +188,9 @@ describe('JuyiHall component behavior', () => {
       expect(sceneSource).not.to.include(`label: '${oldLabel}'`)
     }
 
-    expect(stageSource).to.include('liangshan-hall-functional-bg-v1.png')
+    expect(stageSource).to.include('liangshan-hall-empty-bg-v1.png')
+    expect(stageSource).to.include('liangshan-hall-object-atlas-v1.png')
+    expect(stageSource).to.include('object-visual')
   })
 
   it('syncs scene agents to the melonJS game layer when ready', async () => {
