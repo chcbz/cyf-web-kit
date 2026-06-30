@@ -131,8 +131,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AgentToken from '@/components/juyiting/AgentToken.vue'
-import hallBackground from '@/assets/juyiting/liangshan-hall-physical-bg-v1.png'
-import hallForeground from '@/assets/juyiting/liangshan-hall-foreground-v1.png'
+import hallBackground from '@/assets/juyiting/liangshan-hall-functional-bg-v1.png'
 import roomPropsAtlas from '@/assets/juyiting/liangshan-room-props-v2.png'
 import { hallPhysicalScene, hallRoomPropVisuals } from '@/constants/juyiting'
 import { juyitingGame } from '@/game/index.js'
@@ -179,7 +178,6 @@ const mapWorldStyle = computed(() => ({
   '--map-offset-y': `${viewportOffset.value.y}px`,
   '--map-zoom': mapZoom.value.toFixed(2),
   '--hall-bg-image': `url("${hallBackground}")`,
-  '--hall-foreground-image': `url("${hallForeground}")`,
   '--room-props-image': `url("${roomPropsAtlas}")`
 }))
 
@@ -990,6 +988,13 @@ button.hall-room:focus-visible {
     radial-gradient(circle at 45% 42%, rgba(255, 232, 159, 0.38), rgba(182, 58, 36, 0.12) 52%, transparent 74%);
 }
 
+.object-banner-flag::before {
+  inset: 4% 18%;
+  border-radius: 6px 6px 18px 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 232, 159, 0.42), rgba(173, 46, 34, 0.12) 58%, transparent 78%);
+}
+
 .object-rear-gear::before {
   inset: 6% 10%;
 }
@@ -1038,12 +1043,8 @@ button.hall-room:focus-visible {
   position: absolute;
   inset: 0;
   z-index: 7;
-  background: var(--hall-foreground-image) center / cover no-repeat;
+  display: none;
   pointer-events: none;
-  filter:
-    drop-shadow(0 8px 12px rgba(0, 0, 0, 0.26))
-    saturate(0.96)
-    contrast(1.02);
 }
 
 .empty-hall {

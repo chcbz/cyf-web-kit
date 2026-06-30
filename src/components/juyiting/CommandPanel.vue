@@ -5,7 +5,7 @@
       <div>
         <small>寨主坐镇</small>
         <strong>{{ chiefName }}</strong>
-        <p>总看榜文、好汉簿与厅前话头。</p>
+        <p>总看悬赏榜、点将册与厅前话头。</p>
       </div>
     </section>
 
@@ -70,7 +70,7 @@ defineEmits(['issue-command', 'open-panel'])
 
 const commands = [
   { key: 'reviewBounties', icon: 'format-list-checkbox', label: '巡看榜文', description: '梳理榜文、险处与领令人手' },
-  { key: 'reviewRoster', icon: 'account-circle', label: '整点好汉簿', description: '查候令、办事、失联与本领缺口' },
+  { key: 'reviewRoster', icon: 'account-circle', label: '整点点将册', description: '查候令、办事、失联与本领缺口' },
   { key: 'broadcastOrder', icon: 'message-text-outline', label: '厅前发话', description: '向众好汉起一个话头' },
   { key: 'summonReport', icon: 'account-circle-outline', label: '收拢回报', description: '催当前好汉就榜文回话' }
 ]

@@ -41,7 +41,7 @@
         {{ errorMessage }}
       </div>
       <div v-else-if="!results.length" class="empty-list">
-        {{ hasSearched ? '暂未查得案卷' : '输入关键词后查阅藏书阁。' }}
+        {{ hasSearched ? '暂未查得案卷' : '输入关键词后查阅案卷阁。' }}
       </div>
     </div>
   </div>

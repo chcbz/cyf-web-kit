@@ -47,7 +47,7 @@ const loadSfc = (relativePath) => {
     .replace(/^import\s+\{\s*juyitingGame\s*\}\s+from\s+['"]@\/game\/index\.js['"];?\s*$/gm, 'var juyitingGame = arguments[2]')
     .replace(/^import\s+BountyActionIcon\s+from\s+['"].\/BountyActionIcon\.vue['"];?\s*$/gm, 'var BountyActionIcon = { template: \'<span />\', props: [\'status\'] }')
     .replace(/^import\s+(\w+)\s+from\s+['"]@\/assets\/juyiting\/[^'"]+['"];?\s*$/gm, 'var $1 = \'/mock-juyiting-asset.png\'')
-    .replace(/^import\s+\{\s*hallPhysicalScene,\s*hallRoomPropVisuals\s*\}\s+from\s+['"]@\/constants\/juyiting['"];?\s*$/gm, 'var hallRoomPropVisuals = []; var hallPhysicalScene = { interactiveZones: [{ key: \'main\', panel: \'chat\', title: \'聚义厅\', subtitle: \'厅前公议 / 众好汉\', x: 50, y: 36, w: 12, h: 7, label: \'plaque\' }, { key: \'agents\', panel: \'agents\', title: \'好汉簿\', subtitle: \'点将调遣\', x: 21, y: 32, w: 13, h: 7, label: \'book-tag\' }, { key: \'catalog\', panel: \'catalog\', title: \'招贤馆\', subtitle: \'遍请豪杰\', x: 14, y: 68, w: 12, h: 7, label: \'drum-tag\' }] }')
+    .replace(/^import\s+\{\s*hallPhysicalScene,\s*hallRoomPropVisuals\s*\}\s+from\s+['"]@\/constants\/juyiting['"];?\s*$/gm, 'var hallRoomPropVisuals = []; var hallPhysicalScene = { interactiveZones: [{ key: \'main\', panel: \'chat\', title: \'忠义堂公议\', subtitle: \'厅前公议 / 众好汉\', x: 50, y: 36, w: 12, h: 7, object: \'plaque\', hitShape: \'plaque\' }, { key: \'agents\', panel: \'agents\', title: \'点将册\', subtitle: \'点将调遣\', x: 21, y: 32, w: 13, h: 7, object: \'ledger\' }, { key: \'tasks\', panel: \'tasks\', title: \'悬赏榜\', subtitle: \'榜文\', x: 76, y: 47, w: 19, h: 18, object: \'notice-rack\' }, { key: \'catalog\', panel: \'catalog\', title: \'招贤令\', subtitle: \'遍请豪杰\', x: 14, y: 68, w: 12, h: 7, object: \'banner-flag\' }, { key: \'library\', panel: \'library\', title: \'案卷阁\', subtitle: \'查卷问典\', x: 82, y: 76, w: 22, h: 18, object: \'scroll-shelf\' }, { key: \'back\', panel: null, title: \'整装处\', subtitle: \'兵甲行囊\', x: 67, y: 26, w: 12, h: 8, object: \'rear-gear\' }] }')
     .replace(/^import\s+HallChatComposer\s+from\s+['"].\/HallChatComposer\.vue['"];?\s*$/gm, 'var HallChatComposer = arguments[1]')
     .replace(/^import\s+\{\s*marked\s*\}\s+from\s+['"]marked['"];?\s*$/gm, 'var marked = { setOptions: () => {}, parse: value => value }')
     .replace(/^import\s+DOMPurify\s+from\s+['"]dompurify['"];?\s*$/gm, 'var DOMPurify = { sanitize: value => value }')
@@ -138,7 +138,7 @@ describe('JuyiHall component behavior', () => {
       }
     })
 
-    expect(stage.text()).to.include('招贤馆')
+    expect(stage.text()).to.include('招贤令')
     expect(stage.text()).to.include('遍请豪杰')
     await stage.find('.room-catalog').trigger('click')
     expect(stage.emitted('open-panel')[0]).to.deep.equal(['catalog'])
@@ -172,6 +172,23 @@ describe('JuyiHall component behavior', () => {
 
     await catalog.find('.catalog-action.primary').trigger('click')
     expect(catalog.emitted('bind-persona')[0]).to.deep.equal([personas[1], 'server'])
+  })
+
+  it('labels hall hotspots as concrete function objects in the redesigned scene', () => {
+    const source = readFileSync(new URL('../src/constants/juyiting.js', import.meta.url), 'utf8')
+    const sceneSource = readFileSync(new URL('../src/constants/juyitingScene.js', import.meta.url), 'utf8')
+    const stageSource = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
+
+    for (const label of ['忠义堂公议', '点将册', '悬赏榜', '招贤令', '案卷阁', '整装处']) {
+      expect(source).to.include(`title: '${label}'`)
+    }
+
+    for (const oldLabel of ['榜文房', '招贤馆', '藏书阁']) {
+      expect(source).not.to.include(`title: '${oldLabel}'`)
+      expect(sceneSource).not.to.include(`label: '${oldLabel}'`)
+    }
+
+    expect(stageSource).to.include('liangshan-hall-functional-bg-v1.png')
   })
 
   it('syncs scene agents to the melonJS game layer when ready', async () => {
@@ -820,7 +837,7 @@ describe('JuyiHall component behavior', () => {
     })
 
     expect(wrapper.text()).to.include('巡看榜文')
-    expect(wrapper.text()).to.include('整点好汉簿')
+    expect(wrapper.text()).to.include('整点点将册')
     expect(wrapper.text()).to.include('厅前发话')
 
     await wrapper.findAll('.command-grid button')[0].trigger('click')
@@ -893,7 +910,7 @@ describe('JuyiHall component behavior', () => {
     const errorWrapper = mount(LibraryPanel, {
       global: { stubs },
       props: {
-        errorMessage: '藏书阁暂不可查，主线不受影响',
+        errorMessage: '案卷阁暂不可查，主线不受影响',
         formatTime: value => String(value),
         hasSearched: true,
         keyword: 'deploy',
@@ -903,6 +920,6 @@ describe('JuyiHall component behavior', () => {
       }
     })
 
-    expect(errorWrapper.text()).to.include('藏书阁暂不可查，主线不受影响')
+    expect(errorWrapper.text()).to.include('案卷阁暂不可查，主线不受影响')
   })
 })

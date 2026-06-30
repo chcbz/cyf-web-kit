@@ -22,9 +22,9 @@ export const HALL_SCENE_REGIONS = {
   },
   libraryShelf: {
     id: 'libraryShelf',
-    label: '藏经阁',
-    bounds: { x1: 70, y1: 69, x2: 86, y2: 82 },
-    anchor: { x: 79, y: 78 },
+    label: '案卷阁',
+    bounds: { x1: 66, y1: 67, x2: 90, y2: 86 },
+    anchor: { x: 78, y: 77 },
     depthOffset: 2
   },
   gate: {
@@ -36,9 +36,9 @@ export const HALL_SCENE_REGIONS = {
   },
   leftGuard: {
     id: 'leftGuard',
-    label: '左侧巡守',
-    bounds: { x1: 26, y1: 51, x2: 38, y2: 72 },
-    anchor: { x: 32, y: 62 },
+    label: '点将册',
+    bounds: { x1: 18, y1: 45, x2: 36, y2: 66 },
+    anchor: { x: 28, y: 62 },
     depthOffset: 0
   },
   rightGuard: {
@@ -115,11 +115,11 @@ export const HALL_FEATURED_HEROES = [
 ]
 
 export const HALL_SCENE_HOTSPOTS = [
-  { id: 'mainSeat', panel: 'chat', regionId: 'mainSeat', label: '聚义厅', x: 50, y: 35 },
-  { id: 'agentRoster', panel: 'agents', regionId: 'leftGuard', label: '好汉簿', x: 22, y: 38 },
-  { id: 'bountyBoard', panel: 'tasks', regionId: 'bountyBoard', label: '榜文房', x: 76, y: 50 },
-  { id: 'personaCatalog', panel: 'catalog', regionId: 'leftGuard', label: '招贤馆', x: 14, y: 77 },
-  { id: 'libraryShelf', panel: 'library', regionId: 'libraryShelf', label: '藏书阁', x: 82, y: 76 }
+  { id: 'mainSeat', panel: 'chat', regionId: 'mainSeat', label: '忠义堂公议', x: 50, y: 30 },
+  { id: 'agentRoster', panel: 'agents', regionId: 'leftGuard', label: '点将册', x: 25, y: 52 },
+  { id: 'bountyBoard', panel: 'tasks', regionId: 'bountyBoard', label: '悬赏榜', x: 78, y: 47 },
+  { id: 'personaCatalog', panel: 'catalog', regionId: 'leftGuard', label: '招贤令', x: 8, y: 72 },
+  { id: 'libraryShelf', panel: 'library', regionId: 'libraryShelf', label: '案卷阁', x: 78, y: 77 }
 ]
 
 export const HALL_CHARACTER_VISUALS = {

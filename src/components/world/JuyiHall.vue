@@ -261,11 +261,11 @@ const {
 } = useHallSound()
 
 const activePanelTitle = computed(() => {
-  if (renderedPanel.value === 'agents') return '好汉簿'
-  if (renderedPanel.value === 'catalog') return '招贤帖'
-  if (renderedPanel.value === 'tasks') return '悬赏榜文'
+  if (renderedPanel.value === 'agents') return '点将册'
+  if (renderedPanel.value === 'catalog') return '招贤令'
+  if (renderedPanel.value === 'tasks') return '悬赏榜'
   if (renderedPanel.value === 'chat') return '厅前议事'
-  if (renderedPanel.value === 'library') return '藏书阁'
+  if (renderedPanel.value === 'library') return '案卷阁'
   return ''
 })
 

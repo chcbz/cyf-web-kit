@@ -40,11 +40,11 @@ defineEmits(['open-panel', 'clear-agent', 'clear-task'])
 
 const items = [
   { key: 'command', icon: 'account-circle-outline', label: '宋江' },
-  { key: 'agents', icon: 'account-circle', label: '好汉簿' },
-  { key: 'tasks', icon: 'format-list-checkbox', label: '榜文' },
+  { key: 'agents', icon: 'account-circle', label: '点将册' },
+  { key: 'tasks', icon: 'format-list-checkbox', label: '悬赏榜' },
   { key: 'coordination', icon: 'share', label: '照应' },
   { key: 'chat', icon: 'message-text-outline', label: '议事' },
-  { key: 'library', icon: 'notebook', label: '藏书阁' }
+  { key: 'library', icon: 'notebook', label: '案卷阁' }
 ]
 </script>
 

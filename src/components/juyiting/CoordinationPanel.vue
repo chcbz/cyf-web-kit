@@ -41,7 +41,7 @@
     <div class="section-label">当前榜文</div>
     <article class="task-card">
       <strong>{{ selectedTask?.title || '未选榜文' }}</strong>
-      <p>{{ selectedTask?.description || '可先到榜文房选定榜文，再安排两位好汉照应。' }}</p>
+      <p>{{ selectedTask?.description || '可先到悬赏榜选定榜文，再安排两位好汉照应。' }}</p>
     </article>
 
     <div class="section-label">候令好汉</div>

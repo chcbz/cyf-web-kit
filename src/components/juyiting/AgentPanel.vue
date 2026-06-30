@@ -53,7 +53,7 @@
             <span v-for="ability in selectedAgent.abilities || []" :key="ability">{{ ability }}</span>
             <span v-if="!(selectedAgent.abilities || []).length">未录本领</span>
           </div>
-          <p>{{ selectedAgent.errorMessage || selectedAgent.currentTaskTitle || '正在厅中候令，可从榜文房点将。' }}</p>
+          <p>{{ selectedAgent.errorMessage || selectedAgent.currentTaskTitle || '正在厅中候令，可从悬赏榜点将。' }}</p>
         </template>
         <p v-else>点一位厅中好汉，查看动静、本领与所领榜文。</p>
       </div>
