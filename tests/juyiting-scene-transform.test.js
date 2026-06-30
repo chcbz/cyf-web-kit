@@ -4,6 +4,7 @@ import {
   clamp,
   clampSceneTransform,
   percentRectToViewport,
+  scenePanBounds,
   screenToWorldPoint
 } from '../src/game/sceneTransform.js'
 
@@ -31,9 +32,16 @@ describe('Juyiting scene transform helpers', () => {
       minZoom: 0.75,
       maxZoom: 3.3
     })).to.deep.equal({
-      offsetX: 960,
-      offsetY: -640,
+      offsetX: 900,
+      offsetY: -736,
       zoom: 3.3
+    })
+  })
+
+  it('calculates pan bounds from viewport and zoom', () => {
+    expect(scenePanBounds({ viewportWidth: 960, viewportHeight: 640, zoom: 3.3 })).to.deep.equal({
+      x: 1104,
+      y: 736
     })
   })
 
@@ -46,6 +54,6 @@ describe('Juyiting scene transform helpers', () => {
       offsetX: 100,
       offsetY: -20,
       zoom: 2
-    })).to.deep.equal({ x: 480, y: 350 })
+    })).to.deep.equal({ x: 480, y: 340 })
   })
 })

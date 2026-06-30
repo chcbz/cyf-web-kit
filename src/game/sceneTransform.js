@@ -16,8 +16,8 @@ export const percentRectToViewport = (rect, viewport) => {
 }
 
 export const scenePanBounds = ({ viewportWidth, viewportHeight, zoom }) => ({
-  x: zoom > 1 ? viewportWidth : 0,
-  y: zoom > 1 ? viewportHeight : 0
+  x: Math.max(0, (viewportWidth * (zoom - 1)) / 2),
+  y: Math.max(0, (viewportHeight * (zoom - 1)) / 2)
 })
 
 export const clampSceneTransform = (transform, bounds) => {
@@ -27,10 +27,9 @@ export const clampSceneTransform = (transform, bounds) => {
     viewportHeight: bounds.viewportHeight,
     zoom
   })
-  const requestedZoomWasClamped = transform.zoom !== zoom
   return {
-    offsetX: requestedZoomWasClamped ? Math.sign(transform.offsetX || 0) * pan.x : clamp(transform.offsetX, -pan.x, pan.x),
-    offsetY: requestedZoomWasClamped ? Math.sign(transform.offsetY || 0) * pan.y : clamp(transform.offsetY, -pan.y, pan.y),
+    offsetX: clamp(transform.offsetX, -pan.x, pan.x),
+    offsetY: clamp(transform.offsetY, -pan.y, pan.y),
     zoom
   }
 }
@@ -45,5 +44,5 @@ export const screenToWorldPoint = ({
   zoom
 }) => ({
   x: Number(((x - viewportWidth / 2 - offsetX) / zoom + viewportWidth / 2).toFixed(3)),
-  y: Number(((y - viewportHeight / 2 - offsetY * 2) / zoom + viewportHeight / 2).toFixed(3))
+  y: Number(((y - viewportHeight / 2 - offsetY) / zoom + viewportHeight / 2).toFixed(3))
 })
