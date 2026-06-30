@@ -133,6 +133,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AgentToken from '@/components/juyiting/AgentToken.vue'
 import hallBackground from '@/assets/juyiting/liangshan-hall-empty-bg-v1.png'
 import hallObjectAtlas from '@/assets/juyiting/liangshan-hall-object-atlas-v1.png'
+import hallPlaque from '@/assets/juyiting/liangshan-hall-plaque-tianti-xingdao-v1.svg'
+import hallArchiveDesk from '@/assets/juyiting/liangshan-hall-archive-desk-v1.svg'
 import roomPropsAtlas from '@/assets/juyiting/liangshan-room-props-v2.png'
 import { hallPhysicalScene, hallRoomPropVisuals } from '@/constants/juyiting'
 import { juyitingGame } from '@/game/index.js'
@@ -171,7 +173,7 @@ const suppressNextBoardClick = ref(false)
 const mapPanPadding = 2
 const mapDragThreshold = 3
 const minMapZoom = 0.75
-const maxMapZoom = 1.65
+const maxMapZoom = 3.3
 const mapZoomStep = 0.12
 
 const mapWorldStyle = computed(() => ({
@@ -180,6 +182,8 @@ const mapWorldStyle = computed(() => ({
   '--map-zoom': mapZoom.value.toFixed(2),
   '--hall-bg-image': `url("${hallBackground}")`,
   '--hall-object-atlas-image': `url("${hallObjectAtlas}")`,
+  '--hall-plaque-image': `url("${hallPlaque}")`,
+  '--hall-archive-image': `url("${hallArchiveDesk}")`,
   '--room-props-image': `url("${roomPropsAtlas}")`
 }))
 
@@ -994,7 +998,9 @@ button.hall-room:focus-visible {
 }
 
 .object-plaque .object-visual {
-  background-position: 0 0;
+  background-image: var(--hall-plaque-image);
+  background-size: contain;
+  background-position: center;
 }
 
 .object-ledger .object-visual {
@@ -1010,7 +1016,9 @@ button.hall-room:focus-visible {
 }
 
 .object-scroll-shelf .object-visual {
-  background-position: 50% 100%;
+  background-image: var(--hall-archive-image);
+  background-size: contain;
+  background-position: center;
 }
 
 .object-rear-gear .object-visual {
@@ -1225,7 +1233,7 @@ button.hall-room:focus-visible {
   }
 
   .map-world {
-    --scene-fit-scale: 0.62;
+    --scene-fit-scale: 0.31;
     background-size: auto, contain;
     background-position: center, center;
     background-repeat: no-repeat, no-repeat;

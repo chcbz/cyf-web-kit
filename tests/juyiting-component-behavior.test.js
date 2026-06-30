@@ -190,7 +190,20 @@ describe('JuyiHall component behavior', () => {
 
     expect(stageSource).to.include('liangshan-hall-empty-bg-v1.png')
     expect(stageSource).to.include('liangshan-hall-object-atlas-v1.png')
+    expect(stageSource).to.include('liangshan-hall-plaque-tianti-xingdao-v1.svg')
+    expect(stageSource).to.include('liangshan-hall-archive-desk-v1.svg')
     expect(stageSource).to.include('object-visual')
+  })
+
+  it('uses standalone complete object assets for the hall plaque and archive desk', () => {
+    const plaque = readFileSync(new URL('../src/assets/juyiting/liangshan-hall-plaque-tianti-xingdao-v1.svg', import.meta.url), 'utf8')
+    const archive = readFileSync(new URL('../src/assets/juyiting/liangshan-hall-archive-desk-v1.svg', import.meta.url), 'utf8')
+    const stageSource = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
+
+    expect(plaque).to.include('替天行道')
+    expect(archive).to.include('viewBox="0 0 760 620"')
+    expect(stageSource).to.include('--hall-plaque-image')
+    expect(stageSource).to.include('--hall-archive-image')
   })
 
   it('syncs scene agents to the melonJS game layer when ready', async () => {
@@ -369,6 +382,13 @@ describe('JuyiHall component behavior', () => {
     await Vue.nextTick()
     expect(currentZoom()).to.be.greaterThan(1)
 
+    for (let i = 0; i < 32; i++) {
+      await board.trigger('keydown', { key: '+' })
+    }
+    await Vue.nextTick()
+    expect(currentZoom()).to.equal(3.3)
+    expect(melonLayer.attributes('style')).to.include('--map-zoom: 3.30')
+
     await board.trigger('keydown', { key: '0' })
     await dispatchMapEvent('pointerdown', { pointerId: 1, pointerType: 'touch', button: 0, clientX: 180, clientY: 200 })
     await dispatchMapEvent('pointerdown', { pointerId: 2, pointerType: 'touch', button: 0, clientX: 280, clientY: 200 })
@@ -415,7 +435,7 @@ describe('JuyiHall component behavior', () => {
     const tokenSource = readFileSync(new URL('../src/components/juyiting/AgentToken.vue', import.meta.url), 'utf8')
     const portraitMedia = stageSource.slice(stageSource.indexOf('@media (max-width: 640px) and (orientation: portrait)'))
 
-    expect(portraitMedia).to.include('--scene-fit-scale: 0.62')
+    expect(portraitMedia).to.include('--scene-fit-scale: 0.31')
     expect(tokenSource).to.include('scale(var(--scene-fit-scale, 1))')
     expect(tokenSource).to.include('transform-origin: 50% 100%')
     expect(tokenSource).to.include('.agent-dialogue')
