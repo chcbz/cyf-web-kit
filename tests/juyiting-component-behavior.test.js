@@ -385,6 +385,16 @@ describe('JuyiHall component behavior', () => {
     expect(melonRule).to.include('translate3d(calc(-50% + var(--map-offset-x, 0px)), calc(-50% + var(--map-offset-y, 0px)), 0)')
   })
 
+  it('fits the full landscape hall scene on portrait phones without cover cropping', () => {
+    const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
+    const portraitMedia = source.slice(source.indexOf('@media (max-width: 640px) and (orientation: portrait)'))
+
+    expect(portraitMedia).to.include('aspect-ratio: 1672 / 941')
+    expect(portraitMedia).to.include('width: 100%')
+    expect(portraitMedia).to.include('height: auto')
+    expect(portraitMedia).to.include('background-size: auto, contain')
+  })
+
   it('wires melonJS agent clicks back to Vue selection', async () => {
     let clickHandler
     hallGameMock = {

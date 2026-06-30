@@ -1173,4 +1173,19 @@ button.hall-room:focus-visible {
   }
 }
 
+@media (max-width: 640px) and (orientation: portrait) {
+  .map-world,
+  .melon-layer {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1672 / 941;
+  }
+
+  .map-world {
+    background-size: auto, contain;
+    background-position: center, center;
+    background-repeat: no-repeat, no-repeat;
+  }
+}
+
 </style>
