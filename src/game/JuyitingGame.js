@@ -1,5 +1,5 @@
 /**
- * ������ melonJS game instance manager
+ * 聚义厅 melonJS game instance manager
  */
 
 import { createGameConfig } from './config.js'

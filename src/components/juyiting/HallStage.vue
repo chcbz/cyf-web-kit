@@ -251,6 +251,7 @@ const objectHitboxStyle = (zone) => {
     top: `${zone.y}%`,
     width: `${zone.w}%`,
     height: `${zone.h}%`,
+    zIndex: Math.round(zone.y),
     '--object-tilt': `${zone.tilt || 0}deg`,
     '--object-aspect-ratio': objectRatio.css,
     '--object-visual-width': `${visualWidth.toFixed(2)}%`,
@@ -955,39 +956,18 @@ button.hall-room {
   background-image: var(--hall-object-atlas-image);
   background-repeat: no-repeat;
   background-size: var(--object-background-size, 300% 200%);
-  filter: drop-shadow(0 12px 16px rgba(0, 0, 0, 0.28));
 }
 
 .hall-room::before {
-  inset: 2%;
-  z-index: 2;
-  opacity: 0.18;
-  border-radius: 12px;
-  background:
-    radial-gradient(ellipse at 50% 48%, rgba(255, 238, 178, 0.36), rgba(255, 207, 87, 0.12) 54%, transparent 76%);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 238, 178, 0.34),
-    0 0 18px rgba(235, 178, 62, 0.22);
-  mix-blend-mode: screen;
-  transform: scale(0.96);
+  content: none;
 }
 
 .hall-room::after {
-  left: 50%;
-  bottom: 8%;
-  z-index: 0;
-  width: 56%;
-  height: 8%;
-  transform: translateX(-50%) scaleX(0.82);
-  border-radius: 50%;
-  background: rgba(255, 221, 130, 0.26);
-  filter: blur(8px);
-  opacity: 0.28;
+  content: none;
 }
 
 button.hall-room:focus-visible {
-  outline: 2px solid rgba(255, 232, 159, 0.84);
-  outline-offset: 3px;
+  outline: none;
 }
 
 .shape-ellipse {
@@ -1072,8 +1052,7 @@ button.hall-room:focus-visible {
 .object-banner-flag::before {
   inset: 4% 18%;
   border-radius: 6px 6px 18px 18px;
-  background:
-    linear-gradient(180deg, rgba(255, 232, 159, 0.42), rgba(173, 46, 34, 0.12) 58%, transparent 78%);
+  background: none;
 }
 
 .object-rear-gear::before {
@@ -1114,10 +1093,10 @@ button.hall-room:focus-visible {
   transform: translateX(-50%);
   border-radius: 0 0 8px 8px;
   z-index: 4;
-  background: rgba(148, 42, 28, 0.86);
   color: #fff1c1;
   text-align: center;
   font-weight: 700;
+  font-size: 6px;
 }
 
 .hall-foreground {
@@ -1205,7 +1184,7 @@ button.hall-room:focus-visible {
   }
 
   .banner {
-    top: 92px;
+    top: 0px;
   }
 
   .map-world {

@@ -1,5 +1,5 @@
 /**
- * ������������ ���� melonJS Stage (manual asset loading)
+ * 聚义厅场景 - melonJS Stage (manual asset loading)
  */
 
 import { DEPTH_LAYERS } from '../config.js'
@@ -11,6 +11,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       super()
       this._agents = new Map()
       this._hotspots = []
+      this._imageLayers = []
       this._onAgentClick = null
       this._onHotspotClick = null
       this._onReady = null
@@ -18,6 +19,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._pendingAgents = []
       this._mapData = null
       this._hotspotState = new Map()
+      this._sceneBuilt = false
     }
 
     onAgentClick(cb)   { this._onAgentClick = cb }
@@ -59,12 +61,42 @@ export function createHallSceneClass(me, HallAgentClass) {
 
     getAgent(id) { return this._agents.get(id) }
 
-    onResetEvent() {
-      const vpW = me.game.viewport.width
-      const vpH = me.game.viewport.height
+    /**
+     * Build the full scene (image layers, hotspots, pointer events).
+     * Called from onResetEvent or deferred to first update() if viewport not ready.
+     */
+    _buildScene() {
+      if (this._sceneBuilt) return
+      const vp = me.game.viewport
+      if (!vp) return false // viewport not ready yet, retry later
+
+      const vpW = vp.width
+      const vpH = vp.height
       const mapData = this._mapData
       const hotspots = mapData?.hotspots?.length ? mapData.hotspots : FALLBACK_HALL_HOTSPOTS
 
+      // === Image layers (background + foreground) ===
+      const bgImage = me.loader.getImage('liangshan-hall-bg')
+      const fgImage = me.loader.getImage('liangshan-hall-fg')
+
+      if (bgImage) {
+        // Use melonJS built-in ImageLayer if available, otherwise custom Renderable
+        const bgLayer = typeof me.ImageLayer === 'function'
+          ? new me.ImageLayer(0, 0, { image: bgImage, width: vpW, height: vpH })
+          : this._createCustomImageLayer(0, 0, vpW, vpH, bgImage)
+        me.game.world.addChild(bgLayer, DEPTH_LAYERS.BACKGROUND)
+        this._imageLayers.push(bgLayer)
+      }
+
+      if (fgImage) {
+        const fgLayer = typeof me.ImageLayer === 'function'
+          ? new me.ImageLayer(0, 0, { image: fgImage, width: vpW, height: vpH })
+          : this._createCustomImageLayer(0, 0, vpW, vpH, fgImage)
+        me.game.world.addChild(fgLayer, DEPTH_LAYERS.FOREGROUND)
+        this._imageLayers.push(fgLayer)
+      }
+
+      // === Hotspot layer ===
       class HotspotMarker extends me.Renderable {
         constructor(x, y, w, h, data) {
           super(x, y, w, h)
@@ -106,7 +138,6 @@ export function createHallSceneClass(me, HallAgentClass) {
         }
       }
 
-      // === Hotspot layer ===
       hotspots.forEach(h => {
         const ox = (h.x - h.w / 2) / 100 * vpW
         const oy = (h.y - h.h / 2) / 100 * vpH
@@ -126,6 +157,7 @@ export function createHallSceneClass(me, HallAgentClass) {
         this._hotspots.push({ marker, hitArea: marker, data: h })
       })
 
+      // === Agent click on viewport ===
       me.input.registerPointerEvent('pointerdown', me.game.viewport, (event) => {
         const x = event.gameX ?? event.clientX
         const y = event.gameY ?? event.clientY
@@ -138,8 +170,34 @@ export function createHallSceneClass(me, HallAgentClass) {
       })
       this._hotspots.push({ hitArea: me.game.viewport, stage: true })
 
+      this._sceneBuilt = true
       this._needsSync = true
       if (this._onReady) this._onReady()
+      return true
+    }
+
+    _createCustomImageLayer(x, y, width, height, image) {
+      class ImageLayer extends me.Renderable {
+        constructor(x, y, width, height, img) {
+          super(x, y, width, height)
+          this.anchorPoint.set(0, 0)
+          this.image = img
+          this.floating = true
+        }
+
+        draw(renderer) {
+          if (!this.image) return
+          const ctx = renderer.getContext?.() || renderer
+          if (!ctx) return
+          ctx.drawImage(this.image, this.pos.x, this.pos.y, this.width, this.height)
+        }
+      }
+      return new ImageLayer(x, y, width, height, image)
+    }
+
+    onResetEvent() {
+      // Try to build immediately; if viewport not ready, defer to update()
+      this._buildScene()
     }
 
     _fullSyncAgents() {
@@ -171,6 +229,8 @@ export function createHallSceneClass(me, HallAgentClass) {
 
     update(dt) {
       super.update(dt)
+      // If scene hasn't been built yet, retry (viewport may be ready now)
+      if (!this._sceneBuilt) this._buildScene()
       if (this._needsSync) this._fullSyncAgents()
       this._sortByDepth()
       return true
@@ -190,7 +250,16 @@ export function createHallSceneClass(me, HallAgentClass) {
         }
       })
       this._hotspots = []
+      this._imageLayers.forEach(layer => {
+        try {
+          me.game.world.removeChild(layer)
+        } catch (err) {
+          console.warn('[HallScene] image layer cleanup failed:', err?.message || err)
+        }
+      })
+      this._imageLayers = []
       this._agents.clear()
+      this._sceneBuilt = false
     }
   }
 }

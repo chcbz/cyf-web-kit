@@ -1,5 +1,5 @@
 /**
- * ��������ɫʵ�� ���� melonJS sprite + animation state machine
+ * 好汉角色实体 - melonJS sprite + animation state machine
  */
 
 import { ANIM_STATES, ATLAS_COLS, ATLAS_ROWS, CHAR_VISUALS } from '../config.js'

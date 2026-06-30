@@ -1,5 +1,5 @@
 /**
- * melonJS resource manifest for ������
+ * melonJS resource manifest for 聚义厅
  * Background/foreground loaded as named images, .tmx for future Tiled integration
  */
 

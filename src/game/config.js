@@ -1,5 +1,5 @@
 /**
- * ������ scene configuration
+ * 聚义厅 scene configuration
  */
 
 /** Scene depth layers */
