@@ -396,6 +396,72 @@ describe('JuyiHall component behavior', () => {
     expect(currentZoom()).to.be.greaterThan(1)
   })
 
+  it('clamps portrait hall zoom from exact width fit to exact height fit', async () => {
+    hallGameMock = {
+      destroy: () => {},
+      mount: async (_container, options = {}) => {
+        options.onReady?.()
+      },
+      setSelectedAgent: () => {},
+      start: () => {},
+      syncAgents: () => {},
+      syncHotspots: () => {}
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+    const wrapper = mount(HallStage, {
+      attachTo: document.body,
+      global: { stubs },
+      props: {
+        agentKey: agent => agent.agentId,
+        agentStyle: () => ({}),
+        portraitName: agent => agent.name,
+        portraitShortName: agent => agent.name,
+        portraitStyle: () => ({}),
+        roleClass: () => '',
+        statusClass: () => '',
+        statusText: () => '',
+        visibleAgents: []
+      }
+    })
+    await Vue.nextTick()
+
+    const board = wrapper.find('.hall-board')
+    const world = wrapper.find('.map-world')
+    const currentZoom = () => Number((world.attributes('style') || '').match(/--map-zoom:\s*([0-9.]+)/)?.[1])
+    board.element.getBoundingClientRect = () => ({
+      left: 0,
+      top: 0,
+      width: 390,
+      height: 844,
+      right: 390,
+      bottom: 844
+    })
+    world.element.getBoundingClientRect = () => {
+      const zoom = currentZoom() || 1
+      const width = 390 * zoom
+      const height = 219.44 * zoom
+      return {
+        left: (390 - width) / 2,
+        top: (844 - height) / 2,
+        width,
+        height,
+        right: (390 + width) / 2,
+        bottom: (844 + height) / 2
+      }
+    }
+    for (let i = 0; i < 8; i++) {
+      await board.trigger('keydown', { key: '-' })
+    }
+    await Vue.nextTick()
+    expect(currentZoom()).to.equal(1)
+
+    for (let i = 0; i < 32; i++) {
+      await board.trigger('keydown', { key: '+' })
+    }
+    await Vue.nextTick()
+    expect(currentZoom()).to.equal(3.85)
+  })
+
   it('keeps the melonJS interaction layer aligned to the oversized map world on portrait screens', () => {
     const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
     const melonRule = cssRule(source, '.melon-layer')

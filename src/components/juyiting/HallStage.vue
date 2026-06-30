@@ -169,11 +169,12 @@ const mapDrag = ref({ active: false, dragging: false, pointerId: null, startX: 0
 const activeTouchPointers = new Map()
 const pinchGesture = ref({ active: false, startDistance: 0, startZoom: 1 })
 const suppressNextBoardClick = ref(false)
+let mapResizeObserver = null
 
 const mapPanPadding = 2
 const mapDragThreshold = 3
-const minMapZoom = 0.75
-const maxMapZoom = 3.3
+const defaultMinMapZoom = 0.75
+const defaultMaxMapZoom = 3.3
 const mapZoomStep = 0.12
 
 const mapWorldStyle = computed(() => ({
@@ -190,6 +191,37 @@ const mapWorldStyle = computed(() => ({
 const hallInteractiveZones = computed(() => hallPhysicalScene.interactiveZones)
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
+
+const mapWorldBaseSize = (zoom = mapZoom.value) => {
+  const world = mapWorldRef.value?.getBoundingClientRect()
+  const currentZoom = zoom || 1
+  if (!world || world.width <= 0 || world.height <= 0 || currentZoom <= 0) {
+    return null
+  }
+  return {
+    width: world.width / currentZoom,
+    height: world.height / currentZoom
+  }
+}
+
+const mapZoomBounds = () => {
+  const board = hallBoardRef.value?.getBoundingClientRect()
+  const base = mapWorldBaseSize()
+  if (!board || !base || board.width <= 0 || board.height <= 0) {
+    return { min: defaultMinMapZoom, max: defaultMaxMapZoom }
+  }
+
+  const widthFitZoom = board.width / base.width
+  const heightFitZoom = board.height / base.height
+  const isWidthFitScene = Math.abs(base.width - board.width) <= 1 && heightFitZoom > widthFitZoom
+  if (!isWidthFitScene) {
+    return { min: defaultMinMapZoom, max: defaultMaxMapZoom }
+  }
+
+  const min = Math.max(defaultMinMapZoom, widthFitZoom)
+  const max = Math.max(min, heightFitZoom)
+  return { min, max }
+}
 
 const roomPropStyle = (prop) => {
   const { columns, rows, column, row } = prop.atlas
@@ -230,13 +262,12 @@ const openZone = (zone) => {
 
 const mapOffsetBounds = (zoom = mapZoom.value) => {
   const board = hallBoardRef.value?.getBoundingClientRect()
-  const world = mapWorldRef.value?.getBoundingClientRect()
-  if (!board || !world) {
+  const base = mapWorldBaseSize()
+  if (!board || !base) {
     return { x: 0, y: 0 }
   }
-  const currentZoom = mapZoom.value || 1
-  const worldWidth = (world.width / currentZoom) * zoom
-  const worldHeight = (world.height / currentZoom) * zoom
+  const worldWidth = base.width * zoom
+  const worldHeight = base.height * zoom
   return {
     x: Math.max(0, (worldWidth - board.width) / 2 - mapPanPadding),
     y: Math.max(0, (worldHeight - board.height) / 2 - mapPanPadding)
@@ -252,16 +283,21 @@ const applyMapOffset = (next, zoom = mapZoom.value) => {
 }
 
 const applyMapZoom = (nextZoom) => {
-  const zoom = clamp(nextZoom, minMapZoom, maxMapZoom)
+  const bounds = mapZoomBounds()
+  const zoom = clamp(nextZoom, bounds.min, bounds.max)
   mapZoom.value = Number(zoom.toFixed(2))
   applyMapOffset(viewportOffset.value, mapZoom.value)
 }
 
 const resetMap = () => {
   viewportOffset.value = { x: 0, y: 0 }
-  mapZoom.value = 1
+  mapZoom.value = Number(clamp(1, mapZoomBounds().min, mapZoomBounds().max).toFixed(2))
   activeTouchPointers.clear()
-  pinchGesture.value = { active: false, startDistance: 0, startZoom: 1 }
+  pinchGesture.value = { active: false, startDistance: 0, startZoom: mapZoom.value }
+}
+
+const refreshMapZoomBounds = () => {
+  applyMapZoom(mapZoom.value)
 }
 
 const zoomMapByWheel = (event) => {
@@ -482,6 +518,13 @@ const melonContainerRef = ref(null)
 const melonReady = ref(false)
 
 onMounted(async () => {
+  window.addEventListener('resize', refreshMapZoomBounds)
+  if (window.ResizeObserver && hallBoardRef.value) {
+    mapResizeObserver = new window.ResizeObserver(refreshMapZoomBounds)
+    mapResizeObserver.observe(hallBoardRef.value)
+    if (mapWorldRef.value) mapResizeObserver.observe(mapWorldRef.value)
+  }
+
   const container = melonContainerRef.value
   if (!container) return
 
@@ -509,7 +552,11 @@ onMounted(async () => {
   }
 })
 
-onBeforeUnmount(() => { juyitingGame.destroy() })
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', refreshMapZoomBounds)
+  mapResizeObserver?.disconnect?.()
+  juyitingGame.destroy()
+})
 
 watch(() => props.sceneAgents, (agents) => {
   if (melonReady.value) juyitingGame.syncAgents(agents || [])
