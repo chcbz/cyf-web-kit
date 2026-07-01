@@ -14,7 +14,7 @@
           @click="$emit('refresh-hall')"
         >
           <var-icon name="refresh" />
-          <span>{{ refreshing ? '点验中' : '点验' }}</span>
+          <span class="tool-label">{{ refreshing ? '点验中' : '点验' }}</span>
         </button>
         <button
           class="tool-action sound-toggle"
@@ -22,7 +22,7 @@
           @click="$emit('toggle-sound')"
         >
           <var-icon :name="soundEnabled ? 'bell' : 'bell-outline'" />
-          <span>{{ soundEnabled ? '声响开' : '声响歇' }}</span>
+          <span class="tool-label">{{ soundEnabled ? '声响开' : '声响歇' }}</span>
         </button>
         <button
           class="tool-action orientation-action"
@@ -37,7 +37,7 @@
             }"
             aria-hidden="true"
           ></span>
-          <span>{{ sceneMode === 'landscape' ? '竖屏' : '横屏' }}</span>
+          <span class="tool-label">{{ sceneMode === 'landscape' ? '竖屏' : '横屏' }}</span>
         </button>
       </div>
     </div>
@@ -537,7 +537,7 @@ button {
     padding: 0 9px;
   }
 
-  .tool-action span {
+  .tool-action .tool-label {
     display: none;
   }
 

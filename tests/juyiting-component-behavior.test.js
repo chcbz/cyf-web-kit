@@ -278,6 +278,14 @@ describe('JuyiHall component behavior', () => {
     expect(source).to.include("'is-glyph-landscape': sceneMode !== 'landscape'")
   })
 
+  it('keeps the orientation glyph visible when mobile tool labels are hidden', () => {
+    const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
+
+    expect(source).to.include('class="tool-label"')
+    expect(source).to.include('.tool-action .tool-label')
+    expect(source).not.to.include('.tool-action span {\n    display: none;')
+  })
+
   it('renders the recruit entry and persona catalog actions', async () => {
     const personas = [
       { personaCode: 'songjiang', name: '宋江', title: '及时雨', rankNo: 1, starName: '天魁星', systemAgent: true, abilities: ['dispatch'] },
