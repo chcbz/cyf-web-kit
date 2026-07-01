@@ -314,6 +314,20 @@ const run = async () => {
     await waitForExpression(cdp, '(document.body.innerText || "").includes("聚义厅")')
     await waitForExpression(cdp, '(document.body.innerText || "").includes("宋江")')
 
+    const sceneState = await evaluate(cdp, `(() => {
+      const stage = document.querySelector('.hall-stage');
+      return {
+        hasStage: Boolean(stage),
+        hasCanvas: Boolean(document.querySelector('.melon-layer canvas')),
+        hasMapWorld: Boolean(document.querySelector('.map-world')),
+        hasHallRoom: Boolean(document.querySelector('.hall-room')),
+        hasAgentToken: Boolean(document.querySelector('.agent-token'))
+      };
+    })()`)
+    if (!sceneState.hasStage || !sceneState.hasCanvas || sceneState.hasMapWorld || sceneState.hasHallRoom || sceneState.hasAgentToken) {
+      throw new Error(`Unexpected Juyiting scene DOM state: ${JSON.stringify(sceneState)}`)
+    }
+
     const initialState = await evaluate(cdp, `(() => {
       const text = document.body.innerText || '';
       return {
