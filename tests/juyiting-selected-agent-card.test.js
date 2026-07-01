@@ -62,10 +62,11 @@ describe('SelectedAgentCard interaction contract', () => {
     expect(hallSource).not.to.include('class="map-control"')
     expect(hallSource).not.to.include('.map-controls')
     expect(hallSource).not.to.include('.map-control')
-    expect(hallStageSource).to.include('@pointerdown="startMapDrag"')
-    expect(hallStageSource).to.include('@pointermove="moveMapDrag"')
-    expect(hallStageSource).to.include('@pointerup="endMapDrag"')
-    expect(hallStageSource).to.include('@pointercancel="endMapDrag"')
+    expect(hallStageSource).to.include('class="melon-layer"')
+    expect(hallStageSource).not.to.include('@pointerdown="startMapDrag"')
+    expect(hallStageSource).not.to.include('@pointermove="moveMapDrag"')
+    expect(hallStageSource).not.to.include('@pointerup="endMapDrag"')
+    expect(hallStageSource).not.to.include('@pointercancel="endMapDrag"')
   })
 
   it('does not auto-select the first loaded agent', () => {

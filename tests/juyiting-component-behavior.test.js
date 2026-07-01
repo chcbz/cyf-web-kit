@@ -60,6 +60,20 @@ const stubs = {
   'var-icon': { template: '<i />' }
 }
 
+const makeHallStageProps = (overrides = {}) => ({
+  agentKey: agent => agent.agentId,
+  agentStyle: () => ({}),
+  portraitName: agent => agent.name,
+  portraitShortName: agent => agent.name,
+  portraitStyle: () => ({}),
+  roleClass: () => '',
+  statusClass: () => '',
+  statusText: () => '',
+  tasksTotal: 3,
+  visibleAgents: [],
+  ...overrides
+})
+
 const cssRule = (source, selector) => {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const match = source.match(new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`))
@@ -93,56 +107,20 @@ describe('JuyiHall component behavior', () => {
     PersonaCatalogPanel = loadSfc('../src/components/juyiting/PersonaCatalogPanel.vue')
   })
 
-  it('uses the central courtyard as the all-hands discussion entrance without a command room', async () => {
+  it('renders the hall scene body as a melonJS canvas shell without DOM room or agent layers', () => {
     const wrapper = mount(HallStage, {
       global: { stubs },
-      props: {
-        agentKey: agent => agent.agentId,
-        agentStyle: () => ({}),
-        portraitName: agent => agent.name,
-        portraitShortName: agent => agent.name,
-        portraitStyle: () => ({}),
-        roleClass: () => '',
-        statusClass: () => '',
-        statusText: () => '',
-        tasksTotal: 3,
-        visibleAgents: []
-      }
+      props: makeHallStageProps()
     })
 
-    expect(wrapper.text()).to.include('厅前公议')
-    expect(wrapper.text()).to.include('众好汉')
-    expect(wrapper.text()).not.to.include('传令房')
-    expect(wrapper.find('.room-chat').exists()).to.equal(false)
-    expect(wrapper.find('.hotspot-chat').exists()).to.equal(false)
-
-    await wrapper.find('.room-main').trigger('click')
-
-    expect(wrapper.emitted('open-panel')[0]).to.deep.equal(['chat'])
+    expect(wrapper.find('.melon-layer').exists()).to.equal(true)
+    expect(wrapper.find('.map-world').exists()).to.equal(false)
+    expect(wrapper.find('.hall-room').exists()).to.equal(false)
+    expect(wrapper.find('.room-prop-layer').exists()).to.equal(false)
+    expect(wrapper.find('.agent-token').exists()).to.equal(false)
   })
 
   it('renders the recruit entry and persona catalog actions', async () => {
-    const stage = mount(HallStage, {
-      global: { stubs },
-      props: {
-        agentKey: agent => agent.agentId,
-        agentStyle: () => ({}),
-        portraitName: agent => agent.name,
-        portraitShortName: agent => agent.name,
-        portraitStyle: () => ({}),
-        roleClass: () => '',
-        statusClass: () => '',
-        statusText: () => '',
-        tasksTotal: 3,
-        visibleAgents: []
-      }
-    })
-
-    expect(stage.text()).to.include('招贤令')
-    expect(stage.text()).to.include('遍请豪杰')
-    await stage.find('.room-catalog').trigger('click')
-    expect(stage.emitted('open-panel')[0]).to.deep.equal(['catalog'])
-
     const personas = [
       { personaCode: 'songjiang', name: '宋江', title: '及时雨', rankNo: 1, starName: '天魁星', systemAgent: true, abilities: ['dispatch'] },
       { personaCode: 'wuyong', name: '吴用', title: '智多星', rankNo: 3, starName: '天机星', canBind: true, abilities: ['planning'] },
@@ -174,7 +152,7 @@ describe('JuyiHall component behavior', () => {
     expect(catalog.emitted('bind-persona')[0]).to.deep.equal([personas[1], 'server'])
   })
 
-  it('labels hall hotspots as concrete function objects in the redesigned scene', () => {
+  it('keeps hotspot labels in scene constants instead of the HallStage DOM', () => {
     const source = readFileSync(new URL('../src/constants/juyiting.js', import.meta.url), 'utf8')
     const sceneSource = readFileSync(new URL('../src/constants/juyitingScene.js', import.meta.url), 'utf8')
     const stageSource = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
@@ -188,22 +166,19 @@ describe('JuyiHall component behavior', () => {
       expect(sceneSource).not.to.include(`label: '${oldLabel}'`)
     }
 
-    expect(stageSource).to.include('liangshan-hall-empty-bg-v1.png')
-    expect(stageSource).to.include('liangshan-hall-object-atlas-v1.png')
-    expect(stageSource).to.include('liangshan-hall-plaque-tianti-xingdao-v1.svg')
-    expect(stageSource).to.include('liangshan-hall-archive-desk-v1.svg')
-    expect(stageSource).to.include('object-visual')
+    for (const label of ['忠义堂公议', '点将册', '悬赏榜', '招贤令', '案卷阁', '整装处']) {
+      expect(stageSource).not.to.include(label)
+    }
+    expect(stageSource).not.to.include('object-visual')
   })
 
-  it('uses standalone complete object assets for the hall plaque and archive desk', () => {
-    const plaque = readFileSync(new URL('../src/assets/juyiting/liangshan-hall-plaque-tianti-xingdao-v1.svg', import.meta.url), 'utf8')
-    const archive = readFileSync(new URL('../src/assets/juyiting/liangshan-hall-archive-desk-v1.svg', import.meta.url), 'utf8')
+  it('does not import DOM scene assets or AgentToken in HallStage', () => {
     const stageSource = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
 
-    expect(plaque).to.include('替天行道')
-    expect(archive).to.include('viewBox="0 0 760 620"')
-    expect(stageSource).to.include('--hall-plaque-image')
-    expect(stageSource).to.include('--hall-archive-image')
+    expect(stageSource).not.to.include('AgentToken')
+    expect(stageSource).not.to.include('@/assets/juyiting/')
+    expect(stageSource).not.to.include('hallPhysicalScene')
+    expect(stageSource).not.to.include('hallRoomPropVisuals')
   })
 
   it('syncs scene agents to the melonJS game layer when ready', async () => {
@@ -230,297 +205,30 @@ describe('JuyiHall component behavior', () => {
 
     const wrapper = mount(HallStage, {
       global: { stubs },
-      props: {
-        agentKey: agent => agent.agentId,
-        agentStyle: () => ({}),
-        portraitName: agent => agent.name,
-        portraitShortName: agent => agent.name,
-        portraitStyle: () => ({}),
-        roleClass: () => '',
+      props: makeHallStageProps({
         sceneAgents,
         sceneHotspots,
-        statusClass: () => '',
-        statusText: () => '',
-        tasksTotal: 3,
         visibleAgents: []
-      }
+      })
     })
     await Vue.nextTick()
 
     expect(syncedAgents).to.deep.include(sceneAgents)
     expect(syncedHotspots).to.deep.include(sceneHotspots)
     expect(wrapper.find('.hall-board').classes()).to.include('is-melon-ready')
-    expect(wrapper.find('.map-world').classes()).to.include('is-melon-enhanced')
-    expect(wrapper.find('.map-world').classes()).not.to.include('is-dom-fallback-hidden')
+    expect(wrapper.find('.map-world').exists()).to.equal(false)
   })
 
-  it('keeps scene and agent hit routing usable when the melonJS layer is ready', async () => {
-    hallGameMock = {
-      destroy: () => {},
-      mount: async (_container, options = {}) => {
-        options.onReady?.()
-      },
-      setSelectedAgent: () => {},
-      start: () => {},
-      syncAgents: () => {},
-      syncHotspots: () => {}
-    }
-    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
-    const sceneAgents = [{ agentId: 'linchong', name: '林冲', x: 34, y: 63 }]
-    const wrapper = mount(HallStage, {
-      attachTo: document.body,
-      global: { stubs },
-      props: {
-        agentKey: agent => agent.agentId,
-        agentStyle: () => ({}),
-        portraitName: agent => agent.name,
-        portraitShortName: agent => agent.name,
-        portraitStyle: () => ({}),
-        roleClass: () => '',
-        sceneAgents,
-        statusClass: () => '',
-        statusText: () => '',
-        tasksTotal: 3,
-        visibleAgents: sceneAgents
-      }
-    })
-    await Vue.nextTick()
-
-    wrapper.find('.map-world').element.getBoundingClientRect = () => ({
-      left: 0,
-      top: 0,
-      width: 1000,
-      height: 1000,
-      right: 1000,
-      bottom: 1000
-    })
-
-    expect(wrapper.find('.map-world').classes()).to.include('is-melon-enhanced')
-    expect(wrapper.find('.map-world').classes()).not.to.include('is-dom-fallback-hidden')
-
-    await wrapper.find('.hall-board').trigger('click', { clientX: 130, clientY: 680 })
-    expect(wrapper.emitted('open-panel')[0]).to.deep.equal(['catalog'])
-
-    await wrapper.find('.hall-board').trigger('click', { clientX: 340, clientY: 630 })
-    expect(wrapper.emitted('select-agent')[0]).to.deep.equal([sceneAgents[0]])
-  })
-
-  it('zooms the map through wheel, keyboard, and touch gestures without visible zoom buttons', async () => {
-    hallGameMock = {
-      destroy: () => {},
-      mount: async (_container, options = {}) => {
-        options.onReady?.()
-      },
-      setSelectedAgent: () => {},
-      start: () => {},
-      syncAgents: () => {},
-      syncHotspots: () => {}
-    }
-    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
-    const wrapper = mount(HallStage, {
-      attachTo: document.body,
-      global: { stubs },
-      props: {
-        agentKey: agent => agent.agentId,
-        agentStyle: () => ({}),
-        portraitName: agent => agent.name,
-        portraitShortName: agent => agent.name,
-        portraitStyle: () => ({}),
-        roleClass: () => '',
-        statusClass: () => '',
-        statusText: () => '',
-        visibleAgents: []
-      }
-    })
-    await Vue.nextTick()
-
-    const board = wrapper.find('.hall-board')
-    const world = wrapper.find('.map-world')
-    const melonLayer = wrapper.find('.melon-layer')
-    board.element.getBoundingClientRect = () => ({
-      left: 0,
-      top: 0,
-      width: 500,
-      height: 400,
-      right: 500,
-      bottom: 400
-    })
-    world.element.getBoundingClientRect = () => ({
-      left: -150,
-      top: -96,
-      width: 810,
-      height: 592,
-      right: 660,
-      bottom: 496
-    })
-
-    const currentZoom = () => Number((world.attributes('style') || '').match(/--map-zoom:\s*([0-9.]+)/)?.[1])
-    const dispatchMapEvent = async (type, detail) => {
-      const event = new window.Event(type, { bubbles: true, cancelable: true })
-      Object.defineProperties(event, Object.fromEntries(
-        Object.entries(detail).map(([key, value]) => [key, { value }])
-      ))
-      board.element.dispatchEvent(event)
-      await Vue.nextTick()
-    }
-
-    expect(wrapper.find('.map-controls').exists()).to.equal(false)
-    expect(wrapper.find('.map-control').exists()).to.equal(false)
-    expect(board.attributes('tabindex')).to.equal('0')
-    expect(currentZoom()).to.equal(1)
-    expect(melonLayer.attributes('style')).to.include('--map-zoom: 1.00')
-
-    await dispatchMapEvent('wheel', { deltaY: -120, clientX: 250, clientY: 200 })
-    expect(currentZoom()).to.be.greaterThan(1)
-    expect(melonLayer.attributes('style')).to.include(`--map-zoom: ${currentZoom().toFixed(2)}`)
-
-    await board.trigger('keydown', { key: '0' })
-    await Vue.nextTick()
-    expect(currentZoom()).to.equal(1)
-
-    await board.trigger('keydown', { key: '+' })
-    await Vue.nextTick()
-    expect(currentZoom()).to.be.greaterThan(1)
-
-    for (let i = 0; i < 32; i++) {
-      await board.trigger('keydown', { key: '+' })
-    }
-    await Vue.nextTick()
-    expect(currentZoom()).to.equal(3.3)
-    expect(melonLayer.attributes('style')).to.include('--map-zoom: 3.30')
-
-    await board.trigger('keydown', { key: '0' })
-    await dispatchMapEvent('pointerdown', { pointerId: 1, pointerType: 'touch', button: 0, clientX: 180, clientY: 200 })
-    await dispatchMapEvent('pointerdown', { pointerId: 2, pointerType: 'touch', button: 0, clientX: 280, clientY: 200 })
-    await dispatchMapEvent('pointermove', { pointerId: 2, pointerType: 'touch', clientX: 330, clientY: 200 })
-    expect(currentZoom()).to.be.greaterThan(1)
-  })
-
-  it('clamps portrait hall zoom from exact width fit to exact height fit', async () => {
-    hallGameMock = {
-      destroy: () => {},
-      mount: async (_container, options = {}) => {
-        options.onReady?.()
-      },
-      setSelectedAgent: () => {},
-      start: () => {},
-      syncAgents: () => {},
-      syncHotspots: () => {}
-    }
-    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
-    const wrapper = mount(HallStage, {
-      attachTo: document.body,
-      global: { stubs },
-      props: {
-        agentKey: agent => agent.agentId,
-        agentStyle: () => ({}),
-        portraitName: agent => agent.name,
-        portraitShortName: agent => agent.name,
-        portraitStyle: () => ({}),
-        roleClass: () => '',
-        statusClass: () => '',
-        statusText: () => '',
-        visibleAgents: []
-      }
-    })
-    await Vue.nextTick()
-
-    const board = wrapper.find('.hall-board')
-    const world = wrapper.find('.map-world')
-    const currentZoom = () => Number((world.attributes('style') || '').match(/--map-zoom:\s*([0-9.]+)/)?.[1])
-    board.element.getBoundingClientRect = () => ({
-      left: 0,
-      top: 0,
-      width: 390,
-      height: 844,
-      right: 390,
-      bottom: 844
-    })
-    world.element.getBoundingClientRect = () => {
-      const zoom = currentZoom() || 1
-      const width = 390 * zoom
-      const height = 219.44 * zoom
-      return {
-        left: (390 - width) / 2,
-        top: (844 - height) / 2,
-        width,
-        height,
-        right: (390 + width) / 2,
-        bottom: (844 + height) / 2
-      }
-    }
-    for (let i = 0; i < 8; i++) {
-      await board.trigger('keydown', { key: '-' })
-    }
-    await Vue.nextTick()
-    expect(currentZoom()).to.equal(1)
-
-    for (let i = 0; i < 32; i++) {
-      await board.trigger('keydown', { key: '+' })
-    }
-    await Vue.nextTick()
-    expect(currentZoom()).to.equal(3.85)
-  })
-
-  it('keeps the melonJS interaction layer aligned to the oversized map world on portrait screens', () => {
+  it('keeps the melonJS layer pinned to the hall board', () => {
     const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
     const melonRule = cssRule(source, '.melon-layer')
 
-    expect(melonRule).to.include('left: 50%')
-    expect(melonRule).to.include('top: 50%')
-    expect(melonRule).to.include('width: 162%')
-    expect(melonRule).to.include('height: 148%')
-    expect(melonRule).to.include('translate3d(calc(-50% + var(--map-offset-x, 0px)), calc(-50% + var(--map-offset-y, 0px)), 0)')
-  })
-
-  it('fits the full landscape hall scene on portrait phones without cover cropping', () => {
-    const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
-    const portraitMedia = source.slice(source.indexOf('@media (max-width: 640px) and (orientation: portrait)'))
-
-    expect(portraitMedia).to.include('aspect-ratio: 1672 / 941')
-    expect(portraitMedia).to.include('width: 100%')
-    expect(portraitMedia).to.include('height: auto')
-    expect(portraitMedia).to.include('background-size: auto, contain')
-  })
-
-  it('uses object-shaped hotspots without visible text labels or highlight overlays', () => {
-    const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
-    const constants = readFileSync(new URL('../src/constants/juyiting.js', import.meta.url), 'utf8')
-
-    expect(source).not.to.include('class="hall-room-label"')
-    expect(source).not.to.include('class="hall-room-subtitle"')
-    expect(source).not.to.include('object-highlight')
-    for (const shape of ['shape-ledger', 'shape-notice-board', 'shape-banner-flag', 'shape-scroll-desk', 'shape-gear-rack']) {
-      expect(source).to.include(`.${shape}`)
-      expect(constants).to.include(`hitShape: '${shape.replace('shape-', '')}'`)
-    }
-  })
-
-  it('preserves object visual aspect ratios and keeps hotspot buttons backgroundless', () => {
-    const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
-    const objectVisualRule = cssRule(source, '.object-visual')
-    const buttonRoomRule = cssRule(source, 'button.hall-room')
-
-    expect(source).to.include('--object-visual-width')
-    expect(source).to.include('--object-visual-height')
-    expect(objectVisualRule).to.include('aspect-ratio: var(--object-aspect-ratio, 1 / 1)')
-    expect(objectVisualRule).to.include('width: var(--object-visual-width, 100%)')
-    expect(objectVisualRule).to.include('height: var(--object-visual-height, 100%)')
-    expect(objectVisualRule).to.include('max-width: 100%')
-    expect(objectVisualRule).to.include('max-height: 100%')
-    expect(objectVisualRule).to.include('background-size: var(--object-background-size, 300% 200%)')
-    expect(buttonRoomRule).to.include('background: none')
-  })
-
-  it('scales agents and speech bubbles with the fitted portrait hall scene', () => {
-    const stageSource = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
-    const tokenSource = readFileSync(new URL('../src/components/juyiting/AgentToken.vue', import.meta.url), 'utf8')
-    const portraitMedia = stageSource.slice(stageSource.indexOf('@media (max-width: 640px) and (orientation: portrait)'))
-
-    expect(portraitMedia).to.include('--scene-fit-scale: 0.31')
-    expect(tokenSource).to.include('scale(var(--scene-fit-scale, 1))')
-    expect(tokenSource).to.include('transform-origin: 50% 100%')
-    expect(tokenSource).to.include('.agent-dialogue')
+    expect(melonRule).to.include('inset: 0')
+    expect(melonRule).to.include('width: 100%')
+    expect(melonRule).to.include('height: 100%')
+    expect(melonRule).not.to.include('transform')
+    expect(source).not.to.include('--map-offset-x')
+    expect(source).not.to.include('--map-zoom')
   })
 
   it('wires melonJS agent clicks back to Vue selection', async () => {
@@ -540,18 +248,10 @@ describe('JuyiHall component behavior', () => {
     const sceneAgents = [{ agentId: 'linchong', name: '林冲', x: 34, y: 63 }]
     const wrapper = mount(HallStage, {
       global: { stubs },
-      props: {
-        agentKey: agent => agent.agentId,
-        agentStyle: () => ({}),
-        portraitName: agent => agent.name,
-        portraitShortName: agent => agent.name,
-        portraitStyle: () => ({}),
-        roleClass: () => '',
+      props: makeHallStageProps({
         sceneAgents,
-        statusClass: () => '',
-        statusText: () => '',
         visibleAgents: []
-      }
+      })
     })
 
     clickHandler({ agentId: 'linchong' })
