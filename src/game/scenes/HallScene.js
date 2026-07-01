@@ -23,12 +23,19 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._sceneBuilt = false
       this._minZoom = 0.75
       this._maxZoom = 3.3
+      this._zoomStep = 0.12
       this._transform = { offsetX: 0, offsetY: 0, zoom: 1 }
       this._dragState = {
         active: false,
+        pointerId: null,
         lastX: 0,
-        lastY: 0
+        lastY: 0,
+        moved: false
       }
+      this._touchPointers = new Map()
+      this._pinchState = { active: false, startDistance: 0, startZoom: 1 }
+      this._interactionHitAreas = []
+      this._applySceneTransform()
     }
 
     onAgentClick(cb)   { this._onAgentClick = cb }
@@ -98,6 +105,19 @@ export function createHallSceneClass(me, HallAgentClass) {
       }
     }
 
+    _applySceneTransform() {
+      const bounds = this._getViewportBounds()
+      const transform = me.game.world?.currentTransform
+      if (!bounds || !transform) return
+      const centerX = bounds.viewportWidth / 2
+      const centerY = bounds.viewportHeight / 2
+      transform
+        .identity()
+        .translate(centerX + this._transform.offsetX, centerY + this._transform.offsetY)
+        .scale(this._transform.zoom, this._transform.zoom)
+        .translate(-centerX, -centerY)
+    }
+
     panBy(dx, dy) {
       const next = {
         ...this._transform,
@@ -106,6 +126,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       }
 
       this._transform = this._clampTransform(next)
+      this._applySceneTransform()
       return this.getTransform()
     }
 
@@ -114,6 +135,7 @@ export function createHallSceneClass(me, HallAgentClass) {
         ...this._transform,
         zoom: this._transform.zoom + delta
       })
+      this._applySceneTransform()
       return this.getTransform()
     }
 
@@ -121,10 +143,110 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._transform = { offsetX: 0, offsetY: 0, zoom: 1 }
       this._dragState = {
         active: false,
+        pointerId: null,
         lastX: 0,
-        lastY: 0
+        lastY: 0,
+        moved: false
       }
+      this._touchPointers.clear()
+      this._pinchState = { active: false, startDistance: 0, startZoom: 1 }
+      this._applySceneTransform()
       return this.getTransform()
+    }
+
+    _touchDistance() {
+      const points = [...this._touchPointers.values()]
+      if (points.length < 2) return 0
+      return Math.hypot(points[0].clientX - points[1].clientX, points[0].clientY - points[1].clientY)
+    }
+
+    _trackTouchPointer(event) {
+      if (event.pointerType !== 'touch') return false
+      this._touchPointers.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY })
+      if (this._touchPointers.size >= 2) {
+        const distance = this._touchDistance()
+        if (!this._pinchState.active && distance > 0) {
+          this._pinchState = { active: true, startDistance: distance, startZoom: this._transform.zoom }
+        }
+        this._dragState = { active: false, pointerId: null, lastX: 0, lastY: 0, moved: false }
+      }
+      return this._touchPointers.size >= 2
+    }
+
+    _updatePinchZoom(event) {
+      if (event.pointerType !== 'touch' || !this._touchPointers.has(event.pointerId)) return false
+      this._touchPointers.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY })
+      if (!this._pinchState.active) return false
+      const distance = this._touchDistance()
+      if (distance <= 0 || this._pinchState.startDistance <= 0) return false
+      const targetZoom = this._pinchState.startZoom * (distance / this._pinchState.startDistance)
+      this._transform = this._clampTransform({ ...this._transform, zoom: targetZoom })
+      this._applySceneTransform()
+      event.preventDefault?.()
+      return true
+    }
+
+    _releaseTouchPointer(event) {
+      if (event.pointerType !== 'touch') return
+      this._touchPointers.delete(event.pointerId)
+      if (this._touchPointers.size < 2) {
+        this._pinchState = { active: false, startDistance: 0, startZoom: this._transform.zoom }
+      }
+    }
+
+    _registerSceneInput() {
+      const viewport = me.game.viewport
+      if (!viewport) return
+
+      me.input.registerPointerEvent('wheel', viewport, (event) => {
+        const direction = event.deltaY > 0 ? -1 : 1
+        this.zoomBy(direction * this._zoomStep)
+        event.preventDefault?.()
+        return false
+      })
+
+      me.input.registerPointerEvent('pointerdown', viewport, (event) => {
+        if (event.button !== undefined && event.button !== 0) return true
+        if (this._trackTouchPointer(event)) {
+          event.preventDefault?.()
+          return false
+        }
+        this._dragState = {
+          active: true,
+          pointerId: event.pointerId,
+          lastX: event.clientX,
+          lastY: event.clientY,
+          moved: false
+        }
+        return true
+      })
+
+      me.input.registerPointerEvent('pointermove', viewport, (event) => {
+        if (this._updatePinchZoom(event)) return false
+        if (!this._dragState.active || this._dragState.pointerId !== event.pointerId) return true
+        if (!Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return true
+        const dx = event.clientX - this._dragState.lastX
+        const dy = event.clientY - this._dragState.lastY
+        this._dragState.lastX = event.clientX
+        this._dragState.lastY = event.clientY
+        if (Math.hypot(dx, dy) < 1) return true
+        this._dragState.moved = true
+        this.panBy(dx, dy)
+        event.preventDefault?.()
+        return false
+      })
+
+      const endDrag = (event) => {
+        this._releaseTouchPointer(event)
+        if (this._dragState.pointerId === event.pointerId) {
+          this._dragState = { active: false, pointerId: null, lastX: 0, lastY: 0, moved: false }
+        }
+        return true
+      }
+      me.input.registerPointerEvent('pointerup', viewport, endDrag)
+      me.input.registerPointerEvent('pointercancel', viewport, endDrag)
+
+      this._interactionHitAreas.push(viewport)
     }
 
     _screenToWorld(x, y) {
@@ -250,6 +372,7 @@ export function createHallSceneClass(me, HallAgentClass) {
         return true
       })
       this._hotspots.push({ hitArea: me.game.viewport, stage: true })
+      this._registerSceneInput()
 
       this._sceneBuilt = true
       this._needsSync = true
@@ -263,7 +386,6 @@ export function createHallSceneClass(me, HallAgentClass) {
           super(x, y, width, height)
           this.anchorPoint.set(0, 0)
           this.image = img
-          this.floating = true
         }
 
         draw(renderer) {
@@ -330,6 +452,14 @@ export function createHallSceneClass(me, HallAgentClass) {
           console.warn('[HallScene] pointer cleanup failed:', err?.message || err)
         }
       })
+      this._interactionHitAreas.forEach(hitArea => {
+        try {
+          me.input.releaseAllPointerEvents(hitArea)
+        } catch (err) {
+          console.warn('[HallScene] input cleanup failed:', err?.message || err)
+        }
+      })
+      this._interactionHitAreas = []
       this._hotspots = []
       this._imageLayers.forEach(layer => {
         try {
@@ -340,6 +470,8 @@ export function createHallSceneClass(me, HallAgentClass) {
       })
       this._imageLayers = []
       this._agents.clear()
+      this._touchPointers.clear()
+      this._pinchState = { active: false, startDistance: 0, startZoom: this._transform.zoom }
       this._sceneBuilt = false
     }
   }

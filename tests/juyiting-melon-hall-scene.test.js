@@ -5,6 +5,22 @@ import { createHallSceneClass } from '../src/game/scenes/HallScene.js'
 const createFakeMelon = () => {
   const registered = []
   const children = []
+  const matrixOps = []
+
+  const currentTransform = {
+    identity: () => {
+      matrixOps.push(['identity'])
+      return currentTransform
+    },
+    translate: (x, y) => {
+      matrixOps.push(['translate', x, y])
+      return currentTransform
+    },
+    scale: (x, y) => {
+      matrixOps.push(['scale', x, y])
+      return currentTransform
+    }
+  }
 
   class Stage {}
 
@@ -81,6 +97,7 @@ const createFakeMelon = () => {
     game: {
       viewport,
       world: {
+        currentTransform,
         addChild: (child, depth) => children.push({ child, depth }),
         removeChild: () => {}
       }
@@ -93,11 +110,25 @@ const createFakeMelon = () => {
       getImage: () => null
     },
     registered,
-    children
+    children,
+    matrixOps
   }
 }
 
 describe('HallScene melonJS pointer routing', () => {
+  it('keeps custom image layers inside the transformed world scene', () => {
+    const me = createFakeMelon()
+    me.loader.getImage = name => name === 'liangshan-hall-bg' ? { width: 960, height: 640 } : null
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+
+    scene.onResetEvent()
+
+    const background = me.children.find(item => item.depth === 0)?.child
+    expect(background).to.exist
+    expect(background.floating).not.to.equal(true)
+  })
+
   it('keeps transform state inside the melonJS scene', () => {
     const me = createFakeMelon()
     const HallScene = createHallSceneClass(me, class {})
@@ -167,5 +198,70 @@ describe('HallScene melonJS pointer routing', () => {
     hotspotRegistration.callback({ gameX: 730, gameY: 300 })
 
     expect(clicked[0]).to.deep.equal({ id: 'bountyBoard', panel: 'tasks' })
+  })
+
+  it('applies the scene transform to the melonJS world container', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+
+    scene.zoomBy(0.5)
+    scene.panBy(120, -80)
+
+    expect(me.matrixOps).to.deep.equal([
+      ['identity'],
+      ['translate', 480, 320],
+      ['scale', 1, 1],
+      ['translate', -480, -320],
+      ['identity'],
+      ['translate', 480, 320],
+      ['scale', 1.5, 1.5],
+      ['translate', -480, -320],
+      ['identity'],
+      ['translate', 600, 240],
+      ['scale', 1.5, 1.5],
+      ['translate', -480, -320]
+    ])
+  })
+
+  it('zooms with wheel and pans with pointer drag inside the melonJS viewport', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+
+    scene.onResetEvent()
+    const wheelRegistration = me.registered.find(item => item.type === 'wheel' && item.region === me.game.viewport)
+    const moveRegistration = me.registered.find(item => item.type === 'pointermove' && item.region === me.game.viewport)
+    const downRegistrations = me.registered.filter(item => item.type === 'pointerdown' && item.region === me.game.viewport)
+    const upRegistration = me.registered.find(item => item.type === 'pointerup' && item.region === me.game.viewport)
+
+    expect(wheelRegistration).to.exist
+    expect(moveRegistration).to.exist
+    expect(downRegistrations).to.have.length.greaterThan(1)
+    expect(upRegistration).to.exist
+
+    wheelRegistration.callback({ deltaY: -120, preventDefault: () => {} })
+    expect(scene.getTransform().zoom).to.equal(1.12)
+
+    downRegistrations[1].callback({ pointerId: 7, pointerType: 'mouse', clientX: 100, clientY: 100 })
+    moveRegistration.callback({ pointerId: 7, pointerType: 'mouse', clientX: 140, clientY: 120, preventDefault: () => {} })
+    expect(scene.getTransform()).to.include({ offsetX: 40, offsetY: 20 })
+    upRegistration.callback({ pointerId: 7, pointerType: 'mouse' })
+  })
+
+  it('zooms with two touch pointers for mobile pinch gestures', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+
+    scene.onResetEvent()
+    const moveRegistration = me.registered.find(item => item.type === 'pointermove' && item.region === me.game.viewport)
+    const downRegistrations = me.registered.filter(item => item.type === 'pointerdown' && item.region === me.game.viewport)
+
+    downRegistrations[1].callback({ pointerId: 1, pointerType: 'touch', clientX: 100, clientY: 100 })
+    downRegistrations[1].callback({ pointerId: 2, pointerType: 'touch', clientX: 200, clientY: 100 })
+    moveRegistration.callback({ pointerId: 2, pointerType: 'touch', clientX: 260, clientY: 100, preventDefault: () => {} })
+
+    expect(scene.getTransform().zoom).to.equal(1.6)
   })
 })

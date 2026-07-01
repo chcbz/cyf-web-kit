@@ -132,13 +132,43 @@ describe('JuyiHall component behavior', () => {
     const board = wrapper.find('.hall-board')
 
     expect(wrapper.find('.melon-layer').exists()).to.equal(true)
-    expect(board.attributes('aria-label')).to.equal('聚义厅 melonJS 场景')
-    expect(board.attributes('tabindex')).to.equal(undefined)
+    expect(board.attributes('aria-label')).to.equal('聚义厅 melonJS 场景，可使用加减号缩放，0 复位')
+    expect(board.attributes('tabindex')).to.equal('0')
     expect(wrapper.find('.map-world').exists()).to.equal(false)
     expect(wrapper.find('.hall-room').exists()).to.equal(false)
     expect(wrapper.find('.room-prop-layer').exists()).to.equal(false)
     expect(wrapper.find('.agent-token').exists()).to.equal(false)
     expect(stageSource).not.to.include('hallBoardRef')
+  })
+
+  it('forwards keyboard zoom controls to the melonJS game layer', async () => {
+    const zoomCalls = []
+    const resetCalls = []
+    hallGameMock = {
+      destroy: () => {},
+      mount: async (_container, options = {}) => {
+        options.onReady?.()
+      },
+      resetTransform: () => resetCalls.push(true),
+      setSelectedAgent: () => {},
+      start: () => {},
+      syncAgents: () => {},
+      syncHotspots: () => {},
+      zoomBy: delta => zoomCalls.push(delta)
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+    const wrapper = mount(HallStage, {
+      global: { stubs },
+      props: makeHallStageProps()
+    })
+    const board = wrapper.find('.hall-board')
+
+    await board.trigger('keydown', { key: '+' })
+    await board.trigger('keydown', { key: '-' })
+    await board.trigger('keydown', { key: '0' })
+
+    expect(zoomCalls).to.deep.equal([0.12, -0.12])
+    expect(resetCalls).to.have.length(1)
   })
 
   it('renders the recruit entry and persona catalog actions', async () => {

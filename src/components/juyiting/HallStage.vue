@@ -30,7 +30,9 @@
     <div
       class="hall-board"
       :class="{ 'is-melon-ready': melonReady, 'has-scene-error': Boolean(sceneError) }"
-      aria-label="聚义厅 melonJS 场景"
+      tabindex="0"
+      aria-label="聚义厅 melonJS 场景，可使用加减号缩放，0 复位"
+      @keydown="handleSceneKeydown"
     >
       <div ref="melonContainerRef" class="melon-layer" aria-hidden="true"></div>
       <div v-if="sceneError" class="scene-error" role="status">
@@ -141,6 +143,24 @@ const retryScene = async () => {
   melonReady.value = false
   juyitingGame.destroy()
   await mountScene()
+}
+
+const handleSceneKeydown = (event) => {
+  if (event.defaultPrevented) return
+  if (event.key === '+' || event.key === '=') {
+    juyitingGame.zoomBy?.(0.12)
+    event.preventDefault()
+    return
+  }
+  if (event.key === '-' || event.key === '_') {
+    juyitingGame.zoomBy?.(-0.12)
+    event.preventDefault()
+    return
+  }
+  if (event.key === '0') {
+    juyitingGame.resetTransform?.()
+    event.preventDefault()
+  }
 }
 
 onMounted(() => {
@@ -272,6 +292,7 @@ button {
   margin: 0;
   overflow: hidden;
   border-radius: 0;
+  touch-action: none;
   background:
     radial-gradient(circle at 50% 48%, rgba(239, 197, 118, 0.2), transparent 34%),
     linear-gradient(135deg, #14100c, #23170f 54%, #0d0b09);
@@ -292,6 +313,7 @@ button {
   z-index: 6;
   width: 100%;
   height: 100%;
+  touch-action: none;
 }
 
 .melon-layer :deep(canvas) {

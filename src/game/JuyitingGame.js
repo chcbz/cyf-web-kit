@@ -185,6 +185,18 @@ export class JuyitingGame {
   setSelectedAgent(agentId) {
     if (this._hallScene) this._hallScene.setSelectedAgent(agentId)
   }
+
+  panBy(dx, dy) {
+    return this._hallScene?.panBy?.(dx, dy)
+  }
+
+  zoomBy(delta) {
+    return this._hallScene?.zoomBy?.(delta)
+  }
+
+  resetTransform() {
+    return this._hallScene?.resetTransform?.()
+  }
 }
 
 export const juyitingGame = new JuyitingGame()
