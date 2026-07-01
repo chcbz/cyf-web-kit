@@ -147,20 +147,17 @@ describe('HallScene melonJS pointer routing', () => {
     expect(scene.getTransform()).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 1 })
   })
 
-  it('fits the scene after viewport size changes', () => {
+  it('fits the scene using the melonJS viewport instead of DOM container pixels', () => {
     const me = createFakeMelon()
     const HallScene = createHallSceneClass(me, class {})
     const scene = new HallScene()
 
-    me.game.viewport.width = 390
-    me.game.viewport.height = 720
-
-    expect(scene.fitToViewport()).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 0.41 })
+    expect(scene.fitToViewport({ width: 390, height: 720 })).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 1 })
     expect(me.matrixOps.slice(-4)).to.deep.equal([
       ['identity'],
-      ['translate', 195, 360],
-      ['scale', 0.41, 0.41],
-      ['translate', -195, -360]
+      ['translate', 480, 320],
+      ['scale', 1, 1],
+      ['translate', -480, -320]
     ])
   })
 

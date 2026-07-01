@@ -199,10 +199,7 @@ export class JuyitingGame {
   }
 
   fitToViewport() {
-    const rect = this._container?.getBoundingClientRect?.()
-    return this._hallScene?.fitToViewport?.(
-      rect?.width && rect?.height ? { width: rect.width, height: rect.height } : null
-    )
+    return this._hallScene?.fitToViewport?.()
   }
 }
 

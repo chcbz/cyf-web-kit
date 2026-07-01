@@ -21,11 +21,10 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._mapData = null
       this._hotspotState = new Map()
       this._sceneBuilt = false
-      this._minZoom = 0.35
+      this._minZoom = 1
       this._maxZoom = 3.3
       this._zoomStep = 0.12
       this._transform = { offsetX: 0, offsetY: 0, zoom: 1 }
-      this._viewportOverride = null
       this._dragState = {
         active: false,
         pointerId: null,
@@ -84,8 +83,8 @@ export function createHallSceneClass(me, HallAgentClass) {
 
     _getViewportBounds() {
       const vp = me.game.viewport
-      const width = this._viewportOverride?.width || vp?.width
-      const height = this._viewportOverride?.height || vp?.height
+      const width = vp?.width
+      const height = vp?.height
       if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
         return null
       }
@@ -157,12 +156,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       return this.getTransform()
     }
 
-    fitToViewport(size = null) {
-      const width = Number(size?.width)
-      const height = Number(size?.height)
-      this._viewportOverride = Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0
-        ? { width, height }
-        : null
+    fitToViewport() {
       const bounds = this._getViewportBounds()
       if (!bounds) return this.getTransform()
       this._transform = fitSceneTransform({

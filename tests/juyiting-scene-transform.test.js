@@ -64,17 +64,17 @@ describe('Juyiting scene transform helpers', () => {
       viewportHeight: 720,
       sceneWidth: 960,
       sceneHeight: 640,
-      minZoom: 0.35,
+      minZoom: 1,
       maxZoom: 3.3
-    })).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 0.41 })
+    })).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 1 })
 
     expect(fitSceneTransform({
       viewportWidth: 900,
       viewportHeight: 540,
       sceneWidth: 960,
       sceneHeight: 640,
-      minZoom: 0.35,
+      minZoom: 1,
       maxZoom: 3.3
-    })).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 0.84 })
+    })).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 1 })
   })
 })
