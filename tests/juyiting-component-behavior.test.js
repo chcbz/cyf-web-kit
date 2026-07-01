@@ -272,7 +272,10 @@ describe('JuyiHall component behavior', () => {
     const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
 
     expect(source).not.to.include('crop-landscape')
-    expect(source).to.include("sceneMode === 'landscape' ? 'phone' : 'cellphone'")
+    expect(source).not.to.include("sceneMode === 'landscape' ? 'phone'")
+    expect(source).to.include('class="orientation-glyph"')
+    expect(source).to.include("'is-glyph-portrait': sceneMode === 'landscape'")
+    expect(source).to.include("'is-glyph-landscape': sceneMode !== 'landscape'")
   })
 
   it('renders the recruit entry and persona catalog actions', async () => {

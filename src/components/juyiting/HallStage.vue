@@ -29,7 +29,14 @@
           :title="sceneMode === 'landscape' ? '切回竖屏视图' : '切到横屏视图'"
           @click="toggleOrientationMode"
         >
-          <var-icon :name="sceneMode === 'landscape' ? 'phone' : 'cellphone'" />
+          <span
+            class="orientation-glyph"
+            :class="{
+              'is-glyph-portrait': sceneMode === 'landscape',
+              'is-glyph-landscape': sceneMode !== 'landscape'
+            }"
+            aria-hidden="true"
+          ></span>
           <span>{{ sceneMode === 'landscape' ? '竖屏' : '横屏' }}</span>
         </button>
       </div>
@@ -356,6 +363,50 @@ button {
 .orientation-action {
   background: rgba(104, 161, 139, 0.3);
   color: #effff6;
+}
+
+.orientation-glyph {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+}
+
+.orientation-glyph::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 13px;
+  height: 18px;
+  border: 2px solid currentColor;
+  border-radius: 4px;
+  transform: translate(-50%, -50%);
+}
+
+.orientation-glyph::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  transform: translateX(-50%);
+}
+
+.orientation-glyph.is-glyph-landscape::before {
+  width: 18px;
+  height: 13px;
+}
+
+.orientation-glyph.is-glyph-landscape::after {
+  left: auto;
+  right: 2px;
+  bottom: 50%;
+  transform: translateY(50%);
 }
 
 .refresh-action {
