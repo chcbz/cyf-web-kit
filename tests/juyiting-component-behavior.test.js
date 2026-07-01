@@ -948,10 +948,12 @@ describe('JuyiHall component behavior', () => {
   })
 })
 
-const createFakeGameMelon = () => {
+const createFakeGameMelon = ({ deferDeviceReady = false } = {}) => {
   const loadCallbacks = []
   const stateSets = []
   const stateChanges = []
+  const deviceReadyCallbacks = []
+  let videoInitCalls = 0
 
   class Stage {}
   class Sprite {}
@@ -976,6 +978,12 @@ const createFakeGameMelon = () => {
       registerPointerEvent: () => {},
       releaseAllPointerEvents: () => {}
     },
+    device: {
+      onReady: callback => {
+        if (deferDeviceReady) deviceReadyCallbacks.push(callback)
+        else callback()
+      }
+    },
     loader: {
       getImage: () => null,
       getTMX: () => null,
@@ -991,14 +999,35 @@ const createFakeGameMelon = () => {
     },
     video: {
       CANVAS: 'canvas',
-      init: () => true
+      init: () => {
+        videoInitCalls += 1
+        return true
+      }
     }
   }
 
-  return { loadCallbacks, me, stateChanges, stateSets }
+  return { deviceReadyCallbacks, loadCallbacks, me, stateChanges, stateSets, videoInitCalls: () => videoInitCalls }
 }
 
 describe('JuyitingGame lifecycle guards', () => {
+  it('waits for the melonJS engine ready callback before video initialization', async () => {
+    const mod = await import('../src/game/JuyitingGame.js')
+    const game = new mod.JuyitingGame()
+    const fake = createFakeGameMelon({ deferDeviceReady: true })
+    game._me = fake.me
+
+    const mountPromise = game.mount({ querySelector: () => null })
+    await Promise.resolve()
+
+    expect(fake.deviceReadyCallbacks).to.have.length(1)
+    expect(fake.videoInitCalls()).to.equal(0)
+
+    fake.deviceReadyCallbacks[0]()
+    await mountPromise
+
+    expect(fake.videoInitCalls()).to.equal(1)
+  })
+
   it('ignores stale loader callbacks after destroy invalidates a mount', async () => {
     const mod = await import('../src/game/JuyitingGame.js')
     expect(mod.JuyitingGame).to.be.a('function')

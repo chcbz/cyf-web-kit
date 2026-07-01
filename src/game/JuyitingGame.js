@@ -28,12 +28,20 @@ export class JuyitingGame {
     return this._me
   }
 
+  _waitForEngineReady(me) {
+    if (typeof me?.device?.onReady !== 'function') return Promise.resolve()
+    return new Promise(resolve => {
+      me.device.onReady(resolve)
+    })
+  }
+
   async mount(container, options = {}) {
     if (this._initialized) return
     if (!container) throw new Error('container required')
     const mountToken = ++this._generation
     this._mountToken = mountToken
     const me = await this._loadMelonJS()
+    await this._waitForEngineReady(me)
     if (!this._isCurrentMount(mountToken)) return
 
     this._container = container
