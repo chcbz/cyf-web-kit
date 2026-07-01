@@ -152,4 +152,20 @@ describe('HallScene melonJS pointer routing', () => {
     })
     expect(viewportRegistration.callback({})).to.equal(true)
   })
+
+  it('routes hotspot clicks through melonJS after DOM rooms are removed', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+    const clicked = []
+
+    scene.onHotspotClick(item => clicked.push(item))
+    scene.onResetEvent()
+
+    const hotspotRegistration = me.registered.find(item => item.region.data?.id === 'bountyBoard')
+    expect(hotspotRegistration).to.exist
+    hotspotRegistration.callback({ gameX: 730, gameY: 300 })
+
+    expect(clicked[0]).to.deep.equal({ id: 'bountyBoard', panel: 'tasks' })
+  })
 })

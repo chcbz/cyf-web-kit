@@ -29,10 +29,15 @@
 
     <div
       class="hall-board"
-      :class="{ 'is-melon-ready': melonReady }"
+      :class="{ 'is-melon-ready': melonReady, 'has-scene-error': Boolean(sceneError) }"
       aria-label="聚义厅 melonJS 场景"
     >
       <div ref="melonContainerRef" class="melon-layer" aria-hidden="true"></div>
+      <div v-if="sceneError" class="scene-error" role="status">
+        <strong>聚义厅场景暂不可用</strong>
+        <span>{{ sceneError }}</span>
+        <button type="button" @click="retryScene">重试</button>
+      </div>
     </div>
 
     <slot></slot>
@@ -67,33 +72,53 @@ const emit = defineEmits(['new-conversation', 'open-panel', 'refresh-hall', 'sel
 
 const melonContainerRef = ref(null)
 const melonReady = ref(false)
+const sceneError = ref('')
 
-onMounted(async () => {
+const handleAgentClick = (agentData) => {
+  const full = (props.sceneAgents || []).find(a =>
+    a.agentId === agentData.agentId || a.personaCode === agentData.personaCode
+  ) || agentData
+  emit('select-agent', full)
+}
+
+const handleHotspotClick = (hotspot) => {
+  emit('open-panel', hotspot.panel)
+}
+
+const handleSceneReady = () => {
+  sceneError.value = ''
+  melonReady.value = true
+  juyitingGame.syncAgents(props.sceneAgents)
+  juyitingGame.syncHotspots?.(props.sceneHotspots)
+  juyitingGame.setSelectedAgent(props.selectedAgent?.agentId || null)
+}
+
+const mountScene = async () => {
   const container = melonContainerRef.value
   if (!container) return
 
   try {
     await juyitingGame.mount(container, {
-      onAgentClick: (agentData) => {
-        const full = (props.sceneAgents || []).find(a =>
-          a.agentId === agentData.agentId || a.personaCode === agentData.personaCode
-        ) || agentData
-        emit('select-agent', full)
-      },
-      onHotspotClick: (hotspot) => {
-        emit('open-panel', hotspot.panel)
-      },
-      onReady: () => {
-        melonReady.value = true
-        juyitingGame.syncAgents(props.sceneAgents)
-        juyitingGame.syncHotspots?.(props.sceneHotspots)
-        juyitingGame.setSelectedAgent(props.selectedAgent?.agentId || null)
-      }
+      onAgentClick: handleAgentClick,
+      onHotspotClick: handleHotspotClick,
+      onReady: handleSceneReady
     })
     juyitingGame.start()
   } catch (err) {
-    console.warn('[HallStage] melonJS:', err.message || err)
+    melonReady.value = false
+    sceneError.value = err?.message || '请稍后重试'
+    console.warn('[HallStage] melonJS:', err?.message || err)
   }
+}
+
+const retryScene = async () => {
+  melonReady.value = false
+  juyitingGame.destroy()
+  await mountScene()
+}
+
+onMounted(() => {
+  mountScene()
 })
 
 onBeforeUnmount(() => {
@@ -245,6 +270,47 @@ button {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+.scene-error {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: min(320px, calc(100% - 32px));
+  padding: 18px;
+  border: 1px solid rgba(255, 215, 145, 0.32);
+  border-radius: 8px;
+  background: rgba(31, 22, 16, 0.88);
+  color: #fff4d4;
+  text-align: center;
+  transform: translate(-50%, -50%);
+  backdrop-filter: blur(8px);
+}
+
+.scene-error strong {
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.scene-error span {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #d7b875;
+}
+
+.scene-error button {
+  min-height: 34px;
+  padding: 0 16px;
+  border-radius: 8px;
+  background: #d7b875;
+  color: #24170f;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 @keyframes refreshSpin {

@@ -303,6 +303,52 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.emitted('open-panel')[0]).to.deep.equal(['tasks'])
   })
 
+  it('shows a scene error and retries melonJS mounting without restoring DOM rooms', async () => {
+    let mountCalls = 0
+    let destroyCalls = 0
+    const originalWarn = console.warn
+    console.warn = () => {}
+    hallGameMock = {
+      destroy: () => {
+        destroyCalls += 1
+      },
+      mount: async (_container, options = {}) => {
+        mountCalls += 1
+        if (mountCalls === 1) throw new Error('boom')
+        options.onReady?.()
+      },
+      setSelectedAgent: () => {},
+      start: () => {},
+      syncAgents: () => {},
+      syncHotspots: () => {}
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+
+    try {
+      const wrapper = mount(HallStage, {
+        global: { stubs },
+        props: makeHallStageProps()
+      })
+
+      await Promise.resolve()
+      await Vue.nextTick()
+
+      expect(wrapper.find('.scene-error').text()).to.include('聚义厅场景暂不可用')
+      expect(wrapper.find('.map-world').exists()).to.equal(false)
+      expect(wrapper.find('.hall-room').exists()).to.equal(false)
+
+      await wrapper.find('.scene-error button').trigger('click')
+      await Promise.resolve()
+      await Vue.nextTick()
+
+      expect(destroyCalls).to.equal(1)
+      expect(mountCalls).to.equal(2)
+      expect(wrapper.find('.hall-board').classes()).to.include('is-melon-ready')
+    } finally {
+      console.warn = originalWarn
+    }
+  })
+
   it('opens panels and clears locked contexts from BottomDock', async () => {
     const wrapper = mount(BottomDock, {
       global: { stubs },
