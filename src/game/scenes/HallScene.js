@@ -76,16 +76,26 @@ export function createHallSceneClass(me, HallAgentClass) {
 
     _getViewportBounds() {
       const vp = me.game.viewport
+      if (!vp || !Number.isFinite(vp.width) || !Number.isFinite(vp.height) || vp.width <= 0 || vp.height <= 0) {
+        return null
+      }
       return {
-        viewportWidth: vp?.width || 0,
-        viewportHeight: vp?.height || 0,
+        viewportWidth: vp.width,
+        viewportHeight: vp.height,
         minZoom: this._minZoom,
         maxZoom: this._maxZoom
       }
     }
 
     _clampTransform(next) {
-      return clampSceneTransform(next, this._getViewportBounds())
+      const bounds = this._getViewportBounds()
+      if (!bounds) return this.getTransform()
+      const clamped = clampSceneTransform(next, bounds)
+      return {
+        ...clamped,
+        offsetX: Object.is(clamped.offsetX, -0) ? 0 : clamped.offsetX,
+        offsetY: Object.is(clamped.offsetY, -0) ? 0 : clamped.offsetY
+      }
     }
 
     panBy(dx, dy) {
@@ -95,9 +105,7 @@ export function createHallSceneClass(me, HallAgentClass) {
         offsetY: this._transform.offsetY + dy
       }
 
-      this._transform = this._transform.zoom > 1
-        ? this._clampTransform(next)
-        : next
+      this._transform = this._clampTransform(next)
       return this.getTransform()
     }
 
@@ -120,12 +128,13 @@ export function createHallSceneClass(me, HallAgentClass) {
     }
 
     _screenToWorld(x, y) {
-      const { viewportWidth, viewportHeight } = this._getViewportBounds()
+      const bounds = this._getViewportBounds()
+      if (!bounds) return null
       return screenToWorldPoint({
         x,
         y,
-        viewportWidth,
-        viewportHeight,
+        viewportWidth: bounds.viewportWidth,
+        viewportHeight: bounds.viewportHeight,
         ...this._transform
       })
     }
@@ -230,7 +239,9 @@ export function createHallSceneClass(me, HallAgentClass) {
       me.input.registerPointerEvent('pointerdown', me.game.viewport, (event) => {
         const x = event.gameX ?? event.clientX
         const y = event.gameY ?? event.clientY
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return true
         const point = this._screenToWorld(x, y)
+        if (!point) return true
         const hit = [...this._agents.values()].reverse().find(agent => agent.containsPoint(point.x, point.y))
         if (hit) {
           hit.onPointerDown?.()

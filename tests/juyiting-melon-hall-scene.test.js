@@ -105,12 +105,25 @@ describe('HallScene melonJS pointer routing', () => {
 
     scene.onResetEvent()
     scene.panBy(120, -80)
+    expect(scene.getTransform()).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 1 })
+
     scene.zoomBy(0.5)
+    scene.panBy(120, -80)
 
     expect(scene.getTransform()).to.include({ offsetX: 120, offsetY: -80, zoom: 1.5 })
 
     scene.resetTransform()
     expect(scene.getTransform()).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 1 })
+  })
+
+  it('keeps transform state unchanged when viewport bounds are unavailable', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+
+    me.game.viewport = null
+    expect(scene.zoomBy(0.5)).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 1 })
+    expect(scene.panBy(120, -80)).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 1 })
   })
 
   it('registers clickable hotspots on renderables and the agent hit router on the viewport', () => {
@@ -131,5 +144,12 @@ describe('HallScene melonJS pointer routing', () => {
     const viewportRegistration = me.registered.find(item => item.region === me.game.viewport)
     expect(viewportRegistration).to.exist
     expect(viewportRegistration.callback({ gameX: 10, gameY: 10 })).to.equal(true)
+
+    scene._agents.set('missing-coordinate-guard', {
+      containsPoint: () => {
+        throw new Error('agent hit test should not run without finite coordinates')
+      }
+    })
+    expect(viewportRegistration.callback({})).to.equal(true)
   })
 })
