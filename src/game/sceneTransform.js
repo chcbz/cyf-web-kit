@@ -34,6 +34,25 @@ export const clampSceneTransform = (transform, bounds) => {
   }
 }
 
+export const fitSceneTransform = ({
+  viewportWidth,
+  viewportHeight,
+  sceneWidth,
+  sceneHeight,
+  minZoom,
+  maxZoom
+}) => {
+  if (!viewportWidth || !viewportHeight || !sceneWidth || !sceneHeight) {
+    return { offsetX: 0, offsetY: 0, zoom: 1 }
+  }
+  const rawZoom = Math.min(viewportWidth / sceneWidth, viewportHeight / sceneHeight)
+  return {
+    offsetX: 0,
+    offsetY: 0,
+    zoom: Number(clamp(rawZoom, minZoom, maxZoom).toFixed(2))
+  }
+}
+
 export const screenToWorldPoint = ({
   x,
   y,

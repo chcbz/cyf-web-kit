@@ -171,6 +171,83 @@ describe('JuyiHall component behavior', () => {
     expect(resetCalls).to.have.length(1)
   })
 
+  it('adapts the hall stage orientation and exposes a landscape view toggle', async () => {
+    const originalMatchMedia = global.window.matchMedia
+    const originalFullscreen = global.document.documentElement.requestFullscreen
+    const originalScreen = global.screen
+    const listeners = []
+    const fitModes = []
+    let fullscreenCalls = 0
+    let lockCalls = []
+    let matches = false
+
+    global.window.matchMedia = query => ({
+      media: query,
+      get matches() {
+        return matches
+      },
+      addEventListener: (_event, callback) => listeners.push(callback),
+      removeEventListener: (_event, callback) => {
+        const index = listeners.indexOf(callback)
+        if (index >= 0) listeners.splice(index, 1)
+      }
+    })
+    global.document.documentElement.requestFullscreen = async () => {
+      fullscreenCalls += 1
+    }
+    global.screen = {
+      orientation: {
+        lock: async mode => lockCalls.push(mode)
+      }
+    }
+    hallGameMock = {
+      destroy: () => {},
+      fitToViewport: mode => fitModes.push(mode),
+      mount: async (_container, options = {}) => {
+        options.onReady?.()
+      },
+      setSelectedAgent: () => {},
+      start: () => {},
+      syncAgents: () => {},
+      syncHotspots: () => {}
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+
+    try {
+      const wrapper = mount(HallStage, {
+        global: { stubs },
+        props: makeHallStageProps()
+      })
+      await flushPromises()
+
+      const board = wrapper.find('.hall-board')
+      const toggle = wrapper.find('.orientation-action')
+
+      expect(board.classes()).to.include('is-scene-portrait')
+      expect(toggle.exists()).to.equal(true)
+      expect(toggle.text()).to.include('横屏')
+      expect(fitModes).to.deep.include('portrait')
+
+      await toggle.trigger('click')
+      await flushPromises()
+
+      expect(fullscreenCalls).to.equal(1)
+      expect(lockCalls).to.deep.equal(['landscape'])
+      expect(wrapper.find('.hall-board').classes()).to.include('is-app-landscape')
+      expect(fitModes).to.deep.include('landscape')
+
+      matches = true
+      listeners.forEach(listener => listener({ matches: true }))
+      await flushPromises()
+
+      expect(wrapper.find('.hall-board').classes()).to.include('is-device-landscape')
+    } finally {
+      global.window.matchMedia = originalMatchMedia
+      global.document.documentElement.requestFullscreen = originalFullscreen
+      global.screen = originalScreen
+    }
+  })
+
   it('renders the recruit entry and persona catalog actions', async () => {
     const personas = [
       { personaCode: 'songjiang', name: '宋江', title: '及时雨', rankNo: 1, starName: '天魁星', systemAgent: true, abilities: ['dispatch'] },

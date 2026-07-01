@@ -4,7 +4,7 @@
 
 import { DEPTH_LAYERS } from '../config.js'
 import { FALLBACK_HALL_HOTSPOTS } from '../resources.js'
-import { clampSceneTransform, screenToWorldPoint } from '../sceneTransform.js'
+import { clampSceneTransform, fitSceneTransform, screenToWorldPoint } from '../sceneTransform.js'
 
 export function createHallSceneClass(me, HallAgentClass) {
   return class HallScene extends me.Stage {
@@ -21,10 +21,11 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._mapData = null
       this._hotspotState = new Map()
       this._sceneBuilt = false
-      this._minZoom = 0.75
+      this._minZoom = 0.35
       this._maxZoom = 3.3
       this._zoomStep = 0.12
       this._transform = { offsetX: 0, offsetY: 0, zoom: 1 }
+      this._viewportOverride = null
       this._dragState = {
         active: false,
         pointerId: null,
@@ -83,12 +84,14 @@ export function createHallSceneClass(me, HallAgentClass) {
 
     _getViewportBounds() {
       const vp = me.game.viewport
-      if (!vp || !Number.isFinite(vp.width) || !Number.isFinite(vp.height) || vp.width <= 0 || vp.height <= 0) {
+      const width = this._viewportOverride?.width || vp?.width
+      const height = this._viewportOverride?.height || vp?.height
+      if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
         return null
       }
       return {
-        viewportWidth: vp.width,
-        viewportHeight: vp.height,
+        viewportWidth: width,
+        viewportHeight: height,
         minZoom: this._minZoom,
         maxZoom: this._maxZoom
       }
@@ -150,6 +153,23 @@ export function createHallSceneClass(me, HallAgentClass) {
       }
       this._touchPointers.clear()
       this._pinchState = { active: false, startDistance: 0, startZoom: 1 }
+      this._applySceneTransform()
+      return this.getTransform()
+    }
+
+    fitToViewport(size = null) {
+      const width = Number(size?.width)
+      const height = Number(size?.height)
+      this._viewportOverride = Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0
+        ? { width, height }
+        : null
+      const bounds = this._getViewportBounds()
+      if (!bounds) return this.getTransform()
+      this._transform = fitSceneTransform({
+        ...bounds,
+        sceneWidth: 960,
+        sceneHeight: 640
+      })
       this._applySceneTransform()
       return this.getTransform()
     }

@@ -3,6 +3,7 @@ import { expect } from 'chai'
 import {
   clamp,
   clampSceneTransform,
+  fitSceneTransform,
   percentRectToViewport,
   scenePanBounds,
   screenToWorldPoint
@@ -55,5 +56,25 @@ describe('Juyiting scene transform helpers', () => {
       offsetY: -20,
       zoom: 2
     })).to.deep.equal({ x: 480, y: 340 })
+  })
+
+  it('fits the full scene into portrait and landscape viewports', () => {
+    expect(fitSceneTransform({
+      viewportWidth: 390,
+      viewportHeight: 720,
+      sceneWidth: 960,
+      sceneHeight: 640,
+      minZoom: 0.35,
+      maxZoom: 3.3
+    })).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 0.41 })
+
+    expect(fitSceneTransform({
+      viewportWidth: 900,
+      viewportHeight: 540,
+      sceneWidth: 960,
+      sceneHeight: 640,
+      minZoom: 0.35,
+      maxZoom: 3.3
+    })).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 0.84 })
   })
 })

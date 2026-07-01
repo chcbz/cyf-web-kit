@@ -24,12 +24,27 @@
           <var-icon :name="soundEnabled ? 'bell' : 'bell-outline'" />
           <span>{{ soundEnabled ? '声响开' : '声响歇' }}</span>
         </button>
+        <button
+          class="tool-action orientation-action"
+          :title="sceneMode === 'landscape' ? '切回竖屏视图' : '切到横屏视图'"
+          @click="toggleOrientationMode"
+        >
+          <var-icon :name="sceneMode === 'landscape' ? 'phone' : 'crop-landscape'" />
+          <span>{{ sceneMode === 'landscape' ? '竖屏' : '横屏' }}</span>
+        </button>
       </div>
     </div>
 
     <div
       class="hall-board"
-      :class="{ 'is-melon-ready': melonReady, 'has-scene-error': Boolean(sceneError) }"
+      :class="{
+        'is-melon-ready': melonReady,
+        'has-scene-error': Boolean(sceneError),
+        'is-device-landscape': deviceLandscape,
+        'is-app-landscape': orientationMode === 'landscape',
+        'is-scene-landscape': sceneMode === 'landscape',
+        'is-scene-portrait': sceneMode === 'portrait'
+      }"
       tabindex="0"
       aria-label="聚义厅 melonJS 场景，可使用加减号缩放，0 复位"
       @keydown="handleSceneKeydown"
@@ -49,7 +64,7 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { juyitingGame } from '@/game/index.js'
 
 const props = defineProps({
@@ -78,8 +93,19 @@ const melonContainerRef = ref(null)
 const melonReady = ref(false)
 const sceneError = ref('')
 const isSceneMounting = ref(false)
+const deviceLandscape = ref(false)
+const orientationMode = ref('auto')
 let sceneMountAttempt = 0
 let isUnmounted = false
+let orientationMedia = null
+let orientationMediaHandler = null
+
+const sceneMode = computed(() => {
+  if (orientationMode.value === 'landscape' || orientationMode.value === 'portrait') {
+    return orientationMode.value
+  }
+  return deviceLandscape.value ? 'landscape' : 'portrait'
+})
 
 const isCurrentMountAttempt = (attemptId) => (
   !isUnmounted && attemptId === sceneMountAttempt
@@ -102,6 +128,54 @@ const handleSceneReady = () => {
   juyitingGame.syncAgents(props.sceneAgents)
   juyitingGame.syncHotspots?.(props.sceneHotspots)
   juyitingGame.setSelectedAgent(props.selectedAgent?.agentId || null)
+  fitSceneToViewport()
+}
+
+const fitSceneToViewport = () => {
+  if (!melonReady.value) return
+  juyitingGame.fitToViewport?.(sceneMode.value)
+}
+
+const updateDeviceOrientation = () => {
+  const mediaMatches = orientationMedia?.matches
+  deviceLandscape.value = typeof mediaMatches === 'boolean'
+    ? mediaMatches
+    : window.innerWidth > window.innerHeight
+  fitSceneToViewport()
+}
+
+const setupOrientationTracking = () => {
+  if (typeof window === 'undefined') return
+  orientationMedia = window.matchMedia?.('(orientation: landscape)') || null
+  orientationMediaHandler = () => updateDeviceOrientation()
+  orientationMedia?.addEventListener?.('change', orientationMediaHandler)
+  window.addEventListener?.('resize', updateDeviceOrientation)
+  window.visualViewport?.addEventListener?.('resize', updateDeviceOrientation)
+  updateDeviceOrientation()
+}
+
+const teardownOrientationTracking = () => {
+  orientationMedia?.removeEventListener?.('change', orientationMediaHandler)
+  window.removeEventListener?.('resize', updateDeviceOrientation)
+  window.visualViewport?.removeEventListener?.('resize', updateDeviceOrientation)
+  orientationMedia = null
+  orientationMediaHandler = null
+}
+
+const requestLandscapeLock = async () => {
+  try {
+    await document.documentElement.requestFullscreen?.()
+  } catch (_err) {}
+  try {
+    await screen.orientation?.lock?.('landscape')
+  } catch (_err) {}
+}
+
+const toggleOrientationMode = async () => {
+  const nextMode = sceneMode.value === 'landscape' ? 'portrait' : 'landscape'
+  orientationMode.value = nextMode
+  if (nextMode === 'landscape') await requestLandscapeLock()
+  fitSceneToViewport()
 }
 
 const mountScene = async () => {
@@ -164,13 +238,19 @@ const handleSceneKeydown = (event) => {
 }
 
 onMounted(() => {
+  setupOrientationTracking()
   mountScene()
 })
 
 onBeforeUnmount(() => {
   isUnmounted = true
   sceneMountAttempt += 1
+  teardownOrientationTracking()
   juyitingGame.destroy()
+})
+
+watch(sceneMode, () => {
+  fitSceneToViewport()
 })
 
 watch(() => props.sceneAgents, (agents) => {
@@ -261,6 +341,11 @@ button {
 .sound-toggle {
   background: rgba(215, 184, 117, 0.24);
   color: #fff8de;
+}
+
+.orientation-action {
+  background: rgba(104, 161, 139, 0.3);
+  color: #effff6;
 }
 
 .refresh-action {
@@ -397,6 +482,21 @@ button {
 
   .tool-action :deep(.var-icon) {
     font-size: 17px;
+  }
+
+  .hall-stage:has(.hall-board.is-scene-landscape) .stage-header {
+    right: auto;
+    max-width: calc(100% - 16px);
+    padding: 8px;
+  }
+
+  .hall-stage:has(.hall-board.is-scene-landscape) .eyebrow {
+    display: none;
+  }
+
+  .hall-stage:has(.hall-board.is-scene-landscape) h1 {
+    font-size: 18px;
+    min-height: 0;
   }
 }
 
