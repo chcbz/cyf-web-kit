@@ -2,7 +2,7 @@
  * 聚义厅场景 - melonJS Stage (manual asset loading)
  */
 
-import { DEPTH_LAYERS } from '../config.js'
+import { DEPTH_LAYERS, HALL_SCENE_HEIGHT, HALL_SCENE_WIDTH } from '../config.js'
 import { FALLBACK_HALL_HOTSPOTS } from '../resources.js'
 import { clampSceneTransform, fitSceneTransform, screenToWorldPoint } from '../sceneTransform.js'
 
@@ -161,8 +161,8 @@ export function createHallSceneClass(me, HallAgentClass) {
       if (!bounds) return this.getTransform()
       this._transform = fitSceneTransform({
         ...bounds,
-        sceneWidth: 960,
-        sceneHeight: 640
+        sceneWidth: HALL_SCENE_WIDTH,
+        sceneHeight: HALL_SCENE_HEIGHT
       })
       this._applySceneTransform()
       return this.getTransform()
@@ -294,18 +294,13 @@ export function createHallSceneClass(me, HallAgentClass) {
       const fgImage = me.loader.getImage('liangshan-hall-fg')
 
       if (bgImage) {
-        // Use melonJS built-in ImageLayer if available, otherwise custom Renderable
-        const bgLayer = typeof me.ImageLayer === 'function'
-          ? new me.ImageLayer(0, 0, { image: bgImage, width: vpW, height: vpH })
-          : this._createCustomImageLayer(0, 0, vpW, vpH, bgImage)
+        const bgLayer = this._createCustomImageLayer(0, 0, vpW, vpH, bgImage)
         me.game.world.addChild(bgLayer, DEPTH_LAYERS.BACKGROUND)
         this._imageLayers.push(bgLayer)
       }
 
       if (fgImage) {
-        const fgLayer = typeof me.ImageLayer === 'function'
-          ? new me.ImageLayer(0, 0, { image: fgImage, width: vpW, height: vpH })
-          : this._createCustomImageLayer(0, 0, vpW, vpH, fgImage)
+        const fgLayer = this._createCustomImageLayer(0, 0, vpW, vpH, fgImage)
         me.game.world.addChild(fgLayer, DEPTH_LAYERS.FOREGROUND)
         this._imageLayers.push(fgLayer)
       }
@@ -317,6 +312,7 @@ export function createHallSceneClass(me, HallAgentClass) {
           this.anchorPoint.set(0.5, 0.5)
           this.data = data
           this.feedback = null
+          this.isKinematic = true
         }
 
         setFeedback(feedback) {
@@ -400,6 +396,7 @@ export function createHallSceneClass(me, HallAgentClass) {
           super(x, y, width, height)
           this.anchorPoint.set(0, 0)
           this.image = img
+          this.isKinematic = true
         }
 
         draw(renderer) {
@@ -477,7 +474,9 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._hotspots = []
       this._imageLayers.forEach(layer => {
         try {
-          me.game.world.removeChild(layer)
+          if (me.game.world?.hasChild?.(layer)) {
+            me.game.world.removeChild(layer)
+          }
         } catch (err) {
           console.warn('[HallScene] image layer cleanup failed:', err?.message || err)
         }

@@ -520,8 +520,9 @@ button {
 
 .hall-board {
   position: relative;
-  flex: 1;
-  min-height: 0;
+  flex: 0 0 auto;
+  aspect-ratio: 1672 / 941;
+  min-height: unset;
   margin: 0;
   overflow: hidden;
   border-radius: 0;

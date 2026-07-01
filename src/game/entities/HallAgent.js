@@ -3,14 +3,19 @@
  */
 
 import { ANIM_STATES, ATLAS_COLS, ATLAS_ROWS, CHAR_VISUALS } from '../config.js'
+import { clampPointToRegion } from '../walkableArea.js'
 
 export function createHallAgentClass(me) {
   return class HallAgent extends me.Sprite {
     constructor(agentData) {
       const vpW = me.game.viewport.width
       const vpH = me.game.viewport.height
-      const x = (agentData.x || 50) / 100 * vpW
-      const y = (agentData.y || 60) / 100 * vpH
+      const startPoint = clampPointToRegion(
+        { x: agentData.x || 50, y: agentData.y || 60 },
+        agentData.walkableRegion
+      )
+      const x = startPoint.x / 100 * vpW
+      const y = startPoint.y / 100 * vpH
 
       const atlasImg = me.loader.getImage('character-atlas')
       const atlasW = atlasImg ? atlasImg.width : 1402
@@ -32,17 +37,19 @@ export function createHallAgentClass(me) {
 
       // Set initial frame from atlas position
       const frameIdx = this._visual.row * ATLAS_COLS + this._visual.col
-      if (typeof this.renderable?.setCurrentAnimation === 'function') {
-        this.renderable.addAnimation('idle', [frameIdx])
-        this.renderable.setCurrentAnimation('idle')
+      const sprite = this._spriteTarget()
+      if (typeof sprite?.setCurrentAnimation === 'function') {
+        sprite.addAnimation('idle', [frameIdx])
+        sprite.setCurrentAnimation('idle')
       }
 
-      this.scale = this._visual.scale
+      this._renderScale = 1
+      this._applyScale(this._resolveScale(agentData.scale))
       this.anchorPoint.set(0.5, 1.0)
 
       // Minimal body for collision awareness (not used for physics yet)
       this.body = new me.Body(this)
-      this.body.setVelocity(0, 0)
+      this._setBodyVelocity(0, 0)
 
       this.currentAnim = ANIM_STATES.IDLE
       this.facing = 1
@@ -55,14 +62,16 @@ export function createHallAgentClass(me) {
       this._highlighted = false
       this._selected = false
       this._focused = false
+      this._walkableRegion = agentData.walkableRegion || null
       this._animTimer = 0
       this._animFrame = 0
       this.depth = y
     }
 
     setDestination(pctX, pctY) {
-      this.targetX = (pctX / 100) * me.game.viewport.width
-      this.targetY = (pctY / 100) * me.game.viewport.height
+      const point = clampPointToRegion({ x: pctX, y: pctY }, this._walkableRegion)
+      this.targetX = (point.x / 100) * me.game.viewport.width
+      this.targetY = (point.y / 100) * me.game.viewport.height
     }
 
     setAnimState(state) {
@@ -76,11 +85,13 @@ export function createHallAgentClass(me) {
 
     syncState(agentData = {}) {
       this._sourceData = { ...this._sourceData, ...agentData }
+      if (agentData.walkableRegion) this._walkableRegion = agentData.walkableRegion
       if (agentData.name) this.agentName = agentData.name
       if (agentData.personaCode) this.personaCode = agentData.personaCode
       if (agentData.x !== undefined && agentData.y !== undefined) this.setDestination(agentData.x, agentData.y)
       if (agentData.sceneStatus) this.setAnimState(agentData.sceneStatus)
       if (agentData.bubble) this.setBubble(agentData.bubble.text, agentData.bubble.ttlMs || 5000)
+      if (agentData.scale !== undefined) this._applyScale(this._resolveScale(agentData.scale))
       this._focused = Boolean(agentData.focused || agentData.recommended)
       this.setSelected(Boolean(agentData.selected))
       if (agentData.facing) this.setFacing(agentData.facing)
@@ -93,14 +104,52 @@ export function createHallAgentClass(me) {
 
     setHighlighted(on) {
       this._highlighted = !!on
-      this.renderable.tint = on ? new me.Color(1, 0.95, 0.45, 0.35) : null
+      const sprite = this._spriteTarget()
+      if (sprite) {
+        sprite.tint = on ? new me.Color(1, 0.95, 0.45, 0.35) : new me.Color(255, 255, 255, 1)
+      }
     }
 
     setFacing(dir) {
       const f = dir === 'left' ? -1 : 1
       if (f !== this.facing) {
         this.facing = f
-        this.renderable.flipX(f < 0)
+        const sprite = this._spriteTarget()
+        if (typeof sprite?.flipX === 'function') sprite.flipX(f < 0)
+      }
+    }
+
+    _spriteTarget() {
+      return this.renderable || this
+    }
+
+    _resolveScale(scale) {
+      const value = Number(scale)
+      return Number.isFinite(value) && value > 0 ? value : this._visual.scale
+    }
+
+    _applyScale(scale) {
+      const nextScale = this._resolveScale(scale)
+      const previousScale = this._renderScale || 1
+      this._renderScale = nextScale
+
+      if (typeof this.scale === 'function') {
+        this.scale(nextScale / previousScale)
+      } else {
+        this.scale = nextScale
+      }
+    }
+
+    _setBodyVelocity(x, y) {
+      if (typeof this.body?.setVelocity === 'function') {
+        this.body.setVelocity(x, y)
+        return
+      }
+
+      const velocity = this.body?.velocity || this.body?.vel
+      if (velocity) {
+        velocity.x = x
+        velocity.y = y
       }
     }
 
@@ -111,21 +160,21 @@ export function createHallAgentClass(me) {
       if (dist < 2) {
         this.pos.x = this.targetX
         this.pos.y = this.targetY
-        this.body.setVelocity(0, 0)
+        this._setBodyVelocity(0, 0)
         this.speed = 0
         if (this.currentAnim === ANIM_STATES.WALK) this.setAnimState(ANIM_STATES.IDLE)
         return
       }
       const spd = Math.min(80, dist * 3.5)
-      this.body.setVelocity((dx / dist) * spd, (dy / dist) * spd)
+      this._setBodyVelocity((dx / dist) * spd, (dy / dist) * spd)
       this.speed = spd
       if (Math.abs(dx) > 2) this.setFacing(dx > 0 ? 'right' : 'left')
       this.setAnimState(ANIM_STATES.WALK)
     }
 
     containsPoint(x, y) {
-      const width = this.width * this.scale
-      const height = this.height * this.scale
+      const width = this.width * this._renderScale
+      const height = this.height * this._renderScale
       return x >= this.pos.x - width / 2 &&
         x <= this.pos.x + width / 2 &&
         y >= this.pos.y - height &&
@@ -164,7 +213,7 @@ export function createHallAgentClass(me) {
         ctx.strokeStyle = this._selected ? 'rgba(255, 221, 130, 0.85)' : 'rgba(255, 244, 212, 0.42)'
         ctx.lineWidth = this._selected ? 3 : 2
         ctx.beginPath()
-        ctx.ellipse(this.pos.x, this.pos.y - 8, 24 * this.scale, 9 * this.scale, 0, 0, Math.PI * 2)
+        ctx.ellipse(this.pos.x, this.pos.y - 8, 24 * this._renderScale, 9 * this._renderScale, 0, 0, Math.PI * 2)
         ctx.stroke()
         ctx.restore()
       }
@@ -176,7 +225,7 @@ export function createHallAgentClass(me) {
         ctx.fillStyle = '#fff4d4'
         ctx.textAlign = 'center'
         ctx.textBaseline = 'top'
-        ctx.fillText(this.agentName, this.pos.x, this.pos.y - this.height * this.scale - 18)
+        ctx.fillText(this.agentName, this.pos.x, this.pos.y - this.height * this._renderScale - 18)
         ctx.restore()
       }
 
@@ -186,7 +235,7 @@ export function createHallAgentClass(me) {
         ctx.font = '11px sans-serif'
         const tw = ctx.measureText(this._bubbleText).width
         const bx = this.pos.x - tw / 2 - 6
-        const by = this.pos.y - this.height * this.scale - 38
+        const by = this.pos.y - this.height * this._renderScale - 38
         ctx.fillStyle = 'rgba(30, 18, 10, 0.88)'
         ctx.strokeStyle = 'rgba(255, 220, 130, 0.45)'
         ctx.lineWidth = 1

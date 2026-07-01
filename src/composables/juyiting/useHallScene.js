@@ -7,6 +7,7 @@ import {
   HALL_SCENE_MAX_PROMINENT_MOTION,
   HALL_SCENE_REGIONS
 } from '../../constants/juyitingScene.js'
+import { clampPointToRegion } from '../../game/walkableArea.js'
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
@@ -75,10 +76,10 @@ const randomFromSeed = (seed, offset = 0) => {
 const sampleRegionPoint = (region, seed, offset = 0) => {
   const x = region.bounds.x1 + (region.bounds.x2 - region.bounds.x1) * randomFromSeed(seed, offset)
   const y = region.bounds.y1 + (region.bounds.y2 - region.bounds.y1) * randomFromSeed(seed, offset + 1)
-  return {
+  return clampPointToRegion({
     x: clamp(x, 0, 100),
     y: clamp(y, 0, 100)
-  }
+  }, region)
 }
 
 const agentVisualKey = (agent) => {
@@ -168,7 +169,7 @@ export const useHallScene = ({
       const featuredHero = featuredHeroById[visualKey] || featuredHeroById[normalizeAgentId(agent)]
       const regionId = transient.regionId || featuredHero?.regionId || visual.defaultRegion || HALL_CHARACTER_VISUALS.default.defaultRegion
       const region = HALL_SCENE_REGIONS[regionId] || HALL_SCENE_REGIONS.idleFloor
-      const point = transient.destination || featuredHero?.anchor || sampleRegionPoint(region, seed, 1)
+      const point = clampPointToRegion(transient.destination || featuredHero?.anchor || sampleRegionPoint(region, seed, 1), region)
       const status = normalizeStatus(agent.status)
       const sceneStatus = sceneStatusFor(status, transient)
       const selected = selectedId === normalizeAgentId(agent)
@@ -182,10 +183,11 @@ export const useHallScene = ({
         x: point.x,
         y: point.y,
         depth: (region.depthOffset || 0) + point.y,
-        scale: 1.02 + clamp((point.y - 24) / 62, 0, 1) * 0.34,
+        scale: 0.46 + clamp((point.y - 34) / 45, 0, 1) * 0.28,
         facing,
         regionId,
-        destination: transient.destination,
+        destination: transient.destination ? point : undefined,
+        walkableRegion: region,
         selected,
         focused: selected || Boolean(transient.focused),
         bubble: bubbleFor(normalizeAgentId(agent), transientAgents.value),

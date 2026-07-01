@@ -8,7 +8,7 @@ export const HALL_MAP_RESOURCE = { name: 'juyiting-hall', type: 'tmx', src: '/ju
 export const HALL_RESOURCES = [
   HALL_MAP_RESOURCE,
   { name: 'liangshan-hall-bg', type: 'image', src: '/juyiting/images/liangshan-hall-bg-v2.png' },
-  { name: 'liangshan-hall-fg', type: 'image', src: '/juyiting/images/liangshan-hall-foreground-v1.png' },
+  { name: 'liangshan-hall-fg', type: 'image', src: '/juyiting/images/liangshan-hall-foreground-extracted-v1.png' },
   { name: 'character-atlas', type: 'image', src: '/juyiting/liangshan-character-atlas-v2.png' }
 ]
 

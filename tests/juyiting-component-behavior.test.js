@@ -453,8 +453,11 @@ describe('JuyiHall component behavior', () => {
 
   it('keeps the melonJS layer pinned to the hall board', () => {
     const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
+    const boardRule = cssRule(source, '.hall-board')
     const melonRule = cssRule(source, '.melon-layer')
 
+    expect(boardRule).to.include('aspect-ratio: 1672 / 941')
+    expect(boardRule).to.include('flex: 0 0 auto')
     expect(melonRule).to.include('inset: 0')
     expect(melonRule).to.include('width: 100%')
     expect(melonRule).to.include('height: 100%')

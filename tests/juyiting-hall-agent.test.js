@@ -2,24 +2,35 @@ import { expect } from 'chai'
 
 import { createHallAgentClass } from '../src/game/entities/HallAgent.js'
 
-const createFakeMelon = () => {
+const createFakeMelon = ({ bodyHasSetVelocity = true, spriteHasRenderable = true, spriteHasScaleMethod = false } = {}) => {
   class Sprite {
     constructor(x, y, settings = {}) {
       this.pos = { x, y }
       this.width = settings.framewidth || settings.image?.width || 100
       this.height = settings.frameheight || settings.image?.height || 100
-      this.renderable = {
-        addAnimation: () => {},
-        setCurrentAnimation: () => {},
-        flipX: (on) => { this.flipped = on },
-        tint: null
+      if (spriteHasRenderable) {
+        this.renderable = {
+          addAnimation: () => {},
+          setCurrentAnimation: () => {},
+          flipX: (on) => { this.flipped = on },
+          tint: null
+        }
       }
       this.anchorPoint = { set: () => {} }
-      this.scale = 1
+      if (!spriteHasScaleMethod) this.scale = 1
+      this.appliedScale = 1
+      this.tint = null
+    }
+
+    scale(value) {
+      this.appliedScale *= value
     }
 
     update() { return true }
     draw() {}
+    addAnimation() {}
+    setCurrentAnimation() {}
+    flipX(on) { this.flipped = on }
   }
 
   class Body {
@@ -28,8 +39,15 @@ const createFakeMelon = () => {
     }
 
     setVelocity(x, y) {
+      if (!bodyHasSetVelocity) {
+        throw new TypeError('this.body.setVelocity is not a function')
+      }
       this.velocity = { x, y }
     }
+  }
+
+  if (!bodyHasSetVelocity) {
+    delete Body.prototype.setVelocity
   }
 
   class Color {
@@ -85,5 +103,110 @@ describe('HallAgent melonJS entity', () => {
     expect(agent.flipped).to.equal(true)
     expect(agent.containsPoint(agent.pos.x, agent.pos.y - 20)).to.equal(true)
     expect(agent.containsPoint(agent.pos.x + 1000, agent.pos.y + 1000)).to.equal(false)
+  })
+
+  it('uses direct body velocity assignment when melonJS Body has no setVelocity helper', () => {
+    const me = createFakeMelon({ bodyHasSetVelocity: false })
+    const HallAgent = createHallAgentClass(me)
+    const agent = new HallAgent({
+      agentId: 'songjiang',
+      personaCode: 'songjiang',
+      name: '瀹嬫睙',
+      x: 50,
+      y: 50
+    })
+
+    agent.syncState({ x: 60, y: 50 })
+    agent.update(16)
+
+    expect(agent.body.velocity.x).to.be.greaterThan(0)
+    expect(agent.body.velocity.y).to.equal(0)
+  })
+
+  it('applies scene depth scale from synced agent data', () => {
+    const me = createFakeMelon()
+    const HallAgent = createHallAgentClass(me)
+    const agent = new HallAgent({
+      agentId: 'husanniang',
+      personaCode: 'husanniang',
+      name: '扈三娘',
+      scale: 0.62,
+      x: 50,
+      y: 50
+    })
+
+    expect(agent.scale).to.be.closeTo(0.62, 0.001)
+
+    agent.syncState({ scale: 0.7 })
+
+    expect(agent.scale).to.be.closeTo(0.7, 0.001)
+  })
+
+  it('applies melonJS render scale without replacing the scale method', () => {
+    const me = createFakeMelon({ spriteHasScaleMethod: true })
+    const HallAgent = createHallAgentClass(me)
+    const agent = new HallAgent({
+      agentId: 'songjiang',
+      personaCode: 'songjiang',
+      name: '宋江',
+      scale: 0.52,
+      x: 50,
+      y: 50
+    })
+
+    expect(agent.scale).to.be.a('function')
+    expect(agent._renderScale).to.be.closeTo(0.52, 0.001)
+    expect(agent.appliedScale).to.be.closeTo(0.52, 0.001)
+
+    agent.syncState({ scale: 0.65 })
+
+    expect(agent.scale).to.be.a('function')
+    expect(agent._renderScale).to.be.closeTo(0.65, 0.001)
+    expect(agent.appliedScale).to.be.closeTo(0.65, 0.001)
+  })
+
+  it('keeps synced destinations inside the agent walkable region', () => {
+    const me = createFakeMelon()
+    const HallAgent = createHallAgentClass(me)
+    const agent = new HallAgent({
+      agentId: 'likui',
+      personaCode: 'likui',
+      name: '李逵',
+      x: 5,
+      y: 5,
+      walkableRegion: {
+        walkable: [
+          { x: 40, y: 70 },
+          { x: 60, y: 70 },
+          { x: 60, y: 85 },
+          { x: 40, y: 85 }
+        ]
+      }
+    })
+
+    expect(agent.pos.x).to.be.within(400, 600)
+    expect(agent.pos.y).to.be.within(700, 850)
+
+    agent.syncState({ x: 90, y: 10 })
+
+    expect(agent.targetX).to.be.within(400, 600)
+    expect(agent.targetY).to.be.within(700, 850)
+  })
+
+  it('uses the sprite itself for animation, flipping, and tint when no renderable child exists', () => {
+    const me = createFakeMelon({ spriteHasRenderable: false })
+    const HallAgent = createHallAgentClass(me)
+    const agent = new HallAgent({
+      agentId: 'wusong',
+      personaCode: 'wusong',
+      name: '姝︽澗',
+      x: 50,
+      y: 50
+    })
+
+    agent.syncState({ selected: true, facing: 'left' })
+
+    expect(agent.tint).to.include({ a: 0.35 })
+    expect(agent.flipped).to.equal(true)
   })
 })

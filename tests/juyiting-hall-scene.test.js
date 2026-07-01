@@ -1,7 +1,9 @@
 import { expect } from 'chai'
 import { ref } from 'vue'
 
+import { HALL_SCENE_REGIONS } from '../src/constants/juyitingScene.js'
 import { useHallScene } from '../src/composables/juyiting/useHallScene.js'
+import { isPointInPolygon } from '../src/game/walkableArea.js'
 
 const normalizeStatus = (status = '') => status.toLowerCase()
 
@@ -56,9 +58,26 @@ describe('useHallScene', () => {
     expect(byId.linchong).to.include({ x: 34, y: 63, regionId: 'leftGuard' })
     expect(byId.husanniang).to.include({ x: 65, y: 64, regionId: 'rightGuard' })
     expect(byId.likui.scale).to.be.greaterThan(byId.songjiang.scale)
+    expect(byId.songjiang.scale).to.be.within(0.48, 0.58)
+    expect(byId.likui.scale).to.be.within(0.62, 0.76)
     expect(hallScene.sceneAgents.value.map(agent => agent.depth)).to.deep.equal(
       [...hallScene.sceneAgents.value.map(agent => agent.depth)].sort((a, b) => a - b)
     )
+  })
+
+  it('keeps scene agent anchors inside their configured walkable regions', () => {
+    const hallScene = useHallScene({
+      mapAgents: ref([]),
+      normalizeStatus,
+      selectedAgent: ref(null),
+      selectedTask: ref(null)
+    })
+
+    hallScene.sceneAgents.value.forEach((agent) => {
+      const region = HALL_SCENE_REGIONS[agent.regionId]
+      expect(isPointInPolygon({ x: agent.x, y: agent.y }, region.walkable), agent.agentId).to.equal(true)
+      expect(agent.walkableRegion).to.equal(region)
+    })
   })
 
   it('derives scene agents with regions, depth and selected focus from map agents', () => {
