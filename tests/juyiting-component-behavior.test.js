@@ -80,6 +80,22 @@ const cssRule = (source, selector) => {
   return match?.[1] || ''
 }
 
+const deferred = () => {
+  let resolve
+  let reject
+  const promise = new Promise((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+const flushPromises = async () => {
+  await Promise.resolve()
+  await Promise.resolve()
+  await Vue.nextTick()
+}
+
 describe('JuyiHall component behavior', () => {
   before(async () => {
     global.SVGElement = global.window?.SVGElement
@@ -338,15 +354,95 @@ describe('JuyiHall component behavior', () => {
       expect(wrapper.find('.hall-room').exists()).to.equal(false)
 
       await wrapper.find('.scene-error button').trigger('click')
-      await Promise.resolve()
-      await Vue.nextTick()
+      await flushPromises()
 
       expect(destroyCalls).to.equal(1)
       expect(mountCalls).to.equal(2)
       expect(wrapper.find('.hall-board').classes()).to.include('is-melon-ready')
+      expect(wrapper.find('.scene-error').exists()).to.equal(false)
     } finally {
       console.warn = originalWarn
     }
+  })
+
+  it('prevents overlapping melonJS retry mounts while retry is pending', async () => {
+    let mountCalls = 0
+    let destroyCalls = 0
+    const pendingRetry = deferred()
+    const originalWarn = console.warn
+    console.warn = () => {}
+    hallGameMock = {
+      destroy: () => {
+        destroyCalls += 1
+      },
+      mount: async (_container, options = {}) => {
+        mountCalls += 1
+        if (mountCalls === 1) throw new Error('boom')
+        await pendingRetry.promise
+        options.onReady?.()
+      },
+      setSelectedAgent: () => {},
+      start: () => {},
+      syncAgents: () => {},
+      syncHotspots: () => {}
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+
+    try {
+      const wrapper = mount(HallStage, {
+        global: { stubs },
+        props: makeHallStageProps()
+      })
+      await flushPromises()
+
+      const retryButton = wrapper.find('.scene-error button')
+      await retryButton.trigger('click')
+      await Vue.nextTick()
+
+      expect(wrapper.find('.scene-error button').attributes('disabled')).to.not.equal(undefined)
+      await wrapper.find('.scene-error button').trigger('click')
+
+      expect(destroyCalls).to.equal(1)
+      expect(mountCalls).to.equal(2)
+
+      pendingRetry.resolve()
+      await flushPromises()
+
+      expect(wrapper.find('.hall-board').classes()).to.include('is-melon-ready')
+      expect(wrapper.find('.scene-error').exists()).to.equal(false)
+    } finally {
+      console.warn = originalWarn
+    }
+  })
+
+  it('ignores stale melonJS ready callbacks after HallStage unmounts', async () => {
+    let readyHandler
+    let syncedAgents = 0
+    hallGameMock = {
+      destroy: () => {},
+      mount: async (_container, options = {}) => {
+        readyHandler = options.onReady
+      },
+      setSelectedAgent: () => {},
+      start: () => {},
+      syncAgents: () => {
+        syncedAgents += 1
+      },
+      syncHotspots: () => {}
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+    const wrapper = mount(HallStage, {
+      global: { stubs },
+      props: makeHallStageProps({
+        sceneAgents: [{ agentId: 'songjiang', name: '宋江', x: 50, y: 45 }]
+      })
+    })
+
+    await flushPromises()
+    wrapper.unmount()
+    readyHandler()
+
+    expect(syncedAgents).to.equal(0)
   })
 
   it('opens panels and clears locked contexts from BottomDock', async () => {
@@ -849,5 +945,100 @@ describe('JuyiHall component behavior', () => {
     })
 
     expect(errorWrapper.text()).to.include('案卷阁暂不可查，主线不受影响')
+  })
+})
+
+const createFakeGameMelon = () => {
+  const loadCallbacks = []
+  const stateSets = []
+  const stateChanges = []
+
+  class Stage {}
+  class Sprite {}
+  class Renderable {}
+  class Body {}
+  class Color {}
+
+  const me = {
+    Body,
+    Color,
+    Renderable,
+    Sprite,
+    Stage,
+    game: {
+      viewport: { width: 960, height: 640 },
+      world: {
+        addChild: () => {},
+        removeChild: () => {}
+      }
+    },
+    input: {
+      registerPointerEvent: () => {},
+      releaseAllPointerEvents: () => {}
+    },
+    loader: {
+      getImage: () => null,
+      getTMX: () => null,
+      load: (_resource, onload, onerror) => {
+        loadCallbacks.push({ onload, onerror })
+      }
+    },
+    state: {
+      PLAY: 'PLAY',
+      change: (...args) => stateChanges.push(args),
+      pause: () => {},
+      set: (...args) => stateSets.push(args)
+    },
+    video: {
+      CANVAS: 'canvas',
+      init: () => true
+    }
+  }
+
+  return { loadCallbacks, me, stateChanges, stateSets }
+}
+
+describe('JuyitingGame lifecycle guards', () => {
+  it('ignores stale loader callbacks after destroy invalidates a mount', async () => {
+    const mod = await import('../src/game/JuyitingGame.js')
+    expect(mod.JuyitingGame).to.be.a('function')
+
+    const game = new mod.JuyitingGame()
+    const fake = createFakeGameMelon()
+    let readyCalls = 0
+    game._me = fake.me
+
+    await game.mount({ querySelector: () => null }, {
+      onReady: () => {
+        readyCalls += 1
+      }
+    })
+    game.destroy()
+    fake.loadCallbacks.forEach(item => item.onload())
+
+    expect(fake.stateSets).to.have.length(0)
+    expect(readyCalls).to.equal(0)
+  })
+
+  it('ignores delayed ready callbacks after destroy invalidates a started game', async () => {
+    const mod = await import('../src/game/JuyitingGame.js')
+    expect(mod.JuyitingGame).to.be.a('function')
+
+    const game = new mod.JuyitingGame()
+    const fake = createFakeGameMelon()
+    let readyCalls = 0
+    game._me = fake.me
+
+    await game.mount({ querySelector: () => null }, {
+      onReady: () => {
+        readyCalls += 1
+      }
+    })
+    fake.loadCallbacks.forEach(item => item.onload())
+    game.destroy()
+    await new Promise(resolve => setTimeout(resolve, 240))
+
+    expect(fake.stateSets).to.have.length(1)
+    expect(readyCalls).to.equal(0)
   })
 })

@@ -36,7 +36,9 @@
       <div v-if="sceneError" class="scene-error" role="status">
         <strong>聚义厅场景暂不可用</strong>
         <span>{{ sceneError }}</span>
-        <button type="button" @click="retryScene">重试</button>
+        <button type="button" :disabled="isSceneMounting" @click="retryScene">
+          {{ isSceneMounting ? '重试中' : '重试' }}
+        </button>
       </div>
     </div>
 
@@ -73,6 +75,13 @@ const emit = defineEmits(['new-conversation', 'open-panel', 'refresh-hall', 'sel
 const melonContainerRef = ref(null)
 const melonReady = ref(false)
 const sceneError = ref('')
+const isSceneMounting = ref(false)
+let sceneMountAttempt = 0
+let isUnmounted = false
+
+const isCurrentMountAttempt = (attemptId) => (
+  !isUnmounted && attemptId === sceneMountAttempt
+)
 
 const handleAgentClick = (agentData) => {
   const full = (props.sceneAgents || []).find(a =>
@@ -94,24 +103,41 @@ const handleSceneReady = () => {
 }
 
 const mountScene = async () => {
+  if (isUnmounted || isSceneMounting.value) return
   const container = melonContainerRef.value
   if (!container) return
 
+  const attemptId = ++sceneMountAttempt
+  isSceneMounting.value = true
   try {
     await juyitingGame.mount(container, {
-      onAgentClick: handleAgentClick,
-      onHotspotClick: handleHotspotClick,
-      onReady: handleSceneReady
+      onAgentClick: (agentData) => {
+        if (isCurrentMountAttempt(attemptId)) handleAgentClick(agentData)
+      },
+      onHotspotClick: (hotspot) => {
+        if (isCurrentMountAttempt(attemptId)) handleHotspotClick(hotspot)
+      },
+      onReady: () => {
+        if (isCurrentMountAttempt(attemptId)) handleSceneReady()
+      }
     })
+    if (!isCurrentMountAttempt(attemptId)) return
     juyitingGame.start()
   } catch (err) {
-    melonReady.value = false
-    sceneError.value = err?.message || '请稍后重试'
-    console.warn('[HallStage] melonJS:', err?.message || err)
+    if (isCurrentMountAttempt(attemptId)) {
+      melonReady.value = false
+      sceneError.value = err?.message || '请稍后重试'
+      console.warn('[HallStage] melonJS:', err?.message || err)
+    }
+  } finally {
+    if (isCurrentMountAttempt(attemptId)) {
+      isSceneMounting.value = false
+    }
   }
 }
 
 const retryScene = async () => {
+  if (isSceneMounting.value) return
   melonReady.value = false
   juyitingGame.destroy()
   await mountScene()
@@ -122,6 +148,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  isUnmounted = true
+  sceneMountAttempt += 1
   juyitingGame.destroy()
 })
 

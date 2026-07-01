@@ -8,7 +8,7 @@ import { parseJuyiHallTmx } from './tiledMap.js'
 import { createHallSceneClass } from './scenes/HallScene.js'
 import { createHallAgentClass } from './entities/HallAgent.js'
 
-class JuyitingGame {
+export class JuyitingGame {
   constructor() {
     this._me = null
     this._container = null
@@ -17,6 +17,8 @@ class JuyitingGame {
     this._initialized = false
     this._mapData = null
     this._pendingStart = false
+    this._generation = 0
+    this._mountToken = null
   }
 
   async _loadMelonJS() {
@@ -28,8 +30,11 @@ class JuyitingGame {
 
   async mount(container, options = {}) {
     if (this._initialized) return
-    const me = await this._loadMelonJS()
     if (!container) throw new Error('container required')
+    const mountToken = ++this._generation
+    this._mountToken = mountToken
+    const me = await this._loadMelonJS()
+    if (!this._isCurrentMount(mountToken)) return
 
     this._container = container
     this._callbacks = {
@@ -42,9 +47,15 @@ class JuyitingGame {
     const HallAgentClass = createHallAgentClass(me)
     const HallSceneClass = createHallSceneClass(me, HallAgentClass)
     this._hallScene = new HallSceneClass()
-    this._hallScene.onAgentClick((d) => this._callbacks.onAgentClick?.(d))
-    this._hallScene.onHotspotClick((d) => this._callbacks.onHotspotClick?.(d))
-    this._hallScene.onReady(() => this._callbacks.onReady?.())
+    this._hallScene.onAgentClick((d) => {
+      if (this._isCurrentMount(mountToken)) this._callbacks.onAgentClick?.(d)
+    })
+    this._hallScene.onHotspotClick((d) => {
+      if (this._isCurrentMount(mountToken)) this._callbacks.onHotspotClick?.(d)
+    })
+    this._hallScene.onReady(() => {
+      if (this._isCurrentMount(mountToken)) this._callbacks.onReady?.()
+    })
 
     // Init video (creates canvas inside container)
     me.video.init(config.width, config.height, {
@@ -63,15 +74,16 @@ class JuyitingGame {
     let loaded = 0
     const total = HALL_RESOURCES.length
     if (total === 0) {
-      this._startGame(me)
+      this._startGame(me, mountToken)
       return
     }
 
     const checkDone = () => {
+      if (!this._isCurrentMount(mountToken)) return
       loaded++
       if (loaded >= total) {
         this._prepareMapData(me)
-        this._startGame(me)
+        this._startGame(me, mountToken)
       }
     }
 
@@ -92,6 +104,10 @@ class JuyitingGame {
     })
   }
 
+  _isCurrentMount(mountToken) {
+    return this._mountToken === mountToken
+  }
+
   _prepareMapData(me) {
     const tmx = me.loader.getTMX?.(HALL_MAP_RESOURCE.name)
     try {
@@ -103,7 +119,8 @@ class JuyitingGame {
     this._hallScene?.setMapData(this._mapData)
   }
 
-  _startGame(me) {
+  _startGame(me, mountToken = this._mountToken) {
+    if (!this._isCurrentMount(mountToken)) return
     // Register and switch to PLAY state
     me.state.set(me.state.PLAY, this._hallScene, true)
     this._initialized = true
@@ -113,7 +130,7 @@ class JuyitingGame {
     }
     // Emit ready again if onResetEvent didn't call it
     setTimeout(() => {
-      if (this._callbacks.onReady) this._callbacks.onReady()
+      if (this._isCurrentMount(mountToken) && this._callbacks.onReady) this._callbacks.onReady()
     }, 200)
   }
 
@@ -132,6 +149,8 @@ class JuyitingGame {
   }
 
   destroy() {
+    this._generation += 1
+    this._mountToken = null
     this.pause()
     if (this._hallScene) {
       this._hallScene.onDestroyEvent()
