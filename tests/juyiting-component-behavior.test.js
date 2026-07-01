@@ -174,10 +174,13 @@ describe('JuyiHall component behavior', () => {
   it('adapts the hall stage orientation and exposes a landscape view toggle', async () => {
     const originalMatchMedia = global.window.matchMedia
     const originalFullscreen = global.document.documentElement.requestFullscreen
+    const originalExitFullscreen = global.document.exitFullscreen
     const originalScreen = global.screen
     const listeners = []
     const fitModes = []
     let fullscreenCalls = 0
+    let exitFullscreenCalls = 0
+    let unlockCalls = 0
     let lockCalls = []
     let matches = false
 
@@ -195,9 +198,15 @@ describe('JuyiHall component behavior', () => {
     global.document.documentElement.requestFullscreen = async () => {
       fullscreenCalls += 1
     }
+    global.document.exitFullscreen = async () => {
+      exitFullscreenCalls += 1
+    }
     global.screen = {
       orientation: {
-        lock: async mode => lockCalls.push(mode)
+        lock: async mode => lockCalls.push(mode),
+        unlock: () => {
+          unlockCalls += 1
+        }
       }
     }
     hallGameMock = {
@@ -236,6 +245,16 @@ describe('JuyiHall component behavior', () => {
       expect(wrapper.find('.hall-board').classes()).to.include('is-app-landscape')
       expect(fitModes).to.deep.include('landscape')
 
+      await toggle.trigger('click')
+      await flushPromises()
+
+      expect(unlockCalls).to.equal(1)
+      expect(exitFullscreenCalls).to.equal(1)
+      expect(wrapper.find('.hall-board').classes()).not.to.include('is-app-landscape')
+      expect(wrapper.find('.hall-board').classes()).to.include('is-scene-portrait')
+      expect(wrapper.find('.orientation-action').text()).to.include('横屏')
+      expect(fitModes.at(-1)).to.equal('portrait')
+
       matches = true
       listeners.forEach(listener => listener({ matches: true }))
       await flushPromises()
@@ -244,8 +263,16 @@ describe('JuyiHall component behavior', () => {
     } finally {
       global.window.matchMedia = originalMatchMedia
       global.document.documentElement.requestFullscreen = originalFullscreen
+      global.document.exitFullscreen = originalExitFullscreen
       global.screen = originalScreen
     }
+  })
+
+  it('uses supported Varlet icons for the orientation toggle', () => {
+    const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
+
+    expect(source).not.to.include('crop-landscape')
+    expect(source).to.include("sceneMode === 'landscape' ? 'phone' : 'cellphone'")
   })
 
   it('renders the recruit entry and persona catalog actions', async () => {

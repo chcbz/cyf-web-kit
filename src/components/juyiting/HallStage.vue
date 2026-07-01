@@ -29,7 +29,7 @@
           :title="sceneMode === 'landscape' ? '切回竖屏视图' : '切到横屏视图'"
           @click="toggleOrientationMode"
         >
-          <var-icon :name="sceneMode === 'landscape' ? 'phone' : 'crop-landscape'" />
+          <var-icon :name="sceneMode === 'landscape' ? 'phone' : 'cellphone'" />
           <span>{{ sceneMode === 'landscape' ? '竖屏' : '横屏' }}</span>
         </button>
       </div>
@@ -171,10 +171,20 @@ const requestLandscapeLock = async () => {
   } catch (_err) {}
 }
 
+const releaseLandscapeLock = async () => {
+  try {
+    screen.orientation?.unlock?.()
+  } catch (_err) {}
+  try {
+    await document.exitFullscreen?.()
+  } catch (_err) {}
+}
+
 const toggleOrientationMode = async () => {
   const nextMode = sceneMode.value === 'landscape' ? 'portrait' : 'landscape'
   orientationMode.value = nextMode
   if (nextMode === 'landscape') await requestLandscapeLock()
+  if (nextMode === 'portrait') await releaseLandscapeLock()
   fitSceneToViewport()
 }
 
