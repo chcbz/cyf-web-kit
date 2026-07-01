@@ -171,6 +171,57 @@ describe('JuyiHall component behavior', () => {
     expect(resetCalls).to.have.length(1)
   })
 
+  it('forwards mobile touch drag and pinch gestures to the melonJS game layer', async () => {
+    const panCalls = []
+    const zoomCalls = []
+    hallGameMock = {
+      destroy: () => {},
+      mount: async (_container, options = {}) => {
+        options.onReady?.()
+      },
+      panBy: (dx, dy) => panCalls.push([dx, dy]),
+      resetTransform: () => {},
+      setSelectedAgent: () => {},
+      start: () => {},
+      syncAgents: () => {},
+      syncHotspots: () => {},
+      zoomBy: delta => zoomCalls.push(delta)
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+    const wrapper = mount(HallStage, {
+      global: { stubs },
+      props: makeHallStageProps()
+    })
+    const board = wrapper.find('.hall-board')
+
+    await board.trigger('touchstart', {
+      touches: [{ clientX: 100, clientY: 100 }]
+    })
+    await board.trigger('touchmove', {
+      touches: [{ clientX: 128, clientY: 116 }],
+      preventDefault: () => {}
+    })
+
+    expect(panCalls).to.deep.equal([[28, 16]])
+
+    await board.trigger('touchstart', {
+      touches: [
+        { clientX: 100, clientY: 100 },
+        { clientX: 200, clientY: 100 }
+      ]
+    })
+    await board.trigger('touchmove', {
+      touches: [
+        { clientX: 100, clientY: 100 },
+        { clientX: 260, clientY: 100 }
+      ],
+      preventDefault: () => {}
+    })
+
+    expect(zoomCalls).to.have.length(1)
+    expect(zoomCalls[0]).to.be.greaterThan(0)
+  })
+
   it('adapts the hall stage orientation and exposes a landscape view toggle', async () => {
     const originalMatchMedia = global.window.matchMedia
     const originalFullscreen = global.document.documentElement.requestFullscreen

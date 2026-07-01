@@ -55,6 +55,10 @@
       tabindex="0"
       aria-label="聚义厅 melonJS 场景，可使用加减号缩放，0 复位"
       @keydown="handleSceneKeydown"
+      @touchstart.passive="handleSceneTouchStart"
+      @touchmove="handleSceneTouchMove"
+      @touchend="handleSceneTouchEnd"
+      @touchcancel="handleSceneTouchEnd"
     >
       <div ref="melonContainerRef" class="melon-layer" aria-hidden="true"></div>
       <div v-if="sceneError" class="scene-error" role="status">
@@ -106,6 +110,12 @@ let sceneMountAttempt = 0
 let isUnmounted = false
 let orientationMedia = null
 let orientationMediaHandler = null
+let touchGesture = {
+  mode: null,
+  lastX: 0,
+  lastY: 0,
+  lastDistance: 0
+}
 
 const sceneMode = computed(() => {
   if (orientationMode.value === 'landscape' || orientationMode.value === 'portrait') {
@@ -252,6 +262,83 @@ const handleSceneKeydown = (event) => {
     juyitingGame.resetTransform?.()
     event.preventDefault()
   }
+}
+
+const touchPoint = touch => ({
+  x: Number(touch?.clientX) || 0,
+  y: Number(touch?.clientY) || 0
+})
+
+const touchDistance = (touches) => {
+  if (!touches || touches.length < 2) return 0
+  const first = touchPoint(touches[0])
+  const second = touchPoint(touches[1])
+  return Math.hypot(first.x - second.x, first.y - second.y)
+}
+
+const handleSceneTouchStart = (event) => {
+  const touches = event.touches || []
+  if (touches.length >= 2) {
+    touchGesture = {
+      mode: 'pinch',
+      lastX: 0,
+      lastY: 0,
+      lastDistance: touchDistance(touches)
+    }
+    return
+  }
+  if (touches.length === 1) {
+    const point = touchPoint(touches[0])
+    touchGesture = {
+      mode: 'pan',
+      lastX: point.x,
+      lastY: point.y,
+      lastDistance: 0
+    }
+  }
+}
+
+const handleSceneTouchMove = (event) => {
+  const touches = event.touches || []
+  if (touches.length >= 2) {
+    const distance = touchDistance(touches)
+    if (touchGesture.mode !== 'pinch' || touchGesture.lastDistance <= 0) {
+      touchGesture = { mode: 'pinch', lastX: 0, lastY: 0, lastDistance: distance }
+      return
+    }
+    const delta = (distance - touchGesture.lastDistance) / 180
+    touchGesture.lastDistance = distance
+    if (Math.abs(delta) > 0.01) {
+      juyitingGame.zoomBy?.(delta)
+      event.preventDefault?.()
+    }
+    return
+  }
+  if (touches.length === 1 && touchGesture.mode === 'pan') {
+    const point = touchPoint(touches[0])
+    const dx = point.x - touchGesture.lastX
+    const dy = point.y - touchGesture.lastY
+    touchGesture.lastX = point.x
+    touchGesture.lastY = point.y
+    if (Math.hypot(dx, dy) >= 1) {
+      juyitingGame.panBy?.(dx, dy)
+      event.preventDefault?.()
+    }
+  }
+}
+
+const handleSceneTouchEnd = (event) => {
+  const touches = event.touches || []
+  if (touches.length >= 2) {
+    touchGesture = { mode: 'pinch', lastX: 0, lastY: 0, lastDistance: touchDistance(touches) }
+    return
+  }
+  if (touches.length === 1) {
+    const point = touchPoint(touches[0])
+    touchGesture = { mode: 'pan', lastX: point.x, lastY: point.y, lastDistance: 0 }
+    return
+  }
+  touchGesture = { mode: null, lastX: 0, lastY: 0, lastDistance: 0 }
 }
 
 onMounted(() => {
