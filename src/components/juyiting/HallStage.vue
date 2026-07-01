@@ -28,11 +28,9 @@
     </div>
 
     <div
-      ref="hallBoardRef"
       class="hall-board"
       :class="{ 'is-melon-ready': melonReady }"
-      tabindex="0"
-      aria-label="聚义厅地图，可拖拽平移，滚轮或双指缩放，键盘加减号缩放，0 复位"
+      aria-label="聚义厅 melonJS 场景"
     >
       <div ref="melonContainerRef" class="melon-layer" aria-hidden="true"></div>
     </div>
@@ -67,7 +65,6 @@ const props = defineProps({
 
 const emit = defineEmits(['new-conversation', 'open-panel', 'refresh-hall', 'select-agent', 'toggle-sound'])
 
-const hallBoardRef = ref(null)
 const melonContainerRef = ref(null)
 const melonReady = ref(false)
 

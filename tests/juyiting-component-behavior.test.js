@@ -112,12 +112,17 @@ describe('JuyiHall component behavior', () => {
       global: { stubs },
       props: makeHallStageProps()
     })
+    const stageSource = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
+    const board = wrapper.find('.hall-board')
 
     expect(wrapper.find('.melon-layer').exists()).to.equal(true)
+    expect(board.attributes('aria-label')).to.equal('聚义厅 melonJS 场景')
+    expect(board.attributes('tabindex')).to.equal(undefined)
     expect(wrapper.find('.map-world').exists()).to.equal(false)
     expect(wrapper.find('.hall-room').exists()).to.equal(false)
     expect(wrapper.find('.room-prop-layer').exists()).to.equal(false)
     expect(wrapper.find('.agent-token').exists()).to.equal(false)
+    expect(stageSource).not.to.include('hallBoardRef')
   })
 
   it('renders the recruit entry and persona catalog actions', async () => {
@@ -184,12 +189,13 @@ describe('JuyiHall component behavior', () => {
   it('syncs scene agents to the melonJS game layer when ready', async () => {
     const syncedAgents = []
     const syncedHotspots = []
+    const selectedAgentIds = []
     hallGameMock = {
       destroy: () => {},
       mount: async (_container, options = {}) => {
         options.onReady?.()
       },
-      setSelectedAgent: () => {},
+      setSelectedAgent: agentId => selectedAgentIds.push(agentId),
       start: () => {},
       syncAgents: agents => syncedAgents.push(agents),
       syncHotspots: hotspots => syncedHotspots.push(hotspots)
@@ -217,6 +223,20 @@ describe('JuyiHall component behavior', () => {
     expect(syncedHotspots).to.deep.include(sceneHotspots)
     expect(wrapper.find('.hall-board').classes()).to.include('is-melon-ready')
     expect(wrapper.find('.map-world').exists()).to.equal(false)
+
+    const updatedAgents = [{ agentId: 'wuyong', name: '吴用', x: 42, y: 52 }]
+    const updatedHotspots = [{ id: 'catalog', state: 'active' }]
+    const selectedAgent = { agentId: 'wuyong', name: '吴用' }
+    await wrapper.setProps({
+      sceneAgents: updatedAgents,
+      sceneHotspots: updatedHotspots,
+      selectedAgent
+    })
+    await Vue.nextTick()
+
+    expect(syncedAgents).to.deep.include(updatedAgents)
+    expect(syncedHotspots).to.deep.include(updatedHotspots)
+    expect(selectedAgentIds).to.deep.include('wuyong')
   })
 
   it('keeps the melonJS layer pinned to the hall board', () => {
@@ -257,6 +277,30 @@ describe('JuyiHall component behavior', () => {
     clickHandler({ agentId: 'linchong' })
 
     expect(wrapper.emitted('select-agent')[0]).to.deep.equal([sceneAgents[0]])
+  })
+
+  it('wires melonJS hotspot clicks back to Vue panel routing', async () => {
+    let hotspotHandler
+    hallGameMock = {
+      destroy: () => {},
+      mount: async (_container, options = {}) => {
+        hotspotHandler = options.onHotspotClick
+        options.onReady?.()
+      },
+      setSelectedAgent: () => {},
+      start: () => {},
+      syncAgents: () => {},
+      syncHotspots: () => {}
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+    const wrapper = mount(HallStage, {
+      global: { stubs },
+      props: makeHallStageProps()
+    })
+
+    hotspotHandler({ panel: 'tasks' })
+
+    expect(wrapper.emitted('open-panel')[0]).to.deep.equal(['tasks'])
   })
 
   it('opens panels and clears locked contexts from BottomDock', async () => {
