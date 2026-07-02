@@ -9,22 +9,22 @@
     <property name="panel" value="chat"/>
    </properties>
   </object>
-  <object id="11" name="agentRoster" x="115" y="264" width="173" height="144">
+  <object id="11" name="agentRoster" x="274" y="317" width="125" height="122">
    <properties>
     <property name="panel" value="agents"/>
    </properties>
   </object>
-  <object id="12" name="bountyBoard" x="638" y="365" width="182" height="173">
+  <object id="12" name="bountyBoard" x="562" y="317" width="125" height="122">
    <properties>
     <property name="panel" value="tasks"/>
    </properties>
   </object>
-  <object id="13" name="personaCatalog" x="43" y="667" width="163" height="144">
+  <object id="13" name="personaCatalog" x="283" y="592" width="125" height="122">
    <properties>
     <property name="panel" value="catalog"/>
    </properties>
   </object>
-  <object id="14" name="libraryShelf" x="682" y="643" width="211" height="173">
+  <object id="14" name="libraryShelf" x="365" y="471" width="230" height="157">
    <properties>
     <property name="panel" value="library"/>
    </properties>

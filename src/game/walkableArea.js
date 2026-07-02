@@ -80,15 +80,24 @@ export const clampPointToRegion = (point, region = {}) => {
   }
 }
 
-export const clampPointToAnyRegion = (point, regions = []) => {
+export const clampPointToAnyRegion = (point, regions = [], options = {}) => {
   const p = normalisePoint(point)
   const regionList = Array.isArray(regions) ? regions : Object.values(regions || {})
-  if (!regionList.length) return p
+  const includeRegion = Boolean(options.includeRegion)
+  if (!regionList.length) return includeRegion ? { point: p, region: null } : p
 
   const containing = regionList.find(region => isPointInPolygon(p, regionPolygon(region)))
-  if (containing) return p
+  if (containing) return includeRegion ? { point: p, region: containing } : p
 
-  return regionList
-    .map(region => clampPointToRegion(p, region))
-    .sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0]
+  const nearest = regionList
+    .map(region => ({
+      point: clampPointToRegion(p, region),
+      region
+    }))
+    .sort((a, b) => (
+      Math.hypot(a.point.x - p.x, a.point.y - p.y) -
+      Math.hypot(b.point.x - p.x, b.point.y - p.y)
+    ))[0]
+
+  return includeRegion ? nearest : nearest.point
 }

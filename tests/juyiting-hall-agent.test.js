@@ -10,7 +10,10 @@ const createFakeMelon = ({ bodyHasSetVelocity = true, spriteHasRenderable = true
       this.height = settings.frameheight || settings.image?.height || 100
       if (spriteHasRenderable) {
         this.renderable = {
-          addAnimation: () => {},
+          animations: {},
+          addAnimation: (name, frames, delay) => {
+            this.renderable.animations[name] = { frames, delay }
+          },
           setCurrentAnimation: () => {},
           flipX: (on) => { this.flipped = on },
           tint: null
@@ -84,8 +87,7 @@ describe('HallAgent melonJS entity', () => {
     })
 
     agent.syncState({
-      x: 62,
-      y: 72,
+      destination: { x: 62, y: 72 },
       sceneStatus: 'talk',
       bubble: { text: '收到传令', ttlMs: 1200 },
       selected: true,
@@ -116,11 +118,45 @@ describe('HallAgent melonJS entity', () => {
       y: 50
     })
 
-    agent.syncState({ x: 60, y: 50 })
+    agent.syncState({ destination: { x: 60, y: 50 } })
     agent.update(16)
 
     expect(agent.body.velocity.x).to.be.greaterThan(0)
     expect(agent.body.velocity.y).to.equal(0)
+  })
+
+  it('registers an eight-frame Water Margin walking cycle per character row', () => {
+    const me = createFakeMelon()
+    const HallAgent = createHallAgentClass(me)
+    const agent = new HallAgent({
+      agentId: 'likui',
+      personaCode: 'likui',
+      name: 'Li Kui',
+      x: 50,
+      y: 50
+    })
+
+    expect(agent.width).to.equal(50)
+    expect(agent.renderable.animations.walk.frames).to.have.length(8)
+    expect(agent.renderable.animations.busy.frames).to.have.length(8)
+    expect(agent.renderable.animations.walk.frames).to.deep.equal([
+      40, 41, 42, 43, 44, 45, 46, 47
+    ])
+  })
+
+  it('keeps hall agents kinematic so melonJS broadphase does not recurse into sprites', () => {
+    const me = createFakeMelon()
+    const HallAgent = createHallAgentClass(me)
+    const agent = new HallAgent({
+      agentId: 'songjiang',
+      personaCode: 'songjiang',
+      name: 'Song Jiang',
+      x: 50,
+      y: 50
+    })
+
+    expect(agent.body).to.exist
+    expect(agent.isKinematic).to.equal(true)
   })
 
   it('applies scene depth scale from synced agent data', () => {
@@ -187,10 +223,41 @@ describe('HallAgent melonJS entity', () => {
     expect(agent.pos.x).to.be.within(400, 600)
     expect(agent.pos.y).to.be.within(700, 850)
 
-    agent.syncState({ x: 90, y: 10 })
+    agent.syncState({ destination: { x: 90, y: 10 } })
 
     expect(agent.targetX).to.be.within(400, 600)
     expect(agent.targetY).to.be.within(700, 850)
+  })
+
+  it('advances through an autonomous patrol route without an external destination command', () => {
+    const me = createFakeMelon()
+    const HallAgent = createHallAgentClass(me)
+    const agent = new HallAgent({
+      agentId: 'wuyong',
+      personaCode: 'wuyong',
+      name: 'Wu Yong',
+      x: 45,
+      y: 60,
+      patrolRoute: [
+        { x: 45, y: 60 },
+        { x: 55, y: 60 },
+        { x: 52, y: 66 }
+      ],
+      patrolDelayMs: 0
+    })
+
+    agent.update(16)
+
+    expect(agent.targetX).to.equal(550)
+    expect(agent.targetY).to.equal(600)
+    expect(agent.currentAnim).to.equal('walk')
+
+    agent.pos.x = agent.targetX
+    agent.pos.y = agent.targetY
+    agent.update(16)
+
+    expect(agent.targetX).to.equal(520)
+    expect(agent.targetY).to.equal(660)
   })
 
   it('uses the sprite itself for animation, flipping, and tint when no renderable child exists', () => {

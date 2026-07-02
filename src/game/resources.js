@@ -9,14 +9,14 @@ export const HALL_RESOURCES = [
   HALL_MAP_RESOURCE,
   { name: 'liangshan-hall-bg', type: 'image', src: '/juyiting/images/liangshan-hall-bg-v2.png' },
   { name: 'liangshan-hall-fg', type: 'image', src: '/juyiting/images/liangshan-hall-foreground-extracted-v1.png' },
-  { name: 'character-atlas', type: 'image', src: '/juyiting/liangshan-character-atlas-v2.png' }
+  { name: 'character-atlas', type: 'image', src: '/juyiting/liangshan-character-walksheet-v1.png' }
 ]
 
 /** Fallback hotspot definitions when Tiled data is unavailable. */
 export const FALLBACK_HALL_HOTSPOTS = [
   { id: 'mainSeat', panel: 'chat', x: 50, y: 36, w: 18, h: 11 },
-  { id: 'agentRoster', panel: 'agents', x: 21, y: 35, w: 18, h: 15 },
-  { id: 'bountyBoard', panel: 'tasks', x: 76, y: 47, w: 19, h: 18 },
-  { id: 'personaCatalog', panel: 'catalog', x: 13, y: 77, w: 17, h: 15 },
-  { id: 'libraryShelf', panel: 'library', x: 82, y: 76, w: 22, h: 18 }
+  { id: 'agentRoster', panel: 'agents', x: 35, y: 56, w: 13, h: 13 },
+  { id: 'bountyBoard', panel: 'tasks', x: 65, y: 56, w: 13, h: 13 },
+  { id: 'personaCatalog', panel: 'catalog', x: 36, y: 75, w: 13, h: 13 },
+  { id: 'libraryShelf', panel: 'library', x: 50, y: 63, w: 24, h: 18 }
 ]

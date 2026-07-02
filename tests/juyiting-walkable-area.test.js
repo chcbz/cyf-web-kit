@@ -29,4 +29,11 @@ describe('Juyiting walkable area geometry', () => {
       isPointInPolygon(clamped, region.walkable)
     ))).to.equal(true)
   })
+
+  it('reports the region selected when clamping to any hall region', () => {
+    const result = clampPointToAnyRegion({ x: 78, y: 60 }, HALL_SCENE_REGIONS, { includeRegion: true })
+
+    expect(result.region.id).to.equal('bountyBoard')
+    expect(result.point).to.deep.equal({ x: 78, y: 60 })
+  })
 })

@@ -1,7 +1,7 @@
 import { expect } from 'chai'
 import { ref } from 'vue'
 
-import { HALL_SCENE_REGIONS } from '../src/constants/juyitingScene.js'
+import { HALL_SCENE_HOTSPOTS, HALL_SCENE_REGIONS } from '../src/constants/juyitingScene.js'
 import { useHallScene } from '../src/composables/juyiting/useHallScene.js'
 import { isPointInPolygon } from '../src/game/walkableArea.js'
 
@@ -58,8 +58,8 @@ describe('useHallScene', () => {
     expect(byId.linchong).to.include({ x: 34, y: 63, regionId: 'leftGuard' })
     expect(byId.husanniang).to.include({ x: 65, y: 64, regionId: 'rightGuard' })
     expect(byId.likui.scale).to.be.greaterThan(byId.songjiang.scale)
-    expect(byId.songjiang.scale).to.be.within(0.48, 0.58)
-    expect(byId.likui.scale).to.be.within(0.62, 0.76)
+    expect(byId.songjiang.scale).to.be.within(0.4, 0.46)
+    expect(byId.likui.scale).to.be.within(0.54, 0.62)
     expect(hallScene.sceneAgents.value.map(agent => agent.depth)).to.deep.equal(
       [...hallScene.sceneAgents.value.map(agent => agent.depth)].sort((a, b) => a - b)
     )
@@ -77,6 +77,20 @@ describe('useHallScene', () => {
       const region = HALL_SCENE_REGIONS[agent.regionId]
       expect(isPointInPolygon({ x: agent.x, y: agent.y }, region.walkable), agent.agentId).to.equal(true)
       expect(agent.walkableRegion).to.equal(region)
+    })
+  })
+
+  it('keeps scene hotspots sized and bound to existing floating panels', () => {
+    expect(HALL_SCENE_HOTSPOTS.map(hotspot => hotspot.panel)).to.include.members([
+      'agents',
+      'tasks',
+      'library'
+    ])
+
+    HALL_SCENE_HOTSPOTS.forEach((hotspot) => {
+      expect(hotspot.w, `${hotspot.id} width`).to.be.a('number').and.greaterThan(0)
+      expect(hotspot.h, `${hotspot.id} height`).to.be.a('number').and.greaterThan(0)
+      expect(['agents', 'tasks', 'library', 'catalog', 'chat']).to.include(hotspot.panel)
     })
   })
 
@@ -216,5 +230,21 @@ describe('useHallScene', () => {
       state: 'active',
       feedbackText: '荐单已出'
     })
+  })
+
+  it('gives scene agents autonomous patrol routes inside their walkable regions', () => {
+    const hallScene = useHallScene({
+      mapAgents: ref([makeAgent('linchong', 'Lin Chong')]),
+      normalizeStatus,
+      selectedAgent: ref(null),
+      selectedTask: ref(null)
+    })
+
+    const linchong = hallScene.sceneAgents.value.find(agent => agent.agentId === 'linchong')
+    expect(linchong.patrolRoute).to.have.length.greaterThan(2)
+    linchong.patrolRoute.forEach((point) => {
+      expect(isPointInPolygon(point, HALL_SCENE_REGIONS.leftGuard.walkable), JSON.stringify(point)).to.equal(true)
+    })
+    expect(linchong.destination).to.equal(undefined)
   })
 })

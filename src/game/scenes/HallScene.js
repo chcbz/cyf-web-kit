@@ -35,6 +35,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._touchPointers = new Map()
       this._pinchState = { active: false, startDistance: 0, startZoom: 1 }
       this._interactionHitAreas = []
+      this._suppressNextSceneClick = false
       this._applySceneTransform()
     }
 
@@ -251,10 +252,12 @@ export function createHallSceneClass(me, HallAgentClass) {
       })
 
       const endDrag = (event) => {
+        const wasClick = this._dragState.pointerId === event.pointerId && !this._dragState.moved
         this._releaseTouchPointer(event)
         if (this._dragState.pointerId === event.pointerId) {
           this._dragState = { active: false, pointerId: null, lastX: 0, lastY: 0, moved: false }
         }
+        if (wasClick) this._clickHotspotFromEvent(event)
         return true
       }
       me.input.registerPointerEvent('pointerup', viewport, endDrag)
@@ -273,6 +276,63 @@ export function createHallSceneClass(me, HallAgentClass) {
         viewportHeight: bounds.viewportHeight,
         ...this._transform
       })
+    }
+
+    _canvasRect() {
+      const canvas = me.video?.getCanvas?.() ||
+        me.video?.renderer?.getCanvas?.() ||
+        (typeof document !== 'undefined' ? document.querySelector('.melon-layer canvas, canvas') : null)
+      return canvas?.getBoundingClientRect?.() || null
+    }
+
+    _eventToWorldPoint(event) {
+      const bounds = this._getViewportBounds()
+      if (!bounds) return null
+      const hasClientPoint = Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
+      if (hasClientPoint) {
+        const rect = this._canvasRect()
+        if (rect?.width > 0 && rect?.height > 0) {
+          const scale = Math.max(rect.width / bounds.viewportWidth, rect.height / bounds.viewportHeight)
+          const drawnWidth = bounds.viewportWidth * scale
+          const drawnHeight = bounds.viewportHeight * scale
+          const offsetX = (rect.width - drawnWidth) / 2
+          const offsetY = (rect.height - drawnHeight) / 2
+          return this._screenToWorld(
+            (event.clientX - rect.left - offsetX) / scale,
+            (event.clientY - rect.top - offsetY) / scale
+          )
+        }
+      }
+      const x = event.gameX ?? event.clientX
+      const y = event.gameY ?? event.clientY
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+      return this._screenToWorld(x, y)
+    }
+
+    _clickHotspotFromEvent(event) {
+      if (this._suppressNextSceneClick) {
+        this._suppressNextSceneClick = false
+        return
+      }
+      const point = this._eventToWorldPoint(event)
+      const vp = me.game.viewport
+      if (!point || !vp?.width || !vp?.height) return
+      const hotspot = this._findHotspotAt(point)
+      if (hotspot) {
+        this._onHotspotClick?.({ id: hotspot.id, panel: hotspot.panel })
+      }
+    }
+
+    _findHotspotAt(point) {
+      return this._hotspots
+        .map(item => ({ data: item.data, marker: item.marker }))
+        .filter(item => item.data && item.marker)
+        .find(({ marker }) => (
+          point.x >= marker.pos.x - marker.width / 2 &&
+          point.x <= marker.pos.x + marker.width / 2 &&
+          point.y >= marker.pos.y - marker.height / 2 &&
+          point.y <= marker.pos.y + marker.height / 2
+        ))?.data || null
     }
 
     /**
@@ -369,13 +429,17 @@ export function createHallSceneClass(me, HallAgentClass) {
 
       // === Agent click on viewport ===
       me.input.registerPointerEvent('pointerdown', me.game.viewport, (event) => {
-        const x = event.gameX ?? event.clientX
-        const y = event.gameY ?? event.clientY
-        if (!Number.isFinite(x) || !Number.isFinite(y)) return true
-        const point = this._screenToWorld(x, y)
+        const point = this._eventToWorldPoint(event)
         if (!point) return true
+        const hotspot = this._findHotspotAt(point)
+        if (hotspot) {
+          this._suppressNextSceneClick = true
+          this._onHotspotClick?.({ id: hotspot.id, panel: hotspot.panel })
+          return false
+        }
         const hit = [...this._agents.values()].reverse().find(agent => agent.containsPoint(point.x, point.y))
         if (hit) {
+          this._suppressNextSceneClick = true
           hit.onPointerDown?.()
           return false
         }

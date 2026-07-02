@@ -82,6 +82,23 @@ const sampleRegionPoint = (region, seed, offset = 0) => {
   }, region)
 }
 
+const buildPatrolRoute = (region, seed, anchorPoint) => {
+  const anchor = clampPointToRegion(anchorPoint || region.anchor, region)
+  const spanX = clamp((region.bounds.x2 - region.bounds.x1) * 0.32, 3, 8)
+  const spanY = clamp((region.bounds.y2 - region.bounds.y1) * 0.22, 2, 5)
+  const drift = (randomFromSeed(seed, 9) - 0.5) * 2
+  return [
+    anchor,
+    { x: anchor.x + spanX, y: anchor.y + drift },
+    { x: anchor.x + spanX * 0.35, y: anchor.y + spanY },
+    { x: anchor.x - spanX * 0.9, y: anchor.y + spanY * 0.35 },
+    { x: anchor.x - spanX * 0.25, y: anchor.y - spanY * 0.65 }
+  ].map(point => clampPointToRegion({
+    x: clamp(point.x, 0, 100),
+    y: clamp(point.y, 0, 100)
+  }, region))
+}
+
 const agentVisualKey = (agent) => {
   const code = String(agent?.personaCode || agent?.agentId || agent?.name || '').toLowerCase()
   const name = String(agent?.name || agent?.personaName || '').toLowerCase()
@@ -170,6 +187,7 @@ export const useHallScene = ({
       const regionId = transient.regionId || featuredHero?.regionId || visual.defaultRegion || HALL_CHARACTER_VISUALS.default.defaultRegion
       const region = HALL_SCENE_REGIONS[regionId] || HALL_SCENE_REGIONS.idleFloor
       const point = clampPointToRegion(transient.destination || featuredHero?.anchor || sampleRegionPoint(region, seed, 1), region)
+      const patrolRoute = buildPatrolRoute(region, seed, point)
       const status = normalizeStatus(agent.status)
       const sceneStatus = sceneStatusFor(status, transient)
       const selected = selectedId === normalizeAgentId(agent)
@@ -183,10 +201,12 @@ export const useHallScene = ({
         x: point.x,
         y: point.y,
         depth: (region.depthOffset || 0) + point.y,
-        scale: 0.46 + clamp((point.y - 34) / 45, 0, 1) * 0.28,
+        scale: 0.38 + clamp((point.y - 34) / 45, 0, 1) * 0.18,
         facing,
         regionId,
-        destination: transient.destination ? point : undefined,
+        destination: undefined,
+        patrolRoute,
+        patrolDelayMs: 500 + (seed % 5) * 180,
         walkableRegion: region,
         selected,
         focused: selected || Boolean(transient.focused),

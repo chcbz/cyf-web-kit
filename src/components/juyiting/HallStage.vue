@@ -520,9 +520,9 @@ button {
 
 .hall-board {
   position: relative;
-  flex: 0 0 auto;
-  aspect-ratio: 1672 / 941;
-  min-height: unset;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
   margin: 0;
   overflow: hidden;
   border-radius: 0;
@@ -552,8 +552,9 @@ button {
 
 .melon-layer :deep(canvas) {
   display: block;
-  width: 100%;
-  height: 100%;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
 }
 
 .scene-error {

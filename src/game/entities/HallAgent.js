@@ -18,8 +18,8 @@ export function createHallAgentClass(me) {
       const y = startPoint.y / 100 * vpH
 
       const atlasImg = me.loader.getImage('character-atlas')
-      const atlasW = atlasImg ? atlasImg.width : 1402
-      const atlasH = atlasImg ? atlasImg.height : 1122
+      const atlasW = atlasImg ? atlasImg.width : 1280
+      const atlasH = atlasImg ? atlasImg.height : 1056
       const cellW = Math.floor(atlasW / ATLAS_COLS)
       const cellH = Math.floor(atlasH / ATLAS_ROWS)
       super(x, y, {
@@ -35,12 +35,17 @@ export function createHallAgentClass(me) {
       const code = (agentData.personaCode || '').toLowerCase()
       this._visual = CHAR_VISUALS[code] || CHAR_VISUALS.default
 
-      // Set initial frame from atlas position
       const frameIdx = this._visual.row * ATLAS_COLS + this._visual.col
       const sprite = this._spriteTarget()
       if (typeof sprite?.setCurrentAnimation === 'function') {
-        sprite.addAnimation('idle', [frameIdx])
-        sprite.setCurrentAnimation('idle')
+        const walkFrames = Array.from({ length: ATLAS_COLS }, (_item, offset) => this._visual.row * ATLAS_COLS + offset)
+        sprite.addAnimation(ANIM_STATES.IDLE, [frameIdx])
+        sprite.addAnimation(ANIM_STATES.WALK, walkFrames, 140)
+        sprite.addAnimation(ANIM_STATES.TALK, [frameIdx, walkFrames[2]], 220)
+        sprite.addAnimation(ANIM_STATES.BUSY, walkFrames, 120)
+        sprite.addAnimation(ANIM_STATES.OFFLINE, [frameIdx])
+        sprite.addAnimation(ANIM_STATES.ERROR, [frameIdx])
+        sprite.setCurrentAnimation(ANIM_STATES.IDLE)
       }
 
       this._renderScale = 1
@@ -49,6 +54,7 @@ export function createHallAgentClass(me) {
 
       // Minimal body for collision awareness (not used for physics yet)
       this.body = new me.Body(this)
+      this.isKinematic = true
       this._setBodyVelocity(0, 0)
 
       this.currentAnim = ANIM_STATES.IDLE
@@ -63,9 +69,14 @@ export function createHallAgentClass(me) {
       this._selected = false
       this._focused = false
       this._walkableRegion = agentData.walkableRegion || null
+      this._patrolRoute = this._normalisePatrolRoute(agentData.patrolRoute)
+      this._patrolIndex = 0
+      this._patrolDelayMs = Number.isFinite(agentData.patrolDelayMs) ? agentData.patrolDelayMs : 600
+      this._patrolWaitMs = 0
       this._animTimer = 0
       this._animFrame = 0
       this.depth = y
+      this._advancePatrolTarget()
     }
 
     setDestination(pctX, pctY) {
@@ -75,7 +86,12 @@ export function createHallAgentClass(me) {
     }
 
     setAnimState(state) {
-      if (this.currentAnim !== state) this.currentAnim = state
+      if (this.currentAnim === state) return
+      this.currentAnim = state
+      const sprite = this._spriteTarget()
+      if (typeof sprite?.setCurrentAnimation === 'function') {
+        sprite.setCurrentAnimation(state)
+      }
     }
 
     setBubble(text, durationMs = 5000) {
@@ -88,7 +104,13 @@ export function createHallAgentClass(me) {
       if (agentData.walkableRegion) this._walkableRegion = agentData.walkableRegion
       if (agentData.name) this.agentName = agentData.name
       if (agentData.personaCode) this.personaCode = agentData.personaCode
-      if (agentData.x !== undefined && agentData.y !== undefined) this.setDestination(agentData.x, agentData.y)
+      if (Array.isArray(agentData.patrolRoute)) {
+        this._patrolRoute = this._normalisePatrolRoute(agentData.patrolRoute)
+        this._patrolIndex = 0
+        this._advancePatrolTarget()
+      } else if (agentData.destination) {
+        this.setDestination(agentData.destination.x, agentData.destination.y)
+      }
       if (agentData.sceneStatus) this.setAnimState(agentData.sceneStatus)
       if (agentData.bubble) this.setBubble(agentData.bubble.text, agentData.bubble.ttlMs || 5000)
       if (agentData.scale !== undefined) this._applyScale(this._resolveScale(agentData.scale))
@@ -153,6 +175,26 @@ export function createHallAgentClass(me) {
       }
     }
 
+    _normalisePatrolRoute(route = []) {
+      return (Array.isArray(route) ? route : [])
+        .map(point => clampPointToRegion(point, this._walkableRegion))
+        .filter(point => Number.isFinite(point.x) && Number.isFinite(point.y))
+        .map(point => ({
+          x: (point.x / 100) * me.game.viewport.width,
+          y: (point.y / 100) * me.game.viewport.height
+        }))
+    }
+
+    _advancePatrolTarget() {
+      if (!this._patrolRoute.length) return
+      const current = this._patrolRoute[this._patrolIndex % this._patrolRoute.length]
+      const nearCurrent = Math.hypot(current.x - this.pos.x, current.y - this.pos.y) < 3
+      if (nearCurrent && this._patrolRoute.length > 1) this._patrolIndex += 1
+      const next = this._patrolRoute[this._patrolIndex % this._patrolRoute.length]
+      this.targetX = next.x
+      this.targetY = next.y
+    }
+
     _moveTowardTarget(_dt) {
       const dx = this.targetX - this.pos.x
       const dy = this.targetY - this.pos.y
@@ -162,7 +204,18 @@ export function createHallAgentClass(me) {
         this.pos.y = this.targetY
         this._setBodyVelocity(0, 0)
         this.speed = 0
-        if (this.currentAnim === ANIM_STATES.WALK) this.setAnimState(ANIM_STATES.IDLE)
+        if (this._patrolRoute.length > 1) {
+          this._patrolWaitMs -= _dt
+          if (this._patrolWaitMs <= 0) {
+            this._patrolIndex += 1
+            this._patrolWaitMs = this._patrolDelayMs
+            this._advancePatrolTarget()
+          } else if (this.currentAnim === ANIM_STATES.WALK) {
+            this.setAnimState(ANIM_STATES.IDLE)
+          }
+        } else if (this.currentAnim === ANIM_STATES.WALK) {
+          this.setAnimState(ANIM_STATES.IDLE)
+        }
         return
       }
       const spd = Math.min(80, dist * 3.5)
@@ -187,7 +240,7 @@ export function createHallAgentClass(me) {
       this._animTimer += dt
       if (this._animTimer > 160) {
         this._animTimer = 0
-        this._animFrame = (this._animFrame + 1) % 4
+        this._animFrame = (this._animFrame + 1) % ATLAS_COLS
       }
       this.depth = this.pos.y
       if (this._bubbleTimer > 0) {

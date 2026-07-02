@@ -451,17 +451,19 @@ describe('JuyiHall component behavior', () => {
     expect(selectedAgentIds).to.deep.include('wuyong')
   })
 
-  it('keeps the melonJS layer pinned to the hall board', () => {
+  it('keeps the melonJS layer filling the hall board without leaving unused page space', () => {
     const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
     const boardRule = cssRule(source, '.hall-board')
     const melonRule = cssRule(source, '.melon-layer')
 
-    expect(boardRule).to.include('aspect-ratio: 1672 / 941')
-    expect(boardRule).to.include('flex: 0 0 auto')
+    expect(boardRule).not.to.include('aspect-ratio: 1672 / 941')
+    expect(boardRule).to.include('flex: 1 1 auto')
+    expect(boardRule).to.include('width: 100%')
     expect(melonRule).to.include('inset: 0')
     expect(melonRule).to.include('width: 100%')
     expect(melonRule).to.include('height: 100%')
     expect(melonRule).not.to.include('transform')
+    expect(source).to.include('object-fit: cover')
     expect(source).not.to.include('--map-offset-x')
     expect(source).not.to.include('--map-zoom')
   })
@@ -516,6 +518,29 @@ describe('JuyiHall component behavior', () => {
     hotspotHandler({ panel: 'tasks' })
 
     expect(wrapper.emitted('open-panel')[0]).to.deep.equal(['tasks'])
+  })
+
+  it('does not expose ground-click movement controls from the melonJS layer', async () => {
+    let mountOptions
+    hallGameMock = {
+      destroy: () => {},
+      mount: async (_container, options = {}) => {
+        mountOptions = options
+        options.onReady?.()
+      },
+      setSelectedAgent: () => {},
+      start: () => {},
+      syncAgents: () => {},
+      syncHotspots: () => {}
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+    const wrapper = mount(HallStage, {
+      global: { stubs },
+      props: makeHallStageProps()
+    })
+
+    expect(mountOptions).not.to.have.property('onWalkRequest')
+    expect(wrapper.emitted('move-agent')).to.equal(undefined)
   })
 
   it('shows a scene error and retries melonJS mounting without restoring DOM rooms', async () => {

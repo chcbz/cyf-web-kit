@@ -430,7 +430,6 @@ const selectAgent = (agent) => {
   playAgentSelect()
 }
 
-
 const openPanel = (panel, options = {}) => {
   if (panel !== 'chat') {
     resetToPublic()
