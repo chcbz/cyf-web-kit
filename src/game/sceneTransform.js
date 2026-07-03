@@ -15,10 +15,38 @@ export const percentRectToViewport = (rect, viewport) => {
   }
 }
 
-export const scenePanBounds = ({ viewportWidth, viewportHeight, zoom }) => ({
-  x: Math.max(0, (viewportWidth * (zoom - 1)) / 2),
-  y: Math.max(0, (viewportHeight * (zoom - 1)) / 2)
-})
+export const scenePanBounds = ({
+  viewportWidth,
+  viewportHeight,
+  containerWidth,
+  containerHeight,
+  zoom
+}) => {
+  const zoomX = Math.max(0, (viewportWidth * (zoom - 1)) / 2)
+  const zoomY = Math.max(0, (viewportHeight * (zoom - 1)) / 2)
+  let coverX = 0
+  let coverY = 0
+
+  if (
+    Number.isFinite(containerWidth) &&
+    Number.isFinite(containerHeight) &&
+    containerWidth > 0 &&
+    containerHeight > 0 &&
+    viewportWidth > 0 &&
+    viewportHeight > 0
+  ) {
+    const coverScale = Math.max(containerWidth / viewportWidth, containerHeight / viewportHeight)
+    const visibleWidth = containerWidth / coverScale
+    const visibleHeight = containerHeight / coverScale
+    coverX = Math.max(0, (viewportWidth - visibleWidth) / 2)
+    coverY = Math.max(0, (viewportHeight - visibleHeight) / 2)
+  }
+
+  return {
+    x: Number((zoomX + coverX).toFixed(3)),
+    y: Number((zoomY + coverY).toFixed(3))
+  }
+}
 
 export const clampSceneTransform = (transform, bounds) => {
   const zoom = Number(clamp(transform.zoom, bounds.minZoom, bounds.maxZoom).toFixed(2))

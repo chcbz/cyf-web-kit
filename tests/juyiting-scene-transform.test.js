@@ -46,6 +46,30 @@ describe('Juyiting scene transform helpers', () => {
     })
   })
 
+  it('includes cover-cropped scene edges in pan bounds', () => {
+    expect(scenePanBounds({
+      viewportWidth: 1672,
+      viewportHeight: 941,
+      containerWidth: 390,
+      containerHeight: 720,
+      zoom: 1
+    })).to.deep.equal({
+      x: 581.146,
+      y: 0
+    })
+
+    expect(scenePanBounds({
+      viewportWidth: 1672,
+      viewportHeight: 941,
+      containerWidth: 1280,
+      containerHeight: 360,
+      zoom: 1
+    })).to.deep.equal({
+      x: 0,
+      y: 235.375
+    })
+  })
+
   it('converts screen points into transformed world coordinates', () => {
     expect(screenToWorldPoint({
       x: 580,

@@ -92,6 +92,8 @@ export function createHallSceneClass(me, HallAgentClass) {
       return {
         viewportWidth: width,
         viewportHeight: height,
+        containerWidth: this._canvasRect()?.width,
+        containerHeight: this._canvasRect()?.height,
         minZoom: this._minZoom,
         maxZoom: this._maxZoom
       }
