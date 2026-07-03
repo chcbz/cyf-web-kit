@@ -89,11 +89,12 @@ export function createHallSceneClass(me, HallAgentClass) {
       if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
         return null
       }
+      const displayRect = this._displayRect()
       return {
         viewportWidth: width,
         viewportHeight: height,
-        containerWidth: this._canvasRect()?.width,
-        containerHeight: this._canvasRect()?.height,
+        containerWidth: displayRect?.width,
+        containerHeight: displayRect?.height,
         minZoom: this._minZoom,
         maxZoom: this._maxZoom
       }
@@ -280,11 +281,23 @@ export function createHallSceneClass(me, HallAgentClass) {
       })
     }
 
-    _canvasRect() {
-      const canvas = me.video?.getCanvas?.() ||
+    _canvasElement() {
+      return me.video?.getCanvas?.() ||
         me.video?.renderer?.getCanvas?.() ||
         (typeof document !== 'undefined' ? document.querySelector('.melon-layer canvas, canvas') : null)
+    }
+
+    _canvasRect() {
+      const canvas = this._canvasElement()
       return canvas?.getBoundingClientRect?.() || null
+    }
+
+    _displayRect() {
+      const canvas = this._canvasElement()
+      const layer = canvas?.closest?.('.melon-layer') ||
+        canvas?.parentElement ||
+        (typeof document !== 'undefined' ? document.querySelector('.melon-layer') : null)
+      return layer?.getBoundingClientRect?.() || this._canvasRect()
     }
 
     _eventToWorldPoint(event) {
@@ -292,7 +305,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       if (!bounds) return null
       const hasClientPoint = Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
       if (hasClientPoint) {
-        const rect = this._canvasRect()
+        const rect = this._displayRect()
         if (rect?.width > 0 && rect?.height > 0) {
           const scale = Math.max(rect.width / bounds.viewportWidth, rect.height / bounds.viewportHeight)
           const drawnWidth = bounds.viewportWidth * scale

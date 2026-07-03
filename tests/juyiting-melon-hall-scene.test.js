@@ -6,6 +6,8 @@ const createFakeMelon = () => {
   const registered = []
   const children = []
   const matrixOps = []
+  let canvasRect = null
+  let layerRect = null
 
   const currentTransform = {
     identity: () => {
@@ -109,6 +111,14 @@ const createFakeMelon = () => {
     loader: {
       getImage: () => null
     },
+    video: {
+      getCanvas: () => ({
+        parentElement: layerRect ? { getBoundingClientRect: () => layerRect } : null,
+        getBoundingClientRect: () => canvasRect
+      })
+    },
+    setCanvasRect: rect => { canvasRect = rect },
+    setLayerRect: rect => { layerRect = rect },
     registered,
     children,
     matrixOps
@@ -236,6 +246,20 @@ describe('HallScene melonJS pointer routing', () => {
       ['scale', 1.5, 1.5],
       ['translate', -480, -320]
     ])
+  })
+
+  it('uses the current visible melon layer size for cover-cropped drag bounds', () => {
+    const me = createFakeMelon()
+    me.game.viewport.width = 1672
+    me.game.viewport.height = 941
+    me.setCanvasRect({ left: 0, top: 0, width: 390, height: 720 })
+    me.setLayerRect({ left: 0, top: 0, width: 1280, height: 360 })
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+
+    scene.panBy(0, 999)
+
+    expect(scene.getTransform()).to.deep.equal({ offsetX: 0, offsetY: 235.375, zoom: 1 })
   })
 
   it('zooms with wheel and pans with pointer drag inside the melonJS viewport', () => {

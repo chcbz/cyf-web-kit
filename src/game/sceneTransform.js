@@ -53,6 +53,8 @@ export const clampSceneTransform = (transform, bounds) => {
   const pan = scenePanBounds({
     viewportWidth: bounds.viewportWidth,
     viewportHeight: bounds.viewportHeight,
+    containerWidth: bounds.containerWidth,
+    containerHeight: bounds.containerHeight,
     zoom
   })
   return {
