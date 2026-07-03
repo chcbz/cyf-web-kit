@@ -385,16 +385,18 @@ watch(() => props.selectedAgent, (agent) => {
   position: absolute;
   top: 10px;
   left: 18px;
-  right: 18px;
+  right: auto;
   z-index: 12;
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid rgba(255, 240, 202, 0.16);
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: fit-content;
+  max-width: min(420px, calc(100% - 36px));
+  padding: 7px 8px;
+  border: 1px solid rgba(255, 240, 202, 0.12);
   border-radius: 8px;
-  background: rgba(35, 24, 16, 0.52);
+  background: rgba(35, 24, 16, 0.38);
   color: #fff4d4;
   backdrop-filter: blur(8px);
 }
@@ -404,13 +406,14 @@ watch(() => props.selectedAgent, (agent) => {
 }
 
 .eyebrow {
+  display: none;
   font-size: 12px;
   color: #d7b875;
 }
 
 h1 {
-  margin: 2px 0 0;
-  font-size: 28px;
+  margin: 0;
+  font-size: 20px;
   line-height: 1.1;
   letter-spacing: 0;
 }
@@ -518,6 +521,41 @@ button {
   font-weight: 600;
 }
 
+.hall-stage:has(.hall-board.is-scene-landscape) .stage-header {
+  top: 4px;
+  left: 8px;
+  max-width: calc(100% - 16px);
+  gap: 6px;
+  padding: 6px 7px;
+  background: rgba(35, 24, 16, 0.32);
+}
+
+.hall-stage:has(.hall-board.is-scene-landscape) .stage-heading .eyebrow {
+  display: none;
+}
+
+.hall-stage:has(.hall-board.is-scene-landscape) h1 {
+  font-size: 16px;
+  min-height: 0;
+}
+
+.hall-stage:has(.hall-board.is-scene-landscape) .stage-tools {
+  gap: 5px;
+}
+
+.hall-stage:has(.hall-board.is-scene-landscape) .tool-action {
+  min-height: 30px;
+  padding: 0 7px;
+}
+
+.hall-stage:has(.hall-board.is-scene-landscape) .tool-action .tool-label {
+  display: none;
+}
+
+.hall-stage:has(.hall-board.is-scene-landscape) .tool-action :deep(.var-icon) {
+  font-size: 16px;
+}
+
 .hall-board {
   position: relative;
   flex: 1 1 auto;
@@ -613,9 +651,9 @@ button {
     max-width: calc(100% - 16px);
     align-items: center;
     gap: 8px;
-    padding: 7px 8px;
-    border-color: rgba(255, 240, 202, 0.12);
-    background: rgba(35, 24, 16, 0.44);
+    padding: 6px 7px;
+    border-color: rgba(255, 240, 202, 0.1);
+    background: rgba(35, 24, 16, 0.32);
   }
 
   .stage-heading .eyebrow {
@@ -623,7 +661,7 @@ button {
   }
 
   h1 {
-    font-size: 18px;
+    font-size: 16px;
     min-height: 0;
   }
 
@@ -632,8 +670,8 @@ button {
   }
 
   .tool-action {
-    min-height: 34px;
-    padding: 0 9px;
+    min-height: 30px;
+    padding: 0 7px;
   }
 
   .tool-action .tool-label {
@@ -642,19 +680,6 @@ button {
 
   .tool-action :deep(.var-icon) {
     font-size: 17px;
-  }
-
-  .hall-stage:has(.hall-board.is-scene-landscape) .stage-header {
-    padding: 8px;
-  }
-
-  .hall-stage:has(.hall-board.is-scene-landscape) .eyebrow {
-    display: none;
-  }
-
-  .hall-stage:has(.hall-board.is-scene-landscape) h1 {
-    font-size: 18px;
-    min-height: 0;
   }
 }
 
@@ -672,8 +697,8 @@ button {
   }
 
   h1 {
-    font-size: 22px;
-    min-height: 34px;
+    font-size: 16px;
+    min-height: 0;
   }
 }
 </style>

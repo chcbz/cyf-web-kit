@@ -341,11 +341,16 @@ describe('JuyiHall component behavior', () => {
     const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
     const headerRule = cssRule(source, '.stage-header')
 
-    expect(headerRule).to.include('background: rgba(35, 24, 16, 0.52)')
+    expect(headerRule).to.include('right: auto;')
+    expect(headerRule).to.include('width: fit-content;')
+    expect(headerRule).to.include('max-width: min(420px, calc(100% - 36px));')
+    expect(headerRule).to.include('background: rgba(35, 24, 16, 0.38)')
     expect(source).to.include('@media (max-width: 640px)')
-    expect(source).to.include('width: fit-content;')
     expect(source).to.include('max-width: calc(100% - 16px);')
     expect(source).to.include('.stage-heading .eyebrow {\n    display: none;')
+    expect(source).to.include('.hall-stage:has(.hall-board.is-scene-landscape) .stage-header {\n  top: 4px;')
+    expect(source).to.include('.hall-stage:has(.hall-board.is-scene-landscape) .stage-heading .eyebrow {\n  display: none;')
+    expect(source).to.include('.hall-stage:has(.hall-board.is-scene-landscape) .tool-action .tool-label {\n  display: none;')
   })
 
   it('renders the recruit entry and persona catalog actions', async () => {
