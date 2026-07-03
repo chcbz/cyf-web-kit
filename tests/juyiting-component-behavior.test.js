@@ -337,6 +337,17 @@ describe('JuyiHall component behavior', () => {
     expect(source).not.to.include('.tool-action span {\n    display: none;')
   })
 
+  it('keeps the floating stage header compact so it does not cover the hall map', () => {
+    const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
+    const headerRule = cssRule(source, '.stage-header')
+
+    expect(headerRule).to.include('background: rgba(35, 24, 16, 0.52)')
+    expect(source).to.include('@media (max-width: 640px)')
+    expect(source).to.include('width: fit-content;')
+    expect(source).to.include('max-width: calc(100% - 16px);')
+    expect(source).to.include('.stage-heading .eyebrow {\n    display: none;')
+  })
+
   it('renders the recruit entry and persona catalog actions', async () => {
     const personas = [
       { personaCode: 'songjiang', name: '宋江', title: '及时雨', rankNo: 1, starName: '天魁星', systemAgent: true, abilities: ['dispatch'] },

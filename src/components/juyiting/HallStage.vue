@@ -391,10 +391,10 @@ watch(() => props.selectedAgent, (agent) => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 14px;
-  border: 1px solid rgba(255, 240, 202, 0.22);
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 240, 202, 0.16);
   border-radius: 8px;
-  background: rgba(35, 24, 16, 0.72);
+  background: rgba(35, 24, 16, 0.52);
   color: #fff4d4;
   backdrop-filter: blur(8px);
 }
@@ -608,13 +608,23 @@ button {
   .stage-header {
     top: 4px;
     left: 8px;
-    right: 8px;
-    padding: 12px;
-    align-items: flex-start;
+    right: auto;
+    width: fit-content;
+    max-width: calc(100% - 16px);
+    align-items: center;
+    gap: 8px;
+    padding: 7px 8px;
+    border-color: rgba(255, 240, 202, 0.12);
+    background: rgba(35, 24, 16, 0.44);
+  }
+
+  .stage-heading .eyebrow {
+    display: none;
   }
 
   h1 {
-    font-size: 24px;
+    font-size: 18px;
+    min-height: 0;
   }
 
   .stage-tools {
@@ -635,8 +645,6 @@ button {
   }
 
   .hall-stage:has(.hall-board.is-scene-landscape) .stage-header {
-    right: auto;
-    max-width: calc(100% - 16px);
     padding: 8px;
   }
 
