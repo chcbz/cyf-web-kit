@@ -18,3 +18,4 @@ vite-current*.log
 .cline
 .clinerules
 .tmp*
+.worktrees/
