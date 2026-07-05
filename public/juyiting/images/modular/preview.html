@@ -1,0 +1,63 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Juyiting Modular Layer Preview</title>
+  <style>
+    body {
+      margin: 0;
+      background: #17110d;
+      color: #f6e7c2;
+      font-family: system-ui, sans-serif;
+    }
+    .stage {
+      position: relative;
+      width: min(100vw, 1672px);
+      aspect-ratio: 1672 / 941;
+      margin: 0 auto;
+      overflow: hidden;
+      background: #20150f;
+    }
+    .layer {
+      position: absolute;
+      display: block;
+      user-select: none;
+      pointer-events: none;
+    }
+    .wall { left: 0; top: 0; width: 100%; z-index: 0; }
+    .floor { left: 0; top: 44%; width: 100%; z-index: 1; }
+    .gate { left: 41%; top: 69%; width: 18%; z-index: 2; }
+    .seat { left: 41%; top: 14%; width: 20%; z-index: 3; }
+    .board { left: 74%; top: 26%; width: 15%; z-index: 3; }
+    .shelf { left: 73%; top: 48%; width: 18%; z-index: 3; }
+    .book { left: 13%; top: 52%; width: 13%; z-index: 4; }
+    .desk { left: 41%; top: 48%; width: 21%; z-index: 4; }
+    .pillars { left: 0; top: 0; width: 100%; z-index: 6; }
+    .caption {
+      max-width: 1672px;
+      margin: 12px auto;
+      padding: 0 16px 24px;
+      font-size: 14px;
+      line-height: 1.5;
+      color: #d8c596;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="stage">
+      <img class="layer wall" src="./hall-wall-back-v1.png" alt="">
+      <img class="layer floor" src="./hall-floor-v1.png" alt="">
+      <img class="layer gate" src="./prop-gate-v1.png" alt="">
+      <img class="layer seat" src="./prop-main-seat-v1.png" alt="">
+      <img class="layer board" src="./prop-bounty-board-v1.png" alt="">
+      <img class="layer shelf" src="./prop-library-shelf-v1.png" alt="">
+      <img class="layer book" src="./prop-roster-book-v1.png" alt="">
+      <img class="layer desk" src="./prop-table-desk-v1.png" alt="">
+      <img class="layer pillars" src="./hall-pillars-v1.png" alt="">
+    </div>
+    <p class="caption">Modular generated asset preview. This file is for visual QA only.</p>
+  </main>
+</body>
+</html>
