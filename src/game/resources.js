@@ -1,7 +1,10 @@
-/**
- * melonJS resource manifest for 聚义厅
+﻿/**
+ * melonJS resource manifest for 鉴毃涔夊巺
  * Background/foreground loaded as named images, .tmx for future Tiled integration
  */
+
+import { HALL_SCENE_LAYER_RESOURCES } from './hallSceneLayers.js'
+import { HALL_MODULAR_LAYER_RESOURCES } from './hallModularLayers.js'
 
 export const HALL_MAP_RESOURCE = { name: 'juyiting-hall', type: 'tmx', src: '/juyiting/hall.tmx' }
 
@@ -9,6 +12,8 @@ export const HALL_RESOURCES = [
   HALL_MAP_RESOURCE,
   { name: 'liangshan-hall-bg', type: 'image', src: '/juyiting/images/liangshan-hall-bg-v2.png' },
   { name: 'liangshan-hall-fg', type: 'image', src: '/juyiting/images/liangshan-hall-foreground-extracted-v1.png' },
+  ...HALL_SCENE_LAYER_RESOURCES,
+  ...HALL_MODULAR_LAYER_RESOURCES,
   { name: 'character-atlas', type: 'image', src: '/juyiting/liangshan-character-walksheet-v1.png' }
 ]
 

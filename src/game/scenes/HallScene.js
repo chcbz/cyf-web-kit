@@ -1,8 +1,10 @@
-/**
- * 聚义厅场景 - melonJS Stage (manual asset loading)
+﻿/**
+ * 鉴毃涔夊巺鍦烘櫙 - melonJS Stage (manual asset loading)
  */
 
 import { DEPTH_LAYERS, HALL_SCENE_HEIGHT, HALL_SCENE_WIDTH } from '../config.js'
+import { HALL_SCENE_RENDER_LAYERS } from '../hallSceneLayers.js'
+import { HALL_MODULAR_RENDER_LAYERS } from '../hallModularLayers.js'
 import { FALLBACK_HALL_HOTSPOTS } from '../resources.js'
 import { clampSceneTransform, fitSceneTransform, screenToWorldPoint } from '../sceneTransform.js'
 
@@ -350,10 +352,36 @@ export function createHallSceneClass(me, HallAgentClass) {
         ))?.data || null
     }
 
-    /**
-     * Build the full scene (image layers, hotspots, pointer events).
-     * Called from onResetEvent or deferred to first update() if viewport not ready.
-     */
+    _renderModularLayers(vpW, vpH) {
+      const loaded = HALL_MODULAR_RENDER_LAYERS
+        .map(layer => ({ layer, image: me.loader.getImage(layer.resourceName) }))
+        .filter(({ image }) => Boolean(image))
+
+      if (!loaded.length) return false
+
+      loaded.forEach(({ layer, image }) => {
+        if (layer.kind === 'environment') {
+          const imageLayer = this._createCustomImageLayer(0, 0, vpW, vpH, image, {
+            blendMode: layer.blendMode
+          })
+          me.game.world.addChild(imageLayer, layer.depth)
+          this._imageLayers.push(imageLayer)
+        } else {
+          const scale = layer.defaultScale || 1
+          const iw = Math.round((image.width || vpW) * scale)
+          const ih = Math.round((image.height || vpH) * scale)
+          const imageLayer = this._createCustomImageLayer(
+            layer.defaultX || 0,
+            layer.defaultY || 0,
+            iw, ih, image
+          )
+          me.game.world.addChild(imageLayer, layer.depth)
+          this._imageLayers.push(imageLayer)
+        }
+      })
+      return true
+    }
+
     _buildScene() {
       if (this._sceneBuilt) return
       const vp = me.game.viewport
@@ -364,20 +392,41 @@ export function createHallSceneClass(me, HallAgentClass) {
       const mapData = this._mapData
       const hotspots = mapData?.hotspots?.length ? mapData.hotspots : FALLBACK_HALL_HOTSPOTS
 
-      // === Image layers (background + foreground) ===
-      const bgImage = me.loader.getImage('liangshan-hall-bg')
-      const fgImage = me.loader.getImage('liangshan-hall-fg')
+      // === Image layers (modular first, manifest fallback, legacy last) ===
+      let layersRendered = this._renderModularLayers(vpW, vpH)
 
-      if (bgImage) {
-        const bgLayer = this._createCustomImageLayer(0, 0, vpW, vpH, bgImage)
-        me.game.world.addChild(bgLayer, DEPTH_LAYERS.BACKGROUND)
-        this._imageLayers.push(bgLayer)
+      if (!layersRendered) {
+        const renderedManifestLayers = HALL_SCENE_RENDER_LAYERS
+          .map(layer => ({ layer, image: me.loader.getImage(layer.resourceName) }))
+          .filter(({ image }) => Boolean(image))
+
+        if (renderedManifestLayers.length) {
+          renderedManifestLayers.forEach(({ layer, image }) => {
+            const imageLayer = this._createCustomImageLayer(0, 0, vpW, vpH, image, {
+              blendMode: layer.blendMode
+            })
+            me.game.world.addChild(imageLayer, layer.depth)
+            this._imageLayers.push(imageLayer)
+          })
+          layersRendered = true
+        }
       }
 
-      if (fgImage) {
-        const fgLayer = this._createCustomImageLayer(0, 0, vpW, vpH, fgImage)
-        me.game.world.addChild(fgLayer, DEPTH_LAYERS.FOREGROUND)
-        this._imageLayers.push(fgLayer)
+      if (!layersRendered) {
+        const bgImage = me.loader.getImage('liangshan-hall-bg')
+        const fgImage = me.loader.getImage('liangshan-hall-fg')
+
+        if (bgImage) {
+          const bgLayer = this._createCustomImageLayer(0, 0, vpW, vpH, bgImage)
+          me.game.world.addChild(bgLayer, DEPTH_LAYERS.BACKGROUND)
+          this._imageLayers.push(bgLayer)
+        }
+
+        if (fgImage) {
+          const fgLayer = this._createCustomImageLayer(0, 0, vpW, vpH, fgImage)
+          me.game.world.addChild(fgLayer, DEPTH_LAYERS.FOREGROUND)
+          this._imageLayers.push(fgLayer)
+        }
       }
 
       // === Hotspot layer ===
@@ -469,12 +518,13 @@ export function createHallSceneClass(me, HallAgentClass) {
       return true
     }
 
-    _createCustomImageLayer(x, y, width, height, image) {
+    _createCustomImageLayer(x, y, width, height, image, options = {}) {
       class ImageLayer extends me.Renderable {
-        constructor(x, y, width, height, img) {
+        constructor(x, y, width, height, img, layerOptions) {
           super(x, y, width, height)
           this.anchorPoint.set(0, 0)
           this.image = img
+          this.blendMode = layerOptions.blendMode || null
           this.isKinematic = true
         }
 
@@ -482,10 +532,13 @@ export function createHallSceneClass(me, HallAgentClass) {
           if (!this.image) return
           const ctx = renderer.getContext?.() || renderer
           if (!ctx) return
+          const previousBlendMode = ctx.globalCompositeOperation
+          if (this.blendMode) ctx.globalCompositeOperation = this.blendMode
           ctx.drawImage(this.image, this.pos.x, this.pos.y, this.width, this.height)
+          if (this.blendMode) ctx.globalCompositeOperation = previousBlendMode
         }
       }
-      return new ImageLayer(x, y, width, height, image)
+      return new ImageLayer(x, y, width, height, image, options)
     }
 
     onResetEvent() {
