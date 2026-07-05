@@ -1,9 +1,10 @@
 # cyf-web-kit 应用程序规格说明书
 
-> **文档状态**：完成 v1.0
+> **文档状态**：实施版 v1.1
 > **创建日期**：2025年5月
+> **最后更新**：2026-07-04
 > **目标读者**：开发团队、产品团队
-> **版本**：MVP
+> **版本**：当前代码实现
 
 ---
 
@@ -11,18 +12,21 @@
 
 ### 1.1 项目背景
 
-cyf-web-kit 是一个基于 Vue 3 的微信小程序相关应用工具集，提供聊天、任务管理、投票、短链接、礼品等功能模块。应用主要面向微信小程序用户，提供轻量级的工具服务。
+cyf-web-kit 是一个基于 Vue 3 的应用工具集，提供聚义厅 Agent 协作大厅、聊天、任务管理、投票、短链接、礼品、消息中心和帮助中心等功能模块。应用主要面向微信生态和浏览器用户，提供轻量级工具服务与 Agent 协作入口。
 
 ### 1.2 核心功能
 
 | 模块 | 功能描述 |
 |------|----------|
 | **聊天 (Chat)** | AI 对话助手，支持流式响应、会话管理 |
+| **聚义厅 (JuyiHall)** | Agent 协作大厅，支持 melonJS 2.5D 场景、点将册、悬赏榜、招贤令、厅前议事和案卷阁 |
 | **任务 (Task)** | 日历式任务管理，支持定期任务执行 |
 | **短语 (Phrase)** | 每日金句/语录展示，支持点赞打赏 |
 | **投票 (Vote)** | 有奖答题功能，答对获得积分 |
 | **礼品 (Gift)** | 礼品商城，支持积分和微信支付 |
 | **短链接 (ShortLink)** | 长链接缩短与还原，支持二维码生成 |
+| **消息中心 (MessageCenter)** | 应用消息查看入口 |
+| **帮助中心 (HelpCenter)** | 帮助内容与说明入口 |
 
 ### 1.3 技术栈
 
@@ -34,6 +38,7 @@ cyf-web-kit 是一个基于 Vue 3 的微信小程序相关应用工具集，提�
 | 国际化 | Vue I18n 9 |
 | UI 组件库 | @varlet/ui 3.x |
 | HTTP 请求 | 原生 Fetch API (支持流式响应) |
+| 游戏/场景 | melonJS 15.x |
 | 构建工具 | Vite 6 |
 | 测试框架 | Mocha + Chai + Testing Library |
 
@@ -89,6 +94,56 @@ chat/
 | GET | `/chat/conversation/content` | 获取会话内容 |
 | DELETE | `/chat/conversation/delete` | 删除会话 |
 | POST | `/chat/conversation/update` | 更新会话标题 |
+
+### 2.1A 聚义厅模块 (JuyiHall)
+
+#### 2.1A.1 功能说明
+
+聚义厅是 Agent 协作大厅，默认作为首页入口。当前实现使用 `melonJS` 渲染梁山聚义厅 2.5D 场景，支持 Agent 展示、人格绑定、悬赏任务调度、公共/榜文/私密议事和案卷阁检索。
+
+#### 2.1A.2 核心功能
+
+| 功能 | 描述 | 优先级 |
+|------|------|--------|
+| melonJS 大厅 | 2.5D 分层图片、角色精灵、热点、平移缩放和横竖屏适配 | P0 |
+| 点将册 | Agent 名册、状态筛选、能力展示、选中 Agent | P0 |
+| 悬赏榜 | 张榜、筛选、推荐、手动/自动点将、榜文议事、归档 | P0 |
+| 厅前议事 | 支持 public、bounty、private 三类会话 scope | P0 |
+| SSE 回话 | `/chat/conversation/events` 实时消息，失败后重连和轮询兜底 | P0 |
+| 招贤令 | 人格目录、绑定/解绑、本地接入配置生成 | P1 |
+| 案卷阁 | 搜索项目案卷、议事旧录、长记，并引用到传令 | P1 |
+| 场景反馈 | 任务、议事、案卷和 Agent 回话驱动热点反馈和气泡 | P1 |
+
+#### 2.1A.3 关键文件
+
+| 文件 | 描述 |
+|------|------|
+| `src/components/world/JuyiHall.vue` | 聚义厅页面编排 |
+| `src/components/juyiting/HallStage.vue` | melonJS canvas 挂载与交互层 |
+| `src/game/JuyitingGame.js` | melonJS 实例管理 |
+| `src/game/scenes/HallScene.js` | 大厅场景、图层、热点和 Agent 同步 |
+| `src/game/entities/HallAgent.js` | Agent 精灵 |
+| `src/composables/juyiting/useHallData.js` | Agent、人格和悬赏数据 |
+| `src/composables/juyiting/useHallConversation.js` | 聚义厅会话和流式消息 |
+
+#### 2.1A.4 API 接口
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/agent/map` | 获取大厅地图 Agent |
+| POST | `/agent/roster` | 获取点将册名册 |
+| GET | `/agent/personas/catalog` | 获取人格目录 |
+| POST | `/agent/personas/{personaCode}/bind` | 绑定人格 |
+| DELETE | `/agent/personas/{personaCode}/bind` | 解绑人格 |
+| POST | `/agent/tasks/search` | 查询悬赏任务 |
+| POST | `/agent/tasks/status-counts` | 查询任务状态计数 |
+| POST | `/agent/tasks` | 创建悬赏任务 |
+| POST | `/agent/tasks/{id}/recommend` | 推荐可点 Agent |
+| POST | `/agent/tasks/{id}/assign` | 手动点将 |
+| POST | `/agent/tasks/{id}/auto-assign` | 自动点将 |
+| POST | `/agent/tasks/{id}/archive` | 归档悬赏 |
+| GET | `/chat/conversation/events` | 聚义厅会话事件流 |
+| POST | `/chat/library/search` | 案卷阁检索 |
 
 ### 2.2 任务模块 (Task)
 
@@ -308,6 +363,9 @@ interface Conversation {
   title: string           // 会话标题
   updateTime: number      // 最后更新时间
   jiacn: string           // 用户标识
+  conversationType?: string // 会话类型，如 juyiting
+  conversationScopeType?: string // 会话范围类型
+  conversationScopeKey?: string  // 会话范围键
 }
 ```
 
@@ -398,6 +456,7 @@ interface ShortLink {
 | 组件名 | 文件 | 所属模块 |
 |--------|------|----------|
 | `Chat.vue` | `src/components/chat/Chat.vue` | 聊天 |
+| `JuyiHall.vue` | `src/components/world/JuyiHall.vue` | 聚义厅 |
 | `TaskIndex.vue` | `src/components/TaskIndex.vue` | 任务 |
 | `TaskList.vue` | `src/components/TaskList.vue` | 任务 |
 | `TaskAdd.vue` | `src/components/TaskAdd.vue` | 任务 |
@@ -408,6 +467,8 @@ interface ShortLink {
 | `GiftPay.vue` | `src/components/GiftPay.vue` | 礼品 |
 | `OrderList.vue` | `src/components/OrderList.vue` | 礼品 |
 | `ShortLink.vue` | `src/components/ShortLink.vue` | 短链接 |
+| `MessageCenter.vue` | `src/components/MessageCenter.vue` | 消息中心 |
+| `HelpCenter.vue` | `src/components/HelpCenter.vue` | 帮助中心 |
 
 ### 5.3 子组件
 
@@ -422,6 +483,10 @@ interface ShortLink {
 | `TaskDetailDialog` | `src/components/task/TaskDetailDialog.vue` | 任务详情 |
 | `PhraseAddDialog` | `src/components/phrase/PhraseAddDialog.vue` | 添加短语 |
 | `PhraseFeedbackDialog` | `src/components/phrase/PhraseFeedbackDialog.vue` | 反馈 |
+| `HallStage` | `src/components/juyiting/HallStage.vue` | 聚义厅 melonJS 舞台 |
+| `BountyPanel` | `src/components/juyiting/BountyPanel.vue` | 悬赏榜 |
+| `PersonaCatalogPanel` | `src/components/juyiting/PersonaCatalogPanel.vue` | 招贤令 |
+| `LibraryPanel` | `src/components/juyiting/LibraryPanel.vue` | 案卷阁 |
 
 ---
 
@@ -458,6 +523,8 @@ interface ShortLink {
 | `global` | `src/stores/global.js` | 全局状态（用户、标题、UI） |
 | `util` | `src/stores/util.js` | 工具函数（存储、时间处理） |
 | `i18n` | `src/stores/i18n.js` | 国际化配置 |
+| `agent` | `src/stores/agent.js` | Agent 名册、悬赏任务和本地兼容数据 |
+| `message` | `src/stores/message.js` | 消息中心状态 |
 
 ### 7.2 Global Store 状态
 
@@ -508,6 +575,7 @@ interface GlobalState {
 | `voteApi` | `/vote` |
 | `tipApi` | `/tip` |
 | `chatApi` | `/chat` |
+| `agentApi` | `/agent` |
 | `dwzApi` | `/dwz` |
 | `giftApi` | `/gift` |
 | `wxApi` | `/wx` |
@@ -528,6 +596,15 @@ interface GlobalState {
 | `VITE_COPYRIGHT` | 版权信息 |
 | `VITE_COPYRIGHT_LINK` | 版权链接 |
 | `VITE_HTTP_TIMEOUT` | HTTP 请求超时时间（毫秒） |
+
+### 9.2 静态资源
+
+| 路径 | 描述 |
+|------|------|
+| `public/juyiting/hall.tmx` | 聚义厅 Tiled 地图 |
+| `public/juyiting/images/` | 聚义厅 2.5D 背景、遮挡、灯光图层 |
+| `public/juyiting/images/props/` | 聚义厅交互道具图层 |
+| `public/juyiting/liangshan-character-walksheet-v1.png` | Agent 行走图集 |
 
 ---
 
@@ -563,21 +640,34 @@ src/
 ├── auto-imports.d.ts          # 自动导入类型
 ├── components.d.ts            # 组件类型声明
 ├── components/                # 组件目录
+│   ├── agent/                 # Agent 卡片、详情、列表
 │   ├── chat/                  # 聊天模块
+│   ├── juyiting/              # 聚义厅面板和舞台组件
 │   ├── phrase/                # 短语模块
 │   ├── task/                  # 任务模块
 │   ├── world/                 # 世界模块
 │   └── *.vue                  # 其他组件
 ├── composables/               # 组合式函数
+│   ├── juyiting/              # 聚义厅数据、会话、场景和任务逻辑
 │   ├── useHttp.js             # HTTP 请求封装
 │   └── README.md
+├── constants/                 # 常量配置
+│   ├── juyiting.js
+│   └── juyitingScene.js
+├── game/                      # melonJS 聚义厅场景
+│   ├── JuyitingGame.js
+│   ├── scenes/
+│   ├── entities/
+│   └── *.js
 ├── i18n/                      # 国际化
 ├── router/                    # 路由配置
 │   └── index.js
 ├── stores/                    # 状态管理
 │   ├── api.js                 # API 认证
+│   ├── agent.js               # Agent 状态
 │   ├── global.js              # 全局状态
 │   ├── i18n.js                # 国际化状态
+│   ├── message.js             # 消息中心状态
 │   └── util.js                # 工具函数
 ├── styles/                    # 样式文件
 └── utils/                     # 工具函数
@@ -591,6 +681,7 @@ src/
 | 版本 | 日期 | 修改内容 | 作者 |
 |------|------|----------|------|
 | v1.0 | 2025-05-04 | 初始版本，根据项目代码生成 | AI |
+| v1.1 | 2026-07-04 | 根据当前代码补充聚义厅、melonJS、Agent API、目录结构和状态管理 | AI |
 
 ---
 

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 鉴毃涔夊巺鍦烘櫙 - melonJS Stage (manual asset loading)
  */
 
@@ -353,6 +353,77 @@ export function createHallSceneClass(me, HallAgentClass) {
     }
 
     _renderModularLayers(vpW, vpH) {
+      const tmxLayers = this._mapData?.imageLayers
+      if (!tmxLayers || !Object.keys(tmxLayers).length) {
+        console.warn("[HallScene] _renderModularLayers: no TMX imageLayers, falling back to manifest")
+        return this._renderModularLayersFromManifest(vpW, vpH)
+      }
+
+      // --- fully TMX-driven: imagelayer name -> melonJS resource name ---
+      const NAME_TO_RESOURCE = {
+        "background": "liangshan-hall-base-clean",
+        "mid-occluders": "liangshan-hall-mid-occluders",
+        "prop-main-seat": "liangshan-hall-prop-main-seat",
+        "prop-bounty-board": "liangshan-hall-prop-bounty-board",
+        "prop-library-shelf": "liangshan-hall-prop-library-shelf",
+        "prop-agent-roster": "liangshan-hall-prop-agent-roster",
+        "prop-roster-book": "juyiting-modular-prop-roster-book",
+        "prop-gate": "liangshan-hall-prop-gate",
+        "foreground-occluders": "liangshan-hall-foreground-occluders",
+        "lighting-overlay": "liangshan-hall-lighting-overlay"
+      }
+
+      const LAYER_DEPTH = {
+        "background": 0,
+        "mid-occluders": 2,
+        "foreground-occluders": 5,
+        "lighting-overlay": 8
+      }
+      const PROP_DEPTH_START = 3
+      const PROP_DEPTH_STEP = 0.5
+
+      const BLEND_MODES = {
+        "lighting-overlay": "screen"
+      }
+
+      console.log("[HallScene] _renderModularLayers: TMX-driven, " + Object.keys(tmxLayers).length + " imagelayers")
+
+      let propIndex = 0
+      let rendered = 0
+
+      Object.entries(tmxLayers).forEach(([name, tmxLayer]) => {
+        const resourceName = NAME_TO_RESOURCE[name]
+        if (!resourceName) {
+          console.warn("[HallScene] No resource mapping for TMX layer:", name)
+          return
+        }
+
+        const image = me.loader.getImage(resourceName)
+        if (!image) {
+          console.warn("[HallScene] Image not loaded:", resourceName, "for layer:", name)
+          return
+        }
+
+        const depth = LAYER_DEPTH[name] !== undefined ? LAYER_DEPTH[name] : (PROP_DEPTH_START + propIndex * PROP_DEPTH_STEP)
+        const blendMode = BLEND_MODES[name] || null
+
+        const x = tmxLayer.offsetX || 0
+        const y = tmxLayer.offsetY || 0
+        const w = tmxLayer.width || vpW
+        const h = tmxLayer.height || vpH
+
+        const imageLayer = this._createCustomImageLayer(x, y, w, h, image, { blendMode })
+        me.game.world.addChild(imageLayer, depth)
+        this._imageLayers.push(imageLayer)
+
+        if (!LAYER_DEPTH[name]) propIndex++
+        rendered++
+      })
+
+      console.log("[HallScene] _renderModularLayers: rendered " + rendered + " layers from TMX")
+      return rendered > 0
+    }
+    _renderModularLayersFromManifest(vpW, vpH) {
       const loaded = HALL_MODULAR_RENDER_LAYERS
         .map(layer => ({ layer, image: me.loader.getImage(layer.resourceName) }))
         .filter(({ image }) => Boolean(image))
@@ -360,21 +431,18 @@ export function createHallSceneClass(me, HallAgentClass) {
       if (!loaded.length) return false
 
       loaded.forEach(({ layer, image }) => {
-        if (layer.kind === 'environment') {
+        const x = layer.defaultX || 0
+        const y = layer.defaultY || 0
+        if (layer.kind === "environment") {
           const sx = layer.sourceX || 0
           const sy = layer.sourceY || 0
           const sw = layer.sourceW || image.width
           const sh = layer.sourceH || image.height
-          const x = layer.defaultX || 0
-          const y = layer.defaultY || 0
           const iw = Math.round((layer.sourceW || image.width) * (layer.defaultScale || 1))
           const ih = Math.round((layer.sourceH || image.height) * (layer.defaultScale || 1))
           const imageLayer = this._createCustomImageLayer(x, y, iw, ih, image, {
             blendMode: layer.blendMode,
-            sourceX: sx,
-            sourceY: sy,
-            sourceW: sw,
-            sourceH: sh
+            sourceX: sx, sourceY: sy, sourceW: sw, sourceH: sh
           })
           me.game.world.addChild(imageLayer, layer.depth)
           this._imageLayers.push(imageLayer)
@@ -382,17 +450,14 @@ export function createHallSceneClass(me, HallAgentClass) {
           const scale = layer.defaultScale || 1
           const iw = Math.round((image.width || vpW) * scale)
           const ih = Math.round((image.height || vpH) * scale)
-          const imageLayer = this._createCustomImageLayer(
-            layer.defaultX || 0,
-            layer.defaultY || 0,
-            iw, ih, image
-          )
+          const imageLayer = this._createCustomImageLayer(x, y, iw, ih, image)
           me.game.world.addChild(imageLayer, layer.depth)
           this._imageLayers.push(imageLayer)
         }
       })
       return true
     }
+
 
     _buildScene() {
       if (this._sceneBuilt) return
@@ -598,8 +663,28 @@ export function createHallSceneClass(me, HallAgentClass) {
     }
 
     _sortByDepth() {
-      const sorted = [...this._agents.values()].sort((a, b) => a.pos.y - b.pos.y)
-      sorted.forEach((a, i) => { a.depth = DEPTH_LAYERS.AGENTS + i * 0.001 })
+      const occluders = this._mapData?.occluders || []
+      const sceneHeight = 941
+      const agents = [...this._agents.values()].sort((a, b) => a.pos.y - b.pos.y)
+      agents.forEach((agent) => {
+        // Normalise Y to [0,1] range
+        const normY = agent.pos.y / sceneHeight
+        // Check if agent is behind any mask polygon
+        let behindMask = false
+        if (occluders.length) {
+          behindMask = occluders.some(occ => {
+            const inX = agent.pos.x >= occ.x && agent.pos.x <= occ.x + occ.width
+            const inY = agent.pos.y >= occ.y && agent.pos.y <= occ.y + occ.height
+            return inX && inY
+          })
+        }
+        // Behind mask �� depth 1.5-2.5; in front �� depth 3.0-5.5
+        if (behindMask) {
+          agent.depth = 1.5 + normY * 1.0
+        } else {
+          agent.depth = 2.0 + normY * 3.5
+        }
+      })
     }
 
     onDestroyEvent() {

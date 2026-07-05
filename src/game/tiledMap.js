@@ -11,6 +11,45 @@ const absoluteJuyitingPath = (source = '') => {
   return `/juyiting/${source}`.replace(/\/+/g, '/')
 }
 
+
+const computePolygonBounds = (objectNode) => {
+  const poly = objectNode.querySelector('polygon')
+  if (!poly) return null
+  const pointsStr = textAttr(poly, 'points')
+  if (!pointsStr) return null
+  const coords = pointsStr.split(/\s+/).filter(Boolean).map(p => {
+    const [px, py] = p.split(',').map(Number)
+    return { x: px, y: py }
+  })
+  if (!coords.length) return null
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  coords.forEach(({ x, y }) => {
+    if (x < minX) minX = x; if (y < minY) minY = y
+    if (x > maxX) maxX = x; if (y > maxY) maxY = y
+  })
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+}
+
+const computePolygonBoundsFromData = (object) => {
+  const poly = object?.polygon
+  if (!poly || !Array.isArray(poly)) return null
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  poly.forEach(({ x, y }) => {
+    if (x < minX) minX = x; if (y < minY) minY = y
+    if (x > maxX) maxX = x; if (y > maxY) maxY = y
+  })
+  if (!Number.isFinite(minX)) return null
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+}
+
+const NAME_TO_PANEL_MAP = {
+  'roster-book': 'catalog',
+  'agent-roster': 'agents',
+  'library-shelf': 'library',
+  'bounty-board': 'tasks',
+  'main-seat': 'chat'
+}
+
 const readProperties = (objectNode) => {
   const properties = {}
   objectNode.querySelectorAll('properties > property').forEach((property) => {
@@ -28,13 +67,24 @@ export const rectToPercent = (rect, space) => ({
   h: roundPercent((rect.height / space.height) * 100)
 })
 
-const readObjectRect = objectNode => ({
-  x: numberAttr(objectNode, 'x'),
-  y: numberAttr(objectNode, 'y'),
-  width: numberAttr(objectNode, 'width'),
-  height: numberAttr(objectNode, 'height'),
-  ellipse: Boolean(objectNode.querySelector('ellipse'))
-})
+const readObjectRect = objectNode => {
+  let width = numberAttr(objectNode, 'width')
+  let height = numberAttr(objectNode, 'height')
+  if (!width && !height) {
+    const polyBounds = computePolygonBounds(objectNode)
+    if (polyBounds) {
+      width = polyBounds.width
+      height = polyBounds.height
+    }
+  }
+  return {
+    x: numberAttr(objectNode, 'x'),
+    y: numberAttr(objectNode, 'y'),
+    width,
+    height,
+    ellipse: Boolean(objectNode.querySelector('ellipse'))
+  }
+}
 
 const readObjectGroup = (doc, name) => {
   const group = [...doc.querySelectorAll('objectgroup')].find(item => textAttr(item, 'name') === name)
@@ -42,13 +92,24 @@ const readObjectGroup = (doc, name) => {
   return [...group.children].filter(child => child.tagName === 'object')
 }
 
-const readObjectRectFromData = object => ({
-  x: Number(object?.x) || 0,
-  y: Number(object?.y) || 0,
-  width: Number(object?.width) || 0,
-  height: Number(object?.height) || 0,
-  ellipse: Boolean(object?.ellipse)
-})
+const readObjectRectFromData = object => {
+  let width = Number(object?.width) || 0
+  let height = Number(object?.height) || 0
+  if (!width && !height) {
+    const polyBounds = computePolygonBoundsFromData(object)
+    if (polyBounds) {
+      width = polyBounds.width
+      height = polyBounds.height
+    }
+  }
+  return {
+    x: Number(object?.x) || 0,
+    y: Number(object?.y) || 0,
+    width,
+    height,
+    ellipse: Boolean(object?.ellipse)
+  }
+}
 
 const coordinateSpaceFor = (doc, mapWidth, mapHeight) => {
   const imageSizes = [...doc.querySelectorAll('imagelayer image')]
@@ -73,20 +134,39 @@ const coordinateSpaceFor = (doc, mapWidth, mapHeight) => {
 }
 
 const coordinateSpaceForData = (map, mapWidth, mapHeight) => {
-  const objectBounds = (map.layers || [])
-    .filter(layer => layer.type === 'objectgroup')
-    .flatMap(layer => layer.objects || [])
-    .reduce((bounds, object) => {
-      const rect = readObjectRectFromData(object)
-      return {
-        width: Math.max(bounds.width, rect.x + rect.width),
-        height: Math.max(bounds.height, rect.y + rect.height)
-      }
-    }, { width: mapWidth, height: mapHeight })
+    const imageSizes = (map.layers || [])
+      .filter(layer => layer.type === 'imagelayer')
+      .map(layer => {
+        const w = Number(layer.width || layer.imagewidth || layer.imageWidth || 0)
+        const h = Number(layer.height || layer.imageheight || layer.imageHeight || 0)
+        if (!w && layer.image && typeof layer.image === 'object') {
+          return { width: Number(layer.image.width) || 0, height: Number(layer.image.height) || 0 }
+        }
+        return { width: w, height: h }
+      })
+      .filter(size => size.width && size.height)
 
-  return objectBounds
-}
+    console.log("[tiledMap] coordinateSpaceForData: imagelayer sizes =", JSON.stringify(imageSizes.map(function(s){return s.width+"x"+s.height})))
 
+    const objectBounds = (map.layers || [])
+      .filter(layer => layer.type === 'objectgroup')
+      .flatMap(layer => layer.objects || [])
+      .reduce((bounds, object) => {
+        const rect = readObjectRectFromData(object)
+        return {
+          width: Math.max(bounds.width, rect.x + rect.width),
+          height: Math.max(bounds.height, rect.y + rect.height)
+        }
+      }, { width: mapWidth, height: mapHeight })
+
+    const result = imageSizes.reduce((space, size) => ({
+      width: Math.max(space.width, size.width),
+      height: Math.max(space.height, size.height)
+    }), objectBounds)
+
+    console.log("[tiledMap] coordinateSpaceForData: final =", result.width, "x", result.height, "(map tile size:", mapWidth, "x", mapHeight, ")")
+    return result
+  }
 const objectGroupFromData = (map, name) => {
   const layer = (map.layers || []).find(item => item.name === name && item.type === 'objectgroup')
   return layer?.objects || []
@@ -111,19 +191,27 @@ const parseJuyiHallTmxData = (map) => {
       }
     })
 
-  const hotspots = objectGroupFromData(map, 'hotspots').map((object) => {
+  const hotspotObjects = [
+    ...objectGroupFromData(map, 'hotspots'),
+    ...objectGroupFromData(map, 'object')
+  ]
+  const hotspots = hotspotObjects.map((object) => {
     const rect = readObjectRectFromData(object)
     const properties = object.properties || {}
     return {
       id: object.name || '',
-      panel: properties.panel || '',
+      panel: NAME_TO_PANEL_MAP[object.name] || properties.panel || '',
       ...rectToPercent(rect, coordinateSpace),
       rect,
       properties
     }
   })
 
-  const obstacles = objectGroupFromData(map, 'obstacles').map((object) => {
+  const obstacleGroups = [
+    ...objectGroupFromData(map, 'obstacles'),
+    ...objectGroupFromData(map, 'collision')
+  ]
+  const obstacles = obstacleGroups.map((object) => {
     const rect = readObjectRectFromData(object)
     return {
       id: object.name || '',
@@ -131,6 +219,27 @@ const parseJuyiHallTmxData = (map) => {
       rect
     }
   })
+
+  const maskObjectsData = objectGroupFromData(map, 'mask')
+  const occluders = maskObjectsData.map((object) => {
+    const poly = object?.polygon
+    if (!poly || !Array.isArray(poly)) return null
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    poly.forEach(({ x, y }) => {
+      if (x < minX) minX = x; if (y < minY) minY = y
+      if (x > maxX) maxX = x; if (y > maxY) maxY = y
+    })
+    return {
+      id: object.name || ('mask-' + (object.id || '')),
+      x: (Number(object?.x) || 0) + minX,
+      y: (Number(object?.y) || 0) + minY,
+      width: maxX - minX,
+      height: maxY - minY,
+      points: poly,
+      originX: Number(object?.x) || 0,
+      originY: Number(object?.y) || 0
+    }
+  }).filter(Boolean)
 
   const spawns = Object.fromEntries(objectGroupFromData(map, 'spawns').map((object) => {
     const rawName = object.name || ''
@@ -153,6 +262,7 @@ const parseJuyiHallTmxData = (map) => {
     imageLayers,
     hotspots,
     obstacles,
+    occluders,
     spawns
   }
 }
@@ -191,19 +301,27 @@ export const parseJuyiHallTmx = (xml) => {
     }
   })
 
-  const hotspots = readObjectGroup(doc, 'hotspots').map((objectNode) => {
+  const hotspotObjects = [
+    ...readObjectGroup(doc, 'hotspots'),
+    ...readObjectGroup(doc, 'object')
+  ]
+  const hotspots = hotspotObjects.map((objectNode) => {
     const rect = readObjectRect(objectNode)
     const properties = readProperties(objectNode)
     return {
       id: textAttr(objectNode, 'name'),
-      panel: properties.panel || '',
+      panel: NAME_TO_PANEL_MAP[textAttr(objectNode, 'name')] || properties.panel || '',
       ...rectToPercent(rect, coordinateSpace),
       rect,
       properties
     }
   })
 
-  const obstacles = readObjectGroup(doc, 'obstacles').map((objectNode) => {
+  const obstacleGroups = [
+    ...readObjectGroup(doc, 'obstacles'),
+    ...readObjectGroup(doc, 'collision')
+  ]
+  const obstacles = obstacleGroups.map((objectNode) => {
     const rect = readObjectRect(objectNode)
     return {
       id: textAttr(objectNode, 'name'),
@@ -211,6 +329,34 @@ export const parseJuyiHallTmx = (xml) => {
       rect
     }
   })
+
+  const maskObjects = readObjectGroup(doc, 'mask')
+  const occluders = maskObjects.map((objectNode) => {
+    const poly = objectNode.querySelector('polygon')
+    if (!poly) return null
+    const pointsStr = textAttr(poly, 'points')
+    if (!pointsStr) return null
+    const coords = pointsStr.split(/\s+/).filter(Boolean).map(p => {
+      const [px, py] = p.split(',').map(Number)
+      return { x: px, y: py }
+    })
+    if (!coords.length) return null
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    coords.forEach(({ x, y }) => {
+      if (x < minX) minX = x; if (y < minY) minY = y
+      if (x > maxX) maxX = x; if (y > maxY) maxY = y
+    })
+    return {
+      id: textAttr(objectNode, 'name') || ('mask-' + textAttr(objectNode, 'id')),
+      x: numberAttr(objectNode, 'x') + minX,
+      y: numberAttr(objectNode, 'y') + minY,
+      width: maxX - minX,
+      height: maxY - minY,
+      points: coords,
+      originX: numberAttr(objectNode, 'x'),
+      originY: numberAttr(objectNode, 'y')
+    }
+  }).filter(Boolean)
 
   const spawns = Object.fromEntries(readObjectGroup(doc, 'spawns').map((objectNode) => {
     const rawName = textAttr(objectNode, 'name')
@@ -233,6 +379,7 @@ export const parseJuyiHallTmx = (xml) => {
     imageLayers,
     hotspots,
     obstacles,
+    occluders,
     spawns
   }
 }

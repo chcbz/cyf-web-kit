@@ -1,6 +1,6 @@
-﻿export const HALL_MODULAR_ENVIRONMENT_LAYERS = [
+export const HALL_MODULAR_ENVIRONMENT_LAYERS = [
   {
-    id: 'hall-wall-back',
+    id: 'wall-back',
     resourceName: 'juyiting-modular-hall-wall-back',
     src: '/juyiting/images/modular/hall-wall-back-v1.png',
     depth: 0,
@@ -10,7 +10,7 @@
     kind: 'environment'
   },
   {
-    id: 'hall-floor',
+    id: 'floor',
     resourceName: 'juyiting-modular-hall-floor',
     src: '/juyiting/images/modular/hall-floor-v1.png',
     depth: 1,
@@ -24,7 +24,7 @@
     kind: 'environment'
   },
   {
-    id: 'hall-pillars',
+    id: 'pillars',
     resourceName: 'juyiting-modular-hall-pillars',
     src: '/juyiting/images/modular/hall-pillars-v1.png',
     depth: 6,
@@ -79,7 +79,7 @@ export const HALL_MODULAR_PROP_LAYERS = [
   {
     id: 'prop-roster-book',
     resourceName: 'juyiting-modular-prop-roster-book',
-    src: '/juyiting/images/modular/prop-roster-book-v1.png',
+    src: '/juyiting/images/props/liangshan-hall-prop-roster-book-v3.png',
     depth: 4,
     defaultX: 217,
     defaultY: 489,

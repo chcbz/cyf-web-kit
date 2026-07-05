@@ -1,73 +1,99 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.11.0" orientation="orthogonal" renderorder="right-down" width="30" height="20" tilewidth="32" tileheight="32" infinite="0" nextlayerid="10" nextobjectid="100">
- <imagelayer id="1" name="background" offsetx="0" offsety="0">
-  <image source="images/liangshan-hall-bg-v2.png" width="960" height="640"/>
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.10" tiledversion="1.11.0" orientation="orthogonal" renderorder="right-down" width="1672" height="941" tilewidth="1" tileheight="1" infinite="0" nextlayerid="20" nextobjectid="200">
+ <!-- depth 0: back wall -->
+ <imagelayer id="1" name="wall-back" offsetx="0" offsety="0">
+  <image source="images/modular/hall-wall-back-v1.png" width="1672" height="941"/>
  </imagelayer>
- <objectgroup id="2" name="hotspots" color="#ffcc55">
-  <object id="10" name="mainSeat" x="394" y="293" width="173" height="106">
+ <!-- depth 1: floor (placed at y=414 to align lower half) -->
+ <imagelayer id="2" name="floor" offsetx="0" offsety="414">
+  <image source="images/modular/hall-floor-v1.png" width="1672" height="941"/>
+ </imagelayer>
+ <!-- depth 2: gate / entrance -->
+ <imagelayer id="3" name="prop-gate" offsetx="686" offsety="649">
+  <image source="images/modular/prop-gate-v1.png" width="307" height="205"/>
+ </imagelayer>
+ <!-- depth 3: main seat -->
+ <imagelayer id="4" name="prop-main-seat" offsetx="686" offsety="132">
+  <image source="images/modular/prop-main-seat-v1.png" width="338" height="225"/>
+ </imagelayer>
+ <!-- depth 3: bounty board -->
+ <imagelayer id="5" name="prop-bounty-board" offsetx="1237" offsety="245">
+  <image source="images/modular/prop-bounty-board-v1.png" width="246" height="164"/>
+ </imagelayer>
+ <!-- depth 3: library shelf -->
+ <imagelayer id="6" name="prop-library-shelf" offsetx="1221" offsety="452">
+  <image source="images/modular/prop-library-shelf-v1.png" width="307" height="205"/>
+ </imagelayer>
+ <!-- depth 4: table desk -->
+ <imagelayer id="7" name="prop-table-desk" offsetx="686" offsety="452">
+  <image source="images/modular/prop-table-desk-v1.png" width="353" height="236"/>
+ </imagelayer>
+ <!-- depth 4: roster book -->
+ <imagelayer id="8" name="prop-roster-book" offsetx="217" offsety="489">
+  <image source="images/modular/prop-roster-book-v1.png" width="215" height="143"/>
+ </imagelayer>
+ <!-- depth 6: pillars overlay -->
+ <imagelayer id="9" name="pillars" offsetx="0" offsety="0">
+  <image source="images/modular/hall-pillars-v1.png" width="1672" height="941"/>
+ </imagelayer>
+ <!-- hotspots: clickable interaction zones (percentage coords 0-100) -->
+ <objectgroup id="10" name="hotspots" color="#ffcc55">
+  <object id="10" name="mainSeat" x="41" y="14" width="22" height="24">
    <properties>
     <property name="panel" value="chat"/>
    </properties>
   </object>
-  <object id="11" name="agentRoster" x="274" y="317" width="125" height="122">
+  <object id="11" name="agentRoster" x="13" y="47" width="14" height="17">
    <properties>
     <property name="panel" value="agents"/>
    </properties>
   </object>
-  <object id="12" name="bountyBoard" x="562" y="317" width="125" height="122">
+  <object id="12" name="bountyBoard" x="74" y="24" width="17" height="21">
    <properties>
     <property name="panel" value="tasks"/>
    </properties>
   </object>
-  <object id="13" name="personaCatalog" x="283" y="592" width="125" height="122">
+  <object id="13" name="personaCatalog" x="13" y="70" width="14" height="14">
    <properties>
     <property name="panel" value="catalog"/>
    </properties>
   </object>
-  <object id="14" name="libraryShelf" x="365" y="471" width="230" height="157">
+  <object id="14" name="libraryShelf" x="73" y="49" width="19" height="23">
    <properties>
     <property name="panel" value="library"/>
    </properties>
   </object>
  </objectgroup>
- <objectgroup id="3" name="obstacles" color="#ff4444">
-  <object id="50" name="main-seat" x="389" y="221" width="163" height="96"/>
-  <object id="51" name="main-table" x="360" y="378" width="240" height="69"/>
-  <object id="52" name="left-bookcase" x="86" y="269" width="211" height="192"/>
-  <object id="53" name="left-plan-desk" x="67" y="514" width="211" height="86"/>
-  <object id="54" name="recruit-drum" x="125" y="739" width="154" height="134">
+ <!-- obstacles: agent walk-blocking zones (percentage coords 0-100) -->
+ <objectgroup id="11" name="obstacles" color="#ff4444">
+  <object id="50" name="main-seat" x="41" y="14" width="22" height="22"/>
+  <object id="51" name="main-table" x="41" y="48" width="22" height="16"/>
+  <object id="52" name="left-bookcase" x="5" y="40" width="14" height="22"/>
+  <object id="53" name="left-plan-desk" x="7" y="62" width="14" height="10"/>
+  <object id="54" name="recruit-drum" x="7" y="78" width="11" height="14">
    <ellipse/>
   </object>
-  <object id="55" name="left-weapon-rack" x="10" y="614" width="86" height="211"/>
-  <object id="56" name="bounty-rack" x="643" y="374" width="173" height="154"/>
-  <object id="57" name="bounty-desk" x="624" y="538" width="154" height="77"/>
-  <object id="58" name="library-desk" x="648" y="672" width="202" height="134"/>
-  <object id="59" name="library-shelf-ob" x="840" y="528" width="106" height="250"/>
-  <object id="60" name="left-pillar-f" x="336" y="374" width="77" height="134">
+  <object id="55" name="bounty-rack" x="74" y="40" width="12" height="18"/>
+  <object id="56" name="bounty-desk" x="74" y="58" width="12" height="10"/>
+  <object id="57" name="library-desk" x="74" y="72" width="14" height="15"/>
+  <object id="58" name="library-shelf-ob" x="82" y="56" width="7" height="28"/>
+  <object id="59" name="left-pillar" x="34" y="42" width="6" height="22">
    <ellipse/>
   </object>
-  <object id="61" name="right-pillar-f" x="595" y="374" width="77" height="134">
-   <ellipse/>
-  </object>
-  <object id="62" name="far-left-pillar" x="48" y="538" width="77" height="250">
-   <ellipse/>
-  </object>
-  <object id="63" name="far-right-pillar" x="874" y="528" width="77" height="250">
+  <object id="60" name="right-pillar" x="60" y="42" width="6" height="22">
    <ellipse/>
   </object>
  </objectgroup>
- <objectgroup id="4" name="spawns" color="#4488ff">
-  <object id="70" name="spawn_songjiang" x="480" y="403" width="16" height="16"/>
-  <object id="71" name="spawn_linchong" x="326" y="538" width="16" height="16"/>
-  <object id="72" name="spawn_wuyong" x="451" y="538" width="16" height="16"/>
-  <object id="73" name="spawn_likui" x="422" y="730" width="16" height="16"/>
-  <object id="74" name="spawn_husanniang" x="595" y="557" width="16" height="16"/>
-  <object id="75" name="spawn_lujunyi" x="538" y="538" width="16" height="16"/>
-  <object id="76" name="spawn_center" x="480" y="624" width="16" height="16"/>
-  <object id="77" name="spawn_left" x="288" y="624" width="16" height="16"/>
-  <object id="78" name="spawn_right" x="672" y="624" width="16" height="16"/>
+ <!-- spawns: agent placement points (percentage coords 0-100) -->
+ <objectgroup id="12" name="spawns" color="#4488ff">
+  <object id="70" name="spawn_songjiang" x="51" y="44" width="2" height="2"/>
+  <object id="71" name="spawn_linchong" x="34" y="57" width="2" height="2"/>
+  <object id="72" name="spawn_wuyong" x="48" y="57" width="2" height="2"/>
+  <object id="73" name="spawn_likui" x="38" y="77" width="2" height="2"/>
+  <object id="74" name="spawn_husanniang" x="63" y="60" width="2" height="2"/>
+  <object id="75" name="spawn_lujunyi" x="57" y="57" width="2" height="2"/>
+  <object id="76" name="spawn_center" x="51" y="66" width="2" height="2"/>
+  <object id="77" name="spawn_left" x="31" y="66" width="2" height="2"/>
+  <object id="78" name="spawn_right" x="71" y="66" width="2" height="2"/>
  </objectgroup>
- <imagelayer id="5" name="foreground" offsetx="0" offsety="0">
-  <image source="images/liangshan-hall-foreground-v1.png" width="960" height="640"/>
- </imagelayer>
 </map>

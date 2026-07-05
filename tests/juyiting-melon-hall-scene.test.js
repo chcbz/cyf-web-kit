@@ -1,5 +1,6 @@
 import { expect } from 'chai'
 
+import { HALL_SCENE_IMAGE_LAYERS, HALL_SCENE_PROP_LAYERS } from '../src/game/hallSceneLayers.js'
 import { createHallSceneClass } from '../src/game/scenes/HallScene.js'
 
 const createFakeMelon = () => {
@@ -137,6 +138,29 @@ describe('HallScene melonJS pointer routing', () => {
     const background = me.children.find(item => item.depth === 0)?.child
     expect(background).to.exist
     expect(background.floating).not.to.equal(true)
+  })
+
+  it('renders declared hall image and prop layers in depth order', () => {
+    const me = createFakeMelon()
+    const expectedLayers = HALL_SCENE_IMAGE_LAYERS.concat(HALL_SCENE_PROP_LAYERS)
+    me.loader.getImage = name => expectedLayers.some(layer => layer.resourceName === name)
+      ? { width: 1672, height: 941, resourceName: name }
+      : null
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+
+    scene.onResetEvent()
+
+    const renderedLayers = me.children
+      .filter(item => item.child.image?.resourceName)
+      .map(item => ({ name: item.child.image.resourceName, depth: item.depth }))
+
+    expect(renderedLayers).to.deep.equal(
+      expectedLayers
+        .slice()
+        .sort((a, b) => a.depth - b.depth)
+        .map(layer => ({ name: layer.resourceName, depth: layer.depth }))
+    )
   })
 
   it('keeps transform state inside the melonJS scene', () => {

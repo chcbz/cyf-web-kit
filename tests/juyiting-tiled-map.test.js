@@ -9,9 +9,9 @@ describe('Juyi Hall Tiled map parser', () => {
   it('parses image layers, hotspots, obstacles, and spawn points from hall.tmx', () => {
     const map = parseJuyiHallTmx(xml)
 
-    expect(map.width).to.equal(960)
+    expect(map.width).to.equal(1672)
     expect(map.height).to.equal(640)
-    expect(map.coordinateWidth).to.equal(960)
+    expect(map.coordinateWidth).to.equal(1672)
     expect(map.coordinateHeight).to.be.greaterThan(860)
     expect(map.imageLayers.background.source).to.equal('/juyiting/images/liangshan-hall-bg-v2.png')
     expect(map.imageLayers.foreground.source).to.equal('/juyiting/images/liangshan-hall-foreground-v1.png')

@@ -1,5 +1,5 @@
 /**
- * 聚义厅 scene configuration
+ * 聚义�?scene configuration
  */
 
 /** Scene depth layers */
@@ -12,8 +12,8 @@ export const DEPTH_LAYERS = {
 }
 
 /** Native hall background dimensions. Keep scene math aligned to the art asset. */
-export const HALL_SCENE_WIDTH = 1672
-export const HALL_SCENE_HEIGHT = 941
+export const HALL_SCENE_WIDTH = 1664
+export const HALL_SCENE_HEIGHT = 928
 
 /** Character walk sheet grid: one character per row, eight gait frames per row. */
 export const ATLAS_COLS = 8

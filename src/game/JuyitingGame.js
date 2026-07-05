@@ -1,5 +1,5 @@
 /**
- * 聚义厅 melonJS game instance manager
+ * 鑱氫箟鍘?melonJS game instance manager
  */
 
 import { createGameConfig } from './config.js'
@@ -90,8 +90,10 @@ export class JuyitingGame {
       if (!this._isCurrentMount(mountToken)) return
       loaded++
       if (loaded >= total) {
-        this._prepareMapData(me)
-        this._startGame(me, mountToken)
+        this._prepareMapData(me).then(() => {
+          if (!this._isCurrentMount(mountToken)) return
+          this._startGame(me, mountToken)
+        })
       }
     }
 
@@ -116,12 +118,28 @@ export class JuyitingGame {
     return this._mountToken === mountToken
   }
 
-  _prepareMapData(me) {
-    const tmx = me.loader.getTMX?.(HALL_MAP_RESOURCE.name)
+  async _prepareMapData(me) {
+    let tmx = me.loader.getTMX?.(HALL_MAP_RESOURCE.name)
+    console.log("[JuyitingGame] _prepareMapData: melonJS getTMX:", tmx ? "found" : "null, fetching directly")
+
+    if (!tmx) {
+      try {
+        const resp = await fetch(HALL_MAP_RESOURCE.src)
+        const xmlText = await resp.text()
+        tmx = xmlText
+        console.log("[JuyitingGame] Direct TMX fetch OK,", xmlText.length, "bytes")
+      } catch (err) {
+        console.warn("[JuyitingGame] Direct TMX fetch failed:", err?.message || err)
+      }
+    }
+
     try {
       this._mapData = tmx ? parseJuyiHallTmx(tmx) : null
+      if (this._mapData) {
+        console.log("[JuyitingGame] TMX parsed, imageLayers:", Object.keys(this._mapData.imageLayers || {}).join(", "))
+      }
     } catch (error) {
-      console.warn('[JuyitingGame] TMX parse failed:', error?.message || error)
+      console.warn("[JuyitingGame] TMX parse failed:", error?.message || error)
       this._mapData = null
     }
     this._hallScene?.setMapData(this._mapData)
