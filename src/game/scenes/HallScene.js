@@ -361,8 +361,20 @@ export function createHallSceneClass(me, HallAgentClass) {
 
       loaded.forEach(({ layer, image }) => {
         if (layer.kind === 'environment') {
-          const imageLayer = this._createCustomImageLayer(0, 0, vpW, vpH, image, {
-            blendMode: layer.blendMode
+          const sx = layer.sourceX || 0
+          const sy = layer.sourceY || 0
+          const sw = layer.sourceW || image.width
+          const sh = layer.sourceH || image.height
+          const x = layer.defaultX || 0
+          const y = layer.defaultY || 0
+          const iw = Math.round((layer.sourceW || image.width) * (layer.defaultScale || 1))
+          const ih = Math.round((layer.sourceH || image.height) * (layer.defaultScale || 1))
+          const imageLayer = this._createCustomImageLayer(x, y, iw, ih, image, {
+            blendMode: layer.blendMode,
+            sourceX: sx,
+            sourceY: sy,
+            sourceW: sw,
+            sourceH: sh
           })
           me.game.world.addChild(imageLayer, layer.depth)
           this._imageLayers.push(imageLayer)
@@ -385,14 +397,13 @@ export function createHallSceneClass(me, HallAgentClass) {
     _buildScene() {
       if (this._sceneBuilt) return
       const vp = me.game.viewport
-      if (!vp) return false // viewport not ready yet, retry later
+      if (!vp) return false
 
       const vpW = vp.width
       const vpH = vp.height
       const mapData = this._mapData
       const hotspots = mapData?.hotspots?.length ? mapData.hotspots : FALLBACK_HALL_HOTSPOTS
 
-      // === Image layers (modular first, manifest fallback, legacy last) ===
       let layersRendered = this._renderModularLayers(vpW, vpH)
 
       if (!layersRendered) {
@@ -429,7 +440,6 @@ export function createHallSceneClass(me, HallAgentClass) {
         }
       }
 
-      // === Hotspot layer ===
       class HotspotMarker extends me.Renderable {
         constructor(x, y, w, h, data) {
           super(x, y, w, h)
@@ -491,7 +501,6 @@ export function createHallSceneClass(me, HallAgentClass) {
         this._hotspots.push({ marker, hitArea: marker, data: h })
       })
 
-      // === Agent click on viewport ===
       me.input.registerPointerEvent('pointerdown', me.game.viewport, (event) => {
         const point = this._eventToWorldPoint(event)
         if (!point) return true
@@ -525,6 +534,10 @@ export function createHallSceneClass(me, HallAgentClass) {
           this.anchorPoint.set(0, 0)
           this.image = img
           this.blendMode = layerOptions.blendMode || null
+          this._sourceX = layerOptions.sourceX || 0
+          this._sourceY = layerOptions.sourceY || 0
+          this._sourceW = layerOptions.sourceW || (img ? img.width : width)
+          this._sourceH = layerOptions.sourceH || (img ? img.height : height)
           this.isKinematic = true
         }
 
@@ -534,7 +547,11 @@ export function createHallSceneClass(me, HallAgentClass) {
           if (!ctx) return
           const previousBlendMode = ctx.globalCompositeOperation
           if (this.blendMode) ctx.globalCompositeOperation = this.blendMode
-          ctx.drawImage(this.image, this.pos.x, this.pos.y, this.width, this.height)
+          ctx.drawImage(
+            this.image,
+            this._sourceX, this._sourceY, this._sourceW, this._sourceH,
+            this.pos.x, this.pos.y, this.width, this.height
+          )
           if (this.blendMode) ctx.globalCompositeOperation = previousBlendMode
         }
       }
@@ -542,7 +559,6 @@ export function createHallSceneClass(me, HallAgentClass) {
     }
 
     onResetEvent() {
-      // Try to build immediately; if viewport not ready, defer to update()
       this._buildScene()
     }
 
@@ -575,7 +591,6 @@ export function createHallSceneClass(me, HallAgentClass) {
 
     update(dt) {
       super.update(dt)
-      // If scene hasn't been built yet, retry (viewport may be ready now)
       if (!this._sceneBuilt) this._buildScene()
       if (this._needsSync) this._fullSyncAgents()
       this._sortByDepth()

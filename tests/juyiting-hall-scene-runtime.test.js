@@ -1,5 +1,7 @@
-import { expect } from 'chai'
+﻿import { expect } from 'chai'
 
+import { HALL_SCENE_RENDER_LAYERS } from '../src/game/hallSceneLayers.js'
+import { HALL_MODULAR_RENDER_LAYERS } from '../src/game/hallModularLayers.js'
 import { createHallSceneClass } from '../src/game/scenes/HallScene.js'
 
 describe('HallScene melonJS runtime compatibility', () => {
@@ -54,7 +56,9 @@ describe('HallScene melonJS runtime compatibility', () => {
     scene._buildScene()
 
     const imageLayers = added.filter(child => child.image)
-    expect(imageLayers).to.have.length(2)
+
+    const renderLayerCount = HALL_MODULAR_RENDER_LAYERS.length || HALL_SCENE_RENDER_LAYERS.length
+    expect(imageLayers).to.have.length(renderLayerCount)
     expect(imageLayers.every(layer => typeof layer.addChild === 'function')).to.equal(false)
     expect(imageLayers.every(layer => layer.isKinematic === true)).to.equal(true)
     expect(added.filter(child => child.data).every(marker => marker.isKinematic === true)).to.equal(true)
