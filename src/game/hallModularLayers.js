@@ -22,6 +22,16 @@
     sourceW: 1672,
     sourceH: 527,
     kind: 'environment'
+  },
+  {
+    id: 'hall-pillars',
+    resourceName: 'juyiting-modular-hall-pillars',
+    src: '/juyiting/images/modular/hall-pillars-v1.png',
+    depth: 6,
+    defaultX: 0,
+    defaultY: 0,
+    defaultScale: 1,
+    kind: 'environment'
   }
 ]
 

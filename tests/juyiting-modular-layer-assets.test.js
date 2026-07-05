@@ -19,7 +19,7 @@ const pngInfo = (path) => {
 
 describe('Juyiting modular layer assets', () => {
   it('declares the generated modular environment layers', () => {
-    expect(HALL_MODULAR_ENVIRONMENT_LAYERS.map(layer => layer.id)).to.deep.equal(['hall-wall-back', 'hall-floor'])
+    expect(HALL_MODULAR_ENVIRONMENT_LAYERS.map(layer => layer.id)).to.deep.equal(['hall-wall-back', 'hall-floor', 'hall-pillars'])
 
     HALL_MODULAR_ENVIRONMENT_LAYERS.forEach(layer => {
       expect(layer.kind).to.equal('environment')
@@ -80,4 +80,5 @@ describe('Juyiting modular layer assets', () => {
     })
   })
 })
+
 
