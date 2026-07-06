@@ -165,10 +165,11 @@ export function createHallSceneClass(me, HallAgentClass) {
     fitToViewport() {
       const bounds = this._getViewportBounds()
       if (!bounds) return this.getTransform()
+      const md = this._mapData
       this._transform = fitSceneTransform({
         ...bounds,
-        sceneWidth: HALL_SCENE_WIDTH,
-        sceneHeight: HALL_SCENE_HEIGHT
+        sceneWidth: md?.coordinateWidth || HALL_SCENE_WIDTH,
+        sceneHeight: md?.coordinateHeight || HALL_SCENE_HEIGHT
       })
       this._applySceneTransform()
       return this.getTransform()
@@ -361,7 +362,6 @@ export function createHallSceneClass(me, HallAgentClass) {
 
       // --- fully TMX-driven: imagelayer name -> melonJS resource name ---
       const NAME_TO_RESOURCE = {
-        "background": "liangshan-hall-base-clean",
         "mid-occluders": "liangshan-hall-mid-occluders",
         "prop-main-seat": "liangshan-hall-prop-main-seat",
         "prop-bounty-board": "liangshan-hall-prop-bounty-board",
@@ -374,7 +374,6 @@ export function createHallSceneClass(me, HallAgentClass) {
       }
 
       const LAYER_DEPTH = {
-        "background": 0,
         "mid-occluders": 2,
         "foreground-occluders": 5,
         "lighting-overlay": 8
@@ -412,7 +411,9 @@ export function createHallSceneClass(me, HallAgentClass) {
         const w = tmxLayer.width || vpW
         const h = tmxLayer.height || vpH
 
-        const imageLayer = this._createCustomImageLayer(x, y, w, h, image, { blendMode })
+        const layerOpacity = tmxLayer.opacity !== undefined ? tmxLayer.opacity : 1
+        const layerTint = tmxLayer.tintcolor || null
+        const imageLayer = this._createCustomImageLayer(x, y, w, h, image, { blendMode, opacity: layerOpacity, tintcolor: layerTint })
         me.game.world.addChild(imageLayer, depth)
         this._imageLayers.push(imageLayer)
 
@@ -424,7 +425,13 @@ export function createHallSceneClass(me, HallAgentClass) {
       return rendered > 0
     }
     _renderModularLayersFromManifest(vpW, vpH) {
-      const loaded = HALL_MODULAR_RENDER_LAYERS
+      // When tile layers are present, skip full-painting environment layers (replaced by tile system)
+      const hasTileLayers = this._mapData?.tileLayers?.length > 0
+      const candidates = hasTileLayers
+        ? HALL_MODULAR_RENDER_LAYERS.filter(l => l.kind !== 'environment')
+        : HALL_MODULAR_RENDER_LAYERS
+
+      const loaded = candidates
         .map(layer => ({ layer, image: me.loader.getImage(layer.resourceName) }))
         .filter(({ image }) => Boolean(image))
 
@@ -459,6 +466,70 @@ export function createHallSceneClass(me, HallAgentClass) {
     }
 
 
+    // Render tile layers from TMX using a cached offscreen canvas.
+    // Each tile is drawn once into a cached image, then used as a single
+    // ImageLayer for efficient per-frame rendering.
+    _renderTileLayers(vpW, vpH) {
+      const tileLayers = this._mapData?.tileLayers
+      const tilesets = this._mapData?.tilesets
+      if (!tileLayers?.length || !tilesets?.length) return false
+
+      // Map TMX tileset name → melonJS image resource name
+      const TILESET_RESOURCE_MAP = {
+        'liangshan-hall-base-clean-v3': 'liangshan-hall-base-clean',
+        'hall-tileset': 'hall-tileset'
+      }
+
+      let rendered = 0
+      tileLayers.forEach((tileLayer, layerIdx) => {
+        // Find tileset covering this layer's GID range
+        const maxGid = tileLayer.data.reduce((a, b) => Math.max(a, b), 0)
+        const tileset = tilesets.find(ts => ts.firstgid <= maxGid)
+        if (!tileset) return
+
+        const resourceName = TILESET_RESOURCE_MAP[tileset.name] || tileset.name
+        const tilesetImg = me.loader.getImage(resourceName)
+        if (!tilesetImg) {
+          console.warn('[HallScene] Tileset image not loaded:', resourceName, 'for layer:', tileLayer.name)
+          return
+        }
+
+        const tw = tileset.tilewidth || 16
+        const th = tileset.tileheight || 16
+        const cols = tileset.columns || Math.floor(tileset.imagewidth / tw)
+
+        // Composite all tiles into an offscreen canvas (done once, GPU-friendly)
+        const canvasW = tileLayer.width * tw
+        const canvasH = tileLayer.height * th
+        const offCanvas = document.createElement('canvas')
+        offCanvas.width = canvasW
+        offCanvas.height = canvasH
+        const ctx = offCanvas.getContext('2d')
+
+        for (let i = 0; i < tileLayer.data.length; i++) {
+          const gid = tileLayer.data[i]
+          if (gid === 0) continue
+          const tileIdx = gid - tileset.firstgid
+          const srcCol = tileIdx % cols
+          const srcRow = Math.floor(tileIdx / cols)
+          const sx = srcCol * tw
+          const sy = srcRow * th
+          const dx = (i % tileLayer.width) * tw
+          const dy = Math.floor(i / tileLayer.width) * th
+          ctx.drawImage(tilesetImg, sx, sy, tw, th, dx, dy, tw, th)
+        }
+
+        // depth: background layers start at 0, add small offset per layer
+        const depth = layerIdx * 0.1
+        const imageLayer = this._createCustomImageLayer(0, 0, vpW, vpH, offCanvas, { opacity: null })
+        me.game.world.addChild(imageLayer, depth)
+        this._imageLayers.push(imageLayer)
+        rendered++
+        console.log('[HallScene] Tile layer rendered:', tileLayer.name, tileLayer.data.length, 'tiles, depth', depth)
+      })
+      return rendered > 0
+    }
+
     _buildScene() {
       if (this._sceneBuilt) return
       const vp = me.game.viewport
@@ -469,7 +540,22 @@ export function createHallSceneClass(me, HallAgentClass) {
       const mapData = this._mapData
       const hotspots = mapData?.hotspots?.length ? mapData.hotspots : FALLBACK_HALL_HOTSPOTS
 
-      let layersRendered = this._renderModularLayers(vpW, vpH)
+      // Apply TMX map properties (zoom, dimensions) if available
+      if (mapData?.mapProperties) {
+        const mp = mapData.mapProperties
+        if (mp.minZoom && Number.isFinite(Number(mp.minZoom))) this._minZoom = Number(mp.minZoom)
+        if (mp.maxZoom && Number.isFinite(Number(mp.maxZoom))) this._maxZoom = Number(mp.maxZoom)
+      }
+
+      // 1. Render tile layers first (background base)
+      let layersRendered = this._renderTileLayers(vpW, vpH)
+
+      // 2. Render imagelayer-driven layers (occluders, props, lighting)
+      if (!this._renderModularLayers(vpW, vpH) && !layersRendered) {
+        layersRendered = false
+      } else {
+        layersRendered = true
+      }
 
       if (!layersRendered) {
         const renderedManifestLayers = HALL_SCENE_RENDER_LAYERS
@@ -603,6 +689,8 @@ export function createHallSceneClass(me, HallAgentClass) {
           this._sourceY = layerOptions.sourceY || 0
           this._sourceW = layerOptions.sourceW || (img ? img.width : width)
           this._sourceH = layerOptions.sourceH || (img ? img.height : height)
+          this._opacity = layerOptions.opacity !== undefined && layerOptions.opacity !== null ? layerOptions.opacity : null
+          this._tintcolor = layerOptions.tintcolor || null
           this.isKinematic = true
         }
 
@@ -610,14 +698,24 @@ export function createHallSceneClass(me, HallAgentClass) {
           if (!this.image) return
           const ctx = renderer.getContext?.() || renderer
           if (!ctx) return
-          const previousBlendMode = ctx.globalCompositeOperation
+          const prevAlpha = ctx.globalAlpha
+          const prevBlend = ctx.globalCompositeOperation
+          if (this._opacity !== null && this._opacity !== undefined && this._opacity < 1) {
+            ctx.globalAlpha = this._opacity
+          }
           if (this.blendMode) ctx.globalCompositeOperation = this.blendMode
           ctx.drawImage(
             this.image,
             this._sourceX, this._sourceY, this._sourceW, this._sourceH,
             this.pos.x, this.pos.y, this.width, this.height
           )
-          if (this.blendMode) ctx.globalCompositeOperation = previousBlendMode
+          if (this._tintcolor) {
+            ctx.globalCompositeOperation = 'multiply'
+            ctx.fillStyle = this._tintcolor
+            ctx.fillRect(this.pos.x, this.pos.y, this.width, this.height)
+          }
+          ctx.globalAlpha = prevAlpha
+          ctx.globalCompositeOperation = prevBlend
         }
       }
       return new ImageLayer(x, y, width, height, image, options)
@@ -664,7 +762,7 @@ export function createHallSceneClass(me, HallAgentClass) {
 
     _sortByDepth() {
       const occluders = this._mapData?.occluders || []
-      const sceneHeight = 941
+      const sceneHeight = this._mapData?.coordinateHeight || 941
       const agents = [...this._agents.values()].sort((a, b) => a.pos.y - b.pos.y)
       agents.forEach((agent) => {
         // Normalise Y to [0,1] range

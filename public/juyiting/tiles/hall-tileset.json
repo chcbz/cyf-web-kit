@@ -1,0 +1,92 @@
+{
+  "tilewidth": 16,
+  "tileheight": 16,
+  "columns": 7,
+  "tilecount": 14,
+  "tiles": [
+    {
+      "id": 1,
+      "name": "floor-wood-1",
+      "col": 0,
+      "row": 0
+    },
+    {
+      "id": 2,
+      "name": "floor-wood-2",
+      "col": 1,
+      "row": 0
+    },
+    {
+      "id": 3,
+      "name": "floor-wood-3",
+      "col": 2,
+      "row": 0
+    },
+    {
+      "id": 4,
+      "name": "floor-dark-1",
+      "col": 3,
+      "row": 0
+    },
+    {
+      "id": 5,
+      "name": "floor-dark-2",
+      "col": 4,
+      "row": 0
+    },
+    {
+      "id": 6,
+      "name": "floor-edge",
+      "col": 5,
+      "row": 0
+    },
+    {
+      "id": 7,
+      "name": "wall-stone-1",
+      "col": 6,
+      "row": 0
+    },
+    {
+      "id": 8,
+      "name": "wall-stone-2",
+      "col": 0,
+      "row": 1
+    },
+    {
+      "id": 9,
+      "name": "wall-brick-1",
+      "col": 1,
+      "row": 1
+    },
+    {
+      "id": 10,
+      "name": "wall-brick-2",
+      "col": 2,
+      "row": 1
+    },
+    {
+      "id": 11,
+      "name": "floor-trim",
+      "col": 3,
+      "row": 1
+    },
+    {
+      "id": 12,
+      "name": "wall-top",
+      "col": 4,
+      "row": 1
+    },
+    {
+      "id": 13,
+      "name": "shadow-corner",
+      "col": 5,
+      "row": 1
+    },
+    {
+      "id": 14,
+      "name": "empty-checker",
+      "col": 6,
+      "row": 1
+    }
+  ]
+}

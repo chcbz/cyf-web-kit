@@ -42,6 +42,26 @@ const computePolygonBoundsFromData = (object) => {
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
 }
 
+// --- Map-level properties (Tiled custom properties on <map>) ---
+
+const readMapProperties = (doc) => {
+  const mapNode = doc.querySelector('map')
+  if (!mapNode) return {}
+  const propsNode = mapNode.querySelector('properties')
+  if (!propsNode) return {}
+  return readProperties(propsNode)
+}
+
+const readMapPropertiesFromData = (map) => {
+  const props = map.properties || map.mapProperties || {}
+  if (Array.isArray(props)) {
+    const result = {}
+    props.forEach(p => { result[p.name] = p.value })
+    return result
+  }
+  return props
+}
+
 const NAME_TO_PANEL_MAP = {
   'roster-book': 'catalog',
   'agent-roster': 'agents',
@@ -177,6 +197,32 @@ const parseJuyiHallTmxData = (map) => {
   const height = Number(map.height || 0) * Number(map.tileheight || 0)
   const coordinateSpace = coordinateSpaceForData(map, width, height)
 
+  // --- tile layer data (melonJS pre-parsed) ---
+  const tileLayers = []
+  const tilesets = (map.tilesets || []).map(ts => ({
+    firstgid: ts.firstgid || 1,
+    name: ts.name || '',
+    tilewidth: ts.tilewidth || 16,
+    tileheight: ts.tileheight || 16,
+    columns: ts.columns || Math.floor((ts.imagewidth || ts.image?.width || 0) / (ts.tilewidth || 16)),
+    imagewidth: ts.imagewidth || ts.image?.width || 0,
+    imageheight: ts.imageheight || ts.image?.height || 0,
+    tilesetResourceName: ts.name || ''  // matches melonJS resource name
+  }))
+
+  ;(map.layers || []).filter(l => l.type === 'tilelayer').forEach(layer => {
+    const data = Array.isArray(layer.data) ? layer.data : []
+    if (data.length) {
+      tileLayers.push({
+        name: layer.name,
+        width: layer.width,
+        height: layer.height,
+        data
+      })
+      console.log('[tiledMap] Tile layer parsed:', layer.name, data.length, 'tiles')
+    }
+  })
+
   const imageLayers = {}
   ;(map.layers || [])
     .filter(layer => layer.type === 'imagelayer')
@@ -187,7 +233,9 @@ const parseJuyiHallTmxData = (map) => {
         width: Number(layer.width) || coordinateSpace.width,
         height: Number(layer.height) || coordinateSpace.height,
         offsetX: Number(layer.offsetx || layer.offsetX) || 0,
-        offsetY: Number(layer.offsety || layer.offsetY) || 0
+        offsetY: Number(layer.offsety || layer.offsetY) || 0,
+        opacity: Number(layer.opacity) || 1,
+        tintcolor: layer.tintcolor || null
       }
     })
 
@@ -198,8 +246,12 @@ const parseJuyiHallTmxData = (map) => {
   const hotspots = hotspotObjects.map((object) => {
     const rect = readObjectRectFromData(object)
     const properties = object.properties || {}
+    if (Array.isArray(object.properties)) {
+      Object.assign(properties, Object.fromEntries(object.properties.map(p => [p.name, p.value])))
+    }
     return {
       id: object.name || '',
+      type: object.type || object.name || '',
       panel: NAME_TO_PANEL_MAP[object.name] || properties.panel || '',
       ...rectToPercent(rect, coordinateSpace),
       rect,
@@ -263,7 +315,10 @@ const parseJuyiHallTmxData = (map) => {
     hotspots,
     obstacles,
     occluders,
-    spawns
+    spawns,
+    mapProperties: readMapPropertiesFromData(map),
+    tileLayers,
+    tilesets
   }
 }
 
@@ -287,6 +342,52 @@ export const parseJuyiHallTmx = (xml) => {
   const height = numberAttr(mapNode, 'height') * numberAttr(mapNode, 'tileheight')
   const coordinateSpace = coordinateSpaceFor(doc, width, height)
 
+  // --- tileset metadata ---
+  const tilesets = [...doc.querySelectorAll('tileset')].map(ts => ({
+    firstgid: numberAttr(ts, 'firstgid', 1),
+    name: textAttr(ts, 'name'),
+    tilewidth: numberAttr(ts, 'tilewidth', 16),
+    tileheight: numberAttr(ts, 'tileheight', 16),
+    columns: numberAttr(ts, 'columns', Math.floor(numberAttr(ts.querySelector('image'), 'width', 0) / numberAttr(ts, 'tilewidth', 16))),
+    imagewidth: numberAttr(ts.querySelector('image'), 'width', 0),
+    imageheight: numberAttr(ts.querySelector('image'), 'height', 0),
+    tilesetResourceName: textAttr(ts, 'name')
+  }))
+
+  // --- tile layer data (XML <layer>) ---
+  const tileLayers = []
+  const b64Decoder = typeof atob === 'function' ? atob : (str => Buffer.from(str, 'base64').toString('binary'))
+
+  doc.querySelectorAll('map > layer').forEach(layerEl => {
+    const dataEl = layerEl.querySelector('data')
+    if (!dataEl) return
+    const encoding = textAttr(dataEl, 'encoding')
+    const layerW = numberAttr(layerEl, 'width')
+    const layerH = numberAttr(layerEl, 'height')
+    const expectedLen = layerW * layerH
+
+    let data = []
+    if (encoding === 'base64') {
+      const raw = dataEl.textContent.replace(/\s/g, '')
+      const decoded = b64Decoder(raw)
+      for (let i = 0; i < expectedLen && i * 4 + 3 < decoded.length; i++) {
+        const gid = (decoded.charCodeAt(i * 4) & 0xff)
+          | ((decoded.charCodeAt(i * 4 + 1) & 0xff) << 8)
+          | ((decoded.charCodeAt(i * 4 + 2) & 0xff) << 16)
+          | ((decoded.charCodeAt(i * 4 + 3) & 0xff) << 24)
+        data.push(gid)
+      }
+    } else {
+      // csv
+      data = (dataEl.textContent || '').split(',').map(v => Number(v)).filter(v => Number.isFinite(v))
+    }
+
+    if (data.length) {
+      tileLayers.push({ name: textAttr(layerEl, 'name'), width: layerW, height: layerH, data })
+      console.log('[tiledMap] XML tile layer parsed:', textAttr(layerEl, 'name'), data.length, 'tiles')
+    }
+  })
+
   const imageLayers = {}
   doc.querySelectorAll('imagelayer').forEach((layer) => {
     const image = layer.querySelector('image')
@@ -297,7 +398,9 @@ export const parseJuyiHallTmx = (xml) => {
       width: numberAttr(image, 'width', coordinateSpace.width),
       height: numberAttr(image, 'height', coordinateSpace.height),
       offsetX: numberAttr(layer, 'offsetx'),
-      offsetY: numberAttr(layer, 'offsety')
+      offsetY: numberAttr(layer, 'offsety'),
+      opacity: numberAttr(layer, 'opacity', 1),
+      tintcolor: textAttr(layer, 'tintcolor') || null
     }
   })
 
@@ -310,6 +413,7 @@ export const parseJuyiHallTmx = (xml) => {
     const properties = readProperties(objectNode)
     return {
       id: textAttr(objectNode, 'name'),
+      type: textAttr(objectNode, 'type') || textAttr(objectNode, 'name'),
       panel: NAME_TO_PANEL_MAP[textAttr(objectNode, 'name')] || properties.panel || '',
       ...rectToPercent(rect, coordinateSpace),
       rect,
@@ -380,6 +484,9 @@ export const parseJuyiHallTmx = (xml) => {
     hotspots,
     obstacles,
     occluders,
-    spawns
+    spawns,
+    mapProperties: readMapProperties(doc),
+    tileLayers,
+    tilesets
   }
 }

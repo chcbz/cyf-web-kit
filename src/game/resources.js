@@ -3,10 +3,11 @@
 import { HALL_SCENE_LAYER_RESOURCES } from './hallSceneLayers.js'
 import { HALL_MODULAR_LAYER_RESOURCES } from './hallModularLayers.js'
 
-export const HALL_MAP_RESOURCE = { name: 'juyiting-hall', type: 'tmx', src: '/juyiting/hall_v3.tmx' }
+export const HALL_MAP_RESOURCE = { name: 'juyiting-hall', type: 'tmx', src: '/juyiting/hall_v5.tmx' }
 
 export const HALL_RESOURCES = [
   HALL_MAP_RESOURCE,
+  { name: "hall-tileset", type: "image", src: "/juyiting/tiles/hall-tileset.png" },
   // legacy fallback images (not in hallSceneLayers/hallModularLayers)
   { name: 'liangshan-hall-bg', type: 'image', src: '/juyiting/images/liangshan-hall-bg-v2.png' },
   { name: 'liangshan-hall-fg', type: 'image', src: '/juyiting/images/liangshan-hall-foreground-extracted-v1.png' },
