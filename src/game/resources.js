@@ -1,26 +1,22 @@
-/** * melonJS resource manifest for ¼øš¨ä¹‰åŽ… */
+/** * melonJS resource manifest for ï¿½ï¿½ï¿½ï¿½ä¹‰åŽ… */
 
 import { HALL_SCENE_LAYER_RESOURCES } from './hallSceneLayers.js'
-import { HALL_MODULAR_LAYER_RESOURCES } from './hallModularLayers.js'
 
-export const HALL_MAP_RESOURCE = { name: 'juyiting-hall', type: 'tmx', src: '/juyiting/hall_v5.tmx' }
+export const HALL_PROP_CROPPED_RESOURCES = [
+  { name: "hall-prop-main-seat-cropped", type: "image", src: "/juyiting/images/props/liangshan-hall-prop-main-seat-cropped.png" },
+  { name: "hall-prop-agent-roster-cropped", type: "image", src: "/juyiting/images/props/liangshan-hall-prop-agent-roster-cropped.png" },
+  { name: "hall-prop-bounty-board-cropped", type: "image", src: "/juyiting/images/props/liangshan-hall-prop-bounty-board-cropped.png" },
+  { name: "hall-prop-library-shelf-cropped", type: "image", src: "/juyiting/images/props/liangshan-hall-prop-library-shelf-cropped.png" },
+  { name: "hall-prop-roster-book-cropped", type: "image", src: "/juyiting/images/props/liangshan-hall-prop-roster-book-cropped.png" },
+]
+
+export const HALL_MAP_RESOURCE = { name: 'juyiting-hall', type: 'tmx', src: '/juyiting/hall_v4.tmx' }
 
 export const HALL_RESOURCES = [
   HALL_MAP_RESOURCE,
   { name: "hall-tileset", type: "image", src: "/juyiting/tiles/hall-tileset.png" },
-  // legacy fallback images (not in hallSceneLayers/hallModularLayers)
-  { name: 'liangshan-hall-bg', type: 'image', src: '/juyiting/images/liangshan-hall-bg-v2.png' },
-  { name: 'liangshan-hall-fg', type: 'image', src: '/juyiting/images/liangshan-hall-foreground-extracted-v1.png' },
   ...HALL_SCENE_LAYER_RESOURCES,
-  ...HALL_MODULAR_LAYER_RESOURCES,
+  ...HALL_PROP_CROPPED_RESOURCES,
   { name: 'character-atlas', type: 'image', src: '/juyiting/liangshan-character-walksheet-v1.png' }
 ]
 
-/** Fallback hotspot definitions when Tiled data is unavailable. */
-export const FALLBACK_HALL_HOTSPOTS = [
-  { id: 'mainSeat', panel: 'chat', x: 50, y: 36, w: 18, h: 11 },
-  { id: 'agentRoster', panel: 'agents', x: 35, y: 56, w: 13, h: 13 },
-  { id: 'bountyBoard', panel: 'tasks', x: 65, y: 56, w: 13, h: 13 },
-  { id: 'personaCatalog', panel: 'catalog', x: 36, y: 75, w: 13, h: 13 },
-  { id: 'libraryShelf', panel: 'library', x: 50, y: 63, w: 24, h: 18 }
-]

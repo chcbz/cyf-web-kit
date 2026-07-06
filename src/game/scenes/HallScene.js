@@ -3,9 +3,6 @@
  */
 
 import { DEPTH_LAYERS, HALL_SCENE_HEIGHT, HALL_SCENE_WIDTH } from '../config.js'
-import { HALL_SCENE_RENDER_LAYERS } from '../hallSceneLayers.js'
-import { HALL_MODULAR_RENDER_LAYERS } from '../hallModularLayers.js'
-import { FALLBACK_HALL_HOTSPOTS } from '../resources.js'
 import { clampSceneTransform, fitSceneTransform, screenToWorldPoint } from '../sceneTransform.js'
 
 export function createHallSceneClass(me, HallAgentClass) {
@@ -341,33 +338,48 @@ export function createHallSceneClass(me, HallAgentClass) {
       }
     }
 
+    _pointInPolygon(point, polygon) {
+      let inside = false
+      for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const xi = polygon[i].x, yi = polygon[i].y
+        const xj = polygon[j].x, yj = polygon[j].y
+        if (((yi > point.y) !== (yj > point.y)) &&
+            (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi)) {
+          inside = !inside
+        }
+      }
+      return inside
+    }
+
     _findHotspotAt(point) {
       return this._hotspots
         .map(item => ({ data: item.data, marker: item.marker }))
         .filter(item => item.data && item.marker)
-        .find(({ marker }) => (
-          point.x >= marker.pos.x - marker.width / 2 &&
-          point.x <= marker.pos.x + marker.width / 2 &&
-          point.y >= marker.pos.y - marker.height / 2 &&
-          point.y <= marker.pos.y + marker.height / 2
-        ))?.data || null
+        .find(({ marker, data }) => {
+          // AABB fast reject
+          if (point.x < marker.pos.x - marker.width / 2 ||
+              point.x > marker.pos.x + marker.width / 2 ||
+              point.y < marker.pos.y - marker.height / 2 ||
+              point.y > marker.pos.y + marker.height / 2) {
+            return false
+          }
+          // Polygon: ray-casting
+          if (data.shape === 'polygon' && data.polygon) {
+            return this._pointInPolygon(point, data.polygon)
+          }
+          return true
+        })?.data || null
     }
 
     _renderModularLayers(vpW, vpH) {
       const tmxLayers = this._mapData?.imageLayers
       if (!tmxLayers || !Object.keys(tmxLayers).length) {
-        console.warn("[HallScene] _renderModularLayers: no TMX imageLayers, falling back to manifest")
-        return this._renderModularLayersFromManifest(vpW, vpH)
+        return false
       }
 
       // --- fully TMX-driven: imagelayer name -> melonJS resource name ---
       const NAME_TO_RESOURCE = {
         "mid-occluders": "liangshan-hall-mid-occluders",
-        "prop-main-seat": "liangshan-hall-prop-main-seat",
-        "prop-bounty-board": "liangshan-hall-prop-bounty-board",
-        "prop-library-shelf": "liangshan-hall-prop-library-shelf",
-        "prop-agent-roster": "liangshan-hall-prop-agent-roster",
-        "prop-roster-book": "juyiting-modular-prop-roster-book",
         "prop-gate": "liangshan-hall-prop-gate",
         "foreground-occluders": "liangshan-hall-foreground-occluders",
         "lighting-overlay": "liangshan-hall-lighting-overlay"
@@ -424,47 +436,6 @@ export function createHallSceneClass(me, HallAgentClass) {
       console.log("[HallScene] _renderModularLayers: rendered " + rendered + " layers from TMX")
       return rendered > 0
     }
-    _renderModularLayersFromManifest(vpW, vpH) {
-      // When tile layers are present, skip full-painting environment layers (replaced by tile system)
-      const hasTileLayers = this._mapData?.tileLayers?.length > 0
-      const candidates = hasTileLayers
-        ? HALL_MODULAR_RENDER_LAYERS.filter(l => l.kind !== 'environment')
-        : HALL_MODULAR_RENDER_LAYERS
-
-      const loaded = candidates
-        .map(layer => ({ layer, image: me.loader.getImage(layer.resourceName) }))
-        .filter(({ image }) => Boolean(image))
-
-      if (!loaded.length) return false
-
-      loaded.forEach(({ layer, image }) => {
-        const x = layer.defaultX || 0
-        const y = layer.defaultY || 0
-        if (layer.kind === "environment") {
-          const sx = layer.sourceX || 0
-          const sy = layer.sourceY || 0
-          const sw = layer.sourceW || image.width
-          const sh = layer.sourceH || image.height
-          const iw = Math.round((layer.sourceW || image.width) * (layer.defaultScale || 1))
-          const ih = Math.round((layer.sourceH || image.height) * (layer.defaultScale || 1))
-          const imageLayer = this._createCustomImageLayer(x, y, iw, ih, image, {
-            blendMode: layer.blendMode,
-            sourceX: sx, sourceY: sy, sourceW: sw, sourceH: sh
-          })
-          me.game.world.addChild(imageLayer, layer.depth)
-          this._imageLayers.push(imageLayer)
-        } else {
-          const scale = layer.defaultScale || 1
-          const iw = Math.round((image.width || vpW) * scale)
-          const ih = Math.round((image.height || vpH) * scale)
-          const imageLayer = this._createCustomImageLayer(x, y, iw, ih, image)
-          me.game.world.addChild(imageLayer, layer.depth)
-          this._imageLayers.push(imageLayer)
-        }
-      })
-      return true
-    }
-
 
     // Render tile layers from TMX using a cached offscreen canvas.
     // Each tile is drawn once into a cached image, then used as a single
@@ -538,7 +509,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       const vpW = vp.width
       const vpH = vp.height
       const mapData = this._mapData
-      const hotspots = mapData?.hotspots?.length ? mapData.hotspots : FALLBACK_HALL_HOTSPOTS
+      const hotspots = mapData?.hotspots || []
 
       // Apply TMX map properties (zoom, dimensions) if available
       if (mapData?.mapProperties) {
@@ -551,51 +522,15 @@ export function createHallSceneClass(me, HallAgentClass) {
       let layersRendered = this._renderTileLayers(vpW, vpH)
 
       // 2. Render imagelayer-driven layers (occluders, props, lighting)
-      if (!this._renderModularLayers(vpW, vpH) && !layersRendered) {
-        layersRendered = false
-      } else {
-        layersRendered = true
-      }
-
-      if (!layersRendered) {
-        const renderedManifestLayers = HALL_SCENE_RENDER_LAYERS
-          .map(layer => ({ layer, image: me.loader.getImage(layer.resourceName) }))
-          .filter(({ image }) => Boolean(image))
-
-        if (renderedManifestLayers.length) {
-          renderedManifestLayers.forEach(({ layer, image }) => {
-            const imageLayer = this._createCustomImageLayer(0, 0, vpW, vpH, image, {
-              blendMode: layer.blendMode
-            })
-            me.game.world.addChild(imageLayer, layer.depth)
-            this._imageLayers.push(imageLayer)
-          })
-          layersRendered = true
-        }
-      }
-
-      if (!layersRendered) {
-        const bgImage = me.loader.getImage('liangshan-hall-bg')
-        const fgImage = me.loader.getImage('liangshan-hall-fg')
-
-        if (bgImage) {
-          const bgLayer = this._createCustomImageLayer(0, 0, vpW, vpH, bgImage)
-          me.game.world.addChild(bgLayer, DEPTH_LAYERS.BACKGROUND)
-          this._imageLayers.push(bgLayer)
-        }
-
-        if (fgImage) {
-          const fgLayer = this._createCustomImageLayer(0, 0, vpW, vpH, fgImage)
-          me.game.world.addChild(fgLayer, DEPTH_LAYERS.FOREGROUND)
-          this._imageLayers.push(fgLayer)
-        }
-      }
+      const modularRendered = this._renderModularLayers(vpW, vpH)
+      layersRendered = layersRendered || modularRendered
 
       class HotspotMarker extends me.Renderable {
         constructor(x, y, w, h, data) {
           super(x, y, w, h)
           this.anchorPoint.set(0.5, 0.5)
           this.data = data
+          this.polygon = data?.polygon || null
           this.feedback = null
           this.isKinematic = true
         }
@@ -608,26 +543,43 @@ export function createHallSceneClass(me, HallAgentClass) {
           const ctx = renderer.getContext?.()
           if (!ctx) return
           const active = this.feedback?.state && this.feedback.state !== 'idle'
-          const x = this.pos.x - this.width / 2
-          const y = this.pos.y - this.height / 2
           ctx.save()
           ctx.fillStyle = active ? 'rgba(255, 214, 113, 0.18)' : 'rgba(255, 235, 180, 0.06)'
           ctx.strokeStyle = active ? 'rgba(255, 221, 130, 0.66)' : 'rgba(255, 235, 180, 0.16)'
           ctx.lineWidth = active ? 2 : 1
-          ctx.beginPath()
-          if (typeof ctx.roundRect === 'function') {
-            ctx.roundRect(x, y, this.width, this.height, 8)
+
+          if (this.polygon && this.polygon.length >= 3) {
+            // Polygon shape
+            ctx.beginPath()
+            ctx.moveTo(this.polygon[0].x, this.polygon[0].y)
+            for (let i = 1; i < this.polygon.length; i++) {
+              ctx.lineTo(this.polygon[i].x, this.polygon[i].y)
+            }
+            ctx.closePath()
+            ctx.fill()
+            ctx.stroke()
           } else {
-            ctx.rect(x, y, this.width, this.height)
+            // Rectangle shape
+            const x = this.pos.x - this.width / 2
+            const y = this.pos.y - this.height / 2
+            ctx.beginPath()
+            if (typeof ctx.roundRect === 'function') {
+              ctx.roundRect(x, y, this.width, this.height, 8)
+            } else {
+              ctx.rect(x, y, this.width, this.height)
+            }
+            ctx.fill()
+            ctx.stroke()
           }
-          ctx.fill()
-          ctx.stroke()
+
           if (this.feedback?.feedbackText) {
+            const bx = this.pos.x - this.width / 2
+            const by = this.pos.y - this.height / 2
             ctx.font = 'bold 12px sans-serif'
             ctx.fillStyle = '#fff4d4'
             ctx.textAlign = 'center'
             ctx.textBaseline = 'bottom'
-            ctx.fillText(this.feedback.feedbackText, this.pos.x, y - 8)
+            ctx.fillText(this.feedback.feedbackText, this.pos.x, by - 8)
           }
           ctx.restore()
         }
@@ -650,6 +602,35 @@ export function createHallSceneClass(me, HallAgentClass) {
 
         me.game.world.addChild(marker, DEPTH_LAYERS.HOTSPOTS)
         this._hotspots.push({ marker, hitArea: marker, data: h })
+      })
+
+
+      // Render prop images from rect-type hotspot objects (cropped images)
+      const PROP_IMAGE_MAP = {
+        'main-seat-rect': 'hall-prop-main-seat-cropped',
+        'agent-roster-rect': 'hall-prop-agent-roster-cropped',
+        'bounty-board-rect': 'hall-prop-bounty-board-cropped',
+        'library-shelf-rect': 'hall-prop-library-shelf-cropped',
+        'roster-book-rect': 'hall-prop-roster-book-cropped',
+      }
+      let propDepth = 3
+      hotspots.forEach(h => {
+        if (h.shape !== 'rect' || h.type !== 'prop') return
+        const resourceName = PROP_IMAGE_MAP[h.id]
+        if (!resourceName) return
+        const image = me.loader.getImage(resourceName)
+        if (!image) {
+          console.warn('[HallScene] Prop image not loaded:', resourceName)
+          return
+        }
+        const ox = (h.x - h.w / 2) / 100 * vpW
+        const oy = (h.y - h.h / 2) / 100 * vpH
+        const ow = h.w / 100 * vpW
+        const oh = h.h / 100 * vpH
+        const propLayer = this._createCustomImageLayer(ox, oy, ow, oh, image, { opacity: null })
+        me.game.world.addChild(propLayer, propDepth)
+        this._imageLayers.push(propLayer)
+        propDepth += 0.5
       })
 
       me.input.registerPointerEvent('pointerdown', me.game.viewport, (event) => {

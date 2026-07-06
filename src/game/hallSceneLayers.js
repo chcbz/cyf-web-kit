@@ -32,34 +32,6 @@ export const HALL_SCENE_IMAGE_LAYERS = [
 
 export const HALL_SCENE_PROP_LAYERS = [
   {
-    id: 'prop-main-seat',
-    hotspotId: 'mainSeat',
-    resourceName: 'liangshan-hall-prop-main-seat',
-    src: '/juyiting/images/props/liangshan-hall-prop-main-seat-v3.png',
-    depth: 4
-  },
-  {
-    id: 'prop-bounty-board',
-    hotspotId: 'bountyBoard',
-    resourceName: 'liangshan-hall-prop-bounty-board',
-    src: '/juyiting/images/props/liangshan-hall-prop-bounty-board-v3.png',
-    depth: 4
-  },
-  {
-    id: 'prop-library-shelf',
-    hotspotId: 'libraryShelf',
-    resourceName: 'liangshan-hall-prop-library-shelf',
-    src: '/juyiting/images/props/liangshan-hall-prop-library-shelf-v3.png',
-    depth: 4
-  },
-  {
-    id: 'prop-agent-roster',
-    hotspotId: 'agentRoster',
-    resourceName: 'liangshan-hall-prop-agent-roster',
-    src: '/juyiting/images/props/liangshan-hall-prop-agent-roster-v3.png',
-    depth: 4
-  },
-  {
     id: 'prop-gate',
     hotspotId: 'gate',
     resourceName: 'liangshan-hall-prop-gate',

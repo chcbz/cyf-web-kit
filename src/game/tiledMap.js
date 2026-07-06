@@ -112,9 +112,24 @@ const readObjectGroup = (doc, name) => {
   return [...group.children].filter(child => child.tagName === 'object')
 }
 
-const readObjectRectFromData = object => {
+const readObjectRectFromData = (object, tilesets) => {
   let width = Number(object?.width) || 0
   let height = Number(object?.height) || 0
+  // gid-based tile objects: resolve size from tileset
+  if ((!width || !height) && object?.gid && tilesets?.length) {
+    const gid = Number(object.gid)
+    for (const ts of tilesets) {
+      if (gid >= ts.firstgid && ts.tiles) {
+        const tileIdx = gid - ts.firstgid
+        const tile = ts.tiles[tileIdx]
+        if (tile) {
+          width = width || Number(tile.width || ts.tilewidth || 0)
+          height = height || Number(tile.height || ts.tileheight || 0)
+          break
+        }
+      }
+    }
+  }
   if (!width && !height) {
     const polyBounds = computePolygonBoundsFromData(object)
     if (polyBounds) {
@@ -153,7 +168,7 @@ const coordinateSpaceFor = (doc, mapWidth, mapHeight) => {
   }), objectBounds)
 }
 
-const coordinateSpaceForData = (map, mapWidth, mapHeight) => {
+const coordinateSpaceForData = (map, mapWidth, mapHeight, tilesets) => {
     const imageSizes = (map.layers || [])
       .filter(layer => layer.type === 'imagelayer')
       .map(layer => {
@@ -172,7 +187,7 @@ const coordinateSpaceForData = (map, mapWidth, mapHeight) => {
       .filter(layer => layer.type === 'objectgroup')
       .flatMap(layer => layer.objects || [])
       .reduce((bounds, object) => {
-        const rect = readObjectRectFromData(object)
+        const rect = readObjectRectFromData(object, tilesets)
         return {
           width: Math.max(bounds.width, rect.x + rect.width),
           height: Math.max(bounds.height, rect.y + rect.height)
@@ -195,20 +210,37 @@ const objectGroupFromData = (map, name) => {
 const parseJuyiHallTmxData = (map) => {
   const width = Number(map.width || 0) * Number(map.tilewidth || 0)
   const height = Number(map.height || 0) * Number(map.tileheight || 0)
-  const coordinateSpace = coordinateSpaceForData(map, width, height)
+
+  // --- tileset metadata (needed early for gid->size resolution) ---
+  const tilesets = (map.tilesets || []).map(ts => {
+    const tsData = {
+      firstgid: ts.firstgid || 1,
+      name: ts.name || '',
+      tilewidth: ts.tilewidth || 16,
+      tileheight: ts.tileheight || 16,
+      columns: ts.columns || Math.floor((ts.imagewidth || ts.image?.width || 0) / (ts.tilewidth || 16)),
+      imagewidth: ts.imagewidth || ts.image?.width || 0,
+      imageheight: ts.imageheight || ts.image?.height || 0,
+      tilesetResourceName: ts.name || '',  // matches melonJS resource name
+      tiles: []
+    }
+    // collection-of-images tileset: extract per-tile images
+    if (ts.tiles) {
+      Object.values(ts.tiles).forEach(tile => {
+        const img = tile?.image
+        tsData.tiles[tile.id] = {
+          width: img?.width || tsData.tilewidth,
+          height: img?.height || tsData.tileheight
+        }
+      })
+    }
+    return tsData
+  })
+
+  const coordinateSpace = coordinateSpaceForData(map, width, height, tilesets)
 
   // --- tile layer data (melonJS pre-parsed) ---
   const tileLayers = []
-  const tilesets = (map.tilesets || []).map(ts => ({
-    firstgid: ts.firstgid || 1,
-    name: ts.name || '',
-    tilewidth: ts.tilewidth || 16,
-    tileheight: ts.tileheight || 16,
-    columns: ts.columns || Math.floor((ts.imagewidth || ts.image?.width || 0) / (ts.tilewidth || 16)),
-    imagewidth: ts.imagewidth || ts.image?.width || 0,
-    imageheight: ts.imageheight || ts.image?.height || 0,
-    tilesetResourceName: ts.name || ''  // matches melonJS resource name
-  }))
 
   ;(map.layers || []).filter(l => l.type === 'tilelayer').forEach(layer => {
     const data = Array.isArray(layer.data) ? layer.data : []
@@ -240,19 +272,29 @@ const parseJuyiHallTmxData = (map) => {
     })
 
   const hotspotObjects = [
-    ...objectGroupFromData(map, 'hotspots'),
-    ...objectGroupFromData(map, 'object')
+    ...objectGroupFromData(map, 'hotspots')
   ]
   const hotspots = hotspotObjects.map((object) => {
-    const rect = readObjectRectFromData(object)
+    const rect = readObjectRectFromData(object, tilesets)
     const properties = object.properties || {}
     if (Array.isArray(object.properties)) {
       Object.assign(properties, Object.fromEntries(object.properties.map(p => [p.name, p.value])))
     }
+    const polyData = object?.polygon
+    const shape = polyData && Array.isArray(polyData) && polyData.length >= 3 ? 'polygon' : 'rect'
+    const objX = Number(object?.x) || 0
+    const objY = Number(object?.y) || 0
+    const polygon = shape === 'polygon'
+      ? polyData.map(({ x, y }) => ({ x: objX + x, y: objY + y }))
+      : null
+    const rawName = object.name || ''
+    const cleanName = rawName.replace(/-rect$/, '')
     return {
-      id: object.name || '',
-      type: object.type || object.name || '',
-      panel: NAME_TO_PANEL_MAP[object.name] || properties.panel || '',
+      id: rawName,
+      type: object.type || rawName || '',
+      panel: NAME_TO_PANEL_MAP[cleanName] || NAME_TO_PANEL_MAP[rawName] || properties.panel || '',
+      shape,
+      polygon,
       ...rectToPercent(rect, coordinateSpace),
       rect,
       properties
@@ -264,7 +306,7 @@ const parseJuyiHallTmxData = (map) => {
     ...objectGroupFromData(map, 'collision')
   ]
   const obstacles = obstacleGroups.map((object) => {
-    const rect = readObjectRectFromData(object)
+    const rect = readObjectRectFromData(object, tilesets)
     return {
       id: object.name || '',
       ...rectToPercent(rect, coordinateSpace),
@@ -296,7 +338,7 @@ const parseJuyiHallTmxData = (map) => {
   const spawns = Object.fromEntries(objectGroupFromData(map, 'spawns').map((object) => {
     const rawName = object.name || ''
     const name = rawName.replace(/^spawn_/, '')
-    const rect = readObjectRectFromData(object)
+    const rect = readObjectRectFromData(object, tilesets)
     return [name, {
       id: name,
       rawName,
@@ -405,16 +447,33 @@ export const parseJuyiHallTmx = (xml) => {
   })
 
   const hotspotObjects = [
-    ...readObjectGroup(doc, 'hotspots'),
-    ...readObjectGroup(doc, 'object')
+    ...readObjectGroup(doc, 'hotspots')
   ]
   const hotspots = hotspotObjects.map((objectNode) => {
     const rect = readObjectRect(objectNode)
     const properties = readProperties(objectNode)
+    const polyEl = objectNode.querySelector('polygon')
+    const pointsStr = polyEl ? textAttr(polyEl, 'points') : ''
+    const polyPoints = pointsStr
+      ? pointsStr.split(/\s+/).filter(Boolean).map(p => {
+          const [px, py] = p.split(',').map(Number)
+          return { x: px, y: py }
+        })
+      : []
+    const shape = polyPoints.length >= 3 ? 'polygon' : 'rect'
+    const objX = numberAttr(objectNode, 'x')
+    const objY = numberAttr(objectNode, 'y')
+    const polygon = shape === 'polygon'
+      ? polyPoints.map(({ x, y }) => ({ x: objX + x, y: objY + y }))
+      : null
+    const rawName = textAttr(objectNode, 'name')
+    const cleanName = rawName.replace(/-rect$/, '')
     return {
-      id: textAttr(objectNode, 'name'),
-      type: textAttr(objectNode, 'type') || textAttr(objectNode, 'name'),
-      panel: NAME_TO_PANEL_MAP[textAttr(objectNode, 'name')] || properties.panel || '',
+      id: rawName,
+      type: textAttr(objectNode, 'type') || rawName,
+      panel: NAME_TO_PANEL_MAP[cleanName] || NAME_TO_PANEL_MAP[rawName] || properties.panel || '',
+      shape,
+      polygon,
       ...rectToPercent(rect, coordinateSpace),
       rect,
       properties
