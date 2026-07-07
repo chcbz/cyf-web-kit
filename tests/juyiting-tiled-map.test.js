@@ -5,30 +5,38 @@ import * as TMXUtils from 'melonjs/dist/melonjs.mjs/level/tiled/TMXUtils.js'
 import { parseJuyiHallTmx, rectToPercent } from '../src/game/tiledMap.js'
 
 describe('Juyi Hall Tiled map parser', () => {
-  const xml = readFileSync(new URL('../public/juyiting/hall.tmx', import.meta.url), 'utf8')
-  const hallV4Xml = readFileSync(new URL('../public/juyiting/hall_v4.tmx', import.meta.url), 'utf8')
+  const hallV4Xml = readFileSync(new URL('../public/juyiting/hall.tmx', import.meta.url), 'utf8')
 
-  it('parses image layers, hotspots, obstacles, and spawn points from hall.tmx', () => {
-    const map = parseJuyiHallTmx(xml)
+  it('parses runtime TMX image layers, hotspots, obstacles, and prop tiles from hall.tmx', () => {
+    const map = parseJuyiHallTmx(hallV4Xml)
 
-    expect(map.width).to.equal(1672)
-    expect(map.height).to.equal(941)
-    expect(map.coordinateWidth).to.equal(1672)
-    expect(map.coordinateHeight).to.be.greaterThan(860)
-    expect(map.imageLayers['wall-back'].source).to.equal('/juyiting/images/modular/hall-wall-back-v1.png')
-    expect(map.imageLayers.pillars.source).to.equal('/juyiting/images/modular/hall-pillars-v1.png')
+    expect(map.width).to.equal(1664)
+    expect(map.height).to.equal(928)
+    expect(map.coordinateWidth).to.equal(1664)
+    expect(map.coordinateHeight).to.equal(928)
+    expect(map.tileLayers.find(layer => layer.name === 'background').data).to.have.length(104 * 58)
+    expect(map.imageLayers['mid-occluders'].source).to.equal('/juyiting/images/liangshan-hall-mid-occluders-v3.png')
+    expect(map.imageLayers['lighting-overlay'].source).to.equal('/juyiting/images/liangshan-hall-lighting-overlay-v3.png')
+    expect(map.imageLayers).not.to.have.property('prop-gate')
     expect(map.hotspots.map(item => item.id)).to.include.members([
-      'mainSeat',
-      'agentRoster',
-      'bountyBoard',
-      'personaCatalog',
-      'libraryShelf'
+      'main-seat',
+      'agent-roster',
+      'bounty-board',
+      'library-shelf',
+      'roster-book'
     ])
-    expect(map.hotspots.find(item => item.id === 'mainSeat')).to.include({
+    expect(map.hotspots.find(item => item.id === 'main-seat')).to.include({
       panel: 'chat'
     })
-    expect(map.obstacles.map(item => item.id)).to.include('main-seat')
-    expect(map.spawns.songjiang).to.include.keys(['x', 'y'])
+    expect(map.hotspots.filter(item => item.type === 'prop').map(item => item.tileResourceName)).to.include.members([
+      'hall-props-tile-0',
+      'hall-props-tile-1',
+      'hall-props-tile-2',
+      'hall-props-tile-3',
+      'hall-props-tile-4'
+    ])
+    expect(map.obstacles).to.have.length.greaterThan(0)
+    expect(map.obstacles[0]).to.include.keys(['rect', 'x', 'y', 'w', 'h'])
   })
 
   it('normalizes Tiled rectangles against image coordinate space', () => {
@@ -70,10 +78,9 @@ describe('Juyi Hall Tiled map parser', () => {
 
     expect(map.imageLayers.background.source).to.equal('/juyiting/images/liangshan-hall-bg-v2.png')
     expect(map.hotspots[0]).to.include({ id: 'mainSeat', panel: 'chat' })
-    expect(map.spawns.songjiang).to.include.keys(['x', 'y'])
   })
 
-  it('keeps hall_v4 tile-layer coordinates aligned to the map art bounds', () => {
+  it('keeps hall tile-layer coordinates aligned to the map art bounds', () => {
     const map = parseJuyiHallTmx(hallV4Xml)
 
     expect(map.width).to.equal(1664)
@@ -85,6 +92,7 @@ describe('Juyi Hall Tiled map parser', () => {
       height: 58
     })
     expect(map.tileLayers.find(layer => layer.name === 'background').data).to.have.length(104 * 58)
+    expect(map.imageLayers).not.to.have.property('prop-gate')
 
     const mainSeat = map.hotspots.find(item => item.id === 'main-seat')
     expect(mainSeat.rect).to.include({
@@ -99,7 +107,7 @@ describe('Juyi Hall Tiled map parser', () => {
     })
   })
 
-  it('preserves melonJS parsed typed-array tile data for hall_v4 background', () => {
+  it('preserves melonJS parsed typed-array tile data for hall background', () => {
     const doc = new DOMParser().parseFromString(hallV4Xml, 'application/xml')
     const melonMap = TMXUtils.parse(doc).map
     const map = parseJuyiHallTmx(melonMap)

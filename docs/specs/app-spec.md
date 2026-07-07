@@ -601,9 +601,9 @@ interface GlobalState {
 
 | 路径 | 描述 |
 |------|------|
-| `public/juyiting/hall.tmx` | 聚义厅 Tiled 地图 |
+| `public/juyiting/hall.tmx` | Juyiting Tiled runtime map; single source for map images, tiles, and prop art |
 | `public/juyiting/images/` | 聚义厅 2.5D 背景、遮挡、灯光图层 |
-| `public/juyiting/images/props/` | 聚义厅交互道具图层 |
+| `public/juyiting/images/props/` | TMX-declared collection-of-images prop assets |
 | `public/juyiting/liangshan-character-walksheet-v1.png` | Agent 行走图集 |
 
 ---

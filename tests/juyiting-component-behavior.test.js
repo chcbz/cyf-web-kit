@@ -320,7 +320,7 @@ describe('JuyiHall component behavior', () => {
   })
 
   it('keeps the floating stage header compact so it does not cover the hall map', () => {
-    const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
+    const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
     const headerRule = cssRule(source, '.stage-header')
 
     expect(headerRule).to.include('right: auto;')
@@ -461,7 +461,7 @@ describe('JuyiHall component behavior', () => {
     expect(melonRule).to.include('width: 100%')
     expect(melonRule).to.include('height: 100%')
     expect(melonRule).not.to.include('transform')
-    expect(source).to.include('object-fit: cover')
+    expect(cssRule(source, '.melon-layer :deep(canvas)')).to.include('display: block')
     expect(source).not.to.include('--map-offset-x')
     expect(source).not.to.include('--map-zoom')
   })
@@ -1208,7 +1208,7 @@ const createFakeGameMelon = ({ deferDeviceReady = false } = {}) => {
     },
     loader: {
       getImage: () => null,
-      getTMX: () => null,
+      getTMX: () => '<?xml version="1.0" encoding="UTF-8"?><map width="1" height="1" tilewidth="16" tileheight="16"></map>',
       load: (_resource, onload, onerror) => {
         loadCallbacks.push({ onload, onerror })
       }
@@ -1231,6 +1231,14 @@ const createFakeGameMelon = ({ deferDeviceReady = false } = {}) => {
   return { deviceReadyCallbacks, loadCallbacks, me, stateChanges, stateSets, videoInitCalls: () => videoInitCalls }
 }
 
+
+const flushPendingLoaderSuccess = async (fake, minCallbacks = 1) => {
+  for (let i = 0; i < 10 && fake.loadCallbacks.length < minCallbacks; i += 1) {
+    await Promise.resolve()
+  }
+  fake.loadCallbacks.splice(0).forEach(item => item.onload())
+}
+
 describe('JuyitingGame lifecycle guards', () => {
   it('waits for the melonJS engine ready callback before video initialization', async () => {
     const mod = await import('../src/game/JuyitingGame.js')
@@ -1245,6 +1253,7 @@ describe('JuyitingGame lifecycle guards', () => {
     expect(fake.videoInitCalls()).to.equal(0)
 
     fake.deviceReadyCallbacks[0]()
+    await flushPendingLoaderSuccess(fake, 2)
     await mountPromise
 
     expect(fake.videoInitCalls()).to.equal(1)
@@ -1259,13 +1268,15 @@ describe('JuyitingGame lifecycle guards', () => {
     let readyCalls = 0
     game._me = fake.me
 
-    await game.mount({ querySelector: () => null }, {
+    const mountPromise = game.mount({ querySelector: () => null }, {
       onReady: () => {
         readyCalls += 1
       }
     })
+    await Promise.resolve()
     game.destroy()
-    fake.loadCallbacks.forEach(item => item.onload())
+    await flushPendingLoaderSuccess(fake, 1)
+    await mountPromise
 
     expect(fake.stateSets).to.have.length(0)
     expect(readyCalls).to.equal(0)
@@ -1280,12 +1291,13 @@ describe('JuyitingGame lifecycle guards', () => {
     let readyCalls = 0
     game._me = fake.me
 
-    await game.mount({ querySelector: () => null }, {
+    const mountPromise = game.mount({ querySelector: () => null }, {
       onReady: () => {
         readyCalls += 1
       }
     })
-    fake.loadCallbacks.forEach(item => item.onload())
+    await flushPendingLoaderSuccess(fake, 2)
+    await mountPromise
     game.destroy()
     await new Promise(resolve => setTimeout(resolve, 240))
 

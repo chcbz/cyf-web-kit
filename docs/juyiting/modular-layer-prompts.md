@@ -22,7 +22,6 @@ The built-in image generation tool was used to generate each asset from standalo
 | `prop-bounty-board-v1.png` | 1536x1024 | RGBA prop |
 | `prop-library-shelf-v1.png` | 1536x1024 | RGBA prop |
 | `prop-roster-book-v1.png` | 1535x1024 | RGBA prop |
-| `prop-gate-v1.png` | 1536x1024 | RGBA prop |
 
 ## Shared Prompt
 
@@ -100,13 +99,6 @@ Composition/framing: centered object, full object visible.
 Chroma-key: flat solid #00ff00 background for removal.
 ```
 
-### prop-gate-v1.png
-```
-Primary request: an entrance gate or doorway for a Liangshan gathering hall, heavy timber door frame, mountain stronghold style, open passage feel, no visible characters.
-Subject: one standalone doorway prop.
-Composition/framing: centered object, full object visible.
-Chroma-key: flat solid #00ff00 background for removal.
-```
 
 ## Transparency Workflow
 
@@ -115,3 +107,7 @@ Prop assets were generated on a flat chroma-key (#00ff00) background and convert
 ```
 remove_chroma_key.py --input <source> --out <final.png> --auto-key border --soft-matte --transparent-threshold 12 --opaque-threshold 220 --despill
 ```
+
+## Current Runtime Contract
+
+`hall.tmx` is the runtime source of truth for map images, tile layers, and prop tile images. The removed gate prop is no longer generated, loaded, or rendered. Do not add map-layer manifests in JS; add or remove scene art in TMX instead.

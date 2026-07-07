@@ -3,7 +3,7 @@
  */
 
 import { createGameConfig } from './config.js'
-import { HALL_MAP_RESOURCE, HALL_RESOURCES } from './resources.js'
+import { HALL_BOOT_RESOURCES, HALL_MAP_RESOURCE, buildHallMapResources } from './resources.js'
 import { parseJuyiHallTmx } from './tiledMap.js'
 import { createHallSceneClass } from './scenes/HallScene.js'
 import { createHallAgentClass } from './entities/HallAgent.js'
@@ -78,40 +78,40 @@ export class JuyitingGame {
     const canvas = container.querySelector('canvas')
     if (canvas) canvas.style.background = 'transparent'
 
-    // === Load all resources, then start ===
-    let loaded = 0
-    const total = HALL_RESOURCES.length
-    if (total === 0) {
-      this._startGame(me, mountToken)
-      return
-    }
+    // === Load boot resources, parse TMX, then load resources declared by TMX ===
+    await this._loadResources(me, HALL_BOOT_RESOURCES, mountToken)
+    if (!this._isCurrentMount(mountToken)) return
 
-    const checkDone = () => {
-      if (!this._isCurrentMount(mountToken)) return
-      loaded++
-      if (loaded >= total) {
-        this._prepareMapData(me).then(() => {
-          if (!this._isCurrentMount(mountToken)) return
-          this._startGame(me, mountToken)
-        })
-      }
-    }
+    await this._prepareMapData(me)
+    if (!this._isCurrentMount(mountToken)) return
 
-    HALL_RESOURCES.forEach(res => {
+    await this._loadResources(me, buildHallMapResources(this._mapData), mountToken)
+    if (!this._isCurrentMount(mountToken)) return
+
+    this._startGame(me, mountToken)
+  }
+
+
+  _loadResources(me, resources = [], mountToken = this._mountToken) {
+    const list = (resources || []).filter(Boolean)
+    if (!list.length) return Promise.resolve()
+
+    return Promise.all(list.map(res => new Promise(resolve => {
+      if (!this._isCurrentMount(mountToken)) return resolve()
       try {
         me.loader.load(
           res,
-          () => checkDone(),       // success
-          (err) => {               // error
+          () => resolve(),
+          (err) => {
             console.warn('[JuyitingGame] Failed:', res.name, err)
-            checkDone()
+            resolve()
           }
         )
       } catch (e) {
         console.warn('[JuyitingGame] Load error:', res.name, e.message)
-        checkDone()
+        resolve()
       }
-    })
+    })))
   }
 
   _isCurrentMount(mountToken) {

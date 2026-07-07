@@ -1,5 +1,5 @@
 /**
- * Generate hall_v4.tmx from hall_v3.tmx by converting the background
+ * Generate hall.tmx from hall_v3.tmx by converting the background
  * imagelayer into a real <layer> (tile layer) with sequential GIDs.
  *
  * The tileset image IS the full painting. Each tile is a 16×16 slice.
@@ -11,7 +11,7 @@
 import { readFileSync, writeFileSync } from 'fs'
 
 const SRC = 'public/juyiting/hall_v3.tmx'
-const DST = 'public/juyiting/hall_v4.tmx'
+const DST = 'public/juyiting/hall.tmx'
 
 const xml = readFileSync(SRC, 'utf-8')
 

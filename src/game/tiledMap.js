@@ -11,6 +11,21 @@ const absoluteJuyitingPath = (source = '') => {
   return `/juyiting/${source}`.replace(/\/+/g, '/')
 }
 
+const tileResourceName = (tilesetName, tileId) => `${tilesetName}-tile-${tileId}`
+
+const tileResourceNameForGid = (gid, tilesets = []) => {
+  const numericGid = Number(gid) || 0
+  if (!numericGid) return ''
+  for (const tileset of tilesets) {
+    const firstgid = Number(tileset.firstgid) || 1
+    const tileId = numericGid - firstgid
+    if (tileId >= 0 && tileset.tiles?.[tileId]?.resourceName) {
+      return tileset.tiles[tileId].resourceName
+    }
+  }
+  return ''
+}
+
 const isTileDataSequence = data => Array.isArray(data) || ArrayBuffer.isView(data)
 
 const computePolygonBounds = (objectNode) => {
@@ -223,6 +238,9 @@ const parseJuyiHallTmxData = (map) => {
 
   // --- tileset metadata (needed early for gid->size resolution) ---
   const tilesets = (map.tilesets || []).map(ts => {
+    const imageSource = typeof ts.image === 'string'
+      ? absoluteJuyitingPath(ts.image)
+      : absoluteJuyitingPath(ts.image?.source || ts.image?.src || ts.source || '')
     const tsData = {
       firstgid: ts.firstgid || 1,
       name: ts.name || '',
@@ -231,16 +249,21 @@ const parseJuyiHallTmxData = (map) => {
       columns: ts.columns || Math.floor((ts.imagewidth || ts.image?.width || 0) / (ts.tilewidth || 16)),
       imagewidth: ts.imagewidth || ts.image?.width || 0,
       imageheight: ts.imageheight || ts.image?.height || 0,
-      tilesetResourceName: ts.name || '',  // matches melonJS resource name
+      imageSource,
+      tilesetResourceName: ts.name || '',
       tiles: []
     }
     // collection-of-images tileset: extract per-tile images
     if (ts.tiles) {
       Object.values(ts.tiles).forEach(tile => {
         const img = tile?.image
+        const source = typeof img === 'string' ? absoluteJuyitingPath(img) : absoluteJuyitingPath(img?.source || img?.src || '')
         tsData.tiles[tile.id] = {
-          width: img?.width || tsData.tilewidth,
-          height: img?.height || tsData.tileheight
+          id: Number(tile.id),
+          width: img?.width || tile?.width || tsData.tilewidth,
+          height: img?.height || tile?.height || tsData.tileheight,
+          source,
+          resourceName: source ? tileResourceName(tsData.name, tile.id) : ''
         }
       })
     }
@@ -270,6 +293,7 @@ const parseJuyiHallTmxData = (map) => {
     .forEach((layer) => {
       imageLayers[layer.name] = {
         id: layer.name,
+        resourceName: layer.name,
         source: absoluteJuyitingPath(layer.image || layer.source || ''),
         width: Number(layer.width) || coordinateSpace.width,
         height: Number(layer.height) || coordinateSpace.height,
@@ -306,7 +330,9 @@ const parseJuyiHallTmxData = (map) => {
       polygon,
       ...rectToPercent(rect, coordinateSpace),
       rect,
-      properties
+      properties,
+      gid: Number(object?.gid) || 0,
+      tileResourceName: tileResourceNameForGid(object?.gid, tilesets)
     }
   })
 
@@ -394,16 +420,37 @@ export const parseJuyiHallTmx = (xml) => {
   const coordinateSpace = coordinateSpaceFor(doc, width, height)
 
   // --- tileset metadata ---
-  const tilesets = [...doc.querySelectorAll('tileset')].map(ts => ({
-    firstgid: numberAttr(ts, 'firstgid', 1),
-    name: textAttr(ts, 'name'),
-    tilewidth: numberAttr(ts, 'tilewidth', 16),
-    tileheight: numberAttr(ts, 'tileheight', 16),
-    columns: numberAttr(ts, 'columns', Math.floor(numberAttr(ts.querySelector('image'), 'width', 0) / numberAttr(ts, 'tilewidth', 16))),
-    imagewidth: numberAttr(ts.querySelector('image'), 'width', 0),
-    imageheight: numberAttr(ts.querySelector('image'), 'height', 0),
-    tilesetResourceName: textAttr(ts, 'name')
-  }))
+  const tilesets = [...doc.querySelectorAll('tileset')].map(ts => {
+    const name = textAttr(ts, 'name')
+    const image = ts.querySelector(':scope > image') || ts.querySelector('image')
+    const tsData = {
+      firstgid: numberAttr(ts, 'firstgid', 1),
+      name,
+      tilewidth: numberAttr(ts, 'tilewidth', 16),
+      tileheight: numberAttr(ts, 'tileheight', 16),
+      columns: numberAttr(ts, 'columns', Math.floor(numberAttr(image, 'width', 0) / numberAttr(ts, 'tilewidth', 16))),
+      imagewidth: numberAttr(image, 'width', 0),
+      imageheight: numberAttr(image, 'height', 0),
+      imageSource: absoluteJuyitingPath(textAttr(image, 'source')),
+      tilesetResourceName: name,
+      tiles: []
+    }
+
+    ts.querySelectorAll(':scope > tile').forEach(tile => {
+      const tileId = numberAttr(tile, 'id')
+      const tileImage = tile.querySelector('image')
+      const source = absoluteJuyitingPath(textAttr(tileImage, 'source'))
+      tsData.tiles[tileId] = {
+        id: tileId,
+        width: numberAttr(tileImage, 'width', tsData.tilewidth),
+        height: numberAttr(tileImage, 'height', tsData.tileheight),
+        source,
+        resourceName: source ? tileResourceName(name, tileId) : ''
+      }
+    })
+
+    return tsData
+  })
 
   // --- tile layer data (XML <layer>) ---
   const tileLayers = []
@@ -444,6 +491,7 @@ export const parseJuyiHallTmx = (xml) => {
     const name = textAttr(layer, 'name')
     imageLayers[name] = {
       id: name,
+      resourceName: name,
       source: absoluteJuyitingPath(textAttr(image, 'source')),
       width: numberAttr(image, 'width', coordinateSpace.width),
       height: numberAttr(image, 'height', coordinateSpace.height),
@@ -484,7 +532,9 @@ export const parseJuyiHallTmx = (xml) => {
       polygon,
       ...rectToPercent(rect, coordinateSpace),
       rect,
-      properties
+      properties,
+      gid: numberAttr(objectNode, 'gid'),
+      tileResourceName: tileResourceNameForGid(numberAttr(objectNode, 'gid'), tilesets)
     }
   })
 

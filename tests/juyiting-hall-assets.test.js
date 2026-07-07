@@ -2,8 +2,8 @@ import { expect } from 'chai'
 import { existsSync, readFileSync } from 'fs'
 
 import { createGameConfig, HALL_SCENE_HEIGHT, HALL_SCENE_WIDTH } from '../src/game/config.js'
-import { HALL_SCENE_IMAGE_LAYERS, HALL_SCENE_PROP_LAYERS } from '../src/game/hallSceneLayers.js'
-import { HALL_RESOURCES } from '../src/game/resources.js'
+import { HALL_BOOT_RESOURCES, HALL_MAP_RESOURCE, buildHallMapResources } from '../src/game/resources.js'
+import { parseJuyiHallTmx } from '../src/game/tiledMap.js'
 
 const pngSize = (path) => {
   const bytes = readFileSync(path)
@@ -14,6 +14,9 @@ const pngSize = (path) => {
 }
 
 describe('Juyiting hall scene assets', () => {
+  const hallV4Xml = readFileSync('public/juyiting/hall.tmx', 'utf8')
+  const hallV4Map = parseJuyiHallTmx(hallV4Xml)
+
   it('uses the background native dimensions as the melonJS scene size', () => {
     const bg = pngSize('public/juyiting/images/liangshan-hall-base-clean-v3.png')
     const config = createGameConfig()
@@ -24,68 +27,38 @@ describe('Juyiting hall scene assets', () => {
     expect(config.height).to.equal(bg.height)
   })
 
-  it('loads occluder and lighting overlays aligned to the current tile background', () => {
-    const fg = HALL_RESOURCES.find(resource => resource.name === 'liangshan-hall-foreground-occluders')
-    const fgSize = pngSize('public/juyiting/images/liangshan-hall-foreground-occluders-v3.png')
-    const bgSize = pngSize('public/juyiting/images/liangshan-hall-base-clean-v3.png')
-
-    expect(fg?.src).to.equal('/juyiting/images/liangshan-hall-foreground-occluders-v3.png')
-    expect(fgSize).to.deep.equal(bgSize)
-  })
-
-  it('declares a 2.5D layer manifest from base to lighting overlay', () => {
-    expect(HALL_SCENE_IMAGE_LAYERS.map(layer => layer.id)).to.deep.equal([
-      'baseClean',
-      'midOccluders',
-      'foregroundOccluders',
-      'lightingOverlay'
+  it('keeps only non-map boot resources in the static JS manifest', () => {
+    expect(HALL_BOOT_RESOURCES).to.deep.equal([
+      HALL_MAP_RESOURCE,
+      { name: 'character-atlas', type: 'image', src: '/juyiting/liangshan-character-walksheet-v1.png' }
     ])
+  })
 
-    expect(HALL_SCENE_IMAGE_LAYERS.map(layer => layer.resourceName)).to.deep.equal([
-      'liangshan-hall-base-clean',
-      'liangshan-hall-mid-occluders',
-      'liangshan-hall-foreground-occluders',
-      'liangshan-hall-lighting-overlay'
+  it('derives tileset and image layer resources from TMX map data', () => {
+    const resources = buildHallMapResources(hallV4Map)
+
+    expect(resources).to.deep.include.members([
+      { name: 'liangshan-hall-base-clean-v3', type: 'image', src: '/juyiting/images/liangshan-hall-base-clean-v3.png' },
+      { name: 'mid-occluders', type: 'image', src: '/juyiting/images/liangshan-hall-mid-occluders-v3.png' },
+      { name: 'foreground-occluders', type: 'image', src: '/juyiting/images/liangshan-hall-foreground-occluders-v3.png' },
+      { name: 'lighting-overlay', type: 'image', src: '/juyiting/images/liangshan-hall-lighting-overlay-v3.png' }
     ])
-
-    expect(HALL_SCENE_IMAGE_LAYERS.map(layer => layer.depth)).to.deep.equal([0, 2, 5, 8])
+    expect(resources.map(resource => resource.name)).not.to.include('prop-gate')
+    expect(resources.map(resource => resource.src).join('\n')).not.to.include('gate')
   })
 
-  it('exposes interactive prop layers for hall hotspots', () => {
-    expect(HALL_SCENE_PROP_LAYERS.map(layer => layer.id)).to.include.members([
-      'prop-gate'
-    ])
-
-    HALL_SCENE_PROP_LAYERS.forEach(layer => {
-      expect(layer.hotspotId).to.be.a('string').and.not.equal('')
-      expect(layer.resourceName).to.match(/^liangshan-hall-prop-/)
-      expect(layer.depth).to.equal(4)
-    })
-  })
-
-  it('loads every declared scene layer as a melonJS image resource', () => {
-    const resourceNames = HALL_RESOURCES.map(resource => resource.name)
-
-    HALL_SCENE_IMAGE_LAYERS.concat(HALL_SCENE_PROP_LAYERS).forEach(layer => {
-      expect(resourceNames).to.include(layer.resourceName)
-      expect(layer.src).to.match(/^\/juyiting\/images\//)
-    })
-  })
-
-  it('keeps full-scene image layers aligned to the tile background dimensions', () => {
-    const bgSize = pngSize('public/juyiting/images/liangshan-hall-base-clean-v3.png')
-
-    HALL_SCENE_IMAGE_LAYERS.forEach(layer => {
-      const relativePath = layer.src.replace('/juyiting/', 'public/juyiting/')
-      expect(pngSize(relativePath), layer.id).to.deep.equal(bgSize)
-    })
-  })
-
-  it('keeps every declared hall resource backed by a public file', () => {
-    HALL_RESOURCES.forEach(resource => {
-      if (!resource.src?.startsWith('/')) return
+  it('keeps TMX-derived image layer resources backed by public files', () => {
+    buildHallMapResources(hallV4Map).forEach(resource => {
+      if (!resource.src?.startsWith('/juyiting/')) return
       const relativePath = resource.src.replace('/juyiting/', 'public/juyiting/')
       expect(existsSync(relativePath), resource.name).to.equal(true)
     })
+  })
+
+  it('does not import the old JS scene layer manifest from resources.js', () => {
+    const source = readFileSync('src/game/resources.js', 'utf8')
+    expect(source).not.to.include('hallSceneLayers')
+    expect(source).not.to.include('HALL_SCENE_LAYER_RESOURCES')
+    expect(source).not.to.include('HALL_PROP_CROPPED_RESOURCES')
   })
 })

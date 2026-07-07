@@ -4,7 +4,7 @@ import { expect } from 'chai'
 const hallSource = readFileSync(
   new URL('../src/components/world/JuyiHall.vue', import.meta.url),
   'utf8'
-)
+).replace(/\r\n/g, '\n')
 const bountySource = readFileSync(
   new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url),
   'utf8'
@@ -186,7 +186,7 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallSource).to.include('<PublicDiscussionPanel')
     expect(hallSource).to.include('<BountyDiscussionPanel')
     expect(hallSource).to.include(':agents="chatMentionAgents"')
-    expect(hallSource).to.include('useHallChatContext({\n  agents,')
+    expect(hallSource).to.match(/useHallChatContext\(\{[\s\S]*?\bagents,/)
   })
 
   it('supports task management actions from the bounty board', () => {

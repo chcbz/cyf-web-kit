@@ -76,8 +76,8 @@
 | `src/game/JuyitingGame.js` | melonJS 实例管理、资源加载、TMX 解析、场景启动和销毁 |
 | `src/game/scenes/HallScene.js` | 舞台、图层、热点、Agent 同步、深度排序、点击、拖拽、滚轮和双指缩放 |
 | `src/game/entities/HallAgent.js` | Agent 精灵、行走动画、状态、气泡、命中检测和巡逻 |
-| `src/game/resources.js` | TMX、背景、前景、分层图片、道具和角色图集资源清单 |
-| `src/game/hallSceneLayers.js` | 2.5D 分层图片和道具图层清单 |
+| `src/game/resources.js` | Boot-only resources plus TMX-derived map resource builder; no static map image manifest |
+| `public/juyiting/hall.tmx` | 2.5D map image layers, tilesets, hotspots, and prop image declarations |
 | `src/game/sceneTransform.js` | 场景平移、缩放、适配视口和屏幕坐标转换 |
 | `src/game/tiledMap.js` | `public/juyiting/hall.tmx` 解析 |
 | `src/game/walkableArea.js` | 可行走区域和点位裁剪 |
@@ -102,14 +102,14 @@
 | 资源 | 用途 |
 | --- | --- |
 | `hall.tmx` | Tiled 地图和热点数据来源 |
-| `images/liangshan-hall-base-clean-v2.png` | 主背景底图 |
-| `images/liangshan-hall-mid-occluders-v2.png` | 中景遮挡层 |
-| `images/liangshan-hall-foreground-occluders-v2.png` | 前景遮挡层 |
-| `images/liangshan-hall-lighting-overlay-v2.png` | 灯光叠加层，`screen` 混合 |
-| `images/props/*.png` | 主座、悬赏榜、案卷阁、点将册、门口等交互道具 |
+| `images/liangshan-hall-base-clean-v3.png` | Runtime tile background image referenced by `hall.tmx` |
+| `images/liangshan-hall-mid-occluders-v3.png` | Runtime mid-occluder image layer referenced by `hall.tmx` |
+| `images/liangshan-hall-foreground-occluders-v3.png` | Runtime foreground occluder image layer referenced by `hall.tmx` |
+| `images/liangshan-hall-lighting-overlay-v3.png` | Runtime lighting overlay image layer referenced by `hall.tmx` |
+| `images/props/*.png` | TMX-declared collection-of-images props such as main seat, bounty board, archive shelf, and roster book |
 | `liangshan-character-walksheet-v1.png` | 角色行走图集，8 列 x 6 行 |
 
-如果分层资源加载失败，`HallScene` 会回退到 legacy 的 `liangshan-hall-bg` 和 `liangshan-hall-fg` 资源；如果 TMX 不可用，则使用 `FALLBACK_HALL_HOTSPOTS`。
+Runtime map art is loaded from TMX-derived resources only; missing TMX-declared images are logged and skipped instead of falling back to a JS map manifest.
 
 ### 3.3 热点
 
@@ -476,7 +476,7 @@ POST /chat/library/search
 - 鼠标滚轮、拖拽、键盘 `+`/`-`/`0`、移动端单指平移和双指缩放均不应产生黑边。
 - Agent 位置必须被裁剪到可行走区域。
 - Agent 深度排序按 y 坐标递增，避免近远遮挡错误。
-- 分层图片按 `hallSceneLayers.js` 的 depth 顺序渲染。
+- Map image layers, tiles, and prop images are loaded from `hall.tmx`; JS does not maintain map layer/image manifests.
 
 ---
 
@@ -538,3 +538,8 @@ npm run test:juyiting:agent-smoke
 ---
 
 *文档结束*
+
+
+### TMX-driven map resource contract
+
+`public/juyiting/hall.tmx` is the single source of truth for map image layers, tile layers, tilesets, hotspots, and prop image declarations. `src/game/resources.js` keeps only boot resources and derives map image resources after TMX parsing. Do not add JS map-layer/image manifests; update TMX instead. The obsolete entrance prop layer has been removed from runtime assets.

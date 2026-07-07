@@ -129,12 +129,6 @@ const props = [
     polygons: [
       [[92, 414], [388, 392], [424, 642], [68, 704]]
     ]
-  },
-  {
-    path: 'props/liangshan-hall-prop-gate-v2.png',
-    polygons: [
-      [[618, 718], [1064, 718], [1092, 941], [592, 941]]
-    ]
   }
 ]
 

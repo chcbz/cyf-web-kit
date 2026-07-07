@@ -1,7 +1,5 @@
 ﻿import { expect } from 'chai'
 
-import { HALL_SCENE_RENDER_LAYERS } from '../src/game/hallSceneLayers.js'
-import { HALL_MODULAR_RENDER_LAYERS } from '../src/game/hallModularLayers.js'
 import { createHallSceneClass } from '../src/game/scenes/HallScene.js'
 
 describe('HallScene melonJS runtime compatibility', () => {
@@ -52,12 +50,22 @@ describe('HallScene melonJS runtime compatibility', () => {
 
     const HallScene = createHallSceneClass(me, class {})
     const scene = new HallScene()
+    scene.setMapData({
+      imageLayers: {
+        'mid-occluders': { width: 1672, height: 941 },
+        'foreground-occluders': { width: 1672, height: 941 },
+        'lighting-overlay': { width: 1672, height: 941 }
+      },
+      tileLayers: [],
+      tilesets: [],
+      hotspots: []
+    })
 
     scene._buildScene()
 
     const imageLayers = added.filter(child => child.image)
 
-    const renderLayerCount = HALL_MODULAR_RENDER_LAYERS.length || HALL_SCENE_RENDER_LAYERS.length
+    const renderLayerCount = Object.keys(scene._mapData.imageLayers).length
     expect(imageLayers).to.have.length(renderLayerCount)
     expect(imageLayers.every(layer => typeof layer.addChild === 'function')).to.equal(false)
     expect(imageLayers.every(layer => layer.isKinematic === true)).to.equal(true)
