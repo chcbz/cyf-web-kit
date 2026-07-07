@@ -1,5 +1,6 @@
 import { expect } from 'chai'
 import { readFileSync } from 'fs'
+import * as TMXUtils from 'melonjs/dist/melonjs.mjs/level/tiled/TMXUtils.js'
 
 import { parseJuyiHallTmx, rectToPercent } from '../src/game/tiledMap.js'
 
@@ -96,5 +97,21 @@ describe('Juyi Hall Tiled map parser', () => {
       panel: 'chat',
       shape: 'polygon'
     })
+  })
+
+  it('preserves melonJS parsed typed-array tile data for hall_v4 background', () => {
+    const doc = new DOMParser().parseFromString(hallV4Xml, 'application/xml')
+    const melonMap = TMXUtils.parse(doc).map
+    const map = parseJuyiHallTmx(melonMap)
+    const background = map.tileLayers.find(layer => layer.name === 'background')
+
+    expect(background).to.include({
+      width: '104',
+      height: '58'
+    })
+    expect(background.data).to.be.instanceOf(Uint32Array)
+    expect(background.data).to.have.length(104 * 58)
+    expect(background.data[0]).to.equal(1)
+    expect(background.data[background.data.length - 1]).to.equal(6032)
   })
 })

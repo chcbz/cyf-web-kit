@@ -171,7 +171,7 @@ describe('JuyiHall component behavior', () => {
     expect(resetCalls).to.have.length(1)
   })
 
-  it('forwards mobile touch drag and pinch gestures to the melonJS game layer', async () => {
+  it('leaves mobile touch drag and pinch gestures to the melonJS scene layer', async () => {
     const panCalls = []
     const zoomCalls = []
     hallGameMock = {
@@ -194,32 +194,14 @@ describe('JuyiHall component behavior', () => {
     })
     const board = wrapper.find('.hall-board')
 
-    await board.trigger('touchstart', {
-      touches: [{ clientX: 100, clientY: 100 }]
-    })
+    expect(board.attributes()).not.to.have.property('ontouchstart')
     await board.trigger('touchmove', {
       touches: [{ clientX: 128, clientY: 116 }],
       preventDefault: () => {}
     })
 
-    expect(panCalls).to.deep.equal([[28, 16]])
-
-    await board.trigger('touchstart', {
-      touches: [
-        { clientX: 100, clientY: 100 },
-        { clientX: 200, clientY: 100 }
-      ]
-    })
-    await board.trigger('touchmove', {
-      touches: [
-        { clientX: 100, clientY: 100 },
-        { clientX: 260, clientY: 100 }
-      ],
-      preventDefault: () => {}
-    })
-
-    expect(zoomCalls).to.have.length(1)
-    expect(zoomCalls[0]).to.be.greaterThan(0)
+    expect(panCalls).to.deep.equal([])
+    expect(zoomCalls).to.deep.equal([])
   })
 
   it('adapts the hall stage orientation and exposes a landscape view toggle', async () => {

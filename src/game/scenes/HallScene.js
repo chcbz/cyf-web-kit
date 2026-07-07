@@ -5,6 +5,8 @@
 import { DEPTH_LAYERS, HALL_SCENE_HEIGHT, HALL_SCENE_WIDTH } from '../config.js'
 import { clampSceneTransform, fitSceneTransform, screenToWorldPoint } from '../sceneTransform.js'
 
+const GESTURE_CLICK_TOLERANCE = 6
+
 export function createHallSceneClass(me, HallAgentClass) {
   return class HallScene extends me.Stage {
     constructor() {
@@ -28,14 +30,16 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._dragState = {
         active: false,
         pointerId: null,
+        startX: 0,
+        startY: 0,
         lastX: 0,
         lastY: 0,
         moved: false
       }
+      this._pendingClick = null
       this._touchPointers = new Map()
       this._pinchState = { active: false, startDistance: 0, startZoom: 1 }
       this._interactionHitAreas = []
-      this._suppressNextSceneClick = false
       this._applySceneTransform()
     }
 
@@ -150,10 +154,13 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._dragState = {
         active: false,
         pointerId: null,
+        startX: 0,
+        startY: 0,
         lastX: 0,
         lastY: 0,
         moved: false
       }
+      this._pendingClick = null
       this._touchPointers.clear()
       this._pinchState = { active: false, startDistance: 0, startZoom: 1 }
       this._applySceneTransform()
@@ -184,11 +191,12 @@ export function createHallSceneClass(me, HallAgentClass) {
       if (event.pointerType !== 'touch') return false
       this._touchPointers.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY })
       if (this._touchPointers.size >= 2) {
+        this._cancelPendingClick()
         const distance = this._touchDistance()
         if (!this._pinchState.active && distance > 0) {
           this._pinchState = { active: true, startDistance: distance, startZoom: this._transform.zoom }
         }
-        this._dragState = { active: false, pointerId: null, lastX: 0, lastY: 0, moved: false }
+        this._dragState = { active: false, pointerId: null, startX: 0, startY: 0, lastX: 0, lastY: 0, moved: false }
       }
       return this._touchPointers.size >= 2
     }
@@ -234,10 +242,13 @@ export function createHallSceneClass(me, HallAgentClass) {
         this._dragState = {
           active: true,
           pointerId: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
           lastX: event.clientX,
           lastY: event.clientY,
           moved: false
         }
+        this._pendingClick = this._resolveInteractionTarget(event, event.pointerId)
         return true
       })
 
@@ -250,7 +261,11 @@ export function createHallSceneClass(me, HallAgentClass) {
         this._dragState.lastX = event.clientX
         this._dragState.lastY = event.clientY
         if (Math.hypot(dx, dy) < 1) return true
-        this._dragState.moved = true
+        const totalMove = Math.hypot(event.clientX - this._dragState.startX, event.clientY - this._dragState.startY)
+        if (totalMove > GESTURE_CLICK_TOLERANCE) {
+          this._dragState.moved = true
+          this._cancelPendingClick()
+        }
         this.panBy(dx, dy)
         event.preventDefault?.()
         return false
@@ -260,9 +275,9 @@ export function createHallSceneClass(me, HallAgentClass) {
         const wasClick = this._dragState.pointerId === event.pointerId && !this._dragState.moved
         this._releaseTouchPointer(event)
         if (this._dragState.pointerId === event.pointerId) {
-          this._dragState = { active: false, pointerId: null, lastX: 0, lastY: 0, moved: false }
+          this._dragState = { active: false, pointerId: null, startX: 0, startY: 0, lastX: 0, lastY: 0, moved: false }
         }
-        if (wasClick) this._clickHotspotFromEvent(event)
+        if (wasClick) this._activatePendingClick(event)
         return true
       }
       me.input.registerPointerEvent('pointerup', viewport, endDrag)
@@ -326,17 +341,38 @@ export function createHallSceneClass(me, HallAgentClass) {
       return this._screenToWorld(x, y)
     }
 
-    _clickHotspotFromEvent(event) {
-      if (this._suppressNextSceneClick) {
-        this._suppressNextSceneClick = false
-        return
-      }
+    _resolveInteractionTarget(event, pointerId) {
       const point = this._eventToWorldPoint(event)
       const vp = me.game.viewport
-      if (!point || !vp?.width || !vp?.height) return
+      if (!point || !vp?.width || !vp?.height) return null
       const hotspot = this._findHotspotAt(point)
       if (hotspot) {
-        this._onHotspotClick?.({ id: hotspot.id, panel: hotspot.panel })
+        return {
+          type: 'hotspot',
+          pointerId,
+          id: hotspot.id,
+          panel: hotspot.panel
+        }
+      }
+      const agent = [...this._agents.values()].reverse().find(item => item.containsPoint(point.x, point.y))
+      if (agent) return { type: 'agent', pointerId, agent }
+      return null
+    }
+
+    _cancelPendingClick() {
+      this._pendingClick = null
+    }
+
+    _activatePendingClick(event) {
+      const target = this._pendingClick
+      this._pendingClick = null
+      if (!target || target.pointerId !== event.pointerId) return
+      if (target.type === 'hotspot') {
+        this._onHotspotClick?.({ id: target.id, panel: target.panel })
+        return
+      }
+      if (target.type === 'agent') {
+        target.agent?.onPointerDown?.()
       }
     }
 
@@ -605,12 +641,6 @@ export function createHallSceneClass(me, HallAgentClass) {
 
         const marker = new HotspotMarker(ox + ow / 2, oy + oh / 2, ow, oh, h)
         marker.setFeedback(this._hotspotState.get(h.id))
-        me.input.registerPointerEvent('pointerdown', marker, () => {
-          if (this._onHotspotClick) {
-            this._onHotspotClick({ id: h.id, panel: h.panel })
-          }
-          return false
-        })
 
         me.game.world.addChild(marker, DEPTH_LAYERS.HOTSPOTS)
         this._hotspots.push({ marker, hitArea: marker, data: h })
@@ -645,23 +675,6 @@ export function createHallSceneClass(me, HallAgentClass) {
         propDepth += 0.5
       })
 
-      me.input.registerPointerEvent('pointerdown', me.game.viewport, (event) => {
-        const point = this._eventToWorldPoint(event)
-        if (!point) return true
-        const hotspot = this._findHotspotAt(point)
-        if (hotspot) {
-          this._suppressNextSceneClick = true
-          this._onHotspotClick?.({ id: hotspot.id, panel: hotspot.panel })
-          return false
-        }
-        const hit = [...this._agents.values()].reverse().find(agent => agent.containsPoint(point.x, point.y))
-        if (hit) {
-          this._suppressNextSceneClick = true
-          hit.onPointerDown?.()
-          return false
-        }
-        return true
-      })
       this._hotspots.push({ hitArea: me.game.viewport, stage: true })
       this._registerSceneInput()
 

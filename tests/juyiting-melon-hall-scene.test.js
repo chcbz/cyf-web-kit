@@ -280,7 +280,7 @@ describe('HallScene melonJS pointer routing', () => {
     expect(scene.panBy(120, -80)).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 1 })
   })
 
-  it('registers clickable hotspots on renderables and the agent hit router on the viewport', () => {
+  it('registers hotspot renderables and the viewport click router', () => {
     const me = createFakeMelon()
     const HallScene = createHallSceneClass(me, class {})
     const scene = new HallScene()
@@ -290,25 +290,28 @@ describe('HallScene melonJS pointer routing', () => {
     scene.setMapData(hotspotMapData())
     scene.onResetEvent()
 
-    const hotspotRegistration = me.registered.find(item => item.region.data?.id === 'mainSeat')
-    expect(hotspotRegistration).to.exist
-    expect(hotspotRegistration.region).to.be.instanceOf(me.Renderable)
-    expect(hotspotRegistration.callback()).to.equal(false)
-    expect(hotspotClicks[0]).to.deep.equal({ id: 'mainSeat', panel: 'chat' })
+    const hotspotRenderable = me.children.find(item => item.child.data?.id === 'mainSeat')?.child
+    expect(hotspotRenderable).to.exist
+    expect(hotspotRenderable).to.be.instanceOf(me.Renderable)
 
-    const viewportRegistration = me.registered.find(item => item.region === me.game.viewport)
-    expect(viewportRegistration).to.exist
-    expect(viewportRegistration.callback({ gameX: 10, gameY: 10 })).to.equal(true)
+    const downRegistration = me.registered.find(item => item.type === 'pointerdown' && item.region === me.game.viewport)
+    const upRegistration = me.registered.find(item => item.type === 'pointerup' && item.region === me.game.viewport)
+    expect(downRegistration).to.exist
+    expect(upRegistration).to.exist
+    expect(downRegistration.callback({ pointerId: 1, clientX: 10, clientY: 10 })).to.equal(true)
+    expect(upRegistration.callback({ pointerId: 1, clientX: 10, clientY: 10 })).to.equal(true)
+    expect(hotspotClicks).to.deep.equal([])
 
     scene._agents.set('missing-coordinate-guard', {
       containsPoint: () => {
         throw new Error('agent hit test should not run without finite coordinates')
       }
     })
-    expect(viewportRegistration.callback({})).to.equal(true)
+    expect(downRegistration.callback({ pointerId: 2 })).to.equal(true)
+    expect(upRegistration.callback({ pointerId: 2 })).to.equal(true)
   })
 
-  it('routes hotspot clicks through melonJS after DOM rooms are removed', () => {
+  it('routes hotspot clicks on release after DOM rooms are removed', () => {
     const me = createFakeMelon()
     const HallScene = createHallSceneClass(me, class {})
     const scene = new HallScene()
@@ -318,11 +321,58 @@ describe('HallScene melonJS pointer routing', () => {
     scene.setMapData(hotspotMapData())
     scene.onResetEvent()
 
-    const hotspotRegistration = me.registered.find(item => item.region.data?.id === 'bountyBoard')
-    expect(hotspotRegistration).to.exist
-    hotspotRegistration.callback({ gameX: 730, gameY: 300 })
+    const downRegistration = me.registered.find(item => item.type === 'pointerdown' && item.region === me.game.viewport)
+    const upRegistration = me.registered.find(item => item.type === 'pointerup' && item.region === me.game.viewport)
+
+    downRegistration.callback({ pointerId: 7, clientX: 730, clientY: 300 })
+    expect(clicked).to.deep.equal([])
+    upRegistration.callback({ pointerId: 7, clientX: 730, clientY: 300 })
 
     expect(clicked[0]).to.deep.equal({ id: 'bountyBoard', panel: 'tasks' })
+  })
+
+  it('does not activate a hotspot when the press turns into a drag', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+    const clicked = []
+
+    scene.onHotspotClick(item => clicked.push(item))
+    scene.setMapData(hotspotMapData())
+    scene.onResetEvent()
+
+    const downRegistration = me.registered.find(item => item.type === 'pointerdown' && item.region === me.game.viewport)
+    const moveRegistration = me.registered.find(item => item.type === 'pointermove' && item.region === me.game.viewport)
+    const upRegistration = me.registered.find(item => item.type === 'pointerup' && item.region === me.game.viewport)
+
+    downRegistration.callback({ pointerId: 7, clientX: 730, clientY: 300 })
+    moveRegistration.callback({ pointerId: 7, clientX: 746, clientY: 318, preventDefault: () => {} })
+    upRegistration.callback({ pointerId: 7, clientX: 746, clientY: 318 })
+
+    expect(clicked).to.deep.equal([])
+  })
+
+  it('does not activate a hotspot when the press turns into a pinch', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+    const clicked = []
+
+    scene.onHotspotClick(item => clicked.push(item))
+    scene.setMapData(hotspotMapData())
+    scene.onResetEvent()
+
+    const downRegistration = me.registered.find(item => item.type === 'pointerdown' && item.region === me.game.viewport)
+    const moveRegistration = me.registered.find(item => item.type === 'pointermove' && item.region === me.game.viewport)
+    const upRegistration = me.registered.find(item => item.type === 'pointerup' && item.region === me.game.viewport)
+
+    downRegistration.callback({ pointerId: 1, pointerType: 'touch', clientX: 730, clientY: 300 })
+    downRegistration.callback({ pointerId: 2, pointerType: 'touch', clientX: 780, clientY: 300, preventDefault: () => {} })
+    moveRegistration.callback({ pointerId: 2, pointerType: 'touch', clientX: 820, clientY: 300, preventDefault: () => {} })
+    upRegistration.callback({ pointerId: 1, pointerType: 'touch', clientX: 730, clientY: 300 })
+    upRegistration.callback({ pointerId: 2, pointerType: 'touch', clientX: 820, clientY: 300 })
+
+    expect(clicked).to.deep.equal([])
   })
 
   it('applies the scene transform to the melonJS world container', () => {
@@ -376,13 +426,13 @@ describe('HallScene melonJS pointer routing', () => {
 
     expect(wheelRegistration).to.exist
     expect(moveRegistration).to.exist
-    expect(downRegistrations).to.have.length.greaterThan(1)
+    expect(downRegistrations).to.have.length(1)
     expect(upRegistration).to.exist
 
     wheelRegistration.callback({ deltaY: -120, preventDefault: () => {} })
     expect(scene.getTransform().zoom).to.equal(1.12)
 
-    downRegistrations[1].callback({ pointerId: 7, pointerType: 'mouse', clientX: 100, clientY: 100 })
+    downRegistrations[0].callback({ pointerId: 7, pointerType: 'mouse', clientX: 100, clientY: 100 })
     moveRegistration.callback({ pointerId: 7, pointerType: 'mouse', clientX: 140, clientY: 120, preventDefault: () => {} })
     expect(scene.getTransform()).to.include({ offsetX: 40, offsetY: 20 })
     upRegistration.callback({ pointerId: 7, pointerType: 'mouse' })
@@ -397,8 +447,8 @@ describe('HallScene melonJS pointer routing', () => {
     const moveRegistration = me.registered.find(item => item.type === 'pointermove' && item.region === me.game.viewport)
     const downRegistrations = me.registered.filter(item => item.type === 'pointerdown' && item.region === me.game.viewport)
 
-    downRegistrations[1].callback({ pointerId: 1, pointerType: 'touch', clientX: 100, clientY: 100 })
-    downRegistrations[1].callback({ pointerId: 2, pointerType: 'touch', clientX: 200, clientY: 100 })
+    downRegistrations[0].callback({ pointerId: 1, pointerType: 'touch', clientX: 100, clientY: 100 })
+    downRegistrations[0].callback({ pointerId: 2, pointerType: 'touch', clientX: 200, clientY: 100 })
     moveRegistration.callback({ pointerId: 2, pointerType: 'touch', clientX: 260, clientY: 100, preventDefault: () => {} })
 
     expect(scene.getTransform().zoom).to.equal(1.6)

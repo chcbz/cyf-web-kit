@@ -11,6 +11,7 @@ const absoluteJuyitingPath = (source = '') => {
   return `/juyiting/${source}`.replace(/\/+/g, '/')
 }
 
+const isTileDataSequence = data => Array.isArray(data) || ArrayBuffer.isView(data)
 
 const computePolygonBounds = (objectNode) => {
   const poly = objectNode.querySelector('polygon')
@@ -252,7 +253,7 @@ const parseJuyiHallTmxData = (map) => {
   const tileLayers = []
 
   ;(map.layers || []).filter(l => l.type === 'tilelayer').forEach(layer => {
-    const data = Array.isArray(layer.data) ? layer.data : []
+    const data = isTileDataSequence(layer.data) ? layer.data : []
     if (data.length) {
       tileLayers.push({
         name: layer.name,
