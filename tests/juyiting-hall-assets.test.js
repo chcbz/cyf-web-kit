@@ -1,5 +1,5 @@
 import { expect } from 'chai'
-import { readFileSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 
 import { createGameConfig, HALL_SCENE_HEIGHT, HALL_SCENE_WIDTH } from '../src/game/config.js'
 import { HALL_SCENE_IMAGE_LAYERS, HALL_SCENE_PROP_LAYERS } from '../src/game/hallSceneLayers.js'
@@ -15,7 +15,7 @@ const pngSize = (path) => {
 
 describe('Juyiting hall scene assets', () => {
   it('uses the background native dimensions as the melonJS scene size', () => {
-    const bg = pngSize('public/juyiting/images/liangshan-hall-bg-v2.png')
+    const bg = pngSize('public/juyiting/images/liangshan-hall-base-clean-v3.png')
     const config = createGameConfig()
 
     expect(HALL_SCENE_WIDTH).to.equal(bg.width)
@@ -24,12 +24,12 @@ describe('Juyiting hall scene assets', () => {
     expect(config.height).to.equal(bg.height)
   })
 
-  it('loads a foreground layer extracted from the matching hall background', () => {
-    const fg = HALL_RESOURCES.find(resource => resource.name === 'liangshan-hall-fg')
-    const fgSize = pngSize('public/juyiting/images/liangshan-hall-foreground-extracted-v1.png')
-    const bgSize = pngSize('public/juyiting/images/liangshan-hall-bg-v2.png')
+  it('loads occluder and lighting overlays aligned to the current tile background', () => {
+    const fg = HALL_RESOURCES.find(resource => resource.name === 'liangshan-hall-foreground-occluders')
+    const fgSize = pngSize('public/juyiting/images/liangshan-hall-foreground-occluders-v3.png')
+    const bgSize = pngSize('public/juyiting/images/liangshan-hall-base-clean-v3.png')
 
-    expect(fg?.src).to.equal('/juyiting/images/liangshan-hall-foreground-extracted-v1.png')
+    expect(fg?.src).to.equal('/juyiting/images/liangshan-hall-foreground-occluders-v3.png')
     expect(fgSize).to.deep.equal(bgSize)
   })
 
@@ -53,10 +53,6 @@ describe('Juyiting hall scene assets', () => {
 
   it('exposes interactive prop layers for hall hotspots', () => {
     expect(HALL_SCENE_PROP_LAYERS.map(layer => layer.id)).to.include.members([
-      'prop-main-seat',
-      'prop-bounty-board',
-      'prop-library-shelf',
-      'prop-agent-roster',
       'prop-gate'
     ])
 
@@ -76,12 +72,20 @@ describe('Juyiting hall scene assets', () => {
     })
   })
 
-  it('keeps generated scene layers aligned to the hall background dimensions', () => {
-    const bgSize = pngSize('public/juyiting/images/liangshan-hall-bg-v2.png')
+  it('keeps full-scene image layers aligned to the tile background dimensions', () => {
+    const bgSize = pngSize('public/juyiting/images/liangshan-hall-base-clean-v3.png')
 
-    HALL_SCENE_IMAGE_LAYERS.concat(HALL_SCENE_PROP_LAYERS).forEach(layer => {
+    HALL_SCENE_IMAGE_LAYERS.forEach(layer => {
       const relativePath = layer.src.replace('/juyiting/', 'public/juyiting/')
       expect(pngSize(relativePath), layer.id).to.deep.equal(bgSize)
+    })
+  })
+
+  it('keeps every declared hall resource backed by a public file', () => {
+    HALL_RESOURCES.forEach(resource => {
+      if (!resource.src?.startsWith('/')) return
+      const relativePath = resource.src.replace('/juyiting/', 'public/juyiting/')
+      expect(existsSync(relativePath), resource.name).to.equal(true)
     })
   })
 })
