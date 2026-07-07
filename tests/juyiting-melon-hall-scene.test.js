@@ -1,6 +1,5 @@
 import { expect } from 'chai'
 
-import { HALL_SCENE_IMAGE_LAYERS, HALL_SCENE_PROP_LAYERS } from '../src/game/hallSceneLayers.js'
 import { createHallSceneClass } from '../src/game/scenes/HallScene.js'
 
 const createFakeMelon = () => {
@@ -129,7 +128,6 @@ const createFakeMelon = () => {
 const modularMapData = () => ({
   imageLayers: {
     'mid-occluders': { width: 1672, height: 941 },
-    'prop-gate': { width: 1672, height: 941 },
     'foreground-occluders': { width: 1672, height: 941 },
     'lighting-overlay': { width: 1672, height: 941, opacity: 0.85, tintcolor: '#ffd8a0' }
   },
@@ -151,7 +149,7 @@ const hotspotMapData = () => ({
 describe('HallScene melonJS pointer routing', () => {
   it('keeps custom image layers inside the transformed world scene', () => {
     const me = createFakeMelon()
-    me.loader.getImage = name => name === 'liangshan-hall-mid-occluders' ? { width: 960, height: 640 } : null
+    me.loader.getImage = name => name === 'mid-occluders' ? { width: 960, height: 640 } : null
     const HallScene = createHallSceneClass(me, class {})
     const scene = new HallScene()
     scene.setMapData({
@@ -168,12 +166,10 @@ describe('HallScene melonJS pointer routing', () => {
     expect(background.floating).not.to.equal(true)
   })
 
-  it('renders declared hall image and prop layers in depth order', () => {
+  it('renders declared hall image layers without a prop-gate layer', () => {
     const me = createFakeMelon()
-    const expectedLayers = HALL_SCENE_IMAGE_LAYERS
-      .filter(layer => layer.id !== 'baseClean')
-      .concat(HALL_SCENE_PROP_LAYERS)
-    me.loader.getImage = name => expectedLayers.some(layer => layer.resourceName === name)
+    const expectedResourceNames = ['mid-occluders', 'foreground-occluders', 'lighting-overlay']
+    me.loader.getImage = name => expectedResourceNames.includes(name)
       ? { width: 1672, height: 941, resourceName: name }
       : null
     const HallScene = createHallSceneClass(me, class {})
@@ -187,10 +183,9 @@ describe('HallScene melonJS pointer routing', () => {
       .map(item => ({ name: item.child.image.resourceName, depth: item.depth }))
 
     expect(renderedLayers).to.deep.equal([
-      { name: 'liangshan-hall-mid-occluders', depth: 2 },
-      { name: 'liangshan-hall-prop-gate', depth: 3 },
-      { name: 'liangshan-hall-foreground-occluders', depth: 5 },
-      { name: 'liangshan-hall-lighting-overlay', depth: 8 }
+      { name: 'mid-occluders', depth: 2 },
+      { name: 'foreground-occluders', depth: 5 },
+      { name: 'lighting-overlay', depth: 8 }
     ])
   })
 
@@ -309,6 +304,46 @@ describe('HallScene melonJS pointer routing', () => {
     })
     expect(downRegistration.callback({ pointerId: 2 })).to.equal(true)
     expect(upRegistration.callback({ pointerId: 2 })).to.equal(true)
+  })
+
+  it('stores polygon hotspot draw points relative to the renderable bounds', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+
+    scene.setMapData({
+      coordinateWidth: 1664,
+      coordinateHeight: 928,
+      imageLayers: {},
+      tileLayers: [],
+      tilesets: [],
+      hotspots: [
+        {
+          id: 'roster-book',
+          panel: 'catalog',
+          shape: 'polygon',
+          x: 18.389,
+          y: 30.981,
+          w: 10.697,
+          h: 20.582,
+          polygon: [
+            { x: 329, y: 362 },
+            { x: 351, y: 287 },
+            { x: 395, y: 383 },
+            { x: 217, y: 383 }
+          ]
+        }
+      ]
+    })
+    scene.onResetEvent()
+
+    const marker = me.children.find(item => item.child.data?.id === 'roster-book')?.child
+
+    expect(marker).to.exist
+    expect(marker.polygon[0].x).to.be.closeTo(64.62, 0.01)
+    expect(marker.polygon[0].y).to.be.closeTo(117.24, 0.01)
+    expect(marker.polygon[1].x).to.be.closeTo(77.31, 0.01)
+    expect(marker.polygon[1].y).to.be.closeTo(65.51, 0.01)
   })
 
   it('routes hotspot clicks on release after DOM rooms are removed', () => {

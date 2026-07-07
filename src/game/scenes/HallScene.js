@@ -395,10 +395,10 @@ export function createHallSceneClass(me, HallAgentClass) {
         .filter(item => item.data && item.marker)
         .find(({ marker, data }) => {
           // AABB fast reject
-          if (point.x < marker.pos.x - marker.width / 2 ||
-              point.x > marker.pos.x + marker.width / 2 ||
-              point.y < marker.pos.y - marker.height / 2 ||
-              point.y > marker.pos.y + marker.height / 2) {
+          if (point.x < marker.pos.x ||
+              point.x > marker.pos.x + marker.width ||
+              point.y < marker.pos.y ||
+              point.y > marker.pos.y + marker.height) {
             return false
           }
           // Polygon: ray-casting
@@ -413,14 +413,6 @@ export function createHallSceneClass(me, HallAgentClass) {
       const tmxLayers = this._mapData?.imageLayers
       if (!tmxLayers || !Object.keys(tmxLayers).length) {
         return false
-      }
-
-      // --- fully TMX-driven: imagelayer name -> melonJS resource name ---
-      const NAME_TO_RESOURCE = {
-        "mid-occluders": "liangshan-hall-mid-occluders",
-        "prop-gate": "liangshan-hall-prop-gate",
-        "foreground-occluders": "liangshan-hall-foreground-occluders",
-        "lighting-overlay": "liangshan-hall-lighting-overlay"
       }
 
       const LAYER_DEPTH = {
@@ -439,12 +431,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       let rendered = 0
 
       Object.entries(tmxLayers).forEach(([name, tmxLayer]) => {
-        const resourceName = NAME_TO_RESOURCE[name]
-        if (!resourceName) {
-          console.warn("[HallScene] No resource mapping for TMX layer:", name)
-          return
-        }
-
+        const resourceName = tmxLayer.resourceName || name
         const image = me.loader.getImage(resourceName)
         if (!image) {
           console.warn("[HallScene] Image not loaded:", resourceName, "for layer:", name)
@@ -479,14 +466,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       const tileLayers = this._mapData?.tileLayers
       const tilesets = this._mapData?.tilesets
       if (!tileLayers?.length || !tilesets?.length) return false
-
-      // Map TMX tileset name → melonJS image resource name
-      const TILESET_RESOURCE_MAP = {
-        'liangshan-hall-base-clean-v3': 'liangshan-hall-base-clean',
-        'hall-tileset': 'hall-tileset'
-      }
-
-      const resourceNameForTileset = (tileset) => TILESET_RESOURCE_MAP[tileset.name] || tileset.tilesetResourceName || tileset.name
+      const resourceNameForTileset = (tileset) => tileset.tilesetResourceName || tileset.resourceName || tileset.name
       const tilesetsByFirstGid = tilesets
         .slice()
         .sort((a, b) => Number(b.firstgid || 0) - Number(a.firstgid || 0))
@@ -576,9 +556,9 @@ export function createHallSceneClass(me, HallAgentClass) {
       class HotspotMarker extends me.Renderable {
         constructor(x, y, w, h, data) {
           super(x, y, w, h)
-          this.anchorPoint.set(0.5, 0.5)
+          this.anchorPoint.set(0, 0)
           this.data = data
-          this.polygon = data?.polygon || null
+          this.polygon = data?.drawPolygon || null
           this.feedback = null
           this.isKinematic = true
         }
@@ -608,26 +588,22 @@ export function createHallSceneClass(me, HallAgentClass) {
             ctx.stroke()
           } else {
             // Rectangle shape
-            const x = this.pos.x - this.width / 2
-            const y = this.pos.y - this.height / 2
             ctx.beginPath()
             if (typeof ctx.roundRect === 'function') {
-              ctx.roundRect(x, y, this.width, this.height, 8)
+              ctx.roundRect(0, 0, this.width, this.height, 8)
             } else {
-              ctx.rect(x, y, this.width, this.height)
+              ctx.rect(0, 0, this.width, this.height)
             }
             ctx.fill()
             ctx.stroke()
           }
 
           if (this.feedback?.feedbackText) {
-            const bx = this.pos.x - this.width / 2
-            const by = this.pos.y - this.height / 2
             ctx.font = 'bold 12px sans-serif'
             ctx.fillStyle = '#fff4d4'
             ctx.textAlign = 'center'
             ctx.textBaseline = 'bottom'
-            ctx.fillText(this.feedback.feedbackText, this.pos.x, by - 8)
+            ctx.fillText(this.feedback.feedbackText, this.width / 2, -8)
           }
           ctx.restore()
         }
@@ -638,8 +614,14 @@ export function createHallSceneClass(me, HallAgentClass) {
         const oy = (h.y - h.h / 2) / 100 * vpH
         const ow = h.w / 100 * vpW
         const oh = h.h / 100 * vpH
+        const coordinateWidth = mapData?.coordinateWidth || vpW
+        const coordinateHeight = mapData?.coordinateHeight || vpH
+        const drawPolygon = h.polygon?.map(point => ({
+          x: (point.x / coordinateWidth * vpW) - ox,
+          y: (point.y / coordinateHeight * vpH) - oy
+        })) || null
 
-        const marker = new HotspotMarker(ox + ow / 2, oy + oh / 2, ow, oh, h)
+        const marker = new HotspotMarker(ox, oy, ow, oh, { ...h, drawPolygon })
         marker.setFeedback(this._hotspotState.get(h.id))
 
         me.game.world.addChild(marker, DEPTH_LAYERS.HOTSPOTS)
@@ -647,22 +629,13 @@ export function createHallSceneClass(me, HallAgentClass) {
       })
 
 
-      // Render prop images from rect-type hotspot objects (cropped images)
-      const PROP_IMAGE_MAP = {
-        'main-seat-rect': 'hall-prop-main-seat-cropped',
-        'agent-roster-rect': 'hall-prop-agent-roster-cropped',
-        'bounty-board-rect': 'hall-prop-bounty-board-cropped',
-        'library-shelf-rect': 'hall-prop-library-shelf-cropped',
-        'roster-book-rect': 'hall-prop-roster-book-cropped',
-      }
+      // Render prop tile objects from TMX collection-of-images tilesets.
       let propDepth = 3
       hotspots.forEach(h => {
-        if (h.shape !== 'rect' || h.type !== 'prop') return
-        const resourceName = PROP_IMAGE_MAP[h.id]
-        if (!resourceName) return
-        const image = me.loader.getImage(resourceName)
+        if (h.shape !== 'rect' || h.type !== 'prop' || !h.tileResourceName) return
+        const image = me.loader.getImage(h.tileResourceName)
         if (!image) {
-          console.warn('[HallScene] Prop image not loaded:', resourceName)
+          console.warn('[HallScene] Prop tile image not loaded:', h.tileResourceName)
           return
         }
         const ox = (h.x - h.w / 2) / 100 * vpW
