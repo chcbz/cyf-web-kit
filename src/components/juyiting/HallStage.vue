@@ -472,7 +472,7 @@ button {
 .hall-board {
   position: relative;
   flex: 1 1 auto;
-  width: 100%;
+  width: 100% !important;
   min-height: 0;
   margin: 0;
   overflow: hidden;
@@ -496,8 +496,8 @@ button {
   position: absolute;
   inset: 0;
   z-index: 6;
-  width: 100%;
-  height: 100%;
+  width: 100% !important;
+  height: 100% !important;
   touch-action: none;
 }
 
