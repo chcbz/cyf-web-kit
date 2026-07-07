@@ -90,16 +90,20 @@ export const rectToPercent = (rect, space) => ({
 const readObjectRect = objectNode => {
   let width = numberAttr(objectNode, 'width')
   let height = numberAttr(objectNode, 'height')
+  let x = numberAttr(objectNode, 'x')
+  let y = numberAttr(objectNode, 'y')
   if (!width && !height) {
     const polyBounds = computePolygonBounds(objectNode)
     if (polyBounds) {
+      x += polyBounds.x
+      y += polyBounds.y
       width = polyBounds.width
       height = polyBounds.height
     }
   }
   return {
-    x: numberAttr(objectNode, 'x'),
-    y: numberAttr(objectNode, 'y'),
+    x,
+    y,
     width,
     height,
     ellipse: Boolean(objectNode.querySelector('ellipse'))
@@ -115,6 +119,8 @@ const readObjectGroup = (doc, name) => {
 const readObjectRectFromData = (object, tilesets) => {
   let width = Number(object?.width) || 0
   let height = Number(object?.height) || 0
+  let x = Number(object?.x) || 0
+  let y = Number(object?.y) || 0
   // gid-based tile objects: resolve size from tileset
   if ((!width || !height) && object?.gid && tilesets?.length) {
     const gid = Number(object.gid)
@@ -133,13 +139,15 @@ const readObjectRectFromData = (object, tilesets) => {
   if (!width && !height) {
     const polyBounds = computePolygonBoundsFromData(object)
     if (polyBounds) {
+      x += polyBounds.x
+      y += polyBounds.y
       width = polyBounds.width
       height = polyBounds.height
     }
   }
   return {
-    x: Number(object?.x) || 0,
-    y: Number(object?.y) || 0,
+    x,
+    y,
     width,
     height,
     ellipse: Boolean(object?.ellipse)
@@ -162,10 +170,12 @@ const coordinateSpaceFor = (doc, mapWidth, mapHeight) => {
     }
   }, { width: mapWidth, height: mapHeight })
 
-  return imageSizes.reduce((space, size) => ({
+  const artBounds = imageSizes.reduce((space, size) => ({
     width: Math.max(space.width, size.width),
     height: Math.max(space.height, size.height)
-  }), objectBounds)
+  }), { width: mapWidth, height: mapHeight })
+
+  return artBounds.width && artBounds.height ? artBounds : objectBounds
 }
 
 const coordinateSpaceForData = (map, mapWidth, mapHeight, tilesets) => {
@@ -181,8 +191,6 @@ const coordinateSpaceForData = (map, mapWidth, mapHeight, tilesets) => {
       })
       .filter(size => size.width && size.height)
 
-    console.log("[tiledMap] coordinateSpaceForData: imagelayer sizes =", JSON.stringify(imageSizes.map(function(s){return s.width+"x"+s.height})))
-
     const objectBounds = (map.layers || [])
       .filter(layer => layer.type === 'objectgroup')
       .flatMap(layer => layer.objects || [])
@@ -194,12 +202,13 @@ const coordinateSpaceForData = (map, mapWidth, mapHeight, tilesets) => {
         }
       }, { width: mapWidth, height: mapHeight })
 
-    const result = imageSizes.reduce((space, size) => ({
+    const artBounds = imageSizes.reduce((space, size) => ({
       width: Math.max(space.width, size.width),
       height: Math.max(space.height, size.height)
-    }), objectBounds)
+    }), { width: mapWidth, height: mapHeight })
 
-    console.log("[tiledMap] coordinateSpaceForData: final =", result.width, "x", result.height, "(map tile size:", mapWidth, "x", mapHeight, ")")
+    const result = artBounds.width && artBounds.height ? artBounds : objectBounds
+
     return result
   }
 const objectGroupFromData = (map, name) => {
@@ -251,7 +260,6 @@ const parseJuyiHallTmxData = (map) => {
         height: layer.height,
         data
       })
-      console.log('[tiledMap] Tile layer parsed:', layer.name, data.length, 'tiles')
     }
   })
 
@@ -426,7 +434,6 @@ export const parseJuyiHallTmx = (xml) => {
 
     if (data.length) {
       tileLayers.push({ name: textAttr(layerEl, 'name'), width: layerW, height: layerH, data })
-      console.log('[tiledMap] XML tile layer parsed:', textAttr(layerEl, 'name'), data.length, 'tiles')
     }
   })
 

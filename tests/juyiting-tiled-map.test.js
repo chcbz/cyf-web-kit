@@ -5,16 +5,17 @@ import { parseJuyiHallTmx, rectToPercent } from '../src/game/tiledMap.js'
 
 describe('Juyi Hall Tiled map parser', () => {
   const xml = readFileSync(new URL('../public/juyiting/hall.tmx', import.meta.url), 'utf8')
+  const hallV4Xml = readFileSync(new URL('../public/juyiting/hall_v4.tmx', import.meta.url), 'utf8')
 
   it('parses image layers, hotspots, obstacles, and spawn points from hall.tmx', () => {
     const map = parseJuyiHallTmx(xml)
 
     expect(map.width).to.equal(1672)
-    expect(map.height).to.equal(640)
+    expect(map.height).to.equal(941)
     expect(map.coordinateWidth).to.equal(1672)
     expect(map.coordinateHeight).to.be.greaterThan(860)
-    expect(map.imageLayers.background.source).to.equal('/juyiting/images/liangshan-hall-bg-v2.png')
-    expect(map.imageLayers.foreground.source).to.equal('/juyiting/images/liangshan-hall-foreground-v1.png')
+    expect(map.imageLayers['wall-back'].source).to.equal('/juyiting/images/modular/hall-wall-back-v1.png')
+    expect(map.imageLayers.pillars.source).to.equal('/juyiting/images/modular/hall-pillars-v1.png')
     expect(map.hotspots.map(item => item.id)).to.include.members([
       'mainSeat',
       'agentRoster',
@@ -69,5 +70,31 @@ describe('Juyi Hall Tiled map parser', () => {
     expect(map.imageLayers.background.source).to.equal('/juyiting/images/liangshan-hall-bg-v2.png')
     expect(map.hotspots[0]).to.include({ id: 'mainSeat', panel: 'chat' })
     expect(map.spawns.songjiang).to.include.keys(['x', 'y'])
+  })
+
+  it('keeps hall_v4 tile-layer coordinates aligned to the map art bounds', () => {
+    const map = parseJuyiHallTmx(hallV4Xml)
+
+    expect(map.width).to.equal(1664)
+    expect(map.height).to.equal(928)
+    expect(map.coordinateWidth).to.equal(1664)
+    expect(map.coordinateHeight).to.equal(928)
+    expect(map.tileLayers.find(layer => layer.name === 'background')).to.include({
+      width: 104,
+      height: 58
+    })
+    expect(map.tileLayers.find(layer => layer.name === 'background').data).to.have.length(104 * 58)
+
+    const mainSeat = map.hotspots.find(item => item.id === 'main-seat')
+    expect(mainSeat.rect).to.include({
+      x: 818,
+      y: 175,
+      width: 108,
+      height: 92
+    })
+    expect(mainSeat).to.include({
+      panel: 'chat',
+      shape: 'polygon'
+    })
   })
 })

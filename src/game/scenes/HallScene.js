@@ -21,6 +21,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._hotspotState = new Map()
       this._sceneBuilt = false
       this._minZoom = 1
+      this._fitMinZoom = 1
       this._maxZoom = 3.3
       this._zoomStep = 0.12
       this._transform = { offsetX: 0, offsetY: 0, zoom: 1 }
@@ -94,7 +95,7 @@ export function createHallSceneClass(me, HallAgentClass) {
         viewportHeight: height,
         containerWidth: displayRect?.width,
         containerHeight: displayRect?.height,
-        minZoom: this._minZoom,
+        minZoom: Math.min(this._minZoom, this._fitMinZoom),
         maxZoom: this._maxZoom
       }
     }
@@ -168,6 +169,7 @@ export function createHallSceneClass(me, HallAgentClass) {
         sceneWidth: md?.coordinateWidth || HALL_SCENE_WIDTH,
         sceneHeight: md?.coordinateHeight || HALL_SCENE_HEIGHT
       })
+      this._fitMinZoom = Math.min(this._minZoom, this._transform.zoom)
       this._applySceneTransform()
       return this.getTransform()
     }
@@ -397,8 +399,6 @@ export function createHallSceneClass(me, HallAgentClass) {
         "lighting-overlay": "screen"
       }
 
-      console.log("[HallScene] _renderModularLayers: TMX-driven, " + Object.keys(tmxLayers).length + " imagelayers")
-
       let propIndex = 0
       let rendered = 0
 
@@ -433,7 +433,6 @@ export function createHallSceneClass(me, HallAgentClass) {
         rendered++
       })
 
-      console.log("[HallScene] _renderModularLayers: rendered " + rendered + " layers from TMX")
       return rendered > 0
     }
 
@@ -451,44 +450,58 @@ export function createHallSceneClass(me, HallAgentClass) {
         'hall-tileset': 'hall-tileset'
       }
 
+      const resourceNameForTileset = (tileset) => TILESET_RESOURCE_MAP[tileset.name] || tileset.tilesetResourceName || tileset.name
+      const tilesetsByFirstGid = tilesets
+        .slice()
+        .sort((a, b) => Number(b.firstgid || 0) - Number(a.firstgid || 0))
+      const tilesetForGid = gid => tilesetsByFirstGid.find(ts => gid >= Number(ts.firstgid || 1))
+      const imageCache = new Map()
+      const imageForTileset = (tileset) => {
+        const resourceName = resourceNameForTileset(tileset)
+        if (!imageCache.has(resourceName)) {
+          imageCache.set(resourceName, me.loader.getImage(resourceName))
+        }
+        return imageCache.get(resourceName)
+      }
+
       let rendered = 0
       tileLayers.forEach((tileLayer, layerIdx) => {
-        // Find tileset covering this layer's GID range
-        const maxGid = tileLayer.data.reduce((a, b) => Math.max(a, b), 0)
-        const tileset = tilesets.find(ts => ts.firstgid <= maxGid)
-        if (!tileset) return
-
-        const resourceName = TILESET_RESOURCE_MAP[tileset.name] || tileset.name
-        const tilesetImg = me.loader.getImage(resourceName)
-        if (!tilesetImg) {
-          console.warn('[HallScene] Tileset image not loaded:', resourceName, 'for layer:', tileLayer.name)
-          return
-        }
-
-        const tw = tileset.tilewidth || 16
-        const th = tileset.tileheight || 16
-        const cols = tileset.columns || Math.floor(tileset.imagewidth / tw)
-
         // Composite all tiles into an offscreen canvas (done once, GPU-friendly)
-        const canvasW = tileLayer.width * tw
-        const canvasH = tileLayer.height * th
+        const fallbackTileset = tilesetsByFirstGid[tilesetsByFirstGid.length - 1] || {}
+        const fallbackTileWidth = fallbackTileset.tilewidth || 16
+        const fallbackTileHeight = fallbackTileset.tileheight || 16
+        const canvasW = tileLayer.width * fallbackTileWidth
+        const canvasH = tileLayer.height * fallbackTileHeight
         const offCanvas = document.createElement('canvas')
         offCanvas.width = canvasW
         offCanvas.height = canvasH
         const ctx = offCanvas.getContext('2d')
+        let tileDrawCount = 0
 
         for (let i = 0; i < tileLayer.data.length; i++) {
           const gid = tileLayer.data[i]
           if (gid === 0) continue
+          const tileset = tilesetForGid(gid)
+          if (!tileset) continue
+          const tilesetImg = imageForTileset(tileset)
+          if (!tilesetImg) {
+            console.warn('[HallScene] Tileset image not loaded:', resourceNameForTileset(tileset), 'for layer:', tileLayer.name)
+            continue
+          }
+          const tw = tileset.tilewidth || fallbackTileWidth
+          const th = tileset.tileheight || fallbackTileHeight
+          const cols = tileset.columns || Math.floor((tileset.imagewidth || tilesetImg.width || tw) / tw) || 1
           const tileIdx = gid - tileset.firstgid
           const srcCol = tileIdx % cols
           const srcRow = Math.floor(tileIdx / cols)
           const sx = srcCol * tw
           const sy = srcRow * th
-          const dx = (i % tileLayer.width) * tw
-          const dy = Math.floor(i / tileLayer.width) * th
+          const dx = (i % tileLayer.width) * fallbackTileWidth
+          const dy = Math.floor(i / tileLayer.width) * fallbackTileHeight
           ctx.drawImage(tilesetImg, sx, sy, tw, th, dx, dy, tw, th)
+          tileDrawCount += 1
         }
+        if (!tileDrawCount) return
 
         // depth: background layers start at 0, add small offset per layer
         const depth = layerIdx * 0.1
@@ -496,7 +509,6 @@ export function createHallSceneClass(me, HallAgentClass) {
         me.game.world.addChild(imageLayer, depth)
         this._imageLayers.push(imageLayer)
         rendered++
-        console.log('[HallScene] Tile layer rendered:', tileLayer.name, tileLayer.data.length, 'tiles, depth', depth)
       })
       return rendered > 0
     }

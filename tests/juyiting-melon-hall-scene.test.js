@@ -126,28 +126,59 @@ const createFakeMelon = () => {
   }
 }
 
+const modularMapData = () => ({
+  imageLayers: {
+    'mid-occluders': { width: 1672, height: 941 },
+    'prop-gate': { width: 1672, height: 941 },
+    'foreground-occluders': { width: 1672, height: 941 },
+    'lighting-overlay': { width: 1672, height: 941, opacity: 0.85, tintcolor: '#ffd8a0' }
+  },
+  tileLayers: [],
+  tilesets: [],
+  hotspots: []
+})
+
+const hotspotMapData = () => ({
+  imageLayers: {},
+  tileLayers: [],
+  tilesets: [],
+  hotspots: [
+    { id: 'mainSeat', panel: 'chat', shape: 'rect', x: 50, y: 40, w: 12, h: 8 },
+    { id: 'bountyBoard', panel: 'tasks', shape: 'rect', x: 76, y: 47, w: 16, h: 14 }
+  ]
+})
+
 describe('HallScene melonJS pointer routing', () => {
   it('keeps custom image layers inside the transformed world scene', () => {
     const me = createFakeMelon()
-    me.loader.getImage = name => name === 'liangshan-hall-bg' ? { width: 960, height: 640 } : null
+    me.loader.getImage = name => name === 'liangshan-hall-mid-occluders' ? { width: 960, height: 640 } : null
     const HallScene = createHallSceneClass(me, class {})
     const scene = new HallScene()
+    scene.setMapData({
+      imageLayers: { 'mid-occluders': { width: 960, height: 640 } },
+      tileLayers: [],
+      tilesets: [],
+      hotspots: []
+    })
 
     scene.onResetEvent()
 
-    const background = me.children.find(item => item.depth === 0)?.child
+    const background = me.children.find(item => item.depth === 2)?.child
     expect(background).to.exist
     expect(background.floating).not.to.equal(true)
   })
 
   it('renders declared hall image and prop layers in depth order', () => {
     const me = createFakeMelon()
-    const expectedLayers = HALL_SCENE_IMAGE_LAYERS.concat(HALL_SCENE_PROP_LAYERS)
+    const expectedLayers = HALL_SCENE_IMAGE_LAYERS
+      .filter(layer => layer.id !== 'baseClean')
+      .concat(HALL_SCENE_PROP_LAYERS)
     me.loader.getImage = name => expectedLayers.some(layer => layer.resourceName === name)
       ? { width: 1672, height: 941, resourceName: name }
       : null
     const HallScene = createHallSceneClass(me, class {})
     const scene = new HallScene()
+    scene.setMapData(modularMapData())
 
     scene.onResetEvent()
 
@@ -155,12 +186,56 @@ describe('HallScene melonJS pointer routing', () => {
       .filter(item => item.child.image?.resourceName)
       .map(item => ({ name: item.child.image.resourceName, depth: item.depth }))
 
-    expect(renderedLayers).to.deep.equal(
-      expectedLayers
-        .slice()
-        .sort((a, b) => a.depth - b.depth)
-        .map(layer => ({ name: layer.resourceName, depth: layer.depth }))
-    )
+    expect(renderedLayers).to.deep.equal([
+      { name: 'liangshan-hall-mid-occluders', depth: 2 },
+      { name: 'liangshan-hall-prop-gate', depth: 3 },
+      { name: 'liangshan-hall-foreground-occluders', depth: 5 },
+      { name: 'liangshan-hall-lighting-overlay', depth: 8 }
+    ])
+  })
+
+  it('renders tile-layer cells with the tileset that owns each gid', () => {
+    const me = createFakeMelon()
+    const drawCalls = []
+    const originalCreateElement = document.createElement.bind(document)
+    document.createElement = (tagName, ...args) => {
+      if (tagName === 'canvas') {
+        return {
+          width: 0,
+          height: 0,
+          getContext: () => ({
+            drawImage: (image, sx, sy, sw, sh, dx, dy, dw, dh) => {
+              drawCalls.push({ image, sx, sy, sw, sh, dx, dy, dw, dh })
+            }
+          })
+        }
+      }
+      return originalCreateElement(tagName, ...args)
+    }
+
+    try {
+      me.loader.getImage = name => ({ width: 32, height: 16, resourceName: name })
+      const HallScene = createHallSceneClass(me, class {})
+      const scene = new HallScene()
+      scene.setMapData({
+        tileLayers: [
+          { name: 'mixed', width: 2, height: 1, data: [1, 101] }
+        ],
+        tilesets: [
+          { name: 'first-tileset', firstgid: 1, tilewidth: 16, tileheight: 16, columns: 2, imagewidth: 32 },
+          { name: 'second-tileset', firstgid: 100, tilewidth: 16, tileheight: 16, columns: 2, imagewidth: 32 }
+        ],
+        imageLayers: {},
+        hotspots: []
+      })
+
+      scene.onResetEvent()
+    } finally {
+      document.createElement = originalCreateElement
+    }
+
+    expect(drawCalls.map(call => call.image.resourceName)).to.deep.equal(['first-tileset', 'second-tileset'])
+    expect(drawCalls.map(call => call.sx)).to.deep.equal([0, 16])
   })
 
   it('keeps transform state inside the melonJS scene', () => {
@@ -186,11 +261,11 @@ describe('HallScene melonJS pointer routing', () => {
     const HallScene = createHallSceneClass(me, class {})
     const scene = new HallScene()
 
-    expect(scene.fitToViewport({ width: 390, height: 720 })).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 1 })
+    expect(scene.fitToViewport({ width: 390, height: 720 })).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 0.58 })
     expect(me.matrixOps.slice(-4)).to.deep.equal([
       ['identity'],
       ['translate', 480, 320],
-      ['scale', 1, 1],
+      ['scale', 0.58, 0.58],
       ['translate', -480, -320]
     ])
   })
@@ -212,6 +287,7 @@ describe('HallScene melonJS pointer routing', () => {
     const hotspotClicks = []
 
     scene.onHotspotClick(hotspot => hotspotClicks.push(hotspot))
+    scene.setMapData(hotspotMapData())
     scene.onResetEvent()
 
     const hotspotRegistration = me.registered.find(item => item.region.data?.id === 'mainSeat')
@@ -239,6 +315,7 @@ describe('HallScene melonJS pointer routing', () => {
     const clicked = []
 
     scene.onHotspotClick(item => clicked.push(item))
+    scene.setMapData(hotspotMapData())
     scene.onResetEvent()
 
     const hotspotRegistration = me.registered.find(item => item.region.data?.id === 'bountyBoard')

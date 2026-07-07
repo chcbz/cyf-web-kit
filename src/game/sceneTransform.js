@@ -79,7 +79,7 @@ export const fitSceneTransform = ({
   return {
     offsetX: 0,
     offsetY: 0,
-    zoom: Number(clamp(rawZoom, minZoom, maxZoom).toFixed(2))
+    zoom: Number(clamp(rawZoom, Math.min(minZoom, rawZoom), maxZoom).toFixed(2))
   }
 }
 

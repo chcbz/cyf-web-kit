@@ -120,14 +120,12 @@ export class JuyitingGame {
 
   async _prepareMapData(me) {
     let tmx = me.loader.getTMX?.(HALL_MAP_RESOURCE.name)
-    console.log("[JuyitingGame] _prepareMapData: melonJS getTMX:", tmx ? "found" : "null, fetching directly")
 
     if (!tmx) {
       try {
         const resp = await fetch(HALL_MAP_RESOURCE.src)
         const xmlText = await resp.text()
         tmx = xmlText
-        console.log("[JuyitingGame] Direct TMX fetch OK,", xmlText.length, "bytes")
       } catch (err) {
         console.warn("[JuyitingGame] Direct TMX fetch failed:", err?.message || err)
       }
@@ -135,9 +133,6 @@ export class JuyitingGame {
 
     try {
       this._mapData = tmx ? parseJuyiHallTmx(tmx) : null
-      if (this._mapData) {
-        console.log("[JuyitingGame] TMX parsed, imageLayers:", Object.keys(this._mapData.imageLayers || {}).join(", "))
-      }
     } catch (error) {
       console.warn("[JuyitingGame] TMX parse failed:", error?.message || error)
       this._mapData = null

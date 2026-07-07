@@ -82,7 +82,7 @@ describe('Juyiting scene transform helpers', () => {
     })).to.deep.equal({ x: 480, y: 340 })
   })
 
-  it('fits the full scene into portrait and landscape viewports', () => {
+  it('fits the full scene below configured interaction min zoom when needed', () => {
     expect(fitSceneTransform({
       viewportWidth: 390,
       viewportHeight: 720,
@@ -90,7 +90,7 @@ describe('Juyiting scene transform helpers', () => {
       sceneHeight: 640,
       minZoom: 1,
       maxZoom: 3.3
-    })).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 1 })
+    })).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 0.41 })
 
     expect(fitSceneTransform({
       viewportWidth: 900,
@@ -99,6 +99,6 @@ describe('Juyiting scene transform helpers', () => {
       sceneHeight: 640,
       minZoom: 1,
       maxZoom: 3.3
-    })).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 1 })
+    })).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 0.84 })
   })
 })
