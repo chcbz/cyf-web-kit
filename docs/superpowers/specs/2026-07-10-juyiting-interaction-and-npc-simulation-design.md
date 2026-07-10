@@ -1,4 +1,7 @@
-# 聚义厅交互、NPC 仿真与模块化设计
+﻿# 聚义厅交互、NPC 仿真与模块化设计
+
+> **状态：已被 `2026-07-11-juyiting-unified-map-and-agent-simulation-design.md` 取代。本文仅保留历史追溯用途。**
+
 
 日期：2026-07-10
 

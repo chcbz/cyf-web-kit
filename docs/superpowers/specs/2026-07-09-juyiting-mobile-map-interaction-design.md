@@ -1,5 +1,8 @@
 ﻿# 聚义厅移动优先地图加载、缩放与拖动设计
 
+> **状态：已被 `2026-07-11-juyiting-unified-map-and-agent-simulation-design.md` 取代。本文仅保留历史追溯用途。**
+
+
 日期：2026-07-09
 
 ## 1. 背景
