@@ -1,6 +1,5 @@
 {
   "require": [
-    "@babel/register",
     "./tests/setup.js"
   ],
   "timeout": 10000,
@@ -8,9 +7,10 @@
   "recursive": false,
   "spec": [
     "./tests/*.test.js",
-    "./tests/composables/*.spec.js"
+    "./tests/composables/*.spec.js",
+    "./tests/game/**/*.test.ts"
   ],
-  "extension": ["js"],
+  "extension": ["js", "ts"],
   "reporter": "mochawesome",
   "reporter-options": "reportDir=mochawesome-report,reportFilename=mochawesome.json",
   "ui": "bdd",
