@@ -85,6 +85,26 @@ describe('viewport resize policy', () => {
     }), 'layout')
   })
 
+  it('treats an explicit false orientation signal as authoritative for a large relation flip', () => {
+    assert.equal(classifyViewportResize({
+      previous: { width: 390, height: 720 },
+      next: { width: 720, height: 390 },
+      previousVisualHeight: 720,
+      nextVisualHeight: 390,
+      editableFocused: false,
+      orientationChanged: false
+    }), 'layout')
+
+    assert.equal(classifyViewportResize({
+      previous: { width: 390, height: 720 },
+      next: { width: 720, height: 390 },
+      previousVisualHeight: 720,
+      nextVisualHeight: 390,
+      editableFocused: false,
+      orientationChanged: true
+    }), 'orientation')
+  })
+
   it('classifies square and invalid dimensions deterministically as layout', () => {
     assert.equal(classifyViewportResize({
       previous: { width: 0, height: Number.NaN },

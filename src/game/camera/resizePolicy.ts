@@ -47,11 +47,13 @@ export const classifyViewportResize = (resize: ViewportResize): ViewportResizeKi
       Math.abs(newWidth - oldWidth),
       Math.abs(resize.next.height - resize.previous.height)
     ) >= ORIENTATION_DIMENSION_CHANGE_THRESHOLD
+  const orientationSignalAllowsChange = resize.orientationChanged === true ||
+    (resize.orientationChanged === undefined && meaningfulDimensionChange)
   if (
     previousOrientation !== null &&
     nextOrientation !== null &&
     previousOrientation !== nextOrientation &&
-    (resize.orientationChanged === true || meaningfulDimensionChange)
+    orientationSignalAllowsChange
   ) {
     return 'orientation'
   }
