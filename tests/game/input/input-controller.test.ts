@@ -41,6 +41,7 @@ const pointer = (overrides: Record<string, unknown> = {}) => {
     clientX: 10,
     clientY: 10,
     button: 0,
+    deltaMode: 0,
     preventDefault: () => { prevented = true },
     prevented: () => prevented,
     ...overrides
@@ -93,7 +94,8 @@ const createHarness = () => {
 describe('input controller', () => {
   it('binds each listener exactly once and cleanup is idempotent with no leaks', () => {
     const harness = createHarness()
-    for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'wheel', 'keydown', 'dblclick']) {
+    assert.equal('bind' in harness.controller, false)
+    for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'lostpointercapture', 'wheel', 'keydown', 'dblclick']) {
       assert.equal(harness.count(type), 1)
     }
 
@@ -102,7 +104,7 @@ describe('input controller', () => {
     harness.controller.cleanup()
 
     assert.deepEqual(harness.releases, [7])
-    for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'wheel', 'keydown', 'dblclick']) {
+    for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'lostpointercapture', 'wheel', 'keydown', 'dblclick']) {
       assert.equal(harness.count(type), 0)
     }
   })
@@ -134,6 +136,23 @@ describe('input controller', () => {
     assert.equal(harness.calls.begin, 1)
   })
 
+  it('does not capture or disturb pinch state for a third touch', () => {
+    const harness = createHarness()
+    harness.dispatch('pointerdown', pointer({ pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 }))
+    harness.dispatch('pointerdown', pointer({ pointerId: 2, pointerType: 'touch', clientX: 10, clientY: 0 }))
+    const third = pointer({ pointerId: 3, pointerType: 'touch', clientX: 100, clientY: 100 })
+
+    harness.dispatch('pointerdown', third)
+    harness.dispatch('pointerup', third)
+    harness.dispatch('pointermove', pointer({ pointerId: 2, pointerType: 'touch', clientX: 20, clientY: 0 }))
+
+    assert.deepEqual(harness.captures, [1, 2])
+    assert.deepEqual(harness.releases, [])
+    assert.equal(third.prevented(), false)
+    assert.deepEqual(harness.calls.zooms, [[{ x: 10, y: 0 }, 2]])
+    assert.equal(harness.controller.snapshot().activeGesture, 'pinch')
+  })
+
   it('zooms wheel around the pointer with bounded normalized factors', () => {
     const harness = createHarness()
     const wheelIn = pointer({ clientX: 25, clientY: 30, deltaY: -10000 })
@@ -147,6 +166,28 @@ describe('input controller', () => {
     assert.ok(harness.calls.zooms[0][1] > 1 && harness.calls.zooms[0][1] <= 1.25)
     assert.ok(harness.calls.zooms[1][1] < 1 && harness.calls.zooms[1][1] >= 0.8)
     assert.equal(harness.calls.begin, 2)
+  })
+
+  it('normalizes wheel pixel, line, and page delta modes before bounding the factor', () => {
+    const harness = createHarness()
+    harness.dispatch('wheel', pointer({ deltaY: 16, deltaMode: 0 }))
+    harness.dispatch('wheel', pointer({ deltaY: 1, deltaMode: 1 }))
+    harness.dispatch('wheel', pointer({ deltaY: 0.16, deltaMode: 2 }))
+
+    assert.equal(harness.calls.zooms.length, 3)
+    assert.equal(harness.calls.zooms[0][1], harness.calls.zooms[1][1])
+    assert.equal(harness.calls.zooms[1][1], harness.calls.zooms[2][1])
+  })
+
+  it('ignores zero effective wheel delta without side effects', () => {
+    const harness = createHarness()
+    const event = pointer({ deltaY: 0, deltaMode: 1 })
+
+    harness.dispatch('wheel', event)
+
+    assert.equal(event.prevented(), false)
+    assert.equal(harness.calls.begin, 0)
+    assert.deepEqual(harness.calls.zooms, [])
   })
 
   it('handles zoom and reset keys at viewport center while filtering repeat and editable targets', () => {
@@ -170,6 +211,7 @@ describe('input controller', () => {
       id,
       kind,
       touchSlop,
+      bounds: { left: 10, top: 10, right: 20, bottom: 20 },
       contains: point => point.x >= 10 && point.x <= 20 && point.y >= 10 && point.y <= 20
     })
     harness.setHits([area('agent', 'agent', 5)], [area('hotspot', 'hotspot', 5)])
@@ -242,6 +284,48 @@ describe('input controller', () => {
     assert.deepEqual(harness.calls.agents, [])
     assert.deepEqual(harness.calls.hotspots, [])
     assert.deepEqual(harness.calls.blanks, [])
+  })
+
+  it('releases and cancels pointerup with a valid id but malformed sample fields', () => {
+    const harness = createHarness()
+    harness.dispatch('pointerdown', pointer({ pointerId: 11 }))
+    const terminal = pointer({ pointerId: 11, pointerType: 'invalid', clientX: Number.NaN })
+
+    harness.dispatch('pointerup', terminal)
+
+    assert.deepEqual(harness.releases, [11])
+    assert.equal(harness.controller.snapshot().activeGesture, 'none')
+    assert.equal(terminal.prevented(), false)
+    assert.equal(harness.calls.begin, 1)
+    assert.deepEqual(harness.calls.pans, [])
+    assert.deepEqual(harness.calls.zooms, [])
+    assert.deepEqual(harness.calls.blanks, [])
+  })
+
+  it('releases and cancels pointercancel with a valid id but malformed sample fields', () => {
+    const harness = createHarness()
+    harness.dispatch('pointerdown', pointer({ pointerId: 12 }))
+    const terminal = pointer({ pointerId: 12, clientY: Number.POSITIVE_INFINITY })
+
+    harness.dispatch('pointercancel', terminal)
+
+    assert.deepEqual(harness.releases, [12])
+    assert.equal(harness.controller.snapshot().activeGesture, 'none')
+    assert.equal(terminal.prevented(), false)
+    assert.equal(harness.calls.begin, 1)
+    assert.deepEqual(harness.calls.pans, [])
+    assert.deepEqual(harness.calls.zooms, [])
+    assert.deepEqual(harness.calls.blanks, [])
+  })
+
+  it('cancels and releases valid pointer state on lost pointer capture', () => {
+    const harness = createHarness()
+    harness.dispatch('pointerdown', pointer({ pointerId: 13 }))
+
+    harness.dispatch('lostpointercapture', { pointerId: 13 })
+
+    assert.deepEqual(harness.releases, [13])
+    assert.equal(harness.controller.snapshot().activeGesture, 'none')
   })
 
   it('rejects malformed wheel coordinates and delta before camera or prevention side effects', () => {

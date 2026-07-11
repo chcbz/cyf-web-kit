@@ -5,6 +5,8 @@ export type HitArea = {
   kind: 'agent' | 'hotspot'
   contains(point: Point): boolean
   touchSlop?: number
+  containsWithSlop?(point: Point, slop: number): boolean
+  bounds?: { left: number; top: number; right: number; bottom: number }
 }
 
 export type HitResult =
@@ -18,17 +20,10 @@ const containsWithTouchSlop = (area: HitArea, point: Point): boolean => {
     ? area.touchSlop as number
     : 0
   if (slop === 0) return false
-  const diagonal = slop / Math.SQRT2
-  return [
-    { x: point.x + slop, y: point.y },
-    { x: point.x - slop, y: point.y },
-    { x: point.x, y: point.y + slop },
-    { x: point.x, y: point.y - slop },
-    { x: point.x + diagonal, y: point.y + diagonal },
-    { x: point.x + diagonal, y: point.y - diagonal },
-    { x: point.x - diagonal, y: point.y + diagonal },
-    { x: point.x - diagonal, y: point.y - diagonal }
-  ].some(candidate => area.contains(candidate))
+  if (area.containsWithSlop !== undefined) return area.containsWithSlop(point, slop)
+  if (area.bounds === undefined) return false
+  return point.x >= area.bounds.left - slop && point.x <= area.bounds.right + slop &&
+    point.y >= area.bounds.top - slop && point.y <= area.bounds.bottom + slop
 }
 
 export const resolveHit = (

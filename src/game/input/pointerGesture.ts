@@ -46,10 +46,13 @@ export const createPointerGesture = (
   let activeGesture: ActiveGesture = 'none'
   let pinchStartDistance = 0
   let pinchSuppressedClick = false
+  let pinchIds: readonly [number, number] | null = null
 
   const touchPair = (): [PointerState, PointerState] | null => {
-    const touches = [...pointers.values()].filter(pointer => pointer.type === 'touch')
-    return touches.length >= 2 ? [touches[0], touches[1]] : null
+    if (pinchIds === null) return null
+    const first = pointers.get(pinchIds[0])
+    const second = pointers.get(pinchIds[1])
+    return first === undefined || second === undefined ? null : [first, second]
   }
 
   const pinchResult = (): GestureResult => {
@@ -70,19 +73,41 @@ export const createPointerGesture = (
     activeGesture = 'none'
     pinchStartDistance = 0
     pinchSuppressedClick = false
+    pinchIds = null
+  }
+
+  const promoteRemainingPinchTouch = (releasedId: number): void => {
+    if (pinchIds === null || !pinchIds.includes(releasedId)) return
+    const remainingId = pinchIds[0] === releasedId ? pinchIds[1] : pinchIds[0]
+    const remaining = pointers.get(remainingId)
+    pinchIds = null
+    pinchStartDistance = 0
+    if (remaining === undefined) {
+      primaryId = null
+      activeGesture = 'none'
+      return
+    }
+    primaryId = remainingId
+    remaining.startX = remaining.x
+    remaining.startY = remaining.y
+    activeGesture = 'drag'
+    pinchSuppressedClick = true
   }
 
   return {
     down(sample) {
       if (!validSample(sample) || pointers.has(sample.id)) return NONE
+      if (activeGesture === 'pinch' && sample.type === 'touch') return NONE
       pointers.set(sample.id, { ...sample, startX: sample.x, startY: sample.y })
       if (primaryId === null) {
         primaryId = sample.id
         activeGesture = 'click'
       }
 
-      const pair = touchPair()
-      if (pair !== null) {
+      const touches = [...pointers.values()].filter(pointer => pointer.type === 'touch')
+      if (touches.length === 2) {
+        pinchIds = [touches[0].id, touches[1].id]
+        const pair = touchPair() as [PointerState, PointerState]
         pinchStartDistance = Math.hypot(pair[1].x - pair[0].x, pair[1].y - pair[0].y)
         activeGesture = 'pinch'
         pinchSuppressedClick = true
@@ -128,7 +153,9 @@ export const createPointerGesture = (
         !pinchSuppressedClick && withinClickThreshold
       pointers.delete(sample.id)
 
-      if (activeGesture === 'pinch' || pinchSuppressedClick) {
+      if (activeGesture === 'pinch') {
+        promoteRemainingPinchTouch(sample.id)
+      } else if (pinchSuppressedClick) {
         activeGesture = pointers.size === 0 ? 'none' : 'drag'
       } else if (wasPrimary) {
         activeGesture = 'none'
@@ -138,14 +165,16 @@ export const createPointerGesture = (
         activeGesture = 'none'
         pinchStartDistance = 0
         pinchSuppressedClick = false
+        pinchIds = null
       }
       return shouldClick ? { kind: 'click', point: { x: sample.x, y: sample.y } } : NONE
     },
 
     cancel(id) {
       if (!Number.isSafeInteger(id) || id < 0 || !pointers.has(id)) return
-      if (id === primaryId || activeGesture === 'pinch') cancelAll()
-      else pointers.delete(id)
+      pointers.delete(id)
+      if (activeGesture === 'pinch') promoteRemainingPinchTouch(id)
+      else if (id === primaryId) cancelAll()
     },
 
     cancelAll,

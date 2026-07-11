@@ -8,10 +8,11 @@ import {
 } from './pointerGesture.js'
 
 type InputListener = (event: never) => void
+type InputListenerOptions = { passive?: boolean; capture?: boolean }
 
 export type InputEventTarget = {
-  addEventListener(type: string, listener: InputListener, options?: AddEventListenerOptions | boolean): void
-  removeEventListener(type: string, listener: InputListener, options?: EventListenerOptions | boolean): void
+  addEventListener(type: string, listener: InputListener, options?: InputListenerOptions | boolean): void
+  removeEventListener(type: string, listener: InputListener, options?: InputListenerOptions | boolean): void
   setPointerCapture?(pointerId: number): void
   releasePointerCapture?(pointerId: number): void
 }
@@ -38,7 +39,6 @@ export type InputControllerOptions = {
 }
 
 export type InputController = {
-  bind(): void
   cleanup(): void
   cancelGesture(): void
   snapshot(): { activeGesture: ActiveGesture; interactionLocked: boolean }
@@ -53,15 +53,17 @@ type PointerLike = {
   preventDefault?(): void
 }
 
-type WheelLike = { clientX: number; clientY: number; deltaY: number; preventDefault?(): void }
+type WheelLike = { clientX: number; clientY: number; deltaY: number; deltaMode?: number; preventDefault?(): void }
 type KeyLike = { key: string; repeat?: boolean; target?: unknown; preventDefault?(): void }
 
 const pointerType = (value: string): PointerSample['type'] | null =>
   value === 'mouse' || value === 'touch' || value === 'pen' ? value : null
 
+const validPointerId = (id: number): boolean => Number.isSafeInteger(id) && id >= 0
+
 const sampleFrom = (event: PointerLike): PointerSample | null => {
   const type = pointerType(event.pointerType)
-  if (type === null || !Number.isSafeInteger(event.pointerId) || event.pointerId < 0 ||
+  if (type === null || !validPointerId(event.pointerId) ||
     !Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return null
   return { id: event.pointerId, type, x: event.clientX, y: event.clientY }
 }
@@ -114,8 +116,11 @@ export const createInputController = (options: InputControllerOptions): InputCon
     if (sample === null) return
     if (locked()) return
     if (raw.button !== undefined && raw.button !== 0) return
+    const wasActive = gesture.snapshot().activePointerIds.includes(sample.id)
     if (gesture.snapshot().activeGesture === 'none') options.camera.beginUserGesture()
     const result = gesture.down(sample)
+    const accepted = !wasActive && gesture.snapshot().activePointerIds.includes(sample.id)
+    if (!accepted) return
     try {
       options.target.setPointerCapture?.(sample.id)
       captured.add(sample.id)
@@ -144,33 +149,49 @@ export const createInputController = (options: InputControllerOptions): InputCon
   }) as InputListener
 
   const pointerUp = ((raw: PointerLike): void => {
+    if (!validPointerId(raw.pointerId)) return
     const sample = sampleFrom(raw)
-    if (sample === null) return
+    if (sample === null) {
+      gesture.cancel(raw.pointerId)
+      releaseCapture(raw.pointerId)
+      return
+    }
     if (locked()) {
       releaseCapture(sample.id)
       return
     }
+    const wasCaptured = captured.has(sample.id)
     const result = gesture.up(sample)
     releaseCapture(sample.id)
-    if (sample.type === 'touch') raw.preventDefault?.()
+    if (sample.type === 'touch' && wasCaptured) raw.preventDefault?.()
     if (result.kind === 'click') routeClick(result.point, sample.type)
     if (gesture.snapshot().activeGesture !== 'pinch') lastPinchScale = 1
   }) as InputListener
 
   const pointerCancel = ((raw: PointerLike): void => {
-    const sample = sampleFrom(raw)
-    if (sample === null) return
-    gesture.cancel(sample.id)
-    releaseCapture(sample.id)
+    if (!validPointerId(raw.pointerId)) return
+    gesture.cancel(raw.pointerId)
+    releaseCapture(raw.pointerId)
+  }) as InputListener
+
+  const lostPointerCapture = ((raw: { pointerId: number }): void => {
+    if (!validPointerId(raw.pointerId)) return
+    gesture.cancel(raw.pointerId)
+    releaseCapture(raw.pointerId)
   }) as InputListener
 
   const wheel = ((raw: WheelLike): void => {
     if (!Number.isFinite(raw.clientX) || !Number.isFinite(raw.clientY) ||
-      !Number.isFinite(raw.deltaY) || locked()) return
+      !Number.isFinite(raw.deltaY)) return
+    const deltaUnit = raw.deltaMode === 1
+      ? 16
+      : raw.deltaMode === 2 ? options.viewport().height : 1
+    const effectiveDelta = raw.deltaY * deltaUnit
+    if (!Number.isFinite(effectiveDelta) || effectiveDelta === 0 || locked()) return
     raw.preventDefault?.()
     options.camera.beginUserGesture()
-    const magnitude = Math.min(Math.abs(raw.deltaY), 240) / 240
-    const factor = raw.deltaY < 0 ? 1 + 0.25 * magnitude : 1 - 0.2 * magnitude
+    const magnitude = Math.min(Math.abs(effectiveDelta), 240) / 240
+    const factor = effectiveDelta < 0 ? 1 + 0.25 * magnitude : 1 - 0.2 * magnitude
     options.camera.zoomAt({ x: raw.clientX, y: raw.clientY }, factor)
   }) as InputListener
 
@@ -200,6 +221,7 @@ export const createInputController = (options: InputControllerOptions): InputCon
     ['pointermove', pointerMove, { passive: false }],
     ['pointerup', pointerUp, { passive: false }],
     ['pointercancel', pointerCancel, { passive: false }],
+    ['lostpointercapture', lostPointerCapture, false],
     ['wheel', wheel, { passive: false }],
     ['keydown', keyDown, false],
     ['dblclick', doubleClick, false]
@@ -227,7 +249,6 @@ export const createInputController = (options: InputControllerOptions): InputCon
 
   bind()
   return {
-    bind,
     cleanup,
     cancelGesture: cancelAndReleaseAll,
     snapshot: () => Object.freeze({

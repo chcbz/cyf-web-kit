@@ -63,6 +63,48 @@ describe('pointer gesture', () => {
     assert.deepEqual(gesture.up({ id: 1, type: 'touch', x: 0, y: 0 }), { kind: 'none' })
   })
 
+  it('promotes the second touch to incremental drag when the first pinch pointer lifts', () => {
+    const gesture = createPointerGesture()
+    gesture.down({ id: 1, type: 'touch', x: 0, y: 0 })
+    gesture.down({ id: 2, type: 'touch', x: 10, y: 0 })
+    gesture.move({ id: 2, type: 'touch', x: 20, y: 0 })
+
+    assert.deepEqual(gesture.up({ id: 1, type: 'touch', x: 0, y: 0 }), { kind: 'none' })
+    assert.equal(gesture.snapshot().activeGesture, 'drag')
+    assert.deepEqual(gesture.move({ id: 2, type: 'touch', x: 23, y: 2 }), {
+      kind: 'drag', dx: 3, dy: 2
+    })
+    assert.deepEqual(gesture.up({ id: 2, type: 'touch', x: 23, y: 2 }), { kind: 'none' })
+  })
+
+  it('promotes the first touch to incremental drag when the second pinch pointer lifts', () => {
+    const gesture = createPointerGesture()
+    gesture.down({ id: 1, type: 'touch', x: 0, y: 0 })
+    gesture.down({ id: 2, type: 'touch', x: 10, y: 0 })
+    gesture.move({ id: 1, type: 'touch', x: -5, y: 0 })
+
+    assert.deepEqual(gesture.up({ id: 2, type: 'touch', x: 10, y: 0 }), { kind: 'none' })
+    assert.equal(gesture.snapshot().activeGesture, 'drag')
+    assert.deepEqual(gesture.move({ id: 1, type: 'touch', x: -2, y: 4 }), {
+      kind: 'drag', dx: 3, dy: 4
+    })
+    assert.deepEqual(gesture.up({ id: 1, type: 'touch', x: -2, y: 4 }), { kind: 'none' })
+  })
+
+  it('ignores a third touch without changing or ending the active pinch', () => {
+    const gesture = createPointerGesture()
+    gesture.down({ id: 1, type: 'touch', x: 0, y: 0 })
+    gesture.down({ id: 2, type: 'touch', x: 10, y: 0 })
+
+    assert.deepEqual(gesture.down({ id: 3, type: 'touch', x: 100, y: 100 }), { kind: 'none' })
+    assert.deepEqual(gesture.snapshot().activePointerIds, [1, 2])
+    assert.deepEqual(gesture.up({ id: 3, type: 'touch', x: 100, y: 100 }), { kind: 'none' })
+    assert.equal(gesture.snapshot().activeGesture, 'pinch')
+    assert.deepEqual(gesture.move({ id: 2, type: 'touch', x: 20, y: 0 }), {
+      kind: 'pinch', center: { x: 10, y: 0 }, scale: 2
+    })
+  })
+
   it('ignores malformed samples without moving or corrupting the gesture', () => {
     const gesture = createPointerGesture()
     gesture.down({ id: 1, type: 'mouse', x: 5, y: 5 })
@@ -101,6 +143,7 @@ describe('hit testing', () => {
     id,
     kind,
     touchSlop,
+    bounds: { left, top, right, bottom },
     contains: point => point.x >= left && point.x <= right && point.y >= top && point.y <= bottom
   })
 
@@ -121,6 +164,35 @@ describe('hit testing', () => {
     assert.deepEqual(resolveHit(point, [agent], [], 'touch'), { kind: 'agent', id: 'agent' })
     assert.deepEqual(resolveHit(point, [agent], [], 'mouse'), { kind: 'blank' })
     assert.deepEqual(resolveHit(point, [agent], [], 'pen'), { kind: 'blank' })
+  })
+
+  it('uses exact slop callbacks for corner hits while keeping mouse precise', () => {
+    const agent: HitArea = {
+      id: 'agent',
+      kind: 'agent',
+      touchSlop: 5,
+      contains: point => point.x >= 10 && point.x <= 20 && point.y >= 10 && point.y <= 20,
+      containsWithSlop: (point, slop) => {
+        const nearestX = Math.max(10, Math.min(20, point.x))
+        const nearestY = Math.max(10, Math.min(20, point.y))
+        return Math.hypot(point.x - nearestX, point.y - nearestY) <= slop
+      }
+    }
+    const cornerPoint = { x: 6, y: 8 }
+
+    assert.deepEqual(resolveHit(cornerPoint, [agent], [], 'touch'), { kind: 'agent', id: 'agent' })
+    assert.deepEqual(resolveHit(cornerPoint, [agent], [], 'mouse'), { kind: 'blank' })
+  })
+
+  it('does not approximate touch slop when no exact callback or bounds are provided', () => {
+    const agent: HitArea = {
+      id: 'agent',
+      kind: 'agent',
+      touchSlop: 5,
+      contains: point => point.x >= 10 && point.x <= 20 && point.y >= 10 && point.y <= 20
+    }
+
+    assert.deepEqual(resolveHit({ x: 6, y: 15 }, [agent], [], 'touch'), { kind: 'blank' })
   })
 })
 
