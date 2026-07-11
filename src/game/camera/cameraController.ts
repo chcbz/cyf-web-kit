@@ -41,7 +41,7 @@ export type CameraController = {
   beginUserGesture(): void
   isAwayFromPreset(): boolean
   snapshot(): CameraSnapshot
-  dispose(): void
+  cleanup(): void
 }
 
 const DEFAULT_RESET_DURATION_MS = 200
@@ -138,7 +138,9 @@ export const createCameraController = (
       cancelAnimation()
       const oldViewport = viewport
       viewport = copyViewport(nextViewport)
-      return apply(preserveFocus(transform, oldViewport, viewport))
+      const preserved = preserveFocus(transform, oldViewport, viewport)
+      presetKey = selectViewPreset(viewport, coarsePointer)
+      return apply(preserved)
     },
 
     resetTo(nextPresetKey, durationMs = DEFAULT_RESET_DURATION_MS) {
@@ -199,7 +201,7 @@ export const createCameraController = (
       }
     },
 
-    dispose() {
+    cleanup() {
       disposed = true
       cancelAnimation()
     }

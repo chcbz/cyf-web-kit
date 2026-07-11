@@ -117,20 +117,27 @@ describe('camera controller', () => {
     assert.equal(fake.applied.length, applyCount)
   })
 
-  it('preserves center world focus and zoom on orientation and layout resize', () => {
-    for (const kind of ['orientation', 'layout'] as const) {
+  it('preserves center world focus and zoom while selecting the new resize preset', () => {
+    for (const { kind, viewport, expectedPreset } of [
+      { kind: 'orientation', viewport: { width: 720, height: 390 }, expectedPreset: 'mobileLandscape' },
+      { kind: 'layout', viewport: { width: 1180, height: 820 }, expectedPreset: 'tabletLandscape' }
+    ] as const) {
       const fake = createAdapter()
       const controller = createCameraController(fake.adapter, { minZoom: 0.5, maxZoom: 3.3 }, true)
       controller.panBy(-80, 20)
       const before = controller.snapshot().transform
       const oldCenter = screenToWorld({ x: 195, y: 360 }, before, { width: 390, height: 720 })
-      fake.setViewport({ width: 720, height: 390 })
+      fake.setViewport(viewport)
 
-      const after = controller.resize({ width: 720, height: 390 }, kind)
+      const after = controller.resize(viewport, kind)
 
       assert.equal(after.zoom, before.zoom)
-      assert.deepEqual(screenToWorld({ x: 360, y: 195 }, after, { width: 720, height: 390 }), oldCenter)
-      assert.equal(controller.snapshot().presetKey, 'mobilePortrait')
+      assert.deepEqual(
+        screenToWorld({ x: viewport.width / 2, y: viewport.height / 2 }, after, viewport),
+        oldCenter
+      )
+      assert.equal(controller.snapshot().presetKey, expectedPreset)
+      assert.notEqual(after.zoom, VIEW_PRESETS[expectedPreset].zoom)
     }
   })
 
@@ -195,7 +202,7 @@ describe('camera controller', () => {
     assert.equal(controller.isAwayFromPreset(), true)
   })
 
-  it('returns immutable snapshot copies and disposes pending animation frames', () => {
+  it('returns immutable snapshot copies and cleans up pending animation frames', () => {
     const fake = createAdapter()
     const controller = createCameraController(fake.adapter, { minZoom: 0.5, maxZoom: 3.3 }, true)
     controller.resetTo('desktop')
@@ -205,9 +212,12 @@ describe('camera controller', () => {
 
     assert.notEqual(controller.snapshot().transform.offsetX, 999)
     assert.equal(controller.snapshot().animation?.durationMs, 200)
-    controller.dispose()
+    const applyCount = fake.applied.length
+    controller.cleanup()
     assert.equal(controller.snapshot().animation, null)
     assert.equal(fake.pendingFrames(), 0)
+    fake.advanceFrame(200)
+    assert.equal(fake.applied.length, applyCount)
   })
 
   it('normalizes invalid adapter dimensions, time and frame identifiers deterministically', () => {
