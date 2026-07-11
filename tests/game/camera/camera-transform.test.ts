@@ -40,6 +40,24 @@ describe('camera transforms', () => {
     )
   })
 
+  it('preserves a normalized current transform for invalid focal zoom input', () => {
+    const bounds = { minZoom: 0.8, maxZoom: 1.6 }
+    const current = { zoom: 9, offsetX: 14, offsetY: -9 }
+
+    for (const invalid of [
+      { point: { x: Number.NaN, y: 320 }, zoom: 1.2, viewport: { width: 390, height: 720 } },
+      { point: { x: 240, y: Number.POSITIVE_INFINITY }, zoom: 1.2, viewport: { width: 390, height: 720 } },
+      { point: { x: 240, y: 320 }, zoom: Number.NaN, viewport: { width: 390, height: 720 } },
+      { point: { x: 240, y: 320 }, zoom: 1.2, viewport: { width: 0, height: 720 } },
+      { point: { x: 240, y: 320 }, zoom: 1.2, viewport: { width: 390, height: Number.NaN } }
+    ]) {
+      assert.deepEqual(
+        zoomAt(current, invalid.point, invalid.zoom, invalid.viewport, bounds),
+        { zoom: 1.6, offsetX: 14, offsetY: -9 }
+      )
+    }
+  })
+
   it('builds a transform that places a native world point at a CSS screen point', () => {
     const viewport = { width: 800, height: 600 }
     const transform = transformForFocus({ x: 832, y: 390 }, { x: 175, y: 240 }, 1.25, viewport)
@@ -87,6 +105,34 @@ describe('camera transforms', () => {
     assert.ok(topLeft.y + scene.height * clamped.zoom >= viewport.height - 2)
   })
 
+  it('clamps every extreme direction with fractional CSS and native dimensions', () => {
+    const viewport = { width: 400.5, height: 300.25 }
+    const scene = { width: 601.75, height: 451.5 }
+
+    for (const [offsetX, offsetY] of [
+      [9999, 0],
+      [-9999, 0],
+      [0, 9999],
+      [0, -9999]
+    ]) {
+      const clamped = clampTransform(
+        { zoom: 1, offsetX, offsetY },
+        viewport,
+        scene,
+        { minZoom: 0.5, maxZoom: 3.3 }
+      )
+      const left = viewport.width / 2 + clamped.offsetX - viewport.width / 2 * clamped.zoom
+      const top = viewport.height / 2 + clamped.offsetY - viewport.height / 2 * clamped.zoom
+      const right = left + scene.width * clamped.zoom
+      const bottom = top + scene.height * clamped.zoom
+
+      assert.ok(left <= 2)
+      assert.ok(top <= 2)
+      assert.ok(right >= viewport.width - 2)
+      assert.ok(bottom >= viewport.height - 2)
+    }
+  })
+
   it('never accepts an offset rounding tolerance above two CSS pixels', () => {
     const clamped = clampTransform(
       { zoom: 1, offsetX: 9999, offsetY: 0 },
@@ -129,6 +175,24 @@ describe('camera transforms', () => {
     )
 
     assert.deepEqual(clamped, { zoom: 2, offsetX: 300, offsetY: 200 })
+  })
+
+  it('centers only the impossible axis while clamping the coverable axis', () => {
+    const viewport = { width: 400, height: 300 }
+    const scene = { width: 100, height: 500 }
+    const clamped = clampTransform(
+      { zoom: 2, offsetX: -999, offsetY: 999 },
+      viewport,
+      scene,
+      { minZoom: 0.5, maxZoom: 2 }
+    )
+    const left = viewport.width / 2 + clamped.offsetX - viewport.width / 2 * clamped.zoom
+    const top = viewport.height / 2 + clamped.offsetY - viewport.height / 2 * clamped.zoom
+    const bottom = top + scene.height * clamped.zoom
+
+    assert.equal(left, 100)
+    assert.ok(top <= 2)
+    assert.ok(bottom >= viewport.height - 2)
   })
 
   it('handles zero dimensions deterministically', () => {

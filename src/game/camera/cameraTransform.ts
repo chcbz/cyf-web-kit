@@ -68,15 +68,32 @@ export const transformForFocus = (
 export const zoomAt = (
   transform: CameraTransform,
   screen: Point,
-  zoom: number,
+  targetZoom: number,
   viewport: Viewport,
   bounds: CameraBounds
-): CameraTransform => transformForFocus(
-  screenToWorld(screen, transform, viewport),
-  screen,
-  clampZoom(zoom, bounds.minZoom, bounds.maxZoom),
-  viewport
-)
+): CameraTransform => {
+  const normalized = {
+    zoom: clampZoom(transform.zoom, bounds.minZoom, bounds.maxZoom),
+    offsetX: round(finiteOr(transform.offsetX, 0)),
+    offsetY: round(finiteOr(transform.offsetY, 0))
+  }
+  const validInteraction = Number.isFinite(targetZoom) &&
+    Number.isFinite(screen.x) &&
+    Number.isFinite(screen.y) &&
+    Number.isFinite(viewport.width) &&
+    Number.isFinite(viewport.height) &&
+    viewport.width > 0 &&
+    viewport.height > 0
+
+  if (!validInteraction) return normalized
+
+  return transformForFocus(
+    screenToWorld(screen, normalized, viewport),
+    screen,
+    clampZoom(targetZoom, bounds.minZoom, bounds.maxZoom),
+    viewport
+  )
+}
 
 export const preserveFocus = (
   transform: CameraTransform,
