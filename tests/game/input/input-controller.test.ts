@@ -188,7 +188,8 @@ describe('input controller', () => {
 
   it('ignores locked input and cancels an active gesture without affecting the lock owner', () => {
     const harness = createHarness()
-    harness.dispatch('pointerdown', pointer())
+    harness.dispatch('pointerdown', pointer({ pointerId: 3 }))
+    harness.dispatch('pointerdown', pointer({ pointerId: 4, pointerType: 'touch' }))
     harness.lock.lock('panel')
     harness.dispatch('pointermove', pointer({ clientX: 30 }))
     harness.dispatch('wheel', pointer({ deltaY: -10 }))
@@ -198,16 +199,65 @@ describe('input controller', () => {
     assert.deepEqual(harness.calls.zooms, [])
     assert.deepEqual(harness.lock.reasons(), ['panel'])
     assert.equal(harness.controller.snapshot().activeGesture, 'none')
+    assert.deepEqual(harness.releases, [3, 4])
   })
 
   it('cancels explicitly and suppresses browser double click behavior', () => {
     const harness = createHarness()
-    harness.dispatch('pointerdown', pointer())
+    harness.dispatch('pointerdown', pointer({ pointerId: 8 }))
+    harness.dispatch('pointerdown', pointer({ pointerId: 9, pointerType: 'touch' }))
     harness.controller.cancelGesture()
     const doubleClick = pointer()
     harness.dispatch('dblclick', doubleClick)
 
     assert.equal(harness.controller.snapshot().activeGesture, 'none')
+    assert.deepEqual(harness.releases, [8, 9])
     assert.equal(doubleClick.prevented(), true)
+  })
+
+  it('rejects malformed pointer events before camera, capture, prevention, or click side effects', () => {
+    const harness = createHarness()
+    const malformed = [
+      pointer({ pointerId: Number.NaN }),
+      pointer({ pointerId: -1 }),
+      pointer({ pointerId: 1.5 }),
+      pointer({ pointerId: Number.MAX_SAFE_INTEGER + 1 }),
+      pointer({ clientX: Number.NaN }),
+      pointer({ clientY: Number.POSITIVE_INFINITY })
+    ]
+
+    for (const event of malformed) {
+      harness.dispatch('pointerdown', event)
+      harness.dispatch('pointermove', event)
+      harness.dispatch('pointerup', event)
+      harness.dispatch('pointercancel', event)
+      assert.equal(event.prevented(), false)
+    }
+
+    assert.equal(harness.calls.begin, 0)
+    assert.deepEqual(harness.captures, [])
+    assert.deepEqual(harness.releases, [])
+    assert.deepEqual(harness.calls.pans, [])
+    assert.deepEqual(harness.calls.zooms, [])
+    assert.deepEqual(harness.calls.agents, [])
+    assert.deepEqual(harness.calls.hotspots, [])
+    assert.deepEqual(harness.calls.blanks, [])
+  })
+
+  it('rejects malformed wheel coordinates and delta before camera or prevention side effects', () => {
+    const harness = createHarness()
+    const malformed = [
+      pointer({ clientX: Number.NaN, deltaY: -1 }),
+      pointer({ clientY: Number.NEGATIVE_INFINITY, deltaY: -1 }),
+      pointer({ deltaY: Number.NaN })
+    ]
+
+    for (const event of malformed) {
+      harness.dispatch('wheel', event)
+      assert.equal(event.prevented(), false)
+    }
+
+    assert.equal(harness.calls.begin, 0)
+    assert.deepEqual(harness.calls.zooms, [])
   })
 })

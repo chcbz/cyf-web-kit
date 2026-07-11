@@ -61,7 +61,8 @@ const pointerType = (value: string): PointerSample['type'] | null =>
 
 const sampleFrom = (event: PointerLike): PointerSample | null => {
   const type = pointerType(event.pointerType)
-  if (type === null) return null
+  if (type === null || !Number.isSafeInteger(event.pointerId) || event.pointerId < 0 ||
+    !Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return null
   return { id: event.pointerId, type, x: event.clientX, y: event.clientY }
 }
 
@@ -79,14 +80,24 @@ export const createInputController = (options: InputControllerOptions): InputCon
   let disposed = false
   let lastPinchScale = 1
 
-  const cancelGesture = (): void => {
+  const releaseCapture = (id: number): void => {
+    if (!captured.delete(id)) return
+    try {
+      options.target.releasePointerCapture?.(id)
+    } catch {
+      // The browser may have already released capture.
+    }
+  }
+
+  const cancelAndReleaseAll = (): void => {
+    for (const id of [...captured]) releaseCapture(id)
     gesture.cancelAll()
     lastPinchScale = 1
   }
 
   const locked = (): boolean => {
     if (!options.interactionLock.isLocked()) return false
-    cancelGesture()
+    cancelAndReleaseAll()
     return true
   }
 
@@ -99,10 +110,10 @@ export const createInputController = (options: InputControllerOptions): InputCon
   }
 
   const pointerDown = ((raw: PointerLike): void => {
-    if (locked()) return
-    if (raw.button !== undefined && raw.button !== 0) return
     const sample = sampleFrom(raw)
     if (sample === null) return
+    if (locked()) return
+    if (raw.button !== undefined && raw.button !== 0) return
     if (gesture.snapshot().activeGesture === 'none') options.camera.beginUserGesture()
     const result = gesture.down(sample)
     try {
@@ -116,9 +127,9 @@ export const createInputController = (options: InputControllerOptions): InputCon
   }) as InputListener
 
   const pointerMove = ((raw: PointerLike): void => {
-    if (locked()) return
     const sample = sampleFrom(raw)
     if (sample === null) return
+    if (locked()) return
     const result = gesture.move(sample)
     if (sample.type === 'touch' && gesture.snapshot().activeGesture !== 'none') raw.preventDefault?.()
     if (result.kind === 'drag') options.camera.panBy(result.dx, result.dy)
@@ -131,15 +142,6 @@ export const createInputController = (options: InputControllerOptions): InputCon
       raw.preventDefault?.()
     }
   }) as InputListener
-
-  const releaseCapture = (id: number): void => {
-    if (!captured.delete(id)) return
-    try {
-      options.target.releasePointerCapture?.(id)
-    } catch {
-      // The browser may have already released capture.
-    }
-  }
 
   const pointerUp = ((raw: PointerLike): void => {
     const sample = sampleFrom(raw)
@@ -163,7 +165,8 @@ export const createInputController = (options: InputControllerOptions): InputCon
   }) as InputListener
 
   const wheel = ((raw: WheelLike): void => {
-    if (locked() || !Number.isFinite(raw.deltaY)) return
+    if (!Number.isFinite(raw.clientX) || !Number.isFinite(raw.clientY) ||
+      !Number.isFinite(raw.deltaY) || locked()) return
     raw.preventDefault?.()
     options.camera.beginUserGesture()
     const magnitude = Math.min(Math.abs(raw.deltaY), 240) / 240
@@ -219,15 +222,14 @@ export const createInputController = (options: InputControllerOptions): InputCon
       }
       bound = false
     }
-    for (const id of [...captured]) releaseCapture(id)
-    cancelGesture()
+    cancelAndReleaseAll()
   }
 
   bind()
   return {
     bind,
     cleanup,
-    cancelGesture,
+    cancelGesture: cancelAndReleaseAll,
     snapshot: () => Object.freeze({
       activeGesture: gesture.snapshot().activeGesture,
       interactionLocked: options.interactionLock.isLocked()

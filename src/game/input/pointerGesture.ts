@@ -119,7 +119,13 @@ export const createPointerGesture = (
       pointer.x = sample.x
       pointer.y = sample.y
       const wasPrimary = sample.id === primaryId
-      const shouldClick = wasPrimary && activeGesture === 'click' && !pinchSuppressedClick
+      const threshold = pointer.type === 'touch' ? touchThreshold : mouseThreshold
+      const withinClickThreshold = Math.hypot(
+        pointer.x - pointer.startX,
+        pointer.y - pointer.startY
+      ) <= threshold
+      const shouldClick = wasPrimary && activeGesture === 'click' &&
+        !pinchSuppressedClick && withinClickThreshold
       pointers.delete(sample.id)
 
       if (activeGesture === 'pinch' || pinchSuppressedClick) {

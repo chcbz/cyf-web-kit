@@ -15,6 +15,20 @@ describe('pointer gesture', () => {
     })
   })
 
+  it('does not click when mouse displacement crosses the threshold only on pointer up', () => {
+    const gesture = createPointerGesture()
+    gesture.down({ id: 1, type: 'mouse', x: 10, y: 10 })
+
+    assert.deepEqual(gesture.up({ id: 1, type: 'mouse', x: 17, y: 10 }), { kind: 'none' })
+  })
+
+  it('does not click when touch displacement crosses the threshold only on pointer up', () => {
+    const gesture = createPointerGesture()
+    gesture.down({ id: 1, type: 'touch', x: 10, y: 10 })
+
+    assert.deepEqual(gesture.up({ id: 1, type: 'touch', x: 22, y: 10 }), { kind: 'none' })
+  })
+
   it('cancels click after mouse drag exceeds six pixels and reports incremental deltas', () => {
     const gesture = createPointerGesture({ mouseThreshold: 6, touchThreshold: 11 })
     gesture.down({ id: 1, type: 'mouse', x: 10, y: 10 })
