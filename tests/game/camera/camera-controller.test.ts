@@ -244,6 +244,66 @@ describe('camera controller', () => {
     assert.equal(controller.snapshot().animation, null)
   })
 
+  it('smoothly resets from desktop zoom to the higher mobile portrait minimum', () => {
+    const viewport = { width: 390, height: 720 }
+    const fake = createAdapter(viewport, { width: 5000, height: 5000 })
+    const controller = createCameraController(fake.adapter, { minZoom: 0.5, maxZoom: 3.3 }, true)
+    controller.resetTo('desktop', 150)
+    fake.advanceFrame(150)
+    const startZoom = controller.snapshot().transform.zoom
+    assert.equal(startZoom, VIEW_PRESETS.desktop.zoom)
+
+    controller.resetTo('mobilePortrait', 200)
+    fake.advanceFrame(250)
+    const midpointZoom = controller.snapshot().transform.zoom
+
+    assert.ok(midpointZoom > startZoom)
+    assert.ok(midpointZoom < VIEW_PRESETS.mobilePortrait.zoom)
+    fake.advanceFrame(350)
+    assert.equal(controller.snapshot().transform.zoom, VIEW_PRESETS.mobilePortrait.zoom)
+  })
+
+  it('preserves desktop zoom and center focus when resizing to mobile portrait', () => {
+    const landscape = { width: 720, height: 390 }
+    const portrait = { width: 390, height: 720 }
+    const fake = createAdapter(landscape, { width: 5000, height: 5000 })
+    const controller = createCameraController(fake.adapter, { minZoom: 0.5, maxZoom: 3.3 }, true)
+    controller.resetTo('desktop', 150)
+    fake.advanceFrame(150)
+    controller.panBy(-40, -120)
+    const before = controller.snapshot().transform
+    const oldCenter = screenToWorld({ x: 360, y: 195 }, before, landscape)
+    fake.setViewport(portrait)
+
+    const after = controller.resize(portrait, 'orientation')
+
+    assert.equal(controller.snapshot().presetKey, 'mobilePortrait')
+    assert.equal(after.zoom, before.zoom)
+    assert.deepEqual(screenToWorld({ x: 195, y: 360 }, after, portrait), oldCenter)
+    assert.equal(controller.panBy(1, 0).zoom, before.zoom)
+  })
+
+  it('preserves zoom through reverse resize and restores the active minimum after reset', () => {
+    const landscape = { width: 720, height: 390 }
+    const portrait = { width: 390, height: 720 }
+    const fake = createAdapter(landscape, { width: 5000, height: 5000 })
+    const controller = createCameraController(fake.adapter, { minZoom: 0.5, maxZoom: 3.3 }, true)
+    controller.resetTo('desktop', 150)
+    fake.advanceFrame(150)
+    fake.setViewport(portrait)
+    controller.resize(portrait, 'orientation')
+    fake.setViewport(landscape)
+
+    const reversed = controller.resize(landscape, 'orientation')
+
+    assert.equal(controller.snapshot().presetKey, 'mobileLandscape')
+    assert.equal(reversed.zoom, VIEW_PRESETS.desktop.zoom)
+    controller.resetTo('mobileLandscape', 150)
+    fake.advanceFrame(300)
+    assert.equal(controller.snapshot().transform.zoom, VIEW_PRESETS.mobileLandscape.zoom)
+    assert.equal(controller.zoomAt({ x: 360, y: 195 }, 0.01).zoom, VIEW_PRESETS.mobileLandscape.zoom)
+  })
+
   it('normalizes reset durations outside 150-250ms to 200ms', () => {
     for (const duration of [149, 251, Number.NaN]) {
       const fake = createAdapter()

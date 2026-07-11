@@ -79,8 +79,9 @@ export const createCameraController = (
   let frameId: number | null = null
   let disposed = false
   let animationGeneration = 0
+  let preservedMinimum: number | null = null
 
-  const bounds = (key = presetKey): CameraBounds => {
+  const normalBounds = (key = presetKey): CameraBounds => {
     const maxZoom = Math.min(positiveOr(configuredBounds.maxZoom, MAX_ZOOM), MAX_ZOOM)
     const configuredMinimum = positiveOr(configuredBounds.minZoom, 0)
     return {
@@ -90,8 +91,27 @@ export const createCameraController = (
     }
   }
 
-  const apply = (candidate: CameraTransform): CameraTransform => {
-    transform = clampTransform(candidate, viewport, adapter.sceneSize(), bounds())
+  const bounds = (key = presetKey, minimum = preservedMinimum): CameraBounds => {
+    const normal = normalBounds(key)
+    if (minimum === null) return normal
+    const configuredMinimum = Math.min(
+      normal.maxZoom,
+      positiveOr(configuredBounds.minZoom, 0)
+    )
+    return {
+      ...normal,
+      minZoom: Math.min(
+        normal.minZoom,
+        Math.max(configuredMinimum, Math.min(normal.maxZoom, positiveOr(minimum, configuredMinimum)))
+      )
+    }
+  }
+
+  const apply = (
+    candidate: CameraTransform,
+    operationBounds = bounds()
+  ): CameraTransform => {
+    transform = clampTransform(candidate, viewport, adapter.sceneSize(), operationBounds)
     adapter.apply({ ...transform })
     return { ...transform }
   }
@@ -107,15 +127,19 @@ export const createCameraController = (
       ),
       viewport,
       adapter.sceneSize(),
-      bounds(key)
+      normalBounds(key)
     )
   }
 
   const cancelAnimation = (): void => {
+    const wasAnimating = animation !== null
     animationGeneration += 1
     if (frameId !== null) adapter.cancelFrame(frameId)
     frameId = null
     animation = null
+    if (wasAnimating) {
+      preservedMinimum = Math.min(normalBounds().minZoom, transform.zoom)
+    }
   }
 
   const scheduleFrame = (callback: (now: number) => void): void => {
@@ -151,7 +175,10 @@ export const createCameraController = (
       viewport = copyViewport(nextViewport)
       const preserved = preserveFocus(transform, oldViewport, viewport)
       presetKey = selectViewPreset(viewport, coarsePointer)
-      return apply(preserved)
+      preservedMinimum = transform.zoom
+      const resized = apply(preserved)
+      preservedMinimum = Math.min(normalBounds().minZoom, resized.zoom)
+      return resized
     },
 
     resetTo(nextPresetKey, durationMs = DEFAULT_RESET_DURATION_MS) {
@@ -160,6 +187,8 @@ export const createCameraController = (
       presetKey = nextPresetKey
       const start = { ...transform }
       const target = presetTransform(presetKey)
+      const transitionMinimum = Math.min(start.zoom, target.zoom)
+      const transitionBounds = bounds(presetKey, transitionMinimum)
       const duration = normalizeDuration(durationMs)
       const rawStartedAt = adapter.now()
       const startedAt = finiteOr(rawStartedAt, 0)
@@ -172,17 +201,19 @@ export const createCameraController = (
         const elapsed = Math.max(0, finiteOr(frameNow, startedAt) - startedAt)
         const progress = Math.min(1, elapsed / duration)
         const eased = 1 - (1 - progress) ** 2
+        if (progress >= 1) {
+          preservedMinimum = null
+          apply(target, normalBounds())
+          if (generation !== animationGeneration || animation === null || disposed) return
+          animation = null
+          return
+        }
         apply({
           zoom: start.zoom + (target.zoom - start.zoom) * eased,
           offsetX: start.offsetX + (target.offsetX - start.offsetX) * eased,
           offsetY: start.offsetY + (target.offsetY - start.offsetY) * eased
-        })
+        }, transitionBounds)
         if (generation !== animationGeneration || animation === null || disposed) return
-        if (progress >= 1) {
-          frameId = null
-          animation = null
-          return
-        }
         scheduleFrame(step)
       }
 
