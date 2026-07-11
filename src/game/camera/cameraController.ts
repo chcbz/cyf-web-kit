@@ -10,7 +10,6 @@ import {
   type Viewport
 } from './cameraTransform.js'
 import {
-  MAIN_HALL_FOCUS,
   MAIN_HALL_PRESETS,
   VIEW_PRESETS,
   selectViewPreset,
@@ -55,9 +54,12 @@ const COMPARISON_EPSILON = 1e-9
 const finiteOr = (value: number, fallback: number): number =>
   Number.isFinite(value) ? value : fallback
 
+const positiveOr = (value: number, fallback: number): number =>
+  Number.isFinite(value) && value > 0 ? value : fallback
+
 const copyViewport = (viewport: Viewport): Viewport => ({
-  width: finiteOr(viewport.width, 0),
-  height: finiteOr(viewport.height, 0)
+  width: positiveOr(viewport.width, 0),
+  height: positiveOr(viewport.height, 0)
 })
 
 const normalizeDuration = (durationMs: number): number =>
@@ -76,12 +78,17 @@ export const createCameraController = (
   let animation: CameraSnapshot['animation'] = null
   let frameId: number | null = null
   let disposed = false
+  let animationGeneration = 0
 
-  const bounds = (): CameraBounds => ({
-    minZoom: configuredBounds.minZoom,
-    maxZoom: Math.min(finiteOr(configuredBounds.maxZoom, MAX_ZOOM), MAX_ZOOM),
-    roundingTolerance: configuredBounds.roundingTolerance
-  })
+  const bounds = (key = presetKey): CameraBounds => {
+    const maxZoom = Math.min(positiveOr(configuredBounds.maxZoom, MAX_ZOOM), MAX_ZOOM)
+    const configuredMinimum = positiveOr(configuredBounds.minZoom, 0)
+    return {
+      minZoom: Math.min(maxZoom, Math.max(configuredMinimum, VIEW_PRESETS[key].zoom)),
+      maxZoom,
+      roundingTolerance: configuredBounds.roundingTolerance
+    }
+  }
 
   const apply = (candidate: CameraTransform): CameraTransform => {
     transform = clampTransform(candidate, viewport, adapter.sceneSize(), bounds())
@@ -100,11 +107,12 @@ export const createCameraController = (
       ),
       viewport,
       adapter.sceneSize(),
-      bounds()
+      bounds(key)
     )
   }
 
   const cancelAnimation = (): void => {
+    animationGeneration += 1
     if (frameId !== null) adapter.cancelFrame(frameId)
     frameId = null
     animation = null
@@ -119,6 +127,7 @@ export const createCameraController = (
 
   const controller: CameraController = {
     panBy(dx, dy) {
+      if (disposed) return { ...transform }
       cancelAnimation()
       return apply({
         zoom: transform.zoom,
@@ -128,12 +137,14 @@ export const createCameraController = (
     },
 
     zoomAt(point, factor) {
+      if (disposed || !Number.isFinite(factor) || factor <= 0) return { ...transform }
       cancelAnimation()
-      const targetZoom = transform.zoom * finiteOr(factor, 1)
+      const targetZoom = transform.zoom * factor
       return apply(zoomTransformAt(transform, point, targetZoom, viewport, bounds()))
     },
 
     resize(nextViewport, kind) {
+      if (disposed) return { ...transform }
       if (kind === 'keyboard') return { ...transform }
       cancelAnimation()
       const oldViewport = viewport
@@ -144,6 +155,7 @@ export const createCameraController = (
     },
 
     resetTo(nextPresetKey, durationMs = DEFAULT_RESET_DURATION_MS) {
+      if (disposed) return
       cancelAnimation()
       presetKey = nextPresetKey
       const start = { ...transform }
@@ -152,9 +164,11 @@ export const createCameraController = (
       const rawStartedAt = adapter.now()
       const startedAt = finiteOr(rawStartedAt, 0)
       animation = { startedAt, durationMs: duration }
+      const generation = animationGeneration
 
       const step = (frameNow: number): void => {
-        if (animation === null || disposed) return
+        if (generation !== animationGeneration || animation === null || disposed) return
+        frameId = null
         const elapsed = Math.max(0, finiteOr(frameNow, startedAt) - startedAt)
         const progress = Math.min(1, elapsed / duration)
         const eased = 1 - (1 - progress) ** 2
@@ -163,6 +177,7 @@ export const createCameraController = (
           offsetX: start.offsetX + (target.offsetX - start.offsetX) * eased,
           offsetY: start.offsetY + (target.offsetY - start.offsetY) * eased
         })
+        if (generation !== animationGeneration || animation === null || disposed) return
         if (progress >= 1) {
           frameId = null
           animation = null
@@ -175,21 +190,25 @@ export const createCameraController = (
     },
 
     beginUserGesture() {
+      if (disposed) return
       cancelAnimation()
     },
 
     isAwayFromPreset() {
+      const target = presetTransform(presetKey)
+      const center = { x: viewport.width / 2, y: viewport.height / 2 }
       const centerWorld = screenToWorld(
-        { x: viewport.width / 2, y: viewport.height / 2 },
+        center,
         transform,
         viewport
       )
+      const targetCenterWorld = screenToWorld(center, target, viewport)
       const focusDistance = Math.hypot(
-        centerWorld.x - MAIN_HALL_FOCUS.x,
-        centerWorld.y - MAIN_HALL_FOCUS.y
+        centerWorld.x - targetCenterWorld.x,
+        centerWorld.y - targetCenterWorld.y
       )
       return focusDistance > WORLD_FOCUS_TOLERANCE + COMPARISON_EPSILON ||
-        Math.abs(transform.zoom - VIEW_PRESETS[presetKey].zoom) > ZOOM_TOLERANCE + COMPARISON_EPSILON
+        Math.abs(transform.zoom - target.zoom) > ZOOM_TOLERANCE + COMPARISON_EPSILON
     },
 
     snapshot() {

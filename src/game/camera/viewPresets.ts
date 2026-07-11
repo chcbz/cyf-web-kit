@@ -1,18 +1,18 @@
-export const MAIN_HALL_FOCUS = { x: 832, y: 390 } as const
+export const MAIN_HALL_FOCUS = Object.freeze({ x: 832, y: 390 } as const)
 
-export const VIEW_PRESETS = {
-  mobilePortrait: { id: 'main-hall-mobile', zoom: 1.25 },
-  mobileLandscape: { id: 'main-hall-mobile-landscape', zoom: 1.05 },
-  tabletLandscape: { id: 'main-hall-tablet-landscape', zoom: 0.92 },
-  desktop: { id: 'main-hall-desktop', zoom: 0.84 }
-} as const
+export const VIEW_PRESETS = Object.freeze({
+  mobilePortrait: Object.freeze({ id: 'main-hall-mobile', zoom: 1.25 } as const),
+  mobileLandscape: Object.freeze({ id: 'main-hall-mobile-landscape', zoom: 1.05 } as const),
+  tabletLandscape: Object.freeze({ id: 'main-hall-tablet-landscape', zoom: 0.92 } as const),
+  desktop: Object.freeze({ id: 'main-hall-desktop', zoom: 0.84 } as const)
+} as const)
 
-export const MAIN_HALL_PRESETS = {
-  mobilePortrait: { ...VIEW_PRESETS.mobilePortrait, focus: MAIN_HALL_FOCUS },
-  mobileLandscape: { ...VIEW_PRESETS.mobileLandscape, focus: MAIN_HALL_FOCUS },
-  tabletLandscape: { ...VIEW_PRESETS.tabletLandscape, focus: MAIN_HALL_FOCUS },
-  desktop: { ...VIEW_PRESETS.desktop, focus: MAIN_HALL_FOCUS }
-} as const
+export const MAIN_HALL_PRESETS = Object.freeze({
+  mobilePortrait: Object.freeze({ ...VIEW_PRESETS.mobilePortrait, focus: MAIN_HALL_FOCUS }),
+  mobileLandscape: Object.freeze({ ...VIEW_PRESETS.mobileLandscape, focus: MAIN_HALL_FOCUS }),
+  tabletLandscape: Object.freeze({ ...VIEW_PRESETS.tabletLandscape, focus: MAIN_HALL_FOCUS }),
+  desktop: Object.freeze({ ...VIEW_PRESETS.desktop, focus: MAIN_HALL_FOCUS })
+} as const)
 
 export type ViewPresetKey = keyof typeof VIEW_PRESETS
 

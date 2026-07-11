@@ -22,6 +22,7 @@ const createAdapter = (
   let now = 1000
   let nextFrameId = 1
   const frames = new Map<number, FrameCallback>()
+  const retainedFrames: FrameCallback[] = []
   const applied: Array<{ zoom: number; offsetX: number; offsetY: number }> = []
   const cancelled: number[] = []
   const adapter: CameraAdapter = {
@@ -31,6 +32,7 @@ const createAdapter = (
     requestFrame: callback => {
       const id = nextFrameId++
       frames.set(id, callback)
+      retainedFrames.push(callback)
       return id
     },
     cancelFrame: id => {
@@ -44,6 +46,7 @@ const createAdapter = (
     adapter,
     applied,
     cancelled,
+    retainedFrames,
     setViewport: (next: { width: number; height: number }) => { viewport = { ...next } },
     advanceFrame: (elapsedMs: number) => {
       now = 1000 + elapsedMs
@@ -66,8 +69,26 @@ describe('camera controller', () => {
     assert.equal(selectViewPreset({ width: 390, height: 720 }, true), 'mobilePortrait')
     assert.equal(selectViewPreset({ width: 720, height: 390 }, true), 'mobileLandscape')
     assert.equal(selectViewPreset({ width: 1180, height: 820 }, true), 'tabletLandscape')
+    assert.equal(selectViewPreset({ width: 899, height: 500 }, true), 'mobileLandscape')
+    assert.equal(selectViewPreset({ width: 900, height: 500 }, true), 'tabletLandscape')
+    assert.equal(selectViewPreset({ width: 500, height: 500 }, true), 'mobilePortrait')
+    assert.equal(selectViewPreset({ width: Number.NaN, height: -1 }, true), 'mobilePortrait')
     assert.equal(selectViewPreset({ width: 390, height: 720 }, false), 'desktop')
     assert.equal(selectViewPreset({ width: 1440, height: 900 }, false), 'desktop')
+  })
+
+  it('freezes exported focus and preset configuration at runtime', () => {
+    assert.equal(Object.isFrozen(MAIN_HALL_FOCUS), true)
+    assert.equal(Object.isFrozen(VIEW_PRESETS), true)
+    assert.equal(Object.isFrozen(VIEW_PRESETS.mobilePortrait), true)
+    assert.equal(Object.isFrozen(MAIN_HALL_PRESETS), true)
+    assert.equal(Object.isFrozen(MAIN_HALL_PRESETS.desktop), true)
+    try {
+      (VIEW_PRESETS.mobilePortrait as { zoom: number }).zoom = 9
+    } catch (error) {
+      assert.ok(error instanceof TypeError)
+    }
+    assert.equal(VIEW_PRESETS.mobilePortrait.zoom, 1.25)
   })
 
   it('applies the selected initial preset focus and zoom through clamping', () => {
@@ -101,6 +122,34 @@ describe('camera controller', () => {
     assert.ok(panned.offsetX < 99999)
     assert.ok(panned.offsetY > -99999)
     assert.deepEqual(fake.applied.at(-1), panned)
+  })
+
+  it('uses the active preset zoom as the minimum without reversing bounds above 3.3', () => {
+    const desktop = createAdapter({ width: 100, height: 100 }, { width: 5000, height: 5000 })
+    const desktopController = createCameraController(desktop.adapter, { minZoom: 0.2, maxZoom: 9 }, false)
+    assert.equal(desktopController.zoomAt({ x: 50, y: 50 }, 0.01).zoom, VIEW_PRESETS.desktop.zoom)
+
+    desktopController.resetTo('mobilePortrait', 150)
+    desktop.advanceFrame(150)
+    assert.equal(desktopController.zoomAt({ x: 50, y: 50 }, 0.01).zoom, VIEW_PRESETS.mobilePortrait.zoom)
+
+    const capped = createAdapter({ width: 100, height: 100 }, { width: 5000, height: 5000 })
+    const cappedController = createCameraController(capped.adapter, { minZoom: 9, maxZoom: 9 }, false)
+    assert.equal(cappedController.snapshot().transform.zoom, 3.3)
+    assert.equal(cappedController.zoomAt({ x: 50, y: 50 }, 0.01).zoom, 3.3)
+  })
+
+  it('ignores zero, negative and non-finite zoom factors without applying', () => {
+    const fake = createAdapter()
+    const controller = createCameraController(fake.adapter, { minZoom: 0.5, maxZoom: 3.3 }, true)
+
+    for (const factor of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const before = controller.snapshot().transform
+      const applyCount = fake.applied.length
+      assert.deepEqual(controller.zoomAt({ x: 100, y: 100 }, factor), before)
+      assert.deepEqual(controller.snapshot().transform, before)
+      assert.equal(fake.applied.length, applyCount)
+    }
   })
 
   it('leaves the transform and active reset untouched for keyboard resize', () => {
@@ -138,11 +187,16 @@ describe('camera controller', () => {
       )
       assert.equal(controller.snapshot().presetKey, expectedPreset)
       assert.notEqual(after.zoom, VIEW_PRESETS[expectedPreset].zoom)
+      assert.equal(
+        controller.zoomAt({ x: viewport.width / 2, y: viewport.height / 2 }, 0.01).zoom,
+        VIEW_PRESETS[expectedPreset].zoom
+      )
     }
   })
 
   it('animates reset with ease-out progress and completes at the requested duration', () => {
-    const fake = createAdapter()
+    const viewport = { width: 390, height: 300 }
+    const fake = createAdapter(viewport, { width: 5000, height: 5000 })
     const controller = createCameraController(fake.adapter, { minZoom: 0.5, maxZoom: 3.3 }, true)
     controller.panBy(-100, 0)
     const start = controller.snapshot().transform
@@ -157,7 +211,37 @@ describe('camera controller', () => {
     fake.advanceFrame(200)
     assert.equal(controller.snapshot().animation, null)
     assert.equal(controller.snapshot().transform.zoom, VIEW_PRESETS.desktop.zoom)
+    assert.deepEqual(controller.snapshot().transform, {
+      zoom: VIEW_PRESETS.desktop.zoom,
+      offsetX: -535.08,
+      offsetY: -201.6
+    })
+    assert.deepEqual(
+      screenToWorld({ x: 195, y: 150 }, controller.snapshot().transform, viewport),
+      MAIN_HALL_FOCUS
+    )
     assert.equal(fake.pendingFrames(), 0)
+  })
+
+  it('ignores a retained cancelled reset callback after a newer reset starts', () => {
+    const fake = createAdapter()
+    const controller = createCameraController(fake.adapter, { minZoom: 0.5, maxZoom: 3.3 }, true)
+    controller.panBy(-100, 0)
+    controller.resetTo('desktop', 200)
+    const staleCallback = fake.retainedFrames.at(-1)!
+
+    controller.resetTo('mobileLandscape', 200)
+    const beforeStale = controller.snapshot()
+    const applyCount = fake.applied.length
+    const pendingCount = fake.pendingFrames()
+    staleCallback(1100)
+
+    assert.deepEqual(controller.snapshot(), beforeStale)
+    assert.equal(fake.applied.length, applyCount)
+    assert.equal(fake.pendingFrames(), pendingCount)
+    fake.advanceFrame(200)
+    assert.equal(controller.snapshot().presetKey, 'mobileLandscape')
+    assert.equal(controller.snapshot().animation, null)
   })
 
   it('normalizes reset durations outside 150-250ms to 200ms', () => {
@@ -202,6 +286,21 @@ describe('camera controller', () => {
     assert.equal(controller.isAwayFromPreset(), true)
   })
 
+  it('compares away state with the actual clamped preset transform on a constrained scene', () => {
+    const viewport = { width: 400, height: 300 }
+    const fake = createAdapter(viewport, { width: 100, height: 100 })
+    const controller = createCameraController(fake.adapter, { minZoom: 0.5, maxZoom: 2 }, false)
+    controller.panBy(20, -20)
+
+    controller.resetTo('desktop', 150)
+    fake.advanceFrame(150)
+
+    const transform = controller.snapshot().transform
+    assert.deepEqual(transform, { zoom: 2, offsetX: 300, offsetY: 200 })
+    assert.deepEqual(screenToWorld({ x: 200, y: 150 }, transform, viewport), { x: 50, y: 50 })
+    assert.equal(controller.isAwayFromPreset(), false)
+  })
+
   it('returns immutable snapshot copies and cleans up pending animation frames', () => {
     const fake = createAdapter()
     const controller = createCameraController(fake.adapter, { minZoom: 0.5, maxZoom: 3.3 }, true)
@@ -220,6 +319,35 @@ describe('camera controller', () => {
     assert.equal(fake.applied.length, applyCount)
   })
 
+  it('makes cleanup terminal for every later controller mutation', () => {
+    const fake = createAdapter()
+    const controller = createCameraController(fake.adapter, { minZoom: 0.5, maxZoom: 3.3 }, true)
+    const before = controller.snapshot()
+    controller.cleanup()
+    const applyCount = fake.applied.length
+    const frameCount = fake.retainedFrames.length
+
+    assert.deepEqual(controller.panBy(10, 10), before.transform)
+    assert.deepEqual(controller.zoomAt({ x: 10, y: 10 }, 2), before.transform)
+    assert.deepEqual(controller.resize({ width: 720, height: 390 }, 'orientation'), before.transform)
+    controller.resetTo('desktop')
+    controller.beginUserGesture()
+
+    assert.deepEqual(controller.snapshot(), { ...before, animation: null })
+    assert.equal(fake.applied.length, applyCount)
+    assert.equal(fake.retainedFrames.length, frameCount)
+  })
+
+  it('normalizes non-positive viewport dimensions to zero on initialization and resize', () => {
+    const fake = createAdapter({ width: -390, height: Number.POSITIVE_INFINITY })
+    const controller = createCameraController(fake.adapter, { minZoom: 0.5, maxZoom: 3.3 }, true)
+    assert.deepEqual(controller.snapshot().transform, { zoom: 1.25, offsetX: 0, offsetY: 0 })
+
+    const resized = controller.resize({ width: Number.NaN, height: -20 }, 'layout')
+    assert.deepEqual(resized, { zoom: 1.25, offsetX: 0, offsetY: 0 })
+    assert.equal(controller.snapshot().presetKey, 'mobilePortrait')
+  })
+
   it('normalizes invalid adapter dimensions, time and frame identifiers deterministically', () => {
     const applied: Array<{ zoom: number; offsetX: number; offsetY: number }> = []
     const adapter: CameraAdapter = {
@@ -232,9 +360,9 @@ describe('camera controller', () => {
     }
     const controller = createCameraController(adapter, { minZoom: Number.NaN, maxZoom: -2 }, true)
 
-    assert.deepEqual(controller.snapshot().transform, { zoom: 1, offsetX: 0, offsetY: 0 })
+    assert.deepEqual(controller.snapshot().transform, { zoom: 1.25, offsetX: 0, offsetY: 0 })
     assert.doesNotThrow(() => controller.resetTo('desktop'))
-    assert.deepEqual(applied.at(-1), { zoom: 1, offsetX: 0, offsetY: 0 })
+    assert.deepEqual(applied.at(-1), { zoom: 1.25, offsetX: 0, offsetY: 0 })
     assert.doesNotThrow(() => controller.beginUserGesture())
   })
 })
