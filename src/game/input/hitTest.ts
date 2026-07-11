@@ -6,7 +6,7 @@ export type HitArea = {
   contains(point: Point): boolean
   touchSlop?: number
   containsWithSlop?(point: Point, slop: number): boolean
-  bounds?: { left: number; top: number; right: number; bottom: number }
+  bounds?: { x: number; y: number; width: number; height: number }
 }
 
 export type HitResult =
@@ -22,8 +22,11 @@ const containsWithTouchSlop = (area: HitArea, point: Point): boolean => {
   if (slop === 0) return false
   if (area.containsWithSlop !== undefined) return area.containsWithSlop(point, slop)
   if (area.bounds === undefined) return false
-  return point.x >= area.bounds.left - slop && point.x <= area.bounds.right + slop &&
-    point.y >= area.bounds.top - slop && point.y <= area.bounds.bottom + slop
+  const { x, y, width, height } = area.bounds
+  if (![x, y, width, height].every(Number.isFinite) || width < 0 || height < 0) return false
+  const dx = Math.max(x - point.x, 0, point.x - (x + width))
+  const dy = Math.max(y - point.y, 0, point.y - (y + height))
+  return Math.hypot(dx, dy) <= slop
 }
 
 export const resolveHit = (

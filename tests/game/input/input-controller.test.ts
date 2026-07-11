@@ -153,6 +153,27 @@ describe('input controller', () => {
     assert.equal(harness.controller.snapshot().activeGesture, 'pinch')
   })
 
+  it('does not capture ignored mixed secondary pointers', () => {
+    const mouseHarness = createHarness()
+    const ignoredTouch = pointer({ pointerId: 2, pointerType: 'touch' })
+    mouseHarness.dispatch('pointerdown', pointer({ pointerId: 1, pointerType: 'mouse' }))
+    mouseHarness.dispatch('pointerdown', ignoredTouch)
+    mouseHarness.dispatch('pointerdown', pointer({ pointerId: 3, pointerType: 'touch' }))
+
+    assert.deepEqual(mouseHarness.captures, [1])
+    assert.equal(ignoredTouch.prevented(), false)
+    assert.equal(mouseHarness.controller.snapshot().activeGesture, 'click')
+
+    const penHarness = createHarness()
+    const penIgnoredTouch = pointer({ pointerId: 5, pointerType: 'touch' })
+    penHarness.dispatch('pointerdown', pointer({ pointerId: 4, pointerType: 'pen' }))
+    penHarness.dispatch('pointerdown', penIgnoredTouch)
+
+    assert.deepEqual(penHarness.captures, [4])
+    assert.equal(penIgnoredTouch.prevented(), false)
+    assert.equal(penHarness.controller.snapshot().activeGesture, 'click')
+  })
+
   it('zooms wheel around the pointer with bounded normalized factors', () => {
     const harness = createHarness()
     const wheelIn = pointer({ clientX: 25, clientY: 30, deltaY: -10000 })
@@ -211,7 +232,7 @@ describe('input controller', () => {
       id,
       kind,
       touchSlop,
-      bounds: { left: 10, top: 10, right: 20, bottom: 20 },
+      bounds: { x: 10, y: 10, width: 10, height: 10 },
       contains: point => point.x >= 10 && point.x <= 20 && point.y >= 10 && point.y <= 20
     })
     harness.setHits([area('agent', 'agent', 5)], [area('hotspot', 'hotspot', 5)])
@@ -230,7 +251,7 @@ describe('input controller', () => {
 
   it('ignores locked input and cancels an active gesture without affecting the lock owner', () => {
     const harness = createHarness()
-    harness.dispatch('pointerdown', pointer({ pointerId: 3 }))
+    harness.dispatch('pointerdown', pointer({ pointerId: 3, pointerType: 'touch' }))
     harness.dispatch('pointerdown', pointer({ pointerId: 4, pointerType: 'touch' }))
     harness.lock.lock('panel')
     harness.dispatch('pointermove', pointer({ clientX: 30 }))
@@ -246,7 +267,7 @@ describe('input controller', () => {
 
   it('cancels explicitly and suppresses browser double click behavior', () => {
     const harness = createHarness()
-    harness.dispatch('pointerdown', pointer({ pointerId: 8 }))
+    harness.dispatch('pointerdown', pointer({ pointerId: 8, pointerType: 'touch' }))
     harness.dispatch('pointerdown', pointer({ pointerId: 9, pointerType: 'touch' }))
     harness.controller.cancelGesture()
     const doubleClick = pointer()

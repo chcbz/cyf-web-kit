@@ -97,7 +97,11 @@ export const createPointerGesture = (
   return {
     down(sample) {
       if (!validSample(sample) || pointers.has(sample.id)) return NONE
-      if (activeGesture === 'pinch' && sample.type === 'touch') return NONE
+      if (pointers.size > 0) {
+        const primary = primaryId === null ? undefined : pointers.get(primaryId)
+        const canStartPinch = pointers.size === 1 && primary?.type === 'touch' && sample.type === 'touch'
+        if (!canStartPinch) return NONE
+      }
       pointers.set(sample.id, { ...sample, startX: sample.x, startY: sample.y })
       if (primaryId === null) {
         primaryId = sample.id

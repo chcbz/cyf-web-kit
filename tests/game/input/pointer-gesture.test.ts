@@ -105,6 +105,46 @@ describe('pointer gesture', () => {
     })
   })
 
+  it('ignores two touches while a mouse is primary without leaving stale pointer state', () => {
+    const gesture = createPointerGesture()
+    gesture.down({ id: 1, type: 'mouse', x: 0, y: 0 })
+
+    assert.deepEqual(gesture.down({ id: 2, type: 'touch', x: 10, y: 0 }), { kind: 'none' })
+    assert.deepEqual(gesture.down({ id: 3, type: 'touch', x: 20, y: 0 }), { kind: 'none' })
+    assert.deepEqual(gesture.snapshot().activePointerIds, [1])
+    assert.equal(gesture.snapshot().activeGesture, 'click')
+    assert.deepEqual(gesture.up({ id: 1, type: 'mouse', x: 0, y: 0 }), {
+      kind: 'click', point: { x: 0, y: 0 }
+    })
+    assert.equal(gesture.snapshot().activeGesture, 'none')
+  })
+
+  it('ignores touch while a pen is primary and keeps pen drag state deterministic', () => {
+    const gesture = createPointerGesture()
+    gesture.down({ id: 1, type: 'pen', x: 0, y: 0 })
+
+    assert.deepEqual(gesture.down({ id: 2, type: 'touch', x: 10, y: 0 }), { kind: 'none' })
+    assert.deepEqual(gesture.snapshot().activePointerIds, [1])
+    assert.deepEqual(gesture.move({ id: 1, type: 'pen', x: 7, y: 2 }), {
+      kind: 'drag', dx: 7, dy: 2
+    })
+    assert.deepEqual(gesture.up({ id: 1, type: 'pen', x: 7, y: 2 }), { kind: 'none' })
+    assert.equal(gesture.snapshot().activeGesture, 'none')
+  })
+
+  it('ignores secondary mouse and pen pointers while preserving touch pinch admission', () => {
+    const gesture = createPointerGesture()
+    gesture.down({ id: 1, type: 'touch', x: 0, y: 0 })
+
+    assert.deepEqual(gesture.down({ id: 2, type: 'mouse', x: 5, y: 0 }), { kind: 'none' })
+    assert.deepEqual(gesture.down({ id: 3, type: 'pen', x: 5, y: 0 }), { kind: 'none' })
+    assert.deepEqual(gesture.snapshot().activePointerIds, [1])
+    assert.deepEqual(gesture.down({ id: 4, type: 'touch', x: 10, y: 0 }), {
+      kind: 'pinch', center: { x: 5, y: 0 }, scale: 1
+    })
+    assert.deepEqual(gesture.snapshot().activePointerIds, [1, 4])
+  })
+
   it('ignores malformed samples without moving or corrupting the gesture', () => {
     const gesture = createPointerGesture()
     gesture.down({ id: 1, type: 'mouse', x: 5, y: 5 })
@@ -143,7 +183,7 @@ describe('hit testing', () => {
     id,
     kind,
     touchSlop,
-    bounds: { left, top, right, bottom },
+    bounds: { x: left, y: top, width: right - left, height: bottom - top },
     contains: point => point.x >= left && point.x <= right && point.y >= top && point.y <= bottom
   })
 
@@ -182,6 +222,22 @@ describe('hit testing', () => {
 
     assert.deepEqual(resolveHit(cornerPoint, [agent], [], 'touch'), { kind: 'agent', id: 'agent' })
     assert.deepEqual(resolveHit(cornerPoint, [agent], [], 'mouse'), { kind: 'blank' })
+  })
+
+  it('uses Euclidean distance for rectangular touch slop corners', () => {
+    const agent: HitArea = {
+      id: 'agent',
+      kind: 'agent',
+      touchSlop: 5,
+      bounds: { x: 10, y: 10, width: 10, height: 10 },
+      contains: point => point.x >= 10 && point.x <= 20 && point.y >= 10 && point.y <= 20
+    }
+
+    assert.deepEqual(resolveHit({ x: 6, y: 8 }, [agent], [], 'touch'), {
+      kind: 'agent', id: 'agent'
+    })
+    assert.deepEqual(resolveHit({ x: 5, y: 5 }, [agent], [], 'touch'), { kind: 'blank' })
+    assert.deepEqual(resolveHit({ x: 6, y: 8 }, [agent], [], 'mouse'), { kind: 'blank' })
   })
 
   it('does not approximate touch slop when no exact callback or bounds are provided', () => {
