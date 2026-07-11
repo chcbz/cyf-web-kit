@@ -69,11 +69,12 @@ export const zoomAt = (
   transform: CameraTransform,
   screen: Point,
   zoom: number,
-  viewport: Viewport
+  viewport: Viewport,
+  bounds: CameraBounds
 ): CameraTransform => transformForFocus(
   screenToWorld(screen, transform, viewport),
   screen,
-  zoom,
+  clampZoom(zoom, bounds.minZoom, bounds.maxZoom),
   viewport
 )
 
@@ -123,7 +124,13 @@ export const clampTransform = (
   const height = dimension(viewport.height)
   const sceneWidth = dimension(scene.width)
   const sceneHeight = dimension(scene.height)
-  const zoom = clampZoom(transform.zoom, bounds.minZoom, bounds.maxZoom)
+  const configuredMinimum = clampZoom(bounds.minZoom, bounds.minZoom, bounds.maxZoom)
+  const configuredMaximum = clampZoom(bounds.maxZoom, bounds.minZoom, bounds.maxZoom)
+  const coverZoom = sceneWidth > 0 && sceneHeight > 0
+    ? Math.max(width / sceneWidth, height / sceneHeight)
+    : configuredMinimum
+  const effectiveMinimum = Math.min(configuredMaximum, Math.max(configuredMinimum, coverZoom))
+  const zoom = clampZoom(transform.zoom, effectiveMinimum, configuredMaximum)
   const tolerance = clamp(
     finiteOr(bounds.roundingTolerance ?? DEFAULT_ROUNDING_TOLERANCE, DEFAULT_ROUNDING_TOLERANCE),
     0,

@@ -18,12 +18,26 @@ describe('camera transforms', () => {
     const focalPoint = { x: 240, y: 320 }
     const before = { zoom: 1, offsetX: 0, offsetY: 0 }
 
-    const after = zoomAt(before, focalPoint, 1.5, viewport)
+    const after = zoomAt(before, focalPoint, 1.5, viewport, { minZoom: 0.8, maxZoom: 3.3 })
     const oldWorld = screenToWorld(focalPoint, before, viewport)
     const newWorld = screenToWorld(focalPoint, after, viewport)
 
     closeTo(newWorld.x, oldWorld.x, 2)
     closeTo(newWorld.y, oldWorld.y, 2)
+  })
+
+  it('clamps focal zoom before preserving the focal world point', () => {
+    const viewport = { width: 390, height: 720 }
+    const focalPoint = { x: 240, y: 320 }
+    const before = { zoom: 1, offsetX: 14, offsetY: -9 }
+
+    const after = zoomAt(before, focalPoint, 9, viewport, { minZoom: 0.8, maxZoom: 1.6 })
+
+    assert.equal(after.zoom, 1.6)
+    assert.deepEqual(
+      screenToWorld(focalPoint, after, viewport),
+      screenToWorld(focalPoint, before, viewport)
+    )
   })
 
   it('builds a transform that places a native world point at a CSS screen point', () => {
@@ -84,14 +98,40 @@ describe('camera transforms', () => {
     assert.ok(clamped.offsetX <= 2)
   })
 
-  it('centers undersized scenes and handles zero dimensions deterministically', () => {
-    assert.deepEqual(clampTransform(
-      { zoom: 1, offsetX: 50, offsetY: -50 },
-      { width: 400, height: 300 },
-      { width: 100, height: 0 },
-      { minZoom: 1, maxZoom: 3 }
-    ), { zoom: 1, offsetX: 150, offsetY: 0 })
+  it('raises zoom to the cover minimum and keeps all four map edges within the viewport tolerance', () => {
+    const viewport = { width: 400, height: 300 }
+    const scene = { width: 200, height: 200 }
+    const clamped = clampTransform(
+      { zoom: 0.5, offsetX: 999, offsetY: -999 },
+      viewport,
+      scene,
+      { minZoom: 0.5, maxZoom: 3.3 }
+    )
+    const left = viewport.width / 2 + clamped.offsetX - viewport.width / 2 * clamped.zoom
+    const top = viewport.height / 2 + clamped.offsetY - viewport.height / 2 * clamped.zoom
+    const right = left + scene.width * clamped.zoom
+    const bottom = top + scene.height * clamped.zoom
 
+    assert.equal(clamped.zoom, 2)
+    assert.ok(clamped.zoom >= 0.5 && clamped.zoom <= 3.3)
+    assert.ok(left <= 2)
+    assert.ok(top <= 2)
+    assert.ok(right >= viewport.width - 2)
+    assert.ok(bottom >= viewport.height - 2)
+  })
+
+  it('uses max zoom and centers each impossible-to-cover axis deterministically', () => {
+    const clamped = clampTransform(
+      { zoom: 0.5, offsetX: 999, offsetY: -999 },
+      { width: 400, height: 300 },
+      { width: 100, height: 100 },
+      { minZoom: 0.5, maxZoom: 2 }
+    )
+
+    assert.deepEqual(clamped, { zoom: 2, offsetX: 300, offsetY: 200 })
+  })
+
+  it('handles zero dimensions deterministically', () => {
     assert.deepEqual(screenToWorld(
       { x: 10, y: 20 },
       { zoom: 0, offsetX: 5, offsetY: 5 },
