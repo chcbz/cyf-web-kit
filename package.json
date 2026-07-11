@@ -11,6 +11,7 @@
                     "preview":  "vite preview",
                     "build":  "vite build",
                     "lint":  "eslint src",
+                    "lint:game":  "eslint \"src/game/**/*.ts\" \"tests/game/**/*.ts\"",
                     "test":  "node --import tsx ./node_modules/mocha/bin/mocha.js --config .mocharc.json",
                     "test:watch":  "node --import tsx ./node_modules/mocha/bin/mocha.js --config .mocharc.json --watch",
                     "test:run":  "node --import tsx ./node_modules/mocha/bin/mocha.js --config .mocharc.json",
@@ -45,7 +46,7 @@
                             "@testing-library/jest-dom":  "^6.8.0",
                             "@testing-library/vue":  "^8.1.0",
                             "@types/mocha":  "^10.0.10",
-                            "@types/node":  "^26.1.1",
+                            "@types/node":  "^18.19.0",
                             "@varlet/import-resolver":  "^3.11.0",
                             "@vitejs/plugin-legacy":  "^6.1.1",
                             "@vitejs/plugin-vue":  "^5.2.4",
@@ -87,7 +88,7 @@
                                        }
                   },
     "engines":  {
-                    "node":  "\u003e= 18.0.0",
+                    "node":  "\u003e= 18.19.0",
                     "npm":  "\u003e= 9.0.0"
                 },
     "browserslist":  [
