@@ -10,6 +10,7 @@ import { createInputController } from '../input/inputController.js'
 import { createInteractionLock } from '../input/interactionLock.js'
 
 const DEFAULT_INPUT_SNAPSHOT = Object.freeze({ activeGesture: 'none', interactionLocked: false })
+const normalizeLockReason = reason => typeof reason === 'string' ? reason.trim() : ''
 
 export function createHallSceneClass(me, HallAgentClass) {
   return class HallScene extends me.Stage {
@@ -261,7 +262,10 @@ export function createHallSceneClass(me, HallAgentClass) {
     }
 
     _createInput() {
+      const canvas = this._canvasElement()
+      if (!canvas?.addEventListener || !canvas?.removeEventListener) return false
       this._interactionLock = createInteractionLock()
+      this._lockedReasons.forEach(reason => this._interactionLock.lock(reason))
       this._inputTarget = this._createInputTarget()
       this._inputController = createInputController({
         target: this._inputTarget,
@@ -275,13 +279,14 @@ export function createHallSceneClass(me, HallAgentClass) {
           if (hotspot) this._onHotspotClick?.({ id: hotspot.id, panel: hotspot.panel })
         }
       })
+      return true
     }
 
     _ensureControllers() {
-      if (this._cameraController && this._inputController) return
-      this._destroyed = false
-      this._createCamera()
-      this._createInput()
+      if (this._destroyed) return false
+      if (!this._cameraController) this._createCamera()
+      if (!this._inputController) this._createInput()
+      return this._cameraController !== null
     }
 
     getCameraSnapshot() { return this._cameraController?.snapshot?.() || null }
@@ -323,15 +328,16 @@ export function createHallSceneClass(me, HallAgentClass) {
     }
 
     setInteractionLocked(locked, reason = 'panel') {
-      if (!this._interactionLock) return false
-      if (locked && !this._lockedReasons.has(reason)) {
-        this._lockedReasons.add(reason)
-        this._interactionLock.lock(reason)
-      } else if (!locked && this._lockedReasons.delete(reason)) {
-        this._interactionLock.unlock(reason)
+      const normalizedReason = normalizeLockReason(reason)
+      if (normalizedReason === '') return this._lockedReasons.size > 0
+      if (locked && !this._lockedReasons.has(normalizedReason)) {
+        this._lockedReasons.add(normalizedReason)
+        this._interactionLock?.lock(normalizedReason)
+      } else if (!locked && this._lockedReasons.delete(normalizedReason)) {
+        this._interactionLock?.unlock(normalizedReason)
       }
       if (locked) this._inputController?.cancelGesture?.()
-      return this._interactionLock.isLocked()
+      return this._interactionLock?.isLocked?.() ?? this._lockedReasons.size > 0
     }
 
     _pointInPolygon(point, polygon) {
@@ -465,7 +471,7 @@ export function createHallSceneClass(me, HallAgentClass) {
     }
 
     _buildScene() {
-      if (this._sceneBuilt) return
+      if (this._destroyed || this._sceneBuilt) return false
       const vp = me.game.viewport
       if (!vp) return false
 
@@ -666,6 +672,7 @@ export function createHallSceneClass(me, HallAgentClass) {
     }
 
     update(dt) {
+      if (this._destroyed) return false
       super.update(dt)
       if (!this._sceneBuilt) this._buildScene()
       if (this._needsSync) this._fullSyncAgents()
@@ -708,6 +715,12 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._inputTarget = null
       this._interactionLock = null
       this._lockedReasons.clear()
+      this._onAgentClick = null
+      this._onHotspotClick = null
+      this._onReady = null
+      this._pendingAgents = []
+      this._needsSync = false
+      this._hotspotState.clear()
       this._hotspots.forEach(({ marker }) => {
         try {
           if (marker && me.game.world?.hasChild?.(marker)) me.game.world.removeChild(marker)

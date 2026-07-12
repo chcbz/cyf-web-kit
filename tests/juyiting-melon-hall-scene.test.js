@@ -201,6 +201,23 @@ describe('HallScene melonJS pointer routing', () => {
     expect(scene.inputSnapshot().interactionLocked).to.equal(false)
   })
 
+  it('persists a lock set before scene construction and replays it once when input is built', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+
+    scene.setInteractionLocked(true, 'panel')
+    scene.setInteractionLocked(true, 'panel')
+    expect(me.listenerCount('pointerdown')).to.equal(0)
+
+    scene.onResetEvent()
+    expect(scene.inputSnapshot().interactionLocked).to.equal(true)
+    expect(me.listenerCount('pointerdown')).to.equal(1)
+
+    scene.setInteractionLocked(false, 'panel')
+    expect(scene.inputSnapshot().interactionLocked).to.equal(false)
+  })
+
   it('preserves camera focus and zoom across an orientation resize without replaying the default', () => {
     const me = createFakeMelon()
     const HallScene = createHallSceneClass(me, class {})
@@ -548,6 +565,28 @@ describe('HallScene melonJS pointer routing', () => {
       globalThis.requestAnimationFrame = originalRequest
       globalThis.cancelAnimationFrame = originalCancel
     }
+  })
+
+  it('keeps destroy terminal when late engine build and update callbacks arrive', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+    let readyCalls = 0
+    scene.onReady(() => { readyCalls += 1 })
+    scene.onResetEvent()
+    expect(readyCalls).to.equal(1)
+
+    scene.onDestroyEvent()
+    const childCount = me.children.length
+    const registrationCount = me.registered.length
+    scene._buildScene()
+    scene.update(16)
+
+    expect(me.children).to.have.length(childCount)
+    expect(me.registered).to.have.length(registrationCount)
+    expect(me.listenerCount('pointerdown')).to.equal(0)
+    expect(readyCalls).to.equal(1)
+    expect(scene.getCameraSnapshot()).to.equal(null)
   })
 
   it('applies the scene transform to the melonJS world container', () => {
