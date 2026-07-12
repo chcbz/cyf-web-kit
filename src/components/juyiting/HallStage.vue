@@ -148,6 +148,8 @@ let returnFrame = null
 let resetPollRemaining = 0
 let orientationRequestGeneration = 0
 let currentGameDestroyed = false
+let ownsFullscreen = false
+let ownsOrientationLock = false
 let fallbackFrameId = 0
 const fallbackFrames = new Map()
 
@@ -322,42 +324,61 @@ const isCurrentOrientationRequest = token => (
   !isUnmounted && token === orientationRequestGeneration && orientationMode.value === 'landscape'
 )
 
+const releaseAcquiredOrientation = async ({ fullscreen = false, orientation = false } = {}) => {
+  if (orientation) {
+    try {
+      screen.orientation?.unlock?.()
+    } catch (_err) {}
+  }
+  if (fullscreen) {
+    try {
+      await document.exitFullscreen?.()
+    } catch (_err) {}
+  }
+}
+
+const releaseOwnedOrientation = async () => {
+  const acquired = { fullscreen: ownsFullscreen, orientation: ownsOrientationLock }
+  ownsFullscreen = false
+  ownsOrientationLock = false
+  await releaseAcquiredOrientation(acquired)
+}
+
 const requestLandscapeLock = async (token) => {
   let failed = false
-  let enteredFullscreen = false
+  let acquiredFullscreen = false
+  let acquiredOrientation = false
   const requestFullscreen = document.documentElement.requestFullscreen
   const lockOrientation = screen.orientation?.lock
-  if (typeof requestFullscreen !== 'function') failed = true
-  else {
+  const hostFullscreen = Boolean(document.fullscreenElement)
+  if (!hostFullscreen && typeof requestFullscreen !== 'function') failed = true
+  else if (!hostFullscreen) {
     try {
       await requestFullscreen.call(document.documentElement)
-      enteredFullscreen = true
+      acquiredFullscreen = true
+      ownsFullscreen = true
     } catch (_err) { failed = true }
   }
   if (!isCurrentOrientationRequest(token)) {
-    if (enteredFullscreen) await releaseLandscapeLock()
+    await releaseAcquiredOrientation({ fullscreen: acquiredFullscreen })
+    if (acquiredFullscreen) ownsFullscreen = false
     return
   }
   if (typeof lockOrientation !== 'function') failed = true
   else {
     try {
       await lockOrientation.call(screen.orientation, 'landscape')
+      acquiredOrientation = true
+      ownsOrientationLock = true
     } catch (_err) { failed = true }
   }
   if (!isCurrentOrientationRequest(token)) {
-    await releaseLandscapeLock()
+    await releaseAcquiredOrientation({ fullscreen: acquiredFullscreen, orientation: acquiredOrientation })
+    if (acquiredFullscreen) ownsFullscreen = false
+    if (acquiredOrientation) ownsOrientationLock = false
     return
   }
   if (isCurrentOrientationRequest(token)) orientationHint.value = failed ? '请旋转手机横屏查看' : ''
-}
-
-const releaseLandscapeLock = async () => {
-  try {
-    screen.orientation?.unlock?.()
-  } catch (_err) {}
-  try {
-    await document.exitFullscreen?.()
-  } catch (_err) {}
 }
 
 const toggleOrientationMode = async () => {
@@ -370,7 +391,7 @@ const toggleOrientationMode = async () => {
     if (nextMode === 'landscape') await requestLandscapeLock(requestToken)
     if (nextMode === 'portrait') {
       orientationHint.value = ''
-      await releaseLandscapeLock()
+      await releaseOwnedOrientation()
     }
   } finally {
     if (!isUnmounted && requestToken === orientationRequestGeneration) orientationRequestPending.value = false
@@ -510,7 +531,7 @@ onBeforeUnmount(() => {
   sceneMountAttempt += 1
   orientationRequestGeneration += 1
   orientationRequestPending.value = false
-  void releaseLandscapeLock()
+  void releaseOwnedOrientation()
   clearMountTimeout()
   teardownOrientationTracking()
   if (returnFrame !== null) cancelStageFrame(returnFrame)

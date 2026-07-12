@@ -901,16 +901,54 @@ describe('JuyiHall component behavior', () => {
       expect(toggle.attributes('disabled')).to.not.equal(undefined)
       wrapper.unmount()
       wrapper = null
-      expect(unlockCalls).to.equal(1)
-      expect(exitFullscreenCalls).to.equal(1)
+      expect(unlockCalls).to.equal(0)
+      expect(exitFullscreenCalls).to.equal(0)
       fullscreen.resolve()
       await flushPromises()
       expect(lockCalls).to.equal(0)
-      expect(unlockCalls).to.equal(2)
-      expect(exitFullscreenCalls).to.equal(2)
+      expect(unlockCalls).to.equal(0)
+      expect(exitFullscreenCalls).to.equal(1)
     } finally {
       wrapper?.unmount()
       global.document.documentElement.requestFullscreen = originalFullscreen
+      global.document.exitFullscreen = originalExitFullscreen
+      global.screen = originalScreen
+      global.window.matchMedia = originalMatchMedia
+    }
+  })
+
+  it('does not release host-owned fullscreen or orientation state', async () => {
+    const originalExitFullscreen = global.document.exitFullscreen
+    const originalScreen = global.screen
+    const originalMatchMedia = global.window.matchMedia
+    const fullscreenDescriptor = Object.getOwnPropertyDescriptor(global.document, 'fullscreenElement')
+    const hostFullscreen = document.createElement('div')
+    let unlockCalls = 0
+    let exitFullscreenCalls = 0
+    Object.defineProperty(global.document, 'fullscreenElement', { configurable: true, value: hostFullscreen })
+    global.document.exitFullscreen = async () => { exitFullscreenCalls += 1 }
+    global.screen = { orientation: { unlock: () => { unlockCalls += 1 } } }
+    global.window.matchMedia = query => ({ media: query, matches: query.includes('orientation'), addEventListener: () => {}, removeEventListener: () => {} })
+    hallGameMock = {
+      destroy: () => {}, mount: async (_container, options = {}) => options.onReady?.(),
+      setSelectedAgent: () => {}, start: () => {}, syncAgents: () => {}, syncHotspots: () => {}
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+    let wrapper
+    try {
+      wrapper = mount(HallStage, { global: { stubs }, props: makeHallStageProps() })
+      await flushPromises()
+      await wrapper.find('.orientation-action').trigger('click')
+      await flushPromises()
+      wrapper.unmount()
+      wrapper = null
+      await flushPromises()
+      expect(unlockCalls).to.equal(0)
+      expect(exitFullscreenCalls).to.equal(0)
+    } finally {
+      wrapper?.unmount()
+      if (fullscreenDescriptor) Object.defineProperty(global.document, 'fullscreenElement', fullscreenDescriptor)
+      else delete global.document.fullscreenElement
       global.document.exitFullscreen = originalExitFullscreen
       global.screen = originalScreen
       global.window.matchMedia = originalMatchMedia
