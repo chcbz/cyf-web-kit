@@ -20,7 +20,7 @@
 - 面板：桌面精细指针使用 `center-modal`，横屏触控使用 `right-drawer`，竖屏触控使用 `bottom-drawer`；打开面板时用 `panel` reason 锁定地图输入。
 - 键盘 resize：结合 `visualViewport`、可编辑元素焦点、宽度稳定和 120 CSS px 高度阈值识别打开/关闭；只更新面板可用高度，保留相机 focus、zoom、preset 和 reset 状态。旋转信号去重后才发送 `orientation` resize。
 - 加载：每次挂载尝试精确超时 **15 秒（15000 ms）**。retry 先递增 generation，使旧 timeout 与旧 ready/error callback 失效，再开始新挂载。
-- 横竖屏：仅释放组件自身取得的 fullscreen/orientation lock。API 缺失、拒绝或延迟完成时显示手动旋转提示；卸载后的迟到成功也不触碰宿主已有状态。
+- 横竖屏：仅在 fullscreen/orientation API 不可用或请求被拒绝时显示手动旋转提示；请求 pending 期间不显示提示。stale/迟到完成按 ownership 安全清理，不修改组件状态，也不触碰宿主已有状态。
 
 ## 验证
 
