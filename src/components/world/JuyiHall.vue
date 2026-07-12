@@ -46,21 +46,26 @@
     <transition name="panel" @after-leave="handlePanelAfterLeave">
       <div v-if="activePanel" class="panel-overlay" @click.self="closePanel">
         <section
+          ref="panelRef"
           class="floating-panel"
           :class="[`panel-${renderedPanel}`, `layout-${panelLayout}`]"
+          role="dialog"
+          aria-modal="true"
+          :aria-labelledby="panelTitleId"
+          tabindex="-1"
           @wheel.stop
           @pointerdown.stop
           @pointermove.stop
           @pointerup.stop
           @pointercancel.stop
-          @keydown.stop
+          @keydown="handlePanelKeydown"
           @keyup.stop
           @input.stop
           @click.stop
         >
           <div class="panel-title">
-            <span>{{ activePanelTitle }}</span>
-            <button class="panel-close" @click="closePanel">
+            <span :id="panelTitleId">{{ activePanelTitle }}</span>
+            <button class="panel-close" type="button" aria-label="关闭面板" @click="closePanel">
               <var-icon name="close-circle-outline" />
             </button>
           </div>
@@ -217,7 +222,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useGlobalStore } from '@/stores/global'
 import { useApiStore } from '@/stores/api'
 import { agentApi, chatApi } from '@/composables/useHttp'
@@ -225,7 +230,7 @@ import { useHallChatContext } from '@/composables/juyiting/useHallChatContext'
 import { useHallConversation } from '@/composables/juyiting/useHallConversation'
 import { useHallData } from '@/composables/juyiting/useHallData'
 import { useHallLibrary } from '@/composables/juyiting/useHallLibrary'
-import { useHallPanels } from '@/composables/juyiting/useHallPanels'
+import { focusHallPanel, restorePanelFocus, trapPanelFocus, useHallPanels } from '@/composables/juyiting/useHallPanels'
 import { useHallScene } from '@/composables/juyiting/useHallScene'
 import { useHallSound } from '@/composables/juyiting/useHallSound'
 import { useHallTaskActions } from '@/composables/juyiting/useHallTaskActions'
@@ -259,6 +264,9 @@ const hallRefreshing = ref(false)
 const agentBubbles = ref({})
 const outgoingMetadata = ref({})
 const { panelLayout } = useHallPanels()
+const panelRef = ref(null)
+const panelTitleId = 'juyiting-floating-panel-title'
+let panelPriorFocus = null
 let bubbleTimer = null
 let bubbleInitialTimer = null
 let bubbleClearTimer = null
@@ -446,6 +454,7 @@ const selectAgent = (agent) => {
 }
 
 const openPanel = (panel, options = {}) => {
+  if (!activePanel.value) panelPriorFocus = document.activeElement
   if (panel !== 'chat') {
     resetToPublic()
   }
@@ -454,6 +463,7 @@ const openPanel = (panel, options = {}) => {
   }
   renderedPanel.value = panel
   activePanel.value = panel
+  nextTick(() => focusHallPanel(panelRef.value))
   if (!options.silent) playPanelOpen()
   if (panel === 'chat') {
     window.setTimeout(() => loadHallMessages(), 0)
@@ -473,8 +483,22 @@ const closePanel = () => {
   playTap()
 }
 
+const handlePanelKeydown = (event) => {
+  event.stopPropagation()
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closePanel()
+    return
+  }
+  trapPanelFocus(event, panelRef.value)
+}
+
 const handlePanelAfterLeave = () => {
-  if (!activePanel.value) renderedPanel.value = ''
+  if (!activePanel.value) {
+    renderedPanel.value = ''
+    restorePanelFocus(panelPriorFocus)
+    panelPriorFocus = null
+  }
 }
 
 const closeSelectedAgentCard = () => {
@@ -748,6 +772,8 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  restorePanelFocus(panelPriorFocus)
+  panelPriorFocus = null
   stopHallEventStream()
   stopHallReplyStreaming()
   stopHallReplyPolling()

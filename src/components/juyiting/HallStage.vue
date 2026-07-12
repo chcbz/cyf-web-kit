@@ -26,7 +26,7 @@
         </button>
         <button
           class="tool-action orientation-action"
-          :disabled="isSceneMounting"
+          :disabled="isSceneMounting || orientationRequestPending"
           :title="sceneMode === 'landscape' ? '切回竖屏视图' : '切到横屏视图'"
           @click="toggleOrientationMode"
         >
@@ -56,9 +56,9 @@
       tabindex="0"
       aria-label="聚义厅 melonJS 场景，可使用加减号缩放，0 复位"
       @keydown="handleSceneKeydown"
-      @wheel="refreshReturnButton"
-      @pointerup="refreshReturnButton"
-      @pointercancel="refreshReturnButton"
+      @wheel="scheduleReturnRefresh"
+      @pointerup="scheduleReturnRefresh"
+      @pointercancel="scheduleReturnRefresh"
     >
       <div ref="melonContainerRef" class="melon-layer" aria-hidden="true"></div>
       <div
@@ -128,6 +128,7 @@ const sceneError = ref('')
 const isSceneMounting = ref(false)
 const showReturnButton = ref(false)
 const orientationHint = ref('')
+const orientationRequestPending = ref(false)
 const deviceLandscape = ref(false)
 const orientationMode = ref('auto')
 let sceneMountAttempt = 0
@@ -137,6 +138,36 @@ let orientationMediaHandler = null
 let mountTimeout = null
 let previousLayoutViewport = { width: 0, height: 0 }
 let previousVisualHeight = 0
+let keyboardActive = false
+let resizeFrame = null
+let resizeSettlePass = 0
+let pendingOrientationSignal = false
+let lastResizeSignature = ''
+let lastOrientationDimensions = ''
+let returnFrame = null
+let resetPollRemaining = 0
+let orientationRequestGeneration = 0
+let currentGameDestroyed = false
+let fallbackFrameId = 0
+const fallbackFrames = new Map()
+
+const requestStageFrame = callback => {
+  if (typeof window.requestAnimationFrame === 'function') return window.requestAnimationFrame(callback)
+  const id = `fallback-${++fallbackFrameId}`
+  fallbackFrames.set(id, callback)
+  Promise.resolve().then(() => {
+    const pending = fallbackFrames.get(id)
+    if (!pending) return
+    fallbackFrames.delete(id)
+    pending(Date.now())
+  })
+  return id
+}
+
+const cancelStageFrame = id => {
+  if (typeof id === 'string') fallbackFrames.delete(id)
+  else window.cancelAnimationFrame?.(id)
+}
 const loadingUnlockedAttempts = new Set()
 
 const presetZooms = { mobilePortrait: 1.25, mobileLandscape: 1.05, tabletLandscape: 0.92, desktop: 0.84 }
@@ -178,7 +209,7 @@ const handleSceneReady = (attemptId) => {
   juyitingGame.syncAgents(props.sceneAgents)
   juyitingGame.syncHotspots?.(props.sceneHotspots)
   juyitingGame.setSelectedAgent(props.selectedAgent?.agentId || null)
-  refreshReturnButton()
+  scheduleReturnRefresh()
 }
 
 const clearMountTimeout = () => {
@@ -193,34 +224,73 @@ const editableFocused = () => {
 
 const viewportNow = () => ({ width: window.innerWidth, height: window.innerHeight })
 
-const applyViewportResize = ({ orientationChanged = false, visual = false } = {}) => {
+const evaluateViewportResize = () => {
+  resizeFrame = null
   const next = viewportNow()
   const nextVisualHeight = window.visualViewport?.height || next.height
+  const widthStable = Math.abs(next.width - previousLayoutViewport.width) <= 2
+  const layoutHeightChanged = Math.abs(next.height - previousLayoutViewport.height) >= 120
+  const visualHeightSettled = Math.abs(nextVisualHeight - previousVisualHeight) >= 120
+  const layoutKeyboardRace = widthStable && layoutHeightChanged && !visualHeightSettled && (editableFocused() || keyboardActive)
+  if (
+    resizeSettlePass < 2 &&
+    layoutKeyboardRace
+  ) {
+    resizeSettlePass += 1
+    resizeFrame = requestStageFrame(evaluateViewportResize)
+    return
+  }
+  resizeSettlePass = 0
   const classifiedKind = classifyViewportResize({
     previous: previousLayoutViewport,
     next,
     previousVisualHeight,
     nextVisualHeight,
-    editableFocused: editableFocused(),
-    orientationChanged
+    editableFocused: editableFocused() || keyboardActive,
+    orientationChanged: pendingOrientationSignal
   })
-  const kind = orientationChanged ? 'orientation' : classifiedKind
+  const keyboardTransition = keyboardActive && widthStable && visualHeightSettled
+  const kind = pendingOrientationSignal
+    ? 'orientation'
+    : ((keyboardTransition || layoutKeyboardRace) ? 'keyboard' : classifiedKind)
+  const resizeHeight = kind === 'keyboard' ? Math.min(next.height, nextVisualHeight) : next.height
   document.documentElement.style.setProperty('--hall-visual-height', `${nextVisualHeight}px`)
-  juyitingGame.resizeViewport?.({
+  const change = {
     width: next.width,
-    height: visual && kind === 'keyboard' ? nextVisualHeight : next.height,
+    height: resizeHeight,
     kind,
-    orientationChanged
-  })
-  if (kind !== 'keyboard') previousLayoutViewport = next
+    orientationChanged: pendingOrientationSignal
+  }
+  const signature = `${change.width}:${change.height}:${change.kind}:${change.orientationChanged}`
+  const dimensions = `${change.width}:${change.height}`
+  const duplicateOrientationLayout = kind === 'layout' && dimensions === lastOrientationDimensions
+  if (signature !== lastResizeSignature && !duplicateOrientationLayout) {
+    lastResizeSignature = signature
+    juyitingGame.resizeViewport?.(change)
+  }
+  if (kind === 'orientation') lastOrientationDimensions = dimensions
+  else if (dimensions !== lastOrientationDimensions) lastOrientationDimensions = ''
+  if (kind !== 'keyboard') {
+    previousLayoutViewport = next
+    keyboardActive = false
+  } else {
+    keyboardActive = Math.abs(previousLayoutViewport.height - nextVisualHeight) >= 120
+  }
   previousVisualHeight = nextVisualHeight
-  refreshReturnButton()
+  pendingOrientationSignal = false
+  scheduleReturnRefresh()
+}
+
+const scheduleViewportResize = ({ orientationChanged = false } = {}) => {
+  pendingOrientationSignal = pendingOrientationSignal || orientationChanged
+  if (resizeFrame !== null) return
+  resizeFrame = requestStageFrame(evaluateViewportResize)
 }
 
 const updateDeviceOrientation = (event) => {
   const mediaMatches = typeof event?.matches === 'boolean' ? event.matches : orientationMedia?.matches
   deviceLandscape.value = typeof mediaMatches === 'boolean' ? mediaMatches : window.innerWidth > window.innerHeight
-  applyViewportResize({ orientationChanged: Boolean(event) })
+  scheduleViewportResize({ orientationChanged: Boolean(event) })
 }
 
 const setupOrientationTracking = () => {
@@ -235,8 +305,8 @@ const setupOrientationTracking = () => {
   updateDeviceOrientation()
 }
 
-const handleWindowResize = () => applyViewportResize()
-const handleVisualResize = () => applyViewportResize({ visual: true })
+const handleWindowResize = () => scheduleViewportResize()
+const handleVisualResize = () => scheduleViewportResize()
 
 const teardownOrientationTracking = () => {
   orientationMedia?.removeEventListener?.('change', orientationMediaHandler)
@@ -244,9 +314,15 @@ const teardownOrientationTracking = () => {
   window.visualViewport?.removeEventListener?.('resize', handleVisualResize)
   orientationMedia = null
   orientationMediaHandler = null
+  if (resizeFrame !== null) cancelStageFrame(resizeFrame)
+  resizeFrame = null
 }
 
-const requestLandscapeLock = async () => {
+const isCurrentOrientationRequest = token => (
+  !isUnmounted && token === orientationRequestGeneration && orientationMode.value === 'landscape'
+)
+
+const requestLandscapeLock = async (token) => {
   let failed = false
   const requestFullscreen = document.documentElement.requestFullscreen
   const lockOrientation = screen.orientation?.lock
@@ -256,13 +332,14 @@ const requestLandscapeLock = async () => {
       await requestFullscreen.call(document.documentElement)
     } catch (_err) { failed = true }
   }
+  if (!isCurrentOrientationRequest(token)) return
   if (typeof lockOrientation !== 'function') failed = true
   else {
     try {
       await lockOrientation.call(screen.orientation, 'landscape')
     } catch (_err) { failed = true }
   }
-  orientationHint.value = failed ? '请旋转手机横屏查看' : ''
+  if (isCurrentOrientationRequest(token)) orientationHint.value = failed ? '请旋转手机横屏查看' : ''
 }
 
 const releaseLandscapeLock = async () => {
@@ -275,11 +352,20 @@ const releaseLandscapeLock = async () => {
 }
 
 const toggleOrientationMode = async () => {
-  if (isSceneMounting.value) return
+  if (isSceneMounting.value || orientationRequestPending.value) return
   const nextMode = sceneMode.value === 'landscape' ? 'portrait' : 'landscape'
+  const requestToken = ++orientationRequestGeneration
+  orientationRequestPending.value = true
   orientationMode.value = nextMode
-  if (nextMode === 'landscape') await requestLandscapeLock()
-  if (nextMode === 'portrait') await releaseLandscapeLock()
+  try {
+    if (nextMode === 'landscape') await requestLandscapeLock(requestToken)
+    if (nextMode === 'portrait') {
+      orientationHint.value = ''
+      await releaseLandscapeLock()
+    }
+  } finally {
+    if (!isUnmounted && requestToken === orientationRequestGeneration) orientationRequestPending.value = false
+  }
 }
 
 const mountScene = async () => {
@@ -299,6 +385,8 @@ const mountScene = async () => {
     melonReady.value = false
     sceneError.value = '地图加载超时，请重试'
     unlockLoading(attemptId)
+    currentGameDestroyed = true
+    juyitingGame.destroy()
   }, 15000)
   try {
     await juyitingGame.mount(container, {
@@ -332,7 +420,8 @@ const retryScene = async () => {
   sceneMountAttempt += 1
   clearMountTimeout()
   melonReady.value = false
-  juyitingGame.destroy()
+  if (!currentGameDestroyed) juyitingGame.destroy()
+  currentGameDestroyed = false
   await mountScene()
 }
 
@@ -341,13 +430,13 @@ const handleSceneKeydown = (event) => {
   if (event.key === '+' || event.key === '=') {
     juyitingGame.zoomBy?.(0.12)
     event.preventDefault()
-    window.setTimeout(refreshReturnButton, 0)
+    scheduleReturnRefresh()
     return
   }
   if (event.key === '-' || event.key === '_') {
     juyitingGame.zoomBy?.(-0.12)
     event.preventDefault()
-    window.setTimeout(refreshReturnButton, 0)
+    scheduleReturnRefresh()
     return
   }
   if (event.key === '0') {
@@ -366,21 +455,40 @@ const worldCenterFromSnapshot = (viewport, transform) => {
 }
 
 const refreshReturnButton = () => {
+  if (isUnmounted) return null
   const snapshot = juyitingGame.getCameraSnapshot?.()
   if (!snapshot?.transform) {
     showReturnButton.value = false
-    return
+    return null
   }
   const viewport = previousLayoutViewport.width ? previousLayoutViewport : viewportNow()
   const { zoom } = snapshot.transform
   const centerWorld = worldCenterFromSnapshot(viewport, snapshot.transform)
   const focusDistance = Math.hypot(centerWorld.x - 832, centerWorld.y - 390)
   showReturnButton.value = focusDistance > 48 || Math.abs(zoom - (presetZooms[snapshot.presetKey] ?? zoom)) > 0.08
+  return snapshot
+}
+
+const runReturnRefresh = () => {
+  returnFrame = null
+  const snapshot = refreshReturnButton()
+  if (resetPollRemaining > 0 && snapshot?.animation) {
+    resetPollRemaining -= 1
+    returnFrame = requestStageFrame(runReturnRefresh)
+  } else {
+    resetPollRemaining = 0
+  }
+}
+
+const scheduleReturnRefresh = () => {
+  if (isUnmounted || returnFrame !== null) return
+  returnFrame = requestStageFrame(runReturnRefresh)
 }
 
 const returnToMainHall = () => {
   juyitingGame.resetToMainHall?.()
-  window.setTimeout(refreshReturnButton, 210)
+  resetPollRemaining = 30
+  scheduleReturnRefresh()
 }
 
 onMounted(() => {
@@ -391,17 +499,24 @@ onMounted(() => {
 onBeforeUnmount(() => {
   isUnmounted = true
   sceneMountAttempt += 1
+  orientationRequestGeneration += 1
+  orientationRequestPending.value = false
   clearMountTimeout()
   teardownOrientationTracking()
+  if (returnFrame !== null) cancelStageFrame(returnFrame)
+  returnFrame = null
+  resetPollRemaining = 0
+  fallbackFrames.clear()
   juyitingGame.setInteractionLocked?.(false, 'panel')
   juyitingGame.setInteractionLocked?.(false, 'loading')
-  juyitingGame.destroy()
+  if (!currentGameDestroyed) juyitingGame.destroy()
+  currentGameDestroyed = true
 })
 
 watch(() => props.interactionLocked, value => {
   juyitingGame.setInteractionLocked?.(Boolean(value), 'panel')
   if (value) showReturnButton.value = false
-  else refreshReturnButton()
+  else scheduleReturnRefresh()
 }, { immediate: true })
 
 watch(() => props.sceneAgents, (agents) => {
@@ -414,7 +529,7 @@ watch(() => props.sceneHotspots, (hotspots) => {
 
 watch(() => props.selectedAgent, (agent) => {
   if (melonReady.value) juyitingGame.setSelectedAgent(agent?.agentId || null)
-  refreshReturnButton()
+  scheduleReturnRefresh()
 })
 </script>
 
