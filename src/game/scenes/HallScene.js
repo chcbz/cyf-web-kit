@@ -11,6 +11,10 @@ import { createInteractionLock } from '../input/interactionLock.js'
 
 const DEFAULT_INPUT_SNAPSHOT = Object.freeze({ activeGesture: 'none', interactionLocked: false })
 const normalizeLockReason = reason => typeof reason === 'string' ? reason.trim() : ''
+const normalizeViewport = viewport => ({
+  width: Number.isFinite(Number(viewport?.width)) && Number(viewport.width) > 0 ? Number(viewport.width) : 0,
+  height: Number.isFinite(Number(viewport?.height)) && Number(viewport.height) > 0 ? Number(viewport.height) : 0
+})
 
 export function createHallSceneClass(me, HallAgentClass) {
   return class HallScene extends me.Stage {
@@ -37,6 +41,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._inputTarget = null
       this._destroyed = false
       this._lastViewport = null
+      this._currentViewport = normalizeViewport(me.game.viewport)
     }
 
     onAgentClick(cb)   { this._onAgentClick = cb }
@@ -74,11 +79,12 @@ export function createHallSceneClass(me, HallAgentClass) {
     getAgent(id) { return this._agents.get(id) }
 
     _viewportSize() {
-      const viewport = me.game.viewport
-      return {
-        width: Number.isFinite(viewport?.width) && viewport.width > 0 ? viewport.width : 0,
-        height: Number.isFinite(viewport?.height) && viewport.height > 0 ? viewport.height : 0
-      }
+      return { ...this._currentViewport }
+    }
+
+    _initializeViewport() {
+      if (this._currentViewport.width > 0 && this._currentViewport.height > 0) return
+      this._currentViewport = normalizeViewport(me.game.viewport)
     }
 
     _sceneSize() {
@@ -210,35 +216,55 @@ export function createHallSceneClass(me, HallAgentClass) {
 
     _hitProvider() {
       const touchSlop = 11
-      const agentAreas = [...this._agents.entries()].reverse().map(([id, agent]) => {
-        const bounds = agent.getBounds?.()
-        const screenStart = bounds ? this._worldToScreen({ x: bounds.x, y: bounds.y }) : null
-        const screenEnd = bounds ? this._worldToScreen({ x: bounds.x + bounds.width, y: bounds.y + bounds.height }) : null
-        return {
-          id,
-          kind: 'agent',
-          touchSlop,
-          bounds: screenStart && screenEnd ? {
-            x: Math.min(screenStart.x, screenEnd.x), y: Math.min(screenStart.y, screenEnd.y),
-            width: Math.abs(screenEnd.x - screenStart.x), height: Math.abs(screenEnd.y - screenStart.y)
-          } : undefined,
-          contains: point => {
-            const world = this._screenToWorld(point)
-            return agent.containsPoint?.(world.x, world.y) === true || bounds?.contains?.(world.x, world.y) === true
-          },
-          containsWithSlop: (point, slop) => {
-            if (!bounds) return false
-            const world = this._screenToWorld(point)
-            const worldSlop = slop / Math.max(this.getTransform().zoom, 0.001)
-            const dx = Math.max(bounds.x - world.x, 0, world.x - (bounds.x + bounds.width))
-            const dy = Math.max(bounds.y - world.y, 0, world.y - (bounds.y + bounds.height))
-            return Math.hypot(dx, dy) <= worldSlop
+      const agentAreas = [...this._agents.entries()]
+        .sort(([firstId, first], [secondId, second]) => {
+          const depthDifference = (Number(second.depth) || 0) - (Number(first.depth) || 0)
+          if (depthDifference !== 0) return depthDifference
+          const yDifference = (Number(second.pos?.y) || 0) - (Number(first.pos?.y) || 0)
+          if (yDifference !== 0) return yDifference
+          const firstKey = String(firstId)
+          const secondKey = String(secondId)
+          return firstKey < secondKey ? -1 : firstKey > secondKey ? 1 : 0
+        })
+        .map(([id, agent]) => {
+          const bounds = agent.getBounds?.()
+          const screenStart = bounds ? this._worldToScreen({ x: bounds.x, y: bounds.y }) : null
+          const screenEnd = bounds ? this._worldToScreen({ x: bounds.x + bounds.width, y: bounds.y + bounds.height }) : null
+          return {
+            id,
+            kind: 'agent',
+            touchSlop,
+            bounds: screenStart && screenEnd ? {
+              x: Math.min(screenStart.x, screenEnd.x), y: Math.min(screenStart.y, screenEnd.y),
+              width: Math.abs(screenEnd.x - screenStart.x), height: Math.abs(screenEnd.y - screenStart.y)
+            } : undefined,
+            contains: point => {
+              const world = this._screenToWorld(point)
+              return agent.containsPoint?.(world.x, world.y) === true || bounds?.contains?.(world.x, world.y) === true
+            },
+            containsWithSlop: (point, slop) => {
+              if (!bounds) return false
+              const world = this._screenToWorld(point)
+              const worldSlop = slop / Math.max(this.getTransform().zoom, 0.001)
+              const dx = Math.max(bounds.x - world.x, 0, world.x - (bounds.x + bounds.width))
+              const dy = Math.max(bounds.y - world.y, 0, world.y - (bounds.y + bounds.height))
+              return Math.hypot(dx, dy) <= worldSlop
+            }
           }
-        }
-      })
+        })
       const hotspotAreas = this._hotspots.filter(item => item.data && item.marker).map(({ data, marker }) => {
-        const start = this._worldToScreen({ x: marker.pos.x, y: marker.pos.y })
-        const end = this._worldToScreen({ x: marker.pos.x + marker.width, y: marker.pos.y + marker.height })
+        const polygon = marker.polygon?.length >= 3
+          ? marker.polygon.map(point => ({ x: marker.pos.x + point.x, y: marker.pos.y + point.y }))
+          : null
+        const polygonBounds = polygon ? {
+          x: Math.min(...polygon.map(point => point.x)),
+          y: Math.min(...polygon.map(point => point.y)),
+          width: Math.max(...polygon.map(point => point.x)) - Math.min(...polygon.map(point => point.x)),
+          height: Math.max(...polygon.map(point => point.y)) - Math.min(...polygon.map(point => point.y))
+        } : null
+        const worldBounds = polygonBounds || { x: marker.pos.x, y: marker.pos.y, width: marker.width, height: marker.height }
+        const start = this._worldToScreen({ x: worldBounds.x, y: worldBounds.y })
+        const end = this._worldToScreen({ x: worldBounds.x + worldBounds.width, y: worldBounds.y + worldBounds.height })
         return {
           id: data.id,
           kind: 'hotspot',
@@ -246,12 +272,16 @@ export function createHallSceneClass(me, HallAgentClass) {
           bounds: { x: Math.min(start.x, end.x), y: Math.min(start.y, end.y), width: Math.abs(end.x - start.x), height: Math.abs(end.y - start.y) },
           contains: point => {
             const world = this._screenToWorld(point)
-            if (world.x < marker.pos.x || world.x > marker.pos.x + marker.width || world.y < marker.pos.y || world.y > marker.pos.y + marker.height) return false
-            return data.shape !== 'polygon' || !data.polygon || this._pointInPolygon(world, data.polygon)
+            if (polygon) return this._pointInPolygon(world, polygon)
+            return world.x >= marker.pos.x && world.x <= marker.pos.x + marker.width &&
+              world.y >= marker.pos.y && world.y <= marker.pos.y + marker.height
           },
           containsWithSlop: (point, slop) => {
             const world = this._screenToWorld(point)
             const worldSlop = slop / Math.max(this.getTransform().zoom, 0.001)
+            if (polygon) {
+              return this._pointInPolygon(world, polygon) || this._distanceToPolygon(world, polygon) <= worldSlop
+            }
             const dx = Math.max(marker.pos.x - world.x, 0, world.x - (marker.pos.x + marker.width))
             const dy = Math.max(marker.pos.y - world.y, 0, world.y - (marker.pos.y + marker.height))
             return Math.hypot(dx, dy) <= worldSlop
@@ -317,13 +347,18 @@ export function createHallSceneClass(me, HallAgentClass) {
     fitToViewport() { return this.resetToMainHall() }
 
     resizeViewport(change = {}) {
-      if (!this._cameraController) return this.getTransform()
-      const previous = this._lastViewport || this._viewportSize()
-      const next = { width: Number(change.width) || previous.width, height: Number(change.height) || previous.height }
+      const previous = this._viewportSize()
+      const supplied = normalizeViewport(change)
+      const next = {
+        width: supplied.width || previous.width,
+        height: supplied.height || previous.height
+      }
       const kind = ['keyboard', 'orientation', 'layout'].includes(change.kind)
         ? change.kind
         : classifyViewportResize({ previous, next, previousVisualHeight: previous.height, nextVisualHeight: next.height, editableFocused: false, orientationChanged: change.orientationChanged })
+      this._currentViewport = next
       this._lastViewport = next
+      if (!this._cameraController) return this.getTransform()
       return this._cameraController.resize(next, kind)
     }
 
@@ -348,6 +383,22 @@ export function createHallSceneClass(me, HallAgentClass) {
         if (((yi > point.y) !== (yj > point.y)) && (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi)) inside = !inside
       }
       return inside
+    }
+
+    _distanceToPolygon(point, polygon) {
+      let minimum = Infinity
+      for (let index = 0; index < polygon.length; index++) {
+        const start = polygon[index]
+        const end = polygon[(index + 1) % polygon.length]
+        const dx = end.x - start.x
+        const dy = end.y - start.y
+        const lengthSquared = dx * dx + dy * dy
+        const projection = lengthSquared > 0
+          ? Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared))
+          : 0
+        minimum = Math.min(minimum, Math.hypot(point.x - (start.x + projection * dx), point.y - (start.y + projection * dy)))
+      }
+      return minimum
     }
 
     _renderModularLayers(vpW, vpH) {
@@ -472,11 +523,9 @@ export function createHallSceneClass(me, HallAgentClass) {
 
     _buildScene() {
       if (this._destroyed || this._sceneBuilt) return false
-      const vp = me.game.viewport
-      if (!vp) return false
-
-      const vpW = vp.width
-      const vpH = vp.height
+      this._initializeViewport()
+      const { width: vpW, height: vpH } = this._viewportSize()
+      if (vpW <= 0 || vpH <= 0) return false
       const mapData = this._mapData
       const hotspots = mapData?.hotspots || []
 

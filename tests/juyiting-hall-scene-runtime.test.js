@@ -4,6 +4,20 @@ import { createHallSceneClass } from '../src/game/scenes/HallScene.js'
 import { JuyitingGame } from '../src/game/JuyitingGame.js'
 
 describe('HallScene melonJS runtime compatibility', () => {
+  it('keeps camera and input facades null-safe before mount and after destroy', () => {
+    const game = new JuyitingGame()
+
+    expect(game.getCameraSnapshot()).to.equal(null)
+    expect(game.getInputSnapshot()).to.equal(null)
+    expect(game.resizeViewport({ width: 800, height: 600, kind: 'layout' })).to.equal(undefined)
+    expect(game.setInteractionLocked(true)).to.equal(undefined)
+    expect(game.resetToMainHall()).to.equal(undefined)
+
+    game.destroy()
+    expect(game.getCameraSnapshot()).to.equal(null)
+    expect(game.getInputSnapshot()).to.equal(null)
+  })
+
   it('delegates the camera and input migration facade safely', () => {
     const calls = []
     const game = new JuyitingGame()

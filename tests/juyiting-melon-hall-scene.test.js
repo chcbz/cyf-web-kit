@@ -236,6 +236,52 @@ describe('HallScene melonJS pointer routing', () => {
     expect(after.transform.zoom).to.equal(before.transform.zoom)
     expect(after.transform).not.to.deep.equal({ zoom: 0.84, offsetX: 0, offsetY: 0 })
   })
+
+  it('uses the supplied fractional viewport as the single source for camera, matrix, display and hit conversion', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+    const clicks = []
+    scene.onHotspotClick(item => clicks.push(item))
+    scene.setMapData(hotspotMapData())
+    scene.onResetEvent()
+    const before = scene.getCameraSnapshot().transform
+    const oldCenterWorld = {
+      x: (480 - 480 - before.offsetX) / before.zoom + 480,
+      y: (320 - 320 - before.offsetY) / before.zoom + 320
+    }
+    const viewport = { width: 700.5, height: 500.25 }
+    const rect = { left: 10.25, top: 20.5, width: 1000.75, height: 401.5 }
+    me.setLayerRect(rect)
+
+    scene.resizeViewport({ ...viewport, kind: 'layout' })
+    const after = scene.getCameraSnapshot().transform
+    const newCenterWorld = {
+      x: (viewport.width / 2 - viewport.width / 2 - after.offsetX) / after.zoom + viewport.width / 2,
+      y: (viewport.height / 2 - viewport.height / 2 - after.offsetY) / after.zoom + viewport.height / 2
+    }
+    expect(newCenterWorld.x).to.be.closeTo(oldCenterWorld.x, 0.01)
+    expect(newCenterWorld.y).to.be.closeTo(oldCenterWorld.y, 0.01)
+    expect(me.game.viewport.width).to.equal(960)
+
+    const world = { x: 730, y: 300 }
+    const screen = {
+      x: (world.x - viewport.width / 2) * after.zoom + viewport.width / 2 + after.offsetX,
+      y: (world.y - viewport.height / 2) * after.zoom + viewport.height / 2 + after.offsetY
+    }
+    const scale = Math.max(rect.width / viewport.width, rect.height / viewport.height)
+    const client = {
+      x: rect.left + (rect.width - viewport.width * scale) / 2 + screen.x * scale,
+      y: rect.top + (rect.height - viewport.height * scale) / 2 + screen.y * scale
+    }
+    me.canvas.dispatch('pointerdown', { pointerId: 31, pointerType: 'mouse', clientX: client.x, clientY: client.y })
+    me.canvas.dispatch('pointerup', { pointerId: 31, pointerType: 'mouse', clientX: client.x, clientY: client.y })
+
+    expect(clicks).to.deep.equal([{ id: 'bountyBoard', panel: 'tasks' }])
+    const lastTranslate = me.matrixOps.filter(op => op[0] === 'translate').slice(-2)[0]
+    expect(lastTranslate[1]).to.be.closeTo(viewport.width / 2 + after.offsetX, 0.001)
+    expect(lastTranslate[2]).to.be.closeTo(viewport.height / 2 + after.offsetY, 0.001)
+  })
   it('keeps custom image layers inside the transformed world scene', () => {
     const me = createFakeMelon()
     me.loader.getImage = name => name === 'mid-occluders' ? { width: 960, height: 640 } : null
@@ -324,41 +370,70 @@ describe('HallScene melonJS pointer routing', () => {
 
   it('keeps transform state inside the melonJS scene', () => {
     const me = createFakeMelon()
-    const HallScene = createHallSceneClass(me, class {})
-    const scene = new HallScene()
+    const frames = new Map()
+    const originalRequest = globalThis.requestAnimationFrame
+    const originalCancel = globalThis.cancelAnimationFrame
+    globalThis.requestAnimationFrame = callback => { const id = frames.size + 1; frames.set(id, callback); return id }
+    globalThis.cancelAnimationFrame = id => frames.delete(id)
+    try {
+      const HallScene = createHallSceneClass(me, class {})
+      const scene = new HallScene()
+      scene.onResetEvent()
+      const initial = scene.getCameraSnapshot()
+      scene.zoomBy(0.5)
+      scene.panBy(120, -80)
 
-    scene.onResetEvent()
-    scene.panBy(120, -80)
-    expect(scene.getTransform().zoom).to.equal(0.84)
+      scene.resetTransform()
+      const animation = scene.getCameraSnapshot().animation
+      frames.get(1)?.(animation.startedAt + animation.durationMs)
 
-    scene.zoomBy(0.5)
-    scene.panBy(120, -80)
-
-    expect(scene.getTransform().zoom).to.equal(1.34)
-
-    scene.resetTransform()
-    expect(scene.getCameraSnapshot().animation).not.to.equal(null)
+      expect(scene.getCameraSnapshot().animation).to.equal(null)
+      expect(scene.getCameraSnapshot().presetKey).to.equal(initial.presetKey)
+      expect(scene.getTransform()).to.deep.equal(initial.transform)
+      expect(me.matrixOps.filter(op => op[0] === 'scale').at(-1)).to.deep.equal(['scale', initial.transform.zoom, initial.transform.zoom])
+    } finally {
+      globalThis.requestAnimationFrame = originalRequest
+      globalThis.cancelAnimationFrame = originalCancel
+    }
   })
 
   it('fits the scene using the melonJS viewport instead of DOM container pixels', () => {
     const me = createFakeMelon()
-    const HallScene = createHallSceneClass(me, class {})
-    const scene = new HallScene()
+    const frames = new Map()
+    const originalRequest = globalThis.requestAnimationFrame
+    const originalCancel = globalThis.cancelAnimationFrame
+    globalThis.requestAnimationFrame = callback => { const id = frames.size + 1; frames.set(id, callback); return id }
+    globalThis.cancelAnimationFrame = id => frames.delete(id)
+    try {
+      const HallScene = createHallSceneClass(me, class {})
+      const scene = new HallScene()
+      scene.onResetEvent()
+      const initial = scene.getCameraSnapshot()
+      scene.zoomBy(0.4)
 
-    scene.onResetEvent()
-    scene.zoomBy(0.4)
-    scene.fitToViewport({ width: 390, height: 720 })
-    expect(scene.getCameraSnapshot().animation).not.to.equal(null)
+      scene.fitToViewport()
+      const animation = scene.getCameraSnapshot().animation
+      frames.get(1)?.(animation.startedAt + animation.durationMs)
+
+      expect(scene.getCameraSnapshot().animation).to.equal(null)
+      expect(scene.getTransform()).to.deep.equal(initial.transform)
+    } finally {
+      globalThis.requestAnimationFrame = originalRequest
+      globalThis.cancelAnimationFrame = originalCancel
+    }
   })
 
-  it('keeps transform state unchanged when viewport bounds are unavailable', () => {
+  it('keeps using the authoritative viewport when the melon viewport reference disappears', () => {
     const me = createFakeMelon()
     const HallScene = createHallSceneClass(me, class {})
     const scene = new HallScene()
 
     me.game.viewport = null
-    expect(scene.zoomBy(0.5)).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 0.84 })
-    expect(scene.panBy(120, -80)).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 0.84 })
+    expect(scene.zoomBy(0.5).zoom).to.equal(1.34)
+    const beforePan = scene.getTransform()
+    const afterPan = scene.panBy(120, -80)
+    expect(afterPan.offsetX - beforePan.offsetX).to.equal(120)
+    expect(afterPan.offsetY - beforePan.offsetY).to.be.closeTo(-80, 0.001)
   })
 
   it('registers hotspot renderables and the viewport click router', () => {
@@ -497,6 +572,44 @@ describe('HallScene melonJS pointer routing', () => {
     expect(clicked).to.deep.equal([])
   })
 
+  it('hit-tests the scaled polygon with exact mouse and touch edge geometry', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+    const clicks = []
+    scene.onHotspotClick(item => clicks.push(item))
+    scene.setMapData({
+      coordinateWidth: 1664,
+      coordinateHeight: 928,
+      imageLayers: {}, tileLayers: [], tilesets: [],
+      hotspots: [{
+        id: 'triangle', panel: 'catalog', shape: 'polygon', x: 50, y: 50, w: 50, h: 50,
+        polygon: [{ x: 416, y: 232 }, { x: 1248, y: 232 }, { x: 832, y: 696 }]
+      }]
+    })
+    scene.onResetEvent()
+    const clickAt = (pointerId, pointerType, world) => {
+      const point = scene._worldToScreen(world)
+      me.canvas.dispatch('pointerdown', { pointerId, pointerType, clientX: point.x, clientY: point.y })
+      me.canvas.dispatch('pointerup', { pointerId, pointerType, clientX: point.x, clientY: point.y })
+    }
+
+    clickAt(40, 'mouse', { x: 480, y: 200 })
+    expect(clicks).to.have.length(1)
+    clickAt(41, 'mouse', { x: 250, y: 470 })
+    expect(clicks).to.have.length(1)
+    clickAt(45, 'pen', { x: 250, y: 470 })
+    expect(clicks).to.have.length(1)
+    clickAt(42, 'touch', { x: 250, y: 470 })
+    expect(clicks).to.have.length(1)
+    clickAt(43, 'touch', { x: 458, y: 470 })
+
+    expect(clicks).to.deep.equal([
+      { id: 'triangle', panel: 'catalog' },
+      { id: 'triangle', panel: 'catalog' }
+    ])
+  })
+
   it('prioritizes an agent over an overlapping hotspot', () => {
     const me = createFakeMelon()
     const HallScene = createHallSceneClass(me, class {})
@@ -516,6 +629,23 @@ describe('HallScene melonJS pointer routing', () => {
     me.canvas.dispatch('pointerup', { pointerId: 9, pointerType: 'mouse', clientX: point.x, clientY: point.y })
 
     expect(clicks).to.deep.equal([['agent', 'agent-1']])
+  })
+
+  it('orders overlapping agents by visual depth instead of insertion order', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+    const clicks = []
+    scene.onResetEvent()
+    const bounds = { x: 400, y: 250, width: 100, height: 100, contains: () => true }
+    scene._agents.set('front', { depth: 10, pos: { y: 300 }, containsPoint: () => true, getBounds: () => bounds, onPointerDown: () => clicks.push('front') })
+    scene._agents.set('back', { depth: 1, pos: { y: 350 }, containsPoint: () => true, getBounds: () => bounds, onPointerDown: () => clicks.push('back') })
+    const point = scene._worldToScreen({ x: 430, y: 300 })
+
+    me.canvas.dispatch('pointerdown', { pointerId: 44, pointerType: 'mouse', clientX: point.x, clientY: point.y })
+    me.canvas.dispatch('pointerup', { pointerId: 44, pointerType: 'mouse', clientX: point.x, clientY: point.y })
+
+    expect(clicks).to.deep.equal(['front'])
   })
 
   it('keeps one listener set across repeated builds and removes it exactly once on destroy', () => {
@@ -606,18 +736,25 @@ describe('HallScene melonJS pointer routing', () => {
     expect(me.matrixOps.filter(op => op[0] === 'identity')).to.have.length(2)
   })
 
-  it('uses the current visible melon layer size for cover-cropped drag bounds', () => {
+  it('clamps fractional cover-cropped edges to the exact two-pixel tolerance', () => {
     const me = createFakeMelon()
-    me.game.viewport.width = 1672
-    me.game.viewport.height = 941
-    me.setCanvasRect({ left: 0, top: 0, width: 390, height: 720 })
-    me.setLayerRect({ left: 0, top: 0, width: 1280, height: 360 })
     const HallScene = createHallSceneClass(me, class {})
     const scene = new HallScene()
+    scene.onResetEvent()
+    const viewport = { width: 1000.5, height: 500.25 }
+    scene.resizeViewport({ ...viewport, kind: 'layout' })
+    scene.panBy(9999, 9999)
+    const transform = scene.getTransform()
 
-    scene.panBy(0, 999)
-
-    expect(scene.getTransform().offsetY).to.be.greaterThan(0)
+    expect(transform).to.deep.equal({ zoom: 0.84, offsetX: -78.04, offsetY: -38.02 })
+    const left = viewport.width / 2 * (1 - transform.zoom) + transform.offsetX
+    const top = viewport.height / 2 * (1 - transform.zoom) + transform.offsetY
+    const right = left + 1672 * transform.zoom
+    const bottom = top + 941 * transform.zoom
+    expect(left).to.be.closeTo(2, 0.001)
+    expect(top).to.be.closeTo(2, 0.001)
+    expect(right).to.be.at.least(viewport.width - 2)
+    expect(bottom).to.be.at.least(viewport.height - 2)
   })
 
   it('zooms with wheel and pans with pointer drag inside the melonJS viewport', () => {
