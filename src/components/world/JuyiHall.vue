@@ -5,6 +5,7 @@
       :agent-key="agentKey"
       :agent-style="sceneAgentStyle"
       :hidden-agent-count="hiddenAgentCount"
+      :interaction-locked="Boolean(activePanel)"
       :portrait-name="portraitName"
       :portrait-short-name="portraitShortName"
       :portrait-style="portraitStyle"
@@ -44,7 +45,19 @@
 
     <transition name="panel" @after-leave="handlePanelAfterLeave">
       <div v-if="activePanel" class="panel-overlay" @click.self="closePanel">
-        <section class="floating-panel" :class="`panel-${renderedPanel}`">
+        <section
+          class="floating-panel"
+          :class="[`panel-${renderedPanel}`, `layout-${panelLayout}`]"
+          @wheel.stop
+          @pointerdown.stop
+          @pointermove.stop
+          @pointerup.stop
+          @pointercancel.stop
+          @keydown.stop
+          @keyup.stop
+          @input.stop
+          @click.stop
+        >
           <div class="panel-title">
             <span>{{ activePanelTitle }}</span>
             <button class="panel-close" @click="closePanel">
@@ -212,6 +225,7 @@ import { useHallChatContext } from '@/composables/juyiting/useHallChatContext'
 import { useHallConversation } from '@/composables/juyiting/useHallConversation'
 import { useHallData } from '@/composables/juyiting/useHallData'
 import { useHallLibrary } from '@/composables/juyiting/useHallLibrary'
+import { useHallPanels } from '@/composables/juyiting/useHallPanels'
 import { useHallScene } from '@/composables/juyiting/useHallScene'
 import { useHallSound } from '@/composables/juyiting/useHallSound'
 import { useHallTaskActions } from '@/composables/juyiting/useHallTaskActions'
@@ -244,6 +258,7 @@ const renderedPanel = ref('')
 const hallRefreshing = ref(false)
 const agentBubbles = ref({})
 const outgoingMetadata = ref({})
+const { panelLayout } = useHallPanels()
 let bubbleTimer = null
 let bubbleInitialTimer = null
 let bubbleClearTimer = null
@@ -1356,6 +1371,53 @@ button.hall-room {
   contain: layout paint;
   will-change: transform, opacity;
   isolation: isolate;
+}
+
+.floating-panel.layout-center-modal {
+  width: min(860px, calc(100% - 40px));
+  max-height: calc(100% - 48px);
+}
+
+.panel-chat.layout-center-modal {
+  width: min(920px, calc(100% - 40px));
+}
+
+.panel-overlay:has(.layout-right-drawer) {
+  align-items: stretch;
+  justify-content: flex-end;
+  padding: 0;
+}
+
+.floating-panel.layout-right-drawer {
+  width: clamp(45%, 50vw, 55%);
+  max-width: 55%;
+  height: var(--hall-visual-height, 100%);
+  max-height: 100%;
+  border-radius: 8px 0 0 8px;
+}
+
+.panel-chat.layout-right-drawer {
+  width: min(92%, 720px);
+  max-width: 92%;
+}
+
+.panel-overlay:has(.layout-bottom-drawer) {
+  align-items: flex-end;
+  padding: 0;
+}
+
+.floating-panel.layout-bottom-drawer {
+  width: 100%;
+  max-width: 100%;
+  height: 72vh;
+  height: min(72vh, calc(var(--hall-visual-height, 100vh) * 0.72));
+  max-height: 75vh;
+  border-radius: 8px 8px 0 0;
+}
+
+.floating-panel.panel-chat.layout-bottom-drawer {
+  height: calc(var(--hall-visual-height, 100vh) - 12px);
+  max-height: calc(var(--hall-visual-height, 100vh) - 12px);
 }
 
 .panel-chat {

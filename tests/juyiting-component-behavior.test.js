@@ -16,6 +16,7 @@ let HallStage
 let LibraryPanel
 let PersonaCatalogPanel
 let hallGameMock
+let classifyViewportResizeMock
 
 const vueImportToVar = (_line, imports) => {
   const vueBindings = imports.split(',').map((part) => {
@@ -45,6 +46,7 @@ const loadSfc = (relativePath) => {
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace(/^import\s+AgentToken\s+from\s+['"]@\/components\/juyiting\/AgentToken\.vue['"];?\s*$/gm, 'var AgentToken = { template: \'<button class="agent-token" type="button" @click="$emit(\\\'select-agent\\\', agent)"></button>\', props: [\'agent\'] }')
     .replace(/^import\s+\{\s*juyitingGame\s*\}\s+from\s+['"]@\/game\/index\.js['"];?\s*$/gm, 'var juyitingGame = arguments[2]')
+    .replace(/^import\s+\{\s*classifyViewportResize\s*\}\s+from\s+['"]@\/game\/camera\/resizePolicy\.js['"];?\s*$/gm, 'var classifyViewportResize = arguments[3]')
     .replace(/^import\s+BountyActionIcon\s+from\s+['"].\/BountyActionIcon\.vue['"];?\s*$/gm, 'var BountyActionIcon = { template: \'<span />\', props: [\'status\'] }')
     .replace(/^import\s+(\w+)\s+from\s+['"]@\/assets\/juyiting\/[^'"]+['"];?\s*$/gm, 'var $1 = \'/mock-juyiting-asset.png\'')
     .replace(/^import\s+\{\s*hallPhysicalScene,\s*hallRoomPropVisuals\s*\}\s+from\s+['"]@\/constants\/juyiting['"];?\s*$/gm, 'var hallRoomPropVisuals = []; var hallPhysicalScene = { interactiveZones: [{ key: \'main\', panel: \'chat\', title: \'忠义堂公议\', subtitle: \'厅前公议 / 众好汉\', x: 50, y: 36, w: 12, h: 7, object: \'plaque\', hitShape: \'plaque\' }, { key: \'agents\', panel: \'agents\', title: \'点将册\', subtitle: \'点将调遣\', x: 21, y: 32, w: 13, h: 7, object: \'ledger\' }, { key: \'tasks\', panel: \'tasks\', title: \'悬赏榜\', subtitle: \'榜文\', x: 76, y: 47, w: 19, h: 18, object: \'notice-rack\' }, { key: \'catalog\', panel: \'catalog\', title: \'招贤令\', subtitle: \'遍请豪杰\', x: 14, y: 68, w: 12, h: 7, object: \'banner-flag\' }, { key: \'library\', panel: \'library\', title: \'案卷阁\', subtitle: \'查卷问典\', x: 82, y: 76, w: 22, h: 18, object: \'scroll-shelf\' }, { key: \'back\', panel: null, title: \'整装处\', subtitle: \'兵甲行囊\', x: 67, y: 26, w: 12, h: 8, object: \'rear-gear\' }] }')
@@ -53,7 +55,7 @@ const loadSfc = (relativePath) => {
     .replace(/^import\s+DOMPurify\s+from\s+['"]dompurify['"];?\s*$/gm, 'var DOMPurify = { sanitize: value => value }')
     .replace('export default', 'return')
 
-  return new Function('Vue', 'HallChatComposer', 'juyitingGame', scriptBody)(Vue, HallChatComposer, hallGameMock)
+  return new Function('Vue', 'HallChatComposer', 'juyitingGame', 'classifyViewportResize', scriptBody)(Vue, HallChatComposer, hallGameMock, classifyViewportResizeMock)
 }
 
 const stubs = {
@@ -103,6 +105,7 @@ describe('JuyiHall component behavior', () => {
     global.Node = global.window?.Node
     ;({ mount } = await import('@vue/test-utils'))
     Vue = await import('vue')
+    ;({ classifyViewportResize: classifyViewportResizeMock } = await import('../src/game/camera/resizePolicy.js'))
     hallGameMock = {
       destroy: () => {},
       mount: async (_container, options = {}) => {
@@ -121,6 +124,161 @@ describe('JuyiHall component behavior', () => {
     HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
     LibraryPanel = loadSfc('../src/components/juyiting/LibraryPanel.vue')
     PersonaCatalogPanel = loadSfc('../src/components/juyiting/PersonaCatalogPanel.vue')
+  })
+
+  it('classifies panel layouts for desktop, landscape touch, and portrait touch viewports', async () => {
+    const { classifyPanelLayout } = await import('../src/composables/juyiting/useHallPanels.js')
+
+    expect(classifyPanelLayout({ width: 1280, height: 720, coarsePointer: false })).to.equal('center-modal')
+    expect(classifyPanelLayout({ width: 900, height: 500, coarsePointer: true })).to.equal('right-drawer')
+    expect(classifyPanelLayout({ width: 500, height: 900, coarsePointer: true })).to.equal('bottom-drawer')
+  })
+
+  it('wires the exact responsive panel class and immediate HallStage interaction lock', () => {
+    const source = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+
+    expect(source).to.include(':interaction-locked="Boolean(activePanel)"')
+    expect(source).to.include(':class="[`panel-${renderedPanel}`, `layout-${panelLayout}`]"')
+    expect(source).to.include('layout-bottom-drawer')
+    expect(source).to.include('layout-right-drawer')
+    expect(source).to.include('layout-center-modal')
+  })
+
+  it('locks and unlocks map interaction immediately for panels and cleans up on unmount', async () => {
+    const lockCalls = []
+    hallGameMock = {
+      destroy: () => {},
+      mount: async (_container, options = {}) => options.onReady?.(),
+      setInteractionLocked: (...args) => lockCalls.push(args),
+      setSelectedAgent: () => {}, start: () => {}, syncAgents: () => {}, syncHotspots: () => {}
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+    const wrapper = mount(HallStage, { global: { stubs }, props: makeHallStageProps({ interactionLocked: true }) })
+    await flushPromises()
+    await wrapper.setProps({ interactionLocked: false })
+    wrapper.unmount()
+
+    expect(lockCalls).to.deep.include.members([[true, 'panel'], [false, 'panel']])
+    expect(lockCalls.at(-1)).to.deep.equal([false, 'loading'])
+  })
+
+  it('classifies visual viewport keyboard resizing without fitting the map transform', async () => {
+    const originalVisualViewport = global.window.visualViewport
+    const originalInnerWidth = global.window.innerWidth
+    const originalInnerHeight = global.window.innerHeight
+    const visualListeners = []
+    const resizeCalls = []
+    let visualHeight = 800
+    Object.defineProperty(global.window, 'innerWidth', { configurable: true, value: 500 })
+    Object.defineProperty(global.window, 'innerHeight', { configurable: true, value: 800 })
+    Object.defineProperty(global.window, 'visualViewport', { configurable: true, value: {
+      get height() { return visualHeight },
+      addEventListener: (_event, callback) => visualListeners.push(callback),
+      removeEventListener: () => {}
+    } })
+    hallGameMock = {
+      destroy: () => {}, mount: async (_container, options = {}) => options.onReady?.(),
+      resizeViewport: change => resizeCalls.push(change), setInteractionLocked: () => {},
+      setSelectedAgent: () => {}, start: () => {}, syncAgents: () => {}, syncHotspots: () => {}
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+
+    try {
+      const wrapper = mount(HallStage, { attachTo: document.body, global: { stubs }, props: makeHallStageProps() })
+      await flushPromises()
+      const input = document.createElement('input')
+      document.body.appendChild(input)
+      input.focus()
+      visualHeight = 560
+      visualListeners.forEach(listener => listener())
+      await flushPromises()
+
+      expect(resizeCalls.at(-1)).to.include({ kind: 'keyboard', width: 500, height: 560 })
+      expect(hallGameMock.fitToViewport).to.equal(undefined)
+      wrapper.unmount()
+      input.remove()
+    } finally {
+      Object.defineProperty(global.window, 'visualViewport', { configurable: true, value: originalVisualViewport })
+      Object.defineProperty(global.window, 'innerWidth', { configurable: true, value: originalInnerWidth })
+      Object.defineProperty(global.window, 'innerHeight', { configurable: true, value: originalInnerHeight })
+    }
+  })
+
+  it('shows loading, times out at 15 seconds, retries fresh, and ignores stale ready callbacks', async () => {
+    const originalSetTimeout = global.window.setTimeout
+    const originalClearTimeout = global.window.clearTimeout
+    const timers = []
+    const readyCallbacks = []
+    const lockCalls = []
+    let destroyCalls = 0
+    let syncCalls = 0
+    global.window.setTimeout = (callback, delay) => {
+      timers.push({ callback, delay, cleared: false })
+      return timers.length
+    }
+    global.window.clearTimeout = id => { if (timers[id - 1]) timers[id - 1].cleared = true }
+    hallGameMock = {
+      destroy: () => { destroyCalls += 1 },
+      mount: (_container, options = {}) => {
+        readyCallbacks.push(options.onReady)
+        return readyCallbacks.length === 1 ? new Promise(() => {}) : Promise.resolve()
+      },
+      setInteractionLocked: (...args) => lockCalls.push(args), setSelectedAgent: () => {}, start: () => {},
+      syncAgents: () => { syncCalls += 1 }, syncHotspots: () => {}
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+
+    try {
+      const wrapper = mount(HallStage, { global: { stubs }, props: makeHallStageProps() })
+      await Vue.nextTick()
+      expect(wrapper.text()).to.include('聚义厅地图加载中…')
+      expect(timers[0].delay).to.equal(15000)
+      expect(lockCalls).to.deep.include([true, 'loading'])
+
+      timers[0].callback()
+      await Vue.nextTick()
+      expect(wrapper.text()).to.include('地图加载超时，请重试')
+      expect(lockCalls).to.deep.include([false, 'loading'])
+      await wrapper.find('.scene-error button').trigger('click')
+      await flushPromises()
+      readyCallbacks[1]()
+      await flushPromises()
+      const syncAfterFreshReady = syncCalls
+      readyCallbacks[0]()
+      await flushPromises()
+
+      expect(syncCalls).to.equal(syncAfterFreshReady)
+      expect(destroyCalls).to.equal(1)
+      wrapper.unmount()
+      expect(destroyCalls).to.equal(2)
+      expect(timers.every(timer => timer.cleared || timer.delay !== 15000)).to.equal(true)
+    } finally {
+      global.window.setTimeout = originalSetTimeout
+      global.window.clearTimeout = originalClearTimeout
+    }
+  })
+
+  it('shows an accessible return-main-hall control away from preset and hides it during a panel lock', async () => {
+    let resetCalls = 0
+    hallGameMock = {
+      destroy: () => {}, mount: async (_container, options = {}) => options.onReady?.(),
+      getCameraSnapshot: () => ({ presetKey: 'desktop', transform: { zoom: 1, offsetX: 0, offsetY: 0 } }),
+      resetToMainHall: () => { resetCalls += 1 }, setInteractionLocked: () => {},
+      setSelectedAgent: () => {}, start: () => {}, syncAgents: () => {}, syncHotspots: () => {}
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+    const wrapper = mount(HallStage, { global: { stubs }, props: makeHallStageProps() })
+    await flushPromises()
+    await wrapper.find('.hall-board').trigger('wheel')
+    await Vue.nextTick()
+
+    const button = wrapper.find('.return-main-hall')
+    expect(button.attributes('aria-label')).to.equal('回主厅')
+    expect(button.attributes('title')).to.equal('回主厅')
+    await button.trigger('click')
+    expect(resetCalls).to.equal(1)
+    await wrapper.setProps({ interactionLocked: true })
+    expect(wrapper.find('.return-main-hall').exists()).to.equal(false)
   })
 
   it('renders the hall scene body as a melonJS canvas shell without DOM room or agent layers', () => {
@@ -149,7 +307,7 @@ describe('JuyiHall component behavior', () => {
       mount: async (_container, options = {}) => {
         options.onReady?.()
       },
-      resetTransform: () => resetCalls.push(true),
+      resetToMainHall: () => resetCalls.push(true),
       setSelectedAgent: () => {},
       start: () => {},
       syncAgents: () => {},
@@ -210,7 +368,7 @@ describe('JuyiHall component behavior', () => {
     const originalExitFullscreen = global.document.exitFullscreen
     const originalScreen = global.screen
     const listeners = []
-    const fitModes = []
+    const resizeCalls = []
     let fullscreenCalls = 0
     let exitFullscreenCalls = 0
     let unlockCalls = 0
@@ -244,7 +402,7 @@ describe('JuyiHall component behavior', () => {
     }
     hallGameMock = {
       destroy: () => {},
-      fitToViewport: mode => fitModes.push(mode),
+      resizeViewport: change => resizeCalls.push(change),
       mount: async (_container, options = {}) => {
         options.onReady?.()
       },
@@ -268,7 +426,7 @@ describe('JuyiHall component behavior', () => {
       expect(board.classes()).to.include('is-scene-portrait')
       expect(toggle.exists()).to.equal(true)
       expect(toggle.text()).to.include('横屏')
-      expect(fitModes).to.deep.include('portrait')
+      expect(resizeCalls.some(call => call.kind === 'layout')).to.equal(true)
 
       await toggle.trigger('click')
       await flushPromises()
@@ -276,7 +434,7 @@ describe('JuyiHall component behavior', () => {
       expect(fullscreenCalls).to.equal(1)
       expect(lockCalls).to.deep.equal(['landscape'])
       expect(wrapper.find('.hall-board').classes()).to.include('is-app-landscape')
-      expect(fitModes).to.deep.include('landscape')
+      expect(resizeCalls.filter(call => call.kind === 'orientation')).to.have.length(0)
 
       await toggle.trigger('click')
       await flushPromises()
@@ -286,13 +444,14 @@ describe('JuyiHall component behavior', () => {
       expect(wrapper.find('.hall-board').classes()).not.to.include('is-app-landscape')
       expect(wrapper.find('.hall-board').classes()).to.include('is-scene-portrait')
       expect(wrapper.find('.orientation-action').text()).to.include('横屏')
-      expect(fitModes.at(-1)).to.equal('portrait')
+      expect(hallGameMock.fitToViewport).to.equal(undefined)
 
       matches = true
       listeners.forEach(listener => listener({ matches: true }))
       await flushPromises()
 
       expect(wrapper.find('.hall-board').classes()).to.include('is-device-landscape')
+      expect(resizeCalls.some(call => call.kind === 'orientation' && call.orientationChanged === true)).to.equal(true)
     } finally {
       global.window.matchMedia = originalMatchMedia
       global.document.documentElement.requestFullscreen = originalFullscreen
@@ -621,8 +780,7 @@ describe('JuyiHall component behavior', () => {
       await retryButton.trigger('click')
       await Vue.nextTick()
 
-      expect(wrapper.find('.scene-error button').attributes('disabled')).to.not.equal(undefined)
-      await wrapper.find('.scene-error button').trigger('click')
+      expect(wrapper.find('.scene-loading').exists()).to.equal(true)
 
       expect(destroyCalls).to.equal(1)
       expect(mountCalls).to.equal(2)

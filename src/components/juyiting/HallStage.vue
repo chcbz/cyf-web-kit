@@ -55,8 +55,15 @@
       tabindex="0"
       aria-label="聚义厅 melonJS 场景，可使用加减号缩放，0 复位"
       @keydown="handleSceneKeydown"
+      @wheel="refreshReturnButton"
+      @pointerup="refreshReturnButton"
+      @pointercancel="refreshReturnButton"
     >
       <div ref="melonContainerRef" class="melon-layer" aria-hidden="true"></div>
+      <div v-if="isSceneMounting && !sceneError" class="scene-loading" role="status">
+        <span class="scene-spinner" aria-hidden="true"></span>
+        <span>聚义厅地图加载中…</span>
+      </div>
       <div v-if="sceneError" class="scene-error" role="status">
         <strong>聚义厅场景暂不可用</strong>
         <span>{{ sceneError }}</span>
@@ -64,6 +71,18 @@
           {{ isSceneMounting ? '重试中' : '重试' }}
         </button>
       </div>
+      <button
+        v-if="showReturnButton && !interactionLocked"
+        class="return-main-hall"
+        :class="{ 'is-raised': Boolean(selectedAgent) }"
+        type="button"
+        aria-label="回主厅"
+        title="回主厅"
+        @click="returnToMainHall"
+      >
+        <span aria-hidden="true">⌂</span>
+      </button>
+      <div v-if="orientationHint" class="orientation-hint" role="status">{{ orientationHint }}</div>
     </div>
 
     <slot></slot>
@@ -73,12 +92,14 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { juyitingGame } from '@/game/index.js'
+import { classifyViewportResize } from '@/game/camera/resizePolicy.js'
 
 const props = defineProps({
   agentBubbles: { type: Object, default: () => ({}) },
   agentKey: { type: Function, required: true },
   agentStyle: { type: Function, required: true },
   hiddenAgentCount: { type: Number, default: 0 },
+  interactionLocked: { type: Boolean, default: false },
   portraitName: { type: Function, required: true },
   portraitShortName: { type: Function, required: true },
   portraitStyle: { type: Function, required: true },
@@ -100,12 +121,19 @@ const melonContainerRef = ref(null)
 const melonReady = ref(false)
 const sceneError = ref('')
 const isSceneMounting = ref(false)
+const showReturnButton = ref(false)
+const orientationHint = ref('')
 const deviceLandscape = ref(false)
 const orientationMode = ref('auto')
 let sceneMountAttempt = 0
 let isUnmounted = false
 let orientationMedia = null
 let orientationMediaHandler = null
+let mountTimeout = null
+let previousLayoutViewport = { width: 0, height: 0 }
+let previousVisualHeight = 0
+
+const presetZooms = { mobilePortrait: 1.25, mobileLandscape: 1.05, tabletLandscape: 0.92, desktop: 0.84 }
 
 const sceneMode = computed(() => {
   if (orientationMode.value === 'landscape' || orientationMode.value === 'portrait') {
@@ -130,52 +158,91 @@ const handleHotspotClick = (hotspot) => {
 }
 
 const handleSceneReady = () => {
+  clearMountTimeout()
   sceneError.value = ''
   melonReady.value = true
+  isSceneMounting.value = false
+  juyitingGame.setInteractionLocked?.(false, 'loading')
   juyitingGame.syncAgents(props.sceneAgents)
   juyitingGame.syncHotspots?.(props.sceneHotspots)
   juyitingGame.setSelectedAgent(props.selectedAgent?.agentId || null)
-  fitSceneToViewport()
+  refreshReturnButton()
 }
 
-const fitSceneToViewport = () => {
-  if (!melonReady.value) return
-  juyitingGame.fitToViewport?.(sceneMode.value)
+const clearMountTimeout = () => {
+  if (mountTimeout !== null) window.clearTimeout(mountTimeout)
+  mountTimeout = null
 }
 
-const updateDeviceOrientation = () => {
-  const mediaMatches = orientationMedia?.matches
-  deviceLandscape.value = typeof mediaMatches === 'boolean'
-    ? mediaMatches
-    : window.innerWidth > window.innerHeight
-  fitSceneToViewport()
+const editableFocused = () => {
+  const element = document.activeElement
+  return Boolean(element && (element.matches?.('input, textarea, select, [contenteditable="true"]') || element.isContentEditable))
+}
+
+const viewportNow = () => ({ width: window.innerWidth, height: window.innerHeight })
+
+const applyViewportResize = ({ orientationChanged = false, visual = false } = {}) => {
+  const next = viewportNow()
+  const nextVisualHeight = window.visualViewport?.height || next.height
+  const classifiedKind = classifyViewportResize({
+    previous: previousLayoutViewport,
+    next,
+    previousVisualHeight,
+    nextVisualHeight,
+    editableFocused: editableFocused(),
+    orientationChanged
+  })
+  const kind = orientationChanged ? 'orientation' : classifiedKind
+  document.documentElement.style.setProperty('--hall-visual-height', `${nextVisualHeight}px`)
+  juyitingGame.resizeViewport?.({
+    width: next.width,
+    height: visual && kind === 'keyboard' ? nextVisualHeight : next.height,
+    kind,
+    orientationChanged
+  })
+  if (kind !== 'keyboard') previousLayoutViewport = next
+  previousVisualHeight = nextVisualHeight
+  refreshReturnButton()
+}
+
+const updateDeviceOrientation = (event) => {
+  const mediaMatches = typeof event?.matches === 'boolean' ? event.matches : orientationMedia?.matches
+  deviceLandscape.value = typeof mediaMatches === 'boolean' ? mediaMatches : window.innerWidth > window.innerHeight
+  applyViewportResize({ orientationChanged: Boolean(event) })
 }
 
 const setupOrientationTracking = () => {
   if (typeof window === 'undefined') return
   orientationMedia = window.matchMedia?.('(orientation: landscape)') || null
-  orientationMediaHandler = () => updateDeviceOrientation()
+  previousLayoutViewport = viewportNow()
+  previousVisualHeight = window.visualViewport?.height || previousLayoutViewport.height
+  orientationMediaHandler = event => updateDeviceOrientation(event)
   orientationMedia?.addEventListener?.('change', orientationMediaHandler)
-  window.addEventListener?.('resize', updateDeviceOrientation)
-  window.visualViewport?.addEventListener?.('resize', updateDeviceOrientation)
+  window.addEventListener?.('resize', handleWindowResize)
+  window.visualViewport?.addEventListener?.('resize', handleVisualResize)
   updateDeviceOrientation()
 }
 
+const handleWindowResize = () => applyViewportResize()
+const handleVisualResize = () => applyViewportResize({ visual: true })
+
 const teardownOrientationTracking = () => {
   orientationMedia?.removeEventListener?.('change', orientationMediaHandler)
-  window.removeEventListener?.('resize', updateDeviceOrientation)
-  window.visualViewport?.removeEventListener?.('resize', updateDeviceOrientation)
+  window.removeEventListener?.('resize', handleWindowResize)
+  window.visualViewport?.removeEventListener?.('resize', handleVisualResize)
   orientationMedia = null
   orientationMediaHandler = null
 }
 
 const requestLandscapeLock = async () => {
+  let failed = false
   try {
     await document.documentElement.requestFullscreen?.()
-  } catch (_err) {}
+  } catch (_err) { failed = true }
   try {
     await screen.orientation?.lock?.('landscape')
-  } catch (_err) {}
+  } catch (_err) { failed = true }
+  orientationHint.value = failed ? '请旋转手机横屏查看' : ''
 }
 
 const releaseLandscapeLock = async () => {
@@ -192,7 +259,6 @@ const toggleOrientationMode = async () => {
   orientationMode.value = nextMode
   if (nextMode === 'landscape') await requestLandscapeLock()
   if (nextMode === 'portrait') await releaseLandscapeLock()
-  fitSceneToViewport()
 }
 
 const mountScene = async () => {
@@ -202,6 +268,17 @@ const mountScene = async () => {
 
   const attemptId = ++sceneMountAttempt
   isSceneMounting.value = true
+  sceneError.value = ''
+  juyitingGame.setInteractionLocked?.(true, 'loading')
+  clearMountTimeout()
+  mountTimeout = window.setTimeout(() => {
+    if (!isCurrentMountAttempt(attemptId)) return
+    sceneMountAttempt += 1
+    isSceneMounting.value = false
+    melonReady.value = false
+    sceneError.value = '地图加载超时，请重试'
+    juyitingGame.setInteractionLocked?.(false, 'loading')
+  }, 15000)
   try {
     await juyitingGame.mount(container, {
       onAgentClick: (agentData) => {
@@ -218,9 +295,11 @@ const mountScene = async () => {
     juyitingGame.start()
   } catch (err) {
     if (isCurrentMountAttempt(attemptId)) {
+      clearMountTimeout()
       melonReady.value = false
       sceneError.value = err?.message || '请稍后重试'
       console.warn('[HallStage] melonJS:', err?.message || err)
+      juyitingGame.setInteractionLocked?.(false, 'loading')
     }
   } finally {
     if (isCurrentMountAttempt(attemptId)) {
@@ -231,6 +310,8 @@ const mountScene = async () => {
 
 const retryScene = async () => {
   if (isSceneMounting.value) return
+  sceneMountAttempt += 1
+  clearMountTimeout()
   melonReady.value = false
   juyitingGame.destroy()
   await mountScene()
@@ -241,17 +322,37 @@ const handleSceneKeydown = (event) => {
   if (event.key === '+' || event.key === '=') {
     juyitingGame.zoomBy?.(0.12)
     event.preventDefault()
+    window.setTimeout(refreshReturnButton, 0)
     return
   }
   if (event.key === '-' || event.key === '_') {
     juyitingGame.zoomBy?.(-0.12)
     event.preventDefault()
+    window.setTimeout(refreshReturnButton, 0)
     return
   }
   if (event.key === '0') {
-    juyitingGame.resetTransform?.()
+    returnToMainHall()
     event.preventDefault()
   }
+}
+
+const refreshReturnButton = () => {
+  const snapshot = juyitingGame.getCameraSnapshot?.()
+  if (!snapshot?.transform) {
+    showReturnButton.value = false
+    return
+  }
+  const viewport = previousLayoutViewport.width ? previousLayoutViewport : viewportNow()
+  const { zoom, offsetX, offsetY } = snapshot.transform
+  const centerWorld = { x: viewport.width / 2 - offsetX / zoom, y: viewport.height / 2 - offsetY / zoom }
+  const focusDistance = Math.hypot(centerWorld.x - 832, centerWorld.y - 390)
+  showReturnButton.value = focusDistance > 48 || Math.abs(zoom - (presetZooms[snapshot.presetKey] ?? zoom)) > 0.08
+}
+
+const returnToMainHall = () => {
+  juyitingGame.resetToMainHall?.()
+  window.setTimeout(refreshReturnButton, 210)
 }
 
 onMounted(() => {
@@ -262,13 +363,18 @@ onMounted(() => {
 onBeforeUnmount(() => {
   isUnmounted = true
   sceneMountAttempt += 1
+  clearMountTimeout()
   teardownOrientationTracking()
+  juyitingGame.setInteractionLocked?.(false, 'panel')
+  juyitingGame.setInteractionLocked?.(false, 'loading')
   juyitingGame.destroy()
 })
 
-watch(sceneMode, () => {
-  fitSceneToViewport()
-})
+watch(() => props.interactionLocked, value => {
+  juyitingGame.setInteractionLocked?.(Boolean(value), 'panel')
+  if (value) showReturnButton.value = false
+  else refreshReturnButton()
+}, { immediate: true })
 
 watch(() => props.sceneAgents, (agents) => {
   if (melonReady.value) juyitingGame.syncAgents(agents || [])
@@ -280,6 +386,7 @@ watch(() => props.sceneHotspots, (hotspots) => {
 
 watch(() => props.selectedAgent, (agent) => {
   if (melonReady.value) juyitingGame.setSelectedAgent(agent?.agentId || null)
+  refreshReturnButton()
 })
 </script>
 
@@ -523,6 +630,56 @@ button {
   text-align: center;
   transform: translate(-50%, -50%);
   backdrop-filter: blur(8px);
+}
+
+.scene-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(20, 14, 10, 0.54);
+  color: #fff4d4;
+}
+
+.scene-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 244, 212, 0.3);
+  border-top-color: #fff4d4;
+  border-radius: 50%;
+  animation: refreshSpin 0.8s linear infinite;
+}
+
+.return-main-hall {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 9;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(255, 244, 212, 0.94);
+  color: #3b2516;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.return-main-hall.is-raised {
+  bottom: 132px;
+}
+
+.orientation-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  z-index: 10;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(31, 22, 16, 0.88);
+  color: #fff4d4;
+  transform: translateX(-50%);
 }
 
 .scene-error strong {
