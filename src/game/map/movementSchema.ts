@@ -11,17 +11,17 @@ export interface Region {
   stableId: string
   regionId: string
   polygon: MapPolygon
-  label?: string
-  capacity?: number
-  protected?: boolean
-  riskLevel?: string
+  label: string
+  capacity: number
+  protected: boolean
+  riskLevel: string
 }
 
 export interface NavNode {
   stableId: string
   point: MapPoint
   kind: 'normal' | 'junction' | 'doorway' | 'narrow'
-  channelWidth?: number
+  channelWidth: number
 }
 
 export interface NavEdge {
@@ -33,32 +33,25 @@ export interface NavEdge {
   points: MapPoint[]
 }
 
-export type SlotType = 'parking' | 'queue' | 'home'
-
 export interface Slot {
   stableId: string
-  slotType: SlotType
+  slotId: string
   regionId: string
   point: MapPoint
-  priority?: number
-  capacity?: number
-  facing?: string
-  radiusX?: number
-  radiusY?: number
   personaCode?: string
+  kind: 'parking' | 'queue' | 'home'
 }
 
 export interface MapRuntimeData {
-  sceneId?: string
-  movementSchemaVersion?: string
-  navGraphVersion?: string
-  spriteManifestVersion?: string
+  sceneId: string
+  movementSchemaVersion: string
+  navGraphVersion: string
+  spriteManifestVersion: string
   width: number
   height: number
-  navArea: MapPolygon[]
-  navObstacles: MapPolygon[]
   regions: Region[]
-  navNodes: NavNode[]
-  navEdges: NavEdge[]
+  nodes: NavNode[]
+  edges: NavEdge[]
   slots: Slot[]
+  obstacles: MapPolygon[]
 }

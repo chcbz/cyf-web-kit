@@ -1,5 +1,5 @@
 import type {
-  MapPoint, MapPolygon, MapRuntimeData, NavEdge, NavNode, Region, Slot, SlotType,
+  MapPoint, MapPolygon, MapRuntimeData, NavEdge, NavNode, Region, Slot,
 } from './movementSchema.js'
 
 type Properties = Record<string, unknown>
@@ -9,7 +9,7 @@ interface TmxObject {
   y?: number
   width?: number
   height?: number
-  ellipse?: boolean
+  ellipse?: unknown
   polygon?: unknown
   polyline?: unknown
   properties?: unknown
@@ -34,7 +34,7 @@ interface TmxMap {
 }
 
 const MOVEMENT_GROUPS = new Set([
-  'nav_area', 'nav_obstacles', 'regions', 'nav_nodes', 'nav_edges',
+  'nav_obstacles', 'regions', 'nav_nodes', 'nav_edges',
   'parking_slots', 'queue_slots', 'home_slots',
 ])
 
@@ -44,24 +44,23 @@ export function parseMovementTmx(input: string | TmxMap): MapRuntimeData {
   const tileWidth = number(map.tilewidth ?? map.tileWidth, 0)
   const tileHeight = number(map.tileheight ?? map.tileHeight, 0)
   const result: MapRuntimeData = {
-    sceneId: optionalString(properties.sceneId),
-    movementSchemaVersion: optionalString(properties.movementSchemaVersion),
-    navGraphVersion: optionalString(properties.navGraphVersion),
-    spriteManifestVersion: optionalString(properties.spriteManifestVersion),
+    sceneId: string(properties.sceneId),
+    movementSchemaVersion: string(properties.movementSchemaVersion),
+    navGraphVersion: string(properties.navGraphVersion),
+    spriteManifestVersion: string(properties.spriteManifestVersion),
     width: number(map.width, 0) * tileWidth,
     height: number(map.height, 0) * tileHeight,
-    navArea: [], navObstacles: [], regions: [], navNodes: [], navEdges: [], slots: [],
+    regions: [], nodes: [], edges: [], slots: [], obstacles: [],
   }
 
   for (const layer of map.layers ?? []) {
     const name = layer.name ?? ''
     if (!MOVEMENT_GROUPS.has(name)) continue
     const objects = layer.objects ?? layer.getObjects?.() ?? []
-    if (name === 'nav_area') result.navArea.push(...objects.map(objectPolygon))
-    else if (name === 'nav_obstacles') result.navObstacles.push(...objects.map(objectPolygon))
+    if (name === 'nav_obstacles') result.obstacles.push(...objects.map(objectPolygon))
     else if (name === 'regions') result.regions.push(...objects.map(parseRegion))
-    else if (name === 'nav_nodes') result.navNodes.push(...objects.map(parseNode))
-    else if (name === 'nav_edges') result.navEdges.push(...objects.map(parseEdge))
+    else if (name === 'nav_nodes') result.nodes.push(...objects.map(parseNode))
+    else if (name === 'nav_edges') result.edges.push(...objects.map(parseEdge))
     else result.slots.push(...objects.map(object => parseSlot(object, slotType(name))))
   }
   return result
@@ -69,21 +68,21 @@ export function parseMovementTmx(input: string | TmxMap): MapRuntimeData {
 
 function parseRegion(object: TmxObject): Region {
   const properties = propertyRecord(object.properties)
-  return compact({
+  return {
     stableId: string(properties.stableId), regionId: string(properties.regionId),
-    polygon: objectPolygon(object), label: optionalString(properties.label),
-    capacity: optionalNumber(properties.capacity), protected: optionalBoolean(properties.protected),
-    riskLevel: optionalString(properties.riskLevel),
-  })
+    polygon: objectPolygon(object), label: string(properties.label),
+    capacity: number(properties.capacity, 0), protected: optionalBoolean(properties.protected) ?? false,
+    riskLevel: string(properties.riskLevel),
+  }
 }
 
 function parseNode(object: TmxObject): NavNode {
   const properties = propertyRecord(object.properties)
-  return compact({
+  return {
     stableId: string(properties.stableId), point: objectCenter(object),
     kind: (optionalString(properties.kind) ?? 'normal') as NavNode['kind'],
-    channelWidth: optionalNumber(properties.channelWidth),
-  })
+    channelWidth: number(properties.channelWidth, 0),
+  }
 }
 
 function parseEdge(object: TmxObject): NavEdge {
@@ -91,18 +90,16 @@ function parseEdge(object: TmxObject): NavEdge {
   return {
     stableId: string(properties.stableId), from: string(properties.from), to: string(properties.to),
     bidirectional: optionalBoolean(properties.bidirectional) ?? false,
-    costMultiplier: optionalNumber(properties.costMultiplier) ?? 1,
+    costMultiplier: properties.costMultiplier == null ? 1 : number(properties.costMultiplier, 1),
     points: worldPoints(object, object.polyline),
   }
 }
 
-function parseSlot(object: TmxObject, type: SlotType): Slot {
+function parseSlot(object: TmxObject, kind: Slot['kind']): Slot {
   const properties = propertyRecord(object.properties)
   return compact({
-    stableId: string(properties.stableId), slotType: type, regionId: string(properties.regionId),
-    point: objectCenter(object), priority: optionalNumber(properties.priority),
-    capacity: optionalNumber(properties.capacity), facing: optionalString(properties.facing),
-    radiusX: optionalNumber(properties.radiusX), radiusY: optionalNumber(properties.radiusY),
+    stableId: string(properties.stableId), slotId: string(properties.slotId),
+    regionId: string(properties.regionId), point: objectCenter(object), kind,
     personaCode: optionalString(properties.personaCode),
   })
 }
@@ -205,7 +202,7 @@ function decodeXml(value: string): string {
   return value.replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
 }
 
-function slotType(group: string): SlotType {
+function slotType(group: string): Slot['kind'] {
   return group === 'parking_slots' ? 'parking' : group === 'queue_slots' ? 'queue' : 'home'
 }
 
@@ -216,7 +213,6 @@ function compact<T extends object>(value: T): T {
 function number(value: unknown, fallback: number): number { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback }
 function string(value: unknown): string { return value == null ? '' : String(value) }
 function optionalString(value: unknown): string | undefined { return value == null ? undefined : String(value) }
-function optionalNumber(value: unknown): number | undefined { return value == null || value === '' ? undefined : number(value, 0) }
 function optionalBoolean(value: unknown): boolean | undefined {
   if (value == null || value === '') return undefined
   return typeof value === 'boolean' ? value : value === 'true' || value === '1' || value === 1
