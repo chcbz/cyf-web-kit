@@ -868,16 +868,23 @@ describe('JuyiHall component behavior', () => {
     }
   })
 
-  it('serializes orientation requests and ignores stale async completion after unmount', async () => {
+  it('releases fullscreen and orientation when a deferred request completes after unmount', async () => {
     const originalFullscreen = global.document.documentElement.requestFullscreen
+    const originalExitFullscreen = global.document.exitFullscreen
     const originalScreen = global.screen
     const originalMatchMedia = global.window.matchMedia
     const fullscreen = deferred()
     let fullscreenCalls = 0
     let lockCalls = 0
+    let unlockCalls = 0
+    let exitFullscreenCalls = 0
     global.window.matchMedia = query => ({ media: query, matches: false, addEventListener: () => {}, removeEventListener: () => {} })
     global.document.documentElement.requestFullscreen = () => { fullscreenCalls += 1; return fullscreen.promise }
-    global.screen = { orientation: { lock: async () => { lockCalls += 1 } } }
+    global.document.exitFullscreen = async () => { exitFullscreenCalls += 1 }
+    global.screen = { orientation: {
+      lock: async () => { lockCalls += 1 },
+      unlock: () => { unlockCalls += 1 }
+    } }
     hallGameMock = {
       destroy: () => {}, mount: async (_container, options = {}) => options.onReady?.(),
       setSelectedAgent: () => {}, start: () => {}, syncAgents: () => {}, syncHotspots: () => {}
@@ -894,12 +901,17 @@ describe('JuyiHall component behavior', () => {
       expect(toggle.attributes('disabled')).to.not.equal(undefined)
       wrapper.unmount()
       wrapper = null
+      expect(unlockCalls).to.equal(1)
+      expect(exitFullscreenCalls).to.equal(1)
       fullscreen.resolve()
       await flushPromises()
       expect(lockCalls).to.equal(0)
+      expect(unlockCalls).to.equal(2)
+      expect(exitFullscreenCalls).to.equal(2)
     } finally {
       wrapper?.unmount()
       global.document.documentElement.requestFullscreen = originalFullscreen
+      global.document.exitFullscreen = originalExitFullscreen
       global.screen = originalScreen
       global.window.matchMedia = originalMatchMedia
     }

@@ -324,20 +324,29 @@ const isCurrentOrientationRequest = token => (
 
 const requestLandscapeLock = async (token) => {
   let failed = false
+  let enteredFullscreen = false
   const requestFullscreen = document.documentElement.requestFullscreen
   const lockOrientation = screen.orientation?.lock
   if (typeof requestFullscreen !== 'function') failed = true
   else {
     try {
       await requestFullscreen.call(document.documentElement)
+      enteredFullscreen = true
     } catch (_err) { failed = true }
   }
-  if (!isCurrentOrientationRequest(token)) return
+  if (!isCurrentOrientationRequest(token)) {
+    if (enteredFullscreen) await releaseLandscapeLock()
+    return
+  }
   if (typeof lockOrientation !== 'function') failed = true
   else {
     try {
       await lockOrientation.call(screen.orientation, 'landscape')
     } catch (_err) { failed = true }
+  }
+  if (!isCurrentOrientationRequest(token)) {
+    await releaseLandscapeLock()
+    return
   }
   if (isCurrentOrientationRequest(token)) orientationHint.value = failed ? '请旋转手机横屏查看' : ''
 }
@@ -501,6 +510,7 @@ onBeforeUnmount(() => {
   sceneMountAttempt += 1
   orientationRequestGeneration += 1
   orientationRequestPending.value = false
+  void releaseLandscapeLock()
   clearMountTimeout()
   teardownOrientationTracking()
   if (returnFrame !== null) cancelStageFrame(returnFrame)
