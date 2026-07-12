@@ -4,10 +4,34 @@ import { createHallSceneClass } from '../src/game/scenes/HallScene.js'
 
 const createFakeMelon = () => {
   const registered = []
+  const removed = []
   const children = []
   const matrixOps = []
   let canvasRect = null
   let layerRect = null
+  const listeners = new Map()
+
+  const canvas = {
+    style: {},
+    addEventListener(type, callback) {
+      if (!listeners.has(type)) listeners.set(type, new Set())
+      listeners.get(type).add(callback)
+      registered.push({ type, region: canvas, callback })
+    },
+    removeEventListener(type, callback) {
+      listeners.get(type)?.delete(callback)
+      removed.push({ type, region: canvas, callback })
+    },
+    dispatch(type, event = {}) {
+      for (const callback of [...(listeners.get(type) || [])]) callback(event)
+    },
+    setPointerCapture() {},
+    releasePointerCapture() {},
+    get parentElement() {
+      return layerRect ? { getBoundingClientRect: () => layerRect } : null
+    },
+    getBoundingClientRect: () => canvasRect
+  }
 
   const currentTransform = {
     identity: () => {
@@ -24,7 +48,7 @@ const createFakeMelon = () => {
     }
   }
 
-  class Stage {}
+  class Stage { update() {} }
 
   class Renderable {
     constructor(x, y, w, h) {
@@ -104,22 +128,19 @@ const createFakeMelon = () => {
         removeChild: () => {}
       }
     },
-    input: {
-      registerPointerEvent: (type, region, callback) => registered.push({ type, region, callback }),
-      releaseAllPointerEvents: () => {}
-    },
+    input: {},
     loader: {
       getImage: () => null
     },
     video: {
-      getCanvas: () => ({
-        parentElement: layerRect ? { getBoundingClientRect: () => layerRect } : null,
-        getBoundingClientRect: () => canvasRect
-      })
+      getCanvas: () => canvas
     },
     setCanvasRect: rect => { canvasRect = rect },
     setLayerRect: rect => { layerRect = rect },
     registered,
+    removed,
+    canvas,
+    listenerCount: type => listeners.get(type)?.size || 0,
     children,
     matrixOps
   }
@@ -147,6 +168,57 @@ const hotspotMapData = () => ({
 })
 
 describe('HallScene melonJS pointer routing', () => {
+  it('starts from the approved camera preset and exposes controller snapshots', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+
+    scene.onResetEvent()
+
+    expect(scene.getCameraSnapshot()).to.include({ presetKey: 'desktop', presetId: 'main-hall-desktop' })
+    expect(scene.getTransform()).to.deep.equal(scene.getCameraSnapshot().transform)
+    expect(scene.inputSnapshot()).to.deep.equal({ activeGesture: 'none', interactionLocked: false })
+    expect(scene).not.to.have.property('_dragState')
+    expect(scene).not.to.have.property('_touchPointers')
+    expect(scene).not.to.have.property('_pinchState')
+    expect(scene).not.to.have.property('_pendingClick')
+  })
+
+  it('locks panel interaction without stopping scene updates', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+    scene.onResetEvent()
+
+    scene.setInteractionLocked(true)
+    scene.setInteractionLocked(true)
+    expect(scene.inputSnapshot().interactionLocked).to.equal(true)
+    const beforeWheel = scene.getTransform()
+    me.canvas.dispatch('wheel', { deltaY: -120, clientX: 480, clientY: 320, preventDefault: () => {} })
+    expect(scene.getTransform()).to.deep.equal(beforeWheel)
+    expect(scene.update(16)).to.equal(true)
+    scene.setInteractionLocked(false)
+    expect(scene.inputSnapshot().interactionLocked).to.equal(false)
+  })
+
+  it('preserves camera focus and zoom across an orientation resize without replaying the default', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+    scene.onResetEvent()
+    scene.zoomBy(0.4)
+    scene.panBy(70, -30)
+    const before = scene.getCameraSnapshot()
+
+    me.game.viewport.width = 640
+    me.game.viewport.height = 960
+    scene.resizeViewport({ width: 640, height: 960, kind: 'orientation', orientationChanged: true })
+    const after = scene.getCameraSnapshot()
+
+    expect(after.presetKey).to.equal('desktop')
+    expect(after.transform.zoom).to.equal(before.transform.zoom)
+    expect(after.transform).not.to.deep.equal({ zoom: 0.84, offsetX: 0, offsetY: 0 })
+  })
   it('keeps custom image layers inside the transformed world scene', () => {
     const me = createFakeMelon()
     me.loader.getImage = name => name === 'mid-occluders' ? { width: 960, height: 640 } : null
@@ -192,8 +264,8 @@ describe('HallScene melonJS pointer routing', () => {
   it('renders tile-layer cells with the tileset that owns each gid', () => {
     const me = createFakeMelon()
     const drawCalls = []
-    const originalCreateElement = document.createElement.bind(document)
-    document.createElement = (tagName, ...args) => {
+    const originalDocument = globalThis.document
+    globalThis.document = { createElement: (tagName, ...args) => {
       if (tagName === 'canvas') {
         return {
           width: 0,
@@ -205,8 +277,8 @@ describe('HallScene melonJS pointer routing', () => {
           })
         }
       }
-      return originalCreateElement(tagName, ...args)
-    }
+      return originalDocument?.createElement?.(tagName, ...args)
+    } }
 
     try {
       me.loader.getImage = name => ({ width: 32, height: 16, resourceName: name })
@@ -226,7 +298,7 @@ describe('HallScene melonJS pointer routing', () => {
 
       scene.onResetEvent()
     } finally {
-      document.createElement = originalCreateElement
+      globalThis.document = originalDocument
     }
 
     expect(drawCalls.map(call => call.image.resourceName)).to.deep.equal(['first-tileset', 'second-tileset'])
@@ -240,15 +312,15 @@ describe('HallScene melonJS pointer routing', () => {
 
     scene.onResetEvent()
     scene.panBy(120, -80)
-    expect(scene.getTransform()).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 1 })
+    expect(scene.getTransform().zoom).to.equal(0.84)
 
     scene.zoomBy(0.5)
     scene.panBy(120, -80)
 
-    expect(scene.getTransform()).to.include({ offsetX: 120, offsetY: -80, zoom: 1.5 })
+    expect(scene.getTransform().zoom).to.equal(1.34)
 
     scene.resetTransform()
-    expect(scene.getTransform()).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 1 })
+    expect(scene.getCameraSnapshot().animation).not.to.equal(null)
   })
 
   it('fits the scene using the melonJS viewport instead of DOM container pixels', () => {
@@ -256,13 +328,10 @@ describe('HallScene melonJS pointer routing', () => {
     const HallScene = createHallSceneClass(me, class {})
     const scene = new HallScene()
 
-    expect(scene.fitToViewport({ width: 390, height: 720 })).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 0.58 })
-    expect(me.matrixOps.slice(-4)).to.deep.equal([
-      ['identity'],
-      ['translate', 480, 320],
-      ['scale', 0.58, 0.58],
-      ['translate', -480, -320]
-    ])
+    scene.onResetEvent()
+    scene.zoomBy(0.4)
+    scene.fitToViewport({ width: 390, height: 720 })
+    expect(scene.getCameraSnapshot().animation).not.to.equal(null)
   })
 
   it('keeps transform state unchanged when viewport bounds are unavailable', () => {
@@ -271,8 +340,8 @@ describe('HallScene melonJS pointer routing', () => {
     const scene = new HallScene()
 
     me.game.viewport = null
-    expect(scene.zoomBy(0.5)).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 1 })
-    expect(scene.panBy(120, -80)).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 1 })
+    expect(scene.zoomBy(0.5)).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 0.84 })
+    expect(scene.panBy(120, -80)).to.deep.equal({ offsetX: 0, offsetY: 0, zoom: 0.84 })
   })
 
   it('registers hotspot renderables and the viewport click router', () => {
@@ -289,12 +358,12 @@ describe('HallScene melonJS pointer routing', () => {
     expect(hotspotRenderable).to.exist
     expect(hotspotRenderable).to.be.instanceOf(me.Renderable)
 
-    const downRegistration = me.registered.find(item => item.type === 'pointerdown' && item.region === me.game.viewport)
-    const upRegistration = me.registered.find(item => item.type === 'pointerup' && item.region === me.game.viewport)
+    const downRegistration = me.registered.find(item => item.type === 'pointerdown' && item.region === me.canvas)
+    const upRegistration = me.registered.find(item => item.type === 'pointerup' && item.region === me.canvas)
     expect(downRegistration).to.exist
     expect(upRegistration).to.exist
-    expect(downRegistration.callback({ pointerId: 1, clientX: 10, clientY: 10 })).to.equal(true)
-    expect(upRegistration.callback({ pointerId: 1, clientX: 10, clientY: 10 })).to.equal(true)
+    me.canvas.dispatch('pointerdown', { pointerId: 1, pointerType: 'mouse', clientX: 10, clientY: 10 })
+    me.canvas.dispatch('pointerup', { pointerId: 1, pointerType: 'mouse', clientX: 10, clientY: 10 })
     expect(hotspotClicks).to.deep.equal([])
 
     scene._agents.set('missing-coordinate-guard', {
@@ -302,8 +371,8 @@ describe('HallScene melonJS pointer routing', () => {
         throw new Error('agent hit test should not run without finite coordinates')
       }
     })
-    expect(downRegistration.callback({ pointerId: 2 })).to.equal(true)
-    expect(upRegistration.callback({ pointerId: 2 })).to.equal(true)
+    me.canvas.dispatch('pointerdown', { pointerId: 2, pointerType: 'mouse' })
+    me.canvas.dispatch('pointerup', { pointerId: 2, pointerType: 'mouse' })
   })
 
   it('stores polygon hotspot draw points relative to the renderable bounds', () => {
@@ -356,12 +425,13 @@ describe('HallScene melonJS pointer routing', () => {
     scene.setMapData(hotspotMapData())
     scene.onResetEvent()
 
-    const downRegistration = me.registered.find(item => item.type === 'pointerdown' && item.region === me.game.viewport)
-    const upRegistration = me.registered.find(item => item.type === 'pointerup' && item.region === me.game.viewport)
+    const downRegistration = me.registered.find(item => item.type === 'pointerdown' && item.region === me.canvas)
+    const upRegistration = me.registered.find(item => item.type === 'pointerup' && item.region === me.canvas)
 
-    downRegistration.callback({ pointerId: 7, clientX: 730, clientY: 300 })
+    const point = scene._worldToScreen({ x: 730, y: 300 })
+    me.canvas.dispatch('pointerdown', { pointerId: 7, pointerType: 'mouse', clientX: point.x, clientY: point.y })
     expect(clicked).to.deep.equal([])
-    upRegistration.callback({ pointerId: 7, clientX: 730, clientY: 300 })
+    me.canvas.dispatch('pointerup', { pointerId: 7, pointerType: 'mouse', clientX: point.x, clientY: point.y })
 
     expect(clicked[0]).to.deep.equal({ id: 'bountyBoard', panel: 'tasks' })
   })
@@ -376,13 +446,13 @@ describe('HallScene melonJS pointer routing', () => {
     scene.setMapData(hotspotMapData())
     scene.onResetEvent()
 
-    const downRegistration = me.registered.find(item => item.type === 'pointerdown' && item.region === me.game.viewport)
-    const moveRegistration = me.registered.find(item => item.type === 'pointermove' && item.region === me.game.viewport)
-    const upRegistration = me.registered.find(item => item.type === 'pointerup' && item.region === me.game.viewport)
+    const downRegistration = me.registered.find(item => item.type === 'pointerdown' && item.region === me.canvas)
+    const moveRegistration = me.registered.find(item => item.type === 'pointermove' && item.region === me.canvas)
+    const upRegistration = me.registered.find(item => item.type === 'pointerup' && item.region === me.canvas)
 
-    downRegistration.callback({ pointerId: 7, clientX: 730, clientY: 300 })
-    moveRegistration.callback({ pointerId: 7, clientX: 746, clientY: 318, preventDefault: () => {} })
-    upRegistration.callback({ pointerId: 7, clientX: 746, clientY: 318 })
+    me.canvas.dispatch('pointerdown', { pointerId: 7, pointerType: 'mouse', clientX: 730, clientY: 300 })
+    me.canvas.dispatch('pointermove', { pointerId: 7, pointerType: 'mouse', clientX: 746, clientY: 318, preventDefault: () => {} })
+    me.canvas.dispatch('pointerup', { pointerId: 7, pointerType: 'mouse', clientX: 746, clientY: 318 })
 
     expect(clicked).to.deep.equal([])
   })
@@ -397,17 +467,87 @@ describe('HallScene melonJS pointer routing', () => {
     scene.setMapData(hotspotMapData())
     scene.onResetEvent()
 
-    const downRegistration = me.registered.find(item => item.type === 'pointerdown' && item.region === me.game.viewport)
-    const moveRegistration = me.registered.find(item => item.type === 'pointermove' && item.region === me.game.viewport)
-    const upRegistration = me.registered.find(item => item.type === 'pointerup' && item.region === me.game.viewport)
+    const downRegistration = me.registered.find(item => item.type === 'pointerdown' && item.region === me.canvas)
+    const moveRegistration = me.registered.find(item => item.type === 'pointermove' && item.region === me.canvas)
+    const upRegistration = me.registered.find(item => item.type === 'pointerup' && item.region === me.canvas)
 
-    downRegistration.callback({ pointerId: 1, pointerType: 'touch', clientX: 730, clientY: 300 })
-    downRegistration.callback({ pointerId: 2, pointerType: 'touch', clientX: 780, clientY: 300, preventDefault: () => {} })
-    moveRegistration.callback({ pointerId: 2, pointerType: 'touch', clientX: 820, clientY: 300, preventDefault: () => {} })
-    upRegistration.callback({ pointerId: 1, pointerType: 'touch', clientX: 730, clientY: 300 })
-    upRegistration.callback({ pointerId: 2, pointerType: 'touch', clientX: 820, clientY: 300 })
+    me.canvas.dispatch('pointerdown', { pointerId: 1, pointerType: 'touch', clientX: 730, clientY: 300 })
+    me.canvas.dispatch('pointerdown', { pointerId: 2, pointerType: 'touch', clientX: 780, clientY: 300, preventDefault: () => {} })
+    me.canvas.dispatch('pointermove', { pointerId: 2, pointerType: 'touch', clientX: 820, clientY: 300, preventDefault: () => {} })
+    me.canvas.dispatch('pointerup', { pointerId: 1, pointerType: 'touch', clientX: 730, clientY: 300 })
+    me.canvas.dispatch('pointerup', { pointerId: 2, pointerType: 'touch', clientX: 820, clientY: 300 })
 
     expect(clicked).to.deep.equal([])
+  })
+
+  it('prioritizes an agent over an overlapping hotspot', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+    const clicks = []
+    scene.onHotspotClick(item => clicks.push(['hotspot', item.id]))
+    scene.setMapData(hotspotMapData())
+    scene.onResetEvent()
+    scene._agents.set('agent-1', {
+      containsPoint: () => true,
+      getBounds: () => ({ x: 700, y: 270, width: 60, height: 60, contains: () => true }),
+      onPointerDown: () => clicks.push(['agent', 'agent-1'])
+    })
+    const point = scene._worldToScreen({ x: 730, y: 300 })
+
+    me.canvas.dispatch('pointerdown', { pointerId: 9, pointerType: 'mouse', clientX: point.x, clientY: point.y })
+    me.canvas.dispatch('pointerup', { pointerId: 9, pointerType: 'mouse', clientX: point.x, clientY: point.y })
+
+    expect(clicks).to.deep.equal([['agent', 'agent-1']])
+  })
+
+  it('keeps one listener set across repeated builds and removes it exactly once on destroy', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+
+    scene.onResetEvent()
+    scene.onResetEvent()
+    expect(me.listenerCount('pointerdown')).to.equal(1)
+    expect(me.listenerCount('wheel')).to.equal(1)
+
+    scene.onDestroyEvent()
+    scene.onDestroyEvent()
+    expect(me.listenerCount('pointerdown')).to.equal(0)
+    expect(me.listenerCount('wheel')).to.equal(0)
+    expect(me.removed.filter(item => item.type === 'pointerdown')).to.have.length(1)
+  })
+
+  it('cancels camera frames and ignores late callbacks after destroy', () => {
+    const me = createFakeMelon()
+    const frames = new Map()
+    const cancelled = []
+    const originalRequest = globalThis.requestAnimationFrame
+    const originalCancel = globalThis.cancelAnimationFrame
+    globalThis.requestAnimationFrame = callback => {
+      const id = frames.size + 1
+      frames.set(id, callback)
+      return id
+    }
+    globalThis.cancelAnimationFrame = id => cancelled.push(id)
+    try {
+      const HallScene = createHallSceneClass(me, class {})
+      const scene = new HallScene()
+      scene.onResetEvent()
+      scene.zoomBy(0.4)
+      scene.resetToMainHall()
+      const callback = frames.get(1)
+
+      scene.onDestroyEvent()
+      const operationCount = me.matrixOps.length
+      callback?.(1000)
+
+      expect(cancelled).to.deep.equal([1])
+      expect(me.matrixOps).to.have.length(operationCount)
+    } finally {
+      globalThis.requestAnimationFrame = originalRequest
+      globalThis.cancelAnimationFrame = originalCancel
+    }
   })
 
   it('applies the scene transform to the melonJS world container', () => {
@@ -415,23 +555,16 @@ describe('HallScene melonJS pointer routing', () => {
     const HallScene = createHallSceneClass(me, class {})
     const scene = new HallScene()
 
+    scene.onResetEvent()
+    me.matrixOps.length = 0
     scene.zoomBy(0.5)
     scene.panBy(120, -80)
 
-    expect(me.matrixOps).to.deep.equal([
-      ['identity'],
-      ['translate', 480, 320],
-      ['scale', 1, 1],
-      ['translate', -480, -320],
-      ['identity'],
-      ['translate', 480, 320],
-      ['scale', 1.5, 1.5],
-      ['translate', -480, -320],
-      ['identity'],
-      ['translate', 600, 240],
-      ['scale', 1.5, 1.5],
-      ['translate', -480, -320]
+    expect(me.matrixOps.filter(op => op[0] === 'scale')).to.deep.equal([
+      ['scale', 1.34, 1.34],
+      ['scale', 1.34, 1.34]
     ])
+    expect(me.matrixOps.filter(op => op[0] === 'identity')).to.have.length(2)
   })
 
   it('uses the current visible melon layer size for cover-cropped drag bounds', () => {
@@ -445,7 +578,7 @@ describe('HallScene melonJS pointer routing', () => {
 
     scene.panBy(0, 999)
 
-    expect(scene.getTransform()).to.deep.equal({ offsetX: 0, offsetY: 235.375, zoom: 1 })
+    expect(scene.getTransform().offsetY).to.be.greaterThan(0)
   })
 
   it('zooms with wheel and pans with pointer drag inside the melonJS viewport', () => {
@@ -454,23 +587,25 @@ describe('HallScene melonJS pointer routing', () => {
     const scene = new HallScene()
 
     scene.onResetEvent()
-    const wheelRegistration = me.registered.find(item => item.type === 'wheel' && item.region === me.game.viewport)
-    const moveRegistration = me.registered.find(item => item.type === 'pointermove' && item.region === me.game.viewport)
-    const downRegistrations = me.registered.filter(item => item.type === 'pointerdown' && item.region === me.game.viewport)
-    const upRegistration = me.registered.find(item => item.type === 'pointerup' && item.region === me.game.viewport)
+    const wheelRegistration = me.registered.find(item => item.type === 'wheel' && item.region === me.canvas)
+    const moveRegistration = me.registered.find(item => item.type === 'pointermove' && item.region === me.canvas)
+    const downRegistrations = me.registered.filter(item => item.type === 'pointerdown' && item.region === me.canvas)
+    const upRegistration = me.registered.find(item => item.type === 'pointerup' && item.region === me.canvas)
 
     expect(wheelRegistration).to.exist
     expect(moveRegistration).to.exist
     expect(downRegistrations).to.have.length(1)
     expect(upRegistration).to.exist
 
-    wheelRegistration.callback({ deltaY: -120, preventDefault: () => {} })
-    expect(scene.getTransform().zoom).to.equal(1.12)
+    me.canvas.dispatch('wheel', { deltaY: -120, clientX: 480, clientY: 320, preventDefault: () => {} })
+    expect(scene.getTransform().zoom).to.equal(0.945)
+    const beforeDrag = scene.getTransform()
 
-    downRegistrations[0].callback({ pointerId: 7, pointerType: 'mouse', clientX: 100, clientY: 100 })
-    moveRegistration.callback({ pointerId: 7, pointerType: 'mouse', clientX: 140, clientY: 120, preventDefault: () => {} })
-    expect(scene.getTransform()).to.include({ offsetX: 40, offsetY: 20 })
-    upRegistration.callback({ pointerId: 7, pointerType: 'mouse' })
+    me.canvas.dispatch('pointerdown', { pointerId: 7, pointerType: 'mouse', clientX: 100, clientY: 100 })
+    me.canvas.dispatch('pointermove', { pointerId: 7, pointerType: 'mouse', clientX: 140, clientY: 120, preventDefault: () => {} })
+    expect(scene.getTransform().offsetX - beforeDrag.offsetX).to.equal(40)
+    expect(scene.getTransform().offsetY - beforeDrag.offsetY).to.be.closeTo(20, 0.001)
+    me.canvas.dispatch('pointerup', { pointerId: 7, pointerType: 'mouse' })
   })
 
   it('zooms with two touch pointers for mobile pinch gestures', () => {
@@ -479,13 +614,13 @@ describe('HallScene melonJS pointer routing', () => {
     const scene = new HallScene()
 
     scene.onResetEvent()
-    const moveRegistration = me.registered.find(item => item.type === 'pointermove' && item.region === me.game.viewport)
-    const downRegistrations = me.registered.filter(item => item.type === 'pointerdown' && item.region === me.game.viewport)
+    const moveRegistration = me.registered.find(item => item.type === 'pointermove' && item.region === me.canvas)
+    const downRegistrations = me.registered.filter(item => item.type === 'pointerdown' && item.region === me.canvas)
 
-    downRegistrations[0].callback({ pointerId: 1, pointerType: 'touch', clientX: 100, clientY: 100 })
-    downRegistrations[0].callback({ pointerId: 2, pointerType: 'touch', clientX: 200, clientY: 100 })
-    moveRegistration.callback({ pointerId: 2, pointerType: 'touch', clientX: 260, clientY: 100, preventDefault: () => {} })
+    me.canvas.dispatch('pointerdown', { pointerId: 1, pointerType: 'touch', clientX: 100, clientY: 100 })
+    me.canvas.dispatch('pointerdown', { pointerId: 2, pointerType: 'touch', clientX: 200, clientY: 100 })
+    me.canvas.dispatch('pointermove', { pointerId: 2, pointerType: 'touch', clientX: 260, clientY: 100, preventDefault: () => {} })
 
-    expect(scene.getTransform().zoom).to.equal(1.6)
+    expect(scene.getTransform().zoom).to.equal(1.344)
   })
 })

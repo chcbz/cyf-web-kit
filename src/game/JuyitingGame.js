@@ -214,6 +214,26 @@ export class JuyitingGame {
   fitToViewport() {
     return this._hallScene?.fitToViewport?.()
   }
+
+  resizeViewport(change) {
+    return this._hallScene?.resizeViewport?.(change)
+  }
+
+  setInteractionLocked(locked, reason = 'panel') {
+    return this._hallScene?.setInteractionLocked?.(locked, reason)
+  }
+
+  getCameraSnapshot() {
+    return this._hallScene?.getCameraSnapshot?.() || null
+  }
+
+  getInputSnapshot() {
+    return this._hallScene?.inputSnapshot?.() || null
+  }
+
+  resetToMainHall() {
+    return this._hallScene?.resetToMainHall?.()
+  }
 }
 
 export const juyitingGame = new JuyitingGame()

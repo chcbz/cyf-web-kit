@@ -1,8 +1,33 @@
 ﻿import { expect } from 'chai'
 
 import { createHallSceneClass } from '../src/game/scenes/HallScene.js'
+import { JuyitingGame } from '../src/game/JuyitingGame.js'
 
 describe('HallScene melonJS runtime compatibility', () => {
+  it('delegates the camera and input migration facade safely', () => {
+    const calls = []
+    const game = new JuyitingGame()
+    game._hallScene = {
+      resizeViewport: change => calls.push(['resize', change]),
+      setInteractionLocked: (locked, reason) => calls.push(['lock', locked, reason]),
+      getCameraSnapshot: () => ({ presetKey: 'desktop' }),
+      inputSnapshot: () => ({ interactionLocked: true }),
+      resetToMainHall: () => calls.push(['reset'])
+    }
+
+    game.resizeViewport({ width: 800, height: 600, kind: 'layout' })
+    game.setInteractionLocked(true, 'panel')
+    expect(game.getCameraSnapshot()).to.deep.equal({ presetKey: 'desktop' })
+    expect(game.getInputSnapshot()).to.deep.equal({ interactionLocked: true })
+    game.resetToMainHall()
+
+    expect(calls).to.deep.equal([
+      ['resize', { width: 800, height: 600, kind: 'layout' }],
+      ['lock', true, 'panel'],
+      ['reset']
+    ])
+  })
+
   it('uses non-container image layers so melonJS broadphase does not recurse into them', () => {
     const added = []
 
