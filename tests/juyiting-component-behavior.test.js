@@ -258,6 +258,42 @@ describe('JuyiHall component behavior', () => {
     }
   })
 
+  it('blocks stage actions while loading and reapplies the loading lock after mount resolves', async () => {
+    const pendingMount = deferred()
+    const lockCalls = []
+    const zoomCalls = []
+    const resetCalls = []
+    let readyCallback
+    hallGameMock = {
+      destroy: () => {},
+      mount: async (_container, options = {}) => {
+        readyCallback = options.onReady
+        await pendingMount.promise
+      },
+      resetToMainHall: () => resetCalls.push(true),
+      setInteractionLocked: (...args) => lockCalls.push(args),
+      setSelectedAgent: () => {}, start: () => {}, syncAgents: () => {}, syncHotspots: () => {},
+      zoomBy: delta => zoomCalls.push(delta)
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+    const wrapper = mount(HallStage, { global: { stubs }, props: makeHallStageProps() })
+    const board = wrapper.find('.hall-board')
+
+    await board.trigger('keydown', { key: '+' })
+    await board.trigger('keydown', { key: '0' })
+    await wrapper.find('.orientation-action').trigger('click')
+    expect(zoomCalls).to.deep.equal([])
+    expect(resetCalls).to.deep.equal([])
+
+    pendingMount.resolve()
+    await flushPromises()
+    expect(lockCalls.filter(call => call[0] === true && call[1] === 'loading')).to.have.length(2)
+
+    readyCallback()
+    await flushPromises()
+    expect(lockCalls.filter(call => call[0] === false && call[1] === 'loading')).to.have.length(1)
+  })
+
   it('shows an accessible return-main-hall control away from preset and hides it during a panel lock', async () => {
     let resetCalls = 0
     hallGameMock = {
@@ -279,6 +315,37 @@ describe('JuyiHall component behavior', () => {
     expect(resetCalls).to.equal(1)
     await wrapper.setProps({ interactionLocked: true })
     expect(wrapper.find('.return-main-hall').exists()).to.equal(false)
+  })
+
+  it('uses screen-to-world center math for return visibility at non-unit zoom', async () => {
+    const originalInnerWidth = global.window.innerWidth
+    const originalInnerHeight = global.window.innerHeight
+    Object.defineProperty(global.window, 'innerWidth', { configurable: true, value: 500 })
+    Object.defineProperty(global.window, 'innerHeight', { configurable: true, value: 800 })
+    const snapshot = {
+      presetKey: 'mobilePortrait',
+      transform: { zoom: 1.25, offsetX: -727.5, offsetY: 12.5 }
+    }
+    hallGameMock = {
+      destroy: () => {}, mount: async (_container, options = {}) => options.onReady?.(),
+      getCameraSnapshot: () => snapshot, setInteractionLocked: () => {}, setSelectedAgent: () => {},
+      start: () => {}, syncAgents: () => {}, syncHotspots: () => {}
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+
+    try {
+      const wrapper = mount(HallStage, { global: { stubs }, props: makeHallStageProps() })
+      await flushPromises()
+      expect(wrapper.find('.return-main-hall').exists()).to.equal(false)
+
+      snapshot.transform = { zoom: 1.25, offsetX: -791.25, offsetY: 12.5 }
+      await wrapper.find('.hall-board').trigger('wheel')
+      await Vue.nextTick()
+      expect(wrapper.find('.return-main-hall').exists()).to.equal(true)
+    } finally {
+      Object.defineProperty(global.window, 'innerWidth', { configurable: true, value: originalInnerWidth })
+      Object.defineProperty(global.window, 'innerHeight', { configurable: true, value: originalInnerHeight })
+    }
   })
 
   it('renders the hall scene body as a melonJS canvas shell without DOM room or agent layers', () => {
@@ -434,6 +501,7 @@ describe('JuyiHall component behavior', () => {
       expect(fullscreenCalls).to.equal(1)
       expect(lockCalls).to.deep.equal(['landscape'])
       expect(wrapper.find('.hall-board').classes()).to.include('is-app-landscape')
+      expect(wrapper.find('.orientation-hint').exists()).to.equal(false)
       expect(resizeCalls.filter(call => call.kind === 'orientation')).to.have.length(0)
 
       await toggle.trigger('click')
@@ -457,6 +525,58 @@ describe('JuyiHall component behavior', () => {
       global.document.documentElement.requestFullscreen = originalFullscreen
       global.document.exitFullscreen = originalExitFullscreen
       global.screen = originalScreen
+    }
+  })
+
+  it('shows the rotation hint when fullscreen or orientation lock APIs are missing', async () => {
+    const originalFullscreen = global.document.documentElement.requestFullscreen
+    const originalScreen = global.screen
+    const originalMatchMedia = global.window.matchMedia
+    global.document.documentElement.requestFullscreen = undefined
+    global.screen = { orientation: {} }
+    global.window.matchMedia = query => ({ media: query, matches: false, addEventListener: () => {}, removeEventListener: () => {} })
+    hallGameMock = {
+      destroy: () => {}, mount: async (_container, options = {}) => options.onReady?.(),
+      setSelectedAgent: () => {}, start: () => {}, syncAgents: () => {}, syncHotspots: () => {}
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+
+    try {
+      const wrapper = mount(HallStage, { global: { stubs }, props: makeHallStageProps() })
+      await flushPromises()
+      await wrapper.find('.orientation-action').trigger('click')
+      await flushPromises()
+      expect(wrapper.find('.orientation-hint').text()).to.equal('请旋转手机横屏查看')
+    } finally {
+      global.document.documentElement.requestFullscreen = originalFullscreen
+      global.screen = originalScreen
+      global.window.matchMedia = originalMatchMedia
+    }
+  })
+
+  it('shows the rotation hint when fullscreen or orientation lock rejects', async () => {
+    const originalFullscreen = global.document.documentElement.requestFullscreen
+    const originalScreen = global.screen
+    const originalMatchMedia = global.window.matchMedia
+    global.document.documentElement.requestFullscreen = async () => { throw new Error('denied') }
+    global.screen = { orientation: { lock: async () => { throw new Error('denied') } } }
+    global.window.matchMedia = query => ({ media: query, matches: false, addEventListener: () => {}, removeEventListener: () => {} })
+    hallGameMock = {
+      destroy: () => {}, mount: async (_container, options = {}) => options.onReady?.(),
+      setSelectedAgent: () => {}, start: () => {}, syncAgents: () => {}, syncHotspots: () => {}
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+
+    try {
+      const wrapper = mount(HallStage, { global: { stubs }, props: makeHallStageProps() })
+      await flushPromises()
+      await wrapper.find('.orientation-action').trigger('click')
+      await flushPromises()
+      expect(wrapper.find('.orientation-hint').text()).to.equal('请旋转手机横屏查看')
+    } finally {
+      global.document.documentElement.requestFullscreen = originalFullscreen
+      global.screen = originalScreen
+      global.window.matchMedia = originalMatchMedia
     }
   })
 

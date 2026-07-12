@@ -26,6 +26,7 @@
         </button>
         <button
           class="tool-action orientation-action"
+          :disabled="isSceneMounting"
           :title="sceneMode === 'landscape' ? '切回竖屏视图' : '切到横屏视图'"
           @click="toggleOrientationMode"
         >
@@ -60,7 +61,11 @@
       @pointercancel="refreshReturnButton"
     >
       <div ref="melonContainerRef" class="melon-layer" aria-hidden="true"></div>
-      <div v-if="isSceneMounting && !sceneError" class="scene-loading" role="status">
+      <div
+        v-if="isSceneMounting && !sceneError"
+        class="scene-loading"
+        role="status"
+      >
         <span class="scene-spinner" aria-hidden="true"></span>
         <span>聚义厅地图加载中…</span>
       </div>
@@ -132,6 +137,7 @@ let orientationMediaHandler = null
 let mountTimeout = null
 let previousLayoutViewport = { width: 0, height: 0 }
 let previousVisualHeight = 0
+const loadingUnlockedAttempts = new Set()
 
 const presetZooms = { mobilePortrait: 1.25, mobileLandscape: 1.05, tabletLandscape: 0.92, desktop: 0.84 }
 
@@ -157,12 +163,18 @@ const handleHotspotClick = (hotspot) => {
   emit('open-panel', hotspot.panel)
 }
 
-const handleSceneReady = () => {
+const unlockLoading = (attemptId) => {
+  if (loadingUnlockedAttempts.has(attemptId)) return
+  loadingUnlockedAttempts.add(attemptId)
+  juyitingGame.setInteractionLocked?.(false, 'loading')
+}
+
+const handleSceneReady = (attemptId) => {
   clearMountTimeout()
   sceneError.value = ''
   melonReady.value = true
   isSceneMounting.value = false
-  juyitingGame.setInteractionLocked?.(false, 'loading')
+  unlockLoading(attemptId)
   juyitingGame.syncAgents(props.sceneAgents)
   juyitingGame.syncHotspots?.(props.sceneHotspots)
   juyitingGame.setSelectedAgent(props.selectedAgent?.agentId || null)
@@ -236,12 +248,20 @@ const teardownOrientationTracking = () => {
 
 const requestLandscapeLock = async () => {
   let failed = false
-  try {
-    await document.documentElement.requestFullscreen?.()
-  } catch (_err) { failed = true }
-  try {
-    await screen.orientation?.lock?.('landscape')
-  } catch (_err) { failed = true }
+  const requestFullscreen = document.documentElement.requestFullscreen
+  const lockOrientation = screen.orientation?.lock
+  if (typeof requestFullscreen !== 'function') failed = true
+  else {
+    try {
+      await requestFullscreen.call(document.documentElement)
+    } catch (_err) { failed = true }
+  }
+  if (typeof lockOrientation !== 'function') failed = true
+  else {
+    try {
+      await lockOrientation.call(screen.orientation, 'landscape')
+    } catch (_err) { failed = true }
+  }
   orientationHint.value = failed ? '请旋转手机横屏查看' : ''
 }
 
@@ -255,6 +275,7 @@ const releaseLandscapeLock = async () => {
 }
 
 const toggleOrientationMode = async () => {
+  if (isSceneMounting.value) return
   const nextMode = sceneMode.value === 'landscape' ? 'portrait' : 'landscape'
   orientationMode.value = nextMode
   if (nextMode === 'landscape') await requestLandscapeLock()
@@ -277,7 +298,7 @@ const mountScene = async () => {
     isSceneMounting.value = false
     melonReady.value = false
     sceneError.value = '地图加载超时，请重试'
-    juyitingGame.setInteractionLocked?.(false, 'loading')
+    unlockLoading(attemptId)
   }, 15000)
   try {
     await juyitingGame.mount(container, {
@@ -288,10 +309,11 @@ const mountScene = async () => {
         if (isCurrentMountAttempt(attemptId)) handleHotspotClick(hotspot)
       },
       onReady: () => {
-        if (isCurrentMountAttempt(attemptId)) handleSceneReady()
+        if (isCurrentMountAttempt(attemptId)) handleSceneReady(attemptId)
       }
     })
     if (!isCurrentMountAttempt(attemptId)) return
+    if (!melonReady.value) juyitingGame.setInteractionLocked?.(true, 'loading')
     juyitingGame.start()
   } catch (err) {
     if (isCurrentMountAttempt(attemptId)) {
@@ -299,11 +321,8 @@ const mountScene = async () => {
       melonReady.value = false
       sceneError.value = err?.message || '请稍后重试'
       console.warn('[HallStage] melonJS:', err?.message || err)
-      juyitingGame.setInteractionLocked?.(false, 'loading')
-    }
-  } finally {
-    if (isCurrentMountAttempt(attemptId)) {
       isSceneMounting.value = false
+      unlockLoading(attemptId)
     }
   }
 }
@@ -318,7 +337,7 @@ const retryScene = async () => {
 }
 
 const handleSceneKeydown = (event) => {
-  if (event.defaultPrevented) return
+  if (event.defaultPrevented || isSceneMounting.value) return
   if (event.key === '+' || event.key === '=') {
     juyitingGame.zoomBy?.(0.12)
     event.preventDefault()
@@ -337,6 +356,15 @@ const handleSceneKeydown = (event) => {
   }
 }
 
+const worldCenterFromSnapshot = (viewport, transform) => {
+  const screenX = viewport.width / 2
+  const screenY = viewport.height / 2
+  return {
+    x: ((screenX - viewport.width / 2 - transform.offsetX) / transform.zoom) + viewport.width / 2,
+    y: ((screenY - viewport.height / 2 - transform.offsetY) / transform.zoom) + viewport.height / 2
+  }
+}
+
 const refreshReturnButton = () => {
   const snapshot = juyitingGame.getCameraSnapshot?.()
   if (!snapshot?.transform) {
@@ -344,8 +372,8 @@ const refreshReturnButton = () => {
     return
   }
   const viewport = previousLayoutViewport.width ? previousLayoutViewport : viewportNow()
-  const { zoom, offsetX, offsetY } = snapshot.transform
-  const centerWorld = { x: viewport.width / 2 - offsetX / zoom, y: viewport.height / 2 - offsetY / zoom }
+  const { zoom } = snapshot.transform
+  const centerWorld = worldCenterFromSnapshot(viewport, snapshot.transform)
   const focusDistance = Math.hypot(centerWorld.x - 832, centerWorld.y - 390)
   showReturnButton.value = focusDistance > 48 || Math.abs(zoom - (presetZooms[snapshot.presetKey] ?? zoom)) > 0.08
 }
