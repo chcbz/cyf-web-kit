@@ -356,6 +356,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       const kind = ['keyboard', 'orientation', 'layout'].includes(change.kind)
         ? change.kind
         : classifyViewportResize({ previous, next, previousVisualHeight: previous.height, nextVisualHeight: next.height, editableFocused: false, orientationChanged: change.orientationChanged })
+      if (kind === 'keyboard') return this.getTransform()
       this._currentViewport = next
       this._lastViewport = next
       if (!this._cameraController) return this.getTransform()

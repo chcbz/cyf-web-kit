@@ -282,6 +282,41 @@ describe('HallScene melonJS pointer routing', () => {
     expect(lastTranslate[1]).to.be.closeTo(viewport.width / 2 + after.offsetX, 0.001)
     expect(lastTranslate[2]).to.be.closeTo(viewport.height / 2 + after.offsetY, 0.001)
   })
+
+  it('isolates keyboard visual-height changes from the authoritative camera viewport', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+    const clicks = []
+    scene.onHotspotClick(item => clicks.push(item))
+    scene.setMapData(hotspotMapData())
+    me.setLayerRect({ left: 0, top: 0, width: 960, height: 640 })
+    scene.onResetEvent()
+    const before = scene.getCameraSnapshot()
+    const matrixCount = me.matrixOps.length
+    const world = { x: 730, y: 300 }
+    const screen = {
+      x: (world.x - 480) * before.transform.zoom + 480 + before.transform.offsetX,
+      y: (world.y - 320) * before.transform.zoom + 320 + before.transform.offsetY
+    }
+
+    scene.resizeViewport({ width: 960, height: 360, kind: 'keyboard' })
+    expect(scene.getCameraSnapshot()).to.deep.equal(before)
+    expect(me.matrixOps).to.have.length(matrixCount)
+    me.canvas.dispatch('pointerdown', { pointerId: 32, pointerType: 'mouse', clientX: screen.x, clientY: screen.y })
+    me.canvas.dispatch('pointerup', { pointerId: 32, pointerType: 'mouse', clientX: screen.x, clientY: screen.y })
+    expect(clicks).to.deep.equal([{ id: 'bountyBoard', panel: 'tasks' }])
+    scene.resizeViewport({ width: 960, height: 640, kind: 'keyboard' })
+    expect(scene.getCameraSnapshot()).to.deep.equal(before)
+    expect(me.matrixOps).to.have.length(matrixCount)
+
+    scene.resizeViewport({ width: 800, height: 500, kind: 'layout' })
+    const afterLayout = scene.getCameraSnapshot().transform
+    const layoutTranslate = me.matrixOps.filter(op => op[0] === 'translate').slice(-2)[0]
+    expect(layoutTranslate[1]).to.be.closeTo(400 + afterLayout.offsetX, 0.001)
+    expect(layoutTranslate[2]).to.be.closeTo(250 + afterLayout.offsetY, 0.001)
+  })
+
   it('keeps custom image layers inside the transformed world scene', () => {
     const me = createFakeMelon()
     me.loader.getImage = name => name === 'mid-occluders' ? { width: 960, height: 640 } : null
