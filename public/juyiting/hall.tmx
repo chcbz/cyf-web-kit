@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="104" height="58" tilewidth="16" tileheight="16" infinite="0" nextlayerid="15" nextobjectid="95">
+<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="104" height="58" tilewidth="16" tileheight="16" infinite="0" nextlayerid="24" nextobjectid="121">
  <properties>
   <property name="description" value="聚义厅 v3 - modular layer hall scene"/>
   <property name="maxZoom" type="float" value="3.3"/>
   <property name="minZoom" type="float" value="1"/>
+  <property name="movementSchemaVersion" value="1"/>
+  <property name="navGraphVersion" value="juyiting-main-v1"/>
+  <property name="spriteManifestVersion" value="persona-sheets-v1"/>
+  <property name="sceneId" value="juyiting-main"/>
  </properties>
  <tileset firstgid="1" name="liangshan-hall-base-clean-v3" tilewidth="16" tileheight="16" tilecount="6032" columns="104">
   <image source="images/liangshan-hall-base-clean-v3.png" width="1664" height="928"/>
@@ -290,5 +294,252 @@
   <object id="92" name="bounty-board-rect" type="prop" gid="6035" x="1360" y="255" width="172" height="124"/>
   <object id="93" name="library-shelf-rect" type="prop" gid="6036" x="1497" y="578" width="123" height="141"/>
   <object id="94" name="roster-book-rect" type="prop" gid="6037" x="217" y="192" width="179" height="192"/>
+ </objectgroup>
+ <objectgroup id="15" name="nav_area">
+  <object id="95" x="48" y="144" width="1568" height="720">
+   <properties>
+    <property name="stableId" value="jyt-nav-area-main-v1"/>
+    <property name="areaId" value="juyiting-main-walkable"/>
+   </properties>
+  </object>
+ </objectgroup>
+ <objectgroup id="16" name="nav_obstacles">
+ </objectgroup>
+ <objectgroup id="17" name="regions">
+  <object id="96" x="760" y="176" width="240" height="184">
+   <properties>
+    <property name="stableId" value="jyt-region-main-seat-v1"/>
+    <property name="capacity" type="int" value="6"/>
+    <property name="label" value="Main seat"/>
+    <property name="protected" type="bool" value="true"/>
+    <property name="regionId" value="main-seat"/>
+    <property name="riskLevel" value="low"/>
+   </properties>
+  </object>
+  <object id="97" x="648" y="376" width="464" height="256">
+   <properties>
+    <property name="stableId" value="jyt-region-council-table-v1"/>
+    <property name="capacity" type="int" value="12"/>
+    <property name="label" value="Council table"/>
+    <property name="protected" type="bool" value="false"/>
+    <property name="regionId" value="council-table"/>
+    <property name="riskLevel" value="low"/>
+   </properties>
+  </object>
+  <object id="98" x="1320" y="248" width="240" height="256">
+   <properties>
+    <property name="stableId" value="jyt-region-bounty-board-v1"/>
+    <property name="capacity" type="int" value="5"/>
+    <property name="label" value="Bounty board"/>
+    <property name="protected" type="bool" value="false"/>
+    <property name="regionId" value="bounty-board"/>
+    <property name="riskLevel" value="medium"/>
+   </properties>
+  </object>
+  <object id="99" x="80" y="552" width="288" height="272">
+   <properties>
+    <property name="stableId" value="jyt-region-agent-roster-v1"/>
+    <property name="capacity" type="int" value="8"/>
+    <property name="label" value="Agent roster"/>
+    <property name="protected" type="bool" value="false"/>
+    <property name="regionId" value="agent-roster"/>
+    <property name="riskLevel" value="low"/>
+   </properties>
+  </object>
+  <object id="100" x="1416" y="552" width="224" height="272">
+   <properties>
+    <property name="stableId" value="jyt-region-library-shelf-v1"/>
+    <property name="capacity" type="int" value="4"/>
+    <property name="label" value="Library shelf"/>
+    <property name="protected" type="bool" value="false"/>
+    <property name="regionId" value="library-shelf"/>
+    <property name="riskLevel" value="low"/>
+   </properties>
+  </object>
+ </objectgroup>
+ <objectgroup id="18" name="nav_nodes">
+  <object id="101" x="872" y="312" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-node-main-seat-v1"/>
+    <property name="channelWidth" type="int" value="72"/>
+    <property name="kind" value="junction"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="102" x="872" y="472" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-node-council-v1"/>
+    <property name="channelWidth" type="int" value="72"/>
+    <property name="kind" value="junction"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="103" x="512" y="612" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-node-west-hall-v1"/>
+    <property name="channelWidth" type="int" value="64"/>
+    <property name="kind" value="normal"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="104" x="232" y="672" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-node-agent-roster-v1"/>
+    <property name="channelWidth" type="int" value="48"/>
+    <property name="kind" value="doorway"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="105" x="1232" y="612" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-node-east-hall-v1"/>
+    <property name="channelWidth" type="int" value="64"/>
+    <property name="kind" value="normal"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="106" x="1432" y="412" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-node-bounty-board-v1"/>
+    <property name="channelWidth" type="int" value="48"/>
+    <property name="kind" value="doorway"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="107" x="1512" y="672" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-node-library-shelf-v1"/>
+    <property name="channelWidth" type="int" value="48"/>
+    <property name="kind" value="doorway"/>
+   </properties>
+   <ellipse/>
+  </object>
+ </objectgroup>
+ <objectgroup id="19" name="nav_edges">
+  <object id="108" x="880" y="320">
+   <properties>
+    <property name="stableId" value="jyt-edge-main-council-v1"/>
+    <property name="bidirectional" type="bool" value="true"/>
+    <property name="costMultiplier" type="int" value="1"/>
+    <property name="from" value="jyt-node-main-seat-v1"/>
+    <property name="to" value="jyt-node-council-v1"/>
+   </properties>
+   <polyline points="0,0 0,160"/>
+  </object>
+  <object id="109" x="880" y="480">
+   <properties>
+    <property name="stableId" value="jyt-edge-council-west-v1"/>
+    <property name="bidirectional" type="bool" value="true"/>
+    <property name="costMultiplier" type="int" value="1"/>
+    <property name="from" value="jyt-node-council-v1"/>
+    <property name="to" value="jyt-node-west-hall-v1"/>
+   </properties>
+   <polyline points="0,0 -160,70 -360,140"/>
+  </object>
+  <object id="110" x="520" y="620">
+   <properties>
+    <property name="stableId" value="jyt-edge-west-agent-v1"/>
+    <property name="bidirectional" type="bool" value="true"/>
+    <property name="costMultiplier" type="int" value="1"/>
+    <property name="from" value="jyt-node-west-hall-v1"/>
+    <property name="to" value="jyt-node-agent-roster-v1"/>
+   </properties>
+   <polyline points="0,0 -140,30 -280,60"/>
+  </object>
+  <object id="111" x="880" y="480">
+   <properties>
+    <property name="stableId" value="jyt-edge-council-east-v1"/>
+    <property name="bidirectional" type="bool" value="true"/>
+    <property name="costMultiplier" type="int" value="1"/>
+    <property name="from" value="jyt-node-council-v1"/>
+    <property name="to" value="jyt-node-east-hall-v1"/>
+   </properties>
+   <polyline points="0,0 160,70 360,140"/>
+  </object>
+  <object id="112" x="1240" y="620">
+   <properties>
+    <property name="stableId" value="jyt-edge-east-bounty-v1"/>
+    <property name="bidirectional" type="bool" value="true"/>
+    <property name="costMultiplier" type="float" value="1.1"/>
+    <property name="from" value="jyt-node-east-hall-v1"/>
+    <property name="to" value="jyt-node-bounty-board-v1"/>
+   </properties>
+   <polyline points="0,0 100,-100 200,-200"/>
+  </object>
+  <object id="113" x="1240" y="620">
+   <properties>
+    <property name="stableId" value="jyt-edge-east-library-v1"/>
+    <property name="bidirectional" type="bool" value="true"/>
+    <property name="costMultiplier" type="int" value="1"/>
+    <property name="from" value="jyt-node-east-hall-v1"/>
+    <property name="to" value="jyt-node-library-shelf-v1"/>
+   </properties>
+   <polyline points="0,0 140,30 280,60"/>
+  </object>
+ </objectgroup>
+ <objectgroup id="20" name="parking_slots">
+  <object id="114" x="912" y="312" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-main-seat-parking-v1"/>
+    <property name="regionId" value="main-seat"/>
+    <property name="slotId" value="main-seat-parking-1"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="115" x="912" y="472" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-council-parking-v1"/>
+    <property name="regionId" value="council-table"/>
+    <property name="slotId" value="council-table-parking-1"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="116" x="1472" y="412" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-bounty-parking-v1"/>
+    <property name="regionId" value="bounty-board"/>
+    <property name="slotId" value="bounty-board-parking-1"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="117" x="272" y="672" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-agent-parking-v1"/>
+    <property name="regionId" value="agent-roster"/>
+    <property name="slotId" value="agent-roster-parking-1"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="118" x="1552" y="672" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-library-parking-v1"/>
+    <property name="regionId" value="library-shelf"/>
+    <property name="slotId" value="library-shelf-parking-1"/>
+   </properties>
+   <ellipse/>
+  </object>
+ </objectgroup>
+ <objectgroup id="21" name="queue_slots">
+  <object id="119" x="832" y="472" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-council-queue-v1"/>
+    <property name="regionId" value="council-table"/>
+    <property name="slotId" value="council-table-queue-1"/>
+   </properties>
+   <ellipse/>
+  </object>
+ </objectgroup>
+ <objectgroup id="22" name="home_slots">
+  <object id="120" x="832" y="312" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-songjiang-home-v1"/>
+    <property name="personaCode" value="songjiang"/>
+    <property name="regionId" value="main-seat"/>
+    <property name="slotId" value="songjiang-home"/>
+   </properties>
+   <ellipse/>
+  </object>
+ </objectgroup>
+ <objectgroup id="23" name="debug_labels">
  </objectgroup>
 </map>
