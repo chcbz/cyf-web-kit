@@ -162,19 +162,77 @@ describe('map validation', () => {
     })
   }
 
-  it('accepts edge endpoints within two world pixels and checks obstacles only against runtime geometry', () => {
+  it('accepts edge endpoints within two world pixels when connector gaps are clear', () => {
     const map = validMap()
     map.edges[1].points = [{ x: 201.5, y: 90 }, { x: 310, y: 90 }]
-    map.obstacles = [{
-      points: [{ x: 200.25, y: 85 }, { x: 200.75, y: 85 }, { x: 200.75, y: 95 }, { x: 200.25, y: 95 }],
-    }]
 
     assert.deepEqual(validateMapRuntime(map), { valid: true, errors: [], warnings: [] })
   })
 
-  it('accepts a directed one-way graph when every core region is reachable from Songjiang home', () => {
+  for (const [connector, points, obstacle] of [
+    [
+      'from-node',
+      [{ x: 201.5, y: 90 }, { x: 310, y: 90 }],
+      { points: [{ x: 200.25, y: 85 }, { x: 200.75, y: 85 }, { x: 200.75, y: 95 }, { x: 200.25, y: 95 }] },
+    ],
+    [
+      'to-node',
+      [{ x: 200, y: 90 }, { x: 308.5, y: 90 }],
+      { points: [{ x: 309.25, y: 85 }, { x: 309.75, y: 85 }, { x: 309.75, y: 95 }, { x: 309.25, y: 95 }] },
+    ],
+  ] satisfies Array<[string, MapRuntimeData['edges'][number]['points'], MapRuntimeData['obstacles'][number]]>) {
+    it(`rejects an obstacle in the ${connector} edge connector`, () => {
+      const map = validMap()
+      map.edges[1].points = points
+      map.obstacles = [obstacle]
+
+      const errors = validateMapRuntime(map).errors.filter(error => error.code === 'EDGE_INTERSECTS_OBSTACLE')
+      assert.equal(errors.length, 1)
+      assert.match(errors[0].technicalMessage ?? '', /edge-hall-library/)
+    })
+  }
+
+  it('accepts one-way edges when an alternate directed return route completes the round trip', () => {
     const map = validMap()
     map.edges.forEach(edge => { edge.bidirectional = false })
+    map.edges.push({
+      stableId: 'edge-library-main-return', from: 'node-library', to: 'node-main', bidirectional: false,
+      costMultiplier: 1, points: [{ x: 310, y: 90 }, { x: 90, y: 90 }],
+    })
+
+    assert.deepEqual(validateMapRuntime(map), { valid: true, errors: [], warnings: [] })
+  })
+
+  it('rejects a one-way chain whose core targets cannot return to Songjiang home', () => {
+    const map = validMap()
+    map.edges.forEach(edge => { edge.bidirectional = false })
+
+    const result = validateMapRuntime(map)
+
+    assert.ok(result.errors.some(error => error.code === 'NAV_GRAPH_DISCONNECTED'))
+    assert.match(
+      result.errors.find(error => error.code === 'NAV_GRAPH_DISCONNECTED')?.technicalMessage ?? '',
+      /cannot return to Songjiang anchor node-main.*node-library/s,
+    )
+  })
+
+  it('projects a slot to the nearest visible round-trip node instead of a nearer ineligible node', () => {
+    const map = validMap()
+    map.slots[1].point = { x: 390, y: 175 }
+    map.nodes.push({ stableId: 'node-dead-end', point: { x: 390, y: 181 }, kind: 'normal', channelWidth: 48 })
+    map.edges.push({
+      stableId: 'edge-dead-end-main', from: 'node-dead-end', to: 'node-main', bidirectional: false,
+      costMultiplier: 1, points: [{ x: 390, y: 181 }, { x: 90, y: 90 }],
+    })
+
+    assert.deepEqual(validateMapRuntime(map), { valid: true, errors: [], warnings: [] })
+  })
+
+  it('chooses the nearest viable Songjiang anchor that satisfies the complete round-trip contract', () => {
+    const map = validMap()
+    map.nodes[0].point = { x: 170, y: 90 }
+    map.edges[0].points = [{ x: 170, y: 90 }, { x: 200, y: 90 }]
+    map.nodes.push({ stableId: 'node-nearest-dead', point: { x: 60, y: -5 }, kind: 'normal', channelWidth: 48 })
 
     assert.deepEqual(validateMapRuntime(map), { valid: true, errors: [], warnings: [] })
   })
@@ -194,12 +252,8 @@ describe('map validation', () => {
 
     const result = validateMapRuntime(map)
 
-    assert.deepEqual(result.errors.map(error => error.code), [
-      'CORE_REGION_UNREACHABLE',
-      'NAV_GRAPH_DISCONNECTED',
-    ])
-    assert.match(result.errors[0].technicalMessage ?? '', /library-shelf/)
-    assert.match(result.errors[1].technicalMessage ?? '', /Songjiang anchor node-main.*node-library/s)
+    assert.deepEqual(result.errors.map(error => error.code), ['NAV_GRAPH_DISCONNECTED'])
+    assert.match(result.errors[0].technicalMessage ?? '', /Songjiang anchor node-main.*node-library/s)
   })
 
   it('rejects a Songjiang home with a missing region even when another slot is usable', () => {

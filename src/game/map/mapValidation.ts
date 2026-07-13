@@ -21,6 +21,20 @@ interface SlotProjection {
   nodeId: string
 }
 
+interface HomeContext {
+  candidates: NavNode[]
+}
+
+interface AnchorEvaluation {
+  anchorNodeId: string
+  cannotReachNodeIds: string[]
+  cannotReturnNodeIds: string[]
+  affectedRegions: string[]
+  unreachableRegions: string[]
+  regionProjections: Map<Region, SlotProjection[]>
+  complete: boolean
+}
+
 const SUPPORTED_MOVEMENT_SCHEMA = '1'
 const SUPPORTED_SCENE = 'juyiting-main'
 const MINIMUM_COLLIDER_CHANNEL_WIDTH = 36
@@ -39,25 +53,24 @@ export function validateMapRuntime(map: MapRuntimeData): MapValidationResult {
   const nodesById = new Map(map.nodes.map(node => [node.stableId, node]))
   const traversableEdges = validateEdges(map.edges, nodesById, usableNodes, validObstacles, errors)
   const adjacency = buildAdjacency(map.nodes, map.edges, traversableEdges)
+  const reverseAdjacency = reverseGraph(adjacency)
 
   const songjiangHomes = map.slots.filter(slot => slot.kind === 'home' && slot.personaCode === 'songjiang')
-  const homeProjection = validateSongjiangHome(
+  const homeContext = validateSongjiangHome(
     songjiangHomes, map.regions, usableNodes, validObstacles, errors,
   )
-  const reachableNodeIds = homeProjection ? visit(homeProjection.nodeId, adjacency) : new Set<string>()
+  const anchorEvaluation = homeContext
+    ? chooseAnchorEvaluation(
+        homeContext, map.regions, map.slots, usableNodes, validObstacles, adjacency, reverseAdjacency,
+      )
+    : undefined
 
-  const regionProjections = new Map<Region, SlotProjection[]>()
-  for (const region of map.regions) {
-    regionProjections.set(region, map.slots.flatMap(slot => {
-      const projection = projectUsableSlot(slot, region, usableNodes, validObstacles)
-      return projection ? [projection] : []
-    }))
-  }
-
-  validateDirectedReachability(
-    map.regions, usableNodes, regionProjections, homeProjection, reachableNodeIds, errors,
+  validateRoundTripReachability(anchorEvaluation, errors)
+  validateRegionSlots(
+    map.regions,
+    anchorEvaluation?.regionProjections ?? emptyRegionProjections(map.regions),
+    errors,
   )
-  validateRegionSlots(map.regions, regionProjections, reachableNodeIds, errors)
 
   errors.sort(compareErrors)
   return { valid: errors.length === 0, errors, warnings: [] }
@@ -168,7 +181,8 @@ function validateEdges(
     if (geometryProblem) {
       errors.push(fatal('EDGE_GEOMETRY_INVALID', '地图路径几何无效。', geometryProblem))
     }
-    const obstacleIndex = !geometryProblem ? intersectingObstacle(edge.points, obstacles) : -1
+    const collisionPath = from && to ? [from.point, ...edge.points, to.point] : edge.points
+    const obstacleIndex = !geometryProblem ? intersectingObstacle(collisionPath, obstacles) : -1
     if (obstacleIndex >= 0) {
       errors.push(fatal(
         'EDGE_INTERSECTS_OBSTACLE',
@@ -204,7 +218,7 @@ function validateSongjiangHome(
   usableNodes: Map<string, NavNode>,
   obstacles: MapPolygon[],
   errors: SceneError[],
-): SlotProjection | undefined {
+): HomeContext | undefined {
   if (homes.length !== 1) {
     errors.push(fatal(
       'SONGJIANG_HOME_INVALID',
@@ -228,34 +242,55 @@ function validateSongjiangHome(
     if (obstacleIndex >= 0) problem = `Songjiang home ${home.stableId} is inside or on obstacle ${obstacleIndex}.`
   }
 
-  const projection = !problem && region
-    ? projectUsableSlot(home, region, usableNodes, obstacles)
-    : undefined
-  if (!problem && !projection) {
+  const candidates = !problem
+    ? visibleNodes(home.point, usableNodes.values(), obstacles)
+    : []
+  if (!problem && candidates.length === 0) {
     problem = `Songjiang home ${home.stableId} cannot connect to a usable navigation node.`
   }
   if (problem) {
     errors.push(fatal('SONGJIANG_HOME_INVALID', '宋江必须配置唯一且可用的归位站位。', problem))
     return undefined
   }
-  return projection
+  return { candidates }
 }
 
-function validateDirectedReachability(
+function chooseAnchorEvaluation(
+  homeContext: HomeContext,
   regions: Region[],
+  slots: Slot[],
   usableNodes: Map<string, NavNode>,
-  regionProjections: Map<Region, SlotProjection[]>,
-  homeProjection: SlotProjection | undefined,
-  reachableNodeIds: Set<string>,
-  errors: SceneError[],
-): void {
-  if (!homeProjection) {
-    errors.push(fatal(
-      'NAV_GRAPH_DISCONNECTED',
-      '地图导航网络缺少可用的宋江起点。',
-      'Navigation graph has no usable Songjiang home anchor.',
-    ))
-    return
+  obstacles: MapPolygon[],
+  adjacency: Map<string, Set<string>>,
+  reverseAdjacency: Map<string, Set<string>>,
+): AnchorEvaluation {
+  const evaluations = homeContext.candidates.map(candidate => evaluateAnchor(
+    candidate.stableId, regions, slots, usableNodes, obstacles, adjacency, reverseAdjacency,
+  ))
+  return evaluations.find(evaluation => evaluation.complete) ?? evaluations[0]
+}
+
+function evaluateAnchor(
+  anchorNodeId: string,
+  regions: Region[],
+  slots: Slot[],
+  usableNodes: Map<string, NavNode>,
+  obstacles: MapPolygon[],
+  adjacency: Map<string, Set<string>>,
+  reverseAdjacency: Map<string, Set<string>>,
+): AnchorEvaluation {
+  const reachableFromHome = visit(anchorNodeId, adjacency)
+  const canReturnHome = visit(anchorNodeId, reverseAdjacency)
+  const roundTripNodeIds = new Set([...reachableFromHome].filter(nodeId => canReturnHome.has(nodeId)))
+  const roundTripNodes = new Map(
+    [...usableNodes].filter(([nodeId]) => roundTripNodeIds.has(nodeId)),
+  )
+  const regionProjections = new Map<Region, SlotProjection[]>()
+  for (const region of regions) {
+    regionProjections.set(region, slots.flatMap(slot => {
+      const projection = projectUsableSlot(slot, region, roundTripNodes, obstacles)
+      return projection ? [projection] : []
+    }))
   }
 
   const requiredNodeRegions = new Map<string, Set<string>>()
@@ -263,40 +298,79 @@ function validateDirectedReachability(
     for (const node of usableNodes.values()) {
       if (pointInPolygon(node.point, region.polygon)) addRequiredNode(requiredNodeRegions, node.stableId, region.regionId)
     }
-    for (const projection of regionProjections.get(region) ?? []) {
-      addRequiredNode(requiredNodeRegions, projection.nodeId, region.regionId)
-    }
   }
-  const unreachableNodeIds = [...requiredNodeRegions.keys()]
-    .filter(nodeId => !reachableNodeIds.has(nodeId))
+  const cannotReachNodeIds = [...requiredNodeRegions.keys()]
+    .filter(nodeId => !reachableFromHome.has(nodeId))
     .sort(compareText)
-  if (unreachableNodeIds.length === 0) return
-
-  const affectedRegions = [...new Set(unreachableNodeIds.flatMap(nodeId => (
+  const cannotReturnNodeIds = [...requiredNodeRegions.keys()]
+    .filter(nodeId => !canReturnHome.has(nodeId))
+    .sort(compareText)
+  const failedNodeIds = [...new Set([...cannotReachNodeIds, ...cannotReturnNodeIds])]
+  const nodeAffectedRegions = failedNodeIds.flatMap(nodeId => (
     [...(requiredNodeRegions.get(nodeId) ?? [])]
-  )))].sort(compareText)
+  ))
+  const unreachableRegions = regions
+    .filter(region => (regionProjections.get(region) ?? []).length === 0)
+    .map(region => region.regionId)
+    .sort(compareText)
+  const affectedRegions = [...new Set([...nodeAffectedRegions, ...unreachableRegions])].sort(compareText)
+
+  return {
+    anchorNodeId,
+    cannotReachNodeIds,
+    cannotReturnNodeIds,
+    affectedRegions,
+    unreachableRegions,
+    regionProjections,
+    complete: cannotReachNodeIds.length === 0
+      && cannotReturnNodeIds.length === 0
+      && unreachableRegions.length === 0,
+  }
+}
+
+function validateRoundTripReachability(
+  evaluation: AnchorEvaluation | undefined,
+  errors: SceneError[],
+): void {
+  if (!evaluation) {
+    errors.push(fatal(
+      'NAV_GRAPH_DISCONNECTED',
+      '地图导航网络缺少可用的宋江起点。',
+      'Navigation graph has no usable Songjiang home anchor.',
+    ))
+    return
+  }
+  if (evaluation.complete) return
+
+  const clauses: string[] = []
+  if (evaluation.cannotReachNodeIds.length > 0) {
+    clauses.push(`cannot reach core node(s) from Songjiang anchor ${evaluation.anchorNodeId}: ${evaluation.cannotReachNodeIds.join(', ')}`)
+  }
+  if (evaluation.cannotReturnNodeIds.length > 0) {
+    clauses.push(`cannot return to Songjiang anchor ${evaluation.anchorNodeId} from core node(s): ${evaluation.cannotReturnNodeIds.join(', ')}`)
+  }
+  if (evaluation.unreachableRegions.length > 0) {
+    clauses.push(`has no round-trip slot connection for region(s): ${evaluation.unreachableRegions.join(', ')}`)
+  }
   errors.push(fatal(
     'NAV_GRAPH_DISCONNECTED',
-    '地图导航网络无法到达全部核心区域。',
-    `Songjiang anchor ${homeProjection.nodeId} cannot reach core node(s): ${unreachableNodeIds.join(', ')}; affected region(s): ${affectedRegions.join(', ')}.`,
+    '地图导航网络无法完成核心区域往返。',
+    `Songjiang anchor ${evaluation.anchorNodeId} cannot satisfy round-trip navigation: ${clauses.join('; ')}; affected region(s): ${evaluation.affectedRegions.join(', ')}.`,
   ))
 }
 
 function validateRegionSlots(
-  regions: Region[],
-  regionProjections: Map<Region, SlotProjection[]>,
-  reachableNodeIds: Set<string>,
-  errors: SceneError[],
+  regions: Region[], regionProjections: Map<Region, SlotProjection[]>, errors: SceneError[],
 ): void {
   const unreachableRegions = regions
-    .filter(region => !(regionProjections.get(region) ?? []).some(projection => reachableNodeIds.has(projection.nodeId)))
+    .filter(region => (regionProjections.get(region) ?? []).length === 0)
     .map(region => region.regionId)
     .sort(compareText)
   if (unreachableRegions.length > 0) {
     errors.push(fatal(
       'CORE_REGION_UNREACHABLE',
       '地图核心区域没有可达站位。',
-      `Region(s) without a reachable slot from Songjiang home: ${unreachableRegions.join(', ')}.`,
+      `Region(s) without a round-trip reachable slot from Songjiang home: ${unreachableRegions.join(', ')}.`,
     ))
   }
 }
@@ -314,13 +388,23 @@ function projectUsableSlot(
     || obstacles.some(obstacle => pointInPolygon(slot.point, obstacle))
   ) return undefined
 
-  const node = [...usableNodes.values()]
-    .filter(candidate => intersectingObstacle([slot.point, candidate.point], obstacles) < 0)
-    .sort((left, right) => (
-      pointDistance(slot.point, left.point) - pointDistance(slot.point, right.point)
-      || compareText(left.stableId, right.stableId)
-    ))[0]
+  const node = visibleNodes(slot.point, usableNodes.values(), obstacles)[0]
   return node ? { nodeId: node.stableId } : undefined
+}
+
+function visibleNodes(
+  point: MapPoint, nodes: Iterable<NavNode>, obstacles: MapPolygon[],
+): NavNode[] {
+  return [...nodes]
+    .filter(candidate => intersectingObstacle([point, candidate.point], obstacles) < 0)
+    .sort((left, right) => (
+      pointDistance(point, left.point) - pointDistance(point, right.point)
+      || compareText(left.stableId, right.stableId)
+    ))
+}
+
+function emptyRegionProjections(regions: Region[]): Map<Region, SlotProjection[]> {
+  return new Map(regions.map(region => [region, []]))
 }
 
 function buildAdjacency(
@@ -333,6 +417,14 @@ function buildAdjacency(
     if (edge.bidirectional) adjacency.get(edge.to)?.add(edge.from)
   }
   return adjacency
+}
+
+function reverseGraph(adjacency: Map<string, Set<string>>): Map<string, Set<string>> {
+  const reverse = new Map([...adjacency.keys()].map(nodeId => [nodeId, new Set<string>()]))
+  for (const [from, targets] of adjacency) {
+    for (const to of targets) reverse.get(to)?.add(from)
+  }
+  return reverse
 }
 
 function visit(root: string, adjacency: Map<string, Set<string>>): Set<string> {
