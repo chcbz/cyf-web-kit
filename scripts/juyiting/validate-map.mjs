@@ -1,22 +1,34 @@
 import { randomUUID } from 'node:crypto'
 import {
-  mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync,
+  closeSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync,
 } from 'node:fs'
-import { dirname } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { validateMapRuntime } from '../../src/game/map/mapValidation.ts'
 import { createMapSnapshot, serializeMapSnapshot } from '../../src/game/map/tmxSnapshot.ts'
 import { parseMovementTmx } from '../../src/game/map/tmxMovementParser.ts'
 
-// CLI contract: no arguments checks the committed snapshot; --update atomically replaces it.
-const tmxPath = process.env.JIA_JUYITING_TMX_PATH
-  ?? fileURLToPath(new URL('../../public/juyiting/hall.tmx', import.meta.url))
-const snapshotPath = process.env.JIA_JUYITING_SNAPSHOT_PATH
-  ?? fileURLToPath(new URL('../../tests/fixtures/juyiting/hall-map.snapshot.json', import.meta.url))
+const defaultAtomicOperations = {
+  randomUUID,
+  closeSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+}
 
-try {
-  const update = parseArguments(process.argv.slice(2))
+// CLI contract: no arguments checks the committed snapshot; --update atomically replaces it.
+export function runValidateMap(args = process.argv.slice(2), environment = process.env) {
+  const update = parseArguments(args)
+  const tmxPath = environment.JIA_JUYITING_TMX_PATH
+    ?? fileURLToPath(new URL('../../public/juyiting/hall.tmx', import.meta.url))
+  const snapshotPath = environment.JIA_JUYITING_SNAPSHOT_PATH
+    ?? fileURLToPath(new URL('../../tests/fixtures/juyiting/hall-map.snapshot.json', import.meta.url))
   const runtime = parseMovementTmx(readRequiredFile(tmxPath, 'Juyiting TMX source'))
   const validation = validateMapRuntime(runtime)
   if (!validation.valid) {
@@ -25,7 +37,7 @@ try {
   }
 
   const actual = serializeMapSnapshot(createMapSnapshot(runtime))
-  if (update) atomicWrite(snapshotPath, actual, 'Juyiting map snapshot')
+  if (update) atomicReplaceFile(snapshotPath, actual, 'Juyiting map snapshot')
   else {
     const expected = readArtifact(snapshotPath, 'Juyiting map snapshot', 'snapshot')
     if (actual !== expected) {
@@ -34,9 +46,46 @@ try {
   }
 
   console.log('Juyiting map valid')
-} catch (error) {
-  console.error(error instanceof Error ? error.message : String(error))
-  process.exitCode = 1
+}
+
+export function atomicReplaceFile(path, content, label, operations = defaultAtomicOperations) {
+  operations.mkdirSync(dirname(path), { recursive: true })
+  ensureDestinationFileOrMissing(path, label, operations)
+  const temporaryPath = `${path}.tmp-${process.pid}-${operations.randomUUID()}`
+  let descriptor
+  let temporaryCreated = false
+  try {
+    descriptor = operations.openSync(temporaryPath, 'wx')
+    temporaryCreated = true
+    operations.writeFileSync(descriptor, content, { encoding: 'utf8' })
+    operations.fsyncSync(descriptor)
+    operations.closeSync(descriptor)
+    descriptor = undefined
+    if (operations.readFileSync(temporaryPath, 'utf8') !== content) {
+      throw new Error(`${label} temporary write verification failed.`)
+    }
+    operations.renameSync(temporaryPath, path)
+    temporaryCreated = false
+  } catch (primaryError) {
+    const cleanupErrors = []
+    if (descriptor !== undefined) {
+      try { operations.closeSync(descriptor) } catch (error) { cleanupErrors.push(asError(error)) }
+      descriptor = undefined
+    }
+    if (temporaryCreated) {
+      try { operations.unlinkSync(temporaryPath) } catch (error) {
+        if (error?.code !== 'ENOENT') cleanupErrors.push(asError(error))
+      }
+    }
+    if (cleanupErrors.length > 0) {
+      const primary = asError(primaryError)
+      throw new AggregateError(
+        [primary, ...cleanupErrors],
+        `${label} replacement failed: ${primary.message}; cleanup also failed: ${cleanupErrors.map(error => error.message).join('; ')}`,
+      )
+    }
+    throw primaryError
+  }
 }
 
 function parseArguments(args) {
@@ -65,52 +114,26 @@ function readArtifact(path, label, shortName) {
   }
 }
 
-function atomicWrite(path, content, label) {
-  mkdirSync(dirname(path), { recursive: true })
-  const existing = existingFile(path, label)
-  const suffix = `${process.pid}-${randomUUID()}`
-  const temporaryPath = `${path}.tmp-${suffix}`
-  const backupPath = `${path}.bak-${suffix}`
-  let backupCreated = false
-  let installed = false
+function ensureDestinationFileOrMissing(path, label, operations) {
   try {
-    writeFileSync(temporaryPath, content, { encoding: 'utf8', flag: 'wx' })
-    if (readFileSync(temporaryPath, 'utf8') !== content) throw new Error(`${label} temporary write verification failed.`)
-    if (existing) {
-      renameSync(path, backupPath)
-      backupCreated = true
-    }
-    renameSync(temporaryPath, path)
-    installed = true
-    if (backupCreated) {
-      try { unlinkSync(backupPath); backupCreated = false } catch {}
-    }
-  } catch (error) {
-    if (installed) safeUnlink(path)
-    if (backupCreated) {
-      try { renameSync(backupPath, path); backupCreated = false } catch {}
-    }
-    throw error
-  } finally {
-    safeUnlink(temporaryPath)
-  }
-}
-
-function existingFile(path, label) {
-  try {
-    const stat = statSync(path)
+    const stat = operations.statSync(path)
     if (!stat.isFile()) throw new Error(`${label} path is not a regular file: ${path}`)
-    return true
   } catch (error) {
-    if (error?.code === 'ENOENT') return false
-    throw error
+    if (error?.code !== 'ENOENT') throw error
   }
 }
 
-function safeUnlink(path) {
-  try { unlinkSync(path) } catch (error) { if (error?.code !== 'ENOENT') throw error }
+function asError(error) {
+  return error instanceof Error ? error : new Error(String(error))
 }
 
 function errorCode(error) {
   return error?.code ? `${error.code}: ${error.message}` : String(error)
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try { runValidateMap() } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exitCode = 1
+  }
 }

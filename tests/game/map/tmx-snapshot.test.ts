@@ -26,6 +26,7 @@ const embeddedArt = [{
   height: 928,
   opacity: 1,
 }]
+const testGenerationId = 'a'.repeat(64)
 
 describe('Juyiting TMX snapshots and previews', () => {
   it('sorts stable-ID collections and rounds every coordinate to three decimals', () => {
@@ -68,12 +69,13 @@ describe('Juyiting TMX snapshots and previews', () => {
 
   it('renders a native clean preview with map context and business labels only', () => {
     const runtime = sampleRuntime()
-    const svg = renderMapPreview(runtime, { debug: false, art: embeddedArt })
+    const svg = renderMapPreview(runtime, { debug: false, art: embeddedArt, generationId: testGenerationId })
 
     assert.ok(svg.includes('<svg xmlns="http://www.w3.org/2000/svg" width="1664" height="928" viewBox="0 0 1664 928"'))
     assert.ok(svg.includes('class="map-art"'))
     assert.ok(svg.includes('href="data:image/png;base64,cG5n"'))
     assert.ok(svg.includes('data-art-id="art&lt;&amp;"'))
+    assert.ok(svg.includes(`data-generation-id="${testGenerationId}"`))
     assert.ok(!svg.includes('liangshan-hall-base-clean-v3.png'))
     assert.ok(svg.includes('Region &amp; &lt;A&gt;'))
     assert.ok(!svg.includes('class="nav-edge"'))
@@ -83,9 +85,9 @@ describe('Juyiting TMX snapshots and previews', () => {
   it('renders deterministic escaped debug overlays for graph, obstacles, slots, IDs, and widths', () => {
     const runtime = sampleRuntime()
     ;(runtime.slots[0] as unknown as { kind: string }).kind = 'home"><script>'
-    const svg = renderMapPreview(runtime, { debug: true, art: embeddedArt })
+    const svg = renderMapPreview(runtime, { debug: true, art: embeddedArt, generationId: testGenerationId })
 
-    assert.equal(renderMapPreview(runtime, { debug: true, art: embeddedArt }), svg)
+    assert.equal(renderMapPreview(runtime, { debug: true, art: embeddedArt, generationId: testGenerationId }), svg)
     assert.ok(svg.includes('class="nav-edge"'))
     assert.ok(svg.includes('marker-end="url(#nav-arrow)"'))
     assert.ok(svg.includes('class="nav-node"'))
@@ -99,8 +101,58 @@ describe('Juyiting TMX snapshots and previews', () => {
 
   it('requires caller-derived preview art instead of silently selecting a filename', () => {
     assert.throws(
-      () => renderMapPreview(sampleRuntime(), { debug: false, art: [] }),
+      () => renderMapPreview(sampleRuntime(), { debug: false, art: [], generationId: testGenerationId }),
       /preview art descriptor/i,
+    )
+  })
+
+  it('renames a synced sibling temp directly over the destination without pre-removal', async () => {
+    // @ts-expect-error CLI script intentionally has no TypeScript declaration file
+    const { atomicReplaceFile } = await import('../../../scripts/juyiting/validate-map.mjs')
+    const calls: string[] = []
+    const destination = 'C:/artifacts/hall.svg'
+    const operations = fakeAtomicOperations(calls, {
+      renameSync(from: string, to: string) {
+        calls.push(`rename:${from}->${to}`)
+        throw new Error('rename failed')
+      },
+    })
+
+    assert.throws(
+      () => atomicReplaceFile(destination, 'new-content', 'preview', operations),
+      /rename failed/,
+    )
+    assert.ok(calls.some(call => call.startsWith('fsync:')))
+    assert.ok(calls.some(call => call.startsWith('close:')))
+    assert.ok(calls.some(call => call.startsWith('rename:C:/artifacts/hall.svg.tmp-') && call.endsWith('->C:/artifacts/hall.svg')))
+    assert.ok(!calls.some(call => call === `unlink:${destination}`))
+    assert.ok(!calls.some(call => call.startsWith(`rename:${destination}->`)))
+  })
+
+  it('surfaces primary and cleanup failures together', async () => {
+    // @ts-expect-error CLI script intentionally has no TypeScript declaration file
+    const { atomicReplaceFile } = await import('../../../scripts/juyiting/validate-map.mjs')
+    const operations = fakeAtomicOperations([], {
+      fsyncSync() { throw new Error('primary fsync failure') },
+      closeSync() { throw new Error('cleanup close failure') },
+      unlinkSync() { throw new Error('cleanup unlink failure') },
+    })
+
+    assert.throws(
+      () => atomicReplaceFile('C:/artifacts/hall.svg', 'content', 'preview', operations),
+      (error: unknown) => {
+        assert.ok(error instanceof AggregateError)
+        assert.match(error.message, /cleanup also failed/i)
+        assert.match(error.message, /primary fsync failure/)
+        assert.match(error.message, /cleanup close failure/)
+        assert.match(error.message, /cleanup unlink failure/)
+        assert.deepEqual(error.errors.map(item => (item as Error).message), [
+          'primary fsync failure',
+          'cleanup close failure',
+          'cleanup unlink failure',
+        ])
+        return true
+      },
     )
   })
 
@@ -164,6 +216,7 @@ describe('Juyiting TMX snapshots and previews', () => {
       assert.equal(update.stdout.trim(), 'Juyiting map previews valid')
       const cleanBefore = readFileSync(paths.cleanPath, 'utf8')
       const debugBefore = readFileSync(paths.debugPath, 'utf8')
+      assert.equal(previewGenerationId(cleanBefore), previewGenerationId(debugBefore))
       assert.match(cleanBefore, /data:image\/png;base64,/)
       assert.equal(runScript(previewScript, [], env).status, 0)
 
@@ -184,8 +237,17 @@ describe('Juyiting TMX snapshots and previews', () => {
       assert.notEqual(runScript(previewScript, [], env).status, 0)
       assert.equal(runScript(previewScript, ['--update'], env).status, 0)
       const changedClean = readFileSync(paths.cleanPath, 'utf8')
+      const changedDebug = readFileSync(paths.debugPath, 'utf8')
       assert.notEqual(changedClean, cleanBefore)
       assert.ok(changedClean.includes(alternateBytes.toString('base64')))
+      assert.equal(previewGenerationId(changedClean), previewGenerationId(changedDebug))
+      assert.notEqual(previewGenerationId(changedClean), previewGenerationId(cleanBefore))
+
+      writeFileSync(paths.debugPath, debugBefore, 'utf8')
+      const mixedGeneration = runScript(previewScript, [], env)
+      assert.notEqual(mixedGeneration.status, 0)
+      assert.match(mixedGeneration.stderr, /preview generation mismatch/i)
+      assert.equal(runScript(previewScript, ['--update'], env).status, 0)
 
       const cleanStable = changedClean
       rmSync(paths.debugPath)
@@ -330,4 +392,27 @@ function temporaryArtifacts(root: string): string[] {
   }
   visit(root)
   return found
+}
+
+function previewGenerationId(svg: string): string {
+  const match = svg.match(/data-generation-id="([a-f0-9]{64})"/)
+  assert.ok(match, 'preview generation ID is missing')
+  return match[1]
+}
+
+function fakeAtomicOperations(calls: string[], overrides: Record<string, unknown> = {}) {
+  const operations = {
+    randomUUID: () => 'test-id',
+    mkdirSync: (path: string) => { calls.push(`mkdir:${path}`) },
+    statSync: (path: string) => { calls.push(`stat:${path}`); return { isFile: () => true } },
+    openSync: (path: string) => { calls.push(`open:${path}`); return 7 },
+    writeFileSync: (fd: number) => { calls.push(`write:${fd}`) },
+    fsyncSync: (fd: number) => { calls.push(`fsync:${fd}`) },
+    closeSync: (fd: number) => { calls.push(`close:${fd}`) },
+    readFileSync: (path: string) => { calls.push(`read:${path}`); return 'new-content' },
+    renameSync: (from: string, to: string) => { calls.push(`rename:${from}->${to}`) },
+    unlinkSync: (path: string) => { calls.push(`unlink:${path}`) },
+    ...overrides,
+  }
+  return operations
 }

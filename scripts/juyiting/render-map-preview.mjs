@@ -1,7 +1,5 @@
-import { randomUUID } from 'node:crypto'
-import {
-  mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync,
-} from 'node:fs'
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { dirname, extname, isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -10,8 +8,10 @@ import { SaxesParser } from 'saxes'
 import { validateMapRuntime } from '../../src/game/map/mapValidation.ts'
 import { renderMapPreview } from '../../src/game/map/tmxPreviewRenderer.ts'
 import { parseMovementTmx } from '../../src/game/map/tmxMovementParser.ts'
+import { atomicReplaceFile } from './validate-map.mjs'
 
-// CLI contract: no arguments checks both committed previews; --update atomically replaces the pair.
+// CLI contract: no arguments checks both committed previews; --update atomically replaces each file.
+// The shared content-set ID makes a process interruption between the two portable replaces detectable.
 const tmxPath = process.env.JIA_JUYITING_TMX_PATH
   ?? fileURLToPath(new URL('../../public/juyiting/hall.tmx', import.meta.url))
 const outputDirectory = process.env.JIA_JUYITING_PREVIEW_DIR
@@ -30,18 +30,23 @@ try {
   }
 
   const art = loadPreviewArt(tmx, tmxPath, runtime.width, runtime.height)
-  const clean = renderMapPreview(runtime, { debug: false, art })
-  const debug = renderMapPreview(runtime, { debug: true, art })
+  const generationId = createGenerationId(runtime, art)
+  const clean = renderMapPreview(runtime, { debug: false, art, generationId })
+  const debug = renderMapPreview(runtime, { debug: true, art, generationId })
   validateSvg(clean, 'clean preview')
   validateSvg(debug, 'debug preview')
 
-  if (update) atomicWritePair([
-    { path: cleanPath, content: clean, label: 'Juyiting clean preview' },
-    { path: debugPath, content: debug, label: 'Juyiting debug preview' },
-  ])
+  if (update) {
+    // Each direct rename is atomic. A process stop between these calls can only create a detectable mixed pair.
+    atomicReplaceFile(cleanPath, clean, 'Juyiting clean preview')
+    atomicReplaceFile(debugPath, debug, 'Juyiting debug preview')
+  }
   else {
-    compareArtifact(cleanPath, clean, 'Juyiting clean preview')
-    compareArtifact(debugPath, debug, 'Juyiting debug preview')
+    const committedClean = readPreviewArtifact(cleanPath, 'Juyiting clean preview')
+    const committedDebug = readPreviewArtifact(debugPath, 'Juyiting debug preview')
+    verifyGenerationPair(committedClean, committedDebug, generationId)
+    compareArtifact(committedClean, clean, 'Juyiting clean preview')
+    compareArtifact(committedDebug, debug, 'Juyiting debug preview')
   }
 
   console.log('Juyiting map previews valid')
@@ -74,6 +79,13 @@ function loadPreviewArt(tmx, sourcePath, mapWidth, mapHeight) {
     height: reference.height,
     opacity: reference.opacity,
   }))
+}
+
+function createGenerationId(runtime, art) {
+  const provisionalId = '0'.repeat(64)
+  const clean = renderMapPreview(runtime, { debug: false, art, generationId: provisionalId })
+  const debug = renderMapPreview(runtime, { debug: true, art, generationId: provisionalId })
+  return createHash('sha256').update(clean).update('\0').update(debug).digest('hex')
 }
 
 function parseArtReferences(tmx) {
@@ -144,81 +156,37 @@ function imageMimeType(source) {
   throw new Error(`Unsupported map art format for ${source}. Supported formats: PNG, JPEG, WebP.`)
 }
 
-function compareArtifact(path, actual, label) {
-  let expected
+function readPreviewArtifact(path, label) {
   try {
-    expected = readFileSync(path, 'utf8')
+    return readFileSync(path, 'utf8')
   } catch (error) {
     if (error?.code === 'ENOENT') {
       throw new Error(`${label} is missing. Run npm run preview:juyiting-map -- --update.`)
     }
     throw new Error(`Unable to read preview at ${path}: ${errorCode(error)}`)
   }
+}
+
+function verifyGenerationPair(clean, debug, expectedGenerationId) {
+  const cleanGenerationId = previewGenerationId(clean, 'clean')
+  const debugGenerationId = previewGenerationId(debug, 'debug')
+  if (cleanGenerationId !== debugGenerationId) {
+    throw new Error(`Juyiting preview generation mismatch: clean=${cleanGenerationId}, debug=${debugGenerationId}. Run npm run preview:juyiting-map -- --update.`)
+  }
+  if (cleanGenerationId !== expectedGenerationId) {
+    throw new Error(`Juyiting preview generation mismatch: committed=${cleanGenerationId}, expected=${expectedGenerationId}. Run npm run preview:juyiting-map -- --update.`)
+  }
+}
+
+function previewGenerationId(svg, label) {
+  const match = svg.match(/data-generation-id="([a-f0-9]{64})"/)
+  if (!match) throw new Error(`Juyiting ${label} preview generation ID is missing or invalid. Run npm run preview:juyiting-map -- --update.`)
+  return match[1]
+}
+
+function compareArtifact(expected, actual, label) {
   if (actual !== expected) {
     throw new Error(`${label} mismatch. Review the TMX/art change, then run npm run preview:juyiting-map -- --update.`)
-  }
-}
-
-function atomicWritePair(artifacts) {
-  for (const artifact of artifacts) mkdirSync(dirname(artifact.path), { recursive: true })
-  const existing = artifacts.map(artifact => existingFile(artifact.path, artifact.label))
-  const suffix = `${process.pid}-${randomUUID()}`
-  const states = artifacts.map((artifact, index) => ({
-    ...artifact,
-    existed: existing[index],
-    temporaryPath: `${artifact.path}.tmp-${suffix}`,
-    backupPath: `${artifact.path}.bak-${suffix}`,
-    backupCreated: false,
-    installed: false,
-  }))
-  try {
-    for (const state of states) {
-      writeFileSync(state.temporaryPath, state.content, { encoding: 'utf8', flag: 'wx' })
-      if (readFileSync(state.temporaryPath, 'utf8') !== state.content) {
-        throw new Error(`${state.label} temporary write verification failed.`)
-      }
-      validateSvg(readFileSync(state.temporaryPath, 'utf8'), `${state.label} temporary file`)
-    }
-    for (const state of states) {
-      if (state.existed) {
-        renameSync(state.path, state.backupPath)
-        state.backupCreated = true
-      }
-    }
-    for (const state of states) {
-      renameSync(state.temporaryPath, state.path)
-      state.installed = true
-    }
-    for (const state of states) {
-      if (state.backupCreated) {
-        try { unlinkSync(state.backupPath); state.backupCreated = false } catch {}
-      }
-    }
-  } catch (error) {
-    for (const state of [...states].reverse()) {
-      if (state.installed) safeUnlink(state.path)
-    }
-    for (const state of [...states].reverse()) {
-      if (state.backupCreated) {
-        try { renameSync(state.backupPath, state.path); state.backupCreated = false } catch {}
-      }
-    }
-    throw error
-  } finally {
-    for (const state of states) {
-      safeUnlink(state.temporaryPath)
-    }
-  }
-}
-
-function existingFile(path, label) {
-  try {
-    const stat = statSync(path)
-    if (!stat.isFile()) throw new Error(`${label} path is not a regular file: ${path}`)
-    return true
-  } catch (error) {
-    if (error?.code === 'ENOENT') return false
-    throw error
   }
 }
 
@@ -245,10 +213,6 @@ function positiveNumber(value, label) {
   const result = finiteNumber(value, label)
   if (!(result > 0)) throw new Error(`Invalid ${label}: ${value}`)
   return result
-}
-
-function safeUnlink(path) {
-  try { unlinkSync(path) } catch (error) { if (error?.code !== 'ENOENT' && error?.code !== 'EISDIR' && error?.code !== 'EPERM') throw error }
 }
 
 function errorCode(error) {

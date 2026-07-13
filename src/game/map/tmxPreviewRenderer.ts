@@ -4,6 +4,7 @@ import { createMapSnapshot } from './tmxSnapshot.js'
 export interface MapPreviewOptions {
   debug: boolean
   art: readonly MapPreviewArtDescriptor[]
+  generationId: string
 }
 
 export interface MapPreviewArtDescriptor {
@@ -18,9 +19,10 @@ export interface MapPreviewArtDescriptor {
 
 export function renderMapPreview(runtime: MapRuntimeData, options: MapPreviewOptions): string {
   if (options.art.length === 0) throw new Error('At least one caller-derived preview art descriptor is required.')
+  if (!/^[a-f0-9]{64}$/.test(options.generationId)) throw new Error('Preview generation ID must be a 64-character lowercase SHA-256 hex string.')
   const map = createMapSnapshot(runtime)
   const lines = [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${map.width}" height="${map.height}" viewBox="0 0 ${map.width} ${map.height}" role="img" aria-labelledby="map-title map-description">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${map.width}" height="${map.height}" viewBox="0 0 ${map.width} ${map.height}" data-generation-id="${options.generationId}" role="img" aria-labelledby="map-title map-description">`,
     '  <title id="map-title">Juyiting map preview</title>',
     `  <desc id="map-description">${escapeXml(`${map.sceneId} · graph ${map.navGraphVersion} · sprites ${map.spriteManifestVersion}`)}</desc>`,
     '  <defs>',
