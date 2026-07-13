@@ -3,11 +3,21 @@ import { createMapSnapshot } from './tmxSnapshot.js'
 
 export interface MapPreviewOptions {
   debug: boolean
+  art: readonly MapPreviewArtDescriptor[]
 }
 
-const MAP_ART_HREF = '../../../../public/juyiting/images/liangshan-hall-base-clean-v3.png'
+export interface MapPreviewArtDescriptor {
+  stableId: string
+  href: string
+  x: number
+  y: number
+  width: number
+  height: number
+  opacity: number
+}
 
 export function renderMapPreview(runtime: MapRuntimeData, options: MapPreviewOptions): string {
+  if (options.art.length === 0) throw new Error('At least one caller-derived preview art descriptor is required.')
   const map = createMapSnapshot(runtime)
   const lines = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${map.width}" height="${map.height}" viewBox="0 0 ${map.width} ${map.height}" role="img" aria-labelledby="map-title map-description">`,
@@ -33,7 +43,7 @@ export function renderMapPreview(runtime: MapRuntimeData, options: MapPreviewOpt
     '    </style>',
     '  </defs>',
     `  <rect width="${map.width}" height="${map.height}" fill="#17251d"/>`,
-    `  <image class="map-art" href="${MAP_ART_HREF}" x="0" y="0" width="${map.width}" height="${map.height}" preserveAspectRatio="none"/>`,
+    ...options.art.map(art => `  <image class="map-art" data-art-id="${escapeXml(art.stableId)}" href="${escapeXml(art.href)}" x="${number(art.x)}" y="${number(art.y)}" width="${number(art.width)}" height="${number(art.height)}" opacity="${number(art.opacity)}" preserveAspectRatio="none"/>`),
     '  <g class="business-regions">',
     ...map.regions.flatMap(region => {
       const center = polygonCenter(region.polygon)
@@ -73,7 +83,7 @@ function debugLayers(map: ReturnType<typeof createMapSnapshot>): string[] {
     '  </g>',
     '  <g class="debug-slots">',
     ...map.slots.flatMap(slot => [
-      `    <rect class="slot slot-${slot.kind}" data-stable-id="${escapeXml(slot.stableId)}" x="${number(slot.point.x - 7)}" y="${number(slot.point.y - 7)}" width="14" height="14" rx="3"><title>${escapeXml(`${slot.stableId} · ${slot.kind} · ${slot.slotId}`)}</title></rect>`,
+      `    <rect class="slot slot-${escapeXml(String(slot.kind))}" data-stable-id="${escapeXml(slot.stableId)}" x="${number(slot.point.x - 7)}" y="${number(slot.point.y - 7)}" width="14" height="14" rx="3"><title>${escapeXml(`${slot.stableId} · ${slot.kind} · ${slot.slotId}`)}</title></rect>`,
       `    <text class="debug-label debug-small" x="${number(slot.point.x + 11)}" y="${number(slot.point.y + 5)}">${escapeXml(`${slot.stableId} · ${slot.kind}`)}</text>`,
     ]),
     '  </g>',

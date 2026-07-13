@@ -1,5 +1,11 @@
-import { readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import {
+  copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync,
+} from 'node:fs'
 import assert from 'node:assert/strict'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import type { MapRuntimeData } from '../../../src/game/map/movementSchema.js'
 import { renderMapPreview } from '../../../src/game/map/tmxPreviewRenderer.js'
@@ -8,6 +14,18 @@ import { parseMovementTmx } from '../../../src/game/map/tmxMovementParser.js'
 
 const fixtureUrl = new URL('../../fixtures/juyiting/hall-map.snapshot.json', import.meta.url)
 const hallTmxUrl = new URL('../../../public/juyiting/hall.tmx', import.meta.url)
+const projectRoot = fileURLToPath(new URL('../../../', import.meta.url))
+const validateScript = join(projectRoot, 'scripts/juyiting/validate-map.mjs')
+const previewScript = join(projectRoot, 'scripts/juyiting/render-map-preview.mjs')
+const embeddedArt = [{
+  stableId: 'art<&',
+  href: 'data:image/png;base64,cG5n',
+  x: 0,
+  y: 0,
+  width: 1664,
+  height: 928,
+  opacity: 1,
+}]
 
 describe('Juyiting TMX snapshots and previews', () => {
   it('sorts stable-ID collections and rounds every coordinate to three decimals', () => {
@@ -50,10 +68,13 @@ describe('Juyiting TMX snapshots and previews', () => {
 
   it('renders a native clean preview with map context and business labels only', () => {
     const runtime = sampleRuntime()
-    const svg = renderMapPreview(runtime, { debug: false })
+    const svg = renderMapPreview(runtime, { debug: false, art: embeddedArt })
 
     assert.ok(svg.includes('<svg xmlns="http://www.w3.org/2000/svg" width="1664" height="928" viewBox="0 0 1664 928"'))
     assert.ok(svg.includes('class="map-art"'))
+    assert.ok(svg.includes('href="data:image/png;base64,cG5n"'))
+    assert.ok(svg.includes('data-art-id="art&lt;&amp;"'))
+    assert.ok(!svg.includes('liangshan-hall-base-clean-v3.png'))
     assert.ok(svg.includes('Region &amp; &lt;A&gt;'))
     assert.ok(!svg.includes('class="nav-edge"'))
     assert.ok(!svg.includes('node-a'))
@@ -61,9 +82,10 @@ describe('Juyiting TMX snapshots and previews', () => {
 
   it('renders deterministic escaped debug overlays for graph, obstacles, slots, IDs, and widths', () => {
     const runtime = sampleRuntime()
-    const svg = renderMapPreview(runtime, { debug: true })
+    ;(runtime.slots[0] as unknown as { kind: string }).kind = 'home"><script>'
+    const svg = renderMapPreview(runtime, { debug: true, art: embeddedArt })
 
-    assert.equal(renderMapPreview(runtime, { debug: true }), svg)
+    assert.equal(renderMapPreview(runtime, { debug: true, art: embeddedArt }), svg)
     assert.ok(svg.includes('class="nav-edge"'))
     assert.ok(svg.includes('marker-end="url(#nav-arrow)"'))
     assert.ok(svg.includes('class="nav-node"'))
@@ -73,6 +95,129 @@ describe('Juyiting TMX snapshots and previews', () => {
     assert.ok(svg.includes('slot-a · home'))
     assert.ok(!svg.includes('<script>'))
     assert.ok(svg.includes('&lt;script&gt;'))
+  })
+
+  it('requires caller-derived preview art instead of silently selecting a filename', () => {
+    assert.throws(
+      () => renderMapPreview(sampleRuntime(), { debug: false, art: [] }),
+      /preview art descriptor/i,
+    )
+  })
+
+  it('checks committed artifacts by default and rejects unknown CLI arguments', function () {
+    this.timeout(20_000)
+    const validate = runScript(validateScript)
+    const preview = runScript(previewScript)
+    assert.equal(validate.status, 0, validate.stderr)
+    assert.equal(validate.stdout.trim(), 'Juyiting map valid')
+    assert.equal(preview.status, 0, preview.stderr)
+    assert.equal(preview.stdout.trim(), 'Juyiting map previews valid')
+
+    const validateUnknown = runScript(validateScript, ['--wat'])
+    const previewUnknown = runScript(previewScript, ['--wat'])
+    assert.notEqual(validateUnknown.status, 0)
+    assert.match(validateUnknown.stderr, /Unknown arguments: --wat/)
+    assert.notEqual(previewUnknown.status, 0)
+    assert.match(previewUnknown.stderr, /Unknown arguments: --wat/)
+  })
+
+  it('integrates atomic snapshot check/update semantics for missing, mismatch, and I/O failures', function () {
+    this.timeout(20_000)
+    withScriptFixture(paths => {
+      const env = fixtureEnvironment(paths)
+      const missing = runScript(validateScript, [], env)
+      assert.notEqual(missing.status, 0)
+      assert.match(missing.stderr, /snapshot is missing/i)
+
+      const update = runScript(validateScript, ['--update'], env)
+      assert.equal(update.status, 0, update.stderr)
+      const committed = readFileSync(paths.snapshotPath, 'utf8')
+      assert.equal(runScript(validateScript, [], env).status, 0)
+
+      writeFileSync(paths.snapshotPath, `${committed}mismatch`, 'utf8')
+      const mismatch = runScript(validateScript, [], env)
+      assert.notEqual(mismatch.status, 0)
+      assert.match(mismatch.stderr, /snapshot mismatch/i)
+      assert.equal(runScript(validateScript, ['--update'], env).status, 0)
+      assert.equal(readFileSync(paths.snapshotPath, 'utf8'), committed)
+
+      rmSync(paths.snapshotPath)
+      mkdirSync(paths.snapshotPath)
+      const ioFailure = runScript(validateScript, [], env)
+      assert.notEqual(ioFailure.status, 0)
+      assert.doesNotMatch(ioFailure.stderr, /snapshot is missing/i)
+      assert.match(ioFailure.stderr, /Unable to read/i)
+      assert.deepEqual(temporaryArtifacts(paths.root), [])
+    })
+  })
+
+  it('integrates portable preview check/update, art changes, and no-partial-write failure handling', function () {
+    this.timeout(20_000)
+    withScriptFixture(paths => {
+      const env = fixtureEnvironment(paths)
+      const missing = runScript(previewScript, [], env)
+      assert.notEqual(missing.status, 0)
+      assert.match(missing.stderr, /preview is missing/i)
+
+      const update = runScript(previewScript, ['--update'], env)
+      assert.equal(update.status, 0, update.stderr)
+      assert.equal(update.stdout.trim(), 'Juyiting map previews valid')
+      const cleanBefore = readFileSync(paths.cleanPath, 'utf8')
+      const debugBefore = readFileSync(paths.debugPath, 'utf8')
+      assert.match(cleanBefore, /data:image\/png;base64,/)
+      assert.equal(runScript(previewScript, [], env).status, 0)
+
+      writeFileSync(paths.cleanPath, `${cleanBefore}mismatch`, 'utf8')
+      const mismatch = runScript(previewScript, [], env)
+      assert.notEqual(mismatch.status, 0)
+      assert.match(mismatch.stderr, /preview mismatch/i)
+      assert.equal(readFileSync(paths.debugPath, 'utf8'), debugBefore)
+      assert.equal(runScript(previewScript, ['--update'], env).status, 0)
+
+      const alternateBytes = Buffer.from('alternate-map-art')
+      writeFileSync(join(dirname(paths.tmxPath), 'images/alternate.png'), alternateBytes)
+      writeFileSync(
+        paths.tmxPath,
+        readFileSync(paths.tmxPath, 'utf8').replace('images/liangshan-hall-base-clean-v3.png', 'images/alternate.png'),
+        'utf8',
+      )
+      assert.notEqual(runScript(previewScript, [], env).status, 0)
+      assert.equal(runScript(previewScript, ['--update'], env).status, 0)
+      const changedClean = readFileSync(paths.cleanPath, 'utf8')
+      assert.notEqual(changedClean, cleanBefore)
+      assert.ok(changedClean.includes(alternateBytes.toString('base64')))
+
+      const cleanStable = changedClean
+      rmSync(paths.debugPath)
+      mkdirSync(paths.debugPath)
+      const failedUpdate = runScript(previewScript, ['--update'], env)
+      assert.notEqual(failedUpdate.status, 0)
+      assert.equal(readFileSync(paths.cleanPath, 'utf8'), cleanStable)
+      assert.ok(readdirSync(paths.debugPath).length === 0)
+      assert.deepEqual(temporaryArtifacts(paths.root), [])
+    })
+  })
+
+  it('fails clearly for missing and unsupported TMX art references', function () {
+    this.timeout(20_000)
+    withScriptFixture(paths => {
+      const env = fixtureEnvironment(paths)
+      rmSync(join(dirname(paths.tmxPath), 'images/liangshan-hall-base-clean-v3.png'))
+      const missingArt = runScript(previewScript, ['--update'], env)
+      assert.notEqual(missingArt.status, 0)
+      assert.match(missingArt.stderr, /Referenced map art is missing/i)
+
+      writeFileSync(
+        paths.tmxPath,
+        readFileSync(paths.tmxPath, 'utf8').replace('images/liangshan-hall-base-clean-v3.png', 'images/unsupported.bmp'),
+        'utf8',
+      )
+      writeFileSync(join(dirname(paths.tmxPath), 'images/unsupported.bmp'), 'bmp')
+      const unsupported = runScript(previewScript, ['--update'], env)
+      assert.notEqual(unsupported.status, 0)
+      assert.match(unsupported.stderr, /Unsupported map art format/i)
+      assert.deepEqual(temporaryArtifacts(paths.root), [])
+    })
   })
 })
 
@@ -117,4 +262,72 @@ function region(stableId: string, label: string, x: number): MapRuntimeData['reg
     riskLevel: 'low',
     polygon: { points: [{ x, y: 2.34567 }, { x: x + 2, y: 2.34567 }, { x: x + 2, y: 4.34567 }] },
   }
+}
+
+interface ScriptFixturePaths {
+  root: string
+  tmxPath: string
+  snapshotPath: string
+  previewDirectory: string
+  cleanPath: string
+  debugPath: string
+}
+
+function runScript(script: string, args: string[] = [], env: Record<string, string> = {}) {
+  return spawnSync(process.execPath, ['--import', 'tsx', script, ...args], {
+    cwd: projectRoot,
+    env: { ...process.env, ...env },
+    encoding: 'utf8',
+  })
+}
+
+function withScriptFixture(callback: (paths: ScriptFixturePaths) => void): void {
+  const root = mkdtempSync(join(tmpdir(), 'juyiting-map-artifacts-'))
+  const tmxPath = join(root, 'hall.tmx')
+  const snapshotPath = join(root, 'hall-map.snapshot.json')
+  const previewDirectory = join(root, 'previews')
+  const paths = {
+    root,
+    tmxPath,
+    snapshotPath,
+    previewDirectory,
+    cleanPath: join(previewDirectory, 'hall-clean.svg'),
+    debugPath: join(previewDirectory, 'hall-debug.svg'),
+  }
+  try {
+    copyFileSync(fileURLToPath(hallTmxUrl), tmxPath)
+    const imageDirectory = join(root, 'images')
+    mkdirSync(imageDirectory, { recursive: true })
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64')
+    for (const name of [
+      'liangshan-hall-base-clean-v3.png',
+      'liangshan-hall-mid-occluders-v3.png',
+      'liangshan-hall-foreground-occluders-v3.png',
+      'liangshan-hall-lighting-overlay-v3.png',
+    ]) writeFileSync(join(imageDirectory, name), png)
+    callback(paths)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+}
+
+function fixtureEnvironment(paths: ScriptFixturePaths): Record<string, string> {
+  return {
+    JIA_JUYITING_TMX_PATH: paths.tmxPath,
+    JIA_JUYITING_SNAPSHOT_PATH: paths.snapshotPath,
+    JIA_JUYITING_PREVIEW_DIR: paths.previewDirectory,
+  }
+}
+
+function temporaryArtifacts(root: string): string[] {
+  const found: string[] = []
+  const visit = (directory: string) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name)
+      if (entry.isDirectory()) visit(path)
+      else if (entry.name.includes('.tmp-') || entry.name.includes('.bak-')) found.push(path)
+    }
+  }
+  visit(root)
+  return found
 }
