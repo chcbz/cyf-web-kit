@@ -110,6 +110,43 @@ describe('TMX edit operations', () => {
     assert.match(result, /<polygon points="0,0 20,0 20,20"\/>/)
   })
 
+  it('inserts JavaScript replacement tokens in attribute values literally', () => {
+    const source = `<map><objectgroup name="regions"><object id="1"><properties>
+      <property name="stableId" value="region-token-v1"/><property name="label" value="Old"/>
+    </properties></object></objectgroup></map>`
+    const literal = "literal $& $` $' end"
+    const operations = [{
+      op: 'upsert-object-by-stable-id', group: 'regions', object: {
+        stableId: 'region-token-v1', properties: { label: literal },
+      },
+    }] as const
+
+    const result = applyTmxEditOps(source, operations)
+
+    assert.match(result, /name="label" value="literal \$&amp; \$` \$' end"/)
+    assert.equal(applyTmxEditOps(result, operations), result)
+  })
+
+  it('matches and updates text-valued stable IDs without changing representation', () => {
+    const source = `<map nextobjectid="2"><objectgroup name="regions"><object id="1"><properties>
+      <property name="stableId">region-text-v1</property><property name="label">Old label</property>
+      <property name="custom">keep</property>
+    </properties><point/></object></objectgroup></map>`
+    const operations = [{
+      op: 'upsert-object-by-stable-id', group: 'regions', object: {
+        stableId: 'region-text-v1', properties: { label: 'New label' },
+      },
+    }] as const
+
+    const result = applyTmxEditOps(source, operations)
+
+    assert.equal(result.match(/name="stableId"/g)?.length, 1)
+    assert.match(result, /<property name="stableId">region-text-v1<\/property>/)
+    assert.match(result, /<property name="label">New label<\/property>/)
+    assert.match(result, /<property name="custom">keep<\/property>/)
+    assert.equal(applyTmxEditOps(result, operations), result)
+  })
+
   it('rejects duplicate object-group names before applying operations', () => {
     const source = '<map><objectgroup name="regions"/><objectgroup name="regions"/></map>'
     assert.throws(
@@ -131,6 +168,12 @@ describe('TMX edit operations', () => {
         stableId: 'same', x: 1, y: 1, properties: { kind: 'normal', channelWidth: 48 },
       },
     }]), /Stable ID same already belongs to object group regions/)
+  })
+
+  it('rejects stable-ID conflicts across value-attribute and text property forms', () => {
+    const source = `<map><objectgroup name="regions"><object><properties><property name="stableId" value="same"/></properties></object></objectgroup>
+      <objectgroup name="nav_nodes"><object><properties><property name="stableId">same</property></properties></object></objectgroup></map>`
+    assert.throws(() => applyTmxEditOps(source, []), /Duplicate stable ID: same/)
   })
 
   it('rejects duplicate map properties before mutation', () => {

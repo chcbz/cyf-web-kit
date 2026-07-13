@@ -41,6 +41,7 @@ export type TmxEditOperation =
 interface XmlElement {
   name: string
   attributes: Record<string, string>
+  text: string
   openStart: number
   openEnd: number
   closeStart: number
@@ -216,7 +217,7 @@ function upsertObjectProperty(
     child.name === 'property' && child.attributes.name === name
   ))
   if (!property) throw new Error(`Object property disappeared: ${name}`)
-  result = setElementAttribute(result, property, 'value', formatScalar(value))
+  result = setPropertyValue(result, property, formatScalar(value))
   const refreshed = requiredObjectProperty(result, groupName, stableId, name)
   const type = inferPropertyType(value)
   return type === 'string'
@@ -332,12 +333,19 @@ function setMapCounter(xml: string, name: 'nextlayerid' | 'nextobjectid', value:
 
 function setElementAttribute(xml: string, element: XmlElement, name: string, value: string): string {
   const opening = xml.slice(element.openStart, element.openEnd)
-  const pattern = new RegExp(`(\\s${escapeRegExp(name)}\\s*=\\s*)(["'])[^"']*\\2`)
-  const replacement = `$1"${escapeXml(value)}"`
+  const pattern = new RegExp(`(\\s${escapeRegExp(name)}\\s*=\\s*)(["']).*?\\2`, 's')
   const updated = pattern.test(opening)
-    ? opening.replace(pattern, replacement)
+    ? opening.replace(pattern, (_match, prefix: string) => `${prefix}"${escapeXml(value)}"`)
     : opening.replace(/\s*\/?>(?=$)/, match => ` ${name}="${escapeXml(value)}"${match}`)
   return replaceRange(xml, element.openStart, element.openEnd, updated)
+}
+
+function setPropertyValue(xml: string, property: XmlElement, value: string): string {
+  if (property.attributes.value !== undefined || property.selfClosing) {
+    return setElementAttribute(xml, property, 'value', value)
+  }
+  if (property.children.length > 0) throw new Error(`Cannot replace nested text property ${property.attributes.name ?? ''}`)
+  return replaceRange(xml, property.openEnd, property.closeStart, escapeXml(value))
 }
 
 function removeElementAttribute(xml: string, element: XmlElement, name: string): string {
@@ -380,12 +388,14 @@ function parseElements(xml: string): XmlElement[] {
       if (!current || current.name !== token.name) throw new Error(`Invalid TMX XML near </${token.name}>`)
       current.closeStart = token.start
       current.closeEnd = token.end
+      current.text = current.children.length === 0 ? xml.slice(current.openEnd, token.start) : ''
       continue
     }
     const parent = stack.at(-1)
     const element: OpenElement = {
       name: token.name,
       attributes: token.attributes,
+      text: '',
       openStart: token.start,
       openEnd: token.end,
       closeStart: token.selfClosing ? token.start : -1,
@@ -487,9 +497,16 @@ function requiredObjectProperty(xml: string, groupName: string, stableId: string
 
 function objectStableId(object: XmlElement): string | undefined {
   const properties = childByName(object, 'properties')
-  return properties?.children.find(child => (
+  const property = properties?.children.find(child => (
     child.name === 'property' && child.attributes.name === 'stableId'
-  ))?.attributes.value
+  ))
+  return property ? normalizedPropertyValue(property) : undefined
+}
+
+function normalizedPropertyValue(property: XmlElement): string | undefined {
+  const value = property.attributes.value ?? decodeXml(property.text)
+  const normalized = value.trim()
+  return normalized || undefined
 }
 
 function validateDocumentUniqueness(map: XmlElement): void {
@@ -507,8 +524,9 @@ function validateDocumentUniqueness(map: XmlElement): void {
   for (const object of descendants(map).filter(child => child.name === 'object')) {
     const properties = childByName(object, 'properties')
     for (const property of properties?.children ?? []) {
-      if (property.name === 'property' && property.attributes.name === 'stableId' && property.attributes.value) {
-        stableIds.push(property.attributes.value)
+      if (property.name === 'property' && property.attributes.name === 'stableId') {
+        const stableId = normalizedPropertyValue(property)
+        if (stableId) stableIds.push(stableId)
       }
     }
   }
