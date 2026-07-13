@@ -364,10 +364,7 @@ const {
   resetToPublic,
   setMentionAgent
 } = useHallChatContext({
-  /* useHallChatContext({
-  agents,
-  }) */
-  agents,
+  mapAgents,
   portraitShortName,
   selectedAgent,
   selectedTask

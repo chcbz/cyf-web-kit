@@ -4,6 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
+import WebSocket from 'ws'
 
 const FRONTEND_URL = process.env.JUYITING_FRONTEND_URL || 'https://localhost:8080'
 const BACKEND_URL = process.env.JUYITING_BACKEND_URL || 'https://localhost:10018'
@@ -12,11 +13,20 @@ const LOGIN_USERNAME = process.env.JUYITING_USERNAME || 'chcbz'
 const LOGIN_PASSWORD = process.env.JUYITING_PASSWORD || '123'
 const CHROME_CANDIDATES = [
   process.env.CHROME_PATH,
+  '/usr/local/bin/chromium-headless-smoke',
+  '/usr/bin/chromium-browser',
+  '/usr/bin/chromium',
+  '/usr/bin/google-chrome',
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
   'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
   'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
   'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
 ].filter(Boolean)
+const SCENE_HOTSPOTS = {
+  chat: 'main-seat',
+  tasks: 'bounty-board',
+  library: 'library-shelf'
+}
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
@@ -254,19 +264,85 @@ const stopChrome = async (chrome, userDataDir) => {
   }
 }
 
-const clickByText = (text) => `
-(() => {
-  const target = [...document.querySelectorAll('button, a, .hall-room')]
-    .find(element => (
-      (element.innerText || '').includes(${JSON.stringify(text)}) ||
-      (element.getAttribute('title') || '').includes(${JSON.stringify(text)}) ||
-      (element.getAttribute('aria-label') || '').includes(${JSON.stringify(text)})
-    ));
-  if (!target) return false;
-  target.click();
-  return true;
-})()
-`
+const clickSceneHotspot = async (cdp, hotspotId) => {
+  const objectName = SCENE_HOTSPOTS[hotspotId]
+  if (!objectName) throw new Error(`Unknown scene hotspot: ${hotspotId}`)
+  const point = await evaluate(cdp, `(async () => {
+    const canvas = document.querySelector('.melon-layer canvas');
+    const layer = canvas?.closest('.melon-layer');
+    const rect = layer?.getBoundingClientRect();
+    if (!canvas || !rect?.width || !rect?.height || !canvas.width || !canvas.height) return null;
+    const response = await fetch('/juyiting/hall.tmx');
+    if (!response.ok) return null;
+    const documentNode = new DOMParser().parseFromString(await response.text(), 'text/xml');
+    const map = documentNode.querySelector('map');
+    const object = [...documentNode.querySelectorAll('objectgroup[name="hotspots"] > object')]
+      .find(item => item.getAttribute('name') === ${JSON.stringify(objectName)});
+    const polygon = object?.querySelector('polygon');
+    if (!map || !object || !polygon) return null;
+    const mapWidth = Number(map.getAttribute('width')) * Number(map.getAttribute('tilewidth'));
+    const mapHeight = Number(map.getAttribute('height')) * Number(map.getAttribute('tileheight'));
+    const originX = Number(object.getAttribute('x')) || 0;
+    const originY = Number(object.getAttribute('y')) || 0;
+    const points = (polygon.getAttribute('points') || '').split(/\\s+/).filter(Boolean).map(value => {
+      const [x, y] = value.split(',').map(Number);
+      return { x: originX + x, y: originY + y };
+    });
+    if (!mapWidth || !mapHeight || points.length < 3) return null;
+    const bounds = points.reduce((result, item) => ({
+      minX: Math.min(result.minX, item.x),
+      minY: Math.min(result.minY, item.y),
+      maxX: Math.max(result.maxX, item.x),
+      maxY: Math.max(result.maxY, item.y)
+    }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+    const contains = (candidate) => {
+      let inside = false;
+      for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+        const a = points[i];
+        const b = points[j];
+        if (((a.y > candidate.y) !== (b.y > candidate.y)) &&
+            (candidate.x < (b.x - a.x) * (candidate.y - a.y) / (b.y - a.y) + a.x)) inside = !inside;
+      }
+      return inside;
+    };
+    const center = { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 };
+    let mapPoint = contains(center) ? center : null;
+    const stepX = Math.max(1, (bounds.maxX - bounds.minX) / 20);
+    const stepY = Math.max(1, (bounds.maxY - bounds.minY) / 20);
+    for (let y = bounds.minY + stepY / 2; !mapPoint && y < bounds.maxY; y += stepY) {
+      for (let x = bounds.minX + stepX / 2; x < bounds.maxX; x += stepX) {
+        const candidate = { x, y };
+        if (contains(candidate)) {
+          mapPoint = candidate;
+          break;
+        }
+      }
+    }
+    if (!mapPoint) return null;
+    const scale = Math.max(rect.width / canvas.width, rect.height / canvas.height);
+    const offsetX = (rect.width - canvas.width * scale) / 2;
+    const offsetY = (rect.height - canvas.height * scale) / 2;
+    return {
+      x: rect.left + offsetX + canvas.width * (mapPoint.x / mapWidth) * scale,
+      y: rect.top + offsetY + canvas.height * (mapPoint.y / mapHeight) * scale
+    };
+  })()`)
+  if (!point) throw new Error(`Scene hotspot ${hotspotId} has no clickable canvas point`)
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    x: point.x,
+    y: point.y,
+    button: 'left',
+    clickCount: 1
+  })
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    x: point.x,
+    y: point.y,
+    button: 'left',
+    clickCount: 1
+  })
+}
 
 const closePanel = `
 (() => {
@@ -288,6 +364,7 @@ const run = async () => {
     '--no-first-run',
     '--no-default-browser-check',
     '--ignore-certificate-errors',
+    '--window-size=1440,900',
     `--remote-debugging-port=${debugPort}`,
     `--user-data-dir=${userDataDir}`,
     'about:blank'
@@ -312,7 +389,7 @@ const run = async () => {
     await cdp.send('Page.navigate', { url: `${FRONTEND_URL}/juyiting?transition=none` })
     await waitForExpression(cdp, 'Boolean(document.querySelector(".juyi-page"))')
     await waitForExpression(cdp, '(document.body.innerText || "").includes("聚义厅")')
-    await waitForExpression(cdp, '(document.body.innerText || "").includes("宋江")')
+    await waitForExpression(cdp, 'Boolean(document.querySelector(".hall-board.is-melon-ready .melon-layer canvas"))')
 
     const sceneState = await evaluate(cdp, `(() => {
       const stage = document.querySelector('.hall-stage');
@@ -339,19 +416,38 @@ const run = async () => {
       throw new Error(`Page contains mojibake-like text: ${initialState.text}`)
     }
 
-    if (!await evaluate(cdp, clickByText('藏经阁'))) throw new Error('藏经阁入口不可点击')
-    await waitForExpression(cdp, '(document.body.innerText || "").includes("向量检索")')
+    await clickSceneHotspot(cdp, 'library')
+    await waitForExpression(cdp, '(document.body.innerText || "").includes("藏书查卷")')
     await evaluate(cdp, closePanel)
     await waitForExpression(cdp, '!document.querySelector(".panel-overlay")')
 
-    if (!await evaluate(cdp, clickByText('悬赏榜'))) throw new Error('悬赏榜入口不可点击')
-    await waitForExpression(cdp, '(document.body.innerText || "").includes("新建")')
-    await waitForExpression(cdp, '(document.body.innerText || "").includes("已归档")')
+    await clickSceneHotspot(cdp, 'tasks')
+    await waitForExpression(cdp, '(document.body.innerText || "").includes("张榜")')
+    await waitForExpression(cdp, '(document.body.innerText || "").includes("入档")')
     await evaluate(cdp, closePanel)
     await waitForExpression(cdp, '!document.querySelector(".panel-overlay")')
 
-    if (!await evaluate(cdp, clickByText('全员议事'))) throw new Error('全员议事入口不可点击')
-    await waitForExpression(cdp, '(document.body.innerText || "").includes("厅中暂无议事") || (document.body.innerText || "").includes("实时同步中")')
+    await clickSceneHotspot(cdp, 'chat')
+    await waitForExpression(cdp, '(document.body.innerText || "").includes("厅前公议")')
+    if (!await evaluate(cdp, `(() => {
+      const textarea = document.querySelector('.composer-textarea');
+      if (!textarea) return false;
+      textarea.focus();
+      textarea.value = '@';
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    })()`)) throw new Error('议事输入框不可用')
+    try {
+      await waitForExpression(cdp, '(document.body.innerText || "").includes("@宋江")')
+    } catch (error) {
+      const diagnostic = await evaluate(cdp, `({
+        textareaValue: document.querySelector('.composer-textarea')?.value,
+        hasMentionMenu: Boolean(document.querySelector('.composer-mention-menu')),
+        mentionText: document.querySelector('.composer-mention-menu')?.innerText || '',
+        panelText: document.querySelector('.floating-panel')?.innerText?.slice(0, 3000) || ''
+      })`)
+      throw new Error(`${error.message}. Mention diagnostic: ${JSON.stringify(diagnostic)}`)
+    }
 
     const finalState = await evaluate(cdp, `(() => {
       const text = document.body.innerText || '';
