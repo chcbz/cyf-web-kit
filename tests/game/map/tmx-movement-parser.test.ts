@@ -6,6 +6,9 @@ import * as TMXUtils from 'melonjs/dist/melonjs.mjs/level/tiled/TMXUtils.js'
 
 import { parseMovementTmx } from '../../../src/game/map/tmxMovementParser.js'
 
+const dom = new JSDOM()
+Object.defineProperty(globalThis, 'DOMParser', { value: dom.window.DOMParser, configurable: true })
+
 describe('movement TMX parser', () => {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
     <map width="104" height="58" tilewidth="16" tileheight="16">
@@ -111,7 +114,6 @@ describe('movement TMX parser', () => {
   })
 
   it('accepts the actual object shape produced by the melonJS TMX parser', () => {
-    const dom = new JSDOM()
     const document = new dom.window.DOMParser().parseFromString(xml, 'application/xml')
     const melonMap = TMXUtils.parse(document).map
     assert.equal(typeof melonMap.width, 'string')
@@ -122,8 +124,71 @@ describe('movement TMX parser', () => {
     assert.deepEqual(parseMovementTmx(melonMap), parseMovementTmx(xml))
   })
 
+  it('rejects malformed scalar properties with field context', () => {
+    const replacements: Array<[string, string, RegExp]> = [
+      ['capacity', 'many', /capacity/],
+      ['protected', 'sometimes', /protected/],
+      ['riskLevel', 'extreme', /riskLevel/],
+      ['kind', 'crossroads', /kind/],
+      ['channelWidth', 'wide', /channelWidth/],
+      ['bidirectional', 'yes', /bidirectional/],
+      ['costMultiplier', 'cheap', /costMultiplier/],
+    ]
+    for (const [field, invalid, expected] of replacements) {
+      const malformed = xml.replace(new RegExp(`(<property name="${field}"[^>]*value=")[^"]*`), `$1${invalid}`)
+      assert.throws(() => parseMovementTmx(malformed), expected, field)
+    }
+  })
+
+  it('rejects malformed geometry scalars instead of coercing them to zero', () => {
+    assert.throws(() => parseMovementTmx(xml.replace('x="10"', 'x="left"')), /regions.*x|x.*regions/)
+    assert.throws(() => parseMovementTmx(xml.replace('width="30"', 'width="broad"')), /regions.*width|width.*regions/)
+  })
+
+  it('rejects malformed and truncated raw XML', () => {
+    assert.throws(() => parseMovementTmx('<map><objectgroup name="regions">'), /Invalid TMX XML/)
+    assert.throws(() => parseMovementTmx('<not-map/>'), /TMX map root/)
+  })
+
+  it('applies object-layer offsets and object rotations to all world geometry', () => {
+    const transformedXml = `<map width="20" height="20" tilewidth="16" tileheight="16"><properties>
+      <property name="movementSchemaVersion" value="1"/><property name="navGraphVersion" value="graph"/>
+      <property name="spriteManifestVersion" value="sprites"/><property name="sceneId" value="scene"/>
+    </properties>
+    <objectgroup name="regions" offsetx="100" offsety="50"><object x="10" y="20" rotation="90"><properties>
+      <property name="stableId" value="region"/><property name="regionId" value="region"/><property name="label" value="Region"/>
+      <property name="capacity" type="int" value="1"/><property name="protected" type="bool" value="false"/><property name="riskLevel" value="low"/>
+    </properties><polygon points="0,0 10,0 10,10"/></object></objectgroup>
+    <objectgroup name="nav_obstacles" offsetx="100" offsety="50"><object x="20" y="30" width="10" height="20" rotation="90"/></objectgroup>
+    <objectgroup name="nav_nodes" offsetx="100" offsety="50"><object x="30" y="40" width="20" height="10" rotation="90"><properties>
+      <property name="stableId" value="node"/><property name="kind" value="normal"/><property name="channelWidth" type="int" value="10"/>
+    </properties><ellipse/></object></objectgroup>
+    <objectgroup name="parking_slots" offsetx="100" offsety="50"><object x="50" y="60" width="20" height="10" rotation="180"><properties>
+      <property name="stableId" value="slot"/><property name="slotId" value="slot"/><property name="regionId" value="region"/>
+    </properties><ellipse/></object></objectgroup>
+    <objectgroup name="nav_edges" offsetx="100" offsety="50"><object x="70" y="80" rotation="90"><properties>
+      <property name="stableId" value="edge"/><property name="from" value="node"/><property name="to" value="other"/>
+    </properties><polyline points="0,0 10,0"/></object></objectgroup></map>`
+    const result = parseMovementTmx(transformedXml)
+    assert.deepEqual(result.regions[0].polygon.points, [{ x: 110, y: 70 }, { x: 110, y: 80 }, { x: 100, y: 80 }])
+    assert.deepEqual(result.obstacles[0].points, [{ x: 120, y: 80 }, { x: 120, y: 90 }, { x: 100, y: 90 }, { x: 100, y: 80 }])
+    assert.deepEqual(result.nodes[0].point, { x: 125, y: 100 })
+    assert.deepEqual(result.slots[0].point, { x: 140, y: 105 })
+    assert.deepEqual(result.edges[0].points, [{ x: 170, y: 130 }, { x: 170, y: 140 }])
+  })
+
+  it('produces equivalent transformed geometry from raw XML and melonJS parsed data', () => {
+    const transformed = xml
+      .replace('<objectgroup name="regions">', '<objectgroup name="regions" offsetx="17" offsety="23">')
+      .replace('<object x="10" y="20" width="30" height="40">', '<object x="10" y="20" width="30" height="40" rotation="90">')
+    const document = new dom.window.DOMParser().parseFromString(transformed, 'application/xml')
+    assert.deepEqual(parseMovementTmx(TMXUtils.parse(document).map), parseMovementTmx(transformed))
+  })
+
   it('ignores known visual aliases without confusing them with movement data', () => {
     const result = parseMovementTmx(`<map width="1" height="1" tilewidth="16" tileheight="16">
+      <properties><property name="sceneId" value="scene"/><property name="movementSchemaVersion" value="1"/>
+        <property name="navGraphVersion" value="graph"/><property name="spriteManifestVersion" value="sprites"/></properties>
       <objectgroup name="mid-occluders"><object x="1" y="1" width="1" height="1"/></objectgroup>
       <objectgroup name="foreground-occluders"><object x="2" y="2" width="1" height="1"/></objectgroup>
       <objectgroup name="lighting-overlay"><object x="3" y="3" width="1" height="1"/></objectgroup>
