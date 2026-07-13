@@ -34,7 +34,8 @@
                          "vue":  "^3.5.16",
                          "vue-i18n":  "^9.2.2",
                          "vue-router":  "^4.3.0",
-                         "melonjs":  "^15.7.0"
+                         "melonjs":  "^15.7.0",
+                         "saxes":  "^6.0.0"
                      },
     "devDependencies":  {
                             "@babel/core":  "^7.24.0",

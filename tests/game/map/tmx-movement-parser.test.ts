@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 // @ts-expect-error jsdom is a runtime test dependency without bundled declarations
 import { JSDOM } from 'jsdom'
 // @ts-expect-error melonJS does not publish declarations for its internal TMX utility
@@ -58,6 +59,15 @@ describe('movement TMX parser', () => {
         <property name="regionId" value="main-seat"/><property name="personaCode" value="songjiang"/>
       </properties><ellipse/></object></objectgroup>
     </map>`
+
+  it('declares the XML parser as a production dependency', () => {
+    const packageJson = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')) as {
+      dependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
+    }
+    assert.equal(packageJson.dependencies?.saxes, '^6.0.0')
+    assert.equal(packageJson.devDependencies?.saxes, undefined)
+  })
 
   it('returns the exact approved runtime contract in native pixel coordinates', () => {
     const result = parseMovementTmx(xml)
