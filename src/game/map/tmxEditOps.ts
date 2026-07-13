@@ -68,17 +68,19 @@ export function applyTmxEditOps(
 ): string {
   if (typeof sourceXml !== 'string') throw new TypeError('TMX source must be a string')
   if (!Array.isArray(operations)) throw new TypeError('TMX operations must be an array')
-  parseMap(sourceXml)
+  validateDocumentUniqueness(parseMap(sourceXml))
 
   let result = sourceXml
   for (const operation of operations) {
     if (!operation || typeof operation !== 'object') throw new TypeError('Invalid TMX edit operation')
-    if (operation.op === 'set-map-property') result = setMapProperty(result, operation)
-    else if (operation.op === 'upsert-object-group') result = upsertObjectGroup(result, operation)
-    else if (operation.op === 'upsert-object-by-stable-id') result = upsertObject(result, operation)
+    let candidate: string
+    if (operation.op === 'set-map-property') candidate = setMapProperty(result, operation)
+    else if (operation.op === 'upsert-object-group') candidate = upsertObjectGroup(result, operation)
+    else if (operation.op === 'upsert-object-by-stable-id') candidate = upsertObject(result, operation)
     else throw new Error(`Unsupported TMX edit operation: ${String((operation as { op?: unknown }).op)}`)
+    result = candidate
   }
-  parseMap(result)
+  validateDocumentUniqueness(parseMap(result))
   return result
 }
 
@@ -127,6 +129,12 @@ function upsertObject(xml: string, operation: UpsertObjectByStableIdOperation): 
   requireName(operation.object.stableId, 'stable ID')
   let map = parseMap(xml)
   let group = findObjectGroup(map, operation.group)
+  const globalExisting = findObjectByStableId(map, operation.object.stableId)
+  if (globalExisting && globalExisting.group.attributes.name !== operation.group) {
+    throw new Error(
+      `Stable ID ${operation.object.stableId} already belongs to object group ${globalExisting.group.attributes.name ?? '<unnamed>'}`,
+    )
+  }
   if (!group) {
     xml = upsertObjectGroup(xml, { op: 'upsert-object-group', name: operation.group })
     map = parseMap(xml)
@@ -137,26 +145,106 @@ function upsertObject(xml: string, operation: UpsertObjectByStableIdOperation): 
   const existing = group.children.find(child => (
     child.name === 'object' && objectStableId(child) === operation.object.stableId
   ))
-  let objectId = existing?.attributes.id
-  if (!objectId) {
-    const allObjects = descendants(map).filter(element => element.name === 'object')
-    const allocation = allocateId(xml, 'nextobjectid', allObjects)
-    objectId = String(allocation.id)
-    xml = setMapCounter(xml, 'nextobjectid', allocation.next)
-    map = parseMap(xml)
-    group = findObjectGroup(map, operation.group)
-    if (!group) throw new Error(`Object group disappeared: ${operation.group}`)
-  }
+  if (existing) return mergeExistingObject(xml, operation.group, operation.object)
+
+  const allObjects = descendants(map).filter(element => element.name === 'object')
+  const allocation = allocateId(xml, 'nextobjectid', allObjects)
+  const objectId = String(allocation.id)
+  xml = setMapCounter(xml, 'nextobjectid', allocation.next)
+  map = parseMap(xml)
+  group = findObjectGroup(map, operation.group)
+  if (!group) throw new Error(`Object group disappeared: ${operation.group}`)
 
   const indent = `${lineIndent(xml, group.openStart)} `
   const serialized = serializeObject(objectId, operation.object, indent, newlineOf(xml))
-  const refreshedExisting = group.children.find(child => (
-    child.name === 'object' && objectStableId(child) === operation.object.stableId
-  ))
-  if (refreshedExisting) {
-    return replaceRange(xml, refreshedExisting.openStart, refreshedExisting.closeEnd, serialized.slice(indent.length))
-  }
   return insertChild(xml, group, serialized)
+}
+
+function mergeExistingObject(xml: string, groupName: string, object: TmxObjectSpec): string {
+  const ownedAttributes = [
+    ['name', object.name], ['type', object.type], ['x', object.x], ['y', object.y],
+    ['width', object.width], ['height', object.height], ['rotation', object.rotation],
+  ] as const
+  let result = xml
+  for (const [name, value] of ownedAttributes) {
+    if (value === undefined) continue
+    const current = requiredObjectByStableId(result, groupName, object.stableId)
+    result = setElementAttribute(result, current, name, formatNumber(value))
+  }
+
+  const properties: Array<[string, TmxScalar]> = [
+    ['stableId', object.stableId],
+    ...Object.entries(object.properties ?? {}).filter(([name]) => name !== 'stableId'),
+  ]
+  for (const [name, value] of properties) {
+    result = upsertObjectProperty(result, groupName, object.stableId, name, value)
+  }
+
+  if (object.shape) result = replaceOwnedShape(result, groupName, object.stableId, object.shape)
+  return result
+}
+
+function upsertObjectProperty(
+  xml: string,
+  groupName: string,
+  stableId: string,
+  name: string,
+  value: TmxScalar,
+): string {
+  let object = requiredObjectByStableId(xml, groupName, stableId)
+  let properties = childByName(object, 'properties')
+  if (!properties) {
+    const indent = `${lineIndent(xml, object.openStart)} `
+    const block = `${indent}<properties>${newlineOf(xml)}${indent} ${serializeProperty(name, value)}${newlineOf(xml)}${indent}</properties>`
+    return insertChild(xml, object, block)
+  }
+
+  const matches = properties.children.filter(child => (
+    child.name === 'property' && child.attributes.name === name
+  ))
+  if (matches.length === 0) {
+    return insertChild(xml, properties, `${lineIndent(xml, properties.openStart)} ${serializeProperty(name, value)}`)
+  }
+
+  let result = xml
+  for (const duplicate of matches.slice(1).reverse()) {
+    result = removeElementAndLine(result, duplicate)
+  }
+  object = requiredObjectByStableId(result, groupName, stableId)
+  properties = childByName(object, 'properties')
+  const property = properties?.children.find(child => (
+    child.name === 'property' && child.attributes.name === name
+  ))
+  if (!property) throw new Error(`Object property disappeared: ${name}`)
+  result = setElementAttribute(result, property, 'value', formatScalar(value))
+  const refreshed = requiredObjectProperty(result, groupName, stableId, name)
+  const type = inferPropertyType(value)
+  return type === 'string'
+    ? removeElementAttribute(result, refreshed, 'type')
+    : setElementAttribute(result, refreshed, 'type', type)
+}
+
+function replaceOwnedShape(
+  xml: string,
+  groupName: string,
+  stableId: string,
+  shape: NonNullable<TmxObjectSpec['shape']>,
+): string {
+  let result = xml
+  const object = requiredObjectByStableId(result, groupName, stableId)
+  const ownedShapes = object.children.filter(child => (
+    child.name === 'ellipse' || child.name === 'polygon' || child.name === 'polyline'
+  ))
+  for (const child of ownedShapes.reverse()) result = removeElementAndLine(result, child)
+  const refreshed = requiredObjectByStableId(result, groupName, stableId)
+  const indent = `${lineIndent(result, refreshed.openStart)} `
+  return insertChild(result, refreshed, indent + serializeShape(shape))
+}
+
+function serializeShape(shape: NonNullable<TmxObjectSpec['shape']>): string {
+  if (shape.type === 'ellipse') return '<ellipse/>'
+  const points = shape.points.map(point => `${formatNumber(point[0])},${formatNumber(point[1])}`).join(' ')
+  return `<${shape.type} points="${escapeXml(points)}"/>`
 }
 
 function serializeObject(id: string, object: TmxObjectSpec, indent: string, newline: string): string {
@@ -250,6 +338,23 @@ function setElementAttribute(xml: string, element: XmlElement, name: string, val
     ? opening.replace(pattern, replacement)
     : opening.replace(/\s*\/?>(?=$)/, match => ` ${name}="${escapeXml(value)}"${match}`)
   return replaceRange(xml, element.openStart, element.openEnd, updated)
+}
+
+function removeElementAttribute(xml: string, element: XmlElement, name: string): string {
+  const opening = xml.slice(element.openStart, element.openEnd)
+  const pattern = new RegExp(`\\s${escapeRegExp(name)}\\s*=\\s*(["']).*?\\1`, 's')
+  if (!pattern.test(opening)) return xml
+  return replaceRange(xml, element.openStart, element.openEnd, opening.replace(pattern, ''))
+}
+
+function removeElementAndLine(xml: string, element: XmlElement): string {
+  const start = lineStart(xml, element.openStart)
+  const prefix = xml.slice(start, element.openStart)
+  const end = element.closeEnd
+  const newlineEnd = xml.startsWith('\r\n', end) ? end + 2 : xml[end] === '\n' ? end + 1 : end
+  return /^[\t ]*$/.test(prefix)
+    ? replaceRange(xml, start, newlineEnd, '')
+    : replaceRange(xml, element.openStart, element.closeEnd, '')
 }
 
 function parseMap(xml: string): XmlElement {
@@ -356,11 +461,70 @@ function findObjectGroup(map: XmlElement, name: string): XmlElement | undefined 
   return map.children.find(child => child.name === 'objectgroup' && child.attributes.name === name)
 }
 
+function findObjectByStableId(map: XmlElement, stableId: string): { group: XmlElement, object: XmlElement } | undefined {
+  for (const group of map.children.filter(child => child.name === 'objectgroup')) {
+    const object = descendants(group).find(child => child.name === 'object' && objectStableId(child) === stableId)
+    if (object) return { group, object }
+  }
+  return undefined
+}
+
+function requiredObjectByStableId(xml: string, groupName: string, stableId: string): XmlElement {
+  const group = findObjectGroup(parseMap(xml), groupName)
+  const object = group?.children.find(child => child.name === 'object' && objectStableId(child) === stableId)
+  if (!object) throw new Error(`Object ${stableId} missing from object group ${groupName}`)
+  return object
+}
+
+function requiredObjectProperty(xml: string, groupName: string, stableId: string, name: string): XmlElement {
+  const object = requiredObjectByStableId(xml, groupName, stableId)
+  const property = childByName(object, 'properties')?.children.find(child => (
+    child.name === 'property' && child.attributes.name === name
+  ))
+  if (!property) throw new Error(`Object property ${name} missing from ${stableId}`)
+  return property
+}
+
 function objectStableId(object: XmlElement): string | undefined {
   const properties = childByName(object, 'properties')
   return properties?.children.find(child => (
     child.name === 'property' && child.attributes.name === 'stableId'
   ))?.attributes.value
+}
+
+function validateDocumentUniqueness(map: XmlElement): void {
+  rejectDuplicates(
+    map.children.filter(child => child.name === 'objectgroup').map(group => group.attributes.name).filter(isString),
+    'object group name',
+  )
+  const mapProperties = childByName(map, 'properties')?.children
+    .filter(child => child.name === 'property')
+    .map(property => property.attributes.name)
+    .filter(isString) ?? []
+  rejectDuplicates(mapProperties, 'map property')
+
+  const stableIds: string[] = []
+  for (const object of descendants(map).filter(child => child.name === 'object')) {
+    const properties = childByName(object, 'properties')
+    for (const property of properties?.children ?? []) {
+      if (property.name === 'property' && property.attributes.name === 'stableId' && property.attributes.value) {
+        stableIds.push(property.attributes.value)
+      }
+    }
+  }
+  rejectDuplicates(stableIds, 'stable ID')
+}
+
+function rejectDuplicates(values: string[], label: string): void {
+  const seen = new Set<string>()
+  for (const value of values) {
+    if (seen.has(value)) throw new Error(`Duplicate ${label}: ${value}`)
+    seen.add(value)
+  }
+}
+
+function isString(value: string | undefined): value is string {
+  return typeof value === 'string'
 }
 
 function descendants(element: XmlElement): XmlElement[] {

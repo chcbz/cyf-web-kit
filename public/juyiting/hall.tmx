@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="104" height="58" tilewidth="16" tileheight="16" infinite="0" nextlayerid="24" nextobjectid="121">
+<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="104" height="58" tilewidth="16" tileheight="16" infinite="0" nextlayerid="24" nextobjectid="159">
  <properties>
   <property name="description" value="聚义厅 v3 - modular layer hall scene"/>
   <property name="maxZoom" type="float" value="3.3"/>
@@ -304,6 +304,272 @@
   </object>
  </objectgroup>
  <objectgroup id="16" name="nav_obstacles">
+  <object id="121" x="597" y="487">
+   <properties>
+    <property name="stableId" value="jyt-collision-010-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="10"/>
+   </properties>
+   <polygon points="0,0 -7,30 16,31 21,-2"/>
+  </object>
+  <object id="122" x="1126" y="488">
+   <properties>
+    <property name="stableId" value="jyt-collision-011-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="11"/>
+   </properties>
+   <polygon points="0,0 3,30 29,32 25,0"/>
+  </object>
+  <object id="123" x="1159" y="502">
+   <properties>
+    <property name="stableId" value="jyt-collision-012-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="12"/>
+   </properties>
+   <polygon points="0,0 31,1 28,-29 -5,-33"/>
+  </object>
+  <object id="124" x="552" y="502">
+   <properties>
+    <property name="stableId" value="jyt-collision-013-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="13"/>
+   </properties>
+   <polygon points="0,0 34,0 43,-31 6,-35"/>
+  </object>
+  <object id="125" x="521" y="633">
+   <properties>
+    <property name="stableId" value="jyt-collision-014-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="14"/>
+   </properties>
+   <polygon points="0,0 32,-153 16,-157 -21,-1"/>
+  </object>
+  <object id="126" x="442" y="597">
+   <properties>
+    <property name="stableId" value="jyt-collision-015-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="15"/>
+   </properties>
+   <polygon points="0,0 38,3 49,-43 4,-43"/>
+  </object>
+  <object id="127" x="514" y="704">
+   <properties>
+    <property name="stableId" value="jyt-collision-016-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="16"/>
+   </properties>
+   <polygon points="0,0 -9,68 -31,67 -19,-5"/>
+  </object>
+  <object id="128" x="487" y="804">
+   <properties>
+    <property name="stableId" value="jyt-collision-017-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="17"/>
+   </properties>
+   <polygon points="0,0 150,4 149,53 191,53 188,135 210,135 219,20 315,23 315,-10 217,-10 230,-92 198,-96 195,-27 -7,-29"/>
+  </object>
+  <object id="129" x="412" y="667">
+   <properties>
+    <property name="stableId" value="jyt-collision-018-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="18"/>
+   </properties>
+   <polygon points="0,0 3,-19 -17,-19 -18,-1"/>
+  </object>
+  <object id="130" x="361" y="767">
+   <properties>
+    <property name="stableId" value="jyt-collision-019-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="19"/>
+   </properties>
+   <polygon points="0,0 -40,173 -69,171 -20,-5"/>
+  </object>
+  <object id="131" x="288" y="936">
+   <properties>
+    <property name="stableId" value="jyt-collision-020-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="20"/>
+   </properties>
+   <polygon points="0,0 -291,3 -291,-24 9,-22"/>
+  </object>
+  <object id="132" x="16" y="906">
+   <properties>
+    <property name="stableId" value="jyt-collision-021-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="21"/>
+   </properties>
+   <polygon points="0,0 54,-161 -19,-168 -19,1"/>
+  </object>
+  <object id="133" x="18" y="732">
+   <properties>
+    <property name="stableId" value="jyt-collision-022-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="22"/>
+   </properties>
+   <polygon points="0,0 65,-142 331,-141 339,-158 425,-150 427,-177 57,-182 -22,-5"/>
+  </object>
+  <object id="134" x="549" y="472">
+   <properties>
+    <property name="stableId" value="jyt-collision-023-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="23"/>
+   </properties>
+   <polygon points="0,0 -553,-11 -553,-28 3,-17"/>
+  </object>
+  <object id="135" x="38" y="440">
+   <properties>
+    <property name="stableId" value="jyt-collision-024-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="24"/>
+   </properties>
+   <polygon points="0,0 60,-45 122,-90 189,-225 214,-223 195,-167 339,-166 351,-207 330,-223 333,-230 599,-221 578,-122 585,-111 609,-109 628,-246 137,-263 -22,2"/>
+  </object>
+  <object id="136" x="668" y="252">
+   <properties>
+    <property name="stableId" value="jyt-collision-025-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="25"/>
+   </properties>
+   <polygon points="0,0 3,45 33,40 38,67 72,71 73,100 109,100 110,62 83,61 84,37 47,40 58,-37 58,-62 4,-63"/>
+  </object>
+  <object id="137" x="969" y="309">
+   <properties>
+    <property name="stableId" value="jyt-collision-026-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="26"/>
+   </properties>
+   <polygon points="0,0 -3,41 34,41 31,13 73,7 70,-13 121,-15 118,-122 52,-115 60,-17 22,-19 22,0"/>
+  </object>
+  <object id="138" x="731" y="207">
+   <properties>
+    <property name="stableId" value="jyt-collision-027-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="27"/>
+   </properties>
+   <polygon points="0,0 23,0 23,19 52,18 55,2 228,4 228,13 260,13 260,-6 286,-4 286,-18 1,-17"/>
+  </object>
+  <object id="139" x="998" y="230">
+   <properties>
+    <property name="stableId" value="jyt-collision-028-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="28"/>
+   </properties>
+   <polygon points="0,0 6,44 -34,47 -36,2"/>
+  </object>
+  <object id="140" x="788" y="232">
+   <properties>
+    <property name="stableId" value="jyt-collision-029-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="29"/>
+   </properties>
+   <polygon points="0,0 -2,41 -42,43 -38,-2"/>
+  </object>
+  <object id="141" x="1103" y="335">
+   <properties>
+    <property name="stableId" value="jyt-collision-030-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="30"/>
+   </properties>
+   <polygon points="0,0 -11,-154 206,-149 214,-80 152,-65 139,-98 163,-109 162,-128 21,-115 4,-115 21,-6"/>
+  </object>
+  <object id="142" x="928" y="794">
+   <properties>
+    <property name="stableId" value="jyt-collision-031-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="31"/>
+   </properties>
+   <polygon points="0,0 -3,27 92,25 101,141 129,141 119,69 172,68 165,11 283,9 283,26 317,30 315,-104 287,-98 295,-11 121,-14 119,-80 85,-80 88,-13"/>
+  </object>
+  <object id="143" x="1214" y="613">
+   <properties>
+    <property name="stableId" value="jyt-collision-032-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="32"/>
+   </properties>
+   <polygon points="0,0 -23,-149 451,-155 451,-137 -4,-133 11,-2"/>
+  </object>
+  <object id="144" x="1298" y="563">
+   <properties>
+    <property name="stableId" value="jyt-collision-033-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="33"/>
+   </properties>
+   <polygon points="0,0 -6,32 -41,40 -56,13 -52,0 -50,-14 368,-13 365,78 309,71 294,31 132,30 116,43 146,53 151,80 120,81 117,61 97,47 81,24 69,-4"/>
+  </object>
+  <object id="145" x="1313" y="657">
+   <properties>
+    <property name="stableId" value="jyt-collision-034-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="34"/>
+   </properties>
+   <polygon points="0,0 4,11 24,11 25,-16 0,-16"/>
+  </object>
+  <object id="146" x="1357" y="739">
+   <properties>
+    <property name="stableId" value="jyt-collision-035-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="35"/>
+   </properties>
+   <polygon points="0,0 3,56 27,165 -8,176 -3,199 309,199 308,169 103,170 94,106 188,103 199,79 173,71 160,32 66,30 52,-27"/>
+  </object>
+  <object id="147" x="1603" y="837">
+   <properties>
+    <property name="stableId" value="jyt-collision-036-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="36"/>
+   </properties>
+   <polygon points="0,0 0,25 58,28 59,-51"/>
+  </object>
+  <object id="148" x="1572" y="816">
+   <properties>
+    <property name="stableId" value="jyt-collision-037-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="37"/>
+   </properties>
+   <polygon points="0,0 24,-15 28,-42 8,-44"/>
+  </object>
+  <object id="149" x="1327" y="247">
+   <properties>
+    <property name="stableId" value="jyt-collision-038-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="38"/>
+   </properties>
+   <polygon points="0,0 253,1 256,46 236,74 251,111 291,119 300,151 334,159 327,-51 -10,-30"/>
+  </object>
+  <object id="150" x="481" y="268">
+   <properties>
+    <property name="stableId" value="jyt-collision-039-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="39"/>
+   </properties>
+   <polygon points="0,0 28,10 31,-23 -51,-41 -56,-11"/>
+  </object>
+  <object id="151" x="353" y="845">
+   <properties>
+    <property name="stableId" value="jyt-collision-040-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="40"/>
+   </properties>
+   <polygon points="0,0 58,-3 59,30 -7,30"/>
+  </object>
+  <object id="152" x="157" y="625">
+   <properties>
+    <property name="stableId" value="jyt-collision-041-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="41"/>
+   </properties>
+   <polygon points="0,0 80,4 40,111 -36,111"/>
+  </object>
+  <object id="153" x="55" y="871">
+   <properties>
+    <property name="stableId" value="jyt-collision-042-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="42"/>
+   </properties>
+   <polygon points="0,0 13,-60 203,-42 182,7"/>
+  </object>
+  <object id="154" x="224" y="373">
+   <properties>
+    <property name="stableId" value="jyt-collision-043-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="43"/>
+   </properties>
+   <polygon points="0,0 31,-82 128,-77 98,5"/>
+  </object>
+  <object id="155" x="820" y="222">
+   <properties>
+    <property name="stableId" value="jyt-collision-044-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="44"/>
+   </properties>
+   <polygon points="0,0 0,41 105,42 107,-6"/>
+  </object>
+  <object id="156" x="1363" y="286">
+   <properties>
+    <property name="stableId" value="jyt-collision-045-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="45"/>
+   </properties>
+   <polygon points="0,0 6,55 33,58 33,87 142,96 139,55 166,50 163,28 140,20 141,8 129,-8"/>
+  </object>
+  <object id="157" x="1497" y="626">
+   <properties>
+    <property name="stableId" value="jyt-collision-046-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="46"/>
+   </properties>
+   <polygon points="0,0 29,91 106,88 76,-12"/>
+  </object>
+  <object id="158" x="1297" y="838">
+   <properties>
+    <property name="stableId" value="jyt-collision-047-v1"/>
+    <property name="sourceCollisionObjectId" type="int" value="47"/>
+   </properties>
+   <polygon points="0,0 8,44 66,37 54,-4"/>
+  </object>
  </objectgroup>
  <objectgroup id="17" name="regions">
   <object id="96" x="760" y="176" width="240" height="184">
@@ -374,7 +640,7 @@
    </properties>
    <ellipse/>
   </object>
-  <object id="103" x="512" y="612" width="16" height="16">
+  <object id="103" x="516" y="632" width="16" height="16">
    <properties>
     <property name="stableId" value="jyt-node-west-hall-v1"/>
     <property name="channelWidth" type="int" value="64"/>
@@ -390,7 +656,7 @@
    </properties>
    <ellipse/>
   </object>
-  <object id="105" x="1232" y="612" width="16" height="16">
+  <object id="105" x="1204" y="612" width="16" height="16">
    <properties>
     <property name="stableId" value="jyt-node-east-hall-v1"/>
     <property name="channelWidth" type="int" value="64"/>
@@ -406,7 +672,7 @@
    </properties>
    <ellipse/>
   </object>
-  <object id="107" x="1512" y="672" width="16" height="16">
+  <object id="107" x="1440" y="592" width="16" height="16">
    <properties>
     <property name="stableId" value="jyt-node-library-shelf-v1"/>
     <property name="channelWidth" type="int" value="48"/>
@@ -434,9 +700,9 @@
     <property name="from" value="jyt-node-council-v1"/>
     <property name="to" value="jyt-node-west-hall-v1"/>
    </properties>
-   <polyline points="0,0 -160,70 -360,140"/>
+   <polyline points="0,0 -356,160"/>
   </object>
-  <object id="110" x="520" y="620">
+  <object id="110" x="524" y="640">
    <properties>
     <property name="stableId" value="jyt-edge-west-agent-v1"/>
     <property name="bidirectional" type="bool" value="true"/>
@@ -444,7 +710,7 @@
     <property name="from" value="jyt-node-west-hall-v1"/>
     <property name="to" value="jyt-node-agent-roster-v1"/>
    </properties>
-   <polyline points="0,0 -140,30 -280,60"/>
+   <polyline points="0,0 -104,28 -108,32 -284,40"/>
   </object>
   <object id="111" x="880" y="480">
    <properties>
@@ -454,9 +720,9 @@
     <property name="from" value="jyt-node-council-v1"/>
     <property name="to" value="jyt-node-east-hall-v1"/>
    </properties>
-   <polyline points="0,0 160,70 360,140"/>
+   <polyline points="0,0 332,140"/>
   </object>
-  <object id="112" x="1240" y="620">
+  <object id="112" x="1212" y="620">
    <properties>
     <property name="stableId" value="jyt-edge-east-bounty-v1"/>
     <property name="bidirectional" type="bool" value="true"/>
@@ -464,9 +730,9 @@
     <property name="from" value="jyt-node-east-hall-v1"/>
     <property name="to" value="jyt-node-bounty-board-v1"/>
    </properties>
-   <polyline points="0,0 100,-100 200,-200"/>
+   <polyline points="0,0 -4,-4 -84,-96 -88,-100 -92,-136 -64,-152 -60,-156 228,-200"/>
   </object>
-  <object id="113" x="1240" y="620">
+  <object id="113" x="1212" y="620">
    <properties>
     <property name="stableId" value="jyt-edge-east-library-v1"/>
     <property name="bidirectional" type="bool" value="true"/>
@@ -474,7 +740,7 @@
     <property name="from" value="jyt-node-east-hall-v1"/>
     <property name="to" value="jyt-node-library-shelf-v1"/>
    </properties>
-   <polyline points="0,0 140,30 280,60"/>
+   <polyline points="0,0 196,24 204,32 240,28 244,24 236,-20"/>
   </object>
  </objectgroup>
  <objectgroup id="20" name="parking_slots">
@@ -510,7 +776,7 @@
    </properties>
    <ellipse/>
   </object>
-  <object id="118" x="1552" y="672" width="16" height="16">
+  <object id="118" x="1462" y="592" width="16" height="16">
    <properties>
     <property name="stableId" value="jyt-slot-library-parking-v1"/>
     <property name="regionId" value="library-shelf"/>

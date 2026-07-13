@@ -17,6 +17,19 @@ function productionOperations(): Parameters<typeof applyTmxEditOps>[1] {
   return JSON.parse(readFileSync(operationsPath, 'utf8'))
 }
 
+function objectGroupXml(xml: string, name: string): string {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const group = xml.match(new RegExp(` <objectgroup[^>]*name="${escaped}"[\\s\\S]*? <\\/objectgroup>`))?.[0]
+  assert.ok(group, `missing ${name} object group`)
+  return group
+}
+
+function withCollisionAsMovementObstacles(xml: string): string {
+  return xml
+    .replace('name="nav_obstacles"', 'name="nav_obstacles-authored"')
+    .replace('name="collision"', 'name="nav_obstacles"')
+}
+
 describe('TMX edit operations', () => {
   it('is deterministic and byte-idempotent', () => {
     const source = `<?xml version="1.0" encoding="UTF-8"?>\n<map width="104" height="58" tilewidth="16" tileheight="16" nextlayerid="2" nextobjectid="2">\n <properties>\n  <property name="description" value="kept"/>\n </properties>\n <layer id="1" name="background"><data encoding="csv">1</data></layer>\n</map>\n`
@@ -62,7 +75,75 @@ describe('TMX edit operations', () => {
     assert.match(result, /name="label" value="Main seat"/)
   })
 
-  it('authors production movement content without changing dimensions or existing art and hotspots', () => {
+  it('merges owned object fields while preserving unknown TMX content', () => {
+    const source = `<map width="1" height="1" tilewidth="16" tileheight="16" nextobjectid="8">
+ <objectgroup id="1" name="regions">
+  <object id="7" name="legacy-name" type="legacy-type" class="custom-class" custom="keep" x="1" y="2" width="3" height="4" rotation="5">
+   <properties>
+    <property name="stableId" value="region-stable-v1"/>
+    <property name="customProperty" value="keep-me"/>
+    <property name="label" value="Old label"/>
+   </properties>
+   <text color="#ffffff">Keep text</text>
+   <point/>
+   <extension vendor="keep"><child value="yes"/></extension>
+   <ellipse/>
+  </object>
+ </objectgroup>
+</map>
+`
+    const result = applyTmxEditOps(source, [{
+      op: 'upsert-object-by-stable-id', group: 'regions', object: {
+        stableId: 'region-stable-v1', x: 10,
+        properties: { label: 'New label' },
+        shape: { type: 'polygon', points: [[0, 0], [20, 0], [20, 20]] },
+      },
+    }])
+
+    assert.match(result, /<object id="7" name="legacy-name" type="legacy-type" class="custom-class" custom="keep" x="10" y="2" width="3" height="4" rotation="5">/)
+    assert.match(result, /name="customProperty" value="keep-me"/)
+    assert.match(result, /name="label" value="New label"/)
+    assert.match(result, /<text color="#ffffff">Keep text<\/text>/)
+    assert.match(result, /<point\/>/)
+    assert.match(result, /<extension vendor="keep"><child value="yes"\/><\/extension>/)
+    assert.doesNotMatch(result, /<ellipse\/>/)
+    assert.match(result, /<polygon points="0,0 20,0 20,20"\/>/)
+  })
+
+  it('rejects duplicate object-group names before applying operations', () => {
+    const source = '<map><objectgroup name="regions"/><objectgroup name="regions"/></map>'
+    assert.throws(
+      () => applyTmxEditOps(source, [{ op: 'set-map-property', name: 'sceneId', value: 'changed' }]),
+      /Duplicate object group name: regions/,
+    )
+    assert.equal(source.includes('changed'), false)
+  })
+
+  it('rejects global stable-ID duplicates in source or introduced across groups', () => {
+    const duplicateSource = `<map><objectgroup name="regions"><object><properties><property name="stableId" value="same"/></properties></object></objectgroup>
+      <objectgroup name="nav_nodes"><object><properties><property name="stableId" value="same"/></properties></object></objectgroup></map>`
+    assert.throws(() => applyTmxEditOps(duplicateSource, []), /Duplicate stable ID: same/)
+
+    const uniqueSource = `<map><objectgroup name="regions"><object><properties><property name="stableId" value="same"/></properties></object></objectgroup>
+      <objectgroup name="nav_nodes"></objectgroup></map>`
+    assert.throws(() => applyTmxEditOps(uniqueSource, [{
+      op: 'upsert-object-by-stable-id', group: 'nav_nodes', object: {
+        stableId: 'same', x: 1, y: 1, properties: { kind: 'normal', channelWidth: 48 },
+      },
+    }]), /Stable ID same already belongs to object group regions/)
+  })
+
+  it('rejects duplicate map properties before mutation', () => {
+    const source = `<map><properties><property name="sceneId" value="first"/><property name="sceneId" value="later"/></properties></map>`
+    assert.throws(
+      () => applyTmxEditOps(source, [{ op: 'set-map-property', name: 'sceneId', value: 'changed' }]),
+      /Duplicate map property: sceneId/,
+    )
+    assert.equal(source, `<map><properties><property name="sceneId" value="first"/><property name="sceneId" value="later"/></properties></map>`)
+  })
+
+  it('authors production movement content without changing dimensions or existing art and hotspots', function () {
+    this.timeout(15_000)
     const source = readFileSync(hallPath, 'utf8')
     const artLayer = source.match(/ <layer id="1" name="background"[\s\S]*? <\/layer>/)?.[0]
     const hotspots = source.match(/ <objectgroup id="14" name="hotspots"[\s\S]*? <\/objectgroup>/)?.[0]
@@ -98,6 +179,25 @@ describe('TMX edit operations', () => {
       'nav_area', 'nav_obstacles', 'regions', 'nav_nodes', 'nav_edges',
       'parking_slots', 'queue_slots', 'home_slots', 'debug_labels',
     ]) assert.match(result, new RegExp(`<objectgroup[^>]*name="${group}"`), group)
+  })
+
+  it('matches and safely navigates the existing production collision geometry', () => {
+    const source = readFileSync(hallPath, 'utf8')
+    const runtime = parseMovementTmx(source)
+    const collisionRuntime = parseMovementTmx(withCollisionAsMovementObstacles(source))
+    const collisionGroup = objectGroupXml(source, 'collision')
+    const navObstacleGroup = objectGroupXml(source, 'nav_obstacles')
+    const collisionObjectCount = collisionGroup.match(/<object\b/g)?.length ?? 0
+    const obstacleObjectCount = navObstacleGroup.match(/<object\b/g)?.length ?? 0
+
+    assert.ok(collisionObjectCount > 0)
+    assert.equal(obstacleObjectCount, collisionObjectCount)
+    assert.equal(navObstacleGroup.match(/name="stableId"/g)?.length, collisionObjectCount)
+    assert.deepEqual(runtime.obstacles, collisionRuntime.obstacles)
+    assert.deepEqual(
+      validateMapRuntime({ ...runtime, obstacles: collisionRuntime.obstacles }),
+      { valid: true, errors: [], warnings: [] },
+    )
   })
 
   it('CLI applies operation JSON and leaves a second run byte-identical', function () {

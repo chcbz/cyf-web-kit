@@ -1,49 +1,2353 @@
 [
-  { "op": "set-map-property", "name": "movementSchemaVersion", "value": "1" },
-  { "op": "set-map-property", "name": "navGraphVersion", "value": "juyiting-main-v1" },
-  { "op": "set-map-property", "name": "spriteManifestVersion", "value": "persona-sheets-v1" },
-  { "op": "set-map-property", "name": "sceneId", "value": "juyiting-main" },
-
-  { "op": "upsert-object-group", "name": "nav_area" },
-  { "op": "upsert-object-group", "name": "nav_obstacles" },
-  { "op": "upsert-object-group", "name": "regions" },
-  { "op": "upsert-object-group", "name": "nav_nodes" },
-  { "op": "upsert-object-group", "name": "nav_edges" },
-  { "op": "upsert-object-group", "name": "parking_slots" },
-  { "op": "upsert-object-group", "name": "queue_slots" },
-  { "op": "upsert-object-group", "name": "home_slots" },
-  { "op": "upsert-object-group", "name": "debug_labels" },
-
-  { "op": "upsert-object-by-stable-id", "group": "nav_area", "object": { "stableId": "jyt-nav-area-main-v1", "x": 48, "y": 144, "width": 1568, "height": 720, "properties": { "areaId": "juyiting-main-walkable" } } },
-
-  { "op": "upsert-object-by-stable-id", "group": "regions", "object": { "stableId": "jyt-region-main-seat-v1", "x": 760, "y": 176, "width": 240, "height": 184, "properties": { "regionId": "main-seat", "label": "Main seat", "capacity": 6, "protected": true, "riskLevel": "low" } } },
-  { "op": "upsert-object-by-stable-id", "group": "regions", "object": { "stableId": "jyt-region-council-table-v1", "x": 648, "y": 376, "width": 464, "height": 256, "properties": { "regionId": "council-table", "label": "Council table", "capacity": 12, "protected": false, "riskLevel": "low" } } },
-  { "op": "upsert-object-by-stable-id", "group": "regions", "object": { "stableId": "jyt-region-bounty-board-v1", "x": 1320, "y": 248, "width": 240, "height": 256, "properties": { "regionId": "bounty-board", "label": "Bounty board", "capacity": 5, "protected": false, "riskLevel": "medium" } } },
-  { "op": "upsert-object-by-stable-id", "group": "regions", "object": { "stableId": "jyt-region-agent-roster-v1", "x": 80, "y": 552, "width": 288, "height": 272, "properties": { "regionId": "agent-roster", "label": "Agent roster", "capacity": 8, "protected": false, "riskLevel": "low" } } },
-  { "op": "upsert-object-by-stable-id", "group": "regions", "object": { "stableId": "jyt-region-library-shelf-v1", "x": 1416, "y": 552, "width": 224, "height": 272, "properties": { "regionId": "library-shelf", "label": "Library shelf", "capacity": 4, "protected": false, "riskLevel": "low" } } },
-
-  { "op": "upsert-object-by-stable-id", "group": "nav_nodes", "object": { "stableId": "jyt-node-main-seat-v1", "x": 872, "y": 312, "width": 16, "height": 16, "shape": { "type": "ellipse" }, "properties": { "kind": "junction", "channelWidth": 72 } } },
-  { "op": "upsert-object-by-stable-id", "group": "nav_nodes", "object": { "stableId": "jyt-node-council-v1", "x": 872, "y": 472, "width": 16, "height": 16, "shape": { "type": "ellipse" }, "properties": { "kind": "junction", "channelWidth": 72 } } },
-  { "op": "upsert-object-by-stable-id", "group": "nav_nodes", "object": { "stableId": "jyt-node-west-hall-v1", "x": 512, "y": 612, "width": 16, "height": 16, "shape": { "type": "ellipse" }, "properties": { "kind": "normal", "channelWidth": 64 } } },
-  { "op": "upsert-object-by-stable-id", "group": "nav_nodes", "object": { "stableId": "jyt-node-agent-roster-v1", "x": 232, "y": 672, "width": 16, "height": 16, "shape": { "type": "ellipse" }, "properties": { "kind": "doorway", "channelWidth": 48 } } },
-  { "op": "upsert-object-by-stable-id", "group": "nav_nodes", "object": { "stableId": "jyt-node-east-hall-v1", "x": 1232, "y": 612, "width": 16, "height": 16, "shape": { "type": "ellipse" }, "properties": { "kind": "normal", "channelWidth": 64 } } },
-  { "op": "upsert-object-by-stable-id", "group": "nav_nodes", "object": { "stableId": "jyt-node-bounty-board-v1", "x": 1432, "y": 412, "width": 16, "height": 16, "shape": { "type": "ellipse" }, "properties": { "kind": "doorway", "channelWidth": 48 } } },
-  { "op": "upsert-object-by-stable-id", "group": "nav_nodes", "object": { "stableId": "jyt-node-library-shelf-v1", "x": 1512, "y": 672, "width": 16, "height": 16, "shape": { "type": "ellipse" }, "properties": { "kind": "doorway", "channelWidth": 48 } } },
-
-  { "op": "upsert-object-by-stable-id", "group": "nav_edges", "object": { "stableId": "jyt-edge-main-council-v1", "x": 880, "y": 320, "shape": { "type": "polyline", "points": [[0, 0], [0, 160]] }, "properties": { "from": "jyt-node-main-seat-v1", "to": "jyt-node-council-v1", "bidirectional": true, "costMultiplier": 1 } } },
-  { "op": "upsert-object-by-stable-id", "group": "nav_edges", "object": { "stableId": "jyt-edge-council-west-v1", "x": 880, "y": 480, "shape": { "type": "polyline", "points": [[0, 0], [-160, 70], [-360, 140]] }, "properties": { "from": "jyt-node-council-v1", "to": "jyt-node-west-hall-v1", "bidirectional": true, "costMultiplier": 1 } } },
-  { "op": "upsert-object-by-stable-id", "group": "nav_edges", "object": { "stableId": "jyt-edge-west-agent-v1", "x": 520, "y": 620, "shape": { "type": "polyline", "points": [[0, 0], [-140, 30], [-280, 60]] }, "properties": { "from": "jyt-node-west-hall-v1", "to": "jyt-node-agent-roster-v1", "bidirectional": true, "costMultiplier": 1 } } },
-  { "op": "upsert-object-by-stable-id", "group": "nav_edges", "object": { "stableId": "jyt-edge-council-east-v1", "x": 880, "y": 480, "shape": { "type": "polyline", "points": [[0, 0], [160, 70], [360, 140]] }, "properties": { "from": "jyt-node-council-v1", "to": "jyt-node-east-hall-v1", "bidirectional": true, "costMultiplier": 1 } } },
-  { "op": "upsert-object-by-stable-id", "group": "nav_edges", "object": { "stableId": "jyt-edge-east-bounty-v1", "x": 1240, "y": 620, "shape": { "type": "polyline", "points": [[0, 0], [100, -100], [200, -200]] }, "properties": { "from": "jyt-node-east-hall-v1", "to": "jyt-node-bounty-board-v1", "bidirectional": true, "costMultiplier": 1.1 } } },
-  { "op": "upsert-object-by-stable-id", "group": "nav_edges", "object": { "stableId": "jyt-edge-east-library-v1", "x": 1240, "y": 620, "shape": { "type": "polyline", "points": [[0, 0], [140, 30], [280, 60]] }, "properties": { "from": "jyt-node-east-hall-v1", "to": "jyt-node-library-shelf-v1", "bidirectional": true, "costMultiplier": 1 } } },
-
-  { "op": "upsert-object-by-stable-id", "group": "parking_slots", "object": { "stableId": "jyt-slot-main-seat-parking-v1", "x": 912, "y": 312, "width": 16, "height": 16, "shape": { "type": "ellipse" }, "properties": { "slotId": "main-seat-parking-1", "regionId": "main-seat" } } },
-  { "op": "upsert-object-by-stable-id", "group": "parking_slots", "object": { "stableId": "jyt-slot-council-parking-v1", "x": 912, "y": 472, "width": 16, "height": 16, "shape": { "type": "ellipse" }, "properties": { "slotId": "council-table-parking-1", "regionId": "council-table" } } },
-  { "op": "upsert-object-by-stable-id", "group": "parking_slots", "object": { "stableId": "jyt-slot-bounty-parking-v1", "x": 1472, "y": 412, "width": 16, "height": 16, "shape": { "type": "ellipse" }, "properties": { "slotId": "bounty-board-parking-1", "regionId": "bounty-board" } } },
-  { "op": "upsert-object-by-stable-id", "group": "parking_slots", "object": { "stableId": "jyt-slot-agent-parking-v1", "x": 272, "y": 672, "width": 16, "height": 16, "shape": { "type": "ellipse" }, "properties": { "slotId": "agent-roster-parking-1", "regionId": "agent-roster" } } },
-  { "op": "upsert-object-by-stable-id", "group": "parking_slots", "object": { "stableId": "jyt-slot-library-parking-v1", "x": 1552, "y": 672, "width": 16, "height": 16, "shape": { "type": "ellipse" }, "properties": { "slotId": "library-shelf-parking-1", "regionId": "library-shelf" } } },
-
-  { "op": "upsert-object-by-stable-id", "group": "queue_slots", "object": { "stableId": "jyt-slot-council-queue-v1", "x": 832, "y": 472, "width": 16, "height": 16, "shape": { "type": "ellipse" }, "properties": { "slotId": "council-table-queue-1", "regionId": "council-table" } } },
-
-  { "op": "upsert-object-by-stable-id", "group": "home_slots", "object": { "stableId": "jyt-slot-songjiang-home-v1", "x": 832, "y": 312, "width": 16, "height": 16, "shape": { "type": "ellipse" }, "properties": { "slotId": "songjiang-home", "regionId": "main-seat", "personaCode": "songjiang" } } }
+  {
+    "op": "set-map-property",
+    "name": "movementSchemaVersion",
+    "value": "1"
+  },
+  {
+    "op": "set-map-property",
+    "name": "navGraphVersion",
+    "value": "juyiting-main-v1"
+  },
+  {
+    "op": "set-map-property",
+    "name": "spriteManifestVersion",
+    "value": "persona-sheets-v1"
+  },
+  {
+    "op": "set-map-property",
+    "name": "sceneId",
+    "value": "juyiting-main"
+  },
+  {
+    "op": "upsert-object-group",
+    "name": "nav_area"
+  },
+  {
+    "op": "upsert-object-group",
+    "name": "nav_obstacles"
+  },
+  {
+    "op": "upsert-object-group",
+    "name": "regions"
+  },
+  {
+    "op": "upsert-object-group",
+    "name": "nav_nodes"
+  },
+  {
+    "op": "upsert-object-group",
+    "name": "nav_edges"
+  },
+  {
+    "op": "upsert-object-group",
+    "name": "parking_slots"
+  },
+  {
+    "op": "upsert-object-group",
+    "name": "queue_slots"
+  },
+  {
+    "op": "upsert-object-group",
+    "name": "home_slots"
+  },
+  {
+    "op": "upsert-object-group",
+    "name": "debug_labels"
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-010-v1",
+      "x": 597,
+      "y": 487,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            -7,
+            30
+          ],
+          [
+            16,
+            31
+          ],
+          [
+            21,
+            -2
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 10
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-011-v1",
+      "x": 1126,
+      "y": 488,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            3,
+            30
+          ],
+          [
+            29,
+            32
+          ],
+          [
+            25,
+            0
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 11
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-012-v1",
+      "x": 1159,
+      "y": 502,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            31,
+            1
+          ],
+          [
+            28,
+            -29
+          ],
+          [
+            -5,
+            -33
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 12
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-013-v1",
+      "x": 552,
+      "y": 502,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            34,
+            0
+          ],
+          [
+            43,
+            -31
+          ],
+          [
+            6,
+            -35
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 13
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-014-v1",
+      "x": 521,
+      "y": 633,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            32,
+            -153
+          ],
+          [
+            16,
+            -157
+          ],
+          [
+            -21,
+            -1
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 14
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-015-v1",
+      "x": 442,
+      "y": 597,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            38,
+            3
+          ],
+          [
+            49,
+            -43
+          ],
+          [
+            4,
+            -43
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 15
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-016-v1",
+      "x": 514,
+      "y": 704,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            -9,
+            68
+          ],
+          [
+            -31,
+            67
+          ],
+          [
+            -19,
+            -5
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 16
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-017-v1",
+      "x": 487,
+      "y": 804,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            150,
+            4
+          ],
+          [
+            149,
+            53
+          ],
+          [
+            191,
+            53
+          ],
+          [
+            188,
+            135
+          ],
+          [
+            210,
+            135
+          ],
+          [
+            219,
+            20
+          ],
+          [
+            315,
+            23
+          ],
+          [
+            315,
+            -10
+          ],
+          [
+            217,
+            -10
+          ],
+          [
+            230,
+            -92
+          ],
+          [
+            198,
+            -96
+          ],
+          [
+            195,
+            -27
+          ],
+          [
+            -7,
+            -29
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 17
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-018-v1",
+      "x": 412,
+      "y": 667,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            3,
+            -19
+          ],
+          [
+            -17,
+            -19
+          ],
+          [
+            -18,
+            -1
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 18
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-019-v1",
+      "x": 361,
+      "y": 767,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            -40,
+            173
+          ],
+          [
+            -69,
+            171
+          ],
+          [
+            -20,
+            -5
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 19
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-020-v1",
+      "x": 288,
+      "y": 936,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            -291,
+            3
+          ],
+          [
+            -291,
+            -24
+          ],
+          [
+            9,
+            -22
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 20
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-021-v1",
+      "x": 16,
+      "y": 906,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            54,
+            -161
+          ],
+          [
+            -19,
+            -168
+          ],
+          [
+            -19,
+            1
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 21
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-022-v1",
+      "x": 18,
+      "y": 732,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            65,
+            -142
+          ],
+          [
+            331,
+            -141
+          ],
+          [
+            339,
+            -158
+          ],
+          [
+            425,
+            -150
+          ],
+          [
+            427,
+            -177
+          ],
+          [
+            57,
+            -182
+          ],
+          [
+            -22,
+            -5
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 22
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-023-v1",
+      "x": 549,
+      "y": 472,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            -553,
+            -11
+          ],
+          [
+            -553,
+            -28
+          ],
+          [
+            3,
+            -17
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 23
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-024-v1",
+      "x": 38,
+      "y": 440,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            60,
+            -45
+          ],
+          [
+            122,
+            -90
+          ],
+          [
+            189,
+            -225
+          ],
+          [
+            214,
+            -223
+          ],
+          [
+            195,
+            -167
+          ],
+          [
+            339,
+            -166
+          ],
+          [
+            351,
+            -207
+          ],
+          [
+            330,
+            -223
+          ],
+          [
+            333,
+            -230
+          ],
+          [
+            599,
+            -221
+          ],
+          [
+            578,
+            -122
+          ],
+          [
+            585,
+            -111
+          ],
+          [
+            609,
+            -109
+          ],
+          [
+            628,
+            -246
+          ],
+          [
+            137,
+            -263
+          ],
+          [
+            -22,
+            2
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 24
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-025-v1",
+      "x": 668,
+      "y": 252,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            3,
+            45
+          ],
+          [
+            33,
+            40
+          ],
+          [
+            38,
+            67
+          ],
+          [
+            72,
+            71
+          ],
+          [
+            73,
+            100
+          ],
+          [
+            109,
+            100
+          ],
+          [
+            110,
+            62
+          ],
+          [
+            83,
+            61
+          ],
+          [
+            84,
+            37
+          ],
+          [
+            47,
+            40
+          ],
+          [
+            58,
+            -37
+          ],
+          [
+            58,
+            -62
+          ],
+          [
+            4,
+            -63
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 25
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-026-v1",
+      "x": 969,
+      "y": 309,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            -3,
+            41
+          ],
+          [
+            34,
+            41
+          ],
+          [
+            31,
+            13
+          ],
+          [
+            73,
+            7
+          ],
+          [
+            70,
+            -13
+          ],
+          [
+            121,
+            -15
+          ],
+          [
+            118,
+            -122
+          ],
+          [
+            52,
+            -115
+          ],
+          [
+            60,
+            -17
+          ],
+          [
+            22,
+            -19
+          ],
+          [
+            22,
+            0
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 26
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-027-v1",
+      "x": 731,
+      "y": 207,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            23,
+            0
+          ],
+          [
+            23,
+            19
+          ],
+          [
+            52,
+            18
+          ],
+          [
+            55,
+            2
+          ],
+          [
+            228,
+            4
+          ],
+          [
+            228,
+            13
+          ],
+          [
+            260,
+            13
+          ],
+          [
+            260,
+            -6
+          ],
+          [
+            286,
+            -4
+          ],
+          [
+            286,
+            -18
+          ],
+          [
+            1,
+            -17
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 27
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-028-v1",
+      "x": 998,
+      "y": 230,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            6,
+            44
+          ],
+          [
+            -34,
+            47
+          ],
+          [
+            -36,
+            2
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 28
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-029-v1",
+      "x": 788,
+      "y": 232,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            -2,
+            41
+          ],
+          [
+            -42,
+            43
+          ],
+          [
+            -38,
+            -2
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 29
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-030-v1",
+      "x": 1103,
+      "y": 335,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            -11,
+            -154
+          ],
+          [
+            206,
+            -149
+          ],
+          [
+            214,
+            -80
+          ],
+          [
+            152,
+            -65
+          ],
+          [
+            139,
+            -98
+          ],
+          [
+            163,
+            -109
+          ],
+          [
+            162,
+            -128
+          ],
+          [
+            21,
+            -115
+          ],
+          [
+            4,
+            -115
+          ],
+          [
+            21,
+            -6
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 30
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-031-v1",
+      "x": 928,
+      "y": 794,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            -3,
+            27
+          ],
+          [
+            92,
+            25
+          ],
+          [
+            101,
+            141
+          ],
+          [
+            129,
+            141
+          ],
+          [
+            119,
+            69
+          ],
+          [
+            172,
+            68
+          ],
+          [
+            165,
+            11
+          ],
+          [
+            283,
+            9
+          ],
+          [
+            283,
+            26
+          ],
+          [
+            317,
+            30
+          ],
+          [
+            315,
+            -104
+          ],
+          [
+            287,
+            -98
+          ],
+          [
+            295,
+            -11
+          ],
+          [
+            121,
+            -14
+          ],
+          [
+            119,
+            -80
+          ],
+          [
+            85,
+            -80
+          ],
+          [
+            88,
+            -13
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 31
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-032-v1",
+      "x": 1214,
+      "y": 613,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            -23,
+            -149
+          ],
+          [
+            451,
+            -155
+          ],
+          [
+            451,
+            -137
+          ],
+          [
+            -4,
+            -133
+          ],
+          [
+            11,
+            -2
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 32
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-033-v1",
+      "x": 1298,
+      "y": 563,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            -6,
+            32
+          ],
+          [
+            -41,
+            40
+          ],
+          [
+            -56,
+            13
+          ],
+          [
+            -52,
+            0
+          ],
+          [
+            -50,
+            -14
+          ],
+          [
+            368,
+            -13
+          ],
+          [
+            365,
+            78
+          ],
+          [
+            309,
+            71
+          ],
+          [
+            294,
+            31
+          ],
+          [
+            132,
+            30
+          ],
+          [
+            116,
+            43
+          ],
+          [
+            146,
+            53
+          ],
+          [
+            151,
+            80
+          ],
+          [
+            120,
+            81
+          ],
+          [
+            117,
+            61
+          ],
+          [
+            97,
+            47
+          ],
+          [
+            81,
+            24
+          ],
+          [
+            69,
+            -4
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 33
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-034-v1",
+      "x": 1313,
+      "y": 657,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            4,
+            11
+          ],
+          [
+            24,
+            11
+          ],
+          [
+            25,
+            -16
+          ],
+          [
+            0,
+            -16
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 34
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-035-v1",
+      "x": 1357,
+      "y": 739,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            3,
+            56
+          ],
+          [
+            27,
+            165
+          ],
+          [
+            -8,
+            176
+          ],
+          [
+            -3,
+            199
+          ],
+          [
+            309,
+            199
+          ],
+          [
+            308,
+            169
+          ],
+          [
+            103,
+            170
+          ],
+          [
+            94,
+            106
+          ],
+          [
+            188,
+            103
+          ],
+          [
+            199,
+            79
+          ],
+          [
+            173,
+            71
+          ],
+          [
+            160,
+            32
+          ],
+          [
+            66,
+            30
+          ],
+          [
+            52,
+            -27
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 35
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-036-v1",
+      "x": 1603,
+      "y": 837,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            25
+          ],
+          [
+            58,
+            28
+          ],
+          [
+            59,
+            -51
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 36
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-037-v1",
+      "x": 1572,
+      "y": 816,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            24,
+            -15
+          ],
+          [
+            28,
+            -42
+          ],
+          [
+            8,
+            -44
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 37
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-038-v1",
+      "x": 1327,
+      "y": 247,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            253,
+            1
+          ],
+          [
+            256,
+            46
+          ],
+          [
+            236,
+            74
+          ],
+          [
+            251,
+            111
+          ],
+          [
+            291,
+            119
+          ],
+          [
+            300,
+            151
+          ],
+          [
+            334,
+            159
+          ],
+          [
+            327,
+            -51
+          ],
+          [
+            -10,
+            -30
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 38
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-039-v1",
+      "x": 481,
+      "y": 268,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            28,
+            10
+          ],
+          [
+            31,
+            -23
+          ],
+          [
+            -51,
+            -41
+          ],
+          [
+            -56,
+            -11
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 39
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-040-v1",
+      "x": 353,
+      "y": 845,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            58,
+            -3
+          ],
+          [
+            59,
+            30
+          ],
+          [
+            -7,
+            30
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 40
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-041-v1",
+      "x": 157,
+      "y": 625,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            80,
+            4
+          ],
+          [
+            40,
+            111
+          ],
+          [
+            -36,
+            111
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 41
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-042-v1",
+      "x": 55,
+      "y": 871,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            13,
+            -60
+          ],
+          [
+            203,
+            -42
+          ],
+          [
+            182,
+            7
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 42
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-043-v1",
+      "x": 224,
+      "y": 373,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            31,
+            -82
+          ],
+          [
+            128,
+            -77
+          ],
+          [
+            98,
+            5
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 43
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-044-v1",
+      "x": 820,
+      "y": 222,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            41
+          ],
+          [
+            105,
+            42
+          ],
+          [
+            107,
+            -6
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 44
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-045-v1",
+      "x": 1363,
+      "y": 286,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            6,
+            55
+          ],
+          [
+            33,
+            58
+          ],
+          [
+            33,
+            87
+          ],
+          [
+            142,
+            96
+          ],
+          [
+            139,
+            55
+          ],
+          [
+            166,
+            50
+          ],
+          [
+            163,
+            28
+          ],
+          [
+            140,
+            20
+          ],
+          [
+            141,
+            8
+          ],
+          [
+            129,
+            -8
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 45
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-046-v1",
+      "x": 1497,
+      "y": 626,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            29,
+            91
+          ],
+          [
+            106,
+            88
+          ],
+          [
+            76,
+            -12
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 46
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_obstacles",
+    "object": {
+      "stableId": "jyt-collision-047-v1",
+      "x": 1297,
+      "y": 838,
+      "shape": {
+        "type": "polygon",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            8,
+            44
+          ],
+          [
+            66,
+            37
+          ],
+          [
+            54,
+            -4
+          ]
+        ]
+      },
+      "properties": {
+        "sourceCollisionObjectId": 47
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_area",
+    "object": {
+      "stableId": "jyt-nav-area-main-v1",
+      "x": 48,
+      "y": 144,
+      "width": 1568,
+      "height": 720,
+      "properties": {
+        "areaId": "juyiting-main-walkable"
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "regions",
+    "object": {
+      "stableId": "jyt-region-main-seat-v1",
+      "x": 760,
+      "y": 176,
+      "width": 240,
+      "height": 184,
+      "properties": {
+        "regionId": "main-seat",
+        "label": "Main seat",
+        "capacity": 6,
+        "protected": true,
+        "riskLevel": "low"
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "regions",
+    "object": {
+      "stableId": "jyt-region-council-table-v1",
+      "x": 648,
+      "y": 376,
+      "width": 464,
+      "height": 256,
+      "properties": {
+        "regionId": "council-table",
+        "label": "Council table",
+        "capacity": 12,
+        "protected": false,
+        "riskLevel": "low"
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "regions",
+    "object": {
+      "stableId": "jyt-region-bounty-board-v1",
+      "x": 1320,
+      "y": 248,
+      "width": 240,
+      "height": 256,
+      "properties": {
+        "regionId": "bounty-board",
+        "label": "Bounty board",
+        "capacity": 5,
+        "protected": false,
+        "riskLevel": "medium"
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "regions",
+    "object": {
+      "stableId": "jyt-region-agent-roster-v1",
+      "x": 80,
+      "y": 552,
+      "width": 288,
+      "height": 272,
+      "properties": {
+        "regionId": "agent-roster",
+        "label": "Agent roster",
+        "capacity": 8,
+        "protected": false,
+        "riskLevel": "low"
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "regions",
+    "object": {
+      "stableId": "jyt-region-library-shelf-v1",
+      "x": 1416,
+      "y": 552,
+      "width": 224,
+      "height": 272,
+      "properties": {
+        "regionId": "library-shelf",
+        "label": "Library shelf",
+        "capacity": 4,
+        "protected": false,
+        "riskLevel": "low"
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_nodes",
+    "object": {
+      "stableId": "jyt-node-main-seat-v1",
+      "x": 872,
+      "y": 312,
+      "width": 16,
+      "height": 16,
+      "shape": {
+        "type": "ellipse"
+      },
+      "properties": {
+        "kind": "junction",
+        "channelWidth": 72
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_nodes",
+    "object": {
+      "stableId": "jyt-node-council-v1",
+      "x": 872,
+      "y": 472,
+      "width": 16,
+      "height": 16,
+      "shape": {
+        "type": "ellipse"
+      },
+      "properties": {
+        "kind": "junction",
+        "channelWidth": 72
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_nodes",
+    "object": {
+      "stableId": "jyt-node-west-hall-v1",
+      "x": 516,
+      "y": 632,
+      "width": 16,
+      "height": 16,
+      "shape": {
+        "type": "ellipse"
+      },
+      "properties": {
+        "kind": "normal",
+        "channelWidth": 64
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_nodes",
+    "object": {
+      "stableId": "jyt-node-agent-roster-v1",
+      "x": 232,
+      "y": 672,
+      "width": 16,
+      "height": 16,
+      "shape": {
+        "type": "ellipse"
+      },
+      "properties": {
+        "kind": "doorway",
+        "channelWidth": 48
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_nodes",
+    "object": {
+      "stableId": "jyt-node-east-hall-v1",
+      "x": 1204,
+      "y": 612,
+      "width": 16,
+      "height": 16,
+      "shape": {
+        "type": "ellipse"
+      },
+      "properties": {
+        "kind": "normal",
+        "channelWidth": 64
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_nodes",
+    "object": {
+      "stableId": "jyt-node-bounty-board-v1",
+      "x": 1432,
+      "y": 412,
+      "width": 16,
+      "height": 16,
+      "shape": {
+        "type": "ellipse"
+      },
+      "properties": {
+        "kind": "doorway",
+        "channelWidth": 48
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_nodes",
+    "object": {
+      "stableId": "jyt-node-library-shelf-v1",
+      "x": 1440,
+      "y": 592,
+      "width": 16,
+      "height": 16,
+      "shape": {
+        "type": "ellipse"
+      },
+      "properties": {
+        "kind": "doorway",
+        "channelWidth": 48
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_edges",
+    "object": {
+      "stableId": "jyt-edge-main-council-v1",
+      "x": 880,
+      "y": 320,
+      "shape": {
+        "type": "polyline",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            160
+          ]
+        ]
+      },
+      "properties": {
+        "from": "jyt-node-main-seat-v1",
+        "to": "jyt-node-council-v1",
+        "bidirectional": true,
+        "costMultiplier": 1
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_edges",
+    "object": {
+      "stableId": "jyt-edge-council-west-v1",
+      "x": 880,
+      "y": 480,
+      "shape": {
+        "type": "polyline",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            -356,
+            160
+          ]
+        ]
+      },
+      "properties": {
+        "from": "jyt-node-council-v1",
+        "to": "jyt-node-west-hall-v1",
+        "bidirectional": true,
+        "costMultiplier": 1
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_edges",
+    "object": {
+      "stableId": "jyt-edge-west-agent-v1",
+      "x": 524,
+      "y": 640,
+      "shape": {
+        "type": "polyline",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            -104,
+            28
+          ],
+          [
+            -108,
+            32
+          ],
+          [
+            -284,
+            40
+          ]
+        ]
+      },
+      "properties": {
+        "from": "jyt-node-west-hall-v1",
+        "to": "jyt-node-agent-roster-v1",
+        "bidirectional": true,
+        "costMultiplier": 1
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_edges",
+    "object": {
+      "stableId": "jyt-edge-council-east-v1",
+      "x": 880,
+      "y": 480,
+      "shape": {
+        "type": "polyline",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            332,
+            140
+          ]
+        ]
+      },
+      "properties": {
+        "from": "jyt-node-council-v1",
+        "to": "jyt-node-east-hall-v1",
+        "bidirectional": true,
+        "costMultiplier": 1
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_edges",
+    "object": {
+      "stableId": "jyt-edge-east-bounty-v1",
+      "x": 1212,
+      "y": 620,
+      "shape": {
+        "type": "polyline",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            -4,
+            -4
+          ],
+          [
+            -84,
+            -96
+          ],
+          [
+            -88,
+            -100
+          ],
+          [
+            -92,
+            -136
+          ],
+          [
+            -64,
+            -152
+          ],
+          [
+            -60,
+            -156
+          ],
+          [
+            228,
+            -200
+          ]
+        ]
+      },
+      "properties": {
+        "from": "jyt-node-east-hall-v1",
+        "to": "jyt-node-bounty-board-v1",
+        "bidirectional": true,
+        "costMultiplier": 1.1
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "nav_edges",
+    "object": {
+      "stableId": "jyt-edge-east-library-v1",
+      "x": 1212,
+      "y": 620,
+      "shape": {
+        "type": "polyline",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            196,
+            24
+          ],
+          [
+            204,
+            32
+          ],
+          [
+            240,
+            28
+          ],
+          [
+            244,
+            24
+          ],
+          [
+            236,
+            -20
+          ]
+        ]
+      },
+      "properties": {
+        "from": "jyt-node-east-hall-v1",
+        "to": "jyt-node-library-shelf-v1",
+        "bidirectional": true,
+        "costMultiplier": 1
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "parking_slots",
+    "object": {
+      "stableId": "jyt-slot-main-seat-parking-v1",
+      "x": 912,
+      "y": 312,
+      "width": 16,
+      "height": 16,
+      "shape": {
+        "type": "ellipse"
+      },
+      "properties": {
+        "slotId": "main-seat-parking-1",
+        "regionId": "main-seat"
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "parking_slots",
+    "object": {
+      "stableId": "jyt-slot-council-parking-v1",
+      "x": 912,
+      "y": 472,
+      "width": 16,
+      "height": 16,
+      "shape": {
+        "type": "ellipse"
+      },
+      "properties": {
+        "slotId": "council-table-parking-1",
+        "regionId": "council-table"
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "parking_slots",
+    "object": {
+      "stableId": "jyt-slot-bounty-parking-v1",
+      "x": 1472,
+      "y": 412,
+      "width": 16,
+      "height": 16,
+      "shape": {
+        "type": "ellipse"
+      },
+      "properties": {
+        "slotId": "bounty-board-parking-1",
+        "regionId": "bounty-board"
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "parking_slots",
+    "object": {
+      "stableId": "jyt-slot-agent-parking-v1",
+      "x": 272,
+      "y": 672,
+      "width": 16,
+      "height": 16,
+      "shape": {
+        "type": "ellipse"
+      },
+      "properties": {
+        "slotId": "agent-roster-parking-1",
+        "regionId": "agent-roster"
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "parking_slots",
+    "object": {
+      "stableId": "jyt-slot-library-parking-v1",
+      "x": 1462,
+      "y": 592,
+      "width": 16,
+      "height": 16,
+      "shape": {
+        "type": "ellipse"
+      },
+      "properties": {
+        "slotId": "library-shelf-parking-1",
+        "regionId": "library-shelf"
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "queue_slots",
+    "object": {
+      "stableId": "jyt-slot-council-queue-v1",
+      "x": 832,
+      "y": 472,
+      "width": 16,
+      "height": 16,
+      "shape": {
+        "type": "ellipse"
+      },
+      "properties": {
+        "slotId": "council-table-queue-1",
+        "regionId": "council-table"
+      }
+    }
+  },
+  {
+    "op": "upsert-object-by-stable-id",
+    "group": "home_slots",
+    "object": {
+      "stableId": "jyt-slot-songjiang-home-v1",
+      "x": 832,
+      "y": 312,
+      "width": 16,
+      "height": 16,
+      "shape": {
+        "type": "ellipse"
+      },
+      "properties": {
+        "slotId": "songjiang-home",
+        "regionId": "main-seat",
+        "personaCode": "songjiang"
+      }
+    }
+  }
 ]
