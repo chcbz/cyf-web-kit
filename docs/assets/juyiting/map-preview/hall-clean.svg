@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1664" height="928" viewBox="0 0 1664 928" role="img" aria-labelledby="map-title map-description">
+  <title id="map-title">Juyiting map preview</title>
+  <desc id="map-description">juyiting-main · graph juyiting-main-v1 · sprites persona-sheets-v1</desc>
+  <defs>
+    <filter id="label-shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#08110d" flood-opacity="0.9"/></filter>
+    <style>
+      .business-region{fill:#f4c95d;fill-opacity:.13;stroke:#f7dc91;stroke-width:2;vector-effect:non-scaling-stroke}
+      .business-label{font:700 22px system-ui,sans-serif;fill:#fff7d6;paint-order:stroke;stroke:#2a1b0d;stroke-width:5;stroke-linejoin:round;text-anchor:middle;filter:url(#label-shadow)}
+    </style>
+  </defs>
+  <rect width="1664" height="928" fill="#17251d"/>
+  <image class="map-art" href="../../../../public/juyiting/images/liangshan-hall-base-clean-v3.png" x="0" y="0" width="1664" height="928" preserveAspectRatio="none"/>
+  <g class="business-regions">
+    <polygon class="business-region" points="80,552 368,552 368,824 80,824"><title>Agent roster (jyt-region-agent-roster-v1)</title></polygon>
+    <text class="business-label" x="224" y="688">Agent roster</text>
+    <polygon class="business-region" points="1320,248 1560,248 1560,504 1320,504"><title>Bounty board (jyt-region-bounty-board-v1)</title></polygon>
+    <text class="business-label" x="1440" y="376">Bounty board</text>
+    <polygon class="business-region" points="648,376 1112,376 1112,632 648,632"><title>Council table (jyt-region-council-table-v1)</title></polygon>
+    <text class="business-label" x="880" y="504">Council table</text>
+    <polygon class="business-region" points="1416,552 1640,552 1640,824 1416,824"><title>Library shelf (jyt-region-library-shelf-v1)</title></polygon>
+    <text class="business-label" x="1528" y="688">Library shelf</text>
+    <polygon class="business-region" points="760,176 1000,176 1000,360 760,360"><title>Main seat (jyt-region-main-seat-v1)</title></polygon>
+    <text class="business-label" x="880" y="268">Main seat</text>
+  </g>
+</svg>

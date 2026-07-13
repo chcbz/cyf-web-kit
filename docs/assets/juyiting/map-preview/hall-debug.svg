@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1664" height="928" viewBox="0 0 1664 928" role="img" aria-labelledby="map-title map-description">
+  <title id="map-title">Juyiting map preview</title>
+  <desc id="map-description">juyiting-main · graph juyiting-main-v1 · sprites persona-sheets-v1</desc>
+  <defs>
+    <filter id="label-shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#08110d" flood-opacity="0.9"/></filter>
+    <marker id="nav-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#57d7ff"/></marker>
+    <marker id="nav-arrow-reverse" markerWidth="10" markerHeight="10" refX="1" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M9,0 L9,6 L0,3 z" fill="#57d7ff"/></marker>
+    <style>
+      .business-region{fill:#f4c95d;fill-opacity:.13;stroke:#f7dc91;stroke-width:2;vector-effect:non-scaling-stroke}
+      .business-label{font:700 22px system-ui,sans-serif;fill:#fff7d6;paint-order:stroke;stroke:#2a1b0d;stroke-width:5;stroke-linejoin:round;text-anchor:middle;filter:url(#label-shadow)}
+      .obstacle{fill:#ff4567;fill-opacity:.28;stroke:#ff6f87;stroke-width:2;vector-effect:non-scaling-stroke}
+      .nav-edge{fill:none;stroke:#57d7ff;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .nav-node{fill:#061c29;stroke:#87e7ff;stroke-width:3;vector-effect:non-scaling-stroke}
+      .slot{stroke:#101713;stroke-width:2;vector-effect:non-scaling-stroke}.slot-parking{fill:#ffd166}.slot-queue{fill:#ef6fff}.slot-home{fill:#69ef9d}
+      .debug-label{font:600 14px ui-monospace,monospace;fill:#fff;paint-order:stroke;stroke:#10151c;stroke-width:4;stroke-linejoin:round}
+      .debug-small{font-size:12px}
+    </style>
+  </defs>
+  <rect width="1664" height="928" fill="#17251d"/>
+  <image class="map-art" href="../../../../public/juyiting/images/liangshan-hall-base-clean-v3.png" x="0" y="0" width="1664" height="928" preserveAspectRatio="none"/>
+  <g class="business-regions">
+    <polygon class="business-region" points="80,552 368,552 368,824 80,824"><title>Agent roster (jyt-region-agent-roster-v1)</title></polygon>
+    <text class="business-label" x="224" y="688">Agent roster</text>
+    <polygon class="business-region" points="1320,248 1560,248 1560,504 1320,504"><title>Bounty board (jyt-region-bounty-board-v1)</title></polygon>
+    <text class="business-label" x="1440" y="376">Bounty board</text>
+    <polygon class="business-region" points="648,376 1112,376 1112,632 648,632"><title>Council table (jyt-region-council-table-v1)</title></polygon>
+    <text class="business-label" x="880" y="504">Council table</text>
+    <polygon class="business-region" points="1416,552 1640,552 1640,824 1416,824"><title>Library shelf (jyt-region-library-shelf-v1)</title></polygon>
+    <text class="business-label" x="1528" y="688">Library shelf</text>
+    <polygon class="business-region" points="760,176 1000,176 1000,360 760,360"><title>Main seat (jyt-region-main-seat-v1)</title></polygon>
+    <text class="business-label" x="880" y="268">Main seat</text>
+  </g>
+  <g class="debug-obstacles">
+    <polygon class="obstacle" points="1103,335 1092,181 1309,186 1317,255 1255,270 1242,237 1266,226 1265,207 1124,220 1107,220 1124,329"><title>obstacle-001</title></polygon>
+    <polygon class="obstacle" points="1126,488 1129,518 1155,520 1151,488"><title>obstacle-002</title></polygon>
+    <polygon class="obstacle" points="1159,502 1190,503 1187,473 1154,469"><title>obstacle-003</title></polygon>
+    <polygon class="obstacle" points="1214,613 1191,464 1665,458 1665,476 1210,480 1225,611"><title>obstacle-004</title></polygon>
+    <polygon class="obstacle" points="1297,838 1305,882 1363,875 1351,834"><title>obstacle-005</title></polygon>
+    <polygon class="obstacle" points="1298,563 1292,595 1257,603 1242,576 1246,563 1248,549 1666,550 1663,641 1607,634 1592,594 1430,593 1414,606 1444,616 1449,643 1418,644 1415,624 1395,610 1379,587 1367,559"><title>obstacle-006</title></polygon>
+    <polygon class="obstacle" points="1313,657 1317,668 1337,668 1338,641 1313,641"><title>obstacle-007</title></polygon>
+    <polygon class="obstacle" points="1327,247 1580,248 1583,293 1563,321 1578,358 1618,366 1627,398 1661,406 1654,196 1317,217"><title>obstacle-008</title></polygon>
+    <polygon class="obstacle" points="1357,739 1360,795 1384,904 1349,915 1354,938 1666,938 1665,908 1460,909 1451,845 1545,842 1556,818 1530,810 1517,771 1423,769 1409,712"><title>obstacle-009</title></polygon>
+    <polygon class="obstacle" points="1363,286 1369,341 1396,344 1396,373 1505,382 1502,341 1529,336 1526,314 1503,306 1504,294 1492,278"><title>obstacle-010</title></polygon>
+    <polygon class="obstacle" points="1497,626 1526,717 1603,714 1573,614"><title>obstacle-011</title></polygon>
+    <polygon class="obstacle" points="157,625 237,629 197,736 121,736"><title>obstacle-012</title></polygon>
+    <polygon class="obstacle" points="1572,816 1596,801 1600,774 1580,772"><title>obstacle-013</title></polygon>
+    <polygon class="obstacle" points="16,906 70,745 -3,738 -3,907"><title>obstacle-014</title></polygon>
+    <polygon class="obstacle" points="1603,837 1603,862 1661,865 1662,786"><title>obstacle-015</title></polygon>
+    <polygon class="obstacle" points="18,732 83,590 349,591 357,574 443,582 445,555 75,550 -4,727"><title>obstacle-016</title></polygon>
+    <polygon class="obstacle" points="224,373 255,291 352,296 322,378"><title>obstacle-017</title></polygon>
+    <polygon class="obstacle" points="288,936 -3,939 -3,912 297,914"><title>obstacle-018</title></polygon>
+    <polygon class="obstacle" points="353,845 411,842 412,875 346,875"><title>obstacle-019</title></polygon>
+    <polygon class="obstacle" points="361,767 321,940 292,938 341,762"><title>obstacle-020</title></polygon>
+    <polygon class="obstacle" points="38,440 98,395 160,350 227,215 252,217 233,273 377,274 389,233 368,217 371,210 637,219 616,318 623,329 647,331 666,194 175,177 16,442"><title>obstacle-021</title></polygon>
+    <polygon class="obstacle" points="412,667 415,648 395,648 394,666"><title>obstacle-022</title></polygon>
+    <polygon class="obstacle" points="442,597 480,600 491,554 446,554"><title>obstacle-023</title></polygon>
+    <polygon class="obstacle" points="481,268 509,278 512,245 430,227 425,257"><title>obstacle-024</title></polygon>
+    <polygon class="obstacle" points="487,804 637,808 636,857 678,857 675,939 697,939 706,824 802,827 802,794 704,794 717,712 685,708 682,777 480,775"><title>obstacle-025</title></polygon>
+    <polygon class="obstacle" points="514,704 505,772 483,771 495,699"><title>obstacle-026</title></polygon>
+    <polygon class="obstacle" points="521,633 553,480 537,476 500,632"><title>obstacle-027</title></polygon>
+    <polygon class="obstacle" points="549,472 -4,461 -4,444 552,455"><title>obstacle-028</title></polygon>
+    <polygon class="obstacle" points="55,871 68,811 258,829 237,878"><title>obstacle-029</title></polygon>
+    <polygon class="obstacle" points="552,502 586,502 595,471 558,467"><title>obstacle-030</title></polygon>
+    <polygon class="obstacle" points="597,487 590,517 613,518 618,485"><title>obstacle-031</title></polygon>
+    <polygon class="obstacle" points="668,252 671,297 701,292 706,319 740,323 741,352 777,352 778,314 751,313 752,289 715,292 726,215 726,190 672,189"><title>obstacle-032</title></polygon>
+    <polygon class="obstacle" points="731,207 754,207 754,226 783,225 786,209 959,211 959,220 991,220 991,201 1017,203 1017,189 732,190"><title>obstacle-033</title></polygon>
+    <polygon class="obstacle" points="788,232 786,273 746,275 750,230"><title>obstacle-034</title></polygon>
+    <polygon class="obstacle" points="820,222 820,263 925,264 927,216"><title>obstacle-035</title></polygon>
+    <polygon class="obstacle" points="928,794 925,821 1020,819 1029,935 1057,935 1047,863 1100,862 1093,805 1211,803 1211,820 1245,824 1243,690 1215,696 1223,783 1049,780 1047,714 1013,714 1016,781"><title>obstacle-036</title></polygon>
+    <polygon class="obstacle" points="969,309 966,350 1003,350 1000,322 1042,316 1039,296 1090,294 1087,187 1021,194 1029,292 991,290 991,309"><title>obstacle-037</title></polygon>
+    <polygon class="obstacle" points="998,230 1004,274 964,277 962,232"><title>obstacle-038</title></polygon>
+  </g>
+  <g class="debug-edges">
+    <polyline class="nav-edge" data-stable-id="jyt-edge-council-east-v1" points="880,480 1212,620" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-council-east-v1: jyt-node-council-v1 → jyt-node-east-hall-v1 ↔</title></polyline>
+    <text class="debug-label debug-small" x="888" y="472">jyt-edge-council-east-v1</text>
+    <polyline class="nav-edge" data-stable-id="jyt-edge-council-west-v1" points="880,480 524,640" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-council-west-v1: jyt-node-council-v1 → jyt-node-west-hall-v1 ↔</title></polyline>
+    <text class="debug-label debug-small" x="888" y="472">jyt-edge-council-west-v1</text>
+    <polyline class="nav-edge" data-stable-id="jyt-edge-east-bounty-v1" points="1212,620 1208,616 1128,524 1124,520 1120,484 1148,468 1152,464 1440,420" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-east-bounty-v1: jyt-node-east-hall-v1 → jyt-node-bounty-board-v1 ↔</title></polyline>
+    <text class="debug-label debug-small" x="1132" y="512">jyt-edge-east-bounty-v1</text>
+    <polyline class="nav-edge" data-stable-id="jyt-edge-east-library-v1" points="1212,620 1408,644 1416,652 1452,648 1456,644 1448,600" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-east-library-v1: jyt-node-east-hall-v1 → jyt-node-library-shelf-v1 ↔</title></polyline>
+    <text class="debug-label debug-small" x="1424" y="644">jyt-edge-east-library-v1</text>
+    <polyline class="nav-edge" data-stable-id="jyt-edge-main-council-v1" points="880,320 880,480" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-main-council-v1: jyt-node-main-seat-v1 → jyt-node-council-v1 ↔</title></polyline>
+    <text class="debug-label debug-small" x="888" y="312">jyt-edge-main-council-v1</text>
+    <polyline class="nav-edge" data-stable-id="jyt-edge-west-agent-v1" points="524,640 420,668 416,672 240,680" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-west-agent-v1: jyt-node-west-hall-v1 → jyt-node-agent-roster-v1 ↔</title></polyline>
+    <text class="debug-label debug-small" x="428" y="660">jyt-edge-west-agent-v1</text>
+  </g>
+  <g class="debug-nodes">
+    <circle class="nav-node" data-stable-id="jyt-node-agent-roster-v1" cx="240" cy="680" r="9"><title>jyt-node-agent-roster-v1 · doorway · 48px</title></circle>
+    <text class="debug-label" x="253" y="667">jyt-node-agent-roster-v1 · doorway · 48px</text>
+    <circle class="nav-node" data-stable-id="jyt-node-bounty-board-v1" cx="1440" cy="420" r="9"><title>jyt-node-bounty-board-v1 · doorway · 48px</title></circle>
+    <text class="debug-label" x="1453" y="407">jyt-node-bounty-board-v1 · doorway · 48px</text>
+    <circle class="nav-node" data-stable-id="jyt-node-council-v1" cx="880" cy="480" r="9"><title>jyt-node-council-v1 · junction · 72px</title></circle>
+    <text class="debug-label" x="893" y="467">jyt-node-council-v1 · junction · 72px</text>
+    <circle class="nav-node" data-stable-id="jyt-node-east-hall-v1" cx="1212" cy="620" r="9"><title>jyt-node-east-hall-v1 · normal · 64px</title></circle>
+    <text class="debug-label" x="1225" y="607">jyt-node-east-hall-v1 · normal · 64px</text>
+    <circle class="nav-node" data-stable-id="jyt-node-library-shelf-v1" cx="1448" cy="600" r="9"><title>jyt-node-library-shelf-v1 · doorway · 48px</title></circle>
+    <text class="debug-label" x="1461" y="587">jyt-node-library-shelf-v1 · doorway · 48px</text>
+    <circle class="nav-node" data-stable-id="jyt-node-main-seat-v1" cx="880" cy="320" r="9"><title>jyt-node-main-seat-v1 · junction · 72px</title></circle>
+    <text class="debug-label" x="893" y="307">jyt-node-main-seat-v1 · junction · 72px</text>
+    <circle class="nav-node" data-stable-id="jyt-node-west-hall-v1" cx="524" cy="640" r="9"><title>jyt-node-west-hall-v1 · normal · 64px</title></circle>
+    <text class="debug-label" x="537" y="627">jyt-node-west-hall-v1 · normal · 64px</text>
+  </g>
+  <g class="debug-slots">
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-agent-parking-v1" x="273" y="673" width="14" height="14" rx="3"><title>jyt-slot-agent-parking-v1 · parking · agent-roster-parking-1</title></rect>
+    <text class="debug-label debug-small" x="291" y="685">jyt-slot-agent-parking-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-bounty-parking-v1" x="1473" y="413" width="14" height="14" rx="3"><title>jyt-slot-bounty-parking-v1 · parking · bounty-board-parking-1</title></rect>
+    <text class="debug-label debug-small" x="1491" y="425">jyt-slot-bounty-parking-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-council-parking-v1" x="913" y="473" width="14" height="14" rx="3"><title>jyt-slot-council-parking-v1 · parking · council-table-parking-1</title></rect>
+    <text class="debug-label debug-small" x="931" y="485">jyt-slot-council-parking-v1 · parking</text>
+    <rect class="slot slot-queue" data-stable-id="jyt-slot-council-queue-v1" x="833" y="473" width="14" height="14" rx="3"><title>jyt-slot-council-queue-v1 · queue · council-table-queue-1</title></rect>
+    <text class="debug-label debug-small" x="851" y="485">jyt-slot-council-queue-v1 · queue</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-library-parking-v1" x="1463" y="593" width="14" height="14" rx="3"><title>jyt-slot-library-parking-v1 · parking · library-shelf-parking-1</title></rect>
+    <text class="debug-label debug-small" x="1481" y="605">jyt-slot-library-parking-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-main-seat-parking-v1" x="913" y="313" width="14" height="14" rx="3"><title>jyt-slot-main-seat-parking-v1 · parking · main-seat-parking-1</title></rect>
+    <text class="debug-label debug-small" x="931" y="325">jyt-slot-main-seat-parking-v1 · parking</text>
+    <rect class="slot slot-home" data-stable-id="jyt-slot-songjiang-home-v1" x="833" y="313" width="14" height="14" rx="3"><title>jyt-slot-songjiang-home-v1 · home · songjiang-home</title></rect>
+    <text class="debug-label debug-small" x="851" y="325">jyt-slot-songjiang-home-v1 · home</text>
+  </g>
+</svg>
