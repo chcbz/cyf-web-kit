@@ -584,9 +584,39 @@ function escapeXml(value: string): string {
 }
 
 function decodeXml(value: string): string {
-  return value.replace(/&(?:amp|quot|apos|lt|gt);/g, entity => ({
-    '&amp;': '&', '&quot;': '"', '&apos;': "'", '&lt;': '<', '&gt;': '>',
-  })[entity] ?? entity)
+  validateNumericCharacterReferences(value)
+  return value.replace(/&(?:#(?:x[0-9A-Fa-f]+|[0-9]+)|amp|quot|apos|lt|gt);/g, entity => {
+    if (entity.startsWith('&#')) return decodeNumericCharacterReference(entity)
+    return ({
+      '&amp;': '&', '&quot;': '"', '&apos;': "'", '&lt;': '<', '&gt;': '>',
+    })[entity] ?? entity
+  })
+}
+
+function validateNumericCharacterReferences(value: string): void {
+  let index = value.indexOf('&#')
+  while (index >= 0) {
+    const reference = value.slice(index).match(/^&#(?:x[0-9A-Fa-f]+|[0-9]+);/)?.[0]
+    if (!reference) throw new Error(`Invalid XML numeric character reference at offset ${index}`)
+    index = value.indexOf('&#', index + reference.length)
+  }
+}
+
+function decodeNumericCharacterReference(reference: string): string {
+  const hexadecimal = reference.startsWith('&#x')
+  const digits = reference.slice(hexadecimal ? 3 : 2, -1)
+  const codePoint = Number.parseInt(digits, hexadecimal ? 16 : 10)
+  if (!Number.isSafeInteger(codePoint) || !isValidXmlCodePoint(codePoint)) {
+    throw new Error(`Invalid XML numeric character reference: ${reference}`)
+  }
+  return String.fromCodePoint(codePoint)
+}
+
+function isValidXmlCodePoint(codePoint: number): boolean {
+  return codePoint === 0x9 || codePoint === 0xA || codePoint === 0xD
+    || (codePoint >= 0x20 && codePoint <= 0xD7FF)
+    || (codePoint >= 0xE000 && codePoint <= 0xFFFD)
+    || (codePoint >= 0x10000 && codePoint <= 0x10FFFF)
 }
 
 function escapeRegExp(value: string): string {

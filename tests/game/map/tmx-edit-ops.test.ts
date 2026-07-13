@@ -176,6 +176,41 @@ describe('TMX edit operations', () => {
     assert.throws(() => applyTmxEditOps(source, []), /Duplicate stable ID: same/)
   })
 
+  it('normalizes decimal and hexadecimal stable-ID references across attribute forms', () => {
+    const source = `<map><objectgroup name="regions"><object><properties><property name="stableId" value="same"/></properties></object></objectgroup>
+      <objectgroup name="nav_nodes"><object><properties><property name="stableId" value="&#x73;ame"/></properties></object></objectgroup></map>`
+    assert.throws(() => applyTmxEditOps(source, []), /Duplicate stable ID: same/)
+
+    const decimalSource = source.replace('&#x73;ame', '&#115;ame')
+    assert.throws(() => applyTmxEditOps(decimalSource, []), /Duplicate stable ID: same/)
+  })
+
+  it('matches numeric references in text-valued stable IDs', () => {
+    for (const encoded of ['&#115;ame', '&#x73;ame']) {
+      const source = `<map nextobjectid="2"><objectgroup name="regions"><object id="1"><properties>
+        <property name="stableId">${encoded}</property><property name="label">Old</property>
+      </properties></object></objectgroup></map>`
+      const result = applyTmxEditOps(source, [{
+        op: 'upsert-object-by-stable-id', group: 'regions', object: {
+          stableId: 'same', properties: { label: 'New' },
+        },
+      }])
+
+      assert.equal(result.match(/name="stableId"/g)?.length, 1, encoded)
+      assert.match(result, /<property name="stableId">same<\/property>/, encoded)
+      assert.match(result, /name="label" value="New"|<property name="label">New<\/property>/, encoded)
+    }
+  })
+
+  it('rejects malformed or XML-invalid numeric references in stable IDs', () => {
+    for (const encoded of ['&#xZZ;', '&#12x;', '&#0;', '&#xD800;', '&#x110000;']) {
+      const attributeSource = `<map><objectgroup name="regions"><object><properties><property name="stableId" value="${encoded}"/></properties></object></objectgroup></map>`
+      const textSource = `<map><objectgroup name="regions"><object><properties><property name="stableId">${encoded}</property></properties></object></objectgroup></map>`
+      assert.throws(() => applyTmxEditOps(attributeSource, []), /Invalid XML numeric character reference/, `attribute ${encoded}`)
+      assert.throws(() => applyTmxEditOps(textSource, []), /Invalid XML numeric character reference/, `text ${encoded}`)
+    }
+  })
+
   it('rejects duplicate map properties before mutation', () => {
     const source = `<map><properties><property name="sceneId" value="first"/><property name="sceneId" value="later"/></properties></map>`
     assert.throws(
