@@ -147,4 +147,137 @@ describe('map validation', () => {
       [...costErrors.map(error => error.technicalMessage)].sort(),
     )
   })
+
+  for (const [label, points] of [
+    ['empty', []],
+    ['reversed', [{ x: 200, y: 90 }, { x: 90, y: 90 }]],
+    ['remote', [{ x: 120, y: 120 }, { x: 180, y: 120 }]],
+  ] satisfies Array<[string, MapRuntimeData['edges'][number]['points']]>) {
+    it(`rejects ${label} edge runtime geometry`, () => {
+      const map = validMap()
+      map.edges[0].points = points
+      const geometryErrors = validateMapRuntime(map).errors.filter(error => error.code === 'EDGE_GEOMETRY_INVALID')
+      assert.equal(geometryErrors.length, 1, label)
+      assert.match(geometryErrors[0].technicalMessage ?? '', /edge-main-hall/)
+    })
+  }
+
+  it('accepts edge endpoints within two world pixels and checks obstacles only against runtime geometry', () => {
+    const map = validMap()
+    map.edges[1].points = [{ x: 201.5, y: 90 }, { x: 310, y: 90 }]
+    map.obstacles = [{
+      points: [{ x: 200.25, y: 85 }, { x: 200.75, y: 85 }, { x: 200.75, y: 95 }, { x: 200.25, y: 95 }],
+    }]
+
+    assert.deepEqual(validateMapRuntime(map), { valid: true, errors: [], warnings: [] })
+  })
+
+  it('accepts a directed one-way graph when every core region is reachable from Songjiang home', () => {
+    const map = validMap()
+    map.edges.forEach(edge => { edge.bidirectional = false })
+
+    assert.deepEqual(validateMapRuntime(map), { valid: true, errors: [], warnings: [] })
+  })
+
+  it('rejects directed regions that cannot be reached from the Songjiang anchor', () => {
+    const map = validMap()
+    map.edges = [
+      {
+        ...map.edges[0], from: 'node-hall', to: 'node-main', bidirectional: false,
+        points: [{ x: 200, y: 90 }, { x: 90, y: 90 }],
+      },
+      {
+        ...map.edges[1], from: 'node-library', to: 'node-hall', bidirectional: false,
+        points: [{ x: 310, y: 90 }, { x: 200, y: 90 }],
+      },
+    ]
+
+    const result = validateMapRuntime(map)
+
+    assert.deepEqual(result.errors.map(error => error.code), [
+      'CORE_REGION_UNREACHABLE',
+      'NAV_GRAPH_DISCONNECTED',
+    ])
+    assert.match(result.errors[0].technicalMessage ?? '', /library-shelf/)
+    assert.match(result.errors[1].technicalMessage ?? '', /Songjiang anchor node-main.*node-library/s)
+  })
+
+  it('rejects a Songjiang home with a missing region even when another slot is usable', () => {
+    const map = validMap()
+    map.slots[0].regionId = 'missing-region'
+    map.slots.push({
+      stableId: 'slot-main-parking', slotId: 'main-parking-1', regionId: 'main-seat',
+      point: { x: 70, y: 90 }, kind: 'parking',
+    })
+
+    const homeError = validateMapRuntime(map).errors.find(error => error.code === 'SONGJIANG_HOME_INVALID')
+    assert.match(homeError?.technicalMessage ?? '', /missing-region/)
+  })
+
+  it('rejects a Songjiang home outside its region even when another slot is usable', () => {
+    const map = validMap()
+    map.slots[0].point = { x: 200, y: 150 }
+    map.slots.push({
+      stableId: 'slot-main-parking', slotId: 'main-parking-1', regionId: 'main-seat',
+      point: { x: 70, y: 90 }, kind: 'parking',
+    })
+
+    const homeError = validateMapRuntime(map).errors.find(error => error.code === 'SONGJIANG_HOME_INVALID')
+    assert.match(homeError?.technicalMessage ?? '', /outside region main-seat/)
+  })
+
+  for (const [position, point] of [
+    ['inside', { x: 60, y: 90 }],
+    ['on the boundary of', { x: 50, y: 90 }],
+  ] as const) {
+    it(`rejects a Songjiang home ${position} an obstacle`, () => {
+      const map = validMap()
+      map.slots[0].point = point
+      map.obstacles = [{
+        points: [{ x: 50, y: 80 }, { x: 70, y: 80 }, { x: 70, y: 100 }, { x: 50, y: 100 }],
+      }]
+      map.slots.push({
+        stableId: 'slot-main-parking', slotId: 'main-parking-1', regionId: 'main-seat',
+        point: { x: 100, y: 120 }, kind: 'parking',
+      })
+
+      const homeError = validateMapRuntime(map).errors.find(error => error.code === 'SONGJIANG_HOME_INVALID')
+      assert.match(homeError?.technicalMessage ?? '', /obstacle 0/)
+    })
+  }
+
+  it('rejects a Songjiang home that cannot connect to the graph even when another slot is usable', () => {
+    const map = validMap()
+    map.obstacles = [{
+      points: [{ x: 70, y: 0 }, { x: 80, y: 0 }, { x: 80, y: 180 }, { x: 70, y: 180 }],
+    }]
+    map.slots.push({
+      stableId: 'slot-main-parking', slotId: 'main-parking-1', regionId: 'main-seat',
+      point: { x: 100, y: 120 }, kind: 'parking',
+    })
+
+    const homeError = validateMapRuntime(map).errors.find(error => error.code === 'SONGJIANG_HOME_INVALID')
+    assert.match(homeError?.technicalMessage ?? '', /cannot connect to a usable navigation node/)
+  })
+
+  it('accepts a Songjiang home on its region boundary', () => {
+    const map = validMap()
+    map.slots[0].point = { x: 0, y: 90 }
+
+    assert.deepEqual(validateMapRuntime(map), { valid: true, errors: [], warnings: [] })
+  })
+
+  for (const [label, reason, obstacle] of [
+    ['too-short', 'at least three finite points', { points: [{ x: 1, y: 1 }, { x: 2, y: 2 }] }],
+    ['non-finite', 'finite points', { points: [{ x: 1, y: 1 }, { x: Number.NaN, y: 2 }, { x: 3, y: 1 }] }],
+    ['zero-area', 'non-zero area', { points: [{ x: 1, y: 1 }, { x: 2, y: 2 }, { x: 3, y: 3 }] }],
+  ] satisfies Array<[string, string, MapRuntimeData['obstacles'][number]]>) {
+    it(`rejects ${label} obstacle polygons deterministically`, () => {
+      const map = validMap()
+      map.obstacles = [obstacle]
+      const errors = validateMapRuntime(map).errors.filter(error => error.code === 'OBSTACLE_GEOMETRY_INVALID')
+      assert.equal(errors.length, 1, reason)
+      assert.equal(errors[0].technicalMessage, `Obstacle 0 must contain ${reason}.`)
+    })
+  }
 })

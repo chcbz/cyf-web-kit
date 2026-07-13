@@ -1,5 +1,6 @@
-import type { MapRuntimeData } from './movementSchema.js'
-import type { MapPoint, MapPolygon, NavEdge, NavNode, Region } from './movementSchema.js'
+import type {
+  MapPoint, MapPolygon, MapRuntimeData, NavEdge, NavNode, Region, Slot,
+} from './movementSchema.js'
 
 export interface SceneError {
   code: string
@@ -16,13 +17,53 @@ export interface MapValidationResult {
   warnings: SceneError[]
 }
 
+interface SlotProjection {
+  nodeId: string
+}
+
 const SUPPORTED_MOVEMENT_SCHEMA = '1'
 const SUPPORTED_SCENE = 'juyiting-main'
 const MINIMUM_COLLIDER_CHANNEL_WIDTH = 36
+// TMX polyline endpoints may differ from node centers by at most two world pixels.
+const EDGE_ENDPOINT_TOLERANCE = 2
+const GEOMETRY_EPSILON = 1e-9
 
 export function validateMapRuntime(map: MapRuntimeData): MapValidationResult {
   const errors: SceneError[] = []
 
+  validateMetadata(map, errors)
+  validateIdentities(map, errors)
+
+  const validObstacles = validateObstacles(map.obstacles, errors)
+  const usableNodes = validateNodes(map.nodes, errors)
+  const nodesById = new Map(map.nodes.map(node => [node.stableId, node]))
+  const traversableEdges = validateEdges(map.edges, nodesById, usableNodes, validObstacles, errors)
+  const adjacency = buildAdjacency(map.nodes, map.edges, traversableEdges)
+
+  const songjiangHomes = map.slots.filter(slot => slot.kind === 'home' && slot.personaCode === 'songjiang')
+  const homeProjection = validateSongjiangHome(
+    songjiangHomes, map.regions, usableNodes, validObstacles, errors,
+  )
+  const reachableNodeIds = homeProjection ? visit(homeProjection.nodeId, adjacency) : new Set<string>()
+
+  const regionProjections = new Map<Region, SlotProjection[]>()
+  for (const region of map.regions) {
+    regionProjections.set(region, map.slots.flatMap(slot => {
+      const projection = projectUsableSlot(slot, region, usableNodes, validObstacles)
+      return projection ? [projection] : []
+    }))
+  }
+
+  validateDirectedReachability(
+    map.regions, usableNodes, regionProjections, homeProjection, reachableNodeIds, errors,
+  )
+  validateRegionSlots(map.regions, regionProjections, reachableNodeIds, errors)
+
+  errors.sort(compareErrors)
+  return { valid: errors.length === 0, errors, warnings: [] }
+}
+
+function validateMetadata(map: MapRuntimeData, errors: SceneError[]): void {
   if (map.movementSchemaVersion !== SUPPORTED_MOVEMENT_SCHEMA) {
     errors.push(fatal(
       'MOVEMENT_SCHEMA_INVALID',
@@ -37,7 +78,9 @@ export function validateMapRuntime(map: MapRuntimeData): MapValidationResult {
       `Expected scene ${SUPPORTED_SCENE}, received ${map.sceneId}.`,
     ))
   }
+}
 
+function validateIdentities(map: MapRuntimeData, errors: SceneError[]): void {
   addDuplicateErrors(
     errors,
     'STABLE_ID_DUPLICATE',
@@ -51,10 +94,30 @@ export function validateMapRuntime(map: MapRuntimeData): MapValidationResult {
   )
   addDuplicateErrors(errors, 'REGION_ID_DUPLICATE', map.regions.map(region => region.regionId), 'region ID')
   addDuplicateErrors(errors, 'SLOT_ID_DUPLICATE', map.slots.map(slot => slot.slotId), 'slot ID')
+}
 
-  const nodesById = new Map(map.nodes.map(node => [node.stableId, node]))
-  const usableNodeIds = new Set<string>()
-  for (const node of map.nodes) {
+function validateObstacles(obstacles: MapPolygon[], errors: SceneError[]): MapPolygon[] {
+  return obstacles.filter((obstacle, index) => {
+    let requirement: string | undefined
+    if (obstacle.points.length < 3) requirement = 'at least three finite points'
+    else if (obstacle.points.some(point => !finitePoint(point))) requirement = 'finite points'
+    else if (Math.abs(polygonSignedArea(obstacle)) <= GEOMETRY_EPSILON) requirement = 'non-zero area'
+
+    if (requirement) {
+      errors.push(fatal(
+        'OBSTACLE_GEOMETRY_INVALID',
+        '地图障碍物几何无效。',
+        `Obstacle ${index} must contain ${requirement}.`,
+      ))
+      return false
+    }
+    return true
+  })
+}
+
+function validateNodes(nodes: NavNode[], errors: SceneError[]): Map<string, NavNode> {
+  const usableNodes = new Map<string, NavNode>()
+  for (const node of nodes) {
     if (!(node.channelWidth > 0)) {
       errors.push(fatal(
         'NODE_CHANNEL_WIDTH_INVALID',
@@ -67,13 +130,22 @@ export function validateMapRuntime(map: MapRuntimeData): MapValidationResult {
         '地图通道无法容纳人物碰撞体。',
         `Node ${node.stableId} channelWidth ${node.channelWidth} is below collider diameter ${MINIMUM_COLLIDER_CHANNEL_WIDTH}.`,
       ))
-    } else {
-      usableNodeIds.add(node.stableId)
+    } else if (finitePoint(node.point)) {
+      usableNodes.set(node.stableId, node)
     }
   }
+  return usableNodes
+}
 
+function validateEdges(
+  edges: NavEdge[],
+  nodesById: Map<string, NavNode>,
+  usableNodes: Map<string, NavNode>,
+  obstacles: MapPolygon[],
+  errors: SceneError[],
+): Set<string> {
   const traversableEdges = new Set<string>()
-  for (const edge of map.edges) {
+  for (const edge of edges) {
     const from = nodesById.get(edge.from)
     const to = nodesById.get(edge.to)
     if (!from || !to) {
@@ -91,7 +163,12 @@ export function validateMapRuntime(map: MapRuntimeData): MapValidationResult {
         `Edge ${edge.stableId} has non-positive costMultiplier ${edge.costMultiplier}.`,
       ))
     }
-    const obstacleIndex = from && to ? intersectingObstacle(edgePath(edge, from, to), map.obstacles) : -1
+
+    const geometryProblem = from && to ? edgeGeometryProblem(edge, from, to) : undefined
+    if (geometryProblem) {
+      errors.push(fatal('EDGE_GEOMETRY_INVALID', '地图路径几何无效。', geometryProblem))
+    }
+    const obstacleIndex = !geometryProblem ? intersectingObstacle(edge.points, obstacles) : -1
     if (obstacleIndex >= 0) {
       errors.push(fatal(
         'EDGE_INTERSECTS_OBSTACLE',
@@ -99,56 +176,181 @@ export function validateMapRuntime(map: MapRuntimeData): MapValidationResult {
         `Edge ${edge.stableId} intersects obstacle ${obstacleIndex}.`,
       ))
     }
+
     if (
-      from && to && edge.costMultiplier > 0 && obstacleIndex < 0
-      && usableNodeIds.has(from.stableId) && usableNodeIds.has(to.stableId)
-    ) {
-      traversableEdges.add(edge.stableId)
-    }
+      from && to && edge.costMultiplier > 0 && !geometryProblem && obstacleIndex < 0
+      && usableNodes.has(from.stableId) && usableNodes.has(to.stableId)
+    ) traversableEdges.add(edge.stableId)
+  }
+  return traversableEdges
+}
+
+function edgeGeometryProblem(edge: NavEdge, from: NavNode, to: NavNode): string | undefined {
+  if (edge.points.length === 0) return `Edge ${edge.stableId} has no runtime geometry points.`
+  if (edge.points.some(point => !finitePoint(point))) {
+    return `Edge ${edge.stableId} runtime geometry contains non-finite points.`
+  }
+  const firstDistance = pointDistance(edge.points[0], from.point)
+  const lastDistance = pointDistance(edge.points[edge.points.length - 1], to.point)
+  if (firstDistance > EDGE_ENDPOINT_TOLERANCE || lastDistance > EDGE_ENDPOINT_TOLERANCE) {
+    return `Edge ${edge.stableId} runtime endpoints must be within ${EDGE_ENDPOINT_TOLERANCE} world pixels of from ${from.stableId} and to ${to.stableId}; distances were ${formatDistance(firstDistance)} and ${formatDistance(lastDistance)}.`
+  }
+  return undefined
+}
+
+function validateSongjiangHome(
+  homes: Slot[],
+  regions: Region[],
+  usableNodes: Map<string, NavNode>,
+  obstacles: MapPolygon[],
+  errors: SceneError[],
+): SlotProjection | undefined {
+  if (homes.length !== 1) {
+    errors.push(fatal(
+      'SONGJIANG_HOME_INVALID',
+      '宋江必须配置唯一且可用的归位站位。',
+      `Expected exactly one Songjiang home slot, found ${homes.length}.`,
+    ))
+    return undefined
   }
 
-  const adjacency = buildAdjacency(map.nodes, map.edges, traversableEdges)
-  const connectedNodeIds = connectedFromRoot(
-    map.nodes.filter(node => usableNodeIds.has(node.stableId)),
-    adjacency,
-  )
-  const disconnectedNodeIds = map.nodes
-    .map(node => node.stableId)
-    .filter(nodeId => !connectedNodeIds.has(nodeId))
-    .sort(compareText)
-  if (map.nodes.length === 0 || disconnectedNodeIds.length > 0) {
+  const home = homes[0]
+  const region = [...regions]
+    .filter(candidate => candidate.regionId === home.regionId)
+    .sort((left, right) => compareText(left.stableId, right.stableId))[0]
+  let problem: string | undefined
+  if (!region) problem = `Songjiang home ${home.stableId} references missing region ${home.regionId}.`
+  else if (!finitePoint(home.point)) problem = `Songjiang home ${home.stableId} has a non-finite point.`
+  else if (!pointInPolygon(home.point, region.polygon)) {
+    problem = `Songjiang home ${home.stableId} is outside region ${region.regionId}.`
+  } else {
+    const obstacleIndex = obstacles.findIndex(obstacle => pointInPolygon(home.point, obstacle))
+    if (obstacleIndex >= 0) problem = `Songjiang home ${home.stableId} is inside or on obstacle ${obstacleIndex}.`
+  }
+
+  const projection = !problem && region
+    ? projectUsableSlot(home, region, usableNodes, obstacles)
+    : undefined
+  if (!problem && !projection) {
+    problem = `Songjiang home ${home.stableId} cannot connect to a usable navigation node.`
+  }
+  if (problem) {
+    errors.push(fatal('SONGJIANG_HOME_INVALID', '宋江必须配置唯一且可用的归位站位。', problem))
+    return undefined
+  }
+  return projection
+}
+
+function validateDirectedReachability(
+  regions: Region[],
+  usableNodes: Map<string, NavNode>,
+  regionProjections: Map<Region, SlotProjection[]>,
+  homeProjection: SlotProjection | undefined,
+  reachableNodeIds: Set<string>,
+  errors: SceneError[],
+): void {
+  if (!homeProjection) {
     errors.push(fatal(
       'NAV_GRAPH_DISCONNECTED',
-      '地图导航网络不连通。',
-      map.nodes.length === 0
-        ? 'Navigation graph has no nodes.'
-        : `Navigation graph cannot reach node(s): ${disconnectedNodeIds.join(', ')}.`,
+      '地图导航网络缺少可用的宋江起点。',
+      'Navigation graph has no usable Songjiang home anchor.',
     ))
+    return
   }
 
-  const unreachableRegions = map.regions
-    .filter(region => !hasReachableSlot(region, map, connectedNodeIds))
+  const requiredNodeRegions = new Map<string, Set<string>>()
+  for (const region of regions) {
+    for (const node of usableNodes.values()) {
+      if (pointInPolygon(node.point, region.polygon)) addRequiredNode(requiredNodeRegions, node.stableId, region.regionId)
+    }
+    for (const projection of regionProjections.get(region) ?? []) {
+      addRequiredNode(requiredNodeRegions, projection.nodeId, region.regionId)
+    }
+  }
+  const unreachableNodeIds = [...requiredNodeRegions.keys()]
+    .filter(nodeId => !reachableNodeIds.has(nodeId))
+    .sort(compareText)
+  if (unreachableNodeIds.length === 0) return
+
+  const affectedRegions = [...new Set(unreachableNodeIds.flatMap(nodeId => (
+    [...(requiredNodeRegions.get(nodeId) ?? [])]
+  )))].sort(compareText)
+  errors.push(fatal(
+    'NAV_GRAPH_DISCONNECTED',
+    '地图导航网络无法到达全部核心区域。',
+    `Songjiang anchor ${homeProjection.nodeId} cannot reach core node(s): ${unreachableNodeIds.join(', ')}; affected region(s): ${affectedRegions.join(', ')}.`,
+  ))
+}
+
+function validateRegionSlots(
+  regions: Region[],
+  regionProjections: Map<Region, SlotProjection[]>,
+  reachableNodeIds: Set<string>,
+  errors: SceneError[],
+): void {
+  const unreachableRegions = regions
+    .filter(region => !(regionProjections.get(region) ?? []).some(projection => reachableNodeIds.has(projection.nodeId)))
     .map(region => region.regionId)
     .sort(compareText)
   if (unreachableRegions.length > 0) {
     errors.push(fatal(
       'CORE_REGION_UNREACHABLE',
       '地图核心区域没有可达站位。',
-      `Region(s) without a reachable slot: ${unreachableRegions.join(', ')}.`,
+      `Region(s) without a reachable slot from Songjiang home: ${unreachableRegions.join(', ')}.`,
     ))
   }
+}
 
-  const songjiangHomes = map.slots.filter(slot => slot.kind === 'home' && slot.personaCode === 'songjiang')
-  if (songjiangHomes.length !== 1) {
-    errors.push(fatal(
-      'SONGJIANG_HOME_INVALID',
-      '宋江必须配置唯一的归位站位。',
-      `Expected exactly one Songjiang home slot, found ${songjiangHomes.length}.`,
-    ))
+function projectUsableSlot(
+  slot: Slot,
+  region: Region,
+  usableNodes: Map<string, NavNode>,
+  obstacles: MapPolygon[],
+): SlotProjection | undefined {
+  if (
+    slot.regionId !== region.regionId
+    || !finitePoint(slot.point)
+    || !pointInPolygon(slot.point, region.polygon)
+    || obstacles.some(obstacle => pointInPolygon(slot.point, obstacle))
+  ) return undefined
+
+  const node = [...usableNodes.values()]
+    .filter(candidate => intersectingObstacle([slot.point, candidate.point], obstacles) < 0)
+    .sort((left, right) => (
+      pointDistance(slot.point, left.point) - pointDistance(slot.point, right.point)
+      || compareText(left.stableId, right.stableId)
+    ))[0]
+  return node ? { nodeId: node.stableId } : undefined
+}
+
+function buildAdjacency(
+  nodes: NavNode[], edges: NavEdge[], traversableEdges: Set<string>,
+): Map<string, Set<string>> {
+  const adjacency = new Map(nodes.map(node => [node.stableId, new Set<string>()]))
+  for (const edge of edges) {
+    if (!traversableEdges.has(edge.stableId)) continue
+    adjacency.get(edge.from)?.add(edge.to)
+    if (edge.bidirectional) adjacency.get(edge.to)?.add(edge.from)
   }
+  return adjacency
+}
 
-  errors.sort(compareErrors)
-  return { valid: errors.length === 0, errors, warnings: [] }
+function visit(root: string, adjacency: Map<string, Set<string>>): Set<string> {
+  const visited = new Set<string>()
+  const pending = [root]
+  while (pending.length > 0) {
+    const nodeId = pending.pop() as string
+    if (visited.has(nodeId)) continue
+    visited.add(nodeId)
+    pending.push(...(adjacency.get(nodeId) ?? []))
+  }
+  return visited
+}
+
+function addRequiredNode(required: Map<string, Set<string>>, nodeId: string, regionId: string): void {
+  const regions = required.get(nodeId) ?? new Set<string>()
+  regions.add(regionId)
+  required.set(nodeId, regions)
 }
 
 function fatal(code: string, userMessage: string, technicalMessage: string): SceneError {
@@ -171,57 +373,6 @@ function addDuplicateErrors(
   }
 }
 
-function buildAdjacency(
-  nodes: NavNode[], edges: NavEdge[], traversableEdges: Set<string>,
-): Map<string, Set<string>> {
-  const adjacency = new Map(nodes.map(node => [node.stableId, new Set<string>()]))
-  for (const edge of edges) {
-    if (!traversableEdges.has(edge.stableId)) continue
-    adjacency.get(edge.from)?.add(edge.to)
-    if (edge.bidirectional) adjacency.get(edge.to)?.add(edge.from)
-  }
-  return adjacency
-}
-
-function connectedFromRoot(nodes: NavNode[], adjacency: Map<string, Set<string>>): Set<string> {
-  if (nodes.length === 0) return new Set()
-  const root = [...nodes].sort((left, right) => compareText(left.stableId, right.stableId))[0].stableId
-  const forward = visit(root, adjacency)
-  const reverse = new Map([...adjacency.keys()].map(nodeId => [nodeId, new Set<string>()]))
-  for (const [from, targets] of adjacency) {
-    for (const to of targets) reverse.get(to)?.add(from)
-  }
-  const backward = visit(root, reverse)
-  return new Set([...forward].filter(nodeId => backward.has(nodeId)))
-}
-
-function visit(root: string, adjacency: Map<string, Set<string>>): Set<string> {
-  const visited = new Set<string>()
-  const pending = [root]
-  while (pending.length > 0) {
-    const nodeId = pending.pop() as string
-    if (visited.has(nodeId)) continue
-    visited.add(nodeId)
-    pending.push(...(adjacency.get(nodeId) ?? []))
-  }
-  return visited
-}
-
-function hasReachableSlot(region: Region, map: MapRuntimeData, connectedNodeIds: Set<string>): boolean {
-  const reachableNodes = map.nodes.filter(node => connectedNodeIds.has(node.stableId))
-  return map.slots.some(slot => (
-    slot.regionId === region.regionId
-    && pointInPolygon(slot.point, region.polygon)
-    && !map.obstacles.some(obstacle => pointInPolygon(slot.point, obstacle))
-    && reachableNodes.some(node => intersectingObstacle([slot.point, node.point], map.obstacles) < 0)
-  ))
-}
-
-function edgePath(edge: NavEdge, from: NavNode, to: NavNode): MapPoint[] {
-  const path = [from.point, ...edge.points, to.point]
-  return path.filter((point, index) => index === 0 || !samePoint(point, path[index - 1]))
-}
-
 function intersectingObstacle(path: MapPoint[], obstacles: MapPolygon[]): number {
   return obstacles.findIndex(obstacle => polylineIntersectsPolygon(path, obstacle))
 }
@@ -241,7 +392,7 @@ function polylineIntersectsPolygon(path: MapPoint[], polygon: MapPolygon): boole
 
 function pointInPolygon(point: MapPoint, polygon: MapPolygon): boolean {
   const points = polygon.points
-  if (points.length < 3) return false
+  if (points.length < 3 || !finitePoint(point)) return false
   let inside = false
   for (let index = 0, previous = points.length - 1; index < points.length; previous = index, index += 1) {
     if (pointOnSegment(point, points[previous], points[index])) return true
@@ -274,16 +425,31 @@ function pointOnSegment(point: MapPoint, start: MapPoint, end: MapPoint): boolea
     && point.y >= Math.min(start.y, end.y) && point.y <= Math.max(start.y, end.y)
 }
 
+function polygonSignedArea(polygon: MapPolygon): number {
+  return polygon.points.reduce((area, point, index) => {
+    const next = polygon.points[(index + 1) % polygon.points.length]
+    return area + point.x * next.y - next.x * point.y
+  }, 0) / 2
+}
+
+function finitePoint(point: MapPoint): boolean {
+  return Number.isFinite(point.x) && Number.isFinite(point.y)
+}
+
+function pointDistance(left: MapPoint, right: MapPoint): number {
+  return Math.hypot(left.x - right.x, left.y - right.y)
+}
+
+function formatDistance(distance: number): string {
+  return Number.isFinite(distance) ? distance.toFixed(3) : String(distance)
+}
+
 function cross(a: MapPoint, b: MapPoint, c: MapPoint): number {
   return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
 }
 
-function samePoint(left: MapPoint, right: MapPoint): boolean {
-  return left.x === right.x && left.y === right.y
-}
-
 function approximatelyZero(value: number): boolean {
-  return Math.abs(value) < 1e-9
+  return Math.abs(value) < GEOMETRY_EPSILON
 }
 
 function compareErrors(left: SceneError, right: SceneError): number {
