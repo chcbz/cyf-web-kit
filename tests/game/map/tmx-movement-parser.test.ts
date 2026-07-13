@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 // @ts-expect-error jsdom is a runtime test dependency without bundled declarations
 import { JSDOM } from 'jsdom'
 // @ts-expect-error melonJS does not publish declarations for its internal TMX utility
@@ -7,7 +8,6 @@ import * as TMXUtils from 'melonjs/dist/melonjs.mjs/level/tiled/TMXUtils.js'
 import { parseMovementTmx } from '../../../src/game/map/tmxMovementParser.js'
 
 const dom = new JSDOM()
-Object.defineProperty(globalThis, 'DOMParser', { value: dom.window.DOMParser, configurable: true })
 
 describe('movement TMX parser', () => {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -122,6 +122,21 @@ describe('movement TMX parser', () => {
     assert.equal(melonNode.ellipse.constructor, Object)
 
     assert.deepEqual(parseMovementTmx(melonMap), parseMovementTmx(xml))
+  })
+
+  it('parses raw XML in a plain Node process without a global DOMParser', () => {
+    const parserUrl = new URL('../../../src/game/map/tmxMovementParser.ts', import.meta.url).href
+    const encodedXml = Buffer.from(xml).toString('base64')
+    const script = `
+      delete globalThis.DOMParser;
+      const { parseMovementTmx } = await import(${JSON.stringify(parserUrl)});
+      const result = parseMovementTmx(Buffer.from(${JSON.stringify(encodedXml)}, 'base64').toString('utf8'));
+      process.stdout.write(JSON.stringify({ sceneId: result.sceneId, nodes: result.nodes.length }));
+    `
+    const output = execFileSync(process.execPath, ['--import', 'tsx', '--input-type=module', '--eval', script], {
+      cwd: process.cwd(), encoding: 'utf8',
+    })
+    assert.deepEqual(JSON.parse(output), { sceneId: 'juyiting-main', nodes: 1 })
   })
 
   it('rejects malformed scalar properties with field context', () => {

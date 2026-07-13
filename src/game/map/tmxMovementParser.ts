@@ -1,8 +1,17 @@
+import { SaxesParser } from 'saxes'
+
 import type {
   MapPoint, MapPolygon, MapRuntimeData, NavEdge, NavNode, Region, Slot,
 } from './movementSchema.js'
 
 type Properties = Record<string, unknown>
+
+interface XmlNode {
+  name: string
+  attributes: Record<string, string>
+  children: XmlNode[]
+  text: string
+}
 
 interface TmxObject {
   x?: unknown
@@ -167,45 +176,66 @@ function normalizeParsedMap(map: TmxMap): TmxMap {
 }
 
 function parseXml(xml: string): TmxMap {
-  if (typeof DOMParser === 'undefined') throw new Error('DOMParser is required to parse raw TMX XML')
-  const document = new DOMParser().parseFromString(xml, 'application/xml')
-  if (document.querySelector('parsererror')) throw new Error('Invalid TMX XML')
-  const map = document.documentElement
-  if (map.localName !== 'map') throw new Error('TMX map root missing')
+  const map = parseXmlRoot(xml)
+  if (map.name !== 'map') throw new Error('TMX map root missing')
   return {
-    width: map.getAttribute('width'), height: map.getAttribute('height'),
-    tilewidth: map.getAttribute('tilewidth'), tileheight: map.getAttribute('tileheight'),
+    width: map.attributes.width, height: map.attributes.height,
+    tilewidth: map.attributes.tilewidth, tileheight: map.attributes.tileheight,
     properties: propertiesFromElement(map),
     layers: directChildren(map, 'objectgroup').map(layer => ({
-      name: layer.getAttribute('name') ?? undefined,
-      offsetx: layer.hasAttribute('offsetx') ? layer.getAttribute('offsetx') : undefined,
-      offsety: layer.hasAttribute('offsety') ? layer.getAttribute('offsety') : undefined,
+      name: layer.attributes.name,
+      offsetx: layer.attributes.offsetx,
+      offsety: layer.attributes.offsety,
       objects: directChildren(layer, 'object').map(objectFromElement),
     })),
   }
 }
 
-function objectFromElement(object: Element): TmxObject {
+function parseXmlRoot(xml: string): XmlNode {
+  const roots: XmlNode[] = []
+  const stack: XmlNode[] = []
+  const parser = new SaxesParser()
+  parser.on('opentag', tag => {
+    const attributes = Object.fromEntries(Object.entries(tag.attributes).map(([name, value]) => [name, String(value)]))
+    const node: XmlNode = { name: tag.name, attributes, children: [], text: '' }
+    const parent = stack.at(-1)
+    if (parent) parent.children.push(node)
+    else roots.push(node)
+    stack.push(node)
+  })
+  parser.on('text', text => { const node = stack.at(-1); if (node) node.text += text })
+  parser.on('cdata', text => { const node = stack.at(-1); if (node) node.text += text })
+  parser.on('closetag', () => { stack.pop() })
+  try {
+    parser.write(xml).close()
+  } catch {
+    throw new Error('Invalid TMX XML')
+  }
+  if (roots.length !== 1 || stack.length !== 0) throw new Error('Invalid TMX XML')
+  return roots[0]
+}
+
+function objectFromElement(object: XmlNode): TmxObject {
   const polygon = directChildren(object, 'polygon')[0]
   const polyline = directChildren(object, 'polyline')[0]
   return {
     x: xmlAttribute(object, 'x'), y: xmlAttribute(object, 'y'),
     width: xmlAttribute(object, 'width'), height: xmlAttribute(object, 'height'),
     rotation: xmlAttribute(object, 'rotation'), ellipse: directChildren(object, 'ellipse').length > 0,
-    polygon: polygon ? parsePointList(polygon.getAttribute('points') ?? '', 'polygon.points') : undefined,
-    polyline: polyline ? parsePointList(polyline.getAttribute('points') ?? '', 'polyline.points') : undefined,
+    polygon: polygon ? parsePointList(polygon.attributes.points ?? '', 'polygon.points') : undefined,
+    polyline: polyline ? parsePointList(polyline.attributes.points ?? '', 'polyline.points') : undefined,
     properties: propertiesFromElement(object),
   }
 }
 
-function propertiesFromElement(parent: Element): Properties {
+function propertiesFromElement(parent: XmlNode): Properties {
   const result: Properties = {}
   const container = directChildren(parent, 'properties')[0]
   if (!container) return result
   for (const property of directChildren(container, 'property')) {
-    const name = property.getAttribute('name')
+    const name = property.attributes.name
     if (!name) continue
-    result[name] = property.hasAttribute('value') ? property.getAttribute('value') : property.textContent ?? ''
+    result[name] = property.attributes.value ?? property.text
   }
   return result
 }
@@ -218,12 +248,12 @@ function parsePointList(value: string, context: string): MapPoint[] {
   })
 }
 
-function directChildren(parent: Element, name: string): Element[] {
-  return Array.from(parent.children).filter(child => child.localName === name)
+function directChildren(parent: XmlNode, name: string): XmlNode[] {
+  return parent.children.filter(child => child.name === name)
 }
 
-function xmlAttribute(element: Element, name: string): string | undefined {
-  return element.hasAttribute(name) ? element.getAttribute(name) ?? undefined : undefined
+function xmlAttribute(element: XmlNode, name: string): string | undefined {
+  return element.attributes[name]
 }
 
 function slotType(group: string): Slot['kind'] {
