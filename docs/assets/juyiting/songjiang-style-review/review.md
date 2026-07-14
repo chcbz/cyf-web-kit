@@ -20,7 +20,9 @@ Official Samples B and C preserve Sample A's exact dimensions, pose, silhouette,
 | Animation-ready costume detail | 5 | 4 | 5 |
 Decision: Sample A
 Approved by: Richow
-Approved at: 2026-07-15T00:26:32+08:00
+Approved at: 2026-07-15T06:37:59+08:00
+
+This approval records Richow's explicit re-review of the revised official A/B/C; the selection and scores are unchanged.
 
 Sample A remains the approved H direction: semi-realistic hand-painted Q-version. Final production should strengthen the outline and simplify small details for approximately 66x66 CSS px presentation.
 
