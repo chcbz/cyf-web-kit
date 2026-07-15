@@ -34,14 +34,18 @@ These images are review samples, not a final sprite sheet.
 
 The original decision and score block above remains the traceable style-direction decision.
 
-## Target-scale confirmation
+## Target-scale size-only confirmation
 
 - **Preview:** [`target-scale-preview.png`](target-scale-preview.png)
+- **Confirmation scope:** Size only
 - **Confirmed by:** Richow
 - **Confirmed at:** 2026-07-15T21:52:40+08:00
 - **Confirmed display:** Planned approximately 66x66 CSS-pixel in-map frame scale
+- **Camera-angle status:** Final sprite correction required and pending
 
-Richow explicitly confirmed the target-size presentation after reviewing the canonical preview. This confirmation covers the planned approximately 66x66 CSS-pixel display and does not represent or imply animation.
+Richow confirmed only the planned approximately 66x66 CSS-pixel display size. The current review character camera angle does not match the elevated 2.5D hall, so this is not full target-scale visual approval.
+
+Final production must redraw the character in an elevated three-quarter top-down 2.5D view. The correction must be made in the sprite artwork itself, not simulated with runtime CSS skew, perspective, rotation, or other transforms.
 
 ## Generation method
 
