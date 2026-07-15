@@ -32,7 +32,16 @@ These images are review samples, not a final sprite sheet.
 
 [`target-scale-preview.png`](target-scale-preview.png) composites official A/B/C onto the actual `public/juyiting/images/liangshan-hall-base-clean-v3.png` hall artwork. It includes multiple static A placements, a side-by-side A/B/C comparison in exact 66x66 CSS-pixel review frames, and a clearly separated 3x nearest-neighbor inspection strip. The preview is static review evidence and does not represent or imply animation.
 
-The original decision and score block above remains the traceable style-direction decision. **Final target-scale confirmation is pending Richow after this preview artifact is shown; this review does not claim final production readiness.**
+The original decision and score block above remains the traceable style-direction decision.
+
+## Target-scale confirmation
+
+- **Preview:** [`target-scale-preview.png`](target-scale-preview.png)
+- **Confirmed by:** Richow
+- **Confirmed at:** 2026-07-15T21:52:40+08:00
+- **Confirmed display:** Planned approximately 66x66 CSS-pixel in-map frame scale
+
+Richow explicitly confirmed the target-size presentation after reviewing the canonical preview. This confirmation covers the planned approximately 66x66 CSS-pixel display and does not represent or imply animation.
 
 ## Generation method
 
