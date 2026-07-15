@@ -2,9 +2,8 @@ import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { pathToFileURL } from 'node:url'
 import WebSocket from 'ws'
-
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
 const backend = process.env.JIA_BACKEND_URL || process.env.JUYITING_BACKEND_URL || 'https://localhost:10018'
 const frontend = process.env.JIA_FRONTEND_URL || process.env.JUYITING_FRONTEND_URL || 'https://localhost:8080'
@@ -17,14 +16,22 @@ const timeoutMs = Number(process.env.JUYITING_PREFLIGHT_TIMEOUT_MS || 12000)
 let cookie = ''
 const checks = []
 const execFileAsync = promisify(execFile)
+const ALLOWED_ASSET_SCRIPTS = new Set(['validate:juyiting-map', 'validate:juyiting-sprites'])
 
-async function runNpmScript(script) {
-  const npmExecPath = process.env.npm_execpath
+export async function runNpmScript(script, options = {}) {
+  if (!ALLOWED_ASSET_SCRIPTS.has(script)) throw new Error(`Unsupported preflight npm script: ${script}`)
+  const cwd = options.cwd || process.cwd()
+  const npmExecPath = options.npmExecPath === undefined ? process.env.npm_execpath : options.npmExecPath
   if (npmExecPath) {
-    await execFileAsync(process.execPath, [npmExecPath, 'run', script], { cwd: process.cwd() })
+    await execFileAsync(process.execPath, [npmExecPath, 'run', script], { cwd })
     return
   }
-  await execFileAsync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', script], { cwd: process.cwd() })
+  if (process.platform === 'win32') {
+    const commandShell = process.env.ComSpec || process.env.COMSPEC || 'cmd.exe'
+    await execFileAsync(commandShell, ['/d', '/s', '/c', `npm run ${script}`], { cwd })
+    return
+  }
+  await execFileAsync('npm', ['run', script], { cwd })
 }
 
 function rememberCookie(response) {
@@ -120,6 +127,8 @@ async function checkAgentWebSocket() {
 }
 
 async function main() {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+
   await record('release guide contains public beta gates', async () => {
     const guide = await readFile(resolve('docs/juyiting-public-beta-readiness.md'), 'utf8')
     for (const required of ['发布验证命令', '受控公测结论', '在线 Agent 派发 smoke', '本地剩余状态', '开放公测前检查清单']) {
@@ -201,7 +210,13 @@ async function main() {
   console.log('聚义厅公测 preflight 验证通过')
 }
 
-main().catch(error => {
-  console.error(error.message)
-  process.exit(1)
-})
+const isMainModule = process.argv[1]
+  ? pathToFileURL(resolve(process.argv[1])).href === import.meta.url
+  : false
+
+if (isMainModule) {
+  main().catch(error => {
+    console.error(error.message)
+    process.exit(1)
+  })
+}

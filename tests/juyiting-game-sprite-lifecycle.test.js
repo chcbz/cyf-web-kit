@@ -171,6 +171,62 @@ describe('JuyitingGame sprite lifecycle', () => {
     expect(game._initialized).to.equal(false)
   })
 
+  it('cleans a fatal partial mount and retries with exactly one clean scene and canvas', async () => {
+    const fake = createRuntimeMelon()
+    const canvases = []
+    const container = {
+      querySelector: selector => selector === 'canvas' ? canvases[0] || null : null
+    }
+    fake.me.video.init = (_width, _height, options) => {
+      const canvas = {
+        style: {},
+        remove: () => {
+          const index = canvases.indexOf(canvas)
+          if (index >= 0) canvases.splice(index, 1)
+        }
+      }
+      canvases.push(canvas)
+      expect(options.parent).to.equal(container)
+      return true
+    }
+    fake.me.video.destroy = () => canvases.slice().forEach(canvas => canvas.remove())
+
+    let attempt = 0
+    fake.me.loader.getTMX = () => {
+      attempt += 1
+      return attempt === 1
+        ? HALL_XML.replace('name="movementSchemaVersion" value="1"', 'name="movementSchemaVersion" value="999"')
+        : HALL_XML
+    }
+
+    const game = new JuyitingGame()
+    game._loadMelonJS = async () => fake.me
+    const firstMount = game.mount(container, { onReady: () => {} })
+    succeedBatch(fake, await nextLoadBatch(fake))
+
+    let fatal
+    try { await firstMount } catch (error) { fatal = error }
+    expect(fatal).to.include({ code: 'MOVEMENT_SCHEMA_INVALID', severity: 'fatal' })
+    expect(canvases).to.have.length(0)
+    expect(game._hallScene).to.equal(null)
+    expect(game._container).to.equal(null)
+    expect(game._callbacks).to.deep.equal({})
+    expect(game._me).to.equal(null)
+    expect(game._mountToken).to.equal(null)
+    expect(game._readyTimer).to.equal(null)
+
+    const retryMount = game.mount(container)
+    succeedBatch(fake, await nextLoadBatch(fake))
+    succeedBatch(fake, await nextLoadBatch(fake))
+    succeedBatch(fake, await nextLoadBatch(fake))
+    const outcome = await retryMount
+
+    expect(outcome).to.include({ ready: true, movementReady: true, degraded: false })
+    expect(canvases).to.have.length(1)
+    expect(fake.stateSets).to.have.length(1)
+    expect(game._hallScene).not.to.equal(null)
+  })
+
   it('makes Songjiang available only after the dedicated sprite load succeeds', async () => {
     const fake = createRuntimeMelon()
     const game = new JuyitingGame()

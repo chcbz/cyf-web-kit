@@ -69,10 +69,25 @@ describe('Juyi Hall Tiled map parser', () => {
     })
 
     expect(() => parseJuyiHallTmx(hallV4Xml.slice(0, -40))).to.throw().that.includes({
-      code: 'MOVEMENT_SCHEMA_INVALID',
+      code: 'MAP_PARSE_FAILED',
       severity: 'fatal',
       source: 'map'
     })
+  })
+
+  it('classifies visual parser and programming defects as MAP_PARSE_FAILED', () => {
+    const programmingDefect = {}
+    Object.defineProperty(programmingDefect, 'layers', {
+      get() { throw new TypeError('unexpected visual parser defect') }
+    })
+
+    for (const input of ['<map>', programmingDefect]) {
+      expect(() => parseJuyiHallTmx(input)).to.throw().that.includes({
+        code: 'MAP_PARSE_FAILED',
+        severity: 'fatal',
+        source: 'map'
+      })
+    }
   })
 
   it('normalizes Tiled rectangles against image coordinate space', () => {
