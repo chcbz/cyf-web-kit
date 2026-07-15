@@ -21,7 +21,8 @@
                     "test:juyiting:agent-smoke":  "node tests/juyiting-agent-online-smoke.mjs",
                     "test:juyiting:preflight":  "node tests/juyiting-public-beta-preflight.mjs",
                     "validate:juyiting-map":  "node --import tsx scripts/juyiting/validate-map.mjs",
-                    "preview:juyiting-map":  "node --import tsx scripts/juyiting/render-map-preview.mjs"
+                    "preview:juyiting-map":  "node --import tsx scripts/juyiting/render-map-preview.mjs",
+                    "validate:juyiting-sprites":  "node --import tsx scripts/juyiting/validate-sprites.mjs"
                 },
     "dependencies":  {
                          "@varlet/ui":  "^3.10.9",
