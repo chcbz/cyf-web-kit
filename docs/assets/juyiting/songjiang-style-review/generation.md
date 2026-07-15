@@ -6,7 +6,7 @@
 - The approved direction was originally exploration Sample H. The duplicate H binary is not retained in this release review directory; canonical A preserves those approved bytes.
 - Source A was created using the built-in `image_gen` mode, not the CLI/API fallback.
 - The built-in tool did not expose a model version or seed in the review history. Therefore source generation is **not bit-reproducible**, and this record does not claim that it is. The committed `sample-a.png` is canonical.
-- Only B/C raster derivation, `target-scale-preview.png` composition, and the 45-degree versus 55-degree hall comparison are deterministic from committed inputs. Image-generated A/45/55 source artwork is not bit-reproducible.
+- B/C raster derivation, `target-scale-preview.png` composition, and the 45-degree versus 55-degree hall comparison are deterministic at the decoded-pixel level from committed inputs. Image-generated A/45/55 source artwork is not bit-reproducible.
 
 ## Verbatim available built-in generation prompt for H/A
 
@@ -49,7 +49,7 @@ python docs/assets/juyiting/songjiang-style-review/derive_review_assets.py
 python docs/assets/juyiting/songjiang-style-review/derive_review_assets.py --check
 ```
 
-The committed derivation was produced with Python, Pillow `12.2.0`, and NumPy `2.4.2`. `--check` explicitly requires those versions, then regenerates B, C, and the preview in a temporary directory and requires byte-for-byte equality with committed outputs. A mismatched toolchain exits with a clear error instead of reporting a misleading byte mismatch.
+The committed derivation was produced with Python, Pillow `12.2.0`, and NumPy `2.4.2`; these versions are provenance, not mandatory encoder pins. `--check` regenerates B, C, and the preview in a temporary directory, decodes both generated and committed PNGs, and requires identical dimensions, mode, and exact pixel/channel bytes. It deliberately ignores encoded PNG byte differences caused by native FreeType, zlib, or PNG encoder builds. Canonical `sample-a.png` remains protected by its SHA-256 before derivation.
 
 ### Official B: cool muted ink/wash
 
@@ -136,4 +136,4 @@ python docs/assets/juyiting/songjiang-style-review/derive_camera_angle_preview.p
 python docs/assets/juyiting/songjiang-style-review/derive_camera_angle_preview.py --check
 ```
 
-The script never writes to the 45-degree or selected 55-degree source artwork. For each source it crops to nonzero alpha bounds, scales the subject to fit within `64x64` using LANCZOS, and bottom-centers that result in a transparent `66x66` source/world frame. It composites both frames at matched hall depths on `liangshan-hall-base-clean-v3.png` at map zoom `1.0`, includes separately outlined source/world frames, and enlarges the already-created target frames exactly `3x` with NEAREST in the review-only inspection strip. Across current runtime zoom presets `0.84-1.25`, the `66x66` world frame is approximately `55-83` CSS px; it is approximately `66` CSS px at zoom `1.0`. Byte-for-byte `--check` explicitly requires Pillow `12.2.0` and exits clearly on a different Pillow version. The deterministic output is `sample-a-2_5d-45-55-hall-preview-v1.png`, SHA-256 `53da7bbb9272e692c9068eb01bcfcb05a8a27b8ca95434908f515393aee4972d`.
+The script never writes to the 45-degree or selected 55-degree source artwork. Their committed SHA-256 values are checked before composition. For each source it crops to nonzero alpha bounds, scales the subject to fit within `64x64` using LANCZOS, and bottom-centers that result in a transparent `66x66` source/world frame. It composites both frames at matched hall depths on `liangshan-hall-base-clean-v3.png` at map zoom `1.0`, includes separately outlined source/world frames, and enlarges the already-created target frames exactly `3x` with NEAREST in the review-only inspection strip. Across current runtime zoom presets `0.84-1.25`, the `66x66` world frame is approximately `55-83` CSS px; it is approximately `66` CSS px at zoom `1.0`. `--check` compares decoded dimensions, mode, and exact pixel/channel bytes, avoiding false failures from FreeType/zlib/PNG encoder differences. Pillow `12.2.0` is recorded only as provenance for the committed render. The committed preview file SHA-256 is `53da7bbb9272e692c9068eb01bcfcb05a8a27b8ca95434908f515393aee4972d`.

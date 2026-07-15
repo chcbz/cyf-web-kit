@@ -16,7 +16,6 @@ import hashlib
 import tempfile
 from pathlib import Path
 
-import PIL
 from PIL import Image, ImageDraw, ImageFont
 
 
@@ -31,7 +30,10 @@ OUTPUT_PATH = REVIEW_DIR / OUTPUT_NAME
 FRAME_SIZE = 66
 SUBJECT_MAX = 64
 PREVIEW_SIZE = (1664, 1260)
-REQUIRED_PILLOW_VERSION = "12.2.0"
+SOURCE_SHA256 = {
+    SOURCE_45: "38e45ae50d8c4908c98f5436599a08027870f3d74c80db19ebeb17fc7e647904",
+    SOURCE_55: "6109be7d51cd19f2bd93304a064309b11cbc7718365a35d3ea327b60bd5d0d47",
+}
 
 
 def target_frame(source_path: Path) -> Image.Image:
@@ -48,6 +50,7 @@ def target_frame(source_path: Path) -> Image.Image:
 
 
 def render(output_path: Path) -> None:
+    require_canonical_sources()
     hall = Image.open(HALL_PATH).convert("RGBA")
     width, hall_height = hall.size
     if hall.size != (1664, 928):
@@ -150,29 +153,43 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def require_byte_toolchain() -> None:
-    if PIL.__version__ != REQUIRED_PILLOW_VERSION:
-        raise SystemExit(
-            "Byte-for-byte --check requires "
-            f"Pillow {REQUIRED_PILLOW_VERSION}; found {PIL.__version__}."
-        )
+def require_canonical_sources() -> None:
+    for path, expected in SOURCE_SHA256.items():
+        actual = sha256(path)
+        if actual != expected:
+            raise SystemExit(f"Canonical source SHA-256 mismatch: {path.name}: {actual}")
+
+
+def compare_decoded_png(generated_path: Path, committed_path: Path) -> None:
+    with Image.open(generated_path) as generated, Image.open(committed_path) as committed:
+        generated.load()
+        committed.load()
+        if generated.size != committed.size:
+            raise SystemExit(
+                f"MISMATCH {committed_path.name}: size {generated.size} != {committed.size}"
+            )
+        if generated.mode != committed.mode:
+            raise SystemExit(
+                f"MISMATCH {committed_path.name}: mode {generated.mode} != {committed.mode}"
+            )
+        if generated.tobytes() != committed.tobytes():
+            raise SystemExit(f"MISMATCH {committed_path.name}: decoded pixel/channel bytes differ")
 
 
 def check() -> None:
-    require_byte_toolchain()
     with tempfile.TemporaryDirectory(prefix="songjiang-camera-review-") as temporary:
         generated = Path(temporary) / OUTPUT_NAME
         render(generated)
-        if generated.read_bytes() != OUTPUT_PATH.read_bytes():
-            raise SystemExit(f"MISMATCH: {OUTPUT_NAME}")
-    print(f"PASS {OUTPUT_NAME} {sha256(OUTPUT_PATH)}")
+        compare_decoded_png(generated, OUTPUT_PATH)
+    with Image.open(OUTPUT_PATH) as committed:
+        print(f"PASS {OUTPUT_NAME} decoded-pixels mode={committed.mode} size={committed.size}")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--check", action="store_true",
-        help=f"regenerate and compare bytes (requires Pillow {REQUIRED_PILLOW_VERSION})",
+        help="regenerate and compare decoded image size, mode, and pixel/channel bytes",
     )
     args = parser.parse_args()
     if args.check:

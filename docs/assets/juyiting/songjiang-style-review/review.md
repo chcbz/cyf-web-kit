@@ -63,4 +63,4 @@ Task 5 now records three distinct approvals: style direction A, the planned 66x6
 
 ## Generation method
 
-See [`generation.md`](generation.md) for the verbatim available built-in generation prompts and provenance limits. Run [`derive_review_assets.py`](derive_review_assets.py) to regenerate official B/C and the original target-scale preview, and run [`derive_camera_angle_preview.py`](derive_camera_angle_preview.py) to regenerate the 45-degree versus 55-degree hall comparison without modifying either transparent source artwork.
+See [`generation.md`](generation.md) for the verbatim available built-in generation prompts and provenance limits. Run [`derive_review_assets.py`](derive_review_assets.py) to regenerate official B/C and the original target-scale preview, and run [`derive_camera_angle_preview.py`](derive_camera_angle_preview.py) to regenerate the 45-degree versus 55-degree hall comparison without modifying either transparent source artwork. Both `--check` modes verify pixel-for-pixel decoded image equivalence—dimensions, mode, and exact pixel/channel bytes—rather than encoded PNG file-byte equality.
