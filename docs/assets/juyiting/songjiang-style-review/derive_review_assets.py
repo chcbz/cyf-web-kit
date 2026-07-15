@@ -42,7 +42,10 @@ FRAME_SIZE = 66
 MAP_SIZE = (1664, 928)
 INSPECTION_HEIGHT = 360
 PREVIEW_SIZE = (MAP_SIZE[0], MAP_SIZE[1] + INSPECTION_HEIGHT)
-SOURCE_A_SHA256 = "12d93d364e2785cb5dd92c77c85d7928c3e503c4eeced5f1ac0bcf74c4fa2343"
+SOURCE_SHA256 = {
+    SOURCE_A: "12d93d364e2785cb5dd92c77c85d7928c3e503c4eeced5f1ac0bcf74c4fa2343",
+    HALL_PATH: "94b581a98fe6b16ea4d200936384efc1d975cf8892c75b2e9151fc8bcf510966",
+}
 
 
 def derive_b_and_c(source_a: Path, output_dir: Path) -> tuple[Path, Path]:
@@ -276,9 +279,10 @@ def sha256(path: Path) -> str:
 
 
 def require_canonical_source() -> None:
-    actual = sha256(SOURCE_A)
-    if actual != SOURCE_A_SHA256:
-        raise SystemExit(f"Canonical source SHA-256 mismatch: {SOURCE_A.name}: {actual}")
+    for path, expected in SOURCE_SHA256.items():
+        actual = sha256(path)
+        if actual != expected:
+            raise SystemExit(f"Canonical source SHA-256 mismatch: {path.name}: {actual}")
 
 
 def compare_decoded_png(generated_path: Path, committed_path: Path) -> None:
