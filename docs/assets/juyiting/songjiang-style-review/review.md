@@ -41,12 +41,25 @@ The original decision and score block above remains the traceable style-directio
 - **Confirmed by:** Richow
 - **Confirmed at:** 2026-07-15T21:52:40+08:00
 - **Confirmed display:** Planned approximately 66x66 CSS-pixel in-map frame scale
-- **Camera-angle status:** Final sprite correction required and pending
+- **Camera-angle status:** Resolved by the separately approved native 55-degree gate below
 
-Richow confirmed only the planned approximately 66x66 CSS-pixel display size. The current review character camera angle does not match the elevated 2.5D hall, so this is not full target-scale visual approval.
+Richow confirmed the planned approximately 66x66 CSS-pixel display size independently of the camera-angle decision.
 
-Final production must redraw the character in an elevated three-quarter top-down 2.5D view. The correction must be made in the sprite artwork itself, not simulated with runtime CSS skew, perspective, rotation, or other transforms.
+## Native 2.5D camera-angle confirmation
+
+- **Comparison preview:** [`sample-a-2_5d-45-55-hall-preview-v1.png`](sample-a-2_5d-45-55-hall-preview-v1.png)
+- **Selected transparent source:** [`sample-a-2_5d-55-v1.png`](sample-a-2_5d-55-v1.png)
+- **Retained comparison source:** [`sample-a-2_5d-45-v1.png`](sample-a-2_5d-45-v1.png)
+- **Decision:** Native 55-degree elevated three-quarter top-down 2.5D view
+- **Confirmation scope:** Single-frame camera-angle gate
+- **Approved by:** Richow
+- **Approved at:** 2026-07-15T23:17:22+08:00
+- **Runtime transform policy:** Native sprite artwork; no CSS skew, perspective, rotation, or substitute transform
+
+Richow selected the 55-degree sample after reviewing the exact 66x66 hall comparison against the 45-degree alternative. This resolves the camera-angle correction required after the earlier size-only review.
+
+Task 5 now records three distinct approvals: style direction A, the planned approximately 66x66 CSS-pixel target size, and the native 55-degree single-frame camera angle. These approvals complete the review evidence only. The final animated sprite sheet remains future Task 7 work and is not represented as delivered or approved here.
 
 ## Generation method
 
-See [`generation.md`](generation.md) for the verbatim available built-in generation prompt and provenance limits. Run [`derive_review_assets.py`](derive_review_assets.py) to deterministically regenerate official B/C and the target-scale preview from canonical Sample A and the committed hall image. The script preserves Sample A's alpha channel byte-for-byte for B/C and documents every resize/compositing rule.
+See [`generation.md`](generation.md) for the verbatim available built-in generation prompts and provenance limits. Run [`derive_review_assets.py`](derive_review_assets.py) to regenerate official B/C and the original target-scale preview, and run [`derive_camera_angle_preview.py`](derive_camera_angle_preview.py) to regenerate the 45-degree versus 55-degree hall comparison without modifying either transparent source artwork.
