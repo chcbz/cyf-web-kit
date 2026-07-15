@@ -9,6 +9,8 @@ import { validateSpriteManifest } from '../../src/game/sprites/spriteValidation.
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
 const MAX_PNG_BYTES = 64 * 1024 * 1024
 const MAX_DECODED_BYTES = 64 * 1024 * 1024
+const BYTES_PER_PIXEL = 4
+const MAX_PIXELS = MAX_DECODED_BYTES / BYTES_PER_PIXEL
 const { PNG } = pngjs
 
 export function inspectPngFile(path) {
@@ -50,8 +52,22 @@ export function inspectPngBytes(bytes) {
       if (type !== 'IHDR' || length !== 13) return invalidInspection(true, 'sprite PNG must start with a 13-byte IHDR')
       width = bytes.readUInt32BE(offset + 8)
       height = bytes.readUInt32BE(offset + 12)
-      const decodedBytes = width * height * 4
-      if (width === 0 || height === 0 || !Number.isSafeInteger(decodedBytes) || decodedBytes > MAX_DECODED_BYTES) {
+      const bitDepth = bytes[offset + 16]
+      const colorType = bytes[offset + 17]
+      const compressionMethod = bytes[offset + 18]
+      const filterMethod = bytes[offset + 19]
+      const interlaceMethod = bytes[offset + 20]
+      if (bitDepth !== 8 || colorType !== 6) {
+        return invalidInspection(true, 'sprite PNG must use RGBA8 (bit depth 8, color type 6)')
+      }
+      if (compressionMethod !== 0 || filterMethod !== 0) {
+        return invalidInspection(true, 'sprite PNG must use PNG compression and filter methods 0')
+      }
+      if (interlaceMethod !== 0) return invalidInspection(true, 'sprite PNG interlacing is not supported')
+      const pixels = width * height
+      const decodedBytes = pixels * BYTES_PER_PIXEL
+      if (width === 0 || height === 0 || !Number.isSafeInteger(pixels) || pixels > MAX_PIXELS
+        || !Number.isSafeInteger(decodedBytes) || decodedBytes > MAX_DECODED_BYTES) {
         return invalidInspection(true, 'sprite PNG decoded dimensions exceed the validation bound')
       }
     } else if (type === 'IHDR') return invalidInspection(true, 'sprite PNG contains multiple IHDR chunks')
@@ -63,7 +79,7 @@ export function inspectPngBytes(bytes) {
       if (chunkEnd !== bytes.length) return invalidInspection(true, 'sprite PNG contains data after terminal IEND')
       try {
         const decoded = PNG.sync.read(bytes, { checkCRC: true })
-        if (decoded.width !== width || decoded.height !== height || decoded.data.length !== width * height * 4) {
+        if (decoded.width !== width || decoded.height !== height || decoded.data.length !== width * height * BYTES_PER_PIXEL) {
           return invalidInspection(true, 'sprite PNG decoded output does not match IHDR dimensions')
         }
       } catch (error) {

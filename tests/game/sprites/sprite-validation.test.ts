@@ -8,7 +8,10 @@ import {
   type PersonaSpriteManifest,
 } from '../../../src/game/sprites/personaSpriteManifest.js'
 import { resolvePersonaSprite } from '../../../src/game/sprites/animationResolver.js'
-import { validateSpriteManifest } from '../../../src/game/sprites/spriteValidation.js'
+import {
+  type SpriteAssetInspection,
+  validateSpriteManifest,
+} from '../../../src/game/sprites/spriteValidation.js'
 import { fileURLToPath } from 'node:url'
 // The release CLI intentionally stays a directly executable ESM script.
 // @ts-expect-error No declaration file is emitted for the repository-local CLI module.
@@ -109,11 +112,52 @@ describe('sprite manifest', () => {
 
     const invalid = validateSpriteManifest(PERSONA_SPRITE_MANIFEST, {
       assets: {
-        songjiang: { exists: true, signatureValid: false, width: 512, height: 256 },
+        songjiang: {
+          exists: true, signatureValid: false, structurallyValid: false, decodable: false,
+          width: 512, height: 256, error: 'invalid signature fixture',
+        },
       },
     })
     assert.equal(invalid.requiredMissingCount, 1)
     assert.ok(invalid.errors.map(error => error.code).includes('REQUIRED_SPRITE_LOAD_FAILED'))
+  })
+
+  it('rejects interlaced, 16-bit, and non-RGBA PNG formats before decoding', () => {
+    const valid = readFileSync(fixturePath())
+    const interlaced = Buffer.from(valid)
+    interlaced[28] = 1
+    const sixteenBit = Buffer.from(valid)
+    sixteenBit[24] = 16
+    const rgb = Buffer.from(valid)
+    rgb[25] = 2
+
+    const cases = [
+      { bytes: interlaced, message: /interlac/i },
+      { bytes: sixteenBit, message: /RGBA8/ },
+      { bytes: rgb, message: /RGBA8/ },
+    ]
+    for (const entry of cases) {
+      const inspection = inspectTemporaryPng(entry.bytes)
+      assert.equal(inspection.decodable, false)
+      assert.match(inspection.error, entry.message)
+    }
+  })
+
+  it('fails closed for an incomplete external inspection object', () => {
+    const weakInspection = {
+      exists: true,
+      signatureValid: true,
+      width: 1024,
+      height: 256,
+    } as unknown as SpriteAssetInspection
+
+    const result = validateSpriteManifest(PERSONA_SPRITE_MANIFEST, {
+      assets: { songjiang: weakInspection },
+    })
+
+    assert.equal(result.releaseValid, false)
+    assert.equal(result.requiredMissingCount, 1)
+    assert.ok(result.errors.some(error => error.code === 'REQUIRED_SPRITE_LOAD_FAILED'))
   })
 
   it('rejects header-only, truncated, bad-CRC, and missing-IEND PNG files', () => {

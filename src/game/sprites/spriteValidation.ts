@@ -15,15 +15,31 @@ export type SpriteValidationError = {
   message: string
 }
 
-export type SpriteAssetInspection = {
-  exists: boolean
-  signatureValid: boolean
-  structurallyValid?: boolean
-  decodable?: boolean
-  width?: number
-  height?: number
-  error?: string
-}
+export type SpriteAssetInspection =
+  | {
+    exists: false
+    signatureValid: false
+    structurallyValid: false
+    decodable: false
+    error: string
+  }
+  | {
+    exists: true
+    signatureValid: boolean
+    structurallyValid: false
+    decodable: false
+    width?: number
+    height?: number
+    error: string
+  }
+  | {
+    exists: true
+    signatureValid: true
+    structurallyValid: true
+    decodable: true
+    width: number
+    height: number
+  }
 
 export type SpriteValidationOptions = {
   assets?: Record<string, SpriteAssetInspection>
@@ -84,8 +100,8 @@ export function validateSpriteManifest(
     if (options.assets && (!asset || !asset.exists)) problems.push('sprite PNG is missing')
     else if (asset?.exists) {
       if (!asset.signatureValid) problems.push('sprite PNG signature is invalid')
-      else if (asset.structurallyValid === false || asset.decodable === false) {
-        problems.push(asset.error ?? 'sprite PNG is incomplete or not decodable')
+      else if (asset.structurallyValid !== true || asset.decodable !== true) {
+        problems.push('error' in asset ? asset.error : 'sprite PNG is incomplete or not decodable')
       }
       if (asset.width !== definition.image.width || asset.height !== definition.image.height) {
         problems.push(
