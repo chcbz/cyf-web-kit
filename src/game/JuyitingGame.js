@@ -25,6 +25,8 @@ export class JuyitingGame {
     this._initialized = false
     this._mapData = null
     this._spriteLoadResult = null
+    this._spriteLoadTimeoutMs = 5_000
+    this._spriteLoadAbortController = null
     this._pendingStart = false
     this._generation = 0
     this._mountToken = null
@@ -47,6 +49,8 @@ export class JuyitingGame {
   async mount(container, options = {}) {
     if (this._initialized) return
     if (!container) throw new Error('container required')
+    this._spriteLoadAbortController?.abort()
+    this._spriteLoadAbortController = null
     const mountToken = ++this._generation
     this._mountToken = mountToken
     this._spriteLoadResult = null
@@ -98,11 +102,20 @@ export class JuyitingGame {
     await this._loadResources(me, buildHallMapResources(this._mapData), mountToken)
     if (!this._isCurrentMount(mountToken)) return
 
+    const spriteLoadAbortController = new AbortController()
+    this._spriteLoadAbortController = spriteLoadAbortController
     const spriteLoadResult = await loadPersonaSprites(
       definition => this._loadPersonaSprite(me, definition, mountToken),
-      PERSONA_SPRITE_MANIFEST
+      PERSONA_SPRITE_MANIFEST,
+      {
+        timeoutMs: this._spriteLoadTimeoutMs,
+        signal: spriteLoadAbortController.signal
+      }
     )
     if (!this._isCurrentMount(mountToken)) return
+    if (this._spriteLoadAbortController === spriteLoadAbortController) {
+      this._spriteLoadAbortController = null
+    }
     this._spriteLoadResult = spriteLoadResult
     this._hallScene?.setAvailablePersonas(spriteLoadResult.available)
 
@@ -210,6 +223,8 @@ export class JuyitingGame {
   destroy() {
     this._generation += 1
     this._mountToken = null
+    this._spriteLoadAbortController?.abort()
+    this._spriteLoadAbortController = null
     this.pause()
     if (this._hallScene) {
       this._hallScene.onDestroyEvent()

@@ -415,15 +415,15 @@ export function createHallSceneClass(me, HallAgentClass) {
       }
 
       const LAYER_DEPTH = {
-        "mid-occluders": 2,
-        "foreground-occluders": 5,
-        "lighting-overlay": 8
+        'mid-occluders': 2,
+        'foreground-occluders': 5,
+        'lighting-overlay': 8
       }
       const PROP_DEPTH_START = 3
       const PROP_DEPTH_STEP = 0.5
 
       const BLEND_MODES = {
-        "lighting-overlay": "screen"
+        'lighting-overlay': 'screen'
       }
 
       let propIndex = 0
@@ -433,7 +433,7 @@ export function createHallSceneClass(me, HallAgentClass) {
         const resourceName = tmxLayer.resourceName || name
         const image = me.loader.getImage(resourceName)
         if (!image) {
-          console.warn("[HallScene] Image not loaded:", resourceName, "for layer:", name)
+          console.warn('[HallScene] Image not loaded:', resourceName, 'for layer:', name)
           return
         }
 
@@ -544,11 +544,10 @@ export function createHallSceneClass(me, HallAgentClass) {
       }
 
       // 1. Render tile layers first (background base)
-      let layersRendered = this._renderTileLayers(vpW, vpH)
+      this._renderTileLayers(vpW, vpH)
 
       // 2. Render imagelayer-driven layers (occluders, props, lighting)
-      const modularRendered = this._renderModularLayers(vpW, vpH)
-      layersRendered = layersRendered || modularRendered
+      this._renderModularLayers(vpW, vpH)
 
       class HotspotMarker extends me.Renderable {
         constructor(x, y, w, h, data) {
@@ -624,8 +623,6 @@ export function createHallSceneClass(me, HallAgentClass) {
         me.game.world.addChild(marker, DEPTH_LAYERS.HOTSPOTS)
         this._hotspots.push({ marker, hitArea: marker, data: h })
       })
-
-
       // Render prop tile objects from TMX collection-of-images tilesets.
       let propDepth = 3
       hotspots.forEach(h => {
@@ -713,6 +710,11 @@ export function createHallSceneClass(me, HallAgentClass) {
             this._agents.delete(id)
           }
           return
+        }
+        if (agent && String(agent.personaCode || '').toLowerCase() !== personaCode) {
+          me.game.world.removeChild(agent)
+          this._agents.delete(id)
+          agent = null
         }
         if (typeof HallAgentClass.supports === 'function' && !HallAgentClass.supports(data)) {
           if (agent) {

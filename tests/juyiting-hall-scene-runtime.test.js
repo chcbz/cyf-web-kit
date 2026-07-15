@@ -168,4 +168,45 @@ describe('HallScene melonJS runtime compatibility', () => {
 
     expect(warnings).to.deep.equal([])
   })
+
+  it('removes and recreates an existing agent when its normalized persona identity changes', () => {
+    const added = []
+    const removed = []
+    class Stage {}
+    class Agent {
+      static supports(data) { return ['alpha', 'beta'].includes(String(data.personaCode).toLowerCase()) }
+      static create(data) { return new Agent(data) }
+      constructor(data) {
+        this.personaCode = String(data.personaCode).toLowerCase()
+        this._sourceData = data
+      }
+      syncState(data) { this._sourceData = data }
+    }
+    const me = {
+      Stage,
+      game: {
+        viewport: { width: 960, height: 640 },
+        world: {
+          addChild: agent => added.push(agent),
+          removeChild: agent => removed.push(agent)
+        }
+      }
+    }
+    const HallScene = createHallSceneClass(me, Agent)
+    const scene = new HallScene()
+    scene.setAvailablePersonas(new Set(['alpha', 'beta']))
+
+    scene.syncAgents([{ agentId: 'shared-id', personaCode: 'Alpha' }])
+    scene._fullSyncAgents()
+    const original = scene.getAgent('shared-id')
+
+    scene.syncAgents([{ agentId: 'shared-id', personaCode: 'BETA' }])
+    scene._fullSyncAgents()
+    const replacement = scene.getAgent('shared-id')
+
+    expect(removed).to.deep.equal([original])
+    expect(added).to.have.length(2)
+    expect(replacement).not.to.equal(original)
+    expect(replacement.personaCode).to.equal('beta')
+  })
 })

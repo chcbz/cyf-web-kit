@@ -3,8 +3,11 @@ import { describe, it } from 'mocha'
 
 import {
   PERSONA_SPRITE_MANIFEST,
+  type PersonaSpriteManifest,
 } from '../../../src/game/sprites/personaSpriteManifest.js'
 import { loadPersonaSprites } from '../../../src/game/sprites/spriteLoader.js'
+
+const mutableManifest = (): PersonaSpriteManifest => structuredClone(PERSONA_SPRITE_MANIFEST)
 
 describe('sprite loader', () => {
   it('keeps map readiness independent when a required persona fails to load', async () => {
@@ -21,6 +24,7 @@ describe('sprite loader', () => {
     assert.equal(result.requiredMissingCount, 1)
     assert.equal(result.errors[0]?.code, 'REQUIRED_SPRITE_LOAD_FAILED')
     assert.equal(result.errors[0]?.severity, 'degraded')
+    assert.equal(result.errors[0]?.retryable, true)
     assert.equal(mapReady, true)
   })
 
@@ -44,5 +48,43 @@ describe('sprite loader', () => {
     assert.equal(result.available.size, 0)
     assert.equal(result.placeholderCount, 0)
     assert.match(result.errors[0]?.technicalMessage ?? '', /1024x256/)
+    assert.equal(result.errors[0]?.retryable, false)
+  })
+
+  it('marks manifest identity and configuration failures as permanent', async () => {
+    const identityManifest = mutableManifest()
+    identityManifest.personas.songjiang.personaCode = 'wuyong'
+    const identity = await loadPersonaSprites(async () => ({ width: 1024, height: 256 }), identityManifest)
+    assert.equal(identity.errors[0]?.retryable, false)
+
+    const configManifest = mutableManifest()
+    configManifest.personas.songjiang.frame.columns = 7
+    let loadCalls = 0
+    const config = await loadPersonaSprites(async () => {
+      loadCalls += 1
+      return { width: 1024, height: 256 }
+    }, configManifest)
+    assert.equal(config.errors[0]?.retryable, false)
+    assert.match(config.errors[0]?.technicalMessage ?? '', /frame grid/i)
+    assert.equal(loadCalls, 0)
+
+    const versionManifest = mutableManifest()
+    versionManifest.version = 'persona-sheets-v2'
+    const version = await loadPersonaSprites(async () => ({ width: 1024, height: 256 }), versionManifest)
+    assert.equal(version.errors[0]?.retryable, false)
+    assert.match(version.errors[0]?.technicalMessage ?? '', /manifest version/i)
+  })
+
+  it('times out a never-settling load as a transient degraded failure', async () => {
+    const result = await loadPersonaSprites(
+      async () => new Promise(() => {}),
+      PERSONA_SPRITE_MANIFEST,
+      { timeoutMs: 15 },
+    )
+
+    assert.equal(result.degraded, true)
+    assert.equal(result.available.has('songjiang'), false)
+    assert.equal(result.errors[0]?.retryable, true)
+    assert.match(result.errors[0]?.technicalMessage ?? '', /timed out/i)
   })
 })

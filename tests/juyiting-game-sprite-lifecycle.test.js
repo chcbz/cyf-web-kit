@@ -169,11 +169,34 @@ describe('JuyitingGame sprite lifecycle', () => {
 
     const spriteBatch = await nextLoadBatch(fake)
     game.destroy()
-    succeedBatch(fake, spriteBatch)
     await mountPromise
 
     expect(game.getSpriteLoadSnapshot()).to.equal(null)
     expect(game._hallScene).to.equal(null)
     expect(fake.stateSets).to.have.length(0)
+
+    succeedBatch(fake, spriteBatch)
+    await Promise.resolve()
+    expect(fake.stateSets).to.have.length(0)
+  })
+
+  it('times out a never-settling sprite request and still starts the map scene', async () => {
+    const fake = createRuntimeMelon()
+    const game = new JuyitingGame()
+    game._spriteLoadTimeoutMs = 15
+    game._me = fake.me
+    const { mountPromise } = await mountThroughBaseResources(game, fake)
+
+    const spriteBatch = await nextLoadBatch(fake)
+    expect(spriteBatch.map(item => item.resource.name)).to.deep.equal([SONGJIANG_RESOURCE])
+    // Deliberately leave the melonJS loader callback pending forever.
+    await mountPromise
+
+    const outcome = game.getSpriteLoadSnapshot()
+    expect(outcome.degraded).to.equal(true)
+    expect(outcome.available.has('songjiang')).to.equal(false)
+    expect(outcome.errors[0].retryable).to.equal(true)
+    expect(outcome.errors[0].technicalMessage).to.match(/timed out/i)
+    expect(fake.stateSets).to.have.length(1)
   })
 })

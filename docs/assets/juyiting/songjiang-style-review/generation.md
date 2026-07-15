@@ -156,7 +156,7 @@ python "$env:USERPROFILE\.codex\skills\.system\imagegen\scripts\remove_chroma_ke
   --despill
 ```
 
-The production `public/juyiting/sprites/persona-sheets-v1/songjiang.png` is deterministic from that committed source. The derivation splits the 1254x1254 source by rounded 4x4 grid boundaries, crops each frame to nonzero alpha, resizes each subject to 118 pixels high with Pillow LANCZOS, and bottom-centers it with four top pixels of padding in a 128x128 cell. Source frames remain in row-major order and are laid out as an 8x2 sheet: frames 0-7 idle and frames 8-15 walk.
+The production `public/juyiting/sprites/persona-sheets-v1/songjiang.png` is deterministic from that committed source. The derivation splits the 1254x1254 source by rounded 4x4 grid boundaries, performs an 8-connected alpha-component analysis, retains the largest connected character component (including connected hat wings), and removes bounded detached row-overlap islands. It rejects source detached-alpha ratios above `0.06` and post-resample detached ratios above `0.005`. Each cleaned subject is resized to 118 pixels high with Pillow LANCZOS, post-filtered to one connected component, and bottom-centered with four top pixels of padding in a 128x128 cell. Walk frames must remain 116-120 pixels high, vary by at most two pixels, use source-to-runtime scales from `0.44` to `0.51`, and keep their maximum/minimum scale ratio at or below `1.12`. Source frames remain in row-major order and are laid out as an 8x2 sheet: frames 0-7 idle and frames 8-15 walk. The current production sheet SHA-256 is `012c72f412cf11f2b7948c5ca4eea345dbce9fdce864dc7d1dea12de0302ebd1`.
 
 Run:
 
@@ -165,4 +165,4 @@ python docs/assets/juyiting/songjiang-style-review/derive_songjiang_sprite.py
 python docs/assets/juyiting/songjiang-style-review/derive_songjiang_sprite.py --check
 ```
 
-The check compares exact decoded RGBA pixels, validates all 16 nonempty alpha bounds stay inside their cells, and protects the canonical source hash. The committed derivation used Pillow `12.2.0`. The runtime PNG is separately gated by `npm run validate:juyiting-sprites`, which requires 1024x256 RGBA8, non-interlaced PNG structure and a decodable pixel payload.
+The check compares exact decoded RGBA pixels, validates all 16 nonempty alpha bounds stay inside their cells, reports source/output component counts and areas, requires one connected production subject per frame, enforces walk height/scale consistency, and protects the canonical source hash. The committed derivation used Pillow `12.2.0`. The runtime PNG is separately gated by `npm run validate:juyiting-sprites`, which requires 1024x256 RGBA8, non-interlaced PNG structure and a decodable pixel payload.
