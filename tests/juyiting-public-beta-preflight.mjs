@@ -1,5 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import WebSocket from 'ws'
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
@@ -14,6 +16,16 @@ const timeoutMs = Number(process.env.JUYITING_PREFLIGHT_TIMEOUT_MS || 12000)
 
 let cookie = ''
 const checks = []
+const execFileAsync = promisify(execFile)
+
+async function runNpmScript(script) {
+  const npmExecPath = process.env.npm_execpath
+  if (npmExecPath) {
+    await execFileAsync(process.execPath, [npmExecPath, 'run', script], { cwd: process.cwd() })
+    return
+  }
+  await execFileAsync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', script], { cwd: process.cwd() })
+}
 
 function rememberCookie(response) {
   const setCookie = response.headers.getSetCookie
@@ -124,6 +136,14 @@ async function main() {
         throw new Error(`release runbook missing section: ${required}`)
       }
     }
+  })
+
+  await record('validate Juyiting map assets', async () => {
+    await runNpmScript('validate:juyiting-map')
+  })
+
+  await record('validate Juyiting sprite assets', async () => {
+    await runNpmScript('validate:juyiting-sprites')
   })
 
   await record('backend login works', login)

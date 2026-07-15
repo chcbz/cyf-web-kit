@@ -112,7 +112,7 @@ const mountThroughBaseResources = async (game, fake) => {
 }
 
 describe('JuyitingGame sprite lifecycle', () => {
-  it('retains a degraded sprite result after base readiness and mounts without Songjiang', async () => {
+  it('keeps the map ready and degraded when a required sprite fails', async () => {
     const fake = createRuntimeMelon()
     const game = new JuyitingGame()
     game._me = fake.me
@@ -122,7 +122,13 @@ describe('JuyitingGame sprite lifecycle', () => {
     expect(spriteBatch.map(item => item.resource.name)).to.deep.equal([SONGJIANG_RESOURCE])
     spriteBatch[0].onerror(new Error('sprite CDN unavailable'))
 
-    await mountPromise
+    const mountOutcome = await mountPromise
+    expect(mountOutcome).to.include({
+      ready: true,
+      movementReady: true,
+      degraded: true,
+      requiredMissingCount: 1
+    })
     const outcome = game.getSpriteLoadSnapshot()
     expect(outcome.degraded).to.equal(true)
     expect(outcome.available.has('songjiang')).to.equal(false)
@@ -137,6 +143,32 @@ describe('JuyitingGame sprite lifecycle', () => {
     game._hallScene._fullSyncAgents()
     expect(game._hallScene.getAgent('songjiang')).to.equal(undefined)
     expect(fake.worldChildren).to.have.length(0)
+  })
+
+  it('blocks initialization when movement validation returns a fatal error', async () => {
+    const fake = createRuntimeMelon()
+    fake.me.loader.getTMX = () => HALL_XML.replace(
+      'name="movementSchemaVersion" value="1"',
+      'name="movementSchemaVersion" value="999"'
+    )
+    const game = new JuyitingGame()
+    game._me = fake.me
+    const mountPromise = game.mount({ querySelector: () => null })
+    succeedBatch(fake, await nextLoadBatch(fake))
+
+    let error
+    try {
+      await mountPromise
+    } catch (caught) {
+      error = caught
+    }
+    expect(error).to.include({
+      code: 'MOVEMENT_SCHEMA_INVALID',
+      severity: 'fatal',
+      source: 'map'
+    })
+    expect(fake.stateSets).to.have.length(0)
+    expect(game._initialized).to.equal(false)
   })
 
   it('makes Songjiang available only after the dedicated sprite load succeeds', async () => {

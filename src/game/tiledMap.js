@@ -1,3 +1,41 @@
+import { parseMovementTmx } from './map/tmxMovementParser.js'
+import { validateMapRuntime } from './map/mapValidation.js'
+
+const movementSchemaError = (error) => {
+  if (error?.code && error?.severity === 'fatal' && error?.source === 'map') return error
+  const result = new Error(error?.message || 'Juyiting movement schema is unavailable or malformed.')
+  Object.assign(result, {
+    code: 'MOVEMENT_SCHEMA_INVALID',
+    severity: 'fatal',
+    retryable: false,
+    userMessage: '大厅地图数据无效，暂时无法进入。',
+    technicalMessage: error?.technicalMessage || error?.message || String(error),
+    source: 'map'
+  })
+  return result
+}
+
+const attachValidatedMovement = (source, visualMap) => {
+  let movement
+  try {
+    movement = parseMovementTmx(source)
+  } catch (error) {
+    throw movementSchemaError(error)
+  }
+
+  const validation = validateMapRuntime(movement)
+  if (!validation.valid) {
+    const fatal = validation.errors.find(error => error.severity === 'fatal') || validation.errors[0]
+    throw movementSchemaError(Object.assign(new Error(fatal?.technicalMessage || fatal?.userMessage), fatal))
+  }
+  return {
+    ...visualMap,
+    movement,
+    movementReady: true,
+    movementWarnings: validation.warnings.map(warning => ({ ...warning }))
+  }
+}
+
 const numberAttr = (node, name, fallback = 0) => {
   const value = Number(node?.getAttribute?.(name))
   return Number.isFinite(value) ? value : fallback
@@ -399,9 +437,9 @@ const parseJuyiHallTmxData = (map) => {
   }
 }
 
-export const parseJuyiHallTmx = (xml) => {
+const parseJuyiHallTmxUnchecked = (xml) => {
   if (xml && typeof xml === 'object' && Array.isArray(xml.layers)) {
-    return parseJuyiHallTmxData(xml)
+    return attachValidatedMovement(xml, parseJuyiHallTmxData(xml))
   }
 
   if (!xml || typeof DOMParser === 'undefined') {
@@ -592,7 +630,7 @@ export const parseJuyiHallTmx = (xml) => {
     }]
   }))
 
-  return {
+  return attachValidatedMovement(xml, {
     width,
     height,
     coordinateWidth: coordinateSpace.width,
@@ -605,5 +643,13 @@ export const parseJuyiHallTmx = (xml) => {
     mapProperties: readMapProperties(doc),
     tileLayers,
     tilesets
+  })
+}
+
+export const parseJuyiHallTmx = (input) => {
+  try {
+    return parseJuyiHallTmxUnchecked(input)
+  } catch (error) {
+    throw movementSchemaError(error)
   }
 }

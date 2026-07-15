@@ -24,3 +24,21 @@
 - `tests/game/input/`：pointer gesture、hit priority、keyboard/wheel、reason-set interaction lock。
 - `tests/juyiting-component-behavior.test.js`：panel layout、keyboard preservation、15 秒 timeout/retry、fullscreen/orientation ownership。
 - `tests/juyiting-hall-scene-runtime.test.js`、`tests/juyiting-melon-hall-scene.test.js`：facade 与场景集成。
+
+## TMX 与人物精灵资产门禁
+
+- `parseJuyiHallTmx` 会同时解析大厅视觉数据和移动数据。只有移动 schema 与导航图完整通过校验时，返回值才包含 `movementReady: true` 和已校验的 `movement`。
+- 不支持的 `movementSchemaVersion`，以及缺字段、XML 损坏等无法解析的移动数据，统一抛出结构化致命错误 `MOVEMENT_SCHEMA_INVALID`（`severity: fatal`、`source: map`），`JuyitingGame._prepareMapData` 不再把该错误吞掉并降级为 `null`，因此场景不会初始化。
+- 人物精灵加载发生在地图资源就绪之后。必需的宋江精灵加载失败时，挂载结果仍为 `ready: true`、`movementReady: true`，同时为 `degraded: true`、`requiredMissingCount: 1`；地图和面板可继续使用，但不会创建宋江实体，也不会用其他 persona 替代。
+- 公测 preflight 会在登录、HTTP、WebSocket 等网络检查之前依次执行地图和精灵发布校验。
+
+发布前完整验证：
+
+```powershell
+npm run validate:juyiting-map
+npm run validate:juyiting-sprites
+npm run typecheck:game
+npm run test:run
+npm run build
+npm run test:juyiting:preflight
+```

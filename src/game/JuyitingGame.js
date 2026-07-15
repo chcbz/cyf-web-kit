@@ -120,6 +120,14 @@ export class JuyitingGame {
     this._hallScene?.setAvailablePersonas(spriteLoadResult.available)
 
     this._startGame(me, mountToken)
+    return {
+      ready: true,
+      movementReady: this._mapData?.movementReady === true,
+      degraded: spriteLoadResult.degraded,
+      requiredMissingCount: spriteLoadResult.requiredMissingCount,
+      optionalMissingCount: spriteLoadResult.optionalMissingCount,
+      errors: spriteLoadResult.errors.map(error => ({ ...error }))
+    }
   }
 
   _loadPersonaSprite(me, definition, mountToken = this._mountToken) {
@@ -182,12 +190,7 @@ export class JuyitingGame {
       }
     }
 
-    try {
-      this._mapData = tmx ? parseJuyiHallTmx(tmx) : null
-    } catch (error) {
-      console.warn('[JuyitingGame] TMX parse failed:', error?.message || error)
-      this._mapData = null
-    }
+    this._mapData = parseJuyiHallTmx(tmx)
     this._hallScene?.setMapData(this._mapData)
   }
 

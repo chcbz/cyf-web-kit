@@ -1823,6 +1823,8 @@ describe('JuyiHall component behavior', () => {
   })
 })
 
+const VALID_HALL_TMX = readFileSync('public/juyiting/hall.tmx', 'utf8')
+
 const createFakeGameMelon = ({ deferDeviceReady = false } = {}) => {
   const loadCallbacks = []
   const stateSets = []
@@ -1861,7 +1863,7 @@ const createFakeGameMelon = ({ deferDeviceReady = false } = {}) => {
     },
     loader: {
       getImage: () => null,
-      getTMX: () => '<?xml version="1.0" encoding="UTF-8"?><map width="1" height="1" tilewidth="16" tileheight="16"></map>',
+      getTMX: () => VALID_HALL_TMX,
       load: (_resource, onload, onerror) => {
         loadCallbacks.push({ onload, onerror })
       }
