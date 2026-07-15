@@ -3,10 +3,18 @@
  */
 
 import { createGameConfig } from './config.js'
-import { HALL_BOOT_RESOURCES, HALL_MAP_RESOURCE, buildHallMapResources } from './resources.js'
+import {
+  HALL_BOOT_RESOURCES,
+  HALL_MAP_RESOURCE,
+  buildHallMapResources,
+  buildPersonaSpriteResource,
+  personaSpriteResourceName
+} from './resources.js'
 import { parseJuyiHallTmx } from './tiledMap.js'
 import { createHallSceneClass } from './scenes/HallScene.js'
 import { createHallAgentClass } from './entities/HallAgent.js'
+import { loadPersonaSprites } from './sprites/spriteLoader.js'
+import { PERSONA_SPRITE_MANIFEST } from './sprites/personaSpriteManifest.js'
 
 export class JuyitingGame {
   constructor() {
@@ -16,6 +24,7 @@ export class JuyitingGame {
     this._callbacks = {}
     this._initialized = false
     this._mapData = null
+    this._spriteLoadResult = null
     this._pendingStart = false
     this._generation = 0
     this._mountToken = null
@@ -40,6 +49,7 @@ export class JuyitingGame {
     if (!container) throw new Error('container required')
     const mountToken = ++this._generation
     this._mountToken = mountToken
+    this._spriteLoadResult = null
     const me = await this._loadMelonJS()
     await this._waitForEngineReady(me)
     if (!this._isCurrentMount(mountToken)) return
@@ -88,9 +98,37 @@ export class JuyitingGame {
     await this._loadResources(me, buildHallMapResources(this._mapData), mountToken)
     if (!this._isCurrentMount(mountToken)) return
 
+    const spriteLoadResult = await loadPersonaSprites(
+      definition => this._loadPersonaSprite(me, definition, mountToken),
+      PERSONA_SPRITE_MANIFEST
+    )
+    if (!this._isCurrentMount(mountToken)) return
+    this._spriteLoadResult = spriteLoadResult
+    this._hallScene?.setAvailablePersonas(spriteLoadResult.available)
+
     this._startGame(me, mountToken)
   }
 
+  _loadPersonaSprite(me, definition, mountToken = this._mountToken) {
+    return new Promise((resolve, reject) => {
+      if (!this._isCurrentMount(mountToken)) return reject(new Error('Juyiting mount was cancelled'))
+      const resource = buildPersonaSpriteResource(definition)
+      try {
+        me.loader.load(
+          resource,
+          () => {
+            if (!this._isCurrentMount(mountToken)) return reject(new Error('Juyiting mount was cancelled'))
+            const image = me.loader.getImage(personaSpriteResourceName(definition.personaCode))
+            if (!image) return reject(new Error(`Loaded image is unavailable for ${definition.personaCode}`))
+            resolve(image)
+          },
+          error => reject(error instanceof Error ? error : new Error(String(error)))
+        )
+      } catch (error) {
+        reject(error instanceof Error ? error : new Error(String(error)))
+      }
+    })
+  }
 
   _loadResources(me, resources = [], mountToken = this._mountToken) {
     const list = (resources || []).filter(Boolean)
@@ -127,14 +165,14 @@ export class JuyitingGame {
         const xmlText = await resp.text()
         tmx = xmlText
       } catch (err) {
-        console.warn("[JuyitingGame] Direct TMX fetch failed:", err?.message || err)
+        console.warn('[JuyitingGame] Direct TMX fetch failed:', err?.message || err)
       }
     }
 
     try {
       this._mapData = tmx ? parseJuyiHallTmx(tmx) : null
     } catch (error) {
-      console.warn("[JuyitingGame] TMX parse failed:", error?.message || error)
+      console.warn('[JuyitingGame] TMX parse failed:', error?.message || error)
       this._mapData = null
     }
     this._hallScene?.setMapData(this._mapData)
@@ -180,6 +218,7 @@ export class JuyitingGame {
     this._me = null
     this._initialized = false
     this._mapData = null
+    this._spriteLoadResult = null
     this._pendingStart = false
   }
 
@@ -229,6 +268,16 @@ export class JuyitingGame {
 
   getInputSnapshot() {
     return this._hallScene?.inputSnapshot?.() || null
+  }
+
+  getSpriteLoadSnapshot() {
+    if (!this._spriteLoadResult) return null
+    return {
+      ...this._spriteLoadResult,
+      available: new Set(this._spriteLoadResult.available),
+      assets: new Map(this._spriteLoadResult.assets),
+      errors: this._spriteLoadResult.errors.map(error => ({ ...error }))
+    }
   }
 
   resetToMainHall() {

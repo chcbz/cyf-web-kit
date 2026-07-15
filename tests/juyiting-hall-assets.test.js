@@ -6,8 +6,10 @@ import {
   HALL_BOOT_RESOURCES,
   HALL_MAP_RESOURCE,
   buildHallMapResources,
+  buildPersonaSpriteResource,
   personaSpriteResourceName
 } from '../src/game/resources.js'
+import { PERSONA_SPRITE_MANIFEST } from '../src/game/sprites/personaSpriteManifest.js'
 import { parseJuyiHallTmx } from '../src/game/tiledMap.js'
 
 const pngSize = (path) => {
@@ -47,7 +49,8 @@ describe('Juyiting hall scene assets', () => {
       { name: 'foreground-occluders', type: 'image', src: '/juyiting/images/liangshan-hall-foreground-occluders-v3.png' },
       { name: 'lighting-overlay', type: 'image', src: '/juyiting/images/liangshan-hall-lighting-overlay-v3.png' }
     ])
-    expect(resources).to.deep.include({
+    expect(resources.map(resource => resource.name)).not.to.include(personaSpriteResourceName('songjiang'))
+    expect(buildPersonaSpriteResource(PERSONA_SPRITE_MANIFEST.personas.songjiang)).to.deep.equal({
       name: personaSpriteResourceName('songjiang'),
       type: 'image',
       src: '/juyiting/sprites/persona-sheets-v1/songjiang.png'

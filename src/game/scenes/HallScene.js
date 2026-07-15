@@ -28,6 +28,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._onReady = null
       this._needsSync = false
       this._pendingAgents = []
+      this._availablePersonas = null
       this._mapData = null
       this._hotspotState = new Map()
       this._sceneBuilt = false
@@ -49,6 +50,11 @@ export function createHallSceneClass(me, HallAgentClass) {
     onReady(cb)        { this._onReady = cb }
 
     setMapData(mapData) { this._mapData = mapData }
+
+    setAvailablePersonas(personaCodes) {
+      this._availablePersonas = new Set(personaCodes || [])
+      this._needsSync = true
+    }
 
     syncAgents(list) {
       this._pendingAgents = list || []
@@ -700,6 +706,14 @@ export function createHallSceneClass(me, HallAgentClass) {
         const id = data.agentId || data.personaCode || ''
         if (!id) return
         let agent = this._agents.get(id)
+        const personaCode = String(data.personaCode || '').toLowerCase()
+        if (this._availablePersonas && !this._availablePersonas.has(personaCode)) {
+          if (agent) {
+            me.game.world.removeChild(agent)
+            this._agents.delete(id)
+          }
+          return
+        }
         if (typeof HallAgentClass.supports === 'function' && !HallAgentClass.supports(data)) {
           if (agent) {
             me.game.world.removeChild(agent)
@@ -779,6 +793,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._onHotspotClick = null
       this._onReady = null
       this._pendingAgents = []
+      this._availablePersonas = null
       this._needsSync = false
       this._hotspotState.clear()
       this._hotspots.forEach(({ marker }) => {

@@ -6,13 +6,17 @@
  * that are required before the TMX can be parsed.
  */
 
-import { PERSONA_SPRITE_MANIFEST } from './sprites/personaSpriteManifest.js'
-
 export const HALL_MAP_RESOURCE = { name: 'juyiting-hall', type: 'tmx', src: '/juyiting/hall.tmx' }
 
 export const HALL_BOOT_RESOURCES = [HALL_MAP_RESOURCE]
 
 export const personaSpriteResourceName = personaCode => `persona-sprite-${personaCode}`
+
+export const buildPersonaSpriteResource = definition => ({
+  name: personaSpriteResourceName(definition.personaCode),
+  type: 'image',
+  src: definition.src
+})
 
 const addImageResource = (resources, seen, name, src) => {
   if (!name || !src) return
@@ -42,12 +46,6 @@ export const buildHallMapResources = (mapData) => {
 
   Object.values(mapData?.imageLayers || {}).forEach(layer => {
     addImageResource(resources, seen, layer.resourceName || layer.id, layer.source)
-  })
-
-  // Persona sheets intentionally load only after the TMX has reached map
-  // readiness. A failed image is omitted by HallAgent while the map remains usable.
-  Object.entries(PERSONA_SPRITE_MANIFEST.personas).forEach(([personaCode, definition]) => {
-    addImageResource(resources, seen, personaSpriteResourceName(personaCode), definition.src)
   })
 
   return resources
