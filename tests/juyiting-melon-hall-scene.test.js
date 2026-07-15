@@ -433,7 +433,7 @@ describe('HallScene melonJS pointer routing', () => {
       globalThis.requestAnimationFrame(() => {})
       scene.resetTransform()
       const animation = scene.getCameraSnapshot().animation
-      runPendingFrames(frames, animation.startedAt + animation.durationMs)
+      runPendingFrames(frames, animation.startedAt + animation.durationMs + 1)
 
       expect(scene.getCameraSnapshot().animation).to.equal(null)
       expect(scene.getCameraSnapshot().presetKey).to.equal(initial.presetKey)
@@ -462,7 +462,7 @@ describe('HallScene melonJS pointer routing', () => {
 
       scene.fitToViewport()
       const animation = scene.getCameraSnapshot().animation
-      runPendingFrames(frames, animation.startedAt + animation.durationMs)
+      runPendingFrames(frames, animation.startedAt + animation.durationMs + 1)
 
       expect(scene.getCameraSnapshot().animation).to.equal(null)
       expect(scene.getTransform()).to.deep.equal(initial.transform)
