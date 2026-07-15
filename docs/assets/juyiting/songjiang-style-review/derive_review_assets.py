@@ -10,9 +10,11 @@ Outputs:
   target-scale-preview.png  actual hall composite and target-pixel inspection strip
 
 B and C always reuse A's alpha channel byte-for-byte. The target-scale sprite is
-the alpha bounding box contained in an exact 66x66 transparent frame with
-Pillow LANCZOS resampling. The inspection strip enlarges that already-resized
-66x66 frame by exactly 3x with NEAREST; it does not invent animation frames.
+the alpha bounding box contained in a 66x66 transparent source/world review
+frame for map zoom 1.0, using Pillow LANCZOS resampling. Across current runtime
+zoom presets 0.84-1.25 this is approximately 55-83 CSS px; it is approximately
+66 CSS px at zoom 1.0. The inspection strip enlarges that already-resized frame
+by exactly 3x with NEAREST; it does not invent animation frames.
 
 Run:
   python derive_review_assets.py
@@ -27,6 +29,7 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
+import PIL
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 
 
@@ -40,6 +43,8 @@ FRAME_SIZE = 66
 MAP_SIZE = (1664, 928)
 INSPECTION_HEIGHT = 360
 PREVIEW_SIZE = (MAP_SIZE[0], MAP_SIZE[1] + INSPECTION_HEIGHT)
+REQUIRED_PILLOW_VERSION = "12.2.0"
+REQUIRED_NUMPY_VERSION = "2.4.2"
 
 
 def derive_b_and_c(source_a: Path, output_dir: Path) -> tuple[Path, Path]:
@@ -149,7 +154,7 @@ def derive_b_and_c(source_a: Path, output_dir: Path) -> tuple[Path, Path]:
 
 
 def target_frame(path: Path) -> Image.Image:
-    """Contain the visible subject in an exact transparent 66x66 frame."""
+    """Contain the subject in a 66x66 source/world frame for map zoom 1.0."""
     source = Image.open(path).convert("RGBA")
     bounds = source.getchannel("A").getbbox()
     if bounds is None:
@@ -193,11 +198,11 @@ def render_preview(source_a: Path, source_b: Path, source_c: Path, output_path: 
     preview.alpha_composite(hall, (0, 0))
     draw = ImageDraw.Draw(preview, "RGBA")
 
-    draw.rounded_rectangle((18, 16, 760, 72), radius=10, fill=(12, 14, 16, 220))
+    draw.rounded_rectangle((18, 16, 1000, 72), radius=10, fill=(12, 14, 16, 220))
     draw.text(
         (34, 26),
-        "Songjiang target-scale review | static 66x66 CSS-pixel frames",
-        font=default_font(24),
+        "Songjiang review | 66x66 world frame @ zoom 1.0 (~55-83 CSS px)",
+        font=default_font(22),
         fill=(250, 236, 199, 255),
     )
 
@@ -212,23 +217,23 @@ def render_preview(source_a: Path, source_b: Path, source_c: Path, output_path: 
         preview.alpha_composite(frames["A"], (center_x - FRAME_SIZE // 2, bottom_y - FRAME_SIZE))
         label(draw, (center_x - 48, bottom_y - FRAME_SIZE - 28), text, 15)
 
-    # Side-by-side official comparison, each inside an exact 66x66 review
-    # outline. The outlines and labels are evidence overlays, not runtime UI.
+    # Side-by-side official comparison, each inside a 66x66 source/world review
+    # outline at zoom 1.0. The overlays are not runtime UI.
     comparison = [(760, 704, "A"), (880, 704, "B"), (1000, 704, "C")]
     for center_x, bottom_y, key in comparison:
         left = center_x - FRAME_SIZE // 2
         top = bottom_y - FRAME_SIZE
         draw.rectangle((left - 1, top - 1, left + FRAME_SIZE, top + FRAME_SIZE), outline=(246, 229, 181, 230), width=2)
         preview.alpha_composite(frames[key], (left, top))
-        label(draw, (center_x - 18, top - 30), f"{key} 66x66", 16)
+        label(draw, (center_x - 35, top - 30), f"{key} 66 world", 16)
 
     strip_top = MAP_SIZE[1]
     draw.rectangle((0, strip_top, PREVIEW_SIZE[0], PREVIEW_SIZE[1]), fill=(24, 25, 27, 255))
     draw.line((0, strip_top, PREVIEW_SIZE[0], strip_top), fill=(205, 173, 102, 255), width=3)
     draw.text(
         (34, strip_top + 18),
-        "3x NEAREST inspection of the exact target frames (static review samples; no animation implied)",
-        font=default_font(22),
+        "3x NEAREST inspection of 66x66 world frames (static samples; no animation implied)",
+        font=default_font(21),
         fill=(250, 236, 199, 255),
     )
 
@@ -253,8 +258,8 @@ def render_preview(source_a: Path, source_b: Path, source_c: Path, output_path: 
         preview.alpha_composite(checker, (x + (panel_width - checker.width) // 2, y + 14))
         draw.text(
             (x + 20, y + 220),
-            f"Official {key}: 66x66 frame enlarged 3x",
-            font=default_font(16),
+            f"Official {key}: 66 world frame x3",
+            font=default_font(15),
             fill=(240, 230, 204, 255),
         )
 
@@ -271,7 +276,18 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def require_byte_toolchain() -> None:
+    problems = []
+    if PIL.__version__ != REQUIRED_PILLOW_VERSION:
+        problems.append(f"Pillow {REQUIRED_PILLOW_VERSION} (found {PIL.__version__})")
+    if np.__version__ != REQUIRED_NUMPY_VERSION:
+        problems.append(f"NumPy {REQUIRED_NUMPY_VERSION} (found {np.__version__})")
+    if problems:
+        raise SystemExit("Byte-for-byte --check requires " + " and ".join(problems) + ".")
+
+
 def check() -> None:
+    require_byte_toolchain()
     with tempfile.TemporaryDirectory(prefix="songjiang-review-") as temporary:
         generated_dir = Path(temporary)
         generate(generated_dir)
@@ -285,7 +301,11 @@ def check() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--check", action="store_true", help="regenerate in a temp directory and compare bytes")
+    parser.add_argument(
+        "--check", action="store_true",
+        help=("regenerate and compare bytes; requires Pillow "
+              f"{REQUIRED_PILLOW_VERSION} and NumPy {REQUIRED_NUMPY_VERSION}"),
+    )
     args = parser.parse_args()
     if args.check:
         check()

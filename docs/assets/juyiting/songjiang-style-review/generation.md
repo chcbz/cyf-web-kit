@@ -49,7 +49,7 @@ python docs/assets/juyiting/songjiang-style-review/derive_review_assets.py
 python docs/assets/juyiting/songjiang-style-review/derive_review_assets.py --check
 ```
 
-The committed derivation was produced with Python, Pillow `12.2.0`, and NumPy `2.4.2`. `--check` regenerates B, C, and the preview in a temporary directory and requires byte-for-byte equality with committed outputs.
+The committed derivation was produced with Python, Pillow `12.2.0`, and NumPy `2.4.2`. `--check` explicitly requires those versions, then regenerates B, C, and the preview in a temporary directory and requires byte-for-byte equality with committed outputs. A mismatched toolchain exits with a clear error instead of reporting a misleading byte mismatch.
 
 ### Official B: cool muted ink/wash
 
@@ -71,10 +71,11 @@ The committed derivation was produced with Python, Pillow `12.2.0`, and NumPy `2
 ## Deterministic target-scale preview
 
 - Background input is exactly `public/juyiting/images/liangshan-hall-base-clean-v3.png` at `1664x928`, SHA-256 `94b581a98fe6b16ea4d200936384efc1d975cf8892c75b2e9151fc8bcf510966`.
-- For each official sample, crop to its nonzero alpha bounds and contain it bottom-centered in an exact transparent `66x66` frame using Pillow LANCZOS resampling.
+- For each official sample, crop to its nonzero alpha bounds and contain it bottom-centered in a transparent `66x66` source/world review frame using Pillow LANCZOS resampling.
 - Composite multiple A instances at representative main-seat, west-floor, and east-floor positions.
-- Composite A/B/C side-by-side in separately outlined `66x66` evidence frames. Labels and outlines are review overlays, not runtime UI.
+- Composite A/B/C side-by-side in separately outlined `66x66` source/world evidence frames at map zoom `1.0`. Labels and outlines are review overlays, not runtime UI.
 - Append a separated inspection strip. Enlarge the already-created `66x66` target frame exactly `3x` with NEAREST, so the strip exposes target pixels rather than resampling the source artwork again.
+- Runtime CSS display is zoom-dependent: the current `0.84-1.25` presets display a `66x66` world frame at approximately `55-83` CSS px, with approximately `66` CSS px at zoom `1.0`.
 - The result is a static review composite. It does not claim or simulate animation.
 
 ## Native 2.5D camera-angle review workflow
@@ -126,7 +127,7 @@ python "$env:USERPROFILE\.codex\skills\.system\imagegen\scripts\remove_chroma_ke
   --despill
 ```
 
-### Deterministic exact-66x66 hall comparison
+### Deterministic 66x66 source/world hall comparison
 
 Run:
 
@@ -135,4 +136,4 @@ python docs/assets/juyiting/songjiang-style-review/derive_camera_angle_preview.p
 python docs/assets/juyiting/songjiang-style-review/derive_camera_angle_preview.py --check
 ```
 
-The script never writes to the 45-degree or selected 55-degree source artwork. For each source it crops to nonzero alpha bounds, scales the subject to fit within `64x64` using LANCZOS, and bottom-centers that result in an exact transparent `66x66` frame. It composites both frames at matched hall depths on `liangshan-hall-base-clean-v3.png`, includes separately outlined exact-size frames, and enlarges the already-created target frames exactly `3x` with NEAREST in the review-only inspection strip. The deterministic output is `sample-a-2_5d-45-55-hall-preview-v1.png`, SHA-256 `aabdbb2fe5ede6e35258b946f2b8c98eef34f3da404bc97edc19597ebe0df253`.
+The script never writes to the 45-degree or selected 55-degree source artwork. For each source it crops to nonzero alpha bounds, scales the subject to fit within `64x64` using LANCZOS, and bottom-centers that result in a transparent `66x66` source/world frame. It composites both frames at matched hall depths on `liangshan-hall-base-clean-v3.png` at map zoom `1.0`, includes separately outlined source/world frames, and enlarges the already-created target frames exactly `3x` with NEAREST in the review-only inspection strip. Across current runtime zoom presets `0.84-1.25`, the `66x66` world frame is approximately `55-83` CSS px; it is approximately `66` CSS px at zoom `1.0`. Byte-for-byte `--check` explicitly requires Pillow `12.2.0` and exits clearly on a different Pillow version. The deterministic output is `sample-a-2_5d-45-55-hall-preview-v1.png`, SHA-256 `53da7bbb9272e692c9068eb01bcfcb05a8a27b8ca95434908f515393aee4972d`.

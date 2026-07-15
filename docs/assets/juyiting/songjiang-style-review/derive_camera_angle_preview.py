@@ -16,6 +16,7 @@ import hashlib
 import tempfile
 from pathlib import Path
 
+import PIL
 from PIL import Image, ImageDraw, ImageFont
 
 
@@ -30,10 +31,11 @@ OUTPUT_PATH = REVIEW_DIR / OUTPUT_NAME
 FRAME_SIZE = 66
 SUBJECT_MAX = 64
 PREVIEW_SIZE = (1664, 1260)
+REQUIRED_PILLOW_VERSION = "12.2.0"
 
 
 def target_frame(source_path: Path) -> Image.Image:
-    """Bottom-center the visible source subject in an exact 66x66 frame."""
+    """Bottom-center the subject in a 66x66 source/world frame for zoom 1.0."""
     source = Image.open(source_path).convert("RGBA")
     bounds = source.getchannel("A").getbbox()
     if bounds is None:
@@ -72,15 +74,16 @@ def render(output_path: Path) -> None:
             stroke_width=2, stroke_fill=(0, 0, 0, 255),
         )
 
-    draw.rounded_rectangle((18, 16, 830, 72), 10, fill=(12, 14, 16, 225))
+    draw.rounded_rectangle((18, 16, 1080, 72), 10, fill=(12, 14, 16, 225))
     draw.text(
         (34, 26),
-        "Songjiang H style | 45-degree vs 55-degree | exact 66x66 hall test",
-        font=font(23),
+        "45-degree vs 55-degree | 66x66 world frame @ zoom 1.0 (~55-83 CSS px)",
+        font=font(22),
         fill=(250, 236, 199, 255),
     )
 
-    # Same-depth hall placements, each using the exact 66x66 frame.
+    # Same-depth hall placements, each using a 66x66 source/world frame at
+    # map zoom 1.0. Runtime CSS size varies with camera zoom.
     for center_x, bottom_y, key in [
         (760, 356, "45 deg"),
         (920, 356, "55 deg"),
@@ -90,7 +93,7 @@ def render(output_path: Path) -> None:
         canvas.alpha_composite(frames[key], (center_x - 33, bottom_y - 66))
         label(center_x - 36, bottom_y - 95, key, 16)
 
-    # Explicit frame outlines make the exact runtime-scale comparison auditable.
+    # Explicit outlines make the 66x66 source/world frame auditable.
     for center_x, key in [(780, "45 deg"), (900, "55 deg")]:
         bottom_y = 704
         draw.rectangle(
@@ -99,7 +102,7 @@ def render(output_path: Path) -> None:
             width=2,
         )
         canvas.alpha_composite(frames[key], (center_x - 33, bottom_y - 66))
-        label(center_x - 58, bottom_y - 96, f"{key} 66x66", 16)
+        label(center_x - 48, bottom_y - 96, f"{key[:2]}: 66 world", 14)
 
     # Review-only inspection strip: enlarge the already-created target frame
     # exactly 3x with NEAREST. This is not a source-art rerender or animation.
@@ -108,8 +111,8 @@ def render(output_path: Path) -> None:
     draw.line((0, strip_top, width, strip_top), fill=(205, 173, 102, 255), width=3)
     draw.text(
         (34, 948),
-        "Camera-angle comparison at 3x (review aid; hall placements above are exact runtime scale)",
-        font=font(22),
+        "3x review aid | 66 world px = ~55-83 CSS px at zoom 0.84-1.25 (~66 CSS at 1.0)",
+        font=font(21),
         fill=(250, 236, 199, 255),
     )
     for center_x, key, description in [
@@ -147,7 +150,16 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def require_byte_toolchain() -> None:
+    if PIL.__version__ != REQUIRED_PILLOW_VERSION:
+        raise SystemExit(
+            "Byte-for-byte --check requires "
+            f"Pillow {REQUIRED_PILLOW_VERSION}; found {PIL.__version__}."
+        )
+
+
 def check() -> None:
+    require_byte_toolchain()
     with tempfile.TemporaryDirectory(prefix="songjiang-camera-review-") as temporary:
         generated = Path(temporary) / OUTPUT_NAME
         render(generated)
@@ -158,7 +170,10 @@ def check() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--check", action="store_true", help="regenerate in a temp directory and compare bytes")
+    parser.add_argument(
+        "--check", action="store_true",
+        help=f"regenerate and compare bytes (requires Pillow {REQUIRED_PILLOW_VERSION})",
+    )
     args = parser.parse_args()
     if args.check:
         check()

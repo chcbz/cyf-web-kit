@@ -24,13 +24,13 @@ Approved at: 2026-07-15T06:37:59+08:00
 
 This approval records Richow's explicit re-review of the revised official A/B/C; the selection and scores are unchanged.
 
-Sample A remains the approved H direction: semi-realistic hand-painted Q-version. Final production should strengthen the outline and simplify small details for approximately 66x66 CSS px presentation.
+Sample A remains the approved H direction: semi-realistic hand-painted Q-version. Final production should strengthen the outline and simplify small details for the planned 66x66 source/world frame at map zoom 1.0.
 
 These images are review samples, not a final sprite sheet.
 
 ## Target-scale evidence
 
-[`target-scale-preview.png`](target-scale-preview.png) composites official A/B/C onto the actual `public/juyiting/images/liangshan-hall-base-clean-v3.png` hall artwork. It includes multiple static A placements, a side-by-side A/B/C comparison in exact 66x66 CSS-pixel review frames, and a clearly separated 3x nearest-neighbor inspection strip. The preview is static review evidence and does not represent or imply animation.
+[`target-scale-preview.png`](target-scale-preview.png) composites official A/B/C onto the actual `public/juyiting/images/liangshan-hall-base-clean-v3.png` hall artwork. It includes multiple static A placements, a side-by-side A/B/C comparison in 66x66 source/world review frames at map zoom 1.0, and a clearly separated 3x nearest-neighbor inspection strip. With current runtime zoom presets `0.84-1.25`, the same frame displays at approximately `55-83` CSS px; it is approximately `66` CSS px at zoom `1.0`. The preview is static review evidence and does not represent or imply animation.
 
 The original decision and score block above remains the traceable style-direction decision.
 
@@ -40,10 +40,11 @@ The original decision and score block above remains the traceable style-directio
 - **Confirmation scope:** Size only
 - **Confirmed by:** Richow
 - **Confirmed at:** 2026-07-15T21:52:40+08:00
-- **Confirmed display:** Planned approximately 66x66 CSS-pixel in-map frame scale
+- **Confirmed base target:** 66x66 source/world in-map frame at map zoom 1.0
+- **Runtime CSS range:** Approximately 55-83 CSS px across current 0.84-1.25 zoom presets; approximately 66 CSS px at zoom 1.0
 - **Camera-angle status:** Resolved by the separately approved native 55-degree gate below
 
-Richow confirmed the planned approximately 66x66 CSS-pixel display size independently of the camera-angle decision.
+Richow confirmed the planned base target size independently of the camera-angle decision. This confirmation does not claim an exact 66 CSS-pixel display at every runtime zoom preset.
 
 ## Native 2.5D camera-angle confirmation
 
@@ -56,9 +57,9 @@ Richow confirmed the planned approximately 66x66 CSS-pixel display size independ
 - **Approved at:** 2026-07-15T23:17:22+08:00
 - **Runtime transform policy:** Native sprite artwork; no CSS skew, perspective, rotation, or substitute transform
 
-Richow selected the 55-degree sample after reviewing the exact 66x66 hall comparison against the 45-degree alternative. This resolves the camera-angle correction required after the earlier size-only review.
+Richow selected the 55-degree sample after reviewing the 66x66 source/world hall comparison at map zoom 1.0 against the 45-degree alternative. This resolves the camera-angle correction required after the earlier size-only review.
 
-Task 5 now records three distinct approvals: style direction A, the planned approximately 66x66 CSS-pixel target size, and the native 55-degree single-frame camera angle. These approvals complete the review evidence only. The final animated sprite sheet remains future Task 7 work and is not represented as delivered or approved here.
+Task 5 now records three distinct approvals: style direction A, the planned 66x66 source/world base frame at zoom 1.0, and the native 55-degree single-frame camera angle. Runtime CSS size remains zoom-dependent. These approvals complete the review evidence only. The final animated sprite sheet remains future Task 7 work and is not represented as delivered or approved here.
 
 ## Generation method
 
