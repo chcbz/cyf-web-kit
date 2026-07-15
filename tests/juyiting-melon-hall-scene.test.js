@@ -167,6 +167,15 @@ const hotspotMapData = () => ({
   ]
 })
 
+const runPendingFrames = (frames, now) => {
+  const pending = [...frames.entries()]
+  expect(pending).not.to.be.empty
+  pending.forEach(([id, callback]) => {
+    frames.delete(id)
+    callback(now)
+  })
+}
+
 describe('HallScene melonJS pointer routing', () => {
   it('starts from the approved camera preset and exposes controller snapshots', () => {
     const me = createFakeMelon()
@@ -406,9 +415,10 @@ describe('HallScene melonJS pointer routing', () => {
   it('keeps transform state inside the melonJS scene', () => {
     const me = createFakeMelon()
     const frames = new Map()
+    let nextFrameId = 0
     const originalRequest = globalThis.requestAnimationFrame
     const originalCancel = globalThis.cancelAnimationFrame
-    globalThis.requestAnimationFrame = callback => { const id = frames.size + 1; frames.set(id, callback); return id }
+    globalThis.requestAnimationFrame = callback => { const id = ++nextFrameId; frames.set(id, callback); return id }
     globalThis.cancelAnimationFrame = id => frames.delete(id)
     try {
       const HallScene = createHallSceneClass(me, class {})
@@ -418,9 +428,12 @@ describe('HallScene melonJS pointer routing', () => {
       scene.zoomBy(0.5)
       scene.panBy(120, -80)
 
+      const cancelledFrame = globalThis.requestAnimationFrame(() => {})
+      globalThis.cancelAnimationFrame(cancelledFrame)
+      globalThis.requestAnimationFrame(() => {})
       scene.resetTransform()
       const animation = scene.getCameraSnapshot().animation
-      frames.get(1)?.(animation.startedAt + animation.durationMs)
+      runPendingFrames(frames, animation.startedAt + animation.durationMs)
 
       expect(scene.getCameraSnapshot().animation).to.equal(null)
       expect(scene.getCameraSnapshot().presetKey).to.equal(initial.presetKey)
@@ -435,9 +448,10 @@ describe('HallScene melonJS pointer routing', () => {
   it('fits the scene using the melonJS viewport instead of DOM container pixels', () => {
     const me = createFakeMelon()
     const frames = new Map()
+    let nextFrameId = 0
     const originalRequest = globalThis.requestAnimationFrame
     const originalCancel = globalThis.cancelAnimationFrame
-    globalThis.requestAnimationFrame = callback => { const id = frames.size + 1; frames.set(id, callback); return id }
+    globalThis.requestAnimationFrame = callback => { const id = ++nextFrameId; frames.set(id, callback); return id }
     globalThis.cancelAnimationFrame = id => frames.delete(id)
     try {
       const HallScene = createHallSceneClass(me, class {})
@@ -448,7 +462,7 @@ describe('HallScene melonJS pointer routing', () => {
 
       scene.fitToViewport()
       const animation = scene.getCameraSnapshot().animation
-      frames.get(1)?.(animation.startedAt + animation.durationMs)
+      runPendingFrames(frames, animation.startedAt + animation.durationMs)
 
       expect(scene.getCameraSnapshot().animation).to.equal(null)
       expect(scene.getTransform()).to.deep.equal(initial.transform)
