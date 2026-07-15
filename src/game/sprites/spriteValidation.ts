@@ -18,8 +18,11 @@ export type SpriteValidationError = {
 export type SpriteAssetInspection = {
   exists: boolean
   signatureValid: boolean
+  structurallyValid?: boolean
+  decodable?: boolean
   width?: number
   height?: number
+  error?: string
 }
 
 export type SpriteValidationOptions = {
@@ -29,11 +32,14 @@ export type SpriteValidationOptions = {
 
 export type SpriteManifestValidation = {
   valid: boolean
+  releaseValid: boolean
+  degraded: boolean
   manifestVersion: string
   requiredMissingCount: number
   optionalMissingCount: number
   substitutionCount: number
   errors: SpriteValidationError[]
+  warnings: SpriteValidationError[]
 }
 
 export function validateSpriteManifest(
@@ -41,6 +47,7 @@ export function validateSpriteManifest(
   options: SpriteValidationOptions = {},
 ): SpriteManifestValidation {
   const errors: SpriteValidationError[] = []
+  const warnings: SpriteValidationError[] = []
   const failedRequired = new Set<string>()
   const failedOptional = new Set<string>()
   let substitutionCount = normalizeSubstitutionCount(options.substitutionCount)
@@ -54,11 +61,11 @@ export function validateSpriteManifest(
 
   for (const personaCode of REQUIRED_PERSONAS) {
     const definition = manifest.personas[personaCode]
-    if (!definition || !definition.required) {
+    if (!definition || !definition.required || definition.personaCode !== personaCode) {
       failedRequired.add(personaCode)
       errors.push({
         code: 'REQUIRED_SPRITE_LOAD_FAILED', personaCode,
-        message: `Required persona ${personaCode} is missing or is not marked required.`,
+        message: `Required persona ${personaCode} is missing, is not marked required, or has a mismatched identity.`,
       })
     }
   }
@@ -77,6 +84,9 @@ export function validateSpriteManifest(
     if (options.assets && (!asset || !asset.exists)) problems.push('sprite PNG is missing')
     else if (asset?.exists) {
       if (!asset.signatureValid) problems.push('sprite PNG signature is invalid')
+      else if (asset.structurallyValid === false || asset.decodable === false) {
+        problems.push(asset.error ?? 'sprite PNG is incomplete or not decodable')
+      }
       if (asset.width !== definition.image.width || asset.height !== definition.image.height) {
         problems.push(
           `sprite PNG dimensions must be ${definition.image.width}x${definition.image.height}; received ${asset.width ?? '?'}x${asset.height ?? '?'}`,
@@ -87,11 +97,13 @@ export function validateSpriteManifest(
     if (problems.length > 0) {
       const failed = definition.required ? failedRequired : failedOptional
       failed.add(key)
-      errors.push({
+      const issue = {
         code: definition.required ? 'REQUIRED_SPRITE_LOAD_FAILED' : 'OPTIONAL_SPRITE_LOAD_FAILED',
         personaCode: key,
         message: problems.join('; '),
-      })
+      } as const
+      if (definition.required) errors.push(issue)
+      else warnings.push(issue)
     }
   }
 
@@ -102,13 +114,17 @@ export function validateSpriteManifest(
     })
   }
 
+  const releaseValid = errors.length === 0
   return {
-    valid: errors.length === 0,
+    valid: releaseValid,
+    releaseValid,
+    degraded: failedOptional.size > 0,
     manifestVersion: manifest.version,
     requiredMissingCount: failedRequired.size,
     optionalMissingCount: failedOptional.size,
     substitutionCount,
     errors,
+    warnings,
   }
 }
 

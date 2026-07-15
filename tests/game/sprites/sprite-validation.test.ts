@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, it } from 'mocha'
 import {
   PERSONA_SPRITE_MANIFEST,
@@ -13,6 +16,33 @@ import { inspectPngFile, runValidateSprites } from '../../../scripts/juyiting/va
 
 function mutableManifest(): PersonaSpriteManifest {
   return structuredClone(PERSONA_SPRITE_MANIFEST)
+}
+
+function fixturePath(): string {
+  return fileURLToPath(new URL(
+    './fixtures/public/juyiting/sprites/persona-sheets-v1/songjiang.png', import.meta.url,
+  ))
+}
+
+function inspectTemporaryPng(bytes: Buffer): ReturnType<typeof inspectPngFile> {
+  const directory = mkdtempSync(join(tmpdir(), 'juyiting-png-'))
+  const path = join(directory, 'sprite.png')
+  try {
+    writeFileSync(path, bytes)
+    return inspectPngFile(path)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+}
+
+function chunkOffset(bytes: Buffer, target: string): number {
+  let offset = 8
+  while (offset + 12 <= bytes.length) {
+    const length = bytes.readUInt32BE(offset)
+    if (bytes.subarray(offset + 4, offset + 8).toString('ascii') === target) return offset
+    offset += length + 12
+  }
+  return -1
 }
 
 describe('sprite manifest', () => {
@@ -45,27 +75,34 @@ describe('sprite manifest', () => {
     assert.ok(result.errors.some(error => error.code === 'REQUIRED_SPRITE_LOAD_FAILED'))
   })
 
-  it('validates manifest version, sheet dimensions, and substitutions', () => {
+  it('counts a required identity mismatch as both missing and substituted', () => {
     const manifest = mutableManifest()
-    manifest.version = 'persona-sheets-v2'
-    manifest.personas.songjiang.image.width = 1000
     manifest.personas.songjiang.personaCode = 'not-songjiang'
 
     const result = validateSpriteManifest(manifest)
 
+    assert.equal(result.requiredMissingCount, 1)
     assert.equal(result.substitutionCount, 1)
+    assert.ok(result.errors.some(error => error.code === 'REQUIRED_SPRITE_LOAD_FAILED'))
+    assert.ok(result.errors.some(error => error.code === 'SPRITE_SUBSTITUTION_DETECTED'))
+  })
+
+  it('validates manifest version and sheet dimensions', () => {
+    const manifest = mutableManifest()
+    manifest.version = 'persona-sheets-v2'
+    manifest.personas.songjiang.image.width = 1000
+
+    const result = validateSpriteManifest(manifest)
+
+    assert.equal(result.substitutionCount, 0)
     assert.ok(result.errors.map(error => error.code).includes('SPRITE_MANIFEST_VERSION_MISMATCH'))
     assert.ok(result.errors.map(error => error.code).includes('REQUIRED_SPRITE_LOAD_FAILED'))
-    assert.ok(result.errors.map(error => error.code).includes('SPRITE_SUBSTITUTION_DETECTED'))
   })
 
   it('accepts a matching inspected PNG and rejects bad signatures or dimensions', () => {
-    const fixture = fileURLToPath(new URL(
-      './fixtures/public/juyiting/sprites/persona-sheets-v1/songjiang.png', import.meta.url,
-    ))
     const valid = validateSpriteManifest(PERSONA_SPRITE_MANIFEST, {
       assets: {
-        songjiang: inspectPngFile(fixture),
+        songjiang: inspectPngFile(fixturePath()),
       },
     })
     assert.equal(valid.valid, true)
@@ -77,6 +114,50 @@ describe('sprite manifest', () => {
     })
     assert.equal(invalid.requiredMissingCount, 1)
     assert.ok(invalid.errors.map(error => error.code).includes('REQUIRED_SPRITE_LOAD_FAILED'))
+  })
+
+  it('rejects header-only, truncated, bad-CRC, and missing-IEND PNG files', () => {
+    const valid = readFileSync(fixturePath())
+    const idat = chunkOffset(valid, 'IDAT')
+    assert.ok(idat >= 0)
+    const idatLength = valid.readUInt32BE(idat)
+    const badCrc = Buffer.from(valid)
+    badCrc[idat + 8 + idatLength] ^= 0xff
+
+    const malformed = [
+      valid.subarray(0, 24),
+      valid.subarray(0, valid.length - 4),
+      badCrc,
+      valid.subarray(0, valid.length - 12),
+    ]
+    for (const bytes of malformed) {
+      const inspection = inspectTemporaryPng(bytes)
+      assert.equal(inspection.decodable, false)
+      const result = validateSpriteManifest(PERSONA_SPRITE_MANIFEST, { assets: { songjiang: inspection } })
+      assert.equal(result.releaseValid, false)
+      assert.equal(result.requiredMissingCount, 1)
+    }
+  })
+
+  it('treats an optional missing sprite as a non-fatal degraded warning', () => {
+    const manifest = mutableManifest()
+    manifest.personas.wuyong = {
+      ...structuredClone(manifest.personas.songjiang),
+      personaCode: 'wuyong',
+      required: false,
+      src: '/juyiting/sprites/persona-sheets-v1/wuyong.png',
+    }
+
+    const result = validateSpriteManifest(manifest, {
+      assets: { songjiang: inspectPngFile(fixturePath()) },
+    })
+
+    assert.equal(result.optionalMissingCount, 1)
+    assert.equal(result.degraded, true)
+    assert.equal(result.valid, true)
+    assert.equal(result.releaseValid, true)
+    assert.equal(result.errors.length, 0)
+    assert.ok(result.warnings.some(warning => warning.code === 'OPTIONAL_SPRITE_LOAD_FAILED'))
   })
 
   it('passes the release validator against the fixture public root', () => {
