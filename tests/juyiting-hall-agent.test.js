@@ -2,7 +2,12 @@ import { expect } from 'chai'
 
 import { createHallAgentClass } from '../src/game/entities/HallAgent.js'
 
-const createFakeMelon = ({ bodyHasSetVelocity = true, spriteHasRenderable = true, spriteHasScaleMethod = false } = {}) => {
+const createFakeMelon = ({
+  bodyHasSetVelocity = true,
+  spriteHasRenderable = true,
+  spriteHasScaleMethod = false,
+  spriteImage = { width: 1024, height: 256 }
+} = {}) => {
   class Sprite {
     constructor(x, y, settings = {}) {
       this.pos = { x, y }
@@ -68,7 +73,7 @@ const createFakeMelon = ({ bodyHasSetVelocity = true, spriteHasRenderable = true
     Sprite,
     game: { viewport: { width: 1000, height: 1000 } },
     loader: {
-      getImage: () => ({ width: 400, height: 300 })
+      getImage: () => spriteImage
     },
     video: { renderer: null }
   }
@@ -79,8 +84,8 @@ describe('HallAgent melonJS entity', () => {
     const me = createFakeMelon()
     const HallAgent = createHallAgentClass(me)
     const agent = new HallAgent({
-      agentId: 'linchong',
-      personaCode: 'linchong',
+      agentId: 'songjiang',
+      personaCode: 'songjiang',
       name: '林冲',
       x: 50,
       y: 60
@@ -97,7 +102,7 @@ describe('HallAgent melonJS entity', () => {
 
     expect(agent.targetX).to.equal(620)
     expect(agent.targetY).to.equal(720)
-    expect(agent.currentAnim).to.equal('talk')
+    expect(agent.currentAnim).to.equal('idle')
     expect(agent._bubbleText).to.equal('收到传令')
     expect(agent._selected).to.equal(true)
     expect(agent._focused).to.equal(true)
@@ -125,23 +130,25 @@ describe('HallAgent melonJS entity', () => {
     expect(agent.body.velocity.y).to.equal(0)
   })
 
-  it('registers an eight-frame Water Margin walking cycle per character row', () => {
+  it('registers manifest-defined Songjiang idle and walking cycles', () => {
     const me = createFakeMelon()
     const HallAgent = createHallAgentClass(me)
     const agent = new HallAgent({
-      agentId: 'likui',
-      personaCode: 'likui',
-      name: 'Li Kui',
+      agentId: 'songjiang',
+      personaCode: 'songjiang',
+      name: 'Song Jiang',
       x: 50,
       y: 50
     })
 
-    expect(agent.width).to.equal(50)
+    expect(agent.width).to.equal(128)
+    expect(agent.height).to.equal(128)
+    expect(agent.renderable.animations.idle.frames).to.deep.equal([0, 1, 2, 3])
     expect(agent.renderable.animations.walk.frames).to.have.length(8)
-    expect(agent.renderable.animations.busy.frames).to.have.length(8)
     expect(agent.renderable.animations.walk.frames).to.deep.equal([
-      40, 41, 42, 43, 44, 45, 46, 47
+      8, 9, 10, 11, 12, 13, 14, 15
     ])
+    expect(agent.renderable.animations).not.to.have.property('busy')
   })
 
   it('keeps hall agents kinematic so melonJS broadphase does not recurse into sprites', () => {
@@ -163,8 +170,8 @@ describe('HallAgent melonJS entity', () => {
     const me = createFakeMelon()
     const HallAgent = createHallAgentClass(me)
     const agent = new HallAgent({
-      agentId: 'husanniang',
-      personaCode: 'husanniang',
+      agentId: 'songjiang',
+      personaCode: 'songjiang',
       name: '扈三娘',
       scale: 0.62,
       x: 50,
@@ -205,8 +212,8 @@ describe('HallAgent melonJS entity', () => {
     const me = createFakeMelon()
     const HallAgent = createHallAgentClass(me)
     const agent = new HallAgent({
-      agentId: 'likui',
-      personaCode: 'likui',
+      agentId: 'songjiang',
+      personaCode: 'songjiang',
       name: '李逵',
       x: 5,
       y: 5,
@@ -233,8 +240,8 @@ describe('HallAgent melonJS entity', () => {
     const me = createFakeMelon()
     const HallAgent = createHallAgentClass(me)
     const agent = new HallAgent({
-      agentId: 'wuyong',
-      personaCode: 'wuyong',
+      agentId: 'songjiang',
+      personaCode: 'songjiang',
       name: 'Wu Yong',
       x: 45,
       y: 60,
@@ -264,8 +271,8 @@ describe('HallAgent melonJS entity', () => {
     const me = createFakeMelon({ spriteHasRenderable: false })
     const HallAgent = createHallAgentClass(me)
     const agent = new HallAgent({
-      agentId: 'wusong',
-      personaCode: 'wusong',
+      agentId: 'songjiang',
+      personaCode: 'songjiang',
       name: '姝︽澗',
       x: 50,
       y: 50
@@ -275,5 +282,13 @@ describe('HallAgent melonJS entity', () => {
 
     expect(agent.tint).to.include({ a: 0.35 })
     expect(agent.flipped).to.equal(true)
+  })
+
+  it('returns no entity for an unknown persona or an unavailable sprite image', () => {
+    const availableClass = createHallAgentClass(createFakeMelon())
+    expect(availableClass.create({ personaCode: 'unknown-persona' })).to.equal(null)
+
+    const missingClass = createHallAgentClass(createFakeMelon({ spriteImage: null }))
+    expect(missingClass.create({ personaCode: 'songjiang' })).to.equal(null)
   })
 })

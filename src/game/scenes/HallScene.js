@@ -699,10 +699,19 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._pendingAgents.forEach(data => {
         const id = data.agentId || data.personaCode || ''
         if (!id) return
-        keepIds.add(id)
         let agent = this._agents.get(id)
+        if (typeof HallAgentClass.supports === 'function' && !HallAgentClass.supports(data)) {
+          if (agent) {
+            me.game.world.removeChild(agent)
+            this._agents.delete(id)
+          }
+          return
+        }
         if (!agent) {
-          agent = new HallAgentClass(data)
+          agent = typeof HallAgentClass.create === 'function'
+            ? HallAgentClass.create(data)
+            : new HallAgentClass(data)
+          if (!agent) return
           agent.onPointerDown = () => this._onAgentClick?.(agent._sourceData || data)
           agent.syncState?.(data)
           me.game.world.addChild(agent, DEPTH_LAYERS.AGENTS)
@@ -710,6 +719,7 @@ export function createHallSceneClass(me, HallAgentClass) {
         } else {
           agent.syncState?.(data)
         }
+        keepIds.add(id)
       })
       this._agents.forEach((agent, id) => {
         if (!keepIds.has(id)) {

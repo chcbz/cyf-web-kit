@@ -1886,10 +1886,19 @@ const createFakeGameMelon = ({ deferDeviceReady = false } = {}) => {
 
 
 const flushPendingLoaderSuccess = async (fake, minCallbacks = 1) => {
-  for (let i = 0; i < 10 && fake.loadCallbacks.length < minCallbacks; i += 1) {
+  let completed = 0
+  let idleTurns = 0
+  for (let i = 0; i < 50 && (completed < minCallbacks || idleTurns < 3); i += 1) {
     await Promise.resolve()
+    const callbacks = fake.loadCallbacks.splice(0)
+    if (!callbacks.length) {
+      idleTurns += 1
+      continue
+    }
+    idleTurns = 0
+    completed += callbacks.length
+    callbacks.forEach(item => item.onload())
   }
-  fake.loadCallbacks.splice(0).forEach(item => item.onload())
 }
 
 describe('JuyitingGame lifecycle guards', () => {

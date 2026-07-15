@@ -137,3 +137,32 @@ python docs/assets/juyiting/songjiang-style-review/derive_camera_angle_preview.p
 ```
 
 The script never writes to the 45-degree or selected 55-degree source artwork. Their committed SHA-256 values and the documented SHA-256 of `liangshan-hall-base-clean-v3.png` are checked before composition. For each source it crops to nonzero alpha bounds, scales the subject to fit within `64x64` using LANCZOS, and bottom-centers that result in a transparent `66x66` source/world frame. It composites both frames at matched hall depths on `liangshan-hall-base-clean-v3.png` at map zoom `1.0`, includes separately outlined source/world frames, and enlarges the already-created target frames exactly `3x` with NEAREST in the review-only inspection strip. Across current runtime zoom presets `0.84-1.25`, the `66x66` world frame is approximately `55-83` CSS px; it is approximately `66` CSS px at zoom `1.0`. `--check` compares decoded dimensions, mode, and exact pixel/channel bytes, avoiding false failures from FreeType/zlib/PNG encoder differences. Pillow `12.2.0` is recorded only as provenance for the committed render. The committed preview file SHA-256 is `53da7bbb9272e692c9068eb01bcfcb05a8a27b8ca95434908f515393aee4972d`.
+
+## Final 4x4 animation source and 8x2 runtime derivation
+
+- `songjiang-animation-source-4x4.png` is the canonical generated animation source. Its SHA-256 is `f6a70526ffe4116a6cc4bcf47a0173cbdc24ca6f517d85e4c9d3b835a5c12e1c`.
+- It was generated with the built-in `image_gen` workflow from the approved H / Sample A identity and the approved native 55-degree elevated three-quarter top-down direction. The generation requested one 4x4 grid: eight restrained idle variations followed by eight readable walking poses, with the black official hat, strong brows and beard, black robe, red front panel, gold leader belt, and mobile-readable outline preserved.
+- The built-in workflow did not expose a reusable seed or model-version identifier. The canonical committed 4x4 RGBA source is therefore the reproducibility boundary; this record does not claim the original generation is bit-reproducible.
+- The generated source used the same flat chroma workflow as the camera-angle samples. The green background was removed with the installed helper before committing the canonical source:
+
+```powershell
+python "$env:USERPROFILE\.codex\skills\.system\imagegen\scripts\remove_chroma_key.py" `
+  --input <songjiang-animation-4x4-chroma-source>.png `
+  --out songjiang-animation-source-4x4.png `
+  --auto-key border `
+  --soft-matte `
+  --transparent-threshold 12 `
+  --opaque-threshold 220 `
+  --despill
+```
+
+The production `public/juyiting/sprites/persona-sheets-v1/songjiang.png` is deterministic from that committed source. The derivation splits the 1254x1254 source by rounded 4x4 grid boundaries, crops each frame to nonzero alpha, resizes each subject to 118 pixels high with Pillow LANCZOS, and bottom-centers it with four top pixels of padding in a 128x128 cell. Source frames remain in row-major order and are laid out as an 8x2 sheet: frames 0-7 idle and frames 8-15 walk.
+
+Run:
+
+```powershell
+python docs/assets/juyiting/songjiang-style-review/derive_songjiang_sprite.py
+python docs/assets/juyiting/songjiang-style-review/derive_songjiang_sprite.py --check
+```
+
+The check compares exact decoded RGBA pixels, validates all 16 nonempty alpha bounds stay inside their cells, and protects the canonical source hash. The committed derivation used Pillow `12.2.0`. The runtime PNG is separately gated by `npm run validate:juyiting-sprites`, which requires 1024x256 RGBA8, non-interlaced PNG structure and a decodable pixel payload.

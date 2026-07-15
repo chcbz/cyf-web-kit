@@ -18,6 +18,6 @@ export function resolvePersonaAnimation(
   definition: PersonaSpriteDefinition,
   requested: string,
 ): { name: PersonaAnimationName; animation: PersonaSpriteAnimation } {
-  const name: PersonaAnimationName = requested === 'walk' ? 'walk' : 'idle'
+  const name: PersonaAnimationName = requested === 'walk' || requested === 'busy' ? 'walk' : 'idle'
   return { name, animation: definition.animations[name] }
 }

@@ -2,7 +2,12 @@ import { expect } from 'chai'
 import { existsSync, readFileSync } from 'fs'
 
 import { createGameConfig, HALL_SCENE_HEIGHT, HALL_SCENE_WIDTH } from '../src/game/config.js'
-import { HALL_BOOT_RESOURCES, HALL_MAP_RESOURCE, buildHallMapResources } from '../src/game/resources.js'
+import {
+  HALL_BOOT_RESOURCES,
+  HALL_MAP_RESOURCE,
+  buildHallMapResources,
+  personaSpriteResourceName
+} from '../src/game/resources.js'
 import { parseJuyiHallTmx } from '../src/game/tiledMap.js'
 
 const pngSize = (path) => {
@@ -29,8 +34,7 @@ describe('Juyiting hall scene assets', () => {
 
   it('keeps only non-map boot resources in the static JS manifest', () => {
     expect(HALL_BOOT_RESOURCES).to.deep.equal([
-      HALL_MAP_RESOURCE,
-      { name: 'character-atlas', type: 'image', src: '/juyiting/liangshan-character-walksheet-v1.png' }
+      HALL_MAP_RESOURCE
     ])
   })
 
@@ -43,6 +47,11 @@ describe('Juyiting hall scene assets', () => {
       { name: 'foreground-occluders', type: 'image', src: '/juyiting/images/liangshan-hall-foreground-occluders-v3.png' },
       { name: 'lighting-overlay', type: 'image', src: '/juyiting/images/liangshan-hall-lighting-overlay-v3.png' }
     ])
+    expect(resources).to.deep.include({
+      name: personaSpriteResourceName('songjiang'),
+      type: 'image',
+      src: '/juyiting/sprites/persona-sheets-v1/songjiang.png'
+    })
     expect(resources.map(resource => resource.name)).not.to.include('prop-gate')
     expect(resources.map(resource => resource.src).join('\n')).not.to.include('gate')
   })
