@@ -90,6 +90,37 @@ describe('hall scene state', () => {
     expect(commandQueue.pendingCount.value).to.equal(0)
   })
 
+  it('detaches a replaced engine and accepts a fresh same-version authoritative snapshot', () => {
+    const firstEngine = []
+    const replacementEngine = []
+    const commandQueue = useHallCommandQueue()
+    const sceneState = useHallSceneState({ commandQueue, now: () => 2000 })
+    const snapshot = {
+      sceneId: 'juyiting-main', sceneVersion: 16, states: [backendState(16)]
+    }
+
+    sceneState.setMapRuntime(runtimeMap())
+    commandQueue.setSimulation({ enqueue: command => {
+      firstEngine.push(command)
+      return { accepted: true }
+    } })
+    sceneState.applySnapshot(snapshot)
+
+    commandQueue.setSimulation(null)
+    sceneState.reset()
+    sceneState.setMapRuntime(runtimeMap())
+    commandQueue.setSimulation({ enqueue: command => {
+      replacementEngine.push(command)
+      return { accepted: true }
+    } })
+    const result = sceneState.applySnapshot(snapshot)
+
+    expect(firstEngine).to.have.length(1)
+    expect(result.accepted).to.equal(true)
+    expect(replacementEngine).to.have.length(1)
+    expect(replacementEngine[0]).to.include({ agentId: 'agent-songjiang', stateVersion: 16 })
+  })
+
   it('forwards simulation phases as the backend allowlist with epoch milliseconds', async () => {
     const reports = []
     const sceneState = useHallSceneState({

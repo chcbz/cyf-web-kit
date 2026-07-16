@@ -56,6 +56,32 @@ function harness ({ snapshots = [snapshot(128)], sseEnabled = true } = {}) {
 }
 
 describe('backend scene state', () => {
+  it('allows a failed initial start to be retried by a manual refresh', async () => {
+    let snapshotCalls = 0
+    const backend = useHallBackendSceneState({
+      agentApi: {
+        execute: async ({ url }) => {
+          if (!url.endsWith('/snapshot')) throw new Error('unexpected request')
+          snapshotCalls += 1
+          if (snapshotCalls === 1) throw new Error('temporary snapshot failure')
+          return { data: { sceneId: 'juyiting-main', sceneVersion: 7, states: [] } }
+        }
+      },
+      sseEnabled: false,
+      setIntervalFn: () => 1,
+      clearIntervalFn: () => {}
+    })
+
+    let firstError
+    try { await backend.start() } catch (error) { firstError = error }
+    const recovered = await backend.start()
+
+    expect(firstError?.message).to.equal('temporary snapshot failure')
+    expect(snapshotCalls).to.equal(2)
+    expect(recovered).to.include({ sceneId: 'juyiting-main', sceneVersion: 7 })
+    expect(backend.snapshotReady.value).to.equal(true)
+    backend.stop()
+  })
   it('loads the REST snapshot and parses resumable complete SSE records once', async () => {
     const { state, calls, streams, appliedEvents } = harness()
 

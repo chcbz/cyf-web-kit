@@ -259,6 +259,13 @@ export const useHallBackendSceneState = ({
         return value
       } catch (error) {
         degraded.value = true
+        if (active && generation === lifecycleGeneration) {
+          active = false
+          lifecycleGeneration += 1
+          browserWindow()?.removeEventListener?.('focus', onFocus)
+          clearReconnect()
+          closeStream()
+        }
         throw error
       } finally {
         startPromise = null

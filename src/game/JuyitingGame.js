@@ -41,6 +41,7 @@ export class JuyitingGame {
     this._fatalError = null
     this._sceneDebugBackend = {}
     this._sceneDebugPublication = null
+    this._simulationEnabled = true
   }
 
   async _loadMelonJS() {
@@ -66,6 +67,7 @@ export class JuyitingGame {
     this._mountToken = mountToken
     this._spriteLoadResult = null
     this._fatalError = null
+    this._simulationEnabled = options.simulationEnabled !== false
     this._publishSceneDebug()
     let me
     try {
@@ -141,7 +143,7 @@ export class JuyitingGame {
       this._hallScene?.setAvailablePersonas(spriteLoadResult.available)
       this._publishSceneDebug()
 
-      this._initializeSimulationRuntime()
+      if (this._simulationEnabled) this._initializeSimulationRuntime()
 
       this._startGame(me, mountToken)
       return {
@@ -192,6 +194,7 @@ export class JuyitingGame {
     this._pendingStart = false
     this._movementEngine = null
     this._pendingSimulationPhaseEvents = []
+    this._simulationEnabled = true
   }
 
   _loadPersonaSprite(me, definition, mountToken = this._mountToken) {
@@ -254,7 +257,7 @@ export class JuyitingGame {
       }
     }
 
-    this._mapData = parseJuyiHallTmx(tmx)
+    this._mapData = parseJuyiHallTmx(tmx, { movementEnabled: this._simulationEnabled })
     this._hallScene?.setMapData(this._mapData)
     this._publishSceneDebug()
   }
@@ -425,6 +428,12 @@ export class JuyitingGame {
     const result = this._hallScene?.resetToMainHall?.()
     this._publishSceneDebug()
     return result
+  }
+
+  cancelMovement(agentId, stateVersion) {
+    const cancelled = this._movementEngine?.cancel?.(agentId, stateVersion) === true
+    this._publishSceneDebug()
+    return cancelled
   }
 
   updateBackendSceneDebug(value = {}) {

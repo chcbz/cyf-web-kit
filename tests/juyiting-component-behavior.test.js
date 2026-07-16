@@ -459,6 +459,7 @@ describe('JuyiHall component behavior', () => {
       timers.find(timer => timer.delay === 15000).callback()
       await Vue.nextTick()
       expect(destroyCalls).to.equal(1)
+      expect(wrapper.emitted('simulation-reset')).to.have.length(1)
       const lockCountAfterTimeout = lockCalls.length
       oldMount.resolve()
       await flushPromises()
@@ -471,6 +472,119 @@ describe('JuyiHall component behavior', () => {
       await flushPromises()
       expect(mountCalls).to.equal(2)
       expect(destroyCalls).to.equal(1)
+      expect(wrapper.emitted('simulation-reset')).to.have.length(2)
+    } finally {
+      wrapper?.unmount()
+      global.window.setTimeout = originalSetTimeout
+      global.window.clearTimeout = originalClearTimeout
+    }
+  })
+
+  it('passes rollback mode into the game mount and declares lifecycle reset wiring', async () => {
+    let mountOptions
+    hallGameMock = {
+      destroy: () => {},
+      mount: async (_container, options = {}) => {
+        mountOptions = options
+        options.onReady?.()
+      },
+      setInteractionLocked: () => {}, setSelectedAgent: () => {},
+      start: () => {}, syncAgents: () => {}, syncHotspots: () => {}
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+    const wrapper = mount(HallStage, {
+      global: { stubs },
+      props: makeHallStageProps({ simulationEnabled: false })
+    })
+    await flushPromises()
+
+    expect(mountOptions.simulationEnabled).to.equal(false)
+    expect(readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8'))
+      .to.include('@simulation-reset="resetSimulationLifecycle"')
+    wrapper.unmount()
+  })
+
+  it('restarts a timed-out replacement engine from a fresh authoritative snapshot', async () => {
+    const { useHallCommandQueue } = await import('../src/composables/juyiting/useHallCommandQueue.js')
+    const { useHallSceneState } = await import('../src/composables/juyiting/useHallSceneState.js')
+    const originalSetTimeout = global.window.setTimeout
+    const originalClearTimeout = global.window.clearTimeout
+    const timers = []
+    const engines = [[], []]
+    let mountIndex = 0
+    const movementRuntime = {
+      sceneId: 'juyiting-main', movementSchemaVersion: '1', navGraphVersion: 'graph-v1',
+      spriteManifestVersion: 'persona-sheets-v1', width: 400, height: 300,
+      regions: [
+        { regionId: 'main-seat' },
+        { regionId: 'council-table' }
+      ],
+      nodes: [], edges: [], obstacles: [],
+      slots: [{
+        stableId: 'home-songjiang', slotId: 'home-songjiang', regionId: 'main-seat',
+        point: { x: 20, y: 20 }, personaCode: 'songjiang', kind: 'home'
+      }]
+    }
+    const authoritativeSnapshot = {
+      sceneId: 'juyiting-main', sceneVersion: 16,
+      states: [{
+        agentId: 'agent-songjiang', personaCode: 'songjiang',
+        behavior: 'moving_to_discussion', targetRegionId: 'council-table',
+        stateVersion: 16, startedAt: 1_000, expectedArrivalAt: 5_000, phase: 'moving'
+      }]
+    }
+    global.window.setTimeout = (callback, delay) => {
+      timers.push({ callback, delay })
+      return timers.length
+    }
+    global.window.clearTimeout = () => {}
+    hallGameMock = {
+      destroy: () => {},
+      mount: async () => { mountIndex += 1 },
+      getMovementRuntime: () => movementRuntime,
+      enqueueMovementCommands: ([command]) => {
+        engines[mountIndex - 1].push(command)
+        return [{ accepted: true }]
+      },
+      cancelMovement: () => true,
+      setInteractionLocked: () => {}, setSelectedAgent: () => {},
+      start: () => {}, syncAgents: () => {}, syncHotspots: () => {}
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+    const commandQueue = useHallCommandQueue()
+    const sceneState = useHallSceneState({ commandQueue, now: () => 2_000 })
+    const Harness = {
+      setup() {
+        const onSimulationReady = ({ movementRuntime: map, simulation }) => {
+          sceneState.setMapRuntime(map)
+          commandQueue.setSimulation(simulation)
+          sceneState.applySnapshot(authoritativeSnapshot)
+        }
+        const onSimulationReset = () => {
+          commandQueue.setSimulation(null)
+          sceneState.reset()
+        }
+        return () => Vue.h(HallStage, {
+          ...makeHallStageProps(),
+          onSimulationReady,
+          onSimulationReset
+        })
+      }
+    }
+    let wrapper
+    try {
+      wrapper = mount(Harness, { global: { stubs } })
+      await flushPromises()
+      expect(engines[0]).to.have.length(1)
+
+      timers.find(timer => timer.delay === 15000).callback()
+      await Vue.nextTick()
+      await wrapper.find('.scene-error button').trigger('click')
+      await flushPromises()
+
+      expect(mountIndex).to.equal(2)
+      expect(engines[1]).to.have.length(1)
+      expect(engines[1][0]).to.include({ agentId: 'agent-songjiang', stateVersion: 16 })
     } finally {
       wrapper?.unmount()
       global.window.setTimeout = originalSetTimeout

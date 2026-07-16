@@ -125,11 +125,23 @@ export const useHallSceneState = ({
     return Promise.all(reports.map(reportPhase))
   }
 
+  const reset = () => {
+    sceneCursor = '0'
+    sceneVersion.value = 0
+    blockedStates.value = []
+    mapRuntime = null
+    bufferedStates.clear()
+    latestStateVersions.clear()
+    commandQueue.setMapRuntime?.(null)
+    commandQueue.reset?.()
+  }
+
   return {
     applyEvent,
     applySnapshot,
     blockedStates,
     forwardPhaseEvents,
+    reset,
     sceneVersion,
     setMapRuntime
   }

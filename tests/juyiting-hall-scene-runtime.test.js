@@ -2,6 +2,14 @@
 
 import { createHallSceneClass } from '../src/game/scenes/HallScene.js'
 import { JuyitingGame } from '../src/game/JuyitingGame.js'
+import { readFileSync } from 'node:fs'
+import { useHallCommandQueue } from '../src/composables/juyiting/useHallCommandQueue.js'
+import { useHallSceneState } from '../src/composables/juyiting/useHallSceneState.js'
+import { parseMovementTmx } from '../src/game/map/tmxMovementParser.js'
+import { PERSONA_SPRITE_MANIFEST } from '../src/game/sprites/personaSpriteManifest.js'
+import { createMovementEngine } from '../src/game/simulation/movementEngine.js'
+
+const HALL_XML = readFileSync('public/juyiting/hall.tmx', 'utf8')
 
 describe('HallScene melonJS runtime compatibility', () => {
   it('exposes command, snapshot, movement-map, and phase-event simulation facades', () => {
@@ -24,6 +32,50 @@ describe('HallScene melonJS runtime compatibility', () => {
     expect(game.getMovementRuntime()).to.equal(movement)
     expect(game.drainSimulationPhaseEvents()).to.deep.equal([])
   })
+
+  for (const cancellation of ['blocked', 'absent']) {
+    it(`cancels ${cancellation} backend state through the real game facade without stale arrival`, () => {
+      const runtime = parseMovementTmx(HALL_XML)
+      const game = new JuyitingGame()
+      game._movementEngine = createMovementEngine(runtime, PERSONA_SPRITE_MANIFEST, {
+        now: () => 2_000
+      })
+      const commandQueue = useHallCommandQueue()
+      const sceneState = useHallSceneState({ commandQueue, now: () => 2_000 })
+      sceneState.setMapRuntime(runtime)
+      commandQueue.setSimulation({
+        enqueue: command => game.enqueueMovementCommands([command])[0],
+        cancel: (agentId, stateVersion) => game.cancelMovement(agentId, stateVersion)
+      })
+      sceneState.applySnapshot({
+        sceneId: 'juyiting-main', sceneVersion: 1,
+        states: [{
+          agentId: 'agent-songjiang', personaCode: 'songjiang',
+          behavior: 'moving_to_discussion', targetRegionId: 'council-table',
+          stateVersion: 1, startedAt: 1_000, expectedArrivalAt: 20_000,
+          phase: 'moving'
+        }]
+      })
+      expect(game._movementEngine.snapshots()[0].phase).to.equal('moving')
+
+      if (cancellation === 'absent') {
+        sceneState.applySnapshot({ sceneId: 'juyiting-main', sceneVersion: 2, states: [] })
+      } else {
+        sceneState.applyEvent({
+          sceneVersion: 2,
+          state: {
+            agentId: 'agent-songjiang', personaCode: 'songjiang', behavior: 'blocked',
+            targetRegionId: 'unknown-region', stateVersion: 2, startedAt: 2_000,
+            phase: 'blocked'
+          }
+        })
+      }
+      game._movementEngine.update(120_000)
+
+      expect(game._movementEngine.snapshots()[0].phase).not.to.equal('arrived')
+      expect(game._movementEngine.drainPhaseEvents()).to.deep.equal([])
+    })
+  }
 
   it('syncs simulation snapshots into native HallAgent entities without CSS transforms', () => {
     const added = []

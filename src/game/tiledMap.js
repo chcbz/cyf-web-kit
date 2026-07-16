@@ -455,9 +455,10 @@ const parseJuyiHallTmxData = (map) => {
   }
 }
 
-const parseJuyiHallTmxUnchecked = (xml) => {
+const parseJuyiHallTmxUnchecked = (xml, movementEnabled = true) => {
   if (xml && typeof xml === 'object' && Array.isArray(xml.layers)) {
-    return attachValidatedMovement(xml, parseJuyiHallTmxData(xml))
+    const visualMap = parseJuyiHallTmxData(xml)
+    return movementEnabled ? attachValidatedMovement(xml, visualMap) : legacyVisualMap(visualMap)
   }
 
   if (!xml || typeof DOMParser === 'undefined') {
@@ -648,7 +649,7 @@ const parseJuyiHallTmxUnchecked = (xml) => {
     }]
   }))
 
-  return attachValidatedMovement(xml, {
+  const visualMap = {
     width,
     height,
     coordinateWidth: coordinateSpace.width,
@@ -661,13 +662,21 @@ const parseJuyiHallTmxUnchecked = (xml) => {
     mapProperties: readMapProperties(doc),
     tileLayers,
     tilesets
-  })
+  }
+  return movementEnabled ? attachValidatedMovement(xml, visualMap) : legacyVisualMap(visualMap)
 }
 
-export const parseJuyiHallTmx = (input) => {
+export const parseJuyiHallTmx = (input, { movementEnabled = true } = {}) => {
   try {
-    return parseJuyiHallTmxUnchecked(input)
+    return parseJuyiHallTmxUnchecked(input, movementEnabled)
   } catch (error) {
     throw mapParseError(error)
   }
 }
+
+const legacyVisualMap = visualMap => ({
+  ...visualMap,
+  movement: null,
+  movementReady: false,
+  movementWarnings: []
+})

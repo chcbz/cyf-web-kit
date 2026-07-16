@@ -10,6 +10,7 @@
       :portrait-short-name="portraitShortName"
       :portrait-style="portraitStyle"
       :role-class="roleClass"
+      :simulation-enabled="simulationEnabled"
       :refreshing="hallRefreshing"
       :scene-agents="sceneAgents"
       :scene-hotspots="sceneHotspots"
@@ -25,6 +26,7 @@
       @select-agent="selectAgent"
       @simulation-phase-events="handleSimulationPhaseEvents"
       @simulation-ready="handleSimulationReady"
+      @simulation-reset="resetSimulationLifecycle"
       @toggle-sound="toggleHallSound"
     >
 
@@ -423,17 +425,29 @@ const {
   selectedTask
 })
 
-const handleSimulationReady = async ({ movementRuntime, simulation } = {}) => {
-  if (!simulationEnabled || !movementRuntime || !simulation?.enqueue) return
-  hallSceneState.setMapRuntime(movementRuntime)
-  hallCommandQueue.setSimulation(simulation)
+const startBackendSceneState = async () => {
   if (backendSceneStarted) return
   backendSceneStarted = true
   try {
     await hallBackendSceneState.start()
   } catch (error) {
+    backendSceneStarted = false
     log.warn('Juyiting backend scene state degraded:', error)
   }
+}
+
+const handleSimulationReady = async ({ movementRuntime, simulation } = {}) => {
+  if (!simulationEnabled || !movementRuntime || !simulation?.enqueue) return
+  hallSceneState.setMapRuntime(movementRuntime)
+  hallCommandQueue.setSimulation(simulation)
+  await startBackendSceneState()
+}
+
+const resetSimulationLifecycle = () => {
+  backendSceneStarted = false
+  hallBackendSceneState?.stop()
+  hallCommandQueue.setSimulation(null)
+  hallSceneState.reset()
 }
 
 const handleSimulationPhaseEvents = events => {
@@ -449,6 +463,9 @@ const refreshHall = async ({ silent = false } = {}) => {
   if (!silent) playRefresh()
   try {
     await Promise.all([loadAgents(), loadTasks()])
+    if (simulationEnabled && hallCommandQueue.ready.value && !backendSceneStarted) {
+      await startBackendSceneState()
+    }
     if (!silent) showToast('厅中动静已点验')
   } finally {
     hallRefreshing.value = false
@@ -826,8 +843,7 @@ onUnmounted(() => {
   stopHallReplyStreaming()
   stopHallReplyPolling()
   stopDialogueBubbles()
-  hallBackendSceneState?.stop()
-  hallCommandQueue.setSimulation(null)
+  resetSimulationLifecycle()
   globalStore.setShowAppBar(true)
 })
 </script>

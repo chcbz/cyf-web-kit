@@ -171,6 +171,30 @@ describe('JuyitingGame sprite lifecycle', () => {
     expect(game._initialized).to.equal(false)
   })
 
+  it('preserves the legacy hall when simulation is disabled and movement data is invalid', async () => {
+    const fake = createRuntimeMelon()
+    fake.me.loader.getTMX = () => HALL_XML.replace(
+      'name="movementSchemaVersion" value="1"',
+      'name="movementSchemaVersion" value="999"'
+    )
+    const game = new JuyitingGame()
+    game._me = fake.me
+    const mountPromise = game.mount(
+      { querySelector: () => null },
+      { simulationEnabled: false }
+    )
+    succeedBatch(fake, await nextLoadBatch(fake))
+    succeedBatch(fake, await nextLoadBatch(fake))
+    succeedBatch(fake, await nextLoadBatch(fake))
+
+    const outcome = await mountPromise
+
+    expect(outcome).to.include({ ready: true, movementReady: false, simulationReady: false })
+    expect(fake.stateSets).to.have.length(1)
+    expect(game._initialized).to.equal(true)
+    expect(game.getMovementRuntime()).to.equal(null)
+  })
+
   it('cleans a fatal partial mount and retries with exactly one clean scene and canvas', async () => {
     const fake = createRuntimeMelon()
     const canvases = []

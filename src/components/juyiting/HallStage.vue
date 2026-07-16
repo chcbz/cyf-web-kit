@@ -110,6 +110,7 @@ const props = defineProps({
   portraitStyle: { type: Function, required: true },
   refreshing: { type: Boolean, default: false },
   roleClass: { type: Function, required: true },
+  simulationEnabled: { type: Boolean, default: true },
   sceneAgents: { type: Array, default: () => [] },
   sceneHotspots: { type: Array, default: () => [] },
   selectedAgent: { type: Object, default: null },
@@ -127,6 +128,7 @@ const emit = defineEmits([
   'select-agent',
   'simulation-phase-events',
   'simulation-ready',
+  'simulation-reset',
   'toggle-sound'
 ])
 
@@ -423,11 +425,13 @@ const mountScene = async () => {
     melonReady.value = false
     sceneError.value = '地图加载超时，请重试'
     unlockLoading(attemptId)
+    emit('simulation-reset')
     currentGameDestroyed = true
     juyitingGame.destroy()
   }, 15000)
   try {
     await juyitingGame.mount(container, {
+      simulationEnabled: props.simulationEnabled,
       onAgentClick: (agentData) => {
         if (isCurrentMountAttempt(attemptId)) handleAgentClick(agentData)
       },
@@ -445,7 +449,8 @@ const mountScene = async () => {
     emit('simulation-ready', {
       movementRuntime: juyitingGame.getMovementRuntime?.(),
       simulation: {
-        enqueue: command => juyitingGame.enqueueMovementCommands?.([command])?.[0]
+        enqueue: command => juyitingGame.enqueueMovementCommands?.([command])?.[0],
+        cancel: (agentId, stateVersion) => juyitingGame.cancelMovement?.(agentId, stateVersion)
       }
     })
     if (!melonReady.value) juyitingGame.setInteractionLocked?.(true, 'loading')
@@ -464,6 +469,7 @@ const mountScene = async () => {
 
 const retryScene = async () => {
   if (isSceneMounting.value) return
+  emit('simulation-reset')
   sceneMountAttempt += 1
   clearMountTimeout()
   melonReady.value = false
@@ -557,6 +563,7 @@ onBeforeUnmount(() => {
   fallbackFrames.clear()
   juyitingGame.setInteractionLocked?.(false, 'panel')
   juyitingGame.setInteractionLocked?.(false, 'loading')
+  emit('simulation-reset')
   if (!currentGameDestroyed) juyitingGame.destroy()
   currentGameDestroyed = true
 })
