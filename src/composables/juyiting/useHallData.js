@@ -246,12 +246,14 @@ export const useHallData = ({
   }
 
   const applySceneSnapshot = (snapshot) => {
-    if (!snapshot || !Number.isSafeInteger(snapshot.sceneVersion) || snapshot.sceneVersion < 0) return false
+    if (!snapshot || !Number.isSafeInteger(snapshot.sceneVersion) || snapshot.sceneVersion < 0
+      || snapshot.sceneVersion < backendSceneVersion.value) return false
+    const result = sceneState?.applySnapshot?.(snapshot)
+    if (result?.accepted === false) return false
     backendSceneVersion.value = snapshot.sceneVersion
     backendSceneAgents.value = (Array.isArray(snapshot.agents) ? snapshot.agents : [])
       .map(sceneAgentIdentity)
       .filter(Boolean)
-    sceneState?.applySnapshot?.(snapshot)
     return true
   }
 

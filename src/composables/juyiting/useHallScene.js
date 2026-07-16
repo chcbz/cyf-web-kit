@@ -135,12 +135,16 @@ export const useHallScene = ({
   normalizeStatus = value => String(value || '').toLowerCase(),
   selectedAgent,
   selectedTask: _selectedTask,
-  simulationEnabled = defaultSimulationEnabled()
+  simulationEnabled = defaultSimulationEnabled(),
+  sampleMovementPoint = sampleRegionPoint
 }) => {
   const transientAgents = ref({})
   const transientHotspots = ref({})
 
   const selectedAgentId = computed(() => normalizeAgentId(selectedAgent?.value))
+  const isSimulationControlled = agentOrId => simulationEnabled && agentVisualKey(
+    typeof agentOrId === 'string' ? { agentId: agentOrId } : agentOrId
+  ) === 'songjiang'
 
   const addAgentFeedback = (agentId, feedback) => {
     if (!agentId) return
@@ -269,16 +273,23 @@ export const useHallScene = ({
     const prominentIds = new Set(targets.slice(0, HALL_SCENE_MAX_PROMINENT_MOTION).map(normalizeAgentId))
     targets.forEach((agent, index) => {
       const agentId = normalizeAgentId(agent)
-      const region = HALL_SCENE_REGIONS.bountyBoard
-      const destination = sampleRegionPoint(region, agentSeed(agent), index + 21)
-      addAgentFeedback(agentId, {
-        regionId: 'bountyBoard',
-        destination,
-        sceneStatus: 'busy',
-        prominentMotion: prominentIds.has(agentId),
-        focused: true,
-        facing: destination.x > 50 ? 'left' : 'right'
-      })
+      if (isSimulationControlled(agent)) {
+        addAgentFeedback(agentId, {
+          sceneStatus: 'busy',
+          focused: true
+        })
+      } else {
+        const region = HALL_SCENE_REGIONS.bountyBoard
+        const destination = sampleMovementPoint(region, agentSeed(agent), index + 21)
+        addAgentFeedback(agentId, {
+          regionId: 'bountyBoard',
+          destination,
+          sceneStatus: 'busy',
+          prominentMotion: prominentIds.has(agentId),
+          focused: true,
+          facing: destination.x > 50 ? 'left' : 'right'
+        })
+      }
       addBubble(agentId, `领令：${task?.title || '榜文'}`, 'task')
     })
     setHotspotFeedback('bountyBoard', targets.length > 1 ? `${targets.length} 位已领令` : '榜文已点将')
@@ -313,16 +324,23 @@ export const useHallScene = ({
   const markDiscussionStarted = (task, participantAgentIds = []) => {
     participantAgentIds.forEach((agentOrId, index) => {
       const agentId = normalizeAgentId(agentOrId)
-      const region = HALL_SCENE_REGIONS.councilTable
-      const destination = sampleRegionPoint(region, agentSeed({ agentId }), index + 41)
-      addAgentFeedback(agentId, {
-        regionId: 'councilTable',
-        destination,
-        sceneStatus: 'discuss',
-        prominentMotion: index < HALL_SCENE_MAX_PROMINENT_MOTION,
-        focused: true,
-        facing: destination.x > 50 ? 'left' : 'right'
-      })
+      if (isSimulationControlled(agentOrId)) {
+        addAgentFeedback(agentId, {
+          sceneStatus: 'discuss',
+          focused: true
+        })
+      } else {
+        const region = HALL_SCENE_REGIONS.councilTable
+        const destination = sampleMovementPoint(region, agentSeed({ agentId }), index + 41)
+        addAgentFeedback(agentId, {
+          regionId: 'councilTable',
+          destination,
+          sceneStatus: 'discuss',
+          prominentMotion: index < HALL_SCENE_MAX_PROMINENT_MOTION,
+          focused: true,
+          facing: destination.x > 50 ? 'left' : 'right'
+        })
+      }
     })
     setHotspotFeedback('mainSeat', task?.title ? `议：${task.title}` : '厅前议事')
   }

@@ -15,10 +15,32 @@ export const useHallSceneState = ({
   const blockedStates = ref([])
   let mapRuntime = null
   const bufferedStates = new Map()
+  const latestStateVersions = new Map()
+
+  const cancelPendingMovement = (agentId) => {
+    bufferedStates.delete(agentId)
+    commandQueue.clearPending?.(agentId)
+  }
+
+  const recordBlockedState = (agentId, stateVersion, reason) => {
+    blockedStates.value = [...blockedStates.value, { agentId, stateVersion, reason }]
+  }
 
   const adaptAndEnqueue = (source) => {
+    const identity = stateIdentity(source)
+    if (!identity) return { accepted: false, reason: 'invalid-state' }
+    const latestStateVersion = latestStateVersions.get(identity.agentId)
+    if (latestStateVersion !== undefined && identity.stateVersion < latestStateVersion) {
+      return { accepted: false, reason: 'stale-agent-state' }
+    }
+    latestStateVersions.set(identity.agentId, identity.stateVersion)
+
     const state = semanticState(source)
-    if (!state) return { accepted: false, reason: 'invalid-state' }
+    if (!state) {
+      cancelPendingMovement(identity.agentId)
+      recordBlockedState(identity.agentId, identity.stateVersion, 'invalid-state')
+      return { accepted: false, reason: 'invalid-state' }
+    }
     if (!mapRuntime) {
       const previous = bufferedStates.get(state.agentId)
       if (!previous || state.stateVersion > previous.stateVersion) {
@@ -28,12 +50,8 @@ export const useHallSceneState = ({
     }
     const adapted = adaptBackendState(state, mapRuntime, now())
     if (!adapted.command) {
-      const blocked = {
-        agentId: state.agentId,
-        stateVersion: state.stateVersion,
-        reason: adapted.blockedReason || 'no-command'
-      }
-      blockedStates.value = [...blockedStates.value, blocked]
+      cancelPendingMovement(state.agentId)
+      recordBlockedState(state.agentId, state.stateVersion, adapted.blockedReason || 'no-command')
       return { accepted: false, reason: adapted.blockedReason || 'no-command' }
     }
     return commandQueue.enqueue(adapted.command)
@@ -45,7 +63,7 @@ export const useHallSceneState = ({
     if (!mapRuntime) return []
     const pending = [...bufferedStates.values()]
       .sort((left, right) => left.stateVersion - right.stateVersion
-        || left.agentId.localeCompare(right.agentId))
+        || compareCodeUnits(left.agentId, right.agentId))
     bufferedStates.clear()
     return pending.map(adaptAndEnqueue)
   }
@@ -58,8 +76,12 @@ export const useHallSceneState = ({
       return { accepted: false, reason: 'stale-scene-version' }
     }
     sceneVersion.value = snapshot.sceneVersion
-    const results = (Array.isArray(snapshot.states) ? snapshot.states : [])
-      .map(adaptAndEnqueue)
+    const states = Array.isArray(snapshot.states) ? snapshot.states : []
+    const presentAgentIds = new Set(states.map(stateIdentity).filter(Boolean).map(state => state.agentId))
+    latestStateVersions.forEach((_version, agentId) => {
+      if (!presentAgentIds.has(agentId)) cancelPendingMovement(agentId)
+    })
+    const results = states.map(adaptAndEnqueue)
     return { accepted: true, results }
   }
 
@@ -109,6 +131,11 @@ function semanticState (source) {
   }
 }
 
+function stateIdentity (source) {
+  if (!text(source?.agentId) || !validVersion(source?.stateVersion)) return null
+  return { agentId: source.agentId, stateVersion: source.stateVersion }
+}
+
 function phaseReport (source) {
   const occurredAt = typeof source?.occurredAt === 'number'
     ? source.occurredAt
@@ -138,4 +165,8 @@ function timestamp (value) {
 
 function text (value) {
   return typeof value === 'string' && value.trim().length > 0
+}
+
+function compareCodeUnits (left, right) {
+  return left < right ? -1 : left > right ? 1 : 0
 }

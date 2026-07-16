@@ -128,6 +128,99 @@ describe('hall scene state', () => {
     expect(enqueued).to.deep.equal([])
   })
 
+  it('cancels pending movement and watermarks a newer blocked state', () => {
+    const commandQueue = useHallCommandQueue()
+    const sceneState = useHallSceneState({ commandQueue })
+    sceneState.setMapRuntime(runtimeMap())
+    sceneState.applySnapshot({ sceneId: 'juyiting-main', sceneVersion: 1, states: [backendState(1)] })
+    expect(commandQueue.pendingCount.value).to.equal(1)
+
+    const blocked = sceneState.applyEvent({
+      sceneVersion: 2,
+      state: backendState(2, { targetRegionId: 'made-up-region' })
+    })
+    const stale = sceneState.applyEvent({ sceneVersion: 3, state: backendState(1) })
+
+    expect(blocked).to.deep.include({ accepted: false, reason: 'unknown-region' })
+    expect(stale).to.deep.include({ accepted: false, reason: 'stale-agent-state' })
+    expect(commandQueue.pendingCount.value).to.equal(0)
+    expect(commandQueue.snapshot()).to.deep.equal([])
+  })
+
+  it('cancels pending movement and watermarks a newer semantically invalid state', () => {
+    const commandQueue = useHallCommandQueue()
+    const sceneState = useHallSceneState({ commandQueue })
+    sceneState.setMapRuntime(runtimeMap())
+    sceneState.applySnapshot({ sceneId: 'juyiting-main', sceneVersion: 1, states: [backendState(1)] })
+
+    const invalid = sceneState.applyEvent({
+      sceneVersion: 2,
+      state: backendState(2, { behavior: '' })
+    })
+    const stale = sceneState.applyEvent({ sceneVersion: 3, state: backendState(1) })
+
+    expect(invalid).to.deep.include({ accepted: false, reason: 'invalid-state' })
+    expect(stale).to.deep.include({ accepted: false, reason: 'stale-agent-state' })
+    expect(commandQueue.pendingCount.value).to.equal(0)
+  })
+
+  it('reconciles agents absent from accepted snapshots across pending and buffered commands', () => {
+    const wuyongState = version => backendState(version, {
+      agentId: 'agent-wuyong', personaCode: 'wuyong'
+    })
+
+    const pendingQueue = useHallCommandQueue()
+    const pendingState = useHallSceneState({ commandQueue: pendingQueue })
+    pendingState.setMapRuntime(runtimeMap())
+    pendingState.applySnapshot({
+      sceneId: 'juyiting-main', sceneVersion: 5,
+      states: [backendState(5), wuyongState(5)]
+    })
+    pendingState.applySnapshot({
+      sceneId: 'juyiting-main', sceneVersion: 6,
+      states: [backendState(6)]
+    })
+
+    expect(pendingQueue.snapshot().map(command => command.commandId)).to.deep.equal([
+      'agent-songjiang:6:target'
+    ])
+
+    const bufferedQueue = useHallCommandQueue()
+    const bufferedState = useHallSceneState({ commandQueue: bufferedQueue })
+    bufferedState.applySnapshot({
+      sceneId: 'juyiting-main', sceneVersion: 5,
+      states: [backendState(5), wuyongState(5)]
+    })
+    bufferedState.applySnapshot({
+      sceneId: 'juyiting-main', sceneVersion: 6,
+      states: [backendState(6)]
+    })
+    bufferedState.setMapRuntime(runtimeMap())
+
+    expect(bufferedQueue.snapshot().map(command => command.commandId)).to.deep.equal([
+      'agent-songjiang:6:target'
+    ])
+  })
+
+  it('flushes equal-version buffered agents in deterministic code-unit order', () => {
+    const enqueued = []
+    const commandQueue = useHallCommandQueue()
+    commandQueue.setSimulation({ enqueue: command => enqueued.push(command) })
+    const sceneState = useHallSceneState({ commandQueue })
+    sceneState.applySnapshot({
+      sceneId: 'juyiting-main',
+      sceneVersion: 4,
+      states: [
+        backendState(4, { agentId: 'agent-a', personaCode: 'wuyong' }),
+        backendState(4, { agentId: 'agent-Z', personaCode: 'linchong' })
+      ]
+    })
+
+    sceneState.setMapRuntime(runtimeMap())
+
+    expect(enqueued.map(command => command.agentId)).to.deep.equal(['agent-Z', 'agent-a'])
+  })
+
   it('keeps agent map data as display metadata while snapshots remain movement-authoritative', async () => {
     const appliedSnapshots = []
     const agentApi = {
@@ -165,6 +258,44 @@ describe('hall scene state', () => {
     expect(hallData.backendSceneVersion.value).to.equal(12)
   })
 
+  it('rejects stale snapshots before mutating backend scene metadata', () => {
+    const appliedSnapshots = []
+    const hallData = useHallData({
+      agentApi: {},
+      log: { warn: () => {} },
+      normalizeStatus: value => value,
+      selectedAgent: ref(null),
+      selectedTask: ref(null),
+      taskAgentMatchScore: () => 0,
+      sceneState: {
+        applySnapshot: snapshot => {
+          appliedSnapshots.push(snapshot)
+          return { accepted: true }
+        },
+        applyEvent: () => {}
+      }
+    })
+    const current = {
+      sceneId: 'juyiting-main', sceneVersion: 12,
+      agents: [{ agentId: 'agent-songjiang', personaCode: 'songjiang', status: 'online' }],
+      states: [backendState(12)]
+    }
+    const stale = {
+      sceneId: 'juyiting-main', sceneVersion: 11,
+      agents: [{ agentId: 'agent-wuyong', personaCode: 'wuyong', status: 'busy' }],
+      states: [backendState(11, { agentId: 'agent-wuyong', personaCode: 'wuyong' })]
+    }
+
+    expect(hallData.applySceneSnapshot(current)).to.equal(true)
+    expect(hallData.applySceneSnapshot(stale)).to.equal(false)
+
+    expect(hallData.backendSceneVersion.value).to.equal(12)
+    expect(hallData.backendSceneAgents.value).to.deep.equal([{
+      agentId: 'agent-songjiang', personaCode: 'songjiang', status: 'online'
+    }])
+    expect(appliedSnapshots).to.deep.equal([current])
+  })
+
   it('disables synthetic Songjiang patrol movement only while simulation is enabled', () => {
     const mapAgents = ref([
       { agentId: 'agent-songjiang', personaCode: 'songjiang', name: 'Songjiang', status: 'online' },
@@ -190,5 +321,63 @@ describe('hall scene state', () => {
     })
     expect(rollback.sceneAgents.value.find(agent => agent.personaCode === 'songjiang').patrolRoute)
       .to.have.length.greaterThan(2)
+  })
+
+  it('does not sample or retain a synthetic task destination for simulation-controlled Songjiang', () => {
+    const sampledRegions = []
+    const hallScene = useHallScene({
+      mapAgents: ref([{
+        agentId: 'agent-songjiang', personaCode: 'songjiang', name: 'Songjiang', status: 'online'
+      }]),
+      selectedAgent: ref(null),
+      selectedTask: ref(null),
+      simulationEnabled: true,
+      sampleMovementPoint: region => {
+        sampledRegions.push(region.id)
+        return { x: 99, y: 99 }
+      }
+    })
+
+    hallScene.markTaskAssigned({ title: 'Council order' }, ['agent-songjiang'])
+
+    expect(sampledRegions).to.deep.equal([])
+    expect(hallScene.sceneAgents.value.find(agent => agent.personaCode === 'songjiang')).to.include({
+      regionId: 'mainSeat',
+      x: 50,
+      y: 45,
+      facing: 'right',
+      prominentMotion: false,
+      sceneStatus: 'busy',
+      focused: true
+    })
+  })
+
+  it('does not sample or retain a synthetic discussion destination for simulation-controlled Songjiang', () => {
+    const sampledRegions = []
+    const hallScene = useHallScene({
+      mapAgents: ref([{
+        agentId: 'agent-songjiang', personaCode: 'songjiang', name: 'Songjiang', status: 'online'
+      }]),
+      selectedAgent: ref(null),
+      selectedTask: ref(null),
+      simulationEnabled: true,
+      sampleMovementPoint: region => {
+        sampledRegions.push(region.id)
+        return { x: 99, y: 99 }
+      }
+    })
+
+    hallScene.markDiscussionStarted({ title: 'Council order' }, ['agent-songjiang'])
+
+    expect(sampledRegions).to.deep.equal([])
+    expect(hallScene.sceneAgents.value.find(agent => agent.personaCode === 'songjiang')).to.include({
+      regionId: 'mainSeat',
+      x: 50,
+      y: 45,
+      facing: 'right',
+      prominentMotion: false,
+      sceneStatus: 'discuss',
+      focused: true
+    })
   })
 })
