@@ -43,3 +43,29 @@ npm run test:run
 npm run build
 npm run test:juyiting:preflight
 ```
+
+## Backend scene-state API
+
+The authoritative wire contract is the [backend scene-state API specification](../../../api/docs/specs/interfaces/agent-scene-state-api.md) at `api/docs/specs/interfaces/agent-scene-state-api.md`.
+
+Backend rollout is fail-safe. Both committed defaults are disabled:
+
+```properties
+juyiting.scene-state.enabled=false
+juyiting.scene-events.enabled=false
+```
+
+- `juyiting.scene-state.enabled` controls semantic scene writes from existing Agent business operations. Disabling it does not change the legacy `/agent/map` behavior.
+- `juyiting.scene-events.enabled` controls only the SSE endpoint. Snapshot reads and phase reports remain available when SSE is disabled.
+
+The phase-one scene uses these authenticated endpoints:
+
+- `GET /agent/scenes/juyiting-main/snapshot` returns the current tenant/client-scoped semantic snapshot. It does not expose coordinates, paths, animation frames, chat text, credentials, or raw model output.
+- `GET /agent/scenes/juyiting-main/events` streams contiguous semantic updates. Resume with `sinceVersion`, `Last-Event-ID`, or both; when both are present, the backend resumes after the greater validated cursor. Ignore duplicate or older versions.
+- `POST /agent/scenes/juyiting-main/phases` reports only `arrived` or `blocked` for a specific agent and state version. `occurredAt` is Unix epoch milliseconds, and callers should keep a stable `reportId` when retrying the same report.
+
+If the cursor is outside retained history or continuity cannot be guaranteed, the stream emits one `resync-required` event and closes. The client must discard incremental assumptions, fetch a new snapshot, and reconnect from that snapshot's `sceneVersion`.
+
+When SSE is locally disabled, or the backend returns the controlled `503 SCENE_EVENTS_DISABLED` response, the hall falls back to snapshot polling every 15 seconds and refreshes immediately when the page regains focus. Snapshot and phase endpoints remain usable in this degraded mode.
+
+Use the application's normal authenticated request path. Never place bearer tokens, API keys, cookies, or other credentials in documentation, URLs, examples, logs, or committed configuration.
