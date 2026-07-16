@@ -408,7 +408,7 @@ hallBackendSceneState = useHallBackendSceneState({
   onEvent: applySceneEvent
 })
 
-const stopHallSceneDebugBridge = useHallSceneDebugBridge({
+const hallSceneDebugBridge = useHallSceneDebugBridge({
   backend: hallBackendSceneState,
   commandQueue: hallCommandQueue,
   game: juyitingGame
@@ -448,6 +448,7 @@ const handleSimulationReady = async ({ movementRuntime, simulation } = {}) => {
   if (!simulationEnabled || !movementRuntime || !simulation?.enqueue) return
   hallSceneState.setMapRuntime(movementRuntime)
   hallCommandQueue.setSimulation(simulation)
+  hallSceneDebugBridge.republish()
   await startBackendSceneState()
 }
 
@@ -852,7 +853,7 @@ onUnmounted(() => {
   stopHallReplyPolling()
   stopDialogueBubbles()
   resetSimulationLifecycle()
-  stopHallSceneDebugBridge()
+  hallSceneDebugBridge.stop()
   globalStore.setShowAppBar(true)
 })
 </script>
