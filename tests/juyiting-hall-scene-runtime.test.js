@@ -4,6 +4,97 @@ import { createHallSceneClass } from '../src/game/scenes/HallScene.js'
 import { JuyitingGame } from '../src/game/JuyitingGame.js'
 
 describe('HallScene melonJS runtime compatibility', () => {
+  it('exposes command, snapshot, movement-map, and phase-event simulation facades', () => {
+    const enqueued = []
+    const synced = []
+    const movement = { sceneId: 'juyiting-main' }
+    const game = new JuyitingGame()
+    game._movementEngine = { enqueue: command => { enqueued.push(command); return { accepted: true } } }
+    game._mapData = { movement }
+    game._hallScene = { syncAgentSnapshots: snapshots => synced.push(snapshots) }
+    game._pendingSimulationPhaseEvents = [{ reportId: 'phase-1', phase: 'arrived' }]
+
+    expect(game.enqueueMovementCommands([{ commandId: 'move-1' }])).to.deep.equal([{ accepted: true }])
+    game.syncAgentSnapshots([{ agentId: 'agent-songjiang', x: 10, y: 20 }])
+    const phases = game.drainSimulationPhaseEvents()
+    phases[0].phase = 'mutated'
+
+    expect(enqueued).to.deep.equal([{ commandId: 'move-1' }])
+    expect(synced).to.deep.equal([[{ agentId: 'agent-songjiang', x: 10, y: 20 }]])
+    expect(game.getMovementRuntime()).to.equal(movement)
+    expect(game.drainSimulationPhaseEvents()).to.deep.equal([])
+  })
+
+  it('syncs simulation snapshots into native HallAgent entities without CSS transforms', () => {
+    const added = []
+    class Stage { update () {} }
+    class Agent {
+      static supports () { return true }
+      static create (data) { return new Agent(data) }
+      constructor (data) {
+        this.agentId = data.agentId
+        this.personaCode = data.personaCode
+        this.pos = { x: data.x, y: data.y }
+        this.snapshots = []
+      }
+      syncState () {}
+      syncSimulationSnapshot (snapshot) {
+        this.snapshots.push(snapshot)
+        this.pos = { x: snapshot.x, y: snapshot.y }
+      }
+    }
+    const me = {
+      Stage,
+      game: {
+        viewport: { width: 960, height: 640 },
+        world: {
+          addChild: agent => added.push(agent),
+          removeChild: () => {}
+        }
+      }
+    }
+    const HallScene = createHallSceneClass(me, Agent)
+    const scene = new HallScene()
+    scene.setAvailablePersonas(new Set(['songjiang']))
+
+    scene.syncAgentSnapshots([{
+      agentId: 'agent-songjiang', personaCode: 'songjiang', x: 480, y: 320,
+      facing: 'right', animation: 'walk', behavior: 'moving_to_discussion', phase: 'moving',
+      regionId: 'main-seat', targetRegionId: 'council-table', stateVersion: 16
+    }])
+    scene._fullSyncAgentSnapshots()
+
+    expect(added).to.have.length(1)
+    expect(scene.getAgent('agent-songjiang').pos).to.deep.equal({ x: 480, y: 320 })
+    expect(scene.getAgent('agent-songjiang').snapshots).to.have.length(1)
+  })
+
+  it('stops simulation frame updates and phase draining after scene destroy', () => {
+    let updates = 0
+    let drains = 0
+    class Stage { update () {} }
+    const me = {
+      Stage,
+      game: { viewport: { width: 960, height: 640 }, world: {} },
+      input: { releaseAllPointerEvents: () => {} }
+    }
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+    scene._sceneBuilt = true
+    scene.setSimulationRuntime({
+      update: () => { updates += 1 },
+      snapshots: () => [],
+      drainPhaseEvents: () => { drains += 1; return [] }
+    })
+
+    scene.update(16)
+    scene.onDestroyEvent()
+    scene.update(16)
+
+    expect(updates).to.equal(1)
+    expect(drains).to.equal(1)
+  })
+
   it('keeps camera and input facades null-safe before mount and after destroy', () => {
     const game = new JuyitingGame()
 

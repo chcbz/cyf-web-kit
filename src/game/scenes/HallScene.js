@@ -28,6 +28,9 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._onReady = null
       this._needsSync = false
       this._pendingAgents = []
+      this._pendingAgentSnapshots = []
+      this._simulationAgentIds = new Set()
+      this._simulationRuntime = null
       this._availablePersonas = null
       this._mapData = null
       this._hotspotState = new Map()
@@ -50,6 +53,21 @@ export function createHallSceneClass(me, HallAgentClass) {
     onReady(cb)        { this._onReady = cb }
 
     setMapData(mapData) { this._mapData = mapData }
+
+    prepareRuntime() {
+      if (this._destroyed) return false
+      this._initializeViewport()
+      if (this._currentViewport.width <= 0 || this._currentViewport.height <= 0) return false
+      const properties = this._mapData?.mapProperties
+      if (properties?.minZoom && Number.isFinite(Number(properties.minZoom))) this._minZoom = Number(properties.minZoom)
+      if (properties?.maxZoom && Number.isFinite(Number(properties.maxZoom))) this._maxZoom = Number(properties.maxZoom)
+      this._ensureControllers()
+      return true
+    }
+
+    setSimulationRuntime(runtime) {
+      this._simulationRuntime = runtime || null
+    }
 
     setAvailablePersonas(personaCodes) {
       this._availablePersonas = new Set(personaCodes || [])
@@ -86,6 +104,10 @@ export function createHallSceneClass(me, HallAgentClass) {
 
     _viewportSize() {
       return { ...this._currentViewport }
+    }
+
+    syncAgentSnapshots(list) {
+      this._pendingAgentSnapshots = Array.isArray(list) ? list.map(snapshot => ({ ...snapshot })) : []
     }
 
     _initializeViewport() {
@@ -747,11 +769,59 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._needsSync = false
     }
 
+    _fullSyncAgentSnapshots() {
+      const keepIds = new Set()
+      this._pendingAgentSnapshots.forEach(snapshot => {
+        const id = snapshot.agentId || ''
+        const personaCode = String(snapshot.personaCode || '').toLowerCase()
+        if (!id || !personaCode) return
+        if (this._availablePersonas && !this._availablePersonas.has(personaCode)) return
+        let agent = this._agents.get(id)
+        if (agent && String(agent.personaCode || '').toLowerCase() !== personaCode) {
+          me.game.world.removeChild?.(agent)
+          this._agents.delete(id)
+          agent = null
+        }
+        if (!agent) {
+          const source = {
+            ...snapshot,
+            coordinateSpace: 'world',
+            simulationControlled: true
+          }
+          if (typeof HallAgentClass.supports === 'function' && !HallAgentClass.supports(source)) return
+          agent = typeof HallAgentClass.create === 'function'
+            ? HallAgentClass.create(source)
+            : new HallAgentClass(source)
+          if (!agent) return
+          agent.onPointerDown = () => this._onAgentClick?.(agent._sourceData || source)
+          me.game.world.addChild(agent, DEPTH_LAYERS.AGENTS)
+          this._agents.set(id, agent)
+        }
+        agent.syncSimulationSnapshot?.(snapshot)
+        keepIds.add(id)
+      })
+      this._simulationAgentIds.forEach(id => {
+        if (keepIds.has(id)) return
+        const agent = this._agents.get(id)
+        if (agent) me.game.world.removeChild?.(agent)
+        this._agents.delete(id)
+      })
+      this._simulationAgentIds = keepIds
+      this._pendingAgentSnapshots = []
+    }
+
     update(dt) {
       if (this._destroyed) return false
       super.update(dt)
       if (!this._sceneBuilt) this._buildScene()
       if (this._needsSync) this._fullSyncAgents()
+      if (this._simulationRuntime) {
+        this._simulationRuntime.update?.(dt)
+        this.syncAgentSnapshots(this._simulationRuntime.snapshots?.() || [])
+        this._fullSyncAgentSnapshots()
+        const phaseEvents = this._simulationRuntime.drainPhaseEvents?.() || []
+        if (phaseEvents.length) this._simulationRuntime.onPhaseEvents?.(phaseEvents)
+      }
       this._sortByDepth()
       return true
     }
@@ -795,6 +865,9 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._onHotspotClick = null
       this._onReady = null
       this._pendingAgents = []
+      this._pendingAgentSnapshots = []
+      this._simulationAgentIds.clear()
+      this._simulationRuntime = null
       this._availablePersonas = null
       this._needsSync = false
       this._hotspotState.clear()

@@ -15,6 +15,7 @@ import { createHallSceneClass } from './scenes/HallScene.js'
 import { createHallAgentClass } from './entities/HallAgent.js'
 import { loadPersonaSprites } from './sprites/spriteLoader.js'
 import { PERSONA_SPRITE_MANIFEST } from './sprites/personaSpriteManifest.js'
+import { createMovementEngine } from './simulation/movementEngine.js'
 
 export class JuyitingGame {
   constructor() {
@@ -32,6 +33,8 @@ export class JuyitingGame {
     this._pendingStart = false
     this._generation = 0
     this._mountToken = null
+    this._movementEngine = null
+    this._pendingSimulationPhaseEvents = []
   }
 
   async _loadMelonJS() {
@@ -66,7 +69,8 @@ export class JuyitingGame {
       this._callbacks = {
         onAgentClick: options.onAgentClick || null,
         onHotspotClick: options.onHotspotClick || null,
-        onReady: options.onReady || null
+        onReady: options.onReady || null,
+        onSimulationPhaseEvents: options.onSimulationPhaseEvents || null
       }
 
       const config = createGameConfig()
@@ -107,6 +111,10 @@ export class JuyitingGame {
       await this._loadResources(me, buildHallMapResources(this._mapData), mountToken)
       if (!this._isCurrentMount(mountToken)) return
 
+      if (!this._hallScene?.prepareRuntime?.()) {
+        throw simulationInitializationError(new Error('Camera/input runtime is unavailable'))
+      }
+
       const spriteLoadAbortController = new AbortController()
       this._spriteLoadAbortController = spriteLoadAbortController
       const spriteLoadResult = await loadPersonaSprites(
@@ -124,18 +132,24 @@ export class JuyitingGame {
       this._spriteLoadResult = spriteLoadResult
       this._hallScene?.setAvailablePersonas(spriteLoadResult.available)
 
+      this._initializeSimulationRuntime()
+
       this._startGame(me, mountToken)
       return {
         ready: true,
         movementReady: this._mapData?.movementReady === true,
+        simulationReady: Boolean(this._movementEngine),
         degraded: spriteLoadResult.degraded,
         requiredMissingCount: spriteLoadResult.requiredMissingCount,
         optionalMissingCount: spriteLoadResult.optionalMissingCount,
         errors: spriteLoadResult.errors.map(error => ({ ...error }))
       }
     } catch (error) {
+      const failure = error?.source === 'map'
+        ? Object.assign(error, { retryable: true })
+        : error
       if (this._isCurrentMount(mountToken)) this._cleanupFailedMount(me)
-      throw error
+      throw failure
     }
   }
 
@@ -163,6 +177,8 @@ export class JuyitingGame {
     this._mapData = null
     this._spriteLoadResult = null
     this._pendingStart = false
+    this._movementEngine = null
+    this._pendingSimulationPhaseEvents = []
   }
 
   _loadPersonaSprite(me, definition, mountToken = this._mountToken) {
@@ -246,6 +262,29 @@ export class JuyitingGame {
     }, 200)
   }
 
+  _initializeSimulationRuntime() {
+    try {
+      if (!this._mapData?.movementReady || !this._mapData?.movement) {
+        throw new Error('Validated movement runtime is unavailable')
+      }
+      this._movementEngine = createMovementEngine(this._mapData.movement, PERSONA_SPRITE_MANIFEST)
+      this._hallScene?.setSimulationRuntime?.({
+        update: deltaMs => this._movementEngine?.update(deltaMs),
+        snapshots: () => this._movementEngine?.snapshots() || [],
+        drainPhaseEvents: () => this._movementEngine?.drainPhaseEvents() || [],
+        onPhaseEvents: events => {
+          const copies = events.map(event => ({ ...event }))
+          this._pendingSimulationPhaseEvents.push(...copies)
+          if (this._callbacks.onSimulationPhaseEvents) {
+            this._callbacks.onSimulationPhaseEvents(this.drainSimulationPhaseEvents())
+          }
+        }
+      })
+    } catch (error) {
+      throw simulationInitializationError(error)
+    }
+  }
+
   start() {
     if (!this._me) return
     if (!this._initialized) {
@@ -268,6 +307,26 @@ export class JuyitingGame {
 
   syncAgents(list) {
     if (this._hallScene) this._hallScene.syncAgents(list)
+  }
+
+  syncAgentSnapshots(list) {
+    this._hallScene?.syncAgentSnapshots?.(list)
+  }
+
+  enqueueMovementCommands(commands) {
+    const list = Array.isArray(commands) ? commands : [commands]
+    if (!this._movementEngine) {
+      return list.map(() => ({ accepted: false, reason: 'simulation-unavailable' }))
+    }
+    return list.map(command => this._movementEngine.enqueue(command))
+  }
+
+  drainSimulationPhaseEvents() {
+    return this._pendingSimulationPhaseEvents.splice(0).map(event => ({ ...event }))
+  }
+
+  getMovementRuntime() {
+    return this._mapData?.movement || null
   }
 
   syncHotspots(list) {
@@ -331,3 +390,17 @@ export class JuyitingGame {
 
 export const juyitingGame = new JuyitingGame()
 export default juyitingGame
+
+function simulationInitializationError(error) {
+  if (error?.code === 'SIMULATION_INIT_FAILED') return error
+  const result = new Error(error?.message || 'Juyiting simulation could not be initialized')
+  Object.assign(result, {
+    code: 'SIMULATION_INIT_FAILED',
+    severity: 'fatal',
+    retryable: true,
+    userMessage: 'Juyiting movement is unavailable. Retry initialization.',
+    technicalMessage: error?.message || String(error),
+    source: 'simulation'
+  })
+  return result
+}

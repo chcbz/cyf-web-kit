@@ -120,7 +120,15 @@ const props = defineProps({
   visibleAgents: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['new-conversation', 'open-panel', 'refresh-hall', 'select-agent', 'toggle-sound'])
+const emit = defineEmits([
+  'new-conversation',
+  'open-panel',
+  'refresh-hall',
+  'select-agent',
+  'simulation-phase-events',
+  'simulation-ready',
+  'toggle-sound'
+])
 
 const melonContainerRef = ref(null)
 const melonReady = ref(false)
@@ -328,12 +336,12 @@ const releaseAcquiredOrientation = async ({ fullscreen = false, orientation = fa
   if (orientation) {
     try {
       screen.orientation?.unlock?.()
-    } catch (_err) {}
+    } catch { /* best-effort orientation cleanup */ }
   }
   if (fullscreen) {
     try {
       await document.exitFullscreen?.()
-    } catch (_err) {}
+    } catch { /* best-effort fullscreen cleanup */ }
   }
 }
 
@@ -357,7 +365,7 @@ const requestLandscapeLock = async (token) => {
       await requestFullscreen.call(document.documentElement)
       acquiredFullscreen = true
       ownsFullscreen = true
-    } catch (_err) { failed = true }
+    } catch { failed = true }
   }
   if (!isCurrentOrientationRequest(token)) {
     await releaseAcquiredOrientation({ fullscreen: acquiredFullscreen })
@@ -370,7 +378,7 @@ const requestLandscapeLock = async (token) => {
       await lockOrientation.call(screen.orientation, 'landscape')
       acquiredOrientation = true
       ownsOrientationLock = true
-    } catch (_err) { failed = true }
+    } catch { failed = true }
   }
   if (!isCurrentOrientationRequest(token)) {
     await releaseAcquiredOrientation({ fullscreen: acquiredFullscreen, orientation: acquiredOrientation })
@@ -428,9 +436,18 @@ const mountScene = async () => {
       },
       onReady: () => {
         if (isCurrentMountAttempt(attemptId)) handleSceneReady(attemptId)
+      },
+      onSimulationPhaseEvents: events => {
+        if (isCurrentMountAttempt(attemptId)) emit('simulation-phase-events', events)
       }
     })
     if (!isCurrentMountAttempt(attemptId)) return
+    emit('simulation-ready', {
+      movementRuntime: juyitingGame.getMovementRuntime?.(),
+      simulation: {
+        enqueue: command => juyitingGame.enqueueMovementCommands?.([command])?.[0]
+      }
+    })
     if (!melonReady.value) juyitingGame.setInteractionLocked?.(true, 'loading')
     juyitingGame.start()
   } catch (err) {

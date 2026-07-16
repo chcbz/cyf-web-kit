@@ -23,6 +23,8 @@
       @open-panel="handleStagePanelOpen"
       @refresh-hall="refreshHall"
       @select-agent="selectAgent"
+      @simulation-phase-events="handleSimulationPhaseEvents"
+      @simulation-ready="handleSimulationReady"
       @toggle-sound="toggleHallSound"
     >
 
@@ -65,7 +67,12 @@
         >
           <div class="panel-title">
             <span :id="panelTitleId">{{ activePanelTitle }}</span>
-            <button class="panel-close" type="button" aria-label="关闭面板" @click="closePanel">
+            <button
+              class="panel-close"
+              type="button"
+              aria-label="关闭面板"
+              @click="closePanel"
+            >
               <var-icon name="close-circle-outline" />
             </button>
           </div>
@@ -227,11 +234,14 @@ import { useGlobalStore } from '@/stores/global'
 import { useApiStore } from '@/stores/api'
 import { agentApi, chatApi } from '@/composables/useHttp'
 import { useHallChatContext } from '@/composables/juyiting/useHallChatContext'
+import { useHallBackendSceneState } from '@/composables/juyiting/useHallBackendSceneState'
+import { useHallCommandQueue } from '@/composables/juyiting/useHallCommandQueue'
 import { useHallConversation } from '@/composables/juyiting/useHallConversation'
 import { useHallData } from '@/composables/juyiting/useHallData'
 import { useHallLibrary } from '@/composables/juyiting/useHallLibrary'
 import { focusHallPanel, restorePanelFocus, trapPanelFocus, useHallPanels } from '@/composables/juyiting/useHallPanels'
 import { useHallScene } from '@/composables/juyiting/useHallScene'
+import { useHallSceneState } from '@/composables/juyiting/useHallSceneState'
 import { useHallSound } from '@/composables/juyiting/useHallSound'
 import { useHallTaskActions } from '@/composables/juyiting/useHallTaskActions'
 import { portraitName, portraitRole, portraitShortName, portraitStyle, roleClass } from '@/composables/juyiting/useWaterMarginRoles'
@@ -270,6 +280,14 @@ let panelPriorFocus = null
 let bubbleTimer = null
 let bubbleInitialTimer = null
 let bubbleClearTimer = null
+const simulationEnabled = import.meta.env.VITE_JUYITING_SIMULATION_ENABLED === 'true'
+const hallCommandQueue = useHallCommandQueue()
+let hallBackendSceneState = null
+const hallSceneState = useHallSceneState({
+  commandQueue: hallCommandQueue,
+  reportPhase: report => hallBackendSceneState?.reportPhase(report)
+})
+let backendSceneStarted = false
 
 const {
   playAgentSelect,
@@ -346,6 +364,8 @@ const taskAgentMatchScore = (task, agent) => {
 }
 
 const {
+  applySceneEvent,
+  applySceneSnapshot,
   agentFilter,
   agents,
   bindPersona,
@@ -374,7 +394,14 @@ const {
   normalizeStatus,
   selectedAgent,
   selectedTask,
-  taskAgentMatchScore
+  taskAgentMatchScore,
+  sceneState: hallSceneState
+})
+
+hallBackendSceneState = useHallBackendSceneState({
+  agentApi,
+  onSnapshot: applySceneSnapshot,
+  onEvent: applySceneEvent
 })
 
 const {
@@ -395,6 +422,26 @@ const {
   selectedAgent,
   selectedTask
 })
+
+const handleSimulationReady = async ({ movementRuntime, simulation } = {}) => {
+  if (!simulationEnabled || !movementRuntime || !simulation?.enqueue) return
+  hallSceneState.setMapRuntime(movementRuntime)
+  hallCommandQueue.setSimulation(simulation)
+  if (backendSceneStarted) return
+  backendSceneStarted = true
+  try {
+    await hallBackendSceneState.start()
+  } catch (error) {
+    log.warn('Juyiting backend scene state degraded:', error)
+  }
+}
+
+const handleSimulationPhaseEvents = events => {
+  if (!simulationEnabled) return
+  void hallSceneState.forwardPhaseEvents(events).catch(error => {
+    log.warn('Juyiting phase forwarding failed:', error)
+  })
+}
 
 const refreshHall = async ({ silent = false } = {}) => {
   if (hallRefreshing.value) return
@@ -436,7 +483,8 @@ const {
   mapAgents,
   normalizeStatus,
   selectedAgent,
-  selectedTask
+  selectedTask,
+  simulationEnabled
 })
 
 const selectTask = async (task) => {
@@ -778,6 +826,8 @@ onUnmounted(() => {
   stopHallReplyStreaming()
   stopHallReplyPolling()
   stopDialogueBubbles()
+  hallBackendSceneState?.stop()
+  hallCommandQueue.setSimulation(null)
   globalStore.setShowAppBar(true)
 })
 </script>

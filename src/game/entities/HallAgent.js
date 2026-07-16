@@ -36,12 +36,15 @@ export function createHallAgentClass(me) {
     constructor(agentData, providedDefinition = null, providedImage = null) {
       const vpW = me.game.viewport.width
       const vpH = me.game.viewport.height
-      const startPoint = clampPointToRegion(
-        { x: agentData.x || 50, y: agentData.y || 60 },
-        agentData.walkableRegion
-      )
-      const x = startPoint.x / 100 * vpW
-      const y = startPoint.y / 100 * vpH
+      const worldCoordinates = agentData.coordinateSpace === 'world'
+      const startPoint = worldCoordinates
+        ? { x: Number(agentData.x) || 0, y: Number(agentData.y) || 0 }
+        : clampPointToRegion(
+          { x: agentData.x || 50, y: agentData.y || 60 },
+          agentData.walkableRegion
+        )
+      const x = worldCoordinates ? startPoint.x : startPoint.x / 100 * vpW
+      const y = worldCoordinates ? startPoint.y : startPoint.y / 100 * vpH
 
       const code = String(agentData.personaCode || '').toLowerCase()
       const definition = providedDefinition || resolvePersonaSprite(code, PERSONA_SPRITE_MANIFEST)
@@ -90,6 +93,7 @@ export function createHallAgentClass(me) {
       this._selected = false
       this._focused = false
       this._walkableRegion = agentData.walkableRegion || null
+      this._simulationControlled = Boolean(agentData.simulationControlled || worldCoordinates)
       this._patrolRoute = this._normalisePatrolRoute(agentData.patrolRoute)
       this._patrolIndex = 0
       this._patrolDelayMs = Number.isFinite(agentData.patrolDelayMs) ? agentData.patrolDelayMs : 600
@@ -97,7 +101,7 @@ export function createHallAgentClass(me) {
       this._animTimer = 0
       this._animFrame = 0
       this.depth = y
-      this._advancePatrolTarget()
+      if (!this._simulationControlled) this._advancePatrolTarget()
     }
 
     setDestination(pctX, pctY) {
@@ -139,6 +143,21 @@ export function createHallAgentClass(me) {
       this._focused = Boolean(agentData.focused || agentData.recommended)
       this.setSelected(Boolean(agentData.selected))
       if (agentData.facing) this.setFacing(agentData.facing)
+    }
+
+    syncSimulationSnapshot(snapshot = {}) {
+      if (!Number.isFinite(snapshot.x) || !Number.isFinite(snapshot.y)) return
+      this._simulationControlled = true
+      this._sourceData = { ...this._sourceData, ...snapshot, coordinateSpace: 'world' }
+      this.pos.x = snapshot.x
+      this.pos.y = snapshot.y
+      this.targetX = snapshot.x
+      this.targetY = snapshot.y
+      this._setBodyVelocity(0, 0)
+      this.speed = 0
+      if (snapshot.facing) this.setFacing(snapshot.facing)
+      this.setAnimState(snapshot.animation || 'idle')
+      this.depth = snapshot.y
     }
 
     setSelected(on) {
@@ -258,7 +277,7 @@ export function createHallAgentClass(me) {
 
     update(dt) {
       super.update(dt)
-      this._moveTowardTarget(dt)
+      if (!this._simulationControlled) this._moveTowardTarget(dt)
       this._animTimer += dt
       if (this._animTimer > this._activeAnimation.frameMs) {
         this._animTimer = 0
