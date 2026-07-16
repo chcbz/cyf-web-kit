@@ -22,13 +22,32 @@ export type MovementCommandQueue = {
   peek(): MovementCommand | null
   shift(): MovementCommand | null
   snapshot(): MovementCommand[]
+  clearPending(agentId?: string): number
+  reset(agentId?: string): number
+  /** @deprecated Use clearPending() to preserve replay watermarks explicitly. */
   clear(agentId?: string): number
 }
 
 export function createMovementCommandQueue(): MovementCommandQueue {
   const pending: MovementCommand[] = []
-  const seenCommandIds = new Set<string>()
+  const seenCommandAgents = new Map<string, string>()
   const latestStateVersion = new Map<string, number>()
+
+  const removePending = (agentId?: string): number => {
+    if (agentId === undefined) {
+      const removed = pending.length
+      pending.length = 0
+      return removed
+    }
+    let removed = 0
+    for (let index = pending.length - 1; index >= 0; index -= 1) {
+      if (pending[index]?.agentId === agentId) {
+        pending.splice(index, 1)
+        removed += 1
+      }
+    }
+    return removed
+  }
 
   return {
     get size() {
@@ -37,7 +56,7 @@ export function createMovementCommandQueue(): MovementCommandQueue {
 
     push(source) {
       if (!validCommand(source)) return { accepted: false, reason: 'invalid-command' }
-      if (seenCommandIds.has(source.commandId)) {
+      if (seenCommandAgents.has(source.commandId)) {
         return { accepted: false, reason: 'duplicate-command-id' }
       }
       const watermark = latestStateVersion.get(source.agentId)
@@ -51,7 +70,7 @@ export function createMovementCommandQueue(): MovementCommandQueue {
       if (replacedIndex >= 0) pending.splice(replacedIndex, 1)
       pending.push(command)
       pending.sort(compareCommands)
-      seenCommandIds.add(command.commandId)
+      seenCommandAgents.set(command.commandId, command.agentId)
       latestStateVersion.set(command.agentId, command.stateVersion)
       return replacedCommandId === undefined
         ? { accepted: true }
@@ -71,20 +90,26 @@ export function createMovementCommandQueue(): MovementCommandQueue {
       return pending.map(copyCommand)
     },
 
-    clear(agentId) {
+    clearPending(agentId) {
+      return removePending(agentId)
+    },
+
+    reset(agentId) {
+      const removed = removePending(agentId)
       if (agentId === undefined) {
-        const removed = pending.length
-        pending.length = 0
+        seenCommandAgents.clear()
+        latestStateVersion.clear()
         return removed
       }
-      let removed = 0
-      for (let index = pending.length - 1; index >= 0; index -= 1) {
-        if (pending[index]?.agentId === agentId) {
-          pending.splice(index, 1)
-          removed += 1
-        }
+      latestStateVersion.delete(agentId)
+      for (const [commandId, ownerAgentId] of seenCommandAgents) {
+        if (ownerAgentId === agentId) seenCommandAgents.delete(commandId)
       }
       return removed
+    },
+
+    clear(agentId) {
+      return removePending(agentId)
     },
   }
 }
@@ -97,14 +122,21 @@ function validCommand(command: MovementCommand | null | undefined): command is M
   if (!['MOVE_TO_REGION', 'RETURN_HOME'].includes(command.type)) return false
   if (!Number.isFinite(command.priority)
     || !Number.isSafeInteger(command.stateVersion) || command.stateVersion < 0) return false
-  return Number.isFinite(Date.parse(command.startedAt))
+  const startedAt = Date.parse(command.startedAt)
+  if (!Number.isFinite(startedAt)) return false
+  const expectedArrivalAt = optionalTimestamp(command.expectedArrivalAt)
+  const expiresAt = optionalTimestamp(command.expiresAt)
+  if (expectedArrivalAt === null || expiresAt === null) return false
+  if (expectedArrivalAt !== undefined && expectedArrivalAt < startedAt) return false
+  if (expiresAt !== undefined && expiresAt < startedAt) return false
+  return expectedArrivalAt === undefined || expiresAt === undefined || expiresAt >= expectedArrivalAt
 }
 
 function compareCommands(left: MovementCommand, right: MovementCommand): number {
   return right.priority - left.priority
     || right.stateVersion - left.stateVersion
     || Date.parse(left.startedAt) - Date.parse(right.startedAt)
-    || left.commandId.localeCompare(right.commandId)
+    || compareCodeUnits(left.commandId, right.commandId)
 }
 
 function copyCommand(command: MovementCommand): MovementCommand {
@@ -113,4 +145,15 @@ function copyCommand(command: MovementCommand): MovementCommand {
 
 function nonBlank(value: string): boolean {
   return typeof value === 'string' && value.trim().length > 0
+}
+
+function optionalTimestamp(value: string | undefined): number | undefined | null {
+  if (value === undefined) return undefined
+  if (!nonBlank(value)) return null
+  const timestamp = Date.parse(value)
+  return Number.isFinite(timestamp) ? timestamp : null
+}
+
+function compareCodeUnits(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0
 }

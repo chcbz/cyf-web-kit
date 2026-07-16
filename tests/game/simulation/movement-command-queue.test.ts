@@ -86,4 +86,58 @@ describe('movement command queue', () => {
     assert.equal(queue.peek()?.targetRegionId, 'council-table')
     assert.equal(queue.shift()?.targetRegionId, 'council-table')
   })
+
+  it('rejects malformed optional arrival and expiry timestamps', () => {
+    const queue = createMovementCommandQueue()
+
+    assert.deepEqual(queue.push(command({ expectedArrivalAt: 'not-a-time' })), {
+      accepted: false, reason: 'invalid-command',
+    })
+    assert.deepEqual(queue.push(command({ expiresAt: 'not-a-time' })), {
+      accepted: false, reason: 'invalid-command',
+    })
+    assert.deepEqual(queue.push(command({ expectedArrivalAt: '2026-07-17T07:59:00.000Z' })), {
+      accepted: false, reason: 'invalid-command',
+    })
+    assert.deepEqual(queue.push(command({
+      expectedArrivalAt: '2026-07-17T08:02:00.000Z',
+      expiresAt: '2026-07-17T08:01:00.000Z',
+    })), { accepted: false, reason: 'invalid-command' })
+    assert.equal(queue.push(command({
+      expectedArrivalAt: '2026-07-17T08:01:00.000Z',
+      expiresAt: '2026-07-17T08:02:00.000Z',
+    })).accepted, true)
+  })
+
+  it('separates pending cleanup from per-agent and full replay reset', () => {
+    const queue = createMovementCommandQueue()
+    queue.push(command())
+    queue.push(command({
+      commandId: 'wuyong:5', agentId: 'agent-wuyong', personaCode: 'wuyong', stateVersion: 5,
+    }))
+
+    assert.equal(queue.clearPending('agent-songjiang'), 1)
+    assert.deepEqual(queue.push(command({ commandId: 'songjiang:retry' })), {
+      accepted: false, reason: 'stale-state-version',
+    })
+    assert.equal(queue.reset('agent-songjiang'), 0)
+    assert.equal(queue.push(command()).accepted, true)
+    assert.deepEqual(queue.push(command({
+      commandId: 'wuyong:retry', agentId: 'agent-wuyong', personaCode: 'wuyong', stateVersion: 5,
+    })), { accepted: false, reason: 'stale-state-version' })
+
+    assert.equal(queue.reset(), 2)
+    assert.equal(queue.push(command()).accepted, true)
+    assert.equal(queue.push(command({
+      commandId: 'wuyong:5', agentId: 'agent-wuyong', personaCode: 'wuyong', stateVersion: 5,
+    })).accepted, true)
+  })
+
+  it('uses locale-independent code-unit command ID tie breaking', () => {
+    const queue = createMovementCommandQueue()
+    queue.push(command({ commandId: 'a-command', agentId: 'agent-a' }))
+    queue.push(command({ commandId: 'Z-command', agentId: 'agent-z', personaCode: 'wuyong' }))
+
+    assert.deepEqual(queue.snapshot().map(item => item.commandId), ['Z-command', 'a-command'])
+  })
 })

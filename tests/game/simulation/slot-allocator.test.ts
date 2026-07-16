@@ -97,4 +97,19 @@ describe('slot allocator', () => {
       type: 'RETURN_HOME', targetRegionId: 'main-seat', stateVersion: 4,
     })), null)
   })
+
+  it('uses locale-independent code-unit slot ordering', () => {
+    const allocator = createSlotAllocator([
+      {
+        stableId: 'a-slot', slotId: 'a-slot', regionId: 'council-table',
+        point: { x: 20, y: 0 }, kind: 'parking',
+      },
+      {
+        stableId: 'Z-slot', slotId: 'Z-slot', regionId: 'council-table',
+        point: { x: 10, y: 0 }, kind: 'parking',
+      },
+    ])
+
+    assert.equal(allocator.reserve('council-table', command())?.slotId, 'Z-slot')
+  })
 })

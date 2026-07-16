@@ -76,7 +76,8 @@ function validOwnerCommand(command: MovementCommand | null | undefined): command
 }
 
 function compareSlots(left: Slot, right: Slot): number {
-  return left.stableId.localeCompare(right.stableId) || left.slotId.localeCompare(right.slotId)
+  return compareCodeUnits(left.stableId, right.stableId)
+    || compareCodeUnits(left.slotId, right.slotId)
 }
 
 function copySlot(slot: Slot): Slot {
@@ -85,4 +86,8 @@ function copySlot(slot: Slot): Slot {
 
 function nonBlank(value: string): boolean {
   return typeof value === 'string' && value.trim().length > 0
+}
+
+function compareCodeUnits(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0
 }
