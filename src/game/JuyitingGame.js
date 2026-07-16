@@ -16,6 +16,9 @@ import { createHallAgentClass } from './entities/HallAgent.js'
 import { loadPersonaSprites } from './sprites/spriteLoader.js'
 import { PERSONA_SPRITE_MANIFEST } from './sprites/personaSpriteManifest.js'
 import { createMovementEngine } from './simulation/movementEngine.js'
+import { aggregateSceneDebug } from './debug/sceneDebugAggregator.js'
+
+const SCENE_DEBUG_KEY = '__JYTING_SCENE_DEBUG__'
 
 export class JuyitingGame {
   constructor() {
@@ -35,6 +38,9 @@ export class JuyitingGame {
     this._mountToken = null
     this._movementEngine = null
     this._pendingSimulationPhaseEvents = []
+    this._fatalError = null
+    this._sceneDebugBackend = {}
+    this._sceneDebugPublication = null
   }
 
   async _loadMelonJS() {
@@ -59,6 +65,8 @@ export class JuyitingGame {
     const mountToken = ++this._generation
     this._mountToken = mountToken
     this._spriteLoadResult = null
+    this._fatalError = null
+    this._publishSceneDebug()
     let me
     try {
       me = await this._loadMelonJS()
@@ -131,6 +139,7 @@ export class JuyitingGame {
       }
       this._spriteLoadResult = spriteLoadResult
       this._hallScene?.setAvailablePersonas(spriteLoadResult.available)
+      this._publishSceneDebug()
 
       this._initializeSimulationRuntime()
 
@@ -148,7 +157,11 @@ export class JuyitingGame {
       const failure = error?.source === 'map'
         ? Object.assign(error, { retryable: true })
         : error
-      if (this._isCurrentMount(mountToken)) this._cleanupFailedMount(me)
+      if (this._isCurrentMount(mountToken)) {
+        this._cleanupFailedMount(me)
+        this._fatalError = failure
+        this._publishSceneDebug()
+      }
       throw failure
     }
   }
@@ -243,6 +256,7 @@ export class JuyitingGame {
 
     this._mapData = parseJuyiHallTmx(tmx)
     this._hallScene?.setMapData(this._mapData)
+    this._publishSceneDebug()
   }
 
   _startGame(me, mountToken = this._mountToken) {
@@ -250,6 +264,8 @@ export class JuyitingGame {
     // Register and switch to PLAY state
     me.state.set(me.state.PLAY, this._hallScene, true)
     this._initialized = true
+    this._fatalError = null
+    this._publishSceneDebug()
     if (this._pendingStart) {
       this._pendingStart = false
       me.state.change(me.state.PLAY, true)
@@ -269,7 +285,10 @@ export class JuyitingGame {
       }
       this._movementEngine = createMovementEngine(this._mapData.movement, PERSONA_SPRITE_MANIFEST)
       this._hallScene?.setSimulationRuntime?.({
-        update: deltaMs => this._movementEngine?.update(deltaMs),
+        update: deltaMs => {
+          this._movementEngine?.update(deltaMs)
+          this._publishSceneDebug()
+        },
         snapshots: () => this._movementEngine?.snapshots() || [],
         drainPhaseEvents: () => this._movementEngine?.drainPhaseEvents() || [],
         onPhaseEvents: events => {
@@ -280,6 +299,7 @@ export class JuyitingGame {
           }
         }
       })
+      this._publishSceneDebug()
     } catch (error) {
       throw simulationInitializationError(error)
     }
@@ -302,7 +322,10 @@ export class JuyitingGame {
   destroy() {
     this._generation += 1
     this._mountToken = null
+    this._removeSceneDebug()
     this._cleanupRuntime(this._me)
+    this._fatalError = null
+    this._sceneDebugBackend = {}
   }
 
   syncAgents(list) {
@@ -311,6 +334,7 @@ export class JuyitingGame {
 
   syncAgentSnapshots(list) {
     this._hallScene?.syncAgentSnapshots?.(list)
+    this._publishSceneDebug()
   }
 
   enqueueMovementCommands(commands) {
@@ -318,7 +342,9 @@ export class JuyitingGame {
     if (!this._movementEngine) {
       return list.map(() => ({ accepted: false, reason: 'simulation-unavailable' }))
     }
-    return list.map(command => this._movementEngine.enqueue(command))
+    const results = list.map(command => this._movementEngine.enqueue(command))
+    this._publishSceneDebug()
+    return results
   }
 
   drainSimulationPhaseEvents() {
@@ -342,27 +368,39 @@ export class JuyitingGame {
   }
 
   panBy(dx, dy) {
-    return this._hallScene?.panBy?.(dx, dy)
+    const result = this._hallScene?.panBy?.(dx, dy)
+    this._publishSceneDebug()
+    return result
   }
 
   zoomBy(delta) {
-    return this._hallScene?.zoomBy?.(delta)
+    const result = this._hallScene?.zoomBy?.(delta)
+    this._publishSceneDebug()
+    return result
   }
 
   resetTransform() {
-    return this._hallScene?.resetTransform?.()
+    const result = this._hallScene?.resetTransform?.()
+    this._publishSceneDebug()
+    return result
   }
 
   fitToViewport() {
-    return this._hallScene?.fitToViewport?.()
+    const result = this._hallScene?.fitToViewport?.()
+    this._publishSceneDebug()
+    return result
   }
 
   resizeViewport(change) {
-    return this._hallScene?.resizeViewport?.(change)
+    const result = this._hallScene?.resizeViewport?.(change)
+    this._publishSceneDebug()
+    return result
   }
 
   setInteractionLocked(locked, reason = 'panel') {
-    return this._hallScene?.setInteractionLocked?.(locked, reason)
+    const result = this._hallScene?.setInteractionLocked?.(locked, reason)
+    this._publishSceneDebug()
+    return result
   }
 
   getCameraSnapshot() {
@@ -384,7 +422,121 @@ export class JuyitingGame {
   }
 
   resetToMainHall() {
-    return this._hallScene?.resetToMainHall?.()
+    const result = this._hallScene?.resetToMainHall?.()
+    this._publishSceneDebug()
+    return result
+  }
+
+  updateBackendSceneDebug(value = {}) {
+    this._sceneDebugBackend = {
+      snapshotReady: value?.snapshotReady,
+      sceneVersion: value?.sceneVersion,
+      sseConnected: value?.sseConnected,
+      lastEventAt: value?.lastEventAt,
+      resyncCount: value?.resyncCount,
+      degraded: value?.degraded,
+      warnings: Array.isArray(value?.warnings) ? value.warnings.map(warning => ({
+        code: warning?.code,
+        severity: warning?.severity,
+        source: warning?.source,
+        retryable: warning?.retryable
+      })) : []
+    }
+    this._publishSceneDebug()
+  }
+
+  getSceneDebugSnapshot() {
+    const snapshot = this._createSceneDebugSnapshot()
+    this._publishSceneDebug(snapshot)
+    return snapshot
+  }
+
+  _createSceneDebugSnapshot() {
+    const movement = this._mapData?.movement || {}
+    const snapshots = this._movementEngine?.snapshots?.() || []
+    const available = this._spriteLoadResult?.available
+    const warnings = [
+      ...(this._mapData?.movementWarnings || []),
+      ...(this._spriteLoadResult?.errors || []),
+      ...(this._sceneDebugBackend?.warnings || [])
+    ]
+    const snapshot = aggregateSceneDebug({
+      ready: this._initialized,
+      degraded: Boolean(
+        this._fatalError
+        || this._spriteLoadResult?.degraded
+        || this._sceneDebugBackend?.degraded
+      ),
+      fatalError: this._fatalError,
+      camera: {
+        ...(this.getCameraSnapshot() || {}),
+        viewport: this._hallScene?._viewportSize?.() || {}
+      },
+      input: this.getInputSnapshot(),
+      map: {
+        tmxLoaded: Boolean(this._mapData),
+        movementReady: this._mapData?.movementReady,
+        sceneId: movement.sceneId,
+        movementSchemaVersion: movement.movementSchemaVersion,
+        navGraphVersion: movement.navGraphVersion,
+        hotspotCount: this._mapData?.hotspots?.length
+      },
+      sprites: {
+        manifestReady: Boolean(PERSONA_SPRITE_MANIFEST?.personas),
+        manifestVersion: PERSONA_SPRITE_MANIFEST?.version,
+        requiredMissingCount: this._spriteLoadResult?.requiredMissingCount,
+        optionalMissingCount: this._spriteLoadResult?.optionalMissingCount,
+        placeholderCount: this._spriteLoadResult?.placeholderCount
+      },
+      backend: this._sceneDebugBackend,
+      simulation: {
+        ready: Boolean(this._movementEngine),
+        visibleCount: snapshots.length,
+        movingCount: snapshots.filter(agent => agent?.phase === 'moving').length,
+        blockedCount: snapshots.filter(agent => agent?.phase === 'blocked').length,
+        queuedCommandCount: 0,
+        replanningCount: 0
+      },
+      agents: snapshots.map(agent => ({
+        agentId: agent?.agentId,
+        personaCode: agent?.personaCode,
+        behavior: agent?.behavior,
+        phase: agent?.phase,
+        regionId: agent?.regionId,
+        targetRegionId: agent?.targetRegionId,
+        spriteLoaded: Boolean(available?.has?.(agent?.personaCode)),
+        placeholder: false
+      })),
+      warnings
+    })
+    return snapshot
+  }
+
+  _publishSceneDebug(snapshot = null) {
+    if (!sceneDebugEnabled()) return null
+    const target = sceneDebugTarget()
+    if (!target) return null
+    const publication = snapshot || this._createSceneDebugSnapshot()
+    try {
+      Object.defineProperty(target, SCENE_DEBUG_KEY, {
+        value: publication,
+        configurable: true,
+        enumerable: false,
+        writable: false
+      })
+      this._sceneDebugPublication = publication
+      return publication
+    } catch {
+      return null
+    }
+  }
+
+  _removeSceneDebug() {
+    const target = sceneDebugTarget()
+    if (target && target[SCENE_DEBUG_KEY] === this._sceneDebugPublication) {
+      try { delete target[SCENE_DEBUG_KEY] } catch { /* external debug owner retained */ }
+    }
+    this._sceneDebugPublication = null
   }
 }
 
@@ -403,4 +555,17 @@ function simulationInitializationError(error) {
     source: 'simulation'
   })
   return result
+}
+
+function sceneDebugTarget() {
+  if (typeof window !== 'undefined') return window
+  if (typeof globalThis !== 'undefined') return globalThis
+  return null
+}
+
+function sceneDebugEnabled() {
+  if (import.meta.env?.VITE_JUYITING_SCENE_DEBUG === 'true') return true
+  if (import.meta.env?.MODE === 'test') return true
+  return typeof process !== 'undefined'
+    && process.argv?.some(argument => /(?:mocha|vitest|node:test)/i.test(argument))
 }
