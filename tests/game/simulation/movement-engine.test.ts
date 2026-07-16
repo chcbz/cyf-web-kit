@@ -88,6 +88,50 @@ describe('movement engine', () => {
     ])
   })
 
+  it('recovers backend movement at the time-derived cumulative path position', () => {
+    const recoveredRuntime = runtime()
+    recoveredRuntime.edges[0]!.points = [
+      { x: 0, y: 0 }, { x: 0, y: 40 }, { x: 100, y: 40 }, { x: 100, y: 0 },
+    ]
+    const engine = createMovementEngine(recoveredRuntime, manifest(), { now: () => 5_000 })
+
+    engine.enqueue(command({
+      startedAt: '1970-01-01T00:00:00.000Z',
+      expectedArrivalAt: '1970-01-01T00:00:10.000Z',
+    }))
+
+    assert.deepEqual(engine.snapshots()[0], {
+      agentId: 'agent-songjiang', personaCode: 'songjiang', x: 50, y: 40,
+      facing: 'right', animation: 'walk', behavior: 'moving_to_region', phase: 'moving',
+      regionId: 'main-seat', targetRegionId: 'council-table', stateVersion: 1,
+    })
+    assert.deepEqual(engine.drainPhaseEvents(), [])
+  })
+
+  it('settles a committed arrival before replacing it with a newer command', () => {
+    const engine = createMovementEngine(runtime(), manifest(), {
+      now: () => 4_000,
+      arrivalThreshold: 6,
+    })
+    engine.enqueue(command())
+    engine.update(1_900)
+
+    const replacement = engine.enqueue(command({
+      commandId: 'move-2', targetRegionId: 'bounty-board', stateVersion: 2,
+    }))
+
+    assert.deepEqual(replacement, { accepted: true, replacedCommandId: 'move-1' })
+    assert.deepEqual(engine.drainPhaseEvents(), [{
+      reportId: 'move-1:arrived', agentId: 'agent-songjiang', stateVersion: 1,
+      phase: 'arrived', regionId: 'council-table', occurredAt: '1970-01-01T00:00:04.000Z',
+    }])
+    assert.deepEqual(engine.snapshots()[0], {
+      agentId: 'agent-songjiang', personaCode: 'songjiang', x: 100, y: 0,
+      facing: 'left', animation: 'walk', behavior: 'moving_to_region', phase: 'moving',
+      regionId: 'council-table', targetRegionId: 'bounty-board', stateVersion: 2,
+    })
+  })
+
   it('returns to the persona home and faces left while traversing the reverse path', () => {
     const engine = createMovementEngine(runtime(), manifest())
     engine.enqueue(command())
@@ -120,6 +164,7 @@ describe('movement engine', () => {
     assert.equal(engine.snapshots().length, 1)
     assert.throws(() => engine.update(-1), /delta/i)
     assert.throws(() => engine.update(Number.NaN), /delta/i)
+    assert.throws(() => createMovementEngine(runtime(), manifest(), { arrivalThreshold: -1 }), /threshold/i)
   })
 })
 

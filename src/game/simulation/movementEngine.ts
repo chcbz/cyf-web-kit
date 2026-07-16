@@ -1,5 +1,6 @@
 import type { MapPoint, MapRuntimeData, Slot } from '../map/movementSchema.js'
 import type { PersonaSpriteManifest } from '../sprites/personaSpriteManifest.js'
+import { recoverMovementProgress } from './backendSceneStateAdapter.js'
 import { createGraphPathfinder, type PathFinder } from './graphPathfinder.js'
 import {
   createMovementCommandQueue,
@@ -40,6 +41,7 @@ export type MovementEngine = {
 
 export type MovementEngineOptions = {
   now?: () => number
+  arrivalThreshold?: number
 }
 
 interface ActiveMovement {
@@ -57,6 +59,7 @@ interface AgentRuntime {
 }
 
 const EPSILON = 1e-9
+const DEFAULT_ARRIVAL_THRESHOLD = 8
 
 export function createMovementEngine(
   map: MapRuntimeData,
@@ -69,14 +72,21 @@ export function createMovementEngine(
   const agents = new Map<string, AgentRuntime>()
   const phaseEvents: SimulationPhaseEvent[] = []
   const now = options.now ?? Date.now
+  const arrivalThreshold = options.arrivalThreshold ?? DEFAULT_ARRIVAL_THRESHOLD
+  requireArrivalThreshold(arrivalThreshold)
 
   return {
     enqueue(source) {
-      const replacedActive = agents.get(source?.agentId)?.active?.command.commandId
+      const existingAgent = agents.get(source?.agentId)
+      const replacedActive = existingAgent?.active?.command.commandId
       const result = queue.push(source)
       if (!result.accepted) return result
       const command = queue.shift()
       if (!command) throw new Error('Accepted movement command was not available for simulation')
+      if (existingAgent?.active && replacedActive !== command.commandId
+        && distanceToTarget(existingAgent) <= arrivalThreshold) {
+        arrive(existingAgent, phaseEvents, now)
+      }
       activate(command, map, manifest, pathfinder, slots, agents, phaseEvents, now)
       return replacedActive && replacedActive !== command.commandId
         ? { accepted: true, replacedCommandId: replacedActive }
@@ -175,7 +185,16 @@ function activate(
     return
   }
 
-  const points = path.points.map(copyPoint)
+  let points = path.points.map(copyPoint)
+  if (command.source === 'backend') {
+    const recovery = recoverMovementProgress(command, points, now())
+    if (recovery.point) points = remainingPath(points, recovery.point, recovery.distance)
+  }
+  const startPoint = points[0]
+  if (startPoint) {
+    agent.snapshot.x = startPoint.x
+    agent.snapshot.y = startPoint.y
+  }
   agent.snapshot.phase = 'moving'
   agent.snapshot.animation = 'walk'
   agent.snapshot.facing = initialFacing(points, agent.snapshot.facing)
@@ -300,9 +319,51 @@ function pathLength(points: readonly MapPoint[]): number {
   return total
 }
 
+function remainingPath(
+  path: readonly MapPoint[],
+  recoveredPoint: MapPoint,
+  recoveredDistance: number,
+): MapPoint[] {
+  const remaining = [copyPoint(recoveredPoint)]
+  let traversed = 0
+  let nextIndex = path.length
+  for (let index = 1; index < path.length; index += 1) {
+    const segmentLength = Math.hypot(
+      path[index].x - path[index - 1].x,
+      path[index].y - path[index - 1].y,
+    )
+    const segmentEnd = traversed + segmentLength
+    if (recoveredDistance < segmentEnd - EPSILON) {
+      nextIndex = index
+      break
+    }
+    traversed = segmentEnd
+  }
+  for (let index = nextIndex; index < path.length; index += 1) {
+    const point = path[index]
+    const previous = remaining.at(-1)
+    if (!previous || Math.hypot(point.x - previous.x, point.y - previous.y) > EPSILON) {
+      remaining.push(copyPoint(point))
+    }
+  }
+  return remaining
+}
+
+function distanceToTarget(agent: AgentRuntime): number {
+  const target = agent.active?.targetSlot.point
+  if (!target) return Number.POSITIVE_INFINITY
+  return Math.hypot(target.x - agent.snapshot.x, target.y - agent.snapshot.y)
+}
+
 function requireDelta(deltaMs: number): void {
   if (!Number.isFinite(deltaMs) || deltaMs < 0) {
     throw new TypeError('Movement engine delta time must be finite and nonnegative')
+  }
+}
+
+function requireArrivalThreshold(threshold: number): void {
+  if (!Number.isFinite(threshold) || threshold < 0) {
+    throw new TypeError('Movement engine arrival threshold must be finite and nonnegative')
   }
 }
 
