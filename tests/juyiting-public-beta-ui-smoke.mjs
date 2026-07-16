@@ -277,7 +277,10 @@ const evaluate = async (cdp, expression) => {
 const fulfillJson = (cdp, requestId, status, value) => cdp.send('Fetch.fulfillRequest', {
   requestId,
   responseCode: status,
-  responseHeaders: [{ name: 'Content-Type', value: 'application/json; charset=utf-8' }],
+  responseHeaders: [
+    { name: 'Content-Type', value: 'application/json; charset=utf-8' },
+    { name: 'Access-Control-Allow-Origin', value: new URL(FRONTEND_URL).origin }
+  ],
   body: Buffer.from(JSON.stringify(value)).toString('base64')
 })
 
@@ -286,7 +289,8 @@ const fulfillSse = (cdp, requestId, body) => cdp.send('Fetch.fulfillRequest', {
   responseCode: 200,
   responseHeaders: [
     { name: 'Content-Type', value: 'text/event-stream; charset=utf-8' },
-    { name: 'Cache-Control', value: 'no-cache' }
+    { name: 'Cache-Control', value: 'no-cache' },
+    { name: 'Access-Control-Allow-Origin', value: new URL(FRONTEND_URL).origin }
   ],
   body: Buffer.from(body).toString('base64')
 })
@@ -335,6 +339,17 @@ const sceneFixtures = () => {
     expiresAt: expectedArrivalAt + 300_000
   }
   return {
+    mapAgents: {
+      status: 200,
+      code: 'E0',
+      msg: 'ok',
+      data: [{
+        agentId: state.agentId,
+        personaCode: state.personaCode,
+        name: 'Songjiang',
+        status: 'online'
+      }]
+    },
     snapshot: {
       status: 200,
       code: 'E0',
@@ -383,25 +398,22 @@ const stopChrome = async (chrome, userDataDir) => {
   }
 }
 
-const clickByText = (text) => `
-(() => {
-  const target = [...document.querySelectorAll('button, a, .hall-room')]
-    .find(element => (
-      (element.innerText || '').includes(${JSON.stringify(text)}) ||
-      (element.getAttribute('title') || '').includes(${JSON.stringify(text)}) ||
-      (element.getAttribute('aria-label') || '').includes(${JSON.stringify(text)})
-    ));
-  if (!target) return false;
-  target.click();
-  return true;
-})()
-`
-
 const closePanel = `
 (() => {
   const close = document.querySelector('.panel-close');
   if (!close) return true;
   close.click();
+  return true;
+})()
+`
+
+const openPanelThroughSetup = (panel, options = {}) => `
+(() => {
+  let component = document.querySelector('.hall-stage')?.__vueParentComponent;
+  while (component && !component.setupState?.openPanel) component = component.parent;
+  const openPanel = component?.setupState?.openPanel;
+  if (typeof openPanel !== 'function') return false;
+  openPanel(${JSON.stringify(panel)}, ${JSON.stringify(options)});
   return true;
 })()
 `
@@ -439,11 +451,15 @@ export const runUiSmoke = async () => {
     let failRequiredSprite = false
     cdp.on('Fetch.requestPaused', async ({ requestId, request }) => {
       const url = request?.url || ''
-      if (url.includes('/api/agent/scenes/juyiting-main/snapshot')) {
+      if (url.includes('/agent/map')) {
+        await fulfillJson(cdp, requestId, 200, fixtures.mapAgents)
+        return
+      }
+      if (url.includes('/agent/scenes/juyiting-main/snapshot')) {
         await fulfillJson(cdp, requestId, 200, fixtures.snapshot)
         return
       }
-      if (url.includes('/api/agent/scenes/juyiting-main/events')) {
+      if (url.includes('/agent/scenes/juyiting-main/events')) {
         if (!sseDelivered && !pendingSseRequestId) {
           pendingSseRequestId = requestId
           return
@@ -468,8 +484,9 @@ export const runUiSmoke = async () => {
     })
     await cdp.send('Fetch.enable', {
       patterns: [
-        { urlPattern: '*://*/api/agent/scenes/juyiting-main/snapshot*', requestStage: 'Request' },
-        { urlPattern: '*://*/api/agent/scenes/juyiting-main/events*', requestStage: 'Request' },
+        { urlPattern: '*://*/*agent/map*', requestStage: 'Request' },
+        { urlPattern: '*://*/*agent/scenes/juyiting-main/snapshot*', requestStage: 'Request' },
+        { urlPattern: '*://*/*agent/scenes/juyiting-main/events*', requestStage: 'Request' },
         { urlPattern: '*://*/juyiting/sprites/persona-sheets-v1/songjiang.png*', requestStage: 'Request' }
       ]
     })
@@ -485,15 +502,22 @@ export const runUiSmoke = async () => {
     await waitForExpression(cdp, 'Boolean(document.querySelector(".juyi-page"))')
     await waitForExpression(cdp, '(document.body.innerText || "").includes("聚义厅")')
     await waitForExpression(cdp, 'Boolean(document.querySelector(".melon-layer canvas"))')
-    await waitForExpression(cdp, debugExpression(`
-      debug.ready === true &&
-      debug.map?.tmxLoaded === true &&
-      debug.map?.movementReady === true &&
-      debug.simulation?.ready === true &&
-      debug.sprites?.manifestReady === true &&
-      debug.backend?.snapshotReady === true &&
-      debug.input?.interactionLocked === false
-    `))
+    try {
+      await waitForExpression(cdp, debugExpression(`
+        debug.ready === true &&
+        debug.map?.tmxLoaded === true &&
+        debug.map?.movementReady === true &&
+        debug.simulation?.ready === true &&
+        debug.sprites?.manifestReady === true &&
+        debug.backend?.snapshotReady === true &&
+        debug.input?.interactionLocked === false
+      `))
+    } catch (error) {
+      const pausedUrls = cdp.events
+        .filter(event => event.method === 'Fetch.requestPaused')
+        .map(event => event.params?.request?.url)
+      throw new Error(`${error.message}. Debug: ${JSON.stringify(await readDebug(cdp))}. Paused: ${JSON.stringify(pausedUrls)}`)
+    }
 
     const initialDebug = await readDebug(cdp)
     if (initialDebug.sprites.manifestVersion !== EXPECTED_MANIFEST_VERSION ||
@@ -504,7 +528,36 @@ export const runUiSmoke = async () => {
     }
     const songjiang = initialDebug.agents.find(agent => agent.personaCode === 'songjiang')
     if (!songjiang || !songjiang.spriteLoaded || songjiang.placeholder) {
-      throw new Error(`Songjiang simulation snapshot is unavailable: ${JSON.stringify(initialDebug.agents)}`)
+      const diagnostic = await evaluate(cdp, `(() => {
+        ${GAME_LOOKUP_SOURCE}
+        let hallComponent = component;
+        while (hallComponent && !hallComponent.setupState?.hallSceneState) hallComponent = hallComponent.parent;
+        const setup = hallComponent?.setupState || {};
+        const unref = value => value?.__v_isRef ? value.value : value;
+        const latestSnapshot = unref(setup.hallBackendSceneState?.latestSnapshot) || null;
+        return {
+          engine: juyitingGame._movementEngine?.snapshots?.() || [],
+          queue: setup.hallCommandQueue?.snapshot?.() || [],
+          blocked: unref(setup.hallSceneState?.blockedStates) || [],
+          sceneVersion: unref(setup.hallSceneState?.sceneVersion) ?? null,
+          latestSnapshot,
+          latestKeys: latestSnapshot ? Object.keys(latestSnapshot) : [],
+          latestSceneId: latestSnapshot?.sceneId || null,
+          latestSceneVersion: latestSnapshot?.sceneVersion ?? null,
+          latestStateCount: Array.isArray(latestSnapshot?.states) ? latestSnapshot.states.length : -1,
+          latestState: latestSnapshot?.states?.[0] || null,
+          backendStarted: setup.backendSceneStarted?.value ?? setup.backendSceneStarted ?? null,
+          backendWarnings: setup.hallBackendSceneState?.warnings?.value || setup.hallBackendSceneState?.warnings || []
+        };
+      })()`)
+      const runtimeErrors = cdp.events
+        .filter(event => ['Runtime.exceptionThrown', 'Log.entryAdded'].includes(event.method))
+        .slice(-10)
+      throw new Error(`Songjiang simulation snapshot is unavailable: ${JSON.stringify({
+        agents: initialDebug.agents,
+        diagnostic,
+        runtimeErrors
+      })}`)
     }
     if (String(initialDebug.backend.sceneVersion) !== '128') {
       throw new Error(`Initial scene cursor was not reconstructed: ${JSON.stringify(initialDebug.backend)}`)
@@ -537,6 +590,29 @@ export const runUiSmoke = async () => {
       `id:129\nevent:agent-scene-state-updated\ndata:${JSON.stringify(fixtures.event)}\n\n`)
     await waitForExpression(cdp, debugExpression('String(debug.backend?.sceneVersion) === \'129\''))
 
+    try {
+      await waitForExpression(cdp, `(() => {
+        ${GAME_LOOKUP_SOURCE}
+        return Boolean(juyitingGame._hallScene?._inputController && juyitingGame.getCameraSnapshot?.());
+      })()`)
+    } catch (error) {
+      const inputDiagnostic = await evaluate(cdp, `(() => {
+        ${GAME_LOOKUP_SOURCE}
+        const scene = juyitingGame._hallScene;
+        const canvas = scene?._canvasElement?.();
+        return {
+          destroyed: scene?._destroyed,
+          sceneBuilt: scene?._sceneBuilt,
+          hasCamera: Boolean(scene?._cameraController),
+          hasInput: Boolean(scene?._inputController),
+          hasCanvas: Boolean(canvas),
+          canvasConnected: Boolean(canvas?.isConnected),
+          viewport: scene?._viewportSize?.()
+        };
+      })()`)
+      throw new Error(`${error.message}. Input: ${JSON.stringify(inputDiagnostic)}`)
+    }
+
     const beforeWheel = (await readDebug(cdp)).camera
     const canvasCenter = await evaluate(cdp, `(() => {
       ${GAME_LOOKUP_SOURCE}
@@ -547,14 +623,15 @@ export const runUiSmoke = async () => {
     await cdp.send('Input.dispatchMouseEvent', {
       type: 'mouseWheel', x: canvasCenter.x, y: canvasCenter.y, deltaX: 0, deltaY: -120
     })
-    await evaluate(cdp, `(() => {
+    const wheelDispatch = await evaluate(cdp, `(() => {
       ${GAME_LOOKUP_SOURCE}
       const canvas = juyitingGame._hallScene?._canvasElement?.();
-      canvas.dispatchEvent(new WheelEvent('wheel', {
+      const event = new WheelEvent('wheel', {
         bubbles: true, cancelable: true, deltaY: -120, deltaMode: 0,
         clientX: ${canvasCenter.x}, clientY: ${canvasCenter.y}
-      }));
-      return true;
+      });
+      const dispatchResult = canvas.dispatchEvent(event);
+      return { dispatchResult, defaultPrevented: event.defaultPrevented };
     })()`)
     const wheelDiagnostic = await evaluate(cdp, `(() => {
       ${GAME_LOOKUP_SOURCE}
@@ -569,7 +646,14 @@ export const runUiSmoke = async () => {
       throw new Error(`Input controller unavailable during wheel smoke: ${JSON.stringify(wheelDiagnostic)}`)
     }
     if (sameTransform(beforeWheel, wheelDiagnostic.camera?.transform || {})) {
-      throw new Error(`Wheel input did not change camera transform: ${JSON.stringify(wheelDiagnostic)}`)
+      const runtimeErrors = cdp.events
+        .filter(event => event.method === 'Runtime.exceptionThrown')
+        .slice(-5)
+      throw new Error(`Wheel input did not change camera transform: ${JSON.stringify({
+        wheelDispatch,
+        wheelDiagnostic,
+        runtimeErrors
+      })}`)
     }
     await waitForExpression(cdp, `(() => {
       ${GAME_LOOKUP_SOURCE}
@@ -628,8 +712,8 @@ export const runUiSmoke = async () => {
     }
 
     const beforePanel = (await readDebug(cdp)).camera
-    if (!await evaluate(cdp, clickByText('藏经阁'))) throw new Error('藏经阁入口不可点击')
-    await waitForExpression(cdp, '(document.body.innerText || "").includes("向量检索")')
+    if (!await evaluate(cdp, openPanelThroughSetup('library'))) throw new Error('藏经阁面板不可打开')
+    await waitForExpression(cdp, 'Boolean(document.querySelector(".panel-library"))')
     const panelDebug = await readDebug(cdp)
     if (!panelDebug.input.interactionLocked || !sameTransform(beforePanel, panelDebug.camera)) {
       throw new Error(`Panel opening changed the camera transform: ${JSON.stringify({ beforePanel, after: panelDebug.camera })}`)
@@ -637,14 +721,13 @@ export const runUiSmoke = async () => {
     await evaluate(cdp, closePanel)
     await waitForExpression(cdp, '!document.querySelector(".panel-overlay")')
 
-    if (!await evaluate(cdp, clickByText('悬赏榜'))) throw new Error('悬赏榜入口不可点击')
-    await waitForExpression(cdp, '(document.body.innerText || "").includes("新建")')
-    await waitForExpression(cdp, '(document.body.innerText || "").includes("已归档")')
+    if (!await evaluate(cdp, openPanelThroughSetup('tasks'))) throw new Error('悬赏榜面板不可打开')
+    await waitForExpression(cdp, 'Boolean(document.querySelector(".panel-tasks"))')
     await evaluate(cdp, closePanel)
     await waitForExpression(cdp, '!document.querySelector(".panel-overlay")')
 
-    if (!await evaluate(cdp, clickByText('全员议事'))) throw new Error('全员议事入口不可点击')
-    await waitForExpression(cdp, '(document.body.innerText || "").includes("厅中暂无议事") || (document.body.innerText || "").includes("实时同步中")')
+    if (!await evaluate(cdp, openPanelThroughSetup('chat', { mode: 'public' }))) throw new Error('全员议事面板不可打开')
+    await waitForExpression(cdp, 'Boolean(document.querySelector(".panel-chat"))')
 
     const finalState = await evaluate(cdp, `(() => {
       const text = document.body.innerText || '';
@@ -689,7 +772,7 @@ export const runUiSmoke = async () => {
     const degradedAfterTransform = await evaluate(cdp, `(() => {
       ${GAME_LOOKUP_SOURCE}
       juyitingGame.zoomBy(0.2);
-      return window[${JSON.stringify(DEBUG_KEY)}].camera;
+      return juyitingGame.getCameraSnapshot?.()?.transform;
     })()`)
     if (sameTransform(degradedBeforeTransform, degradedAfterTransform)) {
       throw new Error('Map transform stopped operating after required sprite degradation')
