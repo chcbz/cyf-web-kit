@@ -34,6 +34,7 @@ export type SimulationPhaseEvent = {
 
 export type MovementEngine = {
   enqueue(command: MovementCommand): MovementCommandPushResult
+  cancel(agentId: string, stateVersion?: number): boolean
   update(deltaMs: number): void
   snapshots(): AgentSnapshot[]
   drainPhaseEvents(): SimulationPhaseEvent[]
@@ -71,12 +72,20 @@ export function createMovementEngine(
   const slots = createSlotAllocator(map)
   const agents = new Map<string, AgentRuntime>()
   const phaseEvents: SimulationPhaseEvent[] = []
+  const cancellationWatermarks = new Map<string, number>()
   const now = options.now ?? Date.now
   const arrivalThreshold = options.arrivalThreshold ?? DEFAULT_ARRIVAL_THRESHOLD
   requireArrivalThreshold(arrivalThreshold)
 
   return {
     enqueue(source) {
+      const cancellationWatermark = source
+        ? cancellationWatermarks.get(source.agentId)
+        : undefined
+      if (source && cancellationWatermark !== undefined
+        && source.stateVersion <= cancellationWatermark) {
+        return { accepted: false, reason: 'stale-state-version' }
+      }
       const existingAgent = agents.get(source?.agentId)
       const replacedActive = existingAgent?.active?.command.commandId
       const result = queue.push(source)
@@ -91,6 +100,38 @@ export function createMovementEngine(
       return replacedActive && replacedActive !== command.commandId
         ? { accepted: true, replacedCommandId: replacedActive }
         : result
+    },
+
+    cancel(agentId, stateVersion) {
+      if (typeof agentId !== 'string' || agentId.trim().length === 0) return false
+      if (stateVersion !== undefined
+        && (!Number.isSafeInteger(stateVersion) || stateVersion < 0)) {
+        throw new TypeError('Movement cancellation state version must be a nonnegative safe integer')
+      }
+      queue.clearPending(agentId)
+      const agent = agents.get(agentId)
+      if (!agent) return false
+      releaseReservation(agent, slots)
+      agent.active = undefined
+      agent.snapshot.animation = 'idle'
+      agent.snapshot.phase = 'idle'
+      agent.snapshot.behavior = 'idle'
+      if (stateVersion !== undefined) {
+        agent.snapshot.stateVersion = Math.max(agent.snapshot.stateVersion, stateVersion)
+        cancellationWatermarks.set(agentId, Math.max(
+          cancellationWatermarks.get(agentId) ?? 0,
+          stateVersion,
+        ))
+      }
+      delete agent.snapshot.targetRegionId
+      for (let index = phaseEvents.length - 1; index >= 0; index -= 1) {
+        const event = phaseEvents[index]
+        if (event?.agentId === agentId
+          && (stateVersion === undefined || event.stateVersion <= stateVersion)) {
+          phaseEvents.splice(index, 1)
+        }
+      }
+      return true
     },
 
     update(deltaMs) {

@@ -1,6 +1,11 @@
 import { ref } from 'vue'
 
 import { adaptBackendState } from '../../game/simulation/backendSceneStateAdapter.js'
+import {
+  canonicalSceneVersion,
+  compareSceneVersions,
+  publishSceneVersion
+} from './sceneVersion.js'
 
 const SCENE_ID = 'juyiting-main'
 
@@ -13,31 +18,34 @@ export const useHallSceneState = ({
 
   const sceneVersion = ref(0)
   const blockedStates = ref([])
+  let sceneCursor = '0'
   let mapRuntime = null
   const bufferedStates = new Map()
   const latestStateVersions = new Map()
 
-  const cancelPendingMovement = (agentId) => {
+  const cancelMovement = (agentId, stateVersion) => {
     bufferedStates.delete(agentId)
     commandQueue.clearPending?.(agentId)
+    commandQueue.cancelActive?.(agentId, stateVersion)
   }
 
   const recordBlockedState = (agentId, stateVersion, reason) => {
     blockedStates.value = [...blockedStates.value, { agentId, stateVersion, reason }]
   }
 
-  const adaptAndEnqueue = (source) => {
+  const adaptAndEnqueue = (source, alreadyObserved = false) => {
     const identity = stateIdentity(source)
     if (!identity) return { accepted: false, reason: 'invalid-state' }
     const latestStateVersion = latestStateVersions.get(identity.agentId)
-    if (latestStateVersion !== undefined && identity.stateVersion < latestStateVersion) {
+    if (!alreadyObserved && latestStateVersion !== undefined
+      && identity.stateVersion <= latestStateVersion) {
       return { accepted: false, reason: 'stale-agent-state' }
     }
-    latestStateVersions.set(identity.agentId, identity.stateVersion)
+    if (!alreadyObserved) latestStateVersions.set(identity.agentId, identity.stateVersion)
 
     const state = semanticState(source)
     if (!state) {
-      cancelPendingMovement(identity.agentId)
+      cancelMovement(identity.agentId, identity.stateVersion)
       recordBlockedState(identity.agentId, identity.stateVersion, 'invalid-state')
       return { accepted: false, reason: 'invalid-state' }
     }
@@ -50,12 +58,18 @@ export const useHallSceneState = ({
     }
     const adapted = adaptBackendState(state, mapRuntime, now())
     if (!adapted.command) {
-      cancelPendingMovement(state.agentId)
+      cancelMovement(state.agentId, state.stateVersion)
       recordBlockedState(state.agentId, state.stateVersion, adapted.blockedReason || 'no-command')
       return { accepted: false, reason: adapted.blockedReason || 'no-command' }
     }
-    return commandQueue.enqueue(adapted.command)
+    const result = commandQueue.enqueue(adapted.command)
+    if (!result.accepted) commandQueue.clearPending?.(state.agentId)
+    return result
   }
+
+  const applyStates = states => commandQueue.batch
+    ? commandQueue.batch(() => states.map(state => adaptAndEnqueue(state)))
+    : states.map(state => adaptAndEnqueue(state))
 
   const setMapRuntime = (map) => {
     mapRuntime = map || null
@@ -65,34 +79,42 @@ export const useHallSceneState = ({
       .sort((left, right) => left.stateVersion - right.stateVersion
         || compareCodeUnits(left.agentId, right.agentId))
     bufferedStates.clear()
-    return pending.map(adaptAndEnqueue)
+    return commandQueue.batch
+      ? commandQueue.batch(() => pending.map(state => adaptAndEnqueue(state, true)))
+      : pending.map(state => adaptAndEnqueue(state, true))
   }
 
   const applySnapshot = (snapshot) => {
-    if (!snapshot || snapshot.sceneId !== SCENE_ID || !validVersion(snapshot.sceneVersion)) {
+    const cursor = canonicalSceneVersion(snapshot?.sceneVersion)
+    if (!snapshot || snapshot.sceneId !== SCENE_ID || cursor == null) {
       return { accepted: false, reason: 'invalid-snapshot' }
     }
-    if (snapshot.sceneVersion < sceneVersion.value) {
+    if (compareSceneVersions(cursor, sceneCursor) < 0) {
       return { accepted: false, reason: 'stale-scene-version' }
     }
-    sceneVersion.value = snapshot.sceneVersion
+    sceneCursor = cursor
+    sceneVersion.value = publishSceneVersion(cursor)
     const states = Array.isArray(snapshot.states) ? snapshot.states : []
     const presentAgentIds = new Set(states.map(stateIdentity).filter(Boolean).map(state => state.agentId))
     latestStateVersions.forEach((_version, agentId) => {
-      if (!presentAgentIds.has(agentId)) cancelPendingMovement(agentId)
+      if (!presentAgentIds.has(agentId)) {
+        cancelMovement(agentId, latestStateVersions.get(agentId))
+      }
     })
-    const results = states.map(adaptAndEnqueue)
+    const results = applyStates(states)
     return { accepted: true, results }
   }
 
   const applyEvent = (event) => {
-    if (!event || !validVersion(event.sceneVersion) || !event.state) {
+    const cursor = canonicalSceneVersion(event?.sceneVersion)
+    if (!event || cursor == null || !event.state) {
       return { accepted: false, reason: 'invalid-event' }
     }
-    if (event.sceneVersion <= sceneVersion.value) {
+    if (compareSceneVersions(cursor, sceneCursor) <= 0) {
       return { accepted: false, reason: 'stale-scene-version' }
     }
-    sceneVersion.value = event.sceneVersion
+    sceneCursor = cursor
+    sceneVersion.value = publishSceneVersion(cursor)
     return adaptAndEnqueue(event.state)
   }
 
@@ -114,9 +136,16 @@ export const useHallSceneState = ({
 }
 
 function semanticState (source) {
+  const startedAt = timestampValue(source?.startedAt)
+  const expectedArrivalAt = optionalTimestampValue(source?.expectedArrivalAt)
+  const expiresAt = optionalTimestampValue(source?.expiresAt)
   if (!source || !text(source.agentId) || !text(source.personaCode)
     || !text(source.behavior) || !validVersion(source.stateVersion)
-    || !timestamp(source.startedAt)) return null
+    || startedAt == null || expectedArrivalAt === null || expiresAt === null
+    || (expectedArrivalAt !== undefined && expectedArrivalAt < startedAt)
+    || (expiresAt !== undefined && expiresAt < startedAt)
+    || (expectedArrivalAt !== undefined && expiresAt !== undefined
+      && expiresAt < expectedArrivalAt)) return null
   return {
     agentId: source.agentId,
     personaCode: source.personaCode,
@@ -158,9 +187,17 @@ function validVersion (value) {
   return Number.isSafeInteger(value) && value >= 0
 }
 
-function timestamp (value) {
-  if (typeof value === 'number') return Number.isFinite(value) && value >= 0
-  return text(value) && Number.isFinite(Date.parse(value))
+function timestampValue (value) {
+  if (typeof value === 'number') {
+    return Number.isSafeInteger(value) && value >= 0 ? value : null
+  }
+  if (!text(value)) return null
+  const timestamp = /^\d+$/.test(value) ? Number(value) : Date.parse(value)
+  return Number.isSafeInteger(timestamp) && timestamp >= 0 ? timestamp : null
+}
+
+function optionalTimestampValue (value) {
+  return value === undefined ? undefined : timestampValue(value)
 }
 
 function text (value) {

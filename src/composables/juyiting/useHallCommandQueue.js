@@ -8,6 +8,7 @@ export const useHallCommandQueue = ({ queue = createMovementCommandQueue() } = {
   const pendingCount = ref(0)
   const ready = computed(() => mapReady.value && simulationReady.value)
   let simulation = null
+  let batchDepth = 0
 
   const syncPendingCount = () => {
     pendingCount.value = queue.size
@@ -30,8 +31,18 @@ export const useHallCommandQueue = ({ queue = createMovementCommandQueue() } = {
   const enqueue = (command) => {
     const result = queue.push(command)
     syncPendingCount()
-    if (result.accepted) flush()
+    if (result.accepted && batchDepth === 0) flush()
     return result
+  }
+
+  const batch = (callback) => {
+    batchDepth += 1
+    try {
+      return callback()
+    } finally {
+      batchDepth -= 1
+      if (batchDepth === 0) flush()
+    }
   }
 
   const setMapRuntime = (map) => {
@@ -57,7 +68,13 @@ export const useHallCommandQueue = ({ queue = createMovementCommandQueue() } = {
     return removed
   }
 
+  const cancelActive = (agentId, stateVersion) => (
+    simulation?.cancel?.(agentId, stateVersion) === true
+  )
+
   return {
+    batch,
+    cancelActive,
     clearPending,
     enqueue,
     flush,

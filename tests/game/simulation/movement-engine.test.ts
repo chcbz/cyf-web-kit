@@ -166,6 +166,36 @@ describe('movement engine', () => {
     assert.throws(() => engine.update(Number.NaN), /delta/i)
     assert.throws(() => createMovementEngine(runtime(), manifest(), { arrivalThreshold: -1 }), /threshold/i)
   })
+
+  it('cancels active movement without emitting a stale phase event', () => {
+    const engine = createMovementEngine(runtime(), manifest())
+    engine.enqueue(command())
+    engine.update(500)
+
+    assert.equal(engine.cancel('agent-songjiang', 2), true)
+    const cancelled = engine.snapshots()[0]
+    assert.equal(cancelled?.animation, 'idle')
+    assert.equal(cancelled?.phase, 'idle')
+    assert.equal(cancelled?.stateVersion, 2)
+    assert.equal(cancelled?.targetRegionId, undefined)
+
+    engine.update(30_000)
+    assert.deepEqual(engine.drainPhaseEvents(), [])
+    assert.deepEqual(engine.enqueue(command({ commandId: 'stale-after-cancel', stateVersion: 2 })), {
+      accepted: false,
+      reason: 'stale-state-version',
+    })
+    assert.equal(engine.cancel('missing-agent', 2), false)
+  })
+
+  it('drops an undrained stale phase when an authoritative cancellation arrives', () => {
+    const engine = createMovementEngine(runtime(), manifest())
+    engine.enqueue(command())
+    engine.update(2_000)
+
+    assert.equal(engine.cancel('agent-songjiang', 2), true)
+    assert.deepEqual(engine.drainPhaseEvents(), [])
+  })
 })
 
 function command(overrides: Partial<MovementCommand> = {}): MovementCommand {

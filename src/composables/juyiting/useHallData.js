@@ -1,5 +1,11 @@
 import { computed, ref } from 'vue'
 
+import {
+  canonicalSceneVersion,
+  compareSceneVersions,
+  publishSceneVersion
+} from './sceneVersion.js'
+
 export const useHallData = ({
   agentApi,
   log,
@@ -21,6 +27,7 @@ export const useHallData = ({
   const taskKeyword = ref('')
   const backendSceneAgents = ref([])
   const backendSceneVersion = ref(0)
+  let backendSceneCursor = '0'
 
   const filteredAgents = computed(() => agents.value)
 
@@ -246,11 +253,13 @@ export const useHallData = ({
   }
 
   const applySceneSnapshot = (snapshot) => {
-    if (!snapshot || !Number.isSafeInteger(snapshot.sceneVersion) || snapshot.sceneVersion < 0
-      || snapshot.sceneVersion < backendSceneVersion.value) return false
+    const cursor = canonicalSceneVersion(snapshot?.sceneVersion)
+    if (!snapshot || cursor == null
+      || compareSceneVersions(cursor, backendSceneCursor) < 0) return false
     const result = sceneState?.applySnapshot?.(snapshot)
     if (result?.accepted === false) return false
-    backendSceneVersion.value = snapshot.sceneVersion
+    backendSceneCursor = cursor
+    backendSceneVersion.value = publishSceneVersion(cursor)
     backendSceneAgents.value = (Array.isArray(snapshot.agents) ? snapshot.agents : [])
       .map(sceneAgentIdentity)
       .filter(Boolean)
@@ -258,10 +267,12 @@ export const useHallData = ({
   }
 
   const applySceneEvent = (event) => {
-    if (!event || !Number.isSafeInteger(event.sceneVersion)
-      || event.sceneVersion <= backendSceneVersion.value) return false
-    backendSceneVersion.value = event.sceneVersion
+    const cursor = canonicalSceneVersion(event?.sceneVersion)
+    if (!event || cursor == null
+      || compareSceneVersions(cursor, backendSceneCursor) <= 0) return false
     sceneState?.applyEvent?.(event)
+    backendSceneCursor = cursor
+    backendSceneVersion.value = publishSceneVersion(cursor)
     return true
   }
 

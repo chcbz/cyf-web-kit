@@ -380,4 +380,162 @@ describe('hall scene state', () => {
       focused: true
     })
   })
+
+  it('cancels active movement for blocked states and agents absent from authoritative snapshots', () => {
+    const enqueued = []
+    const cancelled = []
+    const commandQueue = useHallCommandQueue()
+    commandQueue.setSimulation({
+      enqueue: command => {
+        enqueued.push(command)
+        return { accepted: true }
+      },
+      cancel: (agentId, stateVersion) => {
+        cancelled.push({ agentId, stateVersion })
+        return true
+      }
+    })
+    const sceneState = useHallSceneState({ commandQueue })
+    sceneState.setMapRuntime(runtimeMap())
+    sceneState.applyEvent({ sceneVersion: 1, state: backendState(1) })
+    sceneState.applyEvent({
+      sceneVersion: 2,
+      state: backendState(2, { targetRegionId: 'missing-region' })
+    })
+    sceneState.applyEvent({ sceneVersion: 3, state: backendState(3) })
+    sceneState.applySnapshot({ sceneId: 'juyiting-main', sceneVersion: 4, states: [] })
+
+    expect(enqueued.map(command => command.stateVersion)).to.deep.equal([1, 3])
+    expect(cancelled).to.deep.equal([
+      { agentId: 'agent-songjiang', stateVersion: 2 },
+      { agentId: 'agent-songjiang', stateVersion: 3 }
+    ])
+  })
+
+  it('delivers buffered commands in the same queue order for either readiness sequence', () => {
+    const run = simulationFirst => {
+      const delivered = []
+      const commandQueue = useHallCommandQueue()
+      const sceneState = useHallSceneState({ commandQueue })
+      sceneState.applySnapshot({
+        sceneId: 'juyiting-main', sceneVersion: 9,
+        states: [
+          backendState(2, { agentId: 'agent-a', personaCode: 'wuyong' }),
+          backendState(8, { agentId: 'agent-z', personaCode: 'linchong' })
+        ]
+      })
+      const simulation = { enqueue: command => {
+        delivered.push(command.commandId)
+        return { accepted: true }
+      } }
+      if (simulationFirst) {
+        commandQueue.setSimulation(simulation)
+        sceneState.setMapRuntime(runtimeMap())
+      } else {
+        sceneState.setMapRuntime(runtimeMap())
+        commandQueue.setSimulation(simulation)
+      }
+      return delivered
+    }
+
+    expect(run(true)).to.deep.equal(['agent-z:8:target', 'agent-a:2:target'])
+    expect(run(false)).to.deep.equal(run(true))
+  })
+
+  it('rejects equal blocked state versions without reviving movement', () => {
+    const enqueued = []
+    const commandQueue = useHallCommandQueue()
+    commandQueue.setSimulation({
+      enqueue: command => {
+        enqueued.push(command)
+        return { accepted: true }
+      },
+      cancel: () => true
+    })
+    const sceneState = useHallSceneState({ commandQueue })
+    sceneState.setMapRuntime(runtimeMap())
+
+    sceneState.applyEvent({
+      sceneVersion: 1,
+      state: backendState(5, { targetRegionId: 'missing-region' })
+    })
+    const duplicate = sceneState.applyEvent({ sceneVersion: 2, state: backendState(5) })
+
+    expect(duplicate).to.deep.include({ accepted: false, reason: 'stale-agent-state' })
+    expect(enqueued).to.deep.equal([])
+  })
+
+  it('preserves exact Java Long scene versions through hall data and scene state', () => {
+    const beforeMax = '9223372036854775806'
+    const max = '9223372036854775807'
+    const commandQueue = useHallCommandQueue()
+    const sceneState = useHallSceneState({ commandQueue })
+    const hallData = useHallData({
+      agentApi: {},
+      log: { warn: () => {} },
+      normalizeStatus: value => value,
+      selectedAgent: ref(null),
+      selectedTask: ref(null),
+      taskAgentMatchScore: () => 0,
+      sceneState
+    })
+
+    expect(hallData.applySceneSnapshot({
+      sceneId: 'juyiting-main', sceneVersion: beforeMax,
+      agents: [], states: [backendState(1)]
+    })).to.equal(true)
+    expect(hallData.applySceneEvent({
+      sceneVersion: max,
+      state: backendState(2)
+    })).to.equal(true)
+
+    expect(hallData.backendSceneVersion.value).to.equal(max)
+    expect(sceneState.sceneVersion.value).to.equal(max)
+  })
+
+  it('validates optional timestamp ordering and cancels active authoritative state', () => {
+    const cancelled = []
+    const commandQueue = useHallCommandQueue()
+    commandQueue.setSimulation({
+      enqueue: () => ({ accepted: true }),
+      cancel: (agentId, stateVersion) => {
+        cancelled.push({ agentId, stateVersion })
+        return true
+      }
+    })
+    const sceneState = useHallSceneState({ commandQueue })
+    sceneState.setMapRuntime(runtimeMap())
+    sceneState.applyEvent({ sceneVersion: 1, state: backendState(1) })
+
+    const invalid = sceneState.applyEvent({
+      sceneVersion: 2,
+      state: backendState(2, {
+        expectedArrivalAt: 900,
+        expiresAt: 800
+      })
+    })
+
+    expect(invalid).to.deep.include({ accepted: false, reason: 'invalid-state' })
+    expect(cancelled).to.deep.equal([{ agentId: 'agent-songjiang', stateVersion: 2 }])
+  })
+
+  it('clears stale pending movement when authoritative command enqueue is rejected', () => {
+    const cleared = []
+    const sceneState = useHallSceneState({
+      commandQueue: {
+        enqueue: () => ({ accepted: false, reason: 'invalid-command' }),
+        clearPending: agentId => {
+          cleared.push(agentId)
+          return 1
+        },
+        setMapRuntime: () => {}
+      }
+    })
+    sceneState.setMapRuntime(runtimeMap())
+
+    const result = sceneState.applyEvent({ sceneVersion: 1, state: backendState(1) })
+
+    expect(result).to.deep.equal({ accepted: false, reason: 'invalid-command' })
+    expect(cleared).to.deep.equal(['agent-songjiang'])
+  })
 })
