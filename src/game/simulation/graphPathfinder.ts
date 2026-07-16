@@ -76,13 +76,33 @@ function solve(
 
   const adjacency = buildAdjacency(graph.edges, nodesById, graph.obstacles)
   const minimumMultiplier = minimumEdgeMultiplier(graph.edges)
+  const startProjection = nearestTraversalProjection(startProjections, adjacency, nodes.length, 'start')
+  const endProjection = nearestTraversalProjection(endProjections, adjacency, nodes.length, 'end')
+  if (!startProjection || !endProjection) return null
   return aStar(
-    startProjections[0].node,
-    endProjections[0].node,
+    startProjection.node,
+    endProjection.node,
     adjacency,
     nodesById,
     minimumMultiplier,
   )
+}
+
+function nearestTraversalProjection(
+  candidates: Projection[],
+  adjacency: Map<string, Traversal[]>,
+  nodeCount: number,
+  endpoint: 'start' | 'end',
+): Projection | undefined {
+  if (nodeCount === 1) return candidates[0]
+  if (endpoint === 'start') {
+    return candidates.find(candidate => (adjacency.get(candidate.node.stableId)?.length ?? 0) > 0)
+  }
+  const incoming = new Set<string>()
+  for (const traversals of adjacency.values()) {
+    for (const traversal of traversals) incoming.add(traversal.to)
+  }
+  return candidates.find(candidate => incoming.has(candidate.node.stableId))
 }
 
 function projections(

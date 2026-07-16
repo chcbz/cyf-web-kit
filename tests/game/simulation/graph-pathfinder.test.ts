@@ -125,6 +125,27 @@ describe('graph pathfinder', () => {
     assert.equal(result.cost, 0)
   })
 
+  it('skips a nearer dead-end projection for the nearest reachable node pair', () => {
+    const graph: Graph = {
+      nodes: [
+        { stableId: 'dead', point: { x: 0, y: 0 }, kind: 'normal', channelWidth: 48 },
+        { stableId: 'start', point: { x: 10, y: 0 }, kind: 'normal', channelWidth: 48 },
+        { stableId: 'end', point: { x: 100, y: 0 }, kind: 'normal', channelWidth: 48 },
+      ],
+      edges: [edge('start-end', 'start', 'end', [{ x: 10, y: 0 }, { x: 100, y: 0 }])],
+      obstacles: [],
+    }
+
+    const result = findGraphPath(graph, { x: 0, y: 0 }, { x: 100, y: 0 }, { colliderWidth: 36 })
+
+    assert.equal(result.status, 'found')
+    if (result.status !== 'found') return
+    assert.deepEqual(result.nodeIds, ['start', 'end'])
+    assert.deepEqual(result.points, [
+      { x: 0, y: 0 }, { x: 10, y: 0 }, { x: 100, y: 0 },
+    ])
+  })
+
   it('distinguishes invisible projections from disconnected reachable nodes', () => {
     const graph: Graph = {
       nodes: [
