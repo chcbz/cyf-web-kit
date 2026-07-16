@@ -7,6 +7,10 @@ import {
   type BackendAgentSceneState,
 } from '../../../src/game/simulation/backendSceneStateAdapter.js'
 import type { MapRuntimeData } from '../../../src/game/map/movementSchema.js'
+import {
+  createMovementCommandQueue,
+  type MovementCommand,
+} from '../../../src/game/simulation/movementCommandQueue.js'
 
 describe('backend scene state adapter', () => {
   const start = '2026-07-11T09:59:50+08:00'
@@ -50,6 +54,38 @@ describe('backend scene state adapter', () => {
     assert.equal(normalizedProgress(start, start, Date.parse(start)), 0)
     assert.equal(normalizedProgress(start, start, Date.parse(start) + 1), 1)
     assert.equal(normalizedProgress(start, arrival, Number.NaN), 0)
+  })
+
+  it('accepts backend epoch-millisecond timestamps and normalizes queue commands', () => {
+    const startMs = Date.parse(start)
+    const arrivalMs = Date.parse(arrival)
+    const expiryMs = Date.parse('2026-07-11T10:05:00+08:00')
+    assert.equal(normalizedProgress(startMs, arrivalMs, now), 0.5)
+
+    const adapted = adaptBackendState({
+      ...sceneState(),
+      startedAt: startMs,
+      expectedArrivalAt: arrivalMs,
+      expiresAt: expiryMs,
+    }, runtime(), now)
+    const compatible: MovementCommand | undefined = adapted.command
+
+    assert.equal(compatible?.startedAt, new Date(startMs).toISOString())
+    assert.equal(compatible?.expectedArrivalAt, new Date(arrivalMs).toISOString())
+    assert.equal(compatible?.expiresAt, new Date(expiryMs).toISOString())
+    assert.deepEqual(createMovementCommandQueue().push(compatible!), { accepted: true })
+  })
+
+  it('uses numeric backend expiry timestamps for return-home mapping', () => {
+    const adapted = adaptBackendState({
+      ...sceneState(),
+      startedAt: Date.parse(start),
+      expectedArrivalAt: Date.parse(arrival),
+      expiresAt: now,
+    }, runtime(), now)
+
+    assert.equal(adapted.command?.type, 'RETURN_HOME')
+    assert.equal(adapted.command?.targetRegionId, 'main-seat')
   })
 
   it('maps semantic target movement to a stable backend command', () => {

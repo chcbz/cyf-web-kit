@@ -1,18 +1,9 @@
 import type { MapPoint, MapRuntimeData } from '../map/movementSchema.js'
+import type { MovementCommand } from './movementCommandQueue.js'
 
-export type AdaptedMovementCommand = {
-  commandId: string
-  agentId: string
-  personaCode: string
-  source: 'backend'
-  type: 'MOVE_TO_REGION' | 'RETURN_HOME'
-  targetRegionId: string
-  priority: number
-  stateVersion: number
-  startedAt: string
-  expectedArrivalAt?: string
-  expiresAt?: string
-}
+export type AdaptedMovementCommand = MovementCommand & { source: 'backend' }
+
+export type BackendTimestamp = string | number
 
 export type BackendAgentSceneState = {
   agentId: string
@@ -20,9 +11,9 @@ export type BackendAgentSceneState = {
   behavior: string
   targetRegionId: string
   stateVersion: number
-  startedAt: string
-  expectedArrivalAt?: string
-  expiresAt?: string
+  startedAt: BackendTimestamp
+  expectedArrivalAt?: BackendTimestamp
+  expiresAt?: BackendTimestamp
   phase?: string
 }
 
@@ -39,13 +30,13 @@ export type RecoveredMovementProgress = {
 }
 
 export function normalizedProgress(
-  startedAt: string,
-  expectedArrivalAt: string | undefined,
+  startedAt: BackendTimestamp,
+  expectedArrivalAt: BackendTimestamp | undefined,
   nowMs: number,
 ): number {
-  if (!expectedArrivalAt || !Number.isFinite(nowMs)) return 0
-  const start = Date.parse(startedAt)
-  const end = Date.parse(expectedArrivalAt)
+  if (expectedArrivalAt === undefined || !Number.isFinite(nowMs)) return 0
+  const start = timestampMs(startedAt)
+  const end = timestampMs(expectedArrivalAt)
   if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return 0
   if (end === start) return nowMs <= start ? 0 : 1
   return clamp((nowMs - start) / (end - start), 0, 1)
@@ -83,20 +74,23 @@ export function adaptBackendState(
     return { blockedReason: 'unknown-region' }
   }
 
+  const command: AdaptedMovementCommand = {
+    commandId: `${state.agentId}:${state.stateVersion}:${returnHome ? 'home' : 'target'}`,
+    agentId: state.agentId,
+    personaCode: state.personaCode,
+    source: 'backend',
+    type: returnHome ? 'RETURN_HOME' : 'MOVE_TO_REGION',
+    targetRegionId,
+    priority: 10,
+    stateVersion: state.stateVersion,
+    startedAt: commandTimestamp(state.startedAt),
+    ...(state.expectedArrivalAt === undefined
+      ? {} : { expectedArrivalAt: commandTimestamp(state.expectedArrivalAt) }),
+    ...(state.expiresAt === undefined
+      ? {} : { expiresAt: commandTimestamp(state.expiresAt) }),
+  }
   return {
-    command: compact({
-      commandId: `${state.agentId}:${state.stateVersion}:${returnHome ? 'home' : 'target'}`,
-      agentId: state.agentId,
-      personaCode: state.personaCode,
-      source: 'backend' as const,
-      type: returnHome ? 'RETURN_HOME' as const : 'MOVE_TO_REGION' as const,
-      targetRegionId,
-      priority: 10,
-      stateVersion: state.stateVersion,
-      startedAt: state.startedAt,
-      expectedArrivalAt: state.expectedArrivalAt,
-      expiresAt: state.expiresAt,
-    }),
+    command,
   }
 }
 
@@ -133,9 +127,9 @@ function pointAtDistance(
   return copyPoint(path.at(-1) as MapPoint)
 }
 
-function isExpired(expiresAt: string | undefined, nowMs: number): boolean {
-  if (!expiresAt || !Number.isFinite(nowMs)) return false
-  const expiry = Date.parse(expiresAt)
+function isExpired(expiresAt: BackendTimestamp | undefined, nowMs: number): boolean {
+  if (expiresAt === undefined || !Number.isFinite(nowMs)) return false
+  const expiry = timestampMs(expiresAt)
   return Number.isFinite(expiry) && expiry <= nowMs
 }
 
@@ -159,8 +153,11 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.max(minimum, Math.min(maximum, value))
 }
 
-function compact<T extends object>(value: T): T {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, item]) => item !== undefined),
-  ) as T
+function timestampMs(value: BackendTimestamp): number {
+  return typeof value === 'number' ? value : Date.parse(value)
+}
+
+function commandTimestamp(value: BackendTimestamp): string {
+  if (typeof value === 'string') return value
+  return Number.isFinite(value) ? new Date(value).toISOString() : String(value)
 }
