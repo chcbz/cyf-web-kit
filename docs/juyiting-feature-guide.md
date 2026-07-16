@@ -69,3 +69,13 @@ If the cursor is outside retained history or continuity cannot be guaranteed, th
 When SSE is locally disabled, or the backend returns the controlled `503 SCENE_EVENTS_DISABLED` response, the hall falls back to snapshot polling every 15 seconds and refreshes immediately when the page regains focus. Snapshot and phase endpoints remain usable in this degraded mode.
 
 Use the application's normal authenticated request path. Never place bearer tokens, API keys, cookies, or other credentials in documentation, URLs, examples, logs, or committed configuration.
+
+## Simulation vertical slice verification
+
+With `VITE_JUYITING_SIMULATION_ENABLED=true` and `VITE_JUYITING_SCENE_DEBUG=true`, `npm run test:juyiting:ui-smoke` verifies the complete browser path rather than looking for a character name in DOM text.
+
+The release assertion surface is the frozen, semantic-only `window.__JYTING_SCENE_DEBUG__` object. It covers page/canvas readiness, movement-map and simulation readiness, manifest identity and missing counts, the `songjiang` simulation snapshot, camera/input transforms, backend cursor progress, and controlled warning metadata. It deliberately excludes coordinates, paths, credentials, chat content, raw responses, and stack traces.
+
+The smoke injects a contiguous SSE update and requires the debug `sceneVersion` to advance. A version gap or `resync-required` event must trigger a fresh snapshot and reconnect. If SSE is disabled with `SCENE_EVENTS_DISABLED`, the existing 15-second polling and focus-refresh fallback remains the accepted degraded behavior.
+
+Page refresh is accepted only when timestamp recovery reconstructs a nonzero cumulative position for an in-progress backend command. Required sprite failure is also exercised: the map stays ready and transformable, while debug reports degraded readiness and the exact required-missing count without creating a placeholder persona.

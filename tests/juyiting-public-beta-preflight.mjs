@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import WebSocket from 'ws'
+import { runUiSmoke } from './juyiting-public-beta-ui-smoke.mjs'
 
 const backend = process.env.JIA_BACKEND_URL || process.env.JUYITING_BACKEND_URL || 'https://localhost:10018'
 const frontend = process.env.JIA_FRONTEND_URL || process.env.JUYITING_FRONTEND_URL || 'https://localhost:8080'
@@ -147,6 +148,19 @@ async function main() {
     }
   })
 
+  await record('simulation vertical slice guidance is current', async () => {
+    const readiness = await readFile(resolve('docs/juyiting-public-beta-readiness.md'), 'utf8')
+    const featureGuide = await readFile(resolve('docs/juyiting-feature-guide.md'), 'utf8')
+    for (const required of [
+      'Simulation vertical slice', '__JYTING_SCENE_DEBUG__',
+      'persona-sheets-v1', 'resync-required', 'SCENE_EVENTS_DISABLED'
+    ]) {
+      if (!`${readiness}\n${featureGuide}`.includes(required)) {
+        throw new Error(`simulation guidance missing marker: ${required}`)
+      }
+    }
+  })
+
   await record('validate Juyiting map assets', async () => {
     await runNpmScript('validate:juyiting-map')
   })
@@ -199,6 +213,8 @@ async function main() {
       throw new Error(`frontend route returned HTTP ${response.status}`)
     }
   })
+
+  await record('simulation vertical slice browser smoke', runUiSmoke)
 
   await record('agent websocket accepts public beta api key', checkAgentWebSocket)
 

@@ -198,3 +198,30 @@ cd D:\workspace\chcbz\project\jia\api
 
 - 公测范围内继续保留在线 Agent WebSocket `dispatched` 运行时验证证据，并在灰度数据变更后复跑 `npm.cmd run test:juyiting:agent-smoke`。
 - 若需要把顶层 `D:\workspace\chcbz\project\jia\docs` 中的详设文档长期维护，应迁移或复制到已跟踪仓库。
+
+## Simulation vertical slice release gate
+
+Run the frontend with the Phase 1 simulation and safe debug projection enabled before executing the browser gate:
+
+```powershell
+$env:VITE_JUYITING_SIMULATION_ENABLED="true"
+$env:VITE_JUYITING_SCENE_DEBUG="true"
+npm run dev
+
+npm run test:juyiting:ui-smoke
+npm run test:juyiting:preflight
+```
+
+The browser smoke uses `window.__JYTING_SCENE_DEBUG__`; it does not identify Songjiang by searching rendered DOM text. Acceptance requires:
+
+- `.juyi-page` and the melonJS canvas are mounted while legacy DOM map/agent layers remain absent;
+- debug readiness, TMX movement readiness, and simulation readiness are all true;
+- sprite manifest `persona-sheets-v1` is ready with zero required, optional, and placeholder counts;
+- the debug agent allowlist contains the `songjiang` persona with its real sprite and no placeholder;
+- wheel and pointer-drag input change the camera transform, opening a panel preserves it, and an orientation resize preserves world focus;
+- an injected contiguous SSE event advances `sceneVersion`; `resync-required` remains the mandatory snapshot-and-reconnect response to a gap;
+- a refresh reconstructs nonzero cumulative movement progress from backend timestamps;
+- an intercepted required-sprite failure remains `ready: true`, becomes `degraded: true` with one required missing sprite, and leaves camera transforms operable;
+- controlled `503 SCENE_EVENTS_DISABLED` behavior falls back to 15-second snapshot polling and focus refresh.
+
+The smoke injects semantic snapshot/SSE fixtures through browser network interception. It never stores or prints bearer tokens, API keys, cookies, paths, coordinates, chat text, or raw backend payloads in sceneDebug output.
