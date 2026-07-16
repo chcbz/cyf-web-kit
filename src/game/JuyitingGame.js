@@ -274,9 +274,9 @@ export class JuyitingGame {
 
   _startGame(me, mountToken = this._mountToken) {
     if (!this._isCurrentMount(mountToken)) return
-    // Use a mount-specific state ID so remounting cannot be ignored when melonJS
-    // still considers a prior PLAY/USER state current.
-    this._stateId = Number(me.state.USER ?? me.state.PLAY) + Number(mountToken)
+    // Alternate between two private state slots so remounting cannot be ignored
+    // while the melonJS state registry remains bounded across repeated retries.
+    this._stateId = Number(me.state.USER ?? me.state.PLAY) + (Number(mountToken) % 2)
     me.state.set(this._stateId, this._hallScene)
     this._initialized = true
     this._fatalError = null

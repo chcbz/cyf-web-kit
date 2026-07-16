@@ -32,8 +32,8 @@ describe('HallScene melonJS runtime compatibility', () => {
     game.start()
 
     expect(calls).to.deep.equal([
-      ['set', 107, game._hallScene],
-      ['change', 107, true]
+      ['set', 101, game._hallScene],
+      ['change', 101, true]
     ])
   })
 
