@@ -76,33 +76,51 @@ function solve(
 
   const adjacency = buildAdjacency(graph.edges, nodesById, graph.obstacles)
   const minimumMultiplier = minimumEdgeMultiplier(graph.edges)
-  const startProjection = nearestTraversalProjection(startProjections, adjacency, nodes.length, 'start')
-  const endProjection = nearestTraversalProjection(endProjections, adjacency, nodes.length, 'end')
-  if (!startProjection || !endProjection) return null
-  return aStar(
-    startProjection.node,
-    endProjection.node,
-    adjacency,
-    nodesById,
-    minimumMultiplier,
-  )
+  const traversableStarts = traversalProjections(startProjections, adjacency, nodes.length, 'start')
+  const traversableEnds = traversalProjections(endProjections, adjacency, nodes.length, 'end')
+  for (const pair of rankedProjectionPairs(traversableStarts, traversableEnds)) {
+    const result = aStar(
+      pair.start.node,
+      pair.end.node,
+      adjacency,
+      nodesById,
+      minimumMultiplier,
+    )
+    if (result) return result
+  }
+  return null
 }
 
-function nearestTraversalProjection(
+function traversalProjections(
   candidates: Projection[],
   adjacency: Map<string, Traversal[]>,
   nodeCount: number,
   endpoint: 'start' | 'end',
-): Projection | undefined {
-  if (nodeCount === 1) return candidates[0]
+): Projection[] {
+  if (nodeCount === 1) return candidates
   if (endpoint === 'start') {
-    return candidates.find(candidate => (adjacency.get(candidate.node.stableId)?.length ?? 0) > 0)
+    return candidates.filter(candidate => (adjacency.get(candidate.node.stableId)?.length ?? 0) > 0)
   }
   const incoming = new Set<string>()
   for (const traversals of adjacency.values()) {
     for (const traversal of traversals) incoming.add(traversal.to)
   }
-  return candidates.find(candidate => incoming.has(candidate.node.stableId))
+  return candidates.filter(candidate => incoming.has(candidate.node.stableId))
+}
+
+function rankedProjectionPairs(
+  starts: Projection[],
+  ends: Projection[],
+): Array<{ start: Projection, end: Projection }> {
+  return starts.flatMap(start => ends.map(end => ({ start, end })))
+    .sort((left, right) => compareNumber(
+      left.start.distance + left.end.distance,
+      right.start.distance + right.end.distance,
+    )
+      || compareNumber(left.start.distance, right.start.distance)
+      || compareNumber(left.end.distance, right.end.distance)
+      || left.start.node.stableId.localeCompare(right.start.node.stableId)
+      || left.end.node.stableId.localeCompare(right.end.node.stableId))
 }
 
 function projections(

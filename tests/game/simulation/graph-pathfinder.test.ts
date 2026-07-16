@@ -146,6 +146,40 @@ describe('graph pathfinder', () => {
     ])
   })
 
+  it('searches farther projection pairs when independently traversable nearest nodes are disconnected', () => {
+    const graph: Graph = {
+      nodes: [
+        { stableId: 'start-near', point: { x: 0, y: 0 }, kind: 'normal', channelWidth: 48 },
+        { stableId: 'start-far', point: { x: 10, y: 0 }, kind: 'normal', channelWidth: 48 },
+        { stableId: 'end-far', point: { x: 90, y: 0 }, kind: 'normal', channelWidth: 48 },
+        { stableId: 'end-near', point: { x: 100, y: 0 }, kind: 'normal', channelWidth: 48 },
+        { stableId: 'start-component-end', point: { x: -1000, y: 0 }, kind: 'normal', channelWidth: 48 },
+        { stableId: 'end-component-start', point: { x: 1100, y: 0 }, kind: 'normal', channelWidth: 48 },
+      ],
+      edges: [
+        edge('near-start-component', 'start-near', 'start-component-end', [
+          { x: 0, y: 0 }, { x: -1000, y: 0 },
+        ]),
+        edge('near-end-component', 'end-component-start', 'end-near', [
+          { x: 1100, y: 0 }, { x: 100, y: 0 },
+        ]),
+        edge('reachable-far-pair', 'start-far', 'end-far', [
+          { x: 10, y: 0 }, { x: 90, y: 0 },
+        ]),
+      ],
+      obstacles: [],
+    }
+
+    const result = findGraphPath(graph, { x: 0, y: 0 }, { x: 100, y: 0 }, { colliderWidth: 36 })
+
+    assert.equal(result.status, 'found')
+    if (result.status !== 'found') return
+    assert.deepEqual(result.nodeIds, ['start-far', 'end-far'])
+    assert.deepEqual(result.points, [
+      { x: 0, y: 0 }, { x: 10, y: 0 }, { x: 90, y: 0 }, { x: 100, y: 0 },
+    ])
+  })
+
   it('distinguishes invisible projections from disconnected reachable nodes', () => {
     const graph: Graph = {
       nodes: [
