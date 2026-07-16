@@ -347,8 +347,14 @@ export function createHallSceneClass(me, HallAgentClass) {
       return this._cameraController !== null
     }
 
-    getCameraSnapshot() { return this._cameraController?.snapshot?.() || null }
-    inputSnapshot() { return this._inputController?.snapshot?.() || DEFAULT_INPUT_SNAPSHOT }
+    getCameraSnapshot() {
+      this._ensureControllers()
+      return this._cameraController?.snapshot?.() || null
+    }
+    inputSnapshot() {
+      this._ensureControllers()
+      return this._inputController?.snapshot?.() || DEFAULT_INPUT_SNAPSHOT
+    }
     getTransform() { return this.getCameraSnapshot()?.transform || { offsetX: 0, offsetY: 0, zoom: 1 } }
 
     panBy(dx, dy) {
@@ -564,6 +570,16 @@ export function createHallSceneClass(me, HallAgentClass) {
         if (mp.minZoom && Number.isFinite(Number(mp.minZoom))) this._minZoom = Number(mp.minZoom)
         if (mp.maxZoom && Number.isFinite(Number(mp.maxZoom))) this._maxZoom = Number(mp.maxZoom)
       }
+
+      // prepareRuntime runs before melonJS activates the stage. Recreate the
+      // controllers here so they use the final map bounds, active viewport,
+      // and the canvas that now owns the input listeners.
+      this._inputController?.cleanup?.()
+      this._cameraController?.cleanup?.()
+      this._inputController = null
+      this._cameraController = null
+      this._inputTarget = null
+      this._interactionLock = null
 
       // 1. Render tile layers first (background base)
       this._renderTileLayers(vpW, vpH)
@@ -820,6 +836,7 @@ export function createHallSceneClass(me, HallAgentClass) {
 
     update(dt) {
       if (this._destroyed) return false
+      if (!this._inputController) this._ensureControllers()
       super.update(dt)
       if (!this._sceneBuilt) this._buildScene()
       if (this._needsSync) this._fullSyncAgents()

@@ -12,6 +12,31 @@ import { createMovementEngine } from '../src/game/simulation/movementEngine.js'
 const HALL_XML = readFileSync('public/juyiting/hall.tmx', 'utf8')
 
 describe('HallScene melonJS runtime compatibility', () => {
+  it('registers a mount-specific melon state and starts that exact stage', () => {
+    const calls = []
+    const game = new JuyitingGame()
+    const me = {
+      state: {
+        USER: 100,
+        PLAY: 3,
+        set: (...args) => calls.push(['set', ...args]),
+        change: (...args) => calls.push(['change', ...args])
+      }
+    }
+    game._me = me
+    game._mountToken = 7
+    game._hallScene = { stage: true }
+    game._markSceneDebugDirty = () => {}
+
+    game._startGame(me, 7)
+    game.start()
+
+    expect(calls).to.deep.equal([
+      ['set', 107, game._hallScene],
+      ['change', 107, true]
+    ])
+  })
+
   it('exposes command, snapshot, movement-map, and phase-event simulation facades', () => {
     const enqueued = []
     const synced = []
@@ -145,6 +170,28 @@ describe('HallScene melonJS runtime compatibility', () => {
 
     expect(updates).to.equal(1)
     expect(drains).to.equal(1)
+  })
+
+  it('retries input controller creation after the canvas becomes available', () => {
+    class Stage { update () {} }
+    const HallScene = createHallSceneClass({
+      Stage,
+      game: { viewport: { width: 960, height: 640 }, world: {} }
+    }, class {})
+    const scene = new HallScene()
+    scene._sceneBuilt = true
+    scene._cameraController = { snapshot: () => ({ transform: { zoom: 1, offsetX: 0, offsetY: 0 } }) }
+    let attempts = 0
+    scene._createInput = () => {
+      attempts += 1
+      scene._inputController = { snapshot: () => ({ activeGesture: 'none', interactionLocked: false }) }
+      return true
+    }
+
+    scene.update(16)
+
+    expect(attempts).to.equal(1)
+    expect(scene._inputController).not.to.equal(null)
   })
 
   it('keeps camera and input facades null-safe before mount and after destroy', () => {

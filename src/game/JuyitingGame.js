@@ -34,6 +34,7 @@ export class JuyitingGame {
     this._readyTimer = null
     this._canvas = null
     this._pendingStart = false
+    this._stateId = null
     this._generation = 0
     this._mountToken = null
     this._movementEngine = null
@@ -197,6 +198,7 @@ export class JuyitingGame {
     this._mapData = null
     this._spriteLoadResult = null
     this._pendingStart = false
+    this._stateId = null
     this._movementEngine = null
     this._pendingSimulationPhaseEvents = []
     this._simulationEnabled = true
@@ -272,14 +274,16 @@ export class JuyitingGame {
 
   _startGame(me, mountToken = this._mountToken) {
     if (!this._isCurrentMount(mountToken)) return
-    // Register and switch to PLAY state
-    me.state.set(me.state.PLAY, this._hallScene, true)
+    // Use a mount-specific state ID so remounting cannot be ignored when melonJS
+    // still considers a prior PLAY/USER state current.
+    this._stateId = Number(me.state.USER ?? me.state.PLAY) + Number(mountToken)
+    me.state.set(this._stateId, this._hallScene)
     this._initialized = true
     this._fatalError = null
     this._markSceneDebugDirty()
     if (this._pendingStart) {
       this._pendingStart = false
-      me.state.change(me.state.PLAY, true)
+      me.state.change(this._stateId, true)
     }
     // Emit ready again if onResetEvent didn't call it
     if (this._readyTimer !== null) clearTimeout(this._readyTimer)
@@ -317,12 +321,12 @@ export class JuyitingGame {
   }
 
   start() {
-    if (!this._me) return
+    if (!this._me || this._stateId == null) return
     if (!this._initialized) {
       this._pendingStart = true
       return
     }
-    this._me.state.change(this._me.state.PLAY, true)
+    this._me.state.change(this._stateId, true)
   }
 
   pause() {
