@@ -6,7 +6,8 @@ export const useHallData = ({
   normalizeStatus,
   selectedAgent,
   selectedTask,
-  taskAgentMatchScore
+  taskAgentMatchScore,
+  sceneState
 }) => {
   const agents = ref([])
   const mapAgents = ref([])
@@ -18,6 +19,8 @@ export const useHallData = ({
   const taskStatusFilter = ref('')
   const taskAbilityFilter = ref('')
   const taskKeyword = ref('')
+  const backendSceneAgents = ref([])
+  const backendSceneVersion = ref(0)
 
   const filteredAgents = computed(() => agents.value)
 
@@ -242,9 +245,31 @@ export const useHallData = ({
     await loadTasks()
   }
 
+  const applySceneSnapshot = (snapshot) => {
+    if (!snapshot || !Number.isSafeInteger(snapshot.sceneVersion) || snapshot.sceneVersion < 0) return false
+    backendSceneVersion.value = snapshot.sceneVersion
+    backendSceneAgents.value = (Array.isArray(snapshot.agents) ? snapshot.agents : [])
+      .map(sceneAgentIdentity)
+      .filter(Boolean)
+    sceneState?.applySnapshot?.(snapshot)
+    return true
+  }
+
+  const applySceneEvent = (event) => {
+    if (!event || !Number.isSafeInteger(event.sceneVersion)
+      || event.sceneVersion <= backendSceneVersion.value) return false
+    backendSceneVersion.value = event.sceneVersion
+    sceneState?.applyEvent?.(event)
+    return true
+  }
+
   return {
+    applySceneEvent,
+    applySceneSnapshot,
     agentFilter,
     agents,
+    backendSceneAgents,
+    backendSceneVersion,
     bindPersona,
     canAssign,
     filteredAgents,
@@ -269,5 +294,15 @@ export const useHallData = ({
     taskStatusFilter,
     unbindPersona,
     visibleAgents
+  }
+}
+
+const sceneAgentIdentity = (source) => {
+  if (!source?.agentId || !source?.personaCode) return null
+  return {
+    agentId: source.agentId,
+    personaCode: source.personaCode,
+    ...(source.status === undefined ? {} : { status: source.status }),
+    ...(source.available === undefined ? {} : { available: Boolean(source.available) })
   }
 }

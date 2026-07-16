@@ -134,7 +134,8 @@ export const useHallScene = ({
   mapAgents,
   normalizeStatus = value => String(value || '').toLowerCase(),
   selectedAgent,
-  selectedTask: _selectedTask
+  selectedTask: _selectedTask,
+  simulationEnabled = defaultSimulationEnabled()
 }) => {
   const transientAgents = ref({})
   const transientHotspots = ref({})
@@ -184,10 +185,15 @@ export const useHallScene = ({
       const visual = HALL_CHARACTER_VISUALS[visualKey] || HALL_CHARACTER_VISUALS.default
       const transient = transientAgents.value[normalizeAgentId(agent)] || {}
       const featuredHero = featuredHeroById[visualKey] || featuredHeroById[normalizeAgentId(agent)]
-      const regionId = transient.regionId || featuredHero?.regionId || visual.defaultRegion || HALL_CHARACTER_VISUALS.default.defaultRegion
+      const simulationControlled = simulationEnabled && visualKey === 'songjiang'
+      const staticRegionId = featuredHero?.regionId || visual.defaultRegion || HALL_CHARACTER_VISUALS.default.defaultRegion
+      const regionId = simulationControlled ? staticRegionId : (transient.regionId || staticRegionId)
       const region = HALL_SCENE_REGIONS[regionId] || HALL_SCENE_REGIONS.idleFloor
-      const point = clampPointToRegion(transient.destination || featuredHero?.anchor || sampleRegionPoint(region, seed, 1), region)
-      const patrolRoute = buildPatrolRoute(region, seed, point)
+      const point = clampPointToRegion(
+        (!simulationControlled && transient.destination) || featuredHero?.anchor || sampleRegionPoint(region, seed, 1),
+        region
+      )
+      const patrolRoute = simulationControlled ? [] : buildPatrolRoute(region, seed, point)
       const status = normalizeStatus(agent.status)
       const sceneStatus = sceneStatusFor(status, transient)
       const selected = selectedId === normalizeAgentId(agent)
@@ -214,8 +220,9 @@ export const useHallScene = ({
         recommended: Boolean(transient.recommended),
         featuredHero: Boolean(agent.featuredHero || featuredHero),
         synthetic: Boolean(agent.synthetic),
+        simulationControlled,
         visualKey: visual.visualKey || visualKey,
-        prominentMotion: Boolean(transient.prominentMotion),
+        prominentMotion: simulationControlled ? false : Boolean(transient.prominentMotion),
         motionSeed: seed
       }
     })
@@ -378,3 +385,5 @@ export const useHallScene = ({
     syncAfterPersonaChanged
   }
 }
+
+const defaultSimulationEnabled = () => (import.meta.env?.VITE_JUYITING_SIMULATION_ENABLED === 'true')
