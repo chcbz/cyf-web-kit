@@ -40,7 +40,11 @@ export class JuyitingGame {
     this._pendingSimulationPhaseEvents = []
     this._fatalError = null
     this._sceneDebugBackend = {}
+    this._sceneDebugSimulation = {}
     this._sceneDebugPublication = null
+    this._sceneDebugDirty = false
+    this._sceneDebugPublishHandle = null
+    this._sceneDebugPublishCancel = null
     this._simulationEnabled = true
   }
 
@@ -68,7 +72,7 @@ export class JuyitingGame {
     this._spriteLoadResult = null
     this._fatalError = null
     this._simulationEnabled = options.simulationEnabled !== false
-    this._publishSceneDebug()
+    this._markSceneDebugDirty()
     let me
     try {
       me = await this._loadMelonJS()
@@ -115,7 +119,7 @@ export class JuyitingGame {
       await this._loadResources(me, HALL_BOOT_RESOURCES, mountToken)
       if (!this._isCurrentMount(mountToken)) return
 
-      await this._prepareMapData(me)
+      await this._prepareMapData(me, mountToken)
       if (!this._isCurrentMount(mountToken)) return
 
       await this._loadResources(me, buildHallMapResources(this._mapData), mountToken)
@@ -141,7 +145,7 @@ export class JuyitingGame {
       }
       this._spriteLoadResult = spriteLoadResult
       this._hallScene?.setAvailablePersonas(spriteLoadResult.available)
-      this._publishSceneDebug()
+      this._markSceneDebugDirty()
 
       if (this._simulationEnabled) this._initializeSimulationRuntime()
 
@@ -162,7 +166,7 @@ export class JuyitingGame {
       if (this._isCurrentMount(mountToken)) {
         this._cleanupFailedMount(me)
         this._fatalError = failure
-        this._publishSceneDebug()
+        this._markSceneDebugDirty()
       }
       throw failure
     }
@@ -171,6 +175,7 @@ export class JuyitingGame {
   _cleanupFailedMount(me) {
     this._generation += 1
     this._mountToken = null
+    this._cancelSceneDebugPublication()
     this._cleanupRuntime(me)
   }
 
@@ -244,22 +249,25 @@ export class JuyitingGame {
     return this._mountToken === mountToken
   }
 
-  async _prepareMapData(me) {
+  async _prepareMapData(me, mountToken = this._mountToken) {
     let tmx = me.loader.getTMX?.(HALL_MAP_RESOURCE.name)
 
     if (!tmx) {
       try {
         const resp = await fetch(HALL_MAP_RESOURCE.src)
         const xmlText = await resp.text()
+        if (!this._isCurrentMount(mountToken)) return
         tmx = xmlText
       } catch (err) {
         console.warn('[JuyitingGame] Direct TMX fetch failed:', err?.message || err)
       }
     }
 
+    if (!this._isCurrentMount(mountToken)) return
+
     this._mapData = parseJuyiHallTmx(tmx, { movementEnabled: this._simulationEnabled })
     this._hallScene?.setMapData(this._mapData)
-    this._publishSceneDebug()
+    this._markSceneDebugDirty()
   }
 
   _startGame(me, mountToken = this._mountToken) {
@@ -268,7 +276,7 @@ export class JuyitingGame {
     me.state.set(me.state.PLAY, this._hallScene, true)
     this._initialized = true
     this._fatalError = null
-    this._publishSceneDebug()
+    this._markSceneDebugDirty()
     if (this._pendingStart) {
       this._pendingStart = false
       me.state.change(me.state.PLAY, true)
@@ -290,7 +298,7 @@ export class JuyitingGame {
       this._hallScene?.setSimulationRuntime?.({
         update: deltaMs => {
           this._movementEngine?.update(deltaMs)
-          this._publishSceneDebug()
+          this._markSceneDebugDirty()
         },
         snapshots: () => this._movementEngine?.snapshots() || [],
         drainPhaseEvents: () => this._movementEngine?.drainPhaseEvents() || [],
@@ -302,7 +310,7 @@ export class JuyitingGame {
           }
         }
       })
-      this._publishSceneDebug()
+      this._markSceneDebugDirty()
     } catch (error) {
       throw simulationInitializationError(error)
     }
@@ -325,10 +333,12 @@ export class JuyitingGame {
   destroy() {
     this._generation += 1
     this._mountToken = null
+    this._cancelSceneDebugPublication()
     this._removeSceneDebug()
     this._cleanupRuntime(this._me)
     this._fatalError = null
     this._sceneDebugBackend = {}
+    this._sceneDebugSimulation = {}
   }
 
   syncAgents(list) {
@@ -337,7 +347,7 @@ export class JuyitingGame {
 
   syncAgentSnapshots(list) {
     this._hallScene?.syncAgentSnapshots?.(list)
-    this._publishSceneDebug()
+    this._markSceneDebugDirty()
   }
 
   enqueueMovementCommands(commands) {
@@ -346,7 +356,7 @@ export class JuyitingGame {
       return list.map(() => ({ accepted: false, reason: 'simulation-unavailable' }))
     }
     const results = list.map(command => this._movementEngine.enqueue(command))
-    this._publishSceneDebug()
+    this._markSceneDebugDirty()
     return results
   }
 
@@ -372,37 +382,37 @@ export class JuyitingGame {
 
   panBy(dx, dy) {
     const result = this._hallScene?.panBy?.(dx, dy)
-    this._publishSceneDebug()
+    this._markSceneDebugDirty()
     return result
   }
 
   zoomBy(delta) {
     const result = this._hallScene?.zoomBy?.(delta)
-    this._publishSceneDebug()
+    this._markSceneDebugDirty()
     return result
   }
 
   resetTransform() {
     const result = this._hallScene?.resetTransform?.()
-    this._publishSceneDebug()
+    this._markSceneDebugDirty()
     return result
   }
 
   fitToViewport() {
     const result = this._hallScene?.fitToViewport?.()
-    this._publishSceneDebug()
+    this._markSceneDebugDirty()
     return result
   }
 
   resizeViewport(change) {
     const result = this._hallScene?.resizeViewport?.(change)
-    this._publishSceneDebug()
+    this._markSceneDebugDirty()
     return result
   }
 
   setInteractionLocked(locked, reason = 'panel') {
     const result = this._hallScene?.setInteractionLocked?.(locked, reason)
-    this._publishSceneDebug()
+    this._markSceneDebugDirty()
     return result
   }
 
@@ -426,13 +436,13 @@ export class JuyitingGame {
 
   resetToMainHall() {
     const result = this._hallScene?.resetToMainHall?.()
-    this._publishSceneDebug()
+    this._markSceneDebugDirty()
     return result
   }
 
   cancelMovement(agentId, stateVersion) {
     const cancelled = this._movementEngine?.cancel?.(agentId, stateVersion) === true
-    this._publishSceneDebug()
+    this._markSceneDebugDirty()
     return cancelled
   }
 
@@ -451,18 +461,26 @@ export class JuyitingGame {
         retryable: warning?.retryable
       })) : []
     }
-    this._publishSceneDebug()
+    this._markSceneDebugDirty()
+  }
+
+  updateSimulationDebug(value = {}) {
+    this._sceneDebugSimulation = {
+      queuedCommandCount: value?.queuedCommandCount,
+      replanningCount: value?.replanningCount
+    }
+    this._markSceneDebugDirty()
   }
 
   getSceneDebugSnapshot() {
-    const snapshot = this._createSceneDebugSnapshot()
-    this._publishSceneDebug(snapshot)
-    return snapshot
+    return this._publishSceneDebugNow() || this._createSceneDebugSnapshot()
   }
 
   _createSceneDebugSnapshot() {
     const movement = this._mapData?.movement || {}
     const snapshots = this._movementEngine?.snapshots?.() || []
+    const metrics = this._movementEngine?.metrics?.() || {}
+    const renderedVisibleCount = this._hallScene?.getRenderedSimulationAgentCount?.()
     const available = this._spriteLoadResult?.available
     const warnings = [
       ...(this._mapData?.movementWarnings || []),
@@ -500,11 +518,15 @@ export class JuyitingGame {
       backend: this._sceneDebugBackend,
       simulation: {
         ready: Boolean(this._movementEngine),
-        visibleCount: snapshots.length,
+        visibleCount: Number.isSafeInteger(renderedVisibleCount)
+          ? renderedVisibleCount
+          : snapshots.length,
         movingCount: snapshots.filter(agent => agent?.phase === 'moving').length,
         blockedCount: snapshots.filter(agent => agent?.phase === 'blocked').length,
-        queuedCommandCount: 0,
-        replanningCount: 0
+        queuedCommandCount: this._sceneDebugSimulation.queuedCommandCount
+          ?? metrics.queuedCommandCount,
+        replanningCount: this._sceneDebugSimulation.replanningCount
+          ?? metrics.replanningCount
       },
       agents: snapshots.map(agent => ({
         agentId: agent?.agentId,
@@ -521,11 +543,41 @@ export class JuyitingGame {
     return snapshot
   }
 
-  _publishSceneDebug(snapshot = null) {
+  _publishSceneDebug() {
+    return this._markSceneDebugDirty()
+  }
+
+  _markSceneDebugDirty() {
     if (!sceneDebugEnabled()) return null
     const target = sceneDebugTarget()
     if (!target) return null
-    const publication = snapshot || this._createSceneDebugSnapshot()
+    this._sceneDebugDirty = true
+    if (this._sceneDebugPublishHandle !== null) return null
+    const generation = this._generation
+    const publish = () => {
+      this._sceneDebugPublishHandle = null
+      this._sceneDebugPublishCancel = null
+      if (!this._sceneDebugDirty || generation !== this._generation) return
+      this._sceneDebugDirty = false
+      this._publishSceneDebugNow()
+    }
+    if (typeof target.requestAnimationFrame === 'function') {
+      const handle = target.requestAnimationFrame(publish)
+      this._sceneDebugPublishHandle = handle
+      this._sceneDebugPublishCancel = () => target.cancelAnimationFrame?.(handle)
+    } else {
+      const handle = setTimeout(publish, 0)
+      this._sceneDebugPublishHandle = handle
+      this._sceneDebugPublishCancel = () => clearTimeout(handle)
+    }
+    return null
+  }
+
+  _publishSceneDebugNow() {
+    if (!sceneDebugEnabled()) return null
+    const target = sceneDebugTarget()
+    if (!target) return null
+    const publication = this._createSceneDebugSnapshot()
     try {
       Object.defineProperty(target, SCENE_DEBUG_KEY, {
         value: publication,
@@ -538,6 +590,13 @@ export class JuyitingGame {
     } catch {
       return null
     }
+  }
+
+  _cancelSceneDebugPublication() {
+    try { this._sceneDebugPublishCancel?.() } catch { /* best-effort debug cleanup */ }
+    this._sceneDebugPublishHandle = null
+    this._sceneDebugPublishCancel = null
+    this._sceneDebugDirty = false
   }
 
   _removeSceneDebug() {

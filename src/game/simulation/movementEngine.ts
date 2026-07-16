@@ -38,6 +38,7 @@ export type MovementEngine = {
   update(deltaMs: number): void
   snapshots(): AgentSnapshot[]
   drainPhaseEvents(): SimulationPhaseEvent[]
+  metrics(): Readonly<{ queuedCommandCount: number, replanningCount: number }>
 }
 
 export type MovementEngineOptions = {
@@ -73,6 +74,7 @@ export function createMovementEngine(
   const agents = new Map<string, AgentRuntime>()
   const phaseEvents: SimulationPhaseEvent[] = []
   const cancellationWatermarks = new Map<string, number>()
+  let replanningCount = 0
   const now = options.now ?? Date.now
   const arrivalThreshold = options.arrivalThreshold ?? DEFAULT_ARRIVAL_THRESHOLD
   requireArrivalThreshold(arrivalThreshold)
@@ -92,6 +94,7 @@ export function createMovementEngine(
       if (!result.accepted) return result
       const command = queue.shift()
       if (!command) throw new Error('Accepted movement command was not available for simulation')
+      if (existingAgent?.active && replacedActive !== command.commandId) replanningCount += 1
       if (existingAgent?.active && replacedActive !== command.commandId
         && distanceToTarget(existingAgent) <= arrivalThreshold) {
         arrive(existingAgent, phaseEvents, now)
@@ -149,6 +152,10 @@ export function createMovementEngine(
 
     drainPhaseEvents() {
       return phaseEvents.splice(0).map(copyPhaseEvent)
+    },
+
+    metrics() {
+      return Object.freeze({ queuedCommandCount: queue.size, replanningCount })
     },
   }
 }

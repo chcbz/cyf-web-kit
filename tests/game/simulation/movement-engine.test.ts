@@ -79,6 +79,8 @@ describe('movement engine', () => {
     }))
 
     assert.equal(replacement.accepted, true)
+    assert.deepEqual(engine.metrics(), { queuedCommandCount: 0, replanningCount: 1 })
+    assert.equal(Object.isFrozen(engine.metrics()), true)
     assert.equal(engine.snapshots()[0]?.stateVersion, 2)
     assert.equal(engine.snapshots()[0]?.phase, 'moving')
     engine.update(10_000)

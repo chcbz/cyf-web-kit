@@ -10,6 +10,8 @@ type UnknownRecord = Record<string, unknown>
 
 const FORBIDDEN_TEXT = /token|api.?key|credential|password|secret|chat|raw|stack|model.?response/i
 const CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/
+const JAVA_LONG_MAX = 9_223_372_036_854_775_807n
+const MAX_SAFE_INTEGER = BigInt(Number.MAX_SAFE_INTEGER)
 
 export function aggregateSceneDebug(inputs: SceneDebugInputs = {}): SceneDebugSnapshot {
   const camera = record(inputs.camera)
@@ -143,7 +145,17 @@ function safeTimestamp(value: unknown): number | string {
 
 function version(value: unknown): number | string {
   if (Number.isSafeInteger(value) && Number(value) >= 0) return Number(value)
-  if (typeof value === 'string' && /^\d{1,19}$/.test(value)) return value
+  if (typeof value === 'bigint' && value >= 0n && value <= JAVA_LONG_MAX) {
+    return value <= MAX_SAFE_INTEGER ? Number(value) : value.toString()
+  }
+  if (typeof value === 'string' && /^\d+$/.test(value)) {
+    try {
+      const parsed = BigInt(value)
+      if (parsed <= JAVA_LONG_MAX) {
+        return parsed <= MAX_SAFE_INTEGER ? Number(parsed) : parsed.toString()
+      }
+    } catch { /* invalid versions fail closed */ }
+  }
   return 0
 }
 

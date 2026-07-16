@@ -244,6 +244,7 @@ import { useHallLibrary } from '@/composables/juyiting/useHallLibrary'
 import { focusHallPanel, restorePanelFocus, trapPanelFocus, useHallPanels } from '@/composables/juyiting/useHallPanels'
 import { useHallScene } from '@/composables/juyiting/useHallScene'
 import { useHallSceneState } from '@/composables/juyiting/useHallSceneState'
+import { useHallSceneDebugBridge } from '@/composables/juyiting/useHallSceneDebugBridge'
 import { useHallSound } from '@/composables/juyiting/useHallSound'
 import { useHallTaskActions } from '@/composables/juyiting/useHallTaskActions'
 import { portraitName, portraitRole, portraitShortName, portraitStyle, roleClass } from '@/composables/juyiting/useWaterMarginRoles'
@@ -262,6 +263,7 @@ import {
   taskStatusFilters
 } from '@/constants/juyiting'
 import { log } from '@/utils/logger'
+import { juyitingGame } from '@/game/index.js'
 
 const globalStore = useGlobalStore()
 const apiStore = useApiStore()
@@ -404,6 +406,12 @@ hallBackendSceneState = useHallBackendSceneState({
   agentApi,
   onSnapshot: applySceneSnapshot,
   onEvent: applySceneEvent
+})
+
+const stopHallSceneDebugBridge = useHallSceneDebugBridge({
+  backend: hallBackendSceneState,
+  commandQueue: hallCommandQueue,
+  game: juyitingGame
 })
 
 const {
@@ -844,6 +852,7 @@ onUnmounted(() => {
   stopHallReplyPolling()
   stopDialogueBubbles()
   resetSimulationLifecycle()
+  stopHallSceneDebugBridge()
   globalStore.setShowAppBar(true)
 })
 </script>

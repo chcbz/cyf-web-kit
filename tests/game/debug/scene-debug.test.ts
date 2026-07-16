@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { afterEach, describe, it } from 'mocha'
 
 import {
@@ -8,10 +9,13 @@ import {
 import { JuyitingGame } from '../../../src/game/JuyitingGame.js'
 
 const DEBUG_KEY = '__JYTING_SCENE_DEBUG__'
+const debugTarget = (): Record<string, unknown> => (
+  (typeof window !== 'undefined' ? window : globalThis) as unknown as Record<string, unknown>
+)
 
 describe('scene debug', () => {
   afterEach(() => {
-    delete (globalThis as unknown as Record<string, unknown>)[DEBUG_KEY]
+    delete debugTarget()[DEBUG_KEY]
   })
 
   it('publishes the exact approved shape using semantic allowlists only', () => {
@@ -129,8 +133,115 @@ describe('scene debug', () => {
     assert.doesNotMatch(JSON.stringify(debug), /token|private|stack|message|rawResponse|apiKey/i)
   })
 
+  it('canonicalizes backend versions within Java Long bounds', () => {
+    assert.equal(aggregateSceneDebug({ backend: { sceneVersion: '00042' } }).backend.sceneVersion, 42)
+    assert.equal(
+      aggregateSceneDebug({ backend: { sceneVersion: '9223372036854775807' } }).backend.sceneVersion,
+      '9223372036854775807',
+    )
+    assert.equal(
+      aggregateSceneDebug({ backend: { sceneVersion: '9223372036854775808' } }).backend.sceneVersion,
+      0,
+    )
+  })
+
+  it('uses rendered visibility and live simulation metrics instead of snapshot constants', () => {
+    const game = new JuyitingGame()
+    game._movementEngine = {
+      snapshots: () => [{
+        agentId: 'agent-songjiang', personaCode: 'songjiang', phase: 'moving',
+      }],
+      metrics: () => ({ queuedCommandCount: 2, replanningCount: 3 }),
+    }
+    game._hallScene = {
+      getRenderedSimulationAgentCount: () => 0,
+      onDestroyEvent: () => {},
+    }
+    game.updateSimulationDebug({ queuedCommandCount: 4 })
+
+    const debug = game.getSceneDebugSnapshot()
+
+    assert.equal(debug.simulation.visibleCount, 0)
+    assert.equal(debug.simulation.queuedCommandCount, 4)
+    assert.equal(debug.simulation.replanningCount, 3)
+    game.destroy()
+  })
+
+  it('never publishes a caller-provided raw snapshot and coalesces dirty updates', () => {
+    const target = debugTarget()
+    const callbacks: Array<() => void> = []
+    const originalRequest = target.requestAnimationFrame
+    const originalCancel = target.cancelAnimationFrame
+    target.requestAnimationFrame = (callback: () => void) => {
+      callbacks.push(callback)
+      return callbacks.length
+    }
+    target.cancelAnimationFrame = () => {}
+    try {
+      const game = new JuyitingGame()
+      game.updateBackendSceneDebug({ snapshotReady: true, sceneVersion: 1 })
+      game.updateBackendSceneDebug({
+        snapshotReady: true, sceneVersion: 2,
+        rawResponse: { token: 'private-token' }, chatContent: 'private-chat',
+      })
+      game._publishSceneDebug({ rawResponse: 'private-raw-model-response' })
+
+      assert.equal(callbacks.length, 1)
+      assert.equal(Object.hasOwn(target, DEBUG_KEY), false)
+      callbacks[0]?.()
+      const debug = target[DEBUG_KEY]
+      assert.equal((debug as { backend: { sceneVersion: number } }).backend.sceneVersion, 2)
+      assert.doesNotMatch(JSON.stringify(debug), /private|token|chat|raw|model/i)
+      game.destroy()
+    } finally {
+      if (originalRequest === undefined) delete target.requestAnimationFrame
+      else target.requestAnimationFrame = originalRequest
+      if (originalCancel === undefined) delete target.cancelAnimationFrame
+      else target.cancelAnimationFrame = originalCancel
+    }
+  })
+
+  it('guards late map fetch publication and cancels scheduled debug after destroy', async () => {
+    const target = debugTarget()
+    const callbacks: Array<() => void> = []
+    const originalRequest = target.requestAnimationFrame
+    const originalCancel = target.cancelAnimationFrame
+    const originalFetch = globalThis.fetch
+    let resolveText: ((value: string) => void) | undefined
+    target.requestAnimationFrame = (callback: () => void) => {
+      callbacks.push(callback)
+      return callbacks.length
+    }
+    target.cancelAnimationFrame = () => {}
+    globalThis.fetch = (async () => ({
+      text: () => new Promise<string>(resolve => { resolveText = resolve }),
+    })) as unknown as typeof fetch
+    try {
+      const game = new JuyitingGame()
+      game._mountToken = 1
+      game._generation = 1
+      game._hallScene = { setMapData: () => {}, onDestroyEvent: () => {} }
+      const preparing = game._prepareMapData({ loader: { getTMX: () => null } }, 1)
+      await Promise.resolve()
+      game.updateBackendSceneDebug({ sceneVersion: 1 })
+      game.destroy()
+      resolveText?.(readFileSync('public/juyiting/hall.tmx', 'utf8'))
+      await preparing
+      callbacks.forEach(callback => callback())
+
+      assert.equal(Object.hasOwn(target, DEBUG_KEY), false)
+      assert.equal(game._mapData, null)
+    } finally {
+      globalThis.fetch = originalFetch
+      if (originalRequest === undefined) delete target.requestAnimationFrame
+      else target.requestAnimationFrame = originalRequest
+      if (originalCancel === undefined) delete target.cancelAnimationFrame
+      else target.cancelAnimationFrame = originalCancel
+    }
+  })
+
   it('exposes a read-only test global and removes only its own publication on destroy', () => {
-    const target = globalThis as unknown as Record<string, unknown>
+    const target = debugTarget()
     const game = new JuyitingGame()
     game._initialized = true
     game._mapData = {

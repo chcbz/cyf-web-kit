@@ -810,6 +810,14 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._pendingAgentSnapshots = []
     }
 
+    getRenderedSimulationAgentCount() {
+      let count = 0
+      this._simulationAgentIds.forEach(id => {
+        if (this._agents.has(id)) count += 1
+      })
+      return count
+    }
+
     update(dt) {
       if (this._destroyed) return false
       super.update(dt)
