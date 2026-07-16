@@ -174,10 +174,14 @@ export function useHttp (options = {}) {
       // 检查 HTTP 错误状态（fetch 不会自动抛出非 2xx 的错误）
       if (!response.ok) {
         let errorMessage = `HTTP error! status: ${response.status}`
+        let errorCode
 
         // 尝试从响应中提取错误消息
         try {
           const errorData = await response.clone().json()
+          if (errorData && typeof errorData.code === 'string') {
+            errorCode = errorData.code
+          }
           if (errorData && errorData.msg) {
             errorMessage = errorData.msg
           } else if (errorData && errorData.message) {
@@ -189,6 +193,7 @@ export function useHttp (options = {}) {
 
         const error = new Error(errorMessage)
         error.status = response.status
+        if (errorCode) error.code = errorCode
         error.response = response
         throw error
       }
@@ -210,6 +215,7 @@ export function useHttp (options = {}) {
           onStreamOpen(streamHandle, response)
         }
 
+        let streamFailure = null
         try {
           while (true) {
             const { done, value } = await reader.read()
@@ -251,16 +257,14 @@ export function useHttp (options = {}) {
               }
             }
           }
-        } catch (streamError) {
-          if (onError) {
-            onError(streamError.message, streamError)
-          }
-          throw streamError
+        } catch (error) {
+          streamFailure = error
+          throw error
         } finally {
           try {
             await reader.cancel()
           } catch (cancelError) {
-            log.warn('Failed to cancel stream reader:', cancelError)
+            if (!streamFailure) log.warn('Failed to cancel stream reader:', cancelError)
           }
         }
 

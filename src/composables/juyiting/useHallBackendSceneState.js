@@ -5,6 +5,7 @@ const SNAPSHOT_URL = `/agent/scenes/${SCENE_ID}/snapshot`
 const EVENTS_URL = `/agent/scenes/${SCENE_ID}/events`
 const PHASES_URL = `/agent/scenes/${SCENE_ID}/phases`
 const POLL_INTERVAL = 15_000
+const JAVA_LONG_MAX = 9223372036854775807n
 
 export const useHallBackendSceneState = ({
   agentApi,
@@ -13,7 +14,6 @@ export const useHallBackendSceneState = ({
   sseEnabled = true,
   onSnapshot = () => {},
   onEvent = () => {},
-  sleep = delay => new Promise(resolve => setTimeout(resolve, delay)),
   setTimeoutFn = setTimeout,
   clearTimeoutFn = clearTimeout,
   setIntervalFn = setInterval,
@@ -30,6 +30,7 @@ export const useHallBackendSceneState = ({
   const latestSnapshot = ref(null)
   const lastEvent = ref(null)
   const warnings = ref([])
+  let sceneCursor = '0'
 
   let active = false
   let stream = null
@@ -38,7 +39,11 @@ export const useHallBackendSceneState = ({
   let pollTimer = null
   let resyncPromise = null
   let startPromise = null
+  let lifecycleGeneration = 0
+  let streamModeEnabled = Boolean(sseEnabled)
+  let eventsDisabledByBackend = false
   const pendingRequests = new Set()
+  const phaseRetryWaiters = new Set()
 
   const request = async (options) => {
     const controller = new AbortController()
@@ -55,21 +60,25 @@ export const useHallBackendSceneState = ({
     }
   }
 
-  const fetchSnapshot = async () => {
-    const response = await request({ url: SNAPSHOT_URL, method: 'GET' })
+  const fetchSnapshot = async (generation = lifecycleGeneration) => {
+    const response = await request({ url: SNAPSHOT_URL, method: 'GET', responseType: 'text' })
     const value = unwrapPayload(response)
-    if (!value || value.sceneId !== SCENE_ID || !validVersion(value.sceneVersion)) {
+    const cursor = normalizeVersion(value?.sceneVersion)
+    if (!value || value.sceneId !== SCENE_ID || cursor == null) {
       throw new Error('Invalid Juyiting scene snapshot')
     }
-    if (snapshotReady.value && value.sceneVersion < sceneVersion.value) {
+    if (snapshotReady.value && compareVersions(cursor, sceneCursor) < 0) {
       throw new Error('Stale Juyiting scene snapshot')
     }
-    latestSnapshot.value = value
-    sceneVersion.value = value.sceneVersion
+    if (!active || generation !== lifecycleGeneration) return value
+    const published = { ...value, sceneVersion: publishVersion(cursor) }
+    sceneCursor = cursor
+    latestSnapshot.value = published
+    sceneVersion.value = published.sceneVersion
     snapshotReady.value = true
-    degraded.value = false
-    onSnapshot(value)
-    return value
+    degraded.value = eventsDisabledByBackend
+    onSnapshot(published)
+    return published
   }
 
   const closeStream = () => {
@@ -93,8 +102,23 @@ export const useHallBackendSceneState = ({
     }
   }
 
+  const startPolling = () => {
+    if (!active || pollTimer != null) return
+    pollTimer = setIntervalFn(() => fetchSnapshot(lifecycleGeneration)
+      .catch(() => { degraded.value = true }), POLL_INTERVAL)
+  }
+
+  const switchToPolling = () => {
+    eventsDisabledByBackend = true
+    streamModeEnabled = false
+    clearReconnect()
+    closeStream()
+    degraded.value = true
+    startPolling()
+  }
+
   const scheduleReconnect = () => {
-    if (!active || !sseEnabled || reconnectTimer != null || resyncPromise) return
+    if (!active || !streamModeEnabled || reconnectTimer != null || resyncPromise) return
     reconnectTimer = setTimeoutFn(() => {
       reconnectTimer = null
       if (active && !sseConnected.value) openStream()
@@ -107,10 +131,11 @@ export const useHallBackendSceneState = ({
     resyncCount.value += 1
     clearReconnect()
     closeStream()
-    resyncPromise = fetchSnapshot()
+    const generation = lifecycleGeneration
+    resyncPromise = fetchSnapshot(generation)
       .then(() => {
         resyncPromise = null
-        if (active && sseEnabled) openStream()
+        if (active && generation === lifecycleGeneration && streamModeEnabled) openStream()
       })
       .catch(() => {
         resyncPromise = null
@@ -123,8 +148,8 @@ export const useHallBackendSceneState = ({
   const applySseRecord = (record) => {
     const parsed = parseSseRecord(record)
     if (!parsed) return
-    const version = parsed.id ?? parsed.data?.sceneVersion
-    if (!validVersion(version)) {
+    const version = parsed.id ?? normalizeVersion(parsed.data?.sceneVersion)
+    if (version == null) {
       void resync()
       return
     }
@@ -132,19 +157,20 @@ export const useHallBackendSceneState = ({
       void resync()
       return
     }
-    if (version <= sceneVersion.value) return
-    if (version !== sceneVersion.value + 1) {
+    if (compareVersions(version, sceneCursor) <= 0) return
+    if (version !== nextVersion(sceneCursor)) {
       void resync()
       return
     }
     const eventValue = parsed.data && typeof parsed.data === 'object'
-      ? { ...parsed.data, sceneVersion: version, eventType: parsed.event || parsed.data.eventType }
+      ? { ...parsed.data, sceneVersion: publishVersion(version), eventType: parsed.event || parsed.data.eventType }
       : null
     if (!eventValue) {
       void resync()
       return
     }
-    sceneVersion.value = version
+    sceneCursor = version
+    sceneVersion.value = publishVersion(version)
     lastEventAt.value = now()
     lastEvent.value = eventValue
     degraded.value = false
@@ -152,7 +178,7 @@ export const useHallBackendSceneState = ({
   }
 
   const openStream = () => {
-    if (!active || !sseEnabled || resyncPromise) return
+    if (!active || !streamModeEnabled || resyncPromise) return
     clearReconnect()
     closeStream()
     const generation = streamGeneration
@@ -162,8 +188,8 @@ export const useHallBackendSceneState = ({
     const options = {
       url: EVENTS_URL,
       method: 'GET',
-      params: { sinceVersion: sceneVersion.value },
-      headers: { 'Last-Event-ID': String(sceneVersion.value) },
+      params: { sinceVersion: publishVersion(sceneCursor) },
+      headers: { 'Last-Event-ID': sceneCursor },
       onOpen: () => {
         if (active && generation === streamGeneration) {
           sseConnected.value = true
@@ -181,9 +207,13 @@ export const useHallBackendSceneState = ({
           scheduleReconnect()
         }
       },
-      onError: () => {
+      onError: error => {
         if (active && generation === streamGeneration) {
           sseConnected.value = false
+          if (isEventsDisabled(error)) {
+            switchToPolling()
+            return
+          }
           degraded.value = true
           scheduleReconnect()
         }
@@ -195,14 +225,14 @@ export const useHallBackendSceneState = ({
       if (stream && typeof stream.then === 'function') {
         stream.catch(options.onError)
       }
-    } catch {
-      options.onError()
+    } catch (error) {
+      options.onError(error)
     }
   }
 
   const onFocus = () => {
     if (!active) return
-    if (sseEnabled) {
+    if (streamModeEnabled) {
       if (!sseConnected.value && !resyncPromise) openStream()
     } else {
       void fetchSnapshot().catch(() => { degraded.value = true })
@@ -212,16 +242,19 @@ export const useHallBackendSceneState = ({
   const start = async () => {
     if (active) return startPromise || latestSnapshot.value
     active = true
+    lifecycleGeneration += 1
+    const generation = lifecycleGeneration
+    streamModeEnabled = Boolean(sseEnabled)
+    eventsDisabledByBackend = false
     browserWindow()?.addEventListener?.('focus', onFocus)
     startPromise = (async () => {
       try {
-        const value = await fetchSnapshot()
-        if (!active) return value
-        if (sseEnabled) {
+        const value = await fetchSnapshot(generation)
+        if (!active || generation !== lifecycleGeneration) return value
+        if (streamModeEnabled) {
           openStream()
         } else {
-          pollTimer = setIntervalFn(() => fetchSnapshot()
-            .catch(() => { degraded.value = true }), POLL_INTERVAL)
+          startPolling()
         }
         return value
       } catch (error) {
@@ -235,9 +268,10 @@ export const useHallBackendSceneState = ({
   }
 
   const stop = () => {
-    if (!active) return
+    const wasActive = active
     active = false
-    browserWindow()?.removeEventListener?.('focus', onFocus)
+    lifecycleGeneration += 1
+    if (wasActive) browserWindow()?.removeEventListener?.('focus', onFocus)
     clearReconnect()
     if (pollTimer != null) {
       clearIntervalFn(pollTimer)
@@ -245,6 +279,7 @@ export const useHallBackendSceneState = ({
     }
     for (const controller of pendingRequests) controller.abort()
     pendingRequests.clear()
+    for (const cancel of [...phaseRetryWaiters]) cancel()
     closeStream()
   }
 
@@ -252,22 +287,28 @@ export const useHallBackendSceneState = ({
     if (!active) return null
     clearReconnect()
     closeStream()
-    const value = await fetchSnapshot()
-    if (active && sseEnabled) openStream()
+    const generation = lifecycleGeneration
+    const value = await fetchSnapshot(generation)
+    if (active && generation === lifecycleGeneration && streamModeEnabled) openStream()
     return value
   }
 
   const reportPhase = async (phaseReport) => {
+    const payload = createPhasePayload(phaseReport)
+    const generation = lifecycleGeneration
     for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (generation !== lifecycleGeneration) return null
       try {
         const response = await request({
           url: PHASES_URL,
           method: 'POST',
-          data: phaseReport
+          data: payload
         })
+        if (generation !== lifecycleGeneration) return null
         return unwrapPayload(response)
-      } catch {
-        if (attempt < 2) await sleep((attempt + 1) * 1000)
+      } catch (error) {
+        if (generation !== lifecycleGeneration || error?.name === 'AbortError') return null
+        if (attempt < 2 && !await waitForPhaseRetry((attempt + 1) * 1000, generation)) return null
       }
     }
     warnings.value = [...warnings.value, {
@@ -277,6 +318,23 @@ export const useHallBackendSceneState = ({
     degraded.value = true
     return null
   }
+
+  const waitForPhaseRetry = (delay, generation) => new Promise(resolve => {
+    let settled = false
+    const finish = value => {
+      if (settled) return
+      settled = true
+      phaseRetryWaiters.delete(cancel)
+      resolve(value)
+    }
+    const cancel = () => {
+      if (settled) return
+      clearTimeoutFn(timerId)
+      finish(false)
+    }
+    phaseRetryWaiters.add(cancel)
+    const timerId = setTimeoutFn(() => finish(generation === lifecycleGeneration), delay)
+  })
 
   return {
     snapshotReady,
@@ -313,10 +371,7 @@ function authenticatedStream (agentApi, options) {
       options.onOpen()
     },
     onStream: options.onChunk,
-    onStreamEnd: options.onClose,
-    onError: (_message, error) => {
-      if (error?.name !== 'AbortError') options.onError(error)
-    }
+    onStreamEnd: options.onClose
   }).catch(error => {
     if (error?.name !== 'AbortError') options.onError(error)
   })
@@ -376,26 +431,140 @@ function parseSseRecord (record) {
   }
   if (data.length === 0) return null
   try {
-    return { id, event, data: JSON.parse(data.join('\n')) }
+    return { id, event, data: parseWireJson(data.join('\n')) }
   } catch {
     return null
   }
 }
 
 function parseVersion (value) {
-  if (!/^\d+$/.test(value)) return null
-  const version = Number(value)
-  return validVersion(version) ? version : null
+  return normalizeVersion(value)
 }
 
-function validVersion (value) {
-  return Number.isSafeInteger(value) && value >= 0
+function normalizeVersion (value) {
+  if (typeof value === 'number') {
+    return Number.isSafeInteger(value) && value >= 0 ? String(value) : null
+  }
+  if (typeof value === 'bigint') {
+    return value >= 0n && value <= JAVA_LONG_MAX ? value.toString() : null
+  }
+  if (typeof value !== 'string' || !/^\d+$/.test(value)) return null
+  try {
+    const version = BigInt(value)
+    return version <= JAVA_LONG_MAX ? version.toString() : null
+  } catch {
+    return null
+  }
+}
+
+function publishVersion (value) {
+  const version = BigInt(value)
+  return version <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(version) : value
+}
+
+function compareVersions (left, right) {
+  const leftValue = BigInt(left)
+  const rightValue = BigInt(right)
+  return leftValue < rightValue ? -1 : leftValue > rightValue ? 1 : 0
+}
+
+function nextVersion (value) {
+  return (BigInt(value) + 1n).toString()
 }
 
 function unwrapPayload (response) {
-  const body = response?.data ?? response
+  let body = response?.data ?? response
+  if (typeof body === 'string') body = parseWireJson(body)
   if (body && typeof body === 'object' && Object.hasOwn(body, 'data')) return body.data
   return body
+}
+
+function parseWireJson (source) {
+  return JSON.parse(quoteIntegerFields(source, new Set(['sceneVersion'])))
+}
+
+function quoteIntegerFields (source, fields) {
+  let result = ''
+  let index = 0
+  while (index < source.length) {
+    if (source[index] !== '"') {
+      result += source[index]
+      index += 1
+      continue
+    }
+    const start = index
+    index += 1
+    let escaped = false
+    while (index < source.length) {
+      const character = source[index]
+      index += 1
+      if (escaped) {
+        escaped = false
+      } else if (character === '\\') {
+        escaped = true
+      } else if (character === '"') {
+        break
+      }
+    }
+    const token = source.slice(start, index)
+    result += token
+    let cursor = index
+    while (/\s/.test(source[cursor] ?? '')) cursor += 1
+    if (source[cursor] !== ':') continue
+    let field
+    try {
+      field = JSON.parse(token)
+    } catch {
+      continue
+    }
+    if (!fields.has(field)) continue
+    result += source.slice(index, cursor + 1)
+    cursor += 1
+    const whitespaceStart = cursor
+    while (/\s/.test(source[cursor] ?? '')) cursor += 1
+    result += source.slice(whitespaceStart, cursor)
+    const numberStart = cursor
+    if (source[cursor] === '-') cursor += 1
+    const digitsStart = cursor
+    while (/\d/.test(source[cursor] ?? '')) cursor += 1
+    if (cursor === digitsStart || /[.eE]/.test(source[cursor] ?? '')) {
+      index = numberStart
+      continue
+    }
+    result += `"${source.slice(numberStart, cursor)}"`
+    index = cursor
+  }
+  return result
+}
+
+function createPhasePayload (source) {
+  if (!source || typeof source !== 'object') throw new TypeError('Phase report is required')
+  return Object.freeze({
+    reportId: source.reportId,
+    agentId: source.agentId,
+    stateVersion: source.stateVersion,
+    phase: source.phase,
+    regionId: source.regionId,
+    occurredAt: epochMilliseconds(source.occurredAt)
+  })
+}
+
+function epochMilliseconds (value) {
+  const timestamp = typeof value === 'number'
+    ? value
+    : value instanceof Date
+      ? value.getTime()
+      : typeof value === 'string' && /^\d+$/.test(value)
+        ? Number(value)
+        : Date.parse(value)
+  if (!Number.isSafeInteger(timestamp) || timestamp < 0) {
+    throw new TypeError('Phase occurredAt must be a nonnegative epoch-millisecond timestamp')
+  }
+  return timestamp
+}
+
+function isEventsDisabled (error) {
+  return error?.status === 503 && error?.code === 'SCENE_EVENTS_DISABLED'
 }
 
 function browserWindow () {

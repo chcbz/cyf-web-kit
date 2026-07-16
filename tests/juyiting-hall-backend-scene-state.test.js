@@ -216,7 +216,11 @@ describe('backend scene state', () => {
         }
       },
       streamFactory: () => ({ close () {} }),
-      sleep: async delay => delays.push(delay)
+      setTimeoutFn: (callback, delay) => {
+        delays.push(delay)
+        queueMicrotask(callback)
+        return delays.length
+      }
     })
 
     const result = await state.reportPhase({
@@ -233,5 +237,173 @@ describe('backend scene state', () => {
     expect(state.warnings.value).to.deep.equal([{
       code: 'PHASE_REPORT_FAILED', message: 'Failed to report scene phase after 3 attempts'
     }])
+  })
+
+  it('publishes one frozen allowlisted phase payload with epoch-millisecond time across retries', async () => {
+    const attempts = []
+    const timers = []
+    const source = {
+      reportId: 'report-wire', agentId: 'agent-songjiang', stateVersion: 7,
+      phase: 'arrived', regionId: 'council-table',
+      occurredAt: '2026-07-17T08:00:00.123Z', path: [{ x: 1, y: 2 }], token: 'secret'
+    }
+    const state = useHallBackendSceneState({
+      agentApi: {
+        execute: async request => {
+          attempts.push(request)
+          if (attempts.length < 3) throw new Error('offline')
+          return { data: { data: { result: 'accepted' } } }
+        }
+      },
+      setTimeoutFn: callback => {
+        timers.push(callback)
+        return timers.length
+      }
+    })
+
+    const resultPromise = state.reportPhase(source)
+    await tick()
+    source.occurredAt = '2040-01-01T00:00:00.000Z'
+    source.regionId = 'mutated-region'
+    timers.shift()()
+    await tick()
+    timers.shift()()
+    const result = await resultPromise
+
+    expect(result).to.deep.equal({ result: 'accepted' })
+    expect(attempts).to.have.length(3)
+    expect(attempts.map(item => item.data)).to.satisfy(values => values.every(value => value === values[0]))
+    expect(Object.isFrozen(attempts[0].data)).to.equal(true)
+    expect(attempts[0].data).to.deep.equal({
+      reportId: 'report-wire', agentId: 'agent-songjiang', stateVersion: 7,
+      phase: 'arrived', regionId: 'council-table', occurredAt: 1784275200123
+    })
+  })
+
+  it('switches a controlled events-disabled response to polling and focus refresh', async () => {
+    const calls = []
+    const intervals = []
+    const values = [snapshot(4), snapshot(5), snapshot(6)]
+    const disabled = Object.assign(new Error('disabled'), {
+      status: 503, code: 'SCENE_EVENTS_DISABLED'
+    })
+    const state = useHallBackendSceneState({
+      agentApi: {
+        execute: async request => {
+          calls.push(request)
+          if (request.responseType === 'stream') throw disabled
+          return { data: { data: values.shift() } }
+        }
+      },
+      setIntervalFn: (callback, delay) => {
+        intervals.push({ callback, delay })
+        return 91
+      }
+    })
+
+    await state.start()
+    await tick()
+
+    expect(intervals).to.have.length(1)
+    expect(intervals[0].delay).to.equal(15000)
+    expect(state.sseConnected.value).to.equal(false)
+    await intervals[0].callback()
+    window.dispatchEvent(new window.Event('focus'))
+    await tick()
+    expect(calls.filter(call => call.method === 'GET' && call.responseType !== 'stream')).to.have.length(3)
+    expect(state.sceneVersion.value).to.equal(6)
+    state.stop()
+  })
+
+  it('cancels phase retry timers and requests on stop without publishing a warning', async () => {
+    const attempts = []
+    const timers = new Map()
+    const cleared = []
+    let timerId = 0
+    const state = useHallBackendSceneState({
+      agentApi: {
+        execute: async request => {
+          attempts.push(request)
+          if (request.url.endsWith('/snapshot')) return { data: { data: snapshot(1) } }
+          throw new Error('offline')
+        }
+      },
+      streamFactory: () => ({ close () {} }),
+      setTimeoutFn: callback => {
+        timerId += 1
+        timers.set(timerId, callback)
+        return timerId
+      },
+      clearTimeoutFn: id => {
+        cleared.push(id)
+        timers.delete(id)
+      }
+    })
+    await state.start()
+
+    const resultPromise = state.reportPhase({
+      reportId: 'report-cancel', agentId: 'agent-songjiang', stateVersion: 7,
+      phase: 'blocked', regionId: 'council-table', occurredAt: 1234
+    })
+    await tick()
+    expect(attempts.filter(call => call.method === 'POST')).to.have.length(1)
+    state.stop()
+
+    expect(await resultPromise).to.equal(null)
+    expect(cleared).to.have.length(1)
+    expect(timers.size).to.equal(0)
+    expect(attempts.filter(call => call.method === 'POST')).to.have.length(1)
+    expect(state.warnings.value).to.deep.equal([])
+  })
+
+  it('ignores a snapshot that completes after stop', async () => {
+    let resolveSnapshot
+    const applied = []
+    const state = useHallBackendSceneState({
+      agentApi: {
+        execute: () => new Promise(resolve => { resolveSnapshot = resolve })
+      },
+      streamFactory: () => ({ close () {} }),
+      onSnapshot: value => applied.push(value)
+    })
+
+    const starting = state.start()
+    state.stop()
+    resolveSnapshot({ data: { data: snapshot(9) } })
+    await starting
+
+    expect(state.snapshotReady.value).to.equal(false)
+    expect(state.sceneVersion.value).to.equal(0)
+    expect(state.latestSnapshot.value).to.equal(null)
+    expect(applied).to.deep.equal([])
+  })
+
+  it('preserves Java Long snapshot and SSE cursors without Number narrowing', async () => {
+    const streams = []
+    const beforeMax = '9223372036854775806'
+    const max = '9223372036854775807'
+    const state = useHallBackendSceneState({
+      agentApi: {
+        execute: async request => ({ data: request.responseType === 'text'
+          ? `{"status":200,"data":{"sceneId":"juyiting-main","sceneVersion":${beforeMax},` +
+            '"generatedAt":1000,"agents":[],"states":[]}}'
+          : null })
+      },
+      streamFactory: options => {
+        streams.push(options)
+        options.onOpen()
+        return { close () {} }
+      }
+    })
+
+    await state.start()
+    expect(state.sceneVersion.value).to.equal(beforeMax)
+    expect(streams[0].params).to.deep.equal({ sinceVersion: beforeMax })
+    expect(streams[0].headers).to.deep.include({ 'Last-Event-ID': beforeMax })
+
+    streams[0].onChunk(`id: ${max}\nevent: agent-scene-state-updated\n` +
+      `data: {"sceneVersion":${max},"eventType":"agent-scene-state-updated","state":null}\n\n`)
+    expect(state.sceneVersion.value).to.equal(max)
+    state.stop()
   })
 })

@@ -83,4 +83,54 @@ describe('useHttp', () => {
     expect(opened[0].cancel).to.be.a('function')
     expect(chunks.join('')).to.equal('id: 1\ndata: hello\n\n')
   })
+
+  it('reports a stream read failure once', async () => {
+    const originalFetch = global.fetch
+    const errors = []
+    global.fetch = async () => new Response(new ReadableStream({
+      start (controller) {
+        controller.error(new Error('stream failed'))
+      }
+    }), { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
+
+    try {
+      let failure
+      try {
+        await useHttp().get('/stream', {}, {
+          needAuth: false,
+          responseType: 'stream',
+          streamChunks: true,
+          onError: (_message, error) => errors.push(error)
+        })
+      } catch (error) {
+        failure = error
+      }
+      expect(failure?.message).to.equal('stream failed')
+    } finally {
+      global.fetch = originalFetch
+    }
+
+    expect(errors).to.have.length(1)
+  })
+
+  it('exposes controlled backend error codes to stream lifecycle callers', async () => {
+    const originalFetch = global.fetch
+    global.fetch = async () => new Response(JSON.stringify({
+      status: 503,
+      code: 'SCENE_EVENTS_DISABLED',
+      msg: 'Scene event stream is disabled'
+    }), { status: 503, headers: { 'Content-Type': 'application/json' } })
+
+    try {
+      let failure
+      try {
+        await useHttp().get('/stream', {}, { needAuth: false, responseType: 'stream' })
+      } catch (error) {
+        failure = error
+      }
+      expect(failure).to.include({ status: 503, code: 'SCENE_EVENTS_DISABLED' })
+    } finally {
+      global.fetch = originalFetch
+    }
+  })
 })
