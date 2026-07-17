@@ -197,6 +197,18 @@ export default [
     }
   },
   {
+    path: '/wx/mp',
+    name: 'WxMpManager',
+    component: () => import('@/components/WxMpManager'),
+    meta: {
+      title: '公众号管理',
+      icon: 'wechat',
+      iconColor: '#16875e',
+      showInMenu: true,
+      menuOrder: 10
+    }
+  },
+  {
     path: '/hello',
     name: 'HellowList',
     component: () => import('@/components/HelloWorld')

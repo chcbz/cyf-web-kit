@@ -60,5 +60,6 @@ declare module 'vue' {
     TaskListPanel: typeof import('./components/task/TaskListPanel.vue')['default']
     UserProfile: typeof import('./components/UserProfile.vue')['default']
     VoteTick: typeof import('./components/VoteTick.vue')['default']
+    WxMpManager: typeof import('./components/WxMpManager.vue')['default']
   }
 }
