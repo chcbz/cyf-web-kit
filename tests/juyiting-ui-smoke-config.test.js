@@ -24,15 +24,16 @@ describe('juyiting ui smoke config', () => {
     expect(source).to.include('.hall-board.is-melon-ready')
   })
 
-  it('clicks canvas hotspots for current panels and opens the mention menu', () => {
+  it('clicks canvas hotspots and asserts semantic panel containers', () => {
     const source = readFileSync('tests/juyiting-public-beta-ui-smoke.mjs', 'utf8')
 
     expect(source).to.include('clickSceneHotspot')
     expect(source).to.include("await clickSceneHotspot(cdp, 'library')")
     expect(source).to.include("await clickSceneHotspot(cdp, 'tasks')")
     expect(source).to.include("await clickSceneHotspot(cdp, 'chat')")
-    expect(source).to.include('藏书查卷')
-    expect(source).to.include('composer-textarea')
+    expect(source).to.include('panel-library')
+    expect(source).to.include('panel-tasks')
+    expect(source).to.include('panel-chat')
     expect(source).not.to.include("clickByText('案卷阁')")
     expect(source).not.to.include("clickByText('悬赏榜')")
     expect(source).not.to.include("clickByText('议事')")

@@ -497,17 +497,6 @@ const closePanel = `
 })()
 `
 
-const openPanelThroughSetup = (panel, options = {}) => `
-(() => {
-  let component = document.querySelector('.hall-stage')?.__vueParentComponent;
-  while (component && !component.setupState?.openPanel) component = component.parent;
-  const openPanel = component?.setupState?.openPanel;
-  if (typeof openPanel !== 'function') return false;
-  openPanel(${JSON.stringify(panel)}, ${JSON.stringify(options)});
-  return true;
-})()
-`
-
 export const runUiSmoke = async () => {
   const token = await getToken()
   const chromePath = await findChrome()
