@@ -1,0 +1,5 @@
+# This deterministic artifact is compared as serialized bytes by the map
+# validator, so it must retain the LF line endings emitted by its generator.
+tests/fixtures/juyiting/hall-map.snapshot.json text eol=lf
+docs/assets/juyiting/map-preview/hall-clean.svg text eol=lf
+docs/assets/juyiting/map-preview/hall-debug.svg text eol=lf

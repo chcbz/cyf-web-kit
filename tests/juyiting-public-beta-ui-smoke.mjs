@@ -17,6 +17,7 @@ const OAUTH_REDIRECT_URI = process.env.JUYITING_OAUTH_REDIRECT_URI || `${FRONTEN
 const DEBUG_KEY = '__JYTING_SCENE_DEBUG__'
 const EXPECTED_MANIFEST_VERSION = 'persona-sheets-v1'
 const REQUEST_TIMEOUT_MS = 15_000
+const CDP_COMMAND_TIMEOUT_MS = Number(process.env.JUYITING_CDP_COMMAND_TIMEOUT_MS) || 45_000
 const GAME_LOOKUP_SOURCE = `
   let component = document.querySelector('.hall-stage')?.__vueParentComponent;
   while (component && !component.setupState?.juyitingGame) component = component.parent;
@@ -239,7 +240,7 @@ class CdpSession {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         if (this.pending.delete(id)) reject(new Error(`${method} timed out`))
-      }, 15000)
+      }, CDP_COMMAND_TIMEOUT_MS)
       this.pending.set(id, { resolve, reject, timer })
     })
   }
@@ -388,7 +389,21 @@ const sceneFixtures = () => {
 }
 
 const stopChrome = async (chrome, userDataDir) => {
-  if (!chrome.killed) chrome.kill()
+  // Chrome is a multi-process application. On Windows, killing only the
+  // launcher leaves renderer children holding the temporary profile lock;
+  // this in turn makes repeated local browser validation flaky.
+  if (process.platform === 'win32' && chrome.pid) {
+    await new Promise(resolve => {
+      const taskkill = spawn('taskkill', ['/pid', String(chrome.pid), '/t', '/f'], {
+        stdio: 'ignore',
+        windowsHide: true
+      })
+      taskkill.once('error', resolve)
+      taskkill.once('exit', resolve)
+    })
+  } else if (!chrome.killed) {
+    chrome.kill()
+  }
   await Promise.race([
     new Promise(resolve => chrome.once('exit', resolve)),
     delay(3000)

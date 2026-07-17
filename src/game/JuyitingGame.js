@@ -29,7 +29,9 @@ export class JuyitingGame {
     this._initialized = false
     this._mapData = null
     this._spriteLoadResult = null
-    this._spriteLoadTimeoutMs = 5_000
+    // The approved 4x4 persona sheet is a multi-megabyte asset.  Keep the
+    // runtime tolerant of a cold browser cache and slower local dev servers.
+    this._spriteLoadTimeoutMs = 15_000
     this._spriteLoadAbortController = null
     this._readyTimer = null
     this._canvas = null
