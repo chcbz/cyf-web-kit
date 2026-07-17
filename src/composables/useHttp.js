@@ -1,6 +1,5 @@
 import { ref } from 'vue'
-import { useApiStore } from '../stores/api'
-import { log } from '@/utils/logger'
+import { log } from '../utils/logger.js'
 // import { useGlobalStore } from '../stores/global' // 预留
 // import { useUtilStore } from '../stores/util' // 预留
 
@@ -89,7 +88,10 @@ export function useHttp (options = {}) {
       onError,
       onFinally,
       onStream,
-      onStreamEnd
+      onStreamEnd,
+      onStreamOpen,
+      streamChunks = false,
+      signal
     } = mergedOptions
 
     if (autoLoading) {
@@ -119,7 +121,8 @@ export function useHttp (options = {}) {
       }
 
       // 添加URL参数和baseURL
-      const baseURL = import.meta.env.VITE_API_BASE_URL || ''
+      const runtimeEnv = import.meta.env ?? {}
+      const baseURL = runtimeEnv.VITE_API_BASE_URL || ''
       let requestUrl = url
 
       // 如果URL不是绝对路径，添加baseURL
@@ -136,7 +139,7 @@ export function useHttp (options = {}) {
       let token = null
       if (needAuth) {
         try {
-          const apiStore = useApiStore()
+          const apiStore = await resolveApiStore()
           token = await apiStore.token()
           if (token) {
             config.headers.Authorization = `Bearer ${token}`
@@ -149,9 +152,11 @@ export function useHttp (options = {}) {
       // 使用 fetch API 替代 axios，特别是为了支持 stream
       // 计算超时时间：优先使用选项中的timeout，其次使用环境变量VITE_HTTP_TIMEOUT，最后使用默认值60000
       const timeoutValue = timeout ||
-                          (import.meta.env.VITE_HTTP_TIMEOUT ? parseInt(import.meta.env.VITE_HTTP_TIMEOUT, 10) : null) ||
+                          (runtimeEnv.VITE_HTTP_TIMEOUT ? parseInt(runtimeEnv.VITE_HTTP_TIMEOUT, 10) : null) ||
                           60000
-      timeoutSignal = createTimeoutSignal(timeoutValue)
+      timeoutSignal = signal
+        ? { signal, cleanup: () => {} }
+        : createTimeoutSignal(timeoutValue)
       const fetchConfig = {
         method: config.method,
         headers: config.headers,
@@ -169,10 +174,14 @@ export function useHttp (options = {}) {
       // 检查 HTTP 错误状态（fetch 不会自动抛出非 2xx 的错误）
       if (!response.ok) {
         let errorMessage = `HTTP error! status: ${response.status}`
+        let errorCode
 
         // 尝试从响应中提取错误消息
         try {
           const errorData = await response.clone().json()
+          if (errorData && typeof errorData.code === 'string') {
+            errorCode = errorData.code
+          }
           if (errorData && errorData.msg) {
             errorMessage = errorData.msg
           } else if (errorData && errorData.message) {
@@ -184,6 +193,7 @@ export function useHttp (options = {}) {
 
         const error = new Error(errorMessage)
         error.status = response.status
+        if (errorCode) error.code = errorCode
         error.response = response
         throw error
       }
@@ -197,13 +207,27 @@ export function useHttp (options = {}) {
         const reader = response.body.getReader()
         const decoder = new TextDecoder()
         let buffer = ''
+        const streamHandle = {
+          reader,
+          cancel: () => reader.cancel()
+        }
+        if (onStreamOpen) {
+          onStreamOpen(streamHandle, response)
+        }
 
+        let streamFailure = null
         try {
           while (true) {
             const { done, value } = await reader.read()
             if (done) {
               // 处理缓冲区中剩余的数据
-              if (buffer.trim() && onStream) {
+              const tail = decoder.decode()
+              if (streamChunks && tail && onStream) {
+                onStream(tail)
+              } else {
+                buffer += tail
+              }
+              if (!streamChunks && buffer.trim() && onStream) {
                 onStream(buffer)
               }
               if (onStreamEnd) {
@@ -213,6 +237,10 @@ export function useHttp (options = {}) {
             }
 
             const chunk = decoder.decode(value, { stream: true })
+            if (streamChunks) {
+              if (onStream) onStream(chunk)
+              continue
+            }
             buffer += chunk
 
             // 处理 SSE (Server-Sent Events) 格式或其他流式数据
@@ -229,16 +257,14 @@ export function useHttp (options = {}) {
               }
             }
           }
-        } catch (streamError) {
-          if (onError) {
-            onError(streamError.message, streamError)
-          }
-          throw streamError
+        } catch (error) {
+          streamFailure = error
+          throw error
         } finally {
           try {
             await reader.cancel()
           } catch (cancelError) {
-            log.warn('Failed to cancel stream reader:', cancelError)
+            if (!streamFailure) log.warn('Failed to cancel stream reader:', cancelError)
           }
         }
 
@@ -249,10 +275,7 @@ export function useHttp (options = {}) {
           statusText: response.statusText,
           headers: Object.fromEntries(response.headers.entries()),
           config: fetchConfig,
-          stream: {
-            reader,
-            cancel: () => reader.cancel()
-          }
+          stream: streamHandle
         }
       }
 
@@ -315,7 +338,7 @@ export function useHttp (options = {}) {
         error.value = '请求超时'
       } else if (err.status === 401 && needAuth) {
         // 清理旧的 token
-        const apiStore = useApiStore()
+        const apiStore = await resolveApiStore()
         apiStore.cleanToken()
         log.warn('Authentication expired, token cleaned')
 
@@ -396,8 +419,18 @@ export function useHttp (options = {}) {
  * @param {string} basePath - API基础路径
  * @returns {Object} 包含CRUD操作的对象
  */
+async function resolveApiStore () {
+  const { useApiStore } = await import('../stores/api.js')
+  return useApiStore()
+}
+
 export function createApi (basePath) {
   return {
+    execute: options => useHttp().execute({
+      ...options,
+      url: scopedApiUrl(basePath, options.url)
+    }),
+
     list: (uri, data, options = {}) =>
       useHttp().post(`${basePath}${uri}`, data, options),
 
@@ -432,6 +465,11 @@ export function createApi (basePath) {
     search: (uri, data, options = {}) =>
       useHttp().post(`${basePath}${uri}`, data, options)
   }
+}
+
+function scopedApiUrl (basePath, url) {
+  if (url === basePath || url.startsWith(`${basePath}/`)) return url
+  return `${basePath}${url.startsWith('/') ? url : `/${url}`}`
 }
 
 // 预定义的API端点

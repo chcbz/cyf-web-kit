@@ -1,8 +1,237 @@
 ﻿import { expect } from 'chai'
 
 import { createHallSceneClass } from '../src/game/scenes/HallScene.js'
+import { JuyitingGame } from '../src/game/JuyitingGame.js'
+import { readFileSync } from 'node:fs'
+import { useHallCommandQueue } from '../src/composables/juyiting/useHallCommandQueue.js'
+import { useHallSceneState } from '../src/composables/juyiting/useHallSceneState.js'
+import { parseMovementTmx } from '../src/game/map/tmxMovementParser.js'
+import { PERSONA_SPRITE_MANIFEST } from '../src/game/sprites/personaSpriteManifest.js'
+import { createMovementEngine } from '../src/game/simulation/movementEngine.js'
+
+const HALL_XML = readFileSync('public/juyiting/hall.tmx', 'utf8')
 
 describe('HallScene melonJS runtime compatibility', () => {
+  it('registers a mount-specific melon state and starts that exact stage', () => {
+    const calls = []
+    const game = new JuyitingGame()
+    const me = {
+      state: {
+        USER: 100,
+        PLAY: 3,
+        set: (...args) => calls.push(['set', ...args]),
+        change: (...args) => calls.push(['change', ...args])
+      }
+    }
+    game._me = me
+    game._mountToken = 7
+    game._hallScene = { stage: true }
+    game._markSceneDebugDirty = () => {}
+
+    game._startGame(me, 7)
+    game.start()
+
+    expect(calls).to.deep.equal([
+      ['set', 101, game._hallScene],
+      ['change', 101, true]
+    ])
+  })
+
+  it('exposes command, snapshot, movement-map, and phase-event simulation facades', () => {
+    const enqueued = []
+    const synced = []
+    const movement = { sceneId: 'juyiting-main' }
+    const game = new JuyitingGame()
+    game._movementEngine = { enqueue: command => { enqueued.push(command); return { accepted: true } } }
+    game._mapData = { movement }
+    game._hallScene = { syncAgentSnapshots: snapshots => synced.push(snapshots) }
+    game._pendingSimulationPhaseEvents = [{ reportId: 'phase-1', phase: 'arrived' }]
+
+    expect(game.enqueueMovementCommands([{ commandId: 'move-1' }])).to.deep.equal([{ accepted: true }])
+    game.syncAgentSnapshots([{ agentId: 'agent-songjiang', x: 10, y: 20 }])
+    const phases = game.drainSimulationPhaseEvents()
+    phases[0].phase = 'mutated'
+
+    expect(enqueued).to.deep.equal([{ commandId: 'move-1' }])
+    expect(synced).to.deep.equal([[{ agentId: 'agent-songjiang', x: 10, y: 20 }]])
+    expect(game.getMovementRuntime()).to.equal(movement)
+    expect(game.drainSimulationPhaseEvents()).to.deep.equal([])
+  })
+
+  for (const cancellation of ['blocked', 'absent']) {
+    it(`cancels ${cancellation} backend state through the real game facade without stale arrival`, () => {
+      const runtime = parseMovementTmx(HALL_XML)
+      const game = new JuyitingGame()
+      game._movementEngine = createMovementEngine(runtime, PERSONA_SPRITE_MANIFEST, {
+        now: () => 2_000
+      })
+      const commandQueue = useHallCommandQueue()
+      const sceneState = useHallSceneState({ commandQueue, now: () => 2_000 })
+      sceneState.setMapRuntime(runtime)
+      commandQueue.setSimulation({
+        enqueue: command => game.enqueueMovementCommands([command])[0],
+        cancel: (agentId, stateVersion) => game.cancelMovement(agentId, stateVersion)
+      })
+      sceneState.applySnapshot({
+        sceneId: 'juyiting-main', sceneVersion: 1,
+        states: [{
+          agentId: 'agent-songjiang', personaCode: 'songjiang',
+          behavior: 'moving_to_discussion', targetRegionId: 'council-table',
+          stateVersion: 1, startedAt: 1_000, expectedArrivalAt: 20_000,
+          phase: 'moving'
+        }]
+      })
+      expect(game._movementEngine.snapshots()[0].phase).to.equal('moving')
+
+      if (cancellation === 'absent') {
+        sceneState.applySnapshot({ sceneId: 'juyiting-main', sceneVersion: 2, states: [] })
+      } else {
+        sceneState.applyEvent({
+          sceneVersion: 2,
+          state: {
+            agentId: 'agent-songjiang', personaCode: 'songjiang', behavior: 'blocked',
+            targetRegionId: 'unknown-region', stateVersion: 2, startedAt: 2_000,
+            phase: 'blocked'
+          }
+        })
+      }
+      game._movementEngine.update(120_000)
+
+      expect(game._movementEngine.snapshots()[0].phase).not.to.equal('arrived')
+      expect(game._movementEngine.drainPhaseEvents()).to.deep.equal([])
+    })
+  }
+
+  it('syncs simulation snapshots into native HallAgent entities without CSS transforms', () => {
+    const added = []
+    class Stage { update () {} }
+    class Agent {
+      static supports () { return true }
+      static create (data) { return new Agent(data) }
+      constructor (data) {
+        this.agentId = data.agentId
+        this.personaCode = data.personaCode
+        this.pos = { x: data.x, y: data.y }
+        this.snapshots = []
+      }
+      syncState () {}
+      syncSimulationSnapshot (snapshot) {
+        this.snapshots.push(snapshot)
+        this.pos = { x: snapshot.x, y: snapshot.y }
+      }
+    }
+    const me = {
+      Stage,
+      game: {
+        viewport: { width: 960, height: 640 },
+        world: {
+          addChild: agent => added.push(agent),
+          removeChild: () => {}
+        }
+      }
+    }
+    const HallScene = createHallSceneClass(me, Agent)
+    const scene = new HallScene()
+    scene.setAvailablePersonas(new Set(['songjiang']))
+
+    scene.syncAgentSnapshots([{
+      agentId: 'agent-songjiang', personaCode: 'songjiang', x: 480, y: 320,
+      facing: 'right', animation: 'walk', behavior: 'moving_to_discussion', phase: 'moving',
+      regionId: 'main-seat', targetRegionId: 'council-table', stateVersion: 16
+    }])
+    scene._fullSyncAgentSnapshots()
+
+    expect(added).to.have.length(1)
+    expect(scene.getAgent('agent-songjiang').pos).to.deep.equal({ x: 480, y: 320 })
+    expect(scene.getAgent('agent-songjiang').snapshots).to.have.length(1)
+  })
+
+  it('stops simulation frame updates and phase draining after scene destroy', () => {
+    let updates = 0
+    let drains = 0
+    class Stage { update () {} }
+    const me = {
+      Stage,
+      game: { viewport: { width: 960, height: 640 }, world: {} },
+      input: { releaseAllPointerEvents: () => {} }
+    }
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+    scene._sceneBuilt = true
+    scene.setSimulationRuntime({
+      update: () => { updates += 1 },
+      snapshots: () => [],
+      drainPhaseEvents: () => { drains += 1; return [] }
+    })
+
+    scene.update(16)
+    scene.onDestroyEvent()
+    scene.update(16)
+
+    expect(updates).to.equal(1)
+    expect(drains).to.equal(1)
+  })
+
+  it('retries input controller creation after the canvas becomes available', () => {
+    class Stage { update () {} }
+    const HallScene = createHallSceneClass({
+      Stage,
+      game: { viewport: { width: 960, height: 640 }, world: {} }
+    }, class {})
+    const scene = new HallScene()
+    scene._sceneBuilt = true
+    scene._cameraController = { snapshot: () => ({ transform: { zoom: 1, offsetX: 0, offsetY: 0 } }) }
+    let attempts = 0
+    scene._createInput = () => {
+      attempts += 1
+      scene._inputController = { snapshot: () => ({ activeGesture: 'none', interactionLocked: false }) }
+      return true
+    }
+
+    scene.update(16)
+
+    expect(attempts).to.equal(1)
+    expect(scene._inputController).not.to.equal(null)
+  })
+
+  it('keeps camera and input facades null-safe before mount and after destroy', () => {
+    const game = new JuyitingGame()
+
+    expect(game.getCameraSnapshot()).to.equal(null)
+    expect(game.getInputSnapshot()).to.equal(null)
+    expect(game.resizeViewport({ width: 800, height: 600, kind: 'layout' })).to.equal(undefined)
+    expect(game.setInteractionLocked(true)).to.equal(undefined)
+    expect(game.resetToMainHall()).to.equal(undefined)
+
+    game.destroy()
+    expect(game.getCameraSnapshot()).to.equal(null)
+    expect(game.getInputSnapshot()).to.equal(null)
+  })
+
+  it('delegates the camera and input migration facade safely', () => {
+    const calls = []
+    const game = new JuyitingGame()
+    game._hallScene = {
+      resizeViewport: change => calls.push(['resize', change]),
+      setInteractionLocked: (locked, reason) => calls.push(['lock', locked, reason]),
+      getCameraSnapshot: () => ({ presetKey: 'desktop' }),
+      inputSnapshot: () => ({ interactionLocked: true }),
+      resetToMainHall: () => calls.push(['reset'])
+    }
+
+    game.resizeViewport({ width: 800, height: 600, kind: 'layout' })
+    game.setInteractionLocked(true, 'panel')
+    expect(game.getCameraSnapshot()).to.deep.equal({ presetKey: 'desktop' })
+    expect(game.getInputSnapshot()).to.deep.equal({ interactionLocked: true })
+    game.resetToMainHall()
+
+    expect(calls).to.deep.equal([
+      ['resize', { width: 800, height: 600, kind: 'layout' }],
+      ['lock', true, 'panel'],
+      ['reset']
+    ])
+  })
+
   it('uses non-container image layers so melonJS broadphase does not recurse into them', () => {
     const added = []
 
@@ -128,5 +357,46 @@ describe('HallScene melonJS runtime compatibility', () => {
     }
 
     expect(warnings).to.deep.equal([])
+  })
+
+  it('removes and recreates an existing agent when its normalized persona identity changes', () => {
+    const added = []
+    const removed = []
+    class Stage {}
+    class Agent {
+      static supports(data) { return ['alpha', 'beta'].includes(String(data.personaCode).toLowerCase()) }
+      static create(data) { return new Agent(data) }
+      constructor(data) {
+        this.personaCode = String(data.personaCode).toLowerCase()
+        this._sourceData = data
+      }
+      syncState(data) { this._sourceData = data }
+    }
+    const me = {
+      Stage,
+      game: {
+        viewport: { width: 960, height: 640 },
+        world: {
+          addChild: agent => added.push(agent),
+          removeChild: agent => removed.push(agent)
+        }
+      }
+    }
+    const HallScene = createHallSceneClass(me, Agent)
+    const scene = new HallScene()
+    scene.setAvailablePersonas(new Set(['alpha', 'beta']))
+
+    scene.syncAgents([{ agentId: 'shared-id', personaCode: 'Alpha' }])
+    scene._fullSyncAgents()
+    const original = scene.getAgent('shared-id')
+
+    scene.syncAgents([{ agentId: 'shared-id', personaCode: 'BETA' }])
+    scene._fullSyncAgents()
+    const replacement = scene.getAgent('shared-id')
+
+    expect(removed).to.deep.equal([original])
+    expect(added).to.have.length(2)
+    expect(replacement).not.to.equal(original)
+    expect(replacement.personaCode).to.equal('beta')
   })
 })

@@ -8,10 +8,15 @@
 
 export const HALL_MAP_RESOURCE = { name: 'juyiting-hall', type: 'tmx', src: '/juyiting/hall.tmx' }
 
-export const HALL_BOOT_RESOURCES = [
-  HALL_MAP_RESOURCE,
-  { name: 'character-atlas', type: 'image', src: '/juyiting/liangshan-character-walksheet-v1.png' }
-]
+export const HALL_BOOT_RESOURCES = [HALL_MAP_RESOURCE]
+
+export const personaSpriteResourceName = personaCode => `persona-sprite-${personaCode}`
+
+export const buildPersonaSpriteResource = definition => ({
+  name: personaSpriteResourceName(definition.personaCode),
+  type: 'image',
+  src: definition.src
+})
 
 const addImageResource = (resources, seen, name, src) => {
   if (!name || !src) return

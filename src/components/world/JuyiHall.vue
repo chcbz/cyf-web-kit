@@ -5,10 +5,12 @@
       :agent-key="agentKey"
       :agent-style="sceneAgentStyle"
       :hidden-agent-count="hiddenAgentCount"
+      :interaction-locked="Boolean(activePanel)"
       :portrait-name="portraitName"
       :portrait-short-name="portraitShortName"
       :portrait-style="portraitStyle"
       :role-class="roleClass"
+      :simulation-enabled="simulationEnabled"
       :refreshing="hallRefreshing"
       :scene-agents="sceneAgents"
       :scene-hotspots="sceneHotspots"
@@ -22,6 +24,9 @@
       @open-panel="handleStagePanelOpen"
       @refresh-hall="refreshHall"
       @select-agent="selectAgent"
+      @simulation-phase-events="handleSimulationPhaseEvents"
+      @simulation-ready="handleSimulationReady"
+      @simulation-reset="resetSimulationLifecycle"
       @toggle-sound="toggleHallSound"
     >
 
@@ -44,10 +49,32 @@
 
     <transition name="panel" @after-leave="handlePanelAfterLeave">
       <div v-if="activePanel" class="panel-overlay" @click.self="closePanel">
-        <section class="floating-panel" :class="`panel-${renderedPanel}`">
+        <section
+          ref="panelRef"
+          class="floating-panel"
+          :class="[`panel-${renderedPanel}`, `layout-${panelLayout}`]"
+          role="dialog"
+          aria-modal="true"
+          :aria-labelledby="panelTitleId"
+          tabindex="-1"
+          @wheel.stop
+          @pointerdown.stop
+          @pointermove.stop
+          @pointerup.stop
+          @pointercancel.stop
+          @keydown="handlePanelKeydown"
+          @keyup.stop
+          @input.stop
+          @click.stop
+        >
           <div class="panel-title">
-            <span>{{ activePanelTitle }}</span>
-            <button class="panel-close" @click="closePanel">
+            <span :id="panelTitleId">{{ activePanelTitle }}</span>
+            <button
+              class="panel-close"
+              type="button"
+              aria-label="关闭面板"
+              @click="closePanel"
+            >
               <var-icon name="close-circle-outline" />
             </button>
           </div>
@@ -204,15 +231,20 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useGlobalStore } from '@/stores/global'
 import { useApiStore } from '@/stores/api'
 import { agentApi, chatApi } from '@/composables/useHttp'
 import { useHallChatContext } from '@/composables/juyiting/useHallChatContext'
+import { useHallBackendSceneState } from '@/composables/juyiting/useHallBackendSceneState'
+import { useHallCommandQueue } from '@/composables/juyiting/useHallCommandQueue'
 import { useHallConversation } from '@/composables/juyiting/useHallConversation'
 import { useHallData } from '@/composables/juyiting/useHallData'
 import { useHallLibrary } from '@/composables/juyiting/useHallLibrary'
+import { focusHallPanel, restorePanelFocus, trapPanelFocus, useHallPanels } from '@/composables/juyiting/useHallPanels'
 import { useHallScene } from '@/composables/juyiting/useHallScene'
+import { useHallSceneState } from '@/composables/juyiting/useHallSceneState'
+import { useHallSceneDebugBridge } from '@/composables/juyiting/useHallSceneDebugBridge'
 import { useHallSound } from '@/composables/juyiting/useHallSound'
 import { useHallTaskActions } from '@/composables/juyiting/useHallTaskActions'
 import { portraitName, portraitRole, portraitShortName, portraitStyle, roleClass } from '@/composables/juyiting/useWaterMarginRoles'
@@ -231,6 +263,7 @@ import {
   taskStatusFilters
 } from '@/constants/juyiting'
 import { log } from '@/utils/logger'
+import { juyitingGame } from '@/game/index.js'
 
 const globalStore = useGlobalStore()
 const apiStore = useApiStore()
@@ -244,9 +277,21 @@ const renderedPanel = ref('')
 const hallRefreshing = ref(false)
 const agentBubbles = ref({})
 const outgoingMetadata = ref({})
+const { panelLayout } = useHallPanels()
+const panelRef = ref(null)
+const panelTitleId = 'juyiting-floating-panel-title'
+let panelPriorFocus = null
 let bubbleTimer = null
 let bubbleInitialTimer = null
 let bubbleClearTimer = null
+const simulationEnabled = import.meta.env.VITE_JUYITING_SIMULATION_ENABLED === 'true'
+const hallCommandQueue = useHallCommandQueue()
+let hallBackendSceneState = null
+const hallSceneState = useHallSceneState({
+  commandQueue: hallCommandQueue,
+  reportPhase: report => hallBackendSceneState?.reportPhase(report)
+})
+let backendSceneStarted = false
 
 const {
   playAgentSelect,
@@ -323,6 +368,8 @@ const taskAgentMatchScore = (task, agent) => {
 }
 
 const {
+  applySceneEvent,
+  applySceneSnapshot,
   agentFilter,
   agents,
   bindPersona,
@@ -351,7 +398,20 @@ const {
   normalizeStatus,
   selectedAgent,
   selectedTask,
-  taskAgentMatchScore
+  taskAgentMatchScore,
+  sceneState: hallSceneState
+})
+
+hallBackendSceneState = useHallBackendSceneState({
+  agentApi,
+  onSnapshot: applySceneSnapshot,
+  onEvent: applySceneEvent
+})
+
+const hallSceneDebugBridge = useHallSceneDebugBridge({
+  backend: hallBackendSceneState,
+  commandQueue: hallCommandQueue,
+  game: juyitingGame
 })
 
 const {
@@ -370,12 +430,48 @@ const {
   selectedTask
 })
 
+const startBackendSceneState = async () => {
+  if (backendSceneStarted) return
+  backendSceneStarted = true
+  try {
+    await hallBackendSceneState.start()
+  } catch (error) {
+    backendSceneStarted = false
+    log.warn('Juyiting backend scene state degraded:', error)
+  }
+}
+
+const handleSimulationReady = async ({ movementRuntime, simulation } = {}) => {
+  if (!simulationEnabled || !movementRuntime || !simulation?.enqueue) return
+  hallSceneState.setMapRuntime(movementRuntime)
+  hallCommandQueue.setSimulation(simulation)
+  hallSceneDebugBridge.republish()
+  await startBackendSceneState()
+}
+
+const resetSimulationLifecycle = () => {
+  backendSceneStarted = false
+  hallBackendSceneState?.stop()
+  hallCommandQueue.setSimulation(null)
+  hallSceneState.reset()
+}
+
+const handleSimulationPhaseEvents = events => {
+  if (!simulationEnabled) return
+  void hallSceneState.forwardPhaseEvents(events).catch(error => {
+    log.warn('Juyiting phase forwarding failed:', error)
+  })
+}
+
 const refreshHall = async ({ silent = false } = {}) => {
   if (hallRefreshing.value) return
   hallRefreshing.value = true
   if (!silent) playRefresh()
   try {
     await Promise.all([loadAgents(), loadTasks()])
+    if (simulationEnabled && hallCommandQueue.ready.value && !backendSceneStarted) {
+      await startBackendSceneState()
+    }
     if (!silent) showToast('厅中动静已点验')
   } finally {
     hallRefreshing.value = false
@@ -410,7 +506,8 @@ const {
   mapAgents,
   normalizeStatus,
   selectedAgent,
-  selectedTask
+  selectedTask,
+  simulationEnabled
 })
 
 const selectTask = async (task) => {
@@ -428,6 +525,7 @@ const selectAgent = (agent) => {
 }
 
 const openPanel = (panel, options = {}) => {
+  if (!activePanel.value) panelPriorFocus = document.activeElement
   if (panel !== 'chat') {
     resetToPublic()
   }
@@ -436,6 +534,7 @@ const openPanel = (panel, options = {}) => {
   }
   renderedPanel.value = panel
   activePanel.value = panel
+  nextTick(() => focusHallPanel(panelRef.value))
   if (!options.silent) playPanelOpen()
   if (panel === 'chat') {
     window.setTimeout(() => loadHallMessages(), 0)
@@ -455,8 +554,22 @@ const closePanel = () => {
   playTap()
 }
 
+const handlePanelKeydown = (event) => {
+  event.stopPropagation()
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closePanel()
+    return
+  }
+  trapPanelFocus(event, panelRef.value)
+}
+
 const handlePanelAfterLeave = () => {
-  if (!activePanel.value) renderedPanel.value = ''
+  if (!activePanel.value) {
+    renderedPanel.value = ''
+    restorePanelFocus(panelPriorFocus)
+    panelPriorFocus = null
+  }
 }
 
 const closeSelectedAgentCard = () => {
@@ -730,10 +843,14 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  restorePanelFocus(panelPriorFocus)
+  panelPriorFocus = null
   stopHallEventStream()
   stopHallReplyStreaming()
   stopHallReplyPolling()
   stopDialogueBubbles()
+  resetSimulationLifecycle()
+  hallSceneDebugBridge.stop()
   globalStore.setShowAppBar(true)
 })
 </script>
@@ -1353,6 +1470,53 @@ button.hall-room {
   contain: layout paint;
   will-change: transform, opacity;
   isolation: isolate;
+}
+
+.floating-panel.layout-center-modal {
+  width: min(860px, calc(100% - 40px));
+  max-height: calc(100% - 48px);
+}
+
+.panel-chat.layout-center-modal {
+  width: min(920px, calc(100% - 40px));
+}
+
+.panel-overlay:has(.layout-right-drawer) {
+  align-items: stretch;
+  justify-content: flex-end;
+  padding: 0;
+}
+
+.floating-panel.layout-right-drawer {
+  width: clamp(45%, 50vw, 55%);
+  max-width: 55%;
+  height: var(--hall-visual-height, 100%);
+  max-height: 100%;
+  border-radius: 8px 0 0 8px;
+}
+
+.panel-chat.layout-right-drawer {
+  width: min(92%, 720px);
+  max-width: 92%;
+}
+
+.panel-overlay:has(.layout-bottom-drawer) {
+  align-items: flex-end;
+  padding: 0;
+}
+
+.floating-panel.layout-bottom-drawer {
+  width: 100%;
+  max-width: 100%;
+  height: 72vh;
+  height: min(72vh, calc(var(--hall-visual-height, 100vh) * 0.72));
+  max-height: 75vh;
+  border-radius: 8px 8px 0 0;
+}
+
+.floating-panel.panel-chat.layout-bottom-drawer {
+  height: calc(var(--hall-visual-height, 100vh) - 12px);
+  max-height: calc(var(--hall-visual-height, 100vh) - 12px);
 }
 
 .panel-chat {

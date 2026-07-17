@@ -1,4 +1,4 @@
 /**
  * melonJS game module entry
  */
-export { juyitingGame, default as juyitingGameDefault } from './JuyitingGame.js'
+export { JuyitingGame, juyitingGame, default as juyitingGameDefault } from './JuyitingGame.js'

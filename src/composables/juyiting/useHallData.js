@@ -1,12 +1,19 @@
 import { computed, ref } from 'vue'
 
+import {
+  canonicalSceneVersion,
+  compareSceneVersions,
+  publishSceneVersion
+} from './sceneVersion.js'
+
 export const useHallData = ({
   agentApi,
   log,
   normalizeStatus,
   selectedAgent,
   selectedTask,
-  taskAgentMatchScore
+  taskAgentMatchScore,
+  sceneState
 }) => {
   const agents = ref([])
   const mapAgents = ref([])
@@ -18,6 +25,9 @@ export const useHallData = ({
   const taskStatusFilter = ref('')
   const taskAbilityFilter = ref('')
   const taskKeyword = ref('')
+  const backendSceneAgents = ref([])
+  const backendSceneVersion = ref(0)
+  let backendSceneCursor = '0'
 
   const filteredAgents = computed(() => agents.value)
 
@@ -242,9 +252,37 @@ export const useHallData = ({
     await loadTasks()
   }
 
+  const applySceneSnapshot = (snapshot) => {
+    const cursor = canonicalSceneVersion(snapshot?.sceneVersion)
+    if (!snapshot || cursor == null
+      || compareSceneVersions(cursor, backendSceneCursor) < 0) return false
+    const result = sceneState?.applySnapshot?.(snapshot)
+    if (result?.accepted === false) return false
+    backendSceneCursor = cursor
+    backendSceneVersion.value = publishSceneVersion(cursor)
+    backendSceneAgents.value = (Array.isArray(snapshot.agents) ? snapshot.agents : [])
+      .map(sceneAgentIdentity)
+      .filter(Boolean)
+    return true
+  }
+
+  const applySceneEvent = (event) => {
+    const cursor = canonicalSceneVersion(event?.sceneVersion)
+    if (!event || cursor == null
+      || compareSceneVersions(cursor, backendSceneCursor) <= 0) return false
+    sceneState?.applyEvent?.(event)
+    backendSceneCursor = cursor
+    backendSceneVersion.value = publishSceneVersion(cursor)
+    return true
+  }
+
   return {
+    applySceneEvent,
+    applySceneSnapshot,
     agentFilter,
     agents,
+    backendSceneAgents,
+    backendSceneVersion,
     bindPersona,
     canAssign,
     filteredAgents,
@@ -269,5 +307,15 @@ export const useHallData = ({
     taskStatusFilter,
     unbindPersona,
     visibleAgents
+  }
+}
+
+const sceneAgentIdentity = (source) => {
+  if (!source?.agentId || !source?.personaCode) return null
+  return {
+    agentId: source.agentId,
+    personaCode: source.personaCode,
+    ...(source.status === undefined ? {} : { status: source.status }),
+    ...(source.available === undefined ? {} : { available: Boolean(source.available) })
   }
 }

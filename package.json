@@ -11,12 +11,18 @@
                     "preview":  "vite preview",
                     "build":  "vite build",
                     "lint":  "eslint src",
-                    "test":  "mocha --config .mocharc.json",
-                    "test:watch":  "mocha --config .mocharc.json --watch",
-                    "test:run":  "mocha --config .mocharc.json",
+                    "lint:game":  "eslint \"src/game/**/*.ts\" \"tests/game/**/*.ts\"",
+                    "test":  "node --import tsx ./node_modules/mocha/bin/mocha.js --config .mocharc.json",
+                    "test:watch":  "node --import tsx ./node_modules/mocha/bin/mocha.js --config .mocharc.json --watch",
+                    "test:run":  "node --import tsx ./node_modules/mocha/bin/mocha.js --config .mocharc.json",
+                    "test:game":  "node --import tsx ./node_modules/mocha/bin/mocha.js --no-config --extension ts \"tests/game/**/*.test.ts\"",
+                    "typecheck:game":  "tsc --project tsconfig.game.json",
                     "test:juyiting:ui-smoke":  "node tests/juyiting-public-beta-ui-smoke.mjs",
                     "test:juyiting:agent-smoke":  "node tests/juyiting-agent-online-smoke.mjs",
-                    "test:juyiting:preflight":  "node tests/juyiting-public-beta-preflight.mjs"
+                    "test:juyiting:preflight":  "node tests/juyiting-public-beta-preflight.mjs",
+                    "validate:juyiting-map":  "node --import tsx scripts/juyiting/validate-map.mjs",
+                    "preview:juyiting-map":  "node --import tsx scripts/juyiting/render-map-preview.mjs",
+                    "validate:juyiting-sprites":  "node --import tsx scripts/juyiting/validate-sprites.mjs"
                 },
     "dependencies":  {
                          "@varlet/ui":  "^3.10.9",
@@ -31,7 +37,8 @@
                          "vue":  "^3.5.16",
                          "vue-i18n":  "^9.2.2",
                          "vue-router":  "^4.3.0",
-                         "melonjs":  "^15.7.0"
+                         "melonjs":  "^15.7.0",
+                         "saxes":  "^6.0.0"
                      },
     "devDependencies":  {
                             "@babel/core":  "^7.24.0",
@@ -42,6 +49,8 @@
                             "@rollup/plugin-yaml":  "^4.1.2",
                             "@testing-library/jest-dom":  "^6.8.0",
                             "@testing-library/vue":  "^8.1.0",
+                            "@types/mocha":  "^10.0.10",
+                            "@types/node":  "^18.19.0",
                             "@varlet/import-resolver":  "^3.11.0",
                             "@vitejs/plugin-legacy":  "^6.1.1",
                             "@vitejs/plugin-vue":  "^5.2.4",
@@ -58,10 +67,14 @@
                             "lodash":  "^4.17.23",
                             "mocha":  "^11.7.2",
                             "mochawesome":  "^7.1.3",
+                            "pngjs":  "^5.0.0",
                             "postcss-import":  "^16.1.0",
                             "postcss-url":  "^10.1.3",
                             "rollup-plugin-visualizer":  "^6.0.3",
                             "terser":  "^5.46.1",
+                            "tsx":  "^4.23.0",
+                            "typescript":  "^6.0.3",
+                            "typescript-eslint":  "^8.63.0",
                             "unplugin-auto-import":  "^19.3.0",
                             "unplugin-vue-components":  "^28.8.0",
                             "vite":  "^6.3.5",
@@ -81,7 +94,7 @@
                                        }
                   },
     "engines":  {
-                    "node":  "\u003e= 18.0.0",
+                    "node":  "\u003e= 18.19.0",
                     "npm":  "\u003e= 9.0.0"
                 },
     "browserslist":  [

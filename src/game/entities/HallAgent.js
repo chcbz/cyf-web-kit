@@ -2,55 +2,78 @@
  * 好汉角色实体 - melonJS sprite + animation state machine
  */
 
-import { ANIM_STATES, ATLAS_COLS, ATLAS_ROWS, CHAR_VISUALS } from '../config.js'
+import { ANIM_STATES } from '../config.js'
+import { personaSpriteResourceName } from '../resources.js'
+import { resolvePersonaAnimation, resolvePersonaSprite } from '../sprites/animationResolver.js'
+import { PERSONA_SPRITE_MANIFEST } from '../sprites/personaSpriteManifest.js'
 import { clampPointToRegion } from '../walkableArea.js'
 
 export function createHallAgentClass(me) {
   return class HallAgent extends me.Sprite {
-    constructor(agentData) {
+    static supports(agentData) {
+      const definition = resolvePersonaSprite(
+        String(agentData?.personaCode || '').toLowerCase(),
+        PERSONA_SPRITE_MANIFEST
+      )
+      if (!definition) return false
+      return isExpectedSpriteImage(
+        me.loader.getImage(personaSpriteResourceName(definition.personaCode)),
+        definition
+      )
+    }
+
+    static create(agentData) {
+      const definition = resolvePersonaSprite(
+        String(agentData?.personaCode || '').toLowerCase(),
+        PERSONA_SPRITE_MANIFEST
+      )
+      if (!definition) return null
+      const image = me.loader.getImage(personaSpriteResourceName(definition.personaCode))
+      if (!isExpectedSpriteImage(image, definition)) return null
+      return new this(agentData, definition, image)
+    }
+
+    constructor(agentData, providedDefinition = null, providedImage = null) {
       const vpW = me.game.viewport.width
       const vpH = me.game.viewport.height
-      const startPoint = clampPointToRegion(
-        { x: agentData.x || 50, y: agentData.y || 60 },
-        agentData.walkableRegion
-      )
-      const x = startPoint.x / 100 * vpW
-      const y = startPoint.y / 100 * vpH
+      const worldCoordinates = agentData.coordinateSpace === 'world'
+      const startPoint = worldCoordinates
+        ? { x: Number(agentData.x) || 0, y: Number(agentData.y) || 0 }
+        : clampPointToRegion(
+          { x: agentData.x || 50, y: agentData.y || 60 },
+          agentData.walkableRegion
+        )
+      const x = worldCoordinates ? startPoint.x : startPoint.x / 100 * vpW
+      const y = worldCoordinates ? startPoint.y : startPoint.y / 100 * vpH
 
-      const atlasImg = me.loader.getImage('character-atlas')
-      const atlasW = atlasImg ? atlasImg.width : 1280
-      const atlasH = atlasImg ? atlasImg.height : 1056
-      const cellW = Math.floor(atlasW / ATLAS_COLS)
-      const cellH = Math.floor(atlasH / ATLAS_ROWS)
+      const code = String(agentData.personaCode || '').toLowerCase()
+      const definition = providedDefinition || resolvePersonaSprite(code, PERSONA_SPRITE_MANIFEST)
+      if (!definition) throw new Error(`Unknown Juyiting persona sprite: ${code || '<empty>'}`)
+      const spriteImage = providedImage || me.loader.getImage(personaSpriteResourceName(definition.personaCode))
+      if (!isExpectedSpriteImage(spriteImage, definition)) {
+        throw new Error(`Unavailable Juyiting persona sprite: ${definition.personaCode}`)
+      }
       super(x, y, {
-        image: atlasImg,
-        framewidth: cellW,
-        frameheight: cellH
+        image: spriteImage,
+        framewidth: definition.frame.width,
+        frameheight: definition.frame.height
       })
 
       this.agentId = agentData.agentId || ''
       this.agentName = agentData.name || ''
-      this.personaCode = agentData.personaCode || ''
-
-      const code = (agentData.personaCode || '').toLowerCase()
-      this._visual = CHAR_VISUALS[code] || CHAR_VISUALS.default
-
-      const frameIdx = this._visual.row * ATLAS_COLS + this._visual.col
+      this.personaCode = definition.personaCode
+      this._visual = definition
+      this._collider = definition.collider
       const sprite = this._spriteTarget()
       if (typeof sprite?.setCurrentAnimation === 'function') {
-        const walkFrames = Array.from({ length: ATLAS_COLS }, (_item, offset) => this._visual.row * ATLAS_COLS + offset)
-        sprite.addAnimation(ANIM_STATES.IDLE, [frameIdx])
-        sprite.addAnimation(ANIM_STATES.WALK, walkFrames, 140)
-        sprite.addAnimation(ANIM_STATES.TALK, [frameIdx, walkFrames[2]], 220)
-        sprite.addAnimation(ANIM_STATES.BUSY, walkFrames, 120)
-        sprite.addAnimation(ANIM_STATES.OFFLINE, [frameIdx])
-        sprite.addAnimation(ANIM_STATES.ERROR, [frameIdx])
+        sprite.addAnimation(ANIM_STATES.IDLE, definition.animations.idle.frames, definition.animations.idle.frameMs)
+        sprite.addAnimation(ANIM_STATES.WALK, definition.animations.walk.frames, definition.animations.walk.frameMs)
         sprite.setCurrentAnimation(ANIM_STATES.IDLE)
       }
 
       this._renderScale = 1
       this._applyScale(this._resolveScale(agentData.scale))
-      this.anchorPoint.set(0.5, 1.0)
+      this.anchorPoint.set(definition.anchor.x, definition.anchor.y)
 
       // Minimal body for collision awareness (not used for physics yet)
       this.body = new me.Body(this)
@@ -58,6 +81,7 @@ export function createHallAgentClass(me) {
       this._setBodyVelocity(0, 0)
 
       this.currentAnim = ANIM_STATES.IDLE
+      this._activeAnimation = definition.animations.idle
       this.facing = 1
       this.targetX = x
       this.targetY = y
@@ -69,6 +93,7 @@ export function createHallAgentClass(me) {
       this._selected = false
       this._focused = false
       this._walkableRegion = agentData.walkableRegion || null
+      this._simulationControlled = Boolean(agentData.simulationControlled || worldCoordinates)
       this._patrolRoute = this._normalisePatrolRoute(agentData.patrolRoute)
       this._patrolIndex = 0
       this._patrolDelayMs = Number.isFinite(agentData.patrolDelayMs) ? agentData.patrolDelayMs : 600
@@ -76,7 +101,7 @@ export function createHallAgentClass(me) {
       this._animTimer = 0
       this._animFrame = 0
       this.depth = y
-      this._advancePatrolTarget()
+      if (!this._simulationControlled) this._advancePatrolTarget()
     }
 
     setDestination(pctX, pctY) {
@@ -86,11 +111,13 @@ export function createHallAgentClass(me) {
     }
 
     setAnimState(state) {
-      if (this.currentAnim === state) return
-      this.currentAnim = state
+      const resolved = resolvePersonaAnimation(this._visual, state)
+      if (this.currentAnim === resolved.name) return
+      this.currentAnim = resolved.name
+      this._activeAnimation = resolved.animation
       const sprite = this._spriteTarget()
       if (typeof sprite?.setCurrentAnimation === 'function') {
-        sprite.setCurrentAnimation(state)
+        sprite.setCurrentAnimation(resolved.name)
       }
     }
 
@@ -103,7 +130,6 @@ export function createHallAgentClass(me) {
       this._sourceData = { ...this._sourceData, ...agentData }
       if (agentData.walkableRegion) this._walkableRegion = agentData.walkableRegion
       if (agentData.name) this.agentName = agentData.name
-      if (agentData.personaCode) this.personaCode = agentData.personaCode
       if (Array.isArray(agentData.patrolRoute)) {
         this._patrolRoute = this._normalisePatrolRoute(agentData.patrolRoute)
         this._patrolIndex = 0
@@ -117,6 +143,21 @@ export function createHallAgentClass(me) {
       this._focused = Boolean(agentData.focused || agentData.recommended)
       this.setSelected(Boolean(agentData.selected))
       if (agentData.facing) this.setFacing(agentData.facing)
+    }
+
+    syncSimulationSnapshot(snapshot = {}) {
+      if (!Number.isFinite(snapshot.x) || !Number.isFinite(snapshot.y)) return
+      this._simulationControlled = true
+      this._sourceData = { ...this._sourceData, ...snapshot, coordinateSpace: 'world' }
+      this.pos.x = snapshot.x
+      this.pos.y = snapshot.y
+      this.targetX = snapshot.x
+      this.targetY = snapshot.y
+      this._setBodyVelocity(0, 0)
+      this.speed = 0
+      if (snapshot.facing) this.setFacing(snapshot.facing)
+      this.setAnimState(snapshot.animation || 'idle')
+      this.depth = snapshot.y
     }
 
     setSelected(on) {
@@ -218,7 +259,7 @@ export function createHallAgentClass(me) {
         }
         return
       }
-      const spd = Math.min(80, dist * 3.5)
+      const spd = Math.min(this._visual.baseSpeed, dist * 3.5)
       this._setBodyVelocity((dx / dist) * spd, (dy / dist) * spd)
       this.speed = spd
       if (Math.abs(dx) > 2) this.setFacing(dx > 0 ? 'right' : 'left')
@@ -236,11 +277,11 @@ export function createHallAgentClass(me) {
 
     update(dt) {
       super.update(dt)
-      this._moveTowardTarget(dt)
+      if (!this._simulationControlled) this._moveTowardTarget(dt)
       this._animTimer += dt
-      if (this._animTimer > 160) {
+      if (this._animTimer > this._activeAnimation.frameMs) {
         this._animTimer = 0
-        this._animFrame = (this._animFrame + 1) % ATLAS_COLS
+        this._animFrame = (this._animFrame + 1) % this._activeAnimation.frames.length
       }
       this.depth = this.pos.y
       if (this._bubbleTimer > 0) {
@@ -304,4 +345,11 @@ export function createHallAgentClass(me) {
       }
     }
   }
+}
+
+function isExpectedSpriteImage(image, definition) {
+  if (!image) return false
+  const width = image.naturalWidth ?? image.width
+  const height = image.naturalHeight ?? image.height
+  return width === definition.image.width && height === definition.image.height
 }

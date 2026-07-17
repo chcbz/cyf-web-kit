@@ -5,6 +5,7 @@ import js from '@eslint/js'
 import pluginVue from 'eslint-plugin-vue'
 import vueParser from 'vue-eslint-parser'
 import babelParser from '@babel/eslint-parser'
+import tseslint from 'typescript-eslint'
 
 export default [
   {
@@ -19,6 +20,10 @@ export default [
   },
   // JavaScript 推荐配置
   js.configs.recommended,
+  ...tseslint.configs.recommended.map((config) => ({
+    ...config,
+    files: ['src/game/**/*.ts', 'tests/game/**/*.ts']
+  })),
   // Vue 3 推荐配置
   ...pluginVue.configs['flat/recommended'],
   {

@@ -1,3 +1,59 @@
+import { parseMovementTmx } from './map/tmxMovementParser.js'
+import { validateMapRuntime } from './map/mapValidation.js'
+
+const isStructuredFatalMapError = error => (
+  error?.code && error?.severity === 'fatal' && error?.source === 'map'
+)
+
+const movementSchemaError = (error) => {
+  if (isStructuredFatalMapError(error)) return error
+  const result = new Error(error?.message || 'Juyiting movement schema is unavailable or malformed.')
+  Object.assign(result, {
+    code: 'MOVEMENT_SCHEMA_INVALID',
+    severity: 'fatal',
+    retryable: false,
+    userMessage: '大厅地图数据无效，暂时无法进入。',
+    technicalMessage: error?.technicalMessage || error?.message || String(error),
+    source: 'map'
+  })
+  return result
+}
+
+const mapParseError = (error) => {
+  if (isStructuredFatalMapError(error)) return error
+  const result = new Error(error?.message || 'Juyiting map could not be parsed.')
+  Object.assign(result, {
+    code: 'MAP_PARSE_FAILED',
+    severity: 'fatal',
+    retryable: false,
+    userMessage: '大厅地图无法读取，暂时无法进入。',
+    technicalMessage: error?.technicalMessage || error?.message || String(error),
+    source: 'map'
+  })
+  return result
+}
+
+const attachValidatedMovement = (source, visualMap) => {
+  let movement
+  try {
+    movement = parseMovementTmx(source)
+  } catch (error) {
+    throw movementSchemaError(error)
+  }
+
+  const validation = validateMapRuntime(movement)
+  if (!validation.valid) {
+    const fatal = validation.errors.find(error => error.severity === 'fatal') || validation.errors[0]
+    throw movementSchemaError(Object.assign(new Error(fatal?.technicalMessage || fatal?.userMessage), fatal))
+  }
+  return {
+    ...visualMap,
+    movement,
+    movementReady: true,
+    movementWarnings: validation.warnings.map(warning => ({ ...warning }))
+  }
+}
+
 const numberAttr = (node, name, fallback = 0) => {
   const value = Number(node?.getAttribute?.(name))
   return Number.isFinite(value) ? value : fallback
@@ -195,38 +251,38 @@ const coordinateSpaceFor = (doc, mapWidth, mapHeight) => {
 }
 
 const coordinateSpaceForData = (map, mapWidth, mapHeight, tilesets) => {
-    const imageSizes = (map.layers || [])
-      .filter(layer => layer.type === 'imagelayer')
-      .map(layer => {
-        const w = Number(layer.width || layer.imagewidth || layer.imageWidth || 0)
-        const h = Number(layer.height || layer.imageheight || layer.imageHeight || 0)
-        if (!w && layer.image && typeof layer.image === 'object') {
-          return { width: Number(layer.image.width) || 0, height: Number(layer.image.height) || 0 }
-        }
-        return { width: w, height: h }
-      })
-      .filter(size => size.width && size.height)
+  const imageSizes = (map.layers || [])
+    .filter(layer => layer.type === 'imagelayer')
+    .map(layer => {
+      const w = Number(layer.width || layer.imagewidth || layer.imageWidth || 0)
+      const h = Number(layer.height || layer.imageheight || layer.imageHeight || 0)
+      if (!w && layer.image && typeof layer.image === 'object') {
+        return { width: Number(layer.image.width) || 0, height: Number(layer.image.height) || 0 }
+      }
+      return { width: w, height: h }
+    })
+    .filter(size => size.width && size.height)
 
-    const objectBounds = (map.layers || [])
-      .filter(layer => layer.type === 'objectgroup')
-      .flatMap(layer => layer.objects || [])
-      .reduce((bounds, object) => {
-        const rect = readObjectRectFromData(object, tilesets)
-        return {
-          width: Math.max(bounds.width, rect.x + rect.width),
-          height: Math.max(bounds.height, rect.y + rect.height)
-        }
-      }, { width: mapWidth, height: mapHeight })
+  const objectBounds = (map.layers || [])
+    .filter(layer => layer.type === 'objectgroup')
+    .flatMap(layer => layer.objects || [])
+    .reduce((bounds, object) => {
+      const rect = readObjectRectFromData(object, tilesets)
+      return {
+        width: Math.max(bounds.width, rect.x + rect.width),
+        height: Math.max(bounds.height, rect.y + rect.height)
+      }
+    }, { width: mapWidth, height: mapHeight })
 
-    const artBounds = imageSizes.reduce((space, size) => ({
-      width: Math.max(space.width, size.width),
-      height: Math.max(space.height, size.height)
-    }), { width: mapWidth, height: mapHeight })
+  const artBounds = imageSizes.reduce((space, size) => ({
+    width: Math.max(space.width, size.width),
+    height: Math.max(space.height, size.height)
+  }), { width: mapWidth, height: mapHeight })
 
-    const result = artBounds.width && artBounds.height ? artBounds : objectBounds
+  const result = artBounds.width && artBounds.height ? artBounds : objectBounds
 
-    return result
-  }
+  return result
+}
 const objectGroupFromData = (map, name) => {
   const layer = (map.layers || []).find(item => item.name === name && item.type === 'objectgroup')
   return layer?.objects || []
@@ -399,9 +455,10 @@ const parseJuyiHallTmxData = (map) => {
   }
 }
 
-export const parseJuyiHallTmx = (xml) => {
+const parseJuyiHallTmxUnchecked = (xml, movementEnabled = true) => {
   if (xml && typeof xml === 'object' && Array.isArray(xml.layers)) {
-    return parseJuyiHallTmxData(xml)
+    const visualMap = parseJuyiHallTmxData(xml)
+    return movementEnabled ? attachValidatedMovement(xml, visualMap) : legacyVisualMap(visualMap)
   }
 
   if (!xml || typeof DOMParser === 'undefined') {
@@ -454,7 +511,7 @@ export const parseJuyiHallTmx = (xml) => {
 
   // --- tile layer data (XML <layer>) ---
   const tileLayers = []
-  const b64Decoder = typeof atob === 'function' ? atob : (str => Buffer.from(str, 'base64').toString('binary'))
+  const b64Decoder = typeof atob === 'function' ? atob : (str => globalThis.Buffer.from(str, 'base64').toString('binary'))
 
   doc.querySelectorAll('map > layer').forEach(layerEl => {
     const dataEl = layerEl.querySelector('data')
@@ -512,9 +569,9 @@ export const parseJuyiHallTmx = (xml) => {
     const pointsStr = polyEl ? textAttr(polyEl, 'points') : ''
     const polyPoints = pointsStr
       ? pointsStr.split(/\s+/).filter(Boolean).map(p => {
-          const [px, py] = p.split(',').map(Number)
-          return { x: px, y: py }
-        })
+        const [px, py] = p.split(',').map(Number)
+        return { x: px, y: py }
+      })
       : []
     const shape = polyPoints.length >= 3 ? 'polygon' : 'rect'
     const objX = numberAttr(objectNode, 'x')
@@ -592,7 +649,7 @@ export const parseJuyiHallTmx = (xml) => {
     }]
   }))
 
-  return {
+  const visualMap = {
     width,
     height,
     coordinateWidth: coordinateSpace.width,
@@ -606,4 +663,20 @@ export const parseJuyiHallTmx = (xml) => {
     tileLayers,
     tilesets
   }
+  return movementEnabled ? attachValidatedMovement(xml, visualMap) : legacyVisualMap(visualMap)
 }
+
+export const parseJuyiHallTmx = (input, { movementEnabled = true } = {}) => {
+  try {
+    return parseJuyiHallTmxUnchecked(input, movementEnabled)
+  } catch (error) {
+    throw mapParseError(error)
+  }
+}
+
+const legacyVisualMap = visualMap => ({
+  ...visualMap,
+  movement: null,
+  movementReady: false,
+  movementWarnings: []
+})

@@ -1,11 +1,20 @@
-/**
- * 鉴毃涔夊巺鍦烘櫙 - melonJS Stage (manual asset loading)
+﻿/**
+ * 閴存瘍娑斿宸洪崷鐑樻珯 - melonJS Stage (manual asset loading)
  */
 
 import { DEPTH_LAYERS, HALL_SCENE_HEIGHT, HALL_SCENE_WIDTH } from '../config.js'
-import { clampSceneTransform, fitSceneTransform, screenToWorldPoint } from '../sceneTransform.js'
+import { createCameraController } from '../camera/cameraController.js'
+import { classifyViewportResize } from '../camera/resizePolicy.js'
+import { screenToWorld } from '../camera/cameraTransform.js'
+import { createInputController } from '../input/inputController.js'
+import { createInteractionLock } from '../input/interactionLock.js'
 
-const GESTURE_CLICK_TOLERANCE = 6
+const DEFAULT_INPUT_SNAPSHOT = Object.freeze({ activeGesture: 'none', interactionLocked: false })
+const normalizeLockReason = reason => typeof reason === 'string' ? reason.trim() : ''
+const normalizeViewport = viewport => ({
+  width: Number.isFinite(Number(viewport?.width)) && Number(viewport.width) > 0 ? Number(viewport.width) : 0,
+  height: Number.isFinite(Number(viewport?.height)) && Number(viewport.height) > 0 ? Number(viewport.height) : 0
+})
 
 export function createHallSceneClass(me, HallAgentClass) {
   return class HallScene extends me.Stage {
@@ -19,36 +28,50 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._onReady = null
       this._needsSync = false
       this._pendingAgents = []
+      this._pendingAgentSnapshots = []
+      this._simulationAgentIds = new Set()
+      this._simulationRuntime = null
+      this._availablePersonas = null
       this._mapData = null
       this._hotspotState = new Map()
       this._sceneBuilt = false
       this._minZoom = 1
       this._fitMinZoom = 1
       this._maxZoom = 3.3
-      this._zoomStep = 0.12
-      this._transform = { offsetX: 0, offsetY: 0, zoom: 1 }
-      this._dragState = {
-        active: false,
-        pointerId: null,
-        startX: 0,
-        startY: 0,
-        lastX: 0,
-        lastY: 0,
-        moved: false
-      }
-      this._pendingClick = null
-      this._touchPointers = new Map()
-      this._pinchState = { active: false, startDistance: 0, startZoom: 1 }
-      this._interactionHitAreas = []
-      this._applySceneTransform()
+      this._cameraController = null
+      this._inputController = null
+      this._interactionLock = null
+      this._lockedReasons = new Set()
+      this._inputTarget = null
+      this._destroyed = false
+      this._lastViewport = null
+      this._currentViewport = normalizeViewport(me.game.viewport)
     }
 
     onAgentClick(cb)   { this._onAgentClick = cb }
     onHotspotClick(cb) { this._onHotspotClick = cb }
     onReady(cb)        { this._onReady = cb }
 
-    setMapData(mapData) {
-      this._mapData = mapData
+    setMapData(mapData) { this._mapData = mapData }
+
+    prepareRuntime() {
+      if (this._destroyed) return false
+      this._initializeViewport()
+      if (this._currentViewport.width <= 0 || this._currentViewport.height <= 0) return false
+      const properties = this._mapData?.mapProperties
+      if (properties?.minZoom && Number.isFinite(Number(properties.minZoom))) this._minZoom = Number(properties.minZoom)
+      if (properties?.maxZoom && Number.isFinite(Number(properties.maxZoom))) this._maxZoom = Number(properties.maxZoom)
+      this._ensureControllers()
+      return true
+    }
+
+    setSimulationRuntime(runtime) {
+      this._simulationRuntime = runtime || null
+    }
+
+    setAvailablePersonas(personaCodes) {
+      this._availablePersonas = new Set(personaCodes || [])
+      this._needsSync = true
     }
 
     syncAgents(list) {
@@ -59,17 +82,14 @@ export function createHallSceneClass(me, HallAgentClass) {
     syncHotspots(list = []) {
       this._hotspotState = new Map((list || []).map(item => [item.id, item]))
       this._hotspots.forEach(({ marker, data }) => {
-        const state = data?.id ? this._hotspotState.get(data.id) : null
-        marker?.setFeedback?.(state)
+        marker?.setFeedback?.(data?.id ? this._hotspotState.get(data.id) : null)
       })
     }
 
     updateAgentSceneState(agentId, state) {
       const agent = this._agents.get(agentId)
       if (!agent) return
-      if (state.x !== undefined && state.y !== undefined) {
-        agent.setDestination(state.x, state.y)
-      }
+      if (state.x !== undefined && state.y !== undefined) agent.setDestination(state.x, state.y)
       if (state.sceneStatus) agent.setAnimState(state.sceneStatus)
       if (state.bubble) agent.setBubble(state.bubble.text, state.bubble.ttlMs || 5000)
       if (state.highlighted !== undefined) agent.setHighlighted(state.highlighted)
@@ -82,298 +102,312 @@ export function createHallSceneClass(me, HallAgentClass) {
 
     getAgent(id) { return this._agents.get(id) }
 
-    getTransform() {
-      return { ...this._transform }
+    _viewportSize() {
+      return { ...this._currentViewport }
     }
 
-    _getViewportBounds() {
-      const vp = me.game.viewport
-      const width = vp?.width
-      const height = vp?.height
-      if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
-        return null
-      }
-      const displayRect = this._displayRect()
+    syncAgentSnapshots(list) {
+      this._pendingAgentSnapshots = Array.isArray(list) ? list.map(snapshot => ({ ...snapshot })) : []
+    }
+
+    _initializeViewport() {
+      if (this._currentViewport.width > 0 && this._currentViewport.height > 0) return
+      this._currentViewport = normalizeViewport(me.game.viewport)
+    }
+
+    _sceneSize() {
       return {
-        viewportWidth: width,
-        viewportHeight: height,
-        containerWidth: displayRect?.width,
-        containerHeight: displayRect?.height,
-        minZoom: Math.min(this._minZoom, this._fitMinZoom),
-        maxZoom: this._maxZoom
+        width: Number(this._mapData?.coordinateWidth) || HALL_SCENE_WIDTH,
+        height: Number(this._mapData?.coordinateHeight) || HALL_SCENE_HEIGHT
       }
     }
 
-    _clampTransform(next) {
-      const bounds = this._getViewportBounds()
-      if (!bounds) return this.getTransform()
-      const clamped = clampSceneTransform(next, bounds)
-      return {
-        ...clamped,
-        offsetX: Object.is(clamped.offsetX, -0) ? 0 : clamped.offsetX,
-        offsetY: Object.is(clamped.offsetY, -0) ? 0 : clamped.offsetY
-      }
+    _applyCameraTransform(transform) {
+      if (this._destroyed) return
+      const viewport = this._viewportSize()
+      const matrix = me.game.world?.currentTransform
+      if (!matrix || viewport.width <= 0 || viewport.height <= 0) return
+      matrix.identity()
+        .translate(viewport.width / 2 + transform.offsetX, viewport.height / 2 + transform.offsetY)
+        .scale(transform.zoom, transform.zoom)
+        .translate(-viewport.width / 2, -viewport.height / 2)
     }
 
-    _applySceneTransform() {
-      const bounds = this._getViewportBounds()
-      const transform = me.game.world?.currentTransform
-      if (!bounds || !transform) return
-      const centerX = bounds.viewportWidth / 2
-      const centerY = bounds.viewportHeight / 2
-      transform
-        .identity()
-        .translate(centerX + this._transform.offsetX, centerY + this._transform.offsetY)
-        .scale(this._transform.zoom, this._transform.zoom)
-        .translate(-centerX, -centerY)
-    }
-
-    panBy(dx, dy) {
-      const next = {
-        ...this._transform,
-        offsetX: this._transform.offsetX + dx,
-        offsetY: this._transform.offsetY + dy
-      }
-
-      this._transform = this._clampTransform(next)
-      this._applySceneTransform()
-      return this.getTransform()
-    }
-
-    zoomBy(delta) {
-      this._transform = this._clampTransform({
-        ...this._transform,
-        zoom: this._transform.zoom + delta
-      })
-      this._applySceneTransform()
-      return this.getTransform()
-    }
-
-    resetTransform() {
-      this._transform = { offsetX: 0, offsetY: 0, zoom: 1 }
-      this._dragState = {
-        active: false,
-        pointerId: null,
-        startX: 0,
-        startY: 0,
-        lastX: 0,
-        lastY: 0,
-        moved: false
-      }
-      this._pendingClick = null
-      this._touchPointers.clear()
-      this._pinchState = { active: false, startDistance: 0, startZoom: 1 }
-      this._applySceneTransform()
-      return this.getTransform()
-    }
-
-    fitToViewport() {
-      const bounds = this._getViewportBounds()
-      if (!bounds) return this.getTransform()
-      const md = this._mapData
-      this._transform = fitSceneTransform({
-        ...bounds,
-        sceneWidth: md?.coordinateWidth || HALL_SCENE_WIDTH,
-        sceneHeight: md?.coordinateHeight || HALL_SCENE_HEIGHT
-      })
-      this._fitMinZoom = Math.min(this._minZoom, this._transform.zoom)
-      this._applySceneTransform()
-      return this.getTransform()
-    }
-
-    _touchDistance() {
-      const points = [...this._touchPointers.values()]
-      if (points.length < 2) return 0
-      return Math.hypot(points[0].clientX - points[1].clientX, points[0].clientY - points[1].clientY)
-    }
-
-    _trackTouchPointer(event) {
-      if (event.pointerType !== 'touch') return false
-      this._touchPointers.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY })
-      if (this._touchPointers.size >= 2) {
-        this._cancelPendingClick()
-        const distance = this._touchDistance()
-        if (!this._pinchState.active && distance > 0) {
-          this._pinchState = { active: true, startDistance: distance, startZoom: this._transform.zoom }
-        }
-        this._dragState = { active: false, pointerId: null, startX: 0, startY: 0, lastX: 0, lastY: 0, moved: false }
-      }
-      return this._touchPointers.size >= 2
-    }
-
-    _updatePinchZoom(event) {
-      if (event.pointerType !== 'touch' || !this._touchPointers.has(event.pointerId)) return false
-      this._touchPointers.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY })
-      if (!this._pinchState.active) return false
-      const distance = this._touchDistance()
-      if (distance <= 0 || this._pinchState.startDistance <= 0) return false
-      const targetZoom = this._pinchState.startZoom * (distance / this._pinchState.startDistance)
-      this._transform = this._clampTransform({ ...this._transform, zoom: targetZoom })
-      this._applySceneTransform()
-      event.preventDefault?.()
-      return true
-    }
-
-    _releaseTouchPointer(event) {
-      if (event.pointerType !== 'touch') return
-      this._touchPointers.delete(event.pointerId)
-      if (this._touchPointers.size < 2) {
-        this._pinchState = { active: false, startDistance: 0, startZoom: this._transform.zoom }
-      }
-    }
-
-    _registerSceneInput() {
-      const viewport = me.game.viewport
-      if (!viewport) return
-
-      me.input.registerPointerEvent('wheel', viewport, (event) => {
-        const direction = event.deltaY > 0 ? -1 : 1
-        this.zoomBy(direction * this._zoomStep)
-        event.preventDefault?.()
+    _coarsePointer() {
+      try {
+        return globalThis.matchMedia?.('(pointer: coarse)')?.matches === true
+      } catch {
         return false
-      })
-
-      me.input.registerPointerEvent('pointerdown', viewport, (event) => {
-        if (event.button !== undefined && event.button !== 0) return true
-        if (this._trackTouchPointer(event)) {
-          event.preventDefault?.()
-          return false
-        }
-        this._dragState = {
-          active: true,
-          pointerId: event.pointerId,
-          startX: event.clientX,
-          startY: event.clientY,
-          lastX: event.clientX,
-          lastY: event.clientY,
-          moved: false
-        }
-        this._pendingClick = this._resolveInteractionTarget(event, event.pointerId)
-        return true
-      })
-
-      me.input.registerPointerEvent('pointermove', viewport, (event) => {
-        if (this._updatePinchZoom(event)) return false
-        if (!this._dragState.active || this._dragState.pointerId !== event.pointerId) return true
-        if (!Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return true
-        const dx = event.clientX - this._dragState.lastX
-        const dy = event.clientY - this._dragState.lastY
-        this._dragState.lastX = event.clientX
-        this._dragState.lastY = event.clientY
-        if (Math.hypot(dx, dy) < 1) return true
-        const totalMove = Math.hypot(event.clientX - this._dragState.startX, event.clientY - this._dragState.startY)
-        if (totalMove > GESTURE_CLICK_TOLERANCE) {
-          this._dragState.moved = true
-          this._cancelPendingClick()
-        }
-        this.panBy(dx, dy)
-        event.preventDefault?.()
-        return false
-      })
-
-      const endDrag = (event) => {
-        const wasClick = this._dragState.pointerId === event.pointerId && !this._dragState.moved
-        this._releaseTouchPointer(event)
-        if (this._dragState.pointerId === event.pointerId) {
-          this._dragState = { active: false, pointerId: null, startX: 0, startY: 0, lastX: 0, lastY: 0, moved: false }
-        }
-        if (wasClick) this._activatePendingClick(event)
-        return true
       }
-      me.input.registerPointerEvent('pointerup', viewport, endDrag)
-      me.input.registerPointerEvent('pointercancel', viewport, endDrag)
-
-      this._interactionHitAreas.push(viewport)
     }
 
-    _screenToWorld(x, y) {
-      const bounds = this._getViewportBounds()
-      if (!bounds) return null
-      return screenToWorldPoint({
-        x,
-        y,
-        viewportWidth: bounds.viewportWidth,
-        viewportHeight: bounds.viewportHeight,
-        ...this._transform
-      })
+    _createCamera() {
+      const requestFrame = callback => {
+        if (typeof globalThis.requestAnimationFrame === 'function') return globalThis.requestAnimationFrame(callback)
+        return globalThis.setTimeout(() => callback(Date.now()), 16)
+      }
+      const cancelFrame = id => {
+        if (typeof globalThis.cancelAnimationFrame === 'function') globalThis.cancelAnimationFrame(id)
+        else globalThis.clearTimeout(id)
+      }
+      this._cameraController = createCameraController({
+        viewport: () => this._viewportSize(),
+        sceneSize: () => this._sceneSize(),
+        apply: transform => this._applyCameraTransform(transform),
+        requestFrame,
+        cancelFrame,
+        now: () => globalThis.performance?.now?.() ?? Date.now()
+      }, { minZoom: 0.1, maxZoom: this._maxZoom, roundingTolerance: 2 }, this._coarsePointer())
+      this._lastViewport = this._viewportSize()
     }
 
     _canvasElement() {
-      return me.video?.getCanvas?.() ||
-        me.video?.renderer?.getCanvas?.() ||
+      return me.video?.getCanvas?.() || me.video?.renderer?.getCanvas?.() ||
         (typeof document !== 'undefined' ? document.querySelector('.melon-layer canvas, canvas') : null)
     }
 
-    _canvasRect() {
-      const canvas = this._canvasElement()
-      return canvas?.getBoundingClientRect?.() || null
-    }
+    _canvasRect() { return this._canvasElement()?.getBoundingClientRect?.() || null }
 
     _displayRect() {
       const canvas = this._canvasElement()
-      const layer = canvas?.closest?.('.melon-layer') ||
-        canvas?.parentElement ||
+      const layer = canvas?.closest?.('.melon-layer') || canvas?.parentElement ||
         (typeof document !== 'undefined' ? document.querySelector('.melon-layer') : null)
       return layer?.getBoundingClientRect?.() || this._canvasRect()
     }
 
-    _eventToWorldPoint(event) {
-      const bounds = this._getViewportBounds()
-      if (!bounds) return null
-      const hasClientPoint = Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
-      if (hasClientPoint) {
-        const rect = this._displayRect()
-        if (rect?.width > 0 && rect?.height > 0) {
-          const scale = Math.max(rect.width / bounds.viewportWidth, rect.height / bounds.viewportHeight)
-          const drawnWidth = bounds.viewportWidth * scale
-          const drawnHeight = bounds.viewportHeight * scale
-          const offsetX = (rect.width - drawnWidth) / 2
-          const offsetY = (rect.height - drawnHeight) / 2
-          return this._screenToWorld(
-            (event.clientX - rect.left - offsetX) / scale,
-            (event.clientY - rect.top - offsetY) / scale
-          )
-        }
+    _clientToViewport(clientX, clientY) {
+      const viewport = this._viewportSize()
+      const rect = this._displayRect()
+      if (!rect?.width || !rect?.height || viewport.width <= 0 || viewport.height <= 0) {
+        return { x: clientX, y: clientY }
       }
-      const x = event.gameX ?? event.clientX
-      const y = event.gameY ?? event.clientY
-      if (!Number.isFinite(x) || !Number.isFinite(y)) return null
-      return this._screenToWorld(x, y)
+      const scale = Math.max(rect.width / viewport.width, rect.height / viewport.height)
+      const offsetX = (rect.width - viewport.width * scale) / 2
+      const offsetY = (rect.height - viewport.height * scale) / 2
+      return {
+        x: (clientX - rect.left - offsetX) / scale,
+        y: (clientY - rect.top - offsetY) / scale
+      }
     }
 
-    _resolveInteractionTarget(event, pointerId) {
-      const point = this._eventToWorldPoint(event)
-      const vp = me.game.viewport
-      if (!point || !vp?.width || !vp?.height) return null
-      const hotspot = this._findHotspotAt(point)
-      if (hotspot) {
+    _createInputTarget() {
+      const source = this._canvasElement()
+      if (!source?.addEventListener || !source?.removeEventListener) {
+        return { addEventListener() {}, removeEventListener() {} }
+      }
+      const wrappers = new Map()
+      return {
+        addEventListener: (type, listener, options) => {
+          const wrapped = event => {
+            if ((type.startsWith('pointer') || type === 'wheel') &&
+                Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+              const point = this._clientToViewport(event.clientX, event.clientY)
+              listener({
+                pointerId: event.pointerId,
+                pointerType: event.pointerType,
+                clientX: point.x,
+                clientY: point.y,
+                button: event.button,
+                deltaY: event.deltaY,
+                deltaMode: event.deltaMode,
+                target: event.target,
+                preventDefault: () => event.preventDefault?.()
+              })
+            } else listener(event)
+          }
+          wrappers.set(listener, wrapped)
+          source.addEventListener(type, wrapped, options)
+        },
+        removeEventListener: (type, listener, options) => {
+          const wrapped = wrappers.get(listener)
+          if (!wrapped) return
+          source.removeEventListener(type, wrapped, options)
+          wrappers.delete(listener)
+        },
+        setPointerCapture: id => source.setPointerCapture?.(id),
+        releasePointerCapture: id => source.releasePointerCapture?.(id)
+      }
+    }
+
+    _screenToWorld(point) {
+      return screenToWorld(point, this.getTransform(), this._viewportSize())
+    }
+
+    _worldToScreen(point) {
+      const viewport = this._viewportSize()
+      const transform = this.getTransform()
+      return {
+        x: (point.x - viewport.width / 2) * transform.zoom + viewport.width / 2 + transform.offsetX,
+        y: (point.y - viewport.height / 2) * transform.zoom + viewport.height / 2 + transform.offsetY
+      }
+    }
+
+    _hitProvider() {
+      const touchSlop = 11
+      const agentAreas = [...this._agents.entries()]
+        .sort(([firstId, first], [secondId, second]) => {
+          const depthDifference = (Number(second.depth) || 0) - (Number(first.depth) || 0)
+          if (depthDifference !== 0) return depthDifference
+          const yDifference = (Number(second.pos?.y) || 0) - (Number(first.pos?.y) || 0)
+          if (yDifference !== 0) return yDifference
+          const firstKey = String(firstId)
+          const secondKey = String(secondId)
+          return firstKey < secondKey ? -1 : firstKey > secondKey ? 1 : 0
+        })
+        .map(([id, agent]) => {
+          const bounds = agent.getBounds?.()
+          const screenStart = bounds ? this._worldToScreen({ x: bounds.x, y: bounds.y }) : null
+          const screenEnd = bounds ? this._worldToScreen({ x: bounds.x + bounds.width, y: bounds.y + bounds.height }) : null
+          return {
+            id,
+            kind: 'agent',
+            touchSlop,
+            bounds: screenStart && screenEnd ? {
+              x: Math.min(screenStart.x, screenEnd.x), y: Math.min(screenStart.y, screenEnd.y),
+              width: Math.abs(screenEnd.x - screenStart.x), height: Math.abs(screenEnd.y - screenStart.y)
+            } : undefined,
+            contains: point => {
+              const world = this._screenToWorld(point)
+              return agent.containsPoint?.(world.x, world.y) === true || bounds?.contains?.(world.x, world.y) === true
+            },
+            containsWithSlop: (point, slop) => {
+              if (!bounds) return false
+              const world = this._screenToWorld(point)
+              const worldSlop = slop / Math.max(this.getTransform().zoom, 0.001)
+              const dx = Math.max(bounds.x - world.x, 0, world.x - (bounds.x + bounds.width))
+              const dy = Math.max(bounds.y - world.y, 0, world.y - (bounds.y + bounds.height))
+              return Math.hypot(dx, dy) <= worldSlop
+            }
+          }
+        })
+      const hotspotAreas = this._hotspots.filter(item => item.data && item.marker).map(({ data, marker }) => {
+        const polygon = marker.polygon?.length >= 3
+          ? marker.polygon.map(point => ({ x: marker.pos.x + point.x, y: marker.pos.y + point.y }))
+          : null
+        const polygonBounds = polygon ? {
+          x: Math.min(...polygon.map(point => point.x)),
+          y: Math.min(...polygon.map(point => point.y)),
+          width: Math.max(...polygon.map(point => point.x)) - Math.min(...polygon.map(point => point.x)),
+          height: Math.max(...polygon.map(point => point.y)) - Math.min(...polygon.map(point => point.y))
+        } : null
+        const worldBounds = polygonBounds || { x: marker.pos.x, y: marker.pos.y, width: marker.width, height: marker.height }
+        const start = this._worldToScreen({ x: worldBounds.x, y: worldBounds.y })
+        const end = this._worldToScreen({ x: worldBounds.x + worldBounds.width, y: worldBounds.y + worldBounds.height })
         return {
-          type: 'hotspot',
-          pointerId,
-          id: hotspot.id,
-          panel: hotspot.panel
+          id: data.id,
+          kind: 'hotspot',
+          touchSlop,
+          bounds: { x: Math.min(start.x, end.x), y: Math.min(start.y, end.y), width: Math.abs(end.x - start.x), height: Math.abs(end.y - start.y) },
+          contains: point => {
+            const world = this._screenToWorld(point)
+            if (polygon) return this._pointInPolygon(world, polygon)
+            return world.x >= marker.pos.x && world.x <= marker.pos.x + marker.width &&
+              world.y >= marker.pos.y && world.y <= marker.pos.y + marker.height
+          },
+          containsWithSlop: (point, slop) => {
+            const world = this._screenToWorld(point)
+            const worldSlop = slop / Math.max(this.getTransform().zoom, 0.001)
+            if (polygon) {
+              return this._pointInPolygon(world, polygon) || this._distanceToPolygon(world, polygon) <= worldSlop
+            }
+            const dx = Math.max(marker.pos.x - world.x, 0, world.x - (marker.pos.x + marker.width))
+            const dy = Math.max(marker.pos.y - world.y, 0, world.y - (marker.pos.y + marker.height))
+            return Math.hypot(dx, dy) <= worldSlop
+          }
         }
-      }
-      const agent = [...this._agents.values()].reverse().find(item => item.containsPoint(point.x, point.y))
-      if (agent) return { type: 'agent', pointerId, agent }
-      return null
+      })
+      return { agents: agentAreas, hotspots: hotspotAreas }
     }
 
-    _cancelPendingClick() {
-      this._pendingClick = null
+    _createInput() {
+      const canvas = this._canvasElement()
+      if (!canvas?.addEventListener || !canvas?.removeEventListener) return false
+      this._interactionLock = createInteractionLock()
+      this._lockedReasons.forEach(reason => this._interactionLock.lock(reason))
+      this._inputTarget = this._createInputTarget()
+      this._inputController = createInputController({
+        target: this._inputTarget,
+        camera: this._cameraController,
+        interactionLock: this._interactionLock,
+        viewport: () => this._viewportSize(),
+        hitProvider: () => this._hitProvider(),
+        onAgentClick: id => this._agents.get(id)?.onPointerDown?.(),
+        onHotspotClick: id => {
+          const hotspot = this._hotspots.find(item => item.data?.id === id)?.data
+          if (hotspot) this._onHotspotClick?.({ id: hotspot.id, panel: hotspot.panel })
+        }
+      })
+      return true
     }
 
-    _activatePendingClick(event) {
-      const target = this._pendingClick
-      this._pendingClick = null
-      if (!target || target.pointerId !== event.pointerId) return
-      if (target.type === 'hotspot') {
-        this._onHotspotClick?.({ id: target.id, panel: target.panel })
-        return
+    _ensureControllers() {
+      if (this._destroyed) return false
+      if (!this._cameraController) this._createCamera()
+      if (!this._inputController) this._createInput()
+      return this._cameraController !== null
+    }
+
+    getCameraSnapshot() {
+      this._ensureControllers()
+      return this._cameraController?.snapshot?.() || null
+    }
+    inputSnapshot() {
+      this._ensureControllers()
+      return this._inputController?.snapshot?.() || DEFAULT_INPUT_SNAPSHOT
+    }
+    getTransform() { return this.getCameraSnapshot()?.transform || { offsetX: 0, offsetY: 0, zoom: 1 } }
+
+    panBy(dx, dy) {
+      this._ensureControllers()
+      return this._cameraController?.panBy?.(dx, dy) || this.getTransform()
+    }
+
+    zoomBy(delta) {
+      this._ensureControllers()
+      const zoom = this.getTransform().zoom
+      const next = zoom + (Number.isFinite(delta) ? delta : 0)
+      const factor = zoom > 0 && next > 0 ? next / zoom : 1
+      return this._cameraController?.zoomAt?.({ x: this._viewportSize().width / 2, y: this._viewportSize().height / 2 }, factor) || this.getTransform()
+    }
+
+    resetToMainHall() {
+      this._ensureControllers()
+      this._inputController?.cancelGesture?.()
+      this._cameraController?.resetTo?.(this.getCameraSnapshot()?.presetKey || 'desktop')
+      return this.getTransform()
+    }
+
+    resetTransform() { return this.resetToMainHall() }
+    fitToViewport() { return this.resetToMainHall() }
+
+    resizeViewport(change = {}) {
+      const previous = this._viewportSize()
+      const supplied = normalizeViewport(change)
+      const next = {
+        width: supplied.width || previous.width,
+        height: supplied.height || previous.height
       }
-      if (target.type === 'agent') {
-        target.agent?.onPointerDown?.()
+      const kind = ['keyboard', 'orientation', 'layout'].includes(change.kind)
+        ? change.kind
+        : classifyViewportResize({ previous, next, previousVisualHeight: previous.height, nextVisualHeight: next.height, editableFocused: false, orientationChanged: change.orientationChanged })
+      if (kind === 'keyboard') return this.getTransform()
+      this._currentViewport = next
+      this._lastViewport = next
+      if (!this._cameraController) return this.getTransform()
+      return this._cameraController.resize(next, kind)
+    }
+
+    setInteractionLocked(locked, reason = 'panel') {
+      const normalizedReason = normalizeLockReason(reason)
+      if (normalizedReason === '') return this._lockedReasons.size > 0
+      if (locked && !this._lockedReasons.has(normalizedReason)) {
+        this._lockedReasons.add(normalizedReason)
+        this._interactionLock?.lock(normalizedReason)
+      } else if (!locked && this._lockedReasons.delete(normalizedReason)) {
+        this._interactionLock?.unlock(normalizedReason)
       }
+      if (locked) this._inputController?.cancelGesture?.()
+      return this._interactionLock?.isLocked?.() ?? this._lockedReasons.size > 0
     }
 
     _pointInPolygon(point, polygon) {
@@ -381,32 +415,25 @@ export function createHallSceneClass(me, HallAgentClass) {
       for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
         const xi = polygon[i].x, yi = polygon[i].y
         const xj = polygon[j].x, yj = polygon[j].y
-        if (((yi > point.y) !== (yj > point.y)) &&
-            (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi)) {
-          inside = !inside
-        }
+        if (((yi > point.y) !== (yj > point.y)) && (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi)) inside = !inside
       }
       return inside
     }
 
-    _findHotspotAt(point) {
-      return this._hotspots
-        .map(item => ({ data: item.data, marker: item.marker }))
-        .filter(item => item.data && item.marker)
-        .find(({ marker, data }) => {
-          // AABB fast reject
-          if (point.x < marker.pos.x ||
-              point.x > marker.pos.x + marker.width ||
-              point.y < marker.pos.y ||
-              point.y > marker.pos.y + marker.height) {
-            return false
-          }
-          // Polygon: ray-casting
-          if (data.shape === 'polygon' && data.polygon) {
-            return this._pointInPolygon(point, data.polygon)
-          }
-          return true
-        })?.data || null
+    _distanceToPolygon(point, polygon) {
+      let minimum = Infinity
+      for (let index = 0; index < polygon.length; index++) {
+        const start = polygon[index]
+        const end = polygon[(index + 1) % polygon.length]
+        const dx = end.x - start.x
+        const dy = end.y - start.y
+        const lengthSquared = dx * dx + dy * dy
+        const projection = lengthSquared > 0
+          ? Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared))
+          : 0
+        minimum = Math.min(minimum, Math.hypot(point.x - (start.x + projection * dx), point.y - (start.y + projection * dy)))
+      }
+      return minimum
     }
 
     _renderModularLayers(vpW, vpH) {
@@ -416,15 +443,15 @@ export function createHallSceneClass(me, HallAgentClass) {
       }
 
       const LAYER_DEPTH = {
-        "mid-occluders": 2,
-        "foreground-occluders": 5,
-        "lighting-overlay": 8
+        'mid-occluders': 2,
+        'foreground-occluders': 5,
+        'lighting-overlay': 8
       }
       const PROP_DEPTH_START = 3
       const PROP_DEPTH_STEP = 0.5
 
       const BLEND_MODES = {
-        "lighting-overlay": "screen"
+        'lighting-overlay': 'screen'
       }
 
       let propIndex = 0
@@ -434,7 +461,7 @@ export function createHallSceneClass(me, HallAgentClass) {
         const resourceName = tmxLayer.resourceName || name
         const image = me.loader.getImage(resourceName)
         if (!image) {
-          console.warn("[HallScene] Image not loaded:", resourceName, "for layer:", name)
+          console.warn('[HallScene] Image not loaded:', resourceName, 'for layer:', name)
           return
         }
 
@@ -530,12 +557,10 @@ export function createHallSceneClass(me, HallAgentClass) {
     }
 
     _buildScene() {
-      if (this._sceneBuilt) return
-      const vp = me.game.viewport
-      if (!vp) return false
-
-      const vpW = vp.width
-      const vpH = vp.height
+      if (this._destroyed || this._sceneBuilt) return false
+      this._initializeViewport()
+      const { width: vpW, height: vpH } = this._viewportSize()
+      if (vpW <= 0 || vpH <= 0) return false
       const mapData = this._mapData
       const hotspots = mapData?.hotspots || []
 
@@ -546,12 +571,21 @@ export function createHallSceneClass(me, HallAgentClass) {
         if (mp.maxZoom && Number.isFinite(Number(mp.maxZoom))) this._maxZoom = Number(mp.maxZoom)
       }
 
+      // prepareRuntime runs before melonJS activates the stage. Recreate the
+      // controllers here so they use the final map bounds, active viewport,
+      // and the canvas that now owns the input listeners.
+      this._inputController?.cleanup?.()
+      this._cameraController?.cleanup?.()
+      this._inputController = null
+      this._cameraController = null
+      this._inputTarget = null
+      this._interactionLock = null
+
       // 1. Render tile layers first (background base)
-      let layersRendered = this._renderTileLayers(vpW, vpH)
+      this._renderTileLayers(vpW, vpH)
 
       // 2. Render imagelayer-driven layers (occluders, props, lighting)
-      const modularRendered = this._renderModularLayers(vpW, vpH)
-      layersRendered = layersRendered || modularRendered
+      this._renderModularLayers(vpW, vpH)
 
       class HotspotMarker extends me.Renderable {
         constructor(x, y, w, h, data) {
@@ -627,8 +661,6 @@ export function createHallSceneClass(me, HallAgentClass) {
         me.game.world.addChild(marker, DEPTH_LAYERS.HOTSPOTS)
         this._hotspots.push({ marker, hitArea: marker, data: h })
       })
-
-
       // Render prop tile objects from TMX collection-of-images tilesets.
       let propDepth = 3
       hotspots.forEach(h => {
@@ -648,8 +680,7 @@ export function createHallSceneClass(me, HallAgentClass) {
         propDepth += 0.5
       })
 
-      this._hotspots.push({ hitArea: me.game.viewport, stage: true })
-      this._registerSceneInput()
+      this._ensureControllers()
 
       this._sceneBuilt = true
       this._needsSync = true
@@ -709,10 +740,32 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._pendingAgents.forEach(data => {
         const id = data.agentId || data.personaCode || ''
         if (!id) return
-        keepIds.add(id)
         let agent = this._agents.get(id)
+        const personaCode = String(data.personaCode || '').toLowerCase()
+        if (this._availablePersonas && !this._availablePersonas.has(personaCode)) {
+          if (agent) {
+            me.game.world.removeChild(agent)
+            this._agents.delete(id)
+          }
+          return
+        }
+        if (agent && String(agent.personaCode || '').toLowerCase() !== personaCode) {
+          me.game.world.removeChild(agent)
+          this._agents.delete(id)
+          agent = null
+        }
+        if (typeof HallAgentClass.supports === 'function' && !HallAgentClass.supports(data)) {
+          if (agent) {
+            me.game.world.removeChild(agent)
+            this._agents.delete(id)
+          }
+          return
+        }
         if (!agent) {
-          agent = new HallAgentClass(data)
+          agent = typeof HallAgentClass.create === 'function'
+            ? HallAgentClass.create(data)
+            : new HallAgentClass(data)
+          if (!agent) return
           agent.onPointerDown = () => this._onAgentClick?.(agent._sourceData || data)
           agent.syncState?.(data)
           me.game.world.addChild(agent, DEPTH_LAYERS.AGENTS)
@@ -720,6 +773,7 @@ export function createHallSceneClass(me, HallAgentClass) {
         } else {
           agent.syncState?.(data)
         }
+        keepIds.add(id)
       })
       this._agents.forEach((agent, id) => {
         if (!keepIds.has(id)) {
@@ -731,10 +785,68 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._needsSync = false
     }
 
+    _fullSyncAgentSnapshots() {
+      const keepIds = new Set()
+      this._pendingAgentSnapshots.forEach(snapshot => {
+        const id = snapshot.agentId || ''
+        const personaCode = String(snapshot.personaCode || '').toLowerCase()
+        if (!id || !personaCode) return
+        if (this._availablePersonas && !this._availablePersonas.has(personaCode)) return
+        let agent = this._agents.get(id)
+        if (agent && String(agent.personaCode || '').toLowerCase() !== personaCode) {
+          me.game.world.removeChild?.(agent)
+          this._agents.delete(id)
+          agent = null
+        }
+        if (!agent) {
+          const source = {
+            ...snapshot,
+            coordinateSpace: 'world',
+            simulationControlled: true
+          }
+          if (typeof HallAgentClass.supports === 'function' && !HallAgentClass.supports(source)) return
+          agent = typeof HallAgentClass.create === 'function'
+            ? HallAgentClass.create(source)
+            : new HallAgentClass(source)
+          if (!agent) return
+          agent.onPointerDown = () => this._onAgentClick?.(agent._sourceData || source)
+          me.game.world.addChild(agent, DEPTH_LAYERS.AGENTS)
+          this._agents.set(id, agent)
+        }
+        agent.syncSimulationSnapshot?.(snapshot)
+        keepIds.add(id)
+      })
+      this._simulationAgentIds.forEach(id => {
+        if (keepIds.has(id)) return
+        const agent = this._agents.get(id)
+        if (agent) me.game.world.removeChild?.(agent)
+        this._agents.delete(id)
+      })
+      this._simulationAgentIds = keepIds
+      this._pendingAgentSnapshots = []
+    }
+
+    getRenderedSimulationAgentCount() {
+      let count = 0
+      this._simulationAgentIds.forEach(id => {
+        if (this._agents.has(id)) count += 1
+      })
+      return count
+    }
+
     update(dt) {
+      if (this._destroyed) return false
+      if (!this._inputController) this._ensureControllers()
       super.update(dt)
       if (!this._sceneBuilt) this._buildScene()
       if (this._needsSync) this._fullSyncAgents()
+      if (this._simulationRuntime) {
+        this._simulationRuntime.update?.(dt)
+        this.syncAgentSnapshots(this._simulationRuntime.snapshots?.() || [])
+        this._fullSyncAgentSnapshots()
+        const phaseEvents = this._simulationRuntime.drainPhaseEvents?.() || []
+        if (phaseEvents.length) this._simulationRuntime.onPhaseEvents?.(phaseEvents)
+      }
       this._sortByDepth()
       return true
     }
@@ -755,7 +867,7 @@ export function createHallSceneClass(me, HallAgentClass) {
             return inX && inY
           })
         }
-        // Behind mask �� depth 1.5-2.5; in front �� depth 3.0-5.5
+        // Behind mask 锟斤拷 depth 1.5-2.5; in front 锟斤拷 depth 3.0-5.5
         if (behindMask) {
           agent.depth = 1.5 + normY * 1.0
         } else {
@@ -765,21 +877,32 @@ export function createHallSceneClass(me, HallAgentClass) {
     }
 
     onDestroyEvent() {
-      this._hotspots.forEach(h => {
+      if (this._destroyed) return
+      this._destroyed = true
+      this._inputController?.cleanup?.()
+      this._cameraController?.cleanup?.()
+      this._inputController = null
+      this._cameraController = null
+      this._inputTarget = null
+      this._interactionLock = null
+      this._lockedReasons.clear()
+      this._onAgentClick = null
+      this._onHotspotClick = null
+      this._onReady = null
+      this._pendingAgents = []
+      this._pendingAgentSnapshots = []
+      this._simulationAgentIds.clear()
+      this._simulationRuntime = null
+      this._availablePersonas = null
+      this._needsSync = false
+      this._hotspotState.clear()
+      this._hotspots.forEach(({ marker }) => {
         try {
-          me.input.releaseAllPointerEvents(h.hitArea)
+          if (marker && me.game.world?.hasChild?.(marker)) me.game.world.removeChild(marker)
         } catch (err) {
-          console.warn('[HallScene] pointer cleanup failed:', err?.message || err)
+          console.warn('[HallScene] hotspot cleanup failed:', err?.message || err)
         }
       })
-      this._interactionHitAreas.forEach(hitArea => {
-        try {
-          me.input.releaseAllPointerEvents(hitArea)
-        } catch (err) {
-          console.warn('[HallScene] input cleanup failed:', err?.message || err)
-        }
-      })
-      this._interactionHitAreas = []
       this._hotspots = []
       this._imageLayers.forEach(layer => {
         try {
@@ -791,9 +914,14 @@ export function createHallSceneClass(me, HallAgentClass) {
         }
       })
       this._imageLayers = []
+      this._agents.forEach(agent => {
+        try {
+          if (me.game.world?.hasChild?.(agent)) me.game.world.removeChild(agent)
+        } catch (err) {
+          console.warn('[HallScene] agent cleanup failed:', err?.message || err)
+        }
+      })
       this._agents.clear()
-      this._touchPointers.clear()
-      this._pinchState = { active: false, startDistance: 0, startZoom: this._transform.zoom }
       this._sceneBuilt = false
     }
   }
