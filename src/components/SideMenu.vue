@@ -69,11 +69,17 @@ const isMobile = computed(() => width.value < 768)
 const menuPlacement = computed(() => (isMobile.value ? 'bottom' : 'right'))
 const menuOffsetX = computed(() => (isMobile.value ? 0 : -16))
 const menuOffsetY = computed(() => (isMobile.value ? 0 : 56))
+const personalMenuRouteNames = new Set(['UserProfile', 'MessageCenter', 'HelpCenter'])
 
 const menuRoutes = computed(() => {
   return router
     .getRoutes()
-    .filter((route) => route.meta?.title && route.meta?.showInMenu !== false)
+    .filter(
+      (route) =>
+        route.meta?.title &&
+        route.meta?.showInMenu !== false &&
+        personalMenuRouteNames.has(route.name)
+    )
     .sort((a, b) => {
       const orderA = a.meta?.menuOrder ?? 999
       const orderB = b.meta?.menuOrder ?? 999

@@ -127,6 +127,18 @@ export default [
     }
   },
   {
+    path: '/profile',
+    name: 'UserProfile',
+    component: () => import('@/components/UserProfile'),
+    meta: {
+      title: '个人中心',
+      showInMenu: true,
+      menuOrder: 0,
+      icon: 'account-circle',
+      iconColor: '#4f46e5'
+    }
+  },
+  {
     path: '/messages',
     name: 'MessageCenter',
     component: () => import('@/components/MessageCenter'),

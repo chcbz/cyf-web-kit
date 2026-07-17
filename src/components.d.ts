@@ -58,6 +58,7 @@ declare module 'vue' {
     TaskIndex: typeof import('./components/TaskIndex.vue')['default']
     TaskList: typeof import('./components/TaskList.vue')['default']
     TaskListPanel: typeof import('./components/task/TaskListPanel.vue')['default']
+    UserProfile: typeof import('./components/UserProfile.vue')['default']
     VoteTick: typeof import('./components/VoteTick.vue')['default']
   }
 }
