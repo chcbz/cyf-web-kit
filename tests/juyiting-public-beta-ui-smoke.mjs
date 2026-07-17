@@ -411,81 +411,70 @@ const stopChrome = async (chrome, userDataDir) => {
 const clickSceneHotspot = async (cdp, hotspotId) => {
   const objectName = SCENE_HOTSPOTS[hotspotId]
   if (!objectName) throw new Error(`Unknown scene hotspot: ${hotspotId}`)
-  const point = await evaluate(cdp, `(async () => {
+  const point = await evaluate(cdp, `(() => {
+    ${GAME_LOOKUP_SOURCE}
     const canvas = document.querySelector('.melon-layer canvas');
-    const layer = canvas?.closest('.melon-layer');
-    const rect = layer?.getBoundingClientRect();
-    if (!canvas || !rect?.width || !rect?.height || !canvas.width || !canvas.height) return null;
-    const response = await fetch('/juyiting/hall.tmx');
-    if (!response.ok) return null;
-    const documentNode = new DOMParser().parseFromString(await response.text(), 'text/xml');
-    const map = documentNode.querySelector('map');
-    const object = [...documentNode.querySelectorAll('objectgroup[name="hotspots"] > object')]
-      .find(item => item.getAttribute('name') === ${JSON.stringify(objectName)});
-    const polygon = object?.querySelector('polygon');
-    if (!map || !object || !polygon) return null;
-    const mapWidth = Number(map.getAttribute('width')) * Number(map.getAttribute('tilewidth'));
-    const mapHeight = Number(map.getAttribute('height')) * Number(map.getAttribute('tileheight'));
-    const originX = Number(object.getAttribute('x')) || 0;
-    const originY = Number(object.getAttribute('y')) || 0;
-    const points = (polygon.getAttribute('points') || '').split(/\\s+/).filter(Boolean).map(value => {
-      const [x, y] = value.split(',').map(Number);
-      return { x: originX + x, y: originY + y };
-    });
-    if (!mapWidth || !mapHeight || points.length < 3) return null;
-    const bounds = points.reduce((result, item) => ({
-      minX: Math.min(result.minX, item.x),
-      minY: Math.min(result.minY, item.y),
-      maxX: Math.max(result.maxX, item.x),
-      maxY: Math.max(result.maxY, item.y)
-    }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
-    const contains = (candidate) => {
-      let inside = false;
-      for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
-        const a = points[i];
-        const b = points[j];
-        if (((a.y > candidate.y) !== (b.y > candidate.y)) &&
-            (candidate.x < (b.x - a.x) * (candidate.y - a.y) / (b.y - a.y) + a.x)) inside = !inside;
-      }
-      return inside;
-    };
-    const center = { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 };
-    let mapPoint = contains(center) ? center : null;
-    const stepX = Math.max(1, (bounds.maxX - bounds.minX) / 20);
-    const stepY = Math.max(1, (bounds.maxY - bounds.minY) / 20);
-    for (let y = bounds.minY + stepY / 2; !mapPoint && y < bounds.maxY; y += stepY) {
-      for (let x = bounds.minX + stepX / 2; x < bounds.maxX; x += stepX) {
-        const candidate = { x, y };
-        if (contains(candidate)) {
-          mapPoint = candidate;
-          break;
+    const rect = canvas?.closest('.melon-layer')?.getBoundingClientRect();
+    const viewport = juyitingGame.getSceneDebugSnapshot?.().camera?.viewport;
+    const area = juyitingGame._hallScene?._hitProvider?.().hotspots
+      .find(item => item.id === ${JSON.stringify(objectName)});
+    if (!canvas || !rect?.width || !rect?.height || !viewport?.width || !viewport?.height || !area?.bounds) return null;
+    const { x, y, width, height } = area.bounds;
+    const containsVisible = candidate => (
+      candidate.x >= 0 && candidate.x <= viewport.width &&
+      candidate.y >= 0 && candidate.y <= viewport.height &&
+      area.contains(candidate)
+    );
+    let viewportPoint = { x: x + width / 2, y: y + height / 2 };
+    if (!containsVisible(viewportPoint)) {
+      const stepX = Math.max(1, width / 20);
+      const stepY = Math.max(1, height / 20);
+      viewportPoint = null;
+      for (let candidateY = y + stepY / 2; !viewportPoint && candidateY < y + height; candidateY += stepY) {
+        for (let candidateX = x + stepX / 2; candidateX < x + width; candidateX += stepX) {
+          const candidate = { x: candidateX, y: candidateY };
+          if (containsVisible(candidate)) {
+            viewportPoint = candidate;
+            break;
+          }
         }
       }
     }
-    if (!mapPoint) return null;
-    const scale = Math.max(rect.width / canvas.width, rect.height / canvas.height);
-    const offsetX = (rect.width - canvas.width * scale) / 2;
-    const offsetY = (rect.height - canvas.height * scale) / 2;
+    if (!viewportPoint) return null;
+    const scale = Math.max(rect.width / viewport.width, rect.height / viewport.height);
+    const offsetX = (rect.width - viewport.width * scale) / 2;
+    const offsetY = (rect.height - viewport.height * scale) / 2;
     return {
-      x: rect.left + offsetX + canvas.width * (mapPoint.x / mapWidth) * scale,
-      y: rect.top + offsetY + canvas.height * (mapPoint.y / mapHeight) * scale
+      x: rect.left + offsetX + viewportPoint.x * scale,
+      y: rect.top + offsetY + viewportPoint.y * scale
     };
   })()`)
   if (!point) throw new Error(`Scene hotspot ${hotspotId} has no clickable canvas point`)
-  await cdp.send('Input.dispatchMouseEvent', {
-    type: 'mousePressed',
-    x: point.x,
-    y: point.y,
-    button: 'left',
-    clickCount: 1
-  })
-  await cdp.send('Input.dispatchMouseEvent', {
-    type: 'mouseReleased',
-    x: point.x,
-    y: point.y,
-    button: 'left',
-    clickCount: 1
-  })
+  const dispatched = await evaluate(cdp, `(() => {
+    const canvas = document.querySelector('.melon-layer canvas');
+    if (!canvas) return false;
+    const options = { bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse', isPrimary: true, button: 0 };
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { ...options, buttons: 1, clientX: ${point.x}, clientY: ${point.y} }));
+    canvas.dispatchEvent(new PointerEvent('pointerup', { ...options, buttons: 0, clientX: ${point.x}, clientY: ${point.y} }));
+    return true;
+  })()`)
+  if (!dispatched) throw new Error(`Scene hotspot ${hotspotId} canvas is unavailable`)
+}
+
+const centerSceneHotspot = async (cdp, hotspotId) => {
+  const objectName = SCENE_HOTSPOTS[hotspotId]
+  if (!objectName) throw new Error(`Unknown scene hotspot: ${hotspotId}`)
+  const centered = await evaluate(cdp, `(() => {
+    ${GAME_LOOKUP_SOURCE}
+    const viewport = juyitingGame.getSceneDebugSnapshot?.().camera?.viewport;
+    const area = juyitingGame._hallScene?._hitProvider?.().hotspots
+      .find(item => item.id === ${JSON.stringify(objectName)});
+    if (!viewport?.width || !viewport?.height || !area?.bounds) return false;
+    const target = { x: area.bounds.x + area.bounds.width / 2, y: area.bounds.y + area.bounds.height / 2 };
+    juyitingGame.panBy?.(viewport.width / 2 - target.x, viewport.height / 2 - target.y);
+    return true;
+  })()`)
+  if (!centered) throw new Error(`Scene hotspot ${hotspotId} cannot be centered`)
 }
 
 const closePanel = `
@@ -792,6 +781,11 @@ export const runUiSmoke = async () => {
       throw new Error(`Page contains mojibake-like text: ${initialState.text}`)
     }
 
+    await evaluate(cdp, `(() => {
+      ${GAME_LOOKUP_SOURCE}
+      return juyitingGame.resetToMainHall?.();
+    })()`)
+    await centerSceneHotspot(cdp, 'library')
     const beforePanel = (await readDebug(cdp)).camera
     await clickSceneHotspot(cdp, 'library')
     await waitForExpression(cdp, 'Boolean(document.querySelector(".panel-library"))')
@@ -802,11 +796,13 @@ export const runUiSmoke = async () => {
     await evaluate(cdp, closePanel)
     await waitForExpression(cdp, '!document.querySelector(".panel-overlay")')
 
+    await centerSceneHotspot(cdp, 'tasks')
     await clickSceneHotspot(cdp, 'tasks')
     await waitForExpression(cdp, 'Boolean(document.querySelector(".panel-tasks"))')
     await evaluate(cdp, closePanel)
     await waitForExpression(cdp, '!document.querySelector(".panel-overlay")')
 
+    await centerSceneHotspot(cdp, 'chat')
     await clickSceneHotspot(cdp, 'chat')
     await waitForExpression(cdp, 'Boolean(document.querySelector(".panel-chat"))')
 
