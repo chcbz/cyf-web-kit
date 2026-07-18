@@ -88,6 +88,7 @@ export const registerPwa = async () => {
   const serviceWorkerUrl = `${import.meta.env.BASE_URL}sw.js`
   const registration = await navigator.serviceWorker.register(serviceWorkerUrl)
   serviceWorkerRegistration = registration
+  registration.update().catch(() => {})
 
   if (registration.waiting) {
     hasUpdate.value = true
