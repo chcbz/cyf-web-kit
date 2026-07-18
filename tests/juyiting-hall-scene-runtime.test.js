@@ -47,6 +47,50 @@ describe('HallScene melonJS runtime compatibility', () => {
     expect(canvas.style.transform).to.equal('translate(-50%, -50%)')
   })
 
+  it('recomputes the canvas display rectangle from the final observed container size', () => {
+    const originalResizeObserver = globalThis.ResizeObserver
+    let observerCallback = null
+    let observedTarget = null
+    const displayVariables = new Map()
+    let containerSize = { width: 390, height: 844 }
+    globalThis.ResizeObserver = class {
+      constructor(callback) { observerCallback = callback }
+      observe(target) { observedTarget = target }
+      disconnect() {}
+    }
+
+    try {
+      const game = new JuyitingGame()
+      game._canvas = {
+        style: {
+          transform: '',
+          setProperty: (name, value) => displayVariables.set(name, value)
+        }
+      }
+      game._container = {
+        getBoundingClientRect: () => containerSize
+      }
+      game._me = { game: { viewport: { width: 1664, height: 928 } } }
+      game._syncDisplayViewport = () => {}
+      game._markSceneDebugDirty = () => {}
+      game._scheduleCanvasCover = () => game._applyCanvasCover()
+
+      game._observeCanvasDisplay()
+      expect(observedTarget).to.equal(game._container)
+
+      game._applyCanvasCover()
+      expect(displayVariables.get('--juyiting-canvas-display-width')).to.equal('1513.379px')
+      expect(displayVariables.get('--juyiting-canvas-display-height')).to.equal('844px')
+
+      containerSize = { width: 844, height: 390 }
+      observerCallback()
+      expect(displayVariables.get('--juyiting-canvas-display-width')).to.equal('844px')
+      expect(displayVariables.get('--juyiting-canvas-display-height')).to.equal('470.692px')
+    } finally {
+      globalThis.ResizeObserver = originalResizeObserver
+    }
+  })
+
   it('registers a mount-specific melon state and starts that exact stage', () => {
     const calls = []
     const game = new JuyitingGame()
