@@ -8,6 +8,7 @@ import { classifyViewportResize } from '../camera/resizePolicy.js'
 import { screenToWorld } from '../camera/cameraTransform.js'
 import { createInputController } from '../input/inputController.js'
 import { createInteractionLock } from '../input/interactionLock.js'
+import { clientToViewport } from '../viewportTransform.js'
 
 const DEFAULT_INPUT_SNAPSHOT = Object.freeze({ activeGesture: 'none', interactionLocked: false })
 const normalizeLockReason = reason => typeof reason === 'string' ? reason.trim() : ''
@@ -181,13 +182,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       if (!rect?.width || !rect?.height || viewport.width <= 0 || viewport.height <= 0) {
         return { x: clientX, y: clientY }
       }
-      const scale = Math.max(rect.width / viewport.width, rect.height / viewport.height)
-      const offsetX = (rect.width - viewport.width * scale) / 2
-      const offsetY = (rect.height - viewport.height * scale) / 2
-      return {
-        x: (clientX - rect.left - offsetX) / scale,
-        y: (clientY - rect.top - offsetY) / scale
-      }
+      return clientToViewport(clientX, clientY, rect, viewport)
     }
 
     _createInputTarget() {

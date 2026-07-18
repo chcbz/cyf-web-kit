@@ -38,7 +38,7 @@
             }"
             aria-hidden="true"
           ></span>
-          <span class="tool-label">{{ sceneMode === 'landscape' ? '竖屏' : '横屏' }}</span>
+          <span class="tool-label">{{ sceneMode === 'landscape' ? '竖屏视图' : '横屏全景' }}</span>
         </button>
       </div>
     </div>
@@ -154,6 +154,7 @@ let resizeSettlePass = 0
 let pendingOrientationSignal = false
 let lastResizeSignature = ''
 let lastOrientationDimensions = ''
+let stageResizeObserver = null
 let returnFrame = null
 let resetPollRemaining = 0
 let orientationRequestGeneration = 0
@@ -236,12 +237,21 @@ const editableFocused = () => {
 
 const viewportNow = () => ({ width: window.innerWidth, height: window.innerHeight })
 
+const stageViewportNow = () => {
+  const rect = melonContainerRef.value?.getBoundingClientRect?.()
+  if (rect?.width > 0 && rect?.height > 0) {
+    return { width: Math.round(rect.width), height: Math.round(rect.height) }
+  }
+  return viewportNow()
+}
+
 const evaluateViewportResize = () => {
   resizeFrame = null
-  const next = viewportNow()
-  const nextVisualHeight = window.visualViewport?.height || next.height
-  const widthStable = Math.abs(next.width - previousLayoutViewport.width) <= 2
-  const layoutHeightChanged = Math.abs(next.height - previousLayoutViewport.height) >= 120
+  const nextLayoutViewport = viewportNow()
+  const nextStageViewport = stageViewportNow()
+  const nextVisualHeight = window.visualViewport?.height || nextLayoutViewport.height
+  const widthStable = Math.abs(nextLayoutViewport.width - previousLayoutViewport.width) <= 2
+  const layoutHeightChanged = Math.abs(nextLayoutViewport.height - previousLayoutViewport.height) >= 120
   const visualHeightSettled = Math.abs(nextVisualHeight - previousVisualHeight) >= 120
   const layoutKeyboardRace = widthStable && layoutHeightChanged && !visualHeightSettled && (editableFocused() || keyboardActive)
   if (
@@ -255,7 +265,7 @@ const evaluateViewportResize = () => {
   resizeSettlePass = 0
   const classifiedKind = classifyViewportResize({
     previous: previousLayoutViewport,
-    next,
+    next: nextLayoutViewport,
     previousVisualHeight,
     nextVisualHeight,
     editableFocused: editableFocused() || keyboardActive,
@@ -265,10 +275,12 @@ const evaluateViewportResize = () => {
   const kind = pendingOrientationSignal
     ? 'orientation'
     : ((keyboardTransition || layoutKeyboardRace) ? 'keyboard' : classifiedKind)
-  const resizeHeight = kind === 'keyboard' ? Math.min(next.height, nextVisualHeight) : next.height
+  const resizeHeight = kind === 'keyboard'
+    ? Math.min(nextStageViewport.height, nextVisualHeight)
+    : nextStageViewport.height
   document.documentElement.style.setProperty('--hall-visual-height', `${nextVisualHeight}px`)
   const change = {
-    width: next.width,
+    width: nextStageViewport.width,
     height: resizeHeight,
     kind,
     orientationChanged: pendingOrientationSignal
@@ -283,7 +295,7 @@ const evaluateViewportResize = () => {
   if (kind === 'orientation') lastOrientationDimensions = dimensions
   else if (dimensions !== lastOrientationDimensions) lastOrientationDimensions = ''
   if (kind !== 'keyboard') {
-    previousLayoutViewport = next
+    previousLayoutViewport = nextLayoutViewport
     keyboardActive = false
   } else {
     keyboardActive = Math.abs(previousLayoutViewport.height - nextVisualHeight) >= 120
@@ -319,6 +331,18 @@ const setupOrientationTracking = () => {
 
 const handleWindowResize = () => scheduleViewportResize()
 const handleVisualResize = () => scheduleViewportResize()
+
+const setupStageResizeObserver = () => {
+  const ResizeObserverImpl = window.ResizeObserver || globalThis.ResizeObserver
+  if (!ResizeObserverImpl || !melonContainerRef.value) return
+  stageResizeObserver = new ResizeObserverImpl(() => scheduleViewportResize())
+  stageResizeObserver.observe(melonContainerRef.value)
+}
+
+const teardownStageResizeObserver = () => {
+  stageResizeObserver?.disconnect?.()
+  stageResizeObserver = null
+}
 
 const teardownOrientationTracking = () => {
   orientationMedia?.removeEventListener?.('change', orientationMediaHandler)
@@ -546,6 +570,7 @@ const returnToMainHall = () => {
 
 onMounted(() => {
   setupOrientationTracking()
+  setupStageResizeObserver()
   mountScene()
 })
 
@@ -554,6 +579,7 @@ onBeforeUnmount(() => {
   sceneMountAttempt += 1
   orientationRequestGeneration += 1
   orientationRequestPending.value = false
+  teardownStageResizeObserver()
   void releaseOwnedOrientation()
   clearMountTimeout()
   teardownOrientationTracking()

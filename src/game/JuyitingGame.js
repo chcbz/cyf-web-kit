@@ -108,9 +108,10 @@ export class JuyitingGame {
       me.video.init(config.width, config.height, {
         ...config,
         parent: container,
+        scaleTarget: container,
         renderer: me.video.CANVAS,
         scale: 'auto',
-        scaleMethod: 'fit'
+        scaleMethod: 'fill-max'
       })
 
       // Make canvas background transparent to show DOM underneath
@@ -411,6 +412,10 @@ export class JuyitingGame {
   }
 
   resizeViewport(change) {
+    if (change?.kind !== 'keyboard') {
+      const resizeEvent = this._me?.event?.WINDOW_ONRESIZE
+      if (resizeEvent) this._me.event.emit?.(resizeEvent)
+    }
     const result = this._hallScene?.resizeViewport?.(change)
     this._markSceneDebugDirty()
     return result
