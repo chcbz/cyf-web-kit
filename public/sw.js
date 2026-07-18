@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'cyf-pwa-v20260618-logo-v4'
+const CACHE_VERSION = 'cyf-pwa-v20260718-juyiting-redfix'
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest']
 const DEVELOPMENT_HOSTS = ['localhost', '127.0.0.1']
 

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>正在更新聚义厅</title>
+    <style>
+      body { display: grid; min-height: 100vh; margin: 0; place-items: center; background: #211812; color: #fff4d4; font-family: system-ui, sans-serif; }
+      main { max-width: 280px; padding: 24px; text-align: center; line-height: 1.7; }
+    </style>
+  </head>
+  <body>
+    <main>正在清理旧版本缓存并更新聚义厅…</main>
+    <script>
+      (async () => {
+        const registrations = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistrations() : []
+        await Promise.all(registrations.map(registration => registration.unregister()))
+        if ('caches' in window) {
+          const cacheNames = await caches.keys()
+          await Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)))
+        }
+        location.replace(`/juyiting?cache-reset=${Date.now()}`)
+      })().catch(() => location.replace(`/juyiting?cache-reset=${Date.now()}`))
+    </script>
+  </body>
+</html>

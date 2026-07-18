@@ -19,6 +19,7 @@ const createAdapter = (
   scene = { width: 1664, height: 1200 }
 ) => {
   let viewport = { ...initialViewport }
+  let presetViewport = { ...initialViewport }
   let now = 1000
   let nextFrameId = 1
   const frames = new Map<number, FrameCallback>()
@@ -27,6 +28,7 @@ const createAdapter = (
   const cancelled: number[] = []
   const adapter: CameraAdapter = {
     viewport: () => ({ ...viewport }),
+    presetViewport: () => ({ ...presetViewport }),
     sceneSize: () => ({ ...scene }),
     apply: transform => applied.push({ ...transform }),
     requestFrame: callback => {
@@ -47,7 +49,11 @@ const createAdapter = (
     applied,
     cancelled,
     retainedFrames,
-    setViewport: (next: { width: number; height: number }) => { viewport = { ...next } },
+    setViewport: (next: { width: number; height: number }) => {
+      viewport = { ...next }
+      presetViewport = { ...next }
+    },
+    setPresetViewport: (next: { width: number; height: number }) => { presetViewport = { ...next } },
     advanceFrame: (elapsedMs: number) => {
       now = 1000 + elapsedMs
       const pending = [...frames.values()]
@@ -104,6 +110,22 @@ describe('camera controller', () => {
       MAIN_HALL_FOCUS
     )
     assert.deepEqual(fake.applied, [snapshot.transform])
+  })
+
+  it('uses the display viewport for presets while retaining a stable render viewport', () => {
+    const renderViewport = { width: 1664, height: 928 }
+    const fake = createAdapter(renderViewport, { width: 5000, height: 5000 })
+    fake.setPresetViewport({ width: 390, height: 844 })
+    const controller = createCameraController(fake.adapter, { minZoom: 0.5, maxZoom: 3.3 }, true)
+
+    assert.equal(controller.snapshot().presetKey, 'mobilePortrait')
+    assert.equal(controller.snapshot().transform.zoom, VIEW_PRESETS.mobilePortrait.zoom)
+
+    fake.setPresetViewport({ width: 844, height: 390 })
+    controller.resize(renderViewport, 'orientation')
+
+    assert.equal(controller.snapshot().presetKey, 'mobileLandscape')
+    assert.equal(controller.snapshot().transform.zoom, VIEW_PRESETS.mobilePortrait.zoom)
   })
 
   it('clamps pan and factor-based zoom while preserving the zoom focal point', () => {

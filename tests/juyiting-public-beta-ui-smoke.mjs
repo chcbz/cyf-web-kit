@@ -19,9 +19,12 @@ const EXPECTED_MANIFEST_VERSION = 'persona-sheets-v1'
 const REQUEST_TIMEOUT_MS = 15_000
 const CDP_COMMAND_TIMEOUT_MS = Number(process.env.JUYITING_CDP_COMMAND_TIMEOUT_MS) || 45_000
 const GAME_LOOKUP_SOURCE = `
-  let component = document.querySelector('.hall-stage')?.__vueParentComponent;
-  while (component && !component.setupState?.juyitingGame) component = component.parent;
-  const juyitingGame = component?.setupState?.juyitingGame;
+  let juyitingGame = window.__JYTING_GAME__;
+  if (!juyitingGame) {
+    let component = document.querySelector('.hall-stage')?.__vueParentComponent;
+    while (component && !component.setupState?.juyitingGame) component = component.parent;
+    juyitingGame = component?.setupState?.juyitingGame;
+  }
   if (!juyitingGame) throw new Error('Mounted Juyiting game instance is unavailable');
 `
 const CHROME_CANDIDATES = [
@@ -429,7 +432,7 @@ const clickSceneHotspot = async (cdp, hotspotId) => {
   const point = await evaluate(cdp, `(() => {
     ${GAME_LOOKUP_SOURCE}
     const canvas = document.querySelector('.melon-layer canvas');
-    const rect = canvas?.closest('.melon-layer')?.getBoundingClientRect();
+    const rect = canvas?.getBoundingClientRect();
     const viewport = juyitingGame.getSceneDebugSnapshot?.().camera?.viewport;
     const area = juyitingGame._hallScene?._hitProvider?.().hotspots
       .find(item => item.id === ${JSON.stringify(objectName)});
@@ -582,7 +585,7 @@ export const runUiSmoke = async () => {
       }))})`
     })
 
-    await cdp.send('Page.navigate', { url: `${FRONTEND_URL}/juyiting?transition=none` })
+    await cdp.send('Page.navigate', { url: `${FRONTEND_URL}/juyiting?transition=none&scene-debug=1` })
     await waitForExpression(cdp, 'Boolean(document.querySelector(".juyi-page"))')
     await waitForExpression(cdp, '(document.body.innerText || "").includes("聚义厅")')
     await waitForExpression(cdp, 'Boolean(document.querySelector(".hall-board.is-melon-ready .melon-layer canvas"))')
