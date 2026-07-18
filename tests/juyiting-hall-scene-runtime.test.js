@@ -12,6 +12,41 @@ import { createMovementEngine } from '../src/game/simulation/movementEngine.js'
 const HALL_XML = readFileSync('public/juyiting/hall.tmx', 'utf8')
 
 describe('HallScene melonJS runtime compatibility', () => {
+  it('derives an identical canvas display rectangle regardless of prior melonJS fit styles', () => {
+    const displayVariables = new Map()
+    const canvas = {
+      style: {
+        width: '809.6px',
+        height: '451.51px',
+        transform: '',
+        setProperty: (name, value) => displayVariables.set(name, value)
+      }
+    }
+    const game = new JuyitingGame()
+    game._canvas = canvas
+    game._container = {
+      getBoundingClientRect: () => ({ width: 844, height: 390 })
+    }
+    game._me = { game: { viewport: { width: 1664, height: 928 } } }
+    game._syncDisplayViewport = () => {}
+    game._markSceneDebugDirty = () => {}
+
+    game._applyCanvasCover()
+    const firstDisplay = {
+      width: displayVariables.get('--juyiting-canvas-display-width'),
+      height: displayVariables.get('--juyiting-canvas-display-height')
+    }
+
+    canvas.style.width = '1451.68px'
+    canvas.style.height = '809.55px'
+    game._applyCanvasCover()
+
+    expect(displayVariables.get('--juyiting-canvas-display-width')).to.equal(firstDisplay.width)
+    expect(displayVariables.get('--juyiting-canvas-display-height')).to.equal(firstDisplay.height)
+    expect(firstDisplay).to.deep.equal({ width: '844px', height: '470.692px' })
+    expect(canvas.style.transform).to.equal('translate(-50%, -50%)')
+  })
+
   it('registers a mount-specific melon state and starts that exact stage', () => {
     const calls = []
     const game = new JuyitingGame()

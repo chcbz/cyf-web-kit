@@ -842,6 +842,8 @@ button {
 
 .melon-layer :deep(canvas) {
   display: block;
+  width: var(--juyiting-canvas-display-width) !important;
+  height: var(--juyiting-canvas-display-height) !important;
 }
 
 .scene-error {

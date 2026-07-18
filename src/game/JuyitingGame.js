@@ -117,8 +117,8 @@ export class JuyitingGame {
         scaleMethod: 'fit'
       })
 
-      // Preserve melonJS's stable fit renderer. CSS handles visual coverage so
-      // mobile viewport changes never resize the Canvas backing buffer.
+      // Preserve melonJS's stable fit renderer. CSS controls the final display
+      // rectangle so mobile viewport changes never resize the Canvas backing buffer.
       const canvas = container.querySelector('canvas')
       this._canvas = canvas || null
       if (canvas) {
@@ -521,12 +521,21 @@ export class JuyitingGame {
     const canvas = this._canvas
     const containerRect = this._container?.getBoundingClientRect?.()
     if (!canvas || !containerRect?.width || !containerRect?.height) return
-    const baseWidth = Number.parseFloat(canvas.style.width)
-    const baseHeight = Number.parseFloat(canvas.style.height)
-    if (!Number.isFinite(baseWidth) || baseWidth <= 0 || !Number.isFinite(baseHeight) || baseHeight <= 0) return
-    const coverScale = Math.max(containerRect.width / baseWidth, containerRect.height / baseHeight)
-    this._canvasCoverScale = Number.isFinite(coverScale) && coverScale > 0 ? coverScale : 1
-    canvas.style.transform = `translate(-50%, -50%) scale(${this._canvasCoverScale})`
+    const viewport = this._me?.game?.viewport
+    const viewportWidth = Number(viewport?.width)
+    const viewportHeight = Number(viewport?.height)
+    if (!Number.isFinite(viewportWidth) || viewportWidth <= 0 || !Number.isFinite(viewportHeight) || viewportHeight <= 0) return
+    const presentationScale = Math.max(
+      containerRect.width / viewportWidth,
+      containerRect.height / viewportHeight
+    )
+    if (!Number.isFinite(presentationScale) || presentationScale <= 0) return
+    const displayWidth = roundCanvasDimension(viewportWidth * presentationScale)
+    const displayHeight = roundCanvasDimension(viewportHeight * presentationScale)
+    this._canvasCoverScale = presentationScale
+    canvas.style.setProperty('--juyiting-canvas-display-width', `${displayWidth}px`)
+    canvas.style.setProperty('--juyiting-canvas-display-height', `${displayHeight}px`)
+    canvas.style.transform = 'translate(-50%, -50%)'
     this._syncDisplayViewport(containerRect)
     this._markSceneDebugDirty()
   }
@@ -755,6 +764,10 @@ function simulationInitializationError(error) {
     source: 'simulation'
   })
   return result
+}
+
+function roundCanvasDimension(value) {
+  return Number(value.toFixed(3))
 }
 
 function sceneDebugTarget() {
