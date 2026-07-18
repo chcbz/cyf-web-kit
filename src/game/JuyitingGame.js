@@ -35,6 +35,9 @@ export class JuyitingGame {
     this._spriteLoadAbortController = null
     this._readyTimer = null
     this._canvas = null
+    this._canvasCoverFrame = null
+    this._canvasCoverScale = 1
+    this._displayViewportSignature = ''
     this._pendingStart = false
     this._stateId = null
     this._generation = 0
@@ -111,13 +114,21 @@ export class JuyitingGame {
         scaleTarget: container,
         renderer: me.video.CANVAS,
         scale: 'auto',
-        scaleMethod: 'flex'
+        scaleMethod: 'fit'
       })
 
-      // Make canvas background transparent to show DOM underneath
+      // Preserve melonJS's stable fit renderer. CSS handles visual coverage so
+      // mobile viewport changes never resize the Canvas backing buffer.
       const canvas = container.querySelector('canvas')
       this._canvas = canvas || null
-      if (canvas) canvas.style.background = 'transparent'
+      if (canvas) {
+        canvas.style.background = 'transparent'
+        canvas.style.position = 'absolute'
+        canvas.style.left = '50%'
+        canvas.style.top = '50%'
+        canvas.style.transformOrigin = 'center center'
+        this._scheduleCanvasCover()
+      }
 
       // === Load boot resources, parse TMX, then load resources declared by TMX ===
       await this._loadResources(me, HALL_BOOT_RESOURCES, mountToken)
@@ -188,11 +199,14 @@ export class JuyitingGame {
     this._spriteLoadAbortController = null
     if (this._readyTimer !== null) clearTimeout(this._readyTimer)
     this._readyTimer = null
+    this._cancelCanvasCover()
     try { me?.state?.pause?.() } catch { /* preserve the original mount failure */ }
     try { this._hallScene?.onDestroyEvent?.() } catch { /* best-effort scene cleanup */ }
     try { me?.video?.destroy?.() } catch { /* best-effort renderer cleanup */ }
     try { this._canvas?.remove?.() } catch { /* best-effort canvas cleanup */ }
     this._canvas = null
+    this._canvasCoverScale = 1
+    this._displayViewportSignature = ''
     this._hallScene = null
     this._container = null
     this._callbacks = {}
@@ -416,11 +430,37 @@ export class JuyitingGame {
     const viewportWidth = Number(engineViewport?.width)
     const viewportHeight = Number(engineViewport?.height)
     const sceneChange = Number.isFinite(viewportWidth) && viewportWidth > 0 && Number.isFinite(viewportHeight) && viewportHeight > 0
-      ? { ...change, width: viewportWidth, height: viewportHeight }
+      ? {
+          ...change,
+          width: viewportWidth,
+          height: viewportHeight,
+          displayViewport: { width: Number(change?.width), height: Number(change?.height) }
+        }
       : change
+    this._scheduleCanvasCover()
     const result = this._hallScene?.resizeViewport?.(sceneChange)
     this._markSceneDebugDirty()
     return result
+  }
+
+  getRenderSnapshot() {
+    const canvas = this._canvas
+    const canvasRect = canvas?.getBoundingClientRect?.()
+    const containerRect = this._container?.getBoundingClientRect?.()
+    const viewport = this._me?.game?.viewport
+    return {
+      scaleMethod: this._me?.game?.settings?.scaleMethod || '',
+      coverScale: this._canvasCoverScale,
+      devicePixelRatio: Number(globalThis.devicePixelRatio) || 1,
+      viewport: { width: Number(viewport?.width) || 0, height: Number(viewport?.height) || 0 },
+      container: { width: Math.round(containerRect?.width || 0), height: Math.round(containerRect?.height || 0) },
+      canvas: {
+        width: Number(canvas?.width) || 0,
+        height: Number(canvas?.height) || 0,
+        cssWidth: Math.round(canvasRect?.width || 0),
+        cssHeight: Math.round(canvasRect?.height || 0)
+      }
+    }
   }
 
   setInteractionLocked(locked, reason = 'panel') {
@@ -451,6 +491,58 @@ export class JuyitingGame {
     const result = this._hallScene?.resetToMainHall?.()
     this._markSceneDebugDirty()
     return result
+  }
+
+  _scheduleCanvasCover() {
+    if (!this._canvas || !this._container || this._canvasCoverFrame !== null) return
+    const target = typeof window !== 'undefined' ? window : globalThis
+    const schedule = typeof target.requestAnimationFrame === 'function'
+      ? callback => target.requestAnimationFrame(callback)
+      : callback => setTimeout(callback, 0)
+    this._canvasCoverFrame = schedule(() => {
+      this._canvasCoverFrame = null
+      this._applyCanvasCover()
+    })
+  }
+
+  _cancelCanvasCover() {
+    if (this._canvasCoverFrame === null) return
+    const target = typeof window !== 'undefined' ? window : globalThis
+    if (typeof target.cancelAnimationFrame === 'function') target.cancelAnimationFrame(this._canvasCoverFrame)
+    else clearTimeout(this._canvasCoverFrame)
+    this._canvasCoverFrame = null
+  }
+
+  _applyCanvasCover() {
+    const canvas = this._canvas
+    const containerRect = this._container?.getBoundingClientRect?.()
+    if (!canvas || !containerRect?.width || !containerRect?.height) return
+    const baseWidth = Number.parseFloat(canvas.style.width)
+    const baseHeight = Number.parseFloat(canvas.style.height)
+    if (!Number.isFinite(baseWidth) || baseWidth <= 0 || !Number.isFinite(baseHeight) || baseHeight <= 0) return
+    const coverScale = Math.max(containerRect.width / baseWidth, containerRect.height / baseHeight)
+    this._canvasCoverScale = Number.isFinite(coverScale) && coverScale > 0 ? coverScale : 1
+    canvas.style.transform = `translate(-50%, -50%) scale(${this._canvasCoverScale})`
+    this._syncDisplayViewport(containerRect)
+    this._markSceneDebugDirty()
+  }
+
+  _syncDisplayViewport(containerRect) {
+    const width = Math.round(containerRect?.width || 0)
+    const height = Math.round(containerRect?.height || 0)
+    const signature = `${width}:${height}`
+    if (!width || !height || signature === this._displayViewportSignature) return
+    const engineViewport = this._me?.game?.viewport
+    const viewportWidth = Number(engineViewport?.width)
+    const viewportHeight = Number(engineViewport?.height)
+    if (!Number.isFinite(viewportWidth) || viewportWidth <= 0 || !Number.isFinite(viewportHeight) || viewportHeight <= 0) return
+    this._displayViewportSignature = signature
+    this._hallScene?.resizeViewport?.({
+      width: viewportWidth,
+      height: viewportHeight,
+      displayViewport: { width, height },
+      kind: 'layout'
+    })
   }
 
   cancelMovement(agentId, stateVersion) {

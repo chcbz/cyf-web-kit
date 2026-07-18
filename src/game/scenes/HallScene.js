@@ -47,6 +47,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._destroyed = false
       this._lastViewport = null
       this._currentViewport = normalizeViewport(me.game.viewport)
+      this._displayViewport = { ...this._currentViewport }
     }
 
     onAgentClick(cb)   { this._onAgentClick = cb }
@@ -107,6 +108,10 @@ export function createHallSceneClass(me, HallAgentClass) {
       return { ...this._currentViewport }
     }
 
+    _displayViewportSize() {
+      return { ...this._displayViewport }
+    }
+
     syncAgentSnapshots(list) {
       this._pendingAgentSnapshots = Array.isArray(list) ? list.map(snapshot => ({ ...snapshot })) : []
     }
@@ -153,6 +158,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       }
       this._cameraController = createCameraController({
         viewport: () => this._viewportSize(),
+        presetViewport: () => this._displayViewportSize(),
         sceneSize: () => this._sceneSize(),
         apply: transform => this._applyCameraTransform(transform),
         requestFrame,
@@ -171,9 +177,11 @@ export function createHallSceneClass(me, HallAgentClass) {
 
     _displayRect() {
       const canvas = this._canvasElement()
+      const canvasRect = canvas?.getBoundingClientRect?.()
+      if (canvasRect?.width > 0 && canvasRect?.height > 0) return canvasRect
       const layer = canvas?.closest?.('.melon-layer') || canvas?.parentElement ||
         (typeof document !== 'undefined' ? document.querySelector('.melon-layer') : null)
-      return layer?.getBoundingClientRect?.() || this._canvasRect()
+      return layer?.getBoundingClientRect?.() || canvasRect
     }
 
     _clientToViewport(clientX, clientY) {
@@ -378,6 +386,7 @@ export function createHallSceneClass(me, HallAgentClass) {
     resizeViewport(change = {}) {
       const previous = this._viewportSize()
       const supplied = normalizeViewport(change)
+      const display = normalizeViewport(change.displayViewport)
       const next = {
         width: supplied.width || previous.width,
         height: supplied.height || previous.height
@@ -387,6 +396,10 @@ export function createHallSceneClass(me, HallAgentClass) {
         : classifyViewportResize({ previous, next, previousVisualHeight: previous.height, nextVisualHeight: next.height, editableFocused: false, orientationChanged: change.orientationChanged })
       if (kind === 'keyboard') return this.getTransform()
       this._currentViewport = next
+      this._displayViewport = {
+        width: display.width || next.width,
+        height: display.height || next.height
+      }
       this._lastViewport = next
       if (!this._cameraController) return this.getTransform()
       return this._cameraController.resize(next, kind)

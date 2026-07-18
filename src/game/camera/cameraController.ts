@@ -18,6 +18,7 @@ import {
 
 export type CameraAdapter = {
   viewport(): Viewport
+  presetViewport?(): Viewport
   sceneSize(): Viewport
   apply(transform: CameraTransform): void
   requestFrame(callback: (now: number) => void): number
@@ -73,7 +74,8 @@ export const createCameraController = (
   coarsePointer = false
 ): CameraController => {
   let viewport = copyViewport(adapter.viewport())
-  let presetKey = selectViewPreset(viewport, coarsePointer)
+  const currentPresetViewport = (): Viewport => copyViewport(adapter.presetViewport?.() ?? viewport)
+  let presetKey = selectViewPreset(currentPresetViewport(), coarsePointer)
   let transform: CameraTransform = { zoom: 1, offsetX: 0, offsetY: 0 }
   let animation: CameraSnapshot['animation'] = null
   let frameId: number | null = null
@@ -174,7 +176,7 @@ export const createCameraController = (
       const oldViewport = viewport
       viewport = copyViewport(nextViewport)
       const preserved = preserveFocus(transform, oldViewport, viewport)
-      presetKey = selectViewPreset(viewport, coarsePointer)
+      presetKey = selectViewPreset(currentPresetViewport(), coarsePointer)
       preservedMinimum = transform.zoom
       const resized = apply(preserved)
       preservedMinimum = Math.min(normalBounds().minZoom, resized.zoom)

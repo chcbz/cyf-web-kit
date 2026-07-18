@@ -432,7 +432,7 @@ const clickSceneHotspot = async (cdp, hotspotId) => {
   const point = await evaluate(cdp, `(() => {
     ${GAME_LOOKUP_SOURCE}
     const canvas = document.querySelector('.melon-layer canvas');
-    const rect = canvas?.closest('.melon-layer')?.getBoundingClientRect();
+    const rect = canvas?.getBoundingClientRect();
     const viewport = juyitingGame.getSceneDebugSnapshot?.().camera?.viewport;
     const area = juyitingGame._hallScene?._hitProvider?.().hotspots
       .find(item => item.id === ${JSON.stringify(objectName)});
