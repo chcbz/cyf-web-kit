@@ -111,7 +111,7 @@ export class JuyitingGame {
         scaleTarget: container,
         renderer: me.video.CANVAS,
         scale: 'auto',
-        scaleMethod: 'fill-max'
+        scaleMethod: 'flex'
       })
 
       // Make canvas background transparent to show DOM underneath
