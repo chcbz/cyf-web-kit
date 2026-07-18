@@ -416,7 +416,13 @@ export class JuyitingGame {
       const resizeEvent = this._me?.event?.WINDOW_ONRESIZE
       if (resizeEvent) this._me.event.emit?.(resizeEvent)
     }
-    const result = this._hallScene?.resizeViewport?.(change)
+    const engineViewport = this._me?.game?.viewport
+    const viewportWidth = Number(engineViewport?.width)
+    const viewportHeight = Number(engineViewport?.height)
+    const sceneChange = Number.isFinite(viewportWidth) && viewportWidth > 0 && Number.isFinite(viewportHeight) && viewportHeight > 0
+      ? { ...change, width: viewportWidth, height: viewportHeight }
+      : change
+    const result = this._hallScene?.resizeViewport?.(sceneChange)
     this._markSceneDebugDirty()
     return result
   }
@@ -645,6 +651,7 @@ function sceneDebugTarget() {
 function sceneDebugEnabled() {
   if (import.meta.env?.VITE_JUYITING_SCENE_DEBUG === 'true') return true
   if (import.meta.env?.MODE === 'test') return true
+  if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('scene-debug') === '1') return true
   return typeof process !== 'undefined'
     && process.argv?.some(argument => /(?:mocha|vitest|node:test)/i.test(argument))
 }

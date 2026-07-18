@@ -192,6 +192,10 @@ const sceneMode = computed(() => {
   return deviceLandscape.value ? 'landscape' : 'portrait'
 })
 
+const sceneDebugRequested = () => (
+  typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('scene-debug') === '1'
+)
+
 const isCurrentMountAttempt = (attemptId) => (
   !isUnmounted && attemptId === sceneMountAttempt
 )
@@ -222,6 +226,8 @@ const handleSceneReady = (attemptId) => {
   juyitingGame.syncAgents(props.sceneAgents)
   juyitingGame.syncHotspots?.(props.sceneHotspots)
   juyitingGame.setSelectedAgent(props.selectedAgent?.agentId || null)
+  lastResizeSignature = ''
+  scheduleViewportResize()
   scheduleReturnRefresh()
 }
 
@@ -569,6 +575,7 @@ const returnToMainHall = () => {
 }
 
 onMounted(() => {
+  if (sceneDebugRequested()) window.__JYTING_GAME__ = juyitingGame
   setupOrientationTracking()
   setupStageResizeObserver()
   mountScene()
@@ -580,6 +587,7 @@ onBeforeUnmount(() => {
   orientationRequestGeneration += 1
   orientationRequestPending.value = false
   teardownStageResizeObserver()
+  if (window.__JYTING_GAME__ === juyitingGame) delete window.__JYTING_GAME__
   void releaseOwnedOrientation()
   clearMountTimeout()
   teardownOrientationTracking()
