@@ -105,6 +105,33 @@ describe('camera transforms', () => {
     assert.ok(topLeft.y + scene.height * clamped.zoom >= viewport.height - 2)
   })
 
+  it('clamps against the actual portrait canvas crop instead of the full render width', () => {
+    const renderViewport = { width: 1664, height: 928 }
+    const scene = { width: 1664, height: 928 }
+    const visible = { x: 617.2, y: 0, width: 429.6, height: 928 }
+    const bounds = { minZoom: 0.1, maxZoom: 3.3, roundingTolerance: 2 }
+
+    const leftEdge = clampTransform(
+      { zoom: 1.25, offsetX: 9999, offsetY: 0 },
+      renderViewport,
+      scene,
+      bounds,
+      visible
+    )
+    const rightEdge = clampTransform(
+      { zoom: 1.25, offsetX: -9999, offsetY: 0 },
+      renderViewport,
+      scene,
+      bounds,
+      visible
+    )
+
+    closeTo(screenToWorld({ x: visible.x, y: 464 }, leftEdge, renderViewport).x, 0, 2)
+    closeTo(screenToWorld({ x: visible.x + visible.width, y: 464 }, rightEdge, renderViewport).x, scene.width, 2)
+    assert.ok(leftEdge.offsetX > 800)
+    assert.ok(rightEdge.offsetX < -800)
+  })
+
   it('clamps every extreme direction with fractional CSS and native dimensions', () => {
     const viewport = { width: 400.5, height: 300.25 }
     const scene = { width: 601.75, height: 451.5 }

@@ -1,5 +1,6 @@
 export type Point = { x: number; y: number }
 export type Viewport = { width: number; height: number }
+export type VisibleViewport = { x: number; y: number; width: number; height: number }
 export type CameraTransform = { zoom: number; offsetX: number; offsetY: number }
 
 export type CameraBounds = {
@@ -115,36 +116,57 @@ const clampOffsetAxis = (
   viewportSize: number,
   sceneSize: number,
   zoom: number,
-  tolerance: number
+  tolerance: number,
+  visibleStart = 0,
+  visibleSize = viewportSize
 ): number => {
   if (viewportSize === 0 || sceneSize === 0) return 0
 
   const scaledSceneSize = sceneSize * zoom
   const scaleOriginShift = viewportSize / 2 * (1 - zoom)
 
-  if (scaledSceneSize <= viewportSize - tolerance * 2) {
-    return round((viewportSize - scaledSceneSize) / 2 - scaleOriginShift)
+  if (scaledSceneSize <= visibleSize - tolerance * 2) {
+    return round(visibleStart + (visibleSize - scaledSceneSize) / 2 - scaleOriginShift)
   }
 
-  const minimum = viewportSize - tolerance - scaleOriginShift - scaledSceneSize
-  const maximum = tolerance - scaleOriginShift
+  const minimum = visibleStart + visibleSize - tolerance - scaleOriginShift - scaledSceneSize
+  const maximum = visibleStart + tolerance - scaleOriginShift
   return round(clamp(finiteOr(offset, 0), minimum, maximum))
+}
+
+const visibleViewport = (viewport: Viewport, value?: VisibleViewport): VisibleViewport => {
+  const viewportWidth = dimension(viewport.width)
+  const viewportHeight = dimension(viewport.height)
+  const rawX = finiteOr(value?.x ?? 0, 0)
+  const rawY = finiteOr(value?.y ?? 0, 0)
+  const x = clamp(rawX, 0, viewportWidth)
+  const y = clamp(rawY, 0, viewportHeight)
+  const width = clamp(dimension(value?.width ?? viewportWidth), 0, viewportWidth - x)
+  const height = clamp(dimension(value?.height ?? viewportHeight), 0, viewportHeight - y)
+  return {
+    x,
+    y,
+    width: width > 0 ? width : viewportWidth,
+    height: height > 0 ? height : viewportHeight
+  }
 }
 
 export const clampTransform = (
   transform: CameraTransform,
   viewport: Viewport,
   scene: Viewport,
-  bounds: CameraBounds
+  bounds: CameraBounds,
+  visible?: VisibleViewport
 ): CameraTransform => {
   const width = dimension(viewport.width)
   const height = dimension(viewport.height)
   const sceneWidth = dimension(scene.width)
   const sceneHeight = dimension(scene.height)
+  const visibleRect = visibleViewport({ width, height }, visible)
   const configuredMinimum = clampZoom(bounds.minZoom, bounds.minZoom, bounds.maxZoom)
   const configuredMaximum = clampZoom(bounds.maxZoom, bounds.minZoom, bounds.maxZoom)
   const coverZoom = sceneWidth > 0 && sceneHeight > 0
-    ? Math.max(width / sceneWidth, height / sceneHeight)
+    ? Math.max(visibleRect.width / sceneWidth, visibleRect.height / sceneHeight)
     : configuredMinimum
   const effectiveMinimum = Math.min(configuredMaximum, Math.max(configuredMinimum, coverZoom))
   const zoom = clampZoom(transform.zoom, effectiveMinimum, configuredMaximum)
@@ -156,7 +178,7 @@ export const clampTransform = (
 
   return {
     zoom,
-    offsetX: clampOffsetAxis(transform.offsetX, width, sceneWidth, zoom, tolerance),
-    offsetY: clampOffsetAxis(transform.offsetY, height, sceneHeight, zoom, tolerance)
+    offsetX: clampOffsetAxis(transform.offsetX, width, sceneWidth, zoom, tolerance, visibleRect.x, visibleRect.width),
+    offsetY: clampOffsetAxis(transform.offsetY, height, sceneHeight, zoom, tolerance, visibleRect.y, visibleRect.height)
   }
 }

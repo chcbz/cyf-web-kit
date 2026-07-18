@@ -302,6 +302,7 @@ export class JuyitingGame {
       this._pendingStart = false
       me.state.change(this._stateId, true)
     }
+    this._scheduleCanvasCover()
     // Emit ready again if onResetEvent didn't call it
     if (this._readyTimer !== null) clearTimeout(this._readyTimer)
     this._readyTimer = setTimeout(() => {
@@ -429,12 +430,14 @@ export class JuyitingGame {
     const engineViewport = this._me?.game?.viewport
     const viewportWidth = Number(engineViewport?.width)
     const viewportHeight = Number(engineViewport?.height)
+    const containerRect = this._container?.getBoundingClientRect?.()
     const sceneChange = Number.isFinite(viewportWidth) && viewportWidth > 0 && Number.isFinite(viewportHeight) && viewportHeight > 0
       ? {
           ...change,
           width: viewportWidth,
           height: viewportHeight,
-          displayViewport: { width: Number(change?.width), height: Number(change?.height) }
+          displayViewport: { width: Number(change?.width), height: Number(change?.height) },
+          visibleViewport: this._visibleViewport(containerRect)
         }
       : change
     this._scheduleCanvasCover()
@@ -459,7 +462,8 @@ export class JuyitingGame {
         height: Number(canvas?.height) || 0,
         cssWidth: Math.round(canvasRect?.width || 0),
         cssHeight: Math.round(canvasRect?.height || 0)
-      }
+      },
+      visibleViewport: this._visibleViewport(containerRect, canvasRect)
     }
   }
 
@@ -541,8 +545,31 @@ export class JuyitingGame {
       width: viewportWidth,
       height: viewportHeight,
       displayViewport: { width, height },
+      visibleViewport: this._visibleViewport(containerRect),
       kind: 'layout'
     })
+  }
+
+  _visibleViewport(containerRect, canvasRect = this._canvas?.getBoundingClientRect?.()) {
+    const viewport = this._me?.game?.viewport
+    const viewportWidth = Number(viewport?.width)
+    const viewportHeight = Number(viewport?.height)
+    if (!containerRect?.width || !containerRect?.height || !canvasRect?.width || !canvasRect?.height ||
+      !Number.isFinite(viewportWidth) || viewportWidth <= 0 || !Number.isFinite(viewportHeight) || viewportHeight <= 0) {
+      return { x: 0, y: 0, width: Number.isFinite(viewportWidth) ? viewportWidth : 0, height: Number.isFinite(viewportHeight) ? viewportHeight : 0 }
+    }
+    const scaleX = canvasRect.width / viewportWidth
+    const scaleY = canvasRect.height / viewportHeight
+    const left = Math.max(0, (containerRect.left - canvasRect.left) / scaleX)
+    const top = Math.max(0, (containerRect.top - canvasRect.top) / scaleY)
+    const right = Math.min(viewportWidth, (containerRect.right - canvasRect.left) / scaleX)
+    const bottom = Math.min(viewportHeight, (containerRect.bottom - canvasRect.top) / scaleY)
+    return {
+      x: Math.min(viewportWidth, left),
+      y: Math.min(viewportHeight, top),
+      width: Math.max(0, right - left),
+      height: Math.max(0, bottom - top)
+    }
   }
 
   cancelMovement(agentId, stateVersion) {

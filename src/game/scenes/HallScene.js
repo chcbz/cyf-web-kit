@@ -17,6 +17,23 @@ const normalizeViewport = viewport => ({
   height: Number.isFinite(Number(viewport?.height)) && Number(viewport.height) > 0 ? Number(viewport.height) : 0
 })
 
+const normalizeVisibleViewport = (visibleViewport, fallbackViewport) => {
+  const fallback = normalizeViewport(fallbackViewport)
+  const rawX = Number(visibleViewport?.x)
+  const rawY = Number(visibleViewport?.y)
+  const x = Number.isFinite(rawX) ? Math.min(fallback.width, Math.max(0, rawX)) : 0
+  const y = Number.isFinite(rawY) ? Math.min(fallback.height, Math.max(0, rawY)) : 0
+  const rawWidth = Number(visibleViewport?.width)
+  const rawHeight = Number(visibleViewport?.height)
+  const width = Number.isFinite(rawWidth) && rawWidth > 0
+    ? Math.min(fallback.width - x, rawWidth)
+    : fallback.width
+  const height = Number.isFinite(rawHeight) && rawHeight > 0
+    ? Math.min(fallback.height - y, rawHeight)
+    : fallback.height
+  return { x, y, width, height }
+}
+
 export function createHallSceneClass(me, HallAgentClass) {
   return class HallScene extends me.Stage {
     constructor() {
@@ -48,6 +65,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._lastViewport = null
       this._currentViewport = normalizeViewport(me.game.viewport)
       this._displayViewport = { ...this._currentViewport }
+      this._visibleViewport = normalizeVisibleViewport(null, this._currentViewport)
     }
 
     onAgentClick(cb)   { this._onAgentClick = cb }
@@ -112,6 +130,30 @@ export function createHallSceneClass(me, HallAgentClass) {
       return { ...this._displayViewport }
     }
 
+    _visibleViewportRect() {
+      if (this._visibleViewport.width > 0 && this._visibleViewport.height > 0) {
+        return { ...this._visibleViewport }
+      }
+      const viewport = this._viewportSize()
+      const canvas = this._canvasElement()
+      const canvasRect = canvas?.getBoundingClientRect?.()
+      const layer = canvas?.closest?.('.melon-layer') || canvas?.parentElement ||
+        (typeof document !== 'undefined' ? document.querySelector('.melon-layer') : null)
+      const layerRect = layer?.getBoundingClientRect?.()
+      if (!canvasRect?.width || !canvasRect?.height || !layerRect?.width || !layerRect?.height ||
+        viewport.width <= 0 || viewport.height <= 0) {
+        return { ...this._visibleViewport }
+      }
+      const scaleX = canvasRect.width / viewport.width
+      const scaleY = canvasRect.height / viewport.height
+      return normalizeVisibleViewport({
+        x: (layerRect.left - canvasRect.left) / scaleX,
+        y: (layerRect.top - canvasRect.top) / scaleY,
+        width: layerRect.width / scaleX,
+        height: layerRect.height / scaleY
+      }, viewport)
+    }
+
     syncAgentSnapshots(list) {
       this._pendingAgentSnapshots = Array.isArray(list) ? list.map(snapshot => ({ ...snapshot })) : []
     }
@@ -159,6 +201,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._cameraController = createCameraController({
         viewport: () => this._viewportSize(),
         presetViewport: () => this._displayViewportSize(),
+        visibleViewport: () => this._visibleViewportRect(),
         sceneSize: () => this._sceneSize(),
         apply: transform => this._applyCameraTransform(transform),
         requestFrame,
@@ -399,6 +442,9 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._displayViewport = {
         width: display.width || next.width,
         height: display.height || next.height
+      }
+      if (change.visibleViewport) {
+        this._visibleViewport = normalizeVisibleViewport(change.visibleViewport, next)
       }
       this._lastViewport = next
       if (!this._cameraController) return this.getTransform()

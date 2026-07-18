@@ -806,6 +806,28 @@ describe('HallScene melonJS pointer routing', () => {
     expect(bottom).to.be.at.least(viewport.height - 2)
   })
 
+  it('retains the visible canvas crop through later layout resizes', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+    const viewport = { width: 1664, height: 928 }
+    const visibleViewport = { x: 617.2, y: 0, width: 429.6, height: 928 }
+    scene.onResetEvent()
+    scene.resizeViewport({ ...viewport, visibleViewport, kind: 'layout' })
+    scene.zoomBy(0.41)
+    scene.panBy(9999, 0)
+    const leftTransform = scene.getTransform()
+    const leftWorld = (visibleViewport.x - viewport.width / 2 - leftTransform.offsetX) / leftTransform.zoom + viewport.width / 2
+
+    scene.resizeViewport({ ...viewport, kind: 'layout' })
+    scene.panBy(-19999, 0)
+    const rightTransform = scene.getTransform()
+    const rightWorld = (visibleViewport.x + visibleViewport.width - viewport.width / 2 - rightTransform.offsetX) / rightTransform.zoom + viewport.width / 2
+
+    expect(leftWorld).to.be.closeTo(0, 2)
+    expect(rightWorld).to.be.closeTo(1664, 2)
+  })
+
   it('zooms with wheel and pans with pointer drag inside the melonJS viewport', () => {
     const me = createFakeMelon()
     const HallScene = createHallSceneClass(me, class {})

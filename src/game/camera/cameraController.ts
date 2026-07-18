@@ -7,6 +7,7 @@ import {
   type CameraBounds,
   type CameraTransform,
   type Point,
+  type VisibleViewport,
   type Viewport
 } from './cameraTransform.js'
 import {
@@ -19,6 +20,7 @@ import {
 export type CameraAdapter = {
   viewport(): Viewport
   presetViewport?(): Viewport
+  visibleViewport?(): VisibleViewport
   sceneSize(): Viewport
   apply(transform: CameraTransform): void
   requestFrame(callback: (now: number) => void): number
@@ -113,7 +115,7 @@ export const createCameraController = (
     candidate: CameraTransform,
     operationBounds = bounds()
   ): CameraTransform => {
-    transform = clampTransform(candidate, viewport, adapter.sceneSize(), operationBounds)
+    transform = clampTransform(candidate, viewport, adapter.sceneSize(), operationBounds, adapter.visibleViewport?.())
     adapter.apply({ ...transform })
     return { ...transform }
   }
@@ -125,11 +127,12 @@ export const createCameraController = (
         preset.focus,
         { x: viewport.width / 2, y: viewport.height / 2 },
         preset.zoom,
-        viewport
+      viewport
       ),
       viewport,
       adapter.sceneSize(),
-      normalBounds(key)
+      normalBounds(key),
+      adapter.visibleViewport?.()
     )
   }
 
