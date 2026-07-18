@@ -412,10 +412,6 @@ export class JuyitingGame {
   }
 
   resizeViewport(change) {
-    if (change?.kind !== 'keyboard') {
-      const resizeEvent = this._me?.event?.WINDOW_ONRESIZE
-      if (resizeEvent) this._me.event.emit?.(resizeEvent)
-    }
     const engineViewport = this._me?.game?.viewport
     const viewportWidth = Number(engineViewport?.width)
     const viewportHeight = Number(engineViewport?.height)
