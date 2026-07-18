@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -129,37 +128,6 @@ async function checkAgentWebSocket() {
 
 async function main() {
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
-
-  await record('release guide contains public beta gates', async () => {
-    const guide = await readFile(resolve('docs/juyiting-public-beta-readiness.md'), 'utf8')
-    for (const required of ['发布验证命令', '受控公测结论', '在线 Agent 派发 smoke', '本地剩余状态', '开放公测前检查清单']) {
-      if (!guide.includes(required)) {
-        throw new Error(`release guide missing section: ${required}`)
-      }
-    }
-  })
-
-  await record('release runbook contains operating gates', async () => {
-    const runbook = await readFile(resolve('docs/juyiting-public-beta-runbook.md'), 'utf8')
-    for (const required of ['发布窗口', '责任人', '发布前门禁', '监控确认', '告警确认', '回滚步骤', '发布后观察']) {
-      if (!runbook.includes(required)) {
-        throw new Error(`release runbook missing section: ${required}`)
-      }
-    }
-  })
-
-  await record('simulation vertical slice guidance is current', async () => {
-    const readiness = await readFile(resolve('docs/juyiting-public-beta-readiness.md'), 'utf8')
-    const featureGuide = await readFile(resolve('docs/juyiting-feature-guide.md'), 'utf8')
-    for (const required of [
-      'Simulation vertical slice', '__JYTING_SCENE_DEBUG__',
-      'persona-sheets-v1', 'resync-required', 'SCENE_EVENTS_DISABLED'
-    ]) {
-      if (!`${readiness}\n${featureGuide}`.includes(required)) {
-        throw new Error(`simulation guidance missing marker: ${required}`)
-      }
-    }
-  })
 
   await record('validate Juyiting map assets', async () => {
     await runNpmScript('validate:juyiting-map')

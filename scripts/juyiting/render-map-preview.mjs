@@ -15,7 +15,7 @@ import { atomicReplaceFile } from './validate-map.mjs'
 const tmxPath = process.env.JIA_JUYITING_TMX_PATH
   ?? fileURLToPath(new URL('../../public/juyiting/hall.tmx', import.meta.url))
 const outputDirectory = process.env.JIA_JUYITING_PREVIEW_DIR
-  ?? fileURLToPath(new URL('../../docs/assets/juyiting/map-preview/', import.meta.url))
+  ?? fileURLToPath(new URL('../../tests/fixtures/juyiting/map-preview/', import.meta.url))
 const cleanPath = join(outputDirectory, 'hall-clean.svg')
 const debugPath = join(outputDirectory, 'hall-debug.svg')
 

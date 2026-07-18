@@ -16,7 +16,7 @@ rules:
   proposal:
     - Keep proposals under 500 words
     - Always include a "Non-goals" section
-    - Reference docs/specs/app-spec.md for existing features
+    - Reference existing source, tests, and package scripts for current behavior
   tasks:
     - Break tasks into chunks of max 2 hours
-    - Check docs/specs/app-spec.md before implementing
+    - Check relevant source and tests before implementing
