@@ -616,7 +616,8 @@ export function createHallSceneClass(me, HallAgentClass) {
       const { width: vpW, height: vpH } = this._viewportSize()
       if (vpW <= 0 || vpH <= 0) return false
       const mapData = this._mapData
-      const hotspots = mapData?.hotspots || []
+      const mapObjects = mapData?.hotspots || []
+      const hotspots = mapObjects.filter(hotspot => hotspot.type !== 'prop' && hotspot.panel)
 
       // Apply TMX map properties (zoom, dimensions) if available
       if (mapData?.mapProperties) {
@@ -659,28 +660,27 @@ export function createHallSceneClass(me, HallAgentClass) {
           const ctx = renderer.getContext?.()
           if (!ctx) return
           const active = this.feedback?.state && this.feedback.state !== 'idle'
+          if (!active) return
           ctx.save()
-          ctx.fillStyle = active ? 'rgba(255, 214, 113, 0.18)' : 'rgba(255, 235, 180, 0.06)'
-          ctx.strokeStyle = active ? 'rgba(255, 221, 130, 0.66)' : 'rgba(255, 235, 180, 0.16)'
-          ctx.lineWidth = active ? 2 : 1
+          ctx.fillStyle = 'rgba(255, 214, 113, 0.18)'
+          ctx.strokeStyle = 'rgba(255, 221, 130, 0.66)'
+          ctx.lineWidth = 2
 
           if (this.polygon && this.polygon.length >= 3) {
-            // Polygon shape
             ctx.beginPath()
-            ctx.moveTo(this.polygon[0].x, this.polygon[0].y)
+            ctx.moveTo(this.pos.x + this.polygon[0].x, this.pos.y + this.polygon[0].y)
             for (let i = 1; i < this.polygon.length; i++) {
-              ctx.lineTo(this.polygon[i].x, this.polygon[i].y)
+              ctx.lineTo(this.pos.x + this.polygon[i].x, this.pos.y + this.polygon[i].y)
             }
             ctx.closePath()
             ctx.fill()
             ctx.stroke()
           } else {
-            // Rectangle shape
             ctx.beginPath()
             if (typeof ctx.roundRect === 'function') {
-              ctx.roundRect(0, 0, this.width, this.height, 8)
+              ctx.roundRect(this.pos.x, this.pos.y, this.width, this.height, 8)
             } else {
-              ctx.rect(0, 0, this.width, this.height)
+              ctx.rect(this.pos.x, this.pos.y, this.width, this.height)
             }
             ctx.fill()
             ctx.stroke()
@@ -691,7 +691,7 @@ export function createHallSceneClass(me, HallAgentClass) {
             ctx.fillStyle = '#fff4d4'
             ctx.textAlign = 'center'
             ctx.textBaseline = 'bottom'
-            ctx.fillText(this.feedback.feedbackText, this.width / 2, -8)
+            ctx.fillText(this.feedback.feedbackText, this.pos.x + this.width / 2, this.pos.y - 8)
           }
           ctx.restore()
         }
@@ -717,7 +717,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       })
       // Render prop tile objects from TMX collection-of-images tilesets.
       let propDepth = 3
-      hotspots.forEach(h => {
+      mapObjects.forEach(h => {
         if (h.shape !== 'rect' || h.type !== 'prop' || !h.tileResourceName) return
         const image = me.loader.getImage(h.tileResourceName)
         if (!image) {

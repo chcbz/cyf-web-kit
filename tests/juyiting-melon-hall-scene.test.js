@@ -556,6 +556,89 @@ describe('HallScene melonJS pointer routing', () => {
     expect(marker.polygon[1].y).to.be.closeTo(65.51, 0.01)
   })
 
+  it('does not register prop tiles as interactive hotspots', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+
+    scene.setMapData({
+      coordinateWidth: 1664,
+      coordinateHeight: 928,
+      imageLayers: {},
+      tileLayers: [],
+      tilesets: [],
+      hotspots: [
+        { id: 'roster-book', panel: 'catalog', shape: 'rect', x: 20, y: 30, w: 10, h: 12 },
+        { id: 'roster-book-rect', type: 'prop', panel: 'catalog', shape: 'rect', x: 20, y: 30, w: 10, h: 12 }
+      ]
+    })
+    scene.onResetEvent()
+
+    expect(scene._hotspots.map(({ data }) => data.id)).to.deep.equal(['roster-book'])
+    expect(me.children.find(item => item.child.data?.id === 'roster-book-rect')).to.equal(undefined)
+  })
+
+  it('draws active hotspot feedback at the marker world position', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+
+    scene.setMapData({
+      coordinateWidth: 1664,
+      coordinateHeight: 928,
+      imageLayers: {},
+      tileLayers: [],
+      tilesets: [],
+      hotspots: [
+        {
+          id: 'roster-book',
+          panel: 'catalog',
+          shape: 'polygon',
+          x: 18.389,
+          y: 30.981,
+          w: 10.697,
+          h: 20.582,
+          polygon: [
+            { x: 329, y: 362 },
+            { x: 351, y: 287 },
+            { x: 395, y: 383 },
+            { x: 217, y: 383 }
+          ]
+        }
+      ]
+    })
+    scene.onResetEvent()
+
+    const marker = scene._hotspots[0].marker
+    const operations = []
+    marker.setFeedback({ state: 'active', feedbackText: '打开名册' })
+    marker.draw({
+      getContext: () => ({
+        save: () => operations.push(['save']),
+        restore: () => operations.push(['restore']),
+        beginPath: () => operations.push(['beginPath']),
+        moveTo: (x, y) => operations.push(['moveTo', x, y]),
+        lineTo: (x, y) => operations.push(['lineTo', x, y]),
+        closePath: () => operations.push(['closePath']),
+        fill: () => operations.push(['fill']),
+        stroke: () => operations.push(['stroke']),
+        fillText: (text, x, y) => operations.push(['fillText', text, x, y]),
+        set fillStyle(value) { operations.push(['fillStyle', value]) },
+        set strokeStyle(value) { operations.push(['strokeStyle', value]) },
+        set lineWidth(value) { operations.push(['lineWidth', value]) },
+        set font(value) { operations.push(['font', value]) },
+        set textAlign(value) { operations.push(['textAlign', value]) },
+        set textBaseline(value) { operations.push(['textBaseline', value]) }
+      })
+    })
+
+    const firstPoint = operations.find(([operation]) => operation === 'moveTo')
+    const feedbackText = operations.find(([operation]) => operation === 'fillText')
+    expect(firstPoint[1]).to.be.closeTo(marker.pos.x + marker.polygon[0].x, 0.01)
+    expect(firstPoint[2]).to.be.closeTo(marker.pos.y + marker.polygon[0].y, 0.01)
+    expect(feedbackText).to.deep.equal(['fillText', '打开名册', marker.pos.x + marker.width / 2, marker.pos.y - 8])
+  })
+
   it('routes hotspot clicks on release after DOM rooms are removed', () => {
     const me = createFakeMelon()
     const HallScene = createHallSceneClass(me, class {})
