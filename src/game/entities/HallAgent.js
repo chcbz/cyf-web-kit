@@ -192,7 +192,7 @@ export function createHallAgentClass(me) {
       this._highlighted = !!on
       const sprite = this._spriteTarget()
       if (sprite) {
-        sprite.tint = on ? new me.Color(1, 0.95, 0.45, 0.35) : new me.Color(255, 255, 255, 1)
+        sprite.tint = on ? new me.Color(255, 242, 115, 0.35) : new me.Color(255, 255, 255, 1)
       }
     }
 
