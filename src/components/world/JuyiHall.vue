@@ -48,7 +48,7 @@
     </HallStage>
 
     <transition name="panel" @after-leave="handlePanelAfterLeave">
-      <div v-if="activePanel" class="panel-overlay" @click.self="closePanel">
+      <div v-if="activePanel" class="panel-overlay" @pointerdown.self="closePanel">
         <section
           ref="panelRef"
           class="floating-panel"

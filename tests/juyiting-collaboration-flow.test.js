@@ -88,6 +88,8 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallStageSource).not.to.include('@click.stop="openZone(zone)"')
     expect(hallStageSource).not.to.include('startMapDrag')
     expect(hallSource).to.include(':class="{ \'is-panel-open\': activePanel }"')
+    expect(hallSource).to.include('class="panel-overlay" @pointerdown.self="closePanel"')
+    expect(hallSource).not.to.include('class="panel-overlay" @click.self="closePanel"')
     expect(hallSource).to.include('.juyi-page.is-panel-open :deep(.hall-board)')
     expect(hallSource).to.include('animation-play-state: paused !important;')
     expect(hallSource).to.include('.panel-enter-from .floating-panel')
