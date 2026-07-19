@@ -37,7 +37,6 @@ export class JuyitingGame {
     this._canvas = null
     this._canvasCoverFrame = null
     this._canvasCoverScale = 1
-    this._canvasDisplayObserver = null
     this._displayViewportSignature = ''
     this._pendingStart = false
     this._stateId = null
@@ -128,7 +127,6 @@ export class JuyitingGame {
         canvas.style.left = '50%'
         canvas.style.top = '50%'
         canvas.style.transformOrigin = 'center center'
-        this._observeCanvasDisplay()
         this._scheduleCanvasCover()
       }
 
@@ -202,7 +200,6 @@ export class JuyitingGame {
     if (this._readyTimer !== null) clearTimeout(this._readyTimer)
     this._readyTimer = null
     this._cancelCanvasCover()
-    this._disconnectCanvasDisplayObserver()
     try { me?.state?.pause?.() } catch { /* preserve the original mount failure */ }
     try { this._hallScene?.onDestroyEvent?.() } catch { /* best-effort scene cleanup */ }
     try { me?.video?.destroy?.() } catch { /* best-effort renderer cleanup */ }
@@ -518,19 +515,6 @@ export class JuyitingGame {
     if (typeof target.cancelAnimationFrame === 'function') target.cancelAnimationFrame(this._canvasCoverFrame)
     else clearTimeout(this._canvasCoverFrame)
     this._canvasCoverFrame = null
-  }
-
-  _observeCanvasDisplay() {
-    this._disconnectCanvasDisplayObserver()
-    const ResizeObserverImpl = globalThis.ResizeObserver
-    if (typeof ResizeObserverImpl !== 'function' || !this._container) return
-    this._canvasDisplayObserver = new ResizeObserverImpl(() => this._scheduleCanvasCover())
-    this._canvasDisplayObserver.observe(this._container)
-  }
-
-  _disconnectCanvasDisplayObserver() {
-    this._canvasDisplayObserver?.disconnect?.()
-    this._canvasDisplayObserver = null
   }
 
   _applyCanvasCover() {
