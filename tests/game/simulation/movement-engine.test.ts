@@ -31,7 +31,7 @@ describe('movement engine', () => {
     })
     assert.deepEqual(engine.drainPhaseEvents(), [{
       reportId: 'move-1:arrived', agentId: 'agent-songjiang', stateVersion: 1,
-      phase: 'arrived', regionId: 'council-table', occurredAt: '1970-01-01T00:00:01.234Z',
+      phase: 'arrived', regionId: 'council-table', occurredAt: '1970-01-01T00:00:01.234Z', source: 'backend',
     }])
     engine.update(30_000)
     assert.deepEqual(engine.drainPhaseEvents(), [])
@@ -49,7 +49,7 @@ describe('movement engine', () => {
     })
     assert.deepEqual(engine.drainPhaseEvents(), [{
       reportId: 'missing:blocked', agentId: 'agent-songjiang', stateVersion: 1,
-      phase: 'blocked', regionId: 'missing-region', occurredAt: '1970-01-01T00:00:02.000Z',
+      phase: 'blocked', regionId: 'missing-region', occurredAt: '1970-01-01T00:00:02.000Z', source: 'backend',
     }])
     engine.update(30_000)
     assert.deepEqual(engine.drainPhaseEvents(), [])
@@ -65,7 +65,7 @@ describe('movement engine', () => {
     assert.equal(engine.snapshots()[0]?.phase, 'blocked')
     assert.deepEqual(engine.drainPhaseEvents(), [{
       reportId: 'no-path:blocked', agentId: 'agent-songjiang', stateVersion: 1,
-      phase: 'blocked', regionId: 'council-table', occurredAt: '1970-01-01T00:00:02.500Z',
+      phase: 'blocked', regionId: 'council-table', occurredAt: '1970-01-01T00:00:02.500Z', source: 'backend',
     }])
   })
 
@@ -125,7 +125,7 @@ describe('movement engine', () => {
     assert.deepEqual(replacement, { accepted: true, replacedCommandId: 'move-1' })
     assert.deepEqual(engine.drainPhaseEvents(), [{
       reportId: 'move-1:arrived', agentId: 'agent-songjiang', stateVersion: 1,
-      phase: 'arrived', regionId: 'council-table', occurredAt: '1970-01-01T00:00:04.000Z',
+      phase: 'arrived', regionId: 'council-table', occurredAt: '1970-01-01T00:00:04.000Z', source: 'backend',
     }])
     assert.deepEqual(engine.snapshots()[0], {
       agentId: 'agent-songjiang', personaCode: 'songjiang', x: 100, y: 0,
@@ -198,6 +198,21 @@ describe('movement engine', () => {
     assert.equal(engine.cancel('agent-songjiang', 2), true)
     assert.deepEqual(engine.drainPhaseEvents(), [])
   })
+
+  it('runs TMX local patrol until a backend state takes priority, then resumes after cancellation', () => {
+    const engine = createMovementEngine(runtime(), manifest(), { now: () => 1_000 })
+    engine.setLocalPatrols([{ agentId: 'agent-songjiang', personaCode: 'songjiang', routeId: 'songjiang-loop' }])
+
+    engine.update(1)
+    assert.equal(engine.snapshots()[0]?.targetRegionId, 'council-table')
+
+    assert.equal(engine.enqueue(command({ targetRegionId: 'bounty-board', stateVersion: 1 })).accepted, true)
+    assert.equal(engine.snapshots()[0]?.targetRegionId, 'bounty-board')
+
+    assert.equal(engine.cancel('agent-songjiang', 1), true)
+    engine.update(1)
+    assert.equal(engine.snapshots()[0]?.targetRegionId, 'bounty-board')
+  })
 })
 
 function command(overrides: Partial<MovementCommand> = {}): MovementCommand {
@@ -223,6 +238,10 @@ function runtime(): MapRuntimeData {
       edge('home-council', 'home', 'council', [{ x: 0, y: 0 }, { x: 100, y: 0 }]),
       edge('home-bounty', 'home', 'bounty', [{ x: 0, y: 0 }, { x: 0, y: 100 }]),
     ],
+    patrolRoutes: [{
+      stableId: 'patrol-songjiang', routeId: 'songjiang-loop', personaCode: 'songjiang',
+      regionIds: ['council-table', 'bounty-board'], loop: true, dwellMs: 0, priority: 1,
+    }],
     slots: [
       { stableId: 'home-songjiang', slotId: 'home-songjiang', regionId: 'main-seat',
         point: { x: 0, y: 0 }, personaCode: 'songjiang', kind: 'home' },

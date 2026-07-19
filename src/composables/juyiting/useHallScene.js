@@ -225,6 +225,7 @@ export const useHallScene = ({
         featuredHero: Boolean(agent.featuredHero || featuredHero),
         synthetic: Boolean(agent.synthetic),
         simulationControlled,
+        localPatrolRouteId: simulationControlled ? 'songjiang-main-loop' : undefined,
         visualKey: visual.visualKey || visualKey,
         prominentMotion: simulationControlled ? false : Boolean(transient.prominentMotion),
         motionSeed: seed

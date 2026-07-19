@@ -30,15 +30,23 @@ export type SimulationPhaseEvent = {
   phase: 'arrived' | 'blocked'
   regionId: string
   occurredAt: string
+  source: 'backend' | 'local' | 'user'
 }
 
 export type MovementEngine = {
   enqueue(command: MovementCommand): MovementCommandPushResult
   cancel(agentId: string, stateVersion?: number): boolean
+  setLocalPatrols(patrols: readonly LocalPatrolAssignment[]): void
   update(deltaMs: number): void
   snapshots(): AgentSnapshot[]
   drainPhaseEvents(): SimulationPhaseEvent[]
   metrics(): Readonly<{ queuedCommandCount: number, replanningCount: number }>
+}
+
+export type LocalPatrolAssignment = {
+  agentId: string
+  personaCode: string
+  routeId: string
 }
 
 export type MovementEngineOptions = {
@@ -74,6 +82,8 @@ export function createMovementEngine(
   const agents = new Map<string, AgentRuntime>()
   const phaseEvents: SimulationPhaseEvent[] = []
   const cancellationWatermarks = new Map<string, number>()
+  const localPatrols = new Map<string, { personaCode: string, routeId: string, nextIndex: number, waitMs: number }>()
+  const backendHeldAgents = new Set<string>()
   let replanningCount = 0
   const now = options.now ?? Date.now
   const arrivalThreshold = options.arrivalThreshold ?? DEFAULT_ARRIVAL_THRESHOLD
@@ -84,11 +94,17 @@ export function createMovementEngine(
       const cancellationWatermark = source
         ? cancellationWatermarks.get(source.agentId)
         : undefined
-      if (source && cancellationWatermark !== undefined
+      if (source?.source !== 'local' && cancellationWatermark !== undefined
         && source.stateVersion <= cancellationWatermark) {
         return { accepted: false, reason: 'stale-state-version' }
       }
       const existingAgent = agents.get(source?.agentId)
+      if (source?.source === 'local' && backendHeldAgents.has(source.agentId)) {
+        return { accepted: false, reason: 'lower-priority' }
+      }
+      if (source?.source === 'local' && existingAgent?.active?.command.source === 'backend') {
+        return { accepted: false, reason: 'lower-priority' }
+      }
       const replacedActive = existingAgent?.active?.command.commandId
       const result = queue.push(source)
       if (!result.accepted) return result
@@ -99,6 +115,7 @@ export function createMovementEngine(
         && distanceToTarget(existingAgent) <= arrivalThreshold) {
         arrive(existingAgent, phaseEvents, now)
       }
+      if (command.source === 'backend') backendHeldAgents.add(command.agentId)
       activate(command, map, manifest, pathfinder, slots, agents, phaseEvents, now)
       return replacedActive && replacedActive !== command.commandId
         ? { accepted: true, replacedCommandId: replacedActive }
@@ -120,6 +137,7 @@ export function createMovementEngine(
       agent.snapshot.phase = 'idle'
       agent.snapshot.behavior = 'idle'
       if (stateVersion !== undefined) {
+        backendHeldAgents.delete(agentId)
         agent.snapshot.stateVersion = Math.max(agent.snapshot.stateVersion, stateVersion)
         cancellationWatermarks.set(agentId, Math.max(
           cancellationWatermarks.get(agentId) ?? 0,
@@ -142,6 +160,26 @@ export function createMovementEngine(
       for (const agent of agents.values()) {
         if (agent.active) advance(agent, deltaMs, phaseEvents, now)
       }
+      advanceLocalPatrols(deltaMs, localPatrols, backendHeldAgents, agents, map, manifest, pathfinder, slots, phaseEvents, now)
+    },
+
+    setLocalPatrols(assignments) {
+      const availableRoutes = new Map((map.patrolRoutes ?? []).map(route => [route.routeId, route]))
+      const next = new Map<string, { personaCode: string, routeId: string, nextIndex: number, waitMs: number }>()
+      for (const assignment of assignments ?? []) {
+        const route = availableRoutes.get(assignment?.routeId)
+        if (!assignment?.agentId || !assignment?.personaCode || !route
+          || route.personaCode !== assignment.personaCode) continue
+        const current = localPatrols.get(assignment.agentId)
+        next.set(assignment.agentId, {
+          personaCode: assignment.personaCode,
+          routeId: route.routeId,
+          nextIndex: current?.routeId === route.routeId ? current.nextIndex : 0,
+          waitMs: current?.routeId === route.routeId ? current.waitMs : 0,
+        })
+      }
+      localPatrols.clear()
+      next.forEach((value, agentId) => localPatrols.set(agentId, value))
     },
 
     snapshots() {
@@ -157,6 +195,51 @@ export function createMovementEngine(
     metrics() {
       return Object.freeze({ queuedCommandCount: queue.size, replanningCount })
     },
+  }
+}
+
+function advanceLocalPatrols(
+  deltaMs: number,
+  patrols: Map<string, { personaCode: string, routeId: string, nextIndex: number, waitMs: number }>,
+  backendHeldAgents: Set<string>,
+  agents: Map<string, AgentRuntime>,
+  map: MapRuntimeData,
+  manifest: PersonaSpriteManifest,
+  pathfinder: PathFinder,
+  slots: SlotAllocator,
+  phaseEvents: SimulationPhaseEvent[],
+  now: () => number,
+): void {
+  const routes = new Map((map.patrolRoutes ?? []).map(route => [route.routeId, route]))
+  for (const [agentId, patrol] of patrols) {
+    if (backendHeldAgents.has(agentId)) continue
+    const route = routes.get(patrol.routeId)
+    if (!route || !route.regionIds.length) continue
+    const agent = agents.get(agentId)
+    if (agent?.active) continue
+    if (agent?.snapshot.phase === 'arrived' && patrol.waitMs === 0) patrol.waitMs = route.dwellMs
+    if (patrol.waitMs > 0) {
+      patrol.waitMs = Math.max(0, patrol.waitMs - deltaMs)
+      if (patrol.waitMs > 0) continue
+    }
+    const targetRegionId = route.regionIds[patrol.nextIndex]
+    patrol.nextIndex = route.loop
+      ? (patrol.nextIndex + 1) % route.regionIds.length
+      : Math.min(patrol.nextIndex + 1, route.regionIds.length - 1)
+    const command: MovementCommand = {
+      commandId: `local:${agentId}:${route.routeId}:${patrol.nextIndex}:${now()}`,
+      agentId,
+      personaCode: patrol.personaCode,
+      source: 'local',
+      type: 'MOVE_TO_REGION',
+      targetRegionId,
+      priority: route.priority,
+      stateVersion: 0,
+      startedAt: new Date(now()).toISOString(),
+    }
+    const runtime = agents.get(agentId)
+    if (runtime?.active?.command.source === 'backend') continue
+    activate(command, map, manifest, pathfinder, slots, agents, phaseEvents, now)
   }
 }
 
@@ -344,6 +427,7 @@ function emitPhase(
     phase,
     regionId,
     occurredAt: new Date(now()).toISOString(),
+    source: command.source,
   })
 }
 

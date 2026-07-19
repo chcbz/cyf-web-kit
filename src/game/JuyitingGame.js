@@ -371,6 +371,15 @@ export class JuyitingGame {
   }
 
   syncAgents(list) {
+    if (this._simulationEnabled && this._movementEngine) {
+      this._movementEngine.setLocalPatrols((list || [])
+        .filter(agent => agent?.simulationControlled && agent?.localPatrolRouteId)
+        .map(agent => ({
+          agentId: agent.agentId,
+          personaCode: agent.personaCode,
+          routeId: agent.localPatrolRouteId
+        })))
+    }
     if (this._hallScene) this._hallScene.syncAgents(list)
   }
 

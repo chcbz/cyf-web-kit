@@ -806,6 +806,20 @@
    <ellipse/>
   </object>
  </objectgroup>
+ <objectgroup id="24" name="patrol_routes">
+  <object id="117" x="880" y="320">
+   <properties>
+    <property name="stableId" value="jyt-patrol-songjiang-main-v1"/>
+    <property name="routeId" value="songjiang-main-loop"/>
+    <property name="personaCode" value="songjiang"/>
+    <property name="regionIds" value="council-table,bounty-board,library-shelf,main-seat"/>
+    <property name="loop" type="bool" value="true"/>
+    <property name="dwellMs" type="int" value="1800"/>
+    <property name="priority" type="int" value="1"/>
+   </properties>
+   <polyline points="0,0 0,160 332,300 560,100 552,280 0,0"/>
+  </object>
+ </objectgroup>
  <objectgroup id="23" name="debug_labels">
  </objectgroup>
 </map>

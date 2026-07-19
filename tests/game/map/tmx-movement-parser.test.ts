@@ -58,6 +58,12 @@ describe('movement TMX parser', () => {
         <property name="stableId" value="home-songjiang-v1"/><property name="slotId" value="home-songjiang"/>
         <property name="regionId" value="main-seat"/><property name="personaCode" value="songjiang"/>
       </properties><ellipse/></object></objectgroup>
+      <objectgroup name="patrol_routes"><object x="0" y="0"><properties>
+        <property name="stableId" value="patrol-songjiang-v1"/><property name="routeId" value="songjiang-loop"/>
+        <property name="personaCode" value="songjiang"/><property name="regionIds" value="main-seat,polygon-room"/>
+        <property name="loop" type="bool" value="true"/><property name="dwellMs" type="int" value="1500"/>
+        <property name="priority" type="int" value="1"/>
+      </properties><polyline points="0,0 1,1"/></object></objectgroup>
     </map>`
 
   it('declares the XML parser as a production dependency', () => {
@@ -73,7 +79,7 @@ describe('movement TMX parser', () => {
     const result = parseMovementTmx(xml)
     assert.deepEqual(Object.keys(result).sort(), [
       'edges', 'height', 'movementSchemaVersion', 'navGraphVersion', 'nodes', 'obstacles',
-      'regions', 'sceneId', 'slots', 'spriteManifestVersion', 'width',
+      'patrolRoutes', 'regions', 'sceneId', 'slots', 'spriteManifestVersion', 'width',
     ])
     assert.deepEqual({
       sceneId: result.sceneId, movementSchemaVersion: result.movementSchemaVersion,
@@ -83,6 +89,10 @@ describe('movement TMX parser', () => {
       sceneId: 'juyiting-main', movementSchemaVersion: '1', navGraphVersion: 'juyiting-main-v1',
       spriteManifestVersion: 'persona-sheets-v1', width: 1664, height: 928,
     })
+    assert.deepEqual(result.patrolRoutes, [{
+      stableId: 'patrol-songjiang-v1', routeId: 'songjiang-loop', personaCode: 'songjiang',
+      regionIds: ['main-seat', 'polygon-room'], loop: true, dwellMs: 1500, priority: 1,
+    }])
     assert.deepEqual(result.obstacles, [{ points: [{ x: 50, y: 60 }, { x: 55, y: 60 }, { x: 55, y: 65 }] }])
   })
 

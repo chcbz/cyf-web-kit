@@ -14,7 +14,7 @@ export type MovementCommand = {
 
 export type MovementCommandPushResult =
   | { accepted: true; replacedCommandId?: string }
-  | { accepted: false; reason: 'duplicate-command-id' | 'stale-state-version' | 'invalid-command' }
+  | { accepted: false; reason: 'duplicate-command-id' | 'stale-state-version' | 'invalid-command' | 'lower-priority' }
 
 export type MovementCommandQueue = {
   readonly size: number
@@ -60,7 +60,7 @@ export function createMovementCommandQueue(): MovementCommandQueue {
         return { accepted: false, reason: 'duplicate-command-id' }
       }
       const watermark = latestStateVersion.get(source.agentId)
-      if (watermark !== undefined && source.stateVersion <= watermark) {
+      if (source.source !== 'local' && watermark !== undefined && source.stateVersion <= watermark) {
         return { accepted: false, reason: 'stale-state-version' }
       }
 
@@ -71,7 +71,7 @@ export function createMovementCommandQueue(): MovementCommandQueue {
       pending.push(command)
       pending.sort(compareCommands)
       seenCommandAgents.set(command.commandId, command.agentId)
-      latestStateVersion.set(command.agentId, command.stateVersion)
+      if (command.source !== 'local') latestStateVersion.set(command.agentId, command.stateVersion)
       return replacedCommandId === undefined
         ? { accepted: true }
         : { accepted: true, replacedCommandId }

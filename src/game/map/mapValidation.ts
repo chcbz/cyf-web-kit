@@ -1,5 +1,5 @@
 import type {
-  MapPoint, MapPolygon, MapRuntimeData, NavEdge, NavNode, Region, Slot,
+  MapPoint, MapPolygon, MapRuntimeData, NavEdge, NavNode, PatrolRoute, Region, Slot,
 } from './movementSchema.js'
 
 export interface SceneError {
@@ -71,6 +71,7 @@ export function validateMapRuntime(map: MapRuntimeData): MapValidationResult {
     anchorEvaluation?.regionProjections ?? emptyRegionProjections(map.regions),
     errors,
   )
+  validatePatrolRoutes(map.patrolRoutes ?? [], map.regions, map.slots, errors)
 
   errors.sort(compareErrors)
   return { valid: errors.length === 0, errors, warnings: [] }
@@ -102,11 +103,35 @@ function validateIdentities(map: MapRuntimeData, errors: SceneError[]): void {
       ...map.nodes.map(item => item.stableId),
       ...map.edges.map(item => item.stableId),
       ...map.slots.map(item => item.stableId),
+      ...(map.patrolRoutes ?? []).map(item => item.stableId),
     ],
     'stable ID',
   )
   addDuplicateErrors(errors, 'REGION_ID_DUPLICATE', map.regions.map(region => region.regionId), 'region ID')
   addDuplicateErrors(errors, 'SLOT_ID_DUPLICATE', map.slots.map(slot => slot.slotId), 'slot ID')
+  addDuplicateErrors(errors, 'PATROL_ROUTE_ID_DUPLICATE', (map.patrolRoutes ?? []).map(route => route.routeId), 'patrol route ID')
+}
+
+function validatePatrolRoutes(routes: PatrolRoute[], regions: Region[], slots: Slot[], errors: SceneError[]): void {
+  const regionIds = new Set(regions.map(region => region.regionId))
+  for (const route of routes) {
+    if (!route.personaCode.trim()) {
+      errors.push(fatal('PATROL_PERSONA_INVALID', '巡逻路线人物无效。', `Patrol route ${route.routeId} is missing personaCode.`))
+    }
+    if (!route.regionIds.length || route.regionIds.some(regionId => !regionIds.has(regionId))) {
+      errors.push(fatal('PATROL_REGION_INVALID', '巡逻路线引用了不存在的区域。', `Patrol route ${route.routeId} references ${route.regionIds.join(', ')}.`))
+    }
+    if (!Number.isSafeInteger(route.dwellMs) || route.dwellMs < 0) {
+      errors.push(fatal('PATROL_DWELL_INVALID', '巡逻停留时间无效。', `Patrol route ${route.routeId} dwellMs must be a nonnegative integer.`))
+    }
+    if (!Number.isFinite(route.priority)) {
+      errors.push(fatal('PATROL_PRIORITY_INVALID', '巡逻优先级无效。', `Patrol route ${route.routeId} priority must be finite.`))
+    }
+    const hasStart = slots.some(slot => slot.kind === 'home' && slot.personaCode === route.personaCode)
+    if (!hasStart) {
+      errors.push(fatal('PATROL_HOME_MISSING', '巡逻人物缺少归位站位。', `Patrol route ${route.routeId} has no home slot for ${route.personaCode}.`))
+    }
+  }
 }
 
 function validateObstacles(obstacles: MapPolygon[], errors: SceneError[]): MapPolygon[] {

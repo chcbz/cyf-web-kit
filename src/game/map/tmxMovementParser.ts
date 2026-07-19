@@ -1,7 +1,7 @@
 import { SaxesParser } from 'saxes'
 
 import type {
-  MapPoint, MapPolygon, MapRuntimeData, NavEdge, NavNode, Region, Slot,
+  MapPoint, MapPolygon, MapRuntimeData, NavEdge, NavNode, PatrolRoute, Region, Slot,
 } from './movementSchema.js'
 
 type Properties = Record<string, unknown>
@@ -49,7 +49,7 @@ interface TmxMap {
 
 const MOVEMENT_GROUPS = new Set([
   'nav_obstacles', 'regions', 'nav_nodes', 'nav_edges',
-  'parking_slots', 'queue_slots', 'home_slots',
+  'parking_slots', 'queue_slots', 'home_slots', 'patrol_routes',
 ])
 
 export function parseMovementTmx(input: string | TmxMap): MapRuntimeData {
@@ -64,7 +64,7 @@ export function parseMovementTmx(input: string | TmxMap): MapRuntimeData {
     spriteManifestVersion: requiredString(properties.spriteManifestVersion, 'spriteManifestVersion'),
     width: requiredNumber(map.width, 'map.width') * tileWidth,
     height: requiredNumber(map.height, 'map.height') * tileHeight,
-    regions: [], nodes: [], edges: [], slots: [], obstacles: [],
+    regions: [], nodes: [], edges: [], slots: [], patrolRoutes: [], obstacles: [],
   }
 
   for (const layer of map.layers ?? []) {
@@ -77,6 +77,7 @@ export function parseMovementTmx(input: string | TmxMap): MapRuntimeData {
     else if (name === 'regions') result.regions.push(...objects.map((object, index) => parseRegion(object, `${name}[${index}]`)))
     else if (name === 'nav_nodes') result.nodes.push(...objects.map((object, index) => parseNode(object, `${name}[${index}]`)))
     else if (name === 'nav_edges') result.edges.push(...objects.map((object, index) => parseEdge(object, `${name}[${index}]`)))
+    else if (name === 'patrol_routes') result.patrolRoutes.push(...objects.map((object, index) => parsePatrolRoute(object, `${name}[${index}]`)))
     else result.slots.push(...objects.map((object, index) => parseSlot(object, slotType(name), `${name}[${index}]`)))
   }
   return result
@@ -122,6 +123,22 @@ function parseSlot(object: TmxObject, kind: Slot['kind'], context: string): Slot
     regionId: requiredString(properties.regionId, `${context}.regionId`), point: objectCenter(object, context), kind,
     personaCode: optionalString(properties.personaCode),
   })
+}
+
+function parsePatrolRoute(object: TmxObject, context: string): PatrolRoute {
+  const properties = propertyRecord(object.properties)
+  const regionIds = requiredString(properties.regionIds, `${context}.regionIds`)
+    .split(',').map(value => value.trim()).filter(Boolean)
+  if (!regionIds.length) throw new Error(`Invalid ${context}.regionIds: expected at least one region ID`)
+  return {
+    stableId: requiredString(properties.stableId, `${context}.stableId`),
+    routeId: requiredString(properties.routeId, `${context}.routeId`),
+    personaCode: requiredString(properties.personaCode, `${context}.personaCode`),
+    regionIds,
+    loop: requiredBoolean(properties.loop, `${context}.loop`),
+    dwellMs: requiredNumber(properties.dwellMs, `${context}.dwellMs`),
+    priority: requiredNumber(properties.priority, `${context}.priority`),
+  }
 }
 
 function objectPolygon(object: TmxObject, context: string): MapPolygon {

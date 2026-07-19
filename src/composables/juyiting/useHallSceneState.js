@@ -120,6 +120,7 @@ export const useHallSceneState = ({
 
   const forwardPhaseEvents = async (events) => {
     const reports = (Array.isArray(events) ? events : [])
+      .filter(event => event?.source === 'backend')
       .map(phaseReport)
       .filter(Boolean)
     return Promise.all(reports.map(reportPhase))

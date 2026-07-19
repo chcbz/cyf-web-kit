@@ -42,6 +42,16 @@ export interface Slot {
   kind: 'parking' | 'queue' | 'home'
 }
 
+export interface PatrolRoute {
+  stableId: string
+  routeId: string
+  personaCode: string
+  regionIds: string[]
+  loop: boolean
+  dwellMs: number
+  priority: number
+}
+
 export interface MapRuntimeData {
   sceneId: string
   movementSchemaVersion: string
@@ -53,5 +63,6 @@ export interface MapRuntimeData {
   nodes: NavNode[]
   edges: NavEdge[]
   slots: Slot[]
+  patrolRoutes: PatrolRoute[]
   obstacles: MapPolygon[]
 }
