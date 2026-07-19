@@ -1,5 +1,6 @@
 import type { MapPoint, MapRuntimeData, Slot } from '../map/movementSchema.js'
-import type { PersonaSpriteManifest } from '../sprites/personaSpriteManifest.js'
+import type { PersonaDirection, PersonaSpriteManifest } from '../sprites/personaSpriteManifest.js'
+import { resolvePersonaDirectionFromDelta } from '../sprites/animationResolver.js'
 import { recoverMovementProgress } from './backendSceneStateAdapter.js'
 import { createGraphPathfinder, type PathFinder } from './graphPathfinder.js'
 import {
@@ -14,7 +15,7 @@ export type AgentSnapshot = {
   personaCode: string
   x: number
   y: number
-  facing: 'left' | 'right'
+  facing: PersonaDirection
   animation: 'idle' | 'walk'
   behavior: string
   phase: 'idle' | 'moving' | 'arrived' | 'blocked'
@@ -263,7 +264,7 @@ function activate(
         personaCode: command.personaCode,
         x: home.point.x,
         y: home.point.y,
-        facing: 'right',
+        facing: 'down',
         animation: 'idle',
         behavior: behaviorFor(command),
         phase: 'idle',
@@ -358,7 +359,7 @@ function advance(
       active.segmentIndex += 1
       continue
     }
-    if (Math.abs(dx) > EPSILON) agent.snapshot.facing = dx > 0 ? 'right' : 'left'
+    agent.snapshot.facing = resolvePersonaDirectionFromDelta(dx, dy, agent.snapshot.facing)
     if (remaining >= segmentDistance - EPSILON) {
       agent.snapshot.x = target.x
       agent.snapshot.y = target.y
@@ -435,10 +436,11 @@ function behaviorFor(command: MovementCommand): string {
   return command.type === 'RETURN_HOME' ? 'returning_home' : 'moving_to_region'
 }
 
-function initialFacing(points: readonly MapPoint[], fallback: 'left' | 'right'): 'left' | 'right' {
+function initialFacing(points: readonly MapPoint[], fallback: PersonaDirection): PersonaDirection {
   for (let index = 1; index < points.length; index += 1) {
     const dx = points[index].x - points[index - 1].x
-    if (Math.abs(dx) > EPSILON) return dx > 0 ? 'right' : 'left'
+    const dy = points[index].y - points[index - 1].y
+    if (Math.hypot(dx, dy) > EPSILON) return resolvePersonaDirectionFromDelta(dx, dy, fallback)
   }
   return fallback
 }

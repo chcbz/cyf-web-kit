@@ -1,4 +1,5 @@
 import type { PersonaSpriteDefinition, PersonaSpriteManifest } from './personaSpriteManifest.js'
+import { PERSONA_DIRECTIONS } from './personaSpriteManifest.js'
 
 export const SUPPORTED_SPRITE_MANIFEST_VERSION = 'persona-sheets-v1'
 const REQUIRED_PERSONAS = ['songjiang'] as const
@@ -160,14 +161,16 @@ function validateDefinition(definition: PersonaSpriteDefinition): string[] {
 
   const frameCount = frame.columns * frame.rows
   for (const action of ['idle', 'walk'] as const) {
-    const animation = definition.animations[action]
-    if (!animation || animation.frames.length === 0) {
-      problems.push(`${action} animation must contain frames`)
-      continue
-    }
-    if (!positiveInteger(animation.frameMs)) problems.push(`${action} frameMs must be a positive integer`)
-    if (animation.frames.some(index => !Number.isInteger(index) || index < 0 || index >= frameCount)) {
-      problems.push(`${action} animation contains an out-of-bounds frame`)
+    for (const direction of PERSONA_DIRECTIONS) {
+      const animation = definition.animations[action]?.[direction]
+      if (!animation || animation.frames.length === 0) {
+        problems.push(`${action}.${direction} animation must contain frames`)
+        continue
+      }
+      if (!positiveInteger(animation.frameMs)) problems.push(`${action}.${direction} frameMs must be a positive integer`)
+      if (animation.frames.some(index => !Number.isInteger(index) || index < 0 || index >= frameCount)) {
+        problems.push(`${action}.${direction} animation contains an out-of-bounds frame`)
+      }
     }
   }
   return problems

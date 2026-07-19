@@ -3,6 +3,7 @@ import type {
   PersonaSpriteDefinition,
   PersonaSpriteManifest,
 } from './personaSpriteManifest.js'
+import { PERSONA_DIRECTIONS } from './personaSpriteManifest.js'
 
 export type LoadedPersonaSprite = {
   width?: number
@@ -155,13 +156,15 @@ function validateRuntimeDefinition(definition: PersonaSpriteDefinition): string 
   }
   const frameCount = frame.columns * frame.rows
   for (const action of ['idle', 'walk'] as const) {
-    const animation = definition.animations[action]
-    if (!animation || animation.frames.length === 0
-      || !Number.isInteger(animation.frameMs) || !(animation.frameMs > 0)) {
-      return `Sprite ${action} animation configuration is invalid.`
-    }
-    if (animation.frames.some(index => !Number.isInteger(index) || index < 0 || index >= frameCount)) {
-      return `Sprite ${action} animation frame is outside the configured frame grid.`
+    for (const direction of PERSONA_DIRECTIONS) {
+      const animation = definition.animations[action]?.[direction]
+      if (!animation || animation.frames.length === 0
+        || !Number.isInteger(animation.frameMs) || !(animation.frameMs > 0)) {
+        return `Sprite ${action}.${direction} animation configuration is invalid.`
+      }
+      if (animation.frames.some(index => !Number.isInteger(index) || index < 0 || index >= frameCount)) {
+        return `Sprite ${action}.${direction} animation frame is outside the configured frame grid.`
+      }
     }
   }
   return null

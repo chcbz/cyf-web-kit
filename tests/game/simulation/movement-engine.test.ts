@@ -44,7 +44,7 @@ describe('movement engine', () => {
 
     assert.deepEqual(engine.snapshots()[0], {
       agentId: 'agent-songjiang', personaCode: 'songjiang', x: 0, y: 0,
-      facing: 'right', animation: 'idle', behavior: 'moving_to_region', phase: 'blocked',
+      facing: 'down', animation: 'idle', behavior: 'moving_to_region', phase: 'blocked',
       regionId: 'main-seat', targetRegionId: 'missing-region', stateVersion: 1,
     })
     assert.deepEqual(engine.drainPhaseEvents(), [{
@@ -67,6 +67,14 @@ describe('movement engine', () => {
       reportId: 'no-path:blocked', agentId: 'agent-songjiang', stateVersion: 1,
       phase: 'blocked', regionId: 'council-table', occurredAt: '1970-01-01T00:00:02.500Z', source: 'backend',
     }])
+  })
+
+  it('selects the downward sprite direction for a vertical route', () => {
+    const engine = createMovementEngine(runtime(), manifest())
+
+    engine.enqueue(command({ targetRegionId: 'bounty-board' }))
+
+    assert.equal(engine.snapshots()[0]?.facing, 'down')
   })
 
   it('replaces active movement from the current point and does not complete the old command', () => {
@@ -267,17 +275,21 @@ function edge(
 }
 
 function manifest(): PersonaSpriteManifest {
+  const directions = ['down', 'downRight', 'right', 'upRight', 'up', 'upLeft', 'left', 'downLeft'] as const
+  const animations = (frames: number[], frameMs: number) => Object.fromEntries(
+    directions.map(direction => [direction, { frames, frameMs }]),
+  ) as PersonaSpriteManifest['personas'][string]['animations']['idle']
   return {
     version: 'manifest-v1',
     personas: {
       songjiang: {
         personaCode: 'songjiang', required: true, src: '/songjiang.png',
-        image: { width: 1024, height: 256 },
-        frame: { width: 128, height: 128, columns: 8, rows: 2 },
+        image: { width: 1024, height: 1024 },
+        frame: { width: 128, height: 128, columns: 8, rows: 8 },
         anchor: { x: 0.5, y: 0.86 }, collider: { width: 36, height: 20, offsetX: 0, offsetY: -10 },
         scale: 0.52, baseSpeed: 50,
         animations: {
-          idle: { frames: [0], frameMs: 180 }, walk: { frames: [8], frameMs: 90 },
+          idle: animations([0], 180), walk: animations([32], 90),
         },
       },
     },

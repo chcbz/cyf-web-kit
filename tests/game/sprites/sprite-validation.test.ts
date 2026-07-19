@@ -23,7 +23,7 @@ function mutableManifest(): PersonaSpriteManifest {
 
 function fixturePath(): string {
   return fileURLToPath(new URL(
-    './fixtures/public/juyiting/sprites/persona-sheets-v1/songjiang.png', import.meta.url,
+    './fixtures/public/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v1.png', import.meta.url,
   ))
 }
 
@@ -59,8 +59,8 @@ describe('sprite manifest', () => {
 
   it('requires idle and walk animations with valid frame bounds', () => {
     const manifest = mutableManifest()
-    manifest.personas.songjiang.animations.idle.frames = []
-    manifest.personas.songjiang.animations.walk.frames = [16]
+    manifest.personas.songjiang.animations.idle.down.frames = []
+    manifest.personas.songjiang.animations.walk.up.frames = [64]
 
     const result = validateSpriteManifest(manifest)
 
@@ -114,7 +114,7 @@ describe('sprite manifest', () => {
       assets: {
         songjiang: {
           exists: true, signatureValid: false, structurallyValid: false, decodable: false,
-          width: 512, height: 256, error: 'invalid signature fixture',
+          width: 512, height: 1024, error: 'invalid signature fixture',
         },
       },
     })
@@ -148,7 +148,7 @@ describe('sprite manifest', () => {
       exists: true,
       signatureValid: true,
       width: 1024,
-      height: 256,
+      height: 1024,
     } as unknown as SpriteAssetInspection
 
     const result = validateSpriteManifest(PERSONA_SPRITE_MANIFEST, {

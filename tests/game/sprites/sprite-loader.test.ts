@@ -42,19 +42,19 @@ describe('sprite loader', () => {
   })
 
   it('degrades a dimension mismatch without substituting another persona', async () => {
-    const result = await loadPersonaSprites(async () => ({ width: 512, height: 256 }), PERSONA_SPRITE_MANIFEST)
+    const result = await loadPersonaSprites(async () => ({ width: 512, height: 1024 }), PERSONA_SPRITE_MANIFEST)
 
     assert.equal(result.degraded, true)
     assert.equal(result.available.size, 0)
     assert.equal(result.placeholderCount, 0)
-    assert.match(result.errors[0]?.technicalMessage ?? '', /1024x256/)
+    assert.match(result.errors[0]?.technicalMessage ?? '', /1024x1024/)
     assert.equal(result.errors[0]?.retryable, false)
   })
 
   it('marks manifest identity and configuration failures as permanent', async () => {
     const identityManifest = mutableManifest()
     identityManifest.personas.songjiang.personaCode = 'wuyong'
-    const identity = await loadPersonaSprites(async () => ({ width: 1024, height: 256 }), identityManifest)
+    const identity = await loadPersonaSprites(async () => ({ width: 1024, height: 1024 }), identityManifest)
     assert.equal(identity.errors[0]?.retryable, false)
 
     const configManifest = mutableManifest()
@@ -62,7 +62,7 @@ describe('sprite loader', () => {
     let loadCalls = 0
     const config = await loadPersonaSprites(async () => {
       loadCalls += 1
-      return { width: 1024, height: 256 }
+      return { width: 1024, height: 1024 }
     }, configManifest)
     assert.equal(config.errors[0]?.retryable, false)
     assert.match(config.errors[0]?.technicalMessage ?? '', /frame grid/i)
@@ -70,7 +70,7 @@ describe('sprite loader', () => {
 
     const versionManifest = mutableManifest()
     versionManifest.version = 'persona-sheets-v2'
-    const version = await loadPersonaSprites(async () => ({ width: 1024, height: 256 }), versionManifest)
+    const version = await loadPersonaSprites(async () => ({ width: 1024, height: 1024 }), versionManifest)
     assert.equal(version.errors[0]?.retryable, false)
     assert.match(version.errors[0]?.technicalMessage ?? '', /manifest version/i)
   })

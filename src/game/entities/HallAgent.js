@@ -4,8 +4,13 @@
 
 import { ANIM_STATES } from '../config.js'
 import { personaSpriteResourceName } from '../resources.js'
-import { resolvePersonaAnimation, resolvePersonaSprite } from '../sprites/animationResolver.js'
-import { PERSONA_SPRITE_MANIFEST } from '../sprites/personaSpriteManifest.js'
+import {
+  personaAnimationKey,
+  resolvePersonaAnimation,
+  resolvePersonaDirectionFromDelta,
+  resolvePersonaSprite,
+} from '../sprites/animationResolver.js'
+import { PERSONA_DIRECTIONS, PERSONA_SPRITE_MANIFEST } from '../sprites/personaSpriteManifest.js'
 import { clampPointToRegion } from '../walkableArea.js'
 
 export function createHallAgentClass(me) {
@@ -66,9 +71,13 @@ export function createHallAgentClass(me) {
       this._collider = definition.collider
       const sprite = this._spriteTarget()
       if (typeof sprite?.setCurrentAnimation === 'function') {
-        sprite.addAnimation(ANIM_STATES.IDLE, definition.animations.idle.frames, definition.animations.idle.frameMs)
-        sprite.addAnimation(ANIM_STATES.WALK, definition.animations.walk.frames, definition.animations.walk.frameMs)
-        sprite.setCurrentAnimation(ANIM_STATES.IDLE)
+        for (const state of [ANIM_STATES.IDLE, ANIM_STATES.WALK]) {
+          for (const direction of PERSONA_DIRECTIONS) {
+            const animation = definition.animations[state][direction]
+            sprite.addAnimation(personaAnimationKey(state, direction), animation.frames, animation.frameMs)
+          }
+        }
+        sprite.setCurrentAnimation(personaAnimationKey(ANIM_STATES.IDLE, 'down'))
       }
 
       this._renderScale = 1
@@ -81,8 +90,10 @@ export function createHallAgentClass(me) {
       this._setBodyVelocity(0, 0)
 
       this.currentAnim = ANIM_STATES.IDLE
-      this._activeAnimation = definition.animations.idle
-      this.facing = 1
+      this.direction = 'down'
+      this._activeDirection = this.direction
+      this._activeAnimation = definition.animations.idle[this.direction]
+      this.facing = this.direction
       if (agentData.facing) this.setFacing(agentData.facing)
       this.targetX = x
       this.targetY = y
@@ -114,13 +125,14 @@ export function createHallAgentClass(me) {
     }
 
     setAnimState(state) {
-      const resolved = resolvePersonaAnimation(this._visual, state)
-      if (this.currentAnim === resolved.name) return
+      const resolved = resolvePersonaAnimation(this._visual, state, this.direction)
+      if (this.currentAnim === resolved.name && this._activeDirection === resolved.direction) return
       this.currentAnim = resolved.name
+      this._activeDirection = resolved.direction
       this._activeAnimation = resolved.animation
       const sprite = this._spriteTarget()
       if (typeof sprite?.setCurrentAnimation === 'function') {
-        sprite.setCurrentAnimation(resolved.name)
+        sprite.setCurrentAnimation(personaAnimationKey(resolved.name, resolved.direction))
       }
     }
 
@@ -197,12 +209,13 @@ export function createHallAgentClass(me) {
     }
 
     setFacing(dir) {
-      const f = dir === 'left' ? -1 : 1
-      if (f !== this.facing) {
-        this.facing = f
-        const sprite = this._spriteTarget()
-        if (typeof sprite?.flipX === 'function') sprite.flipX(f < 0)
-      }
+      if (!PERSONA_DIRECTIONS.includes(dir)) return
+      if (dir === this.direction) return
+      this.direction = dir
+      this.facing = dir
+      const sprite = this._spriteTarget()
+      if (typeof sprite?.flipX === 'function') sprite.flipX(false)
+      this.setAnimState(this.currentAnim)
     }
 
     _spriteTarget() {
@@ -302,7 +315,7 @@ export function createHallAgentClass(me) {
       this.pos.y += (dy / dist) * step
       this._setBodyVelocity(0, 0)
       this.speed = spd
-      if (Math.abs(dx) > 2) this.setFacing(dx > 0 ? 'right' : 'left')
+      this.setFacing(resolvePersonaDirectionFromDelta(dx, dy, this.direction))
       this.setAnimState(ANIM_STATES.WALK)
       if (step >= dist) this._moveTowardTarget(0)
     }
