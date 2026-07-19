@@ -267,6 +267,120 @@ describe('HallAgent melonJS entity', () => {
     expect(agent.targetY).to.equal(660)
   })
 
+  it('keeps an in-progress patrol when a display-only sync carries an equivalent route', () => {
+    const me = createFakeMelon()
+    const HallAgent = createHallAgentClass(me)
+    const patrolRoute = [
+      { x: 45, y: 60 },
+      { x: 55, y: 60 },
+      { x: 52, y: 66 }
+    ]
+    const agent = new HallAgent({
+      agentId: 'songjiang',
+      personaCode: 'songjiang',
+      name: 'Song Jiang',
+      x: 45,
+      y: 60,
+      facing: 'left',
+      patrolRoute,
+      patrolDelayMs: 0,
+      regionId: 'mainSeat'
+    })
+
+    agent.update(16)
+    expect(agent._patrolIndex).to.equal(1)
+    expect(agent.facing).to.equal(1)
+    const targetBeforeSync = { x: agent.targetX, y: agent.targetY }
+
+    agent.syncState({
+      patrolRoute: patrolRoute.map(point => ({ ...point })),
+      patrolDelayMs: 0,
+      regionId: 'mainSeat',
+      facing: 'left',
+      bubble: { text: '厅中传令', ttlMs: 1200 },
+      selected: true
+    })
+
+    expect(agent._patrolIndex).to.equal(1)
+    expect(agent.targetX).to.equal(targetBeforeSync.x)
+    expect(agent.targetY).to.equal(targetBeforeSync.y)
+    expect(agent.facing).to.equal(1)
+    expect(agent._bubbleText).to.equal('厅中传令')
+
+    agent.update(16)
+    expect(agent.body.velocity.x).to.be.greaterThan(0)
+  })
+
+  it('restarts patrol only when its route or explicit revision changes', () => {
+    const me = createFakeMelon()
+    const HallAgent = createHallAgentClass(me)
+    const agent = new HallAgent({
+      agentId: 'songjiang',
+      personaCode: 'songjiang',
+      name: 'Song Jiang',
+      x: 45,
+      y: 60,
+      patrolRoute: [
+        { x: 45, y: 60 },
+        { x: 55, y: 60 }
+      ],
+      regionId: 'mainSeat'
+    })
+
+    agent.update(16)
+    expect(agent._patrolIndex).to.equal(1)
+
+    agent.syncState({
+      patrolRoute: [
+        { x: 45, y: 60 },
+        { x: 40, y: 60 }
+      ],
+      regionId: 'mainSeat'
+    })
+
+    expect(agent._patrolIndex).to.equal(1)
+    expect(agent.targetX).to.equal(400)
+
+    agent.pos.x = 425
+
+    agent.syncState({
+      patrolRoute: [
+        { x: 45, y: 60 },
+        { x: 40, y: 60 }
+      ],
+      regionId: 'mainSeat',
+      patrolRevision: 1
+    })
+
+    expect(agent._patrolIndex).to.equal(0)
+    expect(agent.targetX).to.equal(450)
+  })
+
+  it('stops when a changed patrol plan becomes empty', () => {
+    const me = createFakeMelon()
+    const HallAgent = createHallAgentClass(me)
+    const agent = new HallAgent({
+      agentId: 'songjiang',
+      personaCode: 'songjiang',
+      name: 'Song Jiang',
+      x: 45,
+      y: 60,
+      patrolRoute: [
+        { x: 45, y: 60 },
+        { x: 55, y: 60 }
+      ],
+      regionId: 'mainSeat'
+    })
+
+    agent.update(16)
+    agent.syncState({ patrolRoute: [], regionId: 'mainSeat' })
+
+    expect(agent.targetX).to.equal(agent.pos.x)
+    expect(agent.targetY).to.equal(agent.pos.y)
+    expect(agent.speed).to.equal(0)
+    expect(agent.body.velocity).to.deep.equal({ x: 0, y: 0 })
+  })
+
   it('uses the sprite itself for animation, flipping, and tint when no renderable child exists', () => {
     const me = createFakeMelon({ spriteHasRenderable: false })
     const HallAgent = createHallAgentClass(me)

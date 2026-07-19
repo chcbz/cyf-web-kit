@@ -83,6 +83,7 @@ export function createHallAgentClass(me) {
       this.currentAnim = ANIM_STATES.IDLE
       this._activeAnimation = definition.animations.idle
       this.facing = 1
+      if (agentData.facing) this.setFacing(agentData.facing)
       this.targetX = x
       this.targetY = y
       this.speed = 0
@@ -95,6 +96,8 @@ export function createHallAgentClass(me) {
       this._walkableRegion = agentData.walkableRegion || null
       this._simulationControlled = Boolean(agentData.simulationControlled || worldCoordinates)
       this._patrolRoute = this._normalisePatrolRoute(agentData.patrolRoute)
+      this._patrolPlanSignature = this._patrolSignature(this._patrolRoute, agentData.regionId)
+      this._patrolRevision = agentData.patrolRevision
       this._patrolIndex = 0
       this._patrolDelayMs = Number.isFinite(agentData.patrolDelayMs) ? agentData.patrolDelayMs : 600
       this._patrolWaitMs = 0
@@ -127,13 +130,33 @@ export function createHallAgentClass(me) {
     }
 
     syncState(agentData = {}) {
+      const previousSource = this._sourceData || {}
       this._sourceData = { ...this._sourceData, ...agentData }
       if (agentData.walkableRegion) this._walkableRegion = agentData.walkableRegion
       if (agentData.name) this.agentName = agentData.name
       if (Array.isArray(agentData.patrolRoute)) {
-        this._patrolRoute = this._normalisePatrolRoute(agentData.patrolRoute)
-        this._patrolIndex = 0
-        this._advancePatrolTarget()
+        const nextRoute = this._normalisePatrolRoute(agentData.patrolRoute)
+        const nextSignature = this._patrolSignature(nextRoute, agentData.regionId)
+        const hasPatrolRevision = Object.prototype.hasOwnProperty.call(agentData, 'patrolRevision')
+        const planChanged = nextSignature !== this._patrolPlanSignature ||
+          (hasPatrolRevision && agentData.patrolRevision !== this._patrolRevision)
+
+        if (Number.isFinite(agentData.patrolDelayMs)) this._patrolDelayMs = agentData.patrolDelayMs
+        if (planChanged) {
+          this._patrolRoute = nextRoute
+          this._patrolPlanSignature = nextSignature
+          this._patrolRevision = agentData.patrolRevision
+          this._patrolIndex = 0
+          this._patrolWaitMs = 0
+          if (this._patrolRoute.length) {
+            this._advancePatrolTarget()
+          } else {
+            this.targetX = this.pos.x
+            this.targetY = this.pos.y
+            this._setBodyVelocity(0, 0)
+            this.speed = 0
+          }
+        }
       } else if (agentData.destination) {
         this.setDestination(agentData.destination.x, agentData.destination.y)
       }
@@ -142,7 +165,7 @@ export function createHallAgentClass(me) {
       if (agentData.scale !== undefined) this._applyScale(this._resolveScale(agentData.scale))
       this._focused = Boolean(agentData.focused || agentData.recommended)
       this.setSelected(Boolean(agentData.selected))
-      if (agentData.facing) this.setFacing(agentData.facing)
+      if (agentData.facing && agentData.facing !== previousSource.facing) this.setFacing(agentData.facing)
     }
 
     syncSimulationSnapshot(snapshot = {}) {
@@ -224,6 +247,12 @@ export function createHallAgentClass(me) {
           x: (point.x / 100) * me.game.viewport.width,
           y: (point.y / 100) * me.game.viewport.height
         }))
+    }
+
+    _patrolSignature(route = [], regionId = '') {
+      const scope = String(regionId || '')
+      const points = route.map(point => `${point.x.toFixed(3)},${point.y.toFixed(3)}`)
+      return `${scope}:${points.join('|')}`
     }
 
     _advancePatrolTarget() {
