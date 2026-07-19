@@ -265,17 +265,18 @@ export function createHallAgentClass(me) {
       this.targetY = next.y
     }
 
-    _moveTowardTarget(_dt) {
+    _moveTowardTarget(dt) {
       const dx = this.targetX - this.pos.x
       const dy = this.targetY - this.pos.y
       const dist = Math.hypot(dx, dy)
+      const deltaMs = Math.max(0, Number(dt) || 0)
       if (dist < 2) {
         this.pos.x = this.targetX
         this.pos.y = this.targetY
         this._setBodyVelocity(0, 0)
         this.speed = 0
         if (this._patrolRoute.length > 1) {
-          this._patrolWaitMs -= _dt
+          this._patrolWaitMs -= deltaMs
           if (this._patrolWaitMs <= 0) {
             this._patrolIndex += 1
             this._patrolWaitMs = this._patrolDelayMs
@@ -288,11 +289,22 @@ export function createHallAgentClass(me) {
         }
         return
       }
+      if (this._patrolWaitMs > 0) {
+        this._patrolWaitMs = Math.max(0, this._patrolWaitMs - deltaMs)
+        this._setBodyVelocity(0, 0)
+        this.speed = 0
+        if (this.currentAnim === ANIM_STATES.WALK) this.setAnimState(ANIM_STATES.IDLE)
+        return
+      }
       const spd = Math.min(this._visual.baseSpeed, dist * 3.5)
-      this._setBodyVelocity((dx / dist) * spd, (dy / dist) * spd)
+      const step = Math.min(dist, spd * deltaMs / 1000)
+      this.pos.x += (dx / dist) * step
+      this.pos.y += (dy / dist) * step
+      this._setBodyVelocity(0, 0)
       this.speed = spd
       if (Math.abs(dx) > 2) this.setFacing(dx > 0 ? 'right' : 'left')
       this.setAnimState(ANIM_STATES.WALK)
+      if (step >= dist) this._moveTowardTarget(0)
     }
 
     containsPoint(x, y) {
@@ -305,6 +317,7 @@ export function createHallAgentClass(me) {
     }
 
     update(dt) {
+      if (!this._simulationControlled) this._setBodyVelocity(0, 0)
       super.update(dt)
       if (!this._simulationControlled) this._moveTowardTarget(dt)
       this._animTimer += dt

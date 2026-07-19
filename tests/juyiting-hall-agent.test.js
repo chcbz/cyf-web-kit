@@ -126,7 +126,8 @@ describe('HallAgent melonJS entity', () => {
     agent.syncState({ destination: { x: 60, y: 50 } })
     agent.update(16)
 
-    expect(agent.body.velocity.x).to.be.greaterThan(0)
+    expect(agent.pos.x).to.be.greaterThan(500)
+    expect(agent.body.velocity.x).to.equal(0)
     expect(agent.body.velocity.y).to.equal(0)
   })
 
@@ -308,7 +309,39 @@ describe('HallAgent melonJS entity', () => {
     expect(agent._bubbleText).to.equal('厅中传令')
 
     agent.update(16)
-    expect(agent.body.velocity.x).to.be.greaterThan(0)
+    expect(agent.pos.x).to.be.greaterThan(450)
+    expect(agent.body.velocity.x).to.equal(0)
+  })
+
+  it('uses elapsed time and never crosses a patrol target on a slow frame', () => {
+    const me = createFakeMelon()
+    const HallAgent = createHallAgentClass(me)
+    const agent = new HallAgent({
+      agentId: 'songjiang',
+      personaCode: 'songjiang',
+      name: 'Song Jiang',
+      x: 45,
+      y: 60,
+      patrolRoute: [
+        { x: 45, y: 60 },
+        { x: 55, y: 60 }
+      ],
+      patrolDelayMs: 0
+    })
+
+    agent.update(1000)
+    expect(agent.pos.x).to.equal(546)
+    expect(agent.pos.x).to.be.at.most(550)
+    expect(agent.targetX).to.equal(550)
+
+    agent.update(1000)
+    expect(agent.pos.x).to.equal(550)
+    expect(agent.targetX).to.equal(450)
+
+    agent.update(1000)
+    expect(agent.pos.x).to.equal(454)
+    expect(agent.pos.x).to.be.at.least(450)
+    expect(agent.body.velocity).to.deep.equal({ x: 0, y: 0 })
   })
 
   it('restarts patrol only when its route or explicit revision changes', () => {
