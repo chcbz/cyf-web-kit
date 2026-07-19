@@ -35,9 +35,12 @@ export class JuyitingGame {
     this._spriteLoadAbortController = null
     this._readyTimer = null
     this._canvas = null
-    this._canvasCoverFrame = null
+    this._viewportCommitFrame = null
+    this._viewportCommitCandidateSignature = ''
+    this._committedViewportGeometrySignature = ''
+    this._pendingViewportChange = null
+    this._containerResizeObserver = null
     this._canvasCoverScale = 1
-    this._displayViewportSignature = ''
     this._pendingStart = false
     this._stateId = null
     this._generation = 0
@@ -127,7 +130,8 @@ export class JuyitingGame {
         canvas.style.left = '50%'
         canvas.style.top = '50%'
         canvas.style.transformOrigin = 'center center'
-        this._scheduleCanvasCover()
+        this._observeContainerResize()
+        this._scheduleViewportCommit()
       }
 
       // === Load boot resources, parse TMX, then load resources declared by TMX ===
@@ -199,14 +203,17 @@ export class JuyitingGame {
     this._spriteLoadAbortController = null
     if (this._readyTimer !== null) clearTimeout(this._readyTimer)
     this._readyTimer = null
-    this._cancelCanvasCover()
+    this._cancelViewportCommit()
+    this._disconnectContainerResizeObserver()
     try { me?.state?.pause?.() } catch { /* preserve the original mount failure */ }
     try { this._hallScene?.onDestroyEvent?.() } catch { /* best-effort scene cleanup */ }
     try { me?.video?.destroy?.() } catch { /* best-effort renderer cleanup */ }
     try { this._canvas?.remove?.() } catch { /* best-effort canvas cleanup */ }
     this._canvas = null
     this._canvasCoverScale = 1
-    this._displayViewportSignature = ''
+    this._viewportCommitCandidateSignature = ''
+    this._committedViewportGeometrySignature = ''
+    this._pendingViewportChange = null
     this._hallScene = null
     this._container = null
     this._callbacks = {}
@@ -302,7 +309,7 @@ export class JuyitingGame {
       this._pendingStart = false
       me.state.change(this._stateId, true)
     }
-    this._scheduleCanvasCover()
+    this._scheduleViewportCommit()
     // Emit ready again if onResetEvent didn't call it
     if (this._readyTimer !== null) clearTimeout(this._readyTimer)
     this._readyTimer = setTimeout(() => {
@@ -426,24 +433,16 @@ export class JuyitingGame {
     return result
   }
 
-  resizeViewport(change) {
-    const engineViewport = this._me?.game?.viewport
-    const viewportWidth = Number(engineViewport?.width)
-    const viewportHeight = Number(engineViewport?.height)
-    const containerRect = this._container?.getBoundingClientRect?.()
-    const sceneChange = Number.isFinite(viewportWidth) && viewportWidth > 0 && Number.isFinite(viewportHeight) && viewportHeight > 0
-      ? {
-          ...change,
-          width: viewportWidth,
-          height: viewportHeight,
-          displayViewport: { width: Number(change?.width), height: Number(change?.height) },
-          visibleViewport: this._visibleViewport(containerRect)
-        }
-      : change
-    this._scheduleCanvasCover()
-    const result = this._hallScene?.resizeViewport?.(sceneChange)
+  resizeViewport(change = {}) {
+    if (!this._geometrySnapshot()) {
+      const result = this._hallScene?.resizeViewport?.(change)
+      this._markSceneDebugDirty()
+      return result
+    }
+    this._pendingViewportChange = this._mergeViewportChange(this._pendingViewportChange, change)
+    this._scheduleViewportCommit()
     this._markSceneDebugDirty()
-    return result
+    return undefined
   }
 
   getRenderSnapshot() {
@@ -497,34 +496,120 @@ export class JuyitingGame {
     return result
   }
 
-  _scheduleCanvasCover() {
-    if (!this._canvas || !this._container || this._canvasCoverFrame !== null) return
+  _scheduleViewportCommit() {
+    if (!this._geometrySnapshot() || this._viewportCommitFrame !== null) return
     const target = typeof window !== 'undefined' ? window : globalThis
     const schedule = typeof target.requestAnimationFrame === 'function'
       ? callback => target.requestAnimationFrame(callback)
       : callback => setTimeout(callback, 0)
-    this._canvasCoverFrame = schedule(() => {
-      this._canvasCoverFrame = null
-      this._applyCanvasCover()
+    this._viewportCommitFrame = schedule(() => {
+      this._viewportCommitFrame = null
+      const geometry = this._geometrySnapshot()
+      if (!geometry) return
+      if (geometry.signature !== this._viewportCommitCandidateSignature) {
+        this._viewportCommitCandidateSignature = geometry.signature
+        this._scheduleViewportCommit()
+        return
+      }
+      this._viewportCommitCandidateSignature = ''
+      this._commitViewportGeometry(geometry)
     })
   }
 
-  _cancelCanvasCover() {
-    if (this._canvasCoverFrame === null) return
+  _cancelViewportCommit() {
+    if (this._viewportCommitFrame === null) return
     const target = typeof window !== 'undefined' ? window : globalThis
-    if (typeof target.cancelAnimationFrame === 'function') target.cancelAnimationFrame(this._canvasCoverFrame)
-    else clearTimeout(this._canvasCoverFrame)
-    this._canvasCoverFrame = null
+    if (typeof target.cancelAnimationFrame === 'function') target.cancelAnimationFrame(this._viewportCommitFrame)
+    else clearTimeout(this._viewportCommitFrame)
+    this._viewportCommitFrame = null
+    this._viewportCommitCandidateSignature = ''
   }
 
-  _applyCanvasCover() {
-    const canvas = this._canvas
+  _geometrySnapshot() {
     const containerRect = this._container?.getBoundingClientRect?.()
-    if (!canvas || !containerRect?.width || !containerRect?.height) return
     const viewport = this._me?.game?.viewport
     const viewportWidth = Number(viewport?.width)
     const viewportHeight = Number(viewport?.height)
-    if (!Number.isFinite(viewportWidth) || viewportWidth <= 0 || !Number.isFinite(viewportHeight) || viewportHeight <= 0) return
+    if (!containerRect?.width || !containerRect?.height ||
+      !Number.isFinite(viewportWidth) || viewportWidth <= 0 || !Number.isFinite(viewportHeight) || viewportHeight <= 0) {
+      return null
+    }
+    const normalize = value => Number(Number(value).toFixed(3))
+    return {
+      containerRect,
+      viewportWidth,
+      viewportHeight,
+      signature: [
+        normalize(containerRect.width),
+        normalize(containerRect.height),
+        viewportWidth,
+        viewportHeight
+      ].join(':')
+    }
+  }
+
+  _mergeViewportChange(previous, next = {}) {
+    if (!previous) return { ...next }
+    const nextKind = next.kind
+    const kind = nextKind === 'orientation'
+      ? 'orientation'
+      : (previous.kind === 'orientation' ? 'orientation' : (nextKind || previous.kind || 'layout'))
+    return {
+      ...previous,
+      ...next,
+      kind,
+      orientationChanged: Boolean(previous.orientationChanged || next.orientationChanged)
+    }
+  }
+
+  _commitViewportGeometry(geometry) {
+    const change = this._pendingViewportChange || { kind: 'layout' }
+    this._pendingViewportChange = null
+    if (geometry.signature === this._committedViewportGeometrySignature) return undefined
+
+    this._applyCanvasCover(geometry)
+    const finalGeometry = this._geometrySnapshot()
+    if (!finalGeometry || finalGeometry.signature !== geometry.signature) {
+      this._pendingViewportChange = this._mergeViewportChange(change, this._pendingViewportChange || {})
+      this._scheduleViewportCommit()
+      return undefined
+    }
+
+    const canvasRect = this._canvas?.getBoundingClientRect?.()
+    const result = this._hallScene?.resizeViewport?.({
+      ...change,
+      width: finalGeometry.viewportWidth,
+      height: finalGeometry.viewportHeight,
+      displayViewport: {
+        width: finalGeometry.containerRect.width,
+        height: finalGeometry.containerRect.height
+      },
+      visibleViewport: this._visibleViewport(finalGeometry.containerRect, canvasRect)
+    })
+    this._committedViewportGeometrySignature = finalGeometry.signature
+    this._markSceneDebugDirty()
+    return result
+  }
+
+  _observeContainerResize() {
+    this._disconnectContainerResizeObserver()
+    const ResizeObserverImpl = globalThis.ResizeObserver
+    if (!ResizeObserverImpl || !this._container) return
+    this._containerResizeObserver = new ResizeObserverImpl(() => {
+      this._scheduleViewportCommit()
+    })
+    this._containerResizeObserver.observe(this._container)
+  }
+
+  _disconnectContainerResizeObserver() {
+    this._containerResizeObserver?.disconnect?.()
+    this._containerResizeObserver = null
+  }
+
+  _applyCanvasCover(geometry = this._geometrySnapshot()) {
+    const canvas = this._canvas
+    if (!canvas || !geometry) return
+    const { containerRect, viewportWidth, viewportHeight } = geometry
     const presentationScale = Math.max(
       containerRect.width / viewportWidth,
       containerRect.height / viewportHeight
@@ -536,27 +621,6 @@ export class JuyitingGame {
     canvas.style.setProperty('--juyiting-canvas-display-width', `${displayWidth}px`)
     canvas.style.setProperty('--juyiting-canvas-display-height', `${displayHeight}px`)
     canvas.style.transform = 'translate(-50%, -50%)'
-    this._syncDisplayViewport(containerRect)
-    this._markSceneDebugDirty()
-  }
-
-  _syncDisplayViewport(containerRect) {
-    const width = Math.round(containerRect?.width || 0)
-    const height = Math.round(containerRect?.height || 0)
-    const signature = `${width}:${height}`
-    if (!width || !height || signature === this._displayViewportSignature) return
-    const engineViewport = this._me?.game?.viewport
-    const viewportWidth = Number(engineViewport?.width)
-    const viewportHeight = Number(engineViewport?.height)
-    if (!Number.isFinite(viewportWidth) || viewportWidth <= 0 || !Number.isFinite(viewportHeight) || viewportHeight <= 0) return
-    this._displayViewportSignature = signature
-    this._hallScene?.resizeViewport?.({
-      width: viewportWidth,
-      height: viewportHeight,
-      displayViewport: { width, height },
-      visibleViewport: this._visibleViewport(containerRect),
-      kind: 'layout'
-    })
   }
 
   _visibleViewport(containerRect, canvasRect = this._canvas?.getBoundingClientRect?.()) {

@@ -28,7 +28,6 @@ describe('HallScene melonJS runtime compatibility', () => {
       getBoundingClientRect: () => ({ width: 844, height: 390 })
     }
     game._me = { game: { viewport: { width: 1664, height: 928 } } }
-    game._syncDisplayViewport = () => {}
     game._markSceneDebugDirty = () => {}
 
     game._applyCanvasCover()
@@ -45,6 +44,60 @@ describe('HallScene melonJS runtime compatibility', () => {
     expect(displayVariables.get('--juyiting-canvas-display-height')).to.equal(firstDisplay.height)
     expect(firstDisplay).to.deep.equal({ width: '844px', height: '470.692px' })
     expect(canvas.style.transform).to.equal('translate(-50%, -50%)')
+  })
+
+  it('commits final canvas geometry once before resizing the scene across orientation changes', () => {
+    const displayVariables = new Map([
+      ['--juyiting-canvas-display-width', '1513.38px'],
+      ['--juyiting-canvas-display-height', '844px']
+    ])
+    let container = { width: 844, height: 390 }
+    const displayNumber = name => Number.parseFloat(displayVariables.get(name))
+    const canvas = {
+      style: {
+        transform: '',
+        setProperty: (name, value) => displayVariables.set(name, value)
+      },
+      getBoundingClientRect: () => {
+        const width = displayNumber('--juyiting-canvas-display-width')
+        const height = displayNumber('--juyiting-canvas-display-height')
+        const left = (container.width - width) / 2
+        const top = (container.height - height) / 2
+        return { width, height, left, top, right: left + width, bottom: top + height }
+      }
+    }
+    const resizeCalls = []
+    const game = new JuyitingGame()
+    game._canvas = canvas
+    game._container = { getBoundingClientRect: () => ({ ...container, left: 0, top: 0, right: container.width, bottom: container.height }) }
+    game._me = { game: { viewport: { width: 1664, height: 928 } } }
+    game._hallScene = { resizeViewport: change => resizeCalls.push(change) }
+    game._markSceneDebugDirty = () => {}
+
+    game._pendingViewportChange = { width: 844, height: 390, kind: 'orientation', orientationChanged: true }
+    game._commitViewportGeometry(game._geometrySnapshot())
+
+    expect(displayVariables.get('--juyiting-canvas-display-width')).to.equal('844px')
+    expect(displayVariables.get('--juyiting-canvas-display-height')).to.equal('470.692px')
+    expect(resizeCalls).to.have.length(1)
+    expect(resizeCalls[0].displayViewport).to.deep.equal({ width: 844, height: 390 })
+    expect(resizeCalls[0].visibleViewport.width).to.equal(1664)
+    expect(resizeCalls[0].visibleViewport.height).to.be.closeTo(768.91, 0.01)
+
+    game._pendingViewportChange = { width: 844, height: 390, kind: 'layout' }
+    game._commitViewportGeometry(game._geometrySnapshot())
+    expect(resizeCalls).to.have.length(1)
+
+    container = { width: 390, height: 844 }
+    game._pendingViewportChange = { width: 390, height: 844, kind: 'orientation', orientationChanged: true }
+    game._commitViewportGeometry(game._geometrySnapshot())
+
+    expect(displayVariables.get('--juyiting-canvas-display-width')).to.equal('1513.379px')
+    expect(displayVariables.get('--juyiting-canvas-display-height')).to.equal('844px')
+    expect(resizeCalls).to.have.length(2)
+    expect(resizeCalls[1].displayViewport).to.deep.equal({ width: 390, height: 844 })
+    expect(resizeCalls[1].visibleViewport.width).to.be.closeTo(428.82, 0.01)
+    expect(resizeCalls[1].visibleViewport.height).to.equal(928)
   })
 
   it('registers a mount-specific melon state and starts that exact stage', () => {
