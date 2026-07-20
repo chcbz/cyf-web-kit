@@ -22,9 +22,10 @@ describe('sprite loader', () => {
     assert.equal(result.available.has('songjiang'), false)
     assert.equal(result.placeholderCount, 0)
     assert.equal(result.requiredMissingCount, 1)
-    assert.equal(result.errors[0]?.code, 'REQUIRED_SPRITE_LOAD_FAILED')
-    assert.equal(result.errors[0]?.severity, 'degraded')
-    assert.equal(result.errors[0]?.retryable, true)
+    const songjiangError = result.errors.find(error => error.technicalMessage?.startsWith('songjiang:'))
+    assert.equal(songjiangError?.code, 'REQUIRED_SPRITE_LOAD_FAILED')
+    assert.equal(songjiangError?.severity, 'degraded')
+    assert.equal(songjiangError?.retryable, true)
     assert.equal(mapReady, true)
   })
 
@@ -35,7 +36,7 @@ describe('sprite loader', () => {
     }), PERSONA_SPRITE_MANIFEST)
 
     assert.equal(result.degraded, false)
-    assert.deepEqual([...result.available], ['songjiang'])
+    assert.deepEqual([...result.available], Object.keys(PERSONA_SPRITE_MANIFEST.personas))
     assert.equal(result.requiredMissingCount, 0)
     assert.equal(result.placeholderCount, 0)
     assert.equal(result.errors.length, 0)
@@ -66,7 +67,7 @@ describe('sprite loader', () => {
     }, configManifest)
     assert.equal(config.errors[0]?.retryable, false)
     assert.match(config.errors[0]?.technicalMessage ?? '', /frame grid/i)
-    assert.equal(loadCalls, 0)
+    assert.equal(loadCalls, Object.keys(configManifest.personas).length - 1)
 
     const versionManifest = mutableManifest()
     versionManifest.version = 'persona-sheets-v2'

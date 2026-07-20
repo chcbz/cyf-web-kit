@@ -185,12 +185,9 @@ describe('sprite manifest', () => {
 
   it('treats an optional missing sprite as a non-fatal degraded warning', () => {
     const manifest = mutableManifest()
-    manifest.personas.wuyong = {
-      ...structuredClone(manifest.personas.songjiang),
-      personaCode: 'wuyong',
-      required: false,
-      src: '/juyiting/sprites/persona-sheets-v1/wuyong.png',
-    }
+    delete manifest.personas.lujunyi
+    delete manifest.personas.linchong
+    manifest.personas.wuyong.src = '/juyiting/sprites/persona-sheets-v1/wuyong.png'
 
     const result = validateSpriteManifest(manifest, {
       assets: { songjiang: inspectPngFile(fixturePath()) },

@@ -9,7 +9,7 @@
     "regions": 5,
     "nodes": 7,
     "edges": 6,
-    "slots": 7,
+    "slots": 10,
     "obstacles": 38
   },
   "regions": [
@@ -423,6 +423,28 @@
       "kind": "parking"
     },
     {
+      "stableId": "jyt-slot-linchong-home-v1",
+      "slotId": "linchong-home",
+      "regionId": "agent-roster",
+      "point": {
+        "x": 240,
+        "y": 680
+      },
+      "personaCode": "linchong",
+      "kind": "home"
+    },
+    {
+      "stableId": "jyt-slot-lujunyi-home-v1",
+      "slotId": "lujunyi-home",
+      "regionId": "council-table",
+      "point": {
+        "x": 848,
+        "y": 480
+      },
+      "personaCode": "lujunyi",
+      "kind": "home"
+    },
+    {
       "stableId": "jyt-slot-main-seat-parking-v1",
       "slotId": "main-seat-parking-1",
       "regionId": "main-seat",
@@ -441,6 +463,17 @@
         "y": 320
       },
       "personaCode": "songjiang",
+      "kind": "home"
+    },
+    {
+      "stableId": "jyt-slot-wuyong-home-v1",
+      "slotId": "wuyong-home",
+      "regionId": "library-shelf",
+      "point": {
+        "x": 1432,
+        "y": 600
+      },
+      "personaCode": "wuyong",
       "kind": "home"
     }
   ],
