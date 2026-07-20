@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>宋江八方向行走预览</title>
+    <style>
+      :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #121820; color: #e7edf5; }
+      body { margin: 0; padding: 24px; }
+      h1 { margin: 0 0 8px; font-size: 22px; }
+      p { margin: 0 0 20px; color: #a8b6c9; }
+      #grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; max-width: 1000px; }
+      article { padding: 12px; border: 1px solid #2a3c52; border-radius: 12px; background: #182231; }
+      h2 { margin: 0 0 8px; font-size: 16px; }
+      canvas { display: block; width: 168px; height: 168px; image-rendering: auto; background-color: #334155; background-image: conic-gradient(#475569 25%, #334155 0 50%, #475569 0 75%, #334155 0); background-size: 20px 20px; border-radius: 8px; }
+      small { display: block; margin-top: 8px; color: #9fb0c4; }
+    </style>
+  </head>
+  <body>
+    <h1>宋江 · 八方向行走帧</h1>
+    <p>每组循环：前迈 → 过渡 → 另一相位 → 过渡。棋盘底色用于确认 PNG 透明区域。</p>
+    <main id="grid"></main>
+    <script>
+      const directions = ['下', '右下', '右', '右上', '上', '左上', '左', '左下']
+      const image = new Image()
+      image.src = './songjiang-8-direction-v3.png'
+      image.onload = () => {
+        const grid = document.querySelector('#grid')
+        const canvases = directions.map((label, directionIndex) => {
+          const card = document.createElement('article')
+          const heading = document.createElement('h2')
+          heading.textContent = label
+          const canvas = document.createElement('canvas')
+          canvas.width = 128
+          canvas.height = 128
+          const note = document.createElement('small')
+          note.textContent = '前迈 → 过渡 → 另一相位 → 过渡'
+          card.append(heading, canvas, note)
+          grid.append(card)
+          return { canvas, directionIndex }
+        })
+        let phase = 0
+        setInterval(() => {
+          canvases.forEach(({ canvas, directionIndex }) => {
+            const context = canvas.getContext('2d')
+            context.clearRect(0, 0, 128, 128)
+            const frameIndex = 32 + directionIndex * 4 + phase
+            context.drawImage(image, (frameIndex % 8) * 128, Math.floor(frameIndex / 8) * 128, 128, 128, 0, 0, 128, 128)
+          })
+          phase = (phase + 1) % 4
+        }, 90)
+      }
+    </script>
+  </body>
+</html>

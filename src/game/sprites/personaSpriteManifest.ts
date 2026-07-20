@@ -32,7 +32,7 @@ export const PERSONA_SPRITE_MANIFEST = {
   personas: {
     songjiang: {
       personaCode: 'songjiang', required: true,
-      src: '/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v1.png',
+      src: '/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v3.png',
       image: { width: 1024, height: 1024 },
       frame: { width: 128, height: 128, columns: 8, rows: 8 },
       anchor: { x: 0.5, y: 0.86 },
