@@ -6,7 +6,7 @@ const createFakeMelon = ({
   bodyHasSetVelocity = true,
   spriteHasRenderable = true,
   spriteHasScaleMethod = false,
-  spriteImage = { width: 1024, height: 256 }
+  spriteImage = { width: 1024, height: 1024 }
 } = {}) => {
   class Sprite {
     constructor(x, y, settings = {}) {
@@ -107,9 +107,42 @@ describe('HallAgent melonJS entity', () => {
     expect(agent._selected).to.equal(true)
     expect(agent._focused).to.equal(true)
     expect(agent.renderable.tint).to.include({ a: 0.35 })
-    expect(agent.flipped).to.equal(true)
+    expect(agent.facing).to.equal('left')
+    expect(agent.flipped).to.equal(false)
     expect(agent.containsPoint(agent.pos.x, agent.pos.y - 20)).to.equal(true)
     expect(agent.containsPoint(agent.pos.x + 1000, agent.pos.y + 1000)).to.equal(false)
+  })
+
+  it('aligns the selected halo to the anchored sprite head', () => {
+    const operations = []
+    const context = {
+      save: () => operations.push(['save']),
+      restore: () => operations.push(['restore']),
+      beginPath: () => operations.push(['beginPath']),
+      ellipse: (...args) => operations.push(['ellipse', ...args]),
+      stroke: () => operations.push(['stroke']),
+      measureText: text => ({ width: text.length * 8 }),
+      fillText: (...args) => operations.push(['fillText', ...args]),
+      rect: (...args) => operations.push(['rect', ...args]),
+      fill: () => operations.push(['fill'])
+    }
+    const me = createFakeMelon()
+    const HallAgent = createHallAgentClass(me)
+    const agent = new HallAgent({
+      agentId: 'songjiang',
+      personaCode: 'songjiang',
+      scale: 0.5,
+      x: 50,
+      y: 50
+    })
+    agent.syncState({ selected: true })
+
+    agent.draw({ getContext: () => context })
+
+    const halo = operations.find(([operation]) => operation === 'ellipse')
+    expect(halo[1]).to.equal(agent.pos.x)
+    expect(halo[2]).to.be.closeTo(agent.pos.y - 128 * 0.5 * 0.86 + 128 * 0.5 * 0.2, 0.001)
+    expect(halo[2]).to.be.lessThan(agent.pos.y - 30)
   })
 
   it('uses direct body velocity assignment when melonJS Body has no setVelocity helper', () => {
@@ -144,11 +177,9 @@ describe('HallAgent melonJS entity', () => {
 
     expect(agent.width).to.equal(128)
     expect(agent.height).to.equal(128)
-    expect(agent.renderable.animations.idle.frames).to.deep.equal([0, 1, 2, 3])
-    expect(agent.renderable.animations.walk.frames).to.have.length(8)
-    expect(agent.renderable.animations.walk.frames).to.deep.equal([
-      8, 9, 10, 11, 12, 13, 14, 15
-    ])
+    expect(agent.renderable.animations['idle-down'].frames).to.deep.equal([0, 1, 2, 3])
+    expect(agent.renderable.animations['walk-down'].frames).to.deep.equal([32, 33, 34, 35])
+    expect(agent.renderable.animations['walk-left'].frames).to.deep.equal([56, 57, 58, 59])
     expect(agent.renderable.animations).not.to.have.property('busy')
   })
 
@@ -290,7 +321,7 @@ describe('HallAgent melonJS entity', () => {
 
     agent.update(16)
     expect(agent._patrolIndex).to.equal(1)
-    expect(agent.facing).to.equal(1)
+    expect(agent.facing).to.equal('right')
     const targetBeforeSync = { x: agent.targetX, y: agent.targetY }
 
     agent.syncState({
@@ -305,7 +336,7 @@ describe('HallAgent melonJS entity', () => {
     expect(agent._patrolIndex).to.equal(1)
     expect(agent.targetX).to.equal(targetBeforeSync.x)
     expect(agent.targetY).to.equal(targetBeforeSync.y)
-    expect(agent.facing).to.equal(1)
+    expect(agent.facing).to.equal('right')
     expect(agent._bubbleText).to.equal('厅中传令')
 
     agent.update(16)
@@ -428,7 +459,8 @@ describe('HallAgent melonJS entity', () => {
     agent.syncState({ selected: true, facing: 'left' })
 
     expect(agent.tint).to.include({ a: 0.35 })
-    expect(agent.flipped).to.equal(true)
+    expect(agent.facing).to.equal('left')
+    expect(agent.flipped).to.equal(false)
   })
 
   it('returns no entity for an unknown persona or an unavailable sprite image', () => {

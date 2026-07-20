@@ -252,6 +252,22 @@ export function createHallAgentClass(me) {
       }
     }
 
+    _overlayMetrics(verticalOffset = 0) {
+      const scale = this._renderScale || 1
+      const width = this.width * scale
+      const height = this.height * scale
+      const anchor = this._visual?.anchor || { x: 0.5, y: 0.5 }
+      const left = this.pos.x - width * anchor.x
+      const top = this.pos.y + verticalOffset - height * anchor.y
+      return {
+        left,
+        top,
+        width,
+        height,
+        centerX: left + width / 2
+      }
+    }
+
     _normalisePatrolRoute(route = []) {
       return (Array.isArray(route) ? route : [])
         .map(point => clampPointToRegion(point, this._walkableRegion))
@@ -356,13 +372,14 @@ export function createHallAgentClass(me) {
       const r = renderer || me.video.renderer
       if (!r || !r.getContext) return
       const ctx = r.getContext()
+      const overlay = this._overlayMetrics(bob)
 
       if (this._selected || this._focused) {
         ctx.save()
         ctx.strokeStyle = this._selected ? 'rgba(255, 221, 130, 0.85)' : 'rgba(255, 244, 212, 0.42)'
         ctx.lineWidth = this._selected ? 3 : 2
         ctx.beginPath()
-        ctx.ellipse(this.pos.x, this.pos.y - 8, 24 * this._renderScale, 9 * this._renderScale, 0, 0, Math.PI * 2)
+        ctx.ellipse(overlay.centerX, overlay.top + overlay.height * 0.2, 18 * this._renderScale, 6 * this._renderScale, 0, 0, Math.PI * 2)
         ctx.stroke()
         ctx.restore()
       }
@@ -374,7 +391,7 @@ export function createHallAgentClass(me) {
         ctx.fillStyle = '#fff4d4'
         ctx.textAlign = 'center'
         ctx.textBaseline = 'top'
-        ctx.fillText(this.agentName, this.pos.x, this.pos.y - this.height * this._renderScale - 18)
+        ctx.fillText(this.agentName, overlay.centerX, overlay.top - 18)
         ctx.restore()
       }
 
@@ -383,8 +400,8 @@ export function createHallAgentClass(me) {
         ctx.save()
         ctx.font = '11px sans-serif'
         const tw = ctx.measureText(this._bubbleText).width
-        const bx = this.pos.x - tw / 2 - 6
-        const by = this.pos.y - this.height * this._renderScale - 38
+        const bx = overlay.centerX - tw / 2 - 6
+        const by = overlay.top - 38
         ctx.fillStyle = 'rgba(30, 18, 10, 0.88)'
         ctx.strokeStyle = 'rgba(255, 220, 130, 0.45)'
         ctx.lineWidth = 1
