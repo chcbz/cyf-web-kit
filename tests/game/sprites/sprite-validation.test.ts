@@ -23,7 +23,7 @@ function mutableManifest(): PersonaSpriteManifest {
 
 function fixturePath(): string {
   return fileURLToPath(new URL(
-    './fixtures/public/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v2.png', import.meta.url,
+    './fixtures/public/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v1.png', import.meta.url,
   ))
 }
 
