@@ -268,6 +268,57 @@ export function createHallAgentClass(me) {
       }
     }
 
+    _drawOverlay(renderer, verticalOffset = 0) {
+      const r = renderer || me.video.renderer
+      if (!r || !r.getContext) return
+      const ctx = r.getContext()
+      const overlay = this._overlayMetrics(verticalOffset)
+
+      if (this._selected || this._focused || this._highlighted) {
+        ctx.save()
+        ctx.strokeStyle = (this._selected || this._highlighted)
+          ? 'rgba(255, 221, 130, 0.85)'
+          : 'rgba(255, 244, 212, 0.42)'
+        ctx.lineWidth = (this._selected || this._highlighted) ? 3 : 2
+        ctx.beginPath()
+        ctx.ellipse(overlay.centerX, overlay.top + overlay.height * 0.2, 18 * this._renderScale, 6 * this._renderScale, 0, 0, Math.PI * 2)
+        ctx.stroke()
+        ctx.restore()
+      }
+
+      // Name label
+      if (this.agentName) {
+        ctx.save()
+        ctx.font = 'bold 11px sans-serif'
+        ctx.fillStyle = '#fff4d4'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'top'
+        ctx.fillText(this.agentName, overlay.centerX, overlay.top - 18)
+        ctx.restore()
+      }
+
+      // Bubble
+      if (this._bubbleText) {
+        ctx.save()
+        ctx.font = '11px sans-serif'
+        const tw = ctx.measureText(this._bubbleText).width
+        const bx = overlay.centerX - tw / 2 - 6
+        const by = overlay.top - 38
+        ctx.fillStyle = 'rgba(30, 18, 10, 0.88)'
+        ctx.strokeStyle = 'rgba(255, 220, 130, 0.45)'
+        ctx.lineWidth = 1
+        ctx.beginPath()
+        ctx.rect(bx, by, tw + 12, 20)
+        ctx.fill()
+        ctx.stroke()
+        ctx.fillStyle = '#fff4d4'
+        ctx.textAlign = 'left'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(this._bubbleText, bx + 6, by + 10)
+        ctx.restore()
+      }
+    }
+
     _normalisePatrolRoute(route = []) {
       return (Array.isArray(route) ? route : [])
         .map(point => clampPointToRegion(point, this._walkableRegion))
@@ -366,55 +417,15 @@ export function createHallAgentClass(me) {
       const bob = this.currentAnim === ANIM_STATES.WALK || this.currentAnim === ANIM_STATES.BUSY
         ? Math.sin(this._animFrame * Math.PI / 2) * 2
         : Math.sin(this._animFrame * Math.PI / 2) * 0.8
+      this._lastOverlayBob = bob
       this.pos.y += bob
       super.draw(renderer)
       this.pos.y -= bob
-      const r = renderer || me.video.renderer
-      if (!r || !r.getContext) return
-      const ctx = r.getContext()
-      const overlay = this._overlayMetrics(bob)
+    }
 
-      if (this._selected || this._focused) {
-        ctx.save()
-        ctx.strokeStyle = this._selected ? 'rgba(255, 221, 130, 0.85)' : 'rgba(255, 244, 212, 0.42)'
-        ctx.lineWidth = this._selected ? 3 : 2
-        ctx.beginPath()
-        ctx.ellipse(overlay.centerX, overlay.top + overlay.height * 0.2, 18 * this._renderScale, 6 * this._renderScale, 0, 0, Math.PI * 2)
-        ctx.stroke()
-        ctx.restore()
-      }
-
-      // Name label
-      if (this.agentName) {
-        ctx.save()
-        ctx.font = 'bold 11px sans-serif'
-        ctx.fillStyle = '#fff4d4'
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'top'
-        ctx.fillText(this.agentName, overlay.centerX, overlay.top - 18)
-        ctx.restore()
-      }
-
-      // Bubble
-      if (this._bubbleText) {
-        ctx.save()
-        ctx.font = '11px sans-serif'
-        const tw = ctx.measureText(this._bubbleText).width
-        const bx = overlay.centerX - tw / 2 - 6
-        const by = overlay.top - 38
-        ctx.fillStyle = 'rgba(30, 18, 10, 0.88)'
-        ctx.strokeStyle = 'rgba(255, 220, 130, 0.45)'
-        ctx.lineWidth = 1
-        ctx.beginPath()
-        ctx.rect(bx, by, tw + 12, 20)
-        ctx.fill()
-        ctx.stroke()
-        ctx.fillStyle = '#fff4d4'
-        ctx.textAlign = 'left'
-        ctx.textBaseline = 'middle'
-        ctx.fillText(this._bubbleText, bx + 6, by + 10)
-        ctx.restore()
-      }
+    postDraw(renderer) {
+      super.postDraw(renderer)
+      this._drawOverlay(renderer, this._lastOverlayBob || 0)
     }
   }
 }
