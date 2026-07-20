@@ -109,6 +109,13 @@ const agentVisualKey = (agent) => {
   )) || 'default'
 }
 
+const LOCAL_PATROL_ROUTE_BY_VISUAL_KEY = {
+  songjiang: 'songjiang-main-loop',
+  lujunyi: 'lujunyi-council-loop',
+  wuyong: 'wuyong-library-loop',
+  linchong: 'linchong-agent-loop'
+}
+
 const sceneStatusFor = (status, override) => {
   if (status === 'error') return 'error'
   if (status === 'offline') return 'offline'
@@ -144,7 +151,7 @@ export const useHallScene = ({
   const selectedAgentId = computed(() => normalizeAgentId(selectedAgent?.value))
   const isSimulationControlled = agentOrId => simulationEnabled && agentVisualKey(
     typeof agentOrId === 'string' ? { agentId: agentOrId } : agentOrId
-  ) === 'songjiang'
+  ) in LOCAL_PATROL_ROUTE_BY_VISUAL_KEY
 
   const addAgentFeedback = (agentId, feedback) => {
     if (!agentId) return
@@ -189,7 +196,8 @@ export const useHallScene = ({
       const visual = HALL_CHARACTER_VISUALS[visualKey] || HALL_CHARACTER_VISUALS.default
       const transient = transientAgents.value[normalizeAgentId(agent)] || {}
       const featuredHero = featuredHeroById[visualKey] || featuredHeroById[normalizeAgentId(agent)]
-      const simulationControlled = simulationEnabled && visualKey === 'songjiang'
+      const localPatrolRouteId = LOCAL_PATROL_ROUTE_BY_VISUAL_KEY[visualKey]
+      const simulationControlled = simulationEnabled && Boolean(localPatrolRouteId)
       const staticRegionId = featuredHero?.regionId || visual.defaultRegion || HALL_CHARACTER_VISUALS.default.defaultRegion
       const regionId = simulationControlled ? staticRegionId : (transient.regionId || staticRegionId)
       const region = HALL_SCENE_REGIONS[regionId] || HALL_SCENE_REGIONS.idleFloor
@@ -225,7 +233,7 @@ export const useHallScene = ({
         featuredHero: Boolean(agent.featuredHero || featuredHero),
         synthetic: Boolean(agent.synthetic),
         simulationControlled,
-        localPatrolRouteId: simulationControlled ? 'songjiang-main-loop' : undefined,
+        localPatrolRouteId: simulationControlled ? localPatrolRouteId : undefined,
         visualKey: visual.visualKey || visualKey,
         prominentMotion: simulationControlled ? false : Boolean(transient.prominentMotion),
         motionSeed: seed

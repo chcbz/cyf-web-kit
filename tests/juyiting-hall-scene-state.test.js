@@ -327,9 +327,11 @@ describe('hall scene state', () => {
     expect(appliedSnapshots).to.deep.equal([current])
   })
 
-  it('disables synthetic Songjiang patrol movement only while simulation is enabled', () => {
+  it('uses TMX local patrol assignments for simulated featured heroes', () => {
     const mapAgents = ref([
       { agentId: 'agent-songjiang', personaCode: 'songjiang', name: 'Songjiang', status: 'online' },
+      { agentId: 'lujunyi', personaCode: 'lujunyi', name: 'Lu Junyi', status: 'online' },
+      { agentId: 'wuyong', personaCode: 'wuyong', name: 'Wu Yong', status: 'online' },
       { agentId: 'linchong', personaCode: 'linchong', name: 'Lin Chong', status: 'online' }
     ])
     const enabled = useHallScene({
@@ -337,21 +339,34 @@ describe('hall scene state', () => {
       simulationEnabled: true
     })
     enabled.markTaskAssigned({ title: 'Council order' }, mapAgents.value)
-    const enabledSongjiang = enabled.sceneAgents.value.find(agent => agent.personaCode === 'songjiang')
-    const enabledLinchong = enabled.sceneAgents.value.find(agent => agent.personaCode === 'linchong')
+    const enabledByPersona = Object.fromEntries(enabled.sceneAgents.value.map(agent => [agent.personaCode, agent]))
 
-    expect(enabledSongjiang.patrolRoute).to.deep.equal([])
-    expect(enabledSongjiang.destination).to.equal(undefined)
-    expect(enabledSongjiang.simulationControlled).to.equal(true)
-    expect(enabledSongjiang).to.include({ regionId: 'mainSeat', x: 50, y: 45 })
-    expect(enabledLinchong.patrolRoute).to.have.length.greaterThan(2)
+    expect(enabledByPersona.songjiang).to.include({
+      regionId: 'mainSeat',
+      x: 50,
+      y: 45,
+      localPatrolRouteId: 'songjiang-main-loop'
+    })
+    expect(enabledByPersona.lujunyi.localPatrolRouteId).to.equal('lujunyi-council-loop')
+    expect(enabledByPersona.wuyong.localPatrolRouteId).to.equal('wuyong-library-loop')
+    expect(enabledByPersona.linchong.localPatrolRouteId).to.equal('linchong-agent-loop')
+    ;['songjiang', 'lujunyi', 'wuyong', 'linchong'].forEach((personaCode) => {
+      const agent = enabledByPersona[personaCode]
+      expect(agent.patrolRoute).to.deep.equal([])
+      expect(agent.destination).to.equal(undefined)
+      expect(agent.simulationControlled).to.equal(true)
+    })
 
     const rollback = useHallScene({
       mapAgents, selectedAgent: ref(null), selectedTask: ref(null),
       simulationEnabled: false
     })
-    expect(rollback.sceneAgents.value.find(agent => agent.personaCode === 'songjiang').patrolRoute)
-      .to.have.length.greaterThan(2)
+    ;['songjiang', 'lujunyi', 'wuyong', 'linchong'].forEach((personaCode) => {
+      const agent = rollback.sceneAgents.value.find(item => item.personaCode === personaCode)
+      expect(agent.simulationControlled).to.equal(false)
+      expect(agent.localPatrolRouteId).to.equal(undefined)
+      expect(agent.patrolRoute).to.have.length.greaterThan(2)
+    })
   })
 
   it('does not sample or retain a synthetic task destination for simulation-controlled Songjiang', () => {
