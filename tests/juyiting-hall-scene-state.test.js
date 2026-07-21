@@ -133,6 +133,7 @@ describe('hall scene state', () => {
 
     await sceneState.forwardPhaseEvents([{
       reportId: 'phase-1', agentId: 'agent-songjiang', stateVersion: 8,
+      source: 'backend',
       phase: 'arrived', regionId: 'council-table', occurredAt: '1970-01-01T00:00:02.500Z',
       x: 100, path: [{ x: 1, y: 1 }]
     }])
@@ -332,7 +333,9 @@ describe('hall scene state', () => {
       { agentId: 'agent-songjiang', personaCode: 'songjiang', name: 'Songjiang', status: 'online' },
       { agentId: 'lujunyi', personaCode: 'lujunyi', name: 'Lu Junyi', status: 'online' },
       { agentId: 'wuyong', personaCode: 'wuyong', name: 'Wu Yong', status: 'online' },
-      { agentId: 'linchong', personaCode: 'linchong', name: 'Lin Chong', status: 'online' }
+      { agentId: 'linchong', personaCode: 'linchong', name: 'Lin Chong', status: 'online' },
+      { agentId: 'likui', personaCode: 'likui', name: 'Li Kui', status: 'online' },
+      { agentId: 'husanniang', personaCode: 'husanniang', name: 'Hu Sanniang', status: 'online' }
     ])
     const enabled = useHallScene({
       mapAgents, selectedAgent: ref(null), selectedTask: ref(null),
@@ -350,7 +353,9 @@ describe('hall scene state', () => {
     expect(enabledByPersona.lujunyi.localPatrolRouteId).to.equal('lujunyi-council-loop')
     expect(enabledByPersona.wuyong.localPatrolRouteId).to.equal('wuyong-library-loop')
     expect(enabledByPersona.linchong.localPatrolRouteId).to.equal('linchong-agent-loop')
-    ;['songjiang', 'lujunyi', 'wuyong', 'linchong'].forEach((personaCode) => {
+    expect(enabledByPersona.likui.localPatrolRouteId).to.equal('likui-gate-loop')
+    expect(enabledByPersona.husanniang.localPatrolRouteId).to.equal('husanniang-right-loop')
+    ;['songjiang', 'lujunyi', 'wuyong', 'linchong', 'likui', 'husanniang'].forEach((personaCode) => {
       const agent = enabledByPersona[personaCode]
       expect(agent.patrolRoute).to.deep.equal([])
       expect(agent.destination).to.equal(undefined)
@@ -361,7 +366,7 @@ describe('hall scene state', () => {
       mapAgents, selectedAgent: ref(null), selectedTask: ref(null),
       simulationEnabled: false
     })
-    ;['songjiang', 'lujunyi', 'wuyong', 'linchong'].forEach((personaCode) => {
+    ;['songjiang', 'lujunyi', 'wuyong', 'linchong', 'likui', 'husanniang'].forEach((personaCode) => {
       const agent = rollback.sceneAgents.value.find(item => item.personaCode === personaCode)
       expect(agent.simulationControlled).to.equal(false)
       expect(agent.localPatrolRouteId).to.equal(undefined)

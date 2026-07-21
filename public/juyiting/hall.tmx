@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="104" height="58" tilewidth="16" tileheight="16" infinite="0" nextlayerid="24" nextobjectid="159">
+<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="104" height="58" tilewidth="16" tileheight="16" infinite="0" nextlayerid="24" nextobjectid="171">
  <properties>
   <property name="description" value="聚义厅 v3 - modular layer hall scene"/>
   <property name="maxZoom" type="float" value="3.3"/>
@@ -622,6 +622,26 @@
     <property name="riskLevel" value="low"/>
    </properties>
   </object>
+  <object id="159" x="640" y="656" width="224" height="208">
+   <properties>
+    <property name="stableId" value="jyt-region-gate-v1"/>
+    <property name="capacity" type="int" value="4"/>
+    <property name="label" value="Gate patrol"/>
+    <property name="protected" type="bool" value="false"/>
+    <property name="regionId" value="gate"/>
+    <property name="riskLevel" value="medium"/>
+   </properties>
+  </object>
+  <object id="160" x="1020" y="520" width="240" height="220">
+   <properties>
+    <property name="stableId" value="jyt-region-right-guard-v1"/>
+    <property name="capacity" type="int" value="4"/>
+    <property name="label" value="Right guard"/>
+    <property name="protected" type="bool" value="false"/>
+    <property name="regionId" value="right-guard"/>
+    <property name="riskLevel" value="low"/>
+   </properties>
+  </object>
  </objectgroup>
  <objectgroup id="18" name="nav_nodes">
   <object id="101" x="872" y="312" width="16" height="16">
@@ -677,6 +697,22 @@
     <property name="stableId" value="jyt-node-library-shelf-v1"/>
     <property name="channelWidth" type="int" value="48"/>
     <property name="kind" value="doorway"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="161" x="724" y="725" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-node-gate-v1"/>
+    <property name="channelWidth" type="int" value="56"/>
+    <property name="kind" value="normal"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="162" x="1074" y="586" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-node-right-guard-v1"/>
+    <property name="channelWidth" type="int" value="56"/>
+    <property name="kind" value="normal"/>
    </properties>
    <ellipse/>
   </object>
@@ -742,6 +778,26 @@
    </properties>
    <polyline points="0,0 196,24 204,32 240,28 244,24 236,-20"/>
   </object>
+  <object id="163" x="880" y="480">
+   <properties>
+    <property name="stableId" value="jyt-edge-council-gate-v1"/>
+    <property name="bidirectional" type="bool" value="true"/>
+    <property name="costMultiplier" type="float" value="1.15"/>
+    <property name="from" value="jyt-node-council-v1"/>
+    <property name="to" value="jyt-node-gate-v1"/>
+   </properties>
+   <polyline points="0,0 -60,104 -148,253"/>
+  </object>
+  <object id="164" x="1212" y="620">
+   <properties>
+    <property name="stableId" value="jyt-edge-east-right-guard-v1"/>
+    <property name="bidirectional" type="bool" value="true"/>
+    <property name="costMultiplier" type="float" value="1.05"/>
+    <property name="from" value="jyt-node-east-hall-v1"/>
+    <property name="to" value="jyt-node-right-guard-v1"/>
+   </properties>
+   <polyline points="0,0 -130,-26"/>
+  </object>
  </objectgroup>
  <objectgroup id="20" name="parking_slots">
   <object id="114" x="912" y="312" width="16" height="16">
@@ -781,6 +837,22 @@
     <property name="stableId" value="jyt-slot-library-parking-v1"/>
     <property name="regionId" value="library-shelf"/>
     <property name="slotId" value="library-shelf-parking-1"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="165" x="764" y="725" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-gate-parking-v1"/>
+    <property name="regionId" value="gate"/>
+    <property name="slotId" value="gate-parking-1"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="166" x="1102" y="586" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-right-guard-parking-v1"/>
+    <property name="regionId" value="right-guard"/>
+    <property name="slotId" value="right-guard-parking-1"/>
    </properties>
    <ellipse/>
   </object>
@@ -829,6 +901,24 @@
     <property name="personaCode" value="linchong"/>
     <property name="regionId" value="agent-roster"/>
     <property name="slotId" value="linchong-home"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="167" x="724" y="725" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-likui-home-v1"/>
+    <property name="personaCode" value="likui"/>
+    <property name="regionId" value="gate"/>
+    <property name="slotId" value="likui-home"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="168" x="1074" y="586" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-husanniang-home-v1"/>
+    <property name="personaCode" value="husanniang"/>
+    <property name="regionId" value="right-guard"/>
+    <property name="slotId" value="husanniang-home"/>
    </properties>
    <ellipse/>
   </object>
@@ -881,6 +971,30 @@
     <property name="priority" type="int" value="1"/>
    </properties>
    <polyline points="0,0 -284,40 0,0"/>
+  </object>
+  <object id="169" x="732" y="733">
+   <properties>
+    <property name="stableId" value="jyt-patrol-likui-gate-v1"/>
+    <property name="routeId" value="likui-gate-loop"/>
+    <property name="personaCode" value="likui"/>
+    <property name="regionIds" value="gate,council-table,agent-roster"/>
+    <property name="loop" type="bool" value="true"/>
+    <property name="dwellMs" type="int" value="1700"/>
+    <property name="priority" type="int" value="1"/>
+   </properties>
+   <polyline points="0,0 188,-253 -452,-53 0,0"/>
+  </object>
+  <object id="170" x="1082" y="594">
+   <properties>
+    <property name="stableId" value="jyt-patrol-husanniang-right-v1"/>
+    <property name="routeId" value="husanniang-right-loop"/>
+    <property name="personaCode" value="husanniang"/>
+    <property name="regionIds" value="right-guard,bounty-board,library-shelf"/>
+    <property name="loop" type="bool" value="true"/>
+    <property name="dwellMs" type="int" value="1800"/>
+    <property name="priority" type="int" value="1"/>
+   </properties>
+   <polyline points="0,0 398,-174 388,6 0,0"/>
   </object>
  </objectgroup>
  <objectgroup id="23" name="debug_labels">

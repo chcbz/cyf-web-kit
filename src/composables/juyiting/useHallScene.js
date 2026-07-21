@@ -113,7 +113,9 @@ const LOCAL_PATROL_ROUTE_BY_VISUAL_KEY = {
   songjiang: 'songjiang-main-loop',
   lujunyi: 'lujunyi-council-loop',
   wuyong: 'wuyong-library-loop',
-  linchong: 'linchong-agent-loop'
+  linchong: 'linchong-agent-loop',
+  likui: 'likui-gate-loop',
+  husanniang: 'husanniang-right-loop'
 }
 
 const sceneStatusFor = (status, override) => {

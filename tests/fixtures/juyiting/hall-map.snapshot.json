@@ -6,10 +6,10 @@
   "width": 1664,
   "height": 928,
   "counts": {
-    "regions": 5,
-    "nodes": 7,
-    "edges": 6,
-    "slots": 10,
+    "regions": 7,
+    "nodes": 9,
+    "edges": 8,
+    "slots": 14,
     "obstacles": 38
   },
   "regions": [
@@ -98,6 +98,34 @@
       "riskLevel": "low"
     },
     {
+      "stableId": "jyt-region-gate-v1",
+      "regionId": "gate",
+      "polygon": {
+        "points": [
+          {
+            "x": 640,
+            "y": 656
+          },
+          {
+            "x": 864,
+            "y": 656
+          },
+          {
+            "x": 864,
+            "y": 864
+          },
+          {
+            "x": 640,
+            "y": 864
+          }
+        ]
+      },
+      "label": "Gate patrol",
+      "capacity": 4,
+      "protected": false,
+      "riskLevel": "medium"
+    },
+    {
       "stableId": "jyt-region-library-shelf-v1",
       "regionId": "library-shelf",
       "polygon": {
@@ -152,6 +180,34 @@
       "capacity": 6,
       "protected": true,
       "riskLevel": "low"
+    },
+    {
+      "stableId": "jyt-region-right-guard-v1",
+      "regionId": "right-guard",
+      "polygon": {
+        "points": [
+          {
+            "x": 1020,
+            "y": 520
+          },
+          {
+            "x": 1260,
+            "y": 520
+          },
+          {
+            "x": 1260,
+            "y": 740
+          },
+          {
+            "x": 1020,
+            "y": 740
+          }
+        ]
+      },
+      "label": "Right guard",
+      "capacity": 4,
+      "protected": false,
+      "riskLevel": "low"
     }
   ],
   "nodes": [
@@ -192,6 +248,15 @@
       "channelWidth": 64
     },
     {
+      "stableId": "jyt-node-gate-v1",
+      "point": {
+        "x": 732,
+        "y": 733
+      },
+      "kind": "normal",
+      "channelWidth": 56
+    },
+    {
       "stableId": "jyt-node-library-shelf-v1",
       "point": {
         "x": 1448,
@@ -208,6 +273,15 @@
       },
       "kind": "junction",
       "channelWidth": 72
+    },
+    {
+      "stableId": "jyt-node-right-guard-v1",
+      "point": {
+        "x": 1082,
+        "y": 594
+      },
+      "kind": "normal",
+      "channelWidth": 56
     },
     {
       "stableId": "jyt-node-west-hall-v1",
@@ -234,6 +308,27 @@
         {
           "x": 1212,
           "y": 620
+        }
+      ]
+    },
+    {
+      "stableId": "jyt-edge-council-gate-v1",
+      "from": "jyt-node-council-v1",
+      "to": "jyt-node-gate-v1",
+      "bidirectional": true,
+      "costMultiplier": 1.15,
+      "points": [
+        {
+          "x": 880,
+          "y": 480
+        },
+        {
+          "x": 820,
+          "y": 584
+        },
+        {
+          "x": 732,
+          "y": 733
         }
       ]
     },
@@ -329,6 +424,23 @@
       ]
     },
     {
+      "stableId": "jyt-edge-east-right-guard-v1",
+      "from": "jyt-node-east-hall-v1",
+      "to": "jyt-node-right-guard-v1",
+      "bidirectional": true,
+      "costMultiplier": 1.05,
+      "points": [
+        {
+          "x": 1212,
+          "y": 620
+        },
+        {
+          "x": 1082,
+          "y": 594
+        }
+      ]
+    },
+    {
       "stableId": "jyt-edge-main-council-v1",
       "from": "jyt-node-main-seat-v1",
       "to": "jyt-node-council-v1",
@@ -413,6 +525,27 @@
       "kind": "queue"
     },
     {
+      "stableId": "jyt-slot-gate-parking-v1",
+      "slotId": "gate-parking-1",
+      "regionId": "gate",
+      "point": {
+        "x": 772,
+        "y": 733
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-husanniang-home-v1",
+      "slotId": "husanniang-home",
+      "regionId": "right-guard",
+      "point": {
+        "x": 1082,
+        "y": 594
+      },
+      "personaCode": "husanniang",
+      "kind": "home"
+    },
+    {
       "stableId": "jyt-slot-library-parking-v1",
       "slotId": "library-shelf-parking-1",
       "regionId": "library-shelf",
@@ -421,6 +554,17 @@
         "y": 600
       },
       "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-likui-home-v1",
+      "slotId": "likui-home",
+      "regionId": "gate",
+      "point": {
+        "x": 732,
+        "y": 733
+      },
+      "personaCode": "likui",
+      "kind": "home"
     },
     {
       "stableId": "jyt-slot-linchong-home-v1",
@@ -451,6 +595,16 @@
       "point": {
         "x": 920,
         "y": 320
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-right-guard-parking-v1",
+      "slotId": "right-guard-parking-1",
+      "regionId": "right-guard",
+      "point": {
+        "x": 1110,
+        "y": 594
       },
       "kind": "parking"
     },
