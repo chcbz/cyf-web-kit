@@ -146,8 +146,8 @@ describe('HallAgent melonJS entity', () => {
     const halo = operations.find(([operation]) => operation === 'ellipse')
     expect(halo[1]).to.equal(agent.pos.x)
     expect(halo[2]).to.be.closeTo(agent.pos.y - 0.5, 0.001)
-    expect(halo[3]).to.equal(16)
-    expect(halo[4]).to.equal(4.5)
+    expect(halo[3]).to.equal(13)
+    expect(halo[4]).to.equal(3.5)
   })
 
   it('does not draw a halo for highlight-only transient feedback', () => {

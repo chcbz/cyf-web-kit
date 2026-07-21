@@ -316,11 +316,11 @@ export function createHallAgentClass(me) {
       const baseX = this.pos.x
       const baseY = this.pos.y + verticalOffset - 1 * scale
       ctx.save()
-      ctx.fillStyle = 'rgba(255, 207, 92, 0.18)'
-      ctx.strokeStyle = 'rgba(255, 221, 130, 0.88)'
-      ctx.lineWidth = 3
+      ctx.fillStyle = 'rgba(255, 207, 92, 0.1)'
+      ctx.strokeStyle = 'rgba(255, 221, 130, 0.58)'
+      ctx.lineWidth = 2
       ctx.beginPath()
-      ctx.ellipse(baseX, baseY, 32 * scale, 9 * scale, 0, 0, Math.PI * 2)
+      ctx.ellipse(baseX, baseY, 26 * scale, 7 * scale, 0, 0, Math.PI * 2)
       ctx.fill()
       ctx.stroke()
       ctx.restore()
