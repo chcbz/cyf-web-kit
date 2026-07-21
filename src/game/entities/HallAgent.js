@@ -274,14 +274,13 @@ export function createHallAgentClass(me) {
       const ctx = r.getContext()
       const overlay = this._overlayMetrics(verticalOffset)
 
-      if (this._selected || this._focused || this._highlighted) {
+      if (this._selected) {
+        const haloY = overlay.top - Math.max(8, 10 * this._renderScale)
         ctx.save()
-        ctx.strokeStyle = (this._selected || this._highlighted)
-          ? 'rgba(255, 221, 130, 0.85)'
-          : 'rgba(255, 244, 212, 0.42)'
-        ctx.lineWidth = (this._selected || this._highlighted) ? 3 : 2
+        ctx.strokeStyle = 'rgba(255, 221, 130, 0.85)'
+        ctx.lineWidth = 3
         ctx.beginPath()
-        ctx.ellipse(overlay.centerX, overlay.top + overlay.height * 0.2, 18 * this._renderScale, 6 * this._renderScale, 0, 0, Math.PI * 2)
+        ctx.ellipse(overlay.centerX, haloY, 18 * this._renderScale, 6 * this._renderScale, 0, 0, Math.PI * 2)
         ctx.stroke()
         ctx.restore()
       }

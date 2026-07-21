@@ -763,6 +763,22 @@ describe('HallScene melonJS pointer routing', () => {
     expect(clicks).to.deep.equal([['agent', 'agent-1']])
   })
 
+  it('marks only the selected agent as selected', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+    const selected = []
+    scene._agents.set('agent-1', { setSelected: value => selected.push(['agent-1', value]) })
+    scene._agents.set('agent-2', { setSelected: value => selected.push(['agent-2', value]) })
+
+    scene.setSelectedAgent('agent-2')
+
+    expect(selected).to.deep.equal([
+      ['agent-1', false],
+      ['agent-2', true]
+    ])
+  })
+
   it('orders overlapping agents by visual depth instead of insertion order', () => {
     const me = createFakeMelon()
     const HallScene = createHallSceneClass(me, class {})

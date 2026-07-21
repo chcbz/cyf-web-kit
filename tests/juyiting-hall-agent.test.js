@@ -145,11 +145,11 @@ describe('HallAgent melonJS entity', () => {
 
     const halo = operations.find(([operation]) => operation === 'ellipse')
     expect(halo[1]).to.equal(agent.pos.x)
-    expect(halo[2]).to.be.closeTo(agent.pos.y - 128 * 0.5 * 0.86 + 128 * 0.5 * 0.2, 0.001)
+    expect(halo[2]).to.be.closeTo(agent.pos.y - 128 * 0.5 * 0.86 - 8, 0.001)
     expect(halo[2]).to.be.lessThan(agent.pos.y - 30)
   })
 
-  it('draws the selected-agent highlight halo after render transforms are restored', () => {
+  it('does not draw a halo for highlight-only transient feedback', () => {
     const operations = []
     const context = {
       save: () => operations.push(['save']),
@@ -176,9 +176,37 @@ describe('HallAgent melonJS entity', () => {
     agent.draw({ getContext: () => context })
     agent.postDraw({ getContext: () => context })
 
-    const halo = operations.find(([operation]) => operation === 'ellipse')
-    expect(halo[1]).to.equal(agent.pos.x)
-    expect(halo[2]).to.be.closeTo(agent.pos.y - 128 * 0.5 * 0.86 + 128 * 0.5 * 0.2, 0.001)
+    expect(operations.find(([operation]) => operation === 'ellipse')).to.equal(undefined)
+  })
+
+  it('does not draw a halo for focused-only transient feedback', () => {
+    const operations = []
+    const context = {
+      save: () => operations.push(['save']),
+      restore: () => operations.push(['restore']),
+      beginPath: () => operations.push(['beginPath']),
+      ellipse: (...args) => operations.push(['ellipse', ...args]),
+      stroke: () => operations.push(['stroke']),
+      measureText: text => ({ width: text.length * 8 }),
+      fillText: (...args) => operations.push(['fillText', ...args]),
+      rect: (...args) => operations.push(['rect', ...args]),
+      fill: () => operations.push(['fill'])
+    }
+    const me = createFakeMelon()
+    const HallAgent = createHallAgentClass(me)
+    const agent = new HallAgent({
+      agentId: 'songjiang',
+      personaCode: 'songjiang',
+      scale: 0.5,
+      x: 50,
+      y: 50
+    })
+
+    agent.syncState({ focused: true })
+    agent.draw({ getContext: () => context })
+    agent.postDraw({ getContext: () => context })
+
+    expect(operations.find(([operation]) => operation === 'ellipse')).to.equal(undefined)
   })
 
   it('uses direct body velocity assignment when melonJS Body has no setVelocity helper', () => {

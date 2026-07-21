@@ -117,7 +117,7 @@ export function createHallSceneClass(me, HallAgentClass) {
     }
 
     setSelectedAgent(agentId) {
-      this._agents.forEach((a, id) => a.setHighlighted(id === agentId))
+      this._agents.forEach((a, id) => a.setSelected(id === agentId))
     }
 
     getAgent(id) { return this._agents.get(id) }
