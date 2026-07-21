@@ -274,17 +274,6 @@ export function createHallAgentClass(me) {
       const ctx = r.getContext()
       const overlay = this._overlayMetrics(verticalOffset)
 
-      if (this._selected) {
-        const haloY = overlay.top - Math.max(8, 10 * this._renderScale)
-        ctx.save()
-        ctx.strokeStyle = 'rgba(255, 221, 130, 0.85)'
-        ctx.lineWidth = 3
-        ctx.beginPath()
-        ctx.ellipse(overlay.centerX, haloY, 18 * this._renderScale, 6 * this._renderScale, 0, 0, Math.PI * 2)
-        ctx.stroke()
-        ctx.restore()
-      }
-
       // Name label
       if (this.agentName) {
         ctx.save()
@@ -316,6 +305,25 @@ export function createHallAgentClass(me) {
         ctx.fillText(this._bubbleText, bx + 6, by + 10)
         ctx.restore()
       }
+    }
+
+    _drawSelectionBase(renderer, verticalOffset = 0) {
+      if (!this._selected) return
+      const r = renderer || me.video.renderer
+      if (!r || !r.getContext) return
+      const ctx = r.getContext()
+      const scale = this._renderScale || 1
+      const baseX = this.pos.x
+      const baseY = this.pos.y + verticalOffset - 1 * scale
+      ctx.save()
+      ctx.fillStyle = 'rgba(255, 207, 92, 0.18)'
+      ctx.strokeStyle = 'rgba(255, 221, 130, 0.88)'
+      ctx.lineWidth = 3
+      ctx.beginPath()
+      ctx.ellipse(baseX, baseY, 32 * scale, 9 * scale, 0, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.stroke()
+      ctx.restore()
     }
 
     _normalisePatrolRoute(route = []) {
@@ -424,6 +432,7 @@ export function createHallAgentClass(me) {
 
     postDraw(renderer) {
       super.postDraw(renderer)
+      this._drawSelectionBase(renderer, this._lastOverlayBob || 0)
       this._drawOverlay(renderer, this._lastOverlayBob || 0)
     }
   }

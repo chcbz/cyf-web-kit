@@ -114,7 +114,7 @@ describe('HallAgent melonJS entity', () => {
     expect(agent.containsPoint(agent.pos.x + 1000, agent.pos.y + 1000)).to.equal(false)
   })
 
-  it('aligns the selected halo to the anchored sprite head', () => {
+  it('draws the selected halo at the sprite foot', () => {
     const operations = []
     const context = {
       save: () => operations.push(['save']),
@@ -145,8 +145,9 @@ describe('HallAgent melonJS entity', () => {
 
     const halo = operations.find(([operation]) => operation === 'ellipse')
     expect(halo[1]).to.equal(agent.pos.x)
-    expect(halo[2]).to.be.closeTo(agent.pos.y - 128 * 0.5 * 0.86 - 8, 0.001)
-    expect(halo[2]).to.be.lessThan(agent.pos.y - 30)
+    expect(halo[2]).to.be.closeTo(agent.pos.y - 0.5, 0.001)
+    expect(halo[3]).to.equal(16)
+    expect(halo[4]).to.equal(4.5)
   })
 
   it('does not draw a halo for highlight-only transient feedback', () => {
