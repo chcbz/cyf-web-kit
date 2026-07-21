@@ -185,8 +185,9 @@ describe('sprite manifest', () => {
 
   it('treats an optional missing sprite as a non-fatal degraded warning', () => {
     const manifest = mutableManifest()
-    delete manifest.personas.lujunyi
-    delete manifest.personas.linchong
+    for (const personaCode of Object.keys(manifest.personas)) {
+      if (!['songjiang', 'wuyong'].includes(personaCode)) delete manifest.personas[personaCode]
+    }
     manifest.personas.wuyong.src = '/juyiting/sprites/persona-sheets-v1/wuyong.png'
 
     const result = validateSpriteManifest(manifest, {
