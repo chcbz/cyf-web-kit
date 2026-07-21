@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="104" height="58" tilewidth="16" tileheight="16" infinite="0" nextlayerid="24" nextobjectid="171">
+<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="104" height="58" tilewidth="16" tileheight="16" infinite="0" nextlayerid="24" nextobjectid="192">
  <properties>
   <property name="description" value="聚义厅 v3 - modular layer hall scene"/>
   <property name="maxZoom" type="float" value="3.3"/>
@@ -856,6 +856,174 @@
    </properties>
    <ellipse/>
   </object>
+  <object id="171" x="832" y="520" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-council-parking-v2"/>
+    <property name="regionId" value="council-table"/>
+    <property name="slotId" value="council-table-parking-2"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="172" x="984" y="520" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-council-parking-v3"/>
+    <property name="regionId" value="council-table"/>
+    <property name="slotId" value="council-table-parking-3"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="173" x="1392" y="412" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-bounty-parking-v2"/>
+    <property name="regionId" value="bounty-board"/>
+    <property name="slotId" value="bounty-board-parking-2"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="174" x="1512" y="412" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-bounty-parking-v3"/>
+    <property name="regionId" value="bounty-board"/>
+    <property name="slotId" value="bounty-board-parking-3"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="175" x="184" y="672" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-agent-parking-v2"/>
+    <property name="regionId" value="agent-roster"/>
+    <property name="slotId" value="agent-roster-parking-2"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="176" x="328" y="672" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-agent-parking-v3"/>
+    <property name="regionId" value="agent-roster"/>
+    <property name="slotId" value="agent-roster-parking-3"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="177" x="1512" y="600" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-library-parking-v2"/>
+    <property name="regionId" value="library-shelf"/>
+    <property name="slotId" value="library-shelf-parking-2"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="178" x="1560" y="600" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-library-parking-v3"/>
+    <property name="regionId" value="library-shelf"/>
+    <property name="slotId" value="library-shelf-parking-3"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="179" x="676" y="756" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-gate-parking-v2"/>
+    <property name="regionId" value="gate"/>
+    <property name="slotId" value="gate-parking-2"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="180" x="812" y="756" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-gate-parking-v3"/>
+    <property name="regionId" value="gate"/>
+    <property name="slotId" value="gate-parking-3"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="181" x="1032" y="640" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-right-guard-parking-v2"/>
+    <property name="regionId" value="right-guard"/>
+    <property name="slotId" value="right-guard-parking-2"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="182" x="1184" y="640" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-right-guard-parking-v3"/>
+    <property name="regionId" value="right-guard"/>
+    <property name="slotId" value="right-guard-parking-3"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="183" x="732" y="520" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-council-parking-v4"/>
+    <property name="regionId" value="council-table"/>
+    <property name="slotId" value="council-table-parking-4"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="184" x="1052" y="520" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-council-parking-v5"/>
+    <property name="regionId" value="council-table"/>
+    <property name="slotId" value="council-table-parking-5"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="185" x="912" y="576" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-council-parking-v6"/>
+    <property name="regionId" value="council-table"/>
+    <property name="slotId" value="council-table-parking-6"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="186" x="1352" y="352" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-bounty-parking-v4"/>
+    <property name="regionId" value="bounty-board"/>
+    <property name="slotId" value="bounty-board-parking-4"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="187" x="1432" y="352" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-bounty-parking-v5"/>
+    <property name="regionId" value="bounty-board"/>
+    <property name="slotId" value="bounty-board-parking-5"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="188" x="1512" y="352" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-bounty-parking-v6"/>
+    <property name="regionId" value="bounty-board"/>
+    <property name="slotId" value="bounty-board-parking-6"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="189" x="1432" y="712" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-library-parking-v4"/>
+    <property name="regionId" value="library-shelf"/>
+    <property name="slotId" value="library-shelf-parking-4"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="190" x="1512" y="712" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-library-parking-v5"/>
+    <property name="regionId" value="library-shelf"/>
+    <property name="slotId" value="library-shelf-parking-5"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="191" x="1536" y="744" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-library-parking-v6"/>
+    <property name="regionId" value="library-shelf"/>
+    <property name="slotId" value="library-shelf-parking-6"/>
+   </properties>
+   <ellipse/>
+  </object>
  </objectgroup>
  <objectgroup id="21" name="queue_slots">
   <object id="119" x="832" y="472" width="16" height="16">
@@ -977,24 +1145,24 @@
     <property name="stableId" value="jyt-patrol-likui-gate-v1"/>
     <property name="routeId" value="likui-gate-loop"/>
     <property name="personaCode" value="likui"/>
-    <property name="regionIds" value="gate,council-table,agent-roster"/>
+    <property name="regionIds" value="gate,council-table"/>
     <property name="loop" type="bool" value="true"/>
     <property name="dwellMs" type="int" value="1700"/>
     <property name="priority" type="int" value="1"/>
    </properties>
-   <polyline points="0,0 188,-253 -452,-53 0,0"/>
+   <polyline points="0,0 188,-253 0,0"/>
   </object>
   <object id="170" x="1082" y="594">
    <properties>
     <property name="stableId" value="jyt-patrol-husanniang-right-v1"/>
     <property name="routeId" value="husanniang-right-loop"/>
     <property name="personaCode" value="husanniang"/>
-    <property name="regionIds" value="right-guard,bounty-board,library-shelf"/>
+    <property name="regionIds" value="right-guard,bounty-board"/>
     <property name="loop" type="bool" value="true"/>
     <property name="dwellMs" type="int" value="1800"/>
     <property name="priority" type="int" value="1"/>
    </properties>
-   <polyline points="0,0 398,-174 388,6 0,0"/>
+   <polyline points="0,0 398,-174 0,0"/>
   </object>
  </objectgroup>
  <objectgroup id="23" name="debug_labels">

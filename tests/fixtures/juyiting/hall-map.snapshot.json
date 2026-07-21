@@ -9,7 +9,7 @@
     "regions": 7,
     "nodes": 9,
     "edges": 8,
-    "slots": 14,
+    "slots": 35,
     "obstacles": 38
   },
   "regions": [
@@ -495,6 +495,26 @@
       "kind": "parking"
     },
     {
+      "stableId": "jyt-slot-agent-parking-v2",
+      "slotId": "agent-roster-parking-2",
+      "regionId": "agent-roster",
+      "point": {
+        "x": 192,
+        "y": 680
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-agent-parking-v3",
+      "slotId": "agent-roster-parking-3",
+      "regionId": "agent-roster",
+      "point": {
+        "x": 336,
+        "y": 680
+      },
+      "kind": "parking"
+    },
+    {
       "stableId": "jyt-slot-bounty-parking-v1",
       "slotId": "bounty-board-parking-1",
       "regionId": "bounty-board",
@@ -505,12 +525,112 @@
       "kind": "parking"
     },
     {
+      "stableId": "jyt-slot-bounty-parking-v2",
+      "slotId": "bounty-board-parking-2",
+      "regionId": "bounty-board",
+      "point": {
+        "x": 1400,
+        "y": 420
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-bounty-parking-v3",
+      "slotId": "bounty-board-parking-3",
+      "regionId": "bounty-board",
+      "point": {
+        "x": 1520,
+        "y": 420
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-bounty-parking-v4",
+      "slotId": "bounty-board-parking-4",
+      "regionId": "bounty-board",
+      "point": {
+        "x": 1360,
+        "y": 360
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-bounty-parking-v5",
+      "slotId": "bounty-board-parking-5",
+      "regionId": "bounty-board",
+      "point": {
+        "x": 1440,
+        "y": 360
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-bounty-parking-v6",
+      "slotId": "bounty-board-parking-6",
+      "regionId": "bounty-board",
+      "point": {
+        "x": 1520,
+        "y": 360
+      },
+      "kind": "parking"
+    },
+    {
       "stableId": "jyt-slot-council-parking-v1",
       "slotId": "council-table-parking-1",
       "regionId": "council-table",
       "point": {
         "x": 920,
         "y": 480
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-council-parking-v2",
+      "slotId": "council-table-parking-2",
+      "regionId": "council-table",
+      "point": {
+        "x": 840,
+        "y": 528
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-council-parking-v3",
+      "slotId": "council-table-parking-3",
+      "regionId": "council-table",
+      "point": {
+        "x": 992,
+        "y": 528
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-council-parking-v4",
+      "slotId": "council-table-parking-4",
+      "regionId": "council-table",
+      "point": {
+        "x": 740,
+        "y": 528
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-council-parking-v5",
+      "slotId": "council-table-parking-5",
+      "regionId": "council-table",
+      "point": {
+        "x": 1060,
+        "y": 528
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-council-parking-v6",
+      "slotId": "council-table-parking-6",
+      "regionId": "council-table",
+      "point": {
+        "x": 920,
+        "y": 584
       },
       "kind": "parking"
     },
@@ -535,6 +655,26 @@
       "kind": "parking"
     },
     {
+      "stableId": "jyt-slot-gate-parking-v2",
+      "slotId": "gate-parking-2",
+      "regionId": "gate",
+      "point": {
+        "x": 684,
+        "y": 764
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-gate-parking-v3",
+      "slotId": "gate-parking-3",
+      "regionId": "gate",
+      "point": {
+        "x": 820,
+        "y": 764
+      },
+      "kind": "parking"
+    },
+    {
       "stableId": "jyt-slot-husanniang-home-v1",
       "slotId": "husanniang-home",
       "regionId": "right-guard",
@@ -552,6 +692,56 @@
       "point": {
         "x": 1470,
         "y": 600
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-library-parking-v2",
+      "slotId": "library-shelf-parking-2",
+      "regionId": "library-shelf",
+      "point": {
+        "x": 1520,
+        "y": 608
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-library-parking-v3",
+      "slotId": "library-shelf-parking-3",
+      "regionId": "library-shelf",
+      "point": {
+        "x": 1568,
+        "y": 608
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-library-parking-v4",
+      "slotId": "library-shelf-parking-4",
+      "regionId": "library-shelf",
+      "point": {
+        "x": 1440,
+        "y": 720
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-library-parking-v5",
+      "slotId": "library-shelf-parking-5",
+      "regionId": "library-shelf",
+      "point": {
+        "x": 1520,
+        "y": 720
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-library-parking-v6",
+      "slotId": "library-shelf-parking-6",
+      "regionId": "library-shelf",
+      "point": {
+        "x": 1544,
+        "y": 752
       },
       "kind": "parking"
     },
@@ -605,6 +795,26 @@
       "point": {
         "x": 1110,
         "y": 594
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-right-guard-parking-v2",
+      "slotId": "right-guard-parking-2",
+      "regionId": "right-guard",
+      "point": {
+        "x": 1040,
+        "y": 648
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-right-guard-parking-v3",
+      "slotId": "right-guard-parking-3",
+      "regionId": "right-guard",
+      "point": {
+        "x": 1192,
+        "y": 648
       },
       "kind": "parking"
     },
