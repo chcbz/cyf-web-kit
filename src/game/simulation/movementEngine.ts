@@ -179,6 +179,16 @@ export function createMovementEngine(
           waitMs: current?.routeId === route.routeId ? current.waitMs : 0,
         })
       }
+      for (const agentId of localPatrols.keys()) {
+        if (next.has(agentId) || backendHeldAgents.has(agentId)) continue
+        const runtime = agents.get(agentId)
+        if (runtime?.active?.command.source === 'backend') continue
+        if (runtime) releaseReservation(runtime, slots)
+        agents.delete(agentId)
+        for (let index = phaseEvents.length - 1; index >= 0; index -= 1) {
+          if (phaseEvents[index]?.agentId === agentId) phaseEvents.splice(index, 1)
+        }
+      }
       localPatrols.clear()
       next.forEach((value, agentId) => localPatrols.set(agentId, value))
     },

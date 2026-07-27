@@ -207,6 +207,26 @@ describe('movement engine', () => {
     assert.deepEqual(engine.drainPhaseEvents(), [])
   })
 
+  it('removes the stale local runtime when a featured placeholder is replaced by the real agent ID', () => {
+    const engine = createMovementEngine(runtime(), manifest(), { now: () => 1_000 })
+
+    // 初始画面使用预置人物 ID；/agent/map 返回后，同一人物会改用真实运行时 ID。
+    engine.setLocalPatrols([{ agentId: 'lujunyi', personaCode: 'songjiang', routeId: 'songjiang-loop' }])
+    engine.update(1)
+    assert.deepEqual(engine.snapshots().map(snapshot => snapshot.agentId), ['lujunyi'])
+
+    engine.setLocalPatrols([{
+      agentId: 'jyt-jiafewnnv58ec2379c-lujunyi',
+      personaCode: 'songjiang',
+      routeId: 'songjiang-loop',
+    }])
+    engine.update(1)
+
+    assert.deepEqual(engine.snapshots().map(snapshot => snapshot.agentId), [
+      'jyt-jiafewnnv58ec2379c-lujunyi',
+    ])
+  })
+
   it('runs TMX local patrol until a backend state takes priority, then resumes after cancellation', () => {
     const engine = createMovementEngine(runtime(), manifest(), { now: () => 1_000 })
     engine.setLocalPatrols([{ agentId: 'agent-songjiang', personaCode: 'songjiang', routeId: 'songjiang-loop' }])
