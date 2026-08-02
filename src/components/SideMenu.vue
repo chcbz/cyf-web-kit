@@ -45,7 +45,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, watch } from 'vue'
+import { computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useWindowSize } from '@vueuse/core'
 import { useGlobalStore } from '@/stores/global'
@@ -125,9 +125,9 @@ const showSideMenu = computed({
   }
 })
 
-onMounted(() => {
-  messageStore.fetchUnreadTotal()
-})
+watch(showSideMenu, (val) => {
+  if (val) messageStore.fetchUnreadTotal()
+}, { immediate: true })
 </script>
 
 <style scoped>

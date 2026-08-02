@@ -6,18 +6,19 @@ import { useHallChatContext } from '../src/composables/juyiting/useHallChatConte
 describe('useHallChatContext', () => {
   const portraitShortName = agent => agent?.shortName || agent?.name || agent?.agentId || ''
   const agents = [
-    { agentId: 'wuyong', name: '吴用' },
-    { agentId: 'linchong', name: '林冲' },
-    { agentId: 'songjiang', name: '宋江' }
+    { agentId: 'wuyong', name: '吴用', boundToMe: true },
+    { agentId: 'linchong', name: '林冲', boundToMe: true },
+    { agentId: 'songjiang', name: '宋江', boundToMe: false }
   ]
 
-  it('builds a public conversation scope and mention targets from map agents', () => {
+  it('builds a public conversation scope and mention targets from owned roster agents', () => {
     const selectedAgent = ref(null)
     const selectedTask = ref({ id: 'task-1', title: '巡检悬赏' })
+    const rosterAgents = ref(agents.slice(0, 2))
     const mapAgents = ref(agents)
-    const context = useHallChatContext({ mapAgents, portraitShortName, selectedAgent, selectedTask })
+    const context = useHallChatContext({ agents: rosterAgents, mapAgents, portraitShortName, selectedAgent, selectedTask })
 
-    context.setMentionAgent(agents[2])
+    context.setMentionAgent(agents[1])
 
     expect(context.chatMode.value).to.equal('public')
     expect(context.chatTargetText.value).to.equal('众好汉')
@@ -27,9 +28,12 @@ describe('useHallChatContext', () => {
       mode: 'public',
       selectedTaskId: 'task-1',
       taskId: 'task-1',
-      targetAgentId: 'songjiang'
+      targetAgentId: 'linchong'
     })
-    expect(context.chatContext.value.targetAgentIds).to.deep.equal(['songjiang'])
+    expect(context.chatContext.value.targetAgentIds).to.deep.equal(['linchong'])
+
+    context.setMentionAgent(agents[2])
+    expect(context.chatContext.value.targetAgentIds).to.deep.equal([])
   })
 
   it('scopes bounty conversations to assignees and filters mention choices', () => {
@@ -39,8 +43,9 @@ describe('useHallChatContext', () => {
       title: '联调接口',
       assignedAgentIds: ['wuyong', 'linchong']
     })
+    const rosterAgents = ref(agents.slice(0, 2))
     const mapAgents = ref(agents)
-    const context = useHallChatContext({ mapAgents, portraitShortName, selectedAgent, selectedTask })
+    const context = useHallChatContext({ agents: rosterAgents, mapAgents, portraitShortName, selectedAgent, selectedTask })
 
     context.enterBountyDiscussion(selectedTask.value)
     context.setMentionAgent(agents[1])
@@ -63,8 +68,9 @@ describe('useHallChatContext', () => {
   it('builds private task and agent scope keys', () => {
     const selectedAgent = ref(agents[0])
     const selectedTask = ref({ id: 'task-3', title: '整理纪要' })
+    const rosterAgents = ref(agents)
     const mapAgents = ref(agents)
-    const context = useHallChatContext({ mapAgents, portraitShortName, selectedAgent, selectedTask })
+    const context = useHallChatContext({ agents: rosterAgents, mapAgents, portraitShortName, selectedAgent, selectedTask })
 
     context.enterPrivateConversation(agents[0])
 
@@ -85,8 +91,9 @@ describe('useHallChatContext', () => {
   it('resets stage chat entrance to a fresh public context', () => {
     const selectedAgent = ref(agents[0])
     const selectedTask = ref({ id: 'task-4', title: '风险评估' })
+    const rosterAgents = ref(agents)
     const mapAgents = ref(agents)
-    const context = useHallChatContext({ mapAgents, portraitShortName, selectedAgent, selectedTask })
+    const context = useHallChatContext({ agents: rosterAgents, mapAgents, portraitShortName, selectedAgent, selectedTask })
 
     context.enterBountyDiscussion(selectedTask.value)
     context.resetToPublic({ clearSelection: true })

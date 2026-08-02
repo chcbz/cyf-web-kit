@@ -3,9 +3,13 @@ import { readFileSync } from 'node:fs'
 
 import { JuyitingGame } from '../src/game/JuyitingGame.js'
 import { personaSpriteResourceName } from '../src/game/resources.js'
+import { PERSONA_SPRITE_MANIFEST } from '../src/game/sprites/personaSpriteManifest.js'
 
 const HALL_XML = readFileSync('public/juyiting/hall.tmx', 'utf8')
 const SONGJIANG_RESOURCE = personaSpriteResourceName('songjiang')
+const PERSONA_RESOURCE_NAMES = Object.keys(PERSONA_SPRITE_MANIFEST.personas).map(personaSpriteResourceName)
+const PERSONA_BY_RESOURCE = new Map(Object.values(PERSONA_SPRITE_MANIFEST.personas)
+  .map(definition => [personaSpriteResourceName(definition.personaCode), definition]))
 
 const createRuntimeMelon = () => {
   const pendingLoads = []
@@ -90,8 +94,9 @@ const nextLoadBatch = async fake => {
 const succeedBatch = (fake, batch) => {
   batch.forEach(({ resource, onload }) => {
     if (resource.type === 'image') {
-      fake.images.set(resource.name, resource.name === SONGJIANG_RESOURCE
-        ? { width: 1024, height: 256 }
+      const definition = PERSONA_BY_RESOURCE.get(resource.name)
+      fake.images.set(resource.name, definition
+        ? { width: definition.image.width, height: definition.image.height }
         : { width: 16, height: 16 })
     }
     onload()
@@ -119,8 +124,11 @@ describe('JuyitingGame sprite lifecycle', () => {
     const { mountPromise } = await mountThroughBaseResources(game, fake)
 
     const spriteBatch = await nextLoadBatch(fake)
-    expect(spriteBatch.map(item => item.resource.name)).to.deep.equal([SONGJIANG_RESOURCE])
-    spriteBatch[0].onerror(new Error('sprite CDN unavailable'))
+    expect(spriteBatch.map(item => item.resource.name)).to.deep.equal(PERSONA_RESOURCE_NAMES)
+    spriteBatch.forEach(item => {
+      if (item.resource.name === SONGJIANG_RESOURCE) item.onerror(new Error('sprite CDN unavailable'))
+      else succeedBatch(fake, [item])
+    })
 
     const mountOutcome = await mountPromise
     expect(mountOutcome).to.include({
@@ -258,7 +266,7 @@ describe('JuyitingGame sprite lifecycle', () => {
     const { mountPromise } = await mountThroughBaseResources(game, fake)
 
     const spriteBatch = await nextLoadBatch(fake)
-    expect(spriteBatch.map(item => item.resource.name)).to.deep.equal([SONGJIANG_RESOURCE])
+    expect(spriteBatch.map(item => item.resource.name)).to.deep.equal(PERSONA_RESOURCE_NAMES)
     succeedBatch(fake, spriteBatch)
 
     await mountPromise
@@ -300,7 +308,7 @@ describe('JuyitingGame sprite lifecycle', () => {
     const { mountPromise } = await mountThroughBaseResources(game, fake)
 
     const spriteBatch = await nextLoadBatch(fake)
-    expect(spriteBatch.map(item => item.resource.name)).to.deep.equal([SONGJIANG_RESOURCE])
+    expect(spriteBatch.map(item => item.resource.name)).to.deep.equal(PERSONA_RESOURCE_NAMES)
     // Deliberately leave the melonJS loader callback pending forever.
     await mountPromise
 

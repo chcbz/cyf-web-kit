@@ -109,6 +109,8 @@ const composerClass = computed(() => ({
   'has-draft': Boolean(String(props.draft || '').trim())
 }))
 
+const selectedAgentInAgents = computed(() => props.selectedAgent && props.agents.some(agent => agent.agentId === props.selectedAgent.agentId))
+
 const orderedAgents = computed(() => {
   const selectedId = props.selectedAgent?.agentId
   return [...props.agents].sort((a, b) => {
@@ -128,7 +130,7 @@ const showMentionMenu = computed(() => {
 })
 
 const targetChips = computed(() => {
-  if (props.discussionVariant === 'private' && props.selectedAgent) {
+  if (props.discussionVariant === 'private' && selectedAgentInAgents.value) {
     return [{
       id: props.selectedAgent.agentId,
       label: props.mentionLabel(props.selectedAgent),
@@ -142,7 +144,7 @@ const targetChips = computed(() => {
       locked: true
     }))
   }
-  if (props.selectedAgent) {
+  if (selectedAgentInAgents.value) {
     return [{
       id: props.selectedAgent.agentId,
       label: props.mentionLabel(props.selectedAgent),

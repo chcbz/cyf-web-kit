@@ -424,6 +424,7 @@ const {
   resetToPublic,
   setMentionAgent
 } = useHallChatContext({
+  agents,
   mapAgents,
   portraitShortName,
   selectedAgent,
@@ -595,7 +596,7 @@ const briefSelectedTask = (task = selectedTask.value, agent = selectedAgent.valu
 const discussTask = (task) => {
   if (!task) return
   enterBountyDiscussion(task)
-  markDiscussionStarted(task, chatContext.participantAgentIds || [])
+  markDiscussionStarted(task, chatContext.value?.participantAgentIds || [])
   draft.value = `请就榜文「${task.title}」议事。`
   openPanel('chat')
 }
@@ -768,12 +769,17 @@ const handleNewHallConversation = () => {
 
 const handleSendHallMessage = async () => {
   playSend()
-  const targets = chatContext.targetAgentIds?.length ? chatContext.targetAgentIds : chatContext.participantAgentIds
+  const currentContext = chatContext.value || {}
+  const targets = currentContext.targetAgentIds?.length ? currentContext.targetAgentIds : currentContext.participantAgentIds
   targets?.slice(0, 3).forEach(agentId => markAgentSpeaking(agentId, '收到传令', 'system'))
   await sendHallMessage()
 }
 
 const handleMentionAgent = (agent) => {
+  if (!chatMentionAgents.value.some(item => item.agentId === agent?.agentId)) {
+    showToast('只可点名自家好汉')
+    return
+  }
   playTap()
   setMentionAgent(agent)
   mentionAgent(agent)

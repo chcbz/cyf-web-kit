@@ -184,11 +184,14 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(chatSource).not.to.include('toolbar-meta')
   })
 
-  it('limits hall chat mention choices to map agents', () => {
+  it('limits hall chat mention choices to owned roster agents', () => {
     expect(hallSource).to.include('<PublicDiscussionPanel')
     expect(hallSource).to.include('<BountyDiscussionPanel')
     expect(hallSource).to.include(':agents="chatMentionAgents"')
-    expect(hallSource).to.match(/\} = useHallChatContext\(\{\s*mapAgents,/)
+    expect(hallSource).to.match(/\} = useHallChatContext\(\{\s*agents,/)
+    expect(hallChatContextSource).to.include('const mentionSourceAgents = computed(() => (agents?.value || []).filter(canMentionAgent))')
+    expect(hallChatContextSource).to.include('agent.boundToMe === true')
+    expect(hallChatContextSource).to.include('mentionSourceAgentIds.value.has(agentId)')
   })
 
   it('supports task management actions from the bounty board', () => {

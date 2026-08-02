@@ -53,7 +53,7 @@ describe('Juyiting hall scene assets', () => {
     expect(buildPersonaSpriteResource(PERSONA_SPRITE_MANIFEST.personas.songjiang)).to.deep.equal({
       name: personaSpriteResourceName('songjiang'),
       type: 'image',
-      src: '/juyiting/sprites/persona-sheets-v1/songjiang.png'
+      src: '/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v3.png'
     })
     expect(resources.map(resource => resource.name)).not.to.include('prop-gate')
     expect(resources.map(resource => resource.src).join('\n')).not.to.include('gate')

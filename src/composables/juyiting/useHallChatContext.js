@@ -8,7 +8,6 @@ export const taskAssigneeIds = (task) => {
 
 export const useHallChatContext = ({
   agents,
-  mapAgents,
   portraitShortName,
   selectedAgent,
   selectedTask
@@ -17,7 +16,17 @@ export const useHallChatContext = ({
   const taskDiscussionAgentIds = ref([])
   const chatMentionAgentIds = ref([])
 
-  const mentionSourceAgents = computed(() => agents?.value || mapAgents?.value || [])
+  const canMentionAgent = (agent) => Boolean(
+    agent?.agentId
+    && agent.boundToMe === true
+    && agent.canOperate !== false
+    && !agent.systemAgent
+  )
+
+  const mentionSourceAgents = computed(() => (agents?.value || []).filter(canMentionAgent))
+  const mentionSourceAgentIds = computed(() => new Set(mentionSourceAgents.value.map(agent => agent.agentId).filter(Boolean)))
+  const selectedAgentMentionable = computed(() => selectedAgent.value?.agentId && mentionSourceAgentIds.value.has(selectedAgent.value.agentId))
+  const allowedMentionIds = (agentIds = []) => agentIds.filter(agentId => mentionSourceAgentIds.value.has(agentId))
 
   const chatMentionAgents = computed(() => {
     if (!taskDiscussionAgentIds.value.length) return mentionSourceAgents.value
@@ -27,19 +36,19 @@ export const useHallChatContext = ({
 
   const chatTargetText = computed(() => {
     if (chatMode.value === 'bounty' && selectedTask.value) return `榜文议事 / ${selectedTask.value.title || selectedTask.value.id}`
-    if (chatMode.value === 'private' && selectedAgent.value) return `密议 / ${portraitShortName(selectedAgent.value)}`
-    if (!selectedAgent.value) return '众好汉'
+    if (chatMode.value === 'private' && selectedAgentMentionable.value) return `密议 / ${portraitShortName(selectedAgent.value)}`
+    if (!selectedAgentMentionable.value) return '众好汉'
     return `${portraitShortName(selectedAgent.value)} / ${selectedAgent.value.name || selectedAgent.value.agentId}`
   })
 
   const chatContext = computed(() => {
     if (chatMode.value === 'bounty' && selectedTask.value) {
-      const participantAgentIds = taskDiscussionAgentIds.value.length
+      const participantAgentIds = allowedMentionIds(taskDiscussionAgentIds.value.length
         ? taskDiscussionAgentIds.value
-        : taskAssigneeIds(selectedTask.value)
-      const targetAgentIds = chatMentionAgentIds.value.length
+        : taskAssigneeIds(selectedTask.value))
+      const targetAgentIds = allowedMentionIds(chatMentionAgentIds.value.length
         ? chatMentionAgentIds.value
-        : participantAgentIds
+        : participantAgentIds)
       return {
         conversationScopeType: 'bounty',
         conversationScopeKey: `task:${selectedTask.value.id}`,
@@ -51,7 +60,7 @@ export const useHallChatContext = ({
         targetAgentId: targetAgentIds[0] || ''
       }
     }
-    if (chatMode.value === 'private' && selectedAgent.value) {
+    if (chatMode.value === 'private' && selectedAgentMentionable.value) {
       const hasTask = Boolean(selectedTask.value?.id)
       return {
         conversationScopeType: 'private',
@@ -72,9 +81,9 @@ export const useHallChatContext = ({
       mode: 'public',
       participantAgentIds: [],
       selectedTaskId: selectedTask.value?.id,
-      targetAgentIds: chatMentionAgentIds.value,
+      targetAgentIds: allowedMentionIds(chatMentionAgentIds.value),
       taskId: selectedTask.value?.id,
-      targetAgentId: chatMentionAgentIds.value[0] || ''
+      targetAgentId: allowedMentionIds(chatMentionAgentIds.value)[0] || ''
     }
   })
 
@@ -101,10 +110,13 @@ export const useHallChatContext = ({
   }
 
   const enterPrivateConversation = (agent = selectedAgent.value) => {
-    if (agent) selectedAgent.value = agent
+    if (agent && mentionSourceAgentIds.value.has(agent.agentId)) selectedAgent.value = agent
     chatMentionAgentIds.value = []
     taskDiscussionAgentIds.value = []
     chatMode.value = 'private'
+    if (selectedAgent.value && !mentionSourceAgentIds.value.has(selectedAgent.value.agentId)) {
+      selectedAgent.value = null
+    }
     if (!selectedAgent.value) {
       selectedAgent.value = chatMentionAgents.value[0] || null
     }
@@ -123,7 +135,8 @@ export const useHallChatContext = ({
   }
 
   const setMentionAgent = (agent) => {
-    chatMentionAgentIds.value = agent?.agentId ? [agent.agentId] : []
+    const agentId = agent?.agentId
+    chatMentionAgentIds.value = agentId && mentionSourceAgentIds.value.has(agentId) ? [agentId] : []
   }
 
   return {
@@ -138,6 +151,7 @@ export const useHallChatContext = ({
     resetToPublic,
     setChatMode,
     setMentionAgent,
-    taskDiscussionAgentIds
+    taskDiscussionAgentIds,
+    canMentionAgent
   }
 }

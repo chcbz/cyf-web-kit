@@ -558,7 +558,7 @@ export const runUiSmoke = async () => {
         })
         return
       }
-      if (url.includes('/juyiting/sprites/persona-sheets-v1/songjiang.png') && failRequiredSprite) {
+      if (url.includes('/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v3.png') && failRequiredSprite) {
         await cdp.send('Fetch.fulfillRequest', {
           requestId,
           responseCode: 404,
@@ -574,7 +574,7 @@ export const runUiSmoke = async () => {
         { urlPattern: '*://*/*agent/map*', requestStage: 'Request' },
         { urlPattern: '*://*/*agent/scenes/juyiting-main/snapshot*', requestStage: 'Request' },
         { urlPattern: '*://*/*agent/scenes/juyiting-main/events*', requestStage: 'Request' },
-        { urlPattern: '*://*/juyiting/sprites/persona-sheets-v1/songjiang.png*', requestStage: 'Request' }
+        { urlPattern: '*://*/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v3.png*', requestStage: 'Request' }
       ]
     })
 
