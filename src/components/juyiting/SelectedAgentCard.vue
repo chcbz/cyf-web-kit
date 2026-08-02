@@ -10,7 +10,7 @@
     </button>
     <span
       class="large-avatar portrait-avatar"
-      :style="portraitStyle(agent)"
+      :style="portraitStyle(agent, { highRes: true })"
       :title="portraitName(agent)"
     ></span>
     <div class="agent-card-body">

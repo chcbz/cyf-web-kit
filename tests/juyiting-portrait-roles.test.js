@@ -30,7 +30,7 @@ describe('JuyiHall portrait roles', () => {
   })
 
   it('uses static per-role portraits and generated custom portraits instead of repeated sprite-grid cells', () => {
-    expect(portraitSource).to.include("publicAsset(`juyiting-portraits/${role.slug}.svg`)")
+    expect(portraitSource).to.include('publicAsset(`juyiting-portraits/${role.slug}.svg`)')
     expect(portraitSource).to.include('const generatedPortrait = (role) =>')
     expect(portraitSource).to.include('data:image/svg+xml')
     expect(portraitSource).not.to.include('water-margin-agents')
@@ -38,9 +38,10 @@ describe('JuyiHall portrait roles', () => {
     expect(portraitSource).not.to.include('juyiting/portraits')
   })
 
-  it('uses realistic PNG portraits for the default visible prototypes', () => {
+  it('uses thumbnail portraits by default while preserving high-resolution realistic portraits', () => {
     expect(portraitSource).to.include('const realisticPortraits = new Map')
     expect(portraitSource).to.include('const realisticAtlasPortraits = new Map')
+    expect(portraitSource).to.include('thumbnailPortrait(role)')
     expect(portraitSource).to.include('backgroundSize: \'200% 200%\'')
     expect(portraitSource).to.include('songjiang-realistic.png')
     expect(portraitSource).to.include('water-margin-atlas-')
@@ -74,6 +75,12 @@ describe('JuyiHall portrait roles', () => {
       'husanniang'
     ].includes(role.slug)).length
     expect(atlasRoleCount).to.equal(104)
+  })
+
+  it('keeps one WebP thumbnail asset for every Water Margin prototype', () => {
+    for (const role of portraitRoles) {
+      expect(existsSync(new URL(`../public/juyiting-portraits/thumbs/${role.slug}.webp`, import.meta.url)), role.slug).to.equal(true)
+    }
   })
 
   it('keeps one static SVG portrait asset for every Water Margin prototype', () => {

@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import { readFileSync, statSync } from 'node:fs'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -7,25 +8,37 @@ import { PERSONA_SPRITE_MANIFEST } from '../../src/game/sprites/personaSpriteMan
 import { validateSpriteManifest } from '../../src/game/sprites/spriteValidation.ts'
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
+const RIFF_SIGNATURE = Buffer.from('RIFF')
+const WEBP_SIGNATURE = Buffer.from('WEBP')
 const MAX_PNG_BYTES = 64 * 1024 * 1024
+const MAX_IMAGE_BYTES = 64 * 1024 * 1024
 const MAX_DECODED_BYTES = 64 * 1024 * 1024
 const BYTES_PER_PIXEL = 4
 const MAX_PIXELS = MAX_DECODED_BYTES / BYTES_PER_PIXEL
 const { PNG } = pngjs
 
 export function inspectPngFile(path) {
+  return inspectSpriteImageFile(path)
+}
+
+export function inspectSpriteImageFile(path) {
   let bytes
   try {
     const stat = statSync(path)
     if (!stat.isFile()) return invalidInspection(false, 'sprite path is not a regular file')
-    if (stat.size > MAX_PNG_BYTES) return invalidInspection(false, `sprite PNG exceeds ${MAX_PNG_BYTES} bytes`)
+    if (stat.size > MAX_IMAGE_BYTES) return invalidInspection(false, `sprite image exceeds ${MAX_IMAGE_BYTES} bytes`)
     bytes = readFileSync(path)
   } catch (error) {
-    if (error?.code === 'ENOENT') return invalidInspection(false, 'sprite PNG is missing', false)
-    throw new Error(`Unable to read sprite PNG at ${path}: ${errorCode(error)}`)
+    if (error?.code === 'ENOENT') return invalidInspection(false, 'sprite image is missing', false)
+    throw new Error(`Unable to read sprite image at ${path}: ${errorCode(error)}`)
   }
 
-  if (bytes.length > MAX_PNG_BYTES) return invalidInspection(false, `sprite PNG exceeds ${MAX_PNG_BYTES} bytes`)
+  if (bytes.length > MAX_IMAGE_BYTES) return invalidInspection(false, `sprite image exceeds ${MAX_IMAGE_BYTES} bytes`)
+  return inspectSpriteImageBytes(bytes)
+}
+
+export function inspectSpriteImageBytes(bytes) {
+  if (isWebpBytes(bytes)) return inspectWebpBytes(bytes)
   return inspectPngBytes(bytes)
 }
 
@@ -93,10 +106,76 @@ export function inspectPngBytes(bytes) {
   return invalidInspection(true, 'sprite PNG is missing terminal IEND')
 }
 
+export function inspectWebpBytes(bytes) {
+  if (!isWebpBytes(bytes)) return invalidInspection(false, 'sprite WebP signature is invalid')
+  if (bytes.length > MAX_IMAGE_BYTES) return invalidInspection(true, `sprite WebP exceeds ${MAX_IMAGE_BYTES} bytes`)
+
+  let offset = 12
+  while (offset + 8 <= bytes.length) {
+    const type = bytes.subarray(offset, offset + 4).toString('ascii')
+    const length = bytes.readUInt32LE(offset + 4)
+    const dataStart = offset + 8
+    const dataEnd = dataStart + length
+    if (!Number.isSafeInteger(dataEnd) || dataEnd > bytes.length) {
+      return invalidInspection(true, `sprite WebP ${type || 'unknown'} chunk exceeds file bounds`)
+    }
+    const chunk = bytes.subarray(dataStart, dataEnd)
+    const dimensions = webpChunkDimensions(type, chunk)
+    if (dimensions) {
+      const { width, height } = dimensions
+      if (!validDecodedDimensions(width, height)) return invalidInspection(true, 'sprite WebP decoded dimensions exceed the validation bound')
+      return { exists: true, signatureValid: true, structurallyValid: true, decodable: true, width, height }
+    }
+    offset = dataEnd + (length % 2)
+  }
+  return invalidInspection(true, 'sprite WebP is missing a supported image chunk')
+}
+
+function isWebpBytes(bytes) {
+  return Buffer.isBuffer(bytes)
+    && bytes.length >= 12
+    && bytes.subarray(0, 4).equals(RIFF_SIGNATURE)
+    && bytes.subarray(8, 12).equals(WEBP_SIGNATURE)
+}
+
+function webpChunkDimensions(type, chunk) {
+  if (type === 'VP8X' && chunk.length >= 10) {
+    return {
+      width: 1 + chunk.readUIntLE(4, 3),
+      height: 1 + chunk.readUIntLE(7, 3)
+    }
+  }
+  if (type === 'VP8L' && chunk.length >= 5 && chunk[0] === 0x2f) {
+    const b0 = chunk[1]
+    const b1 = chunk[2]
+    const b2 = chunk[3]
+    const b3 = chunk[4]
+    return {
+      width: 1 + (((b1 & 0x3f) << 8) | b0),
+      height: 1 + (((b3 & 0x0f) << 10) | (b2 << 2) | ((b1 & 0xc0) >> 6))
+    }
+  }
+  if (type === 'VP8 ' && chunk.length >= 10
+    && chunk[3] === 0x9d && chunk[4] === 0x01 && chunk[5] === 0x2a) {
+    return {
+      width: chunk.readUInt16LE(6) & 0x3fff,
+      height: chunk.readUInt16LE(8) & 0x3fff
+    }
+  }
+  return null
+}
+
+function validDecodedDimensions(width, height) {
+  const pixels = width * height
+  const decodedBytes = pixels * BYTES_PER_PIXEL
+  return width > 0 && height > 0 && Number.isSafeInteger(pixels) && pixels <= MAX_PIXELS
+    && Number.isSafeInteger(decodedBytes) && decodedBytes <= MAX_DECODED_BYTES
+}
+
 export function runValidateSprites(environment = process.env) {
   const publicRoot = resolve(
     environment.JIA_JUYITING_PUBLIC_ROOT
-      ?? fileURLToPath(new URL('../../public', import.meta.url)),
+      ?? fileURLToPath(new URL('../../public', import.meta.url))
   )
   const assets = Object.fromEntries(Object.entries(PERSONA_SPRITE_MANIFEST.personas).map(([personaCode, definition]) => {
     const path = resolvePublicAsset(publicRoot, definition.src)

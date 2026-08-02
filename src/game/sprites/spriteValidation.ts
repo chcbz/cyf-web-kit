@@ -98,15 +98,15 @@ export function validateSpriteManifest(
 
     const problems = validateDefinition(definition)
     const asset = options.assets?.[key]
-    if (options.assets && (!asset || !asset.exists)) problems.push('sprite PNG is missing')
+    if (options.assets && (!asset || !asset.exists)) problems.push('sprite image is missing')
     else if (asset?.exists) {
-      if (!asset.signatureValid) problems.push('sprite PNG signature is invalid')
+      if (!asset.signatureValid) problems.push('sprite image signature is invalid')
       else if (asset.structurallyValid !== true || asset.decodable !== true) {
-        problems.push('error' in asset ? asset.error : 'sprite PNG is incomplete or not decodable')
+        problems.push('error' in asset ? asset.error : 'sprite image is incomplete or not decodable')
       }
       if (asset.width !== definition.image.width || asset.height !== definition.image.height) {
         problems.push(
-          `sprite PNG dimensions must be ${definition.image.width}x${definition.image.height}; received ${asset.width ?? '?'}x${asset.height ?? '?'}`,
+          `sprite image dimensions must be ${definition.image.width}x${definition.image.height}; received ${asset.width ?? '?'}x${asset.height ?? '?'}`,
         )
       }
     }
@@ -154,7 +154,7 @@ function validateDefinition(definition: PersonaSpriteDefinition): string[] {
   } else if (frame.width * frame.columns !== image.width || frame.height * frame.rows !== image.height) {
     problems.push('frame grid does not match image dimensions')
   }
-  if (!definition.src.startsWith('/') || !definition.src.toLowerCase().endsWith('.png')) problems.push('src must be an absolute PNG path')
+  if (!definition.src.startsWith('/') || !isSupportedSpriteImagePath(definition.src)) problems.push('src must be an absolute PNG or WebP path')
   if (!(definition.scale > 0) || !(definition.baseSpeed > 0)) problems.push('scale and baseSpeed must be positive')
   if (![definition.anchor.x, definition.anchor.y].every(unitInterval)) problems.push('anchor values must be between 0 and 1')
   if (!(definition.collider.width > 0) || !(definition.collider.height > 0)) problems.push('collider dimensions must be positive')
@@ -174,6 +174,11 @@ function validateDefinition(definition: PersonaSpriteDefinition): string[] {
     }
   }
   return problems
+}
+
+function isSupportedSpriteImagePath(src: string): boolean {
+  const lower = src.toLowerCase()
+  return lower.endsWith('.png') || lower.endsWith('.webp')
 }
 
 function positiveInteger(value: number): boolean {

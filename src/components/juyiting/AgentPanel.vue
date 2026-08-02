@@ -41,7 +41,7 @@
           <div class="detail-head">
             <span
               class="large-avatar portrait-avatar"
-              :style="portraitStyle(selectedAgent)"
+              :style="portraitStyle(selectedAgent, { highRes: true })"
               :title="portraitName(selectedAgent)"
             ></span>
             <div>

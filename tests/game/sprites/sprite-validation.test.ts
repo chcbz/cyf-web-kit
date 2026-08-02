@@ -23,6 +23,12 @@ function mutableManifest(): PersonaSpriteManifest {
 
 function fixturePath(): string {
   return fileURLToPath(new URL(
+    './fixtures/public/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v3.webp', import.meta.url,
+  ))
+}
+
+function pngFixturePath(): string {
+  return fileURLToPath(new URL(
     './fixtures/public/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v3.png', import.meta.url,
   ))
 }
@@ -102,7 +108,7 @@ describe('sprite manifest', () => {
     assert.ok(result.errors.map(error => error.code).includes('REQUIRED_SPRITE_LOAD_FAILED'))
   })
 
-  it('accepts a matching inspected PNG and rejects bad signatures or dimensions', () => {
+  it('accepts a matching inspected sprite image and rejects bad signatures or dimensions', () => {
     const valid = validateSpriteManifest(PERSONA_SPRITE_MANIFEST, {
       assets: {
         songjiang: inspectPngFile(fixturePath()),
@@ -123,7 +129,7 @@ describe('sprite manifest', () => {
   })
 
   it('rejects interlaced, 16-bit, and non-RGBA PNG formats before decoding', () => {
-    const valid = readFileSync(fixturePath())
+    const valid = readFileSync(pngFixturePath())
     const interlaced = Buffer.from(valid)
     interlaced[28] = 1
     const sixteenBit = Buffer.from(valid)
@@ -161,7 +167,7 @@ describe('sprite manifest', () => {
   })
 
   it('rejects header-only, truncated, bad-CRC, and missing-IEND PNG files', () => {
-    const valid = readFileSync(fixturePath())
+    const valid = readFileSync(pngFixturePath())
     const idat = chunkOffset(valid, 'IDAT')
     assert.ok(idat >= 0)
     const idatLength = valid.readUInt32BE(idat)

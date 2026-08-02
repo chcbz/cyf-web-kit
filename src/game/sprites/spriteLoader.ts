@@ -140,8 +140,8 @@ function validateRuntimeDefinition(definition: PersonaSpriteDefinition): string 
   if (frame.width * frame.columns !== image.width || frame.height * frame.rows !== image.height) {
     return 'Sprite frame grid does not match the configured image dimensions.'
   }
-  if (!definition.src.startsWith('/') || !definition.src.toLowerCase().endsWith('.png')) {
-    return 'Sprite source must be an absolute PNG path.'
+  if (!definition.src.startsWith('/') || !isSupportedSpriteImagePath(definition.src)) {
+    return 'Sprite source must be an absolute PNG or WebP path.'
   }
   if (!(definition.scale > 0) || !(definition.baseSpeed > 0)) {
     return 'Sprite scale and base speed must be positive.'
@@ -168,6 +168,11 @@ function validateRuntimeDefinition(definition: PersonaSpriteDefinition): string 
     }
   }
   return null
+}
+
+function isSupportedSpriteImagePath(src: string): boolean {
+  const lower = src.toLowerCase()
+  return lower.endsWith('.png') || lower.endsWith('.webp')
 }
 
 function normalizeTimeout(timeoutMs: number | undefined): number {

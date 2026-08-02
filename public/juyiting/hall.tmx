@@ -10,7 +10,7 @@
   <property name="sceneId" value="juyiting-main"/>
  </properties>
  <tileset firstgid="1" name="liangshan-hall-base-clean-v3" tilewidth="16" tileheight="16" tilecount="6032" columns="104">
-  <image source="images/liangshan-hall-base-clean-v3.png" width="1664" height="928"/>
+  <image source="images/liangshan-hall-base-clean-v3.webp" width="1664" height="928"/>
  </tileset>
  <tileset firstgid="6033" name="hall-props" tilewidth="179" tileheight="192" tilecount="5" columns="5" objectalignment="topleft">
   <grid orientation="orthogonal" width="16" height="16"/>
@@ -36,13 +36,13 @@
   </data>
  </layer>
  <imagelayer id="3" name="mid-occluders">
-  <image source="images/liangshan-hall-mid-occluders-v3.png" width="1664" height="928"/>
+  <image source="images/liangshan-hall-mid-occluders-v3.webp" width="1664" height="928"/>
  </imagelayer>
  <imagelayer id="10" name="foreground-occluders">
-  <image source="images/liangshan-hall-foreground-occluders-v3.png" width="1664" height="928"/>
+  <image source="images/liangshan-hall-foreground-occluders-v3.webp" width="1664" height="928"/>
  </imagelayer>
  <imagelayer id="11" name="lighting-overlay" opacity="0.85" tintcolor="#ffd8a0">
-  <image source="images/liangshan-hall-lighting-overlay-v3.png" width="1664" height="928"/>
+  <image source="images/liangshan-hall-lighting-overlay-v3.webp" width="1664" height="928"/>
  </imagelayer>
  <objectgroup id="12" name="collision">
   <object id="10" x="597" y="487">

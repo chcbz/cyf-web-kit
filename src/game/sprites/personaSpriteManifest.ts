@@ -55,7 +55,7 @@ export const PERSONA_SPRITE_MANIFEST = {
   personas: {
     songjiang: {
       personaCode: 'songjiang', required: true,
-      src: '/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v3.png',
+      src: '/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v3.webp',
       image: { width: 1024, height: 1024 },
       frame: { width: 128, height: 128, columns: 8, rows: 8 },
       anchor: { x: 0.5, y: 0.86 },
@@ -86,7 +86,7 @@ export const PERSONA_SPRITE_MANIFEST = {
     },
     lujunyi: {
       personaCode: 'lujunyi', required: false,
-      src: '/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.png',
+      src: '/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp',
       image: { width: 1024, height: 1024 },
       frame: { width: 128, height: 128, columns: 8, rows: 8 },
       anchor: { x: 0.5, y: 0.86 },
@@ -96,7 +96,7 @@ export const PERSONA_SPRITE_MANIFEST = {
     },
     wuyong: {
       personaCode: 'wuyong', required: false,
-      src: '/juyiting/sprites/persona-sheets-v1/wuyong-8-direction-v1.png',
+      src: '/juyiting/sprites/persona-sheets-v1/wuyong-8-direction-v1.webp',
       image: { width: 1024, height: 1024 },
       frame: { width: 128, height: 128, columns: 8, rows: 8 },
       anchor: { x: 0.5, y: 0.86 },
@@ -106,7 +106,7 @@ export const PERSONA_SPRITE_MANIFEST = {
     },
     linchong: {
       personaCode: 'linchong', required: false,
-      src: '/juyiting/sprites/persona-sheets-v1/linchong-8-direction-v1.png',
+      src: '/juyiting/sprites/persona-sheets-v1/linchong-8-direction-v1.webp',
       image: { width: 1024, height: 1024 },
       frame: { width: 128, height: 128, columns: 8, rows: 8 },
       anchor: { x: 0.5, y: 0.86 },
@@ -116,7 +116,7 @@ export const PERSONA_SPRITE_MANIFEST = {
     },
     likui: {
       personaCode: 'likui', required: false,
-      src: '/juyiting/sprites/persona-sheets-v1/likui-8-direction-v1.png',
+      src: '/juyiting/sprites/persona-sheets-v1/likui-8-direction-v1.webp',
       image: { width: 1024, height: 1024 },
       frame: { width: 128, height: 128, columns: 8, rows: 8 },
       anchor: { x: 0.5, y: 0.86 },
@@ -126,7 +126,7 @@ export const PERSONA_SPRITE_MANIFEST = {
     },
     husanniang: {
       personaCode: 'husanniang', required: false,
-      src: '/juyiting/sprites/persona-sheets-v1/husanniang-8-direction-v1.png',
+      src: '/juyiting/sprites/persona-sheets-v1/husanniang-8-direction-v1.webp',
       image: { width: 1024, height: 1024 },
       frame: { width: 128, height: 128, columns: 8, rows: 8 },
       anchor: { x: 0.5, y: 0.86 },

@@ -19,6 +19,7 @@ const roleBySlug = new Map(portraitRoles.map(role => [role.slug, role]))
 const portraitCache = new Map()
 const publicAsset = (path) => `${import.meta.env.BASE_URL}${path.replace(/^\/+/, '')}`
 const staticPortrait = (role) => publicAsset(`juyiting-portraits/${role.slug}.svg`)
+const thumbnailPortrait = (role) => publicAsset(`juyiting-portraits/thumbs/${role.slug}.webp`)
 
 const realisticPortraits = new Map([
   ['songjiang', 'songjiang-realistic.png'],
@@ -318,7 +319,7 @@ export const portraitShortName = (agent) => portraitRole(agent).name
 
 export const roleClass = (agent) => `role-${String(portraitRole(agent).slug || 'default').replace(/[^a-zA-Z0-9_-]/g, '-')}`
 
-export const portraitStyle = (agent) => {
+export const portraitStyle = (agent, options = {}) => {
   if (agent?.avatar) {
     return {
       backgroundImage: `url("${agent.avatar}")`,
@@ -330,6 +331,14 @@ export const portraitStyle = (agent) => {
   const role = portraitRole(agent)
   const visual = parseVisualConfig(agent)
   if (visual?.robe || visual?.color || visual?.trim || visual?.motif) return generatedPortrait(role)
+
+  if (!options.highRes) {
+    return {
+      backgroundImage: `url("${thumbnailPortrait(role)}")`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center'
+    }
+  }
 
   const realistic = realisticPortrait(role)
   if (realistic) return realistic

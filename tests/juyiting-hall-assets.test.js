@@ -12,8 +12,19 @@ import {
 import { PERSONA_SPRITE_MANIFEST } from '../src/game/sprites/personaSpriteManifest.js'
 import { parseJuyiHallTmx } from '../src/game/tiledMap.js'
 
-const pngSize = (path) => {
+const imageSize = (path) => {
   const bytes = readFileSync(path)
+  if (bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP') {
+    let offset = 12
+    while (offset + 8 <= bytes.length) {
+      const type = bytes.subarray(offset, offset + 4).toString('ascii')
+      const length = bytes.readUInt32LE(offset + 4)
+      const chunk = bytes.subarray(offset + 8, offset + 8 + length)
+      if (type === 'VP8X' && chunk.length >= 10) return { width: 1 + chunk.readUIntLE(4, 3), height: 1 + chunk.readUIntLE(7, 3) }
+      if (type === 'VP8 ' && chunk.length >= 10) return { width: chunk.readUInt16LE(6) & 0x3fff, height: chunk.readUInt16LE(8) & 0x3fff }
+      offset += 8 + length + (length % 2)
+    }
+  }
   return {
     width: bytes.readUInt32BE(16),
     height: bytes.readUInt32BE(20)
@@ -25,7 +36,7 @@ describe('Juyiting hall scene assets', () => {
   const hallV4Map = parseJuyiHallTmx(hallV4Xml)
 
   it('uses the background native dimensions as the melonJS scene size', () => {
-    const bg = pngSize('public/juyiting/images/liangshan-hall-base-clean-v3.png')
+    const bg = imageSize('public/juyiting/images/liangshan-hall-base-clean-v3.webp')
     const config = createGameConfig()
 
     expect(HALL_SCENE_WIDTH).to.equal(bg.width)
@@ -44,16 +55,16 @@ describe('Juyiting hall scene assets', () => {
     const resources = buildHallMapResources(hallV4Map)
 
     expect(resources).to.deep.include.members([
-      { name: 'liangshan-hall-base-clean-v3', type: 'image', src: '/juyiting/images/liangshan-hall-base-clean-v3.png' },
-      { name: 'mid-occluders', type: 'image', src: '/juyiting/images/liangshan-hall-mid-occluders-v3.png' },
-      { name: 'foreground-occluders', type: 'image', src: '/juyiting/images/liangshan-hall-foreground-occluders-v3.png' },
-      { name: 'lighting-overlay', type: 'image', src: '/juyiting/images/liangshan-hall-lighting-overlay-v3.png' }
+      { name: 'liangshan-hall-base-clean-v3', type: 'image', src: '/juyiting/images/liangshan-hall-base-clean-v3.webp' },
+      { name: 'mid-occluders', type: 'image', src: '/juyiting/images/liangshan-hall-mid-occluders-v3.webp' },
+      { name: 'foreground-occluders', type: 'image', src: '/juyiting/images/liangshan-hall-foreground-occluders-v3.webp' },
+      { name: 'lighting-overlay', type: 'image', src: '/juyiting/images/liangshan-hall-lighting-overlay-v3.webp' }
     ])
     expect(resources.map(resource => resource.name)).not.to.include(personaSpriteResourceName('songjiang'))
     expect(buildPersonaSpriteResource(PERSONA_SPRITE_MANIFEST.personas.songjiang)).to.deep.equal({
       name: personaSpriteResourceName('songjiang'),
       type: 'image',
-      src: '/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v3.png'
+      src: '/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v3.webp'
     })
     expect(resources.map(resource => resource.name)).not.to.include('prop-gate')
     expect(resources.map(resource => resource.src).join('\n')).not.to.include('gate')

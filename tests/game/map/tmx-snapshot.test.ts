@@ -76,7 +76,7 @@ describe('Juyiting TMX snapshots and previews', () => {
     assert.ok(svg.includes('href="data:image/png;base64,cG5n"'))
     assert.ok(svg.includes('data-art-id="art&lt;&amp;"'))
     assert.ok(svg.includes(`data-generation-id="${testGenerationId}"`))
-    assert.ok(!svg.includes('liangshan-hall-base-clean-v3.png'))
+    assert.ok(!svg.includes('liangshan-hall-base-clean-v3.webp'))
     assert.ok(svg.includes('Region &amp; &lt;A&gt;'))
     assert.ok(!svg.includes('class="nav-edge"'))
     assert.ok(!svg.includes('node-a'))
@@ -217,7 +217,7 @@ describe('Juyiting TMX snapshots and previews', () => {
       const cleanBefore = readFileSync(paths.cleanPath, 'utf8')
       const debugBefore = readFileSync(paths.debugPath, 'utf8')
       assert.equal(previewGenerationId(cleanBefore), previewGenerationId(debugBefore))
-      assert.match(cleanBefore, /data:image\/png;base64,/)
+      assert.match(cleanBefore, /data:image\/(png|webp);base64,/)
       assert.equal(runScript(previewScript, [], env).status, 0)
 
       writeFileSync(paths.cleanPath, `${cleanBefore}mismatch`, 'utf8')
@@ -231,7 +231,7 @@ describe('Juyiting TMX snapshots and previews', () => {
       writeFileSync(join(dirname(paths.tmxPath), 'images/alternate.png'), alternateBytes)
       writeFileSync(
         paths.tmxPath,
-        readFileSync(paths.tmxPath, 'utf8').replace('images/liangshan-hall-base-clean-v3.png', 'images/alternate.png'),
+        readFileSync(paths.tmxPath, 'utf8').replace('images/liangshan-hall-base-clean-v3.webp', 'images/alternate.png'),
         'utf8',
       )
       assert.notEqual(runScript(previewScript, [], env).status, 0)
@@ -264,14 +264,14 @@ describe('Juyiting TMX snapshots and previews', () => {
     this.timeout(20_000)
     withScriptFixture(paths => {
       const env = fixtureEnvironment(paths)
-      rmSync(join(dirname(paths.tmxPath), 'images/liangshan-hall-base-clean-v3.png'))
+      rmSync(join(dirname(paths.tmxPath), 'images/liangshan-hall-base-clean-v3.webp'))
       const missingArt = runScript(previewScript, ['--update'], env)
       assert.notEqual(missingArt.status, 0)
       assert.match(missingArt.stderr, /Referenced map art is missing/i)
 
       writeFileSync(
         paths.tmxPath,
-        readFileSync(paths.tmxPath, 'utf8').replace('images/liangshan-hall-base-clean-v3.png', 'images/unsupported.bmp'),
+        readFileSync(paths.tmxPath, 'utf8').replace('images/liangshan-hall-base-clean-v3.webp', 'images/unsupported.bmp'),
         'utf8',
       )
       writeFileSync(join(dirname(paths.tmxPath), 'images/unsupported.bmp'), 'bmp')
@@ -362,10 +362,10 @@ function withScriptFixture(callback: (paths: ScriptFixturePaths) => void): void 
     mkdirSync(imageDirectory, { recursive: true })
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64')
     for (const name of [
-      'liangshan-hall-base-clean-v3.png',
-      'liangshan-hall-mid-occluders-v3.png',
-      'liangshan-hall-foreground-occluders-v3.png',
-      'liangshan-hall-lighting-overlay-v3.png',
+      'liangshan-hall-base-clean-v3.webp',
+      'liangshan-hall-mid-occluders-v3.webp',
+      'liangshan-hall-foreground-occluders-v3.webp',
+      'liangshan-hall-lighting-overlay-v3.webp',
     ]) writeFileSync(join(imageDirectory, name), png)
     callback(paths)
   } finally {
