@@ -835,7 +835,6 @@ export function createHallSceneClass(me, HallAgentClass) {
           this._agents.delete(id)
         }
       })
-      this._pendingAgents = []
       this._needsSync = false
     }
 

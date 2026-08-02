@@ -7,7 +7,12 @@ import { PERSONA_SPRITE_MANIFEST } from '../src/game/sprites/personaSpriteManife
 
 const HALL_XML = readFileSync('public/juyiting/hall.tmx', 'utf8')
 const SONGJIANG_RESOURCE = personaSpriteResourceName('songjiang')
-const PERSONA_RESOURCE_NAMES = Object.keys(PERSONA_SPRITE_MANIFEST.personas).map(personaSpriteResourceName)
+const REQUIRED_PERSONA_RESOURCE_NAMES = Object.values(PERSONA_SPRITE_MANIFEST.personas)
+  .filter(definition => definition.required)
+  .map(definition => personaSpriteResourceName(definition.personaCode))
+const DEFERRED_PERSONA_RESOURCE_NAMES = Object.values(PERSONA_SPRITE_MANIFEST.personas)
+  .filter(definition => !definition.required)
+  .map(definition => personaSpriteResourceName(definition.personaCode))
 const PERSONA_BY_RESOURCE = new Map(Object.values(PERSONA_SPRITE_MANIFEST.personas)
   .map(definition => [personaSpriteResourceName(definition.personaCode), definition]))
 
@@ -86,7 +91,10 @@ const createRuntimeMelon = () => {
 }
 
 const nextLoadBatch = async fake => {
-  for (let turn = 0; turn < 50 && fake.pendingLoads.length === 0; turn += 1) await Promise.resolve()
+  for (let turn = 0; turn < 200 && fake.pendingLoads.length === 0; turn += 1) {
+    await Promise.resolve()
+    if (turn % 20 === 19) await new Promise(resolve => setTimeout(resolve, 0))
+  }
   expect(fake.pendingLoads.length, 'expected a runtime resource batch').to.be.greaterThan(0)
   return fake.pendingLoads.splice(0)
 }
@@ -124,7 +132,7 @@ describe('JuyitingGame sprite lifecycle', () => {
     const { mountPromise } = await mountThroughBaseResources(game, fake)
 
     const spriteBatch = await nextLoadBatch(fake)
-    expect(spriteBatch.map(item => item.resource.name)).to.deep.equal(PERSONA_RESOURCE_NAMES)
+    expect(spriteBatch.map(item => item.resource.name)).to.deep.equal(REQUIRED_PERSONA_RESOURCE_NAMES)
     spriteBatch.forEach(item => {
       if (item.resource.name === SONGJIANG_RESOURCE) item.onerror(new Error('sprite CDN unavailable'))
       else succeedBatch(fake, [item])
@@ -262,23 +270,41 @@ describe('JuyitingGame sprite lifecycle', () => {
   it('makes Songjiang available only after the dedicated sprite load succeeds', async () => {
     const fake = createRuntimeMelon()
     const game = new JuyitingGame()
+    game._deferredSpriteLoadDelayMs = 0
     game._me = fake.me
     const { mountPromise } = await mountThroughBaseResources(game, fake)
 
     const spriteBatch = await nextLoadBatch(fake)
-    expect(spriteBatch.map(item => item.resource.name)).to.deep.equal(PERSONA_RESOURCE_NAMES)
+    expect(spriteBatch.map(item => item.resource.name)).to.deep.equal(REQUIRED_PERSONA_RESOURCE_NAMES)
     succeedBatch(fake, spriteBatch)
 
     await mountPromise
+    const deferredBatch = await nextLoadBatch(fake)
+    expect(deferredBatch.map(item => item.resource.name)).to.deep.equal(DEFERRED_PERSONA_RESOURCE_NAMES)
     const outcome = game.getSpriteLoadSnapshot()
     expect(outcome.degraded).to.equal(false)
     expect(outcome.available.has('songjiang')).to.equal(true)
+    expect(outcome.available.has('lujunyi')).to.equal(false)
     expect(fake.stateSets).to.have.length(1)
 
-    game.syncAgents([{ agentId: 'songjiang', personaCode: 'songjiang', name: 'Song Jiang', x: 50, y: 50 }])
+    game.syncAgents([
+      { agentId: 'songjiang', personaCode: 'songjiang', name: 'Song Jiang', x: 50, y: 50 },
+      { agentId: 'lujunyi', personaCode: 'lujunyi', name: 'Lu Junyi', x: 55, y: 50 }
+    ])
     game._hallScene._fullSyncAgents()
     expect(game._hallScene.getAgent('songjiang')).to.exist
+    expect(game._hallScene.getAgent('lujunyi')).to.equal(undefined)
     expect(fake.worldChildren).to.have.length(1)
+
+    succeedBatch(fake, deferredBatch)
+    for (let turn = 0; turn < 20 && !game.getSpriteLoadSnapshot()?.available?.has('lujunyi'); turn += 1) {
+      await Promise.resolve()
+    }
+    const merged = game.getSpriteLoadSnapshot()
+    expect(merged.available.has('lujunyi')).to.equal(true)
+    expect(merged.placeholderCount).to.equal(0)
+    game._hallScene._fullSyncAgents()
+    expect(game._hallScene.getAgent('lujunyi')).to.exist
   })
 
   it('discards a late sprite callback after destroy without starting the stale scene', async () => {
@@ -308,7 +334,7 @@ describe('JuyitingGame sprite lifecycle', () => {
     const { mountPromise } = await mountThroughBaseResources(game, fake)
 
     const spriteBatch = await nextLoadBatch(fake)
-    expect(spriteBatch.map(item => item.resource.name)).to.deep.equal(PERSONA_RESOURCE_NAMES)
+    expect(spriteBatch.map(item => item.resource.name)).to.deep.equal(REQUIRED_PERSONA_RESOURCE_NAMES)
     // Deliberately leave the melonJS loader callback pending forever.
     await mountPromise
 

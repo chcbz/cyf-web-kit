@@ -33,6 +33,8 @@ export class JuyitingGame {
     // runtime tolerant of a cold browser cache and slower local dev servers.
     this._spriteLoadTimeoutMs = 15_000
     this._spriteLoadAbortController = null
+    this._deferredSpriteLoadDelayMs = 1_200
+    this._deferredSpriteLoadTimer = null
     this._readyTimer = null
     this._canvas = null
     this._viewportCommitFrame = null
@@ -148,35 +150,28 @@ export class JuyitingGame {
         throw simulationInitializationError(new Error('Camera/input runtime is unavailable'))
       }
 
-      const spriteLoadAbortController = new AbortController()
-      this._spriteLoadAbortController = spriteLoadAbortController
-      const spriteLoadResult = await loadPersonaSprites(
-        definition => this._loadPersonaSprite(me, definition, mountToken),
-        PERSONA_SPRITE_MANIFEST,
-        {
-          timeoutMs: this._spriteLoadTimeoutMs,
-          signal: spriteLoadAbortController.signal
-        }
+      const requiredSpriteLoadResult = await this._loadPersonaSpriteBatch(
+        me,
+        this._requiredPersonaSpriteManifest(),
+        mountToken
       )
       if (!this._isCurrentMount(mountToken)) return
-      if (this._spriteLoadAbortController === spriteLoadAbortController) {
-        this._spriteLoadAbortController = null
-      }
-      this._spriteLoadResult = spriteLoadResult
-      this._hallScene?.setAvailablePersonas(spriteLoadResult.available)
+      this._spriteLoadResult = requiredSpriteLoadResult
+      this._hallScene?.setAvailablePersonas(requiredSpriteLoadResult.available)
       this._markSceneDebugDirty()
 
       if (this._simulationEnabled) this._initializeSimulationRuntime()
 
       this._startGame(me, mountToken)
+      this._startDeferredPersonaSpriteLoading(me, mountToken)
       return {
         ready: true,
         movementReady: this._mapData?.movementReady === true,
         simulationReady: Boolean(this._movementEngine),
-        degraded: spriteLoadResult.degraded,
-        requiredMissingCount: spriteLoadResult.requiredMissingCount,
-        optionalMissingCount: spriteLoadResult.optionalMissingCount,
-        errors: spriteLoadResult.errors.map(error => ({ ...error }))
+        degraded: requiredSpriteLoadResult.degraded,
+        requiredMissingCount: requiredSpriteLoadResult.requiredMissingCount,
+        optionalMissingCount: requiredSpriteLoadResult.optionalMissingCount,
+        errors: requiredSpriteLoadResult.errors.map(error => ({ ...error }))
       }
     } catch (error) {
       const failure = error?.source === 'map'
@@ -198,9 +193,120 @@ export class JuyitingGame {
     this._cleanupRuntime(me)
   }
 
+  _requiredPersonaSpriteManifest() {
+    return this._personaSpriteManifestForEntries(
+      Object.entries(PERSONA_SPRITE_MANIFEST.personas || {})
+        .filter(([, definition]) => definition?.required)
+    )
+  }
+
+  _deferredPersonaSpriteManifest() {
+    return this._personaSpriteManifestForEntries(
+      Object.entries(PERSONA_SPRITE_MANIFEST.personas || {})
+        .filter(([, definition]) => !definition?.required)
+    )
+  }
+
+  _personaSpriteManifestForEntries(entries) {
+    return {
+      version: PERSONA_SPRITE_MANIFEST.version,
+      personas: Object.fromEntries(entries || [])
+    }
+  }
+
+  async _loadPersonaSpriteBatch(me, manifest, mountToken = this._mountToken) {
+    const personas = manifest?.personas || {}
+    if (!Object.keys(personas).length) {
+      return {
+        available: new Set(),
+        assets: new Map(),
+        degraded: false,
+        requiredMissingCount: 0,
+        optionalMissingCount: 0,
+        placeholderCount: 0,
+        errors: []
+      }
+    }
+
+    const spriteLoadAbortController = new AbortController()
+    this._spriteLoadAbortController = spriteLoadAbortController
+    const spriteLoadResult = await loadPersonaSprites(
+      definition => this._loadPersonaSprite(me, definition, mountToken),
+      manifest,
+      {
+        timeoutMs: this._spriteLoadTimeoutMs,
+        signal: spriteLoadAbortController.signal
+      }
+    )
+    if (this._spriteLoadAbortController === spriteLoadAbortController) {
+      this._spriteLoadAbortController = null
+    }
+    return spriteLoadResult
+  }
+
+  _startDeferredPersonaSpriteLoading(me, mountToken = this._mountToken) {
+    const manifest = this._deferredPersonaSpriteManifest()
+    if (!Object.keys(manifest.personas || {}).length) return
+
+    this._clearDeferredSpriteLoadTimer()
+    const beginLoading = () => {
+      this._deferredSpriteLoadTimer = null
+      if (!this._isCurrentMount(mountToken)) return
+      void this._loadPersonaSpriteBatch(me, manifest, mountToken)
+        .then(result => {
+          if (!this._isCurrentMount(mountToken)) return
+          this._mergeSpriteLoadResult(result)
+          this._hallScene?.setAvailablePersonas(this._spriteLoadResult?.available || new Set())
+          this._markSceneDebugDirty()
+        })
+        .catch(error => {
+          if (!this._isCurrentMount(mountToken)) return
+          console.warn('[JuyitingGame] Deferred sprite load failed:', error?.message || error)
+        })
+    }
+
+    const delayMs = Math.max(0, Number(this._deferredSpriteLoadDelayMs) || 0)
+    this._deferredSpriteLoadTimer = setTimeout(beginLoading, delayMs)
+    this._deferredSpriteLoadTimer?.unref?.()
+  }
+
+  _clearDeferredSpriteLoadTimer() {
+    if (this._deferredSpriteLoadTimer === null) return
+    clearTimeout(this._deferredSpriteLoadTimer)
+    this._deferredSpriteLoadTimer = null
+  }
+
+  _mergeSpriteLoadResult(result) {
+    if (!result) return
+    if (!this._spriteLoadResult) {
+      this._spriteLoadResult = result
+      return
+    }
+    const available = new Set(this._spriteLoadResult.available || [])
+    ;(result.available || new Set()).forEach(personaCode => available.add(personaCode))
+    const assets = new Map(this._spriteLoadResult.assets || [])
+    ;(result.assets || new Map()).forEach((asset, personaCode) => assets.set(personaCode, asset))
+    this._spriteLoadResult = {
+      available,
+      assets,
+      degraded: Boolean(this._spriteLoadResult.degraded || result.degraded),
+      requiredMissingCount: (this._spriteLoadResult.requiredMissingCount || 0) + (result.requiredMissingCount || 0),
+      optionalMissingCount: (this._spriteLoadResult.optionalMissingCount || 0) + (result.optionalMissingCount || 0),
+      placeholderCount: 0,
+      errors: [
+        ...(this._spriteLoadResult.errors || []),
+        ...(result.errors || [])
+      ].sort((left, right) => (
+        String(left.code || '').localeCompare(String(right.code || ''))
+          || String(left.technicalMessage || '').localeCompare(String(right.technicalMessage || ''))
+      ))
+    }
+  }
+
   _cleanupRuntime(me = this._me) {
     this._spriteLoadAbortController?.abort()
     this._spriteLoadAbortController = null
+    this._clearDeferredSpriteLoadTimer()
     if (this._readyTimer !== null) clearTimeout(this._readyTimer)
     this._readyTimer = null
     this._cancelViewportCommit()

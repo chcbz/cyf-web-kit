@@ -195,6 +195,7 @@ function loadWithBounds<T>(
     const timer = setTimeout(() => {
       finish(() => reject(new Error(`Sprite load timed out after ${timeoutMs}ms for ${personaCode}.`)))
     }, timeoutMs)
+    ;(timer as { unref?: () => void }).unref?.()
 
     if (signal?.aborted) {
       onAbort()
