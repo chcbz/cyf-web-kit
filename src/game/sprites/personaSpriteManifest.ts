@@ -116,7 +116,7 @@ export const PERSONA_SPRITE_MANIFEST = {
     },
     likui: {
       personaCode: 'likui', required: false,
-      src: '/juyiting/sprites/persona-sheets-v1/likui-8-direction-v1.webp',
+      src: '/juyiting/sprites/persona-sheets-v1/likui-8-direction-v2.webp',
       image: { width: 1024, height: 1024 },
       frame: { width: 128, height: 128, columns: 8, rows: 8 },
       anchor: { x: 0.5, y: 0.86 },
