@@ -15,7 +15,6 @@ export const statusFilters = [
 ]
 
 export const taskStatusFilters = [
-  { label: '全榜', value: '' },
   { label: '待点将', value: 'open' },
   { label: '已点将', value: 'assigned' },
   { label: '在办', value: 'running' },
