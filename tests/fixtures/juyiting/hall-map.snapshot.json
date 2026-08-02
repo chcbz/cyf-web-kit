@@ -6,10 +6,10 @@
   "width": 1664,
   "height": 928,
   "counts": {
-    "regions": 7,
-    "nodes": 9,
-    "edges": 8,
-    "slots": 35,
+    "regions": 8,
+    "nodes": 14,
+    "edges": 13,
+    "slots": 39,
     "obstacles": 38
   },
   "regions": [
@@ -208,6 +208,34 @@
       "capacity": 4,
       "protected": false,
       "riskLevel": "low"
+    },
+    {
+      "stableId": "jyt-region-roster-book-v1",
+      "regionId": "roster-book",
+      "polygon": {
+        "points": [
+          {
+            "x": 280,
+            "y": 392
+          },
+          {
+            "x": 456,
+            "y": 392
+          },
+          {
+            "x": 456,
+            "y": 472
+          },
+          {
+            "x": 280,
+            "y": 472
+          }
+        ]
+      },
+      "label": "Roster book alcove",
+      "capacity": 4,
+      "protected": false,
+      "riskLevel": "low"
     }
   ],
   "nodes": [
@@ -257,6 +285,42 @@
       "channelWidth": 56
     },
     {
+      "stableId": "jyt-node-left-pass-1-v1",
+      "point": {
+        "x": 648,
+        "y": 480
+      },
+      "kind": "normal",
+      "channelWidth": 56
+    },
+    {
+      "stableId": "jyt-node-left-pass-2-v1",
+      "point": {
+        "x": 600,
+        "y": 456
+      },
+      "kind": "normal",
+      "channelWidth": 56
+    },
+    {
+      "stableId": "jyt-node-left-pass-3-v1",
+      "point": {
+        "x": 552,
+        "y": 432
+      },
+      "kind": "normal",
+      "channelWidth": 56
+    },
+    {
+      "stableId": "jyt-node-left-pass-4-v1",
+      "point": {
+        "x": 432,
+        "y": 432
+      },
+      "kind": "normal",
+      "channelWidth": 48
+    },
+    {
       "stableId": "jyt-node-library-shelf-v1",
       "point": {
         "x": 1448,
@@ -282,6 +346,15 @@
       },
       "kind": "normal",
       "channelWidth": 56
+    },
+    {
+      "stableId": "jyt-node-roster-book-v1",
+      "point": {
+        "x": 360,
+        "y": 400
+      },
+      "kind": "doorway",
+      "channelWidth": 48
     },
     {
       "stableId": "jyt-node-west-hall-v1",
@@ -329,6 +402,23 @@
         {
           "x": 732,
           "y": 733
+        }
+      ]
+    },
+    {
+      "stableId": "jyt-edge-council-left-pass-1-v1",
+      "from": "jyt-node-council-v1",
+      "to": "jyt-node-left-pass-1-v1",
+      "bidirectional": true,
+      "costMultiplier": 1.1,
+      "points": [
+        {
+          "x": 880,
+          "y": 480
+        },
+        {
+          "x": 648,
+          "y": 480
         }
       ]
     },
@@ -437,6 +527,74 @@
         {
           "x": 1082,
           "y": 594
+        }
+      ]
+    },
+    {
+      "stableId": "jyt-edge-left-pass-1-2-v1",
+      "from": "jyt-node-left-pass-1-v1",
+      "to": "jyt-node-left-pass-2-v1",
+      "bidirectional": true,
+      "costMultiplier": 1.05,
+      "points": [
+        {
+          "x": 648,
+          "y": 480
+        },
+        {
+          "x": 600,
+          "y": 456
+        }
+      ]
+    },
+    {
+      "stableId": "jyt-edge-left-pass-2-3-v1",
+      "from": "jyt-node-left-pass-2-v1",
+      "to": "jyt-node-left-pass-3-v1",
+      "bidirectional": true,
+      "costMultiplier": 1.05,
+      "points": [
+        {
+          "x": 600,
+          "y": 456
+        },
+        {
+          "x": 552,
+          "y": 432
+        }
+      ]
+    },
+    {
+      "stableId": "jyt-edge-left-pass-3-4-v1",
+      "from": "jyt-node-left-pass-3-v1",
+      "to": "jyt-node-left-pass-4-v1",
+      "bidirectional": true,
+      "costMultiplier": 1.05,
+      "points": [
+        {
+          "x": 552,
+          "y": 432
+        },
+        {
+          "x": 432,
+          "y": 432
+        }
+      ]
+    },
+    {
+      "stableId": "jyt-edge-left-pass-4-roster-book-v1",
+      "from": "jyt-node-left-pass-4-v1",
+      "to": "jyt-node-roster-book-v1",
+      "bidirectional": true,
+      "costMultiplier": 1.1,
+      "points": [
+        {
+          "x": 432,
+          "y": 432
+        },
+        {
+          "x": 360,
+          "y": 400
         }
       ]
     },
@@ -815,6 +973,46 @@
       "point": {
         "x": 1192,
         "y": 648
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-roster-book-parking-v1",
+      "slotId": "roster-book-parking-1",
+      "regionId": "roster-book",
+      "point": {
+        "x": 304,
+        "y": 424
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-roster-book-parking-v2",
+      "slotId": "roster-book-parking-2",
+      "regionId": "roster-book",
+      "point": {
+        "x": 344,
+        "y": 424
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-roster-book-parking-v3",
+      "slotId": "roster-book-parking-3",
+      "regionId": "roster-book",
+      "point": {
+        "x": 384,
+        "y": 424
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-roster-book-parking-v4",
+      "slotId": "roster-book-parking-4",
+      "regionId": "roster-book",
+      "point": {
+        "x": 424,
+        "y": 424
       },
       "kind": "parking"
     },

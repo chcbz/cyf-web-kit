@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="104" height="58" tilewidth="16" tileheight="16" infinite="0" nextlayerid="24" nextobjectid="192">
+<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="104" height="58" tilewidth="16" tileheight="16" infinite="0" nextlayerid="24" nextobjectid="207">
  <properties>
   <property name="description" value="聚义厅 v3 - modular layer hall scene"/>
   <property name="maxZoom" type="float" value="3.3"/>
@@ -642,7 +642,17 @@
     <property name="riskLevel" value="low"/>
    </properties>
   </object>
- </objectgroup>
+   <object id="192" x="280" y="392" width="176" height="80">
+   <properties>
+    <property name="stableId" value="jyt-region-roster-book-v1"/>
+    <property name="capacity" type="int" value="4"/>
+    <property name="label" value="Roster book alcove"/>
+    <property name="protected" type="bool" value="false"/>
+    <property name="regionId" value="roster-book"/>
+    <property name="riskLevel" value="low"/>
+   </properties>
+  </object>
+</objectgroup>
  <objectgroup id="18" name="nav_nodes">
   <object id="101" x="872" y="312" width="16" height="16">
    <properties>
@@ -716,7 +726,42 @@
    </properties>
    <ellipse/>
   </object>
- </objectgroup>
+   <object id="193" x="640" y="472" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-node-left-pass-1-v1"/>
+    <property name="channelWidth" type="int" value="56"/>
+    <property name="kind" value="normal"/>
+   </properties>
+  </object>
+  <object id="194" x="592" y="448" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-node-left-pass-2-v1"/>
+    <property name="channelWidth" type="int" value="56"/>
+    <property name="kind" value="normal"/>
+   </properties>
+  </object>
+  <object id="195" x="544" y="424" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-node-left-pass-3-v1"/>
+    <property name="channelWidth" type="int" value="56"/>
+    <property name="kind" value="normal"/>
+   </properties>
+  </object>
+  <object id="196" x="424" y="424" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-node-left-pass-4-v1"/>
+    <property name="channelWidth" type="int" value="48"/>
+    <property name="kind" value="normal"/>
+   </properties>
+  </object>
+  <object id="197" x="352" y="392" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-node-roster-book-v1"/>
+    <property name="channelWidth" type="int" value="48"/>
+    <property name="kind" value="doorway"/>
+   </properties>
+  </object>
+</objectgroup>
  <objectgroup id="19" name="nav_edges">
   <object id="108" x="880" y="320">
    <properties>
@@ -798,7 +843,57 @@
    </properties>
    <polyline points="0,0 -130,-26"/>
   </object>
- </objectgroup>
+   <object id="198" x="880" y="480">
+   <properties>
+    <property name="stableId" value="jyt-edge-council-left-pass-1-v1"/>
+    <property name="bidirectional" type="bool" value="true"/>
+    <property name="costMultiplier" type="float" value="1.1"/>
+    <property name="from" value="jyt-node-council-v1"/>
+    <property name="to" value="jyt-node-left-pass-1-v1"/>
+   </properties>
+   <polyline points="0,0 -232,0"/>
+  </object>
+  <object id="199" x="648" y="480">
+   <properties>
+    <property name="stableId" value="jyt-edge-left-pass-1-2-v1"/>
+    <property name="bidirectional" type="bool" value="true"/>
+    <property name="costMultiplier" type="float" value="1.05"/>
+    <property name="from" value="jyt-node-left-pass-1-v1"/>
+    <property name="to" value="jyt-node-left-pass-2-v1"/>
+   </properties>
+   <polyline points="0,0 -48,-24"/>
+  </object>
+  <object id="200" x="600" y="456">
+   <properties>
+    <property name="stableId" value="jyt-edge-left-pass-2-3-v1"/>
+    <property name="bidirectional" type="bool" value="true"/>
+    <property name="costMultiplier" type="float" value="1.05"/>
+    <property name="from" value="jyt-node-left-pass-2-v1"/>
+    <property name="to" value="jyt-node-left-pass-3-v1"/>
+   </properties>
+   <polyline points="0,0 -48,-24"/>
+  </object>
+  <object id="201" x="552" y="432">
+   <properties>
+    <property name="stableId" value="jyt-edge-left-pass-3-4-v1"/>
+    <property name="bidirectional" type="bool" value="true"/>
+    <property name="costMultiplier" type="float" value="1.05"/>
+    <property name="from" value="jyt-node-left-pass-3-v1"/>
+    <property name="to" value="jyt-node-left-pass-4-v1"/>
+   </properties>
+   <polyline points="0,0 -120,0"/>
+  </object>
+  <object id="202" x="432" y="432">
+   <properties>
+    <property name="stableId" value="jyt-edge-left-pass-4-roster-book-v1"/>
+    <property name="bidirectional" type="bool" value="true"/>
+    <property name="costMultiplier" type="float" value="1.1"/>
+    <property name="from" value="jyt-node-left-pass-4-v1"/>
+    <property name="to" value="jyt-node-roster-book-v1"/>
+   </properties>
+   <polyline points="0,0 -72,-32"/>
+  </object>
+</objectgroup>
  <objectgroup id="20" name="parking_slots">
   <object id="114" x="912" y="312" width="16" height="16">
    <properties>
@@ -1024,7 +1119,35 @@
    </properties>
    <ellipse/>
   </object>
- </objectgroup>
+   <object id="203" x="296" y="416" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-roster-book-parking-v1"/>
+    <property name="regionId" value="roster-book"/>
+    <property name="slotId" value="roster-book-parking-1"/>
+   </properties>
+  </object>
+  <object id="204" x="336" y="416" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-roster-book-parking-v2"/>
+    <property name="regionId" value="roster-book"/>
+    <property name="slotId" value="roster-book-parking-2"/>
+   </properties>
+  </object>
+  <object id="205" x="376" y="416" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-roster-book-parking-v3"/>
+    <property name="regionId" value="roster-book"/>
+    <property name="slotId" value="roster-book-parking-3"/>
+   </properties>
+  </object>
+  <object id="206" x="416" y="416" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-roster-book-parking-v4"/>
+    <property name="regionId" value="roster-book"/>
+    <property name="slotId" value="roster-book-parking-4"/>
+   </properties>
+  </object>
+</objectgroup>
  <objectgroup id="21" name="queue_slots">
   <object id="119" x="832" y="472" width="16" height="16">
    <properties>
@@ -1097,7 +1220,7 @@
     <property name="stableId" value="jyt-patrol-songjiang-main-v1"/>
     <property name="routeId" value="songjiang-main-loop"/>
     <property name="personaCode" value="songjiang"/>
-    <property name="regionIds" value="council-table,bounty-board,library-shelf,main-seat"/>
+    <property name="regionIds" value="council-table,roster-book,council-table,bounty-board,library-shelf,council-table,main-seat"/>
     <property name="loop" type="bool" value="true"/>
     <property name="dwellMs" type="int" value="1800"/>
     <property name="priority" type="int" value="1"/>
@@ -1109,7 +1232,7 @@
     <property name="stableId" value="jyt-patrol-lujunyi-council-v1"/>
     <property name="routeId" value="lujunyi-council-loop"/>
     <property name="personaCode" value="lujunyi"/>
-    <property name="regionIds" value="council-table,bounty-board"/>
+    <property name="regionIds" value="council-table,roster-book,council-table,bounty-board,council-table"/>
     <property name="loop" type="bool" value="true"/>
     <property name="dwellMs" type="int" value="2100"/>
     <property name="priority" type="int" value="1"/>
@@ -1121,7 +1244,7 @@
     <property name="stableId" value="jyt-patrol-wuyong-library-v1"/>
     <property name="routeId" value="wuyong-library-loop"/>
     <property name="personaCode" value="wuyong"/>
-    <property name="regionIds" value="bounty-board,library-shelf"/>
+    <property name="regionIds" value="library-shelf,bounty-board,council-table,roster-book,council-table,library-shelf"/>
     <property name="loop" type="bool" value="true"/>
     <property name="dwellMs" type="int" value="2300"/>
     <property name="priority" type="int" value="1"/>
@@ -1133,7 +1256,7 @@
     <property name="stableId" value="jyt-patrol-linchong-west-v1"/>
     <property name="routeId" value="linchong-agent-loop"/>
     <property name="personaCode" value="linchong"/>
-    <property name="regionIds" value="agent-roster"/>
+    <property name="regionIds" value="agent-roster,council-table,roster-book,council-table,agent-roster"/>
     <property name="loop" type="bool" value="true"/>
     <property name="dwellMs" type="int" value="1600"/>
     <property name="priority" type="int" value="1"/>

@@ -249,7 +249,8 @@ describe('TMX edit operations', () => {
       sceneId: 'juyiting-main',
     })
     assert.deepEqual(runtime.regions.map(region => region.regionId).sort(), [
-      'agent-roster', 'bounty-board', 'council-table', 'library-shelf', 'main-seat',
+      'agent-roster', 'bounty-board', 'council-table', 'gate', 'library-shelf',
+      'main-seat', 'right-guard', 'roster-book',
     ])
     assert.equal(runtime.slots.some(slot => slot.kind === 'home' && slot.personaCode === 'songjiang'), true)
     assert.deepEqual(validation, { valid: true, errors: [], warnings: [] })
