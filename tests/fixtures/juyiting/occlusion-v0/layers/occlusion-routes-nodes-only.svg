@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1664" height="928" viewBox="0 0 1664 928" data-generation-id="76f07abdf7f41ead23c625d949edb054d5678e8c1672442bf2289631e8792859" data-tmx-sha256="e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401" data-commit="2424f51f375814f403ca70a9a6e9948728e595b1" data-layer="occlusion-routes-nodes-only" role="img" aria-labelledby="layer-title">
+  <title id="layer-title">Juyiting geometry: routes + nodes</title>
+  <defs>
+    <style>
+      .mask-poly{fill:#ff9d3c;fill-opacity:.22;stroke:#ff9d3c;stroke-width:2;vector-effect:non-scaling-stroke}
+      .mask-aabb{fill:none;stroke:#ffd6a1;stroke-width:1;stroke-dasharray:6 4;vector-effect:non-scaling-stroke}
+      .collision-poly{fill:#ff4567;fill-opacity:.18;stroke:#ff4567;stroke-width:1.5;vector-effect:non-scaling-stroke}
+      .nav-obstacle-poly{fill:#b26bff;fill-opacity:.14;stroke:#b26bff;stroke-width:1.5;vector-effect:non-scaling-stroke}
+      .nav-area{fill:#57d7ff;fill-opacity:.05;stroke:#57d7ff;stroke-width:2;stroke-dasharray:8 6;vector-effect:non-scaling-stroke}
+      .nav-node{fill:#061c29;stroke:#87e7ff;stroke-width:2.5;vector-effect:non-scaling-stroke}
+      .nav-edge{fill:none;stroke:#57d7ff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .patrol-route{fill:none;stroke:#ffd166;stroke-width:3;stroke-dasharray:10 6;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .label{font:600 13px ui-monospace,monospace;fill:#f4f4f0;paint-order:stroke;stroke:#0a1118;stroke-width:3;stroke-linejoin:round}
+      .node-label{font-size:11px}
+      .legend-title{font:700 16px system-ui,sans-serif;fill:#fff}
+      .legend-row{font:500 12px ui-monospace,monospace;fill:#d8dde3}
+      .swatch{stroke:#0a1118;stroke-width:1}
+    </style>
+  </defs>
+  <rect width="1664" height="928" fill="#141d26"/>
+  <line class="grid" x1="0" y1="0" x2="0" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="64" y1="0" x2="64" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="128" y1="0" x2="128" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="192" y1="0" x2="192" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="256" y1="0" x2="256" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="320" y1="0" x2="320" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="384" y1="0" x2="384" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="448" y1="0" x2="448" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="512" y1="0" x2="512" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="576" y1="0" x2="576" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="640" y1="0" x2="640" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="704" y1="0" x2="704" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="768" y1="0" x2="768" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="832" y1="0" x2="832" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="896" y1="0" x2="896" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="960" y1="0" x2="960" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1024" y1="0" x2="1024" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1088" y1="0" x2="1088" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1152" y1="0" x2="1152" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1216" y1="0" x2="1216" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1280" y1="0" x2="1280" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1344" y1="0" x2="1344" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1408" y1="0" x2="1408" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1472" y1="0" x2="1472" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1536" y1="0" x2="1536" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1600" y1="0" x2="1600" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1664" y1="0" x2="1664" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="0" x2="1664" y2="0" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="64" x2="1664" y2="64" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="128" x2="1664" y2="128" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="192" x2="1664" y2="192" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="256" x2="1664" y2="256" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="320" x2="1664" y2="320" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="384" x2="1664" y2="384" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="448" x2="1664" y2="448" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="512" x2="1664" y2="512" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="576" x2="1664" y2="576" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="640" x2="1664" y2="640" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="704" x2="1664" y2="704" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="768" x2="1664" y2="768" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="832" x2="1664" y2="832" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="896" x2="1664" y2="896" stroke="#23303c" stroke-width="1"/>
+    <g class="layer-nav-node" data-layer="nav_nodes">
+      <circle class="nav-node" data-tmx-id="101" data-stable-id="jyt-node-main-seat-v1" cx="880" cy="320" r="8"><title>node jyt-node-main-seat-v1</title></circle>
+      <text class="label node-label" x="891" y="324">jyt-node-main-seat-v1</text>
+      <circle class="nav-node" data-tmx-id="102" data-stable-id="jyt-node-council-v1" cx="880" cy="480" r="8"><title>node jyt-node-council-v1</title></circle>
+      <text class="label node-label" x="891" y="484">jyt-node-council-v1</text>
+      <circle class="nav-node" data-tmx-id="103" data-stable-id="jyt-node-west-hall-v1" cx="524" cy="640" r="8"><title>node jyt-node-west-hall-v1</title></circle>
+      <text class="label node-label" x="535" y="644">jyt-node-west-hall-v1</text>
+      <circle class="nav-node" data-tmx-id="104" data-stable-id="jyt-node-agent-roster-v1" cx="240" cy="680" r="8"><title>node jyt-node-agent-roster-v1</title></circle>
+      <text class="label node-label" x="251" y="684">jyt-node-agent-roster-v1</text>
+      <circle class="nav-node" data-tmx-id="105" data-stable-id="jyt-node-east-hall-v1" cx="1212" cy="620" r="8"><title>node jyt-node-east-hall-v1</title></circle>
+      <text class="label node-label" x="1223" y="624">jyt-node-east-hall-v1</text>
+      <circle class="nav-node" data-tmx-id="106" data-stable-id="jyt-node-bounty-board-v1" cx="1440" cy="420" r="8"><title>node jyt-node-bounty-board-v1</title></circle>
+      <text class="label node-label" x="1451" y="424">jyt-node-bounty-board-v1</text>
+      <circle class="nav-node" data-tmx-id="107" data-stable-id="jyt-node-library-shelf-v1" cx="1448" cy="600" r="8"><title>node jyt-node-library-shelf-v1</title></circle>
+      <text class="label node-label" x="1459" y="604">jyt-node-library-shelf-v1</text>
+      <circle class="nav-node" data-tmx-id="161" data-stable-id="jyt-node-gate-v1" cx="732" cy="733" r="8"><title>node jyt-node-gate-v1</title></circle>
+      <text class="label node-label" x="743" y="737">jyt-node-gate-v1</text>
+      <circle class="nav-node" data-tmx-id="162" data-stable-id="jyt-node-right-guard-v1" cx="1082" cy="594" r="8"><title>node jyt-node-right-guard-v1</title></circle>
+      <text class="label node-label" x="1093" y="598">jyt-node-right-guard-v1</text>
+      <circle class="nav-node" data-tmx-id="193" data-stable-id="jyt-node-left-pass-1-v1" cx="648" cy="480" r="8"><title>node jyt-node-left-pass-1-v1</title></circle>
+      <text class="label node-label" x="659" y="484">jyt-node-left-pass-1-v1</text>
+      <circle class="nav-node" data-tmx-id="194" data-stable-id="jyt-node-left-pass-2-v1" cx="600" cy="456" r="8"><title>node jyt-node-left-pass-2-v1</title></circle>
+      <text class="label node-label" x="611" y="460">jyt-node-left-pass-2-v1</text>
+      <circle class="nav-node" data-tmx-id="195" data-stable-id="jyt-node-left-pass-3-v1" cx="552" cy="432" r="8"><title>node jyt-node-left-pass-3-v1</title></circle>
+      <text class="label node-label" x="563" y="436">jyt-node-left-pass-3-v1</text>
+      <circle class="nav-node" data-tmx-id="196" data-stable-id="jyt-node-left-pass-4-v1" cx="432" cy="432" r="8"><title>node jyt-node-left-pass-4-v1</title></circle>
+      <text class="label node-label" x="443" y="436">jyt-node-left-pass-4-v1</text>
+      <circle class="nav-node" data-tmx-id="197" data-stable-id="jyt-node-roster-book-v1" cx="360" cy="400" r="8"><title>node jyt-node-roster-book-v1</title></circle>
+      <text class="label node-label" x="371" y="404">jyt-node-roster-book-v1</text>
+    </g>
+    <g class="layer-nav-edge" data-layer="nav_edges">
+      <polyline class="nav-edge" data-tmx-id="108" data-stable-id="jyt-edge-main-council-v1" points="880,320 880,480"><title>edge jyt-edge-main-council-v1</title></polyline>
+      <polyline class="nav-edge" data-tmx-id="109" data-stable-id="jyt-edge-council-west-v1" points="880,480 524,640"><title>edge jyt-edge-council-west-v1</title></polyline>
+      <polyline class="nav-edge" data-tmx-id="110" data-stable-id="jyt-edge-west-agent-v1" points="524,640 420,668 416,672 240,680"><title>edge jyt-edge-west-agent-v1</title></polyline>
+      <polyline class="nav-edge" data-tmx-id="111" data-stable-id="jyt-edge-council-east-v1" points="880,480 1212,620"><title>edge jyt-edge-council-east-v1</title></polyline>
+      <polyline class="nav-edge" data-tmx-id="112" data-stable-id="jyt-edge-east-bounty-v1" points="1212,620 1208,616 1128,524 1124,520 1120,484 1148,468 1152,464 1440,420"><title>edge jyt-edge-east-bounty-v1</title></polyline>
+      <polyline class="nav-edge" data-tmx-id="113" data-stable-id="jyt-edge-east-library-v1" points="1212,620 1408,644 1416,652 1452,648 1456,644 1448,600"><title>edge jyt-edge-east-library-v1</title></polyline>
+      <polyline class="nav-edge" data-tmx-id="163" data-stable-id="jyt-edge-council-gate-v1" points="880,480 820,584 732,733"><title>edge jyt-edge-council-gate-v1</title></polyline>
+      <polyline class="nav-edge" data-tmx-id="164" data-stable-id="jyt-edge-east-right-guard-v1" points="1212,620 1082,594"><title>edge jyt-edge-east-right-guard-v1</title></polyline>
+      <polyline class="nav-edge" data-tmx-id="198" data-stable-id="jyt-edge-council-left-pass-1-v1" points="880,480 648,480"><title>edge jyt-edge-council-left-pass-1-v1</title></polyline>
+      <polyline class="nav-edge" data-tmx-id="199" data-stable-id="jyt-edge-left-pass-1-2-v1" points="648,480 600,456"><title>edge jyt-edge-left-pass-1-2-v1</title></polyline>
+      <polyline class="nav-edge" data-tmx-id="200" data-stable-id="jyt-edge-left-pass-2-3-v1" points="600,456 552,432"><title>edge jyt-edge-left-pass-2-3-v1</title></polyline>
+      <polyline class="nav-edge" data-tmx-id="201" data-stable-id="jyt-edge-left-pass-3-4-v1" points="552,432 432,432"><title>edge jyt-edge-left-pass-3-4-v1</title></polyline>
+      <polyline class="nav-edge" data-tmx-id="202" data-stable-id="jyt-edge-left-pass-4-roster-book-v1" points="432,432 360,400"><title>edge jyt-edge-left-pass-4-roster-book-v1</title></polyline>
+    </g>
+    <g class="layer-patrol" data-layer="patrol_routes">
+      <polyline class="patrol-route" data-tmx-id="117" data-stable-id="jyt-patrol-songjiang-main-v1" points="880,320 880,480 1212,620 1440,420 1432,600 880,320"><title>patrol jyt-patrol-songjiang-main-v1</title></polyline>
+      <polyline class="patrol-route" data-tmx-id="118" data-stable-id="jyt-patrol-lujunyi-council-v1" points="880,480 1212,620 880,480"><title>patrol jyt-patrol-lujunyi-council-v1</title></polyline>
+      <polyline class="patrol-route" data-tmx-id="119" data-stable-id="jyt-patrol-wuyong-library-v1" points="1212,620 1408,644 1212,620"><title>patrol jyt-patrol-wuyong-library-v1</title></polyline>
+      <polyline class="patrol-route" data-tmx-id="120" data-stable-id="jyt-patrol-linchong-west-v1" points="524,640 240,680 524,640"><title>patrol jyt-patrol-linchong-west-v1</title></polyline>
+      <polyline class="patrol-route" data-tmx-id="169" data-stable-id="jyt-patrol-likui-gate-v1" points="732,733 920,480 732,733"><title>patrol jyt-patrol-likui-gate-v1</title></polyline>
+      <polyline class="patrol-route" data-tmx-id="170" data-stable-id="jyt-patrol-husanniang-right-v1" points="1082,594 1480,420 1082,594"><title>patrol jyt-patrol-husanniang-right-v1</title></polyline>
+    </g>
+  <g class="legend" transform="translate(16,16)">
+    <rect width="380" height="250" rx="8" fill="#0a1118" fill-opacity="0.82" stroke="#2a3a4a"/>
+    <text class="legend-title" x="14" y="26">Legend</text>
+    <rect class="swatch" x="14" y="38" width="18" height="10" fill="#87e7ff"/>
+    <text class="legend-row" x="40" y="50">nav_nodes: 14</text>
+    <rect class="swatch" x="14" y="60" width="18" height="10" fill="#57d7ff"/>
+    <text class="legend-row" x="40" y="72">nav_edges: 13</text>
+    <rect class="swatch" x="14" y="82" width="18" height="10" fill="#ffd166"/>
+    <text class="legend-row" x="40" y="94">patrol_routes: 6</text>
+  </g>
+</svg>

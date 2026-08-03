@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "scripts/juyiting/hash-juyiting-sources.mjs",
+  "canonicalSource": {
+    "assetRef": "jyt.occlusion-source.hall-v3",
+    "path": "public/juyiting/images/liangshan-hall-mid-occluders-v3.webp",
+    "expectedSha256": "3e4f3f90b4d84411a844978237a7d3530bd481c37a62bcd73b9d694a7d2dd432",
+    "actualSha256": "3e4f3f90b4d84411a844978237a7d3530bd481c37a62bcd73b9d694a7d2dd432",
+    "matches": true
+  },
+  "entries": [
+    {
+      "role": "tmx",
+      "label": "hall.tmx",
+      "path": "public/juyiting/hall.tmx",
+      "sizeBytes": 85285,
+      "sha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401"
+    },
+    {
+      "role": "canonical-occluder-source",
+      "label": "jyt.occlusion-source.hall-v3",
+      "path": "public/juyiting/images/liangshan-hall-mid-occluders-v3.webp",
+      "sizeBytes": 71274,
+      "sha256": "3e4f3f90b4d84411a844978237a7d3530bd481c37a62bcd73b9d694a7d2dd432"
+    },
+    {
+      "role": "map-layer",
+      "label": "liangshan-hall-base-clean-v3.webp",
+      "path": "public/juyiting/images/liangshan-hall-base-clean-v3.webp",
+      "sizeBytes": 249688,
+      "sha256": "72d5ca5ff3d5c71ec66018d65bbe6a9636e6bbab10338e2a07989b0be1efd9aa"
+    },
+    {
+      "role": "duplicate-occluder",
+      "label": "liangshan-hall-foreground-occluders-v3.webp",
+      "path": "public/juyiting/images/liangshan-hall-foreground-occluders-v3.webp",
+      "sizeBytes": 71274,
+      "sha256": "3e4f3f90b4d84411a844978237a7d3530bd481c37a62bcd73b9d694a7d2dd432"
+    },
+    {
+      "role": "map-layer",
+      "label": "liangshan-hall-lighting-overlay-v3.webp",
+      "path": "public/juyiting/images/liangshan-hall-lighting-overlay-v3.webp",
+      "sizeBytes": 522594,
+      "sha256": "748a571da633ceac300cc526ad7f0e7bc4f292cfc925288e340592d0ed5d568f"
+    },
+    {
+      "role": "prop",
+      "label": "liangshan-hall-prop-main-seat-cropped.png",
+      "path": "public/juyiting/images/props/liangshan-hall-prop-main-seat-cropped.png",
+      "sizeBytes": 18878,
+      "sha256": "7d0c9b7dc2ca274201526d0fc6de146f7c9ab44a9028e2b0a1c0619b661ff794"
+    },
+    {
+      "role": "prop",
+      "label": "liangshan-hall-prop-agent-roster-cropped.png",
+      "path": "public/juyiting/images/props/liangshan-hall-prop-agent-roster-cropped.png",
+      "sizeBytes": 23984,
+      "sha256": "829d710a41b1982925c8ce3cb2e23f99fd9ea0f78dd9bd65be6dce406a43e8cc"
+    },
+    {
+      "role": "prop",
+      "label": "liangshan-hall-prop-bounty-board-cropped.png",
+      "path": "public/juyiting/images/props/liangshan-hall-prop-bounty-board-cropped.png",
+      "sizeBytes": 30808,
+      "sha256": "2e4c3e749119392b01a7301aaa8f40986a09e5cc731ab61105ed600a755b6252"
+    },
+    {
+      "role": "prop",
+      "label": "liangshan-hall-prop-library-shelf-cropped.png",
+      "path": "public/juyiting/images/props/liangshan-hall-prop-library-shelf-cropped.png",
+      "sizeBytes": 25512,
+      "sha256": "2c26abcb9f0c4b8ba83f6bb9470345d4bc280f8af133ab361581ab178d675ff9"
+    },
+    {
+      "role": "prop",
+      "label": "liangshan-hall-prop-roster-book-cropped.png",
+      "path": "public/juyiting/images/props/liangshan-hall-prop-roster-book-cropped.png",
+      "sizeBytes": 50161,
+      "sha256": "6b7c21b45ad24aee9b6bbbbf72177f04e0f3710168d28aef8064dfa1786996c5"
+    }
+  ],
+  "duplicates": [
+    {
+      "sha256": "3e4f3f90b4d84411a844978237a7d3530bd481c37a62bcd73b9d694a7d2dd432",
+      "paths": [
+        "public/juyiting/images/liangshan-hall-mid-occluders-v3.webp",
+        "public/juyiting/images/liangshan-hall-foreground-occluders-v3.webp"
+      ]
+    }
+  ]
+}

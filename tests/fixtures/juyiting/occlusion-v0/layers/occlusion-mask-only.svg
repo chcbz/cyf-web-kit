@@ -1,0 +1,183 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1664" height="928" viewBox="0 0 1664 928" data-generation-id="d8c05f6ac9fad1b0f22ebaed6d7504b1123a1b870c1133beb505bfc45fdf7682" data-tmx-sha256="e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401" data-commit="2424f51f375814f403ca70a9a6e9948728e595b1" data-layer="occlusion-mask-only" role="img" aria-labelledby="layer-title">
+  <title id="layer-title">Juyiting geometry: mask-only</title>
+  <defs>
+    <style>
+      .mask-poly{fill:#ff9d3c;fill-opacity:.22;stroke:#ff9d3c;stroke-width:2;vector-effect:non-scaling-stroke}
+      .mask-aabb{fill:none;stroke:#ffd6a1;stroke-width:1;stroke-dasharray:6 4;vector-effect:non-scaling-stroke}
+      .collision-poly{fill:#ff4567;fill-opacity:.18;stroke:#ff4567;stroke-width:1.5;vector-effect:non-scaling-stroke}
+      .nav-obstacle-poly{fill:#b26bff;fill-opacity:.14;stroke:#b26bff;stroke-width:1.5;vector-effect:non-scaling-stroke}
+      .nav-area{fill:#57d7ff;fill-opacity:.05;stroke:#57d7ff;stroke-width:2;stroke-dasharray:8 6;vector-effect:non-scaling-stroke}
+      .nav-node{fill:#061c29;stroke:#87e7ff;stroke-width:2.5;vector-effect:non-scaling-stroke}
+      .nav-edge{fill:none;stroke:#57d7ff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .patrol-route{fill:none;stroke:#ffd166;stroke-width:3;stroke-dasharray:10 6;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .label{font:600 13px ui-monospace,monospace;fill:#f4f4f0;paint-order:stroke;stroke:#0a1118;stroke-width:3;stroke-linejoin:round}
+      .node-label{font-size:11px}
+      .legend-title{font:700 16px system-ui,sans-serif;fill:#fff}
+      .legend-row{font:500 12px ui-monospace,monospace;fill:#d8dde3}
+      .swatch{stroke:#0a1118;stroke-width:1}
+    </style>
+  </defs>
+  <rect width="1664" height="928" fill="#141d26"/>
+  <line class="grid" x1="0" y1="0" x2="0" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="64" y1="0" x2="64" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="128" y1="0" x2="128" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="192" y1="0" x2="192" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="256" y1="0" x2="256" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="320" y1="0" x2="320" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="384" y1="0" x2="384" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="448" y1="0" x2="448" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="512" y1="0" x2="512" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="576" y1="0" x2="576" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="640" y1="0" x2="640" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="704" y1="0" x2="704" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="768" y1="0" x2="768" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="832" y1="0" x2="832" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="896" y1="0" x2="896" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="960" y1="0" x2="960" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1024" y1="0" x2="1024" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1088" y1="0" x2="1088" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1152" y1="0" x2="1152" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1216" y1="0" x2="1216" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1280" y1="0" x2="1280" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1344" y1="0" x2="1344" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1408" y1="0" x2="1408" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1472" y1="0" x2="1472" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1536" y1="0" x2="1536" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1600" y1="0" x2="1600" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1664" y1="0" x2="1664" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="0" x2="1664" y2="0" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="64" x2="1664" y2="64" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="128" x2="1664" y2="128" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="192" x2="1664" y2="192" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="256" x2="1664" y2="256" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="320" x2="1664" y2="320" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="384" x2="1664" y2="384" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="448" x2="1664" y2="448" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="512" x2="1664" y2="512" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="576" x2="1664" y2="576" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="640" x2="1664" y2="640" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="704" x2="1664" y2="704" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="768" x2="1664" y2="768" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="832" x2="1664" y2="832" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="896" x2="1664" y2="896" stroke="#23303c" stroke-width="1"/>
+    <g class="layer-mask" data-layer="mask">
+      <polygon class="mask-poly" data-tmx-id="48" points="233,350 215,347 241,277 353,280 353,294 253,291"><title>mask tmx:48 · 6 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="48" x="215" y="277" width="138" height="73"><title>mask tmx:48 AABB</title></rect>
+      <text class="label mask-label" x="274.7" y="306.5">M48</text>
+      <polygon class="mask-poly" data-tmx-id="49" points="126,718 117,713 153,601 238,607 233,625 158,623"><title>mask tmx:49 · 6 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="49" x="117" y="601" width="121" height="117"><title>mask tmx:49 AABB</title></rect>
+      <text class="label mask-label" x="170.8" y="647.8">M49</text>
+      <polygon class="mask-poly" data-tmx-id="50" points="243,823 238,790 66,787 66,806"><title>mask tmx:50 · 4 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="50" x="66" y="787" width="177" height="36"><title>mask tmx:50 AABB</title></rect>
+      <text class="label mask-label" x="153.3" y="801.5">M50</text>
+      <polygon class="mask-poly" data-tmx-id="51" points="42,845 58,845 52,873 238,878 259,832 260,845 268,844 247,760 270,731 262,706 269,701 276,729 289,720 292,725 276,736 286,745 335,593 350,593 358,573 375,574 386,578 351,700 367,762 341,759 299,911 17,911"><title>mask tmx:51 · 26 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="51" x="17" y="573" width="369" height="338"><title>mask tmx:51 AABB</title></rect>
+      <text class="label mask-label" x="262.4" y="748.8">M51</text>
+      <polygon class="mask-poly" data-tmx-id="52" points="479,550 447,379 444,359 437,348 405,348 395,371 392,393 394,395 154,396 147,372 133,369 124,383 132,389 132,395 105,393 39,438 -6,459 -4,723 76,548"><title>mask tmx:52 · 19 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="52" x="-6" y="348" width="485" height="375"><title>mask tmx:52 AABB</title></rect>
+      <text class="label mask-label" x="232.9" y="421.5">M52</text>
+      <polygon class="mask-poly" data-tmx-id="53" points="450,401 460,451 545,455 533,396 533,384 522,384 518,400"><title>mask tmx:53 · 7 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="53" x="450" y="384" width="95" height="71"><title>mask tmx:53 AABB</title></rect>
+      <text class="label mask-label" x="508.7" y="410.1">M53</text>
+      <polygon class="mask-poly" data-tmx-id="54" points="557,463 543,354 543,337 543,325 554,314 554,307 563,306 566,315 572,316 572,340 588,448 598,468"><title>mask tmx:54 · 12 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="54" x="543" y="306" width="55" height="162"><title>mask tmx:54 AABB</title></rect>
+      <text class="label mask-label" x="562.8" y="357.8">M54</text>
+      <polygon class="mask-poly" data-tmx-id="55" points="601,488 600,432 615,484"><title>mask tmx:55 · 3 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="55" x="600" y="432" width="15" height="56"><title>mask tmx:55 AABB</title></rect>
+      <text class="label mask-label" x="605.3" y="468">M55</text>
+      <polygon class="mask-poly" data-tmx-id="56" points="1130,484 1146,435 1148,485"><title>mask tmx:56 · 3 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="56" x="1130" y="435" width="18" height="50"><title>mask tmx:56 AABB</title></rect>
+      <text class="label mask-label" x="1141.3" y="468">M56</text>
+      <polygon class="mask-poly" data-tmx-id="57" points="1158,462 1170,350 1175,334 1175,321 1182,314 1182,305 1192,305 1192,315 1199,321 1203,331 1203,341 1203,351 1187,463"><title>mask tmx:57 · 13 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="57" x="1158" y="305" width="45" height="158"><title>mask tmx:57 AABB</title></rect>
+      <text class="label mask-label" x="1186.2" y="347.2">M57</text>
+      <polygon class="mask-poly" data-tmx-id="58" points="1197,458 1208,396 1215,379 1223,388 1223,397 1285,396 1285,371 1288,353 1293,346 1303,343 1328,342 1333,355 1337,367 1340,376 1336,382 1336,395 1554,397 1560,372 1571,370 1577,375 1579,383 1574,396 1624,396 1662,406 1663,455"><title>mask tmx:58 · 25 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="58" x="1197" y="342" width="466" height="116"><title>mask tmx:58 AABB</title></rect>
+      <text class="label mask-label" x="1395.8" y="383.8">M58</text>
+      <polygon class="mask-poly" data-tmx-id="59" points="1499,625 1517,579 1576,577 1590,574 1618,673 1589,672 1569,612"><title>mask tmx:59 · 7 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="59" x="1499" y="574" width="119" height="99"><title>mask tmx:59 AABB</title></rect>
+      <text class="label mask-label" x="1565.4" y="616">M59</text>
+      <polygon class="mask-poly" data-tmx-id="60" points="1324,924 1328,905 1354,905 1360,843 1333,839 1314,921"><title>mask tmx:60 · 6 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="60" x="1314" y="839" width="46" height="85"><title>mask tmx:60 AABB</title></rect>
+      <text class="label mask-label" x="1335.5" y="889.5">M60</text>
+      <polygon class="mask-poly" data-tmx-id="61" points="1084,777 1086,740 1085,705 1092,692 1079,687 1076,674 1067,674 1067,687 1055,690 1056,710 1055,740 1052,777"><title>mask tmx:61 · 12 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="61" x="1052" y="674" width="40" height="103"><title>mask tmx:61 AABB</title></rect>
+      <text class="label mask-label" x="1071.2" y="712.8">M61</text>
+      <polygon class="mask-poly" data-tmx-id="62" points="1034,711 1030,686 1018,688 1018,678 1006,678 1004,690 1004,729 1004,754 1014,754 1014,711"><title>mask tmx:62 · 10 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="62" x="1004" y="678" width="30" height="76"><title>mask tmx:62 AABB</title></rect>
+      <text class="label mask-label" x="1014.6" y="707.9">M62</text>
+      <polygon class="mask-poly" data-tmx-id="63" points="931,795 934,759 933,746 940,744 953,733 959,739 959,743 970,743 969,785"><title>mask tmx:63 · 9 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="63" x="931" y="733" width="39" height="62"><title>mask tmx:63 AABB</title></rect>
+      <text class="label mask-label" x="949.8" y="754.1">M63</text>
+      <polygon class="mask-poly" data-tmx-id="64" points="807,793 814,751 805,744 797,739 794,728 789,722 781,726 784,740 767,746 767,750 773,791"><title>mask tmx:64 · 11 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="64" x="767" y="722" width="47" height="71"><title>mask tmx:64 AABB</title></rect>
+      <text class="label mask-label" x="788.9" y="748.2">M64</text>
+      <polygon class="mask-poly" data-tmx-id="65" points="720,713 720,698 720,686 719,675 711,675 703,675 703,685 690,687 686,703"><title>mask tmx:65 · 9 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="65" x="686" y="675" width="34" height="38"><title>mask tmx:65 AABB</title></rect>
+      <text class="label mask-label" x="708" y="688.6">M65</text>
+      <polygon class="mask-poly" data-tmx-id="66" points="678,741 674,731 665,715 663,694 655,686 649,675 649,689 636,689 636,704 641,735 640,746 506,748 508,759 561,762 561,772 575,774 575,760 639,760 641,774 679,777"><title>mask tmx:66 · 20 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="66" x="506" y="675" width="173" height="102"><title>mask tmx:66 AABB</title></rect>
+      <text class="label mask-label" x="621.5" y="734.5">M66</text>
+      <polygon class="mask-poly" data-tmx-id="67" points="404,924 390,876 357,876 362,907 390,908 395,928"><title>mask tmx:67 · 6 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="67" x="357" y="876" width="47" height="52"><title>mask tmx:67 AABB</title></rect>
+      <text class="label mask-label" x="383" y="903.2">M67</text>
+      <polygon class="mask-poly" data-tmx-id="68" points="58,740 38,706 11,732 22,738"><title>mask tmx:68 · 4 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="68" x="11" y="706" width="47" height="34"><title>mask tmx:68 AABB</title></rect>
+      <text class="label mask-label" x="32.3" y="729">M68</text>
+      <polygon class="mask-poly" data-tmx-id="69" points="503,584 497,535 492,520 492,490 501,497 509,471 536,474"><title>mask tmx:69 · 7 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="69" x="492" y="471" width="44" height="113"><title>mask tmx:69 AABB</title></rect>
+      <text class="label mask-label" x="504.3" y="510.1">M69</text>
+      <polygon class="mask-poly" data-tmx-id="70" points="505,239 492,166 461,165 471,239"><title>mask tmx:70 · 4 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="70" x="461" y="165" width="44" height="74"><title>mask tmx:70 AABB</title></rect>
+      <text class="label mask-label" x="482.3" y="202.3">M70</text>
+      <polygon class="mask-poly" data-tmx-id="71" points="621,271 617,242 629,238"><title>mask tmx:71 · 3 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="71" x="617" y="238" width="12" height="33"><title>mask tmx:71 AABB</title></rect>
+      <text class="label mask-label" x="622.3" y="250.3">M71</text>
+      <polygon class="mask-poly" data-tmx-id="72" points="1126,283 1129,253 1122,230 1112,254"><title>mask tmx:72 · 4 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="72" x="1112" y="230" width="17" height="53"><title>mask tmx:72 AABB</title></rect>
+      <text class="label mask-label" x="1122.3" y="255">M72</text>
+      <polygon class="mask-poly" data-tmx-id="73" points="1385,283 1384,257 1471,255 1478,275"><title>mask tmx:73 · 4 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="73" x="1384" y="255" width="94" height="28"><title>mask tmx:73 AABB</title></rect>
+      <text class="label mask-label" x="1429.5" y="267.5">M73</text>
+      <polygon class="mask-poly" data-tmx-id="74" points="1612,674 1599,700 1592,675"><title>mask tmx:74 · 3 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="74" x="1592" y="674" width="20" height="26"><title>mask tmx:74 AABB</title></rect>
+      <text class="label mask-label" x="1601" y="683">M74</text>
+      <polygon class="mask-poly" data-tmx-id="75" points="1603,829 1616,787 1598,787 1602,767 1622,760 1629,748 1639,748 1631,767 1663,782"><title>mask tmx:75 · 9 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="75" x="1598" y="748" width="65" height="81"><title>mask tmx:75 AABB</title></rect>
+      <text class="label mask-label" x="1622.6" y="775">M75</text>
+      <polygon class="mask-poly" data-tmx-id="76" points="1510,763 1469,747 1464,729 1450,711 1419,713 1390,607 1365,560 1334,561 1389,767"><title>mask tmx:76 · 9 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="76" x="1334" y="560" width="176" height="207"><title>mask tmx:76 AABB</title></rect>
+      <text class="label mask-label" x="1421.1" y="684.2">M76</text>
+      <polygon class="mask-poly" data-tmx-id="77" points="1231,608 1240,531 1245,519 1245,505 1244,495 1239,486 1234,495 1232,478 1208,481"><title>mask tmx:77 · 9 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="77" x="1208" y="478" width="37" height="130"><title>mask tmx:77 AABB</title></rect>
+      <text class="label mask-label" x="1235.3" y="510.9">M77</text>
+      <polygon class="mask-poly" data-tmx-id="78" points="1256,543 1270,480 1665,476 1666,548"><title>mask tmx:78 · 4 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="78" x="1256" y="476" width="410" height="72"><title>mask tmx:78 AABB</title></rect>
+      <text class="label mask-label" x="1464.3" y="511.8">M78</text>
+      <polygon class="mask-poly" data-tmx-id="79" points="1323,639 1329,612 1308,612 1320,562 1336,561 1341,590 1333,641"><title>mask tmx:79 · 7 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="79" x="1308" y="561" width="33" height="80"><title>mask tmx:79 AABB</title></rect>
+      <text class="label mask-label" x="1327.1" y="602.4">M79</text>
+      <polygon class="mask-poly" data-tmx-id="80" points="1251,702 1240,651 1240,629 1242,612 1228,606 1206,606 1206,621 1202,626 1202,639 1211,646 1222,647 1217,661 1225,689"><title>mask tmx:80 · 13 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="80" x="1202" y="606" width="49" height="96"><title>mask tmx:80 AABB</title></rect>
+      <text class="label mask-label" x="1222.5" y="641.2">M80</text>
+      <polygon class="mask-poly" data-tmx-id="81" points="1251,711 1249,774 1242,707"><title>mask tmx:81 · 3 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="81" x="1242" y="707" width="9" height="67"><title>mask tmx:81 AABB</title></rect>
+      <text class="label mask-label" x="1247.3" y="730.7">M81</text>
+      <polygon class="mask-poly" data-tmx-id="82" points="1351,740 1365,691 1374,723"><title>mask tmx:82 · 3 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="82" x="1351" y="691" width="23" height="49"><title>mask tmx:82 AABB</title></rect>
+      <text class="label mask-label" x="1363.3" y="718">M82</text>
+      <polygon class="mask-poly" data-tmx-id="83" points="513,702 516,680 510,655 491,641 474,723 476,758 495,696"><title>mask tmx:83 · 7 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="83" x="474" y="641" width="42" height="117"><title>mask tmx:83 AABB</title></rect>
+      <text class="label mask-label" x="496.4" y="693.6">M83</text>
+      <polygon class="mask-poly" data-tmx-id="84" points="405,641 405,617 418,617 410,575 382,579 396,643"><title>mask tmx:84 · 6 verts</title></polygon>
+      <rect class="mask-aabb" data-tmx-id="84" x="382" y="575" width="36" height="68"><title>mask tmx:84 AABB</title></rect>
+      <text class="label mask-label" x="402.7" y="612">M84</text>
+    </g>
+  <g class="legend" transform="translate(16,16)">
+    <rect width="380" height="250" rx="8" fill="#0a1118" fill-opacity="0.82" stroke="#2a3a4a"/>
+    <text class="legend-title" x="14" y="26">Legend</text>
+    <rect class="swatch" x="14" y="38" width="18" height="10" fill="#ff9d3c"/>
+    <text class="legend-row" x="40" y="50">mask polygons: 37</text>
+    <text class="legend-row" x="40" y="240">solid = mask polygon · dashed = AABB</text>
+  </g>
+</svg>

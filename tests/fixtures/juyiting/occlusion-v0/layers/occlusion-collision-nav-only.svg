@@ -1,0 +1,152 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1664" height="928" viewBox="0 0 1664 928" data-generation-id="650ae733b0504eb9d7ba8a2cfab2605c6e47d348ceec46f4d9df7c2e1cb3a3b1" data-tmx-sha256="e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401" data-commit="2424f51f375814f403ca70a9a6e9948728e595b1" data-layer="occlusion-collision-nav-only" role="img" aria-labelledby="layer-title">
+  <title id="layer-title">Juyiting geometry: collision + nav</title>
+  <defs>
+    <style>
+      .mask-poly{fill:#ff9d3c;fill-opacity:.22;stroke:#ff9d3c;stroke-width:2;vector-effect:non-scaling-stroke}
+      .mask-aabb{fill:none;stroke:#ffd6a1;stroke-width:1;stroke-dasharray:6 4;vector-effect:non-scaling-stroke}
+      .collision-poly{fill:#ff4567;fill-opacity:.18;stroke:#ff4567;stroke-width:1.5;vector-effect:non-scaling-stroke}
+      .nav-obstacle-poly{fill:#b26bff;fill-opacity:.14;stroke:#b26bff;stroke-width:1.5;vector-effect:non-scaling-stroke}
+      .nav-area{fill:#57d7ff;fill-opacity:.05;stroke:#57d7ff;stroke-width:2;stroke-dasharray:8 6;vector-effect:non-scaling-stroke}
+      .nav-node{fill:#061c29;stroke:#87e7ff;stroke-width:2.5;vector-effect:non-scaling-stroke}
+      .nav-edge{fill:none;stroke:#57d7ff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .patrol-route{fill:none;stroke:#ffd166;stroke-width:3;stroke-dasharray:10 6;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .label{font:600 13px ui-monospace,monospace;fill:#f4f4f0;paint-order:stroke;stroke:#0a1118;stroke-width:3;stroke-linejoin:round}
+      .node-label{font-size:11px}
+      .legend-title{font:700 16px system-ui,sans-serif;fill:#fff}
+      .legend-row{font:500 12px ui-monospace,monospace;fill:#d8dde3}
+      .swatch{stroke:#0a1118;stroke-width:1}
+    </style>
+  </defs>
+  <rect width="1664" height="928" fill="#141d26"/>
+  <line class="grid" x1="0" y1="0" x2="0" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="64" y1="0" x2="64" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="128" y1="0" x2="128" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="192" y1="0" x2="192" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="256" y1="0" x2="256" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="320" y1="0" x2="320" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="384" y1="0" x2="384" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="448" y1="0" x2="448" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="512" y1="0" x2="512" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="576" y1="0" x2="576" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="640" y1="0" x2="640" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="704" y1="0" x2="704" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="768" y1="0" x2="768" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="832" y1="0" x2="832" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="896" y1="0" x2="896" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="960" y1="0" x2="960" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1024" y1="0" x2="1024" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1088" y1="0" x2="1088" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1152" y1="0" x2="1152" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1216" y1="0" x2="1216" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1280" y1="0" x2="1280" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1344" y1="0" x2="1344" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1408" y1="0" x2="1408" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1472" y1="0" x2="1472" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1536" y1="0" x2="1536" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1600" y1="0" x2="1600" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="1664" y1="0" x2="1664" y2="928" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="0" x2="1664" y2="0" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="64" x2="1664" y2="64" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="128" x2="1664" y2="128" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="192" x2="1664" y2="192" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="256" x2="1664" y2="256" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="320" x2="1664" y2="320" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="384" x2="1664" y2="384" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="448" x2="1664" y2="448" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="512" x2="1664" y2="512" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="576" x2="1664" y2="576" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="640" x2="1664" y2="640" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="704" x2="1664" y2="704" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="768" x2="1664" y2="768" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="832" x2="1664" y2="832" stroke="#23303c" stroke-width="1"/>
+  <line class="grid" x1="0" y1="896" x2="1664" y2="896" stroke="#23303c" stroke-width="1"/>
+    <g class="layer-collision" data-layer="collision">
+      <polygon class="collision-poly" data-tmx-id="10" points="597,487 590,517 613,518 618,485"><title>collision tmx:10</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="11" points="1126,488 1129,518 1155,520 1151,488"><title>collision tmx:11</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="12" points="1159,502 1190,503 1187,473 1154,469"><title>collision tmx:12</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="13" points="552,502 586,502 595,471 558,467"><title>collision tmx:13</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="14" points="521,633 553,480 537,476 500,632"><title>collision tmx:14</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="15" points="442,597 480,600 491,554 446,554"><title>collision tmx:15</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="16" points="514,704 505,772 483,771 495,699"><title>collision tmx:16</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="17" points="487,804 637,808 636,857 678,857 675,939 697,939 706,824 802,827 802,794 704,794 717,712 685,708 682,777 480,775"><title>collision tmx:17</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="18" points="412,667 415,648 395,648 394,666"><title>collision tmx:18</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="19" points="361,767 321,940 292,938 341,762"><title>collision tmx:19</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="20" points="288,936 -3,939 -3,912 297,914"><title>collision tmx:20</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="21" points="16,906 70,745 -3,738 -3,907"><title>collision tmx:21</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="22" points="18,732 83,590 349,591 357,574 443,582 445,555 75,550 -4,727"><title>collision tmx:22</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="23" points="549,472 -4,461 -4,444 552,455"><title>collision tmx:23</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="24" points="38,440 98,395 160,350 227,215 252,217 233,273 377,274 389,233 368,217 371,210 637,219 616,318 623,329 647,331 666,194 175,177 16,442"><title>collision tmx:24</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="25" points="668,252 671,297 701,292 706,319 740,323 741,352 777,352 778,314 751,313 752,289 715,292 726,215 726,190 672,189"><title>collision tmx:25</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="26" points="969,309 966,350 1003,350 1000,322 1042,316 1039,296 1090,294 1087,187 1021,194 1029,292 991,290 991,309"><title>collision tmx:26</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="27" points="731,207 754,207 754,226 783,225 786,209 959,211 959,220 991,220 991,201 1017,203 1017,189 732,190"><title>collision tmx:27</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="28" points="998,230 1004,274 964,277 962,232"><title>collision tmx:28</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="29" points="788,232 786,273 746,275 750,230"><title>collision tmx:29</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="30" points="1103,335 1092,181 1309,186 1317,255 1255,270 1242,237 1266,226 1265,207 1124,220 1107,220 1124,329"><title>collision tmx:30</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="31" points="928,794 925,821 1020,819 1029,935 1057,935 1047,863 1100,862 1093,805 1211,803 1211,820 1245,824 1243,690 1215,696 1223,783 1049,780 1047,714 1013,714 1016,781"><title>collision tmx:31</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="32" points="1214,613 1191,464 1665,458 1665,476 1210,480 1225,611"><title>collision tmx:32</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="33" points="1298,563 1292,595 1257,603 1242,576 1246,563 1248,549 1666,550 1663,641 1607,634 1592,594 1430,593 1414,606 1444,616 1449,643 1418,644 1415,624 1395,610 1379,587 1367,559"><title>collision tmx:33</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="34" points="1313,657 1317,668 1337,668 1338,641 1313,641"><title>collision tmx:34</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="35" points="1357,739 1360,795 1384,904 1349,915 1354,938 1666,938 1665,908 1460,909 1451,845 1545,842 1556,818 1530,810 1517,771 1423,769 1409,712"><title>collision tmx:35</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="36" points="1603,837 1603,862 1661,865 1662,786"><title>collision tmx:36</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="37" points="1572,816 1596,801 1600,774 1580,772"><title>collision tmx:37</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="38" points="1327,247 1580,248 1583,293 1563,321 1578,358 1618,366 1627,398 1661,406 1654,196 1317,217"><title>collision tmx:38</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="39" points="481,268 509,278 512,245 430,227 425,257"><title>collision tmx:39</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="40" points="353,845 411,842 412,875 346,875"><title>collision tmx:40</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="41" points="157,625 237,629 197,736 121,736"><title>collision tmx:41</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="42" points="55,871 68,811 258,829 237,878"><title>collision tmx:42</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="43" points="224,373 255,291 352,296 322,378"><title>collision tmx:43</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="44" points="820,222 820,263 925,264 927,216"><title>collision tmx:44</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="45" points="1363,286 1369,341 1396,344 1396,373 1505,382 1502,341 1529,336 1526,314 1503,306 1504,294 1492,278"><title>collision tmx:45</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="46" points="1497,626 1526,717 1603,714 1573,614"><title>collision tmx:46</title></polygon>
+      <polygon class="collision-poly" data-tmx-id="47" points="1297,838 1305,882 1363,875 1351,834"><title>collision tmx:47</title></polygon>
+    </g>
+    <g class="layer-nav-obstacle" data-layer="nav_obstacles">
+      <polygon class="nav-obstacle-poly" data-tmx-id="121" data-stable-id="jyt-collision-010-v1" points="597,487 590,517 613,518 618,485"><title>nav_obstacle jyt-collision-010-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="122" data-stable-id="jyt-collision-011-v1" points="1126,488 1129,518 1155,520 1151,488"><title>nav_obstacle jyt-collision-011-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="123" data-stable-id="jyt-collision-012-v1" points="1159,502 1190,503 1187,473 1154,469"><title>nav_obstacle jyt-collision-012-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="124" data-stable-id="jyt-collision-013-v1" points="552,502 586,502 595,471 558,467"><title>nav_obstacle jyt-collision-013-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="125" data-stable-id="jyt-collision-014-v1" points="521,633 553,480 537,476 500,632"><title>nav_obstacle jyt-collision-014-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="126" data-stable-id="jyt-collision-015-v1" points="442,597 480,600 491,554 446,554"><title>nav_obstacle jyt-collision-015-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="127" data-stable-id="jyt-collision-016-v1" points="514,704 505,772 483,771 495,699"><title>nav_obstacle jyt-collision-016-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="128" data-stable-id="jyt-collision-017-v1" points="487,804 637,808 636,857 678,857 675,939 697,939 706,824 802,827 802,794 704,794 717,712 685,708 682,777 480,775"><title>nav_obstacle jyt-collision-017-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="129" data-stable-id="jyt-collision-018-v1" points="412,667 415,648 395,648 394,666"><title>nav_obstacle jyt-collision-018-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="130" data-stable-id="jyt-collision-019-v1" points="361,767 321,940 292,938 341,762"><title>nav_obstacle jyt-collision-019-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="131" data-stable-id="jyt-collision-020-v1" points="288,936 -3,939 -3,912 297,914"><title>nav_obstacle jyt-collision-020-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="132" data-stable-id="jyt-collision-021-v1" points="16,906 70,745 -3,738 -3,907"><title>nav_obstacle jyt-collision-021-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="133" data-stable-id="jyt-collision-022-v1" points="18,732 83,590 349,591 357,574 443,582 445,555 75,550 -4,727"><title>nav_obstacle jyt-collision-022-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="134" data-stable-id="jyt-collision-023-v1" points="549,472 -4,461 -4,444 552,455"><title>nav_obstacle jyt-collision-023-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="135" data-stable-id="jyt-collision-024-v1" points="38,440 98,395 160,350 227,215 252,217 233,273 377,274 389,233 368,217 371,210 637,219 616,318 623,329 647,331 666,194 175,177 16,442"><title>nav_obstacle jyt-collision-024-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="136" data-stable-id="jyt-collision-025-v1" points="668,252 671,297 701,292 706,319 740,323 741,352 777,352 778,314 751,313 752,289 715,292 726,215 726,190 672,189"><title>nav_obstacle jyt-collision-025-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="137" data-stable-id="jyt-collision-026-v1" points="969,309 966,350 1003,350 1000,322 1042,316 1039,296 1090,294 1087,187 1021,194 1029,292 991,290 991,309"><title>nav_obstacle jyt-collision-026-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="138" data-stable-id="jyt-collision-027-v1" points="731,207 754,207 754,226 783,225 786,209 959,211 959,220 991,220 991,201 1017,203 1017,189 732,190"><title>nav_obstacle jyt-collision-027-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="139" data-stable-id="jyt-collision-028-v1" points="998,230 1004,274 964,277 962,232"><title>nav_obstacle jyt-collision-028-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="140" data-stable-id="jyt-collision-029-v1" points="788,232 786,273 746,275 750,230"><title>nav_obstacle jyt-collision-029-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="141" data-stable-id="jyt-collision-030-v1" points="1103,335 1092,181 1309,186 1317,255 1255,270 1242,237 1266,226 1265,207 1124,220 1107,220 1124,329"><title>nav_obstacle jyt-collision-030-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="142" data-stable-id="jyt-collision-031-v1" points="928,794 925,821 1020,819 1029,935 1057,935 1047,863 1100,862 1093,805 1211,803 1211,820 1245,824 1243,690 1215,696 1223,783 1049,780 1047,714 1013,714 1016,781"><title>nav_obstacle jyt-collision-031-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="143" data-stable-id="jyt-collision-032-v1" points="1214,613 1191,464 1665,458 1665,476 1210,480 1225,611"><title>nav_obstacle jyt-collision-032-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="144" data-stable-id="jyt-collision-033-v1" points="1298,563 1292,595 1257,603 1242,576 1246,563 1248,549 1666,550 1663,641 1607,634 1592,594 1430,593 1414,606 1444,616 1449,643 1418,644 1415,624 1395,610 1379,587 1367,559"><title>nav_obstacle jyt-collision-033-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="145" data-stable-id="jyt-collision-034-v1" points="1313,657 1317,668 1337,668 1338,641 1313,641"><title>nav_obstacle jyt-collision-034-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="146" data-stable-id="jyt-collision-035-v1" points="1357,739 1360,795 1384,904 1349,915 1354,938 1666,938 1665,908 1460,909 1451,845 1545,842 1556,818 1530,810 1517,771 1423,769 1409,712"><title>nav_obstacle jyt-collision-035-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="147" data-stable-id="jyt-collision-036-v1" points="1603,837 1603,862 1661,865 1662,786"><title>nav_obstacle jyt-collision-036-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="148" data-stable-id="jyt-collision-037-v1" points="1572,816 1596,801 1600,774 1580,772"><title>nav_obstacle jyt-collision-037-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="149" data-stable-id="jyt-collision-038-v1" points="1327,247 1580,248 1583,293 1563,321 1578,358 1618,366 1627,398 1661,406 1654,196 1317,217"><title>nav_obstacle jyt-collision-038-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="150" data-stable-id="jyt-collision-039-v1" points="481,268 509,278 512,245 430,227 425,257"><title>nav_obstacle jyt-collision-039-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="151" data-stable-id="jyt-collision-040-v1" points="353,845 411,842 412,875 346,875"><title>nav_obstacle jyt-collision-040-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="152" data-stable-id="jyt-collision-041-v1" points="157,625 237,629 197,736 121,736"><title>nav_obstacle jyt-collision-041-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="153" data-stable-id="jyt-collision-042-v1" points="55,871 68,811 258,829 237,878"><title>nav_obstacle jyt-collision-042-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="154" data-stable-id="jyt-collision-043-v1" points="224,373 255,291 352,296 322,378"><title>nav_obstacle jyt-collision-043-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="155" data-stable-id="jyt-collision-044-v1" points="820,222 820,263 925,264 927,216"><title>nav_obstacle jyt-collision-044-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="156" data-stable-id="jyt-collision-045-v1" points="1363,286 1369,341 1396,344 1396,373 1505,382 1502,341 1529,336 1526,314 1503,306 1504,294 1492,278"><title>nav_obstacle jyt-collision-045-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="157" data-stable-id="jyt-collision-046-v1" points="1497,626 1526,717 1603,714 1573,614"><title>nav_obstacle jyt-collision-046-v1</title></polygon>
+      <polygon class="nav-obstacle-poly" data-tmx-id="158" data-stable-id="jyt-collision-047-v1" points="1297,838 1305,882 1363,875 1351,834"><title>nav_obstacle jyt-collision-047-v1</title></polygon>
+    </g>
+    <rect class="nav-area" data-tmx-id="95" x="48" y="144" width="1568" height="720"><title>nav_area jyt-nav-area-main-v1</title></rect>
+  <g class="legend" transform="translate(16,16)">
+    <rect width="380" height="250" rx="8" fill="#0a1118" fill-opacity="0.82" stroke="#2a3a4a"/>
+    <text class="legend-title" x="14" y="26">Legend</text>
+    <rect class="swatch" x="14" y="38" width="18" height="10" fill="#ff4567"/>
+    <text class="legend-row" x="40" y="50">collision polygons: 38</text>
+    <rect class="swatch" x="14" y="60" width="18" height="10" fill="#b26bff"/>
+    <text class="legend-row" x="40" y="72">nav_obstacles: 38</text>
+  </g>
+</svg>
