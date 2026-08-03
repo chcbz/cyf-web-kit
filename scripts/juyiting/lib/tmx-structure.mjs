@@ -154,6 +154,7 @@ function parseTileset(node) {
     tileHeight: number(node.attributes.tileheight),
     tileCount: number(node.attributes.tilecount),
     columns: optionalNumber(node.attributes.columns, 0),
+    objectAlignment: attr(node, 'objectalignment') || undefined,
     image: image ? attr(image, 'source') : undefined,
     imageWidth: image ? optionalNumber(image.attributes.width, 0) : 0,
     imageHeight: image ? optionalNumber(image.attributes.height, 0) : 0,
@@ -172,11 +173,18 @@ function parseTileset(node) {
 function parseObject(node, groupName) {
   const polygonNode = node.children.find(child => child.name === 'polygon')
   const polylineNode = node.children.find(child => child.name === 'polyline')
+  const ellipseNode = node.children.find(child => child.name === 'ellipse')
+  const gid = optionalNumber(node.attributes.gid, undefined)
+  const shape = gid !== undefined ? 'tile'
+    : polygonNode ? 'polygon'
+      : polylineNode ? 'polyline'
+        : ellipseNode ? 'ellipse'
+          : 'rectangle'
   return {
     id: number(node.attributes.id),
     name: attr(node, 'name') || undefined,
     type: attr(node, 'type') || undefined,
-    gid: optionalNumber(node.attributes.gid, undefined),
+    gid,
     x: number(node.attributes.x),
     y: number(node.attributes.y),
     width: optionalNumber(node.attributes.width, 0),
@@ -184,6 +192,8 @@ function parseObject(node, groupName) {
     rotation: optionalNumber(node.attributes.rotation, 0),
     polygon: polygonNode ? parsePoints(polygonNode.attributes.points) : undefined,
     polyline: polylineNode ? parsePoints(polylineNode.attributes.points) : undefined,
+    ellipse: Boolean(ellipseNode),
+    shape,
     properties: propertyMap(node),
   }
 }

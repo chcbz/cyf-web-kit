@@ -6,6 +6,8 @@
 - TMX：`public/juyiting/hall.tmx`
 - TMX SHA-256：`e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401`
 - 本报告绑定：`tests/fixtures/juyiting/occlusion-v0/source-hashes.json`（canonical + prop SHA-256）、`inventory.json`、`mask-ledger.md`、`layers/*.svg`（每个 SVG 内嵌 `data-commit` / `data-tmx-sha256` / `data-generation-id`）、`asset-report.json`。
+- 稳定 provenance：fixture 的 `baselineCommit` / SVG `data-commit` 固定为上述基线，不使用当前 HEAD 生成。无参数 verify 会证明基线是当前 HEAD 的 ancestor，并通过 `git show <baselineCommit>:<path>` 对 hall.tmx 与关键资产重新计算 SHA-256；因此后续提交不会触发“重新生成 → HEAD 再变化”的循环。
+- `data-generation-id` 算法：先把该字段设为 64 个 `0` 生成 provisional SVG，再对 provisional SVG 计算 SHA-256，最后将结果写回。它**不是 final SVG 的 self-hash**；SVG 另含 `data-generation-algorithm=sha256-provisional-svg-zero-id-v1`。
 
 ## 1. 已冻结回归用例（用户事实 → 回归条目）
 
@@ -28,7 +30,7 @@
 | `V0-CS04` | 双人同时出现（UI 关 / world-ui 开各一张） | **BLOCKED** | 无可控角色 spawn/同步接口。E6 后可补齐。 |
 | `V0-CS05` | Debug 对照（脚点、prop bbox、mask polygon/AABB、命中 ID、depth） | **BLOCKED** | 当前 v1 运行时 `_sortByDepth()` 使用 mask AABB + 双 depth 公式（behind `1.5+normY*1.0` / front `2.0+normY*3.5`，prop `3.0+propIndex*0.5`）——已由代码路径核实，但无运行时 overlay 输出。E6 后补齐渲染侧字段。 |
 | `V0-CS06` | 资产组合（base、桌子 prop、canonical occluder 棋盘格/组合） | **BLOCKED（部分）** | 可自动化部分：canonical 与 duplicate occluder 字节级相同（SHA-256 `3e4f3f90…`）已由 `source-hashes.json` 证明；prop 像素组合展示需浏览器合成截图，E1 无此 harness，标 BLOCKED。E6/E9B 后由 RGBA 脚本补齐。 |
-| `V0-CS07` | 几何分层（mask-only、collision/nav-only、routes/nodes-only、combined，带 ID/图例） | **DONE** | `tests/fixtures/juyiting/occlusion-v0/layers/occlusion-{mask-only,collision-nav-only,routes-nodes-only,combined}.svg`；每张含 `data-commit`、`data-tmx-sha256`、`data-generation-id`、ID 标签与 `<title>` tooltip。生成脚本：`scripts/juyiting/render-occlusion-layers.mjs`。 |
+| `V0-CS07` | 几何分层（mask-only、collision/nav-only、routes/nodes-only、combined，带 ID/图例） | **DONE** | `tests/fixtures/juyiting/occlusion-v0/layers/occlusion-{mask-only,collision-nav-only,routes-nodes-only,combined}.svg`；每张含稳定基线 `data-commit`、`data-tmx-sha256`、provisional-hash `data-generation-id` 与算法标记、ID 标签及 `<title>` tooltip。生成脚本：`scripts/juyiting/render-occlusion-layers.mjs`。 |
 | `V0-CS08` | 九宫基线（production-equivalent clean screenshot） | **BLOCKED** | 无后端/前端运行实例的自动化 production-equivalent 截图 harness（后端仅 401 探活；headless Chromium 仅支持静态 file:// 截图，无法渲染 melonJS 场景与后端数据）。E6 debug + 运行 harness 后补齐。 |
 | `V0-CS09` | UI/相机回归（desktop/mobile/zoom/pan，labels/bubbles） | **BLOCKED** | 无浏览器驱动（无 puppeteer/playwright）。E6 后补齐。 |
 
@@ -43,6 +45,7 @@ camera/zoom/DPR, agent/prop/image-layer depth, 命中 mask ID
 
 - mask=37；prop rect=5（gid 6033–6037，tileset `hall-props`）；image layers=3（mid-occluders id=3、foreground-occluders id=10、lighting-overlay id=11 opacity .85）
 - collision=38；nav_obstacles=38；hotspot polygon=5；nav_area=1；regions=8；nav_nodes=14；nav_edges=13；patrol_routes=6；parking_slots=32；queue_slots=1；home_slots=6；debug_labels=0
+- TMX parser 保留 `hall-props.objectalignment=topleft`；ellipse shape：nav_nodes=9、parking_slots=28、queue_slots=1、home_slots=6（其余对象保留 rectangle/polyline 等实际 shape）
 - 地图 1664×928（104×58 tile × 16px），sceneId `juyiting-main`，navGraphVersion `juyiting-main-v1`
 - 每个 mask ledger 条目：index、TMX id、region（§9 权威映射）、regionGeometric 交叉核对、AABB、vertices、targetVisualStructure=TBD_E10A、stableId=TBD_E10B、status=baseline_present
 

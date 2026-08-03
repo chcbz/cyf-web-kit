@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "generatedBy": "scripts/juyiting/hash-juyiting-sources.mjs",
+  "baselineCommit": "2424f51f375814f403ca70a9a6e9948728e595b1",
   "canonicalSource": {
     "assetRef": "jyt.occlusion-source.hall-v3",
     "path": "public/juyiting/images/liangshan-hall-mid-occluders-v3.webp",

@@ -27,7 +27,7 @@
                     "hash:juyiting-sources":  "node scripts/juyiting/hash-juyiting-sources.mjs",
                     "preview:juyiting-occlusion-layers":  "node scripts/juyiting/render-occlusion-layers.mjs",
                     "asset:juyiting-report":  "node scripts/juyiting/asset-report-juyiting.mjs",
-                    "test:juyiting-occlusion-baseline":  "node --import tsx ./node_modules/mocha/bin/mocha.js --config .mocharc.json --reporter spec tests/juyiting-occlusion-baseline.test.js"
+                    "test:juyiting-occlusion-baseline":  "node --import tsx ./node_modules/mocha/bin/mocha.js --no-config --require ./tests/setup.js --reporter spec tests/juyiting-occlusion-baseline.test.js"
                 },
     "dependencies":  {
                          "@varlet/ui":  "^3.10.9",

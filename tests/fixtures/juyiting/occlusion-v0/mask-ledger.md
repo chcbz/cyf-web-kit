@@ -2,7 +2,7 @@
 
 - TMX: `public/juyiting/hall.tmx`
 - TMX SHA-256: `e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401`
-- Commit: 2424f51f375814f403ca70a9a6e9948728e595b1
+- Baseline commit: 2424f51f375814f403ca70a9a6e9948728e595b1
 
 | # | TMX id | region | regionGeometric | AABB (minX,minY,w×h) | vertices | targetVisualStructure | stableId | status |
 |---:|---:|---|---|---|---|---|---|---|

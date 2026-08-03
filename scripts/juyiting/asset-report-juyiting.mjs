@@ -20,9 +20,9 @@ import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync, mkdirSync, statSync, readdirSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { execSync } from 'node:child_process'
 
 import { sha256Bytes } from './lib/tmx-structure.mjs'
+import { assertBaselineProvenance, fixtureBaselineCommit } from './lib/baseline-provenance.mjs'
 
 const worktreeRoot = fileURLToPath(new URL('../../', import.meta.url))
 const tmxPath = process.env.JIA_JUYITING_TMX_PATH
@@ -33,7 +33,7 @@ const fixturePath = resolve(fixtureDir, 'asset-report.json')
 const sourceHashesPath = resolve(fixtureDir, 'source-hashes.json')
 const distDir = resolve(worktreeRoot, 'dist')
 
-const RUNTIME_CATEGORY = {
+const ASSET_CATEGORY_RULES = {
   tmx: ['juyiting/hall.tmx'],
   'map-layer': ['juyiting/images/liangshan-hall-base-clean-v3.webp', 'juyiting/images/liangshan-hall-mid-occluders-v3.webp', 'juyiting/images/liangshan-hall-foreground-occluders-v3.webp', 'juyiting/images/liangshan-hall-lighting-overlay-v3.webp'],
   prop: ['juyiting/images/props/'],
@@ -42,10 +42,13 @@ const RUNTIME_CATEGORY = {
   'dev-preview-modular': ['juyiting/images/modular/'],
 }
 
-export function buildAssetReport(environment = {}) {
+export function buildAssetReport(options = {}) {
   const tmxBytes = readRequiredFile(tmxPath, 'Juyiting TMX source')
   const tmxSha256 = sha256Bytes(Buffer.from(tmxBytes, 'utf8'))
-  const sourceHashes = JSON.parse(readRequiredFile(sourceHashesPath, 'Juyiting source-hashes fixture', 'utf8'))
+  const sourceHashes = options.sourceHashes
+    ?? JSON.parse(readRequiredFile(sourceHashesPath, 'Juyiting source-hashes fixture'))
+  const baselineCommit = fixtureBaselineCommit(sourceHashes)
+  assertBaselineProvenance(baselineCommit, sourceHashes.entries.map(entry => ({ path: entry.path, sha256: entry.sha256 })))
 
   const network = enumerateNetworkAssets()
   const textures = buildTextureEstimate(sourceHashes)
@@ -53,7 +56,7 @@ export function buildAssetReport(environment = {}) {
   return {
     schemaVersion: 1,
     generatedBy: 'scripts/juyiting/asset-report-juyiting.mjs',
-    commit: currentCommit(),
+    baselineCommit,
     tmxSha256,
     buildArtifact: buildArtifactReport(),
     juyitingNetworkAssets: {
@@ -101,7 +104,7 @@ function enumerateNetworkAssets() {
 }
 
 function categoryFor(relativePath) {
-  for (const [category, prefixes] of Object.entries(RUNTIME_CATEGORY)) {
+  for (const [category, prefixes] of Object.entries(ASSET_CATEGORY_RULES)) {
     if (prefixes.some(prefix => prefix.endsWith('/') ? relativePath.includes(prefix) : relativePath === prefix)) return category
   }
   return 'other'
@@ -225,15 +228,6 @@ function parseArguments(args) {
   if (args.length === 1 && args[0] === '--update') return 'update'
   if (args.length === 1 && args[0] === '--stdout') return 'stdout'
   throw new Error(`Unknown arguments: ${args.join(' ')}`)
-}
-
-function currentCommit() {
-  try {
-    const value = execSync('git rev-parse HEAD', { cwd: worktreeRoot, encoding: 'utf8' }).trim()
-    return /^[0-9a-f]{40}$/.test(value) ? value : null
-  } catch {
-    return null
-  }
 }
 
 function readRequiredFile(path, label) {

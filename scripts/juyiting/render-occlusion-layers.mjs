@@ -9,9 +9,10 @@
  *     occlusion-combined.svg             -> all of the above + legend
  *
  * Every SVG embeds:
- *   data-generation-id  = sha256(svg with placeholder id)  (same approach as render-map-preview.mjs)
+ *   data-generation-id  = SHA-256 of the provisional SVG whose id field is 64 zeroes;
+ *                         it is NOT a self-hash of the final SVG
  *   data-tmx-sha256     = sha256 of hall.tmx
- *   data-commit         = current git HEAD (when available)
+ *   data-commit         = stable E1 baseline commit (not current HEAD)
  *   data-counts         = machine inventory counts
  *   a legend block, ID labels, and <title> tooltips bound to TMX object ids.
  *
@@ -20,7 +21,6 @@
 
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
-import { execSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -30,6 +30,7 @@ import {
   polygonAabb,
   sha256Bytes,
 } from './lib/tmx-structure.mjs'
+import { assertBaselineProvenance } from './lib/baseline-provenance.mjs'
 
 const tmxPath = process.env.JIA_JUYITING_TMX_PATH
   ?? fileURLToPath(new URL('../../public/juyiting/hall.tmx', import.meta.url))
@@ -79,12 +80,13 @@ export function runRenderLayers(args = process.argv.slice(2), environment = proc
   const tmxText = readRequiredFile(tmxPath, 'Juyiting TMX source')
   const structure = parseTmxStructure(tmxText)
   const tmxSha256 = sha256Bytes(Buffer.from(tmxText, 'utf8'))
-  const commit = currentCommit()
   const inventory = readInventory()
+  const baselineCommit = inventory.baselineCommit ?? inventory.commit
+  assertBaselineProvenance(baselineCommit, [{ path: 'public/juyiting/hall.tmx', sha256: inventory.tmxSha256 }])
 
   const outputs = new Map()
   for (const name of Object.keys(LAYER_DEFS)) {
-    const svg = buildLayerSvg(name, structure, { tmxSha256, commit, inventory })
+    const svg = buildLayerSvg(name, structure, { tmxSha256, commit: baselineCommit, inventory })
     outputs.set(`${name}.svg`, svg)
   }
 
@@ -180,7 +182,7 @@ function renderBody(name, def, structure, inventory) {
 function wrapSvg(name, title, width, height, tmxSha256, commit, generationId, inventory, body) {
   const legend = legendLines(name, inventory)
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" data-generation-id="${generationId}" data-tmx-sha256="${tmxSha256}" data-commit="${escapeXml(commit ?? '')}" data-layer="${name}" role="img" aria-labelledby="layer-title">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" data-generation-id="${generationId}" data-generation-algorithm="sha256-provisional-svg-zero-id-v1" data-tmx-sha256="${tmxSha256}" data-commit="${escapeXml(commit ?? '')}" data-layer="${name}" role="img" aria-labelledby="layer-title">`,
     `  <title id="layer-title">${escapeXml(title)}</title>`,
     '  <defs>',
     '    <style>',
@@ -295,14 +297,6 @@ function parseArguments(args) {
   if (args.length === 0) return 'verify'
   if (args.length === 1 && args[0] === '--update') return 'update'
   throw new Error(`Unknown arguments: ${args.join(' ')}`)
-}
-
-function currentCommit() {
-  try {
-    return execSync('git rev-parse HEAD', { cwd: fileURLToPath(new URL('../../', import.meta.url)), encoding: 'utf8' }).trim()
-  } catch {
-    return null
-  }
 }
 
 function readInventory() {

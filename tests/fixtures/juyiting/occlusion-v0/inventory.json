@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "generatedBy": "scripts/juyiting/inventory-juyiting-map.mjs",
+  "baselineCommit": "2424f51f375814f403ca70a9a6e9948728e595b1",
   "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
-  "commit": "2424f51f375814f403ca70a9a6e9948728e595b1",
   "map": {
     "width": 104,
     "height": 58,
@@ -28,7 +28,11 @@
     "patrolRoutes": 6,
     "parkingSlots": 32,
     "queueSlots": 1,
-    "homeSlots": 6
+    "homeSlots": 6,
+    "ellipseNavNodes": 9,
+    "ellipseParkingSlots": 28,
+    "ellipseQueueSlots": 1,
+    "ellipseHomeSlots": 6
   },
   "imageLayers": [
     {
@@ -2206,6 +2210,7 @@
       "gid": 6033,
       "tileIndex": 0,
       "asset": "images/props/liangshan-hall-prop-main-seat-cropped.png",
+      "tilesetObjectAlignment": "topleft",
       "rect": {
         "minX": 818,
         "minY": 175,
@@ -2225,6 +2230,7 @@
       "gid": 6034,
       "tileIndex": 1,
       "asset": "images/props/liangshan-hall-prop-agent-roster-cropped.png",
+      "tilesetObjectAlignment": "topleft",
       "rect": {
         "minX": 120,
         "minY": 601,
@@ -2244,6 +2250,7 @@
       "gid": 6035,
       "tileIndex": 2,
       "asset": "images/props/liangshan-hall-prop-bounty-board-cropped.png",
+      "tilesetObjectAlignment": "topleft",
       "rect": {
         "minX": 1360,
         "minY": 255,
@@ -2263,6 +2270,7 @@
       "gid": 6036,
       "tileIndex": 3,
       "asset": "images/props/liangshan-hall-prop-library-shelf-cropped.png",
+      "tilesetObjectAlignment": "topleft",
       "rect": {
         "minX": 1497,
         "minY": 578,
@@ -2282,6 +2290,7 @@
       "gid": 6037,
       "tileIndex": 4,
       "asset": "images/props/liangshan-hall-prop-roster-book-cropped.png",
+      "tilesetObjectAlignment": "topleft",
       "rect": {
         "minX": 217,
         "minY": 192,

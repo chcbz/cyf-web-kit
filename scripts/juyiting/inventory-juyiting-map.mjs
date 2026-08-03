@@ -17,7 +17,7 @@
  */
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import {
@@ -28,6 +28,11 @@ import {
   rectAabb,
   sha256Bytes,
 } from './lib/tmx-structure.mjs'
+import {
+  assertBaselineProvenance,
+  fixtureBaselineCommit,
+  readJsonIfPresent,
+} from './lib/baseline-provenance.mjs'
 
 // Authoritative region mapping from docs/juyiting-occlusion-system-design.md §9.
 // This is the frozen design contract for the 37 legacy masks.
@@ -60,7 +65,7 @@ const inventoryPath = resolve(fixtureDir, 'inventory.json')
 const ledgerPath = resolve(fixtureDir, 'mask-ledger.md')
 
 export function buildInventory(tmxText, options = {}) {
-  const { tmxPath: sourcePath = 'public/juyiting/hall.tmx', fixtureCommit = null } = options
+  const { baselineCommit = null } = options
   const structure = parseTmxStructure(tmxText)
   const { map, tilesets, layers, groups } = structure
   const tmxSha256 = sha256Bytes(Buffer.from(tmxText, 'utf8'))
@@ -105,6 +110,7 @@ export function buildInventory(tmxText, options = {}) {
         gid: object.gid,
         tileIndex,
         asset: tile?.image ?? null,
+        tilesetObjectAlignment: hallPropsTileset?.objectAlignment ?? null,
         rect: rectAabb(object),
         sortAnchorYCandidate: PROP_SORT_ANCHOR_CANDIDATES[object.name] ?? null,
         sortAnchorYCandidateNote: 'design-doc initial candidate; E8A freezes final contact point',
@@ -184,13 +190,17 @@ export function buildInventory(tmxText, options = {}) {
     parkingSlots: groups.parking_slots.length,
     queueSlots: groups.queue_slots.length,
     homeSlots: groups.home_slots.length,
+    ellipseNavNodes: groups.nav_nodes.filter(object => object.ellipse).length,
+    ellipseParkingSlots: groups.parking_slots.filter(object => object.ellipse).length,
+    ellipseQueueSlots: groups.queue_slots.filter(object => object.ellipse).length,
+    ellipseHomeSlots: groups.home_slots.filter(object => object.ellipse).length,
   }
 
   return {
     schemaVersion: 1,
     generatedBy: 'scripts/juyiting/inventory-juyiting-map.mjs',
+    baselineCommit,
     tmxSha256,
-    commit: fixtureCommit,
     map: {
       width: map.width,
       height: map.height,
@@ -233,7 +243,7 @@ export function renderMaskLedgerMarkdown(inventory) {
   lines.push('')
   lines.push(`- TMX: \`public/juyiting/hall.tmx\``)
   lines.push(`- TMX SHA-256: \`${inventory.tmxSha256}\``)
-  lines.push(`- Commit: ${inventory.commit ?? 'unknown'}`)
+  lines.push(`- Baseline commit: ${inventory.baselineCommit ?? 'unknown'}`)
   lines.push('')
   lines.push('| # | TMX id | region | regionGeometric | AABB (minX,minY,w×h) | vertices | targetVisualStructure | stableId | status |')
   lines.push('|---:|---:|---|---|---|---|---|---|---|')
@@ -254,8 +264,11 @@ export function renderMaskLedgerMarkdown(inventory) {
 export function runInventory(args = process.argv.slice(2), environment = process.env) {
   const mode = parseArguments(args)
   const tmxText = readRequiredFile(tmxPath, 'Juyiting TMX source')
-  const fixtureCommit = currentCommit()
-  const inventory = buildInventory(tmxText, { tmxPath, fixtureCommit })
+  const existingFixture = readJsonIfPresent(inventoryPath)
+  const baselineCommit = fixtureBaselineCommit(existingFixture)
+  const expectedTmxSha256 = existingFixture?.tmxSha256 ?? sha256Bytes(Buffer.from(tmxText, 'utf8'))
+  assertBaselineProvenance(baselineCommit, [{ path: 'public/juyiting/hall.tmx', sha256: expectedTmxSha256 }])
+  const inventory = buildInventory(tmxText, { baselineCommit })
   const json = serializeInventory(inventory)
   const markdown = renderMaskLedgerMarkdown(inventory)
 
@@ -315,20 +328,6 @@ function geometricRegion(centroid, mapWidth, mapHeight) {
   return 'southeast'
 }
 
-function currentCommit() {
-  try {
-    const { execSync } = requireChildProcess()
-    const value = execSync('git rev-parse HEAD', { cwd: tmxDir(), encoding: 'utf8' }).trim()
-    return /^[0-9a-f]{40}$/.test(value) ? value : null
-  } catch {
-    return null
-  }
-}
-
-function tmxDir() {
-  return dirname(tmxPath)
-}
-
 function readRequiredFile(path, label) {
   try {
     return readFileSync(path, 'utf8')
@@ -338,14 +337,6 @@ function readRequiredFile(path, label) {
   }
 }
 
-function requireChildProcess() {
-  return { execSync: execSyncImpl }
-}
-
-import { execSync as nodeExecSync } from 'node:child_process'
-function execSyncImpl(command, options) {
-  return nodeExecSync(command, options)
-}
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {

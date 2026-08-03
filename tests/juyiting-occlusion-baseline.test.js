@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 
 import { parseTmxStructure, resolveWorldPolygon, polygonAabb } from '../scripts/juyiting/lib/tmx-structure.mjs'
+import { assertBaselineProvenance, currentHead } from '../scripts/juyiting/lib/baseline-provenance.mjs'
 
 const TMX_PATH = 'public/juyiting/hall.tmx'
 const FIXTURE_DIR = 'tests/fixtures/juyiting/occlusion-v0'
@@ -12,6 +13,7 @@ const tmxSha256 = () => createHash('sha256').update(tmx).digest('hex')
 
 const inventory = JSON.parse(readFileSync(`${FIXTURE_DIR}/inventory.json`, 'utf8'))
 const sourceHashes = JSON.parse(readFileSync(`${FIXTURE_DIR}/source-hashes.json`, 'utf8'))
+const assetReport = JSON.parse(readFileSync(`${FIXTURE_DIR}/asset-report.json`, 'utf8'))
 
 // Authoritative region contract from docs/juyiting-occlusion-system-design.md §9.
 const AUTHORITATIVE_REGIONS = {
@@ -42,6 +44,37 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
     expect(structure.groups.patrol_routes.length).to.equal(6)
   })
 
+
+  it('binds fixtures to a stable ancestor baseline and verifies key bytes at that commit', () => {
+    expect(inventory.baselineCommit).to.equal('2424f51f375814f403ca70a9a6e9948728e595b1')
+    expect(sourceHashes.baselineCommit).to.equal(inventory.baselineCommit)
+    expect(assetReport.baselineCommit).to.equal(inventory.baselineCommit)
+    const provenance = assertBaselineProvenance(
+      inventory.baselineCommit,
+      sourceHashes.entries.map(entry => ({ path: entry.path, sha256: entry.sha256 })),
+    )
+    expect(provenance.currentHead).to.equal(currentHead())
+  })
+
+  it('preserves hall-props objectalignment=topleft and TMX ellipse object shapes', () => {
+    const hallProps = structure.tilesets.find(tileset => tileset.name === 'hall-props')
+    expect(hallProps.objectAlignment).to.equal('topleft')
+    expect(structure.groups.nav_nodes.filter(object => object.ellipse && object.shape === 'ellipse').length).to.equal(9)
+    expect(structure.groups.parking_slots.filter(object => object.ellipse && object.shape === 'ellipse').length).to.equal(28)
+    expect(structure.groups.queue_slots.filter(object => object.ellipse && object.shape === 'ellipse').length).to.equal(1)
+    expect(structure.groups.home_slots.filter(object => object.ellipse && object.shape === 'ellipse').length).to.equal(6)
+  })
+
+  it('defines data-generation-id as provisional zero-id SVG sha256, not final SVG self-hash', () => {
+    const svg = readFileSync(`${FIXTURE_DIR}/layers/occlusion-combined.svg`, 'utf8')
+    const id = svg.match(/data-generation-id="([a-f0-9]{64})"/)?.[1]
+    expect(id).to.match(/^[a-f0-9]{64}$/)
+    expect(svg).to.include('data-generation-algorithm="sha256-provisional-svg-zero-id-v1"')
+    const provisional = svg.replace(`data-generation-id="${id}"`, `data-generation-id="${'0'.repeat(64)}"`)
+    expect(createHash('sha256').update(provisional).digest('hex')).to.equal(id)
+    expect(createHash('sha256').update(svg).digest('hex')).to.not.equal(id)
+  })
+
   it('committed inventory fixture matches a fresh parse (tmx sha256 + counts)', () => {
     expect(inventory.tmxSha256).to.equal(tmxSha256())
     expect(inventory.counts.masks).to.equal(37)
@@ -54,6 +87,10 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
     expect(inventory.counts.navNodes).to.equal(14)
     expect(inventory.counts.navEdges).to.equal(13)
     expect(inventory.counts.patrolRoutes).to.equal(6)
+    expect(inventory.counts.ellipseNavNodes).to.equal(9)
+    expect(inventory.counts.ellipseParkingSlots).to.equal(28)
+    expect(inventory.counts.ellipseQueueSlots).to.equal(1)
+    expect(inventory.counts.ellipseHomeSlots).to.equal(6)
   })
 
   it('every mask has >= 3 vertices and a positive-area AABB', () => {

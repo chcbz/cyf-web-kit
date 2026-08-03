@@ -15,6 +15,11 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { sha256Bytes } from './lib/tmx-structure.mjs'
+import {
+  assertBaselineProvenance,
+  fixtureBaselineCommit,
+  readJsonIfPresent,
+} from './lib/baseline-provenance.mjs'
 
 const tmxPath = process.env.JIA_JUYITING_TMX_PATH
   ?? fileURLToPath(new URL('../../public/juyiting/hall.tmx', import.meta.url))
@@ -23,6 +28,7 @@ const imagesDir = process.env.JIA_JUYITING_IMAGES_DIR
 const fixtureDir = process.env.JIA_JUYITING_OCCLUSION_FIXTURE_DIR
   ?? fileURLToPath(new URL('../../tests/fixtures/juyiting/occlusion-v0/', import.meta.url))
 const fixturePath = resolve(fixtureDir, 'source-hashes.json')
+const inventoryPath = resolve(fixtureDir, 'inventory.json')
 
 // Frozen canonical source contract from docs/juyiting-occlusion-system-design.md §8.1.
 const CANONICAL_SOURCE = {
@@ -31,7 +37,8 @@ const CANONICAL_SOURCE = {
   expectedSha256: '3e4f3f90b4d84411a844978237a7d3530bd481c37a62bcd73b9d694a7d2dd432',
 }
 
-export function buildSourceHashes(environment = {}) {
+export function buildSourceHashes(options = {}) {
+  const { baselineCommit = null } = options
   const entries = []
   const add = (label, path, bytes, role) => {
     entries.push({
@@ -81,6 +88,7 @@ export function buildSourceHashes(environment = {}) {
   return {
     schemaVersion: 1,
     generatedBy: 'scripts/juyiting/hash-juyiting-sources.mjs',
+    baselineCommit,
     canonicalSource: {
       ...CANONICAL_SOURCE,
       actualSha256: sha256Bytes(canonicalBytes),
@@ -97,7 +105,13 @@ export function serializeSourceHashes(report) {
 
 export function runHashSources(args = process.argv.slice(2)) {
   const mode = parseArguments(args)
-  const report = buildSourceHashes()
+  const existingFixture = readJsonIfPresent(fixturePath)
+  const inventoryFixture = readJsonIfPresent(inventoryPath)
+  const provenanceFixture = existingFixture?.baselineCommit || existingFixture?.commit ? existingFixture : inventoryFixture
+  const baselineCommit = fixtureBaselineCommit(provenanceFixture)
+  const expectedFiles = existingFixture?.entries?.map(entry => ({ path: entry.path, sha256: entry.sha256 })) ?? []
+  if (expectedFiles.length > 0) assertBaselineProvenance(baselineCommit, expectedFiles)
+  const report = buildSourceHashes({ baselineCommit })
   const json = serializeSourceHashes(report)
   if (mode === 'stdout') {
     process.stdout.write(json)

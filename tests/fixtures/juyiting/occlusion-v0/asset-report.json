@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "generatedBy": "scripts/juyiting/asset-report-juyiting.mjs",
-  "commit": "2424f51f375814f403ca70a9a6e9948728e595b1",
+  "baselineCommit": "2424f51f375814f403ca70a9a6e9948728e595b1",
   "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
   "buildArtifact": {
     "status": "measured",
