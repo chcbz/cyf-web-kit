@@ -49,6 +49,13 @@ camera/zoom/DPR, agent/prop/image-layer depth, 命中 mask ID
 - 地图 1664×928（104×58 tile × 16px），sceneId `juyiting-main`，navGraphVersion `juyiting-main-v1`
 - 每个 mask ledger 条目：index、TMX id、region（§9 权威映射）、regionGeometric 交叉核对、AABB、vertices、targetVisualStructure=TBD_E10A、stableId=TBD_E10B、status=baseline_present
 
+### 资产与纹理解码统计语义
+
+- `runtimeCoreFiles` 由三类实际引用扫描合并得出：`src/game/resources.js` 的 `HALL_MAP_RESOURCE`/loader contract、`hall.tmx` 的 tileset/image-layer/collection-tile 图片引用、`src/game/sprites/personaSpriteManifest.ts` 的角色 sprite `src`。`runtimeCoreBytes` 是该明细逐项 `sizeBytes` 的精确和：`2,415,264` bytes。
+- `public/juyiting/tiles/hall-tileset.json` 与 `hall-tileset.png` 未被当前 `hall.tmx`、resources loader 或角色 sprite 映射引用，分类为 `unreferenced-legacy`，不计入 runtimeCore。
+- 纹理解码按**实际加载路径**逐行计一次，包含当前 runtime 引用的 4 张全图、5 个 prop 和 6 张 persona sprite：`loadedPathDecodedBytes=50,269,248`；按文件内容 SHA-256 去重后 `uniqueContentDecodedBytes=44,092,480`；`duplicateContentOverheadBytes=6,176,768`。
+- mid/foreground 是两个实际加载路径，各计 `6,176,768` decoded bytes，合计严格为 `2 × 6,176,768`；它们内容 hash 相同，因此只产生一份 `6,176,768` 的 duplicate-content overhead，不存在第三份或每行乘二统计。
+
 ## 4. 边界/缺口与后续任务归属
 
 - **7 个 mask 几何 region 边界漂移**：49、54、57、74、76、80、83 的 centroid 与权威 region 不一致 → E10A 多边形/region 校准候选。

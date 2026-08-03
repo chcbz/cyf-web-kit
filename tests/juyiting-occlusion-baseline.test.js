@@ -159,6 +159,67 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
     expect(inventory.props.find(prop => prop.name === 'bounty-board-rect').tmxId).to.equal(92)
   })
 
+  it('derives runtimeCore from audited runtime references and excludes legacy hall tiles', () => {
+    const network = assetReport.juyitingNetworkAssets
+    const expectedRuntimePaths = [
+      'public/juyiting/hall.tmx',
+      'public/juyiting/images/liangshan-hall-base-clean-v3.webp',
+      'public/juyiting/images/liangshan-hall-foreground-occluders-v3.webp',
+      'public/juyiting/images/liangshan-hall-lighting-overlay-v3.webp',
+      'public/juyiting/images/liangshan-hall-mid-occluders-v3.webp',
+      'public/juyiting/images/props/liangshan-hall-prop-agent-roster-cropped.png',
+      'public/juyiting/images/props/liangshan-hall-prop-bounty-board-cropped.png',
+      'public/juyiting/images/props/liangshan-hall-prop-library-shelf-cropped.png',
+      'public/juyiting/images/props/liangshan-hall-prop-main-seat-cropped.png',
+      'public/juyiting/images/props/liangshan-hall-prop-roster-book-cropped.png',
+      'public/juyiting/sprites/persona-sheets-v1/husanniang-8-direction-v1.webp',
+      'public/juyiting/sprites/persona-sheets-v1/likui-8-direction-v2.webp',
+      'public/juyiting/sprites/persona-sheets-v1/linchong-8-direction-v1.webp',
+      'public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp',
+      'public/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v3.webp',
+      'public/juyiting/sprites/persona-sheets-v1/wuyong-8-direction-v1.webp',
+    ]
+    expect(network.runtimeCoreFiles.map(entry => entry.path)).to.deep.equal(expectedRuntimePaths)
+    expect(network.runtimeCoreBytes).to.equal(network.runtimeCoreFiles.reduce((total, entry) => total + entry.sizeBytes, 0))
+    expect(network.runtimeCoreBytes).to.equal(2415264)
+    expect(network.runtimeReferenceAudit.missingReferences).to.deep.equal([])
+    expect(Object.values(network.runtimeReferenceAudit.loaderContractChecks).every(Boolean)).to.equal(true)
+
+    const legacyPaths = ['public/juyiting/tiles/hall-tileset.json', 'public/juyiting/tiles/hall-tileset.png']
+    for (const path of legacyPaths) {
+      const entry = network.files.find(candidate => candidate.path === path)
+      expect(entry.category, path).to.equal('unreferenced-legacy')
+      expect(entry.runtimeReferenced, path).to.equal(false)
+      expect(network.runtimeCoreFiles.some(candidate => candidate.path === path), path).to.equal(false)
+    }
+  })
+
+  it('counts each loaded texture path once and deduplicates content hashes separately', () => {
+    const texture = assetReport.textureDecodeEstimate
+    expect(new Set(texture.rows.map(row => row.path)).size).to.equal(texture.rows.length)
+    expect(texture.rows.some(row => 'effectiveDecodedBytes' in row)).to.equal(false)
+    expect(texture.loadedPathDecodedBytes).to.equal(texture.rows.reduce((total, row) => total + row.decodedBytes, 0))
+
+    const firstByHash = new Map()
+    for (const row of texture.rows) if (!firstByHash.has(row.sha256)) firstByHash.set(row.sha256, row.decodedBytes)
+    expect(texture.uniqueContentDecodedBytes).to.equal([...firstByHash.values()].reduce((total, bytes) => total + bytes, 0))
+    expect(texture.duplicateContentOverheadBytes).to.equal(texture.loadedPathDecodedBytes - texture.uniqueContentDecodedBytes)
+    expect(texture.loadedPathDecodedBytes).to.equal(50269248)
+    expect(texture.uniqueContentDecodedBytes).to.equal(44092480)
+    expect(texture.duplicateContentOverheadBytes).to.equal(6176768)
+
+    const occluderRows = texture.rows.filter(row => [
+      'public/juyiting/images/liangshan-hall-mid-occluders-v3.webp',
+      'public/juyiting/images/liangshan-hall-foreground-occluders-v3.webp',
+    ].includes(row.path))
+    expect(occluderRows).to.have.length(2)
+    expect(occluderRows.map(row => row.decodedBytes)).to.deep.equal([6176768, 6176768])
+    expect(occluderRows.reduce((total, row) => total + row.decodedBytes, 0)).to.equal(2 * 6176768)
+    expect(texture.duplicateContentGroups).to.have.length(1)
+    expect(texture.duplicateContentGroups[0].paths).to.have.members(occluderRows.map(row => row.path))
+    expect(texture.duplicateContentGroups[0].duplicateContentOverheadBytes).to.equal(6176768)
+  })
+
   it('V0 evidence report records the four frozen regression entries', () => {
     const report = readFileSync(`${FIXTURE_DIR}/v0-evidence-report.md`, 'utf8')
     for (const id of ['REG-TABLE-LUJUNYI-HISTORICAL', 'REG-TABLE-HUSANNIANG-POSITIVE', 'REG-TABLE-ROLE-INVARIANCE', 'REG-TABLE-TARGET-RELATION']) {

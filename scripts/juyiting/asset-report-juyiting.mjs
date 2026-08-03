@@ -3,8 +3,8 @@
  *
  * Records (machine-readable, committed fixture):
  *   1. initial production build artifact size (dist/ is gitignored; measured when present)
- *   2. juyiting network asset bytes (TMX, image layers, props, tiles, persona sheets)
- *   3. decoded texture-size estimate (w×h×4 RGBA per image; duplicate occluder counted twice)
+ *   2. auditable runtime asset references derived from resources.js, hall.tmx, and the persona sprite manifest
+ *   3. decoded texture-size estimate (w×h×4 per actually referenced image path; content hashes deduplicated separately)
  *   4. draw call / runtime performance -> BLOCKED at E1 (no reliable automated sampling
  *      harness on this host); no numbers are fabricated.
  *
@@ -21,7 +21,7 @@ import { readFileSync, writeFileSync, mkdirSync, statSync, readdirSync } from 'n
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { sha256Bytes } from './lib/tmx-structure.mjs'
+import { parseTmxStructure, sha256Bytes } from './lib/tmx-structure.mjs'
 import { assertBaselineProvenance, fixtureBaselineCommit } from './lib/baseline-provenance.mjs'
 
 const worktreeRoot = fileURLToPath(new URL('../../', import.meta.url))
@@ -32,12 +32,14 @@ const fixtureDir = process.env.JIA_JUYITING_OCCLUSION_FIXTURE_DIR
 const fixturePath = resolve(fixtureDir, 'asset-report.json')
 const sourceHashesPath = resolve(fixtureDir, 'source-hashes.json')
 const distDir = resolve(worktreeRoot, 'dist')
+const resourcesPath = resolve(worktreeRoot, 'src/game/resources.js')
+const spriteManifestPath = resolve(worktreeRoot, 'src/game/sprites/personaSpriteManifest.ts')
 
 const ASSET_CATEGORY_RULES = {
   tmx: ['juyiting/hall.tmx'],
   'map-layer': ['juyiting/images/liangshan-hall-base-clean-v3.webp', 'juyiting/images/liangshan-hall-mid-occluders-v3.webp', 'juyiting/images/liangshan-hall-foreground-occluders-v3.webp', 'juyiting/images/liangshan-hall-lighting-overlay-v3.webp'],
   prop: ['juyiting/images/props/'],
-  tiles: ['juyiting/tiles/'],
+  'unreferenced-legacy': ['juyiting/tiles/hall-tileset.json', 'juyiting/tiles/hall-tileset.png'],
   sprite: ['juyiting/sprites/'],
   'dev-preview-modular': ['juyiting/images/modular/'],
 }
@@ -51,7 +53,8 @@ export function buildAssetReport(options = {}) {
   assertBaselineProvenance(baselineCommit, sourceHashes.entries.map(entry => ({ path: entry.path, sha256: entry.sha256 })))
 
   const network = enumerateNetworkAssets()
-  const textures = buildTextureEstimate(sourceHashes)
+  const runtimeReferenceAudit = buildRuntimeReferenceAudit(tmxBytes, network)
+  const textures = buildTextureEstimate(runtimeReferenceAudit.files, sourceHashes.canonicalSource.path)
 
   return {
     schemaVersion: 1,
@@ -60,10 +63,19 @@ export function buildAssetReport(options = {}) {
     tmxSha256,
     buildArtifact: buildArtifactReport(),
     juyitingNetworkAssets: {
-      totalBytes: sum(network.map(entry => entry.sizeBytes)),
-      runtimeCoreBytes: sum(network.filter(entry => ['tmx', 'map-layer', 'canonical-occluder', 'duplicate-occluder', 'prop', 'tiles', 'sprite'].includes(entry.category)).map(entry => entry.sizeBytes)),
-      runtimeCoreNote: 'runtimeCore excludes dev-preview-modular images (not loaded by the game runtime).',
-      files: network,
+      totalPublicTreeBytes: sum(network.map(entry => entry.sizeBytes)),
+      runtimeCoreBytes: sum(runtimeReferenceAudit.files.map(entry => entry.sizeBytes)),
+      runtimeCoreFiles: runtimeReferenceAudit.files,
+      runtimeReferenceAudit: {
+        sources: runtimeReferenceAudit.sources,
+        loaderContractChecks: runtimeReferenceAudit.loaderContractChecks,
+        missingReferences: runtimeReferenceAudit.missingReferences,
+      },
+      files: network.map(entry => ({
+        ...entry,
+        runtimeReferenced: runtimeReferenceAudit.referencePaths.has(entry.path),
+      })),
+      note: 'runtimeCoreBytes is the exact sum of runtimeCoreFiles derived from resources.js boot wiring, hall.tmx image/tileset refs, and personaSpriteManifest.ts sprite src values. Directory membership alone is not treated as a runtime reference.',
     },
     textureDecodeEstimate: textures,
     drawCallsRuntimePerf: {
@@ -110,38 +122,123 @@ function categoryFor(relativePath) {
   return 'other'
 }
 
-function buildTextureEstimate(sourceHashes) {
-  const rows = []
-  const uniqueBytes = new Map()
-  for (const entry of sourceHashes.entries) {
-    if (!['map-layer', 'canonical-occluder-source', 'duplicate-occluder', 'prop', 'tmx'].includes(entry.role)) continue
-    if (entry.role === 'tmx') continue
-    const full = resolve(worktreeRoot, entry.path)
-    const dims = imageDimensions(full)
-    const decodedBytes = dims.width * dims.height * 4
-    const duplicateOf = entry.role === 'duplicate-occluder' ? sourceHashes.canonicalSource.path : null
-    const effectiveBytes = duplicateOf ? decodedBytes * 2 : decodedBytes
-    uniqueBytes.set(entry.path, { decodedBytes, count: duplicateOf ? 2 : 1 })
-    rows.push({
+function buildRuntimeReferenceAudit(tmxText, network) {
+  const resourcesSource = readRequiredFile(resourcesPath, 'Juyiting resources.js')
+  const spriteManifestSource = readRequiredFile(spriteManifestPath, 'Juyiting persona sprite manifest')
+  const structure = parseTmxStructure(tmxText)
+  const references = new Map()
+  const addReference = (publicPath, referencedBy) => {
+    const normalized = publicPath.startsWith('public/')
+      ? publicPath
+      : `public/${publicPath.replace(/^\//, '')}`
+    if (!references.has(normalized)) references.set(normalized, new Set())
+    references.get(normalized).add(referencedBy)
+  }
+
+  const bootMatch = resourcesSource.match(/HALL_MAP_RESOURCE\s*=\s*\{[^}]*src:\s*['"]([^'"]+)['"]/s)
+  if (!bootMatch) throw new Error('Unable to derive HALL_MAP_RESOURCE src from src/game/resources.js')
+  addReference(bootMatch[1], 'src/game/resources.js:HALL_MAP_RESOURCE')
+
+  const tmxPublicDir = dirname(relative(worktreeRoot, tmxPath).replaceAll('\\', '/'))
+  const addTmxReference = (source, referencedBy) => {
+    if (!source) return
+    addReference(relative(worktreeRoot, resolve(worktreeRoot, tmxPublicDir, source)).replaceAll('\\', '/'), referencedBy)
+  }
+  for (const tileset of structure.tilesets) {
+    addTmxReference(tileset.image, `public/juyiting/hall.tmx:tileset:${tileset.name}`)
+    for (const tile of tileset.tiles) {
+      addTmxReference(tile.image, `public/juyiting/hall.tmx:tileset:${tileset.name}:tile:${tile.id}`)
+    }
+  }
+  for (const layer of structure.layers.filter(layer => layer.kind === 'imagelayer')) {
+    addTmxReference(layer.source, `public/juyiting/hall.tmx:imagelayer:${layer.name}`)
+  }
+
+  const spriteSources = [...spriteManifestSource.matchAll(/src:\s*['"](\/juyiting\/sprites\/[^'"]+)['"]/g)]
+    .map(match => match[1])
+  if (spriteSources.length === 0) throw new Error('No persona sprite src values found in personaSpriteManifest.ts')
+  for (const source of spriteSources) addReference(source, 'src/game/sprites/personaSpriteManifest.ts:personas')
+
+  const byPath = new Map(network.map(entry => [entry.path, entry]))
+  const missingReferences = [...references.keys()].filter(path => !byPath.has(path)).sort()
+  if (missingReferences.length > 0) {
+    throw new Error(`Runtime asset references missing from public/juyiting: ${missingReferences.join(', ')}`)
+  }
+
+  const files = [...references.entries()]
+    .map(([path, referencedBy]) => ({
+      path,
+      sizeBytes: byPath.get(path).sizeBytes,
+      sha256: byPath.get(path).sha256,
+      category: byPath.get(path).category,
+      role: byPath.get(path).role,
+      referencedBy: [...referencedBy].sort(),
+    }))
+    .sort((a, b) => a.path.localeCompare(b.path))
+
+  return {
+    files,
+    referencePaths: new Set(files.map(entry => entry.path)),
+    missingReferences,
+    sources: {
+      bootLoader: 'src/game/resources.js:HALL_MAP_RESOURCE',
+      mapImages: 'public/juyiting/hall.tmx tileset/image-layer refs consumed by buildHallMapResources',
+      personaSprites: 'src/game/sprites/personaSpriteManifest.ts persona src values consumed by buildPersonaSpriteResource',
+    },
+    loaderContractChecks: {
+      hallBootResourceDeclared: resourcesSource.includes('HALL_BOOT_RESOURCES = [HALL_MAP_RESOURCE]'),
+      tmxTilesetImagesConsumed: resourcesSource.includes('tileset.imageSource || tileset.source'),
+      tmxCollectionTilesConsumed: resourcesSource.includes('tile.source'),
+      tmxImageLayersConsumed: resourcesSource.includes('mapData?.imageLayers'),
+      personaSpriteMappingConsumed: resourcesSource.includes('buildPersonaSpriteResource'),
+    },
+  }
+}
+
+function buildTextureEstimate(runtimeFiles, canonicalPath) {
+  const imageFiles = runtimeFiles.filter(entry => /\.(?:png|webp)$/i.test(entry.path))
+  const rows = imageFiles.map(entry => {
+    const dims = imageDimensions(resolve(worktreeRoot, entry.path))
+    return {
       path: entry.path,
       role: entry.role,
+      sha256: entry.sha256,
       width: dims.width,
       height: dims.height,
       bpp: 4,
-      decodedBytes,
-      duplicateOf,
-      effectiveDecodedBytes: effectiveBytes,
-    })
+      decodedBytes: dims.width * dims.height * 4,
+    }
+  })
+
+  const contentGroups = new Map()
+  for (const row of rows) {
+    if (!contentGroups.has(row.sha256)) contentGroups.set(row.sha256, [])
+    contentGroups.get(row.sha256).push(row)
   }
-  const totalDecoded = rows.reduce((acc, row) => acc + row.effectiveDecodedBytes, 0)
-  const uniqueTotal = [...uniqueBytes.values()].reduce((acc, v) => acc + v.decodedBytes, 0)
+  const duplicates = []
+  let uniqueContentDecodedBytes = 0
+  for (const [sha256, group] of contentGroups) {
+    const representative = group.find(row => row.path === canonicalPath) ?? group[0]
+    uniqueContentDecodedBytes += representative.decodedBytes
+    if (group.length > 1) {
+      duplicates.push({
+        sha256,
+        representativePath: representative.path,
+        paths: group.map(row => row.path).sort(),
+        decodedBytesPerPath: representative.decodedBytes,
+        duplicateContentOverheadBytes: representative.decodedBytes * (group.length - 1),
+      })
+    }
+  }
+  const loadedPathDecodedBytes = sum(rows.map(row => row.decodedBytes))
   return {
     bpp: 4,
     rows,
-    totalEffectiveDecodedBytes: totalDecoded,
-    totalUniqueDecodedBytes: uniqueTotal,
-    duplicateOccluderExtraBytes: totalDecoded - uniqueTotal,
-    note: 'RGBA decode estimate (width×height×4). The duplicate mid/foreground occluder pair is counted twice because the current runtime loads both files.',
+    loadedPathDecodedBytes,
+    uniqueContentDecodedBytes,
+    duplicateContentOverheadBytes: loadedPathDecodedBytes - uniqueContentDecodedBytes,
+    duplicateContentGroups: duplicates.sort((a, b) => a.sha256.localeCompare(b.sha256)),
+    note: 'Each actually referenced image path contributes decodedBytes exactly once. uniqueContentDecodedBytes deduplicates rows by file SHA-256; duplicateContentOverheadBytes = loadedPathDecodedBytes - uniqueContentDecodedBytes.',
   }
 }
 
