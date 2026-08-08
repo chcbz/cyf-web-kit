@@ -8,6 +8,8 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  symlinkSync,
+  writeFileSync,
 } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -15,10 +17,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { parseTmxStructure, resolveWorldPolygon, polygonAabb } from '../scripts/juyiting/lib/tmx-structure.mjs'
-import { assertBaselineProvenance, currentHead } from '../scripts/juyiting/lib/baseline-provenance.mjs'
+import {
+  E1_BASELINE_COMMIT,
+  assertBaselineProvenance,
+  assertBaselinePublicTree,
+  currentHead,
+} from '../scripts/juyiting/lib/baseline-provenance.mjs'
+import { atomicWriteUtf8 } from '../scripts/juyiting/lib/atomic-write.mjs'
 import {
   canonicalizeJuyitingRuntimeSource,
   canonicalizeJuyitingTmxSource,
+  resolveJuyitingPublicFile,
 } from '../scripts/juyiting/lib/juyiting-public-path.mjs'
 import { buildRuntimeReferenceAudit } from '../scripts/juyiting/asset-report-juyiting.mjs'
 import {
@@ -41,20 +50,37 @@ const assetReport = JSON.parse(readFileSync(`${FIXTURE_DIR}/asset-report.json`, 
 const emptyMapStructure = () => ({ tilesets: [], layers: [] })
 const networkEntry = (path) => ({ path, sizeBytes: 1, sha256: '0'.repeat(64), category: 'test', role: 'test' })
 const importSourceModule = source => import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)
-const runNpmScript = (script, environment) => {
+const runNpmScript = (script, environment, mode = 'update') => {
+  const scriptArguments = mode === 'update' ? ['run', script, '--', '--update'] : ['run', script]
   const npmExecPath = process.env.npm_execpath
   if (npmExecPath) {
-    return spawnSync(process.execPath, [npmExecPath, 'run', script, '--', '--update'], {
+    return spawnSync(process.execPath, [npmExecPath, ...scriptArguments], {
       cwd: process.cwd(),
       env: environment,
       encoding: 'utf8',
     })
   }
-  return spawnSync('npm', ['run', script, '--', '--update'], {
+  return spawnSync('npm', scriptArguments, {
     cwd: process.cwd(),
     env: environment,
     encoding: 'utf8',
   })
+}
+
+const copyIsolatedBaseline = (prefix) => {
+  const root = mkdtempSync(join(tmpdir(), prefix))
+  const publicRoot = join(root, 'public')
+  const fixtureDir = join(root, 'fixtures')
+  mkdirSync(publicRoot, { recursive: true })
+  cpSync('public/juyiting', join(publicRoot, 'juyiting'), { recursive: true })
+  cpSync(FIXTURE_DIR, fixtureDir, { recursive: true })
+  return { root, publicRoot, fixtureDir }
+}
+
+const rewriteBaselineCommit = (path, baselineCommit) => {
+  const fixture = JSON.parse(readFileSync(path, 'utf8'))
+  fixture.baselineCommit = baselineCommit
+  writeFileSync(path, `${JSON.stringify(fixture, null, 2)}\n`)
 }
 
 // Authoritative region contract from docs/juyiting-occlusion-system-design.md §9.
@@ -96,6 +122,35 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
       sourceHashes.entries.map(entry => ({ path: entry.path, sha256: entry.sha256 })),
     )
     expect(provenance.currentHead).to.equal(currentHead())
+  })
+
+
+  it('locks every fixture to the code-owned E1 baseline commit', () => {
+    expect(E1_BASELINE_COMMIT).to.equal('2424f51f375814f403ca70a9a6e9948728e595b1')
+    expect(currentHead()).to.not.equal(E1_BASELINE_COMMIT)
+    for (const fixture of [inventory, sourceHashes, assetReport]) {
+      expect(fixture.baselineCommit).to.equal(E1_BASELINE_COMMIT)
+    }
+  })
+
+  it('audits the complete frozen public/juyiting blob tree, not only runtime references', () => {
+    const audit = assertBaselinePublicTree('public', E1_BASELINE_COMMIT)
+    expect(audit.fileCount).to.equal(27)
+    expect(audit.files).to.have.length(27)
+    expect(audit.files.map(entry => entry.path)).to.deep.equal(
+      assetReport.juyitingNetworkAssets.files.map(entry => entry.path),
+    )
+    expect(audit.files.every(entry => /^100(?:644|755)$/.test(entry.gitMode))).to.equal(true)
+    expect(audit.files.every(entry => /^[0-9a-f]{40}$/.test(entry.baselineBlob))).to.equal(true)
+    expect(assetReport.juyitingNetworkAssets.baselinePublicTreeAudit).to.deep.include({
+      baselineCommit: E1_BASELINE_COMMIT,
+      pathPrefix: 'public/juyiting/',
+      exactPathSet: true,
+      currentBytesMatchBaseline: true,
+      fileCount: 27,
+    })
+    expect(assetReport.juyitingNetworkAssets.totalPublicTreeBytes)
+      .to.equal(assetReport.juyitingNetworkAssets.files.reduce((total, entry) => total + entry.sizeBytes, 0))
   })
 
   it('covers all six executable persona sprite exports with baseline git-show provenance', () => {
@@ -244,6 +299,134 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
         expect(readFileSync(fixturePath).equals(before), script).to.equal(true)
       }
       expect(readdirSync(fixtureDir).filter(name => name.includes('.tmp-'))).to.deep.equal([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('fails asset --update before writing when any frozen non-runtime public file is deleted', function () {
+    this.timeout(30000)
+    const { root, publicRoot, fixtureDir } = copyIsolatedBaseline('juyiting-e1-public-tree-')
+    try {
+      const deletedPath = join(publicRoot, 'juyiting/images/modular/preview.html')
+      rmSync(deletedPath)
+      const fixturePath = join(fixtureDir, 'asset-report.json')
+      const before = readFileSync(fixturePath)
+      const result = runNpmScript('asset:juyiting-report', {
+        ...process.env,
+        JIA_JUYITING_PUBLIC_ROOT: publicRoot,
+        JIA_JUYITING_TMX_PATH: join(publicRoot, 'juyiting/hall.tmx'),
+        JIA_JUYITING_OCCLUSION_FIXTURE_DIR: fixtureDir,
+      })
+      expect(result.status, `${result.stdout}\n${result.stderr}`).to.not.equal(0)
+      expect(`${result.stdout}\n${result.stderr}`).to.include('Juyiting public tree path mismatch')
+      expect(`${result.stdout}\n${result.stderr}`).to.include('public/juyiting/images/modular/preview.html')
+      expect(readFileSync(fixturePath).equals(before)).to.equal(true)
+      expect(readdirSync(fixtureDir).filter(name => name.includes('.tmp-'))).to.deep.equal([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects a fixture baselineCommit redirected to current HEAD in all four verifier/update paths', function () {
+    this.timeout(60000)
+    const cases = [
+      { script: 'inventory:juyiting-map', fixture: 'inventory.json', outputs: ['inventory.json', 'mask-ledger.md'] },
+      { script: 'hash:juyiting-sources', fixture: 'source-hashes.json', outputs: ['source-hashes.json'] },
+      { script: 'preview:juyiting-occlusion-layers', fixture: 'inventory.json', outputs: [
+        'layers/occlusion-mask-only.svg',
+        'layers/occlusion-collision-nav-only.svg',
+        'layers/occlusion-routes-nodes-only.svg',
+        'layers/occlusion-combined.svg',
+      ] },
+      { script: 'asset:juyiting-report', fixture: 'asset-report.json', outputs: ['asset-report.json'] },
+    ]
+    for (const testCase of cases) {
+      for (const mode of ['verify', 'update']) {
+        const { root, publicRoot, fixtureDir } = copyIsolatedBaseline(`juyiting-e1-lock-${testCase.script.replaceAll(':', '-')}-`)
+        try {
+          rewriteBaselineCommit(join(fixtureDir, testCase.fixture), currentHead())
+          const before = new Map(testCase.outputs.map(path => [path, readFileSync(join(fixtureDir, path))]))
+          const environment = {
+            ...process.env,
+            JIA_JUYITING_PUBLIC_ROOT: publicRoot,
+            JIA_JUYITING_IMAGES_DIR: join(publicRoot, 'juyiting/images'),
+            JIA_JUYITING_TMX_PATH: join(publicRoot, 'juyiting/hall.tmx'),
+            JIA_JUYITING_OCCLUSION_FIXTURE_DIR: fixtureDir,
+            JIA_JUYITING_OCCLUSION_INVENTORY_PATH: join(fixtureDir, 'inventory.json'),
+            JIA_JUYITING_LAYER_DIR: join(fixtureDir, 'layers'),
+          }
+          const result = runNpmScript(testCase.script, environment, mode)
+          expect(result.status, `${testCase.script} ${mode}\n${result.stdout}\n${result.stderr}`).to.not.equal(0)
+          expect(`${result.stdout}\n${result.stderr}`).to.include(`E1 baseline commit must equal locked commit ${E1_BASELINE_COMMIT}`)
+          for (const [path, bytes] of before) {
+            expect(readFileSync(join(fixtureDir, path)).equals(bytes), `${testCase.script} ${mode}: ${path}`).to.equal(true)
+          }
+          expect(readdirSync(fixtureDir).filter(name => name.includes('.tmp-'))).to.deep.equal([])
+        } finally {
+          rmSync(root, { recursive: true, force: true })
+        }
+      }
+    }
+  })
+
+  it('resolves only existing real files inside the real public root', () => {
+    const root = mkdtempSync(join(tmpdir(), 'juyiting-e1-realpath-'))
+    try {
+      const publicRoot = join(root, 'public')
+      const imageDirectory = join(publicRoot, 'juyiting/images')
+      const outside = join(root, 'outside.webp')
+      mkdirSync(imageDirectory, { recursive: true })
+      writeFileSync(outside, 'outside')
+      symlinkSync(outside, join(imageDirectory, 'escape.webp'))
+
+      expect(() => resolveJuyitingPublicFile(publicRoot, 'public/juyiting/images/escape.webp'))
+        .to.throw('Juyiting public file resolves outside public root')
+      expect(() => resolveJuyitingPublicFile(publicRoot, 'public/juyiting/images/missing.webp'))
+        .to.throw('Juyiting public file is missing: public/juyiting/images/missing.webp')
+      const inside = join(imageDirectory, 'inside.webp')
+      writeFileSync(inside, 'inside')
+      expect(resolveJuyitingPublicFile(publicRoot, 'public/juyiting/images/inside.webp')).to.equal(inside)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('preserves the primary atomic-write error when close and unlink cleanup both fail', () => {
+    const primary = new Error('primary write failure')
+    const close = new Error('close cleanup failure')
+    const unlink = new Error('unlink cleanup failure')
+    let thrown
+    try {
+      atomicWriteUtf8('/virtual/fixture.json', 'content', 'fault fixture', {
+        randomUUID: () => 'fixed',
+        mkdirSync: () => {},
+        openSync: () => 7,
+        writeFileSync: () => { throw primary },
+        fsyncSync: () => {},
+        closeSync: () => { throw close },
+        readFileSync: () => 'content',
+        renameSync: () => {},
+        unlinkSync: () => { throw unlink },
+      })
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).to.be.instanceOf(AggregateError)
+    expect(thrown.errors).to.deep.equal([primary, close, unlink])
+    expect(thrown.message).to.include('primary write failure')
+    expect(thrown.message).to.include('close cleanup failure')
+    expect(thrown.message).to.include('unlink cleanup failure')
+  })
+
+  it('atomically replaces a normal fixture without leaving temporary files', () => {
+    const root = mkdtempSync(join(tmpdir(), 'juyiting-e1-atomic-'))
+    try {
+      const fixturePath = join(root, 'fixture.json')
+      writeFileSync(fixturePath, 'old')
+      atomicWriteUtf8(fixturePath, 'new', 'normal fixture')
+      expect(readFileSync(fixturePath, 'utf8')).to.equal('new')
+      expect(readdirSync(root).filter(name => name.includes('.tmp-'))).to.deep.equal([])
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

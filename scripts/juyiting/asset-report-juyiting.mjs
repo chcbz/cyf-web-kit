@@ -29,7 +29,12 @@ import {
 import { PERSONA_SPRITE_MANIFEST } from '../../src/game/sprites/personaSpriteManifest.ts'
 import { atomicWriteUtf8 } from './lib/atomic-write.mjs'
 import { parseTmxStructure, sha256Bytes } from './lib/tmx-structure.mjs'
-import { assertBaselineProvenance, fixtureBaselineCommit } from './lib/baseline-provenance.mjs'
+import {
+  assertBaselineProvenance,
+  assertBaselinePublicTree,
+  fixtureBaselineCommit,
+  readJsonIfPresent,
+} from './lib/baseline-provenance.mjs'
 import {
   canonicalizeJuyitingRuntimeSource,
   canonicalizeJuyitingTmxSource,
@@ -66,7 +71,12 @@ export function buildAssetReport(options = {}) {
   const baselineCommit = fixtureBaselineCommit(sourceHashes)
   assertBaselineProvenance(baselineCommit, sourceHashes.entries.map(entry => ({ path: entry.path, sha256: entry.sha256 })))
 
-  const network = enumerateNetworkAssets(publicRoot)
+  const publicTreeAudit = assertBaselinePublicTree(publicRoot, baselineCommit)
+  const network = classifyNetworkAssets(publicTreeAudit.files)
+  const networkTmx = network.find(entry => entry.path === 'public/juyiting/hall.tmx')
+  if (!networkTmx || networkTmx.sha256 !== tmxSha256) {
+    throw new Error(`Juyiting TMX source does not match audited public tree hall.tmx: source=${tmxSha256}, tree=${networkTmx?.sha256 ?? 'missing'}`)
+  }
   const structure = parseTmxStructure(tmxBytes)
   const runtimeReferenceAudit = buildRuntimeReferenceAudit({
     structure,
@@ -76,13 +86,6 @@ export function buildAssetReport(options = {}) {
     personaManifest: PERSONA_SPRITE_MANIFEST,
     buildSpriteResource: buildPersonaSpriteResource,
   })
-  assertBaselineProvenance(
-    baselineCommit,
-    [
-      ...network.map(entry => ({ path: entry.path, sha256: entry.sha256 })),
-      { path: 'public/juyiting/hall.tmx', sha256: tmxSha256 },
-    ],
-  )
   const textures = buildTextureEstimate(runtimeReferenceAudit.files, sourceHashes.canonicalSource.path, publicRoot)
 
   return {
@@ -92,6 +95,15 @@ export function buildAssetReport(options = {}) {
     tmxSha256,
     buildArtifact: buildArtifactReport(),
     juyitingNetworkAssets: {
+      baselinePublicTreeAudit: {
+        baselineCommit: publicTreeAudit.baselineCommit,
+        pathPrefix: publicTreeAudit.pathPrefix,
+        authority: publicTreeAudit.authority,
+        acceptedBlobModes: publicTreeAudit.acceptedBlobModes,
+        exactPathSet: publicTreeAudit.exactPathSet,
+        currentBytesMatchBaseline: publicTreeAudit.currentBytesMatchBaseline,
+        fileCount: publicTreeAudit.fileCount,
+      },
       totalPublicTreeBytes: sum(network.map(entry => entry.sizeBytes)),
       runtimeCoreBytes: sum(runtimeReferenceAudit.files.map(entry => entry.sizeBytes)),
       runtimeCoreFiles: runtimeReferenceAudit.files,
@@ -117,33 +129,15 @@ export function buildAssetReport(options = {}) {
   }
 }
 
-function enumerateNetworkAssets(root) {
-  const juyitingRoot = resolve(root, 'juyiting')
-  const entries = []
-  const walk = (dir) => {
-    for (const name of readdirSync(dir)) {
-      const full = resolve(dir, name)
-      const stat = statSync(full)
-      if (stat.isDirectory()) walk(full)
-      else if (stat.isFile()) {
-        const rel = relative(root, full).replaceAll('\\', '/')
-        const publicPath = canonicalizeJuyitingRuntimeSource(`/${rel}`)
-        const category = categoryFor(rel)
-        const role = rel === 'juyiting/images/liangshan-hall-mid-occluders-v3.webp' ? 'canonical-occluder'
-          : rel === 'juyiting/images/liangshan-hall-foreground-occluders-v3.webp' ? 'duplicate-occluder'
-            : category
-        entries.push({
-          path: publicPath,
-          sizeBytes: stat.size,
-          sha256: sha256Bytes(readFileSync(full)),
-          category,
-          role,
-        })
-      }
-    }
-  }
-  walk(juyitingRoot)
-  return entries.sort((a, b) => a.path.localeCompare(b.path))
+function classifyNetworkAssets(files) {
+  return files.map(entry => {
+    const relativePath = entry.path.slice('public/'.length)
+    const category = categoryFor(relativePath)
+    const role = relativePath === 'juyiting/images/liangshan-hall-mid-occluders-v3.webp' ? 'canonical-occluder'
+      : relativePath === 'juyiting/images/liangshan-hall-foreground-occluders-v3.webp' ? 'duplicate-occluder'
+        : category
+    return { ...entry, category, role }
+  })
 }
 
 function categoryFor(relativePath) {
@@ -448,6 +442,11 @@ export function serializeAssetReport(report) {
 
 export function runAssetReport(args = process.argv.slice(2)) {
   const mode = parseArguments(args)
+  const existingFixture = readJsonIfPresent(fixturePath)
+  if (!existingFixture) {
+    throw new Error('Juyiting asset report verification requires a committed fixture with the locked baselineCommit')
+  }
+  fixtureBaselineCommit(existingFixture)
   const report = buildAssetReport()
   const json = serializeAssetReport(report)
   if (mode === 'stdout') {

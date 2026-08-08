@@ -44,6 +44,18 @@
     ]
   },
   "juyitingNetworkAssets": {
+    "baselinePublicTreeAudit": {
+      "baselineCommit": "2424f51f375814f403ca70a9a6e9948728e595b1",
+      "pathPrefix": "public/juyiting/",
+      "authority": "git ls-tree -r 2424f51f375814f403ca70a9a6e9948728e595b1 -- public/juyiting/",
+      "acceptedBlobModes": [
+        "100644",
+        "100755"
+      ],
+      "exactPathSet": true,
+      "currentBytesMatchBaseline": true,
+      "fileCount": 27
+    },
     "totalPublicTreeBytes": 17931742,
     "runtimeCoreBytes": 2415264,
     "runtimeCoreFiles": [
@@ -231,6 +243,8 @@
     "files": [
       {
         "path": "public/juyiting/hall.tmx",
+        "gitMode": "100644",
+        "baselineBlob": "29adc853ed07b795e7926d2bd8417eea7bf64257",
         "sizeBytes": 85285,
         "sha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
         "category": "tmx",
@@ -239,6 +253,8 @@
       },
       {
         "path": "public/juyiting/images/liangshan-hall-base-clean-v3.webp",
+        "gitMode": "100644",
+        "baselineBlob": "e848e864d13082f337e47693b006815963ac6b5b",
         "sizeBytes": 249688,
         "sha256": "72d5ca5ff3d5c71ec66018d65bbe6a9636e6bbab10338e2a07989b0be1efd9aa",
         "category": "map-layer",
@@ -247,6 +263,8 @@
       },
       {
         "path": "public/juyiting/images/liangshan-hall-foreground-occluders-v3.webp",
+        "gitMode": "100644",
+        "baselineBlob": "2e1a6d737050a40e9e61ef15fc9a5659deb241bb",
         "sizeBytes": 71274,
         "sha256": "3e4f3f90b4d84411a844978237a7d3530bd481c37a62bcd73b9d694a7d2dd432",
         "category": "map-layer",
@@ -255,6 +273,8 @@
       },
       {
         "path": "public/juyiting/images/liangshan-hall-lighting-overlay-v3.webp",
+        "gitMode": "100644",
+        "baselineBlob": "68c7a9ad63001f455a882f2c33e58ce50e699744",
         "sizeBytes": 522594,
         "sha256": "748a571da633ceac300cc526ad7f0e7bc4f292cfc925288e340592d0ed5d568f",
         "category": "map-layer",
@@ -263,6 +283,8 @@
       },
       {
         "path": "public/juyiting/images/liangshan-hall-mid-occluders-v3.webp",
+        "gitMode": "100644",
+        "baselineBlob": "2e1a6d737050a40e9e61ef15fc9a5659deb241bb",
         "sizeBytes": 71274,
         "sha256": "3e4f3f90b4d84411a844978237a7d3530bd481c37a62bcd73b9d694a7d2dd432",
         "category": "map-layer",
@@ -271,6 +293,8 @@
       },
       {
         "path": "public/juyiting/images/modular/hall-floor-v1.png",
+        "gitMode": "100644",
+        "baselineBlob": "2527424c9cbd88e90f5b3cdc1c8f9f8f3e7fbe61",
         "sizeBytes": 2661524,
         "sha256": "37865c24aa7899458bdb1904694c7153a440cd2ca17ebd5d80750c250fc9ceb8",
         "category": "dev-preview-modular",
@@ -279,6 +303,8 @@
       },
       {
         "path": "public/juyiting/images/modular/hall-pillars-v1.png",
+        "gitMode": "100644",
+        "baselineBlob": "9602f37463c3d74c6630f9966d8a33578099f8ad",
         "sizeBytes": 2005310,
         "sha256": "9f0588e37616b049306f4cf3f9048c73ba8006903cb7be1b7c4ede4a0a9e91fe",
         "category": "dev-preview-modular",
@@ -287,6 +313,8 @@
       },
       {
         "path": "public/juyiting/images/modular/hall-wall-back-v1.png",
+        "gitMode": "100644",
+        "baselineBlob": "fcbeb28e54cdde4762c830c38a0940685277acff",
         "sizeBytes": 2074706,
         "sha256": "16f7aa1a5f5c5010feabd6a676c41c41c8015370359a340f1fe0488a3dfb12c8",
         "category": "dev-preview-modular",
@@ -295,6 +323,8 @@
       },
       {
         "path": "public/juyiting/images/modular/preview.html",
+        "gitMode": "100644",
+        "baselineBlob": "997f98a1530a90aae5450c6714070252ab968a0a",
         "sizeBytes": 2010,
         "sha256": "2a3ff0da47f34f6fa10a6302f2ab48cdf0c5e417fc6027861a732f056b1b571c",
         "category": "dev-preview-modular",
@@ -303,6 +333,8 @@
       },
       {
         "path": "public/juyiting/images/modular/prop-bounty-board-v1.png",
+        "gitMode": "100644",
+        "baselineBlob": "9622a2cd57509388d2f1b131395e3b6e4d9c5fcd",
         "sizeBytes": 1608832,
         "sha256": "b33d9cba6ec4a9c47e87ccd219d0a43405cfc527164a61c43febfa5fbf844047",
         "category": "dev-preview-modular",
@@ -311,6 +343,8 @@
       },
       {
         "path": "public/juyiting/images/modular/prop-library-shelf-v1.png",
+        "gitMode": "100644",
+        "baselineBlob": "0e165ff18b666e3115c516f5cdb6931e409f9264",
         "sizeBytes": 1932626,
         "sha256": "48526c4481ccae02113ca624d7deb2d1ccad817126209104dd47af99e8f4256d",
         "category": "dev-preview-modular",
@@ -319,6 +353,8 @@
       },
       {
         "path": "public/juyiting/images/modular/prop-main-seat-v1.png",
+        "gitMode": "100644",
+        "baselineBlob": "118ccee6ba186bafd28366450f30f95a7267b2ce",
         "sizeBytes": 1670708,
         "sha256": "6dd6f8d27dfffd33b08c0ee63d01a7c0da237f35c678fcc4ce316c8c9f765aa6",
         "category": "dev-preview-modular",
@@ -327,6 +363,8 @@
       },
       {
         "path": "public/juyiting/images/modular/prop-roster-book-v1.png",
+        "gitMode": "100644",
+        "baselineBlob": "c109d1b75813b5cc6c024698c88092f3c7ab01c4",
         "sizeBytes": 1963100,
         "sha256": "9a2ed882ac7abf45fe38c2452b2008c39bb2a6f18668ae44b6b50980d199fd6d",
         "category": "dev-preview-modular",
@@ -335,6 +373,8 @@
       },
       {
         "path": "public/juyiting/images/modular/prop-table-desk-v1.png",
+        "gitMode": "100644",
+        "baselineBlob": "1b1fef85eb2e48b1513bd7303a504b87878d795e",
         "sizeBytes": 1591225,
         "sha256": "dc0d203e7a91fc56a01860e364bb52063c442e4d6733e5c6bbe20bf0c88fbd9e",
         "category": "dev-preview-modular",
@@ -343,6 +383,8 @@
       },
       {
         "path": "public/juyiting/images/props/liangshan-hall-prop-agent-roster-cropped.png",
+        "gitMode": "100644",
+        "baselineBlob": "1a4004b82d134497a6865a44b7a51d52e29fd962",
         "sizeBytes": 23984,
         "sha256": "829d710a41b1982925c8ce3cb2e23f99fd9ea0f78dd9bd65be6dce406a43e8cc",
         "category": "prop",
@@ -351,6 +393,8 @@
       },
       {
         "path": "public/juyiting/images/props/liangshan-hall-prop-bounty-board-cropped.png",
+        "gitMode": "100644",
+        "baselineBlob": "b536936448a38e892d1ecdfdfad9c090eafefa1f",
         "sizeBytes": 30808,
         "sha256": "2e4c3e749119392b01a7301aaa8f40986a09e5cc731ab61105ed600a755b6252",
         "category": "prop",
@@ -359,6 +403,8 @@
       },
       {
         "path": "public/juyiting/images/props/liangshan-hall-prop-library-shelf-cropped.png",
+        "gitMode": "100644",
+        "baselineBlob": "9ada65d5108e01b4e5925d0748c5235d0a247382",
         "sizeBytes": 25512,
         "sha256": "2c26abcb9f0c4b8ba83f6bb9470345d4bc280f8af133ab361581ab178d675ff9",
         "category": "prop",
@@ -367,6 +413,8 @@
       },
       {
         "path": "public/juyiting/images/props/liangshan-hall-prop-main-seat-cropped.png",
+        "gitMode": "100644",
+        "baselineBlob": "0f841154f36545f722b49fc96731ffc5e31999f9",
         "sizeBytes": 18878,
         "sha256": "7d0c9b7dc2ca274201526d0fc6de146f7c9ab44a9028e2b0a1c0619b661ff794",
         "category": "prop",
@@ -375,6 +423,8 @@
       },
       {
         "path": "public/juyiting/images/props/liangshan-hall-prop-roster-book-cropped.png",
+        "gitMode": "100644",
+        "baselineBlob": "9bc03777641e4510b7558b37583eb4e0bc13f345",
         "sizeBytes": 50161,
         "sha256": "6b7c21b45ad24aee9b6bbbbf72177f04e0f3710168d28aef8064dfa1786996c5",
         "category": "prop",
@@ -383,6 +433,8 @@
       },
       {
         "path": "public/juyiting/sprites/persona-sheets-v1/husanniang-8-direction-v1.webp",
+        "gitMode": "100644",
+        "baselineBlob": "5cdbf31e0257dec1d2667368f507cc1b0581930b",
         "sizeBytes": 337228,
         "sha256": "51db05d29907b4f6d3271518860ed9cd9c27f0445b6240b68a9957004cab4e99",
         "category": "sprite",
@@ -391,6 +443,8 @@
       },
       {
         "path": "public/juyiting/sprites/persona-sheets-v1/likui-8-direction-v2.webp",
+        "gitMode": "100644",
+        "baselineBlob": "5229d015f905fc6e899675240a75754cb846bf4d",
         "sizeBytes": 256130,
         "sha256": "fd9c7d965a1076cdae9b45c6eaff387a1b966a1e7d45a52e8b80678411892c7b",
         "category": "sprite",
@@ -399,6 +453,8 @@
       },
       {
         "path": "public/juyiting/sprites/persona-sheets-v1/linchong-8-direction-v1.webp",
+        "gitMode": "100644",
+        "baselineBlob": "73b1a6cbf7ef0f4181bd9028b93b854928055f05",
         "sizeBytes": 164230,
         "sha256": "8335c39fe935c9bea88c3ec5b8862846870115ffc47a2f50619cfdf9ffa3486c",
         "category": "sprite",
@@ -407,6 +463,8 @@
       },
       {
         "path": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "gitMode": "100644",
+        "baselineBlob": "abd695616f210e791c153ca9b460f639e0a5b39b",
         "sizeBytes": 193438,
         "sha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
         "category": "sprite",
@@ -415,6 +473,8 @@
       },
       {
         "path": "public/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v3.webp",
+        "gitMode": "100644",
+        "baselineBlob": "994952b182991f40b1e6a90bac707c2132e9f990",
         "sizeBytes": 173290,
         "sha256": "96c0cc8b44593f5a218a97c1f38e1b5023ccd932317ef1a98e85675180268224",
         "category": "sprite",
@@ -423,6 +483,8 @@
       },
       {
         "path": "public/juyiting/sprites/persona-sheets-v1/wuyong-8-direction-v1.webp",
+        "gitMode": "100644",
+        "baselineBlob": "72827daf7bd8abc8fb746a27294f58fb7cf793bd",
         "sizeBytes": 141490,
         "sha256": "846ec15c9ea2c758d6103bc19f2168bb6c5ee7aa175d2fda45264f0a39f7906d",
         "category": "sprite",
@@ -431,6 +493,8 @@
       },
       {
         "path": "public/juyiting/tiles/hall-tileset.json",
+        "gitMode": "100644",
+        "baselineBlob": "a365332143b94cfbdb634278a4bbd2df4ea9385a",
         "sizeBytes": 1338,
         "sha256": "3c20e10997854aac7f075b167d813a3f2e715278a82cc378b27d81a4355bc3d6",
         "category": "unreferenced-legacy",
@@ -439,6 +503,8 @@
       },
       {
         "path": "public/juyiting/tiles/hall-tileset.png",
+        "gitMode": "100644",
+        "baselineBlob": "57b67a99e2644571b5ddea96ea3bb86d17748197",
         "sizeBytes": 5099,
         "sha256": "c54366d4864c7a79786fdf39fbd14e18b53184c614d58a4d0a1d91448e2ef90e",
         "category": "unreferenced-legacy",

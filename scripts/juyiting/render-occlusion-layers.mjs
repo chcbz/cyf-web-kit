@@ -30,7 +30,7 @@ import {
   polygonAabb,
   sha256Bytes,
 } from './lib/tmx-structure.mjs'
-import { assertBaselineProvenance } from './lib/baseline-provenance.mjs'
+import { assertBaselineProvenance, fixtureBaselineCommit } from './lib/baseline-provenance.mjs'
 
 const tmxPath = process.env.JIA_JUYITING_TMX_PATH
   ?? fileURLToPath(new URL('../../public/juyiting/hall.tmx', import.meta.url))
@@ -81,7 +81,7 @@ export function runRenderLayers(args = process.argv.slice(2), environment = proc
   const structure = parseTmxStructure(tmxText)
   const tmxSha256 = sha256Bytes(Buffer.from(tmxText, 'utf8'))
   const inventory = readInventory()
-  const baselineCommit = inventory.baselineCommit ?? inventory.commit
+  const baselineCommit = fixtureBaselineCommit(inventory)
   assertBaselineProvenance(baselineCommit, [{ path: 'public/juyiting/hall.tmx', sha256: inventory.tmxSha256 }])
 
   const outputs = new Map()

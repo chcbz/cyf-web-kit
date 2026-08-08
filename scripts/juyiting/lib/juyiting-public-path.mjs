@@ -7,6 +7,7 @@
  * encoded separators. Every accepted source has exactly one audit path.
  */
 
+import { lstatSync, realpathSync } from 'node:fs'
 import { isAbsolute, relative, resolve } from 'node:path'
 
 const AUDIT_ORIGIN = 'https://juyiting-audit.invalid'
@@ -34,12 +35,35 @@ export function resolveJuyitingPublicFile(publicRoot, canonicalPublicPath) {
   }
 
   const root = resolve(publicRoot)
+  let realRoot
+  try {
+    realRoot = realpathSync(root)
+  } catch (error) {
+    if (error?.code === 'ENOENT') throw new Error(`Juyiting public root is missing: ${root}`)
+    throw error
+  }
+
   const path = resolve(root, canonicalPublicPath.slice('public/'.length))
   const relation = relative(root, path)
   if (relation === '..' || relation.startsWith('../') || relation.startsWith('..\\') || isAbsolute(relation)) {
     throw new Error(`Juyiting public path escapes public root: ${canonicalPublicPath}`)
   }
-  return path
+
+  let realPath
+  try {
+    realPath = realpathSync(path)
+  } catch (error) {
+    if (error?.code === 'ENOENT') throw new Error(`Juyiting public file is missing: ${canonicalPublicPath}`)
+    throw error
+  }
+  const realRelation = relative(realRoot, realPath)
+  if (realRelation === '..' || realRelation.startsWith('../') || realRelation.startsWith('..\\') || isAbsolute(realRelation)) {
+    throw new Error(`Juyiting public file resolves outside public root: ${canonicalPublicPath} -> ${realPath}`)
+  }
+  if (!lstatSync(realPath).isFile()) {
+    throw new Error(`Juyiting public path is not a regular file: ${canonicalPublicPath}`)
+  }
+  return realPath
 }
 
 function canonicalize(source, kind) {

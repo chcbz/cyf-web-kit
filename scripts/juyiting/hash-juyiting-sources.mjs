@@ -135,12 +135,12 @@ export function serializeSourceHashes(report) {
 export function runHashSources(args = process.argv.slice(2)) {
   const mode = parseArguments(args)
   const existingFixture = readJsonIfPresent(fixturePath)
-  const inventoryFixture = readJsonIfPresent(inventoryPath)
-  const provenanceFixture = existingFixture?.baselineCommit || existingFixture?.commit ? existingFixture : inventoryFixture
-  if (!provenanceFixture) {
-    throw new Error('Juyiting source hash verification requires a committed fixture with a fixed baselineCommit')
+  if (!existingFixture) {
+    throw new Error('Juyiting source hash verification requires a committed fixture with the locked baselineCommit')
   }
-  const baselineCommit = fixtureBaselineCommit(provenanceFixture)
+  const inventoryFixture = readJsonIfPresent(inventoryPath)
+  if (inventoryFixture) fixtureBaselineCommit(inventoryFixture)
+  const baselineCommit = fixtureBaselineCommit(existingFixture)
   const expectedFiles = existingFixture?.entries?.map(entry => ({ path: entry.path, sha256: entry.sha256 })) ?? []
   if (expectedFiles.length > 0) assertBaselineProvenance(baselineCommit, expectedFiles)
   const report = buildSourceHashes({ baselineCommit })
