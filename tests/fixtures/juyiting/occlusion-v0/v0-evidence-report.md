@@ -1,12 +1,12 @@
 # Juyiting Occlusion V2 · E1 V0 证据补齐报告
 
-- 初始基线日期：2026-08-03；第五轮审查修复：2026-08-08
+- 初始基线日期：2026-08-03；第六轮审查修复：2026-08-08
 - Writer：`deepseek_flash_worker`
 - 基线 commit（web 分支）：`2424f51f375814f403ca70a9a6e9948728e595b1`
 - TMX：`public/juyiting/hall.tmx`
 - TMX SHA-256：`e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401`
 - 本报告绑定：`tests/fixtures/juyiting/occlusion-v0/source-hashes.json`（canonical + prop + 6 张 runtime persona sprite SHA-256）、`inventory.json`、`mask-ledger.md`、`layers/*.svg`（每个 SVG 内嵌 `data-commit` / `data-tmx-sha256` / `data-generation-id`）、`asset-report.json`。
-- 稳定 provenance：`scripts/juyiting/lib/baseline-provenance.mjs` 用代码常量将 E1 baseline 锁死为上述 commit；所有 fixture 的 `baselineCommit` / SVG `data-commit` 必须与该常量精确相等，不允许从 fixture 自举或 fallback 当前 HEAD。无参数 verify 会证明基线是当前 HEAD 的 ancestor，并通过 `git show <baselineCommit>:<path>` 重新计算受审计字节 SHA-256；因此后续提交不会触发“重新生成 → HEAD 再变化”的循环。
+- 稳定 provenance：`scripts/juyiting/lib/baseline-provenance.mjs` 用代码常量将 E1 baseline 锁死为上述 commit；所有 fixture 的 `baselineCommit` / SVG `data-commit` 必须与该常量精确相等，不允许从 fixture 自举或 fallback 当前 HEAD。所有 Git 子进程保留当前环境并强制 `GIT_NO_REPLACE_OBJECTS=1`；固定 commit 的 tree 路径→blob 映射由 replacement-disabled `ls-tree` 获取，再按 blob object ID 通过 `cat-file --batch` 读取并独立核对 object type、size 和 Git object hash，最后计算 SHA-256。后续提交不会触发“重新生成 → HEAD 再变化”的循环，replace refs 也不能改写证据。
 - `data-generation-id` 算法：先把该字段设为 64 个 `0` 生成 provisional SVG，再对 provisional SVG 计算 SHA-256，最后将结果写回。它**不是 final SVG 的 self-hash**；SVG 另含 `data-generation-algorithm=sha256-provisional-svg-zero-id-v1`。
 
 ## 1. 已冻结回归用例（用户事实 → 回归条目）
@@ -52,7 +52,7 @@ camera/zoom/DPR, agent/prop/image-layer depth, 命中 mask ID
 ### 资产与纹理解码统计语义
 
 - `runtimeCoreFiles` 不扫描源码字符串：脚本通过 `node --import tsx` 执行并读取 `src/game/resources.js` 的 `HALL_BOOT_RESOURCES` / `buildHallMapResources` / `buildPersonaSpriteResource` 与 `src/game/sprites/personaSpriteManifest.ts` 的 `PERSONA_SPRITE_MANIFEST` 真实导出；`parseTmxStructure(hall.tmx)` 的 tileset/image-layer/collection-tile 结果被适配给真实 map loader，并对 loader 输出与 TMX 期望引用做精确集合校验。未知类型、缺失字段、意外或不存在的 runtime 路径均 fail closed。`runtimeCoreBytes` 是 16 项明细逐项 `sizeBytes` 的精确和：`2,415,264` bytes。
-- runtime 与 TMX 引用统一经过 `scripts/juyiting/lib/juyiting-public-path.mjs`：使用 WHATWG URL 复核，当前契约仅接受 ASCII unreserved path segment；percent encoding（含大小写 encoded dot segment、`%2f`/`%5c`）、`.`/`..`/空 segment、反斜杠、NUL/control、origin/host、query/hash 全部 fail closed，唯一输出为 `public/juyiting/...`。文件解析同时对 public root 与最终目标执行 `realpath` 边界检查；缺失目标明确报错，symlink 逃逸 root 被拒绝。
+- runtime 与 TMX 引用统一经过 `scripts/juyiting/lib/juyiting-public-path.mjs`：使用 WHATWG URL 复核，当前契约仅接受 ASCII unreserved path segment；percent encoding（含大小写 encoded dot segment、`%2f`/`%5c`）、`.`/`..`/空 segment、反斜杠、NUL/control、origin/host、query/hash 全部 fail closed，唯一输出为 `public/juyiting/...`。安全读取使用 `openSync(O_RDONLY|O_NOFOLLOW)`，在同一 fd 上 `fstat` regular-file、通过 `/proc/self/fd/<fd>` 核对真实实体位于 real `public/juyiting` root，再从同一 fd 读取并关闭；公共树审计、sprite source hash 和 texture dimension 共用该内存字节，避免 `lstat(path) → readFile(path)` 与审计后的二次路径跟随。
 - 完整 public tree provenance：固定基线的 `git ls-tree -r`（`public/juyiting/`）是路径、blob 与 mode 权威，共 27 个 regular blob。asset verifier/update 要求当前树路径集合、目录边界、regular-file 类型、可执行位及逐文件 SHA-256 全部精确一致；缺失/额外/特殊类型/symlink/字节变化均在 fixture 写入前 fail closed。
 - `public/juyiting/tiles/hall-tileset.json` 与 `hall-tileset.png` 未被当前 `hall.tmx`、resources loader 或角色 sprite 映射引用，分类为 `unreferenced-legacy`，不计入 runtimeCore。
 - 纹理解码按**实际加载路径**逐行计一次，包含当前 runtime 引用的 4 张全图、5 个 prop 和 6 张 persona sprite：`loadedPathDecodedBytes=50,269,248`；按文件内容 SHA-256 去重后 `uniqueContentDecodedBytes=44,092,480`；`duplicateContentOverheadBytes=6,176,768`。
@@ -62,6 +62,6 @@ camera/zoom/DPR, agent/prop/image-layer depth, 命中 mask ID
 
 - **7 个 mask 几何 region 边界漂移**：49、54、57、74、76、80、83 的 centroid 与权威 region 不一致 → E10A 多边形/region 校准候选。
 - **duplicate occluder**：mid 与 foreground 字节级相同（同一 SHA-256，size 71274）→ E16B 清理，E1 不删除（canonical 契约已冻结）。
-- **fixture update fail-closed**：inventory/hash/preview/asset 四条路径都先执行代码常量 baseline 锁；重指 fixture 到当前 HEAD 或其他 commit 时 verify/update 均在写前失败。`hash:juyiting-sources -- --update` 会用候选 `report.entries` 做固定 commit 的 `git show` provenance；`asset:juyiting-report -- --update` 还会校验完整 27-file baseline public tree（包括非 runtime modular/legacy 文件）与实际 TMX。隔离测试覆盖 sprite 篡改、删除非 runtime baseline 文件及 fixture baseline 重指向，均证明命令非 0 且 fixture 字节不变。共享 atomic writer 采用主错误 + cleanup errors 的 `AggregateError`，close/unlink 同时失败也不覆盖主错误；正常替换无 `.tmp-*` 残留。
+- **fixture update fail-closed**：inventory/hash/preview/asset 四条路径都先执行代码常量 baseline 锁；重指 fixture 到当前 HEAD 或其他 commit 时 verify/update 均在写前失败。hash/asset provenance 使用 replacement-disabled blob-object 读取；隔离 clone 中真实建立 replace ref 的测试证明 verifier/update 仍以原 blob 为准，当前篡改被拒绝且 fixture 不变。asset 继续校验完整 27-file baseline public tree。共享 atomic writer 采用主错误 + cleanup errors 的 `AggregateError`；新增 `atomicWriteUtf8Batch` 先完成全部 staging+fsync+verify，再提交，inventory 的 JSON+ledger 与 preview 的四 SVG 已切换为批量事务。第二目标提交失败测试证明第一目标回滚到原字节且无 `.tmp-*`/`.backup-*` 残留。
 - **CS02–05/08/09（production-equivalent）**：需要 E6 `?jytOcclusionDebug` overlay + 可控角色坐标/动画/depth 调试接口 + 浏览器驱动截图 harness；E1 明确标记 BLOCKED，不伪造数字/截图。
 - **draw call / 运行时性能**：E1 无可靠自动采样 harness，标 BLOCKED（见 `asset-report.json` 的 `drawCallsRuntimePerf`）；E14 固定 108-agent benchmark 负责。

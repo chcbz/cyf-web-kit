@@ -1,4 +1,5 @@
 /** Stable, fail-closed provenance checks for committed E1 baseline fixtures. */
+import { createHash } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
 import {
   lstatSync,
@@ -9,16 +10,23 @@ import {
 import { isAbsolute, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { canonicalizeJuyitingRuntimeSource } from './juyiting-public-path.mjs'
+import {
+  canonicalizeJuyitingRuntimeSource,
+  readJuyitingPublicFile,
+} from './juyiting-public-path.mjs'
 import { sha256Bytes } from './tmx-structure.mjs'
 
 export const E1_BASELINE_COMMIT = '2424f51f375814f403ca70a9a6e9948728e595b1'
-export const repoRoot = fileURLToPath(new URL('../../../', import.meta.url))
+export const repoRoot = resolve(
+  process.env.JIA_JUYITING_GIT_REPO_ROOT
+    ?? fileURLToPath(new URL('../../../', import.meta.url)),
+)
 const PUBLIC_TREE_PREFIX = 'public/juyiting/'
 const ALLOWED_BLOB_MODES = new Set(['100644', '100755'])
+const MAX_GIT_BUFFER = 64 * 1024 * 1024
 
 export function currentHead() {
-  return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoRoot, encoding: 'utf8' }).trim()
+  return gitExec(['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
 }
 
 export function readJsonIfPresent(path) {
@@ -40,23 +48,16 @@ export function fixtureBaselineCommit(fixture) {
 }
 
 export function assertBaselineProvenance(baselineCommit, expectedFiles) {
-  assertLockedBaselineCommit(baselineCommit)
-  const resolved = execFileSync('git', ['rev-parse', '--verify', `${baselineCommit}^{commit}`], {
-    cwd: repoRoot,
-    encoding: 'utf8',
-  }).trim()
-  if (resolved !== baselineCommit) throw new Error(`Baseline commit did not resolve exactly: ${baselineCommit}`)
-
-  const ancestor = spawnSync('git', ['merge-base', '--is-ancestor', baselineCommit, 'HEAD'], { cwd: repoRoot })
-  if (ancestor.status !== 0) {
-    throw new Error(`E1 baseline commit ${baselineCommit} is not an ancestor of current HEAD ${currentHead()}`)
-  }
-
+  assertBaselineCommit(baselineCommit)
+  const snapshot = readVerifiedBaselineSnapshot(baselineCommit)
+  const baselineByPath = new Map(snapshot.files.map(entry => [entry.path, entry]))
   for (const expected of expectedFiles) {
-    const bytes = readBaselineFile(baselineCommit, expected.path)
-    const actualSha256 = sha256Bytes(bytes)
-    if (actualSha256 !== expected.sha256) {
-      throw new Error(`Baseline provenance mismatch for ${expected.path}: expected ${expected.sha256}, got ${actualSha256} at ${baselineCommit}`)
+    const baseline = baselineByPath.get(expected.path)
+    if (!baseline) {
+      throw new Error(`Baseline provenance path is not present in fixed public tree: ${expected.path}`)
+    }
+    if (baseline.sha256 !== expected.sha256) {
+      throw new Error(`Baseline provenance mismatch for ${expected.path}: expected ${expected.sha256}, got ${baseline.sha256} at ${baselineCommit}`)
     }
   }
   return { baselineCommit, currentHead: currentHead() }
@@ -64,16 +65,16 @@ export function assertBaselineProvenance(baselineCommit, expectedFiles) {
 
 /**
  * Treat the frozen commit's complete public/juyiting tree as the authority.
- * Every baseline entry must be a regular blob, and the current tree must have
- * the exact same files/directories, executable bits, and bytes.
+ * Every baseline entry must be a verified regular blob, and the current tree
+ * must have the exact same files/directories, executable bits, and bytes.
  */
 export function assertBaselinePublicTree(publicRoot, baselineCommit = E1_BASELINE_COMMIT) {
-  assertBaselineProvenance(baselineCommit, [])
-  const baselineEntries = readBaselinePublicTree(baselineCommit)
-  const baselineByPath = new Map(baselineEntries.map(entry => [entry.path, entry]))
-  const expectedDirectories = baselineDirectories(baselineEntries.map(entry => entry.path))
-  const currentEntries = readCurrentPublicTree(publicRoot, expectedDirectories)
-  const currentByPath = new Map(currentEntries.map(entry => [entry.path, entry]))
+  assertBaselineCommit(baselineCommit)
+  const baselineSnapshot = readVerifiedBaselineSnapshot(baselineCommit)
+  const baselineByPath = new Map(baselineSnapshot.files.map(entry => [entry.path, entry]))
+  const expectedDirectories = baselineDirectories(baselineSnapshot.files.map(entry => entry.path))
+  const currentSnapshot = readCurrentPublicTree(publicRoot, expectedDirectories)
+  const currentByPath = new Map(currentSnapshot.files.map(entry => [entry.path, entry]))
 
   const missing = [...baselineByPath.keys()].filter(path => !currentByPath.has(path)).sort()
   const extra = [...currentByPath.keys()].filter(path => !baselineByPath.has(path)).sort()
@@ -82,15 +83,13 @@ export function assertBaselinePublicTree(publicRoot, baselineCommit = E1_BASELIN
   }
 
   const files = []
-  for (const baseline of baselineEntries) {
+  for (const baseline of baselineSnapshot.files) {
     const current = currentByPath.get(baseline.path)
     if (current.gitMode !== baseline.gitMode) {
       throw new Error(`Juyiting public tree mode mismatch for ${baseline.path}: baseline ${baseline.gitMode}, current ${current.gitMode}`)
     }
-    const baselineBytes = readBaselineFile(baselineCommit, baseline.path)
-    const baselineSha256 = sha256Bytes(baselineBytes)
-    if (baselineSha256 !== current.sha256) {
-      throw new Error(`Baseline provenance mismatch for ${baseline.path}: baseline ${baselineSha256}, current ${current.sha256}`)
+    if (baseline.sha256 !== current.sha256) {
+      throw new Error(`Baseline provenance mismatch for ${baseline.path}: baseline ${baseline.sha256}, current ${current.sha256}`)
     }
     files.push({
       path: baseline.path,
@@ -104,12 +103,15 @@ export function assertBaselinePublicTree(publicRoot, baselineCommit = E1_BASELIN
   return {
     baselineCommit,
     pathPrefix: PUBLIC_TREE_PREFIX,
-    authority: `git ls-tree -r ${baselineCommit} -- ${PUBLIC_TREE_PREFIX}`,
+    authority: `GIT_NO_REPLACE_OBJECTS=1 git ls-tree -r -z --full-tree ${baselineCommit} -- ${PUBLIC_TREE_PREFIX}; blob bytes via git cat-file --batch by object ID`,
     acceptedBlobModes: [...ALLOWED_BLOB_MODES],
     exactPathSet: true,
     currentBytesMatchBaseline: true,
+    gitReplaceObjectsDisabled: true,
+    baselineObjectFormat: baselineSnapshot.objectFormat,
     fileCount: files.length,
     files,
+    bytesByPath: currentSnapshot.bytesByPath,
   }
 }
 
@@ -119,11 +121,41 @@ function assertLockedBaselineCommit(baselineCommit) {
   }
 }
 
+function assertBaselineCommit(baselineCommit) {
+  assertLockedBaselineCommit(baselineCommit)
+  const resolved = gitExec(['rev-parse', '--verify', `${baselineCommit}^{commit}`], { encoding: 'utf8' }).trim()
+  if (resolved !== baselineCommit) throw new Error(`Baseline commit did not resolve exactly: ${baselineCommit}`)
+
+  const ancestor = gitSpawn(['merge-base', '--is-ancestor', baselineCommit, 'HEAD'])
+  if (ancestor.status !== 0) {
+    throw new Error(`E1 baseline commit ${baselineCommit} is not an ancestor of current HEAD ${currentHead()}`)
+  }
+}
+
+function readVerifiedBaselineSnapshot(baselineCommit) {
+  const entries = readBaselinePublicTree(baselineCommit)
+  const objectFormat = gitExec(['rev-parse', '--show-object-format'], { encoding: 'utf8' }).trim()
+  if (!['sha1', 'sha256'].includes(objectFormat)) {
+    throw new Error(`Unsupported Git object format for E1 provenance: ${objectFormat}`)
+  }
+  const blobs = readAndVerifyBaselineBlobs(entries, objectFormat)
+  return {
+    objectFormat,
+    files: entries.map(entry => {
+      const blob = blobs.get(entry.baselineBlob)
+      return {
+        ...entry,
+        baselineSizeBytes: blob.bytes.length,
+        sha256: sha256Bytes(blob.bytes),
+      }
+    }),
+  }
+}
+
 function readBaselinePublicTree(baselineCommit) {
-  const output = execFileSync(
-    'git',
+  const output = gitExec(
     ['ls-tree', '-r', '-z', '--full-tree', baselineCommit, '--', PUBLIC_TREE_PREFIX],
-    { cwd: repoRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+    { encoding: 'utf8' },
   )
   const entries = output.split('\0').filter(Boolean).map(record => {
     const match = /^(\d{6}) ([^ ]+) ([0-9a-f]+)\t([\s\S]+)$/.exec(record)
@@ -140,7 +172,56 @@ function readBaselinePublicTree(baselineCommit) {
     return { path, gitMode, baselineBlob }
   }).sort((a, b) => a.path.localeCompare(b.path))
   if (entries.length === 0) throw new Error(`Baseline public tree is empty at ${baselineCommit}:${PUBLIC_TREE_PREFIX}`)
+  if (new Set(entries.map(entry => entry.path)).size !== entries.length) {
+    throw new Error(`Baseline public tree contains duplicate path mappings at ${baselineCommit}`)
+  }
   return entries
+}
+
+function readAndVerifyBaselineBlobs(entries, objectFormat) {
+  const uniqueObjectIds = [...new Set(entries.map(entry => entry.baselineBlob))]
+  const output = gitExec(['cat-file', '--batch'], {
+    encoding: null,
+    input: `${uniqueObjectIds.join('\n')}\n`,
+  })
+  const blobs = new Map()
+  let offset = 0
+  for (const requestedObjectId of uniqueObjectIds) {
+    const headerEnd = output.indexOf(0x0a, offset)
+    if (headerEnd < 0) throw new Error(`Truncated git cat-file header for baseline blob ${requestedObjectId}`)
+    const header = output.subarray(offset, headerEnd).toString('utf8')
+    const match = /^([0-9a-f]+) ([^ ]+) (\d+)$/.exec(header)
+    if (!match) throw new Error(`Invalid git cat-file header for baseline blob ${requestedObjectId}: ${header}`)
+    const [, returnedObjectId, type, sizeText] = match
+    if (returnedObjectId !== requestedObjectId) {
+      throw new Error(`Git cat-file returned wrong object ID: requested ${requestedObjectId}, got ${returnedObjectId}`)
+    }
+    if (type !== 'blob') throw new Error(`Baseline object ${requestedObjectId} is ${type}, expected blob`)
+    const size = Number(sizeText)
+    if (!Number.isSafeInteger(size) || size < 0) throw new Error(`Invalid baseline blob size for ${requestedObjectId}: ${sizeText}`)
+    const bytesStart = headerEnd + 1
+    const bytesEnd = bytesStart + size
+    if (bytesEnd >= output.length || output[bytesEnd] !== 0x0a) {
+      throw new Error(`Truncated git cat-file body for baseline blob ${requestedObjectId}: expected ${size} bytes`)
+    }
+    const bytes = output.subarray(bytesStart, bytesEnd)
+    const computedObjectId = hashGitBlob(bytes, objectFormat)
+    if (computedObjectId !== requestedObjectId) {
+      throw new Error(`Baseline blob object hash mismatch: expected ${requestedObjectId}, computed ${computedObjectId}`)
+    }
+    blobs.set(requestedObjectId, { bytes, type, size })
+    offset = bytesEnd + 1
+  }
+  if (offset !== output.length) throw new Error(`Unexpected trailing bytes from git cat-file --batch: ${output.length - offset}`)
+  return blobs
+}
+
+function hashGitBlob(bytes, objectFormat) {
+  const algorithm = objectFormat === 'sha1' ? 'sha1' : 'sha256'
+  return createHash(algorithm)
+    .update(Buffer.from(`blob ${bytes.length}\0`))
+    .update(bytes)
+    .digest('hex')
 }
 
 function readCurrentPublicTree(publicRoot, expectedDirectories) {
@@ -166,7 +247,8 @@ function readCurrentPublicTree(publicRoot, expectedDirectories) {
   const realJuyitingRoot = realpathSync(juyitingRoot)
   assertInside(realRoot, realJuyitingRoot, 'Juyiting public tree root escapes public root')
 
-  const entries = []
+  const files = []
+  const bytesByPath = new Map()
   const walk = (directory, auditDirectory) => {
     if (!expectedDirectories.has(auditDirectory)) {
       throw new Error(`Juyiting public tree contains extra directory: ${auditDirectory}/`)
@@ -187,17 +269,19 @@ function readCurrentPublicTree(publicRoot, expectedDirectories) {
       }
       const canonical = canonicalizeJuyitingRuntimeSource(`/${auditPath.slice('public/'.length)}`)
       if (canonical !== auditPath) throw new Error(`Non-canonical current public tree path: ${auditPath}`)
-      const bytes = readFileSync(full)
-      entries.push({
+      const opened = readJuyitingPublicFile(root, auditPath)
+      const bytes = opened.bytes
+      bytesByPath.set(auditPath, bytes)
+      files.push({
         path: auditPath,
-        gitMode: stat.mode & 0o111 ? '100755' : '100644',
+        gitMode: opened.stat.mode & 0o111 ? '100755' : '100644',
         sizeBytes: bytes.length,
         sha256: sha256Bytes(bytes),
       })
     }
   }
   walk(juyitingRoot, 'public/juyiting')
-  return entries.sort((a, b) => a.path.localeCompare(b.path))
+  return { files: files.sort((a, b) => a.path.localeCompare(b.path)), bytesByPath }
 }
 
 function baselineDirectories(paths) {
@@ -211,12 +295,25 @@ function baselineDirectories(paths) {
   return directories
 }
 
-function readBaselineFile(baselineCommit, path) {
-  return execFileSync('git', ['show', `${baselineCommit}:${path}`], {
+function gitExec(args, options = {}) {
+  return execFileSync('git', args, {
     cwd: repoRoot,
-    encoding: null,
-    maxBuffer: 64 * 1024 * 1024,
+    maxBuffer: MAX_GIT_BUFFER,
+    ...options,
+    env: gitEnvironment(),
   })
+}
+
+function gitSpawn(args, options = {}) {
+  return spawnSync('git', args, {
+    cwd: repoRoot,
+    ...options,
+    env: gitEnvironment(),
+  })
+}
+
+function gitEnvironment() {
+  return { ...process.env, GIT_NO_REPLACE_OBJECTS: '1' }
 }
 
 function assertInside(root, candidate, message) {

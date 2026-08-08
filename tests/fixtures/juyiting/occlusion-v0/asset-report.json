@@ -47,13 +47,15 @@
     "baselinePublicTreeAudit": {
       "baselineCommit": "2424f51f375814f403ca70a9a6e9948728e595b1",
       "pathPrefix": "public/juyiting/",
-      "authority": "git ls-tree -r 2424f51f375814f403ca70a9a6e9948728e595b1 -- public/juyiting/",
+      "authority": "GIT_NO_REPLACE_OBJECTS=1 git ls-tree -r -z --full-tree 2424f51f375814f403ca70a9a6e9948728e595b1 -- public/juyiting/; blob bytes via git cat-file --batch by object ID",
       "acceptedBlobModes": [
         "100644",
         "100755"
       ],
       "exactPathSet": true,
       "currentBytesMatchBaseline": true,
+      "gitReplaceObjectsDisabled": true,
+      "baselineObjectFormat": "sha1",
       "fileCount": 27
     },
     "totalPublicTreeBytes": 17931742,

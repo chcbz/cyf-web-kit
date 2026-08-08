@@ -20,7 +20,7 @@
  */
 
 import { createHash } from 'node:crypto'
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -31,6 +31,7 @@ import {
   sha256Bytes,
 } from './lib/tmx-structure.mjs'
 import { assertBaselineProvenance, fixtureBaselineCommit } from './lib/baseline-provenance.mjs'
+import { atomicWriteUtf8Batch } from './lib/atomic-write.mjs'
 
 const tmxPath = process.env.JIA_JUYITING_TMX_PATH
   ?? fileURLToPath(new URL('../../public/juyiting/hall.tmx', import.meta.url))
@@ -91,10 +92,14 @@ export function runRenderLayers(args = process.argv.slice(2), environment = proc
   }
 
   if (mode === 'update') {
-    mkdirSync(layerDir, { recursive: true })
-    for (const [filename, svg] of outputs) {
-      writeFileSync(resolve(layerDir, filename), svg, 'utf8')
-    }
+    atomicWriteUtf8Batch(
+      [...outputs].map(([filename, svg]) => ({
+        path: resolve(layerDir, filename),
+        content: svg,
+        label: `Juyiting occlusion layer ${filename}`,
+      })),
+      'Juyiting occlusion layer fixture batch',
+    )
     console.log(`Juyiting occlusion layers updated: ${layerDir}`)
     return
   }

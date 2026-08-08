@@ -16,7 +16,7 @@
  * deliberately left "TBD_E10A" — E1 does not guess visual semantics.
  */
 
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -33,6 +33,7 @@ import {
   fixtureBaselineCommit,
   readJsonIfPresent,
 } from './lib/baseline-provenance.mjs'
+import { atomicWriteUtf8Batch } from './lib/atomic-write.mjs'
 
 // Authoritative region mapping from docs/juyiting-occlusion-system-design.md §9.
 // This is the frozen design contract for the 37 legacy masks.
@@ -277,9 +278,10 @@ export function runInventory(args = process.argv.slice(2), environment = process
     return inventory
   }
   if (mode === 'update') {
-    mkdirSync(fixtureDir, { recursive: true })
-    writeFileSync(inventoryPath, json, 'utf8')
-    writeFileSync(ledgerPath, markdown, 'utf8')
+    atomicWriteUtf8Batch([
+      { path: inventoryPath, content: json, label: 'Juyiting occlusion inventory fixture' },
+      { path: ledgerPath, content: markdown, label: 'Juyiting mask ledger fixture' },
+    ], 'Juyiting inventory fixture batch')
     console.log(`Juyiting occlusion inventory updated: ${inventoryPath}`)
     console.log(`Juyiting mask ledger updated: ${ledgerPath}`)
     return inventory

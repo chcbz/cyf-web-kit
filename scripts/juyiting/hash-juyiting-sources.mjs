@@ -24,7 +24,7 @@ import {
   fixtureBaselineCommit,
   readJsonIfPresent,
 } from './lib/baseline-provenance.mjs'
-import { canonicalizeJuyitingRuntimeSource, resolveJuyitingPublicFile } from './lib/juyiting-public-path.mjs'
+import { canonicalizeJuyitingRuntimeSource, readJuyitingPublicFile } from './lib/juyiting-public-path.mjs'
 
 const tmxPath = process.env.JIA_JUYITING_TMX_PATH
   ?? fileURLToPath(new URL('../../public/juyiting/hall.tmx', import.meta.url))
@@ -90,7 +90,7 @@ export function buildSourceHashes(options = {}) {
   for (const definition of personaDefinitions) {
     const resource = buildPersonaSpriteResource(definition)
     const publicPath = personaSpritePublicPath(resource)
-    const bytes = readRequiredFile(resolveJuyitingPublicFile(publicRoot, publicPath), `persona sprite ${definition.personaCode}`)
+    const bytes = readJuyitingPublicFile(publicRoot, publicPath).bytes
     add(definition.personaCode, publicPath, bytes, 'persona-sprite')
   }
 

@@ -2,8 +2,12 @@ import { expect } from 'chai'
 import {
   appendFileSync,
   copyFileSync,
+  closeSync,
   cpSync,
+  existsSync,
   mkdirSync,
+  openSync,
+  renameSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -23,10 +27,11 @@ import {
   assertBaselinePublicTree,
   currentHead,
 } from '../scripts/juyiting/lib/baseline-provenance.mjs'
-import { atomicWriteUtf8 } from '../scripts/juyiting/lib/atomic-write.mjs'
+import { atomicWriteUtf8, atomicWriteUtf8Batch } from '../scripts/juyiting/lib/atomic-write.mjs'
 import {
   canonicalizeJuyitingRuntimeSource,
   canonicalizeJuyitingTmxSource,
+  readJuyitingPublicFile,
   resolveJuyitingPublicFile,
 } from '../scripts/juyiting/lib/juyiting-public-path.mjs'
 import { buildRuntimeReferenceAudit } from '../scripts/juyiting/asset-report-juyiting.mjs'
@@ -147,13 +152,82 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
       pathPrefix: 'public/juyiting/',
       exactPathSet: true,
       currentBytesMatchBaseline: true,
+      gitReplaceObjectsDisabled: true,
+      baselineObjectFormat: 'sha1',
       fileCount: 27,
     })
     expect(assetReport.juyitingNetworkAssets.totalPublicTreeBytes)
       .to.equal(assetReport.juyitingNetworkAssets.files.reduce((total, entry) => total + entry.sizeBytes, 0))
   })
 
-  it('covers all six executable persona sprite exports with baseline git-show provenance', () => {
+  it('ignores Git replace refs and reads the fixed tree blob object IDs in an isolated clone', function () {
+    this.timeout(60000)
+    const { root, publicRoot, fixtureDir } = copyIsolatedBaseline('juyiting-e1-git-replace-')
+    const cloneRoot = join(root, 'repo')
+    const targetAuditPath = 'public/juyiting/images/modular/preview.html'
+    const targetFile = join(publicRoot, 'juyiting/images/modular/preview.html')
+    const gitEnvironment = {
+      ...process.env,
+      GIT_CONFIG_GLOBAL: '/dev/null',
+      GIT_CONFIG_NOSYSTEM: '1',
+    }
+    delete gitEnvironment.GIT_NO_REPLACE_OBJECTS
+    for (const key of Object.keys(gitEnvironment)) {
+      if (/^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/.test(key)) delete gitEnvironment[key]
+    }
+    let originalBlob
+    try {
+      execFileSync('git', ['clone', '--shared', '--quiet', process.cwd(), cloneRoot], { env: gitEnvironment })
+      const treeLine = execFileSync(
+        'git',
+        ['-C', cloneRoot, 'ls-tree', E1_BASELINE_COMMIT, '--', targetAuditPath],
+        { encoding: 'utf8', env: gitEnvironment },
+      ).trim()
+      originalBlob = treeLine.match(/^100644 blob ([0-9a-f]{40})	/)?.[1]
+      expect(originalBlob).to.match(/^[0-9a-f]{40}$/)
+
+      const replacementBytes = Buffer.from('replacement-ref-bytes-that-must-not-be-trusted\n')
+      const replacementBlob = execFileSync(
+        'git',
+        ['-C', cloneRoot, 'hash-object', '-w', '--stdin'],
+        { input: replacementBytes, encoding: 'utf8', env: gitEnvironment },
+      ).trim()
+      execFileSync('git', ['-C', cloneRoot, 'replace', originalBlob, replacementBlob], { env: gitEnvironment })
+      expect(execFileSync('git', ['-C', cloneRoot, 'replace', '-l'], { encoding: 'utf8', env: gitEnvironment }).trim())
+        .to.equal(originalBlob)
+      expect(execFileSync('git', ['-C', cloneRoot, 'cat-file', 'blob', originalBlob], { env: gitEnvironment }).equals(replacementBytes))
+        .to.equal(true)
+
+      writeFileSync(targetFile, replacementBytes)
+      const fixturePath = join(fixtureDir, 'asset-report.json')
+      const before = readFileSync(fixturePath)
+      const environment = {
+        ...process.env,
+        JIA_JUYITING_GIT_REPO_ROOT: cloneRoot,
+        JIA_JUYITING_PUBLIC_ROOT: publicRoot,
+        JIA_JUYITING_TMX_PATH: join(publicRoot, 'juyiting/hall.tmx'),
+        JIA_JUYITING_OCCLUSION_FIXTURE_DIR: fixtureDir,
+      }
+      for (const mode of ['verify', 'update']) {
+        const result = runNpmScript('asset:juyiting-report', environment, mode)
+        expect(result.status, `${mode}\n${result.stdout}\n${result.stderr}`).to.not.equal(0)
+        expect(`${result.stdout}\n${result.stderr}`).to.include(`Baseline provenance mismatch for ${targetAuditPath}`)
+        expect(`${result.stdout}\n${result.stderr}`).to.not.include('Baseline blob object hash mismatch')
+        expect(readFileSync(fixturePath).equals(before), mode).to.equal(true)
+      }
+    } finally {
+      if (originalBlob) {
+        try { execFileSync('git', ['-C', cloneRoot, 'replace', '-d', originalBlob], { env: gitEnvironment }) } catch {}
+      }
+      if (originalBlob && existsSync(cloneRoot)) {
+        expect(execFileSync('git', ['-C', cloneRoot, 'replace', '-l'], { encoding: 'utf8', env: gitEnvironment }).trim())
+          .to.equal('')
+      }
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('covers all six executable persona sprite exports with fixed blob-object provenance', () => {
     const spriteEntries = sourceHashes.entries.filter(entry => entry.role === 'persona-sprite')
     expect(spriteEntries).to.have.length(6)
     expect(spriteEntries.map(entry => entry.path)).to.have.members(
@@ -370,23 +444,89 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
     }
   })
 
-  it('resolves only existing real files inside the real public root', () => {
+  it('resolves only opened regular files inside the real public/juyiting root', () => {
     const root = mkdtempSync(join(tmpdir(), 'juyiting-e1-realpath-'))
     try {
       const publicRoot = join(root, 'public')
-      const imageDirectory = join(publicRoot, 'juyiting/images')
-      const outside = join(root, 'outside.webp')
+      const juyitingRoot = join(publicRoot, 'juyiting')
+      const imageDirectory = join(juyitingRoot, 'images')
+      const outsideDirectory = join(root, 'outside')
       mkdirSync(imageDirectory, { recursive: true })
-      writeFileSync(outside, 'outside')
-      symlinkSync(outside, join(imageDirectory, 'escape.webp'))
+      mkdirSync(outsideDirectory, { recursive: true })
+      writeFileSync(join(outsideDirectory, 'escape.webp'), 'outside')
+      symlinkSync(outsideDirectory, join(juyitingRoot, 'escape-dir'))
 
-      expect(() => resolveJuyitingPublicFile(publicRoot, 'public/juyiting/images/escape.webp'))
-        .to.throw('Juyiting public file resolves outside public root')
-      expect(() => resolveJuyitingPublicFile(publicRoot, 'public/juyiting/images/missing.webp'))
+      expect(() => readJuyitingPublicFile(publicRoot, 'public/juyiting/escape-dir/escape.webp'))
+        .to.throw('Juyiting public file descriptor resolves outside real public/juyiting root')
+      symlinkSync(join(outsideDirectory, 'escape.webp'), join(imageDirectory, 'final-link.webp'))
+      expect(() => readJuyitingPublicFile(publicRoot, 'public/juyiting/images/final-link.webp'))
+        .to.throw('Juyiting public file must not be a symlink')
+      expect(() => readJuyitingPublicFile(publicRoot, 'public/juyiting/images/missing.webp'))
         .to.throw('Juyiting public file is missing: public/juyiting/images/missing.webp')
       const inside = join(imageDirectory, 'inside.webp')
       writeFileSync(inside, 'inside')
+      const opened = readJuyitingPublicFile(publicRoot, 'public/juyiting/images/inside.webp')
+      expect(opened.realPath).to.equal(inside)
+      expect(opened.bytes.toString()).to.equal('inside')
       expect(resolveJuyitingPublicFile(publicRoot, 'public/juyiting/images/inside.webp')).to.equal(inside)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects a deterministic final-component symlink swap before descriptor open', () => {
+    const root = mkdtempSync(join(tmpdir(), 'juyiting-e1-open-race-'))
+    try {
+      const publicRoot = join(root, 'public')
+      const imageDirectory = join(publicRoot, 'juyiting/images')
+      const candidate = join(imageDirectory, 'race.webp')
+      const outside = join(root, 'outside.webp')
+      mkdirSync(imageDirectory, { recursive: true })
+      writeFileSync(candidate, 'trusted-before-open')
+      writeFileSync(outside, 'outside')
+      let swapped = false
+      expect(() => readJuyitingPublicFile(
+        publicRoot,
+        'public/juyiting/images/race.webp',
+        {
+          openSync(path, flags) {
+            expect(path).to.equal(candidate)
+            rmSync(path)
+            symlinkSync(outside, path)
+            swapped = true
+            return openSync(path, flags)
+          },
+        },
+      )).to.throw('Juyiting public file must not be a symlink')
+      expect(swapped).to.equal(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('preserves a descriptor-read primary error when close also fails', () => {
+    const root = mkdtempSync(join(tmpdir(), 'juyiting-e1-read-close-fault-'))
+    const primary = new Error('descriptor fstat failure')
+    const close = new Error('descriptor close failure')
+    try {
+      const publicRoot = join(root, 'public')
+      const imageDirectory = join(publicRoot, 'juyiting/images')
+      mkdirSync(imageDirectory, { recursive: true })
+      writeFileSync(join(imageDirectory, 'fault.webp'), 'bytes')
+      let thrown
+      try {
+        readJuyitingPublicFile(publicRoot, 'public/juyiting/images/fault.webp', {
+          fstatSync() { throw primary },
+          closeSync(descriptor) {
+            closeSync(descriptor)
+            throw close
+          },
+        })
+      } catch (error) {
+        thrown = error
+      }
+      expect(thrown).to.be.instanceOf(AggregateError)
+      expect(thrown.errors).to.deep.equal([primary, close])
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
@@ -427,6 +567,53 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
       atomicWriteUtf8(fixturePath, 'new', 'normal fixture')
       expect(readFileSync(fixturePath, 'utf8')).to.equal('new')
       expect(readdirSync(root).filter(name => name.includes('.tmp-'))).to.deep.equal([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('rolls back an atomic UTF-8 batch when the second target commit fails', () => {
+    const root = mkdtempSync(join(tmpdir(), 'juyiting-e1-atomic-batch-fail-'))
+    try {
+      const first = join(root, 'first.json')
+      const second = join(root, 'second.md')
+      writeFileSync(first, 'first-old')
+      writeFileSync(second, 'second-old')
+      let injected = false
+      expect(() => atomicWriteUtf8Batch([
+        { path: first, content: 'first-new', label: 'first fixture' },
+        { path: second, content: 'second-new', label: 'second fixture' },
+      ], 'two fixture transaction', {
+        renameSync(source, destination) {
+          if (!injected && destination === second && source.includes('.tmp-')) {
+            injected = true
+            throw new Error('second target commit failure')
+          }
+          return renameSync(source, destination)
+        },
+      })).to.throw('second target commit failure')
+      expect(injected).to.equal(true)
+      expect(readFileSync(first, 'utf8')).to.equal('first-old')
+      expect(readFileSync(second, 'utf8')).to.equal('second-old')
+      expect(readdirSync(root).filter(name => name.includes('.tmp-') || name.includes('.backup-'))).to.deep.equal([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('commits a complete atomic UTF-8 batch without temporary or backup residue', () => {
+    const root = mkdtempSync(join(tmpdir(), 'juyiting-e1-atomic-batch-ok-'))
+    try {
+      const first = join(root, 'first.json')
+      const second = join(root, 'second.md')
+      writeFileSync(first, 'first-old')
+      atomicWriteUtf8Batch([
+        { path: first, content: 'first-new' },
+        { path: second, content: 'second-new' },
+      ], 'normal fixture transaction')
+      expect(readFileSync(first, 'utf8')).to.equal('first-new')
+      expect(readFileSync(second, 'utf8')).to.equal('second-new')
+      expect(readdirSync(root).sort()).to.deep.equal(['first.json', 'second.md'])
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

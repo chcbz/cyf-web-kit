@@ -38,7 +38,6 @@ import {
 import {
   canonicalizeJuyitingRuntimeSource,
   canonicalizeJuyitingTmxSource,
-  resolveJuyitingPublicFile,
 } from './lib/juyiting-public-path.mjs'
 
 const worktreeRoot = fileURLToPath(new URL('../../', import.meta.url))
@@ -86,7 +85,11 @@ export function buildAssetReport(options = {}) {
     personaManifest: PERSONA_SPRITE_MANIFEST,
     buildSpriteResource: buildPersonaSpriteResource,
   })
-  const textures = buildTextureEstimate(runtimeReferenceAudit.files, sourceHashes.canonicalSource.path, publicRoot)
+  const textures = buildTextureEstimate(
+    runtimeReferenceAudit.files,
+    sourceHashes.canonicalSource.path,
+    publicTreeAudit.bytesByPath,
+  )
 
   return {
     schemaVersion: 1,
@@ -102,6 +105,8 @@ export function buildAssetReport(options = {}) {
         acceptedBlobModes: publicTreeAudit.acceptedBlobModes,
         exactPathSet: publicTreeAudit.exactPathSet,
         currentBytesMatchBaseline: publicTreeAudit.currentBytesMatchBaseline,
+        gitReplaceObjectsDisabled: publicTreeAudit.gitReplaceObjectsDisabled,
+        baselineObjectFormat: publicTreeAudit.baselineObjectFormat,
         fileCount: publicTreeAudit.fileCount,
       },
       totalPublicTreeBytes: sum(network.map(entry => entry.sizeBytes)),
@@ -340,10 +345,12 @@ function actualCoverage(structure, actualSources, kind) {
     .filter(layer => layer.kind === 'imagelayer' && layer.source && actualSources.has(tmxSourceToPublicPath(layer.source))).length
 }
 
-function buildTextureEstimate(runtimeFiles, canonicalPath, root) {
+function buildTextureEstimate(runtimeFiles, canonicalPath, auditedBytesByPath) {
   const imageFiles = runtimeFiles.filter(entry => /\.(?:png|webp)$/i.test(entry.path))
   const rows = imageFiles.map(entry => {
-    const dims = imageDimensions(resolveJuyitingPublicFile(root, entry.path))
+    const bytes = auditedBytesByPath.get(entry.path)
+    if (!bytes) throw new Error(`Audited descriptor bytes are missing for runtime texture: ${entry.path}`)
+    const dims = imageDimensions(bytes, entry.path)
     return {
       path: entry.path,
       role: entry.role,
@@ -415,8 +422,7 @@ function buildArtifactReport() {
   }
 }
 
-function imageDimensions(path) {
-  const bytes = readFileSync(path)
+function imageDimensions(bytes, path) {
   if (bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP') {
     let offset = 12
     while (offset + 8 <= bytes.length) {
