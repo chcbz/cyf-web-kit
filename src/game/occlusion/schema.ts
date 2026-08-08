@@ -241,6 +241,10 @@ const ERROR_CODE_SET = new Set([
   'AGENT_POSITION_INVALID',
   'AGENT_SPAWN_INVALID',
   'AGENT_CHUNK_INVALID',
+  'AGENT_HASH_FAILED',
+  'AGENT_RESOLVER_THREW',
+  'AGENT_RESOLVER_TYPE_INVALID',
+  'AGENT_UNPAIRED_SURROGATE',
 ] as const)
 
 export type RenderSchemaErrorCode = (typeof ERROR_CODE_SET) extends Set<infer T> ? T : never
