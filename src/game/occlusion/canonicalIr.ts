@@ -222,6 +222,78 @@ function parseRect(
   return { x, y, width: w, height: h }
 }
 
+function normalizeBasicZonePolygon(
+  rawPoints: unknown,
+  objectOrigin: Point | undefined,
+  sceneId: string,
+  objectId: string,
+): Point[] {
+  if (!Array.isArray(rawPoints)) {
+    fatal('ZONE_POLYGON_INVALID', sceneId, objectId, 'polygon', 'zone polygon must be an array')
+  }
+
+  const points: Point[] = rawPoints.map((rawPoint, index) => {
+    if (!rawPoint || typeof rawPoint !== 'object' || Array.isArray(rawPoint)) {
+      fatal(
+        'ZONE_POLYGON_INVALID',
+        sceneId,
+        objectId,
+        'polygon',
+        `zone polygon point ${index} must be an object`,
+      )
+    }
+    const point = rawPoint as Record<string, unknown>
+    if (typeof point.x !== 'number' || !Number.isFinite(point.x)
+      || typeof point.y !== 'number' || !Number.isFinite(point.y)) {
+      fatal(
+        'ZONE_POLYGON_INVALID',
+        sceneId,
+        objectId,
+        'polygon',
+        `zone polygon point ${index} must contain finite numeric x/y coordinates`,
+      )
+    }
+
+    const x = point.x + (objectOrigin?.x ?? 0)
+    const y = point.y + (objectOrigin?.y ?? 0)
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      fatal(
+        'ZONE_POLYGON_INVALID',
+        sceneId,
+        objectId,
+        'polygon',
+        `zone polygon point ${index} world coordinates must be finite`,
+      )
+    }
+    return { x, y }
+  })
+
+  while (points.length >= 2) {
+    const first = points[0]
+    const last = points[points.length - 1]
+    if (first.x !== last.x || first.y !== last.y) break
+    points.pop()
+  }
+
+  const uniquePoints: Point[] = []
+  for (const point of points) {
+    if (!uniquePoints.some(candidate => candidate.x === point.x && candidate.y === point.y)) {
+      uniquePoints.push(point)
+    }
+  }
+  if (points.length < 3 || uniquePoints.length < 3) {
+    fatal(
+      'ZONE_POLYGON_INVALID',
+      sceneId,
+      objectId,
+      'polygon',
+      `zone polygon requires at least 3 unique points, got ${uniquePoints.length}`,
+    )
+  }
+
+  return points
+}
+
 // ── Property extraction from TMX custom properties ──
 
 interface RawProperties {
@@ -857,38 +929,22 @@ function parseConstraintZone(
     objectSceneId, stableId, 'priority', 'ZONE_PRIORITY_INVALID',
   )
 
-  // polygon (from TMX polygon element or object properties)
-  let polygon: Point[]
-  if (obj.polygon && obj.polygon.length >= 3) {
-    // TMX polygon points are relative to object origin
-    polygon = obj.polygon.map(p => ({ x: obj.x + p.x, y: obj.y + p.y }))
+  // polygon (TMX polygon points are object-local; property points are world-space)
+  let rawPolygon: unknown
+  let polygonOrigin: Point | undefined
+  if (obj.polygon !== undefined) {
+    rawPolygon = obj.polygon
+    polygonOrigin = { x: obj.x, y: obj.y }
   } else if (props.polygon) {
     try {
-      const pts = JSON.parse(props.polygon) as Point[]
-      if (Array.isArray(pts) && pts.length >= 3 && pts.every(p => Number.isFinite(p.x) && Number.isFinite(p.y))) {
-        polygon = pts
-      } else {
-        fatal('ZONE_POLYGON_INVALID', sceneId, stableId, 'polygon', `zone polygon must have at least 3 valid points`)
-      }
+      rawPolygon = JSON.parse(props.polygon) as unknown
     } catch {
       fatal('ZONE_POLYGON_INVALID', sceneId, stableId, 'polygon', `zone polygon JSON invalid`)
     }
   } else {
     fatal('ZONE_POLYGON_INVALID', sceneId, stableId, 'polygon', `zone requires a polygon`)
   }
-
-  if (polygon.length < 3) {
-    fatal('ZONE_POLYGON_INVALID', sceneId, stableId, 'polygon', `zone polygon needs at least 3 points, got ${polygon.length}`)
-  }
-
-  // Deduplicate consecutive trailing vertex that equals the first
-  if (polygon.length > 3) {
-    const first = polygon[0]
-    const last = polygon[polygon.length - 1]
-    if (first.x === last.x && first.y === last.y) {
-      polygon = polygon.slice(0, -1)
-    }
-  }
+  const polygon = normalizeBasicZonePolygon(rawPolygon, polygonOrigin, sceneId, stableId)
 
   // bounds (AABB of polygon)
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
@@ -1390,6 +1446,9 @@ export function parseCanonicalIrFromData(mapData: Record<string, unknown>): Cano
       let polygon: Point[] | undefined
       if (Array.isArray(object.polygon)) {
         polygon = object.polygon.map(rawPoint => {
+          if (!rawPoint || typeof rawPoint !== 'object' || Array.isArray(rawPoint)) {
+            return { x: Number.NaN, y: Number.NaN }
+          }
           const point = rawPoint as Record<string, unknown>
           return { x: Number(point.x), y: Number(point.y) }
         })

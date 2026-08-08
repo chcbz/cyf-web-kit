@@ -1404,6 +1404,71 @@ describe('Canonical IR - reviewer regressions', () => {
     )
   }
 
+  function reviewerFragmentData(): Record<string, unknown> {
+    return {
+      name: 'tst.frag.review.v1',
+      x: 10,
+      y: 20,
+      width: 32,
+      height: 24,
+      properties: {
+        stableId: 'tst.frag.review.v1',
+        chunkId: 'chunk-review',
+        renderBand: 'world',
+        sortAnchorX: '26',
+        sortAnchorY: '44',
+        assetRef: 'review.png',
+        sourceRectX: '0',
+        sourceRectY: '0',
+        sourceRectW: '32',
+        sourceRectH: '24',
+      },
+    }
+  }
+
+  function reviewerZoneData(
+    polygon: unknown,
+    extraProps: Record<string, string> = {},
+  ): Record<string, unknown> {
+    return {
+      name: 'tst.zone.review.v1',
+      x: 5,
+      y: 6,
+      width: 20,
+      height: 20,
+      ...(polygon === undefined ? {} : { polygon }),
+      properties: {
+        stableId: 'tst.zone.review.v1',
+        chunkId: 'chunk-review',
+        targetFragmentId: 'tst.frag.review.v1',
+        relation: 'behind',
+        priority: '0',
+        ...extraProps,
+      },
+    }
+  }
+
+  function reviewerData(zone: Record<string, unknown>): Record<string, unknown> {
+    return melonData(
+      { renderSchemaVersion: '2', sceneId: 'test-scene' },
+      { name: 'v2-fragments', objects: [reviewerFragmentData()] },
+      { name: 'v2-zones', objects: [zone] },
+    )
+  }
+
+  function assertZonePolygonFatal(fn: () => unknown): void {
+    try {
+      fn()
+      assert.fail('expected zone polygon fatal')
+    } catch (error) {
+      assert.ok(isStructuredFatalRenderSchemaError(error), `expected structured fatal, got ${error}`)
+      if (isStructuredFatalRenderSchemaError(error)) {
+        assert.equal(error.errorCode, 'ZONE_POLYGON_INVALID')
+        assert.equal(error.field, 'polygon')
+      }
+    }
+  }
+
   it('hasRenderSchemaV2 safely rejects null, primitives, arrays, and partial DOM lookalikes', () => {
     const values: unknown[] = [
       null,
@@ -1676,6 +1741,88 @@ describe('Canonical IR - reviewer regressions', () => {
         }
       }
     }
+  })
+
+  it('rejects non-finite preparsed polygon coordinates during parsing', () => {
+    const invalidPolygons = [
+      [{ x: Number.NaN, y: 0 }, { x: 20, y: 0 }, { x: 0, y: 20 }],
+      [{ x: Number.POSITIVE_INFINITY, y: 0 }, { x: 20, y: 0 }, { x: 0, y: 20 }],
+      [{ x: 0, y: Number.NEGATIVE_INFINITY }, { x: 20, y: 0 }, { x: 0, y: 20 }],
+    ]
+
+    for (const polygon of invalidPolygons) {
+      assertZonePolygonFatal(() => parseCanonicalIrFromData(
+        reviewerData(reviewerZoneData(polygon)),
+      ))
+    }
+  })
+
+  it('rejects closed polygons with fewer than three unique points across every input form', () => {
+    const degenerateXml = tmxXml(
+      { renderSchemaVersion: '2', sceneId: 'test-scene' },
+      objectGroupXml('v2-fragments', reviewerFragmentXml()),
+      objectGroupXml(
+        'v2-zones',
+        tmxObjectXml(
+          { name: 'tst.zone.review.v1', x: 5, y: 6, width: 20, height: 20 },
+          propsXml({
+            stableId: 'tst.zone.review.v1',
+            chunkId: 'chunk-review',
+            targetFragmentId: 'tst.frag.review.v1',
+            relation: 'behind',
+            priority: '0',
+          }),
+          polygonXml('0,0 20,0 0,0'),
+        ),
+      ),
+    )
+    const degeneratePoints = [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 0, y: 0 }]
+
+    assertZonePolygonFatal(() => parseCanonicalIrFromXml(degenerateXml))
+    assertZonePolygonFatal(() => parseCanonicalIrFromXml(parseXml(degenerateXml)))
+    assertZonePolygonFatal(() => parseCanonicalIrFromData(
+      reviewerData(reviewerZoneData(degeneratePoints)),
+    ))
+    assertZonePolygonFatal(() => parseCanonicalIrFromData(
+      reviewerData(reviewerZoneData(undefined, { polygon: JSON.stringify(degeneratePoints) })),
+    ))
+  })
+
+  it('normalizes a valid closing point identically for XML, Document, data, and props.polygon', () => {
+    const closedXml = tmxXml(
+      { renderSchemaVersion: '2', sceneId: 'test-scene' },
+      objectGroupXml('v2-fragments', reviewerFragmentXml()),
+      objectGroupXml(
+        'v2-zones',
+        tmxObjectXml(
+          { name: 'tst.zone.review.v1', x: 5, y: 6, width: 20, height: 20 },
+          propsXml({
+            stableId: 'tst.zone.review.v1',
+            chunkId: 'chunk-review',
+            targetFragmentId: 'tst.frag.review.v1',
+            relation: 'behind',
+            priority: '0',
+          }),
+          polygonXml('0,0 20,0 0,20 0,0'),
+        ),
+      ),
+    )
+    const localClosed = [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 0, y: 20 }, { x: 0, y: 0 }]
+    const worldClosed = [{ x: 5, y: 6 }, { x: 25, y: 6 }, { x: 5, y: 26 }, { x: 5, y: 6 }]
+
+    const rawBytes = serializeCanonicalIr(parseCanonicalIrFromXml(closedXml))
+    const documentBytes = serializeCanonicalIr(parseCanonicalIrFromXml(parseXml(closedXml)))
+    const dataBytes = serializeCanonicalIr(parseCanonicalIrFromData(
+      reviewerData(reviewerZoneData(localClosed)),
+    ))
+    const propsBytes = serializeCanonicalIr(parseCanonicalIrFromData(
+      reviewerData(reviewerZoneData(undefined, { polygon: JSON.stringify(worldClosed) })),
+    ))
+
+    assert.equal(rawBytes, documentBytes)
+    assert.equal(rawBytes, dataBytes)
+    assert.equal(rawBytes, propsBytes)
+    assert.deepEqual(parseCanonicalIrFromXml(closedXml).zones[0].polygon, worldClosed.slice(0, -1))
   })
 
   it('performs a real cross-scene zone target validation', () => {
