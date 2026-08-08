@@ -99,7 +99,7 @@ export function atomicWriteUtf8Batch(entries, label = 'fixture batch', operation
       backupCreated: false,
       backupIdentity: null,
       replacementCommitted: false,
-      installedIdentity: null,
+      trustedInstalledIdentity: null,
     }
   })
 
@@ -114,7 +114,8 @@ export function atomicWriteUtf8Batch(entries, label = 'fixture batch', operation
       operations.fsyncSync(descriptor)
       const descriptorStat = operations.fstatSync(descriptor)
       requireRegularStat(descriptorStat, `${item.label} staged descriptor`)
-      item.stagedIdentity = fileIdentity(descriptorStat)
+      item.stagedIdentity = Object.freeze(fileIdentity(descriptorStat))
+      item.trustedInstalledIdentity = Object.freeze(inodeIdentity(descriptorStat))
       operations.closeSync(descriptor)
       descriptor = undefined
       requireIdentityAtPath(
@@ -168,27 +169,28 @@ export function atomicWriteUtf8Batch(entries, label = 'fixture batch', operation
       // target concurrently recreated after the original moved to backup.
       operations.linkSync(item.temporaryPath, item.path)
       item.replacementCommitted = true
-      const linkedTargetStat = requireInodeAtPath(
+      const linkedTargetCandidate = fileIdentity(requireRegularPath(
         item.path,
-        item.stagedIdentity,
-        `${item.label} installed target changed inode`,
+        `${item.label} installed target after hard-link`,
         operations,
-      )
-      item.installedIdentity = fileIdentity(linkedTargetStat)
+      ))
+      if (!sameInode(linkedTargetCandidate, item.trustedInstalledIdentity)) {
+        throw new Error(`${item.label} installed target changed inode after hard-link: expected ${formatIdentity(item.trustedInstalledIdentity)}, got ${formatIdentity(linkedTargetCandidate)} at ${item.path}`)
+      }
       unlinkExpectedInode(
         item.temporaryPath,
-        item.stagedIdentity,
+        item.trustedInstalledIdentity,
         `${item.label} staged temporary cleanup`,
         operations,
       )
       item.temporaryCreated = false
-      item.installedIdentity = fileIdentity(requireRegularPath(
+      const postUnlinkTargetCandidate = fileIdentity(requireRegularPath(
         item.path,
         `${item.label} installed target after staging cleanup`,
         operations,
       ))
-      if (!sameInode(item.installedIdentity, item.stagedIdentity)) {
-        throw new Error(`${item.label} installed target changed inode after staging cleanup: expected ${formatIdentity(item.stagedIdentity)}, got ${formatIdentity(item.installedIdentity)} at ${item.path}`)
+      if (!sameInode(postUnlinkTargetCandidate, item.trustedInstalledIdentity)) {
+        throw new Error(`${item.label} installed target changed inode after staging cleanup: expected ${formatIdentity(item.trustedInstalledIdentity)}, got ${formatIdentity(postUnlinkTargetCandidate)} at ${item.path}`)
       }
     }
   } catch (primaryError) {
@@ -221,10 +223,10 @@ function rollbackItem(item, operations, errors) {
     const current = lstatIfPresent(item.path, operations, errors, `${item.label} rollback target inspection`)
     if (current) {
       const currentIdentity = fileIdentity(current)
-      if (!sameIdentity(currentIdentity, item.installedIdentity)) {
+      if (!sameInode(currentIdentity, item.trustedInstalledIdentity)) {
         errors.push(incompleteRollbackError(
           item,
-          `target changed from installed identity ${formatIdentity(item.installedIdentity)} to ${formatIdentity(currentIdentity)}; concurrent target was preserved`,
+          `target changed from trusted staged inode ${formatIdentity(item.trustedInstalledIdentity)} to ${formatIdentity(currentIdentity)}; concurrent target was preserved`,
         ))
         return
       }
@@ -383,6 +385,10 @@ function fileIdentity(stat) {
     mtimeMs: stat.mtimeMs,
     ctimeMs: stat.ctimeMs,
   }
+}
+
+function inodeIdentity(statOrIdentity) {
+  return { dev: statOrIdentity.dev, ino: statOrIdentity.ino }
 }
 
 function sameInode(left, right) {

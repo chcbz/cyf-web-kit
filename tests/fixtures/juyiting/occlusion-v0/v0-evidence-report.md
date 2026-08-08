@@ -1,6 +1,6 @@
 # Juyiting Occlusion V2 · E1 V0 证据补齐报告
 
-- 初始基线日期：2026-08-03；第七轮审查修复：2026-08-08
+- 初始基线日期：2026-08-03；第八轮审查修复：2026-08-08
 - Writer：`deepseek_flash_worker`
 - 基线 commit（web 分支）：`2424f51f375814f403ca70a9a6e9948728e595b1`
 - TMX：`public/juyiting/hall.tmx`
@@ -62,6 +62,6 @@ camera/zoom/DPR, agent/prop/image-layer depth, 命中 mask ID
 
 - **7 个 mask 几何 region 边界漂移**：49、54、57、74、76、80、83 的 centroid 与权威 region 不一致 → E10A 多边形/region 校准候选。
 - **duplicate occluder**：mid 与 foreground 字节级相同（同一 SHA-256，size 71274）→ E16B 清理，E1 不删除（canonical 契约已冻结）。
-- **fixture update fail-closed**：inventory/hash/preview/asset 四条路径都先执行代码常量 baseline 锁；重指 fixture 到当前 HEAD 或其他 commit 时 verify/update 均在写前失败。hash/asset provenance 使用 replacement-disabled blob-object 读取；隔离 clone 中真实建立 replace ref 的测试证明 verifier/update 仍以原 blob 为准，当前篡改被拒绝且 fixture 不变。asset 继续校验完整 27-file baseline public tree。共享 atomic writer 采用主错误 + cleanup errors 的 `AggregateError`；`atomicWriteUtf8Batch` 先完成全部 staging+fsync+verify，再以同目录 hard-link no-clobber 安装，记录 staged/installed/backup 的 dev+ino 与文件身份。rollback 只删除仍匹配本事务安装身份的 target；并发重建或提交后替换的 target 一律保留，无法恢复的旧 backup 作为明确列出路径的 intentional recovery artifact 保留。inventory 的 JSON+ledger 与 preview 的四 SVG 使用该批量事务；正常、原目标缺失、第二/第三目标失败、并发 target、link/unlink/rollback cleanup 故障均有注入测试。
+- **fixture update fail-closed**：inventory/hash/preview/asset 四条路径都先执行代码常量 baseline 锁；重指 fixture 到当前 HEAD 或其他 commit 时 verify/update 均在写前失败。hash/asset provenance 使用 replacement-disabled blob-object 读取；隔离 clone 中真实建立 replace ref 的测试证明 verifier/update 仍以原 blob 为准，当前篡改被拒绝且 fixture 不变。asset 继续校验完整 27-file baseline public tree。共享 atomic writer 采用主错误 + cleanup errors 的 `AggregateError`；`atomicWriteUtf8Batch` 先完成全部 staging+fsync+verify，再以同目录 hard-link no-clobber 安装，记录 staged/installed/backup 的 dev+ino 与文件身份。trusted installed token 始终冻结为 staging descriptor 的 dev+ino，不会被后续 path 重采样覆盖；每次 target 重采样先进入局部 candidate 并与该 token 比较。rollback 只删除仍精确匹配 trusted staged inode 的 target；并发重建、提交后替换，以及 temp unlink 返回后到最终 identity 检查之间的精确窗口替换均保留，无法恢复的旧 backup 作为明确列出路径的 intentional recovery artifact 保留。inventory 的 JSON+ledger 与 preview 的四 SVG 使用该批量事务；正常、原目标缺失、第二/第三目标失败、并发 target、link/unlink/rollback cleanup 故障均有注入测试。
 - **CS02–05/08/09（production-equivalent）**：需要 E6 `?jytOcclusionDebug` overlay + 可控角色坐标/动画/depth 调试接口 + 浏览器驱动截图 harness；E1 明确标记 BLOCKED，不伪造数字/截图。
 - **draw call / 运行时性能**：E1 无可靠自动采样 harness，标 BLOCKED（见 `asset-report.json` 的 `drawCallsRuntimePerf`）；E14 固定 108-agent benchmark 负责。

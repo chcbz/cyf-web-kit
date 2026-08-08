@@ -7,6 +7,7 @@ import {
   existsSync,
   mkdirSync,
   linkSync,
+  lstatSync,
   openSync,
   renameSync,
   mkdtempSync,
@@ -688,6 +689,56 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
       expect(backups[0]).to.match(/^first\.json\.backup-/)
       expect(readFileSync(backupPath, 'utf8')).to.equal('first-old')
       expect(thrown.message).to.include(first)
+      expect(thrown.message).to.include(backupPath)
+      expect(thrown.message).to.include('concurrent target was preserved')
+      expect(thrown.message).to.include('intentional recovery artifact retained')
+      expect(readdirSync(root).filter(name => name.includes('.tmp-'))).to.deep.equal([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('preserves a concurrent replacement injected after temp unlink and before final target identity validation', () => {
+    const root = mkdtempSync(join(tmpdir(), 'juyiting-e1-atomic-batch-post-temp-unlink-replace-'))
+    try {
+      const target = join(root, 'fixture.json')
+      const concurrentSource = join(root, 'concurrent-source.json')
+      writeFileSync(target, 'ORIGINAL')
+      writeFileSync(concurrentSource, 'CONCURRENT')
+      let tempUnlinked = false
+      let replacedInExactWindow = false
+      let thrown
+      try {
+        atomicWriteUtf8Batch([
+          { path: target, content: 'TRANSACTION', label: 'exact window fixture' },
+        ], 'post-temp-unlink replacement transaction', {
+          unlinkSync(path) {
+            const result = unlinkSync(path)
+            if (path.includes('.tmp-')) tempUnlinked = true
+            return result
+          },
+          lstatSync(path) {
+            if (tempUnlinked && !replacedInExactWindow && path === target) {
+              renameSync(concurrentSource, target)
+              replacedInExactWindow = true
+            }
+            return lstatSync(path)
+          },
+        })
+      } catch (error) {
+        thrown = error
+      }
+      expect(tempUnlinked).to.equal(true)
+      expect(replacedInExactWindow).to.equal(true)
+      expect(thrown).to.be.instanceOf(AggregateError)
+      expect(readFileSync(target, 'utf8')).to.equal('CONCURRENT')
+      const backups = readdirSync(root).filter(name => name.includes('.backup-'))
+      expect(backups).to.have.length(1)
+      const backupPath = join(root, backups[0])
+      expect(backups[0]).to.match(/^fixture\.json\.backup-/)
+      expect(readFileSync(backupPath, 'utf8')).to.equal('ORIGINAL')
+      expect(thrown.message).to.include('trusted staged inode')
+      expect(thrown.message).to.include(target)
       expect(thrown.message).to.include(backupPath)
       expect(thrown.message).to.include('concurrent target was preserved')
       expect(thrown.message).to.include('intentional recovery artifact retained')
