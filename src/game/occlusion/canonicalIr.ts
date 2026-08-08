@@ -1255,10 +1255,20 @@ export function serializeCanonicalIr(ir: CanonicalSceneIr): string {
   return '{' + parts.join(',') + '}'
 }
 
+// ── Helper: type predicate for XML DOM vs plain data ──
+
+function isXmlDocument(input: Document | Record<string, unknown>): input is Document {
+  // Duck-type: DOM nodes have nodeType; plain objects never do.
+  return (
+    typeof (input as Record<string, unknown>).querySelector === 'function'
+    && typeof (input as Record<string, unknown>).nodeType === 'number'
+  )
+}
+
 // ── Helper: check if input has v2 render schema ──
 
 export function hasRenderSchemaV2(input: Document | Record<string, unknown>): boolean {
-  if (typeof (input as Document).querySelector === "function" && (input as Document).nodeType !== undefined) {
+  if (isXmlDocument(input)) {
     const mapNode = input.querySelector('map')
     if (!mapNode) return false
     const propsNode = mapNode.querySelector('properties')
