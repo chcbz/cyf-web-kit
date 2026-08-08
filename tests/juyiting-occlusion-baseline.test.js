@@ -1,9 +1,17 @@
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 
 import { parseTmxStructure, resolveWorldPolygon, polygonAabb } from '../scripts/juyiting/lib/tmx-structure.mjs'
 import { assertBaselineProvenance, currentHead } from '../scripts/juyiting/lib/baseline-provenance.mjs'
+import { buildRuntimeReferenceAudit } from '../scripts/juyiting/asset-report-juyiting.mjs'
+import {
+  HALL_BOOT_RESOURCES,
+  buildHallMapResources,
+  buildPersonaSpriteResource,
+} from '../src/game/resources.js'
+import { PERSONA_SPRITE_MANIFEST } from '../src/game/sprites/personaSpriteManifest.ts'
 
 const TMX_PATH = 'public/juyiting/hall.tmx'
 const FIXTURE_DIR = 'tests/fixtures/juyiting/occlusion-v0'
@@ -14,6 +22,10 @@ const tmxSha256 = () => createHash('sha256').update(tmx).digest('hex')
 const inventory = JSON.parse(readFileSync(`${FIXTURE_DIR}/inventory.json`, 'utf8'))
 const sourceHashes = JSON.parse(readFileSync(`${FIXTURE_DIR}/source-hashes.json`, 'utf8'))
 const assetReport = JSON.parse(readFileSync(`${FIXTURE_DIR}/asset-report.json`, 'utf8'))
+
+const emptyMapStructure = () => ({ tilesets: [], layers: [] })
+const networkEntry = (path) => ({ path, sizeBytes: 1, sha256: '0'.repeat(64), category: 'test', role: 'test' })
+const importSourceModule = source => import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)
 
 // Authoritative region contract from docs/juyiting-occlusion-system-design.md §9.
 const AUTHORITATIVE_REGIONS = {
@@ -54,6 +66,106 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
       sourceHashes.entries.map(entry => ({ path: entry.path, sha256: entry.sha256 })),
     )
     expect(provenance.currentHead).to.equal(currentHead())
+  })
+
+  it('covers all six executable persona sprite exports with baseline git-show provenance', () => {
+    const spriteEntries = sourceHashes.entries.filter(entry => entry.role === 'persona-sprite')
+    expect(spriteEntries).to.have.length(6)
+    expect(spriteEntries.map(entry => entry.path)).to.have.members(
+      Object.values(PERSONA_SPRITE_MANIFEST.personas).map(definition => `public${definition.src}`),
+    )
+
+    const sprite = spriteEntries.find(entry => entry.label === 'songjiang')
+    const baselineBytes = execFileSync('git', ['show', `${sourceHashes.baselineCommit}:${sprite.path}`])
+    const changedSpriteSha = createHash('sha256')
+      .update(Buffer.concat([baselineBytes, Buffer.from('simulated-byte-change')]))
+      .digest('hex')
+    expect(() => assertBaselineProvenance(sourceHashes.baselineCommit, [{ path: sprite.path, sha256: changedSpriteSha }]))
+      .to.throw(`Baseline provenance mismatch for ${sprite.path}`)
+  })
+
+  it('discovers runtime resources from executable exports, so a fake source comment cannot override HALL_BOOT_RESOURCES', async () => {
+    const resourcesSource = readFileSync('src/game/resources.js', 'utf8')
+    const moduleWithFakeComment = await importSourceModule([
+      "// HALL_MAP_RESOURCE = { name: 'fake', type: 'tmx', src: '/juyiting/fake-comment.tmx' }",
+      resourcesSource,
+    ].join('\n'))
+    const spritePath = '/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v3.webp'
+    const audit = buildRuntimeReferenceAudit({
+      structure: emptyMapStructure(),
+      network: [networkEntry('public/juyiting/hall.tmx'), networkEntry(`public${spritePath}`)],
+      bootResources: moduleWithFakeComment.HALL_BOOT_RESOURCES,
+      buildMapResources: moduleWithFakeComment.buildHallMapResources,
+      personaManifest: { personas: { songjiang: { personaCode: 'songjiang', src: spritePath } } },
+      buildSpriteResource: moduleWithFakeComment.buildPersonaSpriteResource,
+    })
+
+    expect(audit.files.map(entry => entry.path)).to.deep.equal([
+      'public/juyiting/hall.tmx',
+      `public${spritePath}`,
+    ])
+    expect(audit.files.some(entry => entry.path.includes('fake-comment'))).to.equal(false)
+  })
+
+  it('discovers a sprite path carried by an executable module constant', async () => {
+    const constantManifestModule = await importSourceModule(`
+      const SPRITE_SRC = '/juyiting/sprites/persona-sheets-v1/wuyong-8-direction-v1.webp'
+      export const PERSONA_SPRITE_MANIFEST = {
+        personas: { wuyong: { personaCode: 'wuyong', src: SPRITE_SRC } },
+      }
+    `)
+    const audit = buildRuntimeReferenceAudit({
+      structure: emptyMapStructure(),
+      network: [
+        networkEntry('public/juyiting/hall.tmx'),
+        networkEntry('public/juyiting/sprites/persona-sheets-v1/wuyong-8-direction-v1.webp'),
+      ],
+      bootResources: HALL_BOOT_RESOURCES,
+      buildMapResources: buildHallMapResources,
+      personaManifest: constantManifestModule.PERSONA_SPRITE_MANIFEST,
+      buildSpriteResource: buildPersonaSpriteResource,
+    })
+
+    expect(audit.files.map(entry => entry.path)).to.include(
+      'public/juyiting/sprites/persona-sheets-v1/wuyong-8-direction-v1.webp',
+    )
+  })
+
+  it('fails closed for unknown resource types and missing runtime paths', () => {
+    const validSpriteManifest = {
+      personas: {
+        missing: { personaCode: 'missing', src: '/juyiting/sprites/persona-sheets-v1/missing.webp' },
+      },
+    }
+    const base = {
+      structure: emptyMapStructure(),
+      network: [networkEntry('public/juyiting/hall.tmx')],
+      buildMapResources: buildHallMapResources,
+      personaManifest: validSpriteManifest,
+      buildSpriteResource: buildPersonaSpriteResource,
+    }
+
+    expect(() => buildRuntimeReferenceAudit({
+      ...base,
+      bootResources: [{ name: 'hall', type: 'audio', src: '/juyiting/hall.tmx' }],
+    })).to.throw('Unsupported runtime resource type')
+    expect(() => buildRuntimeReferenceAudit({ ...base, bootResources: HALL_BOOT_RESOURCES }))
+      .to.throw('Runtime asset references missing from public/juyiting: public/juyiting/sprites/persona-sheets-v1/missing.webp')
+  })
+
+  it('executes the live loader exports against parseTmxStructure output and covers every TMX loader branch', () => {
+    const audit = buildRuntimeReferenceAudit({
+      structure,
+      network: assetReport.juyitingNetworkAssets.files,
+      bootResources: HALL_BOOT_RESOURCES,
+      buildMapResources: buildHallMapResources,
+      personaManifest: PERSONA_SPRITE_MANIFEST,
+      buildSpriteResource: buildPersonaSpriteResource,
+    })
+    expect(Object.values(audit.loaderContractChecks).every(Boolean)).to.equal(true)
+    expect(audit.files.map(entry => entry.path)).to.deep.equal(
+      assetReport.juyitingNetworkAssets.runtimeCoreFiles.map(entry => entry.path),
+    )
   })
 
   it('preserves hall-props objectalignment=topleft and TMX ellipse object shapes', () => {

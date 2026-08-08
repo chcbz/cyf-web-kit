@@ -5,8 +5,8 @@
 - 基线 commit（web 分支）：`2424f51f375814f403ca70a9a6e9948728e595b1`
 - TMX：`public/juyiting/hall.tmx`
 - TMX SHA-256：`e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401`
-- 本报告绑定：`tests/fixtures/juyiting/occlusion-v0/source-hashes.json`（canonical + prop SHA-256）、`inventory.json`、`mask-ledger.md`、`layers/*.svg`（每个 SVG 内嵌 `data-commit` / `data-tmx-sha256` / `data-generation-id`）、`asset-report.json`。
-- 稳定 provenance：fixture 的 `baselineCommit` / SVG `data-commit` 固定为上述基线，不使用当前 HEAD 生成。无参数 verify 会证明基线是当前 HEAD 的 ancestor，并通过 `git show <baselineCommit>:<path>` 对 hall.tmx 与关键资产重新计算 SHA-256；因此后续提交不会触发“重新生成 → HEAD 再变化”的循环。
+- 本报告绑定：`tests/fixtures/juyiting/occlusion-v0/source-hashes.json`（canonical + prop + 6 张 runtime persona sprite SHA-256）、`inventory.json`、`mask-ledger.md`、`layers/*.svg`（每个 SVG 内嵌 `data-commit` / `data-tmx-sha256` / `data-generation-id`）、`asset-report.json`。
+- 稳定 provenance：fixture 的 `baselineCommit` / SVG `data-commit` 固定为上述基线，不使用当前 HEAD 生成。无参数 verify 会证明基线是当前 HEAD 的 ancestor，并通过 `git show <baselineCommit>:<path>` 对 hall.tmx、地图/prop 资产与 6 张 runtime persona sprite 逐项重新计算 SHA-256；因此后续提交不会触发“重新生成 → HEAD 再变化”的循环。
 - `data-generation-id` 算法：先把该字段设为 64 个 `0` 生成 provisional SVG，再对 provisional SVG 计算 SHA-256，最后将结果写回。它**不是 final SVG 的 self-hash**；SVG 另含 `data-generation-algorithm=sha256-provisional-svg-zero-id-v1`。
 
 ## 1. 已冻结回归用例（用户事实 → 回归条目）
@@ -51,7 +51,7 @@ camera/zoom/DPR, agent/prop/image-layer depth, 命中 mask ID
 
 ### 资产与纹理解码统计语义
 
-- `runtimeCoreFiles` 由三类实际引用扫描合并得出：`src/game/resources.js` 的 `HALL_MAP_RESOURCE`/loader contract、`hall.tmx` 的 tileset/image-layer/collection-tile 图片引用、`src/game/sprites/personaSpriteManifest.ts` 的角色 sprite `src`。`runtimeCoreBytes` 是该明细逐项 `sizeBytes` 的精确和：`2,415,264` bytes。
+- `runtimeCoreFiles` 不扫描源码字符串：脚本通过 `node --import tsx` 执行并读取 `src/game/resources.js` 的 `HALL_BOOT_RESOURCES` / `buildHallMapResources` / `buildPersonaSpriteResource` 与 `src/game/sprites/personaSpriteManifest.ts` 的 `PERSONA_SPRITE_MANIFEST` 真实导出；`parseTmxStructure(hall.tmx)` 的 tileset/image-layer/collection-tile 结果被适配给真实 map loader，并对 loader 输出与 TMX 期望引用做精确集合校验。未知类型、缺失字段、意外或不存在的 runtime 路径均 fail closed。`runtimeCoreBytes` 是 16 项明细逐项 `sizeBytes` 的精确和：`2,415,264` bytes。
 - `public/juyiting/tiles/hall-tileset.json` 与 `hall-tileset.png` 未被当前 `hall.tmx`、resources loader 或角色 sprite 映射引用，分类为 `unreferenced-legacy`，不计入 runtimeCore。
 - 纹理解码按**实际加载路径**逐行计一次，包含当前 runtime 引用的 4 张全图、5 个 prop 和 6 张 persona sprite：`loadedPathDecodedBytes=50,269,248`；按文件内容 SHA-256 去重后 `uniqueContentDecodedBytes=44,092,480`；`duplicateContentOverheadBytes=6,176,768`。
 - mid/foreground 是两个实际加载路径，各计 `6,176,768` decoded bytes，合计严格为 `2 × 6,176,768`；它们内容 hash 相同，因此只产生一份 `6,176,768` 的 duplicate-content overhead，不存在第三份或每行乘二统计。

@@ -3,17 +3,19 @@
  *
  * Records the frozen canonical source triple (assetRef/path/sha256), the five
  * prop PNGs, the lighting overlay, the duplicate mid/foreground occluder pair,
- * and the TMX itself. Emits a committed fixture:
+ * all persona sprite sheets exported by the runtime manifest, and the TMX itself.
+ * Emits a committed fixture:
  *   tests/fixtures/juyiting/occlusion-v0/source-hashes.json
  *
  * CLI contract: no args verifies the committed fixture; --update rewrites it.
  */
 
-import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { buildPersonaSpriteResource } from '../../src/game/resources.js'
+import { PERSONA_SPRITE_MANIFEST } from '../../src/game/sprites/personaSpriteManifest.ts'
 import { sha256Bytes } from './lib/tmx-structure.mjs'
 import {
   assertBaselineProvenance,
@@ -21,6 +23,7 @@ import {
   readJsonIfPresent,
 } from './lib/baseline-provenance.mjs'
 
+const worktreeRoot = fileURLToPath(new URL('../../', import.meta.url))
 const tmxPath = process.env.JIA_JUYITING_TMX_PATH
   ?? fileURLToPath(new URL('../../public/juyiting/hall.tmx', import.meta.url))
 const imagesDir = process.env.JIA_JUYITING_IMAGES_DIR
@@ -76,6 +79,15 @@ export function buildSourceHashes(options = {}) {
     add(name, `public/juyiting/images/props/${name}`, bytes, 'prop')
   }
 
+  const personaDefinitions = Object.values(PERSONA_SPRITE_MANIFEST.personas)
+  if (personaDefinitions.length === 0) throw new Error('PERSONA_SPRITE_MANIFEST.personas must not be empty')
+  for (const definition of personaDefinitions) {
+    const resource = buildPersonaSpriteResource(definition)
+    const publicPath = personaSpritePublicPath(resource)
+    const bytes = readRequiredFile(resolve(worktreeRoot, publicPath), `persona sprite ${definition.personaCode}`)
+    add(definition.personaCode, publicPath, bytes, 'persona-sprite')
+  }
+
   const bySha = new Map()
   for (const entry of entries) {
     if (!bySha.has(entry.sha256)) bySha.set(entry.sha256, [])
@@ -97,6 +109,19 @@ export function buildSourceHashes(options = {}) {
     entries,
     duplicates,
   }
+}
+
+function personaSpritePublicPath(resource) {
+  if (!resource || typeof resource !== 'object') throw new Error('buildPersonaSpriteResource returned an invalid resource')
+  if (resource.type !== 'image') throw new Error(`Unsupported persona sprite resource type: ${JSON.stringify(resource.type)}`)
+  if (typeof resource.name !== 'string' || resource.name.trim() === '') throw new Error('Persona sprite resource is missing name')
+  if (typeof resource.src !== 'string' || !resource.src.startsWith('/juyiting/sprites/')) {
+    throw new Error(`Persona sprite resource must use /juyiting/sprites/: ${JSON.stringify(resource.src)}`)
+  }
+  if (resource.src.includes('..') || /[?#]/.test(resource.src)) {
+    throw new Error(`Invalid persona sprite resource path: ${resource.src}`)
+  }
+  return `public${resource.src}`
 }
 
 export function serializeSourceHashes(report) {

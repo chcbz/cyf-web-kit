@@ -79,6 +79,48 @@
       "path": "public/juyiting/images/props/liangshan-hall-prop-roster-book-cropped.png",
       "sizeBytes": 50161,
       "sha256": "6b7c21b45ad24aee9b6bbbbf72177f04e0f3710168d28aef8064dfa1786996c5"
+    },
+    {
+      "role": "persona-sprite",
+      "label": "songjiang",
+      "path": "public/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v3.webp",
+      "sizeBytes": 173290,
+      "sha256": "96c0cc8b44593f5a218a97c1f38e1b5023ccd932317ef1a98e85675180268224"
+    },
+    {
+      "role": "persona-sprite",
+      "label": "lujunyi",
+      "path": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+      "sizeBytes": 193438,
+      "sha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65"
+    },
+    {
+      "role": "persona-sprite",
+      "label": "wuyong",
+      "path": "public/juyiting/sprites/persona-sheets-v1/wuyong-8-direction-v1.webp",
+      "sizeBytes": 141490,
+      "sha256": "846ec15c9ea2c758d6103bc19f2168bb6c5ee7aa175d2fda45264f0a39f7906d"
+    },
+    {
+      "role": "persona-sprite",
+      "label": "linchong",
+      "path": "public/juyiting/sprites/persona-sheets-v1/linchong-8-direction-v1.webp",
+      "sizeBytes": 164230,
+      "sha256": "8335c39fe935c9bea88c3ec5b8862846870115ffc47a2f50619cfdf9ffa3486c"
+    },
+    {
+      "role": "persona-sprite",
+      "label": "likui",
+      "path": "public/juyiting/sprites/persona-sheets-v1/likui-8-direction-v2.webp",
+      "sizeBytes": 256130,
+      "sha256": "fd9c7d965a1076cdae9b45c6eaff387a1b966a1e7d45a52e8b80678411892c7b"
+    },
+    {
+      "role": "persona-sprite",
+      "label": "husanniang",
+      "path": "public/juyiting/sprites/persona-sheets-v1/husanniang-8-direction-v1.webp",
+      "sizeBytes": 337228,
+      "sha256": "51db05d29907b4f6d3271518860ed9cd9c27f0445b6240b68a9957004cab4e99"
     }
   ],
   "duplicates": [

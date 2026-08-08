@@ -3,7 +3,7 @@
  *
  * Records (machine-readable, committed fixture):
  *   1. initial production build artifact size (dist/ is gitignored; measured when present)
- *   2. auditable runtime asset references derived from resources.js, hall.tmx, and the persona sprite manifest
+ *   2. auditable runtime asset references derived from executable resources.js/manifest exports and hall.tmx
  *   3. decoded texture-size estimate (w×h×4 per actually referenced image path; content hashes deduplicated separately)
  *   4. draw call / runtime performance -> BLOCKED at E1 (no reliable automated sampling
  *      harness on this host); no numbers are fabricated.
@@ -16,11 +16,16 @@
  * buildArtifact section is recorded as not_generated and verify skips only that section.
  */
 
-import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync, mkdirSync, statSync, readdirSync } from 'node:fs'
-import { dirname, join, relative, resolve } from 'node:path'
+import { relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import {
+  HALL_BOOT_RESOURCES,
+  buildHallMapResources,
+  buildPersonaSpriteResource,
+} from '../../src/game/resources.js'
+import { PERSONA_SPRITE_MANIFEST } from '../../src/game/sprites/personaSpriteManifest.ts'
 import { parseTmxStructure, sha256Bytes } from './lib/tmx-structure.mjs'
 import { assertBaselineProvenance, fixtureBaselineCommit } from './lib/baseline-provenance.mjs'
 
@@ -32,8 +37,6 @@ const fixtureDir = process.env.JIA_JUYITING_OCCLUSION_FIXTURE_DIR
 const fixturePath = resolve(fixtureDir, 'asset-report.json')
 const sourceHashesPath = resolve(fixtureDir, 'source-hashes.json')
 const distDir = resolve(worktreeRoot, 'dist')
-const resourcesPath = resolve(worktreeRoot, 'src/game/resources.js')
-const spriteManifestPath = resolve(worktreeRoot, 'src/game/sprites/personaSpriteManifest.ts')
 
 const ASSET_CATEGORY_RULES = {
   tmx: ['juyiting/hall.tmx'],
@@ -53,7 +56,15 @@ export function buildAssetReport(options = {}) {
   assertBaselineProvenance(baselineCommit, sourceHashes.entries.map(entry => ({ path: entry.path, sha256: entry.sha256 })))
 
   const network = enumerateNetworkAssets()
-  const runtimeReferenceAudit = buildRuntimeReferenceAudit(tmxBytes, network)
+  const structure = parseTmxStructure(tmxBytes)
+  const runtimeReferenceAudit = buildRuntimeReferenceAudit({
+    structure,
+    network,
+    bootResources: HALL_BOOT_RESOURCES,
+    buildMapResources: buildHallMapResources,
+    personaManifest: PERSONA_SPRITE_MANIFEST,
+    buildSpriteResource: buildPersonaSpriteResource,
+  })
   const textures = buildTextureEstimate(runtimeReferenceAudit.files, sourceHashes.canonicalSource.path)
 
   return {
@@ -75,7 +86,7 @@ export function buildAssetReport(options = {}) {
         ...entry,
         runtimeReferenced: runtimeReferenceAudit.referencePaths.has(entry.path),
       })),
-      note: 'runtimeCoreBytes is the exact sum of runtimeCoreFiles derived from resources.js boot wiring, hall.tmx image/tileset refs, and personaSpriteManifest.ts sprite src values. Directory membership alone is not treated as a runtime reference.',
+      note: 'runtimeCoreBytes is the exact sum of runtimeCoreFiles derived from executable resources.js/manifest exports plus hall.tmx image/tileset refs. Directory membership and source-code text alone are not treated as runtime references.',
     },
     textureDecodeEstimate: textures,
     drawCallsRuntimePerf: {
@@ -122,42 +133,64 @@ function categoryFor(relativePath) {
   return 'other'
 }
 
-function buildRuntimeReferenceAudit(tmxText, network) {
-  const resourcesSource = readRequiredFile(resourcesPath, 'Juyiting resources.js')
-  const spriteManifestSource = readRequiredFile(spriteManifestPath, 'Juyiting persona sprite manifest')
-  const structure = parseTmxStructure(tmxText)
+export function buildRuntimeReferenceAudit({
+  structure,
+  network,
+  bootResources,
+  buildMapResources,
+  personaManifest,
+  buildSpriteResource,
+  tmxPublicPath = 'public/juyiting/hall.tmx',
+}) {
+  if (!structure || !Array.isArray(structure.tilesets) || !Array.isArray(structure.layers)) {
+    throw new Error('Runtime reference audit requires parseTmxStructure() output')
+  }
+  if (!Array.isArray(network)) throw new Error('Runtime reference audit requires enumerated network assets')
+  if (!Array.isArray(bootResources)) throw new Error('HALL_BOOT_RESOURCES export must be an array')
+  if (typeof buildMapResources !== 'function') throw new Error('buildHallMapResources export must be a function')
+  if (!personaManifest || typeof personaManifest.personas !== 'object' || Array.isArray(personaManifest.personas)) {
+    throw new Error('PERSONA_SPRITE_MANIFEST.personas export must be an object')
+  }
+  if (typeof buildSpriteResource !== 'function') throw new Error('buildPersonaSpriteResource export must be a function')
+
   const references = new Map()
-  const addReference = (publicPath, referencedBy) => {
-    const normalized = publicPath.startsWith('public/')
-      ? publicPath
-      : `public/${publicPath.replace(/^\//, '')}`
-    if (!references.has(normalized)) references.set(normalized, new Set())
-    references.get(normalized).add(referencedBy)
+  const addReference = (resource, referencedBy, allowedTypes) => {
+    const { path } = validateRuntimeResource(resource, referencedBy, allowedTypes)
+    if (!references.has(path)) references.set(path, new Set())
+    references.get(path).add(referencedBy)
+    return path
   }
 
-  const bootMatch = resourcesSource.match(/HALL_MAP_RESOURCE\s*=\s*\{[^}]*src:\s*['"]([^'"]+)['"]/s)
-  if (!bootMatch) throw new Error('Unable to derive HALL_MAP_RESOURCE src from src/game/resources.js')
-  addReference(bootMatch[1], 'src/game/resources.js:HALL_MAP_RESOURCE')
-
-  const tmxPublicDir = dirname(relative(worktreeRoot, tmxPath).replaceAll('\\', '/'))
-  const addTmxReference = (source, referencedBy) => {
-    if (!source) return
-    addReference(relative(worktreeRoot, resolve(worktreeRoot, tmxPublicDir, source)).replaceAll('\\', '/'), referencedBy)
+  for (const [index, resource] of bootResources.entries()) {
+    addReference(resource, `src/game/resources.js:HALL_BOOT_RESOURCES[${index}]`, new Set(['tmx', 'image']))
   }
-  for (const tileset of structure.tilesets) {
-    addTmxReference(tileset.image, `public/juyiting/hall.tmx:tileset:${tileset.name}`)
-    for (const tile of tileset.tiles) {
-      addTmxReference(tile.image, `public/juyiting/hall.tmx:tileset:${tileset.name}:tile:${tile.id}`)
+  if (!references.has(tmxPublicPath)) {
+    throw new Error(`HALL_BOOT_RESOURCES does not reference the audited TMX: ${tmxPublicPath}`)
+  }
+
+  const { mapData, expectedReferences, coverage } = buildLoaderMapData(structure)
+  const mapResources = buildMapResources(mapData)
+  if (!Array.isArray(mapResources)) throw new Error('buildHallMapResources(mapData) must return an array')
+  const actualMapSources = new Set()
+  for (const [index, resource] of mapResources.entries()) {
+    const referencedBy = `src/game/resources.js:buildHallMapResources[${index}]`
+    const { path } = validateRuntimeResource(resource, referencedBy, new Set(['image']))
+    const expected = expectedReferences.get(path)
+    if (!expected) throw new Error(`buildHallMapResources returned unexpected TMX resource: ${path}`)
+    actualMapSources.add(path)
+    for (const sourceLabel of expected) addReference(resource, sourceLabel, new Set(['image']))
+  }
+  assertExactReferenceSet('buildHallMapResources', actualMapSources, new Set(expectedReferences.keys()))
+
+  const personaEntries = Object.entries(personaManifest.personas)
+  if (personaEntries.length === 0) throw new Error('PERSONA_SPRITE_MANIFEST.personas must not be empty')
+  for (const [personaKey, definition] of personaEntries) {
+    if (!definition || typeof definition !== 'object') {
+      throw new Error(`Invalid persona definition for ${personaKey}`)
     }
+    const resource = buildSpriteResource(definition)
+    addReference(resource, `src/game/sprites/personaSpriteManifest.ts:personas.${personaKey}`, new Set(['image']))
   }
-  for (const layer of structure.layers.filter(layer => layer.kind === 'imagelayer')) {
-    addTmxReference(layer.source, `public/juyiting/hall.tmx:imagelayer:${layer.name}`)
-  }
-
-  const spriteSources = [...spriteManifestSource.matchAll(/src:\s*['"](\/juyiting\/sprites\/[^'"]+)['"]/g)]
-    .map(match => match[1])
-  if (spriteSources.length === 0) throw new Error('No persona sprite src values found in personaSpriteManifest.ts')
-  for (const source of spriteSources) addReference(source, 'src/game/sprites/personaSpriteManifest.ts:personas')
 
   const byPath = new Map(network.map(entry => [entry.path, entry]))
   const missingReferences = [...references.keys()].filter(path => !byPath.has(path)).sort()
@@ -176,23 +209,124 @@ function buildRuntimeReferenceAudit(tmxText, network) {
     }))
     .sort((a, b) => a.path.localeCompare(b.path))
 
+  const loaderContractChecks = {
+    hallBootResourcesConsumed: true,
+    tmxTilesetImagesConsumed: coverage.tilesetImages === 0 || coverage.tilesetImages === actualCoverage(structure, actualMapSources, 'tileset-image'),
+    tmxCollectionTilesConsumed: coverage.collectionTiles === 0 || coverage.collectionTiles === actualCoverage(structure, actualMapSources, 'collection-tile'),
+    tmxImageLayersConsumed: coverage.imageLayers === 0 || coverage.imageLayers === actualCoverage(structure, actualMapSources, 'image-layer'),
+    personaSpriteResourcesConsumed: personaEntries.length > 0,
+  }
+  const failedChecks = Object.entries(loaderContractChecks).filter(([, passed]) => !passed).map(([name]) => name)
+  if (failedChecks.length > 0) throw new Error(`Runtime loader contract checks failed: ${failedChecks.join(', ')}`)
+
   return {
     files,
     referencePaths: new Set(files.map(entry => entry.path)),
     missingReferences,
     sources: {
-      bootLoader: 'src/game/resources.js:HALL_MAP_RESOURCE',
-      mapImages: 'public/juyiting/hall.tmx tileset/image-layer refs consumed by buildHallMapResources',
-      personaSprites: 'src/game/sprites/personaSpriteManifest.ts persona src values consumed by buildPersonaSpriteResource',
+      bootLoader: 'executable src/game/resources.js HALL_BOOT_RESOURCES export',
+      mapImages: 'parseTmxStructure(hall.tmx) adapted into executable buildHallMapResources export',
+      personaSprites: 'executable PERSONA_SPRITE_MANIFEST definitions mapped by buildPersonaSpriteResource export',
     },
-    loaderContractChecks: {
-      hallBootResourceDeclared: resourcesSource.includes('HALL_BOOT_RESOURCES = [HALL_MAP_RESOURCE]'),
-      tmxTilesetImagesConsumed: resourcesSource.includes('tileset.imageSource || tileset.source'),
-      tmxCollectionTilesConsumed: resourcesSource.includes('tile.source'),
-      tmxImageLayersConsumed: resourcesSource.includes('mapData?.imageLayers'),
-      personaSpriteMappingConsumed: resourcesSource.includes('buildPersonaSpriteResource'),
-    },
+    loaderContractChecks,
   }
+}
+
+export function buildLoaderMapData(structure) {
+  const expectedReferences = new Map()
+  const coverage = { tilesetImages: 0, collectionTiles: 0, imageLayers: 0 }
+  const remember = (source, label, kind) => {
+    if (!source) return undefined
+    const path = tmxSourceToPublicPath(source)
+    if (!expectedReferences.has(path)) expectedReferences.set(path, new Set())
+    expectedReferences.get(path).add(label)
+    coverage[kind] += 1
+    return `/${path.slice('public/'.length)}`
+  }
+
+  const tilesets = structure.tilesets.map(tileset => ({
+    name: tileset.name,
+    tilesetResourceName: tileset.name,
+    imageSource: remember(
+      tileset.image,
+      `public/juyiting/hall.tmx:tileset:${tileset.name}`,
+      'tilesetImages',
+    ),
+    tiles: tileset.tiles.map(tile => ({
+      resourceName: `${tileset.name}-tile-${tile.id}`,
+      source: remember(
+        tile.image,
+        `public/juyiting/hall.tmx:tileset:${tileset.name}:tile:${tile.id}`,
+        'collectionTiles',
+      ),
+    })),
+  }))
+
+  const imageLayers = Object.fromEntries(
+    structure.layers
+      .filter(layer => layer.kind === 'imagelayer')
+      .map(layer => [layer.name, {
+        id: layer.name,
+        resourceName: layer.name,
+        source: remember(
+          layer.source,
+          `public/juyiting/hall.tmx:imagelayer:${layer.name}`,
+          'imageLayers',
+        ),
+      }]),
+  )
+
+  return { mapData: { tilesets, imageLayers }, expectedReferences, coverage }
+}
+
+function validateRuntimeResource(resource, referencedBy, allowedTypes) {
+  if (!resource || typeof resource !== 'object') throw new Error(`Invalid runtime resource from ${referencedBy}`)
+  if (typeof resource.name !== 'string' || resource.name.trim() === '') {
+    throw new Error(`Runtime resource from ${referencedBy} is missing name`)
+  }
+  if (!allowedTypes.has(resource.type)) {
+    throw new Error(`Unsupported runtime resource type from ${referencedBy}: ${JSON.stringify(resource.type)}`)
+  }
+  if (typeof resource.src !== 'string' || resource.src.trim() === '') {
+    throw new Error(`Runtime resource from ${referencedBy} is missing src`)
+  }
+  return { path: runtimeSourceToPublicPath(resource.src) }
+}
+
+function runtimeSourceToPublicPath(source) {
+  const clean = source.split(/[?#]/, 1)[0]
+  if (!clean.startsWith('/juyiting/')) {
+    throw new Error(`Runtime resource must use an absolute /juyiting/ path: ${source}`)
+  }
+  if (clean.includes('..')) throw new Error(`Runtime resource path traversal is not allowed: ${source}`)
+  return `public${clean}`
+}
+
+function tmxSourceToPublicPath(source) {
+  if (typeof source !== 'string' || source.trim() === '') throw new Error('TMX image source must be a non-empty string')
+  const normalized = resolve('/juyiting', source).replaceAll('\\', '/')
+  if (!normalized.startsWith('/juyiting/')) throw new Error(`TMX image source escapes /juyiting: ${source}`)
+  return `public${normalized}`
+}
+
+function assertExactReferenceSet(label, actual, expected) {
+  const missing = [...expected].filter(path => !actual.has(path)).sort()
+  const unexpected = [...actual].filter(path => !expected.has(path)).sort()
+  if (missing.length > 0 || unexpected.length > 0) {
+    throw new Error(`${label} reference mismatch; missing=[${missing.join(', ')}] unexpected=[${unexpected.join(', ')}]`)
+  }
+}
+
+function actualCoverage(structure, actualSources, kind) {
+  if (kind === 'tileset-image') {
+    return structure.tilesets.filter(tileset => tileset.image && actualSources.has(tmxSourceToPublicPath(tileset.image))).length
+  }
+  if (kind === 'collection-tile') {
+    return structure.tilesets.flatMap(tileset => tileset.tiles)
+      .filter(tile => tile.image && actualSources.has(tmxSourceToPublicPath(tile.image))).length
+  }
+  return structure.layers
+    .filter(layer => layer.kind === 'imagelayer' && layer.source && actualSources.has(tmxSourceToPublicPath(layer.source))).length
 }
 
 function buildTextureEstimate(runtimeFiles, canonicalPath) {

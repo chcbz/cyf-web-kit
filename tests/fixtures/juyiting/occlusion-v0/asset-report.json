@@ -54,7 +54,7 @@
         "category": "tmx",
         "role": "tmx",
         "referencedBy": [
-          "src/game/resources.js:HALL_MAP_RESOURCE"
+          "src/game/resources.js:HALL_BOOT_RESOURCES[0]"
         ]
       },
       {
@@ -154,7 +154,7 @@
         "category": "sprite",
         "role": "sprite",
         "referencedBy": [
-          "src/game/sprites/personaSpriteManifest.ts:personas"
+          "src/game/sprites/personaSpriteManifest.ts:personas.husanniang"
         ]
       },
       {
@@ -164,7 +164,7 @@
         "category": "sprite",
         "role": "sprite",
         "referencedBy": [
-          "src/game/sprites/personaSpriteManifest.ts:personas"
+          "src/game/sprites/personaSpriteManifest.ts:personas.likui"
         ]
       },
       {
@@ -174,7 +174,7 @@
         "category": "sprite",
         "role": "sprite",
         "referencedBy": [
-          "src/game/sprites/personaSpriteManifest.ts:personas"
+          "src/game/sprites/personaSpriteManifest.ts:personas.linchong"
         ]
       },
       {
@@ -184,7 +184,7 @@
         "category": "sprite",
         "role": "sprite",
         "referencedBy": [
-          "src/game/sprites/personaSpriteManifest.ts:personas"
+          "src/game/sprites/personaSpriteManifest.ts:personas.lujunyi"
         ]
       },
       {
@@ -194,7 +194,7 @@
         "category": "sprite",
         "role": "sprite",
         "referencedBy": [
-          "src/game/sprites/personaSpriteManifest.ts:personas"
+          "src/game/sprites/personaSpriteManifest.ts:personas.songjiang"
         ]
       },
       {
@@ -204,22 +204,22 @@
         "category": "sprite",
         "role": "sprite",
         "referencedBy": [
-          "src/game/sprites/personaSpriteManifest.ts:personas"
+          "src/game/sprites/personaSpriteManifest.ts:personas.wuyong"
         ]
       }
     ],
     "runtimeReferenceAudit": {
       "sources": {
-        "bootLoader": "src/game/resources.js:HALL_MAP_RESOURCE",
-        "mapImages": "public/juyiting/hall.tmx tileset/image-layer refs consumed by buildHallMapResources",
-        "personaSprites": "src/game/sprites/personaSpriteManifest.ts persona src values consumed by buildPersonaSpriteResource"
+        "bootLoader": "executable src/game/resources.js HALL_BOOT_RESOURCES export",
+        "mapImages": "parseTmxStructure(hall.tmx) adapted into executable buildHallMapResources export",
+        "personaSprites": "executable PERSONA_SPRITE_MANIFEST definitions mapped by buildPersonaSpriteResource export"
       },
       "loaderContractChecks": {
-        "hallBootResourceDeclared": true,
+        "hallBootResourcesConsumed": true,
         "tmxTilesetImagesConsumed": true,
         "tmxCollectionTilesConsumed": true,
         "tmxImageLayersConsumed": true,
-        "personaSpriteMappingConsumed": true
+        "personaSpriteResourcesConsumed": true
       },
       "missingReferences": []
     },
@@ -441,7 +441,7 @@
         "runtimeReferenced": false
       }
     ],
-    "note": "runtimeCoreBytes is the exact sum of runtimeCoreFiles derived from resources.js boot wiring, hall.tmx image/tileset refs, and personaSpriteManifest.ts sprite src values. Directory membership alone is not treated as a runtime reference."
+    "note": "runtimeCoreBytes is the exact sum of runtimeCoreFiles derived from executable resources.js/manifest exports plus hall.tmx image/tileset refs. Directory membership and source-code text alone are not treated as runtime references."
   },
   "textureDecodeEstimate": {
     "bpp": 4,

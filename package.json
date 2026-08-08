@@ -24,9 +24,9 @@
                     "preview:juyiting-map":  "node --import tsx scripts/juyiting/render-map-preview.mjs",
                     "validate:juyiting-sprites":  "node --import tsx scripts/juyiting/validate-sprites.mjs",
                     "inventory:juyiting-map":  "node scripts/juyiting/inventory-juyiting-map.mjs",
-                    "hash:juyiting-sources":  "node scripts/juyiting/hash-juyiting-sources.mjs",
+                    "hash:juyiting-sources":  "node --import tsx scripts/juyiting/hash-juyiting-sources.mjs",
                     "preview:juyiting-occlusion-layers":  "node scripts/juyiting/render-occlusion-layers.mjs",
-                    "asset:juyiting-report":  "node scripts/juyiting/asset-report-juyiting.mjs",
+                    "asset:juyiting-report":  "node --import tsx scripts/juyiting/asset-report-juyiting.mjs",
                     "test:juyiting-occlusion-baseline":  "node --import tsx ./node_modules/mocha/bin/mocha.js --no-config --require ./tests/setup.js --reporter spec tests/juyiting-occlusion-baseline.test.js"
                 },
     "dependencies":  {
