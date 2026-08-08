@@ -443,6 +443,117 @@ describe('E3 Runtime Agent Adapter - P1-4 resolver throws → structured', () =>
       assert.equal((e as { errorCode: string }).errorCode, 'AGENT_RESOLVER_THREW')
     }
   })
+
+  // ── Getter-throw on resolver return values ──
+
+  it('spawn floorId getter throw → AGENT_RESOLVER_THREW', async () => {
+    let accessed = false
+    const adapter = createRuntimeAgentAdapter(
+      () => {
+        const obj: Record<string, unknown> = { elevation: 0 }
+        Object.defineProperty(obj, 'floorId', {
+          get() { accessed = true; throw new Error('floorId getter crash') },
+          enumerable: true,
+          configurable: true,
+        })
+        return obj as unknown as { floorId: string; elevation: number }
+      },
+      defaultChunkResolver(),
+    )
+    await fatalAssertAsync(
+      () => adapter.create([{ agentId: 'spawn-floor-getter' }]),
+      'AGENT_RESOLVER_THREW',
+    )
+    assert.ok(accessed, 'getter should have been accessed')
+  })
+
+  it('spawn elevation getter throw → AGENT_RESOLVER_THREW', async () => {
+    let accessed = false
+    const adapter = createRuntimeAgentAdapter(
+      () => {
+        const obj: Record<string, unknown> = { floorId: 'floor-1' }
+        Object.defineProperty(obj, 'elevation', {
+          get() { accessed = true; throw new Error('elevation getter crash') },
+          enumerable: true,
+          configurable: true,
+        })
+        return obj as unknown as { floorId: string; elevation: number }
+      },
+      defaultChunkResolver(),
+    )
+    await fatalAssertAsync(
+      () => adapter.create([{ agentId: 'spawn-elev-getter' }]),
+      'AGENT_RESOLVER_THREW',
+    )
+    assert.ok(accessed, 'getter should have been accessed')
+  })
+
+  it('spawn then getter throw → AGENT_RESOLVER_THREW', async () => {
+    let accessed = false
+    const adapter = createRuntimeAgentAdapter(
+      () => {
+        const obj: Record<string, unknown> = {
+          floorId: 'floor-1',
+          elevation: 0,
+        }
+        Object.defineProperty(obj, 'then', {
+          get() { accessed = true; throw new Error('then getter crash') },
+          enumerable: true,
+          configurable: true,
+        })
+        return obj as unknown as { floorId: string; elevation: number }
+      },
+      defaultChunkResolver(),
+    )
+    await fatalAssertAsync(
+      () => adapter.create([{ agentId: 'spawn-then-getter' }]),
+      'AGENT_RESOLVER_THREW',
+    )
+    assert.ok(accessed, 'then getter should have been accessed')
+  })
+
+  it('chunk then getter throw → AGENT_RESOLVER_THREW', async () => {
+    let accessed = false
+    const adapter = createRuntimeAgentAdapter(
+      defaultSpawnResolver(),
+      () => {
+        const obj: Record<string, unknown> = { value: 'chunk-a' }
+        Object.defineProperty(obj, 'then', {
+          get() { accessed = true; throw new Error('chunk then getter crash') },
+          enumerable: true,
+          configurable: true,
+        })
+        return obj as unknown as string
+      },
+    )
+    await fatalAssertAsync(
+      () => adapter.create([{ agentId: 'chunk-then-getter' }]),
+      'AGENT_RESOLVER_THREW',
+    )
+    assert.ok(accessed, 'chunk then getter should have been accessed')
+  })
+
+  it('spawn with normal thenable (non-throwing then) still TYPE_INVALID', async () => {
+    const adapter = createRuntimeAgentAdapter(
+      () => ({ floorId: 'floor-1', elevation: 0, then: () => {} }) as unknown as { floorId: string; elevation: number },
+      defaultChunkResolver(),
+    )
+    await fatalAssertAsync(
+      () => adapter.create([{ agentId: 'non-throwing-thenable' }]),
+      'AGENT_RESOLVER_TYPE_INVALID',
+    )
+  })
+
+  it('chunk with normal thenable (non-throwing then) still TYPE_INVALID', async () => {
+    const adapter = createRuntimeAgentAdapter(
+      defaultSpawnResolver(),
+      () => ({ then: () => {} }) as unknown as string,
+    )
+    await fatalAssertAsync(
+      () => adapter.create([{ agentId: 'chunk-normal-thenable' }]),
+      'AGENT_RESOLVER_TYPE_INVALID',
+    )
+  })
 })
 
 // ── P1-5: crypto.subtle missing → AGENT_HASH_FAILED ──

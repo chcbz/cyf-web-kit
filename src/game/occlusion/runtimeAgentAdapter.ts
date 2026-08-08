@@ -253,8 +253,23 @@ function safeSpawn(
     )
   }
 
-  // Reject thenable/promise
-  if (spawn !== null && typeof spawn === 'object' && typeof (spawn as { then?: unknown }).then === 'function') {
+  // Reject thenable/promise (then getter may throw)
+  let spawnIsThenable = false
+  try {
+    spawnIsThenable = spawn !== null && typeof spawn === 'object'
+      && typeof (spawn as { then?: unknown }).then === 'function'
+  } catch (error) {
+    // then getter threw
+    throw renderSchemaError(
+      'AGENT_RESOLVER_THREW',
+      sceneId,
+      sourceId,
+      'spawn',
+      'trusted spawn resolver 的 then 属性访问抛出异常。',
+      `trusted spawn resolver then getter threw: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+  if (spawnIsThenable) {
     throw renderSchemaError(
       'AGENT_RESOLVER_TYPE_INVALID',
       sceneId,
@@ -278,28 +293,59 @@ function safeSpawn(
 
   const obj = spawn as Record<string, unknown>
 
-  if (typeof obj.floorId !== 'string' || !obj.floorId.trim()) {
+  // floorId getter may throw
+  let rawFloorId: unknown
+  try {
+    rawFloorId = obj.floorId
+  } catch (error) {
+    throw renderSchemaError(
+      'AGENT_RESOLVER_THREW',
+      sceneId,
+      sourceId,
+      'floorId',
+      'trusted spawn resolver 的 floorId 属性访问抛出异常。',
+      `trusted spawn resolver floorId getter threw: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+
+  if (typeof rawFloorId !== 'string' || !(rawFloorId as string).trim()) {
     throw renderSchemaError(
       'AGENT_SPAWN_INVALID',
       sceneId,
       sourceId,
       'floorId',
       'trusted spawn resolver 返回无效 floorId。',
-      `trusted spawn resolver returned invalid floorId: ${JSON.stringify(obj.floorId)} for ${JSON.stringify(sourceId)}`,
+      `trusted spawn resolver returned invalid floorId: ${JSON.stringify(rawFloorId)} for ${JSON.stringify(sourceId)}`,
     )
   }
-  if (!Number.isSafeInteger(obj.elevation)) {
+
+  // elevation getter may throw
+  let rawElevation: unknown
+  try {
+    rawElevation = obj.elevation
+  } catch (error) {
+    throw renderSchemaError(
+      'AGENT_RESOLVER_THREW',
+      sceneId,
+      sourceId,
+      'elevation',
+      'trusted spawn resolver 的 elevation 属性访问抛出异常。',
+      `trusted spawn resolver elevation getter threw: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+
+  if (!Number.isSafeInteger(rawElevation)) {
     throw renderSchemaError(
       'AGENT_SPAWN_INVALID',
       sceneId,
       sourceId,
       'elevation',
       'trusted spawn resolver 返回无效 elevation。',
-      `trusted spawn resolver returned invalid elevation: ${JSON.stringify(obj.elevation)} for ${JSON.stringify(sourceId)}`,
+      `trusted spawn resolver returned invalid elevation: ${JSON.stringify(rawElevation)} for ${JSON.stringify(sourceId)}`,
     )
   }
 
-  return { floorId: obj.floorId, elevation: obj.elevation as number }
+  return { floorId: rawFloorId as string, elevation: rawElevation as number }
 }
 
 function safeChunk(
@@ -323,8 +369,23 @@ function safeChunk(
     )
   }
 
-  // Reject thenable/promise
-  if (chunkId !== null && typeof chunkId === 'object' && typeof (chunkId as { then?: unknown }).then === 'function') {
+  // Reject thenable/promise (then getter may throw)
+  let chunkIsThenable = false
+  try {
+    chunkIsThenable = chunkId !== null && typeof chunkId === 'object'
+      && typeof (chunkId as { then?: unknown }).then === 'function'
+  } catch (error) {
+    // then getter threw
+    throw renderSchemaError(
+      'AGENT_RESOLVER_THREW',
+      sceneId,
+      sourceId,
+      'chunkId',
+      'trusted chunk resolver 的 then 属性访问抛出异常。',
+      `trusted chunk resolver then getter threw: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+  if (chunkIsThenable) {
     throw renderSchemaError(
       'AGENT_RESOLVER_TYPE_INVALID',
       sceneId,
@@ -335,7 +396,7 @@ function safeChunk(
     )
   }
 
-  if (typeof chunkId !== 'string' || !chunkId.trim()) {
+  if (typeof chunkId !== 'string' || !(chunkId as string).trim()) {
     throw renderSchemaError(
       'AGENT_CHUNK_INVALID',
       sceneId,
@@ -346,7 +407,7 @@ function safeChunk(
     )
   }
 
-  return chunkId
+  return chunkId as string
 }
 
 export function createRuntimeAgentAdapter(
