@@ -214,6 +214,11 @@
         "mapImages": "parseTmxStructure(hall.tmx) adapted into executable buildHallMapResources export",
         "personaSprites": "executable PERSONA_SPRITE_MANIFEST definitions mapped by buildPersonaSpriteResource export"
       },
+      "pathCanonicalization": {
+        "implementation": "scripts/juyiting/lib/juyiting-public-path.mjs",
+        "outputPrefix": "public/juyiting/",
+        "policy": "WHATWG-checked ASCII unreserved segments only; percent encoding, dot/empty segments, backslash, controls, origin/host, query, and hash fail closed."
+      },
       "loaderContractChecks": {
         "hallBootResourcesConsumed": true,
         "tmxTilesetImagesConsumed": true,

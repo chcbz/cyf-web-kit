@@ -1,10 +1,25 @@
 import { expect } from 'chai'
-import { readFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  copyFileSync,
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+} from 'node:fs'
 import { createHash } from 'node:crypto'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import { parseTmxStructure, resolveWorldPolygon, polygonAabb } from '../scripts/juyiting/lib/tmx-structure.mjs'
 import { assertBaselineProvenance, currentHead } from '../scripts/juyiting/lib/baseline-provenance.mjs'
+import {
+  canonicalizeJuyitingRuntimeSource,
+  canonicalizeJuyitingTmxSource,
+} from '../scripts/juyiting/lib/juyiting-public-path.mjs'
 import { buildRuntimeReferenceAudit } from '../scripts/juyiting/asset-report-juyiting.mjs'
 import {
   HALL_BOOT_RESOURCES,
@@ -26,6 +41,21 @@ const assetReport = JSON.parse(readFileSync(`${FIXTURE_DIR}/asset-report.json`, 
 const emptyMapStructure = () => ({ tilesets: [], layers: [] })
 const networkEntry = (path) => ({ path, sizeBytes: 1, sha256: '0'.repeat(64), category: 'test', role: 'test' })
 const importSourceModule = source => import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)
+const runNpmScript = (script, environment) => {
+  const npmExecPath = process.env.npm_execpath
+  if (npmExecPath) {
+    return spawnSync(process.execPath, [npmExecPath, 'run', script, '--', '--update'], {
+      cwd: process.cwd(),
+      env: environment,
+      encoding: 'utf8',
+    })
+  }
+  return spawnSync('npm', ['run', script, '--', '--update'], {
+    cwd: process.cwd(),
+    env: environment,
+    encoding: 'utf8',
+  })
+}
 
 // Authoritative region contract from docs/juyiting-occlusion-system-design.md §9.
 const AUTHORITATIVE_REGIONS = {
@@ -82,6 +112,141 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
       .digest('hex')
     expect(() => assertBaselineProvenance(sourceHashes.baselineCommit, [{ path: sprite.path, sha256: changedSpriteSha }]))
       .to.throw(`Baseline provenance mismatch for ${sprite.path}`)
+  })
+
+  it('canonicalizes only unambiguous Juyiting runtime and TMX public paths', () => {
+    expect(canonicalizeJuyitingRuntimeSource(
+      '/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v3.webp',
+    )).to.equal('public/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v3.webp')
+    expect(canonicalizeJuyitingTmxSource(
+      'images/props/liangshan-hall-prop-main-seat-cropped.png',
+    )).to.equal('public/juyiting/images/props/liangshan-hall-prop-main-seat-cropped.png')
+    expect(new URL(
+      '/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v3.webp',
+      'https://juyiting-audit.invalid/',
+    ).pathname).to.equal('/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v3.webp')
+    expect(new URL(
+      'images/props/liangshan-hall-prop-main-seat-cropped.png',
+      'https://juyiting-audit.invalid/juyiting/',
+    ).pathname).to.equal('/juyiting/images/props/liangshan-hall-prop-main-seat-cropped.png')
+
+    const runtimeAttacks = [
+      '/juyiting/%2e%2e/secret.webp',
+      '/juyiting/%2E%2E/secret.webp',
+      '/juyiting/.%2e/secret.webp',
+      '/juyiting/%2e./secret.webp',
+      '/juyiting/.%2E/secret.webp',
+      '/juyiting/%2E./secret.webp',
+      '/juyiting/%2fsecret.webp',
+      '/juyiting/%2Fsecret.webp',
+      '/juyiting/%5csecret.webp',
+      '/juyiting/%5Csecret.webp',
+      '/juyiting/%252e%252e/secret.webp',
+      '/juyiting/%00/secret.webp',
+      '/juyiting/../secret.webp',
+      '/juyiting/./secret.webp',
+      '/juyiting/images//secret.webp',
+      '/juyiting/images/',
+      '/juyiting/images\\secret.webp',
+      '/juyiting/images/secret.webp?cache=1',
+      '/juyiting/images/secret.webp#fragment',
+      '/juyiting/images/secret\u0000.webp',
+      '/juyiting/images/%GG.webp',
+      '/juyiting/images/%.webp',
+      'https://example.invalid/juyiting/images/secret.webp',
+      '//example.invalid/juyiting/images/secret.webp',
+    ]
+    for (const source of runtimeAttacks) {
+      expect(() => canonicalizeJuyitingRuntimeSource(source), source).to.throw()
+    }
+
+    const tmxAttacks = [
+      'images/%2e%2e/secret.webp',
+      'images/%2E%2E/secret.webp',
+      'images/.%2e/secret.webp',
+      'images/%2e./secret.webp',
+      'images/%2fsecret.webp',
+      'images/%2Fsecret.webp',
+      'images/%5csecret.webp',
+      'images/%5Csecret.webp',
+      'images/%00/secret.webp',
+      'images/%GG.webp',
+      'images/../secret.webp',
+      './images/secret.webp',
+      'images//secret.webp',
+      'images/',
+      'images\\secret.webp',
+      'images/secret.webp?cache=1',
+      'images/secret.webp#fragment',
+      'https://example.invalid/juyiting/images/secret.webp',
+      '//example.invalid/juyiting/images/secret.webp',
+      '/juyiting/images/secret.webp',
+    ]
+    for (const source of tmxAttacks) {
+      expect(() => canonicalizeJuyitingTmxSource(source), source).to.throw()
+    }
+
+    expect(() => buildRuntimeReferenceAudit({
+      structure: emptyMapStructure(),
+      network: [],
+      bootResources: [{ name: 'hall', type: 'tmx', src: '/juyiting/%2e%2e/secret.tmx' }],
+      buildMapResources: buildHallMapResources,
+      personaManifest: { personas: { songjiang: { personaCode: 'songjiang', src: '/juyiting/sprites/a.webp' } } },
+      buildSpriteResource: buildPersonaSpriteResource,
+    })).to.throw('unsupported percent encoding')
+    expect(() => buildRuntimeReferenceAudit({
+      structure: {
+        tilesets: [{ name: 'attack', image: 'images/.%2e/secret.webp', tiles: [] }],
+        layers: [],
+      },
+      network: [networkEntry('public/juyiting/hall.tmx')],
+      bootResources: HALL_BOOT_RESOURCES,
+      buildMapResources: buildHallMapResources,
+      personaManifest: { personas: { songjiang: { personaCode: 'songjiang', src: '/juyiting/sprites/a.webp' } } },
+      buildSpriteResource: buildPersonaSpriteResource,
+    })).to.throw('unsupported percent encoding')
+  })
+
+  it('keeps hash and asset --update fixtures byte-identical when an isolated sprite is tampered', function () {
+    this.timeout(30000)
+    const root = mkdtempSync(join(tmpdir(), 'juyiting-e1-provenance-'))
+    try {
+      const publicRoot = join(root, 'public')
+      const fixtureDir = join(root, 'fixtures')
+      mkdirSync(publicRoot, { recursive: true })
+      mkdirSync(fixtureDir, { recursive: true })
+      cpSync('public/juyiting', join(publicRoot, 'juyiting'), { recursive: true })
+      for (const fixtureName of ['source-hashes.json', 'asset-report.json']) {
+        copyFileSync(`${FIXTURE_DIR}/${fixtureName}`, join(fixtureDir, fixtureName))
+      }
+
+      appendFileSync(
+        join(publicRoot, 'juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v3.webp'),
+        Buffer.from('isolated-provenance-tamper'),
+      )
+      const environment = {
+        ...process.env,
+        JIA_JUYITING_PUBLIC_ROOT: publicRoot,
+        JIA_JUYITING_OCCLUSION_FIXTURE_DIR: fixtureDir,
+      }
+
+      for (const { script, fixtureName } of [
+        { script: 'hash:juyiting-sources', fixtureName: 'source-hashes.json' },
+        { script: 'asset:juyiting-report', fixtureName: 'asset-report.json' },
+      ]) {
+        const fixturePath = join(fixtureDir, fixtureName)
+        const before = readFileSync(fixturePath)
+        const result = runNpmScript(script, environment)
+        expect(result.status, `${script}\n${result.stdout}\n${result.stderr}`).to.not.equal(0)
+        expect(`${result.stdout}\n${result.stderr}`).to.include(
+          'Baseline provenance mismatch for public/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v3.webp',
+        )
+        expect(readFileSync(fixturePath).equals(before), script).to.equal(true)
+      }
+      expect(readdirSync(fixtureDir).filter(name => name.includes('.tmp-'))).to.deep.equal([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   it('discovers runtime resources from executable exports, so a fake source comment cannot override HALL_BOOT_RESOURCES', async () => {
@@ -296,6 +461,11 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
     expect(network.runtimeCoreBytes).to.equal(2415264)
     expect(network.runtimeReferenceAudit.missingReferences).to.deep.equal([])
     expect(Object.values(network.runtimeReferenceAudit.loaderContractChecks).every(Boolean)).to.equal(true)
+    expect(network.runtimeReferenceAudit.pathCanonicalization).to.deep.equal({
+      implementation: 'scripts/juyiting/lib/juyiting-public-path.mjs',
+      outputPrefix: 'public/juyiting/',
+      policy: 'WHATWG-checked ASCII unreserved segments only; percent encoding, dot/empty segments, backslash, controls, origin/host, query, and hash fail closed.',
+    })
 
     const legacyPaths = ['public/juyiting/tiles/hall-tileset.json', 'public/juyiting/tiles/hall-tileset.png']
     for (const path of legacyPaths) {

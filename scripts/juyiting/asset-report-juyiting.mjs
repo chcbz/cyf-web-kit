@@ -11,12 +11,13 @@
  * Output:
  *   tests/fixtures/juyiting/occlusion-v0/asset-report.json
  *
- * CLI contract: no args verifies the committed fixture; --update rewrites it; --stdout prints.
+ * CLI contract: no args verifies the committed fixture; --update validates the
+ * candidate against the fixed baseline commit, then atomically rewrites it; --stdout prints.
  * Verify mode requires dist/ to exist (run `npm run build` first); when dist/ is absent the
  * buildArtifact section is recorded as not_generated and verify skips only that section.
  */
 
-import { readFileSync, writeFileSync, mkdirSync, statSync, readdirSync } from 'node:fs'
+import { readFileSync, statSync, readdirSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -26,8 +27,14 @@ import {
   buildPersonaSpriteResource,
 } from '../../src/game/resources.js'
 import { PERSONA_SPRITE_MANIFEST } from '../../src/game/sprites/personaSpriteManifest.ts'
+import { atomicWriteUtf8 } from './lib/atomic-write.mjs'
 import { parseTmxStructure, sha256Bytes } from './lib/tmx-structure.mjs'
 import { assertBaselineProvenance, fixtureBaselineCommit } from './lib/baseline-provenance.mjs'
+import {
+  canonicalizeJuyitingRuntimeSource,
+  canonicalizeJuyitingTmxSource,
+  resolveJuyitingPublicFile,
+} from './lib/juyiting-public-path.mjs'
 
 const worktreeRoot = fileURLToPath(new URL('../../', import.meta.url))
 const tmxPath = process.env.JIA_JUYITING_TMX_PATH
@@ -37,6 +44,10 @@ const fixtureDir = process.env.JIA_JUYITING_OCCLUSION_FIXTURE_DIR
 const fixturePath = resolve(fixtureDir, 'asset-report.json')
 const sourceHashesPath = resolve(fixtureDir, 'source-hashes.json')
 const distDir = resolve(worktreeRoot, 'dist')
+const publicRoot = resolve(
+  process.env.JIA_JUYITING_PUBLIC_ROOT
+    ?? fileURLToPath(new URL('../../public/', import.meta.url)),
+)
 
 const ASSET_CATEGORY_RULES = {
   tmx: ['juyiting/hall.tmx'],
@@ -55,7 +66,7 @@ export function buildAssetReport(options = {}) {
   const baselineCommit = fixtureBaselineCommit(sourceHashes)
   assertBaselineProvenance(baselineCommit, sourceHashes.entries.map(entry => ({ path: entry.path, sha256: entry.sha256 })))
 
-  const network = enumerateNetworkAssets()
+  const network = enumerateNetworkAssets(publicRoot)
   const structure = parseTmxStructure(tmxBytes)
   const runtimeReferenceAudit = buildRuntimeReferenceAudit({
     structure,
@@ -65,7 +76,14 @@ export function buildAssetReport(options = {}) {
     personaManifest: PERSONA_SPRITE_MANIFEST,
     buildSpriteResource: buildPersonaSpriteResource,
   })
-  const textures = buildTextureEstimate(runtimeReferenceAudit.files, sourceHashes.canonicalSource.path)
+  assertBaselineProvenance(
+    baselineCommit,
+    [
+      ...network.map(entry => ({ path: entry.path, sha256: entry.sha256 })),
+      { path: 'public/juyiting/hall.tmx', sha256: tmxSha256 },
+    ],
+  )
+  const textures = buildTextureEstimate(runtimeReferenceAudit.files, sourceHashes.canonicalSource.path, publicRoot)
 
   return {
     schemaVersion: 1,
@@ -79,6 +97,7 @@ export function buildAssetReport(options = {}) {
       runtimeCoreFiles: runtimeReferenceAudit.files,
       runtimeReferenceAudit: {
         sources: runtimeReferenceAudit.sources,
+        pathCanonicalization: runtimeReferenceAudit.pathCanonicalization,
         loaderContractChecks: runtimeReferenceAudit.loaderContractChecks,
         missingReferences: runtimeReferenceAudit.missingReferences,
       },
@@ -98,8 +117,8 @@ export function buildAssetReport(options = {}) {
   }
 }
 
-function enumerateNetworkAssets() {
-  const publicRoot = fileURLToPath(new URL('../../public/juyiting/', import.meta.url))
+function enumerateNetworkAssets(root) {
+  const juyitingRoot = resolve(root, 'juyiting')
   const entries = []
   const walk = (dir) => {
     for (const name of readdirSync(dir)) {
@@ -107,13 +126,14 @@ function enumerateNetworkAssets() {
       const stat = statSync(full)
       if (stat.isDirectory()) walk(full)
       else if (stat.isFile()) {
-        const rel = relative(fileURLToPath(new URL('../../public/', import.meta.url)), full).replaceAll('\\', '/')
+        const rel = relative(root, full).replaceAll('\\', '/')
+        const publicPath = canonicalizeJuyitingRuntimeSource(`/${rel}`)
         const category = categoryFor(rel)
         const role = rel === 'juyiting/images/liangshan-hall-mid-occluders-v3.webp' ? 'canonical-occluder'
           : rel === 'juyiting/images/liangshan-hall-foreground-occluders-v3.webp' ? 'duplicate-occluder'
             : category
         entries.push({
-          path: `public/${rel}`,
+          path: publicPath,
           sizeBytes: stat.size,
           sha256: sha256Bytes(readFileSync(full)),
           category,
@@ -122,7 +142,7 @@ function enumerateNetworkAssets() {
       }
     }
   }
-  walk(publicRoot)
+  walk(juyitingRoot)
   return entries.sort((a, b) => a.path.localeCompare(b.path))
 }
 
@@ -228,6 +248,11 @@ export function buildRuntimeReferenceAudit({
       mapImages: 'parseTmxStructure(hall.tmx) adapted into executable buildHallMapResources export',
       personaSprites: 'executable PERSONA_SPRITE_MANIFEST definitions mapped by buildPersonaSpriteResource export',
     },
+    pathCanonicalization: {
+      implementation: 'scripts/juyiting/lib/juyiting-public-path.mjs',
+      outputPrefix: 'public/juyiting/',
+      policy: 'WHATWG-checked ASCII unreserved segments only; percent encoding, dot/empty segments, backslash, controls, origin/host, query, and hash fail closed.',
+    },
     loaderContractChecks,
   }
 }
@@ -294,19 +319,11 @@ function validateRuntimeResource(resource, referencedBy, allowedTypes) {
 }
 
 function runtimeSourceToPublicPath(source) {
-  const clean = source.split(/[?#]/, 1)[0]
-  if (!clean.startsWith('/juyiting/')) {
-    throw new Error(`Runtime resource must use an absolute /juyiting/ path: ${source}`)
-  }
-  if (clean.includes('..')) throw new Error(`Runtime resource path traversal is not allowed: ${source}`)
-  return `public${clean}`
+  return canonicalizeJuyitingRuntimeSource(source)
 }
 
 function tmxSourceToPublicPath(source) {
-  if (typeof source !== 'string' || source.trim() === '') throw new Error('TMX image source must be a non-empty string')
-  const normalized = resolve('/juyiting', source).replaceAll('\\', '/')
-  if (!normalized.startsWith('/juyiting/')) throw new Error(`TMX image source escapes /juyiting: ${source}`)
-  return `public${normalized}`
+  return canonicalizeJuyitingTmxSource(source)
 }
 
 function assertExactReferenceSet(label, actual, expected) {
@@ -329,10 +346,10 @@ function actualCoverage(structure, actualSources, kind) {
     .filter(layer => layer.kind === 'imagelayer' && layer.source && actualSources.has(tmxSourceToPublicPath(layer.source))).length
 }
 
-function buildTextureEstimate(runtimeFiles, canonicalPath) {
+function buildTextureEstimate(runtimeFiles, canonicalPath, root) {
   const imageFiles = runtimeFiles.filter(entry => /\.(?:png|webp)$/i.test(entry.path))
   const rows = imageFiles.map(entry => {
-    const dims = imageDimensions(resolve(worktreeRoot, entry.path))
+    const dims = imageDimensions(resolveJuyitingPublicFile(root, entry.path))
     return {
       path: entry.path,
       role: entry.role,
@@ -438,8 +455,7 @@ export function runAssetReport(args = process.argv.slice(2)) {
     return report
   }
   if (mode === 'update') {
-    mkdirSync(fixtureDir, { recursive: true })
-    writeFileSync(fixturePath, json, 'utf8')
+    atomicWriteUtf8(fixturePath, json, 'Juyiting asset-report fixture')
     console.log(`Juyiting asset report updated: ${fixturePath}`)
     return report
   }

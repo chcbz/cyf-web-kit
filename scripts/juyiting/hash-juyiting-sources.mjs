@@ -7,23 +7,25 @@
  * Emits a committed fixture:
  *   tests/fixtures/juyiting/occlusion-v0/source-hashes.json
  *
- * CLI contract: no args verifies the committed fixture; --update rewrites it.
+ * CLI contract: no args verifies the committed fixture; --update validates the
+ * candidate against the fixed baseline commit, then atomically rewrites it.
  */
 
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { buildPersonaSpriteResource } from '../../src/game/resources.js'
 import { PERSONA_SPRITE_MANIFEST } from '../../src/game/sprites/personaSpriteManifest.ts'
+import { atomicWriteUtf8 } from './lib/atomic-write.mjs'
 import { sha256Bytes } from './lib/tmx-structure.mjs'
 import {
   assertBaselineProvenance,
   fixtureBaselineCommit,
   readJsonIfPresent,
 } from './lib/baseline-provenance.mjs'
+import { canonicalizeJuyitingRuntimeSource, resolveJuyitingPublicFile } from './lib/juyiting-public-path.mjs'
 
-const worktreeRoot = fileURLToPath(new URL('../../', import.meta.url))
 const tmxPath = process.env.JIA_JUYITING_TMX_PATH
   ?? fileURLToPath(new URL('../../public/juyiting/hall.tmx', import.meta.url))
 const imagesDir = process.env.JIA_JUYITING_IMAGES_DIR
@@ -32,6 +34,10 @@ const fixtureDir = process.env.JIA_JUYITING_OCCLUSION_FIXTURE_DIR
   ?? fileURLToPath(new URL('../../tests/fixtures/juyiting/occlusion-v0/', import.meta.url))
 const fixturePath = resolve(fixtureDir, 'source-hashes.json')
 const inventoryPath = resolve(fixtureDir, 'inventory.json')
+const publicRoot = resolve(
+  process.env.JIA_JUYITING_PUBLIC_ROOT
+    ?? fileURLToPath(new URL('../../public/', import.meta.url)),
+)
 
 // Frozen canonical source contract from docs/juyiting-occlusion-system-design.md §8.1.
 const CANONICAL_SOURCE = {
@@ -54,7 +60,7 @@ export function buildSourceHashes(options = {}) {
   }
 
   const tmxBytes = readRequiredFile(tmxPath, 'Juyiting TMX source')
-  add('hall.tmx', tmxPath, tmxBytes, 'tmx')
+  add('hall.tmx', canonicalizeJuyitingRuntimeSource('/juyiting/hall.tmx'), tmxBytes, 'tmx')
 
   const canonicalBytes = readRequiredFile(resolve(imagesDir, 'liangshan-hall-mid-occluders-v3.webp'), 'canonical occluder source')
   add(CANONICAL_SOURCE.assetRef, CANONICAL_SOURCE.path, canonicalBytes, 'canonical-occluder-source')
@@ -84,7 +90,7 @@ export function buildSourceHashes(options = {}) {
   for (const definition of personaDefinitions) {
     const resource = buildPersonaSpriteResource(definition)
     const publicPath = personaSpritePublicPath(resource)
-    const bytes = readRequiredFile(resolve(worktreeRoot, publicPath), `persona sprite ${definition.personaCode}`)
+    const bytes = readRequiredFile(resolveJuyitingPublicFile(publicRoot, publicPath), `persona sprite ${definition.personaCode}`)
     add(definition.personaCode, publicPath, bytes, 'persona-sprite')
   }
 
@@ -115,13 +121,11 @@ function personaSpritePublicPath(resource) {
   if (!resource || typeof resource !== 'object') throw new Error('buildPersonaSpriteResource returned an invalid resource')
   if (resource.type !== 'image') throw new Error(`Unsupported persona sprite resource type: ${JSON.stringify(resource.type)}`)
   if (typeof resource.name !== 'string' || resource.name.trim() === '') throw new Error('Persona sprite resource is missing name')
-  if (typeof resource.src !== 'string' || !resource.src.startsWith('/juyiting/sprites/')) {
+  const publicPath = canonicalizeJuyitingRuntimeSource(resource.src)
+  if (!publicPath.startsWith('public/juyiting/sprites/')) {
     throw new Error(`Persona sprite resource must use /juyiting/sprites/: ${JSON.stringify(resource.src)}`)
   }
-  if (resource.src.includes('..') || /[?#]/.test(resource.src)) {
-    throw new Error(`Invalid persona sprite resource path: ${resource.src}`)
-  }
-  return `public${resource.src}`
+  return publicPath
 }
 
 export function serializeSourceHashes(report) {
@@ -133,18 +137,24 @@ export function runHashSources(args = process.argv.slice(2)) {
   const existingFixture = readJsonIfPresent(fixturePath)
   const inventoryFixture = readJsonIfPresent(inventoryPath)
   const provenanceFixture = existingFixture?.baselineCommit || existingFixture?.commit ? existingFixture : inventoryFixture
+  if (!provenanceFixture) {
+    throw new Error('Juyiting source hash verification requires a committed fixture with a fixed baselineCommit')
+  }
   const baselineCommit = fixtureBaselineCommit(provenanceFixture)
   const expectedFiles = existingFixture?.entries?.map(entry => ({ path: entry.path, sha256: entry.sha256 })) ?? []
   if (expectedFiles.length > 0) assertBaselineProvenance(baselineCommit, expectedFiles)
   const report = buildSourceHashes({ baselineCommit })
+  assertBaselineProvenance(
+    baselineCommit,
+    report.entries.map(entry => ({ path: entry.path, sha256: entry.sha256 })),
+  )
   const json = serializeSourceHashes(report)
   if (mode === 'stdout') {
     process.stdout.write(json)
     return report
   }
   if (mode === 'update') {
-    mkdirSync(fixtureDir, { recursive: true })
-    writeFileSync(fixturePath, json, 'utf8')
+    atomicWriteUtf8(fixturePath, json, 'Juyiting source-hashes fixture')
     console.log(`Juyiting source hashes updated: ${fixturePath}`)
     return report
   }

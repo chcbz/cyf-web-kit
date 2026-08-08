@@ -52,6 +52,7 @@ camera/zoom/DPR, agent/prop/image-layer depth, 命中 mask ID
 ### 资产与纹理解码统计语义
 
 - `runtimeCoreFiles` 不扫描源码字符串：脚本通过 `node --import tsx` 执行并读取 `src/game/resources.js` 的 `HALL_BOOT_RESOURCES` / `buildHallMapResources` / `buildPersonaSpriteResource` 与 `src/game/sprites/personaSpriteManifest.ts` 的 `PERSONA_SPRITE_MANIFEST` 真实导出；`parseTmxStructure(hall.tmx)` 的 tileset/image-layer/collection-tile 结果被适配给真实 map loader，并对 loader 输出与 TMX 期望引用做精确集合校验。未知类型、缺失字段、意外或不存在的 runtime 路径均 fail closed。`runtimeCoreBytes` 是 16 项明细逐项 `sizeBytes` 的精确和：`2,415,264` bytes。
+- runtime 与 TMX 引用统一经过 `scripts/juyiting/lib/juyiting-public-path.mjs`：使用 WHATWG URL 复核，当前契约仅接受 ASCII unreserved path segment；percent encoding（含大小写 encoded dot segment、`%2f`/`%5c`）、`.`/`..`/空 segment、反斜杠、NUL/control、origin/host、query/hash 全部 fail closed，唯一输出为 `public/juyiting/...`。
 - `public/juyiting/tiles/hall-tileset.json` 与 `hall-tileset.png` 未被当前 `hall.tmx`、resources loader 或角色 sprite 映射引用，分类为 `unreferenced-legacy`，不计入 runtimeCore。
 - 纹理解码按**实际加载路径**逐行计一次，包含当前 runtime 引用的 4 张全图、5 个 prop 和 6 张 persona sprite：`loadedPathDecodedBytes=50,269,248`；按文件内容 SHA-256 去重后 `uniqueContentDecodedBytes=44,092,480`；`duplicateContentOverheadBytes=6,176,768`。
 - mid/foreground 是两个实际加载路径，各计 `6,176,768` decoded bytes，合计严格为 `2 × 6,176,768`；它们内容 hash 相同，因此只产生一份 `6,176,768` 的 duplicate-content overhead，不存在第三份或每行乘二统计。
@@ -60,5 +61,6 @@ camera/zoom/DPR, agent/prop/image-layer depth, 命中 mask ID
 
 - **7 个 mask 几何 region 边界漂移**：49、54、57、74、76、80、83 的 centroid 与权威 region 不一致 → E10A 多边形/region 校准候选。
 - **duplicate occluder**：mid 与 foreground 字节级相同（同一 SHA-256，size 71274）→ E16B 清理，E1 不删除（canonical 契约已冻结）。
+- **fixture update fail-closed**：`hash:juyiting-sources -- --update` 会先用候选 `report.entries` 对固定 `baselineCommit` 做 `git show` provenance；`asset:juyiting-report -- --update` 会对候选 public-tree rows 与实际 TMX bytes 做同类校验。二者只在校验通过后原子替换 fixture；隔离副本中的 sprite 字节篡改测试证明命令非 0 且 fixture 字节不变。
 - **CS02–05/08/09（production-equivalent）**：需要 E6 `?jytOcclusionDebug` overlay + 可控角色坐标/动画/depth 调试接口 + 浏览器驱动截图 harness；E1 明确标记 BLOCKED，不伪造数字/截图。
 - **draw call / 运行时性能**：E1 无可靠自动采样 harness，标 BLOCKED（见 `asset-report.json` 的 `drawCallsRuntimePerf`）；E14 固定 108-agent benchmark 负责。
