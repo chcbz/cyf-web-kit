@@ -1,7 +1,9 @@
 /** Atomic UTF-8 fixture replacement with best-effort, non-masking cleanup. */
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import {
   closeSync,
+  constants,
+  fchmodSync,
   fstatSync,
   fsyncSync,
   linkSync,
@@ -18,6 +20,7 @@ import { dirname, resolve } from 'node:path'
 const defaultAtomicOperations = {
   randomUUID,
   closeSync,
+  fchmodSync,
   fstatSync,
   fsyncSync,
   linkSync,
@@ -62,15 +65,19 @@ export function atomicWriteUtf8(path, content, label = 'fixture', operationOverr
 /**
  * Transactionally replaces a batch of UTF-8 fixtures.
  *
- * All targets are staged, fsynced and verified before any destination changes.
- * Installation uses same-directory hard links so a concurrently recreated
- * target fails with EEXIST instead of being overwritten. Rollback removes only
- * a target whose dev+ino still matches this transaction's installed inode.
+ * Every trusted installed token is frozen from descriptor-bound staging bytes:
+ * dev+ino, mode, byte length and SHA-256. Target verification always opens with
+ * O_NOFOLLOW and performs fstat-before/read/fstat-after on one descriptor.
+ * Installation is no-clobber via same-directory hard links.
  */
 export function atomicWriteUtf8Batch(entries, label = 'fixture batch', operationOverrides = {}) {
   if (!Array.isArray(entries) || entries.length === 0) {
     throw new Error(`${label} requires at least one fixture entry`)
   }
+  if (constants.O_NOFOLLOW === undefined) {
+    throw new Error(`${label} requires fs.constants.O_NOFOLLOW`)
+  }
+
   const operations = { ...defaultAtomicOperations, ...operationOverrides }
   const transactionId = `${process.pid}-${operations.randomUUID()}`
   const seenPaths = new Set()
@@ -82,7 +89,7 @@ export function atomicWriteUtf8Batch(entries, label = 'fixture batch', operation
     if (seenPaths.has(path)) throw new Error(`${label} contains duplicate destination: ${path}`)
     seenPaths.add(path)
     operations.mkdirSync(dirname(path), { recursive: true })
-    const originalStat = regularDestinationOrMissing(path, entry.label ?? label, operations)
+    const originalSnapshot = descriptorSnapshotIfPresent(path, `${entry.label ?? label} original destination`, operations)
     const temporaryPath = `${path}.tmp-${transactionId}-${index}`
     const backupPath = `${path}.backup-${transactionId}-${index}`
     assertMissing(temporaryPath, `${label} temporary path`, operations)
@@ -90,19 +97,63 @@ export function atomicWriteUtf8Batch(entries, label = 'fixture batch', operation
     return {
       path,
       content: entry.content,
+      requestBytes: Buffer.from(entry.content, 'utf8'),
       label: entry.label ?? `${label} entry ${index + 1}`,
-      originalIdentity: originalStat ? fileIdentity(originalStat) : null,
+      originalSnapshot,
       temporaryPath,
       backupPath,
       temporaryCreated: false,
-      stagedIdentity: null,
+      trustedInstalledToken: null,
       backupCreated: false,
-      backupIdentity: null,
+      backupToken: null,
       replacementCommitted: false,
-      trustedInstalledIdentity: null,
     }
   })
 
+  stageAllItems(items, label, operations)
+
+  try {
+    for (const item of items) commitItem(item, operations)
+    verifyInstalledBatch(items, 'pre-cleanup final verification', operations)
+  } catch (primaryError) {
+    const rollbackErrors = []
+    for (const item of [...items].reverse()) rollbackItem(item, operations, rollbackErrors)
+    for (const item of items) cleanupStagedTemporary(item, operations, rollbackErrors)
+    throwWithCleanup(primaryError, rollbackErrors, `${label} commit failed`)
+  }
+
+  const cleanupErrors = cleanupCommittedBackups(items, operations)
+  let finalVerificationError
+  try {
+    // Success linearization boundary: on a successful return, this descriptor-
+    // bound pass is the final internal filesystem activity.
+    verifyInstalledBatch(items, 'success linearization verification', operations)
+  } catch (error) {
+    finalVerificationError = asError(error)
+  }
+
+  if (finalVerificationError) {
+    const recoveryErrors = []
+    for (const item of items) ensureRecoveryBackup(item, operations, recoveryErrors)
+    const rollbackErrors = []
+    for (const item of [...items].reverse()) rollbackItem(item, operations, rollbackErrors)
+    for (const item of items) cleanupStagedTemporary(item, operations, rollbackErrors)
+    throwWithCleanup(
+      finalVerificationError,
+      [...cleanupErrors, ...recoveryErrors, ...rollbackErrors],
+      `${label} final verification failed`,
+    )
+  }
+
+  if (cleanupErrors.length > 0) {
+    throw new AggregateError(
+      cleanupErrors,
+      `${label} committed but backup cleanup failed: ${cleanupErrors.map(error => error.message).join('; ')}`,
+    )
+  }
+}
+
+function stageAllItems(items, label, operations) {
   let descriptor
   let stagingItem
   try {
@@ -110,29 +161,19 @@ export function atomicWriteUtf8Batch(entries, label = 'fixture batch', operation
       stagingItem = item
       descriptor = operations.openSync(item.temporaryPath, 'wx')
       item.temporaryCreated = true
-      operations.writeFileSync(descriptor, item.content, { encoding: 'utf8' })
+      operations.writeFileSync(descriptor, item.requestBytes)
       operations.fsyncSync(descriptor)
-      const descriptorStat = operations.fstatSync(descriptor)
-      requireRegularStat(descriptorStat, `${item.label} staged descriptor`)
-      item.stagedIdentity = Object.freeze(fileIdentity(descriptorStat))
-      item.trustedInstalledIdentity = Object.freeze(inodeIdentity(descriptorStat))
+      const writtenStat = operations.fstatSync(descriptor)
+      requireRegularStat(writtenStat, `${item.label} staged descriptor`)
       operations.closeSync(descriptor)
       descriptor = undefined
-      requireIdentityAtPath(
-        item.temporaryPath,
-        item.stagedIdentity,
-        `${item.label} staged temporary file changed identity`,
-        operations,
-      )
-      if (operations.readFileSync(item.temporaryPath, 'utf8') !== item.content) {
-        throw new Error(`${item.label} temporary write verification failed`)
+
+      const stagedCandidate = descriptorSnapshot(item.temporaryPath, `${item.label} staged temporary`, operations)
+      if (!sameInode(stagedCandidate.token, writtenStat)) {
+        throw new Error(`${item.label} staged temporary changed inode after close: expected ${formatToken(inodeToken(writtenStat))}, got ${formatToken(stagedCandidate.token)}`)
       }
-      requireIdentityAtPath(
-        item.temporaryPath,
-        item.stagedIdentity,
-        `${item.label} staged temporary file changed identity after verification`,
-        operations,
-      )
+      assertExpectedContent(stagedCandidate.token, expectedRequestContent(item), `${item.label} staged temporary`)
+      item.trustedInstalledToken = Object.freeze({ ...stagedCandidate.token })
     }
   } catch (primaryError) {
     const cleanupErrors = []
@@ -143,93 +184,111 @@ export function atomicWriteUtf8Batch(entries, label = 'fixture batch', operation
     for (const item of items) cleanupStagedTemporary(item, operations, cleanupErrors)
     throwWithCleanup(primaryError, cleanupErrors, `${stagingItem?.label ?? label} staging failed`)
   }
+}
 
-  try {
-    for (const item of items) {
-      if (item.originalIdentity) {
-        requireIdentityAtPath(
-          item.path,
-          item.originalIdentity,
-          `${item.label} destination changed before batch commit`,
-          operations,
-        )
-        operations.renameSync(item.path, item.backupPath)
-        item.backupCreated = true
-        const backupStat = requireRegularPath(item.backupPath, `${item.label} backup after creation`, operations)
-        const backupIdentity = fileIdentity(backupStat)
-        if (!sameInode(backupIdentity, item.originalIdentity)) {
-          throw new Error(`${item.label} backup changed inode after creation: expected ${formatIdentity(item.originalIdentity)}, got ${formatIdentity(backupIdentity)} at ${item.backupPath}`)
-        }
-        item.backupIdentity = backupIdentity
-      } else {
-        assertMissing(item.path, `${item.label} destination`, operations)
-      }
-
-      // Hard-link installation is atomic and no-clobber: EEXIST preserves any
-      // target concurrently recreated after the original moved to backup.
-      operations.linkSync(item.temporaryPath, item.path)
-      item.replacementCommitted = true
-      const linkedTargetCandidate = fileIdentity(requireRegularPath(
-        item.path,
-        `${item.label} installed target after hard-link`,
-        operations,
-      ))
-      if (!sameInode(linkedTargetCandidate, item.trustedInstalledIdentity)) {
-        throw new Error(`${item.label} installed target changed inode after hard-link: expected ${formatIdentity(item.trustedInstalledIdentity)}, got ${formatIdentity(linkedTargetCandidate)} at ${item.path}`)
-      }
-      unlinkExpectedInode(
-        item.temporaryPath,
-        item.trustedInstalledIdentity,
-        `${item.label} staged temporary cleanup`,
-        operations,
-      )
-      item.temporaryCreated = false
-      const postUnlinkTargetCandidate = fileIdentity(requireRegularPath(
-        item.path,
-        `${item.label} installed target after staging cleanup`,
-        operations,
-      ))
-      if (!sameInode(postUnlinkTargetCandidate, item.trustedInstalledIdentity)) {
-        throw new Error(`${item.label} installed target changed inode after staging cleanup: expected ${formatIdentity(item.trustedInstalledIdentity)}, got ${formatIdentity(postUnlinkTargetCandidate)} at ${item.path}`)
-      }
-    }
-  } catch (primaryError) {
-    const rollbackErrors = []
-    for (const item of [...items].reverse()) rollbackItem(item, operations, rollbackErrors)
-    for (const item of items) cleanupStagedTemporary(item, operations, rollbackErrors)
-    throwWithCleanup(primaryError, rollbackErrors, `${label} commit failed`)
+function commitItem(item, operations) {
+  if (item.originalSnapshot) {
+    verifyFileMatchesToken(
+      item.path,
+      item.originalSnapshot.token,
+      `${item.label} destination changed before batch commit`,
+      operations,
+    )
+    operations.renameSync(item.path, item.backupPath)
+    item.backupCreated = true
+    const backupCandidate = verifyFileMatchesToken(
+      item.backupPath,
+      item.originalSnapshot.token,
+      `${item.label} backup changed after creation`,
+      operations,
+    )
+    item.backupToken = Object.freeze({ ...backupCandidate.token })
+  } else {
+    assertMissing(item.path, `${item.label} destination`, operations)
   }
 
-  const cleanupErrors = []
+  operations.linkSync(item.temporaryPath, item.path)
+  item.replacementCommitted = true
+  verifyFileMatchesToken(
+    item.path,
+    item.trustedInstalledToken,
+    `${item.label} installed target changed after hard-link`,
+    operations,
+  )
+  unlinkVerifiedFile(
+    item.temporaryPath,
+    item.trustedInstalledToken,
+    `${item.label} staged temporary cleanup`,
+    operations,
+  )
+  item.temporaryCreated = false
+  verifyFileMatchesToken(
+    item.path,
+    item.trustedInstalledToken,
+    `${item.label} installed target changed after staging cleanup`,
+    operations,
+  )
+}
+
+function verifyInstalledBatch(items, phase, operations) {
   for (const item of items) {
-    if (item.backupCreated) {
-      const removed = unlinkExpectedPathForCleanup(
-        item.backupPath,
-        item.backupIdentity,
-        `${item.label} committed backup cleanup`,
-        operations,
-        cleanupErrors,
-      )
-      if (removed) item.backupCreated = false
-    }
-  }
-  if (cleanupErrors.length > 0) {
-    throw new AggregateError(cleanupErrors, `${label} committed but backup cleanup failed: ${cleanupErrors.map(error => error.message).join('; ')}`)
+    verifyFileMatchesToken(
+      item.path,
+      item.trustedInstalledToken,
+      `${item.label} ${phase}`,
+      operations,
+    )
   }
 }
 
+function cleanupCommittedBackups(items, operations) {
+  const errors = []
+  for (const item of items) {
+    if (!item.backupCreated) continue
+    const removed = unlinkVerifiedFileForCleanup(
+      item.backupPath,
+      item.backupToken,
+      `${item.label} committed backup cleanup`,
+      operations,
+      errors,
+    )
+    if (removed) item.backupCreated = false
+  }
+  return errors
+}
+
 function rollbackItem(item, operations, errors) {
+  if (item.originalSnapshot && !item.backupCreated) {
+    errors.push(incompleteRollbackError(
+      item,
+      'original destination bytes have no verified backup or recovery artifact; current target was preserved',
+    ))
+    return
+  }
+
   if (item.replacementCommitted) {
-    const current = lstatIfPresent(item.path, operations, errors, `${item.label} rollback target inspection`)
-    if (current) {
-      const currentIdentity = fileIdentity(current)
-      if (!sameInode(currentIdentity, item.trustedInstalledIdentity)) {
+    let currentMatches = false
+    try {
+      verifyFileMatchesToken(
+        item.path,
+        item.trustedInstalledToken,
+        `${item.label} rollback target changed from trusted staged content`,
+        operations,
+      )
+      currentMatches = true
+    } catch (error) {
+      if (isMissingError(error)) {
+        item.replacementCommitted = false
+      } else {
         errors.push(incompleteRollbackError(
           item,
-          `target changed from trusted staged inode ${formatIdentity(item.trustedInstalledIdentity)} to ${formatIdentity(currentIdentity)}; concurrent target was preserved`,
+          `${asError(error).message}; concurrent target was preserved`,
         ))
         return
       }
+    }
+
+    if (currentMatches) {
       try {
         operations.unlinkSync(item.path)
         item.replacementCommitted = false
@@ -237,8 +296,6 @@ function rollbackItem(item, operations, errors) {
         errors.push(incompleteRollbackError(item, `could not remove transaction-installed target: ${asError(error).message}`))
         return
       }
-    } else {
-      item.replacementCommitted = false
     }
   }
 
@@ -247,10 +304,10 @@ function rollbackItem(item, operations, errors) {
 
 function restoreBackupNoClobber(item, operations, errors) {
   try {
-    requireIdentityAtPath(
+    verifyFileMatchesToken(
       item.backupPath,
-      item.backupIdentity,
-      `${item.label} rollback backup changed identity`,
+      item.backupToken,
+      `${item.label} rollback backup changed`,
       operations,
     )
   } catch (error) {
@@ -272,10 +329,10 @@ function restoreBackupNoClobber(item, operations, errors) {
   }
 
   try {
-    requireInodeAtPath(
+    verifyFileMatchesToken(
       item.path,
-      item.backupIdentity,
-      `${item.label} restored target changed inode`,
+      item.backupToken,
+      `${item.label} restored target changed`,
       operations,
     )
   } catch (error) {
@@ -284,9 +341,9 @@ function restoreBackupNoClobber(item, operations, errors) {
   }
 
   const backupCleanupErrors = []
-  const removed = unlinkExpectedInodeForCleanup(
+  const removed = unlinkVerifiedFileForCleanup(
     item.backupPath,
-    item.backupIdentity,
+    item.backupToken,
     `${item.label} restored backup cleanup`,
     operations,
     backupCleanupErrors,
@@ -300,11 +357,60 @@ function restoreBackupNoClobber(item, operations, errors) {
   }
 }
 
+function ensureRecoveryBackup(item, operations, errors) {
+  if (!item.originalSnapshot || item.backupCreated) return
+
+  let descriptor
+  let created = false
+  try {
+    descriptor = operations.openSync(
+      item.backupPath,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
+      item.originalSnapshot.token.mode & 0o7777,
+    )
+    created = true
+    operations.fchmodSync(descriptor, item.originalSnapshot.token.mode & 0o7777)
+    operations.writeFileSync(descriptor, item.originalSnapshot.bytes)
+    operations.fsyncSync(descriptor)
+    const writtenStat = operations.fstatSync(descriptor)
+    requireRegularStat(writtenStat, `${item.label} recovery backup descriptor`)
+    operations.closeSync(descriptor)
+    descriptor = undefined
+
+    const recoveryCandidate = descriptorSnapshot(item.backupPath, `${item.label} recovery backup`, operations)
+    if (!sameInode(recoveryCandidate.token, writtenStat)) {
+      throw new Error(`${item.label} recovery backup changed inode after close`)
+    }
+    assertSameContentAndMode(
+      recoveryCandidate.token,
+      item.originalSnapshot.token,
+      `${item.label} recovery backup content mismatch`,
+    )
+    item.backupToken = Object.freeze({ ...recoveryCandidate.token })
+    item.backupCreated = true
+  } catch (primaryError) {
+    const cleanupErrors = []
+    if (descriptor !== undefined) {
+      try { operations.closeSync(descriptor) } catch (error) { cleanupErrors.push(asError(error)) }
+    }
+    if (created) unlinkForCleanup(item.backupPath, operations, cleanupErrors)
+    const primary = asError(primaryError)
+    errors.push(new AggregateError(
+      [primary, ...cleanupErrors],
+      `${item.label} could not rebuild intentional recovery artifact at ${item.backupPath}: ${primary.message}${cleanupErrors.length ? `; cleanup also failed: ${cleanupErrors.map(error => error.message).join('; ')}` : ''}`,
+    ))
+  }
+}
+
 function cleanupStagedTemporary(item, operations, errors) {
   if (!item.temporaryCreated) return
-  const removed = unlinkExpectedInodeForCleanup(
+  if (!item.trustedInstalledToken) {
+    unlinkForCleanup(item.temporaryPath, operations, errors)
+    return
+  }
+  const removed = unlinkVerifiedFileForCleanup(
     item.temporaryPath,
-    item.stagedIdentity,
+    item.trustedInstalledToken,
     `${item.label} staged temporary cleanup`,
     operations,
     errors,
@@ -312,108 +418,136 @@ function cleanupStagedTemporary(item, operations, errors) {
   if (removed) item.temporaryCreated = false
 }
 
-function regularDestinationOrMissing(path, label, operations) {
+function descriptorSnapshotIfPresent(path, label, operations) {
   try {
-    const stat = operations.lstatSync(path)
-    requireRegularStat(stat, `${label} destination`)
-    return stat
+    return descriptorSnapshot(path, label, operations)
   } catch (error) {
-    if (error?.code === 'ENOENT') return null
+    if (isMissingError(error)) return null
     throw error
   }
 }
 
-function requireRegularStat(stat, label) {
-  if (!stat?.isFile?.()) throw new Error(`${label} is not a regular file`)
-}
-
-
-function requireRegularPath(path, label, operations) {
-  let stat
+function descriptorSnapshot(path, label, operations) {
+  let descriptor
+  let primaryError
+  let captured
   try {
-    stat = operations.lstatSync(path)
+    descriptor = operations.openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW)
+    const before = operations.fstatSync(descriptor)
+    requireRegularStat(before, `${label} descriptor before read`)
+    const bytes = operations.readFileSync(descriptor)
+    const after = operations.fstatSync(descriptor)
+    requireRegularStat(after, `${label} descriptor after read`)
+    if (!stableReadStat(before, after)) {
+      throw new Error(`${label} changed during descriptor-bound read: before=${formatStat(before)} after=${formatStat(after)}`)
+    }
+    if (bytes.length !== after.size) {
+      throw new Error(`${label} descriptor byte length mismatch: stat=${after.size}, read=${bytes.length}`)
+    }
+    captured = {
+      bytes,
+      token: Object.freeze(contentToken(after, bytes)),
+    }
   } catch (error) {
-    if (error?.code === 'ENOENT') throw new Error(`${label}: missing ${path}`)
-    throw error
+    primaryError = asError(error)
   }
-  requireRegularStat(stat, `${label}: ${path}`)
-  return stat
+
+  let closeError
+  if (descriptor !== undefined) {
+    try { operations.closeSync(descriptor) } catch (error) { closeError = asError(error) }
+  }
+  if (primaryError && closeError) {
+    throw new AggregateError([primaryError, closeError], `${label} verification failed: ${primaryError.message}; close also failed: ${closeError.message}`)
+  }
+  if (primaryError) throw primaryError
+  if (closeError) throw closeError
+  return captured
 }
 
-function requireInodeAtPath(path, expectedIdentity, message, operations) {
-  const stat = requireRegularPath(path, message, operations)
-  const actualIdentity = fileIdentity(stat)
-  if (!sameInode(actualIdentity, expectedIdentity)) {
-    throw new Error(`${message}: expected ${formatIdentity(expectedIdentity)}, got ${formatIdentity(actualIdentity)} at ${path}`)
+function verifyFileMatchesToken(path, expectedToken, label, operations) {
+  const candidate = descriptorSnapshot(path, label, operations)
+  if (!sameTrustedToken(candidate.token, expectedToken)) {
+    throw new Error(`${label}: expected ${formatToken(expectedToken)}, got ${formatToken(candidate.token)} at ${path}`)
   }
-  return stat
+  return candidate
 }
 
-function requireIdentityAtPath(path, expectedIdentity, message, operations) {
-  let stat
-  try {
-    stat = operations.lstatSync(path)
-  } catch (error) {
-    if (error?.code === 'ENOENT') throw new Error(`${message}: missing ${path}`)
-    throw error
-  }
-  requireRegularStat(stat, `${message}: ${path}`)
-  const actualIdentity = fileIdentity(stat)
-  if (!sameIdentity(actualIdentity, expectedIdentity)) {
-    throw new Error(`${message}: expected ${formatIdentity(expectedIdentity)}, got ${formatIdentity(actualIdentity)} at ${path}`)
-  }
-  return stat
-}
-
-function lstatIfPresent(path, operations, errors, label) {
-  try {
-    const stat = operations.lstatSync(path)
-    requireRegularStat(stat, `${label}: ${path}`)
-    return stat
-  } catch (error) {
-    if (error?.code === 'ENOENT') return null
-    errors.push(asError(error))
-    return null
+function expectedRequestContent(item) {
+  return {
+    lengthBytes: item.requestBytes.length,
+    sha256: sha256(item.requestBytes),
   }
 }
 
-function fileIdentity(stat) {
+function assertExpectedContent(actualToken, expectedContent, label) {
+  if (actualToken.lengthBytes !== expectedContent.lengthBytes || actualToken.sha256 !== expectedContent.sha256) {
+    throw new Error(`${label} content mismatch: expected length=${expectedContent.lengthBytes},sha256=${expectedContent.sha256}; got length=${actualToken.lengthBytes},sha256=${actualToken.sha256}`)
+  }
+}
+
+function assertSameContentAndMode(actualToken, expectedToken, label) {
+  if (
+    actualToken.mode !== expectedToken.mode
+    || actualToken.lengthBytes !== expectedToken.lengthBytes
+    || actualToken.sha256 !== expectedToken.sha256
+  ) {
+    throw new Error(`${label}: expected ${formatToken(expectedToken)}, got ${formatToken(actualToken)}`)
+  }
+}
+
+function contentToken(stat, bytes) {
   return {
     dev: stat.dev,
     ino: stat.ino,
-    size: stat.size,
-    mtimeMs: stat.mtimeMs,
-    ctimeMs: stat.ctimeMs,
+    mode: stat.mode,
+    lengthBytes: bytes.length,
+    sha256: sha256(bytes),
   }
 }
 
-function inodeIdentity(statOrIdentity) {
-  return { dev: statOrIdentity.dev, ino: statOrIdentity.ino }
+function inodeToken(statOrToken) {
+  return { dev: statOrToken.dev, ino: statOrToken.ino }
 }
 
 function sameInode(left, right) {
   return Boolean(left && right && left.dev === right.dev && left.ino === right.ino)
 }
 
-function sameIdentity(left, right) {
+function sameTrustedToken(left, right) {
   return Boolean(
     sameInode(left, right)
+    && left.mode === right.mode
+    && left.lengthBytes === right.lengthBytes
+    && left.sha256 === right.sha256
+  )
+}
+
+function stableReadStat(left, right) {
+  return Boolean(
+    left.dev === right.dev
+    && left.ino === right.ino
+    && left.mode === right.mode
     && left.size === right.size
     && left.mtimeMs === right.mtimeMs
     && left.ctimeMs === right.ctimeMs
   )
 }
 
-function formatIdentity(identity) {
-  if (!identity) return '<unrecorded>'
-  return `dev=${String(identity.dev)},ino=${String(identity.ino)},size=${String(identity.size)},mtimeMs=${String(identity.mtimeMs)},ctimeMs=${String(identity.ctimeMs)}`
+function formatToken(token) {
+  if (!token) return '<unrecorded>'
+  return `dev=${String(token.dev)},ino=${String(token.ino)},mode=${String(token.mode)},length=${String(token.lengthBytes)},sha256=${String(token.sha256)}`
 }
 
-function incompleteRollbackError(item, reason) {
-  const recovery = item.backupCreated
-    ? `; intentional recovery artifact retained at ${item.backupPath}`
-    : ''
-  return new Error(`Unable to complete rollback for ${item.label} at ${item.path}: ${reason}${recovery}`)
+function formatStat(stat) {
+  return `dev=${String(stat.dev)},ino=${String(stat.ino)},mode=${String(stat.mode)},size=${String(stat.size)},mtimeMs=${String(stat.mtimeMs)},ctimeMs=${String(stat.ctimeMs)}`
+}
+
+function sha256(bytes) {
+  return createHash('sha256').update(bytes).digest('hex')
+}
+
+function requireRegularStat(stat, label) {
+  if (!stat?.isFile?.()) throw new Error(`${label} is not a regular file`)
 }
 
 function assertMissing(path, label, operations) {
@@ -426,36 +560,27 @@ function assertMissing(path, label, operations) {
   throw new Error(`${label} already exists: ${path}`)
 }
 
-function unlinkExpectedPath(path, expectedIdentity, label, operations) {
-  requireIdentityAtPath(path, expectedIdentity, `${label} identity mismatch`, operations)
+function unlinkVerifiedFile(path, token, label, operations) {
+  verifyFileMatchesToken(path, token, `${label} verification`, operations)
   operations.unlinkSync(path)
 }
 
-function unlinkExpectedInode(path, expectedIdentity, label, operations) {
-  requireInodeAtPath(path, expectedIdentity, `${label} inode mismatch`, operations)
-  operations.unlinkSync(path)
-}
-
-function unlinkExpectedPathForCleanup(path, expectedIdentity, label, operations, errors) {
+function unlinkVerifiedFileForCleanup(path, token, label, operations, errors) {
   try {
-    unlinkExpectedPath(path, expectedIdentity, label, operations)
+    unlinkVerifiedFile(path, token, label, operations)
     return true
   } catch (error) {
-    if (error?.code === 'ENOENT') return true
+    if (isMissingError(error)) return true
     errors.push(asError(error))
     return false
   }
 }
 
-function unlinkExpectedInodeForCleanup(path, expectedIdentity, label, operations, errors) {
-  try {
-    unlinkExpectedInode(path, expectedIdentity, label, operations)
-    return true
-  } catch (error) {
-    if (error?.code === 'ENOENT') return true
-    errors.push(asError(error))
-    return false
-  }
+function incompleteRollbackError(item, reason) {
+  const recovery = item.backupCreated
+    ? `; intentional recovery artifact retained at ${item.backupPath}`
+    : ''
+  return new Error(`Unable to complete rollback for ${item.label} at ${item.path}: ${reason}${recovery}`)
 }
 
 function unlinkForCleanup(path, operations, errors) {
@@ -473,6 +598,11 @@ function throwWithCleanup(primaryError, cleanupErrors, prefix) {
     )
   }
   throw primaryError
+}
+
+function isMissingError(error) {
+  if (error?.code === 'ENOENT') return true
+  return error instanceof AggregateError && error.errors.some(isMissingError)
 }
 
 function asError(error) {

@@ -5,6 +5,8 @@ import {
   closeSync,
   cpSync,
   existsSync,
+  fstatSync,
+  fsyncSync,
   mkdirSync,
   linkSync,
   lstatSync,
@@ -698,7 +700,7 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
     }
   })
 
-  it('preserves a concurrent replacement injected after temp unlink and before final target identity validation', () => {
+  it('preserves a concurrent replacement injected after temp unlink and before descriptor-bound target validation', () => {
     const root = mkdtempSync(join(tmpdir(), 'juyiting-e1-atomic-batch-post-temp-unlink-replace-'))
     try {
       const target = join(root, 'fixture.json')
@@ -717,12 +719,12 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
             if (path.includes('.tmp-')) tempUnlinked = true
             return result
           },
-          lstatSync(path) {
+          openSync(path, flags, mode) {
             if (tempUnlinked && !replacedInExactWindow && path === target) {
               renameSync(concurrentSource, target)
               replacedInExactWindow = true
             }
-            return lstatSync(path)
+            return openSync(path, flags, mode)
           },
         })
       } catch (error) {
@@ -737,12 +739,181 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
       const backupPath = join(root, backups[0])
       expect(backups[0]).to.match(/^fixture\.json\.backup-/)
       expect(readFileSync(backupPath, 'utf8')).to.equal('ORIGINAL')
-      expect(thrown.message).to.include('trusted staged inode')
+      expect(thrown.message).to.include('trusted staged content')
       expect(thrown.message).to.include(target)
       expect(thrown.message).to.include(backupPath)
       expect(thrown.message).to.include('concurrent target was preserved')
       expect(thrown.message).to.include('intentional recovery artifact retained')
       expect(readdirSync(root).filter(name => name.includes('.tmp-'))).to.deep.equal([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('detects an in-place same-inode target write after temp unlink and preserves concurrent bytes plus the original backup', () => {
+    const root = mkdtempSync(join(tmpdir(), 'juyiting-e1-atomic-batch-post-temp-unlink-in-place-'))
+    try {
+      const target = join(root, 'fixture.json')
+      writeFileSync(target, 'ORIGINAL')
+      let tempUnlinked = false
+      let mutatedInExactWindow = false
+      let thrown
+      try {
+        atomicWriteUtf8Batch([
+          { path: target, content: 'TRANSACTION', label: 'same-inode exact window fixture' },
+        ], 'post-temp-unlink in-place transaction', {
+          unlinkSync(path) {
+            const result = unlinkSync(path)
+            if (path.includes('.tmp-')) tempUnlinked = true
+            return result
+          },
+          openSync(path, flags, mode) {
+            if (tempUnlinked && !mutatedInExactWindow && path === target) {
+              const before = lstatSync(target)
+              writeFileSync(target, 'CONCURRENT-IN-PLACE')
+              const after = lstatSync(target)
+              expect(after.dev).to.equal(before.dev)
+              expect(after.ino).to.equal(before.ino)
+              mutatedInExactWindow = true
+            }
+            return openSync(path, flags, mode)
+          },
+        })
+      } catch (error) {
+        thrown = error
+      }
+      expect(tempUnlinked).to.equal(true)
+      expect(mutatedInExactWindow).to.equal(true)
+      expect(thrown).to.be.instanceOf(AggregateError)
+      expect(readFileSync(target, 'utf8')).to.equal('CONCURRENT-IN-PLACE')
+      const backups = readdirSync(root).filter(name => name.includes('.backup-'))
+      expect(backups).to.have.length(1)
+      const backupPath = join(root, backups[0])
+      expect(readFileSync(backupPath, 'utf8')).to.equal('ORIGINAL')
+      expect(thrown.message).to.include('sha256=')
+      expect(thrown.message).to.include(target)
+      expect(thrown.message).to.include(backupPath)
+      expect(thrown.message).to.include('concurrent target was preserved')
+      expect(thrown.message).to.include('intentional recovery artifact retained')
+      expect(readdirSync(root).filter(name => name.includes('.tmp-'))).to.deep.equal([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('rebuilds the original recovery backup when an in-place write lands during committed backup cleanup', () => {
+    const root = mkdtempSync(join(tmpdir(), 'juyiting-e1-atomic-batch-backup-cleanup-in-place-'))
+    try {
+      const target = join(root, 'fixture.json')
+      writeFileSync(target, 'ORIGINAL')
+      let mutatedDuringBackupCleanup = false
+      let thrown
+      try {
+        atomicWriteUtf8Batch([
+          { path: target, content: 'TRANSACTION', label: 'backup cleanup window fixture' },
+        ], 'backup-cleanup in-place transaction', {
+          unlinkSync(path) {
+            if (!mutatedDuringBackupCleanup && path.includes('.backup-')) {
+              const result = unlinkSync(path)
+              const before = lstatSync(target)
+              writeFileSync(target, 'CONCURRENT-DURING-BACKUP-CLEANUP')
+              const after = lstatSync(target)
+              expect(after.dev).to.equal(before.dev)
+              expect(after.ino).to.equal(before.ino)
+              mutatedDuringBackupCleanup = true
+              return result
+            }
+            return unlinkSync(path)
+          },
+        })
+      } catch (error) {
+        thrown = error
+      }
+      expect(mutatedDuringBackupCleanup).to.equal(true)
+      expect(thrown).to.be.instanceOf(AggregateError)
+      expect(readFileSync(target, 'utf8')).to.equal('CONCURRENT-DURING-BACKUP-CLEANUP')
+      const backups = readdirSync(root).filter(name => name.includes('.backup-'))
+      expect(backups).to.have.length(1)
+      const backupPath = join(root, backups[0])
+      expect(readFileSync(backupPath, 'utf8')).to.equal('ORIGINAL')
+      expect(thrown.message).to.include('success linearization verification')
+      expect(thrown.message).to.include(target)
+      expect(thrown.message).to.include(backupPath)
+      expect(thrown.message).to.include('concurrent target was preserved')
+      expect(thrown.message).to.include('intentional recovery artifact retained')
+      expect(readdirSync(root).filter(name => name.includes('.tmp-'))).to.deep.equal([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('uses the final descriptor verification after backup cleanup as the successful linearization boundary', () => {
+    const root = mkdtempSync(join(tmpdir(), 'juyiting-e1-atomic-batch-linearization-'))
+    try {
+      const target = join(root, 'fixture.json')
+      writeFileSync(target, 'ORIGINAL')
+      const events = []
+      const descriptorPaths = new Map()
+      const mutatingEvents = new Set(['write', 'fsync', 'link', 'rename', 'unlink'])
+      atomicWriteUtf8Batch([
+        { path: target, content: 'TRANSACTION', label: 'linearization fixture' },
+      ], 'linearization transaction', {
+        openSync(path, flags, mode) {
+          const descriptor = openSync(path, flags, mode)
+          descriptorPaths.set(descriptor, path)
+          events.push(`open:${path}`)
+          return descriptor
+        },
+        fstatSync(descriptor) {
+          events.push(`fstat:${descriptorPaths.get(descriptor)}`)
+          return fstatSync(descriptor)
+        },
+        readFileSync(pathOrDescriptor, options) {
+          events.push(`read:${descriptorPaths.get(pathOrDescriptor) ?? pathOrDescriptor}`)
+          return readFileSync(pathOrDescriptor, options)
+        },
+        closeSync(descriptor) {
+          events.push(`close:${descriptorPaths.get(descriptor)}`)
+          descriptorPaths.delete(descriptor)
+          return closeSync(descriptor)
+        },
+        writeFileSync(pathOrDescriptor, data, options) {
+          events.push(`write:${descriptorPaths.get(pathOrDescriptor) ?? pathOrDescriptor}`)
+          return writeFileSync(pathOrDescriptor, data, options)
+        },
+        fsyncSync(descriptor) {
+          events.push(`fsync:${descriptorPaths.get(descriptor)}`)
+          return fsyncSync(descriptor)
+        },
+        linkSync(source, destination) {
+          events.push(`link:${source}->${destination}`)
+          return linkSync(source, destination)
+        },
+        renameSync(source, destination) {
+          events.push(`rename:${source}->${destination}`)
+          return renameSync(source, destination)
+        },
+        unlinkSync(path) {
+          events.push(`unlink:${path}`)
+          return unlinkSync(path)
+        },
+      })
+
+      const finalSequence = events.slice(-5)
+      expect(finalSequence).to.deep.equal([
+        `open:${target}`,
+        `fstat:${target}`,
+        `read:${target}`,
+        `fstat:${target}`,
+        `close:${target}`,
+      ])
+      const finalOpenIndex = events.length - finalSequence.length
+      expect(events.slice(finalOpenIndex).some(event => mutatingEvents.has(event.split(':', 1)[0]))).to.equal(false)
+      expect(events.slice(0, finalOpenIndex).some(event => event.startsWith('unlink:') && event.includes('.backup-'))).to.equal(true)
+      expect(readFileSync(target, 'utf8')).to.equal('TRANSACTION')
+
+      writeFileSync(target, 'AFTER-RETURN')
+      expect(readFileSync(target, 'utf8')).to.equal('AFTER-RETURN')
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
