@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'mocha'
+import { JSDOM } from 'jsdom'
 import {
   RENDER_SCHEMA_VERSION,
   RENDER_BAND_ORDER,
@@ -46,7 +47,18 @@ function escapeXml(s: string): string {
 }
 
 function objectGroupXml(name: string, ...objects: string[]): string {
-  return ` <objectgroup id="1" name="${escapeXml(name)}">
+  return objectGroupXmlWithAttrs(name, {}, ...objects)
+}
+
+function objectGroupXmlWithAttrs(
+  name: string,
+  attrs: Record<string, string | number>,
+  ...objects: string[]
+): string {
+  const extraAttrs = Object.entries(attrs)
+    .map(([key, value]) => ` ${key}="${escapeXml(String(value))}"`)
+    .join('')
+  return ` <objectgroup id="1" name="${escapeXml(name)}"${extraAttrs}>
 ${objects.join('\n')}
  </objectgroup>`
 }
@@ -95,8 +107,7 @@ function melonData(
 // ── Helpers ──
 
 function parseXml(xmlStr: string): Document {
-  // Use a simple DOMParser (available in node with jsdom or similar, but we use the one from global)
-  return new DOMParser().parseFromString(xmlStr, 'application/xml')
+  return new JSDOM(xmlStr, { contentType: 'text/xml' }).window.document
 }
 
 function miniValidXml(): string {
@@ -547,14 +558,11 @@ describe('Canonical IR - structured fatal errors', () => {
     const xml = tmxXml(
       { renderSchemaVersion: '2', sceneId: 'test-scene', floorRegistry: '{"floor-1":0,"floor-1":1}' },
     )
-    // JSON.parse will deduplicate keys, so the second "floor-1" wins - no duplicate
-    // Need to test with a registry that has duplicate entries in different ways
-    // Actually JSON.parse deduplicates, so this test won't trigger FLOOR_REGISTRY_DUPLICATE
-    // That error is for our internal validation - let me verify the parse handles it
-    // Since JSON never has duplicate keys, FLOOR_REGISTRY_DUPLICATE is a safety guard
-    // We'll skip this test for now since JSON can't produce it
-    const ir = parseCanonicalIrFromXml(parseXml(xml))
-    assert.ok(ir.floorRegistry['floor-1'] !== undefined)
+    assertFatal(
+      () => parseCanonicalIrFromXml(parseXml(xml)),
+      'FLOOR_REGISTRY_DUPLICATE',
+      'floorRegistry',
+    )
   })
 
   it('tieBias out of range is fatal', () => {
@@ -1164,14 +1172,30 @@ describe('Canonical IR - floor registry', () => {
     )
   })
 
-  it('floor registry with negative order is fatal', () => {
+  it('floor registry accepts unique negative integer orders', () => {
     const xml = tmxXml(
-      { renderSchemaVersion: '2', sceneId: 'test-scene', floorRegistry: '{"floor-1":-1}' },
+      { renderSchemaVersion: '2', sceneId: 'test-scene', floorRegistry: '{"basement":-1,"floor-1":0}' },
     )
-    assertFatalHelper(
-      () => parseCanonicalIrFromXml(parseXml(xml)),
-      'FLOOR_REGISTRY_INVALID_ORDER',
+    assert.deepEqual(parseCanonicalIrFromXml(parseXml(xml)).floorRegistry, {
+      basement: -1,
+      'floor-1': 0,
+    })
+  })
+
+  it('floor registry rejects duplicate floor orders', () => {
+    const xml = tmxXml(
+      { renderSchemaVersion: '2', sceneId: 'test-scene', floorRegistry: '{"floor-1":0,"floor-2":0}' },
     )
+    try {
+      parseCanonicalIrFromXml(parseXml(xml))
+      assert.fail('expected fatal error')
+    } catch (error) {
+      assert.ok(isStructuredFatalRenderSchemaError(error))
+      if (isStructuredFatalRenderSchemaError(error)) {
+        assert.equal(error.errorCode, 'FLOOR_REGISTRY_DUPLICATE')
+        assert.equal(error.field, 'floorRegistry')
+      }
+    }
   })
 
   it('unknown floorId in sceneObject is fatal', () => {
@@ -1336,5 +1360,349 @@ describe('Canonical IR - sourceRect validation', () => {
       ),
     )
     assertFatalHelper(() => parseCanonicalIrFromXml(parseXml(xml)), 'SOURCE_RECT_INVALID')
+  })
+})
+
+describe('Canonical IR - reviewer regressions', () => {
+  function reviewerFragmentXml(
+    stableId = 'tst.frag.review.v1',
+    extraProps: Record<string, string> = {},
+  ): string {
+    return tmxObjectXml(
+      { name: stableId, x: 10, y: 20, width: 32, height: 24 },
+      propsXml({
+        stableId,
+        chunkId: 'chunk-review',
+        renderBand: 'world',
+        sortAnchorX: '26',
+        sortAnchorY: '44',
+        assetRef: 'review.png',
+        sourceRectX: '0',
+        sourceRectY: '0',
+        sourceRectW: '32',
+        sourceRectH: '24',
+        ...extraProps,
+      }),
+    )
+  }
+
+  function reviewerZoneXml(
+    stableId = 'tst.zone.review.v1',
+    extraProps: Record<string, string> = {},
+  ): string {
+    return tmxObjectXml(
+      { name: stableId, x: 5, y: 6, width: 20, height: 20 },
+      propsXml({
+        stableId,
+        chunkId: 'chunk-review',
+        targetFragmentId: 'tst.frag.review.v1',
+        relation: 'behind',
+        priority: '0',
+        ...extraProps,
+      }),
+      polygonXml('0,0 20,0 20,20 0,20'),
+    )
+  }
+
+  it('hasRenderSchemaV2 safely rejects null, primitives, arrays, and partial DOM lookalikes', () => {
+    const values: unknown[] = [
+      null,
+      undefined,
+      false,
+      0,
+      '',
+      Symbol('schema'),
+      [],
+      {},
+      { querySelector: () => null },
+      { nodeType: 9, querySelector: () => null },
+      { nodeType: 9, documentElement: { nodeType: 1 }, querySelector: () => null },
+      {
+        nodeType: 9,
+        documentElement: { nodeType: 1 },
+        querySelector: () => null,
+        getElementsByTagName: () => [],
+        createElement: () => ({}),
+      },
+    ]
+    for (const value of values) {
+      assert.doesNotThrow(() => hasRenderSchemaV2(value))
+      assert.equal(hasRenderSchemaV2(value), false)
+    }
+  })
+
+  it('requires signed integer zone priority and accepts negative integers', () => {
+    const validXml = tmxXml(
+      { renderSchemaVersion: '2', sceneId: 'test-scene' },
+      objectGroupXml('v2-fragments', reviewerFragmentXml()),
+      objectGroupXml('v2-zones', reviewerZoneXml('tst.zone.negative.v1', { priority: '-7' })),
+    )
+    assert.equal(parseCanonicalIrFromXml(validXml).zones[0].priority, -7)
+
+    for (const invalidPriority of ['3.5', 'NaN', 'Infinity', '-Infinity']) {
+      const invalidXml = tmxXml(
+        { renderSchemaVersion: '2', sceneId: 'test-scene' },
+        objectGroupXml('v2-fragments', reviewerFragmentXml()),
+        objectGroupXml(
+          'v2-zones',
+          reviewerZoneXml(`tst.zone.invalid-${invalidPriority.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.v1`, {
+            priority: invalidPriority,
+          }),
+        ),
+      )
+      try {
+        parseCanonicalIrFromXml(invalidXml)
+        assert.fail(`expected ${invalidPriority} to fail`)
+      } catch (error) {
+        assert.ok(isStructuredFatalRenderSchemaError(error))
+        if (isStructuredFatalRenderSchemaError(error)) {
+          assert.equal(error.errorCode, 'ZONE_PRIORITY_INVALID')
+          assert.equal(error.field, 'priority')
+        }
+      }
+    }
+  })
+
+  it('serializes finite numbers using exact ECMAScript round-trip representations', () => {
+    const numericValues = [
+      { id: 'a', raw: '0.3', expected: 0.3 },
+      { id: 'b', raw: '0.30000000000000004', expected: 0.30000000000000004 },
+      { id: 'c', raw: '5e-324', expected: 5e-324 },
+      { id: 'd', raw: '1.7976931348623157e+308', expected: Number.MAX_VALUE },
+      { id: 'e', raw: '1e-7', expected: 1e-7 },
+      { id: 'f', raw: '-0', expected: 0 },
+    ]
+    const data = melonData(
+      { renderSchemaVersion: '2', sceneId: 'test-scene' },
+      {
+        name: 'v2-props',
+        objects: numericValues.map(({ id, raw }) => ({
+          name: id,
+          x: 0,
+          y: 0,
+          width: 1,
+          height: 1,
+          properties: {
+            stableId: `tst.numeric.${id}.v1`,
+            chunkId: 'numeric',
+            kind: 'hotspot',
+            sortAnchorX: raw,
+            sortAnchorY: raw,
+          },
+        })),
+      },
+    )
+    const serialized = serializeCanonicalIr(parseCanonicalIrFromData(data))
+    const parsed = JSON.parse(serialized) as CanonicalSceneIr
+    assert.equal(parsed.objects.length, numericValues.length)
+    parsed.objects.forEach((object, index) => {
+      assert.equal(object.sortAnchor.x, numericValues[index].expected)
+      assert.equal(object.sortAnchor.y, numericValues[index].expected)
+      assert.equal(Object.is(object.sortAnchor.x, -0), false)
+    })
+    assert.ok(serialized.includes('0.3'))
+    assert.ok(serialized.includes('0.30000000000000004'))
+    assert.notEqual(serialized.indexOf('0.3'), serialized.indexOf('0.30000000000000004'))
+  })
+
+  it('applies positive and negative objectgroup offsets identically across raw XML, DOM, and data', () => {
+    const xml = tmxXml(
+      { renderSchemaVersion: '2', sceneId: 'test-scene' },
+      objectGroupXmlWithAttrs(
+        'v2-props-east',
+        { offsetx: 10, offsety: -5 },
+        tmxObjectXml(
+          { name: 'prop', x: 2, y: 3, width: 8, height: 9 },
+          propsXml({
+            stableId: 'tst.prop.offset.v1',
+            chunkId: 'east',
+            kind: 'prop',
+            sortAnchorX: '100',
+            sortAnchorY: '200',
+            assetRef: 'prop.png',
+          }),
+        ),
+      ),
+      objectGroupXmlWithAttrs(
+        'v2-fragments-west',
+        { offsetx: -20, offsety: 7 },
+        reviewerFragmentXml(),
+      ),
+      objectGroupXmlWithAttrs(
+        'v2-zones-west',
+        { offsetx: -3, offsety: -4 },
+        reviewerZoneXml(),
+      ),
+    )
+    const data: Record<string, unknown> = {
+      width: 52,
+      height: 29,
+      tilewidth: 32,
+      tileheight: 32,
+      properties: { renderSchemaVersion: '2', sceneId: 'test-scene' },
+      layers: [
+        {
+          type: 'objectgroup', name: 'v2-props-east', offsetx: 10, offsety: -5,
+          objects: [{
+            name: 'prop', x: 2, y: 3, width: 8, height: 9,
+            properties: {
+              stableId: 'tst.prop.offset.v1', chunkId: 'east', kind: 'prop',
+              sortAnchorX: '100', sortAnchorY: '200', assetRef: 'prop.png',
+            },
+          }],
+        },
+        {
+          type: 'objectgroup', name: 'v2-fragments-west', offsetx: -20, offsety: 7,
+          objects: [{
+            name: 'tst.frag.review.v1', x: 10, y: 20, width: 32, height: 24,
+            properties: {
+              stableId: 'tst.frag.review.v1', chunkId: 'chunk-review', renderBand: 'world',
+              sortAnchorX: '26', sortAnchorY: '44', assetRef: 'review.png',
+              sourceRectX: '0', sourceRectY: '0', sourceRectW: '32', sourceRectH: '24',
+            },
+          }],
+        },
+        {
+          type: 'objectgroup', name: 'v2-zones-west', offsetx: -3, offsety: -4,
+          objects: [{
+            name: 'tst.zone.review.v1', x: 5, y: 6, width: 20, height: 20,
+            polygon: [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 20 }, { x: 0, y: 20 }],
+            properties: {
+              stableId: 'tst.zone.review.v1', chunkId: 'chunk-review',
+              targetFragmentId: 'tst.frag.review.v1', relation: 'behind', priority: '0',
+            },
+          }],
+        },
+      ],
+    }
+
+    const rawBytes = serializeCanonicalIr(parseCanonicalIrFromXml(xml))
+    const documentBytes = serializeCanonicalIr(parseCanonicalIrFromXml(parseXml(xml)))
+    const dataBytes = serializeCanonicalIr(parseCanonicalIrFromData(data))
+    assert.equal(rawBytes, documentBytes)
+    assert.equal(rawBytes, dataBytes)
+
+    const ir = parseCanonicalIrFromXml(xml)
+    assert.deepEqual(ir.objects[0].render?.destinationRect, { x: 12, y: -2, width: 8, height: 9 })
+    assert.deepEqual(ir.objects[0].sortAnchor, { x: 100, y: 200 })
+    assert.deepEqual(ir.fragments[0].destinationRect, { x: -10, y: 27, width: 32, height: 24 })
+    assert.deepEqual(ir.fragments[0].sortAnchor, { x: 26, y: 44 })
+    assert.deepEqual(ir.zones[0].polygon[0], { x: 2, y: 2 })
+    assert.deepEqual(ir.zones[0].bounds, { x: 2, y: 2, width: 20, height: 20 })
+  })
+
+  it('rejects non-finite objectgroup offsets with deterministic structured fields', () => {
+    const xml = tmxXml(
+      { renderSchemaVersion: '2', sceneId: 'test-scene' },
+      objectGroupXmlWithAttrs('v2-props', { offsetx: 'NaN' }),
+    )
+    try {
+      parseCanonicalIrFromXml(xml)
+      assert.fail('expected offset fatal')
+    } catch (error) {
+      assert.ok(isStructuredFatalRenderSchemaError(error))
+      if (isStructuredFatalRenderSchemaError(error)) {
+        assert.equal(error.errorCode, 'OBJECTGROUP_OFFSET_INVALID')
+        assert.equal(error.objectId, 'v2-props')
+        assert.equal(error.field, 'offsetx')
+      }
+    }
+
+    const data = melonData({ renderSchemaVersion: '2', sceneId: 'test-scene' })
+    ;(data.layers as Array<Record<string, unknown>>).push({
+      type: 'objectgroup', name: 'v2-bad-offset', offsety: Infinity, objects: [],
+    })
+    assertFatalHelper(() => parseCanonicalIrFromData(data), 'OBJECTGROUP_OFFSET_INVALID')
+  })
+
+  it('rejects non-zero or non-finite object rotation in XML and data', () => {
+    const xml = tmxXml(
+      { renderSchemaVersion: '2', sceneId: 'test-scene' },
+      objectGroupXml(
+        'v2-props',
+        tmxObjectXml(
+          { name: 'rotated', x: 0, y: 0, width: 8, height: 8, rotation: 15 },
+          propsXml({
+            stableId: 'tst.rotated.v1', chunkId: 'c1', kind: 'prop',
+            sortAnchorX: '0', sortAnchorY: '0', assetRef: 'a.png',
+          }),
+        ),
+      ),
+    )
+    assertFatalHelper(() => parseCanonicalIrFromXml(xml), 'OBJECT_ROTATION_UNSUPPORTED')
+
+    const data = miniValidData()
+    const layer = (data.layers as Array<Record<string, unknown>>)[0]
+    ;(layer.objects as Array<Record<string, unknown>>)[0].rotation = NaN
+    assertFatalHelper(() => parseCanonicalIrFromData(data), 'OBJECT_ROTATION_UNSUPPORTED')
+  })
+
+  it('rejects nested groups explicitly in raw XML, DOM, and pre-parsed data', () => {
+    const xml = tmxXml(
+      { renderSchemaVersion: '2', sceneId: 'test-scene' },
+      ' <group id="3" name="nested"><objectgroup id="4" name="v2-props"/></group>',
+    )
+    assertFatalHelper(() => parseCanonicalIrFromXml(xml), 'NESTED_OBJECTGROUP_UNSUPPORTED')
+    assertFatalHelper(() => parseCanonicalIrFromXml(parseXml(xml)), 'NESTED_OBJECTGROUP_UNSUPPORTED')
+
+    const data = melonData({ renderSchemaVersion: '2', sceneId: 'test-scene' })
+    ;(data.layers as Array<Record<string, unknown>>).push({
+      type: 'group', name: 'nested', layers: [{ type: 'objectgroup', name: 'v2-props' }],
+    })
+    assertFatalHelper(() => parseCanonicalIrFromData(data), 'NESTED_OBJECTGROUP_UNSUPPORTED')
+  })
+
+  it('parses raw XML without a DOM dependency and matches Document/data canonical bytes', () => {
+    const rawXml = miniValidXml()
+    const rawBytes = serializeCanonicalIr(parseCanonicalIrFromXml(rawXml))
+    const documentBytes = serializeCanonicalIr(parseCanonicalIrFromXml(parseXml(rawXml)))
+    const dataBytes = serializeCanonicalIr(parseCanonicalIrFromData(miniValidData()))
+    assert.equal(rawBytes, documentBytes)
+    assert.equal(rawBytes, dataBytes)
+  })
+
+  it('reports malformed raw XML as a structured deterministic fatal', () => {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        parseCanonicalIrFromXml('<map><objectgroup></map>')
+        assert.fail('expected malformed XML fatal')
+      } catch (error) {
+        assert.ok(isStructuredFatalRenderSchemaError(error))
+        if (isStructuredFatalRenderSchemaError(error)) {
+          assert.equal(error.errorCode, 'XML_PARSE_FAILED')
+          assert.equal(error.sceneId, '(unknown)')
+          assert.equal(error.objectId, '(map)')
+          assert.equal(error.field, 'xml')
+        }
+      }
+    }
+  })
+
+  it('performs a real cross-scene zone target validation', () => {
+    const xml = tmxXml(
+      { renderSchemaVersion: '2', sceneId: 'test-scene' },
+      objectGroupXml(
+        'v2-fragments',
+        reviewerFragmentXml('tst.frag.cross-scene.v1', { sceneId: 'scene-a' }),
+      ),
+      objectGroupXml(
+        'v2-zones',
+        reviewerZoneXml('tst.zone.cross-scene.v1', {
+          sceneId: 'scene-b',
+          targetFragmentId: 'tst.frag.cross-scene.v1',
+        }),
+      ),
+    )
+    try {
+      parseCanonicalIrFromXml(xml)
+      assert.fail('expected cross-scene fatal')
+    } catch (error) {
+      assert.ok(isStructuredFatalRenderSchemaError(error))
+      if (isStructuredFatalRenderSchemaError(error)) {
+        assert.equal(error.errorCode, 'ZONE_TARGET_CROSS_SCENE')
+        assert.equal(error.field, 'targetFragmentId')
+        assert.equal(error.objectId, 'tst.zone.cross-scene.v1')
+      }
+    }
   })
 })

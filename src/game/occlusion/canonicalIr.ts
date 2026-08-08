@@ -1,3 +1,5 @@
+import { SaxesParser } from 'saxes'
+
 import {
   type CanonicalSceneIr,
   type OcclusionConstraintZone,
@@ -49,13 +51,20 @@ function stableIdSort(a: { stableId: string }, b: { stableId: string }): number 
 }
 
 function canonicalNumber(n: number): string {
-  // Must be byte-identical across serializations.
-  // Use toFixed for integers, avoid exponential notation.
-  if (Number.isSafeInteger(n)) return String(n)
-  // For non-integers, use enough precision to round-trip but no exponential
-  const s = n.toFixed(10)
-  // Strip trailing zeros after decimal, but keep at least one digit
-  return s.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '.0')
+  if (!Number.isFinite(n)) {
+    throw renderSchemaError(
+      'CANONICAL_NUMBER_INVALID',
+      '(canonical)',
+      '(serializer)',
+      'number',
+      '规范化数字必须是有限数值。',
+      `Canonical serialization requires a finite number, got ${String(n)}.`,
+    )
+  }
+  // ECMAScript JSON number serialization is the deterministic shortest decimal
+  // representation that round-trips to the same IEEE-754 value. Normalize -0
+  // because JSON has no distinct negative-zero value.
+  return JSON.stringify(Object.is(n, -0) ? 0 : n)
 }
 
 // ── Structured fatal builder ──
@@ -85,7 +94,12 @@ function fatal(
     FLOOR_ID_MISSING: 'floor ID 缺失。',
     FLOOR_ID_UNKNOWN: 'floor ID 未在 registry 中注册。',
     FLOOR_REGISTRY_DUPLICATE: 'floor registry 中存在重复 ID。',
-    FLOOR_REGISTRY_INVALID_ORDER: 'floor registry order 仅支持非负整数。',
+    FLOOR_REGISTRY_INVALID_ORDER: 'floor registry order 必须为整数。',
+    OBJECTGROUP_OFFSET_INVALID: 'objectgroup offset 必须为有限数值。',
+    OBJECT_ROTATION_UNSUPPORTED: 'render schema v2 暂不支持旋转对象。',
+    NESTED_OBJECTGROUP_UNSUPPORTED: 'render schema v2 暂不支持嵌套对象组。',
+    XML_PARSE_FAILED: 'TMX XML 无法解析。',
+    CANONICAL_NUMBER_INVALID: '规范化数字必须为有限数值。',
     ELEVATION_MISSING: 'elevation 缺失。',
     ELEVATION_INVALID: 'elevation 必须为有符号整数。',
     SORT_MODE_MISSING: 'sortMode 缺失。',
@@ -109,7 +123,7 @@ function fatal(
     ZONE_TARGET_CROSS_SCENE: 'zone target fragment 必须位于同一 scene。',
     ZONE_TARGET_CROSS_FLOOR: 'zone target fragment 必须位于同一 floor。',
     ZONE_RELATION_INVALID: 'zone relation 必须为 behind 或 front。',
-    ZONE_PRIORITY_INVALID: 'zone priority 必须为有限数值。',
+    ZONE_PRIORITY_INVALID: 'zone priority 必须为有符号整数。',
     ZONE_POLYGON_INVALID: 'zone polygon 至少需要 3 个有效点。',
     ZONE_BOUNDS_INVALID: 'zone bounds 无效。',
     ZONE_HYSTERESIS_INVALID: 'zone hysteresisPx 必须为 3。',
@@ -275,14 +289,101 @@ interface TmxInputMap {
   tileheight: number
 }
 
+interface RawXmlNode {
+  name: string
+  attributes: Record<string, string>
+  children: RawXmlNode[]
+  text: string
+}
+
+function directRawChildren(node: RawXmlNode, name: string): RawXmlNode[] {
+  return node.children.filter(child => child.name === name)
+}
+
+function directDomChildren(node: Element, name: string): Element[] {
+  return Array.from(node.children).filter(child => child.tagName === name)
+}
+
+function inputSceneId(properties: RawProperties): string {
+  return properties.sceneId || 'juyiting-main'
+}
+
+function parseObjectGroupOffset(
+  raw: unknown,
+  sceneId: string,
+  layerName: string,
+  field: 'offsetx' | 'offsety',
+): number {
+  const value = raw === undefined || raw === null || raw === '' ? 0 : Number(raw)
+  if (!Number.isFinite(value)) {
+    fatal(
+      'OBJECTGROUP_OFFSET_INVALID',
+      sceneId,
+      layerName || '(objectgroup)',
+      field,
+      `objectgroup ${layerName || '(unnamed)'} ${field} must be finite, got ${String(raw)}`,
+    )
+  }
+  return value
+}
+
+function validateObjectRotation(
+  raw: unknown,
+  sceneId: string,
+  objectId: string,
+): void {
+  const rotation = raw === undefined || raw === null || raw === '' ? 0 : Number(raw)
+  if (!Number.isFinite(rotation) || rotation !== 0) {
+    fatal(
+      'OBJECT_ROTATION_UNSUPPORTED',
+      sceneId,
+      objectId || '(unnamed)',
+      'rotation',
+      `object ${objectId || '(unnamed)'} rotation must be zero, got ${String(raw)}`,
+    )
+  }
+}
+
+function applyObjectGroupOffset(
+  object: TmxInputObject,
+  offsetX: number,
+  offsetY: number,
+): TmxInputObject {
+  return {
+    ...object,
+    x: object.x + offsetX,
+    y: object.y + offsetY,
+  }
+}
+
+function nestedGroupFatal(sceneId: string, groupName: string): never {
+  fatal(
+    'NESTED_OBJECTGROUP_UNSUPPORTED',
+    sceneId,
+    groupName || '(group)',
+    'layers',
+    `nested group ${groupName || '(unnamed)'} is not supported by render schema v2`,
+  )
+}
+
 // ── Map-level parsing ──
+
+function duplicateJsonObjectKey(raw: string): string | undefined {
+  const seen = new Set<string>()
+  const keyPattern = /"((?:\\.|[^"\\])*)"\s*:/g
+  for (const match of raw.matchAll(keyPattern)) {
+    const key = JSON.parse(`"${match[1]}"`) as string
+    if (seen.has(key)) return key
+    seen.add(key)
+  }
+  return undefined
+}
 
 function parseFloorRegistry(
   raw: string | undefined,
   sceneId: string,
 ): Record<string, number> {
   if (!raw || raw.trim() === '') {
-    // Default registry
     return { ...DEFAULT_FLOOR_REGISTRY }
   }
 
@@ -309,10 +410,22 @@ function parseFloorRegistry(
     )
   }
 
+  const duplicateFloorId = duplicateJsonObjectKey(raw)
+  if (duplicateFloorId !== undefined) {
+    fatal(
+      'FLOOR_REGISTRY_DUPLICATE',
+      sceneId,
+      '(map)',
+      'floorRegistry',
+      `duplicate floor ID in registry: ${duplicateFloorId}`,
+    )
+  }
+
   const registry: Record<string, number> = {}
-  const seenOrders = new Set<string>()
+  const floorIdSet = new Set<string>()
+  const floorOrderSet = new Set<number>()
   for (const [floorId, orderRaw] of Object.entries(parsed as Record<string, unknown>)) {
-    if (typeof floorId !== 'string' || floorId.trim() === '') {
+    if (!floorId.trim()) {
       fatal(
         'FLOOR_REGISTRY_INVALID_ORDER',
         sceneId,
@@ -321,7 +434,7 @@ function parseFloorRegistry(
         `floor registry key must be a non-empty string, got: ${JSON.stringify(floorId)}`,
       )
     }
-    if (seenOrders.has(floorId)) {
+    if (floorIdSet.has(floorId)) {
       fatal(
         'FLOOR_REGISTRY_DUPLICATE',
         sceneId,
@@ -331,16 +444,26 @@ function parseFloorRegistry(
       )
     }
     const order = Number(orderRaw)
-    if (!Number.isSafeInteger(order) || order < 0) {
+    if (!Number.isSafeInteger(order)) {
       fatal(
         'FLOOR_REGISTRY_INVALID_ORDER',
         sceneId,
         '(map)',
         'floorRegistry',
-        `floor ${floorId} order must be a non-negative integer, got: ${orderRaw}`,
+        `floor ${floorId} order must be an integer, got: ${String(orderRaw)}`,
       )
     }
-    seenOrders.add(floorId)
+    if (floorOrderSet.has(order)) {
+      fatal(
+        'FLOOR_REGISTRY_DUPLICATE',
+        sceneId,
+        '(map)',
+        'floorRegistry',
+        `duplicate floor order in registry: ${order}`,
+      )
+    }
+    floorIdSet.add(floorId)
+    floorOrderSet.add(order)
     registry[floorId] = order
   }
 
@@ -357,6 +480,10 @@ function parseSceneObject(
 ): SceneObject {
   const props = obj.properties
   const objId = obj.name || '(unnamed)'
+  const objectSceneId = (props.sceneId || sceneId).trim()
+  if (!objectSceneId) {
+    fatal('SCENE_ID_MISSING', sceneId, objId, 'sceneId', `${objId} has an empty sceneId`)
+  }
 
   // stableId
   const stableId = (props.stableId || '').trim()
@@ -416,7 +543,8 @@ function parseSceneObject(
   }
   const sortMode = sortModeRaw as SortMode
 
-  // sortAnchor (explicit, never inferred)
+  // sortAnchorX/Y are explicit world coordinates and are never inferred from
+  // object origin or transformed by objectgroup offsets.
   const sortAnchorX = requireFiniteNumber(
     props.sortAnchorX,
     sceneId, stableId, 'sortAnchor.x', 'SORT_ANCHOR_INVALID',
@@ -534,7 +662,7 @@ function parseSceneObject(
   return normalizeSceneObject({
     stableId,
     ...(sourceEntityId ? { sourceEntityId } : {}),
-    sceneId,
+    sceneId: objectSceneId,
     chunkId,
     kind,
     renderBand,
@@ -560,6 +688,10 @@ function parseOccluderFragment(
 ): OccluderFragment {
   const props = obj.properties
   const objId = obj.name || '(unnamed)'
+  const objectSceneId = (props.sceneId || sceneId).trim()
+  if (!objectSceneId) {
+    fatal('SCENE_ID_MISSING', sceneId, objId, 'sceneId', `${objId} has an empty sceneId`)
+  }
 
   // stableId
   const stableId = (props.stableId || '').trim()
@@ -604,7 +736,7 @@ function parseOccluderFragment(
     fatal('FRAGMENT_SORT_MODE_INVALID', sceneId, stableId, 'sortMode', `fragment sortMode must be fixed`)
   }
 
-  // sortAnchor
+  // Fragment sortAnchorX/Y use the same explicit world-coordinate contract.
   const sortAnchor = parsePoint(
     props.sortAnchorX, props.sortAnchorY,
     sceneId, stableId, 'sortAnchor', 'SORT_ANCHOR_INVALID',
@@ -651,7 +783,7 @@ function parseOccluderFragment(
 
   return normalizeFragment({
     stableId,
-    sceneId,
+    sceneId: objectSceneId,
     chunkId,
     floorId,
     elevation,
@@ -676,6 +808,10 @@ function parseConstraintZone(
 ): OcclusionConstraintZone {
   const props = obj.properties
   const objId = obj.name || '(unnamed)'
+  const objectSceneId = (props.sceneId || sceneId).trim()
+  if (!objectSceneId) {
+    fatal('SCENE_ID_MISSING', sceneId, objId, 'sceneId', `${objId} has an empty sceneId`)
+  }
 
   // stableId
   const stableId = (props.stableId || '').trim()
@@ -716,9 +852,9 @@ function parseConstraintZone(
   const relation = relationRaw as 'behind' | 'front'
 
   // priority
-  const priority = requireFiniteNumber(
+  const priority = requireInteger(
     props.priority ?? '0',
-    sceneId, stableId, 'priority', 'ZONE_PRIORITY_INVALID',
+    objectSceneId, stableId, 'priority', 'ZONE_PRIORITY_INVALID',
   )
 
   // polygon (from TMX polygon element or object properties)
@@ -772,7 +908,7 @@ function parseConstraintZone(
 
   return normalizeZone({
     stableId,
-    sceneId,
+    sceneId: objectSceneId,
     chunkId,
     floorId,
     targetFragmentId,
@@ -1009,83 +1145,219 @@ function parseCanonicalIrFromInput(input: TmxInputMap): CanonicalSceneIr {
   return ir
 }
 
-// ── Public API: XML DOM entry point ──
+// ── XML/data input adapters ──
 
-export function parseCanonicalIrFromXml(xmlDoc: Document): CanonicalSceneIr {
-  const mapNode = xmlDoc.querySelector('map')
-  if (!mapNode) {
-    throw renderSchemaError(
-      'SCENE_ID_MISSING',
-      '(unknown)',
-      '(map)',
-      'mapNode',
-      'XML document missing <map> element',
-      'TMX XML missing root <map> element',
-    )
+function propertiesFromRawNode(owner: RawXmlNode): RawProperties {
+  const propertiesNode = directRawChildren(owner, 'properties')[0]
+  if (!propertiesNode) return {}
+  const result: RawProperties = {}
+  for (const property of directRawChildren(propertiesNode, 'property')) {
+    const name = property.attributes.name
+    if (name) result[name] = property.attributes.value ?? property.text.trim()
+  }
+  return result
+}
+
+function propertiesFromDomElement(owner: Element): RawProperties {
+  const propertiesNode = directDomChildren(owner, 'properties')[0]
+  return extractProperties(propertiesNode ?? null)
+}
+
+function pointsFromText(raw: string | undefined): Point[] | undefined {
+  if (!raw?.trim()) return undefined
+  return raw.trim().split(/\s+/).map(pair => {
+    const [x, y] = pair.split(',').map(Number)
+    return { x, y }
+  })
+}
+
+function parseRawXmlTree(xml: string): RawXmlNode {
+  if (!xml.trim()) {
+    fatal('XML_PARSE_FAILED', '(unknown)', '(map)', 'xml', 'TMX XML input is empty')
   }
 
-  // Parse map-level properties
-  const propsNode = mapNode.querySelector('properties')
-  const mapProperties = extractProperties(propsNode)
+  let root: RawXmlNode | undefined
+  let parseFailure: Error | undefined
+  const stack: RawXmlNode[] = []
+  const parser = new SaxesParser<{ xmlns: false }>({ xmlns: false })
 
-  const width = Number(mapNode.getAttribute('width') || '0')
-  const height = Number(mapNode.getAttribute('height') || '0')
-  const tilewidth = Number(mapNode.getAttribute('tilewidth') || '0')
-  const tileheight = Number(mapNode.getAttribute('tileheight') || '0')
+  parser.on('opentag', tag => {
+    const node: RawXmlNode = {
+      name: tag.name,
+      attributes: { ...tag.attributes },
+      children: [],
+      text: '',
+    }
+    const parent = stack[stack.length - 1]
+    if (parent) parent.children.push(node)
+    else if (!root) root = node
+    stack.push(node)
+  })
+  parser.on('text', text => {
+    const current = stack[stack.length - 1]
+    if (current) current.text += text
+  })
+  parser.on('cdata', text => {
+    const current = stack[stack.length - 1]
+    if (current) current.text += text
+  })
+  parser.on('closetag', () => {
+    stack.pop()
+  })
+  parser.on('error', error => {
+    parseFailure ??= error
+  })
 
-  // Parse object layers
+  try {
+    parser.write(xml).close()
+  } catch (error) {
+    if (isStructuredFatalRenderSchemaError(error)) throw error
+    parseFailure ??= error instanceof Error ? error : new Error(String(error))
+  }
+
+  if (parseFailure) {
+    fatal(
+      'XML_PARSE_FAILED',
+      '(unknown)',
+      '(map)',
+      'xml',
+      `TMX XML parsing failed: ${parseFailure.message}`,
+    )
+  }
+  if (!root || root.name !== 'map') {
+    fatal('XML_PARSE_FAILED', '(unknown)', '(map)', 'xml', 'TMX XML root element must be <map>')
+  }
+  return root
+}
+
+function objectFromRawNode(
+  node: RawXmlNode,
+  sceneId: string,
+  offsetX: number,
+  offsetY: number,
+): TmxInputObject {
+  const name = node.attributes.name || ''
+  validateObjectRotation(node.attributes.rotation, sceneId, name)
+  const polygonNode = directRawChildren(node, 'polygon')[0]
+  return applyObjectGroupOffset({
+    name,
+    type: node.attributes.type || '',
+    x: Number(node.attributes.x || '0'),
+    y: Number(node.attributes.y || '0'),
+    width: Number(node.attributes.width || '0'),
+    height: Number(node.attributes.height || '0'),
+    gid: Number(node.attributes.gid || '0') || undefined,
+    properties: propertiesFromRawNode(node),
+    polygon: pointsFromText(polygonNode?.attributes.points),
+    ellipse: directRawChildren(node, 'ellipse').length > 0,
+  }, offsetX, offsetY)
+}
+
+function inputFromRawXml(xml: string): TmxInputMap {
+  const mapNode = parseRawXmlTree(xml)
+  const properties = propertiesFromRawNode(mapNode)
+  const sceneId = inputSceneId(properties)
   const layers: TmxInputLayer[] = []
-  mapNode.querySelectorAll('objectgroup').forEach((group) => {
-    const layerName = group.getAttribute('name') || ''
-    const objects: TmxInputObject[] = []
 
-    group.querySelectorAll('object').forEach((objEl) => {
-      const objProps = extractProperties(objEl.querySelector('properties'))
+  for (const child of mapNode.children) {
+    if (child.name === 'group') nestedGroupFatal(sceneId, child.attributes.name || '')
+    if (child.name !== 'objectgroup') continue
+    if (child.children.some(nested => nested.name === 'group' || nested.name === 'objectgroup')) {
+      nestedGroupFatal(sceneId, child.attributes.name || '')
+    }
+    const name = child.attributes.name || ''
+    const offsetX = parseObjectGroupOffset(child.attributes.offsetx, sceneId, name, 'offsetx')
+    const offsetY = parseObjectGroupOffset(child.attributes.offsety, sceneId, name, 'offsety')
+    const objects = directRawChildren(child, 'object')
+      .map(object => objectFromRawNode(object, sceneId, offsetX, offsetY))
+    layers.push({ name, type: 'objectgroup', objects })
+  }
 
-      // Parse polygon if present
-      let polygon: Point[] | undefined
-      const polyEl = objEl.querySelector('polygon')
-      if (polyEl) {
-        const pointsStr = polyEl.getAttribute('points') || ''
-        const pts = pointsStr.split(/\s+/).filter(Boolean).map(p => {
-          const [px, py] = p.split(',').map(Number)
-          return { x: px, y: py }
-        })
-        if (pts.length >= 3) polygon = pts
-      }
-
-      objects.push({
-        name: objEl.getAttribute('name') || '',
-        type: objEl.getAttribute('type') || '',
-        x: Number(objEl.getAttribute('x') || '0'),
-        y: Number(objEl.getAttribute('y') || '0'),
-        width: Number(objEl.getAttribute('width') || '0'),
-        height: Number(objEl.getAttribute('height') || '0'),
-        gid: Number(objEl.getAttribute('gid') || '0') || undefined,
-        properties: objProps,
-        polygon,
-        ellipse: objEl.querySelector('ellipse') !== null,
-      })
-    })
-
-    layers.push({ name: layerName, type: 'objectgroup', objects })
-  })
-
-  return parseCanonicalIrFromInput({
-    properties: mapProperties,
+  return {
+    properties,
     layers,
-    width,
-    height,
-    tilewidth,
-    tileheight,
-  })
+    width: Number(mapNode.attributes.width || '0'),
+    height: Number(mapNode.attributes.height || '0'),
+    tilewidth: Number(mapNode.attributes.tilewidth || '0'),
+    tileheight: Number(mapNode.attributes.tileheight || '0'),
+  }
+}
+
+function objectFromDomElement(
+  element: Element,
+  sceneId: string,
+  offsetX: number,
+  offsetY: number,
+): TmxInputObject {
+  const name = element.getAttribute('name') || ''
+  validateObjectRotation(element.getAttribute('rotation'), sceneId, name)
+  const polygonNode = directDomChildren(element, 'polygon')[0]
+  return applyObjectGroupOffset({
+    name,
+    type: element.getAttribute('type') || '',
+    x: Number(element.getAttribute('x') || '0'),
+    y: Number(element.getAttribute('y') || '0'),
+    width: Number(element.getAttribute('width') || '0'),
+    height: Number(element.getAttribute('height') || '0'),
+    gid: Number(element.getAttribute('gid') || '0') || undefined,
+    properties: propertiesFromDomElement(element),
+    polygon: pointsFromText(polygonNode?.getAttribute('points') ?? undefined),
+    ellipse: directDomChildren(element, 'ellipse').length > 0,
+  }, offsetX, offsetY)
+}
+
+function inputFromXmlDocument(xmlDocument: Document): TmxInputMap {
+  if (xmlDocument.getElementsByTagName('parsererror').length > 0) {
+    fatal('XML_PARSE_FAILED', '(unknown)', '(map)', 'xml', 'TMX XML document contains parsererror')
+  }
+  const mapNode = xmlDocument.documentElement
+  if (!mapNode || mapNode.tagName !== 'map') {
+    fatal('XML_PARSE_FAILED', '(unknown)', '(map)', 'xml', 'TMX XML root element must be <map>')
+  }
+
+  const properties = propertiesFromDomElement(mapNode)
+  const sceneId = inputSceneId(properties)
+  const layers: TmxInputLayer[] = []
+
+  for (const child of Array.from(mapNode.children)) {
+    if (child.tagName === 'group') nestedGroupFatal(sceneId, child.getAttribute('name') || '')
+    if (child.tagName !== 'objectgroup') continue
+    if (Array.from(child.children).some(nested => nested.tagName === 'group' || nested.tagName === 'objectgroup')) {
+      nestedGroupFatal(sceneId, child.getAttribute('name') || '')
+    }
+    const name = child.getAttribute('name') || ''
+    const offsetX = parseObjectGroupOffset(child.getAttribute('offsetx'), sceneId, name, 'offsetx')
+    const offsetY = parseObjectGroupOffset(child.getAttribute('offsety'), sceneId, name, 'offsety')
+    const objects = directDomChildren(child, 'object')
+      .map(object => objectFromDomElement(object, sceneId, offsetX, offsetY))
+    layers.push({ name, type: 'objectgroup', objects })
+  }
+
+  return {
+    properties,
+    layers,
+    width: Number(mapNode.getAttribute('width') || '0'),
+    height: Number(mapNode.getAttribute('height') || '0'),
+    tilewidth: Number(mapNode.getAttribute('tilewidth') || '0'),
+    tileheight: Number(mapNode.getAttribute('tileheight') || '0'),
+  }
+}
+
+// ── Public API: XML DOM or raw XML entry point ──
+
+export function parseCanonicalIrFromXml(xml: Document | string): CanonicalSceneIr {
+  if (typeof xml === 'string') return parseCanonicalIrFromInput(inputFromRawXml(xml))
+  if (!isXmlDocument(xml)) {
+    fatal('XML_PARSE_FAILED', '(unknown)', '(map)', 'xml', 'XML input must be a Document or string')
+  }
+  return parseCanonicalIrFromInput(inputFromXmlDocument(xml))
 }
 
 // ── Public API: melonJS / pre-parsed data entry point ──
 
 export function parseCanonicalIrFromData(mapData: Record<string, unknown>): CanonicalSceneIr {
   const mapProperties = extractPropertiesFromData(mapData.properties)
-
+  const sceneId = inputSceneId(mapProperties)
   const width = Number(mapData.width || '0')
   const height = Number(mapData.height || '0')
   const tilewidth = Number(mapData.tilewidth || '0')
@@ -1095,35 +1367,46 @@ export function parseCanonicalIrFromData(mapData: Record<string, unknown>): Cano
   const layers: TmxInputLayer[] = []
 
   for (const rawLayer of rawLayers) {
+    if (!rawLayer || typeof rawLayer !== 'object') continue
     const layer = rawLayer as Record<string, unknown>
+    if (layer.type === 'group') nestedGroupFatal(sceneId, String(layer.name || ''))
     if (layer.type !== 'objectgroup') continue
+    if (Array.isArray(layer.layers) && layer.layers.length > 0) {
+      nestedGroupFatal(sceneId, String(layer.name || ''))
+    }
 
     const layerName = String(layer.name || '')
+    const offsetX = parseObjectGroupOffset(layer.offsetx ?? layer.offsetX, sceneId, layerName, 'offsetx')
+    const offsetY = parseObjectGroupOffset(layer.offsety ?? layer.offsetY, sceneId, layerName, 'offsety')
     const rawObjects = Array.isArray(layer.objects) ? layer.objects : []
     const objects: TmxInputObject[] = []
 
-    for (const rawObj of rawObjects) {
-      const obj = rawObj as Record<string, unknown>
-      const objProperties = extractPropertiesFromData(obj.properties)
-
-      // Parse polygon from melonJS data
+    for (const rawObject of rawObjects) {
+      if (!rawObject || typeof rawObject !== 'object') continue
+      const object = rawObject as Record<string, unknown>
+      const name = String(object.name || '')
+      validateObjectRotation(object.rotation, sceneId, name)
+      const properties = extractPropertiesFromData(object.properties)
       let polygon: Point[] | undefined
-      if (Array.isArray(obj.polygon) && obj.polygon.length >= 3) {
-        polygon = (obj.polygon as Array<{ x: number; y: number }>).map(p => ({ x: p.x, y: p.y }))
+      if (Array.isArray(object.polygon)) {
+        polygon = object.polygon.map(rawPoint => {
+          const point = rawPoint as Record<string, unknown>
+          return { x: Number(point.x), y: Number(point.y) }
+        })
       }
 
-      objects.push({
-        name: String(obj.name || ''),
-        type: String(obj.type || ''),
-        x: Number(obj.x || '0'),
-        y: Number(obj.y || '0'),
-        width: Number(obj.width || '0'),
-        height: Number(obj.height || '0'),
-        gid: obj.gid ? Number(obj.gid) : undefined,
-        properties: objProperties,
+      objects.push(applyObjectGroupOffset({
+        name,
+        type: String(object.type || ''),
+        x: Number(object.x || '0'),
+        y: Number(object.y || '0'),
+        width: Number(object.width || '0'),
+        height: Number(object.height || '0'),
+        gid: object.gid ? Number(object.gid) : undefined,
+        properties,
         polygon,
-        ellipse: Boolean(obj.ellipse),
-      })
+        ellipse: Boolean(object.ellipse),
+      }, offsetX, offsetY))
     }
 
     layers.push({ name: layerName, type: 'objectgroup', objects })
@@ -1138,6 +1421,7 @@ export function parseCanonicalIrFromData(mapData: Record<string, unknown>): Cano
     tileheight,
   })
 }
+
 
 // ── Canonical serializer ──
 // Produces byte-for-byte identical JSON for equivalent inputs.
@@ -1257,25 +1541,28 @@ export function serializeCanonicalIr(ir: CanonicalSceneIr): string {
 
 // ── Helper: type predicate for XML DOM vs plain data ──
 
-function isXmlDocument(input: Document | Record<string, unknown>): input is Document {
-  // Duck-type: DOM nodes have nodeType; plain objects never do.
+function isXmlDocument(input: unknown): input is Document {
+  if (typeof input !== 'object' || input === null) return false
+  const candidate = input as Partial<Document>
   return (
-    typeof (input as Record<string, unknown>).querySelector === 'function'
-    && typeof (input as Record<string, unknown>).nodeType === 'number'
+    candidate.nodeType === 9
+    && candidate.documentElement?.nodeType === 1
+    && candidate.documentElement.ownerDocument === input
+    && typeof candidate.querySelector === 'function'
+    && typeof candidate.getElementsByTagName === 'function'
+    && typeof candidate.createElement === 'function'
   )
 }
 
 // ── Helper: check if input has v2 render schema ──
 
-export function hasRenderSchemaV2(input: Document | Record<string, unknown>): boolean {
+export function hasRenderSchemaV2(input: unknown): boolean {
   if (isXmlDocument(input)) {
-    const mapNode = input.querySelector('map')
-    if (!mapNode) return false
-    const propsNode = mapNode.querySelector('properties')
-    const props = extractProperties(propsNode)
-    return props.renderSchemaVersion === RENDER_SCHEMA_VERSION
+    const mapNode = input.documentElement
+    if (mapNode.tagName !== 'map') return false
+    return propertiesFromDomElement(mapNode).renderSchemaVersion === RENDER_SCHEMA_VERSION
   }
-  // melonJS data
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) return false
   const props = extractPropertiesFromData((input as Record<string, unknown>).properties)
   return props.renderSchemaVersion === RENDER_SCHEMA_VERSION
 }
