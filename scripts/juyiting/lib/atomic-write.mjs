@@ -2,7 +2,9 @@
 import { randomUUID } from 'node:crypto'
 import {
   closeSync,
+  fstatSync,
   fsyncSync,
+  linkSync,
   lstatSync,
   mkdirSync,
   openSync,
@@ -16,7 +18,9 @@ import { dirname, resolve } from 'node:path'
 const defaultAtomicOperations = {
   randomUUID,
   closeSync,
+  fstatSync,
   fsyncSync,
+  linkSync,
   lstatSync,
   mkdirSync,
   openSync,
@@ -59,8 +63,9 @@ export function atomicWriteUtf8(path, content, label = 'fixture', operationOverr
  * Transactionally replaces a batch of UTF-8 fixtures.
  *
  * All targets are staged, fsynced and verified before any destination changes.
- * Commit failures restore every already-touched destination from a sibling
- * backup (or remove it when the original was absent), then clean staged files.
+ * Installation uses same-directory hard links so a concurrently recreated
+ * target fails with EEXIST instead of being overwritten. Rollback removes only
+ * a target whose dev+ino still matches this transaction's installed inode.
  */
 export function atomicWriteUtf8Batch(entries, label = 'fixture batch', operationOverrides = {}) {
   if (!Array.isArray(entries) || entries.length === 0) {
@@ -77,7 +82,7 @@ export function atomicWriteUtf8Batch(entries, label = 'fixture batch', operation
     if (seenPaths.has(path)) throw new Error(`${label} contains duplicate destination: ${path}`)
     seenPaths.add(path)
     operations.mkdirSync(dirname(path), { recursive: true })
-    const originalExists = destinationIsRegularFileOrMissing(path, entry.label ?? label, operations)
+    const originalStat = regularDestinationOrMissing(path, entry.label ?? label, operations)
     const temporaryPath = `${path}.tmp-${transactionId}-${index}`
     const backupPath = `${path}.backup-${transactionId}-${index}`
     assertMissing(temporaryPath, `${label} temporary path`, operations)
@@ -86,12 +91,15 @@ export function atomicWriteUtf8Batch(entries, label = 'fixture batch', operation
       path,
       content: entry.content,
       label: entry.label ?? `${label} entry ${index + 1}`,
-      originalExists,
+      originalIdentity: originalStat ? fileIdentity(originalStat) : null,
       temporaryPath,
       backupPath,
       temporaryCreated: false,
+      stagedIdentity: null,
       backupCreated: false,
+      backupIdentity: null,
       replacementCommitted: false,
+      installedIdentity: null,
     }
   })
 
@@ -104,11 +112,26 @@ export function atomicWriteUtf8Batch(entries, label = 'fixture batch', operation
       item.temporaryCreated = true
       operations.writeFileSync(descriptor, item.content, { encoding: 'utf8' })
       operations.fsyncSync(descriptor)
+      const descriptorStat = operations.fstatSync(descriptor)
+      requireRegularStat(descriptorStat, `${item.label} staged descriptor`)
+      item.stagedIdentity = fileIdentity(descriptorStat)
       operations.closeSync(descriptor)
       descriptor = undefined
+      requireIdentityAtPath(
+        item.temporaryPath,
+        item.stagedIdentity,
+        `${item.label} staged temporary file changed identity`,
+        operations,
+      )
       if (operations.readFileSync(item.temporaryPath, 'utf8') !== item.content) {
         throw new Error(`${item.label} temporary write verification failed`)
       }
+      requireIdentityAtPath(
+        item.temporaryPath,
+        item.stagedIdentity,
+        `${item.label} staged temporary file changed identity after verification`,
+        operations,
+      )
     }
   } catch (primaryError) {
     const cleanupErrors = []
@@ -116,52 +139,76 @@ export function atomicWriteUtf8Batch(entries, label = 'fixture batch', operation
       try { operations.closeSync(descriptor) } catch (error) { cleanupErrors.push(asError(error)) }
       descriptor = undefined
     }
-    for (const item of items) {
-      if (item.temporaryCreated) unlinkForCleanup(item.temporaryPath, operations, cleanupErrors)
-    }
+    for (const item of items) cleanupStagedTemporary(item, operations, cleanupErrors)
     throwWithCleanup(primaryError, cleanupErrors, `${stagingItem?.label ?? label} staging failed`)
   }
 
   try {
     for (const item of items) {
-      if (item.originalExists) {
-        requireRegularDestination(item.path, item.label, operations)
+      if (item.originalIdentity) {
+        requireIdentityAtPath(
+          item.path,
+          item.originalIdentity,
+          `${item.label} destination changed before batch commit`,
+          operations,
+        )
         operations.renameSync(item.path, item.backupPath)
         item.backupCreated = true
+        const backupStat = requireRegularPath(item.backupPath, `${item.label} backup after creation`, operations)
+        const backupIdentity = fileIdentity(backupStat)
+        if (!sameInode(backupIdentity, item.originalIdentity)) {
+          throw new Error(`${item.label} backup changed inode after creation: expected ${formatIdentity(item.originalIdentity)}, got ${formatIdentity(backupIdentity)} at ${item.backupPath}`)
+        }
+        item.backupIdentity = backupIdentity
       } else {
         assertMissing(item.path, `${item.label} destination`, operations)
       }
-      operations.renameSync(item.temporaryPath, item.path)
-      item.temporaryCreated = false
+
+      // Hard-link installation is atomic and no-clobber: EEXIST preserves any
+      // target concurrently recreated after the original moved to backup.
+      operations.linkSync(item.temporaryPath, item.path)
       item.replacementCommitted = true
+      const linkedTargetStat = requireInodeAtPath(
+        item.path,
+        item.stagedIdentity,
+        `${item.label} installed target changed inode`,
+        operations,
+      )
+      item.installedIdentity = fileIdentity(linkedTargetStat)
+      unlinkExpectedInode(
+        item.temporaryPath,
+        item.stagedIdentity,
+        `${item.label} staged temporary cleanup`,
+        operations,
+      )
+      item.temporaryCreated = false
+      item.installedIdentity = fileIdentity(requireRegularPath(
+        item.path,
+        `${item.label} installed target after staging cleanup`,
+        operations,
+      ))
+      if (!sameInode(item.installedIdentity, item.stagedIdentity)) {
+        throw new Error(`${item.label} installed target changed inode after staging cleanup: expected ${formatIdentity(item.stagedIdentity)}, got ${formatIdentity(item.installedIdentity)} at ${item.path}`)
+      }
     }
   } catch (primaryError) {
     const rollbackErrors = []
-    for (const item of [...items].reverse()) {
-      if (item.replacementCommitted) {
-        unlinkForCleanup(item.path, operations, rollbackErrors)
-        item.replacementCommitted = false
-      }
-      if (item.backupCreated) {
-        try {
-          operations.renameSync(item.backupPath, item.path)
-          item.backupCreated = false
-        } catch (error) {
-          rollbackErrors.push(asError(error))
-        }
-      }
-    }
-    for (const item of items) {
-      if (item.temporaryCreated) unlinkForCleanup(item.temporaryPath, operations, rollbackErrors)
-    }
+    for (const item of [...items].reverse()) rollbackItem(item, operations, rollbackErrors)
+    for (const item of items) cleanupStagedTemporary(item, operations, rollbackErrors)
     throwWithCleanup(primaryError, rollbackErrors, `${label} commit failed`)
   }
 
   const cleanupErrors = []
   for (const item of items) {
     if (item.backupCreated) {
-      unlinkForCleanup(item.backupPath, operations, cleanupErrors)
-      item.backupCreated = false
+      const removed = unlinkExpectedPathForCleanup(
+        item.backupPath,
+        item.backupIdentity,
+        `${item.label} committed backup cleanup`,
+        operations,
+        cleanupErrors,
+      )
+      if (removed) item.backupCreated = false
     }
   }
   if (cleanupErrors.length > 0) {
@@ -169,26 +216,198 @@ export function atomicWriteUtf8Batch(entries, label = 'fixture batch', operation
   }
 }
 
-function destinationIsRegularFileOrMissing(path, label, operations) {
+function rollbackItem(item, operations, errors) {
+  if (item.replacementCommitted) {
+    const current = lstatIfPresent(item.path, operations, errors, `${item.label} rollback target inspection`)
+    if (current) {
+      const currentIdentity = fileIdentity(current)
+      if (!sameIdentity(currentIdentity, item.installedIdentity)) {
+        errors.push(incompleteRollbackError(
+          item,
+          `target changed from installed identity ${formatIdentity(item.installedIdentity)} to ${formatIdentity(currentIdentity)}; concurrent target was preserved`,
+        ))
+        return
+      }
+      try {
+        operations.unlinkSync(item.path)
+        item.replacementCommitted = false
+      } catch (error) {
+        errors.push(incompleteRollbackError(item, `could not remove transaction-installed target: ${asError(error).message}`))
+        return
+      }
+    } else {
+      item.replacementCommitted = false
+    }
+  }
+
+  if (item.backupCreated) restoreBackupNoClobber(item, operations, errors)
+}
+
+function restoreBackupNoClobber(item, operations, errors) {
+  try {
+    requireIdentityAtPath(
+      item.backupPath,
+      item.backupIdentity,
+      `${item.label} rollback backup changed identity`,
+      operations,
+    )
+  } catch (error) {
+    errors.push(incompleteRollbackError(item, asError(error).message))
+    return
+  }
+
+  try {
+    operations.linkSync(item.backupPath, item.path)
+  } catch (error) {
+    const cause = asError(error)
+    errors.push(incompleteRollbackError(
+      item,
+      cause.code === 'EEXIST'
+        ? 'concurrent target occupies the destination; concurrent target was preserved and the old backup cannot be restored'
+        : `backup no-clobber restore failed: ${cause.message}`,
+    ))
+    return
+  }
+
+  try {
+    requireInodeAtPath(
+      item.path,
+      item.backupIdentity,
+      `${item.label} restored target changed inode`,
+      operations,
+    )
+  } catch (error) {
+    errors.push(incompleteRollbackError(item, asError(error).message))
+    return
+  }
+
+  const backupCleanupErrors = []
+  const removed = unlinkExpectedInodeForCleanup(
+    item.backupPath,
+    item.backupIdentity,
+    `${item.label} restored backup cleanup`,
+    operations,
+    backupCleanupErrors,
+  )
+  if (removed) {
+    item.backupCreated = false
+  } else {
+    for (const error of backupCleanupErrors) {
+      errors.push(incompleteRollbackError(item, `restored target but backup cleanup failed: ${error.message}`))
+    }
+  }
+}
+
+function cleanupStagedTemporary(item, operations, errors) {
+  if (!item.temporaryCreated) return
+  const removed = unlinkExpectedInodeForCleanup(
+    item.temporaryPath,
+    item.stagedIdentity,
+    `${item.label} staged temporary cleanup`,
+    operations,
+    errors,
+  )
+  if (removed) item.temporaryCreated = false
+}
+
+function regularDestinationOrMissing(path, label, operations) {
   try {
     const stat = operations.lstatSync(path)
-    if (!stat.isFile()) throw new Error(`${label} destination is not a regular file: ${path}`)
-    return true
+    requireRegularStat(stat, `${label} destination`)
+    return stat
   } catch (error) {
-    if (error?.code === 'ENOENT') return false
+    if (error?.code === 'ENOENT') return null
     throw error
   }
 }
 
-function requireRegularDestination(path, label, operations) {
+function requireRegularStat(stat, label) {
+  if (!stat?.isFile?.()) throw new Error(`${label} is not a regular file`)
+}
+
+
+function requireRegularPath(path, label, operations) {
   let stat
   try {
     stat = operations.lstatSync(path)
   } catch (error) {
-    if (error?.code === 'ENOENT') throw new Error(`${label} destination disappeared before batch commit: ${path}`)
+    if (error?.code === 'ENOENT') throw new Error(`${label}: missing ${path}`)
     throw error
   }
-  if (!stat.isFile()) throw new Error(`${label} destination changed to a non-regular file before batch commit: ${path}`)
+  requireRegularStat(stat, `${label}: ${path}`)
+  return stat
+}
+
+function requireInodeAtPath(path, expectedIdentity, message, operations) {
+  const stat = requireRegularPath(path, message, operations)
+  const actualIdentity = fileIdentity(stat)
+  if (!sameInode(actualIdentity, expectedIdentity)) {
+    throw new Error(`${message}: expected ${formatIdentity(expectedIdentity)}, got ${formatIdentity(actualIdentity)} at ${path}`)
+  }
+  return stat
+}
+
+function requireIdentityAtPath(path, expectedIdentity, message, operations) {
+  let stat
+  try {
+    stat = operations.lstatSync(path)
+  } catch (error) {
+    if (error?.code === 'ENOENT') throw new Error(`${message}: missing ${path}`)
+    throw error
+  }
+  requireRegularStat(stat, `${message}: ${path}`)
+  const actualIdentity = fileIdentity(stat)
+  if (!sameIdentity(actualIdentity, expectedIdentity)) {
+    throw new Error(`${message}: expected ${formatIdentity(expectedIdentity)}, got ${formatIdentity(actualIdentity)} at ${path}`)
+  }
+  return stat
+}
+
+function lstatIfPresent(path, operations, errors, label) {
+  try {
+    const stat = operations.lstatSync(path)
+    requireRegularStat(stat, `${label}: ${path}`)
+    return stat
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null
+    errors.push(asError(error))
+    return null
+  }
+}
+
+function fileIdentity(stat) {
+  return {
+    dev: stat.dev,
+    ino: stat.ino,
+    size: stat.size,
+    mtimeMs: stat.mtimeMs,
+    ctimeMs: stat.ctimeMs,
+  }
+}
+
+function sameInode(left, right) {
+  return Boolean(left && right && left.dev === right.dev && left.ino === right.ino)
+}
+
+function sameIdentity(left, right) {
+  return Boolean(
+    sameInode(left, right)
+    && left.size === right.size
+    && left.mtimeMs === right.mtimeMs
+    && left.ctimeMs === right.ctimeMs
+  )
+}
+
+function formatIdentity(identity) {
+  if (!identity) return '<unrecorded>'
+  return `dev=${String(identity.dev)},ino=${String(identity.ino)},size=${String(identity.size)},mtimeMs=${String(identity.mtimeMs)},ctimeMs=${String(identity.ctimeMs)}`
+}
+
+function incompleteRollbackError(item, reason) {
+  const recovery = item.backupCreated
+    ? `; intentional recovery artifact retained at ${item.backupPath}`
+    : ''
+  return new Error(`Unable to complete rollback for ${item.label} at ${item.path}: ${reason}${recovery}`)
 }
 
 function assertMissing(path, label, operations) {
@@ -199,6 +418,38 @@ function assertMissing(path, label, operations) {
     throw error
   }
   throw new Error(`${label} already exists: ${path}`)
+}
+
+function unlinkExpectedPath(path, expectedIdentity, label, operations) {
+  requireIdentityAtPath(path, expectedIdentity, `${label} identity mismatch`, operations)
+  operations.unlinkSync(path)
+}
+
+function unlinkExpectedInode(path, expectedIdentity, label, operations) {
+  requireInodeAtPath(path, expectedIdentity, `${label} inode mismatch`, operations)
+  operations.unlinkSync(path)
+}
+
+function unlinkExpectedPathForCleanup(path, expectedIdentity, label, operations, errors) {
+  try {
+    unlinkExpectedPath(path, expectedIdentity, label, operations)
+    return true
+  } catch (error) {
+    if (error?.code === 'ENOENT') return true
+    errors.push(asError(error))
+    return false
+  }
+}
+
+function unlinkExpectedInodeForCleanup(path, expectedIdentity, label, operations, errors) {
+  try {
+    unlinkExpectedInode(path, expectedIdentity, label, operations)
+    return true
+  } catch (error) {
+    if (error?.code === 'ENOENT') return true
+    errors.push(asError(error))
+    return false
+  }
 }
 
 function unlinkForCleanup(path, operations, errors) {

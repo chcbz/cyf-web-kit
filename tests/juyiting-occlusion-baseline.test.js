@@ -6,6 +6,7 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
+  linkSync,
   openSync,
   renameSync,
   mkdtempSync,
@@ -13,6 +14,7 @@ import {
   readdirSync,
   rmSync,
   symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { createHash } from 'node:crypto'
@@ -572,36 +574,242 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
     }
   })
 
-  it('rolls back an atomic UTF-8 batch when the second target commit fails', () => {
-    const root = mkdtempSync(join(tmpdir(), 'juyiting-e1-atomic-batch-fail-'))
+  it('rolls back all prior targets when no-clobber installation fails at the second or third target', () => {
+    for (const failureIndex of [1, 2]) {
+      const root = mkdtempSync(join(tmpdir(), `juyiting-e1-atomic-batch-link-fail-${failureIndex}-`))
+      try {
+        const paths = ['first.json', 'second.md', 'third.svg'].map(name => join(root, name))
+        paths.forEach((path, index) => writeFileSync(path, `old-${index}`))
+        let installCount = 0
+        expect(() => atomicWriteUtf8Batch(
+          paths.map((path, index) => ({ path, content: `new-${index}`, label: `fixture ${index}` })),
+          'three fixture transaction',
+          {
+            linkSync(source, destination) {
+              if (source.includes('.tmp-')) {
+                if (installCount === failureIndex) throw new Error(`target ${failureIndex + 1} link failure`)
+                installCount += 1
+              }
+              return linkSync(source, destination)
+            },
+          },
+        )).to.throw(`target ${failureIndex + 1} link failure`)
+        paths.forEach((path, index) => expect(readFileSync(path, 'utf8')).to.equal(`old-${index}`))
+        expect(readdirSync(root).filter(name => name.includes('.tmp-') || name.includes('.backup-'))).to.deep.equal([])
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    }
+  })
+
+  it('preserves a concurrently rebuilt target and its old backup when no-clobber installation sees EEXIST', () => {
+    const root = mkdtempSync(join(tmpdir(), 'juyiting-e1-atomic-batch-concurrent-rebuild-'))
     try {
       const first = join(root, 'first.json')
       const second = join(root, 'second.md')
       writeFileSync(first, 'first-old')
       writeFileSync(second, 'second-old')
-      let injected = false
-      expect(() => atomicWriteUtf8Batch([
-        { path: first, content: 'first-new', label: 'first fixture' },
-        { path: second, content: 'second-new', label: 'second fixture' },
-      ], 'two fixture transaction', {
-        renameSync(source, destination) {
-          if (!injected && destination === second && source.includes('.tmp-')) {
-            injected = true
-            throw new Error('second target commit failure')
-          }
-          return renameSync(source, destination)
-        },
-      })).to.throw('second target commit failure')
-      expect(injected).to.equal(true)
+      let rebuilt = false
+      let thrown
+      try {
+        atomicWriteUtf8Batch([
+          { path: first, content: 'first-new', label: 'first fixture' },
+          { path: second, content: 'second-new', label: 'second fixture' },
+        ], 'concurrent rebuild transaction', {
+          linkSync(source, destination) {
+            if (!rebuilt && source.includes('.tmp-') && destination === second) {
+              writeFileSync(second, 'second-concurrent')
+              rebuilt = true
+            }
+            return linkSync(source, destination)
+          },
+        })
+      } catch (error) {
+        thrown = error
+      }
+      expect(rebuilt).to.equal(true)
+      expect(thrown).to.be.instanceOf(AggregateError)
       expect(readFileSync(first, 'utf8')).to.equal('first-old')
-      expect(readFileSync(second, 'utf8')).to.equal('second-old')
-      expect(readdirSync(root).filter(name => name.includes('.tmp-') || name.includes('.backup-'))).to.deep.equal([])
+      expect(readFileSync(second, 'utf8')).to.equal('second-concurrent')
+      const backups = readdirSync(root).filter(name => name.includes('.backup-'))
+      expect(backups).to.have.length(1)
+      const backupPath = join(root, backups[0])
+      expect(backups[0]).to.match(/^second\.md\.backup-/)
+      expect(readFileSync(backupPath, 'utf8')).to.equal('second-old')
+      expect(thrown.message).to.include(second)
+      expect(thrown.message).to.include(backupPath)
+      expect(thrown.message).to.include('concurrent target was preserved')
+      expect(thrown.message).to.include('intentional recovery artifact retained')
+      expect(readdirSync(root).filter(name => name.includes('.tmp-'))).to.deep.equal([])
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
   })
 
-  it('commits a complete atomic UTF-8 batch without temporary or backup residue', () => {
+  it('preserves a target replaced after installation and rolls back unaffected targets', () => {
+    const root = mkdtempSync(join(tmpdir(), 'juyiting-e1-atomic-batch-post-install-replace-'))
+    try {
+      const first = join(root, 'first.json')
+      const second = join(root, 'second.md')
+      const third = join(root, 'third.svg')
+      for (const [path, content] of [[first, 'first-old'], [second, 'second-old'], [third, 'third-old']]) {
+        writeFileSync(path, content)
+      }
+      const concurrentSource = join(root, 'first-concurrent-source')
+      writeFileSync(concurrentSource, 'first-concurrent')
+      let replaced = false
+      let thrown
+      try {
+        atomicWriteUtf8Batch([
+          { path: first, content: 'first-new', label: 'first fixture' },
+          { path: second, content: 'second-new', label: 'second fixture' },
+          { path: third, content: 'third-new', label: 'third fixture' },
+        ], 'post-install replacement transaction', {
+          linkSync(source, destination) {
+            if (!replaced && source.includes('.tmp-') && destination === third) {
+              renameSync(concurrentSource, first)
+              replaced = true
+              throw new Error('third target link failure after concurrent replacement')
+            }
+            return linkSync(source, destination)
+          },
+        })
+      } catch (error) {
+        thrown = error
+      }
+      expect(replaced).to.equal(true)
+      expect(thrown).to.be.instanceOf(AggregateError)
+      expect(readFileSync(first, 'utf8')).to.equal('first-concurrent')
+      expect(readFileSync(second, 'utf8')).to.equal('second-old')
+      expect(readFileSync(third, 'utf8')).to.equal('third-old')
+      const backups = readdirSync(root).filter(name => name.includes('.backup-'))
+      expect(backups).to.have.length(1)
+      const backupPath = join(root, backups[0])
+      expect(backups[0]).to.match(/^first\.json\.backup-/)
+      expect(readFileSync(backupPath, 'utf8')).to.equal('first-old')
+      expect(thrown.message).to.include(first)
+      expect(thrown.message).to.include(backupPath)
+      expect(thrown.message).to.include('concurrent target was preserved')
+      expect(thrown.message).to.include('intentional recovery artifact retained')
+      expect(readdirSync(root).filter(name => name.includes('.tmp-'))).to.deep.equal([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('rolls back cleanly when unlinking an installed staged hard link fails once', () => {
+    const root = mkdtempSync(join(tmpdir(), 'juyiting-e1-atomic-batch-install-unlink-fail-'))
+    try {
+      const target = join(root, 'fixture.json')
+      writeFileSync(target, 'old')
+      let failed = false
+      expect(() => atomicWriteUtf8Batch([
+        { path: target, content: 'new', label: 'unlink fixture' },
+      ], 'install unlink transaction', {
+        unlinkSync(path) {
+          if (!failed && path.includes('.tmp-')) {
+            failed = true
+            throw new Error('installed temp unlink failure')
+          }
+          return unlinkSync(path)
+        },
+      })).to.throw('installed temp unlink failure')
+      expect(failed).to.equal(true)
+      expect(readFileSync(target, 'utf8')).to.equal('old')
+      expect(readdirSync(root)).to.deep.equal(['fixture.json'])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('retains the old backup when rollback cannot unlink the transaction-installed target', () => {
+    const root = mkdtempSync(join(tmpdir(), 'juyiting-e1-atomic-batch-rollback-unlink-fail-'))
+    try {
+      const first = join(root, 'first.json')
+      const second = join(root, 'second.md')
+      writeFileSync(first, 'first-old')
+      writeFileSync(second, 'second-old')
+      let thrown
+      try {
+        atomicWriteUtf8Batch([
+          { path: first, content: 'first-new', label: 'first fixture' },
+          { path: second, content: 'second-new', label: 'second fixture' },
+        ], 'rollback unlink transaction', {
+          linkSync(source, destination) {
+            if (source.includes('.tmp-') && destination === second) throw new Error('second target link failure')
+            return linkSync(source, destination)
+          },
+          unlinkSync(path) {
+            if (path === first) throw new Error('rollback installed target unlink failure')
+            return unlinkSync(path)
+          },
+        })
+      } catch (error) {
+        thrown = error
+      }
+      expect(thrown).to.be.instanceOf(AggregateError)
+      expect(readFileSync(first, 'utf8')).to.equal('first-new')
+      expect(readFileSync(second, 'utf8')).to.equal('second-old')
+      const backups = readdirSync(root).filter(name => name.includes('.backup-'))
+      expect(backups).to.have.length(1)
+      const backupPath = join(root, backups[0])
+      expect(readFileSync(backupPath, 'utf8')).to.equal('first-old')
+      expect(thrown.message).to.include('rollback installed target unlink failure')
+      expect(thrown.message).to.include(backupPath)
+      expect(thrown.message).to.include('intentional recovery artifact retained')
+      expect(readdirSync(root).filter(name => name.includes('.tmp-'))).to.deep.equal([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('reports rollback backup cleanup failure and retains the intentional recovery hard link', () => {
+    const root = mkdtempSync(join(tmpdir(), 'juyiting-e1-atomic-batch-rollback-backup-cleanup-'))
+    try {
+      const first = join(root, 'first.json')
+      const second = join(root, 'second.md')
+      writeFileSync(first, 'first-old')
+      writeFileSync(second, 'second-old')
+      let backupCleanupFailed = false
+      let thrown
+      try {
+        atomicWriteUtf8Batch([
+          { path: first, content: 'first-new', label: 'first fixture' },
+          { path: second, content: 'second-new', label: 'second fixture' },
+        ], 'rollback cleanup transaction', {
+          linkSync(source, destination) {
+            if (source.includes('.tmp-') && destination === second) throw new Error('second target link failure')
+            return linkSync(source, destination)
+          },
+          unlinkSync(path) {
+            if (!backupCleanupFailed && path.includes('first.json.backup-')) {
+              backupCleanupFailed = true
+              throw new Error('rollback backup unlink failure')
+            }
+            return unlinkSync(path)
+          },
+        })
+      } catch (error) {
+        thrown = error
+      }
+      expect(backupCleanupFailed).to.equal(true)
+      expect(thrown).to.be.instanceOf(AggregateError)
+      expect(readFileSync(first, 'utf8')).to.equal('first-old')
+      expect(readFileSync(second, 'utf8')).to.equal('second-old')
+      const backups = readdirSync(root).filter(name => name.includes('.backup-'))
+      expect(backups).to.have.length(1)
+      const backupPath = join(root, backups[0])
+      expect(readFileSync(backupPath, 'utf8')).to.equal('first-old')
+      expect(thrown.message).to.include('rollback backup unlink failure')
+      expect(thrown.message).to.include(backupPath)
+      expect(thrown.message).to.include('intentional recovery artifact retained')
+      expect(readdirSync(root).filter(name => name.includes('.tmp-'))).to.deep.equal([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('commits existing and originally missing targets without temporary or backup residue', () => {
     const root = mkdtempSync(join(tmpdir(), 'juyiting-e1-atomic-batch-ok-'))
     try {
       const first = join(root, 'first.json')
