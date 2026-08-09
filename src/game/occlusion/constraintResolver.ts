@@ -11,7 +11,7 @@
 // - Kahn: zero-indegree priority queue uses base WorldSortKey
 // - Output < input → cycle fatal (no stable fallback)
 // - Membership: E4 signed distance + 3px hysteresis, per-agent-zone state
-// - Candidates: SpatialGrid per-agent query, never flat all-zones O(A×Z)
+// - Candidates: trusted SpatialGrid per-agent query; unbranded providers rejected
 
 import {
   type OcclusionConstraintZone,
@@ -31,6 +31,11 @@ import {
   computeHysteresis,
   type FixedPolygon,
 } from './polygonGeometry.js'
+import {
+  SPATIAL_GRID_PROVIDER_BRAND,
+  type SpatialGridCandidateProvider,
+  isSpatialGridProvider,
+} from './spatialGrid.js'
 
 // ── Constraint node ──
 
@@ -55,53 +60,47 @@ export interface ConstraintEdge {
   priority: number
 }
 
-// ── Membership state (immutable, cross-frame persistent) ──
+// ── Membership state (deep-frozen, cross-frame persistent) ──
 
 export type MembershipState = 'inside' | 'outside'
 
 /**
- * Immutable membership state for cross-frame hysteresis persistence.
- * zoneStableId → Map<agentStableId, MembershipState>
+ * Truly immutable membership state for cross-frame hysteresis persistence.
+ * Deep-frozen plain objects: Record<zoneStableId, Record<agentStableId, MembershipState>>
+ * No Map — cannot be mutated via .set/.delete/.clear.
  */
-export interface ConstraintMembershipState {
-  readonly entries: ReadonlyMap<string, ReadonlyMap<string, MembershipState>>
-}
+export type ConstraintMembershipState = Readonly<Record<string, Readonly<Record<string, MembershipState>>>>
 
 export function createEmptyMembershipState(): ConstraintMembershipState {
-  return { entries: new Map() }
+  return Object.freeze({})
 }
 
-/**
- * Deep-clone a membership state so the caller cannot mutate the original.
- */
-function cloneMembershipState(src: ConstraintMembershipState): {
-  entries: Map<string, Map<string, MembershipState>>
-} {
-  const entries = new Map<string, Map<string, MembershipState>>()
-  for (const [zoneId, agentMap] of src.entries) {
-    entries.set(zoneId, new Map(agentMap))
+function cloneMembershipState(src: ConstraintMembershipState): Record<string, Record<string, MembershipState>> {
+  const out: Record<string, Record<string, MembershipState>> = {}
+  for (const zoneId of Object.keys(src)) {
+    out[zoneId] = { ...src[zoneId] }
   }
-  return { entries }
+  return out
 }
 
-/**
- * Build the immutable output from a mutable working copy.
- */
 function freezeMembershipOutput(
   working: Map<string, Map<string, MembershipState>>,
 ): ConstraintMembershipState {
-  const entries = new Map<string, ReadonlyMap<string, MembershipState>>()
+  const out: Record<string, Record<string, MembershipState>> = {}
   for (const [zoneId, agentMap] of working) {
-    entries.set(zoneId, new Map(agentMap))
+    const inner: Record<string, MembershipState> = {}
+    for (const [aid, s] of agentMap) {
+      inner[aid] = s
+    }
+    out[zoneId] = Object.freeze(inner)
   }
-  return { entries }
+  return Object.freeze(out)
 }
 
 // ── Internal mutable zone membership (polygon + per-agent state) ──
 
 interface ZoneMembershipCache {
   fixedPoly: FixedPolygon
-  /** Mutable per-agent state — this is NOT exposed externally */
   state: Map<string, MembershipState>
 }
 
@@ -109,11 +108,34 @@ interface ZoneMembershipCache {
 
 /**
  * Provider of spatial candidates for zone membership checks.
- * Implemented by SpatialGrid or test doubles.
+ * The resolver only accepts providers stamped with SPATIAL_GRID_PROVIDER_BRAND
+ * (created via SpatialGrid.createConstraintCandidateProvider()).
+ *
+ * Test doubles use `createTestCandidateProvider()` with explicit opt-out.
  */
 export interface ConstraintCandidateProvider {
+  /** Unforgeable provenance brand, checked by resolver */
+  readonly _brand?: typeof SPATIAL_GRID_PROVIDER_BRAND
   /** Return stableIds of entries in nearby cells for a given position. */
   queryCandidates(position: Point, sceneId: string, floorId: string): Set<string>
+}
+
+// ── Test candidate provider factory ──
+
+/**
+ * Create a test candidate provider that is EXPLICITLY marked as non-grid.
+ * The resolver accepts this only when `trustTestProvider = true`.
+ */
+export const TEST_PROVIDER_BRAND = Symbol('test-candidate-provider')
+
+export function createTestCandidateProvider(
+  queryFn: (position: Point, sceneId: string, floorId: string) => Set<string>,
+): ConstraintCandidateProvider & { _testBrand: typeof TEST_PROVIDER_BRAND } {
+  return {
+    _brand: undefined,
+    _testBrand: TEST_PROVIDER_BRAND,
+    queryCandidates: queryFn,
+  }
 }
 
 // ── Resolution result ──
@@ -121,33 +143,38 @@ export interface ConstraintCandidateProvider {
 export interface ConstraintResolution {
   order: string[]
   edges: ConstraintEdge[]
-  /** New membership state to persist for next frame. */
+  /** New membership state to persist for next frame (deep-frozen). */
   nextMembership: ConstraintMembershipState
 }
 
 // ── Instrumentation (mutable, externally readable) ──
 
 export interface ConstraintInstrumentation {
-  candidateCount: number
+  /** Per-agent membership-check counts (index aligned with agents in node order) */
+  perAgentCheckCounts: number[]
+  /** Cumulative number of unique candidate zone IDs across all agents */
+  uniqueCandidateCount: number
   membershipCheckCount: number
   edgeCount: number
   sortDurationMs: number
-  fullMapScanDetected: boolean
   zoneCount: number
   agentCount: number
   cycleDetected: boolean
+  /** Whether the candidate provider is a trusted SpatialGrid provider */
+  providerTrusted: boolean
 }
 
 export function createConstraintInstrumentation(): ConstraintInstrumentation {
   return {
-    candidateCount: 0,
+    perAgentCheckCounts: [],
+    uniqueCandidateCount: 0,
     membershipCheckCount: 0,
     edgeCount: 0,
     sortDurationMs: 0,
-    fullMapScanDetected: false,
     zoneCount: 0,
     agentCount: 0,
     cycleDetected: false,
+    providerTrusted: false,
   }
 }
 
@@ -164,86 +191,110 @@ function fatal(
   throw renderSchemaError(code, sceneId, objectId, field, userMessage, technicalMessage)
 }
 
-// ── Membership resolver (grid-driven, per-agent candidates) ──
+// ── Zone registry pre-validation (P2 fix) ──
 
 /**
- * Resolve memberships using the SpatialGrid candidate provider.
- *
- * For each agent:
- *   1. Query candidateProvider for nearby zones in the same scene/floor
- *   2. Cross-reference with zoneRegistry to get actual zone objects
- *   3. Check signed-distance hysteresis only for those candidate zones
- *
- * This is O(A × C) where C = candidate zones per agent (typically ≤ 9 cells),
- * NOT O(A × Z) where Z = all zones.
- *
- * Uses previous membership state for hysteresis, writes to mutable working copy.
+ * Validate every zone in the registry BEFORE any membership checks.
+ * Checks: target fragment exists in nodes, is world-band, same scene/floor.
+ * Fatal even with zero agents inside. Runs once per resolve call.
  */
+function preValidateZoneRegistry(
+  zoneRegistry: ReadonlyMap<string, OcclusionConstraintZone>,
+  nodeMap: ReadonlyMap<string, ConstraintNode>,
+  sceneId: string,
+): void {
+  for (const [zoneId, zone] of zoneRegistry) {
+    if (zone.sceneId !== sceneId) continue
+
+    // target fragment must exist in nodes
+    const target = nodeMap.get(zone.targetFragmentId)
+    if (!target) {
+      fatal('ZONE_TARGET_NOT_FOUND' as RenderSchemaErrorCode, sceneId, zone.stableId,
+        'targetFragmentId', `zone 目标 fragment 未找到: ${zone.targetFragmentId}`,
+        `zone target fragment not found: ${zone.targetFragmentId}`)
+    }
+
+    // target must be a fragment node
+    if (target.nodeKind !== 'fragment') {
+      fatal('ZONE_TARGET_NOT_FOUND' as RenderSchemaErrorCode, sceneId, zone.stableId,
+        'targetFragmentId', `zone 目标必须是 fragment: ${zone.targetFragmentId} (当前: ${target.nodeKind})`,
+        `zone target ${zone.targetFragmentId} is not a fragment node (got ${target.nodeKind})`)
+    }
+
+    // target must be world-band
+    if (target.sortKey.renderBandOrder !== 100) {
+      fatal('FRAGMENT_RENDER_BAND_INVALID' as RenderSchemaErrorCode, sceneId, zone.stableId,
+        'targetFragmentId', `zone 目标 fragment 必须是 world band: ${zone.targetFragmentId}`,
+        `target ${zone.targetFragmentId} renderBandOrder=${target.sortKey.renderBandOrder}, must be world (100)`)
+    }
+
+    // same scene
+    if (target.sceneId !== zone.sceneId) {
+      fatal('ZONE_TARGET_CROSS_SCENE' as RenderSchemaErrorCode, sceneId, zone.stableId,
+        'targetFragmentId', `zone 目标跨 scene: ${zone.sceneId} vs ${target.sceneId}`,
+        `cross-scene target: ${zone.sceneId} vs ${target.sceneId}`)
+    }
+
+    // same floor
+    if (target.floorId !== zone.floorId) {
+      fatal('ZONE_TARGET_CROSS_FLOOR' as RenderSchemaErrorCode, sceneId, zone.stableId,
+        'targetFragmentId', `zone 目标跨 floor: ${zone.floorId} vs ${target.floorId}`,
+        `cross-floor target: ${zone.floorId} vs ${target.floorId}`)
+    }
+  }
+}
+
+// ── Membership resolver (grid-driven, per-agent candidates) ──
+
 function resolveMembershipsWithGrid(
   agents: ConstraintNode[],
   candidateProvider: ConstraintCandidateProvider,
   zoneRegistry: ReadonlyMap<string, OcclusionConstraintZone>,
-  previousState: ReadonlyMap<string, ReadonlyMap<string, MembershipState>>,
+  previousState: Record<string, Record<string, MembershipState>>,
   zoneCache: Map<string, ZoneMembershipCache>,
   sceneId: string,
-  fullScanThreshold: number,
   instr: ConstraintInstrumentation | undefined,
 ): { snapshots: Map<string, Map<string, MembershipState>>; workingState: Map<string, Map<string, MembershipState>> } {
   const snapshots = new Map<string, Map<string, MembershipState>>()
   const workingState = new Map<string, Map<string, MembershipState>>()
+  const uniqueCandidates = new Set<string>()
 
-  let totalMembershipChecks = 0
-  const totalZones = zoneRegistry.size
-
-  // Full-scan threshold: if totalZones > 5 and any agent gets all zones as candidates,
-  // it indicates the grid is bypassed → hard fatal
-  const effectiveThreshold = fullScanThreshold
+  const perAgentCounts: number[] = []
+  let totalChecks = 0
 
   for (const agent of agents) {
     if (agent.nodeKind !== 'agent') continue
     if (agent.sceneId !== sceneId) continue
     if (!agent.position) continue
 
-    // 1. Query spatial grid for candidate zone IDs
+    // Query spatial grid for candidate zone IDs
     const candidateIds = candidateProvider.queryCandidates(
       agent.position, agent.sceneId, agent.floorId,
     )
 
-    // Count actual zone membership checks (only zones in both candidate set and registry)
-    let zoneChecksForAgent = 0
+    // Filter to only zones in registry
     const zoneCandidatesInRegistry = new Set<string>()
     for (const cid of candidateIds) {
       if (zoneRegistry.has(cid)) {
         zoneCandidatesInRegistry.add(cid)
+        uniqueCandidates.add(cid)
       }
     }
 
-    // 2. Full-scan detection
-    if (totalZones > effectiveThreshold && zoneCandidatesInRegistry.size === totalZones) {
-      if (instr) instr.fullMapScanDetected = true
-      fatal(
-        'SPATIAL_GRID_FULL_SCAN_DETECTED' as RenderSchemaErrorCode,
-        sceneId,
-        agent.stableId,
-        'candidateProvider',
-        `空间网格全图扫描异常：agent ${agent.stableId} 候选区数量(${zoneCandidatesInRegistry.size})等于全部zone数(${totalZones})`,
-        `full map scan detected: agent ${agent.stableId} has ${zoneCandidatesInRegistry.size} candidates == ${totalZones} total zones`,
-      )
-    }
-
-    // 3. Convert agent position to fixed-point
+    // Convert agent position to fixed-point
     const fx = Math.round(agent.position.x * 256)
     const fy = Math.round(agent.position.y * 256)
     const fxNorm = Object.is(fx, -0) ? 0 : fx
     const fyNorm = Object.is(fy, -0) ? 0 : fy
 
-    // 4. For each candidate zone in the registry, check membership
+    let checksForAgent = 0
+
     for (const zoneId of zoneCandidatesInRegistry) {
       const zone = zoneRegistry.get(zoneId)!
       if (zone.sceneId !== sceneId) continue
       if (zone.floorId !== agent.floorId) continue
 
-      zoneChecksForAgent++
+      checksForAgent++
 
       // Ensure zone cache entry
       let zc = zoneCache.get(zoneId)
@@ -253,10 +304,10 @@ function resolveMembershipsWithGrid(
           state: new Map(),
         }
         // Seed from previous membership state
-        const prevAgentMap = previousState.get(zoneId)
+        const prevAgentMap = previousState[zoneId]
         if (prevAgentMap) {
-          for (const [aid, prev] of prevAgentMap) {
-            zc.state.set(aid, prev)
+          for (const aid of Object.keys(prevAgentMap)) {
+            zc.state.set(aid, prevAgentMap[aid])
           }
         }
         zoneCache.set(zoneId, zc)
@@ -289,12 +340,14 @@ function resolveMembershipsWithGrid(
       zc.state.set(agent.stableId, newState)
     }
 
-    totalMembershipChecks += zoneChecksForAgent
+    perAgentCounts.push(checksForAgent)
+    totalChecks += checksForAgent
   }
 
   if (instr) {
-    instr.membershipCheckCount = totalMembershipChecks
-    instr.candidateCount = agents.filter(a => a.nodeKind === 'agent').length
+    instr.perAgentCheckCounts = perAgentCounts
+    instr.uniqueCandidateCount = uniqueCandidates.size
+    instr.membershipCheckCount = totalChecks
   }
 
   return { snapshots, workingState }
@@ -317,7 +370,7 @@ function generateEdgesWithRegistry(
     nodeMap.set(n.stableId, n)
   }
 
-  // Validate fragment nodes are world-band
+  // Validate fragment nodes are world-band (redundant with pre-validation but kept as defense)
   for (const n of nodes) {
     if (n.nodeKind === 'fragment' && n.sortKey.renderBandOrder !== 100) {
       fatal('FRAGMENT_RENDER_BAND_INVALID' as RenderSchemaErrorCode, sceneId, n.stableId,
@@ -336,36 +389,9 @@ function generateEdgesWithRegistry(
     if (!zone) continue
     if (zone.sceneId !== sceneId) continue
 
+    // Pre-validation already verified target exists and is valid
     const targetNode = nodeMap.get(zone.targetFragmentId)
-    if (!targetNode) {
-      fatal('ZONE_TARGET_NOT_FOUND' as RenderSchemaErrorCode, sceneId, zone.stableId,
-        'targetFragmentId', `zone 目标 fragment 未找到: ${zone.targetFragmentId}`,
-        `zone target fragment not found: ${zone.targetFragmentId}`)
-    }
-
-    // Validate target fragment is world-band
-    if (targetNode.nodeKind !== 'fragment') {
-      fatal('ZONE_TARGET_NOT_FOUND' as RenderSchemaErrorCode, sceneId, zone.stableId,
-        'targetFragmentId', `zone 目标必须是 fragment: ${zone.targetFragmentId}`,
-        `zone target ${zone.targetFragmentId} is not a fragment node`)
-    }
-    if (targetNode.sortKey.renderBandOrder !== 100) {
-      fatal('FRAGMENT_RENDER_BAND_INVALID' as RenderSchemaErrorCode, sceneId, zone.stableId,
-        'targetFragmentId', `zone 目标 fragment 必须是 world band: ${zone.targetFragmentId}`,
-        `target fragment ${zone.targetFragmentId} renderBandOrder=${targetNode.sortKey.renderBandOrder}, must be world (100)`)
-    }
-
-    // Cross-scope validation
-    if (targetNode.sceneId !== zone.sceneId) {
-      fatal('ZONE_TARGET_CROSS_SCENE' as RenderSchemaErrorCode, sceneId, zone.stableId,
-        'targetFragmentId', `zone 目标跨 scene: ${zone.sceneId} vs ${targetNode.sceneId}`,
-        `cross-scene zone target: ${zone.sceneId} vs ${targetNode.sceneId}`)
-    }
-    if (targetNode.floorId !== zone.floorId) {
-      fatal('ZONE_TARGET_CROSS_FLOOR' as RenderSchemaErrorCode, sceneId, zone.stableId,
-        'targetFragmentId', `zone 目标跨 floor: ${zone.floorId} vs ${targetNode.floorId}`,
-        `cross-floor zone target: ${zone.floorId} vs ${targetNode.floorId}`)
-    }
+    if (!targetNode) continue // unreachable after preValidateZoneRegistry
 
     for (const [agentId, state] of agentStates) {
       if (state !== 'inside') continue
@@ -512,15 +538,18 @@ export interface ConstraintResolverOptions {
   instrumentation?: ConstraintInstrumentation
   /** Previous membership state for cross-frame hysteresis persistence. */
   previousMembership?: ConstraintMembershipState
-  /** Min zone count before full-map-scan detection activates. Default 5. */
-  fullScanThreshold?: number
+  /**
+   * If true, accept non-grid (test) providers without error.
+   * ONLY for test use. Production must use SpatialGrid-backed providers.
+   */
+  _trustTestProvider?: boolean
 }
 
 /**
  * Resolve constraint-based ordering for all world-band nodes.
  *
  * @param nodes            All active world-band constraint nodes
- * @param candidateProvider SpatialGrid (or test double) for per-agent zone discovery
+ * @param candidateProvider SpatialGrid-backed provider (or test double with opt-out)
  * @param zoneRegistry     Authoritative zone registry (stableId → zone)
  * @param floorRegistry    Floor ID → order mapping
  * @param sceneId          Current scene ID
@@ -537,6 +566,16 @@ export function resolveConstraintOrder(
   const now = opts?.now ?? (() => performance.now())
   const instr = opts?.instrumentation
   const startTime = now()
+
+  // 0. Verify provider provenance (P2 fix: hard gate)
+  const trusted = isSpatialGridProvider(candidateProvider)
+  if (instr) instr.providerTrusted = trusted
+  if (!trusted && !opts?._trustTestProvider) {
+    fatal('SPATIAL_GRID_CELL_SIZE_INVALID' as RenderSchemaErrorCode, sceneId, '(provider)',
+      'candidateProvider',
+      `约束排序必须使用 SpatialGrid 候选提供者，不允许未经认证的 provider`,
+      `constraint resolver requires a SpatialGrid-backed candidate provider (SPATIAL_GRID_PROVIDER_BRAND missing)`)
+  }
 
   // 1. Validate no duplicate nodes
   const seen = new Set<string>()
@@ -557,31 +596,34 @@ export function resolveConstraintOrder(
     }
   }
 
+  // 3. Pre-validate zone registry BEFORE membership (P2 fix: even zero agents)
+  const nodeMap = new Map<string, ConstraintNode>()
+  for (const n of nodes) nodeMap.set(n.stableId, n)
+  preValidateZoneRegistry(zoneRegistry, nodeMap, sceneId)
+
   const agentCount = nodes.filter(n => n.nodeKind === 'agent').length
   const agents = nodes.filter(n => n.nodeKind === 'agent')
 
-  // 3. Clone previous membership state (will NOT be mutated on failure)
-  const previousCloned = opts?.previousMembership
-    ? cloneMembershipState(opts.previousMembership)
-    : { entries: new Map<string, Map<string, MembershipState>>() }
+  // 4. Clone previous membership state (will NOT be mutated on failure)
+  const previousCloned: Record<string, Record<string, MembershipState>> =
+    opts?.previousMembership ? cloneMembershipState(opts.previousMembership) : {}
 
-  // 4. Resolve memberships using spatial grid (NOT flat all-zones)
+  // 5. Resolve memberships using spatial grid (NOT flat all-zones)
   const zoneCache = new Map<string, ZoneMembershipCache>()
   const { snapshots, workingState } = resolveMembershipsWithGrid(
     agents, candidateProvider, zoneRegistry,
-    previousCloned.entries, zoneCache, sceneId,
-    opts?.fullScanThreshold ?? 5, instr,
+    previousCloned, zoneCache, sceneId, instr,
   )
 
-  // 5. Generate edges
+  // 6. Generate edges
   const edges = generateEdgesWithRegistry(nodes, zoneRegistry, snapshots, sceneId)
 
-  // 6. Kahn sort
+  // 7. Kahn sort
   const order = kahnSort(nodes, edges, sceneId)
 
   const endTime = now()
 
-  // 7. Populate instrumentation
+  // 8. Populate instrumentation
   if (instr) {
     instr.edgeCount = edges.length
     instr.sortDurationMs = endTime - startTime
@@ -590,7 +632,7 @@ export function resolveConstraintOrder(
     instr.cycleDetected = false
   }
 
-  // 8. Build immutable output membership state
+  // 9. Build immutable output membership state (deep-frozen)
   const nextMembership = freezeMembershipOutput(workingState)
 
   return { order, edges, nextMembership }
@@ -631,7 +673,7 @@ export function fragmentToConstraintNode(
   fragment: FragmentNodeInput,
   floorRegistry: Readonly<Record<string, number>>,
 ): ConstraintNode {
-  // P0-3: Only world-band fragments can become constraint nodes
+  // Only world-band fragments can become constraint nodes
   if (fragment.renderBand !== 'world') {
     throw renderSchemaError(
       'FRAGMENT_RENDER_BAND_INVALID' as RenderSchemaErrorCode,
@@ -643,7 +685,7 @@ export function fragmentToConstraintNode(
     )
   }
 
-  // P1-5: chunkId must be non-empty
+  // chunkId must be non-empty
   if (!fragment.chunkId || typeof fragment.chunkId !== 'string' || fragment.chunkId.trim() === '') {
     throw renderSchemaError(
       'CHUNK_ID_INVALID' as RenderSchemaErrorCode,

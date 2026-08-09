@@ -369,7 +369,7 @@ describe('SpatialGrid - instrumentation', () => {
     const instr = createSpatialGridInstrumentation()
     assert.equal(instr.candidateCount, 0)
     assert.equal(instr.cellQueryCount, 0)
-    assert.equal(instr.fullMapScanDetected, false)
+    assert.equal(instr.scanCount, 0)
     assert.equal(instr.scanCount, 0)
   })
 

@@ -56,6 +56,15 @@ export interface GridEntry {
   bounds: Rect
 }
 
+// ── Provenance brand for SpatialGrid-backed candidate providers ──
+
+/**
+ * Symbol stamped on every SpatialGrid-backed ConstraintCandidateProvider.
+ * The constraint resolver checks this brand and rejects unbranded providers
+ * in production (test doubles use explicit opt-out).
+ */
+export const SPATIAL_GRID_PROVIDER_BRAND = Symbol('spatial-grid-provider')
+
 // ── Spatial grid ──
 
 export class SpatialGrid {
@@ -329,7 +338,6 @@ function aabbOverlap(a: Rect, b: Rect): boolean {
 export interface SpatialGridInstrumentation {
   candidateCount: number
   cellQueryCount: number
-  fullMapScanDetected: boolean
   scanCount: number
 }
 
@@ -337,7 +345,50 @@ export function createSpatialGridInstrumentation(): SpatialGridInstrumentation {
   return {
     candidateCount: 0,
     cellQueryCount: 0,
-    fullMapScanDetected: false,
     scanCount: 0,
   }
+}
+
+// ── Branded provider (P2 fix) ──
+
+/**
+ * ConstraintCandidateProvider backed by a SpatialGrid.
+ * Carries an unforgeable brand symbol so the resolver can verify
+ * the provider is truly grid-backed and not a flat bypass.
+ *
+ * Test doubles must use `createTestCandidateProvider()` which explicitly
+ * opts out of the brand check.
+ */
+export interface SpatialGridCandidateProvider {
+  /** Unforgeable provenance brand — must be SPATIAL_GRID_PROVIDER_BRAND */
+  readonly _brand: typeof SPATIAL_GRID_PROVIDER_BRAND
+  /** Source grid (for diagnostic access) */
+  readonly _grid: SpatialGrid
+  queryCandidates(position: Point, sceneId: string, floorId: string): Set<string>
+}
+
+/**
+ * Create a branded constraint candidate provider from a SpatialGrid.
+ * This is the ONLY way to get a trusted provider for production use.
+ */
+export function createConstraintCandidateProvider(grid: SpatialGrid): SpatialGridCandidateProvider {
+  return {
+    _brand: SPATIAL_GRID_PROVIDER_BRAND,
+    _grid: grid,
+    queryCandidates: (position, sceneId, floorId) =>
+      grid.queryCandidates(position, sceneId, floorId),
+  }
+}
+
+/**
+ * Type guard: is this provider backed by a SpatialGrid?
+ */
+export function isSpatialGridProvider(
+  provider: unknown,
+): provider is SpatialGridCandidateProvider {
+  return (
+    typeof provider === 'object' &&
+    provider !== null &&
+    (provider as SpatialGridCandidateProvider)._brand === SPATIAL_GRID_PROVIDER_BRAND
+  )
 }
