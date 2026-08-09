@@ -1,0 +1,64 @@
+{
+  "$schema": "jyt.occlusion.ownership-report.v1",
+  "taskId": "E9A",
+  "generationId": "5708ff5be63742f6a988568510e38cdf426202d8763d5e0718bdf978835603d8",
+  "timestamp": "2026-08-09T10:07:45.023Z",
+  "source": {
+    "assetRef": "jyt.occlusion-source.hall-v3",
+    "sha256": "3e4f3f90b4d84411a844978237a7d3530bd481c37a62bcd73b9d694a7d2dd432",
+    "width": 1664,
+    "height": 928
+  },
+  "ownershipResult": {
+    "passed": true,
+    "totalOpaquePixels": 248283,
+    "opaqueOwned": 248283,
+    "opaqueUnowned": 0,
+    "overlapPixels": 0,
+    "transparentOwnedBySourceRect": 266521,
+    "transparentUnowned": 1029388
+  },
+  "perRegion": {
+    "west-upper": {
+      "opaqueCovered": 91375,
+      "totalCovered": 151532
+    },
+    "center": {
+      "opaqueCovered": 504,
+      "totalCovered": 1064
+    },
+    "east-upper": {
+      "opaqueCovered": 68909,
+      "totalCovered": 106743
+    },
+    "west-lower": {
+      "opaqueCovered": 53373,
+      "totalCovered": 174700
+    },
+    "east-lower": {
+      "opaqueCovered": 25587,
+      "totalCovered": 67170
+    },
+    "entrance": {
+      "opaqueCovered": 8535,
+      "totalCovered": 13595
+    }
+  },
+  "fragmentCount": 40,
+  "regionFragmentCounts": {
+    "west-upper": 9,
+    "center": 1,
+    "east-upper": 8,
+    "west-lower": 11,
+    "east-lower": 7,
+    "entrance": 4
+  },
+  "unownedSamples": [],
+  "overlapSamples": [],
+  "policy": {
+    "ownershipModel": "sourceRect-exclusive-partition",
+    "includePolicy": "all-non-transparent-pixels-must-be-owned-by-exactly-one-fragment",
+    "excludePolicy": "transparent-pixels-with-alpha-zero-are-not-owned",
+    "note": "Transparent pixels within fragment sourceRects are included in atlas images but do not contribute to visual output. The ownership validation only checks non-transparent (alpha>0) pixels."
+  }
+}

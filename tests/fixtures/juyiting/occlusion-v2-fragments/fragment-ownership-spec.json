@@ -1,0 +1,1044 @@
+{
+  "$schema": "jyt.occlusion.fragment-ownership-spec.v1",
+  "schemaVersion": 1,
+  "taskId": "E9A",
+  "baseCommit": "a700d1c57a15026a362db535f97fb6baff47e9f7",
+  "sceneId": "juyiting-main",
+  "sourceProvenance": {
+    "assetRef": "jyt.occlusion-source.hall-v3",
+    "path": "public/juyiting/images/liangshan-hall-mid-occluders-v3.webp",
+    "sha256": "3e4f3f90b4d84411a844978237a7d3530bd481c37a62bcd73b9d694a7d2dd432",
+    "width": 1664,
+    "height": 928,
+    "alphaThreshold": 1,
+    "totalOpaquePixels": 248283,
+    "globalAlphaBounds": {
+      "minX": 0,
+      "minY": 165,
+      "maxX": 1664,
+      "maxY": 928
+    }
+  },
+  "inputProvenance": {
+    "tmxAnchor": {
+      "taskId": "E8B",
+      "path": "public/juyiting/hall.tmx",
+      "sha256": "291a38cc66ebd60c8577500a5afc18ce5398570fe4c35ca66d9eebe818826a97"
+    }
+  },
+  "regionPartition": {
+    "description": "Six non-overlapping half-open rectangular regions partitioning the source space [0,1664)×[0,928). Boundaries respect natural column gaps and existing map mask semantics. Half-open: pixel (x,y) belongs to region if xMin ≤ x < xMax and yMin ≤ y < yMax.",
+    "regions": {
+      "west-upper": {
+        "xRange": [
+          0,
+          721
+        ],
+        "yRange": [
+          0,
+          580
+        ],
+        "width": 721,
+        "height": 580,
+        "chunkId": "west-upper"
+      },
+      "west-lower": {
+        "xRange": [
+          0,
+          721
+        ],
+        "yRange": [
+          580,
+          928
+        ],
+        "width": 721,
+        "height": 348,
+        "chunkId": "west-lower"
+      },
+      "center": {
+        "xRange": [
+          721,
+          1130
+        ],
+        "yRange": [
+          0,
+          580
+        ],
+        "width": 409,
+        "height": 580,
+        "chunkId": "center"
+      },
+      "entrance": {
+        "xRange": [
+          721,
+          1130
+        ],
+        "yRange": [
+          580,
+          928
+        ],
+        "width": 409,
+        "height": 348,
+        "chunkId": "entrance"
+      },
+      "east-upper": {
+        "xRange": [
+          1130,
+          1664
+        ],
+        "yRange": [
+          0,
+          580
+        ],
+        "width": 534,
+        "height": 580,
+        "chunkId": "east-upper"
+      },
+      "east-lower": {
+        "xRange": [
+          1130,
+          1664
+        ],
+        "yRange": [
+          580,
+          928
+        ],
+        "width": 534,
+        "height": 348,
+        "chunkId": "east-lower"
+      }
+    }
+  },
+  "visualStructureExplanation": {
+    "westUpper": "Upper west side including northwest ceiling beams, pillars, and upper wall structures. x=[0,721), y=[0,580)",
+    "westLower": "Lower west side including the main west wall, agent-roster area, and southwest corner structures. x=[0,721), y=[580,928)",
+    "center": "Central hall upper area including north-center pillars and the council table ceiling. Mostly open space with sparse occluders. x=[721,1130), y=[0,580)",
+    "entrance": "Entrance/gate area in the south-center, including gate pillars and doorway structures. x=[721,1130), y=[580,928)",
+    "eastUpper": "Upper east side including northeast pillars, bounty-board area railings, and east upper structures. x=[1130,1664), y=[0,580)",
+    "eastLower": "Lower east side including library-shelf area, southeast corner structures, and east lower railings. x=[1130,1664), y=[580,928)"
+  },
+  "outputConstraints": {
+    "format": [
+      "lossless-webp",
+      "png"
+    ],
+    "losslessOnly": true,
+    "paddingPixels": 2,
+    "paddingPolicy": "transparent-padding-around-each-fragment-sourceRect",
+    "reconstructionRequirement": "all-fragments-placed-at-destinationRects-must-reconstruct-canonical-RGBA-exactly",
+    "pixelOwnershipModel": "sourceRect-exclusive-partition",
+    "includePolicy": "all-non-transparent-pixels-must-be-owned-by-exactly-one-fragment",
+    "excludePolicy": "transparent-pixels-with-alpha-zero-are-not-owned",
+    "fragmentCount": 40,
+    "regionFragmentCounts": {
+      "west-upper": 9,
+      "center": 1,
+      "east-upper": 8,
+      "west-lower": 11,
+      "east-lower": 7,
+      "entrance": 4
+    }
+  },
+  "fragments": [
+    {
+      "stableId": "jyt.occ.west-upper.structure-01.v1",
+      "region": "west-upper",
+      "chunkId": "west-upper",
+      "sourceRect": {
+        "x": 460,
+        "y": 164,
+        "width": 47,
+        "height": 77
+      },
+      "destinationRect": {
+        "x": 460,
+        "y": 164,
+        "width": 47,
+        "height": 77
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "structure",
+      "parentComponentIndex": 0,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/west-upper-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.center.pillar-01.v1",
+      "region": "center",
+      "chunkId": "center",
+      "sourceRect": {
+        "x": 1111,
+        "y": 229,
+        "width": 19,
+        "height": 56
+      },
+      "destinationRect": {
+        "x": 1111,
+        "y": 229,
+        "width": 19,
+        "height": 56
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "pillar",
+      "parentComponentIndex": 1,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/center-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.west-upper.detail-01.v1",
+      "region": "west-upper",
+      "chunkId": "west-upper",
+      "sourceRect": {
+        "x": 616,
+        "y": 237,
+        "width": 15,
+        "height": 36
+      },
+      "destinationRect": {
+        "x": 616,
+        "y": 237,
+        "width": 15,
+        "height": 36
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "detail",
+      "parentComponentIndex": 2,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/west-upper-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.east-upper.beam-01.v1",
+      "region": "east-upper",
+      "chunkId": "east-upper",
+      "sourceRect": {
+        "x": 1383,
+        "y": 254,
+        "width": 97,
+        "height": 31
+      },
+      "destinationRect": {
+        "x": 1383,
+        "y": 254,
+        "width": 97,
+        "height": 31
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "beam",
+      "parentComponentIndex": 3,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/east-upper-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.west-upper.railing-01.v1",
+      "region": "west-upper",
+      "chunkId": "west-upper",
+      "sourceRect": {
+        "x": 214,
+        "y": 276,
+        "width": 141,
+        "height": 76
+      },
+      "destinationRect": {
+        "x": 214,
+        "y": 276,
+        "width": 141,
+        "height": 76
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "railing",
+      "parentComponentIndex": 4,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/west-upper-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.east-upper.pillar-01.v1",
+      "region": "east-upper",
+      "chunkId": "east-upper",
+      "sourceRect": {
+        "x": 1157,
+        "y": 304,
+        "width": 48,
+        "height": 161
+      },
+      "destinationRect": {
+        "x": 1157,
+        "y": 304,
+        "width": 48,
+        "height": 161
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "pillar",
+      "parentComponentIndex": 5,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/east-upper-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.west-upper.pillar-01.v1",
+      "region": "west-upper",
+      "chunkId": "west-upper",
+      "sourceRect": {
+        "x": 542,
+        "y": 305,
+        "width": 57,
+        "height": 164
+      },
+      "destinationRect": {
+        "x": 542,
+        "y": 305,
+        "width": 57,
+        "height": 164
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "pillar",
+      "parentComponentIndex": 6,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/west-upper-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.east-upper.wall-01.v1",
+      "region": "east-upper",
+      "chunkId": "east-upper",
+      "sourceRect": {
+        "x": 1205,
+        "y": 341,
+        "width": 459,
+        "height": 119
+      },
+      "destinationRect": {
+        "x": 1205,
+        "y": 341,
+        "width": 459,
+        "height": 119
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "wall",
+      "parentComponentIndex": 7,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/east-upper-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.west-upper.wall-01-p2.v1",
+      "region": "west-upper",
+      "chunkId": "west-upper",
+      "sourceRect": {
+        "x": 0,
+        "y": 347,
+        "width": 214,
+        "height": 5
+      },
+      "destinationRect": {
+        "x": 0,
+        "y": 347,
+        "width": 214,
+        "height": 5
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "wall",
+      "parentComponentIndex": 8,
+      "crossRegionSplit": true,
+      "outputFileHint": "public/juyiting/images/occluders/west-upper-v1.webp",
+      "overlapResolved": true
+    },
+    {
+      "stableId": "jyt.occ.west-upper.wall-01-p3.v1",
+      "region": "west-upper",
+      "chunkId": "west-upper",
+      "sourceRect": {
+        "x": 355,
+        "y": 347,
+        "width": 187,
+        "height": 5
+      },
+      "destinationRect": {
+        "x": 355,
+        "y": 347,
+        "width": 187,
+        "height": 5
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "wall",
+      "parentComponentIndex": 8,
+      "crossRegionSplit": true,
+      "outputFileHint": "public/juyiting/images/occluders/west-upper-v1.webp",
+      "overlapResolved": true
+    },
+    {
+      "stableId": "jyt.occ.west-upper.wall-01-p1.v1",
+      "region": "west-upper",
+      "chunkId": "west-upper",
+      "sourceRect": {
+        "x": 0,
+        "y": 352,
+        "width": 542,
+        "height": 117
+      },
+      "destinationRect": {
+        "x": 0,
+        "y": 352,
+        "width": 542,
+        "height": 117
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "wall",
+      "parentComponentIndex": 8,
+      "crossRegionSplit": true,
+      "outputFileHint": "public/juyiting/images/occluders/west-upper-v1.webp",
+      "overlapResolved": true
+    },
+    {
+      "stableId": "jyt.occ.west-upper.pillar-02.v1",
+      "region": "west-upper",
+      "chunkId": "west-upper",
+      "sourceRect": {
+        "x": 599,
+        "y": 431,
+        "width": 18,
+        "height": 59
+      },
+      "destinationRect": {
+        "x": 599,
+        "y": 431,
+        "width": 18,
+        "height": 59
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "pillar",
+      "parentComponentIndex": 9,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/west-upper-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.east-upper.pillar-02.v1",
+      "region": "east-upper",
+      "chunkId": "east-upper",
+      "sourceRect": {
+        "x": 1130,
+        "y": 434,
+        "width": 21,
+        "height": 53
+      },
+      "destinationRect": {
+        "x": 1130,
+        "y": 434,
+        "width": 21,
+        "height": 53
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "pillar",
+      "parentComponentIndex": 10,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/east-upper-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.west-upper.wall-01-p0.v1",
+      "region": "west-upper",
+      "chunkId": "west-upper",
+      "sourceRect": {
+        "x": 0,
+        "y": 469,
+        "width": 548,
+        "height": 111
+      },
+      "destinationRect": {
+        "x": 0,
+        "y": 469,
+        "width": 548,
+        "height": 111
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "wall",
+      "parentComponentIndex": 8,
+      "crossRegionSplit": true,
+      "outputFileHint": "public/juyiting/images/occluders/west-upper-v1.webp",
+      "overlapResolved": true
+    },
+    {
+      "stableId": "jyt.occ.east-upper.railing-01.v1",
+      "region": "east-upper",
+      "chunkId": "east-upper",
+      "sourceRect": {
+        "x": 1255,
+        "y": 476,
+        "width": 409,
+        "height": 73
+      },
+      "destinationRect": {
+        "x": 1255,
+        "y": 476,
+        "width": 409,
+        "height": 73
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "railing",
+      "parentComponentIndex": 12,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/east-upper-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.east-upper.pillar-03.v1",
+      "region": "east-upper",
+      "chunkId": "east-upper",
+      "sourceRect": {
+        "x": 1201,
+        "y": 477,
+        "width": 52,
+        "height": 103
+      },
+      "destinationRect": {
+        "x": 1201,
+        "y": 477,
+        "width": 52,
+        "height": 103
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "pillar",
+      "parentComponentIndex": 13,
+      "crossRegionSplit": true,
+      "outputFileHint": "public/juyiting/images/occluders/east-upper-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.east-upper.structure-01.v1",
+      "region": "east-upper",
+      "chunkId": "east-upper",
+      "sourceRect": {
+        "x": 1307,
+        "y": 559,
+        "width": 205,
+        "height": 21
+      },
+      "destinationRect": {
+        "x": 1307,
+        "y": 559,
+        "width": 205,
+        "height": 21
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "structure",
+      "parentComponentIndex": 14,
+      "crossRegionSplit": true,
+      "outputFileHint": "public/juyiting/images/occluders/east-upper-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.east-upper.railing-02.v1",
+      "region": "east-upper",
+      "chunkId": "east-upper",
+      "sourceRect": {
+        "x": 1512,
+        "y": 573,
+        "width": 108,
+        "height": 7
+      },
+      "destinationRect": {
+        "x": 1512,
+        "y": 573,
+        "width": 108,
+        "height": 7
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "railing",
+      "parentComponentIndex": 16,
+      "crossRegionSplit": true,
+      "outputFileHint": "public/juyiting/images/occluders/east-upper-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.west-lower.wall-01.v1",
+      "region": "west-lower",
+      "chunkId": "west-lower",
+      "sourceRect": {
+        "x": 0,
+        "y": 580,
+        "width": 548,
+        "height": 138
+      },
+      "destinationRect": {
+        "x": 0,
+        "y": 580,
+        "width": 548,
+        "height": 138
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "wall",
+      "parentComponentIndex": 8,
+      "crossRegionSplit": true,
+      "outputFileHint": "public/juyiting/images/occluders/west-lower-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.east-lower.pillar-01.v1",
+      "region": "east-lower",
+      "chunkId": "east-lower",
+      "sourceRect": {
+        "x": 1201,
+        "y": 580,
+        "width": 52,
+        "height": 125
+      },
+      "destinationRect": {
+        "x": 1201,
+        "y": 580,
+        "width": 52,
+        "height": 125
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "pillar",
+      "parentComponentIndex": 13,
+      "crossRegionSplit": true,
+      "outputFileHint": "public/juyiting/images/occluders/east-lower-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.east-lower.structure-01.v1",
+      "region": "east-lower",
+      "chunkId": "east-lower",
+      "sourceRect": {
+        "x": 1307,
+        "y": 580,
+        "width": 205,
+        "height": 190
+      },
+      "destinationRect": {
+        "x": 1307,
+        "y": 580,
+        "width": 205,
+        "height": 190
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "structure",
+      "parentComponentIndex": 14,
+      "crossRegionSplit": true,
+      "outputFileHint": "public/juyiting/images/occluders/east-lower-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.east-lower.railing-01.v1",
+      "region": "east-lower",
+      "chunkId": "east-lower",
+      "sourceRect": {
+        "x": 1512,
+        "y": 580,
+        "width": 108,
+        "height": 96
+      },
+      "destinationRect": {
+        "x": 1512,
+        "y": 580,
+        "width": 108,
+        "height": 96
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "railing",
+      "parentComponentIndex": 16,
+      "crossRegionSplit": true,
+      "outputFileHint": "public/juyiting/images/occluders/east-lower-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.entrance.pillar-01.v1",
+      "region": "entrance",
+      "chunkId": "entrance",
+      "sourceRect": {
+        "x": 1051,
+        "y": 673,
+        "width": 43,
+        "height": 106
+      },
+      "destinationRect": {
+        "x": 1051,
+        "y": 673,
+        "width": 43,
+        "height": 106
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "pillar",
+      "parentComponentIndex": 19,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/entrance-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.west-lower.railing-02-p2.v1",
+      "region": "west-lower",
+      "chunkId": "west-lower",
+      "sourceRect": {
+        "x": 548,
+        "y": 674,
+        "width": 133,
+        "height": 43
+      },
+      "destinationRect": {
+        "x": 548,
+        "y": 674,
+        "width": 133,
+        "height": 43
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "railing",
+      "parentComponentIndex": 20,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/west-lower-v1.webp",
+      "overlapResolved": true
+    },
+    {
+      "stableId": "jyt.occ.west-lower.element-01.v1",
+      "region": "west-lower",
+      "chunkId": "west-lower",
+      "sourceRect": {
+        "x": 685,
+        "y": 674,
+        "width": 36,
+        "height": 41
+      },
+      "destinationRect": {
+        "x": 685,
+        "y": 674,
+        "width": 36,
+        "height": 41
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "element",
+      "parentComponentIndex": 21,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/west-lower-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.east-lower.detail-01.v1",
+      "region": "east-lower",
+      "chunkId": "east-lower",
+      "sourceRect": {
+        "x": 1591,
+        "y": 676,
+        "width": 22,
+        "height": 26
+      },
+      "destinationRect": {
+        "x": 1591,
+        "y": 676,
+        "width": 22,
+        "height": 26
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "detail",
+      "parentComponentIndex": 22,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/east-lower-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.entrance.pillar-02.v1",
+      "region": "entrance",
+      "chunkId": "entrance",
+      "sourceRect": {
+        "x": 1003,
+        "y": 677,
+        "width": 33,
+        "height": 79
+      },
+      "destinationRect": {
+        "x": 1003,
+        "y": 677,
+        "width": 33,
+        "height": 79
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "pillar",
+      "parentComponentIndex": 23,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/entrance-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.east-lower.pillar-03.v1",
+      "region": "east-lower",
+      "chunkId": "east-lower",
+      "sourceRect": {
+        "x": 1241,
+        "y": 706,
+        "width": 12,
+        "height": 70
+      },
+      "destinationRect": {
+        "x": 1241,
+        "y": 706,
+        "width": 12,
+        "height": 70
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "pillar",
+      "parentComponentIndex": 26,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/east-lower-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.west-lower.element-02.v1",
+      "region": "west-lower",
+      "chunkId": "west-lower",
+      "sourceRect": {
+        "x": 10,
+        "y": 718,
+        "width": 8,
+        "height": 23
+      },
+      "destinationRect": {
+        "x": 10,
+        "y": 718,
+        "width": 8,
+        "height": 23
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "element",
+      "parentComponentIndex": 25,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/west-lower-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.west-lower.wall-02-p0.v1",
+      "region": "west-lower",
+      "chunkId": "west-lower",
+      "sourceRect": {
+        "x": 16,
+        "y": 741,
+        "width": 404,
+        "height": 172
+      },
+      "destinationRect": {
+        "x": 16,
+        "y": 741,
+        "width": 404,
+        "height": 172
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "wall",
+      "parentComponentIndex": 15,
+      "crossRegionSplit": true,
+      "outputFileHint": "public/juyiting/images/occluders/west-lower-v1.webp",
+      "overlapResolved": true
+    },
+    {
+      "stableId": "jyt.occ.west-lower.wall-02-p1.v1",
+      "region": "west-lower",
+      "chunkId": "west-lower",
+      "sourceRect": {
+        "x": 18,
+        "y": 718,
+        "width": 402,
+        "height": 23
+      },
+      "destinationRect": {
+        "x": 18,
+        "y": 718,
+        "width": 402,
+        "height": 23
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "wall",
+      "parentComponentIndex": 15,
+      "crossRegionSplit": true,
+      "outputFileHint": "public/juyiting/images/occluders/west-lower-v1.webp",
+      "overlapResolved": true
+    },
+    {
+      "stableId": "jyt.occ.west-lower.pillar-02.v1",
+      "region": "west-lower",
+      "chunkId": "west-lower",
+      "sourceRect": {
+        "x": 473,
+        "y": 718,
+        "width": 45,
+        "height": 42
+      },
+      "destinationRect": {
+        "x": 473,
+        "y": 718,
+        "width": 45,
+        "height": 42
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "pillar",
+      "parentComponentIndex": 18,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/west-lower-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.west-lower.railing-02-p1-p0.v1",
+      "region": "west-lower",
+      "chunkId": "west-lower",
+      "sourceRect": {
+        "x": 518,
+        "y": 718,
+        "width": 163,
+        "height": 42
+      },
+      "destinationRect": {
+        "x": 518,
+        "y": 718,
+        "width": 163,
+        "height": 42
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "railing",
+      "parentComponentIndex": 20,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/west-lower-v1.webp",
+      "overlapResolved": true
+    },
+    {
+      "stableId": "jyt.occ.west-lower.railing-02-p1-p1.v1",
+      "region": "west-lower",
+      "chunkId": "west-lower",
+      "sourceRect": {
+        "x": 548,
+        "y": 717,
+        "width": 133,
+        "height": 1
+      },
+      "destinationRect": {
+        "x": 548,
+        "y": 717,
+        "width": 133,
+        "height": 1
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "railing",
+      "parentComponentIndex": 20,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/west-lower-v1.webp",
+      "overlapResolved": true
+    },
+    {
+      "stableId": "jyt.occ.entrance.structure-01.v1",
+      "region": "entrance",
+      "chunkId": "entrance",
+      "sourceRect": {
+        "x": 766,
+        "y": 721,
+        "width": 50,
+        "height": 74
+      },
+      "destinationRect": {
+        "x": 766,
+        "y": 721,
+        "width": 50,
+        "height": 74
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "structure",
+      "parentComponentIndex": 27,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/entrance-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.entrance.structure-02.v1",
+      "region": "entrance",
+      "chunkId": "entrance",
+      "sourceRect": {
+        "x": 930,
+        "y": 732,
+        "width": 42,
+        "height": 65
+      },
+      "destinationRect": {
+        "x": 930,
+        "y": 732,
+        "width": 42,
+        "height": 65
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "structure",
+      "parentComponentIndex": 28,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/entrance-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.east-lower.structure-02.v1",
+      "region": "east-lower",
+      "chunkId": "east-lower",
+      "sourceRect": {
+        "x": 1597,
+        "y": 747,
+        "width": 67,
+        "height": 84
+      },
+      "destinationRect": {
+        "x": 1597,
+        "y": 747,
+        "width": 67,
+        "height": 84
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "structure",
+      "parentComponentIndex": 29,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/east-lower-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.west-lower.railing-02-p0.v1",
+      "region": "west-lower",
+      "chunkId": "west-lower",
+      "sourceRect": {
+        "x": 505,
+        "y": 760,
+        "width": 176,
+        "height": 19
+      },
+      "destinationRect": {
+        "x": 505,
+        "y": 760,
+        "width": 176,
+        "height": 19
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "railing",
+      "parentComponentIndex": 20,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/west-lower-v1.webp",
+      "overlapResolved": true
+    },
+    {
+      "stableId": "jyt.occ.east-lower.structure-03.v1",
+      "region": "east-lower",
+      "chunkId": "east-lower",
+      "sourceRect": {
+        "x": 1313,
+        "y": 838,
+        "width": 49,
+        "height": 88
+      },
+      "destinationRect": {
+        "x": 1313,
+        "y": 838,
+        "width": 49,
+        "height": 88
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "structure",
+      "parentComponentIndex": 31,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/east-lower-v1.webp"
+    },
+    {
+      "stableId": "jyt.occ.west-lower.structure-01.v1",
+      "region": "west-lower",
+      "chunkId": "west-lower",
+      "sourceRect": {
+        "x": 356,
+        "y": 913,
+        "width": 50,
+        "height": 15
+      },
+      "destinationRect": {
+        "x": 356,
+        "y": 913,
+        "width": 50,
+        "height": 15
+      },
+      "pixelOwnershipRule": "sourceRect-exclusive",
+      "semanticClassification": "structure",
+      "parentComponentIndex": 32,
+      "crossRegionSplit": false,
+      "outputFileHint": "public/juyiting/images/occluders/west-lower-v1.webp"
+    }
+  ],
+  "generation": {
+    "generatedBy": "scripts/juyiting/generate-fragment-ownership-spec.mjs",
+    "deterministicInputs": [
+      "public/juyiting/images/liangshan-hall-mid-occluders-v3.webp",
+      "3e4f3f90b4d84411a844978237a7d3530bd481c37a62bcd73b9d694a7d2dd432"
+    ],
+    "sourceEpoch": 1786267688,
+    "generationId": "5708ff5be63742f6a988568510e38cdf426202d8763d5e0718bdf978835603d8"
+  },
+  "generationId": "5708ff5be63742f6a988568510e38cdf426202d8763d5e0718bdf978835603d8"
+}
