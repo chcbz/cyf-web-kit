@@ -11,22 +11,25 @@
 //   v2 only in shadow/test path until atomic switch (E7).
 //
 // If hall.tmx lacks v2 schema, returns disabled/not-ready status.
+//
+// E6-review-fix (P1+P2):
+//   - P1: ?jytOcclusionDebug=1 alone enables shadow + overlay data
+//   - P2: lazy init, no parse when both flags off
+//   - P2: deep-immutable snapshot (diagnostic entries, edges, candidates,
+//         errors, instrumentation all clone+freeze)
+//   - P2: truncation report (originalCount, retainedCount, truncatedCount)
+//   - P2: no console.warn from renderer (pure data, caller decides logging)
 
 import {
   type CanonicalSceneIr,
   type OcclusionConstraintZone,
   type Point,
-  type RenderSchemaError,
-  type SceneObject,
   DEFAULT_FLOOR_REGISTRY,
-  HYSTERESIS_PX,
-  RENDER_BAND_ORDER,
   isStructuredFatalRenderSchemaError,
 } from './schema.js'
 import {
   type WorldSortKey,
   computeWorldSortKey,
-  compareWorldSortKeys,
   worldSortKeyToString,
 } from './worldOrder.js'
 import {
@@ -43,7 +46,6 @@ import {
 } from './constraintResolver.js'
 import {
   type SpatialGridCandidateProvider,
-  type SpatialGridInstrumentation,
   SpatialGrid,
   createConstraintCandidateProvider,
   createSpatialGridInstrumentation,
@@ -54,62 +56,38 @@ import { validateAndCanonicalizePolygon } from './validation.js'
 // ── Constants ──
 
 const MAX_SNAPSHOT_OBJECTS = 500
-const MAX_SNAPSHOT_EDGES = 2000
 const MAX_ERRORS = 50
 const THROTTLE_MS = 200
-const MAX_SNAPSHOT_DEPTH_BYTES = 128 * 1024 // 128 KiB cap
 
 // ── V1 object snapshot ──
 
 export interface V1ObjectSnapshot {
-  /** MelonJS or logical object ID (may not match stableId) */
   objectId: string
-  /** Source entity ID from API (for agents) */
   sourceId?: string
-  /** Current v1 depth (float) */
   v1Depth: number
-  /** World position x */
   x: number
-  /** World position y (foot point) */
   y: number
-  /** Width in world pixels */
   width?: number
-  /** Height in world pixels */
   height?: number
-  /** Object kind hint */
   kind: 'agent' | 'prop' | 'layer' | 'unknown'
-  /** Whether this is a visible renderable */
   visible: boolean
-  /** Whether behind-mask (v1) */
   behindMask?: boolean
 }
 
 // ── Shadow per-object diagnostic ──
 
 export interface ShadowDiagnostic {
-  /** stableId if matched/adapted, else v1 objectId */
   objectId: string
-  /** stableId from v2 IR, empty if no match */
   stableId: string
-  /** Source entity ID if available */
   sourceId: string
-  /** V1 depth as computed by scene */
   v1Depth: number
-  /** V2 sort key (serialized) */
   v2SortKey: string
-  /** V2 sort key components */
   v2SortKeyDetail: WorldSortKey | null
-  /** V2 proposed sort order index (0-based) */
   v2OrderIndex: number
-  /** V2 proposed depth (based on sort order) */
   v2ProposedDepth: number
-  /** Constraint edges involving this object */
-  constraintEdges: ShadowEdgeInfo[]
-  /** Membership candidates for agents */
-  membershipCandidates: string[]
-  /** Difference reason vs v1 sort */
+  constraintEdges: readonly ShadowEdgeInfo[]
+  membershipCandidates: readonly string[]
   diffReason: string
-  /** Object kind */
   kind: string
 }
 
@@ -121,74 +99,68 @@ export interface ShadowEdgeInfo {
   priority: number
 }
 
-// ── Shadow snapshot (immutable) ──
+// ── Truncation report ──
+
+export interface ShadowTruncationReport {
+  originalCount: number
+  retainedCount: number
+  truncatedCount: number
+}
+
+// ── Shadow snapshot (deep immutable) ──
 
 export interface ShadowSnapshot {
-  /** Snapshot version counter (monotonic) */
-  version: number
-  /** State of v2 pipeline */
-  state: 'disabled' | 'not-ready' | 'ready' | 'error' | 'fatal'
-  /** Reason for disabled/not-ready state */
-  stateReason: string
-  /** Map data has v2 render schema */
-  hasV2Schema: boolean
-  /** Debug overlay active */
-  debugOverlayActive: boolean
-  /** Per-object diagnostics */
-  diagnostics: readonly ShadowDiagnostic[]
-  /** Constraint edges count */
-  edgeCount: number
-  /** Zone count from IR */
-  zoneCount: number
-  /** Fragment count from IR */
-  fragmentCount: number
-  /** Grid cell count */
-  gridCellCount: number
-  /** Grid entry count */
-  gridEntryCount: number
-  /** Aggregate sort duration ms */
-  sortDurationMs: number
-  /** Instrumentation from constraint resolver */
-  instrumentation: ShadowInstrumentation | null
-  /** Errors captured (max MAX_ERRORS) */
-  errors: readonly ShadowErrorRecord[]
-  /** Timestamp of snapshot */
-  timestamp: number
+  readonly version: number
+  readonly state: 'disabled' | 'not-ready' | 'ready' | 'error' | 'fatal'
+  readonly stateReason: string
+  readonly hasV2Schema: boolean
+  /** Per-object diagnostics (deep-frozen, capped at MAX_SNAPSHOT_OBJECTS) */
+  readonly diagnostics: readonly ShadowDiagnostic[]
+  /** Truncation info for diagnostics */
+  readonly diagnosticsTruncation: ShadowTruncationReport
+  readonly edgeCount: number
+  readonly zoneCount: number
+  readonly fragmentCount: number
+  readonly gridCellCount: number
+  readonly gridEntryCount: number
+  readonly sortDurationMs: number
+  /** Deep-frozen instrumentation or null */
+  readonly instrumentation: ShadowInstrumentation | null
+  /** Deep-frozen errors (capped at MAX_ERRORS) */
+  readonly errors: readonly ShadowErrorRecord[]
+  /** Truncation info for errors */
+  readonly errorsTruncation: ShadowTruncationReport
+  readonly timestamp: number
 }
 
 export interface ShadowInstrumentation {
-  agentCount: number
-  zoneCount: number
-  edgeCount: number
-  sortDurationMs: number
-  cycleDetected: boolean
-  providerTrusted: boolean
-  uniqueCandidateCount: number
-  membershipCheckCount: number
-  gridEntryCount: number
-  gridCellCount: number
+  readonly agentCount: number
+  readonly zoneCount: number
+  readonly edgeCount: number
+  readonly sortDurationMs: number
+  readonly cycleDetected: boolean
+  readonly providerTrusted: boolean
+  readonly uniqueCandidateCount: number
+  readonly membershipCheckCount: number
+  readonly gridEntryCount: number
+  readonly gridCellCount: number
 }
 
 // ── Error record ──
 
 export interface ShadowErrorRecord {
-  code: string
-  objectId: string
-  field: string
-  message: string
-  timestamp: number
+  readonly code: string
+  readonly objectId: string
+  readonly field: string
+  readonly message: string
+  readonly timestamp: number
 }
 
 // ── Factory ──
 
 export interface ShadowRendererOptions {
-  /** Map data from TMX (melonJS pre-parsed) */
   mapData?: Record<string, unknown>
-  /** Debug overlay activation flag */
-  debugOverlayActive?: boolean
-  /** Throttle ms (default 200) */
   throttleMs?: number
-  /** Custom now provider */
   now?: () => number
 }
 
@@ -196,11 +168,68 @@ export function createShadowRenderer(opts: ShadowRendererOptions = {}) {
   return new ShadowRenderer(opts)
 }
 
+// ── Deep-freeze helper ──
+
+function deepFreeze<T>(value: T): T {
+  if (value === null || value === undefined) return value
+  if (typeof value !== 'object') return value
+  if (Array.isArray(value)) {
+    if (Object.isFrozen(value)) return value
+    for (const item of value) deepFreeze(item)
+    return Object.freeze(value)
+  }
+  if (Object.isFrozen(value)) return value
+  for (const key of Object.keys(value as Record<string, unknown>)) {
+    deepFreeze((value as Record<string, unknown>)[key])
+  }
+  return Object.freeze(value)
+}
+
+function freezeDiagnostic(d: ShadowDiagnostic): ShadowDiagnostic {
+  return deepFreeze({
+    objectId: d.objectId,
+    stableId: d.stableId,
+    sourceId: d.sourceId,
+    v1Depth: d.v1Depth,
+    v2SortKey: d.v2SortKey,
+    v2SortKeyDetail: d.v2SortKeyDetail ? deepFreeze({ ...d.v2SortKeyDetail }) : null,
+    v2OrderIndex: d.v2OrderIndex,
+    v2ProposedDepth: d.v2ProposedDepth,
+    constraintEdges: deepFreeze(d.constraintEdges.map(e => deepFreeze({ ...e }))),
+    membershipCandidates: deepFreeze([...d.membershipCandidates]),
+    diffReason: d.diffReason,
+    kind: d.kind,
+  })
+}
+
+function freezeErrorRecord(e: ShadowErrorRecord): ShadowErrorRecord {
+  return deepFreeze({ ...e })
+}
+
+function freezeInstrumentation(i: ShadowInstrumentation | null): ShadowInstrumentation | null {
+  if (!i) return null
+  return deepFreeze({
+    agentCount: i.agentCount,
+    zoneCount: i.zoneCount,
+    edgeCount: i.edgeCount,
+    sortDurationMs: i.sortDurationMs,
+    cycleDetected: i.cycleDetected,
+    providerTrusted: i.providerTrusted,
+    uniqueCandidateCount: i.uniqueCandidateCount,
+    membershipCheckCount: i.membershipCheckCount,
+    gridEntryCount: i.gridEntryCount,
+    gridCellCount: i.gridCellCount,
+  })
+}
+
+function freezeProductionCounters(c: { computeCount: number; errorCount: number; lastErrorTimestamp: number }) {
+  return Object.freeze({ computeCount: c.computeCount, errorCount: c.errorCount, lastErrorTimestamp: c.lastErrorTimestamp })
+}
+
 // ── ShadowRenderer class ──
 
 export class ShadowRenderer {
   private _mapData: Record<string, unknown> | undefined
-  private _debugOverlayActive: boolean
   private _throttleMs: number
   private _now: () => number
 
@@ -212,11 +241,10 @@ export class ShadowRenderer {
   private _parseError: ShadowErrorRecord | null = null
   private _spatialGrid: SpatialGrid | null = null
   private _candidateProvider: SpatialGridCandidateProvider | null = null
-  private _gridInstr: SpatialGridInstrumentation | null = null
   private _membershipState: ConstraintMembershipState = createEmptyMembershipState()
   private _errors: ShadowErrorRecord[] = []
   private _state: ShadowSnapshot['state'] = 'disabled'
-  private _stateReason = 'shadow renderer not initialized'
+  private _stateReason = 'not initialized'
   private _destroyed = false
 
   // Low-cost production counters (always active)
@@ -224,95 +252,83 @@ export class ShadowRenderer {
   private _errorCount = 0
   private _lastErrorTimestamp = 0
 
-  // Feature flag (default off)
+  // Feature flag (default off) — set by HallScene only
   private _enabled = false
+
+  // Lazy init: don't parse v2 until enabled or debug mode
+  private _initialized = false
 
   constructor(opts: ShadowRendererOptions = {}) {
     this._mapData = opts.mapData
-    this._debugOverlayActive = opts.debugOverlayActive ?? false
     this._throttleMs = opts.throttleMs ?? THROTTLE_MS
     this._now = opts.now ?? (() => Date.now())
-
-    if (this._mapData) {
-      this._tryInitialize()
-    }
+    // Lazy: do NOT parse here. Wait for enable().
   }
 
   // ── Public API ──
 
-  /** Enable the shadow renderer (feature flag). */
+  /** Enable the shadow renderer. Triggers lazy init (parse v2, build grid). */
   enable(): void {
     if (this._destroyed) return
     this._enabled = true
-    if (this._mapData) {
-      // Always try re-initialization when enabling
-      // _tryInitialize will reset state and re-parse if possible
-      this._tryInitialize()
-    }
+    this._ensureInit()
   }
 
-  /** Disable the shadow renderer. */
+  /** Disable the shadow renderer. @deprecated prefer dispose+recreate for lifecycle. */
   disable(): void {
     this._enabled = false
   }
 
-  /** Check if enabled. */
   get enabled(): boolean { return this._enabled }
 
-  /** Set map data (re-initializes if enabled). */
+  /** Set map data. If enabled, re-parses immediately. If not, stores for later. */
   setMapData(mapData: Record<string, unknown>): void {
     if (this._destroyed) return
     this._mapData = mapData
-    this._parseError = null
+    this._resetInternalState()
+    if (this._enabled) {
+      this._ensureInit()
+    }
+  }
+
+  get canonicalIr(): CanonicalSceneIr | null { return this._canonicalIr }
+  get spatialGrid(): SpatialGrid | null { return this._spatialGrid }
+  get candidateProvider(): SpatialGridCandidateProvider | null { return this._candidateProvider }
+  get membershipState(): ConstraintMembershipState { return this._membershipState }
+
+  /** Deep-frozen copy of production counters — external callers cannot mutate internals. */
+  get productionCounters(): Readonly<{ computeCount: number; errorCount: number; lastErrorTimestamp: number }> {
+    return freezeProductionCounters({
+      computeCount: this._computeCount,
+      errorCount: this._errorCount,
+      lastErrorTimestamp: this._lastErrorTimestamp,
+    })
+  }
+
+  get state(): ShadowSnapshot['state'] { return this._state }
+  get stateReason(): string { return this._stateReason }
+
+  /** Force a full recompute on next call. */
+  invalidate(): void {
+    this._lastComputeTime = 0
+    this._lastSnapshot = null
+  }
+
+  /** Dispose the shadow renderer completely. */
+  dispose(): void {
+    this._destroyed = true
+    this._mapData = undefined
     this._canonicalIr = null
     this._spatialGrid = null
     this._candidateProvider = null
-    this._gridInstr = null
     this._membershipState = createEmptyMembershipState()
     this._errors = []
     this._lastSnapshot = null
     this._state = 'disabled'
-    this._stateReason = 'map data changed, re-initializing'
-
-    if (this._enabled) {
-      this._tryInitialize()
-    }
+    this._stateReason = 'disposed'
+    this._enabled = false
+    this._initialized = false
   }
-
-  /** Set debug overlay active flag. */
-  setDebugOverlayActive(active: boolean): void {
-    this._debugOverlayActive = active
-  }
-
-  /** Get debug overlay state. */
-  get debugOverlayActive(): boolean { return this._debugOverlayActive }
-
-  /** Get canonical IR (null if not parsed or not v2). */
-  get canonicalIr(): CanonicalSceneIr | null { return this._canonicalIr }
-
-  /** Get spatial grid (null if not built). */
-  get spatialGrid(): SpatialGrid | null { return this._spatialGrid }
-
-  /** Get candidate provider (null if not built). */
-  get candidateProvider(): SpatialGridCandidateProvider | null { return this._candidateProvider }
-
-  /** Get membership state (deep-frozen). */
-  get membershipState(): ConstraintMembershipState { return this._membershipState }
-
-  /** Low-cost production counters. */
-  get productionCounters(): { computeCount: number; errorCount: number; lastErrorTimestamp: number } {
-    return {
-      computeCount: this._computeCount,
-      errorCount: this._errorCount,
-      lastErrorTimestamp: this._lastErrorTimestamp,
-    }
-  }
-
-  /** Get current state. */
-  get state(): ShadowSnapshot['state'] { return this._state }
-
-  /** Get state reason. */
-  get stateReason(): string { return this._stateReason }
 
   /**
    * Compute shadow snapshot from v1 object snapshots.
@@ -321,15 +337,14 @@ export class ShadowRenderer {
    */
   computeSnapshot(v1Objects: readonly V1ObjectSnapshot[]): ShadowSnapshot {
     if (this._destroyed) {
-      return this._buildSnapshot('disabled', 'shadow renderer destroyed', [], [], null)
+      return this._buildEmpty('disabled', 'disposed')
     }
 
-    // Feature flag check: disabled means no shadow computing at all
     if (!this._enabled) {
-      return this._buildSnapshot('disabled', 'shadow renderer not enabled', [], [], null)
+      return this._buildEmpty('disabled', 'not enabled')
     }
 
-    // Throttle check: return last snapshot if within window
+    // Throttle
     const now = this._now()
     if (now - this._lastComputeTime < this._throttleMs && this._snapshotVersion > 0 && this._lastSnapshot) {
       return this._lastSnapshot
@@ -337,46 +352,26 @@ export class ShadowRenderer {
 
     this._computeCount++
 
-    // Capture errors from this frame
-    const frameErrors: ShadowErrorRecord[] = []
-
     try {
-      // If not ready, return status snapshot
       if (this._state !== 'ready') {
-        return this._buildSnapshot(
-          this._state,
-          this._stateReason,
-          [],
-          [...this._errors],
-          null,
-        )
+        return this._buildFromState()
       }
 
-      // Adapt v1 objects to constraint nodes
+      // Adapt v1 objects
       const { nodes, diagnostics, adaptErrors } = this._adaptV1Objects(v1Objects)
-      frameErrors.push(...adaptErrors)
-      this._recordErrors(frameErrors)
+      for (const ae of adaptErrors) this._recordError(ae)
 
       if (nodes.length === 0) {
-        return this._buildSnapshot(
-          'ready',
-          'no v1 objects to adapt',
-          diagnostics,
-          [...this._errors],
-          null,
-        )
+        return this._buildReady(diagnostics, [], [], null)
       }
 
       // Run constraint resolver
       const ir = this._canonicalIr!
       const zoneRegistry = new Map<string, OcclusionConstraintZone>()
-      for (const z of ir.zones) {
-        zoneRegistry.set(z.stableId, z)
-      }
+      for (const z of ir.zones) zoneRegistry.set(z.stableId, z)
 
       const instr = createConstraintInstrumentation()
-      let resolution: ConstraintResolution | null = null
-      let resolveError: ShadowErrorRecord | null = null
+      let resolution: ConstraintResolution
 
       try {
         resolution = resolveConstraintOrder(
@@ -390,27 +385,22 @@ export class ShadowRenderer {
             previousMembership: this._membershipState,
           },
         )
-        // Update membership state on success
         this._membershipState = resolution.nextMembership
       } catch (err) {
-        const record = this._errorFromException(err, '(resolver)')
-        frameErrors.push(record)
-        this._recordErrors(frameErrors)
-
-        // Preserve v1: shadow fatal must not pollute active scene
-        // Membership state NOT updated on error
-        const errorSnap = this._buildSnapshot(
-          'error',
-          `constraint resolution failed: ${record.message}`,
-          diagnostics,
-          [...this._errors],
-          null,
-        )
-        this._lastSnapshot = errorSnap
-        return errorSnap
+        this._recordError(this._errorFromException(err, '(resolver)'))
+        const savedState = this._state
+        const savedReason = this._stateReason
+        this._state = 'error'
+        this._stateReason = `constraint resolution failed: ${this._errorFromException(err, '(resolver)').message}`
+        const snap = this._buildReady(diagnostics, [], [], null)
+        this._state = savedState
+        this._stateReason = savedReason
+        this._lastSnapshot = snap
+        this._lastComputeTime = now
+        return snap
       }
 
-      // Build diagnostic data including order information
+      // Populate order/depth/edges
       const orderMap = new Map<string, number>()
       resolution.order.forEach((id, idx) => { orderMap.set(id, idx) })
 
@@ -419,7 +409,6 @@ export class ShadowRenderer {
         const idx = orderMap.get(d.stableId)
         if (idx !== undefined) {
           d.v2OrderIndex = idx
-          // Simple depth proposal: linear mapping [0, total-1] → [1, total]
           d.v2ProposedDepth = totalObjects > 1 ? 1 + (idx / (totalObjects - 1)) * (totalObjects - 1) : 1
         }
         d.constraintEdges = resolution.edges
@@ -431,25 +420,15 @@ export class ShadowRenderer {
             zoneStableId: e.zoneStableId,
             priority: e.priority,
           }))
-      }
-
-      // Populate diff reasons
-      for (const d of diagnostics) {
         d.diffReason = this._computeDiffReason(d, resolution.order)
-      }
-
-      // Grid instrumentation
-      if (this._gridInstr) {
-        this._gridInstr.scanCount = (this._gridInstr.scanCount ?? 0) + 1
       }
 
       this._lastComputeTime = now
       this._snapshotVersion++
-      const result = this._buildSnapshot(
-        'ready',
-        '',
+      this._lastSnapshot = this._buildReady(
         diagnostics,
-        [...this._errors],
+        this._errors,
+        resolution.edges,
         {
           agentCount: instr.agentCount,
           zoneCount: instr.zoneCount,
@@ -462,57 +441,46 @@ export class ShadowRenderer {
           gridEntryCount: this._spatialGrid?.getEntryCount() ?? 0,
           gridCellCount: this._spatialGrid?.getCellCount() ?? 0,
         },
-        resolution.edges.length,
       )
-      this._lastSnapshot = result
-      return result
+      return this._lastSnapshot
     } catch (err) {
-      const record = this._errorFromException(err, '(computeSnapshot)')
-      frameErrors.push(record)
-      this._recordErrors(frameErrors)
-
-      const errSnap = this._buildSnapshot(
-        'error',
-        `unexpected error: ${record.message}`,
-        [],
-        [...this._errors],
-        null,
-      )
-      this._lastSnapshot = errSnap
-      return errSnap
+      this._recordError(this._errorFromException(err, '(computeSnapshot)'))
+      const savedState = this._state
+      const savedReason = this._stateReason
+      this._state = 'error'
+      this._stateReason = `unexpected error: ${this._errorFromException(err, '(computeSnapshot)').message}`
+      const snap = this._buildReady([], [], [], null)
+      this._state = savedState
+      this._stateReason = savedReason
+      this._lastSnapshot = snap
+      this._lastComputeTime = now
+      return snap
     }
   }
 
-  /** Force a full recompute on next call. */
-  invalidate(): void {
-    this._lastComputeTime = 0
-    this._lastSnapshot = null
+  // ── Private init ──
+
+  private _ensureInit(): void {
+    if (this._initialized) return
+    if (!this._mapData) return
+    this._initialized = true
+    this._tryInitialize()
   }
 
-  /** Dispose the shadow renderer. */
-  dispose(): void {
-    this._destroyed = true
-    this._mapData = undefined
+  private _resetInternalState(): void {
     this._canonicalIr = null
+    this._parseError = null
     this._spatialGrid = null
     this._candidateProvider = null
-    this._gridInstr = null
     this._membershipState = createEmptyMembershipState()
     this._errors = []
     this._lastSnapshot = null
     this._state = 'disabled'
-    this._stateReason = 'shadow renderer disposed'
-    this._enabled = false
+    this._stateReason = 'map data changed'
+    this._initialized = false
   }
 
-  // ── Private ──
-
   private _tryInitialize(): void {
-    // Reset state before attempting initialization
-    this._parseError = null
-    this._errors = []
-    this._lastSnapshot = null
-
     if (!this._mapData) {
       this._state = 'disabled'
       this._stateReason = 'no map data'
@@ -520,14 +488,12 @@ export class ShadowRenderer {
     }
 
     try {
-      // Check v2 schema
       if (!hasRenderSchemaV2(this._mapData)) {
         this._state = 'not-ready'
         this._stateReason = 'hall.tmx has no v2 render schema; shadow comparison disabled'
         return
       }
 
-      // Parse canonical IR
       this._canonicalIr = parseCanonicalIrFromData(this._mapData)
 
       if (!this._canonicalIr.fragments.length && !this._canonicalIr.zones.length && !this._canonicalIr.objects.length) {
@@ -536,82 +502,47 @@ export class ShadowRenderer {
         return
       }
 
-      // Validate and canonicalize zone polygons
       for (const zone of this._canonicalIr.zones) {
-        validateAndCanonicalizePolygon(
-          zone.polygon,
-          zone.stableId,
-          this._canonicalIr.sceneId,
-        )
+        validateAndCanonicalizePolygon(zone.polygon, zone.stableId, this._canonicalIr.sceneId)
       }
 
-      // Build spatial grid
       this._spatialGrid = new SpatialGrid()
-      this._gridInstr = createSpatialGridInstrumentation()
-
-      // Register zones in grid
       for (const zone of this._canonicalIr.zones) {
         this._spatialGrid.register(
-          {
-            stableId: zone.stableId,
-            entryKind: 'zone',
-            bounds: zone.bounds,
-          },
-          this._canonicalIr.sceneId,
-          zone.floorId,
+          { stableId: zone.stableId, entryKind: 'zone', bounds: zone.bounds },
+          this._canonicalIr.sceneId, zone.floorId,
         )
       }
-
-      // Register fragments in grid
       for (const frag of this._canonicalIr.fragments) {
         this._spatialGrid.register(
-          {
-            stableId: frag.stableId,
-            entryKind: 'fragment',
-            bounds: frag.destinationRect,
-          },
-          this._canonicalIr.sceneId,
-          frag.floorId,
+          { stableId: frag.stableId, entryKind: 'fragment', bounds: frag.destinationRect },
+          this._canonicalIr.sceneId, frag.floorId,
         )
       }
-
-      // Register objects in grid
       for (const obj of this._canonicalIr.objects) {
-        const objBounds = obj.geometry?.footprint && obj.geometry.footprint.length > 0
+        const objBounds = obj.geometry?.footprint?.length
           ? (() => {
-              const xs = obj.geometry.footprint.map((p: { x: number }) => p.x)
-              const ys = obj.geometry.footprint.map((p: { y: number }) => p.y)
-              return {
-                x: Math.min(...xs),
-                y: Math.min(...ys),
-                width: Math.max(...xs) - Math.min(...xs),
-                height: Math.max(...ys) - Math.min(...ys),
-              }
+              const xs = obj.geometry!.footprint!.map((p: { x: number }) => p.x)
+              const ys = obj.geometry!.footprint!.map((p: { y: number }) => p.y)
+              return { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) }
             })()
           : obj.render?.type === 'asset'
             ? obj.render.destinationRect
             : { x: obj.sortAnchor.x - 8, y: obj.sortAnchor.y - 8, width: 16, height: 16 }
         this._spatialGrid.register(
-          {
-            stableId: obj.stableId,
-            entryKind: obj.kind === 'agent' ? 'agent' : obj.kind === 'prop' ? 'prop' : 'hotspot',
-            bounds: objBounds,
-          },
-          this._canonicalIr.sceneId,
-          obj.floorId,
+          { stableId: obj.stableId, entryKind: obj.kind === 'agent' ? 'agent' : obj.kind === 'prop' ? 'prop' : 'hotspot', bounds: objBounds },
+          this._canonicalIr.sceneId, obj.floorId,
         )
       }
 
       this._candidateProvider = createConstraintCandidateProvider(this._spatialGrid)
-      this._parseError = null
       this._state = 'ready'
       this._stateReason = ''
     } catch (err) {
       const record = this._errorFromException(err, '(init)')
-      this._parseError = record
       this._errors.push(record)
       this._errorCount++
-
+      this._lastErrorTimestamp = record.timestamp
       if (isStructuredFatalRenderSchemaError(err)) {
         this._state = 'fatal'
         this._stateReason = `v2 schema fatal: ${err.errorCode} - ${err.userMessage}`
@@ -619,10 +550,10 @@ export class ShadowRenderer {
         this._state = 'error'
         this._stateReason = `initialization error: ${record.message}`
       }
-
-      // Recoverable: next valid mapData setMapData call will retry
     }
   }
+
+  // ── Adapt v1 objects ──
 
   private _adaptV1Objects(v1Objects: readonly V1ObjectSnapshot[]): {
     nodes: ConstraintNode[]
@@ -634,113 +565,62 @@ export class ShadowRenderer {
     const diagnostics: ShadowDiagnostic[] = []
     const errors: ShadowErrorRecord[] = []
 
-    // Build fragment nodes from IR
-    const fragmentNodes: ConstraintNode[] = []
+    // Fragment nodes
     for (const frag of ir.fragments) {
       if (frag.renderBand === 'world') {
-        try {
-          fragmentNodes.push(fragmentToConstraintNode(frag, ir.floorRegistry))
-        } catch (err) {
-          errors.push(this._errorFromException(err, frag.stableId))
-        }
+        try { nodes.push(fragmentToConstraintNode(frag, ir.floorRegistry)) }
+        catch (err) { errors.push(this._errorFromException(err, frag.stableId)) }
       }
     }
-
-    // Build static object nodes from IR
-    const staticNodes: ConstraintNode[] = []
+    // Static objects
     for (const obj of ir.objects) {
       if (obj.renderBand === 'world') {
-        try {
-          staticNodes.push(sceneObjectToConstraintNode(obj, ir.floorRegistry))
-        } catch (err) {
-          errors.push(this._errorFromException(err, obj.stableId))
-        }
+        try { nodes.push(sceneObjectToConstraintNode(obj, ir.floorRegistry)) }
+        catch (err) { errors.push(this._errorFromException(err, obj.stableId)) }
       }
     }
 
-    // Adapt v1 objects to agent constraint nodes
-    // We use a simple adapter: each v1 object gets a stableId
-    // derived from its objectId. This is NOT the same as the full
-    // runtime agent adapter (E3) — it's a shadow-path approximation.
     const sceneHeight = ir.coordinateHeight || 928
-
-    for (const v1 of v1Objects.slice(0, MAX_SNAPSHOT_OBJECTS)) {
+    for (const v1 of v1Objects) {
       const diag: ShadowDiagnostic = {
-        objectId: v1.objectId,
-        stableId: '',
-        sourceId: v1.sourceId || '',
-        v1Depth: v1.v1Depth,
-        v2SortKey: '',
-        v2SortKeyDetail: null,
-        v2OrderIndex: -1,
-        v2ProposedDepth: -1,
-        constraintEdges: [],
-        membershipCandidates: [],
-        diffReason: '',
-        kind: v1.kind,
+        objectId: v1.objectId, stableId: '', sourceId: v1.sourceId || '',
+        v1Depth: v1.v1Depth, v2SortKey: '', v2SortKeyDetail: null,
+        v2OrderIndex: -1, v2ProposedDepth: -1,
+        constraintEdges: [], membershipCandidates: [],
+        diffReason: '', kind: v1.kind,
       }
 
-      // For agents: try to create a pseudo-agent node
       if (v1.kind === 'agent' && v1.visible) {
-        // Use a deterministic pseudo-stableId based on objectId
         const pseudoStableId = `jyt.agent.shadow.${v1.objectId.replace(/[^a-z0-9._-]/gi, '_').toLowerCase()}.v0`
         diag.stableId = pseudoStableId
-
         try {
-          // Create a pseudo-SceneObject for the sort key
-          const pseudoObj: SceneObject = {
-            stableId: pseudoStableId,
-            sceneId: ir.sceneId,
-            chunkId: 'shadow', // unknown chunk
-            kind: 'agent',
-            renderBand: 'world',
-            floorId: 'floor-1',
-            elevation: 0,
-            sortMode: 'y',
-            sortAnchor: { x: v1.x, y: v1.y },
-            tieBias: 0,
+          const pseudoObj = {
+            stableId: pseudoStableId, sceneId: ir.sceneId, chunkId: 'shadow',
+            kind: 'agent' as const, renderBand: 'world' as const, floorId: 'floor-1',
+            elevation: 0, sortMode: 'y' as const,
+            sortAnchor: { x: v1.x, y: v1.y }, tieBias: 0,
           }
-
           const sortKey = computeWorldSortKey(pseudoObj, ir.floorRegistry)
           diag.v2SortKey = worldSortKeyToString(sortKey)
           diag.v2SortKeyDetail = sortKey
-
-          // Build constraint node
-          const node: ConstraintNode = {
-            stableId: pseudoStableId,
-            sceneId: ir.sceneId,
-            floorId: 'floor-1',
-            nodeKind: 'agent',
-            sortKey,
-            position: { x: v1.x, y: v1.y },
-          }
-          nodes.push(node)
-
-          // Query grid for membership candidates
+          nodes.push({ stableId: pseudoStableId, sceneId: ir.sceneId, floorId: 'floor-1', nodeKind: 'agent', sortKey, position: { x: v1.x, y: v1.y } })
           if (this._candidateProvider) {
             try {
-              const candidates = this._candidateProvider.queryCandidates(
-                { x: v1.x, y: v1.y },
-                ir.sceneId,
-                'floor-1',
-              )
+              const candidates = this._candidateProvider.queryCandidates({ x: v1.x, y: v1.y }, ir.sceneId, 'floor-1')
               diag.membershipCandidates = [...candidates].slice(0, 50)
-            } catch {
-              // Grid query error non-fatal for diagnostics
-            }
+            } catch { /* non-fatal */ }
           }
-
-          // Compute v1 vs v2 diff reason
-          const v1DepthNorm = v1.v1Depth / sceneHeight
-          const v2DepthNorm = sortKey.fixedPointY / (256 * sceneHeight)
           if (v1.behindMask) {
             diag.diffReason = 'v1: behindMask formula (depth ~1.5-2.5)'
-          } else if (Math.abs(v1DepthNorm - v2DepthNorm) > 0.01) {
-            diag.diffReason = `v1 depth ${v1.v1Depth.toFixed(2)} vs v2 fixedY ${sortKey.fixedPointY}`
+          } else {
+            const v1Norm = v1.v1Depth / sceneHeight
+            const v2Norm = sortKey.fixedPointY / (256 * sceneHeight)
+            if (Math.abs(v1Norm - v2Norm) > 0.01) {
+              diag.diffReason = `v1 depth ${v1.v1Depth.toFixed(2)} vs v2 fixedY ${sortKey.fixedPointY}`
+            }
           }
         } catch (err) {
           errors.push(this._errorFromException(err, v1.objectId))
-          // Don't add node on error, preserve v1
         }
       } else if (v1.kind === 'prop') {
         diag.stableId = `jyt.prop.shadow.${v1.objectId.replace(/[^a-z0-9._-]/gi, '_').toLowerCase()}.v0`
@@ -751,42 +631,78 @@ export class ShadowRenderer {
       } else {
         diag.diffReason = 'v1: unknown object kind'
       }
-
       diagnostics.push(diag)
     }
-
-    // Add fragment and static nodes after agents
-    nodes.push(...staticNodes)
-    nodes.push(...fragmentNodes)
-
     return { nodes, diagnostics, adaptErrors: errors }
   }
 
-  private _buildSnapshot(
-    state: ShadowSnapshot['state'],
-    stateReason: string,
-    diagnostics: ShadowDiagnostic[],
-    errors: readonly ShadowErrorRecord[],
-    instrumentation: ShadowInstrumentation | null,
-    edgeCount?: number,
-  ): ShadowSnapshot {
-    return Object.freeze({
-      version: this._snapshotVersion,
-      state,
-      stateReason,
+  // ── Snapshot builders ──
+
+  private _buildEmpty(state: ShadowSnapshot['state'], reason: string): ShadowSnapshot {
+    return deepFreeze({
+      version: this._snapshotVersion, state, stateReason: reason,
+      hasV2Schema: false,
+      diagnostics: deepFreeze([]),
+      diagnosticsTruncation: deepFreeze({ originalCount: 0, retainedCount: 0, truncatedCount: 0 }),
+      edgeCount: 0, zoneCount: 0, fragmentCount: 0,
+      gridCellCount: 0, gridEntryCount: 0, sortDurationMs: 0,
+      instrumentation: null,
+      errors: deepFreeze([]),
+      errorsTruncation: deepFreeze({ originalCount: 0, retainedCount: 0, truncatedCount: 0 }),
+      timestamp: this._now(),
+    }) as unknown as ShadowSnapshot
+  }
+
+  private _buildFromState(): ShadowSnapshot {
+    const allErrors = [...this._errors]
+    const errOrig = allErrors.length
+    const retainedErrors = allErrors.slice(0, MAX_ERRORS)
+    return deepFreeze({
+      version: this._snapshotVersion, state: this._state, stateReason: this._stateReason,
       hasV2Schema: this._canonicalIr !== null,
-      debugOverlayActive: this._debugOverlayActive,
-      diagnostics: Object.freeze(diagnostics.slice(0, MAX_SNAPSHOT_OBJECTS)),
-      edgeCount: edgeCount ?? 0,
+      diagnostics: deepFreeze([]),
+      diagnosticsTruncation: deepFreeze({ originalCount: 0, retainedCount: 0, truncatedCount: 0 }),
+      edgeCount: 0,
+      zoneCount: this._canonicalIr?.zones.length ?? 0,
+      fragmentCount: this._canonicalIr?.fragments.length ?? 0,
+      gridCellCount: this._spatialGrid?.getCellCount() ?? 0,
+      gridEntryCount: this._spatialGrid?.getEntryCount() ?? 0,
+      sortDurationMs: 0, instrumentation: null,
+      errors: deepFreeze(retainedErrors.map(freezeErrorRecord)),
+      errorsTruncation: deepFreeze({ originalCount: errOrig, retainedCount: retainedErrors.length, truncatedCount: Math.max(0, errOrig - MAX_ERRORS) }),
+      timestamp: this._now(),
+    }) as unknown as ShadowSnapshot
+  }
+
+  private _buildReady(
+    diagnostics: ShadowDiagnostic[],
+    allErrors: ShadowErrorRecord[],
+    edges: ConstraintEdge[],
+    instrumentation: ShadowInstrumentation | null,
+  ): ShadowSnapshot {
+    const diagOrig = diagnostics.length
+    const diagRetained = diagnostics.slice(0, MAX_SNAPSHOT_OBJECTS)
+    const errOrig = allErrors.length
+    const errRetained = allErrors.slice(0, MAX_ERRORS)
+
+    return deepFreeze({
+      version: this._snapshotVersion,
+      state: this._state,
+      stateReason: this._stateReason,
+      hasV2Schema: true,
+      diagnostics: deepFreeze(diagRetained.map(freezeDiagnostic)),
+      diagnosticsTruncation: deepFreeze({ originalCount: diagOrig, retainedCount: diagRetained.length, truncatedCount: Math.max(0, diagOrig - MAX_SNAPSHOT_OBJECTS) }),
+      edgeCount: edges.length,
       zoneCount: this._canonicalIr?.zones.length ?? 0,
       fragmentCount: this._canonicalIr?.fragments.length ?? 0,
       gridCellCount: this._spatialGrid?.getCellCount() ?? 0,
       gridEntryCount: this._spatialGrid?.getEntryCount() ?? 0,
       sortDurationMs: instrumentation?.sortDurationMs ?? 0,
-      instrumentation,
-      errors: Object.freeze(errors.slice(0, MAX_ERRORS)),
+      instrumentation: freezeInstrumentation(instrumentation),
+      errors: deepFreeze(errRetained.map(freezeErrorRecord)),
+      errorsTruncation: deepFreeze({ originalCount: errOrig, retainedCount: errRetained.length, truncatedCount: Math.max(0, errOrig - MAX_ERRORS) }),
       timestamp: this._now(),
-    }) as ShadowSnapshot
+    }) as unknown as ShadowSnapshot
   }
 
   private _computeDiffReason(diag: ShadowDiagnostic, order: string[]): string {
@@ -797,40 +713,20 @@ export class ShadowRenderer {
 
   private _errorFromException(err: unknown, objectId: string): ShadowErrorRecord {
     if (isStructuredFatalRenderSchemaError(err)) {
-      return {
-        code: err.errorCode,
-        objectId: err.objectId || objectId,
-        field: err.field,
-        message: err.userMessage,
-        timestamp: this._now(),
-      }
+      return { code: err.errorCode, objectId: err.objectId || objectId, field: err.field, message: err.userMessage, timestamp: this._now() }
     }
     if (err instanceof Error) {
-      return {
-        code: 'SHADOW_INTERNAL_ERROR',
-        objectId,
-        field: '(unknown)',
-        message: err.message.slice(0, 200),
-        timestamp: this._now(),
-      }
+      return { code: 'SHADOW_INTERNAL_ERROR', objectId, field: '(unknown)', message: err.message.slice(0, 200), timestamp: this._now() }
     }
-    return {
-      code: 'SHADOW_UNKNOWN_ERROR',
-      objectId,
-      field: '(unknown)',
-      message: String(err).slice(0, 200),
-      timestamp: this._now(),
-    }
+    return { code: 'SHADOW_UNKNOWN_ERROR', objectId, field: '(unknown)', message: String(err).slice(0, 200), timestamp: this._now() }
   }
 
-  private _recordErrors(frameErrors: ShadowErrorRecord[]): void {
-    for (const e of frameErrors) {
-      if (this._errors.length < MAX_ERRORS) {
-        this._errors.push(e)
-      }
-      this._errorCount++
-      this._lastErrorTimestamp = e.timestamp
+  private _recordError(e: ShadowErrorRecord): void {
+    if (this._errors.length < MAX_ERRORS * 2) { // keep a bit extra for count tracking
+      this._errors.push(e)
     }
+    this._errorCount++
+    this._lastErrorTimestamp = e.timestamp
   }
 }
 
@@ -881,7 +777,6 @@ export function collectV1Snapshots(
       const depth = Number.isFinite(Number(c.depth)) ? Number(c.depth) : 0
       const visible = c.visible !== false && c.isRenderable !== false && c.alpha !== 0
 
-      // Determine kind
       let kind: V1ObjectSnapshot['kind'] = 'unknown'
       if (c.agentId || c.personaCode || c._isAgent) {
         kind = 'agent'
@@ -891,7 +786,6 @@ export function collectV1Snapshots(
         kind = 'layer'
       }
 
-      // Check behind-mask
       let behindMask = false
       if (kind === 'agent' && occluders.length) {
         behindMask = occluders.some(occ => {
@@ -901,22 +795,12 @@ export function collectV1Snapshots(
         })
       }
 
-      snapshots.push({
-        objectId,
-        sourceId: String(c.agentId || ''),
-        v1Depth: depth,
-        x,
-        y,
+      snapshots.push({ objectId, sourceId: String(c.agentId || ''), v1Depth: depth, x, y,
         width: Number.isFinite(Number(c.width)) ? Number(c.width) : undefined,
         height: Number.isFinite(Number(c.height)) ? Number(c.height) : undefined,
-        kind,
-        visible,
-        behindMask,
-      })
+        kind, visible, behindMask })
     }
-  } catch {
-    // Return whatever we collected
-  }
+  } catch { /* return whatever we collected */ }
 
   return snapshots
 }
