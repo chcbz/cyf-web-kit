@@ -31,6 +31,11 @@ import { tmpdir } from 'node:os'
 import { parseTmxStructure } from '../scripts/juyiting/lib/tmx-structure.mjs'
 import { parseHallTmx, resolveHallProps } from '../scripts/juyiting/lib/prop-sort-evidence.mjs'
 import { canonicalizeJuyitingTmxSource } from '../scripts/juyiting/lib/juyiting-public-path.mjs'
+import {
+  E1_BASELINE_COMMIT,
+  E1_BASELINE_TMX_SHA256,
+  E8B_LIVE_TMX_SHA256,
+} from '../scripts/juyiting/lib/baseline-provenance.mjs'
 import { parseCanonicalIrFromXml, serializeCanonicalIr } from '../src/game/occlusion/canonicalIr.ts'
 import { DEFAULT_FLOOR_REGISTRY } from '../src/game/occlusion/schema.ts'
 import { computeWorldSortKey, compareWorldSortKeys } from '../src/game/occlusion/worldOrder.ts'
@@ -133,6 +138,7 @@ function buildManifest() {
     propCount: props.length,
     generatedBy: 'tests/juyiting-occlusion-prop-tmx-migration.test.js',
     specBinding: {
+      taskId: 'E8A',
       sourceCommit: spec.baseCommit,
       acceptedCommit: 'da3d9600bd322e3a85d93ebfeaf07cd04a76f33d',
       generationId: spec.generationId,
@@ -140,12 +146,14 @@ function buildManifest() {
     },
     tmxProvenance: {
       baselineAnchor: {
-        commit: spec.baseCommit,
-        path: spec.tmxSource.path,
-        sha256: spec.tmxSource.sha256,
+        ownerTask: 'E1',
+        commit: E1_BASELINE_COMMIT,
+        path: 'public/juyiting/hall.tmx',
+        sha256: E1_BASELINE_TMX_SHA256,
         description: 'E1 immutable history TMX; verified from replacement-disabled Git blob'
       },
       currentAnchor: {
+        ownerTask: 'E8B',
         path: 'public/juyiting/hall.tmx',
         sha256: sha256(Buffer.from(tmxBytes, 'utf8')),
         description: 'E8B live production TMX; five-prop migration from E8A spec binding'
@@ -308,13 +316,25 @@ describe('E8B five-prop TMX/manifest/snapshot migration', function () {
       expect(manifest.props).to.have.length(5)
       expect(manifest.props.map(prop => prop.tmxId)).to.deep.equal(FIVE_PROP_TMX_IDS)
       // specBinding provenance
+      expect(manifest.specBinding.taskId).to.equal('E8A')
       expect(manifest.specBinding.sourceCommit).to.equal(spec.baseCommit)
       expect(manifest.specBinding.acceptedCommit).to.equal('da3d9600bd322e3a85d93ebfeaf07cd04a76f33d')
       expect(manifest.specBinding.generationId).to.equal(spec.generationId)
+      expect(manifest.specBinding.sourceTmxSha256).to.equal(E1_BASELINE_TMX_SHA256)
       expect(manifest.specBinding.sourceTmxSha256).to.equal(spec.tmxSource.sha256)
-      // tmxProvenance
-      expect(manifest.tmxProvenance.baselineAnchor.sha256).to.equal(spec.tmxSource.sha256)
-      expect(manifest.tmxProvenance.baselineAnchor.commit).to.equal(spec.baseCommit)
+      // E1 immutable history and E8A accepted evidence are distinct anchors.
+      expect(manifest.tmxProvenance.baselineAnchor).to.deep.include({
+        ownerTask: 'E1',
+        commit: E1_BASELINE_COMMIT,
+        path: 'public/juyiting/hall.tmx',
+        sha256: E1_BASELINE_TMX_SHA256
+      })
+      expect(manifest.tmxProvenance.baselineAnchor.commit).to.not.equal(manifest.specBinding.sourceCommit)
+      expect(manifest.tmxProvenance.currentAnchor).to.deep.include({
+        ownerTask: 'E8B',
+        path: 'public/juyiting/hall.tmx',
+        sha256: E8B_LIVE_TMX_SHA256
+      })
       expect(manifest.tmxProvenance.currentAnchor.sha256).to.equal(tmxSha256)
       expect(manifest.tmxProvenance.currentAnchor.sha256).to.not.equal(manifest.tmxProvenance.baselineAnchor.sha256)
       // No E8B self-reference
@@ -570,12 +590,12 @@ describe('E8B five-prop TMX/manifest/snapshot migration', function () {
         const path = join(dir, 'manifest.json')
         const drifted = JSON.parse(JSON.stringify(buildManifest()))
         drifted.props.find(prop => prop.tmxId === 92).tieBias = -3
-        drifted.tmxSha256 = sha256(Buffer.from('stale'))
+        drifted.tmxProvenance.currentAnchor.sha256 = sha256(Buffer.from('stale'))
         writeFileSync(path, formatJson(drifted))
         const fresh = buildManifest()
         expect(formatJson(drifted)).to.not.equal(formatJson(fresh))
         expect(drifted.props).to.not.deep.equal(fresh.props)
-        expect(drifted.tmxSha256).to.not.equal(fresh.tmxSha256)
+        expect(drifted.tmxProvenance.currentAnchor.sha256).to.not.equal(fresh.tmxProvenance.currentAnchor.sha256)
       } finally {
         rmSync(dir, { recursive: true, force: true })
       }

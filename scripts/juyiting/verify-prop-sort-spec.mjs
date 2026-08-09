@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { tsImport } from 'tsx/esm/api'
 import { alphaScan } from './lib/alpha-scan.mjs'
 import { scanWebpFrames } from './lib/webp-frame-scan.mjs'
+import { readGitBlobAtCommit } from './lib/baseline-provenance.mjs'
 import {
   BASE_COMMIT,
   ZERO_GENERATION_ID,
@@ -125,16 +126,7 @@ if (TMX_OVERRIDE) {
   tmxSourceLabel = `baseCommit ${spec.baseCommit} Git blob`
   try {
     const tmxBaseCommitPath = spec.tmxSource?.path || 'public/juyiting/hall.tmx'
-    const resolved = execFileSync('git', ['rev-parse', '--verify', `${spec.baseCommit}^{commit}`], {
-      cwd: REPO_ROOT, encoding: 'utf8', timeout: 5000,
-      env: { ...process.env, GIT_NO_REPLACE_OBJECTS: '1' }
-    }).trim()
-    if (resolved !== spec.baseCommit) fail(`baseCommit ${spec.baseCommit} did not resolve exactly to ${resolved}`)
-    tmxBytes = execFileSync('git', ['show', `${spec.baseCommit}:${tmxBaseCommitPath}`], {
-      cwd: REPO_ROOT, encoding: null, timeout: 5000,
-      maxBuffer: 64 * 1024 * 1024,
-      env: { ...process.env, GIT_NO_REPLACE_OBJECTS: '1' }
-    })
+    tmxBytes = readGitBlobAtCommit(spec.baseCommit, tmxBaseCommitPath)
     const parsed = parseHallTmx(tmxBytes.toString('utf8'))
     hall = resolveHallProps(parsed)
   } catch (error) { fail(`TMX structured parse (${tmxSourceLabel}): ${error.message}`) }

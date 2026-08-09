@@ -54,13 +54,16 @@ import { PERSONA_SPRITE_MANIFEST } from '../src/game/sprites/personaSpriteManife
 
 const TMX_PATH = 'public/juyiting/hall.tmx'
 const FIXTURE_DIR = 'tests/fixtures/juyiting/occlusion-v0'
-const tmx = readFileSync(TMX_PATH, 'utf8')
-const structure = parseTmxStructure(tmx)
-const tmxSha256 = () => createHash('sha256').update(tmx).digest('hex')
+const liveTmx = readFileSync(TMX_PATH, 'utf8')
+const structure = parseTmxStructure(liveTmx)
+const liveTmxSha256 = () => createHash('sha256').update(liveTmx).digest('hex')
+const historicalTmxBytes = readGitBlobAtCommit(E1_BASELINE_COMMIT, TMX_PATH)
+const historicalStructure = parseTmxStructure(historicalTmxBytes.toString('utf8'))
 
 const inventory = JSON.parse(readFileSync(`${FIXTURE_DIR}/inventory.json`, 'utf8'))
 const sourceHashes = JSON.parse(readFileSync(`${FIXTURE_DIR}/source-hashes.json`, 'utf8'))
 const assetReport = JSON.parse(readFileSync(`${FIXTURE_DIR}/asset-report.json`, 'utf8'))
+const propTmxManifest = JSON.parse(readFileSync('tests/fixtures/juyiting/occlusion-v1-props/prop-tmx-manifest.json', 'utf8'))
 
 const emptyMapStructure = () => ({ tilesets: [], layers: [] })
 const networkEntry = (path) => ({ path, sizeBytes: 1, sha256: '0'.repeat(64), category: 'test', role: 'test' })
@@ -86,8 +89,7 @@ const copyIsolatedBaseline = (prefix) => {
   const root = mkdtempSync(join(tmpdir(), prefix))
   const publicRoot = join(root, 'public')
   const fixtureDir = join(root, 'fixtures')
-  mkdirSync(publicRoot, { recursive: true })
-  cpSync('public/juyiting', join(publicRoot, 'juyiting'), { recursive: true })
+  materializeE1PublicTree(join(publicRoot, 'juyiting'), E1_BASELINE_COMMIT)
   cpSync(FIXTURE_DIR, fixtureDir, { recursive: true })
   return { root, publicRoot, fixtureDir }
 }
@@ -148,26 +150,34 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
     }
   })
 
-  it('audits the complete frozen public/juyiting blob tree, not only runtime references', () => {
-    const audit = assertBaselinePublicTree('public', E1_BASELINE_COMMIT)
-    expect(audit.fileCount).to.equal(27)
-    expect(audit.files).to.have.length(27)
-    expect(audit.files.map(entry => entry.path)).to.deep.equal(
-      assetReport.juyitingNetworkAssets.files.map(entry => entry.path),
-    )
-    expect(audit.files.every(entry => /^100(?:644|755)$/.test(entry.gitMode))).to.equal(true)
-    expect(audit.files.every(entry => /^[0-9a-f]{40}$/.test(entry.baselineBlob))).to.equal(true)
-    expect(assetReport.juyitingNetworkAssets.baselinePublicTreeAudit).to.deep.include({
-      baselineCommit: E1_BASELINE_COMMIT,
-      pathPrefix: 'public/juyiting/',
-      exactPathSet: true,
-      currentBytesMatchBaseline: true,
-      gitReplaceObjectsDisabled: true,
-      baselineObjectFormat: 'sha1',
-      fileCount: 27,
-    })
-    expect(assetReport.juyitingNetworkAssets.totalPublicTreeBytes)
-      .to.equal(assetReport.juyitingNetworkAssets.files.reduce((total, entry) => total + entry.sizeBytes, 0))
+  it('audits the complete frozen public/juyiting blob tree, not only runtime references', function () {
+    this.timeout(30000)
+    const root = mkdtempSync(join(tmpdir(), 'juyiting-e1-frozen-audit-'))
+    try {
+      const publicRoot = join(root, 'public')
+      materializeE1PublicTree(join(publicRoot, 'juyiting'), E1_BASELINE_COMMIT)
+      const audit = assertBaselinePublicTree(publicRoot, E1_BASELINE_COMMIT)
+      expect(audit.fileCount).to.equal(27)
+      expect(audit.files).to.have.length(27)
+      expect(audit.files.map(entry => entry.path)).to.deep.equal(
+        assetReport.juyitingNetworkAssets.files.map(entry => entry.path),
+      )
+      expect(audit.files.every(entry => /^100(?:644|755)$/.test(entry.gitMode))).to.equal(true)
+      expect(audit.files.every(entry => /^[0-9a-f]{40}$/.test(entry.baselineBlob))).to.equal(true)
+      expect(assetReport.juyitingNetworkAssets.baselinePublicTreeAudit).to.deep.include({
+        baselineCommit: E1_BASELINE_COMMIT,
+        pathPrefix: 'public/juyiting/',
+        exactPathSet: true,
+        currentBytesMatchBaseline: true,
+        gitReplaceObjectsDisabled: true,
+        baselineObjectFormat: 'sha1',
+        fileCount: 27,
+      })
+      expect(assetReport.juyitingNetworkAssets.totalPublicTreeBytes)
+        .to.equal(assetReport.juyitingNetworkAssets.files.reduce((total, entry) => total + entry.sizeBytes, 0))
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   it('ignores Git replace refs and reads the fixed tree blob object IDs in an isolated clone', function () {
@@ -352,9 +362,8 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
     try {
       const publicRoot = join(root, 'public')
       const fixtureDir = join(root, 'fixtures')
-      mkdirSync(publicRoot, { recursive: true })
+      materializeE1PublicTree(join(publicRoot, 'juyiting'), E1_BASELINE_COMMIT)
       mkdirSync(fixtureDir, { recursive: true })
-      cpSync('public/juyiting', join(publicRoot, 'juyiting'), { recursive: true })
       for (const fixtureName of ['source-hashes.json', 'asset-report.json']) {
         copyFileSync(`${FIXTURE_DIR}/${fixtureName}`, join(fixtureDir, fixtureName))
       }
@@ -366,6 +375,7 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
       const environment = {
         ...process.env,
         JIA_JUYITING_PUBLIC_ROOT: publicRoot,
+        JIA_JUYITING_TMX_PATH: join(publicRoot, 'juyiting/hall.tmx'),
         JIA_JUYITING_OCCLUSION_FIXTURE_DIR: fixtureDir,
       }
 
@@ -1157,8 +1167,16 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
     expect(createHash('sha256').update(svg).digest('hex')).to.not.equal(id)
   })
 
-  it('committed inventory fixture matches a fresh parse (tmx sha256 + counts)', () => {
-    expect(inventory.tmxSha256).to.equal(tmxSha256())
+  it('separates historical inventory audit from the live E8B current TMX anchor', () => {
+    const historicalSha256 = createHash('sha256').update(historicalTmxBytes).digest('hex')
+    expect(inventory.tmxSha256).to.equal(E1_BASELINE_TMX_SHA256)
+    expect(historicalSha256).to.equal(E1_BASELINE_TMX_SHA256)
+    expect(historicalStructure.groups.mask.length).to.equal(inventory.counts.masks)
+    expect(historicalStructure.groups.hotspots.filter(object => object.gid !== undefined).length).to.equal(inventory.counts.props)
+    expect(propTmxManifest.tmxProvenance.currentAnchor.sha256).to.equal(E8B_LIVE_TMX_SHA256)
+    expect(liveTmxSha256()).to.equal(E8B_LIVE_TMX_SHA256)
+    expect(liveTmxSha256()).to.equal(propTmxManifest.tmxProvenance.currentAnchor.sha256)
+    expect(liveTmxSha256()).to.not.equal(inventory.tmxSha256)
     expect(inventory.counts.masks).to.equal(37)
     expect(inventory.counts.props).to.equal(5)
     expect(inventory.counts.imageLayers).to.equal(3)
@@ -1366,6 +1384,7 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
       try {
         // Materialize E1 tree, then mutate a non-TMX file
         materializeE1PublicTree(join(root, 'public/juyiting'), E1_BASELINE_COMMIT)
+        copyFileSync(TMX_PATH, join(root, 'public/juyiting/hall.tmx'))
         const driftedPath = join(root, 'public/juyiting/images/modular/preview.html')
         appendFileSync(driftedPath, '\n<!-- injected drift -->')
         expect(() => assertCurrentPublicTreeVsE1(join(root, 'public'), E1_BASELINE_COMMIT))
@@ -1396,6 +1415,53 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
         writeFileSync(join(root, 'public/juyiting/extra-secret.json'), '{}')
         expect(() => assertCurrentPublicTreeVsE1(join(root, 'public'), E1_BASELINE_COMMIT))
           .to.throw('Juyiting public tree path mismatch')
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    })
+
+    it('rejects an unchanged E1 tree because E8B requires exactly one hall.tmx replacement', function () {
+      this.timeout(30000)
+      const root = mkdtempSync(join(tmpdir(), 'juyiting-e8b-no-diff-'))
+      try {
+        const publicRoot = join(root, 'public')
+        materializeE1PublicTree(join(publicRoot, 'juyiting'), E1_BASELINE_COMMIT)
+        expect(() => assertCurrentPublicTreeVsE1(
+          publicRoot,
+          E1_BASELINE_COMMIT,
+          E1_BASELINE_TMX_SHA256,
+        )).to.throw('must contain exactly one authorised difference')
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    })
+
+    it('rejects tampered hall.tmx bytes even when it is the only public-tree difference', function () {
+      this.timeout(30000)
+      const root = mkdtempSync(join(tmpdir(), 'juyiting-e8b-tmx-tamper-'))
+      try {
+        const publicRoot = join(root, 'public')
+        const tmxPath = join(publicRoot, 'juyiting/hall.tmx')
+        materializeE1PublicTree(join(publicRoot, 'juyiting'), E1_BASELINE_COMMIT)
+        writeFileSync(tmxPath, Buffer.concat([readFileSync(TMX_PATH), Buffer.from('tampered')]))
+        expect(() => assertCurrentPublicTreeVsE1(publicRoot, E1_BASELINE_COMMIT))
+          .to.throw('E8B hall.tmx current anchor mismatch')
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    })
+
+    it('rejects truncated hall.tmx even when it is the only public-tree difference', function () {
+      this.timeout(30000)
+      const root = mkdtempSync(join(tmpdir(), 'juyiting-e8b-tmx-truncated-'))
+      try {
+        const publicRoot = join(root, 'public')
+        const tmxPath = join(publicRoot, 'juyiting/hall.tmx')
+        materializeE1PublicTree(join(publicRoot, 'juyiting'), E1_BASELINE_COMMIT)
+        const liveBytes = readFileSync(TMX_PATH)
+        writeFileSync(tmxPath, liveBytes.subarray(0, liveBytes.length - 64))
+        expect(() => assertCurrentPublicTreeVsE1(publicRoot, E1_BASELINE_COMMIT))
+          .to.throw('E8B hall.tmx current anchor mismatch')
       } finally {
         rmSync(root, { recursive: true, force: true })
       }

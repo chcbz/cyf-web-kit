@@ -1,9 +1,6 @@
 /** E8A directed tests for the GPT V1 visual-gate prop sort contract. */
 import { expect } from 'chai'
-import {
-  readFileSync, writeFileSync, mkdtempSync, rmSync,
-  cpSync, existsSync, mkdirSync, symlinkSync,
-} from 'node:fs'
+import { readFileSync, writeFileSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { join } from 'node:path'
@@ -19,14 +16,19 @@ import {
   horizontalGap,
   stableJson
 } from '../scripts/juyiting/lib/prop-sort-evidence.mjs'
+import {
+  E1_BASELINE_TMX_SHA256,
+  E8B_LIVE_TMX_SHA256,
+  readGitBlobAtCommit,
+} from '../scripts/juyiting/lib/baseline-provenance.mjs'
 
 const REPO_ROOT = process.cwd()
 const FIXTURE_DIR = join(REPO_ROOT, 'tests/fixtures/juyiting/occlusion-v1-props')
 const SPEC_PATH = join(FIXTURE_DIR, 'prop-sort-spec.json')
 const SVG_PATH = join(FIXTURE_DIR, 'contact-sheet.svg')
 const TMX_PATH = join(REPO_ROOT, 'public/juyiting/hall.tmx')
-const GENERATOR = join(REPO_ROOT, 'scripts/juyiting/generate-prop-sort-spec.mjs')
 const VERIFIER = join(REPO_ROOT, 'scripts/juyiting/verify-prop-sort-spec.mjs')
+const ACCEPTED_COMMIT = 'da3d9600bd322e3a85d93ebfeaf07cd04a76f33d'
 const spec = JSON.parse(readFileSync(SPEC_PATH, 'utf8'))
 
 const EXPECTED_ORDER = [
@@ -47,8 +49,63 @@ function tempWorkspace(prefix = 'e8a-prop-sort-') { return mkdtempSync(join(tmpd
 function runVerifier({ specPath = SPEC_PATH, svgPath = SVG_PATH, tmxPath = null } = {}) {
   const args = [VERIFIER, '--spec', specPath, '--svg', svgPath]
   if (tmxPath) args.push('--tmx', tmxPath)
-  const result = spawnSync(process.execPath, args, { cwd: REPO_ROOT, encoding: 'utf8', timeout: 30000 })
-  return { status: result.status, output: `${result.stdout || ''}${result.stderr || ''}` }
+  const result = spawnSync(process.execPath, args, {
+    cwd: REPO_ROOT,
+    encoding: 'utf8',
+    timeout: 120000,
+    maxBuffer: 4 * 1024 * 1024,
+  })
+  return {
+    status: result.status,
+    signal: result.signal,
+    error: result.error,
+    output: `${result.stdout || ''}${result.stderr || ''}`,
+  }
+}
+function withAcceptedGeneratorOutputs(assertOutputs) {
+  const root = tempWorkspace('e8a-repro-accepted-')
+  try {
+    const cloneDir = join(root, 'clone')
+    const gitEnvironment = {
+      ...process.env,
+      GIT_CONFIG_GLOBAL: '/dev/null',
+      GIT_CONFIG_NOSYSTEM: '1',
+      GIT_NO_REPLACE_OBJECTS: '1',
+    }
+    execFileSync('git', ['clone', '--shared', '--quiet', REPO_ROOT, cloneDir], {
+      timeout: 30000,
+      env: gitEnvironment,
+    })
+    execFileSync('git', ['-C', cloneDir, 'checkout', '--detach', ACCEPTED_COMMIT], {
+      timeout: 10000,
+      env: gitEnvironment,
+    })
+    expect(execFileSync('git', ['-C', cloneDir, 'rev-parse', 'HEAD'], {
+      encoding: 'utf8', timeout: 5000, env: gitEnvironment,
+    }).trim()).to.equal(ACCEPTED_COMMIT)
+    symlinkSync(join(REPO_ROOT, 'node_modules'), join(cloneDir, 'node_modules'))
+
+    const outputs = [1, 2].map(index => ({
+      spec: join(root, `spec-${index}.json`),
+      svg: join(root, `sheet-${index}.svg`),
+    }))
+    for (const output of outputs) {
+      const result = spawnSync(process.execPath, [
+        join(cloneDir, 'scripts/juyiting/generate-prop-sort-spec.mjs'),
+        '--spec', output.spec,
+        '--svg', output.svg,
+      ], {
+        cwd: cloneDir,
+        encoding: 'utf8',
+        timeout: 60000,
+        env: gitEnvironment,
+      })
+      expect(result.status, `${result.stdout}${result.stderr}`).to.equal(0)
+    }
+    return assertOutputs(outputs)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 }
 function runMutatedSpec(mutate) {
   const dir = tempWorkspace()
@@ -71,7 +128,9 @@ function mutateTmx(replacer) {
   return { dir, path }
 }
 function expectRejected(result, marker) {
-  expect(result.status, result.output).to.not.equal(0)
+  expect(result.error, result.output).to.equal(undefined)
+  expect(result.signal, result.output).to.equal(null)
+  expect(result.status, result.output).to.be.a('number').and.not.equal(0)
   expect(result.output).to.include(marker)
 }
 
@@ -292,19 +351,14 @@ describe('E8A prop sort spec — GPT V1 visual gate', function () {
       expect(spec.generatedBy.command).to.equal('npm run generate:juyiting-prop-sort-spec')
     })
 
-    it('runs the generator twice with byte-identical outputs and matches committed outputs', () => {
-      const dir = tempWorkspace('e8a-repro-')
-      try {
-        const outputs = [1, 2].map(index => ({ spec: join(dir, `spec-${index}.json`), svg: join(dir, `sheet-${index}.svg`) }))
-        for (const output of outputs) {
-          const result = spawnSync(process.execPath, [GENERATOR, '--spec', output.spec, '--svg', output.svg], { cwd: REPO_ROOT, encoding: 'utf8', timeout: 30000 })
-          expect(result.status, `${result.stdout}${result.stderr}`).to.equal(0)
-        }
+    it('runs the accepted E8A generator twice with byte-identical outputs matching committed evidence', function () {
+      this.timeout(120000)
+      withAcceptedGeneratorOutputs(outputs => {
         expect(readFileSync(outputs[0].spec).equals(readFileSync(outputs[1].spec))).to.be.true
         expect(readFileSync(outputs[0].svg).equals(readFileSync(outputs[1].svg))).to.be.true
         expect(readFileSync(outputs[0].spec).equals(readFileSync(SPEC_PATH))).to.be.true
         expect(readFileSync(outputs[0].svg).equals(readFileSync(SVG_PATH))).to.be.true
-      } finally { rmSync(dir, { recursive: true, force: true }) }
+      })
     })
 
     it('passes the standalone verifier on committed outputs', () => {
@@ -370,12 +424,20 @@ describe('E8A prop sort spec — GPT V1 visual gate', function () {
       })
     }
 
-    it('rejects contact-sheet/spec generationId mismatch via injectable SVG', () => {
+    it('rejects contact-sheet/spec generationId mismatch via an isolated root-attribute mutation', () => {
       const dir = tempWorkspace('e8a-svg-id-')
       try {
         const path = join(dir, 'sheet.svg')
-        writeFileSync(path, readFileSync(SVG_PATH, 'utf8').replace(spec.generationId, 'f'.repeat(64)))
-        expectRejected(runVerifier({ svgPath: path }), 'contact sheet/spec generationId mismatch')
+        const original = readFileSync(SVG_PATH, 'utf8')
+        const expectedAttribute = `data-generation-id="${spec.generationId}"`
+        const mutatedId = spec.generationId === 'f'.repeat(64) ? 'e'.repeat(64) : 'f'.repeat(64)
+        expect(original.split(expectedAttribute)).to.have.length(2)
+        const mutated = original.replace(expectedAttribute, `data-generation-id="${mutatedId}"`)
+        expect(mutated).to.not.equal(original)
+        writeFileSync(path, mutated)
+        const result = runVerifier({ svgPath: path })
+        expectRejected(result, 'contact sheet/spec generationId mismatch')
+        expect(readFileSync(path, 'utf8')).to.include(`data-generation-id="${mutatedId}"`)
       } finally { rmSync(dir, { recursive: true, force: true }) }
     })
 
@@ -383,17 +445,20 @@ describe('E8A prop sort spec — GPT V1 visual gate', function () {
       const dir = tempWorkspace('e8a-svg-cell-')
       try {
         const path = join(dir, 'sheet.svg')
-        writeFileSync(path, readFileSync(SVG_PATH, 'utf8').replace('class="evidence-cell"', 'class="evidence-cell-mutated"'))
+        const original = readFileSync(SVG_PATH, 'utf8')
+        const evidenceCell = '<g class="evidence-cell" data-evidence-cell-id="prop-main-seat-north-lujunyi"'
+        expect(original.split(evidenceCell)).to.have.length(2)
+        const mutated = original.replace(evidenceCell, '<g class="evidence-cell-mutated" data-evidence-cell-id="prop-main-seat-north-lujunyi"')
+        expect(mutated).to.not.equal(original)
+        writeFileSync(path, mutated)
+        expect(readFileSync(path, 'utf8')).to.include('class="evidence-cell-mutated" data-evidence-cell-id="prop-main-seat-north-lujunyi"')
         expectRejected(runVerifier({ svgPath: path }), 'contact sheet evidence cell groups 33')
       } finally { rmSync(dir, { recursive: true, force: true }) }
     })
   })
 
   describe('E8B provenance overlay', () => {
-    const ACCEPTED_COMMIT = 'da3d9600bd322e3a85d93ebfeaf07cd04a76f33d'
     const LIVE_TMX_PATH = join(REPO_ROOT, 'public/juyiting/hall.tmx')
-    const E1_TMX_SHA256 = 'e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401'
-    const LIVE_TMX_SHA256 = '291a38cc66ebd60c8577500a5afc18ce5398570fe4c35ca66d9eebe818826a97'
 
     it('E8A verifier (default, no --tmx) PASSES by reading historical TMX from baseCommit Git blob', () => {
       const result = runVerifier()
@@ -408,8 +473,8 @@ describe('E8A prop sort spec — GPT V1 visual gate', function () {
       expect(result.status, result.output).to.not.equal(0)
       expect(result.output).to.include('explicit --tmx')
       expect(result.output).to.include('TMX sha256 mismatch')
-      expect(result.output).to.include(LIVE_TMX_SHA256)
-      expect(result.output).to.include(E1_TMX_SHA256)
+      expect(result.output).to.include(E8B_LIVE_TMX_SHA256)
+      expect(result.output).to.include(E1_BASELINE_TMX_SHA256)
       expect(result.output).to.include('VERIFICATION FAILURE')
     })
 
@@ -418,14 +483,11 @@ describe('E8A prop sort spec — GPT V1 visual gate', function () {
       const dir = tempWorkspace('e8a-historical-tmx-')
       try {
         const tmxPath = join(dir, 'hall.tmx')
-        const tmxBytes = execFileSync('git', ['show', spec.baseCommit + ':public/juyiting/hall.tmx'], {
-          cwd: REPO_ROOT, encoding: null, timeout: 5000,
-          env: { ...process.env, GIT_NO_REPLACE_OBJECTS: '1' }
-        })
+        const tmxBytes = readGitBlobAtCommit(spec.baseCommit, 'public/juyiting/hall.tmx')
         writeFileSync(tmxPath, tmxBytes)
         const sha256 = createHash('sha256').update(tmxBytes).digest('hex')
         expect(sha256).to.equal(spec.tmxSource.sha256)
-        expect(sha256).to.equal(E1_TMX_SHA256)
+        expect(sha256).to.equal(E1_BASELINE_TMX_SHA256)
 
         const result = runVerifier({ tmxPath })
         expect(result.status, result.output).to.equal(0)
@@ -436,56 +498,6 @@ describe('E8A prop sort spec — GPT V1 visual gate', function () {
       }
     })
 
-    it('E8A generator is reproducible from accepted commit da3d960 in detached checkout', function () {
-      this.timeout(120000)
-      const dir = tempWorkspace('e8a-repro-accepted-')
-      try {
-        const cloneDir = join(dir, 'clone')
-        mkdirSync(cloneDir, { recursive: true })
-        execFileSync('git', ['clone', '--shared', '--quiet', REPO_ROOT, cloneDir], {
-          timeout: 30000,
-          env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }
-        })
-        execFileSync('git', ['-C', cloneDir, 'checkout', '--detach', ACCEPTED_COMMIT], {
-          timeout: 10000,
-          env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }
-        })
-        const resolved = execFileSync('git', ['-C', cloneDir, 'rev-parse', 'HEAD'], {
-          encoding: 'utf8', timeout: 5000,
-          env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }
-        }).trim()
-        expect(resolved).to.equal(ACCEPTED_COMMIT)
-        // Symlink host node_modules so tsx and dependencies resolve in the clone
-        const hostNodeModules = join(REPO_ROOT, 'node_modules')
-        const cloneNodeModules = join(cloneDir, 'node_modules')
-        symlinkSync(hostNodeModules, cloneNodeModules)
-
-        const spec1 = join(dir, 'spec-1.json')
-        const svg1 = join(dir, 'sheet-1.svg')
-        const spec2 = join(dir, 'spec-2.json')
-        const svg2 = join(dir, 'sheet-2.svg')
-
-        // Run the generator from the clone cwd; the default TMX path resolves to
-        // the clone public/juyiting/hall.tmx (E1 TMX at accepted commit).
-        for (const [specOut, svgOut] of [[spec1, svg1], [spec2, svg2]]) {
-          const result = spawnSync(process.execPath, [
-            join(cloneDir, 'scripts/juyiting/generate-prop-sort-spec.mjs'),
-            '--spec', specOut, '--svg', svgOut
-          ], {
-            cwd: cloneDir, encoding: 'utf8', timeout: 60000,
-            env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }
-          })
-          expect(result.status, `${result.stdout}${result.stderr}`).to.equal(0)
-        }
-
-        expect(readFileSync(spec1).equals(readFileSync(spec2))).to.be.true
-        expect(readFileSync(svg1).equals(readFileSync(svg2))).to.be.true
-        expect(readFileSync(spec1).equals(readFileSync(SPEC_PATH))).to.be.true
-        expect(readFileSync(svg1).equals(readFileSync(SVG_PATH))).to.be.true
-      } finally {
-        rmSync(dir, { recursive: true, force: true })
-      }
-    })
   })
 
 })

@@ -321,17 +321,19 @@ function gitEnvironment() {
   return { ...process.env, GIT_NO_REPLACE_OBJECTS: '1' }
 }
 
-
 /**
  * Read a blob at a specific commit via verified Git (replacement-disabled).
  * Returns the raw bytes.
  */
 export function readGitBlobAtCommit(commit, path) {
-  const resolved = gitExec(['rev-parse', '--verify', `${commit}^{commit}`], { encoding: 'utf8' }).trim()
-  const objectId = gitExec(['rev-parse', '--verify', `${resolved}:${path}`], { encoding: 'utf8' }).trim()
+  const quietTextOptions = { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
+  const resolved = gitExec(['rev-parse', '--verify', `${commit}^{commit}`], quietTextOptions).trim()
+  if (resolved !== commit) throw new Error(`Commit did not resolve exactly: ${commit}`)
+  const objectId = gitExec(['rev-parse', '--verify', `${resolved}:${path}`], quietTextOptions).trim()
   const output = gitExec(['cat-file', '--batch'], {
     encoding: null,
     input: `${objectId}\n`,
+    stdio: ['pipe', 'pipe', 'pipe'],
   })
   const headerEnd = output.indexOf(0x0a)
   if (headerEnd < 0) throw new Error(`Truncated git cat-file header for blob ${path} at ${commit}`)
@@ -345,14 +347,24 @@ export function readGitBlobAtCommit(commit, path) {
   if (!Number.isSafeInteger(size) || size < 0) throw new Error(`Invalid blob size for ${path} at ${commit}: ${sizeText}`)
   const bytesStart = headerEnd + 1
   const bytesEnd = bytesStart + size
-  if (bytesEnd >= output.length || output[bytesEnd] !== 0x0a) {
-    throw new Error(`Truncated git cat-file body for ${path} at ${commit}`)
+  if (bytesEnd >= output.length || output[bytesEnd] !== 0x0a || bytesEnd + 1 !== output.length) {
+    throw new Error(`Truncated or trailing git cat-file body for ${path} at ${commit}`)
   }
-  return output.subarray(bytesStart, bytesEnd)
+  const bytes = output.subarray(bytesStart, bytesEnd)
+  const objectFormat = gitExec(['rev-parse', '--show-object-format'], quietTextOptions).trim()
+  if (!['sha1', 'sha256'].includes(objectFormat)) {
+    throw new Error(`Unsupported Git object format for blob provenance: ${objectFormat}`)
+  }
+  const computedObjectId = hashGitBlob(bytes, objectFormat)
+  if (computedObjectId !== objectId) {
+    throw new Error(`Git blob object hash mismatch for ${path} at ${commit}: expected ${objectId}, computed ${computedObjectId}`)
+  }
+  return bytes
 }
+
 /**
  * Materialize the complete public/juyiting tree from the E1 baseline commit
- * into a target directory using git archive (replacement-disabled).
+ * into a target directory from replacement-disabled, object-verified blobs.
  * Returns the target directory path for the public tree root.
  * Each blob is verified through the replacement-disabled object store.
  */
@@ -370,10 +382,10 @@ export function materializeE1PublicTree(targetDir, baselineCommit = E1_BASELINE_
     }
     const relPath = entry.path.slice(PUBLIC_TREE_PREFIX.length)
     const targetPath = join(targetDir, relPath)
-    const parentDir = join(targetDir, relPath.split("/").slice(0, -1).join("/"))
+    const parentDir = join(targetDir, relPath.split('/').slice(0, -1).join('/'))
     mkdirSync(parentDir, { recursive: true })
     writeFileSync(targetPath, blobBytes)
-    if (entry.gitMode === "100755") {
+    if (entry.gitMode === '100755') {
       chmodSync(targetPath, 0o755)
     }
     written.push({ path: entry.path, targetPath, sha256: entry.sha256 })
@@ -386,22 +398,37 @@ export function materializeE1PublicTree(targetDir, baselineCommit = E1_BASELINE_
  * with the sole allowed difference being an exact content replacement of
  * public/juyiting/hall.tmx (E8B migration). Any other difference must fail closed.
  */
-export function assertCurrentPublicTreeVsE1(publicRoot, baselineCommit = E1_BASELINE_COMMIT) {
+export function assertCurrentPublicTreeVsE1(
+  publicRoot,
+  baselineCommit = E1_BASELINE_COMMIT,
+  expectedCurrentTmxSha256 = E8B_LIVE_TMX_SHA256,
+) {
   assertBaselineCommit(baselineCommit)
+  if (!/^[0-9a-f]{64}$/.test(expectedCurrentTmxSha256)) {
+    throw new Error(`Expected current hall.tmx SHA-256 must be 64 lowercase hex characters; got ${JSON.stringify(expectedCurrentTmxSha256)}`)
+  }
   const baselineSnapshot = readVerifiedBaselineSnapshot(baselineCommit)
   const baselineByPath = new Map(baselineSnapshot.files.map(entry => [entry.path, entry]))
   const expectedDirectories = baselineDirectories(baselineSnapshot.files.map(entry => entry.path))
   const currentSnapshot = readCurrentPublicTree(publicRoot, expectedDirectories)
   const currentByPath = new Map(currentSnapshot.files.map(entry => [entry.path, entry]))
 
-  // Path set must match exactly (no additions, no deletions)
   const missing = [...baselineByPath.keys()].filter(path => !currentByPath.has(path)).sort()
   const extra = [...currentByPath.keys()].filter(path => !baselineByPath.has(path)).sort()
   if (missing.length > 0 || extra.length > 0) {
-    throw new Error(`Juyiting public tree path mismatch against ${baselineCommit}; missing=[${missing.join(', ')} ] extra=[${extra.join(', ')} ]`)
+    throw new Error(`Juyiting public tree path mismatch against ${baselineCommit}; missing=[${missing.join(', ')}] extra=[${extra.join(', ')}]`)
   }
 
   const tmxPath = 'public/juyiting/hall.tmx'
+  const baselineTmx = baselineByPath.get(tmxPath)
+  const currentTmx = currentByPath.get(tmxPath)
+  if (!baselineTmx || baselineTmx.sha256 !== E1_BASELINE_TMX_SHA256) {
+    throw new Error(`E1 hall.tmx anchor mismatch: expected ${E1_BASELINE_TMX_SHA256}, got ${baselineTmx?.sha256 ?? '<missing>'}`)
+  }
+  if (!currentTmx || currentTmx.sha256 !== expectedCurrentTmxSha256) {
+    throw new Error(`E8B hall.tmx current anchor mismatch: expected ${expectedCurrentTmxSha256}, got ${currentTmx?.sha256 ?? '<missing>'}`)
+  }
+
   const diffs = []
   for (const baseline of baselineSnapshot.files) {
     const current = currentByPath.get(baseline.path)
@@ -409,20 +436,22 @@ export function assertCurrentPublicTreeVsE1(publicRoot, baselineCommit = E1_BASE
       throw new Error(`Juyiting public tree mode mismatch for ${baseline.path}: baseline ${baseline.gitMode}, current ${current.gitMode}`)
     }
     if (baseline.sha256 !== current.sha256) {
-      if (baseline.path === tmxPath) {
-        diffs.push({ path: baseline.path, baselineSha256: baseline.sha256, currentSha256: current.sha256 })
-      } else {
+      if (baseline.path !== tmxPath) {
         throw new Error(`Unauthorised public tree drift for ${baseline.path}: baseline ${baseline.sha256}, current ${current.sha256}. Only ${tmxPath} exact replacement is permitted by E8B migration.`)
       }
+      diffs.push({ path: baseline.path, baselineSha256: baseline.sha256, currentSha256: current.sha256 })
     }
+  }
+  if (diffs.length !== 1 || diffs[0].path !== tmxPath) {
+    throw new Error(`E8B public tree must contain exactly one authorised difference (${tmxPath}); got ${JSON.stringify(diffs)}`)
   }
 
   return {
     baselineCommit,
     allowedDiffs: diffs,
-    hallTmxExactReplacementOnly: diffs.length <= 1 && diffs.every(d => d.path === tmxPath),
-    currentTmxSha256: currentByPath.get(tmxPath)?.sha256 ?? null,
-    baselineTmxSha256: baselineByPath.get(tmxPath)?.sha256 ?? null,
+    hallTmxExactReplacementOnly: true,
+    currentTmxSha256: currentTmx.sha256,
+    baselineTmxSha256: baselineTmx.sha256,
   }
 }
 
