@@ -1,0 +1,520 @@
+{
+  "$schema": "jyt.occlusion.prop-sort-spec.v1",
+  "specVersion": 1,
+  "taskId": "E8A",
+  "baseCommit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+  "generatedAt": "2026-08-09T12:00:00.000Z",
+  "generatedBy": "scripts/juyiting/verify-prop-sort-spec.mjs",
+  "sceneId": "juyiting-main",
+  "propCount": 5,
+  "props": [
+    {
+      "semanticName": "main-seat",
+      "tmxId": 90,
+      "tmxName": "main-seat-rect",
+      "stableId": "jyt.prop.center-north.main-seat.v1",
+      "sceneId": "juyiting-main",
+      "chunkId": "center",
+      "floorId": "floor-1",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "tieBias": 0,
+      "asset": {
+        "path": "public/juyiting/images/props/liangshan-hall-prop-main-seat-cropped.png",
+        "sha256": "7d0c9b7dc2ca274201526d0fc6de146f7c9ab44a9028e2b0a1c0619b661ff794",
+        "width": 109,
+        "height": 93
+      },
+      "tmxRect": {
+        "x": 818,
+        "y": 175,
+        "width": 109,
+        "height": 93,
+        "minX": 818,
+        "minY": 175,
+        "maxX": 927,
+        "maxY": 268
+      },
+      "sortAnchor": {
+        "x": 872,
+        "y": 268
+      },
+      "fixedPointY": 68608,
+      "sortAnchorRationale": "ground-contact: rect bottom (y=268). Evidence: bottom image row 92 has 1 opaque pixel at img-x=3 (anti-aliased leg tip). Row 82 (10px up) has 2 opaque pixels at img-x=[17,94] spanning 78px (seat legs). No opaque content below rect bottom. sortAnchor.x=872 is rect horizontal center.",
+      "probes": {
+        "north": {
+          "agentFootPoint": {
+            "x": 872,
+            "y": 160
+          },
+          "expectedRelation": "agent<prop",
+          "rationale": "Agent north (above) seat: agent y=160 < prop sortAnchor.y=268. In Y-sort, lower Y = further back."
+        },
+        "south": {
+          "agentFootPoint": {
+            "x": 872,
+            "y": 290
+          },
+          "expectedRelation": "prop<agent",
+          "rationale": "Agent south (below) seat: prop sortAnchor.y=268 < agent y=290. Prop behind agent."
+        },
+        "west": {
+          "agentFootPoint": {
+            "x": 790,
+            "y": 268
+          },
+          "expectedRelation": "non-overlap",
+          "pixelOverlap": false,
+          "rationale": "Agent west of seat rect [818,927]. Same Y, no horizontal overlap."
+        },
+        "east": {
+          "agentFootPoint": {
+            "x": 955,
+            "y": 268
+          },
+          "expectedRelation": "non-overlap",
+          "pixelOverlap": false,
+          "rationale": "Agent east of seat rect [818,927]. Same Y, no horizontal overlap."
+        }
+      }
+    },
+    {
+      "semanticName": "agent-roster",
+      "tmxId": 91,
+      "tmxName": "agent-roster-rect",
+      "stableId": "jyt.prop.southwest.agent-roster.v1",
+      "sceneId": "juyiting-main",
+      "chunkId": "west-lower",
+      "floorId": "floor-1",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "tieBias": 0,
+      "asset": {
+        "path": "public/juyiting/images/props/liangshan-hall-prop-agent-roster-cropped.png",
+        "sha256": "829d710a41b1982925c8ce3cb2e23f99fd9ea0f78dd9bd65be6dce406a43e8cc",
+        "width": 117,
+        "height": 136
+      },
+      "tmxRect": {
+        "x": 120,
+        "y": 601,
+        "width": 117,
+        "height": 136,
+        "minX": 120,
+        "minY": 601,
+        "maxX": 237,
+        "maxY": 737
+      },
+      "sortAnchor": {
+        "x": 178,
+        "y": 737
+      },
+      "fixedPointY": 188672,
+      "sortAnchorRationale": "ground-contact: rect bottom (y=737). Evidence: bottom row 135 fully transparent. Row 134 has 1px at img-x=17 (stand foot). Row 123 has 2px at x=[4,64] spanning 61px (stand base). sortAnchor.x=178 is rect center.",
+      "probes": {
+        "north": {
+          "agentFootPoint": {
+            "x": 178,
+            "y": 580
+          },
+          "expectedRelation": "agent<prop",
+          "rationale": "Agent north of roster board: agent y=580 < prop y=737."
+        },
+        "south": {
+          "agentFootPoint": {
+            "x": 178,
+            "y": 760
+          },
+          "expectedRelation": "prop<agent",
+          "rationale": "Agent south: prop y=737 < agent y=760."
+        },
+        "west": {
+          "agentFootPoint": {
+            "x": 100,
+            "y": 737
+          },
+          "expectedRelation": "non-overlap",
+          "pixelOverlap": false,
+          "rationale": "West of rect [120,237]."
+        },
+        "east": {
+          "agentFootPoint": {
+            "x": 260,
+            "y": 737
+          },
+          "expectedRelation": "non-overlap",
+          "pixelOverlap": false,
+          "rationale": "East of rect [120,237]."
+        }
+      }
+    },
+    {
+      "semanticName": "bounty-board",
+      "tmxId": 92,
+      "tmxName": "bounty-board-rect",
+      "stableId": "jyt.prop.northeast.bounty-board.v1",
+      "sceneId": "juyiting-main",
+      "chunkId": "east-upper",
+      "floorId": "floor-1",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "tieBias": 0,
+      "asset": {
+        "path": "public/juyiting/images/props/liangshan-hall-prop-bounty-board-cropped.png",
+        "sha256": "2e4c3e749119392b01a7301aaa8f40986a09e5cc731ab61105ed600a755b6252",
+        "width": 172,
+        "height": 124
+      },
+      "tmxRect": {
+        "x": 1360,
+        "y": 255,
+        "width": 172,
+        "height": 124,
+        "minX": 1360,
+        "minY": 255,
+        "maxX": 1532,
+        "maxY": 379
+      },
+      "sortAnchor": {
+        "x": 1446,
+        "y": 379
+      },
+      "fixedPointY": 97024,
+      "sortAnchorRationale": "ground-contact: rect bottom (y=379). V0 target: table≈379 < agent≈420 < railing≈458. Evidence: row 123 has 1px at x=47 (left leg tip), row 101 has 2px at x=[96,142] (both legs, 47px span). No opaque below rect bottom. sortAnchor.x=1446 is rect center. Ensures table<agent in world sort.",
+      "probes": {
+        "north": {
+          "agentFootPoint": {
+            "x": 1446,
+            "y": 240
+          },
+          "expectedRelation": "agent<prop",
+          "rationale": "Agent north: y=240 < table y=379. Agent behind table."
+        },
+        "south": {
+          "agentFootPoint": {
+            "x": 1446,
+            "y": 420
+          },
+          "expectedRelation": "prop<agent",
+          "rationale": "Agent south at y=420: table y=379 < agent y=420. Table behind agent. V0 canonical target."
+        },
+        "west": {
+          "agentFootPoint": {
+            "x": 1320,
+            "y": 379
+          },
+          "expectedRelation": "non-overlap",
+          "pixelOverlap": false,
+          "rationale": "West of rect [1360,1532]."
+        },
+        "east": {
+          "agentFootPoint": {
+            "x": 1560,
+            "y": 379
+          },
+          "expectedRelation": "non-overlap",
+          "pixelOverlap": false,
+          "rationale": "East of rect [1360,1532]."
+        }
+      },
+      "bountyBoardMatrix": {
+        "description": "8-cell N/S/W/E × 2 roles + 6-cell behind/boundary/front × 2 roles. Same foot-point, direction (south), anim frame (idle-0) for both roles.",
+        "roles": [
+          "lujunyi",
+          "husanniang"
+        ],
+        "roleInvarianceRequirement": "Both roles must produce identical sort result at identical world coordinates.",
+        "cleanMode": {
+          "description": "No UI overlay, no labels, no bubbles.",
+          "requiredFields": [
+            "commit",
+            "tmxSha256",
+            "cameraZoom",
+            "cameraDpr",
+            "sortKey",
+            "agentFootWorld"
+          ]
+        },
+        "uiOnMode": {
+          "description": "Labels and bubbles visible.",
+          "requiredFields": [
+            "commit",
+            "tmxSha256",
+            "cameraZoom",
+            "cameraDpr",
+            "sortKey",
+            "agentFootWorld"
+          ]
+        },
+        "matrixCells": {
+          "north": {
+            "agentFoot": {
+              "x": 1446,
+              "y": 240
+            },
+            "lujunyiExpected": "agent<prop",
+            "husanniangExpected": "agent<prop",
+            "rationale": "Both north of table (y=240 < table y=379). Both behind table."
+          },
+          "south": {
+            "agentFoot": {
+              "x": 1446,
+              "y": 420
+            },
+            "lujunyiExpected": "prop<agent",
+            "husanniangExpected": "prop<agent",
+            "rationale": "Both south of table (y=379 < y=420). Both in front. V0 canonical."
+          },
+          "west": {
+            "agentFoot": {
+              "x": 1320,
+              "y": 379
+            },
+            "lujunyiExpected": "non-overlap",
+            "husanniangExpected": "non-overlap",
+            "rationale": "West of rect. No horizontal overlap."
+          },
+          "east": {
+            "agentFoot": {
+              "x": 1560,
+              "y": 379
+            },
+            "lujunyiExpected": "non-overlap",
+            "husanniangExpected": "non-overlap",
+            "rationale": "East of rect. No horizontal overlap."
+          }
+        },
+        "behindBoundaryFront": {
+          "description": "6-cell: 2 roles × 3 positions. Same X=1446, varying Y.",
+          "requiredFields": [
+            "commit",
+            "tmxSha256",
+            "cameraZoom",
+            "cameraDpr",
+            "sortKey",
+            "agentFootWorld",
+            "cleanMode"
+          ],
+          "behind": {
+            "agentFoot": {
+              "x": 1446,
+              "y": 370
+            },
+            "lujunyiExpected": "agent<prop",
+            "husanniangExpected": "agent<prop",
+            "rationale": "y=370 < table y=379. Agent behind table. Behind boundary."
+          },
+          "boundary": {
+            "agentFoot": {
+              "x": 1446,
+              "y": 379
+            },
+            "lujunyiExpected": "agent<prop",
+            "husanniangExpected": "agent<prop",
+            "rationale": "y=379 equals table anchor. Same fixedPointY. tieBias=0. stableId byte-order decides."
+          },
+          "front": {
+            "agentFoot": {
+              "x": 1446,
+              "y": 420
+            },
+            "lujunyiExpected": "prop<agent",
+            "husanniangExpected": "prop<agent",
+            "rationale": "y=420 > table y=379. Table behind agent. V0 canonical."
+          }
+        },
+        "mask58CrossReference": {
+          "description": "Mask 58 covers east wall x=[1197,1663] y=[342,458]. Must be in E10A mandatory review.",
+          "action": "E10A_REQUIRED_REVIEW",
+          "maskId": 58,
+          "maskAabb": {
+            "minX": 1197,
+            "minY": 342,
+            "maxX": 1663,
+            "maxY": 458
+          }
+        }
+      }
+    },
+    {
+      "semanticName": "library-shelf",
+      "tmxId": 93,
+      "tmxName": "library-shelf-rect",
+      "stableId": "jyt.prop.southeast.library-shelf.v1",
+      "sceneId": "juyiting-main",
+      "chunkId": "east-lower",
+      "floorId": "floor-1",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "tieBias": 0,
+      "asset": {
+        "path": "public/juyiting/images/props/liangshan-hall-prop-library-shelf-cropped.png",
+        "sha256": "2c26abcb9f0c4b8ba83f6bb9470345d4bc280f8af133ab361581ab178d675ff9",
+        "width": 123,
+        "height": 141
+      },
+      "tmxRect": {
+        "x": 1497,
+        "y": 578,
+        "width": 123,
+        "height": 141,
+        "minX": 1497,
+        "minY": 578,
+        "maxX": 1620,
+        "maxY": 719
+      },
+      "sortAnchor": {
+        "x": 1558,
+        "y": 719
+      },
+      "fixedPointY": 184064,
+      "sortAnchorRationale": "ground-contact: rect bottom (y=719). Evidence: row 140 has 1px at x=102 (foot). Row 138 has 2px at x=[43,93] spanning 51px (base). sortAnchor.x=1558 is rect center.",
+      "probes": {
+        "north": {
+          "agentFootPoint": {
+            "x": 1558,
+            "y": 560
+          },
+          "expectedRelation": "agent<prop",
+          "rationale": "Agent north: y=560 < shelf y=719."
+        },
+        "south": {
+          "agentFootPoint": {
+            "x": 1558,
+            "y": 745
+          },
+          "expectedRelation": "prop<agent",
+          "rationale": "Agent south: shelf y=719 < agent y=745."
+        },
+        "west": {
+          "agentFootPoint": {
+            "x": 1470,
+            "y": 719
+          },
+          "expectedRelation": "non-overlap",
+          "pixelOverlap": false,
+          "rationale": "West of rect [1497,1620]."
+        },
+        "east": {
+          "agentFootPoint": {
+            "x": 1645,
+            "y": 719
+          },
+          "expectedRelation": "non-overlap",
+          "pixelOverlap": false,
+          "rationale": "East of rect [1497,1620]."
+        }
+      }
+    },
+    {
+      "semanticName": "roster-book",
+      "tmxId": 94,
+      "tmxName": "roster-book-rect",
+      "stableId": "jyt.prop.center-north.roster-book.v1",
+      "sceneId": "juyiting-main",
+      "chunkId": "center",
+      "floorId": "floor-1",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "tieBias": 0,
+      "asset": {
+        "path": "public/juyiting/images/props/liangshan-hall-prop-roster-book-cropped.png",
+        "sha256": "6b7c21b45ad24aee9b6bbbbf72177f04e0f3710168d28aef8064dfa1786996c5",
+        "width": 179,
+        "height": 192
+      },
+      "tmxRect": {
+        "x": 217,
+        "y": 192,
+        "width": 179,
+        "height": 192,
+        "minX": 217,
+        "minY": 192,
+        "maxX": 396,
+        "maxY": 384
+      },
+      "sortAnchor": {
+        "x": 306,
+        "y": 384
+      },
+      "fixedPointY": 98304,
+      "sortAnchorRationale": "ground-contact: rect bottom (y=384). Evidence: row 191 has 1px at x=106 (book edge). Rows 191-140 show diagonal single-pixel pattern (spine). Row 42 has 2px at x=[20,175] spanning 156px (open pages). sortAnchor.x=306 is rect center.",
+      "probes": {
+        "north": {
+          "agentFootPoint": {
+            "x": 306,
+            "y": 175
+          },
+          "expectedRelation": "agent<prop",
+          "rationale": "Agent north: y=175 < book y=384."
+        },
+        "south": {
+          "agentFootPoint": {
+            "x": 306,
+            "y": 410
+          },
+          "expectedRelation": "prop<agent",
+          "rationale": "Agent south: book y=384 < agent y=410."
+        },
+        "west": {
+          "agentFootPoint": {
+            "x": 190,
+            "y": 384
+          },
+          "expectedRelation": "non-overlap",
+          "pixelOverlap": false,
+          "rationale": "West of rect [217,396]."
+        },
+        "east": {
+          "agentFootPoint": {
+            "x": 420,
+            "y": 384
+          },
+          "expectedRelation": "non-overlap",
+          "pixelOverlap": false,
+          "rationale": "East of rect [217,396]."
+        }
+      }
+    }
+  ],
+  "globalConstraints": {
+    "declarationOrderIndependence": {
+      "description": "Sort result identical regardless of prop declaration/insertion order.",
+      "testVector": "Sort 5 props; shuffle input 10 times; verify output byte-identical."
+    },
+    "fivePropSortOrder": {
+      "description": "Expected base sort order (WorldSortKey ascending, no constraints).",
+      "order": [
+        "jyt.prop.center-north.main-seat.v1",
+        "jyt.prop.northeast.bounty-board.v1",
+        "jyt.prop.center-north.roster-book.v1",
+        "jyt.prop.southeast.library-shelf.v1",
+        "jyt.prop.southwest.agent-roster.v1"
+      ],
+      "rationale": "fixedPointY: main-seat(68608) < bounty-board(97024) < roster-book(98304) < library-shelf(184064) < agent-roster(188672). Same renderBand(100), floor(0), elev(0), tieBias(0)."
+    },
+    "failClosedRules": {
+      "tmxIdChange": "TMX id 90-94 name/rect/gid mismatch → fail",
+      "nameChange": "tmxName mismatch → fail",
+      "rectChange": "rect x/y/w/h mismatch → fail",
+      "assetShaMismatch": "asset sha256 mismatch → fail",
+      "missingProp": "<5 props → fail",
+      "duplicateStableId": "duplicate stableId → fail",
+      "anchorOutOfBounds": "sortAnchor outside [0,1664]×[0,928] → fail",
+      "fixedPointInconsistency": "fixedPointY ≠ round(sortAnchor.y×256) → fail",
+      "nonFiveCount": "propCount ≠ 5 → fail",
+      "missingMatrixField": "bounty-board missing matrix cells → fail"
+    }
+  },
+  "tmxSource": {
+    "path": "public/juyiting/hall.tmx",
+    "sha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+    "coordinateWidth": 1664,
+    "coordinateHeight": 928
+  }
+}

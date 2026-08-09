@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     viewBox="0 0 1600 1200" width="1600" height="1200"
+     data-generation-id="c2037dce2bf2"
+     data-base-commit="7144d9260b3905ce0335d037d3b1a3589d3a88a1"
+     data-task="E8A"
+     data-spec="prop-sort-spec.v1">
+  <defs>
+    <style>
+      text { font-family: monospace; }
+      .title { font-size: 18px; font-weight: bold; fill: #1a1a2e; }
+      .subtitle { font-size: 14px; fill: #444; }
+      .label { font-size: 11px; fill: #333; }
+      .anchor-label { font-size: 10px; fill: #d32f2f; font-weight: bold; }
+      .probe-label { font-size: 9px; fill: #1976d2; }
+      .evidence-label { font-size: 9px; fill: #388e3c; }
+      .id-label { font-size: 10px; fill: #666; }
+      .legend-text { font-size: 11px; fill: #333; }
+    </style>
+    <marker id="arrow-red" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#d32f2f"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#1976d2"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1600" height="1200" fill="#fafafa"/>
+  <rect x="10" y="10" width="1580" height="40" rx="4" fill="#1a1a2e"/>
+  <text x="20" y="36" class="title" fill="#ffffff">E8A: Five Prop Sort Specification — Contact Sheet</text>
+
+  <!-- Header info -->
+  <text x="20" y="68" class="subtitle">Base: 7144d926 | Generation: c2037dce2bf2 | TMX SHA256: e2b79085 | Scene: juyiting-main</text>
+  <text x="20" y="86" class="subtitle">All props: renderBand=world, floorId=floor-1, elevation=0, sortMode=fixed, tieBias=0</text>
+
+  <!-- Legend -->
+  <rect x="20" y="100" width="380" height="70" rx="4" fill="#fff" stroke="#ccc"/>
+  <text x="30" y="118" class="legend-text" font-weight="bold">Legend</text>
+  <rect x="30" y="126" width="12" height="12" fill="none" stroke="#d32f2f" stroke-width="2"/>
+  <text x="48" y="136" class="legend-text">sortAnchor (ground contact)</text>
+  <rect x="200" y="126" width="12" height="12" fill="none" stroke="#1976d2" stroke-width="1.5" stroke-dasharray="3,2"/>
+  <text x="218" y="136" class="legend-text">N/S/W/E probe</text>
+  <rect x="30" y="146" width="12" height="12" fill="rgba(255,215,0,0.3)" stroke="#b8860b"/>
+  <text x="48" y="156" class="legend-text">prop rect (TMX)</text>
+  <rect x="200" y="146" width="12" height="12" fill="rgba(0,200,83,0.2)" stroke="#2e7d32"/>
+  <text x="218" y="156" class="legend-text">alpha/contact evidence zone</text>
+
+  <!-- Prop sections -->
+  <!-- Each prop gets its own panel: 5 panels in 2 rows -->
+  <!-- main-seat (tmxId=90) -->
+  <rect x="30" y="185" width="750" height="220" rx="4" fill="#fff" stroke="#ddd"/>
+  <text x="40" y="205" class="title" font-size="14">main-seat (TMX id=90)</text>
+  <text x="40" y="219" class="id-label">jyt.prop.center-north.main-seat.v1</text>
+  <rect x="40" y="225" width="120" height="102.38532110091744" fill="rgba(255,215,0,0.15)" stroke="#b8860b" stroke-width="1"/>
+  <image x="40" y="225" width="120" height="102.38532110091744"
+         xlink:href="../public/juyiting/images/props/liangshan-hall-prop-main-seat-cropped.png"
+         image-rendering="auto" opacity="0.9"/>
+  <circle cx="99.44954128440367" cy="327.38532110091745" r="4" fill="#d32f2f" stroke="#fff" stroke-width="1"/>
+  <line x1="91.44954128440367" y1="319.38532110091745" x2="107.44954128440367" y2="335.38532110091745" stroke="#d32f2f" stroke-width="1.5"/>
+  <line x1="107.44954128440367" y1="319.38532110091745" x2="91.44954128440367" y2="335.38532110091745" stroke="#d32f2f" stroke-width="1.5"/>
+  <text x="105.44954128440367" y="321.38532110091745" class="anchor-label">anchor(872,268) fpY=68608</text>
+  <rect x="40" y="301.7889908256881" width="120" height="25.59633027522936" fill="rgba(0,200,83,0.15)" stroke="#2e7d32" stroke-width="0.5" stroke-dasharray="2,2"/>
+  <text x="42" y="298.7889908256881" class="evidence-label">α-evidence zone</text>
+  <rect x="180" y="235" width="220" height="120" rx="3" fill="#f5f5f5" stroke="#ddd"/>
+  <text x="185" y="250" class="label" font-weight="bold">N/S/W/E Probes (world coords)</text>
+  <text x="190" y="267" class="probe-label" fill="#d32f2f">NORTH: (872,160) → agent<prop</text>
+  <text x="190" y="283" class="probe-label" fill="#d32f2f">SOUTH: (872,290) → prop<agent</text>
+  <text x="190" y="299" class="probe-label" fill="#1976d2">WEST: (790,268) → non-overlap</text>
+  <text x="190" y="315" class="probe-label" fill="#1976d2">EAST: (955,268) → non-overlap</text>
+  <text x="190" y="341" class="evidence-label" font-size="8">Evidence: ground-contact: rect bottom (y=268). Evidence: bottom image row 92 has 1 opaque pixel at img-x=3 (an...</text>
+  <line x1="165" y1="276.1926605504587" x2="180" y2="276.1926605504587" stroke="#999" stroke-width="0.5"/>
+  <text x="40" y="395" class="id-label" font-size="8">Asset: liangshan-hall-prop-main-seat-cropped.png | SHA256: 7d0c9b7dc2ca2742... | 109×93</text>
+  <!-- agent-roster (tmxId=91) -->
+  <rect x="800" y="185" width="750" height="220" rx="4" fill="#fff" stroke="#ddd"/>
+  <text x="810" y="205" class="title" font-size="14">agent-roster (TMX id=91)</text>
+  <text x="810" y="219" class="id-label">jyt.prop.southwest.agent-roster.v1</text>
+  <rect x="810" y="225" width="103.23529411764706" height="120" fill="rgba(255,215,0,0.15)" stroke="#b8860b" stroke-width="1"/>
+  <image x="810" y="225" width="103.23529411764706" height="120"
+         xlink:href="../public/juyiting/images/props/liangshan-hall-prop-agent-roster-cropped.png"
+         image-rendering="auto" opacity="0.9"/>
+  <circle cx="861.1764705882352" cy="345" r="4" fill="#d32f2f" stroke="#fff" stroke-width="1"/>
+  <line x1="853.1764705882352" y1="337" x2="869.1764705882352" y2="353" stroke="#d32f2f" stroke-width="1.5"/>
+  <line x1="869.1764705882352" y1="337" x2="853.1764705882352" y2="353" stroke="#d32f2f" stroke-width="1.5"/>
+  <text x="867.1764705882352" y="339" class="anchor-label">anchor(178,737) fpY=188672</text>
+  <rect x="810" y="315" width="103.23529411764706" height="30" fill="rgba(0,200,83,0.15)" stroke="#2e7d32" stroke-width="0.5" stroke-dasharray="2,2"/>
+  <text x="812" y="312" class="evidence-label">α-evidence zone</text>
+  <rect x="933.2352941176471" y="235" width="220" height="120" rx="3" fill="#f5f5f5" stroke="#ddd"/>
+  <text x="938.2352941176471" y="250" class="label" font-weight="bold">N/S/W/E Probes (world coords)</text>
+  <text x="943.2352941176471" y="267" class="probe-label" fill="#d32f2f">NORTH: (178,580) → agent<prop</text>
+  <text x="943.2352941176471" y="283" class="probe-label" fill="#d32f2f">SOUTH: (178,760) → prop<agent</text>
+  <text x="943.2352941176471" y="299" class="probe-label" fill="#1976d2">WEST: (100,737) → non-overlap</text>
+  <text x="943.2352941176471" y="315" class="probe-label" fill="#1976d2">EAST: (260,737) → non-overlap</text>
+  <text x="943.2352941176471" y="341" class="evidence-label" font-size="8">Evidence: ground-contact: rect bottom (y=737). Evidence: bottom row 135 fully transparent. Row 134 has 1px at ...</text>
+  <line x1="918.2352941176471" y1="285" x2="933.2352941176471" y2="285" stroke="#999" stroke-width="0.5"/>
+  <text x="810" y="395" class="id-label" font-size="8">Asset: liangshan-hall-prop-agent-roster-cropped.png | SHA256: 829d710a41b19829... | 117×136</text>
+  <!-- bounty-board (tmxId=92) -->
+  <rect x="30" y="420" width="750" height="220" rx="4" fill="#fff" stroke="#ddd"/>
+  <text x="40" y="440" class="title" font-size="14">bounty-board (TMX id=92)</text>
+  <text x="40" y="454" class="id-label">jyt.prop.northeast.bounty-board.v1</text>
+  <rect x="40" y="460" width="120" height="86.51162790697674" fill="rgba(255,215,0,0.15)" stroke="#b8860b" stroke-width="1"/>
+  <image x="40" y="460" width="120" height="86.51162790697674"
+         xlink:href="../public/juyiting/images/props/liangshan-hall-prop-bounty-board-cropped.png"
+         image-rendering="auto" opacity="0.9"/>
+  <circle cx="100" cy="546.5116279069767" r="4" fill="#d32f2f" stroke="#fff" stroke-width="1"/>
+  <line x1="92" y1="538.5116279069767" x2="108" y2="554.5116279069767" stroke="#d32f2f" stroke-width="1.5"/>
+  <line x1="108" y1="538.5116279069767" x2="92" y2="554.5116279069767" stroke="#d32f2f" stroke-width="1.5"/>
+  <text x="106" y="540.5116279069767" class="anchor-label">anchor(1446,379) fpY=97024</text>
+  <rect x="40" y="524.8837209302326" width="120" height="21.627906976744185" fill="rgba(0,200,83,0.15)" stroke="#2e7d32" stroke-width="0.5" stroke-dasharray="2,2"/>
+  <text x="42" y="521.8837209302326" class="evidence-label">α-evidence zone</text>
+  <rect x="180" y="470" width="220" height="120" rx="3" fill="#f5f5f5" stroke="#ddd"/>
+  <text x="185" y="485" class="label" font-weight="bold">N/S/W/E Probes (world coords)</text>
+  <text x="190" y="502" class="probe-label" fill="#d32f2f">NORTH: (1446,240) → agent<prop</text>
+  <text x="190" y="518" class="probe-label" fill="#d32f2f">SOUTH: (1446,420) → prop<agent</text>
+  <text x="190" y="534" class="probe-label" fill="#1976d2">WEST: (1320,379) → non-overlap</text>
+  <text x="190" y="550" class="probe-label" fill="#1976d2">EAST: (1560,379) → non-overlap</text>
+  <text x="190" y="576" class="evidence-label" font-size="8">Evidence: ground-contact: rect bottom (y=379). V0 target: table≈379 < agent≈420 < railing≈458. Evidence: row 1...</text>
+  <line x1="165" y1="503.25581395348837" x2="180" y2="503.25581395348837" stroke="#999" stroke-width="0.5"/>
+  <text x="40" y="630" class="id-label" font-size="8">Asset: liangshan-hall-prop-bounty-board-cropped.png | SHA256: 2e4c3e749119392b... | 172×124</text>
+  <!-- library-shelf (tmxId=93) -->
+  <rect x="800" y="420" width="750" height="220" rx="4" fill="#fff" stroke="#ddd"/>
+  <text x="810" y="440" class="title" font-size="14">library-shelf (TMX id=93)</text>
+  <text x="810" y="454" class="id-label">jyt.prop.southeast.library-shelf.v1</text>
+  <rect x="810" y="460" width="104.68085106382979" height="120" fill="rgba(255,215,0,0.15)" stroke="#b8860b" stroke-width="1"/>
+  <image x="810" y="460" width="104.68085106382979" height="120"
+         xlink:href="../public/juyiting/images/props/liangshan-hall-prop-library-shelf-cropped.png"
+         image-rendering="auto" opacity="0.9"/>
+  <circle cx="861.9148936170213" cy="580" r="4" fill="#d32f2f" stroke="#fff" stroke-width="1"/>
+  <line x1="853.9148936170213" y1="572" x2="869.9148936170213" y2="588" stroke="#d32f2f" stroke-width="1.5"/>
+  <line x1="869.9148936170213" y1="572" x2="853.9148936170213" y2="588" stroke="#d32f2f" stroke-width="1.5"/>
+  <text x="867.9148936170213" y="574" class="anchor-label">anchor(1558,719) fpY=184064</text>
+  <rect x="810" y="550" width="104.68085106382979" height="30" fill="rgba(0,200,83,0.15)" stroke="#2e7d32" stroke-width="0.5" stroke-dasharray="2,2"/>
+  <text x="812" y="547" class="evidence-label">α-evidence zone</text>
+  <rect x="934.6808510638298" y="470" width="220" height="120" rx="3" fill="#f5f5f5" stroke="#ddd"/>
+  <text x="939.6808510638298" y="485" class="label" font-weight="bold">N/S/W/E Probes (world coords)</text>
+  <text x="944.6808510638298" y="502" class="probe-label" fill="#d32f2f">NORTH: (1558,560) → agent<prop</text>
+  <text x="944.6808510638298" y="518" class="probe-label" fill="#d32f2f">SOUTH: (1558,745) → prop<agent</text>
+  <text x="944.6808510638298" y="534" class="probe-label" fill="#1976d2">WEST: (1470,719) → non-overlap</text>
+  <text x="944.6808510638298" y="550" class="probe-label" fill="#1976d2">EAST: (1645,719) → non-overlap</text>
+  <text x="944.6808510638298" y="576" class="evidence-label" font-size="8">Evidence: ground-contact: rect bottom (y=719). Evidence: row 140 has 1px at x=102 (foot). Row 138 has 2px at x...</text>
+  <line x1="919.6808510638298" y1="520" x2="934.6808510638298" y2="520" stroke="#999" stroke-width="0.5"/>
+  <text x="810" y="630" class="id-label" font-size="8">Asset: liangshan-hall-prop-library-shelf-cropped.png | SHA256: 2c26abcb9f0c4b8b... | 123×141</text>
+  <!-- roster-book (tmxId=94) -->
+  <rect x="30" y="655" width="750" height="220" rx="4" fill="#fff" stroke="#ddd"/>
+  <text x="40" y="675" class="title" font-size="14">roster-book (TMX id=94)</text>
+  <text x="40" y="689" class="id-label">jyt.prop.center-north.roster-book.v1</text>
+  <rect x="40" y="695" width="111.875" height="120" fill="rgba(255,215,0,0.15)" stroke="#b8860b" stroke-width="1"/>
+  <image x="40" y="695" width="111.875" height="120"
+         xlink:href="../public/juyiting/images/props/liangshan-hall-prop-roster-book-cropped.png"
+         image-rendering="auto" opacity="0.9"/>
+  <circle cx="95.625" cy="815" r="4" fill="#d32f2f" stroke="#fff" stroke-width="1"/>
+  <line x1="87.625" y1="807" x2="103.625" y2="823" stroke="#d32f2f" stroke-width="1.5"/>
+  <line x1="103.625" y1="807" x2="87.625" y2="823" stroke="#d32f2f" stroke-width="1.5"/>
+  <text x="101.625" y="809" class="anchor-label">anchor(306,384) fpY=98304</text>
+  <rect x="40" y="785" width="111.875" height="30" fill="rgba(0,200,83,0.15)" stroke="#2e7d32" stroke-width="0.5" stroke-dasharray="2,2"/>
+  <text x="42" y="782" class="evidence-label">α-evidence zone</text>
+  <rect x="171.875" y="705" width="220" height="120" rx="3" fill="#f5f5f5" stroke="#ddd"/>
+  <text x="176.875" y="720" class="label" font-weight="bold">N/S/W/E Probes (world coords)</text>
+  <text x="181.875" y="737" class="probe-label" fill="#d32f2f">NORTH: (306,175) → agent<prop</text>
+  <text x="181.875" y="753" class="probe-label" fill="#d32f2f">SOUTH: (306,410) → prop<agent</text>
+  <text x="181.875" y="769" class="probe-label" fill="#1976d2">WEST: (190,384) → non-overlap</text>
+  <text x="181.875" y="785" class="probe-label" fill="#1976d2">EAST: (420,384) → non-overlap</text>
+  <text x="181.875" y="811" class="evidence-label" font-size="8">Evidence: ground-contact: rect bottom (y=384). Evidence: row 191 has 1px at x=106 (book edge). Rows 191-140 sh...</text>
+  <line x1="156.875" y1="755" x2="171.875" y2="755" stroke="#999" stroke-width="0.5"/>
+  <text x="40" y="865" class="id-label" font-size="8">Asset: liangshan-hall-prop-roster-book-cropped.png | SHA256: 6b7c21b45ad24aee... | 179×192</text>
+
+  <!-- Bounty-board enlarged detail -->
+  <rect x="30" y="890" width="1540" height="250" rx="4" fill="#fff" stroke="#d32f2f" stroke-width="2"/>
+  <rect x="30" y="890" width="1540" height="30" rx="4" fill="#d32f2f"/>
+  <text x="45" y="910" class="title" fill="#fff">Bounty-Board (tmxId=92) — Enlarged: 14-Cell Matrix Evidence</text>
+
+  <!-- Enlarged prop image -->
+  <image x="50" y="935" width="172" height="124"
+         xlink:href="../public/juyiting/images/props/liangshan-hall-prop-bounty-board-cropped.png" opacity="0.9"/>
+  <rect x="50" y="935" width="172" height="124" fill="none" stroke="#b8860b" stroke-width="1"/>
+  <circle cx="136" cy="1059" r="5" fill="#d32f2f" stroke="#fff" stroke-width="1.5"/>
+  <text x="144" y="1053" class="anchor-label">anchor(1446,379)</text>
+
+  <!-- Matrix table -->
+  <rect x="250" y="935" width="650" height="180" rx="3" fill="#fafafa" stroke="#ccc"/>
+  <text x="265" y="952" class="label" font-weight="bold">N/S/W/E Matrix (both roles, same foot-point, same dir/frame)</text>
+  
+  <text x="265" y="972" class="label">Direction  Agent Foot     Lujunyi       Husanniang   Relation</text>
+  <text x="265" y="990" class="probe-label">N         (1446, 240)     agent&lt;prop    agent&lt;prop    Agent behind table</text>
+  <text x="265" y="1008" class="probe-label" fill="#d32f2f">S         (1446, 420)     prop&lt;agent    prop&lt;agent    ★ V0 canonical: table&lt;agent</text>
+  <text x="265" y="1026" class="probe-label" fill="#1976d2">W         (1320, 379)     non-overlap   non-overlap   West of rect</text>
+  <text x="265" y="1044" class="probe-label" fill="#1976d2">E         (1560, 379)     non-overlap   non-overlap   East of rect</text>
+
+  <text x="265" y="1062" class="label" font-weight="bold">Behind/Boundary/Front Matrix (X=1446, varying Y)</text>
+  <text x="265" y="1080" class="probe-label">Behind    (1446, 370)     agent&lt;prop    agent&lt;prop    y=370 &lt; table 379</text>
+  <text x="265" y="1095" class="probe-label">Boundary  (1446, 379)     agent&lt;prop    agent&lt;prop    y=379 = anchor, stableId tie-break</text>
+  <text x="265" y="1110" class="probe-label" fill="#d32f2f">Front     (1446, 420)     prop&lt;agent    prop&lt;agent    ★ y=420 &gt; table 379</text>
+
+  <!-- Constraint visualization -->
+  <rect x="930" y="935" width="350" height="180" rx="3" fill="#fafafa" stroke="#ccc"/>
+  <text x="945" y="952" class="label" font-weight="bold">V0 Target Constraint</text>
+  <text x="945" y="975" class="label">table anchor ≈ 379</text>
+  <text x="945" y="990" class="label">   ↓ (table behind agent)</text>
+  <text x="945" y="1008" class="label">agent foot ≈ 420</text>
+  <text x="945" y="1023" class="label">   ↓ (agent behind railing)</text>
+  <text x="945" y="1041" class="label">front railing ≈ 458</text>
+
+  <text x="945" y="1065" class="evidence-label" font-size="9">Mask 58 xref → E10A mandatory review</text>
+  <text x="945" y="1082" class="evidence-label" font-size="9">mask58: x=[1197,1663] y=[342,458]</text>
+
+  <!-- Required evidence fields -->
+  <text x="945" y="1102" class="evidence-label" font-size="8">Clean mode fields: commit|tmxSha256|cameraZoom|cameraDpr|sortKey|agentFootWorld</text>
+  <text x="945" y="1114" class="evidence-label" font-size="8">UI-on mode: +labels+bubbles, same fields</text>
+
+  <!-- Footer -->
+  <rect x="10" y="1155" width="1580" height="30" rx="4" fill="#1a1a2e"/>
+  <text x="20" y="1175" class="label" fill="#aaa">E8A Contact Sheet | Generation ID: c2037dce2bf2 | 5/5 props frozen | sortAnchor evidence documented | N/S/W/E probes defined | Bounty-board 14-cell matrix complete | mask58 cross-reference for E10A</text>
+
+  <!-- Fail-closed note -->
+  <text x="20" y="1200" class="evidence-label" font-size="10">Fail-closed: TMX id/name/rect/asset change, missing prop, duplicate stableId, anchor out-of-bounds, fixedPoint mismatch, non-5 count, missing matrix → verification failure</text>
+</svg>
