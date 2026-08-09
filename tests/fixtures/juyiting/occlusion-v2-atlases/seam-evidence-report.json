@@ -1,0 +1,220 @@
+{
+  "$schema": "jyt.occlusion.seam-evidence-report.v1",
+  "schemaVersion": 1,
+  "taskId": "E9B",
+  "e9aGenerationId": "7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b",
+  "manifestId": "ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646",
+  "scaler": "deterministic straight-alpha bilinear (scaleBilinear)",
+  "zoomCount": 5,
+  "requiredZooms": [
+    "0.75",
+    "1",
+    "1.25",
+    "1.5",
+    "2"
+  ],
+  "focuses": [
+    {
+      "index": 1,
+      "id": "west-wall-crossing",
+      "label": "y=580 west wall crossing",
+      "stableId": "jyt.occ.west-upper.wall-panel-assembly-01.v2",
+      "cropRect": {
+        "x": 0,
+        "y": 530,
+        "width": 560,
+        "height": 100
+      },
+      "contactSheet": "seam-evidence/contact-sheet-01-west-wall-crossing.svg",
+      "zooms": {
+        "1": {
+          "exact": true,
+          "mismatchPixels": 0,
+          "maxChannelDelta": 0,
+          "targetWidth": 560,
+          "targetHeight": 100
+        },
+        "2": {
+          "exact": true,
+          "mismatchPixels": 0,
+          "maxChannelDelta": 0,
+          "targetWidth": 1120,
+          "targetHeight": 200
+        },
+        "0.75": {
+          "exact": true,
+          "mismatchPixels": 0,
+          "maxChannelDelta": 0,
+          "targetWidth": 420,
+          "targetHeight": 75
+        },
+        "1.25": {
+          "exact": true,
+          "mismatchPixels": 0,
+          "maxChannelDelta": 0,
+          "targetWidth": 700,
+          "targetHeight": 125
+        },
+        "1.5": {
+          "exact": true,
+          "mismatchPixels": 0,
+          "maxChannelDelta": 0,
+          "targetWidth": 840,
+          "targetHeight": 150
+        }
+      }
+    },
+    {
+      "index": 2,
+      "id": "east-pillar-crossing",
+      "label": "y=580 east pillar crossing",
+      "stableId": "jyt.occ.east-upper.pillar-02.v2",
+      "cropRect": {
+        "x": 1188,
+        "y": 530,
+        "width": 80,
+        "height": 100
+      },
+      "contactSheet": "seam-evidence/contact-sheet-02-east-pillar-crossing.svg",
+      "zooms": {
+        "1": {
+          "exact": true,
+          "mismatchPixels": 0,
+          "maxChannelDelta": 0,
+          "targetWidth": 80,
+          "targetHeight": 100
+        },
+        "2": {
+          "exact": true,
+          "mismatchPixels": 0,
+          "maxChannelDelta": 0,
+          "targetWidth": 160,
+          "targetHeight": 200
+        },
+        "0.75": {
+          "exact": true,
+          "mismatchPixels": 0,
+          "maxChannelDelta": 0,
+          "targetWidth": 60,
+          "targetHeight": 75
+        },
+        "1.25": {
+          "exact": true,
+          "mismatchPixels": 0,
+          "maxChannelDelta": 0,
+          "targetWidth": 100,
+          "targetHeight": 125
+        },
+        "1.5": {
+          "exact": true,
+          "mismatchPixels": 0,
+          "maxChannelDelta": 0,
+          "targetWidth": 120,
+          "targetHeight": 150
+        }
+      }
+    },
+    {
+      "index": 3,
+      "id": "east-diagonal-crossing",
+      "label": "y=580 east diagonal crossing",
+      "stableId": "jyt.occ.east-lower.diagonal-brace-01.v2",
+      "cropRect": {
+        "x": 1290,
+        "y": 540,
+        "width": 240,
+        "height": 80
+      },
+      "contactSheet": "seam-evidence/contact-sheet-03-east-diagonal-crossing.svg",
+      "zooms": {
+        "1": {
+          "exact": true,
+          "mismatchPixels": 0,
+          "maxChannelDelta": 0,
+          "targetWidth": 240,
+          "targetHeight": 80
+        },
+        "2": {
+          "exact": true,
+          "mismatchPixels": 0,
+          "maxChannelDelta": 0,
+          "targetWidth": 480,
+          "targetHeight": 160
+        },
+        "0.75": {
+          "exact": true,
+          "mismatchPixels": 0,
+          "maxChannelDelta": 0,
+          "targetWidth": 180,
+          "targetHeight": 60
+        },
+        "1.25": {
+          "exact": true,
+          "mismatchPixels": 0,
+          "maxChannelDelta": 0,
+          "targetWidth": 300,
+          "targetHeight": 100
+        },
+        "1.5": {
+          "exact": true,
+          "mismatchPixels": 0,
+          "maxChannelDelta": 0,
+          "targetWidth": 360,
+          "targetHeight": 120
+        }
+      }
+    },
+    {
+      "index": 4,
+      "id": "east-worktable-crossing",
+      "label": "y=580 east worktable crossing",
+      "stableId": "jyt.occ.east-lower.worktable-01.v2",
+      "cropRect": {
+        "x": 1485,
+        "y": 540,
+        "width": 150,
+        "height": 80
+      },
+      "contactSheet": "seam-evidence/contact-sheet-04-east-worktable-crossing.svg",
+      "zooms": {
+        "1": {
+          "exact": true,
+          "mismatchPixels": 0,
+          "maxChannelDelta": 0,
+          "targetWidth": 150,
+          "targetHeight": 80
+        },
+        "2": {
+          "exact": true,
+          "mismatchPixels": 0,
+          "maxChannelDelta": 0,
+          "targetWidth": 300,
+          "targetHeight": 160
+        },
+        "0.75": {
+          "exact": true,
+          "mismatchPixels": 0,
+          "maxChannelDelta": 0,
+          "targetWidth": 113,
+          "targetHeight": 60
+        },
+        "1.25": {
+          "exact": true,
+          "mismatchPixels": 0,
+          "maxChannelDelta": 0,
+          "targetWidth": 188,
+          "targetHeight": 100
+        },
+        "1.5": {
+          "exact": true,
+          "mismatchPixels": 0,
+          "maxChannelDelta": 0,
+          "targetWidth": 225,
+          "targetHeight": 120
+        }
+      }
+    }
+  ],
+  "allExact": true,
+  "note": "machine pixel evidence only; E9B makes no visual adjudication"
+}

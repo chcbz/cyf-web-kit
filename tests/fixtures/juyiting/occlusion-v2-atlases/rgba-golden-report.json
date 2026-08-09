@@ -1,0 +1,64 @@
+{
+  "$schema": "jyt.occlusion.rgba-golden-report.v1",
+  "schemaVersion": 1,
+  "taskId": "E9B",
+  "e9aGenerationId": "7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b",
+  "manifestId": "ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646",
+  "source": {
+    "assetRef": "jyt.occlusion-source.hall-v3",
+    "sha256": "3e4f3f90b4d84411a844978237a7d3530bd481c37a62bcd73b9d694a7d2dd432",
+    "width": 1664,
+    "height": 928,
+    "alphaThreshold": 1,
+    "totalOpaquePixels": 248283
+  },
+  "golden": {
+    "passed": true,
+    "comparedPixels": 1544192,
+    "missingPixels": 0,
+    "overlapPixels": 0,
+    "channelMismatchPixels": 0,
+    "channelMismatchByChannel": {
+      "r": 0,
+      "g": 0,
+      "b": 0,
+      "a": 0
+    },
+    "transparentRgb": {
+      "policy": "non-owned pixels are cleared to rgba(0,0,0,0); canonical transparent pixels are also rgba(0,0,0,0)",
+      "canonicalAlpha0NonZeroRgb": 0,
+      "samples": []
+    }
+  },
+  "transparentRgbPolicy": {
+    "policy": "non-owned pixels are cleared to rgba(0,0,0,0); canonical transparent pixels are also rgba(0,0,0,0)",
+    "canonicalAlpha0NonZeroRgb": 0,
+    "reconstructedAlpha0NonZeroRgb": 0,
+    "samples": []
+  },
+  "metrics": {
+    "networkBytes": 516382,
+    "networkBytesByAtlas": {
+      "west-upper": 197737,
+      "center": 2071,
+      "east-upper": 131700,
+      "west-lower": 103886,
+      "entrance": 22676,
+      "east-lower": 58312
+    },
+    "canonicalSourceBytes": 71274,
+    "networkVsCanonicalRatio": 7.245,
+    "decodedTextureAreaPx": 1131936,
+    "fullFramePixels": 1544192,
+    "packedSpriteAreaPx": 632850,
+    "packingEfficiency": 0.5591,
+    "uncompressedRgbaBytes": 6176768,
+    "atlasCount": 6,
+    "fragmentCount": 32
+  },
+  "reconstruction": {
+    "width": 1664,
+    "height": 928,
+    "method": "independent pngjs decode of each atlas + manifest placement"
+  }
+}

@@ -30,6 +30,7 @@ import {
   E1_BASELINE_COMMIT,
   E1_BASELINE_TMX_SHA256,
   E8B_LIVE_TMX_SHA256,
+  E9B_OCCLUDER_OVERLAY_DIRECTORY,
   assertBaselineProvenance,
   assertBaselinePublicTree,
   assertCurrentPublicTreeVsE1,
@@ -1365,8 +1366,10 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
       }
     })
 
-    it('current public tree vs E1 baseline: only hall.tmx exact replacement is permitted', () => {
-      const result = assertCurrentPublicTreeVsE1('public', E1_BASELINE_COMMIT)
+    it('current public tree vs E1 baseline: only hall.tmx exact replacement plus the E9B occluder overlay', () => {
+      const result = assertCurrentPublicTreeVsE1('public', E1_BASELINE_COMMIT, E8B_LIVE_TMX_SHA256, {
+        additionalDirectories: [E9B_OCCLUDER_OVERLAY_DIRECTORY],
+      })
       expect(result.baselineCommit).to.equal(E1_BASELINE_COMMIT)
       expect(result.hallTmxExactReplacementOnly).to.equal(true)
       expect(result.allowedDiffs).to.have.length(1)
@@ -1376,6 +1379,22 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
       expect(result.currentTmxSha256).to.equal(E8B_LIVE_TMX_SHA256)
       expect(result.baselineTmxSha256).to.equal(E1_BASELINE_TMX_SHA256)
       expect(result.currentTmxSha256).to.not.equal(result.baselineTmxSha256)
+      expect(result.additionalDirectories).to.deep.equal([E9B_OCCLUDER_OVERLAY_DIRECTORY])
+    })
+
+    it('E9B occluder overlay: exactly six atlas PNGs matching the E9B manifest are the only additions', () => {
+      const manifest = JSON.parse(readFileSync('tests/fixtures/juyiting/occlusion-v2-atlases/atlas-manifest.json', 'utf8'))
+      const overlayFiles = readdirSync(`public/${E9B_OCCLUDER_OVERLAY_DIRECTORY.slice('public/'.length)}`).sort()
+      expect(overlayFiles).to.deep.equal(manifest.atlases.map(atlas => atlas.file.split('/').pop()).sort())
+      for (const atlas of manifest.atlases) {
+        const bytes = readFileSync(atlas.file)
+        expect(createHash('sha256').update(bytes).digest('hex'), atlas.file).to.equal(atlas.sha256)
+        expect(bytes.length, atlas.file).to.equal(atlas.bytes)
+      }
+      const result = assertCurrentPublicTreeVsE1('public', E1_BASELINE_COMMIT, E8B_LIVE_TMX_SHA256, {
+        additionalDirectories: [E9B_OCCLUDER_OVERLAY_DIRECTORY],
+      })
+      expect(result.additionalDirectories).to.deep.equal([E9B_OCCLUDER_OVERLAY_DIRECTORY])
     })
 
     it('rejects current public tree when a non-TMX file drifts', function () {

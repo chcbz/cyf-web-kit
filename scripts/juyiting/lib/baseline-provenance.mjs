@@ -22,6 +22,13 @@ import { sha256Bytes } from './tmx-structure.mjs'
 export const E1_BASELINE_COMMIT = '2424f51f375814f403ca70a9a6e9948728e595b1'
 export const E1_BASELINE_TMX_SHA256 = 'e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401'
 export const E8B_LIVE_TMX_SHA256 = '291a38cc66ebd60c8577500a5afc18ce5398570fe4c35ca66d9eebe818826a97'
+
+// E9B adds six lossless occluder atlas PNGs under this new directory. The E1
+// provenance overlay is extended explicitly: E1 baseline files must remain
+// byte-identical and hall.tmx remains the only *modified* file; files under
+// this directory are the only permitted *additions* (verified against the E9B
+// atlas manifest in tests).
+export const E9B_OCCLUDER_OVERLAY_DIRECTORY = 'public/juyiting/images/occluders'
 export const repoRoot = resolve(
   process.env.JIA_JUYITING_GIT_REPO_ROOT
     ?? fileURLToPath(new URL('../../../', import.meta.url)),
@@ -300,6 +307,24 @@ function baselineDirectories(paths) {
   return directories
 }
 
+function overlayDirectories(additionalDirectories) {
+  const directories = new Set()
+  for (const path of additionalDirectories) {
+    if (typeof path !== 'string' || !path.startsWith(PUBLIC_TREE_PREFIX) || path.endsWith('/')) {
+      throw new Error(`Additional public tree overlay directory must be canonical under ${PUBLIC_TREE_PREFIX}: ${JSON.stringify(path)}`)
+    }
+    const parts = path.split('/')
+    for (let length = 3; length <= parts.length; length += 1) {
+      directories.add(parts.slice(0, length).join('/'))
+    }
+  }
+  return directories
+}
+
+function isUnderAdditionalDirectory(path, additionalDirectories) {
+  return additionalDirectories.some(directory => path === directory || path.startsWith(`${directory}/`))
+}
+
 function gitExec(args, options = {}) {
   return execFileSync('git', args, {
     cwd: repoRoot,
@@ -402,19 +427,26 @@ export function assertCurrentPublicTreeVsE1(
   publicRoot,
   baselineCommit = E1_BASELINE_COMMIT,
   expectedCurrentTmxSha256 = E8B_LIVE_TMX_SHA256,
+  options = {},
 ) {
   assertBaselineCommit(baselineCommit)
   if (!/^[0-9a-f]{64}$/.test(expectedCurrentTmxSha256)) {
     throw new Error(`Expected current hall.tmx SHA-256 must be 64 lowercase hex characters; got ${JSON.stringify(expectedCurrentTmxSha256)}`)
   }
+  const additionalDirectories = Array.isArray(options.additionalDirectories) ? options.additionalDirectories : []
   const baselineSnapshot = readVerifiedBaselineSnapshot(baselineCommit)
   const baselineByPath = new Map(baselineSnapshot.files.map(entry => [entry.path, entry]))
-  const expectedDirectories = baselineDirectories(baselineSnapshot.files.map(entry => entry.path))
+  const expectedDirectories = new Set([
+    ...baselineDirectories(baselineSnapshot.files.map(entry => entry.path)),
+    ...overlayDirectories(additionalDirectories),
+  ])
   const currentSnapshot = readCurrentPublicTree(publicRoot, expectedDirectories)
   const currentByPath = new Map(currentSnapshot.files.map(entry => [entry.path, entry]))
 
   const missing = [...baselineByPath.keys()].filter(path => !currentByPath.has(path)).sort()
-  const extra = [...currentByPath.keys()].filter(path => !baselineByPath.has(path)).sort()
+  const extra = [...currentByPath.keys()].filter(
+    path => !baselineByPath.has(path) && !isUnderAdditionalDirectory(path, additionalDirectories),
+  ).sort()
   if (missing.length > 0 || extra.length > 0) {
     throw new Error(`Juyiting public tree path mismatch against ${baselineCommit}; missing=[${missing.join(', ')}] extra=[${extra.join(', ')}]`)
   }
@@ -452,6 +484,7 @@ export function assertCurrentPublicTreeVsE1(
     hallTmxExactReplacementOnly: true,
     currentTmxSha256: currentTmx.sha256,
     baselineTmxSha256: baselineTmx.sha256,
+    additionalDirectories: [...additionalDirectories].sort(),
   }
 }
 

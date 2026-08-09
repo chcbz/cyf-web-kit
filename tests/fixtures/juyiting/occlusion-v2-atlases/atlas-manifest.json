@@ -1,0 +1,1482 @@
+{
+  "$schema": "jyt.occlusion.atlas-manifest.v1",
+  "schemaVersion": 1,
+  "taskId": "E9B",
+  "e9aGenerationId": "7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b",
+  "e9aSpecPath": "tests/fixtures/juyiting/occlusion-v2-fragments/fragment-ownership-spec.json",
+  "canonical": {
+    "assetRef": "jyt.occlusion-source.hall-v3",
+    "path": "public/juyiting/images/liangshan-hall-mid-occluders-v3.webp",
+    "sha256": "3e4f3f90b4d84411a844978237a7d3530bd481c37a62bcd73b9d694a7d2dd432",
+    "width": 1664,
+    "height": 928,
+    "alphaThreshold": 1,
+    "totalOpaquePixels": 248283
+  },
+  "e8bTmx": {
+    "taskId": "E8B",
+    "path": "public/juyiting/hall.tmx",
+    "sha256": "291a38cc66ebd60c8577500a5afc18ce5398570fe4c35ca66d9eebe818826a97"
+  },
+  "generator": {
+    "script": "scripts/juyiting/generate-occluder-atlases.mjs",
+    "nodeVersion": "v20.20.2",
+    "pngjsVersion": "5.0.0",
+    "chromium": "/usr/local/bin/chromium-headless-smoke",
+    "format": "png",
+    "formatChoiceRationale": "No lossless WebP encoder is present or verifiable on this host (no cwebp/dwebp/webpinfo, no libwebp; Chromium canvas toDataURL(\"image/webp\") is lossy-quality-based and cannot guarantee lossless RGBA). Deterministic PNG via pngjs (colorType 6, bitDepth 8, deflateLevel 9, default strategy, adaptive filter) is byte-stable across independent processes and decodes to exact RGBA, so it is the chosen format."
+  },
+  "encoding": {
+    "format": "png",
+    "lossless": true,
+    "colorType": 6,
+    "bitDepth": 8,
+    "alpha": true,
+    "deflateLevel": 9,
+    "deflateStrategy": 0,
+    "filterType": -1,
+    "formatChoiceRationale": "No lossless WebP encoder is present or verifiable on this host (no cwebp/dwebp/webpinfo, no libwebp; Chromium canvas toDataURL(\"image/webp\") is lossy-quality-based and cannot guarantee lossless RGBA). Deterministic PNG via pngjs (colorType 6, bitDepth 8, deflateLevel 9, default strategy, adaptive filter) is byte-stable across independent processes and decodes to exact RGBA, so it is the chosen format.",
+    "specAllowedFormats": [
+      "lossless-webp",
+      "png"
+    ]
+  },
+  "packing": {
+    "algorithm": "deterministic-shelf",
+    "orderBasis": "spec stableId order (spec.fragments order)",
+    "atlasWidthBasis": "home region chunk width",
+    "paddingPixels": 1,
+    "extrusionPixels": 2
+  },
+  "atlases": [
+    {
+      "region": "west-upper",
+      "file": "public/juyiting/images/occluders/west-upper-v2.png",
+      "sha256": "759d8062e1e3ea0361305393c91cb19757e44ea42dd5d14fafbf8cd332a96ea4",
+      "width": 721,
+      "height": 539,
+      "bytes": 197737,
+      "fragmentCount": 7,
+      "packingOrder": [
+        "jyt.occ.west-upper.diagonal-brace-01.v2",
+        "jyt.occ.west-upper.lantern-01.v2",
+        "jyt.occ.west-upper.lantern-table-frame-01.v2",
+        "jyt.occ.west-upper.pillar-01.v2",
+        "jyt.occ.west-upper.wall-panel-assembly-01.v2",
+        "jyt.occ.west-upper.wall-sconce-01.v2",
+        "jyt.occ.west-upper.wall-sconce-02.v2"
+      ]
+    },
+    {
+      "region": "center",
+      "file": "public/juyiting/images/occluders/center-v2.png",
+      "sha256": "ce9577cfbec2119b599ed661cbdfe54f3a963779f40dec985a3dcb3bc2611d35",
+      "width": 409,
+      "height": 58,
+      "bytes": 2071,
+      "fragmentCount": 1,
+      "packingOrder": [
+        "jyt.occ.center.wall-sconce-01.v2"
+      ]
+    },
+    {
+      "region": "east-upper",
+      "file": "public/juyiting/images/occluders/east-upper-v2.png",
+      "sha256": "d3692591b3759e377f4a87c6e818148fd51077210ea1c29f5061acaefc10b846",
+      "width": 534,
+      "height": 425,
+      "bytes": 131700,
+      "fragmentCount": 6,
+      "packingOrder": [
+        "jyt.occ.east-upper.diagonal-brace-01.v2",
+        "jyt.occ.east-upper.pillar-01.v2",
+        "jyt.occ.east-upper.pillar-02.v2",
+        "jyt.occ.east-upper.scroll-table-front-01.v2",
+        "jyt.occ.east-upper.wall-panel-lower-01.v2",
+        "jyt.occ.east-upper.wall-panel-upper-01.v2"
+      ]
+    },
+    {
+      "region": "west-lower",
+      "file": "public/juyiting/images/occluders/west-lower-v2.png",
+      "sha256": "64a1c82776f3a94bb283412b32b5da5e49e5e72a40ba7bbc72b5771ca44d81dd",
+      "width": 721,
+      "height": 465,
+      "bytes": 103886,
+      "fragmentCount": 8,
+      "packingOrder": [
+        "jyt.occ.west-lower.diagonal-brace-02.v2",
+        "jyt.occ.west-lower.floor-lantern-01.v2",
+        "jyt.occ.west-lower.long-table-frame-01.v2",
+        "jyt.occ.west-lower.railing-01.v2",
+        "jyt.occ.west-lower.railing-02.v2",
+        "jyt.occ.west-lower.wall-bracket-01.v2",
+        "jyt.occ.west-lower.wall-lantern-01.v2",
+        "jyt.occ.west-lower.wall-panel-assembly-01.v2"
+      ]
+    },
+    {
+      "region": "entrance",
+      "file": "public/juyiting/images/occluders/entrance-v2.png",
+      "sha256": "23d1e7b19d4805e53d25897091995d81b4f9b61d22c7f11114f2e3f0d9b6c3cc",
+      "width": 409,
+      "height": 108,
+      "bytes": 22676,
+      "fragmentCount": 4,
+      "packingOrder": [
+        "jyt.occ.entrance.hanging-banner-01.v2",
+        "jyt.occ.entrance.hanging-banner-02.v2",
+        "jyt.occ.entrance.lantern-post-01.v2",
+        "jyt.occ.entrance.lantern-post-02.v2"
+      ]
+    },
+    {
+      "region": "east-lower",
+      "file": "public/juyiting/images/occluders/east-lower-v2.png",
+      "sha256": "6de6c0945baad420b89c20d61e2d23e9a4875f65b277adc60fbad29095680da6",
+      "width": 534,
+      "height": 212,
+      "bytes": 58312,
+      "fragmentCount": 6,
+      "packingOrder": [
+        "jyt.occ.east-lower.diagonal-brace-01.v2",
+        "jyt.occ.east-lower.diagonal-brace-02.v2",
+        "jyt.occ.east-lower.fabric-rack-01.v2",
+        "jyt.occ.east-lower.lantern-01.v2",
+        "jyt.occ.east-lower.railing-post-01.v2",
+        "jyt.occ.east-lower.worktable-01.v2"
+      ]
+    }
+  ],
+  "fragments": [
+    {
+      "stableId": "jyt.occ.center.wall-sconce-01.v2",
+      "homeRegion": "center",
+      "atlasFile": "public/juyiting/images/occluders/center-v2.png",
+      "atlasRect": {
+        "x": 0,
+        "y": 0,
+        "width": 22,
+        "height": 58
+      },
+      "pixelBounds": {
+        "x": 1112,
+        "y": 230,
+        "width": 18,
+        "height": 54
+      },
+      "sourceRect": {
+        "x": 1111,
+        "y": 229,
+        "width": 20,
+        "height": 56
+      },
+      "destinationRect": {
+        "x": 1111,
+        "y": 229,
+        "width": 20,
+        "height": 56
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 504,
+      "packingOrderIndex": 7
+    },
+    {
+      "stableId": "jyt.occ.east-lower.diagonal-brace-01.v2",
+      "homeRegion": "east-lower",
+      "atlasFile": "public/juyiting/images/occluders/east-lower-v2.png",
+      "atlasRect": {
+        "x": 0,
+        "y": 0,
+        "width": 207,
+        "height": 212
+      },
+      "pixelBounds": {
+        "x": 1308,
+        "y": 560,
+        "width": 203,
+        "height": 208
+      },
+      "sourceRect": {
+        "x": 1307,
+        "y": 559,
+        "width": 205,
+        "height": 210
+      },
+      "destinationRect": {
+        "x": 1307,
+        "y": 559,
+        "width": 205,
+        "height": 210
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 12954,
+      "packingOrderIndex": 26
+    },
+    {
+      "stableId": "jyt.occ.east-lower.diagonal-brace-02.v2",
+      "homeRegion": "east-lower",
+      "atlasFile": "public/juyiting/images/occluders/east-lower-v2.png",
+      "atlasRect": {
+        "x": 207,
+        "y": 0,
+        "width": 28,
+        "height": 54
+      },
+      "pixelBounds": {
+        "x": 1351,
+        "y": 691,
+        "width": 24,
+        "height": 50
+      },
+      "sourceRect": {
+        "x": 1350,
+        "y": 690,
+        "width": 26,
+        "height": 52
+      },
+      "destinationRect": {
+        "x": 1350,
+        "y": 690,
+        "width": 26,
+        "height": 52
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 494,
+      "packingOrderIndex": 27
+    },
+    {
+      "stableId": "jyt.occ.east-lower.fabric-rack-01.v2",
+      "homeRegion": "east-lower",
+      "atlasFile": "public/juyiting/images/occluders/east-lower-v2.png",
+      "atlasRect": {
+        "x": 235,
+        "y": 0,
+        "width": 70,
+        "height": 86
+      },
+      "pixelBounds": {
+        "x": 1598,
+        "y": 748,
+        "width": 66,
+        "height": 82
+      },
+      "sourceRect": {
+        "x": 1597,
+        "y": 747,
+        "width": 67,
+        "height": 84
+      },
+      "destinationRect": {
+        "x": 1597,
+        "y": 747,
+        "width": 67,
+        "height": 84
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 2227,
+      "packingOrderIndex": 28
+    },
+    {
+      "stableId": "jyt.occ.east-lower.lantern-01.v2",
+      "homeRegion": "east-lower",
+      "atlasFile": "public/juyiting/images/occluders/east-lower-v2.png",
+      "atlasRect": {
+        "x": 305,
+        "y": 0,
+        "width": 51,
+        "height": 90
+      },
+      "pixelBounds": {
+        "x": 1314,
+        "y": 839,
+        "width": 47,
+        "height": 86
+      },
+      "sourceRect": {
+        "x": 1313,
+        "y": 838,
+        "width": 49,
+        "height": 88
+      },
+      "destinationRect": {
+        "x": 1313,
+        "y": 838,
+        "width": 49,
+        "height": 88
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 2328,
+      "packingOrderIndex": 29
+    },
+    {
+      "stableId": "jyt.occ.east-lower.railing-post-01.v2",
+      "homeRegion": "east-lower",
+      "atlasFile": "public/juyiting/images/occluders/east-lower-v2.png",
+      "atlasRect": {
+        "x": 356,
+        "y": 0,
+        "width": 14,
+        "height": 72
+      },
+      "pixelBounds": {
+        "x": 1242,
+        "y": 707,
+        "width": 10,
+        "height": 68
+      },
+      "sourceRect": {
+        "x": 1241,
+        "y": 706,
+        "width": 12,
+        "height": 70
+      },
+      "destinationRect": {
+        "x": 1241,
+        "y": 706,
+        "width": 12,
+        "height": 70
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 355,
+      "packingOrderIndex": 30
+    },
+    {
+      "stableId": "jyt.occ.east-lower.worktable-01.v2",
+      "homeRegion": "east-lower",
+      "atlasFile": "public/juyiting/images/occluders/east-lower-v2.png",
+      "atlasRect": {
+        "x": 370,
+        "y": 0,
+        "width": 124,
+        "height": 131
+      },
+      "pixelBounds": {
+        "x": 1499,
+        "y": 574,
+        "width": 120,
+        "height": 127
+      },
+      "sourceRect": {
+        "x": 1498,
+        "y": 573,
+        "width": 122,
+        "height": 129
+      },
+      "destinationRect": {
+        "x": 1498,
+        "y": 573,
+        "width": 122,
+        "height": 129
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 5571,
+      "packingOrderIndex": 31
+    },
+    {
+      "stableId": "jyt.occ.east-upper.diagonal-brace-01.v2",
+      "homeRegion": "east-upper",
+      "atlasFile": "public/juyiting/images/occluders/east-upper-v2.png",
+      "atlasRect": {
+        "x": 0,
+        "y": 0,
+        "width": 23,
+        "height": 55
+      },
+      "pixelBounds": {
+        "x": 1130,
+        "y": 435,
+        "width": 19,
+        "height": 51
+      },
+      "sourceRect": {
+        "x": 1129,
+        "y": 434,
+        "width": 21,
+        "height": 53
+      },
+      "destinationRect": {
+        "x": 1129,
+        "y": 434,
+        "width": 21,
+        "height": 53
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 500,
+      "packingOrderIndex": 8
+    },
+    {
+      "stableId": "jyt.occ.east-upper.pillar-01.v2",
+      "homeRegion": "east-upper",
+      "atlasFile": "public/juyiting/images/occluders/east-upper-v2.png",
+      "atlasRect": {
+        "x": 23,
+        "y": 0,
+        "width": 50,
+        "height": 163
+      },
+      "pixelBounds": {
+        "x": 1158,
+        "y": 305,
+        "width": 46,
+        "height": 159
+      },
+      "sourceRect": {
+        "x": 1157,
+        "y": 304,
+        "width": 48,
+        "height": 161
+      },
+      "destinationRect": {
+        "x": 1157,
+        "y": 304,
+        "width": 48,
+        "height": 161
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 4701,
+      "packingOrderIndex": 9
+    },
+    {
+      "stableId": "jyt.occ.east-upper.pillar-02.v2",
+      "homeRegion": "east-upper",
+      "atlasFile": "public/juyiting/images/occluders/east-upper-v2.png",
+      "atlasRect": {
+        "x": 73,
+        "y": 0,
+        "width": 54,
+        "height": 229
+      },
+      "pixelBounds": {
+        "x": 1202,
+        "y": 478,
+        "width": 50,
+        "height": 225
+      },
+      "sourceRect": {
+        "x": 1201,
+        "y": 477,
+        "width": 52,
+        "height": 227
+      },
+      "destinationRect": {
+        "x": 1201,
+        "y": 477,
+        "width": 52,
+        "height": 227
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 5188,
+      "packingOrderIndex": 10
+    },
+    {
+      "stableId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "homeRegion": "east-upper",
+      "atlasFile": "public/juyiting/images/occluders/east-upper-v2.png",
+      "atlasRect": {
+        "x": 127,
+        "y": 0,
+        "width": 99,
+        "height": 33
+      },
+      "pixelBounds": {
+        "x": 1384,
+        "y": 255,
+        "width": 95,
+        "height": 29
+      },
+      "sourceRect": {
+        "x": 1383,
+        "y": 254,
+        "width": 97,
+        "height": 31
+      },
+      "destinationRect": {
+        "x": 1383,
+        "y": 254,
+        "width": 97,
+        "height": 31
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 2117,
+      "packingOrderIndex": 11
+    },
+    {
+      "stableId": "jyt.occ.east-upper.wall-panel-lower-01.v2",
+      "homeRegion": "east-upper",
+      "atlasFile": "public/juyiting/images/occluders/east-upper-v2.png",
+      "atlasRect": {
+        "x": 0,
+        "y": 229,
+        "width": 412,
+        "height": 75
+      },
+      "pixelBounds": {
+        "x": 1256,
+        "y": 477,
+        "width": 408,
+        "height": 71
+      },
+      "sourceRect": {
+        "x": 1255,
+        "y": 476,
+        "width": 409,
+        "height": 73
+      },
+      "destinationRect": {
+        "x": 1255,
+        "y": 476,
+        "width": 409,
+        "height": 73
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 27065,
+      "packingOrderIndex": 12
+    },
+    {
+      "stableId": "jyt.occ.east-upper.wall-panel-upper-01.v2",
+      "homeRegion": "east-upper",
+      "atlasFile": "public/juyiting/images/occluders/east-upper-v2.png",
+      "atlasRect": {
+        "x": 0,
+        "y": 304,
+        "width": 471,
+        "height": 121
+      },
+      "pixelBounds": {
+        "x": 1197,
+        "y": 342,
+        "width": 467,
+        "height": 117
+      },
+      "sourceRect": {
+        "x": 1196,
+        "y": 341,
+        "width": 468,
+        "height": 119
+      },
+      "destinationRect": {
+        "x": 1196,
+        "y": 341,
+        "width": 468,
+        "height": 119
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 30996,
+      "packingOrderIndex": 13
+    },
+    {
+      "stableId": "jyt.occ.entrance.hanging-banner-01.v2",
+      "homeRegion": "entrance",
+      "atlasFile": "public/juyiting/images/occluders/entrance-v2.png",
+      "atlasRect": {
+        "x": 0,
+        "y": 0,
+        "width": 52,
+        "height": 76
+      },
+      "pixelBounds": {
+        "x": 767,
+        "y": 722,
+        "width": 48,
+        "height": 72
+      },
+      "sourceRect": {
+        "x": 766,
+        "y": 721,
+        "width": 50,
+        "height": 74
+      },
+      "destinationRect": {
+        "x": 766,
+        "y": 721,
+        "width": 50,
+        "height": 74
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 2313,
+      "packingOrderIndex": 22
+    },
+    {
+      "stableId": "jyt.occ.entrance.hanging-banner-02.v2",
+      "homeRegion": "entrance",
+      "atlasFile": "public/juyiting/images/occluders/entrance-v2.png",
+      "atlasRect": {
+        "x": 52,
+        "y": 0,
+        "width": 44,
+        "height": 67
+      },
+      "pixelBounds": {
+        "x": 931,
+        "y": 733,
+        "width": 40,
+        "height": 63
+      },
+      "sourceRect": {
+        "x": 930,
+        "y": 732,
+        "width": 42,
+        "height": 65
+      },
+      "destinationRect": {
+        "x": 930,
+        "y": 732,
+        "width": 42,
+        "height": 65
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 1867,
+      "packingOrderIndex": 23
+    },
+    {
+      "stableId": "jyt.occ.entrance.lantern-post-01.v2",
+      "homeRegion": "entrance",
+      "atlasFile": "public/juyiting/images/occluders/entrance-v2.png",
+      "atlasRect": {
+        "x": 96,
+        "y": 0,
+        "width": 45,
+        "height": 108
+      },
+      "pixelBounds": {
+        "x": 1052,
+        "y": 674,
+        "width": 41,
+        "height": 104
+      },
+      "sourceRect": {
+        "x": 1051,
+        "y": 673,
+        "width": 43,
+        "height": 106
+      },
+      "destinationRect": {
+        "x": 1051,
+        "y": 673,
+        "width": 43,
+        "height": 106
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 3038,
+      "packingOrderIndex": 24
+    },
+    {
+      "stableId": "jyt.occ.entrance.lantern-post-02.v2",
+      "homeRegion": "entrance",
+      "atlasFile": "public/juyiting/images/occluders/entrance-v2.png",
+      "atlasRect": {
+        "x": 141,
+        "y": 0,
+        "width": 35,
+        "height": 81
+      },
+      "pixelBounds": {
+        "x": 1004,
+        "y": 678,
+        "width": 31,
+        "height": 77
+      },
+      "sourceRect": {
+        "x": 1003,
+        "y": 677,
+        "width": 33,
+        "height": 79
+      },
+      "destinationRect": {
+        "x": 1003,
+        "y": 677,
+        "width": 33,
+        "height": 79
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 1317,
+      "packingOrderIndex": 25
+    },
+    {
+      "stableId": "jyt.occ.west-lower.diagonal-brace-02.v2",
+      "homeRegion": "west-lower",
+      "atlasFile": "public/juyiting/images/occluders/west-lower-v2.png",
+      "atlasRect": {
+        "x": 0,
+        "y": 0,
+        "width": 47,
+        "height": 122
+      },
+      "pixelBounds": {
+        "x": 474,
+        "y": 641,
+        "width": 43,
+        "height": 118
+      },
+      "sourceRect": {
+        "x": 473,
+        "y": 640,
+        "width": 45,
+        "height": 120
+      },
+      "destinationRect": {
+        "x": 473,
+        "y": 640,
+        "width": 45,
+        "height": 120
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 2160,
+      "packingOrderIndex": 14
+    },
+    {
+      "stableId": "jyt.occ.west-lower.floor-lantern-01.v2",
+      "homeRegion": "west-lower",
+      "atlasFile": "public/juyiting/images/occluders/west-lower-v2.png",
+      "atlasRect": {
+        "x": 47,
+        "y": 0,
+        "width": 52,
+        "height": 56
+      },
+      "pixelBounds": {
+        "x": 357,
+        "y": 876,
+        "width": 48,
+        "height": 52
+      },
+      "sourceRect": {
+        "x": 356,
+        "y": 875,
+        "width": 50,
+        "height": 53
+      },
+      "destinationRect": {
+        "x": 356,
+        "y": 875,
+        "width": 50,
+        "height": 53
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 1348,
+      "packingOrderIndex": 15
+    },
+    {
+      "stableId": "jyt.occ.west-lower.long-table-frame-01.v2",
+      "homeRegion": "west-lower",
+      "atlasFile": "public/juyiting/images/occluders/west-lower-v2.png",
+      "atlasRect": {
+        "x": 99,
+        "y": 0,
+        "width": 126,
+        "height": 122
+      },
+      "pixelBounds": {
+        "x": 117,
+        "y": 601,
+        "width": 122,
+        "height": 118
+      },
+      "sourceRect": {
+        "x": 116,
+        "y": 600,
+        "width": 124,
+        "height": 120
+      },
+      "destinationRect": {
+        "x": 116,
+        "y": 600,
+        "width": 124,
+        "height": 120
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 2900,
+      "packingOrderIndex": 16
+    },
+    {
+      "stableId": "jyt.occ.west-lower.railing-01.v2",
+      "homeRegion": "west-lower",
+      "atlasFile": "public/juyiting/images/occluders/west-lower-v2.png",
+      "atlasRect": {
+        "x": 225,
+        "y": 0,
+        "width": 178,
+        "height": 107
+      },
+      "pixelBounds": {
+        "x": 506,
+        "y": 675,
+        "width": 174,
+        "height": 103
+      },
+      "sourceRect": {
+        "x": 505,
+        "y": 674,
+        "width": 176,
+        "height": 105
+      },
+      "destinationRect": {
+        "x": 505,
+        "y": 674,
+        "width": 176,
+        "height": 105
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 5013,
+      "packingOrderIndex": 17
+    },
+    {
+      "stableId": "jyt.occ.west-lower.railing-02.v2",
+      "homeRegion": "west-lower",
+      "atlasFile": "public/juyiting/images/occluders/west-lower-v2.png",
+      "atlasRect": {
+        "x": 403,
+        "y": 0,
+        "width": 182,
+        "height": 41
+      },
+      "pixelBounds": {
+        "x": 66,
+        "y": 787,
+        "width": 178,
+        "height": 37
+      },
+      "sourceRect": {
+        "x": 65,
+        "y": 786,
+        "width": 180,
+        "height": 39
+      },
+      "destinationRect": {
+        "x": 65,
+        "y": 786,
+        "width": 180,
+        "height": 39
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 4549,
+      "packingOrderIndex": 18
+    },
+    {
+      "stableId": "jyt.occ.west-lower.wall-bracket-01.v2",
+      "homeRegion": "west-lower",
+      "atlasFile": "public/juyiting/images/occluders/west-lower-v2.png",
+      "atlasRect": {
+        "x": 585,
+        "y": 0,
+        "width": 39,
+        "height": 43
+      },
+      "pixelBounds": {
+        "x": 686,
+        "y": 675,
+        "width": 35,
+        "height": 39
+      },
+      "sourceRect": {
+        "x": 685,
+        "y": 674,
+        "width": 37,
+        "height": 41
+      },
+      "destinationRect": {
+        "x": 685,
+        "y": 674,
+        "width": 37,
+        "height": 41
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 938,
+      "packingOrderIndex": 19
+    },
+    {
+      "stableId": "jyt.occ.west-lower.wall-lantern-01.v2",
+      "homeRegion": "west-lower",
+      "atlasFile": "public/juyiting/images/occluders/west-lower-v2.png",
+      "atlasRect": {
+        "x": 624,
+        "y": 0,
+        "width": 52,
+        "height": 39
+      },
+      "pixelBounds": {
+        "x": 11,
+        "y": 706,
+        "width": 48,
+        "height": 35
+      },
+      "sourceRect": {
+        "x": 10,
+        "y": 705,
+        "width": 50,
+        "height": 37
+      },
+      "destinationRect": {
+        "x": 10,
+        "y": 705,
+        "width": 50,
+        "height": 37
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 850,
+      "packingOrderIndex": 20
+    },
+    {
+      "stableId": "jyt.occ.west-lower.wall-panel-assembly-01.v2",
+      "homeRegion": "west-lower",
+      "atlasFile": "public/juyiting/images/occluders/west-lower-v2.png",
+      "atlasRect": {
+        "x": 0,
+        "y": 122,
+        "width": 406,
+        "height": 343
+      },
+      "pixelBounds": {
+        "x": 17,
+        "y": 573,
+        "width": 402,
+        "height": 339
+      },
+      "sourceRect": {
+        "x": 16,
+        "y": 572,
+        "width": 404,
+        "height": 341
+      },
+      "destinationRect": {
+        "x": 16,
+        "y": 572,
+        "width": 404,
+        "height": 341
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 31548,
+      "packingOrderIndex": 21
+    },
+    {
+      "stableId": "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "homeRegion": "west-upper",
+      "atlasFile": "public/juyiting/images/occluders/west-upper-v2.png",
+      "atlasRect": {
+        "x": 0,
+        "y": 0,
+        "width": 20,
+        "height": 61
+      },
+      "pixelBounds": {
+        "x": 600,
+        "y": 432,
+        "width": 16,
+        "height": 57
+      },
+      "sourceRect": {
+        "x": 599,
+        "y": 431,
+        "width": 18,
+        "height": 59
+      },
+      "destinationRect": {
+        "x": 599,
+        "y": 431,
+        "width": 18,
+        "height": 59
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 449,
+      "packingOrderIndex": 0
+    },
+    {
+      "stableId": "jyt.occ.west-upper.lantern-01.v2",
+      "homeRegion": "west-upper",
+      "atlasFile": "public/juyiting/images/occluders/west-upper-v2.png",
+      "atlasRect": {
+        "x": 20,
+        "y": 0,
+        "width": 49,
+        "height": 79
+      },
+      "pixelBounds": {
+        "x": 461,
+        "y": 165,
+        "width": 45,
+        "height": 75
+      },
+      "sourceRect": {
+        "x": 460,
+        "y": 164,
+        "width": 47,
+        "height": 77
+      },
+      "destinationRect": {
+        "x": 460,
+        "y": 164,
+        "width": 47,
+        "height": 77
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 2475,
+      "packingOrderIndex": 1
+    },
+    {
+      "stableId": "jyt.occ.west-upper.lantern-table-frame-01.v2",
+      "homeRegion": "west-upper",
+      "atlasFile": "public/juyiting/images/occluders/west-upper-v2.png",
+      "atlasRect": {
+        "x": 69,
+        "y": 0,
+        "width": 143,
+        "height": 78
+      },
+      "pixelBounds": {
+        "x": 215,
+        "y": 277,
+        "width": 139,
+        "height": 74
+      },
+      "sourceRect": {
+        "x": 214,
+        "y": 276,
+        "width": 141,
+        "height": 76
+      },
+      "destinationRect": {
+        "x": 214,
+        "y": 276,
+        "width": 141,
+        "height": 76
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 2706,
+      "packingOrderIndex": 2
+    },
+    {
+      "stableId": "jyt.occ.west-upper.pillar-01.v2",
+      "homeRegion": "west-upper",
+      "atlasFile": "public/juyiting/images/occluders/west-upper-v2.png",
+      "atlasRect": {
+        "x": 212,
+        "y": 0,
+        "width": 60,
+        "height": 167
+      },
+      "pixelBounds": {
+        "x": 543,
+        "y": 306,
+        "width": 56,
+        "height": 163
+      },
+      "sourceRect": {
+        "x": 542,
+        "y": 305,
+        "width": 58,
+        "height": 165
+      },
+      "destinationRect": {
+        "x": 542,
+        "y": 305,
+        "width": 58,
+        "height": 165
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 4981,
+      "packingOrderIndex": 3
+    },
+    {
+      "stableId": "jyt.occ.west-upper.wall-panel-assembly-01.v2",
+      "homeRegion": "west-upper",
+      "atlasFile": "public/juyiting/images/occluders/west-upper-v2.png",
+      "atlasRect": {
+        "x": 0,
+        "y": 167,
+        "width": 550,
+        "height": 372
+      },
+      "pixelBounds": {
+        "x": 0,
+        "y": 348,
+        "width": 546,
+        "height": 368
+      },
+      "sourceRect": {
+        "x": 0,
+        "y": 347,
+        "width": 547,
+        "height": 370
+      },
+      "destinationRect": {
+        "x": 0,
+        "y": 347,
+        "width": 547,
+        "height": 370
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 82119,
+      "packingOrderIndex": 4
+    },
+    {
+      "stableId": "jyt.occ.west-upper.wall-sconce-01.v2",
+      "homeRegion": "west-upper",
+      "atlasFile": "public/juyiting/images/occluders/west-upper-v2.png",
+      "atlasRect": {
+        "x": 550,
+        "y": 167,
+        "width": 17,
+        "height": 38
+      },
+      "pixelBounds": {
+        "x": 617,
+        "y": 238,
+        "width": 13,
+        "height": 34
+      },
+      "sourceRect": {
+        "x": 616,
+        "y": 237,
+        "width": 15,
+        "height": 36
+      },
+      "destinationRect": {
+        "x": 616,
+        "y": 237,
+        "width": 15,
+        "height": 36
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 216,
+      "packingOrderIndex": 5
+    },
+    {
+      "stableId": "jyt.occ.west-upper.wall-sconce-02.v2",
+      "homeRegion": "west-upper",
+      "atlasFile": "public/juyiting/images/occluders/west-upper-v2.png",
+      "atlasRect": {
+        "x": 567,
+        "y": 167,
+        "width": 49,
+        "height": 118
+      },
+      "pixelBounds": {
+        "x": 492,
+        "y": 471,
+        "width": 45,
+        "height": 114
+      },
+      "sourceRect": {
+        "x": 491,
+        "y": 470,
+        "width": 47,
+        "height": 116
+      },
+      "destinationRect": {
+        "x": 491,
+        "y": 470,
+        "width": 47,
+        "height": 116
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "paddingPixels": 1,
+      "extrusionPixels": 2,
+      "encoding": "png",
+      "ownedOpaquePixelCount": 2496,
+      "packingOrderIndex": 6
+    }
+  ],
+  "packingOrder": {
+    "west-upper": [
+      "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "jyt.occ.west-upper.lantern-01.v2",
+      "jyt.occ.west-upper.lantern-table-frame-01.v2",
+      "jyt.occ.west-upper.pillar-01.v2",
+      "jyt.occ.west-upper.wall-panel-assembly-01.v2",
+      "jyt.occ.west-upper.wall-sconce-01.v2",
+      "jyt.occ.west-upper.wall-sconce-02.v2"
+    ],
+    "center": [
+      "jyt.occ.center.wall-sconce-01.v2"
+    ],
+    "east-upper": [
+      "jyt.occ.east-upper.diagonal-brace-01.v2",
+      "jyt.occ.east-upper.pillar-01.v2",
+      "jyt.occ.east-upper.pillar-02.v2",
+      "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "jyt.occ.east-upper.wall-panel-lower-01.v2",
+      "jyt.occ.east-upper.wall-panel-upper-01.v2"
+    ],
+    "west-lower": [
+      "jyt.occ.west-lower.diagonal-brace-02.v2",
+      "jyt.occ.west-lower.floor-lantern-01.v2",
+      "jyt.occ.west-lower.long-table-frame-01.v2",
+      "jyt.occ.west-lower.railing-01.v2",
+      "jyt.occ.west-lower.railing-02.v2",
+      "jyt.occ.west-lower.wall-bracket-01.v2",
+      "jyt.occ.west-lower.wall-lantern-01.v2",
+      "jyt.occ.west-lower.wall-panel-assembly-01.v2"
+    ],
+    "entrance": [
+      "jyt.occ.entrance.hanging-banner-01.v2",
+      "jyt.occ.entrance.hanging-banner-02.v2",
+      "jyt.occ.entrance.lantern-post-01.v2",
+      "jyt.occ.entrance.lantern-post-02.v2"
+    ],
+    "east-lower": [
+      "jyt.occ.east-lower.diagonal-brace-01.v2",
+      "jyt.occ.east-lower.diagonal-brace-02.v2",
+      "jyt.occ.east-lower.fabric-rack-01.v2",
+      "jyt.occ.east-lower.lantern-01.v2",
+      "jyt.occ.east-lower.railing-post-01.v2",
+      "jyt.occ.east-lower.worktable-01.v2"
+    ]
+  },
+  "generationId": "7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b",
+  "note": "lossless deterministic PNG chosen because no lossless WebP encoder is verifiable on this host; regeneration is byte-identical",
+  "manifestId": "ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"
+}
