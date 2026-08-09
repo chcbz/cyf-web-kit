@@ -54,14 +54,26 @@ function assertFatal(fn: () => void, expectedCode: string): void {
 // ── Degenerate Edge ──
 
 describe('Degenerate edge detection', () => {
-  it('rejects adjacent duplicate vertex', () => {
-    const poly = fixedPoly(0, 0, 256, 0, 256, 0, 256, 256, 0, 256)
-    assertFatal(() => validateZonePolygon(poly, SCENE, OBJ), 'POLYGON_DEGENERATE_EDGE')
+  it('adjacent duplicate removed by dedup → polygon becomes valid', () => {
+    // After deduplication, (0,0)-(256,0)-(256,0)-(256,256)-(0,256)
+    // becomes the valid square (0,0)-(256,0)-(256,256)-(0,256)
+    const w = Math.round(40 * 256) // large enough for erosion
+    const poly = fixedPoly(0, 0, w, 0, w, 0, w, w, 0, w)
+    // Should NOT throw - dedup removes the duplicate
+    validateZonePolygon(poly, SCENE, OBJ)
   })
 
-  it('rejects zero-length edge (first=last implicit duplicate removed but explicit duplicate remains)', () => {
-    const poly = fixedPoly(0, 0, 256, 0, 256, 256, 256, 256, 0, 256)
-    assertFatal(() => validateZonePolygon(poly, SCENE, OBJ), 'POLYGON_DEGENERATE_EDGE')
+  it('zero-length edge removed by dedup → polygon becomes valid', () => {
+    // After dedup, (0,0)-(w,0)-(w,w)-(w,w)-(0,w) → (0,0)-(w,0)-(w,w)-(0,w), valid
+    const w = Math.round(40 * 256)
+    const poly = fixedPoly(0, 0, w, 0, w, w, w, w, 0, w)
+    validateZonePolygon(poly, SCENE, OBJ)
+  })
+
+  it('rejects polygon with all points merging to < 3 after dedup', () => {
+    // All points identical → dedup to 1 point → TOO_FEW_UNIQUE_POINTS
+    const poly = fixedPoly(100, 100, 100, 100, 100, 100)
+    assertFatal(() => validateZonePolygon(poly, SCENE, OBJ), 'POLYGON_TOO_FEW_UNIQUE_POINTS')
   })
 
   it('accepts polygon with distinct adjacent vertices', () => {
@@ -217,20 +229,23 @@ describe('Erosion (3px)', () => {
     validateZonePolygon(tri, SCENE, OBJ)
   })
 
-  it('concave corridor: wide room with narrow passage fails if passage < 6', () => {
-    // L-shape with wide body but narrow arm
-    // Main body: 100x100, arm: 5x50 (width < 6)
-    const w100 = Math.round(100 * 256)
+  it('concave corridor: narrow-only U-shape fails (no wide room)', () => {
+    // U-shape with both legs narrow (< 6 wide) and center gap also < 6.
+    // No surviving component after 3px erosion.
+    // Shape: left leg at x∈[0,5], right leg at x∈[9,14], both y∈[0,20],
+    // connected by bottom bar at y∈[0,5]. All features < 6 wide.
     const w5 = Math.round(5 * 256)
-    const h50 = Math.round(50 * 256)
-    // Polygon: big square at left, narrow arm extending right from top
+    const w14 = Math.round(14 * 256)
+    const h20 = Math.round(20 * 256)
     const poly = fixedPoly(
       0, 0,
-      w100 + w5, 0,
-      w100 + w5, w5,
-      w100, w5,
-      w100, w100,
-      0, w100,
+      w14, 0,
+      w14, h20,
+      w5 + w5, h20,  // 10 in fixed: gap between legs
+      w5 + w5, w5,
+      w5, w5,
+      w5, h20,
+      0, h20,
     )
     assertFatal(() => validateZonePolygon(poly, SCENE, OBJ), 'POLYGON_EROSION_EMPTY')
   })
@@ -247,6 +262,125 @@ describe('Erosion (3px)', () => {
       0, w100,
     )
     validateZonePolygon(poly, SCENE, OBJ)
+  })
+
+  // ── Reviewer counter-examples ──
+
+  it('U-shape with two surviving legs passes erosion', () => {
+    // U-shape: two legs each 10 wide, bottom connector 40 wide.
+    // Left leg: x∈[0,10], right leg: x∈[30,40], both y∈[0,50],
+    // connected by bottom bar y∈[0,10].
+    // Each leg core after erosion: 4 wide → survives.
+    const w10 = Math.round(10 * 256)
+    const w30 = Math.round(30 * 256)
+    const w40 = Math.round(40 * 256)
+    const h50 = Math.round(50 * 256)
+    const poly = fixedPoly(
+      0, 0,
+      w40, 0,
+      w40, h50,
+      w30, h50,
+      w30, w10,
+      w10, w10,
+      w10, h50,
+      0, h50,
+    )
+    validateZonePolygon(poly, SCENE, OBJ)
+  })
+
+  it('C-shape with surviving interior passes erosion', () => {
+    // C-shape: outer 40×40, open on right side.
+    // Polygon: (0,0)→(40,0)→(40,40)→(0,40)→(0,30)→(30,30)→(30,10)→(0,10)
+    // Wall thickness = 10 everywhere, > 6 → survives.
+    const w10 = Math.round(10 * 256)
+    const w30 = Math.round(30 * 256)
+    const w40 = Math.round(40 * 256)
+    const poly = fixedPoly(
+      0, 0,
+      w40, 0,
+      w40, w40,
+      0, w40,
+      0, w30,
+      w30, w30,
+      w30, w10,
+      0, w10,
+    )
+    validateZonePolygon(poly, SCENE, OBJ)
+  })
+
+  it('L-shape with wide arm and body passes erosion', () => {
+    // L-shape: vertical arm 15 wide, horizontal arm 15 tall, both > 6.
+    const w15 = Math.round(15 * 256)
+    const w80 = Math.round(80 * 256)
+    const poly = fixedPoly(
+      0, 0,
+      w80, 0,
+      w80, w15,
+      w15, w15,
+      w15, w80,
+      0, w80,
+    )
+    validateZonePolygon(poly, SCENE, OBJ)
+  })
+
+  it('narrow-only L-shape (< 6 both arms) fails erosion', () => {
+    const w5 = Math.round(5 * 256)
+    const w30 = Math.round(30 * 256)
+    const poly = fixedPoly(
+      0, 0,
+      w30, 0,
+      w30, w5,
+      w5, w5,
+      w5, w30,
+      0, w30,
+    )
+    assertFatal(() => validateZonePolygon(poly, SCENE, OBJ), 'POLYGON_EROSION_EMPTY')
+  })
+
+  it('rotated narrow strip width=5.9 fails erosion', () => {
+    // A 5.9-wide strip rotated ~30°, enclosed as a thin parallelogram.
+    // No point has signed distance > 3.
+    const w = Math.round(40 * 256)
+    const thin = Math.round(5.9 * 256)
+    // Parallelogram: base from (0,0) to (40,0), top offset by thin*tan(30°)≈thin*0.577
+    const offsetX = Math.round(thin * 0.577)
+    const poly = fixedPoly(
+      0, 0,
+      w, 0,
+      w + offsetX, thin,
+      offsetX, thin,
+    )
+    assertFatal(() => validateZonePolygon(poly, SCENE, OBJ), 'POLYGON_EROSION_EMPTY')
+  })
+
+  it('rotated strip width=6.1 passes erosion', () => {
+    const w = Math.round(40 * 256)
+    const wide = Math.round(6.1 * 256)
+    const offsetX = Math.round(wide * 0.577)
+    const poly = fixedPoly(
+      0, 0,
+      w, 0,
+      w + offsetX, wide,
+      offsetX, wide,
+    )
+    validateZonePolygon(poly, SCENE, OBJ)
+  })
+
+  it('triangle incircle radius exactly 3 fails (no interior after erosion)', () => {
+    // Equilateral triangle with incircle radius exactly 3.
+    // side = incircle * 2*sqrt(3) = 3*2*1.732 = 10.392
+    const side = Math.round(10.392304845413264 * 256)
+    const height = Math.round(10.392304845413264 * Math.sqrt(3) / 2 * 256)
+    const tri = fixedPoly(0, 0, side, 0, side / 2, height)
+    // incircle = 3 → after 3px erosion, only center point survives (degenerate)
+    assertFatal(() => validateZonePolygon(tri, SCENE, OBJ), 'POLYGON_EROSION_EMPTY')
+  })
+
+  it('triangle incircle radius 3.1 passes erosion', () => {
+    const side = Math.round(10.737782979 * 256) // incircle ≈ 3.1
+    const height = Math.round(10.737782979 * Math.sqrt(3) / 2 * 256)
+    const tri = fixedPoly(0, 0, side, 0, Math.round(side / 2), height)
+    validateZonePolygon(tri, SCENE, OBJ)
   })
 })
 
@@ -351,7 +485,7 @@ describe('Canonical adapter integration', () => {
     ]
     assertFatal(
       () => validateAndCompilePolygon(points, SCENE, OBJ),
-      'POLYGON_SELF_INTERSECTING',
+      'POLYGON_TOO_FEW_UNIQUE_POINTS',
     )
   })
 })

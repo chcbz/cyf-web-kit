@@ -27,7 +27,7 @@ import {
   isStructuredFatalRenderSchemaError,
   renderSchemaError,
 } from './schema.js'
-import { validateAndCompilePolygon } from './validation.js'
+import { validateAndCanonicalizePolygon } from './validation.js'
 
 // ── Helpers ──
 
@@ -130,6 +130,7 @@ function fatal(
     ZONE_HYSTERESIS_INVALID: 'zone hysteresisPx 必须为 3。',
     ZONE_TARGET_NOT_FOUND: 'zone target fragment 未在 fragments 中找到。',
     OBJECT_REFERENCE_INVALID: '对象引用无效。',
+    POLYGON_TOO_FEW_UNIQUE_POINTS: 'zone polygon 去重后唯一点少于 3 个。',
     POLYGON_SELF_INTERSECTING: 'zone polygon 存在自相交（含共线重叠/T型接触/非相邻顶点触碰）。',
     POLYGON_DEGENERATE_EDGE: 'zone polygon 存在退化边（相邻重复点或零长度边）。',
     POLYGON_AREA_TOO_SMALL: 'zone polygon 绝对面积小于 1 平方世界像素。',
@@ -951,20 +952,12 @@ function parseConstraintZone(
   } else {
     fatal('ZONE_POLYGON_INVALID', sceneId, stableId, 'polygon', `zone requires a polygon`)
   }
-  const polygon = normalizeBasicZonePolygon(rawPolygon, polygonOrigin, sceneId, stableId)
+  const rawPolygonPoints = normalizeBasicZonePolygon(rawPolygon, polygonOrigin, sceneId, stableId)
 
-  // E4: Compile polygon to fixed-point and validate (fail-closed)
-  validateAndCompilePolygon(polygon, sceneId, stableId)
-
-  // bounds (AABB of polygon)
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-  for (const p of polygon) {
-    if (p.x < minX) minX = p.x
-    if (p.y < minY) minY = p.y
-    if (p.x > maxX) maxX = p.x
-    if (p.y > maxY) maxY = p.y
-  }
-  const bounds: Rect = { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+  // E4: Compile to fixed-point, validate (fail-closed), and produce
+  // canonical quantized world coordinates + bounds.
+  // Two inputs in the same 1/256 grid produce identical canonical bytes.
+  const canonicalPoly = validateAndCanonicalizePolygon(rawPolygonPoints, sceneId, stableId)
 
   // hysteresisPx must be 3
   const hysteresisRaw = props.hysteresisPx !== undefined ? Number(props.hysteresisPx) : HYSTERESIS_PX
@@ -980,8 +973,8 @@ function parseConstraintZone(
     targetFragmentId,
     relation,
     priority,
-    polygon: polygon.map(normalizePoint),
-    bounds: normalizeRect(bounds),
+    polygon: canonicalPoly.polygon.map(normalizePoint),
+    bounds: normalizeRect(canonicalPoly.bounds),
     hysteresisPx: HYSTERESIS_PX,
   })
 }
