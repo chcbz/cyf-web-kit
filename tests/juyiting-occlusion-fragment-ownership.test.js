@@ -103,7 +103,15 @@ describe('E9A V2 Fragment Ownership Spec', () => {
     expect(ids).to.deep.equal([...ids].sort((a, b) => Buffer.from(a).compare(Buffer.from(b))))
     expect(new Set(ids).size).to.equal(ids.length)
     expect(ids).to.have.members(SEMANTIC_OWNER_CATALOG.map(entry => entry.stableId))
-    expect(spec.fragments).to.have.length(30)
+    expect(spec.fragments).to.have.length(32)
+    expect(spec.outputConstraints.regionFragmentCounts).to.deep.equal({
+      'west-upper': 7,
+      center: 1,
+      'east-upper': 6,
+      'west-lower': 8,
+      entrance: 4,
+      'east-lower': 6,
+    })
     for (const fragment of spec.fragments) {
       expect(fragment.semanticType).not.to.be.oneOf(['structure', 'detail', 'element'])
       expect(fragment.observableDescription).to.be.a('string').and.not.be.empty
@@ -125,7 +133,7 @@ describe('E9A V2 Fragment Ownership Spec', () => {
       'jyt.occ.west-upper.wall-panel-assembly-01.v2',
       'jyt.occ.east-upper.pillar-02.v2',
       'jyt.occ.east-lower.diagonal-brace-01.v2',
-      'jyt.occ.east-lower.railing-corner-01.v2',
+      'jyt.occ.east-lower.worktable-01.v2',
     ]
     for (const stableId of ids) {
       const fragment = spec.fragments.find(candidate => candidate.stableId === stableId)
@@ -164,15 +172,55 @@ describe('E9A V2 Fragment Ownership Spec', () => {
     expect(spec.outputConstraints.opaqueCutEdgeExceptions).to.deep.equal([])
   })
 
-  it('records only the two reviewed multi-component semantic continuations', () => {
-    const continuations = spec.fragments.filter(fragment => fragment.semanticOwnership.componentPolicy === 'approved-visual-continuation')
-    expect(continuations.map(fragment => fragment.stableId)).to.have.members([
-      'jyt.occ.east-lower.railing-corner-01.v2',
-      'jyt.occ.west-lower.wall-panel-assembly-01.v2',
+  it('allows disconnected components only for the explicitly approved same-object worktable parts', () => {
+    const grouped = spec.fragments.filter(fragment => fragment.semanticOwnership.componentGroupPolicy.mode === 'approved-same-observable-object-parts')
+    expect(grouped.map(fragment => fragment.stableId)).to.deep.equal(['jyt.occ.east-lower.worktable-01.v2'])
+    expect(grouped[0].semanticOwnership.canonicalComponentIds).to.have.length(2)
+    expect(grouped[0].semanticOwnership.componentGroupPolicy.observableObject).to.equal('east worktable')
+    expect(grouped[0].semanticOwnership.componentGroupPolicy.approvedParts).to.deep.equal([
+      { componentKey: '1499,574,120,100,5297', role: 'tabletop-scrolls-vessels-near-edge-and-main-legs' },
+      { componentKey: '1592,674,21,27,274', role: 'separated-lower-right-leg-cap' },
     ])
-    expect(continuations).to.have.length(2)
-    expect(continuations.find(fragment => fragment.stableId.includes('railing-corner')).semanticOwnership.canonicalComponentIds).to.have.length(2)
-    expect(continuations.find(fragment => fragment.stableId.includes('west-lower.wall-panel')).semanticOwnership.canonicalComponentIds).to.have.length(3)
+    for (const fragment of spec.fragments.filter(candidate => candidate !== grouped[0])) {
+      expect(fragment.semanticOwnership.componentGroupPolicy.mode).to.equal('single-component')
+      expect(fragment.semanticOwnership.canonicalComponentIds).to.have.length(1)
+    }
+  })
+
+  it('splits the southwest wall and two illuminated fixtures by exact component identity', () => {
+    const expected = [
+      ['jyt.occ.west-lower.wall-panel-assembly-01.v2', 'wall-panel-assembly', { x: 17, y: 573, width: 402, height: 339 }, 31548],
+      ['jyt.occ.west-lower.wall-lantern-01.v2', 'wall-lantern', { x: 11, y: 706, width: 48, height: 35 }, 850],
+      ['jyt.occ.west-lower.floor-lantern-01.v2', 'floor-lantern', { x: 357, y: 876, width: 48, height: 52 }, 1348],
+    ]
+    for (const [stableId, semanticType, bounds, opaquePixelCount] of expected) {
+      const fragment = spec.fragments.find(candidate => candidate.stableId === stableId)
+      expect(fragment, stableId).to.exist
+      expect(fragment.semanticType).to.equal(semanticType)
+      expect(fragment.ownedOpaquePixelCount).to.equal(opaquePixelCount)
+      expect(fragment.semanticOwnership.componentGroupPolicy.mode).to.equal('single-component')
+      expect(fragment.semanticOwnership.canonicalComponents).to.have.length(1)
+      expect(fragment.semanticOwnership.canonicalComponents[0]).to.deep.include({ bounds, opaquePixelCount })
+      expect(fragment.semanticOwnership.canonicalComponents[0].identitySha256).to.match(/^[a-f0-9]{64}$/)
+      expect(fragment.semanticOwnership.canonicalComponents[0].componentId).to.equal(fragment.semanticOwnership.canonicalComponentIds[0])
+    }
+  })
+
+  it('locks the five reviewer-corrected coordinate semantics without changing their runs', () => {
+    const corrected = [
+      [{ x: 1597, y: 747, width: 67, height: 84 }, 'jyt.occ.east-lower.fabric-rack-01.v2', 'fabric-rack'],
+      [{ x: 1498, y: 573, width: 122, height: 129 }, 'jyt.occ.east-lower.worktable-01.v2', 'worktable'],
+      [{ x: 1383, y: 254, width: 97, height: 31 }, 'jyt.occ.east-upper.scroll-table-front-01.v2', 'scroll-table-front'],
+      [{ x: 116, y: 600, width: 124, height: 120 }, 'jyt.occ.west-lower.long-table-frame-01.v2', 'long-table-frame'],
+      [{ x: 214, y: 276, width: 141, height: 76 }, 'jyt.occ.west-upper.lantern-table-frame-01.v2', 'lantern-table-frame'],
+    ]
+    for (const [sourceRect, stableId, semanticType] of corrected) {
+      const fragment = spec.fragments.find(candidate => JSON.stringify(candidate.sourceRect) === JSON.stringify(sourceRect))
+      expect(fragment, JSON.stringify(sourceRect)).to.exist
+      expect(fragment.stableId).to.equal(stableId)
+      expect(fragment.semanticType).to.equal(semanticType)
+      expect(fragment.stableId).not.to.match(/(hanging-signboard|railing-corner|diagonal-brace-03|west-lower\.diagonal-brace-01|west-upper\.railing-01)/)
+    }
   })
 
   it('has an exact ownership report with zero cut edges', () => {
@@ -208,7 +256,7 @@ describe('E9A V2 Fragment Ownership Spec', () => {
     expect(cropIndexes).to.deep.equal([...spec.fragments.keys()])
     expect(legendIndexes).to.deep.equal([...spec.fragments.keys()])
     for (const fragment of spec.fragments) expect(contactSheet).to.include(fragment.stableId)
-    for (const label of ['west wall crosses y=580', 'east pillar crosses y=580', 'east diagonal crosses y=580', 'east railing crosses y=580']) {
+    for (const label of ['west wall crosses y=580', 'east pillar crosses y=580', 'east diagonal crosses y=580', 'east worktable crosses y=580']) {
       expect(contactSheet).to.include(label)
     }
     for (const [region, count] of Object.entries(spec.outputConstraints.regionFragmentCounts)) {
@@ -348,13 +396,28 @@ describe('E9A V2 Fragment Ownership Mutation Tests', () => {
     target.ownershipRuns.push(...donor.ownershipRuns.map(run => [...run]))
     target.ownershipRuns.sort(compareRuns)
     target.ownedOpaquePixelCount = runPixels(target.ownershipRuns)
-    target.semanticOwnership.componentPolicy = 'approved-visual-continuation'
-    target.semanticOwnership.continuationRationale = 'mutated arbitrary grouping'
+    target.semanticOwnership.componentGroupPolicy = {
+      mode: 'approved-same-observable-object-parts',
+      observableObject: 'mutated arbitrary grouping',
+      approvalBasis: 'none',
+      approvedParts: [],
+    }
     target.semanticOwnership.canonicalComponentIds.push(...donor.semanticOwnership.canonicalComponentIds)
     target.semanticOwnership.canonicalComponentIds.sort()
+    target.semanticOwnership.canonicalComponents.push(...donor.semanticOwnership.canonicalComponents)
+    target.semanticOwnership.canonicalComponents.sort((left, right) => left.geometryKey.localeCompare(right.geometryKey))
     mutated.fragments.splice(donorIndex, 1)
     updateDeclaredCounts(mutated)
   }, 'broad/disconnected semantic group differs from reviewed catalog'))
+  it('rejects a multi-component owner without the exact approved componentGroupPolicy', () => expectRejected(mutated => {
+    const worktable = mutated.fragments.find(fragment => fragment.stableId === 'jyt.occ.east-lower.worktable-01.v2')
+    worktable.semanticOwnership.componentGroupPolicy = {
+      mode: 'single-component', observableObject: 'worktable', approvedParts: [],
+    }
+  }, 'componentGroupPolicy differs from reviewed catalog'))
+  it('rejects component identity hash or bounds drift', () => expectRejected(mutated => {
+    mutated.fragments[0].semanticOwnership.canonicalComponents[0].identitySha256 = '0'.repeat(64)
+  }, 'component identity/bounds/hash differs from decoded source'))
   it('rejects changed generationId', () => expectRejected(mutated => { mutated.generationId = 'f'.repeat(64); mutated.generation.generationId = mutated.generationId }, 'generationId mismatch'))
   it('fails closed when canonical source is missing', () => expectRejected(mutated => { mutated.sourceProvenance.path = 'public/juyiting/images/missing.webp' }, 'Canonical source not found'))
 })

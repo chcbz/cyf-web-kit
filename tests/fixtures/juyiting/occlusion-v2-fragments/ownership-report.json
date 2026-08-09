@@ -2,7 +2,7 @@
   "$schema": "jyt.occlusion.ownership-report.v2",
   "schemaVersion": 2,
   "taskId": "E9A",
-  "generationId": "5ec3052c1cd5c392a9b9375884ad64a746ea314f42910389006ed6621f3e623f",
+  "generationId": "7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b",
   "generatedFromSourceEpoch": 1786267688,
   "source": {
     "assetRef": "jyt.occlusion-source.hall-v3",
@@ -23,16 +23,16 @@
     "opaqueCutEdgeCount": 0
   },
   "semanticResult": {
-    "fragmentCount": 30,
-    "singleComponentOwners": 28,
-    "approvedVisualContinuationOwners": 2,
+    "fragmentCount": 32,
+    "singleComponentOwners": 31,
+    "approvedSameObservableObjectGroupOwners": 1,
     "genericSemanticLabels": []
   },
   "regionFragmentCounts": {
     "west-upper": 7,
     "center": 1,
     "east-upper": 6,
-    "west-lower": 6,
+    "west-lower": 8,
     "entrance": 4,
     "east-lower": 6
   },
@@ -51,7 +51,7 @@
     },
     "west-lower": {
       "opaqueOwned": 49306,
-      "fragmentCount": 6
+      "fragmentCount": 8
     },
     "entrance": {
       "opaqueOwned": 8535,

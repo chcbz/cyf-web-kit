@@ -120,11 +120,11 @@
   },
   "visualStructureExplanation": {
     "west-upper": "Northwest lanterns, railing, carved pillar, wall panel and braces. The large west wall-panel owner crosses y=580 intact.",
-    "west-lower": "Southwest wall-panel assembly, lower railings and diagonal braces. Detached alpha islands are only merged where they visibly continue one named assembly.",
+    "west-lower": "Southwest wall-panel assembly, two independent illuminated lanterns, long-table frame, lower railings and one narrow brace. Every owner is one 8-connected component.",
     "center": "Sparse north-center area containing one visible wall sconce at (1112,230,18×54); it is explicitly not a pillar.",
     "entrance": "South-center entrance lantern posts and two hanging red banners.",
-    "east-upper": "Northeast signboard, upper/lower wall panels, carved pillars and narrow brace. The pillar at (1202,478,50×225) crosses y=580 intact.",
-    "east-lower": "Southeast diagonal braces, railing corner, railing post and low lantern. The diagonal brace and railing corner spanning y=580 remain single owners."
+    "east-upper": "Northeast scroll-table front, upper/lower wall panels, carved pillars and narrow brace. The pillar at (1202,478,50×225) crosses y=580 intact.",
+    "east-lower": "Southeast diagonal work support, worktable, fabric rack, railing post and low lantern. The diagonal support and worktable spanning y=580 remain single semantic owners."
   },
   "outputConstraints": {
     "formats": [
@@ -141,14 +141,14 @@
     "excludePolicy": "ownershipRuns must never contain canonical pixels with alpha < 1",
     "opaqueNeighborPolicy": "different owners must never meet across a 4-neighbor opaque edge",
     "opaqueCutEdgeExceptions": [],
-    "semanticPurityPolicy": "one canonical 8-connected component per owner unless semanticOwnership.componentPolicy is approved-visual-continuation and lists the complete reviewed component set",
+    "semanticPurityPolicy": "one canonical 8-connected component per owner unless semanticOwnership.componentGroupPolicy.mode is approved-same-observable-object-parts and its approvedParts exactly list every reviewed component identity for one observable object",
     "sourceRectOverlapPolicy": "allowed-because-runs-are-authoritative",
-    "fragmentCount": 30,
+    "fragmentCount": 32,
     "regionFragmentCounts": {
       "west-upper": 7,
       "center": 1,
       "east-upper": 6,
-      "west-lower": 6,
+      "west-lower": 8,
       "entrance": 4,
       "east-lower": 6
     }
@@ -170,7 +170,7 @@
           "y=580 west wall crossing",
           "y=580 east pillar crossing",
           "y=580 east diagonal crossing",
-          "y=580 east railing crossing"
+          "y=580 east worktable crossing"
         ]
       }
     },
@@ -488,11 +488,33 @@
       "ownedOpaquePixelCount": 504,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "wall-sconce",
+          "approvedParts": [
+            {
+              "componentKey": "1112,230,18,54,504",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-88b5c2d3ec506f7fb1a5"
         ],
-        "continuationRationale": null
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-88b5c2d3ec506f7fb1a5",
+            "identitySha256": "88b5c2d3ec506f7fb1a59e95af7ab25f206c8a4d4c5711f9ff9877715a7248a8",
+            "geometryKey": "1112,230,18,54,504",
+            "bounds": {
+              "x": 1112,
+              "y": 230,
+              "width": 18,
+              "height": 54
+            },
+            "opaquePixelCount": 504
+          }
+        ]
       },
       "outputFileHint": "public/juyiting/images/occluders/center-v2.webp",
       "outputEncoding": {
@@ -1837,11 +1859,33 @@
       "ownedOpaquePixelCount": 12954,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "diagonal-brace",
+          "approvedParts": [
+            {
+              "componentKey": "1308,560,203,208,12954",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-ae1c5cb5cfbf2b7f6fd9"
         ],
-        "continuationRationale": null
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-ae1c5cb5cfbf2b7f6fd9",
+            "identitySha256": "ae1c5cb5cfbf2b7f6fd9f7086808ebe08a96612ad071508670d7266202b5d822",
+            "geometryKey": "1308,560,203,208,12954",
+            "bounds": {
+              "x": 1308,
+              "y": 560,
+              "width": 203,
+              "height": 208
+            },
+            "opaquePixelCount": 12954
+          }
+        ]
       },
       "outputFileHint": "public/juyiting/images/occluders/east-lower-v2.webp",
       "outputEncoding": {
@@ -2141,11 +2185,33 @@
       "ownedOpaquePixelCount": 494,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "diagonal-brace",
+          "approvedParts": [
+            {
+              "componentKey": "1351,691,24,50,494",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-c1eeb2f467a754b597d5"
         ],
-        "continuationRationale": null
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-c1eeb2f467a754b597d5",
+            "identitySha256": "c1eeb2f467a754b597d5b90a7e7d94e9e94b872b3ba570f8fce8091b60af003f",
+            "geometryKey": "1351,691,24,50,494",
+            "bounds": {
+              "x": 1351,
+              "y": 691,
+              "width": 24,
+              "height": 50
+            },
+            "opaquePixelCount": 494
+          }
+        ]
       },
       "outputFileHint": "public/juyiting/images/occluders/east-lower-v2.webp",
       "outputEncoding": {
@@ -2159,12 +2225,12 @@
       }
     },
     {
-      "stableId": "jyt.occ.east-lower.diagonal-brace-03.v2",
+      "stableId": "jyt.occ.east-lower.fabric-rack-01.v2",
       "region": "east-lower",
       "homeRegion": "east-lower",
       "chunkId": "east-lower",
-      "semanticType": "diagonal-brace",
-      "observableDescription": "Far southeast triangular diagonal brace.",
+      "semanticType": "fabric-rack",
+      "observableDescription": "Independent southeast rack segment supporting draped fabric or a banner.",
       "sourceRect": {
         "x": 1597,
         "y": 747,
@@ -2605,11 +2671,33 @@
       "ownedOpaquePixelCount": 2227,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "fabric-rack",
+          "approvedParts": [
+            {
+              "componentKey": "1598,748,66,82,2227",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-4dded4d99a2df286dda5"
         ],
-        "continuationRationale": null
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-4dded4d99a2df286dda5",
+            "identitySha256": "4dded4d99a2df286dda541a6c15b17fdeb2c7e6dee7d12f82bf169ca6940cc38",
+            "geometryKey": "1598,748,66,82,2227",
+            "bounds": {
+              "x": 1598,
+              "y": 748,
+              "width": 66,
+              "height": 82
+            },
+            "opaquePixelCount": 2227
+          }
+        ]
       },
       "outputFileHint": "public/juyiting/images/occluders/east-lower-v2.webp",
       "outputEncoding": {
@@ -3089,11 +3177,33 @@
       "ownedOpaquePixelCount": 2328,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "lantern",
+          "approvedParts": [
+            {
+              "componentKey": "1314,839,47,86,2328",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-3ffb7b0c9ac77b68bd63"
         ],
-        "continuationRationale": null
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-3ffb7b0c9ac77b68bd63",
+            "identitySha256": "3ffb7b0c9ac77b68bd639ab3b6642bdfc7c69c4e416b8aadf1b6ef34a7d49ec1",
+            "geometryKey": "1314,839,47,86,2328",
+            "bounds": {
+              "x": 1314,
+              "y": 839,
+              "width": 47,
+              "height": 86
+            },
+            "opaquePixelCount": 2328
+          }
+        ]
       },
       "outputFileHint": "public/juyiting/images/occluders/east-lower-v2.webp",
       "outputEncoding": {
@@ -3107,12 +3217,428 @@
       }
     },
     {
-      "stableId": "jyt.occ.east-lower.railing-corner-01.v2",
+      "stableId": "jyt.occ.east-lower.railing-post-01.v2",
       "region": "east-lower",
       "homeRegion": "east-lower",
       "chunkId": "east-lower",
-      "semanticType": "railing-corner",
-      "observableDescription": "East railing corner with mounted scroll/book bracket and lower cap; merged per V2 coordinates 21+25.",
+      "semanticType": "railing-post",
+      "observableDescription": "Narrow vertical end post below the east pillar.",
+      "sourceRect": {
+        "x": 1241,
+        "y": 706,
+        "width": 12,
+        "height": 70
+      },
+      "destinationRect": {
+        "x": 1241,
+        "y": 706,
+        "width": 12,
+        "height": 70
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "pixelOwnershipRule": {
+        "model": "alpha-rle-v1",
+        "runEncoding": "[y,xStartInclusive,xEndExclusive]",
+        "coordinateSpace": "canonical-source-pixels",
+        "threshold": 1,
+        "e9bAction": "copy RGBA only for ownershipRuns; clear every other sourceRect pixel to transparent"
+      },
+      "ownershipRuns": [
+        [
+          707,
+          1242,
+          1243
+        ],
+        [
+          708,
+          1242,
+          1245
+        ],
+        [
+          709,
+          1242,
+          1247
+        ],
+        [
+          710,
+          1242,
+          1250
+        ],
+        [
+          711,
+          1242,
+          1252
+        ],
+        [
+          712,
+          1243,
+          1252
+        ],
+        [
+          713,
+          1243,
+          1252
+        ],
+        [
+          714,
+          1243,
+          1252
+        ],
+        [
+          715,
+          1243,
+          1252
+        ],
+        [
+          716,
+          1243,
+          1252
+        ],
+        [
+          717,
+          1243,
+          1252
+        ],
+        [
+          718,
+          1243,
+          1252
+        ],
+        [
+          719,
+          1243,
+          1252
+        ],
+        [
+          720,
+          1243,
+          1252
+        ],
+        [
+          721,
+          1243,
+          1252
+        ],
+        [
+          722,
+          1244,
+          1252
+        ],
+        [
+          723,
+          1244,
+          1252
+        ],
+        [
+          724,
+          1244,
+          1252
+        ],
+        [
+          725,
+          1244,
+          1252
+        ],
+        [
+          726,
+          1244,
+          1252
+        ],
+        [
+          727,
+          1244,
+          1251
+        ],
+        [
+          728,
+          1244,
+          1251
+        ],
+        [
+          729,
+          1244,
+          1251
+        ],
+        [
+          730,
+          1244,
+          1251
+        ],
+        [
+          731,
+          1245,
+          1251
+        ],
+        [
+          732,
+          1245,
+          1251
+        ],
+        [
+          733,
+          1245,
+          1251
+        ],
+        [
+          734,
+          1245,
+          1251
+        ],
+        [
+          735,
+          1245,
+          1251
+        ],
+        [
+          736,
+          1245,
+          1251
+        ],
+        [
+          737,
+          1245,
+          1251
+        ],
+        [
+          738,
+          1245,
+          1251
+        ],
+        [
+          739,
+          1245,
+          1251
+        ],
+        [
+          740,
+          1245,
+          1251
+        ],
+        [
+          741,
+          1246,
+          1251
+        ],
+        [
+          742,
+          1246,
+          1251
+        ],
+        [
+          743,
+          1246,
+          1251
+        ],
+        [
+          744,
+          1246,
+          1251
+        ],
+        [
+          745,
+          1246,
+          1251
+        ],
+        [
+          746,
+          1246,
+          1251
+        ],
+        [
+          747,
+          1246,
+          1251
+        ],
+        [
+          748,
+          1246,
+          1251
+        ],
+        [
+          749,
+          1246,
+          1251
+        ],
+        [
+          750,
+          1246,
+          1251
+        ],
+        [
+          751,
+          1247,
+          1251
+        ],
+        [
+          752,
+          1247,
+          1251
+        ],
+        [
+          753,
+          1247,
+          1251
+        ],
+        [
+          754,
+          1247,
+          1251
+        ],
+        [
+          755,
+          1247,
+          1251
+        ],
+        [
+          756,
+          1247,
+          1251
+        ],
+        [
+          757,
+          1247,
+          1251
+        ],
+        [
+          758,
+          1247,
+          1251
+        ],
+        [
+          759,
+          1247,
+          1250
+        ],
+        [
+          760,
+          1248,
+          1250
+        ],
+        [
+          761,
+          1248,
+          1250
+        ],
+        [
+          762,
+          1248,
+          1250
+        ],
+        [
+          763,
+          1248,
+          1250
+        ],
+        [
+          764,
+          1248,
+          1250
+        ],
+        [
+          765,
+          1248,
+          1250
+        ],
+        [
+          766,
+          1248,
+          1250
+        ],
+        [
+          767,
+          1248,
+          1250
+        ],
+        [
+          768,
+          1248,
+          1250
+        ],
+        [
+          769,
+          1248,
+          1250
+        ],
+        [
+          770,
+          1249,
+          1250
+        ],
+        [
+          771,
+          1249,
+          1250
+        ],
+        [
+          772,
+          1249,
+          1250
+        ],
+        [
+          773,
+          1249,
+          1250
+        ],
+        [
+          774,
+          1249,
+          1250
+        ]
+      ],
+      "ownedOpaquePixelCount": 355,
+      "semanticOwnership": {
+        "componentConnectivity": 8,
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "railing-post",
+          "approvedParts": [
+            {
+              "componentKey": "1242,707,10,68,355",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
+        "canonicalComponentIds": [
+          "cc8-5d6fbf80c5d7b0fca6b2"
+        ],
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-5d6fbf80c5d7b0fca6b2",
+            "identitySha256": "5d6fbf80c5d7b0fca6b260caebf1555cbec7902f042ba2e0309e003382c27be8",
+            "geometryKey": "1242,707,10,68,355",
+            "bounds": {
+              "x": 1242,
+              "y": 707,
+              "width": 10,
+              "height": 68
+            },
+            "opaquePixelCount": 355
+          }
+        ]
+      },
+      "outputFileHint": "public/juyiting/images/occluders/east-lower-v2.webp",
+      "outputEncoding": {
+        "allowed": [
+          "lossless-webp",
+          "png"
+        ],
+        "losslessRequired": true,
+        "alphaRequired": true,
+        "colorTransform": "forbidden"
+      }
+    },
+    {
+      "stableId": "jyt.occ.east-lower.worktable-01.v2",
+      "region": "east-lower",
+      "homeRegion": "east-lower",
+      "chunkId": "east-lower",
+      "semanticType": "worktable",
+      "observableDescription": "East worktable with scrolls and vessels on its top, near edge, and separated lower-right leg/cap.",
       "sourceRect": {
         "x": 1498,
         "y": 573,
@@ -3843,406 +4369,51 @@
       "ownedOpaquePixelCount": 5571,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "approved-visual-continuation",
+        "componentGroupPolicy": {
+          "mode": "approved-same-observable-object-parts",
+          "observableObject": "east worktable",
+          "approvalBasis": "GPT V2 reviewed the two alpha islands at (1499,574,120×100) and (1592,674,21×27) as visible parts of the same worktable.",
+          "approvedParts": [
+            {
+              "componentKey": "1499,574,120,100,5297",
+              "role": "tabletop-scrolls-vessels-near-edge-and-main-legs"
+            },
+            {
+              "componentKey": "1592,674,21,27,274",
+              "role": "separated-lower-right-leg-cap"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-12d5a3ad0818eaf6d43b",
           "cc8-e663f6fe28cd440acf1b"
         ],
-        "continuationRationale": "The lower cap continues the same east railing corner despite a transparent antialias gap."
-      },
-      "outputFileHint": "public/juyiting/images/occluders/east-lower-v2.webp",
-      "outputEncoding": {
-        "allowed": [
-          "lossless-webp",
-          "png"
-        ],
-        "losslessRequired": true,
-        "alphaRequired": true,
-        "colorTransform": "forbidden"
-      }
-    },
-    {
-      "stableId": "jyt.occ.east-lower.railing-post-01.v2",
-      "region": "east-lower",
-      "homeRegion": "east-lower",
-      "chunkId": "east-lower",
-      "semanticType": "railing-post",
-      "observableDescription": "Narrow vertical end post below the east pillar.",
-      "sourceRect": {
-        "x": 1241,
-        "y": 706,
-        "width": 12,
-        "height": 70
-      },
-      "destinationRect": {
-        "x": 1241,
-        "y": 706,
-        "width": 12,
-        "height": 70
-      },
-      "destinationMapping": {
-        "mode": "source-coordinate-identity",
-        "scaleNumerator": 1,
-        "scaleDenominator": 1,
-        "sampling": "none"
-      },
-      "pixelOwnershipRule": {
-        "model": "alpha-rle-v1",
-        "runEncoding": "[y,xStartInclusive,xEndExclusive]",
-        "coordinateSpace": "canonical-source-pixels",
-        "threshold": 1,
-        "e9bAction": "copy RGBA only for ownershipRuns; clear every other sourceRect pixel to transparent"
-      },
-      "ownershipRuns": [
-        [
-          707,
-          1242,
-          1243
-        ],
-        [
-          708,
-          1242,
-          1245
-        ],
-        [
-          709,
-          1242,
-          1247
-        ],
-        [
-          710,
-          1242,
-          1250
-        ],
-        [
-          711,
-          1242,
-          1252
-        ],
-        [
-          712,
-          1243,
-          1252
-        ],
-        [
-          713,
-          1243,
-          1252
-        ],
-        [
-          714,
-          1243,
-          1252
-        ],
-        [
-          715,
-          1243,
-          1252
-        ],
-        [
-          716,
-          1243,
-          1252
-        ],
-        [
-          717,
-          1243,
-          1252
-        ],
-        [
-          718,
-          1243,
-          1252
-        ],
-        [
-          719,
-          1243,
-          1252
-        ],
-        [
-          720,
-          1243,
-          1252
-        ],
-        [
-          721,
-          1243,
-          1252
-        ],
-        [
-          722,
-          1244,
-          1252
-        ],
-        [
-          723,
-          1244,
-          1252
-        ],
-        [
-          724,
-          1244,
-          1252
-        ],
-        [
-          725,
-          1244,
-          1252
-        ],
-        [
-          726,
-          1244,
-          1252
-        ],
-        [
-          727,
-          1244,
-          1251
-        ],
-        [
-          728,
-          1244,
-          1251
-        ],
-        [
-          729,
-          1244,
-          1251
-        ],
-        [
-          730,
-          1244,
-          1251
-        ],
-        [
-          731,
-          1245,
-          1251
-        ],
-        [
-          732,
-          1245,
-          1251
-        ],
-        [
-          733,
-          1245,
-          1251
-        ],
-        [
-          734,
-          1245,
-          1251
-        ],
-        [
-          735,
-          1245,
-          1251
-        ],
-        [
-          736,
-          1245,
-          1251
-        ],
-        [
-          737,
-          1245,
-          1251
-        ],
-        [
-          738,
-          1245,
-          1251
-        ],
-        [
-          739,
-          1245,
-          1251
-        ],
-        [
-          740,
-          1245,
-          1251
-        ],
-        [
-          741,
-          1246,
-          1251
-        ],
-        [
-          742,
-          1246,
-          1251
-        ],
-        [
-          743,
-          1246,
-          1251
-        ],
-        [
-          744,
-          1246,
-          1251
-        ],
-        [
-          745,
-          1246,
-          1251
-        ],
-        [
-          746,
-          1246,
-          1251
-        ],
-        [
-          747,
-          1246,
-          1251
-        ],
-        [
-          748,
-          1246,
-          1251
-        ],
-        [
-          749,
-          1246,
-          1251
-        ],
-        [
-          750,
-          1246,
-          1251
-        ],
-        [
-          751,
-          1247,
-          1251
-        ],
-        [
-          752,
-          1247,
-          1251
-        ],
-        [
-          753,
-          1247,
-          1251
-        ],
-        [
-          754,
-          1247,
-          1251
-        ],
-        [
-          755,
-          1247,
-          1251
-        ],
-        [
-          756,
-          1247,
-          1251
-        ],
-        [
-          757,
-          1247,
-          1251
-        ],
-        [
-          758,
-          1247,
-          1251
-        ],
-        [
-          759,
-          1247,
-          1250
-        ],
-        [
-          760,
-          1248,
-          1250
-        ],
-        [
-          761,
-          1248,
-          1250
-        ],
-        [
-          762,
-          1248,
-          1250
-        ],
-        [
-          763,
-          1248,
-          1250
-        ],
-        [
-          764,
-          1248,
-          1250
-        ],
-        [
-          765,
-          1248,
-          1250
-        ],
-        [
-          766,
-          1248,
-          1250
-        ],
-        [
-          767,
-          1248,
-          1250
-        ],
-        [
-          768,
-          1248,
-          1250
-        ],
-        [
-          769,
-          1248,
-          1250
-        ],
-        [
-          770,
-          1249,
-          1250
-        ],
-        [
-          771,
-          1249,
-          1250
-        ],
-        [
-          772,
-          1249,
-          1250
-        ],
-        [
-          773,
-          1249,
-          1250
-        ],
-        [
-          774,
-          1249,
-          1250
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-12d5a3ad0818eaf6d43b",
+            "identitySha256": "12d5a3ad0818eaf6d43ba00aea225d11b356032777c5b33a4fca5c4cfe124e36",
+            "geometryKey": "1499,574,120,100,5297",
+            "bounds": {
+              "x": 1499,
+              "y": 574,
+              "width": 120,
+              "height": 100
+            },
+            "opaquePixelCount": 5297
+          },
+          {
+            "componentId": "cc8-e663f6fe28cd440acf1b",
+            "identitySha256": "e663f6fe28cd440acf1b66816dc58a4b3e6bc918428377c5e13b43ed7ab0e5c0",
+            "geometryKey": "1592,674,21,27,274",
+            "bounds": {
+              "x": 1592,
+              "y": 674,
+              "width": 21,
+              "height": 27
+            },
+            "opaquePixelCount": 274
+          }
         ]
-      ],
-      "ownedOpaquePixelCount": 355,
-      "semanticOwnership": {
-        "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
-        "canonicalComponentIds": [
-          "cc8-5d6fbf80c5d7b0fca6b2"
-        ],
-        "continuationRationale": null
       },
       "outputFileHint": "public/juyiting/images/occluders/east-lower-v2.webp",
       "outputEncoding": {
@@ -4547,210 +4718,33 @@
       "ownedOpaquePixelCount": 500,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "diagonal-brace",
+          "approvedParts": [
+            {
+              "componentKey": "1130,435,19,51,500",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-9fff590e29b026d887c7"
         ],
-        "continuationRationale": null
-      },
-      "outputFileHint": "public/juyiting/images/occluders/east-upper-v2.webp",
-      "outputEncoding": {
-        "allowed": [
-          "lossless-webp",
-          "png"
-        ],
-        "losslessRequired": true,
-        "alphaRequired": true,
-        "colorTransform": "forbidden"
-      }
-    },
-    {
-      "stableId": "jyt.occ.east-upper.hanging-signboard-01.v2",
-      "region": "east-upper",
-      "homeRegion": "east-upper",
-      "chunkId": "east-upper",
-      "semanticType": "hanging-signboard",
-      "observableDescription": "Horizontal inscribed hanging signboard in the northeast.",
-      "sourceRect": {
-        "x": 1383,
-        "y": 254,
-        "width": 97,
-        "height": 31
-      },
-      "destinationRect": {
-        "x": 1383,
-        "y": 254,
-        "width": 97,
-        "height": 31
-      },
-      "destinationMapping": {
-        "mode": "source-coordinate-identity",
-        "scaleNumerator": 1,
-        "scaleDenominator": 1,
-        "sampling": "none"
-      },
-      "pixelOwnershipRule": {
-        "model": "alpha-rle-v1",
-        "runEncoding": "[y,xStartInclusive,xEndExclusive]",
-        "coordinateSpace": "canonical-source-pixels",
-        "threshold": 1,
-        "e9bAction": "copy RGBA only for ownershipRuns; clear every other sourceRect pixel to transparent"
-      },
-      "ownershipRuns": [
-        [
-          255,
-          1471,
-          1472
-        ],
-        [
-          256,
-          1428,
-          1472
-        ],
-        [
-          257,
-          1384,
-          1473
-        ],
-        [
-          258,
-          1384,
-          1473
-        ],
-        [
-          259,
-          1384,
-          1473
-        ],
-        [
-          260,
-          1384,
-          1474
-        ],
-        [
-          261,
-          1384,
-          1474
-        ],
-        [
-          262,
-          1384,
-          1474
-        ],
-        [
-          263,
-          1384,
-          1475
-        ],
-        [
-          264,
-          1384,
-          1475
-        ],
-        [
-          265,
-          1384,
-          1475
-        ],
-        [
-          266,
-          1384,
-          1476
-        ],
-        [
-          267,
-          1384,
-          1476
-        ],
-        [
-          268,
-          1384,
-          1477
-        ],
-        [
-          269,
-          1384,
-          1477
-        ],
-        [
-          270,
-          1385,
-          1477
-        ],
-        [
-          271,
-          1385,
-          1478
-        ],
-        [
-          272,
-          1385,
-          1478
-        ],
-        [
-          273,
-          1385,
-          1478
-        ],
-        [
-          274,
-          1385,
-          1479
-        ],
-        [
-          275,
-          1385,
-          1479
-        ],
-        [
-          276,
-          1385,
-          1467
-        ],
-        [
-          277,
-          1385,
-          1456
-        ],
-        [
-          278,
-          1385,
-          1444
-        ],
-        [
-          279,
-          1385,
-          1432
-        ],
-        [
-          280,
-          1385,
-          1421
-        ],
-        [
-          281,
-          1385,
-          1409
-        ],
-        [
-          282,
-          1385,
-          1398
-        ],
-        [
-          283,
-          1385,
-          1386
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-9fff590e29b026d887c7",
+            "identitySha256": "9fff590e29b026d887c7793de9282c86d46eac6d4b83682d549faa30b4add2d3",
+            "geometryKey": "1130,435,19,51,500",
+            "bounds": {
+              "x": 1130,
+              "y": 435,
+              "width": 19,
+              "height": 51
+            },
+            "opaquePixelCount": 500
+          }
         ]
-      ],
-      "ownedOpaquePixelCount": 2117,
-      "semanticOwnership": {
-        "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
-        "canonicalComponentIds": [
-          "cc8-b143542d72fa132d52bd"
-        ],
-        "continuationRationale": null
       },
       "outputFileHint": "public/juyiting/images/occluders/east-upper-v2.webp",
       "outputEncoding": {
@@ -5595,11 +5589,33 @@
       "ownedOpaquePixelCount": 4701,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "pillar",
+          "approvedParts": [
+            {
+              "componentKey": "1158,305,46,159,4701",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-a991cbd5dbc1deba287a"
         ],
-        "continuationRationale": null
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-a991cbd5dbc1deba287a",
+            "identitySha256": "a991cbd5dbc1deba287a984d91ca5ca548715701673bcc13287bcbb8674d1a04",
+            "geometryKey": "1158,305,46,159,4701",
+            "bounds": {
+              "x": 1158,
+              "y": 305,
+              "width": 46,
+              "height": 159
+            },
+            "opaquePixelCount": 4701
+          }
+        ]
       },
       "outputFileHint": "public/juyiting/images/occluders/east-upper-v2.webp",
       "outputEncoding": {
@@ -6814,11 +6830,254 @@
       "ownedOpaquePixelCount": 5188,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "pillar",
+          "approvedParts": [
+            {
+              "componentKey": "1202,478,50,225,5188",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-0eedfdfed51bbda32ee6"
         ],
-        "continuationRationale": null
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-0eedfdfed51bbda32ee6",
+            "identitySha256": "0eedfdfed51bbda32ee6a9f3e62f3c2225ac25070f6fac9273bc011b086fc320",
+            "geometryKey": "1202,478,50,225,5188",
+            "bounds": {
+              "x": 1202,
+              "y": 478,
+              "width": 50,
+              "height": 225
+            },
+            "opaquePixelCount": 5188
+          }
+        ]
+      },
+      "outputFileHint": "public/juyiting/images/occluders/east-upper-v2.webp",
+      "outputEncoding": {
+        "allowed": [
+          "lossless-webp",
+          "png"
+        ],
+        "losslessRequired": true,
+        "alphaRequired": true,
+        "colorTransform": "forbidden"
+      }
+    },
+    {
+      "stableId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "region": "east-upper",
+      "homeRegion": "east-upper",
+      "chunkId": "east-upper",
+      "semanticType": "scroll-table-front",
+      "observableDescription": "Near-side front edge of the northeast table surface carrying scrolls.",
+      "sourceRect": {
+        "x": 1383,
+        "y": 254,
+        "width": 97,
+        "height": 31
+      },
+      "destinationRect": {
+        "x": 1383,
+        "y": 254,
+        "width": 97,
+        "height": 31
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "pixelOwnershipRule": {
+        "model": "alpha-rle-v1",
+        "runEncoding": "[y,xStartInclusive,xEndExclusive]",
+        "coordinateSpace": "canonical-source-pixels",
+        "threshold": 1,
+        "e9bAction": "copy RGBA only for ownershipRuns; clear every other sourceRect pixel to transparent"
+      },
+      "ownershipRuns": [
+        [
+          255,
+          1471,
+          1472
+        ],
+        [
+          256,
+          1428,
+          1472
+        ],
+        [
+          257,
+          1384,
+          1473
+        ],
+        [
+          258,
+          1384,
+          1473
+        ],
+        [
+          259,
+          1384,
+          1473
+        ],
+        [
+          260,
+          1384,
+          1474
+        ],
+        [
+          261,
+          1384,
+          1474
+        ],
+        [
+          262,
+          1384,
+          1474
+        ],
+        [
+          263,
+          1384,
+          1475
+        ],
+        [
+          264,
+          1384,
+          1475
+        ],
+        [
+          265,
+          1384,
+          1475
+        ],
+        [
+          266,
+          1384,
+          1476
+        ],
+        [
+          267,
+          1384,
+          1476
+        ],
+        [
+          268,
+          1384,
+          1477
+        ],
+        [
+          269,
+          1384,
+          1477
+        ],
+        [
+          270,
+          1385,
+          1477
+        ],
+        [
+          271,
+          1385,
+          1478
+        ],
+        [
+          272,
+          1385,
+          1478
+        ],
+        [
+          273,
+          1385,
+          1478
+        ],
+        [
+          274,
+          1385,
+          1479
+        ],
+        [
+          275,
+          1385,
+          1479
+        ],
+        [
+          276,
+          1385,
+          1467
+        ],
+        [
+          277,
+          1385,
+          1456
+        ],
+        [
+          278,
+          1385,
+          1444
+        ],
+        [
+          279,
+          1385,
+          1432
+        ],
+        [
+          280,
+          1385,
+          1421
+        ],
+        [
+          281,
+          1385,
+          1409
+        ],
+        [
+          282,
+          1385,
+          1398
+        ],
+        [
+          283,
+          1385,
+          1386
+        ]
+      ],
+      "ownedOpaquePixelCount": 2117,
+      "semanticOwnership": {
+        "componentConnectivity": 8,
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "scroll-table-front",
+          "approvedParts": [
+            {
+              "componentKey": "1384,255,95,29,2117",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
+        "canonicalComponentIds": [
+          "cc8-b143542d72fa132d52bd"
+        ],
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-b143542d72fa132d52bd",
+            "identitySha256": "b143542d72fa132d52bda5722a95329bd05c6f5a6e84e76b39feedc4eb4d6197",
+            "geometryKey": "1384,255,95,29,2117",
+            "bounds": {
+              "x": 1384,
+              "y": 255,
+              "width": 95,
+              "height": 29
+            },
+            "opaquePixelCount": 2117
+          }
+        ]
       },
       "outputFileHint": "public/juyiting/images/occluders/east-upper-v2.webp",
       "outputEncoding": {
@@ -7223,11 +7482,33 @@
       "ownedOpaquePixelCount": 27065,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "wall-panel",
+          "approvedParts": [
+            {
+              "componentKey": "1256,477,408,71,27065",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-6d0df6b1e3cde01efab1"
         ],
-        "continuationRationale": null
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-6d0df6b1e3cde01efab1",
+            "identitySha256": "6d0df6b1e3cde01efab16c3d4ccfb05ce931d33aab345e786516616865caa6e0",
+            "geometryKey": "1256,477,408,71,27065",
+            "bounds": {
+              "x": 1256,
+              "y": 477,
+              "width": 408,
+              "height": 71
+            },
+            "opaquePixelCount": 27065
+          }
+        ]
       },
       "outputFileHint": "public/juyiting/images/occluders/east-upper-v2.webp",
       "outputEncoding": {
@@ -8087,11 +8368,33 @@
       "ownedOpaquePixelCount": 30996,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "wall-panel",
+          "approvedParts": [
+            {
+              "componentKey": "1197,342,467,117,30996",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-137ae01e3ff568a482dd"
         ],
-        "continuationRationale": null
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-137ae01e3ff568a482dd",
+            "identitySha256": "137ae01e3ff568a482dd58d0437677076d69a811af2463b648bb4c7e0986164e",
+            "geometryKey": "1197,342,467,117,30996",
+            "bounds": {
+              "x": 1197,
+              "y": 342,
+              "width": 467,
+              "height": 117
+            },
+            "opaquePixelCount": 30996
+          }
+        ]
       },
       "outputFileHint": "public/juyiting/images/occluders/east-upper-v2.webp",
       "outputEncoding": {
@@ -8501,11 +8804,33 @@
       "ownedOpaquePixelCount": 2313,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "hanging-banner",
+          "approvedParts": [
+            {
+              "componentKey": "767,722,48,72,2313",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-e67e5c44c586fd28a3fc"
         ],
-        "continuationRationale": null
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-e67e5c44c586fd28a3fc",
+            "identitySha256": "e67e5c44c586fd28a3fc8c5a990ed2f2a484b08eac7c9114aea8b7376db978fc",
+            "geometryKey": "767,722,48,72,2313",
+            "bounds": {
+              "x": 767,
+              "y": 722,
+              "width": 48,
+              "height": 72
+            },
+            "opaquePixelCount": 2313
+          }
+        ]
       },
       "outputFileHint": "public/juyiting/images/occluders/entrance-v2.webp",
       "outputEncoding": {
@@ -8870,11 +9195,33 @@
       "ownedOpaquePixelCount": 1867,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "hanging-banner",
+          "approvedParts": [
+            {
+              "componentKey": "931,733,40,63,1867",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-66e9312c3061aaafcb90"
         ],
-        "continuationRationale": null
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-66e9312c3061aaafcb90",
+            "identitySha256": "66e9312c3061aaafcb90ad8542a965c5fa045755efb1949c61b1b73d434819c3",
+            "geometryKey": "931,733,40,63,1867",
+            "bounds": {
+              "x": 931,
+              "y": 733,
+              "width": 40,
+              "height": 63
+            },
+            "opaquePixelCount": 1867
+          }
+        ]
       },
       "outputFileHint": "public/juyiting/images/occluders/entrance-v2.webp",
       "outputEncoding": {
@@ -9444,11 +9791,33 @@
       "ownedOpaquePixelCount": 3038,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "lantern-post",
+          "approvedParts": [
+            {
+              "componentKey": "1052,674,41,104,3038",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-f5e824ba01612deb1717"
         ],
-        "continuationRationale": null
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-f5e824ba01612deb1717",
+            "identitySha256": "f5e824ba01612deb1717c48b15be4dcbb679b056a68fe2606c1d1d9c8e95e4c9",
+            "geometryKey": "1052,674,41,104,3038",
+            "bounds": {
+              "x": 1052,
+              "y": 674,
+              "width": 41,
+              "height": 104
+            },
+            "opaquePixelCount": 3038
+          }
+        ]
       },
       "outputFileHint": "public/juyiting/images/occluders/entrance-v2.webp",
       "outputEncoding": {
@@ -9893,667 +10262,35 @@
       "ownedOpaquePixelCount": 1317,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "lantern-post",
+          "approvedParts": [
+            {
+              "componentKey": "1004,678,31,77,1317",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-4ed00285781a3895a191"
         ],
-        "continuationRationale": null
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-4ed00285781a3895a191",
+            "identitySha256": "4ed00285781a3895a1912d7b9d4802daf8552cc9967e0c601abfaf0dd0fa3ca9",
+            "geometryKey": "1004,678,31,77,1317",
+            "bounds": {
+              "x": 1004,
+              "y": 678,
+              "width": 31,
+              "height": 77
+            },
+            "opaquePixelCount": 1317
+          }
+        ]
       },
       "outputFileHint": "public/juyiting/images/occluders/entrance-v2.webp",
-      "outputEncoding": {
-        "allowed": [
-          "lossless-webp",
-          "png"
-        ],
-        "losslessRequired": true,
-        "alphaRequired": true,
-        "colorTransform": "forbidden"
-      }
-    },
-    {
-      "stableId": "jyt.occ.west-lower.diagonal-brace-01.v2",
-      "region": "west-lower",
-      "homeRegion": "west-lower",
-      "chunkId": "west-lower",
-      "semanticType": "diagonal-brace",
-      "observableDescription": "Southwest inward-facing L-shaped diagonal brace.",
-      "sourceRect": {
-        "x": 116,
-        "y": 600,
-        "width": 124,
-        "height": 120
-      },
-      "destinationRect": {
-        "x": 116,
-        "y": 600,
-        "width": 124,
-        "height": 120
-      },
-      "destinationMapping": {
-        "mode": "source-coordinate-identity",
-        "scaleNumerator": 1,
-        "scaleDenominator": 1,
-        "sampling": "none"
-      },
-      "pixelOwnershipRule": {
-        "model": "alpha-rle-v1",
-        "runEncoding": "[y,xStartInclusive,xEndExclusive]",
-        "coordinateSpace": "canonical-source-pixels",
-        "threshold": 1,
-        "e9bAction": "copy RGBA only for ownershipRuns; clear every other sourceRect pixel to transparent"
-      },
-      "ownershipRuns": [
-        [
-          601,
-          153,
-          154
-        ],
-        [
-          602,
-          153,
-          168
-        ],
-        [
-          603,
-          152,
-          182
-        ],
-        [
-          604,
-          152,
-          196
-        ],
-        [
-          605,
-          152,
-          211
-        ],
-        [
-          606,
-          151,
-          225
-        ],
-        [
-          607,
-          151,
-          239
-        ],
-        [
-          608,
-          151,
-          239
-        ],
-        [
-          609,
-          150,
-          238
-        ],
-        [
-          610,
-          150,
-          238
-        ],
-        [
-          611,
-          150,
-          238
-        ],
-        [
-          612,
-          149,
-          238
-        ],
-        [
-          613,
-          149,
-          237
-        ],
-        [
-          614,
-          149,
-          237
-        ],
-        [
-          615,
-          149,
-          237
-        ],
-        [
-          616,
-          148,
-          236
-        ],
-        [
-          617,
-          148,
-          236
-        ],
-        [
-          618,
-          148,
-          236
-        ],
-        [
-          619,
-          147,
-          236
-        ],
-        [
-          620,
-          147,
-          235
-        ],
-        [
-          621,
-          147,
-          235
-        ],
-        [
-          622,
-          146,
-          235
-        ],
-        [
-          623,
-          146,
-          235
-        ],
-        [
-          624,
-          146,
-          159
-        ],
-        [
-          624,
-          196,
-          234
-        ],
-        [
-          625,
-          145,
-          158
-        ],
-        [
-          625,
-          233,
-          234
-        ],
-        [
-          626,
-          145,
-          158
-        ],
-        [
-          627,
-          145,
-          158
-        ],
-        [
-          628,
-          144,
-          157
-        ],
-        [
-          629,
-          144,
-          157
-        ],
-        [
-          630,
-          144,
-          157
-        ],
-        [
-          631,
-          143,
-          156
-        ],
-        [
-          632,
-          143,
-          156
-        ],
-        [
-          633,
-          143,
-          156
-        ],
-        [
-          634,
-          142,
-          155
-        ],
-        [
-          635,
-          142,
-          155
-        ],
-        [
-          636,
-          142,
-          155
-        ],
-        [
-          637,
-          141,
-          154
-        ],
-        [
-          638,
-          141,
-          154
-        ],
-        [
-          639,
-          141,
-          154
-        ],
-        [
-          640,
-          140,
-          153
-        ],
-        [
-          641,
-          140,
-          153
-        ],
-        [
-          642,
-          140,
-          153
-        ],
-        [
-          643,
-          140,
-          152
-        ],
-        [
-          644,
-          139,
-          152
-        ],
-        [
-          645,
-          139,
-          152
-        ],
-        [
-          646,
-          139,
-          151
-        ],
-        [
-          647,
-          138,
-          151
-        ],
-        [
-          648,
-          138,
-          151
-        ],
-        [
-          649,
-          138,
-          150
-        ],
-        [
-          650,
-          137,
-          150
-        ],
-        [
-          651,
-          137,
-          150
-        ],
-        [
-          652,
-          137,
-          149
-        ],
-        [
-          653,
-          136,
-          149
-        ],
-        [
-          654,
-          136,
-          149
-        ],
-        [
-          655,
-          136,
-          148
-        ],
-        [
-          656,
-          135,
-          148
-        ],
-        [
-          657,
-          135,
-          148
-        ],
-        [
-          658,
-          135,
-          147
-        ],
-        [
-          659,
-          134,
-          147
-        ],
-        [
-          660,
-          134,
-          147
-        ],
-        [
-          661,
-          134,
-          146
-        ],
-        [
-          662,
-          133,
-          146
-        ],
-        [
-          663,
-          133,
-          146
-        ],
-        [
-          664,
-          133,
-          145
-        ],
-        [
-          665,
-          132,
-          145
-        ],
-        [
-          666,
-          132,
-          145
-        ],
-        [
-          667,
-          132,
-          144
-        ],
-        [
-          668,
-          131,
-          144
-        ],
-        [
-          669,
-          131,
-          144
-        ],
-        [
-          670,
-          131,
-          143
-        ],
-        [
-          671,
-          131,
-          143
-        ],
-        [
-          672,
-          130,
-          142
-        ],
-        [
-          673,
-          130,
-          142
-        ],
-        [
-          674,
-          130,
-          142
-        ],
-        [
-          675,
-          129,
-          141
-        ],
-        [
-          676,
-          129,
-          141
-        ],
-        [
-          677,
-          129,
-          141
-        ],
-        [
-          678,
-          128,
-          140
-        ],
-        [
-          679,
-          128,
-          140
-        ],
-        [
-          680,
-          128,
-          140
-        ],
-        [
-          681,
-          127,
-          139
-        ],
-        [
-          682,
-          127,
-          139
-        ],
-        [
-          683,
-          127,
-          139
-        ],
-        [
-          684,
-          126,
-          138
-        ],
-        [
-          685,
-          126,
-          138
-        ],
-        [
-          686,
-          126,
-          138
-        ],
-        [
-          687,
-          125,
-          137
-        ],
-        [
-          688,
-          125,
-          137
-        ],
-        [
-          689,
-          125,
-          137
-        ],
-        [
-          690,
-          124,
-          136
-        ],
-        [
-          691,
-          124,
-          136
-        ],
-        [
-          692,
-          124,
-          136
-        ],
-        [
-          693,
-          123,
-          135
-        ],
-        [
-          694,
-          123,
-          135
-        ],
-        [
-          695,
-          123,
-          135
-        ],
-        [
-          696,
-          122,
-          134
-        ],
-        [
-          697,
-          122,
-          134
-        ],
-        [
-          698,
-          122,
-          134
-        ],
-        [
-          699,
-          122,
-          133
-        ],
-        [
-          700,
-          121,
-          133
-        ],
-        [
-          701,
-          121,
-          133
-        ],
-        [
-          702,
-          121,
-          132
-        ],
-        [
-          703,
-          120,
-          132
-        ],
-        [
-          704,
-          120,
-          132
-        ],
-        [
-          705,
-          120,
-          131
-        ],
-        [
-          706,
-          119,
-          131
-        ],
-        [
-          707,
-          119,
-          131
-        ],
-        [
-          708,
-          119,
-          130
-        ],
-        [
-          709,
-          118,
-          130
-        ],
-        [
-          710,
-          118,
-          130
-        ],
-        [
-          711,
-          118,
-          129
-        ],
-        [
-          712,
-          117,
-          129
-        ],
-        [
-          713,
-          117,
-          129
-        ],
-        [
-          714,
-          119,
-          128
-        ],
-        [
-          715,
-          121,
-          128
-        ],
-        [
-          716,
-          122,
-          128
-        ],
-        [
-          717,
-          124,
-          127
-        ],
-        [
-          718,
-          126,
-          127
-        ]
-      ],
-      "ownedOpaquePixelCount": 2900,
-      "semanticOwnership": {
-        "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
-        "canonicalComponentIds": [
-          "cc8-e56239021296140fbfce"
-        ],
-        "continuationRationale": null
-      },
-      "outputFileHint": "public/juyiting/images/occluders/west-lower-v2.webp",
       "outputEncoding": {
         "allowed": [
           "lossless-webp",
@@ -11221,11 +10958,1045 @@
       "ownedOpaquePixelCount": 2160,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "diagonal-brace",
+          "approvedParts": [
+            {
+              "componentKey": "474,641,43,118,2160",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-6ffa06598c78af00862d"
         ],
-        "continuationRationale": null
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-6ffa06598c78af00862d",
+            "identitySha256": "6ffa06598c78af00862d0ba6da5b49a2e7a5faab230bdf4a03dd92a72025d40a",
+            "geometryKey": "474,641,43,118,2160",
+            "bounds": {
+              "x": 474,
+              "y": 641,
+              "width": 43,
+              "height": 118
+            },
+            "opaquePixelCount": 2160
+          }
+        ]
+      },
+      "outputFileHint": "public/juyiting/images/occluders/west-lower-v2.webp",
+      "outputEncoding": {
+        "allowed": [
+          "lossless-webp",
+          "png"
+        ],
+        "losslessRequired": true,
+        "alphaRequired": true,
+        "colorTransform": "forbidden"
+      }
+    },
+    {
+      "stableId": "jyt.occ.west-lower.floor-lantern-01.v2",
+      "region": "west-lower",
+      "homeRegion": "west-lower",
+      "chunkId": "west-lower",
+      "semanticType": "floor-lantern",
+      "observableDescription": "Independent low box lantern at the southwest floor line.",
+      "sourceRect": {
+        "x": 356,
+        "y": 875,
+        "width": 50,
+        "height": 53
+      },
+      "destinationRect": {
+        "x": 356,
+        "y": 875,
+        "width": 50,
+        "height": 53
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "pixelOwnershipRule": {
+        "model": "alpha-rle-v1",
+        "runEncoding": "[y,xStartInclusive,xEndExclusive]",
+        "coordinateSpace": "canonical-source-pixels",
+        "threshold": 1,
+        "e9bAction": "copy RGBA only for ownershipRuns; clear every other sourceRect pixel to transparent"
+      },
+      "ownershipRuns": [
+        [
+          876,
+          357,
+          391
+        ],
+        [
+          877,
+          357,
+          391
+        ],
+        [
+          878,
+          357,
+          392
+        ],
+        [
+          879,
+          357,
+          392
+        ],
+        [
+          880,
+          358,
+          392
+        ],
+        [
+          881,
+          358,
+          392
+        ],
+        [
+          882,
+          358,
+          393
+        ],
+        [
+          883,
+          358,
+          393
+        ],
+        [
+          884,
+          358,
+          393
+        ],
+        [
+          885,
+          358,
+          394
+        ],
+        [
+          886,
+          359,
+          394
+        ],
+        [
+          887,
+          359,
+          394
+        ],
+        [
+          888,
+          359,
+          394
+        ],
+        [
+          889,
+          359,
+          395
+        ],
+        [
+          890,
+          359,
+          395
+        ],
+        [
+          891,
+          359,
+          395
+        ],
+        [
+          892,
+          360,
+          396
+        ],
+        [
+          893,
+          360,
+          396
+        ],
+        [
+          894,
+          360,
+          396
+        ],
+        [
+          895,
+          360,
+          397
+        ],
+        [
+          896,
+          360,
+          397
+        ],
+        [
+          897,
+          360,
+          397
+        ],
+        [
+          898,
+          361,
+          397
+        ],
+        [
+          899,
+          361,
+          398
+        ],
+        [
+          900,
+          361,
+          398
+        ],
+        [
+          901,
+          361,
+          398
+        ],
+        [
+          902,
+          361,
+          399
+        ],
+        [
+          903,
+          361,
+          399
+        ],
+        [
+          904,
+          362,
+          399
+        ],
+        [
+          905,
+          362,
+          399
+        ],
+        [
+          906,
+          362,
+          400
+        ],
+        [
+          907,
+          362,
+          400
+        ],
+        [
+          908,
+          390,
+          400
+        ],
+        [
+          909,
+          390,
+          401
+        ],
+        [
+          910,
+          391,
+          401
+        ],
+        [
+          911,
+          391,
+          401
+        ],
+        [
+          912,
+          391,
+          401
+        ],
+        [
+          913,
+          391,
+          402
+        ],
+        [
+          914,
+          392,
+          402
+        ],
+        [
+          915,
+          392,
+          402
+        ],
+        [
+          916,
+          392,
+          403
+        ],
+        [
+          917,
+          392,
+          403
+        ],
+        [
+          918,
+          393,
+          403
+        ],
+        [
+          919,
+          393,
+          404
+        ],
+        [
+          920,
+          393,
+          404
+        ],
+        [
+          921,
+          393,
+          404
+        ],
+        [
+          922,
+          394,
+          404
+        ],
+        [
+          923,
+          394,
+          405
+        ],
+        [
+          924,
+          394,
+          405
+        ],
+        [
+          925,
+          394,
+          403
+        ],
+        [
+          926,
+          395,
+          400
+        ],
+        [
+          927,
+          395,
+          398
+        ]
+      ],
+      "ownedOpaquePixelCount": 1348,
+      "semanticOwnership": {
+        "componentConnectivity": 8,
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "floor-lantern",
+          "approvedParts": [
+            {
+              "componentKey": "357,876,48,52,1348",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
+        "canonicalComponentIds": [
+          "cc8-0303cc20bc63f771bc94"
+        ],
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-0303cc20bc63f771bc94",
+            "identitySha256": "0303cc20bc63f771bc943d62a09082c2df678044baf6f8f62afd27f249c1d315",
+            "geometryKey": "357,876,48,52,1348",
+            "bounds": {
+              "x": 357,
+              "y": 876,
+              "width": 48,
+              "height": 52
+            },
+            "opaquePixelCount": 1348
+          }
+        ]
+      },
+      "outputFileHint": "public/juyiting/images/occluders/west-lower-v2.webp",
+      "outputEncoding": {
+        "allowed": [
+          "lossless-webp",
+          "png"
+        ],
+        "losslessRequired": true,
+        "alphaRequired": true,
+        "colorTransform": "forbidden"
+      }
+    },
+    {
+      "stableId": "jyt.occ.west-lower.long-table-frame-01.v2",
+      "region": "west-lower",
+      "homeRegion": "west-lower",
+      "chunkId": "west-lower",
+      "semanticType": "long-table-frame",
+      "observableDescription": "Southwest long-table near frame, corner, and visible table legs.",
+      "sourceRect": {
+        "x": 116,
+        "y": 600,
+        "width": 124,
+        "height": 120
+      },
+      "destinationRect": {
+        "x": 116,
+        "y": 600,
+        "width": 124,
+        "height": 120
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "pixelOwnershipRule": {
+        "model": "alpha-rle-v1",
+        "runEncoding": "[y,xStartInclusive,xEndExclusive]",
+        "coordinateSpace": "canonical-source-pixels",
+        "threshold": 1,
+        "e9bAction": "copy RGBA only for ownershipRuns; clear every other sourceRect pixel to transparent"
+      },
+      "ownershipRuns": [
+        [
+          601,
+          153,
+          154
+        ],
+        [
+          602,
+          153,
+          168
+        ],
+        [
+          603,
+          152,
+          182
+        ],
+        [
+          604,
+          152,
+          196
+        ],
+        [
+          605,
+          152,
+          211
+        ],
+        [
+          606,
+          151,
+          225
+        ],
+        [
+          607,
+          151,
+          239
+        ],
+        [
+          608,
+          151,
+          239
+        ],
+        [
+          609,
+          150,
+          238
+        ],
+        [
+          610,
+          150,
+          238
+        ],
+        [
+          611,
+          150,
+          238
+        ],
+        [
+          612,
+          149,
+          238
+        ],
+        [
+          613,
+          149,
+          237
+        ],
+        [
+          614,
+          149,
+          237
+        ],
+        [
+          615,
+          149,
+          237
+        ],
+        [
+          616,
+          148,
+          236
+        ],
+        [
+          617,
+          148,
+          236
+        ],
+        [
+          618,
+          148,
+          236
+        ],
+        [
+          619,
+          147,
+          236
+        ],
+        [
+          620,
+          147,
+          235
+        ],
+        [
+          621,
+          147,
+          235
+        ],
+        [
+          622,
+          146,
+          235
+        ],
+        [
+          623,
+          146,
+          235
+        ],
+        [
+          624,
+          146,
+          159
+        ],
+        [
+          624,
+          196,
+          234
+        ],
+        [
+          625,
+          145,
+          158
+        ],
+        [
+          625,
+          233,
+          234
+        ],
+        [
+          626,
+          145,
+          158
+        ],
+        [
+          627,
+          145,
+          158
+        ],
+        [
+          628,
+          144,
+          157
+        ],
+        [
+          629,
+          144,
+          157
+        ],
+        [
+          630,
+          144,
+          157
+        ],
+        [
+          631,
+          143,
+          156
+        ],
+        [
+          632,
+          143,
+          156
+        ],
+        [
+          633,
+          143,
+          156
+        ],
+        [
+          634,
+          142,
+          155
+        ],
+        [
+          635,
+          142,
+          155
+        ],
+        [
+          636,
+          142,
+          155
+        ],
+        [
+          637,
+          141,
+          154
+        ],
+        [
+          638,
+          141,
+          154
+        ],
+        [
+          639,
+          141,
+          154
+        ],
+        [
+          640,
+          140,
+          153
+        ],
+        [
+          641,
+          140,
+          153
+        ],
+        [
+          642,
+          140,
+          153
+        ],
+        [
+          643,
+          140,
+          152
+        ],
+        [
+          644,
+          139,
+          152
+        ],
+        [
+          645,
+          139,
+          152
+        ],
+        [
+          646,
+          139,
+          151
+        ],
+        [
+          647,
+          138,
+          151
+        ],
+        [
+          648,
+          138,
+          151
+        ],
+        [
+          649,
+          138,
+          150
+        ],
+        [
+          650,
+          137,
+          150
+        ],
+        [
+          651,
+          137,
+          150
+        ],
+        [
+          652,
+          137,
+          149
+        ],
+        [
+          653,
+          136,
+          149
+        ],
+        [
+          654,
+          136,
+          149
+        ],
+        [
+          655,
+          136,
+          148
+        ],
+        [
+          656,
+          135,
+          148
+        ],
+        [
+          657,
+          135,
+          148
+        ],
+        [
+          658,
+          135,
+          147
+        ],
+        [
+          659,
+          134,
+          147
+        ],
+        [
+          660,
+          134,
+          147
+        ],
+        [
+          661,
+          134,
+          146
+        ],
+        [
+          662,
+          133,
+          146
+        ],
+        [
+          663,
+          133,
+          146
+        ],
+        [
+          664,
+          133,
+          145
+        ],
+        [
+          665,
+          132,
+          145
+        ],
+        [
+          666,
+          132,
+          145
+        ],
+        [
+          667,
+          132,
+          144
+        ],
+        [
+          668,
+          131,
+          144
+        ],
+        [
+          669,
+          131,
+          144
+        ],
+        [
+          670,
+          131,
+          143
+        ],
+        [
+          671,
+          131,
+          143
+        ],
+        [
+          672,
+          130,
+          142
+        ],
+        [
+          673,
+          130,
+          142
+        ],
+        [
+          674,
+          130,
+          142
+        ],
+        [
+          675,
+          129,
+          141
+        ],
+        [
+          676,
+          129,
+          141
+        ],
+        [
+          677,
+          129,
+          141
+        ],
+        [
+          678,
+          128,
+          140
+        ],
+        [
+          679,
+          128,
+          140
+        ],
+        [
+          680,
+          128,
+          140
+        ],
+        [
+          681,
+          127,
+          139
+        ],
+        [
+          682,
+          127,
+          139
+        ],
+        [
+          683,
+          127,
+          139
+        ],
+        [
+          684,
+          126,
+          138
+        ],
+        [
+          685,
+          126,
+          138
+        ],
+        [
+          686,
+          126,
+          138
+        ],
+        [
+          687,
+          125,
+          137
+        ],
+        [
+          688,
+          125,
+          137
+        ],
+        [
+          689,
+          125,
+          137
+        ],
+        [
+          690,
+          124,
+          136
+        ],
+        [
+          691,
+          124,
+          136
+        ],
+        [
+          692,
+          124,
+          136
+        ],
+        [
+          693,
+          123,
+          135
+        ],
+        [
+          694,
+          123,
+          135
+        ],
+        [
+          695,
+          123,
+          135
+        ],
+        [
+          696,
+          122,
+          134
+        ],
+        [
+          697,
+          122,
+          134
+        ],
+        [
+          698,
+          122,
+          134
+        ],
+        [
+          699,
+          122,
+          133
+        ],
+        [
+          700,
+          121,
+          133
+        ],
+        [
+          701,
+          121,
+          133
+        ],
+        [
+          702,
+          121,
+          132
+        ],
+        [
+          703,
+          120,
+          132
+        ],
+        [
+          704,
+          120,
+          132
+        ],
+        [
+          705,
+          120,
+          131
+        ],
+        [
+          706,
+          119,
+          131
+        ],
+        [
+          707,
+          119,
+          131
+        ],
+        [
+          708,
+          119,
+          130
+        ],
+        [
+          709,
+          118,
+          130
+        ],
+        [
+          710,
+          118,
+          130
+        ],
+        [
+          711,
+          118,
+          129
+        ],
+        [
+          712,
+          117,
+          129
+        ],
+        [
+          713,
+          117,
+          129
+        ],
+        [
+          714,
+          119,
+          128
+        ],
+        [
+          715,
+          121,
+          128
+        ],
+        [
+          716,
+          122,
+          128
+        ],
+        [
+          717,
+          124,
+          127
+        ],
+        [
+          718,
+          126,
+          127
+        ]
+      ],
+      "ownedOpaquePixelCount": 2900,
+      "semanticOwnership": {
+        "componentConnectivity": 8,
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "long-table-frame",
+          "approvedParts": [
+            {
+              "componentKey": "117,601,122,118,2900",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
+        "canonicalComponentIds": [
+          "cc8-e56239021296140fbfce"
+        ],
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-e56239021296140fbfce",
+            "identitySha256": "e56239021296140fbfce81bcd6bcade39c502d211bd331728f0a840806298c6a",
+            "geometryKey": "117,601,122,118,2900",
+            "bounds": {
+              "x": 117,
+              "y": 601,
+              "width": 122,
+              "height": 118
+            },
+            "opaquePixelCount": 2900
+          }
+        ]
       },
       "outputFileHint": "public/juyiting/images/occluders/west-lower-v2.webp",
       "outputEncoding": {
@@ -11860,11 +12631,33 @@
       "ownedOpaquePixelCount": 5013,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "railing",
+          "approvedParts": [
+            {
+              "componentKey": "506,675,174,103,5013",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-b8402a9a5741757ea762"
         ],
-        "continuationRationale": null
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-b8402a9a5741757ea762",
+            "identitySha256": "b8402a9a5741757ea762c8c927bca1a0b41d175bba12a7d62700d5879c479d06",
+            "geometryKey": "506,675,174,103,5013",
+            "bounds": {
+              "x": 506,
+              "y": 675,
+              "width": 174,
+              "height": 103
+            },
+            "opaquePixelCount": 5013
+          }
+        ]
       },
       "outputFileHint": "public/juyiting/images/occluders/west-lower-v2.webp",
       "outputEncoding": {
@@ -12099,11 +12892,33 @@
       "ownedOpaquePixelCount": 4549,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "railing",
+          "approvedParts": [
+            {
+              "componentKey": "66,787,178,37,4549",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-8b1c22b0bac6cee2a4b3"
         ],
-        "continuationRationale": null
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-8b1c22b0bac6cee2a4b3",
+            "identitySha256": "8b1c22b0bac6cee2a4b332682d7b5cf016762f2c7e09dc7efdc949625f0da9cc",
+            "geometryKey": "66,787,178,37,4549",
+            "bounds": {
+              "x": 66,
+              "y": 787,
+              "width": 178,
+              "height": 37
+            },
+            "opaquePixelCount": 4549
+          }
+        ]
       },
       "outputFileHint": "public/juyiting/images/occluders/west-lower-v2.webp",
       "outputEncoding": {
@@ -12348,11 +13163,284 @@
       "ownedOpaquePixelCount": 938,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "wall-bracket",
+          "approvedParts": [
+            {
+              "componentKey": "686,675,35,39,938",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-97d4fabc2cb0d7833b92"
         ],
-        "continuationRationale": null
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-97d4fabc2cb0d7833b92",
+            "identitySha256": "97d4fabc2cb0d7833b9228dc71e3d424d281665816ee0b74fc074fdaf2ab70c2",
+            "geometryKey": "686,675,35,39,938",
+            "bounds": {
+              "x": 686,
+              "y": 675,
+              "width": 35,
+              "height": 39
+            },
+            "opaquePixelCount": 938
+          }
+        ]
+      },
+      "outputFileHint": "public/juyiting/images/occluders/west-lower-v2.webp",
+      "outputEncoding": {
+        "allowed": [
+          "lossless-webp",
+          "png"
+        ],
+        "losslessRequired": true,
+        "alphaRequired": true,
+        "colorTransform": "forbidden"
+      }
+    },
+    {
+      "stableId": "jyt.occ.west-lower.wall-lantern-01.v2",
+      "region": "west-lower",
+      "homeRegion": "west-lower",
+      "chunkId": "west-lower",
+      "semanticType": "wall-lantern",
+      "observableDescription": "Independent illuminated angled wall lantern at the far west edge.",
+      "sourceRect": {
+        "x": 10,
+        "y": 705,
+        "width": 50,
+        "height": 37
+      },
+      "destinationRect": {
+        "x": 10,
+        "y": 705,
+        "width": 50,
+        "height": 37
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "pixelOwnershipRule": {
+        "model": "alpha-rle-v1",
+        "runEncoding": "[y,xStartInclusive,xEndExclusive]",
+        "coordinateSpace": "canonical-source-pixels",
+        "threshold": 1,
+        "e9bAction": "copy RGBA only for ownershipRuns; clear every other sourceRect pixel to transparent"
+      },
+      "ownershipRuns": [
+        [
+          706,
+          38,
+          39
+        ],
+        [
+          707,
+          37,
+          40
+        ],
+        [
+          708,
+          36,
+          40
+        ],
+        [
+          709,
+          35,
+          41
+        ],
+        [
+          710,
+          34,
+          41
+        ],
+        [
+          711,
+          33,
+          42
+        ],
+        [
+          712,
+          32,
+          43
+        ],
+        [
+          713,
+          31,
+          43
+        ],
+        [
+          714,
+          30,
+          44
+        ],
+        [
+          715,
+          29,
+          44
+        ],
+        [
+          716,
+          28,
+          45
+        ],
+        [
+          717,
+          27,
+          45
+        ],
+        [
+          718,
+          26,
+          46
+        ],
+        [
+          719,
+          25,
+          47
+        ],
+        [
+          720,
+          23,
+          47
+        ],
+        [
+          721,
+          22,
+          48
+        ],
+        [
+          722,
+          21,
+          48
+        ],
+        [
+          723,
+          20,
+          49
+        ],
+        [
+          724,
+          19,
+          50
+        ],
+        [
+          725,
+          18,
+          50
+        ],
+        [
+          726,
+          17,
+          51
+        ],
+        [
+          727,
+          16,
+          51
+        ],
+        [
+          728,
+          15,
+          52
+        ],
+        [
+          729,
+          14,
+          53
+        ],
+        [
+          730,
+          13,
+          53
+        ],
+        [
+          731,
+          12,
+          54
+        ],
+        [
+          732,
+          11,
+          54
+        ],
+        [
+          733,
+          13,
+          55
+        ],
+        [
+          734,
+          15,
+          55
+        ],
+        [
+          735,
+          17,
+          56
+        ],
+        [
+          736,
+          18,
+          57
+        ],
+        [
+          737,
+          20,
+          57
+        ],
+        [
+          738,
+          22,
+          58
+        ],
+        [
+          739,
+          40,
+          58
+        ],
+        [
+          740,
+          58,
+          59
+        ]
+      ],
+      "ownedOpaquePixelCount": 850,
+      "semanticOwnership": {
+        "componentConnectivity": 8,
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "wall-lantern",
+          "approvedParts": [
+            {
+              "componentKey": "11,706,48,35,850",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
+        "canonicalComponentIds": [
+          "cc8-5f8fd36f1184326a68ed"
+        ],
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-5f8fd36f1184326a68ed",
+            "identitySha256": "5f8fd36f1184326a68ed21f9020b344a1b12013993450b4f7c0767e9a788f5c2",
+            "geometryKey": "11,706,48,35,850",
+            "bounds": {
+              "x": 11,
+              "y": 706,
+              "width": 48,
+              "height": 35
+            },
+            "opaquePixelCount": 850
+          }
+        ]
       },
       "outputFileHint": "public/juyiting/images/occluders/west-lower-v2.webp",
       "outputEncoding": {
@@ -12371,18 +13459,18 @@
       "homeRegion": "west-lower",
       "chunkId": "west-lower",
       "semanticType": "wall-panel-assembly",
-      "observableDescription": "Southwest wall-panel assembly, corner cap, lower rail, and attached lantern foot; merged per V2 coordinates 28+30 and 29+39.",
+      "observableDescription": "Main southwest wall-panel assembly with connected corner cap and lower rail.",
       "sourceRect": {
-        "x": 10,
+        "x": 16,
         "y": 572,
-        "width": 410,
-        "height": 356
+        "width": 404,
+        "height": 341
       },
       "destinationRect": {
-        "x": 10,
+        "x": 16,
         "y": 572,
-        "width": 410,
-        "height": 356
+        "width": 404,
+        "height": 341
       },
       "destinationMapping": {
         "mode": "source-coordinate-identity",
@@ -13375,11 +14463,6 @@
         ],
         [
           706,
-          38,
-          39
-        ],
-        [
-          706,
           262,
           271
         ],
@@ -13390,11 +14473,6 @@
         ],
         [
           707,
-          37,
-          40
-        ],
-        [
-          707,
           262,
           271
         ],
@@ -13405,11 +14483,6 @@
         ],
         [
           708,
-          36,
-          40
-        ],
-        [
-          708,
           263,
           272
         ],
@@ -13417,11 +14490,6 @@
           708,
           298,
           354
-        ],
-        [
-          709,
-          35,
-          41
         ],
         [
           709,
@@ -13435,11 +14503,6 @@
         ],
         [
           710,
-          34,
-          41
-        ],
-        [
-          710,
           263,
           272
         ],
@@ -13450,11 +14513,6 @@
         ],
         [
           711,
-          33,
-          42
-        ],
-        [
-          711,
           264,
           272
         ],
@@ -13465,11 +14523,6 @@
         ],
         [
           712,
-          32,
-          43
-        ],
-        [
-          712,
           264,
           273
         ],
@@ -13480,11 +14533,6 @@
         ],
         [
           713,
-          31,
-          43
-        ],
-        [
-          713,
           264,
           273
         ],
@@ -13495,11 +14543,6 @@
         ],
         [
           714,
-          30,
-          44
-        ],
-        [
-          714,
           265,
           273
         ],
@@ -13510,11 +14553,6 @@
         ],
         [
           715,
-          29,
-          44
-        ],
-        [
-          715,
           265,
           273
         ],
@@ -13522,11 +14560,6 @@
           715,
           296,
           356
-        ],
-        [
-          716,
-          28,
-          45
         ],
         [
           716,
@@ -13537,11 +14570,6 @@
           716,
           295,
           356
-        ],
-        [
-          717,
-          27,
-          45
         ],
         [
           717,
@@ -13552,11 +14580,6 @@
           717,
           295,
           356
-        ],
-        [
-          718,
-          26,
-          46
         ],
         [
           718,
@@ -13567,11 +14590,6 @@
           718,
           295,
           357
-        ],
-        [
-          719,
-          25,
-          47
         ],
         [
           719,
@@ -13582,11 +14600,6 @@
           719,
           294,
           357
-        ],
-        [
-          720,
-          23,
-          47
         ],
         [
           720,
@@ -13605,11 +14618,6 @@
         ],
         [
           721,
-          22,
-          48
-        ],
-        [
-          721,
           267,
           275
         ],
@@ -13622,11 +14630,6 @@
           721,
           294,
           357
-        ],
-        [
-          722,
-          21,
-          48
         ],
         [
           722,
@@ -13645,11 +14648,6 @@
         ],
         [
           723,
-          20,
-          49
-        ],
-        [
-          723,
           267,
           275
         ],
@@ -13662,11 +14660,6 @@
           723,
           293,
           358
-        ],
-        [
-          724,
-          19,
-          50
         ],
         [
           724,
@@ -13685,11 +14678,6 @@
         ],
         [
           725,
-          18,
-          50
-        ],
-        [
-          725,
           268,
           276
         ],
@@ -13700,11 +14688,6 @@
         ],
         [
           726,
-          17,
-          51
-        ],
-        [
-          726,
           268,
           276
         ],
@@ -13712,11 +14695,6 @@
           726,
           280,
           359
-        ],
-        [
-          727,
-          16,
-          51
         ],
         [
           727,
@@ -13735,11 +14713,6 @@
         ],
         [
           728,
-          15,
-          52
-        ],
-        [
-          728,
           269,
           289
         ],
@@ -13747,11 +14720,6 @@
           728,
           291,
           359
-        ],
-        [
-          729,
-          14,
-          53
         ],
         [
           729,
@@ -13765,11 +14733,6 @@
         ],
         [
           730,
-          13,
-          53
-        ],
-        [
-          730,
           270,
           286
         ],
@@ -13777,11 +14740,6 @@
           730,
           291,
           360
-        ],
-        [
-          731,
-          12,
-          54
         ],
         [
           731,
@@ -13795,11 +14753,6 @@
         ],
         [
           732,
-          11,
-          54
-        ],
-        [
-          732,
           269,
           283
         ],
@@ -13807,11 +14760,6 @@
           732,
           290,
           360
-        ],
-        [
-          733,
-          13,
-          55
         ],
         [
           733,
@@ -13825,11 +14773,6 @@
         ],
         [
           734,
-          15,
-          55
-        ],
-        [
-          734,
           268,
           280
         ],
@@ -13837,11 +14780,6 @@
           734,
           290,
           361
-        ],
-        [
-          735,
-          17,
-          56
         ],
         [
           735,
@@ -13855,11 +14793,6 @@
         ],
         [
           736,
-          18,
-          57
-        ],
-        [
-          736,
           266,
           277
         ],
@@ -13867,11 +14800,6 @@
           736,
           289,
           361
-        ],
-        [
-          737,
-          20,
-          57
         ],
         [
           737,
@@ -13885,11 +14813,6 @@
         ],
         [
           738,
-          22,
-          58
-        ],
-        [
-          738,
           264,
           279
         ],
@@ -13900,11 +14823,6 @@
         ],
         [
           739,
-          40,
-          58
-        ],
-        [
-          739,
           264,
           280
         ],
@@ -13912,11 +14830,6 @@
           739,
           288,
           362
-        ],
-        [
-          740,
-          58,
-          59
         ],
         [
           740,
@@ -14864,11 +15777,6 @@
           310
         ],
         [
-          876,
-          357,
-          391
-        ],
-        [
           877,
           30,
           202
@@ -14879,29 +15787,14 @@
           309
         ],
         [
-          877,
-          357,
-          391
-        ],
-        [
           878,
           30,
           309
         ],
         [
-          878,
-          357,
-          392
-        ],
-        [
           879,
           29,
           309
-        ],
-        [
-          879,
-          357,
-          392
         ],
         [
           880,
@@ -14909,19 +15802,9 @@
           309
         ],
         [
-          880,
-          358,
-          392
-        ],
-        [
           881,
           28,
           308
-        ],
-        [
-          881,
-          358,
-          392
         ],
         [
           882,
@@ -14929,29 +15812,14 @@
           308
         ],
         [
-          882,
-          358,
-          393
-        ],
-        [
           883,
           28,
           308
         ],
         [
-          883,
-          358,
-          393
-        ],
-        [
           884,
           27,
           307
-        ],
-        [
-          884,
-          358,
-          393
         ],
         [
           885,
@@ -14959,19 +15827,9 @@
           307
         ],
         [
-          885,
-          358,
-          394
-        ],
-        [
           886,
           26,
           307
-        ],
-        [
-          886,
-          359,
-          394
         ],
         [
           887,
@@ -14979,29 +15837,14 @@
           307
         ],
         [
-          887,
-          359,
-          394
-        ],
-        [
           888,
           26,
           306
         ],
         [
-          888,
-          359,
-          394
-        ],
-        [
           889,
           25,
           306
-        ],
-        [
-          889,
-          359,
-          395
         ],
         [
           890,
@@ -15009,29 +15852,14 @@
           306
         ],
         [
-          890,
-          359,
-          395
-        ],
-        [
           891,
           25,
           306
         ],
         [
-          891,
-          359,
-          395
-        ],
-        [
           892,
           24,
           305
-        ],
-        [
-          892,
-          360,
-          396
         ],
         [
           893,
@@ -15039,29 +15867,14 @@
           305
         ],
         [
-          893,
-          360,
-          396
-        ],
-        [
           894,
           23,
           305
         ],
         [
-          894,
-          360,
-          396
-        ],
-        [
           895,
           23,
           304
-        ],
-        [
-          895,
-          360,
-          397
         ],
         [
           896,
@@ -15069,19 +15882,9 @@
           304
         ],
         [
-          896,
-          360,
-          397
-        ],
-        [
           897,
           22,
           304
-        ],
-        [
-          897,
-          360,
-          397
         ],
         [
           898,
@@ -15089,29 +15892,14 @@
           304
         ],
         [
-          898,
-          361,
-          397
-        ],
-        [
           899,
           22,
           303
         ],
         [
-          899,
-          361,
-          398
-        ],
-        [
           900,
           21,
           303
-        ],
-        [
-          900,
-          361,
-          398
         ],
         [
           901,
@@ -15119,19 +15907,9 @@
           303
         ],
         [
-          901,
-          361,
-          398
-        ],
-        [
           902,
           20,
           302
-        ],
-        [
-          902,
-          361,
-          399
         ],
         [
           903,
@@ -15139,39 +15917,19 @@
           302
         ],
         [
-          903,
-          361,
-          399
-        ],
-        [
           904,
           20,
           302
         ],
         [
-          904,
-          362,
-          399
-        ],
-        [
           905,
           19,
           302
         ],
         [
-          905,
-          362,
-          399
-        ],
-        [
           906,
           19,
           301
-        ],
-        [
-          906,
-          362,
-          400
         ],
         [
           907,
@@ -15179,19 +15937,9 @@
           301
         ],
         [
-          907,
-          362,
-          400
-        ],
-        [
           908,
           18,
           301
-        ],
-        [
-          908,
-          390,
-          400
         ],
         [
           909,
@@ -15199,121 +15947,46 @@
           301
         ],
         [
-          909,
-          390,
-          401
-        ],
-        [
           910,
           17,
           300
         ],
         [
-          910,
-          391,
-          401
-        ],
-        [
           911,
           17,
           300
-        ],
-        [
-          911,
-          391,
-          401
-        ],
-        [
-          912,
-          391,
-          401
-        ],
-        [
-          913,
-          391,
-          402
-        ],
-        [
-          914,
-          392,
-          402
-        ],
-        [
-          915,
-          392,
-          402
-        ],
-        [
-          916,
-          392,
-          403
-        ],
-        [
-          917,
-          392,
-          403
-        ],
-        [
-          918,
-          393,
-          403
-        ],
-        [
-          919,
-          393,
-          404
-        ],
-        [
-          920,
-          393,
-          404
-        ],
-        [
-          921,
-          393,
-          404
-        ],
-        [
-          922,
-          394,
-          404
-        ],
-        [
-          923,
-          394,
-          405
-        ],
-        [
-          924,
-          394,
-          405
-        ],
-        [
-          925,
-          394,
-          403
-        ],
-        [
-          926,
-          395,
-          400
-        ],
-        [
-          927,
-          395,
-          398
         ]
       ],
-      "ownedOpaquePixelCount": 33746,
+      "ownedOpaquePixelCount": 31548,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "approved-visual-continuation",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "wall-panel-assembly",
+          "approvedParts": [
+            {
+              "componentKey": "17,573,402,339,31548",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
-          "cc8-0303cc20bc63f771bc94",
-          "cc8-0810a98af5dee11d0583",
-          "cc8-5f8fd36f1184326a68ed"
+          "cc8-0810a98af5dee11d0583"
         ],
-        "continuationRationale": "The three alpha islands are observable continuation pieces of the same southwest wall-panel assembly; E9B must clear all non-owner pixels inside the shared sourceRect."
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-0810a98af5dee11d0583",
+            "identitySha256": "0810a98af5dee11d0583f01cc48b0a6b04b117cabc43278c419a0a6fdbb3162d",
+            "geometryKey": "17,573,402,339,31548",
+            "bounds": {
+              "x": 17,
+              "y": 573,
+              "width": 402,
+              "height": 339
+            },
+            "opaquePixelCount": 31548
+          }
+        ]
       },
       "outputFileHint": "public/juyiting/images/occluders/west-lower-v2.webp",
       "outputEncoding": {
@@ -15648,11 +16321,33 @@
       "ownedOpaquePixelCount": 449,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "diagonal-brace",
+          "approvedParts": [
+            {
+              "componentKey": "600,432,16,57,449",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-b346f0d21c2bb434349e"
         ],
-        "continuationRationale": null
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-b346f0d21c2bb434349e",
+            "identitySha256": "b346f0d21c2bb434349e7f7be334c4ae89c0a21e34c42c36606c0c3d6ac9a6fa",
+            "geometryKey": "600,432,16,57,449",
+            "bounds": {
+              "x": 600,
+              "y": 432,
+              "width": 16,
+              "height": 57
+            },
+            "opaquePixelCount": 449
+          }
+        ]
       },
       "outputFileHint": "public/juyiting/images/occluders/west-upper-v2.webp",
       "outputEncoding": {
@@ -16077,11 +16772,494 @@
       "ownedOpaquePixelCount": 2475,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "lantern",
+          "approvedParts": [
+            {
+              "componentKey": "461,165,45,75,2475",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-1c0656231260747ee514"
         ],
-        "continuationRationale": null
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-1c0656231260747ee514",
+            "identitySha256": "1c0656231260747ee5144549fa4933616c490475ebfe2054022ba161ede14227",
+            "geometryKey": "461,165,45,75,2475",
+            "bounds": {
+              "x": 461,
+              "y": 165,
+              "width": 45,
+              "height": 75
+            },
+            "opaquePixelCount": 2475
+          }
+        ]
+      },
+      "outputFileHint": "public/juyiting/images/occluders/west-upper-v2.webp",
+      "outputEncoding": {
+        "allowed": [
+          "lossless-webp",
+          "png"
+        ],
+        "losslessRequired": true,
+        "alphaRequired": true,
+        "colorTransform": "forbidden"
+      }
+    },
+    {
+      "stableId": "jyt.occ.west-upper.lantern-table-frame-01.v2",
+      "region": "west-upper",
+      "homeRegion": "west-upper",
+      "chunkId": "west-upper",
+      "semanticType": "lantern-table-frame",
+      "observableDescription": "Tabletop frame and near edge of the northwest table beneath the lantern.",
+      "sourceRect": {
+        "x": 214,
+        "y": 276,
+        "width": 141,
+        "height": 76
+      },
+      "destinationRect": {
+        "x": 214,
+        "y": 276,
+        "width": 141,
+        "height": 76
+      },
+      "destinationMapping": {
+        "mode": "source-coordinate-identity",
+        "scaleNumerator": 1,
+        "scaleDenominator": 1,
+        "sampling": "none"
+      },
+      "pixelOwnershipRule": {
+        "model": "alpha-rle-v1",
+        "runEncoding": "[y,xStartInclusive,xEndExclusive]",
+        "coordinateSpace": "canonical-source-pixels",
+        "threshold": 1,
+        "e9bAction": "copy RGBA only for ownershipRuns; clear every other sourceRect pixel to transparent"
+      },
+      "ownershipRuns": [
+        [
+          277,
+          241,
+          242
+        ],
+        [
+          278,
+          241,
+          279
+        ],
+        [
+          279,
+          240,
+          317
+        ],
+        [
+          280,
+          240,
+          354
+        ],
+        [
+          281,
+          240,
+          354
+        ],
+        [
+          282,
+          239,
+          354
+        ],
+        [
+          283,
+          239,
+          354
+        ],
+        [
+          284,
+          238,
+          354
+        ],
+        [
+          285,
+          238,
+          354
+        ],
+        [
+          286,
+          238,
+          354
+        ],
+        [
+          287,
+          237,
+          354
+        ],
+        [
+          288,
+          237,
+          354
+        ],
+        [
+          289,
+          237,
+          354
+        ],
+        [
+          290,
+          236,
+          354
+        ],
+        [
+          291,
+          236,
+          354
+        ],
+        [
+          292,
+          235,
+          254
+        ],
+        [
+          292,
+          286,
+          354
+        ],
+        [
+          293,
+          235,
+          253
+        ],
+        [
+          293,
+          320,
+          354
+        ],
+        [
+          294,
+          235,
+          253
+        ],
+        [
+          294,
+          353,
+          354
+        ],
+        [
+          295,
+          234,
+          253
+        ],
+        [
+          296,
+          234,
+          252
+        ],
+        [
+          297,
+          234,
+          252
+        ],
+        [
+          298,
+          233,
+          252
+        ],
+        [
+          299,
+          233,
+          251
+        ],
+        [
+          300,
+          232,
+          251
+        ],
+        [
+          301,
+          232,
+          251
+        ],
+        [
+          302,
+          232,
+          250
+        ],
+        [
+          303,
+          231,
+          250
+        ],
+        [
+          304,
+          231,
+          250
+        ],
+        [
+          305,
+          231,
+          249
+        ],
+        [
+          306,
+          230,
+          249
+        ],
+        [
+          307,
+          230,
+          249
+        ],
+        [
+          308,
+          229,
+          248
+        ],
+        [
+          309,
+          229,
+          248
+        ],
+        [
+          310,
+          229,
+          248
+        ],
+        [
+          311,
+          228,
+          247
+        ],
+        [
+          312,
+          228,
+          247
+        ],
+        [
+          313,
+          228,
+          247
+        ],
+        [
+          314,
+          227,
+          246
+        ],
+        [
+          315,
+          227,
+          246
+        ],
+        [
+          316,
+          227,
+          246
+        ],
+        [
+          317,
+          226,
+          245
+        ],
+        [
+          318,
+          226,
+          245
+        ],
+        [
+          319,
+          225,
+          245
+        ],
+        [
+          320,
+          225,
+          244
+        ],
+        [
+          321,
+          225,
+          244
+        ],
+        [
+          322,
+          224,
+          243
+        ],
+        [
+          323,
+          224,
+          243
+        ],
+        [
+          324,
+          224,
+          243
+        ],
+        [
+          325,
+          223,
+          242
+        ],
+        [
+          326,
+          223,
+          242
+        ],
+        [
+          327,
+          222,
+          242
+        ],
+        [
+          328,
+          222,
+          241
+        ],
+        [
+          329,
+          222,
+          241
+        ],
+        [
+          330,
+          221,
+          241
+        ],
+        [
+          331,
+          221,
+          240
+        ],
+        [
+          332,
+          221,
+          240
+        ],
+        [
+          333,
+          220,
+          240
+        ],
+        [
+          334,
+          220,
+          239
+        ],
+        [
+          335,
+          219,
+          239
+        ],
+        [
+          336,
+          219,
+          239
+        ],
+        [
+          337,
+          219,
+          238
+        ],
+        [
+          338,
+          218,
+          238
+        ],
+        [
+          339,
+          218,
+          238
+        ],
+        [
+          340,
+          218,
+          237
+        ],
+        [
+          341,
+          217,
+          237
+        ],
+        [
+          342,
+          217,
+          237
+        ],
+        [
+          343,
+          216,
+          236
+        ],
+        [
+          344,
+          216,
+          236
+        ],
+        [
+          345,
+          216,
+          236
+        ],
+        [
+          346,
+          215,
+          235
+        ],
+        [
+          347,
+          215,
+          235
+        ],
+        [
+          348,
+          221,
+          235
+        ],
+        [
+          349,
+          227,
+          234
+        ],
+        [
+          350,
+          233,
+          234
+        ]
+      ],
+      "ownedOpaquePixelCount": 2706,
+      "semanticOwnership": {
+        "componentConnectivity": 8,
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "lantern-table-frame",
+          "approvedParts": [
+            {
+              "componentKey": "215,277,139,74,2706",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
+        "canonicalComponentIds": [
+          "cc8-fe0c7f129804b2e83740"
+        ],
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-fe0c7f129804b2e83740",
+            "identitySha256": "fe0c7f129804b2e837409fc89a5f6ddbafc7d5a234b6519ec470239aa162abbd",
+            "geometryKey": "215,277,139,74,2706",
+            "bounds": {
+              "x": 215,
+              "y": 277,
+              "width": 139,
+              "height": 74
+            },
+            "opaquePixelCount": 2706
+          }
+        ]
       },
       "outputFileHint": "public/juyiting/images/occluders/west-upper-v2.webp",
       "outputEncoding": {
@@ -16946,450 +18124,33 @@
       "ownedOpaquePixelCount": 4981,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "pillar",
+          "approvedParts": [
+            {
+              "componentKey": "543,306,56,163,4981",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-674006166752e35f42cc"
         ],
-        "continuationRationale": null
-      },
-      "outputFileHint": "public/juyiting/images/occluders/west-upper-v2.webp",
-      "outputEncoding": {
-        "allowed": [
-          "lossless-webp",
-          "png"
-        ],
-        "losslessRequired": true,
-        "alphaRequired": true,
-        "colorTransform": "forbidden"
-      }
-    },
-    {
-      "stableId": "jyt.occ.west-upper.railing-01.v2",
-      "region": "west-upper",
-      "homeRegion": "west-upper",
-      "chunkId": "west-upper",
-      "semanticType": "railing",
-      "observableDescription": "L-shaped northwest upper railing previously confirmed by V2 review.",
-      "sourceRect": {
-        "x": 214,
-        "y": 276,
-        "width": 141,
-        "height": 76
-      },
-      "destinationRect": {
-        "x": 214,
-        "y": 276,
-        "width": 141,
-        "height": 76
-      },
-      "destinationMapping": {
-        "mode": "source-coordinate-identity",
-        "scaleNumerator": 1,
-        "scaleDenominator": 1,
-        "sampling": "none"
-      },
-      "pixelOwnershipRule": {
-        "model": "alpha-rle-v1",
-        "runEncoding": "[y,xStartInclusive,xEndExclusive]",
-        "coordinateSpace": "canonical-source-pixels",
-        "threshold": 1,
-        "e9bAction": "copy RGBA only for ownershipRuns; clear every other sourceRect pixel to transparent"
-      },
-      "ownershipRuns": [
-        [
-          277,
-          241,
-          242
-        ],
-        [
-          278,
-          241,
-          279
-        ],
-        [
-          279,
-          240,
-          317
-        ],
-        [
-          280,
-          240,
-          354
-        ],
-        [
-          281,
-          240,
-          354
-        ],
-        [
-          282,
-          239,
-          354
-        ],
-        [
-          283,
-          239,
-          354
-        ],
-        [
-          284,
-          238,
-          354
-        ],
-        [
-          285,
-          238,
-          354
-        ],
-        [
-          286,
-          238,
-          354
-        ],
-        [
-          287,
-          237,
-          354
-        ],
-        [
-          288,
-          237,
-          354
-        ],
-        [
-          289,
-          237,
-          354
-        ],
-        [
-          290,
-          236,
-          354
-        ],
-        [
-          291,
-          236,
-          354
-        ],
-        [
-          292,
-          235,
-          254
-        ],
-        [
-          292,
-          286,
-          354
-        ],
-        [
-          293,
-          235,
-          253
-        ],
-        [
-          293,
-          320,
-          354
-        ],
-        [
-          294,
-          235,
-          253
-        ],
-        [
-          294,
-          353,
-          354
-        ],
-        [
-          295,
-          234,
-          253
-        ],
-        [
-          296,
-          234,
-          252
-        ],
-        [
-          297,
-          234,
-          252
-        ],
-        [
-          298,
-          233,
-          252
-        ],
-        [
-          299,
-          233,
-          251
-        ],
-        [
-          300,
-          232,
-          251
-        ],
-        [
-          301,
-          232,
-          251
-        ],
-        [
-          302,
-          232,
-          250
-        ],
-        [
-          303,
-          231,
-          250
-        ],
-        [
-          304,
-          231,
-          250
-        ],
-        [
-          305,
-          231,
-          249
-        ],
-        [
-          306,
-          230,
-          249
-        ],
-        [
-          307,
-          230,
-          249
-        ],
-        [
-          308,
-          229,
-          248
-        ],
-        [
-          309,
-          229,
-          248
-        ],
-        [
-          310,
-          229,
-          248
-        ],
-        [
-          311,
-          228,
-          247
-        ],
-        [
-          312,
-          228,
-          247
-        ],
-        [
-          313,
-          228,
-          247
-        ],
-        [
-          314,
-          227,
-          246
-        ],
-        [
-          315,
-          227,
-          246
-        ],
-        [
-          316,
-          227,
-          246
-        ],
-        [
-          317,
-          226,
-          245
-        ],
-        [
-          318,
-          226,
-          245
-        ],
-        [
-          319,
-          225,
-          245
-        ],
-        [
-          320,
-          225,
-          244
-        ],
-        [
-          321,
-          225,
-          244
-        ],
-        [
-          322,
-          224,
-          243
-        ],
-        [
-          323,
-          224,
-          243
-        ],
-        [
-          324,
-          224,
-          243
-        ],
-        [
-          325,
-          223,
-          242
-        ],
-        [
-          326,
-          223,
-          242
-        ],
-        [
-          327,
-          222,
-          242
-        ],
-        [
-          328,
-          222,
-          241
-        ],
-        [
-          329,
-          222,
-          241
-        ],
-        [
-          330,
-          221,
-          241
-        ],
-        [
-          331,
-          221,
-          240
-        ],
-        [
-          332,
-          221,
-          240
-        ],
-        [
-          333,
-          220,
-          240
-        ],
-        [
-          334,
-          220,
-          239
-        ],
-        [
-          335,
-          219,
-          239
-        ],
-        [
-          336,
-          219,
-          239
-        ],
-        [
-          337,
-          219,
-          238
-        ],
-        [
-          338,
-          218,
-          238
-        ],
-        [
-          339,
-          218,
-          238
-        ],
-        [
-          340,
-          218,
-          237
-        ],
-        [
-          341,
-          217,
-          237
-        ],
-        [
-          342,
-          217,
-          237
-        ],
-        [
-          343,
-          216,
-          236
-        ],
-        [
-          344,
-          216,
-          236
-        ],
-        [
-          345,
-          216,
-          236
-        ],
-        [
-          346,
-          215,
-          235
-        ],
-        [
-          347,
-          215,
-          235
-        ],
-        [
-          348,
-          221,
-          235
-        ],
-        [
-          349,
-          227,
-          234
-        ],
-        [
-          350,
-          233,
-          234
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-674006166752e35f42cc",
+            "identitySha256": "674006166752e35f42cc16f691cd383b9fd7c793cd63e62d9c626b02869725f2",
+            "geometryKey": "543,306,56,163,4981",
+            "bounds": {
+              "x": 543,
+              "y": 306,
+              "width": 56,
+              "height": 163
+            },
+            "opaquePixelCount": 4981
+          }
         ]
-      ],
-      "ownedOpaquePixelCount": 2706,
-      "semanticOwnership": {
-        "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
-        "canonicalComponentIds": [
-          "cc8-fe0c7f129804b2e83740"
-        ],
-        "continuationRationale": null
       },
       "outputFileHint": "public/juyiting/images/occluders/west-upper-v2.webp",
       "outputEncoding": {
@@ -19539,11 +20300,33 @@
       "ownedOpaquePixelCount": 82119,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "wall-panel-assembly",
+          "approvedParts": [
+            {
+              "componentKey": "0,348,546,368,82119",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-8f2d303b3255bb3cb344"
         ],
-        "continuationRationale": null
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-8f2d303b3255bb3cb344",
+            "identitySha256": "8f2d303b3255bb3cb344639c4d4cb4e632fea63cbb9a065187688b5f18b549b2",
+            "geometryKey": "0,348,546,368,82119",
+            "bounds": {
+              "x": 0,
+              "y": 348,
+              "width": 546,
+              "height": 368
+            },
+            "opaquePixelCount": 82119
+          }
+        ]
       },
       "outputFileHint": "public/juyiting/images/occluders/west-upper-v2.webp",
       "outputEncoding": {
@@ -19763,11 +20546,33 @@
       "ownedOpaquePixelCount": 216,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "wall-sconce",
+          "approvedParts": [
+            {
+              "componentKey": "617,238,13,34,216",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-cc88c09844b07c3a10e7"
         ],
-        "continuationRationale": null
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-cc88c09844b07c3a10e7",
+            "identitySha256": "cc88c09844b07c3a10e73b7281ab78b8ab0e227af57ba194efdcb6b5271abcef",
+            "geometryKey": "617,238,13,34,216",
+            "bounds": {
+              "x": 617,
+              "y": 238,
+              "width": 13,
+              "height": 34
+            },
+            "opaquePixelCount": 216
+          }
+        ]
       },
       "outputFileHint": "public/juyiting/images/occluders/west-upper-v2.webp",
       "outputEncoding": {
@@ -20417,11 +21222,33 @@
       "ownedOpaquePixelCount": 2496,
       "semanticOwnership": {
         "componentConnectivity": 8,
-        "componentPolicy": "single-canonical-component",
+        "componentGroupPolicy": {
+          "mode": "single-component",
+          "observableObject": "wall-sconce",
+          "approvedParts": [
+            {
+              "componentKey": "492,471,45,114,2496",
+              "role": "complete-observable-object"
+            }
+          ]
+        },
         "canonicalComponentIds": [
           "cc8-8002da96e4119572bd09"
         ],
-        "continuationRationale": null
+        "canonicalComponents": [
+          {
+            "componentId": "cc8-8002da96e4119572bd09",
+            "identitySha256": "8002da96e4119572bd0975f6f59e234f6dab6c91bba3f6ed3f519762d23e3479",
+            "geometryKey": "492,471,45,114,2496",
+            "bounds": {
+              "x": 492,
+              "y": 471,
+              "width": 45,
+              "height": 114
+            },
+            "opaquePixelCount": 2496
+          }
+        ]
       },
       "outputFileHint": "public/juyiting/images/occluders/west-upper-v2.webp",
       "outputEncoding": {
@@ -20447,37 +21274,39 @@
         "jyt.occ.center.wall-sconce-01.v2",
         "jyt.occ.east-lower.diagonal-brace-01.v2",
         "jyt.occ.east-lower.diagonal-brace-02.v2",
-        "jyt.occ.east-lower.diagonal-brace-03.v2",
+        "jyt.occ.east-lower.fabric-rack-01.v2",
         "jyt.occ.east-lower.lantern-01.v2",
-        "jyt.occ.east-lower.railing-corner-01.v2",
         "jyt.occ.east-lower.railing-post-01.v2",
+        "jyt.occ.east-lower.worktable-01.v2",
         "jyt.occ.east-upper.diagonal-brace-01.v2",
-        "jyt.occ.east-upper.hanging-signboard-01.v2",
         "jyt.occ.east-upper.pillar-01.v2",
         "jyt.occ.east-upper.pillar-02.v2",
+        "jyt.occ.east-upper.scroll-table-front-01.v2",
         "jyt.occ.east-upper.wall-panel-lower-01.v2",
         "jyt.occ.east-upper.wall-panel-upper-01.v2",
         "jyt.occ.entrance.hanging-banner-01.v2",
         "jyt.occ.entrance.hanging-banner-02.v2",
         "jyt.occ.entrance.lantern-post-01.v2",
         "jyt.occ.entrance.lantern-post-02.v2",
-        "jyt.occ.west-lower.diagonal-brace-01.v2",
         "jyt.occ.west-lower.diagonal-brace-02.v2",
+        "jyt.occ.west-lower.floor-lantern-01.v2",
+        "jyt.occ.west-lower.long-table-frame-01.v2",
         "jyt.occ.west-lower.railing-01.v2",
         "jyt.occ.west-lower.railing-02.v2",
         "jyt.occ.west-lower.wall-bracket-01.v2",
+        "jyt.occ.west-lower.wall-lantern-01.v2",
         "jyt.occ.west-lower.wall-panel-assembly-01.v2",
         "jyt.occ.west-upper.diagonal-brace-01.v2",
         "jyt.occ.west-upper.lantern-01.v2",
+        "jyt.occ.west-upper.lantern-table-frame-01.v2",
         "jyt.occ.west-upper.pillar-01.v2",
-        "jyt.occ.west-upper.railing-01.v2",
         "jyt.occ.west-upper.wall-panel-assembly-01.v2",
         "jyt.occ.west-upper.wall-sconce-01.v2",
         "jyt.occ.west-upper.wall-sconce-02.v2"
       ]
     },
     "stableIdBasis": "explicit-semantic-catalog-keyed-by-canonical-component-geometry-not-declaration-order",
-    "generationId": "5ec3052c1cd5c392a9b9375884ad64a746ea314f42910389006ed6621f3e623f"
+    "generationId": "7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"
   },
-  "generationId": "5ec3052c1cd5c392a9b9375884ad64a746ea314f42910389006ed6621f3e623f"
+  "generationId": "7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"
 }

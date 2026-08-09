@@ -21,6 +21,7 @@ import {
   createAlphaMap,
   decodeCanonicalOwnership,
   runPixelCount,
+  stableStringify,
 } from './lib/fragment-ownership-v2.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -145,9 +146,8 @@ function validate(spec, decoded, actualSourceHash) {
         errors.push(`${prefix} wrong region/homeRegion/chunk; expected ${catalog.homeRegion}`)
       }
       if (fragment.semanticType !== catalog.semanticType) errors.push(`${prefix} semanticType mismatch; expected ${catalog.semanticType}`)
-      if (fragment.semanticOwnership?.componentPolicy !== catalog.componentPolicy) errors.push(`${prefix} componentPolicy mismatch; expected ${catalog.componentPolicy}`)
-      if (catalog.componentPolicy === 'approved-visual-continuation' && !fragment.semanticOwnership?.continuationRationale) {
-        errors.push(`${prefix} approved continuation requires machine-readable rationale`)
+      if (stableStringify(fragment.semanticOwnership?.componentGroupPolicy) !== stableStringify(catalog.componentGroupPolicy)) {
+        errors.push(`${prefix} componentGroupPolicy differs from reviewed catalog`)
       }
     }
     if (GENERIC_LABELS.has(fragment.semanticType)) errors.push(`${prefix} uses forbidden generic semantic label ${fragment.semanticType}`)
@@ -214,8 +214,39 @@ function validate(spec, decoded, actualSourceHash) {
       if (JSON.stringify(actualComponentIds) !== JSON.stringify(expectedComponentIds)) {
         errors.push(`${prefix} broad/disconnected semantic group differs from reviewed catalog: expected ${JSON.stringify(expectedComponentIds)}`)
       }
-      if (catalog.componentPolicy === 'single-canonical-component' && actualComponentIds.length !== 1) {
+      const policy = fragment.semanticOwnership?.componentGroupPolicy
+      const declaredComponents = fragment.semanticOwnership?.canonicalComponents
+      if (!Array.isArray(declaredComponents)) {
+        errors.push(`${prefix} canonicalComponents must record component identity/bounds/hash`)
+      } else {
+        const expectedComponents = catalog.componentKeys.map(key => componentByGeometry.get(key)).filter(Boolean).map(component => ({
+          componentId: component.componentId,
+          identitySha256: component.identitySha256,
+          geometryKey: component.geometryKey,
+          bounds: { ...component.bounds },
+          opaquePixelCount: component.pixelCount,
+        })).sort((left, right) => left.geometryKey.localeCompare(right.geometryKey))
+        const sortedDeclaredComponents = [...declaredComponents].sort((left, right) => String(left?.geometryKey).localeCompare(String(right?.geometryKey)))
+        if (stableStringify(sortedDeclaredComponents) !== stableStringify(expectedComponents)) {
+          errors.push(`${prefix} canonical component identity/bounds/hash differs from decoded source`)
+        }
+      }
+      if (policy?.mode === 'single-component' && actualComponentIds.length !== 1) {
         errors.push(`${prefix} single-component owner contains ${actualComponentIds.length} disconnected canonical components`)
+      }
+      if (actualComponentIds.length > 1 && policy?.mode !== 'approved-same-observable-object-parts') {
+        errors.push(`${prefix} disconnected components require explicit approved-same-observable-object-parts componentGroupPolicy`)
+      }
+      if (policy?.mode === 'approved-same-observable-object-parts') {
+        if (!policy.observableObject || !policy.approvalBasis || !Array.isArray(policy.approvedParts)) {
+          errors.push(`${prefix} grouped owner requires observableObject, approvalBasis, and approvedParts`)
+        } else {
+          const approvedKeys = policy.approvedParts.map(part => part?.componentKey).sort()
+          if (stableStringify(approvedKeys) !== stableStringify([...catalog.componentKeys].sort()) ||
+              policy.approvedParts.some(part => !part?.role)) {
+            errors.push(`${prefix} componentGroupPolicy approvedParts must exactly name every reviewed component and role`)
+          }
+        }
       }
     }
   }

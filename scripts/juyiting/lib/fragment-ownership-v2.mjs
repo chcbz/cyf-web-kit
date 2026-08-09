@@ -38,8 +38,9 @@ export const REGION_DEFS = {
 
 // The catalog is keyed by canonical component geometry, not decode order. The
 // canonical hash is immutable, so a geometry mismatch fails closed instead of
-// silently renaming an owner. Multi-component entries are the two V2-reviewed
-// user-mandated visual continuations from REJECT-V2; they are merges, never cuts.
+// silently renaming an owner. A multi-component entry requires an explicit,
+// machine-readable componentGroupPolicy tying every island to one observable
+// object; arbitrary disconnected merges are forbidden.
 export const SEMANTIC_OWNER_CATALOG = [
   owner('jyt.occ.west-upper.lantern-01.v2', 'west-upper', 'lantern',
     'Tall illuminated wall lantern at the northwest upper wall.', ['461,165,45,75,2475']),
@@ -47,10 +48,10 @@ export const SEMANTIC_OWNER_CATALOG = [
     'Small north-center wall sconce; this object is not a pillar.', ['1112,230,18,54,504']),
   owner('jyt.occ.west-upper.wall-sconce-01.v2', 'west-upper', 'wall-sconce',
     'Small narrow wall sconce east of the northwest lantern.', ['617,238,13,34,216']),
-  owner('jyt.occ.east-upper.hanging-signboard-01.v2', 'east-upper', 'hanging-signboard',
-    'Horizontal inscribed hanging signboard in the northeast.', ['1384,255,95,29,2117']),
-  owner('jyt.occ.west-upper.railing-01.v2', 'west-upper', 'railing',
-    'L-shaped northwest upper railing previously confirmed by V2 review.', ['215,277,139,74,2706']),
+  owner('jyt.occ.east-upper.scroll-table-front-01.v2', 'east-upper', 'scroll-table-front',
+    'Near-side front edge of the northeast table surface carrying scrolls.', ['1384,255,95,29,2117']),
+  owner('jyt.occ.west-upper.lantern-table-frame-01.v2', 'west-upper', 'lantern-table-frame',
+    'Tabletop frame and near edge of the northwest table beneath the lantern.', ['215,277,139,74,2706']),
   owner('jyt.occ.east-upper.pillar-01.v2', 'east-upper', 'pillar',
     'Tall carved northeast inner pillar.', ['1158,305,46,159,4701']),
   owner('jyt.occ.west-upper.pillar-01.v2', 'west-upper', 'pillar',
@@ -71,16 +72,25 @@ export const SEMANTIC_OWNER_CATALOG = [
     'Carved east pillar spanning the y=580 region guide without being clipped.', ['1202,478,50,225,5188']),
   owner('jyt.occ.east-lower.diagonal-brace-01.v2', 'east-lower', 'diagonal-brace',
     'Large southeast-facing diagonal brace spanning the y=580 region guide.', ['1308,560,203,208,12954']),
-  continuationOwner('jyt.occ.west-lower.wall-panel-assembly-01.v2', 'west-lower', 'wall-panel-assembly',
-    'Southwest wall-panel assembly, corner cap, lower rail, and attached lantern foot; merged per V2 coordinates 28+30 and 29+39.',
-    ['17,573,402,339,31548', '11,706,48,35,850', '357,876,48,52,1348'],
-    'The three alpha islands are observable continuation pieces of the same southwest wall-panel assembly; E9B must clear all non-owner pixels inside the shared sourceRect.'),
-  continuationOwner('jyt.occ.east-lower.railing-corner-01.v2', 'east-lower', 'railing-corner',
-    'East railing corner with mounted scroll/book bracket and lower cap; merged per V2 coordinates 21+25.',
+  owner('jyt.occ.west-lower.wall-panel-assembly-01.v2', 'west-lower', 'wall-panel-assembly',
+    'Main southwest wall-panel assembly with connected corner cap and lower rail.', ['17,573,402,339,31548']),
+  owner('jyt.occ.west-lower.wall-lantern-01.v2', 'west-lower', 'wall-lantern',
+    'Independent illuminated angled wall lantern at the far west edge.', ['11,706,48,35,850']),
+  owner('jyt.occ.west-lower.floor-lantern-01.v2', 'west-lower', 'floor-lantern',
+    'Independent low box lantern at the southwest floor line.', ['357,876,48,52,1348']),
+  groupedOwner('jyt.occ.east-lower.worktable-01.v2', 'east-lower', 'worktable',
+    'East worktable with scrolls and vessels on its top, near edge, and separated lower-right leg/cap.',
     ['1499,574,120,100,5297', '1592,674,21,27,274'],
-    'The lower cap continues the same east railing corner despite a transparent antialias gap.'),
-  owner('jyt.occ.west-lower.diagonal-brace-01.v2', 'west-lower', 'diagonal-brace',
-    'Southwest inward-facing L-shaped diagonal brace.', ['117,601,122,118,2900']),
+    {
+      observableObject: 'east worktable',
+      approvalBasis: 'GPT V2 reviewed the two alpha islands at (1499,574,120×100) and (1592,674,21×27) as visible parts of the same worktable.',
+      approvedParts: [
+        { componentKey: '1499,574,120,100,5297', role: 'tabletop-scrolls-vessels-near-edge-and-main-legs' },
+        { componentKey: '1592,674,21,27,274', role: 'separated-lower-right-leg-cap' },
+      ],
+    }),
+  owner('jyt.occ.west-lower.long-table-frame-01.v2', 'west-lower', 'long-table-frame',
+    'Southwest long-table near frame, corner, and visible table legs.', ['117,601,122,118,2900']),
   owner('jyt.occ.west-lower.diagonal-brace-02.v2', 'west-lower', 'diagonal-brace',
     'Narrow diagonal brace beside the lower west railing.', ['474,641,43,118,2160']),
   owner('jyt.occ.entrance.lantern-post-01.v2', 'entrance', 'lantern-post',
@@ -99,8 +109,8 @@ export const SEMANTIC_OWNER_CATALOG = [
     'Left red hanging entrance banner.', ['767,722,48,72,2313']),
   owner('jyt.occ.entrance.hanging-banner-02.v2', 'entrance', 'hanging-banner',
     'Right red hanging entrance banner.', ['931,733,40,63,1867']),
-  owner('jyt.occ.east-lower.diagonal-brace-03.v2', 'east-lower', 'diagonal-brace',
-    'Far southeast triangular diagonal brace.', ['1598,748,66,82,2227']),
+  owner('jyt.occ.east-lower.fabric-rack-01.v2', 'east-lower', 'fabric-rack',
+    'Independent southeast rack segment supporting draped fabric or a banner.', ['1598,748,66,82,2227']),
   owner('jyt.occ.west-lower.railing-02.v2', 'west-lower', 'railing',
     'Low southwest horizontal railing panel.', ['66,787,178,37,4549']),
   owner('jyt.occ.east-lower.lantern-01.v2', 'east-lower', 'lantern',
@@ -114,19 +124,25 @@ function owner(stableId, homeRegion, semanticType, observableDescription, compon
     semanticType,
     observableDescription,
     componentKeys,
-    componentPolicy: 'single-canonical-component',
+    componentGroupPolicy: {
+      mode: 'single-component',
+      observableObject: semanticType,
+      approvedParts: [{ componentKey: componentKeys[0], role: 'complete-observable-object' }],
+    },
   }
 }
 
-function continuationOwner(stableId, homeRegion, semanticType, observableDescription, componentKeys, continuationRationale) {
+function groupedOwner(stableId, homeRegion, semanticType, observableDescription, componentKeys, componentGroupPolicy) {
   return {
     stableId,
     homeRegion,
     semanticType,
     observableDescription,
     componentKeys,
-    componentPolicy: 'approved-visual-continuation',
-    continuationRationale,
+    componentGroupPolicy: {
+      mode: 'approved-same-observable-object-parts',
+      ...componentGroupPolicy,
+    },
   }
 }
 
@@ -242,7 +258,8 @@ export function decodeCanonicalOwnership(webpBytes, { chromium = CHROMIUM, alpha
     decoded.sourceSha256 = sourceSha256
     for (const component of decoded.components) {
       component.geometryKey = componentGeometryKey(component)
-      component.componentId = `cc8-${sha256(stableStringify({ bounds: component.bounds, pixelCount: component.pixelCount, runs: component.runs })).slice(0, 20)}`
+      component.identitySha256 = sha256(stableStringify({ bounds: component.bounds, pixelCount: component.pixelCount, runs: component.runs }))
+      component.componentId = `cc8-${component.identitySha256.slice(0, 20)}`
     }
     decoded.components.sort((a, b) => a.geometryKey.localeCompare(b.geometryKey))
     return decoded
@@ -294,6 +311,13 @@ export function buildSpec(decoded) {
     const sourceRect = unionRect(components, paddingPixels, decoded.width, decoded.height)
     const ownershipRuns = mergeRuns(components)
     const canonicalComponentIds = components.map(component => component.componentId).sort()
+    const canonicalComponents = components.map(component => ({
+      componentId: component.componentId,
+      identitySha256: component.identitySha256,
+      geometryKey: component.geometryKey,
+      bounds: { ...component.bounds },
+      opaquePixelCount: component.pixelCount,
+    })).sort((left, right) => left.geometryKey.localeCompare(right.geometryKey))
     return {
       stableId: entry.stableId,
       region: entry.homeRegion,
@@ -320,9 +344,9 @@ export function buildSpec(decoded) {
       ownedOpaquePixelCount: runPixelCount(ownershipRuns),
       semanticOwnership: {
         componentConnectivity: COMPONENT_CONNECTIVITY,
-        componentPolicy: entry.componentPolicy,
+        componentGroupPolicy: structuredClone(entry.componentGroupPolicy),
         canonicalComponentIds,
-        continuationRationale: entry.continuationRationale ?? null,
+        canonicalComponents,
       },
       outputFileHint: `public/juyiting/images/occluders/${entry.homeRegion}-v2.webp`,
       outputEncoding: {
@@ -382,11 +406,11 @@ export function buildSpec(decoded) {
     },
     visualStructureExplanation: {
       'west-upper': 'Northwest lanterns, railing, carved pillar, wall panel and braces. The large west wall-panel owner crosses y=580 intact.',
-      'west-lower': 'Southwest wall-panel assembly, lower railings and diagonal braces. Detached alpha islands are only merged where they visibly continue one named assembly.',
+      'west-lower': 'Southwest wall-panel assembly, two independent illuminated lanterns, long-table frame, lower railings and one narrow brace. Every owner is one 8-connected component.',
       center: 'Sparse north-center area containing one visible wall sconce at (1112,230,18×54); it is explicitly not a pillar.',
       entrance: 'South-center entrance lantern posts and two hanging red banners.',
-      'east-upper': 'Northeast signboard, upper/lower wall panels, carved pillars and narrow brace. The pillar at (1202,478,50×225) crosses y=580 intact.',
-      'east-lower': 'Southeast diagonal braces, railing corner, railing post and low lantern. The diagonal brace and railing corner spanning y=580 remain single owners.',
+      'east-upper': 'Northeast scroll-table front, upper/lower wall panels, carved pillars and narrow brace. The pillar at (1202,478,50×225) crosses y=580 intact.',
+      'east-lower': 'Southeast diagonal work support, worktable, fabric rack, railing post and low lantern. The diagonal support and worktable spanning y=580 remain single semantic owners.',
     },
     outputConstraints: {
       formats: ['lossless-webp', 'png'],
@@ -400,7 +424,7 @@ export function buildSpec(decoded) {
       excludePolicy: 'ownershipRuns must never contain canonical pixels with alpha < 1',
       opaqueNeighborPolicy: 'different owners must never meet across a 4-neighbor opaque edge',
       opaqueCutEdgeExceptions: [],
-      semanticPurityPolicy: 'one canonical 8-connected component per owner unless semanticOwnership.componentPolicy is approved-visual-continuation and lists the complete reviewed component set',
+      semanticPurityPolicy: 'one canonical 8-connected component per owner unless semanticOwnership.componentGroupPolicy.mode is approved-same-observable-object-parts and its approvedParts exactly list every reviewed component identity for one observable object',
       sourceRectOverlapPolicy: 'allowed-because-runs-are-authoritative',
       fragmentCount: fragments.length,
       regionFragmentCounts,
@@ -412,7 +436,7 @@ export function buildSpec(decoded) {
         rgbaExactReconstructionRequired: true,
         zoomSeamEvidence: {
           requiredZooms: ['0.75', '1', '1.25', '1.5', '2'],
-          requiredFocus: ['y=580 west wall crossing', 'y=580 east pillar crossing', 'y=580 east diagonal crossing', 'y=580 east railing crossing'],
+          requiredFocus: ['y=580 west wall crossing', 'y=580 east pillar crossing', 'y=580 east diagonal crossing', 'y=580 east worktable crossing'],
         },
       },
       E10A: {
@@ -573,8 +597,8 @@ export function buildOwnershipReport(spec, decoded, analysis = analyzeOwnership(
     },
     semanticResult: {
       fragmentCount: spec.fragments.length,
-      singleComponentOwners: spec.fragments.filter(fragment => fragment.semanticOwnership.componentPolicy === 'single-canonical-component').length,
-      approvedVisualContinuationOwners: spec.fragments.filter(fragment => fragment.semanticOwnership.componentPolicy === 'approved-visual-continuation').length,
+      singleComponentOwners: spec.fragments.filter(fragment => fragment.semanticOwnership.componentGroupPolicy.mode === 'single-component').length,
+      approvedSameObservableObjectGroupOwners: spec.fragments.filter(fragment => fragment.semanticOwnership.componentGroupPolicy.mode === 'approved-same-observable-object-parts').length,
       genericSemanticLabels: spec.fragments.filter(fragment => ['structure', 'detail', 'element'].includes(fragment.semanticType)).map(fragment => fragment.stableId),
     },
     regionFragmentCounts: spec.outputConstraints.regionFragmentCounts,
