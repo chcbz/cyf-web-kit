@@ -1,488 +1,378 @@
 import { expect } from 'chai'
-import {
-  readFileSync,
-  writeFileSync,
-  mkdirSync,
-  unlinkSync,
-  existsSync,
-} from 'node:fs'
 import { createHash } from 'node:crypto'
-import { execFileSync, spawnSync } from 'node:child_process'
-import { join, dirname } from 'node:path'
+import { existsSync, readFileSync, unlinkSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { tmpdir } from 'node:os'
 
-import { atomicWriteUtf8, atomicWriteUtf8Batch } from '../scripts/juyiting/lib/atomic-write.mjs'
-import { readJuyitingPublicFile } from '../scripts/juyiting/lib/juyiting-public-path.mjs'
+import { atomicWriteUtf8Batch } from '../scripts/juyiting/lib/atomic-write.mjs'
 import {
-  E1_BASELINE_COMMIT,
-  E1_BASELINE_TMX_SHA256,
-  E8B_LIVE_TMX_SHA256,
-  currentHead,
-} from '../scripts/juyiting/lib/baseline-provenance.mjs'
+  CANONICAL_EXPECTED_SHA256,
+  E8B_TMX_SHA256,
+  REGION_DEFS,
+  REGION_ORDER,
+  SEMANTIC_OWNER_CATALOG,
+  computeGenerationId,
+} from '../scripts/juyiting/lib/fragment-ownership-v2.mjs'
+import { E8B_LIVE_TMX_SHA256 } from '../scripts/juyiting/lib/baseline-provenance.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = join(__dirname, '..')
 const FIXTURE_DIR = 'tests/fixtures/juyiting/occlusion-v2-fragments'
 const SPEC_PATH = join(FIXTURE_DIR, 'fragment-ownership-spec.json')
+const REPORT_PATH = join(FIXTURE_DIR, 'ownership-report.json')
+const CONTACT_PATH = join(FIXTURE_DIR, 'contact-sheet.svg')
 const CANONICAL_PATH = 'public/juyiting/images/liangshan-hall-mid-occluders-v3.webp'
-
-const CANONICAL_EXPECTED_SHA256 = '3e4f3f90b4d84411a844978237a7d3530bd481c37a62bcd73b9d694a7d2dd432'
-const E8B_TMX_ANCHOR = '291a38cc66ebd60c8577500a5afc18ce5398570fe4c35ca66d9eebe818826a97'
+const CHROMIUM_ENV = { ...process.env, CHROMIUM_HEADLESS: '/usr/local/bin/chromium-headless-smoke' }
 
 const spec = JSON.parse(readFileSync(join(REPO_ROOT, SPEC_PATH), 'utf8'))
+const report = JSON.parse(readFileSync(join(REPO_ROOT, REPORT_PATH), 'utf8'))
+const contactSheet = readFileSync(join(REPO_ROOT, CONTACT_PATH), 'utf8')
 const canonicalBytes = readFileSync(join(REPO_ROOT, CANONICAL_PATH))
-const canonicalSha256 = createHash('sha256').update(canonicalBytes).digest('hex')
 
-function runValidator(args = []) {
-  const result = spawnSync(process.execPath, [
-    join(REPO_ROOT, 'scripts/juyiting/validate-fragment-ownership.mjs'),
-    ...args,
-  ], { cwd: REPO_ROOT, encoding: 'utf8', timeout: 30000, env: { ...process.env, CHROMIUM_HEADLESS: '/usr/local/bin/chromium-headless-smoke' } })
-  return result
+function runNode(script, args = [], timeout = 30000) {
+  return spawnSync(process.execPath, [join(REPO_ROOT, script), ...args], {
+    cwd: REPO_ROOT,
+    encoding: 'utf8',
+    timeout,
+    env: CHROMIUM_ENV,
+  })
 }
 
-describe('E9A Fragment Ownership Spec', () => {
-  // ── Source Provenance ──────────────────────────────────────────────────
-  it('canonical source exists and hash matches', () => {
-    expect(existsSync(join(REPO_ROOT, CANONICAL_PATH))).to.be.true
-    expect(canonicalSha256).to.equal(CANONICAL_EXPECTED_SHA256)
-  })
+function updateDeclaredCounts(mutated) {
+  mutated.outputConstraints.fragmentCount = mutated.fragments.length
+  mutated.outputConstraints.regionFragmentCounts = Object.fromEntries(REGION_ORDER.map(region => [
+    region,
+    mutated.fragments.filter(fragment => fragment.homeRegion === region).length,
+  ]))
+}
 
-  it('spec declares correct canonical provenance', () => {
-    expect(spec.sourceProvenance.assetRef).to.equal('jyt.occlusion-source.hall-v3')
-    expect(spec.sourceProvenance.sha256).to.equal(CANONICAL_EXPECTED_SHA256)
+function unionRect(left, right) {
+  const x = Math.min(left.x, right.x)
+  const y = Math.min(left.y, right.y)
+  const maxX = Math.max(left.x + left.width, right.x + right.width)
+  const maxY = Math.max(left.y + left.height, right.y + right.height)
+  return { x, y, width: maxX - x, height: maxY - y }
+}
+
+function compareRuns(left, right) {
+  return left[0] - right[0] || left[1] - right[1] || left[2] - right[2]
+}
+
+function runPixels(runs) {
+  return runs.reduce((sum, [, start, end]) => sum + end - start, 0)
+}
+
+describe('E9A V2 Fragment Ownership Spec', () => {
+  it('locks canonical source provenance and E8B TMX anchor', () => {
+    expect(createHash('sha256').update(canonicalBytes).digest('hex')).to.equal(CANONICAL_EXPECTED_SHA256)
     expect(spec.sourceProvenance.path).to.equal(CANONICAL_PATH)
+    expect(spec.sourceProvenance.sha256).to.equal(CANONICAL_EXPECTED_SHA256)
     expect(spec.sourceProvenance.width).to.equal(1664)
     expect(spec.sourceProvenance.height).to.equal(928)
     expect(spec.sourceProvenance.alphaThreshold).to.equal(1)
-    expect(spec.sourceProvenance.totalOpaquePixels).to.be.a('number').and.be.above(200000)
-  })
-
-  // ── E8B Provenance Binding ────────────────────────────────────────────
-  it('binds to E8B TMX anchor', () => {
-    expect(spec.inputProvenance.tmxAnchor.sha256).to.equal(E8B_TMX_ANCHOR)
-    expect(spec.inputProvenance.tmxAnchor.taskId).to.equal('E8B')
-    expect(spec.inputProvenance.tmxAnchor.path).to.equal('public/juyiting/hall.tmx')
-  })
-
-  // ── Schema Validation ─────────────────────────────────────────────────
-  it('declares valid schema version', () => {
-    expect(spec.schemaVersion).to.equal(1)
-    expect(spec.$schema).to.equal('jyt.occlusion.fragment-ownership-spec.v1')
-    expect(spec.taskId).to.equal('E9A')
-    expect(spec.sceneId).to.equal('juyiting-main')
-  })
-
-  it('has deterministic generationId', () => {
-    expect(spec.generationId).to.be.a('string').with.length(64)
-    expect(spec.generation.generationId).to.equal(spec.generationId)
-    expect(spec.generation.generatedBy).to.include('generate-fragment-ownership-spec')
-  })
-
-  // ── Region Partition ──────────────────────────────────────────────────
-  it('defines exactly six regions', () => {
-    const regions = spec.regionPartition.regions
-    const names = Object.keys(regions)
-    expect(names).to.have.length(6)
-    expect(names).to.include.members([
-      'center', 'west-upper', 'west-lower',
-      'east-upper', 'east-lower', 'entrance',
-    ])
-  })
-
-  it('regions partition source space without gaps', () => {
-    const regions = spec.regionPartition.regions
-    const w = spec.sourceProvenance.width
-    const h = spec.sourceProvenance.height
-
-    // Check that [0,w)×[0,h) is fully covered
-    const testPoints = [
-      [0, 0], [w - 1, 0], [0, h - 1], [w - 1, h - 1],
-      [360, 290], [360, 870], [1080, 290], [1080, 870],
-      [720, 290], [720, 870], [1130, 290], [1130, 870],
-    ]
-    for (const [px, py] of testPoints) {
-      let covered = false
-      for (const def of Object.values(regions)) {
-        if (px >= def.xRange[0] && px < def.xRange[1] &&
-            py >= def.yRange[0] && py < def.yRange[1]) {
-          covered = true
-          break
-        }
-      }
-      expect(covered, `Point (${px},${py}) not covered by any region`).to.be.true
-    }
-  })
-
-  it('regions do not meaningfully overlap', () => {
-    const regions = spec.regionPartition.regions
-    const names = Object.keys(regions)
-    for (let i = 0; i < names.length; i++) {
-      for (let j = i + 1; j < names.length; j++) {
-        const a = regions[names[i]], b = regions[names[j]]
-        const ox = Math.max(a.xRange[0], b.xRange[0])
-        const oy = Math.max(a.yRange[0], b.yRange[0])
-        const ow = Math.min(a.xRange[1], b.xRange[1]) - ox
-        const oh = Math.min(a.yRange[1], b.yRange[1]) - oy
-        if (ow > 0 && oh > 0) {
-          // Half-open semantics: touching at boundary is OK
-          expect(false, `Regions ${names[i]} and ${names[j]} overlap: (${ox},${oy},${ow},${oh})`).to.be.true
-        }
-      }
-    }
-  })
-
-  // ── Fragment Validation ───────────────────────────────────────────────
-  it('all fragments have valid stableIds', () => {
-    const stableIdRe = /^[a-z0-9][a-z0-9._-]{2,95}$/
-    const ids = new Set()
-    for (const f of spec.fragments) {
-      expect(f.stableId, `Invalid stableId: ${f.stableId}`).to.match(stableIdRe)
-      expect(ids.has(f.stableId), `Duplicate stableId: ${f.stableId}`).to.be.false
-      ids.add(f.stableId)
-    }
-  })
-
-  it('stableIds are deterministic and not order-dependent', () => {
-    // stableId format: jyt.occ.<region>.<classification>-<NN>.v1
-    for (const f of spec.fragments) {
-      expect(f.stableId).to.match(/^jyt\.occ\./)
-      expect(f.stableId).to.match(/\.v1$/)
-    }
-  })
-
-  it('all sourceRects are within source bounds', () => {
-    const w = spec.sourceProvenance.width
-    const h = spec.sourceProvenance.height
-    for (const f of spec.fragments) {
-      const r = f.sourceRect
-      expect(r.x).to.be.at.least(0)
-      expect(r.y).to.be.at.least(0)
-      expect(r.x + r.width).to.be.at.most(w)
-      expect(r.y + r.height).to.be.at.most(h)
-      expect(r.width).to.be.above(0)
-      expect(r.height).to.be.above(0)
-    }
-  })
-
-  it('destinationRects equal sourceRects (exact reconstruction)', () => {
-    for (const f of spec.fragments) {
-      expect(f.destinationRect).to.deep.equal(f.sourceRect,
-        `${f.stableId}: destinationRect must equal sourceRect for exact reconstruction`)
-    }
-  })
-
-  it('no overlapping sourceRects', () => {
-    const frags = spec.fragments
-    for (let i = 0; i < frags.length; i++) {
-      for (let j = i + 1; j < frags.length; j++) {
-        const a = frags[i].sourceRect, b = frags[j].sourceRect
-        const overlap = a.x < b.x + b.width && a.x + a.width > b.x &&
-                        a.y < b.y + b.height && a.y + a.height > b.y
-        expect(overlap, `Overlap: ${frags[i].stableId} and ${frags[j].stableId}`).to.be.false
-      }
-    }
-  })
-
-  it('every fragment belongs to a valid region', () => {
-    const regionNames = Object.keys(spec.regionPartition.regions)
-    for (const f of spec.fragments) {
-      expect(regionNames).to.include(f.region, `${f.stableId} has unknown region: ${f.region}`)
-      expect(f.chunkId).to.equal(f.region)
-    }
-  })
-
-  it('fragment count matches declared count', () => {
-    expect(spec.fragments.length).to.equal(spec.outputConstraints.fragmentCount)
-  })
-
-  it('region fragment counts match', () => {
-    const counts = {}
-    for (const f of spec.fragments) {
-      counts[f.region] = (counts[f.region] || 0) + 1
-    }
-    expect(counts).to.deep.equal(spec.outputConstraints.regionFragmentCounts)
-  })
-
-  // ── Output Constraints ────────────────────────────────────────────────
-  it('enforces lossless output', () => {
-    expect(spec.outputConstraints.losslessOnly).to.be.true
-    expect(spec.outputConstraints.format).to.include('lossless-webp')
-    expect(spec.outputConstraints.pixelOwnershipModel).to.equal('sourceRect-exclusive-partition')
-  })
-
-  // ── Ownership Report ──────────────────────────────────────────────────
-  it('has passing ownership report', () => {
-    const reportPath = join(REPO_ROOT, FIXTURE_DIR, 'ownership-report.json')
-    expect(existsSync(reportPath), 'Ownership report not found').to.be.true
-    const report = JSON.parse(readFileSync(reportPath, 'utf8'))
-    expect(report.ownershipResult.passed).to.be.true
-    expect(report.ownershipResult.opaqueUnowned).to.equal(0)
-    expect(report.ownershipResult.overlapPixels).to.equal(0)
-    expect(report.ownershipResult.opaqueOwned).to.equal(spec.sourceProvenance.totalOpaquePixels)
-  })
-
-  // ── Contact Sheet ─────────────────────────────────────────────────────
-  it('has self-contained SVG contact sheet', () => {
-    const svgPath = join(REPO_ROOT, FIXTURE_DIR, 'contact-sheet.svg')
-    expect(existsSync(svgPath), 'Contact sheet not found').to.be.true
-    const svg = readFileSync(svgPath, 'utf8')
-    expect(svg).to.include('<svg')
-    expect(svg).to.include('data:image/webp;base64,')
-    expect(svg).to.include("E9A Fragment Ownership")
-  })
-
-  // ── Validator Integration ─────────────────────────────────────────────
-  it('validator exits 0 on valid spec', function () {
-    this.timeout(30000)
-    const result = runValidator()
-    expect(result.status).to.equal(0,
-      `Validator failed:\n${result.stderr}\n${result.stdout}`)
-  })
-
-  // ── Reproducibility ──────────────────────────────────────────────────
-  it('generator produces deterministic output', function () {
-    this.timeout(60000)
-    const run1 = spawnSync(process.execPath, [
-      join(REPO_ROOT, 'scripts/juyiting/generate-fragment-ownership-spec.mjs'),
-    ], { cwd: REPO_ROOT, encoding: 'utf8', timeout: 35000,
-         env: { ...process.env, CHROMIUM_HEADLESS: '/usr/local/bin/chromium-headless-smoke' } })
-    const run2 = spawnSync(process.execPath, [
-      join(REPO_ROOT, 'scripts/juyiting/generate-fragment-ownership-spec.mjs'),
-    ], { cwd: REPO_ROOT, encoding: 'utf8', timeout: 35000,
-         env: { ...process.env, CHROMIUM_HEADLESS: '/usr/local/bin/chromium-headless-smoke' } })
-
-    expect(run1.status).to.equal(0)
-    expect(run2.status).to.equal(0)
-    const spec1 = JSON.parse(run1.stdout)
-    const spec2 = JSON.parse(run2.stdout)
-    expect(spec1.generationId).to.equal(spec2.generationId)
-    expect(spec1.fragments.length).to.equal(spec2.fragments.length)
-  })
-})
-
-// ── Mutation / Adversarial Tests ──────────────────────────────────────────
-describe('E9A Fragment Ownership — Mutation Tests', () => {
-  let tempSpecPath
-
-  beforeEach(() => {
-    tempSpecPath = join(REPO_ROOT, 'tests/fixtures/juyiting/occlusion-v2-fragments', `mutated-${Date.now()}.json`)
-  })
-
-  afterEach(() => {
-    try {
-      if (existsSync(tempSpecPath)) unlinkSync(tempSpecPath)
-    } catch {}
-  })
-
-  function writeMutatedSpec(mutations) {
-    const s = JSON.parse(JSON.stringify(spec))
-    for (const [path, value] of Object.entries(mutations)) {
-      setDeep(s, path, value)
-    }
-    writeFileSync(tempSpecPath, JSON.stringify(s, null, 2))
-  }
-
-  function setDeep(obj, path, value) {
-    const parts = path.split('.')
-    let current = obj
-    for (let i = 0; i < parts.length - 1; i++) {
-      const part = parts[i]
-      const match = part.match(/^(.+)\[(\d+)\]$/)
-      if (match) {
-        current = current[match[1]][parseInt(match[2])]
-      } else {
-        current = current[part]
-      }
-    }
-    const last = parts[parts.length - 1]
-    const lm = last.match(/^(.+)\[(\d+)\]$/)
-    if (lm) {
-      current[lm[1]][parseInt(lm[2])] = value
-    } else {
-      current[last] = value
-    }
-  }
-
-  function runValidatorOnMutated() {
-    const relPath = tempSpecPath.replace(REPO_ROOT + '/', '')
-    return spawnSync(process.execPath, [
-      join(REPO_ROOT, 'scripts/juyiting/validate-fragment-ownership.mjs'),
-      relPath,
-    ], { cwd: REPO_ROOT, encoding: 'utf8', timeout: 30000,
-         env: { ...process.env, CHROMIUM_HEADLESS: '/usr/local/bin/chromium-headless-smoke' } })
-  }
-
-  it('rejects wrong canonical SHA-256', function () {
-    this.timeout(30000)
-    writeMutatedSpec({ 'sourceProvenance.sha256': '0'.repeat(64) })
-    const result = runValidatorOnMutated()
-    expect(result.status).to.not.equal(0)
-    expect(result.stderr).to.include('SHA-256 mismatch')
-  })
-
-  it('rejects wrong canonical dimensions', function () {
-    this.timeout(30000)
-    writeMutatedSpec({ 'sourceProvenance.width': 100 })
-    const result = runValidatorOnMutated()
-    expect(result.status).to.not.equal(0)
-    expect(result.stderr).to.include('Width mismatch')
-  })
-
-  it('rejects overlapping sourceRects', function () {
-    // Create a duplicate sourceRect to force overlap
-    const s = JSON.parse(JSON.stringify(spec))
-    const dup = JSON.parse(JSON.stringify(s.fragments[0]))
-    dup.stableId = 'jyt.occ.test.duplicate-overlap.v1'
-    s.fragments.push(dup)
-    s.outputConstraints.fragmentCount = s.fragments.length
-    writeFileSync(tempSpecPath, JSON.stringify(s, null, 2))
-    const result = runValidatorOnMutated()
-    expect(result.status).to.not.equal(0)
-  })
-
-  it('rejects duplicate stableId', function () {
-    const s = JSON.parse(JSON.stringify(spec))
-    const dup = JSON.parse(JSON.stringify(s.fragments[0]))
-    // Same stableId, different sourceRect (not overlapping)
-    dup.sourceRect = { x: 0, y: 0, width: 10, height: 10 }
-    dup.destinationRect = { x: 0, y: 0, width: 10, height: 10 }
-    s.fragments.push(dup)
-    s.outputConstraints.fragmentCount = s.fragments.length
-    writeFileSync(tempSpecPath, JSON.stringify(s, null, 2))
-    const result = runValidatorOnMutated()
-    expect(result.status).to.not.equal(0)
-    expect(result.stderr).to.include('Duplicate stableId')
-  })
-
-  it('rejects invalid stableId format', function () {
-    const s = JSON.parse(JSON.stringify(spec))
-    s.fragments[0].stableId = 'INVALID!!!'
-    writeFileSync(tempSpecPath, JSON.stringify(s, null, 2))
-    const result = runValidatorOnMutated()
-    expect(result.status).to.not.equal(0)
-    expect(result.stderr).to.include('Invalid stableId format')
-  })
-
-  it('rejects out-of-bounds sourceRect', function () {
-    const s = JSON.parse(JSON.stringify(spec))
-    s.fragments[0].sourceRect.x = 2000
-    s.fragments[0].destinationRect.x = 2000
-    writeFileSync(tempSpecPath, JSON.stringify(s, null, 2))
-    const result = runValidatorOnMutated()
-    expect(result.status).to.not.equal(0)
-    expect(result.stderr).to.include('sourceRect out of bounds')
-  })
-
-  it('rejects destinationRect differing from sourceRect', function () {
-    const s = JSON.parse(JSON.stringify(spec))
-    s.fragments[0].destinationRect.x = 50
-    writeFileSync(tempSpecPath, JSON.stringify(s, null, 2))
-    const result = runValidatorOnMutated()
-    expect(result.status).to.not.equal(0)
-    expect(result.stderr).to.include('destinationRect differs')
-  })
-
-  it('rejects wrong region assignment', function () {
-    const s = JSON.parse(JSON.stringify(spec))
-    s.fragments[0].region = 'east-upper'
-    s.fragments[0].chunkId = 'east-upper'
-    writeFileSync(tempSpecPath, JSON.stringify(s, null, 2))
-    // The fragment was originally west-upper; region counts may mismatch
-    const result = runValidatorOnMutated()
-    // May or may not fail depending on whether sourceRect is within the new region
-    // This is a soft check; the validator should at least produce warnings
-  })
-
-  it('rejects non-lossless output format', function () {
-    const s = JSON.parse(JSON.stringify(spec))
-    s.outputConstraints.losslessOnly = false
-    writeFileSync(tempSpecPath, JSON.stringify(s, null, 2))
-    const result = runValidatorOnMutated()
-    expect(result.status).to.not.equal(0)
-    expect(result.stderr).to.include('losslessOnly')
-  })
-
-  it('rejects missing lossless-webp format', function () {
-    const s = JSON.parse(JSON.stringify(spec))
-    s.outputConstraints.format = ['png']
-    writeFileSync(tempSpecPath, JSON.stringify(s, null, 2))
-    const result = runValidatorOnMutated()
-    expect(result.status).to.not.equal(0)
-    expect(result.stderr).to.include('lossless-webp')
-  })
-
-  it('rejects wrong pixel ownership model', function () {
-    const s = JSON.parse(JSON.stringify(spec))
-    s.outputConstraints.pixelOwnershipModel = 'overlapping'
-    writeFileSync(tempSpecPath, JSON.stringify(s, null, 2))
-    const result = runValidatorOnMutated()
-    expect(result.status).to.not.equal(0)
-    expect(result.stderr).to.include('pixelOwnershipModel')
-  })
-
-  it('rejects zero-dimension sourceRect', function () {
-    const s = JSON.parse(JSON.stringify(spec))
-    s.fragments[0].sourceRect.width = 0
-    s.fragments[0].destinationRect.width = 0
-    writeFileSync(tempSpecPath, JSON.stringify(s, null, 2))
-    const result = runValidatorOnMutated()
-    expect(result.status).to.not.equal(0)
-  })
-
-  it('detects gap in region coverage', function () {
-    // Shift one region boundary to create a gap
-    const s = JSON.parse(JSON.stringify(spec))
-    s.regionPartition.regions['west-upper'].xRange[1] = 700 // was 721
-    writeFileSync(tempSpecPath, JSON.stringify(s, null, 2))
-    const result = runValidatorOnMutated()
-    // The point at x=720 would not be covered
-    // Validator spot-checks should catch this
-  })
-
-  it('missing canonical file produces error', function () {
-    const s = JSON.parse(JSON.stringify(spec))
-    s.sourceProvenance.path = 'nonexistent.webp'
-    writeFileSync(tempSpecPath, JSON.stringify(s, null, 2))
-    const result = runValidatorOnMutated()
-    expect(result.status).to.not.equal(0)
-    expect(result.stderr).to.include('not found')
-  })
-})
-
-// ── Integration with E1/E8A/E8B Artifacts ─────────────────────────────────
-describe('E9A Fragment Ownership — Provenance Chain', () => {
-  it('references E8B current TMX anchor', () => {
+    expect(spec.inputProvenance.tmxAnchor.sha256).to.equal(E8B_TMX_SHA256)
     expect(spec.inputProvenance.tmxAnchor.sha256).to.equal(E8B_LIVE_TMX_SHA256)
   })
 
-  it('references E1 canonical source SHA-256', () => {
-    const e1Hashes = JSON.parse(readFileSync(
-      join(REPO_ROOT, 'tests/fixtures/juyiting/occlusion-v0/source-hashes.json'), 'utf8'))
-    expect(e1Hashes.canonicalSource.expectedSha256).to.equal(CANONICAL_EXPECTED_SHA256)
+  it('uses the V2 alpha-RLE schema and deterministic generationId', () => {
+    expect(spec.$schema).to.equal('jyt.occlusion.fragment-ownership-spec.v2')
+    expect(spec.schemaVersion).to.equal(2)
+    expect(spec.taskId).to.equal('E9A')
+    expect(spec.outputConstraints.pixelOwnershipModel).to.equal('alpha-rle-v1')
+    expect(spec.generationId).to.equal(computeGenerationId(spec))
+    expect(spec.generation.generationId).to.equal(spec.generationId)
+    expect(spec.generation.stableIdBasis).to.include('not-declaration-order')
   })
 
-  it('does not modify E8A/E8B accepted artifacts', () => {
-    // E8A prop-sort-spec should still be valid
-    const propSpecPath = join(REPO_ROOT, 'tests/fixtures/juyiting/occlusion-v1-props/prop-sort-spec.json')
-    expect(existsSync(propSpecPath)).to.be.true
-    const propSpec = JSON.parse(readFileSync(propSpecPath, 'utf8'))
+  it('defines exact six-region coverage as home/chunk guides rather than clip boundaries', () => {
+    expect(Object.keys(spec.regionPartition.regions).sort()).to.deep.equal([...REGION_ORDER].sort())
+    expect(spec.regionPartition.semantics).to.equal('atlas-home-region-only-not-a-pixel-clip-boundary')
+    for (const region of REGION_ORDER) {
+      const actual = spec.regionPartition.regions[region]
+      const expected = REGION_DEFS[region]
+      expect(actual.xRange).to.deep.equal([expected.xMin, expected.xMax])
+      expect(actual.yRange).to.deep.equal([expected.yMin, expected.yMax])
+      expect(actual.chunkId).to.equal(region)
+      expect(spec.visualStructureExplanation[region]).to.be.a('string').and.not.be.empty
+    }
+  })
+
+  it('serializes all reviewed semantic owners in stableId order with no generic labels', () => {
+    const ids = spec.fragments.map(fragment => fragment.stableId)
+    expect(ids).to.deep.equal([...ids].sort((a, b) => Buffer.from(a).compare(Buffer.from(b))))
+    expect(new Set(ids).size).to.equal(ids.length)
+    expect(ids).to.have.members(SEMANTIC_OWNER_CATALOG.map(entry => entry.stableId))
+    expect(spec.fragments).to.have.length(30)
+    for (const fragment of spec.fragments) {
+      expect(fragment.semanticType).not.to.be.oneOf(['structure', 'detail', 'element'])
+      expect(fragment.observableDescription).to.be.a('string').and.not.be.empty
+      expect(fragment.chunkId).to.equal(fragment.homeRegion)
+      expect(fragment.region).to.equal(fragment.homeRegion)
+    }
+  })
+
+  it('renames the center object to a wall sconce rather than pillar', () => {
+    const center = spec.fragments.find(fragment => fragment.homeRegion === 'center')
+    expect(center.stableId).to.equal('jyt.occ.center.wall-sconce-01.v2')
+    expect(center.semanticType).to.equal('wall-sconce')
+    expect(center.observableDescription).to.include('not a pillar')
+    expect(center.sourceRect).to.deep.equal({ x: 1111, y: 229, width: 20, height: 56 })
+  })
+
+  it('keeps all four y=580 continuous structures as single cross-guide owners', () => {
+    const ids = [
+      'jyt.occ.west-upper.wall-panel-assembly-01.v2',
+      'jyt.occ.east-upper.pillar-02.v2',
+      'jyt.occ.east-lower.diagonal-brace-01.v2',
+      'jyt.occ.east-lower.railing-corner-01.v2',
+    ]
+    for (const stableId of ids) {
+      const fragment = spec.fragments.find(candidate => candidate.stableId === stableId)
+      expect(fragment, stableId).to.exist
+      expect(fragment.sourceRect.y, stableId).to.be.below(580)
+      expect(fragment.sourceRect.y + fragment.sourceRect.height, stableId).to.be.above(580)
+      expect(fragment.semanticOwnership.canonicalComponentIds).not.to.be.empty
+    }
+  })
+
+  it('uses exact identity destination mapping and authoritative sorted RLE runs', () => {
+    for (const fragment of spec.fragments) {
+      expect(fragment.destinationRect).to.deep.equal(fragment.sourceRect)
+      expect(fragment.destinationMapping).to.deep.equal({
+        mode: 'source-coordinate-identity', scaleNumerator: 1, scaleDenominator: 1, sampling: 'none',
+      })
+      expect(fragment.pixelOwnershipRule.model).to.equal('alpha-rle-v1')
+      expect(fragment.ownershipRuns).not.to.be.empty
+      expect(fragment.ownedOpaquePixelCount).to.equal(runPixels(fragment.ownershipRuns))
+      for (let index = 1; index < fragment.ownershipRuns.length; index++) {
+        expect(compareRuns(fragment.ownershipRuns[index - 1], fragment.ownershipRuns[index])).to.be.below(0)
+      }
+    }
+  })
+
+  it('permits overlapping sourceRects because only opaque RLE runs confer ownership', () => {
+    let sourceRectOverlapCount = 0
+    for (let i = 0; i < spec.fragments.length; i++) for (let j = i + 1; j < spec.fragments.length; j++) {
+      const left = spec.fragments[i].sourceRect, right = spec.fragments[j].sourceRect
+      if (left.x < right.x + right.width && left.x + left.width > right.x &&
+          left.y < right.y + right.height && left.y + left.height > right.y) sourceRectOverlapCount++
+    }
+    expect(sourceRectOverlapCount).to.be.above(0)
+    expect(spec.outputConstraints.sourceRectOverlapPolicy).to.equal('allowed-because-runs-are-authoritative')
+    expect(spec.outputConstraints.paddingPolicy).to.include('clears every pixel not listed')
+    expect(spec.outputConstraints.opaqueCutEdgeExceptions).to.deep.equal([])
+  })
+
+  it('records only the two reviewed multi-component semantic continuations', () => {
+    const continuations = spec.fragments.filter(fragment => fragment.semanticOwnership.componentPolicy === 'approved-visual-continuation')
+    expect(continuations.map(fragment => fragment.stableId)).to.have.members([
+      'jyt.occ.east-lower.railing-corner-01.v2',
+      'jyt.occ.west-lower.wall-panel-assembly-01.v2',
+    ])
+    expect(continuations).to.have.length(2)
+    expect(continuations.find(fragment => fragment.stableId.includes('railing-corner')).semanticOwnership.canonicalComponentIds).to.have.length(2)
+    expect(continuations.find(fragment => fragment.stableId.includes('west-lower.wall-panel')).semanticOwnership.canonicalComponentIds).to.have.length(3)
+  })
+
+  it('has an exact ownership report with zero cut edges', () => {
+    expect(report.generationId).to.equal(spec.generationId)
+    expect(report.ownershipResult).to.deep.include({
+      passed: true,
+      totalOpaquePixels: 248283,
+      opaqueOwned: 248283,
+      opaqueUnowned: 0,
+      overlapPixels: 0,
+      transparentOwned: 0,
+      opaqueCutEdgeCount: 0,
+    })
+    expect(report.semanticResult.genericSemanticLabels).to.deep.equal([])
+    expect(report.regionFragmentCounts).to.deep.equal(spec.outputConstraints.regionFragmentCounts)
+  })
+
+  it('declares E9B zoom seam evidence and E10A mask mapping dependency without runtime changes', () => {
+    expect(spec.downstreamRequirements.E9B.zoomSeamEvidence.requiredZooms).to.deep.equal(['0.75', '1', '1.25', '1.5', '2'])
+    expect(spec.downstreamRequirements.E9B.zoomSeamEvidence.requiredFocus).to.have.length(4)
+    expect(spec.downstreamRequirements.E10A.expectedLegacyMaskCount).to.equal(37)
+    expect(spec.downstreamRequirements.E10A.dependency).to.include('37 legacy masks')
+  })
+
+  it('provides a self-contained contact sheet with dynamic counts and complete index coverage', () => {
+    expect(contactSheet).to.include('data:image/webp;base64,')
+    expect(contactSheet).not.to.include('file://')
+    expect(contactSheet).to.include(`data-generation-id="${spec.generationId}"`)
+    expect(contactSheet).to.include(`data-fragment-count="${spec.fragments.length}"`)
+    expect(contactSheet).to.include('data-opaque-cut-edge-count="0"')
+    const cropIndexes = [...contactSheet.matchAll(/data-fragment-index="(\d+)"/g)].map(match => Number(match[1]))
+    const legendIndexes = [...contactSheet.matchAll(/data-legend-index="(\d+)"/g)].map(match => Number(match[1]))
+    expect(cropIndexes).to.deep.equal([...spec.fragments.keys()])
+    expect(legendIndexes).to.deep.equal([...spec.fragments.keys()])
+    for (const fragment of spec.fragments) expect(contactSheet).to.include(fragment.stableId)
+    for (const label of ['west wall crosses y=580', 'east pillar crosses y=580', 'east diagonal crosses y=580', 'east railing crosses y=580']) {
+      expect(contactSheet).to.include(label)
+    }
+    for (const [region, count] of Object.entries(spec.outputConstraints.regionFragmentCounts)) {
+      expect(contactSheet).to.include(`${region}: ${count}`)
+    }
+  })
+
+  it('validator accepts the committed spec', function () {
+    this.timeout(30000)
+    const result = runNode('scripts/juyiting/validate-fragment-ownership.mjs')
+    expect(result.status).to.equal(0, result.stderr)
+    expect(result.stderr).to.include('opaqueCutEdgeCount=0')
+  })
+
+  it('reproduces spec, report, and contact sheet byte-for-byte', function () {
+    this.timeout(60000)
+    const first = runNode('scripts/juyiting/generate-fragment-ownership-spec.mjs', [], 40000)
+    const second = runNode('scripts/juyiting/generate-fragment-ownership-spec.mjs', [], 40000)
+    expect(first.status).to.equal(0, first.stderr)
+    expect(second.status).to.equal(0, second.stderr)
+    expect(first.stdout).to.equal(second.stdout)
+    expect(first.stdout).to.equal(readFileSync(join(REPO_ROOT, SPEC_PATH), 'utf8'))
+    const generatedReport = runNode('scripts/juyiting/generate-ownership-report.mjs', [], 40000)
+    expect(generatedReport.status).to.equal(0, generatedReport.stderr)
+    expect(generatedReport.stdout).to.equal(readFileSync(join(REPO_ROOT, REPORT_PATH), 'utf8'))
+    const generatedContact = runNode('scripts/juyiting/render-fragment-contact-sheet.mjs')
+    expect(generatedContact.status).to.equal(0, generatedContact.stderr)
+    expect(generatedContact.stdout).to.equal(contactSheet)
+  })
+
+  it('uses atomicWriteUtf8Batch for every fixture update path', () => {
+    for (const path of [
+      'scripts/juyiting/generate-fragment-ownership-spec.mjs',
+      'scripts/juyiting/generate-ownership-report.mjs',
+      'scripts/juyiting/render-fragment-contact-sheet.mjs',
+    ]) {
+      const source = readFileSync(join(REPO_ROOT, path), 'utf8')
+      expect(source).to.include('atomicWriteUtf8Batch')
+      expect(source).not.to.match(/writeFileSync\([^)]*(fragment-ownership-spec|ownership-report|contact-sheet)/)
+    }
+  })
+})
+
+describe('E9A V2 Fragment Ownership Mutation Tests', () => {
+  let tempPath
+
+  beforeEach(() => {
+    tempPath = join(REPO_ROOT, FIXTURE_DIR, `mutated-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.json`)
+  })
+
+  afterEach(() => {
+    try { if (existsSync(tempPath)) unlinkSync(tempPath) } catch {}
+  })
+
+  function validateMutation(mutate) {
+    const mutated = structuredClone(spec)
+    mutate(mutated)
+    atomicWriteUtf8Batch([{ path: tempPath, content: `${JSON.stringify(mutated, null, 2)}\n`, label: 'E9A mutation fixture' }], 'E9A mutation fixture update')
+    return runNode('scripts/juyiting/validate-fragment-ownership.mjs', [tempPath.slice(REPO_ROOT.length + 1)], 30000)
+  }
+
+  function expectRejected(mutate, message) {
+    const result = validateMutation(mutate)
+    expect(result.status, result.stderr).not.to.equal(0)
+    expect(result.stderr).to.include(message)
+  }
+
+  it('rejects wrong canonical hash', () => expectRejected(mutated => { mutated.sourceProvenance.sha256 = '0'.repeat(64) }, 'Source SHA-256 mismatch'))
+  it('rejects wrong source dimensions', () => expectRejected(mutated => { mutated.sourceProvenance.width = 100 }, 'Width mismatch'))
+  it('rejects duplicate stableId', () => expectRejected(mutated => { mutated.fragments[1].stableId = mutated.fragments[0].stableId }, 'Duplicate stableId'))
+  it('rejects invalid stableId syntax', () => expectRejected(mutated => { mutated.fragments[0].stableId = 'INVALID!' }, 'invalid stableId format'))
+  it('rejects sourceRect out of bounds', () => expectRejected(mutated => { mutated.fragments[0].sourceRect.x = 2000; mutated.fragments[0].destinationRect.x = 2000 }, 'sourceRect out of bounds'))
+  it('rejects non-identity destination mapping', () => expectRejected(mutated => { mutated.fragments[0].destinationRect.x++ }, 'destinationRect differs'))
+  it('rejects wrong region/home chunk assignment', () => expectRejected(mutated => {
+    mutated.fragments[0].region = 'east-upper'; mutated.fragments[0].homeRegion = 'east-upper'; mutated.fragments[0].chunkId = 'east-upper'; updateDeclaredCounts(mutated)
+  }, 'wrong region/homeRegion/chunk'))
+  it('rejects a region coverage gap', () => expectRejected(mutated => { mutated.regionPartition.regions['west-upper'].xRange[1] = 700 }, 'bounds mismatch or gap'))
+  it('rejects wrong alpha threshold', () => expectRejected(mutated => { mutated.sourceProvenance.alphaThreshold = 2 }, 'alpha threshold must be 1'))
+  it('rejects wrong ownership model', () => expectRejected(mutated => { mutated.outputConstraints.pixelOwnershipModel = 'rectangle-exclusive' }, 'pixelOwnershipModel must be alpha-rle-v1'))
+  it('rejects non-lossless global output', () => expectRejected(mutated => { mutated.outputConstraints.losslessOnly = false }, 'losslessOnly must be true'))
+  it('rejects missing PNG/lossless WebP formats', () => expectRejected(mutated => { mutated.outputConstraints.formats = ['png'] }, 'formats must include lossless-webp and png'))
+  it('rejects non-lossless fragment output', () => expectRejected(mutated => { mutated.fragments[0].outputEncoding.losslessRequired = false }, 'output format must permit lossless-webp/png'))
+  it('rejects a generic semantic label', () => expectRejected(mutated => { mutated.fragments[0].semanticType = 'structure' }, 'forbidden generic semantic label'))
+  it('rejects any opaque cut-edge seam exception', () => expectRejected(mutated => { mutated.outputConstraints.opaqueCutEdgeExceptions = [{ x: 1, y: 1 }] }, 'permits no seam exceptions'))
+  it('rejects unsorted RLE runs', () => expectRejected(mutated => {
+    const runs = mutated.fragments.find(fragment => fragment.ownershipRuns.length > 2).ownershipRuns
+    ;[runs[0], runs[1]] = [runs[1], runs[0]]
+  }, 'ownershipRuns are unsorted'))
+  it('rejects out-of-bounds RLE runs', () => expectRejected(mutated => {
+    const fragment = mutated.fragments[0]
+    fragment.ownershipRuns.unshift([-1, 0, 1])
+    fragment.ownedOpaquePixelCount++
+  }, 'RLE run out of bounds'))
+  it('rejects RLE ownership of a transparent pixel', () => expectRejected(mutated => {
+    const fragment = mutated.fragments[0]
+    fragment.sourceRect = unionRect(fragment.sourceRect, { x: 0, y: 0, width: 1, height: 1 })
+    fragment.destinationRect = { ...fragment.sourceRect }
+    fragment.ownershipRuns.push([0, 0, 1])
+    fragment.ownershipRuns.sort(compareRuns)
+    fragment.ownedOpaquePixelCount++
+  }, 'RLE owns transparent pixel'))
+  it('rejects RLE overlap between owners', () => expectRejected(mutated => {
+    const source = mutated.fragments[0]
+    const target = mutated.fragments[1]
+    const copied = [...source.ownershipRuns[0]]
+    target.sourceRect = unionRect(target.sourceRect, { x: copied[1], y: copied[0], width: copied[2] - copied[1], height: 1 })
+    target.destinationRect = { ...target.sourceRect }
+    target.ownershipRuns.push(copied)
+    target.ownershipRuns.sort(compareRuns)
+    target.ownedOpaquePixelCount = runPixels(target.ownershipRuns)
+  }, 'RLE overlap pixels'))
+  it('rejects an RLE ownership gap', () => expectRejected(mutated => {
+    const fragment = mutated.fragments.find(candidate => candidate.ownershipRuns.some(([, start, end]) => end - start >= 3))
+    const index = fragment.ownershipRuns.findIndex(([, start, end]) => end - start >= 3)
+    fragment.ownershipRuns[index] = [fragment.ownershipRuns[index][0], fragment.ownershipRuns[index][1] + 1, fragment.ownershipRuns[index][2]]
+    fragment.ownedOpaquePixelCount--
+  }, 'opaque pixels have no RLE owner'))
+  it('rejects an opaque-neighbor owner split with nonzero cut edges', () => expectRejected(mutated => {
+    const source = mutated.fragments.find(candidate => candidate.ownershipRuns.some(([, start, end]) => end - start >= 3))
+    const target = mutated.fragments.find(candidate => candidate !== source)
+    const runIndex = source.ownershipRuns.findIndex(([, start, end]) => end - start >= 3)
+    const [y, start, end] = source.ownershipRuns[runIndex]
+    source.ownershipRuns[runIndex] = [y, start + 1, end]
+    source.ownedOpaquePixelCount--
+    target.ownershipRuns.push([y, start, start + 1])
+    target.ownershipRuns.sort(compareRuns)
+    target.sourceRect = unionRect(target.sourceRect, { x: start, y, width: 1, height: 1 })
+    target.destinationRect = { ...target.sourceRect }
+    target.ownedOpaquePixelCount++
+  }, 'opaque cut edge count must be zero'))
+  it('rejects a broad owner that absorbs an unreviewed disconnected semantic group', () => expectRejected(mutated => {
+    const target = mutated.fragments.find(fragment => fragment.stableId === 'jyt.occ.center.wall-sconce-01.v2')
+    const donorIndex = mutated.fragments.findIndex(fragment => fragment.stableId === 'jyt.occ.east-lower.lantern-01.v2')
+    const donor = mutated.fragments[donorIndex]
+    target.sourceRect = unionRect(target.sourceRect, donor.sourceRect)
+    target.destinationRect = { ...target.sourceRect }
+    target.ownershipRuns.push(...donor.ownershipRuns.map(run => [...run]))
+    target.ownershipRuns.sort(compareRuns)
+    target.ownedOpaquePixelCount = runPixels(target.ownershipRuns)
+    target.semanticOwnership.componentPolicy = 'approved-visual-continuation'
+    target.semanticOwnership.continuationRationale = 'mutated arbitrary grouping'
+    target.semanticOwnership.canonicalComponentIds.push(...donor.semanticOwnership.canonicalComponentIds)
+    target.semanticOwnership.canonicalComponentIds.sort()
+    mutated.fragments.splice(donorIndex, 1)
+    updateDeclaredCounts(mutated)
+  }, 'broad/disconnected semantic group differs from reviewed catalog'))
+  it('rejects changed generationId', () => expectRejected(mutated => { mutated.generationId = 'f'.repeat(64); mutated.generation.generationId = mutated.generationId }, 'generationId mismatch'))
+  it('fails closed when canonical source is missing', () => expectRejected(mutated => { mutated.sourceProvenance.path = 'public/juyiting/images/missing.webp' }, 'Canonical source not found'))
+})
+
+describe('E9A V2 Provenance Chain', () => {
+  it('leaves E1 baseline fixtures intact', () => {
+    const inventory = JSON.parse(readFileSync(join(REPO_ROOT, 'tests/fixtures/juyiting/occlusion-v0/inventory.json'), 'utf8'))
+    const hashes = JSON.parse(readFileSync(join(REPO_ROOT, 'tests/fixtures/juyiting/occlusion-v0/source-hashes.json'), 'utf8'))
+    expect(inventory.counts.masks).to.equal(37)
+    expect(inventory.counts.props).to.equal(5)
+    expect(hashes.canonicalSource.expectedSha256).to.equal(CANONICAL_EXPECTED_SHA256)
+  })
+
+  it('leaves E8A/E8B accepted artifacts intact', () => {
+    const propSpec = JSON.parse(readFileSync(join(REPO_ROOT, 'tests/fixtures/juyiting/occlusion-v1-props/prop-sort-spec.json'), 'utf8'))
+    const tmxManifest = JSON.parse(readFileSync(join(REPO_ROOT, 'tests/fixtures/juyiting/occlusion-v1-props/prop-tmx-manifest.json'), 'utf8'))
     expect(propSpec.taskId).to.equal('E8A')
-    expect(propSpec.generationId).to.be.a('string')
-
-    // E8B TMX manifest should still be valid
-    const tmxManifestPath = join(REPO_ROOT, 'tests/fixtures/juyiting/occlusion-v1-props/prop-tmx-manifest.json')
-    expect(existsSync(tmxManifestPath)).to.be.true
-    const tmxManifest = JSON.parse(readFileSync(tmxManifestPath, 'utf8'))
     expect(tmxManifest.taskId).to.equal('E8B')
-  })
-
-  it('E1 baseline fixtures still intact', () => {
-    const invPath = join(REPO_ROOT, 'tests/fixtures/juyiting/occlusion-v0/inventory.json')
-    expect(existsSync(invPath)).to.be.true
-    const inv = JSON.parse(readFileSync(invPath, 'utf8'))
-    expect(inv.counts.masks).to.equal(37)
-    expect(inv.counts.props).to.equal(5)
+    expect(spec.inputProvenance.immutableAcceptedArtifacts).to.deep.equal(['E1', 'E8A', 'E8B'])
   })
 })

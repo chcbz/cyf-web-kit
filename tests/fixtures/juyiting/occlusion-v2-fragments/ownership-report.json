@@ -1,13 +1,17 @@
 {
-  "$schema": "jyt.occlusion.ownership-report.v1",
+  "$schema": "jyt.occlusion.ownership-report.v2",
+  "schemaVersion": 2,
   "taskId": "E9A",
-  "generationId": "5708ff5be63742f6a988568510e38cdf426202d8763d5e0718bdf978835603d8",
-  "timestamp": "2026-08-09T10:07:45.023Z",
+  "generationId": "5ec3052c1cd5c392a9b9375884ad64a746ea314f42910389006ed6621f3e623f",
+  "generatedFromSourceEpoch": 1786267688,
   "source": {
     "assetRef": "jyt.occlusion-source.hall-v3",
     "sha256": "3e4f3f90b4d84411a844978237a7d3530bd481c37a62bcd73b9d694a7d2dd432",
     "width": 1664,
-    "height": 928
+    "height": 928,
+    "alphaThreshold": 1,
+    "canonicalComponentConnectivity": 8,
+    "canonicalComponentCount": 33
   },
   "ownershipResult": {
     "passed": true,
@@ -15,50 +19,61 @@
     "opaqueOwned": 248283,
     "opaqueUnowned": 0,
     "overlapPixels": 0,
-    "transparentOwnedBySourceRect": 266521,
-    "transparentUnowned": 1029388
+    "transparentOwned": 0,
+    "opaqueCutEdgeCount": 0
+  },
+  "semanticResult": {
+    "fragmentCount": 30,
+    "singleComponentOwners": 28,
+    "approvedVisualContinuationOwners": 2,
+    "genericSemanticLabels": []
+  },
+  "regionFragmentCounts": {
+    "west-upper": 7,
+    "center": 1,
+    "east-upper": 6,
+    "west-lower": 6,
+    "entrance": 4,
+    "east-lower": 6
   },
   "perRegion": {
     "west-upper": {
-      "opaqueCovered": 91375,
-      "totalCovered": 151532
+      "opaqueOwned": 95442,
+      "fragmentCount": 7
     },
     "center": {
-      "opaqueCovered": 504,
-      "totalCovered": 1064
+      "opaqueOwned": 504,
+      "fragmentCount": 1
     },
     "east-upper": {
-      "opaqueCovered": 68909,
-      "totalCovered": 106743
+      "opaqueOwned": 70567,
+      "fragmentCount": 6
     },
     "west-lower": {
-      "opaqueCovered": 53373,
-      "totalCovered": 174700
-    },
-    "east-lower": {
-      "opaqueCovered": 25587,
-      "totalCovered": 67170
+      "opaqueOwned": 49306,
+      "fragmentCount": 6
     },
     "entrance": {
-      "opaqueCovered": 8535,
-      "totalCovered": 13595
+      "opaqueOwned": 8535,
+      "fragmentCount": 4
+    },
+    "east-lower": {
+      "opaqueOwned": 23929,
+      "fragmentCount": 6
     }
   },
-  "fragmentCount": 40,
-  "regionFragmentCounts": {
-    "west-upper": 9,
-    "center": 1,
-    "east-upper": 8,
-    "west-lower": 11,
-    "east-lower": 7,
-    "entrance": 4
+  "samples": {
+    "unowned": [],
+    "overlap": [],
+    "transparentOwned": [],
+    "opaqueCutEdges": []
   },
-  "unownedSamples": [],
-  "overlapSamples": [],
   "policy": {
-    "ownershipModel": "sourceRect-exclusive-partition",
-    "includePolicy": "all-non-transparent-pixels-must-be-owned-by-exactly-one-fragment",
-    "excludePolicy": "transparent-pixels-with-alpha-zero-are-not-owned",
-    "note": "Transparent pixels within fragment sourceRects are included in atlas images but do not contribute to visual output. The ownership validation only checks non-transparent (alpha>0) pixels."
+    "ownershipModel": "alpha-rle-v1",
+    "includePolicy": "every canonical pixel with alpha >= 1 is listed in exactly one ownershipRuns entry",
+    "excludePolicy": "ownershipRuns must never contain canonical pixels with alpha < 1",
+    "opaqueNeighborPolicy": "different owners must never meet across a 4-neighbor opaque edge",
+    "opaqueCutEdgeExceptions": [],
+    "note": "sourceRects may overlap and contain transparent/non-owner pixels; only sorted ownershipRuns confer ownership."
   }
 }
