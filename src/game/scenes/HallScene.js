@@ -83,7 +83,7 @@ export function createHallSceneClass(me, HallAgentClass) {
 
     setMapData(mapData) { this._mapData = mapData; this._tryInitShadow() }
 
-    
+
     _tryInitShadow() {
       if (this._shadowSetupDone || this._destroyed) return
       this._shadowSetupDone = true
@@ -969,7 +969,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       return true
     }
 
-    
+
     _runShadowPass() {
       const sr = this._shadowRenderer
       if (!sr || !sr.enabled) return

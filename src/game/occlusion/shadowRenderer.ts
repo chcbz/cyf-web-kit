@@ -512,7 +512,7 @@ export class ShadowRenderer {
     this._parseError = null
     this._errors = []
     this._lastSnapshot = null
-    
+
     if (!this._mapData) {
       this._state = 'disabled'
       this._stateReason = 'no map data'
