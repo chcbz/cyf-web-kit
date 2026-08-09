@@ -155,7 +155,7 @@ export function computeWorldSortKey(
  * Compare two stableId strings byte-by-byte (ASCII, no localeCompare).
  * Returns -1, 0, or 1.
  */
-function compareStableId(a: string, b: string): -1 | 0 | 1 {
+export function compareStableId(a: string, b: string): -1 | 0 | 1 {
   const minLen = a.length < b.length ? a.length : b.length
   for (let i = 0; i < minLen; i++) {
     const ca = a.charCodeAt(i)
