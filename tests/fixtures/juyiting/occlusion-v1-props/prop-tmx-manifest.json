@@ -1,13 +1,29 @@
 {
-  "$schema": "jyt.occlusion.prop-tmx-manifest.v1",
-  "schemaVersion": 1,
+  "$schema": "jyt.occlusion.prop-tmx-manifest.v2",
+  "schemaVersion": 2,
   "taskId": "E8B",
   "sceneId": "juyiting-main",
   "propCount": 5,
   "generatedBy": "tests/juyiting-occlusion-prop-tmx-migration.test.js",
-  "baseCommit": "da3d9600bd322e3a85d93ebfeaf07cd04a76f33d",
-  "specGenerationId": "4a47753cf81ef0219f6e1914ff818be291158bc100d4d2c639cb0c23a8a0f8c6",
-  "tmxSha256": "291a38cc66ebd60c8577500a5afc18ce5398570fe4c35ca66d9eebe818826a97",
+  "specBinding": {
+    "sourceCommit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+    "acceptedCommit": "da3d9600bd322e3a85d93ebfeaf07cd04a76f33d",
+    "generationId": "4a47753cf81ef0219f6e1914ff818be291158bc100d4d2c639cb0c23a8a0f8c6",
+    "sourceTmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401"
+  },
+  "tmxProvenance": {
+    "baselineAnchor": {
+      "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+      "path": "public/juyiting/hall.tmx",
+      "sha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+      "description": "E1 immutable history TMX; verified from replacement-disabled Git blob"
+    },
+    "currentAnchor": {
+      "path": "public/juyiting/hall.tmx",
+      "sha256": "291a38cc66ebd60c8577500a5afc18ce5398570fe4c35ca66d9eebe818826a97",
+      "description": "E8B live production TMX; five-prop migration from E8A spec binding"
+    }
+  },
   "props": [
     {
       "tmxId": 90,

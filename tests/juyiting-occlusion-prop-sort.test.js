@@ -1,8 +1,11 @@
 /** E8A directed tests for the GPT V1 visual-gate prop sort contract. */
 import { expect } from 'chai'
-import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
+import {
+  readFileSync, writeFileSync, mkdtempSync, rmSync,
+  cpSync, existsSync, mkdirSync, symlinkSync,
+} from 'node:fs'
 import { createHash } from 'node:crypto'
-import { spawnSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { compareWorldSortKeys } from '../src/game/occlusion/worldOrder.ts'
@@ -385,4 +388,104 @@ describe('E8A prop sort spec — GPT V1 visual gate', function () {
       } finally { rmSync(dir, { recursive: true, force: true }) }
     })
   })
+
+  describe('E8B provenance overlay', () => {
+    const ACCEPTED_COMMIT = 'da3d9600bd322e3a85d93ebfeaf07cd04a76f33d'
+    const LIVE_TMX_PATH = join(REPO_ROOT, 'public/juyiting/hall.tmx')
+    const E1_TMX_SHA256 = 'e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401'
+    const LIVE_TMX_SHA256 = '291a38cc66ebd60c8577500a5afc18ce5398570fe4c35ca66d9eebe818826a97'
+
+    it('E8A verifier (default, no --tmx) PASSES by reading historical TMX from baseCommit Git blob', () => {
+      const result = runVerifier()
+      expect(result.status, result.output).to.equal(0)
+      expect(result.output).to.include('baseCommit')
+      expect(result.output).to.not.include('explicit --tmx')
+      expect(result.output).to.include('ALL VERIFICATIONS PASSED')
+    })
+
+    it('E8A verifier with --tmx on live migrated TMX FAILS with hash mismatch', () => {
+      const result = runVerifier({ tmxPath: LIVE_TMX_PATH })
+      expect(result.status, result.output).to.not.equal(0)
+      expect(result.output).to.include('explicit --tmx')
+      expect(result.output).to.include('TMX sha256 mismatch')
+      expect(result.output).to.include(LIVE_TMX_SHA256)
+      expect(result.output).to.include(E1_TMX_SHA256)
+      expect(result.output).to.include('VERIFICATION FAILURE')
+    })
+
+    it('E8A verifier with --tmx on E1 historical TMX blob PASSES', function () {
+      this.timeout(15000)
+      const dir = tempWorkspace('e8a-historical-tmx-')
+      try {
+        const tmxPath = join(dir, 'hall.tmx')
+        const tmxBytes = execFileSync('git', ['show', spec.baseCommit + ':public/juyiting/hall.tmx'], {
+          cwd: REPO_ROOT, encoding: null, timeout: 5000,
+          env: { ...process.env, GIT_NO_REPLACE_OBJECTS: '1' }
+        })
+        writeFileSync(tmxPath, tmxBytes)
+        const sha256 = createHash('sha256').update(tmxBytes).digest('hex')
+        expect(sha256).to.equal(spec.tmxSource.sha256)
+        expect(sha256).to.equal(E1_TMX_SHA256)
+
+        const result = runVerifier({ tmxPath })
+        expect(result.status, result.output).to.equal(0)
+        expect(result.output).to.include('explicit --tmx')
+        expect(result.output).to.include('ALL VERIFICATIONS PASSED')
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    })
+
+    it('E8A generator is reproducible from accepted commit da3d960 in detached checkout', function () {
+      this.timeout(120000)
+      const dir = tempWorkspace('e8a-repro-accepted-')
+      try {
+        const cloneDir = join(dir, 'clone')
+        mkdirSync(cloneDir, { recursive: true })
+        execFileSync('git', ['clone', '--shared', '--quiet', REPO_ROOT, cloneDir], {
+          timeout: 30000,
+          env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }
+        })
+        execFileSync('git', ['-C', cloneDir, 'checkout', '--detach', ACCEPTED_COMMIT], {
+          timeout: 10000,
+          env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }
+        })
+        const resolved = execFileSync('git', ['-C', cloneDir, 'rev-parse', 'HEAD'], {
+          encoding: 'utf8', timeout: 5000,
+          env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }
+        }).trim()
+        expect(resolved).to.equal(ACCEPTED_COMMIT)
+        // Symlink host node_modules so tsx and dependencies resolve in the clone
+        const hostNodeModules = join(REPO_ROOT, 'node_modules')
+        const cloneNodeModules = join(cloneDir, 'node_modules')
+        symlinkSync(hostNodeModules, cloneNodeModules)
+
+        const spec1 = join(dir, 'spec-1.json')
+        const svg1 = join(dir, 'sheet-1.svg')
+        const spec2 = join(dir, 'spec-2.json')
+        const svg2 = join(dir, 'sheet-2.svg')
+
+        // Run the generator from the clone cwd; the default TMX path resolves to
+        // the clone public/juyiting/hall.tmx (E1 TMX at accepted commit).
+        for (const [specOut, svgOut] of [[spec1, svg1], [spec2, svg2]]) {
+          const result = spawnSync(process.execPath, [
+            join(cloneDir, 'scripts/juyiting/generate-prop-sort-spec.mjs'),
+            '--spec', specOut, '--svg', svgOut
+          ], {
+            cwd: cloneDir, encoding: 'utf8', timeout: 60000,
+            env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }
+          })
+          expect(result.status, `${result.stdout}${result.stderr}`).to.equal(0)
+        }
+
+        expect(readFileSync(spec1).equals(readFileSync(spec2))).to.be.true
+        expect(readFileSync(svg1).equals(readFileSync(svg2))).to.be.true
+        expect(readFileSync(spec1).equals(readFileSync(SPEC_PATH))).to.be.true
+        expect(readFileSync(svg1).equals(readFileSync(SVG_PATH))).to.be.true
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    })
+  })
+
 })

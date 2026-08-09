@@ -22,8 +22,9 @@
 import { expect } from 'chai'
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { createHash } from 'node:crypto'
+import { atomicWriteUtf8Batch } from '../scripts/juyiting/lib/atomic-write.mjs'
 import { Buffer } from 'node:buffer'
-import { spawnSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -125,15 +126,31 @@ function buildManifest() {
     }
   })
   return {
-    $schema: 'jyt.occlusion.prop-tmx-manifest.v1',
-    schemaVersion: 1,
+    $schema: 'jyt.occlusion.prop-tmx-manifest.v2',
+    schemaVersion: 2,
     taskId: 'E8B',
     sceneId: spec.sceneId,
     propCount: props.length,
     generatedBy: 'tests/juyiting-occlusion-prop-tmx-migration.test.js',
-    baseCommit: 'da3d9600bd322e3a85d93ebfeaf07cd04a76f33d',
-    specGenerationId: spec.generationId,
-    tmxSha256: sha256(Buffer.from(tmxBytes, 'utf8')),
+    specBinding: {
+      sourceCommit: spec.baseCommit,
+      acceptedCommit: 'da3d9600bd322e3a85d93ebfeaf07cd04a76f33d',
+      generationId: spec.generationId,
+      sourceTmxSha256: spec.tmxSource.sha256
+    },
+    tmxProvenance: {
+      baselineAnchor: {
+        commit: spec.baseCommit,
+        path: spec.tmxSource.path,
+        sha256: spec.tmxSource.sha256,
+        description: 'E1 immutable history TMX; verified from replacement-disabled Git blob'
+      },
+      currentAnchor: {
+        path: 'public/juyiting/hall.tmx',
+        sha256: sha256(Buffer.from(tmxBytes, 'utf8')),
+        description: 'E8B live production TMX; five-prop migration from E8A spec binding'
+      }
+    },
     props
   }
 }
@@ -262,8 +279,10 @@ function runVerifier(tmxOverride) {
 // ── optional fixture regeneration (existing parser conventions) ──
 
 if (process.argv.includes('--update-fixtures')) {
-  writeFileSync(MANIFEST_PATH, formatJson(buildManifest()))
-  writeFileSync(SNAPSHOT_PATH, buildSnapshotJson())
+  atomicWriteUtf8Batch([
+    { path: MANIFEST_PATH, content: formatJson(buildManifest()), label: 'prop-tmx-manifest.json' },
+    { path: SNAPSHOT_PATH, content: buildSnapshotJson(), label: 'prop-canonical-ir.snapshot.json' }
+  ], 'E8B fixture update transaction')
   console.log(`updated ${MANIFEST_PATH}`)
   console.log(`updated ${SNAPSHOT_PATH}`)
   process.exit(0)
@@ -281,17 +300,30 @@ describe('E8B five-prop TMX/manifest/snapshot migration', function () {
 
   describe('frozen contract and committed fixtures', () => {
     it('manifest is schema-valid, E8B-bound, and matches the production TMX hash', () => {
-      expect(manifest.$schema).to.equal('jyt.occlusion.prop-tmx-manifest.v1')
-      expect(manifest.schemaVersion).to.equal(1)
+      expect(manifest.$schema).to.equal('jyt.occlusion.prop-tmx-manifest.v2')
+      expect(manifest.schemaVersion).to.equal(2)
       expect(manifest.taskId).to.equal('E8B')
       expect(manifest.sceneId).to.equal('juyiting-main')
-      expect(manifest.baseCommit).to.equal('da3d9600bd322e3a85d93ebfeaf07cd04a76f33d')
-      expect(manifest.specGenerationId).to.equal(spec.generationId)
       expect(manifest.propCount).to.equal(5)
       expect(manifest.props).to.have.length(5)
       expect(manifest.props.map(prop => prop.tmxId)).to.deep.equal(FIVE_PROP_TMX_IDS)
-      expect(manifest.tmxSha256).to.equal(tmxSha256)
-      expect(manifest.tmxSha256).to.not.equal(spec.tmxSource.sha256)
+      // specBinding provenance
+      expect(manifest.specBinding.sourceCommit).to.equal(spec.baseCommit)
+      expect(manifest.specBinding.acceptedCommit).to.equal('da3d9600bd322e3a85d93ebfeaf07cd04a76f33d')
+      expect(manifest.specBinding.generationId).to.equal(spec.generationId)
+      expect(manifest.specBinding.sourceTmxSha256).to.equal(spec.tmxSource.sha256)
+      // tmxProvenance
+      expect(manifest.tmxProvenance.baselineAnchor.sha256).to.equal(spec.tmxSource.sha256)
+      expect(manifest.tmxProvenance.baselineAnchor.commit).to.equal(spec.baseCommit)
+      expect(manifest.tmxProvenance.currentAnchor.sha256).to.equal(tmxSha256)
+      expect(manifest.tmxProvenance.currentAnchor.sha256).to.not.equal(manifest.tmxProvenance.baselineAnchor.sha256)
+      // No E8B self-reference
+      expect(manifest).to.not.have.property('baseCommit')
+      expect(manifest).to.not.have.property('tmxSha256')
+      expect(manifest).to.not.have.property('specGenerationId')
+      // Does not contain current HEAD
+      const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: REPO_ROOT, encoding: 'utf8', timeout: 5000 }).trim()
+      expect(JSON.stringify(manifest)).to.not.include(head)
     })
 
     it('canonical snapshot is a five-object v2 IR with the frozen binding', () => {

@@ -2,12 +2,15 @@
 import { createHash } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
 import {
+  chmodSync,
   lstatSync,
+  mkdirSync,
   readFileSync,
   readdirSync,
   realpathSync,
+  writeFileSync,
 } from 'node:fs'
-import { isAbsolute, relative, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import {
@@ -17,6 +20,8 @@ import {
 import { sha256Bytes } from './tmx-structure.mjs'
 
 export const E1_BASELINE_COMMIT = '2424f51f375814f403ca70a9a6e9948728e595b1'
+export const E1_BASELINE_TMX_SHA256 = 'e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401'
+export const E8B_LIVE_TMX_SHA256 = '291a38cc66ebd60c8577500a5afc18ce5398570fe4c35ca66d9eebe818826a97'
 export const repoRoot = resolve(
   process.env.JIA_JUYITING_GIT_REPO_ROOT
     ?? fileURLToPath(new URL('../../../', import.meta.url)),
@@ -314,6 +319,111 @@ function gitSpawn(args, options = {}) {
 
 function gitEnvironment() {
   return { ...process.env, GIT_NO_REPLACE_OBJECTS: '1' }
+}
+
+
+/**
+ * Read a blob at a specific commit via verified Git (replacement-disabled).
+ * Returns the raw bytes.
+ */
+export function readGitBlobAtCommit(commit, path) {
+  const resolved = gitExec(['rev-parse', '--verify', `${commit}^{commit}`], { encoding: 'utf8' }).trim()
+  const objectId = gitExec(['rev-parse', '--verify', `${resolved}:${path}`], { encoding: 'utf8' }).trim()
+  const output = gitExec(['cat-file', '--batch'], {
+    encoding: null,
+    input: `${objectId}\n`,
+  })
+  const headerEnd = output.indexOf(0x0a)
+  if (headerEnd < 0) throw new Error(`Truncated git cat-file header for blob ${path} at ${commit}`)
+  const header = output.subarray(0, headerEnd).toString('utf8')
+  const match = /^([0-9a-f]+) ([^ ]+) (\d+)$/.exec(header)
+  if (!match) throw new Error(`Invalid git cat-file header for ${path} at ${commit}: ${header}`)
+  const [, returnedObjectId, type, sizeText] = match
+  if (returnedObjectId !== objectId) throw new Error(`Git cat-file returned wrong object ID for ${path} at ${commit}: requested ${objectId}, got ${returnedObjectId}`)
+  if (type !== 'blob') throw new Error(`Object at ${commit}:${path} is ${type}, expected blob`)
+  const size = Number(sizeText)
+  if (!Number.isSafeInteger(size) || size < 0) throw new Error(`Invalid blob size for ${path} at ${commit}: ${sizeText}`)
+  const bytesStart = headerEnd + 1
+  const bytesEnd = bytesStart + size
+  if (bytesEnd >= output.length || output[bytesEnd] !== 0x0a) {
+    throw new Error(`Truncated git cat-file body for ${path} at ${commit}`)
+  }
+  return output.subarray(bytesStart, bytesEnd)
+}
+/**
+ * Materialize the complete public/juyiting tree from the E1 baseline commit
+ * into a target directory using git archive (replacement-disabled).
+ * Returns the target directory path for the public tree root.
+ * Each blob is verified through the replacement-disabled object store.
+ */
+export function materializeE1PublicTree(targetDir, baselineCommit = E1_BASELINE_COMMIT) {
+  assertBaselineCommit(baselineCommit)
+  const snapshot = readVerifiedBaselineSnapshot(baselineCommit)
+  mkdirSync(targetDir, { recursive: true })
+
+  const written = []
+  for (const entry of snapshot.files) {
+    const blobBytes = readGitBlobAtCommit(baselineCommit, entry.path)
+    const expectedSha256 = sha256Bytes(blobBytes)
+    if (expectedSha256 !== entry.sha256) {
+      throw new Error(`E1 materialization: blob sha256 mismatch for ${entry.path}: expected ${entry.sha256}, got ${expectedSha256}`)
+    }
+    const relPath = entry.path.slice(PUBLIC_TREE_PREFIX.length)
+    const targetPath = join(targetDir, relPath)
+    const parentDir = join(targetDir, relPath.split("/").slice(0, -1).join("/"))
+    mkdirSync(parentDir, { recursive: true })
+    writeFileSync(targetPath, blobBytes)
+    if (entry.gitMode === "100755") {
+      chmodSync(targetPath, 0o755)
+    }
+    written.push({ path: entry.path, targetPath, sha256: entry.sha256 })
+  }
+  return { targetDir, baselineCommit, fileCount: written.length, files: written }
+}
+
+/**
+ * Assert that the current public tree is identical to the E1 baseline,
+ * with the sole allowed difference being an exact content replacement of
+ * public/juyiting/hall.tmx (E8B migration). Any other difference must fail closed.
+ */
+export function assertCurrentPublicTreeVsE1(publicRoot, baselineCommit = E1_BASELINE_COMMIT) {
+  assertBaselineCommit(baselineCommit)
+  const baselineSnapshot = readVerifiedBaselineSnapshot(baselineCommit)
+  const baselineByPath = new Map(baselineSnapshot.files.map(entry => [entry.path, entry]))
+  const expectedDirectories = baselineDirectories(baselineSnapshot.files.map(entry => entry.path))
+  const currentSnapshot = readCurrentPublicTree(publicRoot, expectedDirectories)
+  const currentByPath = new Map(currentSnapshot.files.map(entry => [entry.path, entry]))
+
+  // Path set must match exactly (no additions, no deletions)
+  const missing = [...baselineByPath.keys()].filter(path => !currentByPath.has(path)).sort()
+  const extra = [...currentByPath.keys()].filter(path => !baselineByPath.has(path)).sort()
+  if (missing.length > 0 || extra.length > 0) {
+    throw new Error(`Juyiting public tree path mismatch against ${baselineCommit}; missing=[${missing.join(', ')} ] extra=[${extra.join(', ')} ]`)
+  }
+
+  const tmxPath = 'public/juyiting/hall.tmx'
+  const diffs = []
+  for (const baseline of baselineSnapshot.files) {
+    const current = currentByPath.get(baseline.path)
+    if (current.gitMode !== baseline.gitMode) {
+      throw new Error(`Juyiting public tree mode mismatch for ${baseline.path}: baseline ${baseline.gitMode}, current ${current.gitMode}`)
+    }
+    if (baseline.sha256 !== current.sha256) {
+      if (baseline.path === tmxPath) {
+        diffs.push({ path: baseline.path, baselineSha256: baseline.sha256, currentSha256: current.sha256 })
+      } else {
+        throw new Error(`Unauthorised public tree drift for ${baseline.path}: baseline ${baseline.sha256}, current ${current.sha256}. Only ${tmxPath} exact replacement is permitted by E8B migration.`)
+      }
+    }
+  }
+
+  return {
+    baselineCommit,
+    allowedDiffs: diffs,
+    hallTmxExactReplacementOnly: diffs.length <= 1 && diffs.every(d => d.path === tmxPath),
+    currentTmxSha256: currentByPath.get(tmxPath)?.sha256 ?? null,
+    baselineTmxSha256: baselineByPath.get(tmxPath)?.sha256 ?? null,
+  }
 }
 
 function assertInside(root, candidate, message) {

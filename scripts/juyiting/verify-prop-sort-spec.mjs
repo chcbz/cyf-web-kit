@@ -100,19 +100,49 @@ else {
 }
 
 // 2. Structured TMX resolution: map -> object gid -> firstgid/tile -> image source/dims.
-const tmxRelOrPath = TMX_OVERRIDE || spec.tmxSource?.path
-const tmxPath = tmxRelOrPath?.startsWith('/') ? tmxRelOrPath : join(REPO_ROOT, tmxRelOrPath || '')
+// E8B provenance: default (no --tmx) reads the historical TMX from the frozen
+// baseCommit verified Git blob. Explicit --tmx reads the file at the given path
+// and enforces exact hash match against the spec (live migrated TMX must fail).
 let tmxBytes = null
 let hall = null
-try {
-  tmxBytes = readFileSync(tmxPath)
-  const parsed = parseHallTmx(tmxBytes.toString('utf8'))
-  hall = resolveHallProps(parsed)
-} catch (error) { fail(`TMX structured parse: ${error.message}`) }
-if (tmxBytes) {
-  const hash = sha256Bytes(tmxBytes)
-  if (hash !== spec.tmxSource?.sha256) fail(`TMX sha256 mismatch ${hash} != ${spec.tmxSource?.sha256}`)
-  else pass('TMX sha256')
+let tmxSourceLabel = null
+if (TMX_OVERRIDE) {
+  // Explicit TMX path: strict exact-hash check against spec source hash.
+  const tmxPath = TMX_OVERRIDE.startsWith('/') ? TMX_OVERRIDE : join(REPO_ROOT, TMX_OVERRIDE)
+  tmxSourceLabel = `explicit --tmx ${tmxPath}`
+  try {
+    tmxBytes = readFileSync(tmxPath)
+    const parsed = parseHallTmx(tmxBytes.toString('utf8'))
+    hall = resolveHallProps(parsed)
+  } catch (error) { fail(`TMX structured parse (${tmxSourceLabel}): ${error.message}`) }
+  if (tmxBytes) {
+    const hash = sha256Bytes(tmxBytes)
+    if (hash !== spec.tmxSource?.sha256) fail(`TMX sha256 mismatch ${hash} != ${spec.tmxSource?.sha256} (${tmxSourceLabel})`)
+    else pass(`TMX sha256 (${tmxSourceLabel})`)
+  }
+} else {
+  // Default: read historical TMX from the frozen baseCommit verified Git blob.
+  tmxSourceLabel = `baseCommit ${spec.baseCommit} Git blob`
+  try {
+    const tmxBaseCommitPath = spec.tmxSource?.path || 'public/juyiting/hall.tmx'
+    const resolved = execFileSync('git', ['rev-parse', '--verify', `${spec.baseCommit}^{commit}`], {
+      cwd: REPO_ROOT, encoding: 'utf8', timeout: 5000,
+      env: { ...process.env, GIT_NO_REPLACE_OBJECTS: '1' }
+    }).trim()
+    if (resolved !== spec.baseCommit) fail(`baseCommit ${spec.baseCommit} did not resolve exactly to ${resolved}`)
+    tmxBytes = execFileSync('git', ['show', `${spec.baseCommit}:${tmxBaseCommitPath}`], {
+      cwd: REPO_ROOT, encoding: null, timeout: 5000,
+      maxBuffer: 64 * 1024 * 1024,
+      env: { ...process.env, GIT_NO_REPLACE_OBJECTS: '1' }
+    })
+    const parsed = parseHallTmx(tmxBytes.toString('utf8'))
+    hall = resolveHallProps(parsed)
+  } catch (error) { fail(`TMX structured parse (${tmxSourceLabel}): ${error.message}`) }
+  if (tmxBytes) {
+    const hash = sha256Bytes(tmxBytes)
+    if (hash !== spec.tmxSource?.sha256) fail(`TMX sha256 mismatch ${hash} != ${spec.tmxSource?.sha256} (${tmxSourceLabel})`)
+    else pass(`TMX sha256 (${tmxSourceLabel})`)
+  }
 }
 if (hall) {
   same(spec.tmxSource && {
