@@ -7,6 +7,77 @@
   "propCount": 5,
   "props": [
     {
+      "semanticName": "roster-book",
+      "tmxId": 94,
+      "tmxName": "roster-book-rect",
+      "stableId": "jyt.prop.center-north.roster-book.v1",
+      "sceneId": "juyiting-main",
+      "chunkId": "center",
+      "floorId": "floor-1",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "tieBias": 0,
+      "asset": {
+        "path": "public/juyiting/images/props/liangshan-hall-prop-roster-book-cropped.png",
+        "sha256": "6b7c21b45ad24aee9b6bbbbf72177f04e0f3710168d28aef8064dfa1786996c5",
+        "width": 179,
+        "height": 192
+      },
+      "tmxRect": {
+        "x": 217,
+        "y": 192,
+        "width": 179,
+        "height": 192,
+        "minX": 217,
+        "minY": 192,
+        "maxX": 396,
+        "maxY": 384
+      },
+      "sortAnchor": {
+        "x": 306,
+        "y": 260
+      },
+      "fixedPointY": 66560,
+      "sortAnchorRationale": "NOT floor-standing (table-top object). sortAnchor.y=260 (img row 68 in 192px image, NOT rect bottom undefined). Alpha scan (pngjs): 192 rows. Last row with span≥10: row 190 (count=20, span=20, x=[87,106]). Bottom row 191: 1px, span=1, x=[106,106]. Transitions: row 82 (span 156→138, minX 7→25); row 187 (span 99→80, minX 9→28); row 188 (span 80→60, minX 28→48); row 189 (span 60→41, minX 48→67); row 190 (span 41→20, minX 67→87); row 191 (span 20→1, minX 87→106); Structural transition at row 82 (span 156→138, minX 7→25) marks pages→body boundary. Anchor at row 68 (Y=260) places book behind table (fpY 66560 < 97024). sortAnchor.x=306 is rect center.",
+      "probes": {
+        "north": {
+          "agentFootPoint": {
+            "x": 306,
+            "y": 232
+          },
+          "expectedRelation": "agent<prop",
+          "rationale": "Agent north: y=232 < prop sortAnchor.y=260."
+        },
+        "south": {
+          "agentFootPoint": {
+            "x": 306,
+            "y": 288
+          },
+          "expectedRelation": "prop<agent",
+          "rationale": "Agent south: prop sortAnchor.y=260 < agent y=288."
+        },
+        "west": {
+          "agentFootPoint": {
+            "x": 189,
+            "y": 260
+          },
+          "expectedRelation": "non-overlap",
+          "pixelOverlap": false,
+          "rationale": "West of rect [217,396]."
+        },
+        "east": {
+          "agentFootPoint": {
+            "x": 424,
+            "y": 260
+          },
+          "expectedRelation": "non-overlap",
+          "pixelOverlap": false,
+          "rationale": "East of rect [217,396]."
+        }
+      }
+    },
+    {
       "semanticName": "main-seat",
       "tmxId": 90,
       "tmxName": "main-seat-rect",
@@ -39,23 +110,23 @@
         "y": 268
       },
       "fixedPointY": 68608,
-      "sortAnchorRationale": "Floor-standing seat. sortAnchor.y=268 (rect bottom, TMX 175+93). Alpha scan (pngjs): 93 rows. Last row with span≥10: row 91 (count=21, span=106). Row 92 (bottom): 1px at x=3. Rows 82-91: counts 30→21, span 106→106 (seat-leg taper). Floor contact IS at rect bottom; single bottom pixel is structural terminus of seat back. sortAnchor.x=872 is rect center.",
+      "sortAnchorRationale": "Floor-standing. sortAnchor.y=268 (img row 93 in 93px image, NOT rect bottom undefined). Alpha scan (pngjs): 93 rows. Last row with span≥10: row 91 (count=21, span=106, x=[3,108]). Bottom row 92: 1px, span=1, x=[3,3]. Transitions: row 92 (span 106→1, minX 3→3); Single pixel at bottom row (x=3) is structural terminus of seat back. sortAnchor.x=872 is rect center.",
       "probes": {
         "north": {
           "agentFootPoint": {
             "x": 872,
-            "y": 160
+            "y": 240
           },
           "expectedRelation": "agent<prop",
-          "rationale": "Agent north of seat: agent y=160 < seat sortAnchor.y=268."
+          "rationale": "Agent north: y=240 < prop sortAnchor.y=268."
         },
         "south": {
           "agentFootPoint": {
             "x": 872,
-            "y": 290
+            "y": 296
           },
           "expectedRelation": "prop<agent",
-          "rationale": "Agent south of seat: seat sortAnchor.y=268 < agent y=290."
+          "rationale": "Agent south: prop sortAnchor.y=268 < agent y=296."
         },
         "west": {
           "agentFootPoint": {
@@ -74,77 +145,6 @@
           "expectedRelation": "non-overlap",
           "pixelOverlap": false,
           "rationale": "East of rect [818,927]."
-        }
-      }
-    },
-    {
-      "semanticName": "agent-roster",
-      "tmxId": 91,
-      "tmxName": "agent-roster-rect",
-      "stableId": "jyt.prop.southwest.agent-roster.v1",
-      "sceneId": "juyiting-main",
-      "chunkId": "west-lower",
-      "floorId": "floor-1",
-      "elevation": 0,
-      "renderBand": "world",
-      "sortMode": "fixed",
-      "tieBias": 0,
-      "asset": {
-        "path": "public/juyiting/images/props/liangshan-hall-prop-agent-roster-cropped.png",
-        "sha256": "829d710a41b1982925c8ce3cb2e23f99fd9ea0f78dd9bd65be6dce406a43e8cc",
-        "width": 117,
-        "height": 136
-      },
-      "tmxRect": {
-        "x": 120,
-        "y": 601,
-        "width": 117,
-        "height": 136,
-        "minX": 120,
-        "minY": 601,
-        "maxX": 237,
-        "maxY": 737
-      },
-      "sortAnchor": {
-        "x": 178,
-        "y": 737
-      },
-      "fixedPointY": 188672,
-      "sortAnchorRationale": "Floor-standing roster board on stand. sortAnchor.y=737 (rect bottom, TMX 601+136). Alpha scan (pngjs): 136 rows. Last row with span≥10: row 135 (count=20, span=70). Row 135 (bottom): count=20, span=70, x=[9,78]. All 136 rows have alpha content; bottom 13 rows (123-135) taper from 24px to 20px (stand feet). Floor contact IS at rect bottom. sortAnchor.x=178 is rect center.",
-      "probes": {
-        "north": {
-          "agentFootPoint": {
-            "x": 178,
-            "y": 580
-          },
-          "expectedRelation": "agent<prop",
-          "rationale": "Agent north: y=580 < board y=737."
-        },
-        "south": {
-          "agentFootPoint": {
-            "x": 178,
-            "y": 760
-          },
-          "expectedRelation": "prop<agent",
-          "rationale": "Agent south: board y=737 < agent y=760."
-        },
-        "west": {
-          "agentFootPoint": {
-            "x": 100,
-            "y": 737
-          },
-          "expectedRelation": "non-overlap",
-          "pixelOverlap": false,
-          "rationale": "West of rect [120,237]."
-        },
-        "east": {
-          "agentFootPoint": {
-            "x": 260,
-            "y": 737
-          },
-          "expectedRelation": "non-overlap",
-          "pixelOverlap": false,
-          "rationale": "East of rect [120,237]."
         }
       }
     },
@@ -181,28 +181,27 @@
         "y": 379
       },
       "fixedPointY": 97024,
-      "tieBiasRationale": "tieBias=-4 ensures deterministic table<agent at same fixedPointY (boundary). With WorldSortKey: fixedPointY desc, then tieBias asc. table(tieBias=-4) < agent(tieBias=0 default) → table sorts before agent → table behind agent. This replaces the unproven agent hashed stableId tie-break from v0 spec. Boundary cell at y=379 uses tieBias, NOT stableId.",
-      "sortAnchorRationale": "Floor-standing table. sortAnchor.y=379 (rect bottom, TMX 255+124). Alpha scan (pngjs): 124 rows. Last row with span≥10: row 121 (count=34, span=105). Row 123 (bottom): 1px at x=47. Key transition: row 56 (span 168→158, table-leg tips). V0 target constraint: table anchor≈379 < agent foot≈420 < front railing≈458. tieBias=-4 ensures deterministic table<agent at boundary (table behind agent when same fixedPointY). sortAnchor.x=1446 is rect center.",
+      "sortAnchorRationale": "Floor-standing. sortAnchor.y=379 (img row 124 in 124px image, NOT rect bottom undefined). Alpha scan (pngjs): 124 rows. Last row with span≥10: row 121 (count=34, span=105, x=[41,145]). Bottom row 123: 1px, span=1, x=[47,47]. Transitions: row 1 (span 1→45, minX 111→67); row 2 (span 45→90, minX 67→22); row 6 (span 90→113, minX 23→0); row 56 (span 168→158, minX 4→14); row 91 (span 126→114, minX 15→27); row 93 (span 114→99, minX 27→42); row 122 (span 105→4, minX 41→44); V0 target: table≈379 < agent≈420 < railing≈458. tieBias=-4 ensures deterministic boundary. sortAnchor.x=1446 is rect center.",
       "probes": {
         "north": {
           "agentFootPoint": {
             "x": 1446,
-            "y": 240
+            "y": 351
           },
           "expectedRelation": "agent<prop",
-          "rationale": "Agent north: y=240 < table y=379. Agent behind table."
+          "rationale": "Agent north: y=351 < prop sortAnchor.y=379."
         },
         "south": {
           "agentFootPoint": {
             "x": 1446,
-            "y": 420
+            "y": 407
           },
           "expectedRelation": "prop<agent",
-          "rationale": "Agent south at y=420: table y=379 < agent y=420. V0 canonical: table<agent."
+          "rationale": "Agent south: prop sortAnchor.y=379 < agent y=407."
         },
         "west": {
           "agentFootPoint": {
-            "x": 1320,
+            "x": 1332,
             "y": 379
           },
           "expectedRelation": "non-overlap",
@@ -220,14 +219,14 @@
         }
       },
       "bountyBoardMatrix": {
-        "description": "14-cell matrix: 8-cell N/S/W/E × lujunyi/husanniang + 6-cell behind/boundary/front × both roles. All at identical foot-point, facing south, idle-0 frame.",
+        "description": "14-cell matrix: 8-cell N/S/W/E x lujunyi/husanniang + 6-cell behind/boundary/front x both roles.",
         "roles": [
           "lujunyi",
           "husanniang"
         ],
         "roleInvarianceRequirement": "Both roles produce identical sort result; sort key does not depend on role identity.",
         "cleanMode": {
-          "description": "No UI overlay, no labels, no bubbles.",
+          "description": "No UI overlay/labels/bubbles.",
           "requiredFields": [
             "commit",
             "tmxSha256",
@@ -265,7 +264,7 @@
             },
             "lujunyiExpected": "prop<agent",
             "husanniangExpected": "prop<agent",
-            "rationale": "y=420 > table 379, V0 canonical: table<agent."
+            "rationale": "y=420 > table 379, V0 canonical."
           },
           "west": {
             "agentFoot": {
@@ -274,7 +273,7 @@
             },
             "lujunyiExpected": "non-overlap",
             "husanniangExpected": "non-overlap",
-            "rationale": "West of rect."
+            "rationale": "West of rect [1360,1532]."
           },
           "east": {
             "agentFoot": {
@@ -283,11 +282,11 @@
             },
             "lujunyiExpected": "non-overlap",
             "husanniangExpected": "non-overlap",
-            "rationale": "East of rect."
+            "rationale": "East of rect [1360,1532]."
           }
         },
         "behindBoundaryFront": {
-          "description": "6-cell: 2 roles × 3 positions. Same X=1446, varying Y. tieBias=-4 resolves boundary deterministically.",
+          "description": "6-cell: 2 roles x 3 positions. X=1446, Y varies. tieBias=-4 resolves boundary deterministically.",
           "requiredFields": [
             "commit",
             "tmxSha256",
@@ -313,7 +312,7 @@
             },
             "lujunyiExpected": "prop<agent",
             "husanniangExpected": "prop<agent",
-            "rationale": "y=379 = table anchor, same fixedPointY. table tieBias=-4 < agent tieBias=0 → table behind agent. Resolved by tieBias, not stableId."
+            "rationale": "y=379 = anchor, same fpY. table tieBias=-4 < agent 0 -> table sorts first -> table behind agent. tieBias, NOT stableId."
           },
           "front": {
             "agentFoot": {
@@ -326,7 +325,7 @@
           }
         },
         "mask58CrossReference": {
-          "description": "Mask 58 covers east wall x=[1197,1663] y=[342,458]. Included in E10A mandatory review.",
+          "description": "Mask 58 x=[1197,1663] y=[342,458]. E10A mandatory review.",
           "action": "E10A_REQUIRED_REVIEW",
           "maskId": 58,
           "maskAabb": {
@@ -336,7 +335,8 @@
             "maxY": 458
           }
         }
-      }
+      },
+      "tieBiasRationale": "tieBias=-4 ensures deterministic table<agent at same fixedPointY. WorldSortKey: renderBandOrder->floorOrder->elevation->fixedPointY->tieBias->stableId. table(-4) < agent(0) -> table behind agent. NOT stableId."
     },
     {
       "semanticName": "library-shelf",
@@ -371,27 +371,27 @@
         "y": 719
       },
       "fixedPointY": 184064,
-      "sortAnchorRationale": "Floor-standing bookshelf. sortAnchor.y=719 (rect bottom, TMX 578+141). Alpha scan (pngjs): 141 rows. Last row with span≥10: row 139 (count=11, span=59). Row 140 (bottom): 1px at x=102. Structural transition at row 57 (span 103→87, minX 9→25). Bottom rows 139-140 taper (span 59→1). Floor contact IS at rect bottom. sortAnchor.x=1558 is rect center.",
+      "sortAnchorRationale": "Floor-standing. sortAnchor.y=719 (img row 141 in 141px image, NOT rect bottom undefined). Alpha scan (pngjs): 141 rows. Last row with span≥10: row 139 (count=11, span=59, x=[44,102]). Bottom row 140: 1px, span=1, x=[102,102]. Transitions: row 1 (span 1→78, minX 94→17); row 57 (span 103→87, minX 9→25); row 140 (span 59→1, minX 44→102); sortAnchor.x=1558 is rect center.",
       "probes": {
         "north": {
           "agentFootPoint": {
             "x": 1558,
-            "y": 560
+            "y": 691
           },
           "expectedRelation": "agent<prop",
-          "rationale": "Agent north: y=560 < shelf y=719."
+          "rationale": "Agent north: y=691 < prop sortAnchor.y=719."
         },
         "south": {
           "agentFootPoint": {
             "x": 1558,
-            "y": 745
+            "y": 747
           },
           "expectedRelation": "prop<agent",
-          "rationale": "Agent south: shelf y=719 < agent y=745."
+          "rationale": "Agent south: prop sortAnchor.y=719 < agent y=747."
         },
         "west": {
           "agentFootPoint": {
-            "x": 1470,
+            "x": 1469,
             "y": 719
           },
           "expectedRelation": "non-overlap",
@@ -400,83 +400,83 @@
         },
         "east": {
           "agentFootPoint": {
-            "x": 1645,
+            "x": 1648,
             "y": 719
           },
           "expectedRelation": "non-overlap",
           "pixelOverlap": false,
-          "rationale": "East of rect."
+          "rationale": "East of rect [1497,1620]."
         }
       }
     },
     {
-      "semanticName": "roster-book",
-      "tmxId": 94,
-      "tmxName": "roster-book-rect",
-      "stableId": "jyt.prop.center-north.roster-book.v1",
+      "semanticName": "agent-roster",
+      "tmxId": 91,
+      "tmxName": "agent-roster-rect",
+      "stableId": "jyt.prop.southwest.agent-roster.v1",
       "sceneId": "juyiting-main",
-      "chunkId": "center",
+      "chunkId": "west-lower",
       "floorId": "floor-1",
       "elevation": 0,
       "renderBand": "world",
       "sortMode": "fixed",
       "tieBias": 0,
       "asset": {
-        "path": "public/juyiting/images/props/liangshan-hall-prop-roster-book-cropped.png",
-        "sha256": "6b7c21b45ad24aee9b6bbbbf72177f04e0f3710168d28aef8064dfa1786996c5",
-        "width": 179,
-        "height": 192
+        "path": "public/juyiting/images/props/liangshan-hall-prop-agent-roster-cropped.png",
+        "sha256": "829d710a41b1982925c8ce3cb2e23f99fd9ea0f78dd9bd65be6dce406a43e8cc",
+        "width": 117,
+        "height": 136
       },
       "tmxRect": {
-        "x": 217,
-        "y": 192,
-        "width": 179,
-        "height": 192,
-        "minX": 217,
-        "minY": 192,
-        "maxX": 396,
-        "maxY": 384
+        "x": 120,
+        "y": 601,
+        "width": 117,
+        "height": 136,
+        "minX": 120,
+        "minY": 601,
+        "maxX": 237,
+        "maxY": 737
       },
       "sortAnchor": {
-        "x": 306,
-        "y": 260
+        "x": 178,
+        "y": 737
       },
-      "fixedPointY": 66560,
-      "sortAnchorRationale": "Open book on table, NOT floor-standing. sortAnchor.y=260 (img row 68 in 192px image, NOT rect bottom 384). Alpha scan (pngjs): 192 rows, all 192 rows have alpha. Last row with span≥10: row 190 (count=20, span=20). Structural transition at row 82: span 156→138, minX 7→25 — marks boundary between open pages (rows 0-81, fan-shaped, centered) and book body (rows 82-186, solid block ~120px wide). Bottom rows 187-191: sharp taper (span 99→80→60→41→20→1) — book underside perspective edge. The forward contact point of the book pages (where book meets table surface) is row 68 (Y=260), within the page-fan region. Anchor at Y=260 gives fixedPointY=66560 < table(97024), placing book behind table — correct for book resting on table surface. Using rect bottom (384, fpY=98304) would incorrectly place book in front of table. sortAnchor.x=306 is rect center.",
+      "fixedPointY": 188672,
+      "sortAnchorRationale": "Floor-standing. sortAnchor.y=737 (img row 136 in 136px image, NOT rect bottom undefined). Alpha scan (pngjs): 136 rows. Last row with span≥10: row 135 (count=20, span=70, x=[9,78]). Bottom row 135: 20px, span=70, x=[9,78]. All 136 rows have alpha. Bottom rows 123-135 taper from 24px to 20px (stand feet). Floor contact IS at rect bottom. sortAnchor.x=178 is rect center.",
       "probes": {
         "north": {
           "agentFootPoint": {
-            "x": 306,
-            "y": 240
+            "x": 178,
+            "y": 709
           },
           "expectedRelation": "agent<prop",
-          "rationale": "Agent north: y=240 < book y=260."
+          "rationale": "Agent north: y=709 < prop sortAnchor.y=737."
         },
         "south": {
           "agentFootPoint": {
-            "x": 306,
-            "y": 410
+            "x": 178,
+            "y": 765
           },
           "expectedRelation": "prop<agent",
-          "rationale": "Agent south: book y=260 < agent y=410. Book behind agent."
+          "rationale": "Agent south: prop sortAnchor.y=737 < agent y=765."
         },
         "west": {
           "agentFootPoint": {
-            "x": 190,
-            "y": 260
+            "x": 92,
+            "y": 737
           },
           "expectedRelation": "non-overlap",
           "pixelOverlap": false,
-          "rationale": "West of rect [217,396]."
+          "rationale": "West of rect [120,237]."
         },
         "east": {
           "agentFootPoint": {
-            "x": 420,
-            "y": 260
+            "x": 265,
+            "y": 737
           },
           "expectedRelation": "non-overlap",
           "pixelOverlap": false,
-          "rationale": "East of rect [217,396]."
+          "rationale": "East of rect [120,237]."
         }
       }
     }
@@ -487,7 +487,7 @@
       "testVector": "Sort 5 props; shuffle input 10 times; verify output byte-identical."
     },
     "fivePropSortOrder": {
-      "description": "Expected base sort order (WorldSortKey ascending: fixedPointY then tieBias then stableId).",
+      "description": "Expected base sort order (WorldSortKey ascending).",
       "order": [
         "jyt.prop.center-north.roster-book.v1",
         "jyt.prop.center-north.main-seat.v1",
@@ -495,21 +495,22 @@
         "jyt.prop.southeast.library-shelf.v1",
         "jyt.prop.southwest.agent-roster.v1"
       ],
-      "rationale": "fixedPointY: roster-book(66560) < main-seat(68608) < bounty-board(97024) < library-shelf(184064) < agent-roster(188672). bounty-board tieBias=-4 (not in effect since all fixedPointY are distinct). Same renderBand(100), floor(0), elev(0)."
+      "rationale": "fixedPointY: roster-book(66560) < main-seat(68608) < bounty-board(97024) < library-shelf(184064) < agent-roster(188672). Same renderBand/world, floorId/floor-1, elevation/0. bounty-board tieBias=-4 (only matters at same fixedPointY)."
     },
     "failClosedRules": {
-      "tmxIdChange": "Any TMX object id 90-94 with mismatched name, rect, x, y, width, height, or gid → verify failure",
-      "nameChange": "Any tmxName mismatch → verify failure",
-      "rectChange": "Any rect field (x/y/width/height/minX/minY/maxX/maxY) mismatch → verify failure",
-      "assetShaMismatch": "Any asset sha256 mismatch → verify failure",
-      "missingProp": "Fewer than 5 props in spec → verify failure",
-      "duplicateStableId": "Duplicate stableId → verify failure",
-      "anchorOutOfBounds": "sortAnchor outside [0,1664]×[0,928] → verify failure",
-      "fixedPointInconsistency": "fixedPointY ≠ round(sortAnchor.y×256) → verify failure",
-      "nonFiveCount": "propCount ≠ 5 → verify failure",
-      "tieBiasOutOfRange": "tieBias not in [-32,32] → verify failure",
-      "missingMatrix": "bounty-board missing matrix cells → verify failure",
-      "elevationNotZero": "elevation ≠ 0 → verify failure"
+      "tmxIdChange": "TMX object id/name/rect/gid mismatch -> verify failure",
+      "nameChange": "tmxName mismatch -> verify failure",
+      "rectChange": "rect field mismatch -> verify failure",
+      "assetShaMismatch": "asset sha256 mismatch -> verify failure",
+      "missingProp": "<5 props -> verify failure",
+      "duplicateStableId": "duplicate stableId -> verify failure",
+      "anchorOutOfBounds": "sortAnchor outside [0,1664]x[0,928] -> verify failure",
+      "fixedPointInconsistency": "fixedPointY != round(sortAnchor.y*256) -> verify failure",
+      "nonFiveCount": "propCount != 5 -> verify failure",
+      "tieBiasOutOfRange": "tieBias not in [-32,32] -> verify failure",
+      "missingMatrix": "bounty-board missing matrix -> verify failure",
+      "elevationNotZero": "elevation != 0 -> verify failure",
+      "generationIdMismatch": "generationId != SHA-256(spec with generationId=64 zeros) -> verify failure"
     }
   },
   "tmxSource": {
@@ -518,7 +519,7 @@
     "coordinateWidth": 1664,
     "coordinateHeight": 928
   },
-  "generationId": "c223b9efb345",
-  "generatedAt": "2026-08-09T05:25:51.419Z",
-  "generatedBy": "hand-authored spec; alpha-scan evidence via pngjs (scripts/juyiting/lib/alpha-scan.mjs); verify via scripts/juyiting/verify-prop-sort-spec.mjs"
+  "generationId": "7051871d1a71797ba88bc77deaab1df0c62428a6f6bca2dc516ad1cb35f5a578",
+  "generatedAt": "2026-08-09T05:40:12.774Z",
+  "generatedBy": "scripts/juyiting/generate-prop-sort-spec.mjs (deterministic generator; uses pngjs alpha-scan; see scripts/juyiting/lib/alpha-scan.mjs)"
 }
