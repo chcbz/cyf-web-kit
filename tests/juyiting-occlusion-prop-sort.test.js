@@ -16,6 +16,7 @@ const REPO_ROOT = process.cwd();
 const SPEC_PATH = join(REPO_ROOT, "tests/fixtures/juyiting/occlusion-v1-props/prop-sort-spec.json");
 const CONTACT_SHEET_PATH = join(REPO_ROOT, "tests/fixtures/juyiting/occlusion-v1-props/contact-sheet.svg");
 const VERIFIER = join(REPO_ROOT, "scripts/juyiting/verify-prop-sort-spec.mjs");
+const GENERATOR = join(REPO_ROOT, "scripts/juyiting/generate-prop-sort-spec.mjs");
 const TMX_PATH = join(REPO_ROOT, "public/juyiting/hall.tmx");
 
 const spec = JSON.parse(readFileSync(SPEC_PATH, "utf-8"));
@@ -67,6 +68,7 @@ describe("E8A Prop Sort Spec (v3 fix)", () => {
       expect(spec.specVersion).to.equal(1);
       expect(spec.baseCommit).to.equal("7144d9260b3905ce0335d037d3b1a3589d3a88a1");
       expect(spec.taskId).to.equal("E8A");
+      expect(spec.sourceEpoch).to.be.a("number").and.satisfy(n => Number.isSafeInteger(n) && n > 0);
     });
   });
 
@@ -298,6 +300,47 @@ describe("E8A Prop Sort Spec (v3 fix)", () => {
     });
   });
 
+  describe("11b. Generator reproducibility", () => {
+    it("generator produces byte-identical output on two runs", () => {
+      const p1 = join(tmpdir(), "e8a-repro-1-" + Date.now() + ".json");
+      const s1 = join(tmpdir(), "e8a-repro-1-" + Date.now() + ".svg");
+      const p2 = join(tmpdir(), "e8a-repro-2-" + Date.now() + ".json");
+      const s2 = join(tmpdir(), "e8a-repro-2-" + Date.now() + ".svg");
+      try {
+        execSync("node " + GENERATOR + " --spec " + p1 + " --svg " + s1, { cwd: REPO_ROOT, timeout: 10000, stdio: "pipe" });
+        execSync("node " + GENERATOR + " --spec " + p2 + " --svg " + s2, { cwd: REPO_ROOT, timeout: 10000, stdio: "pipe" });
+        const buf1 = readFileSync(p1), buf2 = readFileSync(p2);
+        expect(buf1.equals(buf2), "spec files byte-identical").to.be.true;
+        const svg1 = readFileSync(s1), svg2 = readFileSync(s2);
+        expect(svg1.equals(svg2), "SVG files byte-identical").to.be.true;
+      } finally {
+        try { unlinkSync(p1); unlinkSync(s1); unlinkSync(p2); unlinkSync(s2); } catch (_) {}
+      }
+    });
+    it("committed spec equals freshly generated spec", () => {
+      const tmpP = join(tmpdir(), "e8a-fresh-" + Date.now() + ".json");
+      try {
+        execSync("node " + GENERATOR + " --spec " + tmpP, { cwd: REPO_ROOT, timeout: 10000, stdio: "pipe" });
+        const fresh = readFileSync(tmpP);
+        const committed = readFileSync(SPEC_PATH);
+        expect(fresh.equals(committed), "committed spec matches freshly generated").to.be.true;
+      } finally {
+        try { unlinkSync(tmpP); } catch (_) {}
+      }
+    });
+    it("committed contact-sheet equals freshly generated contact-sheet", () => {
+      const tmpS = join(tmpdir(), "e8a-fresh-" + Date.now() + ".svg");
+      try {
+        execSync("node " + GENERATOR + " --svg " + tmpS, { cwd: REPO_ROOT, timeout: 10000, stdio: "pipe" });
+        const fresh = readFileSync(tmpS);
+        const committed = readFileSync(CONTACT_SHEET_PATH);
+        expect(fresh.equals(committed), "committed SVG matches freshly generated").to.be.true;
+      } finally {
+        try { unlinkSync(tmpS); } catch (_) {}
+      }
+    });
+  });
+
   // ═══════════════════════════════════════════
   // 12. VERIFIER-INVOCATION MUTATION TESTS
   // ═══════════════════════════════════════════
@@ -386,6 +429,9 @@ describe("E8A Prop Sort Spec (v3 fix)", () => {
     });
     it("rejects specVersion != 1 (verifier)", () => {
       expect(runVerifierOnMutated(s => { s.specVersion = 2; })).to.not.equal(0);
+    });
+    it("rejects sourceEpoch=0 (verifier)", () => {
+      expect(runVerifierOnMutated(s => { s.sourceEpoch = 0; })).to.not.equal(0);
     });
 
     // Generation ID mutation

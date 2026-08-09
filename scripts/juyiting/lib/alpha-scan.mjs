@@ -30,7 +30,6 @@ import { PNG } from "pngjs";
 export function alphaScan(filePath) {
   const buf = readFileSync(filePath);
   // SHA-256 of raw bytes for provenance
-  const { createHash } = await_import_crypto();
   const sha256 = createHash("sha256").update(buf).digest("hex");
 
   const png = PNG.sync.read(buf);
@@ -59,11 +58,6 @@ export function alphaScan(filePath) {
   return { width, height, rows, sha256 };
 }
 
-// ESM: crypto import helper
-function await_import_crypto() {
-  // We're in ESM, just use createHash directly
-  return { createHash };
-}
 import { createHash } from "node:crypto";
 
 /**

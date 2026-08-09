@@ -27,6 +27,7 @@ if (spec.props.length !== 5) fail("props.length"); else pass("props.length=5");
 if (spec.sceneId !== "juyiting-main") fail("sceneId"); else pass("sceneId");
 if (spec.specVersion !== 1) fail("specVersion must be 1, got " + spec.specVersion); else pass("specVersion=1");
 if (spec.baseCommit !== "7144d9260b3905ce0335d037d3b1a3589d3a88a1") fail("baseCommit mismatch"); else pass("baseCommit verified");
+if (typeof spec.sourceEpoch !== "number" || !Number.isSafeInteger(spec.sourceEpoch) || spec.sourceEpoch <= 0) fail("sourceEpoch missing or invalid: " + spec.sourceEpoch); else pass("sourceEpoch=" + spec.sourceEpoch);
 const tmxIdCheck = spec.props.map(p => p.tmxId).sort((a,b)=>a-b).join(",");
 if (tmxIdCheck !== "90,91,92,93,94") fail("tmxIds must be 90-94, got " + tmxIdCheck); else pass("tmxIds=90-94");
 

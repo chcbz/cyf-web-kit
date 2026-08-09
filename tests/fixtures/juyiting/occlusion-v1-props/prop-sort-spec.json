@@ -519,7 +519,7 @@
     "coordinateWidth": 1664,
     "coordinateHeight": 928
   },
-  "generationId": "7051871d1a71797ba88bc77deaab1df0c62428a6f6bca2dc516ad1cb35f5a578",
-  "generatedAt": "2026-08-09T05:40:12.774Z",
+  "generationId": "830cd022ae25b33341818c980ff9eaa65dbae1a53c11b2b72496d192f0883426",
+  "sourceEpoch": 1786248574,
   "generatedBy": "scripts/juyiting/generate-prop-sort-spec.mjs (deterministic generator; uses pngjs alpha-scan; see scripts/juyiting/lib/alpha-scan.mjs)"
 }

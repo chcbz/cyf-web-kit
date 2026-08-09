@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync, writeFileSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,6 +9,21 @@ import { alphaScan, lastSpanRow, findTransitions, scanReport } from "./lib/alpha
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const REPO_ROOT = join(__dirname, "..", "..");
+const BASE_COMMIT = "7144d9260b3905ce0335d037d3b1a3589d3a88a1";
+
+// Deterministic epoch: committer timestamp of frozen base commit
+function getSourceEpoch() {
+  try {
+    const ts = execSync("git show -s --format=%ct " + BASE_COMMIT, { cwd: REPO_ROOT, encoding: "utf-8", timeout: 5000 }).trim();
+    const n = Number(ts);
+    if (!Number.isSafeInteger(n) || n <= 0) throw new Error("bad timestamp: " + ts);
+    return n;
+  } catch (e) {
+    console.error("FATAL: cannot resolve sourceEpoch from base commit " + BASE_COMMIT + ": " + e.message);
+    process.exit(1);
+  }
+}
+const SOURCE_EPOCH = getSourceEpoch();
 
 const args = process.argv.slice(2);
 function argVal(flag) { const i = args.indexOf(flag); return i >= 0 ? args[i+1] : null; }
@@ -192,7 +208,7 @@ const spec = {
   },
   tmxSource: { path: "public/juyiting/hall.tmx", sha256: tmxSha256, coordinateWidth: mw * tw, coordinateHeight: mh * th },
   generationId: "0000000000000000000000000000000000000000000000000000000000000000",
-  generatedAt: new Date().toISOString(),
+  sourceEpoch: SOURCE_EPOCH,
   generatedBy: "scripts/juyiting/generate-prop-sort-spec.mjs (deterministic generator; uses pngjs alpha-scan; see scripts/juyiting/lib/alpha-scan.mjs)",
 };
 

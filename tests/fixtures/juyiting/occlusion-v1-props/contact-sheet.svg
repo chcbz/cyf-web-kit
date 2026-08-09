@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1600 1300" width="1600" height="1300" data-generation-id="7051871d1a71797ba88bc77deaab1df0c62428a6f6bca2dc516ad1cb35f5a578" data-base-commit="7144d9260b3905ce0335d037d3b1a3589d3a88a1" data-task="E8A" data-spec="prop-sort-spec.v1">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1600 1300" width="1600" height="1300" data-generation-id="830cd022ae25b33341818c980ff9eaa65dbae1a53c11b2b72496d192f0883426" data-base-commit="7144d9260b3905ce0335d037d3b1a3589d3a88a1" data-task="E8A" data-spec="prop-sort-spec.v1">
   <defs><style>text{font-family:monospace}.title{font-size:18px;font-weight:bold;fill:#1a1a2e}.subtitle{font-size:14px;fill:#444}.label{font-size:11px;fill:#333}.anchor-label{font-size:10px;fill:#d32f2f;font-weight:bold}.probe-label{font-size:9px;fill:#1976d2}.evidence-label{font-size:9px;fill:#388e3c}.id-label{font-size:10px;fill:#666}.legend-text{font-size:11px;fill:#333}</style></defs>
   <rect width="1600" height="1300" fill="#fafafa"/>
   <rect x="10" y="10" width="1580" height="40" rx="4" fill="#1a1a2e"/>
   <text x="20" y="36" class="title" fill="#fff">E8A: Five Prop Sort Specification — Contact Sheet</text>
-  <text x="20" y="68" class="subtitle">Base: 7144d92 | Generation: 7051871d1a71797ba88bc77deaab1df0c62428a6f6bca2dc516ad1cb35f5a578 | TMX SHA256: e2b79085 | Scene: juyiting-main</text>
+  <text x="20" y="68" class="subtitle">Base: 7144d92 | Generation: 830cd022ae25b33341818c980ff9eaa65dbae1a53c11b2b72496d192f0883426 | TMX SHA256: e2b79085 | Scene: juyiting-main</text>
   <text x="20" y="86" class="subtitle">All props: renderBand=world, floorId=floor-1, elevation=0, sortMode=fixed | bounty-board: tieBias=-4 (deterministic boundary via tieBias, NOT stableId)</text>
   <rect x="30" y="185" width="760" height="220" rx="4" fill="#fff" stroke="#ddd"/>
   <text x="40" y="205" class="title" font-size="14">main-seat (TMX id=90)</text>
@@ -127,5 +127,5 @@
   <text x="945" y="1065" class="evidence-label" font-size="8">Evidence fields: commit|tmxSha256|cameraZoom|cameraDpr|sortKey|agentFootWorld</text>
   <text x="945" y="1082" class="evidence-label" font-size="8">tieBias=-4 ensures deterministic boundary without stableId</text>
   <rect x="10" y="1200" width="1580" height="30" rx="4" fill="#1a1a2e"/>
-  <text x="20" y="1220" class="label" fill="#aaa">E8A Contact Sheet | Generation ID: 7051871d1a71797ba88bc77deaab1df0c62428a6f6bca2dc516ad1cb35f5a578 | 5/5 props frozen | Alpha evidence via pngjs | Bounty-board 14-cell matrix | mask58 cross-reference</text>
+  <text x="20" y="1220" class="label" fill="#aaa">E8A Contact Sheet | Generation ID: 830cd022ae25b33341818c980ff9eaa65dbae1a53c11b2b72496d192f0883426 | 5/5 props frozen | Alpha evidence via pngjs | Bounty-board 14-cell matrix | mask58 cross-reference</text>
 </svg>
