@@ -289,11 +289,86 @@
   <object id="89" name="roster-book" type="roster-book" x="329" y="362">
    <polygon points="0,0 22,-75 48,-83 66,-127 43,-140 43,-162 -77,-170 -105,-89 -87,-88 -112,-29 -103,16 -6,21"/>
   </object>
-  <object id="90" name="main-seat-rect" type="prop" gid="6033" x="818" y="175" width="109" height="93"/>
-  <object id="91" name="agent-roster-rect" type="prop" gid="6034" x="120" y="601" width="117" height="136"/>
-  <object id="92" name="bounty-board-rect" type="prop" gid="6035" x="1360" y="255" width="172" height="124"/>
-  <object id="93" name="library-shelf-rect" type="prop" gid="6036" x="1497" y="578" width="123" height="141"/>
-  <object id="94" name="roster-book-rect" type="prop" gid="6037" x="217" y="192" width="179" height="192"/>
+  <object id="90" name="main-seat-rect" type="prop" gid="6033" x="818" y="175" width="109" height="93">
+   <properties>
+    <property name="stableId" value="jyt.prop.center-north.main-seat.v1"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="center"/>
+    <property name="kind" value="prop"/>
+    <property name="renderBand" value="world"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="872"/>
+    <property name="sortAnchorY" type="float" value="268"/>
+    <property name="tieBias" type="int" value="0"/>
+    <property name="assetRef" value="images/props/liangshan-hall-prop-main-seat-cropped.png"/>
+   </properties>
+  </object>
+  <object id="91" name="agent-roster-rect" type="prop" gid="6034" x="120" y="601" width="117" height="136">
+   <properties>
+    <property name="stableId" value="jyt.prop.southwest.agent-roster.v1"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="west-lower"/>
+    <property name="kind" value="prop"/>
+    <property name="renderBand" value="world"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="178"/>
+    <property name="sortAnchorY" type="float" value="737"/>
+    <property name="tieBias" type="int" value="0"/>
+    <property name="assetRef" value="images/props/liangshan-hall-prop-agent-roster-cropped.png"/>
+   </properties>
+  </object>
+  <object id="92" name="bounty-board-rect" type="prop" gid="6035" x="1360" y="255" width="172" height="124">
+   <properties>
+    <property name="stableId" value="jyt.prop.northeast.bounty-board.v1"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="east-upper"/>
+    <property name="kind" value="prop"/>
+    <property name="renderBand" value="world"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="1446"/>
+    <property name="sortAnchorY" type="float" value="379"/>
+    <property name="tieBias" type="int" value="-4"/>
+    <property name="assetRef" value="images/props/liangshan-hall-prop-bounty-board-cropped.png"/>
+   </properties>
+  </object>
+  <object id="93" name="library-shelf-rect" type="prop" gid="6036" x="1497" y="578" width="123" height="141">
+   <properties>
+    <property name="stableId" value="jyt.prop.southeast.library-shelf.v1"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="east-lower"/>
+    <property name="kind" value="prop"/>
+    <property name="renderBand" value="world"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="1558"/>
+    <property name="sortAnchorY" type="float" value="719"/>
+    <property name="tieBias" type="int" value="0"/>
+    <property name="assetRef" value="images/props/liangshan-hall-prop-library-shelf-cropped.png"/>
+   </properties>
+  </object>
+  <object id="94" name="roster-book-rect" type="prop" gid="6037" x="217" y="192" width="179" height="192">
+   <properties>
+    <property name="stableId" value="jyt.prop.center-north.roster-book.v1"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="center"/>
+    <property name="kind" value="prop"/>
+    <property name="renderBand" value="world"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="306"/>
+    <property name="sortAnchorY" type="float" value="384"/>
+    <property name="tieBias" type="int" value="0"/>
+    <property name="assetRef" value="images/props/liangshan-hall-prop-roster-book-cropped.png"/>
+   </properties>
+  </object>
  </objectgroup>
  <objectgroup id="15" name="nav_area">
   <object id="95" x="48" y="144" width="1568" height="720">

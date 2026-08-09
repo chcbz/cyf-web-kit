@@ -1,0 +1,163 @@
+{
+  "$schema": "jyt.occlusion.prop-tmx-manifest.v1",
+  "schemaVersion": 1,
+  "taskId": "E8B",
+  "sceneId": "juyiting-main",
+  "propCount": 5,
+  "generatedBy": "tests/juyiting-occlusion-prop-tmx-migration.test.js",
+  "baseCommit": "da3d9600bd322e3a85d93ebfeaf07cd04a76f33d",
+  "specGenerationId": "4a47753cf81ef0219f6e1914ff818be291158bc100d4d2c639cb0c23a8a0f8c6",
+  "tmxSha256": "291a38cc66ebd60c8577500a5afc18ce5398570fe4c35ca66d9eebe818826a97",
+  "props": [
+    {
+      "tmxId": 90,
+      "tmxName": "main-seat-rect",
+      "semanticName": "main-seat",
+      "stableId": "jyt.prop.center-north.main-seat.v1",
+      "sceneId": "juyiting-main",
+      "chunkId": "center",
+      "floorId": "floor-1",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 872,
+        "y": 268
+      },
+      "fixedPointY": 68608,
+      "tieBias": 0,
+      "assetRef": "images/props/liangshan-hall-prop-main-seat-cropped.png",
+      "gid": 6033,
+      "tilesetName": "hall-props",
+      "firstgid": 6033,
+      "tileId": 0,
+      "objectalignment": "topleft",
+      "rect": {
+        "x": 818,
+        "y": 175,
+        "width": 109,
+        "height": 93
+      }
+    },
+    {
+      "tmxId": 91,
+      "tmxName": "agent-roster-rect",
+      "semanticName": "agent-roster",
+      "stableId": "jyt.prop.southwest.agent-roster.v1",
+      "sceneId": "juyiting-main",
+      "chunkId": "west-lower",
+      "floorId": "floor-1",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 178,
+        "y": 737
+      },
+      "fixedPointY": 188672,
+      "tieBias": 0,
+      "assetRef": "images/props/liangshan-hall-prop-agent-roster-cropped.png",
+      "gid": 6034,
+      "tilesetName": "hall-props",
+      "firstgid": 6033,
+      "tileId": 1,
+      "objectalignment": "topleft",
+      "rect": {
+        "x": 120,
+        "y": 601,
+        "width": 117,
+        "height": 136
+      }
+    },
+    {
+      "tmxId": 92,
+      "tmxName": "bounty-board-rect",
+      "semanticName": "bounty-board",
+      "stableId": "jyt.prop.northeast.bounty-board.v1",
+      "sceneId": "juyiting-main",
+      "chunkId": "east-upper",
+      "floorId": "floor-1",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 1446,
+        "y": 379
+      },
+      "fixedPointY": 97024,
+      "tieBias": -4,
+      "assetRef": "images/props/liangshan-hall-prop-bounty-board-cropped.png",
+      "gid": 6035,
+      "tilesetName": "hall-props",
+      "firstgid": 6033,
+      "tileId": 2,
+      "objectalignment": "topleft",
+      "rect": {
+        "x": 1360,
+        "y": 255,
+        "width": 172,
+        "height": 124
+      }
+    },
+    {
+      "tmxId": 93,
+      "tmxName": "library-shelf-rect",
+      "semanticName": "library-shelf",
+      "stableId": "jyt.prop.southeast.library-shelf.v1",
+      "sceneId": "juyiting-main",
+      "chunkId": "east-lower",
+      "floorId": "floor-1",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 1558,
+        "y": 719
+      },
+      "fixedPointY": 184064,
+      "tieBias": 0,
+      "assetRef": "images/props/liangshan-hall-prop-library-shelf-cropped.png",
+      "gid": 6036,
+      "tilesetName": "hall-props",
+      "firstgid": 6033,
+      "tileId": 3,
+      "objectalignment": "topleft",
+      "rect": {
+        "x": 1497,
+        "y": 578,
+        "width": 123,
+        "height": 141
+      }
+    },
+    {
+      "tmxId": 94,
+      "tmxName": "roster-book-rect",
+      "semanticName": "roster-book",
+      "stableId": "jyt.prop.center-north.roster-book.v1",
+      "sceneId": "juyiting-main",
+      "chunkId": "center",
+      "floorId": "floor-1",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 306,
+        "y": 384
+      },
+      "fixedPointY": 98304,
+      "tieBias": 0,
+      "assetRef": "images/props/liangshan-hall-prop-roster-book-cropped.png",
+      "gid": 6037,
+      "tilesetName": "hall-props",
+      "firstgid": 6033,
+      "tileId": 4,
+      "objectalignment": "topleft",
+      "rect": {
+        "x": 217,
+        "y": 192,
+        "width": 179,
+        "height": 192
+      }
+    }
+  ]
+}

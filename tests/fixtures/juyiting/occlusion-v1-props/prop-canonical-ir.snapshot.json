@@ -1,0 +1,140 @@
+{
+  "sceneId": "juyiting-main",
+  "renderSchemaVersion": "2",
+  "floorRegistry": {
+    "floor-1": 0
+  },
+  "width": 1664,
+  "height": 928,
+  "coordinateWidth": 1664,
+  "coordinateHeight": 928,
+  "objects": [
+    {
+      "stableId": "jyt.prop.center-north.main-seat.v1",
+      "sceneId": "juyiting-main",
+      "chunkId": "center",
+      "kind": "prop",
+      "renderBand": "world",
+      "floorId": "floor-1",
+      "elevation": 0,
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 872,
+        "y": 268
+      },
+      "tieBias": 0,
+      "render": {
+        "type": "asset",
+        "assetRef": "images/props/liangshan-hall-prop-main-seat-cropped.png",
+        "destinationRect": {
+          "x": 818,
+          "y": 175,
+          "width": 109,
+          "height": 93
+        }
+      }
+    },
+    {
+      "stableId": "jyt.prop.center-north.roster-book.v1",
+      "sceneId": "juyiting-main",
+      "chunkId": "center",
+      "kind": "prop",
+      "renderBand": "world",
+      "floorId": "floor-1",
+      "elevation": 0,
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 306,
+        "y": 384
+      },
+      "tieBias": 0,
+      "render": {
+        "type": "asset",
+        "assetRef": "images/props/liangshan-hall-prop-roster-book-cropped.png",
+        "destinationRect": {
+          "x": 217,
+          "y": 192,
+          "width": 179,
+          "height": 192
+        }
+      }
+    },
+    {
+      "stableId": "jyt.prop.northeast.bounty-board.v1",
+      "sceneId": "juyiting-main",
+      "chunkId": "east-upper",
+      "kind": "prop",
+      "renderBand": "world",
+      "floorId": "floor-1",
+      "elevation": 0,
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 1446,
+        "y": 379
+      },
+      "tieBias": -4,
+      "render": {
+        "type": "asset",
+        "assetRef": "images/props/liangshan-hall-prop-bounty-board-cropped.png",
+        "destinationRect": {
+          "x": 1360,
+          "y": 255,
+          "width": 172,
+          "height": 124
+        }
+      }
+    },
+    {
+      "stableId": "jyt.prop.southeast.library-shelf.v1",
+      "sceneId": "juyiting-main",
+      "chunkId": "east-lower",
+      "kind": "prop",
+      "renderBand": "world",
+      "floorId": "floor-1",
+      "elevation": 0,
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 1558,
+        "y": 719
+      },
+      "tieBias": 0,
+      "render": {
+        "type": "asset",
+        "assetRef": "images/props/liangshan-hall-prop-library-shelf-cropped.png",
+        "destinationRect": {
+          "x": 1497,
+          "y": 578,
+          "width": 123,
+          "height": 141
+        }
+      }
+    },
+    {
+      "stableId": "jyt.prop.southwest.agent-roster.v1",
+      "sceneId": "juyiting-main",
+      "chunkId": "west-lower",
+      "kind": "prop",
+      "renderBand": "world",
+      "floorId": "floor-1",
+      "elevation": 0,
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 178,
+        "y": 737
+      },
+      "tieBias": 0,
+      "render": {
+        "type": "asset",
+        "assetRef": "images/props/liangshan-hall-prop-agent-roster-cropped.png",
+        "destinationRect": {
+          "x": 120,
+          "y": 601,
+          "width": 117,
+          "height": 136
+        }
+      }
+    }
+  ],
+  "fragments": [],
+  "zones": []
+}
