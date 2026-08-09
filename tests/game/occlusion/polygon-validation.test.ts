@@ -382,6 +382,51 @@ describe('Erosion (3px)', () => {
     const tri = fixedPoly(0, 0, side, 0, Math.round(side / 2), height)
     validateZonePolygon(tri, SCENE, OBJ)
   })
+
+  // ── P0 regression: convex erosion must use exact half-plane clipping ──
+  // These test that the validator calls erodedInteriorNonEmpty (convex path)
+  // not the quadtree-only maxSignedDistanceGt which samples at grid centers.
+
+  it('convex rectangle width=6 fails (exact erosion → degenerate, no non-empty interior)', () => {
+    const w = 6 * 256
+    const h = Math.round(100 * 256)
+    const rect = fixedPoly(0, 0, w, 0, w, h, 0, h)
+    assertFatal(() => validateZonePolygon(rect, SCENE, OBJ), 'POLYGON_EROSION_EMPTY')
+  })
+
+  it('convex rectangle width=6+1/256 passes (barely non-empty interior after erosion)', () => {
+    const w = Math.round((6 + 1/256) * 256) // = 6*256 + 1 = 1537
+    const h = Math.round(100 * 256)
+    const rect = fixedPoly(0, 0, w, 0, w, h, 0, h)
+    validateZonePolygon(rect, SCENE, OBJ)
+  })
+
+  it('triangle incircle ≈ 3.001 passes (convex half-plane clipping)', () => {
+    // Equilateral triangle: side = incircle * 2*sqrt(3)
+    // incircle ≈ 3.001 → side ≈ 3.001 * 3.4641 ≈ 10.394
+    const side = Math.round(10.3948 * 256)
+    const height = Math.round(10.3948 * Math.sqrt(3) / 2 * 256)
+    const tri = fixedPoly(0, 0, side, 0, Math.round(side / 2), height)
+    validateZonePolygon(tri, SCENE, OBJ)
+  })
+
+  it('convex rotated parallelogram width=6+2/256 passes (exact clipping)', () => {
+    // 6.001 * 256 = 1536.256 → Math.round = 1536 = 6.0 (too narrow).
+    // Use 6+2/256 = 6.0078125 → fixed = 1538 > 1536.
+    const w = Math.round(40 * 256)
+    const wide = Math.round((6 + 2 / 256) * 256) // = 1538
+    const offsetX = Math.round((wide / 256) * 0.577 * 256)
+    const poly = fixedPoly(0, 0, w, 0, w + offsetX, wide, offsetX, wide)
+    validateZonePolygon(poly, SCENE, OBJ)
+  })
+
+  it('convex rotated parallelogram width=6.0 fails (exact clipping → degenerate)', () => {
+    const w = Math.round(40 * 256)
+    const wide = 6 * 256
+    const offsetX = Math.round(wide * 0.577)
+    const poly = fixedPoly(0, 0, w, 0, w + offsetX, wide, offsetX, wide)
+    assertFatal(() => validateZonePolygon(poly, SCENE, OBJ), 'POLYGON_EROSION_EMPTY')
+  })
 })
 
 // ── Valid polygons (should pass all checks) ──

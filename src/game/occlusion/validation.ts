@@ -12,7 +12,7 @@ import {
   polygonAreaCompare,
   evenOddContainment,
   fixedPolygonBounds,
-  maxSignedDistanceGt,
+  erodedInteriorNonEmpty,
   bigOrient2d,
   toFixedPoint,
   assertFixedPoint,
@@ -215,19 +215,20 @@ export function validateZonePolygon(
 
   // 6. After 3px erosion, non-empty interior.
   // Uses branch-and-bound max-signed-distance search (correct for concave).
-  if (!maxSignedDistanceGt(poly, HYSTERESIS_WORLD_PX)) {
+  // Uses convex/concave auto-detection: exact half-plane clipping for convex,
+  // Polylabel-style quadtree search for concave.
+  if (!erodedInteriorNonEmpty(poly)) {
     fatalPolygon(
       'POLYGON_EROSION_EMPTY',
       sceneId,
       objectId,
-      `zone polygon has no point with signed distance > ${HYSTERESIS_WORLD_PX} (no non-empty interior after 3px erosion)`,
+      `zone polygon has no non-empty interior after 3px erosion`,
     )
   }
 }
 
 // ── Public API ──
 
-const HYSTERESIS_WORLD_PX = 3
 
 export function compileFixedPolygon(
   worldPoints: Point[],
