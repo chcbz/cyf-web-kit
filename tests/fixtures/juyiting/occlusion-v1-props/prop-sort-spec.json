@@ -7,77 +7,6 @@
   "propCount": 5,
   "props": [
     {
-      "semanticName": "roster-book",
-      "tmxId": 94,
-      "tmxName": "roster-book-rect",
-      "stableId": "jyt.prop.center-north.roster-book.v1",
-      "sceneId": "juyiting-main",
-      "chunkId": "center",
-      "floorId": "floor-1",
-      "elevation": 0,
-      "renderBand": "world",
-      "sortMode": "fixed",
-      "tieBias": 0,
-      "asset": {
-        "path": "public/juyiting/images/props/liangshan-hall-prop-roster-book-cropped.png",
-        "sha256": "6b7c21b45ad24aee9b6bbbbf72177f04e0f3710168d28aef8064dfa1786996c5",
-        "width": 179,
-        "height": 192
-      },
-      "tmxRect": {
-        "x": 217,
-        "y": 192,
-        "width": 179,
-        "height": 192,
-        "minX": 217,
-        "minY": 192,
-        "maxX": 396,
-        "maxY": 384
-      },
-      "sortAnchor": {
-        "x": 306,
-        "y": 260
-      },
-      "fixedPointY": 66560,
-      "sortAnchorRationale": "NOT floor-standing (table-top object). sortAnchor.y=260 (img row 68 in 192px image, NOT rect bottom undefined). Alpha scan (pngjs): 192 rows. Last row with span≥10: row 190 (count=20, span=20, x=[87,106]). Bottom row 191: 1px, span=1, x=[106,106]. Transitions: row 82 (span 156→138, minX 7→25); row 187 (span 99→80, minX 9→28); row 188 (span 80→60, minX 28→48); row 189 (span 60→41, minX 48→67); row 190 (span 41→20, minX 67→87); row 191 (span 20→1, minX 87→106); Structural transition at row 82 (span 156→138, minX 7→25) marks pages→body boundary. Anchor at row 68 (Y=260) places book behind table (fpY 66560 < 97024). sortAnchor.x=306 is rect center.",
-      "probes": {
-        "north": {
-          "agentFootPoint": {
-            "x": 306,
-            "y": 232
-          },
-          "expectedRelation": "agent<prop",
-          "rationale": "Agent north: y=232 < prop sortAnchor.y=260."
-        },
-        "south": {
-          "agentFootPoint": {
-            "x": 306,
-            "y": 288
-          },
-          "expectedRelation": "prop<agent",
-          "rationale": "Agent south: prop sortAnchor.y=260 < agent y=288."
-        },
-        "west": {
-          "agentFootPoint": {
-            "x": 189,
-            "y": 260
-          },
-          "expectedRelation": "non-overlap",
-          "pixelOverlap": false,
-          "rationale": "West of rect [217,396]."
-        },
-        "east": {
-          "agentFootPoint": {
-            "x": 424,
-            "y": 260
-          },
-          "expectedRelation": "non-overlap",
-          "pixelOverlap": false,
-          "rationale": "East of rect [217,396]."
-        }
-      }
-    },
-    {
       "semanticName": "main-seat",
       "tmxId": 90,
       "tmxName": "main-seat-rect",
@@ -89,6 +18,14 @@
       "renderBand": "world",
       "sortMode": "fixed",
       "tieBias": 0,
+      "tmxBinding": {
+        "gid": 6033,
+        "tilesetName": "hall-props",
+        "firstgid": 6033,
+        "tileId": 0,
+        "objectalignment": "topleft",
+        "imageSource": "images/props/liangshan-hall-prop-main-seat-cropped.png"
+      },
       "asset": {
         "path": "public/juyiting/images/props/liangshan-hall-prop-main-seat-cropped.png",
         "sha256": "7d0c9b7dc2ca274201526d0fc6de146f7c9ab44a9028e2b0a1c0619b661ff794",
@@ -105,12 +42,74 @@
         "maxX": 927,
         "maxY": 268
       },
+      "propAlphaAabbSource": {
+        "minX": 0,
+        "minY": 0,
+        "maxX": 109,
+        "maxY": 93,
+        "width": 109,
+        "height": 93,
+        "opaquePixels": 8716
+      },
+      "propAlphaAabbWorld": {
+        "minX": 818,
+        "minY": 175,
+        "maxX": 927,
+        "maxY": 268
+      },
       "sortAnchor": {
         "x": 872,
         "y": 268
       },
       "fixedPointY": 68608,
-      "sortAnchorRationale": "Floor-standing. sortAnchor.y=268 (img row 93 in 93px image, NOT rect bottom undefined). Alpha scan (pngjs): 93 rows. Last row with span≥10: row 91 (count=21, span=106, x=[3,108]). Bottom row 92: 1px, span=1, x=[3,3]. Transitions: row 92 (span 106→1, minX 3→3); Single pixel at bottom row (x=3) is structural terminus of seat back. sortAnchor.x=872 is rect center.",
+      "sortAnchorEvidence": {
+        "interpretation": "The seat asset remains visually structural through rows 61-91; row 91 spans x=3..108 and row 92 closes at x=3. The frozen boundary Y=268 is the world line immediately after the final alpha row, not an unexamined rectangle default.",
+        "anchorImagePoint": {
+          "x": 54,
+          "y": 93
+        },
+        "alphaAabbSource": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 109,
+          "maxY": 93,
+          "width": 109,
+          "height": 93,
+          "opaquePixels": 8716
+        },
+        "sampledRows": [
+          {
+            "y": 61,
+            "count": 107,
+            "span": 107,
+            "minX": 2,
+            "maxX": 108
+          },
+          {
+            "y": 83,
+            "count": 30,
+            "span": 106,
+            "minX": 3,
+            "maxX": 108
+          },
+          {
+            "y": 91,
+            "count": 21,
+            "span": 106,
+            "minX": 3,
+            "maxX": 108
+          },
+          {
+            "y": 92,
+            "count": 1,
+            "span": 1,
+            "minX": 3,
+            "maxX": 3
+          }
+        ],
+        "boundaryRule": "world anchor Y=268 equals TMX top 175 + image height 93; it is the boundary immediately after source alpha row 92."
+      },
+      "sortAnchorRationale": "The seat asset remains visually structural through rows 61-91; row 91 spans x=3..108 and row 92 closes at x=3. The frozen boundary Y=268 is the world line immediately after the final alpha row, not an unexamined rectangle default.",
       "probes": {
         "north": {
           "agentFootPoint": {
@@ -118,7 +117,24 @@
             "y": 240
           },
           "expectedRelation": "agent<prop",
-          "rationale": "Agent north: y=240 < prop sortAnchor.y=268."
+          "pixelOverlap": true,
+          "alphaAabbIntersection": true,
+          "propAlphaAabbWorld": {
+            "minX": 818,
+            "minY": 175,
+            "maxX": 927,
+            "maxY": 268
+          },
+          "agentAlphaAabbWorld": {
+            "minX": 858.48,
+            "minY": 185.8784,
+            "maxX": 885,
+            "maxY": 246.1984
+          },
+          "horizontalGuardPixels": null,
+          "evidenceCellId": "prop-main-seat-north-lujunyi",
+          "roleFrameReference": "lujunyi/idle/down/0",
+          "rationale": "north is a WorldSortKey assertion at fixedPointY=61440; the rendered alpha AABB intersection is measured, not inferred from the TMX rectangle."
         },
         "south": {
           "agentFootPoint": {
@@ -126,286 +142,74 @@
             "y": 296
           },
           "expectedRelation": "prop<agent",
-          "rationale": "Agent south: prop sortAnchor.y=268 < agent y=296."
+          "pixelOverlap": true,
+          "alphaAabbIntersection": true,
+          "propAlphaAabbWorld": {
+            "minX": 818,
+            "minY": 175,
+            "maxX": 927,
+            "maxY": 268
+          },
+          "agentAlphaAabbWorld": {
+            "minX": 858.48,
+            "minY": 241.8784,
+            "maxX": 885,
+            "maxY": 302.1984
+          },
+          "horizontalGuardPixels": null,
+          "evidenceCellId": "prop-main-seat-south-lujunyi",
+          "roleFrameReference": "lujunyi/idle/down/0",
+          "rationale": "south is a WorldSortKey assertion at fixedPointY=75776; the rendered alpha AABB intersection is measured, not inferred from the TMX rectangle."
         },
         "west": {
           "agentFootPoint": {
-            "x": 790,
+            "x": 801,
             "y": 268
           },
           "expectedRelation": "non-overlap",
           "pixelOverlap": false,
-          "rationale": "West of rect [818,927]."
+          "alphaAabbIntersection": false,
+          "propAlphaAabbWorld": {
+            "minX": 818,
+            "minY": 175,
+            "maxX": 927,
+            "maxY": 268
+          },
+          "agentAlphaAabbWorld": {
+            "minX": 787.48,
+            "minY": 213.8784,
+            "maxX": 814,
+            "maxY": 274.1984
+          },
+          "horizontalGuardPixels": 4,
+          "evidenceCellId": "prop-main-seat-west-lujunyi",
+          "roleFrameReference": "lujunyi/idle/down/0",
+          "rationale": "west footpoint is derived from the scanned prop alpha AABB and rendered lujunyi frame alpha AABB with a minimum 4px horizontal guard; half-open alpha AABBs do not intersect."
         },
         "east": {
           "agentFootPoint": {
-            "x": 955,
+            "x": 944.5234375,
             "y": 268
           },
           "expectedRelation": "non-overlap",
           "pixelOverlap": false,
-          "rationale": "East of rect [818,927]."
-        }
-      }
-    },
-    {
-      "semanticName": "bounty-board",
-      "tmxId": 92,
-      "tmxName": "bounty-board-rect",
-      "stableId": "jyt.prop.northeast.bounty-board.v1",
-      "sceneId": "juyiting-main",
-      "chunkId": "east-upper",
-      "floorId": "floor-1",
-      "elevation": 0,
-      "renderBand": "world",
-      "sortMode": "fixed",
-      "tieBias": -4,
-      "asset": {
-        "path": "public/juyiting/images/props/liangshan-hall-prop-bounty-board-cropped.png",
-        "sha256": "2e4c3e749119392b01a7301aaa8f40986a09e5cc731ab61105ed600a755b6252",
-        "width": 172,
-        "height": 124
-      },
-      "tmxRect": {
-        "x": 1360,
-        "y": 255,
-        "width": 172,
-        "height": 124,
-        "minX": 1360,
-        "minY": 255,
-        "maxX": 1532,
-        "maxY": 379
-      },
-      "sortAnchor": {
-        "x": 1446,
-        "y": 379
-      },
-      "fixedPointY": 97024,
-      "sortAnchorRationale": "Floor-standing. sortAnchor.y=379 (img row 124 in 124px image, NOT rect bottom undefined). Alpha scan (pngjs): 124 rows. Last row with span≥10: row 121 (count=34, span=105, x=[41,145]). Bottom row 123: 1px, span=1, x=[47,47]. Transitions: row 1 (span 1→45, minX 111→67); row 2 (span 45→90, minX 67→22); row 6 (span 90→113, minX 23→0); row 56 (span 168→158, minX 4→14); row 91 (span 126→114, minX 15→27); row 93 (span 114→99, minX 27→42); row 122 (span 105→4, minX 41→44); V0 target: table≈379 < agent≈420 < railing≈458. tieBias=-4 ensures deterministic boundary. sortAnchor.x=1446 is rect center.",
-      "probes": {
-        "north": {
-          "agentFootPoint": {
-            "x": 1446,
-            "y": 351
+          "alphaAabbIntersection": false,
+          "propAlphaAabbWorld": {
+            "minX": 818,
+            "minY": 175,
+            "maxX": 927,
+            "maxY": 268
           },
-          "expectedRelation": "agent<prop",
-          "rationale": "Agent north: y=351 < prop sortAnchor.y=379."
-        },
-        "south": {
-          "agentFootPoint": {
-            "x": 1446,
-            "y": 407
+          "agentAlphaAabbWorld": {
+            "minX": 931.0034375,
+            "minY": 213.8784,
+            "maxX": 957.5234375,
+            "maxY": 274.1984
           },
-          "expectedRelation": "prop<agent",
-          "rationale": "Agent south: prop sortAnchor.y=379 < agent y=407."
-        },
-        "west": {
-          "agentFootPoint": {
-            "x": 1332,
-            "y": 379
-          },
-          "expectedRelation": "non-overlap",
-          "pixelOverlap": false,
-          "rationale": "West of rect [1360,1532]."
-        },
-        "east": {
-          "agentFootPoint": {
-            "x": 1560,
-            "y": 379
-          },
-          "expectedRelation": "non-overlap",
-          "pixelOverlap": false,
-          "rationale": "East of rect [1360,1532]."
-        }
-      },
-      "bountyBoardMatrix": {
-        "description": "14-cell matrix: 8-cell N/S/W/E x lujunyi/husanniang + 6-cell behind/boundary/front x both roles.",
-        "roles": [
-          "lujunyi",
-          "husanniang"
-        ],
-        "roleInvarianceRequirement": "Both roles produce identical sort result; sort key does not depend on role identity.",
-        "cleanMode": {
-          "description": "No UI overlay/labels/bubbles.",
-          "requiredFields": [
-            "commit",
-            "tmxSha256",
-            "cameraZoom",
-            "cameraDpr",
-            "sortKey",
-            "agentFootWorld"
-          ]
-        },
-        "uiOnMode": {
-          "description": "Labels and bubbles visible.",
-          "requiredFields": [
-            "commit",
-            "tmxSha256",
-            "cameraZoom",
-            "cameraDpr",
-            "sortKey",
-            "agentFootWorld"
-          ]
-        },
-        "matrixCells": {
-          "north": {
-            "agentFoot": {
-              "x": 1446,
-              "y": 240
-            },
-            "lujunyiExpected": "agent<prop",
-            "husanniangExpected": "agent<prop",
-            "rationale": "y=240 < table 379, both behind table."
-          },
-          "south": {
-            "agentFoot": {
-              "x": 1446,
-              "y": 420
-            },
-            "lujunyiExpected": "prop<agent",
-            "husanniangExpected": "prop<agent",
-            "rationale": "y=420 > table 379, V0 canonical."
-          },
-          "west": {
-            "agentFoot": {
-              "x": 1320,
-              "y": 379
-            },
-            "lujunyiExpected": "non-overlap",
-            "husanniangExpected": "non-overlap",
-            "rationale": "West of rect [1360,1532]."
-          },
-          "east": {
-            "agentFoot": {
-              "x": 1560,
-              "y": 379
-            },
-            "lujunyiExpected": "non-overlap",
-            "husanniangExpected": "non-overlap",
-            "rationale": "East of rect [1360,1532]."
-          }
-        },
-        "behindBoundaryFront": {
-          "description": "6-cell: 2 roles x 3 positions. X=1446, Y varies. tieBias=-4 resolves boundary deterministically.",
-          "requiredFields": [
-            "commit",
-            "tmxSha256",
-            "cameraZoom",
-            "cameraDpr",
-            "sortKey",
-            "agentFootWorld",
-            "cleanMode"
-          ],
-          "behind": {
-            "agentFoot": {
-              "x": 1446,
-              "y": 370
-            },
-            "lujunyiExpected": "agent<prop",
-            "husanniangExpected": "agent<prop",
-            "rationale": "y=370 < table 379, agent behind table."
-          },
-          "boundary": {
-            "agentFoot": {
-              "x": 1446,
-              "y": 379
-            },
-            "lujunyiExpected": "prop<agent",
-            "husanniangExpected": "prop<agent",
-            "rationale": "y=379 = anchor, same fpY. table tieBias=-4 < agent 0 -> table sorts first -> table behind agent. tieBias, NOT stableId."
-          },
-          "front": {
-            "agentFoot": {
-              "x": 1446,
-              "y": 420
-            },
-            "lujunyiExpected": "prop<agent",
-            "husanniangExpected": "prop<agent",
-            "rationale": "y=420 > table 379, V0 canonical."
-          }
-        },
-        "mask58CrossReference": {
-          "description": "Mask 58 x=[1197,1663] y=[342,458]. E10A mandatory review.",
-          "action": "E10A_REQUIRED_REVIEW",
-          "maskId": 58,
-          "maskAabb": {
-            "minX": 1197,
-            "minY": 342,
-            "maxX": 1663,
-            "maxY": 458
-          }
-        }
-      },
-      "tieBiasRationale": "tieBias=-4 ensures deterministic table<agent at same fixedPointY. WorldSortKey: renderBandOrder->floorOrder->elevation->fixedPointY->tieBias->stableId. table(-4) < agent(0) -> table behind agent. NOT stableId."
-    },
-    {
-      "semanticName": "library-shelf",
-      "tmxId": 93,
-      "tmxName": "library-shelf-rect",
-      "stableId": "jyt.prop.southeast.library-shelf.v1",
-      "sceneId": "juyiting-main",
-      "chunkId": "east-lower",
-      "floorId": "floor-1",
-      "elevation": 0,
-      "renderBand": "world",
-      "sortMode": "fixed",
-      "tieBias": 0,
-      "asset": {
-        "path": "public/juyiting/images/props/liangshan-hall-prop-library-shelf-cropped.png",
-        "sha256": "2c26abcb9f0c4b8ba83f6bb9470345d4bc280f8af133ab361581ab178d675ff9",
-        "width": 123,
-        "height": 141
-      },
-      "tmxRect": {
-        "x": 1497,
-        "y": 578,
-        "width": 123,
-        "height": 141,
-        "minX": 1497,
-        "minY": 578,
-        "maxX": 1620,
-        "maxY": 719
-      },
-      "sortAnchor": {
-        "x": 1558,
-        "y": 719
-      },
-      "fixedPointY": 184064,
-      "sortAnchorRationale": "Floor-standing. sortAnchor.y=719 (img row 141 in 141px image, NOT rect bottom undefined). Alpha scan (pngjs): 141 rows. Last row with span≥10: row 139 (count=11, span=59, x=[44,102]). Bottom row 140: 1px, span=1, x=[102,102]. Transitions: row 1 (span 1→78, minX 94→17); row 57 (span 103→87, minX 9→25); row 140 (span 59→1, minX 44→102); sortAnchor.x=1558 is rect center.",
-      "probes": {
-        "north": {
-          "agentFootPoint": {
-            "x": 1558,
-            "y": 691
-          },
-          "expectedRelation": "agent<prop",
-          "rationale": "Agent north: y=691 < prop sortAnchor.y=719."
-        },
-        "south": {
-          "agentFootPoint": {
-            "x": 1558,
-            "y": 747
-          },
-          "expectedRelation": "prop<agent",
-          "rationale": "Agent south: prop sortAnchor.y=719 < agent y=747."
-        },
-        "west": {
-          "agentFootPoint": {
-            "x": 1469,
-            "y": 719
-          },
-          "expectedRelation": "non-overlap",
-          "pixelOverlap": false,
-          "rationale": "West of rect [1497,1620]."
-        },
-        "east": {
-          "agentFootPoint": {
-            "x": 1648,
-            "y": 719
-          },
-          "expectedRelation": "non-overlap",
-          "pixelOverlap": false,
-          "rationale": "East of rect [1497,1620]."
+          "horizontalGuardPixels": 4.003437500000018,
+          "evidenceCellId": "prop-main-seat-east-lujunyi",
+          "roleFrameReference": "lujunyi/idle/down/0",
+          "rationale": "east footpoint is derived from the scanned prop alpha AABB and rendered lujunyi frame alpha AABB with a minimum 4px horizontal guard; half-open alpha AABBs do not intersect."
         }
       }
     },
@@ -421,6 +225,14 @@
       "renderBand": "world",
       "sortMode": "fixed",
       "tieBias": 0,
+      "tmxBinding": {
+        "gid": 6034,
+        "tilesetName": "hall-props",
+        "firstgid": 6033,
+        "tileId": 1,
+        "objectalignment": "topleft",
+        "imageSource": "images/props/liangshan-hall-prop-agent-roster-cropped.png"
+      },
       "asset": {
         "path": "public/juyiting/images/props/liangshan-hall-prop-agent-roster-cropped.png",
         "sha256": "829d710a41b1982925c8ce3cb2e23f99fd9ea0f78dd9bd65be6dce406a43e8cc",
@@ -437,12 +249,74 @@
         "maxX": 237,
         "maxY": 737
       },
+      "propAlphaAabbSource": {
+        "minX": 0,
+        "minY": 0,
+        "maxX": 117,
+        "maxY": 136,
+        "width": 117,
+        "height": 136,
+        "opaquePixels": 10087
+      },
+      "propAlphaAabbWorld": {
+        "minX": 120,
+        "minY": 601,
+        "maxX": 237,
+        "maxY": 737
+      },
       "sortAnchor": {
         "x": 178,
         "y": 737
       },
       "fixedPointY": 188672,
-      "sortAnchorRationale": "Floor-standing. sortAnchor.y=737 (img row 136 in 136px image, NOT rect bottom undefined). Alpha scan (pngjs): 136 rows. Last row with span≥10: row 135 (count=20, span=70, x=[9,78]). Bottom row 135: 20px, span=70, x=[9,78]. All 136 rows have alpha. Bottom rows 123-135 taper from 24px to 20px (stand feet). Floor contact IS at rect bottom. sortAnchor.x=178 is rect center.",
+      "sortAnchorEvidence": {
+        "interpretation": "The full roster stand reaches the floor: rows 126-135 retain two separated foot/base traces spanning x=5..78, including 20 opaque pixels on row 135. The floor-contact boundary is Y=737 immediately after that final row.",
+        "anchorImagePoint": {
+          "x": 58,
+          "y": 136
+        },
+        "alphaAabbSource": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 117,
+          "maxY": 136,
+          "width": 117,
+          "height": 136,
+          "opaquePixels": 10087
+        },
+        "sampledRows": [
+          {
+            "y": 120,
+            "count": 76,
+            "span": 76,
+            "minX": 3,
+            "maxX": 78
+          },
+          {
+            "y": 126,
+            "count": 23,
+            "span": 73,
+            "minX": 5,
+            "maxX": 77
+          },
+          {
+            "y": 134,
+            "count": 20,
+            "span": 70,
+            "minX": 9,
+            "maxX": 78
+          },
+          {
+            "y": 135,
+            "count": 20,
+            "span": 70,
+            "minX": 9,
+            "maxX": 78
+          }
+        ],
+        "boundaryRule": "world anchor Y=737 equals TMX top 601 + image height 136; it is the boundary immediately after source alpha row 135."
+      },
+      "sortAnchorRationale": "The full roster stand reaches the floor: rows 126-135 retain two separated foot/base traces spanning x=5..78, including 20 opaque pixels on row 135. The floor-contact boundary is Y=737 immediately after that final row.",
       "probes": {
         "north": {
           "agentFootPoint": {
@@ -450,7 +324,24 @@
             "y": 709
           },
           "expectedRelation": "agent<prop",
-          "rationale": "Agent north: y=709 < prop sortAnchor.y=737."
+          "pixelOverlap": true,
+          "alphaAabbIntersection": true,
+          "propAlphaAabbWorld": {
+            "minX": 120,
+            "minY": 601,
+            "maxX": 237,
+            "maxY": 737
+          },
+          "agentAlphaAabbWorld": {
+            "minX": 164.48,
+            "minY": 654.8784,
+            "maxX": 191,
+            "maxY": 715.1984
+          },
+          "horizontalGuardPixels": null,
+          "evidenceCellId": "prop-agent-roster-north-lujunyi",
+          "roleFrameReference": "lujunyi/idle/down/0",
+          "rationale": "north is a WorldSortKey assertion at fixedPointY=181504; the rendered alpha AABB intersection is measured, not inferred from the TMX rectangle."
         },
         "south": {
           "agentFootPoint": {
@@ -458,68 +349,3251 @@
             "y": 765
           },
           "expectedRelation": "prop<agent",
-          "rationale": "Agent south: prop sortAnchor.y=737 < agent y=765."
+          "pixelOverlap": true,
+          "alphaAabbIntersection": true,
+          "propAlphaAabbWorld": {
+            "minX": 120,
+            "minY": 601,
+            "maxX": 237,
+            "maxY": 737
+          },
+          "agentAlphaAabbWorld": {
+            "minX": 164.48,
+            "minY": 710.8784,
+            "maxX": 191,
+            "maxY": 771.1984
+          },
+          "horizontalGuardPixels": null,
+          "evidenceCellId": "prop-agent-roster-south-lujunyi",
+          "roleFrameReference": "lujunyi/idle/down/0",
+          "rationale": "south is a WorldSortKey assertion at fixedPointY=195840; the rendered alpha AABB intersection is measured, not inferred from the TMX rectangle."
         },
         "west": {
           "agentFootPoint": {
-            "x": 92,
+            "x": 103,
             "y": 737
           },
           "expectedRelation": "non-overlap",
           "pixelOverlap": false,
-          "rationale": "West of rect [120,237]."
+          "alphaAabbIntersection": false,
+          "propAlphaAabbWorld": {
+            "minX": 120,
+            "minY": 601,
+            "maxX": 237,
+            "maxY": 737
+          },
+          "agentAlphaAabbWorld": {
+            "minX": 89.48,
+            "minY": 682.8784,
+            "maxX": 116,
+            "maxY": 743.1984
+          },
+          "horizontalGuardPixels": 4,
+          "evidenceCellId": "prop-agent-roster-west-lujunyi",
+          "roleFrameReference": "lujunyi/idle/down/0",
+          "rationale": "west footpoint is derived from the scanned prop alpha AABB and rendered lujunyi frame alpha AABB with a minimum 4px horizontal guard; half-open alpha AABBs do not intersect."
         },
         "east": {
           "agentFootPoint": {
-            "x": 265,
+            "x": 254.5234375,
             "y": 737
           },
           "expectedRelation": "non-overlap",
           "pixelOverlap": false,
-          "rationale": "East of rect [120,237]."
+          "alphaAabbIntersection": false,
+          "propAlphaAabbWorld": {
+            "minX": 120,
+            "minY": 601,
+            "maxX": 237,
+            "maxY": 737
+          },
+          "agentAlphaAabbWorld": {
+            "minX": 241.0034375,
+            "minY": 682.8784,
+            "maxX": 267.5234375,
+            "maxY": 743.1984
+          },
+          "horizontalGuardPixels": 4.00343749999999,
+          "evidenceCellId": "prop-agent-roster-east-lujunyi",
+          "roleFrameReference": "lujunyi/idle/down/0",
+          "rationale": "east footpoint is derived from the scanned prop alpha AABB and rendered lujunyi frame alpha AABB with a minimum 4px horizontal guard; half-open alpha AABBs do not intersect."
+        }
+      }
+    },
+    {
+      "semanticName": "bounty-board",
+      "tmxId": 92,
+      "tmxName": "bounty-board-rect",
+      "stableId": "jyt.prop.northeast.bounty-board.v1",
+      "sceneId": "juyiting-main",
+      "chunkId": "east-upper",
+      "floorId": "floor-1",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "tieBias": -4,
+      "tmxBinding": {
+        "gid": 6035,
+        "tilesetName": "hall-props",
+        "firstgid": 6033,
+        "tileId": 2,
+        "objectalignment": "topleft",
+        "imageSource": "images/props/liangshan-hall-prop-bounty-board-cropped.png"
+      },
+      "asset": {
+        "path": "public/juyiting/images/props/liangshan-hall-prop-bounty-board-cropped.png",
+        "sha256": "2e4c3e749119392b01a7301aaa8f40986a09e5cc731ab61105ed600a755b6252",
+        "width": 172,
+        "height": 124
+      },
+      "tmxRect": {
+        "x": 1360,
+        "y": 255,
+        "width": 172,
+        "height": 124,
+        "minX": 1360,
+        "minY": 255,
+        "maxX": 1532,
+        "maxY": 379
+      },
+      "propAlphaAabbSource": {
+        "minX": 0,
+        "minY": 0,
+        "maxX": 172,
+        "maxY": 124,
+        "width": 172,
+        "height": 124,
+        "opaquePixels": 13671
+      },
+      "propAlphaAabbWorld": {
+        "minX": 1360,
+        "minY": 255,
+        "maxX": 1532,
+        "maxY": 379
+      },
+      "sortAnchor": {
+        "x": 1446,
+        "y": 379
+      },
+      "fixedPointY": 97024,
+      "sortAnchorEvidence": {
+        "interpretation": "The drawable is the full table/board prop. Rows 92-121 retain the front table/leg structure; rows 122-123 close the left front foot at x=44..47. The front contact boundary is Y=379, matching the V0 table≈379 constraint.",
+        "anchorImagePoint": {
+          "x": 86,
+          "y": 124
+        },
+        "alphaAabbSource": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 172,
+          "maxY": 124,
+          "width": 172,
+          "height": 124,
+          "opaquePixels": 13671
+        },
+        "sampledRows": [
+          {
+            "y": 92,
+            "count": 108,
+            "span": 114,
+            "minX": 27,
+            "maxX": 140
+          },
+          {
+            "y": 121,
+            "count": 34,
+            "span": 105,
+            "minX": 41,
+            "maxX": 145
+          },
+          {
+            "y": 122,
+            "count": 4,
+            "span": 4,
+            "minX": 44,
+            "maxX": 47
+          },
+          {
+            "y": 123,
+            "count": 1,
+            "span": 1,
+            "minX": 47,
+            "maxX": 47
+          }
+        ],
+        "boundaryRule": "world anchor Y=379 equals TMX top 255 + image height 124; it is the boundary immediately after source alpha row 123."
+      },
+      "sortAnchorRationale": "The drawable is the full table/board prop. Rows 92-121 retain the front table/leg structure; rows 122-123 close the left front foot at x=44..47. The front contact boundary is Y=379, matching the V0 table≈379 constraint.",
+      "probes": {
+        "north": {
+          "agentFootPoint": {
+            "x": 1446,
+            "y": 351
+          },
+          "expectedRelation": "agent<prop",
+          "pixelOverlap": true,
+          "alphaAabbIntersection": true,
+          "propAlphaAabbWorld": {
+            "minX": 1360,
+            "minY": 255,
+            "maxX": 1532,
+            "maxY": 379
+          },
+          "agentAlphaAabbWorld": {
+            "minX": 1432.48,
+            "minY": 296.8784,
+            "maxX": 1459,
+            "maxY": 357.1984
+          },
+          "horizontalGuardPixels": null,
+          "evidenceCellId": "prop-bounty-board-north-lujunyi",
+          "roleFrameReference": "lujunyi/idle/down/0",
+          "rationale": "north is a WorldSortKey assertion at fixedPointY=89856; the rendered alpha AABB intersection is measured, not inferred from the TMX rectangle."
+        },
+        "south": {
+          "agentFootPoint": {
+            "x": 1446,
+            "y": 407
+          },
+          "expectedRelation": "prop<agent",
+          "pixelOverlap": true,
+          "alphaAabbIntersection": true,
+          "propAlphaAabbWorld": {
+            "minX": 1360,
+            "minY": 255,
+            "maxX": 1532,
+            "maxY": 379
+          },
+          "agentAlphaAabbWorld": {
+            "minX": 1432.48,
+            "minY": 352.8784,
+            "maxX": 1459,
+            "maxY": 413.1984
+          },
+          "horizontalGuardPixels": null,
+          "evidenceCellId": "prop-bounty-board-south-lujunyi",
+          "roleFrameReference": "lujunyi/idle/down/0",
+          "rationale": "south is a WorldSortKey assertion at fixedPointY=104192; the rendered alpha AABB intersection is measured, not inferred from the TMX rectangle."
+        },
+        "west": {
+          "agentFootPoint": {
+            "x": 1332.5,
+            "y": 379
+          },
+          "expectedRelation": "non-overlap",
+          "pixelOverlap": false,
+          "alphaAabbIntersection": false,
+          "propAlphaAabbWorld": {
+            "minX": 1360,
+            "minY": 255,
+            "maxX": 1532,
+            "maxY": 379
+          },
+          "agentAlphaAabbWorld": {
+            "minX": 1318.98,
+            "minY": 324.8784,
+            "maxX": 1345.5,
+            "maxY": 385.1984
+          },
+          "horizontalGuardPixels": 14.5,
+          "evidenceCellId": "prop-bounty-board-west-lujunyi",
+          "roleFrameReference": "lujunyi/idle/down/0",
+          "rationale": "west footpoint is derived from the scanned prop alpha AABB and rendered lujunyi frame alpha AABB with a minimum 4px horizontal guard; half-open alpha AABBs do not intersect."
+        },
+        "east": {
+          "agentFootPoint": {
+            "x": 1560,
+            "y": 379
+          },
+          "expectedRelation": "non-overlap",
+          "pixelOverlap": false,
+          "alphaAabbIntersection": false,
+          "propAlphaAabbWorld": {
+            "minX": 1360,
+            "minY": 255,
+            "maxX": 1532,
+            "maxY": 379
+          },
+          "agentAlphaAabbWorld": {
+            "minX": 1546.48,
+            "minY": 324.8784,
+            "maxX": 1573,
+            "maxY": 385.1984
+          },
+          "horizontalGuardPixels": 14.480000000000018,
+          "evidenceCellId": "prop-bounty-board-east-lujunyi",
+          "roleFrameReference": "lujunyi/idle/down/0",
+          "rationale": "east footpoint is derived from the scanned prop alpha AABB and rendered lujunyi frame alpha AABB with a minimum 4px horizontal guard; half-open alpha AABBs do not intersect."
+        }
+      },
+      "bountyBoardMatrix": {
+        "description": "Machine-readable 14-cell evidence contract: N/S/W/E × lujunyi/husanniang plus behind/boundary/front × both roles. Every role uses idle/down/frame ordinal 0 and each position uses an identical footpoint across roles.",
+        "roles": [
+          "lujunyi",
+          "husanniang"
+        ],
+        "frozenFrame": {
+          "animation": "idle",
+          "direction": "down",
+          "animationFrameOrdinal": 0,
+          "sheetFrameIndex": 0
+        },
+        "roleInvarianceRequirement": "Within each named position, both roles use the same footpoint, direction, animation, frame ordinal, WorldSortKey fields except evidence stableId, and expected relation.",
+        "cleanMode": {
+          "description": "Committed visual cells are clean: no UI labels, bubbles, or debug overlays inside image areas.",
+          "requiredFields": [
+            "commit",
+            "tmxSha256",
+            "cameraZoom",
+            "cameraDpr",
+            "role",
+            "animation",
+            "direction",
+            "sheetFrameIndex",
+            "agentFootWorld",
+            "propSortKey",
+            "agentSortKey",
+            "propAlphaAabbWorld",
+            "agentAlphaAabbWorld",
+            "alphaAabbIntersection"
+          ]
+        },
+        "uiOnMode": {
+          "description": "A later UI-on capture must preserve identical world footpoints/sort keys while allowing labels and bubbles outside the sorting contract.",
+          "requiredFields": [
+            "commit",
+            "tmxSha256",
+            "cameraZoom",
+            "cameraDpr",
+            "role",
+            "animation",
+            "direction",
+            "sheetFrameIndex",
+            "agentFootWorld",
+            "propSortKey",
+            "agentSortKey"
+          ]
+        },
+        "matrixCells": {
+          "north": {
+            "agentFoot": {
+              "x": 1446,
+              "y": 351
+            },
+            "expectedByRole": {
+              "lujunyi": "agent<prop",
+              "husanniang": "agent<prop"
+            },
+            "evidenceCellIds": {
+              "lujunyi": "bounty-direction-north-lujunyi",
+              "husanniang": "bounty-direction-north-husanniang"
+            }
+          },
+          "south": {
+            "agentFoot": {
+              "x": 1446,
+              "y": 420
+            },
+            "expectedByRole": {
+              "lujunyi": "prop<agent",
+              "husanniang": "prop<agent"
+            },
+            "evidenceCellIds": {
+              "lujunyi": "bounty-direction-south-lujunyi",
+              "husanniang": "bounty-direction-south-husanniang"
+            }
+          },
+          "west": {
+            "agentFoot": {
+              "x": 1332.5,
+              "y": 379
+            },
+            "expectedByRole": {
+              "lujunyi": "non-overlap",
+              "husanniang": "non-overlap"
+            },
+            "evidenceCellIds": {
+              "lujunyi": "bounty-direction-west-lujunyi",
+              "husanniang": "bounty-direction-west-husanniang"
+            }
+          },
+          "east": {
+            "agentFoot": {
+              "x": 1560,
+              "y": 379
+            },
+            "expectedByRole": {
+              "lujunyi": "non-overlap",
+              "husanniang": "non-overlap"
+            },
+            "evidenceCellIds": {
+              "lujunyi": "bounty-direction-east-lujunyi",
+              "husanniang": "bounty-direction-east-husanniang"
+            }
+          }
+        },
+        "behindBoundaryFront": {
+          "behind": {
+            "agentFoot": {
+              "x": 1446,
+              "y": 370
+            },
+            "expectedByRole": {
+              "lujunyi": "agent<prop",
+              "husanniang": "agent<prop"
+            },
+            "evidenceCellIds": {
+              "lujunyi": "bounty-depth-behind-lujunyi",
+              "husanniang": "bounty-depth-behind-husanniang"
+            },
+            "rationale": "behind relation is determined by fixedPointY against table anchor Y=379."
+          },
+          "boundary": {
+            "agentFoot": {
+              "x": 1446,
+              "y": 379
+            },
+            "expectedByRole": {
+              "lujunyi": "prop<agent",
+              "husanniang": "prop<agent"
+            },
+            "evidenceCellIds": {
+              "lujunyi": "bounty-depth-boundary-lujunyi",
+              "husanniang": "bounty-depth-boundary-husanniang"
+            },
+            "rationale": "At Y=379 both keys have fixedPointY=97024; bounty tieBias=-4 sorts before agent tieBias=0, so prop<agent independently of either evidence stableId."
+          },
+          "front": {
+            "agentFoot": {
+              "x": 1446,
+              "y": 420
+            },
+            "expectedByRole": {
+              "lujunyi": "prop<agent",
+              "husanniang": "prop<agent"
+            },
+            "evidenceCellIds": {
+              "lujunyi": "bounty-depth-front-lujunyi",
+              "husanniang": "bounty-depth-front-husanniang"
+            },
+            "rationale": "front relation is determined by fixedPointY against table anchor Y=379."
+          }
+        },
+        "mask58CrossReference": {
+          "action": "E10A_REQUIRED_REVIEW",
+          "maskId": 58,
+          "maskAabb": {
+            "minX": 1197,
+            "minY": 342,
+            "maxX": 1663,
+            "maxY": 458
+          },
+          "distinction": "Drawable bounty-board pixels and their sort spec remain separate from canonical occluder pixels, TMX mask geometry, and hotspot behavior. E8A does not migrate mask 58."
+        }
+      },
+      "tieBiasRationale": "At equal fixedPointY, E5 compares tieBias before stableId. bounty-board(-4) < either agent(0), proving table<agent at boundary without relying on an invented or hashed agent stableId."
+    },
+    {
+      "semanticName": "library-shelf",
+      "tmxId": 93,
+      "tmxName": "library-shelf-rect",
+      "stableId": "jyt.prop.southeast.library-shelf.v1",
+      "sceneId": "juyiting-main",
+      "chunkId": "east-lower",
+      "floorId": "floor-1",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "tieBias": 0,
+      "tmxBinding": {
+        "gid": 6036,
+        "tilesetName": "hall-props",
+        "firstgid": 6033,
+        "tileId": 3,
+        "objectalignment": "topleft",
+        "imageSource": "images/props/liangshan-hall-prop-library-shelf-cropped.png"
+      },
+      "asset": {
+        "path": "public/juyiting/images/props/liangshan-hall-prop-library-shelf-cropped.png",
+        "sha256": "2c26abcb9f0c4b8ba83f6bb9470345d4bc280f8af133ab361581ab178d675ff9",
+        "width": 123,
+        "height": 141
+      },
+      "tmxRect": {
+        "x": 1497,
+        "y": 578,
+        "width": 123,
+        "height": 141,
+        "minX": 1497,
+        "minY": 578,
+        "maxX": 1620,
+        "maxY": 719
+      },
+      "propAlphaAabbSource": {
+        "minX": 0,
+        "minY": 0,
+        "maxX": 123,
+        "maxY": 141,
+        "width": 123,
+        "height": 141,
+        "opaquePixels": 10675
+      },
+      "propAlphaAabbWorld": {
+        "minX": 1497,
+        "minY": 578,
+        "maxX": 1620,
+        "maxY": 719
+      },
+      "sortAnchor": {
+        "x": 1558,
+        "y": 719
+      },
+      "fixedPointY": 184064,
+      "sortAnchorEvidence": {
+        "interpretation": "The shelf/base remains present through rows 125-139 and tapers to the terminal base pixel at row 140 x=102. The floor/front-base boundary is Y=719 immediately after the last alpha row.",
+        "anchorImagePoint": {
+          "x": 61,
+          "y": 141
+        },
+        "alphaAabbSource": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 123,
+          "maxY": 141,
+          "width": 123,
+          "height": 141,
+          "opaquePixels": 10675
+        },
+        "sampledRows": [
+          {
+            "y": 125,
+            "count": 26,
+            "span": 74,
+            "minX": 35,
+            "maxX": 108
+          },
+          {
+            "y": 138,
+            "count": 13,
+            "span": 61,
+            "minX": 43,
+            "maxX": 103
+          },
+          {
+            "y": 139,
+            "count": 11,
+            "span": 59,
+            "minX": 44,
+            "maxX": 102
+          },
+          {
+            "y": 140,
+            "count": 1,
+            "span": 1,
+            "minX": 102,
+            "maxX": 102
+          }
+        ],
+        "boundaryRule": "world anchor Y=719 equals TMX top 578 + image height 141; it is the boundary immediately after source alpha row 140."
+      },
+      "sortAnchorRationale": "The shelf/base remains present through rows 125-139 and tapers to the terminal base pixel at row 140 x=102. The floor/front-base boundary is Y=719 immediately after the last alpha row.",
+      "probes": {
+        "north": {
+          "agentFootPoint": {
+            "x": 1558,
+            "y": 691
+          },
+          "expectedRelation": "agent<prop",
+          "pixelOverlap": true,
+          "alphaAabbIntersection": true,
+          "propAlphaAabbWorld": {
+            "minX": 1497,
+            "minY": 578,
+            "maxX": 1620,
+            "maxY": 719
+          },
+          "agentAlphaAabbWorld": {
+            "minX": 1544.48,
+            "minY": 636.8784,
+            "maxX": 1571,
+            "maxY": 697.1984
+          },
+          "horizontalGuardPixels": null,
+          "evidenceCellId": "prop-library-shelf-north-lujunyi",
+          "roleFrameReference": "lujunyi/idle/down/0",
+          "rationale": "north is a WorldSortKey assertion at fixedPointY=176896; the rendered alpha AABB intersection is measured, not inferred from the TMX rectangle."
+        },
+        "south": {
+          "agentFootPoint": {
+            "x": 1558,
+            "y": 747
+          },
+          "expectedRelation": "prop<agent",
+          "pixelOverlap": true,
+          "alphaAabbIntersection": true,
+          "propAlphaAabbWorld": {
+            "minX": 1497,
+            "minY": 578,
+            "maxX": 1620,
+            "maxY": 719
+          },
+          "agentAlphaAabbWorld": {
+            "minX": 1544.48,
+            "minY": 692.8784,
+            "maxX": 1571,
+            "maxY": 753.1984
+          },
+          "horizontalGuardPixels": null,
+          "evidenceCellId": "prop-library-shelf-south-lujunyi",
+          "roleFrameReference": "lujunyi/idle/down/0",
+          "rationale": "south is a WorldSortKey assertion at fixedPointY=191232; the rendered alpha AABB intersection is measured, not inferred from the TMX rectangle."
+        },
+        "west": {
+          "agentFootPoint": {
+            "x": 1480,
+            "y": 719
+          },
+          "expectedRelation": "non-overlap",
+          "pixelOverlap": false,
+          "alphaAabbIntersection": false,
+          "propAlphaAabbWorld": {
+            "minX": 1497,
+            "minY": 578,
+            "maxX": 1620,
+            "maxY": 719
+          },
+          "agentAlphaAabbWorld": {
+            "minX": 1466.48,
+            "minY": 664.8784,
+            "maxX": 1493,
+            "maxY": 725.1984
+          },
+          "horizontalGuardPixels": 4,
+          "evidenceCellId": "prop-library-shelf-west-lujunyi",
+          "roleFrameReference": "lujunyi/idle/down/0",
+          "rationale": "west footpoint is derived from the scanned prop alpha AABB and rendered lujunyi frame alpha AABB with a minimum 4px horizontal guard; half-open alpha AABBs do not intersect."
+        },
+        "east": {
+          "agentFootPoint": {
+            "x": 1637.5234375,
+            "y": 719
+          },
+          "expectedRelation": "non-overlap",
+          "pixelOverlap": false,
+          "alphaAabbIntersection": false,
+          "propAlphaAabbWorld": {
+            "minX": 1497,
+            "minY": 578,
+            "maxX": 1620,
+            "maxY": 719
+          },
+          "agentAlphaAabbWorld": {
+            "minX": 1624.0034375,
+            "minY": 664.8784,
+            "maxX": 1650.5234375,
+            "maxY": 725.1984
+          },
+          "horizontalGuardPixels": 4.003437500000018,
+          "evidenceCellId": "prop-library-shelf-east-lujunyi",
+          "roleFrameReference": "lujunyi/idle/down/0",
+          "rationale": "east footpoint is derived from the scanned prop alpha AABB and rendered lujunyi frame alpha AABB with a minimum 4px horizontal guard; half-open alpha AABBs do not intersect."
+        }
+      }
+    },
+    {
+      "semanticName": "roster-book",
+      "tmxId": 94,
+      "tmxName": "roster-book-rect",
+      "stableId": "jyt.prop.center-north.roster-book.v1",
+      "sceneId": "juyiting-main",
+      "chunkId": "center",
+      "floorId": "floor-1",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "tieBias": 0,
+      "tmxBinding": {
+        "gid": 6037,
+        "tilesetName": "hall-props",
+        "firstgid": 6033,
+        "tileId": 4,
+        "objectalignment": "topleft",
+        "imageSource": "images/props/liangshan-hall-prop-roster-book-cropped.png"
+      },
+      "asset": {
+        "path": "public/juyiting/images/props/liangshan-hall-prop-roster-book-cropped.png",
+        "sha256": "6b7c21b45ad24aee9b6bbbbf72177f04e0f3710168d28aef8064dfa1786996c5",
+        "width": 179,
+        "height": 192
+      },
+      "tmxRect": {
+        "x": 217,
+        "y": 192,
+        "width": 179,
+        "height": 192,
+        "minX": 217,
+        "minY": 192,
+        "maxX": 396,
+        "maxY": 384
+      },
+      "propAlphaAabbSource": {
+        "minX": 0,
+        "minY": 0,
+        "maxX": 179,
+        "maxY": 192,
+        "width": 179,
+        "height": 192,
+        "opaquePixels": 23706
+      },
+      "propAlphaAabbWorld": {
+        "minX": 217,
+        "minY": 192,
+        "maxX": 396,
+        "maxY": 384
+      },
+      "sortAnchor": {
+        "x": 306,
+        "y": 384
+      },
+      "fixedPointY": 98304,
+      "sortAnchorEvidence": {
+        "interpretation": "REJECT-V1 correction: roster-book denotes the full illuminated lectern/cabinet structure, not a detachable book. Rows 160-186 form a broad 99-112px front base, then rows 187-191 taper to the terminal front corner. The whole-asset floor/front-base boundary is Y=384 immediately after alpha row 191.",
+        "anchorImagePoint": {
+          "x": 89,
+          "y": 192
+        },
+        "alphaAabbSource": {
+          "minX": 0,
+          "minY": 0,
+          "maxX": 179,
+          "maxY": 192,
+          "width": 179,
+          "height": 192,
+          "opaquePixels": 23706
+        },
+        "sampledRows": [
+          {
+            "y": 160,
+            "count": 112,
+            "span": 112,
+            "minX": 4,
+            "maxX": 115
+          },
+          {
+            "y": 186,
+            "count": 99,
+            "span": 99,
+            "minX": 9,
+            "maxX": 107
+          },
+          {
+            "y": 187,
+            "count": 80,
+            "span": 80,
+            "minX": 28,
+            "maxX": 107
+          },
+          {
+            "y": 190,
+            "count": 20,
+            "span": 20,
+            "minX": 87,
+            "maxX": 106
+          },
+          {
+            "y": 191,
+            "count": 1,
+            "span": 1,
+            "minX": 106,
+            "maxX": 106
+          }
+        ],
+        "boundaryRule": "world anchor Y=384 equals TMX top 192 + image height 192; it is the boundary immediately after source alpha row 191."
+      },
+      "sortAnchorRationale": "REJECT-V1 correction: roster-book denotes the full illuminated lectern/cabinet structure, not a detachable book. Rows 160-186 form a broad 99-112px front base, then rows 187-191 taper to the terminal front corner. The whole-asset floor/front-base boundary is Y=384 immediately after alpha row 191.",
+      "probes": {
+        "north": {
+          "agentFootPoint": {
+            "x": 306,
+            "y": 356
+          },
+          "expectedRelation": "agent<prop",
+          "pixelOverlap": true,
+          "alphaAabbIntersection": true,
+          "propAlphaAabbWorld": {
+            "minX": 217,
+            "minY": 192,
+            "maxX": 396,
+            "maxY": 384
+          },
+          "agentAlphaAabbWorld": {
+            "minX": 292.48,
+            "minY": 301.8784,
+            "maxX": 319,
+            "maxY": 362.1984
+          },
+          "horizontalGuardPixels": null,
+          "evidenceCellId": "prop-roster-book-north-lujunyi",
+          "roleFrameReference": "lujunyi/idle/down/0",
+          "rationale": "north is a WorldSortKey assertion at fixedPointY=91136; the rendered alpha AABB intersection is measured, not inferred from the TMX rectangle."
+        },
+        "south": {
+          "agentFootPoint": {
+            "x": 306,
+            "y": 412
+          },
+          "expectedRelation": "prop<agent",
+          "pixelOverlap": true,
+          "alphaAabbIntersection": true,
+          "propAlphaAabbWorld": {
+            "minX": 217,
+            "minY": 192,
+            "maxX": 396,
+            "maxY": 384
+          },
+          "agentAlphaAabbWorld": {
+            "minX": 292.48,
+            "minY": 357.8784,
+            "maxX": 319,
+            "maxY": 418.1984
+          },
+          "horizontalGuardPixels": null,
+          "evidenceCellId": "prop-roster-book-south-lujunyi",
+          "roleFrameReference": "lujunyi/idle/down/0",
+          "rationale": "south is a WorldSortKey assertion at fixedPointY=105472; the rendered alpha AABB intersection is measured, not inferred from the TMX rectangle."
+        },
+        "west": {
+          "agentFootPoint": {
+            "x": 200,
+            "y": 384
+          },
+          "expectedRelation": "non-overlap",
+          "pixelOverlap": false,
+          "alphaAabbIntersection": false,
+          "propAlphaAabbWorld": {
+            "minX": 217,
+            "minY": 192,
+            "maxX": 396,
+            "maxY": 384
+          },
+          "agentAlphaAabbWorld": {
+            "minX": 186.48,
+            "minY": 329.8784,
+            "maxX": 213,
+            "maxY": 390.1984
+          },
+          "horizontalGuardPixels": 4,
+          "evidenceCellId": "prop-roster-book-west-lujunyi",
+          "roleFrameReference": "lujunyi/idle/down/0",
+          "rationale": "west footpoint is derived from the scanned prop alpha AABB and rendered lujunyi frame alpha AABB with a minimum 4px horizontal guard; half-open alpha AABBs do not intersect."
+        },
+        "east": {
+          "agentFootPoint": {
+            "x": 413.5234375,
+            "y": 384
+          },
+          "expectedRelation": "non-overlap",
+          "pixelOverlap": false,
+          "alphaAabbIntersection": false,
+          "propAlphaAabbWorld": {
+            "minX": 217,
+            "minY": 192,
+            "maxX": 396,
+            "maxY": 384
+          },
+          "agentAlphaAabbWorld": {
+            "minX": 400.0034375,
+            "minY": 329.8784,
+            "maxX": 426.5234375,
+            "maxY": 390.1984
+          },
+          "horizontalGuardPixels": 4.003437500000018,
+          "evidenceCellId": "prop-roster-book-east-lujunyi",
+          "roleFrameReference": "lujunyi/idle/down/0",
+          "rationale": "east footpoint is derived from the scanned prop alpha AABB and rendered lujunyi frame alpha AABB with a minimum 4px horizontal guard; half-open alpha AABBs do not intersect."
         }
       }
     }
   ],
   "globalConstraints": {
     "declarationOrderIndependence": {
-      "description": "Sort result identical regardless of prop declaration/insertion order.",
-      "testVector": "Sort 5 props; shuffle input 10 times; verify output byte-identical."
-    },
-    "fivePropSortOrder": {
-      "description": "Expected base sort order (WorldSortKey ascending).",
-      "order": [
-        "jyt.prop.center-north.roster-book.v1",
+      "description": "E5 WorldSortKey comparison is independent of declaration and insertion order.",
+      "testVector": "Sort all five props, then sort deterministic shuffles; every result must equal expectedSequence.",
+      "expectedSequence": [
         "jyt.prop.center-north.main-seat.v1",
         "jyt.prop.northeast.bounty-board.v1",
+        "jyt.prop.center-north.roster-book.v1",
+        "jyt.prop.southeast.library-shelf.v1",
+        "jyt.prop.southwest.agent-roster.v1"
+      ]
+    },
+    "fivePropSortOrder": {
+      "description": "Expected ascending E5 WorldSortKey order after the REJECT-V1 roster-book correction.",
+      "order": [
+        "jyt.prop.center-north.main-seat.v1",
+        "jyt.prop.northeast.bounty-board.v1",
+        "jyt.prop.center-north.roster-book.v1",
         "jyt.prop.southeast.library-shelf.v1",
         "jyt.prop.southwest.agent-roster.v1"
       ],
-      "rationale": "fixedPointY: roster-book(66560) < main-seat(68608) < bounty-board(97024) < library-shelf(184064) < agent-roster(188672). Same renderBand/world, floorId/floor-1, elevation/0. bounty-board tieBias=-4 (only matters at same fixedPointY)."
+      "rationale": "fixedPointY: main-seat=68608 < bounty-board=97024 < roster-book=98304 < library-shelf=184064 < agent-roster=188672."
     },
+    "drawableAndOccluderSeparation": "These five entries describe drawable props only. Canonical occluder pixels, TMX mask geometry, hotspots, fragments, and navigation remain separate contracts and are not changed by E8A.",
     "failClosedRules": {
-      "tmxIdChange": "TMX object id/name/rect/gid mismatch -> verify failure",
-      "nameChange": "tmxName mismatch -> verify failure",
-      "rectChange": "rect field mismatch -> verify failure",
-      "assetShaMismatch": "asset sha256 mismatch -> verify failure",
-      "missingProp": "<5 props -> verify failure",
-      "duplicateStableId": "duplicate stableId -> verify failure",
-      "anchorOutOfBounds": "sortAnchor outside [0,1664]x[0,928] -> verify failure",
-      "fixedPointInconsistency": "fixedPointY != round(sortAnchor.y*256) -> verify failure",
-      "nonFiveCount": "propCount != 5 -> verify failure",
-      "tieBiasOutOfRange": "tieBias not in [-32,32] -> verify failure",
-      "missingMatrix": "bounty-board missing matrix -> verify failure",
-      "elevationNotZero": "elevation != 0 -> verify failure",
-      "generationIdMismatch": "generationId != SHA-256(spec with generationId=64 zeros) -> verify failure"
+      "propCompleteness": "Anything other than exactly TMX objects 90-94 with unique stableIds fails.",
+      "tmxBinding": "Object id/name/type/gid/rect and gid→hall-props firstgid/tile/image source/dimensions must match exactly.",
+      "provenance": "TMX, prop, scene-background, manifest, resolver, and role-frame asset hashes must match.",
+      "anchorsAndProbes": "Non-finite/out-of-bounds anchors or probes, fixedPoint mismatch, missing directions, or W/E alpha-AABB intersection/guard<4 fail.",
+      "matrix": "Anything other than full 8 role-direction and 6 role-depth cells, same-foot role invariance, or boundary prop<agent fails.",
+      "evidence": "Anything other than 20 prop cells plus 14 bounty cells with complete metadata and recomputed AABBs/sort order fails.",
+      "generation": "generationId must equal SHA-256 of the pretty JSON with generationId replaced by 64 zeroes; SVG generationId/count/cell IDs and freshly generated bytes must match."
     }
   },
   "tmxSource": {
     "path": "public/juyiting/hall.tmx",
     "sha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+    "tilewidth": 16,
+    "tileheight": 16,
+    "width": 104,
+    "height": 58,
     "coordinateWidth": 1664,
-    "coordinateHeight": 928
+    "coordinateHeight": 928,
+    "hallPropsTileset": {
+      "name": "hall-props",
+      "firstgid": 6033,
+      "tilewidth": 179,
+      "tileheight": 192,
+      "tilecount": 5,
+      "columns": 5,
+      "objectalignment": "topleft"
+    }
   },
-  "generationId": "830cd022ae25b33341818c980ff9eaa65dbae1a53c11b2b72496d192f0883426",
+  "visualEvidence": {
+    "verdictAddressed": "REJECT-V1",
+    "rejectionRationale": [
+      "The prior roster-book anchor treated a detachable book/page region as the drawable; V1 identifies the semantic prop as the full illuminated lectern/cabinet and requires floor/front-base anchor (306,384).",
+      "The prior contact sheet did not render actual role frames composited with props and used generic horizontal points instead of scanned alpha-AABB separation.",
+      "The prior bounty north matrix point was not frozen at the reviewed world point (1446,351)."
+    ],
+    "renderingContract": "Each clean SVG image area embeds the actual hall background, prop PNG, and decoded idle/down/frame-0 role pixels. Drawables are emitted in ascending E5 WorldSortKey painter order. All annotations are outside image areas.",
+    "cameraZoom": 1,
+    "cameraDpr": 1,
+    "captureMode": "clean",
+    "referenceRole": "lujunyi",
+    "animation": "idle",
+    "direction": "down",
+    "animationFrameOrdinal": 0,
+    "sceneBackground": {
+      "path": "public/juyiting/images/liangshan-hall-base-clean-v3.webp",
+      "sha256": "72d5ca5ff3d5c71ec66018d65bbe6a9636e6bbab10338e2a07989b0be1efd9aa",
+      "width": 1664,
+      "height": 928
+    },
+    "personaManifest": {
+      "path": "src/game/sprites/personaSpriteManifest.ts",
+      "sha256": "fd76999973214e7811795d8f529d11df108afa4e794f449676474c3d9b5171db",
+      "version": "persona-sheets-v1"
+    },
+    "roleResolver": {
+      "path": "src/composables/juyiting/useWaterMarginRoles.js",
+      "sha256": "9121c426065de03fee43eb3cdf7698c8fd3f13a3a892ccd5f5ce7d0705b4df25",
+      "canonicalResolution": "portraitRole first resolves personaCode via normalized portraitRoles slug; lujunyi and husanniang are canonical slugs."
+    },
+    "roles": {
+      "lujunyi": {
+        "personaCode": "lujunyi",
+        "displayName": "卢俊义",
+        "manifestVersion": "persona-sheets-v1",
+        "manifestPath": "src/game/sprites/personaSpriteManifest.ts",
+        "resolverPath": "src/composables/juyiting/useWaterMarginRoles.js",
+        "asset": {
+          "path": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+          "sha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+          "imageWidth": 1024,
+          "imageHeight": 1024
+        },
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "sourceFrameRect": {
+          "x": 0,
+          "y": 0,
+          "width": 128,
+          "height": 128
+        },
+        "sourceFrameAlphaAabb": {
+          "minX": 38,
+          "minY": 6,
+          "maxX": 89,
+          "maxY": 122,
+          "width": 51,
+          "height": 116,
+          "opaquePixels": 3677
+        },
+        "anchor": {
+          "x": 0.5,
+          "y": 0.86
+        },
+        "scale": 0.52,
+        "renderedFrameSize": {
+          "width": 66.56,
+          "height": 66.56
+        },
+        "relativeWorldAlphaAabb": {
+          "minX": -13.52,
+          "minY": -54.1216,
+          "maxX": 13,
+          "maxY": 6.198400000000007
+        },
+        "evidenceStableId": "jyt.agent.evidence.lujunyi.v1"
+      },
+      "husanniang": {
+        "personaCode": "husanniang",
+        "displayName": "扈三娘",
+        "manifestVersion": "persona-sheets-v1",
+        "manifestPath": "src/game/sprites/personaSpriteManifest.ts",
+        "resolverPath": "src/composables/juyiting/useWaterMarginRoles.js",
+        "asset": {
+          "path": "public/juyiting/sprites/persona-sheets-v1/husanniang-8-direction-v1.webp",
+          "sha256": "51db05d29907b4f6d3271518860ed9cd9c27f0445b6240b68a9957004cab4e99",
+          "imageWidth": 1024,
+          "imageHeight": 1024
+        },
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "sourceFrameRect": {
+          "x": 0,
+          "y": 0,
+          "width": 128,
+          "height": 128
+        },
+        "sourceFrameAlphaAabb": {
+          "minX": 16,
+          "minY": 8,
+          "maxX": 111,
+          "maxY": 120,
+          "width": 95,
+          "height": 112,
+          "opaquePixels": 4857
+        },
+        "anchor": {
+          "x": 0.5,
+          "y": 0.86
+        },
+        "scale": 0.5,
+        "renderedFrameSize": {
+          "width": 64,
+          "height": 64
+        },
+        "relativeWorldAlphaAabb": {
+          "minX": -24,
+          "minY": -51.04,
+          "maxX": 23.5,
+          "maxY": 4.960000000000001
+        },
+        "evidenceStableId": "jyt.agent.evidence.husanniang.v1"
+      }
+    },
+    "propCellCount": 20,
+    "bountyCellCount": 14,
+    "totalCellCount": 34,
+    "propCells": [
+      {
+        "cellId": "prop-main-seat-north-lujunyi",
+        "set": "prop-direction",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.center-north.main-seat.v1",
+        "tmxId": 90,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "north",
+        "agentFootWorld": {
+          "x": 872,
+          "y": 240
+        },
+        "expectedRelation": "agent<prop",
+        "sortRelation": "agent<prop",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 68608,
+          "tieBias": 0,
+          "stableId": "jyt.prop.center-north.main-seat.v1"
+        },
+        "propSortKeyString": "100|0|0|68608|0|jyt.prop.center-north.main-seat.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 61440,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|61440|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.agent.evidence.lujunyi.v1",
+          "jyt.prop.center-north.main-seat.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 818,
+          "minY": 175,
+          "maxX": 927,
+          "maxY": 268
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 858.48,
+          "minY": 185.8784,
+          "maxX": 885,
+          "maxY": 246.1984
+        },
+        "alphaAabbIntersection": true,
+        "pixelOverlap": true,
+        "horizontalGuardPixels": null
+      },
+      {
+        "cellId": "prop-main-seat-south-lujunyi",
+        "set": "prop-direction",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.center-north.main-seat.v1",
+        "tmxId": 90,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "south",
+        "agentFootWorld": {
+          "x": 872,
+          "y": 296
+        },
+        "expectedRelation": "prop<agent",
+        "sortRelation": "prop<agent",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 68608,
+          "tieBias": 0,
+          "stableId": "jyt.prop.center-north.main-seat.v1"
+        },
+        "propSortKeyString": "100|0|0|68608|0|jyt.prop.center-north.main-seat.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 75776,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|75776|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.prop.center-north.main-seat.v1",
+          "jyt.agent.evidence.lujunyi.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 818,
+          "minY": 175,
+          "maxX": 927,
+          "maxY": 268
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 858.48,
+          "minY": 241.8784,
+          "maxX": 885,
+          "maxY": 302.1984
+        },
+        "alphaAabbIntersection": true,
+        "pixelOverlap": true,
+        "horizontalGuardPixels": null
+      },
+      {
+        "cellId": "prop-main-seat-west-lujunyi",
+        "set": "prop-direction",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.center-north.main-seat.v1",
+        "tmxId": 90,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "west",
+        "agentFootWorld": {
+          "x": 801,
+          "y": 268
+        },
+        "expectedRelation": "non-overlap",
+        "sortRelation": "agent<prop",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 68608,
+          "tieBias": 0,
+          "stableId": "jyt.prop.center-north.main-seat.v1"
+        },
+        "propSortKeyString": "100|0|0|68608|0|jyt.prop.center-north.main-seat.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 68608,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|68608|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.agent.evidence.lujunyi.v1",
+          "jyt.prop.center-north.main-seat.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 818,
+          "minY": 175,
+          "maxX": 927,
+          "maxY": 268
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 787.48,
+          "minY": 213.8784,
+          "maxX": 814,
+          "maxY": 274.1984
+        },
+        "alphaAabbIntersection": false,
+        "pixelOverlap": false,
+        "horizontalGuardPixels": 4
+      },
+      {
+        "cellId": "prop-main-seat-east-lujunyi",
+        "set": "prop-direction",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.center-north.main-seat.v1",
+        "tmxId": 90,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "east",
+        "agentFootWorld": {
+          "x": 944.5234375,
+          "y": 268
+        },
+        "expectedRelation": "non-overlap",
+        "sortRelation": "agent<prop",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 68608,
+          "tieBias": 0,
+          "stableId": "jyt.prop.center-north.main-seat.v1"
+        },
+        "propSortKeyString": "100|0|0|68608|0|jyt.prop.center-north.main-seat.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 68608,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|68608|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.agent.evidence.lujunyi.v1",
+          "jyt.prop.center-north.main-seat.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 818,
+          "minY": 175,
+          "maxX": 927,
+          "maxY": 268
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 931.0034375,
+          "minY": 213.8784,
+          "maxX": 957.5234375,
+          "maxY": 274.1984
+        },
+        "alphaAabbIntersection": false,
+        "pixelOverlap": false,
+        "horizontalGuardPixels": 4.003437500000018
+      },
+      {
+        "cellId": "prop-agent-roster-north-lujunyi",
+        "set": "prop-direction",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.southwest.agent-roster.v1",
+        "tmxId": 91,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "north",
+        "agentFootWorld": {
+          "x": 178,
+          "y": 709
+        },
+        "expectedRelation": "agent<prop",
+        "sortRelation": "agent<prop",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 188672,
+          "tieBias": 0,
+          "stableId": "jyt.prop.southwest.agent-roster.v1"
+        },
+        "propSortKeyString": "100|0|0|188672|0|jyt.prop.southwest.agent-roster.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 181504,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|181504|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.agent.evidence.lujunyi.v1",
+          "jyt.prop.southwest.agent-roster.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 120,
+          "minY": 601,
+          "maxX": 237,
+          "maxY": 737
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 164.48,
+          "minY": 654.8784,
+          "maxX": 191,
+          "maxY": 715.1984
+        },
+        "alphaAabbIntersection": true,
+        "pixelOverlap": true,
+        "horizontalGuardPixels": null
+      },
+      {
+        "cellId": "prop-agent-roster-south-lujunyi",
+        "set": "prop-direction",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.southwest.agent-roster.v1",
+        "tmxId": 91,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "south",
+        "agentFootWorld": {
+          "x": 178,
+          "y": 765
+        },
+        "expectedRelation": "prop<agent",
+        "sortRelation": "prop<agent",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 188672,
+          "tieBias": 0,
+          "stableId": "jyt.prop.southwest.agent-roster.v1"
+        },
+        "propSortKeyString": "100|0|0|188672|0|jyt.prop.southwest.agent-roster.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 195840,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|195840|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.prop.southwest.agent-roster.v1",
+          "jyt.agent.evidence.lujunyi.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 120,
+          "minY": 601,
+          "maxX": 237,
+          "maxY": 737
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 164.48,
+          "minY": 710.8784,
+          "maxX": 191,
+          "maxY": 771.1984
+        },
+        "alphaAabbIntersection": true,
+        "pixelOverlap": true,
+        "horizontalGuardPixels": null
+      },
+      {
+        "cellId": "prop-agent-roster-west-lujunyi",
+        "set": "prop-direction",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.southwest.agent-roster.v1",
+        "tmxId": 91,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "west",
+        "agentFootWorld": {
+          "x": 103,
+          "y": 737
+        },
+        "expectedRelation": "non-overlap",
+        "sortRelation": "agent<prop",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 188672,
+          "tieBias": 0,
+          "stableId": "jyt.prop.southwest.agent-roster.v1"
+        },
+        "propSortKeyString": "100|0|0|188672|0|jyt.prop.southwest.agent-roster.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 188672,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|188672|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.agent.evidence.lujunyi.v1",
+          "jyt.prop.southwest.agent-roster.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 120,
+          "minY": 601,
+          "maxX": 237,
+          "maxY": 737
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 89.48,
+          "minY": 682.8784,
+          "maxX": 116,
+          "maxY": 743.1984
+        },
+        "alphaAabbIntersection": false,
+        "pixelOverlap": false,
+        "horizontalGuardPixels": 4
+      },
+      {
+        "cellId": "prop-agent-roster-east-lujunyi",
+        "set": "prop-direction",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.southwest.agent-roster.v1",
+        "tmxId": 91,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "east",
+        "agentFootWorld": {
+          "x": 254.5234375,
+          "y": 737
+        },
+        "expectedRelation": "non-overlap",
+        "sortRelation": "agent<prop",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 188672,
+          "tieBias": 0,
+          "stableId": "jyt.prop.southwest.agent-roster.v1"
+        },
+        "propSortKeyString": "100|0|0|188672|0|jyt.prop.southwest.agent-roster.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 188672,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|188672|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.agent.evidence.lujunyi.v1",
+          "jyt.prop.southwest.agent-roster.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 120,
+          "minY": 601,
+          "maxX": 237,
+          "maxY": 737
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 241.0034375,
+          "minY": 682.8784,
+          "maxX": 267.5234375,
+          "maxY": 743.1984
+        },
+        "alphaAabbIntersection": false,
+        "pixelOverlap": false,
+        "horizontalGuardPixels": 4.00343749999999
+      },
+      {
+        "cellId": "prop-bounty-board-north-lujunyi",
+        "set": "prop-direction",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.northeast.bounty-board.v1",
+        "tmxId": 92,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "north",
+        "agentFootWorld": {
+          "x": 1446,
+          "y": 351
+        },
+        "expectedRelation": "agent<prop",
+        "sortRelation": "agent<prop",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": -4,
+          "stableId": "jyt.prop.northeast.bounty-board.v1"
+        },
+        "propSortKeyString": "100|0|0|97024|-4|jyt.prop.northeast.bounty-board.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 89856,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|89856|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.agent.evidence.lujunyi.v1",
+          "jyt.prop.northeast.bounty-board.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 1360,
+          "minY": 255,
+          "maxX": 1532,
+          "maxY": 379
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 1432.48,
+          "minY": 296.8784,
+          "maxX": 1459,
+          "maxY": 357.1984
+        },
+        "alphaAabbIntersection": true,
+        "pixelOverlap": true,
+        "horizontalGuardPixels": null
+      },
+      {
+        "cellId": "prop-bounty-board-south-lujunyi",
+        "set": "prop-direction",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.northeast.bounty-board.v1",
+        "tmxId": 92,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "south",
+        "agentFootWorld": {
+          "x": 1446,
+          "y": 407
+        },
+        "expectedRelation": "prop<agent",
+        "sortRelation": "prop<agent",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": -4,
+          "stableId": "jyt.prop.northeast.bounty-board.v1"
+        },
+        "propSortKeyString": "100|0|0|97024|-4|jyt.prop.northeast.bounty-board.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 104192,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|104192|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.prop.northeast.bounty-board.v1",
+          "jyt.agent.evidence.lujunyi.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 1360,
+          "minY": 255,
+          "maxX": 1532,
+          "maxY": 379
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 1432.48,
+          "minY": 352.8784,
+          "maxX": 1459,
+          "maxY": 413.1984
+        },
+        "alphaAabbIntersection": true,
+        "pixelOverlap": true,
+        "horizontalGuardPixels": null
+      },
+      {
+        "cellId": "prop-bounty-board-west-lujunyi",
+        "set": "prop-direction",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.northeast.bounty-board.v1",
+        "tmxId": 92,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "west",
+        "agentFootWorld": {
+          "x": 1332.5,
+          "y": 379
+        },
+        "expectedRelation": "non-overlap",
+        "sortRelation": "prop<agent",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": -4,
+          "stableId": "jyt.prop.northeast.bounty-board.v1"
+        },
+        "propSortKeyString": "100|0|0|97024|-4|jyt.prop.northeast.bounty-board.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|97024|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.prop.northeast.bounty-board.v1",
+          "jyt.agent.evidence.lujunyi.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 1360,
+          "minY": 255,
+          "maxX": 1532,
+          "maxY": 379
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 1318.98,
+          "minY": 324.8784,
+          "maxX": 1345.5,
+          "maxY": 385.1984
+        },
+        "alphaAabbIntersection": false,
+        "pixelOverlap": false,
+        "horizontalGuardPixels": 14.5
+      },
+      {
+        "cellId": "prop-bounty-board-east-lujunyi",
+        "set": "prop-direction",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.northeast.bounty-board.v1",
+        "tmxId": 92,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "east",
+        "agentFootWorld": {
+          "x": 1560,
+          "y": 379
+        },
+        "expectedRelation": "non-overlap",
+        "sortRelation": "prop<agent",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": -4,
+          "stableId": "jyt.prop.northeast.bounty-board.v1"
+        },
+        "propSortKeyString": "100|0|0|97024|-4|jyt.prop.northeast.bounty-board.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|97024|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.prop.northeast.bounty-board.v1",
+          "jyt.agent.evidence.lujunyi.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 1360,
+          "minY": 255,
+          "maxX": 1532,
+          "maxY": 379
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 1546.48,
+          "minY": 324.8784,
+          "maxX": 1573,
+          "maxY": 385.1984
+        },
+        "alphaAabbIntersection": false,
+        "pixelOverlap": false,
+        "horizontalGuardPixels": 14.480000000000018
+      },
+      {
+        "cellId": "prop-library-shelf-north-lujunyi",
+        "set": "prop-direction",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.southeast.library-shelf.v1",
+        "tmxId": 93,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "north",
+        "agentFootWorld": {
+          "x": 1558,
+          "y": 691
+        },
+        "expectedRelation": "agent<prop",
+        "sortRelation": "agent<prop",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 184064,
+          "tieBias": 0,
+          "stableId": "jyt.prop.southeast.library-shelf.v1"
+        },
+        "propSortKeyString": "100|0|0|184064|0|jyt.prop.southeast.library-shelf.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 176896,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|176896|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.agent.evidence.lujunyi.v1",
+          "jyt.prop.southeast.library-shelf.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 1497,
+          "minY": 578,
+          "maxX": 1620,
+          "maxY": 719
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 1544.48,
+          "minY": 636.8784,
+          "maxX": 1571,
+          "maxY": 697.1984
+        },
+        "alphaAabbIntersection": true,
+        "pixelOverlap": true,
+        "horizontalGuardPixels": null
+      },
+      {
+        "cellId": "prop-library-shelf-south-lujunyi",
+        "set": "prop-direction",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.southeast.library-shelf.v1",
+        "tmxId": 93,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "south",
+        "agentFootWorld": {
+          "x": 1558,
+          "y": 747
+        },
+        "expectedRelation": "prop<agent",
+        "sortRelation": "prop<agent",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 184064,
+          "tieBias": 0,
+          "stableId": "jyt.prop.southeast.library-shelf.v1"
+        },
+        "propSortKeyString": "100|0|0|184064|0|jyt.prop.southeast.library-shelf.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 191232,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|191232|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.prop.southeast.library-shelf.v1",
+          "jyt.agent.evidence.lujunyi.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 1497,
+          "minY": 578,
+          "maxX": 1620,
+          "maxY": 719
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 1544.48,
+          "minY": 692.8784,
+          "maxX": 1571,
+          "maxY": 753.1984
+        },
+        "alphaAabbIntersection": true,
+        "pixelOverlap": true,
+        "horizontalGuardPixels": null
+      },
+      {
+        "cellId": "prop-library-shelf-west-lujunyi",
+        "set": "prop-direction",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.southeast.library-shelf.v1",
+        "tmxId": 93,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "west",
+        "agentFootWorld": {
+          "x": 1480,
+          "y": 719
+        },
+        "expectedRelation": "non-overlap",
+        "sortRelation": "agent<prop",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 184064,
+          "tieBias": 0,
+          "stableId": "jyt.prop.southeast.library-shelf.v1"
+        },
+        "propSortKeyString": "100|0|0|184064|0|jyt.prop.southeast.library-shelf.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 184064,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|184064|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.agent.evidence.lujunyi.v1",
+          "jyt.prop.southeast.library-shelf.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 1497,
+          "minY": 578,
+          "maxX": 1620,
+          "maxY": 719
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 1466.48,
+          "minY": 664.8784,
+          "maxX": 1493,
+          "maxY": 725.1984
+        },
+        "alphaAabbIntersection": false,
+        "pixelOverlap": false,
+        "horizontalGuardPixels": 4
+      },
+      {
+        "cellId": "prop-library-shelf-east-lujunyi",
+        "set": "prop-direction",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.southeast.library-shelf.v1",
+        "tmxId": 93,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "east",
+        "agentFootWorld": {
+          "x": 1637.5234375,
+          "y": 719
+        },
+        "expectedRelation": "non-overlap",
+        "sortRelation": "agent<prop",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 184064,
+          "tieBias": 0,
+          "stableId": "jyt.prop.southeast.library-shelf.v1"
+        },
+        "propSortKeyString": "100|0|0|184064|0|jyt.prop.southeast.library-shelf.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 184064,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|184064|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.agent.evidence.lujunyi.v1",
+          "jyt.prop.southeast.library-shelf.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 1497,
+          "minY": 578,
+          "maxX": 1620,
+          "maxY": 719
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 1624.0034375,
+          "minY": 664.8784,
+          "maxX": 1650.5234375,
+          "maxY": 725.1984
+        },
+        "alphaAabbIntersection": false,
+        "pixelOverlap": false,
+        "horizontalGuardPixels": 4.003437500000018
+      },
+      {
+        "cellId": "prop-roster-book-north-lujunyi",
+        "set": "prop-direction",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.center-north.roster-book.v1",
+        "tmxId": 94,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "north",
+        "agentFootWorld": {
+          "x": 306,
+          "y": 356
+        },
+        "expectedRelation": "agent<prop",
+        "sortRelation": "agent<prop",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 98304,
+          "tieBias": 0,
+          "stableId": "jyt.prop.center-north.roster-book.v1"
+        },
+        "propSortKeyString": "100|0|0|98304|0|jyt.prop.center-north.roster-book.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 91136,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|91136|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.agent.evidence.lujunyi.v1",
+          "jyt.prop.center-north.roster-book.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 217,
+          "minY": 192,
+          "maxX": 396,
+          "maxY": 384
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 292.48,
+          "minY": 301.8784,
+          "maxX": 319,
+          "maxY": 362.1984
+        },
+        "alphaAabbIntersection": true,
+        "pixelOverlap": true,
+        "horizontalGuardPixels": null
+      },
+      {
+        "cellId": "prop-roster-book-south-lujunyi",
+        "set": "prop-direction",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.center-north.roster-book.v1",
+        "tmxId": 94,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "south",
+        "agentFootWorld": {
+          "x": 306,
+          "y": 412
+        },
+        "expectedRelation": "prop<agent",
+        "sortRelation": "prop<agent",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 98304,
+          "tieBias": 0,
+          "stableId": "jyt.prop.center-north.roster-book.v1"
+        },
+        "propSortKeyString": "100|0|0|98304|0|jyt.prop.center-north.roster-book.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 105472,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|105472|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.prop.center-north.roster-book.v1",
+          "jyt.agent.evidence.lujunyi.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 217,
+          "minY": 192,
+          "maxX": 396,
+          "maxY": 384
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 292.48,
+          "minY": 357.8784,
+          "maxX": 319,
+          "maxY": 418.1984
+        },
+        "alphaAabbIntersection": true,
+        "pixelOverlap": true,
+        "horizontalGuardPixels": null
+      },
+      {
+        "cellId": "prop-roster-book-west-lujunyi",
+        "set": "prop-direction",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.center-north.roster-book.v1",
+        "tmxId": 94,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "west",
+        "agentFootWorld": {
+          "x": 200,
+          "y": 384
+        },
+        "expectedRelation": "non-overlap",
+        "sortRelation": "agent<prop",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 98304,
+          "tieBias": 0,
+          "stableId": "jyt.prop.center-north.roster-book.v1"
+        },
+        "propSortKeyString": "100|0|0|98304|0|jyt.prop.center-north.roster-book.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 98304,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|98304|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.agent.evidence.lujunyi.v1",
+          "jyt.prop.center-north.roster-book.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 217,
+          "minY": 192,
+          "maxX": 396,
+          "maxY": 384
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 186.48,
+          "minY": 329.8784,
+          "maxX": 213,
+          "maxY": 390.1984
+        },
+        "alphaAabbIntersection": false,
+        "pixelOverlap": false,
+        "horizontalGuardPixels": 4
+      },
+      {
+        "cellId": "prop-roster-book-east-lujunyi",
+        "set": "prop-direction",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.center-north.roster-book.v1",
+        "tmxId": 94,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "east",
+        "agentFootWorld": {
+          "x": 413.5234375,
+          "y": 384
+        },
+        "expectedRelation": "non-overlap",
+        "sortRelation": "agent<prop",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 98304,
+          "tieBias": 0,
+          "stableId": "jyt.prop.center-north.roster-book.v1"
+        },
+        "propSortKeyString": "100|0|0|98304|0|jyt.prop.center-north.roster-book.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 98304,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|98304|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.agent.evidence.lujunyi.v1",
+          "jyt.prop.center-north.roster-book.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 217,
+          "minY": 192,
+          "maxX": 396,
+          "maxY": 384
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 400.0034375,
+          "minY": 329.8784,
+          "maxX": 426.5234375,
+          "maxY": 390.1984
+        },
+        "alphaAabbIntersection": false,
+        "pixelOverlap": false,
+        "horizontalGuardPixels": 4.003437500000018
+      }
+    ],
+    "bountyCells": [
+      {
+        "cellId": "bounty-direction-north-lujunyi",
+        "set": "bounty-direction-role",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.northeast.bounty-board.v1",
+        "tmxId": 92,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "north",
+        "agentFootWorld": {
+          "x": 1446,
+          "y": 351
+        },
+        "expectedRelation": "agent<prop",
+        "sortRelation": "agent<prop",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": -4,
+          "stableId": "jyt.prop.northeast.bounty-board.v1"
+        },
+        "propSortKeyString": "100|0|0|97024|-4|jyt.prop.northeast.bounty-board.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 89856,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|89856|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.agent.evidence.lujunyi.v1",
+          "jyt.prop.northeast.bounty-board.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 1360,
+          "minY": 255,
+          "maxX": 1532,
+          "maxY": 379
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 1432.48,
+          "minY": 296.8784,
+          "maxX": 1459,
+          "maxY": 357.1984
+        },
+        "alphaAabbIntersection": true,
+        "pixelOverlap": true,
+        "horizontalGuardPixels": null
+      },
+      {
+        "cellId": "bounty-direction-north-husanniang",
+        "set": "bounty-direction-role",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.northeast.bounty-board.v1",
+        "tmxId": 92,
+        "role": "husanniang",
+        "roleDisplayName": "扈三娘",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/husanniang-8-direction-v1.webp",
+        "roleAssetSha256": "51db05d29907b4f6d3271518860ed9cd9c27f0445b6240b68a9957004cab4e99",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "north",
+        "agentFootWorld": {
+          "x": 1446,
+          "y": 351
+        },
+        "expectedRelation": "agent<prop",
+        "sortRelation": "agent<prop",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": -4,
+          "stableId": "jyt.prop.northeast.bounty-board.v1"
+        },
+        "propSortKeyString": "100|0|0|97024|-4|jyt.prop.northeast.bounty-board.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 89856,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.husanniang.v1"
+        },
+        "agentSortKeyString": "100|0|0|89856|0|jyt.agent.evidence.husanniang.v1",
+        "painterOrder": [
+          "jyt.agent.evidence.husanniang.v1",
+          "jyt.prop.northeast.bounty-board.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 1360,
+          "minY": 255,
+          "maxX": 1532,
+          "maxY": 379
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 1422,
+          "minY": 299.96,
+          "maxX": 1469.5,
+          "maxY": 355.96
+        },
+        "alphaAabbIntersection": true,
+        "pixelOverlap": true,
+        "horizontalGuardPixels": null
+      },
+      {
+        "cellId": "bounty-direction-south-lujunyi",
+        "set": "bounty-direction-role",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.northeast.bounty-board.v1",
+        "tmxId": 92,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "south",
+        "agentFootWorld": {
+          "x": 1446,
+          "y": 420
+        },
+        "expectedRelation": "prop<agent",
+        "sortRelation": "prop<agent",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": -4,
+          "stableId": "jyt.prop.northeast.bounty-board.v1"
+        },
+        "propSortKeyString": "100|0|0|97024|-4|jyt.prop.northeast.bounty-board.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 107520,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|107520|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.prop.northeast.bounty-board.v1",
+          "jyt.agent.evidence.lujunyi.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 1360,
+          "minY": 255,
+          "maxX": 1532,
+          "maxY": 379
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 1432.48,
+          "minY": 365.8784,
+          "maxX": 1459,
+          "maxY": 426.1984
+        },
+        "alphaAabbIntersection": true,
+        "pixelOverlap": true,
+        "horizontalGuardPixels": null
+      },
+      {
+        "cellId": "bounty-direction-south-husanniang",
+        "set": "bounty-direction-role",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.northeast.bounty-board.v1",
+        "tmxId": 92,
+        "role": "husanniang",
+        "roleDisplayName": "扈三娘",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/husanniang-8-direction-v1.webp",
+        "roleAssetSha256": "51db05d29907b4f6d3271518860ed9cd9c27f0445b6240b68a9957004cab4e99",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "south",
+        "agentFootWorld": {
+          "x": 1446,
+          "y": 420
+        },
+        "expectedRelation": "prop<agent",
+        "sortRelation": "prop<agent",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": -4,
+          "stableId": "jyt.prop.northeast.bounty-board.v1"
+        },
+        "propSortKeyString": "100|0|0|97024|-4|jyt.prop.northeast.bounty-board.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 107520,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.husanniang.v1"
+        },
+        "agentSortKeyString": "100|0|0|107520|0|jyt.agent.evidence.husanniang.v1",
+        "painterOrder": [
+          "jyt.prop.northeast.bounty-board.v1",
+          "jyt.agent.evidence.husanniang.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 1360,
+          "minY": 255,
+          "maxX": 1532,
+          "maxY": 379
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 1422,
+          "minY": 368.96,
+          "maxX": 1469.5,
+          "maxY": 424.96
+        },
+        "alphaAabbIntersection": true,
+        "pixelOverlap": true,
+        "horizontalGuardPixels": null
+      },
+      {
+        "cellId": "bounty-direction-west-lujunyi",
+        "set": "bounty-direction-role",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.northeast.bounty-board.v1",
+        "tmxId": 92,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "west",
+        "agentFootWorld": {
+          "x": 1332.5,
+          "y": 379
+        },
+        "expectedRelation": "non-overlap",
+        "sortRelation": "prop<agent",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": -4,
+          "stableId": "jyt.prop.northeast.bounty-board.v1"
+        },
+        "propSortKeyString": "100|0|0|97024|-4|jyt.prop.northeast.bounty-board.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|97024|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.prop.northeast.bounty-board.v1",
+          "jyt.agent.evidence.lujunyi.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 1360,
+          "minY": 255,
+          "maxX": 1532,
+          "maxY": 379
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 1318.98,
+          "minY": 324.8784,
+          "maxX": 1345.5,
+          "maxY": 385.1984
+        },
+        "alphaAabbIntersection": false,
+        "pixelOverlap": false,
+        "horizontalGuardPixels": 14.5
+      },
+      {
+        "cellId": "bounty-direction-west-husanniang",
+        "set": "bounty-direction-role",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.northeast.bounty-board.v1",
+        "tmxId": 92,
+        "role": "husanniang",
+        "roleDisplayName": "扈三娘",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/husanniang-8-direction-v1.webp",
+        "roleAssetSha256": "51db05d29907b4f6d3271518860ed9cd9c27f0445b6240b68a9957004cab4e99",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "west",
+        "agentFootWorld": {
+          "x": 1332.5,
+          "y": 379
+        },
+        "expectedRelation": "non-overlap",
+        "sortRelation": "prop<agent",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": -4,
+          "stableId": "jyt.prop.northeast.bounty-board.v1"
+        },
+        "propSortKeyString": "100|0|0|97024|-4|jyt.prop.northeast.bounty-board.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.husanniang.v1"
+        },
+        "agentSortKeyString": "100|0|0|97024|0|jyt.agent.evidence.husanniang.v1",
+        "painterOrder": [
+          "jyt.prop.northeast.bounty-board.v1",
+          "jyt.agent.evidence.husanniang.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 1360,
+          "minY": 255,
+          "maxX": 1532,
+          "maxY": 379
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 1308.5,
+          "minY": 327.96,
+          "maxX": 1356,
+          "maxY": 383.96
+        },
+        "alphaAabbIntersection": false,
+        "pixelOverlap": false,
+        "horizontalGuardPixels": 4
+      },
+      {
+        "cellId": "bounty-direction-east-lujunyi",
+        "set": "bounty-direction-role",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.northeast.bounty-board.v1",
+        "tmxId": 92,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "east",
+        "agentFootWorld": {
+          "x": 1560,
+          "y": 379
+        },
+        "expectedRelation": "non-overlap",
+        "sortRelation": "prop<agent",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": -4,
+          "stableId": "jyt.prop.northeast.bounty-board.v1"
+        },
+        "propSortKeyString": "100|0|0|97024|-4|jyt.prop.northeast.bounty-board.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|97024|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.prop.northeast.bounty-board.v1",
+          "jyt.agent.evidence.lujunyi.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 1360,
+          "minY": 255,
+          "maxX": 1532,
+          "maxY": 379
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 1546.48,
+          "minY": 324.8784,
+          "maxX": 1573,
+          "maxY": 385.1984
+        },
+        "alphaAabbIntersection": false,
+        "pixelOverlap": false,
+        "horizontalGuardPixels": 14.480000000000018
+      },
+      {
+        "cellId": "bounty-direction-east-husanniang",
+        "set": "bounty-direction-role",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.northeast.bounty-board.v1",
+        "tmxId": 92,
+        "role": "husanniang",
+        "roleDisplayName": "扈三娘",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/husanniang-8-direction-v1.webp",
+        "roleAssetSha256": "51db05d29907b4f6d3271518860ed9cd9c27f0445b6240b68a9957004cab4e99",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "east",
+        "agentFootWorld": {
+          "x": 1560,
+          "y": 379
+        },
+        "expectedRelation": "non-overlap",
+        "sortRelation": "prop<agent",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": -4,
+          "stableId": "jyt.prop.northeast.bounty-board.v1"
+        },
+        "propSortKeyString": "100|0|0|97024|-4|jyt.prop.northeast.bounty-board.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.husanniang.v1"
+        },
+        "agentSortKeyString": "100|0|0|97024|0|jyt.agent.evidence.husanniang.v1",
+        "painterOrder": [
+          "jyt.prop.northeast.bounty-board.v1",
+          "jyt.agent.evidence.husanniang.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 1360,
+          "minY": 255,
+          "maxX": 1532,
+          "maxY": 379
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 1536,
+          "minY": 327.96,
+          "maxX": 1583.5,
+          "maxY": 383.96
+        },
+        "alphaAabbIntersection": false,
+        "pixelOverlap": false,
+        "horizontalGuardPixels": 4
+      },
+      {
+        "cellId": "bounty-depth-behind-lujunyi",
+        "set": "bounty-depth-role",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.northeast.bounty-board.v1",
+        "tmxId": 92,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "behind",
+        "agentFootWorld": {
+          "x": 1446,
+          "y": 370
+        },
+        "expectedRelation": "agent<prop",
+        "sortRelation": "agent<prop",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": -4,
+          "stableId": "jyt.prop.northeast.bounty-board.v1"
+        },
+        "propSortKeyString": "100|0|0|97024|-4|jyt.prop.northeast.bounty-board.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 94720,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|94720|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.agent.evidence.lujunyi.v1",
+          "jyt.prop.northeast.bounty-board.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 1360,
+          "minY": 255,
+          "maxX": 1532,
+          "maxY": 379
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 1432.48,
+          "minY": 315.8784,
+          "maxX": 1459,
+          "maxY": 376.1984
+        },
+        "alphaAabbIntersection": true,
+        "pixelOverlap": true,
+        "horizontalGuardPixels": null
+      },
+      {
+        "cellId": "bounty-depth-behind-husanniang",
+        "set": "bounty-depth-role",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.northeast.bounty-board.v1",
+        "tmxId": 92,
+        "role": "husanniang",
+        "roleDisplayName": "扈三娘",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/husanniang-8-direction-v1.webp",
+        "roleAssetSha256": "51db05d29907b4f6d3271518860ed9cd9c27f0445b6240b68a9957004cab4e99",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "behind",
+        "agentFootWorld": {
+          "x": 1446,
+          "y": 370
+        },
+        "expectedRelation": "agent<prop",
+        "sortRelation": "agent<prop",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": -4,
+          "stableId": "jyt.prop.northeast.bounty-board.v1"
+        },
+        "propSortKeyString": "100|0|0|97024|-4|jyt.prop.northeast.bounty-board.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 94720,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.husanniang.v1"
+        },
+        "agentSortKeyString": "100|0|0|94720|0|jyt.agent.evidence.husanniang.v1",
+        "painterOrder": [
+          "jyt.agent.evidence.husanniang.v1",
+          "jyt.prop.northeast.bounty-board.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 1360,
+          "minY": 255,
+          "maxX": 1532,
+          "maxY": 379
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 1422,
+          "minY": 318.96,
+          "maxX": 1469.5,
+          "maxY": 374.96
+        },
+        "alphaAabbIntersection": true,
+        "pixelOverlap": true,
+        "horizontalGuardPixels": null
+      },
+      {
+        "cellId": "bounty-depth-boundary-lujunyi",
+        "set": "bounty-depth-role",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.northeast.bounty-board.v1",
+        "tmxId": 92,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "boundary",
+        "agentFootWorld": {
+          "x": 1446,
+          "y": 379
+        },
+        "expectedRelation": "prop<agent",
+        "sortRelation": "prop<agent",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": -4,
+          "stableId": "jyt.prop.northeast.bounty-board.v1"
+        },
+        "propSortKeyString": "100|0|0|97024|-4|jyt.prop.northeast.bounty-board.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|97024|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.prop.northeast.bounty-board.v1",
+          "jyt.agent.evidence.lujunyi.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 1360,
+          "minY": 255,
+          "maxX": 1532,
+          "maxY": 379
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 1432.48,
+          "minY": 324.8784,
+          "maxX": 1459,
+          "maxY": 385.1984
+        },
+        "alphaAabbIntersection": true,
+        "pixelOverlap": true,
+        "horizontalGuardPixels": null
+      },
+      {
+        "cellId": "bounty-depth-boundary-husanniang",
+        "set": "bounty-depth-role",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.northeast.bounty-board.v1",
+        "tmxId": 92,
+        "role": "husanniang",
+        "roleDisplayName": "扈三娘",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/husanniang-8-direction-v1.webp",
+        "roleAssetSha256": "51db05d29907b4f6d3271518860ed9cd9c27f0445b6240b68a9957004cab4e99",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "boundary",
+        "agentFootWorld": {
+          "x": 1446,
+          "y": 379
+        },
+        "expectedRelation": "prop<agent",
+        "sortRelation": "prop<agent",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": -4,
+          "stableId": "jyt.prop.northeast.bounty-board.v1"
+        },
+        "propSortKeyString": "100|0|0|97024|-4|jyt.prop.northeast.bounty-board.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.husanniang.v1"
+        },
+        "agentSortKeyString": "100|0|0|97024|0|jyt.agent.evidence.husanniang.v1",
+        "painterOrder": [
+          "jyt.prop.northeast.bounty-board.v1",
+          "jyt.agent.evidence.husanniang.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 1360,
+          "minY": 255,
+          "maxX": 1532,
+          "maxY": 379
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 1422,
+          "minY": 327.96,
+          "maxX": 1469.5,
+          "maxY": 383.96
+        },
+        "alphaAabbIntersection": true,
+        "pixelOverlap": true,
+        "horizontalGuardPixels": null
+      },
+      {
+        "cellId": "bounty-depth-front-lujunyi",
+        "set": "bounty-depth-role",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.northeast.bounty-board.v1",
+        "tmxId": 92,
+        "role": "lujunyi",
+        "roleDisplayName": "卢俊义",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+        "roleAssetSha256": "68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "front",
+        "agentFootWorld": {
+          "x": 1446,
+          "y": 420
+        },
+        "expectedRelation": "prop<agent",
+        "sortRelation": "prop<agent",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": -4,
+          "stableId": "jyt.prop.northeast.bounty-board.v1"
+        },
+        "propSortKeyString": "100|0|0|97024|-4|jyt.prop.northeast.bounty-board.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 107520,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.lujunyi.v1"
+        },
+        "agentSortKeyString": "100|0|0|107520|0|jyt.agent.evidence.lujunyi.v1",
+        "painterOrder": [
+          "jyt.prop.northeast.bounty-board.v1",
+          "jyt.agent.evidence.lujunyi.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 1360,
+          "minY": 255,
+          "maxX": 1532,
+          "maxY": 379
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 1432.48,
+          "minY": 365.8784,
+          "maxX": 1459,
+          "maxY": 426.1984
+        },
+        "alphaAabbIntersection": true,
+        "pixelOverlap": true,
+        "horizontalGuardPixels": null
+      },
+      {
+        "cellId": "bounty-depth-front-husanniang",
+        "set": "bounty-depth-role",
+        "captureMode": "clean",
+        "commit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+        "tmxSha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
+        "cameraZoom": 1,
+        "cameraDpr": 1,
+        "propStableId": "jyt.prop.northeast.bounty-board.v1",
+        "tmxId": 92,
+        "role": "husanniang",
+        "roleDisplayName": "扈三娘",
+        "roleAssetPath": "public/juyiting/sprites/persona-sheets-v1/husanniang-8-direction-v1.webp",
+        "roleAssetSha256": "51db05d29907b4f6d3271518860ed9cd9c27f0445b6240b68a9957004cab4e99",
+        "animation": "idle",
+        "direction": "down",
+        "animationFrameOrdinal": 0,
+        "sheetFrameIndex": 0,
+        "probeName": "front",
+        "agentFootWorld": {
+          "x": 1446,
+          "y": 420
+        },
+        "expectedRelation": "prop<agent",
+        "sortRelation": "prop<agent",
+        "propSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 97024,
+          "tieBias": -4,
+          "stableId": "jyt.prop.northeast.bounty-board.v1"
+        },
+        "propSortKeyString": "100|0|0|97024|-4|jyt.prop.northeast.bounty-board.v1",
+        "agentSortKey": {
+          "renderBandOrder": 100,
+          "floorOrder": 0,
+          "elevation": 0,
+          "fixedPointY": 107520,
+          "tieBias": 0,
+          "stableId": "jyt.agent.evidence.husanniang.v1"
+        },
+        "agentSortKeyString": "100|0|0|107520|0|jyt.agent.evidence.husanniang.v1",
+        "painterOrder": [
+          "jyt.prop.northeast.bounty-board.v1",
+          "jyt.agent.evidence.husanniang.v1"
+        ],
+        "propAlphaAabbWorld": {
+          "minX": 1360,
+          "minY": 255,
+          "maxX": 1532,
+          "maxY": 379
+        },
+        "agentAlphaAabbWorld": {
+          "minX": 1422,
+          "minY": 368.96,
+          "maxX": 1469.5,
+          "maxY": 424.96
+        },
+        "alphaAabbIntersection": true,
+        "pixelOverlap": true,
+        "horizontalGuardPixels": null
+      }
+    ],
+    "contactSheet": {
+      "path": "tests/fixtures/juyiting/occlusion-v1-props/contact-sheet.svg",
+      "mediaType": "image/svg+xml",
+      "embeddedAssets": true,
+      "imageAreaPolicy": "No labels, speech bubbles, debug overlays, anchors, or AABB boxes inside evidence image areas; metadata is below each image."
+    }
+  },
   "sourceEpoch": 1786248574,
-  "generatedBy": "scripts/juyiting/generate-prop-sort-spec.mjs (deterministic generator; uses pngjs alpha-scan; see scripts/juyiting/lib/alpha-scan.mjs)"
+  "generatedBy": {
+    "command": "npm run generate:juyiting-prop-sort-spec",
+    "script": "scripts/juyiting/generate-prop-sort-spec.mjs",
+    "deterministicInputs": [
+      "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
+      "public/juyiting/hall.tmx",
+      "public/juyiting/images/props/liangshan-hall-prop-main-seat-cropped.png",
+      "public/juyiting/images/props/liangshan-hall-prop-agent-roster-cropped.png",
+      "public/juyiting/images/props/liangshan-hall-prop-bounty-board-cropped.png",
+      "public/juyiting/images/props/liangshan-hall-prop-library-shelf-cropped.png",
+      "public/juyiting/images/props/liangshan-hall-prop-roster-book-cropped.png",
+      "public/juyiting/images/liangshan-hall-base-clean-v3.webp",
+      "src/game/sprites/personaSpriteManifest.ts",
+      "src/composables/juyiting/useWaterMarginRoles.js",
+      "public/juyiting/sprites/persona-sheets-v1/lujunyi-8-direction-v1.webp",
+      "public/juyiting/sprites/persona-sheets-v1/husanniang-8-direction-v1.webp"
+    ],
+    "tooling": [
+      {
+        "path": "scripts/juyiting/generate-prop-sort-spec.mjs",
+        "sha256": "1c47d0ce49b4a1e62210c1af1a64f27398b94e467781b261f1f6af420763b760"
+      },
+      {
+        "path": "scripts/juyiting/lib/prop-sort-evidence.mjs",
+        "sha256": "9c76c2d892ac19b394e3bcec1558b8a3c37e27f2458d691b474d4576ccf1445c"
+      },
+      {
+        "path": "scripts/juyiting/lib/alpha-scan.mjs",
+        "sha256": "20ef55963aa482f1ed1e94a1c7f86632992b8023dbdb10612de0052ff8c04732"
+      },
+      {
+        "path": "scripts/juyiting/lib/webp-frame-scan.mjs",
+        "sha256": "efa2792ce076440eb43303a5bce47e9dd49ad1eadcd528e8b07c7d0552b8712c"
+      }
+    ],
+    "alphaScanners": [
+      "scripts/juyiting/lib/alpha-scan.mjs",
+      "scripts/juyiting/lib/webp-frame-scan.mjs"
+    ],
+    "sourceEpochSemantics": "sourceEpoch is the frozen base commit committer timestamp from git show; no wall-clock generatedAt field is emitted."
+  },
+  "generationId": "4a47753cf81ef0219f6e1914ff818be291158bc100d4d2c639cb0c23a8a0f8c6"
 }

@@ -30,7 +30,6 @@
                     "preview:juyiting-occlusion-layers":  "node scripts/juyiting/render-occlusion-layers.mjs",
                     "asset:juyiting-report":  "node --import tsx scripts/juyiting/asset-report-juyiting.mjs",
                     "test:juyiting-occlusion-baseline":  "node --import tsx ./node_modules/mocha/bin/mocha.js --no-config --require ./tests/setup.js --reporter spec tests/juyiting-occlusion-baseline.test.js",
-                    "verify:juyiting-prop-sort-spec": "node scripts/juyiting/verify-prop-sort-spec.mjs",
                     "test:juyiting-occlusion-prop-sort": "node --import tsx ./node_modules/mocha/bin/mocha.js --no-config --require ./tests/setup.js --reporter spec tests/juyiting-occlusion-prop-sort.test.js"
                 },
     "dependencies":  {

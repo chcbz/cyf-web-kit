@@ -1,513 +1,388 @@
-/**
- * E8A Directed Tests: Five Prop Sort Specification (v3 fix)
- * Covers: completeness, stableId, asset provenance, anchor evidence,
- * 4-dir probes, bounty-board 14-cell matrix with tieBias=-4,
- * role invariance, sort order + tieBias determinism, fixedPoint,
- * TMX rect integrity, generationId, and MUTATION-BASED fail-closed tests.
- */
-import { expect } from "chai";
-import { readFileSync, writeFileSync, unlinkSync } from "node:fs";
-import { createHash } from "node:crypto";
-import { execSync } from "node:child_process";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
+/** E8A directed tests for the GPT V1 visual-gate prop sort contract. */
+import { expect } from 'chai'
+import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { spawnSync } from 'node:child_process'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { compareWorldSortKeys } from '../src/game/occlusion/worldOrder.ts'
+import {
+  BASE_COMMIT,
+  ZERO_GENERATION_ID,
+  BOUNTY_ROLES,
+  DIRECTIONS,
+  worldSortKey,
+  intersectsHalfOpen,
+  horizontalGap,
+  stableJson
+} from '../scripts/juyiting/lib/prop-sort-evidence.mjs'
 
-const REPO_ROOT = process.cwd();
-const SPEC_PATH = join(REPO_ROOT, "tests/fixtures/juyiting/occlusion-v1-props/prop-sort-spec.json");
-const CONTACT_SHEET_PATH = join(REPO_ROOT, "tests/fixtures/juyiting/occlusion-v1-props/contact-sheet.svg");
-const VERIFIER = join(REPO_ROOT, "scripts/juyiting/verify-prop-sort-spec.mjs");
-const GENERATOR = join(REPO_ROOT, "scripts/juyiting/generate-prop-sort-spec.mjs");
-const TMX_PATH = join(REPO_ROOT, "public/juyiting/hall.tmx");
+const REPO_ROOT = process.cwd()
+const FIXTURE_DIR = join(REPO_ROOT, 'tests/fixtures/juyiting/occlusion-v1-props')
+const SPEC_PATH = join(FIXTURE_DIR, 'prop-sort-spec.json')
+const SVG_PATH = join(FIXTURE_DIR, 'contact-sheet.svg')
+const TMX_PATH = join(REPO_ROOT, 'public/juyiting/hall.tmx')
+const GENERATOR = join(REPO_ROOT, 'scripts/juyiting/generate-prop-sort-spec.mjs')
+const VERIFIER = join(REPO_ROOT, 'scripts/juyiting/verify-prop-sort-spec.mjs')
+const spec = JSON.parse(readFileSync(SPEC_PATH, 'utf8'))
 
-const spec = JSON.parse(readFileSync(SPEC_PATH, "utf-8"));
-
-function assetPath(rel) { return join(REPO_ROOT, rel); }
-function computeFixedPointY(y) { return Math.round(y * 256); }
-
-function compareStableId(a, b) {
-  for (let i = 0; i < Math.min(a.length, b.length); i++)
-    if (a.charCodeAt(i) !== b.charCodeAt(i)) return a.charCodeAt(i) - b.charCodeAt(i);
-  return a.length - b.length;
-}
-
-function sortByWorldKey(props) {
-  return [...props].sort((a, b) => {
-    if (a.fixedPointY !== b.fixedPointY) return a.fixedPointY - b.fixedPointY;
-    if (a.tieBias !== b.tieBias) return a.tieBias - b.tieBias;
-    return compareStableId(a.stableId, b.stableId);
-  });
-}
-
-const EXPECTED_TMX_IDS = [90, 91, 92, 93, 94];
 const EXPECTED_ORDER = [
-  "jyt.prop.center-north.roster-book.v1",
-  "jyt.prop.center-north.main-seat.v1",
-  "jyt.prop.northeast.bounty-board.v1",
-  "jyt.prop.southeast.library-shelf.v1",
-  "jyt.prop.southwest.agent-roster.v1",
-];
+  'jyt.prop.center-north.main-seat.v1',
+  'jyt.prop.northeast.bounty-board.v1',
+  'jyt.prop.center-north.roster-book.v1',
+  'jyt.prop.southeast.library-shelf.v1',
+  'jyt.prop.southwest.agent-roster.v1'
+]
 
-const ZERO_ID = "0".repeat(64);
+function resign(value) {
+  value.generationId = ZERO_GENERATION_ID
+  value.generationId = createHash('sha256').update(stableJson(value)).digest('hex')
+  return value
+}
+function cloneSpec() { return JSON.parse(JSON.stringify(spec)) }
+function tempWorkspace(prefix = 'e8a-prop-sort-') { return mkdtempSync(join(tmpdir(), prefix)) }
+function runVerifier({ specPath = SPEC_PATH, svgPath = SVG_PATH, tmxPath = null } = {}) {
+  const args = [VERIFIER, '--spec', specPath, '--svg', svgPath]
+  if (tmxPath) args.push('--tmx', tmxPath)
+  const result = spawnSync(process.execPath, args, { cwd: REPO_ROOT, encoding: 'utf8', timeout: 30000 })
+  return { status: result.status, output: `${result.stdout || ''}${result.stderr || ''}` }
+}
+function runMutatedSpec(mutate) {
+  const dir = tempWorkspace()
+  const path = join(dir, 'spec.json')
+  const value = cloneSpec()
+  mutate(value)
+  resign(value)
+  writeFileSync(path, `${stableJson(value)}\n`)
+  const result = runVerifier({ specPath: path })
+  rmSync(dir, { recursive: true, force: true })
+  return result
+}
+function mutateTmx(replacer) {
+  const dir = tempWorkspace('e8a-tmx-')
+  const path = join(dir, 'hall.tmx')
+  const original = readFileSync(TMX_PATH, 'utf8')
+  const mutated = replacer(original)
+  expect(mutated).to.not.equal(original)
+  writeFileSync(path, mutated)
+  return { dir, path }
+}
+function expectRejected(result, marker) {
+  expect(result.status, result.output).to.not.equal(0)
+  expect(result.output).to.include(marker)
+}
 
-describe("E8A Prop Sort Spec (v3 fix)", () => {
+function sortProps(props) {
+  return [...props].sort((a, b) => compareWorldSortKeys(
+    worldSortKey(a.stableId, a.fixedPointY, a.tieBias),
+    worldSortKey(b.stableId, b.fixedPointY, b.tieBias)
+  ))
+}
 
-  it("spec loads successfully", () => {
-    expect(spec.propCount).to.equal(5);
-    expect(spec.props).to.have.lengthOf(5);
-  });
+function shuffle(array, seed) {
+  const result = [...array]
+  let state = seed
+  for (let index = result.length - 1; index > 0; index--) {
+    state = (state * 1103515245 + 12345) & 0x7fffffff
+    const swap = state % (index + 1)
+    ;[result[index], result[swap]] = [result[swap], result[index]]
+  }
+  return result
+}
 
-  describe("1. Completeness & identity", () => {
-    it("covers all expected TMX ids", () => {
-      expect(spec.props.map(p => p.tmxId).sort()).to.deep.equal(EXPECTED_TMX_IDS);
-    });
-    it("has no duplicate tmxId", () => {
-      expect(new Set(spec.props.map(p => p.tmxId)).size).to.equal(5);
-    });
-    it("has required top-level fields", () => {
-      expect(spec.sceneId).to.equal("juyiting-main");
-      expect(spec.specVersion).to.equal(1);
-      expect(spec.baseCommit).to.equal("7144d9260b3905ce0335d037d3b1a3589d3a88a1");
-      expect(spec.taskId).to.equal("E8A");
-      expect(spec.sourceEpoch).to.be.a("number").and.satisfy(n => Number.isSafeInteger(n) && n > 0);
-    });
-  });
+describe('E8A prop sort spec — GPT V1 visual gate', function () {
+  this.timeout(120000)
 
-  describe("2. stableId schema", () => {
-    it("all stableIds match pattern and are unique", () => {
-      const ids = spec.props.map(p => p.stableId);
-      expect(new Set(ids).size).to.equal(5);
-      for (const id of ids) expect(id).to.match(/^[a-z0-9][a-z0-9._-]{2,95}$/);
-    });
-    it("stableIds are pure ASCII", () => {
-      for (const p of spec.props)
-        for (let i = 0; i < p.stableId.length; i++)
-          expect(p.stableId.charCodeAt(i)).to.be.lessThanOrEqual(127);
-    });
-  });
-
-  describe("3. Asset provenance", () => {
-    it("all 5 assets exist with matching sha256", () => {
-      for (const p of spec.props) {
-        const buf = readFileSync(assetPath(p.asset.path));
-        const sha = createHash("sha256").update(buf).digest("hex");
-        expect(sha, p.semanticName).to.equal(p.asset.sha256);
+  describe('frozen five-prop contract', () => {
+    it('is complete, unique, schema-valid, and base-bound', () => {
+      expect(spec.$schema).to.equal('jyt.occlusion.prop-sort-spec.v1')
+      expect(spec.baseCommit).to.equal(BASE_COMMIT)
+      expect(spec.propCount).to.equal(5)
+      expect(spec.props).to.have.length(5)
+      expect(spec.props.map(prop => prop.tmxId).sort((a, b) => a - b)).to.deep.equal([90, 91, 92, 93, 94])
+      expect(new Set(spec.props.map(prop => prop.stableId)).size).to.equal(5)
+      for (const prop of spec.props) {
+        expect(prop.stableId).to.match(/^[a-z0-9][a-z0-9._-]{2,95}$/)
+        expect(prop.sceneId).to.equal('juyiting-main')
+        expect(prop.floorId).to.equal('floor-1')
+        expect(prop.renderBand).to.equal('world')
+        expect(prop.sortMode).to.equal('fixed')
+        expect(prop.elevation).to.equal(0)
+        expect(prop.fixedPointY).to.equal(Math.round(prop.sortAnchor.y * 256))
       }
-    });
-    it("bounty-board sha256 matches V0 frozen value", () => {
-      const bb = spec.props.find(p => p.tmxId === 92);
-      expect(bb.asset.sha256).to.equal("2e4c3e749119392b01a7301aaa8f40986a09e5cc731ab61105ed600a755b6252");
-    });
-  });
+    })
 
-  describe("4. sortAnchor evidence", () => {
-    it("all anchors within bounds; floor-standing at rect bottom, roster-book at Y=260", () => {
-      for (const p of spec.props) {
-        expect(p.sortAnchor.x, p.semanticName + " x").to.be.within(0, 1664);
-        expect(p.sortAnchor.y, p.semanticName + " y").to.be.within(0, 928);
-        if (p.tmxId === 94) {
-          expect(p.sortAnchor.y, p.semanticName).to.equal(260);
-          expect(p.sortAnchor.y).to.be.lessThan(p.tmxRect.maxY);
-        } else {
-          expect(p.sortAnchor.y, p.semanticName).to.equal(p.tmxRect.maxY);
+    it('freezes the REJECT-V1 roster-book correction as the whole lectern/cabinet', () => {
+      const prop = spec.props.find(item => item.tmxId === 94)
+      expect(prop.sortAnchor).to.deep.equal({ x: 306, y: 384 })
+      expect(prop.fixedPointY).to.equal(98304)
+      expect(prop.probes.north.agentFootPoint).to.deep.equal({ x: 306, y: 356 })
+      expect(prop.probes.south.agentFootPoint).to.deep.equal({ x: 306, y: 412 })
+      expect(prop.probes.west.agentFootPoint.y).to.equal(384)
+      expect(prop.probes.east.agentFootPoint.y).to.equal(384)
+      expect(prop.sortAnchorRationale).to.include('full illuminated lectern/cabinet')
+      expect(prop.sortAnchorRationale).to.include('whole-asset floor/front-base boundary')
+      expect(prop.sortAnchorEvidence.sampledRows.map(row => row.y)).to.deep.equal([160, 186, 187, 190, 191])
+    })
+
+    it('freezes the corrected E5 order and is declaration/insertion-order independent', () => {
+      expect(sortProps(spec.props).map(prop => prop.stableId)).to.deep.equal(EXPECTED_ORDER)
+      expect(spec.globalConstraints.fivePropSortOrder.order).to.deep.equal(EXPECTED_ORDER)
+      for (let seed = 0; seed < 20; seed++) {
+        expect(sortProps(shuffle(spec.props, seed)).map(prop => prop.stableId)).to.deep.equal(EXPECTED_ORDER)
+      }
+    })
+
+    it('binds every prop asset to structured TMX gid/tileset/tile/image provenance', () => {
+      for (const prop of spec.props) {
+        expect(prop.tmxBinding.tilesetName).to.equal('hall-props')
+        expect(prop.tmxBinding.firstgid).to.equal(6033)
+        expect(prop.tmxBinding.objectalignment).to.equal('topleft')
+        expect(prop.tmxBinding.gid).to.equal(prop.tmxBinding.firstgid + prop.tmxBinding.tileId)
+        expect(prop.asset.width).to.equal(prop.tmxRect.width)
+        expect(prop.asset.height).to.equal(prop.tmxRect.height)
+        const bytes = readFileSync(join(REPO_ROOT, prop.asset.path))
+        expect(createHash('sha256').update(bytes).digest('hex')).to.equal(prop.asset.sha256)
+        expect(prop.sortAnchorEvidence.sampledRows.length).to.be.at.least(4)
+        expect(prop.sortAnchorEvidence.anchorImagePoint.y).to.equal(prop.asset.height)
+      }
+    })
+  })
+
+  describe('alpha-AABB probes and canonical role frames', () => {
+    it('freezes real persona manifest assets and decoded idle/down/frame-0 alpha AABBs', () => {
+      const roles = spec.visualEvidence.roles
+      expect(roles.lujunyi.displayName).to.equal('卢俊义')
+      expect(roles.husanniang.displayName).to.equal('扈三娘')
+      expect(roles.lujunyi.asset.sha256).to.equal('68ddd7e090437804f52e3c0bbdf0e44ee85f9d91b81dffe00171966a6f33fa65')
+      expect(roles.husanniang.asset.sha256).to.equal('51db05d29907b4f6d3271518860ed9cd9c27f0445b6240b68a9957004cab4e99')
+      expect(roles.lujunyi.sourceFrameAlphaAabb).to.deep.equal({ minX: 38, minY: 6, maxX: 89, maxY: 122, width: 51, height: 116, opaquePixels: 3677 })
+      expect(roles.husanniang.sourceFrameAlphaAabb).to.deep.equal({ minX: 16, minY: 8, maxX: 111, maxY: 120, width: 95, height: 112, opaquePixels: 4857 })
+      for (const role of BOUNTY_ROLES) {
+        expect(roles[role].animation).to.equal('idle')
+        expect(roles[role].direction).to.equal('down')
+        expect(roles[role].animationFrameOrdinal).to.equal(0)
+        expect(roles[role].sheetFrameIndex).to.equal(0)
+      }
+    })
+
+    it('has all 20 N/S/W/E prop probes with finite coordinates and measured overlap', () => {
+      for (const prop of spec.props) {
+        for (const direction of DIRECTIONS) {
+          const probe = prop.probes[direction]
+          expect(probe.agentFootPoint.x).to.satisfy(Number.isFinite)
+          expect(probe.agentFootPoint.y).to.satisfy(Number.isFinite)
+          expect(probe.alphaAabbIntersection).to.equal(intersectsHalfOpen(probe.propAlphaAabbWorld, probe.agentAlphaAabbWorld))
+          expect(probe.pixelOverlap).to.equal(probe.alphaAabbIntersection)
+          if (direction === 'north') expect(probe.expectedRelation).to.equal('agent<prop')
+          if (direction === 'south') expect(probe.expectedRelation).to.equal('prop<agent')
         }
-        const expectedX = p.tmxRect.x + Math.floor(p.tmxRect.width / 2);
-        expect(Math.abs(p.sortAnchor.x - expectedX), p.semanticName + " center").to.be.lessThanOrEqual(1);
       }
-    });
-    it("all props have sortAnchorRationale with evidence (>=50 chars)", () => {
-      for (const p of spec.props) {
-        expect(p.sortAnchorRationale).to.be.a("string");
-        expect(p.sortAnchorRationale.length, p.semanticName).to.be.greaterThan(50);
-      }
-    });
-  });
+    })
 
-  describe("5. Four-direction probes (strict)", () => {
-    it("all 5 props have N/S/W/E probes with finite coords and relation", () => {
-      for (const p of spec.props)
-        for (const d of ["north","south","west","east"]) {
-          const pr = p.probes[d];
-          expect(pr, p.semanticName + "/" + d).to.be.an("object");
-          expect(pr.agentFootPoint.x, p.semanticName + "/" + d + ".x").to.be.a("number").and.satisfy(Number.isFinite);
-          expect(pr.agentFootPoint.y, p.semanticName + "/" + d + ".y").to.be.a("number").and.satisfy(Number.isFinite);
-          expect(pr.expectedRelation, p.semanticName + "/" + d).to.be.a("string");
-          expect(pr.rationale, p.semanticName + "/" + d).to.be.a("string");
+    it('derives W/E zero-overlap from alpha AABBs with at least a 4px guard', () => {
+      for (const prop of spec.props) {
+        for (const direction of ['west', 'east']) {
+          const probe = prop.probes[direction]
+          expect(probe.expectedRelation).to.equal('non-overlap')
+          expect(probe.alphaAabbIntersection).to.be.false
+          const gap = horizontalGap(probe.propAlphaAabbWorld, probe.agentAlphaAabbWorld, direction)
+          expect(gap).to.be.at.least(4)
+          expect(probe.horizontalGuardPixels).to.equal(gap)
         }
-    });
-    it("north: agent<prop (sort assertion), south: prop<agent (sort assertion)", () => {
-      for (const p of spec.props) {
-        expect(p.probes.north.expectedRelation).to.equal("agent<prop");
-        expect(p.probes.north.agentFootPoint.y).to.be.lessThan(p.sortAnchor.y);
-        expect(p.probes.south.expectedRelation).to.equal("prop<agent");
-        expect(p.probes.south.agentFootPoint.y).to.be.greaterThan(p.sortAnchor.y);
       }
-    });
-    it("west/east: non-overlap (explicit)", () => {
-      for (const p of spec.props) {
-        expect(p.probes.west.expectedRelation).to.equal("non-overlap");
-        expect(p.probes.east.expectedRelation).to.equal("non-overlap");
-        expect(p.probes.west.pixelOverlap).to.be.false;
-        expect(p.probes.east.pixelOverlap).to.be.false;
-      }
-    });
-  });
+    })
+  })
 
-  describe("6. Bounty-board 14-cell matrix + tieBias", () => {
-    const bb = spec.props.find(p => p.tmxId === 92);
-    it("has both roles", () => {
-      expect(bb.bountyBoardMatrix.roles).to.include.members(["lujunyi","husanniang"]);
-    });
-    it("has 4 N/S/W/E cells + 3 behind/boundary/front cells (all 14 cells)", () => {
-      const c = bb.bountyBoardMatrix.matrixCells;
-      for (const d of ["north","south","west","east"]) {
-        expect(c[d], d).to.be.an("object");
-        expect(c[d].lujunyiExpected, d + "/lujunyi").to.be.a("string");
-        expect(c[d].husanniangExpected, d + "/husanniang").to.be.a("string");
-        expect(c[d].agentFoot.x, d + "/foot.x").to.satisfy(Number.isFinite);
-        expect(c[d].agentFoot.y, d + "/foot.y").to.satisfy(Number.isFinite);
-      }
-      const bbf = bb.bountyBoardMatrix.behindBoundaryFront;
-      for (const p of ["behind","boundary","front"]) {
-        expect(bbf[p], "bbf/" + p).to.be.an("object");
-        expect(bbf[p].lujunyiExpected, "bbf/" + p + "/lujunyi").to.be.a("string");
-        expect(bbf[p].husanniangExpected, "bbf/" + p + "/husanniang").to.be.a("string");
-        expect(bbf[p].agentFoot.x, "bbf/" + p + "/foot.x").to.satisfy(Number.isFinite);
-        expect(bbf[p].agentFoot.y, "bbf/" + p + "/foot.y").to.satisfy(Number.isFinite);
-      }
-    });
-    it("tieBias=-4 (deterministic table<agent at boundary)", () => {
-      expect(bb.tieBias).to.equal(-4);
-    });
-    it("role invariance: same relation for both roles in all 14 cells", () => {
-      for (const [d, c] of Object.entries(bb.bountyBoardMatrix.matrixCells))
-        expect(c.lujunyiExpected, "matrix/" + d).to.equal(c.husanniangExpected);
-      for (const [p, c] of Object.entries(bb.bountyBoardMatrix.behindBoundaryFront)) {
-        if (p === "description" || p === "requiredFields") continue;
-        expect(c.lujunyiExpected, "bbf/" + p).to.equal(c.husanniangExpected);
-      }
-    });
-    it("boundary (y=379): prop<agent via tieBias=-4, NOT stableId", () => {
-      const bnd = bb.bountyBoardMatrix.behindBoundaryFront.boundary;
-      expect(bnd.agentFoot.y).to.equal(379);
-      expect(bnd.agentFoot.y).to.equal(bb.sortAnchor.y);
-      expect(bnd.lujunyiExpected).to.equal("prop<agent");
-      expect(bnd.husanniangExpected).to.equal("prop<agent");
-      expect(bnd.rationale).to.include("tieBias");
-      expect(bnd.rationale).to.include("tieBias");
-    });
-    it("behind (y=370): agent<prop; front (y=420): prop<agent", () => {
-      const bbf = bb.bountyBoardMatrix.behindBoundaryFront;
-      expect(bbf.behind.agentFoot.y).to.be.lessThan(bb.sortAnchor.y);
-      expect(bbf.behind.lujunyiExpected).to.equal("agent<prop");
-      expect(bbf.front.agentFoot.y).to.be.greaterThan(bb.sortAnchor.y);
-      expect(bbf.front.lujunyiExpected).to.equal("prop<agent");
-    });
-    it("mask58 cross-reference for E10A", () => {
-      expect(bb.bountyBoardMatrix.mask58CrossReference.maskId).to.equal(58);
-    });
-    it("clean and UI-on modes documented with required fields", () => {
-      const m = bb.bountyBoardMatrix;
-      expect(m.cleanMode.requiredFields).to.include.members(["commit","tmxSha256","cameraZoom","cameraDpr","sortKey","agentFootWorld"]);
-      expect(m.uiOnMode.requiredFields).to.include.members(["commit","tmxSha256","cameraZoom","cameraDpr","sortKey","agentFootWorld"]);
-    });
-  });
+  describe('bounty-board 14-cell contract and tie semantics', () => {
+    const bounty = spec.props.find(prop => prop.tmxId === 92)
+    const matrix = bounty.bountyBoardMatrix
 
-  describe("7. Sort order + tieBias determinism", () => {
-    it("computed order matches declared EXPECTED_ORDER", () => {
-      const computed = sortByWorldKey(spec.props).map(p => p.stableId);
-      expect(computed).to.deep.equal(EXPECTED_ORDER);
-    });
-    it("10-shuffle produces identical sort order", () => {
-      function shuffle(arr, seed) {
-        const a = [...arr]; let s = seed;
-        for (let i = a.length - 1; i > 0; i--) {
-          s = (s * 1103515245 + 12345) & 0x7fffffff;
-          const j = s % (i + 1); [a[i], a[j]] = [a[j], a[i]];
+    it('freezes direction and depth points exactly', () => {
+      expect(matrix.matrixCells.north.agentFoot).to.deep.equal({ x: 1446, y: 351 })
+      expect(matrix.matrixCells.south.agentFoot).to.deep.equal({ x: 1446, y: 420 })
+      expect(matrix.behindBoundaryFront.behind.agentFoot).to.deep.equal({ x: 1446, y: 370 })
+      expect(matrix.behindBoundaryFront.boundary.agentFoot).to.deep.equal({ x: 1446, y: 379 })
+      expect(matrix.behindBoundaryFront.front.agentFoot).to.deep.equal({ x: 1446, y: 420 })
+    })
+
+    it('contains the full 8 direction-role and 6 depth-role cells with same-foot role invariance', () => {
+      expect(spec.visualEvidence.bountyCells).to.have.length(14)
+      for (const direction of DIRECTIONS) {
+        const cells = BOUNTY_ROLES.map(role => spec.visualEvidence.bountyCells.find(cell => cell.cellId === `bounty-direction-${direction}-${role}`))
+        expect(cells.every(Boolean)).to.be.true
+        expect(cells[0].agentFootWorld).to.deep.equal(cells[1].agentFootWorld)
+        expect(cells[0].expectedRelation).to.equal(cells[1].expectedRelation)
+      }
+      for (const position of ['behind', 'boundary', 'front']) {
+        const cells = BOUNTY_ROLES.map(role => spec.visualEvidence.bountyCells.find(cell => cell.cellId === `bounty-depth-${position}-${role}`))
+        expect(cells.every(Boolean)).to.be.true
+        expect(cells[0].agentFootWorld).to.deep.equal(cells[1].agentFootWorld)
+        expect(cells[0].expectedRelation).to.equal(cells[1].expectedRelation)
+      }
+    })
+
+    it('asserts behind agent<prop, boundary/front prop<agent for both roles', () => {
+      for (const role of BOUNTY_ROLES) {
+        expect(matrix.behindBoundaryFront.behind.expectedByRole[role]).to.equal('agent<prop')
+        expect(matrix.behindBoundaryFront.boundary.expectedByRole[role]).to.equal('prop<agent')
+        expect(matrix.behindBoundaryFront.front.expectedByRole[role]).to.equal('prop<agent')
+      }
+    })
+
+    it('proves boundary table(-4)<agent(0) independently of stableId using E5 comparator', () => {
+      const table = worldSortKey(bounty.stableId, bounty.fixedPointY, -4)
+      for (const stableId of ['jyt.agent.evidence.aaa.v1', 'jyt.agent.evidence.zzz.v1']) {
+        const agent = worldSortKey(stableId, bounty.fixedPointY, 0)
+        expect(compareWorldSortKeys(table, agent)).to.equal(-1)
+      }
+    })
+
+    it('keeps drawable, mask geometry, canonical occluder pixels, and hotspot separate', () => {
+      expect(matrix.mask58CrossReference.maskId).to.equal(58)
+      expect(matrix.mask58CrossReference.action).to.equal('E10A_REQUIRED_REVIEW')
+      expect(matrix.mask58CrossReference.distinction).to.include('Drawable')
+      expect(matrix.mask58CrossReference.distinction).to.include('hotspot')
+    })
+  })
+
+  describe('actual visual evidence and deterministic generation', () => {
+    it('commits exactly 20+14 complete actual-render evidence cells', () => {
+      const visual = spec.visualEvidence
+      expect(visual.verdictAddressed).to.equal('REJECT-V1')
+      expect(visual.propCellCount).to.equal(20)
+      expect(visual.bountyCellCount).to.equal(14)
+      expect(visual.totalCellCount).to.equal(34)
+      expect(visual.propCells).to.have.length(20)
+      expect(visual.bountyCells).to.have.length(14)
+      for (const cell of [...visual.propCells, ...visual.bountyCells]) {
+        expect(cell.commit).to.equal(BASE_COMMIT)
+        expect(cell.tmxSha256).to.equal(spec.tmxSource.sha256)
+        expect(cell.cameraZoom).to.equal(1)
+        expect(cell.cameraDpr).to.equal(1)
+        expect(cell.captureMode).to.equal('clean')
+        expect(cell.propSortKey).to.include.all.keys('renderBandOrder', 'floorOrder', 'elevation', 'fixedPointY', 'tieBias', 'stableId')
+        expect(cell.agentSortKey).to.include.all.keys('renderBandOrder', 'floorOrder', 'elevation', 'fixedPointY', 'tieBias', 'stableId')
+        expect(cell.painterOrder).to.have.length(2)
+      }
+    })
+
+    it('has a self-contained SVG with 34 clean image areas and matching generationId', () => {
+      const svg = readFileSync(SVG_PATH, 'utf8')
+      expect(svg.match(/class="evidence-cell"/g)).to.have.length(34)
+      expect(svg.match(/class="clean-image-area"/g)).to.have.length(34)
+      expect(svg).to.include(`data-generation-id="${spec.generationId}"`)
+      expect(svg).to.include('data:image/webp;base64,')
+      expect(svg).to.include('data:image/png;base64,')
+      for (const match of svg.matchAll(/<svg class="clean-image-area"[\s\S]*?<\/svg>/g)) {
+        expect(match[0]).to.not.match(/<text|label|bubble|debug/i)
+      }
+    })
+
+    it('recomputes the full 64-hex provisional-zero generationId', () => {
+      expect(spec.generationId).to.match(/^[0-9a-f]{64}$/)
+      const clone = cloneSpec()
+      const saved = clone.generationId
+      clone.generationId = ZERO_GENERATION_ID
+      expect(createHash('sha256').update(stableJson(clone)).digest('hex')).to.equal(saved)
+      expect(spec).to.not.have.property('generatedAt')
+      expect(spec.generatedBy.command).to.equal('npm run generate:juyiting-prop-sort-spec')
+    })
+
+    it('runs the generator twice with byte-identical outputs and matches committed outputs', () => {
+      const dir = tempWorkspace('e8a-repro-')
+      try {
+        const outputs = [1, 2].map(index => ({ spec: join(dir, `spec-${index}.json`), svg: join(dir, `sheet-${index}.svg`) }))
+        for (const output of outputs) {
+          const result = spawnSync(process.execPath, [GENERATOR, '--spec', output.spec, '--svg', output.svg], { cwd: REPO_ROOT, encoding: 'utf8', timeout: 30000 })
+          expect(result.status, `${result.stdout}${result.stderr}`).to.equal(0)
         }
-        return a;
-      }
-      const expected = EXPECTED_ORDER.join("|");
-      for (let seed = 0; seed < 10; seed++) {
-        const result = sortByWorldKey(shuffle(spec.props, seed)).map(p => p.stableId).join("|");
-        expect(result, "seed " + seed).to.equal(expected);
-      }
-    });
-    it("tieBias proof: table(-4) < agent(0) at same fixedPointY", () => {
-      const a = { fixedPointY: 97024, tieBias: -4, stableId: "jyt.prop.northeast.bounty-board.v1" };
-      const b = { fixedPointY: 97024, tieBias: 0, stableId: "jyt.agent.lujunyi.v1" };
-      const sorted = sortByWorldKey([a, b]);
-      expect(sorted[0].tieBias).to.equal(-4);
-      expect(sorted[1].tieBias).to.equal(0);
-    });
-  });
+        expect(readFileSync(outputs[0].spec).equals(readFileSync(outputs[1].spec))).to.be.true
+        expect(readFileSync(outputs[0].svg).equals(readFileSync(outputs[1].svg))).to.be.true
+        expect(readFileSync(outputs[0].spec).equals(readFileSync(SPEC_PATH))).to.be.true
+        expect(readFileSync(outputs[0].svg).equals(readFileSync(SVG_PATH))).to.be.true
+      } finally { rmSync(dir, { recursive: true, force: true }) }
+    })
 
-  describe("8. Fixed-point Y consistency", () => {
-    it("all fixedPointY = round(sortAnchor.y * 256)", () => {
-      for (const p of spec.props)
-        expect(p.fixedPointY, p.semanticName).to.equal(computeFixedPointY(p.sortAnchor.y));
-    });
-    it("all 5 fixedPointY values are distinct", () => {
-      expect(new Set(spec.props.map(p => p.fixedPointY)).size).to.equal(5);
-    });
-    it("roster-book lowest (66560), agent-roster highest (188672)", () => {
-      const sorted = sortByWorldKey(spec.props);
-      expect(sorted[0].stableId).to.equal("jyt.prop.center-north.roster-book.v1");
-      expect(sorted[4].stableId).to.equal("jyt.prop.southwest.agent-roster.v1");
-    });
-  });
+    it('passes the standalone verifier on committed outputs', () => {
+      const result = runVerifier()
+      expect(result.status, result.output).to.equal(0)
+    })
+  })
 
-  describe("9. Frozen field values", () => {
-    it("all props: renderBand=world, sortMode=fixed, floorId=floor-1, elev=0, sceneId=juyiting-main; bounty-board tieBias=-4", () => {
-      for (const p of spec.props) {
-        expect(p.renderBand, p.semanticName).to.equal("world");
-        expect(p.sortMode, p.semanticName).to.equal("fixed");
-        expect(p.floorId, p.semanticName).to.equal("floor-1");
-        expect(p.elevation, p.semanticName).to.equal(0);
-        if (p.tmxId === 92) expect(p.tieBias, p.semanticName).to.equal(-4);
-        else expect(p.tieBias, p.semanticName).to.equal(0);
-        expect(p.sceneId, p.semanticName).to.equal("juyiting-main");
-      }
-    });
-  });
-
-  describe("10. TMX rect integrity", () => {
-    it("all rects: maxX=x+width, maxY=y+height, matches asset dims", () => {
-      for (const p of spec.props) {
-        expect(p.tmxRect.maxX).to.equal(p.tmxRect.x + p.tmxRect.width);
-        expect(p.tmxRect.maxY).to.equal(p.tmxRect.y + p.tmxRect.height);
-        expect(p.tmxRect.width).to.equal(p.asset.width);
-        expect(p.tmxRect.height).to.equal(p.asset.height);
-      }
-    });
-  });
-
-  describe("11. Generation ID (64-hex provisional-zero-id SHA-256)", () => {
-    it("generationId is 64 hex chars", () => {
-      expect(spec.generationId).to.match(/^[0-9a-f]{64}$/);
-    });
-    it("generationId can be recomputed (provisional-zero-id convention)", () => {
-      const saved = spec.generationId;
-      spec.generationId = ZERO_ID;
-      const recomputed = createHash("sha256").update(JSON.stringify(spec, null, 2)).digest("hex");
-      spec.generationId = saved;
-      expect(recomputed).to.equal(saved);
-    });
-    it("contact-sheet.svg data-generation-id matches spec", () => {
-      const svg = readFileSync(CONTACT_SHEET_PATH, "utf-8");
-      const m = svg.match(/data-generation-id="([^"]+)"/);
-      expect(m, "contact-sheet has data-generation-id").to.not.be.null;
-      expect(m[1]).to.equal(spec.generationId);
-    });
-  });
-
-  describe("11b. Generator reproducibility", () => {
-    it("generator produces byte-identical output on two runs", () => {
-      const p1 = join(tmpdir(), "e8a-repro-1-" + Date.now() + ".json");
-      const s1 = join(tmpdir(), "e8a-repro-1-" + Date.now() + ".svg");
-      const p2 = join(tmpdir(), "e8a-repro-2-" + Date.now() + ".json");
-      const s2 = join(tmpdir(), "e8a-repro-2-" + Date.now() + ".svg");
-      try {
-        execSync("node " + GENERATOR + " --spec " + p1 + " --svg " + s1, { cwd: REPO_ROOT, timeout: 10000, stdio: "pipe" });
-        execSync("node " + GENERATOR + " --spec " + p2 + " --svg " + s2, { cwd: REPO_ROOT, timeout: 10000, stdio: "pipe" });
-        const buf1 = readFileSync(p1), buf2 = readFileSync(p2);
-        expect(buf1.equals(buf2), "spec files byte-identical").to.be.true;
-        const svg1 = readFileSync(s1), svg2 = readFileSync(s2);
-        expect(svg1.equals(svg2), "SVG files byte-identical").to.be.true;
-      } finally {
-        try { unlinkSync(p1); unlinkSync(s1); unlinkSync(p2); unlinkSync(s2); } catch (_) {}
-      }
-    });
-    it("committed spec equals freshly generated spec", () => {
-      const tmpP = join(tmpdir(), "e8a-fresh-" + Date.now() + ".json");
-      try {
-        execSync("node " + GENERATOR + " --spec " + tmpP, { cwd: REPO_ROOT, timeout: 10000, stdio: "pipe" });
-        const fresh = readFileSync(tmpP);
-        const committed = readFileSync(SPEC_PATH);
-        expect(fresh.equals(committed), "committed spec matches freshly generated").to.be.true;
-      } finally {
-        try { unlinkSync(tmpP); } catch (_) {}
-      }
-    });
-    it("committed contact-sheet equals freshly generated contact-sheet", () => {
-      const tmpS = join(tmpdir(), "e8a-fresh-" + Date.now() + ".svg");
-      try {
-        execSync("node " + GENERATOR + " --svg " + tmpS, { cwd: REPO_ROOT, timeout: 10000, stdio: "pipe" });
-        const fresh = readFileSync(tmpS);
-        const committed = readFileSync(CONTACT_SHEET_PATH);
-        expect(fresh.equals(committed), "committed SVG matches freshly generated").to.be.true;
-      } finally {
-        try { unlinkSync(tmpS); } catch (_) {}
-      }
-    });
-  });
-
-  // ═══════════════════════════════════════════
-  // 12. VERIFIER-INVOCATION MUTATION TESTS
-  // ═══════════════════════════════════════════
-  describe("12. Verifier-invocation mutation tests", () => {
-    function cloneSpec() { return JSON.parse(JSON.stringify(spec)); }
-
-    function runVerifierOnMutated(mutateFn, opts = {}) {
-      const s = cloneSpec();
-      mutateFn(s);
-      const tmpSpecPath = join(tmpdir(), "e8a-prop-sort-mutated-" + Date.now() + "-" + Math.random().toString(36).slice(2,8) + ".json");
-      writeFileSync(tmpSpecPath, JSON.stringify(s, null, 2));
-      const tmxArg = opts.tmxPath ? " --tmx " + opts.tmxPath : "";
-      try {
-        execSync("node " + VERIFIER + " --spec " + tmpSpecPath + tmxArg, {
-          cwd: REPO_ROOT,
-          timeout: 10000,
-          stdio: "pipe",
-        });
-        return 0;
-      } catch (e) {
-        return e.status || 1;
-      } finally {
-        try { unlinkSync(tmpSpecPath); } catch (_) {}
-      }
+  describe('mutation-based fail-closed verification', () => {
+    const cases = [
+      ['prop count', s => { s.propCount = 4 }, 'exactly five props required'],
+      ['duplicate stableId', s => { s.props[1].stableId = s.props[0].stableId }, 'duplicate stableId'],
+      ['roster anchor', s => { s.props.find(p => p.tmxId === 94).sortAnchor.y = 383 }, 'frozen sortAnchor'],
+      ['fixed point', s => { s.props[0].fixedPointY++ }, 'fixedPointY mismatch'],
+      ['asset hash', s => { s.props[0].asset.sha256 = '0'.repeat(64) }, 'asset sha256 mismatch'],
+      ['anchor evidence row', s => { s.props[0].sortAnchorEvidence.sampledRows[0].count++ }, 'sampled alpha row'],
+      ['missing west probe', s => { delete s.props[0].probes.west }, 'probe missing'],
+      ['W/E footpoint', s => { s.props[0].probes.west.agentFootPoint.x += 10 }, 'frozen footpoint'],
+      ['W/E recorded AABB', s => { s.props[0].probes.east.agentAlphaAabbWorld.minX++ }, 'agent alpha AABB'],
+      ['role asset hash', s => { s.visualEvidence.roles.lujunyi.asset.sha256 = 'f'.repeat(64) }, 'role asset path/hash mismatch'],
+      ['role frame alpha AABB', s => { s.visualEvidence.roles.husanniang.sourceFrameAlphaAabb.minX++ }, 'decoded frame alpha AABB'],
+      ['prop cell count', s => { s.visualEvidence.propCells.pop() }, 'prop evidence cell count must be 20'],
+      ['bounty cell count', s => { s.visualEvidence.bountyCells.pop() }, 'bounty evidence cell count must be 14'],
+      ['evidence metadata', s => { delete s.visualEvidence.propCells[0].cameraZoom }, 'required metadata cameraZoom missing'],
+      ['evidence role hash', s => { s.visualEvidence.propCells[0].roleAssetSha256 = '0'.repeat(64) }, 'role/frame asset metadata mismatch'],
+      ['evidence AABB', s => { s.visualEvidence.propCells[0].agentAlphaAabbWorld.maxX++ }, 'agent alpha AABB'],
+      ['evidence painter order', s => { s.visualEvidence.propCells[0].painterOrder.reverse() }, 'painter order'],
+      ['bounty north point', s => { s.props.find(p => p.tmxId === 92).bountyBoardMatrix.matrixCells.north.agentFoot.y = 350 }, 'bounty matrix north foot'],
+      ['bounty boundary role expectation', s => { s.props.find(p => p.tmxId === 92).bountyBoardMatrix.behindBoundaryFront.boundary.expectedByRole.husanniang = 'agent<prop' }, 'bounty depth boundary/husanniang expectation'],
+      ['bounty role same-foot evidence', s => { s.visualEvidence.bountyCells.find(c => c.cellId === 'bounty-direction-north-husanniang').agentFootWorld.x++ }, 'bounty-direction-north-husanniang: footpoint'],
+      ['mask 58 cross-reference', s => { delete s.props.find(p => p.tmxId === 92).bountyBoardMatrix.mask58CrossReference }, 'mask 58 E10A cross-reference missing']
+    ]
+    for (const [name, mutate, marker] of cases) {
+      it(`rejects resigned ${name} mutation for the semantic reason`, () => {
+        expectRejected(runMutatedSpec(mutate), marker)
+      })
     }
 
-    function makeTmpTmx(mutateFn) {
-      const orig = readFileSync(TMX_PATH, "utf-8");
-      const mutated = mutateFn(orig);
-      const p = join(tmpdir(), "e8a-tmx-mutated-" + Date.now() + ".tmx");
-      writeFileSync(p, mutated);
-      return p;
+    it('rejects an invalid generationId before semantic trust', () => {
+      const dir = tempWorkspace('e8a-generation-id-')
+      try {
+        const path = join(dir, 'spec.json')
+        const value = cloneSpec()
+        value.generationId = '0'.repeat(64)
+        writeFileSync(path, `${stableJson(value)}\n`)
+        expectRejected(runVerifier({ specPath: path }), 'generationId mismatch')
+      } finally { rmSync(dir, { recursive: true, force: true }) }
+    })
+
+    const tmxCases = [
+      ['object name', xml => xml.replace('name="main-seat-rect"', 'name="wrong-main-seat"'), 'TMX object name/type mismatch'],
+      ['object rect', xml => xml.replace('x="818" y="175" width="109" height="93"', 'x="819" y="175" width="109" height="93"'), 'TMX rect'],
+      ['object gid', xml => xml.replace('gid="6033" x="818"', 'gid="6034" x="818"'), 'gid→tileset→tile→image binding'],
+      ['tileset image source', xml => xml.replace('source="images/props/liangshan-hall-prop-main-seat-cropped.png"', 'source="images/props/liangshan-hall-prop-agent-roster-cropped.png"'), 'asset path'],
+      ['tileset image dimensions', xml => xml.replace('width="109" height="93"', 'width="110" height="93"'), 'tile image dimensions mismatch'],
+      ['map dimensions', xml => xml.replace('width="104" height="58"', 'width="105" height="58"'), 'TMX positive map dimensions']
+    ]
+    for (const [name, mutate, marker] of tmxCases) {
+      it(`rejects injected TMX ${name} mutation structurally`, () => {
+        const tmp = mutateTmx(mutate)
+        try { expectRejected(runVerifier({ tmxPath: tmp.path }), marker) }
+        finally { rmSync(tmp.dir, { recursive: true, force: true }) }
+      })
     }
 
-    // Basic verifier identity
-    it("baseline verifier passes on clean spec", () => {
-      const r = execSync("node " + VERIFIER, { cwd: REPO_ROOT, timeout: 10000, stdio: "pipe" });
-      expect(r.status).to.be.undefined; // execSync throws on non-zero
-    });
+    it('rejects contact-sheet/spec generationId mismatch via injectable SVG', () => {
+      const dir = tempWorkspace('e8a-svg-id-')
+      try {
+        const path = join(dir, 'sheet.svg')
+        writeFileSync(path, readFileSync(SVG_PATH, 'utf8').replace(spec.generationId, 'f'.repeat(64)))
+        expectRejected(runVerifier({ svgPath: path }), 'contact sheet/spec generationId mismatch')
+      } finally { rmSync(dir, { recursive: true, force: true }) }
+    })
 
-    // Prop-level mutations
-    it("rejects propCount=4 (verifier)", () => {
-      expect(runVerifierOnMutated(s => { s.propCount = 4; })).to.not.equal(0);
-    });
-    it("rejects props array length 4 (verifier)", () => {
-      expect(runVerifierOnMutated(s => { s.props = s.props.slice(0, 4); })).to.not.equal(0);
-    });
-    it("rejects duplicate stableId (verifier)", () => {
-      expect(runVerifierOnMutated(s => { s.props[1].stableId = s.props[0].stableId; })).to.not.equal(0);
-    });
-    it("rejects tmxId outside 90-94 (verifier)", () => {
-      expect(runVerifierOnMutated(s => { s.props[0].tmxId = 99; })).to.not.equal(0);
-    });
-    it("rejects sortAnchor.x out of bounds (verifier)", () => {
-      expect(runVerifierOnMutated(s => { s.props[0].sortAnchor.x = -1; })).to.not.equal(0);
-    });
-    it("rejects fixedPointY mismatch (verifier)", () => {
-      expect(runVerifierOnMutated(s => { s.props[0].sortAnchor.y = 300; })).to.not.equal(0);
-    });
-    it("rejects mismatched asset sha256 (verifier)", () => {
-      expect(runVerifierOnMutated(s => { s.props[0].asset.sha256 = "0".repeat(64); })).to.not.equal(0);
-    });
-    it("rejects elevation != 0 (verifier)", () => {
-      expect(runVerifierOnMutated(s => { s.props[0].elevation = 1; })).to.not.equal(0);
-    });
-    it("rejects renderBand != world (verifier)", () => {
-      expect(runVerifierOnMutated(s => { s.props[0].renderBand = "overhead"; })).to.not.equal(0);
-    });
-    it("rejects bounty-board missing matrix (verifier)", () => {
-      expect(runVerifierOnMutated(s => { delete s.props.find(p => p.tmxId === 92).bountyBoardMatrix; })).to.not.equal(0);
-    });
-    it("rejects bounty-board tieBias=0 (verifier)", () => {
-      expect(runVerifierOnMutated(s => { s.props.find(p => p.tmxId === 92).tieBias = 0; })).to.not.equal(0);
-    });
-    it("rejects tmxName mismatch (verifier)", () => {
-      expect(runVerifierOnMutated(s => { s.props[0].tmxName = "wrong-name"; })).to.not.equal(0);
-    });
-    it("rejects tmxRect maxX mismatch (verifier)", () => {
-      expect(runVerifierOnMutated(s => { s.props[0].tmxRect.maxX = 999; })).to.not.equal(0);
-    });
-    it("rejects missing sortAnchorRationale (verifier)", () => {
-      expect(runVerifierOnMutated(s => { s.props[0].sortAnchorRationale = ""; })).to.not.equal(0);
-    });
-    it("rejects baseCommit mismatch (verifier)", () => {
-      expect(runVerifierOnMutated(s => { s.baseCommit = "0000000"; })).to.not.equal(0);
-    });
-    it("rejects specVersion != 1 (verifier)", () => {
-      expect(runVerifierOnMutated(s => { s.specVersion = 2; })).to.not.equal(0);
-    });
-    it("rejects sourceEpoch=0 (verifier)", () => {
-      expect(runVerifierOnMutated(s => { s.sourceEpoch = 0; })).to.not.equal(0);
-    });
-
-    // Generation ID mutation
-    it("rejects generationId mismatch (verifier)", () => {
-      expect(runVerifierOnMutated(s => { s.generationId = "0".repeat(64); })).to.not.equal(0);
-    });
-    it("rejects generationId too short (verifier)", () => {
-      expect(runVerifierOnMutated(s => { s.generationId = "abc123"; })).to.not.equal(0);
-    });
-
-    // Matrix expectation mutations
-    it("rejects boundary lujunyiExpected=agent<prop (verifier)", () => {
-      expect(runVerifierOnMutated(s => {
-        s.props.find(p => p.tmxId === 92).bountyBoardMatrix.behindBoundaryFront.boundary.lujunyiExpected = "agent<prop";
-      })).to.not.equal(0);
-    });
-    it("rejects matrix role invariance violation (verifier)", () => {
-      expect(runVerifierOnMutated(s => {
-        s.props.find(p => p.tmxId === 92).bountyBoardMatrix.matrixCells.north.husanniangExpected = "prop<agent";
-      })).to.not.equal(0);
-    });
-    it("rejects missing mask58 xref (verifier)", () => {
-      expect(runVerifierOnMutated(s => {
-        delete s.props.find(p => p.tmxId === 92).bountyBoardMatrix.mask58CrossReference;
-      })).to.not.equal(0);
-    });
-
-    // TMX-injection mutation tests
-    it("rejects TMX with wrong prop object name (verifier)", () => {
-      const tmxPath = makeTmpTmx(tmx => tmx.replace('name="main-seat-rect"', 'name="wrong-name"'));
+    it('rejects contact-sheet evidence-cell count/ID mutation via injectable SVG', () => {
+      const dir = tempWorkspace('e8a-svg-cell-')
       try {
-        expect(runVerifierOnMutated(s => {}, { tmxPath })).to.not.equal(0);
-      } finally { try { unlinkSync(tmxPath); } catch (_) {} }
-    });
-    it("rejects TMX with wrong prop rect (verifier)", () => {
-      const tmxPath = makeTmpTmx(tmx => tmx.replace(/x="818" y="175"/, 'x="999" y="999"'));
-      try {
-        expect(runVerifierOnMutated(s => {}, { tmxPath })).to.not.equal(0);
-      } finally { try { unlinkSync(tmxPath); } catch (_) {} }
-    });
-    it("rejects TMX with wrong prop gid (verifier)", () => {
-      const tmxPath = makeTmpTmx(tmx => tmx.replace(/gid="6033"/, 'gid="9999"'));
-      try {
-        expect(runVerifierOnMutated(s => {}, { tmxPath })).to.not.equal(0);
-      } finally { try { unlinkSync(tmxPath); } catch (_) {} }
-    });
-    it("rejects TMX with wrong tileset image source (verifier)", () => {
-      const tmxPath = makeTmpTmx(tmx => tmx.replace('source="images/props/liangshan-hall-prop-main-seat-cropped.png"', 'source="wrong.png"'));
-      try {
-        expect(runVerifierOnMutated(s => {}, { tmxPath })).to.not.equal(0);
-      } finally { try { unlinkSync(tmxPath); } catch (_) {} }
-    });
-    it("rejects TMX with wrong tileset image width (verifier)", () => {
-      const tmxPath = makeTmpTmx(tmx => tmx.replace(/width="109" height="93"/, 'width="999" height="93"'));
-      try {
-        expect(runVerifierOnMutated(s => {}, { tmxPath })).to.not.equal(0);
-      } finally { try { unlinkSync(tmxPath); } catch (_) {} }
-    });
-    it("rejects TMX with wrong map dimensions (verifier)", () => {
-      const tmxPath = makeTmpTmx(tmx => tmx.replace(/width="104"/, 'width="999"'));
-      try {
-        expect(runVerifierOnMutated(s => {}, { tmxPath })).to.not.equal(0);
-      } finally { try { unlinkSync(tmxPath); } catch (_) {} }
-    });
-    it("rejects TMX with missing hall-props tileset (verifier)", () => {
-      const tmxPath = makeTmpTmx(tmx => tmx.replace('name="hall-props"', 'name="gone"'));
-      try {
-        expect(runVerifierOnMutated(s => {}, { tmxPath })).to.not.equal(0);
-      } finally { try { unlinkSync(tmxPath); } catch (_) {} }
-    });
-
-    // Contact sheet mismatch
-    it("rejects contact-sheet with wrong generation-id (verifier)", () => {
-      // The verifier reads contact-sheet from default path and checks genId match.
-      // To test, we mutate the spec genId, which will mismatch the real contact-sheet.
-      expect(runVerifierOnMutated(s => { s.generationId = "f".repeat(64); })).to.not.equal(0);
-    });
-  });
-});
+        const path = join(dir, 'sheet.svg')
+        writeFileSync(path, readFileSync(SVG_PATH, 'utf8').replace('class="evidence-cell"', 'class="evidence-cell-mutated"'))
+        expectRejected(runVerifier({ svgPath: path }), 'contact sheet evidence cell groups 33')
+      } finally { rmSync(dir, { recursive: true, force: true }) }
+    })
+  })
+})
