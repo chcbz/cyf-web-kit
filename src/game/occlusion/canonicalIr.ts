@@ -27,6 +27,7 @@ import {
   isStructuredFatalRenderSchemaError,
   renderSchemaError,
 } from './schema.js'
+import { validateAndCompilePolygon } from './validation.js'
 
 // ── Helpers ──
 
@@ -129,6 +130,12 @@ function fatal(
     ZONE_HYSTERESIS_INVALID: 'zone hysteresisPx 必须为 3。',
     ZONE_TARGET_NOT_FOUND: 'zone target fragment 未在 fragments 中找到。',
     OBJECT_REFERENCE_INVALID: '对象引用无效。',
+    POLYGON_SELF_INTERSECTING: 'zone polygon 存在自相交（含共线重叠/T型接触/非相邻顶点触碰）。',
+    POLYGON_DEGENERATE_EDGE: 'zone polygon 存在退化边（相邻重复点或零长度边）。',
+    POLYGON_AREA_TOO_SMALL: 'zone polygon 绝对面积小于 1 平方世界像素。',
+    POLYGON_EROSION_EMPTY: 'zone polygon 经 3px erosion 后没有非空内部面积。',
+    POLYGON_FIXED_OVERFLOW: 'zone polygon 定点化后坐标超过安全整数范围。',
+    POLYGON_NON_FINITE: 'zone polygon 包含非有限坐标。',
   }
   throw renderSchemaError(
     code,
@@ -945,6 +952,9 @@ function parseConstraintZone(
     fatal('ZONE_POLYGON_INVALID', sceneId, stableId, 'polygon', `zone requires a polygon`)
   }
   const polygon = normalizeBasicZonePolygon(rawPolygon, polygonOrigin, sceneId, stableId)
+
+  // E4: Compile polygon to fixed-point and validate (fail-closed)
+  validateAndCompilePolygon(polygon, sceneId, stableId)
 
   // bounds (AABB of polygon)
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
