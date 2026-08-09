@@ -3,9 +3,11 @@
  */
 
 import { expect } from "chai";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { execSync } from "node:child_process";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 const REPO_ROOT = process.cwd();
 const SPEC_PATH = join(REPO_ROOT, "tests/fixtures/juyiting/occlusion-v1-props/prop-sort-spec.json");
@@ -26,15 +28,16 @@ function compareStableId(a, b) {
 function sortByWorldKey(props) {
   return [...props].sort((a, b) => {
     if (a.fixedPointY !== b.fixedPointY) return a.fixedPointY - b.fixedPointY;
+    if (a.tieBias !== b.tieBias) return a.tieBias - b.tieBias;
     return compareStableId(a.stableId, b.stableId);
   });
 }
 
 const EXPECTED_TMX_IDS = [90, 91, 92, 93, 94];
 const EXPECTED_ORDER = [
+  "jyt.prop.center-north.roster-book.v1",
   "jyt.prop.center-north.main-seat.v1",
   "jyt.prop.northeast.bounty-board.v1",
-  "jyt.prop.center-north.roster-book.v1",
   "jyt.prop.southeast.library-shelf.v1",
   "jyt.prop.southwest.agent-roster.v1",
 ];
@@ -97,11 +100,11 @@ describe("E8A Prop Sort Spec", () => {
   });
 
   describe("4. sortAnchor evidence", () => {
-    it("all sortAnchors within bounds and at rect bottom", () => {
+    it("all sortAnchors within bounds; floor-standing at rect bottom, roster-book at Y=260 (table contact)", () => {
       for (const p of spec.props) {
         expect(p.sortAnchor.x, p.semanticName + " x").to.be.within(0, 1664);
         expect(p.sortAnchor.y, p.semanticName + " y").to.be.within(0, 928);
-        expect(p.sortAnchor.y, p.semanticName).to.equal(p.tmxRect.maxY);
+        if (p.tmxId === 94) { expect(p.sortAnchor.y, p.semanticName).to.equal(260); expect(p.sortAnchor.y, p.semanticName).to.be.lessThan(p.tmxRect.maxY); } else { expect(p.sortAnchor.y, p.semanticName).to.equal(p.tmxRect.maxY); }
         const expectedX = p.tmxRect.x + Math.floor(p.tmxRect.width / 2);
         expect(Math.abs(p.sortAnchor.x - expectedX), p.semanticName + " center").to.be.lessThanOrEqual(1);
       }
@@ -244,21 +247,21 @@ describe("E8A Prop Sort Spec", () => {
     it("all 5 fixedPointY values are distinct", () => {
       expect(new Set(spec.props.map(p => p.fixedPointY)).size).to.equal(5);
     });
-    it("main-seat lowest, agent-roster highest", () => {
+    it("roster-book lowest (66560), agent-roster highest (188672)", () => {
       const sorted = sortByWorldKey(spec.props);
-      expect(sorted[0].stableId).to.equal("jyt.prop.center-north.main-seat.v1");
+      expect(sorted[0].stableId).to.equal("jyt.prop.center-north.roster-book.v1");
       expect(sorted[4].stableId).to.equal("jyt.prop.southwest.agent-roster.v1");
     });
   });
 
   describe("9. Frozen field values", () => {
-    it("all props: renderBand=world, sortMode=fixed, floorId=floor-1, elev=0, tieBias=0, sceneId=juyiting-main", () => {
+    it("all props: renderBand=world, sortMode=fixed, floorId=floor-1, elev=0, sceneId=juyiting-main; bounty-board tieBias=-4", () => {
       for (const p of spec.props) {
         expect(p.renderBand, p.semanticName).to.equal("world");
         expect(p.sortMode, p.semanticName).to.equal("fixed");
         expect(p.floorId, p.semanticName).to.equal("floor-1");
         expect(p.elevation, p.semanticName).to.equal(0);
-        expect(p.tieBias, p.semanticName).to.equal(0);
+        if (p.tmxId === 92) { expect(p.tieBias, p.semanticName).to.equal(-4); } else { expect(p.tieBias, p.semanticName).to.equal(0); }
         expect(p.sceneId, p.semanticName).to.equal("juyiting-main");
       }
     });
@@ -299,4 +302,80 @@ describe("E8A Prop Sort Spec", () => {
       }
     });
   });
+
+  // ═══════════════════════════════════════════
+  // 12. VERIFIER-INVOCATION MUTATION TESTS
+  // ═══════════════════════════════════════════
+  describe("12. Verifier-invocation mutation tests", () => {
+    function cloneSpec() { return JSON.parse(JSON.stringify(spec)); }
+
+    function runVerifierOnMutated(mutateFn) {
+      const s = cloneSpec();
+      mutateFn(s);
+      const tmpSpecPath = join(tmpdir(), "e8a-prop-sort-mutated-" + Date.now() + ".json");
+      writeFileSync(tmpSpecPath, JSON.stringify(s, null, 2));
+      try {
+        execSync("node scripts/juyiting/verify-prop-sort-spec.mjs --spec " + tmpSpecPath, {
+          cwd: REPO_ROOT,
+          timeout: 10000,
+          stdio: "pipe",
+        });
+        return 0;
+      } catch (e) {
+        return e.status || 1;
+      } finally {
+        try { unlinkSync(tmpSpecPath); } catch (_) {}
+      }
+    }
+
+    it("rejects propCount=4 (verifier)", () => {
+      expect(runVerifierOnMutated(s => { s.propCount = 4; })).to.not.equal(0);
+    });
+    it("rejects props array length 4 (verifier)", () => {
+      expect(runVerifierOnMutated(s => { s.props = s.props.slice(0, 4); })).to.not.equal(0);
+    });
+    it("rejects duplicate stableId (verifier)", () => {
+      expect(runVerifierOnMutated(s => { s.props[1].stableId = s.props[0].stableId; })).to.not.equal(0);
+    });
+    it("rejects tmxId outside 90-94 (verifier)", () => {
+      expect(runVerifierOnMutated(s => { s.props[0].tmxId = 99; })).to.not.equal(0);
+    });
+    it("rejects sortAnchor.x out of bounds (verifier)", () => {
+      expect(runVerifierOnMutated(s => { s.props[0].sortAnchor.x = -1; })).to.not.equal(0);
+    });
+    it("rejects fixedPointY mismatch (verifier)", () => {
+      expect(runVerifierOnMutated(s => { s.props[0].sortAnchor.y = 300; })).to.not.equal(0);
+    });
+    it("rejects mismatched asset sha256 (verifier)", () => {
+      expect(runVerifierOnMutated(s => { s.props[0].asset.sha256 = "0".repeat(64); })).to.not.equal(0);
+    });
+    it("rejects elevation != 0 (verifier)", () => {
+      expect(runVerifierOnMutated(s => { s.props[0].elevation = 1; })).to.not.equal(0);
+    });
+    it("rejects renderBand != world (verifier)", () => {
+      expect(runVerifierOnMutated(s => { s.props[0].renderBand = "overhead"; })).to.not.equal(0);
+    });
+    it("rejects bounty-board missing matrix (verifier)", () => {
+      expect(runVerifierOnMutated(s => { delete s.props.find(p => p.tmxId === 92).bountyBoardMatrix; })).to.not.equal(0);
+    });
+    it("rejects bounty-board tieBias=0 (verifier)", () => {
+      expect(runVerifierOnMutated(s => { s.props.find(p => p.tmxId === 92).tieBias = 0; })).to.not.equal(0);
+    });
+    it("rejects tmxName mismatch (verifier)", () => {
+      expect(runVerifierOnMutated(s => { s.props[0].tmxName = "wrong-name"; })).to.not.equal(0);
+    });
+    it("rejects tmxRect maxX mismatch (verifier)", () => {
+      expect(runVerifierOnMutated(s => { s.props[0].tmxRect.maxX = 999; })).to.not.equal(0);
+    });
+    it("rejects missing sortAnchorRationale (verifier)", () => {
+      expect(runVerifierOnMutated(s => { s.props[0].sortAnchorRationale = ""; })).to.not.equal(0);
+    });
+    it("rejects baseCommit mismatch (verifier)", () => {
+      expect(runVerifierOnMutated(s => { s.baseCommit = "0000000"; })).to.not.equal(0);
+    });
+    it("rejects specVersion != 1 (verifier)", () => {
+      expect(runVerifierOnMutated(s => { s.specVersion = 2; })).to.not.equal(0);
+    });
+  });
+
 });

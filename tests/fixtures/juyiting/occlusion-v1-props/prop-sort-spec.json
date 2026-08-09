@@ -3,8 +3,6 @@
   "specVersion": 1,
   "taskId": "E8A",
   "baseCommit": "7144d9260b3905ce0335d037d3b1a3589d3a88a1",
-  "generatedAt": "2026-08-09T12:00:00.000Z",
-  "generatedBy": "scripts/juyiting/verify-prop-sort-spec.mjs",
   "sceneId": "juyiting-main",
   "propCount": 5,
   "props": [
@@ -41,7 +39,7 @@
         "y": 268
       },
       "fixedPointY": 68608,
-      "sortAnchorRationale": "ground-contact: rect bottom (y=268). Evidence: bottom image row 92 has 1 opaque pixel at img-x=3 (anti-aliased leg tip). Row 82 (10px up) has 2 opaque pixels at img-x=[17,94] spanning 78px (seat legs). No opaque content below rect bottom. sortAnchor.x=872 is rect horizontal center.",
+      "sortAnchorRationale": "Floor-standing seat. sortAnchor.y=268 (rect bottom, TMX 175+93). Alpha scan (pngjs): 93 rows. Last row with span≥10: row 91 (count=21, span=106). Row 92 (bottom): 1px at x=3. Rows 82-91: counts 30→21, span 106→106 (seat-leg taper). Floor contact IS at rect bottom; single bottom pixel is structural terminus of seat back. sortAnchor.x=872 is rect center.",
       "probes": {
         "north": {
           "agentFootPoint": {
@@ -49,7 +47,7 @@
             "y": 160
           },
           "expectedRelation": "agent<prop",
-          "rationale": "Agent north (above) seat: agent y=160 < prop sortAnchor.y=268. In Y-sort, lower Y = further back."
+          "rationale": "Agent north of seat: agent y=160 < seat sortAnchor.y=268."
         },
         "south": {
           "agentFootPoint": {
@@ -57,7 +55,7 @@
             "y": 290
           },
           "expectedRelation": "prop<agent",
-          "rationale": "Agent south (below) seat: prop sortAnchor.y=268 < agent y=290. Prop behind agent."
+          "rationale": "Agent south of seat: seat sortAnchor.y=268 < agent y=290."
         },
         "west": {
           "agentFootPoint": {
@@ -66,7 +64,7 @@
           },
           "expectedRelation": "non-overlap",
           "pixelOverlap": false,
-          "rationale": "Agent west of seat rect [818,927]. Same Y, no horizontal overlap."
+          "rationale": "West of rect [818,927]."
         },
         "east": {
           "agentFootPoint": {
@@ -75,7 +73,7 @@
           },
           "expectedRelation": "non-overlap",
           "pixelOverlap": false,
-          "rationale": "Agent east of seat rect [818,927]. Same Y, no horizontal overlap."
+          "rationale": "East of rect [818,927]."
         }
       }
     },
@@ -112,7 +110,7 @@
         "y": 737
       },
       "fixedPointY": 188672,
-      "sortAnchorRationale": "ground-contact: rect bottom (y=737). Evidence: bottom row 135 fully transparent. Row 134 has 1px at img-x=17 (stand foot). Row 123 has 2px at x=[4,64] spanning 61px (stand base). sortAnchor.x=178 is rect center.",
+      "sortAnchorRationale": "Floor-standing roster board on stand. sortAnchor.y=737 (rect bottom, TMX 601+136). Alpha scan (pngjs): 136 rows. Last row with span≥10: row 135 (count=20, span=70). Row 135 (bottom): count=20, span=70, x=[9,78]. All 136 rows have alpha content; bottom 13 rows (123-135) taper from 24px to 20px (stand feet). Floor contact IS at rect bottom. sortAnchor.x=178 is rect center.",
       "probes": {
         "north": {
           "agentFootPoint": {
@@ -120,7 +118,7 @@
             "y": 580
           },
           "expectedRelation": "agent<prop",
-          "rationale": "Agent north of roster board: agent y=580 < prop y=737."
+          "rationale": "Agent north: y=580 < board y=737."
         },
         "south": {
           "agentFootPoint": {
@@ -128,7 +126,7 @@
             "y": 760
           },
           "expectedRelation": "prop<agent",
-          "rationale": "Agent south: prop y=737 < agent y=760."
+          "rationale": "Agent south: board y=737 < agent y=760."
         },
         "west": {
           "agentFootPoint": {
@@ -161,7 +159,7 @@
       "elevation": 0,
       "renderBand": "world",
       "sortMode": "fixed",
-      "tieBias": 0,
+      "tieBias": -4,
       "asset": {
         "path": "public/juyiting/images/props/liangshan-hall-prop-bounty-board-cropped.png",
         "sha256": "2e4c3e749119392b01a7301aaa8f40986a09e5cc731ab61105ed600a755b6252",
@@ -183,7 +181,8 @@
         "y": 379
       },
       "fixedPointY": 97024,
-      "sortAnchorRationale": "ground-contact: rect bottom (y=379). V0 target: table≈379 < agent≈420 < railing≈458. Evidence: row 123 has 1px at x=47 (left leg tip), row 101 has 2px at x=[96,142] (both legs, 47px span). No opaque below rect bottom. sortAnchor.x=1446 is rect center. Ensures table<agent in world sort.",
+      "tieBiasRationale": "tieBias=-4 ensures deterministic table<agent at same fixedPointY (boundary). With WorldSortKey: fixedPointY desc, then tieBias asc. table(tieBias=-4) < agent(tieBias=0 default) → table sorts before agent → table behind agent. This replaces the unproven agent hashed stableId tie-break from v0 spec. Boundary cell at y=379 uses tieBias, NOT stableId.",
+      "sortAnchorRationale": "Floor-standing table. sortAnchor.y=379 (rect bottom, TMX 255+124). Alpha scan (pngjs): 124 rows. Last row with span≥10: row 121 (count=34, span=105). Row 123 (bottom): 1px at x=47. Key transition: row 56 (span 168→158, table-leg tips). V0 target constraint: table anchor≈379 < agent foot≈420 < front railing≈458. tieBias=-4 ensures deterministic table<agent at boundary (table behind agent when same fixedPointY). sortAnchor.x=1446 is rect center.",
       "probes": {
         "north": {
           "agentFootPoint": {
@@ -199,7 +198,7 @@
             "y": 420
           },
           "expectedRelation": "prop<agent",
-          "rationale": "Agent south at y=420: table y=379 < agent y=420. Table behind agent. V0 canonical target."
+          "rationale": "Agent south at y=420: table y=379 < agent y=420. V0 canonical: table<agent."
         },
         "west": {
           "agentFootPoint": {
@@ -221,12 +220,12 @@
         }
       },
       "bountyBoardMatrix": {
-        "description": "8-cell N/S/W/E × 2 roles + 6-cell behind/boundary/front × 2 roles. Same foot-point, direction (south), anim frame (idle-0) for both roles.",
+        "description": "14-cell matrix: 8-cell N/S/W/E × lujunyi/husanniang + 6-cell behind/boundary/front × both roles. All at identical foot-point, facing south, idle-0 frame.",
         "roles": [
           "lujunyi",
           "husanniang"
         ],
-        "roleInvarianceRequirement": "Both roles must produce identical sort result at identical world coordinates.",
+        "roleInvarianceRequirement": "Both roles produce identical sort result; sort key does not depend on role identity.",
         "cleanMode": {
           "description": "No UI overlay, no labels, no bubbles.",
           "requiredFields": [
@@ -257,7 +256,7 @@
             },
             "lujunyiExpected": "agent<prop",
             "husanniangExpected": "agent<prop",
-            "rationale": "Both north of table (y=240 < table y=379). Both behind table."
+            "rationale": "y=240 < table 379, both behind table."
           },
           "south": {
             "agentFoot": {
@@ -266,7 +265,7 @@
             },
             "lujunyiExpected": "prop<agent",
             "husanniangExpected": "prop<agent",
-            "rationale": "Both south of table (y=379 < y=420). Both in front. V0 canonical."
+            "rationale": "y=420 > table 379, V0 canonical: table<agent."
           },
           "west": {
             "agentFoot": {
@@ -275,7 +274,7 @@
             },
             "lujunyiExpected": "non-overlap",
             "husanniangExpected": "non-overlap",
-            "rationale": "West of rect. No horizontal overlap."
+            "rationale": "West of rect."
           },
           "east": {
             "agentFoot": {
@@ -284,11 +283,11 @@
             },
             "lujunyiExpected": "non-overlap",
             "husanniangExpected": "non-overlap",
-            "rationale": "East of rect. No horizontal overlap."
+            "rationale": "East of rect."
           }
         },
         "behindBoundaryFront": {
-          "description": "6-cell: 2 roles × 3 positions. Same X=1446, varying Y.",
+          "description": "6-cell: 2 roles × 3 positions. Same X=1446, varying Y. tieBias=-4 resolves boundary deterministically.",
           "requiredFields": [
             "commit",
             "tmxSha256",
@@ -305,16 +304,16 @@
             },
             "lujunyiExpected": "agent<prop",
             "husanniangExpected": "agent<prop",
-            "rationale": "y=370 < table y=379. Agent behind table. Behind boundary."
+            "rationale": "y=370 < table 379, agent behind table."
           },
           "boundary": {
             "agentFoot": {
               "x": 1446,
               "y": 379
             },
-            "lujunyiExpected": "agent<prop",
-            "husanniangExpected": "agent<prop",
-            "rationale": "y=379 equals table anchor. Same fixedPointY. tieBias=0. stableId byte-order decides."
+            "lujunyiExpected": "prop<agent",
+            "husanniangExpected": "prop<agent",
+            "rationale": "y=379 = table anchor, same fixedPointY. table tieBias=-4 < agent tieBias=0 → table behind agent. Resolved by tieBias, not stableId."
           },
           "front": {
             "agentFoot": {
@@ -323,11 +322,11 @@
             },
             "lujunyiExpected": "prop<agent",
             "husanniangExpected": "prop<agent",
-            "rationale": "y=420 > table y=379. Table behind agent. V0 canonical."
+            "rationale": "y=420 > table 379, V0 canonical."
           }
         },
         "mask58CrossReference": {
-          "description": "Mask 58 covers east wall x=[1197,1663] y=[342,458]. Must be in E10A mandatory review.",
+          "description": "Mask 58 covers east wall x=[1197,1663] y=[342,458]. Included in E10A mandatory review.",
           "action": "E10A_REQUIRED_REVIEW",
           "maskId": 58,
           "maskAabb": {
@@ -372,7 +371,7 @@
         "y": 719
       },
       "fixedPointY": 184064,
-      "sortAnchorRationale": "ground-contact: rect bottom (y=719). Evidence: row 140 has 1px at x=102 (foot). Row 138 has 2px at x=[43,93] spanning 51px (base). sortAnchor.x=1558 is rect center.",
+      "sortAnchorRationale": "Floor-standing bookshelf. sortAnchor.y=719 (rect bottom, TMX 578+141). Alpha scan (pngjs): 141 rows. Last row with span≥10: row 139 (count=11, span=59). Row 140 (bottom): 1px at x=102. Structural transition at row 57 (span 103→87, minX 9→25). Bottom rows 139-140 taper (span 59→1). Floor contact IS at rect bottom. sortAnchor.x=1558 is rect center.",
       "probes": {
         "north": {
           "agentFootPoint": {
@@ -406,7 +405,7 @@
           },
           "expectedRelation": "non-overlap",
           "pixelOverlap": false,
-          "rationale": "East of rect [1497,1620]."
+          "rationale": "East of rect."
         }
       }
     },
@@ -440,18 +439,18 @@
       },
       "sortAnchor": {
         "x": 306,
-        "y": 384
+        "y": 260
       },
-      "fixedPointY": 98304,
-      "sortAnchorRationale": "ground-contact: rect bottom (y=384). Evidence: row 191 has 1px at x=106 (book edge). Rows 191-140 show diagonal single-pixel pattern (spine). Row 42 has 2px at x=[20,175] spanning 156px (open pages). sortAnchor.x=306 is rect center.",
+      "fixedPointY": 66560,
+      "sortAnchorRationale": "Open book on table, NOT floor-standing. sortAnchor.y=260 (img row 68 in 192px image, NOT rect bottom 384). Alpha scan (pngjs): 192 rows, all 192 rows have alpha. Last row with span≥10: row 190 (count=20, span=20). Structural transition at row 82: span 156→138, minX 7→25 — marks boundary between open pages (rows 0-81, fan-shaped, centered) and book body (rows 82-186, solid block ~120px wide). Bottom rows 187-191: sharp taper (span 99→80→60→41→20→1) — book underside perspective edge. The forward contact point of the book pages (where book meets table surface) is row 68 (Y=260), within the page-fan region. Anchor at Y=260 gives fixedPointY=66560 < table(97024), placing book behind table — correct for book resting on table surface. Using rect bottom (384, fpY=98304) would incorrectly place book in front of table. sortAnchor.x=306 is rect center.",
       "probes": {
         "north": {
           "agentFootPoint": {
             "x": 306,
-            "y": 175
+            "y": 240
           },
           "expectedRelation": "agent<prop",
-          "rationale": "Agent north: y=175 < book y=384."
+          "rationale": "Agent north: y=240 < book y=260."
         },
         "south": {
           "agentFootPoint": {
@@ -459,12 +458,12 @@
             "y": 410
           },
           "expectedRelation": "prop<agent",
-          "rationale": "Agent south: book y=384 < agent y=410."
+          "rationale": "Agent south: book y=260 < agent y=410. Book behind agent."
         },
         "west": {
           "agentFootPoint": {
             "x": 190,
-            "y": 384
+            "y": 260
           },
           "expectedRelation": "non-overlap",
           "pixelOverlap": false,
@@ -473,7 +472,7 @@
         "east": {
           "agentFootPoint": {
             "x": 420,
-            "y": 384
+            "y": 260
           },
           "expectedRelation": "non-overlap",
           "pixelOverlap": false,
@@ -488,27 +487,29 @@
       "testVector": "Sort 5 props; shuffle input 10 times; verify output byte-identical."
     },
     "fivePropSortOrder": {
-      "description": "Expected base sort order (WorldSortKey ascending, no constraints).",
+      "description": "Expected base sort order (WorldSortKey ascending: fixedPointY then tieBias then stableId).",
       "order": [
+        "jyt.prop.center-north.roster-book.v1",
         "jyt.prop.center-north.main-seat.v1",
         "jyt.prop.northeast.bounty-board.v1",
-        "jyt.prop.center-north.roster-book.v1",
         "jyt.prop.southeast.library-shelf.v1",
         "jyt.prop.southwest.agent-roster.v1"
       ],
-      "rationale": "fixedPointY: main-seat(68608) < bounty-board(97024) < roster-book(98304) < library-shelf(184064) < agent-roster(188672). Same renderBand(100), floor(0), elev(0), tieBias(0)."
+      "rationale": "fixedPointY: roster-book(66560) < main-seat(68608) < bounty-board(97024) < library-shelf(184064) < agent-roster(188672). bounty-board tieBias=-4 (not in effect since all fixedPointY are distinct). Same renderBand(100), floor(0), elev(0)."
     },
     "failClosedRules": {
-      "tmxIdChange": "TMX id 90-94 name/rect/gid mismatch → fail",
-      "nameChange": "tmxName mismatch → fail",
-      "rectChange": "rect x/y/w/h mismatch → fail",
-      "assetShaMismatch": "asset sha256 mismatch → fail",
-      "missingProp": "<5 props → fail",
-      "duplicateStableId": "duplicate stableId → fail",
-      "anchorOutOfBounds": "sortAnchor outside [0,1664]×[0,928] → fail",
-      "fixedPointInconsistency": "fixedPointY ≠ round(sortAnchor.y×256) → fail",
-      "nonFiveCount": "propCount ≠ 5 → fail",
-      "missingMatrixField": "bounty-board missing matrix cells → fail"
+      "tmxIdChange": "Any TMX object id 90-94 with mismatched name, rect, x, y, width, height, or gid → verify failure",
+      "nameChange": "Any tmxName mismatch → verify failure",
+      "rectChange": "Any rect field (x/y/width/height/minX/minY/maxX/maxY) mismatch → verify failure",
+      "assetShaMismatch": "Any asset sha256 mismatch → verify failure",
+      "missingProp": "Fewer than 5 props in spec → verify failure",
+      "duplicateStableId": "Duplicate stableId → verify failure",
+      "anchorOutOfBounds": "sortAnchor outside [0,1664]×[0,928] → verify failure",
+      "fixedPointInconsistency": "fixedPointY ≠ round(sortAnchor.y×256) → verify failure",
+      "nonFiveCount": "propCount ≠ 5 → verify failure",
+      "tieBiasOutOfRange": "tieBias not in [-32,32] → verify failure",
+      "missingMatrix": "bounty-board missing matrix cells → verify failure",
+      "elevationNotZero": "elevation ≠ 0 → verify failure"
     }
   },
   "tmxSource": {
@@ -516,5 +517,8 @@
     "sha256": "e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401",
     "coordinateWidth": 1664,
     "coordinateHeight": 928
-  }
+  },
+  "generationId": "c223b9efb345",
+  "generatedAt": "2026-08-09T05:25:51.419Z",
+  "generatedBy": "hand-authored spec; alpha-scan evidence via pngjs (scripts/juyiting/lib/alpha-scan.mjs); verify via scripts/juyiting/verify-prop-sort-spec.mjs"
 }
