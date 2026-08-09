@@ -9,6 +9,8 @@ import { screenToWorld } from '../camera/cameraTransform.js'
 import { createInputController } from '../input/inputController.js'
 import { createInteractionLock } from '../input/interactionLock.js'
 import { clientToViewport } from '../viewportTransform.js'
+import { createShadowRenderer, collectV1Snapshots, parseOcclusionDebugFlag } from '../occlusion/shadowRenderer.js'
+import { createDebugOverlay } from '../occlusion/debugOverlay.js'
 
 const DEFAULT_INPUT_SNAPSHOT = Object.freeze({ activeGesture: 'none', interactionLocked: false })
 const normalizeLockReason = reason => typeof reason === 'string' ? reason.trim() : ''
@@ -62,6 +64,13 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._lockedReasons = new Set()
       this._inputTarget = null
       this._destroyed = false
+      // E6: shadow renderer (feature flag: default off, never changes v1)
+      this._shadowRenderer = null
+      this._shadowState = null
+      this._shadowSetupDone = false
+      // E6: debug overlay (only created when ?jytOcclusionDebug=1)
+      this._debugOverlay = null
+      this._debugOverlayActive = false
       this._lastViewport = null
       this._currentViewport = normalizeViewport(me.game.viewport)
       this._displayViewport = { ...this._currentViewport }
@@ -72,7 +81,50 @@ export function createHallSceneClass(me, HallAgentClass) {
     onHotspotClick(cb) { this._onHotspotClick = cb }
     onReady(cb)        { this._onReady = cb }
 
-    setMapData(mapData) { this._mapData = mapData }
+    setMapData(mapData) { this._mapData = mapData; this._tryInitShadow() }
+
+    
+    _tryInitShadow() {
+      if (this._shadowSetupDone || this._destroyed) return
+      this._shadowSetupDone = true
+      try {
+        // Feature flag: default off. Enable via window.__JYT_OCCLUSION_SHADOW_ENABLED
+        const enabled = typeof window !== 'undefined' && window.__JYT_OCCLUSION_SHADOW_ENABLED === true
+        // Debug overlay: only when ?jytOcclusionDebug=1
+        const debugActive = typeof window !== 'undefined'
+          && parseOcclusionDebugFlag(window.location?.search || '')
+        this._debugOverlayActive = debugActive
+
+        this._shadowRenderer = createShadowRenderer({
+          mapData: this._mapData,
+          debugOverlayActive: debugActive,
+        })
+
+        if (enabled) {
+          this._shadowRenderer.enable()
+        }
+
+        if (debugActive) {
+          this._ensureDebugOverlay()
+        }
+      } catch (err) {
+        // Shadow init failure must never affect v1 scene
+        console.warn('[HallScene] shadow renderer init failed (v1 preserved):', err?.message || err)
+        this._shadowRenderer = null
+      }
+    }
+
+    _ensureDebugOverlay() {
+      if (this._destroyed) return
+      try {
+        if (!this._debugOverlay) {
+          this._debugOverlay = createDebugOverlay({ game: me?.game })
+        }
+        this._debugOverlay.activate()
+      } catch (err) {
+        console.warn('[HallScene] debug overlay activation failed:', err?.message || err)
+      }
+    }
 
     prepareRuntime() {
       if (this._destroyed) return false
@@ -879,6 +931,17 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._pendingAgentSnapshots = []
     }
 
+    getShadowDiagnostics() {
+      // Returns shadow state for testing (never affects v1 scene)
+      return this._shadowState || null
+    }
+
+    getShadowProductionCounters() {
+      return this._shadowRenderer
+        ? this._shadowRenderer.productionCounters
+        : { computeCount: 0, errorCount: 0, lastErrorTimestamp: 0 }
+    }
+
     getRenderedSimulationAgentCount() {
       let count = 0
       this._simulationAgentIds.forEach(id => {
@@ -901,7 +964,34 @@ export function createHallSceneClass(me, HallAgentClass) {
         if (phaseEvents.length) this._simulationRuntime.onPhaseEvents?.(phaseEvents)
       }
       this._sortByDepth()
+      // E6: shadow renderer compute (never changes v1)
+      this._runShadowPass()
       return true
+    }
+
+    
+    _runShadowPass() {
+      const sr = this._shadowRenderer
+      if (!sr || !sr.enabled) return
+      if (this._destroyed) return
+      try {
+        // Collect v1 object snapshots (read-only, never modifies scene)
+        const v1Objects = collectV1Snapshots(me?.game?.world, this._mapData)
+        // Compute shadow snapshot
+        this._shadowState = sr.computeSnapshot(v1Objects)
+        // Update debug overlay if active
+        if (this._debugOverlay && this._debugOverlayActive) {
+          this._debugOverlay.update(
+            this._shadowState,
+            sr.canonicalIr,
+            sr.spatialGrid,
+          )
+        }
+      } catch (err) {
+        // Shadow failure must never affect v1 scene
+        // Low-cost counter is inside shadowRenderer (errorCount)
+        console.warn('[HallScene] shadow pass failed (v1 preserved):', err?.message || err)
+      }
     }
 
     _sortByDepth() {
@@ -976,6 +1066,18 @@ export function createHallSceneClass(me, HallAgentClass) {
       })
       this._agents.clear()
       this._sceneBuilt = false
+      // E6: dispose shadow renderer and debug overlay
+      if (this._shadowRenderer) {
+        try { this._shadowRenderer.dispose() } catch (err) { /* ignore */ }
+        this._shadowRenderer = null
+      }
+      this._shadowState = null
+      this._shadowSetupDone = false
+      if (this._debugOverlay) {
+        try { this._debugOverlay.dispose() } catch (err) { /* ignore */ }
+        this._debugOverlay = null
+      }
+      this._debugOverlayActive = false
     }
   }
 }
