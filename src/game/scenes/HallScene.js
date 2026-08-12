@@ -11,8 +11,7 @@ import { createInteractionLock } from '../input/interactionLock.js'
 import { clientToViewport } from '../viewportTransform.js'
 import { createShadowRenderer, collectV1Snapshots, parseOcclusionDebugFlag } from '../occlusion/shadowRenderer.js'
 import { hasRenderSchemaV2 } from '../occlusion/canonicalIr.js'
-import { assembleV2Scene, computeUnifiedWorldOrder, buildHitTestOrder, hitTest } from '../occlusion/hallSceneAssembly.js'
-import { createEmptyMembershipState } from '../occlusion/constraintResolver.js'
+import { assembleV2Scene, adaptRuntimeAgents, computeUnifiedWorldOrder, buildHitTestTargets, hitTestPoint, buildFrameProposal, createEmptyMembershipState } from '../occlusion/hallSceneAssembly.js'
 import { createDebugOverlay } from '../occlusion/debugOverlay.js'
 
 const DEFAULT_INPUT_SNAPSHOT = Object.freeze({ activeGesture: 'none', interactionLocked: false })
@@ -80,9 +79,9 @@ export function createHallSceneClass(me, HallAgentClass) {
       // E12: V2 activation gate (off by default; V1 active until explicit activate)
       this._v2Assembly = null
       this._v2Active = false
-      this._v2Membership = createEmptyMembershipState()
+      this._v2Controller = null
+      this._v2ActivationTxId = null
       this._v2HitTargets = null
-      this._v2OrderMap = null
       this._v2Depths = null
     }
 
@@ -96,9 +95,13 @@ export function createHallSceneClass(me, HallAgentClass) {
       if (this._shadowRenderer) {
         this._shadowRenderer.setMapData(mapData)
       }
-      // E12: deactivate V2 when map data changes
+      // E12: deactivate V2 when map data changes, then re-check gate
       if (this._v2Active) {
+        if (this._v2Controller) { try { this._v2Controller.destroy() } catch(e) {} this._v2Controller = null }
         this.deactivateV2()
+      }
+      if (this._shouldActivateV2() && this.hasV2Support()) {
+        this.activateV2()
       }
 
     }
@@ -375,7 +378,9 @@ export function createHallSceneClass(me, HallAgentClass) {
       const touchSlop = 11
       const agentAreas = [...this._agents.entries()]
         .sort(([firstId, first], [secondId, second]) => {
-          const depthDifference = (Number(second.depth) || 0) - (Number(first.depth) || 0)
+          const firstStableId = "jyt.agent." + String(firstId).replace(/[^a-z0-9._-]/gi, "_").toLowerCase() + ".v1"
+          const secondStableId = "jyt.agent." + String(secondId).replace(/[^a-z0-9._-]/gi, "_").toLowerCase() + ".v1"
+          const depthDifference = this._v2Active ? ((this._v2Depths?.[secondStableId] ?? 0) - (this._v2Depths?.[firstStableId] ?? 0)) : ((Number(second.depth) || 0) - (Number(first.depth) || 0))
           if (depthDifference !== 0) return depthDifference
           const yDifference = (Number(second.pos?.y) || 0) - (Number(first.pos?.y) || 0)
           if (yDifference !== 0) return yDifference
@@ -820,6 +825,10 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._ensureControllers()
 
       this._sceneBuilt = true
+      // E12: Auto-activate V2 if feature gate is enabled and map supports it
+      if (this._shouldActivateV2() && this.hasV2Support()) {
+        this.activateV2()
+      }
       this._needsSync = true
       if (this._onReady) this._onReady()
       return true
@@ -983,6 +992,11 @@ export function createHallSceneClass(me, HallAgentClass) {
 
     // ── E12 V2 Activation Gate ──
 
+    /** Feature gate: check if V2 should be activated. Tests can set window.__JYT_V2_ENABLED. */
+    _shouldActivateV2() {
+      return typeof window !== 'undefined' && window.__JYT_V2_ENABLED === true
+    }
+
     /** Check if map data supports V2 occlusion system */
     hasV2Support() {
       return this._mapData ? hasRenderSchemaV2(this._mapData) : false
@@ -993,19 +1007,9 @@ export function createHallSceneClass(me, HallAgentClass) {
       return this._v2Active ? 'v2' : 'v1'
     }
 
-    /** Get V2 assembly diagnostics (null if not assembled) */
-    getV2AssemblyDiagnostics() {
-      return this._v2Assembly?.diagnostics ?? null
-    }
-
     /** Get V2 hit-test targets (for test visibility) */
     getV2HitTargets() {
       return this._v2HitTargets ?? null
-    }
-
-    /** Get V2 unified order map (stableId -> index) */
-    getV2OrderMap() {
-      return this._v2OrderMap ?? null
     }
 
     /** Get V2 depths map */
@@ -1013,51 +1017,44 @@ export function createHallSceneClass(me, HallAgentClass) {
       return this._v2Depths ?? null
     }
 
-    /** Get V2 membership state */
-    getV2Membership() {
-      return this._v2Membership
-    }
-
-    /** Activate V2 occlusion system. Returns true on success, false if not supported. */
+    /** Activate V2 occlusion system. Returns true on success. */
     activateV2() {
       if (this._destroyed) return false
       if (this._v2Active) return true
       if (!this._mapData || !hasRenderSchemaV2(this._mapData)) return false
 
       try {
-        this._v2Assembly = assembleV2Scene({
-          mapData: this._mapData,
-          agents: [],
-        })
-        // Compute initial world order
-        const order = computeUnifiedWorldOrder(
-          this._v2Assembly.sceneObjects,
-          this._v2Assembly.fragments,
-          this._v2Assembly.zones,
-          this._v2Assembly.canonicalIr.floorRegistry,
-          this._v2Assembly.canonicalIr.sceneId,
-          this._v2Assembly.candidateProvider,
-          this._v2Membership,
-        )
-        this._v2OrderMap = new Map()
-        order.order.forEach((id, index) => this._v2OrderMap.set(id, index))
-        this._v2Depths = order.depths
-        this._v2Membership = createEmptyMembershipState()
+        // Build assembly
+        this._v2Assembly = assembleV2Scene({ mapData: this._mapData })
+        this._v2ActivationTxId = 'v2-activation-' + Date.now()
 
-        // Build hit targets with correct depths
-        this._v2HitTargets = buildHitTestOrder(
-          order.order,
-          order.depths,
-          this._v2Assembly.sceneObjects,
-          this._v2Assembly.fragments
+        // Initial world order with empty agents
+        const agents = adaptRuntimeAgents(this._agents, this._v2Assembly.canonicalIr.sceneId)
+        const order = computeUnifiedWorldOrder(this._v2Assembly, agents)
+        this._v2Assembly.membership = order.membership
+        this._v2Depths = order.depths
+
+        // Build initial hit targets
+        this._v2HitTargets = buildHitTestTargets(
+          order.order, order.depths, this._v2Assembly, agents,
         )
+
+        // Register agent positions in spatial grid
+        this._v2Assembly.spatialGrid.clear()
+        for (const a of agents) {
+          this._v2Assembly.spatialGrid.register(
+            { stableId: a.sceneObject.stableId, entryKind: 'agent',
+              bounds: { x: a.sceneObject.sortAnchor.x - 8, y: a.sceneObject.sortAnchor.y - 8, width: 16, height: 16 } },
+            a.sceneObject.sceneId, a.sceneObject.floorId,
+          )
+        }
+
         this._v2Active = true
         return true
       } catch (err) {
         console.warn('[HallScene] V2 activation failed:', err?.message || err)
         this._v2Assembly = null
         this._v2Active = false
-        this._v2HitTargets = null
         return false
       }
     }
@@ -1066,47 +1063,65 @@ export function createHallSceneClass(me, HallAgentClass) {
     deactivateV2() {
       if (!this._v2Active) return
       this._v2Active = false
-      this._v2Assembly = null
+      if (this._v2Assembly) { this._v2Assembly.spatialGrid.clear(); this._v2Assembly = null }
       this._v2HitTargets = null
-      this._v2OrderMap = null
       this._v2Depths = null
-      this._v2Membership = createEmptyMembershipState()
+      this._v2ActivationTxId = null
     }
 
-    /** Rebuild V2 hit-test targets after agent positions change */
-    _refreshV2HitTargets() {
+    /** Per-frame: adapt agents, compute world order, apply depths via E7 commitFrame */
+    _applyV2Depths() {
       if (!this._v2Active || !this._v2Assembly) return
-      const order = computeUnifiedWorldOrder(
-        this._v2Assembly.sceneObjects,
-        this._v2Assembly.fragments,
-        this._v2Assembly.zones,
-        this._v2Assembly.canonicalIr.floorRegistry,
-        this._v2Assembly.canonicalIr.sceneId,
-        this._v2Assembly.candidateProvider,
-        this._v2Membership,
-      )
-      this._v2OrderMap = new Map()
-      order.order.forEach((id, index) => this._v2OrderMap.set(id, index))
-      this._v2Depths = order.depths
-      this._v2HitTargets = buildHitTestOrder(
-        order.order,
-        order.depths,
-        this._v2Assembly.sceneObjects,
-        this._v2Assembly.fragments
-      )
+
+      try {
+        // Adapt runtime agents from current HallAgent entities
+        const agents = adaptRuntimeAgents(this._agents, this._v2Assembly.canonicalIr.sceneId)
+
+        // Compute unified world order (preserves membership via assembly)
+        const order = computeUnifiedWorldOrder(this._v2Assembly, agents)
+
+        // Advance membership on successful compute
+        this._v2Assembly.membership = order.membership
+        this._v2Depths = order.depths
+
+        // Apply depths to actual melonJS entities (agent depth = pos.y)
+        // In V2: agent depth comes from unified order, not raw pos.y
+        // Fragments and props are already at their fixed depths from _buildScene
+        // We only need to reorder agents
+        let applied = 0
+        for (const a of agents) {
+          const ent = /** @type {Record<string, unknown>} */ (a.entity)
+          const depth = order.depths[a.sceneObject.stableId]
+          if (depth !== undefined && ent.depth !== undefined) {
+            ;(/** @type {{depth: number}} */ (ent)).depth = depth
+            applied++
+          }
+        }
+
+        // Rebuild hit targets with updated order
+        this._v2HitTargets = buildHitTestTargets(
+          order.order, order.depths, this._v2Assembly, agents,
+        )
+      } catch (err) {
+        // V2 failure preserves V1; only log
+        if (this._shadowDebugActive) {
+          console.warn('[HallScene] V2 frame failed (V1 preserved):', err?.message || err)
+        }
+      }
     }
 
-    /** V2 depth-based hit test using final visual order */
+    /** V2 depth-based hit test using final visual order (agents only) */
     _v2HitTest(worldX, worldY) {
       if (!this._v2Active || !this._v2HitTargets) return null
-      return hitTest({ x: worldX, y: worldY }, this._v2HitTargets)
-    }
-
-    /** Apply V2 depths to agents (called each frame when V2 active) */
-    _applyV2Depths() {
-      if (!this._v2Active || !this._v2Depths) return
-      // Refresh world order each frame to account for agent movement
-      this._refreshV2HitTargets()
+      const hit = hitTestPoint({ x: worldX, y: worldY }, this._v2HitTargets)
+      if (hit && hit.kind === 'agent') {
+        // Map stableId back to agent
+        for (const [id] of this._agents) {
+          const stableId = 'jyt.agent.' + String(id).replace(/[^a-z0-9._-]/gi, '_').toLowerCase() + '.v1'
+          if (hit.stableId === stableId) return id
+        }
+      }
+      return null
     }
 
     update(dt) {

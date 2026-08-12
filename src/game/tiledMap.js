@@ -449,7 +449,9 @@ const parseJuyiHallTmxData = (map) => {
     obstacles,
     occluders,
     spawns,
+    layers: (map.layers || []).filter(l => l.type === "objectgroup"),
     mapProperties: readMapPropertiesFromData(map),
+    properties: readMapPropertiesFromData(map),
     tileLayers,
     tilesets
   }
@@ -659,7 +661,9 @@ const parseJuyiHallTmxUnchecked = (xml, movementEnabled = true) => {
     obstacles,
     occluders,
     spawns,
+    layers: [],
     mapProperties: readMapProperties(doc),
+    properties: readMapProperties(doc),
     tileLayers,
     tilesets
   }
