@@ -226,7 +226,7 @@ describe('Constraint Resolver - membership immutability', () => {
     assert.deepEqual(Object.keys(empty), [])
   })
 
-  it('previous membership is cloned, not aliased', () => {
+  it('reads previous membership without mutating it and returns independent frozen output', () => {
     const agents = [makeAgent('jyt.agent.a.v1', 50, 50)]
     const frags = [makeFragment('jyt.frag.f1.v1', 40, 40)]
     const zones = [makeZone('jyt.zone.z.v1', 'jyt.frag.f1.v1', 'behind', rectPolygon(0, 0, 200, 200))]
@@ -237,7 +237,7 @@ describe('Constraint Resolver - membership immutability', () => {
     // Frame 1
     const r1 = resolve(nodes, zones)
     const frozen1 = { ...r1.nextMembership }
-    // Frame 2 — resolver clones input, so mutating frozen1 afterward doesn't affect r2
+    // Frame 2 reads the deeply immutable prior state without mutating it.
     const r2 = resolve(nodes, zones, { previousMembership: r1.nextMembership })
     // frozen1 should still be the same deep structure
     assert.deepEqual(frozen1, r1.nextMembership)
@@ -730,5 +730,121 @@ describe('Constraint Resolver - sparse edges', () => {
     const result = resolve(nodes, zones)
     assert.equal(result.edges.length, 1)
     assert.equal(result.edges[0].from, 'jyt.agent.a.v1')
+  })
+})
+
+// ═══════════════════════════════════════════════
+// E14 coarse-cell AABB prefilter
+// ═══════════════════════════════════════════════
+
+describe('Constraint Resolver - E14 zone AABB prefilter', () => {
+  it('skips expensive polygon membership for same-cell points outside expanded zone bounds', () => {
+    const agent = makeAgent('jyt.agent.aabb-out.v1', 190, 190)
+    const fragment = makeFragment('jyt.frag.aabb.v1', 20, 20)
+    const zone = makeZone('jyt.zone.aabb.v1', fragment.stableId, 'behind', rectPolygon(0, 0, 40, 40), {
+      bounds: { x: 0, y: 0, width: 40, height: 40 },
+    })
+    const grid = new SpatialGrid(256)
+    grid.register({ stableId: zone.stableId, entryKind: 'zone', bounds: zone.bounds }, 'test-scene', 'floor-1')
+    const instr = createConstraintInstrumentation()
+    const nodes = [
+      sceneObjectToConstraintNode(agent, DEFAULT_FLOOR_REGISTRY),
+      fragmentToConstraintNode(fragInput(fragment.stableId, 20, 20), DEFAULT_FLOOR_REGISTRY),
+    ]
+    const result = resolve(nodes, [zone], { provider: createConstraintCandidateProvider(grid), instr })
+    assert.equal(instr.membershipCheckCount, 0)
+    assert.equal(result.edges.length, 0)
+  })
+
+  it('retains a prior inside state check within the 3px hysteresis AABB margin', () => {
+    const agent = makeAgent('jyt.agent.aabb-margin.v1', 42, 20)
+    const fragment = makeFragment('jyt.frag.aabb-margin.v1', 20, 20)
+    const zone = makeZone('jyt.zone.aabb-margin.v1', fragment.stableId, 'behind', rectPolygon(0, 0, 40, 40), {
+      bounds: { x: 0, y: 0, width: 40, height: 40 },
+    })
+    const grid = new SpatialGrid(256)
+    grid.register({ stableId: zone.stableId, entryKind: 'zone', bounds: zone.bounds }, 'test-scene', 'floor-1')
+    const instr = createConstraintInstrumentation()
+    const previous = Object.freeze({ [zone.stableId]: Object.freeze({ [agent.stableId]: 'inside' as const }) })
+    const nodes = [
+      sceneObjectToConstraintNode(agent, DEFAULT_FLOOR_REGISTRY),
+      fragmentToConstraintNode(fragInput(fragment.stableId, 20, 20), DEFAULT_FLOOR_REGISTRY),
+    ]
+    const result = resolve(nodes, [zone], { provider: createConstraintCandidateProvider(grid), instr, previousMembership: previous })
+    assert.equal(instr.membershipCheckCount, 1)
+    assert.equal(result.nextMembership[zone.stableId][agent.stableId], 'inside')
+    assert.equal(result.edges.length, 1)
+  })
+
+  it('drops stale membership after moving beyond the expanded AABB and emits no edge', () => {
+    const agent = makeAgent('jyt.agent.aabb-far.v1', 80, 20)
+    const fragment = makeFragment('jyt.frag.aabb-far.v1', 20, 20)
+    const zone = makeZone('jyt.zone.aabb-far.v1', fragment.stableId, 'behind', rectPolygon(0, 0, 40, 40), {
+      bounds: { x: 0, y: 0, width: 40, height: 40 },
+    })
+    const grid = new SpatialGrid(256)
+    grid.register({ stableId: zone.stableId, entryKind: 'zone', bounds: zone.bounds }, 'test-scene', 'floor-1')
+    const instr = createConstraintInstrumentation()
+    const previous = Object.freeze({ [zone.stableId]: Object.freeze({ [agent.stableId]: 'inside' as const }) })
+    const nodes = [
+      sceneObjectToConstraintNode(agent, DEFAULT_FLOOR_REGISTRY),
+      fragmentToConstraintNode(fragInput(fragment.stableId, 20, 20), DEFAULT_FLOOR_REGISTRY),
+    ]
+    const result = resolve(nodes, [zone], { provider: createConstraintCandidateProvider(grid), instr, previousMembership: previous })
+    assert.equal(instr.membershipCheckCount, 0)
+    assert.equal(result.edges.length, 0)
+    assert.equal(result.nextMembership[zone.stableId][agent.stableId], 'outside')
+  })
+
+  it('preserves outside hysteresis when an agent leaves and re-enters near the boundary', () => {
+    const fragment = makeFragment('jyt.frag.aabb-return.v1', 20, 20)
+    const zone = makeZone('jyt.zone.aabb-return.v1', fragment.stableId, 'behind', rectPolygon(0, 0, 40, 40), {
+      bounds: { x: 0, y: 0, width: 40, height: 40 },
+    })
+    const grid = new SpatialGrid(256)
+    grid.register({ stableId: zone.stableId, entryKind: 'zone', bounds: zone.bounds }, 'test-scene', 'floor-1')
+    const provider = createConstraintCandidateProvider(grid)
+    const fragmentNode = fragmentToConstraintNode(fragInput(fragment.stableId, 20, 20), DEFAULT_FLOOR_REGISTRY)
+
+    const outside = makeAgent('jyt.agent.aabb-return.v1', 80, 20)
+    const priorInside = Object.freeze({ [zone.stableId]: Object.freeze({ [outside.stableId]: 'inside' as const }) })
+    const far = resolve([
+      sceneObjectToConstraintNode(outside, DEFAULT_FLOOR_REGISTRY), fragmentNode,
+    ], [zone], { provider, previousMembership: priorInside })
+    assert.equal(far.nextMembership[zone.stableId][outside.stableId], 'outside')
+
+    const nearInside = makeAgent(outside.stableId, 38, 20)
+    const returned = resolve([
+      sceneObjectToConstraintNode(nearInside, DEFAULT_FLOOR_REGISTRY), fragmentNode,
+    ], [zone], { provider, previousMembership: far.nextMembership })
+    assert.equal(returned.nextMembership[zone.stableId][outside.stableId], 'outside')
+    assert.equal(returned.edges.length, 0)
+  })
+
+  it('preserves outside hysteresis after leaving the spatial query neighborhood', () => {
+    const fragment = makeFragment('jyt.frag.aabb-distant-return.v1', 20, 20)
+    const zone = makeZone('jyt.zone.aabb-distant-return.v1', fragment.stableId, 'behind', rectPolygon(0, 0, 40, 40), {
+      bounds: { x: 0, y: 0, width: 40, height: 40 },
+    })
+    const grid = new SpatialGrid(256)
+    grid.register({ stableId: zone.stableId, entryKind: 'zone', bounds: zone.bounds }, 'test-scene', 'floor-1')
+    const provider = createConstraintCandidateProvider(grid)
+    const fragmentNode = fragmentToConstraintNode(fragInput(fragment.stableId, 20, 20), DEFAULT_FLOOR_REGISTRY)
+    const agentId = 'jyt.agent.aabb-distant-return.v1'
+
+    const priorInside = Object.freeze({ [zone.stableId]: Object.freeze({ [agentId]: 'inside' as const }) })
+    const farAgent = makeAgent(agentId, 1000, 20)
+    const far = resolve([
+      sceneObjectToConstraintNode(farAgent, DEFAULT_FLOOR_REGISTRY), fragmentNode,
+    ], [zone], { provider, previousMembership: priorInside })
+    assert.equal(provider.queryCandidates(farAgent.sortAnchor, 'test-scene', 'floor-1').has(zone.stableId), false)
+    assert.equal(far.nextMembership[zone.stableId][agentId], 'outside')
+
+    const nearInside = makeAgent(agentId, 38, 20)
+    const returned = resolve([
+      sceneObjectToConstraintNode(nearInside, DEFAULT_FLOOR_REGISTRY), fragmentNode,
+    ], [zone], { provider, previousMembership: far.nextMembership })
+    assert.equal(returned.nextMembership[zone.stableId][agentId], 'outside')
+    assert.equal(returned.edges.length, 0)
   })
 })

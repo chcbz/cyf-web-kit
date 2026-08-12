@@ -366,6 +366,35 @@ describe('E12 computeUnifiedWorldOrder (production)', () => {
     expect(r2.depths).to.deep.equal(r.depths)
   })
 
+  it('keeps static cache isolated between distinct assemblies', () => {
+    const first = callAssemble(makePreparsedMapData())
+    const second = callAssemble(makePreparsedMapData())
+    const firstOrder = computeUnifiedWorldOrder(first, [], createEmptyMembershipState())
+    const secondOrder = computeUnifiedWorldOrder(second, [], createEmptyMembershipState())
+
+    expect(first).to.not.equal(second)
+    expect(firstOrder.order).to.deep.equal(secondOrder.order)
+    expect(firstOrder.depths).to.deep.equal(secondOrder.depths)
+  })
+
+  it('reuses statics while reflecting per-frame agent position updates', () => {
+    const agent: V2AgentAdapter = {
+      sceneObject: {
+        stableId: 'jyt.agent.cache-position.v1', sourceEntityId: 'cache-position',
+        sceneId: 'juyiting-main', chunkId: 'default', kind: 'agent',
+        renderBand: 'world', floorId: 'floor-1', elevation: 0,
+        sortMode: 'y', sortAnchor: { x: 500, y: 120 }, tieBias: 0,
+      },
+      entity: {},
+    }
+    const before = computeUnifiedWorldOrder(assembly, [agent], createEmptyMembershipState())
+    agent.sceneObject = { ...agent.sceneObject, sortAnchor: { x: 500, y: 900 } }
+    const after = computeUnifiedWorldOrder(assembly, [agent], before.nextMembership)
+
+    expect(before.depths[agent.sceneObject.stableId]).to.not.equal(after.depths[agent.sceneObject.stableId])
+    expect(after.order).to.include(agent.sceneObject.stableId)
+  })
+
   it('contiguous safe integer depths', () => {
     const r = computeUnifiedWorldOrder(assembly, [], createEmptyMembershipState())
     const vals = Object.values(r.depths) as number[]

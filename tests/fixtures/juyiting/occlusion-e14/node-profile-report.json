@@ -1,0 +1,388 @@
+{
+  "schemaVersion": 1,
+  "benchmarkId": "juyiting-occlusion-e14-108-agent",
+  "buildMode": "production",
+  "environment": {
+    "viewport": {
+      "width": 1664,
+      "height": 928
+    },
+    "userAgent": "Mozilla/5.0 (linux) AppleWebKit/537.36 (KHTML, like Gecko) jsdom/26.1.0",
+    "executionEngine": "node-v8-jsdom-fallback",
+    "chromiumGateEligible": false
+  },
+  "fixture": {
+    "mapWidth": 1664,
+    "mapHeight": 928,
+    "agents": 108,
+    "fragments": 50,
+    "zones": 37,
+    "cellSize": 256
+  },
+  "timing": {
+    "warmupMs": 10000,
+    "sampleMs": 60000,
+    "frames": 3280,
+    "total": {
+      "min": 1.755142000001797,
+      "mean": 2.1091742115853482,
+      "p50": 2.0535730000010517,
+      "p95": 2.4922010000009323,
+      "p99": 3.1394360000049346,
+      "max": 3.823442000000796
+    },
+    "gridUpdate": {
+      "min": 0.14131300000008196,
+      "mean": 0.21534137591456395,
+      "p50": 0.2046200000004319,
+      "p95": 0.3019529999983206,
+      "p99": 0.3668499999985215,
+      "max": 0.4494520000007469
+    },
+    "worldOrder": {
+      "min": 1.566172999999253,
+      "mean": 1.8938328356707843,
+      "p50": 1.8424379999996745,
+      "p95": 2.258013000002393,
+      "p99": 2.8237540000009176,
+      "max": 3.409942999998748
+    }
+  },
+  "complexity": {
+    "theoreticalAgentsTimesAllZonesPerFrame": 3996,
+    "auditFrameMembershipChecks": 44,
+    "membershipChecksPerFrameMean": 44,
+    "maxChecksPerAgent": 1,
+    "maxUniqueZoneCandidates": 37,
+    "instrumentationScope": "one representative post-sample frame; excluded from timed production path",
+    "spatialGridDelta": {
+      "candidateCount": 4872559,
+      "cellQueryCount": 3188160,
+      "scanCount": 0,
+      "updateCellVisitCount": 11026
+    }
+  },
+  "memory": {
+    "browserHeapSamples": [
+      {
+        "elapsedMs": 18.158031999999366,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 1035.4218029999993,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 2052.0189979999996,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 3056.977312000001,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 4058.663885,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 5071.582754000001,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 6075.146659,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 7077.9264090000015,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 8079.710498999999,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 9084.397274,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 10093.961787999999,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 11103.780154000002,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 12109.194615999999,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 13116.791620000002,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 14126.566444000002,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 15134.893428000001,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 16136.595129,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 17150.410181,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 18159.133958,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 19159.645251,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 20161.225981000003,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 21178.179204,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 22192.809334000005,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 23200.224351000004,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 24203.879264000003,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 25204.710080000004,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 26218.096999,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 27226.786872000004,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 28232.121639000005,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 29238.653334000002,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 30239.141472000003,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 31243.473479,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 32255.930649,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 33259.312582,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 34264.393023000004,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 35274.507355,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 36288.486629,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 37295.125378000004,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 38306.960525,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 39313.390285,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 40325.367851,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 41341.003068000005,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 42352.198567,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 43358.289949000005,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 44366.955347,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 45379.736335,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 46391.36529,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 47408.452783,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 48425.698382,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 49442.999996,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 50450.621132,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 51465.556713000005,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 52481.98289500001,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 53482.779305000004,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 54485.365737,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 55495.666335999995,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 56500.745737000005,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 57507.252698,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 58521.367595,
+        "usedBytes": null
+      },
+      {
+        "elapsedMs": 59538.436846,
+        "usedBytes": null
+      }
+    ],
+    "browserHeapMinBytes": null,
+    "browserHeapMaxBytes": null,
+    "browserHeapGrowthBytes": null,
+    "heapDropsOver1Mb": 0
+  },
+  "rendering": {
+    "canvasCount": 0,
+    "webglContextCount": 0,
+    "drawCallsBaseline": 0,
+    "drawCallsSample": 0,
+    "textureMemoryBytes": null,
+    "textureMemoryStatus": "unavailable-in-headless-CDP-ordering-harness; real HallScene rendering is audited in E17"
+  },
+  "longTasks": {
+    "count": 0,
+    "maxDurationMs": 0
+  },
+  "network": {
+    "requestCount": 2,
+    "transferredBytes": 52977,
+    "resources": [
+      {
+        "path": "assets/index-CDGRwp2f.js",
+        "bytes": 52651
+      },
+      {
+        "path": "index.html",
+        "bytes": 326
+      }
+    ],
+    "source": "production-build-artifact-inventory"
+  },
+  "node": {
+    "beforeHeap": {
+      "rss": 103165952,
+      "heapTotal": 57053184,
+      "heapUsed": 31087464,
+      "external": 2431422,
+      "arrayBuffers": 72687
+    },
+    "afterHeap": {
+      "rss": 120369152,
+      "heapTotal": 73830400,
+      "heapUsed": 49341160,
+      "external": 2431318,
+      "arrayBuffers": 72543
+    },
+    "versions": {
+      "node": "20.20.2",
+      "acorn": "8.16.0",
+      "ada": "2.9.2",
+      "ares": "1.34.6",
+      "brotli": "1.0.6",
+      "cjs_module_lexer": "2.2.0",
+      "cldr": "48.0",
+      "icu": "78.2",
+      "llhttp": "9.3.1",
+      "modules": "115",
+      "napi": "9",
+      "nghttp2": "1.68.1",
+      "openssl": "1.1.1k",
+      "simdutf": "6.4.2",
+      "tz": "2025c",
+      "undici": "6.24.1",
+      "unicode": "17.0",
+      "uv": "1.46.0",
+      "uvwasi": "0.0.23",
+      "v8": "11.3.244.8-node.38",
+      "zlib": "1.2.11"
+    }
+  },
+  "provisionalGates": {
+    "p95AtMost2Ms": false,
+    "p99AtMost4Ms": true,
+    "noFullGridScan": true,
+    "sparseMembershipChecks": true
+  },
+  "provisionalPass": false,
+  "pass": false,
+  "passReason": "Node/V8 profile is diagnostic only; fixed E14 requires Chromium."
+}

@@ -191,6 +191,16 @@ describe('E6 Shadow Renderer', () => {
       sr.dispose()
     })
 
+    it('membership candidates contain zones only', () => {
+      const sr = createShadowRenderer({ mapData: makeV2MapData() })
+      sr.enable()
+      const snap = sr.computeSnapshot([makeV1Agent('a1', 100, 100, 3.0, false)])
+      const diagnostic = snap.diagnostics.find(d => d.objectId === 'a1')
+      assert.ok(diagnostic)
+      assert.deepEqual(diagnostic!.membershipCandidates, ['jyt.zone.center.railing-01.behind.v1'])
+      sr.dispose()
+    })
+
     it('instrumentation shows provider as trusted', () => {
       const sr = createShadowRenderer({ mapData: makeV2MapData() })
       sr.enable()

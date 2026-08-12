@@ -47,7 +47,10 @@
     "render:e13-contact-sheets": "node scripts/juyiting/e13/render-e13-evidence.mjs",
     "validate:e13-evidence": "node scripts/juyiting/e13/validate-e13-evidence.mjs",
     "test:juyiting-occlusion-e13": "node --import tsx ./node_modules/mocha/bin/mocha.js --no-config --require ./tests/setup.js --reporter spec tests/juyiting-occlusion-e13.test.js",
-    "generate:e13-offline": "node scripts/juyiting/e13/generate-e13-offline-evidence.mjs"
+    "generate:e13-offline": "node scripts/juyiting/e13/generate-e13-offline-evidence.mjs",
+    "benchmark:juyiting-occlusion-e14": "node scripts/juyiting/e14/run-benchmark.mjs",
+    "test:juyiting-occlusion-e14": "E14_REQUIRE_REPORT=1 node --import tsx ./node_modules/mocha/bin/mocha.js --no-config --require ./tests/setup.js --reporter spec tests/juyiting-occlusion-e14.test.js",
+    "profile:juyiting-occlusion-e14:node": "node scripts/juyiting/e14/run-node-profile.mjs"
   },
   "dependencies": {
     "@varlet/ui": "^3.10.9",

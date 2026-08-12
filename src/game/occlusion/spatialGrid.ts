@@ -73,8 +73,17 @@ export class SpatialGrid {
   private cells: Map<string, Set<string>>
   /** Map from stableId → GridEntry (authoritative registry) */
   private entries: Map<string, GridEntry>
+  /** Per-kind cell indexes keep constraint-zone discovery independent of nearby agents/assets. */
+  private cellsByKind: Map<GridEntry['entryKind'], Map<string, Set<string>>>
+  /** Reverse index: stableId → exact occupied cell keys (prevents full-grid unregister scans). */
+  private entryCellKeys: Map<string, Set<string>>
+  /** Optional cumulative instrumentation used by the fixed E14 benchmark. */
+  private instrumentation?: SpatialGridInstrumentation
 
-  constructor(cellSize: number = DEFAULT_CELL_SIZE) {
+  constructor(
+    cellSize: number = DEFAULT_CELL_SIZE,
+    instrumentation?: SpatialGridInstrumentation,
+  ) {
     if (!isLegalCellSize(cellSize)) {
       throw renderSchemaError(
         'RENDER_SCHEMA_VERSION_UNSUPPORTED' as RenderSchemaErrorCode,
@@ -88,6 +97,9 @@ export class SpatialGrid {
     this.cellSize = cellSize
     this.cells = new Map()
     this.entries = new Map()
+    this.cellsByKind = new Map()
+    this.entryCellKeys = new Map()
+    this.instrumentation = instrumentation
   }
 
   /** Get current cell size */
@@ -142,26 +154,51 @@ export class SpatialGrid {
     sceneId: string,
     floorId: string,
   ): void {
-    // Remove stale cells if already registered
-    if (this.entries.has(entry.stableId)) {
-      this.unregister(entry.stableId)
+    // Compute the new cell set before changing indexes. Moving agents usually
+    // remain in the same one or two cells for many frames; in that common case
+    // only authoritative bounds change and no Set delete/add work is needed.
+    const keys = this.aabbToCellKeys(entry.bounds, sceneId, floorId)
+    const occupiedKeys = new Set<string>()
+    for (const key of keys) occupiedKeys.add(cellKeyToString(key))
+
+    const previousEntry = this.entries.get(entry.stableId)
+    const previousKeys = this.entryCellKeys.get(entry.stableId)
+    if (
+      previousEntry?.entryKind === entry.entryKind &&
+      previousKeys && sameStringSet(previousKeys, occupiedKeys)
+    ) {
+      this.entries.set(entry.stableId, { ...entry })
+      return
     }
+
+    // Cell coverage or kind changed: remove the old indexed membership first.
+    if (previousEntry) this.unregister(entry.stableId)
 
     // Store entry
     this.entries.set(entry.stableId, { ...entry })
 
-    // Compute covering cells
-    const keys = this.aabbToCellKeys(entry.bounds, sceneId, floorId)
-
-    for (const key of keys) {
-      const keyStr = cellKeyToString(key)
+    for (const keyStr of occupiedKeys) {
+      if (this.instrumentation) this.instrumentation.updateCellVisitCount++
       let cell = this.cells.get(keyStr)
       if (!cell) {
         cell = new Set()
         this.cells.set(keyStr, cell)
       }
       cell.add(entry.stableId)
+
+      let kindCells = this.cellsByKind.get(entry.entryKind)
+      if (!kindCells) {
+        kindCells = new Map()
+        this.cellsByKind.set(entry.entryKind, kindCells)
+      }
+      let kindCell = kindCells.get(keyStr)
+      if (!kindCell) {
+        kindCell = new Set()
+        kindCells.set(keyStr, kindCell)
+      }
+      kindCell.add(entry.stableId)
     }
+    this.entryCellKeys.set(entry.stableId, occupiedKeys)
   }
 
   /**
@@ -169,14 +206,44 @@ export class SpatialGrid {
    * Leaves no stale entries in any cell.
    */
   unregister(stableId: string): void {
-    // Scan all cells to remove this stableId
-    for (const [keyStr, cell] of this.cells) {
-      cell.delete(stableId)
-      if (cell.size === 0) {
-        this.cells.delete(keyStr)
+    const occupiedKeys = this.entryCellKeys.get(stableId)
+    const entry = this.entries.get(stableId)
+    const kindCells = entry ? this.cellsByKind.get(entry.entryKind) : undefined
+
+    if (occupiedKeys) {
+      // O(cells occupied by this entry), never O(all occupied map cells).
+      for (const keyStr of occupiedKeys) {
+        if (this.instrumentation) this.instrumentation.updateCellVisitCount++
+        const cell = this.cells.get(keyStr)
+        if (!cell) continue
+        cell.delete(stableId)
+        if (cell.size === 0) this.cells.delete(keyStr)
+
+        const kindCell = kindCells?.get(keyStr)
+        if (kindCell) {
+          kindCell.delete(stableId)
+          if (kindCell.size === 0) kindCells!.delete(keyStr)
+        }
+      }
+      if (entry && kindCells?.size === 0) this.cellsByKind.delete(entry.entryKind)
+    } else if (this.entries.has(stableId)) {
+      // Defensive recovery for an impossible inconsistent index. This path is
+      // explicitly observable so production benchmarks cannot hide a full scan.
+      if (this.instrumentation) this.instrumentation.scanCount++
+      for (const [keyStr, cell] of this.cells) {
+        cell.delete(stableId)
+        if (cell.size === 0) this.cells.delete(keyStr)
+      }
+      for (const [kind, indexedCells] of this.cellsByKind) {
+        for (const [keyStr, cell] of indexedCells) {
+          cell.delete(stableId)
+          if (cell.size === 0) indexedCells.delete(keyStr)
+        }
+        if (indexedCells.size === 0) this.cellsByKind.delete(kind)
       }
     }
 
+    this.entryCellKeys.delete(stableId)
     this.entries.delete(stableId)
   }
 
@@ -235,6 +302,7 @@ export class SpatialGrid {
           cellY: cellY + dy,
         }
         const keyStr = cellKeyToString(key)
+        if (this.instrumentation) this.instrumentation.cellQueryCount++
         const cell = this.cells.get(keyStr)
         if (cell) {
           for (const id of cell) {
@@ -244,6 +312,38 @@ export class SpatialGrid {
       }
     }
 
+    if (this.instrumentation) this.instrumentation.candidateCount += result.size
+    return result
+  }
+
+  /**
+   * Query nearby stableIds from a single entry-kind index.
+   * Constraint resolution uses this for zones so nearby moving agents and
+   * render fragments are never materialized as throwaway candidates.
+   */
+  queryCandidateIdsByKind(
+    position: Point,
+    sceneId: string,
+    floorId: string,
+    kind: GridEntry['entryKind'],
+  ): Set<string> {
+    const { cellX, cellY } = this.worldToCell(position.x, position.y)
+    const result = new Set<string>()
+    const indexedCells = this.cellsByKind.get(kind)
+    if (!indexedCells) return result
+
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const keyStr = cellKeyToString({
+          sceneId, floorId, cellX: cellX + dx, cellY: cellY + dy,
+        })
+        if (this.instrumentation) this.instrumentation.cellQueryCount++
+        const cell = indexedCells.get(keyStr)
+        if (cell) for (const id of cell) result.add(id)
+      }
+    }
+
+    if (this.instrumentation) this.instrumentation.candidateCount += result.size
     return result
   }
 
@@ -261,6 +361,7 @@ export class SpatialGrid {
 
     for (const key of keys) {
       const keyStr = cellKeyToString(key)
+      if (this.instrumentation) this.instrumentation.cellQueryCount++
       const cell = this.cells.get(keyStr)
       if (cell) {
         for (const id of cell) {
@@ -268,6 +369,8 @@ export class SpatialGrid {
         }
       }
     }
+
+    if (this.instrumentation) this.instrumentation.candidateCount += candidateIds.size
 
     // Precise AABB filter
     const result: GridEntry[] = []
@@ -307,6 +410,8 @@ export class SpatialGrid {
   clear(): void {
     this.cells.clear()
     this.entries.clear()
+    this.cellsByKind.clear()
+    this.entryCellKeys.clear()
   }
 
   /**
@@ -320,6 +425,12 @@ export class SpatialGrid {
     }
     return snap
   }
+}
+
+function sameStringSet(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+  if (a.size !== b.size) return false
+  for (const value of a) if (!b.has(value)) return false
+  return true
 }
 
 // ── AABB overlap test ──
@@ -336,9 +447,14 @@ function aabbOverlap(a: Rect, b: Rect): boolean {
 // ── Instrumentation ──
 
 export interface SpatialGridInstrumentation {
+  /** Candidate IDs observed by local cell queries (cumulative). */
   candidateCount: number
+  /** Cell lookups performed by query operations (cumulative). */
   cellQueryCount: number
+  /** Full-map cell scans. Must remain zero in production/E14. */
   scanCount: number
+  /** Cell visits used to register/update/unregister entries (cumulative). */
+  updateCellVisitCount: number
 }
 
 export function createSpatialGridInstrumentation(): SpatialGridInstrumentation {
@@ -346,6 +462,7 @@ export function createSpatialGridInstrumentation(): SpatialGridInstrumentation {
     candidateCount: 0,
     cellQueryCount: 0,
     scanCount: 0,
+    updateCellVisitCount: 0,
   }
 }
 
@@ -376,7 +493,7 @@ export function createConstraintCandidateProvider(grid: SpatialGrid): SpatialGri
     _brand: SPATIAL_GRID_PROVIDER_BRAND,
     _grid: grid,
     queryCandidates: (position, sceneId, floorId) =>
-      grid.queryCandidates(position, sceneId, floorId),
+      grid.queryCandidateIdsByKind(position, sceneId, floorId, 'zone'),
   }
 }
 

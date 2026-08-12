@@ -31,6 +31,7 @@ import {
 import {
   type ConstraintNode,
   type ConstraintMembershipState,
+  type ConstraintInstrumentation,
   createEmptyMembershipState,
   resolveConstraintOrder,
   fragmentToConstraintNode,
@@ -97,6 +98,37 @@ export interface UnifiedOrderResult {
 // ── Non-world bands ──
 
 const NON_WORLD_BANDS = new Set(['lighting', 'world-ui', 'screen-ui'])
+
+interface StaticOrderCache {
+  nodes: readonly ConstraintNode[]
+  zoneRegistry: ReadonlyMap<string, OcclusionConstraintZone>
+}
+
+const STATIC_ORDER_CACHE = new WeakMap<E12Assembly, StaticOrderCache>()
+
+function getStaticOrderCache(assembly: E12Assembly): StaticOrderCache {
+  const cached = STATIC_ORDER_CACHE.get(assembly)
+  if (cached) return cached
+
+  const ir = assembly.canonicalIr
+  const nodes: ConstraintNode[] = []
+  for (const object of assembly.worldObjects) {
+    if (object.renderBand === 'world') nodes.push(sceneObjectToConstraintNode(object, ir.floorRegistry))
+  }
+  for (const fragment of assembly.fragments) {
+    if (fragment.renderBand !== 'world') continue
+    try {
+      nodes.push(fragmentToConstraintNode(fragment, ir.floorRegistry))
+    } catch (err) {
+      throw new Error(`E12: fragmentToConstraintNode failed for ${fragment.stableId}: ${(err as Error)?.message || err}`)
+    }
+  }
+  const zoneRegistry = new Map<string, OcclusionConstraintZone>()
+  for (const zone of assembly.zones) zoneRegistry.set(zone.stableId, zone)
+  const created = { nodes: Object.freeze(nodes), zoneRegistry }
+  STATIC_ORDER_CACHE.set(assembly, created)
+  return created
+}
 
 // ── Activation envelope ──
 
@@ -247,39 +279,21 @@ export function computeUnifiedWorldOrder(
   assembly: E12Assembly,
   agentAdapters: V2AgentAdapter[],
   currentMembership: ConstraintMembershipState,
+  options?: { instrumentation?: ConstraintInstrumentation },
 ): UnifiedOrderResult {
   const ir = assembly.canonicalIr
-  const nodes: ConstraintNode[] = []
-
-  // Props (world-band)
-  for (const o of assembly.worldObjects) {
-    if (o.renderBand !== 'world') continue
-    nodes.push(sceneObjectToConstraintNode(o, ir.floorRegistry))
-  }
-
-  // Fragments (world-band)
-  for (const f of assembly.fragments) {
-    if (f.renderBand !== 'world') continue
-    try {
-      nodes.push(fragmentToConstraintNode(f, ir.floorRegistry))
-    } catch (err) {
-      throw new Error(`E12: fragmentToConstraintNode failed for ${f.stableId}: ${(err as Error)?.message || err}`)
-    }
-  }
+  const staticCache = getStaticOrderCache(assembly)
+  const nodes: ConstraintNode[] = [...staticCache.nodes]
 
   // Agents
   for (const a of agentAdapters) {
     nodes.push(sceneObjectToConstraintNode(a.sceneObject, ir.floorRegistry))
   }
 
-  // Zone registry
-  const zoneReg = new Map<string, OcclusionConstraintZone>()
-  for (const z of assembly.zones) zoneReg.set(z.stableId, z)
-
   const resolution = resolveConstraintOrder(
-    nodes, assembly.candidateProvider, zoneReg,
+    nodes, assembly.candidateProvider, staticCache.zoneRegistry,
     ir.floorRegistry, ir.sceneId,
-    { previousMembership: currentMembership },
+    { previousMembership: currentMembership, instrumentation: options?.instrumentation },
   )
 
   // Contiguous integer depths

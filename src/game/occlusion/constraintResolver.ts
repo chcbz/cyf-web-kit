@@ -71,37 +71,79 @@ export type MembershipState = 'inside' | 'outside'
  */
 export type ConstraintMembershipState = Readonly<Record<string, Readonly<Record<string, MembershipState>>>>
 
+type MembershipByAgent = ReadonlyMap<string, ReadonlyMap<string, MembershipState>>
+
+// Cross-frame membership snapshots are immutable objects. Keep their sparse
+// agent-oriented view in a WeakMap so the next frame can preserve hysteresis
+// without rebuilding the inverse index or scanning agents × all zones.
+const MEMBERSHIP_BY_AGENT_CACHE = new WeakMap<ConstraintMembershipState, MembershipByAgent>()
+
 export function createEmptyMembershipState(): ConstraintMembershipState {
-  return Object.freeze({})
+  const empty = Object.freeze({})
+  MEMBERSHIP_BY_AGENT_CACHE.set(empty, new Map())
+  return empty
 }
 
-function cloneMembershipState(src: ConstraintMembershipState): Record<string, Record<string, MembershipState>> {
-  const out: Record<string, Record<string, MembershipState>> = {}
-  for (const zoneId of Object.keys(src)) {
-    out[zoneId] = { ...src[zoneId] }
+function membershipByAgent(state: ConstraintMembershipState): MembershipByAgent {
+  const cached = MEMBERSHIP_BY_AGENT_CACHE.get(state)
+  if (cached) return cached
+
+  // Compatibility path for externally constructed frozen test/restore state.
+  const inverted = new Map<string, Map<string, MembershipState>>()
+  for (const zoneId of Object.keys(state)) {
+    for (const [agentId, membership] of Object.entries(state[zoneId])) {
+      let agentStates = inverted.get(agentId)
+      if (!agentStates) {
+        agentStates = new Map()
+        inverted.set(agentId, agentStates)
+      }
+      agentStates.set(zoneId, membership)
+    }
   }
-  return out
+  MEMBERSHIP_BY_AGENT_CACHE.set(state, inverted)
+  return inverted
 }
 
 function freezeMembershipOutput(
   working: Map<string, Map<string, MembershipState>>,
 ): ConstraintMembershipState {
   const out: Record<string, Record<string, MembershipState>> = {}
+  const inverted = new Map<string, Map<string, MembershipState>>()
   for (const [zoneId, agentMap] of working) {
     const inner: Record<string, MembershipState> = {}
-    for (const [aid, s] of agentMap) {
-      inner[aid] = s
+    for (const [agentId, membership] of agentMap) {
+      inner[agentId] = membership
+      let agentStates = inverted.get(agentId)
+      if (!agentStates) {
+        agentStates = new Map()
+        inverted.set(agentId, agentStates)
+      }
+      agentStates.set(zoneId, membership)
     }
     out[zoneId] = Object.freeze(inner)
   }
-  return Object.freeze(out)
+  const frozen = Object.freeze(out)
+  MEMBERSHIP_BY_AGENT_CACHE.set(frozen, inverted)
+  return frozen
 }
 
 // ── Internal mutable zone membership (polygon + per-agent state) ──
 
 interface ZoneMembershipCache {
   fixedPoly: FixedPolygon
-  state: Map<string, MembershipState>
+}
+
+// Canonical zone objects are scene-static. Cache their validated fixed-point
+// representation across frames so exact polygon checks do not recompile the
+// same geometry on every resolver call.
+const COMPILED_ZONE_POLYGONS = new WeakMap<OcclusionConstraintZone, FixedPolygon>()
+
+function compiledZonePolygon(zone: OcclusionConstraintZone): FixedPolygon {
+  const cached = COMPILED_ZONE_POLYGONS.get(zone)
+  if (cached) return cached
+  const compiled = compileFixedPolygon(zone.polygon, zone.sceneId, zone.stableId)
+  COMPILED_ZONE_POLYGONS.set(zone, compiled)
+  return compiled
 }
 
 // ── Candidate provider interface ──
@@ -250,7 +292,7 @@ function resolveMembershipsWithGrid(
   agents: ConstraintNode[],
   candidateProvider: ConstraintCandidateProvider,
   zoneRegistry: ReadonlyMap<string, OcclusionConstraintZone>,
-  previousState: Record<string, Record<string, MembershipState>>,
+  previousState: ConstraintMembershipState,
   zoneCache: Map<string, ZoneMembershipCache>,
   sceneId: string,
   instr: ConstraintInstrumentation | undefined,
@@ -262,6 +304,8 @@ function resolveMembershipsWithGrid(
   const perAgentCounts: number[] = []
   let totalChecks = 0
 
+  const previousByAgent = membershipByAgent(previousState)
+
   for (const agent of agents) {
     if (agent.nodeKind !== 'agent') continue
     if (agent.sceneId !== sceneId) continue
@@ -272,12 +316,28 @@ function resolveMembershipsWithGrid(
       agent.position, agent.sceneId, agent.floorId,
     )
 
-    // Filter to only zones in registry
-    const zoneCandidatesInRegistry = new Set<string>()
+    // Production providers already return only zone IDs. Keep the
+    // registry check for explicit test providers without allocating another Set.
     for (const cid of candidateIds) {
-      if (zoneRegistry.has(cid)) {
-        zoneCandidatesInRegistry.add(cid)
-        uniqueCandidates.add(cid)
+      if (zoneRegistry.has(cid)) uniqueCandidates.add(cid)
+    }
+
+    // A zone that was tracked last frame but is no longer returned by the
+    // spatial query is necessarily outside the local neighborhood. Persist an
+    // explicit outside state so a later boundary re-entry still requires the
+    // frozen +3px transition instead of being treated as a first sample.
+    const priorAgentStates = previousByAgent.get(agent.stableId)
+    if (priorAgentStates) {
+      for (const zoneId of priorAgentStates.keys()) {
+        if (candidateIds.has(zoneId)) continue
+        const zone = zoneRegistry.get(zoneId)
+        if (!zone || zone.sceneId !== sceneId || zone.floorId !== agent.floorId) continue
+        let ws = workingState.get(zoneId)
+        if (!ws) {
+          ws = new Map()
+          workingState.set(zoneId, ws)
+        }
+        ws.set(agent.stableId, 'outside')
       }
     }
 
@@ -289,32 +349,51 @@ function resolveMembershipsWithGrid(
 
     let checksForAgent = 0
 
-    for (const zoneId of zoneCandidatesInRegistry) {
-      const zone = zoneRegistry.get(zoneId)!
+    for (const zoneId of candidateIds) {
+      const zone = zoneRegistry.get(zoneId)
+      if (!zone) continue
       if (zone.sceneId !== sceneId) continue
       if (zone.floorId !== agent.floorId) continue
+
+      // SpatialGrid cells are deliberately coarse. Before the expensive exact
+      // fixed-point polygon distance, reject points outside the zone AABB plus
+      // the frozen 3px hysteresis margin. This is semantically equivalent:
+      // outside that expanded AABB the signed distance cannot cross either
+      // membership threshold, so no edge can be active.
+      const margin = zone.hysteresisPx
+      if (
+        agent.position.x < zone.bounds.x - margin ||
+        agent.position.x > zone.bounds.x + zone.bounds.width + margin ||
+        agent.position.y < zone.bounds.y - margin ||
+        agent.position.y > zone.bounds.y + zone.bounds.height + margin
+      ) {
+        // Preserve an existing outside state so returning through the 3px
+        // boundary still observes hysteresis. An existing inside state is now
+        // provably outside and is demoted without exact polygon work.
+        if (previousState[zoneId]?.[agent.stableId]) {
+          let ws = workingState.get(zoneId)
+          if (!ws) {
+            ws = new Map()
+            workingState.set(zoneId, ws)
+          }
+          ws.set(agent.stableId, 'outside')
+        }
+        continue
+      }
 
       checksForAgent++
 
       // Ensure zone cache entry
       let zc = zoneCache.get(zoneId)
       if (!zc) {
-        zc = {
-          fixedPoly: compileFixedPolygon(zone.polygon, zone.sceneId, zone.stableId),
-          state: new Map(),
-        }
-        // Seed from previous membership state
-        const prevAgentMap = previousState[zoneId]
-        if (prevAgentMap) {
-          for (const aid of Object.keys(prevAgentMap)) {
-            zc.state.set(aid, prevAgentMap[aid])
-          }
-        }
+        zc = { fixedPoly: compiledZonePolygon(zone) }
         zoneCache.set(zoneId, zc)
       }
 
-      // Hysteresis check
-      const previous = zc.state.get(agent.stableId) ?? null
+      // Hysteresis check reads the immutable prior frame directly. Each
+      // agent-zone pair is evaluated once, so a duplicate mutable state Map is
+      // unnecessary.
+      const previous = previousState[zoneId]?.[agent.stableId] ?? null
       const prevBool = previous === 'inside' ? true : previous === 'outside' ? false : null
 
       const hyst = computeHysteresis(zc.fixedPoly, fxNorm, fyNorm, prevBool)
@@ -335,9 +414,6 @@ function resolveMembershipsWithGrid(
         workingState.set(zoneId, ws)
       }
       ws.set(agent.stableId, newState)
-
-      // Also update zone cache for future agents in same batch
-      zc.state.set(agent.stableId, newState)
     }
 
     perAgentCounts.push(checksForAgent)
@@ -356,29 +432,11 @@ function resolveMembershipsWithGrid(
 // ── Edge generation (with zone registry) ──
 
 function generateEdgesWithRegistry(
-  nodes: ConstraintNode[],
+  nodeMap: ReadonlyMap<string, ConstraintNode>,
   zoneRegistry: ReadonlyMap<string, OcclusionConstraintZone>,
   membershipSnapshots: Map<string, Map<string, MembershipState>>,
   sceneId: string,
 ): ConstraintEdge[] {
-  const nodeMap = new Map<string, ConstraintNode>()
-  for (const n of nodes) {
-    if (nodeMap.has(n.stableId)) {
-      fatal('CONSTRAINT_DUPLICATE_NODE' as RenderSchemaErrorCode, sceneId, n.stableId,
-        'stableId', `重复 stableId: ${n.stableId}`, `duplicate stableId: ${n.stableId}`)
-    }
-    nodeMap.set(n.stableId, n)
-  }
-
-  // Validate fragment nodes are world-band (redundant with pre-validation but kept as defense)
-  for (const n of nodes) {
-    if (n.nodeKind === 'fragment' && n.sortKey.renderBandOrder !== 100) {
-      fatal('FRAGMENT_RENDER_BAND_INVALID' as RenderSchemaErrorCode, sceneId, n.stableId,
-        'renderBand', `fragment 必须为 world band: ${n.stableId}`,
-        `fragment ${n.stableId} renderBandOrder=${n.sortKey.renderBandOrder}, must be world (100)`)
-    }
-  }
-
   const rawEdges: Array<{
     from: string; to: string; kind: ConstraintEdgeKind;
     zoneStableId: string; priority: number;
@@ -495,30 +553,52 @@ function kahnSort(
     return compareWorldSortKeys(keyMap.get(a)!, keyMap.get(b)!)
   }
 
-  const zeroQueue: string[] = []
-  for (const [id, deg] of indegree) {
-    if (deg === 0) zeroQueue.push(id)
-  }
-  zeroQueue.sort(pqCompare)
+  // Binary min-heap preserves the exact WorldSortKey ordering while
+  // avoiding Array.shift/splice element moves on every Kahn step.
+  const zeroHeap: string[] = []
 
-  function pushQueue(id: string) {
-    let lo = 0, hi = zeroQueue.length
-    while (lo < hi) {
-      const mid = (lo + hi) >>> 1
-      if (pqCompare(id, zeroQueue[mid]) < 0) hi = mid
-      else lo = mid + 1
+  function heapPush(id: string): void {
+    let index = zeroHeap.length
+    zeroHeap.push(id)
+    while (index > 0) {
+      const parent = (index - 1) >>> 1
+      if (pqCompare(zeroHeap[parent], id) <= 0) break
+      zeroHeap[index] = zeroHeap[parent]
+      index = parent
     }
-    zeroQueue.splice(lo, 0, id)
+    zeroHeap[index] = id
   }
+
+  function heapPop(): string | undefined {
+    if (zeroHeap.length === 0) return undefined
+    const first = zeroHeap[0]
+    const last = zeroHeap.pop()!
+    if (zeroHeap.length === 0) return first
+    let index = 0
+    while (true) {
+      const left = index * 2 + 1
+      if (left >= zeroHeap.length) break
+      const right = left + 1
+      let child = left
+      if (right < zeroHeap.length && pqCompare(zeroHeap[right], zeroHeap[left]) < 0) child = right
+      if (pqCompare(last, zeroHeap[child]) <= 0) break
+      zeroHeap[index] = zeroHeap[child]
+      index = child
+    }
+    zeroHeap[index] = last
+    return first
+  }
+
+  for (const [id, deg] of indegree) if (deg === 0) heapPush(id)
 
   const result: string[] = []
-  while (zeroQueue.length > 0) {
-    const current = zeroQueue.shift()!
+  while (zeroHeap.length > 0) {
+    const current = heapPop()!
     result.push(current)
     for (const neighbor of adj.get(current) ?? []) {
       const newDeg = (indegree.get(neighbor) ?? 1) - 1
       indegree.set(neighbor, newDeg)
-      if (newDeg === 0) pushQueue(neighbor)
+      if (newDeg === 0) heapPush(neighbor)
     }
   }
 
@@ -577,46 +657,40 @@ export function resolveConstraintOrder(
       `constraint resolver requires a SpatialGrid-backed candidate provider (SPATIAL_GRID_PROVIDER_BRAND missing)`)
   }
 
-  // 1. Validate no duplicate nodes
-  const seen = new Set<string>()
-  for (const n of nodes) {
-    if (seen.has(n.stableId)) {
-      fatal('CONSTRAINT_DUPLICATE_NODE' as RenderSchemaErrorCode, sceneId, n.stableId,
-        'stableId', `重复 stableId: ${n.stableId}`, `duplicate stableId in nodes: ${n.stableId}`)
-    }
-    seen.add(n.stableId)
-  }
-
-  // 2. Validate fragment nodes are world-band (first defense)
-  for (const n of nodes) {
-    if (n.nodeKind === 'fragment' && n.sortKey.renderBandOrder !== 100) {
-      fatal('FRAGMENT_RENDER_BAND_INVALID' as RenderSchemaErrorCode, sceneId, n.stableId,
-        'renderBand', `fragment 必须为 world band: ${n.stableId}`,
-        `fragment ${n.stableId} renderBandOrder=${n.sortKey.renderBandOrder}, must be world (100)`)
-    }
-  }
-
-  // 3. Pre-validate zone registry BEFORE membership (P2 fix: even zero agents)
+  // 1–3. Build the authoritative node registry once while validating
+  // duplicate IDs and fragment bands, and collect agents in the same pass.
   const nodeMap = new Map<string, ConstraintNode>()
-  for (const n of nodes) nodeMap.set(n.stableId, n)
+  const agents: ConstraintNode[] = []
+  for (const node of nodes) {
+    if (nodeMap.has(node.stableId)) {
+      fatal('CONSTRAINT_DUPLICATE_NODE' as RenderSchemaErrorCode, sceneId, node.stableId,
+        'stableId', `重复 stableId: ${node.stableId}`, `duplicate stableId in nodes: ${node.stableId}`)
+    }
+    if (node.nodeKind === 'fragment' && node.sortKey.renderBandOrder !== 100) {
+      fatal('FRAGMENT_RENDER_BAND_INVALID' as RenderSchemaErrorCode, sceneId, node.stableId,
+        'renderBand', `fragment 必须为 world band: ${node.stableId}`,
+        `fragment ${node.stableId} renderBandOrder=${node.sortKey.renderBandOrder}, must be world (100)`)
+    }
+    nodeMap.set(node.stableId, node)
+    if (node.nodeKind === 'agent') agents.push(node)
+  }
   preValidateZoneRegistry(zoneRegistry, nodeMap, sceneId)
 
-  const agentCount = nodes.filter(n => n.nodeKind === 'agent').length
-  const agents = nodes.filter(n => n.nodeKind === 'agent')
+  const agentCount = agents.length
 
-  // 4. Clone previous membership state (will NOT be mutated on failure)
-  const previousCloned: Record<string, Record<string, MembershipState>> =
-    opts?.previousMembership ? cloneMembershipState(opts.previousMembership) : {}
+  // 4. Prior membership is deeply immutable by contract; the resolver only
+  // reads it, so cloning every zone/agent state each frame is redundant.
+  const previousMembership = opts?.previousMembership ?? createEmptyMembershipState()
 
   // 5. Resolve memberships using spatial grid (NOT flat all-zones)
   const zoneCache = new Map<string, ZoneMembershipCache>()
   const { snapshots, workingState } = resolveMembershipsWithGrid(
     agents, candidateProvider, zoneRegistry,
-    previousCloned, zoneCache, sceneId, instr,
+    previousMembership, zoneCache, sceneId, instr,
   )
 
   // 6. Generate edges
-  const edges = generateEdgesWithRegistry(nodes, zoneRegistry, snapshots, sceneId)
+  const edges = generateEdgesWithRegistry(nodeMap, zoneRegistry, snapshots, sceneId)
 
   // 7. Kahn sort
   const order = kahnSort(nodes, edges, sceneId)

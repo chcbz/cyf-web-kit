@@ -462,3 +462,66 @@ describe('SpatialGrid - determinism', () => {
     assert.deepEqual([...q1].sort(), [...q2].sort())
   })
 })
+
+// ── Reverse-index update complexity (E14) ──
+
+describe('SpatialGrid - reverse-index update complexity', () => {
+  it('updates 108 moving agents without any full-grid cell scan', () => {
+    const instr = createSpatialGridInstrumentation()
+    const grid = new SpatialGrid(256, instr)
+    for (let index = 0; index < 87; index++) {
+      grid.register(makeEntry(`static.${index}`, 'zone', (index % 10) * 320, Math.floor(index / 10) * 320, 80, 80), 'scene-1', 'floor-1')
+    }
+    const agents = Array.from({ length: 108 }, (_, index) => makeEntry(`agent.${index}`, 'agent', (index % 12) * 100, Math.floor(index / 12) * 90, 16, 16))
+    for (const agent of agents) grid.register(agent, 'scene-1', 'floor-1')
+    const beforeVisits = instr.updateCellVisitCount
+    for (let frame = 0; frame < 10; frame++) {
+      for (const [index, agent] of agents.entries()) {
+        grid.register({ ...agent, bounds: { ...agent.bounds, x: agent.bounds.x + frame + index % 2 } }, 'scene-1', 'floor-1')
+      }
+    }
+    const deltaVisits = instr.updateCellVisitCount - beforeVisits
+    assert.equal(instr.scanCount, 0)
+    // Each 16px agent normally occupies one cell: unregister + register is ~2 visits.
+    // Allow boundary crossings but reject anything resembling all-map-cell scans.
+    assert.ok(deltaVisits < 108 * 10 * 6, `unexpected update cell visits: ${deltaVisits}`)
+  })
+
+  it('clear resets reverse index so same stableId can be registered cleanly', () => {
+    const instr = createSpatialGridInstrumentation()
+    const grid = new SpatialGrid(256, instr)
+    grid.register(makeEntry('agent.a', 'agent', 10, 10, 16, 16), 'scene-1', 'floor-1')
+    grid.clear()
+    grid.register(makeEntry('agent.a', 'agent', 900, 700, 16, 16), 'scene-1', 'floor-1')
+    assert.equal(instr.scanCount, 0)
+    assert.ok(grid.queryCandidates({ x: 900, y: 700 }, 'scene-1', 'floor-1').has('agent.a'))
+  })
+})
+
+describe('SpatialGrid - per-kind candidate index', () => {
+  it('returns only requested kinds without materializing nearby agents/fragments', () => {
+    const instr = createSpatialGridInstrumentation()
+    const grid = new SpatialGrid(256, instr)
+    grid.register(makeEntry('zone.only', 'zone', 0, 0, 40, 40), 'scene-1', 'floor-1')
+    for (let index = 0; index < 108; index++) {
+      grid.register(makeEntry(`agent.${index}`, 'agent', index % 20, index % 20, 16, 16), 'scene-1', 'floor-1')
+    }
+    grid.register(makeEntry('frag.near', 'fragment', 0, 0, 80, 80), 'scene-1', 'floor-1')
+    const result = grid.queryCandidateIdsByKind({ x: 20, y: 20 }, 'scene-1', 'floor-1', 'zone')
+    assert.deepEqual([...result], ['zone.only'])
+    assert.equal(instr.candidateCount, 1)
+  })
+
+  it('keeps the per-kind index correct across update, unregister and clear', () => {
+    const grid = new SpatialGrid(256)
+    grid.register(makeEntry('zone.move', 'zone', 0, 0, 40, 40), 'scene-1', 'floor-1')
+    grid.register(makeEntry('zone.move', 'zone', 900, 700, 40, 40), 'scene-1', 'floor-1')
+    assert.equal(grid.queryCandidateIdsByKind({ x: 0, y: 0 }, 'scene-1', 'floor-1', 'zone').has('zone.move'), false)
+    assert.equal(grid.queryCandidateIdsByKind({ x: 900, y: 700 }, 'scene-1', 'floor-1', 'zone').has('zone.move'), true)
+    grid.unregister('zone.move')
+    assert.equal(grid.queryCandidateIdsByKind({ x: 900, y: 700 }, 'scene-1', 'floor-1', 'zone').size, 0)
+    grid.register(makeEntry('zone.clear', 'zone', 20, 20, 40, 40), 'scene-1', 'floor-1')
+    grid.clear()
+    assert.equal(grid.queryCandidateIdsByKind({ x: 20, y: 20 }, 'scene-1', 'floor-1', 'zone').size, 0)
+  })
+})

@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "gate": "E14 formal Chromium performance gate",
+  "status": "blocked_by_managed_workspace_sandbox",
+  "date": "2026-08-12",
+  "chromium": {
+    "binary": "/usr/lib64/chromium-browser/headless_shell",
+    "version": "133.0.6943.141"
+  },
+  "observations": [
+    {
+      "operation": "formal runner production bundle build",
+      "result": "pass"
+    },
+    {
+      "operation": "local benchmark HTTP server listen on 127.0.0.1:4179",
+      "result": "EPERM"
+    },
+    {
+      "operation": "CDP connect to 127.0.0.1 remote-debugging port",
+      "result": "EPERM"
+    },
+    {
+      "operation": "Chromium headless startup without CDP",
+      "result": "FATAL sandbox_host_linux.cc(41): shutdown: Operation not permitted"
+    }
+  ],
+  "integrity": {
+    "formalGateClaimed": false,
+    "nodeFallbackClaimedAsChromium": false,
+    "warmupOrSampleShortened": false,
+    "thresholdsChanged": false,
+    "e15Started": false,
+    "pushedOrDeployed": false
+  },
+  "nextAction": "Run npm run benchmark:juyiting-occlusion-e14 on the normal test/deployment host or CI, then run npm run test:juyiting-occlusion-e14."
+}
