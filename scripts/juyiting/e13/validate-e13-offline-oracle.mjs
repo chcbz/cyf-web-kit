@@ -291,7 +291,6 @@ function main () {
   const report = {
     $schema: 'juyiting-occlusion-e13-oracle-v1',
     taskId: 'E13',
-    timestamp: new Date().toISOString(),
     pass: passed,
     checks,
     failures: failures.length,

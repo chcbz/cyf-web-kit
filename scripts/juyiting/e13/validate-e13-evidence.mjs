@@ -206,7 +206,6 @@ function writeGate (gatePath) {
   const gate = {
     $schema: 'juyiting-occlusion-e13-machines-gate-v2',
     taskId: 'E13',
-    timestamp: new Date().toISOString(),
     generatedBy: 'validate-e13-evidence.mjs',
     pass: results.every(r => r.ok),
     passedChecks: results.filter(r => r.ok).length,

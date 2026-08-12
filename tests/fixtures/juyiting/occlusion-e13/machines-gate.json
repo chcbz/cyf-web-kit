@@ -1,7 +1,6 @@
 {
   "$schema": "juyiting-occlusion-e13-machines-gate-v2",
   "taskId": "E13",
-  "timestamp": "2026-08-12T14:51:31.953Z",
   "generatedBy": "validate-e13-evidence.mjs",
   "pass": true,
   "passedChecks": 33,

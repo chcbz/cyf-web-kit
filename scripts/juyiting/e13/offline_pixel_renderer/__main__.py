@@ -89,7 +89,6 @@ def main():
             'expectedRelation': shot['expectedRelation'],
             'expectedDepth': shot['expectedDepth'],
             'runtimeFacts': facts,
-            'renderTimeMs': round(elapsed * 1000),
         })
 
         if (i + 1) % 30 == 0:
@@ -106,11 +105,9 @@ def main():
         '$schema': 'juyiting-occlusion-e13-index-v2',
         'schemaVersion': 2,
         'taskId': 'E13',
-        'generatedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
         'generator': 'offline-pixel-renderer (Python, deterministic, no browser)',
         'status': 'GENERATED_OFFLINE',
         'shotCount': len(records),
-        'renderTimeTotalMs': round(total_elapsed * 1000),
         'matrixShots': len(records),
         'cameraShots': 0,
         'interactionShots': 0,

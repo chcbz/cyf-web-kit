@@ -112,20 +112,9 @@ def validate(evidence_dir, repo_root):
         if not r['ok']:
             print(f'  {status}: {r["check"]} - {r["detail"]}')
 
-    # Write gate
-    gate = {
-        '$schema': 'juyiting-occlusion-e13-machines-gate-v2',
-        'taskId': 'E13',
-        'generator': 'offline-pixel-renderer/validate.py',
-        'pass': all(r['ok'] for r in results),
-        'passedChecks': passed,
-        'totalChecks': total,
-        'failures': [r for r in results if not r['ok']],
-        'checks': results,
-    }
-    with open(os.path.join(evidence_dir, 'machines-gate.json'), 'w') as f:
-        json.dump(gate, f, indent=2)
-
+    # NOTE: this validator is read-only w.r.t. fixtures. The canonical machine
+    # gate is written by validate-e13-evidence.mjs (33 checks). Writing here
+    # would race with that file and make the tree dirty on re-runs.
     return results
 
 

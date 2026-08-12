@@ -97,10 +97,8 @@ depth_matches = sum(1 for r in records if r['runtimeFacts']['depthMatch'])
 
 index = {
     '$schema': 'juyiting-occlusion-e13-index-v2', 'schemaVersion': 2, 'taskId': 'E13',
-    'generatedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
     'generator': 'generate-e13-offline-evidence.mjs + offline_pixel_renderer (Python, deterministic)',
     'status': 'GENERATED_OFFLINE', 'shotCount': len(records),
-    'renderTimeTotalMs': round(total * 1000),
     'matrixShots': len(records), 'cameraShots': 0, 'interactionShots': 0, 'movementShots': 0,
     'notes': {
         'camera': 'DEFERRED — camera zoom/pan tests require browser viewport + touch simulation',
@@ -180,7 +178,16 @@ for c in r:
     print(f'  {"PASS" if c["ok"] else "FAIL"}: {c["check"]}')
 exit(0 if all(x['ok'] for x in r) else 1)
 `)
-  // validator already prints its own output
+  // Python validator is read-only w.r.t. fixtures; it only fails closed.
+  log('Python validator passed.')
+
+  // Canonical machine gate writes machines-gate.json (deterministic, no timestamp).
+  log('Running machine gate (validate-e13-evidence.mjs)...')
+  const gate = spawnSync('node', [join(__dirname, 'validate-e13-evidence.mjs')], {
+    cwd: REPO, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, timeout: 120000,
+  })
+  if (gate.status !== 0) die(`Machine gate failed:\n${gate.stderr || gate.stdout}`)
+  log('Machine gate passed.')
 
   const total = Date.now() - t0
   log(`=== Complete in ${(total/1000).toFixed(1)}s ===`)
