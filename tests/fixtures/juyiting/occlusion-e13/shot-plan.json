@@ -1,0 +1,7843 @@
+{
+  "$schema": "juyiting-occlusion-e13-shot-plan-v1",
+  "taskId": "E13",
+  "shotCount": 289,
+  "shots": [
+    {
+      "id": "E13-001",
+      "kind": "matrix",
+      "cell": "northwest",
+      "targetStableId": "jyt.occ.west-upper.lantern-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "behind",
+      "world": {
+        "x": 484,
+        "y": 206
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 484,
+          "y": 240
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-002",
+      "kind": "matrix",
+      "cell": "northwest",
+      "targetStableId": "jyt.occ.west-upper.lantern-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "boundary",
+      "world": {
+        "x": 484,
+        "y": 240
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 484,
+          "y": 240
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-003",
+      "kind": "matrix",
+      "cell": "northwest",
+      "targetStableId": "jyt.occ.west-upper.lantern-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "front",
+      "world": {
+        "x": 484,
+        "y": 274
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 484,
+          "y": 240
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-004",
+      "kind": "matrix",
+      "cell": "northwest",
+      "targetStableId": "jyt.occ.west-upper.lantern-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "behind",
+      "world": {
+        "x": 484,
+        "y": 206
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 484,
+          "y": 240
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-005",
+      "kind": "matrix",
+      "cell": "northwest",
+      "targetStableId": "jyt.occ.west-upper.lantern-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "boundary",
+      "world": {
+        "x": 484,
+        "y": 240
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 484,
+          "y": 240
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-006",
+      "kind": "matrix",
+      "cell": "northwest",
+      "targetStableId": "jyt.occ.west-upper.lantern-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "front",
+      "world": {
+        "x": 484,
+        "y": 274
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 484,
+          "y": 240
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-007",
+      "kind": "matrix",
+      "cell": "northwest",
+      "targetStableId": "jyt.occ.west-upper.lantern-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "behind",
+      "world": {
+        "x": 484,
+        "y": 206
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 484,
+          "y": 240
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-008",
+      "kind": "matrix",
+      "cell": "northwest",
+      "targetStableId": "jyt.occ.west-upper.lantern-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "boundary",
+      "world": {
+        "x": 484,
+        "y": 240
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 484,
+          "y": 240
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-009",
+      "kind": "matrix",
+      "cell": "northwest",
+      "targetStableId": "jyt.occ.west-upper.lantern-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "front",
+      "world": {
+        "x": 484,
+        "y": 274
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 484,
+          "y": 240
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-010",
+      "kind": "matrix",
+      "cell": "northwest",
+      "targetStableId": "jyt.occ.west-upper.lantern-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "behind",
+      "world": {
+        "x": 484,
+        "y": 206
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 484,
+          "y": 240
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-011",
+      "kind": "matrix",
+      "cell": "northwest",
+      "targetStableId": "jyt.occ.west-upper.lantern-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "boundary",
+      "world": {
+        "x": 484,
+        "y": 240
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 484,
+          "y": 240
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-012",
+      "kind": "matrix",
+      "cell": "northwest",
+      "targetStableId": "jyt.occ.west-upper.lantern-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "front",
+      "world": {
+        "x": 484,
+        "y": 274
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 484,
+          "y": 240
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-013",
+      "kind": "matrix",
+      "cell": "northwest",
+      "targetStableId": "jyt.occ.west-upper.lantern-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "behind",
+      "world": {
+        "x": 484,
+        "y": 206
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 484,
+          "y": 240
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-014",
+      "kind": "matrix",
+      "cell": "northwest",
+      "targetStableId": "jyt.occ.west-upper.lantern-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "boundary",
+      "world": {
+        "x": 484,
+        "y": 240
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 484,
+          "y": 240
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-015",
+      "kind": "matrix",
+      "cell": "northwest",
+      "targetStableId": "jyt.occ.west-upper.lantern-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "front",
+      "world": {
+        "x": 484,
+        "y": 274
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 484,
+          "y": 240
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-016",
+      "kind": "matrix",
+      "cell": "northwest",
+      "targetStableId": "jyt.occ.west-upper.lantern-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "behind",
+      "world": {
+        "x": 484,
+        "y": 206
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 484,
+          "y": 240
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-017",
+      "kind": "matrix",
+      "cell": "northwest",
+      "targetStableId": "jyt.occ.west-upper.lantern-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "boundary",
+      "world": {
+        "x": 484,
+        "y": 240
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 484,
+          "y": 240
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-018",
+      "kind": "matrix",
+      "cell": "northwest",
+      "targetStableId": "jyt.occ.west-upper.lantern-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "front",
+      "world": {
+        "x": 484,
+        "y": 274
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 484,
+          "y": 240
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-019",
+      "kind": "matrix",
+      "cell": "north_center",
+      "targetStableId": "jyt.prop.center-north.main-seat.v1",
+      "targetKind": "prop",
+      "focus": false,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "behind",
+      "world": {
+        "x": 872,
+        "y": 234
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 872,
+          "y": 268
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-020",
+      "kind": "matrix",
+      "cell": "north_center",
+      "targetStableId": "jyt.prop.center-north.main-seat.v1",
+      "targetKind": "prop",
+      "focus": false,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "boundary",
+      "world": {
+        "x": 872,
+        "y": 268
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 872,
+          "y": 268
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-021",
+      "kind": "matrix",
+      "cell": "north_center",
+      "targetStableId": "jyt.prop.center-north.main-seat.v1",
+      "targetKind": "prop",
+      "focus": false,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "front",
+      "world": {
+        "x": 872,
+        "y": 302
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 872,
+          "y": 268
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-022",
+      "kind": "matrix",
+      "cell": "north_center",
+      "targetStableId": "jyt.prop.center-north.main-seat.v1",
+      "targetKind": "prop",
+      "focus": false,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "behind",
+      "world": {
+        "x": 872,
+        "y": 234
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 872,
+          "y": 268
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-023",
+      "kind": "matrix",
+      "cell": "north_center",
+      "targetStableId": "jyt.prop.center-north.main-seat.v1",
+      "targetKind": "prop",
+      "focus": false,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "boundary",
+      "world": {
+        "x": 872,
+        "y": 268
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 872,
+          "y": 268
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-024",
+      "kind": "matrix",
+      "cell": "north_center",
+      "targetStableId": "jyt.prop.center-north.main-seat.v1",
+      "targetKind": "prop",
+      "focus": false,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "front",
+      "world": {
+        "x": 872,
+        "y": 302
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 872,
+          "y": 268
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-025",
+      "kind": "matrix",
+      "cell": "north_center",
+      "targetStableId": "jyt.prop.center-north.main-seat.v1",
+      "targetKind": "prop",
+      "focus": false,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "behind",
+      "world": {
+        "x": 872,
+        "y": 234
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 872,
+          "y": 268
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-026",
+      "kind": "matrix",
+      "cell": "north_center",
+      "targetStableId": "jyt.prop.center-north.main-seat.v1",
+      "targetKind": "prop",
+      "focus": false,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "boundary",
+      "world": {
+        "x": 872,
+        "y": 268
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 872,
+          "y": 268
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-027",
+      "kind": "matrix",
+      "cell": "north_center",
+      "targetStableId": "jyt.prop.center-north.main-seat.v1",
+      "targetKind": "prop",
+      "focus": false,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "front",
+      "world": {
+        "x": 872,
+        "y": 302
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 872,
+          "y": 268
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-028",
+      "kind": "matrix",
+      "cell": "north_center",
+      "targetStableId": "jyt.prop.center-north.main-seat.v1",
+      "targetKind": "prop",
+      "focus": false,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "behind",
+      "world": {
+        "x": 872,
+        "y": 234
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 872,
+          "y": 268
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-029",
+      "kind": "matrix",
+      "cell": "north_center",
+      "targetStableId": "jyt.prop.center-north.main-seat.v1",
+      "targetKind": "prop",
+      "focus": false,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "boundary",
+      "world": {
+        "x": 872,
+        "y": 268
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 872,
+          "y": 268
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-030",
+      "kind": "matrix",
+      "cell": "north_center",
+      "targetStableId": "jyt.prop.center-north.main-seat.v1",
+      "targetKind": "prop",
+      "focus": false,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "front",
+      "world": {
+        "x": 872,
+        "y": 302
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 872,
+          "y": 268
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-031",
+      "kind": "matrix",
+      "cell": "north_center",
+      "targetStableId": "jyt.prop.center-north.main-seat.v1",
+      "targetKind": "prop",
+      "focus": false,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "behind",
+      "world": {
+        "x": 872,
+        "y": 234
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 872,
+          "y": 268
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-032",
+      "kind": "matrix",
+      "cell": "north_center",
+      "targetStableId": "jyt.prop.center-north.main-seat.v1",
+      "targetKind": "prop",
+      "focus": false,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "boundary",
+      "world": {
+        "x": 872,
+        "y": 268
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 872,
+          "y": 268
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-033",
+      "kind": "matrix",
+      "cell": "north_center",
+      "targetStableId": "jyt.prop.center-north.main-seat.v1",
+      "targetKind": "prop",
+      "focus": false,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "front",
+      "world": {
+        "x": 872,
+        "y": 302
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 872,
+          "y": 268
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-034",
+      "kind": "matrix",
+      "cell": "north_center",
+      "targetStableId": "jyt.prop.center-north.main-seat.v1",
+      "targetKind": "prop",
+      "focus": false,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "behind",
+      "world": {
+        "x": 872,
+        "y": 234
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 872,
+          "y": 268
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-035",
+      "kind": "matrix",
+      "cell": "north_center",
+      "targetStableId": "jyt.prop.center-north.main-seat.v1",
+      "targetKind": "prop",
+      "focus": false,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "boundary",
+      "world": {
+        "x": 872,
+        "y": 268
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 872,
+          "y": 268
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-036",
+      "kind": "matrix",
+      "cell": "north_center",
+      "targetStableId": "jyt.prop.center-north.main-seat.v1",
+      "targetKind": "prop",
+      "focus": false,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "front",
+      "world": {
+        "x": 872,
+        "y": 302
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 872,
+          "y": 268
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-037",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "behind",
+      "world": {
+        "x": 1446,
+        "y": 345
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 379
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-038",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "boundary",
+      "world": {
+        "x": 1446,
+        "y": 379
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 379
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-039",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "front",
+      "world": {
+        "x": 1446,
+        "y": 413
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 379
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-040",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "behind",
+      "world": {
+        "x": 1446,
+        "y": 345
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 379
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-041",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "boundary",
+      "world": {
+        "x": 1446,
+        "y": 379
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 379
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-042",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "front",
+      "world": {
+        "x": 1446,
+        "y": 413
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 379
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-043",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "behind",
+      "world": {
+        "x": 1446,
+        "y": 345
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 379
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-044",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "boundary",
+      "world": {
+        "x": 1446,
+        "y": 379
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 379
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-045",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "front",
+      "world": {
+        "x": 1446,
+        "y": 413
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 379
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-046",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "behind",
+      "world": {
+        "x": 1446,
+        "y": 345
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 379
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-047",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "boundary",
+      "world": {
+        "x": 1446,
+        "y": 379
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 379
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-048",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "front",
+      "world": {
+        "x": 1446,
+        "y": 413
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 379
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-049",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "behind",
+      "world": {
+        "x": 1446,
+        "y": 345
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 379
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-050",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "boundary",
+      "world": {
+        "x": 1446,
+        "y": 379
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 379
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-051",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "front",
+      "world": {
+        "x": 1446,
+        "y": 413
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 379
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-052",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "behind",
+      "world": {
+        "x": 1446,
+        "y": 345
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 379
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-053",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "boundary",
+      "world": {
+        "x": 1446,
+        "y": 379
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 379
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-054",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "front",
+      "world": {
+        "x": 1446,
+        "y": 413
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 379
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-055",
+      "kind": "matrix",
+      "cell": "west_center",
+      "targetStableId": "jyt.occ.west-upper.wall-sconce-02.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "behind",
+      "world": {
+        "x": 515,
+        "y": 551
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 515,
+          "y": 585
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-056",
+      "kind": "matrix",
+      "cell": "west_center",
+      "targetStableId": "jyt.occ.west-upper.wall-sconce-02.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "boundary",
+      "world": {
+        "x": 515,
+        "y": 585
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 515,
+          "y": 585
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-057",
+      "kind": "matrix",
+      "cell": "west_center",
+      "targetStableId": "jyt.occ.west-upper.wall-sconce-02.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "front",
+      "world": {
+        "x": 515,
+        "y": 619
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 515,
+          "y": 585
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-058",
+      "kind": "matrix",
+      "cell": "west_center",
+      "targetStableId": "jyt.occ.west-upper.wall-sconce-02.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "behind",
+      "world": {
+        "x": 515,
+        "y": 551
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 515,
+          "y": 585
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-059",
+      "kind": "matrix",
+      "cell": "west_center",
+      "targetStableId": "jyt.occ.west-upper.wall-sconce-02.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "boundary",
+      "world": {
+        "x": 515,
+        "y": 585
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 515,
+          "y": 585
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-060",
+      "kind": "matrix",
+      "cell": "west_center",
+      "targetStableId": "jyt.occ.west-upper.wall-sconce-02.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "front",
+      "world": {
+        "x": 515,
+        "y": 619
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 515,
+          "y": 585
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-061",
+      "kind": "matrix",
+      "cell": "west_center",
+      "targetStableId": "jyt.occ.west-upper.wall-sconce-02.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "behind",
+      "world": {
+        "x": 515,
+        "y": 551
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 515,
+          "y": 585
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-062",
+      "kind": "matrix",
+      "cell": "west_center",
+      "targetStableId": "jyt.occ.west-upper.wall-sconce-02.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "boundary",
+      "world": {
+        "x": 515,
+        "y": 585
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 515,
+          "y": 585
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-063",
+      "kind": "matrix",
+      "cell": "west_center",
+      "targetStableId": "jyt.occ.west-upper.wall-sconce-02.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "front",
+      "world": {
+        "x": 515,
+        "y": 619
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 515,
+          "y": 585
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-064",
+      "kind": "matrix",
+      "cell": "west_center",
+      "targetStableId": "jyt.occ.west-upper.wall-sconce-02.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "behind",
+      "world": {
+        "x": 515,
+        "y": 551
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 515,
+          "y": 585
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-065",
+      "kind": "matrix",
+      "cell": "west_center",
+      "targetStableId": "jyt.occ.west-upper.wall-sconce-02.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "boundary",
+      "world": {
+        "x": 515,
+        "y": 585
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 515,
+          "y": 585
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-066",
+      "kind": "matrix",
+      "cell": "west_center",
+      "targetStableId": "jyt.occ.west-upper.wall-sconce-02.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "front",
+      "world": {
+        "x": 515,
+        "y": 619
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 515,
+          "y": 585
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-067",
+      "kind": "matrix",
+      "cell": "west_center",
+      "targetStableId": "jyt.occ.west-upper.wall-sconce-02.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "behind",
+      "world": {
+        "x": 515,
+        "y": 551
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 515,
+          "y": 585
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-068",
+      "kind": "matrix",
+      "cell": "west_center",
+      "targetStableId": "jyt.occ.west-upper.wall-sconce-02.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "boundary",
+      "world": {
+        "x": 515,
+        "y": 585
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 515,
+          "y": 585
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-069",
+      "kind": "matrix",
+      "cell": "west_center",
+      "targetStableId": "jyt.occ.west-upper.wall-sconce-02.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "front",
+      "world": {
+        "x": 515,
+        "y": 619
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 515,
+          "y": 585
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-070",
+      "kind": "matrix",
+      "cell": "west_center",
+      "targetStableId": "jyt.occ.west-upper.wall-sconce-02.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "behind",
+      "world": {
+        "x": 515,
+        "y": 551
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 515,
+          "y": 585
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-071",
+      "kind": "matrix",
+      "cell": "west_center",
+      "targetStableId": "jyt.occ.west-upper.wall-sconce-02.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "boundary",
+      "world": {
+        "x": 515,
+        "y": 585
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 515,
+          "y": 585
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-072",
+      "kind": "matrix",
+      "cell": "west_center",
+      "targetStableId": "jyt.occ.west-upper.wall-sconce-02.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "front",
+      "world": {
+        "x": 515,
+        "y": 619
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 515,
+          "y": 585
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-073",
+      "kind": "matrix",
+      "cell": "center",
+      "targetStableId": "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "behind",
+      "world": {
+        "x": 608,
+        "y": 455
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 608,
+          "y": 489
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-074",
+      "kind": "matrix",
+      "cell": "center",
+      "targetStableId": "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "boundary",
+      "world": {
+        "x": 608,
+        "y": 489
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 608,
+          "y": 489
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-075",
+      "kind": "matrix",
+      "cell": "center",
+      "targetStableId": "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "front",
+      "world": {
+        "x": 608,
+        "y": 523
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 608,
+          "y": 489
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-076",
+      "kind": "matrix",
+      "cell": "center",
+      "targetStableId": "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "behind",
+      "world": {
+        "x": 608,
+        "y": 455
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 608,
+          "y": 489
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-077",
+      "kind": "matrix",
+      "cell": "center",
+      "targetStableId": "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "boundary",
+      "world": {
+        "x": 608,
+        "y": 489
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 608,
+          "y": 489
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-078",
+      "kind": "matrix",
+      "cell": "center",
+      "targetStableId": "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "front",
+      "world": {
+        "x": 608,
+        "y": 523
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 608,
+          "y": 489
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-079",
+      "kind": "matrix",
+      "cell": "center",
+      "targetStableId": "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "behind",
+      "world": {
+        "x": 608,
+        "y": 455
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 608,
+          "y": 489
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-080",
+      "kind": "matrix",
+      "cell": "center",
+      "targetStableId": "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "boundary",
+      "world": {
+        "x": 608,
+        "y": 489
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 608,
+          "y": 489
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-081",
+      "kind": "matrix",
+      "cell": "center",
+      "targetStableId": "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "front",
+      "world": {
+        "x": 608,
+        "y": 523
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 608,
+          "y": 489
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-082",
+      "kind": "matrix",
+      "cell": "center",
+      "targetStableId": "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "behind",
+      "world": {
+        "x": 608,
+        "y": 455
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 608,
+          "y": 489
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-083",
+      "kind": "matrix",
+      "cell": "center",
+      "targetStableId": "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "boundary",
+      "world": {
+        "x": 608,
+        "y": 489
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 608,
+          "y": 489
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-084",
+      "kind": "matrix",
+      "cell": "center",
+      "targetStableId": "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "front",
+      "world": {
+        "x": 608,
+        "y": 523
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 608,
+          "y": 489
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-085",
+      "kind": "matrix",
+      "cell": "center",
+      "targetStableId": "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "behind",
+      "world": {
+        "x": 608,
+        "y": 455
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 608,
+          "y": 489
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-086",
+      "kind": "matrix",
+      "cell": "center",
+      "targetStableId": "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "boundary",
+      "world": {
+        "x": 608,
+        "y": 489
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 608,
+          "y": 489
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-087",
+      "kind": "matrix",
+      "cell": "center",
+      "targetStableId": "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "front",
+      "world": {
+        "x": 608,
+        "y": 523
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 608,
+          "y": 489
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-088",
+      "kind": "matrix",
+      "cell": "center",
+      "targetStableId": "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "behind",
+      "world": {
+        "x": 608,
+        "y": 455
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 608,
+          "y": 489
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-089",
+      "kind": "matrix",
+      "cell": "center",
+      "targetStableId": "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "boundary",
+      "world": {
+        "x": 608,
+        "y": 489
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 608,
+          "y": 489
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-090",
+      "kind": "matrix",
+      "cell": "center",
+      "targetStableId": "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "targetKind": "fragment",
+      "focus": false,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "front",
+      "world": {
+        "x": 608,
+        "y": 523
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 608,
+          "y": 489
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-091",
+      "kind": "matrix",
+      "cell": "east_center",
+      "targetStableId": "jyt.occ.east-upper.pillar-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "behind",
+      "world": {
+        "x": 1181,
+        "y": 430
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1181,
+          "y": 464
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-092",
+      "kind": "matrix",
+      "cell": "east_center",
+      "targetStableId": "jyt.occ.east-upper.pillar-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "boundary",
+      "world": {
+        "x": 1181,
+        "y": 464
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1181,
+          "y": 464
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-093",
+      "kind": "matrix",
+      "cell": "east_center",
+      "targetStableId": "jyt.occ.east-upper.pillar-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "front",
+      "world": {
+        "x": 1181,
+        "y": 498
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1181,
+          "y": 464
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-094",
+      "kind": "matrix",
+      "cell": "east_center",
+      "targetStableId": "jyt.occ.east-upper.pillar-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "behind",
+      "world": {
+        "x": 1181,
+        "y": 430
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1181,
+          "y": 464
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-095",
+      "kind": "matrix",
+      "cell": "east_center",
+      "targetStableId": "jyt.occ.east-upper.pillar-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "boundary",
+      "world": {
+        "x": 1181,
+        "y": 464
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1181,
+          "y": 464
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-096",
+      "kind": "matrix",
+      "cell": "east_center",
+      "targetStableId": "jyt.occ.east-upper.pillar-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "front",
+      "world": {
+        "x": 1181,
+        "y": 498
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1181,
+          "y": 464
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-097",
+      "kind": "matrix",
+      "cell": "east_center",
+      "targetStableId": "jyt.occ.east-upper.pillar-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "behind",
+      "world": {
+        "x": 1181,
+        "y": 430
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1181,
+          "y": 464
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-098",
+      "kind": "matrix",
+      "cell": "east_center",
+      "targetStableId": "jyt.occ.east-upper.pillar-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "boundary",
+      "world": {
+        "x": 1181,
+        "y": 464
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1181,
+          "y": 464
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-099",
+      "kind": "matrix",
+      "cell": "east_center",
+      "targetStableId": "jyt.occ.east-upper.pillar-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "front",
+      "world": {
+        "x": 1181,
+        "y": 498
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1181,
+          "y": 464
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-100",
+      "kind": "matrix",
+      "cell": "east_center",
+      "targetStableId": "jyt.occ.east-upper.pillar-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "behind",
+      "world": {
+        "x": 1181,
+        "y": 430
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1181,
+          "y": 464
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-101",
+      "kind": "matrix",
+      "cell": "east_center",
+      "targetStableId": "jyt.occ.east-upper.pillar-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "boundary",
+      "world": {
+        "x": 1181,
+        "y": 464
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1181,
+          "y": 464
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-102",
+      "kind": "matrix",
+      "cell": "east_center",
+      "targetStableId": "jyt.occ.east-upper.pillar-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "front",
+      "world": {
+        "x": 1181,
+        "y": 498
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1181,
+          "y": 464
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-103",
+      "kind": "matrix",
+      "cell": "east_center",
+      "targetStableId": "jyt.occ.east-upper.pillar-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "behind",
+      "world": {
+        "x": 1181,
+        "y": 430
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1181,
+          "y": 464
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-104",
+      "kind": "matrix",
+      "cell": "east_center",
+      "targetStableId": "jyt.occ.east-upper.pillar-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "boundary",
+      "world": {
+        "x": 1181,
+        "y": 464
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1181,
+          "y": 464
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-105",
+      "kind": "matrix",
+      "cell": "east_center",
+      "targetStableId": "jyt.occ.east-upper.pillar-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "front",
+      "world": {
+        "x": 1181,
+        "y": 498
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1181,
+          "y": 464
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-106",
+      "kind": "matrix",
+      "cell": "east_center",
+      "targetStableId": "jyt.occ.east-upper.pillar-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "behind",
+      "world": {
+        "x": 1181,
+        "y": 430
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1181,
+          "y": 464
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-107",
+      "kind": "matrix",
+      "cell": "east_center",
+      "targetStableId": "jyt.occ.east-upper.pillar-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "boundary",
+      "world": {
+        "x": 1181,
+        "y": 464
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1181,
+          "y": 464
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-108",
+      "kind": "matrix",
+      "cell": "east_center",
+      "targetStableId": "jyt.occ.east-upper.pillar-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "front",
+      "world": {
+        "x": 1181,
+        "y": 498
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1181,
+          "y": 464
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-109",
+      "kind": "matrix",
+      "cell": "southwest",
+      "targetStableId": "jyt.occ.west-lower.railing-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "behind",
+      "world": {
+        "x": 155,
+        "y": 790
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 155,
+          "y": 824
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-110",
+      "kind": "matrix",
+      "cell": "southwest",
+      "targetStableId": "jyt.occ.west-lower.railing-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "boundary",
+      "world": {
+        "x": 155,
+        "y": 824
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 155,
+          "y": 824
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-111",
+      "kind": "matrix",
+      "cell": "southwest",
+      "targetStableId": "jyt.occ.west-lower.railing-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "front",
+      "world": {
+        "x": 155,
+        "y": 858
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 155,
+          "y": 824
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-112",
+      "kind": "matrix",
+      "cell": "southwest",
+      "targetStableId": "jyt.occ.west-lower.railing-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "behind",
+      "world": {
+        "x": 155,
+        "y": 790
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 155,
+          "y": 824
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-113",
+      "kind": "matrix",
+      "cell": "southwest",
+      "targetStableId": "jyt.occ.west-lower.railing-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "boundary",
+      "world": {
+        "x": 155,
+        "y": 824
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 155,
+          "y": 824
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-114",
+      "kind": "matrix",
+      "cell": "southwest",
+      "targetStableId": "jyt.occ.west-lower.railing-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "front",
+      "world": {
+        "x": 155,
+        "y": 858
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 155,
+          "y": 824
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-115",
+      "kind": "matrix",
+      "cell": "southwest",
+      "targetStableId": "jyt.occ.west-lower.railing-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "behind",
+      "world": {
+        "x": 155,
+        "y": 790
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 155,
+          "y": 824
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-116",
+      "kind": "matrix",
+      "cell": "southwest",
+      "targetStableId": "jyt.occ.west-lower.railing-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "boundary",
+      "world": {
+        "x": 155,
+        "y": 824
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 155,
+          "y": 824
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-117",
+      "kind": "matrix",
+      "cell": "southwest",
+      "targetStableId": "jyt.occ.west-lower.railing-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "front",
+      "world": {
+        "x": 155,
+        "y": 858
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 155,
+          "y": 824
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-118",
+      "kind": "matrix",
+      "cell": "southwest",
+      "targetStableId": "jyt.occ.west-lower.railing-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "behind",
+      "world": {
+        "x": 155,
+        "y": 790
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 155,
+          "y": 824
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-119",
+      "kind": "matrix",
+      "cell": "southwest",
+      "targetStableId": "jyt.occ.west-lower.railing-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "boundary",
+      "world": {
+        "x": 155,
+        "y": 824
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 155,
+          "y": 824
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-120",
+      "kind": "matrix",
+      "cell": "southwest",
+      "targetStableId": "jyt.occ.west-lower.railing-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "front",
+      "world": {
+        "x": 155,
+        "y": 858
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 155,
+          "y": 824
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-121",
+      "kind": "matrix",
+      "cell": "southwest",
+      "targetStableId": "jyt.occ.west-lower.railing-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "behind",
+      "world": {
+        "x": 155,
+        "y": 790
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 155,
+          "y": 824
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-122",
+      "kind": "matrix",
+      "cell": "southwest",
+      "targetStableId": "jyt.occ.west-lower.railing-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "boundary",
+      "world": {
+        "x": 155,
+        "y": 824
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 155,
+          "y": 824
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-123",
+      "kind": "matrix",
+      "cell": "southwest",
+      "targetStableId": "jyt.occ.west-lower.railing-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "front",
+      "world": {
+        "x": 155,
+        "y": 858
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 155,
+          "y": 824
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-124",
+      "kind": "matrix",
+      "cell": "southwest",
+      "targetStableId": "jyt.occ.west-lower.railing-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "behind",
+      "world": {
+        "x": 155,
+        "y": 790
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 155,
+          "y": 824
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-125",
+      "kind": "matrix",
+      "cell": "southwest",
+      "targetStableId": "jyt.occ.west-lower.railing-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "boundary",
+      "world": {
+        "x": 155,
+        "y": 824
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 155,
+          "y": 824
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-126",
+      "kind": "matrix",
+      "cell": "southwest",
+      "targetStableId": "jyt.occ.west-lower.railing-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "front",
+      "world": {
+        "x": 155,
+        "y": 858
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 155,
+          "y": 824
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-127",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.hanging-banner-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "behind",
+      "world": {
+        "x": 791,
+        "y": 760
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 791,
+          "y": 794
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-128",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.hanging-banner-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "boundary",
+      "world": {
+        "x": 791,
+        "y": 794
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 791,
+          "y": 794
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-129",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.hanging-banner-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "front",
+      "world": {
+        "x": 791,
+        "y": 828
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 791,
+          "y": 794
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-130",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.hanging-banner-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "behind",
+      "world": {
+        "x": 791,
+        "y": 760
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 791,
+          "y": 794
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-131",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.hanging-banner-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "boundary",
+      "world": {
+        "x": 791,
+        "y": 794
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 791,
+          "y": 794
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-132",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.hanging-banner-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "front",
+      "world": {
+        "x": 791,
+        "y": 828
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 791,
+          "y": 794
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-133",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.hanging-banner-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "behind",
+      "world": {
+        "x": 791,
+        "y": 760
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 791,
+          "y": 794
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-134",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.hanging-banner-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "boundary",
+      "world": {
+        "x": 791,
+        "y": 794
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 791,
+          "y": 794
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-135",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.hanging-banner-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "front",
+      "world": {
+        "x": 791,
+        "y": 828
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 791,
+          "y": 794
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-136",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.hanging-banner-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "behind",
+      "world": {
+        "x": 791,
+        "y": 760
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 791,
+          "y": 794
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-137",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.hanging-banner-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "boundary",
+      "world": {
+        "x": 791,
+        "y": 794
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 791,
+          "y": 794
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-138",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.hanging-banner-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "front",
+      "world": {
+        "x": 791,
+        "y": 828
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 791,
+          "y": 794
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-139",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.hanging-banner-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "behind",
+      "world": {
+        "x": 791,
+        "y": 760
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 791,
+          "y": 794
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-140",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.hanging-banner-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "boundary",
+      "world": {
+        "x": 791,
+        "y": 794
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 791,
+          "y": 794
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-141",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.hanging-banner-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "front",
+      "world": {
+        "x": 791,
+        "y": 828
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 791,
+          "y": 794
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-142",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.hanging-banner-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "behind",
+      "world": {
+        "x": 791,
+        "y": 760
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 791,
+          "y": 794
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-143",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.hanging-banner-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "boundary",
+      "world": {
+        "x": 791,
+        "y": 794
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 791,
+          "y": 794
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-144",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.hanging-banner-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "front",
+      "world": {
+        "x": 791,
+        "y": 828
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 791,
+          "y": 794
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-145",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.prop.southeast.library-shelf.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "behind",
+      "world": {
+        "x": 1558,
+        "y": 685
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1558,
+          "y": 719
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-146",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.prop.southeast.library-shelf.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "boundary",
+      "world": {
+        "x": 1558,
+        "y": 719
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1558,
+          "y": 719
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-147",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.prop.southeast.library-shelf.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "front",
+      "world": {
+        "x": 1558,
+        "y": 753
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1558,
+          "y": 719
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-148",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.prop.southeast.library-shelf.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "behind",
+      "world": {
+        "x": 1558,
+        "y": 685
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1558,
+          "y": 719
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-149",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.prop.southeast.library-shelf.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "boundary",
+      "world": {
+        "x": 1558,
+        "y": 719
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1558,
+          "y": 719
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-150",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.prop.southeast.library-shelf.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "front",
+      "world": {
+        "x": 1558,
+        "y": 753
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1558,
+          "y": 719
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-151",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.prop.southeast.library-shelf.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "behind",
+      "world": {
+        "x": 1558,
+        "y": 685
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1558,
+          "y": 719
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-152",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.prop.southeast.library-shelf.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "boundary",
+      "world": {
+        "x": 1558,
+        "y": 719
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1558,
+          "y": 719
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-153",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.prop.southeast.library-shelf.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "front",
+      "world": {
+        "x": 1558,
+        "y": 753
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1558,
+          "y": 719
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-154",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.prop.southeast.library-shelf.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "behind",
+      "world": {
+        "x": 1558,
+        "y": 685
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1558,
+          "y": 719
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-155",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.prop.southeast.library-shelf.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "boundary",
+      "world": {
+        "x": 1558,
+        "y": 719
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1558,
+          "y": 719
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-156",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.prop.southeast.library-shelf.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "front",
+      "world": {
+        "x": 1558,
+        "y": 753
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1558,
+          "y": 719
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-157",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.prop.southeast.library-shelf.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "behind",
+      "world": {
+        "x": 1558,
+        "y": 685
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1558,
+          "y": 719
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-158",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.prop.southeast.library-shelf.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "boundary",
+      "world": {
+        "x": 1558,
+        "y": 719
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1558,
+          "y": 719
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-159",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.prop.southeast.library-shelf.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "front",
+      "world": {
+        "x": 1558,
+        "y": 753
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1558,
+          "y": 719
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-160",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.prop.southeast.library-shelf.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "behind",
+      "world": {
+        "x": 1558,
+        "y": 685
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1558,
+          "y": 719
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-161",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.prop.southeast.library-shelf.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "boundary",
+      "world": {
+        "x": 1558,
+        "y": 719
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1558,
+          "y": 719
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-162",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.prop.southeast.library-shelf.v1",
+      "targetKind": "prop",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "front",
+      "world": {
+        "x": 1558,
+        "y": 753
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1558,
+          "y": 719
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-163",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "behind",
+      "world": {
+        "x": 1432,
+        "y": 250
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1432,
+          "y": 284
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-164",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "boundary",
+      "world": {
+        "x": 1432,
+        "y": 284
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1432,
+          "y": 284
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-165",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "front",
+      "world": {
+        "x": 1432,
+        "y": 318
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1432,
+          "y": 284
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-166",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "behind",
+      "world": {
+        "x": 1432,
+        "y": 250
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1432,
+          "y": 284
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-167",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "boundary",
+      "world": {
+        "x": 1432,
+        "y": 284
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1432,
+          "y": 284
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-168",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "front",
+      "world": {
+        "x": 1432,
+        "y": 318
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1432,
+          "y": 284
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-169",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "behind",
+      "world": {
+        "x": 1432,
+        "y": 250
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1432,
+          "y": 284
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-170",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "boundary",
+      "world": {
+        "x": 1432,
+        "y": 284
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1432,
+          "y": 284
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-171",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "front",
+      "world": {
+        "x": 1432,
+        "y": 318
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1432,
+          "y": 284
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-172",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "behind",
+      "world": {
+        "x": 1432,
+        "y": 250
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1432,
+          "y": 284
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-173",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "boundary",
+      "world": {
+        "x": 1432,
+        "y": 284
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1432,
+          "y": 284
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-174",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "front",
+      "world": {
+        "x": 1432,
+        "y": 318
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1432,
+          "y": 284
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-175",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "behind",
+      "world": {
+        "x": 1432,
+        "y": 250
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1432,
+          "y": 284
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-176",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "boundary",
+      "world": {
+        "x": 1432,
+        "y": 284
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1432,
+          "y": 284
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-177",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "front",
+      "world": {
+        "x": 1432,
+        "y": 318
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1432,
+          "y": 284
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-178",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "behind",
+      "world": {
+        "x": 1432,
+        "y": 250
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1432,
+          "y": 284
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-179",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "boundary",
+      "world": {
+        "x": 1432,
+        "y": 284
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1432,
+          "y": 284
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-180",
+      "kind": "matrix",
+      "cell": "northeast",
+      "targetStableId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "front",
+      "world": {
+        "x": 1432,
+        "y": 318
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1432,
+          "y": 284
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-181",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.west-lower.railing-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "behind",
+      "world": {
+        "x": 593,
+        "y": 744
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 593,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-182",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.west-lower.railing-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "boundary",
+      "world": {
+        "x": 593,
+        "y": 778
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 593,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-183",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.west-lower.railing-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "front",
+      "world": {
+        "x": 593,
+        "y": 812
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 593,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-184",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.west-lower.railing-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "behind",
+      "world": {
+        "x": 593,
+        "y": 744
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 593,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-185",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.west-lower.railing-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "boundary",
+      "world": {
+        "x": 593,
+        "y": 778
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 593,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-186",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.west-lower.railing-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "front",
+      "world": {
+        "x": 593,
+        "y": 812
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 593,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-187",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.west-lower.railing-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "behind",
+      "world": {
+        "x": 593,
+        "y": 744
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 593,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-188",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.west-lower.railing-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "boundary",
+      "world": {
+        "x": 593,
+        "y": 778
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 593,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-189",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.west-lower.railing-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "front",
+      "world": {
+        "x": 593,
+        "y": 812
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 593,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-190",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.west-lower.railing-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "behind",
+      "world": {
+        "x": 593,
+        "y": 744
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 593,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-191",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.west-lower.railing-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "boundary",
+      "world": {
+        "x": 593,
+        "y": 778
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 593,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-192",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.west-lower.railing-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "front",
+      "world": {
+        "x": 593,
+        "y": 812
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 593,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-193",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.west-lower.railing-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "behind",
+      "world": {
+        "x": 593,
+        "y": 744
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 593,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-194",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.west-lower.railing-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "boundary",
+      "world": {
+        "x": 593,
+        "y": 778
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 593,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-195",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.west-lower.railing-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "front",
+      "world": {
+        "x": 593,
+        "y": 812
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 593,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-196",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.west-lower.railing-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "behind",
+      "world": {
+        "x": 593,
+        "y": 744
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 593,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-197",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.west-lower.railing-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "boundary",
+      "world": {
+        "x": 593,
+        "y": 778
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 593,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-198",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.west-lower.railing-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "front",
+      "world": {
+        "x": 593,
+        "y": 812
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 593,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-199",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.railing-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "behind",
+      "world": {
+        "x": 1247,
+        "y": 741
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1247,
+          "y": 775
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-200",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.railing-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "boundary",
+      "world": {
+        "x": 1247,
+        "y": 775
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1247,
+          "y": 775
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-201",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.railing-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "front",
+      "world": {
+        "x": 1247,
+        "y": 809
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1247,
+          "y": 775
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-202",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.railing-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "behind",
+      "world": {
+        "x": 1247,
+        "y": 741
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1247,
+          "y": 775
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-203",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.railing-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "boundary",
+      "world": {
+        "x": 1247,
+        "y": 775
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1247,
+          "y": 775
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-204",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.railing-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "front",
+      "world": {
+        "x": 1247,
+        "y": 809
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1247,
+          "y": 775
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-205",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.railing-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "behind",
+      "world": {
+        "x": 1247,
+        "y": 741
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1247,
+          "y": 775
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-206",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.railing-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "boundary",
+      "world": {
+        "x": 1247,
+        "y": 775
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1247,
+          "y": 775
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-207",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.railing-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "front",
+      "world": {
+        "x": 1247,
+        "y": 809
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1247,
+          "y": 775
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-208",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.railing-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "behind",
+      "world": {
+        "x": 1247,
+        "y": 741
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1247,
+          "y": 775
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-209",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.railing-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "boundary",
+      "world": {
+        "x": 1247,
+        "y": 775
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1247,
+          "y": 775
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-210",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.railing-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "front",
+      "world": {
+        "x": 1247,
+        "y": 809
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1247,
+          "y": 775
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-211",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.railing-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "behind",
+      "world": {
+        "x": 1247,
+        "y": 741
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1247,
+          "y": 775
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-212",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.railing-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "boundary",
+      "world": {
+        "x": 1247,
+        "y": 775
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1247,
+          "y": 775
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-213",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.railing-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "front",
+      "world": {
+        "x": 1247,
+        "y": 809
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1247,
+          "y": 775
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-214",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.railing-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "behind",
+      "world": {
+        "x": 1247,
+        "y": 741
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1247,
+          "y": 775
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-215",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.railing-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "boundary",
+      "world": {
+        "x": 1247,
+        "y": 775
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1247,
+          "y": 775
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-216",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.railing-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "front",
+      "world": {
+        "x": 1247,
+        "y": 809
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1247,
+          "y": 775
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-217",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-upper.pillar-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "behind",
+      "world": {
+        "x": 1227,
+        "y": 669
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1227,
+          "y": 703
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-218",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-upper.pillar-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "boundary",
+      "world": {
+        "x": 1227,
+        "y": 703
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1227,
+          "y": 703
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-219",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-upper.pillar-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "front",
+      "world": {
+        "x": 1227,
+        "y": 737
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1227,
+          "y": 703
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-220",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-upper.pillar-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "behind",
+      "world": {
+        "x": 1227,
+        "y": 669
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1227,
+          "y": 703
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-221",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-upper.pillar-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "boundary",
+      "world": {
+        "x": 1227,
+        "y": 703
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1227,
+          "y": 703
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-222",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-upper.pillar-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "front",
+      "world": {
+        "x": 1227,
+        "y": 737
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1227,
+          "y": 703
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-223",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-upper.pillar-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "behind",
+      "world": {
+        "x": 1227,
+        "y": 669
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1227,
+          "y": 703
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-224",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-upper.pillar-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "boundary",
+      "world": {
+        "x": 1227,
+        "y": 703
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1227,
+          "y": 703
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-225",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-upper.pillar-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "front",
+      "world": {
+        "x": 1227,
+        "y": 737
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1227,
+          "y": 703
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-226",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-upper.pillar-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "behind",
+      "world": {
+        "x": 1227,
+        "y": 669
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1227,
+          "y": 703
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-227",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-upper.pillar-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "boundary",
+      "world": {
+        "x": 1227,
+        "y": 703
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1227,
+          "y": 703
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-228",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-upper.pillar-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "front",
+      "world": {
+        "x": 1227,
+        "y": 737
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1227,
+          "y": 703
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-229",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-upper.pillar-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "behind",
+      "world": {
+        "x": 1227,
+        "y": 669
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1227,
+          "y": 703
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-230",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-upper.pillar-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "boundary",
+      "world": {
+        "x": 1227,
+        "y": 703
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1227,
+          "y": 703
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-231",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-upper.pillar-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "front",
+      "world": {
+        "x": 1227,
+        "y": 737
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1227,
+          "y": 703
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-232",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-upper.pillar-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "behind",
+      "world": {
+        "x": 1227,
+        "y": 669
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1227,
+          "y": 703
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-233",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-upper.pillar-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "boundary",
+      "world": {
+        "x": 1227,
+        "y": 703
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1227,
+          "y": 703
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-234",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-upper.pillar-02.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "front",
+      "world": {
+        "x": 1227,
+        "y": 737
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1227,
+          "y": 703
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-235",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.lantern-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "behind",
+      "world": {
+        "x": 1073,
+        "y": 744
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1073,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-236",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.lantern-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "boundary",
+      "world": {
+        "x": 1073,
+        "y": 778
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1073,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-237",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.lantern-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "front",
+      "world": {
+        "x": 1073,
+        "y": 812
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1073,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-238",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.lantern-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "behind",
+      "world": {
+        "x": 1073,
+        "y": 744
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1073,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-239",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.lantern-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "boundary",
+      "world": {
+        "x": 1073,
+        "y": 778
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1073,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-240",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.lantern-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "front",
+      "world": {
+        "x": 1073,
+        "y": 812
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1073,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-241",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.lantern-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "behind",
+      "world": {
+        "x": 1073,
+        "y": 744
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1073,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-242",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.lantern-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "boundary",
+      "world": {
+        "x": 1073,
+        "y": 778
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1073,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-243",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.lantern-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "front",
+      "world": {
+        "x": 1073,
+        "y": 812
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1073,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-244",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.lantern-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "behind",
+      "world": {
+        "x": 1073,
+        "y": 744
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1073,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-245",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.lantern-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "boundary",
+      "world": {
+        "x": 1073,
+        "y": 778
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1073,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-246",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.lantern-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "front",
+      "world": {
+        "x": 1073,
+        "y": 812
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1073,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-247",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.lantern-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "behind",
+      "world": {
+        "x": 1073,
+        "y": 744
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1073,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-248",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.lantern-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "boundary",
+      "world": {
+        "x": 1073,
+        "y": 778
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1073,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-249",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.lantern-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "front",
+      "world": {
+        "x": 1073,
+        "y": 812
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1073,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-250",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.lantern-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "behind",
+      "world": {
+        "x": 1073,
+        "y": 744
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1073,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-251",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.lantern-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "boundary",
+      "world": {
+        "x": 1073,
+        "y": 778
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1073,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-252",
+      "kind": "matrix",
+      "cell": "south_center",
+      "targetStableId": "jyt.occ.entrance.lantern-post-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "front",
+      "world": {
+        "x": 1073,
+        "y": 812
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1073,
+          "y": 778
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-253",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.worktable-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "behind",
+      "world": {
+        "x": 1559,
+        "y": 667
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1559,
+          "y": 701
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-254",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.worktable-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "boundary",
+      "world": {
+        "x": 1559,
+        "y": 701
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1559,
+          "y": 701
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-255",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.worktable-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "songjiang",
+      "personaName": "宋江",
+      "relation": "front",
+      "world": {
+        "x": 1559,
+        "y": 735
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1559,
+          "y": 701
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-256",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.worktable-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "behind",
+      "world": {
+        "x": 1559,
+        "y": 667
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1559,
+          "y": 701
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-257",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.worktable-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "boundary",
+      "world": {
+        "x": 1559,
+        "y": 701
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1559,
+          "y": 701
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-258",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.worktable-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "relation": "front",
+      "world": {
+        "x": 1559,
+        "y": 735
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1559,
+          "y": 701
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-259",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.worktable-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "behind",
+      "world": {
+        "x": 1559,
+        "y": 667
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1559,
+          "y": 701
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-260",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.worktable-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "boundary",
+      "world": {
+        "x": 1559,
+        "y": 701
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1559,
+          "y": 701
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-261",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.worktable-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "husanniang",
+      "personaName": "扈三娘",
+      "relation": "front",
+      "world": {
+        "x": 1559,
+        "y": 735
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1559,
+          "y": 701
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-262",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.worktable-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "behind",
+      "world": {
+        "x": 1559,
+        "y": 667
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1559,
+          "y": 701
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-263",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.worktable-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "boundary",
+      "world": {
+        "x": 1559,
+        "y": 701
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1559,
+          "y": 701
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-264",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.worktable-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "likui",
+      "personaName": "李逵",
+      "relation": "front",
+      "world": {
+        "x": 1559,
+        "y": 735
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1559,
+          "y": 701
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-265",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.worktable-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "behind",
+      "world": {
+        "x": 1559,
+        "y": 667
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1559,
+          "y": 701
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-266",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.worktable-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "boundary",
+      "world": {
+        "x": 1559,
+        "y": 701
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1559,
+          "y": 701
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-267",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.worktable-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "linchong",
+      "personaName": "林冲",
+      "relation": "front",
+      "world": {
+        "x": 1559,
+        "y": 735
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1559,
+          "y": 701
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-268",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.worktable-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "behind",
+      "world": {
+        "x": 1559,
+        "y": 667
+      },
+      "expectedRelation": "agent_behind_target",
+      "expectedDepth": "agent < target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1559,
+          "y": 701
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-269",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.worktable-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "boundary",
+      "world": {
+        "x": 1559,
+        "y": 701
+      },
+      "expectedRelation": "tie",
+      "expectedDepth": "tie (tieBias/stableId)",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1559,
+          "y": 701
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-270",
+      "kind": "matrix",
+      "cell": "southeast",
+      "targetStableId": "jyt.occ.east-lower.worktable-01.v2",
+      "targetKind": "fragment",
+      "focus": true,
+      "persona": "wuyong",
+      "personaName": "吴用",
+      "relation": "front",
+      "world": {
+        "x": 1559,
+        "y": 735
+      },
+      "expectedRelation": "agent_in_front",
+      "expectedDepth": "agent > target",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1559,
+          "y": 701
+        },
+        "zoom": 1.1
+      }
+    },
+    {
+      "id": "E13-271",
+      "kind": "camera",
+      "cameraCase": "desktop-default",
+      "cameraLabel": "desktop default zoom 0.84",
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "relation": "front",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 413
+        },
+        "zoom": 0.84
+      }
+    },
+    {
+      "id": "E13-272",
+      "kind": "camera",
+      "cameraCase": "desktop-zoom-in",
+      "cameraLabel": "desktop zoom-in 1.5",
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "relation": "front",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 413
+        },
+        "zoom": 1.5
+      }
+    },
+    {
+      "id": "E13-273",
+      "kind": "camera",
+      "cameraCase": "desktop-zoom-out",
+      "cameraLabel": "desktop zoom-out 0.6",
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "relation": "front",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 413
+        },
+        "zoom": 0.6
+      }
+    },
+    {
+      "id": "E13-274",
+      "kind": "camera",
+      "cameraCase": "desktop-pan-east",
+      "cameraLabel": "desktop pan east +120px",
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "relation": "front",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 413
+        },
+        "zoom": 0.84,
+        "panDx": 120
+      }
+    },
+    {
+      "id": "E13-275",
+      "kind": "camera",
+      "cameraCase": "desktop-pan-west",
+      "cameraLabel": "desktop pan west -120px",
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "relation": "front",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 413
+        },
+        "zoom": 0.84,
+        "panDx": -120
+      }
+    },
+    {
+      "id": "E13-276",
+      "kind": "camera",
+      "cameraCase": "tablet-landscape",
+      "cameraLabel": "tablet landscape 1024×768",
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "relation": "front",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 413
+        },
+        "zoom": 0.92
+      }
+    },
+    {
+      "id": "E13-277",
+      "kind": "camera",
+      "cameraCase": "mobile-portrait",
+      "cameraLabel": "mobile portrait 390×844",
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "relation": "front",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 413
+        },
+        "zoom": 1.25
+      }
+    },
+    {
+      "id": "E13-278",
+      "kind": "camera",
+      "cameraCase": "mobile-landscape",
+      "cameraLabel": "mobile landscape 844×390",
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "relation": "front",
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 413
+        },
+        "zoom": 1.05
+      }
+    },
+    {
+      "id": "E13-279",
+      "kind": "camera",
+      "cameraCase": "mobile-pinch-in",
+      "cameraLabel": "mobile pinch zoom-in",
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "relation": "front",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 413
+        },
+        "zoom": 1.25,
+        "pinch": {
+          "start": 60,
+          "end": 220
+        }
+      }
+    },
+    {
+      "id": "E13-280",
+      "kind": "camera",
+      "cameraCase": "mobile-pinch-out",
+      "cameraLabel": "mobile pinch zoom-out",
+      "persona": "lujunyi",
+      "personaName": "卢俊义",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "relation": "front",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "camera": {
+        "center": {
+          "x": 1446,
+          "y": 413
+        },
+        "zoom": 1.25,
+        "pinch": {
+          "start": 220,
+          "end": 60
+        }
+      }
+    },
+    {
+      "id": "E13-281",
+      "kind": "interaction",
+      "interactionCase": "agent-pointer",
+      "interactionLabel": "agent pointer: 点击宋江 → 选中高亮+名牌"
+    },
+    {
+      "id": "E13-282",
+      "kind": "interaction",
+      "interactionCase": "hotspot-bounty-board",
+      "interactionLabel": "hotspot pointer: 点击右上悬赏桌 → 面板"
+    },
+    {
+      "id": "E13-283",
+      "kind": "interaction",
+      "interactionCase": "hotspot-library-shelf",
+      "interactionLabel": "hotspot pointer: 点击书架 → 面板"
+    },
+    {
+      "id": "E13-284",
+      "kind": "interaction",
+      "interactionCase": "hotspot-main-seat",
+      "interactionLabel": "hotspot pointer: 点击主位 → 面板"
+    },
+    {
+      "id": "E13-285",
+      "kind": "interaction",
+      "interactionCase": "labels-bubbles",
+      "interactionLabel": "labels/bubbles: 名牌+气泡 (world-ui)"
+    },
+    {
+      "id": "E13-286",
+      "kind": "interaction",
+      "interactionCase": "lighting-fullmap",
+      "interactionLabel": "lighting: 全图 lighting-overlay"
+    },
+    {
+      "id": "E13-287",
+      "kind": "interaction",
+      "interactionCase": "lighting-closeup",
+      "interactionLabel": "lighting: 东北近景 lighting-overlay"
+    },
+    {
+      "id": "E13-288",
+      "kind": "movement",
+      "movementCase": "movement-bounty-board",
+      "movementLabel": "movement: 卢俊义沿路网走向右上悬赏桌",
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1"
+    },
+    {
+      "id": "E13-289",
+      "kind": "movement",
+      "movementCase": "movement-front-door",
+      "movementLabel": "movement: 李逵沿路网走向前门",
+      "targetStableId": "jyt.occ.entrance.hanging-banner-01.v2"
+    }
+  ]
+}

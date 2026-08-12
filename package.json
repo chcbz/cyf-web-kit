@@ -40,7 +40,13 @@
     "test:mask-tmx-migration": "node --import tsx ./node_modules/mocha/bin/mocha.js --no-config --require ./tests/setup.js --reporter spec tests/juyiting-occlusion-mask-tmx-migration.test.js --timeout 30000",
     "test:juyiting-occlusion-constraint-calibration": "node --import tsx ./node_modules/mocha/bin/mocha.js --no-config --require ./tests/setup.js --reporter spec tests/juyiting-occlusion-constraint-calibration.test.js --timeout 30000",
     "validate:constraint-calibration": "node scripts/juyiting/validate-constraint-calibration.mjs",
-    "generate:constraint-calibration": "node scripts/juyiting/generate-constraint-calibration.mjs --output tests/fixtures/juyiting/occlusion-v2-constraint/calibration-report.json"
+    "generate:constraint-calibration": "node scripts/juyiting/generate-constraint-calibration.mjs --output tests/fixtures/juyiting/occlusion-v2-constraint/calibration-report.json",
+    "generate:e13-world-model": "node scripts/juyiting/e13/derive-world-model.mjs",
+    "generate:e13-evidence": "node scripts/juyiting/e13/generate-e13-evidence.mjs",
+    "probe:e13-runtime-env": "node scripts/juyiting/e13/probe-runtime-env.mjs",
+    "render:e13-contact-sheets": "node scripts/juyiting/e13/render-e13-evidence.mjs",
+    "validate:e13-evidence": "node scripts/juyiting/e13/validate-e13-evidence.mjs",
+    "test:juyiting-occlusion-e13": "node --import tsx ./node_modules/mocha/bin/mocha.js --no-config --require ./tests/setup.js --reporter spec tests/juyiting-occlusion-e13.test.js"
   },
   "dependencies": {
     "@varlet/ui": "^3.10.9",

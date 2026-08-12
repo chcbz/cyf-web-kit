@@ -1,0 +1,103 @@
+{
+  "$schema": "juyiting-occlusion-e13-runtime-env-probes-v1",
+  "taskId": "E13",
+  "timestamp": "2026-08-12T13:59:46.384Z",
+  "frontendUrl": "https://localhost:8080",
+  "host": "linux",
+  "node": "v20.20.2",
+  "summary": {
+    "chromiumLaunchable": false,
+    "tcpBindAllowed": false,
+    "frontendReachable": false,
+    "canvasAvailable": false,
+    "conclusion": "Real runtime screenshots are not possible on this host (no frontend server, no TCP listener, headless chromium sandbox FATAL). No screenshots were fabricated. Re-run generate-e13-evidence.mjs on a browser-capable host."
+  },
+  "probes": [
+    {
+      "probe": "chromium-version",
+      "ok": true,
+      "binary": "/usr/local/bin/chromium-headless-smoke",
+      "detail": "Chromium 133.0.6943.141"
+    },
+    {
+      "probe": "chromium-headless-launch",
+      "ok": false,
+      "binary": "/usr/local/bin/chromium-headless-smoke",
+      "status": null,
+      "signal": "SIGTRAP",
+      "crash": "yes",
+      "stderrHead": "[0812/215946.228716:FATAL:sandbox_host_linux.cc(41)] Check failed: . shutdown: Operation not permitted (1)",
+      "stdoutHead": "",
+      "note": "headless chromium failed to launch/run on this host (sandbox FATAL or equivalent)"
+    },
+    {
+      "probe": "tcp-bind-8080",
+      "ok": false,
+      "address": "127.0.0.1",
+      "port": 8080,
+      "code": "EPERM",
+      "detail": "listen EPERM: operation not permitted 127.0.0.1:8080",
+      "note": "TCP listen is denied on this host (EPERM) — a local dev/preview server cannot start"
+    },
+    {
+      "probe": "tcp-bind-5173",
+      "ok": false,
+      "address": "127.0.0.1",
+      "port": 5173,
+      "code": "EPERM",
+      "detail": "listen EPERM: operation not permitted 127.0.0.1:5173",
+      "note": "TCP listen is denied on this host (EPERM) — a local dev/preview server cannot start"
+    },
+    {
+      "probe": "tcp-bind-4173",
+      "ok": false,
+      "address": "127.0.0.1",
+      "port": 4173,
+      "code": "EPERM",
+      "detail": "listen EPERM: operation not permitted 127.0.0.1:4173",
+      "note": "TCP listen is denied on this host (EPERM) — a local dev/preview server cannot start"
+    },
+    {
+      "probe": "tcp-bind-9090",
+      "ok": false,
+      "address": "127.0.0.1",
+      "port": 9090,
+      "code": "EPERM",
+      "detail": "listen EPERM: operation not permitted 127.0.0.1:9090",
+      "note": "TCP listen is denied on this host (EPERM) — a local dev/preview server cannot start"
+    },
+    {
+      "probe": "fetch",
+      "ok": false,
+      "url": "https://localhost:8080",
+      "detail": "TypeError: fetch failed",
+      "note": "unreachable (network restricted or server not running)"
+    },
+    {
+      "probe": "fetch",
+      "ok": false,
+      "url": "https://api.chaoyoufan.cn",
+      "detail": "TypeError: fetch failed",
+      "note": "unreachable (network restricted or server not running)"
+    },
+    {
+      "probe": "fetch",
+      "ok": false,
+      "url": "https://kit.chaoyoufan.cn",
+      "detail": "TypeError: fetch failed",
+      "note": "unreachable (network restricted or server not running)"
+    },
+    {
+      "probe": "npm-canvas",
+      "ok": false,
+      "detail": "not installed",
+      "note": "node-canvas NOT installed — WebP decode/crop tooling unavailable on this host"
+    },
+    {
+      "probe": "dist-staleness",
+      "ok": true,
+      "detail": "mtime=2026-08-12T13:29:35.615Z size=1093",
+      "note": "dist/ exists but was built before the E13 base commit and cannot be served without a TCP listener (see tcp-bind probes); it is NOT a substitute for runtime screenshots"
+    }
+  ]
+}
