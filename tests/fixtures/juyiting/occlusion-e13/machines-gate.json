@@ -1,71 +1,177 @@
 {
   "$schema": "juyiting-occlusion-e13-machines-gate-v2",
   "taskId": "E13",
-  "generator": "offline-pixel-renderer/validate.py",
+  "timestamp": "2026-08-12T14:51:31.953Z",
+  "generatedBy": "validate-e13-evidence.mjs",
   "pass": true,
-  "passedChecks": 12,
-  "totalChecks": 12,
+  "passedChecks": 33,
+  "totalChecks": 33,
   "failures": [],
   "checks": [
     {
-      "check": "270 shots in index",
+      "check": "world-model.json exists",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "shot-plan.json exists",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "targets anchored to TMX (≤1px) + tieBias",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "shot plan invariants (cells/personas/relations/targets/ids)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "matrix count = 270",
       "ok": true,
       "detail": "got 270"
     },
     {
-      "check": "all 270 PNGs exist",
+      "check": "camera count = 10",
+      "ok": true,
+      "detail": "got 10"
+    },
+    {
+      "check": "interaction count = 7",
+      "ok": true,
+      "detail": "got 7"
+    },
+    {
+      "check": "movement count = 2",
+      "ok": true,
+      "detail": "got 2"
+    },
+    {
+      "check": "total plan count = 289",
+      "ok": true,
+      "detail": "got 289"
+    },
+    {
+      "check": "matrix covers every cell×persona×relation",
       "ok": true,
       "detail": ""
     },
     {
-      "check": "all PNGs > 100 bytes",
+      "check": "all focus targets present in world model",
       "ok": true,
       "detail": ""
     },
     {
-      "check": "unique shot IDs",
+      "check": "provenance tmx sha256 matches live TMX",
       "ok": true,
-      "detail": "270 vs 270 unique"
+      "detail": "4f94e3a52da71369d9c29d96e0ac0ceb2126a1a441b6cd63911701957e1ed49b vs 4f94e3a52da71369d9c29d96e0ac0ceb2126a1a441b6cd63911701957e1ed49b"
     },
     {
-      "check": "15 targets",
-      "ok": true,
-      "detail": "got 15: ['jyt.occ.east-lower.railing-post-01.v2', 'jyt.occ.east-lower.worktable-01.v2', 'jyt.occ.east-upper.pillar-01.v2', 'jyt.occ.east-upper.pillar-02.v2', 'jyt.occ.east-upper.scroll-table-front-01.v2', 'jyt.occ.entrance.hanging-banner-01.v2', 'jyt.occ.entrance.lantern-post-01.v2', 'jyt.occ.west-lower.railing-01.v2', 'jyt.occ.west-lower.railing-02.v2', 'jyt.occ.west-upper.diagonal-brace-01.v2', 'jyt.occ.west-upper.lantern-01.v2', 'jyt.occ.west-upper.wall-sconce-02.v2', 'jyt.prop.center-north.main-seat.v1', 'jyt.prop.northeast.bounty-board.v1', 'jyt.prop.southeast.library-shelf.v1']"
-    },
-    {
-      "check": "6 personas",
-      "ok": true,
-      "detail": "got 6: ['husanniang', 'likui', 'linchong', 'lujunyi', 'songjiang', 'wuyong']"
-    },
-    {
-      "check": "3 relations",
-      "ok": true,
-      "detail": "got 3: ['behind', 'boundary', 'front']"
-    },
-    {
-      "check": "all 270 combos covered",
+      "check": "provenance fragment-spec sha256 matches",
       "ok": true,
       "detail": ""
     },
     {
-      "check": "\u5362\u4fca\u4e49 behind bounty-board: agent_behind_target",
+      "check": "provenance map-snapshot sha256 matches",
       "ok": true,
-      "detail": "ordering=agent_behind_target depth=5/7"
+      "detail": ""
     },
     {
-      "check": "\u6248\u4e09\u5a18 behind bounty-board: agent_behind_target",
+      "check": "index status is GENERATED_OFFLINE",
       "ok": true,
-      "detail": "ordering=agent_behind_target depth=5/7"
+      "detail": "got GENERATED_OFFLINE"
     },
     {
-      "check": "\u5362\u4fca\u4e49 boundary @ bounty-board (tieBias: agent>target \u2192 agent_in_front)",
+      "check": "index shotCount = 270",
       "ok": true,
-      "detail": "ordering=agent_in_front (tieBias agent=0, target=-4)"
+      "detail": "got 270"
     },
     {
-      "check": "sort keys are deterministic (agentSortKey present)",
+      "check": "index matrixShots = 270",
       "ok": true,
-      "detail": "spot-checking first 10"
+      "detail": "got 270"
+    },
+    {
+      "check": "camera DEFERRED (0 shots)",
+      "ok": true,
+      "detail": "got 0"
+    },
+    {
+      "check": "interaction DEFERRED (0 shots)",
+      "ok": true,
+      "detail": "got 0"
+    },
+    {
+      "check": "movement DEFERRED (0 shots)",
+      "ok": true,
+      "detail": "got 0"
+    },
+    {
+      "check": "notes.camera = DEFERRED",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "notes.interaction = DEFERRED",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "notes.movement = DEFERRED",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "all 270 matrix shot ids in index",
+      "ok": true,
+      "detail": "missing "
+    },
+    {
+      "check": "all shots have runtimeFacts (depth, ordering, depthMatch, sortKey, screenshotFile, world)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "100% depthMatch (no tie-with-acceptable-ratio loophole)",
+      "ok": true,
+      "detail": "0 failures"
+    },
+    {
+      "check": "卢俊义 behind bounty-board → agent_behind_target",
+      "ok": true,
+      "detail": "got agent_behind_target"
+    },
+    {
+      "check": "扈三娘 behind bounty-board → agent_behind_target",
+      "ok": true,
+      "detail": "got agent_behind_target"
+    },
+    {
+      "check": "270 PNG evidence files in shots/",
+      "ok": true,
+      "detail": "got 270"
+    },
+    {
+      "check": "all PNGs > 500 bytes",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "contact-sheets dir exists",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "15 PNG contact sheets (per-target)",
+      "ok": true,
+      "detail": "got 15"
+    },
+    {
+      "check": "all contact sheets > 500 bytes",
+      "ok": true,
+      "detail": ""
     }
   ]
 }

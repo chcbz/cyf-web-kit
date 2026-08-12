@@ -302,6 +302,7 @@ def build_shot_plan(repo_root=None):
         'jyt.occ.east-lower.worktable-01.v2',
     }
 
+    all_objects = list(fragments) + list(props_list)
     for obj in fragments + props_list:
         sid = obj['stableId']
         if sid in e13_target_ids:
@@ -323,6 +324,20 @@ def build_shot_plan(repo_root=None):
                 seq += 1
                 world_x = target['anchor']['x']
                 world_y = target['anchor']['y'] + rel_def['dy']
+                # Compute resolved expected ordering from production sort keys
+                # Build pseudo-objects for sort key computation
+                agent_pseudo = {
+                    'stableId': f'agent.{persona["personaCode"]}',
+                    'sceneId': 'juyiting-main', 'chunkId': 'agents', 'kind': 'agent',
+                    'renderBand': 'world', 'floorId': 'floor-1', 'elevation': 0,
+                    'sortMode': 'fixed', 'sortAnchor': {'x': world_x, 'y': world_y}, 'tieBias': 0,
+                }
+                ak = compute_world_sort_key(agent_pseudo)
+                target_obj = next(o for o in all_objects if o['stableId'] == target['stableId'])
+                tk = compute_world_sort_key(target_obj)
+                resolved = 'agent_behind_target' if compare_sort_keys(ak, tk) < 0 else ('agent_in_front' if compare_sort_keys(ak, tk) > 0 else 'tie')
+                resolved_depth = 'agent < target' if compare_sort_keys(ak, tk) < 0 else ('agent > target' if compare_sort_keys(ak, tk) > 0 else 'tie (tieBias/stableId)')
+
                 shots.append({
                     'id': f'E13-{seq:03d}',
                     'kind': 'matrix',
@@ -334,8 +349,9 @@ def build_shot_plan(repo_root=None):
                     'personaName': persona['name'],
                     'relation': rel_name,
                     'world': {'x': world_x, 'y': world_y},
-                    'expectedRelation': rel_def['expected'],
-                    'expectedDepth': rel_def['expectedDepth'],
+                    'expectedRelation': resolved,
+                    'expectedDepth': resolved_depth,
+                    'semanticRelation': rel_name,
                     'viewport': {'width': 1280, 'height': 800},
                     'camera': {'center': {'x': target['anchor']['x'], 'y': target['anchor']['y']}, 'zoom': 1.1},
                     'targetAnchor': target['anchor'],

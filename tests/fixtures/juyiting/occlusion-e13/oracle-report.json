@@ -1,0 +1,12 @@
+{
+  "$schema": "juyiting-occlusion-e13-oracle-v1",
+  "taskId": "E13",
+  "timestamp": "2026-08-12T14:51:26.980Z",
+  "pass": true,
+  "checks": 1350,
+  "failures": 0,
+  "failureDetails": [],
+  "methodology": "Node.js independent computation of WorldSortKey from committed TMX, compared against Python index.json agentSortKey/targetSortKey/depthMatch fields",
+  "tmxSha256": "4f94e3a52da71369d9c29d96e0ac0ceb2126a1a441b6cd63911701957e1ed49b",
+  "indexSha256": "7d911648375fe7698e2b3ecb2960613c4fd7c4a8606701693861f5cc28eb5fcd"
+}

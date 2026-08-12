@@ -56,7 +56,7 @@ def validate(evidence_dir, repo_root):
         targets.add(s['targetStableId'])
         personas.add(s['persona'])
         relations.add(s['relation'])
-    
+
     check('15 targets', len(targets) == 15, f'got {len(targets)}: {sorted(targets)}')
     check('6 personas', len(personas) == 6, f'got {len(personas)}: {sorted(personas)}')
     check('3 relations', len(relations) == 3, f'got {len(relations)}: {sorted(relations)}')

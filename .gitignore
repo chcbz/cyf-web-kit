@@ -19,3 +19,4 @@ vite-current*.log
 .clinerules
 .tmp*
 .worktrees/
+__pycache__/

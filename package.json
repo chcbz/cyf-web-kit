@@ -46,7 +46,8 @@
     "probe:e13-runtime-env": "node scripts/juyiting/e13/probe-runtime-env.mjs",
     "render:e13-contact-sheets": "node scripts/juyiting/e13/render-e13-evidence.mjs",
     "validate:e13-evidence": "node scripts/juyiting/e13/validate-e13-evidence.mjs",
-    "test:juyiting-occlusion-e13": "node --import tsx ./node_modules/mocha/bin/mocha.js --no-config --require ./tests/setup.js --reporter spec tests/juyiting-occlusion-e13.test.js"
+    "test:juyiting-occlusion-e13": "node --import tsx ./node_modules/mocha/bin/mocha.js --no-config --require ./tests/setup.js --reporter spec tests/juyiting-occlusion-e13.test.js",
+    "generate:e13-offline": "node scripts/juyiting/e13/generate-e13-offline-evidence.mjs"
   },
   "dependencies": {
     "@varlet/ui": "^3.10.9",
