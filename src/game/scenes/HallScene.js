@@ -93,6 +93,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._v2PendingFrame = null
       this._v2PendingActivation = null  // activation staging before commit publish
       this._v2DestroyPromise = Promise.resolve()
+      this._v2LastRosterAttempt = null      // Set of agent IDs from last roster reactivation attempt
       this._tmxSha256 = null
     }
 
@@ -1088,27 +1089,7 @@ export function createHallSceneClass(me, HallAgentClass) {
             return false
           }
 
-          const FragRenderable = class extends me.Renderable {
-            constructor() {
-              super(f.destinationRect.x, f.destinationRect.y,
-                f.destinationRect.width, f.destinationRect.height)
-              this._img = image
-              this._sx = f.sourceRect.x
-              this._sy = f.sourceRect.y
-              this._sw = f.sourceRect.width
-              this._sh = f.sourceRect.height
-              this.floating = false
-            }
-            draw(renderer) {
-              const ctx = renderer.getContext?.()
-              if (ctx && this._img) {
-                ctx.drawImage(this._img, this._sx, this._sy, this._sw, this._sh,
-                  this.pos.x, this.pos.y, this.width, this.height)
-              }
-            }
-          }
-          const handle = new FragRenderable()
-          renderables.set(f.stableId, handle)
+          const handle = this._createFragmentHandle(image, f)
           stagingFragments.add(handle)
           // NOT added to world yet — will be added in commit.apply
         }
@@ -1177,14 +1158,17 @@ export function createHallSceneClass(me, HallAgentClass) {
                 order: Object.freeze(initOrder.order),
                 depths: Object.freeze(initOrder.depths),
                 dispose: () => {
-                  // Only dispose staging-owned fragments that were never published
-                  if (self._v2StagingRenderables) {
-                    for (const handle of self._v2StagingRenderables) {
-                      try { me.game.world.removeChild(handle) } catch (e) {}
-                    }
+                  // Only dispose OWN staging fragments (captured locally, not global ref)
+                  for (const handle of stagingFragments) {
+                    try { me.game.world.removeChild(handle) } catch (e) {}
+                  }
+                  // Clear global only if it still points to this set
+                  if (self._v2StagingRenderables === stagingFragments) {
                     self._v2StagingRenderables = null
                   }
-                  self._v2PendingActivation = null
+                  if (self._v2PendingActivation?.stagingFragments === stagingFragments) {
+                    self._v2PendingActivation = null
+                  }
                 },
               }
             },
@@ -1204,10 +1188,10 @@ export function createHallSceneClass(me, HallAgentClass) {
               ctx.swap(
                 () => {
                   // ── apply ──
-                  // 1. Add offline fragments to world
+                  // 1. Add offline fragments to world (throw propagates to E7)
                   if (pa && pa.stagingFragments) {
                     for (const handle of pa.stagingFragments) {
-                      try { me.game.world.addChild(handle, 0) } catch (e) {}
+                      me.game.world.addChild(handle, 0)
                     }
                   }
                   // 2. Apply depths to all renderables
@@ -1217,7 +1201,7 @@ export function createHallSceneClass(me, HallAgentClass) {
                       if (d !== undefined && h && typeof h.depth === 'number') h.depth = d
                     }
                   }
-                  // 3. Sort world
+                  // 3. Sort world (throw propagates)
                   if (me.game.world && typeof me.game.world.sort === 'function') {
                     me.game.world.sort(true)
                   }
@@ -1232,27 +1216,27 @@ export function createHallSceneClass(me, HallAgentClass) {
                 },
                 () => {
                   // ── rollback ──
-                  // 1. Remove fragments that were just added
-                  if (pa && pa.stagingFragments) {
-                    for (const handle of pa.stagingFragments) {
-                      try { me.game.world.removeChild(handle) } catch (e) {}
-                    }
-                  }
-                  // 2. Restore old prop/agent depths
-                  for (const [sid, d] of oldPropDepths) {
-                    const h = savedRenderables.get(sid)
-                    if (h && typeof h.depth === 'number') h.depth = d
-                  }
-                  // 3. Restore world sort
-                  if (me.game.world && typeof me.game.world.sort === 'function') {
-                    me.game.world.sort(true)
-                  }
-                  // 4. Restore reader state
+                  // 1. Restore reader state FIRST (must not throw)
                   self._v2Active = oldActive
                   self._v2Depths = oldDepths
                   self._v2Membership = oldMembership
                   self._v2HitTargets = oldHitTargets
                   self._v2PendingActivation = null
+                  // 2. Best-effort: remove newly added fragments
+                  if (pa && pa.stagingFragments) {
+                    for (const handle of pa.stagingFragments) {
+                      try { me.game.world.removeChild(handle) } catch (e) {}
+                    }
+                  }
+                  // 3. Best-effort: restore old prop/agent depths
+                  for (const [sid, d] of oldPropDepths) {
+                    const h = savedRenderables.get(sid)
+                    if (h && typeof h.depth === 'number') { try { h.depth = d } catch (e) {} }
+                  }
+                  // 4. Best-effort: restore world sort
+                  if (me.game.world && typeof me.game.world.sort === 'function') {
+                    try { me.game.world.sort(true) } catch (e) {}
+                  }
                 },
               )
             },
@@ -1330,6 +1314,31 @@ export function createHallSceneClass(me, HallAgentClass) {
       }
     }
 
+
+    /** Create an offline fragment renderable handle (shared by activateV2 and _reactivateV2ForRoster). */
+    _createFragmentHandle(image, fragment) {
+      const f = fragment
+      const FragRenderable = class extends me.Renderable {
+        constructor() {
+          super(f.destinationRect.x, f.destinationRect.y,
+            f.destinationRect.width, f.destinationRect.height)
+          this._img = image
+          this._sx = f.sourceRect.x
+          this._sy = f.sourceRect.y
+          this._sw = f.sourceRect.width
+          this._sh = f.sourceRect.height
+          this.floating = false
+        }
+        draw(renderer) {
+          const ctx = renderer.getContext?.()
+          if (ctx && this._img) {
+            ctx.drawImage(this._img, this._sx, this._sy, this._sw, this._sh,
+              this.pos.x, this.pos.y, this.width, this.height)
+          }
+        }
+      }
+      return new FragRenderable()
+    }
     /** Deactivate V2 system. Returns a promise that settles when cleanup is complete. */
     deactivateV2() {
       this._v2Generation++ // invalidate all pending async continuations
@@ -1404,16 +1413,25 @@ export function createHallSceneClass(me, HallAgentClass) {
           [...adapterIds].some(id => !currentIds.has(id))
 
         if (hasRosterChange) {
-          // Agent roster changed: rebuild via reactivate while preserving old active
+          // Prevent infinite retry: only rebuild if roster differs from last attempt
+          const lastAttempt = self._v2LastRosterAttempt
+          const sameAsLast = lastAttempt && lastAttempt.size === currentIds.size &&
+            [...currentIds].every(id => lastAttempt.has(id))
+          if (sameAsLast) {
+            if (self._shadowDebugActive) {
+              console.warn('[HallScene] V2 roster reactivation already attempted for this set; skipping frame')
+            }
+            return
+          }
+          self._v2LastRosterAttempt = new Set(currentIds)
           if (self._shadowDebugActive) {
             console.warn('[HallScene] V2 agent roster changed; rebuilding scene transaction')
           }
-          // Deferred reactivation: mark pending, build in background,
-          // swap atomically when ready. Old active stays until new commit succeeds.
-          self._reactivateV2ForRoster()
+          await self._reactivateV2ForRoster()
           return
         }
-
+        // Clear last attempt if roster is now stable (no change)
+        self._v2LastRosterAttempt = null
         // 2. Sync E3 agent adapter positions, unregister removed from grid
         const tasks = []
 
@@ -1527,67 +1545,106 @@ export function createHallSceneClass(me, HallAgentClass) {
 
     /**
      * Rebuild V2 scene transaction when agent roster changes.
-     * Old active scene is preserved until the new activation commit succeeds.
-     * If the new activation fails, old active stays in place.
+     * Creates NEW adapter from current _agents, NEW offline fragments, NEW E7 controller.
+     * Old active stays live until new controller.activate commit succeeds.
+     * On commit success: atomically swap fragments/depths/state; async destroy old.
+     * On failure: destroy new staging, sync old adapter, keep old active.
+     * Must be awaited by caller.
      */
     async _reactivateV2ForRoster() {
       const self = this
-      const gen = this._v2Generation  // capture current gen; stale if deactivateV2 bumps it
+      const gen = this._v2Generation
+      const oldController = self._v2Controller
+      const oldAdapter = self._v2AgentAdapter
+      const oldAssembly = self._v2Assembly
+      const oldFragments = self._v2StagingRenderables
+      const oldActive = self._v2Active
+      const oldDepths = self._v2Depths
+      const oldMembership = self._v2Membership
+      const oldHitTargets = self._v2HitTargets
+      const oldRenderableDepths = new Map()
+      if (oldFragments) {
+        for (const h of oldFragments) {
+          if (h && typeof h.depth === 'number') oldRenderableDepths.set(h, h.depth)
+        }
+      }
+      for (const [sid, h] of self._v2PropRenderables) {
+        if (h && typeof h.depth === 'number') oldRenderableDepths.set(sid, h.depth)
+      }
+
+      let newAdapter = null
+      let newController = null
+      const stagingFragments = new Set()
 
       try {
-        // Check gate conditions
-        if (!self._shouldActivateV2() || !self.hasV2Support()) return
-        if (self._destroyed || !self._v2Assembly) return
+        if (gen !== self._v2Generation || self._destroyed) return
+        if (!oldAssembly || !oldController) return
 
-        const adapter = self._v2AgentAdapter
-        if (!adapter) return
-
-        // Build new renderable snapshot (same assembly, new adapter snapshot)
-        const ir = self._v2Assembly.canonicalIr
-        const renderables = new Map()
-        const stagingFragments = new Set()
-
-        // Props
-        for (const prop of ir.objects.filter(o => o.kind === 'prop')) {
-          const handle = self._v2PropRenderables.get(prop.stableId)
-          if (handle) renderables.set(prop.stableId, handle)
+        // ── 1. Build NEW adapter from current _agents ──
+        newAdapter = createRuntimeAgentAdapter(
+          defaultSpawnResolver('floor-1', 0),
+          defaultChunkResolver(),
+          'juyiting-main',
+        )
+        const createTasks = []
+        for (const [agentId, entity] of self._agents) {
+          const pos = entity.pos || {}
+          createTasks.push(
+            newAdapter.create([{ agentId, x: pos.x ?? 0, y: pos.y ?? 0 }])
+          )
+        }
+        const createResults = await Promise.allSettled(createTasks)
+        const anyFailed = createResults.some(r => r.status === 'rejected')
+        if (anyFailed) {
+          newAdapter.destroy()
+          newAdapter = null
+          // Sync old adapter to prevent infinite retry
+          await self._syncAdapterToCurrentAgents(oldAdapter)
+          return
         }
 
-        // Fragments — recreate offline (not added to world; old ones are still live)
+        if (gen !== self._v2Generation || self._destroyed) {
+          newAdapter.destroy()
+          newAdapter = null
+          return
+        }
+
+        // ── 2. Build NEW offline fragments / renderables ──
+        const ir = oldAssembly.canonicalIr
+        const renderables = new Map()
+
+        // Props (reuse existing handles, assert 5/5)
+        let propsMatched = 0
+        for (const prop of ir.objects.filter(o => o.kind === 'prop')) {
+          const handle = self._v2PropRenderables.get(prop.stableId)
+          if (handle) {
+            renderables.set(prop.stableId, handle)
+            propsMatched++
+          }
+        }
+        if (propsMatched !== 5) {
+          newAdapter.destroy()
+          newAdapter = null
+          return
+        }
+
+        // Fragments — create offline (not added to world)
         for (const f of ir.fragments) {
           const image = me.loader.getImage(f.assetRef)
           if (!image) {
-            console.warn('[HallScene] V2 roster: fragment asset not loaded; keeping old active')
-            return  // keep old active
+            newAdapter.destroy()
+            newAdapter = null
+            return
           }
-          const FragRenderable = class extends me.Renderable {
-            constructor() {
-              super(f.destinationRect.x, f.destinationRect.y,
-                f.destinationRect.width, f.destinationRect.height)
-              this._img = image
-              this._sx = f.sourceRect.x
-              this._sy = f.sourceRect.y
-              this._sw = f.sourceRect.width
-              this._sh = f.sourceRect.height
-              this.floating = false
-            }
-            draw(renderer) {
-              const ctx = renderer.getContext?.()
-              if (ctx && this._img) {
-                ctx.drawImage(this._img, this._sx, this._sy, this._sw, this._sh,
-                  this.pos.x, this.pos.y, this.width, this.height)
-              }
-            }
-          }
-          const handle = new FragRenderable()
+          const handle = self._createFragmentHandle(image, f)
           renderables.set(f.stableId, handle)
           stagingFragments.add(handle)
         }
 
-        // Agents — use current adapter snapshot
+        // Agents from new adapter
         const agentAdapters = []
-        for (const id of adapter.sourceEntityIds) {
-          const so = adapter.lookup(id)
+        for (const id of newAdapter.sourceEntityIds) {
+          const so = newAdapter.lookup(id)
           const entity = self._agents.get(id)
           if (so && entity) {
             agentAdapters.push({ sceneObject: so, entity })
@@ -1595,70 +1652,206 @@ export function createHallSceneClass(me, HallAgentClass) {
           }
         }
 
-        registerAgentsInGrid(self._v2Assembly.spatialGrid, agentAdapters, 'juyiting-main', 'floor-1')
-        const initOrder = computeUnifiedWorldOrder(self._v2Assembly, agentAdapters, createEmptyMembershipState())
+        registerAgentsInGrid(oldAssembly.spatialGrid, agentAdapters, 'juyiting-main', 'floor-1')
+        const initOrder = computeUnifiedWorldOrder(oldAssembly, agentAdapters, createEmptyMembershipState())
 
-        const nodeValues = []
-        const seen = new Set()
-        for (const [stableId] of renderables) {
-          if (seen.has(stableId)) continue
-          seen.add(stableId)
-          nodeValues.push(Object.freeze({
-            stableId, sceneId: 'juyiting-main', mode: 'v2',
-            ownerTransactionId: 'roster-rebuild', value: stableId,
-          }))
-        }
-
-        const pending = {
-          depths: initOrder.depths,
-          membership: initOrder.nextMembership,
-          hitTargets: buildHitTestTargets(initOrder.order, initOrder.depths, self._v2Assembly, agentAdapters),
-          stagingFragments,
-          renderables,
-        }
-
-        // Guard: generation must still match
         if (gen !== self._v2Generation || self._destroyed) {
-          // Discard new staging fragments (never added to world)
+          newAdapter.destroy()
+          newAdapter = null
           return
         }
 
-        // ── Atomic swap ──
-        // 1. Remove OLD staging fragments from world
-        const oldFragments = self._v2StagingRenderables
-        if (oldFragments) {
-          for (const handle of oldFragments) {
-            try { me.game.world.removeChild(handle) } catch (e) {}
-          }
-        }
-        // 2. Add NEW fragments to world
-        for (const handle of stagingFragments) {
-          try { me.game.world.addChild(handle, 0) } catch (e) {}
-        }
-        // 3. Apply new depths
-        for (const [sid, h] of renderables) {
-          const d = pending.depths[sid]
-          if (d !== undefined && h && typeof h.depth === 'number') h.depth = d
-        }
-        // 4. Sort
-        if (me.game.world && typeof me.game.world.sort === 'function') {
-          me.game.world.sort(true)
-        }
-        // 5. Publish new reader state
-        self._v2StagingRenderables = stagingFragments
-        self._v2Depths = pending.depths
-        self._v2Membership = pending.membership
-        self._v2HitTargets = pending.hitTargets
-        self._v2PendingActivation = null
-        self._v2PendingFrame = null
+        // ── 3. Build NEW E7 controller with atomic commit swap ──
+        // nodeValues use ctx.transactionId (not hardcoded) so E7 validation passes
+        newController = createSceneActivationController({
+          parse: (s, ctx) => s,
+          canonicalize: (p, ctx) => p,
+          validate: (c, ctx) => c,
+          loadAssets: (v, ctx) => v,
+          instantiate: (input, ctx) => {
+            const txId = ctx.transactionId
+            const nodeValues = []
+            const seen = new Set()
+            for (const [stableId] of renderables) {
+              if (seen.has(stableId)) continue
+              seen.add(stableId)
+              nodeValues.push(Object.freeze({
+                stableId, sceneId: 'juyiting-main', mode: 'v2',
+                ownerTransactionId: txId, value: stableId,
+              }))
+            }
+            return {
+              sceneId: 'juyiting-main', mode: 'v2',
+              ownerTransactionId: txId,
+              children: Object.freeze(nodeValues),
+              order: Object.freeze(initOrder.order),
+              depths: Object.freeze(initOrder.depths),
+              dispose: () => {
+                // Only dispose OWN staging fragments (captured locally)
+                for (const handle of stagingFragments) {
+                  try { me.game.world.removeChild(handle) } catch (e) {}
+                }
+              },
+            }
+          },
+          validateConstraints: (scene, ctx) => ({ order: scene.order }),
+          commit: (ctx) => {
+            ctx.swap(
+              () => {
+                // ── apply: atomic external swap ──
+                // 1. Remove OLD fragments from world
+                if (oldFragments) {
+                  for (const handle of oldFragments) {
+                    me.game.world.removeChild(handle)
+                  }
+                }
+                // 2. Add NEW fragments
+                for (const handle of stagingFragments) {
+                  me.game.world.addChild(handle, 0)
+                }
+                // 3. Apply new depths
+                for (const [sid, h] of renderables) {
+                  const d = initOrder.depths[sid]
+                  if (d !== undefined && h && typeof h.depth === 'number') h.depth = d
+                }
+                // 4. Sort
+                if (me.game.world && typeof me.game.world.sort === 'function') {
+                  me.game.world.sort(true)
+                }
+                // 5. Publish new reader state + controller + adapter
+                self._v2Controller = newController
+                self._v2AgentAdapter = newAdapter
+                self._v2StagingRenderables = stagingFragments
+                self._v2Depths = initOrder.depths
+                self._v2Membership = initOrder.nextMembership
+                self._v2HitTargets = buildHitTestTargets(initOrder.order, initOrder.depths, oldAssembly, agentAdapters)
+                self._v2PendingFrame = null
+                self._v2PendingActivation = null
+                self._v2Active = true
+                self._v2LastRosterAttempt = null
+                // 6. Async destroy old controller + adapter
+                Promise.resolve().then(() => {
+                  if (oldController) oldController.destroy().catch(() => {})
+                  if (oldAdapter) oldAdapter.destroy()
+                }).catch(() => {})
+              },
+              () => {
+                // ── rollback: restore reader state FIRST, then best-effort world ──
+                self._v2Active = oldActive
+                self._v2Depths = oldDepths
+                self._v2Membership = oldMembership
+                self._v2HitTargets = oldHitTargets
+                self._v2PendingActivation = null
+                self._v2PendingFrame = null
+                // Best-effort: remove new fragments
+                for (const handle of stagingFragments) {
+                  try { me.game.world.removeChild(handle) } catch (e) {}
+                }
+                // Best-effort: re-add old fragments
+                if (oldFragments) {
+                  for (const handle of oldFragments) {
+                    try { me.game.world.addChild(handle, 0) } catch (e) {}
+                  }
+                }
+                // Best-effort: restore old depths
+                for (const [key, d] of oldRenderableDepths) {
+                  if (typeof key === 'string') {
+                    const h = renderables.get(key) || self._v2PropRenderables.get(key)
+                    if (h && typeof h.depth === 'number') { try { h.depth = d } catch (e) {} }
+                  } else if (key && typeof key.depth === 'number') {
+                    try { key.depth = d } catch (e) {}
+                  }
+                }
+                // Best-effort: sort
+                if (me.game.world && typeof me.game.world.sort === 'function') {
+                  try { me.game.world.sort(true) } catch (e) {}
+                }
+                // Destroy new staging adapter (controller stays in failed state)
+                newAdapter.destroy()
+              },
+            )
+          },
+        })
 
+        // ── 4. Activate new controller ──
+        const result = await newController.activate({
+          sceneId: 'juyiting-main', mode: 'v2', source: { mapData: self._mapData },
+        })
+
+        if (gen !== self._v2Generation || self._destroyed) {
+          // Generation changed during activation; destroy new staging
+          newController.destroy().catch(() => {})
+          newAdapter.destroy()
+          return
+        }
+
+        if (!result.ok) {
+          // Activation failed; destroy new staging, keep old active
+          newController.destroy().catch(() => {})
+          newAdapter.destroy()
+          newAdapter = null
+          newController = null
+          // Sync old adapter to prevent infinite retry loop
+          await self._syncAdapterToCurrentAgents(oldAdapter)
+          self._v2LastRosterAttempt = null  // allow retry if roster changes again
+          if (self._shadowDebugActive) {
+            console.warn('[HallScene] V2 roster reactivation failed:', result.error?.message)
+          }
+          return
+        }
+
+        // Success: reader state already published via commit.apply
+        // oldController/oldAdapter destroyed async in commit.apply
+        // Clear newAdapter/newController refs (now owned by self._v2Xxx)
+        newAdapter = null
+        newController = null
       } catch (err) {
+        // Clean up any new staging that was created
+        if (newController) {
+          newController.destroy().catch(() => {})
+          newController = null
+        }
+        if (newAdapter) {
+          newAdapter.destroy()
+          newAdapter = null
+        }
+        // Sync old adapter to prevent infinite retry loop
+        if (oldAdapter && self._v2Active && gen === self._v2Generation) {
+          self._syncAdapterToCurrentAgents(oldAdapter).catch(() => {})
+        }
+        self._v2LastRosterAttempt = null
         if (self._shadowDebugActive) {
           console.warn('[HallScene] V2 roster reactivation failed (old active preserved):', err?.message || err)
         }
       }
     }
 
+    /** Sync the given adapter to match current _agents (best-effort, for recovery). */
+    async _syncAdapterToCurrentAgents(adapter) {
+      if (!adapter) return
+      const currentIds = new Set(this._agents.keys())
+      const adapterIds = new Set(adapter.sourceEntityIds)
+      try {
+        // Remove stale
+        for (const id of adapterIds) {
+          if (!currentIds.has(id)) {
+            await adapter.remove([id]).catch(() => {})
+          }
+        }
+        // Create/update current
+        for (const [agentId, entity] of this._agents) {
+          const pos = entity.pos || {}
+          const existing = adapter.lookup(agentId)
+          if (!existing) {
+            await adapter.create([{ agentId, x: pos.x ?? 0, y: pos.y ?? 0 }]).catch(() => {})
+          } else {
+            await adapter.update([{ agentId, x: pos.x ?? 0, y: pos.y ?? 0 }]).catch(() => {})
+          }
+        }
+      } catch (_) {
+        // best-effort; ignore failures
+      }
+    }
     /** V2 depth-based hit test using final visual order (agents only) */
     _v2HitTest(worldX, worldY) {
       if (!this._v2Active || !this._v2HitTargets || !this._v2AgentAdapter) return null
