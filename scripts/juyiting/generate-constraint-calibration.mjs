@@ -25,11 +25,6 @@ function sha256File(filePath) {
   return sha256(readFileSync(filePath))
 }
 
-function fatal(msg) {
-  console.error(`FATAL: ${msg}`)
-  process.exit(1)
-}
-
 // ── Frozen contract hashes ──
 const CONTRACT_SOURCES = {
   'src/game/occlusion/schema.ts': '172a293a9b873482be25fed706da05e49ddcc02cfa8717ff329311159e51b9d1',
@@ -266,6 +261,9 @@ export function generateCalibrationReport(rootDir = ROOT) {
   }
 
   // ── Build calibration report (deterministic, no runtime clock) ──
+  // FROZEN: this timestamp is a deterministic constant for byte-reproducibility.
+  // Do NOT replace with Date.now() / new Date().toISOString() — it would break
+  // the contract that two generator calls produce identical output.
   const generationTimestamp = '2026-08-12T00:00:00.000Z'
 
   return {
