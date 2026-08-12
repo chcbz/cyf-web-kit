@@ -1,0 +1,143 @@
+{
+  "$schema": "juyiting-occlusion-constraint-calibration-v1",
+  "schemaVersion": 1,
+  "taskId": "E11",
+  "timestamp": "2026-08-12T09:26:08.678Z",
+  "conclusion": "zones=0",
+  "provenance": {
+    "e10aLedger": {
+      "path": "tests/fixtures/juyiting/occlusion-v2-masks/migration-ledger.json",
+      "wholeFileSha256": "700b2ac6d27ceb58ce5fe0dd92b3f0dc7012a6ecafd03f7c23a9d3a3c42704b1",
+      "generationId": "fc855f90cbfc13c5ad8b24659825bc1dccaa03ec17866735fd923452dbdc7611",
+      "contentSha256": "89d96b39e74e63edb620da5d595a0c010546c81d2a9447433c137c7bcb8b2d4f"
+    },
+    "e10bManifest": {
+      "path": "tests/fixtures/juyiting/occlusion-v2-masks/mask-tmx-manifest.json",
+      "wholeFileSha256": "183dadfa3221306eaac82b815d16023f21589323a7659ceb15cde0c227f916b0",
+      "generationId": "a79959fd081f6c76fe5cf371b0587b5efaef463ade443e63e65f1afb4e32bbc9"
+    },
+    "tmx": {
+      "path": "public/juyiting/hall.tmx",
+      "sha256": "4f94e3a52da71369d9c29d96e0ac0ceb2126a1a441b6cd63911701957e1ed49b"
+    },
+    "e4e5Contracts": {
+      "src/game/occlusion/schema.ts": "172a293a9b873482be25fed706da05e49ddcc02cfa8717ff329311159e51b9d1",
+      "src/game/occlusion/worldOrder.ts": "ccb3bc5eaa55055c78f04090a74f0fea4b37e36780349f09eff4ac9f9249942c",
+      "src/game/occlusion/constraintResolver.ts": "55c696e56f4db1aabe3233c19eda525f86319997d58920aaef055da8dd7095c5",
+      "src/game/occlusion/polygonGeometry.ts": "586c716e541e874776ab28aed60212f2550957ab3df5661443d931653dc31a4e",
+      "src/game/occlusion/validation.ts": "7b4bcfed5ec2cb39003d2f06709113c837b89600138e991a0aec60d1903b0eeb"
+    }
+  },
+  "proofs": {
+    "zones": {
+      "count": 0,
+      "statement": "All 37 bindings have constraintDecision=none; zones=[] is correct and complete.",
+      "canonicalParseZones": []
+    },
+    "relations": {
+      "count": 0,
+      "statement": "No constraint relations needed; all 111 probes satisfied by fixed-point Y + tieBias."
+    },
+    "edges": {
+      "count": 0,
+      "statement": "No mandatory constraint edges (static/activation/runtime all empty).",
+      "oppositeOverlapSet": [],
+      "staticEdgeSet": [],
+      "activationEdgeSet": [],
+      "runtimeEdgeSet": []
+    },
+    "conflicts": {
+      "count": 0,
+      "statement": "No contradictory relations detected."
+    },
+    "cycles": {
+      "count": 0,
+      "statement": "Kahn result is trivially determined (empty edge set)."
+    },
+    "targetCoverage": {
+      "uniqueTargetFragments": 32,
+      "totalCanonicalFragments": 32,
+      "statement": "32/32 canonical fragments covered by 37 bindings.",
+      "uncoveredTargets": []
+    },
+    "probes": {
+      "total": 111,
+      "passed": 111,
+      "failed": 0,
+      "statement": "All 111 probes match expected painter relations via fixed-point Y + tieBias."
+    },
+    "globalSemantics": {
+      "hasGlobalBehindMask": false,
+      "hasLegacyDepthHalving": false,
+      "hasGlobalCharacterState": false,
+      "statement": "No global depth-halving, behindMask, or character state modification semantics."
+    },
+    "hysteresis": {
+      "contractPx": 3,
+      "statement": "3px hysteresis contract is frozen; zones=0 means no membership state is needed.",
+      "membershipState": "none (zones=0)"
+    },
+    "overheadTargets": {
+      "count": 0,
+      "statement": "No target fragment has renderBand=overhead."
+    },
+    "crossSceneTargets": {
+      "count": 0,
+      "statement": "No cross-scene targets."
+    },
+    "crossFloorTargets": {
+      "count": 0,
+      "statement": "No cross-floor targets."
+    }
+  },
+  "bindingSummary": {
+    "totalBindings": 37,
+    "allConstraintDecisionNone": true,
+    "recalibratedBindings": 7,
+    "probeResults": {
+      "total": 111,
+      "pass": 111,
+      "fail": 0
+    },
+    "uniqueTargetFragments": [
+      "jyt.occ.center.wall-sconce-01.v2",
+      "jyt.occ.east-lower.diagonal-brace-01.v2",
+      "jyt.occ.east-lower.diagonal-brace-02.v2",
+      "jyt.occ.east-lower.fabric-rack-01.v2",
+      "jyt.occ.east-lower.lantern-01.v2",
+      "jyt.occ.east-lower.railing-post-01.v2",
+      "jyt.occ.east-lower.worktable-01.v2",
+      "jyt.occ.east-upper.diagonal-brace-01.v2",
+      "jyt.occ.east-upper.pillar-01.v2",
+      "jyt.occ.east-upper.pillar-02.v2",
+      "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "jyt.occ.east-upper.wall-panel-lower-01.v2",
+      "jyt.occ.east-upper.wall-panel-upper-01.v2",
+      "jyt.occ.entrance.hanging-banner-01.v2",
+      "jyt.occ.entrance.hanging-banner-02.v2",
+      "jyt.occ.entrance.lantern-post-01.v2",
+      "jyt.occ.entrance.lantern-post-02.v2",
+      "jyt.occ.west-lower.diagonal-brace-02.v2",
+      "jyt.occ.west-lower.floor-lantern-01.v2",
+      "jyt.occ.west-lower.long-table-frame-01.v2",
+      "jyt.occ.west-lower.railing-01.v2",
+      "jyt.occ.west-lower.railing-02.v2",
+      "jyt.occ.west-lower.wall-bracket-01.v2",
+      "jyt.occ.west-lower.wall-lantern-01.v2",
+      "jyt.occ.west-lower.wall-panel-assembly-01.v2",
+      "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "jyt.occ.west-upper.lantern-01.v2",
+      "jyt.occ.west-upper.lantern-table-frame-01.v2",
+      "jyt.occ.west-upper.pillar-01.v2",
+      "jyt.occ.west-upper.wall-panel-assembly-01.v2",
+      "jyt.occ.west-upper.wall-sconce-01.v2",
+      "jyt.occ.west-upper.wall-sconce-02.v2"
+    ]
+  },
+  "metadata": {
+    "generatorScript": "scripts/juyiting/generate-constraint-calibration.mjs",
+    "validatorScript": "scripts/juyiting/validate-constraint-calibration.mjs",
+    "testFile": "tests/juyiting-occlusion-constraint-calibration.test.js",
+    "fixturePath": "tests/fixtures/juyiting/occlusion-v2-constraint/calibration-report.json"
+  }
+}

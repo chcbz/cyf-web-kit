@@ -37,7 +37,10 @@
     "render:mask-contact-sheet": "node scripts/juyiting/render-mask-contact-sheet.mjs",
     "generate:mask-tmx-migration": "node scripts/juyiting/generate-mask-tmx-migration.mjs --update",
     "validate:mask-tmx-migration": "node --import tsx scripts/juyiting/validate-mask-tmx-migration.mjs",
-    "test:mask-tmx-migration": "node --import tsx ./node_modules/mocha/bin/mocha.js --no-config --require ./tests/setup.js --reporter spec tests/juyiting-occlusion-mask-tmx-migration.test.js --timeout 30000"
+    "test:mask-tmx-migration": "node --import tsx ./node_modules/mocha/bin/mocha.js --no-config --require ./tests/setup.js --reporter spec tests/juyiting-occlusion-mask-tmx-migration.test.js --timeout 30000",
+    "test:juyiting-occlusion-constraint-calibration": "node --import tsx ./node_modules/mocha/bin/mocha.js --no-config --require ./tests/setup.js --reporter spec tests/juyiting-occlusion-constraint-calibration.test.js --timeout 30000",
+    "validate:constraint-calibration": "node scripts/juyiting/validate-constraint-calibration.mjs",
+    "generate:constraint-calibration": "node scripts/juyiting/generate-constraint-calibration.mjs --output tests/fixtures/juyiting/occlusion-v2-constraint/calibration-report.json"
   },
   "dependencies": {
     "@varlet/ui": "^3.10.9",
