@@ -383,15 +383,38 @@ export class JuyitingGame {
 
   async _prepareMapData(me, mountToken = this._mountToken) {
     let tmx = me.loader.getTMX?.(HALL_MAP_RESOURCE.name)
+    let rawXml = null
 
-    if (!tmx) {
+    if (tmx && typeof tmx === 'string') {
+      // melonJS returned raw XML string
+      rawXml = tmx
+    } else {
+      // melonJS returned parsed object or nothing — always fetch raw XML for SHA provenance
       try {
         const resp = await fetch(HALL_MAP_RESOURCE.src)
         const xmlText = await resp.text()
         if (!this._isCurrentMount(mountToken)) return
-        tmx = xmlText
+        rawXml = xmlText
+        if (!tmx) tmx = xmlText  // use raw XML for parsing too if melonJS had no cached object
       } catch (err) {
         console.warn('[JuyitingGame] Direct TMX fetch failed:', err?.message || err)
+      }
+    }
+
+    if (!this._isCurrentMount(mountToken)) return
+    if (!tmx) return
+
+    // E12: Compute SHA-256 and set BEFORE setMapData so hasV2Support() can use it
+    if (rawXml && typeof rawXml === 'string') {
+      try {
+        const encoder = new TextEncoder()
+        const data = encoder.encode(rawXml)
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+        const hashArray = Array.from(new Uint8Array(hashBuffer))
+        const sha = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+        this._hallScene?.setTmxSha256(sha)
+      } catch (err) {
+        console.warn('[JuyitingGame] SHA-256 computation failed:', err?.message || err)
       }
     }
 

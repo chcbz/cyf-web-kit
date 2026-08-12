@@ -91,11 +91,15 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._v2FrameSerial = Promise.resolve()   // serialized async frame processing
       this._v2FramePending = false
       this._v2PendingFrame = null
+      this._tmxSha256 = null
     }
 
     onAgentClick(cb)   { this._onAgentClick = cb }
     onHotspotClick(cb) { this._onHotspotClick = cb }
     onReady(cb)        { this._onReady = cb }
+
+        /** Set TMX SHA-256 provenance for V2 activation gate. */
+    setTmxSha256(sha) { this._tmxSha256 = sha }
 
     setMapData(mapData) {
       this._mapData = mapData
@@ -103,14 +107,15 @@ export function createHallSceneClass(me, HallAgentClass) {
       if (this._shadowRenderer) {
         this._shadowRenderer.setMapData(mapData)
       }
-      // E12: deactivate V2 when map data changes, then re-check gate
+      // E12: deactivate V2 when map data changes
       if (this._v2Active) {
         this.deactivateV2()
       }
-      if (this._shouldActivateV2() && this.hasV2Support()) {
+      // Only auto-activate if scene is already built (props registered).
+      // Otherwise _buildScene will trigger activation after prop registration.
+      if (this._sceneBuilt && this._shouldActivateV2() && this.hasV2Support()) {
         this.activateV2()
       }
-
     }
 
 
@@ -409,6 +414,11 @@ export function createHallSceneClass(me, HallAgentClass) {
             } : undefined,
             contains: point => {
               const world = this._screenToWorld(point)
+              // V2 hit-test takes priority when active
+              if (this._v2Active) {
+                const v2Hit = this._v2HitTest(world.x, world.y)
+                if (v2Hit === id) return true
+              }
               return agent.containsPoint?.(world.x, world.y) === true || bounds?.contains?.(world.x, world.y) === true
             },
             containsWithSlop: (point, slop) => {
@@ -1010,7 +1020,10 @@ export function createHallSceneClass(me, HallAgentClass) {
 
     /** Check if map data supports V2 occlusion system */
     hasV2Support() {
-      return this._mapData ? hasV2ActivationEnvelope(this._mapData) : false
+      if (!this._mapData) return false
+      if (!hasV2ActivationEnvelope(this._mapData, this._tmxSha256 ?? undefined)) return false
+      if (!this._tmxSha256) return false
+      return true
     }
 
     /** Get current active renderer mode */
@@ -1024,12 +1037,12 @@ export function createHallSceneClass(me, HallAgentClass) {
     /** Activate V2 occlusion system via E7 controller. Returns true if activation started. */
     activateV2() {
       if (this._destroyed || this._v2Active) return this._v2Active
-      if (!this._mapData || !hasV2ActivationEnvelope(this._mapData)) return false
+      if (!this._mapData || !hasV2ActivationEnvelope(this._mapData, this._tmxSha256 ?? undefined)) return false
 
       const gen = ++this._v2Generation
 
       try {
-        this._v2Assembly = assembleV2Scene(this._mapData)
+        this._v2Assembly = assembleV2Scene(this._mapData, this._tmxSha256 ?? undefined)
         const ir = this._v2Assembly.canonicalIr
 
         // Create E3 agent adapter
@@ -1084,7 +1097,7 @@ export function createHallSceneClass(me, HallAgentClass) {
               this._sy = f.sourceRect.y
               this._sw = f.sourceRect.width
               this._sh = f.sourceRect.height
-              this.floating = true
+              this.floating = false
             }
             draw(renderer) {
               const ctx = renderer.getContext?.()
@@ -1140,12 +1153,24 @@ export function createHallSceneClass(me, HallAgentClass) {
                   ownerTransactionId: ctx.transactionId, value: stableId,
                 }))
               }
+              // Compute initial unified world order for activation commit
+              const initialAdapters = []
+              for (const id of adapter.sourceEntityIds) {
+                const so = adapter.lookup(id)
+                const entity = self._agents.get(id)
+                if (so && entity) initialAdapters.push({ sceneObject: so, entity })
+              }
+              registerAgentsInGrid(self._v2Assembly.spatialGrid, initialAdapters, 'juyiting-main', 'floor-1')
+              const initOrder = computeUnifiedWorldOrder(self._v2Assembly, initialAdapters, createEmptyMembershipState())
+              self._v2Depths = initOrder.depths
+              self._v2Membership = initOrder.nextMembership
+              self._v2HitTargets = buildHitTestTargets(initOrder.order, initOrder.depths, self._v2Assembly, initialAdapters)
               return {
                 sceneId: ctx.sceneId, mode: ctx.mode,
                 ownerTransactionId: ctx.transactionId,
                 children: Object.freeze(nodeValues),
-                order: Object.freeze([]),
-                depths: Object.freeze({}),
+                order: Object.freeze(initOrder.order),
+                depths: Object.freeze(initOrder.depths),
                 dispose: () => {
                   if (self._v2StagingRenderables) {
                     for (const handle of self._v2StagingRenderables) {
@@ -1156,7 +1181,7 @@ export function createHallSceneClass(me, HallAgentClass) {
                 },
               }
             },
-            validateConstraints: (scene, ctx) => ({ order: [] }),
+            validateConstraints: (scene, ctx) => ({ order: scene.order }),
             commit: (ctx) => {
               const depths = self._v2Depths
               ctx.swap(
@@ -1233,7 +1258,7 @@ export function createHallSceneClass(me, HallAgentClass) {
             self.deactivateV2()
             return
           }
-          self._applyV2Depths()
+          // Initial depths already applied via commit hook
         }).catch(err => {
           if (capturedGen !== self._v2Generation) return
           console.warn('[HallScene] V2 activation failed:', err?.message || err)
@@ -1310,8 +1335,27 @@ export function createHallSceneClass(me, HallAgentClass) {
         const adapter = self._v2AgentAdapter
         if (!adapter) return
 
-        // 1. Sync E3 agent adapter with current this._agents (fail closed on any error)
+        // 1. Detect agent roster changes (additions/removals) → full reactivate
         const currentIds = new Set(self._agents.keys())
+        const adapterIds = new Set(adapter.sourceEntityIds)
+        const hasRosterChange =
+          currentIds.size !== adapterIds.size ||
+          [...currentIds].some(id => !adapterIds.has(id)) ||
+          [...adapterIds].some(id => !currentIds.has(id))
+
+        if (hasRosterChange) {
+          // Agent roster changed: rebuild scene transaction via activate
+          if (self._shadowDebugActive) {
+            console.warn('[HallScene] V2 agent roster changed; rebuilding scene transaction')
+          }
+          self.deactivateV2()
+          if (self._shouldActivateV2() && self.hasV2Support()) {
+            self.activateV2()
+          }
+          return
+        }
+
+        // 2. Sync E3 agent adapter positions, unregister removed from grid
         const tasks = []
 
         for (const [agentId, entity] of self._agents) {
@@ -1320,37 +1364,53 @@ export function createHallSceneClass(me, HallAgentClass) {
           if (!existing) {
             tasks.push(
               adapter.create([{ agentId, x: pos.x ?? 0, y: pos.y ?? 0 }])
-                .then(() => {}) // success: no-op
+                .then(() => {})
+                .catch(err => {
+                  console.warn('[HallScene] V2 adapter create failed for %s:', agentId, err?.message || err)
+                  throw err
+                })
             )
           } else if (pos.x !== undefined && pos.y !== undefined) {
             tasks.push(
               adapter.update([{ agentId, x: pos.x, y: pos.y }])
                 .then(() => {})
+                .catch(err => {
+                  console.warn('[HallScene] V2 adapter update failed for %s:', agentId, err?.message || err)
+                  throw err
+                })
             )
           }
         }
 
-        // Remove agents no longer in _agents
+        // Remove agents no longer in _agents — unregister from grid too
         for (const id of adapter.sourceEntityIds) {
           if (!currentIds.has(id)) {
-            tasks.push(adapter.remove([id]).then(() => {}))
+            const so = adapter.lookup(id)
+            if (so) unregisterAgentFromGrid(self._v2Assembly.spatialGrid, so.stableId)
+            tasks.push(
+              adapter.remove([id])
+                .then(() => {})
+                .catch(err => {
+                  console.warn('[HallScene] V2 adapter remove failed for %s:', id, err?.message || err)
+                  throw err
+                })
+            )
           }
         }
 
-        // Await all adapter operations; any failure → fail this frame
+        // Await all adapter operations; any failure → fail this frame closed
         const results = await Promise.allSettled(tasks)
         const anyFailed = results.some(r => r.status === 'rejected')
         if (anyFailed) {
-          // Log but don't crash — V1 is preserved
           if (self._shadowDebugActive) {
-            console.warn('[HallScene] V2 adapter sync had failures; skipping frame')
+            console.warn('[HallScene] V2 adapter sync had failures; skipping frame (V1 preserved)')
           }
           return
         }
 
         if (capturedGen !== self._v2Generation) return
 
-        // 2. Build V2AgentAdapters from E3 snapshot
+        // 3. Build V2AgentAdapters from E3 snapshot
         const agentAdapters = []
         for (const id of adapter.sourceEntityIds) {
           const so = adapter.lookup(id)
@@ -1360,14 +1420,14 @@ export function createHallSceneClass(me, HallAgentClass) {
           }
         }
 
-        // 3. Register agents in spatial grid
+        // 4. Register agents in spatial grid (re-register moves, auto-unregisters old position)
         registerAgentsInGrid(
           self._v2Assembly.spatialGrid,
           agentAdapters,
           'juyiting-main', 'floor-1',
         )
 
-        // 4. Build frame proposal
+        // 5. Build frame proposal
         const activationTxId = self._v2Controller.active?.ownerTransactionId
         if (!activationTxId) return
 
@@ -1379,7 +1439,7 @@ export function createHallSceneClass(me, HallAgentClass) {
 
         if (capturedGen !== self._v2Generation) return
 
-        // 5. Pre-build next hit targets and store as pending frame state
+        // 6. Pre-build next hit targets and store as pending frame state
         const nextHitTargets = buildHitTestTargets(
           proposal.order, proposal.depths, self._v2Assembly, agentAdapters,
         )
@@ -1389,9 +1449,17 @@ export function createHallSceneClass(me, HallAgentClass) {
           nextHitTargets,
         }
 
-        // 6. Commit frame via E7 controller (sync; swap publishes reader state on success)
-        self._v2Controller.commitFrame(proposal)
+        // 7. Commit frame via E7 controller (sync)
+        const commitResult = self._v2Controller.commitFrame(proposal)
+        if (!commitResult.ok) {
+          // Commit failed; clear pending frame
+          self._v2PendingFrame = null
+          if (self._shadowDebugActive) {
+            console.warn('[HallScene] V2 commitFrame failed:', commitResult.error?.message)
+          }
+        }
       } catch (err) {
+        self._v2PendingFrame = null
         if (self._shadowDebugActive) {
           console.warn('[HallScene] V2 frame failed (V1 preserved):', err?.message || err)
         }

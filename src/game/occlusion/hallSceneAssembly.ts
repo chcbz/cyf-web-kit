@@ -154,8 +154,9 @@ export function projectActivationEnvelope(mapData: Record<string, unknown>): Rec
 
 // ── Parse and build ──
 
-export function assembleV2Scene(mapData: Record<string, unknown>): E12Assembly {
-  if (!hasV2ActivationEnvelope(mapData)) {
+/** Assemble V2 scene. tmxSha256 is mandatory for production; pass the accepted SHA. */
+export function assembleV2Scene(mapData: Record<string, unknown>, tmxSha256?: string): E12Assembly {
+  if (!hasV2ActivationEnvelope(mapData, tmxSha256)) {
     throw new Error('E12: mapData does not satisfy V2 activation envelope; V2 unreachable')
   }
   const projected = projectActivationEnvelope(mapData)
@@ -259,7 +260,11 @@ export function computeUnifiedWorldOrder(
   // Fragments (world-band)
   for (const f of assembly.fragments) {
     if (f.renderBand !== 'world') continue
-    try { nodes.push(fragmentToConstraintNode(f, ir.floorRegistry)) } catch { /* skip */ }
+    try {
+      nodes.push(fragmentToConstraintNode(f, ir.floorRegistry))
+    } catch (err) {
+      throw new Error(`E12: fragmentToConstraintNode failed for ${f.stableId}: ${(err as Error)?.message || err}`)
+    }
   }
 
   // Agents

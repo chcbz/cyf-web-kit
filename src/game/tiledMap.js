@@ -661,7 +661,31 @@ const parseJuyiHallTmxUnchecked = (xml, movementEnabled = true) => {
     obstacles,
     occluders,
     spawns,
-    layers: [],
+    // E12: Build objectgroup layers for V2 activation envelope
+    layers: (() => {
+      const result = []
+      for (const group of doc.querySelectorAll('objectgroup')) {
+        const name = textAttr(group, 'name')
+        const objects = []
+        for (const obj of group.querySelectorAll('object')) {
+          const props = {}
+          for (const p of obj.querySelectorAll('properties > property')) {
+            props[textAttr(p, 'name')] = textAttr(p, 'value')
+          }
+          objects.push({
+            name: textAttr(obj, 'name'),
+            type: textAttr(obj, 'type'),
+            x: numberAttr(obj, 'x'),
+            y: numberAttr(obj, 'y'),
+            width: numberAttr(obj, 'width'),
+            height: numberAttr(obj, 'height'),
+            properties: props,
+          })
+        }
+        result.push({ name, type: 'objectgroup', objects })
+      }
+      return result
+    })(),
     mapProperties: readMapProperties(doc),
     properties: readMapProperties(doc),
     tileLayers,

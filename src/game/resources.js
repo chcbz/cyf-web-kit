@@ -48,5 +48,22 @@ export const buildHallMapResources = (mapData) => {
     addImageResource(resources, seen, layer.resourceName || layer.id, layer.source)
   })
 
+  // E12: V2 fragment occluder atlas images
+  // Extract assetRef values from v2-fragments-occluders layer in mapData
+  const fragLayers = (mapData?.layers || []).filter(
+    l => l && l.type === 'objectgroup' && (l.name === 'v2-fragments-occluders' || l.name === 'v2-fragments')
+  )
+  const fragAssets = new Set()
+  for (const layer of fragLayers) {
+    for (const obj of (layer.objects || [])) {
+      const assetRef = obj?.properties?.assetRef
+      if (assetRef && typeof assetRef === 'string') fragAssets.add(assetRef)
+    }
+  }
+  for (const assetRef of fragAssets) {
+    // Resource name = assetRef path (melonJS uses name for getImage lookup)
+    addImageResource(resources, seen, assetRef, '/juyiting/' + assetRef.replace(/^\/+/, ''))
+  }
+
   return resources
 }
