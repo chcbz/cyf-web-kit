@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="104" height="58" tilewidth="16" tileheight="16" infinite="0" nextlayerid="24" nextobjectid="207">
+<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="104" height="58" tilewidth="16" tileheight="16" infinite="0" nextlayerid="26" nextobjectid="239">
  <properties>
   <property name="description" value="聚义厅 v3 - modular layer hall scene"/>
   <property name="maxZoom" type="float" value="3.3"/>
@@ -163,16 +163,19 @@
  <objectgroup id="13" name="mask">
   <object id="48" x="233" y="350">
    <properties>
-    <property name="stableId" value="jyt.occluder.west-upper.lantern-table-frame-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-48.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.west-upper.lantern-table-frame-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="west-upper"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="west-upper"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="285"/>
     <property name="sortAnchorY" type="float" value="351"/>
+    <property name="fixedPointY" type="int" value="89856"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.west-upper.lantern-table-frame-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -183,16 +186,19 @@
   </object>
   <object id="49" x="126" y="718">
    <properties>
-    <property name="stableId" value="jyt.occluder.west-lower.long-table-frame-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-49.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.west-lower.long-table-frame-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="west-lower"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="west-lower"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="178"/>
     <property name="sortAnchorY" type="float" value="719"/>
+    <property name="fixedPointY" type="int" value="184064"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.west-lower.long-table-frame-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -203,16 +209,19 @@
   </object>
   <object id="50" x="243" y="823">
    <properties>
-    <property name="stableId" value="jyt.occluder.west-lower.railing-02.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-50.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.west-lower.railing-02.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="west-lower"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="west-lower"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="155"/>
     <property name="sortAnchorY" type="float" value="824"/>
+    <property name="fixedPointY" type="int" value="210944"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.west-lower.railing-02.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -223,16 +232,19 @@
   </object>
   <object id="51" x="42" y="845">
    <properties>
-    <property name="stableId" value="jyt.occluder.west-lower.wall-panel-assembly-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-51.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.west-lower.wall-panel-assembly-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="west-lower"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="west-lower"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="218"/>
     <property name="sortAnchorY" type="float" value="852"/>
+    <property name="fixedPointY" type="int" value="218112"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.west-lower.wall-panel-assembly-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -243,16 +255,19 @@
   </object>
   <object id="52" x="479" y="550">
    <properties>
-    <property name="stableId" value="jyt.occluder.west-upper.wall-panel-assembly-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-52.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.west-upper.wall-panel-assembly-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="west-upper"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="west-upper"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="274"/>
     <property name="sortAnchorY" type="float" value="716"/>
+    <property name="fixedPointY" type="int" value="183296"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.west-upper.wall-panel-assembly-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -263,16 +278,19 @@
   </object>
   <object id="53" x="450" y="401">
    <properties>
-    <property name="stableId" value="jyt.occluder.west-upper.wall-panel-assembly-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-53.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.west-upper.wall-panel-assembly-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="west-upper"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="west-upper"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="274"/>
     <property name="sortAnchorY" type="float" value="716"/>
+    <property name="fixedPointY" type="int" value="183296"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.west-upper.wall-panel-assembly-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -283,16 +301,19 @@
   </object>
   <object id="54" x="557" y="463">
    <properties>
-    <property name="stableId" value="jyt.occluder.west-upper.pillar-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-54.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.west-upper.pillar-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="west-upper"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="west-upper"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="571"/>
     <property name="sortAnchorY" type="float" value="469"/>
+    <property name="fixedPointY" type="int" value="120064"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.west-upper.pillar-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -303,16 +324,19 @@
   </object>
   <object id="55" x="601" y="488">
    <properties>
-    <property name="stableId" value="jyt.occluder.west-upper.diagonal-brace-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-55.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.west-upper.diagonal-brace-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="west-upper"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="west-upper"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="608"/>
     <property name="sortAnchorY" type="float" value="489"/>
+    <property name="fixedPointY" type="int" value="125184"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.west-upper.diagonal-brace-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -323,16 +347,19 @@
   </object>
   <object id="56" x="1130" y="484">
    <properties>
-    <property name="stableId" value="jyt.occluder.east-upper.diagonal-brace-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-56.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.east-upper.diagonal-brace-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="east-upper"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="east-upper"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="1140"/>
     <property name="sortAnchorY" type="float" value="486"/>
+    <property name="fixedPointY" type="int" value="124416"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.east-upper.diagonal-brace-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -343,16 +370,19 @@
   </object>
   <object id="57" x="1158" y="462">
    <properties>
-    <property name="stableId" value="jyt.occluder.east-upper.pillar-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-57.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.east-upper.pillar-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="east-upper"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="east-upper"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="1181"/>
     <property name="sortAnchorY" type="float" value="464"/>
+    <property name="fixedPointY" type="int" value="118784"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.east-upper.pillar-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -363,16 +393,19 @@
   </object>
   <object id="58" x="1197" y="458">
    <properties>
-    <property name="stableId" value="jyt.occluder.east-upper.wall-panel-upper-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-58.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.east-upper.wall-panel-upper-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="east-upper"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="east-upper"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="1430"/>
     <property name="sortAnchorY" type="float" value="459"/>
+    <property name="fixedPointY" type="int" value="117504"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.east-upper.wall-panel-upper-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -383,16 +416,19 @@
   </object>
   <object id="59" x="1499" y="625">
    <properties>
-    <property name="stableId" value="jyt.occluder.east-lower.worktable-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-59.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.east-lower.worktable-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="east-lower"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="east-lower"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="1559"/>
     <property name="sortAnchorY" type="float" value="701"/>
+    <property name="fixedPointY" type="int" value="179456"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.east-lower.worktable-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -403,16 +439,19 @@
   </object>
   <object id="60" x="1324" y="924">
    <properties>
-    <property name="stableId" value="jyt.occluder.east-lower.lantern-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-60.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.east-lower.lantern-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="east-lower"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="east-lower"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="1338"/>
     <property name="sortAnchorY" type="float" value="852"/>
+    <property name="fixedPointY" type="int" value="218112"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.east-lower.lantern-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -423,16 +462,19 @@
   </object>
   <object id="61" x="1084" y="777">
    <properties>
-    <property name="stableId" value="jyt.occluder.entrance.lantern-post-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-61.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.entrance.lantern-post-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="entrance"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="entrance"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="1073"/>
     <property name="sortAnchorY" type="float" value="778"/>
+    <property name="fixedPointY" type="int" value="199168"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.entrance.lantern-post-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -443,16 +485,19 @@
   </object>
   <object id="62" x="1034" y="711">
    <properties>
-    <property name="stableId" value="jyt.occluder.entrance.lantern-post-02.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-62.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.entrance.lantern-post-02.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="entrance"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="entrance"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="1020"/>
     <property name="sortAnchorY" type="float" value="755"/>
+    <property name="fixedPointY" type="int" value="193280"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.entrance.lantern-post-02.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -463,16 +508,19 @@
   </object>
   <object id="63" x="931" y="795">
    <properties>
-    <property name="stableId" value="jyt.occluder.entrance.hanging-banner-02.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-63.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.entrance.hanging-banner-02.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="entrance"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="entrance"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="951"/>
     <property name="sortAnchorY" type="float" value="796"/>
+    <property name="fixedPointY" type="int" value="203776"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.entrance.hanging-banner-02.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -483,16 +531,19 @@
   </object>
   <object id="64" x="807" y="793">
    <properties>
-    <property name="stableId" value="jyt.occluder.entrance.hanging-banner-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-64.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.entrance.hanging-banner-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="entrance"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="entrance"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="791"/>
     <property name="sortAnchorY" type="float" value="794"/>
+    <property name="fixedPointY" type="int" value="203264"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.entrance.hanging-banner-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -503,16 +554,19 @@
   </object>
   <object id="65" x="720" y="713">
    <properties>
-    <property name="stableId" value="jyt.occluder.west-lower.wall-bracket-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-65.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.west-lower.wall-bracket-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="west-lower"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="west-lower"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="704"/>
     <property name="sortAnchorY" type="float" value="714"/>
+    <property name="fixedPointY" type="int" value="182784"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.west-lower.wall-bracket-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -523,16 +577,19 @@
   </object>
   <object id="66" x="678" y="741">
    <properties>
-    <property name="stableId" value="jyt.occluder.west-lower.railing-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-66.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.west-lower.railing-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="west-lower"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="west-lower"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="593"/>
     <property name="sortAnchorY" type="float" value="778"/>
+    <property name="fixedPointY" type="int" value="199168"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.west-lower.railing-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -543,16 +600,19 @@
   </object>
   <object id="67" x="404" y="924">
    <properties>
-    <property name="stableId" value="jyt.occluder.west-lower.floor-lantern-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-67.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.west-lower.floor-lantern-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="west-lower"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="west-lower"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="381"/>
     <property name="sortAnchorY" type="float" value="852"/>
+    <property name="fixedPointY" type="int" value="218112"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.west-lower.floor-lantern-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -563,16 +623,19 @@
   </object>
   <object id="68" x="58" y="740">
    <properties>
-    <property name="stableId" value="jyt.occluder.west-lower.wall-lantern-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-68.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.west-lower.wall-lantern-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="west-lower"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="west-lower"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="35"/>
     <property name="sortAnchorY" type="float" value="741"/>
+    <property name="fixedPointY" type="int" value="189696"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.west-lower.wall-lantern-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -583,16 +646,19 @@
   </object>
   <object id="69" x="503" y="584">
    <properties>
-    <property name="stableId" value="jyt.occluder.west-upper.wall-sconce-02.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-69.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.west-upper.wall-sconce-02.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="west-upper"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="west-upper"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="515"/>
     <property name="sortAnchorY" type="float" value="585"/>
+    <property name="fixedPointY" type="int" value="149760"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.west-upper.wall-sconce-02.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -603,16 +669,19 @@
   </object>
   <object id="70" x="505" y="239">
    <properties>
-    <property name="stableId" value="jyt.occluder.west-upper.lantern-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-70.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.west-upper.lantern-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="west-upper"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="west-upper"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="484"/>
     <property name="sortAnchorY" type="float" value="240"/>
+    <property name="fixedPointY" type="int" value="61440"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.west-upper.lantern-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -623,16 +692,19 @@
   </object>
   <object id="71" x="621" y="271">
    <properties>
-    <property name="stableId" value="jyt.occluder.west-upper.wall-sconce-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-71.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.west-upper.wall-sconce-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="west-upper"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="west-upper"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="624"/>
     <property name="sortAnchorY" type="float" value="272"/>
+    <property name="fixedPointY" type="int" value="69632"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.west-upper.wall-sconce-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -643,16 +715,19 @@
   </object>
   <object id="72" x="1126" y="283">
    <properties>
-    <property name="stableId" value="jyt.occluder.center.wall-sconce-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-72.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.center.wall-sconce-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="center"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="center"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="1121"/>
     <property name="sortAnchorY" type="float" value="284"/>
+    <property name="fixedPointY" type="int" value="72704"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.center.wall-sconce-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -663,16 +738,19 @@
   </object>
   <object id="73" x="1385" y="283">
    <properties>
-    <property name="stableId" value="jyt.occluder.east-upper.scroll-table-front-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-73.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.east-upper.scroll-table-front-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="east-upper"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="east-upper"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="1432"/>
     <property name="sortAnchorY" type="float" value="284"/>
+    <property name="fixedPointY" type="int" value="72704"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.east-upper.scroll-table-front-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -683,16 +761,19 @@
   </object>
   <object id="74" x="1612" y="674">
    <properties>
-    <property name="stableId" value="jyt.occluder.east-lower.worktable-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-74.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.east-lower.worktable-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="east-lower"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="east-lower"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="1559"/>
     <property name="sortAnchorY" type="float" value="701"/>
+    <property name="fixedPointY" type="int" value="179456"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.east-lower.worktable-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -703,16 +784,19 @@
   </object>
   <object id="75" x="1603" y="829">
    <properties>
-    <property name="stableId" value="jyt.occluder.east-lower.fabric-rack-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-75.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.east-lower.fabric-rack-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="east-lower"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="east-lower"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="1631"/>
     <property name="sortAnchorY" type="float" value="830"/>
+    <property name="fixedPointY" type="int" value="212480"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.east-lower.fabric-rack-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -723,16 +807,19 @@
   </object>
   <object id="76" x="1510" y="763">
    <properties>
-    <property name="stableId" value="jyt.occluder.east-lower.diagonal-brace-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-76.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.east-lower.diagonal-brace-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="east-lower"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="east-lower"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="1410"/>
     <property name="sortAnchorY" type="float" value="768"/>
+    <property name="fixedPointY" type="int" value="196608"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.east-lower.diagonal-brace-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -743,16 +830,19 @@
   </object>
   <object id="77" x="1231" y="608">
    <properties>
-    <property name="stableId" value="jyt.occluder.east-upper.pillar-02.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-77.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.east-upper.pillar-02.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="east-upper"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="east-upper"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="1227"/>
     <property name="sortAnchorY" type="float" value="703"/>
+    <property name="fixedPointY" type="int" value="179968"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.east-upper.pillar-02.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -763,16 +853,19 @@
   </object>
   <object id="78" x="1256" y="543">
    <properties>
-    <property name="stableId" value="jyt.occluder.east-upper.wall-panel-lower-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-78.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.east-upper.wall-panel-lower-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="east-upper"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="east-upper"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="1460"/>
     <property name="sortAnchorY" type="float" value="548"/>
+    <property name="fixedPointY" type="int" value="140288"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.east-upper.wall-panel-lower-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -783,16 +876,19 @@
   </object>
   <object id="79" x="1323" y="639">
    <properties>
-    <property name="stableId" value="jyt.occluder.east-lower.diagonal-brace-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-79.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.east-lower.diagonal-brace-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="east-lower"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="east-lower"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="1410"/>
     <property name="sortAnchorY" type="float" value="768"/>
+    <property name="fixedPointY" type="int" value="196608"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.east-lower.diagonal-brace-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -803,16 +899,19 @@
   </object>
   <object id="80" x="1251" y="702">
    <properties>
-    <property name="stableId" value="jyt.occluder.east-upper.pillar-02.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-80.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.east-upper.pillar-02.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="east-upper"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="east-upper"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="1227"/>
     <property name="sortAnchorY" type="float" value="703"/>
+    <property name="fixedPointY" type="int" value="179968"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.east-upper.pillar-02.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -823,16 +922,19 @@
   </object>
   <object id="81" x="1251" y="711">
    <properties>
-    <property name="stableId" value="jyt.occluder.east-lower.railing-post-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-81.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.east-lower.railing-post-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="east-lower"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="east-lower"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="1247"/>
     <property name="sortAnchorY" type="float" value="775"/>
+    <property name="fixedPointY" type="int" value="198400"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.east-lower.railing-post-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -843,16 +945,19 @@
   </object>
   <object id="82" x="1351" y="740">
    <properties>
-    <property name="stableId" value="jyt.occluder.east-lower.diagonal-brace-02.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-82.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.east-lower.diagonal-brace-02.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="east-lower"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="east-lower"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="1363"/>
     <property name="sortAnchorY" type="float" value="741"/>
+    <property name="fixedPointY" type="int" value="189696"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.east-lower.diagonal-brace-02.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -863,16 +968,19 @@
   </object>
   <object id="83" x="513" y="702">
    <properties>
-    <property name="stableId" value="jyt.occluder.west-lower.diagonal-brace-02.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-83.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.west-lower.diagonal-brace-02.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="west-lower"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="west-lower"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="496"/>
     <property name="sortAnchorY" type="float" value="759"/>
+    <property name="fixedPointY" type="int" value="194304"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.west-lower.diagonal-brace-02.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -883,16 +991,19 @@
   </object>
   <object id="84" x="405" y="641">
    <properties>
-    <property name="stableId" value="jyt.occluder.west-lower.wall-panel-assembly-01.v1"/>
+    <property name="stableId" value="jyt.mask-binding.mask-84.v1"/>
+    <property name="ledgerOccluderStableId" value="jyt.occluder.west-lower.wall-panel-assembly-01.v1"/>
     <property name="sceneId" value="juyiting-main"/>
     <property name="floorId" value="floor-1"/>
-    <property name="chunk-id" value="west-lower"/>
-    <property name="kind" value="occluder"/>
+    <property name="chunkId" value="west-lower"/>
+    <property name="kind" value="legacy-mask-binding"/>
     <property name="renderBand" value="world"/>
     <property name="elevation" type="int" value="0"/>
-    <property name="sortMode" value="fixed-point-y"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="ledgerSortContract" value="fixed-point-y"/>
     <property name="sortAnchorX" type="float" value="218"/>
     <property name="sortAnchorY" type="float" value="852"/>
+    <property name="fixedPointY" type="int" value="218112"/>
     <property name="tieBias" type="int" value="-1"/>
     <property name="targetFragmentId" value="jyt.occ.west-lower.wall-panel-assembly-01.v2"/>
     <property name="migrationTaskId" value="E10B"/>
@@ -1993,5 +2104,1159 @@
   </object>
  </objectgroup>
  <objectgroup id="23" name="debug_labels">
+ </objectgroup>
+ <objectgroup id="25" name="v2-fragments-occluders">
+  <object id="207" name="fragment-207" type="occluder-fragment" x="1112" y="230" width="18" height="54">
+   <properties>
+    <property name="stableId" value="jyt.occ.center.wall-sconce-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="center"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="1121"/>
+    <property name="sortAnchorY" type="float" value="284"/>
+    <property name="fixedPointY" type="int" value="72704"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/center-v2.png"/>
+    <property name="sourceRectX" type="int" value="2"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="18"/>
+    <property name="sourceRectH" type="int" value="54"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="1111"/>
+    <property name="e9aSourceRectY" type="int" value="229"/>
+    <property name="e9aSourceRectW" type="int" value="20"/>
+    <property name="e9aSourceRectH" type="int" value="56"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="0"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="22"/>
+    <property name="e9bAtlasRectH" type="int" value="58"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="1112"/>
+    <property name="e9bPixelBoundsY" type="int" value="230"/>
+    <property name="e9bPixelBoundsW" type="int" value="18"/>
+    <property name="e9bPixelBoundsH" type="int" value="54"/>
+   </properties>
+  </object>
+  <object id="208" name="fragment-208" type="occluder-fragment" x="1308" y="560" width="203" height="208">
+   <properties>
+    <property name="stableId" value="jyt.occ.east-lower.diagonal-brace-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="east-lower"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="1410"/>
+    <property name="sortAnchorY" type="float" value="768"/>
+    <property name="fixedPointY" type="int" value="196608"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/east-lower-v2.png"/>
+    <property name="sourceRectX" type="int" value="2"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="203"/>
+    <property name="sourceRectH" type="int" value="208"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="1307"/>
+    <property name="e9aSourceRectY" type="int" value="559"/>
+    <property name="e9aSourceRectW" type="int" value="205"/>
+    <property name="e9aSourceRectH" type="int" value="210"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="0"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="207"/>
+    <property name="e9bAtlasRectH" type="int" value="212"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="1308"/>
+    <property name="e9bPixelBoundsY" type="int" value="560"/>
+    <property name="e9bPixelBoundsW" type="int" value="203"/>
+    <property name="e9bPixelBoundsH" type="int" value="208"/>
+   </properties>
+  </object>
+  <object id="209" name="fragment-209" type="occluder-fragment" x="1351" y="691" width="24" height="50">
+   <properties>
+    <property name="stableId" value="jyt.occ.east-lower.diagonal-brace-02.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="east-lower"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="1363"/>
+    <property name="sortAnchorY" type="float" value="741"/>
+    <property name="fixedPointY" type="int" value="189696"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/east-lower-v2.png"/>
+    <property name="sourceRectX" type="int" value="209"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="24"/>
+    <property name="sourceRectH" type="int" value="50"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="1350"/>
+    <property name="e9aSourceRectY" type="int" value="690"/>
+    <property name="e9aSourceRectW" type="int" value="26"/>
+    <property name="e9aSourceRectH" type="int" value="52"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="207"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="28"/>
+    <property name="e9bAtlasRectH" type="int" value="54"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="1351"/>
+    <property name="e9bPixelBoundsY" type="int" value="691"/>
+    <property name="e9bPixelBoundsW" type="int" value="24"/>
+    <property name="e9bPixelBoundsH" type="int" value="50"/>
+   </properties>
+  </object>
+  <object id="210" name="fragment-210" type="occluder-fragment" x="1598" y="748" width="66" height="82">
+   <properties>
+    <property name="stableId" value="jyt.occ.east-lower.fabric-rack-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="east-lower"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="1631"/>
+    <property name="sortAnchorY" type="float" value="830"/>
+    <property name="fixedPointY" type="int" value="212480"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/east-lower-v2.png"/>
+    <property name="sourceRectX" type="int" value="237"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="66"/>
+    <property name="sourceRectH" type="int" value="82"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="1597"/>
+    <property name="e9aSourceRectY" type="int" value="747"/>
+    <property name="e9aSourceRectW" type="int" value="67"/>
+    <property name="e9aSourceRectH" type="int" value="84"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="235"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="70"/>
+    <property name="e9bAtlasRectH" type="int" value="86"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="1598"/>
+    <property name="e9bPixelBoundsY" type="int" value="748"/>
+    <property name="e9bPixelBoundsW" type="int" value="66"/>
+    <property name="e9bPixelBoundsH" type="int" value="82"/>
+   </properties>
+  </object>
+  <object id="211" name="fragment-211" type="occluder-fragment" x="1314" y="839" width="47" height="86">
+   <properties>
+    <property name="stableId" value="jyt.occ.east-lower.lantern-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="east-lower"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="1338"/>
+    <property name="sortAnchorY" type="float" value="852"/>
+    <property name="fixedPointY" type="int" value="218112"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/east-lower-v2.png"/>
+    <property name="sourceRectX" type="int" value="307"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="47"/>
+    <property name="sourceRectH" type="int" value="86"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="1313"/>
+    <property name="e9aSourceRectY" type="int" value="838"/>
+    <property name="e9aSourceRectW" type="int" value="49"/>
+    <property name="e9aSourceRectH" type="int" value="88"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="305"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="51"/>
+    <property name="e9bAtlasRectH" type="int" value="90"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="1314"/>
+    <property name="e9bPixelBoundsY" type="int" value="839"/>
+    <property name="e9bPixelBoundsW" type="int" value="47"/>
+    <property name="e9bPixelBoundsH" type="int" value="86"/>
+   </properties>
+  </object>
+  <object id="212" name="fragment-212" type="occluder-fragment" x="1242" y="707" width="10" height="68">
+   <properties>
+    <property name="stableId" value="jyt.occ.east-lower.railing-post-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="east-lower"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="1247"/>
+    <property name="sortAnchorY" type="float" value="775"/>
+    <property name="fixedPointY" type="int" value="198400"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/east-lower-v2.png"/>
+    <property name="sourceRectX" type="int" value="358"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="10"/>
+    <property name="sourceRectH" type="int" value="68"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="1241"/>
+    <property name="e9aSourceRectY" type="int" value="706"/>
+    <property name="e9aSourceRectW" type="int" value="12"/>
+    <property name="e9aSourceRectH" type="int" value="70"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="356"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="14"/>
+    <property name="e9bAtlasRectH" type="int" value="72"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="1242"/>
+    <property name="e9bPixelBoundsY" type="int" value="707"/>
+    <property name="e9bPixelBoundsW" type="int" value="10"/>
+    <property name="e9bPixelBoundsH" type="int" value="68"/>
+   </properties>
+  </object>
+  <object id="213" name="fragment-213" type="occluder-fragment" x="1499" y="574" width="120" height="127">
+   <properties>
+    <property name="stableId" value="jyt.occ.east-lower.worktable-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="east-lower"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="1559"/>
+    <property name="sortAnchorY" type="float" value="701"/>
+    <property name="fixedPointY" type="int" value="179456"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/east-lower-v2.png"/>
+    <property name="sourceRectX" type="int" value="372"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="120"/>
+    <property name="sourceRectH" type="int" value="127"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="1498"/>
+    <property name="e9aSourceRectY" type="int" value="573"/>
+    <property name="e9aSourceRectW" type="int" value="122"/>
+    <property name="e9aSourceRectH" type="int" value="129"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="370"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="124"/>
+    <property name="e9bAtlasRectH" type="int" value="131"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="1499"/>
+    <property name="e9bPixelBoundsY" type="int" value="574"/>
+    <property name="e9bPixelBoundsW" type="int" value="120"/>
+    <property name="e9bPixelBoundsH" type="int" value="127"/>
+   </properties>
+  </object>
+  <object id="214" name="fragment-214" type="occluder-fragment" x="1130" y="435" width="19" height="51">
+   <properties>
+    <property name="stableId" value="jyt.occ.east-upper.diagonal-brace-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="east-upper"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="1140"/>
+    <property name="sortAnchorY" type="float" value="486"/>
+    <property name="fixedPointY" type="int" value="124416"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/east-upper-v2.png"/>
+    <property name="sourceRectX" type="int" value="2"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="19"/>
+    <property name="sourceRectH" type="int" value="51"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="1129"/>
+    <property name="e9aSourceRectY" type="int" value="434"/>
+    <property name="e9aSourceRectW" type="int" value="21"/>
+    <property name="e9aSourceRectH" type="int" value="53"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="0"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="23"/>
+    <property name="e9bAtlasRectH" type="int" value="55"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="1130"/>
+    <property name="e9bPixelBoundsY" type="int" value="435"/>
+    <property name="e9bPixelBoundsW" type="int" value="19"/>
+    <property name="e9bPixelBoundsH" type="int" value="51"/>
+   </properties>
+  </object>
+  <object id="215" name="fragment-215" type="occluder-fragment" x="1158" y="305" width="46" height="159">
+   <properties>
+    <property name="stableId" value="jyt.occ.east-upper.pillar-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="east-upper"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="1181"/>
+    <property name="sortAnchorY" type="float" value="464"/>
+    <property name="fixedPointY" type="int" value="118784"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/east-upper-v2.png"/>
+    <property name="sourceRectX" type="int" value="25"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="46"/>
+    <property name="sourceRectH" type="int" value="159"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="1157"/>
+    <property name="e9aSourceRectY" type="int" value="304"/>
+    <property name="e9aSourceRectW" type="int" value="48"/>
+    <property name="e9aSourceRectH" type="int" value="161"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="23"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="50"/>
+    <property name="e9bAtlasRectH" type="int" value="163"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="1158"/>
+    <property name="e9bPixelBoundsY" type="int" value="305"/>
+    <property name="e9bPixelBoundsW" type="int" value="46"/>
+    <property name="e9bPixelBoundsH" type="int" value="159"/>
+   </properties>
+  </object>
+  <object id="216" name="fragment-216" type="occluder-fragment" x="1202" y="478" width="50" height="225">
+   <properties>
+    <property name="stableId" value="jyt.occ.east-upper.pillar-02.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="east-upper"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="1227"/>
+    <property name="sortAnchorY" type="float" value="703"/>
+    <property name="fixedPointY" type="int" value="179968"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/east-upper-v2.png"/>
+    <property name="sourceRectX" type="int" value="75"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="50"/>
+    <property name="sourceRectH" type="int" value="225"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="1201"/>
+    <property name="e9aSourceRectY" type="int" value="477"/>
+    <property name="e9aSourceRectW" type="int" value="52"/>
+    <property name="e9aSourceRectH" type="int" value="227"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="73"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="54"/>
+    <property name="e9bAtlasRectH" type="int" value="229"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="1202"/>
+    <property name="e9bPixelBoundsY" type="int" value="478"/>
+    <property name="e9bPixelBoundsW" type="int" value="50"/>
+    <property name="e9bPixelBoundsH" type="int" value="225"/>
+   </properties>
+  </object>
+  <object id="217" name="fragment-217" type="occluder-fragment" x="1384" y="255" width="95" height="29">
+   <properties>
+    <property name="stableId" value="jyt.occ.east-upper.scroll-table-front-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="east-upper"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="1432"/>
+    <property name="sortAnchorY" type="float" value="284"/>
+    <property name="fixedPointY" type="int" value="72704"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/east-upper-v2.png"/>
+    <property name="sourceRectX" type="int" value="129"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="95"/>
+    <property name="sourceRectH" type="int" value="29"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="1383"/>
+    <property name="e9aSourceRectY" type="int" value="254"/>
+    <property name="e9aSourceRectW" type="int" value="97"/>
+    <property name="e9aSourceRectH" type="int" value="31"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="127"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="99"/>
+    <property name="e9bAtlasRectH" type="int" value="33"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="1384"/>
+    <property name="e9bPixelBoundsY" type="int" value="255"/>
+    <property name="e9bPixelBoundsW" type="int" value="95"/>
+    <property name="e9bPixelBoundsH" type="int" value="29"/>
+   </properties>
+  </object>
+  <object id="218" name="fragment-218" type="occluder-fragment" x="1256" y="477" width="408" height="71">
+   <properties>
+    <property name="stableId" value="jyt.occ.east-upper.wall-panel-lower-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="east-upper"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="1460"/>
+    <property name="sortAnchorY" type="float" value="548"/>
+    <property name="fixedPointY" type="int" value="140288"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/east-upper-v2.png"/>
+    <property name="sourceRectX" type="int" value="2"/>
+    <property name="sourceRectY" type="int" value="231"/>
+    <property name="sourceRectW" type="int" value="408"/>
+    <property name="sourceRectH" type="int" value="71"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="1255"/>
+    <property name="e9aSourceRectY" type="int" value="476"/>
+    <property name="e9aSourceRectW" type="int" value="409"/>
+    <property name="e9aSourceRectH" type="int" value="73"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="0"/>
+    <property name="e9bAtlasRectY" type="int" value="229"/>
+    <property name="e9bAtlasRectW" type="int" value="412"/>
+    <property name="e9bAtlasRectH" type="int" value="75"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="1256"/>
+    <property name="e9bPixelBoundsY" type="int" value="477"/>
+    <property name="e9bPixelBoundsW" type="int" value="408"/>
+    <property name="e9bPixelBoundsH" type="int" value="71"/>
+   </properties>
+  </object>
+  <object id="219" name="fragment-219" type="occluder-fragment" x="1197" y="342" width="467" height="117">
+   <properties>
+    <property name="stableId" value="jyt.occ.east-upper.wall-panel-upper-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="east-upper"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="1430"/>
+    <property name="sortAnchorY" type="float" value="459"/>
+    <property name="fixedPointY" type="int" value="117504"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/east-upper-v2.png"/>
+    <property name="sourceRectX" type="int" value="2"/>
+    <property name="sourceRectY" type="int" value="306"/>
+    <property name="sourceRectW" type="int" value="467"/>
+    <property name="sourceRectH" type="int" value="117"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="1196"/>
+    <property name="e9aSourceRectY" type="int" value="341"/>
+    <property name="e9aSourceRectW" type="int" value="468"/>
+    <property name="e9aSourceRectH" type="int" value="119"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="0"/>
+    <property name="e9bAtlasRectY" type="int" value="304"/>
+    <property name="e9bAtlasRectW" type="int" value="471"/>
+    <property name="e9bAtlasRectH" type="int" value="121"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="1197"/>
+    <property name="e9bPixelBoundsY" type="int" value="342"/>
+    <property name="e9bPixelBoundsW" type="int" value="467"/>
+    <property name="e9bPixelBoundsH" type="int" value="117"/>
+   </properties>
+  </object>
+  <object id="220" name="fragment-220" type="occluder-fragment" x="767" y="722" width="48" height="72">
+   <properties>
+    <property name="stableId" value="jyt.occ.entrance.hanging-banner-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="entrance"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="791"/>
+    <property name="sortAnchorY" type="float" value="794"/>
+    <property name="fixedPointY" type="int" value="203264"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/entrance-v2.png"/>
+    <property name="sourceRectX" type="int" value="2"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="48"/>
+    <property name="sourceRectH" type="int" value="72"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="766"/>
+    <property name="e9aSourceRectY" type="int" value="721"/>
+    <property name="e9aSourceRectW" type="int" value="50"/>
+    <property name="e9aSourceRectH" type="int" value="74"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="0"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="52"/>
+    <property name="e9bAtlasRectH" type="int" value="76"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="767"/>
+    <property name="e9bPixelBoundsY" type="int" value="722"/>
+    <property name="e9bPixelBoundsW" type="int" value="48"/>
+    <property name="e9bPixelBoundsH" type="int" value="72"/>
+   </properties>
+  </object>
+  <object id="221" name="fragment-221" type="occluder-fragment" x="931" y="733" width="40" height="63">
+   <properties>
+    <property name="stableId" value="jyt.occ.entrance.hanging-banner-02.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="entrance"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="951"/>
+    <property name="sortAnchorY" type="float" value="796"/>
+    <property name="fixedPointY" type="int" value="203776"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/entrance-v2.png"/>
+    <property name="sourceRectX" type="int" value="54"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="40"/>
+    <property name="sourceRectH" type="int" value="63"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="930"/>
+    <property name="e9aSourceRectY" type="int" value="732"/>
+    <property name="e9aSourceRectW" type="int" value="42"/>
+    <property name="e9aSourceRectH" type="int" value="65"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="52"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="44"/>
+    <property name="e9bAtlasRectH" type="int" value="67"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="931"/>
+    <property name="e9bPixelBoundsY" type="int" value="733"/>
+    <property name="e9bPixelBoundsW" type="int" value="40"/>
+    <property name="e9bPixelBoundsH" type="int" value="63"/>
+   </properties>
+  </object>
+  <object id="222" name="fragment-222" type="occluder-fragment" x="1052" y="674" width="41" height="104">
+   <properties>
+    <property name="stableId" value="jyt.occ.entrance.lantern-post-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="entrance"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="1073"/>
+    <property name="sortAnchorY" type="float" value="778"/>
+    <property name="fixedPointY" type="int" value="199168"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/entrance-v2.png"/>
+    <property name="sourceRectX" type="int" value="98"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="41"/>
+    <property name="sourceRectH" type="int" value="104"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="1051"/>
+    <property name="e9aSourceRectY" type="int" value="673"/>
+    <property name="e9aSourceRectW" type="int" value="43"/>
+    <property name="e9aSourceRectH" type="int" value="106"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="96"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="45"/>
+    <property name="e9bAtlasRectH" type="int" value="108"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="1052"/>
+    <property name="e9bPixelBoundsY" type="int" value="674"/>
+    <property name="e9bPixelBoundsW" type="int" value="41"/>
+    <property name="e9bPixelBoundsH" type="int" value="104"/>
+   </properties>
+  </object>
+  <object id="223" name="fragment-223" type="occluder-fragment" x="1004" y="678" width="31" height="77">
+   <properties>
+    <property name="stableId" value="jyt.occ.entrance.lantern-post-02.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="entrance"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="1020"/>
+    <property name="sortAnchorY" type="float" value="755"/>
+    <property name="fixedPointY" type="int" value="193280"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/entrance-v2.png"/>
+    <property name="sourceRectX" type="int" value="143"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="31"/>
+    <property name="sourceRectH" type="int" value="77"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="1003"/>
+    <property name="e9aSourceRectY" type="int" value="677"/>
+    <property name="e9aSourceRectW" type="int" value="33"/>
+    <property name="e9aSourceRectH" type="int" value="79"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="141"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="35"/>
+    <property name="e9bAtlasRectH" type="int" value="81"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="1004"/>
+    <property name="e9bPixelBoundsY" type="int" value="678"/>
+    <property name="e9bPixelBoundsW" type="int" value="31"/>
+    <property name="e9bPixelBoundsH" type="int" value="77"/>
+   </properties>
+  </object>
+  <object id="224" name="fragment-224" type="occluder-fragment" x="474" y="641" width="43" height="118">
+   <properties>
+    <property name="stableId" value="jyt.occ.west-lower.diagonal-brace-02.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="west-lower"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="496"/>
+    <property name="sortAnchorY" type="float" value="759"/>
+    <property name="fixedPointY" type="int" value="194304"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/west-lower-v2.png"/>
+    <property name="sourceRectX" type="int" value="2"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="43"/>
+    <property name="sourceRectH" type="int" value="118"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="473"/>
+    <property name="e9aSourceRectY" type="int" value="640"/>
+    <property name="e9aSourceRectW" type="int" value="45"/>
+    <property name="e9aSourceRectH" type="int" value="120"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="0"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="47"/>
+    <property name="e9bAtlasRectH" type="int" value="122"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="474"/>
+    <property name="e9bPixelBoundsY" type="int" value="641"/>
+    <property name="e9bPixelBoundsW" type="int" value="43"/>
+    <property name="e9bPixelBoundsH" type="int" value="118"/>
+   </properties>
+  </object>
+  <object id="225" name="fragment-225" type="occluder-fragment" x="357" y="876" width="48" height="52">
+   <properties>
+    <property name="stableId" value="jyt.occ.west-lower.floor-lantern-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="west-lower"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="381"/>
+    <property name="sortAnchorY" type="float" value="852"/>
+    <property name="fixedPointY" type="int" value="218112"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/west-lower-v2.png"/>
+    <property name="sourceRectX" type="int" value="49"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="48"/>
+    <property name="sourceRectH" type="int" value="52"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="356"/>
+    <property name="e9aSourceRectY" type="int" value="875"/>
+    <property name="e9aSourceRectW" type="int" value="50"/>
+    <property name="e9aSourceRectH" type="int" value="53"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="47"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="52"/>
+    <property name="e9bAtlasRectH" type="int" value="56"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="357"/>
+    <property name="e9bPixelBoundsY" type="int" value="876"/>
+    <property name="e9bPixelBoundsW" type="int" value="48"/>
+    <property name="e9bPixelBoundsH" type="int" value="52"/>
+   </properties>
+  </object>
+  <object id="226" name="fragment-226" type="occluder-fragment" x="117" y="601" width="122" height="118">
+   <properties>
+    <property name="stableId" value="jyt.occ.west-lower.long-table-frame-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="west-lower"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="178"/>
+    <property name="sortAnchorY" type="float" value="719"/>
+    <property name="fixedPointY" type="int" value="184064"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/west-lower-v2.png"/>
+    <property name="sourceRectX" type="int" value="101"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="122"/>
+    <property name="sourceRectH" type="int" value="118"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="116"/>
+    <property name="e9aSourceRectY" type="int" value="600"/>
+    <property name="e9aSourceRectW" type="int" value="124"/>
+    <property name="e9aSourceRectH" type="int" value="120"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="99"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="126"/>
+    <property name="e9bAtlasRectH" type="int" value="122"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="117"/>
+    <property name="e9bPixelBoundsY" type="int" value="601"/>
+    <property name="e9bPixelBoundsW" type="int" value="122"/>
+    <property name="e9bPixelBoundsH" type="int" value="118"/>
+   </properties>
+  </object>
+  <object id="227" name="fragment-227" type="occluder-fragment" x="506" y="675" width="174" height="103">
+   <properties>
+    <property name="stableId" value="jyt.occ.west-lower.railing-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="west-lower"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="593"/>
+    <property name="sortAnchorY" type="float" value="778"/>
+    <property name="fixedPointY" type="int" value="199168"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/west-lower-v2.png"/>
+    <property name="sourceRectX" type="int" value="227"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="174"/>
+    <property name="sourceRectH" type="int" value="103"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="505"/>
+    <property name="e9aSourceRectY" type="int" value="674"/>
+    <property name="e9aSourceRectW" type="int" value="176"/>
+    <property name="e9aSourceRectH" type="int" value="105"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="225"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="178"/>
+    <property name="e9bAtlasRectH" type="int" value="107"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="506"/>
+    <property name="e9bPixelBoundsY" type="int" value="675"/>
+    <property name="e9bPixelBoundsW" type="int" value="174"/>
+    <property name="e9bPixelBoundsH" type="int" value="103"/>
+   </properties>
+  </object>
+  <object id="228" name="fragment-228" type="occluder-fragment" x="66" y="787" width="178" height="37">
+   <properties>
+    <property name="stableId" value="jyt.occ.west-lower.railing-02.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="west-lower"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="155"/>
+    <property name="sortAnchorY" type="float" value="824"/>
+    <property name="fixedPointY" type="int" value="210944"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/west-lower-v2.png"/>
+    <property name="sourceRectX" type="int" value="405"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="178"/>
+    <property name="sourceRectH" type="int" value="37"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="65"/>
+    <property name="e9aSourceRectY" type="int" value="786"/>
+    <property name="e9aSourceRectW" type="int" value="180"/>
+    <property name="e9aSourceRectH" type="int" value="39"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="403"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="182"/>
+    <property name="e9bAtlasRectH" type="int" value="41"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="66"/>
+    <property name="e9bPixelBoundsY" type="int" value="787"/>
+    <property name="e9bPixelBoundsW" type="int" value="178"/>
+    <property name="e9bPixelBoundsH" type="int" value="37"/>
+   </properties>
+  </object>
+  <object id="229" name="fragment-229" type="occluder-fragment" x="686" y="675" width="35" height="39">
+   <properties>
+    <property name="stableId" value="jyt.occ.west-lower.wall-bracket-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="west-lower"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="704"/>
+    <property name="sortAnchorY" type="float" value="714"/>
+    <property name="fixedPointY" type="int" value="182784"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/west-lower-v2.png"/>
+    <property name="sourceRectX" type="int" value="587"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="35"/>
+    <property name="sourceRectH" type="int" value="39"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="685"/>
+    <property name="e9aSourceRectY" type="int" value="674"/>
+    <property name="e9aSourceRectW" type="int" value="37"/>
+    <property name="e9aSourceRectH" type="int" value="41"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="585"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="39"/>
+    <property name="e9bAtlasRectH" type="int" value="43"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="686"/>
+    <property name="e9bPixelBoundsY" type="int" value="675"/>
+    <property name="e9bPixelBoundsW" type="int" value="35"/>
+    <property name="e9bPixelBoundsH" type="int" value="39"/>
+   </properties>
+  </object>
+  <object id="230" name="fragment-230" type="occluder-fragment" x="11" y="706" width="48" height="35">
+   <properties>
+    <property name="stableId" value="jyt.occ.west-lower.wall-lantern-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="west-lower"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="35"/>
+    <property name="sortAnchorY" type="float" value="741"/>
+    <property name="fixedPointY" type="int" value="189696"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/west-lower-v2.png"/>
+    <property name="sourceRectX" type="int" value="626"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="48"/>
+    <property name="sourceRectH" type="int" value="35"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="10"/>
+    <property name="e9aSourceRectY" type="int" value="705"/>
+    <property name="e9aSourceRectW" type="int" value="50"/>
+    <property name="e9aSourceRectH" type="int" value="37"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="624"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="52"/>
+    <property name="e9bAtlasRectH" type="int" value="39"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="11"/>
+    <property name="e9bPixelBoundsY" type="int" value="706"/>
+    <property name="e9bPixelBoundsW" type="int" value="48"/>
+    <property name="e9bPixelBoundsH" type="int" value="35"/>
+   </properties>
+  </object>
+  <object id="231" name="fragment-231" type="occluder-fragment" x="17" y="573" width="402" height="339">
+   <properties>
+    <property name="stableId" value="jyt.occ.west-lower.wall-panel-assembly-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="west-lower"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="218"/>
+    <property name="sortAnchorY" type="float" value="852"/>
+    <property name="fixedPointY" type="int" value="218112"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/west-lower-v2.png"/>
+    <property name="sourceRectX" type="int" value="2"/>
+    <property name="sourceRectY" type="int" value="124"/>
+    <property name="sourceRectW" type="int" value="402"/>
+    <property name="sourceRectH" type="int" value="339"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="16"/>
+    <property name="e9aSourceRectY" type="int" value="572"/>
+    <property name="e9aSourceRectW" type="int" value="404"/>
+    <property name="e9aSourceRectH" type="int" value="341"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="0"/>
+    <property name="e9bAtlasRectY" type="int" value="122"/>
+    <property name="e9bAtlasRectW" type="int" value="406"/>
+    <property name="e9bAtlasRectH" type="int" value="343"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="17"/>
+    <property name="e9bPixelBoundsY" type="int" value="573"/>
+    <property name="e9bPixelBoundsW" type="int" value="402"/>
+    <property name="e9bPixelBoundsH" type="int" value="339"/>
+   </properties>
+  </object>
+  <object id="232" name="fragment-232" type="occluder-fragment" x="600" y="432" width="16" height="57">
+   <properties>
+    <property name="stableId" value="jyt.occ.west-upper.diagonal-brace-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="west-upper"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="608"/>
+    <property name="sortAnchorY" type="float" value="489"/>
+    <property name="fixedPointY" type="int" value="125184"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/west-upper-v2.png"/>
+    <property name="sourceRectX" type="int" value="2"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="16"/>
+    <property name="sourceRectH" type="int" value="57"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="599"/>
+    <property name="e9aSourceRectY" type="int" value="431"/>
+    <property name="e9aSourceRectW" type="int" value="18"/>
+    <property name="e9aSourceRectH" type="int" value="59"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="0"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="20"/>
+    <property name="e9bAtlasRectH" type="int" value="61"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="600"/>
+    <property name="e9bPixelBoundsY" type="int" value="432"/>
+    <property name="e9bPixelBoundsW" type="int" value="16"/>
+    <property name="e9bPixelBoundsH" type="int" value="57"/>
+   </properties>
+  </object>
+  <object id="233" name="fragment-233" type="occluder-fragment" x="461" y="165" width="45" height="75">
+   <properties>
+    <property name="stableId" value="jyt.occ.west-upper.lantern-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="west-upper"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="484"/>
+    <property name="sortAnchorY" type="float" value="240"/>
+    <property name="fixedPointY" type="int" value="61440"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/west-upper-v2.png"/>
+    <property name="sourceRectX" type="int" value="22"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="45"/>
+    <property name="sourceRectH" type="int" value="75"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="460"/>
+    <property name="e9aSourceRectY" type="int" value="164"/>
+    <property name="e9aSourceRectW" type="int" value="47"/>
+    <property name="e9aSourceRectH" type="int" value="77"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="20"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="49"/>
+    <property name="e9bAtlasRectH" type="int" value="79"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="461"/>
+    <property name="e9bPixelBoundsY" type="int" value="165"/>
+    <property name="e9bPixelBoundsW" type="int" value="45"/>
+    <property name="e9bPixelBoundsH" type="int" value="75"/>
+   </properties>
+  </object>
+  <object id="234" name="fragment-234" type="occluder-fragment" x="215" y="277" width="139" height="74">
+   <properties>
+    <property name="stableId" value="jyt.occ.west-upper.lantern-table-frame-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="west-upper"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="285"/>
+    <property name="sortAnchorY" type="float" value="351"/>
+    <property name="fixedPointY" type="int" value="89856"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/west-upper-v2.png"/>
+    <property name="sourceRectX" type="int" value="71"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="139"/>
+    <property name="sourceRectH" type="int" value="74"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="214"/>
+    <property name="e9aSourceRectY" type="int" value="276"/>
+    <property name="e9aSourceRectW" type="int" value="141"/>
+    <property name="e9aSourceRectH" type="int" value="76"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="69"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="143"/>
+    <property name="e9bAtlasRectH" type="int" value="78"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="215"/>
+    <property name="e9bPixelBoundsY" type="int" value="277"/>
+    <property name="e9bPixelBoundsW" type="int" value="139"/>
+    <property name="e9bPixelBoundsH" type="int" value="74"/>
+   </properties>
+  </object>
+  <object id="235" name="fragment-235" type="occluder-fragment" x="543" y="306" width="56" height="163">
+   <properties>
+    <property name="stableId" value="jyt.occ.west-upper.pillar-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="west-upper"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="571"/>
+    <property name="sortAnchorY" type="float" value="469"/>
+    <property name="fixedPointY" type="int" value="120064"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/west-upper-v2.png"/>
+    <property name="sourceRectX" type="int" value="214"/>
+    <property name="sourceRectY" type="int" value="2"/>
+    <property name="sourceRectW" type="int" value="56"/>
+    <property name="sourceRectH" type="int" value="163"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="542"/>
+    <property name="e9aSourceRectY" type="int" value="305"/>
+    <property name="e9aSourceRectW" type="int" value="58"/>
+    <property name="e9aSourceRectH" type="int" value="165"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="212"/>
+    <property name="e9bAtlasRectY" type="int" value="0"/>
+    <property name="e9bAtlasRectW" type="int" value="60"/>
+    <property name="e9bAtlasRectH" type="int" value="167"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="543"/>
+    <property name="e9bPixelBoundsY" type="int" value="306"/>
+    <property name="e9bPixelBoundsW" type="int" value="56"/>
+    <property name="e9bPixelBoundsH" type="int" value="163"/>
+   </properties>
+  </object>
+  <object id="236" name="fragment-236" type="occluder-fragment" x="0" y="348" width="546" height="368">
+   <properties>
+    <property name="stableId" value="jyt.occ.west-upper.wall-panel-assembly-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="west-upper"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="274"/>
+    <property name="sortAnchorY" type="float" value="716"/>
+    <property name="fixedPointY" type="int" value="183296"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/west-upper-v2.png"/>
+    <property name="sourceRectX" type="int" value="2"/>
+    <property name="sourceRectY" type="int" value="169"/>
+    <property name="sourceRectW" type="int" value="546"/>
+    <property name="sourceRectH" type="int" value="368"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="0"/>
+    <property name="e9aSourceRectY" type="int" value="347"/>
+    <property name="e9aSourceRectW" type="int" value="547"/>
+    <property name="e9aSourceRectH" type="int" value="370"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="0"/>
+    <property name="e9bAtlasRectY" type="int" value="167"/>
+    <property name="e9bAtlasRectW" type="int" value="550"/>
+    <property name="e9bAtlasRectH" type="int" value="372"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="0"/>
+    <property name="e9bPixelBoundsY" type="int" value="348"/>
+    <property name="e9bPixelBoundsW" type="int" value="546"/>
+    <property name="e9bPixelBoundsH" type="int" value="368"/>
+   </properties>
+  </object>
+  <object id="237" name="fragment-237" type="occluder-fragment" x="617" y="238" width="13" height="34">
+   <properties>
+    <property name="stableId" value="jyt.occ.west-upper.wall-sconce-01.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="west-upper"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="624"/>
+    <property name="sortAnchorY" type="float" value="272"/>
+    <property name="fixedPointY" type="int" value="69632"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/west-upper-v2.png"/>
+    <property name="sourceRectX" type="int" value="552"/>
+    <property name="sourceRectY" type="int" value="169"/>
+    <property name="sourceRectW" type="int" value="13"/>
+    <property name="sourceRectH" type="int" value="34"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="616"/>
+    <property name="e9aSourceRectY" type="int" value="237"/>
+    <property name="e9aSourceRectW" type="int" value="15"/>
+    <property name="e9aSourceRectH" type="int" value="36"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="550"/>
+    <property name="e9bAtlasRectY" type="int" value="167"/>
+    <property name="e9bAtlasRectW" type="int" value="17"/>
+    <property name="e9bAtlasRectH" type="int" value="38"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="617"/>
+    <property name="e9bPixelBoundsY" type="int" value="238"/>
+    <property name="e9bPixelBoundsW" type="int" value="13"/>
+    <property name="e9bPixelBoundsH" type="int" value="34"/>
+   </properties>
+  </object>
+  <object id="238" name="fragment-238" type="occluder-fragment" x="492" y="471" width="45" height="114">
+   <properties>
+    <property name="stableId" value="jyt.occ.west-upper.wall-sconce-02.v2"/>
+    <property name="sceneId" value="juyiting-main"/>
+    <property name="chunkId" value="west-upper"/>
+    <property name="floorId" value="floor-1"/>
+    <property name="kind" value="occluder-fragment"/>
+    <property name="elevation" type="int" value="0"/>
+    <property name="renderBand" value="world"/>
+    <property name="sortMode" value="fixed"/>
+    <property name="sortAnchorX" type="float" value="515"/>
+    <property name="sortAnchorY" type="float" value="585"/>
+    <property name="fixedPointY" type="int" value="149760"/>
+    <property name="tieBias" type="int" value="-1"/>
+    <property name="assetRef" value="images/occluders/west-upper-v2.png"/>
+    <property name="sourceRectX" type="int" value="569"/>
+    <property name="sourceRectY" type="int" value="169"/>
+    <property name="sourceRectW" type="int" value="45"/>
+    <property name="sourceRectH" type="int" value="114"/>
+    <property name="e9aSpecGenerationId" value="7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"/>
+    <property name="e9aSourceRectX" type="int" value="491"/>
+    <property name="e9aSourceRectY" type="int" value="470"/>
+    <property name="e9aSourceRectW" type="int" value="47"/>
+    <property name="e9aSourceRectH" type="int" value="116"/>
+    <property name="e9bManifestId" value="ebcbae2a7697594238909a17eb7ecb357021f6faa0d2bdd109186202896d2646"/>
+    <property name="e9bAtlasRectX" type="int" value="567"/>
+    <property name="e9bAtlasRectY" type="int" value="167"/>
+    <property name="e9bAtlasRectW" type="int" value="49"/>
+    <property name="e9bAtlasRectH" type="int" value="118"/>
+    <property name="e9bExtrusionPixels" type="int" value="2"/>
+    <property name="e9bPixelBoundsX" type="int" value="492"/>
+    <property name="e9bPixelBoundsY" type="int" value="471"/>
+    <property name="e9bPixelBoundsW" type="int" value="45"/>
+    <property name="e9bPixelBoundsH" type="int" value="114"/>
+   </properties>
+  </object>
  </objectgroup>
 </map>

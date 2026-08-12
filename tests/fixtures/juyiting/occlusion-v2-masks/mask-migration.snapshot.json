@@ -1,33 +1,74 @@
 {
-  "$schema": "jyt.occlusion.mask-migration-snapshot.v1",
-  "schemaVersion": 1,
+  "$schema": "jyt.occlusion.mask-fragment-migration-snapshot.v2",
+  "schemaVersion": 2,
   "taskId": "E10B",
   "sceneId": "juyiting-main",
   "width": 1664,
   "height": 928,
-  "maskCount": 37,
+  "maskBindingCount": 37,
+  "canonicalFragmentCount": 32,
   "probeCount": 111,
   "constraintCount": 0,
-  "generationId": "306ac0f6b343a8ebf604d49953e633870a7cc3eb58a6f005867324275f3f664b",
-  "masks": [
+  "generationId": "a79959fd081f6c76fe5cf371b0587b5efaef463ade443e63e65f1afb4e32bbc9",
+  "maskBindings": [
     {
       "tmxId": 48,
-      "stableId": "jyt.occluder.west-upper.lantern-table-frame-01.v1",
+      "legacyIndex": 1,
+      "legacyTmxName": "mask-48",
+      "stableId": "jyt.mask-binding.mask-48.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-upper.lantern-table-frame-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "west-upper"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 285,
         "y": 351
       },
       "fixedPointY": 89856,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.west-upper.lantern-table-frame-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-48-behind",
+          "footPoint": {
+            "x": 337,
+            "y": 338
+          },
+          "fixedPointY": 86528,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-48-boundary",
+          "footPoint": {
+            "x": 332,
+            "y": 351
+          },
+          "fixedPointY": 89856,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-48-front",
+          "footPoint": {
+            "x": 332,
+            "y": 367
+          },
+          "fixedPointY": 93952,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 233,
@@ -61,33 +102,66 @@
         "maxY": 350,
         "width": 138,
         "height": 73
-      },
-      "targetFragmentId": "jyt.occ.west-upper.lantern-table-frame-01.v2",
-      "probeIds": [
-        "mask-48-behind",
-        "mask-48-boundary",
-        "mask-48-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 49,
-      "stableId": "jyt.occluder.west-lower.long-table-frame-01.v1",
+      "legacyIndex": 2,
+      "legacyTmxName": "mask-49",
+      "stableId": "jyt.mask-binding.mask-49.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-lower.long-table-frame-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "west-lower"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 178,
         "y": 719
       },
       "fixedPointY": 184064,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.west-lower.long-table-frame-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-49-behind",
+          "footPoint": {
+            "x": 209,
+            "y": 704
+          },
+          "fixedPointY": 180224,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-49-boundary",
+          "footPoint": {
+            "x": 204,
+            "y": 719
+          },
+          "fixedPointY": 184064,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-49-front",
+          "footPoint": {
+            "x": 204,
+            "y": 735
+          },
+          "fixedPointY": 188160,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "recalibrate",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 126,
@@ -121,33 +195,66 @@
         "maxY": 718,
         "width": 121,
         "height": 117
-      },
-      "targetFragmentId": "jyt.occ.west-lower.long-table-frame-01.v2",
-      "probeIds": [
-        "mask-49-behind",
-        "mask-49-boundary",
-        "mask-49-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 50,
-      "stableId": "jyt.occluder.west-lower.railing-02.v1",
+      "legacyIndex": 3,
+      "legacyTmxName": "mask-50",
+      "stableId": "jyt.mask-binding.mask-50.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-lower.railing-02.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "west-lower"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 155,
         "y": 824
       },
       "fixedPointY": 210944,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.west-lower.railing-02.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-50-behind",
+          "footPoint": {
+            "x": 206,
+            "y": 808
+          },
+          "fixedPointY": 206848,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-50-boundary",
+          "footPoint": {
+            "x": 206,
+            "y": 824
+          },
+          "fixedPointY": 210944,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-50-front",
+          "footPoint": {
+            "x": 216,
+            "y": 825
+          },
+          "fixedPointY": 211200,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 243,
@@ -173,33 +280,66 @@
         "maxY": 823,
         "width": 177,
         "height": 36
-      },
-      "targetFragmentId": "jyt.occ.west-lower.railing-02.v2",
-      "probeIds": [
-        "mask-50-behind",
-        "mask-50-boundary",
-        "mask-50-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 51,
-      "stableId": "jyt.occluder.west-lower.wall-panel-assembly-01.v1",
+      "legacyIndex": 4,
+      "legacyTmxName": "mask-51",
+      "stableId": "jyt.mask-binding.mask-51.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-lower.wall-panel-assembly-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "west-lower"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 218,
         "y": 852
       },
       "fixedPointY": 218112,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.west-lower.wall-panel-assembly-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-51-behind",
+          "footPoint": {
+            "x": 254,
+            "y": 839
+          },
+          "fixedPointY": 214784,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-51-boundary",
+          "footPoint": {
+            "x": 249,
+            "y": 852
+          },
+          "fixedPointY": 218112,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-51-front",
+          "footPoint": {
+            "x": 249,
+            "y": 864
+          },
+          "fixedPointY": 221184,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 42,
@@ -313,33 +453,66 @@
         "maxY": 911,
         "width": 369,
         "height": 338
-      },
-      "targetFragmentId": "jyt.occ.west-lower.wall-panel-assembly-01.v2",
-      "probeIds": [
-        "mask-51-behind",
-        "mask-51-boundary",
-        "mask-51-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 52,
-      "stableId": "jyt.occluder.west-upper.wall-panel-assembly-01.v1",
+      "legacyIndex": 5,
+      "legacyTmxName": "mask-52",
+      "stableId": "jyt.mask-binding.mask-52.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-upper.wall-panel-assembly-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "west-upper"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 274,
         "y": 716
       },
       "fixedPointY": 183296,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.west-upper.wall-panel-assembly-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-52-behind",
+          "footPoint": {
+            "x": 274,
+            "y": 700
+          },
+          "fixedPointY": 179200,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-52-boundary",
+          "footPoint": {
+            "x": 274,
+            "y": 716
+          },
+          "fixedPointY": 183296,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-52-front",
+          "footPoint": {
+            "x": 274,
+            "y": 732
+          },
+          "fixedPointY": 187392,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 479,
@@ -425,33 +598,66 @@
         "maxY": 723,
         "width": 485,
         "height": 375
-      },
-      "targetFragmentId": "jyt.occ.west-upper.wall-panel-assembly-01.v2",
-      "probeIds": [
-        "mask-52-behind",
-        "mask-52-boundary",
-        "mask-52-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 53,
-      "stableId": "jyt.occluder.west-upper.wall-panel-assembly-01.v1",
+      "legacyIndex": 6,
+      "legacyTmxName": "mask-53",
+      "stableId": "jyt.mask-binding.mask-53.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-upper.wall-panel-assembly-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "west-upper"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 274,
         "y": 716
       },
       "fixedPointY": 183296,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.west-upper.wall-panel-assembly-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-53-behind",
+          "footPoint": {
+            "x": 492,
+            "y": 700
+          },
+          "fixedPointY": 179200,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-53-boundary",
+          "footPoint": {
+            "x": 492,
+            "y": 716
+          },
+          "fixedPointY": 183296,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-53-front",
+          "footPoint": {
+            "x": 489,
+            "y": 732
+          },
+          "fixedPointY": 187392,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 450,
@@ -489,33 +695,66 @@
         "maxY": 455,
         "width": 95,
         "height": 71
-      },
-      "targetFragmentId": "jyt.occ.west-upper.wall-panel-assembly-01.v2",
-      "probeIds": [
-        "mask-53-behind",
-        "mask-53-boundary",
-        "mask-53-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 54,
-      "stableId": "jyt.occluder.west-upper.pillar-01.v1",
+      "legacyIndex": 7,
+      "legacyTmxName": "mask-54",
+      "stableId": "jyt.mask-binding.mask-54.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-upper.pillar-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "west-upper"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 571,
         "y": 469
       },
       "fixedPointY": 120064,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.west-upper.pillar-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-54-behind",
+          "footPoint": {
+            "x": 577,
+            "y": 453
+          },
+          "fixedPointY": 115968,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-54-boundary",
+          "footPoint": {
+            "x": 577,
+            "y": 469
+          },
+          "fixedPointY": 120064,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-54-front",
+          "footPoint": {
+            "x": 590,
+            "y": 489
+          },
+          "fixedPointY": 125184,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "recalibrate",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 557,
@@ -573,33 +812,66 @@
         "maxY": 468,
         "width": 55,
         "height": 162
-      },
-      "targetFragmentId": "jyt.occ.west-upper.pillar-01.v2",
-      "probeIds": [
-        "mask-54-behind",
-        "mask-54-boundary",
-        "mask-54-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 55,
-      "stableId": "jyt.occluder.west-upper.diagonal-brace-01.v1",
+      "legacyIndex": 8,
+      "legacyTmxName": "mask-55",
+      "stableId": "jyt.mask-binding.mask-55.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-upper.diagonal-brace-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "west-upper"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 608,
         "y": 489
       },
       "fixedPointY": 125184,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-55-behind",
+          "footPoint": {
+            "x": 618,
+            "y": 473
+          },
+          "fixedPointY": 121088,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-55-boundary",
+          "footPoint": {
+            "x": 618,
+            "y": 489
+          },
+          "fixedPointY": 125184,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-55-front",
+          "footPoint": {
+            "x": 618,
+            "y": 505
+          },
+          "fixedPointY": 129280,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 601,
@@ -621,33 +893,66 @@
         "maxY": 488,
         "width": 15,
         "height": 56
-      },
-      "targetFragmentId": "jyt.occ.west-upper.diagonal-brace-01.v2",
-      "probeIds": [
-        "mask-55-behind",
-        "mask-55-boundary",
-        "mask-55-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 56,
-      "stableId": "jyt.occluder.east-upper.diagonal-brace-01.v1",
+      "legacyIndex": 9,
+      "legacyTmxName": "mask-56",
+      "stableId": "jyt.mask-binding.mask-56.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-upper.diagonal-brace-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "east-upper"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 1140,
         "y": 486
       },
       "fixedPointY": 124416,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.east-upper.diagonal-brace-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-56-behind",
+          "footPoint": {
+            "x": 1140,
+            "y": 470
+          },
+          "fixedPointY": 120320,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-56-boundary",
+          "footPoint": {
+            "x": 1140,
+            "y": 486
+          },
+          "fixedPointY": 124416,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-56-front",
+          "footPoint": {
+            "x": 1127,
+            "y": 502
+          },
+          "fixedPointY": 128512,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 1130,
@@ -669,33 +974,66 @@
         "maxY": 485,
         "width": 18,
         "height": 50
-      },
-      "targetFragmentId": "jyt.occ.east-upper.diagonal-brace-01.v2",
-      "probeIds": [
-        "mask-56-behind",
-        "mask-56-boundary",
-        "mask-56-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 57,
-      "stableId": "jyt.occluder.east-upper.pillar-01.v1",
+      "legacyIndex": 10,
+      "legacyTmxName": "mask-57",
+      "stableId": "jyt.mask-binding.mask-57.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-upper.pillar-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "east-upper"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 1181,
         "y": 464
       },
       "fixedPointY": 118784,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.east-upper.pillar-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-57-behind",
+          "footPoint": {
+            "x": 1181,
+            "y": 448
+          },
+          "fixedPointY": 114688,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-57-boundary",
+          "footPoint": {
+            "x": 1181,
+            "y": 464
+          },
+          "fixedPointY": 118784,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-57-front",
+          "footPoint": {
+            "x": 1188,
+            "y": 480
+          },
+          "fixedPointY": 122880,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "recalibrate",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 1158,
@@ -757,33 +1095,66 @@
         "maxY": 463,
         "width": 45,
         "height": 158
-      },
-      "targetFragmentId": "jyt.occ.east-upper.pillar-01.v2",
-      "probeIds": [
-        "mask-57-behind",
-        "mask-57-boundary",
-        "mask-57-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 58,
-      "stableId": "jyt.occluder.east-upper.wall-panel-upper-01.v1",
+      "legacyIndex": 11,
+      "legacyTmxName": "mask-58",
+      "stableId": "jyt.mask-binding.mask-58.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-upper.wall-panel-upper-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "east-upper"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 1430,
         "y": 459
       },
       "fixedPointY": 117504,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.east-upper.wall-panel-upper-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-58-behind",
+          "footPoint": {
+            "x": 1430,
+            "y": 443
+          },
+          "fixedPointY": 113408,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-58-boundary",
+          "footPoint": {
+            "x": 1430,
+            "y": 459
+          },
+          "fixedPointY": 117504,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-58-front",
+          "footPoint": {
+            "x": 1430,
+            "y": 479
+          },
+          "fixedPointY": 122624,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 1197,
@@ -893,33 +1264,66 @@
         "maxY": 458,
         "width": 466,
         "height": 116
-      },
-      "targetFragmentId": "jyt.occ.east-upper.wall-panel-upper-01.v2",
-      "probeIds": [
-        "mask-58-behind",
-        "mask-58-boundary",
-        "mask-58-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 59,
-      "stableId": "jyt.occluder.east-lower.worktable-01.v1",
+      "legacyIndex": 12,
+      "legacyTmxName": "mask-59",
+      "stableId": "jyt.mask-binding.mask-59.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-lower.worktable-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "east-lower"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 1559,
         "y": 701
       },
       "fixedPointY": 179456,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.east-lower.worktable-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-59-behind",
+          "footPoint": {
+            "x": 1516,
+            "y": 686
+          },
+          "fixedPointY": 175616,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-59-boundary",
+          "footPoint": {
+            "x": 1520,
+            "y": 701
+          },
+          "fixedPointY": 179456,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-59-front",
+          "footPoint": {
+            "x": 1520,
+            "y": 717
+          },
+          "fixedPointY": 183552,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 1499,
@@ -957,33 +1361,66 @@
         "maxY": 673,
         "width": 119,
         "height": 99
-      },
-      "targetFragmentId": "jyt.occ.east-lower.worktable-01.v2",
-      "probeIds": [
-        "mask-59-behind",
-        "mask-59-boundary",
-        "mask-59-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 60,
-      "stableId": "jyt.occluder.east-lower.lantern-01.v1",
+      "legacyIndex": 13,
+      "legacyTmxName": "mask-60",
+      "stableId": "jyt.mask-binding.mask-60.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-lower.lantern-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "east-lower"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 1338,
         "y": 852
       },
       "fixedPointY": 218112,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.east-lower.lantern-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-60-behind",
+          "footPoint": {
+            "x": 1357,
+            "y": 836
+          },
+          "fixedPointY": 214016,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-60-boundary",
+          "footPoint": {
+            "x": 1357,
+            "y": 852
+          },
+          "fixedPointY": 218112,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-60-front",
+          "footPoint": {
+            "x": 1360,
+            "y": 864
+          },
+          "fixedPointY": 221184,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 1324,
@@ -1017,33 +1454,66 @@
         "maxY": 924,
         "width": 46,
         "height": 85
-      },
-      "targetFragmentId": "jyt.occ.east-lower.lantern-01.v2",
-      "probeIds": [
-        "mask-60-behind",
-        "mask-60-boundary",
-        "mask-60-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 61,
-      "stableId": "jyt.occluder.entrance.lantern-post-01.v1",
+      "legacyIndex": 14,
+      "legacyTmxName": "mask-61",
+      "stableId": "jyt.mask-binding.mask-61.v1",
+      "ledgerOccluderStableId": "jyt.occluder.entrance.lantern-post-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "entrance"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 1073,
         "y": 778
       },
       "fixedPointY": 199168,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.entrance.lantern-post-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-61-behind",
+          "footPoint": {
+            "x": 1073,
+            "y": 762
+          },
+          "fixedPointY": 195072,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-61-boundary",
+          "footPoint": {
+            "x": 1073,
+            "y": 778
+          },
+          "fixedPointY": 199168,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-61-front",
+          "footPoint": {
+            "x": 1073,
+            "y": 780
+          },
+          "fixedPointY": 199680,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 1084,
@@ -1101,33 +1571,66 @@
         "maxY": 777,
         "width": 40,
         "height": 103
-      },
-      "targetFragmentId": "jyt.occ.entrance.lantern-post-01.v2",
-      "probeIds": [
-        "mask-61-behind",
-        "mask-61-boundary",
-        "mask-61-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 62,
-      "stableId": "jyt.occluder.entrance.lantern-post-02.v1",
+      "legacyIndex": 15,
+      "legacyTmxName": "mask-62",
+      "stableId": "jyt.mask-binding.mask-62.v1",
+      "ledgerOccluderStableId": "jyt.occluder.entrance.lantern-post-02.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "entrance"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 1020,
         "y": 755
       },
       "fixedPointY": 193280,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.entrance.lantern-post-02.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-62-behind",
+          "footPoint": {
+            "x": 1014,
+            "y": 739
+          },
+          "fixedPointY": 189184,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-62-boundary",
+          "footPoint": {
+            "x": 1014,
+            "y": 755
+          },
+          "fixedPointY": 193280,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-62-front",
+          "footPoint": {
+            "x": 1014,
+            "y": 771
+          },
+          "fixedPointY": 197376,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 1034,
@@ -1177,33 +1680,66 @@
         "maxY": 754,
         "width": 30,
         "height": 76
-      },
-      "targetFragmentId": "jyt.occ.entrance.lantern-post-02.v2",
-      "probeIds": [
-        "mask-62-behind",
-        "mask-62-boundary",
-        "mask-62-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 63,
-      "stableId": "jyt.occluder.entrance.hanging-banner-02.v1",
+      "legacyIndex": 16,
+      "legacyTmxName": "mask-63",
+      "stableId": "jyt.mask-binding.mask-63.v1",
+      "ledgerOccluderStableId": "jyt.occluder.entrance.hanging-banner-02.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "entrance"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 951,
         "y": 796
       },
       "fixedPointY": 203776,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.entrance.hanging-banner-02.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-63-behind",
+          "footPoint": {
+            "x": 927,
+            "y": 780
+          },
+          "fixedPointY": 199680,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-63-boundary",
+          "footPoint": {
+            "x": 927,
+            "y": 796
+          },
+          "fixedPointY": 203776,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-63-front",
+          "footPoint": {
+            "x": 926,
+            "y": 811
+          },
+          "fixedPointY": 207616,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 931,
@@ -1249,33 +1785,66 @@
         "maxY": 795,
         "width": 39,
         "height": 62
-      },
-      "targetFragmentId": "jyt.occ.entrance.hanging-banner-02.v2",
-      "probeIds": [
-        "mask-63-behind",
-        "mask-63-boundary",
-        "mask-63-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 64,
-      "stableId": "jyt.occluder.entrance.hanging-banner-01.v1",
+      "legacyIndex": 17,
+      "legacyTmxName": "mask-64",
+      "stableId": "jyt.mask-binding.mask-64.v1",
+      "ledgerOccluderStableId": "jyt.occluder.entrance.hanging-banner-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "entrance"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 791,
         "y": 794
       },
       "fixedPointY": 203264,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.entrance.hanging-banner-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-64-behind",
+          "footPoint": {
+            "x": 803,
+            "y": 778
+          },
+          "fixedPointY": 199168,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-64-boundary",
+          "footPoint": {
+            "x": 803,
+            "y": 794
+          },
+          "fixedPointY": 203264,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-64-front",
+          "footPoint": {
+            "x": 803,
+            "y": 810
+          },
+          "fixedPointY": 207360,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 807,
@@ -1329,33 +1898,66 @@
         "maxY": 793,
         "width": 47,
         "height": 71
-      },
-      "targetFragmentId": "jyt.occ.entrance.hanging-banner-01.v2",
-      "probeIds": [
-        "mask-64-behind",
-        "mask-64-boundary",
-        "mask-64-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 65,
-      "stableId": "jyt.occluder.west-lower.wall-bracket-01.v1",
+      "legacyIndex": 18,
+      "legacyTmxName": "mask-65",
+      "stableId": "jyt.mask-binding.mask-65.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-lower.wall-bracket-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "west-lower"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 704,
         "y": 714
       },
       "fixedPointY": 182784,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.west-lower.wall-bracket-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-65-behind",
+          "footPoint": {
+            "x": 717,
+            "y": 698
+          },
+          "fixedPointY": 178688,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-65-boundary",
+          "footPoint": {
+            "x": 717,
+            "y": 714
+          },
+          "fixedPointY": 182784,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-65-front",
+          "footPoint": {
+            "x": 717,
+            "y": 730
+          },
+          "fixedPointY": 186880,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 720,
@@ -1401,33 +2003,66 @@
         "maxY": 713,
         "width": 34,
         "height": 38
-      },
-      "targetFragmentId": "jyt.occ.west-lower.wall-bracket-01.v2",
-      "probeIds": [
-        "mask-65-behind",
-        "mask-65-boundary",
-        "mask-65-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 66,
-      "stableId": "jyt.occluder.west-lower.railing-01.v1",
+      "legacyIndex": 19,
+      "legacyTmxName": "mask-66",
+      "stableId": "jyt.mask-binding.mask-66.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-lower.railing-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "west-lower"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 593,
         "y": 778
       },
       "fixedPointY": 199168,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.west-lower.railing-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-66-behind",
+          "footPoint": {
+            "x": 480,
+            "y": 762
+          },
+          "fixedPointY": 195072,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-66-boundary",
+          "footPoint": {
+            "x": 480,
+            "y": 778
+          },
+          "fixedPointY": 199168,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-66-front",
+          "footPoint": {
+            "x": 480,
+            "y": 794
+          },
+          "fixedPointY": 203264,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 678,
@@ -1517,33 +2152,66 @@
         "maxY": 777,
         "width": 173,
         "height": 102
-      },
-      "targetFragmentId": "jyt.occ.west-lower.railing-01.v2",
-      "probeIds": [
-        "mask-66-behind",
-        "mask-66-boundary",
-        "mask-66-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 67,
-      "stableId": "jyt.occluder.west-lower.floor-lantern-01.v1",
+      "legacyIndex": 20,
+      "legacyTmxName": "mask-67",
+      "stableId": "jyt.mask-binding.mask-67.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-lower.floor-lantern-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "west-lower"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 381,
         "y": 852
       },
       "fixedPointY": 218112,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.west-lower.floor-lantern-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-67-behind",
+          "footPoint": {
+            "x": 351,
+            "y": 836
+          },
+          "fixedPointY": 214016,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-67-boundary",
+          "footPoint": {
+            "x": 351,
+            "y": 852
+          },
+          "fixedPointY": 218112,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-67-front",
+          "footPoint": {
+            "x": 348,
+            "y": 864
+          },
+          "fixedPointY": 221184,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 404,
@@ -1577,33 +2245,66 @@
         "maxY": 928,
         "width": 47,
         "height": 52
-      },
-      "targetFragmentId": "jyt.occ.west-lower.floor-lantern-01.v2",
-      "probeIds": [
-        "mask-67-behind",
-        "mask-67-boundary",
-        "mask-67-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 68,
-      "stableId": "jyt.occluder.west-lower.wall-lantern-01.v1",
+      "legacyIndex": 21,
+      "legacyTmxName": "mask-68",
+      "stableId": "jyt.mask-binding.mask-68.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-lower.wall-lantern-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "west-lower"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 35,
         "y": 741
       },
       "fixedPointY": 189696,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.west-lower.wall-lantern-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-68-behind",
+          "footPoint": {
+            "x": 48,
+            "y": 725
+          },
+          "fixedPointY": 185600,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-68-boundary",
+          "footPoint": {
+            "x": 48,
+            "y": 741
+          },
+          "fixedPointY": 189696,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-68-front",
+          "footPoint": {
+            "x": 50,
+            "y": 743
+          },
+          "fixedPointY": 190208,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 58,
@@ -1629,33 +2330,66 @@
         "maxY": 740,
         "width": 47,
         "height": 34
-      },
-      "targetFragmentId": "jyt.occ.west-lower.wall-lantern-01.v2",
-      "probeIds": [
-        "mask-68-behind",
-        "mask-68-boundary",
-        "mask-68-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 69,
-      "stableId": "jyt.occluder.west-upper.wall-sconce-02.v1",
+      "legacyIndex": 22,
+      "legacyTmxName": "mask-69",
+      "stableId": "jyt.mask-binding.mask-69.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-upper.wall-sconce-02.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "west-upper"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 515,
         "y": 585
       },
       "fixedPointY": 149760,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.west-upper.wall-sconce-02.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-69-behind",
+          "footPoint": {
+            "x": 511,
+            "y": 569
+          },
+          "fixedPointY": 145664,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-69-boundary",
+          "footPoint": {
+            "x": 511,
+            "y": 585
+          },
+          "fixedPointY": 149760,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-69-front",
+          "footPoint": {
+            "x": 507,
+            "y": 601
+          },
+          "fixedPointY": 153856,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 503,
@@ -1693,33 +2427,66 @@
         "maxY": 584,
         "width": 44,
         "height": 113
-      },
-      "targetFragmentId": "jyt.occ.west-upper.wall-sconce-02.v2",
-      "probeIds": [
-        "mask-69-behind",
-        "mask-69-boundary",
-        "mask-69-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 70,
-      "stableId": "jyt.occluder.west-upper.lantern-01.v1",
+      "legacyIndex": 23,
+      "legacyTmxName": "mask-70",
+      "stableId": "jyt.mask-binding.mask-70.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-upper.lantern-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "west-upper"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 484,
         "y": 240
       },
       "fixedPointY": 61440,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.west-upper.lantern-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-70-behind",
+          "footPoint": {
+            "x": 490,
+            "y": 224
+          },
+          "fixedPointY": 57344,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-70-boundary",
+          "footPoint": {
+            "x": 490,
+            "y": 240
+          },
+          "fixedPointY": 61440,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-70-front",
+          "footPoint": {
+            "x": 486,
+            "y": 270
+          },
+          "fixedPointY": 69120,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 505,
@@ -1745,33 +2512,66 @@
         "maxY": 239,
         "width": 44,
         "height": 74
-      },
-      "targetFragmentId": "jyt.occ.west-upper.lantern-01.v2",
-      "probeIds": [
-        "mask-70-behind",
-        "mask-70-boundary",
-        "mask-70-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 71,
-      "stableId": "jyt.occluder.west-upper.wall-sconce-01.v1",
+      "legacyIndex": 24,
+      "legacyTmxName": "mask-71",
+      "stableId": "jyt.mask-binding.mask-71.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-upper.wall-sconce-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "west-upper"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 624,
         "y": 272
       },
       "fixedPointY": 69632,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.west-upper.wall-sconce-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-71-behind",
+          "footPoint": {
+            "x": 624,
+            "y": 256
+          },
+          "fixedPointY": 65536,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-71-boundary",
+          "footPoint": {
+            "x": 624,
+            "y": 272
+          },
+          "fixedPointY": 69632,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-71-front",
+          "footPoint": {
+            "x": 622,
+            "y": 288
+          },
+          "fixedPointY": 73728,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 621,
@@ -1793,33 +2593,66 @@
         "maxY": 271,
         "width": 12,
         "height": 33
-      },
-      "targetFragmentId": "jyt.occ.west-upper.wall-sconce-01.v2",
-      "probeIds": [
-        "mask-71-behind",
-        "mask-71-boundary",
-        "mask-71-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 72,
-      "stableId": "jyt.occluder.center.wall-sconce-01.v1",
+      "legacyIndex": 25,
+      "legacyTmxName": "mask-72",
+      "stableId": "jyt.mask-binding.mask-72.v1",
+      "ledgerOccluderStableId": "jyt.occluder.center.wall-sconce-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "center"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 1121,
         "y": 284
       },
       "fixedPointY": 72704,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.center.wall-sconce-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-72-behind",
+          "footPoint": {
+            "x": 1121,
+            "y": 268
+          },
+          "fixedPointY": 68608,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-72-boundary",
+          "footPoint": {
+            "x": 1121,
+            "y": 284
+          },
+          "fixedPointY": 72704,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-72-front",
+          "footPoint": {
+            "x": 1121,
+            "y": 300
+          },
+          "fixedPointY": 76800,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 1126,
@@ -1845,33 +2678,66 @@
         "maxY": 283,
         "width": 17,
         "height": 53
-      },
-      "targetFragmentId": "jyt.occ.center.wall-sconce-01.v2",
-      "probeIds": [
-        "mask-72-behind",
-        "mask-72-boundary",
-        "mask-72-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 73,
-      "stableId": "jyt.occluder.east-upper.scroll-table-front-01.v1",
+      "legacyIndex": 26,
+      "legacyTmxName": "mask-73",
+      "stableId": "jyt.mask-binding.mask-73.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-upper.scroll-table-front-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "east-upper"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 1432,
         "y": 284
       },
       "fixedPointY": 72704,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-73-behind",
+          "footPoint": {
+            "x": 1395,
+            "y": 268
+          },
+          "fixedPointY": 68608,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-73-boundary",
+          "footPoint": {
+            "x": 1395,
+            "y": 284
+          },
+          "fixedPointY": 72704,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-73-front",
+          "footPoint": {
+            "x": 1379,
+            "y": 285
+          },
+          "fixedPointY": 72960,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 1385,
@@ -1897,33 +2763,66 @@
         "maxY": 283,
         "width": 94,
         "height": 28
-      },
-      "targetFragmentId": "jyt.occ.east-upper.scroll-table-front-01.v2",
-      "probeIds": [
-        "mask-73-behind",
-        "mask-73-boundary",
-        "mask-73-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 74,
-      "stableId": "jyt.occluder.east-lower.worktable-01.v1",
+      "legacyIndex": 27,
+      "legacyTmxName": "mask-74",
+      "stableId": "jyt.mask-binding.mask-74.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-lower.worktable-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "east-lower"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 1559,
         "y": 701
       },
       "fixedPointY": 179456,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.east-lower.worktable-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-74-behind",
+          "footPoint": {
+            "x": 1602,
+            "y": 685
+          },
+          "fixedPointY": 175360,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-74-boundary",
+          "footPoint": {
+            "x": 1602,
+            "y": 701
+          },
+          "fixedPointY": 179456,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-74-front",
+          "footPoint": {
+            "x": 1602,
+            "y": 717
+          },
+          "fixedPointY": 183552,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "recalibrate",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 1612,
@@ -1945,33 +2844,66 @@
         "maxY": 700,
         "width": 20,
         "height": 26
-      },
-      "targetFragmentId": "jyt.occ.east-lower.worktable-01.v2",
-      "probeIds": [
-        "mask-74-behind",
-        "mask-74-boundary",
-        "mask-74-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 75,
-      "stableId": "jyt.occluder.east-lower.fabric-rack-01.v1",
+      "legacyIndex": 28,
+      "legacyTmxName": "mask-75",
+      "stableId": "jyt.mask-binding.mask-75.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-lower.fabric-rack-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "east-lower"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 1631,
         "y": 830
       },
       "fixedPointY": 212480,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.east-lower.fabric-rack-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-75-behind",
+          "footPoint": {
+            "x": 1611,
+            "y": 814
+          },
+          "fixedPointY": 208384,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-75-boundary",
+          "footPoint": {
+            "x": 1611,
+            "y": 830
+          },
+          "fixedPointY": 212480,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-75-front",
+          "footPoint": {
+            "x": 1602,
+            "y": 846
+          },
+          "fixedPointY": 216576,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 1603,
@@ -2017,33 +2949,66 @@
         "maxY": 829,
         "width": 65,
         "height": 81
-      },
-      "targetFragmentId": "jyt.occ.east-lower.fabric-rack-01.v2",
-      "probeIds": [
-        "mask-75-behind",
-        "mask-75-boundary",
-        "mask-75-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 76,
-      "stableId": "jyt.occluder.east-lower.diagonal-brace-01.v1",
+      "legacyIndex": 29,
+      "legacyTmxName": "mask-76",
+      "stableId": "jyt.mask-binding.mask-76.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-lower.diagonal-brace-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "east-lower"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 1410,
         "y": 768
       },
       "fixedPointY": 196608,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.east-lower.diagonal-brace-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-76-behind",
+          "footPoint": {
+            "x": 1423,
+            "y": 752
+          },
+          "fixedPointY": 192512,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-76-boundary",
+          "footPoint": {
+            "x": 1423,
+            "y": 768
+          },
+          "fixedPointY": 196608,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-76-front",
+          "footPoint": {
+            "x": 1424,
+            "y": 769
+          },
+          "fixedPointY": 196864,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "recalibrate",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 1510,
@@ -2089,33 +3054,66 @@
         "maxY": 767,
         "width": 176,
         "height": 207
-      },
-      "targetFragmentId": "jyt.occ.east-lower.diagonal-brace-01.v2",
-      "probeIds": [
-        "mask-76-behind",
-        "mask-76-boundary",
-        "mask-76-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 77,
-      "stableId": "jyt.occluder.east-upper.pillar-02.v1",
+      "legacyIndex": 30,
+      "legacyTmxName": "mask-77",
+      "stableId": "jyt.mask-binding.mask-77.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-upper.pillar-02.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "east-upper"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 1227,
         "y": 703
       },
       "fixedPointY": 179968,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.east-upper.pillar-02.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-77-behind",
+          "footPoint": {
+            "x": 1215,
+            "y": 687
+          },
+          "fixedPointY": 175872,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-77-boundary",
+          "footPoint": {
+            "x": 1215,
+            "y": 703
+          },
+          "fixedPointY": 179968,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-77-front",
+          "footPoint": {
+            "x": 1215,
+            "y": 719
+          },
+          "fixedPointY": 184064,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 1231,
@@ -2161,33 +3159,66 @@
         "maxY": 608,
         "width": 37,
         "height": 130
-      },
-      "targetFragmentId": "jyt.occ.east-upper.pillar-02.v2",
-      "probeIds": [
-        "mask-77-behind",
-        "mask-77-boundary",
-        "mask-77-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 78,
-      "stableId": "jyt.occluder.east-upper.wall-panel-lower-01.v1",
+      "legacyIndex": 31,
+      "legacyTmxName": "mask-78",
+      "stableId": "jyt.mask-binding.mask-78.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-upper.wall-panel-lower-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "east-upper"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 1460,
         "y": 548
       },
       "fixedPointY": 140288,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.east-upper.wall-panel-lower-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-78-behind",
+          "footPoint": {
+            "x": 1460,
+            "y": 532
+          },
+          "fixedPointY": 136192,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-78-boundary",
+          "footPoint": {
+            "x": 1460,
+            "y": 548
+          },
+          "fixedPointY": 140288,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-78-front",
+          "footPoint": {
+            "x": 1460,
+            "y": 549
+          },
+          "fixedPointY": 140544,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 1256,
@@ -2213,33 +3244,66 @@
         "maxY": 548,
         "width": 410,
         "height": 72
-      },
-      "targetFragmentId": "jyt.occ.east-upper.wall-panel-lower-01.v2",
-      "probeIds": [
-        "mask-78-behind",
-        "mask-78-boundary",
-        "mask-78-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 79,
-      "stableId": "jyt.occluder.east-lower.diagonal-brace-01.v1",
+      "legacyIndex": 32,
+      "legacyTmxName": "mask-79",
+      "stableId": "jyt.mask-binding.mask-79.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-lower.diagonal-brace-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "east-lower"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 1410,
         "y": 768
       },
       "fixedPointY": 196608,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.east-lower.diagonal-brace-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-79-behind",
+          "footPoint": {
+            "x": 1325,
+            "y": 752
+          },
+          "fixedPointY": 192512,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-79-boundary",
+          "footPoint": {
+            "x": 1325,
+            "y": 768
+          },
+          "fixedPointY": 196608,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-79-front",
+          "footPoint": {
+            "x": 1325,
+            "y": 784
+          },
+          "fixedPointY": 200704,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 1323,
@@ -2277,33 +3341,66 @@
         "maxY": 641,
         "width": 33,
         "height": 80
-      },
-      "targetFragmentId": "jyt.occ.east-lower.diagonal-brace-01.v2",
-      "probeIds": [
-        "mask-79-behind",
-        "mask-79-boundary",
-        "mask-79-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 80,
-      "stableId": "jyt.occluder.east-upper.pillar-02.v1",
+      "legacyIndex": 33,
+      "legacyTmxName": "mask-80",
+      "stableId": "jyt.mask-binding.mask-80.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-upper.pillar-02.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "east-upper"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 1227,
         "y": 703
       },
       "fixedPointY": 179968,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.east-upper.pillar-02.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-80-behind",
+          "footPoint": {
+            "x": 1215,
+            "y": 687
+          },
+          "fixedPointY": 175872,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-80-boundary",
+          "footPoint": {
+            "x": 1215,
+            "y": 703
+          },
+          "fixedPointY": 179968,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-80-front",
+          "footPoint": {
+            "x": 1215,
+            "y": 719
+          },
+          "fixedPointY": 184064,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "recalibrate",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 1251,
@@ -2365,33 +3462,66 @@
         "maxY": 702,
         "width": 49,
         "height": 96
-      },
-      "targetFragmentId": "jyt.occ.east-upper.pillar-02.v2",
-      "probeIds": [
-        "mask-80-behind",
-        "mask-80-boundary",
-        "mask-80-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 81,
-      "stableId": "jyt.occluder.east-lower.railing-post-01.v1",
+      "legacyIndex": 34,
+      "legacyTmxName": "mask-81",
+      "stableId": "jyt.mask-binding.mask-81.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-lower.railing-post-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "east-lower"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 1247,
         "y": 775
       },
       "fixedPointY": 198400,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.east-lower.railing-post-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-81-behind",
+          "footPoint": {
+            "x": 1247,
+            "y": 759
+          },
+          "fixedPointY": 194304,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-81-boundary",
+          "footPoint": {
+            "x": 1247,
+            "y": 775
+          },
+          "fixedPointY": 198400,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-81-front",
+          "footPoint": {
+            "x": 1247,
+            "y": 791
+          },
+          "fixedPointY": 202496,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 1251,
@@ -2413,33 +3543,66 @@
         "maxY": 774,
         "width": 9,
         "height": 67
-      },
-      "targetFragmentId": "jyt.occ.east-lower.railing-post-01.v2",
-      "probeIds": [
-        "mask-81-behind",
-        "mask-81-boundary",
-        "mask-81-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 82,
-      "stableId": "jyt.occluder.east-lower.diagonal-brace-02.v1",
+      "legacyIndex": 35,
+      "legacyTmxName": "mask-82",
+      "stableId": "jyt.mask-binding.mask-82.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-lower.diagonal-brace-02.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "east-lower"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 1363,
         "y": 741
       },
       "fixedPointY": 189696,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.east-lower.diagonal-brace-02.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-82-behind",
+          "footPoint": {
+            "x": 1357,
+            "y": 725
+          },
+          "fixedPointY": 185600,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-82-boundary",
+          "footPoint": {
+            "x": 1357,
+            "y": 741
+          },
+          "fixedPointY": 189696,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-82-front",
+          "footPoint": {
+            "x": 1357,
+            "y": 757
+          },
+          "fixedPointY": 193792,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 1351,
@@ -2461,33 +3624,66 @@
         "maxY": 740,
         "width": 23,
         "height": 49
-      },
-      "targetFragmentId": "jyt.occ.east-lower.diagonal-brace-02.v2",
-      "probeIds": [
-        "mask-82-behind",
-        "mask-82-boundary",
-        "mask-82-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 83,
-      "stableId": "jyt.occluder.west-lower.diagonal-brace-02.v1",
+      "legacyIndex": 36,
+      "legacyTmxName": "mask-83",
+      "stableId": "jyt.mask-binding.mask-83.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-lower.diagonal-brace-02.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "west-lower"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 496,
         "y": 759
       },
       "fixedPointY": 194304,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.west-lower.diagonal-brace-02.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-83-behind",
+          "footPoint": {
+            "x": 509,
+            "y": 743
+          },
+          "fixedPointY": 190208,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-83-boundary",
+          "footPoint": {
+            "x": 507,
+            "y": 759
+          },
+          "fixedPointY": 194304,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-83-front",
+          "footPoint": {
+            "x": 507,
+            "y": 775
+          },
+          "fixedPointY": 198400,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "recalibrate",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 513,
@@ -2525,33 +3721,66 @@
         "maxY": 758,
         "width": 42,
         "height": 117
-      },
-      "targetFragmentId": "jyt.occ.west-lower.diagonal-brace-02.v2",
-      "probeIds": [
-        "mask-83-behind",
-        "mask-83-boundary",
-        "mask-83-front"
-      ],
-      "constraintDecision": "none"
+      }
     },
     {
       "tmxId": 84,
-      "stableId": "jyt.occluder.west-lower.wall-panel-assembly-01.v1",
+      "legacyIndex": 37,
+      "legacyTmxName": "mask-84",
+      "stableId": "jyt.mask-binding.mask-84.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-lower.wall-panel-assembly-01.v1",
       "scope": {
         "sceneId": "juyiting-main",
         "floorId": "floor-1",
         "chunkId": "west-lower"
       },
-      "kind": "occluder",
+      "kind": "legacy-mask-binding",
+      "canonicalDrawable": false,
       "renderBand": "world",
       "elevation": 0,
-      "sortMode": "fixed-point-y",
+      "sortMode": "fixed",
+      "ledgerSortContract": "fixed-point-y",
       "sortAnchor": {
         "x": 218,
         "y": 852
       },
       "fixedPointY": 218112,
       "tieBias": -1,
+      "targetFragmentId": "jyt.occ.west-lower.wall-panel-assembly-01.v2",
+      "probes": [
+        {
+          "name": "behind",
+          "probeId": "mask-84-behind",
+          "footPoint": {
+            "x": 412,
+            "y": 836
+          },
+          "fixedPointY": 214016,
+          "expectedPainterRelation": "agent<fragment"
+        },
+        {
+          "name": "boundary",
+          "probeId": "mask-84-boundary",
+          "footPoint": {
+            "x": 412,
+            "y": 852
+          },
+          "fixedPointY": 218112,
+          "expectedPainterRelation": "fragment<agent"
+        },
+        {
+          "name": "front",
+          "probeId": "mask-84-front",
+          "footPoint": {
+            "x": 412,
+            "y": 864
+          },
+          "fixedPointY": 221184,
+          "expectedPainterRelation": "fragment<agent"
+        }
+      ],
+      "recalibrationDecision": "none",
+      "constraintDecision": "none",
       "polygon": [
         {
           "x": 405,
@@ -2585,14 +3814,2121 @@
         "maxY": 643,
         "width": 36,
         "height": 68
+      }
+    }
+  ],
+  "canonicalFragments": [
+    {
+      "tmxId": 207,
+      "stableId": "jyt.occ.center.wall-sconce-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "center",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 1121,
+        "y": 284
       },
-      "targetFragmentId": "jyt.occ.west-lower.wall-panel-assembly-01.v2",
-      "probeIds": [
-        "mask-84-behind",
-        "mask-84-boundary",
-        "mask-84-front"
-      ],
-      "constraintDecision": "none"
+      "fixedPointY": 72704,
+      "tieBias": -1,
+      "assetRef": "images/occluders/center-v2.png",
+      "sourceRect": {
+        "x": 2,
+        "y": 2,
+        "width": 18,
+        "height": 54
+      },
+      "destinationRect": {
+        "x": 1112,
+        "y": 230,
+        "width": 18,
+        "height": 54
+      },
+      "e9a": {
+        "region": "center",
+        "homeRegion": "center",
+        "semanticType": "wall-sconce",
+        "sourceRect": {
+          "x": 1111,
+          "y": 229,
+          "width": 20,
+          "height": 56
+        },
+        "destinationRect": {
+          "x": 1111,
+          "y": 229,
+          "width": 20,
+          "height": 56
+        },
+        "ownedOpaquePixelCount": 504
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/center-v2.png",
+        "atlasRect": {
+          "x": 0,
+          "y": 0,
+          "width": 22,
+          "height": 58
+        },
+        "pixelBounds": {
+          "x": 1112,
+          "y": 230,
+          "width": 18,
+          "height": 54
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 504,
+        "packingOrderIndex": 7
+      }
+    },
+    {
+      "tmxId": 208,
+      "stableId": "jyt.occ.east-lower.diagonal-brace-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "east-lower",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 1410,
+        "y": 768
+      },
+      "fixedPointY": 196608,
+      "tieBias": -1,
+      "assetRef": "images/occluders/east-lower-v2.png",
+      "sourceRect": {
+        "x": 2,
+        "y": 2,
+        "width": 203,
+        "height": 208
+      },
+      "destinationRect": {
+        "x": 1308,
+        "y": 560,
+        "width": 203,
+        "height": 208
+      },
+      "e9a": {
+        "region": "east-lower",
+        "homeRegion": "east-lower",
+        "semanticType": "diagonal-brace",
+        "sourceRect": {
+          "x": 1307,
+          "y": 559,
+          "width": 205,
+          "height": 210
+        },
+        "destinationRect": {
+          "x": 1307,
+          "y": 559,
+          "width": 205,
+          "height": 210
+        },
+        "ownedOpaquePixelCount": 12954
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/east-lower-v2.png",
+        "atlasRect": {
+          "x": 0,
+          "y": 0,
+          "width": 207,
+          "height": 212
+        },
+        "pixelBounds": {
+          "x": 1308,
+          "y": 560,
+          "width": 203,
+          "height": 208
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 12954,
+        "packingOrderIndex": 26
+      }
+    },
+    {
+      "tmxId": 209,
+      "stableId": "jyt.occ.east-lower.diagonal-brace-02.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "east-lower",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 1363,
+        "y": 741
+      },
+      "fixedPointY": 189696,
+      "tieBias": -1,
+      "assetRef": "images/occluders/east-lower-v2.png",
+      "sourceRect": {
+        "x": 209,
+        "y": 2,
+        "width": 24,
+        "height": 50
+      },
+      "destinationRect": {
+        "x": 1351,
+        "y": 691,
+        "width": 24,
+        "height": 50
+      },
+      "e9a": {
+        "region": "east-lower",
+        "homeRegion": "east-lower",
+        "semanticType": "diagonal-brace",
+        "sourceRect": {
+          "x": 1350,
+          "y": 690,
+          "width": 26,
+          "height": 52
+        },
+        "destinationRect": {
+          "x": 1350,
+          "y": 690,
+          "width": 26,
+          "height": 52
+        },
+        "ownedOpaquePixelCount": 494
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/east-lower-v2.png",
+        "atlasRect": {
+          "x": 207,
+          "y": 0,
+          "width": 28,
+          "height": 54
+        },
+        "pixelBounds": {
+          "x": 1351,
+          "y": 691,
+          "width": 24,
+          "height": 50
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 494,
+        "packingOrderIndex": 27
+      }
+    },
+    {
+      "tmxId": 210,
+      "stableId": "jyt.occ.east-lower.fabric-rack-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "east-lower",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 1631,
+        "y": 830
+      },
+      "fixedPointY": 212480,
+      "tieBias": -1,
+      "assetRef": "images/occluders/east-lower-v2.png",
+      "sourceRect": {
+        "x": 237,
+        "y": 2,
+        "width": 66,
+        "height": 82
+      },
+      "destinationRect": {
+        "x": 1598,
+        "y": 748,
+        "width": 66,
+        "height": 82
+      },
+      "e9a": {
+        "region": "east-lower",
+        "homeRegion": "east-lower",
+        "semanticType": "fabric-rack",
+        "sourceRect": {
+          "x": 1597,
+          "y": 747,
+          "width": 67,
+          "height": 84
+        },
+        "destinationRect": {
+          "x": 1597,
+          "y": 747,
+          "width": 67,
+          "height": 84
+        },
+        "ownedOpaquePixelCount": 2227
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/east-lower-v2.png",
+        "atlasRect": {
+          "x": 235,
+          "y": 0,
+          "width": 70,
+          "height": 86
+        },
+        "pixelBounds": {
+          "x": 1598,
+          "y": 748,
+          "width": 66,
+          "height": 82
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 2227,
+        "packingOrderIndex": 28
+      }
+    },
+    {
+      "tmxId": 211,
+      "stableId": "jyt.occ.east-lower.lantern-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "east-lower",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 1338,
+        "y": 852
+      },
+      "fixedPointY": 218112,
+      "tieBias": -1,
+      "assetRef": "images/occluders/east-lower-v2.png",
+      "sourceRect": {
+        "x": 307,
+        "y": 2,
+        "width": 47,
+        "height": 86
+      },
+      "destinationRect": {
+        "x": 1314,
+        "y": 839,
+        "width": 47,
+        "height": 86
+      },
+      "e9a": {
+        "region": "east-lower",
+        "homeRegion": "east-lower",
+        "semanticType": "lantern",
+        "sourceRect": {
+          "x": 1313,
+          "y": 838,
+          "width": 49,
+          "height": 88
+        },
+        "destinationRect": {
+          "x": 1313,
+          "y": 838,
+          "width": 49,
+          "height": 88
+        },
+        "ownedOpaquePixelCount": 2328
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/east-lower-v2.png",
+        "atlasRect": {
+          "x": 305,
+          "y": 0,
+          "width": 51,
+          "height": 90
+        },
+        "pixelBounds": {
+          "x": 1314,
+          "y": 839,
+          "width": 47,
+          "height": 86
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 2328,
+        "packingOrderIndex": 29
+      }
+    },
+    {
+      "tmxId": 212,
+      "stableId": "jyt.occ.east-lower.railing-post-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "east-lower",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 1247,
+        "y": 775
+      },
+      "fixedPointY": 198400,
+      "tieBias": -1,
+      "assetRef": "images/occluders/east-lower-v2.png",
+      "sourceRect": {
+        "x": 358,
+        "y": 2,
+        "width": 10,
+        "height": 68
+      },
+      "destinationRect": {
+        "x": 1242,
+        "y": 707,
+        "width": 10,
+        "height": 68
+      },
+      "e9a": {
+        "region": "east-lower",
+        "homeRegion": "east-lower",
+        "semanticType": "railing-post",
+        "sourceRect": {
+          "x": 1241,
+          "y": 706,
+          "width": 12,
+          "height": 70
+        },
+        "destinationRect": {
+          "x": 1241,
+          "y": 706,
+          "width": 12,
+          "height": 70
+        },
+        "ownedOpaquePixelCount": 355
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/east-lower-v2.png",
+        "atlasRect": {
+          "x": 356,
+          "y": 0,
+          "width": 14,
+          "height": 72
+        },
+        "pixelBounds": {
+          "x": 1242,
+          "y": 707,
+          "width": 10,
+          "height": 68
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 355,
+        "packingOrderIndex": 30
+      }
+    },
+    {
+      "tmxId": 213,
+      "stableId": "jyt.occ.east-lower.worktable-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "east-lower",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 1559,
+        "y": 701
+      },
+      "fixedPointY": 179456,
+      "tieBias": -1,
+      "assetRef": "images/occluders/east-lower-v2.png",
+      "sourceRect": {
+        "x": 372,
+        "y": 2,
+        "width": 120,
+        "height": 127
+      },
+      "destinationRect": {
+        "x": 1499,
+        "y": 574,
+        "width": 120,
+        "height": 127
+      },
+      "e9a": {
+        "region": "east-lower",
+        "homeRegion": "east-lower",
+        "semanticType": "worktable",
+        "sourceRect": {
+          "x": 1498,
+          "y": 573,
+          "width": 122,
+          "height": 129
+        },
+        "destinationRect": {
+          "x": 1498,
+          "y": 573,
+          "width": 122,
+          "height": 129
+        },
+        "ownedOpaquePixelCount": 5571
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/east-lower-v2.png",
+        "atlasRect": {
+          "x": 370,
+          "y": 0,
+          "width": 124,
+          "height": 131
+        },
+        "pixelBounds": {
+          "x": 1499,
+          "y": 574,
+          "width": 120,
+          "height": 127
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 5571,
+        "packingOrderIndex": 31
+      }
+    },
+    {
+      "tmxId": 214,
+      "stableId": "jyt.occ.east-upper.diagonal-brace-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "east-upper",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 1140,
+        "y": 486
+      },
+      "fixedPointY": 124416,
+      "tieBias": -1,
+      "assetRef": "images/occluders/east-upper-v2.png",
+      "sourceRect": {
+        "x": 2,
+        "y": 2,
+        "width": 19,
+        "height": 51
+      },
+      "destinationRect": {
+        "x": 1130,
+        "y": 435,
+        "width": 19,
+        "height": 51
+      },
+      "e9a": {
+        "region": "east-upper",
+        "homeRegion": "east-upper",
+        "semanticType": "diagonal-brace",
+        "sourceRect": {
+          "x": 1129,
+          "y": 434,
+          "width": 21,
+          "height": 53
+        },
+        "destinationRect": {
+          "x": 1129,
+          "y": 434,
+          "width": 21,
+          "height": 53
+        },
+        "ownedOpaquePixelCount": 500
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/east-upper-v2.png",
+        "atlasRect": {
+          "x": 0,
+          "y": 0,
+          "width": 23,
+          "height": 55
+        },
+        "pixelBounds": {
+          "x": 1130,
+          "y": 435,
+          "width": 19,
+          "height": 51
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 500,
+        "packingOrderIndex": 8
+      }
+    },
+    {
+      "tmxId": 215,
+      "stableId": "jyt.occ.east-upper.pillar-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "east-upper",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 1181,
+        "y": 464
+      },
+      "fixedPointY": 118784,
+      "tieBias": -1,
+      "assetRef": "images/occluders/east-upper-v2.png",
+      "sourceRect": {
+        "x": 25,
+        "y": 2,
+        "width": 46,
+        "height": 159
+      },
+      "destinationRect": {
+        "x": 1158,
+        "y": 305,
+        "width": 46,
+        "height": 159
+      },
+      "e9a": {
+        "region": "east-upper",
+        "homeRegion": "east-upper",
+        "semanticType": "pillar",
+        "sourceRect": {
+          "x": 1157,
+          "y": 304,
+          "width": 48,
+          "height": 161
+        },
+        "destinationRect": {
+          "x": 1157,
+          "y": 304,
+          "width": 48,
+          "height": 161
+        },
+        "ownedOpaquePixelCount": 4701
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/east-upper-v2.png",
+        "atlasRect": {
+          "x": 23,
+          "y": 0,
+          "width": 50,
+          "height": 163
+        },
+        "pixelBounds": {
+          "x": 1158,
+          "y": 305,
+          "width": 46,
+          "height": 159
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 4701,
+        "packingOrderIndex": 9
+      }
+    },
+    {
+      "tmxId": 216,
+      "stableId": "jyt.occ.east-upper.pillar-02.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "east-upper",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 1227,
+        "y": 703
+      },
+      "fixedPointY": 179968,
+      "tieBias": -1,
+      "assetRef": "images/occluders/east-upper-v2.png",
+      "sourceRect": {
+        "x": 75,
+        "y": 2,
+        "width": 50,
+        "height": 225
+      },
+      "destinationRect": {
+        "x": 1202,
+        "y": 478,
+        "width": 50,
+        "height": 225
+      },
+      "e9a": {
+        "region": "east-upper",
+        "homeRegion": "east-upper",
+        "semanticType": "pillar",
+        "sourceRect": {
+          "x": 1201,
+          "y": 477,
+          "width": 52,
+          "height": 227
+        },
+        "destinationRect": {
+          "x": 1201,
+          "y": 477,
+          "width": 52,
+          "height": 227
+        },
+        "ownedOpaquePixelCount": 5188
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/east-upper-v2.png",
+        "atlasRect": {
+          "x": 73,
+          "y": 0,
+          "width": 54,
+          "height": 229
+        },
+        "pixelBounds": {
+          "x": 1202,
+          "y": 478,
+          "width": 50,
+          "height": 225
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 5188,
+        "packingOrderIndex": 10
+      }
+    },
+    {
+      "tmxId": 217,
+      "stableId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "east-upper",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 1432,
+        "y": 284
+      },
+      "fixedPointY": 72704,
+      "tieBias": -1,
+      "assetRef": "images/occluders/east-upper-v2.png",
+      "sourceRect": {
+        "x": 129,
+        "y": 2,
+        "width": 95,
+        "height": 29
+      },
+      "destinationRect": {
+        "x": 1384,
+        "y": 255,
+        "width": 95,
+        "height": 29
+      },
+      "e9a": {
+        "region": "east-upper",
+        "homeRegion": "east-upper",
+        "semanticType": "scroll-table-front",
+        "sourceRect": {
+          "x": 1383,
+          "y": 254,
+          "width": 97,
+          "height": 31
+        },
+        "destinationRect": {
+          "x": 1383,
+          "y": 254,
+          "width": 97,
+          "height": 31
+        },
+        "ownedOpaquePixelCount": 2117
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/east-upper-v2.png",
+        "atlasRect": {
+          "x": 127,
+          "y": 0,
+          "width": 99,
+          "height": 33
+        },
+        "pixelBounds": {
+          "x": 1384,
+          "y": 255,
+          "width": 95,
+          "height": 29
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 2117,
+        "packingOrderIndex": 11
+      }
+    },
+    {
+      "tmxId": 218,
+      "stableId": "jyt.occ.east-upper.wall-panel-lower-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "east-upper",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 1460,
+        "y": 548
+      },
+      "fixedPointY": 140288,
+      "tieBias": -1,
+      "assetRef": "images/occluders/east-upper-v2.png",
+      "sourceRect": {
+        "x": 2,
+        "y": 231,
+        "width": 408,
+        "height": 71
+      },
+      "destinationRect": {
+        "x": 1256,
+        "y": 477,
+        "width": 408,
+        "height": 71
+      },
+      "e9a": {
+        "region": "east-upper",
+        "homeRegion": "east-upper",
+        "semanticType": "wall-panel",
+        "sourceRect": {
+          "x": 1255,
+          "y": 476,
+          "width": 409,
+          "height": 73
+        },
+        "destinationRect": {
+          "x": 1255,
+          "y": 476,
+          "width": 409,
+          "height": 73
+        },
+        "ownedOpaquePixelCount": 27065
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/east-upper-v2.png",
+        "atlasRect": {
+          "x": 0,
+          "y": 229,
+          "width": 412,
+          "height": 75
+        },
+        "pixelBounds": {
+          "x": 1256,
+          "y": 477,
+          "width": 408,
+          "height": 71
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 27065,
+        "packingOrderIndex": 12
+      }
+    },
+    {
+      "tmxId": 219,
+      "stableId": "jyt.occ.east-upper.wall-panel-upper-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "east-upper",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 1430,
+        "y": 459
+      },
+      "fixedPointY": 117504,
+      "tieBias": -1,
+      "assetRef": "images/occluders/east-upper-v2.png",
+      "sourceRect": {
+        "x": 2,
+        "y": 306,
+        "width": 467,
+        "height": 117
+      },
+      "destinationRect": {
+        "x": 1197,
+        "y": 342,
+        "width": 467,
+        "height": 117
+      },
+      "e9a": {
+        "region": "east-upper",
+        "homeRegion": "east-upper",
+        "semanticType": "wall-panel",
+        "sourceRect": {
+          "x": 1196,
+          "y": 341,
+          "width": 468,
+          "height": 119
+        },
+        "destinationRect": {
+          "x": 1196,
+          "y": 341,
+          "width": 468,
+          "height": 119
+        },
+        "ownedOpaquePixelCount": 30996
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/east-upper-v2.png",
+        "atlasRect": {
+          "x": 0,
+          "y": 304,
+          "width": 471,
+          "height": 121
+        },
+        "pixelBounds": {
+          "x": 1197,
+          "y": 342,
+          "width": 467,
+          "height": 117
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 30996,
+        "packingOrderIndex": 13
+      }
+    },
+    {
+      "tmxId": 220,
+      "stableId": "jyt.occ.entrance.hanging-banner-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "entrance",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 791,
+        "y": 794
+      },
+      "fixedPointY": 203264,
+      "tieBias": -1,
+      "assetRef": "images/occluders/entrance-v2.png",
+      "sourceRect": {
+        "x": 2,
+        "y": 2,
+        "width": 48,
+        "height": 72
+      },
+      "destinationRect": {
+        "x": 767,
+        "y": 722,
+        "width": 48,
+        "height": 72
+      },
+      "e9a": {
+        "region": "entrance",
+        "homeRegion": "entrance",
+        "semanticType": "hanging-banner",
+        "sourceRect": {
+          "x": 766,
+          "y": 721,
+          "width": 50,
+          "height": 74
+        },
+        "destinationRect": {
+          "x": 766,
+          "y": 721,
+          "width": 50,
+          "height": 74
+        },
+        "ownedOpaquePixelCount": 2313
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/entrance-v2.png",
+        "atlasRect": {
+          "x": 0,
+          "y": 0,
+          "width": 52,
+          "height": 76
+        },
+        "pixelBounds": {
+          "x": 767,
+          "y": 722,
+          "width": 48,
+          "height": 72
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 2313,
+        "packingOrderIndex": 22
+      }
+    },
+    {
+      "tmxId": 221,
+      "stableId": "jyt.occ.entrance.hanging-banner-02.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "entrance",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 951,
+        "y": 796
+      },
+      "fixedPointY": 203776,
+      "tieBias": -1,
+      "assetRef": "images/occluders/entrance-v2.png",
+      "sourceRect": {
+        "x": 54,
+        "y": 2,
+        "width": 40,
+        "height": 63
+      },
+      "destinationRect": {
+        "x": 931,
+        "y": 733,
+        "width": 40,
+        "height": 63
+      },
+      "e9a": {
+        "region": "entrance",
+        "homeRegion": "entrance",
+        "semanticType": "hanging-banner",
+        "sourceRect": {
+          "x": 930,
+          "y": 732,
+          "width": 42,
+          "height": 65
+        },
+        "destinationRect": {
+          "x": 930,
+          "y": 732,
+          "width": 42,
+          "height": 65
+        },
+        "ownedOpaquePixelCount": 1867
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/entrance-v2.png",
+        "atlasRect": {
+          "x": 52,
+          "y": 0,
+          "width": 44,
+          "height": 67
+        },
+        "pixelBounds": {
+          "x": 931,
+          "y": 733,
+          "width": 40,
+          "height": 63
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 1867,
+        "packingOrderIndex": 23
+      }
+    },
+    {
+      "tmxId": 222,
+      "stableId": "jyt.occ.entrance.lantern-post-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "entrance",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 1073,
+        "y": 778
+      },
+      "fixedPointY": 199168,
+      "tieBias": -1,
+      "assetRef": "images/occluders/entrance-v2.png",
+      "sourceRect": {
+        "x": 98,
+        "y": 2,
+        "width": 41,
+        "height": 104
+      },
+      "destinationRect": {
+        "x": 1052,
+        "y": 674,
+        "width": 41,
+        "height": 104
+      },
+      "e9a": {
+        "region": "entrance",
+        "homeRegion": "entrance",
+        "semanticType": "lantern-post",
+        "sourceRect": {
+          "x": 1051,
+          "y": 673,
+          "width": 43,
+          "height": 106
+        },
+        "destinationRect": {
+          "x": 1051,
+          "y": 673,
+          "width": 43,
+          "height": 106
+        },
+        "ownedOpaquePixelCount": 3038
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/entrance-v2.png",
+        "atlasRect": {
+          "x": 96,
+          "y": 0,
+          "width": 45,
+          "height": 108
+        },
+        "pixelBounds": {
+          "x": 1052,
+          "y": 674,
+          "width": 41,
+          "height": 104
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 3038,
+        "packingOrderIndex": 24
+      }
+    },
+    {
+      "tmxId": 223,
+      "stableId": "jyt.occ.entrance.lantern-post-02.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "entrance",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 1020,
+        "y": 755
+      },
+      "fixedPointY": 193280,
+      "tieBias": -1,
+      "assetRef": "images/occluders/entrance-v2.png",
+      "sourceRect": {
+        "x": 143,
+        "y": 2,
+        "width": 31,
+        "height": 77
+      },
+      "destinationRect": {
+        "x": 1004,
+        "y": 678,
+        "width": 31,
+        "height": 77
+      },
+      "e9a": {
+        "region": "entrance",
+        "homeRegion": "entrance",
+        "semanticType": "lantern-post",
+        "sourceRect": {
+          "x": 1003,
+          "y": 677,
+          "width": 33,
+          "height": 79
+        },
+        "destinationRect": {
+          "x": 1003,
+          "y": 677,
+          "width": 33,
+          "height": 79
+        },
+        "ownedOpaquePixelCount": 1317
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/entrance-v2.png",
+        "atlasRect": {
+          "x": 141,
+          "y": 0,
+          "width": 35,
+          "height": 81
+        },
+        "pixelBounds": {
+          "x": 1004,
+          "y": 678,
+          "width": 31,
+          "height": 77
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 1317,
+        "packingOrderIndex": 25
+      }
+    },
+    {
+      "tmxId": 224,
+      "stableId": "jyt.occ.west-lower.diagonal-brace-02.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "west-lower",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 496,
+        "y": 759
+      },
+      "fixedPointY": 194304,
+      "tieBias": -1,
+      "assetRef": "images/occluders/west-lower-v2.png",
+      "sourceRect": {
+        "x": 2,
+        "y": 2,
+        "width": 43,
+        "height": 118
+      },
+      "destinationRect": {
+        "x": 474,
+        "y": 641,
+        "width": 43,
+        "height": 118
+      },
+      "e9a": {
+        "region": "west-lower",
+        "homeRegion": "west-lower",
+        "semanticType": "diagonal-brace",
+        "sourceRect": {
+          "x": 473,
+          "y": 640,
+          "width": 45,
+          "height": 120
+        },
+        "destinationRect": {
+          "x": 473,
+          "y": 640,
+          "width": 45,
+          "height": 120
+        },
+        "ownedOpaquePixelCount": 2160
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/west-lower-v2.png",
+        "atlasRect": {
+          "x": 0,
+          "y": 0,
+          "width": 47,
+          "height": 122
+        },
+        "pixelBounds": {
+          "x": 474,
+          "y": 641,
+          "width": 43,
+          "height": 118
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 2160,
+        "packingOrderIndex": 14
+      }
+    },
+    {
+      "tmxId": 225,
+      "stableId": "jyt.occ.west-lower.floor-lantern-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "west-lower",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 381,
+        "y": 852
+      },
+      "fixedPointY": 218112,
+      "tieBias": -1,
+      "assetRef": "images/occluders/west-lower-v2.png",
+      "sourceRect": {
+        "x": 49,
+        "y": 2,
+        "width": 48,
+        "height": 52
+      },
+      "destinationRect": {
+        "x": 357,
+        "y": 876,
+        "width": 48,
+        "height": 52
+      },
+      "e9a": {
+        "region": "west-lower",
+        "homeRegion": "west-lower",
+        "semanticType": "floor-lantern",
+        "sourceRect": {
+          "x": 356,
+          "y": 875,
+          "width": 50,
+          "height": 53
+        },
+        "destinationRect": {
+          "x": 356,
+          "y": 875,
+          "width": 50,
+          "height": 53
+        },
+        "ownedOpaquePixelCount": 1348
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/west-lower-v2.png",
+        "atlasRect": {
+          "x": 47,
+          "y": 0,
+          "width": 52,
+          "height": 56
+        },
+        "pixelBounds": {
+          "x": 357,
+          "y": 876,
+          "width": 48,
+          "height": 52
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 1348,
+        "packingOrderIndex": 15
+      }
+    },
+    {
+      "tmxId": 226,
+      "stableId": "jyt.occ.west-lower.long-table-frame-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "west-lower",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 178,
+        "y": 719
+      },
+      "fixedPointY": 184064,
+      "tieBias": -1,
+      "assetRef": "images/occluders/west-lower-v2.png",
+      "sourceRect": {
+        "x": 101,
+        "y": 2,
+        "width": 122,
+        "height": 118
+      },
+      "destinationRect": {
+        "x": 117,
+        "y": 601,
+        "width": 122,
+        "height": 118
+      },
+      "e9a": {
+        "region": "west-lower",
+        "homeRegion": "west-lower",
+        "semanticType": "long-table-frame",
+        "sourceRect": {
+          "x": 116,
+          "y": 600,
+          "width": 124,
+          "height": 120
+        },
+        "destinationRect": {
+          "x": 116,
+          "y": 600,
+          "width": 124,
+          "height": 120
+        },
+        "ownedOpaquePixelCount": 2900
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/west-lower-v2.png",
+        "atlasRect": {
+          "x": 99,
+          "y": 0,
+          "width": 126,
+          "height": 122
+        },
+        "pixelBounds": {
+          "x": 117,
+          "y": 601,
+          "width": 122,
+          "height": 118
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 2900,
+        "packingOrderIndex": 16
+      }
+    },
+    {
+      "tmxId": 227,
+      "stableId": "jyt.occ.west-lower.railing-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "west-lower",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 593,
+        "y": 778
+      },
+      "fixedPointY": 199168,
+      "tieBias": -1,
+      "assetRef": "images/occluders/west-lower-v2.png",
+      "sourceRect": {
+        "x": 227,
+        "y": 2,
+        "width": 174,
+        "height": 103
+      },
+      "destinationRect": {
+        "x": 506,
+        "y": 675,
+        "width": 174,
+        "height": 103
+      },
+      "e9a": {
+        "region": "west-lower",
+        "homeRegion": "west-lower",
+        "semanticType": "railing",
+        "sourceRect": {
+          "x": 505,
+          "y": 674,
+          "width": 176,
+          "height": 105
+        },
+        "destinationRect": {
+          "x": 505,
+          "y": 674,
+          "width": 176,
+          "height": 105
+        },
+        "ownedOpaquePixelCount": 5013
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/west-lower-v2.png",
+        "atlasRect": {
+          "x": 225,
+          "y": 0,
+          "width": 178,
+          "height": 107
+        },
+        "pixelBounds": {
+          "x": 506,
+          "y": 675,
+          "width": 174,
+          "height": 103
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 5013,
+        "packingOrderIndex": 17
+      }
+    },
+    {
+      "tmxId": 228,
+      "stableId": "jyt.occ.west-lower.railing-02.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "west-lower",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 155,
+        "y": 824
+      },
+      "fixedPointY": 210944,
+      "tieBias": -1,
+      "assetRef": "images/occluders/west-lower-v2.png",
+      "sourceRect": {
+        "x": 405,
+        "y": 2,
+        "width": 178,
+        "height": 37
+      },
+      "destinationRect": {
+        "x": 66,
+        "y": 787,
+        "width": 178,
+        "height": 37
+      },
+      "e9a": {
+        "region": "west-lower",
+        "homeRegion": "west-lower",
+        "semanticType": "railing",
+        "sourceRect": {
+          "x": 65,
+          "y": 786,
+          "width": 180,
+          "height": 39
+        },
+        "destinationRect": {
+          "x": 65,
+          "y": 786,
+          "width": 180,
+          "height": 39
+        },
+        "ownedOpaquePixelCount": 4549
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/west-lower-v2.png",
+        "atlasRect": {
+          "x": 403,
+          "y": 0,
+          "width": 182,
+          "height": 41
+        },
+        "pixelBounds": {
+          "x": 66,
+          "y": 787,
+          "width": 178,
+          "height": 37
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 4549,
+        "packingOrderIndex": 18
+      }
+    },
+    {
+      "tmxId": 229,
+      "stableId": "jyt.occ.west-lower.wall-bracket-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "west-lower",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 704,
+        "y": 714
+      },
+      "fixedPointY": 182784,
+      "tieBias": -1,
+      "assetRef": "images/occluders/west-lower-v2.png",
+      "sourceRect": {
+        "x": 587,
+        "y": 2,
+        "width": 35,
+        "height": 39
+      },
+      "destinationRect": {
+        "x": 686,
+        "y": 675,
+        "width": 35,
+        "height": 39
+      },
+      "e9a": {
+        "region": "west-lower",
+        "homeRegion": "west-lower",
+        "semanticType": "wall-bracket",
+        "sourceRect": {
+          "x": 685,
+          "y": 674,
+          "width": 37,
+          "height": 41
+        },
+        "destinationRect": {
+          "x": 685,
+          "y": 674,
+          "width": 37,
+          "height": 41
+        },
+        "ownedOpaquePixelCount": 938
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/west-lower-v2.png",
+        "atlasRect": {
+          "x": 585,
+          "y": 0,
+          "width": 39,
+          "height": 43
+        },
+        "pixelBounds": {
+          "x": 686,
+          "y": 675,
+          "width": 35,
+          "height": 39
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 938,
+        "packingOrderIndex": 19
+      }
+    },
+    {
+      "tmxId": 230,
+      "stableId": "jyt.occ.west-lower.wall-lantern-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "west-lower",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 35,
+        "y": 741
+      },
+      "fixedPointY": 189696,
+      "tieBias": -1,
+      "assetRef": "images/occluders/west-lower-v2.png",
+      "sourceRect": {
+        "x": 626,
+        "y": 2,
+        "width": 48,
+        "height": 35
+      },
+      "destinationRect": {
+        "x": 11,
+        "y": 706,
+        "width": 48,
+        "height": 35
+      },
+      "e9a": {
+        "region": "west-lower",
+        "homeRegion": "west-lower",
+        "semanticType": "wall-lantern",
+        "sourceRect": {
+          "x": 10,
+          "y": 705,
+          "width": 50,
+          "height": 37
+        },
+        "destinationRect": {
+          "x": 10,
+          "y": 705,
+          "width": 50,
+          "height": 37
+        },
+        "ownedOpaquePixelCount": 850
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/west-lower-v2.png",
+        "atlasRect": {
+          "x": 624,
+          "y": 0,
+          "width": 52,
+          "height": 39
+        },
+        "pixelBounds": {
+          "x": 11,
+          "y": 706,
+          "width": 48,
+          "height": 35
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 850,
+        "packingOrderIndex": 20
+      }
+    },
+    {
+      "tmxId": 231,
+      "stableId": "jyt.occ.west-lower.wall-panel-assembly-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "west-lower",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 218,
+        "y": 852
+      },
+      "fixedPointY": 218112,
+      "tieBias": -1,
+      "assetRef": "images/occluders/west-lower-v2.png",
+      "sourceRect": {
+        "x": 2,
+        "y": 124,
+        "width": 402,
+        "height": 339
+      },
+      "destinationRect": {
+        "x": 17,
+        "y": 573,
+        "width": 402,
+        "height": 339
+      },
+      "e9a": {
+        "region": "west-lower",
+        "homeRegion": "west-lower",
+        "semanticType": "wall-panel-assembly",
+        "sourceRect": {
+          "x": 16,
+          "y": 572,
+          "width": 404,
+          "height": 341
+        },
+        "destinationRect": {
+          "x": 16,
+          "y": 572,
+          "width": 404,
+          "height": 341
+        },
+        "ownedOpaquePixelCount": 31548
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/west-lower-v2.png",
+        "atlasRect": {
+          "x": 0,
+          "y": 122,
+          "width": 406,
+          "height": 343
+        },
+        "pixelBounds": {
+          "x": 17,
+          "y": 573,
+          "width": 402,
+          "height": 339
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 31548,
+        "packingOrderIndex": 21
+      }
+    },
+    {
+      "tmxId": 232,
+      "stableId": "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "west-upper",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 608,
+        "y": 489
+      },
+      "fixedPointY": 125184,
+      "tieBias": -1,
+      "assetRef": "images/occluders/west-upper-v2.png",
+      "sourceRect": {
+        "x": 2,
+        "y": 2,
+        "width": 16,
+        "height": 57
+      },
+      "destinationRect": {
+        "x": 600,
+        "y": 432,
+        "width": 16,
+        "height": 57
+      },
+      "e9a": {
+        "region": "west-upper",
+        "homeRegion": "west-upper",
+        "semanticType": "diagonal-brace",
+        "sourceRect": {
+          "x": 599,
+          "y": 431,
+          "width": 18,
+          "height": 59
+        },
+        "destinationRect": {
+          "x": 599,
+          "y": 431,
+          "width": 18,
+          "height": 59
+        },
+        "ownedOpaquePixelCount": 449
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/west-upper-v2.png",
+        "atlasRect": {
+          "x": 0,
+          "y": 0,
+          "width": 20,
+          "height": 61
+        },
+        "pixelBounds": {
+          "x": 600,
+          "y": 432,
+          "width": 16,
+          "height": 57
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 449,
+        "packingOrderIndex": 0
+      }
+    },
+    {
+      "tmxId": 233,
+      "stableId": "jyt.occ.west-upper.lantern-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "west-upper",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 484,
+        "y": 240
+      },
+      "fixedPointY": 61440,
+      "tieBias": -1,
+      "assetRef": "images/occluders/west-upper-v2.png",
+      "sourceRect": {
+        "x": 22,
+        "y": 2,
+        "width": 45,
+        "height": 75
+      },
+      "destinationRect": {
+        "x": 461,
+        "y": 165,
+        "width": 45,
+        "height": 75
+      },
+      "e9a": {
+        "region": "west-upper",
+        "homeRegion": "west-upper",
+        "semanticType": "lantern",
+        "sourceRect": {
+          "x": 460,
+          "y": 164,
+          "width": 47,
+          "height": 77
+        },
+        "destinationRect": {
+          "x": 460,
+          "y": 164,
+          "width": 47,
+          "height": 77
+        },
+        "ownedOpaquePixelCount": 2475
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/west-upper-v2.png",
+        "atlasRect": {
+          "x": 20,
+          "y": 0,
+          "width": 49,
+          "height": 79
+        },
+        "pixelBounds": {
+          "x": 461,
+          "y": 165,
+          "width": 45,
+          "height": 75
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 2475,
+        "packingOrderIndex": 1
+      }
+    },
+    {
+      "tmxId": 234,
+      "stableId": "jyt.occ.west-upper.lantern-table-frame-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "west-upper",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 285,
+        "y": 351
+      },
+      "fixedPointY": 89856,
+      "tieBias": -1,
+      "assetRef": "images/occluders/west-upper-v2.png",
+      "sourceRect": {
+        "x": 71,
+        "y": 2,
+        "width": 139,
+        "height": 74
+      },
+      "destinationRect": {
+        "x": 215,
+        "y": 277,
+        "width": 139,
+        "height": 74
+      },
+      "e9a": {
+        "region": "west-upper",
+        "homeRegion": "west-upper",
+        "semanticType": "lantern-table-frame",
+        "sourceRect": {
+          "x": 214,
+          "y": 276,
+          "width": 141,
+          "height": 76
+        },
+        "destinationRect": {
+          "x": 214,
+          "y": 276,
+          "width": 141,
+          "height": 76
+        },
+        "ownedOpaquePixelCount": 2706
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/west-upper-v2.png",
+        "atlasRect": {
+          "x": 69,
+          "y": 0,
+          "width": 143,
+          "height": 78
+        },
+        "pixelBounds": {
+          "x": 215,
+          "y": 277,
+          "width": 139,
+          "height": 74
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 2706,
+        "packingOrderIndex": 2
+      }
+    },
+    {
+      "tmxId": 235,
+      "stableId": "jyt.occ.west-upper.pillar-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "west-upper",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 571,
+        "y": 469
+      },
+      "fixedPointY": 120064,
+      "tieBias": -1,
+      "assetRef": "images/occluders/west-upper-v2.png",
+      "sourceRect": {
+        "x": 214,
+        "y": 2,
+        "width": 56,
+        "height": 163
+      },
+      "destinationRect": {
+        "x": 543,
+        "y": 306,
+        "width": 56,
+        "height": 163
+      },
+      "e9a": {
+        "region": "west-upper",
+        "homeRegion": "west-upper",
+        "semanticType": "pillar",
+        "sourceRect": {
+          "x": 542,
+          "y": 305,
+          "width": 58,
+          "height": 165
+        },
+        "destinationRect": {
+          "x": 542,
+          "y": 305,
+          "width": 58,
+          "height": 165
+        },
+        "ownedOpaquePixelCount": 4981
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/west-upper-v2.png",
+        "atlasRect": {
+          "x": 212,
+          "y": 0,
+          "width": 60,
+          "height": 167
+        },
+        "pixelBounds": {
+          "x": 543,
+          "y": 306,
+          "width": 56,
+          "height": 163
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 4981,
+        "packingOrderIndex": 3
+      }
+    },
+    {
+      "tmxId": 236,
+      "stableId": "jyt.occ.west-upper.wall-panel-assembly-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "west-upper",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 274,
+        "y": 716
+      },
+      "fixedPointY": 183296,
+      "tieBias": -1,
+      "assetRef": "images/occluders/west-upper-v2.png",
+      "sourceRect": {
+        "x": 2,
+        "y": 169,
+        "width": 546,
+        "height": 368
+      },
+      "destinationRect": {
+        "x": 0,
+        "y": 348,
+        "width": 546,
+        "height": 368
+      },
+      "e9a": {
+        "region": "west-upper",
+        "homeRegion": "west-upper",
+        "semanticType": "wall-panel-assembly",
+        "sourceRect": {
+          "x": 0,
+          "y": 347,
+          "width": 547,
+          "height": 370
+        },
+        "destinationRect": {
+          "x": 0,
+          "y": 347,
+          "width": 547,
+          "height": 370
+        },
+        "ownedOpaquePixelCount": 82119
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/west-upper-v2.png",
+        "atlasRect": {
+          "x": 0,
+          "y": 167,
+          "width": 550,
+          "height": 372
+        },
+        "pixelBounds": {
+          "x": 0,
+          "y": 348,
+          "width": 546,
+          "height": 368
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 82119,
+        "packingOrderIndex": 4
+      }
+    },
+    {
+      "tmxId": 237,
+      "stableId": "jyt.occ.west-upper.wall-sconce-01.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "west-upper",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 624,
+        "y": 272
+      },
+      "fixedPointY": 69632,
+      "tieBias": -1,
+      "assetRef": "images/occluders/west-upper-v2.png",
+      "sourceRect": {
+        "x": 552,
+        "y": 169,
+        "width": 13,
+        "height": 34
+      },
+      "destinationRect": {
+        "x": 617,
+        "y": 238,
+        "width": 13,
+        "height": 34
+      },
+      "e9a": {
+        "region": "west-upper",
+        "homeRegion": "west-upper",
+        "semanticType": "wall-sconce",
+        "sourceRect": {
+          "x": 616,
+          "y": 237,
+          "width": 15,
+          "height": 36
+        },
+        "destinationRect": {
+          "x": 616,
+          "y": 237,
+          "width": 15,
+          "height": 36
+        },
+        "ownedOpaquePixelCount": 216
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/west-upper-v2.png",
+        "atlasRect": {
+          "x": 550,
+          "y": 167,
+          "width": 17,
+          "height": 38
+        },
+        "pixelBounds": {
+          "x": 617,
+          "y": 238,
+          "width": 13,
+          "height": 34
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 216,
+        "packingOrderIndex": 5
+      }
+    },
+    {
+      "tmxId": 238,
+      "stableId": "jyt.occ.west-upper.wall-sconce-02.v2",
+      "sceneId": "juyiting-main",
+      "chunkId": "west-upper",
+      "floorId": "floor-1",
+      "kind": "occluder-fragment",
+      "elevation": 0,
+      "renderBand": "world",
+      "sortMode": "fixed",
+      "sortAnchor": {
+        "x": 515,
+        "y": 585
+      },
+      "fixedPointY": 149760,
+      "tieBias": -1,
+      "assetRef": "images/occluders/west-upper-v2.png",
+      "sourceRect": {
+        "x": 569,
+        "y": 169,
+        "width": 45,
+        "height": 114
+      },
+      "destinationRect": {
+        "x": 492,
+        "y": 471,
+        "width": 45,
+        "height": 114
+      },
+      "e9a": {
+        "region": "west-upper",
+        "homeRegion": "west-upper",
+        "semanticType": "wall-sconce",
+        "sourceRect": {
+          "x": 491,
+          "y": 470,
+          "width": 47,
+          "height": 116
+        },
+        "destinationRect": {
+          "x": 491,
+          "y": 470,
+          "width": 47,
+          "height": 116
+        },
+        "ownedOpaquePixelCount": 2496
+      },
+      "e9b": {
+        "atlasFile": "public/juyiting/images/occluders/west-upper-v2.png",
+        "atlasRect": {
+          "x": 567,
+          "y": 167,
+          "width": 49,
+          "height": 118
+        },
+        "pixelBounds": {
+          "x": 492,
+          "y": 471,
+          "width": 45,
+          "height": 114
+        },
+        "extrusionPixels": 2,
+        "ownedOpaquePixelCount": 2496,
+        "packingOrderIndex": 6
+      }
     }
   ]
 }

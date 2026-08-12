@@ -19,40 +19,48 @@ const outputDirectory = process.env.JIA_JUYITING_PREVIEW_DIR
 const cleanPath = join(outputDirectory, 'hall-clean.svg')
 const debugPath = join(outputDirectory, 'hall-debug.svg')
 
-try {
-  const update = parseArguments(process.argv.slice(2))
-  const tmx = readRequiredText(tmxPath, 'Juyiting TMX source')
+export function deriveMapPreviews(tmx, sourcePath = tmxPath) {
   const runtime = parseMovementTmx(tmx)
   const validation = validateMapRuntime(runtime)
   if (!validation.valid) {
     const details = validation.errors.map(error => `${error.code}: ${error.technicalMessage ?? error.userMessage}`).join('\n')
     throw new Error(`Juyiting map validation failed:\n${details}`)
   }
-
-  const art = loadPreviewArt(tmx, tmxPath, runtime.width, runtime.height)
+  const art = loadPreviewArt(tmx, sourcePath, runtime.width, runtime.height)
   const generationId = createGenerationId(runtime, art)
   const clean = renderMapPreview(runtime, { debug: false, art, generationId })
   const debug = renderMapPreview(runtime, { debug: true, art, generationId })
   validateSvg(clean, 'clean preview')
   validateSvg(debug, 'debug preview')
+  return { clean, debug, generationId }
+}
+
+export function validateOrUpdateMapPreviews(args = process.argv.slice(2)) {
+  const update = parseArguments(args)
+  const tmx = readRequiredText(tmxPath, 'Juyiting TMX source')
+  const { clean, debug, generationId } = deriveMapPreviews(tmx, tmxPath)
 
   if (update) {
-    // Each direct rename is atomic. A process stop between these calls can only create a detectable mixed pair.
     atomicReplaceFile(cleanPath, clean, 'Juyiting clean preview')
     atomicReplaceFile(debugPath, debug, 'Juyiting debug preview')
-  }
-  else {
+  } else {
     const committedClean = readPreviewArtifact(cleanPath, 'Juyiting clean preview')
     const committedDebug = readPreviewArtifact(debugPath, 'Juyiting debug preview')
     verifyGenerationPair(committedClean, committedDebug, generationId)
     compareArtifact(committedClean, clean, 'Juyiting clean preview')
     compareArtifact(committedDebug, debug, 'Juyiting debug preview')
   }
+  return { clean, debug, generationId }
+}
 
-  console.log('Juyiting map previews valid')
-} catch (error) {
-  console.error(error instanceof Error ? error.message : String(error))
-  process.exitCode = 1
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try {
+    validateOrUpdateMapPreviews()
+    console.log('Juyiting map previews valid')
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exitCode = 1
+  }
 }
 
 function parseArguments(args) {

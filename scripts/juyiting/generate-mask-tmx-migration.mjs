@@ -14,7 +14,7 @@ import { dirname, join } from 'node:path'
 import { atomicWriteUtf8Batch } from './lib/atomic-write.mjs'
 import {
   buildMaskMigrationDebugSvg, buildMaskMigrationSnapshot, buildMaskTmxManifest,
-  readLedger, stableJson,
+  readFragmentInputs, readLedger, stableJson,
 } from './lib/mask-tmx-migration.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -22,6 +22,8 @@ const REPO_ROOT = join(__dirname, '..', '..')
 const FIXTURE_DIR = join(REPO_ROOT, 'tests/fixtures/juyiting/occlusion-v2-masks')
 const TMX_PATH = join(REPO_ROOT, 'public/juyiting/hall.tmx')
 const LEDGER_PATH = join(FIXTURE_DIR, 'migration-ledger.json')
+const E9A_PATH = join(REPO_ROOT, 'tests/fixtures/juyiting/occlusion-v2-fragments/fragment-ownership-spec.json')
+const E9B_PATH = join(REPO_ROOT, 'tests/fixtures/juyiting/occlusion-v2-atlases/atlas-manifest.json')
 const MANIFEST_PATH = join(FIXTURE_DIR, 'mask-tmx-manifest.json')
 const SNAPSHOT_PATH = join(FIXTURE_DIR, 'mask-migration.snapshot.json')
 const PREVIEW_PATH = join(FIXTURE_DIR, 'mask-migration-debug.svg')
@@ -29,7 +31,8 @@ const PREVIEW_PATH = join(FIXTURE_DIR, 'mask-migration-debug.svg')
 export function generateMaskTmxMigrationFixtures({ write = true } = {}) {
   const tmxText = readFileSync(TMX_PATH, 'utf8')
   const ledger = readLedger(LEDGER_PATH)
-  const manifest = buildMaskTmxManifest(tmxText, ledger)
+  const { e9a, e9b } = readFragmentInputs(E9A_PATH, E9B_PATH)
+  const manifest = buildMaskTmxManifest(tmxText, ledger, e9a, e9b)
   const snapshot = buildMaskMigrationSnapshot(manifest, ledger)
   const preview = buildMaskMigrationDebugSvg(manifest, ledger, manifest.generationId)
   const outputs = [
@@ -55,7 +58,7 @@ function cli() {
   }
   const result = generateMaskTmxMigrationFixtures({ write: update })
   console.log(`E10B fixtures ${update ? 'updated' : 'verified'} (generationId=${result.manifest.generationId.slice(0, 16)}…)`)
-  console.log(`  masks=${result.manifest.maskCount} probes=${result.manifest.probeCount} constraints=${result.manifest.constraintCount} recalibrations=${result.manifest.recalibrationCount} uniqueOccluders=${result.manifest.uniqueOccluderStableIds} anonymous=${result.manifest.anonymousOccluderCount}`)
+  console.log(`  bindings=${result.manifest.maskBindingCount} fragments=${result.manifest.canonicalFragmentCount} probes=${result.manifest.probeCount} constraints=${result.manifest.constraintCount} recalibrations=${result.manifest.recalibrationCount} authoritativeTargets=${result.manifest.authoritativeTargetFragmentCount} anonymousBindings=${result.manifest.anonymousBindingCount} anonymousTargets=${result.manifest.anonymousTargetFragmentCount}`)
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) cli()

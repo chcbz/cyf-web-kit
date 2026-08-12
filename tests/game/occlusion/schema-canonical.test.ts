@@ -245,6 +245,44 @@ describe('Canonical IR - basic parsing', () => {
     assert.equal(ir.objects[0].stableId, 'tst.prop.test.prop1.v1')
   })
 
+  it('ignores legacy stableId-only audit objects outside explicit canonical boundaries', () => {
+    const xml = tmxXml(
+      { renderSchemaVersion: '2', sceneId: 'test-scene' },
+      objectGroupXml('mask',
+        tmxObjectXml(
+          { name: 'mask-48', x: 10, y: 20 },
+          propsXml({
+            stableId: 'tst.audit.mask-48.v1',
+            chunkId: 'chunk-1',
+            kind: 'legacy-mask-binding',
+            sortMode: 'fixed',
+            ledgerSortContract: 'fixed-point-y',
+            sortAnchorX: '20',
+            sortAnchorY: '30',
+          }),
+          polygonXml('0,0 10,0 10,10'),
+        ),
+      ),
+      objectGroupXml('hotspots',
+        tmxObjectXml(
+          { name: 'supported-prop', type: 'prop', x: 10, y: 20, width: 32, height: 32 },
+          propsXml({
+            stableId: 'tst.prop.supported.v1',
+            chunkId: 'chunk-1',
+            kind: 'prop',
+            sortMode: 'fixed',
+            sortAnchorX: '26',
+            sortAnchorY: '52',
+            assetRef: 'test.png',
+          }),
+        ),
+      ),
+    )
+    const ir = parseCanonicalIrFromXml(parseXml(xml))
+    assert.deepEqual(ir.objects.map(object => object.stableId), ['tst.prop.supported.v1'])
+    assert.deepEqual(ir.fragments, [])
+  })
+
   it('uses default floor registry when not specified', () => {
     const ir = parseCanonicalIrFromXml(parseXml(miniValidXml()))
     assert.deepEqual(ir.floorRegistry, { 'floor-1': 0 })

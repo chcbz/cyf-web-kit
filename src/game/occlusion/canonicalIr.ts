@@ -1172,11 +1172,18 @@ function parseCanonicalIrFromInput(input: TmxInputMap): CanonicalSceneIr {
         fragments.push(parseOccluderFragment(obj, sceneId, floorRegistry, stableIds))
       } else if (layerName.startsWith('v2-zones') || obj.type === 'occlusion-zone' || obj.properties.kind === 'occlusion-zone') {
         zones.push(parseConstraintZone(obj, sceneId, floorRegistry, stableIds))
-      } else if (layerName.startsWith('v2-') || obj.properties.stableId) {
-        // Any v2- prefixed layer or object with stableId is a SceneObject
+      } else if (
+        layerName.startsWith('v2-')
+        || (SCENE_OBJECT_KINDS as readonly string[]).includes(obj.type)
+        || (SCENE_OBJECT_KINDS as readonly string[]).includes(obj.properties.kind || '')
+      ) {
+        // Canonical SceneObjects require an explicit v2 layer boundary, a
+        // supported object type, or a supported canonical kind. A stableId is
+        // identity metadata, not an activation discriminator: legacy audit,
+        // navigation, and migration-binding objects may legitimately carry it.
         objects.push(parseSceneObject(obj, sceneId, floorRegistry, stableIds))
       }
-      // Objects without stableId in non-v2 layers are ignored (v1 objects)
+      // Non-v2 legacy objects without an explicitly supported type/kind are ignored.
     }
   }
 
