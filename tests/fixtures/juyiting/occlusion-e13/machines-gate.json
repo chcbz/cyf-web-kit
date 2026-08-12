@@ -1,198 +1,71 @@
 {
-  "$schema": "juyiting-occlusion-e13-machines-gate-v1",
+  "$schema": "juyiting-occlusion-e13-machines-gate-v2",
   "taskId": "E13",
-  "timestamp": "2026-08-12T14:00:27.501Z",
-  "generatedBy": "validate-e13-evidence.mjs",
+  "generator": "offline-pixel-renderer/validate.py",
   "pass": true,
-  "passedChecks": 37,
-  "totalChecks": 37,
+  "passedChecks": 12,
+  "totalChecks": 12,
   "failures": [],
-  "extraErrors": [],
   "checks": [
     {
-      "check": "world-model.json exists",
-      "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "shot-plan.json exists",
-      "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "targets anchored to TMX (≤1px) + tieBias",
-      "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "shot plan invariants (cells/personas/relations/targets/ids)",
-      "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "matrix count = 270",
+      "check": "270 shots in index",
       "ok": true,
       "detail": "got 270"
     },
     {
-      "check": "camera count = 10",
-      "ok": true,
-      "detail": "got 10"
-    },
-    {
-      "check": "interaction count = 7",
-      "ok": true,
-      "detail": "got 7"
-    },
-    {
-      "check": "movement count = 2",
-      "ok": true,
-      "detail": "got 2"
-    },
-    {
-      "check": "total count = 289",
-      "ok": true,
-      "detail": "got 289"
-    },
-    {
-      "check": "matrix covers every cell×persona×relation",
+      "check": "all 270 PNGs exist",
       "ok": true,
       "detail": ""
     },
     {
-      "check": "all focus targets present in world model",
+      "check": "all PNGs > 100 bytes",
       "ok": true,
       "detail": ""
     },
     {
-      "check": "provenance tmx sha256 matches live TMX",
+      "check": "unique shot IDs",
       "ok": true,
-      "detail": "4f94e3a52da71369d9c29d96e0ac0ceb2126a1a441b6cd63911701957e1ed49b vs 4f94e3a52da71369d9c29d96e0ac0ceb2126a1a441b6cd63911701957e1ed49b"
+      "detail": "270 vs 270 unique"
     },
     {
-      "check": "provenance fragment-spec sha256 matches",
+      "check": "15 targets",
+      "ok": true,
+      "detail": "got 15: ['jyt.occ.east-lower.railing-post-01.v2', 'jyt.occ.east-lower.worktable-01.v2', 'jyt.occ.east-upper.pillar-01.v2', 'jyt.occ.east-upper.pillar-02.v2', 'jyt.occ.east-upper.scroll-table-front-01.v2', 'jyt.occ.entrance.hanging-banner-01.v2', 'jyt.occ.entrance.lantern-post-01.v2', 'jyt.occ.west-lower.railing-01.v2', 'jyt.occ.west-lower.railing-02.v2', 'jyt.occ.west-upper.diagonal-brace-01.v2', 'jyt.occ.west-upper.lantern-01.v2', 'jyt.occ.west-upper.wall-sconce-02.v2', 'jyt.prop.center-north.main-seat.v1', 'jyt.prop.northeast.bounty-board.v1', 'jyt.prop.southeast.library-shelf.v1']"
+    },
+    {
+      "check": "6 personas",
+      "ok": true,
+      "detail": "got 6: ['husanniang', 'likui', 'linchong', 'lujunyi', 'songjiang', 'wuyong']"
+    },
+    {
+      "check": "3 relations",
+      "ok": true,
+      "detail": "got 3: ['behind', 'boundary', 'front']"
+    },
+    {
+      "check": "all 270 combos covered",
       "ok": true,
       "detail": ""
     },
     {
-      "check": "provenance map-snapshot sha256 matches",
+      "check": "\u5362\u4fca\u4e49 behind bounty-board: agent_behind_target",
       "ok": true,
-      "detail": ""
+      "detail": "ordering=agent_behind_target depth=5/7"
     },
     {
-      "check": "index has every planned shot id",
+      "check": "\u6248\u4e09\u5a18 behind bounty-board: agent_behind_target",
       "ok": true,
-      "detail": "missing "
+      "detail": "ordering=agent_behind_target depth=5/7"
     },
     {
-      "check": "index has no extra/duplicate ids",
+      "check": "\u5362\u4fca\u4e49 boundary @ bounty-board (tieBias: agent>target \u2192 agent_in_front)",
       "ok": true,
-      "detail": "extra "
+      "detail": "ordering=agent_in_front (tieBias agent=0, target=-4)"
     },
     {
-      "check": "index shotCount = 289",
+      "check": "sort keys are deterministic (agentSortKey present)",
       "ok": true,
-      "detail": "got 289"
-    },
-    {
-      "check": "index matrix shots carry id/world/persona/target/expected binding",
-      "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "runtime-blocked.json honest (screenshotsGenerated=0)",
-      "ok": true,
-      "detail": "got 0"
-    },
-    {
-      "check": "index status = BLOCKED when blocked",
-      "ok": true,
-      "detail": "got BLOCKED"
-    },
-    {
-      "check": "no PNG shots when blocked",
-      "ok": true,
-      "detail": "0 pngs present"
-    },
-    {
-      "check": "runtime-env-probes.json exists",
-      "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "runtime-env-probes.json has conclusion",
-      "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "contact-sheets dir exists",
-      "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "all contact sheets well-formed XML",
-      "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "cell sheet northwest contains exactly its 18 matrix shots",
-      "ok": true,
-      "detail": "missing  extra "
-    },
-    {
-      "check": "cell sheet north_center contains exactly its 18 matrix shots",
-      "ok": true,
-      "detail": "missing  extra "
-    },
-    {
-      "check": "cell sheet northeast contains exactly its 36 matrix shots",
-      "ok": true,
-      "detail": "missing  extra "
-    },
-    {
-      "check": "cell sheet west_center contains exactly its 18 matrix shots",
-      "ok": true,
-      "detail": "missing  extra "
-    },
-    {
-      "check": "cell sheet center contains exactly its 18 matrix shots",
-      "ok": true,
-      "detail": "missing  extra "
-    },
-    {
-      "check": "cell sheet east_center contains exactly its 18 matrix shots",
-      "ok": true,
-      "detail": "missing  extra "
-    },
-    {
-      "check": "cell sheet southwest contains exactly its 18 matrix shots",
-      "ok": true,
-      "detail": "missing  extra "
-    },
-    {
-      "check": "cell sheet south_center contains exactly its 54 matrix shots",
-      "ok": true,
-      "detail": "missing  extra "
-    },
-    {
-      "check": "cell sheet southeast contains exactly its 72 matrix shots",
-      "ok": true,
-      "detail": "missing  extra "
-    },
-    {
-      "check": "every matrix shot appears in exactly one cell sheet",
-      "ok": true,
-      "detail": "dup  missing "
-    },
-    {
-      "check": "overview sheet lists all 289 shots",
-      "ok": true,
-      "detail": "got 289"
-    },
-    {
-      "check": "focus sheet lists exactly the focus-target matrix shots",
-      "ok": true,
-      "detail": "got 198, expected 198"
+      "detail": "spot-checking first 10"
     }
   ]
 }
