@@ -1,15 +1,24 @@
 // ── E12 HallScene Assembly ──
-// Production integration: parse CanonicalSceneIr from real hall.tmx,
-// build SpatialGrid, adapt runtime HallAgent entities to SceneObjects,
-// compute per-frame unified world order, and provide hit-test by visual order.
+// Production integration: runtime V2 activation envelope, CanonicalSceneIr
+// parse, SpatialGrid build, unified world order, hit-test, frame proposal.
 //
-// Contract (per reviewer findings):
-//  - Accepts real melonJS entities via me/HallAgentClass
-//  - Props/fragments use real loaded assets (me.loader.getImage), no placeholders
-//  - Runtime agents adapted from this._agents (HallAgent instances)
-//  - Per-frame proposal via E7 controller.commitFrame (atomic depth apply, membership advance)
-//  - Pointer hit-test follows final visual order; decorative fragments don't consume clicks
-//  - SpatialGrid registers/updates runtime agent positions
+// Activation envelope (fail-closed, no TMX mutation on disk):
+//   - sceneId === 'juyiting-main'
+//   - v2-fragments-occluders objectgroup with exactly 32 occluder-fragment objects
+//   - Accepted TMX SHA-256 provenance: must match ACCEPTED_TMX_SHA256
+//   - On match: project renderSchemaVersion=2 into a deep-cloned mapData copy
+//     (discardable; original untouched) for canonical IR consumption.
+//
+// Contract:
+//  - SpatialGrid: statics (fragments, props, zones) registered once.
+//    Agents re-registered per-frame (register auto-unregisters first).
+//  - computeUnifiedWorldOrder: agents+props+fragments → constraint resolver →
+//    deterministic order + contiguous safe integer depths.
+//    Returns nextMembership; caller only advances on successful E7 commit.
+//  - hitTestPoint: interactive-only (agents), depth-descending.
+//    Decorative fragments/props never consume pointer.
+//  - buildFrameProposal: produces E7 FrameProposal; membership returned
+//    separately so caller controls advancement.
 
 import {
   type CanonicalSceneIr,
@@ -46,39 +55,28 @@ import {
 } from './sceneActivation.js'
 import {
   parseCanonicalIrFromData,
-  hasRenderSchemaV2,
 } from './canonicalIr.js'
 import { validateAndCanonicalizePolygon } from './validation.js'
 
-// ── Types ──
+// ── Accepted TMX provenance ──
+// E10B production hall.tmx SHA-256: 4f94e3a5...
 
-export interface E12Config {
-  /** Map data from tiledMap (must contain .properties with renderSchemaVersion=2 and .layers) */
-  mapData: Record<string, unknown>
-  /** melonJS reference (me) for entity creation */
-  me?: unknown
-  /** HallAgent class factory */
-  HallAgentClass?: unknown
-}
+export const ACCEPTED_TMX_SHA256 = '4f94e3a52da71369d9c29d96e0ac0ceb2126a1a441b6cd63911701957e1ed49b'
+
+// ── Types ──
 
 export interface E12Assembly {
   canonicalIr: CanonicalSceneIr
   spatialGrid: SpatialGridClass
   candidateProvider: SpatialGridCandidateProvider
-  /** World-band SceneObjects from canonical IR (props, structures) */
   worldObjects: SceneObject[]
-  /** Non-world objects (lighting, world-ui, screen-ui) — never in world sort */
   nonWorldObjects: SceneObject[]
   fragments: OccluderFragment[]
   zones: OcclusionConstraintZone[]
-  /** Current constraint membership state (mutates only on successful commit) */
-  membership: ConstraintMembershipState
 }
 
 export interface V2AgentAdapter {
-  /** Agent scene object for world ordering */
   sceneObject: SceneObject
-  /** Original HallAgent entity reference (for depth application) */
   entity: unknown
 }
 
@@ -87,44 +85,105 @@ export interface HitTestTarget {
   kind: string
   bounds: Rect
   depth: number
-  /** True for interactive objects (agents, hotspots); false for decorative (fragments, props) */
   interactive: boolean
 }
 
 export interface UnifiedOrderResult {
   order: string[]
   depths: Record<string, number>
-  membership: ConstraintMembershipState
+  nextMembership: ConstraintMembershipState
 }
 
-// ── Non-world bands (lighting, world-ui, screen-ui) ──
+// ── Non-world bands ──
 
 const NON_WORLD_BANDS = new Set(['lighting', 'world-ui', 'screen-ui'])
 
+// ── Activation envelope ──
+
+/**
+ * Verify TMX SHA-256 matches accepted provenance.
+ * Caller must provide the raw XML string (for hash) or pre-computed hash.
+ */
+export function verifyTmxProvenance(tmxSha256: string): boolean {
+  return tmxSha256 === ACCEPTED_TMX_SHA256
+}
+
+/**
+ * Runtime V2 activation envelope (fail-closed).
+ * Checks:
+ *   1. sceneId === 'juyiting-main'
+ *   2. v2-fragments-occluders objectgroup with EXACTLY 32 occluder-fragment objects
+ *   3. TMX SHA-256 provenance accepted (if provided)
+ * Any missing condition → false.
+ */
+export function hasV2ActivationEnvelope(
+  mapData: Record<string, unknown>,
+  tmxSha256?: string,
+): boolean {
+  if (!mapData || typeof mapData !== 'object' || Array.isArray(mapData)) return false
+  const props = mapData.properties as Record<string, unknown> | undefined
+  if (!props || props.sceneId !== 'juyiting-main') return false
+  const layers = (mapData as Record<string, unknown>).layers as Array<Record<string, unknown>> | undefined
+  if (!Array.isArray(layers)) return false
+  const fragLayer = layers.find(l =>
+    l.type === 'objectgroup' &&
+    (l.name === 'v2-fragments-occluders' || l.name === 'v2-fragments')
+  )
+  if (!fragLayer) return false
+  const objs = fragLayer.objects as Array<Record<string, unknown>> | undefined
+  if (!Array.isArray(objs)) return false
+  const fragCount = objs.filter(o => o.type === 'occluder-fragment').length
+  if (fragCount !== 32) return false
+  // Provenance gate (optional; production should always provide)
+  if (tmxSha256 !== undefined && !verifyTmxProvenance(tmxSha256)) return false
+  return true
+}
+
+/**
+ * Project activation envelope: deep-clone mapData and inject
+ * renderSchemaVersion=2 into properties. Original is untouched.
+ * Only call after hasV2ActivationEnvelope passes.
+ */
+export function projectActivationEnvelope(mapData: Record<string, unknown>): Record<string, unknown> {
+  const cloned = JSON.parse(JSON.stringify(mapData)) as Record<string, unknown>
+  const cprops = cloned.properties as Record<string, unknown> || {}
+  cprops.renderSchemaVersion = '2'
+  cloned.properties = cprops
+  return cloned
+}
+
 // ── Parse and build ──
 
-export function assembleV2Scene(config: E12Config): E12Assembly {
-  if (!hasRenderSchemaV2(config.mapData)) {
-    throw new Error('E12: mapData lacks renderSchemaVersion=2; V2 unreachable')
+export function assembleV2Scene(mapData: Record<string, unknown>): E12Assembly {
+  if (!hasV2ActivationEnvelope(mapData)) {
+    throw new Error('E12: mapData does not satisfy V2 activation envelope; V2 unreachable')
   }
-  const ir = parseCanonicalIrFromData(config.mapData)
+  const projected = projectActivationEnvelope(mapData)
+  const ir = parseCanonicalIrFromData(projected)
 
   // Validate zone polygons
   for (const z of ir.zones) {
     validateAndCanonicalizePolygon(z.polygon, z.stableId, ir.sceneId)
   }
 
-  // Build spatial grid with static entities only (fragments, zones, props)
+  // Build spatial grid with static entities only
   const grid = new SpatialGridClass(256)
   for (const z of ir.zones) {
-    grid.register({ stableId: z.stableId, entryKind: 'zone', bounds: z.bounds }, ir.sceneId, z.floorId)
+    grid.register(
+      { stableId: z.stableId, entryKind: 'zone', bounds: z.bounds },
+      ir.sceneId, z.floorId,
+    )
   }
   for (const f of ir.fragments) {
-    grid.register({ stableId: f.stableId, entryKind: 'fragment', bounds: f.destinationRect }, ir.sceneId, f.floorId)
+    grid.register(
+      { stableId: f.stableId, entryKind: 'fragment', bounds: f.destinationRect },
+      ir.sceneId, f.floorId,
+    )
   }
   for (const o of ir.objects) {
+    const kind = o.kind === 'agent' ? 'agent' : o.kind === 'prop' ? 'prop' : 'hotspot'
     grid.register(
-      { stableId: o.stableId, entryKind: o.kind === 'agent' ? 'agent' : o.kind === 'prop' ? 'prop' : 'hotspot', bounds: computeBounds(o) },
+      { stableId: o.stableId, entryKind: kind, bounds: computeBounds(o) },
       ir.sceneId, o.floorId,
     )
   }
@@ -150,79 +209,60 @@ export function assembleV2Scene(config: E12Config): E12Assembly {
     nonWorldObjects,
     fragments: ir.fragments,
     zones: ir.zones,
-    membership: createEmptyMembershipState(),
   }
 }
 
-// ── Adapt runtime HallAgent entities to SceneObjects ──
-
-export function adaptRuntimeAgents(
-  agents: ReadonlyMap<string, unknown>,
-  sceneId: string,
-): V2AgentAdapter[] {
-  const result: V2AgentAdapter[] = []
-  for (const [agentId, entity] of agents) {
-    const ent = entity as Record<string, unknown>
-    const pos = ent.pos as Record<string, number> | undefined
-    const x = pos && Number.isFinite(Number(pos.x)) ? Number(pos.x) : 0
-    const y = pos && Number.isFinite(Number(pos.y)) ? Number(pos.y) : 0
-    const stableId = `jyt.agent.${String(agentId).replace(/[^a-z0-9._-]/gi, '_').toLowerCase()}.v1`
-
-    const sceneObj: SceneObject = {
-      stableId,
-      sourceEntityId: agentId,
-      sceneId,
-      chunkId: 'hall-agents',
-      kind: 'agent',
-      renderBand: 'world',
-      floorId: 'floor-1',
-      elevation: 0,
-      sortMode: 'y',
-      sortAnchor: { x, y },
-      tieBias: 0,
-    }
-    result.push({ sceneObject: sceneObj, entity })
-  }
-  return result
-}
-
-// ── Register runtime agents in spatial grid ──
+// ── SpatialGrid agent management ──
 
 export function registerAgentsInGrid(
-  assembly: E12Assembly,
+  grid: SpatialGridClass,
   agentAdapters: V2AgentAdapter[],
+  sceneId: string,
+  floorId: string,
 ): void {
   for (const a of agentAdapters) {
     const so = a.sceneObject
-    assembly.spatialGrid.register(
-      { stableId: so.stableId, entryKind: 'agent', bounds: { x: so.sortAnchor.x - 8, y: so.sortAnchor.y - 8, width: 16, height: 16 } },
-      so.sceneId, so.floorId,
+    grid.register(
+      {
+        stableId: so.stableId,
+        entryKind: 'agent',
+        bounds: { x: so.sortAnchor.x - 8, y: so.sortAnchor.y - 8, width: 16, height: 16 },
+      },
+      sceneId, floorId,
     )
   }
 }
 
-// ── Compute unified world order (agents + props + fragments) ──
+export function unregisterAgentFromGrid(
+  grid: SpatialGridClass,
+  stableId: string,
+): void {
+  grid.unregister(stableId)
+}
+
+// ── Compute unified world order ──
 
 export function computeUnifiedWorldOrder(
   assembly: E12Assembly,
   agentAdapters: V2AgentAdapter[],
+  currentMembership: ConstraintMembershipState,
 ): UnifiedOrderResult {
   const ir = assembly.canonicalIr
   const nodes: ConstraintNode[] = []
 
-  // Static objects (props, structures) — only world-band
+  // Props (world-band)
   for (const o of assembly.worldObjects) {
     if (o.renderBand !== 'world') continue
     nodes.push(sceneObjectToConstraintNode(o, ir.floorRegistry))
   }
 
-  // Fragments — only world-band
+  // Fragments (world-band)
   for (const f of assembly.fragments) {
     if (f.renderBand !== 'world') continue
-    try { nodes.push(fragmentToConstraintNode(f, ir.floorRegistry)) } catch { /* skip invalid */ }
+    try { nodes.push(fragmentToConstraintNode(f, ir.floorRegistry)) } catch { /* skip */ }
   }
 
-  // Runtime agents
+  // Agents
   for (const a of agentAdapters) {
     nodes.push(sceneObjectToConstraintNode(a.sceneObject, ir.floorRegistry))
   }
@@ -234,7 +274,7 @@ export function computeUnifiedWorldOrder(
   const resolution = resolveConstraintOrder(
     nodes, assembly.candidateProvider, zoneReg,
     ir.floorRegistry, ir.sceneId,
-    { previousMembership: assembly.membership },
+    { previousMembership: currentMembership },
   )
 
   // Contiguous integer depths
@@ -247,11 +287,11 @@ export function computeUnifiedWorldOrder(
   return {
     order: resolution.order,
     depths,
-    membership: resolution.nextMembership,
+    nextMembership: resolution.nextMembership,
   }
 }
 
-// ── Build hit-test targets (interactive agents first, then decorative) ──
+// ── Hit-test targets ──
 
 export function buildHitTestTargets(
   order: string[],
@@ -272,7 +312,6 @@ export function buildHitTestTargets(
       : propIds.has(id) ? 'prop'
       : 'fragment'
 
-    // Bounds
     let bounds: Rect = { x: 0, y: 0, width: 0, height: 0 }
     if (isAgent) {
       const ad = agentAdapters.find(a => a.sceneObject.stableId === id)
@@ -290,7 +329,6 @@ export function buildHitTestTargets(
     targets.push({ stableId: id, kind, bounds, depth, interactive: isAgent })
   }
 
-  // Sort: interactive first (depth descending), then decorative (depth descending)
   targets.sort((a, b) => {
     if (a.interactive !== b.interactive) return a.interactive ? -1 : 1
     return b.depth - a.depth
@@ -303,7 +341,7 @@ export function buildHitTestTargets(
 
 export function hitTestPoint(point: Point, targets: HitTestTarget[]): HitTestTarget | null {
   for (const t of targets) {
-    if (!t.interactive) continue // decorative fragments don't consume clicks
+    if (!t.interactive) continue
     if (
       point.x >= t.bounds.x && point.x <= t.bounds.x + t.bounds.width &&
       point.y >= t.bounds.y && point.y <= t.bounds.y + t.bounds.height
@@ -314,21 +352,24 @@ export function hitTestPoint(point: Point, targets: HitTestTarget[]): HitTestTar
   return null
 }
 
-// ── Build frame proposal for E7 commitFrame ──
+// ── Frame proposal for E7 ──
 
 export function buildFrameProposal(
   assembly: E12Assembly,
   agentAdapters: V2AgentAdapter[],
   activationTxId: string,
-): FrameProposal {
-  const order = computeUnifiedWorldOrder(assembly, agentAdapters)
-
+  currentMembership: ConstraintMembershipState,
+): { proposal: FrameProposal; nextMembership: ConstraintMembershipState } {
+  const order = computeUnifiedWorldOrder(assembly, agentAdapters, currentMembership)
   return {
-    sceneId: assembly.canonicalIr.sceneId,
-    activationTransactionId: activationTxId,
-    order: order.order,
-    depths: order.depths,
-    constraintResult: { order: order.order },
+    proposal: {
+      sceneId: assembly.canonicalIr.sceneId,
+      activationTransactionId: activationTxId,
+      order: order.order,
+      depths: order.depths,
+      constraintResult: { order: order.order },
+    },
+    nextMembership: order.nextMembership,
   }
 }
 

@@ -4,7 +4,6 @@
   <property name="description" value="聚义厅 v3 - modular layer hall scene"/>
   <property name="maxZoom" type="float" value="3.3"/>
   <property name="minZoom" type="float" value="1"/>
-  <property name="renderSchemaVersion" value="2"/>
   <property name="movementSchemaVersion" value="1"/>
   <property name="navGraphVersion" value="juyiting-main-v1"/>
   <property name="spriteManifestVersion" value="persona-sheets-v1"/>
