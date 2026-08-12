@@ -160,4 +160,7 @@ def build_shot_plan(repo_root=None):
         shot['semanticRelation'] = shot['relation']
         shot['targetAnchor'] = copy.deepcopy(target['sortAnchor'])
         shot['targetRect'] = copy.deepcopy(target['destinationRect'])
+        omissions = shot.get('visualOmissions', [])
+        if not isinstance(omissions, list) or any(stable_id not in objects for stable_id in omissions):
+            raise RuntimeError(f'{shot["id"]}: invalid visualOmissions {omissions}')
     return matrix, fragments, props_list, image_layers

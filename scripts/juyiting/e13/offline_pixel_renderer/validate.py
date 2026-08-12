@@ -3,7 +3,7 @@
 import argparse, json, os, sys
 from .png_io import read_png, webp_decoder_provenance
 
-BIND_FIELDS=('id','kind','cell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera')
+BIND_FIELDS=('id','kind','cell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera','evidenceContext','contextCompanionStableId','visualOmissions','probeKind','navValidation','probeRationale')
 
 def validate(evidence_dir, repo_root):
     results=[]
@@ -56,6 +56,23 @@ def validate(evidence_dir, repo_root):
         except Exception as exc: png_bad.append(f'{shot.get("id")}:{exc}')
     check('all 270 resolved production depths match',not bad,','.join(bad[:10]))
     check('all shots report mapped depths plus alpha/final-composite metrics',not alpha_bad,','.join(alpha_bad[:10]))
+    probe_bad=[]; context_bad=[]
+    for shot in shots:
+        if shot.get('probeKind') == 'target-specific':
+            nav=shot.get('navValidation',{})
+            overlap=shot.get('runtimeFacts',{}).get('pixelOverlap',{})
+            if nav.get('navigable') is not True or overlap.get('opaqueIntersectionPixels',0) <= 0 or overlap.get('visibleOcclusionPixels',0) <= 0:
+                probe_bad.append(shot.get('id'))
+        context=shot.get('evidenceContext')
+        omissions=shot.get('visualOmissions',[])
+        companion=shot.get('contextCompanionStableId')
+        if context == 'target-isolated':
+            if not companion or omissions != [companion] or shot.get('runtimeFacts',{}).get('visualOmissions') != omissions:
+                context_bad.append(shot.get('id'))
+        elif context != 'in-context' or omissions:
+            context_bad.append(shot.get('id'))
+    check('target-specific probes are navigable and visibly exercise their target',not probe_bad,','.join(probe_bad[:12]))
+    check('isolated audit context omits only its declared independent companion',not context_bad,','.join(context_bad[:12]))
     check('all screenshotFile PNGs are 400x300',not png_bad,'; '.join(png_bad[:8]))
     for persona in ('lujunyi','husanniang'):
         critical=next((s for s in shots if s['persona']==persona and s['relation']=='behind' and s['targetStableId']=='jyt.prop.northeast.bounty-board.v1'),None)

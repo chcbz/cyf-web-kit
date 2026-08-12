@@ -29,7 +29,22 @@
           "y": 240
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          24
+        ],
+        "navObstacleIds": [
+          135
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-002",
@@ -57,7 +72,22 @@
           "y": 240
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          39
+        ],
+        "navObstacleIds": [
+          150
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-003",
@@ -85,7 +115,18 @@
           "y": 240
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-004",
@@ -113,7 +154,22 @@
           "y": 240
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          24
+        ],
+        "navObstacleIds": [
+          135
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-005",
@@ -141,7 +197,22 @@
           "y": 240
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          39
+        ],
+        "navObstacleIds": [
+          150
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-006",
@@ -169,7 +240,18 @@
           "y": 240
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-007",
@@ -197,7 +279,22 @@
           "y": 240
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          24
+        ],
+        "navObstacleIds": [
+          135
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-008",
@@ -225,7 +322,22 @@
           "y": 240
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          39
+        ],
+        "navObstacleIds": [
+          150
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-009",
@@ -253,7 +365,18 @@
           "y": 240
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-010",
@@ -281,7 +404,22 @@
           "y": 240
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          24
+        ],
+        "navObstacleIds": [
+          135
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-011",
@@ -309,7 +447,22 @@
           "y": 240
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          39
+        ],
+        "navObstacleIds": [
+          150
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-012",
@@ -337,7 +490,18 @@
           "y": 240
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-013",
@@ -365,7 +529,22 @@
           "y": 240
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          24
+        ],
+        "navObstacleIds": [
+          135
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-014",
@@ -393,7 +572,22 @@
           "y": 240
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          39
+        ],
+        "navObstacleIds": [
+          150
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-015",
@@ -421,7 +615,18 @@
           "y": 240
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-016",
@@ -449,7 +654,22 @@
           "y": 240
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          24
+        ],
+        "navObstacleIds": [
+          135
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-017",
@@ -477,7 +697,22 @@
           "y": 240
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          39
+        ],
+        "navObstacleIds": [
+          150
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-018",
@@ -505,7 +740,18 @@
           "y": 240
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-019",
@@ -533,7 +779,22 @@
           "y": 268
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          44
+        ],
+        "navObstacleIds": [
+          155
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-020",
@@ -561,7 +822,18 @@
           "y": 268
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-021",
@@ -589,7 +861,18 @@
           "y": 268
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-022",
@@ -617,7 +900,22 @@
           "y": 268
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          44
+        ],
+        "navObstacleIds": [
+          155
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-023",
@@ -645,7 +943,18 @@
           "y": 268
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-024",
@@ -673,7 +982,18 @@
           "y": 268
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-025",
@@ -701,7 +1021,22 @@
           "y": 268
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          44
+        ],
+        "navObstacleIds": [
+          155
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-026",
@@ -729,7 +1064,18 @@
           "y": 268
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-027",
@@ -757,7 +1103,18 @@
           "y": 268
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-028",
@@ -785,7 +1142,22 @@
           "y": 268
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          44
+        ],
+        "navObstacleIds": [
+          155
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-029",
@@ -813,7 +1185,18 @@
           "y": 268
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-030",
@@ -841,7 +1224,18 @@
           "y": 268
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-031",
@@ -869,7 +1263,22 @@
           "y": 268
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          44
+        ],
+        "navObstacleIds": [
+          155
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-032",
@@ -897,7 +1306,18 @@
           "y": 268
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-033",
@@ -925,7 +1345,18 @@
           "y": 268
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-034",
@@ -953,7 +1384,22 @@
           "y": 268
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          44
+        ],
+        "navObstacleIds": [
+          155
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-035",
@@ -981,7 +1427,18 @@
           "y": 268
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-036",
@@ -1009,7 +1466,18 @@
           "y": 268
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-037",
@@ -1022,8 +1490,8 @@
       "personaName": "宋江",
       "relation": "behind",
       "world": {
-        "x": 1446,
-        "y": 345
+        "x": 1380,
+        "y": 370
       },
       "expectedRelation": "agent_behind_target",
       "expectedDepth": "agent < target",
@@ -1037,7 +1505,18 @@
           "y": 379
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Use navigable table-edge ground for behind/boundary; the old centerline probe was inside collision/nav-obstacle geometry and could swallow the whole sprite."
     },
     {
       "id": "E13-038",
@@ -1050,7 +1529,7 @@
       "personaName": "宋江",
       "relation": "boundary",
       "world": {
-        "x": 1446,
+        "x": 1390,
         "y": 379
       },
       "expectedRelation": "tie",
@@ -1065,7 +1544,18 @@
           "y": 379
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Use navigable table-edge ground for behind/boundary; the old centerline probe was inside collision/nav-obstacle geometry and could swallow the whole sprite."
     },
     {
       "id": "E13-039",
@@ -1078,8 +1568,8 @@
       "personaName": "宋江",
       "relation": "front",
       "world": {
-        "x": 1446,
-        "y": 413
+        "x": 1400,
+        "y": 385
       },
       "expectedRelation": "agent_in_front",
       "expectedDepth": "agent > target",
@@ -1093,7 +1583,18 @@
           "y": 379
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Use navigable table-edge ground for behind/boundary; the old centerline probe was inside collision/nav-obstacle geometry and could swallow the whole sprite."
     },
     {
       "id": "E13-040",
@@ -1106,8 +1607,8 @@
       "personaName": "卢俊义",
       "relation": "behind",
       "world": {
-        "x": 1446,
-        "y": 345
+        "x": 1380,
+        "y": 370
       },
       "expectedRelation": "agent_behind_target",
       "expectedDepth": "agent < target",
@@ -1121,7 +1622,18 @@
           "y": 379
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Use navigable table-edge ground for behind/boundary; the old centerline probe was inside collision/nav-obstacle geometry and could swallow the whole sprite."
     },
     {
       "id": "E13-041",
@@ -1134,7 +1646,7 @@
       "personaName": "卢俊义",
       "relation": "boundary",
       "world": {
-        "x": 1446,
+        "x": 1390,
         "y": 379
       },
       "expectedRelation": "tie",
@@ -1149,7 +1661,18 @@
           "y": 379
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Use navigable table-edge ground for behind/boundary; the old centerline probe was inside collision/nav-obstacle geometry and could swallow the whole sprite."
     },
     {
       "id": "E13-042",
@@ -1162,8 +1685,8 @@
       "personaName": "卢俊义",
       "relation": "front",
       "world": {
-        "x": 1446,
-        "y": 413
+        "x": 1400,
+        "y": 385
       },
       "expectedRelation": "agent_in_front",
       "expectedDepth": "agent > target",
@@ -1177,7 +1700,18 @@
           "y": 379
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Use navigable table-edge ground for behind/boundary; the old centerline probe was inside collision/nav-obstacle geometry and could swallow the whole sprite."
     },
     {
       "id": "E13-043",
@@ -1190,8 +1724,8 @@
       "personaName": "扈三娘",
       "relation": "behind",
       "world": {
-        "x": 1446,
-        "y": 345
+        "x": 1380,
+        "y": 370
       },
       "expectedRelation": "agent_behind_target",
       "expectedDepth": "agent < target",
@@ -1205,7 +1739,18 @@
           "y": 379
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Use navigable table-edge ground for behind/boundary; the old centerline probe was inside collision/nav-obstacle geometry and could swallow the whole sprite."
     },
     {
       "id": "E13-044",
@@ -1218,7 +1763,7 @@
       "personaName": "扈三娘",
       "relation": "boundary",
       "world": {
-        "x": 1446,
+        "x": 1390,
         "y": 379
       },
       "expectedRelation": "tie",
@@ -1233,7 +1778,18 @@
           "y": 379
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Use navigable table-edge ground for behind/boundary; the old centerline probe was inside collision/nav-obstacle geometry and could swallow the whole sprite."
     },
     {
       "id": "E13-045",
@@ -1246,8 +1802,8 @@
       "personaName": "扈三娘",
       "relation": "front",
       "world": {
-        "x": 1446,
-        "y": 413
+        "x": 1400,
+        "y": 385
       },
       "expectedRelation": "agent_in_front",
       "expectedDepth": "agent > target",
@@ -1261,7 +1817,18 @@
           "y": 379
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Use navigable table-edge ground for behind/boundary; the old centerline probe was inside collision/nav-obstacle geometry and could swallow the whole sprite."
     },
     {
       "id": "E13-046",
@@ -1274,8 +1841,8 @@
       "personaName": "李逵",
       "relation": "behind",
       "world": {
-        "x": 1446,
-        "y": 345
+        "x": 1380,
+        "y": 370
       },
       "expectedRelation": "agent_behind_target",
       "expectedDepth": "agent < target",
@@ -1289,7 +1856,18 @@
           "y": 379
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Use navigable table-edge ground for behind/boundary; the old centerline probe was inside collision/nav-obstacle geometry and could swallow the whole sprite."
     },
     {
       "id": "E13-047",
@@ -1302,7 +1880,7 @@
       "personaName": "李逵",
       "relation": "boundary",
       "world": {
-        "x": 1446,
+        "x": 1390,
         "y": 379
       },
       "expectedRelation": "tie",
@@ -1317,7 +1895,18 @@
           "y": 379
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Use navigable table-edge ground for behind/boundary; the old centerline probe was inside collision/nav-obstacle geometry and could swallow the whole sprite."
     },
     {
       "id": "E13-048",
@@ -1330,8 +1919,8 @@
       "personaName": "李逵",
       "relation": "front",
       "world": {
-        "x": 1446,
-        "y": 413
+        "x": 1400,
+        "y": 385
       },
       "expectedRelation": "agent_in_front",
       "expectedDepth": "agent > target",
@@ -1345,7 +1934,18 @@
           "y": 379
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Use navigable table-edge ground for behind/boundary; the old centerline probe was inside collision/nav-obstacle geometry and could swallow the whole sprite."
     },
     {
       "id": "E13-049",
@@ -1358,8 +1958,8 @@
       "personaName": "林冲",
       "relation": "behind",
       "world": {
-        "x": 1446,
-        "y": 345
+        "x": 1380,
+        "y": 370
       },
       "expectedRelation": "agent_behind_target",
       "expectedDepth": "agent < target",
@@ -1373,7 +1973,18 @@
           "y": 379
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Use navigable table-edge ground for behind/boundary; the old centerline probe was inside collision/nav-obstacle geometry and could swallow the whole sprite."
     },
     {
       "id": "E13-050",
@@ -1386,7 +1997,7 @@
       "personaName": "林冲",
       "relation": "boundary",
       "world": {
-        "x": 1446,
+        "x": 1390,
         "y": 379
       },
       "expectedRelation": "tie",
@@ -1401,7 +2012,18 @@
           "y": 379
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Use navigable table-edge ground for behind/boundary; the old centerline probe was inside collision/nav-obstacle geometry and could swallow the whole sprite."
     },
     {
       "id": "E13-051",
@@ -1414,8 +2036,8 @@
       "personaName": "林冲",
       "relation": "front",
       "world": {
-        "x": 1446,
-        "y": 413
+        "x": 1400,
+        "y": 385
       },
       "expectedRelation": "agent_in_front",
       "expectedDepth": "agent > target",
@@ -1429,7 +2051,18 @@
           "y": 379
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Use navigable table-edge ground for behind/boundary; the old centerline probe was inside collision/nav-obstacle geometry and could swallow the whole sprite."
     },
     {
       "id": "E13-052",
@@ -1442,8 +2075,8 @@
       "personaName": "吴用",
       "relation": "behind",
       "world": {
-        "x": 1446,
-        "y": 345
+        "x": 1380,
+        "y": 370
       },
       "expectedRelation": "agent_behind_target",
       "expectedDepth": "agent < target",
@@ -1457,7 +2090,18 @@
           "y": 379
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Use navigable table-edge ground for behind/boundary; the old centerline probe was inside collision/nav-obstacle geometry and could swallow the whole sprite."
     },
     {
       "id": "E13-053",
@@ -1470,7 +2114,7 @@
       "personaName": "吴用",
       "relation": "boundary",
       "world": {
-        "x": 1446,
+        "x": 1390,
         "y": 379
       },
       "expectedRelation": "tie",
@@ -1485,7 +2129,18 @@
           "y": 379
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Use navigable table-edge ground for behind/boundary; the old centerline probe was inside collision/nav-obstacle geometry and could swallow the whole sprite."
     },
     {
       "id": "E13-054",
@@ -1498,8 +2153,8 @@
       "personaName": "吴用",
       "relation": "front",
       "world": {
-        "x": 1446,
-        "y": 413
+        "x": 1400,
+        "y": 385
       },
       "expectedRelation": "agent_in_front",
       "expectedDepth": "agent > target",
@@ -1513,7 +2168,18 @@
           "y": 379
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Use navigable table-edge ground for behind/boundary; the old centerline probe was inside collision/nav-obstacle geometry and could swallow the whole sprite."
     },
     {
       "id": "E13-055",
@@ -1541,7 +2207,18 @@
           "y": 585
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-056",
@@ -1569,7 +2246,22 @@
           "y": 585
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          14
+        ],
+        "navObstacleIds": [
+          125
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-057",
@@ -1597,7 +2289,22 @@
           "y": 585
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          14
+        ],
+        "navObstacleIds": [
+          125
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-058",
@@ -1625,7 +2332,18 @@
           "y": 585
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-059",
@@ -1653,7 +2371,22 @@
           "y": 585
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          14
+        ],
+        "navObstacleIds": [
+          125
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-060",
@@ -1681,7 +2414,22 @@
           "y": 585
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          14
+        ],
+        "navObstacleIds": [
+          125
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-061",
@@ -1709,7 +2457,18 @@
           "y": 585
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-062",
@@ -1737,7 +2496,22 @@
           "y": 585
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          14
+        ],
+        "navObstacleIds": [
+          125
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-063",
@@ -1765,7 +2539,22 @@
           "y": 585
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          14
+        ],
+        "navObstacleIds": [
+          125
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-064",
@@ -1793,7 +2582,18 @@
           "y": 585
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-065",
@@ -1821,7 +2621,22 @@
           "y": 585
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          14
+        ],
+        "navObstacleIds": [
+          125
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-066",
@@ -1849,7 +2664,22 @@
           "y": 585
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          14
+        ],
+        "navObstacleIds": [
+          125
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-067",
@@ -1877,7 +2707,18 @@
           "y": 585
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-068",
@@ -1905,7 +2746,22 @@
           "y": 585
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          14
+        ],
+        "navObstacleIds": [
+          125
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-069",
@@ -1933,7 +2789,22 @@
           "y": 585
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          14
+        ],
+        "navObstacleIds": [
+          125
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-070",
@@ -1961,7 +2832,18 @@
           "y": 585
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-071",
@@ -1989,7 +2871,22 @@
           "y": 585
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          14
+        ],
+        "navObstacleIds": [
+          125
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-072",
@@ -2017,7 +2914,22 @@
           "y": 585
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          14
+        ],
+        "navObstacleIds": [
+          125
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-073",
@@ -2045,7 +2957,18 @@
           "y": 489
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-074",
@@ -2073,7 +2996,22 @@
           "y": 489
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          10
+        ],
+        "navObstacleIds": [
+          121
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-075",
@@ -2101,7 +3039,18 @@
           "y": 489
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-076",
@@ -2129,7 +3078,18 @@
           "y": 489
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-077",
@@ -2157,7 +3117,22 @@
           "y": 489
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          10
+        ],
+        "navObstacleIds": [
+          121
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-078",
@@ -2185,7 +3160,18 @@
           "y": 489
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-079",
@@ -2213,7 +3199,18 @@
           "y": 489
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-080",
@@ -2241,7 +3238,22 @@
           "y": 489
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          10
+        ],
+        "navObstacleIds": [
+          121
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-081",
@@ -2269,7 +3281,18 @@
           "y": 489
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-082",
@@ -2297,7 +3320,18 @@
           "y": 489
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-083",
@@ -2325,7 +3359,22 @@
           "y": 489
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          10
+        ],
+        "navObstacleIds": [
+          121
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-084",
@@ -2353,7 +3402,18 @@
           "y": 489
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-085",
@@ -2381,7 +3441,18 @@
           "y": 489
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-086",
@@ -2409,7 +3480,22 @@
           "y": 489
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          10
+        ],
+        "navObstacleIds": [
+          121
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-087",
@@ -2437,7 +3523,18 @@
           "y": 489
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-088",
@@ -2465,7 +3562,18 @@
           "y": 489
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-089",
@@ -2493,7 +3601,22 @@
           "y": 489
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          10
+        ],
+        "navObstacleIds": [
+          121
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-090",
@@ -2521,7 +3644,18 @@
           "y": 489
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-091",
@@ -2549,7 +3683,18 @@
           "y": 464
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-092",
@@ -2577,7 +3722,18 @@
           "y": 464
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-093",
@@ -2605,7 +3761,22 @@
           "y": 464
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          12
+        ],
+        "navObstacleIds": [
+          123
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-094",
@@ -2633,7 +3804,18 @@
           "y": 464
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-095",
@@ -2661,7 +3843,18 @@
           "y": 464
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-096",
@@ -2689,7 +3882,22 @@
           "y": 464
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          12
+        ],
+        "navObstacleIds": [
+          123
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-097",
@@ -2717,7 +3925,18 @@
           "y": 464
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-098",
@@ -2745,7 +3964,18 @@
           "y": 464
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-099",
@@ -2773,7 +4003,22 @@
           "y": 464
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          12
+        ],
+        "navObstacleIds": [
+          123
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-100",
@@ -2801,7 +4046,18 @@
           "y": 464
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-101",
@@ -2829,7 +4085,18 @@
           "y": 464
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-102",
@@ -2857,7 +4124,22 @@
           "y": 464
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          12
+        ],
+        "navObstacleIds": [
+          123
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-103",
@@ -2885,7 +4167,18 @@
           "y": 464
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-104",
@@ -2913,7 +4206,18 @@
           "y": 464
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-105",
@@ -2941,7 +4245,22 @@
           "y": 464
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          12
+        ],
+        "navObstacleIds": [
+          123
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-106",
@@ -2969,7 +4288,18 @@
           "y": 464
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-107",
@@ -2997,7 +4327,18 @@
           "y": 464
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-108",
@@ -3025,7 +4366,22 @@
           "y": 464
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          12
+        ],
+        "navObstacleIds": [
+          123
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-109",
@@ -3053,7 +4409,18 @@
           "y": 824
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-110",
@@ -3081,7 +4448,22 @@
           "y": 824
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          42
+        ],
+        "navObstacleIds": [
+          153
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-111",
@@ -3109,7 +4491,22 @@
           "y": 824
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          42
+        ],
+        "navObstacleIds": [
+          153
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-112",
@@ -3137,7 +4534,18 @@
           "y": 824
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-113",
@@ -3165,7 +4573,22 @@
           "y": 824
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          42
+        ],
+        "navObstacleIds": [
+          153
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-114",
@@ -3193,7 +4616,22 @@
           "y": 824
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          42
+        ],
+        "navObstacleIds": [
+          153
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-115",
@@ -3221,7 +4659,18 @@
           "y": 824
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-116",
@@ -3249,7 +4698,22 @@
           "y": 824
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          42
+        ],
+        "navObstacleIds": [
+          153
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-117",
@@ -3277,7 +4741,22 @@
           "y": 824
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          42
+        ],
+        "navObstacleIds": [
+          153
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-118",
@@ -3305,7 +4784,18 @@
           "y": 824
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-119",
@@ -3333,7 +4823,22 @@
           "y": 824
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          42
+        ],
+        "navObstacleIds": [
+          153
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-120",
@@ -3361,7 +4866,22 @@
           "y": 824
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          42
+        ],
+        "navObstacleIds": [
+          153
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-121",
@@ -3389,7 +4909,18 @@
           "y": 824
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-122",
@@ -3417,7 +4948,22 @@
           "y": 824
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          42
+        ],
+        "navObstacleIds": [
+          153
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-123",
@@ -3445,7 +4991,22 @@
           "y": 824
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          42
+        ],
+        "navObstacleIds": [
+          153
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-124",
@@ -3473,7 +5034,18 @@
           "y": 824
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-125",
@@ -3501,7 +5073,22 @@
           "y": 824
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          42
+        ],
+        "navObstacleIds": [
+          153
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-126",
@@ -3529,7 +5116,22 @@
           "y": 824
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          42
+        ],
+        "navObstacleIds": [
+          153
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-127",
@@ -3557,7 +5159,18 @@
           "y": 794
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-128",
@@ -3585,7 +5198,22 @@
           "y": 794
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          17
+        ],
+        "navObstacleIds": [
+          128
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-129",
@@ -3613,7 +5241,18 @@
           "y": 794
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-130",
@@ -3641,7 +5280,18 @@
           "y": 794
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-131",
@@ -3669,7 +5319,22 @@
           "y": 794
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          17
+        ],
+        "navObstacleIds": [
+          128
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-132",
@@ -3697,7 +5362,18 @@
           "y": 794
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-133",
@@ -3725,7 +5401,18 @@
           "y": 794
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-134",
@@ -3753,7 +5440,22 @@
           "y": 794
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          17
+        ],
+        "navObstacleIds": [
+          128
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-135",
@@ -3781,7 +5483,18 @@
           "y": 794
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-136",
@@ -3809,7 +5522,18 @@
           "y": 794
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-137",
@@ -3837,7 +5561,22 @@
           "y": 794
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          17
+        ],
+        "navObstacleIds": [
+          128
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-138",
@@ -3865,7 +5604,18 @@
           "y": 794
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-139",
@@ -3893,7 +5643,18 @@
           "y": 794
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-140",
@@ -3921,7 +5682,22 @@
           "y": 794
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          17
+        ],
+        "navObstacleIds": [
+          128
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-141",
@@ -3949,7 +5725,18 @@
           "y": 794
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-142",
@@ -3977,7 +5764,18 @@
           "y": 794
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-143",
@@ -4005,7 +5803,22 @@
           "y": 794
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          17
+        ],
+        "navObstacleIds": [
+          128
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-144",
@@ -4033,7 +5846,18 @@
           "y": 794
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-145",
@@ -4061,7 +5885,22 @@
           "y": 719
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          46
+        ],
+        "navObstacleIds": [
+          157
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-146",
@@ -4089,7 +5928,18 @@
           "y": 719
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-147",
@@ -4117,7 +5967,18 @@
           "y": 719
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-148",
@@ -4145,7 +6006,22 @@
           "y": 719
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          46
+        ],
+        "navObstacleIds": [
+          157
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-149",
@@ -4173,7 +6049,18 @@
           "y": 719
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-150",
@@ -4201,7 +6088,18 @@
           "y": 719
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-151",
@@ -4229,7 +6127,22 @@
           "y": 719
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          46
+        ],
+        "navObstacleIds": [
+          157
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-152",
@@ -4257,7 +6170,18 @@
           "y": 719
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-153",
@@ -4285,7 +6209,18 @@
           "y": 719
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-154",
@@ -4313,7 +6248,22 @@
           "y": 719
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          46
+        ],
+        "navObstacleIds": [
+          157
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-155",
@@ -4341,7 +6291,18 @@
           "y": 719
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-156",
@@ -4369,7 +6330,18 @@
           "y": 719
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-157",
@@ -4397,7 +6369,22 @@
           "y": 719
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          46
+        ],
+        "navObstacleIds": [
+          157
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-158",
@@ -4425,7 +6412,18 @@
           "y": 719
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-159",
@@ -4453,7 +6451,18 @@
           "y": 719
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-160",
@@ -4481,7 +6490,22 @@
           "y": 719
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          46
+        ],
+        "navObstacleIds": [
+          157
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-161",
@@ -4509,7 +6533,18 @@
           "y": 719
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-162",
@@ -4537,7 +6572,18 @@
           "y": 719
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-163",
@@ -4550,8 +6596,8 @@
       "personaName": "宋江",
       "relation": "behind",
       "world": {
-        "x": 1432,
-        "y": 250
+        "x": 1395,
+        "y": 268
       },
       "expectedRelation": "agent_behind_target",
       "expectedDepth": "agent < target",
@@ -4565,7 +6611,20 @@
           "y": 284
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.northeast.bounty-board.v1",
+      "visualOmissions": [
+        "jyt.prop.northeast.bounty-board.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-73 probes; isolate only this audit sheet because the nearby independent floor table otherwise owns the final pixels and makes this wall-mounted fragment visually unjudgeable."
     },
     {
       "id": "E13-164",
@@ -4578,7 +6637,7 @@
       "personaName": "宋江",
       "relation": "boundary",
       "world": {
-        "x": 1432,
+        "x": 1395,
         "y": 284
       },
       "expectedRelation": "tie",
@@ -4593,7 +6652,20 @@
           "y": 284
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.northeast.bounty-board.v1",
+      "visualOmissions": [
+        "jyt.prop.northeast.bounty-board.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-73 probes; isolate only this audit sheet because the nearby independent floor table otherwise owns the final pixels and makes this wall-mounted fragment visually unjudgeable."
     },
     {
       "id": "E13-165",
@@ -4606,8 +6678,8 @@
       "personaName": "宋江",
       "relation": "front",
       "world": {
-        "x": 1432,
-        "y": 318
+        "x": 1379,
+        "y": 285
       },
       "expectedRelation": "agent_in_front",
       "expectedDepth": "agent > target",
@@ -4621,7 +6693,20 @@
           "y": 284
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.northeast.bounty-board.v1",
+      "visualOmissions": [
+        "jyt.prop.northeast.bounty-board.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-73 probes; isolate only this audit sheet because the nearby independent floor table otherwise owns the final pixels and makes this wall-mounted fragment visually unjudgeable."
     },
     {
       "id": "E13-166",
@@ -4634,8 +6719,8 @@
       "personaName": "卢俊义",
       "relation": "behind",
       "world": {
-        "x": 1432,
-        "y": 250
+        "x": 1395,
+        "y": 268
       },
       "expectedRelation": "agent_behind_target",
       "expectedDepth": "agent < target",
@@ -4649,7 +6734,20 @@
           "y": 284
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.northeast.bounty-board.v1",
+      "visualOmissions": [
+        "jyt.prop.northeast.bounty-board.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-73 probes; isolate only this audit sheet because the nearby independent floor table otherwise owns the final pixels and makes this wall-mounted fragment visually unjudgeable."
     },
     {
       "id": "E13-167",
@@ -4662,7 +6760,7 @@
       "personaName": "卢俊义",
       "relation": "boundary",
       "world": {
-        "x": 1432,
+        "x": 1395,
         "y": 284
       },
       "expectedRelation": "tie",
@@ -4677,7 +6775,20 @@
           "y": 284
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.northeast.bounty-board.v1",
+      "visualOmissions": [
+        "jyt.prop.northeast.bounty-board.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-73 probes; isolate only this audit sheet because the nearby independent floor table otherwise owns the final pixels and makes this wall-mounted fragment visually unjudgeable."
     },
     {
       "id": "E13-168",
@@ -4690,8 +6801,8 @@
       "personaName": "卢俊义",
       "relation": "front",
       "world": {
-        "x": 1432,
-        "y": 318
+        "x": 1379,
+        "y": 285
       },
       "expectedRelation": "agent_in_front",
       "expectedDepth": "agent > target",
@@ -4705,7 +6816,20 @@
           "y": 284
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.northeast.bounty-board.v1",
+      "visualOmissions": [
+        "jyt.prop.northeast.bounty-board.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-73 probes; isolate only this audit sheet because the nearby independent floor table otherwise owns the final pixels and makes this wall-mounted fragment visually unjudgeable."
     },
     {
       "id": "E13-169",
@@ -4718,8 +6842,8 @@
       "personaName": "扈三娘",
       "relation": "behind",
       "world": {
-        "x": 1432,
-        "y": 250
+        "x": 1395,
+        "y": 268
       },
       "expectedRelation": "agent_behind_target",
       "expectedDepth": "agent < target",
@@ -4733,7 +6857,20 @@
           "y": 284
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.northeast.bounty-board.v1",
+      "visualOmissions": [
+        "jyt.prop.northeast.bounty-board.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-73 probes; isolate only this audit sheet because the nearby independent floor table otherwise owns the final pixels and makes this wall-mounted fragment visually unjudgeable."
     },
     {
       "id": "E13-170",
@@ -4746,7 +6883,7 @@
       "personaName": "扈三娘",
       "relation": "boundary",
       "world": {
-        "x": 1432,
+        "x": 1395,
         "y": 284
       },
       "expectedRelation": "tie",
@@ -4761,7 +6898,20 @@
           "y": 284
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.northeast.bounty-board.v1",
+      "visualOmissions": [
+        "jyt.prop.northeast.bounty-board.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-73 probes; isolate only this audit sheet because the nearby independent floor table otherwise owns the final pixels and makes this wall-mounted fragment visually unjudgeable."
     },
     {
       "id": "E13-171",
@@ -4774,8 +6924,8 @@
       "personaName": "扈三娘",
       "relation": "front",
       "world": {
-        "x": 1432,
-        "y": 318
+        "x": 1379,
+        "y": 285
       },
       "expectedRelation": "agent_in_front",
       "expectedDepth": "agent > target",
@@ -4789,7 +6939,20 @@
           "y": 284
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.northeast.bounty-board.v1",
+      "visualOmissions": [
+        "jyt.prop.northeast.bounty-board.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-73 probes; isolate only this audit sheet because the nearby independent floor table otherwise owns the final pixels and makes this wall-mounted fragment visually unjudgeable."
     },
     {
       "id": "E13-172",
@@ -4802,8 +6965,8 @@
       "personaName": "李逵",
       "relation": "behind",
       "world": {
-        "x": 1432,
-        "y": 250
+        "x": 1395,
+        "y": 268
       },
       "expectedRelation": "agent_behind_target",
       "expectedDepth": "agent < target",
@@ -4817,7 +6980,20 @@
           "y": 284
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.northeast.bounty-board.v1",
+      "visualOmissions": [
+        "jyt.prop.northeast.bounty-board.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-73 probes; isolate only this audit sheet because the nearby independent floor table otherwise owns the final pixels and makes this wall-mounted fragment visually unjudgeable."
     },
     {
       "id": "E13-173",
@@ -4830,7 +7006,7 @@
       "personaName": "李逵",
       "relation": "boundary",
       "world": {
-        "x": 1432,
+        "x": 1395,
         "y": 284
       },
       "expectedRelation": "tie",
@@ -4845,7 +7021,20 @@
           "y": 284
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.northeast.bounty-board.v1",
+      "visualOmissions": [
+        "jyt.prop.northeast.bounty-board.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-73 probes; isolate only this audit sheet because the nearby independent floor table otherwise owns the final pixels and makes this wall-mounted fragment visually unjudgeable."
     },
     {
       "id": "E13-174",
@@ -4858,8 +7047,8 @@
       "personaName": "李逵",
       "relation": "front",
       "world": {
-        "x": 1432,
-        "y": 318
+        "x": 1379,
+        "y": 285
       },
       "expectedRelation": "agent_in_front",
       "expectedDepth": "agent > target",
@@ -4873,7 +7062,20 @@
           "y": 284
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.northeast.bounty-board.v1",
+      "visualOmissions": [
+        "jyt.prop.northeast.bounty-board.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-73 probes; isolate only this audit sheet because the nearby independent floor table otherwise owns the final pixels and makes this wall-mounted fragment visually unjudgeable."
     },
     {
       "id": "E13-175",
@@ -4886,8 +7088,8 @@
       "personaName": "林冲",
       "relation": "behind",
       "world": {
-        "x": 1432,
-        "y": 250
+        "x": 1395,
+        "y": 268
       },
       "expectedRelation": "agent_behind_target",
       "expectedDepth": "agent < target",
@@ -4901,7 +7103,20 @@
           "y": 284
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.northeast.bounty-board.v1",
+      "visualOmissions": [
+        "jyt.prop.northeast.bounty-board.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-73 probes; isolate only this audit sheet because the nearby independent floor table otherwise owns the final pixels and makes this wall-mounted fragment visually unjudgeable."
     },
     {
       "id": "E13-176",
@@ -4914,7 +7129,7 @@
       "personaName": "林冲",
       "relation": "boundary",
       "world": {
-        "x": 1432,
+        "x": 1395,
         "y": 284
       },
       "expectedRelation": "tie",
@@ -4929,7 +7144,20 @@
           "y": 284
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.northeast.bounty-board.v1",
+      "visualOmissions": [
+        "jyt.prop.northeast.bounty-board.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-73 probes; isolate only this audit sheet because the nearby independent floor table otherwise owns the final pixels and makes this wall-mounted fragment visually unjudgeable."
     },
     {
       "id": "E13-177",
@@ -4942,8 +7170,8 @@
       "personaName": "林冲",
       "relation": "front",
       "world": {
-        "x": 1432,
-        "y": 318
+        "x": 1379,
+        "y": 285
       },
       "expectedRelation": "agent_in_front",
       "expectedDepth": "agent > target",
@@ -4957,7 +7185,20 @@
           "y": 284
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.northeast.bounty-board.v1",
+      "visualOmissions": [
+        "jyt.prop.northeast.bounty-board.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-73 probes; isolate only this audit sheet because the nearby independent floor table otherwise owns the final pixels and makes this wall-mounted fragment visually unjudgeable."
     },
     {
       "id": "E13-178",
@@ -4970,8 +7211,8 @@
       "personaName": "吴用",
       "relation": "behind",
       "world": {
-        "x": 1432,
-        "y": 250
+        "x": 1395,
+        "y": 268
       },
       "expectedRelation": "agent_behind_target",
       "expectedDepth": "agent < target",
@@ -4985,7 +7226,20 @@
           "y": 284
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.northeast.bounty-board.v1",
+      "visualOmissions": [
+        "jyt.prop.northeast.bounty-board.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-73 probes; isolate only this audit sheet because the nearby independent floor table otherwise owns the final pixels and makes this wall-mounted fragment visually unjudgeable."
     },
     {
       "id": "E13-179",
@@ -4998,7 +7252,7 @@
       "personaName": "吴用",
       "relation": "boundary",
       "world": {
-        "x": 1432,
+        "x": 1395,
         "y": 284
       },
       "expectedRelation": "tie",
@@ -5013,7 +7267,20 @@
           "y": 284
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.northeast.bounty-board.v1",
+      "visualOmissions": [
+        "jyt.prop.northeast.bounty-board.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-73 probes; isolate only this audit sheet because the nearby independent floor table otherwise owns the final pixels and makes this wall-mounted fragment visually unjudgeable."
     },
     {
       "id": "E13-180",
@@ -5026,8 +7293,8 @@
       "personaName": "吴用",
       "relation": "front",
       "world": {
-        "x": 1432,
-        "y": 318
+        "x": 1379,
+        "y": 285
       },
       "expectedRelation": "agent_in_front",
       "expectedDepth": "agent > target",
@@ -5041,7 +7308,20 @@
           "y": 284
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.northeast.bounty-board.v1",
+      "visualOmissions": [
+        "jyt.prop.northeast.bounty-board.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-73 probes; isolate only this audit sheet because the nearby independent floor table otherwise owns the final pixels and makes this wall-mounted fragment visually unjudgeable."
     },
     {
       "id": "E13-181",
@@ -5069,7 +7349,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-182",
@@ -5097,7 +7388,22 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          17
+        ],
+        "navObstacleIds": [
+          128
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-183",
@@ -5125,7 +7431,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-184",
@@ -5153,7 +7470,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-185",
@@ -5181,7 +7509,22 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          17
+        ],
+        "navObstacleIds": [
+          128
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-186",
@@ -5209,7 +7552,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-187",
@@ -5237,7 +7591,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-188",
@@ -5265,7 +7630,22 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          17
+        ],
+        "navObstacleIds": [
+          128
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-189",
@@ -5293,7 +7673,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-190",
@@ -5321,7 +7712,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-191",
@@ -5349,7 +7751,22 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          17
+        ],
+        "navObstacleIds": [
+          128
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-192",
@@ -5377,7 +7794,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-193",
@@ -5405,7 +7833,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-194",
@@ -5433,7 +7872,22 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          17
+        ],
+        "navObstacleIds": [
+          128
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-195",
@@ -5461,7 +7915,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-196",
@@ -5489,7 +7954,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-197",
@@ -5517,7 +7993,22 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          17
+        ],
+        "navObstacleIds": [
+          128
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-198",
@@ -5545,7 +8036,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-199",
@@ -5573,7 +8075,18 @@
           "y": 775
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-200",
@@ -5601,7 +8114,18 @@
           "y": 775
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-201",
@@ -5629,7 +8153,18 @@
           "y": 775
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-202",
@@ -5657,7 +8192,18 @@
           "y": 775
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-203",
@@ -5685,7 +8231,18 @@
           "y": 775
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-204",
@@ -5713,7 +8270,18 @@
           "y": 775
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-205",
@@ -5741,7 +8309,18 @@
           "y": 775
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-206",
@@ -5769,7 +8348,18 @@
           "y": 775
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-207",
@@ -5797,7 +8387,18 @@
           "y": 775
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-208",
@@ -5825,7 +8426,18 @@
           "y": 775
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-209",
@@ -5853,7 +8465,18 @@
           "y": 775
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-210",
@@ -5881,7 +8504,18 @@
           "y": 775
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-211",
@@ -5909,7 +8543,18 @@
           "y": 775
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-212",
@@ -5937,7 +8582,18 @@
           "y": 775
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-213",
@@ -5965,7 +8621,18 @@
           "y": 775
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-214",
@@ -5993,7 +8660,18 @@
           "y": 775
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-215",
@@ -6021,7 +8699,18 @@
           "y": 775
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-216",
@@ -6049,7 +8738,18 @@
           "y": 775
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-217",
@@ -6077,7 +8777,18 @@
           "y": 703
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-218",
@@ -6105,7 +8816,22 @@
           "y": 703
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          31
+        ],
+        "navObstacleIds": [
+          142
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-219",
@@ -6133,7 +8859,22 @@
           "y": 703
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          31
+        ],
+        "navObstacleIds": [
+          142
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-220",
@@ -6161,7 +8902,18 @@
           "y": 703
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-221",
@@ -6189,7 +8941,22 @@
           "y": 703
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          31
+        ],
+        "navObstacleIds": [
+          142
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-222",
@@ -6217,7 +8984,22 @@
           "y": 703
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          31
+        ],
+        "navObstacleIds": [
+          142
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-223",
@@ -6245,7 +9027,18 @@
           "y": 703
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-224",
@@ -6273,7 +9066,22 @@
           "y": 703
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          31
+        ],
+        "navObstacleIds": [
+          142
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-225",
@@ -6301,7 +9109,22 @@
           "y": 703
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          31
+        ],
+        "navObstacleIds": [
+          142
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-226",
@@ -6329,7 +9152,18 @@
           "y": 703
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-227",
@@ -6357,7 +9191,22 @@
           "y": 703
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          31
+        ],
+        "navObstacleIds": [
+          142
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-228",
@@ -6385,7 +9234,22 @@
           "y": 703
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          31
+        ],
+        "navObstacleIds": [
+          142
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-229",
@@ -6413,7 +9277,18 @@
           "y": 703
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-230",
@@ -6441,7 +9316,22 @@
           "y": 703
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          31
+        ],
+        "navObstacleIds": [
+          142
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-231",
@@ -6469,7 +9359,22 @@
           "y": 703
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          31
+        ],
+        "navObstacleIds": [
+          142
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-232",
@@ -6497,7 +9402,18 @@
           "y": 703
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-233",
@@ -6525,7 +9441,22 @@
           "y": 703
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          31
+        ],
+        "navObstacleIds": [
+          142
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-234",
@@ -6553,7 +9484,22 @@
           "y": 703
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          31
+        ],
+        "navObstacleIds": [
+          142
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-235",
@@ -6581,7 +9527,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-236",
@@ -6609,7 +9566,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-237",
@@ -6637,7 +9605,22 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          31
+        ],
+        "navObstacleIds": [
+          142
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-238",
@@ -6665,7 +9648,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-239",
@@ -6693,7 +9687,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-240",
@@ -6721,7 +9726,22 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          31
+        ],
+        "navObstacleIds": [
+          142
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-241",
@@ -6749,7 +9769,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-242",
@@ -6777,7 +9808,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-243",
@@ -6805,7 +9847,22 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          31
+        ],
+        "navObstacleIds": [
+          142
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-244",
@@ -6833,7 +9890,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-245",
@@ -6861,7 +9929,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-246",
@@ -6889,7 +9968,22 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          31
+        ],
+        "navObstacleIds": [
+          142
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-247",
@@ -6917,7 +10011,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-248",
@@ -6945,7 +10050,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-249",
@@ -6973,7 +10089,22 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          31
+        ],
+        "navObstacleIds": [
+          142
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-250",
@@ -7001,7 +10132,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-251",
@@ -7029,7 +10171,18 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-252",
@@ -7057,7 +10210,22 @@
           "y": 778
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "in-context",
+      "contextCompanionStableId": null,
+      "visualOmissions": [],
+      "probeKind": "uniform-anchor-offset",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [
+          31
+        ],
+        "navObstacleIds": [
+          142
+        ],
+        "navigable": false
+      },
+      "probeRationale": "Default anchor-relative probe."
     },
     {
       "id": "E13-253",
@@ -7070,8 +10238,8 @@
       "personaName": "宋江",
       "relation": "behind",
       "world": {
-        "x": 1559,
-        "y": 667
+        "x": 1602,
+        "y": 685
       },
       "expectedRelation": "agent_behind_target",
       "expectedDepth": "agent < target",
@@ -7085,7 +10253,20 @@
           "y": 701
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.southeast.library-shelf.v1",
+      "visualOmissions": [
+        "jyt.prop.southeast.library-shelf.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-74 probes; isolate only this audit sheet because the adjacent independent shelf/table structure otherwise owns the final pixels."
     },
     {
       "id": "E13-254",
@@ -7098,7 +10279,7 @@
       "personaName": "宋江",
       "relation": "boundary",
       "world": {
-        "x": 1559,
+        "x": 1602,
         "y": 701
       },
       "expectedRelation": "tie",
@@ -7113,7 +10294,20 @@
           "y": 701
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.southeast.library-shelf.v1",
+      "visualOmissions": [
+        "jyt.prop.southeast.library-shelf.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-74 probes; isolate only this audit sheet because the adjacent independent shelf/table structure otherwise owns the final pixels."
     },
     {
       "id": "E13-255",
@@ -7126,8 +10320,8 @@
       "personaName": "宋江",
       "relation": "front",
       "world": {
-        "x": 1559,
-        "y": 735
+        "x": 1602,
+        "y": 717
       },
       "expectedRelation": "agent_in_front",
       "expectedDepth": "agent > target",
@@ -7141,7 +10335,20 @@
           "y": 701
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.southeast.library-shelf.v1",
+      "visualOmissions": [
+        "jyt.prop.southeast.library-shelf.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-74 probes; isolate only this audit sheet because the adjacent independent shelf/table structure otherwise owns the final pixels."
     },
     {
       "id": "E13-256",
@@ -7154,8 +10361,8 @@
       "personaName": "卢俊义",
       "relation": "behind",
       "world": {
-        "x": 1559,
-        "y": 667
+        "x": 1602,
+        "y": 685
       },
       "expectedRelation": "agent_behind_target",
       "expectedDepth": "agent < target",
@@ -7169,7 +10376,20 @@
           "y": 701
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.southeast.library-shelf.v1",
+      "visualOmissions": [
+        "jyt.prop.southeast.library-shelf.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-74 probes; isolate only this audit sheet because the adjacent independent shelf/table structure otherwise owns the final pixels."
     },
     {
       "id": "E13-257",
@@ -7182,7 +10402,7 @@
       "personaName": "卢俊义",
       "relation": "boundary",
       "world": {
-        "x": 1559,
+        "x": 1602,
         "y": 701
       },
       "expectedRelation": "tie",
@@ -7197,7 +10417,20 @@
           "y": 701
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.southeast.library-shelf.v1",
+      "visualOmissions": [
+        "jyt.prop.southeast.library-shelf.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-74 probes; isolate only this audit sheet because the adjacent independent shelf/table structure otherwise owns the final pixels."
     },
     {
       "id": "E13-258",
@@ -7210,8 +10443,8 @@
       "personaName": "卢俊义",
       "relation": "front",
       "world": {
-        "x": 1559,
-        "y": 735
+        "x": 1602,
+        "y": 717
       },
       "expectedRelation": "agent_in_front",
       "expectedDepth": "agent > target",
@@ -7225,7 +10458,20 @@
           "y": 701
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.southeast.library-shelf.v1",
+      "visualOmissions": [
+        "jyt.prop.southeast.library-shelf.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-74 probes; isolate only this audit sheet because the adjacent independent shelf/table structure otherwise owns the final pixels."
     },
     {
       "id": "E13-259",
@@ -7238,8 +10484,8 @@
       "personaName": "扈三娘",
       "relation": "behind",
       "world": {
-        "x": 1559,
-        "y": 667
+        "x": 1602,
+        "y": 685
       },
       "expectedRelation": "agent_behind_target",
       "expectedDepth": "agent < target",
@@ -7253,7 +10499,20 @@
           "y": 701
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.southeast.library-shelf.v1",
+      "visualOmissions": [
+        "jyt.prop.southeast.library-shelf.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-74 probes; isolate only this audit sheet because the adjacent independent shelf/table structure otherwise owns the final pixels."
     },
     {
       "id": "E13-260",
@@ -7266,7 +10525,7 @@
       "personaName": "扈三娘",
       "relation": "boundary",
       "world": {
-        "x": 1559,
+        "x": 1602,
         "y": 701
       },
       "expectedRelation": "tie",
@@ -7281,7 +10540,20 @@
           "y": 701
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.southeast.library-shelf.v1",
+      "visualOmissions": [
+        "jyt.prop.southeast.library-shelf.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-74 probes; isolate only this audit sheet because the adjacent independent shelf/table structure otherwise owns the final pixels."
     },
     {
       "id": "E13-261",
@@ -7294,8 +10566,8 @@
       "personaName": "扈三娘",
       "relation": "front",
       "world": {
-        "x": 1559,
-        "y": 735
+        "x": 1602,
+        "y": 717
       },
       "expectedRelation": "agent_in_front",
       "expectedDepth": "agent > target",
@@ -7309,7 +10581,20 @@
           "y": 701
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.southeast.library-shelf.v1",
+      "visualOmissions": [
+        "jyt.prop.southeast.library-shelf.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-74 probes; isolate only this audit sheet because the adjacent independent shelf/table structure otherwise owns the final pixels."
     },
     {
       "id": "E13-262",
@@ -7322,8 +10607,8 @@
       "personaName": "李逵",
       "relation": "behind",
       "world": {
-        "x": 1559,
-        "y": 667
+        "x": 1602,
+        "y": 685
       },
       "expectedRelation": "agent_behind_target",
       "expectedDepth": "agent < target",
@@ -7337,7 +10622,20 @@
           "y": 701
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.southeast.library-shelf.v1",
+      "visualOmissions": [
+        "jyt.prop.southeast.library-shelf.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-74 probes; isolate only this audit sheet because the adjacent independent shelf/table structure otherwise owns the final pixels."
     },
     {
       "id": "E13-263",
@@ -7350,7 +10648,7 @@
       "personaName": "李逵",
       "relation": "boundary",
       "world": {
-        "x": 1559,
+        "x": 1602,
         "y": 701
       },
       "expectedRelation": "tie",
@@ -7365,7 +10663,20 @@
           "y": 701
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.southeast.library-shelf.v1",
+      "visualOmissions": [
+        "jyt.prop.southeast.library-shelf.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-74 probes; isolate only this audit sheet because the adjacent independent shelf/table structure otherwise owns the final pixels."
     },
     {
       "id": "E13-264",
@@ -7378,8 +10689,8 @@
       "personaName": "李逵",
       "relation": "front",
       "world": {
-        "x": 1559,
-        "y": 735
+        "x": 1602,
+        "y": 717
       },
       "expectedRelation": "agent_in_front",
       "expectedDepth": "agent > target",
@@ -7393,7 +10704,20 @@
           "y": 701
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.southeast.library-shelf.v1",
+      "visualOmissions": [
+        "jyt.prop.southeast.library-shelf.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-74 probes; isolate only this audit sheet because the adjacent independent shelf/table structure otherwise owns the final pixels."
     },
     {
       "id": "E13-265",
@@ -7406,8 +10730,8 @@
       "personaName": "林冲",
       "relation": "behind",
       "world": {
-        "x": 1559,
-        "y": 667
+        "x": 1602,
+        "y": 685
       },
       "expectedRelation": "agent_behind_target",
       "expectedDepth": "agent < target",
@@ -7421,7 +10745,20 @@
           "y": 701
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.southeast.library-shelf.v1",
+      "visualOmissions": [
+        "jyt.prop.southeast.library-shelf.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-74 probes; isolate only this audit sheet because the adjacent independent shelf/table structure otherwise owns the final pixels."
     },
     {
       "id": "E13-266",
@@ -7434,7 +10771,7 @@
       "personaName": "林冲",
       "relation": "boundary",
       "world": {
-        "x": 1559,
+        "x": 1602,
         "y": 701
       },
       "expectedRelation": "tie",
@@ -7449,7 +10786,20 @@
           "y": 701
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.southeast.library-shelf.v1",
+      "visualOmissions": [
+        "jyt.prop.southeast.library-shelf.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-74 probes; isolate only this audit sheet because the adjacent independent shelf/table structure otherwise owns the final pixels."
     },
     {
       "id": "E13-267",
@@ -7462,8 +10812,8 @@
       "personaName": "林冲",
       "relation": "front",
       "world": {
-        "x": 1559,
-        "y": 735
+        "x": 1602,
+        "y": 717
       },
       "expectedRelation": "agent_in_front",
       "expectedDepth": "agent > target",
@@ -7477,7 +10827,20 @@
           "y": 701
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.southeast.library-shelf.v1",
+      "visualOmissions": [
+        "jyt.prop.southeast.library-shelf.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-74 probes; isolate only this audit sheet because the adjacent independent shelf/table structure otherwise owns the final pixels."
     },
     {
       "id": "E13-268",
@@ -7490,8 +10853,8 @@
       "personaName": "吴用",
       "relation": "behind",
       "world": {
-        "x": 1559,
-        "y": 667
+        "x": 1602,
+        "y": 685
       },
       "expectedRelation": "agent_behind_target",
       "expectedDepth": "agent < target",
@@ -7505,7 +10868,20 @@
           "y": 701
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.southeast.library-shelf.v1",
+      "visualOmissions": [
+        "jyt.prop.southeast.library-shelf.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-74 probes; isolate only this audit sheet because the adjacent independent shelf/table structure otherwise owns the final pixels."
     },
     {
       "id": "E13-269",
@@ -7518,7 +10894,7 @@
       "personaName": "吴用",
       "relation": "boundary",
       "world": {
-        "x": 1559,
+        "x": 1602,
         "y": 701
       },
       "expectedRelation": "tie",
@@ -7533,7 +10909,20 @@
           "y": 701
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.southeast.library-shelf.v1",
+      "visualOmissions": [
+        "jyt.prop.southeast.library-shelf.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-74 probes; isolate only this audit sheet because the adjacent independent shelf/table structure otherwise owns the final pixels."
     },
     {
       "id": "E13-270",
@@ -7546,8 +10935,8 @@
       "personaName": "吴用",
       "relation": "front",
       "world": {
-        "x": 1559,
-        "y": 735
+        "x": 1602,
+        "y": 717
       },
       "expectedRelation": "agent_in_front",
       "expectedDepth": "agent > target",
@@ -7561,7 +10950,20 @@
           "y": 701
         },
         "zoom": 1.1
-      }
+      },
+      "evidenceContext": "target-isolated",
+      "contextCompanionStableId": "jyt.prop.southeast.library-shelf.v1",
+      "visualOmissions": [
+        "jyt.prop.southeast.library-shelf.v1"
+      ],
+      "probeKind": "target-specific",
+      "navValidation": {
+        "insideNavArea": true,
+        "collisionIds": [],
+        "navObstacleIds": [],
+        "navigable": true
+      },
+      "probeRationale": "E10 mask-74 probes; isolate only this audit sheet because the adjacent independent shelf/table structure otherwise owns the final pixels."
     },
     {
       "id": "E13-271",

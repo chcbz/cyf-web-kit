@@ -88,6 +88,17 @@ describe('E13 evidence integrity (phase-1 + offline)', () => {
     }
   })
 
+  it('uses target-specific navigable probes for the three previously contaminated targets', () => {
+    const custom = matrixShots.filter(shot => shot.probeKind === 'target-specific')
+    expect(custom).to.have.length(54)
+    custom.forEach(shot => expect(shot.navValidation.navigable, shot.id).to.equal(true))
+    expect(new Set(custom.map(shot => shot.targetStableId))).to.deep.equal(new Set([
+      'jyt.prop.northeast.bounty-board.v1',
+      'jyt.occ.east-upper.scroll-table-front-01.v2',
+      'jyt.occ.east-lower.worktable-01.v2',
+    ]))
+  })
+
   it('world model provenance hashes match the live sources', () => {
     const facts = loadSourceFacts()
     expect(worldModel.provenance.tmxSha256).to.equal(facts.tmxSha256)
@@ -100,7 +111,7 @@ describe('E13 evidence integrity (phase-1 + offline)', () => {
     expect(index.matrixPass).to.equal(true)
     expect(index.releasePass).to.equal(false)
     expect(index.shots).to.have.length(270)
-    const fields = ['id','kind','cell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera']
+    const fields = ['id','kind','cell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera','evidenceContext','contextCompanionStableId','visualOmissions','probeKind','navValidation','probeRationale']
     matrixShots.forEach((plan, i) => fields.forEach(field => expect(index.shots[i][field], `${plan.id}:${field}`).to.deep.equal(plan[field])))
   })
 
@@ -135,6 +146,7 @@ describe('E13 evidence integrity (phase-1 + offline)', () => {
     expect(gate.matrixPass).to.equal(true)
     expect(gate.releasePass).to.equal(false)
     expect(gate.pass).to.equal(false)
-    expect(gate.releaseBlockers).to.include('GPT visual review not performed')
+    expect(gate.checks.find(check => check.check.includes('incremental GPT V4'))?.ok).to.equal(true)
+    expect(gate.releaseBlockers).to.include('technical cross-model review deferred to E17 because DeepSeek provider returned auth_unavailable')
   })
 })

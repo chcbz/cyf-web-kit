@@ -179,7 +179,7 @@ class OfflineRenderer:
         agent = build_agent_scene_object(shot['persona'], shot['world']['x'], shot['world']['y'])
         sorted_objects, depths = compute_unified_order(fragments, props_list, agent)
         wx, wy, cw, ch = self._crop(shot, crop_w, crop_h)
-        stack = self._event_stack(sorted_objects, agent)
+        stack = [event for event in self._event_stack(sorted_objects, agent) if event.get('object', {}).get('stableId') not in set(shot.get('visualOmissions', []))]
         agent_index = next(i for i, event in enumerate(stack) if event.get('object') is agent)
         prefix_signature = tuple(
             (event['event'], event['depth'], event['insertion'], event.get('object', {}).get('stableId', ''))
@@ -406,6 +406,10 @@ class OfflineRenderer:
             'renderPolicy': self.render_policy,
             'fixedLayerStack': [{'name': e['event'], 'depth': e['depth'], 'opacity': e.get('opacity', 1),
                                  'tintcolor': e.get('tintcolor'), 'blend': 'screen' if e['event'] == 'lighting-overlay' else 'source-over'} for e in fixed],
+            'evidenceContext': shot.get('evidenceContext', 'in-context'),
+            'visualOmissions': list(shot.get('visualOmissions', [])),
+            'navValidation': dict(shot.get('navValidation', {})),
+            'probeKind': shot.get('probeKind', 'uniform-anchor-offset'),
             'drawIndices': {
                 'agent': next(i for i, e in enumerate(stack) if e.get('object', {}).get('stableId') == agent['stableId']),
                 'target': next(i for i, e in enumerate(stack) if e.get('object', {}).get('stableId') == target['stableId']),

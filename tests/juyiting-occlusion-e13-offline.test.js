@@ -3,7 +3,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 const ROOT=process.cwd(), DIR=join(ROOT,'tests/fixtures/juyiting/occlusion-e13')
 const read=p=>JSON.parse(readFileSync(p,'utf8'))
-const BIND=['id','kind','cell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera']
+const BIND=['id','kind','cell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera','evidenceContext','contextCompanionStableId','visualOmissions','probeKind','navValidation','probeRationale']
 describe('E13 authoritative offline pixel evidence',()=>{
  let index,matrix
  before(()=>{ index=read(join(DIR,'index.json')); matrix=read(join(DIR,'shot-plan.json')).shots.filter(s=>s.kind==='matrix') })
@@ -27,6 +27,12 @@ describe('E13 authoritative offline pixel evidence',()=>{
  })
  it('matches all resolved depths and reports source-alpha intersections and final-composite visibility',()=>{
   index.shots.forEach(s=>{const f=s.runtimeFacts; expect(f.shotId).eq(s.id); expect(f.ordering).eq(s.resolvedExpectedOrdering); expect(f.resolvedExpectedOrdering).eq(s.resolvedExpectedOrdering); expect(f.depthMatch).eq(true); expect(f.actualDepth).a('number'); expect(f.targetDepth).a('number'); expect(f.actualRenderDepth).eq(100+f.actualDepth); expect(f.targetRenderDepth).eq(100+f.targetDepth); expect(f.actualRenderDepth).lessThan(300); expect(f.targetRenderDepth).lessThan(300); expect(f.pixelOverlap.method).eq('source-alpha-intersection-plus-final-composite-difference'); expect(f.pixelOverlap.opaqueIntersectionPixels).a('number'); expect(f.pixelOverlap.visibleOcclusionPixels).a('number'); expect(f.pixelOverlap.finalCompositeChangedByTargetPixels).a('number'); expect(f.pixelOverlap.finalCompositeChangedByAgentPixels).a('number')})
+ })
+ it('uses navigable target-specific probes and isolates only declared independent companions',()=>{
+  const custom=index.shots.filter(s=>s.probeKind==='target-specific'); expect(custom).length(54)
+  custom.forEach(s=>{expect(s.navValidation.navigable,s.id).eq(true); expect(s.runtimeFacts.pixelOverlap.opaqueIntersectionPixels,s.id).greaterThan(0); expect(s.runtimeFacts.pixelOverlap.visibleOcclusionPixels,s.id).greaterThan(0)})
+  const isolated=custom.filter(s=>s.evidenceContext==='target-isolated'); expect(isolated).length(36)
+  isolated.forEach(s=>{expect(s.visualOmissions,s.id).deep.eq([s.contextCompanionStableId]); expect(s.runtimeFacts.visualOmissions,s.id).deep.eq(s.visualOmissions)})
  })
  it('uses the repaired production base/V2-world/lighting stack without legacy duplicates',()=>{
   expect(index.productionVisualStack.fixedDepths).deep.eq({base:0,'lighting-overlay':300}); expect(index.productionVisualStack.depthBands).deep.eq({BASE_MIN:0,BASE_MAX_EXCLUSIVE:100,V2_WORLD_START:100,V2_WORLD_STRIDE:1,LIGHTING:300,WORLD_UI:400,SCREEN_UI:500})

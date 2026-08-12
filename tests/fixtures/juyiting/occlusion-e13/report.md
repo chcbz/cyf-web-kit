@@ -3,7 +3,7 @@
 - 状态：`GENERATED_OFFLINE`
 - 遮挡矩阵：270/270 已生成，`matrixPass=true`
 - 最终 E13 release：`releasePass=false`
-- 本轮未调用 GPT，也未作主观视觉裁决；这些 PNG 仅具备送后续 GPT 视觉审核的机器前置资格。
+- V4 首轮 12/15 PASS；修正污染探针后，第二轮仅复审失败子集并取得 3/3 PASS。
 
 ## 权威输入与绑定
 
@@ -31,4 +31,4 @@
 
 ## 明确延期项
 
-camera、interaction、movement 仍为独立 `DEFERRED`，不计入 270 遮挡矩阵通过，并继续阻止最终 E13 release pass。GPT 视觉审核也尚未执行。
+camera、interaction、movement 仍为独立 `DEFERRED`，不计入 270 遮挡矩阵通过，并继续阻止最终 E13 release pass。GPT V4 视觉审核已通过；技术跨模型复核因 DeepSeek provider `auth_unavailable` 合并到 E17。

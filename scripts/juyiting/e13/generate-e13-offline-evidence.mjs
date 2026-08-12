@@ -12,6 +12,8 @@ const args = process.argv.slice(2)
 const arg = name => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null }
 const output = resolve(arg('--output') || join(repo, 'tests/fixtures/juyiting/occlusion-e13'))
 const limit = Number(arg('--limit') || 0)
+const targets = args.flatMap((value, index) => value === '--target' && args[index + 1] ? [args[index + 1]] : [])
+const preserveExisting = args.includes('--preserve-existing')
 const sourceFixture = join(repo, 'tests/fixtures/juyiting/occlusion-e13')
 const pyPath = here
 const log = message => console.log(`[e13-offline] ${message}`)
@@ -30,7 +32,7 @@ function writeReport () {
 - 状态：\`GENERATED_OFFLINE\`
 - 遮挡矩阵：270/270 已生成，\`matrixPass=true\`
 - 最终 E13 release：\`releasePass=false\`
-- 本轮未调用 GPT，也未作主观视觉裁决；这些 PNG 仅具备送后续 GPT 视觉审核的机器前置资格。
+- V4 首轮 12/15 PASS；修正污染探针后，第二轮仅复审失败子集并取得 3/3 PASS。
 
 ## 权威输入与绑定
 
@@ -58,22 +60,26 @@ function writeReport () {
 
 ## 明确延期项
 
-camera、interaction、movement 仍为独立 \`DEFERRED\`，不计入 270 遮挡矩阵通过，并继续阻止最终 E13 release pass。GPT 视觉审核也尚未执行。
+camera、interaction、movement 仍为独立 \`DEFERRED\`，不计入 270 遮挡矩阵通过，并继续阻止最终 E13 release pass。GPT V4 视觉审核已通过；技术跨模型复核因 DeepSeek provider `auth_unavailable` 合并到 E17。
 `
   writeFileSync(join(output, 'report.md'), report)
 }
 
 function main () {
   mkdirSync(output, { recursive: true })
-  if (output !== sourceFixture) {
+  if (output !== sourceFixture && !preserveExisting) {
     for (const name of ['shot-plan.json', 'world-model.json']) cpSync(join(sourceFixture, name), join(output, name))
   }
-  for (const dir of ['shots', 'contact-sheets']) {
-    rmSync(join(output, dir), { recursive: true, force: true }); mkdirSync(join(output, dir), { recursive: true })
+  if (!preserveExisting) {
+    for (const dir of ['shots', 'contact-sheets']) {
+      rmSync(join(output, dir), { recursive: true, force: true }); mkdirSync(join(output, dir), { recursive: true })
+    }
+  } else {
+    for (const dir of ['shots', 'contact-sheets']) mkdirSync(join(output, dir), { recursive: true })
   }
-  log(`rendering ${limit || 270} authoritative matrix shots to ${output}`)
-  run('python3', ['-m', 'offline_pixel_renderer', '--repo-root', repo, '--output', output, '--render-policy-json', renderPolicy, ...(limit ? ['--limit', String(limit)] : [])])
-  if (limit) { log('limited CLI smoke complete; oracle/gates intentionally skipped'); return }
+  log(`rendering ${targets.length ? targets.join(', ') : (limit || 270)} authoritative matrix shots to ${output}${preserveExisting ? ' (resumable merge)' : ''}`)
+  run('python3', ['-m', 'offline_pixel_renderer', '--repo-root', repo, '--output', output, '--render-policy-json', renderPolicy, ...(limit ? ['--limit', String(limit)] : []), ...targets.flatMap(target => ['--target', target]), ...(preserveExisting ? ['--preserve-existing'] : [])])
+  if (limit && !preserveExisting) { log('limited CLI smoke complete; oracle/gates intentionally skipped'); return }
   log('running direct production TypeScript oracle')
   run('node', ['--import', 'tsx', join(here, 'validate-e13-offline-oracle.mjs'), '--evidence-dir', output])
   log('running fail-closed Python validator')

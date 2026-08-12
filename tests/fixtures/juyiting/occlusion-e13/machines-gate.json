@@ -9,10 +9,10 @@
     "camera DEFERRED",
     "interaction DEFERRED",
     "movement DEFERRED",
-    "GPT visual review not performed"
+    "technical cross-model review deferred to E17 because DeepSeek provider returned auth_unavailable"
   ],
-  "passedChecks": 18,
-  "totalChecks": 18,
+  "passedChecks": 21,
+  "totalChecks": 21,
   "failures": [],
   "checks": [
     {
@@ -47,6 +47,16 @@
     },
     {
       "check": "270/270 alpha plus final-composite visibility facts",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "target-specific probes are navigable and visibly exercise their target",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "isolated evidence omits only the declared independent companion",
       "ok": true,
       "detail": ""
     },
@@ -104,11 +114,16 @@
       "check": "direct production TypeScript oracle passes all 270",
       "ok": true,
       "detail": ""
+    },
+    {
+      "check": "incremental GPT V4 visual review passes all three prior failures",
+      "ok": true,
+      "detail": ""
     }
   ],
   "sourceHashes": {
-    "shotPlanSha256": "f7761ad1fe6396c01dfdba1adb42591a9ba1648941717498bf08ab318b86fc23",
-    "indexSha256": "aad18e25113c9a2b0a625f77e70b9b95b7c71838441010fdcd4df3ec3286fbaa",
-    "oracleSha256": "2109d7451279267b74d4b4b56f9b4f42c9910af769456157c79c39b47ff05c45"
+    "shotPlanSha256": "785f28bc67830d3043af65e9f9aa455892a0e50872c106e4aea22e3f74796ec3",
+    "indexSha256": "7cb9f8009d7709a180f69b5bcd51077f9f7a479f49619361f9f63e4765837c5b",
+    "oracleSha256": "0d0d2f97d690adc53a6f4e5dac97a57ed9904cc95b99c86392fe255d3e7ae5e1"
   }
 }

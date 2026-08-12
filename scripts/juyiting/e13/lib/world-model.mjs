@@ -18,6 +18,8 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { buildInventory } from '../../inventory-juyiting-map.mjs'
+import { pointStatus } from '../../lib/mask-migration-evidence.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 export const REPO_ROOT = resolve(__dirname, '..', '..', '..', '..')
@@ -66,7 +68,7 @@ export const TARGETS = Object.freeze([
   // cell primary targets
   { stableId: 'jyt.occ.west-upper.lantern-01.v2',          kind: 'fragment', cell: 'northwest',    focus: false, anchor: { x: 484, y: 240 }, tieBias: -1, rect: { x: 461, y: 165, width: 45, height: 75 } },
   { stableId: 'jyt.prop.center-north.main-seat.v1',        kind: 'prop',     cell: 'north_center', focus: false, anchor: { x: 872, y: 268 }, tieBias: 0,  rect: { x: 818, y: 175, width: 109, height: 93 } },
-  { stableId: 'jyt.prop.northeast.bounty-board.v1',        kind: 'prop',     cell: 'northeast',    focus: true,  anchor: { x: 1446, y: 379 }, tieBias: -4, rect: { x: 1360, y: 255, width: 172, height: 124 } },
+  { stableId: 'jyt.prop.northeast.bounty-board.v1',        kind: 'prop',     cell: 'northeast',    focus: true,  anchor: { x: 1446, y: 379 }, tieBias: -4, rect: { x: 1360, y: 255, width: 172, height: 124 }, probes: { behind: { x: 1380, y: 370 }, boundary: { x: 1390, y: 379 }, front: { x: 1400, y: 385 } }, probeRationale: 'Use navigable table-edge ground for behind/boundary; the old centerline probe was inside collision/nav-obstacle geometry and could swallow the whole sprite.' },
   { stableId: 'jyt.occ.west-upper.wall-sconce-02.v2',      kind: 'fragment', cell: 'west_center',  focus: false, anchor: { x: 515, y: 585 }, tieBias: -1, rect: { x: 492, y: 471, width: 45, height: 114 } },
   { stableId: 'jyt.occ.west-upper.diagonal-brace-01.v2',   kind: 'fragment', cell: 'center',       focus: false, anchor: { x: 608, y: 489 }, tieBias: -1, rect: { x: 600, y: 432, width: 16, height: 57 } },
   { stableId: 'jyt.occ.east-upper.pillar-01.v2',           kind: 'fragment', cell: 'east_center',  focus: true,  anchor: { x: 1181, y: 464 }, tieBias: -1, rect: { x: 1158, y: 305, width: 46, height: 159 } },
@@ -74,12 +76,12 @@ export const TARGETS = Object.freeze([
   { stableId: 'jyt.occ.entrance.hanging-banner-01.v2',     kind: 'fragment', cell: 'south_center', focus: true,  anchor: { x: 791, y: 794 }, tieBias: -1, rect: { x: 767, y: 722, width: 48, height: 72 } },
   { stableId: 'jyt.prop.southeast.library-shelf.v1',       kind: 'prop',     cell: 'southeast',    focus: true,  anchor: { x: 1558, y: 719 }, tieBias: 0,  rect: { x: 1497, y: 578, width: 123, height: 141 } },
   // additional focus targets (右上桌 front / 栏杆 / 柱子 / 前门灯柱 / 右桌)
-  { stableId: 'jyt.occ.east-upper.scroll-table-front-01.v2', kind: 'fragment', cell: 'northeast',    focus: true, anchor: { x: 1432, y: 284 }, tieBias: -1, rect: { x: 1384, y: 255, width: 95, height: 29 } },
+  { stableId: 'jyt.occ.east-upper.scroll-table-front-01.v2', kind: 'fragment', cell: 'northeast',    focus: true, anchor: { x: 1432, y: 284 }, tieBias: -1, rect: { x: 1384, y: 255, width: 95, height: 29 }, probes: { behind: { x: 1395, y: 268 }, boundary: { x: 1395, y: 284 }, front: { x: 1379, y: 285 } }, evidenceContext: 'target-isolated', contextCompanionStableId: 'jyt.prop.northeast.bounty-board.v1', probeRationale: 'E10 mask-73 probes; isolate only this audit sheet because the nearby independent floor table otherwise owns the final pixels and makes this wall-mounted fragment visually unjudgeable.' },
   { stableId: 'jyt.occ.west-lower.railing-01.v2',            kind: 'fragment', cell: 'south_center', focus: true, anchor: { x: 593, y: 778 }, tieBias: -1, rect: { x: 506, y: 675, width: 174, height: 103 } },
   { stableId: 'jyt.occ.east-lower.railing-post-01.v2',       kind: 'fragment', cell: 'southeast',    focus: true, anchor: { x: 1247, y: 775 }, tieBias: -1, rect: { x: 1242, y: 707, width: 10, height: 68 } },
   { stableId: 'jyt.occ.east-upper.pillar-02.v2',             kind: 'fragment', cell: 'southeast',    focus: true, anchor: { x: 1227, y: 703 }, tieBias: -1, rect: { x: 1202, y: 478, width: 50, height: 225 } },
   { stableId: 'jyt.occ.entrance.lantern-post-01.v2',         kind: 'fragment', cell: 'south_center', focus: true, anchor: { x: 1073, y: 778 }, tieBias: -1, rect: { x: 1052, y: 674, width: 41, height: 104 } },
-  { stableId: 'jyt.occ.east-lower.worktable-01.v2',          kind: 'fragment', cell: 'southeast',    focus: true, anchor: { x: 1559, y: 701 }, tieBias: -1, rect: { x: 1499, y: 574, width: 120, height: 127 } },
+  { stableId: 'jyt.occ.east-lower.worktable-01.v2',          kind: 'fragment', cell: 'southeast',    focus: true, anchor: { x: 1559, y: 701 }, tieBias: -1, rect: { x: 1499, y: 574, width: 120, height: 127 }, probes: { behind: { x: 1602, y: 685 }, boundary: { x: 1602, y: 701 }, front: { x: 1602, y: 717 } }, evidenceContext: 'target-isolated', contextCompanionStableId: 'jyt.prop.southeast.library-shelf.v1', probeRationale: 'E10 mask-74 probes; isolate only this audit sheet because the adjacent independent shelf/table structure otherwise owns the final pixels.' },
 ])
 
 // ── Camera regression / interaction / lighting plan (single persona 卢俊义) ──
@@ -177,6 +179,7 @@ export function loadSourceFacts () {
     snapshotSha256: sha256Text(readFileSync(snapshotPath, 'utf8')),
     map: { width: snapshot.width, height: snapshot.height },
     spec,
+    inventory: buildInventory(tmx),
     tmxFragments,
     tmxProps,
   }
@@ -200,7 +203,7 @@ export function validateTargetsAgainstTmx (facts, targets = TARGETS) {
 }
 
 /** Build the full matrix shot plan: targets × personas × relations (+ camera/interaction/movement). */
-export function buildShotPlan () {
+export function buildShotPlan (facts = loadSourceFacts()) {
   const shots = []
   let seq = 0
   const push = (shot) => {
@@ -210,7 +213,7 @@ export function buildShotPlan () {
   for (const target of TARGETS) {
     for (const persona of PERSONAS) {
       for (const [relation, def] of Object.entries(RELATIONS)) {
-        const world = { x: target.anchor.x, y: target.anchor.y + def.dy }
+        const world = target.probes?.[relation] ?? { x: target.anchor.x, y: target.anchor.y + def.dy }
         push({
           kind: 'matrix',
           cell: target.cell,
@@ -225,6 +228,12 @@ export function buildShotPlan () {
           expectedDepth: def.expectedDepth,
           viewport: { width: 1280, height: 800 },
           camera: { center: { x: target.anchor.x, y: target.anchor.y }, zoom: 1.1 },
+          evidenceContext: target.evidenceContext ?? 'in-context',
+          contextCompanionStableId: target.contextCompanionStableId ?? null,
+          visualOmissions: target.evidenceContext === 'target-isolated' ? [target.contextCompanionStableId] : [],
+          probeKind: target.probes ? 'target-specific' : 'uniform-anchor-offset',
+          navValidation: pointStatus(world, facts.inventory),
+          probeRationale: target.probeRationale ?? 'Default anchor-relative probe.',
         })
       }
     }
@@ -267,6 +276,17 @@ export function validateShotPlan (shots = buildShotPlan(), facts = loadSourceFac
       }
       if (!PERSONAS.some(p => p.personaCode === shot.persona)) errors.push(`${shot.id}: unknown persona ${shot.persona}`)
       if (!RELATIONS[shot.relation]) errors.push(`${shot.id}: unknown relation ${shot.relation}`)
+      const status = pointStatus(shot.world, facts.inventory)
+      if (JSON.stringify(status) !== JSON.stringify(shot.navValidation)) errors.push(`${shot.id}: navValidation drift`)
+      if (shot.probeKind === 'target-specific' && !status.navigable) errors.push(`${shot.id}: target-specific probe is not navigable (${JSON.stringify(status)})`)
+      const dy = shot.world.y - target.anchor.y
+      if ((shot.relation === 'behind' && dy >= 0) || (shot.relation === 'boundary' && dy !== 0) || (shot.relation === 'front' && dy <= 0)) {
+        errors.push(`${shot.id}: probe y=${shot.world.y} does not satisfy ${shot.relation} against anchor y=${target.anchor.y}`)
+      }
+      if (shot.evidenceContext === 'target-isolated') {
+        const companion = TARGETS.find(t => t.stableId === shot.contextCompanionStableId)
+        if (!companion || companion.evidenceContext === 'target-isolated') errors.push(`${shot.id}: isolated target requires an in-context companion`)
+      } else if (shot.evidenceContext !== 'in-context') errors.push(`${shot.id}: invalid evidenceContext ${shot.evidenceContext}`)
     }
   }
   // Coverage: every cell, persona, relation, target present
@@ -300,7 +320,7 @@ export function buildWorldModelJson () {
   if (anchorErrors.length) {
     throw new Error(`world model anchor mismatch:\n${anchorErrors.join('\n')}`)
   }
-  const plan = buildShotPlan()
+  const plan = buildShotPlan(facts)
   const planErrors = validateShotPlan(plan, facts)
   if (planErrors.length) {
     throw new Error(`shot plan invalid:\n${planErrors.join('\n')}`)

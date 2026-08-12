@@ -9,7 +9,7 @@ const args=process.argv.slice(2); const arg=name=>{const i=args.indexOf(name);re
 const evidence=resolve(arg('--evidence-dir')||join(repo,'tests/fixtures/juyiting/occlusion-e13'))
 const results=[]; const check=(name,ok,detail='')=>results.push({check:name,ok:Boolean(ok),detail})
 const read=p=>JSON.parse(readFileSync(p,'utf8')); const hash=p=>createHash('sha256').update(readFileSync(p)).digest('hex')
-const fields=['id','kind','cell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera']
+const fields=['id','kind','cell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera','evidenceContext','contextCompanionStableId','visualOmissions','probeKind','navValidation','probeRationale']
 function main(){
  const plan=read(join(repo,'tests/fixtures/juyiting/occlusion-e13/shot-plan.json')); const matrix=plan.shots.filter(s=>s.kind==='matrix')
  const index=read(join(evidence,'index.json')); const shots=index.shots||[]
@@ -25,6 +25,10 @@ function main(){
  check('270/270 mapped world depths are above base and below lighting',renderDepthBad.length===0,renderDepthBad.slice(0,10).map(s=>s.id).join(','))
  const alphaBad=shots.filter(s=>s.runtimeFacts?.pixelOverlap?.method!=='source-alpha-intersection-plus-final-composite-difference'||!Number.isInteger(s.runtimeFacts?.pixelOverlap?.opaqueIntersectionPixels)||!Number.isInteger(s.runtimeFacts?.pixelOverlap?.visibleOcclusionPixels)||!Number.isInteger(s.runtimeFacts?.pixelOverlap?.finalCompositeChangedByTargetPixels)||!Number.isInteger(s.runtimeFacts?.pixelOverlap?.finalCompositeChangedByAgentPixels))
  check('270/270 alpha plus final-composite visibility facts',alphaBad.length===0,alphaBad.slice(0,10).map(s=>s.id).join(','))
+ const probeBad=shots.filter(s=>s.probeKind==='target-specific'&&(s.navValidation?.navigable!==true||s.runtimeFacts?.pixelOverlap?.opaqueIntersectionPixels<=0||s.runtimeFacts?.pixelOverlap?.visibleOcclusionPixels<=0))
+ check('target-specific probes are navigable and visibly exercise their target',probeBad.length===0,probeBad.slice(0,12).map(s=>s.id).join(','))
+ const contextBad=shots.filter(s=>s.evidenceContext==='target-isolated'?(typeof s.contextCompanionStableId!=='string'||JSON.stringify(s.visualOmissions)!==JSON.stringify([s.contextCompanionStableId])||JSON.stringify(s.runtimeFacts?.visualOmissions)!==JSON.stringify(s.visualOmissions)):(s.evidenceContext!=='in-context'||(s.visualOmissions||[]).length!==0))
+ check('isolated evidence omits only the declared independent companion',contextBad.length===0,contextBad.slice(0,12).map(s=>s.id).join(','))
  const files=shots.filter(s=>typeof s.screenshotFile!=='string'||!existsSync(join(evidence,s.screenshotFile)))
  check('270 explicit screenshotFile PNGs exist',files.length===0,files.slice(0,10).map(s=>s.id).join(','))
  const diskShots=existsSync(join(evidence,'shots'))?readdirSync(join(evidence,'shots')).filter(f=>f.endsWith('.png')):[]
@@ -39,9 +43,10 @@ function main(){
  check('WebP ABI/hash/API fail-closed provenance recorded',index.webpDecoder?.abi===7&&/^0x[0-9a-f]{6}$/.test(index.webpDecoder?.decoderVersionHex||'')&&/^[0-9a-f]{64}$/.test(index.webpDecoder?.sha256||'')&&index.webpDecoder?.api?.includes('WebPDecodeRGBA'))
  check('camera/interaction/movement independently DEFERRED', ['camera','interaction','movement'].every(k=>(index.notes?.[k]||'').includes('DEFERRED')))
  const oracle=read(join(evidence,'oracle-report.json')); check('direct production TypeScript oracle passes all 270',oracle.pass===true&&oracle.matrixShots===270&&oracle.productionImports?.includes('src/game/occlusion/worldOrder.ts')&&oracle.productionImports?.includes('src/game/occlusion/hallSceneDepthBands.js'))
+ const visual=read(join(evidence,'visual-review-v4.json')); check('incremental GPT V4 visual review passes all three prior failures',visual.pass===true&&visual.sheetsReviewed===3&&visual.results?.length===3&&visual.results.every(r=>r.verdict==='PASS'))
  const matrixPass=results.every(r=>r.ok); const releasePass=false
  const gate={$schema:'juyiting-occlusion-e13-machines-gate-v3',taskId:'E13',generatedBy:'validate-e13-evidence.mjs',pass:releasePass,matrixPass,releasePass,
-   releaseBlockers:['camera DEFERRED','interaction DEFERRED','movement DEFERRED','GPT visual review not performed'],passedChecks:results.filter(r=>r.ok).length,totalChecks:results.length,
+   releaseBlockers:['camera DEFERRED','interaction DEFERRED','movement DEFERRED','technical cross-model review deferred to E17 because DeepSeek provider returned auth_unavailable'],passedChecks:results.filter(r=>r.ok).length,totalChecks:results.length,
    failures:results.filter(r=>!r.ok).map(r=>({check:r.check,detail:r.detail})),checks:results,
    sourceHashes:{shotPlanSha256:hash(join(repo,'tests/fixtures/juyiting/occlusion-e13/shot-plan.json')),indexSha256:hash(join(evidence,'index.json')),oracleSha256:hash(join(evidence,'oracle-report.json'))}}
  writeFileSync(join(evidence,'machines-gate.json'),`${JSON.stringify(gate,null,2)}\n`)

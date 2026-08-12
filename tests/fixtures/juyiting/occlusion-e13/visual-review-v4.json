@@ -1,0 +1,37 @@
+{
+  "$schema": "juyiting-occlusion-e13-visual-review-v4-v1",
+  "taskId": "E13",
+  "reviewRound": 2,
+  "reviewDate": "2026-08-12",
+  "reviewerRole": "vision_reviewer",
+  "scope": "incremental-failed-subset-only",
+  "pass": true,
+  "sheetsReviewed": 3,
+  "results": [
+    {
+      "targetStableId": "jyt.prop.northeast.bounty-board.v1",
+      "contactSheet": "contact-sheets/cell-northeast-jyt_prop_northeast_bounty-board_v1.png",
+      "evidenceContext": "in-context",
+      "verdict": "PASS",
+      "shots": "E13-037..E13-054"
+    },
+    {
+      "targetStableId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "contactSheet": "contact-sheets/cell-northeast-jyt_occ_east-upper_scroll-table-front-01_v2.png",
+      "evidenceContext": "target-isolated",
+      "declaredCompanionOmission": "jyt.prop.northeast.bounty-board.v1",
+      "verdict": "PASS",
+      "shots": "E13-163..E13-180"
+    },
+    {
+      "targetStableId": "jyt.occ.east-lower.worktable-01.v2",
+      "contactSheet": "contact-sheets/cell-southeast-jyt_occ_east-lower_worktable-01_v2.png",
+      "evidenceContext": "target-isolated",
+      "declaredCompanionOmission": "jyt.prop.southeast.library-shelf.v1",
+      "verdict": "PASS",
+      "shots": "E13-253..E13-270"
+    }
+  ],
+  "findings": [],
+  "summary": "PASS 3/3. No whole-character swallowing, reverse occlusion, white halo, transparent seam, or fragment edge discontinuity observed. The prior duplicate-owner inference does not apply to the separately declared physical structures."
+}

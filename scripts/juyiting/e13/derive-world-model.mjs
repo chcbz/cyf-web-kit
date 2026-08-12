@@ -20,7 +20,7 @@ function parseArgs (args) {
 const { output } = parseArgs(process.argv.slice(2))
 mkdirSync(output, { recursive: true })
 const model = buildWorldModelJson()
-const plan = buildShotPlan()
+const plan = model.shotPlan
 writeFileSync(join(output, 'world-model.json'), `${JSON.stringify(model, null, 2)}\n`)
 writeFileSync(join(output, 'shot-plan.json'), `${JSON.stringify({ $schema: 'juyiting-occlusion-e13-shot-plan-v1', taskId: 'E13', shotCount: plan.length, shots: plan }, null, 2)}\n`)
 console.log(`E13 world model written to ${output}`)

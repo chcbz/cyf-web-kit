@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """CLI for deterministic E13 shot/index/contact-sheet generation."""
-import argparse, hashlib, json, os, shutil, sys
+import argparse, copy, hashlib, json, os, shutil, sys
 from .compositor import OfflineRenderer, PixelBuffer
 from .png_io import write_png, read_png, webp_decoder_provenance
 from .text import draw_text
@@ -15,33 +15,67 @@ def main():
     ap.add_argument('--repo-root', default=default_repo_root())
     ap.add_argument('--output', default=None)
     ap.add_argument('--limit', type=int, default=0)
+    ap.add_argument('--target', action='append', default=[], help='render only this targetStableId (repeatable)')
+    ap.add_argument('--shot-id', action='append', default=[], help='render only this shot id (repeatable)')
+    ap.add_argument('--preserve-existing', action='store_true', help='merge selected shots into an existing complete index')
+    ap.add_argument('--skip-contact-sheets', action='store_true', help='update PNG/index only; rebuild sheets in a final pass')
+    ap.add_argument('--finalize-only', action='store_true', help='rebind existing records and rebuild contact sheets without rendering shots')
+    ap.add_argument('--contact-target', action='append', default=[], help='rebuild only this target contact sheet (repeatable)')
     ap.add_argument('--render-policy-json', required=True, help='JSON exported from production hallSceneDepthBands.js')
     args=ap.parse_args()
     repo=os.path.realpath(args.repo_root)
     output=os.path.realpath(args.output or os.path.join(repo,'tests/fixtures/juyiting/occlusion-e13'))
     shots_dir=os.path.join(output,'shots'); contacts=os.path.join(output,'contact-sheets')
     os.makedirs(shots_dir,exist_ok=True); os.makedirs(contacts,exist_ok=True)
-    for d in (shots_dir,contacts):
-        for name in os.listdir(d):
-            path=os.path.join(d,name)
-            if os.path.isfile(path): os.unlink(path)
+    if not args.preserve_existing:
+        for d in (shots_dir,contacts):
+            for name in os.listdir(d):
+                path=os.path.join(d,name)
+                if os.path.isfile(path): os.unlink(path)
     try:
         render_policy=json.loads(args.render_policy_json)
     except Exception as exc:
         raise RuntimeError(f'fail-closed: invalid production render policy JSON: {exc}')
     shots,fragments,props,layers=build_shot_plan(repo)
-    selected=shots[:args.limit] if args.limit else shots
+    target_filter=set(args.target); shot_filter=set(args.shot_id)
+    selected=[] if args.finalize_only else [shot for shot in shots if (not target_filter or shot['targetStableId'] in target_filter) and (not shot_filter or shot['id'] in shot_filter)]
+    selected=selected[:args.limit] if args.limit else selected
+    if not args.finalize_only and (args.target or args.shot_id) and not selected:
+        raise RuntimeError(f'no shots matched target={args.target} shot-id={args.shot_id}')
     renderer=OfflineRenderer(os.path.join(repo,'public','juyiting'),layers,render_policy)
+    existing_records=[]
+    existing_index_path=os.path.join(output,'index.json')
+    if args.preserve_existing and os.path.isfile(existing_index_path):
+        with open(existing_index_path,encoding='utf-8') as f: existing_records=json.load(f).get('shots',[])
     records=[]
     for i,shot in enumerate(selected):
         pixels,order,depths,facts=renderer.render_shot_small(shot,fragments,props,400,300)
         name=f'{shot["id"]}.png'; path=os.path.join(shots_dir,name)
         write_png(path,400,300,pixels)
-        record={k:shot[k] for k in ('id','kind','cell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera')}
+        record={k:shot[k] for k in ('id','kind','cell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera','evidenceContext','contextCompanionStableId','visualOmissions','probeKind','navValidation','probeRationale')}
         record.update({'semanticRelation':shot['relation'],'resolvedExpectedOrdering':shot['resolvedExpectedOrdering'],'screenshotFile':f'shots/{name}','sha256':sha(path),'runtimeFacts':facts})
         records.append(record)
         if (i+1)%45==0: print(f'[{i+1}/{len(selected)}]',flush=True)
-    frame_checks={p['personaCode']:renderer.frame_alpha_bounds(p['personaCode']) for p in PERSONAS}
+    if args.preserve_existing or args.finalize_only:
+        updated={r['id']:r for r in records}
+        prior={r['id']:r for r in existing_records}
+        merged=[]
+        bind_fields=('id','kind','cell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera','evidenceContext','contextCompanionStableId','visualOmissions','probeKind','navValidation','probeRationale')
+        for shot in shots:
+            record=updated.get(shot['id']) or prior.get(shot['id'])
+            if record is None:
+                raise RuntimeError(f'preserve-existing index missing {shot["id"]}')
+            rebound={key:copy.deepcopy(shot[key]) for key in bind_fields}
+            rebound.update({key:value for key,value in record.items() if key not in bind_fields})
+            merged.append(rebound)
+        records=merged
+    if args.finalize_only and existing_records and os.path.isfile(existing_index_path):
+        with open(existing_index_path,encoding='utf-8') as f: prior_index=json.load(f)
+        frame_checks=prior_index.get('frameAlphaBoundsChecks', {})
+        decoder_provenance=prior_index.get('webpDecoder')
+    else:
+        frame_checks={p['personaCode']:renderer.frame_alpha_bounds(p['personaCode']) for p in PERSONAS}
+        decoder_provenance=webp_decoder_provenance()
     mid=os.path.join(repo,'public/juyiting',layers['mid-occluders']['source'])
     foreground=os.path.join(repo,'public/juyiting',layers['foreground-occluders']['source'])
     if not os.path.isfile(mid) or not os.path.isfile(foreground):
@@ -52,7 +86,7 @@ def main():
       'shotCount':len(records),'matrixShots':len(records),'cameraShots':0,'interactionShots':0,'movementShots':0,
       'matrixPass':len(records)==270 and all(r['runtimeFacts']['depthMatch'] for r in records),'releasePass':False,
       'sampledFrame':{'animation':'idle','direction':'down','frame':0,'claim':'single deterministic audit sampling frame, not full animation evidence'},
-      'frameAlphaBoundsChecks':frame_checks,'webpDecoder':webp_decoder_provenance(),
+      'frameAlphaBoundsChecks':frame_checks,'webpDecoder':decoder_provenance,
       'productionVisualStack':{
         'effectiveDrawOrder':'base background, mapped contiguous V2 world band, then independent lighting; ascending melonJS z',
         'canvasRaster':{'productionAntiAlias':True,'scaledSpriteSampling':'premultiplied-RGBA bilinear at destination pixel centers','browserCanvasBitIdentityClaim':False,'difference':'browser Canvas2D backend-specific edge/color rounding is not claimed bit-identical; layer, blend, source/destination geometry, ordering, and final-composite-difference semantics are reproduced deterministically'},
@@ -70,9 +104,14 @@ def main():
       },'shots':records,
     }
     with open(os.path.join(output,'index.json'),'w',encoding='utf-8') as f: json.dump(index,f,ensure_ascii=False,indent=2); f.write('\n')
-    if args.limit: return
+    if args.limit and not args.preserve_existing: return
+    if args.skip_contact_sheets:
+        return
     by_target={}
-    for r in records: by_target.setdefault(r['targetStableId'],[]).append(r)
+    contact_filter=set(args.contact_target)
+    for r in records:
+        if not contact_filter or r['targetStableId'] in contact_filter:
+            by_target.setdefault(r['targetStableId'],[]).append(r)
     personas=['songjiang','lujunyi','husanniang','likui','linchong','wuyong']; relations=['behind','boundary','front']
     for target in sorted(by_target):
         items=by_target[target]; lookup={(r['persona'],r['relation']):r for r in items}
