@@ -1,6 +1,9 @@
 import { expect } from 'chai'
+import { readFileSync } from 'fs'
 
 import { createHallSceneClass } from '../src/game/scenes/HallScene.js'
+import { parseJuyiHallTmx } from '../src/game/tiledMap.js'
+import { ACCEPTED_TMX_SHA256 } from '../src/game/occlusion/hallSceneAssembly.js'
 
 const createFakeMelon = () => {
   const registered = []
@@ -124,8 +127,16 @@ const createFakeMelon = () => {
       viewport,
       world: {
         currentTransform,
-        addChild: (child, depth) => children.push({ child, depth }),
-        removeChild: () => {}
+        addChild: (child, depth) => {
+          if (!children.some(item => item.child === child)) children.push({ child, depth })
+          if (depth !== undefined) child.depth = depth
+          return child
+        },
+        removeChild: child => {
+          const index = children.findIndex(item => item.child === child)
+          if (index >= 0) children.splice(index, 1)
+        },
+        sort: () => {}
       }
     },
     input: {},
@@ -166,6 +177,67 @@ const hotspotMapData = () => ({
     { id: 'bountyBoard', panel: 'tasks', shape: 'rect', x: 76, y: 47, w: 16, h: 14 }
   ]
 })
+
+
+const waitFor = async (predicate, timeoutMs = 2000) => {
+  const deadline = Date.now() + timeoutMs
+  while (!predicate()) {
+    if (Date.now() > deadline) throw new Error('timed out waiting for HallScene state')
+    await new Promise(resolve => setTimeout(resolve, 0))
+  }
+}
+
+const productionV2MapData = () => {
+  const mapData = parseJuyiHallTmx(
+    readFileSync('public/juyiting/hall.tmx', 'utf8'),
+    { movementEnabled: false }
+  )
+  mapData.tileLayers = []
+  return mapData
+}
+
+const installProductionImages = (me, mapData) => {
+  const images = new Map()
+  for (const tileset of mapData.tilesets || []) {
+    if (tileset.tiles?.length) {
+      for (const tile of tileset.tiles) {
+        if (tile?.resourceName) images.set(tile.resourceName, { width: tile.width, height: tile.height })
+      }
+    } else if (tileset.tilesetResourceName) {
+      images.set(tileset.tilesetResourceName, { width: tileset.imagewidth, height: tileset.imageheight })
+    }
+  }
+  for (const layer of Object.values(mapData.imageLayers || {})) {
+    images.set(layer.resourceName, { width: layer.width, height: layer.height })
+  }
+  for (const layer of mapData.layers || []) {
+    for (const object of layer.objects || []) {
+      const assetRef = object.properties?.assetRef
+      if (assetRef) images.set(assetRef, { width: 1664, height: 928 })
+    }
+  }
+  me.loader.getImage = name => images.get(name) || null
+}
+
+class V2HallAgent {
+  constructor(data) {
+    this.personaCode = data.personaCode
+    this.pos = { x: data.x || 0, y: data.y || 0 }
+    this.depth = 3
+    this._sourceData = data
+  }
+  static supports() { return true }
+  syncState(data) {
+    this._sourceData = data
+    this.pos.x = data.x || 0
+    this.pos.y = data.y || 0
+  }
+  setSelected() {}
+  getBounds() {
+    return { x: this.pos.x - 8, y: this.pos.y - 8, width: 16, height: 16, contains: () => true }
+  }
+  containsPoint() { return true }
+}
 
 const runPendingFrames = (frames, now) => {
   const pending = [...frames.entries()]
@@ -969,4 +1041,98 @@ describe('HallScene melonJS pointer routing', () => {
 
     expect(scene.getTransform().zoom).to.equal(1.344)
   })
+
+  it('activates production V2 with all 32 fragment handles at contiguous non-default depths', async () => {
+    const me = createFakeMelon()
+    const mapData = productionV2MapData()
+    installProductionImages(me, mapData)
+    const HallScene = createHallSceneClass(me, V2HallAgent)
+    const scene = new HallScene()
+    const previousGate = window.__JYT_V2_ENABLED
+    window.__JYT_V2_ENABLED = true
+    try {
+      scene.setTmxSha256(ACCEPTED_TMX_SHA256)
+      scene.setMapData(mapData)
+      scene.onResetEvent()
+      await waitFor(() => scene.activeRendererMode === 'v2')
+
+      const fragments = scene._v2Assembly.canonicalIr.fragments
+      const handles = [...scene._v2StagingRenderables]
+      const depths = fragments.map(fragment => scene._v2Depths[fragment.stableId])
+      expect(handles).to.have.length(32)
+      expect(handles.map(handle => handle.depth).sort((a, b) => a - b))
+        .to.deep.equal([...depths].sort((a, b) => a - b))
+      expect(depths.every(depth => Number.isSafeInteger(depth))).to.equal(true)
+      expect(new Set(depths).size).to.equal(32)
+      const allDepths = Object.values(scene._v2Depths).sort((a, b) => a - b)
+      expect(allDepths).to.deep.equal(Array.from({ length: allDepths.length }, (_, index) => allDepths[0] + index))
+    } finally {
+      window.__JYT_V2_ENABLED = previousGate
+      await scene.deactivateV2()
+    }
+  })
+
+  it('replaces roster atomically, commits later frames, and preserves the old scene on sort failure', async () => {
+    const me = createFakeMelon()
+    const mapData = productionV2MapData()
+    installProductionImages(me, mapData)
+    const HallScene = createHallSceneClass(me, V2HallAgent)
+    const scene = new HallScene()
+    const previousGate = window.__JYT_V2_ENABLED
+    window.__JYT_V2_ENABLED = true
+    try {
+      scene.setTmxSha256(ACCEPTED_TMX_SHA256)
+      scene.setMapData(mapData)
+      scene.syncAgents([{ agentId: 'a', personaCode: 'a', x: 300, y: 200 }])
+      scene.onResetEvent()
+      scene.update(16)
+      await waitFor(() => scene.activeRendererMode === 'v2')
+      await scene._doApplyV2Depths(scene._v2Generation)
+      await waitFor(() => scene._v2AgentAdapter?.sourceEntityIds.includes('a'))
+
+      scene.syncAgents([
+        { agentId: 'a', personaCode: 'a', x: 300, y: 200 },
+        { agentId: 'b', personaCode: 'b', x: 300, y: 600 },
+      ])
+      scene.update(16)
+      scene.update(16)
+      await scene._v2FrameSerial
+      await waitFor(() => scene._v2AgentAdapter?.sourceEntityIds.includes('b'))
+      expect(scene._v2Controller.active.children).to.have.length(39)
+
+      const agentA = scene._agents.get('a')
+      const beforeFrameDepth = agentA.depth
+      agentA.pos.y = 850
+      await scene._doApplyV2Depths(scene._v2Generation)
+      expect(agentA.depth).not.to.equal(beforeFrameDepth)
+
+      const oldController = scene._v2Controller
+      const oldAdapter = scene._v2AgentAdapter
+      const oldAssembly = scene._v2Assembly
+      const oldFragments = scene._v2StagingRenderables
+      const oldDepths = scene._v2Depths
+      const oldMembership = scene._v2Membership
+      const oldHitTargets = scene._v2HitTargets
+      scene._agents.delete('b')
+      const originalSort = me.game.world.sort
+      me.game.world.sort = () => { throw new Error('sort failed') }
+      await scene._reactivateV2ForRoster()
+      me.game.world.sort = originalSort
+
+      expect(scene._v2Controller).to.equal(oldController)
+      expect(scene._v2AgentAdapter).to.equal(oldAdapter)
+      expect(scene._v2Assembly).to.equal(oldAssembly)
+      expect(scene._v2StagingRenderables).to.equal(oldFragments)
+      expect(scene._v2Depths).to.equal(oldDepths)
+      expect(scene._v2Membership).to.equal(oldMembership)
+      expect(scene._v2HitTargets).to.equal(oldHitTargets)
+      expect(scene.activeRendererMode).to.equal('v2')
+      expect([...oldFragments].every(handle => me.children.some(item => item.child === handle))).to.equal(true)
+    } finally {
+      window.__JYT_V2_ENABLED = previousGate
+      me.game.world.sort = () => {}
+      await scene.deactivateV2()
+    }
+  })
+
 })

@@ -11,7 +11,7 @@ import { createInteractionLock } from '../input/interactionLock.js'
 import { clientToViewport } from '../viewportTransform.js'
 import { createShadowRenderer, collectV1Snapshots, parseOcclusionDebugFlag } from '../occlusion/shadowRenderer.js'
 import { hasRenderSchemaV2 } from '../occlusion/canonicalIr.js'
-import { hasV2ActivationEnvelope, assembleV2Scene, computeUnifiedWorldOrder, buildHitTestTargets, hitTestPoint, buildFrameProposal, createEmptyMembershipState, registerAgentsInGrid, unregisterAgentFromGrid } from '../occlusion/hallSceneAssembly.js'
+import { hasV2ActivationEnvelope, assembleV2Scene, computeUnifiedWorldOrder, buildHitTestTargets, hitTestPoint, buildFrameProposal, createEmptyMembershipState, registerAgentsInGrid, unregisterAgentFromGrid, createSceneActivationController } from '../occlusion/hallSceneAssembly.js'
 import { createRuntimeAgentAdapter, defaultSpawnResolver, defaultChunkResolver } from '../occlusion/runtimeAgentAdapter.js'
 import { createDebugOverlay } from '../occlusion/debugOverlay.js'
 
@@ -841,8 +841,9 @@ export function createHallSceneClass(me, HallAgentClass) {
         me.game.world.addChild(propLayer, propDepth)
         this._imageLayers.push(propLayer)
         // E12: record prop renderable by its canonical stableId
-        if (h.stableId) {
-          this._v2PropRenderables.set(h.stableId, propLayer)
+        const stableId = h.stableId || h.properties?.stableId
+        if (stableId) {
+          this._v2PropRenderables.set(stableId, propLayer)
         }
         propDepth += 0.5
       })
@@ -1090,6 +1091,7 @@ export function createHallSceneClass(me, HallAgentClass) {
           }
 
           const handle = this._createFragmentHandle(image, f)
+          renderables.set(f.stableId, handle)
           stagingFragments.add(handle)
           // NOT added to world yet — will be added in commit.apply
         }
@@ -1564,56 +1566,57 @@ export function createHallSceneClass(me, HallAgentClass) {
       const oldHitTargets = self._v2HitTargets
       const oldRenderableDepths = new Map()
       if (oldFragments) {
-        for (const h of oldFragments) {
-          if (h && typeof h.depth === 'number') oldRenderableDepths.set(h, h.depth)
-        }
+        for (const handle of oldFragments) oldRenderableDepths.set(handle, handle.depth)
       }
-      for (const [sid, h] of self._v2PropRenderables) {
-        if (h && typeof h.depth === 'number') oldRenderableDepths.set(sid, h.depth)
-      }
+      for (const [, handle] of self._v2PropRenderables) oldRenderableDepths.set(handle, handle.depth)
+      for (const [, handle] of self._agents) oldRenderableDepths.set(handle, handle.depth)
 
       let newAdapter = null
       let newController = null
       const stagingFragments = new Set()
 
       try {
-        if (gen !== self._v2Generation || self._destroyed) return
-        if (!oldAssembly || !oldController) return
+        if (gen !== self._v2Generation || self._destroyed || !oldAssembly || !oldController) return
 
-        // ── 1. Build NEW adapter from current _agents ──
+        // Remove stale runtime agents before any early return; static grid entries remain intact.
+        const currentIds = new Set(self._agents.keys())
+        for (const id of oldAdapter?.sourceEntityIds || []) {
+          if (currentIds.has(id)) continue
+          const sceneObject = oldAdapter.lookup(id)
+          if (sceneObject) unregisterAgentFromGrid(oldAssembly.spatialGrid, sceneObject.stableId)
+        }
+        const oldGridAgents = [...(oldAdapter?.sourceEntityIds || [])]
+          .filter(id => currentIds.has(id))
+          .map(id => ({ sceneObject: oldAdapter.lookup(id), entity: self._agents.get(id) }))
+          .filter(entry => entry.sceneObject && entry.entity)
+        let newAgentsRegistered = false
+        const restoreOldGrid = () => {
+          if (!newAgentsRegistered) return
+          for (const id of newAdapter?.sourceEntityIds || []) {
+            const sceneObject = newAdapter.lookup(id)
+            if (sceneObject) unregisterAgentFromGrid(oldAssembly.spatialGrid, sceneObject.stableId)
+          }
+          registerAgentsInGrid(oldAssembly.spatialGrid, oldGridAgents, 'juyiting-main', 'floor-1')
+          newAgentsRegistered = false
+        }
+
         newAdapter = createRuntimeAgentAdapter(
           defaultSpawnResolver('floor-1', 0),
           defaultChunkResolver(),
           'juyiting-main',
         )
-        const createTasks = []
-        for (const [agentId, entity] of self._agents) {
+        await Promise.all([...self._agents].map(([agentId, entity]) => {
           const pos = entity.pos || {}
-          createTasks.push(
-            newAdapter.create([{ agentId, x: pos.x ?? 0, y: pos.y ?? 0 }])
-          )
-        }
-        const createResults = await Promise.allSettled(createTasks)
-        const anyFailed = createResults.some(r => r.status === 'rejected')
-        if (anyFailed) {
-          newAdapter.destroy()
-          newAdapter = null
-          // Sync old adapter to prevent infinite retry
-          await self._syncAdapterToCurrentAgents(oldAdapter)
-          return
-        }
+          return newAdapter.create([{ agentId, x: pos.x ?? 0, y: pos.y ?? 0 }])
+        }))
 
         if (gen !== self._v2Generation || self._destroyed) {
           newAdapter.destroy()
-          newAdapter = null
           return
         }
 
-        // ── 2. Build NEW offline fragments / renderables ──
         const ir = oldAssembly.canonicalIr
         const renderables = new Map()
-
-        // Props (reuse existing handles, assert 5/5)
         let propsMatched = 0
         for (const prop of ir.objects.filter(o => o.kind === 'prop')) {
           const handle = self._v2PropRenderables.get(prop.stableId)
@@ -1622,206 +1625,178 @@ export function createHallSceneClass(me, HallAgentClass) {
             propsMatched++
           }
         }
-        if (propsMatched !== 5) {
-          newAdapter.destroy()
-          newAdapter = null
-          return
-        }
+        if (propsMatched !== 5) throw new Error(`V2 roster replacement matched ${propsMatched}/5 props`)
 
-        // Fragments — create offline (not added to world)
-        for (const f of ir.fragments) {
-          const image = me.loader.getImage(f.assetRef)
-          if (!image) {
-            newAdapter.destroy()
-            newAdapter = null
-            return
-          }
-          const handle = self._createFragmentHandle(image, f)
-          renderables.set(f.stableId, handle)
+        for (const fragment of ir.fragments) {
+          const image = me.loader.getImage(fragment.assetRef)
+          if (!image) throw new Error(`V2 roster replacement asset missing: ${fragment.assetRef}`)
+          const handle = self._createFragmentHandle(image, fragment)
+          renderables.set(fragment.stableId, handle)
           stagingFragments.add(handle)
         }
 
-        // Agents from new adapter
         const agentAdapters = []
         for (const id of newAdapter.sourceEntityIds) {
-          const so = newAdapter.lookup(id)
+          const sceneObject = newAdapter.lookup(id)
           const entity = self._agents.get(id)
-          if (so && entity) {
-            agentAdapters.push({ sceneObject: so, entity })
-            renderables.set(so.stableId, entity)
+          if (sceneObject && entity) {
+            agentAdapters.push({ sceneObject, entity })
+            renderables.set(sceneObject.stableId, entity)
           }
         }
-
         registerAgentsInGrid(oldAssembly.spatialGrid, agentAdapters, 'juyiting-main', 'floor-1')
+        newAgentsRegistered = true
         const initOrder = computeUnifiedWorldOrder(oldAssembly, agentAdapters, createEmptyMembershipState())
+        const initialHitTargets = buildHitTestTargets(initOrder.order, initOrder.depths, oldAssembly, agentAdapters)
 
         if (gen !== self._v2Generation || self._destroyed) {
           newAdapter.destroy()
-          newAdapter = null
           return
         }
 
-        // ── 3. Build NEW E7 controller with atomic commit swap ──
-        // nodeValues use ctx.transactionId (not hardcoded) so E7 validation passes
         newController = createSceneActivationController({
-          parse: (s, ctx) => s,
-          canonicalize: (p, ctx) => p,
-          validate: (c, ctx) => c,
-          loadAssets: (v, ctx) => v,
-          instantiate: (input, ctx) => {
-            const txId = ctx.transactionId
-            const nodeValues = []
-            const seen = new Set()
-            for (const [stableId] of renderables) {
-              if (seen.has(stableId)) continue
-              seen.add(stableId)
-              nodeValues.push(Object.freeze({
-                stableId, sceneId: 'juyiting-main', mode: 'v2',
-                ownerTransactionId: txId, value: stableId,
-              }))
-            }
-            return {
-              sceneId: 'juyiting-main', mode: 'v2',
-              ownerTransactionId: txId,
-              children: Object.freeze(nodeValues),
-              order: Object.freeze(initOrder.order),
-              depths: Object.freeze(initOrder.depths),
-              dispose: () => {
-                // Only dispose OWN staging fragments (captured locally)
-                for (const handle of stagingFragments) {
-                  try { me.game.world.removeChild(handle) } catch (e) {}
-                }
-              },
-            }
-          },
-          validateConstraints: (scene, ctx) => ({ order: scene.order }),
-          commit: (ctx) => {
+          parse: source => source,
+          canonicalize: parsed => parsed,
+          validate: canonical => canonical,
+          loadAssets: validated => validated,
+          instantiate: (input, ctx) => ({
+            sceneId: ctx.sceneId,
+            mode: ctx.mode,
+            ownerTransactionId: ctx.transactionId,
+            children: Object.freeze([...renderables].map(([stableId]) => Object.freeze({
+              stableId,
+              sceneId: ctx.sceneId,
+              mode: ctx.mode,
+              ownerTransactionId: ctx.transactionId,
+              value: stableId,
+            }))),
+            order: Object.freeze(initOrder.order),
+            depths: Object.freeze(initOrder.depths),
+            dispose: () => {
+              for (const handle of stagingFragments) {
+                try { me.game.world.removeChild(handle) } catch (error) {}
+              }
+            },
+          }),
+          validateConstraints: scene => ({ order: scene.order }),
+          commit: ctx => {
             ctx.swap(
               () => {
-                // ── apply: atomic external swap ──
-                // 1. Remove OLD fragments from world
                 if (oldFragments) {
-                  for (const handle of oldFragments) {
-                    me.game.world.removeChild(handle)
-                  }
+                  for (const handle of oldFragments) me.game.world.removeChild(handle)
                 }
-                // 2. Add NEW fragments
-                for (const handle of stagingFragments) {
-                  me.game.world.addChild(handle, 0)
+                for (const handle of stagingFragments) me.game.world.addChild(handle, 0)
+                for (const [stableId, handle] of renderables) {
+                  const depth = initOrder.depths[stableId]
+                  if (depth !== undefined) handle.depth = depth
                 }
-                // 3. Apply new depths
-                for (const [sid, h] of renderables) {
-                  const d = initOrder.depths[sid]
-                  if (d !== undefined && h && typeof h.depth === 'number') h.depth = d
-                }
-                // 4. Sort
-                if (me.game.world && typeof me.game.world.sort === 'function') {
-                  me.game.world.sort(true)
-                }
-                // 5. Publish new reader state + controller + adapter
+                me.game.world.sort?.(true)
                 self._v2Controller = newController
                 self._v2AgentAdapter = newAdapter
+                self._v2Assembly = oldAssembly
                 self._v2StagingRenderables = stagingFragments
                 self._v2Depths = initOrder.depths
                 self._v2Membership = initOrder.nextMembership
-                self._v2HitTargets = buildHitTestTargets(initOrder.order, initOrder.depths, oldAssembly, agentAdapters)
-                self._v2PendingFrame = null
+                self._v2HitTargets = initialHitTargets
                 self._v2PendingActivation = null
+                self._v2PendingFrame = null
                 self._v2Active = true
                 self._v2LastRosterAttempt = null
-                // 6. Async destroy old controller + adapter
-                Promise.resolve().then(() => {
-                  if (oldController) oldController.destroy().catch(() => {})
-                  if (oldAdapter) oldAdapter.destroy()
-                }).catch(() => {})
               },
               () => {
-                // ── rollback: restore reader state FIRST, then best-effort world ──
+                self._v2Controller = oldController
+                self._v2AgentAdapter = oldAdapter
+                self._v2Assembly = oldAssembly
+                self._v2StagingRenderables = oldFragments
                 self._v2Active = oldActive
                 self._v2Depths = oldDepths
                 self._v2Membership = oldMembership
                 self._v2HitTargets = oldHitTargets
                 self._v2PendingActivation = null
                 self._v2PendingFrame = null
-                // Best-effort: remove new fragments
+                restoreOldGrid()
                 for (const handle of stagingFragments) {
-                  try { me.game.world.removeChild(handle) } catch (e) {}
+                  try { me.game.world.removeChild(handle) } catch (error) {}
                 }
-                // Best-effort: re-add old fragments
                 if (oldFragments) {
                   for (const handle of oldFragments) {
-                    try { me.game.world.addChild(handle, 0) } catch (e) {}
+                    try { me.game.world.addChild(handle, 0) } catch (error) {}
                   }
                 }
-                // Best-effort: restore old depths
-                for (const [key, d] of oldRenderableDepths) {
-                  if (typeof key === 'string') {
-                    const h = renderables.get(key) || self._v2PropRenderables.get(key)
-                    if (h && typeof h.depth === 'number') { try { h.depth = d } catch (e) {} }
-                  } else if (key && typeof key.depth === 'number') {
-                    try { key.depth = d } catch (e) {}
-                  }
+                for (const [handle, depth] of oldRenderableDepths) {
+                  try { handle.depth = depth } catch (error) {}
                 }
-                // Best-effort: sort
-                if (me.game.world && typeof me.game.world.sort === 'function') {
-                  try { me.game.world.sort(true) } catch (e) {}
+                try { me.game.world.sort?.(true) } catch (error) {}
+              },
+            )
+          },
+          commitFrame: ctx => {
+            const oldFrameDepths = self._v2Depths
+            const oldFrameMembership = self._v2Membership
+            const oldFrameHitTargets = self._v2HitTargets
+            const oldHandleDepths = new Map([...renderables].map(([, handle]) => [handle, handle.depth]))
+            ctx.swap(
+              () => {
+                for (const [stableId, handle] of renderables) {
+                  const depth = ctx.next.depths[stableId]
+                  if (depth !== undefined) handle.depth = depth
                 }
-                // Destroy new staging adapter (controller stays in failed state)
-                newAdapter.destroy()
+                me.game.world.sort?.(true)
+                const pending = self._v2PendingFrame
+                if (pending) {
+                  self._v2Depths = pending.nextDepths
+                  self._v2Membership = pending.nextMembership
+                  self._v2HitTargets = pending.nextHitTargets
+                  self._v2PendingFrame = null
+                }
+              },
+              () => {
+                self._v2Depths = oldFrameDepths
+                self._v2Membership = oldFrameMembership
+                self._v2HitTargets = oldFrameHitTargets
+                self._v2PendingFrame = null
+                for (const [handle, depth] of oldHandleDepths) {
+                  try { handle.depth = depth } catch (error) {}
+                }
+                try { me.game.world.sort?.(true) } catch (error) {}
               },
             )
           },
         })
 
-        // ── 4. Activate new controller ──
         const result = await newController.activate({
           sceneId: 'juyiting-main', mode: 'v2', source: { mapData: self._mapData },
         })
-
+        if (!result.ok) throw result.error
         if (gen !== self._v2Generation || self._destroyed) {
-          // Generation changed during activation; destroy new staging
-          newController.destroy().catch(() => {})
+          await newController.destroy()
           newAdapter.destroy()
           return
         }
 
-        if (!result.ok) {
-          // Activation failed; destroy new staging, keep old active
-          newController.destroy().catch(() => {})
-          newAdapter.destroy()
-          newAdapter = null
-          newController = null
-          // Sync old adapter to prevent infinite retry loop
-          await self._syncAdapterToCurrentAgents(oldAdapter)
-          self._v2LastRosterAttempt = null  // allow retry if roster changes again
-          if (self._shadowDebugActive) {
-            console.warn('[HallScene] V2 roster reactivation failed:', result.error?.message)
-          }
-          return
-        }
-
-        // Success: reader state already published via commit.apply
-        // oldController/oldAdapter destroyed async in commit.apply
-        // Clear newAdapter/newController refs (now owned by self._v2Xxx)
-        newAdapter = null
         newController = null
-      } catch (err) {
-        // Clean up any new staging that was created
-        if (newController) {
-          newController.destroy().catch(() => {})
-          newController = null
-        }
+        newAdapter = null
+        Promise.resolve().then(async () => {
+          await oldController.destroy()
+          oldAdapter?.destroy()
+        }).catch(error => {
+          console.warn('[HallScene] V2 old roster scene destroy failed:', error?.message || error)
+        })
+      } catch (error) {
+        if (newController) await newController.destroy().catch(() => {})
         if (newAdapter) {
+          for (const id of newAdapter.sourceEntityIds) {
+            const sceneObject = newAdapter.lookup(id)
+            if (sceneObject) unregisterAgentFromGrid(oldAssembly.spatialGrid, sceneObject.stableId)
+          }
+          registerAgentsInGrid(oldAssembly.spatialGrid, [...oldAdapter.sourceEntityIds]
+            .filter(id => self._agents.has(id))
+            .map(id => ({ sceneObject: oldAdapter.lookup(id), entity: self._agents.get(id) }))
+            .filter(entry => entry.sceneObject && entry.entity), 'juyiting-main', 'floor-1')
           newAdapter.destroy()
-          newAdapter = null
         }
-        // Sync old adapter to prevent infinite retry loop
-        if (oldAdapter && self._v2Active && gen === self._v2Generation) {
-          self._syncAdapterToCurrentAgents(oldAdapter).catch(() => {})
-        }
-        self._v2LastRosterAttempt = null
         if (self._shadowDebugActive) {
-          console.warn('[HallScene] V2 roster reactivation failed (old active preserved):', err?.message || err)
+          console.warn('[HallScene] V2 roster reactivation failed (old active preserved):', error?.message || error)
         }
       }
     }
