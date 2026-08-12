@@ -15,6 +15,7 @@ def main():
     ap.add_argument('--repo-root', default=default_repo_root())
     ap.add_argument('--output', default=None)
     ap.add_argument('--limit', type=int, default=0)
+    ap.add_argument('--render-policy-json', required=True, help='JSON exported from production hallSceneDepthBands.js')
     args=ap.parse_args()
     repo=os.path.realpath(args.repo_root)
     output=os.path.realpath(args.output or os.path.join(repo,'tests/fixtures/juyiting/occlusion-e13'))
@@ -24,9 +25,13 @@ def main():
         for name in os.listdir(d):
             path=os.path.join(d,name)
             if os.path.isfile(path): os.unlink(path)
+    try:
+        render_policy=json.loads(args.render_policy_json)
+    except Exception as exc:
+        raise RuntimeError(f'fail-closed: invalid production render policy JSON: {exc}')
     shots,fragments,props,layers=build_shot_plan(repo)
     selected=shots[:args.limit] if args.limit else shots
-    renderer=OfflineRenderer(os.path.join(repo,'public','juyiting'),layers)
+    renderer=OfflineRenderer(os.path.join(repo,'public','juyiting'),layers,render_policy)
     records=[]
     for i,shot in enumerate(selected):
         pixels,order,depths,facts=renderer.render_shot_small(shot,fragments,props,400,300)
@@ -39,6 +44,8 @@ def main():
     frame_checks={p['personaCode']:renderer.frame_alpha_bounds(p['personaCode']) for p in PERSONAS}
     mid=os.path.join(repo,'public/juyiting',layers['mid-occluders']['source'])
     foreground=os.path.join(repo,'public/juyiting',layers['foreground-occluders']['source'])
+    if not os.path.isfile(mid) or not os.path.isfile(foreground):
+        raise RuntimeError('fail-closed: production legacy occluder resources missing')
     index={
       '$schema':'juyiting-occlusion-e13-index-v3','schemaVersion':3,'taskId':'E13','status':'GENERATED_OFFLINE',
       'generator':'scripts/juyiting/e13/generate-e13-offline-evidence.mjs + offline_pixel_renderer',
@@ -47,17 +54,19 @@ def main():
       'sampledFrame':{'animation':'idle','direction':'down','frame':0,'claim':'single deterministic audit sampling frame, not full animation evidence'},
       'frameAlphaBoundsChecks':frame_checks,'webpDecoder':webp_decoder_provenance(),
       'productionVisualStack':{
-        'effectiveDrawOrder':'ascending melonJS z; equal z draws later-added world renderables before earlier fixed layers',
-        'canvasRaster':{'productionAntiAlias':True,'scaledSpriteSampling':'premultiplied-RGBA bilinear at destination pixel centers','browserCanvasBitIdentityClaim':False,'difference':'browser Canvas2D backend-specific edge/color rounding is not claimed bit-identical; layer, blend, source/destination geometry, ordering, and alpha-mask semantics are reproduced deterministically'},
-        'fixedDepths':{'base':0,'mid-occluders':2,'foreground-occluders':5,'lighting-overlay':8},
+        'effectiveDrawOrder':'base background, mapped contiguous V2 world band, then independent lighting; ascending melonJS z',
+        'canvasRaster':{'productionAntiAlias':True,'scaledSpriteSampling':'premultiplied-RGBA bilinear at destination pixel centers','browserCanvasBitIdentityClaim':False,'difference':'browser Canvas2D backend-specific edge/color rounding is not claimed bit-identical; layer, blend, source/destination geometry, ordering, and final-composite-difference semantics are reproduced deterministically'},
+        'depthBands':render_policy['depthBands'],
+        'v2WorldMapping':{'formula':'V2_WORLD_START + logicalDepth * V2_WORLD_STRIDE','logicalDepthsRemainContiguous':True},
+        'fixedDepths':{'base':render_policy['depthBands']['BASE_MIN'],'lighting-overlay':render_policy['depthBands']['LIGHTING']},
         'lighting':{'opacity':layers['lighting-overlay']['opacity'],'tintcolor':layers['lighting-overlay']['tintcolor'],'imageBlend':'screen','tintBlend':'multiply'},
-        'midForegroundDuplicate':{'drawnTwice':True,'midSha256':sha(mid),'foregroundSha256':sha(foreground),'sameBytes':sha(mid)==sha(foreground)},
+        'legacyMidForeground':{'v2Attached':False,'v1Restored':True,'layerNames':render_policy['legacyOccluderLayers'],'midSha256':sha(mid),'foregroundSha256':sha(foreground),'sameBytes':sha(mid)==sha(foreground),'reason':'production V2 commit detaches both legacy full-map handles to avoid duplication with 32 fragments'},
       },
       'notes':{
         'camera':'DEFERRED — requires live browser viewport/touch behavior; excluded from matrix pass and blocks releasePass',
         'interaction':'DEFERRED — requires live pointer/hotspot/DOM behavior; excluded from matrix pass and blocks releasePass',
         'movement':'DEFERRED — requires live movement/navmesh engine; excluded from matrix pass and blocks releasePass',
-        'methodology':'Direct authoritative shot-plan matrix; production TMX source/destination rects; production sprite manifest idle/down/frame0; full fixed-depth/world event stream; alpha-mask overlap.',
+        'methodology':'Direct authoritative shot-plan matrix; production TMX source/destination rects; production sprite manifest idle/down/frame0; repaired base/V2-world/lighting event stream; source-alpha intersection plus final composited RGBA difference.',
       },'shots':records,
     }
     with open(os.path.join(output,'index.json'),'w',encoding='utf-8') as f: json.dump(index,f,ensure_ascii=False,indent=2); f.write('\n')

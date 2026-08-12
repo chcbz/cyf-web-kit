@@ -11,8 +11,8 @@
     "movement DEFERRED",
     "GPT visual review not performed"
   ],
-  "passedChecks": 17,
-  "totalChecks": 17,
+  "passedChecks": 18,
+  "totalChecks": 18,
   "failures": [],
   "checks": [
     {
@@ -41,7 +41,12 @@
       "detail": ""
     },
     {
-      "check": "270/270 real alpha overlap facts",
+      "check": "270/270 mapped world depths are above base and below lighting",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "270/270 alpha plus final-composite visibility facts",
       "ok": true,
       "detail": ""
     },
@@ -71,7 +76,7 @@
       "detail": ""
     },
     {
-      "check": "production fixed stack and lighting semantics recorded",
+      "check": "repaired base/world/lighting stack and lighting semantics recorded",
       "ok": true,
       "detail": ""
     },
@@ -81,7 +86,7 @@
       "detail": ""
     },
     {
-      "check": "mid/foreground byte-identical resource is drawn twice",
+      "check": "legacy duplicate full-map occluders are detached in V2",
       "ok": true,
       "detail": ""
     },
@@ -103,7 +108,7 @@
   ],
   "sourceHashes": {
     "shotPlanSha256": "f7761ad1fe6396c01dfdba1adb42591a9ba1648941717498bf08ab318b86fc23",
-    "indexSha256": "426415ef8dda3050755c5c8bca9c13348404334fdc8c55bebd65a37c5ad3966e",
-    "oracleSha256": "27b0648d6534ac04d69829a202e08741ab0a627a0f2a482a0c6f69f81bfa792c"
+    "indexSha256": "aad18e25113c9a2b0a625f77e70b9b95b7c71838441010fdcd4df3ec3286fbaa",
+    "oracleSha256": "2109d7451279267b74d4b4b56f9b4f42c9910af769456157c79c39b47ff05c45"
   }
 }

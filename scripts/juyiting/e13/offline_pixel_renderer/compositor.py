@@ -113,39 +113,56 @@ class AssetCache:
 
 class OfflineRenderer:
     MAP_W, MAP_H = 1664, 928
-    FIXED_DEPTH = {'base': 0, 'mid-occluders': 2, 'foreground-occluders': 5, 'lighting-overlay': 8}
 
-    def __init__(self, public_dir, image_layers=None):
+    def __init__(self, public_dir, image_layers=None, render_policy=None):
         self.assets = AssetCache(public_dir)
         self.image_layers = image_layers or {}
+        self.render_policy = render_policy or {}
+        bands = self.render_policy.get('depthBands', {})
+        required = ('BASE_MIN', 'BASE_MAX_EXCLUSIVE', 'V2_WORLD_START', 'V2_WORLD_STRIDE', 'LIGHTING', 'WORLD_UI', 'SCREEN_UI')
+        if any(not isinstance(bands.get(key), int) for key in required):
+            raise RuntimeError('fail-closed: production HallScene render policy is missing integer depth bands')
+        if bands['BASE_MIN'] != 0 or not (bands['BASE_MAX_EXCLUSIVE'] <= bands['V2_WORLD_START'] < bands['LIGHTING'] < bands['WORLD_UI'] < bands['SCREEN_UI']):
+            raise RuntimeError('fail-closed: invalid HallScene render-band ordering')
+        if self.render_policy.get('legacyOccluderLayers') != ['mid-occluders', 'foreground-occluders']:
+            raise RuntimeError('fail-closed: production legacy occluder ownership policy drift')
+        self.depth_bands = bands
         self._static_crop_cache = {}
 
+    def _world_depth(self, logical_depth):
+        if not isinstance(logical_depth, int) or logical_depth < 0:
+            raise RuntimeError(f'fail-closed: invalid logical world depth {logical_depth}')
+        depth = self.depth_bands['V2_WORLD_START'] + logical_depth * self.depth_bands['V2_WORLD_STRIDE']
+        if depth >= self.depth_bands['LIGHTING']:
+            raise RuntimeError(f'fail-closed: mapped world depth {depth} escapes below-lighting band')
+        return depth
+
     def _fixed_events(self):
-        # Production insertion order: tile base, then TMX image layers. At equal
-        # z, melon sorts stably descending and draws backwards, so later-added
-        # world renderables draw before these earlier fixed layers.
-        base = {'event': 'base', 'depth': 0, 'insertion': 0, 'source': 'images/liangshan-hall-base-clean-v3.webp'}
-        events = [base]
-        for insertion, name in enumerate(('mid-occluders', 'foreground-occluders', 'lighting-overlay'), 1):
-            layer = self.image_layers.get(name)
-            if not layer:
-                raise RuntimeError(f'fail-closed: production TMX image layer missing: {name}')
-            events.append({'event': name, 'depth': self.FIXED_DEPTH[name], 'insertion': insertion, **layer})
-        return events
+        # Repaired production V2 stack: opaque tile base remains, legacy full-map
+        # mid/foreground handles are detached, and lighting remains independent.
+        lighting = self.image_layers.get('lighting-overlay')
+        if not lighting:
+            raise RuntimeError('fail-closed: production TMX lighting layer missing')
+        return [
+            {'event': 'base', 'depth': self.depth_bands['BASE_MIN'], 'insertion': 0,
+             'source': 'images/liangshan-hall-base-clean-v3.webp'},
+            {'event': 'lighting-overlay', 'depth': self.depth_bands['LIGHTING'], 'insertion': 1, **lighting},
+        ]
 
     def _event_stack(self, sorted_objects, agent):
         events = self._fixed_events()
-        # Props exist before V2 activation; agents are added before staged fragments.
+        # Production insertion order is props, agents, then staged fragments;
+        # mapped depths are unique because E7 logical depths are contiguous.
         insertion = 10
         for obj in sorted_objects:
             if obj['kind'] == 'prop':
-                events.append({'event': 'world', 'depth': sorted_objects.index(obj), 'insertion': insertion, 'object': obj})
+                events.append({'event': 'world', 'depth': self._world_depth(sorted_objects.index(obj)), 'logicalDepth': sorted_objects.index(obj), 'insertion': insertion, 'object': obj})
                 insertion += 1
-        events.append({'event': 'world', 'depth': sorted_objects.index(agent), 'insertion': insertion, 'object': agent})
+        events.append({'event': 'world', 'depth': self._world_depth(sorted_objects.index(agent)), 'logicalDepth': sorted_objects.index(agent), 'insertion': insertion, 'object': agent})
         insertion += 1
         for obj in sorted_objects:
             if obj['kind'] == 'fragment':
-                events.append({'event': 'world', 'depth': sorted_objects.index(obj), 'insertion': insertion, 'object': obj})
+                events.append({'event': 'world', 'depth': self._world_depth(sorted_objects.index(obj)), 'logicalDepth': sorted_objects.index(obj), 'insertion': insertion, 'object': obj})
                 insertion += 1
         return sorted(events, key=lambda e: (e['depth'], -e['insertion']))
 
@@ -193,7 +210,7 @@ class OfflineRenderer:
                     self._draw_world(canvas, obj, wx, wy, frame=0)
             else:
                 self._draw_fixed(canvas, event, wx, wy)
-        facts = self._build_facts(sorted_objects, depths, agent, shot, fragments, props_list, stack, wx, wy, cw, ch)
+        facts = self._build_facts(sorted_objects, depths, agent, shot, fragments, props_list, stack, wx, wy, cw, ch, canvas)
         return canvas.to_bytes(), sorted_objects, depths, facts
 
     def render_shot(self, shot, fragments, props_list):
@@ -287,31 +304,64 @@ class OfflineRenderer:
             sy = int((y - d['y']) * src.height / d['height'])
         return src.pixels[(sy * src.width + sx) * 4 + 3]
 
-    def _alpha_overlap(self, agent, target, ordering):
+    def _compose_region(self, stack, region, omit_stable_id=None):
+        vx, vy, width, height = region
+        canvas = PixelBuffer(width, height)
+        for event in stack:
+            obj = event.get('object')
+            if obj is not None:
+                if obj.get('stableId') == omit_stable_id:
+                    continue
+                if self._obj_overlaps(obj, region):
+                    self._draw_world(canvas, obj, vx, vy, frame=0)
+            else:
+                self._draw_fixed(canvas, event, vx, vy)
+        return canvas
+
+    def _final_visibility_overlap(self, agent, target, ordering, stack, crop, final_canvas):
         ag, tr = self._agent_geometry(agent), target['destinationRect']
-        x0, y0 = max(ag['x'], int(tr['x'])), max(ag['y'], int(tr['y']))
-        x1, y1 = min(ag['x'] + ag['width'], int(tr['x'] + tr['width'])), min(ag['y'] + ag['height'], int(tr['y'] + tr['height']))
+        crop_x, crop_y, crop_w, crop_h = crop
+        x0 = max(ag['x'], int(tr['x']), crop_x)
+        y0 = max(ag['y'], int(tr['y']), crop_y)
+        x1 = min(ag['x'] + ag['width'], int(tr['x'] + tr['width']), crop_x + crop_w)
+        y1 = min(ag['y'] + ag['height'], int(tr['y'] + tr['height']), crop_y + crop_h)
         intersection = weighted = agent_px = target_px = 0
+        changed_by_target = changed_by_agent = 0
         bounds = None
         if x0 < x1 and y0 < y1:
+            region = (x0, y0, x1 - x0, y1 - y0)
+            omitted_id = target['stableId'] if ordering == 'agent_behind_target' else agent['stableId']
+            without_later = self._compose_region(stack, region, omitted_id)
             minx = miny = 10**9; maxx = maxy = -1
             for y in range(y0, y1):
                 for x in range(x0, x1):
                     aa, ta = self._alpha_at_agent(agent, x, y), self._alpha_at_target(target, x, y)
                     agent_px += aa > 0; target_px += ta > 0
-                    if aa > 0 and ta > 0:
-                        intersection += 1; weighted += aa * ta / 255.0
-                        minx, miny, maxx, maxy = min(minx, x), min(miny, y), max(maxx, x), max(maxy, y)
+                    if aa <= 0 or ta <= 0:
+                        continue
+                    intersection += 1; weighted += aa * ta / 255.0
+                    minx, miny, maxx, maxy = min(minx, x), min(miny, y), max(maxx, x), max(maxy, y)
+                    final_index = ((y - crop_y) * crop_w + (x - crop_x)) * 4
+                    omitted_index = ((y - y0) * region[2] + (x - x0)) * 4
+                    changed = final_canvas.pixels[final_index:final_index + 4] != without_later.pixels[omitted_index:omitted_index + 4]
+                    if changed and ordering == 'agent_behind_target': changed_by_target += 1
+                    if changed and ordering == 'agent_in_front': changed_by_agent += 1
             if intersection:
                 bounds = {'x': minx, 'y': miny, 'width': maxx - minx + 1, 'height': maxy - miny + 1}
         target_after = ordering == 'agent_behind_target'
+        agent_after = ordering == 'agent_in_front'
+        applicable = changed_by_target if target_after else (changed_by_agent if agent_after else 0)
         return {
-            'method': 'source-alpha-mask-intersection', 'hasAlphaOverlap': intersection > 0,
+            'method': 'source-alpha-intersection-plus-final-composite-difference',
+            'visibilityMethod': 'final RGBA differs from the identical full stack with the later agent/target omitted, after lighting',
+            'hasAlphaOverlap': intersection > 0,
             'agentOpaquePixelsInAabb': agent_px, 'targetOpaquePixelsInAabb': target_px,
             'opaqueIntersectionPixels': intersection, 'alphaWeightedIntersection': round(weighted, 3),
-            'visibleOcclusionPixels': intersection if target_after else 0,
-            'agentPixelsOccludedByTarget': intersection if target_after else 0,
-            'targetPixelsOccludedByAgent': intersection if ordering == 'agent_in_front' else 0,
+            'finalCompositeChangedByTargetPixels': changed_by_target,
+            'finalCompositeChangedByAgentPixels': changed_by_agent,
+            'visibleOcclusionPixels': applicable,
+            'agentPixelsVisiblyOccludedByTarget': changed_by_target if target_after else 0,
+            'targetPixelsVisiblyOccludedByAgent': changed_by_agent if agent_after else 0,
             'overlapBounds': bounds,
         }
 
@@ -336,7 +386,7 @@ class OfflineRenderer:
                 'reviewInvariantPass': len(vertical_extents) == 1 and all(r['opaquePixels'] > 0 for r in result),
                 'invariant': 'same frame geometry/anchor/scale and same alpha top/baseline; exact x/width differences are reported, not hidden'}
 
-    def _build_facts(self, order, depths, agent, shot, fragments, props, stack, wx, wy, cw, ch):
+    def _build_facts(self, order, depths, agent, shot, fragments, props, stack, wx, wy, cw, ch, final_canvas):
         from .world_model import compute_world_sort_key
         target = next(o for o in [*fragments, *props] if o['stableId'] == shot['targetStableId'])
         ad, td = depths[agent['stableId']], depths[target['stableId']]
@@ -346,12 +396,14 @@ class OfflineRenderer:
             'shotId': shot['id'], 'agentStableId': agent['stableId'], 'targetStableId': target['stableId'],
             'agentWorld': dict(shot['world']), 'agentSortKey': list(compute_world_sort_key(agent)),
             'targetSortKey': list(compute_world_sort_key(target)), 'actualDepth': ad, 'targetDepth': td,
+            'actualRenderDepth': self._world_depth(ad), 'targetRenderDepth': self._world_depth(td),
             'ordering': ordering, 'semanticExpectedRelation': shot['expectedRelation'],
             'resolvedExpectedOrdering': shot['resolvedExpectedOrdering'],
             'depthMatch': ordering == shot['resolvedExpectedOrdering'],
-            'pixelOverlap': self._alpha_overlap(agent, target, ordering), 'worldOrderLength': len(order),
+            'pixelOverlap': self._final_visibility_overlap(agent, target, ordering, stack, (wx, wy, cw, ch), final_canvas), 'worldOrderLength': len(order),
             'viewportWorld': {'x': wx, 'y': wy, 'width': cw, 'height': ch},
             'sampledSpriteFrame': {'animation': 'idle', 'direction': 'down', 'frame': 0},
+            'renderPolicy': self.render_policy,
             'fixedLayerStack': [{'name': e['event'], 'depth': e['depth'], 'opacity': e.get('opacity', 1),
                                  'tintcolor': e.get('tintcolor'), 'blend': 'screen' if e['event'] == 'lighting-overlay' else 'source-over'} for e in fixed],
             'drawIndices': {

@@ -14,6 +14,7 @@ import { hasRenderSchemaV2 } from '../occlusion/canonicalIr.js'
 import { hasV2ActivationEnvelope, assembleV2Scene, computeUnifiedWorldOrder, buildHitTestTargets, hitTestPoint, buildFrameProposal, createEmptyMembershipState, registerAgentsInGrid, unregisterAgentFromGrid, createSceneActivationController } from '../occlusion/hallSceneAssembly.js'
 import { createRuntimeAgentAdapter, defaultSpawnResolver, defaultChunkResolver } from '../occlusion/runtimeAgentAdapter.js'
 import { createDebugOverlay } from '../occlusion/debugOverlay.js'
+import { HALL_SCENE_DEPTH_BANDS, HALL_SCENE_LEGACY_OCCLUDER_LAYERS, hallV2WorldDepth } from '../occlusion/hallSceneDepthBands.js'
 
 const DEFAULT_INPUT_SNAPSHOT = Object.freeze({ activeGesture: 'none', interactionLocked: false })
 const normalizeLockReason = reason => typeof reason === 'string' ? reason.trim() : ''
@@ -46,6 +47,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._agents = new Map()
       this._hotspots = []
       this._imageLayers = []
+      this._imageLayersByName = new Map()
       this._onAgentClick = null
       this._onHotspotClick = null
       this._onReady = null
@@ -86,6 +88,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._v2Membership = createEmptyMembershipState()
       this._v2HitTargets = null
       this._v2Depths = null
+      this._v2RenderableHandles = null
       this._v2PropRenderables = new Map()     // stableId → melonJS prop renderable
       this._v2StagingRenderables = null        // Set<melonJS renderable> staging-owned (fragments only)
       this._v2FrameSerial = Promise.resolve()   // serialized async frame processing
@@ -94,6 +97,8 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._v2PendingActivation = null  // activation staging before commit publish
       this._v2DestroyPromise = Promise.resolve()
       this._v2LastRosterAttempt = null      // Set of agent IDs from last roster reactivation attempt
+      this._v2OwnsRenderStack = false
+      this._v1RenderableDepths = null
       this._tmxSha256 = null
     }
 
@@ -641,6 +646,7 @@ export function createHallSceneClass(me, HallAgentClass) {
         const imageLayer = this._createCustomImageLayer(x, y, w, h, image, { blendMode, opacity: layerOpacity, tintcolor: layerTint })
         me.game.world.addChild(imageLayer, depth)
         this._imageLayers.push(imageLayer)
+        this._imageLayersByName.set(name, { handle: imageLayer, legacyDepth: depth, attached: true })
 
         if (!LAYER_DEPTH[name]) propIndex++
         rendered++
@@ -711,6 +717,9 @@ export function createHallSceneClass(me, HallAgentClass) {
 
         // depth: background layers start at 0, add small offset per layer
         const depth = layerIdx * 0.1
+        if (depth >= HALL_SCENE_DEPTH_BANDS.BASE_MAX_EXCLUSIVE) {
+          throw new RangeError(`HallScene base tile depth ${depth} escapes the background band`)
+        }
         const imageLayer = this._createCustomImageLayer(0, 0, vpW, vpH, offCanvas, { opacity: null })
         me.game.world.addChild(imageLayer, depth)
         this._imageLayers.push(imageLayer)
@@ -1018,6 +1027,76 @@ export function createHallSceneClass(me, HallAgentClass) {
 
     // ── E12 V2 Activation Gate ──
 
+    _v2RenderDepth(logicalDepth) {
+      return hallV2WorldDepth(logicalDepth)
+    }
+
+    _captureV1RenderableDepths() {
+      if (this._v1RenderableDepths) return
+      const depths = new Map()
+      for (const [, handle] of this._v2PropRenderables) {
+        if (handle && typeof handle.depth === 'number') depths.set(handle, handle.depth)
+      }
+      for (const [, handle] of this._agents) {
+        if (handle && typeof handle.depth === 'number') depths.set(handle, handle.depth)
+      }
+      this._v1RenderableDepths = depths
+    }
+
+    _enterV2RenderOwnership() {
+      if (this._v2OwnsRenderStack) return
+      this._captureV1RenderableDepths()
+      const legacyNames = new Set(HALL_SCENE_LEGACY_OCCLUDER_LAYERS)
+      for (const [name, record] of this._imageLayersByName) {
+        if (legacyNames.has(name) && record.attached) {
+          me.game.world.removeChild(record.handle)
+          record.attached = false
+        }
+      }
+      const lighting = this._imageLayersByName.get('lighting-overlay')
+      if (lighting) lighting.handle.depth = HALL_SCENE_DEPTH_BANDS.LIGHTING
+      for (const { marker } of this._hotspots) {
+        if (marker) marker.depth = HALL_SCENE_DEPTH_BANDS.WORLD_UI
+      }
+      this._v2OwnsRenderStack = true
+    }
+
+    _restoreV1RenderOwnership() {
+      if (this._v1RenderableDepths) {
+        for (const [handle, depth] of this._v1RenderableDepths) {
+          try { handle.depth = depth } catch (error) {}
+        }
+      }
+      const legacyNames = new Set(HALL_SCENE_LEGACY_OCCLUDER_LAYERS)
+      for (const [name, record] of this._imageLayersByName) {
+        if (name === 'lighting-overlay') {
+          try { record.handle.depth = record.legacyDepth } catch (error) {}
+        }
+        if (!this._destroyed && legacyNames.has(name) && !record.attached) {
+          try {
+            me.game.world.addChild(record.handle, record.legacyDepth)
+            record.attached = true
+          } catch (error) {}
+        }
+      }
+      for (const { marker } of this._hotspots) {
+        if (marker) {
+          try { marker.depth = DEPTH_LAYERS.HOTSPOTS } catch (error) {}
+        }
+      }
+      this._v2OwnsRenderStack = false
+      this._v1RenderableDepths = null
+      this._v2RenderableHandles = null
+    }
+
+    _reapplyCommittedV2RenderDepths() {
+      if (!this._v2Active || !this._v2Depths) return
+      for (const [stableId, handle] of this._v2RenderableHandles || []) {
+        const logicalDepth = this._v2Depths[stableId]
+        if (logicalDepth !== undefined && handle) handle.depth = this._v2RenderDepth(logicalDepth)
+      }
+    }
+
     /** Feature gate: check if V2 should be activated. Tests can set window.__JYT_V2_ENABLED. */
     _shouldActivateV2() {
       return typeof window !== 'undefined' && window.__JYT_V2_ENABLED === true
@@ -1177,10 +1256,11 @@ export function createHallSceneClass(me, HallAgentClass) {
             validateConstraints: (scene, ctx) => ({ order: scene.order }),
             commit: (ctx) => {
               const pa = self._v2PendingActivation
-              const oldPropDepths = new Map()
+              const oldRenderableDepths = new Map()
               for (const [sid, h] of savedRenderables) {
-                if (h && typeof h.depth === 'number') oldPropDepths.set(sid, h.depth)
+                if (h && typeof h.depth === 'number') oldRenderableDepths.set(sid, h.depth)
               }
+              const oldRenderOwnership = self._v2OwnsRenderStack
               // Remember old reader state for rollback
               const oldActive = self._v2Active
               const oldDepths = self._v2Depths
@@ -1190,29 +1270,34 @@ export function createHallSceneClass(me, HallAgentClass) {
               ctx.swap(
                 () => {
                   // ── apply ──
-                  // 1. Add offline fragments to world (throw propagates to E7)
-                  if (pa && pa.stagingFragments) {
-                    for (const handle of pa.stagingFragments) {
-                      me.game.world.addChild(handle, 0)
+                  // 1. Atomically take V2 render-stack ownership: retain base/lighting,
+                  // remove legacy full-map occluders, and move independent bands.
+                  self._enterV2RenderOwnership()
+                  // 2. Add offline fragments directly in the mapped world band.
+                  if (pa && pa.stagingFragments && pa.depths && pa.renderables) {
+                    for (const [sid, handle] of pa.renderables) {
+                      if (!pa.stagingFragments.has(handle)) continue
+                      me.game.world.addChild(handle, self._v2RenderDepth(pa.depths[sid]))
                     }
                   }
-                  // 2. Apply depths to all renderables
+                  // 3. Apply mapped depths to all V2 world renderables.
                   if (pa && pa.depths && pa.renderables) {
                     for (const [sid, h] of pa.renderables) {
                       const d = pa.depths[sid]
-                      if (d !== undefined && h && typeof h.depth === 'number') h.depth = d
+                      if (d !== undefined && h) h.depth = self._v2RenderDepth(d)
                     }
                   }
-                  // 3. Sort world (throw propagates)
+                  // 4. Sort world (throw propagates)
                   if (me.game.world && typeof me.game.world.sort === 'function') {
                     me.game.world.sort(true)
                   }
-                  // 4. Publish reader state from pending activation
+                  // 5. Publish reader state from pending activation
                   if (pa) {
                     self._v2Depths = pa.depths
                     self._v2Membership = pa.membership
                     self._v2HitTargets = pa.hitTargets
                   }
+                  self._v2RenderableHandles = new Map(pa?.renderables || [])
                   self._v2Active = true
                   self._v2PendingActivation = null
                 },
@@ -1223,6 +1308,7 @@ export function createHallSceneClass(me, HallAgentClass) {
                   self._v2Depths = oldDepths
                   self._v2Membership = oldMembership
                   self._v2HitTargets = oldHitTargets
+                  self._v2RenderableHandles = null
                   self._v2PendingActivation = null
                   // 2. Best-effort: remove newly added fragments
                   if (pa && pa.stagingFragments) {
@@ -1230,11 +1316,12 @@ export function createHallSceneClass(me, HallAgentClass) {
                       try { me.game.world.removeChild(handle) } catch (e) {}
                     }
                   }
-                  // 3. Best-effort: restore old prop/agent depths
-                  for (const [sid, d] of oldPropDepths) {
+                  // 3. Best-effort: restore old prop/agent depths and V1 layer ownership.
+                  for (const [sid, d] of oldRenderableDepths) {
                     const h = savedRenderables.get(sid)
-                    if (h && typeof h.depth === 'number') { try { h.depth = d } catch (e) {} }
+                    if (h) { try { h.depth = d } catch (e) {} }
                   }
+                  if (!oldRenderOwnership) self._restoreV1RenderOwnership()
                   // 4. Best-effort: restore world sort
                   if (me.game.world && typeof me.game.world.sort === 'function') {
                     try { me.game.world.sort(true) } catch (e) {}
@@ -1257,7 +1344,7 @@ export function createHallSceneClass(me, HallAgentClass) {
                   // Apply new depths to all renderables
                   for (const [sid, h] of savedRenderables) {
                     const d = ctx.next.depths[sid]
-                    if (d !== undefined && h && typeof h.depth === 'number') h.depth = d
+                    if (d !== undefined && h) h.depth = self._v2RenderDepth(d)
                   }
                   if (me.game.world && typeof me.game.world.sort === 'function') {
                     me.game.world.sort(true)
@@ -1375,9 +1462,16 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._v2Assembly = null
       this._v2HitTargets = null
       this._v2Depths = null
+      this._v2RenderableHandles = null
       this._v2Membership = createEmptyMembershipState()
       this._v2FramePending = false
       this._v2PendingFrame = null
+
+      this._restoreV1RenderOwnership()
+      if (!this._destroyed) {
+        this._sortByDepth()
+        try { me.game.world.sort?.(true) } catch (error) {}
+      }
 
       return destroyPromise
     }
@@ -1564,6 +1658,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       const oldDepths = self._v2Depths
       const oldMembership = self._v2Membership
       const oldHitTargets = self._v2HitTargets
+      const oldRenderableHandles = self._v2RenderableHandles
       const oldRenderableDepths = new Map()
       if (oldFragments) {
         for (const handle of oldFragments) oldRenderableDepths.set(handle, handle.depth)
@@ -1685,10 +1780,12 @@ export function createHallSceneClass(me, HallAgentClass) {
                 if (oldFragments) {
                   for (const handle of oldFragments) me.game.world.removeChild(handle)
                 }
-                for (const handle of stagingFragments) me.game.world.addChild(handle, 0)
+                for (const [stableId, handle] of renderables) {
+                  if (stagingFragments.has(handle)) me.game.world.addChild(handle, self._v2RenderDepth(initOrder.depths[stableId]))
+                }
                 for (const [stableId, handle] of renderables) {
                   const depth = initOrder.depths[stableId]
-                  if (depth !== undefined) handle.depth = depth
+                  if (depth !== undefined) handle.depth = self._v2RenderDepth(depth)
                 }
                 me.game.world.sort?.(true)
                 self._v2Controller = newController
@@ -1698,6 +1795,7 @@ export function createHallSceneClass(me, HallAgentClass) {
                 self._v2Depths = initOrder.depths
                 self._v2Membership = initOrder.nextMembership
                 self._v2HitTargets = initialHitTargets
+                self._v2RenderableHandles = new Map(renderables)
                 self._v2PendingActivation = null
                 self._v2PendingFrame = null
                 self._v2Active = true
@@ -1712,6 +1810,7 @@ export function createHallSceneClass(me, HallAgentClass) {
                 self._v2Depths = oldDepths
                 self._v2Membership = oldMembership
                 self._v2HitTargets = oldHitTargets
+                self._v2RenderableHandles = oldRenderableHandles
                 self._v2PendingActivation = null
                 self._v2PendingFrame = null
                 restoreOldGrid()
@@ -1720,7 +1819,7 @@ export function createHallSceneClass(me, HallAgentClass) {
                 }
                 if (oldFragments) {
                   for (const handle of oldFragments) {
-                    try { me.game.world.addChild(handle, 0) } catch (error) {}
+                    try { me.game.world.addChild(handle, oldRenderableDepths.get(handle)) } catch (error) {}
                   }
                 }
                 for (const [handle, depth] of oldRenderableDepths) {
@@ -1739,7 +1838,7 @@ export function createHallSceneClass(me, HallAgentClass) {
               () => {
                 for (const [stableId, handle] of renderables) {
                   const depth = ctx.next.depths[stableId]
-                  if (depth !== undefined) handle.depth = depth
+                  if (depth !== undefined) handle.depth = self._v2RenderDepth(depth)
                 }
                 me.game.world.sort?.(true)
                 const pending = self._v2PendingFrame
@@ -1852,6 +1951,9 @@ export function createHallSceneClass(me, HallAgentClass) {
         if (phaseEvents.length) this._simulationRuntime.onPhaseEvents?.(phaseEvents)
       }
       if (this._v2Active) {
+        // HallAgent.update writes y into depth; pin the last committed logical
+        // order back into the V2 world band until the async frame commits.
+        this._reapplyCommittedV2RenderDepths()
         this._applyV2Depths()
       } else {
         this._sortByDepth()
@@ -1951,6 +2053,7 @@ export function createHallSceneClass(me, HallAgentClass) {
         }
       })
       this._imageLayers = []
+      this._imageLayersByName.clear()
       this._agents.forEach(agent => {
         try {
           if (me.game.world?.hasChild?.(agent)) me.game.world.removeChild(agent)

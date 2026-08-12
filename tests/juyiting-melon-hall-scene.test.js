@@ -4,6 +4,7 @@ import { readFileSync } from 'fs'
 import { createHallSceneClass } from '../src/game/scenes/HallScene.js'
 import { parseJuyiHallTmx } from '../src/game/tiledMap.js'
 import { ACCEPTED_TMX_SHA256 } from '../src/game/occlusion/hallSceneAssembly.js'
+import { HALL_SCENE_DEPTH_BANDS, hallV2WorldDepth } from '../src/game/occlusion/hallSceneDepthBands.js'
 
 const createFakeMelon = () => {
   const registered = []
@@ -136,7 +137,8 @@ const createFakeMelon = () => {
           const index = children.findIndex(item => item.child === child)
           if (index >= 0) children.splice(index, 1)
         },
-        sort: () => {}
+        sort: () => {},
+        hasChild: child => children.some(item => item.child === child)
       }
     },
     input: {},
@@ -187,12 +189,12 @@ const waitFor = async (predicate, timeoutMs = 2000) => {
   }
 }
 
-const productionV2MapData = () => {
+const productionV2MapData = ({ withBase = false } = {}) => {
   const mapData = parseJuyiHallTmx(
     readFileSync('public/juyiting/hall.tmx', 'utf8'),
     { movementEnabled: false }
   )
-  mapData.tileLayers = []
+  if (!withBase) mapData.tileLayers = []
   return mapData
 }
 
@@ -1042,7 +1044,114 @@ describe('HallScene melonJS pointer routing', () => {
     expect(scene.getTransform().zoom).to.equal(1.344)
   })
 
-  it('activates production V2 with all 32 fragment handles at contiguous non-default depths', async () => {
+  it('atomically maps V2 above base, removes legacy duplicate layers, and restores V1 ownership', async () => {
+    const me = createFakeMelon()
+    const mapData = productionV2MapData({ withBase: true })
+    installProductionImages(me, mapData)
+    const HallScene = createHallSceneClass(me, V2HallAgent)
+    const scene = new HallScene()
+    const previousGate = window.__JYT_V2_ENABLED
+    const originalCreateElement = document.createElement.bind(document)
+    document.createElement = tag => tag === 'canvas'
+      ? { width: 0, height: 0, getContext: () => ({ drawImage: () => {} }) }
+      : originalCreateElement(tag)
+    window.__JYT_V2_ENABLED = true
+    try {
+      scene.setTmxSha256(ACCEPTED_TMX_SHA256)
+      scene.setMapData(mapData)
+      scene.syncAgents([{ agentId: 'a', personaCode: 'a', x: 300, y: 200 }])
+      scene.onResetEvent()
+      scene.update(16)
+      await waitFor(() => scene.activeRendererMode === 'v2')
+
+      const fragments = scene._v2Assembly.canonicalIr.fragments
+      const handles = [...scene._v2StagingRenderables]
+      const logicalDepths = fragments.map(fragment => scene._v2Depths[fragment.stableId])
+      const mappedDepths = fragments.map(fragment => hallV2WorldDepth(scene._v2Depths[fragment.stableId]))
+      const layer = name => scene._imageLayersByName.get(name)
+      const base = me.children.find(item => item.depth === HALL_SCENE_DEPTH_BANDS.BASE_MIN && !item.child.image?.resourceName)?.child
+      expect(base).to.exist
+      expect(base.depth).to.equal(0)
+      expect(handles).to.have.length(32)
+      expect(handles.map(handle => handle.depth).sort((a, b) => a - b)).to.deep.equal([...mappedDepths].sort((a, b) => a - b))
+      expect(Object.values(scene._v2Depths).sort((a, b) => a - b)).to.deep.equal(Array.from({ length: Object.keys(scene._v2Depths).length }, (_, index) => index))
+      expect(logicalDepths.every(Number.isSafeInteger)).to.equal(true)
+      expect([...scene._v2RenderableHandles.values()].every(handle => handle.depth >= HALL_SCENE_DEPTH_BANDS.V2_WORLD_START && handle.depth < HALL_SCENE_DEPTH_BANDS.LIGHTING)).to.equal(true)
+      expect(layer('mid-occluders').attached).to.equal(false)
+      expect(layer('foreground-occluders').attached).to.equal(false)
+      expect(me.game.world.hasChild(layer('mid-occluders').handle)).to.equal(false)
+      expect(me.game.world.hasChild(layer('foreground-occluders').handle)).to.equal(false)
+      expect(me.game.world.hasChild(layer('lighting-overlay').handle)).to.equal(true)
+      expect(layer('lighting-overlay').handle.depth).to.equal(HALL_SCENE_DEPTH_BANDS.LIGHTING)
+
+      await scene.deactivateV2()
+      expect(scene.activeRendererMode).to.equal('v1')
+      expect(layer('mid-occluders').attached).to.equal(true)
+      expect(layer('foreground-occluders').attached).to.equal(true)
+      expect(me.children.filter(item => item.child === layer('mid-occluders').handle)).to.have.length(1)
+      expect(me.children.filter(item => item.child === layer('foreground-occluders').handle)).to.have.length(1)
+      expect(layer('lighting-overlay').handle.depth).to.equal(8)
+      expect(scene._agents.get('a').depth).to.be.lessThan(6)
+    } finally {
+      window.__JYT_V2_ENABLED = previousGate
+      document.createElement = originalCreateElement
+      await scene.deactivateV2()
+    }
+  })
+
+  it('keeps the full legacy V1 image-layer stack when V2 is disabled', () => {
+    const me = createFakeMelon()
+    const mapData = productionV2MapData()
+    installProductionImages(me, mapData)
+    const HallScene = createHallSceneClass(me, V2HallAgent)
+    const scene = new HallScene()
+    const previousGate = window.__JYT_V2_ENABLED
+    window.__JYT_V2_ENABLED = false
+    try {
+      scene.setTmxSha256(ACCEPTED_TMX_SHA256)
+      scene.setMapData(mapData)
+      scene.onResetEvent()
+      expect(scene.activeRendererMode).to.equal('v1')
+      for (const name of ['mid-occluders', 'foreground-occluders', 'lighting-overlay']) {
+        const record = scene._imageLayersByName.get(name)
+        expect(record.attached).to.equal(true)
+        expect(me.game.world.hasChild(record.handle)).to.equal(true)
+      }
+    } finally {
+      window.__JYT_V2_ENABLED = previousGate
+      scene.onDestroyEvent()
+    }
+  })
+
+  it('rolls an initial V2 sort failure back to the complete V1 stack', async () => {
+    const me = createFakeMelon()
+    const mapData = productionV2MapData()
+    installProductionImages(me, mapData)
+    const HallScene = createHallSceneClass(me, V2HallAgent)
+    const scene = new HallScene()
+    const previousGate = window.__JYT_V2_ENABLED
+    window.__JYT_V2_ENABLED = true
+    me.game.world.sort = () => { throw new Error('initial sort failed') }
+    try {
+      scene.setTmxSha256(ACCEPTED_TMX_SHA256)
+      scene.setMapData(mapData)
+      scene.onResetEvent()
+      await waitFor(() => scene._v2Controller === null && scene._v2Assembly === null)
+      expect(scene.activeRendererMode).to.equal('v1')
+      for (const name of ['mid-occluders', 'foreground-occluders', 'lighting-overlay']) {
+        const record = scene._imageLayersByName.get(name)
+        expect(record.attached).to.equal(true)
+        expect(me.game.world.hasChild(record.handle)).to.equal(true)
+      }
+      expect(scene._v2StagingRenderables).to.equal(null)
+    } finally {
+      window.__JYT_V2_ENABLED = previousGate
+      me.game.world.sort = () => {}
+      await scene.deactivateV2()
+    }
+  })
+
+  it('destroys active V2 ownership without re-adding legacy layers', async () => {
     const me = createFakeMelon()
     const mapData = productionV2MapData()
     installProductionImages(me, mapData)
@@ -1055,20 +1164,14 @@ describe('HallScene melonJS pointer routing', () => {
       scene.setMapData(mapData)
       scene.onResetEvent()
       await waitFor(() => scene.activeRendererMode === 'v2')
-
-      const fragments = scene._v2Assembly.canonicalIr.fragments
-      const handles = [...scene._v2StagingRenderables]
-      const depths = fragments.map(fragment => scene._v2Depths[fragment.stableId])
-      expect(handles).to.have.length(32)
-      expect(handles.map(handle => handle.depth).sort((a, b) => a - b))
-        .to.deep.equal([...depths].sort((a, b) => a - b))
-      expect(depths.every(depth => Number.isSafeInteger(depth))).to.equal(true)
-      expect(new Set(depths).size).to.equal(32)
-      const allDepths = Object.values(scene._v2Depths).sort((a, b) => a - b)
-      expect(allDepths).to.deep.equal(Array.from({ length: allDepths.length }, (_, index) => allDepths[0] + index))
+      const legacyHandles = ['mid-occluders', 'foreground-occluders'].map(name => scene._imageLayersByName.get(name).handle)
+      scene.onDestroyEvent()
+      await scene._v2DestroyPromise
+      expect(scene.activeRendererMode).to.equal('v1')
+      expect(legacyHandles.every(handle => !me.game.world.hasChild(handle))).to.equal(true)
+      expect(me.children).to.have.length(0)
     } finally {
       window.__JYT_V2_ENABLED = previousGate
-      await scene.deactivateV2()
     }
   })
 
@@ -1099,12 +1202,15 @@ describe('HallScene melonJS pointer routing', () => {
       await scene._v2FrameSerial
       await waitFor(() => scene._v2AgentAdapter?.sourceEntityIds.includes('b'))
       expect(scene._v2Controller.active.children).to.have.length(39)
+      expect(scene._imageLayersByName.get('mid-occluders').attached).to.equal(false)
+      expect(scene._imageLayersByName.get('foreground-occluders').attached).to.equal(false)
 
       const agentA = scene._agents.get('a')
       const beforeFrameDepth = agentA.depth
       agentA.pos.y = 850
       await scene._doApplyV2Depths(scene._v2Generation)
       expect(agentA.depth).not.to.equal(beforeFrameDepth)
+      expect(agentA.depth).to.equal(hallV2WorldDepth(scene._v2Depths[scene._v2AgentAdapter.lookup('a').stableId]))
 
       const oldController = scene._v2Controller
       const oldAdapter = scene._v2AgentAdapter
@@ -1128,6 +1234,8 @@ describe('HallScene melonJS pointer routing', () => {
       expect(scene._v2HitTargets).to.equal(oldHitTargets)
       expect(scene.activeRendererMode).to.equal('v2')
       expect([...oldFragments].every(handle => me.children.some(item => item.child === handle))).to.equal(true)
+      expect(scene._imageLayersByName.get('mid-occluders').attached).to.equal(false)
+      expect(scene._imageLayersByName.get('foreground-occluders').attached).to.equal(false)
     } finally {
       window.__JYT_V2_ENABLED = previousGate
       me.game.world.sort = () => {}

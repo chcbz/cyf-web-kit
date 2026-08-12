@@ -21,8 +21,10 @@ function main(){
  check('every index id/target/persona/relation/world/expected field binds authoritative plan',drift.length===0,drift.slice(0,12).join('; '))
  const depthBad=shots.filter(s=>s.resolvedExpectedOrdering!==s.runtimeFacts?.resolvedExpectedOrdering||s.runtimeFacts?.ordering!==s.resolvedExpectedOrdering||s.runtimeFacts?.depthMatch!==true)
  check('270/270 resolved depth matches',depthBad.length===0,depthBad.slice(0,10).map(s=>s.id).join(','))
- const alphaBad=shots.filter(s=>s.runtimeFacts?.pixelOverlap?.method!=='source-alpha-mask-intersection'||!Number.isInteger(s.runtimeFacts?.pixelOverlap?.opaqueIntersectionPixels)||!Number.isInteger(s.runtimeFacts?.pixelOverlap?.visibleOcclusionPixels))
- check('270/270 real alpha overlap facts',alphaBad.length===0,alphaBad.slice(0,10).map(s=>s.id).join(','))
+ const renderDepthBad=shots.filter(s=>s.runtimeFacts?.actualRenderDepth!==100+s.runtimeFacts?.actualDepth||s.runtimeFacts?.targetRenderDepth!==100+s.runtimeFacts?.targetDepth||s.runtimeFacts?.actualRenderDepth<100||s.runtimeFacts?.targetRenderDepth<100||s.runtimeFacts?.actualRenderDepth>=300||s.runtimeFacts?.targetRenderDepth>=300)
+ check('270/270 mapped world depths are above base and below lighting',renderDepthBad.length===0,renderDepthBad.slice(0,10).map(s=>s.id).join(','))
+ const alphaBad=shots.filter(s=>s.runtimeFacts?.pixelOverlap?.method!=='source-alpha-intersection-plus-final-composite-difference'||!Number.isInteger(s.runtimeFacts?.pixelOverlap?.opaqueIntersectionPixels)||!Number.isInteger(s.runtimeFacts?.pixelOverlap?.visibleOcclusionPixels)||!Number.isInteger(s.runtimeFacts?.pixelOverlap?.finalCompositeChangedByTargetPixels)||!Number.isInteger(s.runtimeFacts?.pixelOverlap?.finalCompositeChangedByAgentPixels))
+ check('270/270 alpha plus final-composite visibility facts',alphaBad.length===0,alphaBad.slice(0,10).map(s=>s.id).join(','))
  const files=shots.filter(s=>typeof s.screenshotFile!=='string'||!existsSync(join(evidence,s.screenshotFile)))
  check('270 explicit screenshotFile PNGs exist',files.length===0,files.slice(0,10).map(s=>s.id).join(','))
  const diskShots=existsSync(join(evidence,'shots'))?readdirSync(join(evidence,'shots')).filter(f=>f.endsWith('.png')):[]
@@ -31,12 +33,12 @@ function main(){
  check('15 labeled contact sheets exist',sheets.length===15,`got ${sheets.length}`)
  check('idle/down/frame0 is the declared audit sample',JSON.stringify(index.sampledFrame?.animation)==='"idle"'&&index.sampledFrame?.direction==='down'&&index.sampledFrame?.frame===0)
  check('idle-down frames 0..3 alpha bounds invariant checked for six personas',Object.keys(index.frameAlphaBoundsChecks||{}).length===6&&Object.values(index.frameAlphaBoundsChecks).every(v=>v.reviewInvariantPass===true))
- check('production fixed stack and lighting semantics recorded',JSON.stringify(index.productionVisualStack?.fixedDepths)===JSON.stringify({base:0,'mid-occluders':2,'foreground-occluders':5,'lighting-overlay':8})&&index.productionVisualStack?.lighting?.opacity===0.85&&index.productionVisualStack?.lighting?.tintcolor==='#ffd8a0')
+ check('repaired base/world/lighting stack and lighting semantics recorded',JSON.stringify(index.productionVisualStack?.fixedDepths)===JSON.stringify({base:0,'lighting-overlay':300})&&JSON.stringify(index.productionVisualStack?.depthBands)===JSON.stringify({BASE_MIN:0,BASE_MAX_EXCLUSIVE:100,V2_WORLD_START:100,V2_WORLD_STRIDE:1,LIGHTING:300,WORLD_UI:400,SCREEN_UI:500})&&index.productionVisualStack?.lighting?.opacity===0.85&&index.productionVisualStack?.lighting?.tintcolor==='#ffd8a0')
  check('production antiAlias raster semantics and browser-bit caveat recorded',index.productionVisualStack?.canvasRaster?.productionAntiAlias===true&&index.productionVisualStack?.canvasRaster?.scaledSpriteSampling?.includes('bilinear')&&index.productionVisualStack?.canvasRaster?.browserCanvasBitIdentityClaim===false)
- check('mid/foreground byte-identical resource is drawn twice',index.productionVisualStack?.midForegroundDuplicate?.drawnTwice===true&&index.productionVisualStack?.midForegroundDuplicate?.sameBytes===true)
+ check('legacy duplicate full-map occluders are detached in V2',index.productionVisualStack?.legacyMidForeground?.v2Attached===false&&index.productionVisualStack?.legacyMidForeground?.v1Restored===true&&index.productionVisualStack?.legacyMidForeground?.sameBytes===true)
  check('WebP ABI/hash/API fail-closed provenance recorded',index.webpDecoder?.abi===7&&/^0x[0-9a-f]{6}$/.test(index.webpDecoder?.decoderVersionHex||'')&&/^[0-9a-f]{64}$/.test(index.webpDecoder?.sha256||'')&&index.webpDecoder?.api?.includes('WebPDecodeRGBA'))
  check('camera/interaction/movement independently DEFERRED', ['camera','interaction','movement'].every(k=>(index.notes?.[k]||'').includes('DEFERRED')))
- const oracle=read(join(evidence,'oracle-report.json')); check('direct production TypeScript oracle passes all 270',oracle.pass===true&&oracle.matrixShots===270&&oracle.productionImports?.includes('src/game/occlusion/worldOrder.ts'))
+ const oracle=read(join(evidence,'oracle-report.json')); check('direct production TypeScript oracle passes all 270',oracle.pass===true&&oracle.matrixShots===270&&oracle.productionImports?.includes('src/game/occlusion/worldOrder.ts')&&oracle.productionImports?.includes('src/game/occlusion/hallSceneDepthBands.js'))
  const matrixPass=results.every(r=>r.ok); const releasePass=false
  const gate={$schema:'juyiting-occlusion-e13-machines-gate-v3',taskId:'E13',generatedBy:'validate-e13-evidence.mjs',pass:releasePass,matrixPass,releasePass,
    releaseBlockers:['camera DEFERRED','interaction DEFERRED','movement DEFERRED','GPT visual review not performed'],passedChecks:results.filter(r=>r.ok).length,totalChecks:results.length,

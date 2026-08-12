@@ -10,6 +10,7 @@ import { DEFAULT_FLOOR_REGISTRY } from '../../../src/game/occlusion/schema.ts'
 import { createEmptyMembershipState } from '../../../src/game/occlusion/constraintResolver.ts'
 import { computeUnifiedWorldOrder, registerAgentsInGrid } from '../../../src/game/occlusion/hallSceneAssembly.ts'
 import { SpatialGrid, createConstraintCandidateProvider } from '../../../src/game/occlusion/spatialGrid.ts'
+import { HALL_SCENE_DEPTH_BANDS, HALL_SCENE_LEGACY_OCCLUDER_LAYERS, hallV2WorldDepth } from '../../../src/game/occlusion/hallSceneDepthBands.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repo = resolve(here, '..', '..', '..')
@@ -74,17 +75,20 @@ function main () {
     const depth = resolved.depths
     const actual = ordering(depth[agent.stableId] - depth[target.stableId])
     const keyExpected = ordering(compareWorldSortKeys(ak, tk))
-    checks += 4
+    checks += 6
     if (actual !== keyExpected) failures.push(`${plan.id}: production resolver/key order mismatch ${actual}/${keyExpected}`)
     if (actual !== shot.resolvedExpectedOrdering) failures.push(`${plan.id}: resolvedExpectedOrdering mismatch`)
     if (actual !== shot.runtimeFacts.ordering) failures.push(`${plan.id}: Python ordering mismatch`)
     if (shot.runtimeFacts.actualDepth !== depth[agent.stableId] || shot.runtimeFacts.targetDepth !== depth[target.stableId]) failures.push(`${plan.id}: depth mismatch`)
+    if (shot.runtimeFacts.actualRenderDepth !== hallV2WorldDepth(depth[agent.stableId]) || shot.runtimeFacts.targetRenderDepth !== hallV2WorldDepth(depth[target.stableId])) failures.push(`${plan.id}: HallScene mapped render depth mismatch`)
+    if (shot.runtimeFacts.actualRenderDepth < HALL_SCENE_DEPTH_BANDS.V2_WORLD_START || shot.runtimeFacts.targetRenderDepth < HALL_SCENE_DEPTH_BANDS.V2_WORLD_START || shot.runtimeFacts.actualRenderDepth >= HALL_SCENE_DEPTH_BANDS.LIGHTING || shot.runtimeFacts.targetRenderDepth >= HALL_SCENE_DEPTH_BANDS.LIGHTING) failures.push(`${plan.id}: mapped render depth outside world band`)
   }
   const report = {
     $schema: 'juyiting-occlusion-e13-oracle-v2', taskId: 'E13', pass: failures.length === 0,
     matrixShots: matrix.length, checks, failures: failures.length, failureDetails: failures.slice(0, 100),
-    methodology: 'Direct imports of production canonicalIr.ts, worldOrder.ts, schema.ts, constraintResolver.ts, and spatialGrid.ts via node --import tsx; all 270 authoritative matrix shots checked.',
-    productionImports: ['src/game/occlusion/canonicalIr.ts', 'src/game/occlusion/worldOrder.ts', 'src/game/occlusion/schema.ts', 'src/game/occlusion/constraintResolver.ts', 'src/game/occlusion/hallSceneAssembly.ts', 'src/game/occlusion/spatialGrid.ts'],
+    methodology: 'Direct imports of production canonicalIr.ts, worldOrder.ts, schema.ts, constraintResolver.ts, spatialGrid.ts, and HallScene integration depth policy via node --import tsx; all 270 authoritative matrix shots checked.',
+    productionImports: ['src/game/occlusion/canonicalIr.ts', 'src/game/occlusion/worldOrder.ts', 'src/game/occlusion/schema.ts', 'src/game/occlusion/constraintResolver.ts', 'src/game/occlusion/hallSceneAssembly.ts', 'src/game/occlusion/spatialGrid.ts', 'src/game/occlusion/hallSceneDepthBands.js'],
+    renderPolicy: { depthBands: HALL_SCENE_DEPTH_BANDS, legacyOccluderLayers: HALL_SCENE_LEGACY_OCCLUDER_LAYERS },
     tmxSha256: createHash('sha256').update(tmxBytes).digest('hex'), indexSha256: createHash('sha256').update(indexBytes).digest('hex'),
   }
   writeFileSync(output, `${JSON.stringify(report, null, 2)}\n`)

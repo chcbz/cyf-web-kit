@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { HALL_SCENE_DEPTH_BANDS, HALL_SCENE_LEGACY_OCCLUDER_LAYERS } from '../../../src/game/occlusion/hallSceneDepthBands.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repo = resolve(here, '..', '..', '..')
@@ -14,8 +15,9 @@ const limit = Number(arg('--limit') || 0)
 const sourceFixture = join(repo, 'tests/fixtures/juyiting/occlusion-e13')
 const pyPath = here
 const log = message => console.log(`[e13-offline] ${message}`)
+const renderPolicy = JSON.stringify({ depthBands: HALL_SCENE_DEPTH_BANDS, legacyOccluderLayers: HALL_SCENE_LEGACY_OCCLUDER_LAYERS })
 function run (command, commandArgs, options = {}) {
-  const result = spawnSync(command, commandArgs, { cwd: repo, encoding: 'utf8', stdio: options.capture ? 'pipe' : 'inherit', timeout: options.timeout || 900000, env: { ...process.env, PYTHONPATH: pyPath } })
+  const result = spawnSync(command, commandArgs, { cwd: repo, encoding: 'utf8', stdio: options.capture ? 'pipe' : 'inherit', timeout: options.timeout || 1800000, env: { ...process.env, PYTHONPATH: pyPath } })
   if (result.status !== 0) throw new Error(`${command} ${commandArgs.join(' ')} failed\n${result.stderr || result.stdout || ''}`)
   return result
 }
@@ -32,15 +34,15 @@ function writeReport () {
 
 ## 权威输入与绑定
 
-渲染器直接读取 \`shot-plan.json\` 的 270 个 \`kind=matrix\` 项，并逐字段保留其 \`id / target / persona / relation / world / expected\` 绑定。语义边界仍为 \`relation=boundary\`、\`expectedRelation=tie\`；生产总排序结果另存为 \`resolvedExpectedOrdering\`，270 项 \`depthMatch\` 均为真。Node oracle 通过 \`node --import tsx\` 直接导入生产 \`canonicalIr.ts\`、\`worldOrder.ts\`、\`schema.ts\`、\`constraintResolver.ts\`、\`hallSceneAssembly.ts\` 与 \`spatialGrid.ts\` 交叉校验全部 270 项。
+渲染器直接读取 \`shot-plan.json\` 的 270 个 \`kind=matrix\` 项，并逐字段保留其 \`id / target / persona / relation / world / expected\` 绑定。语义边界仍为 \`relation=boundary\`、\`expectedRelation=tie\`；生产总排序结果另存为 \`resolvedExpectedOrdering\`，270 项 \`depthMatch\` 均为真。Node oracle 通过 \`node --import tsx\` 直接导入生产 \`canonicalIr.ts\`、\`worldOrder.ts\`、\`schema.ts\`、\`constraintResolver.ts\`、\`hallSceneAssembly.ts\`、\`spatialGrid.ts\` 和 \`hallSceneDepthBands.js\`，交叉校验全部 270 项 logical/render depth。
 
 ## 离线像素语义
 
-每张 400×300 PNG 使用生产 TMX/资源中的 base（depth 0）、mid（depth 2）、V2 world renderables/agent、foreground（depth 5）和 lighting（depth 8），遵循 melonJS 升序 z 的实际绘制效果及同 z 插入顺序。production \`antiAlias=true\`，缩放人物采用 destination pixel-center 的 premultiplied-RGBA bilinear sampling。mid 与 foreground 是字节相同资源，生产绘两次，离线同样绘两次。lighting 参数来自 TMX：opacity \`0.85\`、image blend \`screen\`，随后保持 alpha 以 tint \`#ffd8a0\` 做 \`multiply\` fill。
+每张 400×300 PNG 使用修复后的生产 V2 栈：base background depth 0；E7 连续 logical depth 通过 HallScene integration policy 映射到 100..299 world band；lighting 独立位于 depth 300；world-ui/screen-ui 分别保留独立 400/500 band。V2 原子 commit 会移除 legacy mid/foreground handles，因此离线不再重复绘制两张字节相同的全图资源；V1 fallback 会恢复它们。production \`antiAlias=true\`，缩放人物采用 destination pixel-center 的 premultiplied-RGBA bilinear sampling。lighting 参数来自 TMX：opacity \`0.85\`、image blend \`screen\`，随后保持 alpha 以 tint \`#ffd8a0\` 做 \`multiply\` fill。
 
 人物只使用生产 persona sprite sheet、manifest scale/anchor，审核采样固定为 \`idle/down/frame0\`，不冒称完整动画。六角色 frame 0/1/2/3 的 frame geometry/anchor/scale、alpha 顶部及 baseline 一致；每帧实际 alpha bounds（包括可能不同的 x/width）逐项记录。
 
-\`runtimeFacts.pixelOverlap\` 来自 agent frame 与 target sourceRect/destinationRect 的真实非透明像素 mask 交集，记录 opaque intersection 与按最终前后关系计算的可见遮盖像素，不用 AABB 冒充视觉 gate。离线软件 raster 明确不宣称与任一浏览器 Canvas2D 后端的边缘/色彩取整逐 bit 相同；确定性覆盖的是资源、source/destination geometry、层序、blend/tint 与 alpha-mask 语义。
+\`runtimeFacts.pixelOverlap\` 同时记录 agent frame 与 target sourceRect/destinationRect 的真实非透明像素 mask 交集，并按 resolved ordering 对完全相同的最终绘制栈省略视觉上较后的 target 或 agent 后重新合成；\`visibleOcclusionPixels\` 只计 lighting 之后最终 RGBA 确实改变的交叠像素，不用 AABB 或单纯排序推断冒充可见性。离线软件 raster 明确不宣称与任一浏览器 Canvas2D 后端的边缘/色彩取整逐 bit 相同；确定性覆盖的是资源、source/destination geometry、层序、blend/tint、alpha 交集与最终合成差异语义。
 
 ## WebP 解码器边界
 
@@ -70,7 +72,7 @@ function main () {
     rmSync(join(output, dir), { recursive: true, force: true }); mkdirSync(join(output, dir), { recursive: true })
   }
   log(`rendering ${limit || 270} authoritative matrix shots to ${output}`)
-  run('python3', ['-m', 'offline_pixel_renderer', '--repo-root', repo, '--output', output, ...(limit ? ['--limit', String(limit)] : [])])
+  run('python3', ['-m', 'offline_pixel_renderer', '--repo-root', repo, '--output', output, '--render-policy-json', renderPolicy, ...(limit ? ['--limit', String(limit)] : [])])
   if (limit) { log('limited CLI smoke complete; oracle/gates intentionally skipped'); return }
   log('running direct production TypeScript oracle')
   run('node', ['--import', 'tsx', join(here, 'validate-e13-offline-oracle.mjs'), '--evidence-dir', output])

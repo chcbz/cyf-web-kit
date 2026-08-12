@@ -109,7 +109,7 @@ describe('E13 evidence integrity (phase-1 + offline)', () => {
       expect(shot.screenshotFile).to.match(/^shots\/E13-\d{3}\.png$/)
       expect(shot.runtimeFacts.ordering).to.equal(shot.resolvedExpectedOrdering)
       expect(shot.runtimeFacts.depthMatch).to.equal(true)
-      expect(shot.runtimeFacts.pixelOverlap.method).to.equal('source-alpha-mask-intersection')
+      expect(shot.runtimeFacts.pixelOverlap.method).to.equal('source-alpha-intersection-plus-final-composite-difference')
     }
   })
 
