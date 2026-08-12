@@ -33,7 +33,7 @@
     "test:juyiting-occlusion-prop-sort": "node --import tsx ./node_modules/mocha/bin/mocha.js --no-config --require ./tests/setup.js --reporter spec tests/juyiting-occlusion-prop-sort.test.js",
     "generate:mask-ledger": "node scripts/juyiting/generate-mask-migration-ledger.mjs",
     "validate:mask-ledger": "node scripts/juyiting/validate-mask-migration-ledger.mjs",
-    "test:mask-ledger": "npx mocha tests/juyiting-occlusion-mask-migration.test.js --timeout 30000",
+    "test:mask-ledger": "node --import tsx ./node_modules/mocha/bin/mocha.js --no-config --require ./tests/setup.js --reporter spec tests/juyiting-occlusion-mask-migration.test.js --timeout 30000",
     "render:mask-contact-sheet": "node scripts/juyiting/render-mask-contact-sheet.mjs"
   },
   "dependencies": {

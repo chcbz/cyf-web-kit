@@ -1,205 +1,129 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
+import { PNG } from 'pngjs'
 import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import {
+  ZERO_GENERATION_ID, TMX_SHA256, E9A_GENERATION_ID, E9B_COMMIT, NAV_AREA,
+  OWNER_BY_MASK, PROBE_FIXTURES, RECALIBRATIONS, stableJson, sha256,
+  countOwnedPixelsInPolygon, pointInPolygonInclusive, pointStatus
+} from './lib/mask-migration-evidence.mjs'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const repoRoot = join(__dirname, '..', '..')
-const FROZEN_GENERATION_ID = 'e10a-20260809-37mask-ledger-v1'
+const __dirname=dirname(fileURLToPath(import.meta.url)),REPO_ROOT=join(__dirname,'..','..')
+function exactObject(a,b){return stableJson(a)===stableJson(b)}
+function allStrings(value){return typeof value==='string'?[value]:Array.isArray(value)?value.flatMap(allStrings):value&&typeof value==='object'?Object.values(value).flatMap(allStrings):[]}
 
-function loadJson(p) { return JSON.parse(readFileSync(join(repoRoot, p), 'utf-8')) }
+export async function validateMaskMigration({ ledger, contact, inputRoot=REPO_ROOT, ledgerText=stableJson(ledger) }={}) {
+ inputRoot=resolve(inputRoot)
+ const load=p=>JSON.parse(readFileSync(resolve(inputRoot,p),'utf8'))
+ const errors=[],warnings=[],fail=m=>errors.push(m)
+ const inventory=load('tests/fixtures/juyiting/occlusion-v0/inventory.json'),fragSpec=load('tests/fixtures/juyiting/occlusion-v2-fragments/fragment-ownership-spec.json'),propSpec=load('tests/fixtures/juyiting/occlusion-v1-props/prop-sort-spec.json'),e8bManifest=load('tests/fixtures/juyiting/occlusion-v1-props/prop-tmx-manifest.json')
+ const { buildInventory }=await import('./inventory-juyiting-map.mjs')
+ const liveGeometry=buildInventory(readFileSync(resolve(inputRoot,'public/juyiting/hall.tmx'),'utf8'),{baselineCommit:inventory.baselineCommit})
+ if(!exactObject(liveGeometry.collision,inventory.collision)||!exactObject(liveGeometry.navObstacles,inventory.navObstacles))fail('live TMX collision/nav geometry drifts from E1 fixture')
+ const fragments=new Map(fragSpec.fragments.map(f=>[f.stableId,f]))
+if(ledger.$schema!=='juyiting-occlusion-v2-mask-migration-ledger-v2'||ledger.schemaVersion!==2)fail('schema/version mismatch')
+if(!/^[0-9a-f]{64}$/.test(ledger.generationId)||ledger.generationId===ZERO_GENERATION_ID)fail('generationId must be derived SHA-256')
+if(ledger.provenance?.tmxSha256!==TMX_SHA256||ledger.provenance?.e9aGenerationId!==E9A_GENERATION_ID||ledger.provenance?.e9bCommit!==E9B_COMMIT)fail('frozen provenance mismatch')
+if(ledger.provenance?.inputHashes?.tmx?.sha256!==TMX_SHA256)fail('input TMX hash drift')
+if(e8bManifest.taskId!=='E8B'||e8bManifest.tmxProvenance?.currentAnchor?.sha256!==TMX_SHA256)fail('E8B provenance binding drift')
+if(ledger.provenance?.inputHashes?.e8b?.tmxSha256!==TMX_SHA256)fail('ledger E8B TMX binding drift')
+for(const [name,input] of Object.entries(ledger.provenance?.inputHashes||{})){
+ if(!input||typeof input!=='object'||typeof input.path!=='string'||typeof input.sha256!=='string')continue
+ let actual;try{actual=sha256(readFileSync(resolve(inputRoot,input.path)))}catch{fail(`input hash source missing: ${name}`);continue}
+ if(actual!==input.sha256)fail(`input hash drift: ${name}`)
+}
+for(const [name,input] of Object.entries(ledger.provenance?.inputHashes?.generatorTooling||{})){
+ if(!input||typeof input.path!=='string'||typeof input.sha256!=='string'){fail(`generator tooling provenance missing: ${name}`);continue}
+ let actual;try{actual=sha256(readFileSync(resolve(inputRoot,input.path)))}catch{fail(`generator tooling source missing: ${name}`);continue}
+ if(actual!==input.sha256)fail(`generator tooling hash drift: ${name}`)
+}
+const generationBasis={ledger:{...ledger,generationId:ZERO_GENERATION_ID,contentSha256:''},evidenceInputs:ledger.provenance.inputHashes}
+const expectedGeneration=createHash('sha256').update(stableJson(generationBasis)).digest('hex')
+if(ledger.generationId!==expectedGeneration)fail('generationId content derivation mismatch')
+const expectedContent=createHash('sha256').update(stableJson({...ledger,contentSha256:''})).digest('hex')
+if(ledger.contentSha256!==expectedContent)fail('contentSha256 mismatch')
+if(!Array.isArray(ledger.entries)||ledger.entries.length!==37)fail(`expected 37 entries, got ${ledger.entries?.length}`)
+const ids=ledger.entries.map(e=>e.legacyTmxId);if(new Set(ids).size!==37)fail('duplicate mask id');for(let id=48;id<=84;id++)if(!ids.includes(id))fail(`missing mask ${id}`)
+const indexSet=new Set(ledger.entries.map(e=>e.legacyIndex));if(indexSet.size!==37)fail('duplicate legacy index');for(let i=1;i<=37;i++)if(!indexSet.has(i))fail(`missing legacy index ${i}`)
+if(!exactObject(ledger.navArea,NAV_AREA))fail('nav area contract drift')
 
-function pointInPolygon(px, py, poly) {
-  let inside = false, n = poly.length, j = n - 1
-  for (let i = 0; i < n; i++) {
-    const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y
-    if ((yi > py) !== (yj > py) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) inside = !inside
-    j = i
-  }
-  return inside
+for(const e of ledger.entries){
+ const id=e.legacyTmxId,mask=inventory.masks.find(m=>m.tmxId===id),expectedSid=OWNER_BY_MASK[id],f=fragments.get(expectedSid)
+ if(!mask){fail(`mask ${id}: absent from E1`);continue} if(!f){fail(`mask ${id}: expected target absent`);continue}
+ if(e.legacyIndex!==mask.index||e.legacyTmxName!==(mask.name||`mask-${id}`))fail(`mask ${id}: legacy identity drift`)
+ if(!exactObject(e.polygon,mask.polygon)||!exactObject(e.worldVertices,mask.polygon)||!exactObject(e.aabb,mask.aabb))fail(`mask ${id}: polygon/AABB drift`)
+ if(e.targetFragmentStableId!==expectedSid||!exactObject(e.targetFragmentStableIds,[expectedSid])||e.targetFragmentCount!==1)fail(`mask ${id}: target must be sole real owner ${expectedSid}`)
+ if(e.oneToManyRationale!==null)fail(`mask ${id}: one-to-many rationale forbidden for single owner`)
+ if(e.targetFragment?.ownedOpaquePixelCount!==f.ownedOpaquePixelCount)fail(`mask ${id}: target owned total drift`)
+ const actualOwners=fragSpec.fragments.map(candidate=>({stableId:candidate.stableId,ownedPixelsInLegacyPolygon:countOwnedPixelsInPolygon(candidate.ownershipRuns,mask.polygon)})).filter(x=>x.ownedPixelsInLegacyPolygon>0).sort((a,b)=>b.ownedPixelsInLegacyPolygon-a.ownedPixelsInLegacyPolygon||a.stableId.localeCompare(b.stableId))
+ const target=actualOwners.find(x=>x.stableId===expectedSid)
+ if(!target||target.ownedPixelsInLegacyPolygon<=0)fail(`mask ${id}: target zero overlap`)
+ if(actualOwners.length!==1||actualOwners[0]?.stableId!==expectedSid)fail(`mask ${id}: legacy polygon must have exactly one real E9A owner ${expectedSid}`)
+ if(!exactObject(e.ownerOverlapEvidence?.actualOwners,actualOwners)||e.ownerOverlapEvidence?.ownedPixelsInLegacyPolygon!==target?.ownedPixelsInLegacyPolygon)fail(`mask ${id}: exact ownership overlap drift`)
+ if(e.ownerOverlapEvidence?.method!=='boundary-inclusive pixel-center test against E9A alpha-rle ownershipRuns')fail(`mask ${id}: overlap method not exact ownershipRuns`)
+ if(id===51&&target?.ownedPixelsInLegacyPolygon!==29316)fail('mask 51: expected 29316 owned pixels')
+ if(id===58&&target?.ownedPixelsInLegacyPolygon!==30629)fail('mask 58: expected 30629 owned pixels')
+ if(id===76&&target?.ownedPixelsInLegacyPolygon!==11150)fail('mask 76: expected 11150 owned pixels')
+ if(e.constraintDecision?.decision!=='none'||e.constraintDecision.target!==null||e.constraintDecision.relation!==null||e.constraintDecision.priority!==null||e.constraintDecision.scope!==null)fail(`mask ${id}: constraints must be none/not-needed`)
+ const banned=allStrings(e.constraintDecision).join(' ').toLowerCase();if(/always-behind|fragment-behind-agent-global/.test(banned))fail(`mask ${id}: forbidden constraint semantics`)
+ if(e.renderBand!=='world'||e.elevation!==0||e.sortMode!=='fixed-point-y'||e.tieBias!==-1||e.fixedPointY!==Math.round(e.sortAnchor.y*256))fail(`mask ${id}: sort contract drift`)
+ if(!Number.isFinite(e.sortAnchor?.x)||!Number.isFinite(e.sortAnchor?.y)||e.sortAnchor.x<0||e.sortAnchor.x>1664||e.sortAnchor.y<0||e.sortAnchor.y>928)fail(`mask ${id}: sortAnchor out of map bounds`)
+ if(!exactObject(e.sortAnchor,PROBE_FIXTURES[id].anchor))fail(`mask ${id}: anchor drift`)
+ for(const name of ['behind','boundary','front']){
+   const p=e.probes?.[name],expected=PROBE_FIXTURES[id][name];if(!p){fail(`mask ${id}: missing ${name} probe`);continue}
+   if(!exactObject(p.footPoint,expected))fail(`mask ${id}: ${name} coordinate drift`)
+   if(p.fixedPointY!==Math.round(p.footPoint.y*256))fail(`mask ${id}: ${name} fixedPoint drift`)
+   if(name==='behind'&&!(p.footPoint.y<e.sortAnchor.y))fail(`mask ${id}: behind anchor direction invalid`)
+   if(name==='boundary'&&p.footPoint.y!==e.sortAnchor.y)fail(`mask ${id}: boundary must equal anchor Y`)
+   if(name==='front'&&!(p.footPoint.y>e.sortAnchor.y))fail(`mask ${id}: front anchor direction invalid`)
+   const status=pointStatus(p.footPoint,liveGeometry);if(!status.navigable)fail(`mask ${id}: ${name} probe outside nav or in obstacle/collision`)
+   if(!exactObject(p.navValidation,{source:'live-tmx+e1-equality-checked',navAreaTmxId:NAV_AREA.tmxId,...status}))fail(`mask ${id}: ${name} nav evidence drift`)
+   const inside=pointInPolygonInclusive(p.footPoint.x,p.footPoint.y,e.polygon);if(p.insideLegacyPolygon!==inside)fail(`mask ${id}: ${name} polygon flag drift`)
+   if(!inside&&!(typeof p.outsideLegacyPolygonReason==='string'&&p.outsideLegacyPolygonReason.length>20))fail(`mask ${id}: ${name} outside polygon without reason`)
+   if(inside&&p.outsideLegacyPolygonReason!==null)fail(`mask ${id}: ${name} unnecessary outside reason`)
+   const expectedRelation=name==='behind'?'agent<fragment':'fragment<agent';if(p.expectedPainterRelation!==expectedRelation)fail(`mask ${id}: ${name} expected relation drift`)
+ }
+ const rec=RECALIBRATIONS[id];if(rec){if(e.recalibrationDecision?.action!=='recalibrate'||e.recalibrationDecision.nineGridRegion!==rec.nineGridRegion||e.recalibrationDecision.homeChunk!==rec.homeChunk)fail(`mask ${id}: recalibration drift`)}else if(e.recalibrationDecision!=='none')fail(`mask ${id}: unexpected recalibration`)
+ if(id===80&&e.recalibrationDecision?.homeChunk!=='east-upper')fail('mask 80: recalibration homeChunk must be east-upper')
+ if(!e.targetVisualStructure||/TBD|TODO/i.test(e.targetVisualStructure))fail(`mask ${id}: generic TBD visual structure`)
 }
 
-function main() {
-  const ledger = loadJson('tests/fixtures/juyiting/occlusion-v2-masks/migration-ledger.json')
-  const fragSpec = loadJson('tests/fixtures/juyiting/occlusion-v2-fragments/fragment-ownership-spec.json')
-  const inventory = loadJson('tests/fixtures/juyiting/occlusion-v0/inventory.json')
+const m58=ledger.entries.find(e=>e.legacyTmxId===58),p92=propSpec.props.find(p=>p.tmxId===92),ev=m58?.mask58Evidence
+if(!exactObject(ev?.legacyMaskAabb,{minX:1197,minY:342,maxX:1663,maxY:458,width:466,height:116}))fail('mask 58 AABB evidence drift')
+if(ev?.wallOwnerPixelsInPolygon!==30629||ev?.prop92?.opaquePixelsOverlappingMaskPolygon!==0)fail('mask 58 wall/prop overlap facts drift')
+if(!exactObject(ev?.prop92?.bounds,{x:1360,y:255,width:172,height:124,maxX:1532,maxY:379})||!exactObject(ev?.prop92?.sortAnchor,{x:1446,y:379})||ev?.prop92?.tieBias!==-4)fail('mask 58 prop92 bounds/anchor/tieBias drift')
+if(!exactObject(p92.tmxRect,{x:1360,y:255,width:172,height:124,minX:1360,minY:255,maxX:1532,maxY:379}))fail('E8A prop92 fixture drift')
+try{const png=PNG.sync.read(readFileSync(resolve(inputRoot,p92.asset.path)));let opaque=0,overlap=0;for(let y=0;y<png.height;y++)for(let x=0;x<png.width;x++){if(png.data[(y*png.width+x)*4+3]===0)continue;opaque++;if(pointInPolygonInclusive(p92.tmxRect.x+x+.5,p92.tmxRect.y+y+.5,m58.polygon))overlap++}if(opaque!==13671||overlap!==0)fail(`mask 58 prop92 alpha evidence drift opaque=${opaque} overlap=${overlap}`)}catch(error){fail(`mask 58 prop92 alpha verification failed: ${error.message}`)}
+const expectedDepth={behind:{x:1446,y:370},boundary:{x:1446,y:379},front:{x:1446,y:420}};for(const [name,foot] of Object.entries(expectedDepth)){const fixture=ev?.roleFixture?.positions?.[name];if(!exactObject(fixture?.footPoint,foot))fail(`mask 58 table ${name} foot drift`);if(fixture?.fixedPointY!==foot.y*256)fail(`mask 58 table ${name} fixedPoint drift`);const roles=fixture?.expectedByRole;if(!roles||roles.lujunyi!==roles.husanniang)fail(`mask 58 ${name}: role invariance drift`);const status=pointStatus(foot,liveGeometry);if(!exactObject(fixture?.navValidation,{source:'live-tmx+e1-equality-checked',navAreaTmxId:NAV_AREA.tmxId,...status}))fail(`mask 58 table ${name} nav evidence drift`)}
+if(ev?.roleFixture?.positions?.behind?.navValidation?.navigable!==false||!exactObject(ev?.roleFixture?.positions?.behind?.navValidation?.collisionIds,[45])||!exactObject(ev?.roleFixture?.positions?.behind?.navValidation?.navObstacleIds,[156]))fail('mask 58 y370 must disclose table collision/nav obstacle evidence')
+if(ev?.roleFixture?.positions?.boundary?.navValidation?.navigable!==true||ev?.roleFixture?.positions?.front?.navValidation?.navigable!==true)fail('mask 58 boundary/front navigation evidence drift')
+if(/y\s*=?\s*573|573\+|desk area[^\n]*573/i.test(ledgerText))fail('mask 58 forbidden table y573 narrative')
 
-  const fragMap = new Map()
-  for (const f of fragSpec.fragments) fragMap.set(f.stableId, f)
+if(!contact.includes(`data-generation-id="${ledger.generationId}"`))fail('contact sheet generationId drift')
+for(const marker of ['data-evidence="canonical','target-owner','agent-frame','nav-status','data-mask58-special="true"','data-evidence="prop92-complete"'])if(!contact.includes(marker))fail(`contact sheet missing ${marker}`)
+for(let id=48;id<=84;id++){const matches=contact.match(new RegExp(`data-mask-tmx-id="${id}"`,'g'))||[];if(matches.length<2)fail(`contact sheet missing overview/card number ${id}`)}
+if((contact.match(/class="mask-card"/g)||[]).length!==37)fail('contact sheet must contain 37 mask cards')
+if((contact.match(/data-evidence="agent-frame"/g)||[]).length<117)fail('contact sheet missing 37x3 plus mask58 role agent composites')
+if((contact.match(/data-evidence="nav-status"/g)||[]).length<111)fail('contact sheet missing per-probe nav markers')
+for(const role of ['lujunyi','husanniang'])for(const y of [370,379,420])if(!contact.includes(`data-role="${role}" data-table-y="${y}"`))fail(`contact sheet missing mask58 ${role} y${y}`)
+if(/y\s*=?\s*573|573\+|always-behind/i.test(contact))fail('contact sheet contains rejected mask58/constraint narrative')
+if(!contact.includes('never “depth halving inside mask”')||/uses [^<]{0,20}depth halving|depth halving determines/i.test(contact))fail('contact sheet mask-depth regression wording drift')
 
-  const errors = [], warnings = []
-  const fail = (m) => errors.push(m)
-  const warn = (m) => warnings.push(m)
-
-  // 1. generationId
-  if (ledger.generationId !== FROZEN_GENERATION_ID) fail(`generationId mismatch`)
-
-  // 2. content hash
-  const { contentSha256, ...ledgerBody } = ledger
-  const recomputed = createHash('sha256').update(JSON.stringify(ledgerBody, null, 2)).digest('hex')
-  if (contentSha256 !== recomputed) fail(`contentSha256 mismatch`)
-
-  // 3. count
-  if (ledger.entries.length !== 37) fail(`Expected 37 entries, got ${ledger.entries.length}`)
-
-  // 4. TMX IDs
-  const tmxIds = ledger.entries.map(e => e.legacyTmxId)
-  const uniqueIds = new Set(tmxIds)
-  if (uniqueIds.size !== 37) fail(`Duplicate TMX IDs`)
-  for (let id = 48; id <= 84; id++) if (!uniqueIds.has(id)) fail(`Missing TMX ID ${id}`)
-
-  // 5. index uniqueness
-  const indices = ledger.entries.map(e => e.legacyIndex)
-  const uniqueIdx = new Set(indices)
-  if (uniqueIdx.size !== 37) fail(`Duplicate indices`)
-  for (let i = 1; i <= 37; i++) if (!uniqueIdx.has(i)) fail(`Missing index ${i}`)
-
-  // 6. per-entry validation
-  for (const entry of ledger.entries) {
-    const id = entry.legacyTmxId
-
-    // Required string fields
-    for (const f of ['targetVisualStructure','nineGridRegionDeclared','homeChunk','sceneId','floorId','renderBand','sortMode']) {
-      if (typeof entry[f] !== 'string' || entry[f].length === 0) fail(`Mask ${id}: ${f} must be non-empty string`)
-    }
-
-    // Polygon
-    if (!Array.isArray(entry.polygon) || entry.polygon.length < 3) fail(`Mask ${id}: polygon must have >=3 vertices`)
-    for (const v of entry.polygon) {
-      if (typeof v.x !== 'number' || typeof v.y !== 'number' || !Number.isFinite(v.x) || !Number.isFinite(v.y))
-        fail(`Mask ${id}: polygon vertex must be finite numbers`)
-    }
-
-    // AABB
-    const aabb = entry.aabb
-    if (aabb.minX > aabb.maxX || aabb.minY > aabb.maxY) fail(`Mask ${id}: invalid AABB`)
-    if (aabb.width !== aabb.maxX - aabb.minX) fail(`Mask ${id}: AABB width mismatch`)
-    if (aabb.height !== aabb.maxY - aabb.minY) fail(`Mask ${id}: AABB height mismatch`)
-
-    // Polygon vertices in AABB
-    for (const v of entry.polygon) {
-      if (v.x < aabb.minX || v.x > aabb.maxX) fail(`Mask ${id}: vertex x=${v.x} outside AABB`)
-      if (v.y < aabb.minY || v.y > aabb.maxY) fail(`Mask ${id}: vertex y=${v.y} outside AABB`)
-    }
-
-    // Centroid in AABB
-    const c = entry.centroid
-    if (c.x < aabb.minX || c.x > aabb.maxX || c.y < aabb.minY || c.y > aabb.maxY) fail(`Mask ${id}: centroid outside AABB`)
-
-    // Sort anchor
-    const sa = entry.sortAnchor
-    if (typeof sa.x !== 'number' || typeof sa.y !== 'number' || !Number.isFinite(sa.x) || !Number.isFinite(sa.y))
-      fail(`Mask ${id}: invalid sortAnchor`)
-    if (sa.x < 0 || sa.x > 1664 || sa.y < 0 || sa.y > 928) fail(`Mask ${id}: sortAnchor out of map bounds`)
-
-    // Render band and elevation
-    if (entry.renderBand !== 'world') fail(`Mask ${id}: renderBand must be world`)
-    if (entry.elevation !== 0) fail(`Mask ${id}: elevation must be 0`)
-    if (typeof entry.tieBias !== 'number' || !Number.isInteger(entry.tieBias) || Math.abs(entry.tieBias) > 128)
-      fail(`Mask ${id}: invalid tieBias`)
-
-    // Target fragments exist
-    if (entry.targetFragmentCount !== entry.targetFragmentStableIds.length) fail(`Mask ${id}: targetFragmentCount mismatch`)
-    if (entry.targetFragmentCount !== entry.targetFragments.length) fail(`Mask ${id}: targetFragments count mismatch`)
-    for (const tf of entry.targetFragments) {
-      if (!tf.found) fail(`Mask ${id}: fragment ${tf.stableId} not found`)
-      if (!tf.stableId.match(/^jyt\.occ\.[a-z0-9-]+\.[a-z0-9-]+\.v2$/)) fail(`Mask ${id}: bad stableId pattern`)
-    }
-
-    // One-to-many rationale
-    if (entry.targetFragmentCount > 1) {
-      if (!entry.oneToManyRationale || !Array.isArray(entry.oneToManyRationale) || entry.oneToManyRationale.length === 0)
-        fail(`Mask ${id}: one-to-many requires rationale`)
-    }
-
-    // Future occluder
-    if (!Array.isArray(entry.futureOccluderStableIds) || entry.futureOccluderStableIds.length !== entry.targetFragmentStableIds.length)
-      fail(`Mask ${id}: futureOccluderStableIds mismatch`)
-
-    // Probes
-    for (const key of ['behind','boundary','front']) {
-      const probe = entry.probes[key]
-      if (!probe || typeof probe !== 'object') { fail(`Mask ${id}: missing ${key} probe`); continue }
-      const fp = probe.footPoint
-      if (typeof fp.x !== 'number' || typeof fp.y !== 'number') { fail(`Mask ${id}: probe ${key} invalid footPoint`); continue }
-      if (!pointInPolygon(fp.x, fp.y, entry.polygon)) fail(`Mask ${id}: probe ${key} (${fp.x},${fp.y}) outside polygon`)
-      if (probe.insideMaskPolygon !== true) fail(`Mask ${id}: probe ${key} insideMaskPolygon flag wrong`)
-      if (!probe.probeId || !probe.expectedRelation || !probe.expectedAgentDrawOrder || !probe.rationale)
-        fail(`Mask ${id}: probe ${key} missing required string fields`)
-    }
-
-    // Recalibration
-    const recal = entry.recalibrationDecision
-    if (recal && recal !== 'none') {
-      if (typeof recal !== 'object' || recal.action !== 'recalibrate') fail(`Mask ${id}: invalid recalibration`)
-      if (!recal.nineGridRegion || !recal.homeChunk || !recal.reason) fail(`Mask ${id}: recalibration missing fields`)
-    }
-
-    // Constraint
-    const con = entry.constraintDecision
-    if (con !== null) {
-      if (!con.type || !con.decision || !Array.isArray(con.targets) || con.targets.length === 0) fail(`Mask ${id}: invalid constraint`)
-      if (!con.relation || !con.priority || !con.scope || !con.rationale) fail(`Mask ${id}: constraint missing fields`)
-      for (const ct of con.targets) if (!fragMap.has(ct)) fail(`Mask ${id}: constraint target ${ct} not found`)
-    }
-
-    // No TBD
-    if (entry.targetVisualStructure.includes('TBD') || entry.targetVisualStructure.includes('TODO'))
-      fail(`Mask ${id}: contains TBD/TODO`)
-
-    // Overlap evidence
-    if (!Array.isArray(entry.fragmentOverlapEvidence) || entry.fragmentOverlapEvidence.length === 0)
-      fail(`Mask ${id}: missing overlap evidence`)
-
-    // Valid homeChunk
-    if (!['west-upper','center','east-upper','west-lower','entrance','east-lower'].includes(entry.homeChunk))
-      fail(`Mask ${id}: invalid homeChunk ${entry.homeChunk}`)
-
-    // Match inventory
-    const invMask = inventory.masks.find(m => m.tmxId === id)
-    if (!invMask) fail(`Mask ${id}: not in inventory`)
-    else if (entry.legacyIndex !== invMask.index) fail(`Mask ${id}: index mismatch`)
-
-    // Probe collision checks (warnings only)
-    for (const [key, probe] of Object.entries(entry.probes)) {
-      if (!probe) continue
-      const fp = probe.footPoint
-      for (const col of inventory.collision) {
-        if (pointInPolygon(fp.x, fp.y, col.polygon)) warn(`Mask ${id}: probe ${key} inside collision ${col.tmxId}`)
-      }
-      for (const nav of inventory.navObstacles) {
-        if (pointInPolygon(fp.x, fp.y, nav.polygon)) warn(`Mask ${id}: probe ${key} inside nav obstacle ${nav.tmxId}`)
-      }
-    }
-  }
-
-  // Summary checks
-  const s = ledger.summary
-  if (s.totalMasks !== 37) fail('Summary totalMasks wrong')
-  if (s.tmxIdRange[0] !== 48 || s.tmxIdRange[1] !== 84) fail('Summary tmxIdRange wrong')
-  const aRecal = ledger.entries.filter(e => e.recalibrationDecision && e.recalibrationDecision !== 'none').length
-  const aCon = ledger.entries.filter(e => e.constraintDecision !== null).length
-  const aOtM = ledger.entries.filter(e => e.targetFragmentCount > 1).length
-  const aRegM = ledger.entries.filter(e => !e.nineGridRegionMatch).length
-  if (s.recalibrationCount !== aRecal) fail('Summary recalibrationCount mismatch')
-  if (s.constraintCount !== aCon) fail('Summary constraintCount mismatch')
-  if (s.oneToManyCount !== aOtM) fail('Summary oneToManyCount mismatch')
-  if (s.regionMismatchCount !== aRegM) fail('Summary regionMismatchCount mismatch')
-
-  // Provenance
-  if (ledger.provenance.tmxSha256 !== '291a38cc66ebd60c8577500a5afc18ce5398570fe4c35ca66d9eebe818826a97') fail('TMX SHA mismatch')
-  if (ledger.provenance.e9aGenerationId !== '7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b') fail('E9A genId mismatch')
-  if (ledger.provenance.e9bCommit !== 'b8adb0988cd17f777e44064cf79c376cd9254b92') fail('E9B commit mismatch')
-
-  console.log(`\n=== E10A Migration Ledger Validation ===`)
-  console.log(`  Entries: ${ledger.entries.length}/37`)
-  console.log(`  Errors: ${errors.length}`)
-  console.log(`  Warnings: ${warnings.length}`)
-  if (errors.length) { console.log('\n  ERRORS:'); for (const e of errors) console.log(`    ❌ ${e}`) }
-  if (warnings.length) { console.log('\n  WARNINGS:'); for (const w of warnings) console.log(`    ⚠️  ${w}`) }
-  if (errors.length === 0) { console.log('\n  ✅ VALIDATION PASSED'); return { ok: true } }
-  else { console.log('\n  ❌ VALIDATION FAILED'); process.exit(1) }
+const s=ledger.summary;if(s?.totalMasks!==37||s.constraintCount!==0||s.oneToManyCount!==0||s.recalibrationCount!==Object.keys(RECALIBRATIONS).length||s.totalProbeCount!==111||s.probeWarnings!==0)fail('summary drift')
+ return {ok:errors.length===0,errors,warnings,generationId:ledger.generationId,entryCount:ledger.entries?.length??0}
 }
 
-main()
+async function cli(){
+ const args=process.argv.slice(2),arg=flag=>{const i=args.indexOf(flag);return i>=0?args[i+1]:null}
+ const ledgerPath=resolve(REPO_ROOT,arg('--ledger')||'tests/fixtures/juyiting/occlusion-v2-masks/migration-ledger.json')
+ const contactPath=resolve(REPO_ROOT,arg('--contact')||'tests/fixtures/juyiting/occlusion-v2-masks/contact-sheet.svg')
+ const inputRoot=resolve(REPO_ROOT,arg('--input-root')||'.')
+ const ledgerText=readFileSync(ledgerPath,'utf8'),ledger=JSON.parse(ledgerText),contact=readFileSync(contactPath,'utf8')
+ const result=await validateMaskMigration({ledger,contact,inputRoot,ledgerText})
+ console.log('\n=== E10A Mask Migration Validation ===');console.log(`  Entries: ${result.entryCount}/37`);console.log(`  Errors: ${result.errors.length}`);console.log(`  Warnings: ${result.warnings.length}`)
+ if(!result.ok){for(const error of result.errors)console.log(`    ❌ ${error}`);process.exitCode=1;return}
+ console.log(`  generationId: ${result.generationId}`);console.log('  ✅ VALIDATION PASSED (0 warnings)')
+}
+if(process.argv[1]===fileURLToPath(import.meta.url))cli()

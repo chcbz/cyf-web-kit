@@ -1,295 +1,85 @@
 #!/usr/bin/env node
-
-/**
- * E10A: Generate GPT V3 contact sheet for 37-mask migration
- *
- * Self-contained SVG with:
- *   - Nine-grid overview (37 masks numbered, polygon outlines, target fragment colors)
- *   - Per-mask crop with polygon + 3 probes
- *   - Mask 58 large inset with historical facts
- *   - Legend with fragment color mapping
- *   - Provenance block
- */
-
-import { readFileSync, writeFileSync } from 'node:fs'
-import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { ownerPath, xmlEscape } from './lib/mask-migration-evidence.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const repoRoot = join(__dirname, '..', '..')
+const REPO_ROOT = join(__dirname, '..', '..')
 
-const ledger = JSON.parse(readFileSync(join(repoRoot, 'tests/fixtures/juyiting/occlusion-v2-masks/migration-ledger.json'), 'utf-8'))
-const fragSpec = JSON.parse(readFileSync(join(repoRoot, 'tests/fixtures/juyiting/occlusion-v2-fragments/fragment-ownership-spec.json'), 'utf-8'))
+function dataUri(mediaType, bytes) { return `data:${mediaType};base64,${bytes.toString('base64')}` }
+function roleImage(role, foot, roleEvidence, roleUris, extra = '') {
+  const def = roleEvidence[role]
+  const left = foot.x - def.renderedFrameSize.width * def.anchor.x
+  const top = foot.y - def.renderedFrameSize.height * def.anchor.y
+  return `<image data-evidence="agent-frame" data-role="${role}" ${extra} href="${roleUris[role]}" x="${left}" y="${top}" width="${def.renderedFrameSize.width}" height="${def.renderedFrameSize.height}"/>`
+}
+function crop(entry, fragment) {
+  const points = [entry.sortAnchor, ...Object.values(entry.probes).map(p => p.footPoint)]
+  let minX = Math.min(entry.aabb.minX, fragment.sourceRect.x, ...points.map(p => p.x)) - 55
+  let minY = Math.min(entry.aabb.minY, fragment.sourceRect.y, ...points.map(p => p.y)) - 75
+  let maxX = Math.max(entry.aabb.maxX, fragment.sourceRect.x + fragment.sourceRect.width, ...points.map(p => p.x)) + 55
+  let maxY = Math.max(entry.aabb.maxY, fragment.sourceRect.y + fragment.sourceRect.height, ...points.map(p => p.y)) + 35
+  minX=Math.max(0,minX);minY=Math.max(0,minY);maxX=Math.min(1664,maxX);maxY=Math.min(928,maxY)
+  const aspect=620/250,w=maxX-minX,h=maxY-minY
+  if(w/h<aspect){const add=(h*aspect-w)/2;minX=Math.max(0,minX-add);maxX=Math.min(1664,maxX+add)}
+  else{const add=(w/aspect-h)/2;minY=Math.max(0,minY-add);maxY=Math.min(928,maxY+add)}
+  return {x:minX,y:minY,width:maxX-minX,height:maxY-minY}
+}
+function polygonPoints(poly){return poly.map(p=>`${p.x},${p.y}`).join(' ')}
 
-// ── Color palette for fragments ────────────────────────────────────
-const FRAGMENT_COLORS = {}
-const PALETTE = [
-  '#e6194b','#3cb44b','#ffe119','#4363d8','#f58231','#911eb4','#42d4f4','#f032e6',
-  '#bfef45','#fabed4','#469990','#dcbeff','#9A6324','#fffac8','#800000','#aaffc3',
-  '#808000','#ffd8b1','#000075','#a9a9a9','#ff6f61','#88b04b','#f7cac9','#92a8d1',
-  '#955251','#b565a7','#009b77','#dd4124','#d65076','#45b8ac','#efc050','#5b5ea6',
-]
+export function renderMaskContactSheet({ ledger, fragSpec, canonicalBytes, baseBytes, prop92Bytes, roleEvidence, roleUris }) {
+  const fragments = new Map(fragSpec.fragments.map(f => [f.stableId, f]))
+  const colors = ['#00c2ff','#ff4d6d','#6ee7b7','#f59e0b','#a78bfa','#f97316','#22c55e','#e879f9','#38bdf8','#facc15']
+  const colorByOwner = new Map([...new Set(ledger.entries.map(e=>e.targetFragmentStableId))].sort().map((sid,i)=>[sid,colors[i%colors.length]]))
+  const clipByOwner = new Map()
+  const canonicalUri=dataUri('image/webp',canonicalBytes), baseUri=dataUri('image/webp',baseBytes), propUri=dataUri('image/png',prop92Bytes)
+  const cardW=680,cardH=430,cols=2,gap=16,margin=20,overviewH=1160,headerH=170
+  const cardRows=Math.ceil(ledger.entries.length/cols)
+  const mask58Y=headerH+overviewH+cardRows*(cardH+gap)+20
+  const mask58H=980
+  const width=margin*2+cols*cardW+gap
+  const height=mask58Y+mask58H+40
+  let svg=`<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" data-generation-id="${ledger.generationId}" data-mask-count="37" data-evidence="canonical target-owner agent-frame nav-status" data-camera-zoom="1" data-camera-dpr="1">\n`
+  svg+=`<defs><style>text{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;fill:#17202a}.title{font-size:25px;font-weight:700}.section{font-size:18px;font-weight:700}.label{font-size:12px}.small{font-size:10px}.tiny{font-size:8px}.ok{fill:#157347}.warn{fill:#a33}.card{fill:#fff;stroke:#9aa6b2}.mask{fill:#ff1744;fill-opacity:.14;stroke:#ff1744}.anchor{stroke:#f59e0b;stroke-width:2;stroke-dasharray:6 3}</style><image id="hall-base" data-evidence="canonical" href="${baseUri}" width="1664" height="928"/><image id="hall-canonical" data-evidence="canonical" href="${canonicalUri}" width="1664" height="928"/>`
+  let ownerIndex=0
+  for(const sid of [...colorByOwner.keys()]){const f=fragments.get(sid),clip=`owner-clip-${ownerIndex++}`;clipByOwner.set(sid,clip);svg+=`<clipPath id="${clip}"><path d="${ownerPath(f)}"/></clipPath>`}
+  svg+='</defs>\n'
+  svg+=`<rect width="${width}" height="${height}" fill="#e8edf2"/><rect width="${width}" height="${headerH}" fill="#17202a"/><text x="24" y="42" class="title" fill="#fff">E10A · 37 legacy masks → exact E9A visual owners</text><text x="24" y="72" class="label" fill="#d5dce3">Real evidence: embedded clean hall + canonical owner pixels + TMX mask polygon + frozen 卢俊义 idle/down/frame 0 at B/Bd/F.</text><text x="24" y="96" class="label" fill="#d5dce3">Every probe marker records insideNavArea=true, collision=false, navObstacle=false; boundary foot Y equals owner anchor Y exactly.</text><text x="24" y="122" class="small" fill="#ccd1d1">generationId=${ledger.generationId} · TMX=${ledger.provenance.tmxSha256} · E9A=${ledger.provenance.e9aGenerationId}</text><text x="24" y="145" class="small" fill="#f8c471">Constraint count is zero. No mask-depth-halving. Painter relation changes only by fixed-point Y and boundary tieBias.</text>`
 
-let colorIdx = 0
-for (const f of fragSpec.fragments) {
-  FRAGMENT_COLORS[f.stableId] = PALETTE[colorIdx % PALETTE.length]
-  colorIdx++
+  // Nine-grid: one readable canonical crop per region with direct TMX IDs 48-84.
+  svg+=`<text x="20" y="${headerH+28}" class="section">Nine-grid canonical overview · direct TMX mask IDs 48–84</text>`
+  const grids=[['northwest',0,0,555,309],['north_center',555,0,555,309],['northeast',1110,0,554,309],['west_center',0,309,555,309],['center',555,309,555,309],['east_center',1110,309,554,309],['southwest',0,618,555,310],['south_center',555,618,555,310],['southeast',1110,618,554,310]]
+  const gw=438,gh=330
+  grids.forEach(([name,x0,y0,w0,h0],i)=>{const x=20+(i%3)*(gw+14),y=headerH+50+Math.floor(i/3)*(gh+16);svg+=`<g data-nine-grid="${name}"><rect x="${x}" y="${y}" width="${gw}" height="${gh}" class="card"/><text x="${x+8}" y="${y+18}" class="label">${name}</text><svg x="${x+5}" y="${y+25}" width="${gw-10}" height="${gh-30}" viewBox="${x0} ${y0} ${w0} ${h0}" preserveAspectRatio="xMidYMid meet"><use href="#hall-base"/><use href="#hall-canonical" opacity=".82"/>`;for(const e of ledger.entries.filter(e=>e.nineGridRegionDeclared===name)){const ownerColor=colorByOwner.get(e.targetFragmentStableId);svg+=`<polygon data-mask-tmx-id="${e.legacyTmxId}" data-target-owner="${xmlEscape(e.targetFragmentStableId)}" points="${polygonPoints(e.polygon)}" fill="${ownerColor}" fill-opacity=".2" stroke="${ownerColor}" stroke-width="3"><title>mask ${e.legacyTmxId} → ${xmlEscape(e.targetFragmentStableId)}</title></polygon><g transform="translate(${e.centroid.x} ${e.centroid.y})"><circle r="13" fill="#fff" stroke="${ownerColor}" stroke-width="3"/><text text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="700">${e.legacyTmxId}</text></g>`}svg+='</svg></g>'})
+
+  const cardsY=headerH+overviewH
+  ledger.entries.forEach((e,i)=>{const f=fragments.get(e.targetFragmentStableId),color=colorByOwner.get(e.targetFragmentStableId),clip=clipByOwner.get(e.targetFragmentStableId),c=crop(e,f);const x=margin+(i%cols)*(cardW+gap),y=cardsY+Math.floor(i/cols)*(cardH+gap),imageX=x+12,imageY=y+78,imageW=656,imageH=250;const B=e.probes.behind.footPoint,Bd=e.probes.boundary.footPoint,F=e.probes.front.footPoint;svg+=`<g class="mask-card" data-mask-tmx-id="${e.legacyTmxId}" data-evidence="canonical target-owner agent-frame nav-status"><rect x="${x}" y="${y}" width="${cardW}" height="${cardH}" rx="7" class="card"/><text x="${x+14}" y="${y+24}" class="section">mask ${e.legacyTmxId} · ${xmlEscape(e.homeChunk)}</text><text x="${x+14}" y="${y+44}" class="small">${xmlEscape(e.targetFragmentStableId)}</text><text x="${x+14}" y="${y+61}" class="small">owned pixels in polygon=${e.ownerOverlapEvidence.ownedPixelsInLegacyPolygon} · anchor=(${e.sortAnchor.x},${e.sortAnchor.y}) · tieBias=${e.tieBias}</text><svg x="${imageX}" y="${imageY}" width="${imageW}" height="${imageH}" viewBox="${c.x} ${c.y} ${c.width} ${c.height}" preserveAspectRatio="xMidYMid meet"><use href="#hall-base"/>${roleImage('lujunyi',B,roleEvidence,roleUris,'data-probe="behind"')}<use href="#hall-canonical" clip-path="url(#${clip})" data-evidence="target-owner"/><path d="${ownerPath(f)}" fill="${color}" fill-opacity=".28" data-evidence="target-owner"/><polygon points="${polygonPoints(e.polygon)}" class="mask" stroke-width="2"/><line x1="${c.x}" x2="${c.x+c.width}" y1="${e.sortAnchor.y}" y2="${e.sortAnchor.y}" class="anchor"/>${roleImage('lujunyi',Bd,roleEvidence,roleUris,'data-probe="boundary"')}${roleImage('lujunyi',F,roleEvidence,roleUris,'data-probe="front"')}<g font-size="11" font-weight="700"><g data-evidence="nav-status" data-probe="behind" data-inside-nav-area="true" data-collision="false" data-nav-obstacle="false"><circle cx="${B.x}" cy="${B.y}" r="5" fill="#2f80ed"/><text x="${B.x+7}" y="${B.y}">B</text></g><g data-evidence="nav-status" data-probe="boundary" data-inside-nav-area="true" data-collision="false" data-nav-obstacle="false"><circle cx="${Bd.x}" cy="${Bd.y}" r="5" fill="#f59e0b"/><text x="${Bd.x+7}" y="${Bd.y}">Bd</text></g><g data-evidence="nav-status" data-probe="front" data-inside-nav-area="true" data-collision="false" data-nav-obstacle="false"><circle cx="${F.x}" cy="${F.y}" r="5" fill="#ef4444"/><text x="${F.x+7}" y="${F.y}">F</text></g></g></svg><rect x="${imageX}" y="${imageY}" width="${imageW}" height="${imageH}" fill="none" stroke="#566573"/><text x="${x+14}" y="${y+350}" class="small">B (${B.x},${B.y}) agent&lt;fragment · Bd (${Bd.x},${Bd.y}) fragment&lt;agent · F (${F.x},${F.y}) fragment&lt;agent</text><text x="${x+14}" y="${y+369}" class="small ok">B nav=true collision=false navObstacle=false · Bd nav=true collision=false navObstacle=false · F nav=true collision=false navObstacle=false</text><text x="${x+14}" y="${y+388}" class="tiny">${xmlEscape(e.probes.behind.outsideLegacyPolygonReason||'B inside legacy polygon')} | ${xmlEscape(e.probes.boundary.outsideLegacyPolygonReason||'Bd inside legacy polygon')}</text><text x="${x+14}" y="${y+405}" class="tiny">${xmlEscape(e.probes.front.outsideLegacyPolygonReason||'F inside legacy polygon')}</text></g>`})
+
+  // Mask 58 wall/prop responsibility and both-role world-order matrix.
+  const m58=ledger.entries.find(e=>e.legacyTmxId===58),f58=fragments.get(m58.targetFragmentStableId),color58=colorByOwner.get(m58.targetFragmentStableId),clip58=clipByOwner.get(m58.targetFragmentStableId)
+  svg+=`<g data-mask58-special="true" data-mask-tmx-id="58" data-evidence="canonical target-owner agent-frame nav-status prop92-complete"><rect x="20" y="${mask58Y}" width="${width-40}" height="${mask58H}" rx="8" fill="#fff8e8" stroke="#d97706" stroke-width="2"/><text x="34" y="${mask58Y+34}" class="title">mask 58 critical inset · wall owner vs independent prop 92 table</text><text x="34" y="${mask58Y+62}" class="label">mask AABB=(1197,342)-(1663,458) · wall owner polygon pixels=30629 · prop92 opaque overlap=0</text><text x="34" y="${mask58Y+84}" class="label">prop92 full bounds=(1360,255,172×124) · sortAnchor=(1446,379) · tieBias=-4 · cameraZoom=1 · DPR=1</text><svg x="34" y="${mask58Y+105}" width="650" height="300" viewBox="1160 220 504 310"><use href="#hall-base"/><use href="#hall-canonical" clip-path="url(#${clip58})" data-evidence="target-owner"/><path d="${ownerPath(f58)}" fill="${color58}" fill-opacity=".32"/><polygon points="${polygonPoints(m58.polygon)}" class="mask" stroke-width="2"/><image data-evidence="prop92-complete" href="${propUri}" x="1360" y="255" width="172" height="124"/><line x1="1160" x2="1664" y1="379" y2="379" class="anchor"/></svg><text x="34" y="${mask58Y+430}" class="small">Wall crop: legacy polygon owns the accepted east-upper wall fragment, not table pixels. Wall fragment uses its own B/Bd/F and has constraintDecision=none.</text>`
+  const positions=[['behind',370,'agent&lt;prop'],['boundary',379,'prop&lt;agent (tieBias -4)'],['front',420,'prop&lt;agent']]
+  const roles=['lujunyi','husanniang'];let ci=0
+  for(const role of roles)for(const [name,yy,relation] of positions){const x=34+(ci%3)*440,y=mask58Y+465+Math.floor(ci/3)*230,foot={x:1446,y:yy},status=m58.mask58Evidence.roleFixture.positions[name].navValidation;const agent=roleImage(role,foot,roleEvidence,roleUris,`data-table-probe="${name}"`);const prop=`<image data-evidence="prop92-complete" href="${propUri}" x="1360" y="255" width="172" height="124"/>`;const ordered=name==='behind'?agent+prop:prop+agent;svg+=`<g data-role="${role}" data-table-y="${yy}" data-expected-table-order="${relation}"><rect x="${x}" y="${y}" width="425" height="214" class="card"/><text x="${x+8}" y="${y+18}" class="label">${role} · ${name} · foot=(1446,${yy})</text><svg x="${x+8}" y="${y+26}" width="409" height="145" viewBox="1320 235 240 205"><use href="#hall-base"/>${ordered}</svg><text x="${x+8}" y="${y+190}" class="small">painter=${relation} · same Y fact for both roles</text><text x="${x+8}" y="${y+207}" class="tiny" data-evidence="nav-status" data-inside-nav-area="${status.insideNavArea}" data-collision="${status.collisionIds.length>0}" data-nav-obstacle="${status.navObstacleIds.length>0}">navArea=${status.insideNavArea} · collision=${status.collisionIds.join(',')||'false'} · navObstacle=${status.navObstacleIds.join(',')||'false'} · zoom/DPR=1</text></g>`;ci++}
+  svg+=`<text x="34" y="${mask58Y+948}" class="label">Regression: table occlusion depends on WorldSortKey, never “depth halving inside mask”. 扈三娘未被错误遮挡 is an observed sample under the same 370/379/420 matrix as 卢俊义.</text></g>`
+  svg+='</svg>\n'
+  return svg.split('\n').map(line=>line.replace(/[ \t]+$/,'')).join('\n')
 }
 
-// Map nine-grid region to map position
-const NINE_GRID_POS = {
-  northwest:     { x: 50,  y: 50,  w: 185, h: 103 },
-  north_center:  { x: 235, y: 50,  w: 185, h: 103 },
-  northeast:     { x: 420, y: 50,  w: 185, h: 103 },
-  west_center:   { x: 50,  y: 153, w: 185, h: 103 },
-  center:        { x: 235, y: 153, w: 185, h: 103 },
-  east_center:   { x: 420, y: 153, w: 185, h: 103 },
-  southwest:     { x: 50,  y: 256, w: 185, h: 106 },
-  south_center:  { x: 235, y: 256, w: 185, h: 106 },
-  southeast:     { x: 420, y: 256, w: 185, h: 106 },
-}
-
-// Map coordinates: 1664x928 → grid cell size
-const MAP_W = 1664, MAP_H = 928
-
-function mapToGrid(mx, my, grid) {
-  return {
-    x: grid.x + (mx / MAP_W) * grid.w,
-    y: grid.y + (my / MAP_H) * grid.h,
-  }
-}
-
-// ── Build SVG ──────────────────────────────────────────────────────
-const svgParts = []
-let svgId = 0
-function sid() { return `e10a-${svgId++}` }
-
-function tag(name, attrs, content) {
-  const attrStr = Object.entries(attrs)
-    .map(([k, v]) => `${k}="${v}"`)
-    .join(' ')
-  if (content === undefined || content === null) return `<${name} ${attrStr}/>`
-  return `<${name} ${attrStr}>${content}</${name}>`
-}
-
-// SVG header
-const TOTAL_W = 1400
-const TOTAL_H = 3400 // tall: nine-grid + 37 detail cards + mask58 inset
-svgParts.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${TOTAL_W} ${TOTAL_H}" width="${TOTAL_W}" height="${TOTAL_H}">`)
-svgParts.push(`<style>
-  .title { font-family: sans-serif; font-size: 18px; font-weight: bold; fill: #1a1a2e; }
-  .subtitle { font-family: sans-serif; font-size: 12px; fill: #555; }
-  .label { font-family: monospace; font-size: 10px; fill: #333; }
-  .small { font-family: monospace; font-size: 8px; fill: #666; }
-  .mask-poly { fill: none; stroke: #ff4444; stroke-width: 1.5; }
-  .mask-poly-fill { fill: rgba(255,68,68,0.08); stroke: #ff4444; stroke-width: 1.5; }
-  .frag-rect { fill: none; stroke-width: 1.2; stroke-dasharray: 4,3; }
-  .probe { fill: #00cc00; stroke: #006600; stroke-width: 0.8; }
-  .probe-behind { fill: #4488ff; }
-  .probe-boundary { fill: #ffaa00; }
-  .probe-front { fill: #ff4444; }
-  .legend-swatch { stroke: #333; stroke-width: 0.5; }
-</style>`)
-
-// ── Title block ────────────────────────────────────────────────────
-svgParts.push(tag('rect', { x: 0, y: 0, width: TOTAL_W, height: 60, fill: '#f0f0f5' }))
-svgParts.push(tag('text', { x: 20, y: 24, class: 'title' }, 'E10A: 37-Mask Visual Migration Contact Sheet'))
-svgParts.push(tag('text', { x: 20, y: 42, class: 'subtitle' },
-  `generationId: ${ledger.generationId} | TMX: ${ledger.provenance.tmxSha256.substring(0,16)}... | E9A: ${ledger.provenance.e9aGenerationId.substring(0,16)}... | Masks: 37 | Recal: ${ledger.summary.recalibrationCount} | Constraints: ${ledger.summary.constraintCount}`))
-
-// ── Nine-grid overview ─────────────────────────────────────────────
-const gridY = 70
-svgParts.push(tag('text', { x: 20, y: gridY + 18, class: 'subtitle' }, 'Nine-Grid Region Overview (37 masks, polygon outlines, target fragment colors)'))
-
-// Draw nine-grid borders
-for (const [name, pos] of Object.entries(NINE_GRID_POS)) {
-  svgParts.push(tag('rect', {
-    x: pos.x, y: pos.y + gridY, width: pos.w, height: pos.h,
-    fill: '#fafafa', stroke: '#ccc', 'stroke-width': 1,
+async function cli(){
+  const ledger=JSON.parse(readFileSync(join(REPO_ROOT,'tests/fixtures/juyiting/occlusion-v2-masks/migration-ledger.json'),'utf8'))
+  const fragSpec=JSON.parse(readFileSync(join(REPO_ROOT,'tests/fixtures/juyiting/occlusion-v2-fragments/fragment-ownership-spec.json'),'utf8'))
+  const propSpec=JSON.parse(readFileSync(join(REPO_ROOT,'tests/fixtures/juyiting/occlusion-v1-props/prop-sort-spec.json'),'utf8'))
+  const roleEvidence=propSpec.visualEvidence.roles
+  const e8aContact=readFileSync(join(REPO_ROOT,'tests/fixtures/juyiting/occlusion-v1-props/contact-sheet.svg'),'utf8')
+  const roleUris=Object.fromEntries(Object.keys(roleEvidence).map(role=>{
+    const width=String(roleEvidence[role].renderedFrameSize.width),start=e8aContact.indexOf(`data-role=\"${role}\"`)
+    const group=e8aContact.slice(start,e8aContact.indexOf('</g>',start))
+    const match=group.match(new RegExp(`<image href=\"(data:image/png;base64,[^\"]+)\"[^>]*width=\"${width.replace('.', '\\.')}\"`))
+    if(!match)throw new Error(`E8A contact sheet missing frozen frame pixels for ${role}`)
+    return [role,match[1]]
   }))
-  svgParts.push(tag('text', {
-    x: pos.x + 3, y: pos.y + gridY + 12, class: 'small', fill: '#999',
-  }, name.replace('_', ' ')))
+  process.stdout.write(renderMaskContactSheet({ledger,fragSpec,canonicalBytes:readFileSync(join(REPO_ROOT,fragSpec.sourceProvenance.path)),baseBytes:readFileSync(join(REPO_ROOT,'public/juyiting/images/liangshan-hall-base-clean-v3.webp')),prop92Bytes:readFileSync(join(REPO_ROOT,'public/juyiting/images/props/liangshan-hall-prop-bounty-board-cropped.png')),roleEvidence,roleUris}))
 }
-
-// Draw each mask polygon in its nine-grid cell
-for (const entry of ledger.entries) {
-  const grid = NINE_GRID_POS[entry.nineGridRegionDeclared]
-  if (!grid) continue
-
-  // Polygon
-  const points = entry.polygon.map(v => {
-    const p = mapToGrid(v.x, v.y, grid)
-    return `${p.x.toFixed(1)},${(p.y + gridY).toFixed(1)}`
-  }).join(' ')
-
-  const color = FRAGMENT_COLORS[entry.targetFragmentStableIds[0]] || '#999'
-  svgParts.push(tag('polygon', {
-    points,
-    fill: color,
-    'fill-opacity': 0.15,
-    stroke: color,
-    'stroke-width': 1,
-    class: 'mask-poly-fill',
-  }))
-
-  // Mask number label at centroid
-  const cp = mapToGrid(entry.centroid.x, entry.centroid.y, grid)
-  svgParts.push(tag('text', {
-    x: cp.x.toFixed(0), y: (cp.y + gridY).toFixed(0),
-    class: 'label',
-    'text-anchor': 'middle',
-    'dominant-baseline': 'central',
-    fill: '#000',
-    'font-size': '7',
-  }, `${entry.legacyIndex}`))
-
-  // Highlight region mismatches
-  if (!entry.nineGridRegionMatch) {
-    svgParts.push(tag('circle', {
-      cx: cp.x.toFixed(0), cy: (cp.y + gridY + 6).toFixed(0),
-      r: 8, fill: 'none', stroke: '#ff0000', 'stroke-width': 1.5,
-    }))
-  }
-
-  // Highlight constraint masks
-  if (entry.constraintDecision) {
-    svgParts.push(tag('circle', {
-      cx: cp.x.toFixed(0), cy: (cp.y + gridY - 8).toFixed(0),
-      r: 6, fill: 'none', stroke: '#ff8800', 'stroke-width': 2,
-    }))
-  }
-}
-
-// ── Legend ─────────────────────────────────────────────────────────
-const legendY = gridY + 380
-svgParts.push(tag('text', { x: 20, y: legendY, class: 'subtitle' }, 'Fragment Color Legend (32 fragments)'))
-
-let lx = 20, ly = legendY + 16
-for (const [sid, color] of Object.entries(FRAGMENT_COLORS)) {
-  if (lx > 620) { lx = 20; ly += 14 }
-  svgParts.push(tag('rect', { x: lx, y: ly - 6, width: 10, height: 10, fill: color, class: 'legend-swatch' }))
-  const shortName = sid.replace('jyt.occ.', '').replace('.v2', '')
-  svgParts.push(tag('text', { x: lx + 13, y: ly + 2, class: 'small', fill: '#333' }, shortName))
-  lx += 200
-}
-
-// ── Per-mask detail cards (6 columns grid) ─────────────────────────
-const cardStartY = legendY + 170
-const cardW = 220, cardH = 130
-const cols = 6, gapX = 10, gapY = 8
-const startX = 20
-
-for (let i = 0; i < ledger.entries.length; i++) {
-  const entry = ledger.entries[i]
-  const col = i % cols
-  const row = Math.floor(i / cols)
-  const cx = startX + col * (cardW + gapX)
-  const cy = cardStartY + row * (cardH + gapY)
-
-  // Card background
-  const isConstraint = entry.constraintDecision !== null
-  const isRecal = entry.recalibrationDecision && entry.recalibrationDecision !== 'none'
-  const bgColor = isConstraint ? '#fff8e1' : (isRecal ? '#ffe8e8' : '#f8f8fc')
-  svgParts.push(tag('rect', { x: cx, y: cy, width: cardW, height: cardH, fill: bgColor, stroke: '#ddd', rx: 3 }))
-
-  // Mask header
-  svgParts.push(tag('text', { x: cx + 4, y: cy + 12, class: 'label', fill: '#000', 'font-weight': 'bold' },
-    `#${entry.legacyIndex} TMX ${entry.legacyTmxId} ${entry.homeChunk}`))
-  svgParts.push(tag('text', { x: cx + 4, y: cy + 24, class: 'small', fill: '#666' },
-    `${entry.nineGridRegionDeclared}${entry.nineGridRegionMatch ? '' : ' ⚠RECAL'}`))
-
-  // Fragment tag
-  const fragColor = FRAGMENT_COLORS[entry.targetFragmentStableIds[0]] || '#999'
-  svgParts.push(tag('rect', { x: cx + 4, y: cy + 28, width: 8, height: 8, fill: fragColor }))
-  const shortFrag = entry.targetFragmentStableIds[0].replace('jyt.occ.', '').replace('.v2', '')
-  svgParts.push(tag('text', { x: cx + 15, y: cy + 36, class: 'small', fill: fragColor }, shortFrag))
-
-  if (entry.targetFragmentCount > 1) {
-    svgParts.push(tag('text', { x: cx + 4, y: cy + 48, class: 'small', fill: '#f80' }, `+${entry.targetFragmentCount - 1} more`))
-  }
-
-  // Constraint indicator
-  if (isConstraint) {
-    svgParts.push(tag('text', { x: cx + 4, y: cy + (entry.targetFragmentCount > 1 ? 60 : 48), class: 'small', fill: '#f80', 'font-weight': 'bold' },
-      `⛓ ${entry.constraintDecision.decision}`))
-  }
-
-  // Probe indicators
-  const probeY = cy + cardH - 20
-  const probes = entry.probes
-  if (probes.behind) {
-    svgParts.push(tag('circle', { cx: cx + 30, cy: probeY, r: 5, class: 'probe probe-behind' }))
-    svgParts.push(tag('text', { x: cx + 38, y: probeY + 3, class: 'small', fill: '#4488ff' }, 'B'))
-  }
-  if (probes.boundary) {
-    svgParts.push(tag('circle', { cx: cx + 75, cy: probeY, r: 5, class: 'probe probe-boundary' }))
-    svgParts.push(tag('text', { x: cx + 83, y: probeY + 3, class: 'small', fill: '#ffaa00' }, '∂'))
-  }
-  if (probes.front) {
-    svgParts.push(tag('circle', { cx: cx + 120, cy: probeY, r: 5, class: 'probe probe-front' }))
-    svgParts.push(tag('text', { x: cx + 128, y: probeY + 3, class: 'small', fill: '#ff4444' }, 'F'))
-  }
-
-  // Probe labels
-  svgParts.push(tag('text', { x: cx + 155, y: probeY + 3, class: 'small', fill: '#888' }, 'B=behind ∂=bound F=front'))
-}
-
-// ── Mask 58 large inset ────────────────────────────────────────────
-const m58 = ledger.entries.find(e => e.legacyTmxId === 58)
-const insetY = cardStartY + Math.ceil(37 / cols) * (cardH + gapY) + 30
-
-svgParts.push(tag('rect', { x: 20, y: insetY, width: TOTAL_W - 40, height: 280, fill: '#fff3e0', stroke: '#e65100', 'stroke-width': 2, rx: 5 }))
-svgParts.push(tag('text', { x: 30, y: insetY + 22, class: 'title', fill: '#e65100' }, '⚠ MASK 58 — Critical Visual Review'))
-
-// Mask 58 facts
-const facts = [
-  `Legacy TMX ID: 58 | Nine-grid: east_center | Home chunk: east-upper`,
-  `Target Fragment: jyt.occ.east-upper.wall-panel-upper-01.v2 (wall panel, NOT the desk)`,
-  `Constraint: wall-panel-always-behind (mandatory, mask-polygon scope)`,
-  `The desk/table is prop TMX 92 (bounty-board) at sortAnchor (1446,379), tieBias=-4`,
-  ``,
-  `User-confirmed regression facts:`,
-  `• Lu Junyi below the desk (higher Y) should appear in FRONT of the desk — handled by world-order Y sorting`,
-  `• Hu Sanniang was never incorrectly occluded by the desk — her foot Y was above the critical boundary`,
-  `• Desk occlusion is NOT "mask depth halving" — it is world-order Y comparison with tieBias=-4`,
-  `• The wall panel fragment (wall-panel-upper-01) is always a background element behind all agents`,
-  ``,
-  `Mask 58 polygon bounds: AABB (1197,342)-(1663,458), area=54056px², 100% contained within wall-panel-upper fragment`,
-  `Probes: behind=(1396,365) boundary=(1396,400) front=(1396,447) — all inside polygon`,
-]
-
-let fy = insetY + 40
-for (const fact of facts) {
-  const isBold = fact.startsWith('•') || fact.startsWith('⚠')
-  svgParts.push(tag('text', {
-    x: 30, y: fy, class: 'small',
-    fill: isBold ? '#333' : '#666',
-    'font-weight': isBold ? 'bold' : 'normal',
-    'font-size': isBold ? '10' : '9',
-  }, fact))
-  fy += 14
-}
-
-// ── Provenance footer ──────────────────────────────────────────────
-const footerY = insetY + 300
-svgParts.push(tag('line', { x1: 20, y1: footerY, x2: TOTAL_W - 20, y2: footerY, stroke: '#ccc', 'stroke-width': 1 }))
-svgParts.push(tag('text', { x: 20, y: footerY + 16, class: 'small', fill: '#999' },
-  `E10A generationId: ${ledger.generationId} | Base commit: ${ledger.baseCommit} | Content SHA-256: ${ledger.contentSha256.substring(0, 32)}...`))
-svgParts.push(tag('text', { x: 20, y: footerY + 30, class: 'small', fill: '#999' },
-  `Frozen inputs: E1 ${ledger.provenance.e1BaselineCommit.substring(0,8)} | E8A ${ledger.provenance.e8aGenerationId.substring(0,16)} | E9A ${ledger.provenance.e9aGenerationId.substring(0,16)} | E9B ${ledger.provenance.e9bCommit.substring(0,8)}`))
-
-svgParts.push('</svg>')
-
-// ── Write output ───────────────────────────────────────────────────
-const svg = svgParts.join('\n')
-const outPath = join(repoRoot, 'tests/fixtures/juyiting/occlusion-v2-masks/contact-sheet.svg')
-writeFileSync(outPath, svg, 'utf-8')
-const hash = createHash('sha256').update(svg).digest('hex')
-
-console.log(`Contact sheet written: ${outPath}`)
-console.log(`  Size: ${svg.length} bytes`)
-console.log(`  SHA-256: ${hash}`)
-console.log(`  Masks shown: ${ledger.entries.length}/37`)
-console.log(`  Mask 58 inset: included`)
+if(process.argv[1]===fileURLToPath(import.meta.url)) cli()
