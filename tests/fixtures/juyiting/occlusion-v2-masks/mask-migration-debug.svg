@@ -1,0 +1,287 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1664" height="928" viewBox="0 0 1664 928" data-generation-id="306ac0f6b343a8ebf604d49953e633870a7cc3eb58a6f005867324275f3f664b" data-task-id="E10B" role="img" aria-labelledby="mm-title mm-desc">
+  <title id="mm-title">Juyiting 37-mask E10B migration debug preview</title>
+  <desc id="mm-desc">juyiting-main · E10A ledger binding · constraints 0 · probes 111 · no anonymous occluder</desc>
+  <defs>
+    <filter id="mm-shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#08110d" flood-opacity="0.9"/></filter>
+    <style>
+      .chunk{fill-opacity:.07;stroke-width:1;vector-effect:non-scaling-stroke}
+      .chunk-label{font:700 20px system-ui,sans-serif;fill:#d7e3ef;paint-order:stroke;stroke:#10151c;stroke-width:4;stroke-linejoin:round;filter:url(#mm-shadow)}
+      .mask{fill-opacity:.16;stroke-width:1.5;vector-effect:non-scaling-stroke}
+      .mask-label{font:600 11px ui-monospace,monospace;fill:#eaf2ff;paint-order:stroke;stroke:#10151c;stroke-width:3;stroke-linejoin:round}
+      .probe{stroke-width:2;vector-effect:non-scaling-stroke}
+      .anchor{fill:#ffffff;stroke:#10151c;stroke-width:1.5;vector-effect:non-scaling-stroke}
+    </style>
+  </defs>
+  <rect width="1664" height="928" fill="#17251d"/>
+  <rect class="chunk" x="0" y="0" width="721" height="580" fill="#3a86ff" stroke="#3a86ff"/>
+  <text class="chunk-label" x="360.5" y="26">west-upper</text>
+  <rect class="chunk" x="721" y="0" width="409" height="580" fill="#9d4edd" stroke="#9d4edd"/>
+  <text class="chunk-label" x="925.5" y="26">center</text>
+  <rect class="chunk" x="1130" y="0" width="534" height="580" fill="#00b4d8" stroke="#00b4d8"/>
+  <text class="chunk-label" x="1397" y="26">east-upper</text>
+  <rect class="chunk" x="0" y="580" width="721" height="348" fill="#f4a261" stroke="#f4a261"/>
+  <text class="chunk-label" x="360.5" y="606">west-lower</text>
+  <rect class="chunk" x="721" y="580" width="409" height="348" fill="#e9c46a" stroke="#e9c46a"/>
+  <text class="chunk-label" x="925.5" y="606">entrance</text>
+  <rect class="chunk" x="1130" y="580" width="534" height="348" fill="#e76f51" stroke="#e76f51"/>
+  <text class="chunk-label" x="1397" y="606">east-lower</text>
+  <polygon class="mask" data-mask-tmx-id="48" data-stable-id="jyt.occluder.west-upper.lantern-table-frame-01.v1" fill="hsl(96 70% 62%)" stroke="hsl(96 70% 62%)" points="233,350 215,347 241,277 353,280 353,294 253,291"/>
+  <text class="mask-label" x="274.7" y="304.5" text-anchor="middle">mask-48 jyt.occluder.west-upper.lantern-table-frame-01.v1</text>
+  <text class="mask-label" x="274.7" y="318.5" text-anchor="middle">→ jyt.occ.west-upper.lantern-table-frame-01.v2</text>
+  <circle class="probe" data-probe-id="mask-48-behind" cx="337" cy="338" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-48-boundary" cx="332" cy="351" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-48-front" cx="332" cy="367" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="285" cy="351" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="49" data-stable-id="jyt.occluder.west-lower.long-table-frame-01.v1" fill="hsl(143 70% 62%)" stroke="hsl(143 70% 62%)" points="126,718 117,713 153,601 238,607 233,625 158,623"/>
+  <text class="mask-label" x="170.8" y="645.8" text-anchor="middle">mask-49 jyt.occluder.west-lower.long-table-frame-01.v1</text>
+  <text class="mask-label" x="170.8" y="659.8" text-anchor="middle">→ jyt.occ.west-lower.long-table-frame-01.v2</text>
+  <circle class="probe" data-probe-id="mask-49-behind" cx="209" cy="704" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-49-boundary" cx="204" cy="719" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-49-front" cx="204" cy="735" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="178" cy="719" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="50" data-stable-id="jyt.occluder.west-lower.railing-02.v1" fill="hsl(190 70% 62%)" stroke="hsl(190 70% 62%)" points="243,823 238,790 66,787 66,806"/>
+  <text class="mask-label" x="153.3" y="799.5" text-anchor="middle">mask-50 jyt.occluder.west-lower.railing-02.v1</text>
+  <text class="mask-label" x="153.3" y="813.5" text-anchor="middle">→ jyt.occ.west-lower.railing-02.v2</text>
+  <circle class="probe" data-probe-id="mask-50-behind" cx="206" cy="808" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-50-boundary" cx="206" cy="824" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-50-front" cx="216" cy="825" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="155" cy="824" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="51" data-stable-id="jyt.occluder.west-lower.wall-panel-assembly-01.v1" fill="hsl(237 70% 62%)" stroke="hsl(237 70% 62%)" points="42,845 58,845 52,873 238,878 259,832 260,845 268,844 247,760 270,731 262,706 269,701 276,729 289,720 292,725 276,736 286,745 335,593 350,593 358,573 375,574 386,578 351,700 367,762 341,759 299,911 17,911"/>
+  <text class="mask-label" x="262.4" y="746.8" text-anchor="middle">mask-51 jyt.occluder.west-lower.wall-panel-assembly-01.v1</text>
+  <text class="mask-label" x="262.4" y="760.8" text-anchor="middle">→ jyt.occ.west-lower.wall-panel-assembly-01.v2</text>
+  <circle class="probe" data-probe-id="mask-51-behind" cx="254" cy="839" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-51-boundary" cx="249" cy="852" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-51-front" cx="249" cy="864" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="218" cy="852" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="52" data-stable-id="jyt.occluder.west-upper.wall-panel-assembly-01.v1" fill="hsl(284 70% 62%)" stroke="hsl(284 70% 62%)" points="479,550 447,379 444,359 437,348 405,348 395,371 392,393 394,395 154,396 147,372 133,369 124,383 132,389 132,395 105,393 39,438 -6,459 -4,723 76,548"/>
+  <text class="mask-label" x="232.9" y="419.5" text-anchor="middle">mask-52 jyt.occluder.west-upper.wall-panel-assembly-01.v1</text>
+  <text class="mask-label" x="232.9" y="433.5" text-anchor="middle">→ jyt.occ.west-upper.wall-panel-assembly-01.v2</text>
+  <circle class="probe" data-probe-id="mask-52-behind" cx="274" cy="700" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-52-boundary" cx="274" cy="716" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-52-front" cx="274" cy="732" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="274" cy="716" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="53" data-stable-id="jyt.occluder.west-upper.wall-panel-assembly-01.v1" fill="hsl(331 70% 62%)" stroke="hsl(331 70% 62%)" points="450,401 460,451 545,455 533,396 533,384 522,384 518,400"/>
+  <text class="mask-label" x="508.7" y="408.1" text-anchor="middle">mask-53 jyt.occluder.west-upper.wall-panel-assembly-01.v1</text>
+  <text class="mask-label" x="508.7" y="422.1" text-anchor="middle">→ jyt.occ.west-upper.wall-panel-assembly-01.v2</text>
+  <circle class="probe" data-probe-id="mask-53-behind" cx="492" cy="700" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-53-boundary" cx="492" cy="716" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-53-front" cx="489" cy="732" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="274" cy="716" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="54" data-stable-id="jyt.occluder.west-upper.pillar-01.v1" fill="hsl(18 70% 62%)" stroke="hsl(18 70% 62%)" points="557,463 543,354 543,337 543,325 554,314 554,307 563,306 566,315 572,316 572,340 588,448 598,468"/>
+  <text class="mask-label" x="562.8" y="355.8" text-anchor="middle">mask-54 jyt.occluder.west-upper.pillar-01.v1</text>
+  <text class="mask-label" x="562.8" y="369.8" text-anchor="middle">→ jyt.occ.west-upper.pillar-01.v2</text>
+  <circle class="probe" data-probe-id="mask-54-behind" cx="577" cy="453" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-54-boundary" cx="577" cy="469" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-54-front" cx="590" cy="489" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="571" cy="469" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="55" data-stable-id="jyt.occluder.west-upper.diagonal-brace-01.v1" fill="hsl(65 70% 62%)" stroke="hsl(65 70% 62%)" points="601,488 600,432 615,484"/>
+  <text class="mask-label" x="605.3" y="466.0" text-anchor="middle">mask-55 jyt.occluder.west-upper.diagonal-brace-01.v1</text>
+  <text class="mask-label" x="605.3" y="480.0" text-anchor="middle">→ jyt.occ.west-upper.diagonal-brace-01.v2</text>
+  <circle class="probe" data-probe-id="mask-55-behind" cx="618" cy="473" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-55-boundary" cx="618" cy="489" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-55-front" cx="618" cy="505" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="608" cy="489" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="56" data-stable-id="jyt.occluder.east-upper.diagonal-brace-01.v1" fill="hsl(112 70% 62%)" stroke="hsl(112 70% 62%)" points="1130,484 1146,435 1148,485"/>
+  <text class="mask-label" x="1141.3" y="466.0" text-anchor="middle">mask-56 jyt.occluder.east-upper.diagonal-brace-01.v1</text>
+  <text class="mask-label" x="1141.3" y="480.0" text-anchor="middle">→ jyt.occ.east-upper.diagonal-brace-01.v2</text>
+  <circle class="probe" data-probe-id="mask-56-behind" cx="1140" cy="470" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-56-boundary" cx="1140" cy="486" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-56-front" cx="1127" cy="502" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="1140" cy="486" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="57" data-stable-id="jyt.occluder.east-upper.pillar-01.v1" fill="hsl(159 70% 62%)" stroke="hsl(159 70% 62%)" points="1158,462 1170,350 1175,334 1175,321 1182,314 1182,305 1192,305 1192,315 1199,321 1203,331 1203,341 1203,351 1187,463"/>
+  <text class="mask-label" x="1186.2" y="345.2" text-anchor="middle">mask-57 jyt.occluder.east-upper.pillar-01.v1</text>
+  <text class="mask-label" x="1186.2" y="359.2" text-anchor="middle">→ jyt.occ.east-upper.pillar-01.v2</text>
+  <circle class="probe" data-probe-id="mask-57-behind" cx="1181" cy="448" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-57-boundary" cx="1181" cy="464" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-57-front" cx="1188" cy="480" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="1181" cy="464" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="58" data-stable-id="jyt.occluder.east-upper.wall-panel-upper-01.v1" fill="hsl(206 70% 62%)" stroke="hsl(206 70% 62%)" points="1197,458 1208,396 1215,379 1223,388 1223,397 1285,396 1285,371 1288,353 1293,346 1303,343 1328,342 1333,355 1337,367 1340,376 1336,382 1336,395 1554,397 1560,372 1571,370 1577,375 1579,383 1574,396 1624,396 1662,406 1663,455"/>
+  <text class="mask-label" x="1395.8" y="381.8" text-anchor="middle">mask-58 jyt.occluder.east-upper.wall-panel-upper-01.v1</text>
+  <text class="mask-label" x="1395.8" y="395.8" text-anchor="middle">→ jyt.occ.east-upper.wall-panel-upper-01.v2</text>
+  <circle class="probe" data-probe-id="mask-58-behind" cx="1430" cy="443" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-58-boundary" cx="1430" cy="459" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-58-front" cx="1430" cy="479" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="1430" cy="459" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="59" data-stable-id="jyt.occluder.east-lower.worktable-01.v1" fill="hsl(253 70% 62%)" stroke="hsl(253 70% 62%)" points="1499,625 1517,579 1576,577 1590,574 1618,673 1589,672 1569,612"/>
+  <text class="mask-label" x="1565.4" y="614.0" text-anchor="middle">mask-59 jyt.occluder.east-lower.worktable-01.v1</text>
+  <text class="mask-label" x="1565.4" y="628.0" text-anchor="middle">→ jyt.occ.east-lower.worktable-01.v2</text>
+  <circle class="probe" data-probe-id="mask-59-behind" cx="1516" cy="686" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-59-boundary" cx="1520" cy="701" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-59-front" cx="1520" cy="717" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="1559" cy="701" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="60" data-stable-id="jyt.occluder.east-lower.lantern-01.v1" fill="hsl(300 70% 62%)" stroke="hsl(300 70% 62%)" points="1324,924 1328,905 1354,905 1360,843 1333,839 1314,921"/>
+  <text class="mask-label" x="1335.5" y="887.5" text-anchor="middle">mask-60 jyt.occluder.east-lower.lantern-01.v1</text>
+  <text class="mask-label" x="1335.5" y="901.5" text-anchor="middle">→ jyt.occ.east-lower.lantern-01.v2</text>
+  <circle class="probe" data-probe-id="mask-60-behind" cx="1357" cy="836" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-60-boundary" cx="1357" cy="852" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-60-front" cx="1360" cy="864" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="1338" cy="852" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="61" data-stable-id="jyt.occluder.entrance.lantern-post-01.v1" fill="hsl(347 70% 62%)" stroke="hsl(347 70% 62%)" points="1084,777 1086,740 1085,705 1092,692 1079,687 1076,674 1067,674 1067,687 1055,690 1056,710 1055,740 1052,777"/>
+  <text class="mask-label" x="1071.2" y="710.8" text-anchor="middle">mask-61 jyt.occluder.entrance.lantern-post-01.v1</text>
+  <text class="mask-label" x="1071.2" y="724.8" text-anchor="middle">→ jyt.occ.entrance.lantern-post-01.v2</text>
+  <circle class="probe" data-probe-id="mask-61-behind" cx="1073" cy="762" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-61-boundary" cx="1073" cy="778" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-61-front" cx="1073" cy="780" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="1073" cy="778" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="62" data-stable-id="jyt.occluder.entrance.lantern-post-02.v1" fill="hsl(34 70% 62%)" stroke="hsl(34 70% 62%)" points="1034,711 1030,686 1018,688 1018,678 1006,678 1004,690 1004,729 1004,754 1014,754 1014,711"/>
+  <text class="mask-label" x="1014.6" y="705.9" text-anchor="middle">mask-62 jyt.occluder.entrance.lantern-post-02.v1</text>
+  <text class="mask-label" x="1014.6" y="719.9" text-anchor="middle">→ jyt.occ.entrance.lantern-post-02.v2</text>
+  <circle class="probe" data-probe-id="mask-62-behind" cx="1014" cy="739" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-62-boundary" cx="1014" cy="755" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-62-front" cx="1014" cy="771" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="1020" cy="755" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="63" data-stable-id="jyt.occluder.entrance.hanging-banner-02.v1" fill="hsl(81 70% 62%)" stroke="hsl(81 70% 62%)" points="931,795 934,759 933,746 940,744 953,733 959,739 959,743 970,743 969,785"/>
+  <text class="mask-label" x="949.8" y="752.1" text-anchor="middle">mask-63 jyt.occluder.entrance.hanging-banner-02.v1</text>
+  <text class="mask-label" x="949.8" y="766.1" text-anchor="middle">→ jyt.occ.entrance.hanging-banner-02.v2</text>
+  <circle class="probe" data-probe-id="mask-63-behind" cx="927" cy="780" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-63-boundary" cx="927" cy="796" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-63-front" cx="926" cy="811" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="951" cy="796" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="64" data-stable-id="jyt.occluder.entrance.hanging-banner-01.v1" fill="hsl(128 70% 62%)" stroke="hsl(128 70% 62%)" points="807,793 814,751 805,744 797,739 794,728 789,722 781,726 784,740 767,746 767,750 773,791"/>
+  <text class="mask-label" x="788.9" y="746.2" text-anchor="middle">mask-64 jyt.occluder.entrance.hanging-banner-01.v1</text>
+  <text class="mask-label" x="788.9" y="760.2" text-anchor="middle">→ jyt.occ.entrance.hanging-banner-01.v2</text>
+  <circle class="probe" data-probe-id="mask-64-behind" cx="803" cy="778" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-64-boundary" cx="803" cy="794" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-64-front" cx="803" cy="810" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="791" cy="794" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="65" data-stable-id="jyt.occluder.west-lower.wall-bracket-01.v1" fill="hsl(175 70% 62%)" stroke="hsl(175 70% 62%)" points="720,713 720,698 720,686 719,675 711,675 703,675 703,685 690,687 686,703"/>
+  <text class="mask-label" x="708.0" y="686.6" text-anchor="middle">mask-65 jyt.occluder.west-lower.wall-bracket-01.v1</text>
+  <text class="mask-label" x="708.0" y="700.6" text-anchor="middle">→ jyt.occ.west-lower.wall-bracket-01.v2</text>
+  <circle class="probe" data-probe-id="mask-65-behind" cx="717" cy="698" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-65-boundary" cx="717" cy="714" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-65-front" cx="717" cy="730" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="704" cy="714" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="66" data-stable-id="jyt.occluder.west-lower.railing-01.v1" fill="hsl(222 70% 62%)" stroke="hsl(222 70% 62%)" points="678,741 674,731 665,715 663,694 655,686 649,675 649,689 636,689 636,704 641,735 640,746 506,748 508,759 561,762 561,772 575,774 575,760 639,760 641,774 679,777"/>
+  <text class="mask-label" x="621.6" y="732.6" text-anchor="middle">mask-66 jyt.occluder.west-lower.railing-01.v1</text>
+  <text class="mask-label" x="621.6" y="746.6" text-anchor="middle">→ jyt.occ.west-lower.railing-01.v2</text>
+  <circle class="probe" data-probe-id="mask-66-behind" cx="480" cy="762" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-66-boundary" cx="480" cy="778" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-66-front" cx="480" cy="794" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="593" cy="778" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="67" data-stable-id="jyt.occluder.west-lower.floor-lantern-01.v1" fill="hsl(269 70% 62%)" stroke="hsl(269 70% 62%)" points="404,924 390,876 357,876 362,907 390,908 395,928"/>
+  <text class="mask-label" x="383.0" y="901.2" text-anchor="middle">mask-67 jyt.occluder.west-lower.floor-lantern-01.v1</text>
+  <text class="mask-label" x="383.0" y="915.2" text-anchor="middle">→ jyt.occ.west-lower.floor-lantern-01.v2</text>
+  <circle class="probe" data-probe-id="mask-67-behind" cx="351" cy="836" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-67-boundary" cx="351" cy="852" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-67-front" cx="348" cy="864" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="381" cy="852" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="68" data-stable-id="jyt.occluder.west-lower.wall-lantern-01.v1" fill="hsl(316 70% 62%)" stroke="hsl(316 70% 62%)" points="58,740 38,706 11,732 22,738"/>
+  <text class="mask-label" x="32.3" y="727.0" text-anchor="middle">mask-68 jyt.occluder.west-lower.wall-lantern-01.v1</text>
+  <text class="mask-label" x="32.3" y="741.0" text-anchor="middle">→ jyt.occ.west-lower.wall-lantern-01.v2</text>
+  <circle class="probe" data-probe-id="mask-68-behind" cx="48" cy="725" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-68-boundary" cx="48" cy="741" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-68-front" cx="50" cy="743" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="35" cy="741" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="69" data-stable-id="jyt.occluder.west-upper.wall-sconce-02.v1" fill="hsl(3 70% 62%)" stroke="hsl(3 70% 62%)" points="503,584 497,535 492,520 492,490 501,497 509,471 536,474"/>
+  <text class="mask-label" x="504.3" y="508.1" text-anchor="middle">mask-69 jyt.occluder.west-upper.wall-sconce-02.v1</text>
+  <text class="mask-label" x="504.3" y="522.1" text-anchor="middle">→ jyt.occ.west-upper.wall-sconce-02.v2</text>
+  <circle class="probe" data-probe-id="mask-69-behind" cx="511" cy="569" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-69-boundary" cx="511" cy="585" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-69-front" cx="507" cy="601" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="515" cy="585" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="70" data-stable-id="jyt.occluder.west-upper.lantern-01.v1" fill="hsl(50 70% 62%)" stroke="hsl(50 70% 62%)" points="505,239 492,166 461,165 471,239"/>
+  <text class="mask-label" x="482.3" y="200.3" text-anchor="middle">mask-70 jyt.occluder.west-upper.lantern-01.v1</text>
+  <text class="mask-label" x="482.3" y="214.3" text-anchor="middle">→ jyt.occ.west-upper.lantern-01.v2</text>
+  <circle class="probe" data-probe-id="mask-70-behind" cx="490" cy="224" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-70-boundary" cx="490" cy="240" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-70-front" cx="486" cy="270" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="484" cy="240" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="71" data-stable-id="jyt.occluder.west-upper.wall-sconce-01.v1" fill="hsl(97 70% 62%)" stroke="hsl(97 70% 62%)" points="621,271 617,242 629,238"/>
+  <text class="mask-label" x="622.3" y="248.3" text-anchor="middle">mask-71 jyt.occluder.west-upper.wall-sconce-01.v1</text>
+  <text class="mask-label" x="622.3" y="262.3" text-anchor="middle">→ jyt.occ.west-upper.wall-sconce-01.v2</text>
+  <circle class="probe" data-probe-id="mask-71-behind" cx="624" cy="256" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-71-boundary" cx="624" cy="272" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-71-front" cx="622" cy="288" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="624" cy="272" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="72" data-stable-id="jyt.occluder.center.wall-sconce-01.v1" fill="hsl(144 70% 62%)" stroke="hsl(144 70% 62%)" points="1126,283 1129,253 1122,230 1112,254"/>
+  <text class="mask-label" x="1122.3" y="253.0" text-anchor="middle">mask-72 jyt.occluder.center.wall-sconce-01.v1</text>
+  <text class="mask-label" x="1122.3" y="267.0" text-anchor="middle">→ jyt.occ.center.wall-sconce-01.v2</text>
+  <circle class="probe" data-probe-id="mask-72-behind" cx="1121" cy="268" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-72-boundary" cx="1121" cy="284" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-72-front" cx="1121" cy="300" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="1121" cy="284" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="73" data-stable-id="jyt.occluder.east-upper.scroll-table-front-01.v1" fill="hsl(191 70% 62%)" stroke="hsl(191 70% 62%)" points="1385,283 1384,257 1471,255 1478,275"/>
+  <text class="mask-label" x="1429.5" y="265.5" text-anchor="middle">mask-73 jyt.occluder.east-upper.scroll-table-front-01.v1</text>
+  <text class="mask-label" x="1429.5" y="279.5" text-anchor="middle">→ jyt.occ.east-upper.scroll-table-front-01.v2</text>
+  <circle class="probe" data-probe-id="mask-73-behind" cx="1395" cy="268" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-73-boundary" cx="1395" cy="284" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-73-front" cx="1379" cy="285" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="1432" cy="284" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="74" data-stable-id="jyt.occluder.east-lower.worktable-01.v1" fill="hsl(238 70% 62%)" stroke="hsl(238 70% 62%)" points="1612,674 1599,700 1592,675"/>
+  <text class="mask-label" x="1601.0" y="681.0" text-anchor="middle">mask-74 jyt.occluder.east-lower.worktable-01.v1</text>
+  <text class="mask-label" x="1601.0" y="695.0" text-anchor="middle">→ jyt.occ.east-lower.worktable-01.v2</text>
+  <circle class="probe" data-probe-id="mask-74-behind" cx="1602" cy="685" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-74-boundary" cx="1602" cy="701" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-74-front" cx="1602" cy="717" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="1559" cy="701" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="75" data-stable-id="jyt.occluder.east-lower.fabric-rack-01.v1" fill="hsl(285 70% 62%)" stroke="hsl(285 70% 62%)" points="1603,829 1616,787 1598,787 1602,767 1622,760 1629,748 1639,748 1631,767 1663,782"/>
+  <text class="mask-label" x="1622.6" y="773.0" text-anchor="middle">mask-75 jyt.occluder.east-lower.fabric-rack-01.v1</text>
+  <text class="mask-label" x="1622.6" y="787.0" text-anchor="middle">→ jyt.occ.east-lower.fabric-rack-01.v2</text>
+  <circle class="probe" data-probe-id="mask-75-behind" cx="1611" cy="814" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-75-boundary" cx="1611" cy="830" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-75-front" cx="1602" cy="846" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="1631" cy="830" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="76" data-stable-id="jyt.occluder.east-lower.diagonal-brace-01.v1" fill="hsl(332 70% 62%)" stroke="hsl(332 70% 62%)" points="1510,763 1469,747 1464,729 1450,711 1419,713 1390,607 1365,560 1334,561 1389,767"/>
+  <text class="mask-label" x="1421.1" y="682.2" text-anchor="middle">mask-76 jyt.occluder.east-lower.diagonal-brace-01.v1</text>
+  <text class="mask-label" x="1421.1" y="696.2" text-anchor="middle">→ jyt.occ.east-lower.diagonal-brace-01.v2</text>
+  <circle class="probe" data-probe-id="mask-76-behind" cx="1423" cy="752" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-76-boundary" cx="1423" cy="768" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-76-front" cx="1424" cy="769" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="1410" cy="768" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="77" data-stable-id="jyt.occluder.east-upper.pillar-02.v1" fill="hsl(19 70% 62%)" stroke="hsl(19 70% 62%)" points="1231,608 1240,531 1245,519 1245,505 1244,495 1239,486 1234,495 1232,478 1208,481"/>
+  <text class="mask-label" x="1235.3" y="508.9" text-anchor="middle">mask-77 jyt.occluder.east-upper.pillar-02.v1</text>
+  <text class="mask-label" x="1235.3" y="522.9" text-anchor="middle">→ jyt.occ.east-upper.pillar-02.v2</text>
+  <circle class="probe" data-probe-id="mask-77-behind" cx="1215" cy="687" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-77-boundary" cx="1215" cy="703" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-77-front" cx="1215" cy="719" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="1227" cy="703" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="78" data-stable-id="jyt.occluder.east-upper.wall-panel-lower-01.v1" fill="hsl(66 70% 62%)" stroke="hsl(66 70% 62%)" points="1256,543 1270,480 1665,476 1666,548"/>
+  <text class="mask-label" x="1464.3" y="509.8" text-anchor="middle">mask-78 jyt.occluder.east-upper.wall-panel-lower-01.v1</text>
+  <text class="mask-label" x="1464.3" y="523.8" text-anchor="middle">→ jyt.occ.east-upper.wall-panel-lower-01.v2</text>
+  <circle class="probe" data-probe-id="mask-78-behind" cx="1460" cy="532" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-78-boundary" cx="1460" cy="548" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-78-front" cx="1460" cy="549" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="1460" cy="548" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="79" data-stable-id="jyt.occluder.east-lower.diagonal-brace-01.v1" fill="hsl(113 70% 62%)" stroke="hsl(113 70% 62%)" points="1323,639 1329,612 1308,612 1320,562 1336,561 1341,590 1333,641"/>
+  <text class="mask-label" x="1327.1" y="600.4" text-anchor="middle">mask-79 jyt.occluder.east-lower.diagonal-brace-01.v1</text>
+  <text class="mask-label" x="1327.1" y="614.4" text-anchor="middle">→ jyt.occ.east-lower.diagonal-brace-01.v2</text>
+  <circle class="probe" data-probe-id="mask-79-behind" cx="1325" cy="752" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-79-boundary" cx="1325" cy="768" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-79-front" cx="1325" cy="784" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="1410" cy="768" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="80" data-stable-id="jyt.occluder.east-upper.pillar-02.v1" fill="hsl(160 70% 62%)" stroke="hsl(160 70% 62%)" points="1251,702 1240,651 1240,629 1242,612 1228,606 1206,606 1206,621 1202,626 1202,639 1211,646 1222,647 1217,661 1225,689"/>
+  <text class="mask-label" x="1222.5" y="639.2" text-anchor="middle">mask-80 jyt.occluder.east-upper.pillar-02.v1</text>
+  <text class="mask-label" x="1222.5" y="653.2" text-anchor="middle">→ jyt.occ.east-upper.pillar-02.v2</text>
+  <circle class="probe" data-probe-id="mask-80-behind" cx="1215" cy="687" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-80-boundary" cx="1215" cy="703" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-80-front" cx="1215" cy="719" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="1227" cy="703" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="81" data-stable-id="jyt.occluder.east-lower.railing-post-01.v1" fill="hsl(207 70% 62%)" stroke="hsl(207 70% 62%)" points="1251,711 1249,774 1242,707"/>
+  <text class="mask-label" x="1247.3" y="728.7" text-anchor="middle">mask-81 jyt.occluder.east-lower.railing-post-01.v1</text>
+  <text class="mask-label" x="1247.3" y="742.7" text-anchor="middle">→ jyt.occ.east-lower.railing-post-01.v2</text>
+  <circle class="probe" data-probe-id="mask-81-behind" cx="1247" cy="759" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-81-boundary" cx="1247" cy="775" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-81-front" cx="1247" cy="791" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="1247" cy="775" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="82" data-stable-id="jyt.occluder.east-lower.diagonal-brace-02.v1" fill="hsl(254 70% 62%)" stroke="hsl(254 70% 62%)" points="1351,740 1365,691 1374,723"/>
+  <text class="mask-label" x="1363.3" y="716.0" text-anchor="middle">mask-82 jyt.occluder.east-lower.diagonal-brace-02.v1</text>
+  <text class="mask-label" x="1363.3" y="730.0" text-anchor="middle">→ jyt.occ.east-lower.diagonal-brace-02.v2</text>
+  <circle class="probe" data-probe-id="mask-82-behind" cx="1357" cy="725" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-82-boundary" cx="1357" cy="741" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-82-front" cx="1357" cy="757" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="1363" cy="741" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="83" data-stable-id="jyt.occluder.west-lower.diagonal-brace-02.v1" fill="hsl(301 70% 62%)" stroke="hsl(301 70% 62%)" points="513,702 516,680 510,655 491,641 474,723 476,758 495,696"/>
+  <text class="mask-label" x="496.4" y="691.6" text-anchor="middle">mask-83 jyt.occluder.west-lower.diagonal-brace-02.v1</text>
+  <text class="mask-label" x="496.4" y="705.6" text-anchor="middle">→ jyt.occ.west-lower.diagonal-brace-02.v2</text>
+  <circle class="probe" data-probe-id="mask-83-behind" cx="509" cy="743" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-83-boundary" cx="507" cy="759" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-83-front" cx="507" cy="775" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="496" cy="759" r="2.6"/>
+  <polygon class="mask" data-mask-tmx-id="84" data-stable-id="jyt.occluder.west-lower.wall-panel-assembly-01.v1" fill="hsl(348 70% 62%)" stroke="hsl(348 70% 62%)" points="405,641 405,617 418,617 410,575 382,579 396,643"/>
+  <text class="mask-label" x="402.7" y="610.0" text-anchor="middle">mask-84 jyt.occluder.west-lower.wall-panel-assembly-01.v1</text>
+  <text class="mask-label" x="402.7" y="624.0" text-anchor="middle">→ jyt.occ.west-lower.wall-panel-assembly-01.v2</text>
+  <circle class="probe" data-probe-id="mask-84-behind" cx="412" cy="836" r="3.2" fill="#4cc9f0" stroke="#4cc9f0"/>
+  <circle class="probe" data-probe-id="mask-84-boundary" cx="412" cy="852" r="3.2" fill="#ffd166" stroke="#ffd166"/>
+  <circle class="probe" data-probe-id="mask-84-front" cx="412" cy="864" r="3.2" fill="#06d6a0" stroke="#06d6a0"/>
+  <circle class="anchor" cx="218" cy="852" r="2.6"/>
+</svg>

@@ -1,0 +1,2598 @@
+{
+  "$schema": "jyt.occlusion.mask-migration-snapshot.v1",
+  "schemaVersion": 1,
+  "taskId": "E10B",
+  "sceneId": "juyiting-main",
+  "width": 1664,
+  "height": 928,
+  "maskCount": 37,
+  "probeCount": 111,
+  "constraintCount": 0,
+  "generationId": "306ac0f6b343a8ebf604d49953e633870a7cc3eb58a6f005867324275f3f664b",
+  "masks": [
+    {
+      "tmxId": 48,
+      "stableId": "jyt.occluder.west-upper.lantern-table-frame-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-upper"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 285,
+        "y": 351
+      },
+      "fixedPointY": 89856,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 233,
+          "y": 350
+        },
+        {
+          "x": 215,
+          "y": 347
+        },
+        {
+          "x": 241,
+          "y": 277
+        },
+        {
+          "x": 353,
+          "y": 280
+        },
+        {
+          "x": 353,
+          "y": 294
+        },
+        {
+          "x": 253,
+          "y": 291
+        }
+      ],
+      "aabb": {
+        "minX": 215,
+        "minY": 277,
+        "maxX": 353,
+        "maxY": 350,
+        "width": 138,
+        "height": 73
+      },
+      "targetFragmentId": "jyt.occ.west-upper.lantern-table-frame-01.v2",
+      "probeIds": [
+        "mask-48-behind",
+        "mask-48-boundary",
+        "mask-48-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 49,
+      "stableId": "jyt.occluder.west-lower.long-table-frame-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-lower"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 178,
+        "y": 719
+      },
+      "fixedPointY": 184064,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 126,
+          "y": 718
+        },
+        {
+          "x": 117,
+          "y": 713
+        },
+        {
+          "x": 153,
+          "y": 601
+        },
+        {
+          "x": 238,
+          "y": 607
+        },
+        {
+          "x": 233,
+          "y": 625
+        },
+        {
+          "x": 158,
+          "y": 623
+        }
+      ],
+      "aabb": {
+        "minX": 117,
+        "minY": 601,
+        "maxX": 238,
+        "maxY": 718,
+        "width": 121,
+        "height": 117
+      },
+      "targetFragmentId": "jyt.occ.west-lower.long-table-frame-01.v2",
+      "probeIds": [
+        "mask-49-behind",
+        "mask-49-boundary",
+        "mask-49-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 50,
+      "stableId": "jyt.occluder.west-lower.railing-02.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-lower"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 155,
+        "y": 824
+      },
+      "fixedPointY": 210944,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 243,
+          "y": 823
+        },
+        {
+          "x": 238,
+          "y": 790
+        },
+        {
+          "x": 66,
+          "y": 787
+        },
+        {
+          "x": 66,
+          "y": 806
+        }
+      ],
+      "aabb": {
+        "minX": 66,
+        "minY": 787,
+        "maxX": 243,
+        "maxY": 823,
+        "width": 177,
+        "height": 36
+      },
+      "targetFragmentId": "jyt.occ.west-lower.railing-02.v2",
+      "probeIds": [
+        "mask-50-behind",
+        "mask-50-boundary",
+        "mask-50-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 51,
+      "stableId": "jyt.occluder.west-lower.wall-panel-assembly-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-lower"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 218,
+        "y": 852
+      },
+      "fixedPointY": 218112,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 42,
+          "y": 845
+        },
+        {
+          "x": 58,
+          "y": 845
+        },
+        {
+          "x": 52,
+          "y": 873
+        },
+        {
+          "x": 238,
+          "y": 878
+        },
+        {
+          "x": 259,
+          "y": 832
+        },
+        {
+          "x": 260,
+          "y": 845
+        },
+        {
+          "x": 268,
+          "y": 844
+        },
+        {
+          "x": 247,
+          "y": 760
+        },
+        {
+          "x": 270,
+          "y": 731
+        },
+        {
+          "x": 262,
+          "y": 706
+        },
+        {
+          "x": 269,
+          "y": 701
+        },
+        {
+          "x": 276,
+          "y": 729
+        },
+        {
+          "x": 289,
+          "y": 720
+        },
+        {
+          "x": 292,
+          "y": 725
+        },
+        {
+          "x": 276,
+          "y": 736
+        },
+        {
+          "x": 286,
+          "y": 745
+        },
+        {
+          "x": 335,
+          "y": 593
+        },
+        {
+          "x": 350,
+          "y": 593
+        },
+        {
+          "x": 358,
+          "y": 573
+        },
+        {
+          "x": 375,
+          "y": 574
+        },
+        {
+          "x": 386,
+          "y": 578
+        },
+        {
+          "x": 351,
+          "y": 700
+        },
+        {
+          "x": 367,
+          "y": 762
+        },
+        {
+          "x": 341,
+          "y": 759
+        },
+        {
+          "x": 299,
+          "y": 911
+        },
+        {
+          "x": 17,
+          "y": 911
+        }
+      ],
+      "aabb": {
+        "minX": 17,
+        "minY": 573,
+        "maxX": 386,
+        "maxY": 911,
+        "width": 369,
+        "height": 338
+      },
+      "targetFragmentId": "jyt.occ.west-lower.wall-panel-assembly-01.v2",
+      "probeIds": [
+        "mask-51-behind",
+        "mask-51-boundary",
+        "mask-51-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 52,
+      "stableId": "jyt.occluder.west-upper.wall-panel-assembly-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-upper"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 274,
+        "y": 716
+      },
+      "fixedPointY": 183296,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 479,
+          "y": 550
+        },
+        {
+          "x": 447,
+          "y": 379
+        },
+        {
+          "x": 444,
+          "y": 359
+        },
+        {
+          "x": 437,
+          "y": 348
+        },
+        {
+          "x": 405,
+          "y": 348
+        },
+        {
+          "x": 395,
+          "y": 371
+        },
+        {
+          "x": 392,
+          "y": 393
+        },
+        {
+          "x": 394,
+          "y": 395
+        },
+        {
+          "x": 154,
+          "y": 396
+        },
+        {
+          "x": 147,
+          "y": 372
+        },
+        {
+          "x": 133,
+          "y": 369
+        },
+        {
+          "x": 124,
+          "y": 383
+        },
+        {
+          "x": 132,
+          "y": 389
+        },
+        {
+          "x": 132,
+          "y": 395
+        },
+        {
+          "x": 105,
+          "y": 393
+        },
+        {
+          "x": 39,
+          "y": 438
+        },
+        {
+          "x": -6,
+          "y": 459
+        },
+        {
+          "x": -4,
+          "y": 723
+        },
+        {
+          "x": 76,
+          "y": 548
+        }
+      ],
+      "aabb": {
+        "minX": -6,
+        "minY": 348,
+        "maxX": 479,
+        "maxY": 723,
+        "width": 485,
+        "height": 375
+      },
+      "targetFragmentId": "jyt.occ.west-upper.wall-panel-assembly-01.v2",
+      "probeIds": [
+        "mask-52-behind",
+        "mask-52-boundary",
+        "mask-52-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 53,
+      "stableId": "jyt.occluder.west-upper.wall-panel-assembly-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-upper"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 274,
+        "y": 716
+      },
+      "fixedPointY": 183296,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 450,
+          "y": 401
+        },
+        {
+          "x": 460,
+          "y": 451
+        },
+        {
+          "x": 545,
+          "y": 455
+        },
+        {
+          "x": 533,
+          "y": 396
+        },
+        {
+          "x": 533,
+          "y": 384
+        },
+        {
+          "x": 522,
+          "y": 384
+        },
+        {
+          "x": 518,
+          "y": 400
+        }
+      ],
+      "aabb": {
+        "minX": 450,
+        "minY": 384,
+        "maxX": 545,
+        "maxY": 455,
+        "width": 95,
+        "height": 71
+      },
+      "targetFragmentId": "jyt.occ.west-upper.wall-panel-assembly-01.v2",
+      "probeIds": [
+        "mask-53-behind",
+        "mask-53-boundary",
+        "mask-53-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 54,
+      "stableId": "jyt.occluder.west-upper.pillar-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-upper"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 571,
+        "y": 469
+      },
+      "fixedPointY": 120064,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 557,
+          "y": 463
+        },
+        {
+          "x": 543,
+          "y": 354
+        },
+        {
+          "x": 543,
+          "y": 337
+        },
+        {
+          "x": 543,
+          "y": 325
+        },
+        {
+          "x": 554,
+          "y": 314
+        },
+        {
+          "x": 554,
+          "y": 307
+        },
+        {
+          "x": 563,
+          "y": 306
+        },
+        {
+          "x": 566,
+          "y": 315
+        },
+        {
+          "x": 572,
+          "y": 316
+        },
+        {
+          "x": 572,
+          "y": 340
+        },
+        {
+          "x": 588,
+          "y": 448
+        },
+        {
+          "x": 598,
+          "y": 468
+        }
+      ],
+      "aabb": {
+        "minX": 543,
+        "minY": 306,
+        "maxX": 598,
+        "maxY": 468,
+        "width": 55,
+        "height": 162
+      },
+      "targetFragmentId": "jyt.occ.west-upper.pillar-01.v2",
+      "probeIds": [
+        "mask-54-behind",
+        "mask-54-boundary",
+        "mask-54-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 55,
+      "stableId": "jyt.occluder.west-upper.diagonal-brace-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-upper"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 608,
+        "y": 489
+      },
+      "fixedPointY": 125184,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 601,
+          "y": 488
+        },
+        {
+          "x": 600,
+          "y": 432
+        },
+        {
+          "x": 615,
+          "y": 484
+        }
+      ],
+      "aabb": {
+        "minX": 600,
+        "minY": 432,
+        "maxX": 615,
+        "maxY": 488,
+        "width": 15,
+        "height": 56
+      },
+      "targetFragmentId": "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "probeIds": [
+        "mask-55-behind",
+        "mask-55-boundary",
+        "mask-55-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 56,
+      "stableId": "jyt.occluder.east-upper.diagonal-brace-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-upper"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 1140,
+        "y": 486
+      },
+      "fixedPointY": 124416,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 1130,
+          "y": 484
+        },
+        {
+          "x": 1146,
+          "y": 435
+        },
+        {
+          "x": 1148,
+          "y": 485
+        }
+      ],
+      "aabb": {
+        "minX": 1130,
+        "minY": 435,
+        "maxX": 1148,
+        "maxY": 485,
+        "width": 18,
+        "height": 50
+      },
+      "targetFragmentId": "jyt.occ.east-upper.diagonal-brace-01.v2",
+      "probeIds": [
+        "mask-56-behind",
+        "mask-56-boundary",
+        "mask-56-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 57,
+      "stableId": "jyt.occluder.east-upper.pillar-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-upper"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 1181,
+        "y": 464
+      },
+      "fixedPointY": 118784,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 1158,
+          "y": 462
+        },
+        {
+          "x": 1170,
+          "y": 350
+        },
+        {
+          "x": 1175,
+          "y": 334
+        },
+        {
+          "x": 1175,
+          "y": 321
+        },
+        {
+          "x": 1182,
+          "y": 314
+        },
+        {
+          "x": 1182,
+          "y": 305
+        },
+        {
+          "x": 1192,
+          "y": 305
+        },
+        {
+          "x": 1192,
+          "y": 315
+        },
+        {
+          "x": 1199,
+          "y": 321
+        },
+        {
+          "x": 1203,
+          "y": 331
+        },
+        {
+          "x": 1203,
+          "y": 341
+        },
+        {
+          "x": 1203,
+          "y": 351
+        },
+        {
+          "x": 1187,
+          "y": 463
+        }
+      ],
+      "aabb": {
+        "minX": 1158,
+        "minY": 305,
+        "maxX": 1203,
+        "maxY": 463,
+        "width": 45,
+        "height": 158
+      },
+      "targetFragmentId": "jyt.occ.east-upper.pillar-01.v2",
+      "probeIds": [
+        "mask-57-behind",
+        "mask-57-boundary",
+        "mask-57-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 58,
+      "stableId": "jyt.occluder.east-upper.wall-panel-upper-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-upper"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 1430,
+        "y": 459
+      },
+      "fixedPointY": 117504,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 1197,
+          "y": 458
+        },
+        {
+          "x": 1208,
+          "y": 396
+        },
+        {
+          "x": 1215,
+          "y": 379
+        },
+        {
+          "x": 1223,
+          "y": 388
+        },
+        {
+          "x": 1223,
+          "y": 397
+        },
+        {
+          "x": 1285,
+          "y": 396
+        },
+        {
+          "x": 1285,
+          "y": 371
+        },
+        {
+          "x": 1288,
+          "y": 353
+        },
+        {
+          "x": 1293,
+          "y": 346
+        },
+        {
+          "x": 1303,
+          "y": 343
+        },
+        {
+          "x": 1328,
+          "y": 342
+        },
+        {
+          "x": 1333,
+          "y": 355
+        },
+        {
+          "x": 1337,
+          "y": 367
+        },
+        {
+          "x": 1340,
+          "y": 376
+        },
+        {
+          "x": 1336,
+          "y": 382
+        },
+        {
+          "x": 1336,
+          "y": 395
+        },
+        {
+          "x": 1554,
+          "y": 397
+        },
+        {
+          "x": 1560,
+          "y": 372
+        },
+        {
+          "x": 1571,
+          "y": 370
+        },
+        {
+          "x": 1577,
+          "y": 375
+        },
+        {
+          "x": 1579,
+          "y": 383
+        },
+        {
+          "x": 1574,
+          "y": 396
+        },
+        {
+          "x": 1624,
+          "y": 396
+        },
+        {
+          "x": 1662,
+          "y": 406
+        },
+        {
+          "x": 1663,
+          "y": 455
+        }
+      ],
+      "aabb": {
+        "minX": 1197,
+        "minY": 342,
+        "maxX": 1663,
+        "maxY": 458,
+        "width": 466,
+        "height": 116
+      },
+      "targetFragmentId": "jyt.occ.east-upper.wall-panel-upper-01.v2",
+      "probeIds": [
+        "mask-58-behind",
+        "mask-58-boundary",
+        "mask-58-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 59,
+      "stableId": "jyt.occluder.east-lower.worktable-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-lower"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 1559,
+        "y": 701
+      },
+      "fixedPointY": 179456,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 1499,
+          "y": 625
+        },
+        {
+          "x": 1517,
+          "y": 579
+        },
+        {
+          "x": 1576,
+          "y": 577
+        },
+        {
+          "x": 1590,
+          "y": 574
+        },
+        {
+          "x": 1618,
+          "y": 673
+        },
+        {
+          "x": 1589,
+          "y": 672
+        },
+        {
+          "x": 1569,
+          "y": 612
+        }
+      ],
+      "aabb": {
+        "minX": 1499,
+        "minY": 574,
+        "maxX": 1618,
+        "maxY": 673,
+        "width": 119,
+        "height": 99
+      },
+      "targetFragmentId": "jyt.occ.east-lower.worktable-01.v2",
+      "probeIds": [
+        "mask-59-behind",
+        "mask-59-boundary",
+        "mask-59-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 60,
+      "stableId": "jyt.occluder.east-lower.lantern-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-lower"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 1338,
+        "y": 852
+      },
+      "fixedPointY": 218112,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 1324,
+          "y": 924
+        },
+        {
+          "x": 1328,
+          "y": 905
+        },
+        {
+          "x": 1354,
+          "y": 905
+        },
+        {
+          "x": 1360,
+          "y": 843
+        },
+        {
+          "x": 1333,
+          "y": 839
+        },
+        {
+          "x": 1314,
+          "y": 921
+        }
+      ],
+      "aabb": {
+        "minX": 1314,
+        "minY": 839,
+        "maxX": 1360,
+        "maxY": 924,
+        "width": 46,
+        "height": 85
+      },
+      "targetFragmentId": "jyt.occ.east-lower.lantern-01.v2",
+      "probeIds": [
+        "mask-60-behind",
+        "mask-60-boundary",
+        "mask-60-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 61,
+      "stableId": "jyt.occluder.entrance.lantern-post-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "entrance"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 1073,
+        "y": 778
+      },
+      "fixedPointY": 199168,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 1084,
+          "y": 777
+        },
+        {
+          "x": 1086,
+          "y": 740
+        },
+        {
+          "x": 1085,
+          "y": 705
+        },
+        {
+          "x": 1092,
+          "y": 692
+        },
+        {
+          "x": 1079,
+          "y": 687
+        },
+        {
+          "x": 1076,
+          "y": 674
+        },
+        {
+          "x": 1067,
+          "y": 674
+        },
+        {
+          "x": 1067,
+          "y": 687
+        },
+        {
+          "x": 1055,
+          "y": 690
+        },
+        {
+          "x": 1056,
+          "y": 710
+        },
+        {
+          "x": 1055,
+          "y": 740
+        },
+        {
+          "x": 1052,
+          "y": 777
+        }
+      ],
+      "aabb": {
+        "minX": 1052,
+        "minY": 674,
+        "maxX": 1092,
+        "maxY": 777,
+        "width": 40,
+        "height": 103
+      },
+      "targetFragmentId": "jyt.occ.entrance.lantern-post-01.v2",
+      "probeIds": [
+        "mask-61-behind",
+        "mask-61-boundary",
+        "mask-61-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 62,
+      "stableId": "jyt.occluder.entrance.lantern-post-02.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "entrance"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 1020,
+        "y": 755
+      },
+      "fixedPointY": 193280,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 1034,
+          "y": 711
+        },
+        {
+          "x": 1030,
+          "y": 686
+        },
+        {
+          "x": 1018,
+          "y": 688
+        },
+        {
+          "x": 1018,
+          "y": 678
+        },
+        {
+          "x": 1006,
+          "y": 678
+        },
+        {
+          "x": 1004,
+          "y": 690
+        },
+        {
+          "x": 1004,
+          "y": 729
+        },
+        {
+          "x": 1004,
+          "y": 754
+        },
+        {
+          "x": 1014,
+          "y": 754
+        },
+        {
+          "x": 1014,
+          "y": 711
+        }
+      ],
+      "aabb": {
+        "minX": 1004,
+        "minY": 678,
+        "maxX": 1034,
+        "maxY": 754,
+        "width": 30,
+        "height": 76
+      },
+      "targetFragmentId": "jyt.occ.entrance.lantern-post-02.v2",
+      "probeIds": [
+        "mask-62-behind",
+        "mask-62-boundary",
+        "mask-62-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 63,
+      "stableId": "jyt.occluder.entrance.hanging-banner-02.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "entrance"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 951,
+        "y": 796
+      },
+      "fixedPointY": 203776,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 931,
+          "y": 795
+        },
+        {
+          "x": 934,
+          "y": 759
+        },
+        {
+          "x": 933,
+          "y": 746
+        },
+        {
+          "x": 940,
+          "y": 744
+        },
+        {
+          "x": 953,
+          "y": 733
+        },
+        {
+          "x": 959,
+          "y": 739
+        },
+        {
+          "x": 959,
+          "y": 743
+        },
+        {
+          "x": 970,
+          "y": 743
+        },
+        {
+          "x": 969,
+          "y": 785
+        }
+      ],
+      "aabb": {
+        "minX": 931,
+        "minY": 733,
+        "maxX": 970,
+        "maxY": 795,
+        "width": 39,
+        "height": 62
+      },
+      "targetFragmentId": "jyt.occ.entrance.hanging-banner-02.v2",
+      "probeIds": [
+        "mask-63-behind",
+        "mask-63-boundary",
+        "mask-63-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 64,
+      "stableId": "jyt.occluder.entrance.hanging-banner-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "entrance"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 791,
+        "y": 794
+      },
+      "fixedPointY": 203264,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 807,
+          "y": 793
+        },
+        {
+          "x": 814,
+          "y": 751
+        },
+        {
+          "x": 805,
+          "y": 744
+        },
+        {
+          "x": 797,
+          "y": 739
+        },
+        {
+          "x": 794,
+          "y": 728
+        },
+        {
+          "x": 789,
+          "y": 722
+        },
+        {
+          "x": 781,
+          "y": 726
+        },
+        {
+          "x": 784,
+          "y": 740
+        },
+        {
+          "x": 767,
+          "y": 746
+        },
+        {
+          "x": 767,
+          "y": 750
+        },
+        {
+          "x": 773,
+          "y": 791
+        }
+      ],
+      "aabb": {
+        "minX": 767,
+        "minY": 722,
+        "maxX": 814,
+        "maxY": 793,
+        "width": 47,
+        "height": 71
+      },
+      "targetFragmentId": "jyt.occ.entrance.hanging-banner-01.v2",
+      "probeIds": [
+        "mask-64-behind",
+        "mask-64-boundary",
+        "mask-64-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 65,
+      "stableId": "jyt.occluder.west-lower.wall-bracket-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-lower"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 704,
+        "y": 714
+      },
+      "fixedPointY": 182784,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 720,
+          "y": 713
+        },
+        {
+          "x": 720,
+          "y": 698
+        },
+        {
+          "x": 720,
+          "y": 686
+        },
+        {
+          "x": 719,
+          "y": 675
+        },
+        {
+          "x": 711,
+          "y": 675
+        },
+        {
+          "x": 703,
+          "y": 675
+        },
+        {
+          "x": 703,
+          "y": 685
+        },
+        {
+          "x": 690,
+          "y": 687
+        },
+        {
+          "x": 686,
+          "y": 703
+        }
+      ],
+      "aabb": {
+        "minX": 686,
+        "minY": 675,
+        "maxX": 720,
+        "maxY": 713,
+        "width": 34,
+        "height": 38
+      },
+      "targetFragmentId": "jyt.occ.west-lower.wall-bracket-01.v2",
+      "probeIds": [
+        "mask-65-behind",
+        "mask-65-boundary",
+        "mask-65-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 66,
+      "stableId": "jyt.occluder.west-lower.railing-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-lower"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 593,
+        "y": 778
+      },
+      "fixedPointY": 199168,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 678,
+          "y": 741
+        },
+        {
+          "x": 674,
+          "y": 731
+        },
+        {
+          "x": 665,
+          "y": 715
+        },
+        {
+          "x": 663,
+          "y": 694
+        },
+        {
+          "x": 655,
+          "y": 686
+        },
+        {
+          "x": 649,
+          "y": 675
+        },
+        {
+          "x": 649,
+          "y": 689
+        },
+        {
+          "x": 636,
+          "y": 689
+        },
+        {
+          "x": 636,
+          "y": 704
+        },
+        {
+          "x": 641,
+          "y": 735
+        },
+        {
+          "x": 640,
+          "y": 746
+        },
+        {
+          "x": 506,
+          "y": 748
+        },
+        {
+          "x": 508,
+          "y": 759
+        },
+        {
+          "x": 561,
+          "y": 762
+        },
+        {
+          "x": 561,
+          "y": 772
+        },
+        {
+          "x": 575,
+          "y": 774
+        },
+        {
+          "x": 575,
+          "y": 760
+        },
+        {
+          "x": 639,
+          "y": 760
+        },
+        {
+          "x": 641,
+          "y": 774
+        },
+        {
+          "x": 679,
+          "y": 777
+        }
+      ],
+      "aabb": {
+        "minX": 506,
+        "minY": 675,
+        "maxX": 679,
+        "maxY": 777,
+        "width": 173,
+        "height": 102
+      },
+      "targetFragmentId": "jyt.occ.west-lower.railing-01.v2",
+      "probeIds": [
+        "mask-66-behind",
+        "mask-66-boundary",
+        "mask-66-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 67,
+      "stableId": "jyt.occluder.west-lower.floor-lantern-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-lower"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 381,
+        "y": 852
+      },
+      "fixedPointY": 218112,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 404,
+          "y": 924
+        },
+        {
+          "x": 390,
+          "y": 876
+        },
+        {
+          "x": 357,
+          "y": 876
+        },
+        {
+          "x": 362,
+          "y": 907
+        },
+        {
+          "x": 390,
+          "y": 908
+        },
+        {
+          "x": 395,
+          "y": 928
+        }
+      ],
+      "aabb": {
+        "minX": 357,
+        "minY": 876,
+        "maxX": 404,
+        "maxY": 928,
+        "width": 47,
+        "height": 52
+      },
+      "targetFragmentId": "jyt.occ.west-lower.floor-lantern-01.v2",
+      "probeIds": [
+        "mask-67-behind",
+        "mask-67-boundary",
+        "mask-67-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 68,
+      "stableId": "jyt.occluder.west-lower.wall-lantern-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-lower"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 35,
+        "y": 741
+      },
+      "fixedPointY": 189696,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 58,
+          "y": 740
+        },
+        {
+          "x": 38,
+          "y": 706
+        },
+        {
+          "x": 11,
+          "y": 732
+        },
+        {
+          "x": 22,
+          "y": 738
+        }
+      ],
+      "aabb": {
+        "minX": 11,
+        "minY": 706,
+        "maxX": 58,
+        "maxY": 740,
+        "width": 47,
+        "height": 34
+      },
+      "targetFragmentId": "jyt.occ.west-lower.wall-lantern-01.v2",
+      "probeIds": [
+        "mask-68-behind",
+        "mask-68-boundary",
+        "mask-68-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 69,
+      "stableId": "jyt.occluder.west-upper.wall-sconce-02.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-upper"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 515,
+        "y": 585
+      },
+      "fixedPointY": 149760,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 503,
+          "y": 584
+        },
+        {
+          "x": 497,
+          "y": 535
+        },
+        {
+          "x": 492,
+          "y": 520
+        },
+        {
+          "x": 492,
+          "y": 490
+        },
+        {
+          "x": 501,
+          "y": 497
+        },
+        {
+          "x": 509,
+          "y": 471
+        },
+        {
+          "x": 536,
+          "y": 474
+        }
+      ],
+      "aabb": {
+        "minX": 492,
+        "minY": 471,
+        "maxX": 536,
+        "maxY": 584,
+        "width": 44,
+        "height": 113
+      },
+      "targetFragmentId": "jyt.occ.west-upper.wall-sconce-02.v2",
+      "probeIds": [
+        "mask-69-behind",
+        "mask-69-boundary",
+        "mask-69-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 70,
+      "stableId": "jyt.occluder.west-upper.lantern-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-upper"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 484,
+        "y": 240
+      },
+      "fixedPointY": 61440,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 505,
+          "y": 239
+        },
+        {
+          "x": 492,
+          "y": 166
+        },
+        {
+          "x": 461,
+          "y": 165
+        },
+        {
+          "x": 471,
+          "y": 239
+        }
+      ],
+      "aabb": {
+        "minX": 461,
+        "minY": 165,
+        "maxX": 505,
+        "maxY": 239,
+        "width": 44,
+        "height": 74
+      },
+      "targetFragmentId": "jyt.occ.west-upper.lantern-01.v2",
+      "probeIds": [
+        "mask-70-behind",
+        "mask-70-boundary",
+        "mask-70-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 71,
+      "stableId": "jyt.occluder.west-upper.wall-sconce-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-upper"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 624,
+        "y": 272
+      },
+      "fixedPointY": 69632,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 621,
+          "y": 271
+        },
+        {
+          "x": 617,
+          "y": 242
+        },
+        {
+          "x": 629,
+          "y": 238
+        }
+      ],
+      "aabb": {
+        "minX": 617,
+        "minY": 238,
+        "maxX": 629,
+        "maxY": 271,
+        "width": 12,
+        "height": 33
+      },
+      "targetFragmentId": "jyt.occ.west-upper.wall-sconce-01.v2",
+      "probeIds": [
+        "mask-71-behind",
+        "mask-71-boundary",
+        "mask-71-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 72,
+      "stableId": "jyt.occluder.center.wall-sconce-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "center"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 1121,
+        "y": 284
+      },
+      "fixedPointY": 72704,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 1126,
+          "y": 283
+        },
+        {
+          "x": 1129,
+          "y": 253
+        },
+        {
+          "x": 1122,
+          "y": 230
+        },
+        {
+          "x": 1112,
+          "y": 254
+        }
+      ],
+      "aabb": {
+        "minX": 1112,
+        "minY": 230,
+        "maxX": 1129,
+        "maxY": 283,
+        "width": 17,
+        "height": 53
+      },
+      "targetFragmentId": "jyt.occ.center.wall-sconce-01.v2",
+      "probeIds": [
+        "mask-72-behind",
+        "mask-72-boundary",
+        "mask-72-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 73,
+      "stableId": "jyt.occluder.east-upper.scroll-table-front-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-upper"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 1432,
+        "y": 284
+      },
+      "fixedPointY": 72704,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 1385,
+          "y": 283
+        },
+        {
+          "x": 1384,
+          "y": 257
+        },
+        {
+          "x": 1471,
+          "y": 255
+        },
+        {
+          "x": 1478,
+          "y": 275
+        }
+      ],
+      "aabb": {
+        "minX": 1384,
+        "minY": 255,
+        "maxX": 1478,
+        "maxY": 283,
+        "width": 94,
+        "height": 28
+      },
+      "targetFragmentId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "probeIds": [
+        "mask-73-behind",
+        "mask-73-boundary",
+        "mask-73-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 74,
+      "stableId": "jyt.occluder.east-lower.worktable-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-lower"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 1559,
+        "y": 701
+      },
+      "fixedPointY": 179456,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 1612,
+          "y": 674
+        },
+        {
+          "x": 1599,
+          "y": 700
+        },
+        {
+          "x": 1592,
+          "y": 675
+        }
+      ],
+      "aabb": {
+        "minX": 1592,
+        "minY": 674,
+        "maxX": 1612,
+        "maxY": 700,
+        "width": 20,
+        "height": 26
+      },
+      "targetFragmentId": "jyt.occ.east-lower.worktable-01.v2",
+      "probeIds": [
+        "mask-74-behind",
+        "mask-74-boundary",
+        "mask-74-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 75,
+      "stableId": "jyt.occluder.east-lower.fabric-rack-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-lower"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 1631,
+        "y": 830
+      },
+      "fixedPointY": 212480,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 1603,
+          "y": 829
+        },
+        {
+          "x": 1616,
+          "y": 787
+        },
+        {
+          "x": 1598,
+          "y": 787
+        },
+        {
+          "x": 1602,
+          "y": 767
+        },
+        {
+          "x": 1622,
+          "y": 760
+        },
+        {
+          "x": 1629,
+          "y": 748
+        },
+        {
+          "x": 1639,
+          "y": 748
+        },
+        {
+          "x": 1631,
+          "y": 767
+        },
+        {
+          "x": 1663,
+          "y": 782
+        }
+      ],
+      "aabb": {
+        "minX": 1598,
+        "minY": 748,
+        "maxX": 1663,
+        "maxY": 829,
+        "width": 65,
+        "height": 81
+      },
+      "targetFragmentId": "jyt.occ.east-lower.fabric-rack-01.v2",
+      "probeIds": [
+        "mask-75-behind",
+        "mask-75-boundary",
+        "mask-75-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 76,
+      "stableId": "jyt.occluder.east-lower.diagonal-brace-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-lower"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 1410,
+        "y": 768
+      },
+      "fixedPointY": 196608,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 1510,
+          "y": 763
+        },
+        {
+          "x": 1469,
+          "y": 747
+        },
+        {
+          "x": 1464,
+          "y": 729
+        },
+        {
+          "x": 1450,
+          "y": 711
+        },
+        {
+          "x": 1419,
+          "y": 713
+        },
+        {
+          "x": 1390,
+          "y": 607
+        },
+        {
+          "x": 1365,
+          "y": 560
+        },
+        {
+          "x": 1334,
+          "y": 561
+        },
+        {
+          "x": 1389,
+          "y": 767
+        }
+      ],
+      "aabb": {
+        "minX": 1334,
+        "minY": 560,
+        "maxX": 1510,
+        "maxY": 767,
+        "width": 176,
+        "height": 207
+      },
+      "targetFragmentId": "jyt.occ.east-lower.diagonal-brace-01.v2",
+      "probeIds": [
+        "mask-76-behind",
+        "mask-76-boundary",
+        "mask-76-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 77,
+      "stableId": "jyt.occluder.east-upper.pillar-02.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-upper"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 1227,
+        "y": 703
+      },
+      "fixedPointY": 179968,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 1231,
+          "y": 608
+        },
+        {
+          "x": 1240,
+          "y": 531
+        },
+        {
+          "x": 1245,
+          "y": 519
+        },
+        {
+          "x": 1245,
+          "y": 505
+        },
+        {
+          "x": 1244,
+          "y": 495
+        },
+        {
+          "x": 1239,
+          "y": 486
+        },
+        {
+          "x": 1234,
+          "y": 495
+        },
+        {
+          "x": 1232,
+          "y": 478
+        },
+        {
+          "x": 1208,
+          "y": 481
+        }
+      ],
+      "aabb": {
+        "minX": 1208,
+        "minY": 478,
+        "maxX": 1245,
+        "maxY": 608,
+        "width": 37,
+        "height": 130
+      },
+      "targetFragmentId": "jyt.occ.east-upper.pillar-02.v2",
+      "probeIds": [
+        "mask-77-behind",
+        "mask-77-boundary",
+        "mask-77-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 78,
+      "stableId": "jyt.occluder.east-upper.wall-panel-lower-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-upper"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 1460,
+        "y": 548
+      },
+      "fixedPointY": 140288,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 1256,
+          "y": 543
+        },
+        {
+          "x": 1270,
+          "y": 480
+        },
+        {
+          "x": 1665,
+          "y": 476
+        },
+        {
+          "x": 1666,
+          "y": 548
+        }
+      ],
+      "aabb": {
+        "minX": 1256,
+        "minY": 476,
+        "maxX": 1666,
+        "maxY": 548,
+        "width": 410,
+        "height": 72
+      },
+      "targetFragmentId": "jyt.occ.east-upper.wall-panel-lower-01.v2",
+      "probeIds": [
+        "mask-78-behind",
+        "mask-78-boundary",
+        "mask-78-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 79,
+      "stableId": "jyt.occluder.east-lower.diagonal-brace-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-lower"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 1410,
+        "y": 768
+      },
+      "fixedPointY": 196608,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 1323,
+          "y": 639
+        },
+        {
+          "x": 1329,
+          "y": 612
+        },
+        {
+          "x": 1308,
+          "y": 612
+        },
+        {
+          "x": 1320,
+          "y": 562
+        },
+        {
+          "x": 1336,
+          "y": 561
+        },
+        {
+          "x": 1341,
+          "y": 590
+        },
+        {
+          "x": 1333,
+          "y": 641
+        }
+      ],
+      "aabb": {
+        "minX": 1308,
+        "minY": 561,
+        "maxX": 1341,
+        "maxY": 641,
+        "width": 33,
+        "height": 80
+      },
+      "targetFragmentId": "jyt.occ.east-lower.diagonal-brace-01.v2",
+      "probeIds": [
+        "mask-79-behind",
+        "mask-79-boundary",
+        "mask-79-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 80,
+      "stableId": "jyt.occluder.east-upper.pillar-02.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-upper"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 1227,
+        "y": 703
+      },
+      "fixedPointY": 179968,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 1251,
+          "y": 702
+        },
+        {
+          "x": 1240,
+          "y": 651
+        },
+        {
+          "x": 1240,
+          "y": 629
+        },
+        {
+          "x": 1242,
+          "y": 612
+        },
+        {
+          "x": 1228,
+          "y": 606
+        },
+        {
+          "x": 1206,
+          "y": 606
+        },
+        {
+          "x": 1206,
+          "y": 621
+        },
+        {
+          "x": 1202,
+          "y": 626
+        },
+        {
+          "x": 1202,
+          "y": 639
+        },
+        {
+          "x": 1211,
+          "y": 646
+        },
+        {
+          "x": 1222,
+          "y": 647
+        },
+        {
+          "x": 1217,
+          "y": 661
+        },
+        {
+          "x": 1225,
+          "y": 689
+        }
+      ],
+      "aabb": {
+        "minX": 1202,
+        "minY": 606,
+        "maxX": 1251,
+        "maxY": 702,
+        "width": 49,
+        "height": 96
+      },
+      "targetFragmentId": "jyt.occ.east-upper.pillar-02.v2",
+      "probeIds": [
+        "mask-80-behind",
+        "mask-80-boundary",
+        "mask-80-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 81,
+      "stableId": "jyt.occluder.east-lower.railing-post-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-lower"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 1247,
+        "y": 775
+      },
+      "fixedPointY": 198400,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 1251,
+          "y": 711
+        },
+        {
+          "x": 1249,
+          "y": 774
+        },
+        {
+          "x": 1242,
+          "y": 707
+        }
+      ],
+      "aabb": {
+        "minX": 1242,
+        "minY": 707,
+        "maxX": 1251,
+        "maxY": 774,
+        "width": 9,
+        "height": 67
+      },
+      "targetFragmentId": "jyt.occ.east-lower.railing-post-01.v2",
+      "probeIds": [
+        "mask-81-behind",
+        "mask-81-boundary",
+        "mask-81-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 82,
+      "stableId": "jyt.occluder.east-lower.diagonal-brace-02.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-lower"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 1363,
+        "y": 741
+      },
+      "fixedPointY": 189696,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 1351,
+          "y": 740
+        },
+        {
+          "x": 1365,
+          "y": 691
+        },
+        {
+          "x": 1374,
+          "y": 723
+        }
+      ],
+      "aabb": {
+        "minX": 1351,
+        "minY": 691,
+        "maxX": 1374,
+        "maxY": 740,
+        "width": 23,
+        "height": 49
+      },
+      "targetFragmentId": "jyt.occ.east-lower.diagonal-brace-02.v2",
+      "probeIds": [
+        "mask-82-behind",
+        "mask-82-boundary",
+        "mask-82-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 83,
+      "stableId": "jyt.occluder.west-lower.diagonal-brace-02.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-lower"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 496,
+        "y": 759
+      },
+      "fixedPointY": 194304,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 513,
+          "y": 702
+        },
+        {
+          "x": 516,
+          "y": 680
+        },
+        {
+          "x": 510,
+          "y": 655
+        },
+        {
+          "x": 491,
+          "y": 641
+        },
+        {
+          "x": 474,
+          "y": 723
+        },
+        {
+          "x": 476,
+          "y": 758
+        },
+        {
+          "x": 495,
+          "y": 696
+        }
+      ],
+      "aabb": {
+        "minX": 474,
+        "minY": 641,
+        "maxX": 516,
+        "maxY": 758,
+        "width": 42,
+        "height": 117
+      },
+      "targetFragmentId": "jyt.occ.west-lower.diagonal-brace-02.v2",
+      "probeIds": [
+        "mask-83-behind",
+        "mask-83-boundary",
+        "mask-83-front"
+      ],
+      "constraintDecision": "none"
+    },
+    {
+      "tmxId": 84,
+      "stableId": "jyt.occluder.west-lower.wall-panel-assembly-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-lower"
+      },
+      "kind": "occluder",
+      "renderBand": "world",
+      "elevation": 0,
+      "sortMode": "fixed-point-y",
+      "sortAnchor": {
+        "x": 218,
+        "y": 852
+      },
+      "fixedPointY": 218112,
+      "tieBias": -1,
+      "polygon": [
+        {
+          "x": 405,
+          "y": 641
+        },
+        {
+          "x": 405,
+          "y": 617
+        },
+        {
+          "x": 418,
+          "y": 617
+        },
+        {
+          "x": 410,
+          "y": 575
+        },
+        {
+          "x": 382,
+          "y": 579
+        },
+        {
+          "x": 396,
+          "y": 643
+        }
+      ],
+      "aabb": {
+        "minX": 382,
+        "minY": 575,
+        "maxX": 418,
+        "maxY": 643,
+        "width": 36,
+        "height": 68
+      },
+      "targetFragmentId": "jyt.occ.west-lower.wall-panel-assembly-01.v2",
+      "probeIds": [
+        "mask-84-behind",
+        "mask-84-boundary",
+        "mask-84-front"
+      ],
+      "constraintDecision": "none"
+    }
+  ]
+}
