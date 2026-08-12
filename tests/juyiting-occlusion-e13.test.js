@@ -95,105 +95,46 @@ describe('E13 evidence integrity (phase-1 + offline)', () => {
     expect(worldModel.provenance.hallMapSnapshotSha256).to.equal(facts.snapshotSha256)
   })
 
-  it('index.json covers all 270 matrix shots with GENERATED_OFFLINE status', () => {
+  it('index binds the authoritative 270 matrix shots exactly', () => {
     expect(index.status).to.equal('GENERATED_OFFLINE')
-    expect(index.shotCount).to.equal(270)
+    expect(index.matrixPass).to.equal(true)
+    expect(index.releasePass).to.equal(false)
     expect(index.shots).to.have.length(270)
-    expect(index.matrixShots).to.equal(270)
-    // Camera/interaction/movement are DEFERRED independently
+    const fields = ['id','kind','cell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera']
+    matrixShots.forEach((plan, i) => fields.forEach(field => expect(index.shots[i][field], `${plan.id}:${field}`).to.deep.equal(plan[field])))
+  })
+
+  it('all matrix shots have 100% resolved depth matches and alpha facts', () => {
+    for (const shot of index.shots) {
+      expect(shot.screenshotFile).to.match(/^shots\/E13-\d{3}\.png$/)
+      expect(shot.runtimeFacts.ordering).to.equal(shot.resolvedExpectedOrdering)
+      expect(shot.runtimeFacts.depthMatch).to.equal(true)
+      expect(shot.runtimeFacts.pixelOverlap.method).to.equal('source-alpha-mask-intersection')
+    }
+  })
+
+  it('camera/interaction/movement are deferred and block final release', () => {
     expect(index.cameraShots).to.equal(0)
     expect(index.interactionShots).to.equal(0)
     expect(index.movementShots).to.equal(0)
     expect(index.notes.camera).to.include('DEFERRED')
     expect(index.notes.interaction).to.include('DEFERRED')
     expect(index.notes.movement).to.include('DEFERRED')
-
-    // Every matrix shot from the plan is represented in the index
-    const indexIds = new Set(index.shots.map(s => s.id))
-    const matrixPlanIds = matrixShots.map(s => s.id)
-    for (const id of matrixPlanIds) {
-      expect(indexIds.has(id), `matrix shot ${id} missing from index`).to.equal(true)
-    }
+    expect(index.releasePass).to.equal(false)
   })
 
-  it('all 270 index shots carry full runtime facts (deterministic, not BLOCKED)', () => {
-    for (const shot of index.shots) {
-      expect(shot.screenshotFile, `${shot.id} missing screenshotFile`).to.be.a('string')
-      expect(shot.runtimeFacts, `${shot.id} missing runtimeFacts`).to.be.an('object')
-      const f = shot.runtimeFacts
-      expect(f.actualDepth).to.be.a('number')
-      expect(f.targetDepth).to.be.a('number')
-      expect(['agent_behind_target', 'agent_in_front', 'tie']).to.include(f.ordering)
-      expect(f.depthMatch).to.equal(true)
-      expect(f.pixelOverlap).to.be.an('object')
-      expect(typeof f.pixelOverlap.hasOverlap).to.equal('boolean')
-      expect(f.agentSortKey).to.be.an('array')
-      expect(f.agentSortKey).to.have.length(6)
-    }
+  it('commits 270 shot PNGs and 15 contact sheets', () => {
+    expect(readdirSync(SHOTS_DIR).filter(f => f.endsWith('.png'))).to.have.length(270)
+    expect(readdirSync(CONTACT_DIR).filter(f => f.endsWith('.png'))).to.have.length(15)
   })
 
-  it('100% depthMatch — no tie-with-acceptable-ratio loophole', () => {
-    const failures = index.shots.filter(s => !s.runtimeFacts.depthMatch)
-    expect(failures, `${failures.length} shots have depthMatch=false`).to.deep.equal([])
-  })
-
-  it('boundary shots have resolvedExpectedOrdering, not simplified tie', () => {
-    const boundaryShots = index.shots.filter(s => s.relation === 'boundary')
-    expect(boundaryShots).to.have.length(90)
-    for (const s of boundaryShots) {
-      expect(s.relation).to.equal('boundary')
-      // expectedRelation is resolved via sort keys, not 'tie'
-      expect(['agent_behind_target', 'agent_in_front', 'tie']).to.include(s.expectedRelation)
-    }
-  })
-
-  it('critical shots: 卢俊义/扈三娘 behind bounty-board → agent_behind_target', () => {
-    const luShot = index.shots.find(
-      s => s.persona === 'lujunyi' && s.relation === 'behind'
-        && s.targetStableId === 'jyt.prop.northeast.bounty-board.v1'
-    )
-    expect(luShot).to.not.equal(undefined)
-    expect(luShot.runtimeFacts.ordering).to.equal('agent_behind_target')
-    expect(luShot.runtimeFacts.actualDepth).to.be.lessThan(luShot.runtimeFacts.targetDepth)
-
-    const huShot = index.shots.find(
-      s => s.persona === 'husanniang' && s.relation === 'behind'
-        && s.targetStableId === 'jyt.prop.northeast.bounty-board.v1'
-    )
-    expect(huShot).to.not.equal(undefined)
-    expect(huShot.runtimeFacts.ordering).to.equal('agent_behind_target')
-    expect(huShot.runtimeFacts.actualDepth).to.be.lessThan(huShot.runtimeFacts.targetDepth)
-  })
-
-  it('contact sheets exist — 15 PNG per-target sheets covering all matrix shots', () => {
-    expect(existsSync(CONTACT_DIR)).to.equal(true)
-    const files = readdirSync(CONTACT_DIR)
-    const pngs = files.filter(f => f.endsWith('.png'))
-    // 15 target contact sheets in PNG format
-    expect(pngs.length, `expected 15 target PNG sheets, got ${pngs.length}`).to.equal(15)
-    // Each PNG should be reasonable size
-    for (const f of pngs) {
-      const content = readFileSync(join(CONTACT_DIR, f))
-      expect(content.length, `${f} too small`).to.be.at.least(500)
-    }
-  })
-
-  it('270 PNG evidence files exist in shots/', () => {
-    expect(existsSync(SHOTS_DIR)).to.equal(true)
-    const pngs = readdirSync(SHOTS_DIR).filter(f => f.endsWith('.png'))
-    expect(pngs).to.have.length(270)
-  })
-
-  it('machine gate passes end-to-end', () => {
-    const result = spawnSync(process.execPath, [GATE_SCRIPT], {
-      cwd: REPO_ROOT,
-      encoding: 'utf8',
-      timeout: 120000,
-      maxBuffer: 8 * 1024 * 1024,
-    })
-    expect(result.status, `gate exited ${result.status}: ${result.stderr}`).to.equal(0)
+  it('machine gate passes the matrix but not final E13 release', () => {
+    const result = spawnSync(process.execPath, [GATE_SCRIPT], { cwd: REPO_ROOT, encoding: 'utf8', timeout: 120000 })
+    expect(result.status, result.stderr).to.equal(0)
     const gate = readJson(join(FIXTURE_DIR, 'machines-gate.json'))
-    expect(gate.pass).to.equal(true)
-    expect(gate.failures).to.deep.equal([])
+    expect(gate.matrixPass).to.equal(true)
+    expect(gate.releasePass).to.equal(false)
+    expect(gate.pass).to.equal(false)
+    expect(gate.releaseBlockers).to.include('GPT visual review not performed')
   })
 })

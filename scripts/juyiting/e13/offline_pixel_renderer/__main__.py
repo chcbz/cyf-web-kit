@@ -1,135 +1,83 @@
 #!/usr/bin/env python3
-"""
-E13 Offline Pixel Renderer - Main Entry Point.
-Generates 270 matrix shot PNGs with runtimeFacts.
-Usage: python3 -m offline_pixel_renderer [--output DIR] [--limit N]
-"""
-import sys, os, time, json
+"""CLI for deterministic E13 shot/index/contact-sheet generation."""
+import argparse, hashlib, json, os, shutil, sys
+from .compositor import OfflineRenderer, PixelBuffer
+from .png_io import write_png, read_png, webp_decoder_provenance
+from .text import draw_text
+from .world_model import build_shot_plan, default_repo_root, PERSONAS
 
-# Ensure package is importable
-_src = os.path.dirname(os.path.abspath(__file__))
-_parent = os.path.dirname(_src)
-if _parent not in sys.path:
-    sys.path.insert(0, _parent)
 
-from offline_pixel_renderer.png_io import write_png
-from offline_pixel_renderer.world_model import build_shot_plan
-from offline_pixel_renderer.compositor import OfflineRenderer
-
+def sha(path):
+    h=hashlib.sha256(); h.update(open(path,'rb').read()); return h.hexdigest()
 
 def main():
-    import argparse
-    parser = argparse.ArgumentParser(description='E13 Offline Pixel Renderer')
-    parser.add_argument('--output', default=None, help='Output directory for evidence')
-    parser.add_argument('--limit', type=int, default=0, help='Limit number of shots (0=all)')
-    parser.add_argument('--shots-dir', default=None, help='Override shots subdirectory')
-    parser.add_argument('--repo-root', default=None, help='Repository root path')
-    args = parser.parse_args()
-
-    repo_root = args.repo_root or os.getcwd()
-    public_dir = os.path.join(repo_root, 'public', 'juyiting')
-    evidence_dir = args.output or os.path.join(repo_root, 'tests', 'fixtures', 'juyiting', 'occlusion-e13')
-    shots_dir = args.shots_dir or os.path.join(evidence_dir, 'shots')
-
-    os.makedirs(shots_dir, exist_ok=True)
-
-    print('=== E13 Offline Pixel Renderer ===')
-    print(f'Evidence dir: {evidence_dir}')
-    print(f'Shots dir: {shots_dir}')
-
-    # Init
-    print('\n[1/4] Loading assets...')
-    t0 = time.time()
-    renderer = OfflineRenderer(public_dir)
-    print(f'  Assets loaded in {time.time()-t0:.1f}s')
-
-    # Build world model
-    print('\n[2/4] Building world model...')
-    t0 = time.time()
-    shots, fragments, props_list = build_shot_plan(repo_root)
-    print(f'  {len(shots)} matrix shots, {len(fragments)} fragments, {len(props_list)} props in {time.time()-t0:.1f}s')
-
-    # Build static composite
-    print('\n[3/4] Building static composite...')
-    t0 = time.time()
-    renderer._build_static_composite()
-    print(f'  Static composite in {time.time()-t0:.1f}s')
-
-    # Render shots
-    limit = args.limit if args.limit > 0 else len(shots)
-    render_shots = shots[:limit]
-    print(f'\n[4/4] Rendering {len(render_shots)} shots...')
-
-    records = []
-    start = time.time()
-    for i, shot in enumerate(render_shots):
-        t0 = time.time()
-        pixels, order, depths, facts = renderer.render_shot(shot, fragments, props_list)
-
-        # Save PNG
-        vp = facts['viewportWorld']
-        cw, ch = vp['width'], vp['height']
-        png_path = os.path.join(shots_dir, f'{shot["id"]}.png')
-        write_png(png_path, cw, ch, pixels)
-
-        elapsed = time.time() - t0
-        records.append({
-            'id': shot['id'],
-            'file': f'shots/{shot["id"]}.png',
-            'kind': 'matrix',
-            'cell': shot['cell'],
-            'persona': shot['persona'],
-            'personaName': shot['personaName'],
-            'relation': shot['relation'],
-            'targetStableId': shot['targetStableId'],
-            'targetKind': shot['targetKind'],
-            'focus': shot['focus'],
-            'worldX': shot['world']['x'],
-            'worldY': shot['world']['y'],
-            'expectedRelation': shot['expectedRelation'],
-            'expectedDepth': shot['expectedDepth'],
-            'runtimeFacts': facts,
-        })
-
-        if (i + 1) % 30 == 0:
-            elapsed_total = time.time() - start
-            rate = (i + 1) / elapsed_total
-            remaining = (len(render_shots) - i - 1) / rate
-            print(f'  [{i+1}/{len(render_shots)}] {rate:.1f} shots/s, ~{remaining:.0f}s remaining')
-
-    total_elapsed = time.time() - start
-    print(f'\n  Done! {len(render_shots)} shots in {total_elapsed:.0f}s ({len(render_shots)/total_elapsed:.1f} shots/s)')
-
-    # Write index.json
-    index = {
-        '$schema': 'juyiting-occlusion-e13-index-v2',
-        'schemaVersion': 2,
-        'taskId': 'E13',
-        'generator': 'offline-pixel-renderer (Python, deterministic, no browser)',
-        'status': 'GENERATED_OFFLINE',
-        'shotCount': len(records),
-        'matrixShots': len(records),
-        'cameraShots': 0,
-        'interactionShots': 0,
-        'movementShots': 0,
-        'notes': {
-            'camera': 'DEFERRED - camera/interaction/movement cannot be proven offline; require browser/touch input',
-            'interaction': 'DEFERRED - see camera note',
-            'movement': 'DEFERRED - see camera note',
-            'methodology': 'Production-equivalent deterministic sort (worldOrder.ts base sort, no constraint zones). Base+FG+lighting pre-composited. Each shot renders world-band objects in sort order onto viewport crop.',
-        },
-        'shots': records,
+    ap=argparse.ArgumentParser()
+    ap.add_argument('--repo-root', default=default_repo_root())
+    ap.add_argument('--output', default=None)
+    ap.add_argument('--limit', type=int, default=0)
+    args=ap.parse_args()
+    repo=os.path.realpath(args.repo_root)
+    output=os.path.realpath(args.output or os.path.join(repo,'tests/fixtures/juyiting/occlusion-e13'))
+    shots_dir=os.path.join(output,'shots'); contacts=os.path.join(output,'contact-sheets')
+    os.makedirs(shots_dir,exist_ok=True); os.makedirs(contacts,exist_ok=True)
+    for d in (shots_dir,contacts):
+        for name in os.listdir(d):
+            path=os.path.join(d,name)
+            if os.path.isfile(path): os.unlink(path)
+    shots,fragments,props,layers=build_shot_plan(repo)
+    selected=shots[:args.limit] if args.limit else shots
+    renderer=OfflineRenderer(os.path.join(repo,'public','juyiting'),layers)
+    records=[]
+    for i,shot in enumerate(selected):
+        pixels,order,depths,facts=renderer.render_shot_small(shot,fragments,props,400,300)
+        name=f'{shot["id"]}.png'; path=os.path.join(shots_dir,name)
+        write_png(path,400,300,pixels)
+        record={k:shot[k] for k in ('id','kind','cell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera')}
+        record.update({'semanticRelation':shot['relation'],'resolvedExpectedOrdering':shot['resolvedExpectedOrdering'],'screenshotFile':f'shots/{name}','sha256':sha(path),'runtimeFacts':facts})
+        records.append(record)
+        if (i+1)%45==0: print(f'[{i+1}/{len(selected)}]',flush=True)
+    frame_checks={p['personaCode']:renderer.frame_alpha_bounds(p['personaCode']) for p in PERSONAS}
+    mid=os.path.join(repo,'public/juyiting',layers['mid-occluders']['source'])
+    foreground=os.path.join(repo,'public/juyiting',layers['foreground-occluders']['source'])
+    index={
+      '$schema':'juyiting-occlusion-e13-index-v3','schemaVersion':3,'taskId':'E13','status':'GENERATED_OFFLINE',
+      'generator':'scripts/juyiting/e13/generate-e13-offline-evidence.mjs + offline_pixel_renderer',
+      'shotCount':len(records),'matrixShots':len(records),'cameraShots':0,'interactionShots':0,'movementShots':0,
+      'matrixPass':len(records)==270 and all(r['runtimeFacts']['depthMatch'] for r in records),'releasePass':False,
+      'sampledFrame':{'animation':'idle','direction':'down','frame':0,'claim':'single deterministic audit sampling frame, not full animation evidence'},
+      'frameAlphaBoundsChecks':frame_checks,'webpDecoder':webp_decoder_provenance(),
+      'productionVisualStack':{
+        'effectiveDrawOrder':'ascending melonJS z; equal z draws later-added world renderables before earlier fixed layers',
+        'canvasRaster':{'productionAntiAlias':True,'scaledSpriteSampling':'premultiplied-RGBA bilinear at destination pixel centers','browserCanvasBitIdentityClaim':False,'difference':'browser Canvas2D backend-specific edge/color rounding is not claimed bit-identical; layer, blend, source/destination geometry, ordering, and alpha-mask semantics are reproduced deterministically'},
+        'fixedDepths':{'base':0,'mid-occluders':2,'foreground-occluders':5,'lighting-overlay':8},
+        'lighting':{'opacity':layers['lighting-overlay']['opacity'],'tintcolor':layers['lighting-overlay']['tintcolor'],'imageBlend':'screen','tintBlend':'multiply'},
+        'midForegroundDuplicate':{'drawnTwice':True,'midSha256':sha(mid),'foregroundSha256':sha(foreground),'sameBytes':sha(mid)==sha(foreground)},
+      },
+      'notes':{
+        'camera':'DEFERRED — requires live browser viewport/touch behavior; excluded from matrix pass and blocks releasePass',
+        'interaction':'DEFERRED — requires live pointer/hotspot/DOM behavior; excluded from matrix pass and blocks releasePass',
+        'movement':'DEFERRED — requires live movement/navmesh engine; excluded from matrix pass and blocks releasePass',
+        'methodology':'Direct authoritative shot-plan matrix; production TMX source/destination rects; production sprite manifest idle/down/frame0; full fixed-depth/world event stream; alpha-mask overlap.',
+      },'shots':records,
     }
-    index_path = os.path.join(evidence_dir, 'index.json')
-    with open(index_path, 'w') as f:
-        json.dump(index, f, indent=2)
-    print(f'\nIndex written to {index_path}')
+    with open(os.path.join(output,'index.json'),'w',encoding='utf-8') as f: json.dump(index,f,ensure_ascii=False,indent=2); f.write('\n')
+    if args.limit: return
+    by_target={}
+    for r in records: by_target.setdefault(r['targetStableId'],[]).append(r)
+    personas=['songjiang','lujunyi','husanniang','likui','linchong','wuyong']; relations=['behind','boundary','front']
+    for target in sorted(by_target):
+        items=by_target[target]; lookup={(r['persona'],r['relation']):r for r in items}
+        tw,th,pad,label_h=120,90,5,27; cw=6*(tw+pad)+pad; ch=3*(th+label_h+pad)+pad
+        sheet=PixelBuffer(cw,ch); sheet.fill((24,24,30,255))
+        for row,rel in enumerate(relations):
+            for col,persona in enumerate(personas):
+                r=lookup[(persona,rel)]; w,h,_,px=read_png(os.path.join(output,r['screenshotFile']))
+                x=pad+col*(tw+pad); y=pad+row*(th+label_h+pad)
+                sheet.blit_region(PixelBuffer(w,h,px),0,0,w,h,x,y,tw,th)
+                draw_text(sheet,x,y+th+2,r['id'],scale=1)
+                draw_text(sheet,x,y+th+11,persona,scale=1)
+                draw_text(sheet,x,y+th+20,rel,scale=1)
+        safe=target.replace('/','_').replace('.','_')
+        write_png(os.path.join(contacts,f'cell-{items[0]["cell"]}-{safe}.png'),cw,ch,sheet.to_bytes())
 
-    # Summary
-    depth_matches = sum(1 for r in records if r['runtimeFacts']['depthMatch'])
-    print(f'\nDepth match rate: {depth_matches}/{len(records)} ({100*depth_matches/len(records):.1f}%)')
-    print(f'(Mismatches indicate simplified expectedRelation differs from production sort - expected.)')
-
-
-if __name__ == '__main__':
-    main()
+if __name__=='__main__': main()

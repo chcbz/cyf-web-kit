@@ -1,290 +1,361 @@
 #!/usr/bin/env python3
-"""
-E13 Offline Pixel Compositor - production-equivalent, performance-optimized.
-Strategy: Pre-composite base+fragments+props+fg+lighting into one "full map".
-Per-shot: determine agent depth vs each object, render agent, then re-render
-any world-band objects (fragments AND props) that should occlude the agent.
-"""
+"""Deterministic crop compositor matching HallScene/melonJS production draw semantics."""
 import os
-from .png_io import load_image, write_png
+from .png_io import load_image
 
 
 class PixelBuffer:
     __slots__ = ('width', 'height', 'pixels')
     def __init__(self, width, height, pixels=None):
-        self.width = width; self.height = height
+        self.width, self.height = width, height
         self.pixels = bytearray(width * height * 4) if pixels is None else bytearray(pixels)
-    def to_bytes(self): return bytes(self.pixels)
+    def to_bytes(self):
+        return bytes(self.pixels)
 
-    def blit_region(self, src_buf, sx, sy, sw, sh, dx, dy, dw=None, dh=None):
-        sp = src_buf.pixels; dp = self.pixels; src_w = src_buf.width
-        dw_v = dw if dw is not None else sw; dh_v = dh if dh is not None else sh
-        for ry in range(dh_v):
+    def fill(self, rgba):
+        self.pixels[:] = bytes(rgba) * (self.width * self.height)
+
+    def blit_region(self, src, sx, sy, sw, sh, dx, dy, dw=None, dh=None, opacity=1.0, blend='source-over', smoothing=True, clip=None):
+        dw, dh = int(dw if dw is not None else sw), int(dh if dh is not None else sh)
+        if dw <= 0 or dh <= 0 or sw <= 0 or sh <= 0:
+            return
+        sp, dp = src.pixels, self.pixels
+        dx, dy = int(dx), int(dy)
+        ry0, ry1 = max(0, -dy), min(dh, self.height - dy)
+        rx0, rx1 = max(0, -dx), min(dw, self.width - dx)
+        if clip is not None:
+            clip_x, clip_y, clip_w, clip_h = clip
+            ry0, ry1 = max(ry0, int(clip_y) - dy), min(ry1, int(clip_y + clip_h) - dy)
+            rx0, rx1 = max(rx0, int(clip_x) - dx), min(rx1, int(clip_x + clip_w) - dx)
+        if ry0 >= ry1 or rx0 >= rx1:
+            return
+        for ry in range(ry0, ry1):
             ty = dy + ry
-            if ty < 0 or ty >= self.height: continue
-            ssy = sy + int(ry * sh / dh_v)
-            if ssy < 0 or ssy >= src_buf.height: continue
-            sr = ssy * src_w * 4; dr = ty * self.width * 4
-            for rx in range(dw_v):
+            ssy = int(sy) + int(ry * sh / dh)
+            if ssy < 0 or ssy >= src.height:
+                continue
+            for rx in range(rx0, rx1):
                 tx = dx + rx
-                if tx < 0 or tx >= self.width: continue
-                ssx = sx + int(rx * sw / dw_v)
-                if ssx < 0 or ssx >= src_w: continue
-                si = sr + ssx * 4; sa = sp[si + 3]
-                if sa == 0: continue
-                di = dr + tx * 4
-                if sa == 255:
-                    dp[di]=sp[si]; dp[di+1]=sp[si+1]; dp[di+2]=sp[si+2]; dp[di+3]=255
+                if smoothing and (dw != sw or dh != sh):
+                    # CanvasRenderer runs with antiAlias=true. Sample at pixel
+                    # centers and interpolate premultiplied RGBA, clamped to
+                    # the supplied sourceRect so adjacent sprite frames/atlas
+                    # fragments cannot bleed into the audit frame.
+                    fx = float(sx) + (rx + 0.5) * sw / dw - 0.5
+                    fy = float(sy) + (ry + 0.5) * sh / dh - 0.5
+                    x0 = max(int(sx), min(int(float(sx) + sw - 1), int(fx // 1)))
+                    y0 = max(int(sy), min(int(float(sy) + sh - 1), int(fy // 1)))
+                    x1 = max(int(sx), min(int(float(sx) + sw - 1), x0 + 1))
+                    y1 = max(int(sy), min(int(float(sy) + sh - 1), y0 + 1))
+                    wx, wy = fx - (fx // 1), fy - (fy // 1)
+                    weights = ((x0, y0, (1-wx)*(1-wy)), (x1, y0, wx*(1-wy)),
+                               (x0, y1, (1-wx)*wy), (x1, y1, wx*wy))
+                    alpha = sum(sp[(yy * src.width + xx) * 4 + 3] / 255.0 * weight for xx, yy, weight in weights)
+                    if alpha <= 0:
+                        continue
+                    sc = []
+                    for c in range(3):
+                        premul = sum((sp[(yy * src.width + xx) * 4 + c] / 255.0) *
+                                     (sp[(yy * src.width + xx) * 4 + 3] / 255.0) * weight
+                                     for xx, yy, weight in weights)
+                        sc.append(premul / alpha)
+                    sa = alpha * opacity
                 else:
-                    a=sa/255.0; inv=1.0-a
-                    dp[di]=int(sp[si]*a+dp[di]*inv); dp[di+1]=int(sp[si+1]*a+dp[di+1]*inv)
-                    dp[di+2]=int(sp[si+2]*a+dp[di+2]*inv); dp[di+3]=min(255,sa+int(dp[di+3]*inv))
+                    ssx = int(sx) + int(rx * sw / dw)
+                    if ssx < 0 or ssx >= src.width:
+                        continue
+                    si = (ssy * src.width + ssx) * 4
+                    sa = (sp[si + 3] / 255.0) * opacity
+                    if sa <= 0:
+                        continue
+                    sc = [sp[si + c] / 255.0 for c in range(3)]
+                di = (ty * self.width + tx) * 4
+                da = dp[di + 3] / 255.0
+                out_a = sa + da * (1.0 - sa)
+                if out_a <= 0:
+                    continue
+                dc = [dp[di + c] / 255.0 for c in range(3)]
+                for c in range(3):
+                    if blend == 'screen':
+                        blended = 1.0 - (1.0 - dc[c]) * (1.0 - sc[c])
+                    elif blend == 'multiply':
+                        blended = dc[c] * sc[c]
+                    else:
+                        blended = sc[c]
+                    premul = sa * ((1.0 - da) * sc[c] + da * blended) + (1.0 - sa) * da * dc[c]
+                    dp[di + c] = max(0, min(255, round(premul / out_a * 255.0)))
+                dp[di + 3] = max(0, min(255, round(out_a * 255.0)))
+
+    def blend_fill(self, rgb, opacity, blend='multiply'):
+        one = PixelBuffer(1, 1, bytes([rgb[0], rgb[1], rgb[2], 255]))
+        self.blit_region(one, 0, 0, 1, 1, 0, 0, self.width, self.height, opacity, blend)
 
     @staticmethod
     def from_image(filepath):
-        w, h, c, px = load_image(filepath)
-        return PixelBuffer(w, h, px)
+        w, h, _, pixels = load_image(filepath)
+        return PixelBuffer(w, h, pixels)
 
 
 class AssetCache:
     def __init__(self, public_dir):
-        self.public_dir = public_dir; self._cache = {}
+        self.public_dir, self._cache = public_dir, {}
     def _load(self, key, path):
-        if key not in self._cache: self._cache[key] = PixelBuffer.from_image(path)
+        if key not in self._cache:
+            self._cache[key] = PixelBuffer.from_image(path)
         return self._cache[key]
-    def base(self):
-        return self._load('base', os.path.join(self.public_dir, 'images', 'liangshan-hall-base-clean-v3.webp'))
-    def fg(self):
-        return self._load('fg', os.path.join(self.public_dir, 'images', 'liangshan-hall-foreground-occluders-v3.webp'))
-    def lt(self):
-        return self._load('lt', os.path.join(self.public_dir, 'images', 'liangshan-hall-lighting-overlay-v3.webp'))
-    def atlas(self, ref):
-        k = f'atlas:{ref}'
-        if k not in self._cache: self._cache[k] = PixelBuffer.from_image(os.path.join(self.public_dir, ref))
-        return self._cache[k]
-    def prop_img(self, ref):
-        k = f'prop:{ref}'
-        if k not in self._cache: self._cache[k] = PixelBuffer.from_image(os.path.join(self.public_dir, ref))
-        return self._cache[k]
+    def asset(self, ref):
+        return self._load(f'asset:{ref}', os.path.join(self.public_dir, ref))
     def persona_sheet(self, code):
-        k = f'sprite:{code}'
-        if k not in self._cache:
-            from .world_model import PERSONA_SPRITE
-            info = PERSONA_SPRITE.get(code)
-            if not info: raise ValueError(f'Unknown persona: {code}')
-            self._cache[k] = PixelBuffer.from_image(os.path.join(self.public_dir, 'sprites', 'persona-sheets-v1', info['src']))
-        return self._cache[k]
+        from .world_model import PERSONA_SPRITE
+        info = PERSONA_SPRITE[code]
+        return self._load(f'sprite:{code}', os.path.join(self.public_dir, 'sprites', 'persona-sheets-v1', info['src']))
 
 
 class OfflineRenderer:
-    MAP_W = 1664; MAP_H = 928
+    MAP_W, MAP_H = 1664, 928
+    FIXED_DEPTH = {'base': 0, 'mid-occluders': 2, 'foreground-occluders': 5, 'lighting-overlay': 8}
 
-    def __init__(self, public_dir):
+    def __init__(self, public_dir, image_layers=None):
         self.assets = AssetCache(public_dir)
-        self._full_composite = None
+        self.image_layers = image_layers or {}
+        self._static_crop_cache = {}
 
-    def _build_full_composite(self, fragments, props_list):
-        if self._full_composite is not None:
-            return
-        import time
-        t0 = time.time()
-        from .world_model import base_order_sort
-        all_static = list(fragments) + list(props_list)
-        sorted_static = base_order_sort(all_static)
-        comp = PixelBuffer(self.MAP_W, self.MAP_H)
-        bp = self.assets.base().pixels
-        comp.pixels[:] = bp
-        for obj in sorted_static:
-            if obj.get('kind') == 'prop':
-                self._blit_prop(comp, obj)
-            else:
-                self._blit_fragment(comp, obj)
-        fgp = self.assets.fg().pixels; dp = comp.pixels
-        n = self.MAP_W * self.MAP_H
-        for i in range(0, n*4, 4):
-            fsa = fgp[i+3]
-            if fsa == 255:
-                dp[i]=fgp[i]; dp[i+1]=fgp[i+1]; dp[i+2]=fgp[i+2]; dp[i+3]=255
-            elif fsa > 0:
-                fa = fsa/255.0; inv = 1.0-fa
-                dp[i]=int(fgp[i]*fa+dp[i]*inv); dp[i+1]=int(fgp[i+1]*fa+dp[i+1]*inv)
-                dp[i+2]=int(fgp[i+2]*fa+dp[i+2]*inv); dp[i+3]=min(255,fsa+int(dp[i+3]*inv))
-        ltp = self.assets.lt().pixels
-        for i in range(0, n*4, 4):
-            lsa = ltp[i+3]
-            if lsa > 0:
-                af = (lsa/255.0)*0.45
-                v = 255-int((255-dp[i])*(255-ltp[i])/255*af); dp[i]=max(0,min(255,v))
-                v = 255-int((255-dp[i+1])*(255-ltp[i+1])/255*af); dp[i+1]=max(0,min(255,v))
-                v = 255-int((255-dp[i+2])*(255-ltp[i+2])/255*af); dp[i+2]=max(0,min(255,v))
-                dp[i+3]=min(255,dp[i+3]+int(lsa*0.45))
-        self._full_composite = comp
-        print(f'Full composite built in {time.time()-t0:.1f}s')
+    def _fixed_events(self):
+        # Production insertion order: tile base, then TMX image layers. At equal
+        # z, melon sorts stably descending and draws backwards, so later-added
+        # world renderables draw before these earlier fixed layers.
+        base = {'event': 'base', 'depth': 0, 'insertion': 0, 'source': 'images/liangshan-hall-base-clean-v3.webp'}
+        events = [base]
+        for insertion, name in enumerate(('mid-occluders', 'foreground-occluders', 'lighting-overlay'), 1):
+            layer = self.image_layers.get(name)
+            if not layer:
+                raise RuntimeError(f'fail-closed: production TMX image layer missing: {name}')
+            events.append({'event': name, 'depth': self.FIXED_DEPTH[name], 'insertion': insertion, **layer})
+        return events
 
-    def _blit_fragment(self, canvas, frag):
-        ar = frag.get('assetRef', '')
-        if not ar: return
-        try: atlas = self.assets.atlas(ar)
-        except: return
-        s = frag['sourceRect']; d = frag['destinationRect']
-        canvas.blit_region(atlas, int(s['x']), int(s['y']), int(s['width']), int(s['height']),
-            int(d['x']), int(d['y']), int(d['width']), int(d['height']))
-
-    def _blit_prop(self, canvas, prop):
-        ar = prop.get('assetRef', '')
-        if not ar: return
-        try: img = self.assets.prop_img(ar)
-        except: return
-        d = prop['destinationRect']
-        canvas.blit_region(img, 0, 0, img.width, img.height,
-            int(d['x']), int(d['y']), int(d['width']), int(d['height']))
-
-    def render_shot(self, shot, fragments, props_list):
-        """Render standard viewport crop (used by tests)."""
-        from .world_model import (
-            build_agent_scene_object, compute_unified_order,
-            compute_world_sort_key, PERSONA_SPRITE, PERSONAS,
-        )
-        self._build_full_composite(fragments, props_list)
-        agent = build_agent_scene_object(shot['persona'], shot['world']['x'], shot['world']['y'])
-        sorted_objects, depths = compute_unified_order(fragments, props_list, agent)
-        camera = shot['camera']; vp = shot['viewport']
-        zoom = camera['zoom']; cx, cy = camera['center']['x'], camera['center']['y']
-        vpw = int(vp['width'] / zoom); vph = int(vp['height'] / zoom)
-        wx = max(0, min(int(cx - vpw/2), self.MAP_W - vpw))
-        wy = max(0, min(int(cy - vph/2), self.MAP_H - vph))
-        cw = min(vpw, self.MAP_W - wx); ch = min(vph, self.MAP_H - wy)
-        canvas = PixelBuffer(cw, ch)
-        sp = self._full_composite.pixels; dp = canvas.pixels
-        for cy_i in range(ch):
-            src = ((wy + cy_i) * self.MAP_W + wx) * 4
-            dst = cy_i * cw * 4
-            dp[dst:dst+cw*4] = sp[src:src+cw*4]
-        agent_sid = agent['stableId']; agent_depth = depths.get(agent_sid, 0)
-        covering = []
+    def _event_stack(self, sorted_objects, agent):
+        events = self._fixed_events()
+        # Props exist before V2 activation; agents are added before staged fragments.
+        insertion = 10
         for obj in sorted_objects:
-            sid = obj.get('stableId', '')
-            if sid == agent_sid: continue
-            d = depths.get(sid, 0)
-            if d > agent_depth and self._obj_overlaps(obj, (wx, wy, cw, ch)):
-                covering.append(obj)
-        self._render_agent_vp(canvas, agent, wx, wy)
-        for obj in covering:
-            if obj.get('kind') == 'prop':
-                self._render_prop_vp(canvas, obj, wx, wy)
-            else:
-                self._render_fragment_vp(canvas, obj, wx, wy)
-        return self._build_facts(canvas, sorted_objects, depths, agent, shot, fragments, props_list, wx, wy, cw, ch)
+            if obj['kind'] == 'prop':
+                events.append({'event': 'world', 'depth': sorted_objects.index(obj), 'insertion': insertion, 'object': obj})
+                insertion += 1
+        events.append({'event': 'world', 'depth': sorted_objects.index(agent), 'insertion': insertion, 'object': agent})
+        insertion += 1
+        for obj in sorted_objects:
+            if obj['kind'] == 'fragment':
+                events.append({'event': 'world', 'depth': sorted_objects.index(obj), 'insertion': insertion, 'object': obj})
+                insertion += 1
+        return sorted(events, key=lambda e: (e['depth'], -e['insertion']))
+
+    def _crop(self, shot, crop_w, crop_h):
+        ax, ay = shot['world']['x'], shot['world']['y']
+        tx, ty = shot['targetAnchor']['x'], shot['targetAnchor']['y']
+        cx, cy = int((ax + tx) / 2), int((ay + ty) / 2)
+        wx = max(0, min(cx - crop_w // 2, self.MAP_W - crop_w))
+        wy = max(0, min(cy - crop_h // 2, self.MAP_H - crop_h))
+        return wx, wy, min(crop_w, self.MAP_W - wx), min(crop_h, self.MAP_H - wy)
 
     def render_shot_small(self, shot, fragments, props_list, crop_w=400, crop_h=300):
-        """Render small crop centered on agent-target midpoint."""
-        from .world_model import (
-            build_agent_scene_object, compute_unified_order,
-            compute_world_sort_key, PERSONA_SPRITE, PERSONAS,
-        )
-        self._build_full_composite(fragments, props_list)
+        from .world_model import build_agent_scene_object, compute_unified_order, compute_world_sort_key
         agent = build_agent_scene_object(shot['persona'], shot['world']['x'], shot['world']['y'])
         sorted_objects, depths = compute_unified_order(fragments, props_list, agent)
-        ax = shot['world']['x']; ay = shot['world']['y']
-        tx = shot['targetAnchor']['x']; ty = shot['targetAnchor']['y']
-        cx = int((ax + tx) / 2); cy = int((ay + ty) / 2)
-        wx = max(0, min(cx - crop_w//2, self.MAP_W - crop_w))
-        wy = max(0, min(cy - crop_h//2, self.MAP_H - crop_h))
-        cw = min(crop_w, self.MAP_W - wx); ch = min(crop_h, self.MAP_H - wy)
-        canvas = PixelBuffer(cw, ch)
-        sp = self._full_composite.pixels; dp = canvas.pixels
-        for cy_i in range(ch):
-            src = ((wy + cy_i) * self.MAP_W + wx) * 4
-            dst = cy_i * cw * 4
-            dp[dst:dst+cw*4] = sp[src:src+cw*4]
-        agent_sid = agent['stableId']; agent_depth = depths.get(agent_sid, 0)
-        covering = []
-        for obj in sorted_objects:
-            sid = obj.get('stableId', '')
-            if sid == agent_sid: continue
-            d = depths.get(sid, 0)
-            if d > agent_depth and self._obj_overlaps(obj, (wx, wy, cw, ch)):
-                covering.append(obj)
-        self._render_agent_vp(canvas, agent, wx, wy)
-        for obj in covering:
-            if obj.get('kind') == 'prop':
-                self._render_prop_vp(canvas, obj, wx, wy)
+        wx, wy, cw, ch = self._crop(shot, crop_w, crop_h)
+        stack = self._event_stack(sorted_objects, agent)
+        agent_index = next(i for i, event in enumerate(stack) if event.get('object') is agent)
+        prefix_signature = tuple(
+            (event['event'], event['depth'], event['insertion'], event.get('object', {}).get('stableId', ''))
+            for event in stack[:agent_index]
+        )
+        cache_key = (wx, wy, cw, ch, prefix_signature)
+        cached = self._static_crop_cache.get(cache_key)
+        if cached is None:
+            prefix = PixelBuffer(cw, ch)
+            for event in stack[:agent_index]:
+                obj = event.get('object')
+                if event['event'] == 'world':
+                    if self._obj_overlaps(obj, (wx, wy, cw, ch)):
+                        self._draw_world(prefix, obj, wx, wy, frame=0)
+                else:
+                    self._draw_fixed(prefix, event, wx, wy)
+            cached = prefix.to_bytes()
+            self._static_crop_cache[cache_key] = cached
+        canvas = PixelBuffer(cw, ch, cached)
+        self._render_agent(canvas, agent, wx, wy, frame=0)
+        # Exact production suffix: every world and fixed renderable after the
+        # agent is drawn once, in event order. No precomposited suffix remains
+        # underneath semitransparent agent pixels, so lighting cannot double-hit.
+        for event in stack[agent_index + 1:]:
+            obj = event.get('object')
+            if event['event'] == 'world':
+                if self._obj_overlaps(obj, (wx, wy, cw, ch)):
+                    self._draw_world(canvas, obj, wx, wy, frame=0)
             else:
-                self._render_fragment_vp(canvas, obj, wx, wy)
-        return self._build_facts(canvas, sorted_objects, depths, agent, shot, fragments, props_list, wx, wy, cw, ch)
+                self._draw_fixed(canvas, event, wx, wy)
+        facts = self._build_facts(sorted_objects, depths, agent, shot, fragments, props_list, stack, wx, wy, cw, ch)
+        return canvas.to_bytes(), sorted_objects, depths, facts
 
-    def _build_facts(self, canvas, sorted_objects, depths, agent, shot, fragments, props_list, wx, wy, cw, ch):
-        from .world_model import compute_world_sort_key
-        target_sid = shot['targetStableId']; agent_sid = agent['stableId']
-        ad = depths.get(agent_sid); td = depths.get(target_sid)
-        if ad is not None and td is not None:
-            ordering = 'agent_behind_target' if ad < td else ('agent_in_front' if ad > td else 'tie')
+    def render_shot(self, shot, fragments, props_list):
+        vp, camera = shot['viewport'], shot['camera']
+        zoom = camera['zoom']
+        return self.render_shot_small(shot, fragments, props_list, int(vp['width'] / zoom), int(vp['height'] / zoom))
+
+    def _draw_fixed(self, canvas, event, vx, vy, clip=None):
+        src = self.assets.asset(event['source'])
+        opacity = float(event.get('opacity', 1))
+        blend = 'screen' if event['event'] == 'lighting-overlay' else 'source-over'
+        canvas.blit_region(src, 0, 0, src.width, src.height, int(event.get('offsetX', 0)) - vx,
+                           int(event.get('offsetY', 0)) - vy, int(event.get('width', src.width)),
+                           int(event.get('height', src.height)), opacity, blend, clip=clip)
+        tint = event.get('tintcolor')
+        if tint:
+            rgb = tuple(int(tint[i:i + 2], 16) for i in (1, 3, 5))
+            # HallScene fills the layer rectangle (not the current crop) while
+            # keeping globalAlpha and switching screen -> multiply.
+            one = PixelBuffer(1, 1, bytes([rgb[0], rgb[1], rgb[2], 255]))
+            canvas.blit_region(one, 0, 0, 1, 1, int(event.get('offsetX', 0)) - vx,
+                               int(event.get('offsetY', 0)) - vy, int(event.get('width', src.width)),
+                               int(event.get('height', src.height)), opacity, 'multiply', clip=clip)
+
+    def _draw_world(self, canvas, obj, vx, vy, frame=0):
+        if obj['kind'] == 'agent':
+            self._render_agent(canvas, obj, vx, vy, frame)
+        elif obj['kind'] == 'prop':
+            self._render_prop(canvas, obj, vx, vy)
         else:
-            ordering = 'unknown'
-        target_obj = next((o for o in fragments + props_list if o['stableId'] == target_sid), None)
-        return canvas.to_bytes(), sorted_objects, depths, {
-            'shotId': shot['id'], 'agentStableId': agent_sid, 'targetStableId': target_sid,
-            'agentWorld': {'x': shot['world']['x'], 'y': shot['world']['y']},
-            'agentSortKey': list(compute_world_sort_key(agent)),
-            'targetSortKey': list(compute_world_sort_key(target_obj)) if target_obj else None,
-            'actualDepth': ad, 'targetDepth': td, 'ordering': ordering,
-            'expectedOrdering': shot['expectedRelation'], 'depthMatch': ordering == shot['expectedRelation'],
-            'pixelOverlap': self._compute_overlap(agent, shot),
-            'worldOrderLength': len(sorted_objects),
-            'viewportWorld': {'x': wx, 'y': wy, 'width': cw, 'height': ch},
+            self._render_fragment(canvas, obj, vx, vy)
+
+    def _render_fragment(self, canvas, obj, vx, vy):
+        src = self.assets.asset(obj['assetRef']); s, d = obj['sourceRect'], obj['destinationRect']
+        canvas.blit_region(src, int(s['x']), int(s['y']), int(s['width']), int(s['height']),
+                           int(d['x']) - vx, int(d['y']) - vy, int(d['width']), int(d['height']))
+
+    def _render_prop(self, canvas, obj, vx, vy):
+        src = self.assets.asset(obj['assetRef']); d = obj['destinationRect']
+        canvas.blit_region(src, 0, 0, src.width, src.height, int(d['x']) - vx, int(d['y']) - vy,
+                           int(d['width']), int(d['height']))
+
+    def _agent_geometry(self, agent, frame=0):
+        from .world_model import PERSONA_SPRITE, PERSONAS
+        info = PERSONA_SPRITE[agent['personaCode']]
+        scale = next(p['scale'] for p in PERSONAS if p['personaCode'] == agent['personaCode'])
+        fw, fh = info['frame_w'], info['frame_h']
+        return {
+            'sx': (frame % info['cols']) * fw, 'sy': (frame // info['cols']) * fh,
+            'sw': fw, 'sh': fh, 'x': int(agent['worldX'] - info['anchor_x'] * fw * scale),
+            'y': int(agent['worldY'] - info['anchor_y'] * fh * scale),
+            'width': int(fw * scale), 'height': int(fh * scale), 'scale': scale,
         }
+
+    def _render_agent(self, canvas, agent, vx, vy, frame=0):
+        g = self._agent_geometry(agent, frame); src = self.assets.persona_sheet(agent['personaCode'])
+        canvas.blit_region(src, g['sx'], g['sy'], g['sw'], g['sh'], g['x'] - vx, g['y'] - vy, g['width'], g['height'])
 
     def _obj_overlaps(self, obj, vp):
         vx, vy, vw, vh = vp
-        if obj.get('kind') == 'agent':
-            ax = obj.get('worldX',0)-70; ay = obj.get('worldY',0)-110; aw=140; ah=130
+        d = self._agent_geometry(obj) if obj['kind'] == 'agent' else obj['destinationRect']
+        return not (d['x'] + d['width'] <= vx or d['x'] >= vx + vw or d['y'] + d['height'] <= vy or d['y'] >= vy + vh)
+
+    def _alpha_at_agent(self, agent, x, y, frame=0):
+        g = self._agent_geometry(agent, frame)
+        if not (g['x'] <= x < g['x'] + g['width'] and g['y'] <= y < g['y'] + g['height']):
+            return 0
+        sheet = self.assets.persona_sheet(agent['personaCode'])
+        fx = g['sx'] + (x - g['x'] + 0.5) * g['sw'] / g['width'] - 0.5
+        fy = g['sy'] + (y - g['y'] + 0.5) * g['sh'] / g['height'] - 0.5
+        x0 = max(g['sx'], min(g['sx'] + g['sw'] - 1, int(fx // 1)))
+        y0 = max(g['sy'], min(g['sy'] + g['sh'] - 1, int(fy // 1)))
+        x1, y1 = min(g['sx'] + g['sw'] - 1, x0 + 1), min(g['sy'] + g['sh'] - 1, y0 + 1)
+        wx, wy = fx - (fx // 1), fy - (fy // 1)
+        alpha = 0.0
+        for sx, sy, weight in ((x0,y0,(1-wx)*(1-wy)),(x1,y0,wx*(1-wy)),(x0,y1,(1-wx)*wy),(x1,y1,wx*wy)):
+            alpha += sheet.pixels[(sy * sheet.width + sx) * 4 + 3] * weight
+        return round(alpha)
+
+    def _alpha_at_target(self, target, x, y):
+        d = target['destinationRect']
+        if not (d['x'] <= x < d['x'] + d['width'] and d['y'] <= y < d['y'] + d['height']):
+            return 0
+        if target['kind'] == 'fragment':
+            s, src = target['sourceRect'], self.assets.asset(target['assetRef'])
+            sx = int(s['x']) + int((x - d['x']) * s['width'] / d['width'])
+            sy = int(s['y']) + int((y - d['y']) * s['height'] / d['height'])
         else:
-            d = obj.get('destinationRect',{})
-            ax=d.get('x',0); ay=d.get('y',0); aw=d.get('width',0); ah=d.get('height',0)
-        return not (ax+aw<vx or ax>vx+vw or ay+ah<vy or ay>vy+vh)
+            src = self.assets.asset(target['assetRef'])
+            sx = int((x - d['x']) * src.width / d['width'])
+            sy = int((y - d['y']) * src.height / d['height'])
+        return src.pixels[(sy * src.width + sx) * 4 + 3]
 
-    def _render_fragment_vp(self, c, f, vx, vy):
-        ar = f.get('assetRef','')
-        if not ar: return
-        try: a = self.assets.atlas(ar)
-        except: return
-        s=f['sourceRect']; d=f['destinationRect']
-        c.blit_region(a,int(s['x']),int(s['y']),int(s['width']),int(s['height']),
-            int(d['x'])-vx,int(d['y'])-vy,int(d['width']),int(d['height']))
+    def _alpha_overlap(self, agent, target, ordering):
+        ag, tr = self._agent_geometry(agent), target['destinationRect']
+        x0, y0 = max(ag['x'], int(tr['x'])), max(ag['y'], int(tr['y']))
+        x1, y1 = min(ag['x'] + ag['width'], int(tr['x'] + tr['width'])), min(ag['y'] + ag['height'], int(tr['y'] + tr['height']))
+        intersection = weighted = agent_px = target_px = 0
+        bounds = None
+        if x0 < x1 and y0 < y1:
+            minx = miny = 10**9; maxx = maxy = -1
+            for y in range(y0, y1):
+                for x in range(x0, x1):
+                    aa, ta = self._alpha_at_agent(agent, x, y), self._alpha_at_target(target, x, y)
+                    agent_px += aa > 0; target_px += ta > 0
+                    if aa > 0 and ta > 0:
+                        intersection += 1; weighted += aa * ta / 255.0
+                        minx, miny, maxx, maxy = min(minx, x), min(miny, y), max(maxx, x), max(maxy, y)
+            if intersection:
+                bounds = {'x': minx, 'y': miny, 'width': maxx - minx + 1, 'height': maxy - miny + 1}
+        target_after = ordering == 'agent_behind_target'
+        return {
+            'method': 'source-alpha-mask-intersection', 'hasAlphaOverlap': intersection > 0,
+            'agentOpaquePixelsInAabb': agent_px, 'targetOpaquePixelsInAabb': target_px,
+            'opaqueIntersectionPixels': intersection, 'alphaWeightedIntersection': round(weighted, 3),
+            'visibleOcclusionPixels': intersection if target_after else 0,
+            'agentPixelsOccludedByTarget': intersection if target_after else 0,
+            'targetPixelsOccludedByAgent': intersection if ordering == 'agent_in_front' else 0,
+            'overlapBounds': bounds,
+        }
 
-    def _render_prop_vp(self, c, p, vx, vy):
-        ar = p.get('assetRef','')
-        if not ar: return
-        try: img = self.assets.prop_img(ar)
-        except: return
-        d=p['destinationRect']
-        c.blit_region(img,0,0,img.width,img.height,int(d['x'])-vx,int(d['y'])-vy,int(d['width']),int(d['height']))
+    def frame_alpha_bounds(self, persona):
+        from .world_model import PERSONA_SPRITE
+        info, sheet = PERSONA_SPRITE[persona], self.assets.persona_sheet(persona)
+        result = []
+        for frame in range(4):
+            sx, sy, fw, fh = (frame % info['cols']) * info['frame_w'], 0, info['frame_w'], info['frame_h']
+            xs, ys, count = [], [], 0
+            for y in range(fh):
+                for x in range(fw):
+                    if sheet.pixels[((sy + y) * sheet.width + sx + x) * 4 + 3] > 0:
+                        xs.append(x); ys.append(y); count += 1
+            result.append({'frame': frame, 'bounds': {'x': min(xs), 'y': min(ys), 'width': max(xs)-min(xs)+1, 'height': max(ys)-min(ys)+1}, 'opaquePixels': count})
+        vertical_extents = {(r['bounds']['y'], r['bounds']['y'] + r['bounds']['height']) for r in result}
+        exact_bounds = {tuple(r['bounds'][k] for k in ('x', 'y', 'width', 'height')) for r in result}
+        return {'animation': 'idle', 'direction': 'down', 'frames': result,
+                'sameFrameGeometryAnchorScale': True,
+                'sameAlphaVerticalExtent': len(vertical_extents) == 1,
+                'allAlphaBoundsEqual': len(exact_bounds) == 1,
+                'reviewInvariantPass': len(vertical_extents) == 1 and all(r['opaquePixels'] > 0 for r in result),
+                'invariant': 'same frame geometry/anchor/scale and same alpha top/baseline; exact x/width differences are reported, not hidden'}
 
-    def _render_agent_vp(self, c, a, vx, vy):
-        pc = a.get('personaCode','')
-        if not pc: return
-        from .world_model import PERSONA_SPRITE, PERSONAS
-        info = PERSONA_SPRITE.get(pc)
-        pers = next((p for p in PERSONAS if p['personaCode']==pc),None)
-        if not info or not pers: return
-        try: sheet = self.assets.persona_sheet(pc)
-        except: return
-        fw,fh=info['frame_w'],info['frame_h']; sc=pers['scale']
-        afx=info['anchor_x']*fw; afy=info['anchor_y']*fh
-        c.blit_region(sheet,0,0,fw,fh,
-            int(a['worldX']-afx*sc)-vx,int(a['worldY']-afy*sc)-vy,int(fw*sc),int(fh*sc))
-
-    def _compute_overlap(self, agent, shot):
-        from .world_model import PERSONA_SPRITE, PERSONAS
-        pc=agent.get('personaCode','')
-        info=PERSONA_SPRITE.get(pc)
-        pers=next((p for p in PERSONAS if p['personaCode']==pc),None)
-        if not info or not pers: return {'hasOverlap':False}
-        sc=pers['scale']; afx=info['anchor_x']*info['frame_w']; afy=info['anchor_y']*info['frame_h']
-        dw=int(info['frame_w']*sc); dh=int(info['frame_h']*sc)
-        ax=int(agent['worldX']-afx*sc); ay=int(agent['worldY']-afy*sc)
-        tr=shot.get('targetRect',{})
-        tx=int(tr.get('x',0)); ty=int(tr.get('y',0)); tw=int(tr.get('width',0)); th=int(tr.get('height',0))
-        ox=max(tx,ax); oy=max(ty,ay); ox2=min(tx+tw,ax+dw); oy2=min(ty+th,ay+dh)
-        if ox>=ox2 or oy>=oy2: return {'hasOverlap':False,'overlapAlpha':0,'overlapBounds':None}
-        return {'hasOverlap':True,'overlapBounds':{'x':ox,'y':oy,'width':ox2-ox,'height':oy2-oy}}
+    def _build_facts(self, order, depths, agent, shot, fragments, props, stack, wx, wy, cw, ch):
+        from .world_model import compute_world_sort_key
+        target = next(o for o in [*fragments, *props] if o['stableId'] == shot['targetStableId'])
+        ad, td = depths[agent['stableId']], depths[target['stableId']]
+        ordering = 'agent_behind_target' if ad < td else ('agent_in_front' if ad > td else 'tie')
+        fixed = [e for e in stack if e['event'] != 'world']
+        return {
+            'shotId': shot['id'], 'agentStableId': agent['stableId'], 'targetStableId': target['stableId'],
+            'agentWorld': dict(shot['world']), 'agentSortKey': list(compute_world_sort_key(agent)),
+            'targetSortKey': list(compute_world_sort_key(target)), 'actualDepth': ad, 'targetDepth': td,
+            'ordering': ordering, 'semanticExpectedRelation': shot['expectedRelation'],
+            'resolvedExpectedOrdering': shot['resolvedExpectedOrdering'],
+            'depthMatch': ordering == shot['resolvedExpectedOrdering'],
+            'pixelOverlap': self._alpha_overlap(agent, target, ordering), 'worldOrderLength': len(order),
+            'viewportWorld': {'x': wx, 'y': wy, 'width': cw, 'height': ch},
+            'sampledSpriteFrame': {'animation': 'idle', 'direction': 'down', 'frame': 0},
+            'fixedLayerStack': [{'name': e['event'], 'depth': e['depth'], 'opacity': e.get('opacity', 1),
+                                 'tintcolor': e.get('tintcolor'), 'blend': 'screen' if e['event'] == 'lighting-overlay' else 'source-over'} for e in fixed],
+            'drawIndices': {
+                'agent': next(i for i, e in enumerate(stack) if e.get('object', {}).get('stableId') == agent['stableId']),
+                'target': next(i for i, e in enumerate(stack) if e.get('object', {}).get('stableId') == target['stableId']),
+            },
+        }

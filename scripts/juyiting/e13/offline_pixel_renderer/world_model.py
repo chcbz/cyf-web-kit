@@ -1,361 +1,163 @@
 #!/usr/bin/env python3
-"""
-E13 World Model: TMX parser, sort key computation, shot plan.
-Matches production:
-  - worldOrder.ts: computeWorldSortKey, compareWorldSortKeys, baseOrderSort
-  - hallSceneAssembly.ts: computeUnifiedWorldOrder (base sort, no constraint zones)
-  - schema.ts: RENDER_BAND_ORDER, DEFAULT_FLOOR_REGISTRY
-
-Production-identical sort key:
-  renderBandOrder → floorOrder → elevation → fixedPointY → tieBias → stableId ASCII bytes
-"""
-import os
+"""Authoritative E13 shot-plan loader plus deterministic production sort model."""
+from pathlib import Path
+import copy
 import json
-import hashlib
+import math
+import os
 import xml.etree.ElementTree as ET
 
-# ── Production constants from schema.ts ──
 RENDER_BAND_ORDER = {
-    'background': 0,
-    'world': 100,
-    'overhead': 200,
-    'lighting': 300,
-    'world-ui': 400,
-    'screen-ui': 500,
+    'background': 0, 'world': 100, 'overhead': 200,
+    'lighting': 300, 'world-ui': 400, 'screen-ui': 500,
 }
-
 DEFAULT_FLOOR_REGISTRY = {'floor-1': 0}
 
-# ── E13 personas from world-model.mjs ──
 PERSONAS = [
-    {'personaCode': 'songjiang',  'name': '宋江',   'agentId': 'songjiang',  'scale': 0.52},
-    {'personaCode': 'lujunyi',    'name': '卢俊义', 'agentId': 'lujunyi',    'scale': 0.52},
+    {'personaCode': 'songjiang', 'name': '宋江', 'agentId': 'songjiang', 'scale': 0.52},
+    {'personaCode': 'lujunyi', 'name': '卢俊义', 'agentId': 'lujunyi', 'scale': 0.52},
     {'personaCode': 'husanniang', 'name': '扈三娘', 'agentId': 'husanniang', 'scale': 0.50},
-    {'personaCode': 'likui',      'name': '李逵',   'agentId': 'likui',      'scale': 0.56},
-    {'personaCode': 'linchong',   'name': '林冲',   'agentId': 'linchong',   'scale': 0.54},
-    {'personaCode': 'wuyong',     'name': '吴用',   'agentId': 'wuyong',     'scale': 0.50},
+    {'personaCode': 'likui', 'name': '李逵', 'agentId': 'likui', 'scale': 0.56},
+    {'personaCode': 'linchong', 'name': '林冲', 'agentId': 'linchong', 'scale': 0.54},
+    {'personaCode': 'wuyong', 'name': '吴用', 'agentId': 'wuyong', 'scale': 0.50},
 ]
-
-RELATIONS = {
-    'behind':   {'dy': -34, 'expected': 'agent_behind_target',  'expectedDepth': 'agent < target'},
-    'boundary': {'dy': 0,   'expected': 'tie',                  'expectedDepth': 'tie (tieBias/stableId)'},
-    'front':    {'dy': +34, 'expected': 'agent_in_front',       'expectedDepth': 'agent > target'},
-}
-
-# ── Sprite sheet constants for personas ──
 PERSONA_SPRITE = {
-    'songjiang':  {'src': 'songjiang-8-direction-v3.webp',  'frame_w': 128, 'frame_h': 128, 'cols': 8, 'anchor_x': 0.5, 'anchor_y': 0.86},
-    'lujunyi':    {'src': 'lujunyi-8-direction-v1.webp',    'frame_w': 128, 'frame_h': 128, 'cols': 8, 'anchor_x': 0.5, 'anchor_y': 0.86},
+    'songjiang': {'src': 'songjiang-8-direction-v3.webp', 'frame_w': 128, 'frame_h': 128, 'cols': 8, 'anchor_x': 0.5, 'anchor_y': 0.86},
+    'lujunyi': {'src': 'lujunyi-8-direction-v1.webp', 'frame_w': 128, 'frame_h': 128, 'cols': 8, 'anchor_x': 0.5, 'anchor_y': 0.86},
     'husanniang': {'src': 'husanniang-8-direction-v1.webp', 'frame_w': 128, 'frame_h': 128, 'cols': 8, 'anchor_x': 0.5, 'anchor_y': 0.86},
-    'likui':      {'src': 'likui-8-direction-v2.webp',      'frame_w': 128, 'frame_h': 128, 'cols': 8, 'anchor_x': 0.5, 'anchor_y': 0.86},
-    'linchong':   {'src': 'linchong-8-direction-v1.webp',   'frame_w': 128, 'frame_h': 128, 'cols': 8, 'anchor_x': 0.5, 'anchor_y': 0.86},
-    'wuyong':     {'src': 'wuyong-8-direction-v1.webp',     'frame_w': 128, 'frame_h': 128, 'cols': 8, 'anchor_x': 0.5, 'anchor_y': 0.86},
+    'likui': {'src': 'likui-8-direction-v2.webp', 'frame_w': 128, 'frame_h': 128, 'cols': 8, 'anchor_x': 0.5, 'anchor_y': 0.86},
+    'linchong': {'src': 'linchong-8-direction-v1.webp', 'frame_w': 128, 'frame_h': 128, 'cols': 8, 'anchor_x': 0.5, 'anchor_y': 0.86},
+    'wuyong': {'src': 'wuyong-8-direction-v1.webp', 'frame_w': 128, 'frame_h': 128, 'cols': 8, 'anchor_x': 0.5, 'anchor_y': 0.86},
 }
 
 
-def sha256_hex(data):
-    if isinstance(data, str):
-        data = data.encode('utf-8')
-    return hashlib.sha256(data).hexdigest()
+def default_repo_root():
+    return str(Path(__file__).resolve().parents[4])
+
+
+def _props(node):
+    result = {}
+    pn = node.find('properties')
+    if pn is not None:
+        for p in pn.findall('property'):
+            result[p.get('name', '')] = p.get('value', p.text or '')
+    return result
 
 
 def parse_tmx(filepath):
-    """Parse hall.tmx and return fragments, props, and map properties."""
-    tree = ET.parse(filepath)
-    root = tree.getroot()
-
-    fragments = []
-    props_list = []
-
-    for objgroup in root.findall('.//objectgroup'):
-        name = objgroup.get('name', '')
-
-        for obj in objgroup.findall('object'):
-            properties = {}
-            props_node = obj.find('properties')
-            if props_node is not None:
-                for p in props_node.findall('property'):
-                    properties[p.get('name', '')] = p.get('value', '')
-
-            kind = properties.get('kind', '')
-            obj_type = obj.get('type', '')
-            stable_id = properties.get('stableId', '')
-
+    root = ET.parse(filepath).getroot()
+    fragments, props_list = [], []
+    for group in root.findall('objectgroup'):
+        group_name = group.get('name', '')
+        for obj in group.findall('object'):
+            p = _props(obj)
+            stable_id = p.get('stableId', '')
             if not stable_id:
                 continue
-
-            x = float(obj.get('x', 0))
-            y = float(obj.get('y', 0))
-            w = float(obj.get('width', 0))
-            h = float(obj.get('height', 0))
-
-            sort_anchor_x = float(properties.get('sortAnchorX', x))
-            sort_anchor_y = float(properties.get('sortAnchorY', y))
-            tie_bias = int(properties.get('tieBias', 0))
-            asset_ref = properties.get('assetRef', '')
-            floor_id = properties.get('floorId', 'floor-1')
-            elevation = int(properties.get('elevation', 0))
-            chunk_id = properties.get('chunkId', '')
-            render_band = properties.get('renderBand', 'world')
-
-            if name.startswith('v2-fragments') or obj_type == 'occluder-fragment' or kind == 'occluder-fragment':
-                # Fragment
-                src_x = int(float(properties.get('sourceRectX', 0)))
-                src_y = int(float(properties.get('sourceRectY', 0)))
-                src_w = int(float(properties.get('sourceRectW', w)))
-                src_h = int(float(properties.get('sourceRectH', h)))
-
-                # Determine chunk_id from atlas name if not explicit
-                if not chunk_id and asset_ref:
-                    atlas_name = os.path.basename(asset_ref).replace('-v2.png', '')
-                    chunk_id = atlas_name
-
-                fragments.append({
-                    'stableId': stable_id,
-                    'sceneId': 'juyiting-main',
-                    'chunkId': chunk_id,
-                    'floorId': floor_id,
-                    'elevation': elevation,
-                    'renderBand': render_band,
-                    'sortMode': 'fixed',
-                    'sortAnchor': {'x': sort_anchor_x, 'y': sort_anchor_y},
-                    'tieBias': tie_bias,
-                    'assetRef': asset_ref,
-                    'sourceRect': {'x': src_x, 'y': src_y, 'width': src_w, 'height': src_h},
-                    'destinationRect': {'x': x, 'y': y, 'width': w, 'height': h},
-                })
-
+            x, y = float(obj.get('x', 0)), float(obj.get('y', 0))
+            w, h = float(obj.get('width', 0)), float(obj.get('height', 0))
+            common = {
+                'stableId': stable_id, 'sceneId': 'juyiting-main',
+                'chunkId': p.get('chunkId', 'props'), 'floorId': p.get('floorId', 'floor-1'),
+                'elevation': int(p.get('elevation', 0)), 'renderBand': p.get('renderBand', 'world'),
+                'sortMode': p.get('sortMode', 'fixed'),
+                'sortAnchor': {'x': float(p.get('sortAnchorX', x)), 'y': float(p.get('sortAnchorY', y))},
+                'tieBias': int(p.get('tieBias', 0)), 'assetRef': p.get('assetRef', ''),
+                'destinationRect': {'x': x, 'y': y, 'width': w, 'height': h},
+            }
+            kind = p.get('kind', '')
+            if group_name.startswith('v2-fragments') or obj.get('type') == 'occluder-fragment' or kind == 'occluder-fragment':
+                common['kind'] = 'fragment'
+                common['sourceRect'] = {
+                    'x': int(float(p.get('sourceRectX', 0))), 'y': int(float(p.get('sourceRectY', 0))),
+                    'width': int(float(p.get('sourceRectW', w))), 'height': int(float(p.get('sourceRectH', h))),
+                }
+                if common['chunkId'] == 'props' and common['assetRef']:
+                    common['chunkId'] = os.path.basename(common['assetRef']).replace('-v2.png', '')
+                fragments.append(common)
             elif kind == 'prop':
-                props_list.append({
-                    'stableId': stable_id,
-                    'sceneId': 'juyiting-main',
-                    'chunkId': chunk_id or 'props',
-                    'floorId': floor_id,
-                    'elevation': elevation,
-                    'renderBand': render_band,
-                    'sortMode': 'fixed',
-                    'sortAnchor': {'x': sort_anchor_x, 'y': sort_anchor_y},
-                    'tieBias': tie_bias,
-                    'assetRef': asset_ref,
-                    'destinationRect': {'x': x, 'y': y, 'width': w, 'height': h},
-                    'kind': 'prop',
-                })
+                common['kind'] = 'prop'
+                props_list.append(common)
 
-    return fragments, props_list
+    image_layers = {}
+    for layer in root.findall('imagelayer'):
+        image = layer.find('image')
+        if image is None:
+            continue
+        name = layer.get('name', '')
+        image_layers[name] = {
+            'name': name, 'source': image.get('source', ''),
+            'width': int(image.get('width', root.get('width', 0))),
+            'height': int(image.get('height', root.get('height', 0))),
+            'offsetX': float(layer.get('offsetx', 0)), 'offsetY': float(layer.get('offsety', 0)),
+            'opacity': float(layer.get('opacity', 1)), 'tintcolor': layer.get('tintcolor'),
+        }
+    return fragments, props_list, image_layers
+
+
+def _js_round(value):
+    return math.floor(value + 0.5)
 
 
 def compute_world_sort_key(obj, floor_registry=None):
-    """
-    Compute deterministic sort key matching production worldOrder.ts.
-    Returns a tuple: (renderBandOrder, floorOrder, elevation, fixedPointY, tieBias, stableId)
-    """
-    if floor_registry is None:
-        floor_registry = DEFAULT_FLOOR_REGISTRY
-
-    band = obj.get('renderBand', 'world')
-    render_band_order = RENDER_BAND_ORDER.get(band, 100)
-
-    floor_id = obj.get('floorId', 'floor-1')
-    floor_order = floor_registry.get(floor_id, 0)
-
-    elevation = int(obj.get('elevation', 0))
-
-    sort_anchor_y = obj['sortAnchor']['y']
-    fixed_point_y = round(sort_anchor_y * 256)
-    if fixed_point_y == -0:
-        fixed_point_y = 0
-
-    tie_bias = int(obj.get('tieBias', 0))
-    stable_id = obj['stableId']
-
-    return (render_band_order, floor_order, elevation, fixed_point_y, tie_bias, stable_id)
+    floor_registry = floor_registry or DEFAULT_FLOOR_REGISTRY
+    return (
+        RENDER_BAND_ORDER[obj.get('renderBand', 'world')],
+        floor_registry[obj.get('floorId', 'floor-1')], int(obj.get('elevation', 0)),
+        _js_round(float(obj['sortAnchor']['y']) * 256), int(obj.get('tieBias', 0)), obj['stableId'],
+    )
 
 
-def compare_stable_ids(a, b):
-    """Byte-by-byte ASCII comparison matching compareStableId in worldOrder.ts."""
-    for ca, cb in zip(a.encode('ascii'), b.encode('ascii')):
-        if ca < cb: return -1
-        if ca > cb: return 1
-    if len(a) < len(b): return -1
-    if len(a) > len(b): return 1
-    return 0
-
-
-def compare_sort_keys(key_a, key_b):
-    """Compare two sort keys matching compareWorldSortKeys in worldOrder.ts."""
-    for i in range(5):  # first 5 fields are numeric
-        if key_a[i] < key_b[i]:
-            return -1
-        if key_a[i] > key_b[i]:
-            return 1
-    return compare_stable_ids(key_a[5], key_b[5])
+def compare_sort_keys(a, b):
+    return -1 if a < b else (1 if a > b else 0)
 
 
 def base_order_sort(objects, floor_registry=None):
-    """Sort objects by world sort key. Matches baseOrderSort in worldOrder.ts."""
-    decorated = [(compute_world_sort_key(obj, floor_registry), obj) for obj in objects]
-    decorated.sort(key=lambda x: (
-        x[0][0], x[0][1], x[0][2], x[0][3], x[0][4], x[0][5]
-    ))
-    return [obj for _, obj in decorated]
+    return sorted(objects, key=lambda obj: compute_world_sort_key(obj, floor_registry))
 
 
 def build_agent_scene_object(persona_code, world_x, world_y):
-    """Build a pseudo SceneObject for an agent at given world position."""
-    persona = next((p for p in PERSONAS if p['personaCode'] == persona_code), None)
-    if not persona:
+    if not any(p['personaCode'] == persona_code for p in PERSONAS):
         raise ValueError(f'Unknown persona: {persona_code}')
-
     return {
-        'stableId': f'agent.{persona_code}',
-        'sceneId': 'juyiting-main',
-        'chunkId': 'agents',
-        'kind': 'agent',
-        'renderBand': 'world',
-        'floorId': 'floor-1',
-        'elevation': 0,
-        'sortMode': 'fixed',
-        'sortAnchor': {'x': world_x, 'y': world_y},
-        'tieBias': 0,
-        'personaCode': persona_code,
-        'worldX': world_x,
-        'worldY': world_y,
+        'stableId': f'agent.{persona_code}', 'sceneId': 'juyiting-main', 'chunkId': 'agents',
+        'kind': 'agent', 'renderBand': 'world', 'floorId': 'floor-1', 'elevation': 0,
+        'sortMode': 'fixed', 'sortAnchor': {'x': world_x, 'y': world_y}, 'tieBias': 0,
+        'personaCode': persona_code, 'worldX': world_x, 'worldY': world_y,
     }
 
 
 def compute_unified_order(fragments, props_list, agent_obj):
-    """
-    Compute unified world order for fragments + props + one agent.
-    No constraint zones (none in TMX), so this is pure base sort.
-    Returns ordered list of objects and depth map.
-    """
-    all_objects = list(fragments) + list(props_list) + [agent_obj]
-    sorted_objects = base_order_sort(all_objects)
-
-    depths = {}
-    for i, obj in enumerate(sorted_objects):
-        depths[obj['stableId']] = i
-
-    return sorted_objects, depths
+    order = base_order_sort([*fragments, *props_list, agent_obj])
+    return order, {obj['stableId']: i for i, obj in enumerate(order)}
 
 
 def build_shot_plan(repo_root=None):
-    """Build the 270 matrix shot plan matching world-model.mjs buildShotPlan."""
-    # First parse TMX to get actual fragments and props
-    if repo_root is None:
-        repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-    tmx_path = os.path.join(repo_root, 'public', 'juyiting', 'hall.tmx')
-    fragments, props_list = parse_tmx(tmx_path)
+    """Consume, never reconstruct, the authoritative 270 matrix entries."""
+    repo_root = os.path.realpath(repo_root or default_repo_root())
+    fixture = os.path.join(repo_root, 'tests', 'fixtures', 'juyiting', 'occlusion-e13', 'shot-plan.json')
+    with open(fixture, encoding='utf-8') as f:
+        authoritative = json.load(f)
+    matrix = [copy.deepcopy(s) for s in authoritative.get('shots', []) if s.get('kind') == 'matrix']
+    if len(matrix) != 270:
+        raise RuntimeError(f'authoritative shot-plan matrix count must be 270, got {len(matrix)}')
 
-    # Build targets from fragments and props that match E13 targets
-    all_targets = []
-
-    # E13 target stableIds (matching world-model.mjs TARGETS)
-    e13_target_ids = {
-        'jyt.occ.west-upper.lantern-01.v2',
-        'jyt.prop.center-north.main-seat.v1',
-        'jyt.prop.northeast.bounty-board.v1',
-        'jyt.occ.west-upper.wall-sconce-02.v2',
-        'jyt.occ.west-upper.diagonal-brace-01.v2',
-        'jyt.occ.east-upper.pillar-01.v2',
-        'jyt.occ.west-lower.railing-02.v2',
-        'jyt.occ.entrance.hanging-banner-01.v2',
-        'jyt.prop.southeast.library-shelf.v1',
-        'jyt.occ.east-upper.scroll-table-front-01.v2',
-        'jyt.occ.west-lower.railing-01.v2',
-        'jyt.occ.east-lower.railing-post-01.v2',
-        'jyt.occ.east-upper.pillar-02.v2',
-        'jyt.occ.entrance.lantern-post-01.v2',
-        'jyt.occ.east-lower.worktable-01.v2',
-    }
-
-    # Cell assignments matching world-model.mjs
-    cell_map = {
-        'jyt.occ.west-upper.lantern-01.v2': 'northwest',
-        'jyt.prop.center-north.main-seat.v1': 'north_center',
-        'jyt.prop.northeast.bounty-board.v1': 'northeast',
-        'jyt.occ.west-upper.wall-sconce-02.v2': 'west_center',
-        'jyt.occ.west-upper.diagonal-brace-01.v2': 'center',
-        'jyt.occ.east-upper.pillar-01.v2': 'east_center',
-        'jyt.occ.west-lower.railing-02.v2': 'southwest',
-        'jyt.occ.entrance.hanging-banner-01.v2': 'south_center',
-        'jyt.prop.southeast.library-shelf.v1': 'southeast',
-        'jyt.occ.east-upper.scroll-table-front-01.v2': 'northeast',
-        'jyt.occ.west-lower.railing-01.v2': 'south_center',
-        'jyt.occ.east-lower.railing-post-01.v2': 'southeast',
-        'jyt.occ.east-upper.pillar-02.v2': 'southeast',
-        'jyt.occ.entrance.lantern-post-01.v2': 'south_center',
-        'jyt.occ.east-lower.worktable-01.v2': 'southeast',
-    }
-
-    focus_ids = {
-        'jyt.prop.northeast.bounty-board.v1',
-        'jyt.occ.east-upper.pillar-01.v2',
-        'jyt.occ.west-lower.railing-02.v2',
-        'jyt.occ.entrance.hanging-banner-01.v2',
-        'jyt.prop.southeast.library-shelf.v1',
-        'jyt.occ.east-upper.scroll-table-front-01.v2',
-        'jyt.occ.west-lower.railing-01.v2',
-        'jyt.occ.east-lower.railing-post-01.v2',
-        'jyt.occ.east-upper.pillar-02.v2',
-        'jyt.occ.entrance.lantern-post-01.v2',
-        'jyt.occ.east-lower.worktable-01.v2',
-    }
-
-    all_objects = list(fragments) + list(props_list)
-    for obj in fragments + props_list:
-        sid = obj['stableId']
-        if sid in e13_target_ids:
-            all_targets.append({
-                'stableId': sid,
-                'kind': obj.get('kind', 'fragment'),
-                'cell': cell_map.get(sid, 'center'),
-                'focus': sid in focus_ids,
-                'anchor': obj['sortAnchor'],
-                'tieBias': obj['tieBias'],
-                'rect': obj.get('destinationRect', obj.get('sourceRect', {'x': 0, 'y': 0, 'width': 0, 'height': 0})),
-            })
-
-    shots = []
-    seq = 0
-    for target in all_targets:
-        for persona in PERSONAS:
-            for rel_name, rel_def in RELATIONS.items():
-                seq += 1
-                world_x = target['anchor']['x']
-                world_y = target['anchor']['y'] + rel_def['dy']
-                # Compute resolved expected ordering from production sort keys
-                # Build pseudo-objects for sort key computation
-                agent_pseudo = {
-                    'stableId': f'agent.{persona["personaCode"]}',
-                    'sceneId': 'juyiting-main', 'chunkId': 'agents', 'kind': 'agent',
-                    'renderBand': 'world', 'floorId': 'floor-1', 'elevation': 0,
-                    'sortMode': 'fixed', 'sortAnchor': {'x': world_x, 'y': world_y}, 'tieBias': 0,
-                }
-                ak = compute_world_sort_key(agent_pseudo)
-                target_obj = next(o for o in all_objects if o['stableId'] == target['stableId'])
-                tk = compute_world_sort_key(target_obj)
-                resolved = 'agent_behind_target' if compare_sort_keys(ak, tk) < 0 else ('agent_in_front' if compare_sort_keys(ak, tk) > 0 else 'tie')
-                resolved_depth = 'agent < target' if compare_sort_keys(ak, tk) < 0 else ('agent > target' if compare_sort_keys(ak, tk) > 0 else 'tie (tieBias/stableId)')
-
-                shots.append({
-                    'id': f'E13-{seq:03d}',
-                    'kind': 'matrix',
-                    'cell': target['cell'],
-                    'targetStableId': target['stableId'],
-                    'targetKind': target['kind'],
-                    'focus': target['focus'],
-                    'persona': persona['personaCode'],
-                    'personaName': persona['name'],
-                    'relation': rel_name,
-                    'world': {'x': world_x, 'y': world_y},
-                    'expectedRelation': resolved,
-                    'expectedDepth': resolved_depth,
-                    'semanticRelation': rel_name,
-                    'viewport': {'width': 1280, 'height': 800},
-                    'camera': {'center': {'x': target['anchor']['x'], 'y': target['anchor']['y']}, 'zoom': 1.1},
-                    'targetAnchor': target['anchor'],
-                    'targetRect': target['rect'],
-                })
-
-    return shots, fragments, props_list
+    fragments, props_list, image_layers = parse_tmx(os.path.join(repo_root, 'public', 'juyiting', 'hall.tmx'))
+    objects = {o['stableId']: o for o in [*fragments, *props_list]}
+    seen = set()
+    for shot in matrix:
+        if shot['id'] in seen:
+            raise RuntimeError(f'duplicate authoritative shot id: {shot["id"]}')
+        seen.add(shot['id'])
+        target = objects.get(shot['targetStableId'])
+        if target is None:
+            raise RuntimeError(f'{shot["id"]}: target absent from production TMX: {shot["targetStableId"]}')
+        if shot['targetKind'] != target['kind']:
+            raise RuntimeError(f'{shot["id"]}: targetKind drift: plan={shot["targetKind"]} TMX={target["kind"]}')
+        agent = build_agent_scene_object(shot['persona'], shot['world']['x'], shot['world']['y'])
+        cmp = compare_sort_keys(compute_world_sort_key(agent), compute_world_sort_key(target))
+        shot['resolvedExpectedOrdering'] = 'agent_behind_target' if cmp < 0 else ('agent_in_front' if cmp > 0 else 'tie')
+        shot['semanticRelation'] = shot['relation']
+        shot['targetAnchor'] = copy.deepcopy(target['sortAnchor'])
+        shot['targetRect'] = copy.deepcopy(target['destinationRect'])
+    return matrix, fragments, props_list, image_layers

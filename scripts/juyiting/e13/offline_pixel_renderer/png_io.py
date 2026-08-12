@@ -215,47 +215,80 @@ def write_png(filepath, width, height, pixels_rgba):
         f.write(result)
 
 
-def decode_webp(filepath):
+EXPECTED_WEBP = {
+    'soname': 'libwebp.so.7',
+    'abi': 7,
+    'decoderVersionHex': '0x010200',
+    'decoderVersion': '1.2.0',
+    'sha256': 'cddced092a8452bb7df72743d7810d736b4043cf9b00f41a4fdf72e120f438a0',
+    'api': ['WebPGetDecoderVersion', 'WebPGetInfo', 'WebPDecodeRGBA', 'WebPFree'],
+}
+_WEBP_STATE = None
+
+
+def webp_decoder_provenance():
+    global _WEBP_STATE
+    if _WEBP_STATE is not None:
+        return dict(_WEBP_STATE['provenance'])
     import ctypes
-    lib = ctypes.cdll.LoadLibrary('libwebp.so.7')
-    lib.WebPGetInfo.argtypes = [
-        ctypes.c_char_p, ctypes.c_size_t,
-        ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int)
-    ]
+    import ctypes.util
+    import hashlib
+    import os
+    candidates = ['/lib64/libwebp.so.7', '/usr/lib64/libwebp.so.7', ctypes.util.find_library('webp')]
+    selected = next((p for p in candidates if p and (os.path.isabs(p) and os.path.exists(p))), None)
+    if not selected:
+        raise RuntimeError('fail-closed: required libwebp.so.7 was not found')
+    realpath = os.path.realpath(selected)
+    digest = hashlib.sha256(open(realpath, 'rb').read()).hexdigest()
+    if digest != EXPECTED_WEBP['sha256']:
+        raise RuntimeError(f'fail-closed: libwebp decoder hash drift: {realpath} sha256={digest}')
+    lib = ctypes.CDLL(selected)
+    for symbol in EXPECTED_WEBP['api']:
+        if not hasattr(lib, symbol):
+            raise RuntimeError(f'fail-closed: libwebp missing decoder API {symbol}')
+    lib.WebPGetDecoderVersion.restype = ctypes.c_int
+    version = lib.WebPGetDecoderVersion()
+    version_hex = f'0x{version:06x}'
+    if version_hex != EXPECTED_WEBP['decoderVersionHex']:
+        raise RuntimeError(f'fail-closed: libwebp decoder version drift: {version_hex}')
+    lib.WebPGetInfo.argtypes = [ctypes.c_char_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int)]
     lib.WebPGetInfo.restype = ctypes.c_int
-    lib.WebPDecodeRGBA.argtypes = [
-        ctypes.c_char_p, ctypes.c_size_t,
-        ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int)
-    ]
+    lib.WebPDecodeRGBA.argtypes = [ctypes.c_char_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int)]
     lib.WebPDecodeRGBA.restype = ctypes.POINTER(ctypes.c_uint8)
     lib.WebPFree.argtypes = [ctypes.c_void_p]
     lib.WebPFree.restype = None
+    provenance = {
+        **EXPECTED_WEBP, 'loadedPath': selected, 'realPath': realpath,
+        'crossHostPolicy': 'fail-closed: exact SONAME ABI, decoder version, exported API, and library SHA-256 must match',
+    }
+    _WEBP_STATE = {'lib': lib, 'provenance': provenance}
+    return dict(provenance)
 
+
+def decode_webp(filepath):
+    import ctypes
+    webp_decoder_provenance()
+    lib = _WEBP_STATE['lib']
     with open(filepath, 'rb') as f:
         data = f.read()
-
-    w = ctypes.c_int()
-    h = ctypes.c_int()
+    w, h = ctypes.c_int(), ctypes.c_int()
     if not lib.WebPGetInfo(data, len(data), ctypes.byref(w), ctypes.byref(h)):
         raise RuntimeError(f'Invalid WebP: {filepath}')
-
-    width, height = w.value, h.value
     ptr = lib.WebPDecodeRGBA(data, len(data), ctypes.byref(w), ctypes.byref(h))
     if not ptr:
         raise RuntimeError(f'WebP decode failed: {filepath}')
-
-    size = width * height * 4
-    pixels = bytes(ctypes.cast(ptr, ctypes.POINTER(ctypes.c_uint8 * size)).contents)
-    pixels = bytes(pixels)
-    lib.WebPFree(ptr)
-    return width, height, 4, pixels
+    size = w.value * h.value * 4
+    try:
+        pixels = bytes(ctypes.cast(ptr, ctypes.POINTER(ctypes.c_uint8 * size)).contents)
+    finally:
+        lib.WebPFree(ptr)
+    return w.value, h.value, 4, pixels
 
 
 def load_image(filepath):
     ext = filepath.rsplit('.', 1)[-1].lower()
     if ext == 'png':
         return read_png(filepath)
-    elif ext == 'webp':
+    if ext == 'webp':
         return decode_webp(filepath)
-    else:
-        raise ValueError(f'Unsupported image format: {ext}')
+    raise ValueError(f'Unsupported image format: {ext}')

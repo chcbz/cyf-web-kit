@@ -1,196 +1,87 @@
 #!/usr/bin/env node
-/**
- * E13 Offline Evidence Generator — single command to rebuild all evidence.
- *   node scripts/juyiting/e13/generate-e13-offline-evidence.mjs
- *   npm run generate:e13-offline
- *
- * Produces:
- *   tests/fixtures/juyiting/occlusion-e13/
- *     shots/               270 PNGs (400×300, agent-target crops)
- *     contact-sheets/      15 PNG per-target grids
- *     index.json           v2 schema, GENERATED_OFFLINE, per-shot runtimeFacts
- *     machines-gate.json   validator result (fail-closed)
- *     oracle-report.json   Node/TS cross-validation
- *
- * Camera/interaction/movement: DEFERRED (requires browser), NOT fabricated.
- */
+/** One-command deterministic offline E13 matrix evidence rebuild. */
 import { spawnSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const REPO = resolve(__dirname, '..', '..', '..')
-const EVIDENCE = join(REPO, 'tests', 'fixtures', 'juyiting', 'occlusion-e13')
-const SHOTS = join(EVIDENCE, 'shots')
-const CONTACTS = join(EVIDENCE, 'contact-sheets')
-const RENDERER = join(__dirname, 'offline_pixel_renderer')
-const PY_SETUP = `import sys; sys.path.insert(0,'${__dirname}')`
-
-const log = (...a) => console.log('[e13-offline]', ...a)
-const die = (...a) => { console.error('[e13-offline]', ...a); process.exit(1) }
-
-function py (code, opts = {}) {
-  const r = spawnSync('python3', ['-c', PY_SETUP + '\n' + code], {
-    cwd: REPO, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024,
-    timeout: opts.timeout || 600000,
-  })
-  if (r.status !== 0) die(`Python error (exit ${r.status}):\n${r.stderr || r.stdout}`)
-  return (r.stdout || '').trim()
+const here = dirname(fileURLToPath(import.meta.url))
+const repo = resolve(here, '..', '..', '..')
+const args = process.argv.slice(2)
+const arg = name => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null }
+const output = resolve(arg('--output') || join(repo, 'tests/fixtures/juyiting/occlusion-e13'))
+const limit = Number(arg('--limit') || 0)
+const sourceFixture = join(repo, 'tests/fixtures/juyiting/occlusion-e13')
+const pyPath = here
+const log = message => console.log(`[e13-offline] ${message}`)
+function run (command, commandArgs, options = {}) {
+  const result = spawnSync(command, commandArgs, { cwd: repo, encoding: 'utf8', stdio: options.capture ? 'pipe' : 'inherit', timeout: options.timeout || 900000, env: { ...process.env, PYTHONPATH: pyPath } })
+  if (result.status !== 0) throw new Error(`${command} ${commandArgs.join(' ')} failed\n${result.stderr || result.stdout || ''}`)
+  return result
 }
 
-function clean (dir) {
-  if (!existsSync(dir)) return
-  for (const f of readdirSync(dir)) {
-    try { unlinkSync(join(dir, f)) } catch (_) {}
-  }
+function writeReport () {
+  const index = JSON.parse(readFileSync(join(output, 'index.json'), 'utf8'))
+  const decoder = index.webpDecoder
+  const report = `# E13 离线遮挡矩阵证据
+
+- 状态：\`GENERATED_OFFLINE\`
+- 遮挡矩阵：270/270 已生成，\`matrixPass=true\`
+- 最终 E13 release：\`releasePass=false\`
+- 本轮未调用 GPT，也未作主观视觉裁决；这些 PNG 仅具备送后续 GPT 视觉审核的机器前置资格。
+
+## 权威输入与绑定
+
+渲染器直接读取 \`shot-plan.json\` 的 270 个 \`kind=matrix\` 项，并逐字段保留其 \`id / target / persona / relation / world / expected\` 绑定。语义边界仍为 \`relation=boundary\`、\`expectedRelation=tie\`；生产总排序结果另存为 \`resolvedExpectedOrdering\`，270 项 \`depthMatch\` 均为真。Node oracle 通过 \`node --import tsx\` 直接导入生产 \`canonicalIr.ts\`、\`worldOrder.ts\`、\`schema.ts\`、\`constraintResolver.ts\`、\`hallSceneAssembly.ts\` 与 \`spatialGrid.ts\` 交叉校验全部 270 项。
+
+## 离线像素语义
+
+每张 400×300 PNG 使用生产 TMX/资源中的 base（depth 0）、mid（depth 2）、V2 world renderables/agent、foreground（depth 5）和 lighting（depth 8），遵循 melonJS 升序 z 的实际绘制效果及同 z 插入顺序。production \`antiAlias=true\`，缩放人物采用 destination pixel-center 的 premultiplied-RGBA bilinear sampling。mid 与 foreground 是字节相同资源，生产绘两次，离线同样绘两次。lighting 参数来自 TMX：opacity \`0.85\`、image blend \`screen\`，随后保持 alpha 以 tint \`#ffd8a0\` 做 \`multiply\` fill。
+
+人物只使用生产 persona sprite sheet、manifest scale/anchor，审核采样固定为 \`idle/down/frame0\`，不冒称完整动画。六角色 frame 0/1/2/3 的 frame geometry/anchor/scale、alpha 顶部及 baseline 一致；每帧实际 alpha bounds（包括可能不同的 x/width）逐项记录。
+
+\`runtimeFacts.pixelOverlap\` 来自 agent frame 与 target sourceRect/destinationRect 的真实非透明像素 mask 交集，记录 opaque intersection 与按最终前后关系计算的可见遮盖像素，不用 AABB 冒充视觉 gate。离线软件 raster 明确不宣称与任一浏览器 Canvas2D 后端的边缘/色彩取整逐 bit 相同；确定性覆盖的是资源、source/destination geometry、层序、blend/tint 与 alpha-mask 语义。
+
+## WebP 解码器边界
+
+当前证据要求 \`${decoder.soname}\` ABI ${decoder.abi}，decoder \`${decoder.decoderVersion}\` (\`${decoder.decoderVersionHex}\`)，库 SHA-256 \`${decoder.sha256}\`，API \`${decoder.api.join(' / ')}\`。SONAME、版本、API 或 hash 漂移均 fail closed。不同发行版即使 ABI 兼容也可能被拒绝，必须显式审核 provenance，不能静默跨宿主生成不同证据。
+
+## 输出与重建
+
+- \`shots/E13-001.png\` … \`shots/E13-270.png\`
+- \`contact-sheets/*.png\`：15 张，每格有 \`shotId / persona / relation\` 标签
+- \`index.json\`、\`oracle-report.json\`、\`machines-gate.json\`、本报告
+
+\`npm run generate:e13-offline\` 从干净 checkout 完整重建。隔离输出使用 \`npm run generate:e13-offline -- --output /tmp/e13-review\`。
+
+## 明确延期项
+
+camera、interaction、movement 仍为独立 \`DEFERRED\`，不计入 270 遮挡矩阵通过，并继续阻止最终 E13 release pass。GPT 视觉审核也尚未执行。
+`
+  writeFileSync(join(output, 'report.md'), report)
 }
 
 function main () {
-  log('=== E13 Offline Evidence Generator ===')
-  const t0 = Date.now()
-
-  // ── Step 1: Render 270 PNGs ──
-  log('Step 1/3: Rendering 270 matrix shots...')
-  mkdirSync(SHOTS, { recursive: true })
-  clean(SHOTS)
-
-  py(`
-from offline_pixel_renderer.png_io import write_png
-from offline_pixel_renderer.world_model import build_shot_plan
-from offline_pixel_renderer.compositor import OfflineRenderer
-import time, os
-
-renderer = OfflineRenderer('${join(REPO, 'public', 'juyiting')}')
-shots, frags, props = build_shot_plan('${REPO}')
-renderer._build_full_composite(frags, props)
-
-CROP_W, CROP_H = 400, 300
-records = []
-start = time.time()
-
-for i, shot in enumerate(shots):
-    pixels, order, depths, facts = renderer.render_shot_small(shot, frags, props, CROP_W, CROP_H)
-    vp = facts['viewportWorld']
-    write_png(os.path.join('${SHOTS}', f'{shot["id"]}.png'), vp['width'], vp['height'], pixels)
-    records.append({
-        'id': shot['id'], 'screenshotFile': f'shots/{shot["id"]}.png',
-        'kind': 'matrix', 'cell': shot['cell'],
-        'persona': shot['persona'], 'personaName': shot['personaName'],
-        'relation': shot['relation'],
-        'semanticRelation': shot.get('semanticRelation', shot['relation']),
-        'targetStableId': shot['targetStableId'],
-        'targetKind': shot['targetKind'], 'focus': shot['focus'],
-        'worldX': shot['world']['x'], 'worldY': shot['world']['y'],
-        'expectedRelation': shot['expectedRelation'],
-        'expectedDepth': shot['expectedDepth'],
-        'runtimeFacts': facts,
-    })
-    if (i+1) % 45 == 0:
-        elapsed = time.time() - start
-        rate = (i+1) / elapsed
-        print(f'  [{i+1}/{len(shots)}] {rate:.1f} shots/s', flush=True)
-
-total = time.time() - start
-depth_matches = sum(1 for r in records if r['runtimeFacts']['depthMatch'])
-
-index = {
-    '$schema': 'juyiting-occlusion-e13-index-v2', 'schemaVersion': 2, 'taskId': 'E13',
-    'generator': 'generate-e13-offline-evidence.mjs + offline_pixel_renderer (Python, deterministic)',
-    'status': 'GENERATED_OFFLINE', 'shotCount': len(records),
-    'matrixShots': len(records), 'cameraShots': 0, 'interactionShots': 0, 'movementShots': 0,
-    'notes': {
-        'camera': 'DEFERRED — camera zoom/pan tests require browser viewport + touch simulation',
-        'interaction': 'DEFERRED — pointer/hotspot/label tests require browser DOM events',
-        'movement': 'DEFERRED — pathfinding tests require live engine + navmesh',
-        'methodology': 'Production-equivalent deterministic sort (worldOrder.ts base sort, no constraint zones). Full map pre-composited (base+frags+props+fg+lighting). Per-shot: agent rendered onto crop, then all world-band objects with depth>agent re-rendered on top.',
-        'boundaryResolution': 'boundary shots use resolvedExpectedOrdering from production sort keys (tieBias+stableId), not simplified tie. All 270 depthMatch=true.',
-    },
-    'shots': records,
+  mkdirSync(output, { recursive: true })
+  if (output !== sourceFixture) {
+    for (const name of ['shot-plan.json', 'world-model.json']) cpSync(join(sourceFixture, name), join(output, name))
+  }
+  for (const dir of ['shots', 'contact-sheets']) {
+    rmSync(join(output, dir), { recursive: true, force: true }); mkdirSync(join(output, dir), { recursive: true })
+  }
+  log(`rendering ${limit || 270} authoritative matrix shots to ${output}`)
+  run('python3', ['-m', 'offline_pixel_renderer', '--repo-root', repo, '--output', output, ...(limit ? ['--limit', String(limit)] : [])])
+  if (limit) { log('limited CLI smoke complete; oracle/gates intentionally skipped'); return }
+  log('running direct production TypeScript oracle')
+  run('node', ['--import', 'tsx', join(here, 'validate-e13-offline-oracle.mjs'), '--evidence-dir', output])
+  log('running fail-closed Python validator')
+  run('python3', ['-m', 'offline_pixel_renderer.validate', '--repo-root', repo, '--evidence-dir', output])
+  log('running matrix/release machine gate')
+  run('node', [join(here, 'validate-e13-evidence.mjs'), '--evidence-dir', output])
+  writeReport()
+  const shots = readdirSync(join(output, 'shots')).filter(f => f.endsWith('.png')).length
+  const sheets = readdirSync(join(output, 'contact-sheets')).filter(f => f.endsWith('.png')).length
+  if (shots !== 270 || sheets !== 15 || !existsSync(join(output, 'index.json'))) throw new Error(`incomplete output ${shots} shots/${sheets} sheets`)
+  log('complete: matrix generated and validated; final E13 release remains deferred')
 }
-import json
-with open('${join(EVIDENCE, 'index.json')}', 'w') as f:
-    json.dump(index, f, indent=2)
-print(f'INDEX_DONE:{len(records)}:{depth_matches}')
-`)
-
-  // ── Step 2: Node production oracle ──
-  log('Step 2/3: Production oracle cross-validation...')
-  const oracleResult = spawnSync('node', [join(__dirname, 'validate-e13-offline-oracle.mjs')], {
-    cwd: REPO, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, timeout: 120000,
-  })
-  if (oracleResult.status !== 0) die(`Oracle failed:\n${oracleResult.stderr || oracleResult.stdout}`)
-  log('Oracle passed.')
-
-  // ── Step 3: Contact sheets ──
-  log('Step 3/3: Building contact sheets...')
-  mkdirSync(CONTACTS, { recursive: true })
-  clean(CONTACTS)
-
-  py(`
-from offline_pixel_renderer.png_io import read_png, write_png
-from offline_pixel_renderer.compositor import PixelBuffer
-import json, os
-
-index = json.load(open('${join(EVIDENCE, 'index.json')}'))
-shots = index['shots']
-
-PERSONA_ORDER = ['songjiang','lujunyi','husanniang','likui','linchong','wuyong']
-RELATION_ORDER = ['behind','boundary','front']
-THUMB_W, THUMB_H, PAD = 120, 90, 4
-
-for target_sid in sorted(set(s['targetStableId'] for s in shots)):
-    ts = [s for s in shots if s['targetStableId'] == target_sid]
-    cell_id = ts[0]['cell']
-    shot_map = {(s['persona'],s['relation']):s for s in ts}
-
-    cw = 6*(THUMB_W+PAD)+PAD
-    ch = 3*(THUMB_H+14+PAD)+PAD+30
-    sheet = PixelBuffer(cw, ch)
-    for i in range(0, cw*ch*4, 4):
-        sheet.pixels[i]=30; sheet.pixels[i+1]=30; sheet.pixels[i+2]=35; sheet.pixels[i+3]=255
-
-    for ri, rel in enumerate(RELATION_ORDER):
-        for ci, pers in enumerate(PERSONA_ORDER):
-            s = shot_map.get((pers,rel))
-            if not s: continue
-            png_p = os.path.join('${SHOTS}', s['screenshotFile'].split('/')[-1])
-            if not os.path.exists(png_p): continue
-            w,h,c,px = read_png(png_p)
-            thumb = PixelBuffer(w,h,px)
-            tx = PAD + ci*(THUMB_W+PAD)
-            ty = PAD + 30 + ri*(THUMB_H+14+PAD)
-            sheet.blit_region(thumb,0,0,w,h,tx,ty,THUMB_W,THUMB_H)
-
-    safe = target_sid.replace('/','_').replace('.','_')
-    write_png(os.path.join('${CONTACTS}', f'cell-{cell_id}-{safe}.png'), cw, ch, sheet.to_bytes())
-
-print(f'CONTACTS_DONE:{len(os.listdir("${CONTACTS}"))}')
-`, { timeout: 300000 })
-
-  // ── Final validation ──
-  log('Running final validator...')
-  const valOut = py(`
-from offline_pixel_renderer.validate import validate
-r = validate('${EVIDENCE}', '${REPO}')
-for c in r:
-    print(f'  {"PASS" if c["ok"] else "FAIL"}: {c["check"]}')
-exit(0 if all(x['ok'] for x in r) else 1)
-`)
-  // Python validator is read-only w.r.t. fixtures; it only fails closed.
-  log('Python validator passed.')
-
-  // Canonical machine gate writes machines-gate.json (deterministic, no timestamp).
-  log('Running machine gate (validate-e13-evidence.mjs)...')
-  const gate = spawnSync('node', [join(__dirname, 'validate-e13-evidence.mjs')], {
-    cwd: REPO, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, timeout: 120000,
-  })
-  if (gate.status !== 0) die(`Machine gate failed:\n${gate.stderr || gate.stdout}`)
-  log('Machine gate passed.')
-
-  const total = Date.now() - t0
-  log(`=== Complete in ${(total/1000).toFixed(1)}s ===`)
-}
-
-main()
+try { main() } catch (error) { console.error(`[e13-offline] FAIL: ${error.message}`); process.exit(1) }

@@ -1,176 +1,109 @@
 {
-  "$schema": "juyiting-occlusion-e13-machines-gate-v2",
+  "$schema": "juyiting-occlusion-e13-machines-gate-v3",
   "taskId": "E13",
   "generatedBy": "validate-e13-evidence.mjs",
-  "pass": true,
-  "passedChecks": 33,
-  "totalChecks": 33,
+  "pass": false,
+  "matrixPass": true,
+  "releasePass": false,
+  "releaseBlockers": [
+    "camera DEFERRED",
+    "interaction DEFERRED",
+    "movement DEFERRED",
+    "GPT visual review not performed"
+  ],
+  "passedChecks": 17,
+  "totalChecks": 17,
   "failures": [],
   "checks": [
     {
-      "check": "world-model.json exists",
-      "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "shot-plan.json exists",
-      "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "targets anchored to TMX (≤1px) + tieBias",
-      "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "shot plan invariants (cells/personas/relations/targets/ids)",
-      "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "matrix count = 270",
+      "check": "authoritative plan has 270 matrix shots",
       "ok": true,
       "detail": "got 270"
     },
     {
-      "check": "camera count = 10",
+      "check": "index status GENERATED_OFFLINE",
       "ok": true,
-      "detail": "got 10"
+      "detail": "GENERATED_OFFLINE"
     },
     {
-      "check": "interaction count = 7",
-      "ok": true,
-      "detail": "got 7"
-    },
-    {
-      "check": "movement count = 2",
-      "ok": true,
-      "detail": "got 2"
-    },
-    {
-      "check": "total plan count = 289",
-      "ok": true,
-      "detail": "got 289"
-    },
-    {
-      "check": "matrix covers every cell×persona×relation",
-      "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "all focus targets present in world model",
-      "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "provenance tmx sha256 matches live TMX",
-      "ok": true,
-      "detail": "4f94e3a52da71369d9c29d96e0ac0ceb2126a1a441b6cd63911701957e1ed49b vs 4f94e3a52da71369d9c29d96e0ac0ceb2126a1a441b6cd63911701957e1ed49b"
-    },
-    {
-      "check": "provenance fragment-spec sha256 matches",
-      "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "provenance map-snapshot sha256 matches",
-      "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "index status is GENERATED_OFFLINE",
-      "ok": true,
-      "detail": "got GENERATED_OFFLINE"
-    },
-    {
-      "check": "index shotCount = 270",
+      "check": "index has 270 ordered matrix shots",
       "ok": true,
       "detail": "got 270"
     },
     {
-      "check": "index matrixShots = 270",
+      "check": "every index id/target/persona/relation/world/expected field binds authoritative plan",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "270/270 resolved depth matches",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "270/270 real alpha overlap facts",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "270 explicit screenshotFile PNGs exist",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "shots directory has exactly 270 PNGs",
       "ok": true,
       "detail": "got 270"
     },
     {
-      "check": "camera DEFERRED (0 shots)",
-      "ok": true,
-      "detail": "got 0"
-    },
-    {
-      "check": "interaction DEFERRED (0 shots)",
-      "ok": true,
-      "detail": "got 0"
-    },
-    {
-      "check": "movement DEFERRED (0 shots)",
-      "ok": true,
-      "detail": "got 0"
-    },
-    {
-      "check": "notes.camera = DEFERRED",
-      "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "notes.interaction = DEFERRED",
-      "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "notes.movement = DEFERRED",
-      "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "all 270 matrix shot ids in index",
-      "ok": true,
-      "detail": "missing "
-    },
-    {
-      "check": "all shots have runtimeFacts (depth, ordering, depthMatch, sortKey, screenshotFile, world)",
-      "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "100% depthMatch (no tie-with-acceptable-ratio loophole)",
-      "ok": true,
-      "detail": "0 failures"
-    },
-    {
-      "check": "卢俊义 behind bounty-board → agent_behind_target",
-      "ok": true,
-      "detail": "got agent_behind_target"
-    },
-    {
-      "check": "扈三娘 behind bounty-board → agent_behind_target",
-      "ok": true,
-      "detail": "got agent_behind_target"
-    },
-    {
-      "check": "270 PNG evidence files in shots/",
-      "ok": true,
-      "detail": "got 270"
-    },
-    {
-      "check": "all PNGs > 500 bytes",
-      "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "contact-sheets dir exists",
-      "ok": true,
-      "detail": ""
-    },
-    {
-      "check": "15 PNG contact sheets (per-target)",
+      "check": "15 labeled contact sheets exist",
       "ok": true,
       "detail": "got 15"
     },
     {
-      "check": "all contact sheets > 500 bytes",
+      "check": "idle/down/frame0 is the declared audit sample",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "idle-down frames 0..3 alpha bounds invariant checked for six personas",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "production fixed stack and lighting semantics recorded",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "production antiAlias raster semantics and browser-bit caveat recorded",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "mid/foreground byte-identical resource is drawn twice",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "WebP ABI/hash/API fail-closed provenance recorded",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "camera/interaction/movement independently DEFERRED",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "direct production TypeScript oracle passes all 270",
       "ok": true,
       "detail": ""
     }
-  ]
+  ],
+  "sourceHashes": {
+    "shotPlanSha256": "f7761ad1fe6396c01dfdba1adb42591a9ba1648941717498bf08ab318b86fc23",
+    "indexSha256": "426415ef8dda3050755c5c8bca9c13348404334fdc8c55bebd65a37c5ad3966e",
+    "oracleSha256": "27b0648d6534ac04d69829a202e08741ab0a627a0f2a482a0c6f69f81bfa792c"
+  }
 }

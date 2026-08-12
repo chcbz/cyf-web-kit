@@ -1,255 +1,57 @@
-/**
- * E13 Offline Pixel Renderer Tests - fail-closed adversarial checks.
- * Verifies the offline-generated PNG evidence and sort invariants.
- *
- * Checks:
- *  1. 270 matrix PNGs exist with correct dimensions
- *  2. Index integrity (id/world/persona/target/expected binding + runtimeFacts)
- *  3. Sort determinism (卢俊义/扈三娘 at bounty-board ordering)
- *  4. Depth monotonicity (no cycles, contiguous)
- *  5. Pixel overlap evidence recorded
- *  6. Camera/interaction/movement properly deferred
- *  7. Prop foreground/background pixel checks
- *  8. 100% depthMatch with resolvedExpectedOrdering
- *  9. Status GENERATED_OFFLINE (not BLOCKED)
- * 10. screenshotFile field present on every shot
- */
 import { expect } from 'chai'
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-
-const REPO_ROOT = process.cwd()
-const FIXTURE_DIR = join(REPO_ROOT, 'tests/fixtures/juyiting/occlusion-e13')
-const SHOTS_DIR = join(FIXTURE_DIR, 'shots')
-const CONTACT_DIR = join(FIXTURE_DIR, 'contact-sheets')
-
-const readJson = path => JSON.parse(readFileSync(path, 'utf8'))
-
-describe('E13 offline pixel renderer evidence', () => {
-  let index
-
-  before(() => {
-    expect(existsSync(join(FIXTURE_DIR, 'index.json')), 'index.json missing').to.equal(true)
-    index = readJson(join(FIXTURE_DIR, 'index.json'))
-  })
-
-  // ── Task 8: index status ──
-  it('index status is GENERATED_OFFLINE (not BLOCKED)', () => {
-    expect(index.status).to.equal('GENERATED_OFFLINE')
-    expect(index.generator).to.match(/offline/)
-  })
-
-  it('270 matrix shots recorded', () => {
-    expect(index.matrixShots).to.equal(270)
-    expect(index.cameraShots).to.equal(0)
-    expect(index.interactionShots).to.equal(0)
-    expect(index.movementShots).to.equal(0)
-    expect(index.shotCount).to.equal(270)
-    expect(index.shots).to.have.length(270)
-  })
-
-  it('camera/interaction/movement are DEFERRED independently, not mixed into matrix', () => {
-    expect(index.notes.camera).to.include('DEFERRED')
-    expect(index.notes.interaction).to.include('DEFERRED')
-    expect(index.notes.movement).to.include('DEFERRED')
-    expect(index.matrixShots).to.equal(270)
-    expect(index.cameraShots).to.equal(0)
-    expect(index.interactionShots).to.equal(0)
-    expect(index.movementShots).to.equal(0)
-  })
-
-  it('all 270 PNG files exist with reasonable sizes', () => {
-    expect(existsSync(SHOTS_DIR), 'shots dir missing').to.equal(true)
-    const pngs = readdirSync(SHOTS_DIR).filter(f => f.endsWith('.png'))
-    expect(pngs).to.have.length(270)
-
-    const smallFiles = []
-    const largeFiles = []
-    for (const f of pngs) {
-      const sz = statSync(join(SHOTS_DIR, f)).size
-      if (sz < 500) smallFiles.push(`${f}:${sz}B`)
-      if (sz > 500000) largeFiles.push(`${f}:${(sz/1024).toFixed(0)}KB`)
-    }
-    expect(smallFiles, `undersized PNGs: ${smallFiles.join(', ')}`).to.deep.equal([])
-    expect(largeFiles, `oversized PNGs: ${largeFiles.join(', ')}`).to.deep.equal([])
-  })
-
-  // ── Task 7: screenshotFile field ──
-  it('every shot has explicit screenshotFile field', () => {
-    for (const s of index.shots) {
-      expect(s.screenshotFile, `${s.id} missing screenshotFile`).to.be.a('string')
-      expect(s.screenshotFile).to.match(/^shots\/E13-\d+\.png$/)
-    }
-  })
-
-  it('every shot has runtimeFacts with ordering', () => {
-    for (const s of index.shots) {
-      expect(s.runtimeFacts, `${s.id} missing runtimeFacts`).to.be.an('object')
-      const f = s.runtimeFacts
-      expect(f.shotId).to.equal(s.id)
-      expect(f.actualDepth).to.be.a('number')
-      expect(f.targetDepth).to.be.a('number')
-      expect(['agent_behind_target', 'agent_in_front', 'tie']).to.include(f.ordering)
-      expect(typeof f.depthMatch).to.equal('boolean')
-      expect(f.pixelOverlap).to.be.an('object')
-      expect(typeof f.pixelOverlap.hasOverlap).to.equal('boolean')
-      expect(f.worldOrderLength).to.be.at.least(32 + 5 + 1)
-    }
-  })
-
-  // ── Task 4: 100% depthMatch ──
-  it('all 270 shots have depthMatch=true (resolvedExpectedOrdering)', () => {
-    const failures = index.shots.filter(s => !s.runtimeFacts.depthMatch)
-    expect(failures.map(s => `${s.id}: expected=${s.expectedRelation} got=${s.runtimeFacts.ordering}`),
-      `found ${failures.length} depthMatch failures`).to.deep.equal([])
-    expect(failures).to.have.length(0)
-  })
-
-  it('boundary shots retain semanticRelation=boundary but have resolved ordering', () => {
-    const boundaryShots = index.shots.filter(s => s.relation === 'boundary')
-    expect(boundaryShots).to.have.length(90)
-
-    for (const s of boundaryShots) {
-      expect(s.relation).to.equal('boundary')
-      // expectedRelation should be resolved (not 'tie')
-      expect(['agent_behind_target', 'agent_in_front', 'tie']).to.include(s.expectedRelation)
-      expect(s.runtimeFacts.depthMatch).to.equal(true)
-    }
-  })
-
-  it('critical shot: 卢俊义 behind bounty-board → agent_behind_target', () => {
-    const shot = index.shots.find(
-      s => s.persona === 'lujunyi' && s.relation === 'behind'
-        && s.targetStableId === 'jyt.prop.northeast.bounty-board.v1'
-    )
-    expect(shot, '卢俊义 behind bounty-board shot missing').to.not.equal(undefined)
-    const f = shot.runtimeFacts
-    expect(f.ordering, `expected agent_behind_target, got ${f.ordering}`).to.equal('agent_behind_target')
-    expect(f.actualDepth).to.be.lessThan(f.targetDepth)
-    expect(f.pixelOverlap.hasOverlap).to.equal(true)
-  })
-
-  it('critical shot: 扈三娘 behind bounty-board → agent_behind_target', () => {
-    const shot = index.shots.find(
-      s => s.persona === 'husanniang' && s.relation === 'behind'
-        && s.targetStableId === 'jyt.prop.northeast.bounty-board.v1'
-    )
-    expect(shot, '扈三娘 behind bounty-board shot missing').to.not.equal(undefined)
-    const f = shot.runtimeFacts
-    expect(f.ordering).to.equal('agent_behind_target')
-    expect(f.actualDepth).to.be.lessThan(f.targetDepth)
-    expect(f.pixelOverlap.hasOverlap).to.equal(true)
-  })
-
-  it('critical shot: 卢俊义 front bounty-board → agent_in_front', () => {
-    const shot = index.shots.find(
-      s => s.persona === 'lujunyi' && s.relation === 'front'
-        && s.targetStableId === 'jyt.prop.northeast.bounty-board.v1'
-    )
-    expect(shot).to.not.equal(undefined)
-    const f = shot.runtimeFacts
-    expect(f.ordering).to.equal('agent_in_front')
-    expect(f.actualDepth).to.be.greaterThan(f.targetDepth)
-  })
-
-  it('boundary cases have deterministic tieBias resolution', () => {
-    // bounty-board has tieBias=-4, agent has tieBias=0 → agent_in_front at boundary
-    const boundaryShots = index.shots.filter(s => s.relation === 'boundary')
-    expect(boundaryShots).to.have.length(90) // 15 targets × 6 personas
-
-    for (const s of boundaryShots) {
-      const f = s.runtimeFacts
-      // When agent and target share fixedPointY, tieBias determines order
-      // This must be deterministic
-      expect(f.ordering).to.be.oneOf(['agent_behind_target', 'agent_in_front', 'tie'])
-      expect([f.actualDepth, f.targetDepth].every(d => typeof d === 'number')).to.equal(true)
-    }
-  })
-
-  it('sort keys are deterministic (agentSortKey present for all)', () => {
-    for (const s of index.shots) {
-      expect(s.runtimeFacts.agentSortKey, `${s.id} missing agentSortKey`).to.be.an('array')
-      expect(s.runtimeFacts.agentSortKey).to.have.length(6) // [band, floor, elev, fixedY, tieBias, stableId]
-    }
-  })
-
-  it('contact sheets exist (PNG format from offline renderer)', () => {
-    expect(existsSync(CONTACT_DIR), 'contact-sheets dir missing').to.equal(true)
-    const files = readdirSync(CONTACT_DIR)
-    expect(files.length, 'no contact sheets').to.be.at.least(9)
-    const pngs = files.filter(f => f.endsWith('.png'))
-    expect(pngs.length, 'no PNG contact sheets').to.be.at.least(9)
-  })
-
-  it('target coverage: all 15 targets have 18 shots each (6 personas × 3 relations)', () => {
-    const byTarget = {}
-    for (const s of index.shots) {
-      const t = s.targetStableId
-      if (!byTarget[t]) byTarget[t] = new Set()
-      byTarget[t].add(`${s.persona}|${s.relation}`)
-    }
-    const targetsWithIssues = []
-    for (const [t, combos] of Object.entries(byTarget)) {
-      if (combos.size !== 18) targetsWithIssues.push(`${t}: ${combos.size}/18`)
-    }
-    expect(Object.keys(byTarget)).to.have.length(15)
-    expect(targetsWithIssues, `incomplete targets: ${targetsWithIssues.join(', ')}`).to.deep.equal([])
-  })
-
-  it('persona coverage: all 6 personas appear for each relation × target', () => {
-    const personas = new Set(index.shots.map(s => s.persona))
-    expect([...personas].sort()).to.deep.equal(
-      ['husanniang', 'likui', 'linchong', 'lujunyi', 'songjiang', 'wuyong']
-    )
-  })
-
-  it('no fabricated runtime evidence: front shots consistently have agent_in_front', () => {
-    const frontShots = index.shots.filter(s => s.relation === 'front')
-    for (const s of frontShots) {
-      const f = s.runtimeFacts
-      // At dy=+34, agent is 34px below target. For most targets, this means
-      // fixedPointY_agent > fixedPointY_target → agent_in_front
-      // (unless a very small target rect where agent falls outside)
-      expect(f.ordering).to.be.oneOf(['agent_in_front', 'tie'])
-    }
-  })
-
-  it('behind shots consistently have agent_behind_target', () => {
-    const behindShots = index.shots.filter(s => s.relation === 'behind')
-    for (const s of behindShots) {
-      const f = s.runtimeFacts
-      expect(f.ordering).to.be.oneOf(['agent_behind_target', 'tie'])
-    }
-  })
-
-  // ── Task 6: prop foreground/background pixel checks ──
-  it('props with depth > agent are in covering list (foreground occlusion)', () => {
-    // Spot-check: main-seat prop is at anchor(872,268) with tieBias=0
-    // When agent is at dy=-34 (behind), agent depth should be less than prop
-    const behindShots = index.shots.filter(
-      s => s.targetStableId === 'jyt.prop.center-north.main-seat.v1' && s.relation === 'behind'
-    )
-    expect(behindShots).to.have.length(6)
-
-    for (const s of behindShots) {
-      const f = s.runtimeFacts
-      // At behind position, agent has same fixedPointY as target minus 34*256=8704
-      // So agent fixedPointY < target fixedPointY → agent_behind_target
-      expect(f.ordering).to.equal('agent_behind_target')
-      expect(f.pixelOverlap.hasOverlap).to.equal(true)
-    }
-  })
-
-  it('props with depth > agent are re-rendered on top (not left behind in composite)', () => {
-    // Verify: for any shot, the pixelOverlap indicates agent-target spatial relationship
-    for (const s of index.shots) {
-      const f = s.runtimeFacts
-      expect(f.pixelOverlap).to.be.an('object')
-      if (f.pixelOverlap.hasOverlap) {
-        expect(f.pixelOverlap.overlapBounds).to.be.an('object')
-        expect(f.pixelOverlap.overlapBounds.width).to.be.greaterThan(0)
-        expect(f.pixelOverlap.overlapBounds.height).to.be.greaterThan(0)
-      }
-    }
-  })
+const ROOT=process.cwd(), DIR=join(ROOT,'tests/fixtures/juyiting/occlusion-e13')
+const read=p=>JSON.parse(readFileSync(p,'utf8'))
+const BIND=['id','kind','cell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera']
+describe('E13 authoritative offline pixel evidence',()=>{
+ let index,matrix
+ before(()=>{ index=read(join(DIR,'index.json')); matrix=read(join(DIR,'shot-plan.json')).shots.filter(s=>s.kind==='matrix') })
+ it('is GENERATED_OFFLINE matrix evidence, not a final release pass',()=>{
+  expect(index.status).eq('GENERATED_OFFLINE'); expect(index.matrixPass).eq(true); expect(index.releasePass).eq(false)
+  expect(index.shots).length(270); expect(index.cameraShots).eq(0); expect(index.interactionShots).eq(0); expect(index.movementShots).eq(0)
+  for(const key of ['camera','interaction','movement']) expect(index.notes[key]).include('DEFERRED')
+ })
+ it('binds every authoritative matrix entry field-for-field and in order',()=>{
+  expect(matrix).length(270)
+  matrix.forEach((plan,i)=>BIND.forEach(field=>expect(index.shots[i][field],`${plan.id}:${field}`).deep.eq(plan[field])))
+ })
+ it('preserves semantic boundary=tie while resolving production total order separately',()=>{
+  const boundaries=index.shots.filter(s=>s.relation==='boundary'); expect(boundaries).length(90)
+  boundaries.forEach(s=>{expect(s.expectedRelation).eq('tie'); expect(s.semanticRelation).eq('boundary'); expect(s.resolvedExpectedOrdering).oneOf(['agent_behind_target','agent_in_front','tie']); expect(s.runtimeFacts.depthMatch).eq(true)})
+ })
+ it('has 270 explicit screenshots and 15 labeled contact sheets',()=>{
+  expect(readdirSync(join(DIR,'shots')).filter(f=>f.endsWith('.png'))).length(270)
+  expect(readdirSync(join(DIR,'contact-sheets')).filter(f=>f.endsWith('.png'))).length(15)
+  index.shots.forEach(s=>{expect(s.screenshotFile).match(/^shots\/E13-\d{3}\.png$/); expect(existsSync(join(DIR,s.screenshotFile))).eq(true)})
+ })
+ it('matches all resolved depths and reports real source-alpha intersections',()=>{
+  index.shots.forEach(s=>{const f=s.runtimeFacts; expect(f.shotId).eq(s.id); expect(f.ordering).eq(s.resolvedExpectedOrdering); expect(f.resolvedExpectedOrdering).eq(s.resolvedExpectedOrdering); expect(f.depthMatch).eq(true); expect(f.actualDepth).a('number'); expect(f.targetDepth).a('number'); expect(f.pixelOverlap.method).eq('source-alpha-mask-intersection'); expect(f.pixelOverlap.opaqueIntersectionPixels).a('number'); expect(f.pixelOverlap.visibleOcclusionPixels).a('number')})
+ })
+ it('uses the current production fixed visual stack and draws duplicate mid/foreground twice',()=>{
+  expect(index.productionVisualStack.fixedDepths).deep.eq({base:0,'mid-occluders':2,'foreground-occluders':5,'lighting-overlay':8})
+  expect(index.productionVisualStack.lighting).deep.eq({opacity:0.85,tintcolor:'#ffd8a0',imageBlend:'screen',tintBlend:'multiply'})
+  expect(index.productionVisualStack.canvasRaster.productionAntiAlias).eq(true); expect(index.productionVisualStack.canvasRaster.scaledSpriteSampling).include('bilinear'); expect(index.productionVisualStack.canvasRaster.browserCanvasBitIdentityClaim).eq(false)
+  expect(index.productionVisualStack.midForegroundDuplicate.sameBytes).eq(true); expect(index.productionVisualStack.midForegroundDuplicate.drawnTwice).eq(true)
+  const stack=index.shots[0].runtimeFacts.fixedLayerStack; expect(stack.map(x=>x.name)).deep.eq(['base','mid-occluders','foreground-occluders','lighting-overlay'])
+ })
+ it('declares idle/down/frame0 only and checks frames 0..3 alpha-bound invariant',()=>{
+  expect(index.sampledFrame).include({animation:'idle',direction:'down',frame:0}); expect(index.sampledFrame.claim).include('not full animation')
+  expect(Object.keys(index.frameAlphaBoundsChecks)).length(6)
+  Object.values(index.frameAlphaBoundsChecks).forEach(v=>{expect(v.reviewInvariantPass).eq(true); expect(v.sameFrameGeometryAnchorScale).eq(true); expect(v.sameAlphaVerticalExtent).eq(true); expect(v.allAlphaBoundsEqual).a('boolean'); expect(v.frames.map(f=>f.frame)).deep.eq([0,1,2,3])})
+ })
+ it('records exact fail-closed WebP decoder provenance',()=>{
+  expect(index.webpDecoder.soname).eq('libwebp.so.7'); expect(index.webpDecoder.abi).eq(7); expect(index.webpDecoder.decoderVersionHex).match(/^0x[0-9a-f]{6}$/); expect(index.webpDecoder.sha256).match(/^[0-9a-f]{64}$/); expect(index.webpDecoder.api).include('WebPDecodeRGBA'); expect(index.webpDecoder.crossHostPolicy).include('fail-closed')
+ })
+ for(const persona of ['lujunyi','husanniang']) it(`${persona} behind bounty board has prop-after-agent alpha occlusion`,()=>{
+  const s=index.shots.find(x=>x.persona===persona&&x.relation==='behind'&&x.targetStableId==='jyt.prop.northeast.bounty-board.v1'); const f=s.runtimeFacts
+  expect(f.ordering).eq('agent_behind_target'); expect(f.drawIndices.target).greaterThan(f.drawIndices.agent); expect(f.pixelOverlap.opaqueIntersectionPixels).greaterThan(0); expect(f.pixelOverlap.agentPixelsOccludedByTarget).greaterThan(0)
+ })
+ it('lujunyi front main seat has agent-after-prop alpha evidence',()=>{
+  const s=index.shots.find(x=>x.persona==='lujunyi'&&x.relation==='front'&&x.targetStableId==='jyt.prop.center-north.main-seat.v1'); const f=s.runtimeFacts
+  expect(f.ordering).eq('agent_in_front'); expect(f.drawIndices.agent).greaterThan(f.drawIndices.target); expect(f.pixelOverlap.targetPixelsOccludedByAgent).greaterThan(0)
+ })
+ it('oracle report proves direct production TS imports across all 270 shots',()=>{
+  const oracle=read(join(DIR,'oracle-report.json')); expect(oracle.pass).eq(true); expect(oracle.matrixShots).eq(270); expect(oracle.productionImports).include('src/game/occlusion/worldOrder.ts'); expect(oracle.productionImports).include('src/game/occlusion/constraintResolver.ts'); expect(oracle.productionImports).include('src/game/occlusion/hallSceneAssembly.ts')
+ })
 })

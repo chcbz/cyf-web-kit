@@ -20,3 +20,4 @@ vite-current*.log
 .tmp*
 .worktrees/
 __pycache__/
+*.py[cod]
