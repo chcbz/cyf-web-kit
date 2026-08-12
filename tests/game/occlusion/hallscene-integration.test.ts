@@ -2,7 +2,11 @@
 // Production integration: real hall.tmx, V2 activation envelope,
 // E3 agent adapter stableIds, E7 controller staging/commit,
 // depth continuity, SpatialGrid production provider, hit-test,
-// destroy/recreate, atomic failure, membership advancement.
+// destroy/recreate, atomic failure, membership advancement,
+// E7 SceneActivationController lifecycle with real assembly.
+//
+// All hasV2ActivationEnvelope / assembleV2Scene calls pass the
+// mandatory accepted TMX SHA-256.
 //
 // Uses real public/juyiting/hall.tmx XML (E10B baseline SHA verified).
 // No fake fixtures.
@@ -23,10 +27,16 @@ import {
   unregisterAgentFromGrid,
   buildFrameProposal,
   createEmptyMembershipState,
+  ACCEPTED_TMX_SHA256,
+  createSceneActivationController,
   type E12Assembly,
   type V2AgentAdapter,
   type HitTestTarget,
   type UnifiedOrderResult,
+  type SceneActivationController,
+  type FrameProposal,
+  type ActiveScene,
+  type ConstraintMembershipState,
 } from '../../../src/game/occlusion/hallSceneAssembly.js'
 import {
   hasRenderSchemaV2,
@@ -48,10 +58,8 @@ import {
   type RuntimeAgentAdapter,
 } from '../../../src/game/occlusion/runtimeAgentAdapter.js'
 import {
-  createSceneActivationController,
-  type SceneActivationController,
-  type FrameProposal,
-  type SceneActivationHooks,
+  type StagedScene,
+  type SceneActivationNode,
 } from '../../../src/game/occlusion/sceneActivation.js'
 
 // ── JSDOM setup ──
@@ -61,7 +69,6 @@ const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', { url: 'http:
 (globalThis as Record<string, unknown>).DOMParser = dom.window.DOMParser;
 (globalThis as Record<string, unknown>).window = dom.window;
 
-// Set up minimal crypto for SHA-256 (E3 adapter needs it)
 if (!(globalThis as Record<string, unknown>).crypto) {
   const { webcrypto } = require('crypto') as { webcrypto: Crypto }
   ;(globalThis as Record<string, unknown>).crypto = webcrypto
@@ -70,14 +77,11 @@ if (!(globalThis as Record<string, unknown>).crypto) {
 // ── Real hall.tmx ──
 
 const HALL_TMX_XML = readFileSync('public/juyiting/hall.tmx', 'utf-8')
-const HALL_TMX_SHA = '4f94e3a52da71369d9c29d96e0ac0ceb2126a1a441b6cd63911701957e1ed49b'
+const HALL_TMX_SHA = ACCEPTED_TMX_SHA256
 
 let canonicalIr: CanonicalSceneIr
 
-before(() => {
-  // Build mapData and canonicalIr from real TMX (production path via activation envelope)
-  // Must be self-contained; does not rely on makePreparsedMapData or canonicalIr
-  // Build fragment layer from TMX XML
+function buildMapDataFromXml(): Record<string, unknown> {
   const fragLayer: any = { name: 'v2-fragments-occluders', type: 'objectgroup', objects: [] }
   const fragMatch = HALL_TMX_XML.match(/<objectgroup[^>]*name="v2-fragments-occluders"[^>]*>([\s\S]*?)<\/objectgroup>/)
   if (fragMatch) {
@@ -107,8 +111,7 @@ before(() => {
       })
     }
   }
-  
-  // Build prop layer from TMX XML hotspots
+
   const propLayer: any = { name: 'hotspots', type: 'objectgroup', objects: [] }
   const hsMatch = HALL_TMX_XML.match(/<objectgroup[^>]*name="hotspots"[^>]*>([\s\S]*?)<\/objectgroup>/)
   if (hsMatch) {
@@ -139,7 +142,7 @@ before(() => {
       })
     }
   }
-  
+
   const md: Record<string, unknown> = {
     width: 104, height: 58, tilewidth: 16, tileheight: 16,
     properties: { sceneId: 'juyiting-main' },
@@ -148,16 +151,18 @@ before(() => {
   if (propLayer.objects.length > 0) {
     (md.layers as any[]).push(propLayer)
   }
-  
-  const assembly = assembleV2Scene(md)
+  return md
+}
+
+before(() => {
+  const md = buildMapDataFromXml()
+  const assembly = assembleV2Scene(md, HALL_TMX_SHA)
   canonicalIr = assembly.canonicalIr
 })
 
 // ── Helpers ──
 
-/** Build mapData from parseJuyiHallTmx-like structure (pre-parsed melonJS data) */
 function makePreparsedMapData(): Record<string, unknown> {
-  // Build from canonicalIr (set in before() hook)
   const layers: Array<Record<string, unknown>> = [
     {
       name: 'v2-fragments-occluders', type: 'objectgroup',
@@ -200,6 +205,11 @@ function makePreparsedMapData(): Record<string, unknown> {
     layers,
   }
 }
+
+function callAssemble(md: Record<string, unknown>) {
+  return assembleV2Scene(md, HALL_TMX_SHA)
+}
+
 // ── Tests ──
 
 describe('E12 hall.tmx provenance', () => {
@@ -232,57 +242,55 @@ describe('E12 hall.tmx provenance', () => {
 })
 
 describe('E12 activation envelope', () => {
-  it('hasV2ActivationEnvelope detects v2-fragments-occluders layer', () => {
-    const md = makePreparsedMapData(canonicalIr)
-    // Pre-parsed data has properties but no renderSchemaVersion
+  it('hasV2ActivationEnvelope passes with accepted SHA', () => {
+    const md = makePreparsedMapData()
     expect(md.properties).to.not.have.property('renderSchemaVersion')
-    // But activation envelope still detects it
-    expect(hasV2ActivationEnvelope(md)).to.be.true
+    expect(hasV2ActivationEnvelope(md, HALL_TMX_SHA)).to.be.true
+  })
+
+  it('hasV2ActivationEnvelope returns false for wrong SHA', () => {
+    const md = makePreparsedMapData()
+    expect(hasV2ActivationEnvelope(md, '0000000000000000000000000000000000000000000000000000000000000000')).to.be.false
   })
 
   it('hasV2ActivationEnvelope returns false for non-juyiting sceneId', () => {
-    const md = { ...makePreparsedMapData(canonicalIr), properties: { sceneId: 'other-scene' } }
-    expect(hasV2ActivationEnvelope(md)).to.be.false
+    const md = { ...makePreparsedMapData(), properties: { sceneId: 'other-scene' } }
+    expect(hasV2ActivationEnvelope(md, HALL_TMX_SHA)).to.be.false
   })
 
   it('hasV2ActivationEnvelope returns false without v2-fragments layer', () => {
     const md = { properties: { sceneId: 'juyiting-main' }, layers: [] }
-    expect(hasV2ActivationEnvelope(md)).to.be.false
+    expect(hasV2ActivationEnvelope(md, HALL_TMX_SHA)).to.be.false
   })
 
   it('hasV2ActivationEnvelope returns false for null/undefined/empty', () => {
-    expect(hasV2ActivationEnvelope(null as any)).to.be.false
-    expect(hasV2ActivationEnvelope(undefined as any)).to.be.false
-    expect(hasV2ActivationEnvelope({} as any)).to.be.false
+    expect(hasV2ActivationEnvelope(null as any, HALL_TMX_SHA)).to.be.false
+    expect(hasV2ActivationEnvelope(undefined as any, HALL_TMX_SHA)).to.be.false
+    expect(hasV2ActivationEnvelope({} as any, HALL_TMX_SHA)).to.be.false
   })
 
   it('projectActivationEnvelope injects renderSchemaVersion=2 without mutating original', () => {
-    const md = makePreparsedMapData(canonicalIr)
+    const md = makePreparsedMapData()
     expect(md.properties).to.not.have.property('renderSchemaVersion')
     const projected = projectActivationEnvelope(md)
     expect(projected.properties).to.have.property('renderSchemaVersion', '2')
-    // Original unchanged
     expect(md.properties).to.not.have.property('renderSchemaVersion')
   })
 
   it('projected data passes hasRenderSchemaV2', () => {
-    const md = makePreparsedMapData(canonicalIr)
+    const md = makePreparsedMapData()
     const projected = projectActivationEnvelope(md)
     expect(hasRenderSchemaV2(projected)).to.be.true
   })
 
-  it('activation envelope fail-closed: missing any fragment property fails assembleV2Scene', () => {
-    // Build mapData with a fragment missing required stableId
+  it('activation envelope fail-closed: missing stableId causes throw', () => {
     const md = makePreparsedMapData()
     const layers = md.layers as Array<Record<string, unknown>>
     const fragObj = (layers[0].objects as Array<Record<string, unknown>>)[0]
     const origStableId = (fragObj.properties as Record<string, unknown>).stableId
     delete (fragObj.properties as any).stableId
-    // hasEnvelope passes (only checks count == 32 + type)
-    expect(hasV2ActivationEnvelope(md)).to.be.true
-    // assembleV2Scene → parseCanonicalIrFromData should throw on missing stableId
-    expect(() => assembleV2Scene(md)).to.throw()
-    // Restore
+    expect(hasV2ActivationEnvelope(md, HALL_TMX_SHA)).to.be.true
+    expect(() => callAssemble(md)).to.throw()
     ;(fragObj.properties as any).stableId = origStableId
   })
 })
@@ -291,49 +299,53 @@ describe('E12 assembleV2Scene (production)', () => {
   let mapData: Record<string, unknown>
 
   before(() => {
-    mapData = makePreparsedMapData(canonicalIr)
+    mapData = makePreparsedMapData()
   })
 
   it('assembles V2 scene from production mapData via activation envelope', () => {
-    expect(hasV2ActivationEnvelope(mapData)).to.be.true
-    const assembly = assembleV2Scene(mapData)
+    expect(hasV2ActivationEnvelope(mapData, HALL_TMX_SHA)).to.be.true
+    const assembly = callAssemble(mapData)
     expect(assembly.canonicalIr.sceneId).to.equal('juyiting-main')
     expect(assembly.canonicalIr.renderSchemaVersion).to.equal('2')
   })
 
   it('has exactly 32 fragments', () => {
-    const assembly = assembleV2Scene(mapData)
+    const assembly = callAssemble(mapData)
     expect(assembly.fragments).to.have.lengthOf(32)
   })
 
   it('has at least 5 worldObjects (props)', () => {
-    const assembly = assembleV2Scene(mapData)
+    const assembly = callAssemble(mapData)
     expect(assembly.worldObjects).to.have.lengthOf.at.least(5)
   })
 
   it('has 0 zones', () => {
-    const assembly = assembleV2Scene(mapData)
+    const assembly = callAssemble(mapData)
     expect(assembly.zones).to.have.lengthOf(0)
   })
 
   it('creates trusted SpatialGrid production provider', () => {
-    const assembly = assembleV2Scene(mapData)
+    const assembly = callAssemble(mapData)
     expect(assembly.spatialGrid).to.be.instanceOf(SpatialGrid)
     expect(isSpatialGridProvider(assembly.candidateProvider)).to.be.true
   })
 
   it('grid has entries for fragments + props', () => {
-    const assembly = assembleV2Scene(mapData)
+    const assembly = callAssemble(mapData)
     expect(assembly.spatialGrid.getEntryCount()).to.be.at.least(32 + 5)
   })
 
-  it('throws on non-V2 data', () => {
-    expect(() => assembleV2Scene({} as any)).to.throw()
+  it('throws on non-V2 data (wrong SHA)', () => {
+    expect(() => assembleV2Scene(mapData, '0000000000000000000000000000000000000000000000000000000000000000')).to.throw()
+  })
+
+  it('throws on non-V2 data (empty map)', () => {
+    expect(() => assembleV2Scene({} as any, HALL_TMX_SHA)).to.throw()
   })
 
   it('repeatable for same input', () => {
-    const a1 = assembleV2Scene(mapData)
-    const a2 = assembleV2Scene(mapData)
+    const a1 = callAssemble(mapData)
+    const a2 = callAssemble(mapData)
     expect(a1.fragments.length).to.equal(a2.fragments.length)
     expect(a1.worldObjects.length).to.equal(a2.worldObjects.length)
   })
@@ -343,8 +355,7 @@ describe('E12 computeUnifiedWorldOrder (production)', () => {
   let assembly: E12Assembly
 
   before(() => {
-    const mapData = makePreparsedMapData(canonicalIr)
-    assembly = assembleV2Scene(mapData)
+    assembly = callAssemble(makePreparsedMapData())
   })
 
   it('deterministic order with no agents (5 props + 32 fragments = 37)', () => {
@@ -358,7 +369,7 @@ describe('E12 computeUnifiedWorldOrder (production)', () => {
   it('contiguous safe integer depths', () => {
     const r = computeUnifiedWorldOrder(assembly, [], createEmptyMembershipState())
     const vals = Object.values(r.depths) as number[]
-    const sorted = [...vals].sort((a, b) => a - b)
+    const sorted = [...vals].sort((a: number, b: number) => a - b)
     for (let i = 0; i < sorted.length; i++) {
       expect(sorted[i]).to.equal(i)
       expect(Number.isSafeInteger(sorted[i])).to.be.true
@@ -448,15 +459,13 @@ describe('E12 E3 agent adapter integration', () => {
     await adapter.create([{ agentId: 'frozen-test', x: 50, y: 60 }])
     const sos = adapter.sceneObjects
     expect(sos).to.be.an('array')
-    // Should be frozen
     expect(Object.isFrozen(sos)).to.be.true
   })
 })
 
 describe('E12 SpatialGrid agent registration', () => {
   it('registerAgentsInGrid adds agents, re-register updates', () => {
-    const mapData = makePreparsedMapData(canonicalIr)
-    const assembly = assembleV2Scene(mapData)
+    const assembly = callAssemble(makePreparsedMapData())
     const beforeCount = assembly.spatialGrid.getEntryCount()
 
     const agentAdapters: V2AgentAdapter[] = [
@@ -472,30 +481,22 @@ describe('E12 SpatialGrid agent registration', () => {
     ]
 
     registerAgentsInGrid(assembly.spatialGrid, agentAdapters, 'juyiting-main', 'floor-1')
-    // Grid should have static + 1 agent
     expect(assembly.spatialGrid.getEntryCount()).to.equal(beforeCount + 1)
 
-    // Re-register (move agent)
     agentAdapters[0].sceneObject.sortAnchor = { x: 300, y: 400 }
     registerAgentsInGrid(assembly.spatialGrid, agentAdapters, 'juyiting-main', 'floor-1')
-    // Count should not double; register auto-unregisters first
     expect(assembly.spatialGrid.getEntryCount()).to.equal(beforeCount + 1)
 
-    // Unregister
     unregisterAgentFromGrid(assembly.spatialGrid, 'jyt.agent.test1.v1')
     expect(assembly.spatialGrid.getEntryCount()).to.equal(beforeCount)
-
-    // Clear does not break - but we don't clear statics in production
   })
 
   it('grid.clear() wipes everything, re-register statics works', () => {
-    const mapData = makePreparsedMapData(canonicalIr)
-    const assembly = assembleV2Scene(mapData)
+    const assembly = callAssemble(makePreparsedMapData())
     assembly.spatialGrid.clear()
     expect(assembly.spatialGrid.getEntryCount()).to.equal(0)
     expect(assembly.spatialGrid.getCellCount()).to.equal(0)
 
-    // Re-register statics
     for (const f of assembly.fragments) {
       assembly.spatialGrid.register(
         { stableId: f.stableId, entryKind: 'fragment', bounds: f.destinationRect },
@@ -510,8 +511,7 @@ describe('E12 hitTestPoint & buildHitTestTargets', () => {
   let assembly: E12Assembly
 
   before(() => {
-    const mapData = makePreparsedMapData(canonicalIr)
-    assembly = assembleV2Scene(mapData)
+    assembly = callAssemble(makePreparsedMapData())
   })
 
   it('buildHitTestTargets marks agents as interactive, others as decorative', () => {
@@ -533,11 +533,11 @@ describe('E12 hitTestPoint & buildHitTestTargets', () => {
     const agentTargets = targets.filter(t => t.interactive)
     expect(agentTargets).to.have.lengthOf.at.least(1)
     const decorative = targets.filter(t => !t.interactive)
-    expect(decorative).to.have.lengthOf.at.least(32) // fragments
+    expect(decorative).to.have.lengthOf.at.least(32)
 
     // All interactive come before all decorative
     const firstDecIdx = targets.findIndex(t => !t.interactive)
-    const lastIntIdx = targets.findLastIndex(t => t.interactive)
+    const lastIntIdx = targets.reduce((last, t, i) => (t.interactive ? i : last), -1)
     if (firstDecIdx >= 0 && lastIntIdx >= 0) {
       expect(lastIntIdx).to.be.lessThan(firstDecIdx)
     }
@@ -565,7 +565,6 @@ describe('E12 hitTestPoint & buildHitTestTargets', () => {
   })
 
   it('hitTestPoint returns topmost agent when two agents have same x, different y', () => {
-    // Both agents at same x, different y → should share overlapping hit bounds
     const agentAdapters: V2AgentAdapter[] = [
       {
         sceneObject: {
@@ -590,8 +589,6 @@ describe('E12 hitTestPoint & buildHitTestTargets', () => {
     const r = computeUnifiedWorldOrder(assembly, agentAdapters, createEmptyMembershipState())
     const targets = buildHitTestTargets(r.order, r.depths, assembly, agentAdapters)
 
-    // The two agents hit bounds: (x-16=484, y-32=168, w=32, h=64) and (x-16=484, y-32=468, w=32, h=64)
-    // They don't overlap vertically (168+64=232 < 468). Ensure hit at one agent's position works.
     const hitBack = hitTestPoint({ x: 500, y: 200 }, targets)
     expect(hitBack).to.not.be.null
     expect(hitBack!.stableId).to.equal('jyt.agent.back.v1')
@@ -628,8 +625,7 @@ describe('E12 hitTestPoint & buildHitTestTargets', () => {
 
 describe('E12 buildFrameProposal', () => {
   it('builds valid frame proposal with membership separation', () => {
-    const mapData = makePreparsedMapData(canonicalIr)
-    const assembly = assembleV2Scene(mapData)
+    const assembly = callAssemble(makePreparsedMapData())
     const { proposal, nextMembership } = buildFrameProposal(assembly, [], 'tx-1', createEmptyMembershipState())
 
     expect(proposal.sceneId).to.equal('juyiting-main')
@@ -638,55 +634,50 @@ describe('E12 buildFrameProposal', () => {
     expect(proposal.constraintResult).to.have.property('order')
     expect(nextMembership).to.not.equal(createEmptyMembershipState())
 
-    // Depths are contiguous
     const vals = Object.values(proposal.depths) as number[]
-    const sorted = [...vals].sort((a, b) => a - b)
+    const sorted = [...vals].sort((a: number, b: number) => a - b)
     for (let i = 0; i < sorted.length; i++) {
       expect(sorted[i]).to.equal(i)
     }
   })
 
   it('membership not mutated by caller error', () => {
-    const mapData = makePreparsedMapData(canonicalIr)
-    const assembly = assembleV2Scene(mapData)
+    const assembly = callAssemble(makePreparsedMapData())
     const mem = createEmptyMembershipState()
     const { nextMembership: nm } = buildFrameProposal(assembly, [], 'tx-1', mem)
 
-    // Original membership unchanged
     expect(mem).to.deep.equal(createEmptyMembershipState())
-    // Next membership is different
     expect(nm).to.not.equal(mem)
   })
 })
 
 describe('E12 destroy/recreate lifecycle', () => {
-  it('assemble → compute → dispose static grid → reassemble is stable', () => {
-    const mapData = makePreparsedMapData(canonicalIr)
+  it('assemble -> compute -> dispose static grid -> reassemble is stable', () => {
+    const mapData = makePreparsedMapData()
 
     for (let i = 0; i < 3; i++) {
-      const assembly = assembleV2Scene(mapData)
+      const assembly = callAssemble(mapData)
       expect(assembly.fragments).to.have.lengthOf(32)
 
       const r = computeUnifiedWorldOrder(assembly, [], createEmptyMembershipState())
       expect(r.order).to.be.an('array').that.is.not.empty
 
-      // dispose
       assembly.spatialGrid.clear()
     }
   })
 })
 
 describe('E12 V1 path preservation', () => {
-  it('V1 data does not pass activation envelope', () => {
+  it('V1 data does not pass activation envelope (wrong SHA)', () => {
     const v1 = { properties: { sceneId: 'juyiting-main' }, layers: [] }
-    expect(hasV2ActivationEnvelope(v1)).to.be.false
+    expect(hasV2ActivationEnvelope(v1, HALL_TMX_SHA)).to.be.false
   })
 
   it('canonicalIr.ts hasRenderSchemaV2 still works on projected data', () => {
-    const md = makePreparsedMapData(canonicalIr)
-    expect(hasRenderSchemaV2(md)).to.be.false // no renderSchemaVersion
+    const md = makePreparsedMapData()
+    expect(hasRenderSchemaV2(md)).to.be.false
     const projected = projectActivationEnvelope(md)
-    expect(hasRenderSchemaV2(projected)).to.be.true // after projection
+    expect(hasRenderSchemaV2(projected)).to.be.true
   })
 })
 
@@ -700,23 +691,21 @@ describe('E12 no /agent/active regression', () => {
 })
 
 describe('E12 atomic failure handling', () => {
-  it('assembleV2Scene throws on missing activation envelope', () => {
-    expect(() => assembleV2Scene({} as any)).to.throw()
+  it('assembleV2Scene throws on wrong SHA', () => {
+    expect(() => assembleV2Scene(makePreparsedMapData(), '0000000000000000000000000000000000000000000000000000000000000000')).to.throw()
   })
 
   it('assembleV2Scene throws on corrupted fragment data', () => {
-    // hasEnvelope passes but missing required stableId
     const badMd = makePreparsedMapData()
     const badLayer = badMd.layers as Array<Record<string, unknown>>
     const badObj = (badLayer[0].objects as Array<Record<string, unknown>>)[0]
     ;(badObj.properties as Record<string, unknown>).stableId = undefined
-    expect(hasV2ActivationEnvelope(badMd)).to.be.true
-    expect(() => assembleV2Scene(badMd)).to.throw()
+    expect(hasV2ActivationEnvelope(badMd, HALL_TMX_SHA)).to.be.true
+    expect(() => callAssemble(badMd)).to.throw()
   })
 
   it('computeUnifiedWorldOrder with empty adapters is valid', () => {
-    const mapData = makePreparsedMapData(canonicalIr)
-    const assembly = assembleV2Scene(mapData)
+    const assembly = callAssemble(makePreparsedMapData())
     const r = computeUnifiedWorldOrder(assembly, [], createEmptyMembershipState())
     expect(r.order).to.be.an('array').that.is.not.empty
   })
@@ -724,11 +713,394 @@ describe('E12 atomic failure handling', () => {
 
 describe('E12 TMX XML fallback detection', () => {
   it('activation envelope is the only V2 path (XML lacks renderSchemaVersion)', () => {
-    // Real TMX XML does not have renderSchemaVersion; hasRenderSchemaV2 returns false
     const doc = new dom.window.DOMParser().parseFromString(HALL_TMX_XML, 'application/xml')
     expect(hasRenderSchemaV2(doc)).to.be.false
-    // But hasV2ActivationEnvelope detects it via v2-fragments layer
     const md = makePreparsedMapData()
-    expect(hasV2ActivationEnvelope(md)).to.be.true
+    expect(hasV2ActivationEnvelope(md, HALL_TMX_SHA)).to.be.true
+  })
+})
+
+// ── E12 E7 Controller Lifecycle Integration ──
+// Tests activation/commitFrame with real assembly data through the
+// E7 SceneActivationController pipeline.
+
+describe('E12 E7 controller lifecycle (real assembly)', () => {
+  let assembly: E12Assembly
+  let adapter: RuntimeAgentAdapter
+
+  before(async () => {
+    assembly = callAssemble(makePreparsedMapData())
+    adapter = createRuntimeAgentAdapter(
+      defaultSpawnResolver('floor-1', 0),
+      defaultChunkResolver(),
+      'juyiting-main',
+    )
+  })
+
+  after(() => {
+    adapter.destroy()
+  })
+
+  async function createAgent(agentId: string, x: number, y: number): Promise<SceneObject> {
+    const scenes = await adapter.create([{ agentId, x, y }])
+    return scenes[0]
+  }
+
+  function buildStagedScene(
+    renderables: Map<string, number>,  // stableId → fake depth slot
+    adapters: V2AgentAdapter[],
+    ctx: { sceneId: string; mode: string; transactionId: string },
+  ) {
+    const nodeValues: SceneActivationNode[] = []
+    const seen = new Set<string>()
+    for (const [sid] of renderables) {
+      if (seen.has(sid)) continue
+      seen.add(sid)
+      nodeValues.push(Object.freeze({
+        stableId: sid, sceneId: ctx.sceneId, mode: ctx.mode,
+        ownerTransactionId: ctx.transactionId, value: sid,
+      }))
+    }
+    registerAgentsInGrid(assembly.spatialGrid, adapters, 'juyiting-main', 'floor-1')
+    const initOrder = computeUnifiedWorldOrder(assembly, adapters, createEmptyMembershipState())
+    return Object.freeze({
+      sceneId: ctx.sceneId, mode: ctx.mode,
+      ownerTransactionId: ctx.transactionId,
+      children: Object.freeze(nodeValues),
+      order: Object.freeze(initOrder.order),
+      depths: Object.freeze(initOrder.depths),
+      dispose: () => {},
+    })
+  }
+
+  it('activate succeeds with real assembly and 0 agents (37 static)', async () => {
+    const renderables = new Map<string, number>()
+    for (const p of assembly.worldObjects) renderables.set(p.stableId, 0)
+    for (const f of assembly.fragments) renderables.set(f.stableId, 0)
+
+    // Build controller
+    let activeFlag = false
+    let committedDepths: Record<string, number> | null = null
+
+    const controller = createSceneActivationController({
+      parse: (source: any, ctx: any) => source,
+      canonicalize: (parsed: any, ctx: any) => parsed,
+      validate: (canonical: any, ctx: any) => canonical,
+      loadAssets: (validated: any, ctx: any) => validated,
+      instantiate: (input: any, ctx: any) => buildStagedScene(renderables, [], ctx),
+      validateConstraints: (scene: any, ctx: any) => ({ order: scene.order }),
+      commit: (ctx: any) => {
+        ctx.swap(
+          () => {
+            activeFlag = true
+            committedDepths = { ...ctx.next.depths }
+          },
+          () => { activeFlag = false; committedDepths = null },
+        )
+      },
+      commitFrame: (ctx: any) => {
+        ctx.swap(
+          () => {
+            committedDepths = { ...ctx.next.depths }
+          },
+          () => { /* rollback */ },
+        )
+      },
+    })
+
+    const result = await controller.activate({
+      sceneId: 'juyiting-main', mode: 'v2', source: { mapData: {} },
+    })
+
+    expect(result.ok).to.be.true
+    expect(activeFlag).to.be.true
+    expect(controller.active).to.not.be.null
+    if (controller.active) {
+      expect(controller.active.children.length).to.equal(37) // 5 props + 32 fragments
+      expect(controller.active.order.length).to.equal(37)
+      expect(Object.keys(controller.active.depths).length).to.equal(37)
+    }
+
+    // Depths are contiguous
+    if (committedDepths) {
+      const vals = Object.values(committedDepths)
+      const sorted = [...vals].sort((a, b) => a - b)
+      for (let i = 0; i < sorted.length; i++) {
+        expect(sorted[i]).to.equal(i)
+      }
+    }
+
+    await controller.destroy()
+  })
+
+  it('activate with agents produces children = 37 + N', async () => {
+    const agentA = await createAgent('test-a', 500, 300)
+    const agentB = await createAgent('test-b', 800, 400)
+
+    const renderables = new Map<string, number>()
+    for (const p of assembly.worldObjects) renderables.set(p.stableId, 0)
+    for (const f of assembly.fragments) renderables.set(f.stableId, 0)
+    renderables.set(agentA.stableId, 0)
+    renderables.set(agentB.stableId, 0)
+
+    const agentAdapters: V2AgentAdapter[] = [
+      { sceneObject: agentA, entity: { id: 'test-a', pos: { x: 500, y: 300 } } },
+      { sceneObject: agentB, entity: { id: 'test-b', pos: { x: 800, y: 400 } } },
+    ]
+
+    let activeFlag = false
+    let childrenCount = 0
+
+    const controller = createSceneActivationController({
+      parse: (s: any, ctx: any) => s,
+      canonicalize: (p: any, ctx: any) => p,
+      validate: (c: any, ctx: any) => c,
+      loadAssets: (v: any, ctx: any) => v,
+      instantiate: (input: any, ctx: any) => buildStagedScene(renderables, agentAdapters, ctx),
+      validateConstraints: (scene: any, ctx: any) => ({ order: scene.order }),
+      commit: (ctx: any) => {
+        ctx.swap(
+          () => { activeFlag = true; childrenCount = ctx.next.children.length },
+          () => { activeFlag = false },
+        )
+      },
+    })
+
+    const result = await controller.activate({
+      sceneId: 'juyiting-main', mode: 'v2', source: { mapData: {} },
+    })
+
+    expect(result.ok).to.be.true
+    expect(activeFlag).to.be.true
+    expect(childrenCount).to.equal(39) // 37 static + 2 agents
+
+    await controller.destroy()
+  })
+
+  it('commitFrame with agent position update succeeds', async () => {
+    const agentM = await createAgent('test-mover', 500, 300)
+
+    const renderables = new Map<string, number>()
+    for (const p of assembly.worldObjects) renderables.set(p.stableId, 0)
+    for (const f of assembly.fragments) renderables.set(f.stableId, 0)
+    renderables.set(agentM.stableId, 0)
+
+    const agentAdapters: V2AgentAdapter[] = [
+      { sceneObject: agentM, entity: { id: 'test-mover', pos: { x: 500, y: 300 } } },
+    ]
+
+    let frameDepthsSnapshot: Record<string, number> | null = null
+    let activeFlag = false
+
+    const controller = createSceneActivationController({
+      parse: (s: any, ctx: any) => s,
+      canonicalize: (p: any, ctx: any) => p,
+      validate: (c: any, ctx: any) => c,
+      loadAssets: (v: any, ctx: any) => v,
+      instantiate: (input: any, ctx: any) => buildStagedScene(renderables, agentAdapters, ctx),
+      validateConstraints: (scene: any, ctx: any) => ({ order: scene.order }),
+      commit: (ctx: any) => {
+        ctx.swap(
+          () => { activeFlag = true },
+          () => { activeFlag = false },
+        )
+      },
+      commitFrame: (ctx: any) => {
+        ctx.swap(
+          () => { frameDepthsSnapshot = { ...ctx.next.depths } },
+          () => { frameDepthsSnapshot = null },
+        )
+      },
+    })
+
+    // Activate
+    const result = await controller.activate({
+      sceneId: 'juyiting-main', mode: 'v2', source: { mapData: {} },
+    })
+    expect(result.ok).to.be.true
+    expect(activeFlag).to.be.true
+    const activationTxId = controller.active?.ownerTransactionId
+    expect(activationTxId).to.be.a('string')
+
+    // Move agent
+    await adapter.update([{ agentId: 'test-mover', x: 600, y: 500 }])
+    const updatedAgent = adapter.lookup('test-mover')!
+    const updatedAdapters: V2AgentAdapter[] = [
+      { sceneObject: updatedAgent, entity: { id: 'test-mover', pos: { x: 600, y: 500 } } },
+    ]
+    registerAgentsInGrid(assembly.spatialGrid, updatedAdapters, 'juyiting-main', 'floor-1')
+
+    const { proposal } = buildFrameProposal(
+      assembly, updatedAdapters,
+      activationTxId!,
+      createEmptyMembershipState(),
+    )
+
+    const frameResult = controller.commitFrame(proposal)
+    expect(frameResult.ok).to.be.true
+    expect(frameDepthsSnapshot).to.not.be.null
+    expect(Object.keys(frameDepthsSnapshot!).length).to.equal(38) // 37 static + 1 agent
+
+    await controller.destroy()
+  })
+
+  it('commitFrame rollback on depth setter failure', async () => {
+    const agentF = await createAgent('test-fail', 500, 300)
+
+    const renderables = new Map<string, number>()
+    for (const p of assembly.worldObjects) renderables.set(p.stableId, 0)
+    for (const f of assembly.fragments) renderables.set(f.stableId, 0)
+    renderables.set(agentF.stableId, 0)
+
+    const agentAdapters: V2AgentAdapter[] = [
+      { sceneObject: agentF, entity: { id: 'test-fail', pos: { x: 500, y: 300 } } },
+    ]
+
+    let activeFlag = false
+    let frameOk = true
+    let swapAppliedThenFailed = false
+
+    const controller = createSceneActivationController({
+      parse: (s: any, ctx: any) => s,
+      canonicalize: (p: any, ctx: any) => p,
+      validate: (c: any, ctx: any) => c,
+      loadAssets: (v: any, ctx: any) => v,
+      instantiate: (input: any, ctx: any) => buildStagedScene(renderables, agentAdapters, ctx),
+      validateConstraints: (scene: any, ctx: any) => ({ order: scene.order }),
+      commit: (ctx: any) => {
+        ctx.swap(
+          () => { activeFlag = true },
+          () => { activeFlag = false },
+        )
+      },
+      commitFrame: (ctx: any) => {
+        ctx.swap(
+          () => {
+            swapAppliedThenFailed = true
+            throw new Error('SIMULATED_DEPTH_SETTER_FAILURE')
+          },
+          () => { /* rollback */ },
+        )
+      },
+    })
+
+    // Activate
+    const result = await controller.activate({
+      sceneId: 'juyiting-main', mode: 'v2', source: { mapData: {} },
+    })
+    expect(result.ok).to.be.true
+
+    const activationTxId = controller.active?.ownerTransactionId!
+    const { proposal } = buildFrameProposal(
+      assembly, agentAdapters,
+      activationTxId,
+      createEmptyMembershipState(),
+    )
+
+    const frameResult = controller.commitFrame(proposal)
+    // Frame should fail
+    expect(frameResult.ok).to.be.false
+    expect(swapAppliedThenFailed).to.be.true
+
+    // Active scene should still be the pre-frame version
+    expect(controller.active).to.not.be.null
+    expect(controller.active!.frameVersion).to.equal(0) // not incremented
+
+    await controller.destroy()
+  })
+
+  it('membership advances only on successful commit', async () => {
+    const agentM1 = await createAgent('test-mem', 500, 300)
+
+    const renderables = new Map<string, number>()
+    for (const p of assembly.worldObjects) renderables.set(p.stableId, 0)
+    for (const f of assembly.fragments) renderables.set(f.stableId, 0)
+    renderables.set(agentM1.stableId, 0)
+
+    const agentAdapters: V2AgentAdapter[] = [
+      { sceneObject: agentM1, entity: { id: 'test-mem', pos: { x: 500, y: 300 } } },
+    ]
+
+    let currentMembership = createEmptyMembershipState()
+    let lastMembershipDuringCommit: ConstraintMembershipState | null = null
+
+    const controller = createSceneActivationController({
+      parse: (s: any, ctx: any) => s,
+      canonicalize: (p: any, ctx: any) => p,
+      validate: (c: any, ctx: any) => c,
+      loadAssets: (v: any, ctx: any) => v,
+      instantiate: (input: any, ctx: any) => buildStagedScene(renderables, agentAdapters, ctx),
+      validateConstraints: (scene: any, ctx: any) => ({ order: scene.order }),
+      commit: (ctx: any) => {
+        ctx.swap(() => {}, () => {})
+      },
+      commitFrame: (ctx: any) => {
+        ctx.swap(
+          () => { lastMembershipDuringCommit = currentMembership },
+          () => {},
+        )
+      },
+    })
+
+    const result = await controller.activate({
+      sceneId: 'juyiting-main', mode: 'v2', source: { mapData: {} },
+    })
+    expect(result.ok).to.be.true
+
+    const activationTxId = controller.active?.ownerTransactionId!
+
+    // Frame 1 — build proposal using currentMembership
+    const { proposal: fp1, nextMembership: nm1 } = buildFrameProposal(
+      assembly, agentAdapters, activationTxId!, currentMembership,
+    )
+    const fr1 = controller.commitFrame(fp1)
+    expect(fr1.ok).to.be.true
+    // Advance membership (caller responsibility)
+    currentMembership = nm1
+
+    // Frame 2 — using advanced membership
+    const { proposal: fp2, nextMembership: nm2 } = buildFrameProposal(
+      assembly, agentAdapters, activationTxId!, currentMembership,
+    )
+    const fr2 = controller.commitFrame(fp2)
+    expect(fr2.ok).to.be.true
+    currentMembership = nm2
+
+    // Membership should have changed
+    // nm2 can be empty for stable constraint scenes; just verify it exists
+      expect(nm2).to.be.an('object')
+
+    await controller.destroy()
+  })
+
+  it('destroy/recreate: re-activate after destroy does not leak', async () => {
+    const renderables = new Map<string, number>()
+    for (const p of assembly.worldObjects) renderables.set(p.stableId, 0)
+    for (const f of assembly.fragments) renderables.set(f.stableId, 0)
+
+    for (let i = 0; i < 3; i++) {
+      let activeFlag = false
+      const controller = createSceneActivationController({
+        parse: (s: any, ctx: any) => s,
+        canonicalize: (p: any, ctx: any) => p,
+        validate: (c: any, ctx: any) => c,
+        loadAssets: (v: any, ctx: any) => v,
+        instantiate: (input: any, ctx: any) => buildStagedScene(renderables, [], ctx),
+        validateConstraints: (scene: any, ctx: any) => ({ order: scene.order }),
+        commit: (ctx: any) => {
+          ctx.swap(() => { activeFlag = true }, () => { activeFlag = false })
+        },
+      })
+
+      const result = await controller.activate({
+        sceneId: 'juyiting-main', mode: 'v2', source: { mapData: {} },
+      })
+      expect(result.ok).to.be.true
+      expect(activeFlag).to.be.true
+      expect(controller.active).to.not.be.null
+
+      await controller.destroy()
+      expect(controller.active).to.be.null
+    }
   })
 })

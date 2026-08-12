@@ -118,7 +118,7 @@ export function verifyTmxProvenance(tmxSha256: string): boolean {
  */
 export function hasV2ActivationEnvelope(
   mapData: Record<string, unknown>,
-  tmxSha256?: string,
+  tmxSha256: string,
 ): boolean {
   if (!mapData || typeof mapData !== 'object' || Array.isArray(mapData)) return false
   const props = mapData.properties as Record<string, unknown> | undefined
@@ -134,8 +134,8 @@ export function hasV2ActivationEnvelope(
   if (!Array.isArray(objs)) return false
   const fragCount = objs.filter(o => o.type === 'occluder-fragment').length
   if (fragCount !== 32) return false
-  // Provenance gate (optional; production should always provide)
-  if (tmxSha256 !== undefined && !verifyTmxProvenance(tmxSha256)) return false
+  // Provenance gate (mandatory)
+  if (!verifyTmxProvenance(tmxSha256)) return false
   return true
 }
 
@@ -155,7 +155,7 @@ export function projectActivationEnvelope(mapData: Record<string, unknown>): Rec
 // ── Parse and build ──
 
 /** Assemble V2 scene. tmxSha256 is mandatory for production; pass the accepted SHA. */
-export function assembleV2Scene(mapData: Record<string, unknown>, tmxSha256?: string): E12Assembly {
+export function assembleV2Scene(mapData: Record<string, unknown>, tmxSha256: string): E12Assembly {
   if (!hasV2ActivationEnvelope(mapData, tmxSha256)) {
     throw new Error('E12: mapData does not satisfy V2 activation envelope; V2 unreachable')
   }

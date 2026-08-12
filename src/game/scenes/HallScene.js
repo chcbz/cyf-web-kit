@@ -1021,7 +1021,7 @@ export function createHallSceneClass(me, HallAgentClass) {
     /** Check if map data supports V2 occlusion system */
     hasV2Support() {
       if (!this._mapData) return false
-      if (!hasV2ActivationEnvelope(this._mapData, this._tmxSha256 ?? undefined)) return false
+      if (!hasV2ActivationEnvelope(this._mapData, this._tmxSha256)) return false
       if (!this._tmxSha256) return false
       return true
     }
@@ -1037,12 +1037,12 @@ export function createHallSceneClass(me, HallAgentClass) {
     /** Activate V2 occlusion system via E7 controller. Returns true if activation started. */
     activateV2() {
       if (this._destroyed || this._v2Active) return this._v2Active
-      if (!this._mapData || !hasV2ActivationEnvelope(this._mapData, this._tmxSha256 ?? undefined)) return false
+      if (!this._mapData || !hasV2ActivationEnvelope(this._mapData, this._tmxSha256)) return false
 
       const gen = ++this._v2Generation
 
       try {
-        this._v2Assembly = assembleV2Scene(this._mapData, this._tmxSha256 ?? undefined)
+        this._v2Assembly = assembleV2Scene(this._mapData, this._tmxSha256)
         const ir = this._v2Assembly.canonicalIr
 
         // Create E3 agent adapter
