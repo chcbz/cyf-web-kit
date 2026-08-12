@@ -5,6 +5,9 @@
 //
 // Usage: node scripts/juyiting/generate-constraint-calibration.mjs > report.json
 //        or:  node scripts/juyiting/generate-constraint-calibration.mjs --output <path>
+//
+// Importable:
+//   import { generateCalibrationReport } from './generate-constraint-calibration.mjs'
 
 import { readFileSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
@@ -36,24 +39,66 @@ const CONTRACT_SOURCES = {
   'src/game/occlusion/validation.ts': '7b4bcfed5ec2cb39003d2f06709113c837b89600138e991a0aec60d1903b0eeb',
 }
 
-function verifyContractHashes() {
+function verifyContractHashes(rootDir) {
   for (const [relPath, expectedHash] of Object.entries(CONTRACT_SOURCES)) {
-    const actual = sha256File(path.join(ROOT, relPath))
+    const actual = sha256File(path.join(rootDir, relPath))
     if (actual !== expectedHash) {
-      fatal(`Contract hash mismatch for ${relPath}: expected ${expectedHash}, got ${actual}`)
+      throw new Error(`Contract hash mismatch for ${relPath}: expected ${expectedHash}, got ${actual}`)
     }
   }
 }
 
-// ── Main ──
+// ── Hysteresis cross-check from frozen source text ──
+function verifyHysteresisConstants(rootDir) {
+  const schemaPath = path.join(rootDir, 'src/game/occlusion/schema.ts')
+  const polyPath = path.join(rootDir, 'src/game/occlusion/polygonGeometry.ts')
 
-function main() {
-  verifyContractHashes()
+  const schemaSrc = readFileSync(schemaPath, 'utf-8')
+  const polySrc = readFileSync(polyPath, 'utf-8')
+
+  const schemaMatch = schemaSrc.match(/export\s+const\s+HYSTERESIS_PX\s*=\s*(\d+)/)
+  if (!schemaMatch) {
+    throw new Error('Cannot find HYSTERESIS_PX in schema.ts')
+  }
+  const schemaHpx = parseInt(schemaMatch[1], 10)
+
+  const polyMatch = polySrc.match(/export\s+const\s+HYSTERESIS_WORLD_PX\s*=\s*(\d+)/)
+  if (!polyMatch) {
+    throw new Error('Cannot find HYSTERESIS_WORLD_PX in polygonGeometry.ts')
+  }
+  const polyHpx = parseInt(polyMatch[1], 10)
+
+  if (schemaHpx !== 3) {
+    throw new Error(`HYSTERESIS_PX in schema.ts is ${schemaHpx}, must be 3 — fail closed`)
+  }
+  if (polyHpx !== 3) {
+    throw new Error(`HYSTERESIS_WORLD_PX in polygonGeometry.ts is ${polyHpx}, must be 3 — fail closed`)
+  }
+  if (schemaHpx !== polyHpx) {
+    throw new Error(`HYSTERESIS_PX (${schemaHpx}) !== HYSTERESIS_WORLD_PX (${polyHpx}) — fail closed`)
+  }
+}
+
+// ── Frozen SHAs ──
+const EXPECTED_LEDGER_SHA = '700b2ac6d27ceb58ce5fe0dd92b3f0dc7012a6ecafd03f7c23a9d3a3c42704b1'
+const EXPECTED_MANIFEST_SHA = '183dadfa3221306eaac82b815d16023f21589323a7659ceb15cde0c227f916b0'
+const EXPECTED_TMX_SHA = '4f94e3a52da71369d9c29d96e0ac0ceb2126a1a441b6cd63911701957e1ed49b'
+
+/**
+ * Generate a calibration report from frozen inputs.
+ * Deterministic: no runtime clock, no random, same inputs → same output.
+ *
+ * @param {string} [rootDir] - project root (defaults to derived ROOT)
+ * @returns {object} calibration report
+ */
+export function generateCalibrationReport(rootDir = ROOT) {
+  verifyContractHashes(rootDir)
+  verifyHysteresisConstants(rootDir)
 
   // Read frozen inputs
-  const ledgerPath = path.join(ROOT, 'tests/fixtures/juyiting/occlusion-v2-masks/migration-ledger.json')
-  const manifestPath = path.join(ROOT, 'tests/fixtures/juyiting/occlusion-v2-masks/mask-tmx-manifest.json')
-  const tmxPath = path.join(ROOT, 'public/juyiting/hall.tmx')
+  const ledgerPath = path.join(rootDir, 'tests/fixtures/juyiting/occlusion-v2-masks/migration-ledger.json')
+  const manifestPath = path.join(rootDir, 'tests/fixtures/juyiting/occlusion-v2-masks/mask-tmx-manifest.json')
+  const tmxPath = path.join(rootDir, 'public/juyiting/hall.tmx')
 
   const ledgerRaw = readFileSync(ledgerPath, 'utf-8')
   const manifestRaw = readFileSync(manifestPath, 'utf-8')
@@ -65,27 +110,27 @@ function main() {
   const manifestWholeSha = sha256(manifestRaw)
   const tmxSha = sha256File(tmxPath)
 
-  // Verify expected values
-  if (ledgerWholeSha !== '700b2ac6d27ceb58ce5fe0dd92b3f0dc7012a6ecafd03f7c23a9d3a3c42704b1') {
-    console.error(`WARNING: ledger whole SHA differs: ${ledgerWholeSha}`)
+  // ── Ledger/manifest/TMX SHA drift: fail closed ──
+  if (ledgerWholeSha !== EXPECTED_LEDGER_SHA) {
+    throw new Error(`Ledger whole SHA drift: expected ${EXPECTED_LEDGER_SHA}, got ${ledgerWholeSha} — fail closed`)
   }
-  if (manifestWholeSha !== '183dadfa3221306eaac82b815d16023f21589323a7659ceb15cde0c227f916b0') {
-    console.error(`WARNING: manifest whole SHA differs: ${manifestWholeSha}`)
+  if (manifestWholeSha !== EXPECTED_MANIFEST_SHA) {
+    throw new Error(`Manifest whole SHA drift: expected ${EXPECTED_MANIFEST_SHA}, got ${manifestWholeSha} — fail closed`)
   }
-  if (tmxSha !== '4f94e3a52da71369d9c29d96e0ac0ceb2126a1a441b6cd63911701957e1ed49b') {
-    console.error(`WARNING: TMX SHA differs: ${tmxSha}`)
+  if (tmxSha !== EXPECTED_TMX_SHA) {
+    throw new Error(`TMX SHA drift: expected ${EXPECTED_TMX_SHA}, got ${tmxSha} — fail closed`)
   }
 
   const bindings = manifest.maskBindings
   if (!Array.isArray(bindings) || bindings.length !== 37) {
-    fatal(`Expected 37 mask bindings, got ${bindings?.length ?? 'not an array'}`)
+    throw new Error(`Expected 37 mask bindings, got ${bindings?.length ?? 'not an array'}`)
   }
 
   // ── Proof 1: All constraintDecision = none ──
   const nonNoneBindings = bindings.filter(b => b.constraintDecision !== 'none')
   if (nonNoneBindings.length > 0) {
     const ids = nonNoneBindings.map(b => `${b.stableId}(${b.constraintDecision})`).join(', ')
-    fatal(`Found ${nonNoneBindings.length} bindings with constraintDecision != none: ${ids}`)
+    throw new Error(`Found ${nonNoneBindings.length} bindings with constraintDecision != none: ${ids}`)
   }
 
   // ── Proof 2: All target fragments are world-band ──
@@ -93,7 +138,7 @@ function main() {
   const fragMap = new Map()
   for (const f of fragments) {
     if (f.renderBand !== 'world') {
-      fatal(`Fragment ${f.stableId} has renderBand=${f.renderBand}, must be 'world'`)
+      throw new Error(`Fragment ${f.stableId} has renderBand=${f.renderBand}, must be 'world'`)
     }
     fragMap.set(f.stableId, f)
   }
@@ -103,10 +148,10 @@ function main() {
     const fid = b.targetFragmentId
     const frag = fragMap.get(fid)
     if (!frag) {
-      fatal(`Binding ${b.stableId} target fragment ${fid} not found in manifest fragments`)
+      throw new Error(`Binding ${b.stableId} target fragment ${fid} not found in manifest fragments`)
     }
     if (frag.renderBand !== 'world') {
-      fatal(`Binding ${b.stableId} target fragment ${fid} is not world-band (${frag.renderBand})`)
+      throw new Error(`Binding ${b.stableId} target fragment ${fid} is not world-band (${frag.renderBand})`)
     }
   }
 
@@ -115,18 +160,18 @@ function main() {
   const floorId = 'floor-1'
   for (const b of bindings) {
     if (b.scope?.sceneId !== sceneId) {
-      fatal(`Binding ${b.stableId} has sceneId=${b.scope?.sceneId}, expected ${sceneId}`)
+      throw new Error(`Binding ${b.stableId} has sceneId=${b.scope?.sceneId}, expected ${sceneId}`)
     }
     if (b.scope?.floorId !== floorId) {
-      fatal(`Binding ${b.stableId} has floorId=${b.scope?.floorId}, expected ${floorId}`)
+      throw new Error(`Binding ${b.stableId} has floorId=${b.scope?.floorId}, expected ${floorId}`)
     }
     const fid = b.targetFragmentId
     const frag = fragMap.get(fid)
     if (frag && frag.sceneId !== sceneId) {
-      fatal(`Fragment ${fid} has sceneId=${frag.sceneId}, expected ${sceneId}`)
+      throw new Error(`Fragment ${fid} has sceneId=${frag.sceneId}, expected ${sceneId}`)
     }
     if (frag && frag.floorId !== floorId) {
-      fatal(`Fragment ${fid} has floorId=${frag.floorId}, expected ${floorId}`)
+      throw new Error(`Fragment ${fid} has floorId=${frag.floorId}, expected ${floorId}`)
     }
   }
 
@@ -137,29 +182,26 @@ function main() {
 
   for (const b of bindings) {
     const fragment = fragMap.get(b.targetFragmentId)
-    const fragFixedPointY = b.fixedPointY // fragment's sortAnchor Y (fixed-point)
+    const fragFixedPointY = b.fixedPointY
     const fragTieBias = b.tieBias ?? -1
 
     const probes = b.probes || []
     for (const probe of probes) {
       const agentFixedPointY = probe.fixedPointY
-      const agentTieBias = 0 // agents default to tieBias=0
+      const agentTieBias = 0
 
-      // Compute expected painter relation from sort keys
       let expectedFromSortKey
       if (agentFixedPointY < fragFixedPointY) {
         expectedFromSortKey = 'agent<fragment'
       } else if (agentFixedPointY > fragFixedPointY) {
         expectedFromSortKey = 'fragment<agent'
       } else {
-        // Same fixedPointY: tieBias determines (fragment=-1, agent=0 → fragment<agent)
         if (fragTieBias < agentTieBias) {
           expectedFromSortKey = 'fragment<agent'
         } else if (fragTieBias > agentTieBias) {
           expectedFromSortKey = 'agent<fragment'
         } else {
-          // Tie: stableId comparison
-          expectedFromSortKey = 'fragment<agent' // fragment sorts before agent when keys equal
+          expectedFromSortKey = 'fragment<agent'
         }
       }
 
@@ -175,11 +217,7 @@ function main() {
         fragTieBias,
       }
 
-      if (matches) {
-        probePassCount++
-      } else {
-        probeFailCount++
-      }
+      if (matches) { probePassCount++ } else { probeFailCount++ }
       probeResults.push(result)
     }
   }
@@ -189,37 +227,52 @@ function main() {
     for (const f of fails.slice(0, 5)) {
       console.error(`PROBE FAIL: ${f.probeId} expected=${f.expectedPainterRelation} sortKey=${f.sortKeyDerivedRelation}`)
     }
-    fatal(`Found ${probeFailCount} probe relation mismatches`)
+    throw new Error(`Found ${probeFailCount} probe relation mismatches`)
   }
 
-  // ── Proof 6: No contradictory relations between same agent-fragment pair ──
+  // ── Proof 6: No contradictory relations ──
   const relationMap = new Map()
   for (const b of bindings) {
     for (const probe of b.probes || []) {
-      // We check that for the same fragment, expected relations don't contradict
-      // behind probes should have agent<fragment, front probes should have fragment<agent
       const key = `${b.targetFragmentId}::${probe.name}`
       const existing = relationMap.get(key)
       if (existing && existing !== probe.expectedPainterRelation) {
-        fatal(`Contradictory relation for ${key}: ${existing} vs ${probe.expectedPainterRelation}`)
+        throw new Error(`Contradictory relation for ${key}: ${existing} vs ${probe.expectedPainterRelation}`)
       }
       relationMap.set(key, probe.expectedPainterRelation)
     }
   }
 
-  // ── Proof 7: 37→32 coverage ──
+  // ── Proof 7: 37→32 coverage (derive from live manifest) ──
   const uniqueTargets = new Set(bindings.map(b => b.targetFragmentId))
-  const totalCanonicalFrags = manifest.canonicalFragmentCount || 32
+  const totalCanonicalFrags = manifest.canonicalFragmentCount || fragments.length
 
-  // ── Proof 8: No global depth-halving semantics ──
-  // All bindings have `constraintDecision: "none"`, no legacy behindMask logic
+  const allCanonicalIds = new Set(fragments.map(f => f.stableId))
+  const uncoveredTargets = [...allCanonicalIds].filter(id => !uniqueTargets.has(id)).sort()
+  if (uncoveredTargets.length > 0) {
+    throw new Error(`Found ${uncoveredTargets.length} uncovered canonical fragments: ${uncoveredTargets.join(', ')}`)
+  }
 
-  // ── Build calibration report ──
-  const report = {
+  // Derive counts from live data
+  const totalProbes = probePassCount + probeFailCount
+  if (totalProbes !== 111) {
+    throw new Error(`Expected 111 probes from live bindings, got ${totalProbes}`)
+  }
+  if (uniqueTargets.size !== 32) {
+    throw new Error(`Expected 32 unique target fragments, got ${uniqueTargets.size}`)
+  }
+  if (totalCanonicalFrags !== 32) {
+    throw new Error(`Expected 32 canonical fragments, got ${totalCanonicalFrags}`)
+  }
+
+  // ── Build calibration report (deterministic, no runtime clock) ──
+  const generationTimestamp = '2026-08-12T00:00:00.000Z'
+
+  return {
     $schema: 'juyiting-occlusion-constraint-calibration-v1',
     schemaVersion: 1,
     taskId: 'E11',
-    timestamp: new Date().toISOString(),
+    timestamp: generationTimestamp,
     conclusion: 'zones=0',
 
     provenance: {
@@ -271,10 +324,10 @@ function main() {
         uniqueTargetFragments: uniqueTargets.size,
         totalCanonicalFragments: totalCanonicalFrags,
         statement: `${uniqueTargets.size}/${totalCanonicalFrags} canonical fragments covered by 37 bindings.`,
-        uncoveredTargets: [],
+        uncoveredTargets,
       },
       probes: {
-        total: probePassCount + probeFailCount,
+        total: totalProbes,
         passed: probePassCount,
         failed: probeFailCount,
         statement: `All ${probePassCount} probes match expected painter relations via fixed-point Y + tieBias.`,
@@ -305,11 +358,11 @@ function main() {
     },
 
     bindingSummary: {
-      totalBindings: 37,
+      totalBindings: bindings.length,
       allConstraintDecisionNone: true,
       recalibratedBindings: bindings.filter(b => b.recalibrationDecision === 'recalibrate').length,
       probeResults: {
-        total: probeResults.length,
+        total: totalProbes,
         pass: probePassCount,
         fail: probeFailCount,
       },
@@ -323,21 +376,34 @@ function main() {
       fixturePath: 'tests/fixtures/juyiting/occlusion-v2-constraint/calibration-report.json',
     },
   }
+}
 
-  // Write output
-  const outputPath = process.argv.includes('--output')
-    ? process.argv[process.argv.indexOf('--output') + 1]
-    : null
+// ── CLI entry point ──
+function main() {
+  try {
+    const report = generateCalibrationReport()
 
-  const json = JSON.stringify(report, null, 2)
+    const outputPath = process.argv.includes('--output')
+      ? process.argv[process.argv.indexOf('--output') + 1]
+      : null
 
-  if (outputPath) {
-    writeFileSync(outputPath, json, 'utf-8')
-    console.error(`Calibration report written to ${outputPath}`)
-    console.error(`SHA-256: ${sha256(json)}`)
-  } else {
-    process.stdout.write(json)
+    const json = JSON.stringify(report, null, 2)
+
+    if (outputPath) {
+      writeFileSync(outputPath, json, 'utf-8')
+      console.error(`Calibration report written to ${outputPath}`)
+      console.error(`SHA-256: ${sha256(json)}`)
+    } else {
+      process.stdout.write(json)
+    }
+  } catch (e) {
+    console.error(`FATAL: ${e.message}`)
+    process.exit(1)
   }
 }
 
-main()
+// Only run CLI when executed directly (not imported)
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
+if (isMain) {
+  main()
+}

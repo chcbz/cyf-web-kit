@@ -1,16 +1,17 @@
 // ── E11 Constraint Calibration Tests ──
 // Covers: calibration report validation, zones=0 proof,
-// 108-agent zero-edges, mutation tests, determinism.
+// 108-agent zero-edges, mutation tests, determinism,
+// hysteresis cross-check, computeHysteresis boundary tests.
 //
-// All tests use direct function calls (no execSync) for sandbox compatibility.
+// Uses exported validateCalibrationReport and generateCalibrationReport
+// from the production scripts (no inline copies).
 
 import assert from 'node:assert/strict'
-import { describe, it } from 'mocha'
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
+import { describe, it, before } from 'mocha'
+import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import os from 'node:os'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
@@ -19,7 +20,9 @@ function sha256(buf) {
   return createHash('sha256').update(buf).digest('hex')
 }
 
-// ── Frozen expectations ──
+function loadJson(p) { return JSON.parse(readFileSync(p, 'utf-8')) }
+
+// ── Paths ──
 const REPORT_PATH = path.join(ROOT, 'tests/fixtures/juyiting/occlusion-v2-constraint/calibration-report.json')
 const LEDGER_PATH = path.join(ROOT, 'tests/fixtures/juyiting/occlusion-v2-masks/migration-ledger.json')
 const MANIFEST_PATH = path.join(ROOT, 'tests/fixtures/juyiting/occlusion-v2-masks/mask-tmx-manifest.json')
@@ -27,7 +30,6 @@ const MANIFEST_PATH = path.join(ROOT, 'tests/fixtures/juyiting/occlusion-v2-mask
 const EXPECTED_LEDGER_WHOLE_SHA = '700b2ac6d27ceb58ce5fe0dd92b3f0dc7012a6ecafd03f7c23a9d3a3c42704b1'
 const EXPECTED_MANIFEST_WHOLE_SHA = '183dadfa3221306eaac82b815d16023f21589323a7659ceb15cde0c227f916b0'
 const EXPECTED_TMX_SHA = '4f94e3a52da71369d9c29d96e0ac0ceb2126a1a441b6cd63911701957e1ed49b'
-const HYSTERESIS_PX = 3
 
 const CONTRACT_PATHS = [
   'src/game/occlusion/schema.ts',
@@ -44,102 +46,135 @@ const EXPECTED_CONTRACTS = {
   'src/game/occlusion/validation.ts': '7b4bcfed5ec2cb39003d2f06709113c837b89600138e991a0aec60d1903b0eeb',
 }
 
-/**
- * Inline validator — validates a calibration report object.
- * Returns { passed: boolean, errors: string[] }
- */
-function validateReport(report) {
-  const errors = []
+// ═══════════════════════════════════════════════
+// Hysteresis cross-check (fail closed)
+// ═══════════════════════════════════════════════
 
-  function check(condition, msg) { if (!condition) errors.push(msg) }
+describe('E11 - hysteresis cross-check', () => {
+  let HYSTERESIS_PX
+  let HYSTERESIS_WORLD_PX
+  let computeHysteresis
 
-  // Schema
-  check(report.$schema === 'juyiting-occlusion-constraint-calibration-v1',
-    `Invalid $schema: ${report.$schema}`)
-  check(report.schemaVersion === 1, `Invalid schemaVersion: ${report.schemaVersion}`)
-  check(report.taskId === 'E11', `Invalid taskId: ${report.taskId}`)
-  check(report.conclusion === 'zones=0', `Invalid conclusion: ${report.conclusion}`)
+  before(async () => {
+    const schemaMod = await import('../src/game/occlusion/schema.js')
+    HYSTERESIS_PX = schemaMod.HYSTERESIS_PX
+    const polyMod = await import('../src/game/occlusion/polygonGeometry.js')
+    HYSTERESIS_WORLD_PX = polyMod.HYSTERESIS_WORLD_PX
+    computeHysteresis = polyMod.computeHysteresis
+  })
 
-  const prov = report.provenance
-  if (!prov) { errors.push('Missing provenance'); return { passed: false, errors } }
+  it('HYSTERESIS_PX from schema.js is 3', () => {
+    assert.equal(HYSTERESIS_PX, 3,
+      `HYSTERESIS_PX must be 3, got ${HYSTERESIS_PX} — fail closed`)
+  })
 
-  check(prov.e10aLedger?.wholeFileSha256 === EXPECTED_LEDGER_WHOLE_SHA,
-    `Ledger SHA mismatch: ${prov.e10aLedger?.wholeFileSha256}`)
-  check(prov.e10aLedger?.generationId === 'fc855f90cbfc13c5ad8b24659825bc1dccaa03ec17866735fd923452dbdc7611',
-    `Ledger generationId mismatch: ${prov.e10aLedger?.generationId}`)
-  check(prov.e10bManifest?.wholeFileSha256 === EXPECTED_MANIFEST_WHOLE_SHA,
-    `Manifest SHA mismatch: ${prov.e10bManifest?.wholeFileSha256}`)
-  check(prov.e10bManifest?.generationId === 'a79959fd081f6c76fe5cf371b0587b5efaef463ade443e63e65f1afb4e32bbc9',
-    `Manifest generationId mismatch: ${prov.e10bManifest?.generationId}`)
-  check(prov.tmx?.sha256 === EXPECTED_TMX_SHA,
-    `TMX SHA mismatch: ${prov.tmx?.sha256}`)
+  it('HYSTERESIS_WORLD_PX from polygonGeometry.js is 3', () => {
+    assert.equal(HYSTERESIS_WORLD_PX, 3,
+      `HYSTERESIS_WORLD_PX must be 3, got ${HYSTERESIS_WORLD_PX} — fail closed`)
+  })
 
-  const reportContracts = prov.e4e5Contracts || {}
-  for (const [relPath, expectedHash] of Object.entries(EXPECTED_CONTRACTS)) {
-    check(reportContracts[relPath] === expectedHash, `Report contract hash mismatch for ${relPath}`)
-  }
+  it('HYSTERESIS_PX === HYSTERESIS_WORLD_PX (both must be 3)', () => {
+    assert.equal(HYSTERESIS_PX, HYSTERESIS_WORLD_PX,
+      `HYSTERESIS_PX (${HYSTERESIS_PX}) !== HYSTERESIS_WORLD_PX (${HYSTERESIS_WORLD_PX}) — fail closed`)
+  })
 
-  const proofs = report.proofs
-  if (!proofs) { errors.push('Missing proofs'); return { passed: false, errors } }
+  // ── computeHysteresis boundary tests ──
+  // FixedPolygon = array of {x, y} in fixed-point scale (FIXED_SCALE=256)
+  // Square from (0,0) to (100,100) world pixels → (0,0) to (25600,25600) fixed-point
+  const unitSquare = [
+    { x: 0, y: 0 },
+    { x: 25600, y: 0 },
+    { x: 25600, y: 25600 },
+    { x: 0, y: 25600 },
+  ]
 
-  check(proofs.zones?.count === 0, `Zones count should be 0, got ${proofs.zones?.count}`)
-  check(Array.isArray(proofs.zones?.canonicalParseZones) && proofs.zones.canonicalParseZones.length === 0,
-    `canonicalParseZones should be []`)
-  check(proofs.relations?.count === 0, `Relations count should be 0, got ${proofs.relations?.count}`)
-  check(proofs.edges?.count === 0, `Edges count should be 0, got ${proofs.edges?.count}`)
-  check(Array.isArray(proofs.edges?.oppositeOverlapSet) && proofs.edges.oppositeOverlapSet.length === 0,
-    'oppositeOverlapSet should be empty')
-  check(Array.isArray(proofs.edges?.staticEdgeSet) && proofs.edges.staticEdgeSet.length === 0,
-    'staticEdgeSet should be empty')
-  check(Array.isArray(proofs.edges?.activationEdgeSet) && proofs.edges.activationEdgeSet.length === 0,
-    'activationEdgeSet should be empty')
-  check(Array.isArray(proofs.edges?.runtimeEdgeSet) && proofs.edges.runtimeEdgeSet.length === 0,
-    'runtimeEdgeSet should be empty')
-  check(proofs.conflicts?.count === 0, `Conflicts count should be 0, got ${proofs.conflicts?.count}`)
-  check(proofs.cycles?.count === 0, `Cycles count should be 0, got ${proofs.cycles?.count}`)
+  it('computeHysteresis with previous=null: sd >= 0 is inside', () => {
+    // Center of square: well inside, sd should be large positive
+    const result = computeHysteresis(unitSquare, 12800, 12800, null)
+    assert.equal(typeof result.inside, 'boolean')
+    assert.equal(typeof result.signedDistance, 'number')
+    assert.equal(result.inside, true, 'Center should be inside with previous=null')
+    assert.ok(result.signedDistance > 0, 'signedDistance should be positive at center')
+  })
 
-  check(proofs.targetCoverage?.uniqueTargetFragments === 32,
-    `Unique target fragments: expected 32, got ${proofs.targetCoverage?.uniqueTargetFragments}`)
-  check(proofs.targetCoverage?.totalCanonicalFragments === 32,
-    `Total canonical: expected 32, got ${proofs.targetCoverage?.totalCanonicalFragments}`)
-  check(Array.isArray(proofs.targetCoverage?.uncoveredTargets) && proofs.targetCoverage.uncoveredTargets.length === 0,
-    `Uncovered targets should be empty`)
+  it('computeHysteresis with previous=null: sd < 0 is outside', () => {
+    // Far outside the square
+    const result = computeHysteresis(unitSquare, -10000, -10000, null)
+    assert.equal(result.inside, false, 'Far outside should be outside with previous=null')
+    assert.ok(result.signedDistance < 0, 'signedDistance should be negative outside')
+  })
 
-  check(proofs.probes?.total === 111, `Probe total: expected 111, got ${proofs.probes?.total}`)
-  check(proofs.probes?.passed === 111, `Probes passed: expected 111, got ${proofs.probes?.passed}`)
-  check(proofs.probes?.failed === 0, `Probes failed: expected 0, got ${proofs.probes?.failed}`)
+  it('computeHysteresis with previous=true: sd > -3px stays inside (hysteresis margin)', () => {
+    // Use a point just barely outside (sd just below 0 but > -HYSTERESIS_WORLD_PX * FIXED_SCALE)
+    // HYSTERESIS_WORLD_PX = 3, FIXED_SCALE = 256, so threshold = 3 * 256 = 768
+    // Point just 2px outside the right edge: x = 25600 + 2*256 = 26112
+    const result = computeHysteresis(unitSquare, 26112, 12800, true)
+    // sd will be slightly negative (~ -2*256 = -512) which is > -768
+    assert.equal(result.inside, true,
+      `previous=true, sd=${result.signedDistance}: should stay inside (sd > -HYSTERESIS_WORLD_PX*FIXED_SCALE)`)
+    assert.ok(result.signedDistance > -768, 'sd should be > -768 (3px * 256)')
+  })
 
-  check(proofs.globalSemantics?.hasGlobalBehindMask === false, 'hasGlobalBehindMask should be false')
-  check(proofs.globalSemantics?.hasLegacyDepthHalving === false, 'hasLegacyDepthHalving should be false')
-  check(proofs.globalSemantics?.hasGlobalCharacterState === false, 'hasGlobalCharacterState should be false')
+  it('computeHysteresis with previous=true: sd < -3px transitions to outside', () => {
+    // Point 5px outside: x = 25600 + 5*256 = 26880
+    const result = computeHysteresis(unitSquare, 26880, 12800, true)
+    assert.equal(result.inside, false,
+      `previous=true, sd=${result.signedDistance}: should transition to outside (sd < -3px)`)
+    assert.ok(result.signedDistance < 0, 'sd should be negative outside')
+  })
 
-  check(proofs.hysteresis?.contractPx === HYSTERESIS_PX,
-    `Hysteresis: expected ${HYSTERESIS_PX}, got ${proofs.hysteresis?.contractPx}`)
-  check(proofs.hysteresis?.membershipState === 'none (zones=0)',
-    `Membership state should be 'none (zones=0)'`)
+  it('computeHysteresis with previous=false: sd >= 3px transitions to inside', () => {
+    // Center of square is deep inside, sd >> HYSTERESIS_WORLD_PX * FIXED_SCALE
+    const result = computeHysteresis(unitSquare, 12800, 12800, false)
+    assert.equal(result.inside, true,
+      `previous=false, sd=${result.signedDistance}: should transition to inside (sd >= 3px)`)
+    assert.ok(result.signedDistance > 0, 'sd should be positive inside')
+  })
 
-  check(proofs.overheadTargets?.count === 0, `Overhead targets: expected 0`)
-  check(proofs.crossSceneTargets?.count === 0, `Cross-scene targets: expected 0`)
-  check(proofs.crossFloorTargets?.count === 0, `Cross-floor targets: expected 0`)
+  it('computeHysteresis with previous=false: sd < 3px stays outside', () => {
+    // Point 2px inside from edge: x = 25500 - 254*256 = ... actually let's use a point 2px inside
+    // 2px inside right edge: x = 25600 - 2*256 = 25088, sd ≈ 2*256 = 512 which is < 768
+    const result = computeHysteresis(unitSquare, 25088, 12800, false)
+    assert.equal(result.inside, false,
+      `previous=false, sd=${result.signedDistance}: should stay outside (sd < 3px)`)
+    assert.ok(result.signedDistance < 768, 'sd should be < 768 (3px * 256)')
+  })
 
-  const bs = report.bindingSummary
-  check(bs?.totalBindings === 37, `Total bindings: expected 37`)
-  check(bs?.allConstraintDecisionNone === true, 'allConstraintDecisionNone should be true')
-  check(bs?.probeResults?.total === 111, `Probe results total: expected 111`)
-  check(bs?.probeResults?.pass === 111, `Probe results pass: expected 111`)
-  check(bs?.probeResults?.fail === 0, `Probe results fail: expected 0`)
-  check(bs?.uniqueTargetFragments?.length === 32, `Unique targets: expected 32`)
+  it('computeHysteresis transition at exact 3px boundary: previous=true, sd=-768', () => {
+    // Exactly 3px outside: x = 25600 + 3*256 = 26368, sd ≈ -768
+    const result = computeHysteresis(unitSquare, 26368, 12800, true)
+    // sd > -HYSTERESIS_WORLD_PX * FIXED_SCALE means inside; sd == -768 is NOT > -768
+    assert.equal(result.inside, false,
+      `previous=true, sd=${result.signedDistance} at exact -3px: should be outside (not > -3px)`)
+  })
 
-  return { passed: errors.length === 0, errors }
-}
-
-function loadJson(p) { return JSON.parse(readFileSync(p, 'utf-8')) }
+  it('computeHysteresis transition at exact 3px boundary: previous=false, sd=768', () => {
+    // Exactly 3px inside: x = 25600 - 3*256 = 24832, sd ≈ 768
+    const result = computeHysteresis(unitSquare, 24832, 12800, false)
+    // sd >= HYSTERESIS_WORLD_PX * FIXED_SCALE means inside; sd == 768 IS >= 768
+    assert.equal(result.inside, true,
+      `previous=false, sd=${result.signedDistance} at exact +3px: should be inside (>= 3px)`)
+  })
+})
 
 // ═══════════════════════════════════════════════
-// Calibration report validity
+// Calibration report validity (using production validator)
 // ═══════════════════════════════════════════════
 
 describe('E11 - calibration report', () => {
+  let validateCalibrationReport
+  let HYSTERESIS_PX
+  let HYSTERESIS_WORLD_PX
+
+  before(async () => {
+    const valMod = await import('../scripts/juyiting/validate-constraint-calibration.mjs')
+    validateCalibrationReport = valMod.validateCalibrationReport
+    const schemaMod = await import('../src/game/occlusion/schema.js')
+    HYSTERESIS_PX = schemaMod.HYSTERESIS_PX
+    const polyMod = await import('../src/game/occlusion/polygonGeometry.js')
+    HYSTERESIS_WORLD_PX = polyMod.HYSTERESIS_WORLD_PX
+  })
+
   it('conclusion is zones=0', () => {
     const r = loadJson(REPORT_PATH)
     assert.equal(r.conclusion, 'zones=0')
@@ -228,6 +263,27 @@ describe('E11 - calibration report', () => {
         `Fragment ${f.stableId} has renderBand=${f.renderBand}`)
     }
   })
+
+  it('uncoveredTargets is derived from live manifest (not hardcoded)', () => {
+    const m = loadJson(MANIFEST_PATH)
+    const r = loadJson(REPORT_PATH)
+    const allCanonicalIds = m.canonicalFragments.map(f => f.stableId)
+    const bindingTargets = new Set(m.maskBindings.map(b => b.targetFragmentId))
+    const expectedUncovered = allCanonicalIds.filter(id => !bindingTargets.has(id)).sort()
+    assert.deepEqual(r.proofs.targetCoverage.uncoveredTargets, expectedUncovered,
+      'uncoveredTargets must match live manifest derivation')
+  })
+
+  it('counts derived from live manifest/bindings match fixture', () => {
+    const m = loadJson(MANIFEST_PATH)
+    const r = loadJson(REPORT_PATH)
+    assert.equal(m.maskBindings.length, 37, 'Live bindings count')
+    assert.equal(m.canonicalFragments.length, 32, 'Live canonical fragments count')
+    assert.equal(r.bindingSummary.totalBindings, m.maskBindings.length,
+      'totalBindings must match live manifest')
+    assert.equal(r.proofs.targetCoverage.totalCanonicalFragments, m.canonicalFragments.length,
+      'totalCanonicalFragments must match live manifest')
+  })
 })
 
 // ═══════════════════════════════════════════════
@@ -268,13 +324,33 @@ describe('E11 - provenance', () => {
 })
 
 // ═══════════════════════════════════════════════
-// Validator function (direct call, no execSync)
+// Validator function (reuses production core)
 // ═══════════════════════════════════════════════
 
 describe('E11 - validator function', () => {
+  let validateCalibrationReport
+  let HYSTERESIS_PX
+  let HYSTERESIS_WORLD_PX
+
+  before(async () => {
+    const valMod = await import('../scripts/juyiting/validate-constraint-calibration.mjs')
+    validateCalibrationReport = valMod.validateCalibrationReport
+    const schemaMod = await import('../src/game/occlusion/schema.js')
+    HYSTERESIS_PX = schemaMod.HYSTERESIS_PX
+    const polyMod = await import('../src/game/occlusion/polygonGeometry.js')
+    HYSTERESIS_WORLD_PX = polyMod.HYSTERESIS_WORLD_PX
+  })
+
+  function validateReportObj(report) {
+    return validateCalibrationReport(report, {
+      schemaHysteresisPx: HYSTERESIS_PX,
+      polygonHysteresisPx: HYSTERESIS_WORLD_PX,
+    })
+  }
+
   it('validates report without errors', () => {
     const r = loadJson(REPORT_PATH)
-    const result = validateReport(r)
+    const result = validateReportObj(r)
     assert.equal(result.passed, true, `Validation errors: ${result.errors.join('; ')}`)
     assert.deepEqual(result.errors, [])
   })
@@ -290,7 +366,7 @@ describe('E11 - validator function', () => {
       priority: 0,
     }]
     mutated.conclusion = 'zones>0'
-    const result = validateReport(mutated)
+    const result = validateReportObj(mutated)
     assert.equal(result.passed, false, 'Should fail on injected zone')
     assert.ok(result.errors.some(e => e.includes('Zones') || e.includes('zone')),
       `Errors should mention zones: ${result.errors.join(', ')}`)
@@ -300,7 +376,7 @@ describe('E11 - validator function', () => {
     const orig = loadJson(REPORT_PATH)
     const mutated = JSON.parse(JSON.stringify(orig))
     mutated.bindingSummary.allConstraintDecisionNone = false
-    const result = validateReport(mutated)
+    const result = validateReportObj(mutated)
     assert.equal(result.passed, false)
     assert.ok(result.errors.some(e => e.includes('constraintDecision') || e.includes('None')),
       `Errors: ${result.errors.join(', ')}`)
@@ -310,7 +386,7 @@ describe('E11 - validator function', () => {
     const orig = loadJson(REPORT_PATH)
     const mutated = JSON.parse(JSON.stringify(orig))
     mutated.proofs.overheadTargets.count = 1
-    const result = validateReport(mutated)
+    const result = validateReportObj(mutated)
     assert.equal(result.passed, false)
     assert.ok(result.errors.some(e => e.includes('Overhead') || e.includes('overhead')),
       `Errors: ${result.errors.join(', ')}`)
@@ -320,7 +396,7 @@ describe('E11 - validator function', () => {
     const orig = loadJson(REPORT_PATH)
     const mutated = JSON.parse(JSON.stringify(orig))
     mutated.proofs.crossSceneTargets.count = 1
-    const result = validateReport(mutated)
+    const result = validateReportObj(mutated)
     assert.equal(result.passed, false)
     assert.ok(result.errors.some(e => e.includes('Cross')),
       `Errors: ${result.errors.join(', ')}`)
@@ -330,7 +406,7 @@ describe('E11 - validator function', () => {
     const orig = loadJson(REPORT_PATH)
     const mutated = JSON.parse(JSON.stringify(orig))
     mutated.proofs.edges.oppositeOverlapSet = [{ agent: 'a', fragment: 'b' }]
-    const result = validateReport(mutated)
+    const result = validateReportObj(mutated)
     assert.equal(result.passed, false)
     assert.ok(result.errors.some(e => e.includes('oppositeOverlap')),
       `Errors: ${result.errors.join(', ')}`)
@@ -340,7 +416,7 @@ describe('E11 - validator function', () => {
     const orig = loadJson(REPORT_PATH)
     const mutated = JSON.parse(JSON.stringify(orig))
     mutated.proofs.cycles.count = 1
-    const result = validateReport(mutated)
+    const result = validateReportObj(mutated)
     assert.equal(result.passed, false)
     assert.ok(result.errors.some(e => e.includes('Cycles')),
       `Errors: ${result.errors.join(', ')}`)
@@ -350,7 +426,7 @@ describe('E11 - validator function', () => {
     const orig = loadJson(REPORT_PATH)
     const mutated = JSON.parse(JSON.stringify(orig))
     mutated.proofs.hysteresis.contractPx = 5
-    const result = validateReport(mutated)
+    const result = validateReportObj(mutated)
     assert.equal(result.passed, false)
     assert.ok(result.errors.some(e => e.includes('Hysteresis') || e.includes('3')),
       `Errors: ${result.errors.join(', ')}`)
@@ -360,7 +436,7 @@ describe('E11 - validator function', () => {
     const orig = loadJson(REPORT_PATH)
     const mutated = JSON.parse(JSON.stringify(orig))
     mutated.proofs.targetCoverage.uncoveredTargets = ['jyt.occ.west-upper.pillar-01.v2']
-    const result = validateReport(mutated)
+    const result = validateReportObj(mutated)
     assert.equal(result.passed, false)
     assert.ok(result.errors.some(e => e.includes('Uncovered')),
       `Errors: ${result.errors.join(', ')}`)
@@ -370,9 +446,34 @@ describe('E11 - validator function', () => {
     const orig = loadJson(REPORT_PATH)
     const mutated = JSON.parse(JSON.stringify(orig))
     mutated.provenance.e10aLedger.wholeFileSha256 = 'deadbeef'
-    const result = validateReport(mutated)
+    const result = validateReportObj(mutated)
     assert.equal(result.passed, false)
     assert.ok(result.errors.some(e => e.includes('Ledger') || e.includes('SHA')),
+      `Errors: ${result.errors.join(', ')}`)
+  })
+
+  it('rejects report with hysteresis mismatch (provided both constants but different)', () => {
+    const orig = loadJson(REPORT_PATH)
+    // If we provide mismatched hysteresis constants, it should fail
+    const result = validateCalibrationReport(JSON.parse(JSON.stringify(orig)), {
+      schemaHysteresisPx: 3,
+      polygonHysteresisPx: 5,
+    })
+    assert.equal(result.passed, false,
+      'Should fail when provided hysteresis constants differ')
+    assert.ok(result.errors.some(e => e.includes('HYSTERESIS') || e.includes('!==')),
+      `Errors should mention hysteresis mismatch: ${result.errors.join(', ')}`)
+  })
+
+  it('rejects report when schema hysteresis != 3', () => {
+    const orig = loadJson(REPORT_PATH)
+    const result = validateCalibrationReport(JSON.parse(JSON.stringify(orig)), {
+      schemaHysteresisPx: 5,
+      polygonHysteresisPx: 5,
+    })
+    assert.equal(result.passed, false,
+      'Should fail when schema HYSTERESIS_PX != 3')
+    assert.ok(result.errors.some(e => e.includes('3') && e.includes('schema')),
       `Errors: ${result.errors.join(', ')}`)
   })
 })
@@ -383,7 +484,7 @@ describe('E11 - validator function', () => {
 
 describe('E11 - constraint subsystem (zones=0)', () => {
   it('canonical IR parse with zones=[] succeeds', async () => {
-    const { DEFAULT_FLOOR_REGISTRY, isStructuredFatalRenderSchemaError } =
+    const { DEFAULT_FLOOR_REGISTRY } =
       await import('../src/game/occlusion/schema.js')
     const { computeWorldSortKey, baseOrderSort } =
       await import('../src/game/occlusion/worldOrder.js')
@@ -497,9 +598,7 @@ describe('E11 - constraint subsystem (zones=0)', () => {
 
   it('polygonGeometry exports computeHysteresis with 3px contract', async () => {
     const { computeHysteresis } = await import('../src/game/occlusion/polygonGeometry.js')
-
     assert.equal(typeof computeHysteresis, 'function')
-
     const result = computeHysteresis(
       { vertices: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }], bounds: { minX: 0, minY: 0, maxX: 100, maxY: 100 } },
       50 * 256, 50 * 256, null,
@@ -510,15 +609,86 @@ describe('E11 - constraint subsystem (zones=0)', () => {
 })
 
 // ═══════════════════════════════════════════════
-// Generator determinism (direct call, no execSync)
+// Generator byte-determinism (production function, run twice)
 // ═══════════════════════════════════════════════
 
-describe('E11 - generator determinism', () => {
-  it('generator logic produces deterministic output', () => {
-    // Load the generator as a module and call its core logic
-    // Since the generator is an ESM script, we verify determinism via
-    // comparing the committed fixture against re-derived computed values
+describe('E11 - generator byte-determinism', () => {
+  let generateCalibrationReport
 
+  before(async () => {
+    const genMod = await import('../scripts/juyiting/generate-constraint-calibration.mjs')
+    generateCalibrationReport = genMod.generateCalibrationReport
+  })
+
+  it('two calls produce identical complete output', () => {
+    const report1 = generateCalibrationReport()
+    const report2 = generateCalibrationReport()
+
+    const json1 = JSON.stringify(report1, null, 2)
+    const json2 = JSON.stringify(report2, null, 2)
+
+    assert.equal(json1, json2, 'Two generator calls must produce identical JSON output')
+    assert.equal(sha256(json1), sha256(json2), 'SHA-256 must match between calls')
+  })
+
+  it('generator output matches committed fixture structure', () => {
+    const report = generateCalibrationReport()
+    const fixture = loadJson(REPORT_PATH)
+
+    // Key fields should match
+    assert.equal(report.conclusion, fixture.conclusion)
+    assert.equal(report.schemaVersion, fixture.schemaVersion)
+    assert.equal(report.taskId, fixture.taskId)
+    // Timestamp is deterministic in both
+    assert.equal(report.timestamp, fixture.timestamp)
+
+    // Provenance SHAs should match
+    assert.equal(report.provenance.e10aLedger.wholeFileSha256, fixture.provenance.e10aLedger.wholeFileSha256)
+    assert.equal(report.provenance.e10bManifest.wholeFileSha256, fixture.provenance.e10bManifest.wholeFileSha256)
+    assert.equal(report.provenance.tmx.sha256, fixture.provenance.tmx.sha256)
+
+    // Proofs match
+    assert.equal(report.proofs.zones.count, fixture.proofs.zones.count)
+    assert.equal(report.proofs.probes.total, fixture.proofs.probes.total)
+    assert.equal(report.proofs.probes.passed, fixture.proofs.probes.passed)
+    assert.equal(report.proofs.probes.failed, fixture.proofs.probes.failed)
+    assert.equal(report.proofs.targetCoverage.uniqueTargetFragments, fixture.proofs.targetCoverage.uniqueTargetFragments)
+    assert.equal(report.proofs.targetCoverage.totalCanonicalFragments, fixture.proofs.targetCoverage.totalCanonicalFragments)
+    assert.deepEqual(report.proofs.targetCoverage.uncoveredTargets, fixture.proofs.targetCoverage.uncoveredTargets)
+    assert.equal(report.proofs.hysteresis.contractPx, fixture.proofs.hysteresis.contractPx)
+    assert.equal(report.proofs.edges.count, fixture.proofs.edges.count)
+    assert.equal(report.proofs.conflicts.count, fixture.proofs.conflicts.count)
+    assert.equal(report.proofs.cycles.count, fixture.proofs.cycles.count)
+
+    // Binding summary matches
+    assert.equal(report.bindingSummary.totalBindings, fixture.bindingSummary.totalBindings)
+    assert.deepEqual(report.bindingSummary.uniqueTargetFragments, fixture.bindingSummary.uniqueTargetFragments)
+    assert.equal(report.bindingSummary.probeResults.total, fixture.bindingSummary.probeResults.total)
+    assert.equal(report.bindingSummary.probeResults.pass, fixture.bindingSummary.probeResults.pass)
+    assert.equal(report.bindingSummary.probeResults.fail, fixture.bindingSummary.probeResults.fail)
+  })
+
+  it('fixture passes validator with live hysteresis constants', async () => {
+    const { validateCalibrationReport } = await import('../scripts/juyiting/validate-constraint-calibration.mjs')
+    const schemaMod = await import('../src/game/occlusion/schema.js')
+    const polyMod = await import('../src/game/occlusion/polygonGeometry.js')
+
+    const report = generateCalibrationReport()
+    const result = validateCalibrationReport(report, {
+      schemaHysteresisPx: schemaMod.HYSTERESIS_PX,
+      polygonHysteresisPx: polyMod.HYSTERESIS_WORLD_PX,
+    })
+    assert.equal(result.passed, true,
+      `Generated report should pass validator: ${result.errors.join('; ')}`)
+  })
+})
+
+// ═══════════════════════════════════════════════
+// Generator determinism (manifest-based proofs)
+// ═══════════════════════════════════════════════
+
+describe('E11 - generator determinism (manifest proofs)', () => {
+  it('generator logic produces deterministic output from manifest', () => {
     const r = loadJson(REPORT_PATH)
     const m = loadJson(MANIFEST_PATH)
 
@@ -564,7 +734,6 @@ describe('E11 - generator determinism', () => {
 
   it('generator fixture matches expected structure', () => {
     const r = loadJson(REPORT_PATH)
-    // The fixture must have all required sections
     assert.ok(r.provenance?.e10aLedger?.generationId)
     assert.ok(r.provenance?.e10bManifest?.generationId)
     assert.ok(r.proofs?.zones)
@@ -709,14 +878,30 @@ describe('E11 - 108-agent pressure', () => {
 })
 
 // ═══════════════════════════════════════════════
-// Validator determinism (direct call, no execSync)
+// Validator determinism (production function)
 // ═══════════════════════════════════════════════
 
 describe('E11 - validator determinism', () => {
+  let validateCalibrationReport
+  let HYSTERESIS_PX
+  let HYSTERESIS_WORLD_PX
+
+  before(async () => {
+    const valMod = await import('../scripts/juyiting/validate-constraint-calibration.mjs')
+    validateCalibrationReport = valMod.validateCalibrationReport
+    const schemaMod = await import('../src/game/occlusion/schema.js')
+    HYSTERESIS_PX = schemaMod.HYSTERESIS_PX
+    const polyMod = await import('../src/game/occlusion/polygonGeometry.js')
+    HYSTERESIS_WORLD_PX = polyMod.HYSTERESIS_WORLD_PX
+  })
+
   it('produces identical validation result across repeated calls', () => {
     const r = loadJson(REPORT_PATH)
     for (let i = 0; i < 5; i++) {
-      const result = validateReport(r)
+      const result = validateCalibrationReport(r, {
+        schemaHysteresisPx: HYSTERESIS_PX,
+        polygonHysteresisPx: HYSTERESIS_WORLD_PX,
+      })
       assert.equal(result.passed, true, `Run ${i}: ${result.errors.join('; ')}`)
       assert.deepEqual(result.errors, [])
     }

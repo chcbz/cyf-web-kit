@@ -2,7 +2,7 @@
   "$schema": "juyiting-occlusion-constraint-calibration-v1",
   "schemaVersion": 1,
   "taskId": "E11",
-  "timestamp": "2026-08-12T09:26:08.678Z",
+  "timestamp": "2026-08-12T00:00:00.000Z",
   "conclusion": "zones=0",
   "provenance": {
     "e10aLedger": {

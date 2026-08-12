@@ -3,8 +3,12 @@
 // Validates the E11 calibration report against frozen inputs.
 // Verifies: zones=0 proof, probe coverage, no crosses, no cycles, 3px hysteresis.
 //
-// Usage: node scripts/juyiting/validate-constraint-calibration.mjs [report-path]
+// Usage (CLI):
+//   node scripts/juyiting/validate-constraint-calibration.mjs [report-path]
 // Default report: tests/fixtures/juyiting/occlusion-v2-constraint/calibration-report.json
+//
+// Importable:
+//   import { validateCalibrationReport } from './validate-constraint-calibration.mjs'
 
 import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
@@ -22,31 +26,12 @@ function sha256File(filePath) {
   return sha256(readFileSync(filePath))
 }
 
-let errors = 0
-let warnings = 0
-
-function error(msg) {
-  console.error(`ERROR: ${msg}`)
-  errors++
-}
-
-function warn(msg) {
-  console.error(`WARN: ${msg}`)
-  warnings++
-}
-
-function check(condition, msg) {
-  if (!condition) error(msg)
-  return condition
-}
-
 // ── Frozen constants ──
 const EXPECTED_LEDGER_WHOLE_SHA = '700b2ac6d27ceb58ce5fe0dd92b3f0dc7012a6ecafd03f7c23a9d3a3c42704b1'
 const EXPECTED_MANIFEST_WHOLE_SHA = '183dadfa3221306eaac82b815d16023f21589323a7659ceb15cde0c227f916b0'
 const EXPECTED_TMX_SHA = '4f94e3a52da71369d9c29d96e0ac0ceb2126a1a441b6cd63911701957e1ed49b'
 const EXPECTED_E10A_GENERATION_ID = 'fc855f90cbfc13c5ad8b24659825bc1dccaa03ec17866735fd923452dbdc7611'
 const EXPECTED_E10B_GENERATION_ID = 'a79959fd081f6c76fe5cf371b0587b5efaef463ade443e63e65f1afb4e32bbc9'
-const HYSTERESIS_PX = 3
 
 const CONTRACT_SOURCES = {
   'src/game/occlusion/schema.ts': '172a293a9b873482be25fed706da05e49ddcc02cfa8717ff329311159e51b9d1',
@@ -56,18 +41,34 @@ const CONTRACT_SOURCES = {
   'src/game/occlusion/validation.ts': '7b4bcfed5ec2cb39003d2f06709113c837b89600138e991a0aec60d1903b0eeb',
 }
 
-function main() {
-  const reportPath = process.argv[2] ||
-    path.join(ROOT, 'tests/fixtures/juyiting/occlusion-v2-constraint/calibration-report.json')
+/**
+ * Validate a calibration report object.
+ *
+ * @param {object} report - parsed calibration report JSON
+ * @param {object} [opts] - options
+ * @param {Record<string,string>} [opts.liveContractHashes] - live contract path→sha256 map
+ * @param {number} [opts.schemaHysteresisPx] - HYSTERESIS_PX from live schema.js
+ * @param {number} [opts.polygonHysteresisPx] - HYSTERESIS_WORLD_PX from live polygonGeometry.js
+ * @returns {{ passed: boolean, errors: string[], warnings: string[] }}
+ */
+export function validateCalibrationReport(report, opts = {}) {
+  const errors = []
+  const warnings = []
 
-  console.error(`Validating: ${reportPath}`)
+  function error(msg) { errors.push(msg) }
+  function warn(msg) { warnings.push(msg) }
+  function check(condition, msg) { if (!condition) error(msg) }
 
-  let report
-  try {
-    report = JSON.parse(readFileSync(reportPath, 'utf-8'))
-  } catch (e) {
-    error(`Cannot parse report: ${e.message}`)
-    process.exit(1)
+  // ── Hysteresis cross-check: both live sources must be 3 and equal ──
+  const schemaHpx = opts.schemaHysteresisPx
+  const polyHpx = opts.polygonHysteresisPx
+  if (schemaHpx !== undefined && polyHpx !== undefined) {
+    check(schemaHpx === 3,
+      `HYSTERESIS_PX from schema.js must be 3, got ${schemaHpx}`)
+    check(polyHpx === 3,
+      `HYSTERESIS_WORLD_PX from polygonGeometry.js must be 3, got ${polyHpx}`)
+    check(schemaHpx === polyHpx,
+      `HYSTERESIS_PX (${schemaHpx}) !== HYSTERESIS_WORLD_PX (${polyHpx}) — fail closed`)
   }
 
   // ── Schema check ──
@@ -79,7 +80,7 @@ function main() {
 
   // ── Provenance verification ──
   const prov = report.provenance
-  if (!prov) { error('Missing provenance'); process.exit(1) }
+  if (!prov) { error('Missing provenance'); return { passed: false, errors, warnings } }
 
   check(prov.e10aLedger?.wholeFileSha256 === EXPECTED_LEDGER_WHOLE_SHA,
     `Ledger SHA mismatch: ${prov.e10aLedger?.wholeFileSha256}`)
@@ -94,22 +95,25 @@ function main() {
   check(prov.tmx?.sha256 === EXPECTED_TMX_SHA,
     `TMX SHA mismatch: ${prov.tmx?.sha256}`)
 
-  // Verify live contract hashes
-  for (const [relPath, expectedHash] of Object.entries(CONTRACT_SOURCES)) {
-    const actual = sha256File(path.join(ROOT, relPath))
-    check(actual === expectedHash,
-      `Contract hash mismatch for ${relPath}: expected ${expectedHash}, got ${actual}`)
-  }
-
+  // Verify contract hashes in report match expected
   const reportContracts = prov.e4e5Contracts || {}
   for (const [relPath, expectedHash] of Object.entries(CONTRACT_SOURCES)) {
     check(reportContracts[relPath] === expectedHash,
       `Report contract hash mismatch for ${relPath}`)
   }
 
+  // Cross-check live contract hashes if provided
+  if (opts.liveContractHashes) {
+    for (const [relPath, expectedHash] of Object.entries(CONTRACT_SOURCES)) {
+      const liveHash = opts.liveContractHashes[relPath]
+      check(liveHash === expectedHash,
+        `Live contract hash mismatch for ${relPath}: expected ${expectedHash}, got ${liveHash}`)
+    }
+  }
+
   // ── Proofs verification ──
   const proofs = report.proofs
-  if (!proofs) { error('Missing proofs'); process.exit(1) }
+  if (!proofs) { error('Missing proofs'); return { passed: false, errors, warnings } }
 
   // Zones
   check(proofs.zones?.count === 0, `Zones count should be 0, got ${proofs.zones?.count}`)
@@ -141,7 +145,7 @@ function main() {
   check(tc?.uniqueTargetFragments === 32, `Unique target fragments: expected 32, got ${tc?.uniqueTargetFragments}`)
   check(tc?.totalCanonicalFragments === 32, `Total canonical: expected 32, got ${tc?.totalCanonicalFragments}`)
   check(Array.isArray(tc?.uncoveredTargets) && tc.uncoveredTargets.length === 0,
-    `Uncovered targets should be empty, got ${tc?.uncoveredTargets?.length}`)
+    `Uncovered targets should be empty, got ${JSON.stringify(tc?.uncoveredTargets)}`)
 
   // Probes
   check(proofs.probes?.total === 111, `Probe total: expected 111, got ${proofs.probes?.total}`)
@@ -154,8 +158,8 @@ function main() {
   check(proofs.globalSemantics?.hasGlobalCharacterState === false, 'hasGlobalCharacterState should be false')
 
   // Hysteresis
-  check(proofs.hysteresis?.contractPx === HYSTERESIS_PX,
-    `Hysteresis contract: expected ${HYSTERESIS_PX}, got ${proofs.hysteresis?.contractPx}`)
+  check(proofs.hysteresis?.contractPx === 3,
+    `Hysteresis contract: expected 3, got ${proofs.hysteresis?.contractPx}`)
   check(proofs.hysteresis?.membershipState === 'none (zones=0)',
     `Membership state should be 'none (zones=0)', got ${proofs.hysteresis?.membershipState}`)
 
@@ -175,15 +179,74 @@ function main() {
   check(bs?.probeResults?.fail === 0, `Probe results fail: expected 0, got ${bs?.probeResults?.fail}`)
   check(bs?.uniqueTargetFragments?.length === 32, `Unique targets: expected 32, got ${bs?.uniqueTargetFragments?.length}`)
 
-  // ── Final result ──
+  return { passed: errors.length === 0, errors, warnings }
+}
+
+// ── CLI entry point ──
+function main() {
+  const reportPath = process.argv[2] ||
+    path.join(ROOT, 'tests/fixtures/juyiting/occlusion-v2-constraint/calibration-report.json')
+
+  console.error(`Validating: ${reportPath}`)
+
+  let report
+  try {
+    report = JSON.parse(readFileSync(reportPath, 'utf-8'))
+  } catch (e) {
+    console.error(`ERROR: Cannot parse report: ${e.message}`)
+    process.exit(1)
+  }
+
+  // Compute live contract hashes for CLI validation
+  const liveContractHashes = {}
+  for (const relPath of Object.keys(CONTRACT_SOURCES)) {
+    liveContractHashes[relPath] = sha256File(path.join(ROOT, relPath))
+  }
+
+  // Extract hysteresis constants from frozen source text (CLI runs without tsx)
+  let schemaHysteresisPx
+  let polygonHysteresisPx
+  try {
+    const schemaSrc = readFileSync(path.join(ROOT, 'src/game/occlusion/schema.ts'), 'utf-8')
+    const schemaMatch = schemaSrc.match(/export\s+const\s+HYSTERESIS_PX\s*=\s*(\d+)/)
+    if (!schemaMatch) throw new Error('Cannot find HYSTERESIS_PX in schema.ts')
+    schemaHysteresisPx = parseInt(schemaMatch[1], 10)
+
+    const polySrc = readFileSync(path.join(ROOT, 'src/game/occlusion/polygonGeometry.ts'), 'utf-8')
+    const polyMatch = polySrc.match(/export\s+const\s+HYSTERESIS_WORLD_PX\s*=\s*(\d+)/)
+    if (!polyMatch) throw new Error('Cannot find HYSTERESIS_WORLD_PX in polygonGeometry.ts')
+    polygonHysteresisPx = parseInt(polyMatch[1], 10)
+  } catch (e) {
+    console.error(`ERROR: Cannot extract hysteresis constants from frozen sources: ${e.message}`)
+    process.exit(1)
+  }
+
+
+  const result = validateCalibrationReport(report, {
+    liveContractHashes,
+    schemaHysteresisPx,
+    polygonHysteresisPx,
+  })
+
+  for (const w of result.warnings) {
+    console.error(`WARN: ${w}`)
+  }
+  for (const e of result.errors) {
+    console.error(`ERROR: ${e}`)
+  }
+
   console.error('')
-  if (errors > 0) {
-    console.error(`VALIDATION FAILED: ${errors} error(s), ${warnings} warning(s)`)
+  if (!result.passed) {
+    console.error(`VALIDATION FAILED: ${result.errors.length} error(s), ${result.warnings.length} warning(s)`)
     process.exit(1)
   } else {
-    console.error(`VALIDATION PASSED: 0 errors, ${warnings} warning(s)`)
+    console.error(`VALIDATION PASSED: 0 errors, ${result.warnings.length} warning(s)`)
     console.log('PASS')
   }
 }
 
-main()
+// Only run CLI when executed directly (not imported)
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
+if (isMain) {
+  main()
+}
