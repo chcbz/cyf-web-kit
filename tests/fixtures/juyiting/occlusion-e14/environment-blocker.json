@@ -2,9 +2,10 @@
   "schemaVersion": 1,
   "gate": "E14 formal Chromium performance gate",
   "status": "blocked_by_managed_workspace_sandbox",
-  "date": "2026-08-12",
+  "date": "2026-08-13",
   "chromium": {
     "binary": "/usr/lib64/chromium-browser/headless_shell",
+    "wrapper": "/usr/local/bin/chromium-headless-smoke",
     "version": "133.0.6943.141"
   },
   "observations": [
@@ -17,14 +18,40 @@
       "result": "EPERM"
     },
     {
-      "operation": "CDP connect to 127.0.0.1 remote-debugging port",
-      "result": "EPERM"
+      "operation": "strict formal report test",
+      "result": "fail-closed because benchmark-report.json is absent"
     },
     {
-      "operation": "Chromium headless startup without CDP",
-      "result": "FATAL sandbox_host_linux.cc(41): shutdown: Operation not permitted"
+      "operation": "minimal Chromium file:// --dump-dom without HTTP or CDP",
+      "result": "exit 133: FATAL sandbox_host_linux.cc(41): shutdown: Operation not permitted"
+    },
+    {
+      "operation": "Chromium startup with --single-process --no-zygote",
+      "result": "exit 133 with the same forbidden shutdown syscall"
+    },
+    {
+      "operation": "Chromium startup with no-zygote, in-process network, disabled network service, and expanded sandbox-disabling flag variants",
+      "result": "all variants exit 133 with the same forbidden shutdown syscall"
     }
   ],
+  "latestDiagnostic": {
+    "engine": "node-v8-jsdom-fallback",
+    "chromiumGateEligible": false,
+    "warmupMs": 10000,
+    "sampleMs": 60000,
+    "totalP95Ms": 1.90460599999642,
+    "totalP99Ms": 2.3931420000008075,
+    "gridUpdateP95Ms": 0.227694999994128,
+    "worldOrderP95Ms": 1.726794999995036,
+    "fullGridScanCount": 0,
+    "provisionalPass": true
+  },
+  "review": {
+    "model": "deepseek-v4-pro",
+    "scope": "commit 4499b47 immutable neighborhood cache, same-cell zone invalidation, and instrumentation semantics",
+    "result": "PASS",
+    "blockingCodeFindings": 0
+  },
   "integrity": {
     "formalGateClaimed": false,
     "nodeFallbackClaimedAsChromium": false,
