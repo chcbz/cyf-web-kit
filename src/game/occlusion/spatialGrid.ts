@@ -67,6 +67,27 @@ export const SPATIAL_GRID_PROVIDER_BRAND = Symbol('spatial-grid-provider')
 
 // ── Spatial grid ──
 
+
+/** Runtime-immutable ReadonlySet view for cached candidate neighborhoods. */
+class ImmutableSetView<T> implements ReadonlySet<T> {
+  readonly #source: Set<T>
+
+  constructor(source: Set<T>) {
+    this.#source = source
+    Object.freeze(this)
+  }
+
+  get size(): number { return this.#source.size }
+  has(value: T): boolean { return this.#source.has(value) }
+  entries(): SetIterator<[T, T]> { return this.#source.entries() }
+  keys(): SetIterator<T> { return this.#source.keys() }
+  values(): SetIterator<T> { return this.#source.values() }
+  [Symbol.iterator](): SetIterator<T> { return this.#source[Symbol.iterator]() }
+  forEach(callbackfn: (value: T, value2: T, set: ReadonlySet<T>) => void, thisArg?: unknown): void {
+    for (const value of this.#source) callbackfn.call(thisArg, value, value, this)
+  }
+}
+
 export class SpatialGrid {
   private cellSize: CellSize
   /** Map from cell key string → Set of stableIds */
@@ -77,8 +98,12 @@ export class SpatialGrid {
   private cellsByKind: Map<GridEntry['entryKind'], Map<string, Set<string>>>
   /** Reverse index: stableId → exact occupied cell keys (prevents full-grid unregister scans). */
   private entryCellKeys: Map<string, Set<string>>
+  /** Stable coverage signature enables allocation-free same-cell moving updates. */
+  private entryCellSignatures: Map<string, string>
   /** Optional cumulative instrumentation used by the fixed E14 benchmark. */
   private instrumentation?: SpatialGridInstrumentation
+  /** Scene-static zone candidates cached by query cell for the constraint provider. */
+  private constraintZoneNeighborhoodCache: Map<string, ReadonlySet<string>>
 
   constructor(
     cellSize: number = DEFAULT_CELL_SIZE,
@@ -99,7 +124,9 @@ export class SpatialGrid {
     this.entries = new Map()
     this.cellsByKind = new Map()
     this.entryCellKeys = new Map()
+    this.entryCellSignatures = new Map()
     this.instrumentation = instrumentation
+    this.constraintZoneNeighborhoodCache = new Map()
   }
 
   /** Get current cell size */
@@ -121,6 +148,15 @@ export class SpatialGrid {
     return { cellX: Object.is(cellX, -0) ? 0 : cellX, cellY: Object.is(cellY, -0) ? 0 : cellY }
   }
 
+  private aabbCellRange(bounds: Rect): { minCx: number; minCy: number; maxCx: number; maxCy: number } {
+    const { cellX: minCx, cellY: minCy } = this.worldToCell(bounds.x, bounds.y)
+    const { cellX: maxCx, cellY: maxCy } = this.worldToCell(
+      bounds.x + bounds.width,
+      bounds.y + bounds.height,
+    )
+    return { minCx, minCy, maxCx, maxCy }
+  }
+
   /**
    * Compute all cell keys covered by an AABB.
    * Covers cells that overlap the AABB (inclusive on both ends).
@@ -130,11 +166,7 @@ export class SpatialGrid {
     sceneId: string,
     floorId: string,
   ): CellKey[] {
-    const { cellX: minCx, cellY: minCy } = this.worldToCell(bounds.x, bounds.y)
-    const { cellX: maxCx, cellY: maxCy } = this.worldToCell(
-      bounds.x + bounds.width,
-      bounds.y + bounds.height,
-    )
+    const { minCx, minCy, maxCx, maxCy } = this.aabbCellRange(bounds)
 
     const keys: CellKey[] = []
     for (let cx = minCx; cx <= maxCx; cx++) {
@@ -154,25 +186,36 @@ export class SpatialGrid {
     sceneId: string,
     floorId: string,
   ): void {
-    // Compute the new cell set before changing indexes. Moving agents usually
-    // remain in the same one or two cells for many frames; in that common case
-    // only authoritative bounds change and no Set delete/add work is needed.
-    const keys = this.aabbToCellKeys(entry.bounds, sceneId, floorId)
-    const occupiedKeys = new Set<string>()
-    for (const key of keys) occupiedKeys.add(cellKeyToString(key))
-
+    // Moving agents commonly retain the same cell coverage for many frames.
+    // Compare a compact range signature before allocating cell keys or Sets.
+    const range = this.aabbCellRange(entry.bounds)
+    const coverageSignature = `${sceneId}|${floorId}|${range.minCx}|${range.minCy}|${range.maxCx}|${range.maxCy}`
     const previousEntry = this.entries.get(entry.stableId)
-    const previousKeys = this.entryCellKeys.get(entry.stableId)
     if (
       previousEntry?.entryKind === entry.entryKind &&
-      previousKeys && sameStringSet(previousKeys, occupiedKeys)
+      this.entryCellSignatures.get(entry.stableId) === coverageSignature
     ) {
+      // Zone geometry/bounds may change without crossing a cell boundary.
+      // Invalidate even though the indexed stableId neighborhood is unchanged,
+      // so the cache contract remains correct for every zone update.
+      if (entry.entryKind === 'zone') this.constraintZoneNeighborhoodCache.clear()
       this.entries.set(entry.stableId, { ...entry })
       return
     }
 
+    const occupiedKeys = new Set<string>()
+    for (let cx = range.minCx; cx <= range.maxCx; cx++) {
+      for (let cy = range.minCy; cy <= range.maxCy; cy++) {
+        occupiedKeys.add(cellKeyToString({ sceneId, floorId, cellX: cx, cellY: cy }))
+      }
+    }
+
     // Cell coverage or kind changed: remove the old indexed membership first.
     if (previousEntry) this.unregister(entry.stableId)
+
+    // Zone neighborhood results are scene-static between zone topology
+    // changes. Agent/fragment/prop updates do not invalidate this cache.
+    if (entry.entryKind === 'zone') this.constraintZoneNeighborhoodCache.clear()
 
     // Store entry
     this.entries.set(entry.stableId, { ...entry })
@@ -199,6 +242,7 @@ export class SpatialGrid {
       kindCell.add(entry.stableId)
     }
     this.entryCellKeys.set(entry.stableId, occupiedKeys)
+    this.entryCellSignatures.set(entry.stableId, coverageSignature)
   }
 
   /**
@@ -209,6 +253,7 @@ export class SpatialGrid {
     const occupiedKeys = this.entryCellKeys.get(stableId)
     const entry = this.entries.get(stableId)
     const kindCells = entry ? this.cellsByKind.get(entry.entryKind) : undefined
+    if (entry?.entryKind === 'zone') this.constraintZoneNeighborhoodCache.clear()
 
     if (occupiedKeys) {
       // O(cells occupied by this entry), never O(all occupied map cells).
@@ -244,6 +289,7 @@ export class SpatialGrid {
     }
 
     this.entryCellKeys.delete(stableId)
+    this.entryCellSignatures.delete(stableId)
     this.entries.delete(stableId)
   }
 
@@ -348,6 +394,48 @@ export class SpatialGrid {
   }
 
   /**
+   * Read-only zone candidates for production constraint resolution.
+   * Zones are scene-static, so all agents in the same cell can share one
+   * neighborhood result until zone topology changes.
+   */
+  queryConstraintZoneCandidateIds(
+    position: Point,
+    sceneId: string,
+    floorId: string,
+  ): ReadonlySet<string> {
+    const { cellX, cellY } = this.worldToCell(position.x, position.y)
+    const cacheKey = cellKeyToString({ sceneId, floorId, cellX, cellY })
+    const cached = this.constraintZoneNeighborhoodCache.get(cacheKey)
+    if (cached) {
+      // candidateCount is a logical resolver metric; cellQueryCount records
+      // physical index reads, so cache hits intentionally add zero cell reads.
+      if (this.instrumentation) this.instrumentation.candidateCount += cached.size
+      return cached
+    }
+
+    const result = new Set<string>()
+    const indexedCells = this.cellsByKind.get('zone')
+    if (indexedCells) {
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          const keyStr = cellKeyToString({
+            sceneId, floorId, cellX: cellX + dx, cellY: cellY + dy,
+          })
+          const cell = indexedCells.get(keyStr)
+          if (cell) for (const id of cell) result.add(id)
+        }
+      }
+    }
+    const immutableResult = new ImmutableSetView(result)
+    this.constraintZoneNeighborhoodCache.set(cacheKey, immutableResult)
+    if (this.instrumentation) {
+      this.instrumentation.cellQueryCount += 9
+      this.instrumentation.candidateCount += immutableResult.size
+    }
+    return immutableResult
+  }
+
+  /**
    * Query entries whose AABB overlaps with a query AABB.
    * Uses cell-based candidate discovery + precise AABB filter.
    */
@@ -412,6 +500,8 @@ export class SpatialGrid {
     this.entries.clear()
     this.cellsByKind.clear()
     this.entryCellKeys.clear()
+    this.entryCellSignatures.clear()
+    this.constraintZoneNeighborhoodCache.clear()
   }
 
   /**
@@ -425,12 +515,6 @@ export class SpatialGrid {
     }
     return snap
   }
-}
-
-function sameStringSet(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
-  if (a.size !== b.size) return false
-  for (const value of a) if (!b.has(value)) return false
-  return true
 }
 
 // ── AABB overlap test ──
@@ -481,7 +565,7 @@ export interface SpatialGridCandidateProvider {
   readonly _brand: typeof SPATIAL_GRID_PROVIDER_BRAND
   /** Source grid (for diagnostic access) */
   readonly _grid: SpatialGrid
-  queryCandidates(position: Point, sceneId: string, floorId: string): Set<string>
+  queryCandidates(position: Point, sceneId: string, floorId: string): ReadonlySet<string>
 }
 
 /**
@@ -493,7 +577,7 @@ export function createConstraintCandidateProvider(grid: SpatialGrid): SpatialGri
     _brand: SPATIAL_GRID_PROVIDER_BRAND,
     _grid: grid,
     queryCandidates: (position, sceneId, floorId) =>
-      grid.queryCandidateIdsByKind(position, sceneId, floorId, 'zone'),
+      grid.queryConstraintZoneCandidateIds(position, sceneId, floorId),
   }
 }
 

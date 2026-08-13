@@ -159,7 +159,7 @@ export interface ConstraintCandidateProvider {
   /** Unforgeable provenance brand, checked by resolver */
   readonly _brand?: typeof SPATIAL_GRID_PROVIDER_BRAND
   /** Return stableIds of entries in nearby cells for a given position. */
-  queryCandidates(position: Point, sceneId: string, floorId: string): Set<string>
+  queryCandidates(position: Point, sceneId: string, floorId: string): ReadonlySet<string>
 }
 
 // ── Test candidate provider factory ──
@@ -171,7 +171,7 @@ export interface ConstraintCandidateProvider {
 export const TEST_PROVIDER_BRAND = Symbol('test-candidate-provider')
 
 export function createTestCandidateProvider(
-  queryFn: (position: Point, sceneId: string, floorId: string) => Set<string>,
+  queryFn: (position: Point, sceneId: string, floorId: string) => ReadonlySet<string>,
 ): ConstraintCandidateProvider & { _testBrand: typeof TEST_PROVIDER_BRAND } {
   return {
     _brand: undefined,

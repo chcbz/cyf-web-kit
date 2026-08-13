@@ -22,286 +22,286 @@
   "timing": {
     "warmupMs": 10000,
     "sampleMs": 60000,
-    "frames": 3280,
+    "frames": 3389,
     "total": {
-      "min": 1.755142000001797,
-      "mean": 2.1091742115853482,
-      "p50": 2.0535730000010517,
-      "p95": 2.4922010000009323,
-      "p99": 3.1394360000049346,
-      "max": 3.823442000000796
+      "min": 1.213434999999663,
+      "mean": 1.500711684272737,
+      "p50": 1.446274000001722,
+      "p95": 1.90460599999642,
+      "p99": 2.3931420000008075,
+      "max": 2.650685999997222
     },
     "gridUpdate": {
-      "min": 0.14131300000008196,
-      "mean": 0.21534137591456395,
-      "p50": 0.2046200000004319,
-      "p95": 0.3019529999983206,
-      "p99": 0.3668499999985215,
-      "max": 0.4494520000007469
+      "min": 0.08022499999788124,
+      "mean": 0.14556728090889215,
+      "p50": 0.1365379999988363,
+      "p95": 0.227694999994128,
+      "p99": 0.28908700000465615,
+      "max": 0.4364480000003823
     },
     "worldOrder": {
-      "min": 1.566172999999253,
-      "mean": 1.8938328356707843,
-      "p50": 1.8424379999996745,
-      "p95": 2.258013000002393,
-      "p99": 2.8237540000009176,
-      "max": 3.409942999998748
+      "min": 1.1043840000056662,
+      "mean": 1.355144403363845,
+      "p50": 1.3070589999988442,
+      "p95": 1.726794999995036,
+      "p99": 2.159213999999338,
+      "max": 2.384620000000723
     }
   },
   "complexity": {
     "theoreticalAgentsTimesAllZonesPerFrame": 3996,
-    "auditFrameMembershipChecks": 44,
-    "membershipChecksPerFrameMean": 44,
+    "auditFrameMembershipChecks": 41,
+    "membershipChecksPerFrameMean": 41,
     "maxChecksPerAgent": 1,
     "maxUniqueZoneCandidates": 37,
     "instrumentationScope": "one representative post-sample frame; excluded from timed production path",
     "spatialGridDelta": {
-      "candidateCount": 4872559,
-      "cellQueryCount": 3188160,
+      "candidateCount": 5032357,
+      "cellQueryCount": 0,
       "scanCount": 0,
-      "updateCellVisitCount": 11026
+      "updateCellVisitCount": 11436
     }
   },
   "memory": {
     "browserHeapSamples": [
       {
-        "elapsedMs": 18.158031999999366,
+        "elapsedMs": 17.9431429999986,
         "usedBytes": null
       },
       {
-        "elapsedMs": 1035.4218029999993,
+        "elapsedMs": 1024.5569039999991,
         "usedBytes": null
       },
       {
-        "elapsedMs": 2052.0189979999996,
+        "elapsedMs": 2032.383534999999,
         "usedBytes": null
       },
       {
-        "elapsedMs": 3056.977312000001,
+        "elapsedMs": 3034.555869,
         "usedBytes": null
       },
       {
-        "elapsedMs": 4058.663885,
+        "elapsedMs": 4046.0805379999983,
         "usedBytes": null
       },
       {
-        "elapsedMs": 5071.582754000001,
+        "elapsedMs": 5061.996489000001,
         "usedBytes": null
       },
       {
-        "elapsedMs": 6075.146659,
+        "elapsedMs": 6074.442514999999,
         "usedBytes": null
       },
       {
-        "elapsedMs": 7077.9264090000015,
+        "elapsedMs": 7083.1066869999995,
         "usedBytes": null
       },
       {
-        "elapsedMs": 8079.710498999999,
+        "elapsedMs": 8083.391176000001,
         "usedBytes": null
       },
       {
-        "elapsedMs": 9084.397274,
+        "elapsedMs": 9089.734689,
         "usedBytes": null
       },
       {
-        "elapsedMs": 10093.961787999999,
+        "elapsedMs": 10095.320017999999,
         "usedBytes": null
       },
       {
-        "elapsedMs": 11103.780154000002,
+        "elapsedMs": 11105.725025,
         "usedBytes": null
       },
       {
-        "elapsedMs": 12109.194615999999,
+        "elapsedMs": 12118.457074999998,
         "usedBytes": null
       },
       {
-        "elapsedMs": 13116.791620000002,
+        "elapsedMs": 13127.815584,
         "usedBytes": null
       },
       {
-        "elapsedMs": 14126.566444000002,
+        "elapsedMs": 14139.185995,
         "usedBytes": null
       },
       {
-        "elapsedMs": 15134.893428000001,
+        "elapsedMs": 15145.805097,
         "usedBytes": null
       },
       {
-        "elapsedMs": 16136.595129,
+        "elapsedMs": 16160.866124,
         "usedBytes": null
       },
       {
-        "elapsedMs": 17150.410181,
+        "elapsedMs": 17170.426994999998,
         "usedBytes": null
       },
       {
-        "elapsedMs": 18159.133958,
+        "elapsedMs": 18172.64219,
         "usedBytes": null
       },
       {
-        "elapsedMs": 19159.645251,
+        "elapsedMs": 19178.613999,
         "usedBytes": null
       },
       {
-        "elapsedMs": 20161.225981000003,
+        "elapsedMs": 20187.82333,
         "usedBytes": null
       },
       {
-        "elapsedMs": 21178.179204,
+        "elapsedMs": 21193.268897,
         "usedBytes": null
       },
       {
-        "elapsedMs": 22192.809334000005,
+        "elapsedMs": 22202.633002000002,
         "usedBytes": null
       },
       {
-        "elapsedMs": 23200.224351000004,
+        "elapsedMs": 23209.386980000003,
         "usedBytes": null
       },
       {
-        "elapsedMs": 24203.879264000003,
+        "elapsedMs": 24212.247671999998,
         "usedBytes": null
       },
       {
-        "elapsedMs": 25204.710080000004,
+        "elapsedMs": 25212.495778999997,
         "usedBytes": null
       },
       {
-        "elapsedMs": 26218.096999,
+        "elapsedMs": 26218.754493,
         "usedBytes": null
       },
       {
-        "elapsedMs": 27226.786872000004,
+        "elapsedMs": 27223.890526999996,
         "usedBytes": null
       },
       {
-        "elapsedMs": 28232.121639000005,
+        "elapsedMs": 28232.981496,
         "usedBytes": null
       },
       {
-        "elapsedMs": 29238.653334000002,
+        "elapsedMs": 29240.210826000002,
         "usedBytes": null
       },
       {
-        "elapsedMs": 30239.141472000003,
+        "elapsedMs": 30248.537617,
         "usedBytes": null
       },
       {
-        "elapsedMs": 31243.473479,
+        "elapsedMs": 31257.840961,
         "usedBytes": null
       },
       {
-        "elapsedMs": 32255.930649,
+        "elapsedMs": 32273.836691999997,
         "usedBytes": null
       },
       {
-        "elapsedMs": 33259.312582,
+        "elapsedMs": 33276.783125,
         "usedBytes": null
       },
       {
-        "elapsedMs": 34264.393023000004,
+        "elapsedMs": 34277.173023999996,
         "usedBytes": null
       },
       {
-        "elapsedMs": 35274.507355,
+        "elapsedMs": 35289.883941,
         "usedBytes": null
       },
       {
-        "elapsedMs": 36288.486629,
+        "elapsedMs": 36290.025821,
         "usedBytes": null
       },
       {
-        "elapsedMs": 37295.125378000004,
+        "elapsedMs": 37301.16964,
         "usedBytes": null
       },
       {
-        "elapsedMs": 38306.960525,
+        "elapsedMs": 38304.053578,
         "usedBytes": null
       },
       {
-        "elapsedMs": 39313.390285,
+        "elapsedMs": 39305.72439,
         "usedBytes": null
       },
       {
-        "elapsedMs": 40325.367851,
+        "elapsedMs": 40310.625963,
         "usedBytes": null
       },
       {
-        "elapsedMs": 41341.003068000005,
+        "elapsedMs": 41316.968014,
         "usedBytes": null
       },
       {
-        "elapsedMs": 42352.198567,
+        "elapsedMs": 42328.181322,
         "usedBytes": null
       },
       {
-        "elapsedMs": 43358.289949000005,
+        "elapsedMs": 43339.748782,
         "usedBytes": null
       },
       {
-        "elapsedMs": 44366.955347,
+        "elapsedMs": 44355.497187,
         "usedBytes": null
       },
       {
-        "elapsedMs": 45379.736335,
+        "elapsedMs": 45367.558826,
         "usedBytes": null
       },
       {
-        "elapsedMs": 46391.36529,
+        "elapsedMs": 46382.516821,
         "usedBytes": null
       },
       {
-        "elapsedMs": 47408.452783,
+        "elapsedMs": 47385.921954,
         "usedBytes": null
       },
       {
-        "elapsedMs": 48425.698382,
+        "elapsedMs": 48392.82775,
         "usedBytes": null
       },
       {
-        "elapsedMs": 49442.999996,
+        "elapsedMs": 49396.085592999996,
         "usedBytes": null
       },
       {
-        "elapsedMs": 50450.621132,
+        "elapsedMs": 50406.844774,
         "usedBytes": null
       },
       {
-        "elapsedMs": 51465.556713000005,
+        "elapsedMs": 51414.464653,
         "usedBytes": null
       },
       {
-        "elapsedMs": 52481.98289500001,
+        "elapsedMs": 52419.504328999996,
         "usedBytes": null
       },
       {
-        "elapsedMs": 53482.779305000004,
+        "elapsedMs": 53430.791334999994,
         "usedBytes": null
       },
       {
-        "elapsedMs": 54485.365737,
+        "elapsedMs": 54440.964558,
         "usedBytes": null
       },
       {
-        "elapsedMs": 55495.666335999995,
+        "elapsedMs": 55448.097313,
         "usedBytes": null
       },
       {
-        "elapsedMs": 56500.745737000005,
+        "elapsedMs": 56461.608787,
         "usedBytes": null
       },
       {
-        "elapsedMs": 57507.252698,
+        "elapsedMs": 57471.099139000005,
         "usedBytes": null
       },
       {
-        "elapsedMs": 58521.367595,
+        "elapsedMs": 58478.442466,
         "usedBytes": null
       },
       {
-        "elapsedMs": 59538.436846,
+        "elapsedMs": 59484.305946,
         "usedBytes": null
       }
     ],
@@ -324,11 +324,11 @@
   },
   "network": {
     "requestCount": 2,
-    "transferredBytes": 52977,
+    "transferredBytes": 54537,
     "resources": [
       {
-        "path": "assets/index-CDGRwp2f.js",
-        "bytes": 52651
+        "path": "assets/index-DXgoa-rK.js",
+        "bytes": 54211
       },
       {
         "path": "index.html",
@@ -339,16 +339,16 @@
   },
   "node": {
     "beforeHeap": {
-      "rss": 103165952,
-      "heapTotal": 57053184,
-      "heapUsed": 31087464,
+      "rss": 103235584,
+      "heapTotal": 56791040,
+      "heapUsed": 31640048,
       "external": 2431422,
       "arrayBuffers": 72687
     },
     "afterHeap": {
-      "rss": 120369152,
-      "heapTotal": 73830400,
-      "heapUsed": 49341160,
+      "rss": 118697984,
+      "heapTotal": 70160384,
+      "heapUsed": 34784456,
       "external": 2431318,
       "arrayBuffers": 72543
     },
@@ -377,12 +377,12 @@
     }
   },
   "provisionalGates": {
-    "p95AtMost2Ms": false,
+    "p95AtMost2Ms": true,
     "p99AtMost4Ms": true,
     "noFullGridScan": true,
     "sparseMembershipChecks": true
   },
-  "provisionalPass": false,
+  "provisionalPass": true,
   "pass": false,
   "passReason": "Node/V8 profile is diagnostic only; fixed E14 requires Chromium."
 }

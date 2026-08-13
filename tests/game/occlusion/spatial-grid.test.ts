@@ -498,6 +498,65 @@ describe('SpatialGrid - reverse-index update complexity', () => {
   })
 })
 
+describe('SpatialGrid - cached constraint-zone neighborhoods', () => {
+  it('reuses a cell result across agents and ignores non-zone updates', () => {
+    const instr = createSpatialGridInstrumentation()
+    const grid = new SpatialGrid(256, instr)
+    grid.register(makeEntry('zone.cached', 'zone', 0, 0, 40, 40), 'scene-1', 'floor-1')
+    const first = grid.queryConstraintZoneCandidateIds({ x: 20, y: 20 }, 'scene-1', 'floor-1')
+    grid.register(makeEntry('agent.moving', 'agent', 10, 10, 16, 16), 'scene-1', 'floor-1')
+    const second = grid.queryConstraintZoneCandidateIds({ x: 40, y: 40 }, 'scene-1', 'floor-1')
+    assert.equal(second, first)
+    assert.deepEqual([...second], ['zone.cached'])
+    assert.equal(instr.cellQueryCount, 9)
+    assert.equal((second as unknown as { add?: unknown }).add, undefined)
+    assert.equal((second as unknown as { delete?: unknown }).delete, undefined)
+    assert.equal((second as unknown as { clear?: unknown }).clear, undefined)
+    assert.throws(() => {
+      ;(second as unknown as { add: (value: string) => void }).add('zone.injected')
+    }, TypeError)
+    assert.deepEqual([...grid.queryConstraintZoneCandidateIds(
+      { x: 20, y: 20 }, 'scene-1', 'floor-1',
+    )], ['zone.cached'])
+  })
+
+  it('invalidates cached neighborhoods when zone topology changes', () => {
+    const grid = new SpatialGrid(256)
+    grid.register(makeEntry('zone.first', 'zone', 0, 0, 40, 40), 'scene-1', 'floor-1')
+    const before = grid.queryConstraintZoneCandidateIds({ x: 20, y: 20 }, 'scene-1', 'floor-1')
+    grid.register(makeEntry('zone.first', 'zone', 10, 10, 40, 40), 'scene-1', 'floor-1')
+    const afterSameCellUpdate = grid.queryConstraintZoneCandidateIds({ x: 20, y: 20 }, 'scene-1', 'floor-1')
+    assert.notEqual(afterSameCellUpdate, before)
+    grid.register(makeEntry('zone.second', 'zone', 20, 20, 40, 40), 'scene-1', 'floor-1')
+    const afterAdd = grid.queryConstraintZoneCandidateIds({ x: 20, y: 20 }, 'scene-1', 'floor-1')
+    assert.notEqual(afterAdd, afterSameCellUpdate)
+    assert.deepEqual([...afterAdd].sort(), ['zone.first', 'zone.second'])
+    grid.unregister('zone.first')
+    const afterRemove = grid.queryConstraintZoneCandidateIds({ x: 20, y: 20 }, 'scene-1', 'floor-1')
+    assert.deepEqual([...afterRemove], ['zone.second'])
+  })
+
+  it('isolates cached neighborhoods by scene and floor', () => {
+    const grid = new SpatialGrid(256)
+    grid.register(makeEntry('zone.scene-1', 'zone', 0, 0, 40, 40), 'scene-1', 'floor-1')
+    grid.register(makeEntry('zone.scene-2', 'zone', 0, 0, 40, 40), 'scene-2', 'floor-1')
+    grid.register(makeEntry('zone.floor-2', 'zone', 0, 0, 40, 40), 'scene-1', 'floor-2')
+
+    assert.deepEqual(
+      [...grid.queryConstraintZoneCandidateIds({ x: 20, y: 20 }, 'scene-1', 'floor-1')],
+      ['zone.scene-1'],
+    )
+    assert.deepEqual(
+      [...grid.queryConstraintZoneCandidateIds({ x: 20, y: 20 }, 'scene-2', 'floor-1')],
+      ['zone.scene-2'],
+    )
+    assert.deepEqual(
+      [...grid.queryConstraintZoneCandidateIds({ x: 20, y: 20 }, 'scene-1', 'floor-2')],
+      ['zone.floor-2'],
+    )
+  })
+})
+
 describe('SpatialGrid - per-kind candidate index', () => {
   it('returns only requested kinds without materializing nearby agents/fragments', () => {
     const instr = createSpatialGridInstrumentation()
