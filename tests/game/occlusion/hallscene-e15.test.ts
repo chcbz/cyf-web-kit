@@ -649,4 +649,140 @@ describe('E15 HallScene atomic V2 switch', () => {
       me.game.world.sort = () => {}
     }
   })
+
+  it('map refresh destroy rollback does not resurrect a destroyed scene', async () => {
+    const me = createFakeMelon()
+    const mapData = productionMapData()
+    installProductionImages(me, mapData)
+    const previousGate = (window as any).__JYT_V2_ENABLED
+    ;(window as any).__JYT_V2_ENABLED = true
+    try {
+      const scene = makeScene(me, mapData)
+      scene.syncAgents([{ agentId: 'a', personaCode: 'a', x: 300, y: 200 }])
+      scene.onResetEvent()
+      scene.update(16)
+      await waitFor(() => scene.activeRendererMode === 'v2')
+
+      const oldMapData = scene._mapData
+      const oldController = scene._v2Controller
+      const oldFragments = [...scene._v2StagingRenderables]
+
+      const newMapData = productionMapData()
+      installProductionImages(me, newMapData)
+      const realGetImage = me.loader.getImage
+      let armed = false
+      me.loader.getImage = (name: string) => {
+        const image = realGetImage(name)
+        if (!armed) {
+          armed = true
+          // Fire after the synchronous staging loop, while the new E7
+          // controller is between its async stages and its commit.apply.
+          queueMicrotask(() => scene.onDestroyEvent())
+        }
+        return image
+      }
+
+      scene.setMapData(newMapData)
+      await waitFor(() => scene._destroyed === true)
+      await scene._v2DestroyPromise.catch(() => {})
+      // Let the failed replacement catch destroy its new controller/adapter.
+      await waitFor(() => scene.getV2Diagnostics().some((d: any) => d.code === 'V2_MAP_REFRESH_FAILED'))
+
+      expect(scene._destroyed).to.equal(true)
+      expect(scene._v2Active).to.equal(false)
+      expect(scene.activeRendererMode).to.equal('v1')
+      expect(scene.renderSchemaVersion).to.equal('1')
+      expect(scene._v2Controller).to.equal(null)
+      expect(scene._v2AgentAdapter).to.equal(null)
+      expect(scene._v2Assembly).to.equal(null)
+      expect(scene._v2StagingRenderables).to.equal(null)
+      expect(scene._v2Depths).to.equal(null)
+      expect(scene._v2RenderableHandles).to.equal(null)
+      expect(scene._mapData).to.equal(oldMapData)
+      expect(scene._v2Controller).to.not.equal(oldController)
+      for (const handle of oldFragments) {
+        expect(me.game.world.hasChild(handle)).to.equal(false)
+      }
+      expect(me.children.length).to.equal(0)
+
+      // Leak check: a few macrotasks later the destroyed scene is still dead
+      // and no old/new fragment was re-added to the world.
+      for (let index = 0; index < 3; index++) await new Promise(resolve => setTimeout(resolve, 0))
+      expect(scene._destroyed).to.equal(true)
+      expect(scene._v2Active).to.equal(false)
+      expect(scene._v2Controller).to.equal(null)
+      expect(scene._v2StagingRenderables).to.equal(null)
+      expect(me.children.length).to.equal(0)
+    } finally {
+      ;(window as any).__JYT_V2_ENABLED = previousGate
+    }
+  })
+
+  it('roster replacement destroy rollback does not resurrect a destroyed scene', async () => {
+    const me = createFakeMelon()
+    const mapData = productionMapData()
+    installProductionImages(me, mapData)
+    const previousGate = (window as any).__JYT_V2_ENABLED
+    ;(window as any).__JYT_V2_ENABLED = true
+    try {
+      const scene = makeScene(me, mapData)
+      scene.syncAgents([{ agentId: 'a', personaCode: 'a', x: 300, y: 200 }])
+      scene.onResetEvent()
+      scene.update(16)
+      await waitFor(() => scene.activeRendererMode === 'v2')
+
+      const oldController = scene._v2Controller
+      const oldFragments = [...scene._v2StagingRenderables]
+
+      const realGetImage = me.loader.getImage
+      let armed = false
+      me.loader.getImage = (name: string) => {
+        const image = realGetImage(name)
+        if (!armed) {
+          armed = true
+          // Fire while the roster replacement is between its async stages and
+          // its commit.apply, mirroring the map-refresh destroy window.
+          queueMicrotask(() => scene.onDestroyEvent())
+        }
+        return image
+      }
+
+      scene.syncAgents([
+        { agentId: 'a', personaCode: 'a', x: 300, y: 200 },
+        { agentId: 'b', personaCode: 'b', x: 300, y: 600 },
+      ])
+      scene.update(16)
+      await scene._v2FrameSerial
+      await scene._v2DestroyPromise.catch(() => {})
+
+      expect(scene._destroyed).to.equal(true)
+      expect(scene._v2Active).to.equal(false)
+      expect(scene.activeRendererMode).to.equal('v1')
+      expect(scene.renderSchemaVersion).to.equal('1')
+      expect(scene._v2Controller).to.equal(null)
+      expect(scene._v2AgentAdapter).to.equal(null)
+      expect(scene._v2Assembly).to.equal(null)
+      expect(scene._v2StagingRenderables).to.equal(null)
+      expect(scene._v2Depths).to.equal(null)
+      expect(scene._v2RenderableHandles).to.equal(null)
+      expect(scene._v2Controller).to.not.equal(oldController)
+      for (const handle of oldFragments) {
+        expect(me.game.world.hasChild(handle)).to.equal(false)
+      }
+      expect(me.children.length).to.equal(0)
+      expect(scene.getV2Diagnostics().filter((d: any) => d.code === 'V2_ROSTER_REPLACE_FAILED')).to.have.length(1)
+
+      // Leak check: the destroyed scene stays dead and no old/new fragment is
+      // re-added to the world on later macrotasks.
+      for (let index = 0; index < 3; index++) await new Promise(resolve => setTimeout(resolve, 0))
+      expect(scene._destroyed).to.equal(true)
+      expect(scene._v2Active).to.equal(false)
+      expect(scene._v2Controller).to.equal(null)
+      expect(scene._v2StagingRenderables).to.equal(null)
+      expect(me.children.length).to.equal(0)
+    } finally {
+      ;(window as any).__JYT_V2_ENABLED = previousGate
+    }
+  })
+
 })

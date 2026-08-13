@@ -1774,6 +1774,9 @@ export function createHallSceneClass(me, HallAgentClass) {
       const stagingFragments = new Set()
 
       const restoreGrid = () => {
+        // A destroyed scene must not mutate its (now dead) old assembly grid;
+        // deactivateV2 has already released the live scene and its readers.
+        if (self._destroyed) return
         if (!oldAssembly || !gridSnapshot) return
         try {
           self._restoreSpatialGrid(oldAssembly, gridSnapshot)
@@ -1878,6 +1881,9 @@ export function createHallSceneClass(me, HallAgentClass) {
           commit: ctx => {
             ctx.swap(
               () => {
+                if (gen !== self._v2Generation || self._destroyed) {
+                  throw new Error('V2 roster replacement superseded before commit')
+                }
                 if (oldFragments) {
                   for (const handle of oldFragments) me.game.world.removeChild(handle)
                 }
@@ -1902,6 +1908,13 @@ export function createHallSceneClass(me, HallAgentClass) {
                 self._v2Active = true
               },
               () => {
+                // Destroyed scene: never resurrect live fields, fragments, or
+                // active reader state. E7 disposes the new transaction staging;
+                // the caller's catch destroys the new controller/adapter.
+                if (self._destroyed) return
+                // A newer lifecycle event already owns the live scene; leave it
+                // untouched instead of clobbering its committed state.
+                if (self._v2Controller !== oldController) return
                 self._v2Controller = oldController
                 self._v2AgentAdapter = oldAdapter
                 self._v2Assembly = oldAssembly
@@ -2146,6 +2159,14 @@ export function createHallSceneClass(me, HallAgentClass) {
                 }
               },
               () => {
+                // Destroyed scene: never resurrect live fields, fragments,
+                // active state, mapData, or shadow renderer alignment. E7
+                // disposes the new transaction staging and the caller's catch
+                // destroys the new controller/adapter.
+                if (self._destroyed) return
+                // A newer lifecycle event already owns the live scene; leave
+                // it untouched instead of clobbering its committed state.
+                if (self._v2Controller !== oldController) return
                 self._v2Controller = oldController
                 self._v2AgentAdapter = oldAdapter
                 self._v2Assembly = oldAssembly
