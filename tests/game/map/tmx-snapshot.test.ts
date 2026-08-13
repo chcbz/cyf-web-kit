@@ -307,6 +307,7 @@ function sampleRuntime(): MapRuntimeData {
       { stableId: 'slot-z', slotId: 'parking-z', regionId: 'z', point: { x: 20.4444, y: 21.5555 }, kind: 'parking' },
       { stableId: 'slot-a', slotId: '<script>', regionId: 'a', point: { x: 10.1111, y: 11.2222 }, kind: 'home', personaCode: '<script>' },
     ],
+    patrolRoutes: [],
     obstacles: [
       { points: [{ x: 40.4444, y: 41.5555 }, { x: 42.6666, y: 43.7777 }, { x: 44.8888, y: 45.9999 }] },
       { points: [{ x: 30.4444, y: 31.5555 }, { x: 32.6666, y: 33.7777 }, { x: 34.8888, y: 35.9999 }] },

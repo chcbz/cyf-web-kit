@@ -5,7 +5,7 @@ export const PERSONA_DIRECTIONS = [
 export type PersonaDirection = typeof PERSONA_DIRECTIONS[number]
 
 export type PersonaSpriteAnimation = {
-  frames: number[]
+  frames: readonly number[]
   frameMs: number
 }
 

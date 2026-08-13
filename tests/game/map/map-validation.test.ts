@@ -48,6 +48,7 @@ function validMap(): MapRuntimeData {
         point: { x: 340, y: 90 }, kind: 'parking',
       },
     ],
+    patrolRoutes: [],
     obstacles: [{ points: [{ x: 500, y: 500 }, { x: 520, y: 500 }, { x: 520, y: 520 }, { x: 500, y: 520 }] }],
   }
 }

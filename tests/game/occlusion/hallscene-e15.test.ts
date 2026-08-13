@@ -5,7 +5,6 @@
 // rollback, and roster-replacement failure. No fake fixtures — real hall.tmx
 // and the accepted TMX SHA are used.
 
-// @ts-expect-error chai ships no bundled declarations in this tsconfig
 import { expect } from 'chai'
 import { describe, it } from 'mocha'
 import { readFileSync } from 'fs'

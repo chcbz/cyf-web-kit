@@ -60,6 +60,7 @@ import {
 import {
   type StagedScene,
   type SceneActivationNode,
+  type ActivationStageContext,
 } from '../../../src/game/occlusion/sceneActivation.js'
 
 // ── JSDOM setup ──
@@ -778,7 +779,7 @@ describe('E12 E7 controller lifecycle (real assembly)', () => {
   function buildStagedScene(
     renderables: Map<string, number>,  // stableId → fake depth slot
     adapters: V2AgentAdapter[],
-    ctx: { sceneId: string; mode: string; transactionId: string },
+    ctx: Pick<ActivationStageContext, 'sceneId' | 'mode' | 'transactionId'>,
   ) {
     const nodeValues: SceneActivationNode[] = []
     const seen = new Set<string>()
@@ -852,7 +853,7 @@ describe('E12 E7 controller lifecycle (real assembly)', () => {
 
     // Depths are contiguous
     if (committedDepths) {
-      const vals = Object.values(committedDepths)
+      const vals = Object.values(committedDepths) as number[]
       const sorted = [...vals].sort((a, b) => a - b)
       for (let i = 0; i < sorted.length; i++) {
         expect(sorted[i]).to.equal(i)
@@ -1160,7 +1161,7 @@ describe('E15 atomic V2 switch fault injection (real assembly)', () => {
   function buildStagedScene(
     renderables: Map<string, number>,
     adapters: V2AgentAdapter[],
-    ctx: { sceneId: string; mode: string; transactionId: string },
+    ctx: Pick<ActivationStageContext, 'sceneId' | 'mode' | 'transactionId'>,
   ) {
     const nodeValues: SceneActivationNode[] = []
     const seen = new Set<string>()

@@ -295,10 +295,18 @@ function edge(
 }
 
 function manifest(): PersonaSpriteManifest {
-  const directions = ['down', 'downRight', 'right', 'upRight', 'up', 'upLeft', 'left', 'downLeft'] as const
-  const animations = (frames: number[], frameMs: number) => Object.fromEntries(
-    directions.map(direction => [direction, { frames, frameMs }]),
-  ) as PersonaSpriteManifest['personas'][string]['animations']['idle']
+  const animations = (
+    frames: number[], frameMs: number,
+  ): PersonaSpriteManifest['personas'][string]['animations']['idle'] => ({
+    down: { frames, frameMs },
+    downRight: { frames, frameMs },
+    right: { frames, frameMs },
+    upRight: { frames, frameMs },
+    up: { frames, frameMs },
+    upLeft: { frames, frameMs },
+    left: { frames, frameMs },
+    downLeft: { frames, frameMs },
+  })
   return {
     version: 'manifest-v1',
     personas: {

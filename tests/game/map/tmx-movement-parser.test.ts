@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-// @ts-expect-error jsdom is a runtime test dependency without bundled declarations
 import { JSDOM } from 'jsdom'
 // @ts-expect-error melonJS does not publish declarations for its internal TMX utility
 import * as TMXUtils from 'melonjs/dist/melonjs.mjs/level/tiled/TMXUtils.js'

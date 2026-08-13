@@ -160,6 +160,7 @@ describe('backend scene state adapter', () => {
       nodes: [],
       edges: [],
       obstacles: [],
+      patrolRoutes: [],
       regions: [
         region('main-seat'),
         region('council-table'),
