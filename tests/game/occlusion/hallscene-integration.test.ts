@@ -1133,3 +1133,187 @@ describe('E12 E7 controller lifecycle (real assembly)', () => {
     }
   })
 })
+
+
+describe('E15 atomic V2 switch fault injection (real assembly)', () => {
+  let assembly: E12Assembly
+  let adapter: RuntimeAgentAdapter
+
+  before(async () => {
+    assembly = callAssemble(makePreparsedMapData())
+    adapter = createRuntimeAgentAdapter(
+      defaultSpawnResolver('floor-1', 0),
+      defaultChunkResolver(),
+      'juyiting-main',
+    )
+  })
+
+  after(() => {
+    adapter.destroy()
+  })
+
+  async function createAgent(agentId: string, x: number, y: number): Promise<SceneObject> {
+    const scenes = await adapter.create([{ agentId, x, y }])
+    return scenes[0]
+  }
+
+  function buildStagedScene(
+    renderables: Map<string, number>,
+    adapters: V2AgentAdapter[],
+    ctx: { sceneId: string; mode: string; transactionId: string },
+  ) {
+    const nodeValues: SceneActivationNode[] = []
+    const seen = new Set<string>()
+    for (const [sid] of renderables) {
+      if (seen.has(sid)) continue
+      seen.add(sid)
+      nodeValues.push(Object.freeze({
+        stableId: sid, sceneId: ctx.sceneId, mode: ctx.mode,
+        ownerTransactionId: ctx.transactionId, value: sid,
+      }))
+    }
+    registerAgentsInGrid(assembly.spatialGrid, adapters, 'juyiting-main', 'floor-1')
+    const initOrder = computeUnifiedWorldOrder(assembly, adapters, createEmptyMembershipState())
+    return Object.freeze({
+      sceneId: ctx.sceneId, mode: ctx.mode,
+      ownerTransactionId: ctx.transactionId,
+      children: Object.freeze(nodeValues),
+      order: Object.freeze(initOrder.order),
+      depths: Object.freeze(initOrder.depths),
+      dispose: () => {},
+    })
+  }
+
+  function makeFaultController(behavior: { failAssetsOnV2: boolean; cycleOnV2: boolean }) {
+    let activeFlag = false
+    const renderables = new Map<string, number>()
+    for (const p of assembly.worldObjects) renderables.set(p.stableId, 0)
+    for (const f of assembly.fragments) renderables.set(f.stableId, 0)
+
+    const controller = createSceneActivationController({
+      parse: (source: any, ctx: any) => source,
+      canonicalize: (parsed: any, ctx: any) => parsed,
+      validate: (canonical: any, ctx: any) => canonical,
+      loadAssets: (validated: any, ctx: any) => {
+        if (ctx.mode === 'v2' && behavior.failAssetsOnV2) {
+          throw new Error('SIMULATED_FRAGMENT_ASSET_MISSING')
+        }
+        return validated
+      },
+      instantiate: (input: any, ctx: any) => buildStagedScene(renderables, [], ctx),
+      validateConstraints: (scene: any, ctx: any) => {
+        if (ctx.mode === 'v2' && behavior.cycleOnV2) {
+          throw new Error('SIMULATED_CONSTRAINT_CYCLE')
+        }
+        return { order: [...scene.order] }
+      },
+      commit: (ctx: any) => {
+        ctx.swap(
+          () => { activeFlag = true },
+          () => { activeFlag = false },
+        )
+      },
+      commitFrame: (ctx: any) => {
+        ctx.swap(() => {}, () => {})
+      },
+    })
+    return { controller, isActive: () => activeFlag }
+  }
+
+  it('activation asset failure preserves the previous complete v1 scene', async () => {
+    const behavior = { failAssetsOnV2: false, cycleOnV2: false }
+    const { controller } = makeFaultController(behavior)
+
+    const v1 = await controller.activate({
+      sceneId: 'juyiting-main', mode: 'v1', source: { mapData: {} },
+    })
+    expect(v1.ok).to.be.true
+    const v1Transaction = controller.active?.ownerTransactionId
+    expect(v1Transaction).to.be.a('string')
+
+    behavior.failAssetsOnV2 = true
+    const failed = await controller.activate({
+      sceneId: 'juyiting-main', mode: 'v2', source: { mapData: {} },
+    })
+    expect(failed.ok).to.be.false
+    expect((failed as any).error.stage).to.equal('assetsReady')
+    expect(controller.active).to.not.be.null
+    expect(controller.active!.mode).to.equal('v1')
+    expect(controller.active!.ownerTransactionId).to.equal(v1Transaction)
+    expect(controller.snapshot.status).to.equal('active')
+
+    await controller.destroy()
+  })
+
+  it('activation cycle failure preserves the previous complete v1 scene', async () => {
+    const behavior = { failAssetsOnV2: false, cycleOnV2: false }
+    const { controller } = makeFaultController(behavior)
+
+    const v1 = await controller.activate({
+      sceneId: 'juyiting-main', mode: 'v1', source: { mapData: {} },
+    })
+    expect(v1.ok).to.be.true
+    const v1Transaction = controller.active?.ownerTransactionId
+    expect(v1Transaction).to.be.a('string')
+
+    behavior.cycleOnV2 = true
+    const failed = await controller.activate({
+      sceneId: 'juyiting-main', mode: 'v2', source: { mapData: {} },
+    })
+    expect(failed.ok).to.be.false
+    expect((failed as any).error.stage).to.equal('constraint')
+    expect(controller.active).to.not.be.null
+    expect(controller.active!.mode).to.equal('v1')
+    expect(controller.active!.ownerTransactionId).to.equal(v1Transaction)
+    expect(controller.snapshot.status).to.equal('active')
+
+    await controller.destroy()
+  })
+
+  it('commitFrame cycle fault keeps the active scene and frame version', async () => {
+    const agent = await createAgent('test-e15-cycle', 500, 300)
+    const renderables = new Map<string, number>()
+    for (const p of assembly.worldObjects) renderables.set(p.stableId, 0)
+    for (const f of assembly.fragments) renderables.set(f.stableId, 0)
+    renderables.set(agent.stableId, 0)
+    const agentAdapters: V2AgentAdapter[] = [
+      { sceneObject: agent, entity: { id: 'test-e15-cycle', pos: { x: 500, y: 300 } } },
+    ]
+
+    const controller = createSceneActivationController({
+      parse: (s: any, ctx: any) => s,
+      canonicalize: (p: any, ctx: any) => p,
+      validate: (c: any, ctx: any) => c,
+      loadAssets: (v: any, ctx: any) => v,
+      instantiate: (input: any, ctx: any) => buildStagedScene(renderables, agentAdapters, ctx),
+      validateConstraints: (scene: any, ctx: any) => ({ order: scene.order }),
+      commit: (ctx: any) => { ctx.swap(() => {}, () => {}) },
+      commitFrame: (ctx: any) => { ctx.swap(() => {}, () => {}) },
+    })
+
+    const activated = await controller.activate({
+      sceneId: 'juyiting-main', mode: 'v2', source: { mapData: {} },
+    })
+    expect(activated.ok).to.be.true
+    const activationTxId = controller.active?.ownerTransactionId!
+    const before = controller.active!.frameVersion
+
+    const { proposal } = buildFrameProposal(
+      assembly, agentAdapters, activationTxId, createEmptyMembershipState(),
+    )
+    const cyclicProposal = {
+      ...proposal,
+      constraintResult: { ok: false, code: 'CONSTRAINT_CYCLE_DETECTED', message: 'cycle injected' } as any,
+    }
+
+    const frameResult = controller.commitFrame(cyclicProposal)
+    expect(frameResult.ok).to.be.false
+    expect((frameResult as any).error.stage).to.equal('frame')
+    expect((frameResult as any).error.errorCode).to.equal('CONSTRAINT_CYCLE_DETECTED')
+    expect(controller.active).to.not.be.null
+    expect(controller.active!.frameVersion).to.equal(before)
+    expect(controller.active!.ownerTransactionId).to.equal(activationTxId)
+
+    await controller.destroy()
+  })
+})

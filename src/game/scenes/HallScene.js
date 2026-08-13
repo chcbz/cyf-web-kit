@@ -1115,12 +1115,21 @@ export function createHallSceneClass(me, HallAgentClass) {
       return this._v2Active ? 'v2' : 'v1'
     }
 
+    /** Get the active render schema version (whole-map, one-shot switch). */
+    get renderSchemaVersion() {
+      return this._v2Active ? '2' : '1'
+    }
+
     getV2HitTargets() { return this._v2HitTargets ?? null }
     getV2Depths() { return this._v2Depths ?? null }
 
     /** Activate V2 occlusion system via E7 controller. Returns true if activation started. */
     activateV2() {
-      if (this._destroyed || this._v2Active) return this._v2Active
+      if (this._destroyed) return false
+      if (this._v2Active) return true
+      // Repeated activation while a switch is already in flight is a no-op;
+      // the in-flight transaction owns the assembly/controller until commit.
+      if (this._v2Assembly || this._v2Controller || this._v2PendingActivation) return false
       if (!this._mapData || !hasV2ActivationEnvelope(this._mapData, this._tmxSha256)) return false
 
       const gen = ++this._v2Generation
@@ -1128,6 +1137,13 @@ export function createHallSceneClass(me, HallAgentClass) {
       try {
         this._v2Assembly = assembleV2Scene(this._mapData, this._tmxSha256)
         const ir = this._v2Assembly.canonicalIr
+        // Fail closed: the whole map must switch to renderSchemaVersion=2 in
+        // one transaction. Any mismatch leaves V1 active.
+        if (ir.renderSchemaVersion !== '2' || ir.sceneId !== 'juyiting-main') {
+          console.warn('[HallScene] V2: assembled IR failed renderSchemaVersion=2 gate')
+          this.deactivateV2()
+          return false
+        }
 
         // Create E3 agent adapter
         const adapter = createRuntimeAgentAdapter(
@@ -1359,13 +1375,15 @@ export function createHallSceneClass(me, HallAgentClass) {
                   }
                 },
                 () => {
-                  // Full rollback: restore renderable depths
+                  // Full rollback: restore renderable depths (must never throw).
                   for (const [sid, d] of oldRenderableDepths) {
                     const h = savedRenderables.get(sid)
-                    if (h && typeof h.depth === 'number') h.depth = d
+                    if (h && typeof h.depth === 'number') {
+                      try { h.depth = d } catch (e) {}
+                    }
                   }
                   if (me.game.world && typeof me.game.world.sort === 'function') {
-                    me.game.world.sort(true)
+                    try { me.game.world.sort(true) } catch (e) {}
                   }
                   // Restore reader-side state
                   self._v2Depths = oldDepths
@@ -1813,7 +1831,7 @@ export function createHallSceneClass(me, HallAgentClass) {
                 self._v2RenderableHandles = oldRenderableHandles
                 self._v2PendingActivation = null
                 self._v2PendingFrame = null
-                restoreOldGrid()
+                try { restoreOldGrid() } catch (error) {}
                 for (const handle of stagingFragments) {
                   try { me.game.world.removeChild(handle) } catch (error) {}
                 }
