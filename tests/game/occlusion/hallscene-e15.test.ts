@@ -678,9 +678,15 @@ describe('E15 HallScene atomic V2 switch', () => {
       installProductionImages(me, newMapData)
 
       let newControllerSeen: any = null
+      let shadowPublishFired = false
       scene._shadowRenderer = {
         setMapData: (map: any) => {
-          if (map === newMapData) {
+          // E16A: HallScene feeds the shadow renderer the projected activation
+          // envelope (deep clone with renderSchemaVersion=2), not the raw TMX
+          // mapData identity. Throw only for the first projected live-map
+          // publish so the rollback restore does not overwrite newControllerSeen.
+          if (!shadowPublishFired && map?.properties?.renderSchemaVersion === '2') {
+            shadowPublishFired = true
             // Apply has already published newController; this throw forces the
             // E7 commit rollback path after apply mutated live state.
             newControllerSeen = scene._v2Controller
@@ -849,5 +855,77 @@ describe('E15 HallScene atomic V2 switch', () => {
       ;(window as any).__JYT_V2_ENABLED = previousGate
     }
   })
+})
 
+describe('E16A legacy runtime cleanup guards', () => {
+  it('production source no longer contains global behindMask, propDepth increment, or V1 collector semantics', () => {
+    const hallSceneSource = readFileSync('src/game/scenes/HallScene.js', 'utf-8')
+    const shadowSource = readFileSync('src/game/occlusion/shadowRenderer.ts', 'utf-8')
+    expect(hallSceneSource).to.not.match(/behindMask/)
+    expect(hallSceneSource).to.not.match(/propDepth\s*\+=\s*0\.5/)
+    expect(hallSceneSource).to.not.match(/_sortByDepth/)
+    expect(shadowSource).to.not.match(/behindMask/)
+    expect(shadowSource).to.not.match(/collectV1Snapshots|V1ObjectSnapshot|v1Depth/)
+  })
+
+  it('normal production defaults to V2 without an explicit __JYT_V2_ENABLED assignment', async () => {
+    const me = createFakeMelon()
+    const mapData = productionMapData()
+    installProductionImages(me, mapData)
+    const previousGate = (window as any).__JYT_V2_ENABLED
+    delete (window as any).__JYT_V2_ENABLED
+    try {
+      const scene = makeScene(me, mapData)
+      scene.syncAgents([{ agentId: 'a', personaCode: 'a', x: 300, y: 200 }])
+      scene.onResetEvent()
+      scene.update(16)
+      await waitFor(() => scene.activeRendererMode === 'v2')
+
+      expect(scene.activeRendererMode).to.equal('v2')
+      expect(scene.renderSchemaVersion).to.equal('2')
+      expect(scene._imageLayersByName.get('mid-occluders')?.attached).to.equal(false)
+      expect(scene._imageLayersByName.get('foreground-occluders')?.attached).to.equal(false)
+      for (const handle of [...scene._v2RenderableHandles.values()]) {
+        expect(handle.depth).to.be.at.least(HALL_SCENE_DEPTH_BANDS.V2_WORLD_START)
+        expect(handle.depth).to.be.below(HALL_SCENE_DEPTH_BANDS.LIGHTING)
+      }
+    } finally {
+      if (previousGate === undefined) delete (window as any).__JYT_V2_ENABLED
+      else (window as any).__JYT_V2_ENABLED = previousGate
+    }
+  })
+
+  it('failed V2 activation never leaves a half scene when V2 is the default', async () => {
+    const me = createFakeMelon()
+    const mapData = productionMapData()
+    const images = installProductionImages(me, mapData)
+    const fragmentLayer = mapData.layers.find((layer: any) => layer.name === 'v2-fragments-occluders')
+    images.delete(fragmentLayer.objects[0].properties.assetRef)
+    const previousGate = (window as any).__JYT_V2_ENABLED
+    delete (window as any).__JYT_V2_ENABLED
+    try {
+      const scene = makeScene(me, mapData)
+      scene.syncAgents([{ agentId: 'a', personaCode: 'a', x: 300, y: 200 }])
+      scene.onResetEvent()
+      await waitFor(() => scene._v2Assembly === null && scene._v2Controller === null)
+
+      expect(scene.activeRendererMode).to.equal('v1')
+      expect(scene.renderSchemaVersion).to.equal('1')
+      expect(scene._v2Active).to.equal(false)
+      expect(scene._v2StagingRenderables).to.equal(null)
+      expect(scene._v2AgentAdapter).to.equal(null)
+      expect(scene._v2PropRenderables.size).to.equal(5)
+      // The full fallback stack is present: legacy occluder layers, lighting,
+      // hotspots, and agents are all still attached as one complete scene.
+      expect(scene._imageLayersByName.get('mid-occluders')?.attached).to.equal(true)
+      expect(scene._imageLayersByName.get('foreground-occluders')?.attached).to.equal(true)
+      expect(me.game.world.hasChild(scene._imageLayersByName.get('lighting-overlay')?.handle)).to.equal(true)
+      expect(scene._hotspots.length).to.be.greaterThan(0)
+      expect(scene._agents.has('a')).to.equal(true)
+      expect(me.game.world.hasChild(scene._agents.get('a'))).to.equal(true)
+    } finally {
+      if (previousGate === undefined) delete (window as any).__JYT_V2_ENABLED
+      else (window as any).__JYT_V2_ENABLED = previousGate
+    }
+  })
 })

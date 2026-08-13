@@ -8,7 +8,7 @@
 //  - OcclusionConstraintZone polygons
 //  - Grid cells (SpatialGrid coverage)
 //  - Constraint edges and errors
-//  - V1 vs V2 depth differences
+//  - Live V2 order and depth diagnostics
 //
 // Overlay:
 //  - Does NOT participate in hit-test or sorting
@@ -47,8 +47,8 @@ const COLORS = {
   edgeBehind: '#ff00ff',      // Magenta for behind edges
   edgeFront: '#00ffff',       // Cyan for front edges
   errorHighlight: '#ff0000',  // Red for errors
-  diffPositive: '#ffcc00',    // Yellow for v2 > v1
-  diffNegative: '#ff6600',    // Orange for v1 > v2
+  diffPositive: '#ffcc00',    // Yellow for v2 > runtime
+  diffNegative: '#ff6600',    // Orange for runtime > v2
   textLabel: '#ffffff',       // White text
   textShadow: 'rgba(0,0,0,0.8)',
   bg: 'rgba(0,0,0,0.6)',
@@ -457,7 +457,7 @@ export class DebugOverlay {
    */
   drawAgentFootPoints(
     ctx: CanvasRenderingContext2D,
-    agents: Array<{ x: number; y: number; stableId: string; v1Depth: number; v2Depth: number }>,
+    agents: Array<{ x: number; y: number; stableId: string; runtimeDepth: number; v2Depth: number }>,
   ): void {
     ctx.save()
     ctx.font = '9px monospace'
@@ -482,14 +482,14 @@ export class DebugOverlay {
       ctx.lineTo(sx, sy + 6)
       ctx.stroke()
 
-      // Label with v1/v2 depth
+      // Label with runtime/v2 depth
       ctx.fillStyle = COLORS.textShadow
-      ctx.fillText(`${agent.stableId.slice(-8)} v1:${agent.v1Depth.toFixed(1)} v2:${agent.v2Depth.toFixed(1)}`, sx + 8, sy + 1)
+      ctx.fillText(`${agent.stableId.slice(-8)} rt:${agent.runtimeDepth.toFixed(1)} v2:${agent.v2Depth.toFixed(1)}`, sx + 8, sy + 1)
       ctx.fillStyle = COLORS.textLabel
-      ctx.fillText(`${agent.stableId.slice(-8)} v1:${agent.v1Depth.toFixed(1)} v2:${agent.v2Depth.toFixed(1)}`, sx + 7, sy)
+      ctx.fillText(`${agent.stableId.slice(-8)} rt:${agent.runtimeDepth.toFixed(1)} v2:${agent.v2Depth.toFixed(1)}`, sx + 7, sy)
 
       // Color code diff
-      const diff = agent.v2Depth - agent.v1Depth
+      const diff = agent.v2Depth - agent.runtimeDepth
       if (Math.abs(diff) > 0.5) {
         ctx.fillStyle = diff > 0 ? COLORS.diffPositive : COLORS.diffNegative
         ctx.fillText(`Δ${diff > 0 ? '+' : ''}${diff.toFixed(1)}`, sx + 7, sy + 12)

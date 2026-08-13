@@ -1,30 +1,25 @@
-// ── E6 Shadow Renderer ──
-// Computes v2 sort key, constraint edges, depth proposals for every
-// active object WITHOUT changing v1 children/depth/camera/hit-test/
-// pointer/lighting/UI or active state.
+// ── E6 Shadow Renderer (V2-native diagnostics) ──
+// Computes the active V2 constraint order, edges, and proposed depths from
+// live runtime objects WITHOUT mutating render state, camera, hit-test,
+// pointer, lighting, UI, or the committed V2 scene.
 //
-// Input: v1 object snapshots + normalized IR (if v2 schema present)
+// Input: runtime object snapshots (V2 world handles/agents) + normalized IR
 // Output: per-object diagnostics + structured shadow snapshot
 //
-// Frozen contract per §12.2 of juyiting-occlusion-system-design.md:
-//   legacy TMX → v1 adapter → normalized IR → shadow renderer comparison
-//   v2 only in shadow/test path until atomic switch (E7).
-//
-// If hall.tmx lacks v2 schema, returns disabled/not-ready status.
-//
-// E6-review-fix (P1+P2):
+// E6-review-fix invariants retained:
 //   - P1: ?jytOcclusionDebug=1 alone enables shadow + overlay data
 //   - P2: lazy init, no parse when both flags off
 //   - P2: deep-immutable snapshot (diagnostic entries, edges, candidates,
 //         errors, instrumentation all clone+freeze)
 //   - P2: truncation report (originalCount, retainedCount, truncatedCount)
 //   - P2: no console.warn from renderer (pure data, caller decides logging)
+//
+// E16A: the migration-only V1 adapter, collector, and AABB mask diff path
+// are removed. Diagnostics are V2-native; no global V1 depth formula remains.
 
 import {
   type CanonicalSceneIr,
   type OcclusionConstraintZone,
-  type Point,
-  DEFAULT_FLOOR_REGISTRY,
   isStructuredFatalRenderSchemaError,
 } from './schema.js'
 import {
@@ -34,7 +29,6 @@ import {
 } from './worldOrder.js'
 import {
   type ConstraintEdge,
-  type ConstraintInstrumentation,
   type ConstraintMembershipState,
   type ConstraintNode,
   type ConstraintResolution,
@@ -48,7 +42,6 @@ import {
   type SpatialGridCandidateProvider,
   SpatialGrid,
   createConstraintCandidateProvider,
-  createSpatialGridInstrumentation,
 } from './spatialGrid.js'
 import { parseCanonicalIrFromData, hasRenderSchemaV2 } from './canonicalIr.js'
 import { validateAndCanonicalizePolygon } from './validation.js'
@@ -59,19 +52,20 @@ const MAX_SNAPSHOT_OBJECTS = 500
 const MAX_ERRORS = 50
 const THROTTLE_MS = 200
 
-// ── V1 object snapshot ──
+// ── Runtime object snapshot ──
 
-export interface V1ObjectSnapshot {
+export interface RuntimeObjectSnapshot {
   objectId: string
   sourceId?: string
-  v1Depth: number
+  /** Canonical V2 stableId when known (preferred over pseudo-id derivation). */
+  stableId?: string
+  runtimeDepth: number
   x: number
   y: number
   width?: number
   height?: number
-  kind: 'agent' | 'prop' | 'layer' | 'unknown'
+  kind: 'agent' | 'prop' | 'fragment' | 'layer' | 'unknown'
   visible: boolean
-  behindMask?: boolean
 }
 
 // ── Shadow per-object diagnostic ──
@@ -80,7 +74,7 @@ export interface ShadowDiagnostic {
   objectId: string
   stableId: string
   sourceId: string
-  v1Depth: number
+  runtimeDepth: number
   v2SortKey: string
   v2SortKeyDetail: WorldSortKey | null
   v2OrderIndex: number
@@ -190,7 +184,7 @@ function freezeDiagnostic(d: ShadowDiagnostic): ShadowDiagnostic {
     objectId: d.objectId,
     stableId: d.stableId,
     sourceId: d.sourceId,
-    v1Depth: d.v1Depth,
+    runtimeDepth: d.runtimeDepth,
     v2SortKey: d.v2SortKey,
     v2SortKeyDetail: d.v2SortKeyDetail ? deepFreeze({ ...d.v2SortKeyDetail }) : null,
     v2OrderIndex: d.v2OrderIndex,
@@ -331,11 +325,11 @@ export class ShadowRenderer {
   }
 
   /**
-   * Compute shadow snapshot from v1 object snapshots.
+   * Compute shadow snapshot from live V2 runtime object snapshots.
    * Throttled: returns last snapshot if within throttle window.
-   * V1 scene continues to operate independently.
+   * The committed V2 scene continues to operate independently.
    */
-  computeSnapshot(v1Objects: readonly V1ObjectSnapshot[]): ShadowSnapshot {
+  computeSnapshot(runtimeObjects: readonly RuntimeObjectSnapshot[]): ShadowSnapshot {
     if (this._destroyed) {
       return this._buildEmpty('disabled', 'disposed')
     }
@@ -357,8 +351,8 @@ export class ShadowRenderer {
         return this._buildFromState()
       }
 
-      // Adapt v1 objects
-      const { nodes, diagnostics, adaptErrors } = this._adaptV1Objects(v1Objects)
+      // Adapt live runtime objects
+      const { nodes, diagnostics, adaptErrors } = this._adaptRuntimeObjects(runtimeObjects)
       for (const ae of adaptErrors) this._recordError(ae)
 
       if (nodes.length === 0) {
@@ -420,7 +414,7 @@ export class ShadowRenderer {
             zoneStableId: e.zoneStableId,
             priority: e.priority,
           }))
-        d.diffReason = this._computeDiffReason(d, resolution.order)
+        d.diffReason = this._computeDiffReason(d)
       }
 
       this._lastComputeTime = now
@@ -553,9 +547,9 @@ export class ShadowRenderer {
     }
   }
 
-  // ── Adapt v1 objects ──
+  // ── Adapt runtime objects ──
 
-  private _adaptV1Objects(v1Objects: readonly V1ObjectSnapshot[]): {
+  private _adaptRuntimeObjects(runtimeObjects: readonly RuntimeObjectSnapshot[]): {
     nodes: ConstraintNode[]
     diagnostics: ShadowDiagnostic[]
     adaptErrors: ShadowErrorRecord[]
@@ -580,56 +574,52 @@ export class ShadowRenderer {
       }
     }
 
-    const sceneHeight = ir.coordinateHeight || 928
-    for (const v1 of v1Objects) {
+    for (const runtime of runtimeObjects) {
       const diag: ShadowDiagnostic = {
-        objectId: v1.objectId, stableId: '', sourceId: v1.sourceId || '',
-        v1Depth: v1.v1Depth, v2SortKey: '', v2SortKeyDetail: null,
+        objectId: runtime.objectId,
+        stableId: runtime.stableId || '',
+        sourceId: runtime.sourceId || '',
+        runtimeDepth: runtime.runtimeDepth,
+        v2SortKey: '', v2SortKeyDetail: null,
         v2OrderIndex: -1, v2ProposedDepth: -1,
         constraintEdges: [], membershipCandidates: [],
-        diffReason: '', kind: v1.kind,
+        diffReason: '', kind: runtime.kind,
       }
 
-      if (v1.kind === 'agent' && v1.visible) {
-        const pseudoStableId = `jyt.agent.shadow.${v1.objectId.replace(/[^a-z0-9._-]/gi, '_').toLowerCase()}.v0`
-        diag.stableId = pseudoStableId
+      if (runtime.kind === 'agent' && runtime.visible) {
+        const stableId = runtime.stableId || `jyt.agent.shadow.${runtime.objectId.replace(/[^a-z0-9._-]/gi, '_').toLowerCase()}.v0`
+        diag.stableId = stableId
         try {
           const pseudoObj = {
-            stableId: pseudoStableId, sceneId: ir.sceneId, chunkId: 'shadow',
+            stableId, sceneId: ir.sceneId, chunkId: 'runtime',
             kind: 'agent' as const, renderBand: 'world' as const, floorId: 'floor-1',
             elevation: 0, sortMode: 'y' as const,
-            sortAnchor: { x: v1.x, y: v1.y }, tieBias: 0,
+            sortAnchor: { x: runtime.x, y: runtime.y }, tieBias: 0,
           }
           const sortKey = computeWorldSortKey(pseudoObj, ir.floorRegistry)
           diag.v2SortKey = worldSortKeyToString(sortKey)
           diag.v2SortKeyDetail = sortKey
-          nodes.push({ stableId: pseudoStableId, sceneId: ir.sceneId, floorId: 'floor-1', nodeKind: 'agent', sortKey, position: { x: v1.x, y: v1.y } })
+          nodes.push({ stableId, sceneId: ir.sceneId, floorId: 'floor-1', nodeKind: 'agent', sortKey, position: { x: runtime.x, y: runtime.y } })
           if (this._candidateProvider) {
             try {
-              const candidates = this._candidateProvider.queryCandidates({ x: v1.x, y: v1.y }, ir.sceneId, 'floor-1')
+              const candidates = this._candidateProvider.queryCandidates({ x: runtime.x, y: runtime.y }, ir.sceneId, 'floor-1')
               diag.membershipCandidates = [...candidates].slice(0, 50)
             } catch { /* non-fatal */ }
           }
-          if (v1.behindMask) {
-            diag.diffReason = 'v1: behindMask formula (depth ~1.5-2.5)'
-          } else {
-            const v1Norm = v1.v1Depth / sceneHeight
-            const v2Norm = sortKey.fixedPointY / (256 * sceneHeight)
-            if (Math.abs(v1Norm - v2Norm) > 0.01) {
-              diag.diffReason = `v1 depth ${v1.v1Depth.toFixed(2)} vs v2 fixedY ${sortKey.fixedPointY}`
-            }
-          }
         } catch (err) {
-          errors.push(this._errorFromException(err, v1.objectId))
+          errors.push(this._errorFromException(err, runtime.objectId))
         }
-      } else if (v1.kind === 'prop') {
-        diag.stableId = `jyt.prop.shadow.${v1.objectId.replace(/[^a-z0-9._-]/gi, '_').toLowerCase()}.v0`
-        diag.diffReason = 'v1: prop declaration-order depth'
-      } else if (v1.kind === 'layer') {
-        diag.stableId = `jyt.layer.shadow.${v1.objectId.replace(/[^a-z0-9._-]/gi, '_').toLowerCase()}.v0`
-        diag.diffReason = 'v1: fixed layer depth'
+      } else if (runtime.kind === 'prop') {
+        diag.stableId = runtime.stableId || `jyt.prop.shadow.${runtime.objectId.replace(/[^a-z0-9._-]/gi, '_').toLowerCase()}.v0`
+        diag.diffReason = 'runtime prop'
+      } else if (runtime.kind === 'fragment') {
+        diag.stableId = runtime.stableId || `jyt.fragment.shadow.${runtime.objectId.replace(/[^a-z0-9._-]/gi, '_').toLowerCase()}.v0`
+        diag.diffReason = 'runtime fragment'
+      } else if (runtime.kind === 'layer') {
+        diag.stableId = runtime.stableId || `jyt.layer.shadow.${runtime.objectId.replace(/[^a-z0-9._-]/gi, '_').toLowerCase()}.v0`
+        diag.diffReason = 'runtime layer'
       } else {
-        diag.diffReason = 'v1: unknown object kind'
+        diag.diffReason = 'runtime unknown object kind'
       }
       diagnostics.push(diag)
     }
@@ -705,10 +695,10 @@ export class ShadowRenderer {
     }) as unknown as ShadowSnapshot
   }
 
-  private _computeDiffReason(diag: ShadowDiagnostic, order: string[]): string {
+  private _computeDiffReason(diag: ShadowDiagnostic): string {
     if (diag.diffReason) return diag.diffReason
     if (diag.v2OrderIndex < 0) return 'not in v2 sort order'
-    return `v2 order #${diag.v2OrderIndex}, v1 depth ${diag.v1Depth.toFixed(2)}`
+    return `v2 order #${diag.v2OrderIndex}, runtime depth ${diag.runtimeDepth.toFixed(2)}`
   }
 
   private _errorFromException(err: unknown, objectId: string): ShadowErrorRecord {
@@ -747,20 +737,17 @@ export function parseOcclusionDebugFlag(search: string): boolean {
   }
 }
 
-// ── V1 object snapshot collector ──
+// ── Runtime object snapshot collector ──
 
 /**
- * Collect v1 object snapshots from melonJS scene world.
- * Reads current depth, position, visibility but does NOT modify anything.
+ * Collect live runtime object snapshots from the melonJS scene world.
+ * Reads current depth, position, visibility, and known stableId but does
+ * NOT modify anything. There is deliberately no mask/occluder AABB logic.
  */
-export function collectV1Snapshots(
+export function collectRuntimeSnapshots(
   world: unknown,
-  mapData: unknown,
-): V1ObjectSnapshot[] {
-  const snapshots: V1ObjectSnapshot[] = []
-  const mapDataRecord = mapData as Record<string, unknown> | null | undefined
-  const occluders: Array<{ x: number; y: number; width: number; height: number }> =
-    Array.isArray(mapDataRecord?.occluders) ? mapDataRecord!.occluders as Array<{ x: number; y: number; width: number; height: number }> : []
+): RuntimeObjectSnapshot[] {
+  const snapshots: RuntimeObjectSnapshot[] = []
 
   try {
     const w = world as Record<string, unknown>
@@ -776,29 +763,29 @@ export function collectV1Snapshots(
       const y = Number.isFinite(Number(pos?.y)) ? Number(pos!.y) : 0
       const depth = Number.isFinite(Number(c.depth)) ? Number(c.depth) : 0
       const visible = c.visible !== false && c.isRenderable !== false && c.alpha !== 0
+      const stableId = typeof c.stableId === 'string' ? c.stableId : undefined
 
-      let kind: V1ObjectSnapshot['kind'] = 'unknown'
+      let kind: RuntimeObjectSnapshot['kind'] = 'unknown'
       if (c.agentId || c.personaCode || c._isAgent) {
         kind = 'agent'
+      } else if (c._isFragment || c.kind === 'fragment') {
+        kind = 'fragment'
       } else if (c._isProp || c._isHotspot || (c.type && String(c.type) === 'prop')) {
         kind = 'prop'
       } else if (c.image || c._isImageLayer || c._isTileLayer) {
         kind = 'layer'
       }
 
-      let behindMask = false
-      if (kind === 'agent' && occluders.length) {
-        behindMask = occluders.some(occ => {
-          const inX = x >= (occ.x || 0) && x <= (occ.x || 0) + (occ.width || 0)
-          const inY = y >= (occ.y || 0) && y <= (occ.y || 0) + (occ.height || 0)
-          return inX && inY
-        })
-      }
-
-      snapshots.push({ objectId, sourceId: String(c.agentId || ''), v1Depth: depth, x, y,
+      snapshots.push({
+        objectId,
+        sourceId: String(c.agentId || c.sourceId || ''),
+        stableId,
+        runtimeDepth: depth,
+        x, y,
         width: Number.isFinite(Number(c.width)) ? Number(c.width) : undefined,
         height: Number.isFinite(Number(c.height)) ? Number(c.height) : undefined,
-        kind, visible, behindMask })
+        kind, visible,
+      })
     }
   } catch { /* return whatever we collected */ }
 

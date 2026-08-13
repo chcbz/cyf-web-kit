@@ -9,9 +9,8 @@ import { screenToWorld } from '../camera/cameraTransform.js'
 import { createInputController } from '../input/inputController.js'
 import { createInteractionLock } from '../input/interactionLock.js'
 import { clientToViewport } from '../viewportTransform.js'
-import { createShadowRenderer, collectV1Snapshots, parseOcclusionDebugFlag } from '../occlusion/shadowRenderer.js'
-import { hasRenderSchemaV2 } from '../occlusion/canonicalIr.js'
-import { hasV2ActivationEnvelope, assembleV2Scene, computeUnifiedWorldOrder, buildHitTestTargets, hitTestPoint, buildFrameProposal, createEmptyMembershipState, registerAgentsInGrid, unregisterAgentFromGrid, createSceneActivationController } from '../occlusion/hallSceneAssembly.js'
+import { createShadowRenderer, parseOcclusionDebugFlag } from '../occlusion/shadowRenderer.js'
+import { hasV2ActivationEnvelope, assembleV2Scene, computeUnifiedWorldOrder, buildHitTestTargets, hitTestPoint, buildFrameProposal, createEmptyMembershipState, registerAgentsInGrid, unregisterAgentFromGrid, createSceneActivationController, projectActivationEnvelope } from '../occlusion/hallSceneAssembly.js'
 import { createRuntimeAgentAdapter, defaultSpawnResolver, defaultChunkResolver } from '../occlusion/runtimeAgentAdapter.js'
 import { createDebugOverlay } from '../occlusion/debugOverlay.js'
 import { HALL_SCENE_DEPTH_BANDS, HALL_SCENE_LEGACY_OCCLUDER_LAYERS, hallV2WorldDepth } from '../occlusion/hallSceneDepthBands.js'
@@ -73,6 +72,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       // E6: shadow renderer (lazy init, both flags off → zero construct)
       this._shadowRenderer = null
       this._shadowState = null
+      this._shadowAssemblySource = null
       // E6: debug overlay (only created when ?jytOcclusionDebug=1)
       this._debugOverlay = null
       this._shadowDebugActive = false
@@ -80,7 +80,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._currentViewport = normalizeViewport(me.game.viewport)
       this._displayViewport = { ...this._currentViewport }
       this._visibleViewport = normalizeVisibleViewport(null, this._currentViewport)
-      // E12: V2 activation gate (off by default; V1 active until explicit activate)
+      // E12: V2 activation gate (production default; only explicit test opt-out keeps fallback)
       this._v2Generation = 0
       this._v2Assembly = null
       this._v2Active = false
@@ -152,9 +152,16 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._shadowDebugActive = debugOn
 
       if (needShadow) {
-        // Ensure renderer exists and is enabled
+        // Ensure renderer exists, aligned with the currently committed V2
+        // assembly (projected renderSchemaVersion=2 input) and enabled.
+        const shadowAssembly = this._v2Assembly
+        const shadowMapData = this._shadowMapData()
         if (!this._shadowRenderer) {
-          this._shadowRenderer = createShadowRenderer({ mapData: this._mapData })
+          this._shadowRenderer = createShadowRenderer({ mapData: shadowMapData })
+          this._shadowAssemblySource = shadowAssembly
+        } else if (this._shadowAssemblySource !== shadowAssembly) {
+          this._shadowRenderer.setMapData(shadowMapData)
+          this._shadowAssemblySource = shadowAssembly
         }
         this._shadowRenderer.enable()
 
@@ -171,6 +178,7 @@ export function createHallSceneClass(me, HallAgentClass) {
           this._shadowRenderer.dispose()
           this._shadowRenderer = null
           this._shadowState = null
+          this._shadowAssemblySource = null
         }
         if (this._debugOverlay) {
           this._debugOverlay.dispose()
@@ -629,14 +637,11 @@ export function createHallSceneClass(me, HallAgentClass) {
         'foreground-occluders': 5,
         'lighting-overlay': 8
       }
-      const PROP_DEPTH_START = 3
-      const PROP_DEPTH_STEP = 0.5
 
       const BLEND_MODES = {
         'lighting-overlay': 'screen'
       }
 
-      let propIndex = 0
       let rendered = 0
 
       Object.entries(tmxLayers).forEach(([name, tmxLayer]) => {
@@ -647,7 +652,9 @@ export function createHallSceneClass(me, HallAgentClass) {
           return
         }
 
-        const depth = LAYER_DEPTH[name] !== undefined ? LAYER_DEPTH[name] : (PROP_DEPTH_START + propIndex * PROP_DEPTH_STEP)
+        // Unknown imagelayers are non-production fallbacks; keep them inside the
+        // base band without declaration-order depth.
+        const depth = LAYER_DEPTH[name] !== undefined ? LAYER_DEPTH[name] : (HALL_SCENE_DEPTH_BANDS.BASE_MAX_EXCLUSIVE - 1)
         const blendMode = BLEND_MODES[name] || null
 
         const x = tmxLayer.offsetX || 0
@@ -662,7 +669,6 @@ export function createHallSceneClass(me, HallAgentClass) {
         this._imageLayers.push(imageLayer)
         this._imageLayersByName.set(name, { handle: imageLayer, legacyDepth: depth, attached: true })
 
-        if (!LAYER_DEPTH[name]) propIndex++
         rendered++
       })
 
@@ -848,7 +854,9 @@ export function createHallSceneClass(me, HallAgentClass) {
         this._hotspots.push({ marker, hitArea: marker, data: h })
       })
       // Render prop tile objects from TMX collection-of-images tilesets.
-      let propDepth = 3
+      // E16A: no declaration-order propDepth increments. V1/fallback props are
+      // placed in the static agent band; V2 maps them into the world band on commit.
+      const propDepth = DEPTH_LAYERS.AGENTS
       mapObjects.forEach(h => {
         if (h.shape !== 'rect' || h.type !== 'prop' || !h.tileResourceName) return
         const image = me.loader.getImage(h.tileResourceName)
@@ -868,7 +876,6 @@ export function createHallSceneClass(me, HallAgentClass) {
         if (stableId) {
           this._v2PropRenderables.set(stableId, propLayer)
         }
-        propDepth += 0.5
       })
 
       this._ensureControllers()
@@ -1114,9 +1121,9 @@ export function createHallSceneClass(me, HallAgentClass) {
       }
     }
 
-    /** Feature gate: check if V2 should be activated. Tests can set window.__JYT_V2_ENABLED. */
+    /** Production V2 is the default renderer. Tests may opt out explicitly. */
     _shouldActivateV2() {
-      return typeof window !== 'undefined' && window.__JYT_V2_ENABLED === true
+      return typeof window !== 'undefined' && window.__JYT_V2_ENABLED !== false
     }
 
     /** Check if map data supports V2 occlusion system */
@@ -1518,7 +1525,6 @@ export function createHallSceneClass(me, HallAgentClass) {
 
       this._restoreV1RenderOwnership()
       if (!this._destroyed) {
-        this._sortByDepth()
         try { me.game.world.sort?.(true) } catch (error) {}
       }
 
@@ -2156,7 +2162,8 @@ export function createHallSceneClass(me, HallAgentClass) {
                 // shadow renderer must align with the published live map.
                 self._mapData = newMapData
                 if (self._shadowRenderer) {
-                  self._shadowRenderer.setMapData(newMapData)
+                  self._shadowRenderer.setMapData(self._shadowMapData())
+                  self._shadowAssemblySource = newAssembly
                 }
               },
               () => {
@@ -2183,7 +2190,10 @@ export function createHallSceneClass(me, HallAgentClass) {
                 if (self._mapData !== oldMapData) {
                   self._mapData = oldMapData
                   if (self._shadowRenderer) {
-                    try { self._shadowRenderer.setMapData(oldMapData) } catch { /* noop */ }
+                    try {
+                      self._shadowRenderer.setMapData(self._shadowMapData())
+                      self._shadowAssemblySource = oldAssembly
+                    } catch { /* noop */ }
                   }
                 }
                 for (const handle of stagingFragments) {
@@ -2318,25 +2328,56 @@ export function createHallSceneClass(me, HallAgentClass) {
         // order back into the V2 world band until the async frame commits.
         this._reapplyCommittedV2RenderDepths()
         this._applyV2Depths()
-      } else {
-        this._sortByDepth()
       }
-      // E6: re-evaluate flags, then shadow compute (never changes v1)
+      // E6: re-evaluate flags, then shadow compute (never changes the committed V2 scene)
       this._ensureShadowFlags()
       this._runShadowPass()
       return true
     }
 
+    _shadowMapData() {
+      if (this._v2Assembly) {
+        try {
+          return projectActivationEnvelope(this._mapData)
+        } catch {
+          return this._mapData
+        }
+      }
+      return this._mapData
+    }
+
+    _collectV2RuntimeObjects() {
+      const snapshots = []
+      if (!this._v2Active || !this._v2AgentAdapter || !this._v2RenderableHandles) return snapshots
+      for (const sourceId of this._v2AgentAdapter.sourceEntityIds) {
+        const sceneObject = this._v2AgentAdapter.lookup(sourceId)
+        if (!sceneObject) continue
+        const handle = this._v2RenderableHandles.get(sceneObject.stableId)
+        snapshots.push({
+          objectId: sceneObject.stableId,
+          sourceId,
+          stableId: sceneObject.stableId,
+          runtimeDepth: Number.isFinite(handle?.depth) ? handle.depth : 0,
+          x: Number.isFinite(Number(sceneObject.sortAnchor?.x)) ? Number(sceneObject.sortAnchor.x) : 0,
+          y: Number.isFinite(Number(sceneObject.sortAnchor?.y)) ? Number(sceneObject.sortAnchor.y) : 0,
+          kind: 'agent',
+          visible: true,
+        })
+      }
+      return snapshots
+    }
 
     _runShadowPass() {
       const sr = this._shadowRenderer
       if (!sr || !sr.enabled) return
       if (this._destroyed) return
       try {
-        // Collect v1 object snapshots (read-only, never modifies scene)
-        const v1Objects = collectV1Snapshots(me?.game?.world, this._mapData)
+        // Collect committed V2 runtime objects (read-only, never modifies scene).
+        // When V2 has not committed yet, diagnostics are computed from the
+        // canonical static IR with no runtime agents.
+        const runtimeObjects = this._collectV2RuntimeObjects()
         // Compute shadow snapshot
-        this._shadowState = sr.computeSnapshot(v1Objects)
+        this._shadowState = sr.computeSnapshot(runtimeObjects)
         // Update debug overlay if active
         if (this._debugOverlay && this._shadowDebugActive) {
           this._debugOverlay.update(
@@ -2346,36 +2387,11 @@ export function createHallSceneClass(me, HallAgentClass) {
           )
         }
       } catch (err) {
-        // Shadow failure must never affect v1 scene; only log when debug active
+        // Shadow failure must never affect the committed scene; only log when debug active
         if (this._shadowDebugActive) {
-          console.warn('[HallScene] shadow pass failed (v1 preserved):', err?.message || err)
+          console.warn('[HallScene] shadow pass failed (scene preserved):', err?.message || err)
         }
       }
-    }
-
-    _sortByDepth() {
-      const occluders = this._mapData?.occluders || []
-      const sceneHeight = this._mapData?.coordinateHeight || 941
-      const agents = [...this._agents.values()].sort((a, b) => a.pos.y - b.pos.y)
-      agents.forEach((agent) => {
-        // Normalise Y to [0,1] range
-        const normY = agent.pos.y / sceneHeight
-        // Check if agent is behind any mask polygon
-        let behindMask = false
-        if (occluders.length) {
-          behindMask = occluders.some(occ => {
-            const inX = agent.pos.x >= occ.x && agent.pos.x <= occ.x + occ.width
-            const inY = agent.pos.y >= occ.y && agent.pos.y <= occ.y + occ.height
-            return inX && inY
-          })
-        }
-        // Behind mask 锟斤拷 depth 1.5-2.5; in front 锟斤拷 depth 3.0-5.5
-        if (behindMask) {
-          agent.depth = 1.5 + normY * 1.0
-        } else {
-          agent.depth = 2.0 + normY * 3.5
-        }
-      })
     }
 
     onDestroyEvent() {
