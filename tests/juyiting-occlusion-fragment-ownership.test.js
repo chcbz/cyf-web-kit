@@ -26,7 +26,9 @@ const CANONICAL_PATH = 'public/juyiting/images/liangshan-hall-mid-occluders-v3.w
 const CHROMIUM_ENV = {
   ...process.env,
   CHROMIUM_HEADLESS: process.env.CHROMIUM_HEADLESS || '/usr/local/bin/chromium-headless-smoke',
-  CHROMIUM_PROVENANCE: '/usr/local/bin/chromium-headless-smoke',
+  CHROMIUM_PROVENANCE: process.env.CHROMIUM_PROVENANCE
+    || process.env.CHROMIUM_HEADLESS
+    || '/usr/local/bin/chromium-headless-smoke',
 }
 
 const spec = JSON.parse(readFileSync(join(REPO_ROOT, SPEC_PATH), 'utf8'))

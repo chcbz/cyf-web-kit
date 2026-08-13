@@ -48,7 +48,7 @@ declare module 'chai' {
     throw(expected?: unknown, message?: string): Assertion
     a(type: string, message?: string): Assertion
     an(type: string, message?: string): Assertion
-    instanceOf(constructor: Function, message?: string): Assertion
+    instanceOf(constructor: abstract new (...args: never[]) => unknown, message?: string): Assertion
     below(limit: number, message?: string): Assertion
     lessThan(limit: number, message?: string): Assertion
     greaterThan(limit: number, message?: string): Assertion

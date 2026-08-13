@@ -22,12 +22,16 @@ import { parseJuyiHallTmx } from '../../../src/game/tiledMap.js'
 // `npm run test` already installs one shared JSDOM before loading suites.
 // `npm run test:game` has no setup hook, so install a fallback only when absent;
 // never replace an existing document because Vue runtime-dom retains its identity.
-if (typeof globalThis.DOMParser === 'undefined' || typeof globalThis.document === 'undefined') {
+if (typeof globalThis.document === 'undefined') {
   const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', { url: 'http://localhost' } as any)
   ;(globalThis as any).window = dom.window
   ;(globalThis as any).document = dom.window.document
   ;(globalThis as any).navigator = (dom.window as any).navigator
   ;(globalThis as any).DOMParser = (dom.window as any).DOMParser
+} else if (typeof globalThis.DOMParser === 'undefined') {
+  const existingParser = (globalThis as any).window?.DOMParser
+  if (!existingParser) throw new Error('Existing test document has no matching DOMParser')
+  ;(globalThis as any).DOMParser = existingParser
 }
 
 if (!(globalThis as any).crypto) {

@@ -20,6 +20,9 @@ export async function validateMaskMigration({ ledger, contact, inputRoot=REPO_RO
  const load=p=>JSON.parse(readFileSync(resolve(inputRoot,p),'utf8'))
  const errors=[],warnings=[],fail=m=>errors.push(m)
  const inventory=load('tests/fixtures/juyiting/occlusion-v0/inventory.json'),fragSpec=load('tests/fixtures/juyiting/occlusion-v2-fragments/fragment-ownership-spec.json'),propSpec=load('tests/fixtures/juyiting/occlusion-v1-props/prop-sort-spec.json'),e8bManifest=load('tests/fixtures/juyiting/occlusion-v1-props/prop-tmx-manifest.json')
+ let e8aContact=''
+ try { e8aContact=readFileSync(resolve(inputRoot,'tests/fixtures/juyiting/occlusion-v1-props/contact-sheet.svg'),'utf8') }
+ catch { fail('current role frame source missing') }
  const { buildInventory }=await import('./inventory-juyiting-map.mjs')
  const liveGeometry=buildInventory(readFileSync(resolve(inputRoot,'public/juyiting/hall.tmx'),'utf8'),{baselineCommit:inventory.baselineCommit})
  if(!exactObject(liveGeometry.collision,inventory.collision)||!exactObject(liveGeometry.navObstacles,inventory.navObstacles))fail('live TMX collision/nav geometry drifts from E1 fixture')
@@ -30,22 +33,38 @@ if(ledger.provenance?.tmxSha256!==TMX_SHA256||ledger.provenance?.e9aGenerationId
 if(ledger.provenance?.inputHashes?.tmx?.sha256!==TMX_SHA256)fail('input TMX hash drift')
 if(e8bManifest.taskId!=='E8B'||e8bManifest.tmxProvenance?.currentAnchor?.sha256!==TMX_SHA256)fail('E8B provenance binding drift')
 if(ledger.provenance?.inputHashes?.e8b?.tmxSha256!==TMX_SHA256)fail('ledger E8B TMX binding drift')
+// E10A's TMX is historical provenance: later E10B/E12 migrations legitimately
+// changed the live TMX, so the main-repository check reads the accepted E10A blob.
+// All other top-level inputs below are current semantic regression inputs.
 for(const [name,input] of Object.entries(ledger.provenance?.inputHashes||{})){
  if(!input||typeof input!=='object'||typeof input.path!=='string'||typeof input.sha256!=='string')continue
  let actual
  try {
-  actual = inputRoot===REPO_ROOT && (name==='tmx' || name==='generatorTooling')
-   ? input.sha256
+  actual = inputRoot===REPO_ROOT && name==='tmx'
+   ? sha256(readGitBlobAtCommit(E10A_ACCEPTED_COMMIT,input.path))
    : sha256(readFileSync(resolve(inputRoot,input.path)))
  } catch { fail(`input hash source missing: ${name}`); continue }
  if(actual!==input.sha256)fail(`input hash drift: ${name}`)
 }
+// Generator tooling is also historical provenance for the accepted fixture. The
+// current validator/generator may evolve, while isolated roots must still supply
+// and hash their own tooling bytes so mutation tests cannot inherit trusted Git.
 for(const [name,input] of Object.entries(ledger.provenance?.inputHashes?.generatorTooling||{})){
  if(!input||typeof input.path!=='string'||typeof input.sha256!=='string'){fail(`generator tooling provenance missing: ${name}`);continue}
  let actual
  try { actual=inputRoot===REPO_ROOT?sha256(readGitBlobAtCommit(E10A_ACCEPTED_COMMIT,input.path)):sha256(readFileSync(resolve(inputRoot,input.path))) }
  catch{fail(`generator tooling source missing: ${name}`);continue}
  if(actual!==input.sha256)fail(`generator tooling hash drift: ${name}`)
+}
+// Role evidence is a current-runtime semantic gate, separate from historical E10A
+// provenance. It binds the live E8A role metadata and the exact embedded frames.
+for(const role of ['lujunyi','husanniang']){
+ const expected=propSpec.visualEvidence?.roles?.[role],recorded=ledger.provenance?.inputHashes?.roles?.[role]
+ if(!expected||!recorded){fail(`role evidence missing: ${role}`);continue}
+ if(recorded.assetSha256!==expected.asset?.sha256||!exactObject(recorded.frame,expected.sourceFrameRect)||!exactObject(recorded.alphaAabb,expected.sourceFrameAlphaAabb))fail(`current role semantics drift: ${role}`)
+ const marker=`data-role=\"${role}\"`,start=e8aContact.indexOf(marker),end=start<0?-1:e8aContact.indexOf('</g>',start),group=start<0||end<0?'':e8aContact.slice(start,end),width=String(expected.renderedFrameSize?.width)
+ const match=group.match(new RegExp(`<image href=\"(data:image/png;base64,[^\"]+)\"[^>]*width=\"${width.replace('.', '\\.')}\"`))
+ if(!match||sha256(Buffer.from(match[1].split(',')[1],'base64'))!==recorded.pngSha256)fail(`current role frame pixels drift: ${role}`)
 }
 const generationBasis={ledger:{...ledger,generationId:ZERO_GENERATION_ID,contentSha256:''},evidenceInputs:ledger.provenance.inputHashes}
 const expectedGeneration=createHash('sha256').update(stableJson(generationBasis)).digest('hex')

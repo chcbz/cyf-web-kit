@@ -69,7 +69,7 @@ export function spawnSyncCaptured(command, args = [], options = {}) {
   }
 }
 
-/** execFileSync-compatible wrapper backed by regular-file capture. */
+/** execFileSync-style subset backed by regular-file capture; caller encoding is preserved. */
 export function execFileSyncCaptured(command, args = [], options = {}) {
   const result = spawnSyncCaptured(command, args, options)
   if (result.error || result.status !== 0) {

@@ -66,11 +66,15 @@ import {
 // `npm run test` already installs one shared JSDOM before loading suites.
 // `npm run test:game` has no setup hook, so install a fallback only when absent;
 // never replace an existing document because Vue runtime-dom retains its identity.
-if (typeof globalThis.DOMParser === 'undefined' || typeof globalThis.document === 'undefined') {
+if (typeof globalThis.document === 'undefined') {
   const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', { url: 'http://localhost' })
   ;(globalThis as Record<string, unknown>).document = dom.window.document
   ;(globalThis as Record<string, unknown>).DOMParser = dom.window.DOMParser
   ;(globalThis as Record<string, unknown>).window = dom.window
+} else if (typeof globalThis.DOMParser === 'undefined') {
+  const existingParser = (globalThis as Record<string, any>).window?.DOMParser
+  if (!existingParser) throw new Error('Existing test document has no matching DOMParser')
+  ;(globalThis as Record<string, unknown>).DOMParser = existingParser
 }
 
 if (!(globalThis as Record<string, unknown>).crypto) {

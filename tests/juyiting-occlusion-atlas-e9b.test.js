@@ -51,7 +51,9 @@ const CANONICAL_PATH_FULL = join(REPO_ROOT, CANONICAL_PATH)
 const CHROMIUM_ENV = {
   ...process.env,
   CHROMIUM_HEADLESS: process.env.CHROMIUM_HEADLESS || '/usr/local/bin/chromium-headless-smoke',
-  CHROMIUM_PROVENANCE: '/usr/local/bin/chromium-headless-smoke',
+  CHROMIUM_PROVENANCE: process.env.CHROMIUM_PROVENANCE
+    || process.env.CHROMIUM_HEADLESS
+    || '/usr/local/bin/chromium-headless-smoke',
 }
 
 const manifest = JSON.parse(readFileSync(join(REPO_ROOT, MANIFEST_PATH), 'utf8'))
