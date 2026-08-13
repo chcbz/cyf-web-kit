@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { execFileSyncCaptured } from './lib/spawn-capture.mjs'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { tsImport } from 'tsx/esm/api'
 import { alphaScan } from './lib/alpha-scan.mjs'
 import { scanWebpFrames } from './lib/webp-frame-scan.mjs'
@@ -60,6 +60,17 @@ function finite(value, label) {
 function readJson(path) {
   try { return JSON.parse(readFileSync(path, 'utf8')) }
   catch (error) { console.error(`FATAL: cannot read spec ${path}: ${error.message}`); process.exit(1) }
+}
+
+async function importCurrentPortraitRole(resolverPath) {
+  const constantsUrl = pathToFileURL(join(REPO_ROOT, 'src/constants/juyiting.js')).href
+  const source = readFileSync(resolverPath, 'utf8')
+  const rewritten = source.replace("from '@/constants/juyiting'", `from '${constantsUrl}'`)
+  if (rewritten === source) throw new Error('canonical role resolver import was not found')
+  const moduleUrl = `data:text/javascript;base64,${Buffer.from(rewritten).toString('base64')}`
+  const module = await import(moduleUrl)
+  if (typeof module.portraitRole !== 'function') throw new Error('portraitRole export missing')
+  return module.portraitRole
 }
 
 const spec = readJson(SPEC_PATH)
@@ -228,10 +239,28 @@ const manifestPath = join(REPO_ROOT, manifestRel)
 const resolverPath = join(REPO_ROOT, resolverRel)
 const { PERSONA_SPRITE_MANIFEST } = await tsImport(manifestPath, import.meta.url)
 const { compareWorldSortKeys, worldSortKeyToString } = await tsImport(join(REPO_ROOT, 'src/game/occlusion/worldOrder.ts'), import.meta.url)
+// Historical provenance proves which accepted E8A sources produced the frozen
+// evidence. Current runtime semantics are checked separately below; later
+// type-only/source refactors must not be confused with historical byte drift.
 const historicalManifestBytes = readGitBlobAtCommit(spec.baseCommit, manifestRel)
 const historicalResolverBytes = readGitBlobAtCommit(spec.baseCommit, resolverRel)
-if (spec.visualEvidence?.personaManifest?.path !== manifestRel || spec.visualEvidence.personaManifest.sha256 !== sha256Bytes(historicalManifestBytes)) fail('persona manifest provenance mismatch')
-if (spec.visualEvidence?.roleResolver?.path !== resolverRel || spec.visualEvidence.roleResolver.sha256 !== sha256Bytes(historicalResolverBytes)) fail('role resolver provenance mismatch')
+if (spec.visualEvidence?.personaManifest?.path !== manifestRel || spec.visualEvidence.personaManifest.sha256 !== sha256Bytes(historicalManifestBytes)) fail('historical persona manifest provenance mismatch')
+else pass('historical persona manifest provenance')
+if (spec.visualEvidence?.roleResolver?.path !== resolverRel || spec.visualEvidence.roleResolver.sha256 !== sha256Bytes(historicalResolverBytes)) fail('historical role resolver provenance mismatch')
+else pass('historical role resolver provenance')
+
+// Execute the current resolver rather than trusting its historical whole-file
+// hash. This binds both canonical roles to the live personaCode and prefixed-ID
+// paths used by Juyi Hall. The live manifest definitions are consumed below and
+// checked field-by-field against the frozen frame/asset/runtime semantics.
+try {
+  const portraitRole = await importCurrentPortraitRole(resolverPath)
+  for (const role of BOUNTY_ROLES) {
+    if (portraitRole({ personaCode: role })?.slug !== role || portraitRole({ agentId: `agent-${role}` })?.slug !== role) {
+      fail(`${role}: current role resolver semantics mismatch`)
+    } else pass(`${role}: current role resolver semantics`)
+  }
+} catch (error) { fail(`current role resolver execution: ${error.message}`) }
 const roleRequests = []
 for (const role of BOUNTY_ROLES) {
   const definition = PERSONA_SPRITE_MANIFEST.personas[role]
