@@ -113,21 +113,21 @@ export function createHallSceneClass(me, HallAgentClass) {
     setTmxSha256(sha) { this._tmxSha256 = sha }
 
     setMapData(mapData) {
+      // E15 P2: an active V2 refresh must stage the replacement BEFORE
+      // publishing new mapData. Keep this._mapData/shadow renderer aligned
+      // with the currently live scene until the new transaction commits.
+      if (!this._destroyed && this._v2Active && this._v2Controller && this._v2Assembly) {
+        this._v2Generation++  // invalidate any pending async continuations
+        this._replaceV2ForMapData(mapData)
+        return
+      }
+
       this._mapData = mapData
       // Propagate to existing shadow renderer if any
       if (this._shadowRenderer) {
         this._shadowRenderer.setMapData(mapData)
       }
       if (this._destroyed) return
-
-      // E15 P2: when V2 is already active, stage a replacement scene without
-      // falling back to V1. The previous complete active scene stays live until
-      // the replacement commits; any failure keeps it.
-      if (this._v2Active && this._v2Controller && this._v2Assembly) {
-        this._v2Generation++  // invalidate any pending async continuations
-        this._replaceV2ForMapData(mapData)
-        return
-      }
 
       // E12: always invalidate any in-flight activation on map change
       this._v2Generation++  // kill all pending async continuations
@@ -1578,9 +1578,9 @@ export function createHallSceneClass(me, HallAgentClass) {
           try {
             const replaced = await self._reactivateV2ForRoster()
             if (!replaced) {
+              // The callee already recorded the single structured
+              // V2_ROSTER_REPLACE_FAILED diagnostic; do not duplicate it here.
               self._v2LastRosterFailure = { ids: new Set(currentIds), at: Date.now(), logged: false }
-              self._recordV2Diagnostic('V2_ROSTER_REPLACE_FAILED', 'roster',
-                'roster reactivation failed; previous complete active scene preserved')
             }
           } finally {
             self._v2RosterInFlight = false
@@ -2009,6 +2009,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       const oldMembership = self._v2Membership
       const oldHitTargets = self._v2HitTargets
       const oldRenderableHandles = self._v2RenderableHandles
+      const oldMapData = self._mapData
       const oldRenderableDepths = new Map()
       if (oldFragments) {
         for (const handle of oldFragments) oldRenderableDepths.set(handle, handle.depth)
@@ -2112,6 +2113,9 @@ export function createHallSceneClass(me, HallAgentClass) {
           commit: ctx => {
             ctx.swap(
               () => {
+                if (gen !== self._v2Generation || self._destroyed) {
+                  throw new Error('V2 map refresh superseded before commit')
+                }
                 if (oldFragments) {
                   for (const handle of oldFragments) me.game.world.removeChild(handle)
                 }
@@ -2134,6 +2138,12 @@ export function createHallSceneClass(me, HallAgentClass) {
                 self._v2PendingActivation = null
                 self._v2PendingFrame = null
                 self._v2Active = true
+                // Publish new mapData only after the full scene swap succeeded;
+                // shadow renderer must align with the published live map.
+                self._mapData = newMapData
+                if (self._shadowRenderer) {
+                  self._shadowRenderer.setMapData(newMapData)
+                }
               },
               () => {
                 self._v2Controller = oldController
@@ -2147,6 +2157,12 @@ export function createHallSceneClass(me, HallAgentClass) {
                 self._v2RenderableHandles = oldRenderableHandles
                 self._v2PendingActivation = null
                 self._v2PendingFrame = null
+                if (self._mapData !== oldMapData) {
+                  self._mapData = oldMapData
+                  if (self._shadowRenderer) {
+                    try { self._shadowRenderer.setMapData(oldMapData) } catch { /* noop */ }
+                  }
+                }
                 for (const handle of stagingFragments) {
                   try { me.game.world.removeChild(handle) } catch { /* noop */ }
                 }

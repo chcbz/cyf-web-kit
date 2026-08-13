@@ -346,20 +346,28 @@ describe('E15 HallScene atomic V2 switch', () => {
       const oldAssembly = scene._v2Assembly
       const oldAdapter = scene._v2AgentAdapter
       const oldFragments = scene._v2StagingRenderables
+      const oldMapData = scene._mapData
 
       // Refresh with a fresh, valid mapData object.
-      scene.setMapData(productionMapData())
+      const newMapData = productionMapData()
+      scene.setMapData(newMapData)
 
-      // E15 P2: refresh must NOT synchronously fall back to V1. The previous
-      // complete V2 scene stays live until the replacement commits.
+      // E15 P2: refresh must NOT synchronously fall back to V1 or publish the
+      // new mapData. The previous complete V2 scene stays live until commit.
       expect(scene.activeRendererMode).to.equal('v2')
       expect(scene.renderSchemaVersion).to.equal('2')
       expect(scene._v2Controller).to.equal(oldController)
       expect(scene._v2Assembly).to.equal(oldAssembly)
       expect(scene._v2AgentAdapter).to.equal(oldAdapter)
+      expect(scene._mapData).to.equal(oldMapData)
+      expect(scene.hasV2Support()).to.equal(true)
       expect([...oldFragments].every((handle: any) => me.game.world.hasChild(handle))).to.equal(true)
 
       await waitFor(() => scene.activeRendererMode === 'v2' && scene._v2Controller !== oldController)
+
+      // mapData is published exactly once, with the committed scene.
+      expect(scene._mapData).to.equal(newMapData)
+      expect(scene.hasV2Support()).to.equal(true)
 
       expect(scene.renderSchemaVersion).to.equal('2')
       expect(scene._v2StagingRenderables).to.not.equal(oldFragments)
@@ -371,6 +379,73 @@ describe('E15 HallScene atomic V2 switch', () => {
         expect(handle.depth).to.be.at.least(HALL_SCENE_DEPTH_BANDS.V2_WORLD_START)
         expect(handle.depth).to.be.below(HALL_SCENE_DEPTH_BANDS.LIGHTING)
       }
+    } finally {
+      ;(window as any).__JYT_V2_ENABLED = previousGate
+    }
+  })
+
+  it('active V2 refresh with invalid provenance keeps old mapData and old active scene', async () => {
+    const me = createFakeMelon()
+    const mapData = productionMapData()
+    installProductionImages(me, mapData)
+    const previousGate = (window as any).__JYT_V2_ENABLED
+    ;(window as any).__JYT_V2_ENABLED = true
+    try {
+      const scene = makeScene(me, mapData)
+      scene.syncAgents([{ agentId: 'a', personaCode: 'a', x: 300, y: 200 }])
+      scene.onResetEvent()
+      scene.update(16)
+      await waitFor(() => scene.activeRendererMode === 'v2')
+
+      const oldAssembly = scene._v2Assembly
+      const oldMapData = scene._mapData
+      const invalidMapData = productionMapData()
+      invalidMapData.properties = { ...(invalidMapData.properties || {}), sceneId: 'not-juyiting-main' }
+
+      scene.setMapData(invalidMapData)
+      await waitFor(() => scene.getV2Diagnostics().some((d: any) => d.code === 'V2_MAP_REFRESH_FAILED'))
+
+      expect(scene._mapData).to.equal(oldMapData)
+      expect(scene.hasV2Support()).to.equal(true)
+      expect(scene._v2Assembly).to.equal(oldAssembly)
+      expect(scene.activeRendererMode).to.equal('v2')
+      expect(scene.renderSchemaVersion).to.equal('2')
+      expect(scene.getV2Diagnostics().some((d: any) => d.code === 'V2_MAP_REFRESH_FAILED')).to.equal(true)
+    } finally {
+      ;(window as any).__JYT_V2_ENABLED = previousGate
+    }
+  })
+
+  it('active V2 refresh with missing asset keeps old mapData and old active scene', async () => {
+    const me = createFakeMelon()
+    const mapData = productionMapData()
+    const images = installProductionImages(me, mapData)
+    const previousGate = (window as any).__JYT_V2_ENABLED
+    ;(window as any).__JYT_V2_ENABLED = true
+    try {
+      const scene = makeScene(me, mapData)
+      scene.syncAgents([{ agentId: 'a', personaCode: 'a', x: 300, y: 200 }])
+      scene.onResetEvent()
+      scene.update(16)
+      await waitFor(() => scene.activeRendererMode === 'v2')
+
+      const oldAssembly = scene._v2Assembly
+      const oldMapData = scene._mapData
+
+      const newMapData = productionMapData()
+      const fragmentLayer = newMapData.layers.find((layer: any) => layer.name === 'v2-fragments-occluders')
+      const firstFragment = fragmentLayer.objects[0]
+      images.delete(firstFragment.properties.assetRef)
+
+      scene.setMapData(newMapData)
+      await waitFor(() => scene.getV2Diagnostics().some((d: any) => d.code === 'V2_MAP_REFRESH_FAILED'))
+
+      expect(scene._mapData).to.equal(oldMapData)
+      expect(scene.hasV2Support()).to.equal(true)
+      expect(scene._v2Assembly).to.equal(oldAssembly)
+      expect(scene.activeRendererMode).to.equal('v2')
+      expect(scene.renderSchemaVersion).to.equal('2')
+      expect(scene.getV2Diagnostics().some((d: any) => d.code === 'V2_MAP_REFRESH_FAILED')).to.equal(true)
     } finally {
       ;(window as any).__JYT_V2_ENABLED = previousGate
     }
@@ -455,7 +530,7 @@ describe('E15 HallScene atomic V2 switch', () => {
       expect(scene.activeRendererMode).to.equal('v2')
       expect(scene.renderSchemaVersion).to.equal('2')
       expect([...oldFragments].every((handle: any) => me.game.world.hasChild(handle))).to.equal(true)
-      expect(scene.getV2Diagnostics().some((d: any) => d.code === 'V2_ROSTER_REPLACE_FAILED')).to.equal(true)
+      expect(scene.getV2Diagnostics().filter((d: any) => d.code === 'V2_ROSTER_REPLACE_FAILED')).to.have.length(1)
     } finally {
       ;(window as any).__JYT_V2_ENABLED = previousGate
     }
@@ -519,7 +594,9 @@ describe('E15 HallScene atomic V2 switch', () => {
       // The failure must have reached the commit callback, not an early asset
       // failure, and grid rollback itself must not have failed.
       const diagnostics = scene.getV2Diagnostics()
-      expect(diagnostics.some((d: any) => d.code === 'V2_ROSTER_REPLACE_FAILED' && /sort|commit/.test(d.message))).to.equal(true)
+      const failedDiagnostics = diagnostics.filter((d: any) => d.code === 'V2_ROSTER_REPLACE_FAILED')
+      expect(failedDiagnostics).to.have.length(1)
+      expect(failedDiagnostics[0].message).to.match(/sort|commit/)
       expect(diagnostics.some((d: any) => d.code === 'V2_ROSTER_GRID_ROLLBACK_FAILED')).to.equal(false)
     } finally {
       ;(window as any).__JYT_V2_ENABLED = previousGate
