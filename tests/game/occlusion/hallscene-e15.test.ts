@@ -650,6 +650,71 @@ describe('E15 HallScene atomic V2 switch', () => {
     }
   })
 
+  it('active V2 map refresh with shadow publish failure fully restores old active scene and destroys new staging', async () => {
+    const me = createFakeMelon()
+    const mapData = productionMapData()
+    installProductionImages(me, mapData)
+    const previousGate = (window as any).__JYT_V2_ENABLED
+    ;(window as any).__JYT_V2_ENABLED = true
+    try {
+      const scene = makeScene(me, mapData)
+      scene.syncAgents([{ agentId: 'a', personaCode: 'a', x: 300, y: 200 }])
+      scene.onResetEvent()
+      scene.update(16)
+      await waitFor(() => scene.activeRendererMode === 'v2')
+
+      const oldController = scene._v2Controller
+      const oldAssembly = scene._v2Assembly
+      const oldAdapter = scene._v2AgentAdapter
+      const oldFragments = scene._v2StagingRenderables
+      const oldDepths = scene._v2Depths
+      const oldMembership = scene._v2Membership
+      const oldHitTargets = scene._v2HitTargets
+      const oldRenderableHandles = scene._v2RenderableHandles
+      const oldMapData = scene._mapData
+      const preRefreshWorld = new Set(me.children.map((item: any) => item.child))
+
+      const newMapData = productionMapData()
+      installProductionImages(me, newMapData)
+
+      let newControllerSeen: any = null
+      scene._shadowRenderer = {
+        setMapData: (map: any) => {
+          if (map === newMapData) {
+            // Apply has already published newController; this throw forces the
+            // E7 commit rollback path after apply mutated live state.
+            newControllerSeen = scene._v2Controller
+            throw new Error('shadow publish failed')
+          }
+        },
+      }
+
+      scene.setMapData(newMapData)
+      await waitFor(() => scene.getV2Diagnostics().some((d: any) => d.code === 'V2_MAP_REFRESH_FAILED'))
+
+      // The whole old active scene is restored; the failed transaction staging
+      // is gone and the new controller was disposed by the caller's catch.
+      expect(scene._v2Controller).to.equal(oldController)
+      expect(scene._v2AgentAdapter).to.equal(oldAdapter)
+      expect(scene._v2Assembly).to.equal(oldAssembly)
+      expect(scene._v2StagingRenderables).to.equal(oldFragments)
+      expect(scene._v2Depths).to.equal(oldDepths)
+      expect(scene._v2Membership).to.equal(oldMembership)
+      expect(scene._v2HitTargets).to.equal(oldHitTargets)
+      expect(scene._v2RenderableHandles).to.equal(oldRenderableHandles)
+      expect(scene._mapData).to.equal(oldMapData)
+      expect(scene.activeRendererMode).to.equal('v2')
+      expect(scene.renderSchemaVersion).to.equal('2')
+      expect([...oldFragments].every((handle: any) => me.game.world.hasChild(handle))).to.equal(true)
+      expect(new Set(me.children.map((item: any) => item.child))).to.deep.equal(preRefreshWorld)
+      expect(newControllerSeen).to.not.equal(null)
+      expect(newControllerSeen.snapshot.status).to.equal('destroyed')
+      expect(scene.getV2Diagnostics().filter((d: any) => d.code === 'V2_MAP_REFRESH_FAILED')).to.have.length(1)
+    } finally {
+      ;(window as any).__JYT_V2_ENABLED = previousGate
+    }
+  })
+
   it('map refresh destroy rollback does not resurrect a destroyed scene', async () => {
     const me = createFakeMelon()
     const mapData = productionMapData()

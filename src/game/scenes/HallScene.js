@@ -1912,9 +1912,10 @@ export function createHallSceneClass(me, HallAgentClass) {
                 // active reader state. E7 disposes the new transaction staging;
                 // the caller's catch destroys the new controller/adapter.
                 if (self._destroyed) return
-                // A newer lifecycle event already owns the live scene; leave it
-                // untouched instead of clobbering its committed state.
-                if (self._v2Controller !== oldController) return
+                // Only refuse when a third lifecycle event owns the live scene.
+                // oldController means apply never ran; this transaction's
+                // newController means apply ran and threw, so roll back fully.
+                if (self._v2Controller !== oldController && self._v2Controller !== newController) return
                 self._v2Controller = oldController
                 self._v2AgentAdapter = oldAdapter
                 self._v2Assembly = oldAssembly
@@ -2164,9 +2165,10 @@ export function createHallSceneClass(me, HallAgentClass) {
                 // disposes the new transaction staging and the caller's catch
                 // destroys the new controller/adapter.
                 if (self._destroyed) return
-                // A newer lifecycle event already owns the live scene; leave
-                // it untouched instead of clobbering its committed state.
-                if (self._v2Controller !== oldController) return
+                // Only refuse when a third lifecycle event owns the live scene.
+                // oldController means apply never ran; this transaction's
+                // newController means apply ran and threw, so roll back fully.
+                if (self._v2Controller !== oldController && self._v2Controller !== newController) return
                 self._v2Controller = oldController
                 self._v2AgentAdapter = oldAdapter
                 self._v2Assembly = oldAssembly
