@@ -2,6 +2,7 @@ import { expect } from 'chai'
 import { readFileSync } from 'fs'
 
 import { createHallSceneClass } from '../src/game/scenes/HallScene.js'
+import { createHallAgentClass } from '../src/game/entities/HallAgent.js'
 import { parseJuyiHallTmx } from '../src/game/tiledMap.js'
 import { ACCEPTED_TMX_SHA256 } from '../src/game/occlusion/hallSceneAssembly.js'
 import { HALL_SCENE_DEPTH_BANDS, hallV2WorldDepth } from '../src/game/occlusion/hallSceneDepthBands.js'
@@ -97,12 +98,37 @@ const createFakeMelon = () => {
     }
 
     scale() {}
+    addAnimation() {}
+    setCurrentAnimation() {}
+    flipX() {}
+    update() { return true }
   }
 
   class Vector2d {
     constructor(x, y) {
       this.x = x
       this.y = y
+    }
+  }
+
+  class Body {
+    constructor(owner) {
+      this.owner = owner
+      this.velocity = { x: 0, y: 0 }
+    }
+
+    setVelocity(x, y) {
+      this.velocity.x = x
+      this.velocity.y = y
+    }
+  }
+
+  class Color {
+    constructor(r, g, b, a) {
+      this.r = r
+      this.g = g
+      this.b = b
+      this.a = a
     }
   }
 
@@ -124,6 +150,8 @@ const createFakeMelon = () => {
     Sprite,
     Stage,
     Vector2d,
+    Body,
+    Color,
     game: {
       viewport,
       world: {
@@ -1091,7 +1119,7 @@ describe('HallScene melonJS pointer routing', () => {
       expect(me.children.filter(item => item.child === layer('mid-occluders').handle)).to.have.length(1)
       expect(me.children.filter(item => item.child === layer('foreground-occluders').handle)).to.have.length(1)
       expect(layer('lighting-overlay').handle.depth).to.equal(8)
-      expect(scene._agents.get('a').depth).to.be.lessThan(6)
+      expect(scene._agents.get('a').depth).to.equal(HALL_SCENE_DEPTH_BANDS.ERROR_STATE_AGENT_DEPTH)
     } finally {
       window.__JYT_V2_ENABLED = previousGate
       document.createElement = originalCreateElement
@@ -1240,6 +1268,60 @@ describe('HallScene melonJS pointer routing', () => {
       window.__JYT_V2_ENABLED = previousGate
       me.game.world.sort = () => {}
       await scene.deactivateV2()
+    }
+  })
+
+  it('pins real HallAgent and prop depths to the fixed error-state band after HallAgent.update', () => {
+    const me = createFakeMelon()
+    const mapData = productionV2MapData()
+    installProductionImages(me, mapData)
+    const fallbackImageLookup = me.loader.getImage
+    me.loader.getImage = name => name === 'persona-sprite-songjiang'
+      ? { width: 1024, height: 1024 }
+      : fallbackImageLookup(name)
+
+    const HallAgentClass = createHallAgentClass(me)
+    const HallScene = createHallSceneClass(me, HallAgentClass)
+    const scene = new HallScene()
+    const previousGate = window.__JYT_V2_ENABLED
+    window.__JYT_V2_ENABLED = false
+    try {
+      scene.setTmxSha256(ACCEPTED_TMX_SHA256)
+      scene.setMapData(mapData)
+      scene.syncAgents([{ agentId: 'a', personaCode: 'songjiang', x: 300, y: 700, coordinateSpace: 'world' }])
+      scene.onResetEvent()
+
+      const agent = scene._agents.get('a')
+      const propHandle = [...scene._v2PropRenderables.values()][0]
+      const mid = scene._imageLayersByName.get('mid-occluders')
+      const foreground = scene._imageLayersByName.get('foreground-occluders')
+      const lighting = scene._imageLayersByName.get('lighting-overlay')
+
+      expect(mid.attached).to.equal(true)
+      expect(foreground.attached).to.equal(true)
+      expect(mid.handle.depth).to.equal(2)
+      expect(foreground.handle.depth).to.equal(5)
+      expect(lighting.handle.depth).to.equal(8)
+      expect(scene._hotspots.length).to.be.greaterThan(0)
+      expect(scene._hotspots.every(hotspot => hotspot.marker.depth === 1)).to.equal(true)
+
+      // The real HallAgent.update contract writes raw world Y into depth.
+      agent.update(16)
+      expect(agent.depth).to.equal(700)
+
+      // The error-state policy must pin the full fallback scene back into the
+      // safe band without touching lighting, hotspots, or world-ui ownership.
+      scene.update(16)
+      expect(agent.depth).to.equal(HALL_SCENE_DEPTH_BANDS.ERROR_STATE_AGENT_DEPTH)
+      expect(propHandle.depth).to.equal(HALL_SCENE_DEPTH_BANDS.ERROR_STATE_PROP_DEPTH)
+      expect(mid.handle.depth).to.equal(2)
+      expect(foreground.handle.depth).to.equal(5)
+      expect(lighting.handle.depth).to.equal(8)
+      expect(scene._hotspots.every(hotspot => hotspot.marker.depth === 1)).to.equal(true)
+      expect(scene.activeRendererMode).to.equal('v1')
+    } finally {
+      window.__JYT_V2_ENABLED = previousGate
+      scene.onDestroyEvent()
     }
   })
 

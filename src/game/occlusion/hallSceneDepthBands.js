@@ -11,6 +11,12 @@ export const HALL_SCENE_DEPTH_BANDS = Object.freeze({
   BASE_MAX_EXCLUSIVE: 100,
   V2_WORLD_START: 100,
   V2_WORLD_STRIDE: 1,
+  // E16A P2: fail-closed fixed error-state band. These are static render
+  // depths only (no Y sort, no mask, no declaration order). They keep the
+  // complete fallback scene readable: props and agents sit above the legacy
+  // foreground layer (5) and below lighting (8).
+  ERROR_STATE_PROP_DEPTH: 6,
+  ERROR_STATE_AGENT_DEPTH: 7,
   LIGHTING: 300,
   WORLD_UI: 400,
   SCREEN_UI: 500,

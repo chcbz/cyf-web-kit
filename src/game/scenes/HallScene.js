@@ -1121,6 +1121,26 @@ export function createHallSceneClass(me, HallAgentClass) {
       }
     }
 
+    /**
+     * E16A P2 fail-closed error-state render policy.
+     * No Y sort, no mask/AABB, no declaration-order depth: only a fixed,
+     * deterministic band for the complete fallback scene. Lighting, hotspots,
+     * and world-ui ownership remain untouched.
+     */
+    _applyErrorStateRenderDepths() {
+      if (this._destroyed || this._v2Active) return
+      for (const [, handle] of this._agents) {
+        if (handle) {
+          try { handle.depth = HALL_SCENE_DEPTH_BANDS.ERROR_STATE_AGENT_DEPTH } catch { /* noop */ }
+        }
+      }
+      for (const [, handle] of this._v2PropRenderables) {
+        if (handle) {
+          try { handle.depth = HALL_SCENE_DEPTH_BANDS.ERROR_STATE_PROP_DEPTH } catch { /* noop */ }
+        }
+      }
+    }
+
     /** Production V2 is the default renderer. Tests may opt out explicitly. */
     _shouldActivateV2() {
       return typeof window !== 'undefined' && window.__JYT_V2_ENABLED !== false
@@ -2328,6 +2348,12 @@ export function createHallSceneClass(me, HallAgentClass) {
         // order back into the V2 world band until the async frame commits.
         this._reapplyCommittedV2RenderDepths()
         this._applyV2Depths()
+      } else if (!this._destroyed) {
+        // E16A P2: HallAgent.update also writes raw world Y into depth in the
+        // fallback/error state, which would put agents/props above lighting and
+        // foreground. Apply a fixed, complete error-state render policy instead
+        // of reintroducing a Y sort, mask logic, or declaration order.
+        this._applyErrorStateRenderDepths()
       }
       // E6: re-evaluate flags, then shadow compute (never changes the committed V2 scene)
       this._ensureShadowFlags()

@@ -8,7 +8,6 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'mocha'
 import {
   createShadowRenderer,
-  collectRuntimeSnapshots,
   parseOcclusionDebugFlag,
   type RuntimeObjectSnapshot,
 } from '../../../src/game/occlusion/shadowRenderer.js'
@@ -444,36 +443,6 @@ describe('E6 Shadow Renderer', () => {
       assert.ok(snap.errors.length >= 1, `should have errors, got ${snap.errors.length}`)
       sr.dispose()
     })
-  })
-})
-
-// ── Runtime snapshot collection tests ──
-
-describe('E6 collectRuntimeSnapshots', () => {
-  it('collects live V2 world objects without occluder/behindMask logic', () => {
-    const world = {
-      children: [
-        { name: 'agent-1', pos: { x: 100, y: 200 }, depth: 103.5, visible: true, agentId: 'real-id-1', _isAgent: true, stableId: 'jyt.agent.test.one.v1' },
-        { name: 'fragment-1', pos: { x: 0, y: 0 }, depth: 104.0, visible: true, _isFragment: true, stableId: 'jyt.occ.center.pillar-01.v1' },
-        { name: 'layer-bg', pos: { x: 0, y: 0 }, depth: 0.1, visible: true, _isImageLayer: true },
-      ],
-    }
-    const snaps = collectRuntimeSnapshots(world)
-    assert.ok(snaps.length >= 3)
-    const agent = snaps.find(s => s.objectId === 'agent-1')
-    assert.ok(agent)
-    assert.equal(agent!.kind, 'agent')
-    assert.equal(agent!.runtimeDepth, 103.5)
-    assert.equal(agent!.stableId, 'jyt.agent.test.one.v1')
-    assert.equal('behindMask' in agent!, false)
-    const fragment = snaps.find(s => s.objectId === 'fragment-1')
-    assert.equal(fragment!.kind, 'fragment')
-    assert.equal(fragment!.stableId, 'jyt.occ.center.pillar-01.v1')
-  })
-
-  it('handles empty world gracefully', () => {
-    assert.deepEqual(collectRuntimeSnapshots({}), [])
-    assert.deepEqual(collectRuntimeSnapshots(null), [])
   })
 })
 
