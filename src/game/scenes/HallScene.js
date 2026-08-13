@@ -17,6 +17,7 @@ import { createDebugOverlay } from '../occlusion/debugOverlay.js'
 import { HALL_SCENE_DEPTH_BANDS, HALL_SCENE_LEGACY_OCCLUDER_LAYERS, hallV2WorldDepth } from '../occlusion/hallSceneDepthBands.js'
 
 const DEFAULT_INPUT_SNAPSHOT = Object.freeze({ activeGesture: 'none', interactionLocked: false })
+const V2_ROSTER_RETRY_COOLDOWN_MS = 250
 const normalizeLockReason = reason => typeof reason === 'string' ? reason.trim() : ''
 const normalizeViewport = viewport => ({
   width: Number.isFinite(Number(viewport?.width)) && Number(viewport.width) > 0 ? Number(viewport.width) : 0,
@@ -96,7 +97,9 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._v2PendingFrame = null
       this._v2PendingActivation = null  // activation staging before commit publish
       this._v2DestroyPromise = Promise.resolve()
-      this._v2LastRosterAttempt = null      // Set of agent IDs from last roster reactivation attempt
+      this._v2RosterInFlight = false
+      this._v2LastRosterFailure = null      // { ids: Set<string>, at: number, logged: boolean } | null
+      this._v2Diagnostics = []               // structured, read-only diagnostics
       this._v2OwnsRenderStack = false
       this._v1RenderableDepths = null
       this._tmxSha256 = null
@@ -115,6 +118,17 @@ export function createHallSceneClass(me, HallAgentClass) {
       if (this._shadowRenderer) {
         this._shadowRenderer.setMapData(mapData)
       }
+      if (this._destroyed) return
+
+      // E15 P2: when V2 is already active, stage a replacement scene without
+      // falling back to V1. The previous complete active scene stays live until
+      // the replacement commits; any failure keeps it.
+      if (this._v2Active && this._v2Controller && this._v2Assembly) {
+        this._v2Generation++  // invalidate any pending async continuations
+        this._replaceV2ForMapData(mapData)
+        return
+      }
+
       // E12: always invalidate any in-flight activation on map change
       this._v2Generation++  // kill all pending async continuations
       if (this._v2Controller || this._v2AgentAdapter || this._v2Assembly || this._v2StagingRenderables) {
@@ -860,7 +874,10 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._ensureControllers()
 
       this._sceneBuilt = true
-      this._needsSync = true
+      // E15 P1: sync pending agents BEFORE first activation so the first
+      // committed V2 scene already contains every current agent in the
+      // adapter, renderable handles, and V2 world-band depths.
+      this._fullSyncAgents()
       // E12: Auto-activate V2 if feature gate is enabled and map supports it
       if (this._shouldActivateV2() && this.hasV2Support()) {
         this.activateV2()
@@ -1122,6 +1139,18 @@ export function createHallSceneClass(me, HallAgentClass) {
 
     getV2HitTargets() { return this._v2HitTargets ?? null }
     getV2Depths() { return this._v2Depths ?? null }
+    getV2Diagnostics() { return this._v2Diagnostics.slice() }
+
+    /** Append a structured, read-only diagnostic and emit one controlled warning. */
+    _recordV2Diagnostic(code, label, message) {
+      const diagnostic = Object.freeze({
+        code, label, message, at: Date.now()
+      })
+      this._v2Diagnostics.push(diagnostic)
+      if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+        console.warn(`[HallScene] V2 ${code}: ${label}: ${message}`)
+      }
+    }
 
     /** Activate V2 occlusion system via E7 controller. Returns true if activation started. */
     activateV2() {
@@ -1484,6 +1513,8 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._v2Membership = createEmptyMembershipState()
       this._v2FramePending = false
       this._v2PendingFrame = null
+      this._v2RosterInFlight = false
+      this._v2LastRosterFailure = null
 
       this._restoreV1RenderOwnership()
       if (!this._destroyed) {
@@ -1527,25 +1558,37 @@ export function createHallSceneClass(me, HallAgentClass) {
           [...adapterIds].some(id => !currentIds.has(id))
 
         if (hasRosterChange) {
-          // Prevent infinite retry: only rebuild if roster differs from last attempt
-          const lastAttempt = self._v2LastRosterAttempt
-          const sameAsLast = lastAttempt && lastAttempt.size === currentIds.size &&
-            [...currentIds].every(id => lastAttempt.has(id))
-          if (sameAsLast) {
-            if (self._shadowDebugActive) {
-              console.warn('[HallScene] V2 roster reactivation already attempted for this set; skipping frame')
+          if (self._v2RosterInFlight) return
+          const failure = self._v2LastRosterFailure
+          const sameRosterAsFailure = failure && failure.ids.size === currentIds.size &&
+            [...currentIds].every(id => failure.ids.has(id))
+          if (sameRosterAsFailure && Date.now() - failure.at < V2_ROSTER_RETRY_COOLDOWN_MS) {
+            // Controlled cooldown: do not hammer a persistent failure, but never
+            // permanently latch. The same roster is retried after the cooldown.
+            if (!failure.logged) {
+              failure.logged = true
+              self._recordV2Diagnostic('V2_ROSTER_REPLACE_COOLDOWN', 'roster',
+                'roster reactivation failed recently; cooling down before retry')
             }
             return
           }
-          self._v2LastRosterAttempt = new Set(currentIds)
-          if (self._shadowDebugActive) {
-            console.warn('[HallScene] V2 agent roster changed; rebuilding scene transaction')
+          if (sameRosterAsFailure) self._v2LastRosterFailure = null
+
+          self._v2RosterInFlight = true
+          try {
+            const replaced = await self._reactivateV2ForRoster()
+            if (!replaced) {
+              self._v2LastRosterFailure = { ids: new Set(currentIds), at: Date.now(), logged: false }
+              self._recordV2Diagnostic('V2_ROSTER_REPLACE_FAILED', 'roster',
+                'roster reactivation failed; previous complete active scene preserved')
+            }
+          } finally {
+            self._v2RosterInFlight = false
           }
-          await self._reactivateV2ForRoster()
           return
         }
-        // Clear last attempt if roster is now stable (no change)
-        self._v2LastRosterAttempt = null
+        // Roster is stable and matches the adapter: clear any failure latch.
+        self._v2LastRosterFailure = null
         // 2. Sync E3 agent adapter positions, unregister removed from grid
         const tasks = []
 
@@ -1665,6 +1708,44 @@ export function createHallSceneClass(me, HallAgentClass) {
      * On failure: destroy new staging, sync old adapter, keep old active.
      * Must be awaited by caller.
      */
+    _snapshotSpatialGrid(assembly) {
+      const grid = assembly.spatialGrid
+      const sceneId = assembly.canonicalIr.sceneId
+      const floorByStableId = new Map()
+      for (const z of assembly.zones) floorByStableId.set(z.stableId, z.floorId)
+      for (const f of assembly.fragments) floorByStableId.set(f.stableId, f.floorId)
+      for (const o of assembly.worldObjects) floorByStableId.set(o.stableId, o.floorId)
+      for (const o of assembly.nonWorldObjects) floorByStableId.set(o.stableId, o.floorId)
+      return [...grid.snapshot().entries()].map(([stableId, entry]) => ({
+        stableId,
+        entryKind: entry.entryKind,
+        bounds: { x: entry.bounds.x, y: entry.bounds.y, width: entry.bounds.width, height: entry.bounds.height },
+        sceneId,
+        floorId: floorByStableId.get(stableId) || 'floor-1'
+      }))
+    }
+
+    _restoreSpatialGrid(assembly, snapshot) {
+      const grid = assembly.spatialGrid
+      grid.clear()
+      for (const item of snapshot) {
+        grid.register({
+          stableId: item.stableId,
+          entryKind: item.entryKind,
+          bounds: item.bounds
+        }, item.sceneId, item.floorId)
+      }
+    }
+
+    /**
+     * Rebuild V2 scene transaction when agent roster changes.
+     * Creates NEW adapter from current _agents, NEW offline fragments, NEW E7 controller.
+     * Old active stays live until new controller.activate commit succeeds.
+     * On commit success: atomically swap fragments/depths/state; async destroy old.
+     * On failure: destroy new staging, restore the trusted grid snapshot, keep old active.
+     * Returns true on success and false when the old active scene is preserved.
+     * Must be awaited by caller.
+     */
     async _reactivateV2ForRoster() {
       const self = this
       const gen = this._v2Generation
@@ -1684,39 +1765,40 @@ export function createHallSceneClass(me, HallAgentClass) {
       for (const [, handle] of self._v2PropRenderables) oldRenderableDepths.set(handle, handle.depth)
       for (const [, handle] of self._agents) oldRenderableDepths.set(handle, handle.depth)
 
+      // Trusted pre-mutation grid snapshot. Rollback restores by clear + rebuild,
+      // never by incremental unregister that could fail and leave stale entries.
+      const gridSnapshot = oldAssembly ? self._snapshotSpatialGrid(oldAssembly) : null
+
       let newAdapter = null
       let newController = null
       const stagingFragments = new Set()
 
-      try {
-        if (gen !== self._v2Generation || self._destroyed || !oldAssembly || !oldController) return
+      const restoreGrid = () => {
+        if (!oldAssembly || !gridSnapshot) return
+        try {
+          self._restoreSpatialGrid(oldAssembly, gridSnapshot)
+        } catch (error) {
+          self._recordV2Diagnostic('V2_ROSTER_GRID_ROLLBACK_FAILED', 'roster',
+            `could not rebuild grid from trusted snapshot: ${error?.message || error}`)
+        }
+      }
 
-        // Remove stale runtime agents before any early return; static grid entries remain intact.
+      try {
+        if (gen !== self._v2Generation || self._destroyed || !oldAssembly || !oldController) return false
+
+        // Remove stale runtime agents before any early return; the trusted
+        // snapshot above is the recovery point if a later stage fails.
         const currentIds = new Set(self._agents.keys())
         for (const id of oldAdapter?.sourceEntityIds || []) {
           if (currentIds.has(id)) continue
           const sceneObject = oldAdapter.lookup(id)
           if (sceneObject) unregisterAgentFromGrid(oldAssembly.spatialGrid, sceneObject.stableId)
         }
-        const oldGridAgents = [...(oldAdapter?.sourceEntityIds || [])]
-          .filter(id => currentIds.has(id))
-          .map(id => ({ sceneObject: oldAdapter.lookup(id), entity: self._agents.get(id) }))
-          .filter(entry => entry.sceneObject && entry.entity)
-        let newAgentsRegistered = false
-        const restoreOldGrid = () => {
-          if (!newAgentsRegistered) return
-          for (const id of newAdapter?.sourceEntityIds || []) {
-            const sceneObject = newAdapter.lookup(id)
-            if (sceneObject) unregisterAgentFromGrid(oldAssembly.spatialGrid, sceneObject.stableId)
-          }
-          registerAgentsInGrid(oldAssembly.spatialGrid, oldGridAgents, 'juyiting-main', 'floor-1')
-          newAgentsRegistered = false
-        }
 
         newAdapter = createRuntimeAgentAdapter(
           defaultSpawnResolver('floor-1', 0),
           defaultChunkResolver(),
-          'juyiting-main',
+          'juyiting-main'
         )
         await Promise.all([...self._agents].map(([agentId, entity]) => {
           const pos = entity.pos || {}
@@ -1725,7 +1807,8 @@ export function createHallSceneClass(me, HallAgentClass) {
 
         if (gen !== self._v2Generation || self._destroyed) {
           newAdapter.destroy()
-          return
+          restoreGrid()
+          return false
         }
 
         const ir = oldAssembly.canonicalIr
@@ -1758,13 +1841,13 @@ export function createHallSceneClass(me, HallAgentClass) {
           }
         }
         registerAgentsInGrid(oldAssembly.spatialGrid, agentAdapters, 'juyiting-main', 'floor-1')
-        newAgentsRegistered = true
         const initOrder = computeUnifiedWorldOrder(oldAssembly, agentAdapters, createEmptyMembershipState())
         const initialHitTargets = buildHitTestTargets(initOrder.order, initOrder.depths, oldAssembly, agentAdapters)
 
         if (gen !== self._v2Generation || self._destroyed) {
           newAdapter.destroy()
-          return
+          restoreGrid()
+          return false
         }
 
         newController = createSceneActivationController({
@@ -1781,15 +1864,15 @@ export function createHallSceneClass(me, HallAgentClass) {
               sceneId: ctx.sceneId,
               mode: ctx.mode,
               ownerTransactionId: ctx.transactionId,
-              value: stableId,
+              value: stableId
             }))),
             order: Object.freeze(initOrder.order),
             depths: Object.freeze(initOrder.depths),
             dispose: () => {
               for (const handle of stagingFragments) {
-                try { me.game.world.removeChild(handle) } catch (error) {}
+                try { me.game.world.removeChild(handle) } catch { /* noop */ }
               }
-            },
+            }
           }),
           validateConstraints: scene => ({ order: scene.order }),
           commit: ctx => {
@@ -1817,7 +1900,6 @@ export function createHallSceneClass(me, HallAgentClass) {
                 self._v2PendingActivation = null
                 self._v2PendingFrame = null
                 self._v2Active = true
-                self._v2LastRosterAttempt = null
               },
               () => {
                 self._v2Controller = oldController
@@ -1831,20 +1913,19 @@ export function createHallSceneClass(me, HallAgentClass) {
                 self._v2RenderableHandles = oldRenderableHandles
                 self._v2PendingActivation = null
                 self._v2PendingFrame = null
-                try { restoreOldGrid() } catch (error) {}
                 for (const handle of stagingFragments) {
-                  try { me.game.world.removeChild(handle) } catch (error) {}
+                  try { me.game.world.removeChild(handle) } catch { /* noop */ }
                 }
                 if (oldFragments) {
                   for (const handle of oldFragments) {
-                    try { me.game.world.addChild(handle, oldRenderableDepths.get(handle)) } catch (error) {}
+                    try { me.game.world.addChild(handle, oldRenderableDepths.get(handle)) } catch { /* noop */ }
                   }
                 }
                 for (const [handle, depth] of oldRenderableDepths) {
-                  try { handle.depth = depth } catch (error) {}
+                  try { handle.depth = depth } catch { /* noop */ }
                 }
-                try { me.game.world.sort?.(true) } catch (error) {}
-              },
+                try { me.game.world.sort?.(true) } catch { /* noop */ }
+              }
             )
           },
           commitFrame: ctx => {
@@ -1873,22 +1954,22 @@ export function createHallSceneClass(me, HallAgentClass) {
                 self._v2HitTargets = oldFrameHitTargets
                 self._v2PendingFrame = null
                 for (const [handle, depth] of oldHandleDepths) {
-                  try { handle.depth = depth } catch (error) {}
+                  try { handle.depth = depth } catch { /* noop */ }
                 }
-                try { me.game.world.sort?.(true) } catch (error) {}
-              },
+                try { me.game.world.sort?.(true) } catch { /* noop */ }
+              }
             )
-          },
+          }
         })
 
         const result = await newController.activate({
-          sceneId: 'juyiting-main', mode: 'v2', source: { mapData: self._mapData },
+          sceneId: 'juyiting-main', mode: 'v2', source: { mapData: self._mapData }
         })
         if (!result.ok) throw result.error
         if (gen !== self._v2Generation || self._destroyed) {
-          await newController.destroy()
-          newAdapter.destroy()
-          return
+          // A newer lifecycle event now owns the committed scene; do not
+          // double-destroy the controller that was just atomically published.
+          return true
         }
 
         newController = null
@@ -1899,22 +1980,247 @@ export function createHallSceneClass(me, HallAgentClass) {
         }).catch(error => {
           console.warn('[HallScene] V2 old roster scene destroy failed:', error?.message || error)
         })
+        return true
       } catch (error) {
         if (newController) await newController.destroy().catch(() => {})
-        if (newAdapter) {
-          for (const id of newAdapter.sourceEntityIds) {
-            const sceneObject = newAdapter.lookup(id)
-            if (sceneObject) unregisterAgentFromGrid(oldAssembly.spatialGrid, sceneObject.stableId)
-          }
-          registerAgentsInGrid(oldAssembly.spatialGrid, [...oldAdapter.sourceEntityIds]
-            .filter(id => self._agents.has(id))
-            .map(id => ({ sceneObject: oldAdapter.lookup(id), entity: self._agents.get(id) }))
-            .filter(entry => entry.sceneObject && entry.entity), 'juyiting-main', 'floor-1')
+        if (newAdapter) newAdapter.destroy()
+        restoreGrid()
+        self._recordV2Diagnostic('V2_ROSTER_REPLACE_FAILED', 'roster',
+          `roster reactivation failed (old active preserved): ${error?.message || error}`)
+        return false
+      }
+    }
+
+    /**
+     * Replace the active V2 scene with one derived from new mapData without
+     * falling back to V1. The old active scene stays live until the new E7
+     * transaction commits; any failure preserves it. New assembly owns its own
+     * spatial grid, so the old grid is never mutated during a refresh.
+     */
+    async _replaceV2ForMapData(newMapData) {
+      const self = this
+      const gen = this._v2Generation
+      const oldController = self._v2Controller
+      const oldAdapter = self._v2AgentAdapter
+      const oldAssembly = self._v2Assembly
+      const oldFragments = self._v2StagingRenderables
+      const oldActive = self._v2Active
+      const oldDepths = self._v2Depths
+      const oldMembership = self._v2Membership
+      const oldHitTargets = self._v2HitTargets
+      const oldRenderableHandles = self._v2RenderableHandles
+      const oldRenderableDepths = new Map()
+      if (oldFragments) {
+        for (const handle of oldFragments) oldRenderableDepths.set(handle, handle.depth)
+      }
+      for (const [, handle] of self._v2PropRenderables) oldRenderableDepths.set(handle, handle.depth)
+      for (const [, handle] of self._agents) oldRenderableDepths.set(handle, handle.depth)
+
+      let newAssembly = null
+      let newAdapter = null
+      let newController = null
+      const stagingFragments = new Set()
+
+      try {
+        if (gen !== self._v2Generation || self._destroyed || !oldController || !oldAdapter || !oldAssembly) return false
+
+        newAssembly = assembleV2Scene(newMapData, self._tmxSha256)
+        const ir = newAssembly.canonicalIr
+        if (ir.renderSchemaVersion !== '2' || ir.sceneId !== 'juyiting-main') {
+          self._recordV2Diagnostic('V2_MAP_REFRESH_GATE_FAILED', 'map-refresh',
+            'assembled IR failed renderSchemaVersion=2 gate')
+          return false
+        }
+
+        newAdapter = createRuntimeAgentAdapter(
+          defaultSpawnResolver('floor-1', 0),
+          defaultChunkResolver(),
+          'juyiting-main'
+        )
+        await Promise.all([...self._agents].map(([agentId, entity]) => {
+          const pos = entity.pos || {}
+          return newAdapter.create([{ agentId, x: pos.x ?? 0, y: pos.y ?? 0 }])
+        }))
+
+        if (gen !== self._v2Generation || self._destroyed) {
           newAdapter.destroy()
+          return false
         }
-        if (self._shadowDebugActive) {
-          console.warn('[HallScene] V2 roster reactivation failed (old active preserved):', error?.message || error)
+
+        const renderables = new Map()
+        let propsMatched = 0
+        for (const prop of ir.objects.filter(o => o.kind === 'prop')) {
+          const handle = self._v2PropRenderables.get(prop.stableId)
+          if (handle) {
+            renderables.set(prop.stableId, handle)
+            propsMatched++
+          }
         }
+        if (propsMatched !== 5) throw new Error(`V2 map refresh matched ${propsMatched}/5 props`)
+
+        for (const fragment of ir.fragments) {
+          const image = me.loader.getImage(fragment.assetRef)
+          if (!image) throw new Error(`V2 map refresh asset missing: ${fragment.assetRef}`)
+          const handle = self._createFragmentHandle(image, fragment)
+          renderables.set(fragment.stableId, handle)
+          stagingFragments.add(handle)
+        }
+
+        const agentAdapters = []
+        for (const id of newAdapter.sourceEntityIds) {
+          const sceneObject = newAdapter.lookup(id)
+          const entity = self._agents.get(id)
+          if (sceneObject && entity) {
+            agentAdapters.push({ sceneObject, entity })
+            renderables.set(sceneObject.stableId, entity)
+          }
+        }
+        registerAgentsInGrid(newAssembly.spatialGrid, agentAdapters, 'juyiting-main', 'floor-1')
+        const initOrder = computeUnifiedWorldOrder(newAssembly, agentAdapters, createEmptyMembershipState())
+        const initialHitTargets = buildHitTestTargets(initOrder.order, initOrder.depths, newAssembly, agentAdapters)
+
+        if (gen !== self._v2Generation || self._destroyed) {
+          newAdapter.destroy()
+          return false
+        }
+
+        newController = createSceneActivationController({
+          parse: source => source,
+          canonicalize: parsed => parsed,
+          validate: canonical => canonical,
+          loadAssets: validated => validated,
+          instantiate: (input, ctx) => ({
+            sceneId: ctx.sceneId,
+            mode: ctx.mode,
+            ownerTransactionId: ctx.transactionId,
+            children: Object.freeze([...renderables].map(([stableId]) => Object.freeze({
+              stableId,
+              sceneId: ctx.sceneId,
+              mode: ctx.mode,
+              ownerTransactionId: ctx.transactionId,
+              value: stableId
+            }))),
+            order: Object.freeze(initOrder.order),
+            depths: Object.freeze(initOrder.depths),
+            dispose: () => {
+              for (const handle of stagingFragments) {
+                try { me.game.world.removeChild(handle) } catch { /* noop */ }
+              }
+            }
+          }),
+          validateConstraints: scene => ({ order: scene.order }),
+          commit: ctx => {
+            ctx.swap(
+              () => {
+                if (oldFragments) {
+                  for (const handle of oldFragments) me.game.world.removeChild(handle)
+                }
+                for (const [stableId, handle] of renderables) {
+                  if (stagingFragments.has(handle)) me.game.world.addChild(handle, self._v2RenderDepth(initOrder.depths[stableId]))
+                }
+                for (const [stableId, handle] of renderables) {
+                  const depth = initOrder.depths[stableId]
+                  if (depth !== undefined) handle.depth = self._v2RenderDepth(depth)
+                }
+                me.game.world.sort?.(true)
+                self._v2Controller = newController
+                self._v2AgentAdapter = newAdapter
+                self._v2Assembly = newAssembly
+                self._v2StagingRenderables = stagingFragments
+                self._v2Depths = initOrder.depths
+                self._v2Membership = initOrder.nextMembership
+                self._v2HitTargets = initialHitTargets
+                self._v2RenderableHandles = new Map(renderables)
+                self._v2PendingActivation = null
+                self._v2PendingFrame = null
+                self._v2Active = true
+              },
+              () => {
+                self._v2Controller = oldController
+                self._v2AgentAdapter = oldAdapter
+                self._v2Assembly = oldAssembly
+                self._v2StagingRenderables = oldFragments
+                self._v2Active = oldActive
+                self._v2Depths = oldDepths
+                self._v2Membership = oldMembership
+                self._v2HitTargets = oldHitTargets
+                self._v2RenderableHandles = oldRenderableHandles
+                self._v2PendingActivation = null
+                self._v2PendingFrame = null
+                for (const handle of stagingFragments) {
+                  try { me.game.world.removeChild(handle) } catch { /* noop */ }
+                }
+                if (oldFragments) {
+                  for (const handle of oldFragments) {
+                    try { me.game.world.addChild(handle, oldRenderableDepths.get(handle)) } catch { /* noop */ }
+                  }
+                }
+                for (const [handle, depth] of oldRenderableDepths) {
+                  try { handle.depth = depth } catch { /* noop */ }
+                }
+                try { me.game.world.sort?.(true) } catch { /* noop */ }
+              }
+            )
+          },
+          commitFrame: ctx => {
+            const oldFrameDepths = self._v2Depths
+            const oldFrameMembership = self._v2Membership
+            const oldFrameHitTargets = self._v2HitTargets
+            const oldHandleDepths = new Map([...renderables].map(([, handle]) => [handle, handle.depth]))
+            ctx.swap(
+              () => {
+                for (const [stableId, handle] of renderables) {
+                  const depth = ctx.next.depths[stableId]
+                  if (depth !== undefined) handle.depth = self._v2RenderDepth(depth)
+                }
+                me.game.world.sort?.(true)
+                const pending = self._v2PendingFrame
+                if (pending) {
+                  self._v2Depths = pending.nextDepths
+                  self._v2Membership = pending.nextMembership
+                  self._v2HitTargets = pending.nextHitTargets
+                  self._v2PendingFrame = null
+                }
+              },
+              () => {
+                self._v2Depths = oldFrameDepths
+                self._v2Membership = oldFrameMembership
+                self._v2HitTargets = oldFrameHitTargets
+                self._v2PendingFrame = null
+                for (const [handle, depth] of oldHandleDepths) {
+                  try { handle.depth = depth } catch { /* noop */ }
+                }
+                try { me.game.world.sort?.(true) } catch { /* noop */ }
+              }
+            )
+          }
+        })
+
+        const result = await newController.activate({
+          sceneId: 'juyiting-main', mode: 'v2', source: { mapData: newMapData }
+        })
+        if (!result.ok) throw result.error
+        if (gen !== self._v2Generation || self._destroyed) {
+          // A newer lifecycle event now owns the committed scene; do not
+          // double-destroy the controller that was just atomically published.
+          return true
+        }
+
+        newController = null
+        newAdapter = null
+        Promise.resolve().then(async () => {
+          await oldController.destroy()
+          oldAdapter?.destroy()
+        }).catch(error => {
+          console.warn('[HallScene] V2 old map scene destroy failed:', error?.message || error)
+        })
+        return true
+      } catch (error) {
+        if (newController) await newController.destroy().catch(() => {})
+        if (newAdapter) newAdapter.destroy()
+        self._recordV2Diagnostic('V2_MAP_REFRESH_FAILED', 'map-refresh',
+          `map refresh failed (old active preserved): ${error?.message || error}`)
+        return false
       }
     }
 

@@ -5,6 +5,7 @@
 // rollback, and roster-replacement failure. No fake fixtures — real hall.tmx
 // and the accepted TMX SHA are used.
 
+// @ts-expect-error chai ships no bundled declarations in this tsconfig
 import { expect } from 'chai'
 import { describe, it } from 'mocha'
 import { readFileSync } from 'fs'
@@ -19,11 +20,11 @@ import { createHallSceneClass } from '../../../src/game/scenes/HallScene.js'
 // @ts-expect-error tiledMap is an existing JavaScript runtime module without declarations
 import { parseJuyiHallTmx } from '../../../src/game/tiledMap.js'
 
-const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', { url: 'http://localhost' });
+const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', { url: 'http://localhost' } as any);
 (globalThis as any).window = dom.window;
 (globalThis as any).document = dom.window.document;
-(globalThis as any).navigator = dom.window.navigator;
-(globalThis as any).DOMParser = dom.window.DOMParser;
+(globalThis as any).navigator = (dom.window as any).navigator;
+(globalThis as any).DOMParser = (dom.window as any).DOMParser;
 
 if (!(globalThis as any).crypto) {
   ;(globalThis as any).crypto = webcrypto
@@ -169,6 +170,25 @@ function makeScene(me: any, mapData: any) {
   return scene
 }
 
+function gridSnapshotEntries(assembly: any): Array<{ stableId: string; entryKind: string }> {
+  return [...assembly.spatialGrid.snapshot().entries()]
+    .map(([stableId, entry]: [string, any]) => ({ stableId, entryKind: entry.entryKind }))
+    .sort((a, b) => a.stableId.localeCompare(b.stableId))
+}
+
+function assertAgentPublishedInV2(scene: any, agentId: string) {
+  const adapter = scene._v2AgentAdapter
+  const sourceIds = new Set(adapter.sourceEntityIds)
+  expect(sourceIds.has(agentId), `agent ${agentId} should be in adapter.sourceEntityIds`).to.equal(true)
+  const sceneObject = adapter.lookup(agentId)
+  expect(sceneObject, `agent ${agentId} should have an adapter sceneObject`).to.not.equal(undefined)
+  const handle = scene._v2RenderableHandles.get(sceneObject.stableId)
+  expect(handle, `agent ${agentId} should have a committed renderable handle`).to.not.equal(undefined)
+  expect(scene._v2Depths[sceneObject.stableId], `agent ${agentId} should have a logical depth`).to.not.equal(undefined)
+  expect(handle.depth).to.be.at.least(HALL_SCENE_DEPTH_BANDS.V2_WORLD_START)
+  expect(handle.depth).to.be.below(HALL_SCENE_DEPTH_BANDS.LIGHTING)
+}
+
 describe('E15 HallScene atomic V2 switch', () => {
   it('one-shot renderSchemaVersion=2 switch and idempotent repeated activation', async () => {
     const me = createFakeMelon()
@@ -216,6 +236,41 @@ describe('E15 HallScene atomic V2 switch', () => {
       expect([...logicalDepths].sort((a, b) => (a as number) - (b as number))).to.deep.equal(
         Array.from({ length: logicalDepths.length }, (_, index) => index),
       )
+    } finally {
+      ;(window as any).__JYT_V2_ENABLED = previousGate
+    }
+  })
+
+  it('first activation publishes every pending/current agent into the adapter, handles, and V2 depths', async () => {
+    const me = createFakeMelon()
+    const mapData = productionMapData()
+    installProductionImages(me, mapData)
+    const previousGate = (window as any).__JYT_V2_ENABLED
+    ;(window as any).__JYT_V2_ENABLED = true
+    try {
+      const scene = makeScene(me, mapData)
+      scene.syncAgents([
+        { agentId: 'songjiang', personaCode: 'songjiang', x: 240, y: 220 },
+        { agentId: 'lujunyi', personaCode: 'lujunyi', x: 420, y: 460 },
+      ])
+      scene.onResetEvent()
+      scene.update(16)
+      await waitFor(() => scene.activeRendererMode === 'v2')
+
+      expect(scene.activeRendererMode).to.equal('v2')
+      expect(scene.renderSchemaVersion).to.equal('2')
+
+      // Both pending agents must already be committed into the first V2 scene.
+      assertAgentPublishedInV2(scene, 'songjiang')
+      assertAgentPublishedInV2(scene, 'lujunyi')
+
+      // Their actual render depth is pinned into the V2 world band (not V1).
+      const songjiangHandle = scene._v2RenderableHandles.get(scene._v2AgentAdapter.lookup('songjiang').stableId)
+      const lujunyiHandle = scene._v2RenderableHandles.get(scene._v2AgentAdapter.lookup('lujunyi').stableId)
+      for (const handle of [songjiangHandle, lujunyiHandle]) {
+        expect(handle.depth).to.be.at.least(HALL_SCENE_DEPTH_BANDS.V2_WORLD_START)
+        expect(handle.depth).to.be.below(HALL_SCENE_DEPTH_BANDS.LIGHTING)
+      }
     } finally {
       ;(window as any).__JYT_V2_ENABLED = previousGate
     }
@@ -288,10 +343,22 @@ describe('E15 HallScene atomic V2 switch', () => {
       await waitFor(() => scene.activeRendererMode === 'v2')
 
       const oldController = scene._v2Controller
+      const oldAssembly = scene._v2Assembly
+      const oldAdapter = scene._v2AgentAdapter
       const oldFragments = scene._v2StagingRenderables
 
       // Refresh with a fresh, valid mapData object.
       scene.setMapData(productionMapData())
+
+      // E15 P2: refresh must NOT synchronously fall back to V1. The previous
+      // complete V2 scene stays live until the replacement commits.
+      expect(scene.activeRendererMode).to.equal('v2')
+      expect(scene.renderSchemaVersion).to.equal('2')
+      expect(scene._v2Controller).to.equal(oldController)
+      expect(scene._v2Assembly).to.equal(oldAssembly)
+      expect(scene._v2AgentAdapter).to.equal(oldAdapter)
+      expect([...oldFragments].every((handle: any) => me.game.world.hasChild(handle))).to.equal(true)
+
       await waitFor(() => scene.activeRendererMode === 'v2' && scene._v2Controller !== oldController)
 
       expect(scene.renderSchemaVersion).to.equal('2')
@@ -365,19 +432,18 @@ describe('E15 HallScene atomic V2 switch', () => {
       const oldMembership = scene._v2Membership
       const oldHitTargets = scene._v2HitTargets
 
-      // Add a second agent and remove a fragment asset, then force a frame
-      // pass so roster replacement hits the resource-failure path.
+      // Remove a fragment asset BEFORE the roster change is observed, so the
+      // replacement hits the staging asset-failure path (never commit/sort).
+      const fragmentLayer = mapData.layers.find((layer: any) => layer.name === 'v2-fragments-occluders')
+      const firstFragment = fragmentLayer.objects[0]
+      images.delete(firstFragment.properties.assetRef)
+
       scene.syncAgents([
         { agentId: 'a', personaCode: 'a', x: 300, y: 200 },
         { agentId: 'b', personaCode: 'b', x: 300, y: 600 },
       ])
-      const fragmentLayer = mapData.layers.find((layer: any) => layer.name === 'v2-fragments-occluders')
-      const firstFragment = fragmentLayer.objects[0]
-      images.delete(firstFragment.properties.assetRef)
-      me.game.world.sort = () => { throw new Error('sort failed during roster replacement') }
       scene.update(16)
       await scene._v2FrameSerial
-      me.game.world.sort = () => {}
 
       expect(scene._v2Controller).to.equal(oldController)
       expect(scene._v2AgentAdapter).to.equal(oldAdapter)
@@ -389,6 +455,118 @@ describe('E15 HallScene atomic V2 switch', () => {
       expect(scene.activeRendererMode).to.equal('v2')
       expect(scene.renderSchemaVersion).to.equal('2')
       expect([...oldFragments].every((handle: any) => me.game.world.hasChild(handle))).to.equal(true)
+      expect(scene.getV2Diagnostics().some((d: any) => d.code === 'V2_ROSTER_REPLACE_FAILED')).to.equal(true)
+    } finally {
+      ;(window as any).__JYT_V2_ENABLED = previousGate
+    }
+  })
+
+  it('roster commit rollback preserves the old active V2 scene and rebuilds the trusted spatial-grid snapshot', async () => {
+    const me = createFakeMelon()
+    const mapData = productionMapData()
+    installProductionImages(me, mapData)
+    const previousGate = (window as any).__JYT_V2_ENABLED
+    ;(window as any).__JYT_V2_ENABLED = true
+    try {
+      const scene = makeScene(me, mapData)
+      scene.syncAgents([{ agentId: 'a', personaCode: 'a', x: 300, y: 200 }])
+      scene.onResetEvent()
+      scene.update(16)
+      await waitFor(() => scene.activeRendererMode === 'v2')
+
+      const oldController = scene._v2Controller
+      const oldAdapter = scene._v2AgentAdapter
+      const oldAssembly = scene._v2Assembly
+      const oldFragments = scene._v2StagingRenderables
+      const oldDepths = scene._v2Depths
+      const oldMembership = scene._v2Membership
+      const oldHitTargets = scene._v2HitTargets
+      const oldRenderableHandles = scene._v2RenderableHandles
+
+      // Trusted pre-attempt grid probe: exactly these entries must survive the
+      // failed replacement and its clear+rebuild rollback.
+      const preGridEntries = gridSnapshotEntries(oldAssembly)
+
+      scene.syncAgents([
+        { agentId: 'a', personaCode: 'a', x: 300, y: 200 },
+        { agentId: 'b', personaCode: 'b', x: 300, y: 600 },
+      ])
+
+      // Assets are valid, so the replacement reaches the commit callback; the
+      // sort throw forces commit.apply to fail and the E7 rollback path runs.
+      me.game.world.sort = () => { throw new Error('sort failed during roster commit') }
+      scene.update(16)
+      await scene._v2FrameSerial
+      me.game.world.sort = () => {}
+
+      expect(scene._v2Controller).to.equal(oldController)
+      expect(scene._v2AgentAdapter).to.equal(oldAdapter)
+      expect(scene._v2Assembly).to.equal(oldAssembly)
+      expect(scene._v2StagingRenderables).to.equal(oldFragments)
+      expect(scene._v2Depths).to.equal(oldDepths)
+      expect(scene._v2Membership).to.equal(oldMembership)
+      expect(scene._v2HitTargets).to.equal(oldHitTargets)
+      expect(scene._v2RenderableHandles).to.equal(oldRenderableHandles)
+      expect(scene.activeRendererMode).to.equal('v2')
+      expect(scene.renderSchemaVersion).to.equal('2')
+      expect([...oldFragments].every((handle: any) => me.game.world.hasChild(handle))).to.equal(true)
+
+      // Grid probe: count and stableId/kind pairs must exactly match the
+      // trusted pre-attempt snapshot, with no stale agent entries left behind.
+      expect(gridSnapshotEntries(oldAssembly)).to.deep.equal(preGridEntries)
+      expect(oldAssembly.spatialGrid.getEntryCount()).to.equal(preGridEntries.length)
+
+      // The failure must have reached the commit callback, not an early asset
+      // failure, and grid rollback itself must not have failed.
+      const diagnostics = scene.getV2Diagnostics()
+      expect(diagnostics.some((d: any) => d.code === 'V2_ROSTER_REPLACE_FAILED' && /sort|commit/.test(d.message))).to.equal(true)
+      expect(diagnostics.some((d: any) => d.code === 'V2_ROSTER_GRID_ROLLBACK_FAILED')).to.equal(false)
+    } finally {
+      ;(window as any).__JYT_V2_ENABLED = previousGate
+      me.game.world.sort = () => {}
+    }
+  })
+
+  it('transient roster failure is retryable and does not permanently latch the same roster', async () => {
+    const me = createFakeMelon()
+    const mapData = productionMapData()
+    installProductionImages(me, mapData)
+    const previousGate = (window as any).__JYT_V2_ENABLED
+    ;(window as any).__JYT_V2_ENABLED = true
+    try {
+      const scene = makeScene(me, mapData)
+      scene.syncAgents([{ agentId: 'a', personaCode: 'a', x: 300, y: 200 }])
+      scene.onResetEvent()
+      scene.update(16)
+      await waitFor(() => scene.activeRendererMode === 'v2')
+
+      const oldController = scene._v2Controller
+      const roster = [
+        { agentId: 'a', personaCode: 'a', x: 300, y: 200 },
+        { agentId: 'b', personaCode: 'b', x: 300, y: 600 },
+      ]
+      scene.syncAgents(roster)
+
+      // First attempt fails at commit (valid assets, throwing sort).
+      me.game.world.sort = () => { throw new Error('transient roster sort failure') }
+      scene.update(16)
+      await scene._v2FrameSerial
+      me.game.world.sort = () => {}
+      expect(scene._v2Controller).to.equal(oldController)
+      expect(scene._v2LastRosterFailure).to.not.equal(null)
+
+      // Wait out the controlled cooldown and retry the SAME roster.
+      await new Promise(resolve => setTimeout(resolve, 300))
+      scene.update(16)
+      await scene._v2FrameSerial
+
+      expect(scene.activeRendererMode).to.equal('v2')
+      expect(scene.renderSchemaVersion).to.equal('2')
+      expect(scene._v2Controller).to.not.equal(oldController)
+      const newSourceIds = new Set(scene._v2AgentAdapter.sourceEntityIds)
+      expect(newSourceIds.has('a')).to.equal(true)
+      expect(newSourceIds.has('b')).to.equal(true)
+      expect(scene._v2LastRosterFailure).to.equal(null)
     } finally {
       ;(window as any).__JYT_V2_ENABLED = previousGate
       me.game.world.sort = () => {}
