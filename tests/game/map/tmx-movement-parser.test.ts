@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { JSDOM } from 'jsdom'
 // @ts-expect-error melonJS does not publish declarations for its internal TMX utility
 import * as TMXUtils from 'melonjs/dist/melonjs.mjs/level/tiled/TMXUtils.js'
 
 import { parseMovementTmx } from '../../../src/game/map/tmxMovementParser.js'
+import { spawnSyncCaptured } from '../helpers/spawnCapture.js'
 
 const dom = new JSDOM()
 
@@ -152,10 +152,13 @@ describe('movement TMX parser', () => {
       const result = parseMovementTmx(Buffer.from(${JSON.stringify(encodedXml)}, 'base64').toString('utf8'));
       process.stdout.write(JSON.stringify({ sceneId: result.sceneId, nodes: result.nodes.length }));
     `
-    const output = execFileSync(process.execPath, ['--import', 'tsx', '--input-type=module', '--eval', script], {
-      cwd: process.cwd(), encoding: 'utf8',
-    })
-    assert.deepEqual(JSON.parse(output), { sceneId: 'juyiting-main', nodes: 1 })
+    const result = spawnSyncCaptured(
+      process.execPath,
+      ['--import', 'tsx', '--input-type=module', '--eval', script],
+      { cwd: process.cwd() },
+    )
+    assert.equal(result.status, 0, result.stderr || result.error?.message)
+    assert.deepEqual(JSON.parse(result.stdout), { sceneId: 'juyiting-main', nodes: 1 })
   })
 
   it('rejects malformed scalar properties with field context', () => {

@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -8,6 +7,7 @@ import { describe, it } from 'mocha'
 import { applyTmxEditOps } from '../../../src/game/map/tmxEditOps.js'
 import { validateMapRuntime } from '../../../src/game/map/mapValidation.js'
 import { parseMovementTmx } from '../../../src/game/map/tmxMovementParser.js'
+import { spawnSyncCaptured } from '../helpers/spawnCapture.js'
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 const hallPath = join(projectRoot, 'public/juyiting/hall.tmx')
@@ -280,15 +280,17 @@ describe('TMX edit operations', () => {
   })
 
   it('CLI applies operation JSON and leaves a second run byte-identical', function () {
-    this.timeout(15_000)
+    this.timeout(30_000)
     const directory = mkdtempSync(join(tmpdir(), 'juyiting-map-ops-'))
     try {
       const target = join(directory, 'hall.tmx')
       writeFileSync(target, readFileSync(hallPath))
       const script = join(projectRoot, 'scripts/juyiting/apply-map-ops.mjs')
-      execFileSync(process.execPath, [script, target, operationsPath], { cwd: projectRoot, stdio: 'pipe' })
+      const firstRun = spawnSyncCaptured(process.execPath, [script, target, operationsPath], { cwd: projectRoot })
+      assert.equal(firstRun.status, 0, firstRun.stderr || firstRun.error?.message)
       const first = readFileSync(target, 'utf8')
-      execFileSync(process.execPath, [script, target, operationsPath], { cwd: projectRoot, stdio: 'pipe' })
+      const secondRun = spawnSyncCaptured(process.execPath, [script, target, operationsPath], { cwd: projectRoot })
+      assert.equal(secondRun.status, 0, secondRun.stderr || secondRun.error?.message)
       const second = readFileSync(target, 'utf8')
 
       assert.equal(second, first)

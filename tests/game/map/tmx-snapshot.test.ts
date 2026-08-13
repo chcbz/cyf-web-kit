@@ -1,4 +1,3 @@
-import { spawnSync } from 'node:child_process'
 import {
   copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync,
 } from 'node:fs'
@@ -11,6 +10,7 @@ import type { MapRuntimeData } from '../../../src/game/map/movementSchema.js'
 import { renderMapPreview } from '../../../src/game/map/tmxPreviewRenderer.js'
 import { createMapSnapshot, serializeMapSnapshot } from '../../../src/game/map/tmxSnapshot.js'
 import { parseMovementTmx } from '../../../src/game/map/tmxMovementParser.js'
+import { spawnSyncCaptured } from '../helpers/spawnCapture.js'
 
 const fixtureUrl = new URL('../../fixtures/juyiting/hall-map.snapshot.json', import.meta.url)
 const hallTmxUrl = new URL('../../../public/juyiting/hall.tmx', import.meta.url)
@@ -337,10 +337,9 @@ interface ScriptFixturePaths {
 }
 
 function runScript(script: string, args: string[] = [], env: Record<string, string> = {}) {
-  return spawnSync(process.execPath, ['--import', 'tsx', script, ...args], {
+  return spawnSyncCaptured(process.execPath, ['--import', 'tsx', script, ...args], {
     cwd: projectRoot,
     env: { ...process.env, ...env },
-    encoding: 'utf8',
   })
 }
 
