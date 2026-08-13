@@ -63,12 +63,15 @@ import {
   type ActivationStageContext,
 } from '../../../src/game/occlusion/sceneActivation.js'
 
-// ── JSDOM setup ──
-
-const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', { url: 'http://localhost' });
-(globalThis as Record<string, unknown>).document = dom.window.document;
-(globalThis as Record<string, unknown>).DOMParser = dom.window.DOMParser;
-(globalThis as Record<string, unknown>).window = dom.window;
+// `npm run test` already installs one shared JSDOM before loading suites.
+// `npm run test:game` has no setup hook, so install a fallback only when absent;
+// never replace an existing document because Vue runtime-dom retains its identity.
+if (typeof globalThis.DOMParser === 'undefined' || typeof globalThis.document === 'undefined') {
+  const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', { url: 'http://localhost' })
+  ;(globalThis as Record<string, unknown>).document = dom.window.document
+  ;(globalThis as Record<string, unknown>).DOMParser = dom.window.DOMParser
+  ;(globalThis as Record<string, unknown>).window = dom.window
+}
 
 if (!(globalThis as Record<string, unknown>).crypto) {
   const { webcrypto } = require('crypto') as { webcrypto: Crypto }
@@ -743,7 +746,7 @@ describe('E12 atomic failure handling', () => {
 
 describe('E12 TMX XML fallback detection', () => {
   it('activation envelope is the only V2 path (XML lacks renderSchemaVersion)', () => {
-    const doc = new dom.window.DOMParser().parseFromString(HALL_TMX_XML, 'application/xml')
+    const doc = new DOMParser().parseFromString(HALL_TMX_XML, 'application/xml')
     expect(hasRenderSchemaV2(doc)).to.be.false
     const md = makePreparsedMapData()
     expect(hasV2ActivationEnvelope(md, HALL_TMX_SHA)).to.be.true

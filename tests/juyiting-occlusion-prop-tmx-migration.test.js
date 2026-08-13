@@ -20,11 +20,11 @@
  * the snapshot derives a v2 input only for canonical IR serialization.
  */
 import { expect } from 'chai'
+import { execFileSyncCaptured, spawnSyncCaptured } from '../scripts/juyiting/lib/spawn-capture.mjs'
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { atomicWriteUtf8Batch } from '../scripts/juyiting/lib/atomic-write.mjs'
 import { Buffer } from 'node:buffer'
-import { execFileSync, spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -280,7 +280,7 @@ function assertTmxBindingMatchesSpec(entry) {
 function runVerifier(tmxOverride) {
   const args = [VERIFIER, '--spec', SPEC_PATH, '--svg', join(FIXTURE_DIR, 'contact-sheet.svg')]
   if (tmxOverride) args.push('--tmx', tmxOverride)
-  const result = spawnSync(process.execPath, args, { cwd: REPO_ROOT, encoding: 'utf8', timeout: 30000 })
+  const result = spawnSyncCaptured(process.execPath, args, { cwd: REPO_ROOT, encoding: 'utf8', timeout: 30000 })
   if (result.error && /EPERM|ENOENT/.test(String(result.error.message))) {
     const actual = sha256(Buffer.from(readFileSync(tmxOverride || TMX_PATH, 'utf8'), 'utf8'))
     const expected = spec.tmxSource.sha256
@@ -353,7 +353,7 @@ describe('E8B five-prop TMX/manifest/snapshot migration', function () {
       // Does not contain current HEAD
       let head = null
       try {
-        head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: REPO_ROOT, encoding: 'utf8', timeout: 5000 }).trim()
+        head = execFileSyncCaptured('git', ['rev-parse', 'HEAD'], { cwd: REPO_ROOT, encoding: 'utf8', timeout: 5000 }).trim()
       } catch (error) {
         if (!/EPERM|ENOENT/.test(String(error?.message ?? error))) throw error
       }

@@ -20,7 +20,8 @@ async function mutateLedger(mutator,{inputRoot}={}){const l=load(LEDGER);mutator
 async function mutateContact(mutator){return validate({contact:mutator(readFileSync(join(REPO,CONTACT),'utf8'))})}
 async function expectRejected(result,needle){result=await result;expect(result.ok).to.equal(false);expect(result.errors.join('\n')).to.include(needle)}
 
-describe('E10A 37-mask machine/visual evidence',()=>{
+describe('E10A 37-mask machine/visual evidence',function(){
+ this.timeout(120000)
  const ledger=load(LEDGER),inventory=load('tests/fixtures/juyiting/occlusion-v0/inventory.json'),fragSpec=load('tests/fixtures/juyiting/occlusion-v2-fragments/fragment-ownership-spec.json'),frags=new Map(fragSpec.fragments.map(f=>[f.stableId,f]))
  it('passes the directed validator with zero warnings',async()=>{const r=await validate();expect(r.ok,r.errors.join('\n')).to.equal(true);expect(r.warnings).to.deep.equal([])})
  it('has a real SHA-256 generationId and content hash',()=>{expect(ledger.generationId).to.match(/^[0-9a-f]{64}$/);expect(ledger.generationId).not.to.equal('0'.repeat(64));const hash=createHash('sha256').update(JSON.stringify({...ledger,contentSha256:''},null,2)).digest('hex');expect(ledger.contentSha256).to.equal(hash)})

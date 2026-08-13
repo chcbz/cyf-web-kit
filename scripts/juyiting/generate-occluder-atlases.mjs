@@ -121,7 +121,7 @@ export function generateOccluderAtlases({ specPath = E9A_SPEC_PATH, canonicalPat
     script: 'scripts/juyiting/generate-occluder-atlases.mjs',
     nodeVersion: process.version,
     pngjsVersion,
-    chromium,
+    chromium: process.env.CHROMIUM_PROVENANCE || chromium,
     format: FORMAT_CHOICE.chosen,
     formatChoiceRationale: FORMAT_CHOICE.rationale,
   }

@@ -1,8 +1,8 @@
 /** E8A directed tests for the GPT V1 visual-gate prop sort contract. */
 import { expect } from 'chai'
+import { execFileSyncCaptured, spawnSyncCaptured } from '../scripts/juyiting/lib/spawn-capture.mjs'
 import { readFileSync, writeFileSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { execFileSync, spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { compareWorldSortKeys } from '../src/game/occlusion/worldOrder.ts'
@@ -18,7 +18,7 @@ import {
 } from '../scripts/juyiting/lib/prop-sort-evidence.mjs'
 import {
   E1_BASELINE_TMX_SHA256,
-  E8B_LIVE_TMX_SHA256,
+  CURRENT_LIVE_TMX_SHA256,
   readGitBlobAtCommit,
 } from '../scripts/juyiting/lib/baseline-provenance.mjs'
 
@@ -49,7 +49,7 @@ function tempWorkspace(prefix = 'e8a-prop-sort-') { return mkdtempSync(join(tmpd
 function runVerifier({ specPath = SPEC_PATH, svgPath = SVG_PATH, tmxPath = null } = {}) {
   const args = [VERIFIER, '--spec', specPath, '--svg', svgPath]
   if (tmxPath) args.push('--tmx', tmxPath)
-  const result = spawnSync(process.execPath, args, {
+  const result = spawnSyncCaptured(process.execPath, args, {
     cwd: REPO_ROOT,
     encoding: 'utf8',
     timeout: 120000,
@@ -72,15 +72,15 @@ function withAcceptedGeneratorOutputs(assertOutputs) {
       GIT_CONFIG_NOSYSTEM: '1',
       GIT_NO_REPLACE_OBJECTS: '1',
     }
-    execFileSync('git', ['clone', '--shared', '--quiet', REPO_ROOT, cloneDir], {
+    execFileSyncCaptured('git', ['clone', '--shared', '--quiet', REPO_ROOT, cloneDir], {
       timeout: 30000,
       env: gitEnvironment,
     })
-    execFileSync('git', ['-C', cloneDir, 'checkout', '--detach', ACCEPTED_COMMIT], {
+    execFileSyncCaptured('git', ['-C', cloneDir, 'checkout', '--detach', ACCEPTED_COMMIT], {
       timeout: 10000,
       env: gitEnvironment,
     })
-    expect(execFileSync('git', ['-C', cloneDir, 'rev-parse', 'HEAD'], {
+    expect(execFileSyncCaptured('git', ['-C', cloneDir, 'rev-parse', 'HEAD'], {
       encoding: 'utf8', timeout: 5000, env: gitEnvironment,
     }).trim()).to.equal(ACCEPTED_COMMIT)
     symlinkSync(join(REPO_ROOT, 'node_modules'), join(cloneDir, 'node_modules'))
@@ -90,7 +90,7 @@ function withAcceptedGeneratorOutputs(assertOutputs) {
       svg: join(root, `sheet-${index}.svg`),
     }))
     for (const output of outputs) {
-      const result = spawnSync(process.execPath, [
+      const result = spawnSyncCaptured(process.execPath, [
         join(cloneDir, 'scripts/juyiting/generate-prop-sort-spec.mjs'),
         '--spec', output.spec,
         '--svg', output.svg,
@@ -473,7 +473,7 @@ describe('E8A prop sort spec — GPT V1 visual gate', function () {
       expect(result.status, result.output).to.not.equal(0)
       expect(result.output).to.include('explicit --tmx')
       expect(result.output).to.include('TMX sha256 mismatch')
-      expect(result.output).to.include(E8B_LIVE_TMX_SHA256)
+      expect(result.output).to.include(CURRENT_LIVE_TMX_SHA256)
       expect(result.output).to.include(E1_BASELINE_TMX_SHA256)
       expect(result.output).to.include('VERIFICATION FAILURE')
     })

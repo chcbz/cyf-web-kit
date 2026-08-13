@@ -26,15 +26,19 @@ export function spawnSyncCaptured(
   const directory = mkdtempSync(join(tmpdir(), 'cyf-spawn-capture-'))
   const stdoutPath = join(directory, 'stdout.log')
   const stderrPath = join(directory, 'stderr.log')
-  const stdoutFd = openSync(stdoutPath, 'w')
-  const stderrFd = openSync(stderrPath, 'w')
+  let stdoutFd: number | undefined
+  let stderrFd: number | undefined
   try {
+    stdoutFd = openSync(stdoutPath, 'w')
+    stderrFd = openSync(stderrPath, 'w')
     const result = spawnSync(command, [...args], {
       ...options,
       stdio: ['ignore', stdoutFd, stderrFd],
     })
     closeSync(stdoutFd)
+    stdoutFd = undefined
     closeSync(stderrFd)
+    stderrFd = undefined
     return {
       status: result.status,
       signal: result.signal,
@@ -43,8 +47,8 @@ export function spawnSyncCaptured(
       ...(result.error ? { error: result.error } : {}),
     }
   } finally {
-    try { closeSync(stdoutFd) } catch {}
-    try { closeSync(stderrFd) } catch {}
+    if (stdoutFd !== undefined) try { closeSync(stdoutFd) } catch {}
+    if (stderrFd !== undefined) try { closeSync(stderrFd) } catch {}
     rmSync(directory, { recursive: true, force: true })
   }
 }

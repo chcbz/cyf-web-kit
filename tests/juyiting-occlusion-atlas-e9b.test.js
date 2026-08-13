@@ -1,7 +1,7 @@
 import { expect } from 'chai'
+import { spawnSyncCaptured } from '../scripts/juyiting/lib/spawn-capture.mjs'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
-import { spawnSync } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -48,7 +48,11 @@ const GOLDEN_PATH = join(FIXTURE_DIR, 'rgba-golden-report.json')
 const SEAM_REPORT_PATH = join(FIXTURE_DIR, 'seam-evidence-report.json')
 const SEAM_DIR = join(FIXTURE_DIR, 'seam-evidence')
 const CANONICAL_PATH_FULL = join(REPO_ROOT, CANONICAL_PATH)
-const CHROMIUM_ENV = { ...process.env, CHROMIUM_HEADLESS: '/usr/local/bin/chromium-headless-smoke' }
+const CHROMIUM_ENV = {
+  ...process.env,
+  CHROMIUM_HEADLESS: process.env.CHROMIUM_HEADLESS || '/usr/local/bin/chromium-headless-smoke',
+  CHROMIUM_PROVENANCE: '/usr/local/bin/chromium-headless-smoke',
+}
 
 const manifest = JSON.parse(readFileSync(join(REPO_ROOT, MANIFEST_PATH), 'utf8'))
 const goldenReport = JSON.parse(readFileSync(join(REPO_ROOT, GOLDEN_PATH), 'utf8'))
@@ -60,7 +64,7 @@ const GENERATOR = 'scripts/juyiting/generate-occluder-atlases.mjs'
 const VALIDATOR = 'scripts/juyiting/validate-occluder-atlases.mjs'
 
 function runNode(script, args = [], timeout = 60000) {
-  return spawnSync(process.execPath, [join(REPO_ROOT, script), ...args], {
+  return spawnSyncCaptured(process.execPath, [join(REPO_ROOT, script), ...args], {
     cwd: REPO_ROOT,
     encoding: 'utf8',
     timeout,

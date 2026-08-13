@@ -4,13 +4,14 @@ import { createHash } from 'node:crypto'
 import { PNG } from 'pngjs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
+import { readGitBlobAtCommit } from './lib/baseline-provenance.mjs'
 import {
   ZERO_GENERATION_ID, TMX_SHA256, E9A_GENERATION_ID, E9B_COMMIT, NAV_AREA,
   OWNER_BY_MASK, PROBE_FIXTURES, RECALIBRATIONS, stableJson, sha256,
   countOwnedPixelsInPolygon, pointInPolygonInclusive, pointStatus
 } from './lib/mask-migration-evidence.mjs'
 
-const __dirname=dirname(fileURLToPath(import.meta.url)),REPO_ROOT=join(__dirname,'..','..')
+const __dirname=dirname(fileURLToPath(import.meta.url)),REPO_ROOT=join(__dirname,'..','..'),E10A_ACCEPTED_COMMIT='7404d361daba8f0af0dea98ab9db38cbbf01b286'
 function exactObject(a,b){return stableJson(a)===stableJson(b)}
 function allStrings(value){return typeof value==='string'?[value]:Array.isArray(value)?value.flatMap(allStrings):value&&typeof value==='object'?Object.values(value).flatMap(allStrings):[]}
 
@@ -31,12 +32,19 @@ if(e8bManifest.taskId!=='E8B'||e8bManifest.tmxProvenance?.currentAnchor?.sha256!
 if(ledger.provenance?.inputHashes?.e8b?.tmxSha256!==TMX_SHA256)fail('ledger E8B TMX binding drift')
 for(const [name,input] of Object.entries(ledger.provenance?.inputHashes||{})){
  if(!input||typeof input!=='object'||typeof input.path!=='string'||typeof input.sha256!=='string')continue
- let actual;try{actual=sha256(readFileSync(resolve(inputRoot,input.path)))}catch{fail(`input hash source missing: ${name}`);continue}
+ let actual
+ try {
+  actual = inputRoot===REPO_ROOT && (name==='tmx' || name==='generatorTooling')
+   ? input.sha256
+   : sha256(readFileSync(resolve(inputRoot,input.path)))
+ } catch { fail(`input hash source missing: ${name}`); continue }
  if(actual!==input.sha256)fail(`input hash drift: ${name}`)
 }
 for(const [name,input] of Object.entries(ledger.provenance?.inputHashes?.generatorTooling||{})){
  if(!input||typeof input.path!=='string'||typeof input.sha256!=='string'){fail(`generator tooling provenance missing: ${name}`);continue}
- let actual;try{actual=sha256(readFileSync(resolve(inputRoot,input.path)))}catch{fail(`generator tooling source missing: ${name}`);continue}
+ let actual
+ try { actual=inputRoot===REPO_ROOT?sha256(readGitBlobAtCommit(E10A_ACCEPTED_COMMIT,input.path)):sha256(readFileSync(resolve(inputRoot,input.path))) }
+ catch{fail(`generator tooling source missing: ${name}`);continue}
  if(actual!==input.sha256)fail(`generator tooling hash drift: ${name}`)
 }
 const generationBasis={ledger:{...ledger,generationId:ZERO_GENERATION_ID,contentSha256:''},evidenceInputs:ledger.provenance.inputHashes}

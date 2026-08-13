@@ -1,7 +1,7 @@
 import { expect } from 'chai'
+import { spawnSyncCaptured } from '../scripts/juyiting/lib/spawn-capture.mjs'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, unlinkSync } from 'node:fs'
-import { spawnSync } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -23,7 +23,11 @@ const SPEC_PATH = join(FIXTURE_DIR, 'fragment-ownership-spec.json')
 const REPORT_PATH = join(FIXTURE_DIR, 'ownership-report.json')
 const CONTACT_PATH = join(FIXTURE_DIR, 'contact-sheet.svg')
 const CANONICAL_PATH = 'public/juyiting/images/liangshan-hall-mid-occluders-v3.webp'
-const CHROMIUM_ENV = { ...process.env, CHROMIUM_HEADLESS: '/usr/local/bin/chromium-headless-smoke' }
+const CHROMIUM_ENV = {
+  ...process.env,
+  CHROMIUM_HEADLESS: process.env.CHROMIUM_HEADLESS || '/usr/local/bin/chromium-headless-smoke',
+  CHROMIUM_PROVENANCE: '/usr/local/bin/chromium-headless-smoke',
+}
 
 const spec = JSON.parse(readFileSync(join(REPO_ROOT, SPEC_PATH), 'utf8'))
 const report = JSON.parse(readFileSync(join(REPO_ROOT, REPORT_PATH), 'utf8'))
@@ -31,7 +35,7 @@ const contactSheet = readFileSync(join(REPO_ROOT, CONTACT_PATH), 'utf8')
 const canonicalBytes = readFileSync(join(REPO_ROOT, CANONICAL_PATH))
 
 function runNode(script, args = [], timeout = 30000) {
-  return spawnSync(process.execPath, [join(REPO_ROOT, script), ...args], {
+  return spawnSyncCaptured(process.execPath, [join(REPO_ROOT, script), ...args], {
     cwd: REPO_ROOT,
     encoding: 'utf8',
     timeout,

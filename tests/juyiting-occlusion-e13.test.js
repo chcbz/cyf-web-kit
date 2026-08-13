@@ -15,7 +15,7 @@
  *  - the machine gate (validate-e13-evidence.mjs) passes end-to-end
  */
 import { expect } from 'chai'
-import { spawnSync } from 'node:child_process'
+import { spawnSyncCaptured } from '../scripts/juyiting/lib/spawn-capture.mjs'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -142,7 +142,7 @@ describe('E13 evidence integrity (phase-1 + offline)', () => {
   })
 
   it('machine gate passes the matrix but not final E13 release', () => {
-    const result = spawnSync(process.execPath, [GATE_SCRIPT], { cwd: REPO_ROOT, encoding: 'utf8', timeout: 120000 })
+    const result = spawnSyncCaptured(process.execPath, [GATE_SCRIPT], { cwd: REPO_ROOT, encoding: 'utf8', timeout: 120000 })
     expect(result.status, result.stderr).to.equal(0)
     const gate = readJson(join(FIXTURE_DIR, 'machines-gate.json'))
     expect(gate.matrixPass).to.equal(true)

@@ -1,6 +1,6 @@
 /** Stable, fail-closed provenance checks for committed E1 baseline fixtures. */
 import { createHash } from 'node:crypto'
-import { execFileSync, spawnSync } from 'node:child_process'
+import { execFileSyncCaptured, spawnSyncCaptured } from './spawn-capture.mjs'
 import {
   chmodSync,
   lstatSync,
@@ -327,7 +327,7 @@ function isUnderAdditionalDirectory(path, additionalDirectories) {
 }
 
 function gitExec(args, options = {}) {
-  return execFileSync('git', args, {
+  return execFileSyncCaptured('git', args, {
     cwd: repoRoot,
     maxBuffer: MAX_GIT_BUFFER,
     ...options,
@@ -336,7 +336,7 @@ function gitExec(args, options = {}) {
 }
 
 function gitSpawn(args, options = {}) {
-  return spawnSync('git', args, {
+  return spawnSyncCaptured('git', args, {
     cwd: repoRoot,
     ...options,
     env: gitEnvironment(),

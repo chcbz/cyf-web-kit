@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs'
-import { execFileSync } from 'node:child_process'
+import { execFileSyncCaptured } from './lib/spawn-capture.mjs'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -75,7 +75,7 @@ else pass('5/5 props present')
 
 let expectedEpoch = null
 try {
-  expectedEpoch = Number(execFileSync('git', ['show', '-s', '--format=%ct', BASE_COMMIT], { cwd: REPO_ROOT, encoding: 'utf8', timeout: 5000 }).trim())
+  expectedEpoch = Number(execFileSyncCaptured('git', ['show', '-s', '--format=%ct', BASE_COMMIT], { cwd: REPO_ROOT, encoding: 'utf8', timeout: 5000 }).trim())
 } catch (error) { fail(`base commit timestamp unavailable: ${error.message}`) }
 if (!Number.isSafeInteger(spec.sourceEpoch) || spec.sourceEpoch <= 0 || spec.sourceEpoch !== expectedEpoch) fail(`sourceEpoch ${spec.sourceEpoch} != frozen commit timestamp ${expectedEpoch}`)
 else pass(`sourceEpoch=${spec.sourceEpoch}`)
@@ -228,8 +228,10 @@ const manifestPath = join(REPO_ROOT, manifestRel)
 const resolverPath = join(REPO_ROOT, resolverRel)
 const { PERSONA_SPRITE_MANIFEST } = await tsImport(manifestPath, import.meta.url)
 const { compareWorldSortKeys, worldSortKeyToString } = await tsImport(join(REPO_ROOT, 'src/game/occlusion/worldOrder.ts'), import.meta.url)
-if (spec.visualEvidence?.personaManifest?.path !== manifestRel || spec.visualEvidence.personaManifest.sha256 !== sha256Bytes(readFileSync(manifestPath))) fail('persona manifest provenance mismatch')
-if (spec.visualEvidence?.roleResolver?.path !== resolverRel || spec.visualEvidence.roleResolver.sha256 !== sha256Bytes(readFileSync(resolverPath))) fail('role resolver provenance mismatch')
+const historicalManifestBytes = readGitBlobAtCommit(spec.baseCommit, manifestRel)
+const historicalResolverBytes = readGitBlobAtCommit(spec.baseCommit, resolverRel)
+if (spec.visualEvidence?.personaManifest?.path !== manifestRel || spec.visualEvidence.personaManifest.sha256 !== sha256Bytes(historicalManifestBytes)) fail('persona manifest provenance mismatch')
+if (spec.visualEvidence?.roleResolver?.path !== resolverRel || spec.visualEvidence.roleResolver.sha256 !== sha256Bytes(historicalResolverBytes)) fail('role resolver provenance mismatch')
 const roleRequests = []
 for (const role of BOUNTY_ROLES) {
   const definition = PERSONA_SPRITE_MANIFEST.personas[role]

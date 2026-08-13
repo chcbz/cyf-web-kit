@@ -1,4 +1,5 @@
 import { expect } from 'chai'
+import { execFileSyncCaptured, spawnSyncCaptured } from '../scripts/juyiting/lib/spawn-capture.mjs'
 import {
   appendFileSync,
   copyFileSync,
@@ -21,7 +22,6 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { execFileSync, spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -74,13 +74,13 @@ const runNpmScript = (script, environment, mode = 'update') => {
   const scriptArguments = mode === 'update' ? ['run', script, '--', '--update'] : ['run', script]
   const npmExecPath = process.env.npm_execpath
   if (npmExecPath) {
-    return spawnSync(process.execPath, [npmExecPath, ...scriptArguments], {
+    return spawnSyncCaptured(process.execPath, [npmExecPath, ...scriptArguments], {
       cwd: process.cwd(),
       env: environment,
       encoding: 'utf8',
     })
   }
-  return spawnSync('npm', scriptArguments, {
+  return spawnSyncCaptured('npm', scriptArguments, {
     cwd: process.cwd(),
     env: environment,
     encoding: 'utf8',
@@ -199,8 +199,8 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
     }
     let originalBlob
     try {
-      execFileSync('git', ['clone', '--shared', '--quiet', process.cwd(), cloneRoot], { env: gitEnvironment })
-      const treeLine = execFileSync(
+      execFileSyncCaptured('git', ['clone', '--shared', '--quiet', process.cwd(), cloneRoot], { env: gitEnvironment })
+      const treeLine = execFileSyncCaptured(
         'git',
         ['-C', cloneRoot, 'ls-tree', E1_BASELINE_COMMIT, '--', targetAuditPath],
         { encoding: 'utf8', env: gitEnvironment },
@@ -209,15 +209,15 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
       expect(originalBlob).to.match(/^[0-9a-f]{40}$/)
 
       const replacementBytes = Buffer.from('replacement-ref-bytes-that-must-not-be-trusted\n')
-      const replacementBlob = execFileSync(
+      const replacementBlob = execFileSyncCaptured(
         'git',
         ['-C', cloneRoot, 'hash-object', '-w', '--stdin'],
         { input: replacementBytes, encoding: 'utf8', env: gitEnvironment },
       ).trim()
-      execFileSync('git', ['-C', cloneRoot, 'replace', originalBlob, replacementBlob], { env: gitEnvironment })
-      expect(execFileSync('git', ['-C', cloneRoot, 'replace', '-l'], { encoding: 'utf8', env: gitEnvironment }).trim())
+      execFileSyncCaptured('git', ['-C', cloneRoot, 'replace', originalBlob, replacementBlob], { env: gitEnvironment })
+      expect(execFileSyncCaptured('git', ['-C', cloneRoot, 'replace', '-l'], { encoding: 'utf8', env: gitEnvironment }).trim())
         .to.equal(originalBlob)
-      expect(execFileSync('git', ['-C', cloneRoot, 'cat-file', 'blob', originalBlob], { env: gitEnvironment }).equals(replacementBytes))
+      expect(execFileSyncCaptured('git', ['-C', cloneRoot, 'cat-file', 'blob', originalBlob], { env: gitEnvironment }).equals(replacementBytes))
         .to.equal(true)
 
       writeFileSync(targetFile, replacementBytes)
@@ -239,10 +239,10 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
       }
     } finally {
       if (originalBlob) {
-        try { execFileSync('git', ['-C', cloneRoot, 'replace', '-d', originalBlob], { env: gitEnvironment }) } catch {}
+        try { execFileSyncCaptured('git', ['-C', cloneRoot, 'replace', '-d', originalBlob], { env: gitEnvironment }) } catch {}
       }
       if (originalBlob && existsSync(cloneRoot)) {
-        expect(execFileSync('git', ['-C', cloneRoot, 'replace', '-l'], { encoding: 'utf8', env: gitEnvironment }).trim())
+        expect(execFileSyncCaptured('git', ['-C', cloneRoot, 'replace', '-l'], { encoding: 'utf8', env: gitEnvironment }).trim())
           .to.equal('')
       }
       rmSync(root, { recursive: true, force: true })
@@ -257,7 +257,7 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
     )
 
     const sprite = spriteEntries.find(entry => entry.label === 'songjiang')
-    const baselineBytes = execFileSync('git', ['show', `${sourceHashes.baselineCommit}:${sprite.path}`])
+    const baselineBytes = execFileSyncCaptured('git', ['show', `${sourceHashes.baselineCommit}:${sprite.path}`])
     const changedSpriteSha = createHash('sha256')
       .update(Buffer.concat([baselineBytes, Buffer.from('simulated-byte-change')]))
       .digest('hex')

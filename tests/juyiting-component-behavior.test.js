@@ -2021,20 +2021,21 @@ const createFakeGameMelon = ({ deferDeviceReady = false } = {}) => {
 }
 
 
-const flushPendingLoaderSuccess = async (fake, minCallbacks = 1) => {
-  let completed = 0
-  let idleTurns = 0
-  for (let i = 0; i < 50 && (completed < minCallbacks || idleTurns < 3); i += 1) {
-    await Promise.resolve()
+const settleMountWithLoaderSuccess = async (fake, mountPromise, timeoutMs = 5_000) => {
+  let settled = false
+  mountPromise.finally(() => {
+    settled = true
+  }).catch(() => {})
+
+  const deadline = Date.now() + timeoutMs
+  while (!settled && Date.now() < deadline) {
     const callbacks = fake.loadCallbacks.splice(0)
-    if (!callbacks.length) {
-      idleTurns += 1
-      continue
-    }
-    idleTurns = 0
-    completed += callbacks.length
     callbacks.forEach(item => item.onload())
+    await new Promise(resolve => setImmediate(resolve))
   }
+
+  if (!settled) throw new Error('timed out draining fake melonJS loader callbacks')
+  return mountPromise
 }
 
 describe('JuyitingGame lifecycle guards', () => {
@@ -2051,8 +2052,7 @@ describe('JuyitingGame lifecycle guards', () => {
     expect(fake.videoInitCalls()).to.equal(0)
 
     fake.deviceReadyCallbacks[0]()
-    await flushPendingLoaderSuccess(fake, 2)
-    await mountPromise
+    await settleMountWithLoaderSuccess(fake, mountPromise)
 
     expect(fake.videoInitCalls()).to.equal(1)
   })
@@ -2073,8 +2073,7 @@ describe('JuyitingGame lifecycle guards', () => {
     })
     await Promise.resolve()
     game.destroy()
-    await flushPendingLoaderSuccess(fake, 1)
-    await mountPromise
+    await settleMountWithLoaderSuccess(fake, mountPromise)
 
     expect(fake.stateSets).to.have.length(0)
     expect(readyCalls).to.equal(0)
@@ -2094,8 +2093,7 @@ describe('JuyitingGame lifecycle guards', () => {
         readyCalls += 1
       }
     })
-    await flushPendingLoaderSuccess(fake, 2)
-    await mountPromise
+    await settleMountWithLoaderSuccess(fake, mountPromise)
     game.destroy()
     await new Promise(resolve => setTimeout(resolve, 240))
 
