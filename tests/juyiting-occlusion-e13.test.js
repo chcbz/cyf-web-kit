@@ -99,9 +99,11 @@ describe('E13 evidence integrity (phase-1 + offline)', () => {
     ]))
   })
 
-  it('world model provenance hashes match the live sources', () => {
+  it('preserves the accepted E13 historical TMX anchor while other source hashes remain current', () => {
     const facts = loadSourceFacts()
-    expect(worldModel.provenance.tmxSha256).to.equal(facts.tmxSha256)
+    expect(worldModel.provenance.tmxSha256).to.equal('4f94e3a52da71369d9c29d96e0ac0ceb2126a1a441b6cd63911701957e1ed49b')
+    expect(worldModel.provenance.tmxSha256).to.not.equal(facts.tmxSha256)
+    expect(facts.tmxSha256).to.equal('885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f')
     expect(worldModel.provenance.fragmentSpecSha256).to.equal(facts.specSha256)
     expect(worldModel.provenance.hallMapSnapshotSha256).to.equal(facts.snapshotSha256)
   })

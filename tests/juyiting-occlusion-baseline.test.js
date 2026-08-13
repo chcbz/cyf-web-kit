@@ -30,6 +30,7 @@ import {
   E1_BASELINE_COMMIT,
   E1_BASELINE_TMX_SHA256,
   E8B_LIVE_TMX_SHA256,
+  CURRENT_LIVE_TMX_SHA256,
   E9B_OCCLUDER_OVERLAY_DIRECTORY,
   assertBaselineProvenance,
   assertBaselinePublicTree,
@@ -1145,8 +1146,11 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
     })
     expect(Object.values(audit.loaderContractChecks).every(Boolean)).to.equal(true)
     expect(audit.files.map(entry => entry.path)).to.deep.equal(
-      assetReport.juyitingNetworkAssets.runtimeCoreFiles.map(entry => entry.path),
+      assetReport.juyitingNetworkAssets.runtimeCoreFiles
+        .map(entry => entry.path)
+        .filter(path => path !== 'public/juyiting/images/liangshan-hall-foreground-occluders-v3.webp'),
     )
+    expect(audit.files.some(entry => entry.path.endsWith('/liangshan-hall-foreground-occluders-v3.webp'))).to.equal(false)
   })
 
   it('preserves hall-props objectalignment=topleft and TMX ellipse object shapes', () => {
@@ -1168,15 +1172,15 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
     expect(createHash('sha256').update(svg).digest('hex')).to.not.equal(id)
   })
 
-  it('separates historical inventory audit from the live E8B current TMX anchor', () => {
+  it('separates E1/E8B historical anchors from the current live TMX anchor', () => {
     const historicalSha256 = createHash('sha256').update(historicalTmxBytes).digest('hex')
     expect(inventory.tmxSha256).to.equal(E1_BASELINE_TMX_SHA256)
     expect(historicalSha256).to.equal(E1_BASELINE_TMX_SHA256)
     expect(historicalStructure.groups.mask.length).to.equal(inventory.counts.masks)
     expect(historicalStructure.groups.hotspots.filter(object => object.gid !== undefined).length).to.equal(inventory.counts.props)
     expect(propTmxManifest.tmxProvenance.currentAnchor.sha256).to.equal(E8B_LIVE_TMX_SHA256)
-    expect(liveTmxSha256()).to.equal(E8B_LIVE_TMX_SHA256)
-    expect(liveTmxSha256()).to.equal(propTmxManifest.tmxProvenance.currentAnchor.sha256)
+    expect(liveTmxSha256()).to.equal(CURRENT_LIVE_TMX_SHA256)
+    expect(liveTmxSha256()).to.not.equal(propTmxManifest.tmxProvenance.currentAnchor.sha256)
     expect(liveTmxSha256()).to.not.equal(inventory.tmxSha256)
     expect(inventory.counts.masks).to.equal(37)
     expect(inventory.counts.props).to.equal(5)
@@ -1367,7 +1371,7 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
     })
 
     it('current public tree vs E1 baseline: only hall.tmx exact replacement plus the E9B occluder overlay', () => {
-      const result = assertCurrentPublicTreeVsE1('public', E1_BASELINE_COMMIT, E8B_LIVE_TMX_SHA256, {
+      const result = assertCurrentPublicTreeVsE1('public', E1_BASELINE_COMMIT, CURRENT_LIVE_TMX_SHA256, {
         additionalDirectories: [E9B_OCCLUDER_OVERLAY_DIRECTORY],
       })
       expect(result.baselineCommit).to.equal(E1_BASELINE_COMMIT)
@@ -1375,8 +1379,8 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
       expect(result.allowedDiffs).to.have.length(1)
       expect(result.allowedDiffs[0].path).to.equal('public/juyiting/hall.tmx')
       expect(result.allowedDiffs[0].baselineSha256).to.equal(E1_BASELINE_TMX_SHA256)
-      expect(result.allowedDiffs[0].currentSha256).to.equal(E8B_LIVE_TMX_SHA256)
-      expect(result.currentTmxSha256).to.equal(E8B_LIVE_TMX_SHA256)
+      expect(result.allowedDiffs[0].currentSha256).to.equal(CURRENT_LIVE_TMX_SHA256)
+      expect(result.currentTmxSha256).to.equal(CURRENT_LIVE_TMX_SHA256)
       expect(result.baselineTmxSha256).to.equal(E1_BASELINE_TMX_SHA256)
       expect(result.currentTmxSha256).to.not.equal(result.baselineTmxSha256)
       expect(result.additionalDirectories).to.deep.equal([E9B_OCCLUDER_OVERLAY_DIRECTORY])
@@ -1391,7 +1395,7 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
         expect(createHash('sha256').update(bytes).digest('hex'), atlas.file).to.equal(atlas.sha256)
         expect(bytes.length, atlas.file).to.equal(atlas.bytes)
       }
-      const result = assertCurrentPublicTreeVsE1('public', E1_BASELINE_COMMIT, E8B_LIVE_TMX_SHA256, {
+      const result = assertCurrentPublicTreeVsE1('public', E1_BASELINE_COMMIT, CURRENT_LIVE_TMX_SHA256, {
         additionalDirectories: [E9B_OCCLUDER_OVERLAY_DIRECTORY],
       })
       expect(result.additionalDirectories).to.deep.equal([E9B_OCCLUDER_OVERLAY_DIRECTORY])
@@ -1464,7 +1468,7 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
         materializeE1PublicTree(join(publicRoot, 'juyiting'), E1_BASELINE_COMMIT)
         writeFileSync(tmxPath, Buffer.concat([readFileSync(TMX_PATH), Buffer.from('tampered')]))
         expect(() => assertCurrentPublicTreeVsE1(publicRoot, E1_BASELINE_COMMIT))
-          .to.throw('E8B hall.tmx current anchor mismatch')
+          .to.throw('Current hall.tmx anchor mismatch')
       } finally {
         rmSync(root, { recursive: true, force: true })
       }
@@ -1480,7 +1484,7 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
         const liveBytes = readFileSync(TMX_PATH)
         writeFileSync(tmxPath, liveBytes.subarray(0, liveBytes.length - 64))
         expect(() => assertCurrentPublicTreeVsE1(publicRoot, E1_BASELINE_COMMIT))
-          .to.throw('E8B hall.tmx current anchor mismatch')
+          .to.throw('Current hall.tmx anchor mismatch')
       } finally {
         rmSync(root, { recursive: true, force: true })
       }

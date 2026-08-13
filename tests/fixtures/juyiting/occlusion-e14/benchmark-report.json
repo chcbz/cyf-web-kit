@@ -32,28 +32,28 @@
     "sampleMs": 60000,
     "frames": 3601,
     "total": {
-      "min": 0.7999992370605469,
-      "mean": 1.212413276178709,
+      "min": 0.8999977111816406,
+      "mean": 1.2041654642407544,
       "p50": 1.2000007629394531,
-      "p95": 1.5999984741210938,
-      "p99": 1.9000015258789062,
-      "max": 16.800003051757812
+      "p95": 1.5,
+      "p99": 1.7999992370605469,
+      "max": 2.0999984741210938
     },
     "gridUpdate": {
       "min": 0,
-      "mean": 0.12199389990817437,
+      "mean": 0.12113305165747144,
       "p50": 0.10000228881835938,
       "p95": 0.20000076293945312,
       "p99": 0.2999992370605469,
-      "max": 4
+      "max": 0.6000022888183594
     },
     "worldOrder": {
-      "min": 0.7000007629394531,
-      "mean": 1.0904193762705348,
+      "min": 0.7999992370605469,
+      "mean": 1.083032412583283,
       "p50": 1.0999984741210938,
-      "p95": 1.4000015258789062,
-      "p99": 1.7000007629394531,
-      "max": 16.60000228881836
+      "p95": 1.3999977111816406,
+      "p99": 1.5999984741210938,
+      "max": 1.9000015258789062
     }
   },
   "complexity": {
@@ -73,250 +73,250 @@
   "memory": {
     "browserHeapSamples": [
       {
-        "elapsedMs": 16.799999237060547,
-        "usedBytes": 9346490
+        "elapsedMs": 16.900001525878906,
+        "usedBytes": 3869946
       },
       {
-        "elapsedMs": 1032.7000007629395,
-        "usedBytes": 6452598
+        "elapsedMs": 1032.900001525879,
+        "usedBytes": 7523530
       },
       {
-        "elapsedMs": 2033.7999992370605,
-        "usedBytes": 9914982
+        "elapsedMs": 2032.900001525879,
+        "usedBytes": 4410210
       },
       {
-        "elapsedMs": 3049.900001525879,
-        "usedBytes": 7309302
+        "elapsedMs": 3049.5,
+        "usedBytes": 8165410
       },
       {
-        "elapsedMs": 4066.7000007629395,
-        "usedBytes": 4333854
+        "elapsedMs": 4049.5,
+        "usedBytes": 5196906
       },
       {
-        "elapsedMs": 5083.400001525879,
-        "usedBytes": 7980478
+        "elapsedMs": 5049.599998474121,
+        "usedBytes": 8546382
       },
       {
-        "elapsedMs": 6099.700000762939,
-        "usedBytes": 5170006
+        "elapsedMs": 6066,
+        "usedBytes": 5758198
       },
       {
-        "elapsedMs": 7117.5,
-        "usedBytes": 8915782
+        "elapsedMs": 7066,
+        "usedBytes": 9268862
       },
       {
-        "elapsedMs": 8132.599998474121,
-        "usedBytes": 5876630
+        "elapsedMs": 8066.099998474121,
+        "usedBytes": 6237262
       },
       {
-        "elapsedMs": 9132.70000076294,
-        "usedBytes": 9292454
+        "elapsedMs": 9066.29999923706,
+        "usedBytes": 9613326
       },
       {
-        "elapsedMs": 10132.70000076294,
-        "usedBytes": 6141358
+        "elapsedMs": 10082.79999923706,
+        "usedBytes": 7029506
       },
       {
-        "elapsedMs": 11149.29999923706,
-        "usedBytes": 10112994
+        "elapsedMs": 11099.29999923706,
+        "usedBytes": 10761114
       },
       {
-        "elapsedMs": 12149.400001525879,
-        "usedBytes": 6880174
+        "elapsedMs": 12100,
+        "usedBytes": 7508830
       },
       {
-        "elapsedMs": 13165.79999923706,
-        "usedBytes": 17231810
+        "elapsedMs": 13115.900001525879,
+        "usedBytes": 17844762
       },
       {
-        "elapsedMs": 14182.29999923706,
-        "usedBytes": 8178962
+        "elapsedMs": 14132.5,
+        "usedBytes": 8843970
       },
       {
-        "elapsedMs": 15182.5,
-        "usedBytes": 11806466
+        "elapsedMs": 15132.599998474121,
+        "usedBytes": 12523842
       },
       {
-        "elapsedMs": 16198.79999923706,
-        "usedBytes": 15414226
+        "elapsedMs": 16148.900001525879,
+        "usedBytes": 16056886
       },
       {
-        "elapsedMs": 17199,
-        "usedBytes": 5927126
+        "elapsedMs": 17149,
+        "usedBytes": 6624958
       },
       {
-        "elapsedMs": 18215.5,
-        "usedBytes": 9901882
+        "elapsedMs": 18149,
+        "usedBytes": 10382906
       },
       {
-        "elapsedMs": 19215.5,
-        "usedBytes": 13421110
+        "elapsedMs": 19165.59999847412,
+        "usedBytes": 14133594
       },
       {
-        "elapsedMs": 20215.5,
-        "usedBytes": 16906150
+        "elapsedMs": 20182.09999847412,
+        "usedBytes": 17902394
       },
       {
-        "elapsedMs": 21232.09999847412,
-        "usedBytes": 7940138
+        "elapsedMs": 21198.70000076294,
+        "usedBytes": 8999282
       },
       {
-        "elapsedMs": 22232.09999847412,
-        "usedBytes": 11636890
+        "elapsedMs": 22198.79999923706,
+        "usedBytes": 12675890
       },
       {
-        "elapsedMs": 23232.40000152588,
-        "usedBytes": 14922858
+        "elapsedMs": 23198.90000152588,
+        "usedBytes": 16197462
       },
       {
-        "elapsedMs": 24248.59999847412,
-        "usedBytes": 18867138
+        "elapsedMs": 24215.29999923706,
+        "usedBytes": 7049974
       },
       {
-        "elapsedMs": 25248.90000152588,
-        "usedBytes": 9452514
+        "elapsedMs": 25215.29999923706,
+        "usedBytes": 10770914
       },
       {
-        "elapsedMs": 26265.20000076294,
-        "usedBytes": 13285858
+        "elapsedMs": 26215.5,
+        "usedBytes": 14342810
       },
       {
-        "elapsedMs": 27265.20000076294,
-        "usedBytes": 16725542
+        "elapsedMs": 27231.79999923706,
+        "usedBytes": 18046306
       },
       {
-        "elapsedMs": 28281.79999923706,
-        "usedBytes": 7793838
+        "elapsedMs": 28232.09999847412,
+        "usedBytes": 8584046
       },
       {
-        "elapsedMs": 29286.20000076294,
-        "usedBytes": 11443534
+        "elapsedMs": 29232.09999847412,
+        "usedBytes": 12266154
       },
       {
-        "elapsedMs": 30298.29999923706,
-        "usedBytes": 15001526
+        "elapsedMs": 30248.40000152588,
+        "usedBytes": 16075194
       },
       {
-        "elapsedMs": 31298.40000152588,
-        "usedBytes": 18618954
+        "elapsedMs": 31248.40000152588,
+        "usedBytes": 19705342
       },
       {
-        "elapsedMs": 32314.79999923706,
-        "usedBytes": 9531390
+        "elapsedMs": 32248.5,
+        "usedBytes": 10386922
       },
       {
-        "elapsedMs": 33331.5,
-        "usedBytes": 13468394
+        "elapsedMs": 33265,
+        "usedBytes": 14335234
       },
       {
-        "elapsedMs": 34331.70000076294,
-        "usedBytes": 16827854
+        "elapsedMs": 34265.29999923706,
+        "usedBytes": 17660266
       },
       {
-        "elapsedMs": 35348.20000076294,
-        "usedBytes": 7626514
+        "elapsedMs": 35281.59999847412,
+        "usedBytes": 8476234
       },
       {
-        "elapsedMs": 36364.70000076294,
-        "usedBytes": 11604194
+        "elapsedMs": 36298.29999923706,
+        "usedBytes": 12495678
       },
       {
-        "elapsedMs": 37381.29999923706,
-        "usedBytes": 15379446
+        "elapsedMs": 37314.90000152588,
+        "usedBytes": 16270622
       },
       {
-        "elapsedMs": 38381.40000152588,
-        "usedBytes": 18981446
+        "elapsedMs": 38315,
+        "usedBytes": 19836262
       },
       {
-        "elapsedMs": 39397.90000152588,
-        "usedBytes": 9906878
+        "elapsedMs": 39315.09999847412,
+        "usedBytes": 10536478
       },
       {
-        "elapsedMs": 40398,
-        "usedBytes": 26605502
+        "elapsedMs": 40331.70000076294,
+        "usedBytes": 27533758
       },
       {
-        "elapsedMs": 41398,
-        "usedBytes": 17063638
+        "elapsedMs": 41347.90000152588,
+        "usedBytes": 18236090
       },
       {
-        "elapsedMs": 42398.09999847412,
-        "usedBytes": 33833826
+        "elapsedMs": 42348.09999847412,
+        "usedBytes": 9054454
       },
       {
-        "elapsedMs": 43414.5,
-        "usedBytes": 24949654
+        "elapsedMs": 43348.09999847412,
+        "usedBytes": 25910870
       },
       {
-        "elapsedMs": 44415.09999847412,
-        "usedBytes": 15317222
+        "elapsedMs": 44348.09999847412,
+        "usedBytes": 16276634
       },
       {
-        "elapsedMs": 45431,
-        "usedBytes": 32115550
+        "elapsedMs": 45364.40000152588,
+        "usedBytes": 33074350
       },
       {
-        "elapsedMs": 46431,
-        "usedBytes": 22986822
+        "elapsedMs": 46364.40000152588,
+        "usedBytes": 23960818
       },
       {
-        "elapsedMs": 47447.5,
-        "usedBytes": 14054126
+        "elapsedMs": 47364.40000152588,
+        "usedBytes": 14795094
       },
       {
-        "elapsedMs": 48447.5,
-        "usedBytes": 30454774
+        "elapsedMs": 48380.90000152588,
+        "usedBytes": 31510070
       },
       {
-        "elapsedMs": 49464.09999847412,
-        "usedBytes": 21561526
+        "elapsedMs": 49381.09999847412,
+        "usedBytes": 22279222
       },
       {
-        "elapsedMs": 50464.09999847412,
-        "usedBytes": 12479058
+        "elapsedMs": 50381.20000076294,
+        "usedBytes": 5969910
       },
       {
-        "elapsedMs": 51464.09999847412,
-        "usedBytes": 29065058
+        "elapsedMs": 51397.5,
+        "usedBytes": 24385254
       },
       {
-        "elapsedMs": 52464.20000076294,
-        "usedBytes": 19708978
+        "elapsedMs": 52397.79999923706,
+        "usedBytes": 16076526
       },
       {
-        "elapsedMs": 53480.70000076294,
-        "usedBytes": 10790102
+        "elapsedMs": 53413.90000152588,
+        "usedBytes": 7681382
       },
       {
-        "elapsedMs": 54497.29999923706,
-        "usedBytes": 27879670
+        "elapsedMs": 54413.90000152588,
+        "usedBytes": 24538670
       },
       {
-        "elapsedMs": 55513.79999923706,
-        "usedBytes": 18645742
+        "elapsedMs": 55414,
+        "usedBytes": 15010442
       },
       {
-        "elapsedMs": 56513.79999923706,
-        "usedBytes": 10101570
+        "elapsedMs": 56430.5,
+        "usedBytes": 5987510
       },
       {
-        "elapsedMs": 57513.79999923706,
-        "usedBytes": 27716246
+        "elapsedMs": 57430.59999847412,
+        "usedBytes": 22854410
       },
       {
-        "elapsedMs": 58530.29999923706,
-        "usedBytes": 18707226
+        "elapsedMs": 58430.70000076294,
+        "usedBytes": 13622066
       },
       {
-        "elapsedMs": 59530.29999923706,
-        "usedBytes": 9161606
+        "elapsedMs": 59430.90000152588,
+        "usedBytes": 4001126
       }
     ],
-    "browserHeapMinBytes": 4333854,
-    "browserHeapMaxBytes": 33833826,
-    "browserHeapGrowthBytes": -184884,
-    "heapDropsOver1Mb": 28
+    "browserHeapMinBytes": 3869946,
+    "browserHeapMaxBytes": 33074350,
+    "browserHeapGrowthBytes": 131180,
+    "heapDropsOver1Mb": 27
   },
   "rendering": {
     "canvasCount": 0,
@@ -331,7 +331,7 @@
     "maxDurationMs": 0
   },
   "provenance": {
-    "generatedAt": "2026-08-13T18:01:10.358Z",
+    "generatedAt": "2026-08-13T19:29:01.428Z",
     "inputs": {
       "scripts/juyiting/e14/benchmark-entry.ts": "cba7be0b281f73b3abea7d36c7d520c2185ae908896801bcda1d8564d8edeae2",
       "scripts/juyiting/e14/run-benchmark-restricted.mjs": "0da75483fbab1f5cce040a3c127792107c6e07f7f7b24524fd0532b0dce917a4",
@@ -340,7 +340,7 @@
       "src/game/occlusion/canonicalIr.ts": "d4e7102a869010219a1f5feed9d49981ac2479420d555182847d6cec41beb50f",
       "src/game/occlusion/constraintResolver.ts": "fe2e2903c1830b402db3ca18edfdbd132306ffbde3523397a356bb3541ca88bd",
       "src/game/occlusion/debugOverlay.ts": "109dca86d9513590dec382b75912a40a932e3cacee6c0318256a689c4a0be2e4",
-      "src/game/occlusion/hallSceneAssembly.ts": "00247b8ef9b61e64981ef0b30f7705a309fe51ab213c346f8ad8d05b9427f879",
+      "src/game/occlusion/hallSceneAssembly.ts": "d4b6e652bfab92365fec735d8770d985e78c957a939e18ac5d743d17d5fabd7c",
       "src/game/occlusion/polygonGeometry.ts": "586c716e541e874776ab28aed60212f2550957ab3df5661443d931653dc31a4e",
       "src/game/occlusion/runtimeAgentAdapter.ts": "945730938c900b305e8279b3170d053022346a729608c2c84725e657473b48d9",
       "src/game/occlusion/sceneActivation.ts": "c22c3ac155f304a70b1137efe10ac1e66deb491a63fc75b87e76a54aeba3b868",
@@ -367,7 +367,7 @@
     "transferredBytes": 54466,
     "resources": [
       {
-        "requestId": "0481B0455406A4FBD4A3239ED59C64C3",
+        "requestId": "41EA04579D92C16ED26F20C556BE6A75",
         "url": "file:///home/isp/wsps/cyf/.worktrees/juyiting-occlusion-v2/dist/e14-benchmark/index.html",
         "method": "GET",
         "type": "Document",
@@ -377,7 +377,7 @@
         "finished": true
       },
       {
-        "requestId": "48.2",
+        "requestId": "65.2",
         "url": "file:///home/isp/wsps/cyf/.worktrees/juyiting-occlusion-v2/dist/e14-benchmark/assets/index-DOBG5ntY.js",
         "method": "GET",
         "type": "Script",
@@ -405,12 +405,12 @@
     "source": "production-build-artifact-inventory"
   },
   "cdp": {
-    "jsHeapUsedBytes": 20645208,
+    "jsHeapUsedBytes": 17222304,
     "jsHeapTotalBytes": 76300288,
-    "taskDurationSeconds": 6.681378,
-    "scriptDurationSeconds": 0.057456,
-    "layoutCount": 3,
-    "recalcStyleCount": 3,
+    "taskDurationSeconds": 6.640673,
+    "scriptDurationSeconds": 0.082973,
+    "layoutCount": 4,
+    "recalcStyleCount": 4,
     "nodes": 21,
     "documents": 2
   },

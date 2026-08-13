@@ -28,15 +28,15 @@ function sha256File(filePath) {
 
 // ── Frozen constants ──
 const EXPECTED_LEDGER_WHOLE_SHA = '700b2ac6d27ceb58ce5fe0dd92b3f0dc7012a6ecafd03f7c23a9d3a3c42704b1'
-const EXPECTED_MANIFEST_WHOLE_SHA = '183dadfa3221306eaac82b815d16023f21589323a7659ceb15cde0c227f916b0'
-const EXPECTED_TMX_SHA = '4f94e3a52da71369d9c29d96e0ac0ceb2126a1a441b6cd63911701957e1ed49b'
+const EXPECTED_MANIFEST_WHOLE_SHA = '96053f6cda115ecc437085ef431ef1d4ec766403f4c2e6a2bda6c8093bbdb0e7'
+const EXPECTED_TMX_SHA = '885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f'
 const EXPECTED_E10A_GENERATION_ID = 'fc855f90cbfc13c5ad8b24659825bc1dccaa03ec17866735fd923452dbdc7611'
-const EXPECTED_E10B_GENERATION_ID = 'a79959fd081f6c76fe5cf371b0587b5efaef463ade443e63e65f1afb4e32bbc9'
+const EXPECTED_E10B_GENERATION_ID = '0440e4963703f0d2f572d60c37f2ea1c1bd34f3fa9a77889b6f672bb108c57f0'
 
 const CONTRACT_SOURCES = {
   'src/game/occlusion/schema.ts': '172a293a9b873482be25fed706da05e49ddcc02cfa8717ff329311159e51b9d1',
   'src/game/occlusion/worldOrder.ts': 'ccb3bc5eaa55055c78f04090a74f0fea4b37e36780349f09eff4ac9f9249942c',
-  'src/game/occlusion/constraintResolver.ts': '55c696e56f4db1aabe3233c19eda525f86319997d58920aaef055da8dd7095c5',
+  'src/game/occlusion/constraintResolver.ts': 'fe2e2903c1830b402db3ca18edfdbd132306ffbde3523397a356bb3541ca88bd',
   'src/game/occlusion/polygonGeometry.ts': '586c716e541e874776ab28aed60212f2550957ab3df5661443d931653dc31a4e',
   'src/game/occlusion/validation.ts': '7b4bcfed5ec2cb39003d2f06709113c837b89600138e991a0aec60d1903b0eeb',
 }

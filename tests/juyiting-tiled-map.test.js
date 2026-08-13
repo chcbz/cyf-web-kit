@@ -16,6 +16,7 @@ describe('Juyi Hall Tiled map parser', () => {
     expect(map.coordinateHeight).to.equal(928)
     expect(map.tileLayers.find(layer => layer.name === 'background').data).to.have.length(104 * 58)
     expect(map.imageLayers['mid-occluders'].source).to.equal('/juyiting/images/liangshan-hall-mid-occluders-v3.webp')
+    expect(map.imageLayers['foreground-occluders'].source).to.equal('/juyiting/images/liangshan-hall-mid-occluders-v3.webp')
     expect(map.imageLayers['lighting-overlay'].source).to.equal('/juyiting/images/liangshan-hall-lighting-overlay-v3.webp')
     expect(map.imageLayers).not.to.have.property('prop-gate')
     expect(map.hotspots.map(item => item.id)).to.include.members([

@@ -60,9 +60,9 @@ import {
 import { validateAndCanonicalizePolygon } from './validation.js'
 
 // ── Accepted TMX provenance ──
-// E10B production hall.tmx SHA-256: 4f94e3a5...
+// E16B current production hall.tmx SHA-256: 885471a1...
 
-export const ACCEPTED_TMX_SHA256 = '4f94e3a52da71369d9c29d96e0ac0ceb2126a1a441b6cd63911701957e1ed49b'
+export const ACCEPTED_TMX_SHA256 = '885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f'
 
 // ── Types ──
 

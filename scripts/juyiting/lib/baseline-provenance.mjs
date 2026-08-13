@@ -22,6 +22,7 @@ import { sha256Bytes } from './tmx-structure.mjs'
 export const E1_BASELINE_COMMIT = '2424f51f375814f403ca70a9a6e9948728e595b1'
 export const E1_BASELINE_TMX_SHA256 = 'e2b79085d2caf232801f9843bb1cfafa941fb5a7d38e16cede60ecb0ab3e8401'
 export const E8B_LIVE_TMX_SHA256 = '291a38cc66ebd60c8577500a5afc18ce5398570fe4c35ca66d9eebe818826a97'
+export const CURRENT_LIVE_TMX_SHA256 = '885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f'
 
 // E9B adds six lossless occluder atlas PNGs under this new directory. The E1
 // provenance overlay is extended explicitly: E1 baseline files must remain
@@ -426,7 +427,7 @@ export function materializeE1PublicTree(targetDir, baselineCommit = E1_BASELINE_
 export function assertCurrentPublicTreeVsE1(
   publicRoot,
   baselineCommit = E1_BASELINE_COMMIT,
-  expectedCurrentTmxSha256 = E8B_LIVE_TMX_SHA256,
+  expectedCurrentTmxSha256 = CURRENT_LIVE_TMX_SHA256,
   options = {},
 ) {
   assertBaselineCommit(baselineCommit)
@@ -458,7 +459,7 @@ export function assertCurrentPublicTreeVsE1(
     throw new Error(`E1 hall.tmx anchor mismatch: expected ${E1_BASELINE_TMX_SHA256}, got ${baselineTmx?.sha256 ?? '<missing>'}`)
   }
   if (!currentTmx || currentTmx.sha256 !== expectedCurrentTmxSha256) {
-    throw new Error(`E8B hall.tmx current anchor mismatch: expected ${expectedCurrentTmxSha256}, got ${currentTmx?.sha256 ?? '<missing>'}`)
+    throw new Error(`Current hall.tmx anchor mismatch: expected ${expectedCurrentTmxSha256}, got ${currentTmx?.sha256 ?? '<missing>'}`)
   }
 
   const diffs = []
@@ -469,13 +470,13 @@ export function assertCurrentPublicTreeVsE1(
     }
     if (baseline.sha256 !== current.sha256) {
       if (baseline.path !== tmxPath) {
-        throw new Error(`Unauthorised public tree drift for ${baseline.path}: baseline ${baseline.sha256}, current ${current.sha256}. Only ${tmxPath} exact replacement is permitted by E8B migration.`)
+        throw new Error(`Unauthorised public tree drift for ${baseline.path}: baseline ${baseline.sha256}, current ${current.sha256}. Only ${tmxPath} exact replacement is permitted by the current live overlay.`)
       }
       diffs.push({ path: baseline.path, baselineSha256: baseline.sha256, currentSha256: current.sha256 })
     }
   }
   if (diffs.length !== 1 || diffs[0].path !== tmxPath) {
-    throw new Error(`E8B public tree must contain exactly one authorised difference (${tmxPath}); got ${JSON.stringify(diffs)}`)
+    throw new Error(`Current public tree must contain exactly one authorised difference (${tmxPath}); got ${JSON.stringify(diffs)}`)
   }
 
   return {

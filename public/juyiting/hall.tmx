@@ -39,7 +39,7 @@
   <image source="images/liangshan-hall-mid-occluders-v3.webp" width="1664" height="928"/>
  </imagelayer>
  <imagelayer id="10" name="foreground-occluders">
-  <image source="images/liangshan-hall-foreground-occluders-v3.webp" width="1664" height="928"/>
+  <image source="images/liangshan-hall-mid-occluders-v3.webp" width="1664" height="928"/>
  </imagelayer>
  <imagelayer id="11" name="lighting-overlay" opacity="0.85" tintcolor="#ffd8a0">
   <image source="images/liangshan-hall-lighting-overlay-v3.webp" width="1664" height="928"/>

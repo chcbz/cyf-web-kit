@@ -32,7 +32,7 @@
     },
     "tmx": {
       "baselineSha256": "291a38cc66ebd60c8577500a5afc18ce5398570fe4c35ca66d9eebe818826a97",
-      "currentSha256": "4f94e3a52da71369d9c29d96e0ac0ceb2126a1a441b6cd63911701957e1ed49b",
+      "currentSha256": "885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f",
       "path": "public/juyiting/hall.tmx"
     }
   },
@@ -4335,5 +4335,5 @@
       }
     }
   ],
-  "generationId": "a79959fd081f6c76fe5cf371b0587b5efaef463ade443e63e65f1afb4e32bbc9"
+  "generationId": "0440e4963703f0d2f572d60c37f2ea1c1bd34f3fa9a77889b6f672bb108c57f0"
 }

@@ -57,10 +57,11 @@ describe('Juyiting hall scene assets', () => {
     expect(resources).to.deep.include.members([
       { name: 'liangshan-hall-base-clean-v3', type: 'image', src: '/juyiting/images/liangshan-hall-base-clean-v3.webp' },
       { name: 'mid-occluders', type: 'image', src: '/juyiting/images/liangshan-hall-mid-occluders-v3.webp' },
-      { name: 'foreground-occluders', type: 'image', src: '/juyiting/images/liangshan-hall-foreground-occluders-v3.webp' },
+      { name: 'foreground-occluders', type: 'image', src: '/juyiting/images/liangshan-hall-mid-occluders-v3.webp' },
       { name: 'lighting-overlay', type: 'image', src: '/juyiting/images/liangshan-hall-lighting-overlay-v3.webp' }
     ])
     expect(resources.map(resource => resource.name)).not.to.include(personaSpriteResourceName('songjiang'))
+    expect(resources.map(resource => resource.src)).not.to.include('/juyiting/images/liangshan-hall-foreground-occluders-v3.webp')
     expect(buildPersonaSpriteResource(PERSONA_SPRITE_MANIFEST.personas.songjiang)).to.deep.equal({
       name: personaSpriteResourceName('songjiang'),
       type: 'image',
