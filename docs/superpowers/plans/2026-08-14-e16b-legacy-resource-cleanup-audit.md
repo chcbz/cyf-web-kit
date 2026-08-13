@@ -20,6 +20,9 @@ public-tree provenance. Historical E1/E8B/E10A anchors were not rewritten.
   final manifest, live TMX, and current contract hashes.
 - Runtime TMX resource closure contains no reference to
   `liangshan-hall-foreground-occluders-v3.webp`.
+- The `foreground-occluders` layer itself remains intentionally present for the V1/error-state
+  fallback depth contract. During normal V2 operation both legacy full-map occluder layers are
+  detached; retaining the named layer does not add a V2 draw.
 
 ## Retained frozen resources
 
