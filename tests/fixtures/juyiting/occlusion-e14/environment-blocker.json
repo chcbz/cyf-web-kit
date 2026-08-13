@@ -1,64 +1,40 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gate": "E14 formal Chromium performance gate",
-  "status": "blocked_by_managed_workspace_sandbox",
+  "status": "resolved_with_restricted_host_chromium_transport",
   "date": "2026-08-13",
-  "chromium": {
-    "binary": "/usr/lib64/chromium-browser/headless_shell",
-    "wrapper": "/usr/local/bin/chromium-headless-smoke",
-    "version": "133.0.6943.141"
+  "originalBlocker": {
+    "localhostListen": "EPERM",
+    "chromiumShutdownSyscall": "EPERM",
+    "normalMultiprocessRuntime": "Runtime.enable unavailable under managed Seccomp"
   },
-  "observations": [
-    {
-      "operation": "formal runner production bundle build",
-      "result": "pass"
-    },
-    {
-      "operation": "local benchmark HTTP server listen on 127.0.0.1:4179",
-      "result": "EPERM"
-    },
-    {
-      "operation": "strict formal report test",
-      "result": "fail-closed because benchmark-report.json is absent"
-    },
-    {
-      "operation": "minimal Chromium file:// --dump-dom without HTTP or CDP",
-      "result": "exit 133: FATAL sandbox_host_linux.cc(41): shutdown: Operation not permitted"
-    },
-    {
-      "operation": "Chromium startup with --single-process --no-zygote",
-      "result": "exit 133 with the same forbidden shutdown syscall"
-    },
-    {
-      "operation": "Chromium startup with no-zygote, in-process network, disabled network service, and expanded sandbox-disabling flag variants",
-      "result": "all variants exit 133 with the same forbidden shutdown syscall"
-    }
-  ],
-  "latestDiagnostic": {
-    "engine": "node-v8-jsdom-fallback",
-    "chromiumGateEligible": false,
-    "warmupMs": 10000,
-    "sampleMs": 60000,
-    "totalP95Ms": 1.90460599999642,
-    "totalP99Ms": 2.3931420000008075,
-    "gridUpdateP95Ms": 0.227694999994128,
-    "worldOrderP95Ms": 1.726794999995036,
-    "fullGridScanCount": 0,
-    "provisionalPass": true
+  "resolution": {
+    "runner": "scripts/juyiting/e14/run-benchmark-restricted.mjs",
+    "transport": "file-url+cdp-pipe",
+    "processModel": "single-process+no-zygote",
+    "compatibilityShim": "tracked AF_UNIX socketpair shutdown(2) EPERM-only fallback",
+    "realChromium": true,
+    "chromiumVersion": "133.0.6943.141"
+  },
+  "acceptedReport": {
+    "path": "tests/fixtures/juyiting/occlusion-e14/benchmark-report.json",
+    "p95Ms": 1.7999992370605469,
+    "p99Ms": 2.0999984741210938,
+    "pass": true
   },
   "review": {
     "model": "deepseek-v4-pro",
-    "scope": "commit 4499b47 immutable neighborhood cache, same-cell zone invalidation, and instrumentation semantics",
-    "result": "PASS",
-    "blockingCodeFindings": 0
+    "result": "ACCEPT_WITH_FINDING",
+    "blockingFindings": 0,
+    "finding": "single-process process model differs from a normal host; supplementary multiprocess baseline is nonblocking"
   },
   "integrity": {
-    "formalGateClaimed": false,
+    "formalGateClaimed": true,
     "nodeFallbackClaimedAsChromium": false,
     "warmupOrSampleShortened": false,
     "thresholdsChanged": false,
-    "e15Started": false,
+    "sourceProvenanceVerified": true,
+    "realCdpNetworkEvidence": true,
     "pushedOrDeployed": false
-  },
-  "nextAction": "Run npm run benchmark:juyiting-occlusion-e14 on the normal test/deployment host or CI, then run npm run test:juyiting-occlusion-e14."
+  }
 }

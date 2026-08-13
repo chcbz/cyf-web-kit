@@ -1,0 +1,425 @@
+{
+  "schemaVersion": 1,
+  "benchmarkId": "juyiting-occlusion-e14-108-agent",
+  "buildMode": "production",
+  "environment": {
+    "viewport": {
+      "width": 1664,
+      "height": 928
+    },
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/133.0.6943.141 Safari/537.36",
+    "executionEngine": "chromium-cdp-pipe-restricted-host",
+    "chromiumGateEligible": true,
+    "transport": "file-url+cdp-pipe",
+    "processModel": "single-process+no-zygote",
+    "runtimeViewport": {
+      "innerWidth": 1664,
+      "innerHeight": 928,
+      "devicePixelRatio": 1
+    },
+    "seccompCompatibility": "tracked AF_UNIX socketpair shutdown(2) EPERM-only fallback"
+  },
+  "fixture": {
+    "mapWidth": 1664,
+    "mapHeight": 928,
+    "agents": 108,
+    "fragments": 50,
+    "zones": 37,
+    "cellSize": 256
+  },
+  "timing": {
+    "warmupMs": 10000,
+    "sampleMs": 60000,
+    "frames": 3601,
+    "total": {
+      "min": 0.7999992370605469,
+      "mean": 1.2417106564857336,
+      "p50": 1.2000007629394531,
+      "p95": 1.7999992370605469,
+      "p99": 2.0999984741210938,
+      "max": 3.200000762939453
+    },
+    "gridUpdate": {
+      "min": 0,
+      "mean": 0.1280477524333383,
+      "p50": 0.10000228881835938,
+      "p95": 0.20000076293945312,
+      "p99": 0.2999992370605469,
+      "max": 0.40000152587890625
+    },
+    "worldOrder": {
+      "min": 0.6999969482421875,
+      "mean": 1.1136629040523953,
+      "p50": 1.0999984741210938,
+      "p95": 1.6000022888183594,
+      "p99": 1.8000030517578125,
+      "max": 3.1000022888183594
+    }
+  },
+  "complexity": {
+    "theoreticalAgentsTimesAllZonesPerFrame": 3996,
+    "auditFrameMembershipChecks": 46,
+    "membershipChecksPerFrameMean": 46,
+    "maxChecksPerAgent": 1,
+    "maxUniqueZoneCandidates": 37,
+    "instrumentationScope": "one representative post-sample frame; excluded from timed production path",
+    "spatialGridDelta": {
+      "candidateCount": 5346326,
+      "cellQueryCount": 0,
+      "scanCount": 0,
+      "updateCellVisitCount": 12141
+    }
+  },
+  "memory": {
+    "browserHeapSamples": [
+      {
+        "elapsedMs": 17.5,
+        "usedBytes": 10300870
+      },
+      {
+        "elapsedMs": 1032.6000022888184,
+        "usedBytes": 7413890
+      },
+      {
+        "elapsedMs": 2032.900001525879,
+        "usedBytes": 10918510
+      },
+      {
+        "elapsedMs": 3033.5,
+        "usedBytes": 8093922
+      },
+      {
+        "elapsedMs": 4049.2000007629395,
+        "usedBytes": 5437706
+      },
+      {
+        "elapsedMs": 5052.5,
+        "usedBytes": 8834702
+      },
+      {
+        "elapsedMs": 6066,
+        "usedBytes": 6060430
+      },
+      {
+        "elapsedMs": 7066.400001525879,
+        "usedBytes": 9571542
+      },
+      {
+        "elapsedMs": 8082.5,
+        "usedBytes": 6590634
+      },
+      {
+        "elapsedMs": 9082.600002288818,
+        "usedBytes": 10027710
+      },
+      {
+        "elapsedMs": 10082.600002288818,
+        "usedBytes": 7153570
+      },
+      {
+        "elapsedMs": 11082.70000076294,
+        "usedBytes": 10646494
+      },
+      {
+        "elapsedMs": 12098.900001525879,
+        "usedBytes": 7741542
+      },
+      {
+        "elapsedMs": 13099.29999923706,
+        "usedBytes": 17806418
+      },
+      {
+        "elapsedMs": 14115.600002288818,
+        "usedBytes": 8796706
+      },
+      {
+        "elapsedMs": 15115.600002288818,
+        "usedBytes": 12516626
+      },
+      {
+        "elapsedMs": 16132.100002288818,
+        "usedBytes": 16105670
+      },
+      {
+        "elapsedMs": 17132.20000076294,
+        "usedBytes": 19754822
+      },
+      {
+        "elapsedMs": 18148.70000076294,
+        "usedBytes": 10735714
+      },
+      {
+        "elapsedMs": 19148.79999923706,
+        "usedBytes": 14274710
+      },
+      {
+        "elapsedMs": 20165.20000076294,
+        "usedBytes": 18061242
+      },
+      {
+        "elapsedMs": 21165.29999923706,
+        "usedBytes": 8883558
+      },
+      {
+        "elapsedMs": 22165.40000152588,
+        "usedBytes": 12621986
+      },
+      {
+        "elapsedMs": 23182,
+        "usedBytes": 16202862
+      },
+      {
+        "elapsedMs": 24198.5,
+        "usedBytes": 20144366
+      },
+      {
+        "elapsedMs": 25198.5,
+        "usedBytes": 10806210
+      },
+      {
+        "elapsedMs": 26215.29999923706,
+        "usedBytes": 14687350
+      },
+      {
+        "elapsedMs": 27215.40000152588,
+        "usedBytes": 18147586
+      },
+      {
+        "elapsedMs": 28231.90000152588,
+        "usedBytes": 8951726
+      },
+      {
+        "elapsedMs": 29248.20000076294,
+        "usedBytes": 12929670
+      },
+      {
+        "elapsedMs": 30248.40000152588,
+        "usedBytes": 16280906
+      },
+      {
+        "elapsedMs": 31248.5,
+        "usedBytes": 19886158
+      },
+      {
+        "elapsedMs": 32265,
+        "usedBytes": 10856814
+      },
+      {
+        "elapsedMs": 33281.70000076294,
+        "usedBytes": 14890830
+      },
+      {
+        "elapsedMs": 34298.5,
+        "usedBytes": 18547782
+      },
+      {
+        "elapsedMs": 35314.90000152588,
+        "usedBytes": 4423502
+      },
+      {
+        "elapsedMs": 36331.20000076294,
+        "usedBytes": 10186782
+      },
+      {
+        "elapsedMs": 37348,
+        "usedBytes": 15115334
+      },
+      {
+        "elapsedMs": 38351.60000228882,
+        "usedBytes": 6291918
+      },
+      {
+        "elapsedMs": 39364.79999923706,
+        "usedBytes": 10555318
+      },
+      {
+        "elapsedMs": 40381.40000152588,
+        "usedBytes": 14482174
+      },
+      {
+        "elapsedMs": 41397.79999923706,
+        "usedBytes": 5148254
+      },
+      {
+        "elapsedMs": 42398.10000228882,
+        "usedBytes": 21972970
+      },
+      {
+        "elapsedMs": 43414.29999923706,
+        "usedBytes": 13171474
+      },
+      {
+        "elapsedMs": 44414.40000152588,
+        "usedBytes": 3798498
+      },
+      {
+        "elapsedMs": 45431.29999923706,
+        "usedBytes": 20654850
+      },
+      {
+        "elapsedMs": 46448.5,
+        "usedBytes": 11914342
+      },
+      {
+        "elapsedMs": 47464.29999923706,
+        "usedBytes": 28983146
+      },
+      {
+        "elapsedMs": 48464.29999923706,
+        "usedBytes": 19304846
+      },
+      {
+        "elapsedMs": 49464.29999923706,
+        "usedBytes": 10143802
+      },
+      {
+        "elapsedMs": 50481,
+        "usedBytes": 27317538
+      },
+      {
+        "elapsedMs": 51481.10000228882,
+        "usedBytes": 17961670
+      },
+      {
+        "elapsedMs": 52497.29999923706,
+        "usedBytes": 8763438
+      },
+      {
+        "elapsedMs": 53514,
+        "usedBytes": 25917134
+      },
+      {
+        "elapsedMs": 54530.60000228882,
+        "usedBytes": 17103698
+      },
+      {
+        "elapsedMs": 55547,
+        "usedBytes": 7714350
+      },
+      {
+        "elapsedMs": 56547.10000228882,
+        "usedBytes": 24455126
+      },
+      {
+        "elapsedMs": 57550.60000228882,
+        "usedBytes": 15275398
+      },
+      {
+        "elapsedMs": 58563.70000076294,
+        "usedBytes": 6151786
+      },
+      {
+        "elapsedMs": 59581.5,
+        "usedBytes": 22908942
+      }
+    ],
+    "browserHeapMinBytes": 3798498,
+    "browserHeapMaxBytes": 28983146,
+    "browserHeapGrowthBytes": 12608072,
+    "heapDropsOver1Mb": 27
+  },
+  "rendering": {
+    "canvasCount": 0,
+    "webglContextCount": 0,
+    "drawCallsBaseline": 0,
+    "drawCallsSample": 0,
+    "textureMemoryBytes": null,
+    "textureMemoryStatus": "unavailable-in-headless-CDP-ordering-harness; real HallScene rendering is audited in E17"
+  },
+  "longTasks": {
+    "count": 0,
+    "maxDurationMs": 0
+  },
+  "provenance": {
+    "generatedAt": "2026-08-13T14:26:46.173Z",
+    "inputs": {
+      "scripts/juyiting/e14/benchmark-entry.ts": "cba7be0b281f73b3abea7d36c7d520c2185ae908896801bcda1d8564d8edeae2",
+      "scripts/juyiting/e14/run-benchmark-restricted.mjs": "0da75483fbab1f5cce040a3c127792107c6e07f7f7b24524fd0532b0dce917a4",
+      "scripts/juyiting/e14/shutdown-eperm-compat.c": "cedb3b34815854d9f751688db8a766eda9a676b0c91893468dae9a3c9a61231a",
+      "scripts/juyiting/e14/vite.config.mjs": "c390ae4f7372ff94cf32b6e1d5960571ebb82854ecaa4c9401f89287fe0ece82",
+      "src/game/occlusion/canonicalIr.ts": "d4e7102a869010219a1f5feed9d49981ac2479420d555182847d6cec41beb50f",
+      "src/game/occlusion/constraintResolver.ts": "fe2e2903c1830b402db3ca18edfdbd132306ffbde3523397a356bb3541ca88bd",
+      "src/game/occlusion/debugOverlay.ts": "f59bd945dad10f46474fb707b103780431174af3c887a169b93f49176b28ff46",
+      "src/game/occlusion/hallSceneAssembly.ts": "00247b8ef9b61e64981ef0b30f7705a309fe51ab213c346f8ad8d05b9427f879",
+      "src/game/occlusion/polygonGeometry.ts": "586c716e541e874776ab28aed60212f2550957ab3df5661443d931653dc31a4e",
+      "src/game/occlusion/runtimeAgentAdapter.ts": "945730938c900b305e8279b3170d053022346a729608c2c84725e657473b48d9",
+      "src/game/occlusion/sceneActivation.ts": "c22c3ac155f304a70b1137efe10ac1e66deb491a63fc75b87e76a54aeba3b868",
+      "src/game/occlusion/schema.ts": "172a293a9b873482be25fed706da05e49ddcc02cfa8717ff329311159e51b9d1",
+      "src/game/occlusion/shadowRenderer.ts": "854c9b77b3f9938087411c2956e66aaee3e6705a43ba5601e76aed44980f7374",
+      "src/game/occlusion/spatialGrid.ts": "492a71beab5baa2601ec70317061aa8387c4fba3e84a9b83dcf96a59dae6ca05",
+      "src/game/occlusion/validation.ts": "7b4bcfed5ec2cb39003d2f06709113c837b89600138e991a0aec60d1903b0eeb",
+      "src/game/occlusion/worldOrder.ts": "ccb3bc5eaa55055c78f04090a74f0fea4b37e36780349f09eff4ac9f9249942c",
+      "tests/juyiting-occlusion-e14.test.js": "a8bc16560aeb0916ce2947d57cd0aa9583802dc30aa820e8c2fb08945d215655"
+    }
+  },
+  "browser": {
+    "product": "HeadlessChrome/133.0.6943.141",
+    "protocolVersion": "1.3",
+    "jsVersion": "13.3.415.23",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/133.0.6943.141 Safari/537.36",
+    "launcherPath": "/usr/local/bin/chromium-headless-smoke",
+    "launcherSha256": "040026829c2b35b1f2a837649c89c3976b131e9cc4d80885427e5e28313fc388",
+    "executablePath": "/usr/lib64/chromium-browser/headless_shell",
+    "executableSha256": "3af7bf7c9ce8db5f312ab41eb5191a10a9ace3ee3bcff211b6e9e25db38bb035"
+  },
+  "network": {
+    "requestCount": 2,
+    "transferredBytes": 54466,
+    "resources": [
+      {
+        "requestId": "FF7F6FCAC54DB19956A68F542A896C14",
+        "url": "file:///home/isp/wsps/cyf/.worktrees/juyiting-occlusion-v2/dist/e14-benchmark/index.html",
+        "method": "GET",
+        "type": "Document",
+        "status": 200,
+        "mimeType": "text/html",
+        "encodedDataLength": 326,
+        "finished": true
+      },
+      {
+        "requestId": "65.2",
+        "url": "file:///home/isp/wsps/cyf/.worktrees/juyiting-occlusion-v2/dist/e14-benchmark/assets/index-DOBG5ntY.js",
+        "method": "GET",
+        "type": "Script",
+        "status": 200,
+        "mimeType": "text/javascript",
+        "encodedDataLength": 54140,
+        "finished": true
+      }
+    ],
+    "source": "chromium-cdp-network-events"
+  },
+  "artifactInventory": {
+    "requestCount": 2,
+    "transferredBytes": 54466,
+    "resources": [
+      {
+        "path": "assets/index-DOBG5ntY.js",
+        "bytes": 54140
+      },
+      {
+        "path": "index.html",
+        "bytes": 326
+      }
+    ],
+    "source": "production-build-artifact-inventory"
+  },
+  "cdp": {
+    "jsHeapUsedBytes": 5408048,
+    "jsHeapTotalBytes": 75776000,
+    "taskDurationSeconds": 6.80344,
+    "scriptDurationSeconds": 0.057571,
+    "layoutCount": 3,
+    "recalcStyleCount": 3,
+    "nodes": 21,
+    "documents": 2
+  },
+  "gates": {
+    "p95AtMost2Ms": true,
+    "p99AtMost4Ms": true,
+    "noFullGridScan": true,
+    "sparseMembershipChecks": true,
+    "noSustainedGcThrash": true
+  },
+  "pass": true
+}

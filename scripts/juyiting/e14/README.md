@@ -42,3 +42,22 @@ The current managed workspace sandbox blocks localhost listen/connect and the
 `shutdown(2)` call used during Chromium startup. On that host the formal runner
 fails before page execution. This is an environment blocker, not a benchmark
 pass or fail; run the formal command on the normal deployment/test host or CI.
+
+
+## Restricted managed-host Chromium gate
+
+When localhost sockets and Chromium's `shutdown(2)` call are blocked by the
+managed Seccomp profile, run:
+
+```bash
+npm run benchmark:juyiting-occlusion-e14:restricted
+npm run test:juyiting-occlusion-e14
+```
+
+This path still runs the same production bundle in installed Chromium at
+1664×928 with the fixed 10s warmup, 60s sample, fixture, and thresholds. It uses
+`file://` plus CDP pipe instead of HTTP plus TCP CDP, runs Chromium in
+single-process/no-zygote mode, and compiles a narrow `LD_PRELOAD` shim that only
+turns a Seccomp-generated `shutdown(2) == EPERM` into success. Reports identify
+this transport and remain ineligible unless the user agent and execution engine
+prove a real Chromium run.

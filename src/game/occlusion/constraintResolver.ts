@@ -127,11 +127,7 @@ function freezeMembershipOutput(
   return frozen
 }
 
-// ── Internal mutable zone membership (polygon + per-agent state) ──
-
-interface ZoneMembershipCache {
-  fixedPoly: FixedPolygon
-}
+// ── Compiled zone polygon cache ──
 
 // Canonical zone objects are scene-static. Cache their validated fixed-point
 // representation across frames so exact polygon checks do not recompile the
@@ -293,7 +289,6 @@ function resolveMembershipsWithGrid(
   candidateProvider: ConstraintCandidateProvider,
   zoneRegistry: ReadonlyMap<string, OcclusionConstraintZone>,
   previousState: ConstraintMembershipState,
-  zoneCache: Map<string, ZoneMembershipCache>,
   sceneId: string,
   instr: ConstraintInstrumentation | undefined,
 ): { snapshots: Map<string, Map<string, MembershipState>>; workingState: Map<string, Map<string, MembershipState>> } {
@@ -383,20 +378,13 @@ function resolveMembershipsWithGrid(
 
       checksForAgent++
 
-      // Ensure zone cache entry
-      let zc = zoneCache.get(zoneId)
-      if (!zc) {
-        zc = { fixedPoly: compiledZonePolygon(zone) }
-        zoneCache.set(zoneId, zc)
-      }
-
       // Hysteresis check reads the immutable prior frame directly. Each
       // agent-zone pair is evaluated once, so a duplicate mutable state Map is
       // unnecessary.
       const previous = previousState[zoneId]?.[agent.stableId] ?? null
       const prevBool = previous === 'inside' ? true : previous === 'outside' ? false : null
 
-      const hyst = computeHysteresis(zc.fixedPoly, fxNorm, fyNorm, prevBool)
+      const hyst = computeHysteresis(compiledZonePolygon(zone), fxNorm, fyNorm, prevBool)
       const newState: MembershipState = hyst.inside ? 'inside' : 'outside'
 
       // Record in snapshot
@@ -683,10 +671,9 @@ export function resolveConstraintOrder(
   const previousMembership = opts?.previousMembership ?? createEmptyMembershipState()
 
   // 5. Resolve memberships using spatial grid (NOT flat all-zones)
-  const zoneCache = new Map<string, ZoneMembershipCache>()
   const { snapshots, workingState } = resolveMembershipsWithGrid(
     agents, candidateProvider, zoneRegistry,
-    previousMembership, zoneCache, sceneId, instr,
+    previousMembership, sceneId, instr,
   )
 
   // 6. Generate edges
