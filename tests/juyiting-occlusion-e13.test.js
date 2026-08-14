@@ -160,7 +160,7 @@ describe('E13 evidence integrity (phase-1 + offline)', () => {
     // Keep this exception local: 120 seconds covers normal host variance, while
     // the matching subprocess deadline still kills a genuine stalled validator.
     this.timeout(120000)
-    const result = spawnSyncCaptured(process.execPath, ['--import', 'tsx', GATE_SCRIPT], { cwd: REPO_ROOT, encoding: 'utf8', timeout: 120000 })
+    const result = spawnSyncCaptured(process.execPath, ['--import', 'tsx', GATE_SCRIPT, '--reviewed-evidence-dir', FIXTURE_DIR], { cwd: REPO_ROOT, encoding: 'utf8', timeout: 120000 })
     expect(result.status, result.stderr).to.equal(0)
     const gate = readJson(join(FIXTURE_DIR, 'machines-gate.json'))
     expect(gate.matrixPass).to.equal(true)

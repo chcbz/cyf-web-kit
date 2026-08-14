@@ -26,6 +26,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { resolveContainedEvidenceFile } from './lib/evidence-files.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(__dirname, '..', '..', '..')
@@ -86,6 +87,7 @@ function main () {
 
   // ── pass 1: validate every batch against the current hashes and file bytes ──
   const merged = new Map() // id -> { record, batchDir }
+  const hashOwners = new Map()
   const sourceBatches = []
   const batchIndexHashes = []
 
@@ -117,25 +119,33 @@ function main () {
       if (!record.runtimeFacts || typeof record.runtimeFacts !== 'object') {
         fail(`batch ${batchDir}: record ${id} missing runtimeFacts`)
       }
-      const file = typeof record.file === 'string' ? record.file : `shots/${id}.png`
-      if (!/^shots\/[^/]+\.png$/.test(file)) fail(`batch ${batchDir}: record ${id} has unexpected file path ${file}`)
-      const filePath = join(batchDir, file)
-      if (!existsSync(filePath)) fail(`batch ${batchDir}: record ${id} file missing: ${filePath}`)
+      const file = record.file
+      let filePath
+      try {
+        filePath = resolveContainedEvidenceFile(batchDir, file, `shots/${id}.png`)
+      } catch (error) {
+        fail(`batch ${batchDir}: record ${id} ${error.message}`)
+      }
       const actual = sha256File(filePath)
       if (actual !== record.sha256) {
         fail(`batch ${batchDir}: record ${id} file hash mismatch: index ${record.sha256}, file ${actual}`)
       }
+      const priorHashOwner = hashOwners.get(actual)
+      if (priorHashOwner) fail(`batch ${batchDir}: record ${id} duplicates shot bytes from ${priorHashOwner}`)
+      hashOwners.set(actual, id)
       if (record.kind === 'movement') {
         const sequence = Array.isArray(record.movementSequence) ? record.movementSequence : []
         if (sequence.length !== 3 || sequence.map(frame => frame?.stage).join(',') !== 'before,mid,after') {
           fail(`batch ${batchDir}: movement record ${id} must have before/mid/after sequence`)
         }
         for (const frame of sequence) {
-          if (!new RegExp(`^movement-sequences/${id}-(before|mid|after)\\.png$`).test(frame.file || '')) {
-            fail(`batch ${batchDir}: movement record ${id} has unexpected sequence file ${frame.file}`)
+          const expectedFrame = `movement-sequences/${id}-${frame.stage}.png`
+          let framePath
+          try {
+            framePath = resolveContainedEvidenceFile(batchDir, frame.file, expectedFrame)
+          } catch (error) {
+            fail(`batch ${batchDir}: movement record ${id} ${error.message}`)
           }
-          const framePath = join(batchDir, frame.file)
-          if (!existsSync(framePath)) fail(`batch ${batchDir}: movement sequence file missing: ${framePath}`)
           const frameHash = sha256File(framePath)
           if (frameHash !== frame.sha256) fail(`batch ${batchDir}: movement sequence hash mismatch for ${frame.file}`)
         }
@@ -168,8 +178,8 @@ function main () {
   const enriched = []
   for (const id of LIVE_IDS) {
     const { record } = merged.get(id)
-    const file = typeof record.file === 'string' ? record.file : `shots/${id}.png`
-    const sourcePath = join(merged.get(id).batchDir, file)
+    const file = record.file
+    const sourcePath = resolveContainedEvidenceFile(merged.get(id).batchDir, file, `shots/${id}.png`)
     const buffer = readFileSync(sourcePath)
     if (sha256Buffer(buffer) !== record.sha256) fail(`internal hash re-check failed for ${id}`)
     const destPath = join(shotsDir, `${id}.png`)
@@ -184,7 +194,7 @@ function main () {
     }
     if (record.kind === 'movement') {
       next.movementSequence = record.movementSequence.map(frame => {
-        const sourceFrame = join(merged.get(id).batchDir, frame.file)
+        const sourceFrame = resolveContainedEvidenceFile(merged.get(id).batchDir, frame.file, `movement-sequences/${id}-${frame.stage}.png`)
         const destFile = `movement-sequences/${id}-${frame.stage}.png`
         const frameBuffer = readFileSync(sourceFrame)
         if (sha256Buffer(frameBuffer) !== frame.sha256) fail(`internal sequence hash re-check failed for ${id}:${frame.stage}`)

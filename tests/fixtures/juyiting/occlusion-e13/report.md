@@ -2,10 +2,8 @@
 
 - 状态：`GENERATED_OFFLINE`
 - 遮挡矩阵：270/270 已生成，`matrixPass=true`
-- 真实 Chromium：19/19（camera 10、interaction 7、movement 2 + 6 个 before/mid/after movement frames），机器校验 17/17 PASS
-- GPT live 视觉复审：camera / interaction / movement 全部 PASS，最高严重级 S0
-- 最终 E13 release：`releasePass=false`（仅独立 `release_guard` 待完成）
-- GPT V5 全量审核发现 5 个 P1；重建固定视口、可达探针、ownership overlay 和 37-mask mapping 后，GPT V6 全量审核 15/15 sheets、270/270 shots、37/37 mask cards PASS。
+- 最终 E13 release：`releasePass=false`
+- 本命令只重建并验证确定性的 270-shot mechanical matrix；V5/V6、37-mask mapping 与 live browser 审核产物由独立 aggregate reviewed-evidence gate 消费，不会从旧 fixture 静默混入本次机械结果。
 
 ## 权威输入与绑定
 
@@ -27,10 +25,10 @@
 
 - `shots/E13-001.png` … `shots/E13-270.png`
 - `contact-sheets/*.png`：15 张，每格有 `shotId / persona / relation` 标签
-- `index.json`、`oracle-report.json`、`machines-gate.json`、本报告
+- `index.json`、`oracle-report.json`、`pixel-recompute-report.json`、`matrix-gate.json`、本报告
 
-`npm run generate:e13-offline` 从干净 checkout 完整重建。隔离输出使用 `npm run generate:e13-offline -- --output /tmp/e13-review`。
+`npm run generate:e13-offline` 从干净 checkout 重建并验证 mechanical matrix。隔离输出使用 `npm run generate:e13-offline -- --output /tmp/e13-matrix`；该目录不需要、也不会读取 V5/V6、mask mapping 或 live browser 审核产物。完整 reviewed-evidence 汇总另由 `npm run validate:e13-evidence` 显式消费已审核目录；若重建字节与已审核 fixture 漂移，aggregate 必须拒绝并要求重新审核，不能沿用旧 V6。
 
 ## 明确延期项
 
-离线 `index.json` 继续将 camera、interaction、movement 标记为浏览器专属范围，不混入 270 遮挡矩阵。对应的真实 Chromium 证据已生成到 `live/`：10 个 camera、7 个 interaction、2 个 movement，PNG/hash/viewport/V2 renderer/camera contract/pointer-panel-bubble-lighting/movement contract 共 17/17 校验通过。GPT V6 离线全量视觉审核已通过；live camera/interaction/movement 视觉复审也已全部 PASS。独立技术复核和 release guard 按 E17/E18 完成。
+matrix index 中 camera、interaction、movement 保持独立 `DEFERRED`，因为它们不是本命令可确定重建的产物。已提交的 V6 与 live browser 审核证据只能由 aggregate reviewed-evidence gate 按实际 SHA 显式绑定；最终 release 仍由独立 release_guard 决定。

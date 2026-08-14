@@ -1,13 +1,16 @@
 import { expect } from 'chai'
 import { createHash } from 'node:crypto'
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { copyFileSync, cpSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { spawnSyncCaptured } from '../scripts/juyiting/lib/spawn-capture.mjs'
+import { validateReviewedEvidenceBindings } from '../scripts/juyiting/e13/lib/review-bindings.mjs'
 
 const ROOT = process.cwd()
 const FIXTURE = join(ROOT, 'tests/fixtures/juyiting/occlusion-e13')
 const GATE_SCRIPT = join(ROOT, 'scripts/juyiting/e13/validate-e13-evidence.mjs')
+const LIVE_GATE_SCRIPT = join(ROOT, 'scripts/juyiting/e13/validate-e13-live-evidence.mjs')
+const GENERATOR_SCRIPT = join(ROOT, 'scripts/juyiting/e13/generate-e13-offline-evidence.mjs')
 const LIVE_PY_CHECK = 'live Python offline validator re-derives all 270 pixel metrics from production assets and committed PNGs (exit 0 required)'
 const PNG_SHA_CHECK = '270/270 screenshotFile PNG bytes match committed sha256'
 
@@ -43,6 +46,7 @@ function gateEvidence (mutateIndex, mutatePlan, mutateReport, mutateShot) {
   else symlinkDir(join(FIXTURE, 'shots'), join(dir, 'shots'))
   symlinkDir(join(FIXTURE, 'contact-sheets'), join(dir, 'contact-sheets'))
   symlinkDir(join(FIXTURE, 'live'), join(dir, 'live'))
+  cpSync(join(FIXTURE, 'mask-structure-mapping'), join(dir, 'mask-structure-mapping'), { recursive: true })
   if (mutateIndex) { const index = readJson(join(dir, 'index.json')); mutateIndex(index); writeJson(join(dir, 'index.json'), index) }
   if (mutatePlan) { const plan = readJson(join(dir, 'shot-plan.json')); mutatePlan(plan); writeJson(join(dir, 'shot-plan.json'), plan) }
   if (mutateReport) { const report = readJson(join(dir, 'pixel-recompute-report.json')); mutateReport(report, join(dir, 'index.json')); writeJson(join(dir, 'pixel-recompute-report.json'), report) }
@@ -60,7 +64,7 @@ function pyEvidence (mutateIndex, mutateShot) {
 }
 
 function runGate (dir, shotPlan = join(dir, 'shot-plan.json')) {
-  return spawnSyncCaptured(process.execPath, ['--import', 'tsx', GATE_SCRIPT, '--evidence-dir', dir, '--shot-plan', shotPlan], {
+  return spawnSyncCaptured(process.execPath, ['--import', 'tsx', GATE_SCRIPT, '--evidence-dir', dir, '--shot-plan', shotPlan, '--reviewed-evidence-dir', dir], {
     cwd: ROOT, encoding: 'utf8', timeout: 180000,
   })
 }
@@ -186,6 +190,180 @@ describe('E13 fail-closed independent recompute (P2-B)', () => {
       const gate = readJson(join(dir, 'machines-gate.json'))
       const failing = gate.failures.find(f => f.check === LIVE_PY_CHECK)
       expect(failing, 'missing live Python recompute failure').to.exist
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+})
+
+
+function reviewedBindingFixture () {
+  const dir = mkdtempSync(join(tmpdir(), 'cyf-e13-reviewed-bindings-'))
+  for (const name of ['index.json', 'shot-plan.json', 'visual-review-v6.json']) copyFileSync(join(FIXTURE, name), join(dir, name))
+  cpSync(join(FIXTURE, 'contact-sheets'), join(dir, 'contact-sheets'), { recursive: true })
+  cpSync(join(FIXTURE, 'mask-structure-mapping'), join(dir, 'mask-structure-mapping'), { recursive: true })
+  return dir
+}
+
+function failedReviewChecks (dir) {
+  return validateReviewedEvidenceBindings({ repo: ROOT, evidenceDir: dir, reviewedEvidenceDir: dir }).filter(result => !result.ok)
+}
+
+function hardlinkTreeFiles (src, dst) {
+  mkdirSync(dst, { recursive: true })
+  for (const name of readdirSync(src)) linkSync(join(src, name), join(dst, name))
+}
+
+function liveEvidenceFixture (mutate) {
+  const dir = mkdtempSync(join(tmpdir(), 'cyf-e13-live-paths-'))
+  copyFileSync(join(FIXTURE, 'live/index.json'), join(dir, 'index.json'))
+  hardlinkTreeFiles(join(FIXTURE, 'live/shots'), join(dir, 'shots'))
+  hardlinkTreeFiles(join(FIXTURE, 'live/movement-sequences'), join(dir, 'movement-sequences'))
+  hardlinkTreeFiles(join(FIXTURE, 'live/contact-sheets'), join(dir, 'contact-sheets'))
+  const index = readJson(join(dir, 'index.json'))
+  mutate?.(dir, index)
+  writeJson(join(dir, 'index.json'), index)
+  return dir
+}
+
+function runLiveGate (dir) {
+  return spawnSyncCaptured(process.execPath, [LIVE_GATE_SCRIPT, '--live-dir', dir], {
+    cwd: ROOT, encoding: 'utf8', timeout: 30000,
+  })
+}
+
+describe('E13 V6 reviewed-artifact bindings fail closed (P2-1)', () => {
+  it('accepts the committed exact 15-sheet/hash/dimension and mapping bindings', () => {
+    const dir = reviewedBindingFixture()
+    try { expect(failedReviewChecks(dir)).to.deep.equal([]) } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+
+  for (const mutation of [
+    {
+      name: 'a contact sheet replaced by non-PNG bytes',
+      mutate: dir => writeFileSync(join(dir, 'contact-sheets', readdirSync(join(dir, 'contact-sheets')).sort()[0]), 'NOT-A-PNG'),
+      expected: 'PNG signature',
+    },
+    {
+      name: 'an extra stale contact sheet',
+      mutate: dir => copyFileSync(join(dir, 'contact-sheets', readdirSync(join(dir, 'contact-sheets')).sort()[0]), join(dir, 'contact-sheets', 'stale-old-sheet.png')),
+      expected: 'exactly matches',
+    },
+    {
+      name: 'a missing contact sheet',
+      mutate: dir => unlinkSync(join(dir, 'contact-sheets', readdirSync(join(dir, 'contact-sheets')).sort()[0])),
+      expected: 'exactly matches',
+    },
+    {
+      name: 'a valid old/other sheet substituted under the planned filename',
+      mutate: dir => {
+        const [first, second] = readdirSync(join(dir, 'contact-sheets')).sort()
+        copyFileSync(join(dir, 'contact-sheets', second), join(dir, 'contact-sheets', first))
+      },
+      expected: 'SHA-256',
+    },
+    {
+      name: 'shot-plan/index and mapping JSON/SVG drift after visual review',
+      mutate: dir => {
+        const plan = readJson(join(dir, 'shot-plan.json')); plan.reviewerMutation = true; writeJson(join(dir, 'shot-plan.json'), plan)
+        const index = readJson(join(dir, 'index.json')); index.reviewerMutation = true; writeJson(join(dir, 'index.json'), index)
+        const mapping = readJson(join(dir, 'mask-structure-mapping/mask-structure-mapping.json')); mapping.reviewerMutation = true; writeJson(join(dir, 'mask-structure-mapping/mask-structure-mapping.json'), mapping)
+        writeFileSync(join(dir, 'mask-structure-mapping/mask-structure-mapping.svg'), `${readFileSync(join(dir, 'mask-structure-mapping/mask-structure-mapping.svg'), 'utf8')}<!-- drift -->\n`)
+      },
+      expected: 'actual current TMX',
+    },
+  ]) {
+    it(`rejects ${mutation.name}`, () => {
+      const dir = reviewedBindingFixture()
+      try {
+        mutation.mutate(dir)
+        const failures = failedReviewChecks(dir)
+        expect(failures.length).to.be.greaterThan(0)
+        expect(failures.map(failure => failure.check).join(' | ')).to.include(mutation.expected)
+      } finally { rmSync(dir, { recursive: true, force: true }) }
+    })
+  }
+
+  it('Python review-binding mode rejects the reviewer NOT-A-PNG reproduction', function () {
+    this.timeout(30000)
+    const dir = reviewedBindingFixture()
+    try {
+      writeFileSync(join(dir, 'contact-sheets', readdirSync(join(dir, 'contact-sheets')).sort()[0]), 'NOT-A-PNG')
+      const result = spawnSyncCaptured('python3', ['-m', 'offline_pixel_renderer.validate', '--repo-root', ROOT, '--evidence-dir', dir, '--review-bindings-only', '--reviewed-evidence-dir', dir], {
+        cwd: ROOT, encoding: 'utf8', timeout: 30000, env: { ...process.env, PYTHONPATH: join(ROOT, 'scripts/juyiting/e13') },
+      })
+      expect(result.status).to.not.equal(0)
+      expect(result.stdout).to.include('Python V6 contact sheets are PNG 755x398')
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+})
+
+describe('E13 live shot canonical paths and unique hashes fail closed (P2-3)', () => {
+  it('rejects a record that points at another shot', () => {
+    const dir = liveEvidenceFixture((_dir, index) => {
+      const first = index.shots[0]; const second = index.shots[1]
+      first.file = second.file; first.sha256 = second.sha256
+    })
+    try { expect(runLiveGate(dir).status).to.not.equal(0) } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+
+  it('rejects an absolute record.file path', () => {
+    const dir = liveEvidenceFixture((_liveDir, index) => {
+      index.shots[0].file = resolve(FIXTURE, 'live/shots/E13-271.png')
+    })
+    try { expect(runLiveGate(dir).status).to.not.equal(0) } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+
+  it('rejects ../ path traversal even when the escaped file hash is supplied', () => {
+    const dir = liveEvidenceFixture((liveDir, index) => {
+      const escaped = join(liveDir, '..', `escaped-${process.pid}.png`)
+      copyFileSync(join(FIXTURE, 'live/shots/E13-271.png'), escaped)
+      index.shots[0].file = `../${escaped.split('/').at(-1)}`
+    })
+    try { expect(runLiveGate(dir).status).to.not.equal(0) } finally {
+      const escaped = join(dir, '..', `escaped-${process.pid}.png`)
+      rmSync(escaped, { force: true }); rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects a canonical-name symlink that escapes the live evidence root', () => {
+    const dir = liveEvidenceFixture((liveDir) => {
+      const file = join(liveDir, 'shots/E13-271.png')
+      unlinkSync(file)
+      symlinkSync(resolve(FIXTURE, 'live/shots/E13-271.png'), file, 'file')
+    })
+    try { expect(runLiveGate(dir).status).to.not.equal(0) } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+
+  it('rejects duplicate bytes/hashes assigned to two planned shot names', () => {
+    const dir = liveEvidenceFixture((liveDir, index) => {
+      const first = index.shots[0]; const second = index.shots[1]
+      unlinkSync(join(liveDir, second.file)); copyFileSync(join(liveDir, first.file), join(liveDir, second.file))
+      second.sha256 = first.sha256
+    })
+    try { expect(runLiveGate(dir).status).to.not.equal(0) } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+})
+
+describe('E13 isolated mechanical rebuild scope (P2-2)', () => {
+  it('aggregate reviewed-evidence gate rejects an implicit review source before running expensive validation', () => {
+    const result = spawnSyncCaptured(process.execPath, ['--import', 'tsx', GATE_SCRIPT], { cwd: ROOT, encoding: 'utf8', timeout: 10000 })
+    expect(result.status).to.not.equal(0)
+    expect(result.stderr).to.include('--reviewed-evidence-dir is required')
+  })
+
+  it('starts from a clean /tmp output without borrowing V5/V6/live reviewed artifacts', function () {
+    this.timeout(120000)
+    const dir = mkdtempSync(join(tmpdir(), 'cyf-e13-clean-rebuild-smoke-'))
+    rmSync(dir, { recursive: true, force: true })
+    try {
+      const result = spawnSyncCaptured(process.execPath, [GENERATOR_SCRIPT, '--output', dir, '--limit', '1'], {
+        cwd: ROOT, encoding: 'utf8', timeout: 120000,
+      })
+      expect(result.status, result.stderr).to.equal(0)
+      expect(existsSync(join(dir, 'index.json'))).to.equal(true)
+      expect(existsSync(join(dir, 'shots/E13-001.png'))).to.equal(true)
+      for (const name of ['visual-review-v5.json', 'visual-review-v6.json', 'live', 'mask-structure-mapping', 'machines-gate.json']) {
+        expect(existsSync(join(dir, name)), name).to.equal(false)
+      }
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 })

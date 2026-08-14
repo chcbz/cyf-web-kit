@@ -11,6 +11,72 @@ PIXEL_KEYS=('method','visibilityMethod','hasAlphaOverlap','agentOpaquePixelsInAa
 def _sha256_bytes(data):
     return hashlib.sha256(data).hexdigest()
 
+def _png_dimensions(path):
+    with open(path, 'rb') as f:
+        header=f.read(24)
+    signature=b'\x89PNG\r\n\x1a\n'
+    if len(header)<24 or header[:8]!=signature:
+        return None
+    return (int.from_bytes(header[16:20], 'big'), int.from_bytes(header[20:24], 'big'))
+
+def _expected_contact_sheets(matrix):
+    first_by_target={}
+    for shot in matrix:
+        first_by_target.setdefault(shot['targetStableId'], shot)
+    return sorted(
+        f"cell-{shot['cell']}-{target.replace('/', '_').replace('.', '_')}.png"
+        for target,shot in sorted(first_by_target.items())
+    )
+
+def validate_review_bindings(evidence_dir, reviewed_evidence_dir, repo_root):
+    results=[]
+    def check(name,ok,detail=''):
+        results.append({'check':name,'ok':bool(ok),'detail':str(detail)}); return bool(ok)
+    def read(path):
+        with open(path,encoding='utf-8') as f:return json.load(f)
+    review_path=os.path.join(reviewed_evidence_dir,'visual-review-v6.json')
+    if not os.path.isfile(review_path):
+        check('Python V6 review binding file exists',False,review_path)
+        return results
+    review=read(review_path); bindings=review.get('bindings',{})
+    contact=bindings.get('contactSheets',{}) if isinstance(bindings.get('contactSheets'),dict) else {}
+    sheets_dir=os.path.join(reviewed_evidence_dir,'contact-sheets')
+    expected=sorted(contact)
+    actual=sorted(os.listdir(sheets_dir)) if os.path.isdir(sheets_dir) else []
+    check('Python V6 contact-sheet set is exact 15/15',len(expected)==15 and actual==expected,f'expected={expected} actual={actual}')
+    png_bad=[]; hash_bad=[]
+    for name in expected:
+        path=os.path.join(sheets_dir,name)
+        try:
+            dimensions=_png_dimensions(path)
+            if dimensions!=(755,398): png_bad.append(f'{name}:{dimensions}')
+            with open(path,'rb') as f: actual_hash=_sha256_bytes(f.read())
+            if actual_hash!=contact[name]: hash_bad.append(name)
+        except Exception as exc:
+            png_bad.append(f'{name}:{exc}')
+    check('Python V6 contact sheets are PNG 755x398',not png_bad,'; '.join(png_bad))
+    check('Python V6 contact-sheet SHA-256 bindings match actual bytes',not hash_bad,','.join(hash_bad))
+    mapping_dir=os.path.join(reviewed_evidence_dir,'mask-structure-mapping')
+    paths={
+        'tmxSha256':os.path.join(repo_root,'public','juyiting','hall.tmx'),
+        'shotPlanSha256':os.path.join(evidence_dir,'shot-plan.json'),
+        'indexSha256':os.path.join(evidence_dir,'index.json'),
+        'maskMappingSha256':os.path.join(mapping_dir,'mask-structure-mapping.json'),
+        'maskMappingSvgSha256':os.path.join(mapping_dir,'mask-structure-mapping.svg'),
+    }
+    drift=[]
+    for field,path in paths.items():
+        try:
+            with open(path,'rb') as f: actual_hash=_sha256_bytes(f.read())
+            if bindings.get(field)!=actual_hash: drift.append(field)
+        except Exception as exc:
+            drift.append(f'{field}:{exc}')
+    check('Python V6 binds actual TMX/plan/index/mapping JSON/SVG SHA-256',not drift,','.join(drift))
+    sheet_results=review.get('sheetResults',[])
+    result_names=sorted(item.get('sheet') for item in sheet_results if isinstance(item,dict) and isinstance(item.get('sheet'),str))
+    check('Python V6 sheetResults exactly match bound sheets and PASS',result_names==expected and len(set(result_names))==15 and all(item.get('verdict')=='PASS' for item in sheet_results),f'got={result_names}')
+    return results
+
 def validate(evidence_dir, repo_root, write_recompute_report=False):
     results=[]
     def check(name,ok,detail=''):
@@ -150,8 +216,17 @@ def validate(evidence_dir, repo_root, write_recompute_report=False):
     front=next((s for s in shots if s['persona']=='lujunyi' and s['relation']=='front' and s['targetStableId']=='jyt.prop.center-north.main-seat.v1'),None)
     check('lujunyi front main-seat has agent-after-target final-composite evidence',front and front['runtimeFacts']['ordering']=='agent_in_front' and front['runtimeFacts']['pixelOverlap']['opaqueIntersectionPixels']>0 and front['runtimeFacts']['pixelOverlap']['targetPixelsVisiblyOccludedByAgent']>0 and front['runtimeFacts']['drawIndices']['agent']>front['runtimeFacts']['drawIndices']['target'])
     sheets=os.path.join(evidence_dir,'contact-sheets')
-    files=[f for f in os.listdir(sheets) if f.endswith('.png')] if os.path.isdir(sheets) else []
-    check('15 labeled PNG contact sheets exist',len(files)==15,f'got {len(files)}')
+    expected_sheets=_expected_contact_sheets(matrix)
+    files=sorted(os.listdir(sheets)) if os.path.isdir(sheets) else []
+    check('exact deterministic 15-file contact-sheet set exists',files==expected_sheets,f'expected={expected_sheets} actual={files}')
+    sheet_bad=[]
+    for name in expected_sheets:
+        path=os.path.join(sheets,name)
+        try:
+            dimensions=_png_dimensions(path)
+            if dimensions!=(755,398): sheet_bad.append(f'{name}:{dimensions}')
+        except Exception as exc: sheet_bad.append(f'{name}:{exc}')
+    check('all 15 contact sheets have PNG signature and 755x398 dimensions',not sheet_bad,'; '.join(sheet_bad))
     if write_recompute_report:
         report = {
             '$schema': 'juyiting-occlusion-e13-pixel-recompute-v1',
@@ -178,8 +253,18 @@ def main():
     ap.add_argument('--repo-root', default=os.getcwd())
     ap.add_argument('--evidence-dir', default=None)
     ap.add_argument('--write-recompute-report', action='store_true', help='write pixel-recompute-report.json after the independent pixel recompute')
+    ap.add_argument('--review-bindings-only', action='store_true', help='only validate V6 reviewed-artifact hashes and PNG bindings')
+    ap.add_argument('--reviewed-evidence-dir', default=None)
     args=ap.parse_args()
-    evidence=args.evidence_dir or os.path.join(args.repo_root,'tests/fixtures/juyiting/occlusion-e13')
-    results=validate(os.path.realpath(evidence), os.path.realpath(args.repo_root), write_recompute_report=args.write_recompute_report)
+    evidence=os.path.realpath(args.evidence_dir or os.path.join(args.repo_root,'tests/fixtures/juyiting/occlusion-e13'))
+    repo_root=os.path.realpath(args.repo_root)
+    if args.review_bindings_only:
+        reviewed=os.path.realpath(args.reviewed_evidence_dir or evidence)
+        results=validate_review_bindings(evidence,reviewed,repo_root)
+        print(f'Python E13 V6 binding validator: {sum(r["ok"] for r in results)}/{len(results)} checks passed')
+        for r in results:
+            if not r['ok']: print(f'  FAIL {r["check"]}: {r["detail"]}')
+    else:
+        results=validate(evidence, repo_root, write_recompute_report=args.write_recompute_report)
     sys.exit(0 if all(r['ok'] for r in results) else 1)
 if __name__=='__main__': main()

@@ -1,7 +1,10 @@
 {
-  "$schema": "juyiting-occlusion-e13-machines-gate-v5",
+  "$schema": "juyiting-occlusion-e13-machines-gate-v6",
   "taskId": "E13",
   "generatedBy": "validate-e13-evidence.mjs",
+  "scope": "aggregate-reviewed-evidence",
+  "evidenceDir": "tests/fixtures/juyiting/occlusion-e13",
+  "reviewedEvidenceDir": "tests/fixtures/juyiting/occlusion-e13",
   "pass": false,
   "matrixPass": true,
   "livePass": true,
@@ -10,8 +13,8 @@
   "releaseBlockers": [
     "independent release_guard pending"
   ],
-  "passedChecks": 36,
-  "totalChecks": 36,
+  "passedChecks": 48,
+  "totalChecks": 48,
   "failures": [],
   "checks": [
     {
@@ -82,7 +85,7 @@
     {
       "check": "live Python offline validator re-derives all 270 pixel metrics from production assets and committed PNGs (exit 0 required)",
       "ok": true,
-      "detail": "Python E13 validator: 27/27 checks passed"
+      "detail": "Python E13 validator: 28/28 checks passed"
     },
     {
       "check": "isolated evidence omits only the declared independent companion",
@@ -90,19 +93,24 @@
       "detail": ""
     },
     {
-      "check": "270 explicit screenshotFile PNGs exist",
+      "check": "270 screenshotFile paths are canonical and exist",
       "ok": true,
       "detail": ""
     },
     {
-      "check": "shots directory has exactly 270 PNGs",
+      "check": "shots directory is the exact 270-file planned set",
       "ok": true,
-      "detail": "got 270"
+      "detail": "missing= extras="
     },
     {
-      "check": "15 labeled contact sheets exist",
+      "check": "contact-sheets directory is the exact deterministic 15-file set",
       "ok": true,
-      "detail": "got 15"
+      "detail": "missing= extras="
+    },
+    {
+      "check": "15 mechanical contact sheets have PNG signature and 755x398 dimensions",
+      "ok": true,
+      "detail": ""
     },
     {
       "check": "idle/down/frame0 is the declared audit sample",
@@ -145,6 +153,11 @@
       "detail": ""
     },
     {
+      "check": "mechanical 270-shot matrix gate passes independently",
+      "ok": true,
+      "detail": "E13 mechanical matrix gate: PASS 27/27"
+    },
+    {
       "check": "GPT V5 rejection is retained as historical provenance",
       "ok": true,
       "detail": ""
@@ -153,6 +166,51 @@
       "check": "GPT V6 full visual audit passes all 15 sheets and 37 mask cards",
       "ok": true,
       "detail": ""
+    },
+    {
+      "check": "GPT V6 binds the actual current TMX, shot-plan and matrix index hashes",
+      "ok": true,
+      "detail": "tmx=885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f/885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f plan=a78bc573ec5adeb3fd6c09972f88127e24ba49ab156a17011db6d3782b1d5f01/a78bc573ec5adeb3fd6c09972f88127e24ba49ab156a17011db6d3782b1d5f01 index=c703e3471b2493e16e8da7c230efd89c4cebf648501eff9694092fe3eead85b0/c703e3471b2493e16e8da7c230efd89c4cebf648501eff9694092fe3eead85b0"
+    },
+    {
+      "check": "GPT V6 binds the actual 37-mask mapping JSON and SVG hashes",
+      "ok": true,
+      "detail": "json=06f764c6a11d02d1608e1e3f509231cfc6316d6897fe7b4b11b40c431e86c906/06f764c6a11d02d1608e1e3f509231cfc6316d6897fe7b4b11b40c431e86c906 svg=b2c705f0bc0512257637e957b287856138e1a7638cb42a93e275535f06993ec1/b2c705f0bc0512257637e957b287856138e1a7638cb42a93e275535f06993ec1"
+    },
+    {
+      "check": "GPT V6 contact-sheet binding declares exactly 15 unique files",
+      "ok": true,
+      "detail": "got 15"
+    },
+    {
+      "check": "reviewed contact-sheets directory exactly matches the V6-bound file set",
+      "ok": true,
+      "detail": "missing= extras="
+    },
+    {
+      "check": "all 15 V6-bound contact sheets have PNG signature and 755x398 dimensions",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "all 15 reviewed contact-sheet bytes match their V6 SHA-256 bindings",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "V6 sheetResults is the exact bound 15-sheet set with PASS verdicts",
+      "ok": true,
+      "detail": "missing= extras="
+    },
+    {
+      "check": "V6 machinesGateSha256AtReview is retained as a non-circular historical SHA-256 binding",
+      "ok": true,
+      "detail": "e0ced2a4ad1f26c4053e7d15a1c704d3112defe72ee707bab4e04bdccf1f83d8"
+    },
+    {
+      "check": "Python validator independently enforces V6 reviewed-artifact SHA/set/PNG bindings",
+      "ok": true,
+      "detail": "Python E13 V6 binding validator: 5/5 checks passed"
     },
     {
       "check": "37/37 mask to structure mappings cover TMX ids 48..84 without duplicates",
@@ -165,7 +223,12 @@
       "detail": ""
     },
     {
-      "check": "mask mapping visualization exists and hash matches manifest",
+      "check": "mask mapping visualization hash matches the actual reviewed SVG",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "live Chromium validator reruns successfully against the reviewed bytes",
       "ok": true,
       "detail": ""
     },
@@ -180,7 +243,7 @@
       "detail": ""
     },
     {
-      "check": "live Chromium evidence binds the current world model and shot plan",
+      "check": "live Chromium evidence binds the explicitly consumed world model and shot plan",
       "ok": true,
       "detail": ""
     },
@@ -190,18 +253,19 @@
       "detail": ""
     },
     {
-      "check": "GPT live visual audit hashes bind the current index, validation and contact sheets",
+      "check": "GPT live visual audit hashes bind the current live index, validation and exact contact sheets",
       "ok": true,
       "detail": ""
     }
   ],
   "sourceHashes": {
+    "matrixGateSha256": "80f0c08a4d6a43a0b6f63dd2bc21b93a225293b31e0a97cd621d091eae16e471",
     "shotPlanSha256": "a78bc573ec5adeb3fd6c09972f88127e24ba49ab156a17011db6d3782b1d5f01",
     "indexSha256": "c703e3471b2493e16e8da7c230efd89c4cebf648501eff9694092fe3eead85b0",
     "oracleSha256": "d61af98bd6e238a5ff0f55d5b5db8db058b8b9c9bf9203c43ffb1a656238d999",
+    "pixelRecomputeReportSha256": "0fac75645476cdb3b73056b3222c51f691015598d3d84cce16c122c53a016e67",
     "visualReviewV5Sha256": "6843f877e01eef6180a50c57159237ae68f81d66b2d470a4d5c48720afa6bdfb",
     "visualReviewV6Sha256": "794438ff0813ff3335b6fd563d0d9f2165260f11d720112b37ed3649eda905ef",
-    "pixelRecomputeReportSha256": "0fac75645476cdb3b73056b3222c51f691015598d3d84cce16c122c53a016e67",
     "maskStructureMappingSha256": "06f764c6a11d02d1608e1e3f509231cfc6316d6897fe7b4b11b40c431e86c906",
     "maskStructureMappingSvgSha256": "b2c705f0bc0512257637e957b287856138e1a7638cb42a93e275535f06993ec1",
     "liveIndexSha256": "54b4de7f7b6bd01f23b970e4078cf25608191292acb9e718edc53634ab947130",

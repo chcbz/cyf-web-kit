@@ -32,7 +32,7 @@ function writeReport () {
 - 状态：\`GENERATED_OFFLINE\`
 - 遮挡矩阵：270/270 已生成，\`matrixPass=true\`
 - 最终 E13 release：\`releasePass=false\`
-- GPT V5 全量审核发现 5 个 P1；重建固定视口、可达探针、ownership overlay 和 37-mask mapping 后，GPT V6 全量审核 15/15 sheets、270/270 shots、37/37 mask cards PASS。
+- 本命令只重建并验证确定性的 270-shot mechanical matrix；V5/V6、37-mask mapping 与 live browser 审核产物由独立 aggregate reviewed-evidence gate 消费，不会从旧 fixture 静默混入本次机械结果。
 
 ## 权威输入与绑定
 
@@ -54,13 +54,13 @@ function writeReport () {
 
 - \`shots/E13-001.png\` … \`shots/E13-270.png\`
 - \`contact-sheets/*.png\`：15 张，每格有 \`shotId / persona / relation\` 标签
-- \`index.json\`、\`oracle-report.json\`、\`machines-gate.json\`、本报告
+- \`index.json\`、\`oracle-report.json\`、\`pixel-recompute-report.json\`、\`matrix-gate.json\`、本报告
 
-\`npm run generate:e13-offline\` 从干净 checkout 完整重建。隔离输出使用 \`npm run generate:e13-offline -- --output /tmp/e13-review\`。
+\`npm run generate:e13-offline\` 从干净 checkout 重建并验证 mechanical matrix。隔离输出使用 \`npm run generate:e13-offline -- --output /tmp/e13-matrix\`；该目录不需要、也不会读取 V5/V6、mask mapping 或 live browser 审核产物。完整 reviewed-evidence 汇总另由 \`npm run validate:e13-evidence\` 显式消费已审核目录；若重建字节与已审核 fixture 漂移，aggregate 必须拒绝并要求重新审核，不能沿用旧 V6。
 
 ## 明确延期项
 
-camera、interaction、movement 仍为独立 \`DEFERRED\`，不计入 270 遮挡矩阵通过，并继续阻止最终 E13 release pass。GPT V6 全量视觉审核已通过；live browser 证据、独立技术复核和 release guard 仍在 E17/E18 完成。
+matrix index 中 camera、interaction、movement 保持独立 \`DEFERRED\`，因为它们不是本命令可确定重建的产物。已提交的 V6 与 live browser 审核证据只能由 aggregate reviewed-evidence gate 按实际 SHA 显式绑定；最终 release 仍由独立 release_guard 决定。
 `
   writeFileSync(join(output, 'report.md'), report)
 }
@@ -84,12 +84,12 @@ function main () {
   run('node', ['--import', 'tsx', join(here, 'validate-e13-offline-oracle.mjs'), '--evidence-dir', output])
   log('running fail-closed Python validator')
   run('python3', ['-m', 'offline_pixel_renderer.validate', '--repo-root', repo, '--evidence-dir', output, '--write-recompute-report'])
-  log('running matrix/release machine gate')
-  run('node', ['--import', 'tsx', join(here, 'validate-e13-evidence.mjs'), '--evidence-dir', output])
+  log('running mechanical matrix gate (reviewed V5/V6/live evidence intentionally excluded)')
+  run('node', ['--import', 'tsx', join(here, 'validate-e13-matrix-evidence.mjs'), '--evidence-dir', output, '--shot-plan', join(output, 'shot-plan.json')])
   writeReport()
   const shots = readdirSync(join(output, 'shots')).filter(f => f.endsWith('.png')).length
   const sheets = readdirSync(join(output, 'contact-sheets')).filter(f => f.endsWith('.png')).length
   if (shots !== 270 || sheets !== 15 || !existsSync(join(output, 'index.json'))) throw new Error(`incomplete output ${shots} shots/${sheets} sheets`)
-  log('complete: matrix generated and validated; final E13 release remains deferred')
+  log('complete: mechanical matrix generated and validated in isolation; aggregate reviewed-evidence/release gates were not run')
 }
 try { main() } catch (error) { console.error(`[e13-offline] FAIL: ${error.message}`); process.exit(1) }

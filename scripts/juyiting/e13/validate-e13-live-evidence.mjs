@@ -22,10 +22,10 @@
  *
  * Writes live/validation.json and exits 0 only when every check passes.
  */
-import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { compareExactNames, exactDirectoryEntries, pngDimensions, resolveContainedEvidenceFile, sha256Buffer } from './lib/evidence-files.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(__dirname, '..', '..', '..')
@@ -56,13 +56,6 @@ const MOVEMENT_ACTOR = Object.freeze({
   'E13-289': 'likui',            // movement-front-door
 })
 
-const sha256Buffer = buffer => createHash('sha256').update(buffer).digest('hex')
-const pngDimensions = buffer => {
-  const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
-  if (buffer.length < 24 || !buffer.subarray(0, 8).equals(signature)) return null
-  return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) }
-}
-
 const results = []
 const check = (name, ok, detail = '') => results.push({ check: name, ok: Boolean(ok), detail: String(detail) })
 
@@ -80,11 +73,15 @@ function main () {
     return index >= 0 ? args[index + 1] : null
   }
   const liveDir = resolve(arg('--live-dir') || DEFAULT_LIVE_DIR)
+  // Aggregate validation must not rewrite an independently reviewed validation.json.
+  const noWrite = args.includes('--no-write')
+  const worldModelPath = resolve(arg('--world-model') || WORLD_MODEL_PATH)
+  const shotPlanPath = resolve(arg('--shot-plan') || SHOT_PLAN_PATH)
 
-  const worldModel = readJson(WORLD_MODEL_PATH, 'world model')
-  const plan = readJson(SHOT_PLAN_PATH, 'shot plan')
-  const worldModelSha256 = sha256Buffer(readFileSync(WORLD_MODEL_PATH))
-  const shotPlanSha256 = sha256Buffer(readFileSync(SHOT_PLAN_PATH))
+  const worldModel = readJson(worldModelPath, 'world model')
+  const plan = readJson(shotPlanPath, 'shot plan')
+  const worldModelSha256 = sha256Buffer(readFileSync(worldModelPath))
+  const shotPlanSha256 = sha256Buffer(readFileSync(shotPlanPath))
   const planById = new Map(plan.shots.map(shot => [shot.id, shot]))
 
   const indexPath = join(liveDir, 'index.json')
@@ -108,7 +105,7 @@ function main () {
   check('no duplicate live shot ids', duplicates.length === 0, duplicates.join(', '))
   check('no live shot ids outside E13-271..E13-289', extras.length === 0, extras.join(', '))
   const shotsDir = join(liveDir, 'shots')
-  const diskPngs = existsSync(shotsDir) ? readdirSync(shotsDir).filter(file => file.endsWith('.png')).sort() : []
+  const diskPngs = exactDirectoryEntries(shotsDir)
   const expectedPngs = LIVE_IDS.map(id => `${id}.png`).sort()
   check('live/shots contains exactly the 19 planned PNG files',
     JSON.stringify(diskPngs) === JSON.stringify(expectedPngs),
@@ -129,21 +126,29 @@ function main () {
   const movementBad = []
   const movementSequenceBad = []
   const movementVisualBad = []
+  const actualShotHashes = new Map()
 
   for (const id of LIVE_IDS) {
     const record = byId.get(id)
     if (!record) continue
-    const file = typeof record.file === 'string' ? record.file : `shots/${id}.png`
-    const filePath = join(liveDir, file)
-    if (!existsSync(filePath)) {
-      fileBad.push(`${id}:missing`)
+    const expectedFile = `shots/${id}.png`
+    const file = record.file
+    let filePath
+    try {
+      filePath = resolveContainedEvidenceFile(liveDir, file, expectedFile)
+    } catch (error) {
+      fileBad.push(`${id}:path:${error.message}`)
       continue
     }
     const png = readFileSync(filePath)
-    if (sha256Buffer(png) !== record.sha256) {
+    const actualHash = sha256Buffer(png)
+    if (actualHash !== record.sha256) {
       fileBad.push(`${id}:hash`)
       continue
     }
+    const priorId = actualShotHashes.get(actualHash)
+    if (priorId) fileBad.push(`${id}:duplicate-bytes-with-${priorId}`)
+    else actualShotHashes.set(actualHash, id)
     const expectedDimensions = planById.get(id)?.kind === 'camera' ? planById.get(id).viewport : DEFAULT_BROWSER_VIEWPORT
     const dimensions = pngDimensions(png)
     if (!dimensions || dimensions.width !== expectedDimensions.width || dimensions.height !== expectedDimensions.height) {
@@ -163,9 +168,11 @@ function main () {
         }
         for (const frame of sequence) {
           const expectedFile = `movement-sequences/${id}-${frame.stage}.png`
-          const framePath = join(liveDir, frame.file || '')
-          if (frame.file !== expectedFile || !existsSync(framePath)) {
-            movementSequenceBad.push(`${id}:${frame.stage}:missing-or-path`)
+          let framePath
+          try {
+            framePath = resolveContainedEvidenceFile(liveDir, frame.file, expectedFile)
+          } catch (error) {
+            movementSequenceBad.push(`${id}:${frame.stage}:path:${error.message}`)
             continue
           }
           const framePng = readFileSync(framePath)
@@ -212,17 +219,27 @@ function main () {
   // ── contact sheets exist ──
   const contactDir = join(liveDir, 'contact-sheets')
   const missingSheets = []
-  for (const sheet of ['camera.png', 'interaction.png', 'movement.png']) {
-    const path = join(contactDir, sheet)
-    if (!existsSync(path)) {
-      missingSheets.push(`${sheet}:missing`)
+  const expectedSheets = ['camera.png', 'interaction.png', 'movement.png']
+  const expectedSheetDimensions = {
+    'camera.png': { width: 1960, height: 674 },
+    'interaction.png': { width: 1890, height: 754 },
+    'movement.png': { width: 1720, height: 894 },
+  }
+  const sheetSet = compareExactNames(exactDirectoryEntries(contactDir), expectedSheets)
+  if (!sheetSet.ok) missingSheets.push(`set:missing=${sheetSet.missing.join('|')}:extras=${sheetSet.extras.join('|')}`)
+  for (const sheet of expectedSheets) {
+    let path
+    try {
+      path = resolveContainedEvidenceFile(liveDir, `contact-sheets/${sheet}`, `contact-sheets/${sheet}`)
+    } catch (error) {
+      missingSheets.push(`${sheet}:path:${error.message}`)
       continue
     }
-    const buffer = readFileSync(path)
-    if (buffer.length === 0) {
-      missingSheets.push(`${sheet}:empty`)
-    } else if (!buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
-      missingSheets.push(`${sheet}:not-png`)
+    const dimensions = pngDimensions(readFileSync(path))
+    const expected = expectedSheetDimensions[sheet]
+    if (!dimensions) missingSheets.push(`${sheet}:not-png`)
+    else if (dimensions.width !== expected.width || dimensions.height !== expected.height) {
+      missingSheets.push(`${sheet}:${dimensions.width}x${dimensions.height}!=${expected.width}x${expected.height}`)
     }
   }
   check('camera/interaction/movement contact sheets exist as PNGs', missingSheets.length === 0, missingSheets.join(', '))
@@ -276,7 +293,7 @@ function main () {
     failures: stableValidation.failures,
     checks: stableValidation.checks,
   }
-  writeFileSync(validationPath, `${JSON.stringify(validation, null, 2)}\n`)
+  if (!noWrite) writeFileSync(validationPath, `${JSON.stringify(validation, null, 2)}\n`)
 
   console.log(`[validate-e13-live] ${pass ? 'PASS' : 'FAIL'} ${validation.passedChecks}/${validation.totalChecks} checks (${liveDir})`)
   for (const failure of validation.failures) {
