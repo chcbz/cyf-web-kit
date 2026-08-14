@@ -2,8 +2,10 @@
 
 - 状态：`GENERATED_OFFLINE`
 - 遮挡矩阵：270/270 已生成，`matrixPass=true`
-- 最终 E13 release：`releasePass=false`
-- V4 首轮 12/15 PASS；修正污染探针后，第二轮仅复审失败子集并取得 3/3 PASS。
+- 真实 Chromium：19/19（camera 10、interaction 7、movement 2 + 6 个 before/mid/after movement frames），机器校验 17/17 PASS
+- GPT live 视觉复审：camera / interaction / movement 全部 PASS，最高严重级 S0
+- 最终 E13 release：`releasePass=false`（仅独立 `release_guard` 待完成）
+- GPT V5 全量审核发现 5 个 P1；重建固定视口、可达探针、ownership overlay 和 37-mask mapping 后，GPT V6 全量审核 15/15 sheets、270/270 shots、37/37 mask cards PASS。
 
 ## 权威输入与绑定
 
@@ -31,4 +33,4 @@
 
 ## 明确延期项
 
-camera、interaction、movement 仍为独立 `DEFERRED`，不计入 270 遮挡矩阵通过，并继续阻止最终 E13 release pass。GPT V4 视觉审核已通过；技术跨模型复核因 DeepSeek provider `auth_unavailable` 合并到 E17。
+离线 `index.json` 继续将 camera、interaction、movement 标记为浏览器专属范围，不混入 270 遮挡矩阵。对应的真实 Chromium 证据已生成到 `live/`：10 个 camera、7 个 interaction、2 个 movement，PNG/hash/viewport/V2 renderer/camera contract/pointer-panel-bubble-lighting/movement contract 共 17/17 校验通过。GPT V6 离线全量视觉审核已通过；live camera/interaction/movement 视觉复审也已全部 PASS。独立技术复核和 release guard 按 E17/E18 完成。

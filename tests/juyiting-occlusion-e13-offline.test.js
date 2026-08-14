@@ -3,7 +3,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 const ROOT=process.cwd(), DIR=join(ROOT,'tests/fixtures/juyiting/occlusion-e13')
 const read=p=>JSON.parse(readFileSync(p,'utf8'))
-const BIND=['id','kind','cell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera','evidenceContext','contextCompanionStableId','visualOmissions','probeKind','navValidation','probeRationale']
+const BIND=['id','kind','cell','probeCell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera','evidenceContext','contextCompanionStableId','visualOmissions','probeKind','visualExerciseContract','visualOverlay','maxAgentOcclusionRatio','navValidation','probeRationale']
 describe('E13 authoritative offline pixel evidence',()=>{
  let index,matrix
  before(()=>{ index=read(join(DIR,'index.json')); matrix=read(join(DIR,'shot-plan.json')).shots.filter(s=>s.kind==='matrix') })
@@ -28,14 +28,22 @@ describe('E13 authoritative offline pixel evidence',()=>{
  it('matches all resolved depths and reports source-alpha intersections and final-composite visibility',()=>{
   index.shots.forEach(s=>{const f=s.runtimeFacts; expect(f.shotId).eq(s.id); expect(f.ordering).eq(s.resolvedExpectedOrdering); expect(f.resolvedExpectedOrdering).eq(s.resolvedExpectedOrdering); expect(f.depthMatch).eq(true); expect(f.actualDepth).a('number'); expect(f.targetDepth).a('number'); expect(f.actualRenderDepth).eq(100+f.actualDepth); expect(f.targetRenderDepth).eq(100+f.targetDepth); expect(f.actualRenderDepth).lessThan(300); expect(f.targetRenderDepth).lessThan(300); expect(f.pixelOverlap.method).eq('source-alpha-intersection-plus-final-composite-difference'); expect(f.pixelOverlap.opaqueIntersectionPixels).a('number'); expect(f.pixelOverlap.visibleOcclusionPixels).a('number'); expect(f.pixelOverlap.finalCompositeChangedByTargetPixels).a('number'); expect(f.pixelOverlap.finalCompositeChangedByAgentPixels).a('number')})
  })
- it('uses navigable target-specific probes and isolates only declared independent companions',()=>{
-  const custom=index.shots.filter(s=>s.probeKind==='target-specific'); expect(custom).length(54)
-  custom.forEach(s=>{expect(s.navValidation.navigable,s.id).eq(true); expect(s.runtimeFacts.pixelOverlap.opaqueIntersectionPixels,s.id).greaterThan(0); expect(s.runtimeFacts.pixelOverlap.visibleOcclusionPixels,s.id).greaterThan(0)})
-  const isolated=custom.filter(s=>s.evidenceContext==='target-isolated'); expect(isolated).length(36)
+ it('uses one fixed world viewport for all 18 shots of each target',()=>{
+  const byTarget=new Map()
+  index.shots.forEach(s=>{const viewport=s.runtimeFacts.viewportWorld; if(!byTarget.has(s.targetStableId))byTarget.set(s.targetStableId,viewport); expect(viewport,s.id).deep.eq(byTarget.get(s.targetStableId))})
+ })
+ it('uses production-reachable target-specific probes and explicit visual exercise contracts',()=>{
+  const custom=index.shots.filter(s=>s.probeKind==='target-specific'); expect(custom).length(162)
+  custom.forEach(s=>{expect(s.navValidation.navigable,s.id).eq(true); expect(s.navValidation.reachability,s.id).include({source:'production-graph-pathfinder',colliderWidth:42,status:'found'}); if(s.visualExerciseContract==='target-each-shot'||(['ownership-transition','composite-transition'].includes(s.visualExerciseContract)&&s.relation==='behind')){expect(s.runtimeFacts.pixelOverlap.opaqueIntersectionPixels,s.id).greaterThan(0); expect(s.runtimeFacts.pixelOverlap.visibleOcclusionPixels,s.id).greaterThan(0)}})
+  const composite=custom.filter(s=>s.visualExerciseContract==='composite-transition'); expect(composite).length(18)
+  composite.forEach(s=>{expect(s.evidenceContext,s.id).eq('in-context'); expect(s.visualOmissions,s.id).deep.eq([]); if(s.relation==='behind'){expect(s.runtimeFacts.pixelOverlap.opaqueIntersectionPixels,s.id).greaterThan(0); expect(s.runtimeFacts.pixelOverlap.visibleOcclusionPixels,s.id).greaterThan(0)}})
+  const limited=custom.filter(s=>s.maxAgentOcclusionRatio!=null)
+  limited.filter(s=>s.relation==='behind'&&s.runtimeFacts.ordering==='agent_behind_target').forEach(s=>{const o=s.runtimeFacts.pixelOverlap; expect(o.agentPixelsVisiblyOccludedByTarget/Math.max(1,o.agentOpaquePixelsInAabb),s.id).at.most(s.maxAgentOcclusionRatio)})
+  const isolated=custom.filter(s=>s.evidenceContext==='target-isolated'); expect(isolated).length(18)
   isolated.forEach(s=>{expect(s.visualOmissions,s.id).deep.eq([s.contextCompanionStableId]); expect(s.runtimeFacts.visualOmissions,s.id).deep.eq(s.visualOmissions)})
  })
  it('uses the repaired production base/V2-world/lighting stack without legacy duplicates',()=>{
-  expect(index.productionVisualStack.fixedDepths).deep.eq({base:0,'lighting-overlay':300}); expect(index.productionVisualStack.depthBands).deep.eq({BASE_MIN:0,BASE_MAX_EXCLUSIVE:100,V2_WORLD_START:100,V2_WORLD_STRIDE:1,LIGHTING:300,WORLD_UI:400,SCREEN_UI:500})
+  expect(index.productionVisualStack.fixedDepths).deep.eq({base:0,'lighting-overlay':300}); expect(index.productionVisualStack.depthBands).deep.eq({BASE_MIN:0,BASE_MAX_EXCLUSIVE:100,V2_WORLD_START:100,V2_WORLD_STRIDE:1,ERROR_STATE_PROP_DEPTH:6,ERROR_STATE_AGENT_DEPTH:7,LIGHTING:300,WORLD_UI:400,SCREEN_UI:500})
   expect(index.productionVisualStack.lighting).deep.eq({opacity:0.85,tintcolor:'#ffd8a0',imageBlend:'screen',tintBlend:'multiply'})
   expect(index.productionVisualStack.canvasRaster.productionAntiAlias).eq(true); expect(index.productionVisualStack.canvasRaster.scaledSpriteSampling).include('bilinear'); expect(index.productionVisualStack.canvasRaster.browserCanvasBitIdentityClaim).eq(false)
   expect(index.productionVisualStack.legacyMidForeground.sameBytes).eq(true); expect(index.productionVisualStack.legacyMidForeground.v2Attached).eq(false); expect(index.productionVisualStack.legacyMidForeground.v1Restored).eq(true)

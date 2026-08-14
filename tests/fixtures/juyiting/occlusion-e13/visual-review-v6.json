@@ -1,0 +1,228 @@
+{
+  "$schema": "juyiting-occlusion-e13-visual-review-v6-v1",
+  "taskId": "E13",
+  "reviewRound": 6,
+  "reviewDate": "2026-08-14",
+  "reviewerRole": "vision_reviewer",
+  "reviewer": "ZhangZeduan",
+  "reviewerAgentId": "019ffdfb-966f-72b2-a48b-0142ed198bf9",
+  "scope": "full-15-contact-sheet-plus-37-mask-mapping-review",
+  "verdict": "PASS",
+  "pass": true,
+  "highestSeverity": "NONE",
+  "contactSheetsReviewed": 15,
+  "shotsReviewed": 270,
+  "mappingCardsReviewed": 37,
+  "bindings": {
+    "tmxSha256": "885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f",
+    "shotPlanSha256": "a78bc573ec5adeb3fd6c09972f88127e24ba49ab156a17011db6d3782b1d5f01",
+    "indexSha256": "c703e3471b2493e16e8da7c230efd89c4cebf648501eff9694092fe3eead85b0",
+    "machinesGateSha256AtReview": "e0ced2a4ad1f26c4053e7d15a1c704d3112defe72ee707bab4e04bdccf1f83d8",
+    "maskMappingSha256": "06f764c6a11d02d1608e1e3f509231cfc6316d6897fe7b4b11b40c431e86c906",
+    "maskMappingSvgSha256": "b2c705f0bc0512257637e957b287856138e1a7638cb42a93e275535f06993ec1",
+    "contactSheets": {
+      "cell-northwest-jyt_occ_west-upper_lantern-01_v2.png": "a22f49d274f0a46d2fbe16ff7af4f926f57a26cba04fd36bef2310877587b10e",
+      "cell-north_center-jyt_prop_center-north_main-seat_v1.png": "91076549a7c7b87bf29b127519217d0015412aadb2df29fdce001d2cccdf0421",
+      "cell-northeast-jyt_prop_northeast_bounty-board_v1.png": "03defcfd758d8636cf8237961a16cedd68d558157f7b8b375333cc3531743883",
+      "cell-west_center-jyt_occ_west-upper_wall-sconce-02_v2.png": "3d788caeac4b7cb4b466cbe47ba378568174fb911252d4b754eb723894a5432f",
+      "cell-center-jyt_occ_west-upper_diagonal-brace-01_v2.png": "1e58f47c0ca9e90b8feab6e88d904d78b08a0cfbee8c65cd909ce2f89485077e",
+      "cell-east_center-jyt_occ_east-upper_pillar-01_v2.png": "e69b56732380f6fa329a56b456e182626517f4cc035ce712c3ee72b245a3a38e",
+      "cell-southwest-jyt_occ_west-lower_railing-02_v2.png": "cce816944da372360fef874483e8ae7a87ff1c38094a4c91509d514ed424bc61",
+      "cell-south_center-jyt_occ_entrance_hanging-banner-01_v2.png": "747ae7186a4a4e74fb1a0e81e21878533b6641cee977bbe65eab11d8bfde7d88",
+      "cell-southeast-jyt_prop_southeast_library-shelf_v1.png": "fcea331d7faa83b7b5e448c662a347925c8cfe9e1c1f5d670a074054603e6ab0",
+      "cell-northeast-jyt_occ_east-upper_scroll-table-front-01_v2.png": "d664252b8623e73e7f3c18d961d3f3b1e1d97be9ab2d5427cce19f2a7a140a53",
+      "cell-south_center-jyt_occ_west-lower_railing-01_v2.png": "0233cb252b0bde27806767818e624b0bbdaf2b6bb48183dfc5a7706ff1c9b066",
+      "cell-southeast-jyt_occ_east-lower_railing-post-01_v2.png": "cf5ed90c484261bfbcc2178255ccd862f40f25455a99319ab74991e04c490781",
+      "cell-southeast-jyt_occ_east-upper_pillar-02_v2.png": "2a24064b61ab4ba03fb2fe6b1d74a9e2233106bc320352e73d498e05b83746ad",
+      "cell-south_center-jyt_occ_entrance_lantern-post-01_v2.png": "72591fb35b08f54aa6354fafcbf587e2f9938f7e8e15edb7b24c7515ef3ac7fe",
+      "cell-southeast-jyt_occ_east-lower_worktable-01_v2.png": "5051838cd8a60bf6f9cba82ace600d4cbb54d5febb59e35410690523ea172cd3"
+    }
+  },
+  "sheetResults": [
+    {
+      "sheet": "cell-northwest-jyt_occ_west-upper_lantern-01_v2.png",
+      "shots": "E13-001..018",
+      "verdict": "PASS",
+      "evidence": "behind 人物保留头肩或半身，boundary/front 连续可辨"
+    },
+    {
+      "sheet": "cell-north_center-jyt_prop_center-north_main-seat_v1.png",
+      "shots": "E13-019..036",
+      "verdict": "PASS",
+      "evidence": "主座 behind 探针横向移至左侧，六角色主体可辨"
+    },
+    {
+      "sheet": "cell-northeast-jyt_prop_northeast_bounty-board_v1.png",
+      "shots": "E13-037..054",
+      "verdict": "PASS",
+      "evidence": "卢俊义与扈三娘均形成正确 behind/boundary/front 基线"
+    },
+    {
+      "sheet": "cell-west_center-jyt_occ_west-upper_wall-sconce-02_v2.png",
+      "shots": "E13-055..072",
+      "verdict": "PASS",
+      "evidence": "壁灯遮挡方向连续，无整人吞没"
+    },
+    {
+      "sheet": "cell-center-jyt_occ_west-upper_diagonal-brace-01_v2.png",
+      "shots": "E13-073..090",
+      "verdict": "PASS",
+      "evidence": "固定 crop 下斜撑三档关系可辨"
+    },
+    {
+      "sheet": "cell-east_center-jyt_occ_east-upper_pillar-01_v2.png",
+      "shots": "E13-091..108",
+      "verdict": "PASS",
+      "evidence": "柱体只遮挡侧身，头肩和半身保持可读"
+    },
+    {
+      "sheet": "cell-southwest-jyt_occ_west-lower_railing-02_v2.png",
+      "shots": "E13-109..126",
+      "verdict": "PASS",
+      "evidence": "behind 腿部合理遮挡，front 覆盖栏杆近边"
+    },
+    {
+      "sheet": "cell-south_center-jyt_occ_entrance_hanging-banner-01_v2.png",
+      "shots": "E13-127..144",
+      "verdict": "PASS",
+      "evidence": "挂布遮挡人物中段，轮廓仍可辨"
+    },
+    {
+      "sheet": "cell-southeast-jyt_prop_southeast_library-shelf_v1.png",
+      "shots": "E13-145..162",
+      "verdict": "PASS",
+      "evidence": "书架后、边界、前方三档明确"
+    },
+    {
+      "sheet": "cell-northeast-jyt_occ_east-upper_scroll-table-front-01_v2.png",
+      "shots": "E13-163..180",
+      "verdict": "PASS",
+      "evidence": "粉框 target 与黄探针明确 ownership transition"
+    },
+    {
+      "sheet": "cell-south_center-jyt_occ_west-lower_railing-01_v2.png",
+      "shots": "E13-181..198",
+      "verdict": "PASS",
+      "evidence": "栏杆遮挡集中于下部，无透明裂缝"
+    },
+    {
+      "sheet": "cell-southeast-jyt_occ_east-lower_railing-post-01_v2.png",
+      "shots": "E13-199..216",
+      "verdict": "PASS",
+      "evidence": "细立柱边界无异常扩张或反向遮挡"
+    },
+    {
+      "sheet": "cell-southeast-jyt_occ_east-upper_pillar-02_v2.png",
+      "shots": "E13-217..234",
+      "verdict": "PASS",
+      "evidence": "behind 保留头肩及半身，关闭整人吞没"
+    },
+    {
+      "sheet": "cell-south_center-jyt_occ_entrance_lantern-post-01_v2.png",
+      "shots": "E13-235..252",
+      "verdict": "PASS",
+      "evidence": "入口灯柱 behind 保留完整头肩与上身"
+    },
+    {
+      "sheet": "cell-southeast-jyt_occ_east-lower_worktable-01_v2.png",
+      "shots": "E13-253..270",
+      "verdict": "PASS",
+      "evidence": "粉框 fragment、青框 prop、黄探针使 composite transition 清楚"
+    }
+  ],
+  "crossSheetChecks": {
+    "wholePersonaSwallowed": "PASS",
+    "behindBoundaryFrontDiscernible": "PASS",
+    "sameTargetCropConsistency": "PASS",
+    "lujunyiHusanniangUpperRightTableBaselines": "PASS",
+    "whiteSpriteEdges": "PASS",
+    "transparentCracks": "PASS",
+    "reverseOcclusion": "PASS",
+    "wrongObjectOwnership": "PASS"
+  },
+  "mappingReview": {
+    "verdict": "PASS",
+    "count": "37/37",
+    "tmxIdRange": [
+      48,
+      84
+    ],
+    "uniqueTargetFragments": 32,
+    "spotCheckedCards": [
+      48,
+      51,
+      54,
+      58,
+      59,
+      70,
+      73,
+      76,
+      77,
+      81,
+      84
+    ],
+    "evidence": [
+      "每卡具有可识别 mask ID 与完整 target fragment stableId",
+      "每卡显示 structureName 与 owner sourceRect/runs AABB/opaque pixels",
+      "每卡包含 target-owner、owner-boundary、owner-source-rect、mask-polygon 可视构成"
+    ]
+  },
+  "v5Findings": [
+    {
+      "id": "P1-01",
+      "severity": "P1",
+      "verdict": "PASS",
+      "evidence": [
+        "E13-019/022/025 主座只遮挡人物侧边或下部",
+        "E13-094 柱体未覆盖卢俊义整个精灵",
+        "E13-220 保留卢俊义头肩及右半身",
+        "E13-238 保留卢俊义完整头肩与上身"
+      ]
+    },
+    {
+      "id": "P1-02",
+      "severity": "P1",
+      "verdict": "PASS",
+      "evidence": [
+        "E13-253/256/259/262/265/268 behind 保留头肩",
+        "E13-254/257/260/263/266/269 位于左侧边界",
+        "E13-255/258/261/264/267/270 位于桌前下方"
+      ]
+    },
+    {
+      "id": "P1-03",
+      "severity": "P1",
+      "verdict": "PASS",
+      "evidence": [
+        "E13-163 behind 可见桌前片遮挡",
+        "E13-164 黄探针抵达 fragment 左侧边界",
+        "E13-165 黄探针越过目标前基线"
+      ]
+    },
+    {
+      "id": "P1-04",
+      "severity": "P1",
+      "verdict": "PASS",
+      "evidence": [
+        "15/15 sheets 内同目标 18 格背景和结构位置一致",
+        "index 中每个 target 的 viewportWorld 唯一值数量为 1"
+      ]
+    },
+    {
+      "id": "P1-05",
+      "severity": "P1",
+      "verdict": "PASS",
+      "evidence": [
+        "SVG 含 mask 48..84 共 37 张独立卡片",
+        "每卡显示 mask ID、target fragment stableId、owner boundary 与 structureName",
+        "重复 owner 映射仍按 mask ID 独立成卡"
+      ]
+    }
+  ],
+  "additionalFindings": [],
+  "releaseRecommendation": {
+    "visualV6": "PASS — 关闭 V5 P1-01..P1-05",
+    "fullRelease": "DEFERRED — 仍需 live camera/interaction/movement、独立技术复核和 release_guard"
+  },
+  "summary": "PASS: 15/15 contact sheets、270/270 matrix shots 与 37/37 mask mapping 视觉审核通过；无残余 P0/P1/P2。"
+}

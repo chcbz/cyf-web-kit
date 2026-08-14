@@ -1,18 +1,17 @@
 {
-  "$schema": "juyiting-occlusion-e13-machines-gate-v3",
+  "$schema": "juyiting-occlusion-e13-machines-gate-v5",
   "taskId": "E13",
   "generatedBy": "validate-e13-evidence.mjs",
   "pass": false,
   "matrixPass": true,
+  "livePass": true,
+  "evidencePass": true,
   "releasePass": false,
   "releaseBlockers": [
-    "camera DEFERRED",
-    "interaction DEFERRED",
-    "movement DEFERRED",
-    "technical cross-model review deferred to E17 because DeepSeek provider returned auth_unavailable"
+    "independent release_guard pending"
   ],
-  "passedChecks": 21,
-  "totalChecks": 21,
+  "passedChecks": 36,
+  "totalChecks": 36,
   "failures": [],
   "checks": [
     {
@@ -51,9 +50,39 @@
       "detail": ""
     },
     {
-      "check": "target-specific probes are navigable and visibly exercise their target",
+      "check": "all 18 shots per target reuse one fixed viewportWorld",
       "ok": true,
       "detail": ""
+    },
+    {
+      "check": "target-specific probes are production reachable and satisfy their visual exercise contract",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "composite-transition probes use real context and visibly exercise behind",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "declared agent occlusion ratios stay within visual readability limits",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "every matrix probe navValidation is independently re-derived from the production TMX parser + graph pathfinder",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "270/270 committed pixelOverlap cross-check the independent pixel recompute report",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "live Python offline validator re-derives all 270 pixel metrics from production assets and committed PNGs (exit 0 required)",
+      "ok": true,
+      "detail": "Python E13 validator: 27/27 checks passed"
     },
     {
       "check": "isolated evidence omits only the declared independent companion",
@@ -106,7 +135,7 @@
       "detail": ""
     },
     {
-      "check": "camera/interaction/movement independently DEFERRED",
+      "check": "offline matrix index keeps browser-only scopes explicitly separate",
       "ok": true,
       "detail": ""
     },
@@ -116,14 +145,67 @@
       "detail": ""
     },
     {
-      "check": "incremental GPT V4 visual review passes all three prior failures",
+      "check": "GPT V5 rejection is retained as historical provenance",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "GPT V6 full visual audit passes all 15 sheets and 37 mask cards",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "37/37 mask to structure mappings cover TMX ids 48..84 without duplicates",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "mask mapping binds current TMX and passes independent 16/16 verification",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "mask mapping visualization exists and hash matches manifest",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "live Chromium evidence has exactly 10 camera, 7 interaction and 2 movement shots",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "live Chromium validator passes every fail-closed check",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "live Chromium evidence binds the current world model and shot plan",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "GPT live visual audit passes camera, interaction and movement sequences",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "GPT live visual audit hashes bind the current index, validation and contact sheets",
       "ok": true,
       "detail": ""
     }
   ],
   "sourceHashes": {
-    "shotPlanSha256": "785f28bc67830d3043af65e9f9aa455892a0e50872c106e4aea22e3f74796ec3",
-    "indexSha256": "7cb9f8009d7709a180f69b5bcd51077f9f7a479f49619361f9f63e4765837c5b",
-    "oracleSha256": "0d0d2f97d690adc53a6f4e5dac97a57ed9904cc95b99c86392fe255d3e7ae5e1"
+    "shotPlanSha256": "a78bc573ec5adeb3fd6c09972f88127e24ba49ab156a17011db6d3782b1d5f01",
+    "indexSha256": "c703e3471b2493e16e8da7c230efd89c4cebf648501eff9694092fe3eead85b0",
+    "oracleSha256": "d61af98bd6e238a5ff0f55d5b5db8db058b8b9c9bf9203c43ffb1a656238d999",
+    "visualReviewV5Sha256": "6843f877e01eef6180a50c57159237ae68f81d66b2d470a4d5c48720afa6bdfb",
+    "visualReviewV6Sha256": "794438ff0813ff3335b6fd563d0d9f2165260f11d720112b37ed3649eda905ef",
+    "pixelRecomputeReportSha256": "0fac75645476cdb3b73056b3222c51f691015598d3d84cce16c122c53a016e67",
+    "maskStructureMappingSha256": "06f764c6a11d02d1608e1e3f509231cfc6316d6897fe7b4b11b40c431e86c906",
+    "maskStructureMappingSvgSha256": "b2c705f0bc0512257637e957b287856138e1a7638cb42a93e275535f06993ec1",
+    "liveIndexSha256": "54b4de7f7b6bd01f23b970e4078cf25608191292acb9e718edc53634ab947130",
+    "liveValidationSha256": "d9bc724f58f75b49c470eda05b7c6e34d75f49766275c5013a30b647da8e4be6",
+    "liveVisualReviewSha256": "cc7e6f0946436b23433078493ff1ecc2a36e3cce9145d3a278942ff77aa9fae6"
   }
 }

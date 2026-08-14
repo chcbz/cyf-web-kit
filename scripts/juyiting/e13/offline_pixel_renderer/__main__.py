@@ -10,6 +10,28 @@ from .world_model import build_shot_plan, default_repo_root, PERSONAS
 def sha(path):
     h=hashlib.sha256(); h.update(open(path,'rb').read()); return h.hexdigest()
 
+
+def draw_rect_outline(buffer, x, y, width, height, rgba, clip, thickness=2):
+    """Draw a diagnostic outline without modifying the authoritative shot PNG."""
+    cx, cy, cw, ch = clip
+    x0=max(cx,int(round(x))); y0=max(cy,int(round(y)))
+    x1=min(cx+cw,int(round(x+width))); y1=min(cy+ch,int(round(y+height)))
+    if x0>=x1 or y0>=y1:return
+    for yy in range(y0,y1):
+        for xx in range(x0,x1):
+            if xx < x0+thickness or xx >= x1-thickness or yy < y0+thickness or yy >= y1-thickness:
+                i=(yy*buffer.width+xx)*4; buffer.pixels[i:i+4]=bytes(rgba)
+
+
+def draw_crosshair(buffer, x, y, rgba, clip, radius=3):
+    cx, cy, cw, ch=clip; px=int(round(x)); py=int(round(y))
+    for xx in range(max(cx,px-radius),min(cx+cw,px+radius+1)):
+        if cy<=py<cy+ch:
+            i=(py*buffer.width+xx)*4; buffer.pixels[i:i+4]=bytes(rgba)
+    for yy in range(max(cy,py-radius),min(cy+ch,py+radius+1)):
+        if cx<=px<cx+cw:
+            i=(yy*buffer.width+px)*4; buffer.pixels[i:i+4]=bytes(rgba)
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument('--repo-root', default=default_repo_root())
@@ -37,6 +59,7 @@ def main():
     except Exception as exc:
         raise RuntimeError(f'fail-closed: invalid production render policy JSON: {exc}')
     shots,fragments,props,layers=build_shot_plan(repo)
+    object_by_stable_id={o['stableId']:o for o in [*fragments,*props]}
     target_filter=set(args.target); shot_filter=set(args.shot_id)
     selected=[] if args.finalize_only else [shot for shot in shots if (not target_filter or shot['targetStableId'] in target_filter) and (not shot_filter or shot['id'] in shot_filter)]
     selected=selected[:args.limit] if args.limit else selected
@@ -52,7 +75,7 @@ def main():
         pixels,order,depths,facts=renderer.render_shot_small(shot,fragments,props,400,300)
         name=f'{shot["id"]}.png'; path=os.path.join(shots_dir,name)
         write_png(path,400,300,pixels)
-        record={k:shot[k] for k in ('id','kind','cell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera','evidenceContext','contextCompanionStableId','visualOmissions','probeKind','navValidation','probeRationale')}
+        record={k:shot[k] for k in ('id','kind','cell','probeCell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera','evidenceContext','contextCompanionStableId','visualOmissions','probeKind','visualExerciseContract','visualOverlay','maxAgentOcclusionRatio','navValidation','probeRationale')}
         record.update({'semanticRelation':shot['relation'],'resolvedExpectedOrdering':shot['resolvedExpectedOrdering'],'screenshotFile':f'shots/{name}','sha256':sha(path),'runtimeFacts':facts})
         records.append(record)
         if (i+1)%45==0: print(f'[{i+1}/{len(selected)}]',flush=True)
@@ -60,7 +83,7 @@ def main():
         updated={r['id']:r for r in records}
         prior={r['id']:r for r in existing_records}
         merged=[]
-        bind_fields=('id','kind','cell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera','evidenceContext','contextCompanionStableId','visualOmissions','probeKind','navValidation','probeRationale')
+        bind_fields=('id','kind','cell','probeCell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera','evidenceContext','contextCompanionStableId','visualOmissions','probeKind','visualExerciseContract','visualOverlay','maxAgentOcclusionRatio','navValidation','probeRationale')
         for shot in shots:
             record=updated.get(shot['id']) or prior.get(shot['id'])
             if record is None:
@@ -115,16 +138,31 @@ def main():
     personas=['songjiang','lujunyi','husanniang','likui','linchong','wuyong']; relations=['behind','boundary','front']
     for target in sorted(by_target):
         items=by_target[target]; lookup={(r['persona'],r['relation']):r for r in items}
-        tw,th,pad,label_h=120,90,5,27; cw=6*(tw+pad)+pad; ch=3*(th+label_h+pad)+pad
+        tw,th,pad,label_h=120,90,5,36; cw=6*(tw+pad)+pad; ch=3*(th+label_h+pad)+pad
         sheet=PixelBuffer(cw,ch); sheet.fill((24,24,30,255))
         for row,rel in enumerate(relations):
             for col,persona in enumerate(personas):
                 r=lookup[(persona,rel)]; w,h,_,px=read_png(os.path.join(output,r['screenshotFile']))
                 x=pad+col*(tw+pad); y=pad+row*(th+label_h+pad)
                 sheet.blit_region(PixelBuffer(w,h,px),0,0,w,h,x,y,tw,th)
+                overlay=r.get('visualOverlay','none')
+                if overlay!='none':
+                    viewport=r['runtimeFacts']['viewportWorld']; target_obj=object_by_stable_id[r['targetStableId']]
+                    def projected(rect):
+                        return (x+(rect['x']-viewport['x'])*tw/viewport['width'],
+                                y+(rect['y']-viewport['y'])*th/viewport['height'],
+                                rect['width']*tw/viewport['width'], rect['height']*th/viewport['height'])
+                    draw_rect_outline(sheet,*projected(target_obj['destinationRect']),(255,32,180,255),(x,y,tw,th),2)
+                    if overlay=='target-and-companion-outline':
+                        companion=object_by_stable_id[r['contextCompanionStableId']]
+                        draw_rect_outline(sheet,*projected(companion['destinationRect']),(0,220,255,255),(x,y,tw,th),1)
+                    probe=r['world']
+                    draw_crosshair(sheet,x+(probe['x']-viewport['x'])*tw/viewport['width'],y+(probe['y']-viewport['y'])*th/viewport['height'],(255,220,0,255),(x,y,tw,th),3)
                 draw_text(sheet,x,y+th+2,r['id'],scale=1)
                 draw_text(sheet,x,y+th+11,persona,scale=1)
                 draw_text(sheet,x,y+th+20,rel,scale=1)
+                if overlay=='target-outline': draw_text(sheet,x,y+th+29,'pink=target yel=probe',scale=1)
+                elif overlay=='target-and-companion-outline': draw_text(sheet,x,y+th+29,'pink=frag cyan=prop',scale=1)
         safe=target.replace('/','_').replace('.','_')
         write_png(os.path.join(contacts,f'cell-{items[0]["cell"]}-{safe}.png'),cw,ch,sheet.to_bytes())
 

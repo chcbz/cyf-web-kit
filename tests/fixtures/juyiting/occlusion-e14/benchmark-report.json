@@ -32,290 +32,290 @@
     "sampleMs": 60000,
     "frames": 3601,
     "total": {
-      "min": 0.8999977111816406,
-      "mean": 1.2041654642407544,
-      "p50": 1.2000007629394531,
+      "min": 0.7999992370605469,
+      "mean": 1.1612607695863697,
+      "p50": 1.1000022888183594,
       "p95": 1.5,
       "p99": 1.7999992370605469,
-      "max": 2.0999984741210938
+      "max": 5.100002288818359
     },
     "gridUpdate": {
       "min": 0,
-      "mean": 0.12113305165747144,
+      "mean": 0.12024432253552887,
       "p50": 0.10000228881835938,
       "p95": 0.20000076293945312,
       "p99": 0.2999992370605469,
-      "max": 0.6000022888183594
+      "max": 1
     },
     "worldOrder": {
-      "min": 0.7999992370605469,
-      "mean": 1.083032412583283,
-      "p50": 1.0999984741210938,
-      "p95": 1.3999977111816406,
-      "p99": 1.5999984741210938,
-      "max": 1.9000015258789062
+      "min": 0.7000007629394531,
+      "mean": 1.041016447050841,
+      "p50": 1,
+      "p95": 1.3000030517578125,
+      "p99": 1.6000022888183594,
+      "max": 5
     }
   },
   "complexity": {
     "theoreticalAgentsTimesAllZonesPerFrame": 3996,
-    "auditFrameMembershipChecks": 46,
-    "membershipChecksPerFrameMean": 46,
+    "auditFrameMembershipChecks": 44,
+    "membershipChecksPerFrameMean": 44,
     "maxChecksPerAgent": 1,
     "maxUniqueZoneCandidates": 37,
     "instrumentationScope": "one representative post-sample frame; excluded from timed production path",
     "spatialGridDelta": {
-      "candidateCount": 5346326,
+      "candidateCount": 5346333,
       "cellQueryCount": 0,
       "scanCount": 0,
-      "updateCellVisitCount": 12141
+      "updateCellVisitCount": 12117
     }
   },
   "memory": {
     "browserHeapSamples": [
       {
-        "elapsedMs": 16.900001525878906,
-        "usedBytes": 3869946
+        "elapsedMs": 16.700000762939453,
+        "usedBytes": 9782518
       },
       {
-        "elapsedMs": 1032.900001525879,
-        "usedBytes": 7523530
+        "elapsedMs": 1034,
+        "usedBytes": 6888558
       },
       {
-        "elapsedMs": 2032.900001525879,
-        "usedBytes": 4410210
+        "elapsedMs": 2049.7999992370605,
+        "usedBytes": 10670638
       },
       {
-        "elapsedMs": 3049.5,
-        "usedBytes": 8165410
+        "elapsedMs": 3066.7000007629395,
+        "usedBytes": 8159734
       },
       {
-        "elapsedMs": 4049.5,
-        "usedBytes": 5196906
+        "elapsedMs": 4083,
+        "usedBytes": 5471846
       },
       {
-        "elapsedMs": 5049.599998474121,
-        "usedBytes": 8546382
+        "elapsedMs": 5099.600002288818,
+        "usedBytes": 9121034
       },
       {
-        "elapsedMs": 6066,
-        "usedBytes": 5758198
+        "elapsedMs": 6116.100002288818,
+        "usedBytes": 6377698
       },
       {
-        "elapsedMs": 7066,
-        "usedBytes": 9268862
+        "elapsedMs": 7116.200000762939,
+        "usedBytes": 9872714
       },
       {
-        "elapsedMs": 8066.099998474121,
-        "usedBytes": 6237262
+        "elapsedMs": 8132.799999237061,
+        "usedBytes": 6837710
       },
       {
-        "elapsedMs": 9066.29999923706,
-        "usedBytes": 9613326
+        "elapsedMs": 9132.900001525879,
+        "usedBytes": 10328290
       },
       {
-        "elapsedMs": 10082.79999923706,
-        "usedBytes": 7029506
+        "elapsedMs": 10149.29999923706,
+        "usedBytes": 7473642
       },
       {
-        "elapsedMs": 11099.29999923706,
-        "usedBytes": 10761114
+        "elapsedMs": 11149.400001525879,
+        "usedBytes": 10911922
       },
       {
-        "elapsedMs": 12100,
-        "usedBytes": 7508830
+        "elapsedMs": 12165.79999923706,
+        "usedBytes": 8014754
       },
       {
-        "elapsedMs": 13115.900001525879,
-        "usedBytes": 17844762
+        "elapsedMs": 13166.600002288818,
+        "usedBytes": 18115970
       },
       {
-        "elapsedMs": 14132.5,
-        "usedBytes": 8843970
+        "elapsedMs": 14182.5,
+        "usedBytes": 9090826
       },
       {
-        "elapsedMs": 15132.599998474121,
-        "usedBytes": 12523842
+        "elapsedMs": 15182.600002288818,
+        "usedBytes": 12749610
       },
       {
-        "elapsedMs": 16148.900001525879,
-        "usedBytes": 16056886
+        "elapsedMs": 16199.20000076294,
+        "usedBytes": 16383038
       },
       {
-        "elapsedMs": 17149,
-        "usedBytes": 6624958
+        "elapsedMs": 17199.40000152588,
+        "usedBytes": 6955106
       },
       {
-        "elapsedMs": 18149,
-        "usedBytes": 10382906
+        "elapsedMs": 18215.70000076294,
+        "usedBytes": 10977806
       },
       {
-        "elapsedMs": 19165.59999847412,
-        "usedBytes": 14133594
+        "elapsedMs": 19215.79999923706,
+        "usedBytes": 14496990
       },
       {
-        "elapsedMs": 20182.09999847412,
-        "usedBytes": 17902394
+        "elapsedMs": 20232.29999923706,
+        "usedBytes": 18333546
       },
       {
-        "elapsedMs": 21198.70000076294,
-        "usedBytes": 8999282
+        "elapsedMs": 21232.29999923706,
+        "usedBytes": 9109578
       },
       {
-        "elapsedMs": 22198.79999923706,
-        "usedBytes": 12675890
+        "elapsedMs": 22249,
+        "usedBytes": 13120178
       },
       {
-        "elapsedMs": 23198.90000152588,
-        "usedBytes": 16197462
+        "elapsedMs": 23265.5,
+        "usedBytes": 16727358
       },
       {
-        "elapsedMs": 24215.29999923706,
-        "usedBytes": 7049974
+        "elapsedMs": 24265.70000076294,
+        "usedBytes": 20425822
       },
       {
-        "elapsedMs": 25215.29999923706,
-        "usedBytes": 10770914
+        "elapsedMs": 25282.29999923706,
+        "usedBytes": 11322102
       },
       {
-        "elapsedMs": 26215.5,
-        "usedBytes": 14342810
+        "elapsedMs": 26298.90000152588,
+        "usedBytes": 15177338
       },
       {
-        "elapsedMs": 27231.79999923706,
-        "usedBytes": 18046306
+        "elapsedMs": 27315.29999923706,
+        "usedBytes": 18955962
       },
       {
-        "elapsedMs": 28232.09999847412,
-        "usedBytes": 8584046
+        "elapsedMs": 28315.40000152588,
+        "usedBytes": 9775250
       },
       {
-        "elapsedMs": 29232.09999847412,
-        "usedBytes": 12266154
+        "elapsedMs": 29315.70000076294,
+        "usedBytes": 13467450
       },
       {
-        "elapsedMs": 30248.40000152588,
-        "usedBytes": 16075194
+        "elapsedMs": 30331.79999923706,
+        "usedBytes": 17048914
       },
       {
-        "elapsedMs": 31248.40000152588,
-        "usedBytes": 19705342
+        "elapsedMs": 31331.79999923706,
+        "usedBytes": 20719082
       },
       {
-        "elapsedMs": 32248.5,
-        "usedBytes": 10386922
+        "elapsedMs": 32332,
+        "usedBytes": 11381542
       },
       {
-        "elapsedMs": 33265,
-        "usedBytes": 14335234
+        "elapsedMs": 33348.5,
+        "usedBytes": 15325870
       },
       {
-        "elapsedMs": 34265.29999923706,
-        "usedBytes": 17660266
+        "elapsedMs": 34365.20000076294,
+        "usedBytes": 19009642
       },
       {
-        "elapsedMs": 35281.59999847412,
-        "usedBytes": 8476234
+        "elapsedMs": 35381.90000152588,
+        "usedBytes": 9853782
       },
       {
-        "elapsedMs": 36298.29999923706,
-        "usedBytes": 12495678
+        "elapsedMs": 36398.20000076294,
+        "usedBytes": 13857710
       },
       {
-        "elapsedMs": 37314.90000152588,
-        "usedBytes": 16270622
+        "elapsedMs": 37398.29999923706,
+        "usedBytes": 2981266
       },
       {
-        "elapsedMs": 38315,
-        "usedBytes": 19836262
+        "elapsedMs": 38398.29999923706,
+        "usedBytes": 8006734
       },
       {
-        "elapsedMs": 39315.09999847412,
-        "usedBytes": 10536478
+        "elapsedMs": 39399,
+        "usedBytes": 13305390
       },
       {
-        "elapsedMs": 40331.70000076294,
-        "usedBytes": 27533758
+        "elapsedMs": 40414.90000152588,
+        "usedBytes": 18107270
       },
       {
-        "elapsedMs": 41347.90000152588,
-        "usedBytes": 18236090
+        "elapsedMs": 41431.29999923706,
+        "usedBytes": 8865862
       },
       {
-        "elapsedMs": 42348.09999847412,
-        "usedBytes": 9054454
+        "elapsedMs": 42431.60000228882,
+        "usedBytes": 25694602
       },
       {
-        "elapsedMs": 43348.09999847412,
-        "usedBytes": 25910870
+        "elapsedMs": 43448.20000076294,
+        "usedBytes": 16788138
       },
       {
-        "elapsedMs": 44348.09999847412,
-        "usedBytes": 16276634
+        "elapsedMs": 44464.40000152588,
+        "usedBytes": 7566330
       },
       {
-        "elapsedMs": 45364.40000152588,
-        "usedBytes": 33074350
+        "elapsedMs": 45464.5,
+        "usedBytes": 24170434
       },
       {
-        "elapsedMs": 46364.40000152588,
-        "usedBytes": 23960818
+        "elapsedMs": 46481,
+        "usedBytes": 15225130
       },
       {
-        "elapsedMs": 47364.40000152588,
-        "usedBytes": 14795094
+        "elapsedMs": 47481,
+        "usedBytes": 6086866
       },
       {
-        "elapsedMs": 48380.90000152588,
-        "usedBytes": 31510070
+        "elapsedMs": 48481.10000228882,
+        "usedBytes": 22552594
       },
       {
-        "elapsedMs": 49381.09999847412,
-        "usedBytes": 22279222
+        "elapsedMs": 49497.60000228882,
+        "usedBytes": 13649790
       },
       {
-        "elapsedMs": 50381.20000076294,
-        "usedBytes": 5969910
+        "elapsedMs": 50497.60000228882,
+        "usedBytes": 4621678
       },
       {
-        "elapsedMs": 51397.5,
-        "usedBytes": 24385254
+        "elapsedMs": 51514.20000076294,
+        "usedBytes": 21495526
       },
       {
-        "elapsedMs": 52397.79999923706,
-        "usedBytes": 16076526
+        "elapsedMs": 52530.79999923706,
+        "usedBytes": 12289430
       },
       {
-        "elapsedMs": 53413.90000152588,
-        "usedBytes": 7681382
+        "elapsedMs": 53530.90000152588,
+        "usedBytes": 29177622
       },
       {
-        "elapsedMs": 54413.90000152588,
-        "usedBytes": 24538670
+        "elapsedMs": 54531,
+        "usedBytes": 20103114
       },
       {
-        "elapsedMs": 55414,
-        "usedBytes": 15010442
+        "elapsedMs": 55547.40000152588,
+        "usedBytes": 10841610
       },
       {
-        "elapsedMs": 56430.5,
-        "usedBytes": 5987510
+        "elapsedMs": 56547.40000152588,
+        "usedBytes": 27592630
       },
       {
-        "elapsedMs": 57430.59999847412,
-        "usedBytes": 22854410
+        "elapsedMs": 57547.5,
+        "usedBytes": 18595858
       },
       {
-        "elapsedMs": 58430.70000076294,
-        "usedBytes": 13622066
+        "elapsedMs": 58564,
+        "usedBytes": 9588602
       },
       {
-        "elapsedMs": 59430.90000152588,
-        "usedBytes": 4001126
+        "elapsedMs": 59564,
+        "usedBytes": 26076498
       }
     ],
-    "browserHeapMinBytes": 3869946,
-    "browserHeapMaxBytes": 33074350,
-    "browserHeapGrowthBytes": 131180,
+    "browserHeapMinBytes": 2981266,
+    "browserHeapMaxBytes": 29177622,
+    "browserHeapGrowthBytes": 16293980,
     "heapDropsOver1Mb": 27
   },
   "rendering": {
@@ -331,7 +331,7 @@
     "maxDurationMs": 0
   },
   "provenance": {
-    "generatedAt": "2026-08-13T19:29:01.428Z",
+    "generatedAt": "2026-08-14T04:52:14.256Z",
     "inputs": {
       "scripts/juyiting/e14/benchmark-entry.ts": "cba7be0b281f73b3abea7d36c7d520c2185ae908896801bcda1d8564d8edeae2",
       "scripts/juyiting/e14/run-benchmark-restricted.mjs": "0da75483fbab1f5cce040a3c127792107c6e07f7f7b24524fd0532b0dce917a4",
@@ -367,7 +367,7 @@
     "transferredBytes": 54466,
     "resources": [
       {
-        "requestId": "41EA04579D92C16ED26F20C556BE6A75",
+        "requestId": "AA7561DD8D8150E41F12EE12389A4C41",
         "url": "file:///home/isp/wsps/cyf/.worktrees/juyiting-occlusion-v2/dist/e14-benchmark/index.html",
         "method": "GET",
         "type": "Document",
@@ -377,7 +377,7 @@
         "finished": true
       },
       {
-        "requestId": "65.2",
+        "requestId": "3700621.2",
         "url": "file:///home/isp/wsps/cyf/.worktrees/juyiting-occlusion-v2/dist/e14-benchmark/assets/index-DOBG5ntY.js",
         "method": "GET",
         "type": "Script",
@@ -405,12 +405,12 @@
     "source": "production-build-artifact-inventory"
   },
   "cdp": {
-    "jsHeapUsedBytes": 17222304,
+    "jsHeapUsedBytes": 11031260,
     "jsHeapTotalBytes": 76300288,
-    "taskDurationSeconds": 6.640673,
-    "scriptDurationSeconds": 0.082973,
-    "layoutCount": 4,
-    "recalcStyleCount": 4,
+    "taskDurationSeconds": 6.362692,
+    "scriptDurationSeconds": 0.05763,
+    "layoutCount": 3,
+    "recalcStyleCount": 3,
     "nodes": 21,
     "documents": 2
   },

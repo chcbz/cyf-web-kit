@@ -117,6 +117,30 @@ describe('Juyiting hall scene assets', () => {
     })
   })
 
+  it('deduplicates collection-of-images tiles with identical resourceName and source', () => {
+    const mapData = {
+      tilesets: [
+        {
+          tilesetResourceName: 'prop-sheet',
+          tiles: [
+            { resourceName: 'prop-sheet-tile-3', source: '/juyiting/images/occluders/center-v2.png' },
+            { resourceName: 'prop-sheet-tile-3', source: '/juyiting/images/occluders/center-v2.png' }
+          ]
+        }
+      ],
+      imageLayers: {},
+      layers: []
+    }
+    const resources = buildHallMapResources(mapData)
+    const matches = resources.filter(resource => resource.name === 'prop-sheet-tile-3')
+    expect(matches).to.have.length(1)
+    expect(matches[0]).to.deep.equal({
+      name: 'prop-sheet-tile-3',
+      type: 'image',
+      src: '/juyiting/images/occluders/center-v2.png'
+    })
+  })
+
   it('throws fail-closed when the same resource name maps to different srcs', () => {
     const mapData = {
       tilesets: [
@@ -136,6 +160,97 @@ describe('Juyiting hall scene assets', () => {
     expect(caught.message).to.include('colliding-sheet')
     expect(caught.message).to.include('/juyiting/images/a/colliding-sheet.png')
     expect(caught.message).to.include('/juyiting/images/b/colliding-sheet.png')
+  })
+
+  it('throws fail-closed when collection-of-images tiles share a name but map to different srcs', () => {
+    const mapData = {
+      tilesets: [
+        {
+          tilesetResourceName: 'prop-sheet',
+          tiles: [
+            { resourceName: 'prop-sheet-tile-3', source: '/juyiting/images/a/prop-sheet-tile-3.png' },
+            { resourceName: 'prop-sheet-tile-3', source: '/juyiting/images/b/prop-sheet-tile-3.png' }
+          ]
+        }
+      ],
+      imageLayers: {},
+      layers: []
+    }
+    let caught
+    try {
+      buildHallMapResources(mapData)
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).to.be.instanceOf(Error)
+    expect(caught.message).to.include('prop-sheet-tile-3')
+    expect(caught.message).to.include('/juyiting/images/a/prop-sheet-tile-3.png')
+    expect(caught.message).to.include('/juyiting/images/b/prop-sheet-tile-3.png')
+  })
+
+  it('deduplicates image layers with identical resourceName and source', () => {
+    const mapData = {
+      tilesets: [],
+      imageLayers: {
+        'dup-a': { resourceName: 'lighting-overlay-dup', source: '/juyiting/images/liangshan-hall-lighting-overlay-v3.webp' },
+        'dup-b': { resourceName: 'lighting-overlay-dup', source: '/juyiting/images/liangshan-hall-lighting-overlay-v3.webp' }
+      },
+      layers: []
+    }
+    const resources = buildHallMapResources(mapData)
+    const matches = resources.filter(resource => resource.name === 'lighting-overlay-dup')
+    expect(matches).to.have.length(1)
+    expect(matches[0]).to.deep.equal({
+      name: 'lighting-overlay-dup',
+      type: 'image',
+      src: '/juyiting/images/liangshan-hall-lighting-overlay-v3.webp'
+    })
+  })
+
+  it('throws fail-closed when image layers share a name but map to different srcs', () => {
+    const mapData = {
+      tilesets: [],
+      imageLayers: {
+        'col-a': { resourceName: 'lighting-overlay-collide', source: '/juyiting/images/a/lighting-overlay-collide.webp' },
+        'col-b': { resourceName: 'lighting-overlay-collide', source: '/juyiting/images/b/lighting-overlay-collide.webp' }
+      },
+      layers: []
+    }
+    let caught
+    try {
+      buildHallMapResources(mapData)
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).to.be.instanceOf(Error)
+    expect(caught.message).to.include('lighting-overlay-collide')
+    expect(caught.message).to.include('/juyiting/images/a/lighting-overlay-collide.webp')
+    expect(caught.message).to.include('/juyiting/images/b/lighting-overlay-collide.webp')
+  })
+
+  it('deduplicates V2 atlas assetRefs with the same basename and src', () => {
+    const mapData = {
+      tilesets: [],
+      imageLayers: {},
+      layers: [
+        {
+          type: 'objectgroup',
+          name: 'v2-fragments-occluders',
+          objects: [
+            { properties: { assetRef: 'images/occluders/center-v2.png' } },
+            { properties: { assetRef: '/images/occluders/center-v2.png' } }
+          ]
+        }
+      ]
+    }
+    const resources = buildHallMapResources(mapData)
+    const matches = resources.filter(resource => resource.src === '/juyiting/images/occluders/center-v2.png')
+    expect(matches).to.have.length(1)
+    expect(matches[0]).to.deep.equal({
+      name: 'center-v2',
+      type: 'image',
+      src: '/juyiting/images/occluders/center-v2.png'
+    })
   })
 
   it('throws fail-closed when two V2 atlas assetRefs share a basename across directories', () => {

@@ -16,13 +16,14 @@
  *    runtime-blocked.json with precise diagnostics and exits non-zero.
  */
 import { createHash } from 'node:crypto'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
+import { get as httpsGet } from 'node:https'
 import {
   launchChrome, stopChrome, waitForExpression, evaluate, fulfillJson, fulfillSse,
-  captureCanvasPng, GAME_LOOKUP_SOURCE, isMainModule,
+  captureCanvasPng, captureViewportPng, GAME_LOOKUP_SOURCE, isMainModule,
 } from './lib/cdp-harness.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -64,10 +65,10 @@ const sceneFixtures = () => {
   const states = PERSONAS.map((p, i) => ({
     agentId: p.agentId, personaCode: p.personaCode,
     behavior: 'idle_at_hall', originRegionId: 'main-seat',
-    targetRegionId: ['main-seat', 'council-table', 'bounty-board', 'gate', 'library-shelf', 'right-guard'][i % 6],
+    targetRegionId: ['main-seat', 'council-table', 'bounty-board', 'right-guard', 'library-shelf', 'roster-book'][i % 6],
     relatedType: 'idle', relatedId: `e13-${p.agentId}`,
-    phase: 'idle', stateVersion: 1, startedAt: now - 120000,
-    expectedArrivalAt: now - 60000, expiresAt: now + 3600000,
+    phase: 'moving', stateVersion: 1, startedAt: now - 1000,
+    expectedArrivalAt: now + 600000, expiresAt: now + 3600000,
   }))
   return {
     mapAgents: { status: 200, code: 'E0', msg: 'ok', data: mapAgents },
@@ -142,6 +143,22 @@ window.__E13_RUNTIME__ = (() => {
         drainPhaseEvents: () => [],
         onPhaseEvents: () => {}
       });
+    },
+    restoreEngineSnapshotSource({ manual = false } = {}) {
+      const g = gameLookup();
+      const engine = g._movementEngine;
+      if (!engine) throw new Error('movement engine unavailable');
+      engine.setLocalPatrols([]);
+      scene().setSimulationRuntime({
+        // Evidence capture advances the engine explicitly. Freezing automatic
+        // page-loop updates keeps before/mid/after states deterministic and
+        // lets every screenshot bind to the exact audited snapshot.
+        update: deltaMs => { if (!manual) engine.update(deltaMs); },
+        snapshots: () => engine.snapshots(),
+        drainPhaseEvents: () => engine.drainPhaseEvents(),
+        onPhaseEvents: () => {}
+      });
+      return engine.snapshots();
     },
     place(agentId, personaCode, x, y, facing = 'down') {
       const existing = snapshots.findIndex(s => s.agentId === agentId);
@@ -237,14 +254,50 @@ const waitForReady = async (cdp) => {
 
 const sha256 = buffer => createHash('sha256').update(buffer).digest('hex')
 
-async function run (planPath = join(EVIDENCE_DIR, 'shot-plan.json'), outputDir = EVIDENCE_DIR) {
+const probeFrontend = async (url) => {
+  const parsed = new URL(url)
+  if (parsed.protocol === 'https:' && ['127.0.0.1', 'localhost'].includes(parsed.hostname)) {
+    return await new Promise(resolve => {
+      const request = httpsGet(parsed, { rejectUnauthorized: false }, response => {
+        response.resume()
+        resolve(Boolean(response.statusCode && response.statusCode >= 200 && response.statusCode < 400))
+      })
+      request.setTimeout(8000, () => request.destroy(new Error('frontend probe timed out')))
+      request.on('error', () => resolve(false))
+    })
+  }
+  return fetch(url, { signal: AbortSignal.timeout(8000) }).then(r => r.ok).catch(() => false)
+}
+
+export async function run (planPath = join(EVIDENCE_DIR, 'shot-plan.json'), outputDir = EVIDENCE_DIR, options = {}) {
   const plan = JSON.parse(readFileSync(planPath, 'utf8'))
   const worldModel = JSON.parse(readFileSync(join(EVIDENCE_DIR, 'world-model.json'), 'utf8'))
+  const requestedKinds = new Set(options.kinds || [])
+  const requestedIds = new Set(options.ids || [])
+  const selectedShots = plan.shots.filter(shot =>
+    (requestedKinds.size === 0 || requestedKinds.has(shot.kind)) &&
+    (requestedIds.size === 0 || requestedIds.has(shot.id))
+  )
+  if (selectedShots.length === 0) {
+    throw new Error(`shot selection is empty (kinds=${[...requestedKinds].join(',') || '*'}, ids=${[...requestedIds].join(',') || '*'})`)
+  }
+  if (requestedIds.size > 0) {
+    const selectedIds = new Set(selectedShots.map(shot => shot.id))
+    const unknownIds = [...requestedIds].filter(id => !selectedIds.has(id))
+    if (unknownIds.length > 0) throw new Error(`unknown or kind-mismatched shot id(s): ${unknownIds.join(', ')}`)
+  }
+
   mkdirSync(join(outputDir, 'shots'), { recursive: true })
   mkdirSync(join(outputDir, 'contact-sheets'), { recursive: true })
+  mkdirSync(join(outputDir, 'movement-sequences'), { recursive: true })
+  for (const stale of ['index.json', 'runtime-blocked.json']) {
+    const stalePath = join(outputDir, stale)
+    if (existsSync(stalePath)) rmSync(stalePath)
+  }
 
   const probes = []
-  const frontendReachable = await fetch(FRONTEND_URL, { signal: AbortSignal.timeout(8000) }).then(r => r.ok).catch(() => false)
+  const records = []
+  const frontendReachable = await probeFrontend(FRONTEND_URL)
 
   let chrome, cdp, userDataDir
   try {
@@ -253,6 +306,12 @@ async function run (planPath = join(EVIDENCE_DIR, 'shot-plan.json'), outputDir =
     }
     const debugPort = 9400 + Math.floor(Math.random() * 400)
     ;({ chrome, cdp, userDataDir } = await launchChrome({ debugPort }))
+    cdp.on('Runtime.consoleAPICalled', event => {
+      const text = (event.args || []).map(arg => arg.value ?? arg.description ?? '').join(' ')
+      if (/HallScene|JuyitingGame|V2|Failed|error/i.test(text)) {
+        probes.push({ probe: 'browser-console', ok: !/failed|error/i.test(text), type: event.type, detail: text })
+      }
+    })
     await setupInterception(cdp)
     await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
       source: `window.__JYT_V2_ENABLED = true; window.__JYT_OCCLUSION_SHADOW_ENABLED = false;`
@@ -262,17 +321,65 @@ async function run (planPath = join(EVIDENCE_DIR, 'shot-plan.json'), outputDir =
       source: `localStorage.setItem('api_token', ${JSON.stringify(JSON.stringify({ data: 'e13-evidence-token', expTime: Date.now() + 86400000 }))})`
     })
     await cdp.send('Page.navigate', { url: `${FRONTEND_URL}/juyiting?transition=none&scene-debug=1` })
-    await waitForReady(cdp)
+    try {
+      await waitForReady(cdp)
+    } catch (error) {
+      const runtimeDiagnostic = await evaluate(cdp, `(() => {
+        try {
+          ${GAME_LOOKUP_SOURCE}
+          const scene = juyitingGame._hallScene;
+          return {
+            activeRendererMode: scene?.activeRendererMode,
+            v2Flag: window.__JYT_V2_ENABLED,
+            tmxSha256: scene?._tmxSha256,
+            hasV2Support: scene?.hasV2Support?.(),
+            v2Diagnostics: scene?.getV2Diagnostics?.(),
+            v2AssemblyPresent: Boolean(scene?._v2Assembly),
+            v2ControllerPresent: Boolean(scene?._v2Controller),
+            v2PendingActivationPresent: Boolean(scene?._v2PendingActivation),
+            propStableIds: Array.from(scene?._v2PropRenderables?.keys?.() || []),
+            mapProperties: scene?._mapData?.properties,
+            fragmentCount: (scene?._mapData?.layers || [])
+              .find(layer => layer?.name === 'v2-fragments-occluders')?.objects
+              ?.filter(object => object?.type === 'occluder-fragment').length,
+            fragmentAssets: Array.from(new Set((scene?._mapData?.layers || [])
+              .find(layer => layer?.name === 'v2-fragments-occluders')?.objects
+              ?.filter(object => object?.type === 'occluder-fragment')
+              ?.map(object => object?.properties?.assetRef) || []))
+              .map(assetRef => ({ assetRef, loaded: Boolean(juyitingGame._me?.loader?.getImage?.(assetRef)) })),
+          };
+        } catch (diagnosticError) {
+          return { diagnosticError: diagnosticError?.message || String(diagnosticError) };
+        }
+      })()`).catch(diagnosticError => ({ diagnosticError: diagnosticError.message }))
+      probes.push({ probe: 'v2-runtime-readiness', ok: false, detail: runtimeDiagnostic })
+      throw new Error(`${error.message}; runtimeDiagnostic=${JSON.stringify(runtimeDiagnostic)}`)
+    }
     await evaluate(cdp, `(() => { ${GAME_LOOKUP_SOURCE}; window.__E13_RUNTIME__.clearBubbles(); return true; })()`)
 
-    const records = []
-    for (const shot of plan.shots) {
-      const buffer = await captureMatrixShot(cdp, shot, worldModel)
+    for (const shot of selectedShots) {
+      let capture
+      try {
+        await configureShotViewport(cdp, shot)
+        capture = await captureMatrixShot(cdp, shot, worldModel)
+      } catch (error) {
+        throw new Error(`${shot.id} (${shot.kind}:${shot.cameraCase || shot.interactionCase || shot.movementCase || shot.relation || 'unknown'}): ${error.message}`)
+      }
+      const buffer = Buffer.isBuffer(capture) ? capture : capture.buffer
+      const movementSequence = []
+      for (const frame of (Buffer.isBuffer(capture) ? [] : capture.frames || [])) {
+        const frameFile = `movement-sequences/${shot.id}-${frame.stage}.png`
+        writeFileSync(join(outputDir, frameFile), frame.buffer)
+        movementSequence.push({ stage: frame.stage, file: frameFile, sha256: sha256(frame.buffer) })
+      }
+      const runtimeFacts = await collectRuntimeFacts(cdp, shot)
       const file = `shots/${shot.id}.png`
       writeFileSync(join(outputDir, file), buffer)
       records.push({
         id: shot.id, kind: shot.kind, file,
         sha256: sha256(buffer),
+        runtimeFacts,
+        ...(movementSequence.length > 0 ? { movementSequence } : {}),
         ...(shot.kind === 'matrix' ? {
           cell: shot.cell, persona: shot.persona, personaName: shot.personaName, relation: shot.relation,
           targetStableId: shot.targetStableId, targetKind: shot.targetKind, focus: shot.focus,
@@ -294,6 +401,10 @@ async function run (planPath = join(EVIDENCE_DIR, 'shot-plan.json'), outputDir =
       chromium: await evaluate(cdp, `navigator.userAgent`),
       worldModelSha256: sha256(readFileSync(join(EVIDENCE_DIR, 'world-model.json'))),
       shotPlanSha256: sha256(readFileSync(planPath)),
+      selection: {
+        kinds: [...requestedKinds],
+        ids: [...requestedIds],
+      },
       shotCount: records.length,
       status: 'GENERATED',
       shots: records,
@@ -310,8 +421,11 @@ async function run (planPath = join(EVIDENCE_DIR, 'shot-plan.json'), outputDir =
       frontendReachable,
       error: error.message,
       probes: probes.map(p => ({ ...p })),
-      screenshotsGenerated: 0,
-      note: 'No screenshots were fabricated. Re-run on a host with a reachable frontend and working headless chromium.',
+      screenshotsGenerated: records.length,
+      generatedShotIds: records.map(record => record.id),
+      note: records.length === 0
+        ? 'No screenshots were fabricated. Re-run on a host with a reachable frontend and working headless chromium.'
+        : 'Generation stopped after partial real-browser output. The batch has no index.json and must not be merged; re-run into a clean batch directory.',
     }
     writeFileSync(join(outputDir, 'runtime-blocked.json'), `${JSON.stringify(blocked, null, 2)}\n`)
     console.error(`E13 evidence generation BLOCKED: ${error.message}`)
@@ -321,6 +435,71 @@ async function run (planPath = join(EVIDENCE_DIR, 'shot-plan.json'), outputDir =
     if (cdp) cdp.close()
     if (chrome) await stopChrome(chrome, userDataDir)
   }
+}
+
+
+const DEFAULT_BROWSER_VIEWPORT = Object.freeze({ width: 1280, height: 800 })
+
+async function configureShotViewport (cdp, shot) {
+  const viewport = shot.kind === 'camera' ? shot.viewport : DEFAULT_BROWSER_VIEWPORT
+  if (!viewport?.width || !viewport?.height) throw new Error('planned browser viewport is missing')
+  await cdp.send('Emulation.setDeviceMetricsOverride', {
+    width: viewport.width,
+    height: viewport.height,
+    deviceScaleFactor: 1,
+    mobile: viewport.width < 600,
+    screenWidth: viewport.width,
+    screenHeight: viewport.height,
+  })
+  await waitForExpression(cdp, `window.innerWidth === ${viewport.width} && window.innerHeight === ${viewport.height}`, 8000)
+  await delay(220)
+  const actual = await evaluate(cdp, `(() => {
+    ${GAME_LOOKUP_SOURCE}
+    return {
+      layout: { width: window.innerWidth, height: window.innerHeight },
+      scene: juyitingGame._hallScene._viewportSize(),
+      rendererMode: juyitingGame._hallScene.activeRendererMode,
+    };
+  })()`)
+  if (actual.rendererMode !== 'v2') throw new Error(`renderer left V2 after viewport change: ${actual.rendererMode}`)
+  if (shot.kind === 'camera' && (actual.layout.width !== viewport.width || actual.layout.height !== viewport.height)) {
+    throw new Error(`browser viewport mismatch: planned ${viewport.width}x${viewport.height}, actual ${actual.layout.width}x${actual.layout.height}`)
+  }
+}
+
+async function collectRuntimeFacts (cdp, shot) {
+  return evaluate(cdp, `(() => {
+    ${GAME_LOOKUP_SOURCE}
+    const scene = juyitingGame._hallScene;
+    const canvas = document.querySelector('.melon-layer canvas');
+    const rect = canvas?.getBoundingClientRect?.();
+    const movementActor = ${JSON.stringify(shot.movementCase === 'movement-bounty-board' ? 'lujunyi' : shot.movementCase === 'movement-front-door' ? 'likui' : '')};
+    const movementSnapshot = movementActor
+      ? (juyitingGame._movementEngine?.snapshots?.() || []).find(item => item.agentId === movementActor) || null
+      : null;
+    return {
+      rendererMode: scene.activeRendererMode,
+      browserViewport: { width: window.innerWidth, height: window.innerHeight },
+      sceneViewport: scene._viewportSize(),
+      camera: window.__E13_RUNTIME__.readCamera(),
+      canvasRect: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
+      selectedAgents: Array.from(scene._agents.entries()).filter(([, agent]) => agent?._selected).map(([id]) => id),
+      openPanelClass: document.querySelector('.floating-panel')?.className || null,
+      movementSnapshot,
+      movementProbe: window.__E13_MOVEMENT_PROBE__ || null,
+      agentVisuals: Array.from(scene._agents.entries()).map(([id, agent]) => ({
+        id, name: agent?.agentName || '', bubbleText: agent?._bubbleText || '', bubbleTimer: agent?._bubbleTimer || 0,
+        selected: Boolean(agent?._selected), x: agent?.pos?.x ?? null, y: agent?.pos?.y ?? null,
+      })),
+      lighting: (() => {
+        const record = scene._imageLayersByName?.get?.('lighting-overlay');
+        const handle = record?.handle;
+        return { present: Boolean(record && handle), attached: Boolean(record?.attached), depth: handle?.depth ?? null, opacity: handle?.opacity ?? null, blendMode: handle?.blendMode ?? handle?.blendmode ?? null };
+      })(),
+      input: scene.inputSnapshot?.() || null,
+      shotKind: ${JSON.stringify(shot.kind)},
+    };
+  })()`)
 }
 
 async function captureMatrixShot (cdp, shot, worldModel) {
@@ -365,7 +544,7 @@ async function captureMatrixShot (cdp, shot, worldModel) {
       rt.setCameraWorldCenter(cc.center.x, cc.center.y, cc.zoom);
       if (cc.panDx) juyitingGame.panBy(cc.panDx, 0);
       if (cc.pinch) {
-        const vp = juyitingGame.getCameraSnapshot().viewport;
+        const vp = rt.readCamera().viewport;
         rt.pinchGesture(vp.width / 2, vp.height / 2, cc.pinch.start, cc.pinch.end);
       }
       return true;
@@ -384,6 +563,10 @@ async function captureMatrixShot (cdp, shot, worldModel) {
 
 async function captureInteraction (cdp, shot) {
   const { interactionCase } = shot
+  // Every interaction shot starts from a clean modal state. Without this,
+  // the chat panel opened by E13-284 leaks into labels/lighting evidence.
+  await evaluate(cdp, `(() => { document.querySelector('.panel-close')?.click(); return true; })()`)
+  await waitForExpression(cdp, `!document.querySelector('.floating-panel')`, 8000)
   if (interactionCase === 'agent-pointer') {
     await evaluate(cdp, `(() => {
       ${GAME_LOOKUP_SOURCE}
@@ -401,7 +584,7 @@ async function captureInteraction (cdp, shot) {
       const canvas = document.querySelector('.melon-layer canvas');
       const area = juyitingGame._hallScene._hitProvider().agents.find(a => a.id === 'songjiang');
       const rect = canvas.getBoundingClientRect();
-      const vp = juyitingGame.getCameraSnapshot().viewport;
+      const vp = juyitingGame._hallScene._viewportSize();
       if (!area?.bounds?.width || !area?.bounds?.height) throw new Error('songjiang hit area unavailable');
       const p = { x: area.bounds.x + area.bounds.width / 2, y: area.bounds.y + area.bounds.height / 2 };
       const scale = Math.max(rect.width / vp.width, rect.height / vp.height);
@@ -414,7 +597,7 @@ async function captureInteraction (cdp, shot) {
     await delay(200)
     const selected = await evaluate(cdp, `(() => { ${GAME_LOOKUP_SOURCE}; return Boolean(juyitingGame._hallScene._agents.get('songjiang')?._selected); })()`)
     if (!selected) throw new Error('agent pointer did not select songjiang')
-    return await captureCanvasPng(cdp)
+    return await captureViewportPng(cdp)
   }
   if (interactionCase.startsWith('hotspot-')) {
     const hotspotId = interactionCase.replace('hotspot-', '')
@@ -424,7 +607,8 @@ async function captureInteraction (cdp, shot) {
       juyitingGame.resetToMainHall();
       const area = juyitingGame._hallScene._hitProvider().hotspots.find(h => h.id === ${JSON.stringify(hotspotId)});
       if (!area?.bounds?.width) throw new Error('hotspot ${hotspotId} unavailable');
-      juyitingGame._hallScene.panBy(juyitingGame.getCameraSnapshot().viewport.width / 2 - area.bounds.x - area.bounds.width / 2, juyitingGame.getCameraSnapshot().viewport.height / 2 - area.bounds.y - area.bounds.height / 2);
+      const vp = juyitingGame._hallScene._viewportSize();
+      juyitingGame._hallScene.panBy(vp.width / 2 - area.bounds.x - area.bounds.width / 2, vp.height / 2 - area.bounds.y - area.bounds.height / 2);
       return true;
     })()`)
     await delay(200)
@@ -432,7 +616,7 @@ async function captureInteraction (cdp, shot) {
       ${GAME_LOOKUP_SOURCE}
       const canvas = document.querySelector('.melon-layer canvas');
       const rect = canvas.getBoundingClientRect();
-      const vp = juyitingGame.getCameraSnapshot().viewport;
+      const vp = juyitingGame._hallScene._viewportSize();
       const area = juyitingGame._hallScene._hitProvider().hotspots.find(h => h.id === ${JSON.stringify(hotspotId)});
       const p = { x: area.bounds.x + area.bounds.width / 2, y: area.bounds.y + area.bounds.height / 2 };
       const scale = Math.max(rect.width / vp.width, rect.height / vp.height);
@@ -443,7 +627,7 @@ async function captureInteraction (cdp, shot) {
       return true;
     })()`)
     await waitForExpression(cdp, `Boolean(document.querySelector(${JSON.stringify(panelClass)}))`, 8000)
-    return await captureCanvasPng(cdp)
+    return await captureViewportPng(cdp)
   }
   if (interactionCase === 'labels-bubbles') {
     await evaluate(cdp, `(() => {
@@ -465,12 +649,12 @@ async function captureInteraction (cdp, shot) {
       return true;
     })()`)
     await delay(260)
-    return await captureCanvasPng(cdp)
+    return await captureViewportPng(cdp)
   }
   if (interactionCase === 'lighting-fullmap') {
     await evaluate(cdp, `(() => { ${GAME_LOOKUP_SOURCE}; juyitingGame.resetToMainHall(); return true; })()`)
     await delay(260)
-    return await captureCanvasPng(cdp)
+    return await captureViewportPng(cdp)
   }
   if (interactionCase === 'lighting-closeup') {
     await evaluate(cdp, `(() => {
@@ -483,41 +667,130 @@ async function captureInteraction (cdp, shot) {
       return true;
     })()`)
     await delay(260)
-    return await captureCanvasPng(cdp)
+    return await captureViewportPng(cdp)
   }
   throw new Error(`unknown interaction case ${interactionCase}`)
 }
 
-async function captureMovement (cdp, shot) {
-  // Real engine movement: enqueue a local command after cancelling backend hold.
+async function settleMovementVisual (cdp, actor, snapshot) {
+  if (!snapshot || !Number.isFinite(snapshot.x) || !Number.isFinite(snapshot.y)) {
+    throw new Error(`movement snapshot is not finite for ${actor}`)
+  }
   await evaluate(cdp, `(() => {
     ${GAME_LOOKUP_SOURCE}
-    const g = juyitingGame;
+    juyitingGame._hallScene.update(0);
+    juyitingGame._me?.game?.repaint?.();
+    return true;
+  })()`)
+  await waitForExpression(cdp, `(() => {
+    ${GAME_LOOKUP_SOURCE}
+    const agent = juyitingGame._hallScene?._agents.get(${JSON.stringify(actor)});
+    return Boolean(agent && Math.abs(agent.pos.x - ${snapshot.x}) <= 0.25 && Math.abs(agent.pos.y - ${snapshot.y}) <= 0.25);
+  })()`, 8000)
+  await evaluate(cdp, `(async () => {
+    const frame = () => new Promise(resolve => {
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => resolve());
+      else setTimeout(resolve, 16);
+    });
+    await frame();
+    await frame();
+    return true;
+  })()`)
+  return evaluate(cdp, `(() => {
+    ${GAME_LOOKUP_SOURCE}
+    const agent = juyitingGame._hallScene?._agents.get(${JSON.stringify(actor)});
+    return agent ? { x: agent.pos.x, y: agent.pos.y } : null;
+  })()`)
+}
+
+async function captureMovement (cdp, shot) {
+  // Real engine movement with visible before/mid/after evidence. Backend states
+  // are deliberately in-flight and Likui starts away from the gate.
+  await evaluate(cdp, `(() => {
+    ${GAME_LOOKUP_SOURCE}
     const rt = window.__E13_RUNTIME__;
-    rt.installSnapshotSource([]); // engine-driven again? No: keep probe for non-actors, move subject via engine.
+    rt.restoreEngineSnapshotSource({ manual: true });
+    window.__E13_MOVEMENT_PROBE__ = null;
+    juyitingGame.resetToMainHall();
     return true;
   })()`)
   const { movementCase } = shot
   const targetRegionId = movementCase === 'movement-bounty-board' ? 'bounty-board' : 'gate'
   const actor = movementCase === 'movement-bounty-board' ? 'lujunyi' : 'likui'
-  await evaluate(cdp, `(() => {
+  if (actor === 'lujunyi') {
+    // The frozen six-agent fixture initially parks Husanniang in the first
+    // bounty-board slot. Move her to a different real region before auditing
+    // Lujunyi so the arrival evidence uses the primary, visually readable
+    // bounty-board slot instead of the secondary slot behind the wall rail.
+    const relocation = await evaluate(cdp, `(() => {
+      ${GAME_LOOKUP_SOURCE}
+      const g = juyitingGame;
+      g.cancelMovement('husanniang', 2);
+      const accepted = g.enqueueMovementCommands([{
+        commandId: 'e13-relocate-husanniang-' + Date.now(),
+        agentId: 'husanniang', personaCode: 'husanniang',
+        source: 'local', type: 'MOVE_TO_REGION', targetRegionId: 'agent-roster',
+        priority: 5, stateVersion: 3, startedAt: new Date().toISOString(),
+      }])[0];
+      g._movementEngine.update(60000);
+      const snapshot = g._movementEngine.snapshots().find(item => item.agentId === 'husanniang') || null;
+      return { accepted, snapshot };
+    })()` )
+    if (relocation?.accepted?.accepted !== true || relocation?.snapshot?.regionId !== 'agent-roster' || relocation?.snapshot?.phase !== 'arrived') {
+      throw new Error(`failed to free primary bounty-board slot: ${JSON.stringify(relocation)}`)
+    }
+  } else if (actor === 'likui') {
+    // Finish the mocked backend trip to right-guard first, so the audited
+    // local command starts at a real region slot and has a valid route to gate.
+    await evaluate(cdp, `(() => { ${GAME_LOOKUP_SOURCE}; juyitingGame._movementEngine.update(60000); return true; })()`)
+  }
+  const snapshot = () => evaluate(cdp, `(() => { ${GAME_LOOKUP_SOURCE}; return (juyitingGame._movementEngine?.snapshots?.() || []).find(item => item.agentId === ${JSON.stringify(actor)}) || null; })()`)
+  const before = await snapshot()
+  if (!before) throw new Error(`movement actor unavailable before command: ${actor}`)
+  const beforeVisual = await settleMovementVisual(cdp, actor, before)
+  const beforeBuffer = await captureCanvasPng(cdp)
+  const enqueueResult = await evaluate(cdp, `(() => {
     ${GAME_LOOKUP_SOURCE}
     const g = juyitingGame;
+    g._movementEngine.setLocalPatrols([]);
     g.cancelMovement(${JSON.stringify(actor)}, 1);
-    g.enqueueMovementCommands([{
+    return g.enqueueMovementCommands([{
       commandId: 'e13-move-${movementCase}-' + Date.now(),
       agentId: ${JSON.stringify(actor)}, personaCode: ${JSON.stringify(actor)},
       source: 'local', type: 'MOVE_TO_REGION', targetRegionId: ${JSON.stringify(targetRegionId)},
       priority: 5, stateVersion: 2, startedAt: new Date().toISOString(),
-    }]);
-    return true;
+    }])[0];
   })()`)
-  await delay(450) // mid-walk
-  return await captureCanvasPng(cdp)
+  if (enqueueResult?.accepted !== true) throw new Error(`movement command rejected: ${JSON.stringify(enqueueResult)}`)
+  await evaluate(cdp, `(() => { ${GAME_LOOKUP_SOURCE}; juyitingGame._movementEngine.update(3000); return true; })()` )
+  const mid = await snapshot()
+  const midVisual = await settleMovementVisual(cdp, actor, mid)
+  const midBuffer = await captureCanvasPng(cdp)
+  await evaluate(cdp, `(() => { ${GAME_LOOKUP_SOURCE}; juyitingGame._movementEngine.update(8000); return true; })()` )
+  const after = await snapshot()
+  const afterVisual = await settleMovementVisual(cdp, actor, after)
+  const afterBuffer = await captureCanvasPng(cdp)
+  const movementProbe = { actor, targetRegionId, before, mid, after, visuals: { before: beforeVisual, mid: midVisual, after: afterVisual } }
+  await evaluate(cdp, `window.__E13_MOVEMENT_PROBE__ = ${JSON.stringify(movementProbe)}`)
+  return {
+    buffer: midBuffer,
+    frames: [
+      { stage: 'before', buffer: beforeBuffer },
+      { stage: 'mid', buffer: midBuffer },
+      { stage: 'after', buffer: afterBuffer },
+    ],
+  }
 }
 
 if (isMainModule(import.meta.url)) {
-  run().catch(error => {
+  const args = process.argv.slice(2)
+  const arg = name => { const index = args.indexOf(name); return index >= 0 ? args[index + 1] : null }
+  const planPath = resolve(arg('--plan') || join(EVIDENCE_DIR, 'shot-plan.json'))
+  const outputDir = resolve(arg('--output') || EVIDENCE_DIR)
+  const csv = name => (arg(name) || '').split(',').map(value => value.trim()).filter(Boolean)
+  const kinds = csv('--kinds')
+  const ids = csv('--ids')
+  run(planPath, outputDir, { kinds, ids }).catch(error => {
     console.error(error)
     process.exit(1)
   })

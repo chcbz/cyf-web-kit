@@ -22,6 +22,8 @@
       "BASE_MAX_EXCLUSIVE": 100,
       "V2_WORLD_START": 100,
       "V2_WORLD_STRIDE": 1,
+      "ERROR_STATE_PROP_DEPTH": 6,
+      "ERROR_STATE_AGENT_DEPTH": 7,
       "LIGHTING": 300,
       "WORLD_UI": 400,
       "SCREEN_UI": 500
@@ -31,6 +33,6 @@
       "foreground-occluders"
     ]
   },
-  "tmxSha256": "4f94e3a52da71369d9c29d96e0ac0ceb2126a1a441b6cd63911701957e1ed49b",
-  "indexSha256": "7cb9f8009d7709a180f69b5bcd51077f9f7a479f49619361f9f63e4765837c5b"
+  "tmxSha256": "885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f",
+  "indexSha256": "c703e3471b2493e16e8da7c230efd89c4cebf648501eff9694092fe3eead85b0"
 }

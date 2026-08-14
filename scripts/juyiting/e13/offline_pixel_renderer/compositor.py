@@ -167,9 +167,13 @@ class OfflineRenderer:
         return sorted(events, key=lambda e: (e['depth'], -e['insertion']))
 
     def _crop(self, shot, crop_w, crop_h):
-        ax, ay = shot['world']['x'], shot['world']['y']
-        tx, ty = shot['targetAnchor']['x'], shot['targetAnchor']['y']
-        cx, cy = int((ax + tx) / 2), int((ay + ty) / 2)
+        # A target contact sheet is an A/B/C comparison. Its camera must not
+        # follow the probe agent, otherwise behind/boundary/front silently use
+        # different world viewports and cease to be comparable. Bind the crop
+        # only to the authoritative camera center (the target anchor for all
+        # matrix shots); map-edge clamping is deterministic for that target.
+        center = shot.get('camera', {}).get('center') or shot['targetAnchor']
+        cx, cy = int(center['x']), int(center['y'])
         wx = max(0, min(cx - crop_w // 2, self.MAP_W - crop_w))
         wy = max(0, min(cy - crop_h // 2, self.MAP_H - crop_h))
         return wx, wy, min(crop_w, self.MAP_W - wx), min(crop_h, self.MAP_H - wy)
@@ -415,3 +419,20 @@ class OfflineRenderer:
                 'target': next(i for i, e in enumerate(stack) if e.get('object', {}).get('stableId') == target['stableId']),
             },
         }
+
+    def recompute_pixel_overlap(self, shot, fragments, props, png_pixels):
+        """Independently re-derive pixelOverlap from production assets and the
+        committed final-composite PNG. This intentionally does not read any
+        committed runtimeFacts.pixelOverlap field."""
+        from .world_model import build_agent_scene_object, compute_unified_order
+        agent = build_agent_scene_object(shot['persona'], shot['world']['x'], shot['world']['y'])
+        sorted_objects, depths = compute_unified_order(fragments, props, agent)
+        wx, wy, cw, ch = self._crop(shot, 400, 300)
+        omissions = set(shot.get('visualOmissions', []))
+        stack = [event for event in self._event_stack(sorted_objects, agent)
+                 if event.get('object', {}).get('stableId') not in omissions]
+        target = next(o for o in [*fragments, *props] if o['stableId'] == shot['targetStableId'])
+        ad, td = depths[agent['stableId']], depths[target['stableId']]
+        ordering = 'agent_behind_target' if ad < td else ('agent_in_front' if ad > td else 'tie')
+        final_canvas = PixelBuffer(cw, ch, png_pixels)
+        return self._final_visibility_overlap(agent, target, ordering, stack, (wx, wy, cw, ch), final_canvas)

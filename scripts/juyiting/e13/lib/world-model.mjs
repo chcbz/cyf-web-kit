@@ -20,11 +20,18 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildInventory } from '../../inventory-juyiting-map.mjs'
 import { pointStatus } from '../../lib/mask-migration-evidence.mjs'
+import { parseMovementTmx } from '../../../../src/game/map/tmxMovementParser.ts'
+import { findGraphPath } from '../../../../src/game/simulation/graphPathfinder.ts'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 export const REPO_ROOT = resolve(__dirname, '..', '..', '..', '..')
 
 export const MAP = Object.freeze({ width: 1664, height: 928 })
+export const PRODUCTION_REACHABILITY = Object.freeze({
+  colliderWidth: 42,
+  source: 'production-graph-pathfinder',
+  referenceStart: Object.freeze({ x: 880, y: 320 }),
+})
 
 // E13 handoff base commit (fixed by docs/juyiting-occlusion-system-execution-plan.md E13).
 export const E13_BASE_COMMIT = '5308d7cda5c6dc72ab1403bcf4c9d8dadffdf916'
@@ -66,36 +73,36 @@ export const REGIONS = Object.freeze([
 // TMX. `focus` marks the five E13 focus areas: 右上悬赏桌/栏杆/柱子/书架/前门.
 export const TARGETS = Object.freeze([
   // cell primary targets
-  { stableId: 'jyt.occ.west-upper.lantern-01.v2',          kind: 'fragment', cell: 'northwest',    focus: false, anchor: { x: 484, y: 240 }, tieBias: -1, rect: { x: 461, y: 165, width: 45, height: 75 } },
-  { stableId: 'jyt.prop.center-north.main-seat.v1',        kind: 'prop',     cell: 'north_center', focus: false, anchor: { x: 872, y: 268 }, tieBias: 0,  rect: { x: 818, y: 175, width: 109, height: 93 } },
+  { stableId: 'jyt.occ.west-upper.lantern-01.v2',          kind: 'fragment', cell: 'northwest',    focus: false, anchor: { x: 484, y: 240 }, tieBias: -1, rect: { x: 461, y: 165, width: 45, height: 75 }, probes: { behind: { x: 507, y: 219 }, boundary: { x: 510, y: 240 }, front: { x: 480, y: 274 } }, maxAgentOcclusionRatio: 0.7, probeRationale: 'Production-reachable lateral probes keep the northwest lantern visibly involved without swallowing the persona; the behind point preserves 18%-63% source-alpha coverage across all six audit sprites.' },
+  { stableId: 'jyt.prop.center-north.main-seat.v1',        kind: 'prop',     cell: 'north_center', focus: false, anchor: { x: 872, y: 268 }, tieBias: 0,  rect: { x: 818, y: 175, width: 109, height: 93 }, probes: { behind: { x: 817, y: 267 }, boundary: { x: 832, y: 268 }, front: { x: 832, y: 302 } }, maxAgentOcclusionRatio: 0.85, probeRationale: 'The main seat is a wide opaque prop, so its least-destructive production-reachable behind probe uses the west edge one pixel above the sort anchor; this reduces the prior 99%-100% swallowing while preserving real agent < prop ordering.' },
   { stableId: 'jyt.prop.northeast.bounty-board.v1',        kind: 'prop',     cell: 'northeast',    focus: true,  anchor: { x: 1446, y: 379 }, tieBias: -4, rect: { x: 1360, y: 255, width: 172, height: 124 }, probes: { behind: { x: 1380, y: 370 }, boundary: { x: 1390, y: 379 }, front: { x: 1400, y: 385 } }, probeRationale: 'Use navigable table-edge ground for behind/boundary; the old centerline probe was inside collision/nav-obstacle geometry and could swallow the whole sprite.' },
   { stableId: 'jyt.occ.west-upper.wall-sconce-02.v2',      kind: 'fragment', cell: 'west_center',  focus: false, anchor: { x: 515, y: 585 }, tieBias: -1, rect: { x: 492, y: 471, width: 45, height: 114 } },
   { stableId: 'jyt.occ.west-upper.diagonal-brace-01.v2',   kind: 'fragment', cell: 'center',       focus: false, anchor: { x: 608, y: 489 }, tieBias: -1, rect: { x: 600, y: 432, width: 16, height: 57 } },
-  { stableId: 'jyt.occ.east-upper.pillar-01.v2',           kind: 'fragment', cell: 'east_center',  focus: true,  anchor: { x: 1181, y: 464 }, tieBias: -1, rect: { x: 1158, y: 305, width: 46, height: 159 } },
+  { stableId: 'jyt.occ.east-upper.pillar-01.v2',           kind: 'fragment', cell: 'east_center',  focus: true,  anchor: { x: 1181, y: 464 }, tieBias: -1, rect: { x: 1158, y: 305, width: 46, height: 159 }, probes: { behind: { x: 1199, y: 463 }, boundary: { x: 1178, y: 464 }, front: { x: 1178, y: 465 } }, maxAgentOcclusionRatio: 0.6, probeRationale: 'Production-reachable lateral probes move the behind persona to the pillar edge, retaining a readable silhouette (14%-53% source-alpha coverage) instead of the prior 93%-100% swallowing.' },
   { stableId: 'jyt.occ.west-lower.railing-02.v2',          kind: 'fragment', cell: 'southwest',    focus: true,  anchor: { x: 155, y: 824 }, tieBias: -1, rect: { x: 66, y: 787, width: 178, height: 37 } },
   { stableId: 'jyt.occ.entrance.hanging-banner-01.v2',     kind: 'fragment', cell: 'south_center', focus: true,  anchor: { x: 791, y: 794 }, tieBias: -1, rect: { x: 767, y: 722, width: 48, height: 72 } },
-  { stableId: 'jyt.prop.southeast.library-shelf.v1',       kind: 'prop',     cell: 'southeast',    focus: true,  anchor: { x: 1558, y: 719 }, tieBias: 0,  rect: { x: 1497, y: 578, width: 123, height: 141 } },
+  { stableId: 'jyt.prop.southeast.library-shelf.v1',       kind: 'prop',     cell: 'southeast',    focus: true,  anchor: { x: 1558, y: 719 }, tieBias: 0,  rect: { x: 1497, y: 578, width: 123, height: 141 }, probes: { behind: { x: 1597, y: 608 }, boundary: { x: 1527, y: 719 }, front: { x: 1544, y: 732 } }, maxAgentOcclusionRatio: 0.6, probeRationale: 'Composite desk prop probes use the production graph pathfinder with the widest persona collider (42px); behind keeps the upper silhouette readable, while boundary/front exercise the reachable west/south edge.' },
   // additional focus targets (右上桌 front / 栏杆 / 柱子 / 前门灯柱 / 右桌)
-  { stableId: 'jyt.occ.east-upper.scroll-table-front-01.v2', kind: 'fragment', cell: 'northeast',    focus: true, anchor: { x: 1432, y: 284 }, tieBias: -1, rect: { x: 1384, y: 255, width: 95, height: 29 }, probes: { behind: { x: 1395, y: 268 }, boundary: { x: 1395, y: 284 }, front: { x: 1379, y: 285 } }, evidenceContext: 'target-isolated', contextCompanionStableId: 'jyt.prop.northeast.bounty-board.v1', probeRationale: 'E10 mask-73 probes; isolate only this audit sheet because the nearby independent floor table otherwise owns the final pixels and makes this wall-mounted fragment visually unjudgeable.' },
+  { stableId: 'jyt.occ.east-upper.scroll-table-front-01.v2', kind: 'fragment', cell: 'northeast',    focus: true, anchor: { x: 1432, y: 284 }, tieBias: -1, rect: { x: 1384, y: 255, width: 95, height: 29 }, probes: { behind: { x: 1395, y: 268 }, boundary: { x: 1371, y: 284 }, front: { x: 1367, y: 285 } }, evidenceContext: 'target-isolated', contextCompanionStableId: 'jyt.prop.northeast.bounty-board.v1', visualExerciseContract: 'ownership-transition', visualOverlay: 'target-outline', probeRationale: 'Production-pathfinder reachable probes for colliderWidth=42; this ownership-only sheet isolates the nearby independent bounty-board prop. Behind visibly exercises the 29px foreground strip, while boundary/front verify the reachable ordering transition without requiring impossible per-shot alpha overlap.' },
   { stableId: 'jyt.occ.west-lower.railing-01.v2',            kind: 'fragment', cell: 'south_center', focus: true, anchor: { x: 593, y: 778 }, tieBias: -1, rect: { x: 506, y: 675, width: 174, height: 103 } },
   { stableId: 'jyt.occ.east-lower.railing-post-01.v2',       kind: 'fragment', cell: 'southeast',    focus: true, anchor: { x: 1247, y: 775 }, tieBias: -1, rect: { x: 1242, y: 707, width: 10, height: 68 } },
-  { stableId: 'jyt.occ.east-upper.pillar-02.v2',             kind: 'fragment', cell: 'southeast',    focus: true, anchor: { x: 1227, y: 703 }, tieBias: -1, rect: { x: 1202, y: 478, width: 50, height: 225 } },
-  { stableId: 'jyt.occ.entrance.lantern-post-01.v2',         kind: 'fragment', cell: 'south_center', focus: true, anchor: { x: 1073, y: 778 }, tieBias: -1, rect: { x: 1052, y: 674, width: 41, height: 104 } },
-  { stableId: 'jyt.occ.east-lower.worktable-01.v2',          kind: 'fragment', cell: 'southeast',    focus: true, anchor: { x: 1559, y: 701 }, tieBias: -1, rect: { x: 1499, y: 574, width: 120, height: 127 }, probes: { behind: { x: 1602, y: 685 }, boundary: { x: 1602, y: 701 }, front: { x: 1602, y: 717 } }, evidenceContext: 'target-isolated', contextCompanionStableId: 'jyt.prop.southeast.library-shelf.v1', probeRationale: 'E10 mask-74 probes; isolate only this audit sheet because the adjacent independent shelf/table structure otherwise owns the final pixels.' },
+  { stableId: 'jyt.occ.east-upper.pillar-02.v2',             kind: 'fragment', cell: 'southeast',    focus: true, anchor: { x: 1227, y: 703 }, tieBias: -1, rect: { x: 1202, y: 478, width: 50, height: 225 }, probes: { behind: { x: 1215, y: 695 }, boundary: { x: 1250, y: 703 }, front: { x: 1250, y: 704 } }, maxAgentOcclusionRatio: 0.55, probeRationale: 'Production-reachable edge probes retain 56%-84% of the persona silhouette at behind while visibly exercising the full-height pillar in boundary/front relations.' },
+  { stableId: 'jyt.occ.entrance.lantern-post-01.v2',         kind: 'fragment', cell: 'south_center', focus: true, anchor: { x: 1073, y: 778 }, tieBias: -1, rect: { x: 1052, y: 674, width: 41, height: 104 }, probes: { behind: { x: 1062, y: 688 }, boundary: { x: 1062, y: 778 }, front: { x: 1062, y: 779 } }, maxAgentOcclusionRatio: 0.55, probeRationale: 'The behind probe moves upward and laterally to the lantern-post edge, remaining production reachable while reducing the previous 95%-100% whole-person cover to a readable partial overlap.' },
+  { stableId: 'jyt.occ.east-lower.worktable-01.v2',          kind: 'fragment', cell: 'southeast',    focus: true, anchor: { x: 1559, y: 701 }, tieBias: -1, rect: { x: 1499, y: 574, width: 120, height: 127 }, probes: { behind: { x: 1584, y: 615 }, boundary: { x: 1520, y: 701 }, front: { x: 1599, y: 747 } }, evidenceContext: 'in-context', contextCompanionStableId: 'jyt.prop.southeast.library-shelf.v1', visualExerciseContract: 'composite-transition', visualOverlay: 'target-and-companion-outline', maxAgentOcclusionRatio: 0.6, probeRationale: 'This fragment is the foreground slice of the same composite desk as the companion prop. All probes are production-pathfinder reachable for colliderWidth=42; behind visibly exercises the fragment without swallowing the persona, while boundary/front validate the real composite transition at reachable west/south edges.' },
 ])
 
 // ── Camera regression / interaction / lighting plan (single persona 卢俊义) ──
 export const CAMERA_CASES = Object.freeze([
-  { id: 'desktop-default',  label: 'desktop default zoom 0.84',  viewport: { width: 1280, height: 800 }, zoom: 0.84 },
-  { id: 'desktop-zoom-in',  label: 'desktop zoom-in 1.5',        viewport: { width: 1280, height: 800 }, zoom: 1.5 },
-  { id: 'desktop-zoom-out', label: 'desktop zoom-out 0.6',       viewport: { width: 1280, height: 800 }, zoom: 0.6 },
-  { id: 'desktop-pan-east', label: 'desktop pan east +120px',    viewport: { width: 1280, height: 800 }, zoom: 0.84, panDx: 120 },
-  { id: 'desktop-pan-west', label: 'desktop pan west -120px',    viewport: { width: 1280, height: 800 }, zoom: 0.84, panDx: -120 },
-  { id: 'tablet-landscape', label: 'tablet landscape 1024×768',  viewport: { width: 1024, height: 768 }, zoom: 0.92 },
-  { id: 'mobile-portrait',  label: 'mobile portrait 390×844',    viewport: { width: 390, height: 844 }, zoom: 1.25 },
-  { id: 'mobile-landscape', label: 'mobile landscape 844×390',   viewport: { width: 844, height: 390 }, zoom: 1.05 },
-  { id: 'mobile-pinch-in',  label: 'mobile pinch zoom-in',       viewport: { width: 390, height: 844 }, zoom: 1.25, pinch: { start: 60, end: 220 } },
-  { id: 'mobile-pinch-out', label: 'mobile pinch zoom-out',      viewport: { width: 390, height: 844 }, zoom: 1.25, pinch: { start: 220, end: 60 } },
+  { id: 'desktop-default',  label: 'desktop default request 0.84 → effective full-map minimum 1.0', viewport: { width: 1280, height: 800 }, zoom: 0.84, expectedZoom: 1.0 },
+  { id: 'desktop-zoom-in',  label: 'desktop zoom-in 1.5',                                   viewport: { width: 1280, height: 800 }, zoom: 1.5, expectedZoom: 1.5 },
+  { id: 'desktop-zoom-out', label: 'desktop below-min request 0.6 → clamped 1.0',              viewport: { width: 1280, height: 800 }, zoom: 0.6, expectedZoom: 1.0, expectedClamp: 'full-map-cover-minimum' },
+  { id: 'desktop-pan-east', label: 'desktop pan east +120px from centered zoom 1.5',           viewport: { width: 1280, height: 800 }, zoom: 1.5, center: { x: 832, y: 464 }, panDx: 120, expectedPan: 'positive-x' },
+  { id: 'desktop-pan-west', label: 'desktop pan west -120px from centered zoom 1.5',           viewport: { width: 1280, height: 800 }, zoom: 1.5, center: { x: 832, y: 464 }, panDx: -120, expectedPan: 'negative-x' },
+  { id: 'tablet-landscape', label: 'tablet landscape 1024×768 request 0.92 → effective 1.0',   viewport: { width: 1024, height: 768 }, zoom: 0.92, expectedZoom: 1.0 },
+  { id: 'mobile-portrait',  label: 'mobile portrait 390×844',                                viewport: { width: 390, height: 844 }, zoom: 1.25, expectedZoom: 1.25 },
+  { id: 'mobile-landscape', label: 'mobile landscape 844×390',                               viewport: { width: 844, height: 390 }, zoom: 1.05, expectedZoom: 1.05 },
+  { id: 'mobile-pinch-in',  label: 'mobile pinch zoom-in from 1.25',                          viewport: { width: 390, height: 844 }, zoom: 1.25, pinch: { start: 60, end: 220 }, expectedZoomDirection: 'increase' },
+  { id: 'mobile-pinch-out', label: 'mobile pinch zoom-out from 1.25',                         viewport: { width: 390, height: 844 }, zoom: 1.25, pinch: { start: 220, end: 60 }, expectedZoomDirection: 'decrease' },
 ])
 
 export const INTERACTION_CASES = Object.freeze([
@@ -182,7 +189,36 @@ export function loadSourceFacts () {
     inventory: buildInventory(tmx),
     tmxFragments,
     tmxProps,
+    movementRuntime: parseMovementTmx(tmx),
   }
+}
+
+export function productionReachability (world, facts = loadSourceFacts()) {
+  const result = findGraphPath(
+    facts.movementRuntime,
+    PRODUCTION_REACHABILITY.referenceStart,
+    world,
+    { colliderWidth: PRODUCTION_REACHABILITY.colliderWidth },
+  )
+  return {
+    source: PRODUCTION_REACHABILITY.source,
+    colliderWidth: PRODUCTION_REACHABILITY.colliderWidth,
+    referenceStart: PRODUCTION_REACHABILITY.referenceStart,
+    status: result.status,
+    ...(result.status === 'found'
+      ? { cost: result.cost, nodeIds: result.nodeIds }
+      : { reason: result.reason }),
+  }
+}
+
+/**
+ * Re-derive the full nav validation for one world point from the production
+ * TMX collision inventory and the production graph pathfinder. This is the
+ * single source of truth used by both the plan builder and the fail-closed
+ * machine gate, so committed navValidation is never trusted by itself.
+ */
+export function deriveNavValidation (world, facts = loadSourceFacts()) {
+  return { ...pointStatus(world, facts.inventory), reachability: productionReachability(world, facts) }
 }
 
 /** Cross-check every committed target against the TMX source anchors (≤1px tolerance). */
@@ -224,6 +260,7 @@ export function buildShotPlan (facts = loadSourceFacts()) {
           personaName: persona.name,
           relation,
           world,
+          probeCell: cellForPoint(world)?.id ?? null,
           expectedRelation: def.expected,
           expectedDepth: def.expectedDepth,
           viewport: { width: 1280, height: 800 },
@@ -232,7 +269,10 @@ export function buildShotPlan (facts = loadSourceFacts()) {
           contextCompanionStableId: target.contextCompanionStableId ?? null,
           visualOmissions: target.evidenceContext === 'target-isolated' ? [target.contextCompanionStableId] : [],
           probeKind: target.probes ? 'target-specific' : 'uniform-anchor-offset',
-          navValidation: pointStatus(world, facts.inventory),
+          visualExerciseContract: target.visualExerciseContract ?? 'target-each-shot',
+          visualOverlay: target.visualOverlay ?? 'none',
+          maxAgentOcclusionRatio: target.maxAgentOcclusionRatio ?? null,
+          navValidation: deriveNavValidation(world, facts),
           probeRationale: target.probeRationale ?? 'Default anchor-relative probe.',
         })
       }
@@ -248,7 +288,8 @@ export function buildShotPlan (facts = loadSourceFacts()) {
       targetStableId: 'jyt.prop.northeast.bounty-board.v1',
       relation: 'front',
       viewport: cameraCase.viewport,
-      camera: { center: { x: 1446, y: 413 }, zoom: cameraCase.zoom, panDx: cameraCase.panDx, pinch: cameraCase.pinch },
+      camera: { center: cameraCase.center ?? { x: 1446, y: 413 }, zoom: cameraCase.zoom, panDx: cameraCase.panDx, pinch: cameraCase.pinch },
+      cameraExpectations: { expectedZoom: cameraCase.expectedZoom ?? null, expectedClamp: cameraCase.expectedClamp ?? null, expectedPan: cameraCase.expectedPan ?? null, expectedZoomDirection: cameraCase.expectedZoomDirection ?? null },
     })
   }
   for (const interactionCase of INTERACTION_CASES) {
@@ -271,14 +312,31 @@ export function validateShotPlan (shots = buildShotPlan(), facts = loadSourceFac
       if (!target) { errors.push(`${shot.id}: unknown target ${shot.targetStableId}`); continue }
       if (target.cell !== shot.cell) errors.push(`${shot.id}: cell mismatch`)
       const cell = REGIONS.find(r => r.id === shot.cell)
-      if (cell && !pointInRect(shot.world, cell.bounds)) {
-        errors.push(`${shot.id}: agent world (${shot.world.x},${shot.world.y}) outside cell ${shot.cell} ${JSON.stringify(cell.bounds)}`)
+      if (!pointInRect(shot.world, { x: 0, y: 0, width: MAP.width, height: MAP.height })) {
+        errors.push(`${shot.id}: agent world (${shot.world.x},${shot.world.y}) outside map bounds`)
+      }
+      if (shot.probeKind !== 'target-specific' && cell && !pointInRect(shot.world, cell.bounds)) {
+        errors.push(`${shot.id}: uniform probe world (${shot.world.x},${shot.world.y}) outside target cell ${shot.cell} ${JSON.stringify(cell.bounds)}`)
+      }
+      if (shot.probeCell !== (cellForPoint(shot.world)?.id ?? null)) {
+        errors.push(`${shot.id}: probeCell drift`)
       }
       if (!PERSONAS.some(p => p.personaCode === shot.persona)) errors.push(`${shot.id}: unknown persona ${shot.persona}`)
       if (!RELATIONS[shot.relation]) errors.push(`${shot.id}: unknown relation ${shot.relation}`)
-      const status = pointStatus(shot.world, facts.inventory)
-      if (JSON.stringify(status) !== JSON.stringify(shot.navValidation)) errors.push(`${shot.id}: navValidation drift`)
-      if (shot.probeKind === 'target-specific' && !status.navigable) errors.push(`${shot.id}: target-specific probe is not navigable (${JSON.stringify(status)})`)
+      const expectedNavValidation = deriveNavValidation(shot.world, facts)
+      if (JSON.stringify(expectedNavValidation) !== JSON.stringify(shot.navValidation)) errors.push(`${shot.id}: navValidation drift`)
+      if (shot.probeKind === 'target-specific' && (!expectedNavValidation.navigable || expectedNavValidation.reachability.status !== 'found')) {
+        errors.push(`${shot.id}: target-specific probe is not production reachable (${JSON.stringify(expectedNavValidation)})`)
+      }
+      if (!['target-each-shot', 'ownership-transition', 'composite-transition'].includes(shot.visualExerciseContract)) {
+        errors.push(`${shot.id}: invalid visualExerciseContract ${shot.visualExerciseContract}`)
+      }
+      if (!['none', 'target-outline', 'target-and-companion-outline'].includes(shot.visualOverlay)) {
+        errors.push(`${shot.id}: invalid visualOverlay ${shot.visualOverlay}`)
+      }
+      if (shot.maxAgentOcclusionRatio !== null && (!(shot.maxAgentOcclusionRatio > 0) || shot.maxAgentOcclusionRatio > 1)) {
+        errors.push(`${shot.id}: invalid maxAgentOcclusionRatio ${shot.maxAgentOcclusionRatio}`)
+      }
       const dy = shot.world.y - target.anchor.y
       if ((shot.relation === 'behind' && dy >= 0) || (shot.relation === 'boundary' && dy !== 0) || (shot.relation === 'front' && dy <= 0)) {
         errors.push(`${shot.id}: probe y=${shot.world.y} does not satisfy ${shot.relation} against anchor y=${target.anchor.y}`)

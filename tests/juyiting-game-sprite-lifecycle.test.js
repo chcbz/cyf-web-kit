@@ -90,12 +90,15 @@ const createRuntimeMelon = () => {
   return { images, me, pendingLoads, stateSets, worldChildren }
 }
 
-const nextLoadBatch = async fake => {
-  for (let turn = 0; turn < 200 && fake.pendingLoads.length === 0; turn += 1) {
-    await Promise.resolve()
-    if (turn % 20 === 19) await new Promise(resolve => setTimeout(resolve, 0))
+const nextLoadBatch = async (fake, timeoutMs = 5_000) => {
+  const deadline = Date.now() + timeoutMs
+  while (fake.pendingLoads.length === 0 && Date.now() < deadline) {
+    // Resource preparation includes WebCrypto and dynamic-module work. Yield to the
+    // event loop until a wall-clock deadline instead of assuming a fixed number
+    // of microtasks, which is flaky when the complete test suite is CPU-bound.
+    await new Promise(resolve => setTimeout(resolve, 5))
   }
-  expect(fake.pendingLoads.length, 'expected a runtime resource batch').to.be.greaterThan(0)
+  expect(fake.pendingLoads.length, `expected a runtime resource batch within ${timeoutMs}ms`).to.be.greaterThan(0)
   return fake.pendingLoads.splice(0)
 }
 

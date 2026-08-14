@@ -1,0 +1,68 @@
+{
+  "$schema": "juyiting-occlusion-e13-visual-review-v5-v1",
+  "taskId": "E13",
+  "reviewRound": 5,
+  "reviewDate": "2026-08-14",
+  "reviewerRole": "vision_reviewer",
+  "reviewer": "ShenKuoVision",
+  "reviewerAgentId": "019ffda6-eba5-7310-9eb1-3b818ac0adae",
+  "scope": "full-15-contact-sheet-review",
+  "verdict": "REJECT",
+  "pass": false,
+  "highestSeverity": "P1",
+  "contactSheetsReviewed": 15,
+  "bindings": {
+    "tmxSha256": "885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f",
+    "shotPlanSha256": "dd2de43a6bba5f67f173dedc4e6fc8a524e45cef78783231d6665dbd359b1dae",
+    "indexSha256": "55f5ba3cc0c623fcabeb000c02a153199b724b5d702c3bd4f7d0970d6437f431",
+    "shotPngHashesMatchedIndex": "270/270"
+  },
+  "findings": [
+    {
+      "id": "P1-01",
+      "severity": "P1",
+      "title": "Behind probes swallow most or all of the persona",
+      "examples": [
+        "main-seat E13-019/022/025/028/031/034: 99.4%-100%",
+        "pillar-01 E13-091/094/097/103/106: 92.6%-100%",
+        "entrance lantern-post E13-235/238/241/247/250: 94.8%-100%",
+        "northwest lantern E13-001/004/013/016: 91.5%-98.1%",
+        "pillar-02 E13-217..234 also requires recalibration"
+      ],
+      "requiredAction": "Use production-reachable lateral probes that retain a readable head/shoulder or half-body silhouette while preserving agent < target."
+    },
+    {
+      "id": "P1-02",
+      "severity": "P1",
+      "title": "Worktable boundary/front lack visible fragment exercise",
+      "shots": "E13-253..270",
+      "detail": "Twelve boundary/front shots report zero alpha intersection and zero visible occlusion; behind has only weak 2.1%-4.7% visible impact.",
+      "requiredAction": "Recalibrate production-reachable probes while retaining the full composite prop context."
+    },
+    {
+      "id": "P1-03",
+      "severity": "P1",
+      "title": "Scroll-table boundary/front evidence is visually insufficient",
+      "shots": "E13-163..180",
+      "requiredAction": "Use readable probes or an explicit target ownership outline/overlay; preserve the declared owner-isolation contract."
+    },
+    {
+      "id": "P1-04",
+      "severity": "P1",
+      "title": "Shots for the same target use different viewportWorld crops",
+      "detail": "The offline renderer followed the agent/target midpoint, preventing strict behind/boundary/front A/B/C comparison.",
+      "requiredAction": "All 18 shots for one target must share identical viewportWorld and zoom."
+    },
+    {
+      "id": "P1-05",
+      "severity": "P1",
+      "title": "Visual evidence does not cover all 37 mask-to-structure mappings",
+      "coveredBindings": 14,
+      "totalBindings": 37,
+      "missingMaskIds": [48,49,51,52,53,54,56,58,60,62,63,65,67,68,71,72,75,76,78,79,82,83,84],
+      "requiredAction": "Add current-TMX-bound mapping sheets showing mask ID, fragment stableId, owner boundary, and structure name for all 37 mappings."
+    }
+  ],
+  "releaseDecision": "BLOCKED",
+  "summary": "REJECT: 0 P0, highest severity P1. Do not merge, deploy, or push until evidence is rebuilt and a new full visual review passes."
+}

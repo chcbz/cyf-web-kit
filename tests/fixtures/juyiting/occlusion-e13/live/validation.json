@@ -1,0 +1,109 @@
+{
+  "$schema": "juyiting-occlusion-e13-live-validation-v1",
+  "schemaVersion": 1,
+  "taskId": "E13",
+  "pass": true,
+  "checkedAt": "2026-08-14T06:43:13.274Z",
+  "liveDir": "tests/fixtures/juyiting/occlusion-e13/live",
+  "worldModelSha256": "f212c93a82322e2640eb13573fa49d85c9493bc89015a22c319d499ab82eb177",
+  "shotPlanSha256": "a78bc573ec5adeb3fd6c09972f88127e24ba49ab156a17011db6d3782b1d5f01",
+  "shotCount": 19,
+  "cameraShots": 10,
+  "interactionShots": 7,
+  "movementShots": 2,
+  "passedChecks": 18,
+  "totalChecks": 18,
+  "failures": [],
+  "checks": [
+    {
+      "check": "live index worldModelSha256 binds current world-model.json",
+      "ok": true,
+      "detail": "f212c93a82322e2640eb13573fa49d85c9493bc89015a22c319d499ab82eb177 vs f212c93a82322e2640eb13573fa49d85c9493bc89015a22c319d499ab82eb177"
+    },
+    {
+      "check": "live index shotPlanSha256 binds current shot-plan.json",
+      "ok": true,
+      "detail": "a78bc573ec5adeb3fd6c09972f88127e24ba49ab156a17011db6d3782b1d5f01 vs a78bc573ec5adeb3fd6c09972f88127e24ba49ab156a17011db6d3782b1d5f01"
+    },
+    {
+      "check": "live evidence has exactly 19 shots",
+      "ok": true,
+      "detail": "got 19"
+    },
+    {
+      "check": "19/19 live shot ids present, none missing",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "no duplicate live shot ids",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "no live shot ids outside E13-271..E13-289",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "live/shots contains exactly the 19 planned PNG files",
+      "ok": true,
+      "detail": "got E13-271.png, E13-272.png, E13-273.png, E13-274.png, E13-275.png, E13-276.png, E13-277.png, E13-278.png, E13-279.png, E13-280.png, E13-281.png, E13-282.png, E13-283.png, E13-284.png, E13-285.png, E13-286.png, E13-287.png, E13-288.png, E13-289.png"
+    },
+    {
+      "check": "live shot kinds are camera/interaction/movement only",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "19/19 live shot PNGs exist and hash-match the index",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "19/19 live shot PNG dimensions match their planned viewport",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "19/19 live shots ran in rendererMode=v2",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "browserViewport matches plan for every shot",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "camera shots satisfy plan expectedZoom/expectedPan/expectedZoomDirection",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "interaction shots satisfy selection/panel/bubble/lighting contracts",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "movement shots carry hash-bound 1280x800 before/mid/after sequences",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "movement shots prove actor-bound displacement toward the planned region",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "movement engine snapshots and rendered actor positions agree at every captured frame",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "camera/interaction/movement contact sheets exist as PNGs",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

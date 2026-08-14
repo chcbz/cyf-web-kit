@@ -1,0 +1,105 @@
+{
+  "$schema": "juyiting.occlusion-e13.mask-structure-mapping.verify.v1",
+  "schemaVersion": 1,
+  "taskId": "E13",
+  "subtask": "mask-structure-mapping",
+  "generatedBy": "verify-mask-structure-mapping.mjs",
+  "pass": true,
+  "maskCount": 37,
+  "tmxIdRange": [
+    48,
+    84
+  ],
+  "uniqueTargetFragmentCount": 32,
+  "currentTmxSha256": "885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f",
+  "passedChecks": 16,
+  "totalChecks": 16,
+  "failures": [],
+  "checks": [
+    {
+      "check": "schema is E13 mask-structure-mapping v1",
+      "ok": true,
+      "detail": "juyiting.occlusion-e13.mask-structure-mapping.v1 v1"
+    },
+    {
+      "check": "maskCount field matches entries",
+      "ok": true,
+      "detail": "entries=37"
+    },
+    {
+      "check": "mask 48..84 full coverage, no duplicates, sorted",
+      "ok": true,
+      "detail": "[48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84]"
+    },
+    {
+      "check": "tmxIdRange field",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "every entry binds ledger + mask-tmx-manifest + fragment-ownership-spec",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "every derived maskBoundary/ownerBoundary/ownerOverlapEvidence fact re-derives from source data",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "uniqueTargetFragmentCount matches resolved fragments",
+      "ok": true,
+      "detail": "got 32"
+    },
+    {
+      "check": "current TMX file hash is bound SHA 885471a1…",
+      "ok": true,
+      "detail": "885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f"
+    },
+    {
+      "check": "manifest currentTmxSha256 matches bound SHA",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "manifest tmx provenance matches mask-tmx-manifest current/baseline",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "provenance wholeFileSha256 fields match source files",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "manifest contentSha256 recomputes",
+      "ok": true,
+      "detail": "4789ccaa73de93edc10fe58c259eeb22f7984a8a078aa48fb46e1a7324123501"
+    },
+    {
+      "check": "visualization.sha256 matches SVG file",
+      "ok": true,
+      "detail": "b2c705f0bc0512257637e957b287856138e1a7638cb42a93e275535f06993ec1"
+    },
+    {
+      "check": "SVG renders exactly 37 mask cards 48..84",
+      "ok": true,
+      "detail": "got 37"
+    },
+    {
+      "check": "SVG cards carry target stableId + structure name for every entry",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "SVG binds current TMX SHA",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "sourceHashes": {
+    "manifestSha256": "06f764c6a11d02d1608e1e3f509231cfc6316d6897fe7b4b11b40c431e86c906",
+    "svgSha256": "b2c705f0bc0512257637e957b287856138e1a7638cb42a93e275535f06993ec1",
+    "tmxSha256": "885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f"
+  }
+}

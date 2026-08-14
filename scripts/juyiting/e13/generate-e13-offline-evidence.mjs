@@ -32,7 +32,7 @@ function writeReport () {
 - 状态：\`GENERATED_OFFLINE\`
 - 遮挡矩阵：270/270 已生成，\`matrixPass=true\`
 - 最终 E13 release：\`releasePass=false\`
-- V4 首轮 12/15 PASS；修正污染探针后，第二轮仅复审失败子集并取得 3/3 PASS。
+- GPT V5 全量审核发现 5 个 P1；重建固定视口、可达探针、ownership overlay 和 37-mask mapping 后，GPT V6 全量审核 15/15 sheets、270/270 shots、37/37 mask cards PASS。
 
 ## 权威输入与绑定
 
@@ -60,7 +60,7 @@ function writeReport () {
 
 ## 明确延期项
 
-camera、interaction、movement 仍为独立 \`DEFERRED\`，不计入 270 遮挡矩阵通过，并继续阻止最终 E13 release pass。GPT V4 视觉审核已通过；技术跨模型复核因 DeepSeek provider `auth_unavailable` 合并到 E17。
+camera、interaction、movement 仍为独立 \`DEFERRED\`，不计入 270 遮挡矩阵通过，并继续阻止最终 E13 release pass。GPT V6 全量视觉审核已通过；live browser 证据、独立技术复核和 release guard 仍在 E17/E18 完成。
 `
   writeFileSync(join(output, 'report.md'), report)
 }
@@ -83,9 +83,9 @@ function main () {
   log('running direct production TypeScript oracle')
   run('node', ['--import', 'tsx', join(here, 'validate-e13-offline-oracle.mjs'), '--evidence-dir', output])
   log('running fail-closed Python validator')
-  run('python3', ['-m', 'offline_pixel_renderer.validate', '--repo-root', repo, '--evidence-dir', output])
+  run('python3', ['-m', 'offline_pixel_renderer.validate', '--repo-root', repo, '--evidence-dir', output, '--write-recompute-report'])
   log('running matrix/release machine gate')
-  run('node', [join(here, 'validate-e13-evidence.mjs'), '--evidence-dir', output])
+  run('node', ['--import', 'tsx', join(here, 'validate-e13-evidence.mjs'), '--evidence-dir', output])
   writeReport()
   const shots = readdirSync(join(output, 'shots')).filter(f => f.endsWith('.png')).length
   const sheets = readdirSync(join(output, 'contact-sheets')).filter(f => f.endsWith('.png')).length

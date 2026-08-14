@@ -135,7 +135,14 @@ export const waitForExpression = async (cdp, expression, timeoutMs = 20000) => {
 export const evaluate = async (cdp, expression) => {
   cdp.throwHandlerErrors()
   const result = await cdp.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
-  if (result.exceptionDetails) throw new Error(result.exceptionDetails.text || 'Runtime.evaluate failed')
+  if (result.exceptionDetails) {
+    const details = result.exceptionDetails
+    const description = details.exception?.description || details.exception?.value || details.text || 'Runtime.evaluate failed'
+    const location = Number.isInteger(details.lineNumber)
+      ? ` at ${details.url || '<evaluation>'}:${details.lineNumber + 1}:${(details.columnNumber || 0) + 1}`
+      : ''
+    throw new Error(`${description}${location}`)
+  }
   return result.result?.value
 }
 
@@ -207,7 +214,11 @@ export const captureCanvasPng = async (cdp, { clipPadding = 0 } = {}) => {
     const canvas = document.querySelector('.melon-layer canvas');
     if (!canvas) return null;
     const r = canvas.getBoundingClientRect();
-    return { x: Math.max(0, r.left - ${clipPadding}), y: Math.max(0, r.top - ${clipPadding}), width: r.width + ${clipPadding} * 2, height: r.height + ${clipPadding} * 2 };
+    const left = Math.max(0, r.left - ${clipPadding});
+    const top = Math.max(0, r.top - ${clipPadding});
+    const right = Math.min(window.innerWidth, r.right + ${clipPadding});
+    const bottom = Math.min(window.innerHeight, r.bottom + ${clipPadding});
+    return { x: left, y: top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
   })()`)
   if (!rect || !rect.width || !rect.height) throw new Error('Melon canvas is unavailable for screenshot')
   const result = await cdp.send('Page.captureScreenshot', {
@@ -215,6 +226,15 @@ export const captureCanvasPng = async (cdp, { clipPadding = 0 } = {}) => {
     clip: { ...rect, scale: 1 }
   })
   if (!result?.data) throw new Error('Page.captureScreenshot returned no data')
+  return Buffer.from(result.data, 'base64')
+}
+
+/** Capture the current browser viewport, including DOM overlays and the melon canvas. */
+export const captureViewportPng = async (cdp) => {
+  const result = await cdp.send('Page.captureScreenshot', {
+    format: 'png', fromSurface: true, captureBeyondViewport: false,
+  })
+  if (!result?.data) throw new Error('Page.captureScreenshot returned no viewport data')
   return Buffer.from(result.data, 'base64')
 }
 

@@ -1,0 +1,86 @@
+{
+  "$schema": "juyiting-occlusion-e13-live-visual-review-v1",
+  "schemaVersion": 1,
+  "taskId": "E13",
+  "reviewedAt": "2026-08-14",
+  "reviewer": {
+    "role": "vision_reviewer",
+    "agentId": "019ffef9-f697-7650-9eb6-935ca344764a",
+    "nickname": "GuKaizhi the 2nd",
+    "modelClass": "GPT multimodal independent read-only reviewer"
+  },
+  "pass": true,
+  "verdict": "PASS",
+  "highestSeverity": "S0",
+  "scope": {
+    "liveShotsReviewed": 19,
+    "cameraShots": 10,
+    "interactionShots": 7,
+    "movementShots": 2,
+    "movementFramesReviewed": 6
+  },
+  "sourceHashes": {
+    "liveIndexSha256": "54b4de7f7b6bd01f23b970e4078cf25608191292acb9e718edc53634ab947130",
+    "liveValidationSha256": "d9bc724f58f75b49c470eda05b7c6e34d75f49766275c5013a30b647da8e4be6",
+    "cameraContactSheetSha256": "94e470c2262f49b7e5556554ada1567ce570b9169e2515006e6d65a3421c35de",
+    "interactionContactSheetSha256": "53af9d09aa6e15b5d75c2682bbaf98444f34487704a0fdb48d139a80d699ec71",
+    "movementContactSheetSha256": "c4ff171d4b6bffc08a8427a58d4a20f16b89418b675f6b8fdbc4c40b96549ccf"
+  },
+  "sheetVerdicts": [
+    {
+      "sheet": "camera",
+      "verdict": "PASS",
+      "highestSeverity": "S0",
+      "shotsReviewed": 10,
+      "finding": "desktop/tablet/mobile/pinch/pan layouts remain coherent; no merge regression observed"
+    },
+    {
+      "sheet": "interaction",
+      "verdict": "PASS",
+      "highestSeverity": "S0",
+      "shotsReviewed": 7,
+      "finding": "panels, labels, bubbles and lighting remain visually coherent; no merge regression observed"
+    },
+    {
+      "sheet": "movement",
+      "verdict": "PASS",
+      "highestSeverity": "S0",
+      "shotsReviewed": 2,
+      "framesReviewed": 6,
+      "finding": "both actors visibly move along real routes and arrive with readable identity, coherent grounding and correct occlusion"
+    }
+  ],
+  "movementVerdicts": [
+    {
+      "shotId": "E13-288",
+      "actor": "lujunyi",
+      "targetRegionId": "bounty-board",
+      "verdict": "PASS",
+      "highestSeverity": "S0",
+      "finding": "same labeled actor moves from (840,528) through (1076.741,562.963) to production parking slot (1480,420); name, head, shoulders and more than half the sprite remain readable with no wall-rail swallowing"
+    },
+    {
+      "shotId": "E13-289",
+      "actor": "likui",
+      "targetRegionId": "gate",
+      "verdict": "PASS",
+      "highestSeverity": "S0",
+      "finding": "same labeled actor moves from (1110,594) through (1100.115,572.820) to (772,733); gate occludes only the lower body while label and upper body remain readable"
+    }
+  ],
+  "reviewHistory": [
+    {
+      "round": 1,
+      "verdict": "REJECT",
+      "highestSeverity": "P1",
+      "reason": "E13-288 after at secondary slot (1400,420) lost head, torso and name label behind northeast wall rail"
+    },
+    {
+      "round": 2,
+      "verdict": "PASS",
+      "highestSeverity": "S0",
+      "reason": "E13-288 now reaches the real primary bounty-board slot (1480,420), preserving readable identity and coherent occlusion; E13-289 remains correct"
+    }
+  ],
+  "additionalFindings": []
+}

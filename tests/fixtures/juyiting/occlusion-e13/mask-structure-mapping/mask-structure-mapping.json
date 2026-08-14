@@ -1,0 +1,3999 @@
+{
+  "$schema": "juyiting.occlusion-e13.mask-structure-mapping.v1",
+  "schemaVersion": 1,
+  "taskId": "E13",
+  "subtask": "mask-structure-mapping",
+  "sceneId": "juyiting-main",
+  "maskCount": 37,
+  "tmxIdRange": [
+    48,
+    84
+  ],
+  "uniqueTargetFragmentCount": 32,
+  "currentTmxSha256": "885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f",
+  "currentTmxPath": "public/juyiting/hall.tmx",
+  "visualization": {
+    "path": "tests/fixtures/juyiting/occlusion-e13/mask-structure-mapping/mask-structure-mapping.svg",
+    "sha256": "b2c705f0bc0512257637e957b287856138e1a7638cb42a93e275535f06993ec1"
+  },
+  "provenance": {
+    "migrationLedger": {
+      "path": "tests/fixtures/juyiting/occlusion-v2-masks/migration-ledger.json",
+      "wholeFileSha256": "700b2ac6d27ceb58ce5fe0dd92b3f0dc7012a6ecafd03f7c23a9d3a3c42704b1",
+      "contentSha256": "89d96b39e74e63edb620da5d595a0c010546c81d2a9447433c137c7bcb8b2d4f",
+      "generationId": "fc855f90cbfc13c5ad8b24659825bc1dccaa03ec17866735fd923452dbdc7611"
+    },
+    "maskTmxManifest": {
+      "path": "tests/fixtures/juyiting/occlusion-v2-masks/mask-tmx-manifest.json",
+      "wholeFileSha256": "96053f6cda115ecc437085ef431ef1d4ec766403f4c2e6a2bda6c8093bbdb0e7",
+      "generationId": "0440e4963703f0d2f572d60c37f2ea1c1bd34f3fa9a77889b6f672bb108c57f0"
+    },
+    "fragmentOwnershipSpec": {
+      "path": "tests/fixtures/juyiting/occlusion-v2-fragments/fragment-ownership-spec.json",
+      "wholeFileSha256": "1d1c8dbbc9f32c414f2eea76835e0c39b45587708ec67923c52639613da3ffe6",
+      "generationId": "7f8bbdd8f3ca49952d0bcfceadf60a50ad998fc7033e370cbef665ee331f3d3b"
+    },
+    "tmx": {
+      "path": "public/juyiting/hall.tmx",
+      "baselineSha256": "291a38cc66ebd60c8577500a5afc18ce5398570fe4c35ca66d9eebe818826a97",
+      "currentSha256": "885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f"
+    }
+  },
+  "entries": [
+    {
+      "tmxId": 48,
+      "legacyIndex": 1,
+      "legacyTmxName": "mask-48",
+      "maskBindingStableId": "jyt.mask-binding.mask-48.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-upper.lantern-table-frame-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-upper"
+      },
+      "targetFragmentStableId": "jyt.occ.west-upper.lantern-table-frame-01.v2",
+      "structureName": "Northwest lantern table frame.",
+      "semanticType": "lantern-table-frame",
+      "homeChunk": "west-upper",
+      "nineGridRegionDeclared": "northwest",
+      "nineGridRegionGeometric": "northwest",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 233,
+            "y": 350
+          },
+          {
+            "x": 215,
+            "y": 347
+          },
+          {
+            "x": 241,
+            "y": 277
+          },
+          {
+            "x": 353,
+            "y": 280
+          },
+          {
+            "x": 353,
+            "y": 294
+          },
+          {
+            "x": 253,
+            "y": 291
+          }
+        ],
+        "vertexCount": 6,
+        "aabb": {
+          "minX": 215,
+          "minY": 277,
+          "maxX": 353,
+          "maxY": 350,
+          "width": 138,
+          "height": 73
+        },
+        "centroid": {
+          "x": 274.667,
+          "y": 306.5
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 214,
+          "y": 276,
+          "width": 141,
+          "height": 76
+        },
+        "aabb": {
+          "minX": 215,
+          "minY": 277,
+          "maxX": 353,
+          "maxY": 350,
+          "width": 139,
+          "height": 74
+        },
+        "ownedOpaquePixelCount": 2706,
+        "runsSha256": "6c4661e857c43745584f68f5841167beb2697b7b65e39b3e59a63fca0668f10c"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 285,
+          "y": 351
+        },
+        "fixedPointY": 89856,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 2563,
+        "targetOwnedOpaquePixelCount": 2706,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Tabletop frame and near edge of the northwest table beneath the lantern."
+    },
+    {
+      "tmxId": 49,
+      "legacyIndex": 2,
+      "legacyTmxName": "mask-49",
+      "maskBindingStableId": "jyt.mask-binding.mask-49.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-lower.long-table-frame-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-lower"
+      },
+      "targetFragmentStableId": "jyt.occ.west-lower.long-table-frame-01.v2",
+      "structureName": "West-lower long table frame.",
+      "semanticType": "long-table-frame",
+      "homeChunk": "west-lower",
+      "nineGridRegionDeclared": "west_center",
+      "nineGridRegionGeometric": "southwest",
+      "nineGridRegionMatch": false,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 126,
+            "y": 718
+          },
+          {
+            "x": 117,
+            "y": 713
+          },
+          {
+            "x": 153,
+            "y": 601
+          },
+          {
+            "x": 238,
+            "y": 607
+          },
+          {
+            "x": 233,
+            "y": 625
+          },
+          {
+            "x": 158,
+            "y": 623
+          }
+        ],
+        "vertexCount": 6,
+        "aabb": {
+          "minX": 117,
+          "minY": 601,
+          "maxX": 238,
+          "maxY": 718,
+          "width": 121,
+          "height": 117
+        },
+        "centroid": {
+          "x": 170.833,
+          "y": 647.833
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 116,
+          "y": 600,
+          "width": 124,
+          "height": 120
+        },
+        "aabb": {
+          "minX": 117,
+          "minY": 601,
+          "maxX": 238,
+          "maxY": 718,
+          "width": 122,
+          "height": 118
+        },
+        "ownedOpaquePixelCount": 2900,
+        "runsSha256": "3ce3a18133800dd77990e7ceea41340077a4207a2c5f47b2b5a2be06f5da19b5"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 178,
+          "y": 719
+        },
+        "fixedPointY": 184064,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 2727,
+        "targetOwnedOpaquePixelCount": 2900,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Southwest long-table near frame, corner, and visible table legs."
+    },
+    {
+      "tmxId": 50,
+      "legacyIndex": 3,
+      "legacyTmxName": "mask-50",
+      "maskBindingStableId": "jyt.mask-binding.mask-50.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-lower.railing-02.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-lower"
+      },
+      "targetFragmentStableId": "jyt.occ.west-lower.railing-02.v2",
+      "structureName": "Southwest lower railing.",
+      "semanticType": "railing",
+      "homeChunk": "west-lower",
+      "nineGridRegionDeclared": "southwest",
+      "nineGridRegionGeometric": "southwest",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 243,
+            "y": 823
+          },
+          {
+            "x": 238,
+            "y": 790
+          },
+          {
+            "x": 66,
+            "y": 787
+          },
+          {
+            "x": 66,
+            "y": 806
+          }
+        ],
+        "vertexCount": 4,
+        "aabb": {
+          "minX": 66,
+          "minY": 787,
+          "maxX": 243,
+          "maxY": 823,
+          "width": 177,
+          "height": 36
+        },
+        "centroid": {
+          "x": 153.25,
+          "y": 801.5
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 65,
+          "y": 786,
+          "width": 180,
+          "height": 39
+        },
+        "aabb": {
+          "minX": 66,
+          "minY": 787,
+          "maxX": 243,
+          "maxY": 823,
+          "width": 178,
+          "height": 37
+        },
+        "ownedOpaquePixelCount": 4549,
+        "runsSha256": "873c5af4bb8d43db50dfd4eb2a6c1c27b7ff2d7818f90c856fad0dd03aaab59b"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 155,
+          "y": 824
+        },
+        "fixedPointY": 210944,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 4430,
+        "targetOwnedOpaquePixelCount": 4549,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Low southwest horizontal railing panel."
+    },
+    {
+      "tmxId": 51,
+      "legacyIndex": 4,
+      "legacyTmxName": "mask-51",
+      "maskBindingStableId": "jyt.mask-binding.mask-51.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-lower.wall-panel-assembly-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-lower"
+      },
+      "targetFragmentStableId": "jyt.occ.west-lower.wall-panel-assembly-01.v2",
+      "structureName": "Southwest wall-panel assembly; exact E9A owner pixels only, excluding independently owned table, railing, and lantern pixels.",
+      "semanticType": "wall-panel-assembly",
+      "homeChunk": "west-lower",
+      "nineGridRegionDeclared": "southwest",
+      "nineGridRegionGeometric": "southwest",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 42,
+            "y": 845
+          },
+          {
+            "x": 58,
+            "y": 845
+          },
+          {
+            "x": 52,
+            "y": 873
+          },
+          {
+            "x": 238,
+            "y": 878
+          },
+          {
+            "x": 259,
+            "y": 832
+          },
+          {
+            "x": 260,
+            "y": 845
+          },
+          {
+            "x": 268,
+            "y": 844
+          },
+          {
+            "x": 247,
+            "y": 760
+          },
+          {
+            "x": 270,
+            "y": 731
+          },
+          {
+            "x": 262,
+            "y": 706
+          },
+          {
+            "x": 269,
+            "y": 701
+          },
+          {
+            "x": 276,
+            "y": 729
+          },
+          {
+            "x": 289,
+            "y": 720
+          },
+          {
+            "x": 292,
+            "y": 725
+          },
+          {
+            "x": 276,
+            "y": 736
+          },
+          {
+            "x": 286,
+            "y": 745
+          },
+          {
+            "x": 335,
+            "y": 593
+          },
+          {
+            "x": 350,
+            "y": 593
+          },
+          {
+            "x": 358,
+            "y": 573
+          },
+          {
+            "x": 375,
+            "y": 574
+          },
+          {
+            "x": 386,
+            "y": 578
+          },
+          {
+            "x": 351,
+            "y": 700
+          },
+          {
+            "x": 367,
+            "y": 762
+          },
+          {
+            "x": 341,
+            "y": 759
+          },
+          {
+            "x": 299,
+            "y": 911
+          },
+          {
+            "x": 17,
+            "y": 911
+          }
+        ],
+        "vertexCount": 26,
+        "aabb": {
+          "minX": 17,
+          "minY": 573,
+          "maxX": 386,
+          "maxY": 911,
+          "width": 369,
+          "height": 338
+        },
+        "centroid": {
+          "x": 262.423,
+          "y": 748.808
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 16,
+          "y": 572,
+          "width": 404,
+          "height": 341
+        },
+        "aabb": {
+          "minX": 17,
+          "minY": 573,
+          "maxX": 418,
+          "maxY": 911,
+          "width": 402,
+          "height": 339
+        },
+        "ownedOpaquePixelCount": 31548,
+        "runsSha256": "4f9f2d17c7839ee0888dc967ecf8eadfb104839b404a838cd1ed57724457869f"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 218,
+          "y": 852
+        },
+        "fixedPointY": 218112,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 29316,
+        "targetOwnedOpaquePixelCount": 31548,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Main southwest wall-panel assembly with connected corner cap and lower rail."
+    },
+    {
+      "tmxId": 52,
+      "legacyIndex": 5,
+      "legacyTmxName": "mask-52",
+      "maskBindingStableId": "jyt.mask-binding.mask-52.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-upper.wall-panel-assembly-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-upper"
+      },
+      "targetFragmentStableId": "jyt.occ.west-upper.wall-panel-assembly-01.v2",
+      "structureName": "Large west-upper wall-panel assembly.",
+      "semanticType": "wall-panel-assembly",
+      "homeChunk": "west-upper",
+      "nineGridRegionDeclared": "west_center",
+      "nineGridRegionGeometric": "west_center",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 479,
+            "y": 550
+          },
+          {
+            "x": 447,
+            "y": 379
+          },
+          {
+            "x": 444,
+            "y": 359
+          },
+          {
+            "x": 437,
+            "y": 348
+          },
+          {
+            "x": 405,
+            "y": 348
+          },
+          {
+            "x": 395,
+            "y": 371
+          },
+          {
+            "x": 392,
+            "y": 393
+          },
+          {
+            "x": 394,
+            "y": 395
+          },
+          {
+            "x": 154,
+            "y": 396
+          },
+          {
+            "x": 147,
+            "y": 372
+          },
+          {
+            "x": 133,
+            "y": 369
+          },
+          {
+            "x": 124,
+            "y": 383
+          },
+          {
+            "x": 132,
+            "y": 389
+          },
+          {
+            "x": 132,
+            "y": 395
+          },
+          {
+            "x": 105,
+            "y": 393
+          },
+          {
+            "x": 39,
+            "y": 438
+          },
+          {
+            "x": -6,
+            "y": 459
+          },
+          {
+            "x": -4,
+            "y": 723
+          },
+          {
+            "x": 76,
+            "y": 548
+          }
+        ],
+        "vertexCount": 19,
+        "aabb": {
+          "minX": -6,
+          "minY": 348,
+          "maxX": 479,
+          "maxY": 723,
+          "width": 485,
+          "height": 375
+        },
+        "centroid": {
+          "x": 232.895,
+          "y": 421.474
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 0,
+          "y": 347,
+          "width": 547,
+          "height": 370
+        },
+        "aabb": {
+          "minX": 0,
+          "minY": 348,
+          "maxX": 545,
+          "maxY": 715,
+          "width": 546,
+          "height": 368
+        },
+        "ownedOpaquePixelCount": 82119,
+        "runsSha256": "32b35d7e33e253ee1ade99fa4df8900a9ab58a292e7a1f8ebcad67b6d2191085"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 274,
+          "y": 716
+        },
+        "fixedPointY": 183296,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 76889,
+        "targetOwnedOpaquePixelCount": 82119,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Connected northwest/west wall panel with attached posts and braces; one owner crosses y=580."
+    },
+    {
+      "tmxId": 53,
+      "legacyIndex": 6,
+      "legacyTmxName": "mask-53",
+      "maskBindingStableId": "jyt.mask-binding.mask-53.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-upper.wall-panel-assembly-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-upper"
+      },
+      "targetFragmentStableId": "jyt.occ.west-upper.wall-panel-assembly-01.v2",
+      "structureName": "Small legacy slice of the west-upper wall-panel assembly.",
+      "semanticType": "wall-panel-assembly",
+      "homeChunk": "west-upper",
+      "nineGridRegionDeclared": "west_center",
+      "nineGridRegionGeometric": "west_center",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 450,
+            "y": 401
+          },
+          {
+            "x": 460,
+            "y": 451
+          },
+          {
+            "x": 545,
+            "y": 455
+          },
+          {
+            "x": 533,
+            "y": 396
+          },
+          {
+            "x": 533,
+            "y": 384
+          },
+          {
+            "x": 522,
+            "y": 384
+          },
+          {
+            "x": 518,
+            "y": 400
+          }
+        ],
+        "vertexCount": 7,
+        "aabb": {
+          "minX": 450,
+          "minY": 384,
+          "maxX": 545,
+          "maxY": 455,
+          "width": 95,
+          "height": 71
+        },
+        "centroid": {
+          "x": 508.714,
+          "y": 410.143
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 0,
+          "y": 347,
+          "width": 547,
+          "height": 370
+        },
+        "aabb": {
+          "minX": 0,
+          "minY": 348,
+          "maxX": 545,
+          "maxY": 715,
+          "width": 546,
+          "height": 368
+        },
+        "ownedOpaquePixelCount": 82119,
+        "runsSha256": "32b35d7e33e253ee1ade99fa4df8900a9ab58a292e7a1f8ebcad67b6d2191085"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 274,
+          "y": 716
+        },
+        "fixedPointY": 183296,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 4600,
+        "targetOwnedOpaquePixelCount": 82119,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Connected northwest/west wall panel with attached posts and braces; one owner crosses y=580."
+    },
+    {
+      "tmxId": 54,
+      "legacyIndex": 7,
+      "legacyTmxName": "mask-54",
+      "maskBindingStableId": "jyt.mask-binding.mask-54.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-upper.pillar-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-upper"
+      },
+      "targetFragmentStableId": "jyt.occ.west-upper.pillar-01.v2",
+      "structureName": "West structural pillar.",
+      "semanticType": "pillar",
+      "homeChunk": "west-upper",
+      "nineGridRegionDeclared": "north_center",
+      "nineGridRegionGeometric": "center",
+      "nineGridRegionMatch": false,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 557,
+            "y": 463
+          },
+          {
+            "x": 543,
+            "y": 354
+          },
+          {
+            "x": 543,
+            "y": 337
+          },
+          {
+            "x": 543,
+            "y": 325
+          },
+          {
+            "x": 554,
+            "y": 314
+          },
+          {
+            "x": 554,
+            "y": 307
+          },
+          {
+            "x": 563,
+            "y": 306
+          },
+          {
+            "x": 566,
+            "y": 315
+          },
+          {
+            "x": 572,
+            "y": 316
+          },
+          {
+            "x": 572,
+            "y": 340
+          },
+          {
+            "x": 588,
+            "y": 448
+          },
+          {
+            "x": 598,
+            "y": 468
+          }
+        ],
+        "vertexCount": 12,
+        "aabb": {
+          "minX": 543,
+          "minY": 306,
+          "maxX": 598,
+          "maxY": 468,
+          "width": 55,
+          "height": 162
+        },
+        "centroid": {
+          "x": 562.75,
+          "y": 357.75
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 542,
+          "y": 305,
+          "width": 58,
+          "height": 165
+        },
+        "aabb": {
+          "minX": 543,
+          "minY": 306,
+          "maxX": 598,
+          "maxY": 468,
+          "width": 56,
+          "height": 163
+        },
+        "ownedOpaquePixelCount": 4981,
+        "runsSha256": "352b2a5b1baaea67634633f850ad07e0a3efcc3078b50cc4036251871b07286c"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 571,
+          "y": 469
+        },
+        "fixedPointY": 120064,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 4813,
+        "targetOwnedOpaquePixelCount": 4981,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Tall carved northwest inner pillar, including its one-pixel diagonal alpha fringe."
+    },
+    {
+      "tmxId": 55,
+      "legacyIndex": 8,
+      "legacyTmxName": "mask-55",
+      "maskBindingStableId": "jyt.mask-binding.mask-55.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-upper.diagonal-brace-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-upper"
+      },
+      "targetFragmentStableId": "jyt.occ.west-upper.diagonal-brace-01.v2",
+      "structureName": "West-upper diagonal brace.",
+      "semanticType": "diagonal-brace",
+      "homeChunk": "west-upper",
+      "nineGridRegionDeclared": "center",
+      "nineGridRegionGeometric": "center",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 601,
+            "y": 488
+          },
+          {
+            "x": 600,
+            "y": 432
+          },
+          {
+            "x": 615,
+            "y": 484
+          }
+        ],
+        "vertexCount": 3,
+        "aabb": {
+          "minX": 600,
+          "minY": 432,
+          "maxX": 615,
+          "maxY": 488,
+          "width": 15,
+          "height": 56
+        },
+        "centroid": {
+          "x": 605.333,
+          "y": 468
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 599,
+          "y": 431,
+          "width": 18,
+          "height": 59
+        },
+        "aabb": {
+          "minX": 600,
+          "minY": 432,
+          "maxX": 615,
+          "maxY": 488,
+          "width": 16,
+          "height": 57
+        },
+        "ownedOpaquePixelCount": 449,
+        "runsSha256": "5246bc9f5da3b8450dbefb6e7fdf52b23be565ce9d0d2281378b9a886f276157"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 608,
+          "y": 489
+        },
+        "fixedPointY": 125184,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 394,
+        "targetOwnedOpaquePixelCount": 449,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Narrow diagonal brace immediately east of the northwest inner pillar."
+    },
+    {
+      "tmxId": 56,
+      "legacyIndex": 9,
+      "legacyTmxName": "mask-56",
+      "maskBindingStableId": "jyt.mask-binding.mask-56.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-upper.diagonal-brace-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-upper"
+      },
+      "targetFragmentStableId": "jyt.occ.east-upper.diagonal-brace-01.v2",
+      "structureName": "East-upper diagonal brace.",
+      "semanticType": "diagonal-brace",
+      "homeChunk": "east-upper",
+      "nineGridRegionDeclared": "east_center",
+      "nineGridRegionGeometric": "east_center",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 1130,
+            "y": 484
+          },
+          {
+            "x": 1146,
+            "y": 435
+          },
+          {
+            "x": 1148,
+            "y": 485
+          }
+        ],
+        "vertexCount": 3,
+        "aabb": {
+          "minX": 1130,
+          "minY": 435,
+          "maxX": 1148,
+          "maxY": 485,
+          "width": 18,
+          "height": 50
+        },
+        "centroid": {
+          "x": 1141.333,
+          "y": 468
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 1129,
+          "y": 434,
+          "width": 21,
+          "height": 53
+        },
+        "aabb": {
+          "minX": 1130,
+          "minY": 435,
+          "maxX": 1148,
+          "maxY": 485,
+          "width": 19,
+          "height": 51
+        },
+        "ownedOpaquePixelCount": 500,
+        "runsSha256": "0fd6deb01c254ededc62121cee80445ee5362fbd7564c30d71de730dd557d3d1"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 1140,
+          "y": 486
+        },
+        "fixedPointY": 124416,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 442,
+        "targetOwnedOpaquePixelCount": 500,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Narrow diagonal brace at the west edge of the northeast wall."
+    },
+    {
+      "tmxId": 57,
+      "legacyIndex": 10,
+      "legacyTmxName": "mask-57",
+      "maskBindingStableId": "jyt.mask-binding.mask-57.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-upper.pillar-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-upper"
+      },
+      "targetFragmentStableId": "jyt.occ.east-upper.pillar-01.v2",
+      "structureName": "East upper structural pillar.",
+      "semanticType": "pillar",
+      "homeChunk": "east-upper",
+      "nineGridRegionDeclared": "northeast",
+      "nineGridRegionGeometric": "east_center",
+      "nineGridRegionMatch": false,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 1158,
+            "y": 462
+          },
+          {
+            "x": 1170,
+            "y": 350
+          },
+          {
+            "x": 1175,
+            "y": 334
+          },
+          {
+            "x": 1175,
+            "y": 321
+          },
+          {
+            "x": 1182,
+            "y": 314
+          },
+          {
+            "x": 1182,
+            "y": 305
+          },
+          {
+            "x": 1192,
+            "y": 305
+          },
+          {
+            "x": 1192,
+            "y": 315
+          },
+          {
+            "x": 1199,
+            "y": 321
+          },
+          {
+            "x": 1203,
+            "y": 331
+          },
+          {
+            "x": 1203,
+            "y": 341
+          },
+          {
+            "x": 1203,
+            "y": 351
+          },
+          {
+            "x": 1187,
+            "y": 463
+          }
+        ],
+        "vertexCount": 13,
+        "aabb": {
+          "minX": 1158,
+          "minY": 305,
+          "maxX": 1203,
+          "maxY": 463,
+          "width": 45,
+          "height": 158
+        },
+        "centroid": {
+          "x": 1186.231,
+          "y": 347.154
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 1157,
+          "y": 304,
+          "width": 48,
+          "height": 161
+        },
+        "aabb": {
+          "minX": 1158,
+          "minY": 305,
+          "maxX": 1203,
+          "maxY": 463,
+          "width": 46,
+          "height": 159
+        },
+        "ownedOpaquePixelCount": 4701,
+        "runsSha256": "c1fba19ea22dca9a8299d92fc566321c816bcdaad014542b1ca71f33d2eb9a86"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 1181,
+          "y": 464
+        },
+        "fixedPointY": 118784,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 4534,
+        "targetOwnedOpaquePixelCount": 4701,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Tall carved northeast inner pillar."
+    },
+    {
+      "tmxId": 58,
+      "legacyIndex": 11,
+      "legacyTmxName": "mask-58",
+      "maskBindingStableId": "jyt.mask-binding.mask-58.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-upper.wall-panel-upper-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-upper"
+      },
+      "targetFragmentStableId": "jyt.occ.east-upper.wall-panel-upper-01.v2",
+      "structureName": "East-upper architectural wall-panel owner. This is separate from prop TMX 92: the complete bounty-board table prop has bounds (1360,255,172x124), anchor (1446,379), tieBias -4, and zero opaque-pixel overlap with the legacy mask polygon.",
+      "semanticType": "wall-panel",
+      "homeChunk": "east-upper",
+      "nineGridRegionDeclared": "east_center",
+      "nineGridRegionGeometric": "east_center",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 1197,
+            "y": 458
+          },
+          {
+            "x": 1208,
+            "y": 396
+          },
+          {
+            "x": 1215,
+            "y": 379
+          },
+          {
+            "x": 1223,
+            "y": 388
+          },
+          {
+            "x": 1223,
+            "y": 397
+          },
+          {
+            "x": 1285,
+            "y": 396
+          },
+          {
+            "x": 1285,
+            "y": 371
+          },
+          {
+            "x": 1288,
+            "y": 353
+          },
+          {
+            "x": 1293,
+            "y": 346
+          },
+          {
+            "x": 1303,
+            "y": 343
+          },
+          {
+            "x": 1328,
+            "y": 342
+          },
+          {
+            "x": 1333,
+            "y": 355
+          },
+          {
+            "x": 1337,
+            "y": 367
+          },
+          {
+            "x": 1340,
+            "y": 376
+          },
+          {
+            "x": 1336,
+            "y": 382
+          },
+          {
+            "x": 1336,
+            "y": 395
+          },
+          {
+            "x": 1554,
+            "y": 397
+          },
+          {
+            "x": 1560,
+            "y": 372
+          },
+          {
+            "x": 1571,
+            "y": 370
+          },
+          {
+            "x": 1577,
+            "y": 375
+          },
+          {
+            "x": 1579,
+            "y": 383
+          },
+          {
+            "x": 1574,
+            "y": 396
+          },
+          {
+            "x": 1624,
+            "y": 396
+          },
+          {
+            "x": 1662,
+            "y": 406
+          },
+          {
+            "x": 1663,
+            "y": 455
+          }
+        ],
+        "vertexCount": 25,
+        "aabb": {
+          "minX": 1197,
+          "minY": 342,
+          "maxX": 1663,
+          "maxY": 458,
+          "width": 466,
+          "height": 116
+        },
+        "centroid": {
+          "x": 1395.76,
+          "y": 383.76
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 1196,
+          "y": 341,
+          "width": 468,
+          "height": 119
+        },
+        "aabb": {
+          "minX": 1197,
+          "minY": 342,
+          "maxX": 1663,
+          "maxY": 458,
+          "width": 467,
+          "height": 117
+        },
+        "ownedOpaquePixelCount": 30996,
+        "runsSha256": "6ef4d181e74658d1ea82cf1419b0dd030dd4cb618fc0883ac5fd80ceaf73981a"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 1430,
+          "y": 459
+        },
+        "fixedPointY": 117504,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 30629,
+        "targetOwnedOpaquePixelCount": 30996,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Upper northeast wall panel and its connected top rail."
+    },
+    {
+      "tmxId": 59,
+      "legacyIndex": 12,
+      "legacyTmxName": "mask-59",
+      "maskBindingStableId": "jyt.mask-binding.mask-59.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-lower.worktable-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-lower"
+      },
+      "targetFragmentStableId": "jyt.occ.east-lower.worktable-01.v2",
+      "structureName": "East-lower worktable owner.",
+      "semanticType": "worktable",
+      "homeChunk": "east-lower",
+      "nineGridRegionDeclared": "east_center",
+      "nineGridRegionGeometric": "east_center",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 1499,
+            "y": 625
+          },
+          {
+            "x": 1517,
+            "y": 579
+          },
+          {
+            "x": 1576,
+            "y": 577
+          },
+          {
+            "x": 1590,
+            "y": 574
+          },
+          {
+            "x": 1618,
+            "y": 673
+          },
+          {
+            "x": 1589,
+            "y": 672
+          },
+          {
+            "x": 1569,
+            "y": 612
+          }
+        ],
+        "vertexCount": 7,
+        "aabb": {
+          "minX": 1499,
+          "minY": 574,
+          "maxX": 1618,
+          "maxY": 673,
+          "width": 119,
+          "height": 99
+        },
+        "centroid": {
+          "x": 1565.429,
+          "y": 616
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 1498,
+          "y": 573,
+          "width": 122,
+          "height": 129
+        },
+        "aabb": {
+          "minX": 1499,
+          "minY": 574,
+          "maxX": 1618,
+          "maxY": 700,
+          "width": 120,
+          "height": 127
+        },
+        "ownedOpaquePixelCount": 5571,
+        "runsSha256": "e5034192c4086e57fe958a5ba73eb5e428f5d78e87d61250c8f461c7d135a7b1"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 1559,
+          "y": 701
+        },
+        "fixedPointY": 179456,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 5149,
+        "targetOwnedOpaquePixelCount": 5571,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "East worktable with scrolls and vessels on its top, near edge, and separated lower-right leg/cap."
+    },
+    {
+      "tmxId": 60,
+      "legacyIndex": 13,
+      "legacyTmxName": "mask-60",
+      "maskBindingStableId": "jyt.mask-binding.mask-60.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-lower.lantern-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-lower"
+      },
+      "targetFragmentStableId": "jyt.occ.east-lower.lantern-01.v2",
+      "structureName": "Southeast hanging lantern owner.",
+      "semanticType": "lantern",
+      "homeChunk": "east-lower",
+      "nineGridRegionDeclared": "southeast",
+      "nineGridRegionGeometric": "southeast",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 1324,
+            "y": 924
+          },
+          {
+            "x": 1328,
+            "y": 905
+          },
+          {
+            "x": 1354,
+            "y": 905
+          },
+          {
+            "x": 1360,
+            "y": 843
+          },
+          {
+            "x": 1333,
+            "y": 839
+          },
+          {
+            "x": 1314,
+            "y": 921
+          }
+        ],
+        "vertexCount": 6,
+        "aabb": {
+          "minX": 1314,
+          "minY": 839,
+          "maxX": 1360,
+          "maxY": 924,
+          "width": 46,
+          "height": 85
+        },
+        "centroid": {
+          "x": 1335.5,
+          "y": 889.5
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 1313,
+          "y": 838,
+          "width": 49,
+          "height": 88
+        },
+        "aabb": {
+          "minX": 1314,
+          "minY": 839,
+          "maxX": 1360,
+          "maxY": 924,
+          "width": 47,
+          "height": 86
+        },
+        "ownedOpaquePixelCount": 2328,
+        "runsSha256": "afafdfd1bbcaa998a33503f1c71853c70876d5e0794d4fed9694f043009d0264"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 1338,
+          "y": 852
+        },
+        "fixedPointY": 218112,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 2211,
+        "targetOwnedOpaquePixelCount": 2328,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Low southeast standing lantern."
+    },
+    {
+      "tmxId": 61,
+      "legacyIndex": 14,
+      "legacyTmxName": "mask-61",
+      "maskBindingStableId": "jyt.mask-binding.mask-61.v1",
+      "ledgerOccluderStableId": "jyt.occluder.entrance.lantern-post-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "entrance"
+      },
+      "targetFragmentStableId": "jyt.occ.entrance.lantern-post-01.v2",
+      "structureName": "Entrance right lantern post.",
+      "semanticType": "lantern-post",
+      "homeChunk": "entrance",
+      "nineGridRegionDeclared": "south_center",
+      "nineGridRegionGeometric": "south_center",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 1084,
+            "y": 777
+          },
+          {
+            "x": 1086,
+            "y": 740
+          },
+          {
+            "x": 1085,
+            "y": 705
+          },
+          {
+            "x": 1092,
+            "y": 692
+          },
+          {
+            "x": 1079,
+            "y": 687
+          },
+          {
+            "x": 1076,
+            "y": 674
+          },
+          {
+            "x": 1067,
+            "y": 674
+          },
+          {
+            "x": 1067,
+            "y": 687
+          },
+          {
+            "x": 1055,
+            "y": 690
+          },
+          {
+            "x": 1056,
+            "y": 710
+          },
+          {
+            "x": 1055,
+            "y": 740
+          },
+          {
+            "x": 1052,
+            "y": 777
+          }
+        ],
+        "vertexCount": 12,
+        "aabb": {
+          "minX": 1052,
+          "minY": 674,
+          "maxX": 1092,
+          "maxY": 777,
+          "width": 40,
+          "height": 103
+        },
+        "centroid": {
+          "x": 1071.167,
+          "y": 712.75
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 1051,
+          "y": 673,
+          "width": 43,
+          "height": 106
+        },
+        "aabb": {
+          "minX": 1052,
+          "minY": 674,
+          "maxX": 1092,
+          "maxY": 777,
+          "width": 41,
+          "height": 104
+        },
+        "ownedOpaquePixelCount": 3038,
+        "runsSha256": "a54dedf18cf4264239ea67fd75308f888abf8006aab0159d1f2adaffcc6e207e"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 1073,
+          "y": 778
+        },
+        "fixedPointY": 199168,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 2906,
+        "targetOwnedOpaquePixelCount": 3038,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Right entrance lantern post."
+    },
+    {
+      "tmxId": 62,
+      "legacyIndex": 15,
+      "legacyTmxName": "mask-62",
+      "maskBindingStableId": "jyt.mask-binding.mask-62.v1",
+      "ledgerOccluderStableId": "jyt.occluder.entrance.lantern-post-02.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "entrance"
+      },
+      "targetFragmentStableId": "jyt.occ.entrance.lantern-post-02.v2",
+      "structureName": "Entrance left lantern post.",
+      "semanticType": "lantern-post",
+      "homeChunk": "entrance",
+      "nineGridRegionDeclared": "south_center",
+      "nineGridRegionGeometric": "south_center",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 1034,
+            "y": 711
+          },
+          {
+            "x": 1030,
+            "y": 686
+          },
+          {
+            "x": 1018,
+            "y": 688
+          },
+          {
+            "x": 1018,
+            "y": 678
+          },
+          {
+            "x": 1006,
+            "y": 678
+          },
+          {
+            "x": 1004,
+            "y": 690
+          },
+          {
+            "x": 1004,
+            "y": 729
+          },
+          {
+            "x": 1004,
+            "y": 754
+          },
+          {
+            "x": 1014,
+            "y": 754
+          },
+          {
+            "x": 1014,
+            "y": 711
+          }
+        ],
+        "vertexCount": 10,
+        "aabb": {
+          "minX": 1004,
+          "minY": 678,
+          "maxX": 1034,
+          "maxY": 754,
+          "width": 30,
+          "height": 76
+        },
+        "centroid": {
+          "x": 1014.6,
+          "y": 707.9
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 1003,
+          "y": 677,
+          "width": 33,
+          "height": 79
+        },
+        "aabb": {
+          "minX": 1004,
+          "minY": 678,
+          "maxX": 1034,
+          "maxY": 754,
+          "width": 31,
+          "height": 77
+        },
+        "ownedOpaquePixelCount": 1317,
+        "runsSha256": "3d2f891c2616f4626fa30649bea0b4b330ecc040c587cefc5a23f8893b54104e"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 1020,
+          "y": 755
+        },
+        "fixedPointY": 193280,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 1210,
+        "targetOwnedOpaquePixelCount": 1317,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Left entrance lantern post."
+    },
+    {
+      "tmxId": 63,
+      "legacyIndex": 16,
+      "legacyTmxName": "mask-63",
+      "maskBindingStableId": "jyt.mask-binding.mask-63.v1",
+      "ledgerOccluderStableId": "jyt.occluder.entrance.hanging-banner-02.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "entrance"
+      },
+      "targetFragmentStableId": "jyt.occ.entrance.hanging-banner-02.v2",
+      "structureName": "Entrance right hanging banner.",
+      "semanticType": "hanging-banner",
+      "homeChunk": "entrance",
+      "nineGridRegionDeclared": "south_center",
+      "nineGridRegionGeometric": "south_center",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 931,
+            "y": 795
+          },
+          {
+            "x": 934,
+            "y": 759
+          },
+          {
+            "x": 933,
+            "y": 746
+          },
+          {
+            "x": 940,
+            "y": 744
+          },
+          {
+            "x": 953,
+            "y": 733
+          },
+          {
+            "x": 959,
+            "y": 739
+          },
+          {
+            "x": 959,
+            "y": 743
+          },
+          {
+            "x": 970,
+            "y": 743
+          },
+          {
+            "x": 969,
+            "y": 785
+          }
+        ],
+        "vertexCount": 9,
+        "aabb": {
+          "minX": 931,
+          "minY": 733,
+          "maxX": 970,
+          "maxY": 795,
+          "width": 39,
+          "height": 62
+        },
+        "centroid": {
+          "x": 949.778,
+          "y": 754.111
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 930,
+          "y": 732,
+          "width": 42,
+          "height": 65
+        },
+        "aabb": {
+          "minX": 931,
+          "minY": 733,
+          "maxX": 970,
+          "maxY": 795,
+          "width": 40,
+          "height": 63
+        },
+        "ownedOpaquePixelCount": 1867,
+        "runsSha256": "5eed264df8f0921730a7d3b4e494b9a4f48eb8724f5c244676ba6a44d78f295f"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 951,
+          "y": 796
+        },
+        "fixedPointY": 203776,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 1792,
+        "targetOwnedOpaquePixelCount": 1867,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Right red hanging entrance banner."
+    },
+    {
+      "tmxId": 64,
+      "legacyIndex": 17,
+      "legacyTmxName": "mask-64",
+      "maskBindingStableId": "jyt.mask-binding.mask-64.v1",
+      "ledgerOccluderStableId": "jyt.occluder.entrance.hanging-banner-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "entrance"
+      },
+      "targetFragmentStableId": "jyt.occ.entrance.hanging-banner-01.v2",
+      "structureName": "Entrance left hanging banner.",
+      "semanticType": "hanging-banner",
+      "homeChunk": "entrance",
+      "nineGridRegionDeclared": "south_center",
+      "nineGridRegionGeometric": "south_center",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 807,
+            "y": 793
+          },
+          {
+            "x": 814,
+            "y": 751
+          },
+          {
+            "x": 805,
+            "y": 744
+          },
+          {
+            "x": 797,
+            "y": 739
+          },
+          {
+            "x": 794,
+            "y": 728
+          },
+          {
+            "x": 789,
+            "y": 722
+          },
+          {
+            "x": 781,
+            "y": 726
+          },
+          {
+            "x": 784,
+            "y": 740
+          },
+          {
+            "x": 767,
+            "y": 746
+          },
+          {
+            "x": 767,
+            "y": 750
+          },
+          {
+            "x": 773,
+            "y": 791
+          }
+        ],
+        "vertexCount": 11,
+        "aabb": {
+          "minX": 767,
+          "minY": 722,
+          "maxX": 814,
+          "maxY": 793,
+          "width": 47,
+          "height": 71
+        },
+        "centroid": {
+          "x": 788.909,
+          "y": 748.182
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 766,
+          "y": 721,
+          "width": 50,
+          "height": 74
+        },
+        "aabb": {
+          "minX": 767,
+          "minY": 722,
+          "maxX": 814,
+          "maxY": 793,
+          "width": 48,
+          "height": 72
+        },
+        "ownedOpaquePixelCount": 2313,
+        "runsSha256": "e3a14d13fbd4960e3acca064d2b25b2bdb049c198ca632f4c30bb617da4b003d"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 791,
+          "y": 794
+        },
+        "fixedPointY": 203264,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 2235,
+        "targetOwnedOpaquePixelCount": 2313,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Left red hanging entrance banner."
+    },
+    {
+      "tmxId": 65,
+      "legacyIndex": 18,
+      "legacyTmxName": "mask-65",
+      "maskBindingStableId": "jyt.mask-binding.mask-65.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-lower.wall-bracket-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-lower"
+      },
+      "targetFragmentStableId": "jyt.occ.west-lower.wall-bracket-01.v2",
+      "structureName": "West-lower wall bracket.",
+      "semanticType": "wall-bracket",
+      "homeChunk": "west-lower",
+      "nineGridRegionDeclared": "south_center",
+      "nineGridRegionGeometric": "south_center",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 720,
+            "y": 713
+          },
+          {
+            "x": 720,
+            "y": 698
+          },
+          {
+            "x": 720,
+            "y": 686
+          },
+          {
+            "x": 719,
+            "y": 675
+          },
+          {
+            "x": 711,
+            "y": 675
+          },
+          {
+            "x": 703,
+            "y": 675
+          },
+          {
+            "x": 703,
+            "y": 685
+          },
+          {
+            "x": 690,
+            "y": 687
+          },
+          {
+            "x": 686,
+            "y": 703
+          }
+        ],
+        "vertexCount": 9,
+        "aabb": {
+          "minX": 686,
+          "minY": 675,
+          "maxX": 720,
+          "maxY": 713,
+          "width": 34,
+          "height": 38
+        },
+        "centroid": {
+          "x": 708,
+          "y": 688.556
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 685,
+          "y": 674,
+          "width": 37,
+          "height": 41
+        },
+        "aabb": {
+          "minX": 686,
+          "minY": 675,
+          "maxX": 720,
+          "maxY": 713,
+          "width": 35,
+          "height": 39
+        },
+        "ownedOpaquePixelCount": 938,
+        "runsSha256": "a4ce8a353c3db71b0a12598b65712c232342578caffcba66b8e4426854914546"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 704,
+          "y": 714
+        },
+        "fixedPointY": 182784,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 884,
+        "targetOwnedOpaquePixelCount": 938,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Small carved wall bracket at the east end of the lower west railing."
+    },
+    {
+      "tmxId": 66,
+      "legacyIndex": 19,
+      "legacyTmxName": "mask-66",
+      "maskBindingStableId": "jyt.mask-binding.mask-66.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-lower.railing-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-lower"
+      },
+      "targetFragmentStableId": "jyt.occ.west-lower.railing-01.v2",
+      "structureName": "West-lower railing.",
+      "semanticType": "railing",
+      "homeChunk": "west-lower",
+      "nineGridRegionDeclared": "south_center",
+      "nineGridRegionGeometric": "south_center",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 678,
+            "y": 741
+          },
+          {
+            "x": 674,
+            "y": 731
+          },
+          {
+            "x": 665,
+            "y": 715
+          },
+          {
+            "x": 663,
+            "y": 694
+          },
+          {
+            "x": 655,
+            "y": 686
+          },
+          {
+            "x": 649,
+            "y": 675
+          },
+          {
+            "x": 649,
+            "y": 689
+          },
+          {
+            "x": 636,
+            "y": 689
+          },
+          {
+            "x": 636,
+            "y": 704
+          },
+          {
+            "x": 641,
+            "y": 735
+          },
+          {
+            "x": 640,
+            "y": 746
+          },
+          {
+            "x": 506,
+            "y": 748
+          },
+          {
+            "x": 508,
+            "y": 759
+          },
+          {
+            "x": 561,
+            "y": 762
+          },
+          {
+            "x": 561,
+            "y": 772
+          },
+          {
+            "x": 575,
+            "y": 774
+          },
+          {
+            "x": 575,
+            "y": 760
+          },
+          {
+            "x": 639,
+            "y": 760
+          },
+          {
+            "x": 641,
+            "y": 774
+          },
+          {
+            "x": 679,
+            "y": 777
+          }
+        ],
+        "vertexCount": 20,
+        "aabb": {
+          "minX": 506,
+          "minY": 675,
+          "maxX": 679,
+          "maxY": 777,
+          "width": 173,
+          "height": 102
+        },
+        "centroid": {
+          "x": 621.55,
+          "y": 734.55
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 505,
+          "y": 674,
+          "width": 176,
+          "height": 105
+        },
+        "aabb": {
+          "minX": 506,
+          "minY": 675,
+          "maxX": 679,
+          "maxY": 777,
+          "width": 174,
+          "height": 103
+        },
+        "ownedOpaquePixelCount": 5013,
+        "runsSha256": "b201bb6527a9ac66b29a22f1cf1d0dd93a16a0a56ad3c71d739b13afbae52035"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 593,
+          "y": 778
+        },
+        "fixedPointY": 199168,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 4798,
+        "targetOwnedOpaquePixelCount": 5013,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Lower west horizontal railing with illuminated end post."
+    },
+    {
+      "tmxId": 67,
+      "legacyIndex": 20,
+      "legacyTmxName": "mask-67",
+      "maskBindingStableId": "jyt.mask-binding.mask-67.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-lower.floor-lantern-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-lower"
+      },
+      "targetFragmentStableId": "jyt.occ.west-lower.floor-lantern-01.v2",
+      "structureName": "Southwest floor lantern.",
+      "semanticType": "floor-lantern",
+      "homeChunk": "west-lower",
+      "nineGridRegionDeclared": "southwest",
+      "nineGridRegionGeometric": "southwest",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 404,
+            "y": 924
+          },
+          {
+            "x": 390,
+            "y": 876
+          },
+          {
+            "x": 357,
+            "y": 876
+          },
+          {
+            "x": 362,
+            "y": 907
+          },
+          {
+            "x": 390,
+            "y": 908
+          },
+          {
+            "x": 395,
+            "y": 928
+          }
+        ],
+        "vertexCount": 6,
+        "aabb": {
+          "minX": 357,
+          "minY": 876,
+          "maxX": 404,
+          "maxY": 928,
+          "width": 47,
+          "height": 52
+        },
+        "centroid": {
+          "x": 383,
+          "y": 903.167
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 356,
+          "y": 875,
+          "width": 50,
+          "height": 53
+        },
+        "aabb": {
+          "minX": 357,
+          "minY": 876,
+          "maxX": 404,
+          "maxY": 927,
+          "width": 48,
+          "height": 52
+        },
+        "ownedOpaquePixelCount": 1348,
+        "runsSha256": "cee20070cca7f8e5ccdee2e05797b5e522938fa499dc0b3cd3b2feb96e9dad2d"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 381,
+          "y": 852
+        },
+        "fixedPointY": 218112,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 1284,
+        "targetOwnedOpaquePixelCount": 1348,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Independent low box lantern at the southwest floor line."
+    },
+    {
+      "tmxId": 68,
+      "legacyIndex": 21,
+      "legacyTmxName": "mask-68",
+      "maskBindingStableId": "jyt.mask-binding.mask-68.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-lower.wall-lantern-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-lower"
+      },
+      "targetFragmentStableId": "jyt.occ.west-lower.wall-lantern-01.v2",
+      "structureName": "Southwest edge wall lantern.",
+      "semanticType": "wall-lantern",
+      "homeChunk": "west-lower",
+      "nineGridRegionDeclared": "southwest",
+      "nineGridRegionGeometric": "southwest",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 58,
+            "y": 740
+          },
+          {
+            "x": 38,
+            "y": 706
+          },
+          {
+            "x": 11,
+            "y": 732
+          },
+          {
+            "x": 22,
+            "y": 738
+          }
+        ],
+        "vertexCount": 4,
+        "aabb": {
+          "minX": 11,
+          "minY": 706,
+          "maxX": 58,
+          "maxY": 740,
+          "width": 47,
+          "height": 34
+        },
+        "centroid": {
+          "x": 32.25,
+          "y": 729
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 10,
+          "y": 705,
+          "width": 50,
+          "height": 37
+        },
+        "aabb": {
+          "minX": 11,
+          "minY": 706,
+          "maxX": 58,
+          "maxY": 740,
+          "width": 48,
+          "height": 35
+        },
+        "ownedOpaquePixelCount": 850,
+        "runsSha256": "bead629da28d6190be8ed15641da08ece8919d1b4e79c761a006d9370b9b88ba"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 35,
+          "y": 741
+        },
+        "fixedPointY": 189696,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 802,
+        "targetOwnedOpaquePixelCount": 850,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Independent illuminated angled wall lantern at the far west edge."
+    },
+    {
+      "tmxId": 69,
+      "legacyIndex": 22,
+      "legacyTmxName": "mask-69",
+      "maskBindingStableId": "jyt.mask-binding.mask-69.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-upper.wall-sconce-02.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-upper"
+      },
+      "targetFragmentStableId": "jyt.occ.west-upper.wall-sconce-02.v2",
+      "structureName": "West-upper wall sconce.",
+      "semanticType": "wall-sconce",
+      "homeChunk": "west-upper",
+      "nineGridRegionDeclared": "west_center",
+      "nineGridRegionGeometric": "west_center",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 503,
+            "y": 584
+          },
+          {
+            "x": 497,
+            "y": 535
+          },
+          {
+            "x": 492,
+            "y": 520
+          },
+          {
+            "x": 492,
+            "y": 490
+          },
+          {
+            "x": 501,
+            "y": 497
+          },
+          {
+            "x": 509,
+            "y": 471
+          },
+          {
+            "x": 536,
+            "y": 474
+          }
+        ],
+        "vertexCount": 7,
+        "aabb": {
+          "minX": 492,
+          "minY": 471,
+          "maxX": 536,
+          "maxY": 584,
+          "width": 44,
+          "height": 113
+        },
+        "centroid": {
+          "x": 504.286,
+          "y": 510.143
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 491,
+          "y": 470,
+          "width": 47,
+          "height": 116
+        },
+        "aabb": {
+          "minX": 492,
+          "minY": 471,
+          "maxX": 536,
+          "maxY": 584,
+          "width": 45,
+          "height": 114
+        },
+        "ownedOpaquePixelCount": 2496,
+        "runsSha256": "ebc8f6f5b532036ee850b7aa15f1f6d084b651a7fe8b5fe270be06cea344ff63"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 515,
+          "y": 585
+        },
+        "fixedPointY": 149760,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 2369,
+        "targetOwnedOpaquePixelCount": 2496,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Lit wall sconce attached to the west wall panel near y=528."
+    },
+    {
+      "tmxId": 70,
+      "legacyIndex": 23,
+      "legacyTmxName": "mask-70",
+      "maskBindingStableId": "jyt.mask-binding.mask-70.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-upper.lantern-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-upper"
+      },
+      "targetFragmentStableId": "jyt.occ.west-upper.lantern-01.v2",
+      "structureName": "Northwest hanging lantern.",
+      "semanticType": "lantern",
+      "homeChunk": "west-upper",
+      "nineGridRegionDeclared": "northwest",
+      "nineGridRegionGeometric": "northwest",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 505,
+            "y": 239
+          },
+          {
+            "x": 492,
+            "y": 166
+          },
+          {
+            "x": 461,
+            "y": 165
+          },
+          {
+            "x": 471,
+            "y": 239
+          }
+        ],
+        "vertexCount": 4,
+        "aabb": {
+          "minX": 461,
+          "minY": 165,
+          "maxX": 505,
+          "maxY": 239,
+          "width": 44,
+          "height": 74
+        },
+        "centroid": {
+          "x": 482.25,
+          "y": 202.25
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 460,
+          "y": 164,
+          "width": 47,
+          "height": 77
+        },
+        "aabb": {
+          "minX": 461,
+          "minY": 165,
+          "maxX": 505,
+          "maxY": 239,
+          "width": 45,
+          "height": 75
+        },
+        "ownedOpaquePixelCount": 2475,
+        "runsSha256": "ef04866b90c1bc003492e1b651ef2e408a066dc76e64b02a416ea0a31deb74e6"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 484,
+          "y": 240
+        },
+        "fixedPointY": 61440,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 2370,
+        "targetOwnedOpaquePixelCount": 2475,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Tall illuminated wall lantern at the northwest upper wall."
+    },
+    {
+      "tmxId": 71,
+      "legacyIndex": 24,
+      "legacyTmxName": "mask-71",
+      "maskBindingStableId": "jyt.mask-binding.mask-71.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-upper.wall-sconce-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-upper"
+      },
+      "targetFragmentStableId": "jyt.occ.west-upper.wall-sconce-01.v2",
+      "structureName": "North-center small wall sconce.",
+      "semanticType": "wall-sconce",
+      "homeChunk": "west-upper",
+      "nineGridRegionDeclared": "north_center",
+      "nineGridRegionGeometric": "north_center",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 621,
+            "y": 271
+          },
+          {
+            "x": 617,
+            "y": 242
+          },
+          {
+            "x": 629,
+            "y": 238
+          }
+        ],
+        "vertexCount": 3,
+        "aabb": {
+          "minX": 617,
+          "minY": 238,
+          "maxX": 629,
+          "maxY": 271,
+          "width": 12,
+          "height": 33
+        },
+        "centroid": {
+          "x": 622.333,
+          "y": 250.333
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 616,
+          "y": 237,
+          "width": 15,
+          "height": 36
+        },
+        "aabb": {
+          "minX": 617,
+          "minY": 238,
+          "maxX": 629,
+          "maxY": 271,
+          "width": 13,
+          "height": 34
+        },
+        "ownedOpaquePixelCount": 216,
+        "runsSha256": "e8e552c53fd88bd144829eead449d78b0708b3350214861d9e187375006b0c61"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 624,
+          "y": 272
+        },
+        "fixedPointY": 69632,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 176,
+        "targetOwnedOpaquePixelCount": 216,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Small narrow wall sconce east of the northwest lantern."
+    },
+    {
+      "tmxId": 72,
+      "legacyIndex": 25,
+      "legacyTmxName": "mask-72",
+      "maskBindingStableId": "jyt.mask-binding.mask-72.v1",
+      "ledgerOccluderStableId": "jyt.occluder.center.wall-sconce-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "center"
+      },
+      "targetFragmentStableId": "jyt.occ.center.wall-sconce-01.v2",
+      "structureName": "Center-north wall sconce.",
+      "semanticType": "wall-sconce",
+      "homeChunk": "center",
+      "nineGridRegionDeclared": "northeast",
+      "nineGridRegionGeometric": "northeast",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 1126,
+            "y": 283
+          },
+          {
+            "x": 1129,
+            "y": 253
+          },
+          {
+            "x": 1122,
+            "y": 230
+          },
+          {
+            "x": 1112,
+            "y": 254
+          }
+        ],
+        "vertexCount": 4,
+        "aabb": {
+          "minX": 1112,
+          "minY": 230,
+          "maxX": 1129,
+          "maxY": 283,
+          "width": 17,
+          "height": 53
+        },
+        "centroid": {
+          "x": 1122.25,
+          "y": 255
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 1111,
+          "y": 229,
+          "width": 20,
+          "height": 56
+        },
+        "aabb": {
+          "minX": 1112,
+          "minY": 230,
+          "maxX": 1129,
+          "maxY": 283,
+          "width": 18,
+          "height": 54
+        },
+        "ownedOpaquePixelCount": 504,
+        "runsSha256": "88027830739a7dbc2de62400f48929d0dcaee8ad0c3931e19cd725f469d2f861"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 1121,
+          "y": 284
+        },
+        "fixedPointY": 72704,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 447,
+        "targetOwnedOpaquePixelCount": 504,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Small north-center wall sconce; this object is not a pillar."
+    },
+    {
+      "tmxId": 73,
+      "legacyIndex": 26,
+      "legacyTmxName": "mask-73",
+      "maskBindingStableId": "jyt.mask-binding.mask-73.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-upper.scroll-table-front-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-upper"
+      },
+      "targetFragmentStableId": "jyt.occ.east-upper.scroll-table-front-01.v2",
+      "structureName": "East-upper scroll-table front panel.",
+      "semanticType": "scroll-table-front",
+      "homeChunk": "east-upper",
+      "nineGridRegionDeclared": "northeast",
+      "nineGridRegionGeometric": "northeast",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 1385,
+            "y": 283
+          },
+          {
+            "x": 1384,
+            "y": 257
+          },
+          {
+            "x": 1471,
+            "y": 255
+          },
+          {
+            "x": 1478,
+            "y": 275
+          }
+        ],
+        "vertexCount": 4,
+        "aabb": {
+          "minX": 1384,
+          "minY": 255,
+          "maxX": 1478,
+          "maxY": 283,
+          "width": 94,
+          "height": 28
+        },
+        "centroid": {
+          "x": 1429.5,
+          "y": 267.5
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 1383,
+          "y": 254,
+          "width": 97,
+          "height": 31
+        },
+        "aabb": {
+          "minX": 1384,
+          "minY": 255,
+          "maxX": 1478,
+          "maxY": 283,
+          "width": 95,
+          "height": 29
+        },
+        "ownedOpaquePixelCount": 2117,
+        "runsSha256": "890cbf68a8ee83f752338e8007f1e2dce3cb163891a8222ac848b4c432e457ea"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 1432,
+          "y": 284
+        },
+        "fixedPointY": 72704,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 2046,
+        "targetOwnedOpaquePixelCount": 2117,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Near-side front edge of the northeast table surface carrying scrolls."
+    },
+    {
+      "tmxId": 74,
+      "legacyIndex": 27,
+      "legacyTmxName": "mask-74",
+      "maskBindingStableId": "jyt.mask-binding.mask-74.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-lower.worktable-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-lower"
+      },
+      "targetFragmentStableId": "jyt.occ.east-lower.worktable-01.v2",
+      "structureName": "Small legacy corner of the east-lower worktable owner.",
+      "semanticType": "worktable",
+      "homeChunk": "east-lower",
+      "nineGridRegionDeclared": "east_center",
+      "nineGridRegionGeometric": "southeast",
+      "nineGridRegionMatch": false,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 1612,
+            "y": 674
+          },
+          {
+            "x": 1599,
+            "y": 700
+          },
+          {
+            "x": 1592,
+            "y": 675
+          }
+        ],
+        "vertexCount": 3,
+        "aabb": {
+          "minX": 1592,
+          "minY": 674,
+          "maxX": 1612,
+          "maxY": 700,
+          "width": 20,
+          "height": 26
+        },
+        "centroid": {
+          "x": 1601,
+          "y": 683
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 1498,
+          "y": 573,
+          "width": 122,
+          "height": 129
+        },
+        "aabb": {
+          "minX": 1499,
+          "minY": 574,
+          "maxX": 1618,
+          "maxY": 700,
+          "width": 120,
+          "height": 127
+        },
+        "ownedOpaquePixelCount": 5571,
+        "runsSha256": "e5034192c4086e57fe958a5ba73eb5e428f5d78e87d61250c8f461c7d135a7b1"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 1559,
+          "y": 701
+        },
+        "fixedPointY": 179456,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 244,
+        "targetOwnedOpaquePixelCount": 5571,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "East worktable with scrolls and vessels on its top, near edge, and separated lower-right leg/cap."
+    },
+    {
+      "tmxId": 75,
+      "legacyIndex": 28,
+      "legacyTmxName": "mask-75",
+      "maskBindingStableId": "jyt.mask-binding.mask-75.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-lower.fabric-rack-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-lower"
+      },
+      "targetFragmentStableId": "jyt.occ.east-lower.fabric-rack-01.v2",
+      "structureName": "Southeast fabric rack.",
+      "semanticType": "fabric-rack",
+      "homeChunk": "east-lower",
+      "nineGridRegionDeclared": "southeast",
+      "nineGridRegionGeometric": "southeast",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 1603,
+            "y": 829
+          },
+          {
+            "x": 1616,
+            "y": 787
+          },
+          {
+            "x": 1598,
+            "y": 787
+          },
+          {
+            "x": 1602,
+            "y": 767
+          },
+          {
+            "x": 1622,
+            "y": 760
+          },
+          {
+            "x": 1629,
+            "y": 748
+          },
+          {
+            "x": 1639,
+            "y": 748
+          },
+          {
+            "x": 1631,
+            "y": 767
+          },
+          {
+            "x": 1663,
+            "y": 782
+          }
+        ],
+        "vertexCount": 9,
+        "aabb": {
+          "minX": 1598,
+          "minY": 748,
+          "maxX": 1663,
+          "maxY": 829,
+          "width": 65,
+          "height": 81
+        },
+        "centroid": {
+          "x": 1622.556,
+          "y": 775
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 1597,
+          "y": 747,
+          "width": 67,
+          "height": 84
+        },
+        "aabb": {
+          "minX": 1598,
+          "minY": 748,
+          "maxX": 1663,
+          "maxY": 829,
+          "width": 66,
+          "height": 82
+        },
+        "ownedOpaquePixelCount": 2227,
+        "runsSha256": "ca0b56c86f1a6e4d396000a72b4f4b29ec9793cf4d281528066a3852e1bef458"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 1631,
+          "y": 830
+        },
+        "fixedPointY": 212480,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 2108,
+        "targetOwnedOpaquePixelCount": 2227,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Independent southeast rack segment supporting draped fabric or a banner."
+    },
+    {
+      "tmxId": 76,
+      "legacyIndex": 29,
+      "legacyTmxName": "mask-76",
+      "maskBindingStableId": "jyt.mask-binding.mask-76.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-lower.diagonal-brace-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-lower"
+      },
+      "targetFragmentStableId": "jyt.occ.east-lower.diagonal-brace-01.v2",
+      "structureName": "East-lower primary diagonal brace; exact E9A owner pixels only, excluding nearby independently owned brace/worktable pixels.",
+      "semanticType": "diagonal-brace",
+      "homeChunk": "east-lower",
+      "nineGridRegionDeclared": "east_center",
+      "nineGridRegionGeometric": "southeast",
+      "nineGridRegionMatch": false,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 1510,
+            "y": 763
+          },
+          {
+            "x": 1469,
+            "y": 747
+          },
+          {
+            "x": 1464,
+            "y": 729
+          },
+          {
+            "x": 1450,
+            "y": 711
+          },
+          {
+            "x": 1419,
+            "y": 713
+          },
+          {
+            "x": 1390,
+            "y": 607
+          },
+          {
+            "x": 1365,
+            "y": 560
+          },
+          {
+            "x": 1334,
+            "y": 561
+          },
+          {
+            "x": 1389,
+            "y": 767
+          }
+        ],
+        "vertexCount": 9,
+        "aabb": {
+          "minX": 1334,
+          "minY": 560,
+          "maxX": 1510,
+          "maxY": 767,
+          "width": 176,
+          "height": 207
+        },
+        "centroid": {
+          "x": 1421.111,
+          "y": 684.222
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 1307,
+          "y": 559,
+          "width": 205,
+          "height": 210
+        },
+        "aabb": {
+          "minX": 1308,
+          "minY": 560,
+          "maxX": 1510,
+          "maxY": 767,
+          "width": 203,
+          "height": 208
+        },
+        "ownedOpaquePixelCount": 12954,
+        "runsSha256": "7f9fe551cb80362a713eef7bada3024a89194863ac5910524fb3ac78d3c69a58"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 1410,
+          "y": 768
+        },
+        "fixedPointY": 196608,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 11150,
+        "targetOwnedOpaquePixelCount": 12954,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Large southeast-facing diagonal brace spanning the y=580 region guide."
+    },
+    {
+      "tmxId": 77,
+      "legacyIndex": 30,
+      "legacyTmxName": "mask-77",
+      "maskBindingStableId": "jyt.mask-binding.mask-77.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-upper.pillar-02.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-upper"
+      },
+      "targetFragmentStableId": "jyt.occ.east-upper.pillar-02.v2",
+      "structureName": "East pillar-02 upper/lower structural section.",
+      "semanticType": "pillar",
+      "homeChunk": "east-upper",
+      "nineGridRegionDeclared": "east_center",
+      "nineGridRegionGeometric": "east_center",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 1231,
+            "y": 608
+          },
+          {
+            "x": 1240,
+            "y": 531
+          },
+          {
+            "x": 1245,
+            "y": 519
+          },
+          {
+            "x": 1245,
+            "y": 505
+          },
+          {
+            "x": 1244,
+            "y": 495
+          },
+          {
+            "x": 1239,
+            "y": 486
+          },
+          {
+            "x": 1234,
+            "y": 495
+          },
+          {
+            "x": 1232,
+            "y": 478
+          },
+          {
+            "x": 1208,
+            "y": 481
+          }
+        ],
+        "vertexCount": 9,
+        "aabb": {
+          "minX": 1208,
+          "minY": 478,
+          "maxX": 1245,
+          "maxY": 608,
+          "width": 37,
+          "height": 130
+        },
+        "centroid": {
+          "x": 1235.333,
+          "y": 510.889
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 1201,
+          "y": 477,
+          "width": 52,
+          "height": 227
+        },
+        "aabb": {
+          "minX": 1202,
+          "minY": 478,
+          "maxX": 1251,
+          "maxY": 702,
+          "width": 50,
+          "height": 225
+        },
+        "ownedOpaquePixelCount": 5188,
+        "runsSha256": "9734c938f38dc3426609a68cf086e4bdb5dba7ba66ebc1212590ddb4f6aecf30"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 1227,
+          "y": 703
+        },
+        "fixedPointY": 179968,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 2376,
+        "targetOwnedOpaquePixelCount": 5188,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Carved east pillar spanning the y=580 region guide without being clipped."
+    },
+    {
+      "tmxId": 78,
+      "legacyIndex": 31,
+      "legacyTmxName": "mask-78",
+      "maskBindingStableId": "jyt.mask-binding.mask-78.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-upper.wall-panel-lower-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-upper"
+      },
+      "targetFragmentStableId": "jyt.occ.east-upper.wall-panel-lower-01.v2",
+      "structureName": "East-upper lower wall panel.",
+      "semanticType": "wall-panel",
+      "homeChunk": "east-upper",
+      "nineGridRegionDeclared": "east_center",
+      "nineGridRegionGeometric": "east_center",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 1256,
+            "y": 543
+          },
+          {
+            "x": 1270,
+            "y": 480
+          },
+          {
+            "x": 1665,
+            "y": 476
+          },
+          {
+            "x": 1666,
+            "y": 548
+          }
+        ],
+        "vertexCount": 4,
+        "aabb": {
+          "minX": 1256,
+          "minY": 476,
+          "maxX": 1666,
+          "maxY": 548,
+          "width": 410,
+          "height": 72
+        },
+        "centroid": {
+          "x": 1464.25,
+          "y": 511.75
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 1255,
+          "y": 476,
+          "width": 409,
+          "height": 73
+        },
+        "aabb": {
+          "minX": 1256,
+          "minY": 477,
+          "maxX": 1663,
+          "maxY": 547,
+          "width": 408,
+          "height": 71
+        },
+        "ownedOpaquePixelCount": 27065,
+        "runsSha256": "3c57140f34bf496a7348f0a65fbbb656e7838ada7eb8671533a1257dcdfce092"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 1460,
+          "y": 548
+        },
+        "fixedPointY": 140288,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 26860,
+        "targetOwnedOpaquePixelCount": 27065,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Lower horizontal northeast wall panel and shelf rail."
+    },
+    {
+      "tmxId": 79,
+      "legacyIndex": 32,
+      "legacyTmxName": "mask-79",
+      "maskBindingStableId": "jyt.mask-binding.mask-79.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-lower.diagonal-brace-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-lower"
+      },
+      "targetFragmentStableId": "jyt.occ.east-lower.diagonal-brace-01.v2",
+      "structureName": "Small legacy slice of east-lower diagonal brace-01.",
+      "semanticType": "diagonal-brace",
+      "homeChunk": "east-lower",
+      "nineGridRegionDeclared": "east_center",
+      "nineGridRegionGeometric": "east_center",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 1323,
+            "y": 639
+          },
+          {
+            "x": 1329,
+            "y": 612
+          },
+          {
+            "x": 1308,
+            "y": 612
+          },
+          {
+            "x": 1320,
+            "y": 562
+          },
+          {
+            "x": 1336,
+            "y": 561
+          },
+          {
+            "x": 1341,
+            "y": 590
+          },
+          {
+            "x": 1333,
+            "y": 641
+          }
+        ],
+        "vertexCount": 7,
+        "aabb": {
+          "minX": 1308,
+          "minY": 561,
+          "maxX": 1341,
+          "maxY": 641,
+          "width": 33,
+          "height": 80
+        },
+        "centroid": {
+          "x": 1327.143,
+          "y": 602.429
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 1307,
+          "y": 559,
+          "width": 205,
+          "height": 210
+        },
+        "aabb": {
+          "minX": 1308,
+          "minY": 560,
+          "maxX": 1510,
+          "maxY": 767,
+          "width": 203,
+          "height": 208
+        },
+        "ownedOpaquePixelCount": 12954,
+        "runsSha256": "7f9fe551cb80362a713eef7bada3024a89194863ac5910524fb3ac78d3c69a58"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 1410,
+          "y": 768
+        },
+        "fixedPointY": 196608,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 1504,
+        "targetOwnedOpaquePixelCount": 12954,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Large southeast-facing diagonal brace spanning the y=580 region guide."
+    },
+    {
+      "tmxId": 80,
+      "legacyIndex": 33,
+      "legacyTmxName": "mask-80",
+      "maskBindingStableId": "jyt.mask-binding.mask-80.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-upper.pillar-02.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-upper"
+      },
+      "targetFragmentStableId": "jyt.occ.east-upper.pillar-02.v2",
+      "structureName": "Pillar-02 lower extension whose target remains in east-upper.",
+      "semanticType": "pillar",
+      "homeChunk": "east-upper",
+      "nineGridRegionDeclared": "east_center",
+      "nineGridRegionGeometric": "southeast",
+      "nineGridRegionMatch": false,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 1251,
+            "y": 702
+          },
+          {
+            "x": 1240,
+            "y": 651
+          },
+          {
+            "x": 1240,
+            "y": 629
+          },
+          {
+            "x": 1242,
+            "y": 612
+          },
+          {
+            "x": 1228,
+            "y": 606
+          },
+          {
+            "x": 1206,
+            "y": 606
+          },
+          {
+            "x": 1206,
+            "y": 621
+          },
+          {
+            "x": 1202,
+            "y": 626
+          },
+          {
+            "x": 1202,
+            "y": 639
+          },
+          {
+            "x": 1211,
+            "y": 646
+          },
+          {
+            "x": 1222,
+            "y": 647
+          },
+          {
+            "x": 1217,
+            "y": 661
+          },
+          {
+            "x": 1225,
+            "y": 689
+          }
+        ],
+        "vertexCount": 13,
+        "aabb": {
+          "minX": 1202,
+          "minY": 606,
+          "maxX": 1251,
+          "maxY": 702,
+          "width": 49,
+          "height": 96
+        },
+        "centroid": {
+          "x": 1222.462,
+          "y": 641.154
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 1201,
+          "y": 477,
+          "width": 52,
+          "height": 227
+        },
+        "aabb": {
+          "minX": 1202,
+          "minY": 478,
+          "maxX": 1251,
+          "maxY": 702,
+          "width": 50,
+          "height": 225
+        },
+        "ownedOpaquePixelCount": 5188,
+        "runsSha256": "9734c938f38dc3426609a68cf086e4bdb5dba7ba66ebc1212590ddb4f6aecf30"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 1227,
+          "y": 703
+        },
+        "fixedPointY": 179968,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 2551,
+        "targetOwnedOpaquePixelCount": 5188,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Carved east pillar spanning the y=580 region guide without being clipped."
+    },
+    {
+      "tmxId": 81,
+      "legacyIndex": 34,
+      "legacyTmxName": "mask-81",
+      "maskBindingStableId": "jyt.mask-binding.mask-81.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-lower.railing-post-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-lower"
+      },
+      "targetFragmentStableId": "jyt.occ.east-lower.railing-post-01.v2",
+      "structureName": "East-lower railing post.",
+      "semanticType": "railing-post",
+      "homeChunk": "east-lower",
+      "nineGridRegionDeclared": "southeast",
+      "nineGridRegionGeometric": "southeast",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 1251,
+            "y": 711
+          },
+          {
+            "x": 1249,
+            "y": 774
+          },
+          {
+            "x": 1242,
+            "y": 707
+          }
+        ],
+        "vertexCount": 3,
+        "aabb": {
+          "minX": 1242,
+          "minY": 707,
+          "maxX": 1251,
+          "maxY": 774,
+          "width": 9,
+          "height": 67
+        },
+        "centroid": {
+          "x": 1247.333,
+          "y": 730.667
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 1241,
+          "y": 706,
+          "width": 12,
+          "height": 70
+        },
+        "aabb": {
+          "minX": 1242,
+          "minY": 707,
+          "maxX": 1251,
+          "maxY": 774,
+          "width": 10,
+          "height": 68
+        },
+        "ownedOpaquePixelCount": 355,
+        "runsSha256": "0a49e54df422a2834aa5e374ce0a114aae85eac83c2bf182dc44b366810fad59"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 1247,
+          "y": 775
+        },
+        "fixedPointY": 198400,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 287,
+        "targetOwnedOpaquePixelCount": 355,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Narrow vertical end post below the east pillar."
+    },
+    {
+      "tmxId": 82,
+      "legacyIndex": 35,
+      "legacyTmxName": "mask-82",
+      "maskBindingStableId": "jyt.mask-binding.mask-82.v1",
+      "ledgerOccluderStableId": "jyt.occluder.east-lower.diagonal-brace-02.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "east-lower"
+      },
+      "targetFragmentStableId": "jyt.occ.east-lower.diagonal-brace-02.v2",
+      "structureName": "East-lower secondary diagonal brace.",
+      "semanticType": "diagonal-brace",
+      "homeChunk": "east-lower",
+      "nineGridRegionDeclared": "southeast",
+      "nineGridRegionGeometric": "southeast",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 1351,
+            "y": 740
+          },
+          {
+            "x": 1365,
+            "y": 691
+          },
+          {
+            "x": 1374,
+            "y": 723
+          }
+        ],
+        "vertexCount": 3,
+        "aabb": {
+          "minX": 1351,
+          "minY": 691,
+          "maxX": 1374,
+          "maxY": 740,
+          "width": 23,
+          "height": 49
+        },
+        "centroid": {
+          "x": 1363.333,
+          "y": 718
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 1350,
+          "y": 690,
+          "width": 26,
+          "height": 52
+        },
+        "aabb": {
+          "minX": 1351,
+          "minY": 691,
+          "maxX": 1374,
+          "maxY": 740,
+          "width": 24,
+          "height": 50
+        },
+        "ownedOpaquePixelCount": 494,
+        "runsSha256": "1280c90ae5a007522179d37bf35df7fa81f65c9763958fd0810c449db34b9bba"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 1363,
+          "y": 741
+        },
+        "fixedPointY": 189696,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 438,
+        "targetOwnedOpaquePixelCount": 494,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Small triangular diagonal brace under the east wall panel."
+    },
+    {
+      "tmxId": 83,
+      "legacyIndex": 36,
+      "legacyTmxName": "mask-83",
+      "maskBindingStableId": "jyt.mask-binding.mask-83.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-lower.diagonal-brace-02.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-lower"
+      },
+      "targetFragmentStableId": "jyt.occ.west-lower.diagonal-brace-02.v2",
+      "structureName": "West-lower secondary diagonal brace.",
+      "semanticType": "diagonal-brace",
+      "homeChunk": "west-lower",
+      "nineGridRegionDeclared": "west_center",
+      "nineGridRegionGeometric": "southwest",
+      "nineGridRegionMatch": false,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 513,
+            "y": 702
+          },
+          {
+            "x": 516,
+            "y": 680
+          },
+          {
+            "x": 510,
+            "y": 655
+          },
+          {
+            "x": 491,
+            "y": 641
+          },
+          {
+            "x": 474,
+            "y": 723
+          },
+          {
+            "x": 476,
+            "y": 758
+          },
+          {
+            "x": 495,
+            "y": 696
+          }
+        ],
+        "vertexCount": 7,
+        "aabb": {
+          "minX": 474,
+          "minY": 641,
+          "maxX": 516,
+          "maxY": 758,
+          "width": 42,
+          "height": 117
+        },
+        "centroid": {
+          "x": 496.429,
+          "y": 693.571
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 473,
+          "y": 640,
+          "width": 45,
+          "height": 120
+        },
+        "aabb": {
+          "minX": 474,
+          "minY": 641,
+          "maxX": 516,
+          "maxY": 758,
+          "width": 43,
+          "height": 118
+        },
+        "ownedOpaquePixelCount": 2160,
+        "runsSha256": "7b6709265eee4e820803a0ded144211f8d91b31cd07af443f5836db643e0e7d6"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 496,
+          "y": 759
+        },
+        "fixedPointY": 194304,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 2032,
+        "targetOwnedOpaquePixelCount": 2160,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Narrow diagonal brace beside the lower west railing."
+    },
+    {
+      "tmxId": 84,
+      "legacyIndex": 37,
+      "legacyTmxName": "mask-84",
+      "maskBindingStableId": "jyt.mask-binding.mask-84.v1",
+      "ledgerOccluderStableId": "jyt.occluder.west-lower.wall-panel-assembly-01.v1",
+      "scope": {
+        "sceneId": "juyiting-main",
+        "floorId": "floor-1",
+        "chunkId": "west-lower"
+      },
+      "targetFragmentStableId": "jyt.occ.west-lower.wall-panel-assembly-01.v2",
+      "structureName": "Small legacy slice of the west-lower wall-panel assembly.",
+      "semanticType": "wall-panel-assembly",
+      "homeChunk": "west-lower",
+      "nineGridRegionDeclared": "west_center",
+      "nineGridRegionGeometric": "west_center",
+      "nineGridRegionMatch": true,
+      "maskBoundary": {
+        "polygon": [
+          {
+            "x": 405,
+            "y": 641
+          },
+          {
+            "x": 405,
+            "y": 617
+          },
+          {
+            "x": 418,
+            "y": 617
+          },
+          {
+            "x": 410,
+            "y": 575
+          },
+          {
+            "x": 382,
+            "y": 579
+          },
+          {
+            "x": 396,
+            "y": 643
+          }
+        ],
+        "vertexCount": 6,
+        "aabb": {
+          "minX": 382,
+          "minY": 575,
+          "maxX": 418,
+          "maxY": 643,
+          "width": 36,
+          "height": 68
+        },
+        "centroid": {
+          "x": 402.667,
+          "y": 612
+        }
+      },
+      "ownerBoundary": {
+        "representation": "alpha-ownership-runs (E9A fragment-ownership-spec)",
+        "sourceRect": {
+          "x": 16,
+          "y": 572,
+          "width": 404,
+          "height": 341
+        },
+        "aabb": {
+          "minX": 17,
+          "minY": 573,
+          "maxX": 418,
+          "maxY": 911,
+          "width": 402,
+          "height": 339
+        },
+        "ownedOpaquePixelCount": 31548,
+        "runsSha256": "4f9f2d17c7839ee0888dc967ecf8eadfb104839b404a838cd1ed57724457869f"
+      },
+      "painterBinding": {
+        "sortMode": "fixed-point-y",
+        "sortAnchor": {
+          "x": 218,
+          "y": 852
+        },
+        "fixedPointY": 218112,
+        "tieBias": -1,
+        "renderBand": "world",
+        "elevation": 0
+      },
+      "ownerOverlapEvidence": {
+        "ownedPixelsInLegacyPolygon": 1417,
+        "targetOwnedOpaquePixelCount": 31548,
+        "actualOwnerCount": 1,
+        "polygonToOwnerPixelDistance": 0
+      },
+      "targetFragmentDescription": "Main southwest wall-panel assembly with connected corner cap and lower rail."
+    }
+  ],
+  "generationId": "c6f4c9520d1d82ae27cdf7ee38350e4d504b1b73aa92c3e76feb1d2e6e22e2b4",
+  "contentSha256": "4789ccaa73de93edc10fe58c259eeb22f7984a8a078aa48fb46e1a7324123501"
+}
