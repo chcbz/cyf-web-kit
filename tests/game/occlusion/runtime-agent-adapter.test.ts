@@ -132,9 +132,9 @@ describe('E3 Runtime Agent Adapter - error handling', () => {
     const [created] = await adapter.create([{ agentId: maxId }])
     assert.equal(created.sourceEntityId, maxId)
 
-    await fatalAssertAsync(() => adapter.create([{ agentId: overlongId }]), 'AGENT_ID_TOO_LONG')
-    await fatalAssertAsync(() => adapter.update([{ agentId: overlongId, x: 1 }]), 'AGENT_ID_TOO_LONG')
-    await fatalAssertAsync(() => adapter.remove([overlongId]), 'AGENT_ID_TOO_LONG')
+    await fatalAssertAsync(() => adapter.create([{ agentId: overlongId }]), 'AGENT_ID_INVALID')
+    await fatalAssertAsync(() => adapter.update([{ agentId: overlongId, x: 1 }]), 'AGENT_ID_INVALID')
+    await fatalAssertAsync(() => adapter.remove([overlongId]), 'AGENT_ID_INVALID')
     assert.equal(adapter.lookup(maxId)?.sourceEntityId, maxId)
   })
 

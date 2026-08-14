@@ -497,7 +497,7 @@ export function createRuntimeAgentAdapter(
     }
     if (raw.length > SOURCE_ENTITY_ID_MAX_LENGTH) {
       throw renderSchemaError(
-        'AGENT_ID_TOO_LONG',
+        'AGENT_ID_INVALID',
         sceneId,
         '(too-long)',
         'agentId',
