@@ -1407,55 +1407,200 @@ describe('HallScene melonJS pointer routing', () => {
   })
 
 
-  it('orders world-ui by frozen sort key across insertion and remove/re-add, and syncs map bounds', () => {
+  it('uses lossless permanent world-ui identities and fails closed for invalid source IDs', () => {
     const me = createFakeMelon()
     const HallScene = createHallSceneClass(me, class {})
     const scene = new HallScene()
-    const calls = []
 
-    scene.setMapData({ coordinateWidth: 2000, coordinateHeight: 1100 })
-    const overlay = scene._ensureWorldUiOverlay()
-    expect(overlay).to.include({ width: 2000, height: 1100 })
+    const emoji = scene._worldUiStableId('agent', '😀')
+    expect(emoji).to.equal('jyt.world-ui.agent.ud83dde00.v1')
+    // The old low-byte fallback would collide for these two distinct strings.
+    expect(emoji).not.to.equal(scene._worldUiStableId('agent', '=\0'))
+    expect(scene._worldUiStableId('agent', 'same')).not.to.equal(scene._worldUiStableId('hotspot', 'same'))
+    expect(scene._worldUiStableId('agent', '0')).to.equal('jyt.world-ui.agent.u0030.v1')
 
+    const previousTextEncoder = globalThis.TextEncoder
+    try {
+      globalThis.TextEncoder = undefined
+      expect(scene._worldUiStableId('agent', '😀')).to.equal(emoji)
+    } finally {
+      globalThis.TextEncoder = previousTextEncoder
+    }
+
+    for (const invalid of [undefined, null, false, 0, '', ' \t ']) {
+      expect(scene._worldUiStableId('agent', invalid)).to.equal(null)
+    }
+    expect(scene._worldUiStableId('invalid-kind', 'agent')).to.equal(null)
+    expect(scene._worldUiStableId('agent', '550e8400-e29b-41d4-a716-446655440000'))
+      .to.equal('jyt.world-ui.agent.u00350035003000650038003400300030002d0065003200390062002d0034003100640034002d0061003700310036002d003400340036003600350035003400340030003000300030.v1')
+
+    scene._agents.set(false, { pos: { y: 0 } })
+    scene._agents.set(0, { pos: { y: 0 } })
+    scene._agents.set('', { pos: { y: 0 } })
+    scene._agents.set('0', { pos: { y: 0 } })
+    scene._hotspots = [{ marker: { pos: { y: 0 }, height: 0 }, data: { id: false } }]
+    expect(scene._worldUiEntries().map(entry => entry.stableId)).to.deep.equal([
+      'jyt.world-ui.agent.u0030.v1'
+    ])
+  })
+
+  it('orders world-ui by each frozen key and keeps V1/V2 identities identical', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
     scene._v2Assembly = { canonicalIr: { floorRegistry: { 'floor-1': 0, 'floor-2': 1 } } }
-    scene._v2AgentAdapter = {
-      lookup: id => ({
-        stableId: id === 'first' ? 'jyt.agent.a.v1' : 'jyt.agent.b.v1',
-        floorId: id === 'first' ? 'floor-1' : 'floor-2',
-        elevation: id === 'first' ? 10 : -1,
-      })
-    }
-    const first = { pos: { y: 999 }, drawWorldUi: () => calls.push('agent-first') }
-    const late = { pos: { y: 100 }, drawWorldUi: () => calls.push('agent-late') }
-    const hotspot = {
-      pos: { y: 0 },
-      height: 1,
-      drawWorldUi: () => calls.push('hotspot-a')
-    }
-    const hotspotEntry = {
-      marker: hotspot,
-      data: { id: 'a', stableId: 'jyt.hotspot.a.v1', floorId: 'floor-2', elevation: -1, sortAnchor: { y: 100 } }
-    }
+    const agent = y => ({ pos: { y }, drawWorldUi: () => {} })
 
-    scene._agents.set('late', late)
-    scene._agents.set('first', first)
-    scene._hotspots = [hotspotEntry]
-    overlay.draw({})
-    expect(calls).to.deep.equal(['agent-first', 'agent-late', 'hotspot-a'])
+    // floorOrder alone wins over every later key.
+    scene._agents.set('floor-2', agent(0))
+    scene._agents.set('floor-1', agent(0))
+    scene._v2AgentAdapter = { lookup: id => ({
+      stableId: id === 'floor-2' ? 'reverse-a' : 'reverse-z',
+      floorId: id,
+      elevation: 0
+    }) }
+    expect(scene._worldUiEntries().map(entry => entry.stableId)).to.deep.equal([
+      scene._worldUiStableId('agent', 'floor-1'),
+      scene._worldUiStableId('agent', 'floor-2')
+    ])
 
-    calls.length = 0
-    scene._agents.delete('late')
+    // elevation alone wins when floorOrder is tied.
     scene._agents.clear()
-    scene._agents.set('first', first)
-    scene._agents.set('late', late)
-    scene._hotspots = [hotspotEntry]
-    overlay.draw({})
-    expect(calls).to.deep.equal(['agent-first', 'agent-late', 'hotspot-a'])
+    scene._agents.set('elevation-high', agent(0))
+    scene._agents.set('elevation-low', agent(0))
+    scene._v2AgentAdapter = { lookup: id => ({
+      stableId: id === 'elevation-high' ? 'reverse-a' : 'reverse-z',
+      floorId: 'floor-1',
+      elevation: id === 'elevation-high' ? 1 : 0
+    }) }
+    expect(scene._worldUiEntries().map(entry => entry.stableId)).to.deep.equal([
+      scene._worldUiStableId('agent', 'elevation-low'),
+      scene._worldUiStableId('agent', 'elevation-high')
+    ])
 
+    // fixedPoint(sortAnchor.y) alone wins when floor/elevation are tied.
+    scene._agents.clear()
+    scene._agents.set('later-y', agent(101))
+    scene._agents.set('earlier-y', agent(100))
+    scene._v2AgentAdapter = { lookup: () => ({ stableId: 'ignored', floorId: 'floor-1', elevation: 0 }) }
+    expect(scene._worldUiEntries().map(entry => entry.stableId)).to.deep.equal([
+      scene._worldUiStableId('agent', 'earlier-y'),
+      scene._worldUiStableId('agent', 'later-y')
+    ])
+
+    // stableId is the final total-order tie breaker; ASCII agent precedes hotspot.
+    scene._agents.clear()
+    scene._agents.set('b', agent(100))
+    scene._agents.set('a', agent(100))
+    scene._hotspots = [{
+      marker: { pos: { y: 100 }, height: 0, drawWorldUi: () => {} },
+      data: { id: 'a', floorId: 'floor-1', elevation: 0, sortAnchor: { y: 100 } }
+    }]
     scene._v2AgentAdapter = null
-    scene._v2Assembly = null
-    scene.setMapData({ coordinateWidth: 1234, coordinateHeight: 567 })
-    expect(overlay).to.include({ width: 1234, height: 567 })
+    const v1 = scene._worldUiEntries().map(entry => entry.stableId)
+    expect(v1).to.deep.equal([
+      scene._worldUiStableId('agent', 'a'),
+      scene._worldUiStableId('agent', 'b'),
+      scene._worldUiStableId('hotspot', 'a')
+    ])
+
+    // Adapter stable IDs intentionally reverse the old canonical order. They
+    // must not affect world-ui identity or order at the V1/V2 boundary.
+    scene._v2AgentAdapter = { lookup: id => ({
+      stableId: id === 'a' ? 'z-adapter-id' : 'a-adapter-id',
+      floorId: 'floor-1', elevation: 0
+    }) }
+    expect(scene._worldUiEntries().map(entry => entry.stableId)).to.deep.equal(v1)
+  })
+
+  it('keeps world-ui identity across real V2 roster remove/re-add transactions', async () => {
+    const me = createFakeMelon()
+    const mapData = productionV2MapData()
+    installProductionImages(me, mapData)
+    const HallScene = createHallSceneClass(me, V2HallAgent)
+    const scene = new HallScene()
+    const previousGate = window.__JYT_V2_ENABLED
+    window.__JYT_V2_ENABLED = true
+    const roster = [
+      { agentId: 'b', personaCode: 'b', x: 300, y: 200 },
+      { agentId: 'a', personaCode: 'a', x: 300, y: 200 }
+    ]
+    try {
+      scene.setTmxSha256(ACCEPTED_TMX_SHA256)
+      scene.setMapData(mapData)
+      scene.syncAgents(roster)
+      scene.onResetEvent()
+      scene.update(16)
+      await waitFor(() => scene.activeRendererMode === 'v2')
+      await waitFor(() => scene._v2AgentAdapter?.sourceEntityIds.length === 2)
+      const initialOrder = scene._worldUiEntries().map(entry => entry.stableId)
+      const originalB = scene._worldUiStableId('agent', 'b')
+
+      scene.syncAgents([roster[1]])
+      scene.update(16)
+      await waitFor(() => !scene._v2AgentAdapter?.sourceEntityIds.includes('b'))
+
+      scene.syncAgents(roster)
+      scene.update(16)
+      await waitFor(() => scene._v2AgentAdapter?.sourceEntityIds.includes('b'))
+      expect(scene._worldUiEntries().map(entry => entry.stableId)).to.deep.equal(initialOrder)
+      expect(scene._worldUiStableId('agent', 'b')).to.equal(originalB)
+    } finally {
+      window.__JYT_V2_ENABLED = previousGate
+      await scene.deactivateV2()
+    }
+  })
+
+  it('publishes and rolls back active V2 map-refresh world-ui bounds atomically', async () => {
+    const me = createFakeMelon()
+    const mapData = productionV2MapData()
+    installProductionImages(me, mapData)
+    const HallScene = createHallSceneClass(me, V2HallAgent)
+    const scene = new HallScene()
+    const previousGate = window.__JYT_V2_ENABLED
+    window.__JYT_V2_ENABLED = true
+    try {
+      scene.setTmxSha256(ACCEPTED_TMX_SHA256)
+      scene.setMapData(mapData)
+      scene.onResetEvent()
+      await waitFor(() => scene.activeRendererMode === 'v2')
+      const overlay = scene._worldUiOverlay
+      const marker = scene._hotspots[0]?.marker
+      expect(marker).to.exist
+      marker.setFeedback({ state: 'active', feedbackText: 'V2 feedback remains visible' })
+      expect(() => marker.draw({ getContext: () => { throw new Error('marker draw must be a no-op') } })).not.to.throw()
+      const feedback = []
+      overlay.draw({
+        getContext: () => ({
+          save: () => {}, restore: () => {}, beginPath: () => {}, moveTo: () => {}, lineTo: () => {},
+          closePath: () => {}, rect: () => {}, fill: () => {}, stroke: () => {},
+          fillText: text => feedback.push(text),
+          set fillStyle(_) {}, set strokeStyle(_) {}, set lineWidth(_) {}, set font(_) {},
+          set textAlign(_) {}, set textBaseline(_) {}
+        })
+      })
+      expect(feedback).to.include('V2 feedback remains visible')
+      const refreshedMap = { ...mapData, coordinateWidth: 1777, coordinateHeight: 999 }
+
+      scene.setMapData(refreshedMap)
+      await waitFor(() => scene._mapData === refreshedMap && overlay.width === 1777 && overlay.height === 999)
+      expect(scene.activeRendererMode).to.equal('v2')
+
+      scene._shadowRenderer = {
+        setMapData: () => { throw new Error('shadow refresh failure') },
+        dispose: () => {}
+      }
+      const failedMap = { ...refreshedMap, coordinateWidth: 1888, coordinateHeight: 777 }
+      scene.setMapData(failedMap)
+      await waitFor(() => scene.getV2Diagnostics().some(item => item.code === 'V2_MAP_REFRESH_FAILED'))
+
+      expect(scene._mapData).to.equal(refreshedMap)
+      expect(overlay).to.include({ width: 1777, height: 999 })
+      expect(scene.activeRendererMode).to.equal('v2')
+    } finally {
+      window.__JYT_V2_ENABLED = previousGate
+      await scene.deactivateV2()
+    }
   })
 
 

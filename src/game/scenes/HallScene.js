@@ -916,12 +916,22 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._worldUiOverlay.height = height
     }
 
-    _worldUiFallbackStableId(kind, sourceId) {
-      const value = String(sourceId || 'unknown')
-      const bytes = typeof TextEncoder === 'function'
-        ? new TextEncoder().encode(value)
-        : Array.from(value, char => char.charCodeAt(0) & 0xff)
-      return `jyt.${kind}.ui.${Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('') || '00'}.v1`
+    _worldUiStableId(kind, sourceId) {
+      // world-ui is synchronous. Its identity is deliberately independent from
+      // the async world adapter and is never swapped at V1/V2 boundaries. Use
+      // every UTF-16 code unit (not UTF-8/TextEncoder) so Unicode, emoji, and
+      // surrogate pairs have a deterministic, lossless ASCII representation.
+      if ((kind !== 'agent' && kind !== 'hotspot') || typeof sourceId !== 'string' || sourceId.length === 0 || sourceId.trim().length === 0) {
+        return null
+      }
+      let codeUnits = ''
+      for (let index = 0; index < sourceId.length; index++) {
+        codeUnits += sourceId.charCodeAt(index).toString(16).padStart(4, '0')
+      }
+      // This local sorting identity is not a canonical-IR stableId, so it is
+      // intentionally not constrained by the IR envelope: UUID agent IDs must
+      // retain their names/bubbles rather than disappearing from world-ui.
+      return `jyt.world-ui.${kind}.u${codeUnits}.v1`
     }
 
     _worldUiFloorOrder(floorId) {
@@ -932,23 +942,27 @@ export function createHallSceneClass(me, HallAgentClass) {
     _worldUiEntries() {
       const entries = []
       for (const [agentId, agent] of this._agents) {
+        const stableId = this._worldUiStableId('agent', agentId)
+        if (!stableId) continue
         const sceneObject = this._v2AgentAdapter?.lookup?.(agentId)
         entries.push({
           floorOrder: this._worldUiFloorOrder(sceneObject?.floorId || 'floor-1'),
           elevation: Number.isSafeInteger(sceneObject?.elevation) ? sceneObject.elevation : 0,
           fixedPointY: Math.round((Number(agent?.pos?.y) || 0) * 256),
-          stableId: sceneObject?.stableId || this._worldUiFallbackStableId('agent', agentId),
+          stableId,
           draw: renderer => agent.drawWorldUi?.(renderer)
         })
       }
       for (const { marker, data } of this._hotspots) {
         if (!marker) continue
+        const stableId = this._worldUiStableId('hotspot', data?.id)
+        if (!stableId) continue
         const sortAnchorY = Number(data?.sortAnchor?.y ?? data?.sortAnchorY)
         entries.push({
           floorOrder: this._worldUiFloorOrder(data?.floorId || 'floor-1'),
           elevation: Number.isSafeInteger(data?.elevation) ? data.elevation : 0,
           fixedPointY: Math.round((Number.isFinite(sortAnchorY) ? sortAnchorY : ((Number(marker.pos?.y) || 0) + (Number(marker.height) || 0))) * 256),
-          stableId: data?.stableId || this._worldUiFallbackStableId('hotspot', data?.id),
+          stableId,
           draw: renderer => marker.drawWorldUi?.(renderer)
         })
       }
@@ -2317,14 +2331,16 @@ export function createHallSceneClass(me, HallAgentClass) {
                 self._v2RenderableHandles = oldRenderableHandles
                 self._v2PendingActivation = null
                 self._v2PendingFrame = null
-                if (self._mapData !== oldMapData) {
-                  self._mapData = oldMapData
-                  if (self._shadowRenderer) {
-                    try {
-                      self._shadowRenderer.setMapData(self._shadowMapData())
-                      self._shadowAssemblySource = oldAssembly
-                    } catch { /* noop */ }
-                  }
+                if (self._mapData !== oldMapData) self._mapData = oldMapData
+                // Shadow publication can throw after the new bounds have been
+                // published. Bounds are part of the same map transaction and
+                // must always be restored, even if shadow rollback also fails.
+                self._syncWorldUiOverlayBounds(oldMapData)
+                if (self._shadowRenderer) {
+                  try {
+                    self._shadowRenderer.setMapData(self._shadowMapData())
+                    self._shadowAssemblySource = oldAssembly
+                  } catch { /* noop */ }
                 }
                 for (const handle of stagingFragments) {
                   try { me.game.world.removeChild(handle) } catch { /* noop */ }
