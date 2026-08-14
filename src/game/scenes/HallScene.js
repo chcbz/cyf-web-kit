@@ -48,6 +48,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._hotspots = []
       this._imageLayers = []
       this._imageLayersByName = new Map()
+      this._worldUiOverlay = null
       this._onAgentClick = null
       this._onHotspotClick = null
       this._onReady = null
@@ -879,6 +880,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       })
 
       this._ensureControllers()
+      this._ensureWorldUiOverlay()
 
       this._sceneBuilt = true
       // E15 P1: sync pending agents BEFORE first activation so the first
@@ -891,6 +893,41 @@ export function createHallSceneClass(me, HallAgentClass) {
       }
       if (this._onReady) this._onReady()
       return true
+    }
+
+    _ensureWorldUiOverlay() {
+      if (this._worldUiOverlay) {
+        this._worldUiOverlay.depth = HALL_SCENE_DEPTH_BANDS.WORLD_UI
+        return this._worldUiOverlay
+      }
+
+      const scene = this
+      class WorldUiOverlay extends me.Renderable {
+        constructor() {
+          super(0, 0, HALL_SCENE_WIDTH, HALL_SCENE_HEIGHT)
+          this.anchorPoint.set(0, 0)
+          this.floating = false
+          this.isKinematic = true
+        }
+
+        draw(renderer) {
+          if (scene._destroyed) return
+          for (const agent of scene._agents.values()) {
+            agent.drawWorldUi?.(renderer)
+          }
+        }
+      }
+
+      const overlay = new WorldUiOverlay()
+      me.game.world.addChild(overlay, HALL_SCENE_DEPTH_BANDS.WORLD_UI)
+      this._worldUiOverlay = overlay
+      return overlay
+    }
+
+    _pinWorldUiOverlayDepth() {
+      if (this._worldUiOverlay) {
+        this._worldUiOverlay.depth = HALL_SCENE_DEPTH_BANDS.WORLD_UI
+      }
     }
 
     _createCustomImageLayer(x, y, width, height, image, options = {}) {
@@ -1114,6 +1151,7 @@ export function createHallSceneClass(me, HallAgentClass) {
     }
 
     _reapplyCommittedV2RenderDepths() {
+      this._pinWorldUiOverlayDepth()
       if (!this._v2Active || !this._v2Depths) return
       for (const [stableId, handle] of this._v2RenderableHandles || []) {
         const logicalDepth = this._v2Depths[stableId]
@@ -1128,6 +1166,7 @@ export function createHallSceneClass(me, HallAgentClass) {
      * and world-ui ownership remain untouched.
      */
     _applyErrorStateRenderDepths() {
+      this._pinWorldUiOverlayDepth()
       if (this._destroyed || this._v2Active) return
       for (const [, handle] of this._agents) {
         if (handle) {
@@ -2459,6 +2498,14 @@ export function createHallSceneClass(me, HallAgentClass) {
       })
       this._imageLayers = []
       this._imageLayersByName.clear()
+      if (this._worldUiOverlay) {
+        try {
+          if (me.game.world?.hasChild?.(this._worldUiOverlay)) me.game.world.removeChild(this._worldUiOverlay)
+        } catch (err) {
+          console.warn('[HallScene] world-ui overlay cleanup failed:', err?.message || err)
+        }
+        this._worldUiOverlay = null
+      }
       this._agents.forEach(agent => {
         try {
           if (me.game.world?.hasChild?.(agent)) me.game.world.removeChild(agent)

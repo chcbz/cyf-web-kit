@@ -114,7 +114,7 @@ describe('HallAgent melonJS entity', () => {
     expect(agent.containsPoint(agent.pos.x + 1000, agent.pos.y + 1000)).to.equal(false)
   })
 
-  it('draws the selected halo at the sprite foot', () => {
+  it('keeps world-ui out of postDraw and draws the selected halo at the sprite foot via drawWorldUi', () => {
     const operations = []
     const context = {
       save: () => operations.push(['save']),
@@ -132,17 +132,21 @@ describe('HallAgent melonJS entity', () => {
     const agent = new HallAgent({
       agentId: 'songjiang',
       personaCode: 'songjiang',
+      name: '宋江',
       scale: 0.5,
       x: 50,
       y: 50
     })
-    agent.syncState({ selected: true })
+    agent.syncState({ selected: true, bubble: { text: '收到传令', ttlMs: 1200 } })
 
     agent.draw({ getContext: () => context })
     expect(operations.find(([operation]) => operation === 'ellipse')).to.equal(undefined)
 
     agent.postDraw({ getContext: () => context })
+    expect(operations.find(([operation]) => operation === 'ellipse')).to.equal(undefined)
+    expect(operations.find(([operation]) => operation === 'fillText')).to.equal(undefined)
 
+    agent.drawWorldUi({ getContext: () => context })
     const halo = operations.find(([operation]) => operation === 'ellipse')
     expect(halo[1]).to.equal(agent.pos.x)
     expect(halo[2]).to.be.closeTo(agent.pos.y - 0.5, 0.001)

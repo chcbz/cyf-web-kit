@@ -1325,4 +1325,81 @@ describe('HallScene melonJS pointer routing', () => {
     }
   })
 
+
+  it('owns agent world-ui in one fixed overlay across V2, error-state, roster, and destroy transitions', () => {
+    const me = createFakeMelon()
+    me.loader.getImage = name => name === 'persona-sprite-songjiang'
+      ? { width: 1024, height: 1024 }
+      : null
+    const HallAgentClass = createHallAgentClass(me)
+    const HallScene = createHallSceneClass(me, HallAgentClass)
+    const scene = new HallScene()
+
+    scene.setMapData(modularMapData())
+    scene.syncAgents([{
+      agentId: 'songjiang',
+      personaCode: 'songjiang',
+      name: '宋江',
+      x: 300,
+      y: 200,
+      coordinateSpace: 'world',
+      selected: true,
+      bubble: { text: '收到传令', ttlMs: 1200 },
+    }])
+    scene.onResetEvent()
+
+    const overlay = scene._worldUiOverlay
+    expect(overlay).to.exist
+    expect(overlay.depth).to.equal(HALL_SCENE_DEPTH_BANDS.WORLD_UI)
+    expect(me.children.filter(item => item.child === overlay)).to.have.length(1)
+
+    const operations = []
+    const context = {
+      save: () => operations.push(['save']),
+      restore: () => operations.push(['restore']),
+      beginPath: () => operations.push(['beginPath']),
+      ellipse: (...args) => operations.push(['ellipse', ...args]),
+      stroke: () => operations.push(['stroke']),
+      measureText: value => ({ width: value.length * 8 }),
+      fillText: (...args) => operations.push(['fillText', ...args]),
+      rect: (...args) => operations.push(['rect', ...args]),
+      fill: () => operations.push(['fill']),
+    }
+    const agent = scene.getAgent('songjiang')
+    overlay.draw({ getContext: () => context })
+    const firstHalo = operations.find(([operation]) => operation === 'ellipse')
+    expect(firstHalo).to.exist
+    const labels = operations.filter(([operation]) => operation === 'fillText').map(([, value]) => value)
+    expect(labels).to.deep.equal(['宋江', '收到传令'])
+
+    operations.length = 0
+    agent.pos.x += 25
+    agent.pos.y += 15
+    overlay.draw({ getContext: () => context })
+    const halo = operations.find(([operation]) => operation === 'ellipse')
+    expect(halo[1]).to.equal(firstHalo[1] + 25)
+    expect(halo[2]).to.be.closeTo(firstHalo[2] + 15, 0.001)
+
+    overlay.depth = 7
+    scene._v2Active = true
+    scene._v2Depths = {}
+    scene._reapplyCommittedV2RenderDepths()
+    expect(overlay.depth).to.equal(HALL_SCENE_DEPTH_BANDS.WORLD_UI)
+
+    overlay.depth = 7
+    scene._v2Active = false
+    scene._applyErrorStateRenderDepths()
+    expect(overlay.depth).to.equal(HALL_SCENE_DEPTH_BANDS.WORLD_UI)
+
+    scene.syncAgents([])
+    scene.update(16)
+    operations.length = 0
+    overlay.draw({ getContext: () => context })
+    expect(operations).to.be.empty
+
+    scene.onDestroyEvent()
+    expect(scene._worldUiOverlay).to.equal(null)
+    expect(me.game.world.hasChild(overlay)).to.equal(false)
+  })
+
 })

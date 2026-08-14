@@ -430,10 +430,18 @@ export function createHallAgentClass(me) {
       this.pos.y -= bob
     }
 
+    /**
+     * Draw UI that follows this agent but must remain outside the world sort.
+     * HallScene owns the dedicated WORLD_UI renderable and invokes this method.
+     */
+    drawWorldUi(renderer) {
+      const verticalOffset = this._lastOverlayBob || 0
+      this._drawSelectionBase(renderer, verticalOffset)
+      this._drawOverlay(renderer, verticalOffset)
+    }
+
     postDraw(renderer) {
       super.postDraw(renderer)
-      this._drawSelectionBase(renderer, this._lastOverlayBob || 0)
-      this._drawOverlay(renderer, this._lastOverlayBob || 0)
     }
   }
 }
