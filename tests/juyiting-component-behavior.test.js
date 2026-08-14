@@ -429,6 +429,78 @@ describe('JuyiHall component behavior', () => {
     }
   })
 
+  it('keeps HallStage loading unless JuyitingGame confirms a built scene and publishes success once', async () => {
+    const { JuyitingGame } = await import('../src/game/JuyitingGame.js')
+    const makeContractGame = (sceneBuildState) => {
+      const game = new JuyitingGame()
+      let activeStage = null
+      let sceneReadyCallback = null
+      let readyCount = 0
+      const me = {
+        game: { viewport: { width: 960, height: 640 } },
+        state: {
+          USER: 100,
+          PLAY: 0,
+          set: (_id, stage) => { activeStage = stage },
+          change: () => activeStage?.onResetEvent?.(),
+          pause: () => {}
+        },
+        video: { destroy: () => {} }
+      }
+      const scene = {
+        sceneBuildState,
+        onReady: callback => { sceneReadyCallback = callback },
+        onResetEvent: () => {
+          if (scene.sceneBuildState === 'ready') sceneReadyCallback?.()
+        },
+        onDestroyEvent: () => {},
+        setInteractionLocked: () => {},
+        setSelectedAgent: () => {},
+        syncAgents: () => {},
+        syncHotspots: () => {}
+      }
+      game.mount = async (_container, options = {}) => {
+        const mountToken = ++game._generation
+        game._mountToken = mountToken
+        game._me = me
+        game._hallScene = scene
+        game._callbacks = {
+          ...options,
+          onReady: () => {
+            readyCount += 1
+            options.onReady?.()
+          }
+        }
+        scene.onReady(() => game._publishReadyIfSceneBuilt(mountToken))
+        game._startGame(me, mountToken)
+        return { ready: true }
+      }
+      return { game, readyCount: () => readyCount }
+    }
+
+    const failed = makeContractGame('failed')
+    hallGameMock = failed.game
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+    const failedWrapper = mount(HallStage, { global: { stubs }, props: makeHallStageProps() })
+    await new Promise(resolve => setTimeout(resolve, 240))
+    await Vue.nextTick()
+    expect(failed.readyCount()).to.equal(0)
+    expect(failedWrapper.find('.hall-board').classes()).not.to.include('is-melon-ready')
+    expect(failedWrapper.find('.scene-loading').exists()).to.equal(true)
+    failedWrapper.unmount()
+
+    const succeeded = makeContractGame('ready')
+    hallGameMock = succeeded.game
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+    const succeededWrapper = mount(HallStage, { global: { stubs }, props: makeHallStageProps() })
+    await new Promise(resolve => setTimeout(resolve, 240))
+    await Vue.nextTick()
+    expect(succeeded.readyCount()).to.equal(1)
+    expect(succeededWrapper.find('.hall-board').classes()).to.include('is-melon-ready')
+    expect(succeededWrapper.find('.scene-loading').exists()).to.equal(false)
+    succeededWrapper.unmount()
+  })
+
   it('keeps timeout terminal when the old mount resolves late and retries one fresh mount', async () => {
     const originalSetTimeout = global.window.setTimeout
     const originalClearTimeout = global.window.clearTimeout

@@ -66,6 +66,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._mapData = null
       this._hotspotState = new Map()
       this._sceneBuilt = false
+      this._initialBuildFatal = false
       this._minZoom = 1
       this._fitMinZoom = 1
       this._maxZoom = 3.3
@@ -114,6 +115,12 @@ export function createHallSceneClass(me, HallAgentClass) {
     onAgentClick(cb)   { this._onAgentClick = cb }
     onHotspotClick(cb) { this._onHotspotClick = cb }
     onReady(cb)        { this._onReady = cb }
+
+    get sceneBuildState() {
+      if (this._sceneBuilt) return 'ready'
+      if (this._initialBuildFatal) return 'failed'
+      return 'pending'
+    }
 
         /** Set TMX SHA-256 provenance for V2 activation gate. */
     setTmxSha256(sha) { this._tmxSha256 = sha }
@@ -756,7 +763,7 @@ export function createHallSceneClass(me, HallAgentClass) {
     }
 
     _buildScene() {
-      if (this._destroyed || this._sceneBuilt) return false
+      if (this._destroyed || this._sceneBuilt || this._initialBuildFatal) return false
       const mapData = this._mapData
       let canonicalHotspots
       try {
@@ -767,6 +774,7 @@ export function createHallSceneClass(me, HallAgentClass) {
         canonicalHotspots = this._canonicalizeHotspots(mapData)
       } catch (error) {
         this._hotspotSnapshot = null
+        this._initialBuildFatal = true
         console.warn('[HallScene] Hotspot contract failed closed:', error?.message || error)
         return false
       }
@@ -989,8 +997,8 @@ export function createHallSceneClass(me, HallAgentClass) {
         throw new Error(`hotspot ${id} polygon requires at least three points`)
       }
       const uniquePoints = new Set(polygon.map(point => JSON.stringify([point.x, point.y])))
-      if (uniquePoints.size < 3) {
-        throw new Error(`hotspot ${id} polygon requires at least three unique points`)
+      if (uniquePoints.size !== polygon.length) {
+        throw new Error(`hotspot ${id} polygon vertices must be unique`)
       }
 
       let twiceArea = 0
@@ -2768,6 +2776,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       })
       this._agents.clear()
       this._sceneBuilt = false
+      this._initialBuildFatal = false
       // E6: dispose shadow renderer and debug overlay
       if (this._shadowRenderer) {
         try { this._shadowRenderer.dispose() } catch (err) { /* ignore */ }

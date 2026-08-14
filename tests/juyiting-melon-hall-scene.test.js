@@ -2,6 +2,7 @@ import { expect } from 'chai'
 import { ref } from 'vue'
 import { readFileSync } from 'fs'
 
+import { JuyitingGame } from '../src/game/JuyitingGame.js'
 import { createHallSceneClass } from '../src/game/scenes/HallScene.js'
 import { useHallScene } from '../src/composables/juyiting/useHallScene.js'
 import { createHallAgentClass } from '../src/game/entities/HallAgent.js'
@@ -1531,6 +1532,8 @@ describe('HallScene melonJS pointer routing', () => {
       [{ id: 'missing-rect', panel: 'catalog', shape: 'rect', x: 10, y: 10, h: 4 }],
       [{ id: 'duplicate-points', panel: 'catalog', shape: 'polygon', x: 10, y: 10, w: 4, h: 4,
         polygon: [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 1, y: 1 }] }],
+      [{ id: 'repeated-edge-vertex', panel: 'catalog', shape: 'polygon', x: 10, y: 10, w: 4, h: 4,
+        polygon: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 4 }, { x: 0, y: 4 }, { x: 4, y: 0 }] }],
       [{ id: 'zero-area', panel: 'catalog', shape: 'polygon', x: 10, y: 10, w: 4, h: 4,
         polygon: [{ x: 0, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 2 }] }],
       [{ id: 'non-finite', panel: 'catalog', shape: 'polygon', x: 10, y: 10, w: 4, h: 4,
@@ -1578,6 +1581,84 @@ describe('HallScene melonJS pointer routing', () => {
     expect(() => scene._canonicalizeHotspots(unknownFloor)).to.throw('unavailable in V1')
     expect(() => scene._canonicalizeHotspots(unknownFloor, { 'floor-1': 0 })).to.throw('unknown V2 floor')
     expect(scene._canonicalizeHotspots(unknownFloor, { 'floor-1': 0, 'floor-2': 1 }).hotspots[0].floorId).to.equal('floor-2')
+    expect(() => scene._canonicalizeHotspots(productionV2MapData())).not.to.throw()
+  })
+
+  it('publishes HallStage readiness only after a real HallScene build and only once', async () => {
+    const runLifecycle = async (mapData, { updateAfterStart = false } = {}) => {
+      const me = createFakeMelon()
+      const stages = new Map()
+      me.state = {
+        USER: 100,
+        PLAY: 0,
+        set: (id, stage) => stages.set(id, stage),
+        change: id => stages.get(id)?.onResetEvent?.(),
+        pause: () => {}
+      }
+      me.video.destroy = () => {}
+
+      const HallScene = createHallSceneClass(me, class {})
+      const scene = new HallScene()
+      scene.setMapData(mapData)
+      const game = new JuyitingGame()
+      const mountToken = 1
+      let readyCount = 0
+      let melonReady = false
+      game._me = me
+      game._mountToken = mountToken
+      game._hallScene = scene
+      game._callbacks = {
+        onReady: () => {
+          readyCount += 1
+          melonReady = true
+        }
+      }
+      game._markSceneDebugDirty = () => {}
+      game._scheduleViewportCommit = () => {}
+      scene.onReady(() => game._publishReadyIfSceneBuilt(mountToken))
+
+      game._startGame(me, mountToken)
+      game.start()
+      if (updateAfterStart) {
+        scene.update(16)
+        scene.update(16)
+      }
+      await new Promise(resolve => setTimeout(resolve, 240))
+      return { game, scene, readyCount, melonReady }
+    }
+
+    const originalWarn = console.warn
+    const warnings = []
+    console.warn = (...args) => warnings.push(args)
+    let failed
+    let succeeded
+    try {
+      failed = await runLifecycle({
+        coordinateWidth: 1664,
+        coordinateHeight: 928,
+        imageLayers: {}, tileLayers: [], tilesets: [],
+        hotspots: [{
+          id: 'invalid-repeat', panel: 'catalog', shape: 'polygon', x: 10, y: 10, w: 4, h: 4,
+          polygon: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 4 }, { x: 0, y: 4 }, { x: 4, y: 0 }]
+        }]
+      }, { updateAfterStart: true })
+      expect(failed.scene.sceneBuildState).to.equal('failed')
+      expect(failed.readyCount).to.equal(0)
+      expect(failed.melonReady).to.equal(false)
+      expect(warnings.filter(args => String(args[0]).includes('Hotspot contract failed closed'))).to.have.length(1)
+
+      succeeded = await runLifecycle(hotspotMapData(), { updateAfterStart: true })
+      expect(succeeded.scene.sceneBuildState).to.equal('ready')
+      expect(succeeded.readyCount).to.equal(1)
+      expect(succeeded.melonReady).to.equal(true)
+      succeeded.scene.onResetEvent()
+      succeeded.scene.update(16)
+      expect(succeeded.readyCount).to.equal(1)
+    } finally {
+      failed?.game.destroy()
+      succeeded?.game.destroy()
+      console.warn = originalWarn
+    }
   })
 
   it('uses lossless permanent world-ui identities and fails closed for invalid source IDs', () => {

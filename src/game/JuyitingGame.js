@@ -36,6 +36,7 @@ export class JuyitingGame {
     this._deferredSpriteLoadDelayMs = 1_200
     this._deferredSpriteLoadTimer = null
     this._readyTimer = null
+    this._readyPublished = false
     this._canvas = null
     this._viewportCommitFrame = null
     this._viewportCommitCandidateSignature = ''
@@ -81,6 +82,7 @@ export class JuyitingGame {
     const mountToken = ++this._generation
     this._mountToken = mountToken
     this._spriteLoadResult = null
+    this._readyPublished = false
     this._fatalError = null
     this._simulationEnabled = options.simulationEnabled !== false
     this._markSceneDebugDirty()
@@ -109,7 +111,7 @@ export class JuyitingGame {
         if (this._isCurrentMount(mountToken)) this._callbacks.onHotspotClick?.(d)
       })
       this._hallScene.onReady(() => {
-        if (this._isCurrentMount(mountToken)) this._callbacks.onReady?.()
+        this._publishReadyIfSceneBuilt(mountToken)
       })
 
       // Init video (creates canvas inside container)
@@ -309,6 +311,7 @@ export class JuyitingGame {
     this._clearDeferredSpriteLoadTimer()
     if (this._readyTimer !== null) clearTimeout(this._readyTimer)
     this._readyTimer = null
+    this._readyPublished = false
     this._cancelViewportCommit()
     this._disconnectContainerResizeObserver()
     try { me?.state?.pause?.() } catch { /* preserve the original mount failure */ }
@@ -425,6 +428,17 @@ export class JuyitingGame {
     this._markSceneDebugDirty()
   }
 
+  _publishReadyIfSceneBuilt(mountToken = this._mountToken) {
+    if (!this._isCurrentMount(mountToken) || this._readyPublished) return false
+    if (this._hallScene?.sceneBuildState !== 'ready') return false
+
+    this._readyPublished = true
+    if (this._readyTimer !== null) clearTimeout(this._readyTimer)
+    this._readyTimer = null
+    this._callbacks.onReady?.()
+    return true
+  }
+
   _startGame(me, mountToken = this._mountToken) {
     if (!this._isCurrentMount(mountToken)) return
     // Alternate between two private state slots so remounting cannot be ignored
@@ -439,12 +453,16 @@ export class JuyitingGame {
       me.state.change(this._stateId, true)
     }
     this._scheduleViewportCommit()
-    // Emit ready again if onResetEvent didn't call it
+    // A delayed confirmation may recover a missed scene callback, but it
+    // must never manufacture readiness for a pending or failed HallScene.
     if (this._readyTimer !== null) clearTimeout(this._readyTimer)
-    this._readyTimer = setTimeout(() => {
-      this._readyTimer = null
-      if (this._isCurrentMount(mountToken) && this._callbacks.onReady) this._callbacks.onReady()
-    }, 200)
+    this._readyTimer = null
+    if (!this._readyPublished) {
+      this._readyTimer = setTimeout(() => {
+        this._readyTimer = null
+        this._publishReadyIfSceneBuilt(mountToken)
+      }, 200)
+    }
   }
 
   _initializeSimulationRuntime() {
