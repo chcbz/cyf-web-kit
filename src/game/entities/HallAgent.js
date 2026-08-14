@@ -421,27 +421,32 @@ export function createHallAgentClass(me) {
     }
 
     draw(renderer) {
-      const bob = this.currentAnim === ANIM_STATES.WALK || this.currentAnim === ANIM_STATES.BUSY
+      const rawBob = this.currentAnim === ANIM_STATES.WALK || this.currentAnim === ANIM_STATES.BUSY
         ? Math.sin(this._animFrame * Math.PI / 2) * 2
         : Math.sin(this._animFrame * Math.PI / 2) * 0.8
-      this._lastOverlayBob = bob
-      this.pos.y += bob
+      // melonJS applies the sprite transform around its anchor before draw().
+      // Moving the draw coordinates by rawBob therefore appears as rawBob ×
+      // renderScale. Store that rendered displacement for the independent UI.
+      this._lastOverlayBob = rawBob * (this._renderScale || 1)
+      this.pos.y += rawBob
       super.draw(renderer)
-      this.pos.y -= bob
+      this.pos.y -= rawBob
     }
 
     /**
      * Draw UI that follows this agent but must remain outside the world sort.
-     * HallScene owns the dedicated WORLD_UI renderable and invokes this method.
+     * Only labels and bubbles belong to world-ui; the selection base stays in
+     * the agent's world render pass so occluders can cover it with the body.
      */
     drawWorldUi(renderer) {
-      const verticalOffset = this._lastOverlayBob || 0
-      this._drawSelectionBase(renderer, verticalOffset)
-      this._drawOverlay(renderer, verticalOffset)
+      this._drawOverlay(renderer, this._lastOverlayBob || 0)
     }
 
     postDraw(renderer) {
-      super.postDraw(renderer)
+      // Lightweight test renderers may not implement melonJS postDraw; the
+      // production path does, and must restore the sprite transform first.
+      super.postDraw?.(renderer)
+      this._drawSelectionBase(renderer, this._lastOverlayBob || 0)
     }
   }
 }

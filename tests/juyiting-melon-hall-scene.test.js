@@ -714,7 +714,7 @@ describe('HallScene melonJS pointer routing', () => {
     const marker = scene._hotspots[0].marker
     const operations = []
     marker.setFeedback({ state: 'active', feedbackText: '打开名册' })
-    marker.draw({
+    scene._worldUiOverlay.draw({
       getContext: () => ({
         save: () => operations.push(['save']),
         restore: () => operations.push(['restore']),
@@ -1303,7 +1303,7 @@ describe('HallScene melonJS pointer routing', () => {
       expect(foreground.handle.depth).to.equal(5)
       expect(lighting.handle.depth).to.equal(8)
       expect(scene._hotspots.length).to.be.greaterThan(0)
-      expect(scene._hotspots.every(hotspot => hotspot.marker.depth === 1)).to.equal(true)
+      expect(scene._hotspots.every(hotspot => hotspot.marker.depth === HALL_SCENE_DEPTH_BANDS.WORLD_UI)).to.equal(true)
 
       // The real HallAgent.update contract writes raw world Y into depth.
       agent.update(16)
@@ -1317,7 +1317,7 @@ describe('HallScene melonJS pointer routing', () => {
       expect(mid.handle.depth).to.equal(2)
       expect(foreground.handle.depth).to.equal(5)
       expect(lighting.handle.depth).to.equal(8)
-      expect(scene._hotspots.every(hotspot => hotspot.marker.depth === 1)).to.equal(true)
+      expect(scene._hotspots.every(hotspot => hotspot.marker.depth === HALL_SCENE_DEPTH_BANDS.WORLD_UI)).to.equal(true)
       expect(scene.activeRendererMode).to.equal('v1')
     } finally {
       window.__JYT_V2_ENABLED = previousGate
@@ -1367,15 +1367,19 @@ describe('HallScene melonJS pointer routing', () => {
     }
     const agent = scene.getAgent('songjiang')
     overlay.draw({ getContext: () => context })
-    const firstHalo = operations.find(([operation]) => operation === 'ellipse')
-    expect(firstHalo).to.exist
+    expect(operations.find(([operation]) => operation === 'ellipse')).to.equal(undefined)
     const labels = operations.filter(([operation]) => operation === 'fillText').map(([, value]) => value)
     expect(labels).to.deep.equal(['宋江', '收到传令'])
 
     operations.length = 0
+    agent.postDraw({ getContext: () => context })
+    const firstHalo = operations.find(([operation]) => operation === 'ellipse')
+    expect(firstHalo).to.exist
+
+    operations.length = 0
     agent.pos.x += 25
     agent.pos.y += 15
-    overlay.draw({ getContext: () => context })
+    agent.postDraw({ getContext: () => context })
     const halo = operations.find(([operation]) => operation === 'ellipse')
     expect(halo[1]).to.equal(firstHalo[1] + 25)
     expect(halo[2]).to.be.closeTo(firstHalo[2] + 15, 0.001)
@@ -1401,5 +1405,58 @@ describe('HallScene melonJS pointer routing', () => {
     expect(scene._worldUiOverlay).to.equal(null)
     expect(me.game.world.hasChild(overlay)).to.equal(false)
   })
+
+
+  it('orders world-ui by frozen sort key across insertion and remove/re-add, and syncs map bounds', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, class {})
+    const scene = new HallScene()
+    const calls = []
+
+    scene.setMapData({ coordinateWidth: 2000, coordinateHeight: 1100 })
+    const overlay = scene._ensureWorldUiOverlay()
+    expect(overlay).to.include({ width: 2000, height: 1100 })
+
+    scene._v2Assembly = { canonicalIr: { floorRegistry: { 'floor-1': 0, 'floor-2': 1 } } }
+    scene._v2AgentAdapter = {
+      lookup: id => ({
+        stableId: id === 'first' ? 'jyt.agent.a.v1' : 'jyt.agent.b.v1',
+        floorId: id === 'first' ? 'floor-1' : 'floor-2',
+        elevation: id === 'first' ? 10 : -1,
+      })
+    }
+    const first = { pos: { y: 999 }, drawWorldUi: () => calls.push('agent-first') }
+    const late = { pos: { y: 100 }, drawWorldUi: () => calls.push('agent-late') }
+    const hotspot = {
+      pos: { y: 0 },
+      height: 1,
+      drawWorldUi: () => calls.push('hotspot-a')
+    }
+    const hotspotEntry = {
+      marker: hotspot,
+      data: { id: 'a', stableId: 'jyt.hotspot.a.v1', floorId: 'floor-2', elevation: -1, sortAnchor: { y: 100 } }
+    }
+
+    scene._agents.set('late', late)
+    scene._agents.set('first', first)
+    scene._hotspots = [hotspotEntry]
+    overlay.draw({})
+    expect(calls).to.deep.equal(['agent-first', 'agent-late', 'hotspot-a'])
+
+    calls.length = 0
+    scene._agents.delete('late')
+    scene._agents.clear()
+    scene._agents.set('first', first)
+    scene._agents.set('late', late)
+    scene._hotspots = [hotspotEntry]
+    overlay.draw({})
+    expect(calls).to.deep.equal(['agent-first', 'agent-late', 'hotspot-a'])
+
+    scene._v2AgentAdapter = null
+    scene._v2Assembly = null
+    scene.setMapData({ coordinateWidth: 1234, coordinateHeight: 567 })
+    expect(overlay).to.include({ width: 1234, height: 567 })
+  })
+
 
 })

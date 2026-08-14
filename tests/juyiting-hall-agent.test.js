@@ -114,7 +114,7 @@ describe('HallAgent melonJS entity', () => {
     expect(agent.containsPoint(agent.pos.x + 1000, agent.pos.y + 1000)).to.equal(false)
   })
 
-  it('keeps world-ui out of postDraw and draws the selected halo at the sprite foot via drawWorldUi', () => {
+  it('keeps the selection halo in the world postDraw pass and limits world-ui to labels and bubbles', () => {
     const operations = []
     const context = {
       save: () => operations.push(['save']),
@@ -143,15 +143,36 @@ describe('HallAgent melonJS entity', () => {
     expect(operations.find(([operation]) => operation === 'ellipse')).to.equal(undefined)
 
     agent.postDraw({ getContext: () => context })
-    expect(operations.find(([operation]) => operation === 'ellipse')).to.equal(undefined)
-    expect(operations.find(([operation]) => operation === 'fillText')).to.equal(undefined)
-
-    agent.drawWorldUi({ getContext: () => context })
     const halo = operations.find(([operation]) => operation === 'ellipse')
     expect(halo[1]).to.equal(agent.pos.x)
     expect(halo[2]).to.be.closeTo(agent.pos.y - 0.5, 0.001)
     expect(halo[3]).to.equal(13)
     expect(halo[4]).to.equal(3.5)
+    expect(operations.find(([operation]) => operation === 'fillText')).to.equal(undefined)
+
+    operations.length = 0
+    agent.drawWorldUi({ getContext: () => context })
+    expect(operations.find(([operation]) => operation === 'ellipse')).to.equal(undefined)
+    expect(operations.filter(([operation]) => operation === 'fillText').map(([, text]) => text)).to.deep.equal(['宋江', '收到传令'])
+  })
+
+  it('uses the sprite transform-scaled bob displacement for independent world-ui', () => {
+    const me = createFakeMelon()
+    const HallAgent = createHallAgentClass(me)
+    const halfScale = new HallAgent({ agentId: 'half', personaCode: 'songjiang', scale: 0.5, x: 50, y: 50 })
+    const fullScale = new HallAgent({ agentId: 'full', personaCode: 'songjiang', scale: 1, x: 50, y: 50 })
+
+    halfScale.setAnimState('walk')
+    fullScale.setAnimState('walk')
+    halfScale._animFrame = 1
+    fullScale._animFrame = 1
+    halfScale.draw({ getContext: () => ({}) })
+    fullScale.draw({ getContext: () => ({}) })
+
+    // melonJS scales the draw coordinates around the anchor, so a raw 2px
+    // walking bob renders as 1px at 0.5 scale and 2px at full scale.
+    expect(halfScale._lastOverlayBob).to.equal(1)
+    expect(fullScale._lastOverlayBob).to.equal(2)
   })
 
   it('does not draw a halo for highlight-only transient feedback', () => {

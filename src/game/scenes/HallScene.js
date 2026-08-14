@@ -124,6 +124,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       }
 
       this._mapData = mapData
+      this._syncWorldUiOverlayBounds(mapData)
       // Propagate to existing shadow renderer if any
       if (this._shadowRenderer) {
         this._shadowRenderer.setMapData(mapData)
@@ -796,6 +797,12 @@ export function createHallSceneClass(me, HallAgentClass) {
         }
 
         draw(renderer) {
+          // World-ui is painted once by HallScene's ordered overlay. Keep this
+          // renderable for hit geometry only; painting here would depend on
+          // sibling insertion order at the same depth.
+        }
+
+        drawWorldUi(renderer) {
           const ctx = renderer.getContext?.()
           if (!ctx) return
           const active = this.feedback?.state && this.feedback.state !== 'idle'
@@ -851,7 +858,7 @@ export function createHallSceneClass(me, HallAgentClass) {
         const marker = new HotspotMarker(ox, oy, ow, oh, { ...h, drawPolygon })
         marker.setFeedback(this._hotspotState.get(h.id))
 
-        me.game.world.addChild(marker, DEPTH_LAYERS.HOTSPOTS)
+        me.game.world.addChild(marker, HALL_SCENE_DEPTH_BANDS.WORLD_UI)
         this._hotspots.push({ marker, hitArea: marker, data: h })
       })
       // Render prop tile objects from TMX collection-of-images tilesets.
@@ -895,16 +902,81 @@ export function createHallSceneClass(me, HallAgentClass) {
       return true
     }
 
+    _worldUiBounds(mapData = this._mapData) {
+      return {
+        width: Number(mapData?.coordinateWidth) || HALL_SCENE_WIDTH,
+        height: Number(mapData?.coordinateHeight) || HALL_SCENE_HEIGHT
+      }
+    }
+
+    _syncWorldUiOverlayBounds(mapData = this._mapData) {
+      if (!this._worldUiOverlay) return
+      const { width, height } = this._worldUiBounds(mapData)
+      this._worldUiOverlay.width = width
+      this._worldUiOverlay.height = height
+    }
+
+    _worldUiFallbackStableId(kind, sourceId) {
+      const value = String(sourceId || 'unknown')
+      const bytes = typeof TextEncoder === 'function'
+        ? new TextEncoder().encode(value)
+        : Array.from(value, char => char.charCodeAt(0) & 0xff)
+      return `jyt.${kind}.ui.${Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('') || '00'}.v1`
+    }
+
+    _worldUiFloorOrder(floorId) {
+      const registry = this._v2Assembly?.canonicalIr?.floorRegistry || { 'floor-1': 0 }
+      return Number.isSafeInteger(registry?.[floorId]) ? registry[floorId] : 0
+    }
+
+    _worldUiEntries() {
+      const entries = []
+      for (const [agentId, agent] of this._agents) {
+        const sceneObject = this._v2AgentAdapter?.lookup?.(agentId)
+        entries.push({
+          floorOrder: this._worldUiFloorOrder(sceneObject?.floorId || 'floor-1'),
+          elevation: Number.isSafeInteger(sceneObject?.elevation) ? sceneObject.elevation : 0,
+          fixedPointY: Math.round((Number(agent?.pos?.y) || 0) * 256),
+          stableId: sceneObject?.stableId || this._worldUiFallbackStableId('agent', agentId),
+          draw: renderer => agent.drawWorldUi?.(renderer)
+        })
+      }
+      for (const { marker, data } of this._hotspots) {
+        if (!marker) continue
+        const sortAnchorY = Number(data?.sortAnchor?.y ?? data?.sortAnchorY)
+        entries.push({
+          floorOrder: this._worldUiFloorOrder(data?.floorId || 'floor-1'),
+          elevation: Number.isSafeInteger(data?.elevation) ? data.elevation : 0,
+          fixedPointY: Math.round((Number.isFinite(sortAnchorY) ? sortAnchorY : ((Number(marker.pos?.y) || 0) + (Number(marker.height) || 0))) * 256),
+          stableId: data?.stableId || this._worldUiFallbackStableId('hotspot', data?.id),
+          draw: renderer => marker.drawWorldUi?.(renderer)
+        })
+      }
+      return entries.sort((first, second) => {
+        if (first.floorOrder !== second.floorOrder) return first.floorOrder - second.floorOrder
+        if (first.elevation !== second.elevation) return first.elevation - second.elevation
+        if (first.fixedPointY !== second.fixedPointY) return first.fixedPointY - second.fixedPointY
+        const length = Math.min(first.stableId.length, second.stableId.length)
+        for (let index = 0; index < length; index++) {
+          const difference = first.stableId.charCodeAt(index) - second.stableId.charCodeAt(index)
+          if (difference !== 0) return difference
+        }
+        return first.stableId.length - second.stableId.length
+      })
+    }
+
     _ensureWorldUiOverlay() {
       if (this._worldUiOverlay) {
         this._worldUiOverlay.depth = HALL_SCENE_DEPTH_BANDS.WORLD_UI
+        this._syncWorldUiOverlayBounds()
         return this._worldUiOverlay
       }
 
       const scene = this
+      const { width, height } = this._worldUiBounds()
       class WorldUiOverlay extends me.Renderable {
         constructor() {
-          super(0, 0, HALL_SCENE_WIDTH, HALL_SCENE_HEIGHT)
+          super(0, 0, width, height)
           this.anchorPoint.set(0, 0)
           this.floating = false
           this.isKinematic = true
@@ -912,9 +984,7 @@ export function createHallSceneClass(me, HallAgentClass) {
 
         draw(renderer) {
           if (scene._destroyed) return
-          for (const agent of scene._agents.values()) {
-            agent.drawWorldUi?.(renderer)
-          }
+          for (const entry of scene._worldUiEntries()) entry.draw(renderer)
         }
       }
 
@@ -1142,7 +1212,7 @@ export function createHallSceneClass(me, HallAgentClass) {
       }
       for (const { marker } of this._hotspots) {
         if (marker) {
-          try { marker.depth = DEPTH_LAYERS.HOTSPOTS } catch (error) {}
+          try { marker.depth = HALL_SCENE_DEPTH_BANDS.WORLD_UI } catch (error) {}
         }
       }
       this._v2OwnsRenderStack = false
@@ -2220,6 +2290,7 @@ export function createHallSceneClass(me, HallAgentClass) {
                 // Publish new mapData only after the full scene swap succeeded;
                 // shadow renderer must align with the published live map.
                 self._mapData = newMapData
+                self._syncWorldUiOverlayBounds(newMapData)
                 if (self._shadowRenderer) {
                   self._shadowRenderer.setMapData(self._shadowMapData())
                   self._shadowAssemblySource = newAssembly
