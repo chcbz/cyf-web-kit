@@ -49,6 +49,10 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._imageLayers = []
       this._imageLayersByName = new Map()
       this._worldUiOverlay = null
+      // Handle-scoped identity cache: avoids allocating a long UTF-16 hex
+      // string every draw while allowing removed handles to be collected.
+      this._worldUiIdentityCache = new WeakMap()
+      this._hotspotSnapshot = null
       this._onAgentClick = null
       this._onHotspotClick = null
       this._onReady = null
@@ -756,8 +760,18 @@ export function createHallSceneClass(me, HallAgentClass) {
       const { width: vpW, height: vpH } = this._viewportSize()
       if (vpW <= 0 || vpH <= 0) return false
       const mapData = this._mapData
-      const mapObjects = mapData?.hotspots || []
-      const hotspots = mapObjects.filter(hotspot => hotspot.type !== 'prop' && hotspot.panel)
+      const mapObjects = Array.isArray(mapData?.hotspots) ? mapData.hotspots : []
+      let hotspots = []
+      try {
+        const canonicalHotspots = this._canonicalizeHotspots(mapData)
+        hotspots = canonicalHotspots.hotspots
+        this._hotspotSnapshot = canonicalHotspots.snapshot
+      } catch (error) {
+        // V1 has no transactional marker staging. Refuse the entire interactive
+        // hotspot set rather than silently aliasing duplicate IDs or floors.
+        this._hotspotSnapshot = null
+        console.warn('[HallScene] Hotspot contract failed closed:', error?.message || error)
+      }
 
       // Apply TMX map properties (zoom, dimensions) if available
       if (mapData?.mapProperties) {
@@ -916,37 +930,127 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._worldUiOverlay.height = height
     }
 
-    _worldUiStableId(kind, sourceId) {
-      // world-ui is synchronous. Its identity is deliberately independent from
-      // the async world adapter and is never swapped at V1/V2 boundaries. Use
-      // every UTF-16 code unit (not UTF-8/TextEncoder) so Unicode, emoji, and
-      // surrogate pairs have a deterministic, lossless ASCII representation.
-      if ((kind !== 'agent' && kind !== 'hotspot') || typeof sourceId !== 'string' || sourceId.length === 0 || sourceId.trim().length === 0) {
-        return null
-      }
+    _validWorldUiSourceId(sourceId) {
+      return typeof sourceId === 'string' && sourceId.length > 0 && sourceId.trim().length > 0
+    }
+
+    _encodeWorldUiStableId(kind, sourceId) {
       let codeUnits = ''
       for (let index = 0; index < sourceId.length; index++) {
         codeUnits += sourceId.charCodeAt(index).toString(16).padStart(4, '0')
       }
-      // This local sorting identity is not a canonical-IR stableId, so it is
-      // intentionally not constrained by the IR envelope: UUID agent IDs must
-      // retain their names/bubbles rather than disappearing from world-ui.
+      // This local sorting identity is not a canonical-IR stableId, so UUID
+      // agent IDs must retain their names/bubbles rather than disappearing.
       return `jyt.world-ui.${kind}.u${codeUnits}.v1`
+    }
+
+    _worldUiStableId(kind, sourceId, handle = null) {
+      // world-ui is synchronous and deliberately independent from the async
+      // world adapter. Every UTF-16 code unit is losslessly represented, so
+      // Unicode/emoji never depend on TextEncoder or UTF-8 replacement rules.
+      if ((kind !== 'agent' && kind !== 'hotspot') || !this._validWorldUiSourceId(sourceId)) return null
+      if (handle && (typeof handle === 'object' || typeof handle === 'function')) {
+        const cached = this._worldUiIdentityCache.get(handle)
+        if (cached?.kind === kind && cached.sourceId === sourceId) return cached.stableId
+        const stableId = this._encodeWorldUiStableId(kind, sourceId)
+        this._worldUiIdentityCache.set(handle, { kind, sourceId, stableId })
+        return stableId
+      }
+      return this._encodeWorldUiStableId(kind, sourceId)
+    }
+
+    _hotspotField(hotspot, field) {
+      if (hotspot && Object.prototype.hasOwnProperty.call(hotspot, field)) return hotspot[field]
+      return hotspot?.properties?.[field]
+    }
+
+    _hotspotFinite(value, fallback, field) {
+      if (value === undefined) return fallback
+      if (value === null || (typeof value === 'string' && value.trim().length === 0)) {
+        throw new Error(`hotspot ${field} must be finite`)
+      }
+      const number = Number(value)
+      if (!Number.isFinite(number)) throw new Error(`hotspot ${field} must be finite`)
+      return number
+    }
+
+    _canonicalizeHotspots(mapData, floorRegistry = null) {
+      const seenIds = new Set()
+      const canonical = []
+      const source = Array.isArray(mapData?.hotspots) ? mapData.hotspots : []
+      for (const hotspot of source) {
+        if (!hotspot || hotspot.type === 'prop' || !hotspot.panel) continue
+        const id = hotspot.id
+        if (!this._validWorldUiSourceId(id)) throw new Error('hotspot id must be a non-empty string')
+        if (seenIds.has(id)) throw new Error(`duplicate hotspot id: ${id}`)
+        seenIds.add(id)
+
+        const panel = hotspot.panel
+        if (typeof panel !== 'string' || panel.trim().length === 0) throw new Error(`hotspot ${id} panel must be a non-empty string`)
+        const rawFloorId = this._hotspotField(hotspot, 'floorId')
+        const floorId = rawFloorId === undefined ? 'floor-1' : rawFloorId
+        if (!this._validWorldUiSourceId(floorId)) throw new Error(`hotspot ${id} floorId must be a non-empty string`)
+        if (floorRegistry) {
+          if (!Number.isSafeInteger(floorRegistry[floorId])) throw new Error(`hotspot ${id} references unknown V2 floor: ${floorId}`)
+        } else if (floorId !== 'floor-1') {
+          throw new Error(`hotspot ${id} floorId ${floorId} is unavailable in V1`)
+        }
+
+        const rawElevation = this._hotspotField(hotspot, 'elevation')
+        const elevation = rawElevation === undefined ? 0 : this._hotspotFinite(rawElevation, 0, `${id}.elevation`)
+        if (!Number.isSafeInteger(elevation)) throw new Error(`hotspot ${id} elevation must be an integer`)
+        const x = this._hotspotFinite(hotspot.x, 0, `${id}.x`)
+        const y = this._hotspotFinite(hotspot.y, 0, `${id}.y`)
+        const w = this._hotspotFinite(hotspot.w, 0, `${id}.w`)
+        const h = this._hotspotFinite(hotspot.h, 0, `${id}.h`)
+        if (w < 0 || h < 0) throw new Error(`hotspot ${id} geometry must not be negative`)
+        if (hotspot.shape !== undefined && hotspot.shape !== 'rect' && hotspot.shape !== 'polygon') {
+          throw new Error(`hotspot ${id} has unsupported shape: ${hotspot.shape}`)
+        }
+        const shape = hotspot.shape === 'polygon' ? 'polygon' : 'rect'
+        if (hotspot.polygon != null && !Array.isArray(hotspot.polygon)) throw new Error(`hotspot ${id} polygon must be an array`)
+        const polygon = hotspot.polygon == null ? null : hotspot.polygon.map((point, index) => ({
+          x: this._hotspotFinite(point?.x, 0, `${id}.polygon[${index}].x`),
+          y: this._hotspotFinite(point?.y, 0, `${id}.polygon[${index}].y`)
+        }))
+        if (shape === 'polygon' && (!polygon || polygon.length < 3)) throw new Error(`hotspot ${id} polygon requires at least three points`)
+        const rawSortAnchor = hotspot.sortAnchor
+        const sortAnchorX = this._hotspotField(hotspot, 'sortAnchorX') ?? rawSortAnchor?.x
+        const sortAnchorY = this._hotspotField(hotspot, 'sortAnchorY') ?? rawSortAnchor?.y
+        const sortAnchor = {
+          x: sortAnchorX === undefined ? null : this._hotspotFinite(sortAnchorX, 0, `${id}.sortAnchor.x`),
+          y: sortAnchorY === undefined ? null : this._hotspotFinite(sortAnchorY, 0, `${id}.sortAnchor.y`)
+        }
+        const data = {
+          ...hotspot, id, panel, shape, x, y, w, h, polygon, floorId, elevation,
+          ...(sortAnchor.x === null && sortAnchor.y === null ? {} : { sortAnchor })
+        }
+        canonical.push({
+          id, panel, type: typeof hotspot.type === 'string' ? hotspot.type : '', floorId, elevation,
+          sortAnchor, geometry: { shape, x, y, w, h, polygon }, data
+        })
+      }
+      const snapshot = JSON.stringify(canonical.map(({ id, panel, type, floorId, elevation, sortAnchor, geometry }) => (
+        { id, panel, type, floorId, elevation, sortAnchor, geometry }
+      )))
+      return { hotspots: canonical.map(item => item.data), snapshot }
     }
 
     _worldUiFloorOrder(floorId) {
       const registry = this._v2Assembly?.canonicalIr?.floorRegistry || { 'floor-1': 0 }
-      return Number.isSafeInteger(registry?.[floorId]) ? registry[floorId] : 0
+      return Number.isSafeInteger(registry?.[floorId]) ? registry[floorId] : null
     }
 
     _worldUiEntries() {
       const entries = []
       for (const [agentId, agent] of this._agents) {
-        const stableId = this._worldUiStableId('agent', agentId)
+        const stableId = this._worldUiStableId('agent', agentId, agent)
         if (!stableId) continue
         const sceneObject = this._v2AgentAdapter?.lookup?.(agentId)
+        const floorOrder = this._worldUiFloorOrder(sceneObject?.floorId || 'floor-1')
+        if (!Number.isSafeInteger(floorOrder)) continue
         entries.push({
-          floorOrder: this._worldUiFloorOrder(sceneObject?.floorId || 'floor-1'),
+          floorOrder,
           elevation: Number.isSafeInteger(sceneObject?.elevation) ? sceneObject.elevation : 0,
           fixedPointY: Math.round((Number(agent?.pos?.y) || 0) * 256),
           stableId,
@@ -955,12 +1059,14 @@ export function createHallSceneClass(me, HallAgentClass) {
       }
       for (const { marker, data } of this._hotspots) {
         if (!marker) continue
-        const stableId = this._worldUiStableId('hotspot', data?.id)
-        if (!stableId) continue
+        const stableId = this._worldUiStableId('hotspot', data?.id, marker)
+        if (!stableId || !Number.isSafeInteger(data?.elevation)) continue
+        const floorOrder = this._worldUiFloorOrder(data?.floorId)
+        if (!Number.isSafeInteger(floorOrder)) continue
         const sortAnchorY = Number(data?.sortAnchor?.y ?? data?.sortAnchorY)
         entries.push({
-          floorOrder: this._worldUiFloorOrder(data?.floorId || 'floor-1'),
-          elevation: Number.isSafeInteger(data?.elevation) ? data.elevation : 0,
+          floorOrder,
+          elevation: data.elevation,
           fixedPointY: Math.round((Number.isFinite(sortAnchorY) ? sortAnchorY : ((Number(marker.pos?.y) || 0) + (Number(marker.height) || 0))) * 256),
           stableId,
           draw: renderer => marker.drawWorldUi?.(renderer)
@@ -1064,10 +1170,10 @@ export function createHallSceneClass(me, HallAgentClass) {
     _fullSyncAgents() {
       const keepIds = new Set()
       this._pendingAgents.forEach(data => {
-        const id = data.agentId || data.personaCode || ''
+        const id = this._validWorldUiSourceId(data?.agentId) ? data.agentId : null
         if (!id) return
         let agent = this._agents.get(id)
-        const personaCode = String(data.personaCode || '').toLowerCase()
+        const personaCode = String(data?.personaCode || '').toLowerCase()
         if (this._availablePersonas && !this._availablePersonas.has(personaCode)) {
           if (agent) {
             me.game.world.removeChild(agent)
@@ -1113,8 +1219,8 @@ export function createHallSceneClass(me, HallAgentClass) {
     _fullSyncAgentSnapshots() {
       const keepIds = new Set()
       this._pendingAgentSnapshots.forEach(snapshot => {
-        const id = snapshot.agentId || ''
-        const personaCode = String(snapshot.personaCode || '').toLowerCase()
+        const id = this._validWorldUiSourceId(snapshot?.agentId) ? snapshot.agentId : null
+        const personaCode = String(snapshot?.personaCode || '').toLowerCase()
         if (!id || !personaCode) return
         if (this._availablePersonas && !this._availablePersonas.has(personaCode)) return
         let agent = this._agents.get(id)
@@ -1320,6 +1426,16 @@ export function createHallSceneClass(me, HallAgentClass) {
         // one transaction. Any mismatch leaves V1 active.
         if (ir.renderSchemaVersion !== '2' || ir.sceneId !== 'juyiting-main') {
           console.warn('[HallScene] V2: assembled IR failed renderSchemaVersion=2 gate')
+          this.deactivateV2()
+          return false
+        }
+        try {
+          const v2Hotspots = this._canonicalizeHotspots(this._mapData, ir.floorRegistry)
+          if (v2Hotspots.snapshot !== this._hotspotSnapshot) {
+            throw new Error('V1/V2 hotspot snapshots differ; marker staging is required')
+          }
+        } catch (error) {
+          this._recordV2Diagnostic('V2_HOTSPOT_CONTRACT_FAILED', 'hotspot', error?.message || String(error))
           this.deactivateV2()
           return false
         }
@@ -2193,6 +2309,16 @@ export function createHallSceneClass(me, HallAgentClass) {
         if (ir.renderSchemaVersion !== '2' || ir.sceneId !== 'juyiting-main') {
           self._recordV2Diagnostic('V2_MAP_REFRESH_GATE_FAILED', 'map-refresh',
             'assembled IR failed renderSchemaVersion=2 gate')
+          return false
+        }
+        try {
+          const refreshedHotspots = self._canonicalizeHotspots(newMapData, ir.floorRegistry)
+          if (!self._hotspotSnapshot || refreshedHotspots.snapshot !== self._hotspotSnapshot) {
+            throw new Error('hotspot snapshot changed; marker staging is required')
+          }
+        } catch (error) {
+          self._recordV2Diagnostic('V2_MAP_REFRESH_HOTSPOT_CHANGED', 'map-refresh',
+            `hotspot refresh rejected: ${error?.message || error}`)
           return false
         }
 
