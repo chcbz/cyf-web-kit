@@ -8,6 +8,7 @@ import {
   HALL_SCENE_REGIONS
 } from '../../constants/juyitingScene.js'
 import { clampPointToRegion } from '../../game/walkableArea.js'
+import { isValidSourceEntityId } from '../../game/occlusion/sourceIdentity.js'
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
@@ -17,6 +18,10 @@ const normalizeAgentId = (agentOrId) => {
   return agentOrId.agentId || agentOrId.personaCode || agentOrId.name || ''
 }
 
+// /agent/map is an authoritative entity boundary. Compatibility fallbacks
+// remain available for UI/event inputs, but must never manufacture map IDs.
+const sourceAgentId = agent => isValidSourceEntityId(agent?.agentId) ? agent.agentId : ''
+
 const asAgentList = (agents) => Array.isArray(agents) ? agents : [agents].filter(Boolean)
 
 const featuredHeroById = Object.fromEntries(HALL_FEATURED_HEROES.map(hero => [hero.agentId, hero]))
@@ -25,7 +30,7 @@ const withFeaturedHeroes = (agents) => {
   const byId = new Map()
   const featuredVisuals = new Set()
   agents.forEach((agent) => {
-    const agentId = normalizeAgentId(agent)
+    const agentId = sourceAgentId(agent)
     if (!agentId) return
     const visualKey = agentVisualKey(agent)
     const featuredHero = featuredHeroById[visualKey] || featuredHeroById[agentId]
@@ -190,14 +195,15 @@ export const useHallScene = ({
   }
 
   const sceneAgents = computed(() => {
-    const agents = withFeaturedHeroes([...(mapAgents?.value || [])])
+    const agents = withFeaturedHeroes([...(mapAgents?.value || [])].filter(agent => sourceAgentId(agent)))
     const selectedId = selectedAgentId.value
     const derived = agents.map((agent, index) => {
+      const agentId = sourceAgentId(agent)
       const seed = agentSeed(agent) + index * 17
       const visualKey = agentVisualKey(agent)
       const visual = HALL_CHARACTER_VISUALS[visualKey] || HALL_CHARACTER_VISUALS.default
-      const transient = transientAgents.value[normalizeAgentId(agent)] || {}
-      const featuredHero = featuredHeroById[visualKey] || featuredHeroById[normalizeAgentId(agent)]
+      const transient = transientAgents.value[agentId] || {}
+      const featuredHero = featuredHeroById[visualKey] || featuredHeroById[agentId]
       const localPatrolRouteId = LOCAL_PATROL_ROUTE_BY_VISUAL_KEY[visualKey]
       const simulationControlled = simulationEnabled && Boolean(localPatrolRouteId)
       const staticRegionId = featuredHero?.regionId || visual.defaultRegion || HALL_CHARACTER_VISUALS.default.defaultRegion
@@ -210,12 +216,12 @@ export const useHallScene = ({
       const patrolRoute = simulationControlled ? [] : buildPatrolRoute(region, seed, point)
       const status = normalizeStatus(agent.status)
       const sceneStatus = sceneStatusFor(status, transient)
-      const selected = selectedId === normalizeAgentId(agent)
+      const selected = selectedId === agentId
       const facing = transient.facing || featuredHero?.facing || (point.x >= region.anchor.x ? 'left' : 'right')
       return {
         ...agent,
         rawAgent: agent,
-        agentId: normalizeAgentId(agent),
+        agentId,
         status: agent.status,
         sceneStatus,
         x: point.x,
@@ -230,7 +236,7 @@ export const useHallScene = ({
         walkableRegion: region,
         selected,
         focused: selected || Boolean(transient.focused),
-        bubble: bubbleFor(normalizeAgentId(agent), transientAgents.value),
+        bubble: bubbleFor(agentId, transientAgents.value),
         recommended: Boolean(transient.recommended),
         featuredHero: Boolean(agent.featuredHero || featuredHero),
         synthetic: Boolean(agent.synthetic),
@@ -370,7 +376,7 @@ export const useHallScene = ({
   }
 
   const markRecommendedAgents = (agentsOrIds = []) => {
-    const mapAgentIds = new Set((mapAgents?.value || []).map(normalizeAgentId))
+    const mapAgentIds = new Set((mapAgents?.value || []).map(sourceAgentId).filter(Boolean))
     asAgentList(agentsOrIds)
       .map(normalizeAgentId)
       .filter(agentId => agentId && mapAgentIds.has(agentId))

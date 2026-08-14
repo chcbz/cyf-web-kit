@@ -1,11 +1,14 @@
 import { expect } from 'chai'
+import { ref } from 'vue'
 import { readFileSync } from 'fs'
 
 import { createHallSceneClass } from '../src/game/scenes/HallScene.js'
+import { useHallScene } from '../src/composables/juyiting/useHallScene.js'
 import { createHallAgentClass } from '../src/game/entities/HallAgent.js'
 import { parseJuyiHallTmx } from '../src/game/tiledMap.js'
 import { ACCEPTED_TMX_SHA256 } from '../src/game/occlusion/hallSceneAssembly.js'
 import { HALL_SCENE_DEPTH_BANDS, hallV2WorldDepth } from '../src/game/occlusion/hallSceneDepthBands.js'
+import { SOURCE_ENTITY_ID_MAX_LENGTH } from '../src/game/occlusion/sourceIdentity.js'
 
 const createFakeMelon = () => {
   const registered = []
@@ -1407,39 +1410,87 @@ describe('HallScene melonJS pointer routing', () => {
   })
 
 
-  it('requires nonblank string agent IDs on map and simulation sync paths', () => {
+  it('keeps strict source IDs through useHallScene sceneAgents into HallScene sync', () => {
+    const maxId = '界'.repeat(SOURCE_ENTITY_ID_MAX_LENGTH)
+    const overlongId = `${maxId}界`
+    const hallScene = useHallScene({
+      mapAgents: ref([
+        { personaCode: 'persona-fallback-must-not-render', name: 'name-fallback-must-not-render', x: 1, y: 1 },
+        { agentId: 0, personaCode: 'zero-must-not-render', x: 1, y: 1 },
+        { agentId: false, personaCode: 'false-must-not-render', x: 1, y: 1 },
+        { agentId: ' \t ', personaCode: 'blank-must-not-render', x: 1, y: 1 },
+        { agentId: overlongId, personaCode: 'overlong-must-not-render', x: 1, y: 1 },
+        { agentId: maxId, personaCode: 'max-valid', x: 1, y: 1 }
+      ]),
+      selectedAgent: ref(null),
+      selectedTask: ref(null),
+      simulationEnabled: false
+    })
+    const publishedIds = hallScene.sceneAgents.value.map(agent => agent.agentId)
+    expect(publishedIds).to.include(maxId)
+    expect(publishedIds).not.to.include.members([
+      'persona-fallback-must-not-render', 'name-fallback-must-not-render',
+      'zero-must-not-render', 'false-must-not-render', 'blank-must-not-render',
+      'overlong-must-not-render', overlongId
+    ])
+
     const me = createFakeMelon()
     const HallScene = createHallSceneClass(me, V2HallAgent)
     const scene = new HallScene()
+    scene.setMapData(modularMapData())
+    scene.syncAgents(hallScene.sceneAgents.value)
+    scene.onResetEvent()
+    expect([...scene._agents.keys()]).to.have.members(publishedIds)
+    expect(scene.getAgent(maxId)).to.exist
+    expect(scene.getAgent('persona-fallback-must-not-render')).to.equal(undefined)
+    expect(scene.getAgent(overlongId)).to.equal(undefined)
+  })
+
+  it('requires bounded nonblank string agent IDs on map and simulation sync paths', () => {
+    const me = createFakeMelon()
+    const HallScene = createHallSceneClass(me, V2HallAgent)
+    const scene = new HallScene()
+    const maxId = '界'.repeat(SOURCE_ENTITY_ID_MAX_LENGTH)
+    const overlongId = `${maxId}界`
     scene.setMapData(modularMapData())
     scene.syncAgents([
       { personaCode: 'persona-fallback-must-not-render', x: 1, y: 1 },
       { agentId: 0, personaCode: 'zero-must-not-render', x: 1, y: 1 },
       { agentId: false, personaCode: 'false-must-not-render', x: 1, y: 1 },
       { agentId: ' \t ', personaCode: 'blank-must-not-render', x: 1, y: 1 },
+      { agentId: overlongId, personaCode: 'overlong-must-not-render', x: 1, y: 1 },
+      { agentId: maxId, personaCode: 'max-valid', x: 1, y: 1 },
       { agentId: 'map-ok', personaCode: 'map-ok', x: 1, y: 1 }
     ])
     scene.onResetEvent()
-    expect([...scene._agents.keys()]).to.deep.equal(['map-ok'])
+    expect([...scene._agents.keys()]).to.deep.equal([maxId, 'map-ok'])
     expect(scene.getAgent('persona-fallback-must-not-render')).to.equal(undefined)
+    expect(scene.getAgent(overlongId)).to.equal(undefined)
 
+    const snapshotMaxId = '照'.repeat(SOURCE_ENTITY_ID_MAX_LENGTH)
+    const snapshotOverlongId = `${snapshotMaxId}照`
     scene.syncAgentSnapshots([
       { personaCode: 'snapshot-fallback-must-not-render', x: 1, y: 1 },
       { agentId: 0, personaCode: 'snapshot-zero-must-not-render', x: 1, y: 1 },
       { agentId: ' ', personaCode: 'snapshot-blank-must-not-render', x: 1, y: 1 },
+      { agentId: snapshotOverlongId, personaCode: 'snapshot-overlong-must-not-render', x: 1, y: 1 },
+      { agentId: snapshotMaxId, personaCode: 'snapshot-max-valid', x: 1, y: 1 },
       { agentId: 'snapshot-ok', personaCode: 'snapshot-ok', x: 1, y: 1 }
     ])
     scene._fullSyncAgentSnapshots()
-    expect([...scene._simulationAgentIds]).to.deep.equal(['snapshot-ok'])
+    expect([...scene._simulationAgentIds]).to.deep.equal([snapshotMaxId, 'snapshot-ok'])
     expect(scene.getAgent('snapshot-fallback-must-not-render')).to.equal(undefined)
+    expect(scene.getAgent(snapshotOverlongId)).to.equal(undefined)
+    expect(scene.getAgent(snapshotMaxId)).to.exist
     expect(scene.getAgent('snapshot-ok')).to.exist
   })
 
-  it('caches long world-ui identities by handle without changing remove/re-add order', () => {
+  it('caches maximum-length world-ui identities by handle and rejects max+1 before encoding', () => {
     const me = createFakeMelon()
     const HallScene = createHallSceneClass(me, class {})
     const scene = new HallScene()
-    const longId = `agent-${'😀'.repeat(128)}`
+    const longId = '😀'.repeat(SOURCE_ENTITY_ID_MAX_LENGTH / 2)
+    const overlongId = `${longId}x`
     const first = { pos: { y: 100 }, drawWorldUi: () => {} }
     let encodeCalls = 0
     const encode = scene._encodeWorldUiStableId.bind(scene)
@@ -1454,6 +1505,11 @@ describe('HallScene melonJS pointer routing', () => {
     scene._worldUiEntries()
     expect(encodeCalls).to.equal(1)
 
+    scene._agents.set(overlongId, { pos: { y: 100 }, drawWorldUi: () => {} })
+    expect(scene._worldUiEntries().map(entry => entry.stableId)).to.deep.equal([firstStableId])
+    expect(scene._worldUiStableId('agent', overlongId)).to.equal(null)
+    expect(encodeCalls).to.equal(1)
+
     scene._agents.delete(longId)
     const readded = { pos: { y: 100 }, drawWorldUi: () => {} }
     scene._agents.set(longId, readded)
@@ -1463,20 +1519,58 @@ describe('HallScene melonJS pointer routing', () => {
     expect(encodeCalls).to.equal(2)
   })
 
-  it('fails closed for duplicate hotspot IDs and unavailable floors', () => {
+  it('fails the whole initial scene closed for invalid hotspot contracts and geometry', () => {
+    const invalidHotspotSets = [
+      [
+        { id: 'same', panel: 'catalog', shape: 'rect', x: 10, y: 10, w: 4, h: 4 },
+        { id: 'same', panel: 'chat', shape: 'rect', x: 20, y: 20, w: 4, h: 4 }
+      ],
+      [{ id: 'unknown-floor', panel: 'catalog', shape: 'rect', x: 10, y: 10, w: 4, h: 4, floorId: 'floor-2' }],
+      [{ id: 'zero-rect', panel: 'catalog', shape: 'rect', x: 10, y: 10, w: 0, h: 4 }],
+      [{ id: 'boolean-rect', panel: 'catalog', shape: 'rect', x: false, y: 10, w: 4, h: 4 }],
+      [{ id: 'missing-rect', panel: 'catalog', shape: 'rect', x: 10, y: 10, h: 4 }],
+      [{ id: 'duplicate-points', panel: 'catalog', shape: 'polygon', x: 10, y: 10, w: 4, h: 4,
+        polygon: [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 1, y: 1 }] }],
+      [{ id: 'zero-area', panel: 'catalog', shape: 'polygon', x: 10, y: 10, w: 4, h: 4,
+        polygon: [{ x: 0, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 2 }] }],
+      [{ id: 'non-finite', panel: 'catalog', shape: 'polygon', x: 10, y: 10, w: 4, h: 4,
+        polygon: [{ x: 0, y: 0 }, { x: 1, y: Infinity }, { x: 2, y: 0 }] }],
+      [{ id: 'x'.repeat(SOURCE_ENTITY_ID_MAX_LENGTH + 1), panel: 'catalog', shape: 'rect', x: 10, y: 10, w: 4, h: 4 }]
+    ]
+
+    invalidHotspotSets.forEach((hotspots) => {
+      const me = createFakeMelon()
+      me.loader.getImage = () => ({ width: 10, height: 10 })
+      const HallScene = createHallSceneClass(me, class {})
+      const scene = new HallScene()
+      let readyCount = 0
+      scene.onReady(() => { readyCount += 1 })
+      scene.setMapData({
+        coordinateWidth: 1664,
+        coordinateHeight: 928,
+        imageLayers: { 'mid-occluders': { resourceName: 'would-publish', width: 10, height: 10 } },
+        tileLayers: [], tilesets: [], hotspots
+      })
+
+      scene.onResetEvent()
+      expect(scene._sceneBuilt).to.equal(false)
+      expect(readyCount).to.equal(0)
+      expect(scene._hotspotSnapshot).to.equal(null)
+      expect(scene._hotspots).to.be.empty
+      expect(scene._imageLayers).to.be.empty
+      expect(scene._imageLayersByName.size).to.equal(0)
+      expect(scene._v2PropRenderables.size).to.equal(0)
+      expect(scene._worldUiOverlay).to.equal(null)
+      expect(me.children).to.be.empty
+    })
+
     const me = createFakeMelon()
     const HallScene = createHallSceneClass(me, class {})
     const scene = new HallScene()
-    const duplicate = {
-      coordinateWidth: 1664, coordinateHeight: 928, imageLayers: {}, tileLayers: [], tilesets: [],
-      hotspots: [
-        { id: 'same', panel: 'catalog', shape: 'rect', x: 10, y: 10, w: 4, h: 4 },
-        { id: 'same', panel: 'chat', shape: 'rect', x: 20, y: 20, w: 4, h: 4 }
-      ]
-    }
-    scene.setMapData(duplicate)
-    scene.onResetEvent()
-    expect(scene._hotspots).to.be.empty
+    const maxId = '点'.repeat(SOURCE_ENTITY_ID_MAX_LENGTH)
+    expect(scene._canonicalizeHotspots({
+      hotspots: [{ id: maxId, panel: 'catalog', shape: 'rect', x: 10, y: 10, w: 4, h: 4 }]
+    }).hotspots[0].id).to.equal(maxId)
 
     const unknownFloor = {
       hotspots: [{ id: 'floor-test', panel: 'catalog', shape: 'rect', x: 10, y: 10, w: 4, h: 4, floorId: 'floor-2' }]
@@ -1630,7 +1724,7 @@ describe('HallScene melonJS pointer routing', () => {
     }
   })
 
-  it('publishes and rolls back active V2 map-refresh world-ui bounds atomically', async () => {
+  it('accepts invariant-preserving refreshes and atomically rejects projection changes or rollback failures', async () => {
     const me = createFakeMelon()
     const mapData = productionV2MapData()
     installProductionImages(me, mapData)
@@ -1659,13 +1753,47 @@ describe('HallScene melonJS pointer routing', () => {
         })
       })
       expect(feedback).to.include('V2 feedback remains visible')
-      const refreshedMap = { ...mapData, coordinateWidth: 1777, coordinateHeight: 999 }
 
+      const refreshedMap = { ...mapData }
       scene.setMapData(refreshedMap)
-      await waitFor(() => scene._mapData === refreshedMap && overlay.width === 1777 && overlay.height === 999)
+      await waitFor(() => scene._mapData === refreshedMap)
       expect(scene.activeRendererMode).to.equal('v2')
+      expect(overlay).to.include({ width: mapData.coordinateWidth, height: mapData.coordinateHeight })
+
+      const oldAssembly = scene._v2Assembly
       const oldMarker = scene._hotspots[0].marker
-      const oldHotspotIds = scene._hotspots.map(({ data }) => data.id)
+      const oldHitArea = scene._hotspots[0].hitArea
+      const oldMarkerGeometry = {
+        x: oldMarker.pos.x,
+        y: oldMarker.pos.y,
+        width: oldMarker.width,
+        height: oldMarker.height,
+        polygon: oldMarker.polygon?.map(point => ({ ...point }))
+      }
+      const oldBounds = { width: overlay.width, height: overlay.height }
+      const changedDimensionsMap = {
+        ...refreshedMap,
+        coordinateWidth: refreshedMap.coordinateWidth + 113,
+        coordinateHeight: refreshedMap.coordinateHeight + 71
+      }
+      scene.setMapData(changedDimensionsMap)
+      await waitFor(() => scene.getV2Diagnostics().some(item => item.code === 'V2_MAP_REFRESH_HOTSPOT_CHANGED'))
+      expect(scene._mapData).to.equal(refreshedMap)
+      expect(scene._v2Assembly).to.equal(oldAssembly)
+      expect(scene._hotspots[0].marker).to.equal(oldMarker)
+      expect(scene._hotspots[0].hitArea).to.equal(oldHitArea)
+      expect({
+        x: oldMarker.pos.x,
+        y: oldMarker.pos.y,
+        width: oldMarker.width,
+        height: oldMarker.height,
+        polygon: oldMarker.polygon?.map(point => ({ ...point }))
+      }).to.deep.equal(oldMarkerGeometry)
+      expect(overlay).to.include(oldBounds)
+      expect(scene.activeRendererMode).to.equal('v2')
+
+      const changedHotspotDiagnosticCount = scene.getV2Diagnostics()
+        .filter(item => item.code === 'V2_MAP_REFRESH_HOTSPOT_CHANGED').length
       const changedHotspotMap = {
         ...refreshedMap,
         hotspots: refreshedMap.hotspots.map((hotspot, index) => index === 0
@@ -1673,23 +1801,29 @@ describe('HallScene melonJS pointer routing', () => {
           : hotspot)
       }
       scene.setMapData(changedHotspotMap)
-      await waitFor(() => scene.getV2Diagnostics().some(item => item.code === 'V2_MAP_REFRESH_HOTSPOT_CHANGED'))
+      await waitFor(() => scene.getV2Diagnostics()
+        .filter(item => item.code === 'V2_MAP_REFRESH_HOTSPOT_CHANGED').length > changedHotspotDiagnosticCount)
       expect(scene._mapData).to.equal(refreshedMap)
+      expect(scene._v2Assembly).to.equal(oldAssembly)
       expect(scene._hotspots[0].marker).to.equal(oldMarker)
-      expect(scene._hotspots.map(({ data }) => data.id)).to.deep.equal(oldHotspotIds)
-      expect(overlay).to.include({ width: 1777, height: 999 })
-      expect(scene.activeRendererMode).to.equal('v2')
+      expect(overlay).to.include(oldBounds)
 
       scene._shadowRenderer = {
         setMapData: () => { throw new Error('shadow refresh failure') },
         dispose: () => {}
       }
-      const failedMap = { ...refreshedMap, coordinateWidth: 1888, coordinateHeight: 777 }
+      const failedMap = {
+        ...refreshedMap,
+        mapProperties: { ...refreshedMap.mapProperties, minZoom: 0.731 }
+      }
       scene.setMapData(failedMap)
       await waitFor(() => scene.getV2Diagnostics().some(item => item.code === 'V2_MAP_REFRESH_FAILED'))
 
       expect(scene._mapData).to.equal(refreshedMap)
-      expect(overlay).to.include({ width: 1777, height: 999 })
+      expect(scene._v2Assembly).to.equal(oldAssembly)
+      expect(scene._hotspots[0].marker).to.equal(oldMarker)
+      expect(scene._hotspots[0].hitArea).to.equal(oldHitArea)
+      expect(overlay).to.include(oldBounds)
       expect(scene.activeRendererMode).to.equal('v2')
     } finally {
       window.__JYT_V2_ENABLED = previousGate

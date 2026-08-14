@@ -13,6 +13,7 @@ import {
   type RuntimeAgentAdapterOptions,
 } from '../../../src/game/occlusion/runtimeAgentAdapter.js'
 import { isStructuredFatalRenderSchemaError, type SceneObject } from '../../../src/game/occlusion/schema.js'
+import { SOURCE_ENTITY_ID_MAX_LENGTH } from '../../../src/game/occlusion/sourceIdentity.js'
 
 // ── Helpers ──
 
@@ -122,6 +123,19 @@ describe('E3 Runtime Agent Adapter - error handling', () => {
     for (const ws of [' ', '  ', '\t', '\n', ' \t\n']) {
       await fatalAssertAsync(() => makeAdapter().create([{ agentId: ws }]), 'AGENT_ID_WHITESPACE_ONLY')
     }
+  })
+
+  it('accepts the shared maximum source ID length and rejects max+1 before create/update/remove', async () => {
+    const maxId = '界'.repeat(SOURCE_ENTITY_ID_MAX_LENGTH)
+    const overlongId = `${maxId}界`
+    const adapter = makeAdapter()
+    const [created] = await adapter.create([{ agentId: maxId }])
+    assert.equal(created.sourceEntityId, maxId)
+
+    await fatalAssertAsync(() => adapter.create([{ agentId: overlongId }]), 'AGENT_ID_TOO_LONG')
+    await fatalAssertAsync(() => adapter.update([{ agentId: overlongId, x: 1 }]), 'AGENT_ID_TOO_LONG')
+    await fatalAssertAsync(() => adapter.remove([overlongId]), 'AGENT_ID_TOO_LONG')
+    assert.equal(adapter.lookup(maxId)?.sourceEntityId, maxId)
   })
 
   it('rejects duplicate agentId within same batch', async () => {

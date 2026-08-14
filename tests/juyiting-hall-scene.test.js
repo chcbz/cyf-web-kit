@@ -4,6 +4,7 @@ import { ref } from 'vue'
 import { HALL_SCENE_HOTSPOTS, HALL_SCENE_REGIONS } from '../src/constants/juyitingScene.js'
 import { useHallScene } from '../src/composables/juyiting/useHallScene.js'
 import { isPointInPolygon } from '../src/game/walkableArea.js'
+import { SOURCE_ENTITY_ID_MAX_LENGTH } from '../src/game/occlusion/sourceIdentity.js'
 
 const normalizeStatus = (status = '') => status.toLowerCase()
 
@@ -42,6 +43,32 @@ describe('useHallScene', () => {
       synthetic: true,
       visualKey: 'wuyong'
     })
+  })
+
+  it('publishes only strict /agent/map source IDs and never falls back to persona or name', () => {
+    const maxId = '界'.repeat(SOURCE_ENTITY_ID_MAX_LENGTH)
+    const overlongId = `${maxId}界`
+    const hallScene = useHallScene({
+      mapAgents: ref([
+        { personaCode: 'persona-fallback', name: 'name-fallback', status: 'online' },
+        { agentId: 0, personaCode: 'zero-fallback', status: 'online' },
+        { agentId: false, personaCode: 'false-fallback', status: 'online' },
+        { agentId: '  ', personaCode: 'blank-fallback', status: 'online' },
+        { agentId: overlongId, personaCode: 'overlong-fallback', status: 'online' },
+        { agentId: maxId, personaCode: 'max-valid', status: 'online' }
+      ]),
+      normalizeStatus,
+      selectedAgent: ref(null),
+      selectedTask: ref(null)
+    })
+
+    const ids = hallScene.sceneAgents.value.map(agent => agent.agentId)
+    expect(ids).to.include(maxId)
+    expect(ids).not.to.include.members([
+      'persona-fallback', 'name-fallback', 'zero-fallback', 'false-fallback',
+      'blank-fallback', 'overlong-fallback', overlongId
+    ])
+    expect(ids.every(id => typeof id === 'string' && id.length > 0 && id.length <= SOURCE_ENTITY_ID_MAX_LENGTH)).to.equal(true)
   })
 
   it('places featured heroes on readable floor anchors with stronger foreground scale', () => {

@@ -3,6 +3,7 @@
 // Frozen contract per §6.2 of juyiting-occlusion-system-design.md.
 
 import { type SceneObject, type Point, type RenderBand, type SortMode, renderSchemaError } from './schema.js'
+import { SOURCE_ENTITY_ID_MAX_LENGTH, isValidSourceEntityId } from './sourceIdentity.js'
 
 // ── Constants ──
 
@@ -494,7 +495,17 @@ export function createRuntimeAgentAdapter(
         'agentId must be a non-empty string',
       )
     }
-    if (raw.trim().length === 0) {
+    if (raw.length > SOURCE_ENTITY_ID_MAX_LENGTH) {
+      throw renderSchemaError(
+        'AGENT_ID_TOO_LONG',
+        sceneId,
+        '(too-long)',
+        'agentId',
+        `agentId 长度不得超过 ${SOURCE_ENTITY_ID_MAX_LENGTH} 个 UTF-16 code unit。`,
+        `agentId exceeds ${SOURCE_ENTITY_ID_MAX_LENGTH} UTF-16 code units (received ${raw.length})`,
+      )
+    }
+    if (!isValidSourceEntityId(raw)) {
       throw renderSchemaError(
         'AGENT_ID_WHITESPACE_ONLY',
         sceneId,

@@ -14,6 +14,7 @@ import { hasV2ActivationEnvelope, assembleV2Scene, computeUnifiedWorldOrder, bui
 import { createRuntimeAgentAdapter, defaultSpawnResolver, defaultChunkResolver } from '../occlusion/runtimeAgentAdapter.js'
 import { createDebugOverlay } from '../occlusion/debugOverlay.js'
 import { HALL_SCENE_DEPTH_BANDS, HALL_SCENE_LEGACY_OCCLUDER_LAYERS, hallV2WorldDepth } from '../occlusion/hallSceneDepthBands.js'
+import { isValidSourceEntityId } from '../occlusion/sourceIdentity.js'
 
 const DEFAULT_INPUT_SNAPSHOT = Object.freeze({ activeGesture: 'none', interactionLocked: false })
 const V2_ROSTER_RETRY_COOLDOWN_MS = 250
@@ -756,22 +757,26 @@ export function createHallSceneClass(me, HallAgentClass) {
 
     _buildScene() {
       if (this._destroyed || this._sceneBuilt) return false
+      const mapData = this._mapData
+      let canonicalHotspots
+      try {
+        // Hotspots own hit geometry and world-ui entries, so their complete
+        // contract must pass before any map child, overlay, or ready signal is
+        // published. V1 has no marker staging transaction to repair a partial
+        // scene after publication.
+        canonicalHotspots = this._canonicalizeHotspots(mapData)
+      } catch (error) {
+        this._hotspotSnapshot = null
+        console.warn('[HallScene] Hotspot contract failed closed:', error?.message || error)
+        return false
+      }
+
       this._initializeViewport()
       const { width: vpW, height: vpH } = this._viewportSize()
       if (vpW <= 0 || vpH <= 0) return false
-      const mapData = this._mapData
       const mapObjects = Array.isArray(mapData?.hotspots) ? mapData.hotspots : []
-      let hotspots = []
-      try {
-        const canonicalHotspots = this._canonicalizeHotspots(mapData)
-        hotspots = canonicalHotspots.hotspots
-        this._hotspotSnapshot = canonicalHotspots.snapshot
-      } catch (error) {
-        // V1 has no transactional marker staging. Refuse the entire interactive
-        // hotspot set rather than silently aliasing duplicate IDs or floors.
-        this._hotspotSnapshot = null
-        console.warn('[HallScene] Hotspot contract failed closed:', error?.message || error)
-      }
+      const hotspots = canonicalHotspots.hotspots
+      this._hotspotSnapshot = canonicalHotspots.snapshot
 
       // Apply TMX map properties (zoom, dimensions) if available
       if (mapData?.mapProperties) {
@@ -862,11 +867,9 @@ export function createHallSceneClass(me, HallAgentClass) {
         const oy = (h.y - h.h / 2) / 100 * vpH
         const ow = h.w / 100 * vpW
         const oh = h.h / 100 * vpH
-        const coordinateWidth = mapData?.coordinateWidth || vpW
-        const coordinateHeight = mapData?.coordinateHeight || vpH
         const drawPolygon = h.polygon?.map(point => ({
-          x: (point.x / coordinateWidth * vpW) - ox,
-          y: (point.y / coordinateHeight * vpH) - oy
+          x: (point.x / canonicalHotspots.projection.coordinateWidth * vpW) - ox,
+          y: (point.y / canonicalHotspots.projection.coordinateHeight * vpH) - oy
         })) || null
 
         const marker = new HotspotMarker(ox, oy, ow, oh, { ...h, drawPolygon })
@@ -931,7 +934,7 @@ export function createHallSceneClass(me, HallAgentClass) {
     }
 
     _validWorldUiSourceId(sourceId) {
-      return typeof sourceId === 'string' && sourceId.length > 0 && sourceId.trim().length > 0
+      return isValidSourceEntityId(sourceId)
     }
 
     _encodeWorldUiStableId(kind, sourceId) {
@@ -964,9 +967,10 @@ export function createHallSceneClass(me, HallAgentClass) {
       return hotspot?.properties?.[field]
     }
 
-    _hotspotFinite(value, fallback, field) {
-      if (value === undefined) return fallback
-      if (value === null || (typeof value === 'string' && value.trim().length === 0)) {
+    _hotspotFinite(value, field) {
+      const valueType = typeof value
+      if ((valueType !== 'number' && valueType !== 'string') ||
+          (valueType === 'string' && value.trim().length === 0)) {
         throw new Error(`hotspot ${field} must be finite`)
       }
       const number = Number(value)
@@ -974,14 +978,47 @@ export function createHallSceneClass(me, HallAgentClass) {
       return number
     }
 
+    _hotspotProjectionDimension(value, fallback, field) {
+      const dimension = value === undefined ? fallback : this._hotspotFinite(value, field)
+      if (!(dimension > 0)) throw new Error(`hotspot ${field} must be greater than zero`)
+      return dimension
+    }
+
+    _validateHotspotPolygon(id, polygon) {
+      if (!polygon || polygon.length < 3) {
+        throw new Error(`hotspot ${id} polygon requires at least three points`)
+      }
+      const uniquePoints = new Set(polygon.map(point => JSON.stringify([point.x, point.y])))
+      if (uniquePoints.size < 3) {
+        throw new Error(`hotspot ${id} polygon requires at least three unique points`)
+      }
+
+      let twiceArea = 0
+      let maxCoordinate = 1
+      for (let index = 0; index < polygon.length; index++) {
+        const point = polygon[index]
+        const next = polygon[(index + 1) % polygon.length]
+        twiceArea += point.x * next.y - next.x * point.y
+        maxCoordinate = Math.max(maxCoordinate, Math.abs(point.x), Math.abs(point.y))
+      }
+      const areaEpsilon = Math.max(1e-9, Number.EPSILON * maxCoordinate * maxCoordinate * polygon.length * 16)
+      if (Math.abs(twiceArea) <= areaEpsilon) {
+        throw new Error(`hotspot ${id} polygon area must be non-zero`)
+      }
+    }
+
     _canonicalizeHotspots(mapData, floorRegistry = null) {
+      const projection = {
+        coordinateWidth: this._hotspotProjectionDimension(mapData?.coordinateWidth, HALL_SCENE_WIDTH, 'coordinateWidth'),
+        coordinateHeight: this._hotspotProjectionDimension(mapData?.coordinateHeight, HALL_SCENE_HEIGHT, 'coordinateHeight')
+      }
       const seenIds = new Set()
       const canonical = []
       const source = Array.isArray(mapData?.hotspots) ? mapData.hotspots : []
       for (const hotspot of source) {
         if (!hotspot || hotspot.type === 'prop' || !hotspot.panel) continue
         const id = hotspot.id
-        if (!this._validWorldUiSourceId(id)) throw new Error('hotspot id must be a non-empty string')
+        if (!this._validWorldUiSourceId(id)) throw new Error('hotspot id must be a valid source entity ID')
         if (seenIds.has(id)) throw new Error(`duplicate hotspot id: ${id}`)
         seenIds.add(id)
 
@@ -989,7 +1026,7 @@ export function createHallSceneClass(me, HallAgentClass) {
         if (typeof panel !== 'string' || panel.trim().length === 0) throw new Error(`hotspot ${id} panel must be a non-empty string`)
         const rawFloorId = this._hotspotField(hotspot, 'floorId')
         const floorId = rawFloorId === undefined ? 'floor-1' : rawFloorId
-        if (!this._validWorldUiSourceId(floorId)) throw new Error(`hotspot ${id} floorId must be a non-empty string`)
+        if (!this._validWorldUiSourceId(floorId)) throw new Error(`hotspot ${id} floorId must be a valid source entity ID`)
         if (floorRegistry) {
           if (!Number.isSafeInteger(floorRegistry[floorId])) throw new Error(`hotspot ${id} references unknown V2 floor: ${floorId}`)
         } else if (floorId !== 'floor-1') {
@@ -997,29 +1034,29 @@ export function createHallSceneClass(me, HallAgentClass) {
         }
 
         const rawElevation = this._hotspotField(hotspot, 'elevation')
-        const elevation = rawElevation === undefined ? 0 : this._hotspotFinite(rawElevation, 0, `${id}.elevation`)
+        const elevation = rawElevation === undefined ? 0 : this._hotspotFinite(rawElevation, `${id}.elevation`)
         if (!Number.isSafeInteger(elevation)) throw new Error(`hotspot ${id} elevation must be an integer`)
-        const x = this._hotspotFinite(hotspot.x, 0, `${id}.x`)
-        const y = this._hotspotFinite(hotspot.y, 0, `${id}.y`)
-        const w = this._hotspotFinite(hotspot.w, 0, `${id}.w`)
-        const h = this._hotspotFinite(hotspot.h, 0, `${id}.h`)
-        if (w < 0 || h < 0) throw new Error(`hotspot ${id} geometry must not be negative`)
+        const x = this._hotspotFinite(hotspot.x, `${id}.x`)
+        const y = this._hotspotFinite(hotspot.y, `${id}.y`)
+        const w = this._hotspotFinite(hotspot.w, `${id}.w`)
+        const h = this._hotspotFinite(hotspot.h, `${id}.h`)
+        if (!(w > 0) || !(h > 0)) throw new Error(`hotspot ${id} geometry width and height must be greater than zero`)
         if (hotspot.shape !== undefined && hotspot.shape !== 'rect' && hotspot.shape !== 'polygon') {
           throw new Error(`hotspot ${id} has unsupported shape: ${hotspot.shape}`)
         }
         const shape = hotspot.shape === 'polygon' ? 'polygon' : 'rect'
         if (hotspot.polygon != null && !Array.isArray(hotspot.polygon)) throw new Error(`hotspot ${id} polygon must be an array`)
         const polygon = hotspot.polygon == null ? null : hotspot.polygon.map((point, index) => ({
-          x: this._hotspotFinite(point?.x, 0, `${id}.polygon[${index}].x`),
-          y: this._hotspotFinite(point?.y, 0, `${id}.polygon[${index}].y`)
+          x: this._hotspotFinite(point?.x, `${id}.polygon[${index}].x`),
+          y: this._hotspotFinite(point?.y, `${id}.polygon[${index}].y`)
         }))
-        if (shape === 'polygon' && (!polygon || polygon.length < 3)) throw new Error(`hotspot ${id} polygon requires at least three points`)
+        if (shape === 'polygon') this._validateHotspotPolygon(id, polygon)
         const rawSortAnchor = hotspot.sortAnchor
         const sortAnchorX = this._hotspotField(hotspot, 'sortAnchorX') ?? rawSortAnchor?.x
         const sortAnchorY = this._hotspotField(hotspot, 'sortAnchorY') ?? rawSortAnchor?.y
         const sortAnchor = {
-          x: sortAnchorX === undefined ? null : this._hotspotFinite(sortAnchorX, 0, `${id}.sortAnchor.x`),
-          y: sortAnchorY === undefined ? null : this._hotspotFinite(sortAnchorY, 0, `${id}.sortAnchor.y`)
+          x: sortAnchorX === undefined ? null : this._hotspotFinite(sortAnchorX, `${id}.sortAnchor.x`),
+          y: sortAnchorY === undefined ? null : this._hotspotFinite(sortAnchorY, `${id}.sortAnchor.y`)
         }
         const data = {
           ...hotspot, id, panel, shape, x, y, w, h, polygon, floorId, elevation,
@@ -1030,10 +1067,13 @@ export function createHallSceneClass(me, HallAgentClass) {
           sortAnchor, geometry: { shape, x, y, w, h, polygon }, data
         })
       }
-      const snapshot = JSON.stringify(canonical.map(({ id, panel, type, floorId, elevation, sortAnchor, geometry }) => (
-        { id, panel, type, floorId, elevation, sortAnchor, geometry }
-      )))
-      return { hotspots: canonical.map(item => item.data), snapshot }
+      const snapshot = JSON.stringify({
+        projection,
+        hotspots: canonical.map(({ id, panel, type, floorId, elevation, sortAnchor, geometry }) => (
+          { id, panel, type, floorId, elevation, sortAnchor, geometry }
+        ))
+      })
+      return { hotspots: canonical.map(item => item.data), projection, snapshot }
     }
 
     _worldUiFloorOrder(floorId) {
