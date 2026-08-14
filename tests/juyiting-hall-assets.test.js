@@ -69,6 +69,18 @@ describe('Juyiting hall scene assets', () => {
     })
     expect(resources.map(resource => resource.name)).not.to.include('prop-gate')
     expect(resources.map(resource => resource.src).join('\n')).not.to.include('gate')
+
+    const v2Atlases = resources.filter(resource => resource.src.includes('/images/occluders/'))
+    expect(v2Atlases).to.have.length(6)
+    expect(v2Atlases.map(resource => resource.name).sort()).to.deep.equal([
+      'center-v2',
+      'east-lower-v2',
+      'east-upper-v2',
+      'entrance-v2',
+      'west-lower-v2',
+      'west-upper-v2'
+    ])
+    expect(v2Atlases.every(resource => !resource.name.includes('/') && !resource.name.endsWith('.png'))).to.equal(true)
   })
 
   it('keeps TMX-derived image layer resources backed by public files', () => {
@@ -84,5 +96,72 @@ describe('Juyiting hall scene assets', () => {
     expect(source).not.to.include('hallSceneLayers')
     expect(source).not.to.include('HALL_SCENE_LAYER_RESOURCES')
     expect(source).not.to.include('HALL_PROP_CROPPED_RESOURCES')
+  })
+
+  it('deduplicates image resources with identical name and src idempotently', () => {
+    const mapData = {
+      tilesets: [
+        { tilesetResourceName: 'duplicate-sheet', imageSource: '/juyiting/images/occluders/center-v2.png' },
+        { tilesetResourceName: 'duplicate-sheet', imageSource: '/juyiting/images/occluders/center-v2.png' }
+      ],
+      imageLayers: {},
+      layers: []
+    }
+    const resources = buildHallMapResources(mapData)
+    const matches = resources.filter(resource => resource.name === 'duplicate-sheet')
+    expect(matches).to.have.length(1)
+    expect(matches[0]).to.deep.equal({
+      name: 'duplicate-sheet',
+      type: 'image',
+      src: '/juyiting/images/occluders/center-v2.png'
+    })
+  })
+
+  it('throws fail-closed when the same resource name maps to different srcs', () => {
+    const mapData = {
+      tilesets: [
+        { tilesetResourceName: 'colliding-sheet', imageSource: '/juyiting/images/a/colliding-sheet.png' },
+        { tilesetResourceName: 'colliding-sheet', imageSource: '/juyiting/images/b/colliding-sheet.png' }
+      ],
+      imageLayers: {},
+      layers: []
+    }
+    let caught
+    try {
+      buildHallMapResources(mapData)
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).to.be.instanceOf(Error)
+    expect(caught.message).to.include('colliding-sheet')
+    expect(caught.message).to.include('/juyiting/images/a/colliding-sheet.png')
+    expect(caught.message).to.include('/juyiting/images/b/colliding-sheet.png')
+  })
+
+  it('throws fail-closed when two V2 atlas assetRefs share a basename across directories', () => {
+    const mapData = {
+      tilesets: [],
+      imageLayers: {},
+      layers: [
+        {
+          type: 'objectgroup',
+          name: 'v2-fragments-occluders',
+          objects: [
+            { properties: { assetRef: 'images/occluders/legacy/center-v2.png' } },
+            { properties: { assetRef: 'images/occluders/retry/center-v2.png' } }
+          ]
+        }
+      ]
+    }
+    let caught
+    try {
+      buildHallMapResources(mapData)
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).to.be.instanceOf(Error)
+    expect(caught.message).to.include('center-v2')
+    expect(caught.message).to.include('/juyiting/images/occluders/legacy/center-v2.png')
+    expect(caught.message).to.include('/juyiting/images/occluders/retry/center-v2.png')
   })
 })

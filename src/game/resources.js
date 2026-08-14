@@ -20,15 +20,29 @@ export const buildPersonaSpriteResource = definition => ({
 
 const addImageResource = (resources, seen, name, src) => {
   if (!name || !src) return
-  const key = `${name}\u0000${src}`
-  if (seen.has(key)) return
-  seen.add(key)
+  const existingSrc = seen.get(name)
+  if (existingSrc === src) {
+    // Same resource name + same src: idempotent dedup.
+    return
+  }
+  if (existingSrc !== undefined) {
+    // melonJS registers images by name (basename-without-extension) in
+    // loader.imgList, and getImage() looks up by basename, so two different
+    // sources under the same name would silently overwrite each other at
+    // runtime. Fail closed instead of hiding the collision.
+    throw new Error(
+      `Juyiting resource name collision: "${name}" maps to both "${existingSrc}" and "${src}". ` +
+      'melonJS keys images by name (basename without extension), so the same name with ' +
+      'different srcs would silently overwrite one of them.'
+    )
+  }
+  seen.set(name, src)
   resources.push({ name, type: 'image', src })
 }
 
 export const buildHallMapResources = (mapData) => {
   const resources = []
-  const seen = new Set()
+  const seen = new Map()
 
   ;(mapData?.tilesets || []).forEach(tileset => {
     addImageResource(
@@ -61,8 +75,11 @@ export const buildHallMapResources = (mapData) => {
     }
   }
   for (const assetRef of fragAssets) {
-    // Resource name = assetRef path (melonJS uses name for getImage lookup)
-    addImageResource(resources, seen, assetRef, '/juyiting/' + assetRef.replace(/^\/+/, ''))
+    // melonJS getImage() normalizes lookups to basename-without-extension.
+    // Register atlas images under that same key; using the full assetRef here
+    // downloads successfully but leaves the image unreachable at runtime.
+    const resourceName = assetRef.split('/').pop()?.replace(/\.[^.]+$/, '') || assetRef
+    addImageResource(resources, seen, resourceName, '/juyiting/' + assetRef.replace(/^\/+/, ''))
   }
 
   return resources
