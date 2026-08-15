@@ -64,7 +64,27 @@ const createFakeMelon = () => {
       this.pos = { x, y }
       this.width = w
       this.height = h
-      this.anchorPoint = { set: () => {} }
+      this.anchorPoint = {
+        x: 0.5,
+        y: 0.5,
+        set: (anchorX, anchorY) => {
+          this.anchorPoint.x = anchorX
+          this.anchorPoint.y = anchorY
+        }
+      }
+    }
+
+    // Mirror the melonJS Renderable lifecycle relevant to fragment placement:
+    // preDraw translates by the negative pixel anchor before draw() reaches the
+    // Canvas context. Older tests called draw() directly and could not detect
+    // the default (0.5, 0.5) half-size shift.
+    preDraw(renderer) {
+      renderer.save()
+      renderer.translate(-this.width * this.anchorPoint.x, -this.height * this.anchorPoint.y)
+    }
+
+    postDraw(renderer) {
+      renderer.restore()
     }
 
     getBounds() {
@@ -280,6 +300,63 @@ const runPendingFrames = (frames, now) => {
     frames.delete(id)
     callback(now)
   })
+}
+
+const renderFragmentDestination = handle => {
+  const transforms = [{ x: 0, y: 0 }]
+  let destination = null
+  const renderer = {
+    save() {
+      transforms.push({ ...transforms.at(-1) })
+    },
+    restore() {
+      transforms.pop()
+    },
+    translate(x, y) {
+      transforms.at(-1).x += x
+      transforms.at(-1).y += y
+    },
+    getContext() {
+      return {
+        drawImage(...args) {
+          const [, , , , , x, y, width, height] = args
+          const transform = transforms.at(-1)
+          destination = { x: x + transform.x, y: y + transform.y, width, height }
+        }
+      }
+    }
+  }
+
+  handle.preDraw(renderer)
+  handle.draw(renderer)
+  handle.postDraw(renderer)
+  return destination
+}
+
+const representativeFragments = fragments => {
+  const sorted = [...fragments].sort((left, right) => (
+    left.destinationRect.width * left.destinationRect.height
+      - right.destinationRect.width * right.destinationRect.height
+  ))
+  const fragment207 = fragments.find(fragment => (
+    fragment.stableId === 'jyt.occ.center.wall-sconce-01.v2'
+  ))
+  return [fragment207, sorted[Math.floor(sorted.length / 2)], sorted.at(-1)]
+}
+
+const expectFragmentDestinations = (scene, phase) => {
+  const fragments = representativeFragments(scene._v2Assembly.canonicalIr.fragments)
+  expect(fragments, `${phase}: representative fragments`).not.to.include(undefined)
+  for (const fragment of fragments) {
+    const handle = scene._v2RenderableHandles.get(fragment.stableId)
+    expect(handle, `${phase}: ${fragment.stableId} handle`).to.exist
+    expect(handle.anchorPoint, `${phase}: ${fragment.stableId} anchor`).to.include({ x: 0, y: 0 })
+    expect(renderFragmentDestination(handle), `${phase}: ${fragment.stableId} destination`)
+      .to.deep.equal(fragment.destinationRect)
+  }
+  const fragment207 = fragments[0]
+  expect(renderFragmentDestination(scene._v2RenderableHandles.get(fragment207.stableId)), `${phase}: fragment-207`)
+    .to.deep.equal({ x: 1112, y: 230, width: 18, height: 54 })
 }
 
 describe('HallScene melonJS pointer routing', () => {
@@ -1074,6 +1151,45 @@ describe('HallScene melonJS pointer routing', () => {
     me.canvas.dispatch('pointermove', { pointerId: 2, pointerType: 'touch', clientX: 260, clientY: 100, preventDefault: () => {} })
 
     expect(scene.getTransform().zoom).to.equal(1.344)
+  })
+
+  it('keeps fragment Canvas destinations at TMX top-left across activation, roster reload, and map refresh', async () => {
+    const me = createFakeMelon()
+    const mapData = productionV2MapData()
+    installProductionImages(me, mapData)
+    const HallScene = createHallSceneClass(me, V2HallAgent)
+    const scene = new HallScene()
+    const previousGate = window.__JYT_V2_ENABLED
+    window.__JYT_V2_ENABLED = true
+    try {
+      scene.setTmxSha256(ACCEPTED_TMX_SHA256)
+      scene.setMapData(mapData)
+      scene.syncAgents([{ agentId: 'a', personaCode: 'a', x: 300, y: 200 }])
+      scene.onResetEvent()
+      scene.update(16)
+      await waitFor(() => scene.activeRendererMode === 'v2')
+      expectFragmentDestinations(scene, 'initial activation')
+
+      const initialHandles = scene._v2RenderableHandles
+      scene.syncAgents([
+        { agentId: 'a', personaCode: 'a', x: 300, y: 200 },
+        { agentId: 'b', personaCode: 'b', x: 420, y: 360 }
+      ])
+      scene.update(16)
+      await waitFor(() => scene._v2AgentAdapter?.sourceEntityIds.includes('b'))
+      expect(scene._v2RenderableHandles).not.to.equal(initialHandles)
+      expectFragmentDestinations(scene, 'roster reload')
+
+      const rosterHandles = scene._v2RenderableHandles
+      const refreshedMap = { ...mapData }
+      scene.setMapData(refreshedMap)
+      await waitFor(() => scene._mapData === refreshedMap)
+      expect(scene._v2RenderableHandles).not.to.equal(rosterHandles)
+      expectFragmentDestinations(scene, 'map refresh')
+    } finally {
+      window.__JYT_V2_ENABLED = previousGate
+      await scene.deactivateV2()
+    }
   })
 
   it('atomically maps V2 above base, removes legacy duplicate layers, and restores V1 ownership', async () => {

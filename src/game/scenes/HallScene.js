@@ -1772,6 +1772,7 @@ export function createHallSceneClass(me, HallAgentClass) {
         constructor() {
           super(f.destinationRect.x, f.destinationRect.y,
             f.destinationRect.width, f.destinationRect.height)
+          this.anchorPoint.set(0, 0)
           this._img = image
           this._sx = f.sourceRect.x
           this._sy = f.sourceRect.y
