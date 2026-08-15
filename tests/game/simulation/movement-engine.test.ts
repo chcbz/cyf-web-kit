@@ -92,6 +92,31 @@ describe('movement engine', () => {
     assert.equal(engine.snapshots()[0]?.y, 60)
   })
 
+  it('prefers a non-reversing local patrol slot across consecutive commands', () => {
+    const map = runtime()
+    map.slots = [
+      map.slots[0],
+      { stableId: 'parking-council', slotId: 'parking-council', regionId: 'council-table',
+        point: { x: 100, y: 0 }, kind: 'parking' },
+      { stableId: 'parking-bounty-reverse', slotId: 'parking-bounty-reverse', regionId: 'bounty-board',
+        point: { x: 0, y: 0 }, kind: 'parking' },
+      { stableId: 'parking-bounty-smooth', slotId: 'parking-bounty-smooth', regionId: 'bounty-board',
+        point: { x: 100, y: 100 }, kind: 'parking' },
+    ]
+    const engine = createMovementEngine(map, manifest(), { now: () => 1_000 })
+    engine.setLocalPatrols([{
+      agentId: 'agent-songjiang', personaCode: 'songjiang', routeId: 'songjiang-loop',
+    }])
+
+    engine.update(1)
+    engine.update(2_000)
+    engine.update(2_000)
+
+    assert.equal(engine.snapshots()[0]?.regionId, 'bounty-board')
+    assert.equal(engine.snapshots()[0]?.x, 100)
+    assert.equal(engine.snapshots()[0]?.y, 100)
+  })
+
   it('selects the downward sprite direction for a vertical route', () => {
     const engine = createMovementEngine(runtime(), manifest())
 

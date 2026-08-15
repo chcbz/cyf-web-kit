@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1664" height="928" viewBox="0 0 1664 928" data-generation-id="e69a6ed5067faea1b3f13e6ce984b8e341798f22a9400109c77d4a476423680e" role="img" aria-labelledby="map-title map-description">
+<svg xmlns="http://www.w3.org/2000/svg" width="1664" height="928" viewBox="0 0 1664 928" data-generation-id="99b9fb0595e282b47821bb539ceb4654c33c456262c06890595c8b20ada8b672" role="img" aria-labelledby="map-title map-description">
   <title id="map-title">Juyiting map preview</title>
   <desc id="map-description">juyiting-main · graph juyiting-main-v2-candidate-final · sprites persona-sheets-v1</desc>
   <defs>
@@ -22,6 +22,14 @@
     <text class="business-label" x="880" y="504">Council table</text>
     <polygon class="business-region" points="640,656 864,656 864,864 640,864"><title>Gate patrol (jyt-region-gate-v1)</title></polygon>
     <text class="business-label" x="752" y="760">Gate patrol</text>
+    <polygon class="business-region" points="960,384 1080,384 1080,448 960,448"><title>Northeast hall patrol (jyt-region-hall-patrol-northeast-v1)</title></polygon>
+    <text class="business-label" x="1020" y="416">Northeast hall patrol</text>
+    <polygon class="business-region" points="680,384 800,384 800,448 680,448"><title>Northwest hall patrol (jyt-region-hall-patrol-northwest-v1)</title></polygon>
+    <text class="business-label" x="740" y="416">Northwest hall patrol</text>
+    <polygon class="business-region" points="960,584 1080,584 1080,648 960,648"><title>Southeast hall patrol (jyt-region-hall-patrol-southeast-v1)</title></polygon>
+    <text class="business-label" x="1020" y="616">Southeast hall patrol</text>
+    <polygon class="business-region" points="680,584 800,584 800,648 680,648"><title>Southwest hall patrol (jyt-region-hall-patrol-southwest-v1)</title></polygon>
+    <text class="business-label" x="740" y="616">Southwest hall patrol</text>
     <polygon class="business-region" points="1416,552 1640,552 1640,824 1416,824"><title>Library shelf (jyt-region-library-shelf-v1)</title></polygon>
     <text class="business-label" x="1528" y="688">Library shelf</text>
     <polygon class="business-region" points="760,176 1000,176 1000,360 760,360"><title>Main seat (jyt-region-main-seat-v1)</title></polygon>

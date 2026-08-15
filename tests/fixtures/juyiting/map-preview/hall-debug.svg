@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1664" height="928" viewBox="0 0 1664 928" data-generation-id="e69a6ed5067faea1b3f13e6ce984b8e341798f22a9400109c77d4a476423680e" role="img" aria-labelledby="map-title map-description">
+<svg xmlns="http://www.w3.org/2000/svg" width="1664" height="928" viewBox="0 0 1664 928" data-generation-id="99b9fb0595e282b47821bb539ceb4654c33c456262c06890595c8b20ada8b672" role="img" aria-labelledby="map-title map-description">
   <title id="map-title">Juyiting map preview</title>
   <desc id="map-description">juyiting-main · graph juyiting-main-v2-candidate-final · sprites persona-sheets-v1</desc>
   <defs>
@@ -30,6 +30,14 @@
     <text class="business-label" x="880" y="504">Council table</text>
     <polygon class="business-region" points="640,656 864,656 864,864 640,864"><title>Gate patrol (jyt-region-gate-v1)</title></polygon>
     <text class="business-label" x="752" y="760">Gate patrol</text>
+    <polygon class="business-region" points="960,384 1080,384 1080,448 960,448"><title>Northeast hall patrol (jyt-region-hall-patrol-northeast-v1)</title></polygon>
+    <text class="business-label" x="1020" y="416">Northeast hall patrol</text>
+    <polygon class="business-region" points="680,384 800,384 800,448 680,448"><title>Northwest hall patrol (jyt-region-hall-patrol-northwest-v1)</title></polygon>
+    <text class="business-label" x="740" y="416">Northwest hall patrol</text>
+    <polygon class="business-region" points="960,584 1080,584 1080,648 960,648"><title>Southeast hall patrol (jyt-region-hall-patrol-southeast-v1)</title></polygon>
+    <text class="business-label" x="1020" y="616">Southeast hall patrol</text>
+    <polygon class="business-region" points="680,584 800,584 800,648 680,648"><title>Southwest hall patrol (jyt-region-hall-patrol-southwest-v1)</title></polygon>
+    <text class="business-label" x="740" y="616">Southwest hall patrol</text>
     <polygon class="business-region" points="1416,552 1640,552 1640,824 1416,824"><title>Library shelf (jyt-region-library-shelf-v1)</title></polygon>
     <text class="business-label" x="1528" y="688">Library shelf</text>
     <polygon class="business-region" points="760,176 1000,176 1000,360 760,360"><title>Main seat (jyt-region-main-seat-v1)</title></polygon>
@@ -178,6 +186,54 @@
     <text class="debug-label debug-small" x="827" y="765">jyt-slot-gate-parking-v2 · parking</text>
     <rect class="slot slot-parking" data-stable-id="jyt-slot-gate-parking-v3" x="849" y="753" width="14" height="14" rx="3"><title>jyt-slot-gate-parking-v3 · parking · gate-parking-3</title></rect>
     <text class="debug-label debug-small" x="867" y="765">jyt-slot-gate-parking-v3 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-northeast-1-v1" x="973" y="393" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-northeast-1-v1 · parking · hall-patrol-northeast-1</title></rect>
+    <text class="debug-label debug-small" x="991" y="405">jyt-slot-hall-patrol-northeast-1-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-northeast-2-v1" x="1009" y="393" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-northeast-2-v1 · parking · hall-patrol-northeast-2</title></rect>
+    <text class="debug-label debug-small" x="1027" y="405">jyt-slot-hall-patrol-northeast-2-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-northeast-3-v1" x="1045" y="393" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-northeast-3-v1 · parking · hall-patrol-northeast-3</title></rect>
+    <text class="debug-label debug-small" x="1063" y="405">jyt-slot-hall-patrol-northeast-3-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-northeast-4-v1" x="973" y="425" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-northeast-4-v1 · parking · hall-patrol-northeast-4</title></rect>
+    <text class="debug-label debug-small" x="991" y="437">jyt-slot-hall-patrol-northeast-4-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-northeast-5-v1" x="1009" y="425" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-northeast-5-v1 · parking · hall-patrol-northeast-5</title></rect>
+    <text class="debug-label debug-small" x="1027" y="437">jyt-slot-hall-patrol-northeast-5-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-northeast-6-v1" x="1045" y="425" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-northeast-6-v1 · parking · hall-patrol-northeast-6</title></rect>
+    <text class="debug-label debug-small" x="1063" y="437">jyt-slot-hall-patrol-northeast-6-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-northwest-1-v1" x="693" y="393" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-northwest-1-v1 · parking · hall-patrol-northwest-1</title></rect>
+    <text class="debug-label debug-small" x="711" y="405">jyt-slot-hall-patrol-northwest-1-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-northwest-2-v1" x="729" y="393" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-northwest-2-v1 · parking · hall-patrol-northwest-2</title></rect>
+    <text class="debug-label debug-small" x="747" y="405">jyt-slot-hall-patrol-northwest-2-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-northwest-3-v1" x="765" y="393" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-northwest-3-v1 · parking · hall-patrol-northwest-3</title></rect>
+    <text class="debug-label debug-small" x="783" y="405">jyt-slot-hall-patrol-northwest-3-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-northwest-4-v1" x="693" y="425" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-northwest-4-v1 · parking · hall-patrol-northwest-4</title></rect>
+    <text class="debug-label debug-small" x="711" y="437">jyt-slot-hall-patrol-northwest-4-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-northwest-5-v1" x="729" y="425" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-northwest-5-v1 · parking · hall-patrol-northwest-5</title></rect>
+    <text class="debug-label debug-small" x="747" y="437">jyt-slot-hall-patrol-northwest-5-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-northwest-6-v1" x="765" y="425" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-northwest-6-v1 · parking · hall-patrol-northwest-6</title></rect>
+    <text class="debug-label debug-small" x="783" y="437">jyt-slot-hall-patrol-northwest-6-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-southeast-1-v1" x="973" y="593" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-southeast-1-v1 · parking · hall-patrol-southeast-1</title></rect>
+    <text class="debug-label debug-small" x="991" y="605">jyt-slot-hall-patrol-southeast-1-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-southeast-2-v1" x="1009" y="593" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-southeast-2-v1 · parking · hall-patrol-southeast-2</title></rect>
+    <text class="debug-label debug-small" x="1027" y="605">jyt-slot-hall-patrol-southeast-2-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-southeast-3-v1" x="1045" y="593" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-southeast-3-v1 · parking · hall-patrol-southeast-3</title></rect>
+    <text class="debug-label debug-small" x="1063" y="605">jyt-slot-hall-patrol-southeast-3-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-southeast-4-v1" x="973" y="625" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-southeast-4-v1 · parking · hall-patrol-southeast-4</title></rect>
+    <text class="debug-label debug-small" x="991" y="637">jyt-slot-hall-patrol-southeast-4-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-southeast-5-v1" x="1009" y="625" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-southeast-5-v1 · parking · hall-patrol-southeast-5</title></rect>
+    <text class="debug-label debug-small" x="1027" y="637">jyt-slot-hall-patrol-southeast-5-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-southeast-6-v1" x="1045" y="625" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-southeast-6-v1 · parking · hall-patrol-southeast-6</title></rect>
+    <text class="debug-label debug-small" x="1063" y="637">jyt-slot-hall-patrol-southeast-6-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-southwest-1-v1" x="693" y="593" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-southwest-1-v1 · parking · hall-patrol-southwest-1</title></rect>
+    <text class="debug-label debug-small" x="711" y="605">jyt-slot-hall-patrol-southwest-1-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-southwest-2-v1" x="729" y="593" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-southwest-2-v1 · parking · hall-patrol-southwest-2</title></rect>
+    <text class="debug-label debug-small" x="747" y="605">jyt-slot-hall-patrol-southwest-2-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-southwest-3-v1" x="765" y="593" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-southwest-3-v1 · parking · hall-patrol-southwest-3</title></rect>
+    <text class="debug-label debug-small" x="783" y="605">jyt-slot-hall-patrol-southwest-3-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-southwest-4-v1" x="693" y="625" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-southwest-4-v1 · parking · hall-patrol-southwest-4</title></rect>
+    <text class="debug-label debug-small" x="711" y="637">jyt-slot-hall-patrol-southwest-4-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-southwest-5-v1" x="729" y="625" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-southwest-5-v1 · parking · hall-patrol-southwest-5</title></rect>
+    <text class="debug-label debug-small" x="747" y="637">jyt-slot-hall-patrol-southwest-5-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-hall-patrol-southwest-6-v1" x="765" y="625" width="14" height="14" rx="3"><title>jyt-slot-hall-patrol-southwest-6-v1 · parking · hall-patrol-southwest-6</title></rect>
+    <text class="debug-label debug-small" x="783" y="637">jyt-slot-hall-patrol-southwest-6-v1 · parking</text>
     <rect class="slot slot-home" data-stable-id="jyt-slot-husanniang-home-v1" x="1075" y="587" width="14" height="14" rx="3"><title>jyt-slot-husanniang-home-v1 · home · husanniang-home</title></rect>
     <text class="debug-label debug-small" x="1093" y="599">jyt-slot-husanniang-home-v1 · home</text>
     <rect class="slot slot-parking" data-stable-id="jyt-slot-library-parking-v1" x="1425" y="673" width="14" height="14" rx="3"><title>jyt-slot-library-parking-v1 · parking · library-shelf-parking-1</title></rect>

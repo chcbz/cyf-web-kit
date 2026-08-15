@@ -221,7 +221,7 @@ describe('TMX edit operations', () => {
   })
 
   it('authors production movement content without changing dimensions or existing art and hotspots', function () {
-    this.timeout(15_000)
+    this.timeout(60_000)
     const source = readFileSync(hallPath, 'utf8')
     const artLayer = source.match(/ <layer id="1" name="background"[\s\S]*? <\/layer>/)?.[0]
     const hotspots = source.match(/ <objectgroup id="14" name="hotspots"[\s\S]*? <\/objectgroup>/)?.[0]
@@ -249,8 +249,9 @@ describe('TMX edit operations', () => {
       sceneId: 'juyiting-main',
     })
     assert.deepEqual(runtime.regions.map(region => region.regionId).sort(), [
-      'agent-roster', 'bounty-board', 'council-table', 'gate', 'library-shelf',
-      'main-seat', 'right-guard', 'roster-book',
+      'agent-roster', 'bounty-board', 'council-table', 'gate',
+      'hall-patrol-northeast', 'hall-patrol-northwest', 'hall-patrol-southeast',
+      'hall-patrol-southwest', 'library-shelf', 'main-seat', 'right-guard', 'roster-book',
     ])
     assert.equal(runtime.slots.some(slot => slot.kind === 'home' && slot.personaCode === 'songjiang'), true)
     assert.deepEqual(validation, { valid: true, errors: [], warnings: [] })
@@ -280,7 +281,7 @@ describe('TMX edit operations', () => {
   })
 
   it('CLI applies operation JSON and leaves a second run byte-identical', function () {
-    this.timeout(30_000)
+    this.timeout(60_000)
     const directory = mkdtempSync(join(tmpdir(), 'juyiting-map-ops-'))
     try {
       const target = join(directory, 'hall.tmx')

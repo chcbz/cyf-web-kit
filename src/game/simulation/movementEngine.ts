@@ -67,10 +67,13 @@ interface AgentRuntime {
   snapshot: AgentSnapshot
   active?: ActiveMovement
   reservedSlotId?: string
+  lastTravelVector?: MapPoint
 }
 
 const EPSILON = 1e-9
 const DEFAULT_ARRIVAL_THRESHOLD = 8
+const HARD_CROSS_COMMAND_TURN_DEGREES = 120
+const CROSS_COMMAND_TURN_PENALTY_PER_DEGREE = 0.5
 
 export function createMovementEngine(
   map: MapRuntimeData,
@@ -311,9 +314,21 @@ function activate(
   const origin = { x: agent.snapshot.x, y: agent.snapshot.y }
   const scoredSlots = slots.available(command.targetRegionId, command).flatMap(slot => {
     const path = pathfinder.find(origin, slot.point, { colliderWidth: definition.collider.width })
-    return path.status === 'found' ? [{ slot, path }] : []
+    if (path.status !== 'found') return []
+    const turnDegrees = command.source === 'local'
+      ? directionChangeDegrees(agent.lastTravelVector, firstTravelVector(path.points))
+      : 0
+    return [{
+      slot,
+      path,
+      turnDegrees,
+      hardCrossCommandTurn: turnDegrees > HARD_CROSS_COMMAND_TURN_DEGREES + EPSILON,
+      continuityCost: path.cost + turnDegrees * CROSS_COMMAND_TURN_PENALTY_PER_DEGREE,
+    }]
   }).sort((left, right) => (
-    left.path.cost - right.path.cost
+    Number(left.hardCrossCommandTurn) - Number(right.hardCrossCommandTurn)
+    || left.continuityCost - right.continuityCost
+    || left.path.cost - right.path.cost
     || compareSlotChoice(left.slot, right.slot)
   ))
   const selected = scoredSlots[0]
@@ -406,6 +421,7 @@ function arrive(
   if (!active) return
   agent.snapshot.x = active.targetSlot.point.x
   agent.snapshot.y = active.targetSlot.point.y
+  agent.lastTravelVector = finalTravelVector(active.path) ?? agent.lastTravelVector
   agent.snapshot.animation = 'idle'
   agent.snapshot.phase = 'arrived'
   agent.snapshot.regionId = active.targetSlot.regionId
@@ -464,6 +480,42 @@ function initialFacing(points: readonly MapPoint[], fallback: PersonaDirection):
     if (Math.hypot(dx, dy) > EPSILON) return resolvePersonaDirectionFromDelta(dx, dy, fallback)
   }
   return fallback
+}
+
+
+function firstTravelVector(points: readonly MapPoint[]): MapPoint | undefined {
+  for (let index = 1; index < points.length; index += 1) {
+    const vector = {
+      x: points[index].x - points[index - 1].x,
+      y: points[index].y - points[index - 1].y,
+    }
+    if (Math.hypot(vector.x, vector.y) > EPSILON) return vector
+  }
+  return undefined
+}
+
+function finalTravelVector(points: readonly MapPoint[]): MapPoint | undefined {
+  for (let index = points.length - 1; index > 0; index -= 1) {
+    const vector = {
+      x: points[index].x - points[index - 1].x,
+      y: points[index].y - points[index - 1].y,
+    }
+    if (Math.hypot(vector.x, vector.y) > EPSILON) return vector
+  }
+  return undefined
+}
+
+function directionChangeDegrees(
+  incoming: MapPoint | undefined,
+  outgoing: MapPoint | undefined,
+): number {
+  if (!incoming || !outgoing) return 0
+  const denominator = Math.hypot(incoming.x, incoming.y) * Math.hypot(outgoing.x, outgoing.y)
+  if (denominator <= EPSILON) return 0
+  const cosine = Math.max(-1, Math.min(1,
+    (incoming.x * outgoing.x + incoming.y * outgoing.y) / denominator,
+  ))
+  return Math.acos(cosine) * 180 / Math.PI
 }
 
 function pathLength(points: readonly MapPoint[]): number {

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="104" height="58" tilewidth="16" tileheight="16" infinite="0" nextlayerid="26" nextobjectid="241">
+<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="104" height="58" tilewidth="16" tileheight="16" infinite="0" nextlayerid="26" nextobjectid="269">
  <properties>
   <property name="description" value="聚义厅 v3 - modular layer hall scene"/>
   <property name="maxZoom" type="float" value="3.3"/>
@@ -1467,6 +1467,46 @@
     <property name="riskLevel" value="low"/>
    </properties>
   </object>
+  <object id="241" x="680" y="384" width="120" height="64">
+   <properties>
+    <property name="stableId" value="jyt-region-hall-patrol-northwest-v1"/>
+    <property name="capacity" type="int" value="6"/>
+    <property name="label" value="Northwest hall patrol"/>
+    <property name="protected" type="bool" value="false"/>
+    <property name="regionId" value="hall-patrol-northwest"/>
+    <property name="riskLevel" value="low"/>
+   </properties>
+  </object>
+  <object id="248" x="960" y="384" width="120" height="64">
+   <properties>
+    <property name="stableId" value="jyt-region-hall-patrol-northeast-v1"/>
+    <property name="capacity" type="int" value="6"/>
+    <property name="label" value="Northeast hall patrol"/>
+    <property name="protected" type="bool" value="false"/>
+    <property name="regionId" value="hall-patrol-northeast"/>
+    <property name="riskLevel" value="low"/>
+   </properties>
+  </object>
+  <object id="255" x="960" y="584" width="120" height="64">
+   <properties>
+    <property name="stableId" value="jyt-region-hall-patrol-southeast-v1"/>
+    <property name="capacity" type="int" value="6"/>
+    <property name="label" value="Southeast hall patrol"/>
+    <property name="protected" type="bool" value="false"/>
+    <property name="regionId" value="hall-patrol-southeast"/>
+    <property name="riskLevel" value="low"/>
+   </properties>
+  </object>
+  <object id="262" x="680" y="584" width="120" height="64">
+   <properties>
+    <property name="stableId" value="jyt-region-hall-patrol-southwest-v1"/>
+    <property name="capacity" type="int" value="6"/>
+    <property name="label" value="Southwest hall patrol"/>
+    <property name="protected" type="bool" value="false"/>
+    <property name="regionId" value="hall-patrol-southwest"/>
+    <property name="riskLevel" value="low"/>
+   </properties>
+  </object>
 </objectgroup>
  <objectgroup id="18" name="nav_nodes">
   <object height="16" id="101" width="16" x="872.0" y="312.0">
@@ -1958,6 +1998,198 @@
     <property name="slotId" value="roster-book-parking-4"/>
    </properties>
   </object>
+  <object id="242" x="692" y="392" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-northwest-1-v1"/>
+    <property name="regionId" value="hall-patrol-northwest"/>
+    <property name="slotId" value="hall-patrol-northwest-1"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="243" x="728" y="392" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-northwest-2-v1"/>
+    <property name="regionId" value="hall-patrol-northwest"/>
+    <property name="slotId" value="hall-patrol-northwest-2"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="244" x="764" y="392" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-northwest-3-v1"/>
+    <property name="regionId" value="hall-patrol-northwest"/>
+    <property name="slotId" value="hall-patrol-northwest-3"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="245" x="692" y="424" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-northwest-4-v1"/>
+    <property name="regionId" value="hall-patrol-northwest"/>
+    <property name="slotId" value="hall-patrol-northwest-4"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="246" x="728" y="424" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-northwest-5-v1"/>
+    <property name="regionId" value="hall-patrol-northwest"/>
+    <property name="slotId" value="hall-patrol-northwest-5"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="247" x="764" y="424" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-northwest-6-v1"/>
+    <property name="regionId" value="hall-patrol-northwest"/>
+    <property name="slotId" value="hall-patrol-northwest-6"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="249" x="972" y="392" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-northeast-1-v1"/>
+    <property name="regionId" value="hall-patrol-northeast"/>
+    <property name="slotId" value="hall-patrol-northeast-1"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="250" x="1008" y="392" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-northeast-2-v1"/>
+    <property name="regionId" value="hall-patrol-northeast"/>
+    <property name="slotId" value="hall-patrol-northeast-2"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="251" x="1044" y="392" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-northeast-3-v1"/>
+    <property name="regionId" value="hall-patrol-northeast"/>
+    <property name="slotId" value="hall-patrol-northeast-3"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="252" x="972" y="424" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-northeast-4-v1"/>
+    <property name="regionId" value="hall-patrol-northeast"/>
+    <property name="slotId" value="hall-patrol-northeast-4"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="253" x="1008" y="424" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-northeast-5-v1"/>
+    <property name="regionId" value="hall-patrol-northeast"/>
+    <property name="slotId" value="hall-patrol-northeast-5"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="254" x="1044" y="424" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-northeast-6-v1"/>
+    <property name="regionId" value="hall-patrol-northeast"/>
+    <property name="slotId" value="hall-patrol-northeast-6"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="256" x="972" y="592" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-southeast-1-v1"/>
+    <property name="regionId" value="hall-patrol-southeast"/>
+    <property name="slotId" value="hall-patrol-southeast-1"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="257" x="1008" y="592" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-southeast-2-v1"/>
+    <property name="regionId" value="hall-patrol-southeast"/>
+    <property name="slotId" value="hall-patrol-southeast-2"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="258" x="1044" y="592" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-southeast-3-v1"/>
+    <property name="regionId" value="hall-patrol-southeast"/>
+    <property name="slotId" value="hall-patrol-southeast-3"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="259" x="972" y="624" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-southeast-4-v1"/>
+    <property name="regionId" value="hall-patrol-southeast"/>
+    <property name="slotId" value="hall-patrol-southeast-4"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="260" x="1008" y="624" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-southeast-5-v1"/>
+    <property name="regionId" value="hall-patrol-southeast"/>
+    <property name="slotId" value="hall-patrol-southeast-5"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="261" x="1044" y="624" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-southeast-6-v1"/>
+    <property name="regionId" value="hall-patrol-southeast"/>
+    <property name="slotId" value="hall-patrol-southeast-6"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="263" x="692" y="592" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-southwest-1-v1"/>
+    <property name="regionId" value="hall-patrol-southwest"/>
+    <property name="slotId" value="hall-patrol-southwest-1"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="264" x="728" y="592" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-southwest-2-v1"/>
+    <property name="regionId" value="hall-patrol-southwest"/>
+    <property name="slotId" value="hall-patrol-southwest-2"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="265" x="764" y="592" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-southwest-3-v1"/>
+    <property name="regionId" value="hall-patrol-southwest"/>
+    <property name="slotId" value="hall-patrol-southwest-3"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="266" x="692" y="624" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-southwest-4-v1"/>
+    <property name="regionId" value="hall-patrol-southwest"/>
+    <property name="slotId" value="hall-patrol-southwest-4"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="267" x="728" y="624" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-southwest-5-v1"/>
+    <property name="regionId" value="hall-patrol-southwest"/>
+    <property name="slotId" value="hall-patrol-southwest-5"/>
+   </properties>
+   <ellipse/>
+  </object>
+  <object id="268" x="764" y="624" width="16" height="16">
+   <properties>
+    <property name="stableId" value="jyt-slot-hall-patrol-southwest-6-v1"/>
+    <property name="regionId" value="hall-patrol-southwest"/>
+    <property name="slotId" value="hall-patrol-southwest-6"/>
+   </properties>
+   <ellipse/>
+  </object>
 </objectgroup>
  <objectgroup id="21" name="queue_slots">
   <object height="16" id="119" width="16" x="832.0" y="472.0">
@@ -2026,77 +2258,77 @@
   </object>
  </objectgroup>
  <objectgroup id="24" name="patrol_routes">
-  <object id="117" x="880" y="320">
+  <object id="117" x="980" y="400">
    <properties>
     <property name="stableId" value="jyt-patrol-songjiang-main-v1"/>
     <property name="routeId" value="songjiang-main-loop"/>
     <property name="personaCode" value="songjiang"/>
-    <property name="regionIds" value="council-table,roster-book,council-table,bounty-board,library-shelf,council-table,main-seat"/>
+    <property name="regionIds" value="hall-patrol-northeast,hall-patrol-southeast,hall-patrol-southwest,hall-patrol-northwest"/>
     <property name="loop" type="bool" value="true"/>
     <property name="dwellMs" type="int" value="1800"/>
     <property name="priority" type="int" value="1"/>
    </properties>
-   <polyline points="0,0 0,160 332,300 560,100 552,280 0,0"/>
+   <polyline points="0,0 0,200 -280,200 -280,0 0,0"/>
   </object>
-  <object id="118" x="880" y="480">
+  <object id="118" x="980" y="400">
    <properties>
     <property name="stableId" value="jyt-patrol-lujunyi-council-v1"/>
     <property name="routeId" value="lujunyi-council-loop"/>
     <property name="personaCode" value="lujunyi"/>
-    <property name="regionIds" value="council-table,roster-book,council-table,bounty-board,council-table"/>
+    <property name="regionIds" value="hall-patrol-northeast,hall-patrol-southeast,hall-patrol-southwest,hall-patrol-northwest"/>
     <property name="loop" type="bool" value="true"/>
     <property name="dwellMs" type="int" value="2100"/>
     <property name="priority" type="int" value="1"/>
    </properties>
-   <polyline points="0,0 332,140 0,0"/>
+   <polyline points="0,0 0,200 -280,200 -280,0 0,0"/>
   </object>
-  <object id="119" x="1212" y="620">
+  <object id="119" x="980" y="600">
    <properties>
     <property name="stableId" value="jyt-patrol-wuyong-library-v1"/>
     <property name="routeId" value="wuyong-library-loop"/>
     <property name="personaCode" value="wuyong"/>
-    <property name="regionIds" value="library-shelf,bounty-board,council-table,roster-book,council-table,library-shelf"/>
+    <property name="regionIds" value="hall-patrol-southeast,hall-patrol-southwest,hall-patrol-northwest,hall-patrol-northeast"/>
     <property name="loop" type="bool" value="true"/>
     <property name="dwellMs" type="int" value="2300"/>
     <property name="priority" type="int" value="1"/>
    </properties>
-   <polyline points="0,0 196,24 0,0"/>
+   <polyline points="0,0 -280,0 -280,-200 0,-200 0,0"/>
   </object>
-  <object id="120" x="524" y="640">
+  <object id="120" x="700" y="600">
    <properties>
     <property name="stableId" value="jyt-patrol-linchong-west-v1"/>
     <property name="routeId" value="linchong-agent-loop"/>
     <property name="personaCode" value="linchong"/>
-    <property name="regionIds" value="agent-roster,council-table,roster-book,council-table,agent-roster"/>
+    <property name="regionIds" value="hall-patrol-southwest,hall-patrol-northwest,hall-patrol-northeast,hall-patrol-southeast"/>
     <property name="loop" type="bool" value="true"/>
     <property name="dwellMs" type="int" value="1600"/>
     <property name="priority" type="int" value="1"/>
    </properties>
-   <polyline points="0,0 -284,40 0,0"/>
+   <polyline points="0,0 0,-200 280,-200 280,0 0,0"/>
   </object>
-  <object id="169" x="732" y="733">
+  <object id="169" x="700" y="600">
    <properties>
     <property name="stableId" value="jyt-patrol-likui-gate-v1"/>
     <property name="routeId" value="likui-gate-loop"/>
     <property name="personaCode" value="likui"/>
-    <property name="regionIds" value="gate,council-table"/>
+    <property name="regionIds" value="hall-patrol-southwest,hall-patrol-northwest,hall-patrol-northeast,hall-patrol-southeast"/>
     <property name="loop" type="bool" value="true"/>
     <property name="dwellMs" type="int" value="1700"/>
     <property name="priority" type="int" value="1"/>
    </properties>
-   <polyline points="0,0 188,-253 0,0"/>
+   <polyline points="0,0 0,-200 280,-200 280,0 0,0"/>
   </object>
-  <object id="170" x="1082" y="594">
+  <object id="170" x="980" y="600">
    <properties>
     <property name="stableId" value="jyt-patrol-husanniang-right-v1"/>
     <property name="routeId" value="husanniang-right-loop"/>
     <property name="personaCode" value="husanniang"/>
-    <property name="regionIds" value="right-guard,bounty-board"/>
+    <property name="regionIds" value="hall-patrol-southeast,hall-patrol-southwest,hall-patrol-northwest,hall-patrol-northeast"/>
     <property name="loop" type="bool" value="true"/>
     <property name="dwellMs" type="int" value="1800"/>
     <property name="priority" type="int" value="1"/>
    </properties>
-   <polyline points="0,0 398,-174 0,0"/>
+   <polyline points="0,0 -280,0 -280,-200 0,-200 0,0"/>
   </object>
  </objectgroup>
  <objectgroup id="23" name="debug_labels">

@@ -6,10 +6,10 @@
   "width": 1664,
   "height": 928,
   "counts": {
-    "regions": 8,
+    "regions": 12,
     "nodes": 14,
     "edges": 15,
-    "slots": 36,
+    "slots": 60,
     "obstacles": 38
   },
   "regions": [
@@ -124,6 +124,118 @@
       "capacity": 4,
       "protected": false,
       "riskLevel": "medium"
+    },
+    {
+      "stableId": "jyt-region-hall-patrol-northeast-v1",
+      "regionId": "hall-patrol-northeast",
+      "polygon": {
+        "points": [
+          {
+            "x": 960,
+            "y": 384
+          },
+          {
+            "x": 1080,
+            "y": 384
+          },
+          {
+            "x": 1080,
+            "y": 448
+          },
+          {
+            "x": 960,
+            "y": 448
+          }
+        ]
+      },
+      "label": "Northeast hall patrol",
+      "capacity": 6,
+      "protected": false,
+      "riskLevel": "low"
+    },
+    {
+      "stableId": "jyt-region-hall-patrol-northwest-v1",
+      "regionId": "hall-patrol-northwest",
+      "polygon": {
+        "points": [
+          {
+            "x": 680,
+            "y": 384
+          },
+          {
+            "x": 800,
+            "y": 384
+          },
+          {
+            "x": 800,
+            "y": 448
+          },
+          {
+            "x": 680,
+            "y": 448
+          }
+        ]
+      },
+      "label": "Northwest hall patrol",
+      "capacity": 6,
+      "protected": false,
+      "riskLevel": "low"
+    },
+    {
+      "stableId": "jyt-region-hall-patrol-southeast-v1",
+      "regionId": "hall-patrol-southeast",
+      "polygon": {
+        "points": [
+          {
+            "x": 960,
+            "y": 584
+          },
+          {
+            "x": 1080,
+            "y": 584
+          },
+          {
+            "x": 1080,
+            "y": 648
+          },
+          {
+            "x": 960,
+            "y": 648
+          }
+        ]
+      },
+      "label": "Southeast hall patrol",
+      "capacity": 6,
+      "protected": false,
+      "riskLevel": "low"
+    },
+    {
+      "stableId": "jyt-region-hall-patrol-southwest-v1",
+      "regionId": "hall-patrol-southwest",
+      "polygon": {
+        "points": [
+          {
+            "x": 680,
+            "y": 584
+          },
+          {
+            "x": 800,
+            "y": 584
+          },
+          {
+            "x": 800,
+            "y": 648
+          },
+          {
+            "x": 680,
+            "y": 648
+          }
+        ]
+      },
+      "label": "Southwest hall patrol",
+      "capacity": 6,
+      "protected": false,
+      "riskLevel": "low"
     },
     {
       "stableId": "jyt-region-library-shelf-v1",
@@ -857,6 +969,246 @@
       "point": {
         "x": 856,
         "y": 760
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-northeast-1-v1",
+      "slotId": "hall-patrol-northeast-1",
+      "regionId": "hall-patrol-northeast",
+      "point": {
+        "x": 980,
+        "y": 400
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-northeast-2-v1",
+      "slotId": "hall-patrol-northeast-2",
+      "regionId": "hall-patrol-northeast",
+      "point": {
+        "x": 1016,
+        "y": 400
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-northeast-3-v1",
+      "slotId": "hall-patrol-northeast-3",
+      "regionId": "hall-patrol-northeast",
+      "point": {
+        "x": 1052,
+        "y": 400
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-northeast-4-v1",
+      "slotId": "hall-patrol-northeast-4",
+      "regionId": "hall-patrol-northeast",
+      "point": {
+        "x": 980,
+        "y": 432
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-northeast-5-v1",
+      "slotId": "hall-patrol-northeast-5",
+      "regionId": "hall-patrol-northeast",
+      "point": {
+        "x": 1016,
+        "y": 432
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-northeast-6-v1",
+      "slotId": "hall-patrol-northeast-6",
+      "regionId": "hall-patrol-northeast",
+      "point": {
+        "x": 1052,
+        "y": 432
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-northwest-1-v1",
+      "slotId": "hall-patrol-northwest-1",
+      "regionId": "hall-patrol-northwest",
+      "point": {
+        "x": 700,
+        "y": 400
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-northwest-2-v1",
+      "slotId": "hall-patrol-northwest-2",
+      "regionId": "hall-patrol-northwest",
+      "point": {
+        "x": 736,
+        "y": 400
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-northwest-3-v1",
+      "slotId": "hall-patrol-northwest-3",
+      "regionId": "hall-patrol-northwest",
+      "point": {
+        "x": 772,
+        "y": 400
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-northwest-4-v1",
+      "slotId": "hall-patrol-northwest-4",
+      "regionId": "hall-patrol-northwest",
+      "point": {
+        "x": 700,
+        "y": 432
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-northwest-5-v1",
+      "slotId": "hall-patrol-northwest-5",
+      "regionId": "hall-patrol-northwest",
+      "point": {
+        "x": 736,
+        "y": 432
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-northwest-6-v1",
+      "slotId": "hall-patrol-northwest-6",
+      "regionId": "hall-patrol-northwest",
+      "point": {
+        "x": 772,
+        "y": 432
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-southeast-1-v1",
+      "slotId": "hall-patrol-southeast-1",
+      "regionId": "hall-patrol-southeast",
+      "point": {
+        "x": 980,
+        "y": 600
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-southeast-2-v1",
+      "slotId": "hall-patrol-southeast-2",
+      "regionId": "hall-patrol-southeast",
+      "point": {
+        "x": 1016,
+        "y": 600
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-southeast-3-v1",
+      "slotId": "hall-patrol-southeast-3",
+      "regionId": "hall-patrol-southeast",
+      "point": {
+        "x": 1052,
+        "y": 600
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-southeast-4-v1",
+      "slotId": "hall-patrol-southeast-4",
+      "regionId": "hall-patrol-southeast",
+      "point": {
+        "x": 980,
+        "y": 632
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-southeast-5-v1",
+      "slotId": "hall-patrol-southeast-5",
+      "regionId": "hall-patrol-southeast",
+      "point": {
+        "x": 1016,
+        "y": 632
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-southeast-6-v1",
+      "slotId": "hall-patrol-southeast-6",
+      "regionId": "hall-patrol-southeast",
+      "point": {
+        "x": 1052,
+        "y": 632
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-southwest-1-v1",
+      "slotId": "hall-patrol-southwest-1",
+      "regionId": "hall-patrol-southwest",
+      "point": {
+        "x": 700,
+        "y": 600
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-southwest-2-v1",
+      "slotId": "hall-patrol-southwest-2",
+      "regionId": "hall-patrol-southwest",
+      "point": {
+        "x": 736,
+        "y": 600
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-southwest-3-v1",
+      "slotId": "hall-patrol-southwest-3",
+      "regionId": "hall-patrol-southwest",
+      "point": {
+        "x": 772,
+        "y": 600
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-southwest-4-v1",
+      "slotId": "hall-patrol-southwest-4",
+      "regionId": "hall-patrol-southwest",
+      "point": {
+        "x": 700,
+        "y": 632
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-southwest-5-v1",
+      "slotId": "hall-patrol-southwest-5",
+      "regionId": "hall-patrol-southwest",
+      "point": {
+        "x": 736,
+        "y": 632
+      },
+      "kind": "parking"
+    },
+    {
+      "stableId": "jyt-slot-hall-patrol-southwest-6-v1",
+      "slotId": "hall-patrol-southwest-6",
+      "regionId": "hall-patrol-southwest",
+      "point": {
+        "x": 772,
+        "y": 632
       },
       "kind": "parking"
     },

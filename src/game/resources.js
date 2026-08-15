@@ -9,7 +9,7 @@
 // Bind the runtime URL to the exact TMX bytes accepted by the V2 activation
 // envelope. This prevents a browser-cached legacy hall.tmx from being paired
 // with newer JavaScript validation rules during a rolling/static deployment.
-export const HALL_MAP_VERSION = 'd2dc951033061d1fbd1075d3f3ed62b572bf51f2ffc7b3c645c5754b32d52157'
+export const HALL_MAP_VERSION = '4a83f387457d7bd58bb571c2286c52ce6c1afcd743f6730d1592fb522caee2e1'
 
 export const HALL_MAP_RESOURCE = {
   name: 'juyiting-hall',
