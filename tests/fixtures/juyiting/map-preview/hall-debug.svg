@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1664" height="928" viewBox="0 0 1664 928" data-generation-id="1ded379cc0351889a96b3a6aef1dbfc0fa5b4a2048b8cb693a0f64737eb7791b" role="img" aria-labelledby="map-title map-description">
+<svg xmlns="http://www.w3.org/2000/svg" width="1664" height="928" viewBox="0 0 1664 928" data-generation-id="e69a6ed5067faea1b3f13e6ce984b8e341798f22a9400109c77d4a476423680e" role="img" aria-labelledby="map-title map-description">
   <title id="map-title">Juyiting map preview</title>
-  <desc id="map-description">juyiting-main · graph juyiting-main-v1 · sprites persona-sheets-v1</desc>
+  <desc id="map-description">juyiting-main · graph juyiting-main-v2-candidate-final · sprites persona-sheets-v1</desc>
   <defs>
     <filter id="label-shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#08110d" flood-opacity="0.9"/></filter>
     <marker id="nav-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#57d7ff"/></marker>
@@ -80,82 +80,84 @@
     <polygon class="obstacle" points="998,230 1004,274 964,277 962,232"><title>obstacle-038</title></polygon>
   </g>
   <g class="debug-edges">
-    <polyline class="nav-edge" data-stable-id="jyt-edge-council-east-v1" points="880,480 1212,620" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-council-east-v1: jyt-node-council-v1 → jyt-node-east-hall-v1 ↔</title></polyline>
+    <polyline class="nav-edge" data-stable-id="jyt-edge-council-east-v1" points="880,480 1288,680" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-council-east-v1: jyt-node-council-v1 → jyt-node-east-hall-v1 ↔</title></polyline>
     <text class="debug-label debug-small" x="888" y="472">jyt-edge-council-east-v1</text>
-    <polyline class="nav-edge" data-stable-id="jyt-edge-council-gate-v1" points="880,480 820,584 732,733" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-council-gate-v1: jyt-node-council-v1 → jyt-node-gate-v1 ↔</title></polyline>
-    <text class="debug-label debug-small" x="828" y="576">jyt-edge-council-gate-v1</text>
-    <polyline class="nav-edge" data-stable-id="jyt-edge-council-left-pass-1-v1" points="880,480 648,480" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-council-left-pass-1-v1: jyt-node-council-v1 → jyt-node-left-pass-1-v1 ↔</title></polyline>
+    <polyline class="nav-edge" data-stable-id="jyt-edge-council-gate-v1" points="880,480 816,704" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-council-gate-v1: jyt-node-council-v1 → jyt-node-gate-v1 ↔</title></polyline>
+    <text class="debug-label debug-small" x="888" y="472">jyt-edge-council-gate-v1</text>
+    <polyline class="nav-edge" data-stable-id="jyt-edge-council-left-pass-1-v1" points="880,480 544,424" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-council-left-pass-1-v1: jyt-node-council-v1 → jyt-node-left-pass-1-v1 ↔</title></polyline>
     <text class="debug-label debug-small" x="888" y="472">jyt-edge-council-left-pass-1-v1</text>
-    <polyline class="nav-edge" data-stable-id="jyt-edge-council-west-v1" points="880,480 524,640" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-council-west-v1: jyt-node-council-v1 → jyt-node-west-hall-v1 ↔</title></polyline>
+    <polyline class="nav-edge" data-stable-id="jyt-edge-council-west-v1" points="880,480 520,664" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-council-west-v1: jyt-node-council-v1 → jyt-node-west-hall-v1 ↔</title></polyline>
     <text class="debug-label debug-small" x="888" y="472">jyt-edge-council-west-v1</text>
-    <polyline class="nav-edge" data-stable-id="jyt-edge-east-bounty-v1" points="1212,620 1208,616 1128,524 1124,520 1120,484 1148,468 1152,464 1440,420" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-east-bounty-v1: jyt-node-east-hall-v1 → jyt-node-bounty-board-v1 ↔</title></polyline>
-    <text class="debug-label debug-small" x="1132" y="512">jyt-edge-east-bounty-v1</text>
-    <polyline class="nav-edge" data-stable-id="jyt-edge-east-library-v1" points="1212,620 1408,644 1416,652 1452,648 1456,644 1448,600" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-east-library-v1: jyt-node-east-hall-v1 → jyt-node-library-shelf-v1 ↔</title></polyline>
-    <text class="debug-label debug-small" x="1424" y="644">jyt-edge-east-library-v1</text>
-    <polyline class="nav-edge" data-stable-id="jyt-edge-east-right-guard-v1" points="1212,620 1082,594" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-east-right-guard-v1: jyt-node-east-hall-v1 → jyt-node-right-guard-v1 ↔</title></polyline>
-    <text class="debug-label debug-small" x="1220" y="612">jyt-edge-east-right-guard-v1</text>
-    <polyline class="nav-edge" data-stable-id="jyt-edge-left-pass-1-2-v1" points="648,480 600,456" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-left-pass-1-2-v1: jyt-node-left-pass-1-v1 → jyt-node-left-pass-2-v1 ↔</title></polyline>
-    <text class="debug-label debug-small" x="656" y="472">jyt-edge-left-pass-1-2-v1</text>
-    <polyline class="nav-edge" data-stable-id="jyt-edge-left-pass-2-3-v1" points="600,456 552,432" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-left-pass-2-3-v1: jyt-node-left-pass-2-v1 → jyt-node-left-pass-3-v1 ↔</title></polyline>
-    <text class="debug-label debug-small" x="608" y="448">jyt-edge-left-pass-2-3-v1</text>
-    <polyline class="nav-edge" data-stable-id="jyt-edge-left-pass-3-4-v1" points="552,432 432,432" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-left-pass-3-4-v1: jyt-node-left-pass-3-v1 → jyt-node-left-pass-4-v1 ↔</title></polyline>
-    <text class="debug-label debug-small" x="560" y="424">jyt-edge-left-pass-3-4-v1</text>
-    <polyline class="nav-edge" data-stable-id="jyt-edge-left-pass-4-roster-book-v1" points="432,432 360,400" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-left-pass-4-roster-book-v1: jyt-node-left-pass-4-v1 → jyt-node-roster-book-v1 ↔</title></polyline>
-    <text class="debug-label debug-small" x="440" y="424">jyt-edge-left-pass-4-roster-book-v1</text>
+    <polyline class="nav-edge" data-stable-id="jyt-edge-east-bounty-v1" points="1216,432 1456,416" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-east-bounty-v1: jyt-node-left-pass-3-v1 → jyt-node-bounty-board-v1 ↔</title></polyline>
+    <text class="debug-label debug-small" x="1224" y="424">jyt-edge-east-bounty-v1</text>
+    <polyline class="nav-edge" data-stable-id="jyt-edge-east-library-v1" points="1376,696 1416,680 1440,704 1464,704" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-east-library-v1: jyt-node-left-pass-4-v1 → jyt-node-library-shelf-v1 ↔</title></polyline>
+    <text class="debug-label debug-small" x="1424" y="672">jyt-edge-east-library-v1</text>
+    <polyline class="nav-edge" data-stable-id="jyt-edge-east-right-guard-v1" points="1082,594 1096,480" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-east-right-guard-v1: jyt-node-right-guard-v1 → jyt-node-left-pass-2-v1 ↔</title></polyline>
+    <text class="debug-label debug-small" x="1090" y="586">jyt-edge-east-right-guard-v1</text>
+    <polyline class="nav-edge" data-stable-id="jyt-edge-left-pass-1-2-v1" points="544,424 408,392" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-left-pass-1-2-v1: jyt-node-left-pass-1-v1 → jyt-node-roster-book-v1 ↔</title></polyline>
+    <text class="debug-label debug-small" x="552" y="416">jyt-edge-left-pass-1-2-v1</text>
+    <polyline class="nav-edge" data-stable-id="jyt-edge-left-pass-2-3-v1" points="1096,480 1104,464 1144,440 1216,432" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-left-pass-2-3-v1: jyt-node-left-pass-2-v1 → jyt-node-left-pass-3-v1 ↔</title></polyline>
+    <text class="debug-label debug-small" x="1112" y="456">jyt-edge-left-pass-2-3-v1</text>
+    <polyline class="nav-edge" data-stable-id="jyt-edge-left-pass-3-4-v1" points="880,480 1216,432" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-left-pass-3-4-v1: jyt-node-council-v1 → jyt-node-left-pass-3-v1 ↔</title></polyline>
+    <text class="debug-label debug-small" x="888" y="472">jyt-edge-left-pass-3-4-v1</text>
+    <polyline class="nav-edge" data-stable-id="jyt-edge-left-pass-4-roster-book-v1" points="1288,680 1304,696 1376,696" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-left-pass-4-roster-book-v1: jyt-node-east-hall-v1 → jyt-node-left-pass-4-v1 ↔</title></polyline>
+    <text class="debug-label debug-small" x="1312" y="688">jyt-edge-left-pass-4-roster-book-v1</text>
     <polyline class="nav-edge" data-stable-id="jyt-edge-main-council-v1" points="880,320 880,480" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-main-council-v1: jyt-node-main-seat-v1 → jyt-node-council-v1 ↔</title></polyline>
     <text class="debug-label debug-small" x="888" y="312">jyt-edge-main-council-v1</text>
-    <polyline class="nav-edge" data-stable-id="jyt-edge-west-agent-v1" points="524,640 420,668 416,672 240,680" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-west-agent-v1: jyt-node-west-hall-v1 → jyt-node-agent-roster-v1 ↔</title></polyline>
-    <text class="debug-label debug-small" x="428" y="660">jyt-edge-west-agent-v1</text>
+    <polyline class="nav-edge" data-stable-id="jyt-edge-rightguard-eastlower-v2" points="1082,594 1160,620 1200,640 1288,680" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-rightguard-eastlower-v2: jyt-node-right-guard-v1 → jyt-node-east-hall-v1 ↔</title></polyline>
+    <text class="debug-label debug-small" x="1168" y="612">jyt-edge-rightguard-eastlower-v2</text>
+    <polyline class="nav-edge" data-stable-id="jyt-edge-west-agent-v1" points="520,664 432,688 416,704 312,704 312,680" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-west-agent-v1: jyt-node-west-hall-v1 → jyt-node-agent-roster-v1 ↔</title></polyline>
+    <text class="debug-label debug-small" x="424" y="696">jyt-edge-west-agent-v1</text>
+    <polyline class="nav-edge" data-stable-id="jyt-edge-west-lower-upper-v2" points="520,664 544,656 648,520 648,472 600,440 544,424" marker-start="url(#nav-arrow-reverse)" marker-end="url(#nav-arrow)"><title>jyt-edge-west-lower-upper-v2: jyt-node-west-hall-v1 → jyt-node-left-pass-1-v1 ↔</title></polyline>
+    <text class="debug-label debug-small" x="656" y="512">jyt-edge-west-lower-upper-v2</text>
   </g>
   <g class="debug-nodes">
-    <circle class="nav-node" data-stable-id="jyt-node-agent-roster-v1" cx="240" cy="680" r="9"><title>jyt-node-agent-roster-v1 · doorway · 48px</title></circle>
-    <text class="debug-label" x="253" y="667">jyt-node-agent-roster-v1 · doorway · 48px</text>
-    <circle class="nav-node" data-stable-id="jyt-node-bounty-board-v1" cx="1440" cy="420" r="9"><title>jyt-node-bounty-board-v1 · doorway · 48px</title></circle>
-    <text class="debug-label" x="1453" y="407">jyt-node-bounty-board-v1 · doorway · 48px</text>
-    <circle class="nav-node" data-stable-id="jyt-node-council-v1" cx="880" cy="480" r="9"><title>jyt-node-council-v1 · junction · 72px</title></circle>
-    <text class="debug-label" x="893" y="467">jyt-node-council-v1 · junction · 72px</text>
-    <circle class="nav-node" data-stable-id="jyt-node-east-hall-v1" cx="1212" cy="620" r="9"><title>jyt-node-east-hall-v1 · normal · 64px</title></circle>
-    <text class="debug-label" x="1225" y="607">jyt-node-east-hall-v1 · normal · 64px</text>
-    <circle class="nav-node" data-stable-id="jyt-node-gate-v1" cx="732" cy="733" r="9"><title>jyt-node-gate-v1 · normal · 56px</title></circle>
-    <text class="debug-label" x="745" y="720">jyt-node-gate-v1 · normal · 56px</text>
-    <circle class="nav-node" data-stable-id="jyt-node-left-pass-1-v1" cx="648" cy="480" r="9"><title>jyt-node-left-pass-1-v1 · normal · 56px</title></circle>
-    <text class="debug-label" x="661" y="467">jyt-node-left-pass-1-v1 · normal · 56px</text>
-    <circle class="nav-node" data-stable-id="jyt-node-left-pass-2-v1" cx="600" cy="456" r="9"><title>jyt-node-left-pass-2-v1 · normal · 56px</title></circle>
-    <text class="debug-label" x="613" y="443">jyt-node-left-pass-2-v1 · normal · 56px</text>
-    <circle class="nav-node" data-stable-id="jyt-node-left-pass-3-v1" cx="552" cy="432" r="9"><title>jyt-node-left-pass-3-v1 · normal · 56px</title></circle>
-    <text class="debug-label" x="565" y="419">jyt-node-left-pass-3-v1 · normal · 56px</text>
-    <circle class="nav-node" data-stable-id="jyt-node-left-pass-4-v1" cx="432" cy="432" r="9"><title>jyt-node-left-pass-4-v1 · normal · 48px</title></circle>
-    <text class="debug-label" x="445" y="419">jyt-node-left-pass-4-v1 · normal · 48px</text>
-    <circle class="nav-node" data-stable-id="jyt-node-library-shelf-v1" cx="1448" cy="600" r="9"><title>jyt-node-library-shelf-v1 · doorway · 48px</title></circle>
-    <text class="debug-label" x="1461" y="587">jyt-node-library-shelf-v1 · doorway · 48px</text>
-    <circle class="nav-node" data-stable-id="jyt-node-main-seat-v1" cx="880" cy="320" r="9"><title>jyt-node-main-seat-v1 · junction · 72px</title></circle>
-    <text class="debug-label" x="893" y="307">jyt-node-main-seat-v1 · junction · 72px</text>
-    <circle class="nav-node" data-stable-id="jyt-node-right-guard-v1" cx="1082" cy="594" r="9"><title>jyt-node-right-guard-v1 · normal · 56px</title></circle>
-    <text class="debug-label" x="1095" y="581">jyt-node-right-guard-v1 · normal · 56px</text>
-    <circle class="nav-node" data-stable-id="jyt-node-roster-book-v1" cx="360" cy="400" r="9"><title>jyt-node-roster-book-v1 · doorway · 48px</title></circle>
-    <text class="debug-label" x="373" y="387">jyt-node-roster-book-v1 · doorway · 48px</text>
-    <circle class="nav-node" data-stable-id="jyt-node-west-hall-v1" cx="524" cy="640" r="9"><title>jyt-node-west-hall-v1 · normal · 64px</title></circle>
-    <text class="debug-label" x="537" y="627">jyt-node-west-hall-v1 · normal · 64px</text>
+    <circle class="nav-node" data-stable-id="jyt-node-agent-roster-v1" cx="312" cy="680" r="9"><title>jyt-node-agent-roster-v1 · doorway · 54px</title></circle>
+    <text class="debug-label" x="325" y="667">jyt-node-agent-roster-v1 · doorway · 54px</text>
+    <circle class="nav-node" data-stable-id="jyt-node-bounty-board-v1" cx="1456" cy="416" r="9"><title>jyt-node-bounty-board-v1 · doorway · 54px</title></circle>
+    <text class="debug-label" x="1469" y="403">jyt-node-bounty-board-v1 · doorway · 54px</text>
+    <circle class="nav-node" data-stable-id="jyt-node-council-v1" cx="880" cy="480" r="9"><title>jyt-node-council-v1 · junction · 54px</title></circle>
+    <text class="debug-label" x="893" y="467">jyt-node-council-v1 · junction · 54px</text>
+    <circle class="nav-node" data-stable-id="jyt-node-east-hall-v1" cx="1288" cy="680" r="9"><title>jyt-node-east-hall-v1 · normal · 54px</title></circle>
+    <text class="debug-label" x="1301" y="667">jyt-node-east-hall-v1 · normal · 54px</text>
+    <circle class="nav-node" data-stable-id="jyt-node-gate-v1" cx="816" cy="704" r="9"><title>jyt-node-gate-v1 · normal · 54px</title></circle>
+    <text class="debug-label" x="829" y="691">jyt-node-gate-v1 · normal · 54px</text>
+    <circle class="nav-node" data-stable-id="jyt-node-left-pass-1-v1" cx="544" cy="424" r="9"><title>jyt-node-left-pass-1-v1 · normal · 54px</title></circle>
+    <text class="debug-label" x="557" y="411">jyt-node-left-pass-1-v1 · normal · 54px</text>
+    <circle class="nav-node" data-stable-id="jyt-node-left-pass-2-v1" cx="1096" cy="480" r="9"><title>jyt-node-left-pass-2-v1 · normal · 54px</title></circle>
+    <text class="debug-label" x="1109" y="467">jyt-node-left-pass-2-v1 · normal · 54px</text>
+    <circle class="nav-node" data-stable-id="jyt-node-left-pass-3-v1" cx="1216" cy="432" r="9"><title>jyt-node-left-pass-3-v1 · normal · 54px</title></circle>
+    <text class="debug-label" x="1229" y="419">jyt-node-left-pass-3-v1 · normal · 54px</text>
+    <circle class="nav-node" data-stable-id="jyt-node-left-pass-4-v1" cx="1376" cy="696" r="9"><title>jyt-node-left-pass-4-v1 · normal · 54px</title></circle>
+    <text class="debug-label" x="1389" y="683">jyt-node-left-pass-4-v1 · normal · 54px</text>
+    <circle class="nav-node" data-stable-id="jyt-node-library-shelf-v1" cx="1464" cy="704" r="9"><title>jyt-node-library-shelf-v1 · doorway · 54px</title></circle>
+    <text class="debug-label" x="1477" y="691">jyt-node-library-shelf-v1 · doorway · 54px</text>
+    <circle class="nav-node" data-stable-id="jyt-node-main-seat-v1" cx="880" cy="320" r="9"><title>jyt-node-main-seat-v1 · junction · 54px</title></circle>
+    <text class="debug-label" x="893" y="307">jyt-node-main-seat-v1 · junction · 54px</text>
+    <circle class="nav-node" data-stable-id="jyt-node-right-guard-v1" cx="1082" cy="594" r="9"><title>jyt-node-right-guard-v1 · normal · 54px</title></circle>
+    <text class="debug-label" x="1095" y="581">jyt-node-right-guard-v1 · normal · 54px</text>
+    <circle class="nav-node" data-stable-id="jyt-node-roster-book-v1" cx="408" cy="392" r="9"><title>jyt-node-roster-book-v1 · doorway · 54px</title></circle>
+    <text class="debug-label" x="421" y="379">jyt-node-roster-book-v1 · doorway · 54px</text>
+    <circle class="nav-node" data-stable-id="jyt-node-west-hall-v1" cx="520" cy="664" r="9"><title>jyt-node-west-hall-v1 · normal · 54px</title></circle>
+    <text class="debug-label" x="533" y="651">jyt-node-west-hall-v1 · normal · 54px</text>
   </g>
   <g class="debug-slots">
     <rect class="slot slot-parking" data-stable-id="jyt-slot-agent-parking-v1" x="273" y="673" width="14" height="14" rx="3"><title>jyt-slot-agent-parking-v1 · parking · agent-roster-parking-1</title></rect>
     <text class="debug-label debug-small" x="291" y="685">jyt-slot-agent-parking-v1 · parking</text>
-    <rect class="slot slot-parking" data-stable-id="jyt-slot-agent-parking-v2" x="185" y="673" width="14" height="14" rx="3"><title>jyt-slot-agent-parking-v2 · parking · agent-roster-parking-2</title></rect>
-    <text class="debug-label debug-small" x="203" y="685">jyt-slot-agent-parking-v2 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-agent-parking-v2" x="273" y="721" width="14" height="14" rx="3"><title>jyt-slot-agent-parking-v2 · parking · agent-roster-parking-2</title></rect>
+    <text class="debug-label debug-small" x="291" y="733">jyt-slot-agent-parking-v2 · parking</text>
     <rect class="slot slot-parking" data-stable-id="jyt-slot-agent-parking-v3" x="329" y="673" width="14" height="14" rx="3"><title>jyt-slot-agent-parking-v3 · parking · agent-roster-parking-3</title></rect>
     <text class="debug-label debug-small" x="347" y="685">jyt-slot-agent-parking-v3 · parking</text>
-    <rect class="slot slot-parking" data-stable-id="jyt-slot-bounty-parking-v1" x="1473" y="413" width="14" height="14" rx="3"><title>jyt-slot-bounty-parking-v1 · parking · bounty-board-parking-1</title></rect>
-    <text class="debug-label debug-small" x="1491" y="425">jyt-slot-bounty-parking-v1 · parking</text>
-    <rect class="slot slot-parking" data-stable-id="jyt-slot-bounty-parking-v2" x="1393" y="413" width="14" height="14" rx="3"><title>jyt-slot-bounty-parking-v2 · parking · bounty-board-parking-2</title></rect>
-    <text class="debug-label debug-small" x="1411" y="425">jyt-slot-bounty-parking-v2 · parking</text>
-    <rect class="slot slot-parking" data-stable-id="jyt-slot-bounty-parking-v3" x="1513" y="413" width="14" height="14" rx="3"><title>jyt-slot-bounty-parking-v3 · parking · bounty-board-parking-3</title></rect>
-    <text class="debug-label debug-small" x="1531" y="425">jyt-slot-bounty-parking-v3 · parking</text>
-    <rect class="slot slot-parking" data-stable-id="jyt-slot-bounty-parking-v4" x="1353" y="353" width="14" height="14" rx="3"><title>jyt-slot-bounty-parking-v4 · parking · bounty-board-parking-4</title></rect>
-    <text class="debug-label debug-small" x="1371" y="365">jyt-slot-bounty-parking-v4 · parking</text>
-    <rect class="slot slot-parking" data-stable-id="jyt-slot-bounty-parking-v5" x="1433" y="353" width="14" height="14" rx="3"><title>jyt-slot-bounty-parking-v5 · parking · bounty-board-parking-5</title></rect>
-    <text class="debug-label debug-small" x="1451" y="365">jyt-slot-bounty-parking-v5 · parking</text>
-    <rect class="slot slot-parking" data-stable-id="jyt-slot-bounty-parking-v6" x="1513" y="353" width="14" height="14" rx="3"><title>jyt-slot-bounty-parking-v6 · parking · bounty-board-parking-6</title></rect>
-    <text class="debug-label debug-small" x="1531" y="365">jyt-slot-bounty-parking-v6 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-bounty-parking-v1" x="1353" y="409" width="14" height="14" rx="3"><title>jyt-slot-bounty-parking-v1 · parking · bounty-board-parking-1</title></rect>
+    <text class="debug-label debug-small" x="1371" y="421">jyt-slot-bounty-parking-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-bounty-parking-v2" x="1401" y="409" width="14" height="14" rx="3"><title>jyt-slot-bounty-parking-v2 · parking · bounty-board-parking-2</title></rect>
+    <text class="debug-label debug-small" x="1419" y="421">jyt-slot-bounty-parking-v2 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-bounty-parking-v3" x="1449" y="409" width="14" height="14" rx="3"><title>jyt-slot-bounty-parking-v3 · parking · bounty-board-parking-3</title></rect>
+    <text class="debug-label debug-small" x="1467" y="421">jyt-slot-bounty-parking-v3 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-bounty-parking-v4" x="1497" y="417" width="14" height="14" rx="3"><title>jyt-slot-bounty-parking-v4 · parking · bounty-board-parking-4</title></rect>
+    <text class="debug-label debug-small" x="1515" y="429">jyt-slot-bounty-parking-v4 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-bounty-parking-v5" x="1545" y="401" width="14" height="14" rx="3"><title>jyt-slot-bounty-parking-v5 · parking · bounty-board-parking-5</title></rect>
+    <text class="debug-label debug-small" x="1563" y="413">jyt-slot-bounty-parking-v5 · parking</text>
     <rect class="slot slot-parking" data-stable-id="jyt-slot-council-parking-v1" x="913" y="473" width="14" height="14" rx="3"><title>jyt-slot-council-parking-v1 · parking · council-table-parking-1</title></rect>
     <text class="debug-label debug-small" x="931" y="485">jyt-slot-council-parking-v1 · parking</text>
     <rect class="slot slot-parking" data-stable-id="jyt-slot-council-parking-v2" x="833" y="521" width="14" height="14" rx="3"><title>jyt-slot-council-parking-v2 · parking · council-table-parking-2</title></rect>
@@ -172,28 +174,24 @@
     <text class="debug-label debug-small" x="851" y="485">jyt-slot-council-queue-v1 · queue</text>
     <rect class="slot slot-parking" data-stable-id="jyt-slot-gate-parking-v1" x="765" y="726" width="14" height="14" rx="3"><title>jyt-slot-gate-parking-v1 · parking · gate-parking-1</title></rect>
     <text class="debug-label debug-small" x="783" y="738">jyt-slot-gate-parking-v1 · parking</text>
-    <rect class="slot slot-parking" data-stable-id="jyt-slot-gate-parking-v2" x="677" y="757" width="14" height="14" rx="3"><title>jyt-slot-gate-parking-v2 · parking · gate-parking-2</title></rect>
-    <text class="debug-label debug-small" x="695" y="769">jyt-slot-gate-parking-v2 · parking</text>
-    <rect class="slot slot-parking" data-stable-id="jyt-slot-gate-parking-v3" x="813" y="757" width="14" height="14" rx="3"><title>jyt-slot-gate-parking-v3 · parking · gate-parking-3</title></rect>
-    <text class="debug-label debug-small" x="831" y="769">jyt-slot-gate-parking-v3 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-gate-parking-v2" x="809" y="753" width="14" height="14" rx="3"><title>jyt-slot-gate-parking-v2 · parking · gate-parking-2</title></rect>
+    <text class="debug-label debug-small" x="827" y="765">jyt-slot-gate-parking-v2 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-gate-parking-v3" x="849" y="753" width="14" height="14" rx="3"><title>jyt-slot-gate-parking-v3 · parking · gate-parking-3</title></rect>
+    <text class="debug-label debug-small" x="867" y="765">jyt-slot-gate-parking-v3 · parking</text>
     <rect class="slot slot-home" data-stable-id="jyt-slot-husanniang-home-v1" x="1075" y="587" width="14" height="14" rx="3"><title>jyt-slot-husanniang-home-v1 · home · husanniang-home</title></rect>
     <text class="debug-label debug-small" x="1093" y="599">jyt-slot-husanniang-home-v1 · home</text>
-    <rect class="slot slot-parking" data-stable-id="jyt-slot-library-parking-v1" x="1463" y="593" width="14" height="14" rx="3"><title>jyt-slot-library-parking-v1 · parking · library-shelf-parking-1</title></rect>
-    <text class="debug-label debug-small" x="1481" y="605">jyt-slot-library-parking-v1 · parking</text>
-    <rect class="slot slot-parking" data-stable-id="jyt-slot-library-parking-v2" x="1513" y="601" width="14" height="14" rx="3"><title>jyt-slot-library-parking-v2 · parking · library-shelf-parking-2</title></rect>
-    <text class="debug-label debug-small" x="1531" y="613">jyt-slot-library-parking-v2 · parking</text>
-    <rect class="slot slot-parking" data-stable-id="jyt-slot-library-parking-v3" x="1561" y="601" width="14" height="14" rx="3"><title>jyt-slot-library-parking-v3 · parking · library-shelf-parking-3</title></rect>
-    <text class="debug-label debug-small" x="1579" y="613">jyt-slot-library-parking-v3 · parking</text>
-    <rect class="slot slot-parking" data-stable-id="jyt-slot-library-parking-v4" x="1433" y="713" width="14" height="14" rx="3"><title>jyt-slot-library-parking-v4 · parking · library-shelf-parking-4</title></rect>
-    <text class="debug-label debug-small" x="1451" y="725">jyt-slot-library-parking-v4 · parking</text>
-    <rect class="slot slot-parking" data-stable-id="jyt-slot-library-parking-v5" x="1513" y="713" width="14" height="14" rx="3"><title>jyt-slot-library-parking-v5 · parking · library-shelf-parking-5</title></rect>
-    <text class="debug-label debug-small" x="1531" y="725">jyt-slot-library-parking-v5 · parking</text>
-    <rect class="slot slot-parking" data-stable-id="jyt-slot-library-parking-v6" x="1537" y="745" width="14" height="14" rx="3"><title>jyt-slot-library-parking-v6 · parking · library-shelf-parking-6</title></rect>
-    <text class="debug-label debug-small" x="1555" y="757">jyt-slot-library-parking-v6 · parking</text>
-    <rect class="slot slot-home" data-stable-id="jyt-slot-likui-home-v1" x="725" y="726" width="14" height="14" rx="3"><title>jyt-slot-likui-home-v1 · home · likui-home</title></rect>
-    <text class="debug-label debug-small" x="743" y="738">jyt-slot-likui-home-v1 · home</text>
-    <rect class="slot slot-home" data-stable-id="jyt-slot-linchong-home-v1" x="233" y="673" width="14" height="14" rx="3"><title>jyt-slot-linchong-home-v1 · home · linchong-home</title></rect>
-    <text class="debug-label debug-small" x="251" y="685">jyt-slot-linchong-home-v1 · home</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-library-parking-v1" x="1425" y="673" width="14" height="14" rx="3"><title>jyt-slot-library-parking-v1 · parking · library-shelf-parking-1</title></rect>
+    <text class="debug-label debug-small" x="1443" y="685">jyt-slot-library-parking-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-library-parking-v2" x="1489" y="729" width="14" height="14" rx="3"><title>jyt-slot-library-parking-v2 · parking · library-shelf-parking-2</title></rect>
+    <text class="debug-label debug-small" x="1507" y="741">jyt-slot-library-parking-v2 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-library-parking-v3" x="1469" y="657" width="14" height="14" rx="3"><title>jyt-slot-library-parking-v3 · parking · library-shelf-parking-3</title></rect>
+    <text class="debug-label debug-small" x="1487" y="669">jyt-slot-library-parking-v3 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-library-parking-v4" x="1437" y="733" width="14" height="14" rx="3"><title>jyt-slot-library-parking-v4 · parking · library-shelf-parking-4</title></rect>
+    <text class="debug-label debug-small" x="1455" y="745">jyt-slot-library-parking-v4 · parking</text>
+    <rect class="slot slot-home" data-stable-id="jyt-slot-likui-home-v1" x="809" y="697" width="14" height="14" rx="3"><title>jyt-slot-likui-home-v1 · home · likui-home</title></rect>
+    <text class="debug-label debug-small" x="827" y="709">jyt-slot-likui-home-v1 · home</text>
+    <rect class="slot slot-home" data-stable-id="jyt-slot-linchong-home-v1" x="329" y="721" width="14" height="14" rx="3"><title>jyt-slot-linchong-home-v1 · home · linchong-home</title></rect>
+    <text class="debug-label debug-small" x="347" y="733">jyt-slot-linchong-home-v1 · home</text>
     <rect class="slot slot-home" data-stable-id="jyt-slot-lujunyi-home-v1" x="841" y="473" width="14" height="14" rx="3"><title>jyt-slot-lujunyi-home-v1 · home · lujunyi-home</title></rect>
     <text class="debug-label debug-small" x="859" y="485">jyt-slot-lujunyi-home-v1 · home</text>
     <rect class="slot slot-parking" data-stable-id="jyt-slot-main-seat-parking-v1" x="913" y="313" width="14" height="14" rx="3"><title>jyt-slot-main-seat-parking-v1 · parking · main-seat-parking-1</title></rect>
@@ -202,19 +200,19 @@
     <text class="debug-label debug-small" x="1121" y="599">jyt-slot-right-guard-parking-v1 · parking</text>
     <rect class="slot slot-parking" data-stable-id="jyt-slot-right-guard-parking-v2" x="1033" y="641" width="14" height="14" rx="3"><title>jyt-slot-right-guard-parking-v2 · parking · right-guard-parking-2</title></rect>
     <text class="debug-label debug-small" x="1051" y="653">jyt-slot-right-guard-parking-v2 · parking</text>
-    <rect class="slot slot-parking" data-stable-id="jyt-slot-right-guard-parking-v3" x="1185" y="641" width="14" height="14" rx="3"><title>jyt-slot-right-guard-parking-v3 · parking · right-guard-parking-3</title></rect>
-    <text class="debug-label debug-small" x="1203" y="653">jyt-slot-right-guard-parking-v3 · parking</text>
-    <rect class="slot slot-parking" data-stable-id="jyt-slot-roster-book-parking-v1" x="297" y="417" width="14" height="14" rx="3"><title>jyt-slot-roster-book-parking-v1 · parking · roster-book-parking-1</title></rect>
-    <text class="debug-label debug-small" x="315" y="429">jyt-slot-roster-book-parking-v1 · parking</text>
-    <rect class="slot slot-parking" data-stable-id="jyt-slot-roster-book-parking-v2" x="337" y="417" width="14" height="14" rx="3"><title>jyt-slot-roster-book-parking-v2 · parking · roster-book-parking-2</title></rect>
-    <text class="debug-label debug-small" x="355" y="429">jyt-slot-roster-book-parking-v2 · parking</text>
-    <rect class="slot slot-parking" data-stable-id="jyt-slot-roster-book-parking-v3" x="377" y="417" width="14" height="14" rx="3"><title>jyt-slot-roster-book-parking-v3 · parking · roster-book-parking-3</title></rect>
-    <text class="debug-label debug-small" x="395" y="429">jyt-slot-roster-book-parking-v3 · parking</text>
-    <rect class="slot slot-parking" data-stable-id="jyt-slot-roster-book-parking-v4" x="417" y="417" width="14" height="14" rx="3"><title>jyt-slot-roster-book-parking-v4 · parking · roster-book-parking-4</title></rect>
-    <text class="debug-label debug-small" x="435" y="429">jyt-slot-roster-book-parking-v4 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-right-guard-parking-v3" x="1173" y="625" width="14" height="14" rx="3"><title>jyt-slot-right-guard-parking-v3 · parking · right-guard-parking-3</title></rect>
+    <text class="debug-label debug-small" x="1191" y="637">jyt-slot-right-guard-parking-v3 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-roster-book-parking-v1" x="305" y="409" width="14" height="14" rx="3"><title>jyt-slot-roster-book-parking-v1 · parking · roster-book-parking-1</title></rect>
+    <text class="debug-label debug-small" x="323" y="421">jyt-slot-roster-book-parking-v1 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-roster-book-parking-v2" x="353" y="393" width="14" height="14" rx="3"><title>jyt-slot-roster-book-parking-v2 · parking · roster-book-parking-2</title></rect>
+    <text class="debug-label debug-small" x="371" y="405">jyt-slot-roster-book-parking-v2 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-roster-book-parking-v3" x="401" y="385" width="14" height="14" rx="3"><title>jyt-slot-roster-book-parking-v3 · parking · roster-book-parking-3</title></rect>
+    <text class="debug-label debug-small" x="419" y="397">jyt-slot-roster-book-parking-v3 · parking</text>
+    <rect class="slot slot-parking" data-stable-id="jyt-slot-roster-book-parking-v4" x="449" y="385" width="14" height="14" rx="3"><title>jyt-slot-roster-book-parking-v4 · parking · roster-book-parking-4</title></rect>
+    <text class="debug-label debug-small" x="467" y="397">jyt-slot-roster-book-parking-v4 · parking</text>
     <rect class="slot slot-home" data-stable-id="jyt-slot-songjiang-home-v1" x="833" y="313" width="14" height="14" rx="3"><title>jyt-slot-songjiang-home-v1 · home · songjiang-home</title></rect>
     <text class="debug-label debug-small" x="851" y="325">jyt-slot-songjiang-home-v1 · home</text>
-    <rect class="slot slot-home" data-stable-id="jyt-slot-wuyong-home-v1" x="1425" y="593" width="14" height="14" rx="3"><title>jyt-slot-wuyong-home-v1 · home · wuyong-home</title></rect>
-    <text class="debug-label debug-small" x="1443" y="605">jyt-slot-wuyong-home-v1 · home</text>
+    <rect class="slot slot-home" data-stable-id="jyt-slot-wuyong-home-v1" x="1457" y="697" width="14" height="14" rx="3"><title>jyt-slot-wuyong-home-v1 · home · wuyong-home</title></rect>
+    <text class="debug-label debug-small" x="1475" y="709">jyt-slot-wuyong-home-v1 · home</text>
   </g>
 </svg>

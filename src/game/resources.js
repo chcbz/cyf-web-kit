@@ -6,7 +6,16 @@
  * that are required before the TMX can be parsed.
  */
 
-export const HALL_MAP_RESOURCE = { name: 'juyiting-hall', type: 'tmx', src: '/juyiting/hall.tmx' }
+// Bind the runtime URL to the exact TMX bytes accepted by the V2 activation
+// envelope. This prevents a browser-cached legacy hall.tmx from being paired
+// with newer JavaScript validation rules during a rolling/static deployment.
+export const HALL_MAP_VERSION = 'd2dc951033061d1fbd1075d3f3ed62b572bf51f2ffc7b3c645c5754b32d52157'
+
+export const HALL_MAP_RESOURCE = {
+  name: 'juyiting-hall',
+  type: 'tmx',
+  src: `/juyiting/hall.tmx?v=${HALL_MAP_VERSION}`
+}
 
 export const HALL_BOOT_RESOURCES = [HALL_MAP_RESOURCE]
 

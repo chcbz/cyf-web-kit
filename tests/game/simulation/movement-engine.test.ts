@@ -58,6 +58,7 @@ describe('movement engine', () => {
   it('blocks a known target when the navigation graph has no path', () => {
     const disconnected = runtime()
     disconnected.edges = []
+    disconnected.obstacles = [{ points: [{ x: 40, y: -30 }, { x: 60, y: -30 }, { x: 60, y: 30 }, { x: 40, y: 30 }] }]
     const engine = createMovementEngine(disconnected, manifest(), { now: () => 2_500 })
 
     engine.enqueue(command({ commandId: 'no-path' }))
@@ -67,6 +68,28 @@ describe('movement engine', () => {
       reportId: 'no-path:blocked', agentId: 'agent-songjiang', stateVersion: 1,
       phase: 'blocked', regionId: 'council-table', occurredAt: '1970-01-01T00:00:02.500Z', source: 'backend',
     }])
+  })
+
+  it('scores every available parking slot before atomically reserving the best reachable one', () => {
+    const map = runtime()
+    map.slots = [
+      map.slots[0],
+      { stableId: 'parking-blocked', slotId: 'parking-blocked', regionId: 'council-table', point: { x: 100, y: 0 }, kind: 'parking' },
+      { stableId: 'parking-safe', slotId: 'parking-safe', regionId: 'council-table', point: { x: 100, y: 60 }, kind: 'parking' },
+    ]
+    map.nodes = [
+      { stableId: 'node-home', point: { x: 0, y: 0 }, kind: 'normal', channelWidth: 60 },
+      { stableId: 'node-safe', point: { x: 100, y: 60 }, kind: 'normal', channelWidth: 60 },
+    ]
+    map.edges = [{ stableId: 'safe-edge', from: 'node-home', to: 'node-safe', bidirectional: true, costMultiplier: 1, points: [{ x: 0, y: 0 }, { x: 0, y: 60 }, { x: 100, y: 60 }] }]
+    map.obstacles = [{ points: [{ x: 40, y: -30 }, { x: 60, y: -30 }, { x: 60, y: 30 }, { x: 40, y: 30 }] }]
+    const engine = createMovementEngine(map, manifest())
+
+    engine.enqueue(command())
+    engine.update(10_000)
+
+    assert.equal(engine.snapshots()[0]?.regionId, 'council-table')
+    assert.equal(engine.snapshots()[0]?.y, 60)
   })
 
   it('selects the downward sprite direction for a vertical route', () => {
@@ -101,8 +124,9 @@ describe('movement engine', () => {
   it('recovers backend movement at the time-derived cumulative path position', () => {
     const recoveredRuntime = runtime()
     recoveredRuntime.edges[0]!.points = [
-      { x: 0, y: 0 }, { x: 0, y: 40 }, { x: 100, y: 40 }, { x: 100, y: 0 },
+      { x: 0, y: 0 }, { x: 0, y: 60 }, { x: 100, y: 60 }, { x: 100, y: 0 },
     ]
+    recoveredRuntime.obstacles = [{ points: [{ x: 40, y: -30 }, { x: 60, y: -30 }, { x: 60, y: 30 }, { x: 40, y: 30 }] }]
     const engine = createMovementEngine(recoveredRuntime, manifest(), { now: () => 5_000 })
 
     engine.enqueue(command({
@@ -111,7 +135,7 @@ describe('movement engine', () => {
     }))
 
     assert.deepEqual(engine.snapshots()[0], {
-      agentId: 'agent-songjiang', personaCode: 'songjiang', x: 50, y: 40,
+      agentId: 'agent-songjiang', personaCode: 'songjiang', x: 50, y: 60,
       facing: 'right', animation: 'walk', behavior: 'moving_to_region', phase: 'moving',
       regionId: 'main-seat', targetRegionId: 'council-table', stateVersion: 1,
     })
@@ -137,7 +161,7 @@ describe('movement engine', () => {
     }])
     assert.deepEqual(engine.snapshots()[0], {
       agentId: 'agent-songjiang', personaCode: 'songjiang', x: 100, y: 0,
-      facing: 'left', animation: 'walk', behavior: 'moving_to_region', phase: 'moving',
+      facing: 'downLeft', animation: 'walk', behavior: 'moving_to_region', phase: 'moving',
       regionId: 'council-table', targetRegionId: 'bounty-board', stateVersion: 2,
     })
   })

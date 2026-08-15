@@ -7,7 +7,7 @@
   {
     "op": "set-map-property",
     "name": "navGraphVersion",
-    "value": "juyiting-main-v1"
+    "value": "juyiting-main-v2-candidate-final"
   },
   {
     "op": "set-map-property",
@@ -1801,10 +1801,10 @@
       "width": 240,
       "height": 184,
       "properties": {
-        "regionId": "main-seat",
-        "label": "Main seat",
         "capacity": 6,
+        "label": "Main seat",
         "protected": true,
+        "regionId": "main-seat",
         "riskLevel": "low"
       }
     }
@@ -1819,10 +1819,10 @@
       "width": 464,
       "height": 256,
       "properties": {
-        "regionId": "council-table",
-        "label": "Council table",
         "capacity": 12,
+        "label": "Council table",
         "protected": false,
+        "regionId": "council-table",
         "riskLevel": "low"
       }
     }
@@ -1837,10 +1837,10 @@
       "width": 240,
       "height": 256,
       "properties": {
-        "regionId": "bounty-board",
-        "label": "Bounty board",
         "capacity": 5,
+        "label": "Bounty board",
         "protected": false,
+        "regionId": "bounty-board",
         "riskLevel": "medium"
       }
     }
@@ -1855,10 +1855,10 @@
       "width": 288,
       "height": 272,
       "properties": {
-        "regionId": "agent-roster",
-        "label": "Agent roster",
         "capacity": 8,
+        "label": "Agent roster",
         "protected": false,
+        "regionId": "agent-roster",
         "riskLevel": "low"
       }
     }
@@ -1873,10 +1873,10 @@
       "width": 224,
       "height": 272,
       "properties": {
-        "regionId": "library-shelf",
-        "label": "Library shelf",
         "capacity": 4,
+        "label": "Library shelf",
         "protected": false,
+        "regionId": "library-shelf",
         "riskLevel": "low"
       }
     }
@@ -1894,8 +1894,8 @@
         "type": "ellipse"
       },
       "properties": {
-        "kind": "junction",
-        "channelWidth": 72
+        "channelWidth": 54,
+        "kind": "junction"
       }
     }
   },
@@ -1912,8 +1912,8 @@
         "type": "ellipse"
       },
       "properties": {
-        "kind": "junction",
-        "channelWidth": 72
+        "channelWidth": 54,
+        "kind": "junction"
       }
     }
   },
@@ -1922,16 +1922,16 @@
     "group": "nav_nodes",
     "object": {
       "stableId": "jyt-node-west-hall-v1",
-      "x": 516,
-      "y": 632,
+      "x": 512,
+      "y": 656,
       "width": 16,
       "height": 16,
       "shape": {
         "type": "ellipse"
       },
       "properties": {
-        "kind": "normal",
-        "channelWidth": 64
+        "channelWidth": 54,
+        "kind": "normal"
       }
     }
   },
@@ -1940,7 +1940,7 @@
     "group": "nav_nodes",
     "object": {
       "stableId": "jyt-node-agent-roster-v1",
-      "x": 232,
+      "x": 304,
       "y": 672,
       "width": 16,
       "height": 16,
@@ -1948,8 +1948,8 @@
         "type": "ellipse"
       },
       "properties": {
-        "kind": "doorway",
-        "channelWidth": 48
+        "channelWidth": 54,
+        "kind": "doorway"
       }
     }
   },
@@ -1958,16 +1958,16 @@
     "group": "nav_nodes",
     "object": {
       "stableId": "jyt-node-east-hall-v1",
-      "x": 1204,
-      "y": 612,
+      "x": 1280,
+      "y": 672,
       "width": 16,
       "height": 16,
       "shape": {
         "type": "ellipse"
       },
       "properties": {
-        "kind": "normal",
-        "channelWidth": 64
+        "channelWidth": 54,
+        "kind": "normal"
       }
     }
   },
@@ -1976,16 +1976,16 @@
     "group": "nav_nodes",
     "object": {
       "stableId": "jyt-node-bounty-board-v1",
-      "x": 1432,
-      "y": 412,
+      "x": 1448,
+      "y": 408,
       "width": 16,
       "height": 16,
       "shape": {
         "type": "ellipse"
       },
       "properties": {
-        "kind": "doorway",
-        "channelWidth": 48
+        "channelWidth": 54,
+        "kind": "doorway"
       }
     }
   },
@@ -1994,16 +1994,16 @@
     "group": "nav_nodes",
     "object": {
       "stableId": "jyt-node-library-shelf-v1",
-      "x": 1440,
-      "y": 592,
+      "x": 1456,
+      "y": 696,
       "width": 16,
       "height": 16,
       "shape": {
         "type": "ellipse"
       },
       "properties": {
-        "kind": "doorway",
-        "channelWidth": 48
+        "channelWidth": 54,
+        "kind": "doorway"
       }
     }
   },
@@ -2028,10 +2028,10 @@
         ]
       },
       "properties": {
-        "from": "jyt-node-main-seat-v1",
-        "to": "jyt-node-council-v1",
         "bidirectional": true,
-        "costMultiplier": 1
+        "costMultiplier": 1,
+        "from": "jyt-node-main-seat-v1",
+        "to": "jyt-node-council-v1"
       }
     }
   },
@@ -2050,16 +2050,16 @@
             0
           ],
           [
-            -356,
-            160
+            -360,
+            184
           ]
         ]
       },
       "properties": {
-        "from": "jyt-node-council-v1",
-        "to": "jyt-node-west-hall-v1",
         "bidirectional": true,
-        "costMultiplier": 1
+        "costMultiplier": 1,
+        "from": "jyt-node-council-v1",
+        "to": "jyt-node-west-hall-v1"
       }
     }
   },
@@ -2068,8 +2068,8 @@
     "group": "nav_edges",
     "object": {
       "stableId": "jyt-edge-west-agent-v1",
-      "x": 524,
-      "y": 640,
+      "x": 520,
+      "y": 664,
       "shape": {
         "type": "polyline",
         "points": [
@@ -2078,24 +2078,28 @@
             0
           ],
           [
+            -88,
+            24
+          ],
+          [
             -104,
-            28
-          ],
-          [
-            -108,
-            32
-          ],
-          [
-            -284,
             40
+          ],
+          [
+            -208,
+            40
+          ],
+          [
+            -208,
+            16
           ]
         ]
       },
       "properties": {
-        "from": "jyt-node-west-hall-v1",
-        "to": "jyt-node-agent-roster-v1",
         "bidirectional": true,
-        "costMultiplier": 1
+        "costMultiplier": 1,
+        "from": "jyt-node-west-hall-v1",
+        "to": "jyt-node-agent-roster-v1"
       }
     }
   },
@@ -2114,16 +2118,16 @@
             0
           ],
           [
-            332,
-            140
+            408,
+            200
           ]
         ]
       },
       "properties": {
-        "from": "jyt-node-council-v1",
-        "to": "jyt-node-east-hall-v1",
         "bidirectional": true,
-        "costMultiplier": 1
+        "costMultiplier": 1,
+        "from": "jyt-node-council-v1",
+        "to": "jyt-node-east-hall-v1"
       }
     }
   },
@@ -2132,8 +2136,8 @@
     "group": "nav_edges",
     "object": {
       "stableId": "jyt-edge-east-bounty-v1",
-      "x": 1212,
-      "y": 620,
+      "x": 1216,
+      "y": 432,
       "shape": {
         "type": "polyline",
         "points": [
@@ -2142,40 +2146,16 @@
             0
           ],
           [
-            -4,
-            -4
-          ],
-          [
-            -84,
-            -96
-          ],
-          [
-            -88,
-            -100
-          ],
-          [
-            -92,
-            -136
-          ],
-          [
-            -64,
-            -152
-          ],
-          [
-            -60,
-            -156
-          ],
-          [
-            228,
-            -200
+            240,
+            -16
           ]
         ]
       },
       "properties": {
-        "from": "jyt-node-east-hall-v1",
-        "to": "jyt-node-bounty-board-v1",
         "bidirectional": true,
-        "costMultiplier": 1.1
+        "costMultiplier": 1.1,
+        "from": "jyt-node-left-pass-3-v1",
+        "to": "jyt-node-bounty-board-v1"
       }
     }
   },
@@ -2184,8 +2164,8 @@
     "group": "nav_edges",
     "object": {
       "stableId": "jyt-edge-east-library-v1",
-      "x": 1212,
-      "y": 620,
+      "x": 1376,
+      "y": 696,
       "shape": {
         "type": "polyline",
         "points": [
@@ -2194,32 +2174,24 @@
             0
           ],
           [
-            196,
-            24
+            40,
+            -16
           ],
           [
-            204,
-            32
+            64,
+            8
           ],
           [
-            240,
-            28
-          ],
-          [
-            244,
-            24
-          ],
-          [
-            236,
-            -20
+            88,
+            8
           ]
         ]
       },
       "properties": {
-        "from": "jyt-node-east-hall-v1",
-        "to": "jyt-node-library-shelf-v1",
         "bidirectional": true,
-        "costMultiplier": 1
+        "costMultiplier": 1,
+        "from": "jyt-node-left-pass-4-v1",
+        "to": "jyt-node-library-shelf-v1"
       }
     }
   },
@@ -2236,8 +2208,8 @@
         "type": "ellipse"
       },
       "properties": {
-        "slotId": "main-seat-parking-1",
-        "regionId": "main-seat"
+        "regionId": "main-seat",
+        "slotId": "main-seat-parking-1"
       }
     }
   },
@@ -2254,8 +2226,8 @@
         "type": "ellipse"
       },
       "properties": {
-        "slotId": "council-table-parking-1",
-        "regionId": "council-table"
+        "regionId": "council-table",
+        "slotId": "council-table-parking-1"
       }
     }
   },
@@ -2264,16 +2236,16 @@
     "group": "parking_slots",
     "object": {
       "stableId": "jyt-slot-bounty-parking-v1",
-      "x": 1472,
-      "y": 412,
+      "x": 1352,
+      "y": 408,
       "width": 16,
       "height": 16,
       "shape": {
         "type": "ellipse"
       },
       "properties": {
-        "slotId": "bounty-board-parking-1",
-        "regionId": "bounty-board"
+        "regionId": "bounty-board",
+        "slotId": "bounty-board-parking-1"
       }
     }
   },
@@ -2290,8 +2262,8 @@
         "type": "ellipse"
       },
       "properties": {
-        "slotId": "agent-roster-parking-1",
-        "regionId": "agent-roster"
+        "regionId": "agent-roster",
+        "slotId": "agent-roster-parking-1"
       }
     }
   },
@@ -2300,16 +2272,16 @@
     "group": "parking_slots",
     "object": {
       "stableId": "jyt-slot-library-parking-v1",
-      "x": 1462,
-      "y": 592,
+      "x": 1424,
+      "y": 672,
       "width": 16,
       "height": 16,
       "shape": {
         "type": "ellipse"
       },
       "properties": {
-        "slotId": "library-shelf-parking-1",
-        "regionId": "library-shelf"
+        "regionId": "library-shelf",
+        "slotId": "library-shelf-parking-1"
       }
     }
   },
@@ -2326,8 +2298,8 @@
         "type": "ellipse"
       },
       "properties": {
-        "slotId": "council-table-queue-1",
-        "regionId": "council-table"
+        "regionId": "council-table",
+        "slotId": "council-table-queue-1"
       }
     }
   },
@@ -2344,9 +2316,9 @@
         "type": "ellipse"
       },
       "properties": {
-        "slotId": "songjiang-home",
+        "personaCode": "songjiang",
         "regionId": "main-seat",
-        "personaCode": "songjiang"
+        "slotId": "songjiang-home"
       }
     }
   }

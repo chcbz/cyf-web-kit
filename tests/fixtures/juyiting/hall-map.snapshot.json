@@ -1,15 +1,15 @@
 {
   "sceneId": "juyiting-main",
   "movementSchemaVersion": "1",
-  "navGraphVersion": "juyiting-main-v1",
+  "navGraphVersion": "juyiting-main-v2-candidate-final",
   "spriteManifestVersion": "persona-sheets-v1",
   "width": 1664,
   "height": 928,
   "counts": {
     "regions": 8,
     "nodes": 14,
-    "edges": 13,
-    "slots": 39,
+    "edges": 15,
+    "slots": 36,
     "obstacles": 38
   },
   "regions": [
@@ -242,20 +242,20 @@
     {
       "stableId": "jyt-node-agent-roster-v1",
       "point": {
-        "x": 240,
+        "x": 312,
         "y": 680
       },
       "kind": "doorway",
-      "channelWidth": 48
+      "channelWidth": 54
     },
     {
       "stableId": "jyt-node-bounty-board-v1",
       "point": {
-        "x": 1440,
-        "y": 420
+        "x": 1456,
+        "y": 416
       },
       "kind": "doorway",
-      "channelWidth": 48
+      "channelWidth": 54
     },
     {
       "stableId": "jyt-node-council-v1",
@@ -264,70 +264,70 @@
         "y": 480
       },
       "kind": "junction",
-      "channelWidth": 72
+      "channelWidth": 54
     },
     {
       "stableId": "jyt-node-east-hall-v1",
       "point": {
-        "x": 1212,
-        "y": 620
+        "x": 1288,
+        "y": 680
       },
       "kind": "normal",
-      "channelWidth": 64
+      "channelWidth": 54
     },
     {
       "stableId": "jyt-node-gate-v1",
       "point": {
-        "x": 732,
-        "y": 733
+        "x": 816,
+        "y": 704
       },
       "kind": "normal",
-      "channelWidth": 56
+      "channelWidth": 54
     },
     {
       "stableId": "jyt-node-left-pass-1-v1",
       "point": {
-        "x": 648,
-        "y": 480
+        "x": 544,
+        "y": 424
       },
       "kind": "normal",
-      "channelWidth": 56
+      "channelWidth": 54
     },
     {
       "stableId": "jyt-node-left-pass-2-v1",
       "point": {
-        "x": 600,
-        "y": 456
+        "x": 1096,
+        "y": 480
       },
       "kind": "normal",
-      "channelWidth": 56
+      "channelWidth": 54
     },
     {
       "stableId": "jyt-node-left-pass-3-v1",
       "point": {
-        "x": 552,
+        "x": 1216,
         "y": 432
       },
       "kind": "normal",
-      "channelWidth": 56
+      "channelWidth": 54
     },
     {
       "stableId": "jyt-node-left-pass-4-v1",
       "point": {
-        "x": 432,
-        "y": 432
+        "x": 1376,
+        "y": 696
       },
       "kind": "normal",
-      "channelWidth": 48
+      "channelWidth": 54
     },
     {
       "stableId": "jyt-node-library-shelf-v1",
       "point": {
-        "x": 1448,
-        "y": 600
+        "x": 1464,
+        "y": 704
       },
       "kind": "doorway",
-      "channelWidth": 48
+      "channelWidth": 54
     },
     {
       "stableId": "jyt-node-main-seat-v1",
@@ -336,7 +336,7 @@
         "y": 320
       },
       "kind": "junction",
-      "channelWidth": 72
+      "channelWidth": 54
     },
     {
       "stableId": "jyt-node-right-guard-v1",
@@ -345,25 +345,25 @@
         "y": 594
       },
       "kind": "normal",
-      "channelWidth": 56
+      "channelWidth": 54
     },
     {
       "stableId": "jyt-node-roster-book-v1",
       "point": {
-        "x": 360,
-        "y": 400
+        "x": 408,
+        "y": 392
       },
       "kind": "doorway",
-      "channelWidth": 48
+      "channelWidth": 54
     },
     {
       "stableId": "jyt-node-west-hall-v1",
       "point": {
-        "x": 524,
-        "y": 640
+        "x": 520,
+        "y": 664
       },
       "kind": "normal",
-      "channelWidth": 64
+      "channelWidth": 54
     }
   ],
   "edges": [
@@ -379,8 +379,8 @@
           "y": 480
         },
         {
-          "x": 1212,
-          "y": 620
+          "x": 1288,
+          "y": 680
         }
       ]
     },
@@ -396,12 +396,8 @@
           "y": 480
         },
         {
-          "x": 820,
-          "y": 584
-        },
-        {
-          "x": 732,
-          "y": 733
+          "x": 816,
+          "y": 704
         }
       ]
     },
@@ -410,15 +406,15 @@
       "from": "jyt-node-council-v1",
       "to": "jyt-node-left-pass-1-v1",
       "bidirectional": true,
-      "costMultiplier": 1.1,
+      "costMultiplier": 1,
       "points": [
         {
           "x": 880,
           "y": 480
         },
         {
-          "x": 648,
-          "y": 480
+          "x": 544,
+          "y": 424
         }
       ]
     },
@@ -434,116 +430,84 @@
           "y": 480
         },
         {
-          "x": 524,
-          "y": 640
+          "x": 520,
+          "y": 664
         }
       ]
     },
     {
       "stableId": "jyt-edge-east-bounty-v1",
-      "from": "jyt-node-east-hall-v1",
+      "from": "jyt-node-left-pass-3-v1",
       "to": "jyt-node-bounty-board-v1",
       "bidirectional": true,
       "costMultiplier": 1.1,
       "points": [
         {
-          "x": 1212,
-          "y": 620
+          "x": 1216,
+          "y": 432
         },
         {
-          "x": 1208,
-          "y": 616
-        },
-        {
-          "x": 1128,
-          "y": 524
-        },
-        {
-          "x": 1124,
-          "y": 520
-        },
-        {
-          "x": 1120,
-          "y": 484
-        },
-        {
-          "x": 1148,
-          "y": 468
-        },
-        {
-          "x": 1152,
-          "y": 464
-        },
-        {
-          "x": 1440,
-          "y": 420
+          "x": 1456,
+          "y": 416
         }
       ]
     },
     {
       "stableId": "jyt-edge-east-library-v1",
-      "from": "jyt-node-east-hall-v1",
+      "from": "jyt-node-left-pass-4-v1",
       "to": "jyt-node-library-shelf-v1",
       "bidirectional": true,
       "costMultiplier": 1,
       "points": [
         {
-          "x": 1212,
-          "y": 620
-        },
-        {
-          "x": 1408,
-          "y": 644
+          "x": 1376,
+          "y": 696
         },
         {
           "x": 1416,
-          "y": 652
+          "y": 680
         },
         {
-          "x": 1452,
-          "y": 648
+          "x": 1440,
+          "y": 704
         },
         {
-          "x": 1456,
-          "y": 644
-        },
-        {
-          "x": 1448,
-          "y": 600
+          "x": 1464,
+          "y": 704
         }
       ]
     },
     {
       "stableId": "jyt-edge-east-right-guard-v1",
-      "from": "jyt-node-east-hall-v1",
-      "to": "jyt-node-right-guard-v1",
+      "from": "jyt-node-right-guard-v1",
+      "to": "jyt-node-left-pass-2-v1",
       "bidirectional": true,
       "costMultiplier": 1.05,
       "points": [
         {
-          "x": 1212,
-          "y": 620
-        },
-        {
           "x": 1082,
           "y": 594
+        },
+        {
+          "x": 1096,
+          "y": 480
         }
       ]
     },
     {
       "stableId": "jyt-edge-left-pass-1-2-v1",
       "from": "jyt-node-left-pass-1-v1",
-      "to": "jyt-node-left-pass-2-v1",
+      "to": "jyt-node-roster-book-v1",
       "bidirectional": true,
-      "costMultiplier": 1.05,
+      "costMultiplier": 1,
       "points": [
         {
-          "x": 648,
-          "y": 480
+          "x": 544,
+          "y": 424
         },
         {
-          "x": 600,
-          "y": 456
+          "x": 408,
+          "y": 392
         }
       ]
     },
@@ -555,46 +519,58 @@
       "costMultiplier": 1.05,
       "points": [
         {
-          "x": 600,
-          "y": 456
+          "x": 1096,
+          "y": 480
         },
         {
-          "x": 552,
+          "x": 1104,
+          "y": 464
+        },
+        {
+          "x": 1144,
+          "y": 440
+        },
+        {
+          "x": 1216,
           "y": 432
         }
       ]
     },
     {
       "stableId": "jyt-edge-left-pass-3-4-v1",
-      "from": "jyt-node-left-pass-3-v1",
-      "to": "jyt-node-left-pass-4-v1",
+      "from": "jyt-node-council-v1",
+      "to": "jyt-node-left-pass-3-v1",
       "bidirectional": true,
       "costMultiplier": 1.05,
       "points": [
         {
-          "x": 552,
-          "y": 432
+          "x": 880,
+          "y": 480
         },
         {
-          "x": 432,
+          "x": 1216,
           "y": 432
         }
       ]
     },
     {
       "stableId": "jyt-edge-left-pass-4-roster-book-v1",
-      "from": "jyt-node-left-pass-4-v1",
-      "to": "jyt-node-roster-book-v1",
+      "from": "jyt-node-east-hall-v1",
+      "to": "jyt-node-left-pass-4-v1",
       "bidirectional": true,
       "costMultiplier": 1.1,
       "points": [
         {
-          "x": 432,
-          "y": 432
+          "x": 1288,
+          "y": 680
         },
         {
-          "x": 360,
-          "y": 400
+          "x": 1304,
+          "y": 696
+        },
+        {
+          "x": 1376,
+          "y": 696
         }
       ]
     },
@@ -616,6 +592,31 @@
       ]
     },
     {
+      "stableId": "jyt-edge-rightguard-eastlower-v2",
+      "from": "jyt-node-right-guard-v1",
+      "to": "jyt-node-east-hall-v1",
+      "bidirectional": true,
+      "costMultiplier": 1,
+      "points": [
+        {
+          "x": 1082,
+          "y": 594
+        },
+        {
+          "x": 1160,
+          "y": 620
+        },
+        {
+          "x": 1200,
+          "y": 640
+        },
+        {
+          "x": 1288,
+          "y": 680
+        }
+      ]
+    },
+    {
       "stableId": "jyt-edge-west-agent-v1",
       "from": "jyt-node-west-hall-v1",
       "to": "jyt-node-agent-roster-v1",
@@ -623,20 +624,57 @@
       "costMultiplier": 1,
       "points": [
         {
-          "x": 524,
-          "y": 640
+          "x": 520,
+          "y": 664
         },
         {
-          "x": 420,
-          "y": 668
+          "x": 432,
+          "y": 688
         },
         {
           "x": 416,
-          "y": 672
+          "y": 704
         },
         {
-          "x": 240,
+          "x": 312,
+          "y": 704
+        },
+        {
+          "x": 312,
           "y": 680
+        }
+      ]
+    },
+    {
+      "stableId": "jyt-edge-west-lower-upper-v2",
+      "from": "jyt-node-west-hall-v1",
+      "to": "jyt-node-left-pass-1-v1",
+      "bidirectional": true,
+      "costMultiplier": 1,
+      "points": [
+        {
+          "x": 520,
+          "y": 664
+        },
+        {
+          "x": 544,
+          "y": 656
+        },
+        {
+          "x": 648,
+          "y": 520
+        },
+        {
+          "x": 648,
+          "y": 472
+        },
+        {
+          "x": 600,
+          "y": 440
+        },
+        {
+          "x": 544,
+          "y": 424
         }
       ]
     }
@@ -657,8 +695,8 @@
       "slotId": "agent-roster-parking-2",
       "regionId": "agent-roster",
       "point": {
-        "x": 192,
-        "y": 680
+        "x": 280,
+        "y": 728
       },
       "kind": "parking"
     },
@@ -677,8 +715,8 @@
       "slotId": "bounty-board-parking-1",
       "regionId": "bounty-board",
       "point": {
-        "x": 1480,
-        "y": 420
+        "x": 1360,
+        "y": 416
       },
       "kind": "parking"
     },
@@ -687,8 +725,8 @@
       "slotId": "bounty-board-parking-2",
       "regionId": "bounty-board",
       "point": {
-        "x": 1400,
-        "y": 420
+        "x": 1408,
+        "y": 416
       },
       "kind": "parking"
     },
@@ -697,8 +735,8 @@
       "slotId": "bounty-board-parking-3",
       "regionId": "bounty-board",
       "point": {
-        "x": 1520,
-        "y": 420
+        "x": 1456,
+        "y": 416
       },
       "kind": "parking"
     },
@@ -707,8 +745,8 @@
       "slotId": "bounty-board-parking-4",
       "regionId": "bounty-board",
       "point": {
-        "x": 1360,
-        "y": 360
+        "x": 1504,
+        "y": 424
       },
       "kind": "parking"
     },
@@ -717,18 +755,8 @@
       "slotId": "bounty-board-parking-5",
       "regionId": "bounty-board",
       "point": {
-        "x": 1440,
-        "y": 360
-      },
-      "kind": "parking"
-    },
-    {
-      "stableId": "jyt-slot-bounty-parking-v6",
-      "slotId": "bounty-board-parking-6",
-      "regionId": "bounty-board",
-      "point": {
-        "x": 1520,
-        "y": 360
+        "x": 1552,
+        "y": 408
       },
       "kind": "parking"
     },
@@ -817,8 +845,8 @@
       "slotId": "gate-parking-2",
       "regionId": "gate",
       "point": {
-        "x": 684,
-        "y": 764
+        "x": 816,
+        "y": 760
       },
       "kind": "parking"
     },
@@ -827,8 +855,8 @@
       "slotId": "gate-parking-3",
       "regionId": "gate",
       "point": {
-        "x": 820,
-        "y": 764
+        "x": 856,
+        "y": 760
       },
       "kind": "parking"
     },
@@ -848,8 +876,8 @@
       "slotId": "library-shelf-parking-1",
       "regionId": "library-shelf",
       "point": {
-        "x": 1470,
-        "y": 600
+        "x": 1432,
+        "y": 680
       },
       "kind": "parking"
     },
@@ -858,8 +886,8 @@
       "slotId": "library-shelf-parking-2",
       "regionId": "library-shelf",
       "point": {
-        "x": 1520,
-        "y": 608
+        "x": 1496,
+        "y": 736
       },
       "kind": "parking"
     },
@@ -868,8 +896,8 @@
       "slotId": "library-shelf-parking-3",
       "regionId": "library-shelf",
       "point": {
-        "x": 1568,
-        "y": 608
+        "x": 1476,
+        "y": 664
       },
       "kind": "parking"
     },
@@ -878,28 +906,8 @@
       "slotId": "library-shelf-parking-4",
       "regionId": "library-shelf",
       "point": {
-        "x": 1440,
-        "y": 720
-      },
-      "kind": "parking"
-    },
-    {
-      "stableId": "jyt-slot-library-parking-v5",
-      "slotId": "library-shelf-parking-5",
-      "regionId": "library-shelf",
-      "point": {
-        "x": 1520,
-        "y": 720
-      },
-      "kind": "parking"
-    },
-    {
-      "stableId": "jyt-slot-library-parking-v6",
-      "slotId": "library-shelf-parking-6",
-      "regionId": "library-shelf",
-      "point": {
-        "x": 1544,
-        "y": 752
+        "x": 1444,
+        "y": 740
       },
       "kind": "parking"
     },
@@ -908,8 +916,8 @@
       "slotId": "likui-home",
       "regionId": "gate",
       "point": {
-        "x": 732,
-        "y": 733
+        "x": 816,
+        "y": 704
       },
       "personaCode": "likui",
       "kind": "home"
@@ -919,8 +927,8 @@
       "slotId": "linchong-home",
       "regionId": "agent-roster",
       "point": {
-        "x": 240,
-        "y": 680
+        "x": 336,
+        "y": 728
       },
       "personaCode": "linchong",
       "kind": "home"
@@ -971,8 +979,8 @@
       "slotId": "right-guard-parking-3",
       "regionId": "right-guard",
       "point": {
-        "x": 1192,
-        "y": 648
+        "x": 1180,
+        "y": 632
       },
       "kind": "parking"
     },
@@ -981,8 +989,8 @@
       "slotId": "roster-book-parking-1",
       "regionId": "roster-book",
       "point": {
-        "x": 304,
-        "y": 424
+        "x": 312,
+        "y": 416
       },
       "kind": "parking"
     },
@@ -991,8 +999,8 @@
       "slotId": "roster-book-parking-2",
       "regionId": "roster-book",
       "point": {
-        "x": 344,
-        "y": 424
+        "x": 360,
+        "y": 400
       },
       "kind": "parking"
     },
@@ -1001,8 +1009,8 @@
       "slotId": "roster-book-parking-3",
       "regionId": "roster-book",
       "point": {
-        "x": 384,
-        "y": 424
+        "x": 408,
+        "y": 392
       },
       "kind": "parking"
     },
@@ -1011,8 +1019,8 @@
       "slotId": "roster-book-parking-4",
       "regionId": "roster-book",
       "point": {
-        "x": 424,
-        "y": 424
+        "x": 456,
+        "y": 392
       },
       "kind": "parking"
     },
@@ -1032,8 +1040,8 @@
       "slotId": "wuyong-home",
       "regionId": "library-shelf",
       "point": {
-        "x": 1432,
-        "y": 600
+        "x": 1464,
+        "y": 704
       },
       "personaCode": "wuyong",
       "kind": "home"

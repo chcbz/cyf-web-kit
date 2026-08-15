@@ -1,6 +1,10 @@
 import type {
   MapPoint, MapPolygon, MapRuntimeData, NavEdge, NavNode, PatrolRoute, Region, Slot,
 } from './movementSchema.js'
+import {
+  hasRequiredPointClearance, hasRequiredPolylineClearance, pointClearance, polylineClearance,
+  requiredChannelWidth, requiredClearance,
+} from '../simulation/clearanceGeometry.js'
 
 export interface SceneError {
   code: string
@@ -37,7 +41,9 @@ interface AnchorEvaluation {
 
 const SUPPORTED_MOVEMENT_SCHEMA = '1'
 const SUPPORTED_SCENE = 'juyiting-main'
-const MINIMUM_COLLIDER_CHANNEL_WIDTH = 36
+const MAXIMUM_COLLIDER_WIDTH = 42
+const MINIMUM_COLLIDER_CHANNEL_WIDTH = requiredChannelWidth(MAXIMUM_COLLIDER_WIDTH)
+const REQUIRED_CENTER_CLEARANCE = requiredClearance(MAXIMUM_COLLIDER_WIDTH)
 // TMX polyline endpoints may differ from node centers by at most two world pixels.
 const EDGE_ENDPOINT_TOLERANCE = 2
 const GEOMETRY_EPSILON = 1e-9
@@ -49,11 +55,13 @@ export function validateMapRuntime(map: MapRuntimeData): MapValidationResult {
   validateIdentities(map, errors)
 
   const validObstacles = validateObstacles(map.obstacles, errors)
-  const usableNodes = validateNodes(map.nodes, errors)
+  const usableNodes = validateNodes(map.nodes, validObstacles, errors)
   const nodesById = new Map(map.nodes.map(node => [node.stableId, node]))
   const traversableEdges = validateEdges(map.edges, nodesById, usableNodes, validObstacles, errors)
   const adjacency = buildAdjacency(map.nodes, map.edges, traversableEdges)
   const reverseAdjacency = reverseGraph(adjacency)
+
+  validateSlotClearance(map.slots, usableNodes, validObstacles, errors)
 
   const songjiangHomes = map.slots.filter(slot => slot.kind === 'home' && slot.personaCode === 'songjiang')
   const homeContext = validateSongjiangHome(
@@ -153,7 +161,9 @@ function validateObstacles(obstacles: MapPolygon[], errors: SceneError[]): MapPo
   })
 }
 
-function validateNodes(nodes: NavNode[], errors: SceneError[]): Map<string, NavNode> {
+function validateNodes(
+  nodes: NavNode[], obstacles: MapPolygon[], errors: SceneError[],
+): Map<string, NavNode> {
   const usableNodes = new Map<string, NavNode>()
   for (const node of nodes) {
     if (!(node.channelWidth > 0)) {
@@ -166,9 +176,17 @@ function validateNodes(nodes: NavNode[], errors: SceneError[]): Map<string, NavN
       errors.push(fatal(
         'CHANNEL_WIDTH_INCOMPATIBLE',
         '地图通道无法容纳人物碰撞体。',
-        `Node ${node.stableId} channelWidth ${node.channelWidth} is below collider diameter ${MINIMUM_COLLIDER_CHANNEL_WIDTH}.`,
+        `Node ${node.stableId} channelWidth ${node.channelWidth} is below required safe channel width ${MINIMUM_COLLIDER_CHANNEL_WIDTH}.`,
       ))
-    } else if (finitePoint(node.point)) {
+    } else if (!finitePoint(node.point)) {
+      errors.push(fatal('NODE_POINT_INVALID', '地图导航节点坐标无效。', `Node ${node.stableId} has a non-finite point.`))
+    } else if (!hasRequiredPointClearance(node.point, obstacles, REQUIRED_CENTER_CLEARANCE)) {
+      errors.push(fatal(
+        'NODE_CLEARANCE_INSUFFICIENT',
+        '地图导航节点离障碍物过近。',
+        `Node ${node.stableId} clearance ${formatDistance(pointClearance(node.point, obstacles))} is below required ${formatDistance(REQUIRED_CENTER_CLEARANCE)} world pixels.`,
+      ))
+    } else {
       usableNodes.set(node.stableId, node)
     }
   }
@@ -214,10 +232,17 @@ function validateEdges(
         '地图路径穿过了障碍物。',
         `Edge ${edge.stableId} intersects obstacle ${obstacleIndex}.`,
       ))
+    } else if (!geometryProblem && !hasRequiredPolylineClearance(collisionPath, obstacles, REQUIRED_CENTER_CLEARANCE)) {
+      errors.push(fatal(
+        'EDGE_CLEARANCE_INSUFFICIENT',
+        '地图路径离障碍物过近。',
+        `Edge ${edge.stableId} clearance ${formatDistance(polylineClearance(collisionPath, obstacles))} is below required ${formatDistance(REQUIRED_CENTER_CLEARANCE)} world pixels.`,
+      ))
     }
 
     if (
       from && to && edge.costMultiplier > 0 && !geometryProblem && obstacleIndex < 0
+      && hasRequiredPolylineClearance(collisionPath, obstacles, REQUIRED_CENTER_CLEARANCE)
       && usableNodes.has(from.stableId) && usableNodes.has(to.stableId)
     ) traversableEdges.add(edge.stableId)
   }
@@ -235,6 +260,33 @@ function edgeGeometryProblem(edge: NavEdge, from: NavNode, to: NavNode): string 
     return `Edge ${edge.stableId} runtime endpoints must be within ${EDGE_ENDPOINT_TOLERANCE} world pixels of from ${from.stableId} and to ${to.stableId}; distances were ${formatDistance(firstDistance)} and ${formatDistance(lastDistance)}.`
   }
   return undefined
+}
+
+function validateSlotClearance(
+  slots: Slot[], usableNodes: Map<string, NavNode>, obstacles: MapPolygon[], errors: SceneError[],
+): void {
+  for (const slot of slots) {
+    if (!finitePoint(slot.point)) continue
+    const clearance = pointClearance(slot.point, obstacles)
+    if (!hasRequiredPointClearance(slot.point, obstacles, REQUIRED_CENTER_CLEARANCE)) {
+      errors.push(fatal(
+        'SLOT_CLEARANCE_INSUFFICIENT',
+        '地图站位离障碍物过近。',
+        `Slot ${slot.stableId} clearance ${formatDistance(clearance)} is below required ${formatDistance(REQUIRED_CENTER_CLEARANCE)} world pixels.`,
+      ))
+      continue
+    }
+    const connector = [...usableNodes.values()].some(node => hasRequiredPolylineClearance(
+      [slot.point, node.point], obstacles, REQUIRED_CENTER_CLEARANCE,
+    ))
+    if (!connector) {
+      errors.push(fatal(
+        'SLOT_CONNECTOR_CLEARANCE_INSUFFICIENT',
+        '地图站位无法安全连接导航网络。',
+        `Slot ${slot.stableId} has no connector with at least ${formatDistance(REQUIRED_CENTER_CLEARANCE)} world pixels of clearance.`,
+      ))
+    }
+  }
 }
 
 function validateSongjiangHome(
@@ -421,7 +473,9 @@ function visibleNodes(
   point: MapPoint, nodes: Iterable<NavNode>, obstacles: MapPolygon[],
 ): NavNode[] {
   return [...nodes]
-    .filter(candidate => intersectingObstacle([point, candidate.point], obstacles) < 0)
+    .filter(candidate => hasRequiredPolylineClearance(
+      [point, candidate.point], obstacles, REQUIRED_CENTER_CLEARANCE,
+    ))
     .sort((left, right) => (
       pointDistance(point, left.point) - pointDistance(point, right.point)
       || compareText(left.stableId, right.stableId)

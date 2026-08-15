@@ -314,11 +314,20 @@ function validateRuntimeResource(resource, referencedBy, allowedTypes) {
   if (typeof resource.src !== 'string' || resource.src.trim() === '') {
     throw new Error(`Runtime resource from ${referencedBy} is missing src`)
   }
-  return { path: runtimeSourceToPublicPath(resource.src) }
+  return { path: runtimeSourceToPublicPath(resource.src, resource.type) }
 }
 
-function runtimeSourceToPublicPath(source) {
-  return canonicalizeJuyitingRuntimeSource(source)
+function runtimeSourceToPublicPath(source, resourceType) {
+  if (resourceType !== 'tmx') return canonicalizeJuyitingRuntimeSource(source)
+
+  const queryIndex = source.indexOf('?')
+  const pathname = queryIndex < 0 ? source : source.slice(0, queryIndex)
+  const path = canonicalizeJuyitingRuntimeSource(pathname)
+  const query = queryIndex < 0 ? '' : source.slice(queryIndex + 1)
+  if (!/^v=[0-9a-f]{64}$/.test(query)) {
+    throw new Error(`Juyiting TMX runtime source must contain exactly one lowercase SHA-256 v query: ${source}`)
+  }
+  return path
 }
 
 function tmxSourceToPublicPath(source) {

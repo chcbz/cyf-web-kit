@@ -1,16 +1,19 @@
 import { expect } from 'chai'
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'fs'
 
 import { createGameConfig, HALL_SCENE_HEIGHT, HALL_SCENE_WIDTH } from '../src/game/config.js'
 import {
   HALL_BOOT_RESOURCES,
   HALL_MAP_RESOURCE,
+  HALL_MAP_VERSION,
   buildHallMapResources,
   buildPersonaSpriteResource,
   personaSpriteResourceName
 } from '../src/game/resources.js'
 import { PERSONA_SPRITE_MANIFEST } from '../src/game/sprites/personaSpriteManifest.js'
 import { parseJuyiHallTmx } from '../src/game/tiledMap.js'
+import { ACCEPTED_TMX_SHA256 } from '../src/game/occlusion/hallSceneAssembly.js'
 
 const imageSize = (path) => {
   const bytes = readFileSync(path)
@@ -49,6 +52,17 @@ describe('Juyiting hall scene assets', () => {
     expect(HALL_BOOT_RESOURCES).to.deep.equal([
       HALL_MAP_RESOURCE
     ])
+  })
+
+  it('cache-busts hall.tmx with the exact V2-accepted content hash', () => {
+    const hallTmxSha256 = createHash('sha256').update(readFileSync('public/juyiting/hall.tmx')).digest('hex')
+    const resourceUrl = new URL(HALL_MAP_RESOURCE.src, 'https://juyiting.test/')
+
+    expect(HALL_MAP_VERSION).to.equal(hallTmxSha256)
+    expect(HALL_MAP_VERSION).to.equal(ACCEPTED_TMX_SHA256)
+    expect(resourceUrl.pathname).to.equal('/juyiting/hall.tmx')
+    expect(resourceUrl.searchParams.getAll('v')).to.deep.equal([hallTmxSha256])
+    expect([...resourceUrl.searchParams.keys()]).to.deep.equal(['v'])
   })
 
   it('derives tileset and image layer resources from TMX map data', () => {

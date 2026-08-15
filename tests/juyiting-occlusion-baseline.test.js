@@ -127,7 +127,7 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
     expect(structure.groups.nav_area.length).to.equal(1)
     expect(structure.groups.regions.length).to.equal(8)
     expect(structure.groups.nav_nodes.length).to.equal(14)
-    expect(structure.groups.nav_edges.length).to.equal(13)
+    expect(structure.groups.nav_edges.length).to.equal(15)
     expect(structure.groups.patrol_routes.length).to.equal(6)
   })
 
@@ -1089,6 +1089,39 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
     expect(audit.files.some(entry => entry.path.includes('fake-comment'))).to.equal(false)
   })
 
+  it('audits a SHA-versioned TMX URL as the underlying public file and rejects ambiguous cache keys', () => {
+    const validSpriteManifest = {
+      personas: { songjiang: { personaCode: 'songjiang', src: '/juyiting/sprites/a.webp' } },
+    }
+    const base = {
+      structure: emptyMapStructure(),
+      network: [networkEntry('public/juyiting/hall.tmx'), networkEntry('public/juyiting/sprites/a.webp')],
+      buildMapResources: buildHallMapResources,
+      personaManifest: validSpriteManifest,
+      buildSpriteResource: buildPersonaSpriteResource,
+    }
+    const sha = 'a'.repeat(64)
+    const audit = buildRuntimeReferenceAudit({
+      ...base,
+      bootResources: [{ name: 'hall', type: 'tmx', src: `/juyiting/hall.tmx?v=${sha}` }],
+    })
+    expect(audit.files.map(entry => entry.path)).to.include('public/juyiting/hall.tmx')
+
+    for (const src of [
+      '/juyiting/hall.tmx',
+      '/juyiting/hall.tmx?v=short',
+      `/juyiting/hall.tmx?v=${'A'.repeat(64)}`,
+      `/juyiting/hall.tmx?v=${sha}&v=${sha}`,
+      `/juyiting/hall.tmx?v=${sha}&extra=1`,
+      `/juyiting/hall.tmx?v=${sha}#fragment`,
+    ]) {
+      expect(() => buildRuntimeReferenceAudit({
+        ...base,
+        bootResources: [{ name: 'hall', type: 'tmx', src }],
+      }), src).to.throw()
+    }
+  })
+
   it('discovers a sprite path carried by an executable module constant', async () => {
     const constantManifestModule = await importSourceModule(`
       const SPRITE_SRC = '/juyiting/sprites/persona-sheets-v1/wuyong-8-direction-v1.webp'
@@ -1157,7 +1190,7 @@ describe('Juyiting occlusion V2 E1 baseline', () => {
     const hallProps = structure.tilesets.find(tileset => tileset.name === 'hall-props')
     expect(hallProps.objectAlignment).to.equal('topleft')
     expect(structure.groups.nav_nodes.filter(object => object.ellipse && object.shape === 'ellipse').length).to.equal(9)
-    expect(structure.groups.parking_slots.filter(object => object.ellipse && object.shape === 'ellipse').length).to.equal(28)
+    expect(structure.groups.parking_slots.filter(object => object.ellipse && object.shape === 'ellipse').length).to.equal(25)
     expect(structure.groups.queue_slots.filter(object => object.ellipse && object.shape === 'ellipse').length).to.equal(1)
     expect(structure.groups.home_slots.filter(object => object.ellipse && object.shape === 'ellipse').length).to.equal(6)
   })

@@ -244,7 +244,7 @@ describe('TMX edit operations', () => {
       sceneId: runtime.sceneId,
     }, {
       movementSchemaVersion: '1',
-      navGraphVersion: 'juyiting-main-v1',
+      navGraphVersion: 'juyiting-main-v2-candidate-final',
       spriteManifestVersion: 'persona-sheets-v1',
       sceneId: 'juyiting-main',
     })

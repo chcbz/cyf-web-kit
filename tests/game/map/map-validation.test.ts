@@ -25,8 +25,8 @@ function validMap(): MapRuntimeData {
     ],
     nodes: [
       { stableId: 'node-main', point: { x: 90, y: 90 }, kind: 'junction', channelWidth: 72 },
-      { stableId: 'node-hall', point: { x: 200, y: 90 }, kind: 'normal', channelWidth: 48 },
-      { stableId: 'node-library', point: { x: 310, y: 90 }, kind: 'doorway', channelWidth: 48 },
+      { stableId: 'node-hall', point: { x: 200, y: 90 }, kind: 'normal', channelWidth: 60 },
+      { stableId: 'node-library', point: { x: 310, y: 90 }, kind: 'doorway', channelWidth: 60 },
     ],
     edges: [
       {
@@ -121,8 +121,11 @@ describe('map validation', () => {
     assert.deepEqual(result.errors.map(error => error.code), [
       'CHANNEL_WIDTH_INCOMPATIBLE',
       'CORE_REGION_UNREACHABLE',
+      'EDGE_CLEARANCE_INSUFFICIENT',
       'EDGE_INTERSECTS_OBSTACLE',
       'NAV_GRAPH_DISCONNECTED',
+      'NODE_CLEARANCE_INSUFFICIENT',
+      'SLOT_CLEARANCE_INSUFFICIENT',
     ])
     assert.match(
       result.errors.find(error => error.code === 'CORE_REGION_UNREACHABLE')?.technicalMessage ?? '',
@@ -220,7 +223,7 @@ describe('map validation', () => {
   it('projects a slot to the nearest visible round-trip node instead of a nearer ineligible node', () => {
     const map = validMap()
     map.slots[1].point = { x: 390, y: 175 }
-    map.nodes.push({ stableId: 'node-dead-end', point: { x: 390, y: 181 }, kind: 'normal', channelWidth: 48 })
+    map.nodes.push({ stableId: 'node-dead-end', point: { x: 390, y: 181 }, kind: 'normal', channelWidth: 60 })
     map.edges.push({
       stableId: 'edge-dead-end-main', from: 'node-dead-end', to: 'node-main', bidirectional: false,
       costMultiplier: 1, points: [{ x: 390, y: 181 }, { x: 90, y: 90 }],
@@ -233,7 +236,7 @@ describe('map validation', () => {
     const map = validMap()
     map.nodes[0].point = { x: 170, y: 90 }
     map.edges[0].points = [{ x: 170, y: 90 }, { x: 200, y: 90 }]
-    map.nodes.push({ stableId: 'node-nearest-dead', point: { x: 60, y: -5 }, kind: 'normal', channelWidth: 48 })
+    map.nodes.push({ stableId: 'node-nearest-dead', point: { x: 60, y: -5 }, kind: 'normal', channelWidth: 60 })
 
     assert.deepEqual(validateMapRuntime(map), { valid: true, errors: [], warnings: [] })
   })
@@ -335,4 +338,22 @@ describe('map validation', () => {
       assert.equal(errors[0].technicalMessage, `Obstacle 0 must contain ${reason}.`)
     })
   }
+
+  it('reports explicit 27px clearance failures for nodes, edges, slots, and slot connectors', () => {
+    const map = validMap()
+    map.obstacles = [{ points: [{ x: 120, y: 105 }, { x: 140, y: 105 }, { x: 140, y: 125 }, { x: 120, y: 125 }] }]
+    map.nodes[1].point = { x: 150, y: 90 }
+    map.edges[0].points = [{ x: 90, y: 90 }, { x: 150, y: 90 }]
+    map.slots[1].point = { x: 150, y: 90 }
+
+    const codes = errorCodes(map)
+    assert.ok(codes.includes('NODE_CLEARANCE_INSUFFICIENT'))
+    assert.ok(codes.includes('EDGE_CLEARANCE_INSUFFICIENT'))
+    assert.ok(codes.includes('SLOT_CLEARANCE_INSUFFICIENT'))
+
+    const connectorMap = validMap()
+    connectorMap.slots[1].point = { x: 390, y: 90 }
+    connectorMap.obstacles = [{ points: [{ x: 340, y: 110 }, { x: 360, y: 110 }, { x: 360, y: 130 }, { x: 340, y: 130 }] }]
+    assert.ok(errorCodes(connectorMap).includes('SLOT_CONNECTOR_CLEARANCE_INSUFFICIENT'))
+  })
 })

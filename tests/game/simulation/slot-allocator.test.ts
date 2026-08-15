@@ -98,6 +98,18 @@ describe('slot allocator', () => {
     })), null)
   })
 
+  it('enumerates without locking, then atomically claims only the scored slot', () => {
+    const allocator = createSlotAllocator(slots)
+    const candidates = allocator.available('council-table', command())
+    assert.deepEqual(candidates.map(slot => slot.slotId), ['council-a', 'council-b'])
+    assert.equal(allocator.occupant('council-a'), null)
+    assert.equal(allocator.reserveSlot('council-b', command())?.slotId, 'council-b')
+    assert.equal(allocator.occupant('council-a'), null)
+    assert.equal(allocator.occupant('council-b')?.agentId, 'agent-songjiang')
+    assert.equal(allocator.reserveSlot('council-a', command({ agentId: 'agent-wuyong', commandId: 'other' }))?.slotId, 'council-a')
+    assert.equal(allocator.reserveSlot('council-b', command({ agentId: 'agent-wuyong', commandId: 'steal' })), null)
+  })
+
   it('uses locale-independent code-unit slot ordering', () => {
     const allocator = createSlotAllocator([
       {

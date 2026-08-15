@@ -308,24 +308,30 @@ function activate(
     return
   }
 
-  const targetSlot = slots.reserve(command.targetRegionId, command)
+  const origin = { x: agent.snapshot.x, y: agent.snapshot.y }
+  const scoredSlots = slots.available(command.targetRegionId, command).flatMap(slot => {
+    const path = pathfinder.find(origin, slot.point, { colliderWidth: definition.collider.width })
+    return path.status === 'found' ? [{ slot, path }] : []
+  }).sort((left, right) => (
+    left.path.cost - right.path.cost
+    || compareSlotChoice(left.slot, right.slot)
+  ))
+  const selected = scoredSlots[0]
+  if (!selected) {
+    releaseReservation(agent, slots)
+    block(agent, command, phaseEvents, now)
+    return
+  }
+  // Scoring never owns a slot. Claim only the final choice, atomically, so a
+  // failed/less-optimal candidate cannot transiently displace another agent.
+  const targetSlot = slots.reserveSlot(selected.slot.slotId, command)
   if (!targetSlot) {
     releaseReservation(agent, slots)
     block(agent, command, phaseEvents, now)
     return
   }
   agent.reservedSlotId = targetSlot.slotId
-
-  const path = pathfinder.find(
-    { x: agent.snapshot.x, y: agent.snapshot.y },
-    targetSlot.point,
-    { colliderWidth: definition.collider.width },
-  )
-  if (path.status !== 'found') {
-    releaseReservation(agent, slots)
-    block(agent, command, phaseEvents, now)
-    return
-  }
+  const path = selected.path
 
   let points = path.points.map(copyPoint)
   if (command.source === 'backend') {
@@ -348,6 +354,11 @@ function activate(
     targetSlot,
   }
   if (points.length < 2 || pathLength(points) <= EPSILON) arrive(agent, phaseEvents, now)
+}
+
+function compareSlotChoice(left: Slot, right: Slot): number {
+  return left.stableId < right.stableId ? -1 : left.stableId > right.stableId ? 1
+    : left.slotId < right.slotId ? -1 : left.slotId > right.slotId ? 1 : 0
 }
 
 function advance(

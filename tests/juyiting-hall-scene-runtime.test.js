@@ -2,6 +2,7 @@
 
 import { createHallSceneClass } from '../src/game/scenes/HallScene.js'
 import { JuyitingGame } from '../src/game/JuyitingGame.js'
+import { HALL_MAP_RESOURCE } from '../src/game/resources.js'
 import { readFileSync } from 'node:fs'
 import { useHallCommandQueue } from '../src/composables/juyiting/useHallCommandQueue.js'
 import { useHallSceneState } from '../src/composables/juyiting/useHallSceneState.js'
@@ -12,6 +13,39 @@ import { createMovementEngine } from '../src/game/simulation/movementEngine.js'
 const HALL_XML = readFileSync('public/juyiting/hall.tmx', 'utf8')
 
 describe('HallScene melonJS runtime compatibility', () => {
+  it('prefetches the SHA-versioned TMX and registers its XML through the melonJS data path', async () => {
+    const originalFetch = globalThis.fetch
+    const fetched = []
+    const loaded = []
+    const mountToken = Symbol('mount')
+    const game = new JuyitingGame()
+    game._mountToken = mountToken
+
+    try {
+      globalThis.fetch = async url => {
+        fetched.push(url)
+        return { ok: true, status: 200, text: async () => HALL_XML }
+      }
+      const me = {
+        loader: {
+          load: (resource, onload) => {
+            loaded.push(resource)
+            onload()
+          }
+        }
+      }
+
+      await game._loadResources(me, [HALL_MAP_RESOURCE], mountToken)
+
+      expect(fetched).to.deep.equal([HALL_MAP_RESOURCE.src])
+      expect(loaded).to.have.length(1)
+      expect(loaded[0]).to.deep.include(HALL_MAP_RESOURCE)
+      expect(loaded[0].data).to.equal(HALL_XML)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
   it('derives an identical canvas display rectangle regardless of prior melonJS fit styles', () => {
     const displayVariables = new Map()
     const canvas = {

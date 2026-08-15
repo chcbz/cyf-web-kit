@@ -1,6 +1,12 @@
 import type {
   MapPoint, MapPolygon, MapRuntimeData, NavEdge, NavNode,
 } from '../map/movementSchema.js'
+import {
+  hasRequiredPointClearance,
+  hasRequiredPolylineClearance,
+  requiredChannelWidth,
+  requiredClearance,
+} from './clearanceGeometry.js'
 
 export type NavigationGraph = Pick<MapRuntimeData, 'nodes' | 'edges' | 'obstacles'>
 
@@ -24,7 +30,6 @@ interface SearchResult {
   nodeIds: string[]
   traversals: Traversal[]
   cost: number
-  startPoint: MapPoint
 }
 
 interface Projection {
@@ -32,12 +37,19 @@ interface Projection {
   distance: number
 }
 
+interface Candidate {
+  nodeIds: string[]
+  points: MapPoint[]
+  cost: number
+  tieKey: string
+  hardTurn: boolean
+}
+
 const EPSILON = 1e-9
+const HARD_TURN_COSINE = Math.cos(120 * Math.PI / 180)
 
 export function createGraphPathfinder(graph: NavigationGraph): PathFinder {
-  return {
-    find: (start, end, options) => findGraphPath(graph, start, end, options),
-  }
+  return { find: (start, end, options) => findGraphPath(graph, start, end, options) }
 }
 
 export function findGraphPath(
@@ -47,14 +59,20 @@ export function findGraphPath(
   options: { colliderWidth: number },
 ): PathResult {
   requireInputs(start, end, options.colliderWidth)
-  const restricted = solve(graph, start, end, options.colliderWidth, true)
-  if (restricted) return foundResult(start, end, restricted)
+  const clearance = requiredClearance(options.colliderWidth)
+  if (hasRequiredPolylineClearance([start, end], graph.obstacles, clearance)) {
+    return { status: 'found', points: [copyPoint(start), copyPoint(end)], nodeIds: [], cost: distance(start, end) }
+  }
 
-  const unrestricted = solve(graph, start, end, options.colliderWidth, false)
+  const channelWidth = requiredChannelWidth(options.colliderWidth)
+  const restricted = solve(graph, start, end, channelWidth, clearance, true)
+  if (restricted) return foundResult(restricted)
+
+  const unrestricted = solve(graph, start, end, channelWidth, clearance, false)
   if (unrestricted) return { status: 'blocked', reason: 'channel-too-narrow' }
 
-  if (projections(graph.nodes, start, graph.obstacles, options.colliderWidth, false).length === 0
-    || projections(graph.nodes, end, graph.obstacles, options.colliderWidth, false).length === 0) {
+  if (projections(graph.nodes, start, graph.obstacles, channelWidth, clearance, false).length === 0
+    || projections(graph.nodes, end, graph.obstacles, channelWidth, clearance, false).length === 0) {
     return { status: 'blocked', reason: 'no-nearest-node' }
   }
   return { status: 'blocked', reason: 'disconnected' }
@@ -64,31 +82,71 @@ function solve(
   graph: NavigationGraph,
   start: MapPoint,
   end: MapPoint,
-  colliderWidth: number,
-  enforceWidth: boolean,
-): SearchResult | null {
+  channelWidth: number,
+  clearance: number,
+  enforceClearance: boolean,
+): Candidate | null {
   const nodes = graph.nodes.filter(node => validNode(node)
-    && (!enforceWidth || node.channelWidth >= colliderWidth))
+    && (!enforceClearance || node.channelWidth >= channelWidth)
+    && (!enforceClearance || hasRequiredPointClearance(node.point, graph.obstacles, clearance)))
   const nodesById = new Map(nodes.map(node => [node.stableId, node]))
-  const startProjections = projections(nodes, start, graph.obstacles, colliderWidth, enforceWidth)
-  const endProjections = projections(nodes, end, graph.obstacles, colliderWidth, enforceWidth)
+  const startProjections = projections(nodes, start, graph.obstacles, channelWidth, clearance, enforceClearance)
+  const endProjections = projections(nodes, end, graph.obstacles, channelWidth, clearance, enforceClearance)
   if (startProjections.length === 0 || endProjections.length === 0) return null
 
-  const adjacency = buildAdjacency(graph.edges, nodesById, graph.obstacles)
+  const adjacency = buildAdjacency(graph.edges, nodesById, graph.obstacles, clearance, enforceClearance)
   const minimumMultiplier = minimumEdgeMultiplier(graph.edges)
-  const traversableStarts = traversalProjections(startProjections, adjacency, nodes.length, 'start')
-  const traversableEnds = traversalProjections(endProjections, adjacency, nodes.length, 'end')
-  for (const pair of rankedProjectionPairs(traversableStarts, traversableEnds)) {
-    const result = aStar(
-      pair.start.node,
-      pair.end.node,
-      adjacency,
-      nodesById,
-      minimumMultiplier,
-    )
-    if (result) return result
+  const starts = traversalProjections(startProjections, adjacency, nodes.length, 'start')
+  const ends = traversalProjections(endProjections, adjacency, nodes.length, 'end')
+  const candidates: Candidate[] = []
+  for (const startProjection of starts) {
+    for (const endProjection of ends) {
+      const result = aStar(startProjection.node, endProjection.node, adjacency, nodesById, minimumMultiplier)
+      if (!result) continue
+      const rawPoints = deduplicatePoints([
+        start, startProjection.node.point,
+        ...result.traversals.flatMap(traversal => traversal.points), endProjection.node.point, end,
+      ])
+      const points = stringPull(rawPoints, graph.obstacles, clearance, enforceClearance)
+      candidates.push({
+        nodeIds: result.nodeIds,
+        points,
+        cost: result.cost + startProjection.distance + endProjection.distance,
+        tieKey: `${startProjection.node.stableId}\u0000${endProjection.node.stableId}\u0000${result.nodeIds.join('\u0000')}`,
+        hardTurn: pathHasHardTurn(points),
+      })
+    }
   }
-  return null
+  return chooseCandidate(candidates)
+}
+
+function chooseCandidate(candidates: Candidate[]): Candidate | null {
+  if (candidates.length === 0) return null
+  const ordinary = candidates.filter(candidate => !candidate.hardTurn)
+  return [...(ordinary.length > 0 ? ordinary : candidates)].sort(compareCandidate)[0] ?? null
+}
+
+function compareCandidate(left: Candidate, right: Candidate): number {
+  return compareNumber(left.cost, right.cost) || left.tieKey.localeCompare(right.tieKey)
+}
+
+export function pathHasHardTurn(points: readonly MapPoint[]): boolean {
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const previous = points[index - 1]
+    const current = points[index]
+    const next = points[index + 1]
+    const incomingX = current.x - previous.x
+    const incomingY = current.y - previous.y
+    const outgoingX = next.x - current.x
+    const outgoingY = next.y - current.y
+    const incomingLength = Math.hypot(incomingX, incomingY)
+    const outgoingLength = Math.hypot(outgoingX, outgoingY)
+    if (incomingLength <= EPSILON || outgoingLength <= EPSILON) continue
+    const cosine = (incomingX * outgoingX + incomingY * outgoingY)
+      / (incomingLength * outgoingLength)
+    if (cosine < HARD_TURN_COSINE - EPSILON) return true
+  }
+  return false
 }
 
 function traversalProjections(
@@ -99,7 +157,9 @@ function traversalProjections(
 ): Projection[] {
   if (nodeCount === 1) return candidates
   if (endpoint === 'start') {
-    return candidates.filter(candidate => (adjacency.get(candidate.node.stableId)?.length ?? 0) > 0)
+    return candidates.filter(candidate => (
+      adjacency.get(candidate.node.stableId)?.length ?? 0
+    ) > 0)
   }
   const incoming = new Set<string>()
   for (const traversals of adjacency.values()) {
@@ -108,55 +168,36 @@ function traversalProjections(
   return candidates.filter(candidate => incoming.has(candidate.node.stableId))
 }
 
-function rankedProjectionPairs(
-  starts: Projection[],
-  ends: Projection[],
-): Array<{ start: Projection, end: Projection }> {
-  return starts.flatMap(start => ends.map(end => ({ start, end })))
-    .sort((left, right) => compareNumber(
-      left.start.distance + left.end.distance,
-      right.start.distance + right.end.distance,
-    )
-      || compareNumber(left.start.distance, right.start.distance)
-      || compareNumber(left.end.distance, right.end.distance)
-      || left.start.node.stableId.localeCompare(right.start.node.stableId)
-      || left.end.node.stableId.localeCompare(right.end.node.stableId))
-}
-
 function projections(
-  nodes: NavNode[],
-  point: MapPoint,
-  obstacles: MapPolygon[],
-  colliderWidth: number,
-  enforceWidth: boolean,
+  nodes: NavNode[], point: MapPoint, obstacles: MapPolygon[], channelWidth: number,
+  clearance: number, enforceClearance: boolean,
 ): Projection[] {
   return nodes.filter(node => validNode(node)
-      && (!enforceWidth || node.channelWidth >= colliderWidth)
-      && visibleConnector(point, node.point, obstacles))
+      && (!enforceClearance || node.channelWidth >= channelWidth)
+      && visibleConnector(point, node.point, obstacles, clearance, enforceClearance))
     .map(node => ({ node, distance: distance(point, node.point) }))
     .sort((left, right) => compareNumber(left.distance, right.distance)
       || left.node.stableId.localeCompare(right.node.stableId))
 }
 
 function buildAdjacency(
-  edges: NavEdge[],
-  nodesById: Map<string, NavNode>,
-  obstacles: MapPolygon[],
+  edges: NavEdge[], nodesById: Map<string, NavNode>, obstacles: MapPolygon[],
+  clearance: number, enforceClearance: boolean,
 ): Map<string, Traversal[]> {
   const adjacency = new Map<string, Traversal[]>()
   for (const edge of edges) {
     const from = nodesById.get(edge.from)
     const to = nodesById.get(edge.to)
     if (!from || !to || !Number.isFinite(edge.costMultiplier) || edge.costMultiplier <= 0) continue
-    const forwardPoints = deduplicatePoints([from.point, ...edge.points, to.point])
-    const length = polylineLength(forwardPoints)
-    if (!Number.isFinite(length) || polylineIntersectsObstacles(forwardPoints, obstacles)) continue
+    const points = deduplicatePoints([from.point, ...edge.points, to.point])
+    const length = polylineLength(points)
+    if (!Number.isFinite(length) || !visibleConnectorPolyline(points, obstacles, clearance, enforceClearance)) continue
     addTraversal(adjacency, {
       edgeId: edge.stableId,
       from: edge.from,
       to: edge.to,
       cost: length * edge.costMultiplier,
-      points: forwardPoints,
+      points,
     })
     if (edge.bidirectional) {
       addTraversal(adjacency, {
@@ -164,7 +205,7 @@ function buildAdjacency(
         from: edge.to,
         to: edge.from,
         cost: length * edge.costMultiplier,
-        points: [...forwardPoints].reverse(),
+        points: [...points].reverse(),
       })
     }
   }
@@ -189,7 +230,7 @@ function aStar(
   minimumMultiplier: number,
 ): SearchResult | null {
   if (start.stableId === end.stableId) {
-    return { nodeIds: [start.stableId], traversals: [], cost: 0, startPoint: start.point }
+    return { nodeIds: [start.stableId], traversals: [], cost: 0 }
   }
   const frontier = [{
     nodeId: start.stableId,
@@ -217,7 +258,6 @@ function aStar(
         nodeIds: current.nodeIds,
         traversals: current.traversals,
         cost: current.cost,
-        startPoint: start.point,
       }
     }
     for (const traversal of adjacency.get(current.nodeId) ?? []) {
@@ -242,14 +282,50 @@ function aStar(
   return null
 }
 
-function foundResult(start: MapPoint, end: MapPoint, search: SearchResult): PathResult {
-  const graphPoints = search.traversals.flatMap(traversal => traversal.points)
-  return {
-    status: 'found',
-    points: deduplicatePoints([start, search.startPoint, ...graphPoints, end]),
-    nodeIds: [...search.nodeIds],
-    cost: search.cost,
+function foundResult(candidate: Candidate): PathResult {
+  return { status: 'found', points: candidate.points.map(copyPoint), nodeIds: [...candidate.nodeIds], cost: candidate.cost }
+}
+
+function stringPull(
+  points: MapPoint[],
+  obstacles: MapPolygon[],
+  clearance: number,
+  enforceClearance: boolean,
+): MapPoint[] {
+  if (!enforceClearance || points.length < 3) return points
+  const pulled = [points[0]]
+  let anchor = 0
+  while (anchor < points.length - 1) {
+    let next = points.length - 1
+    while (next > anchor + 1
+      && !hasRequiredPolylineClearance([points[anchor], points[next]], obstacles, clearance)) {
+      next -= 1
+    }
+    pulled.push(points[next])
+    anchor = next
   }
+  return deduplicatePoints(pulled)
+}
+
+function visibleConnector(
+  from: MapPoint,
+  to: MapPoint,
+  obstacles: MapPolygon[],
+  clearance: number,
+  enforceClearance: boolean,
+): boolean {
+  return visibleConnectorPolyline([from, to], obstacles, clearance, enforceClearance)
+}
+
+function visibleConnectorPolyline(
+  points: MapPoint[],
+  obstacles: MapPolygon[],
+  clearance: number,
+  enforceClearance: boolean,
+): boolean {
+  return enforceClearance
+    ? hasRequiredPolylineClearance(points, obstacles, clearance)
+    : hasRequiredPolylineClearance(points, obstacles, 0)
 }
 
 function minimumEdgeMultiplier(edges: NavEdge[]): number {
@@ -260,65 +336,6 @@ function minimumEdgeMultiplier(edges: NavEdge[]): number {
 
 function heuristic(from: NavNode, to: NavNode, minimumMultiplier: number): number {
   return distance(from.point, to.point) * minimumMultiplier
-}
-
-function visibleConnector(from: MapPoint, to: MapPoint, obstacles: MapPolygon[]): boolean {
-  return !polylineIntersectsObstacles([from, to], obstacles)
-}
-
-function polylineIntersectsObstacles(points: MapPoint[], obstacles: MapPolygon[]): boolean {
-  return obstacles.some(obstacle => polylineIntersectsPolygon(points, obstacle))
-}
-
-function polylineIntersectsPolygon(path: MapPoint[], polygon: MapPolygon): boolean {
-  if (polygon.points.length < 3) return false
-  if (path.some(point => pointInPolygon(point, polygon))) return true
-  for (let pathIndex = 0; pathIndex < path.length - 1; pathIndex += 1) {
-    for (let polygonIndex = 0; polygonIndex < polygon.points.length; polygonIndex += 1) {
-      const next = (polygonIndex + 1) % polygon.points.length
-      if (segmentsIntersect(
-        path[pathIndex], path[pathIndex + 1], polygon.points[polygonIndex], polygon.points[next],
-      )) return true
-    }
-  }
-  return false
-}
-
-function pointInPolygon(point: MapPoint, polygon: MapPolygon): boolean {
-  let inside = false
-  for (let index = 0, previous = polygon.points.length - 1;
-    index < polygon.points.length; previous = index, index += 1) {
-    const current = polygon.points[index]
-    const before = polygon.points[previous]
-    if (pointOnSegment(point, before, current)) return true
-    if ((current.y > point.y) !== (before.y > point.y)
-      && point.x < ((before.x - current.x) * (point.y - current.y))
-        / (before.y - current.y) + current.x) inside = !inside
-  }
-  return inside
-}
-
-function segmentsIntersect(a: MapPoint, b: MapPoint, c: MapPoint, d: MapPoint): boolean {
-  const abC = cross(a, b, c)
-  const abD = cross(a, b, d)
-  const cdA = cross(c, d, a)
-  const cdB = cross(c, d, b)
-  if (((abC > 0 && abD < 0) || (abC < 0 && abD > 0))
-    && ((cdA > 0 && cdB < 0) || (cdA < 0 && cdB > 0))) return true
-  return (approximatelyZero(abC) && pointOnSegment(c, a, b))
-    || (approximatelyZero(abD) && pointOnSegment(d, a, b))
-    || (approximatelyZero(cdA) && pointOnSegment(a, c, d))
-    || (approximatelyZero(cdB) && pointOnSegment(b, c, d))
-}
-
-function pointOnSegment(point: MapPoint, start: MapPoint, end: MapPoint): boolean {
-  return approximatelyZero(cross(start, end, point))
-    && point.x >= Math.min(start.x, end.x) && point.x <= Math.max(start.x, end.x)
-    && point.y >= Math.min(start.y, end.y) && point.y <= Math.max(start.y, end.y)
-}
-
-function cross(a: MapPoint, b: MapPoint, c: MapPoint): number {
-  return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
 }
 
 function polylineLength(points: MapPoint[]): number {
@@ -332,31 +349,36 @@ function polylineLength(points: MapPoint[]): number {
 function deduplicatePoints(points: MapPoint[]): MapPoint[] {
   const result: MapPoint[] = []
   for (const point of points) {
-    const previous = result.at(-1)
-    if (!previous || !samePoint(previous, point)) result.push({ x: point.x, y: point.y })
+    if (!samePoint(result.at(-1), point)) result.push(copyPoint(point))
   }
   return result
 }
 
 function validNode(node: NavNode): boolean {
-  return node.stableId.length > 0 && Number.isFinite(node.point.x) && Number.isFinite(node.point.y)
-    && Number.isFinite(node.channelWidth) && node.channelWidth > 0
+  return node.stableId.length > 0
+    && Number.isFinite(node.point.x)
+    && Number.isFinite(node.point.y)
+    && Number.isFinite(node.channelWidth)
+    && node.channelWidth > 0
 }
 
 function requireInputs(start: MapPoint, end: MapPoint, colliderWidth: number): void {
   if (![start.x, start.y, end.x, end.y].every(Number.isFinite)) {
     throw new TypeError('Path endpoints must contain finite world-pixel coordinates')
   }
-  if (!Number.isFinite(colliderWidth) || colliderWidth <= 0) {
-    throw new TypeError('colliderWidth must be positive and finite')
-  }
+  requiredClearance(colliderWidth)
 }
 
 function distance(left: MapPoint, right: MapPoint): number {
   return Math.hypot(left.x - right.x, left.y - right.y)
 }
 
-function samePoint(left: MapPoint, right: MapPoint): boolean {
+function copyPoint(point: MapPoint): MapPoint {
+  return { x: point.x, y: point.y }
+}
+
+function samePoint(left: MapPoint | undefined, right: MapPoint): boolean {
+  if (!left) return false
   return approximatelyEqual(left.x, right.x) && approximatelyEqual(left.y, right.y)
 }
 
@@ -366,8 +388,4 @@ function compareNumber(left: number, right: number): number {
 
 function approximatelyEqual(left: number, right: number): boolean {
   return Math.abs(left - right) <= EPSILON
-}
-
-function approximatelyZero(value: number): boolean {
-  return Math.abs(value) <= EPSILON
 }

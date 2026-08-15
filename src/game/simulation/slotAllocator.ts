@@ -8,6 +8,11 @@ export type MovementSlotOwner = {
 
 export type SlotAllocator = {
   homeFor(personaCode: string): Slot | null
+  /** Returns currently eligible slots without changing ownership. */
+  available(regionId: string, command: MovementCommand): Slot[]
+  /** Atomically claims this exact eligible slot, releasing a prior slot only after success. */
+  reserveSlot(slotId: string, command: MovementCommand): Slot | null
+  /** Legacy deterministic first-eligible reservation. Prefer available + reserveSlot for scored selection. */
   reserve(regionId: string, command: MovementCommand): Slot | null
   release(slotId: string, agentId: string): boolean
   occupant(slotId: string): MovementSlotOwner | null
@@ -21,6 +26,12 @@ export function createSlotAllocator(source: MapRuntimeData | readonly Slot[]): S
   const slotsById = new Map(slots.map(slot => [slot.slotId, slot]))
   const ownersBySlot = new Map<string, MovementSlotOwner>()
   const slotIdByAgent = new Map<string, string>()
+  const eligibleSlots = (regionId: string, command: MovementCommand): Slot[] => slots.filter(slot => (
+    slot.regionId === regionId
+    && (command.type === 'RETURN_HOME'
+      ? slot.kind === 'home' && slot.personaCode === command.personaCode
+      : slot.kind === 'parking')
+  ))
 
   return {
     homeFor(personaCode) {
@@ -28,30 +39,33 @@ export function createSlotAllocator(source: MapRuntimeData | readonly Slot[]): S
       return home ? copySlot(home) : null
     },
 
-    reserve(regionId, command) {
-      if (!nonBlank(regionId) || !validOwnerCommand(command)) return null
-      const candidates = slots.filter(slot => (
-        slot.regionId === regionId
-        && (command.type === 'RETURN_HOME'
-          ? slot.kind === 'home' && slot.personaCode === command.personaCode
-          : slot.kind === 'parking')
-      ))
-      const selected = candidates.find(slot => {
+    available(regionId, command) {
+      if (!nonBlank(regionId) || !validOwnerCommand(command)) return []
+      return eligibleSlots(regionId, command).filter(slot => {
         const owner = ownersBySlot.get(slot.slotId)
         return owner === undefined || owner.agentId === command.agentId
-      })
-      if (!selected) return null
+      }).map(copySlot)
+    },
+
+    reserveSlot(slotId, command) {
+      if (!nonBlank(slotId) || !validOwnerCommand(command)) return null
+      const selected = slotsById.get(slotId)
+      if (!selected || !eligibleSlots(selected.regionId, command).some(slot => slot.slotId === slotId)) return null
+      const owner = ownersBySlot.get(slotId)
+      if (owner && owner.agentId !== command.agentId) return null
 
       const previousSlotId = slotIdByAgent.get(command.agentId)
-      if (previousSlotId && previousSlotId !== selected.slotId) {
-        ownersBySlot.delete(previousSlotId)
-      }
-      ownersBySlot.set(selected.slotId, {
-        agentId: command.agentId,
-        commandId: command.commandId,
-      })
-      slotIdByAgent.set(command.agentId, selected.slotId)
+      // Claim the selected slot before releasing the old one: there is never a state
+      // where the agent loses its current reservation because the target was invalid.
+      ownersBySlot.set(slotId, { agentId: command.agentId, commandId: command.commandId })
+      slotIdByAgent.set(command.agentId, slotId)
+      if (previousSlotId && previousSlotId !== slotId) ownersBySlot.delete(previousSlotId)
       return copySlot(selected)
+    },
+
+    reserve(regionId, command) {
+      const selected = this.available(regionId, command)[0]
+      return selected ? this.reserveSlot(selected.slotId, command) : null
     },
 
     release(slotId, agentId) {

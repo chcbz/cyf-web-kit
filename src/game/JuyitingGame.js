@@ -362,22 +362,42 @@ export class JuyitingGame {
     const list = (resources || []).filter(Boolean)
     if (!list.length) return Promise.resolve()
 
-    return Promise.all(list.map(res => new Promise(resolve => {
-      if (!this._isCurrentMount(mountToken)) return resolve()
-      try {
-        me.loader.load(
-          res,
-          () => resolve(),
-          (err) => {
-            console.warn('[JuyitingGame] Failed:', res.name, err)
-            resolve()
-          }
-        )
-      } catch (e) {
-        console.warn('[JuyitingGame] Load error:', res.name, e.message)
-        resolve()
+    return Promise.all(list.map(async res => {
+      if (!this._isCurrentMount(mountToken)) return
+      let loadableResource = res
+
+      // melonJS determines the TMX format from the literal end of src, so a
+      // standard cache-busting query would be misread as "tmx?v=...". Fetch
+      // the versioned URL ourselves and use the loader's data path instead.
+      if (res.type === 'tmx') {
+        try {
+          const response = await fetch(res.src)
+          if (!response.ok) throw new Error(`HTTP ${response.status}`)
+          const data = await response.text()
+          if (!this._isCurrentMount(mountToken)) return
+          loadableResource = { ...res, data }
+        } catch (error) {
+          console.warn('[JuyitingGame] TMX prefetch failed:', res.name, error?.message || error)
+          return
+        }
       }
-    })))
+
+      await new Promise(resolve => {
+        try {
+          me.loader.load(
+            loadableResource,
+            () => resolve(),
+            (err) => {
+              console.warn('[JuyitingGame] Failed:', res.name, err)
+              resolve()
+            }
+          )
+        } catch (e) {
+          console.warn('[JuyitingGame] Load error:', res.name, e.message)
+          resolve()
+        }
+      })
+    }))
   }
 
   _isCurrentMount(mountToken) {
