@@ -8,7 +8,7 @@ import { classifyViewportResize } from '../camera/resizePolicy.js'
 import { screenToWorld } from '../camera/cameraTransform.js'
 import { createInputController } from '../input/inputController.js'
 import { createInteractionLock } from '../input/interactionLock.js'
-import { clientToViewport } from '../viewportTransform.js'
+import { clientToViewport, clockwiseRectToViewport, localToViewport, quadToViewport } from '../viewportTransform.js'
 import { createShadowRenderer, parseOcclusionDebugFlag } from '../occlusion/shadowRenderer.js'
 import { hasV2ActivationEnvelope, assembleV2Scene, computeUnifiedWorldOrder, buildHitTestTargets, hitTestPoint, buildFrameProposal, createEmptyMembershipState, registerAgentsInGrid, unregisterAgentFromGrid, createSceneActivationController, projectActivationEnvelope } from '../occlusion/hallSceneAssembly.js'
 import { createRuntimeAgentAdapter, defaultSpawnResolver, defaultChunkResolver } from '../occlusion/runtimeAgentAdapter.js'
@@ -370,12 +370,35 @@ export function createHallSceneClass(me, HallAgentClass) {
       return layer?.getBoundingClientRect?.() || canvasRect
     }
 
-    _clientToViewport(clientX, clientY) {
+    _clientToViewport(clientX, clientY, event = null) {
       const viewport = this._viewportSize()
+      const canvas = this._canvasElement()
+      if (viewport.width <= 0 || viewport.height <= 0) return { x: clientX, y: clientY }
+
+      // A virtual landscape stage is rotated with CSS while the browser remains
+      // in portrait coordinates. Resolve the transformed canvas quad first so
+      // drag, pinch and hit-test axes stay aligned with what the user sees.
+      try {
+        const quad = canvas?.getBoxQuads?.({ box: 'border' })?.[0]
+        const transformedPoint = quad && quadToViewport(clientX, clientY, quad, viewport)
+        if (transformedPoint) return transformedPoint
+      } catch { /* getBoxQuads is optional on older embedded browsers */ }
+
       const rect = this._displayRect()
-      if (!rect?.width || !rect?.height || viewport.width <= 0 || viewport.height <= 0) {
-        return { x: clientX, y: clientY }
+      if (canvas?.closest?.('.hall-stage.is-virtual-landscape')) {
+        const rotatedPoint = clockwiseRectToViewport(clientX, clientY, rect, viewport)
+        if (rotatedPoint) return rotatedPoint
       }
+
+      const localPoint = localToViewport(
+        Number(event?.offsetX),
+        Number(event?.offsetY),
+        { width: canvas?.clientWidth, height: canvas?.clientHeight },
+        viewport
+      )
+      if (Number.isFinite(event?.offsetX) && Number.isFinite(event?.offsetY) && localPoint) return localPoint
+
+      if (!rect?.width || !rect?.height) return { x: clientX, y: clientY }
       return clientToViewport(clientX, clientY, rect, viewport)
     }
 
@@ -390,7 +413,7 @@ export function createHallSceneClass(me, HallAgentClass) {
           const wrapped = event => {
             if ((type.startsWith('pointer') || type === 'wheel') &&
                 Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
-              const point = this._clientToViewport(event.clientX, event.clientY)
+              const point = this._clientToViewport(event.clientX, event.clientY, event)
               listener({
                 pointerId: event.pointerId,
                 pointerType: event.pointerType,

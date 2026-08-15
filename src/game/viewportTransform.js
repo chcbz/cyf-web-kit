@@ -12,6 +12,52 @@ const normalizeViewport = (viewport = {}) => ({
   height: finitePositive(viewport.height)
 })
 
+const quadPoint = (point = {}) => ({
+  x: Number.isFinite(point.x) ? point.x : Number.isFinite(point.left) ? point.left : 0,
+  y: Number.isFinite(point.y) ? point.y : Number.isFinite(point.top) ? point.top : 0
+})
+
+export const quadToViewport = (clientX, clientY, quad = {}, viewport = {}) => {
+  const targetViewport = normalizeViewport(viewport)
+  const origin = quadPoint(quad.p1)
+  const xCorner = quadPoint(quad.p2)
+  const yCorner = quadPoint(quad.p4)
+  const axisX = { x: xCorner.x - origin.x, y: xCorner.y - origin.y }
+  const axisY = { x: yCorner.x - origin.x, y: yCorner.y - origin.y }
+  const determinant = axisX.x * axisY.y - axisX.y * axisY.x
+  if (!targetViewport.width || !targetViewport.height || !Number.isFinite(determinant) || Math.abs(determinant) < 1e-8) {
+    return null
+  }
+  const relative = { x: clientX - origin.x, y: clientY - origin.y }
+  const localX = (relative.x * axisY.y - relative.y * axisY.x) / determinant
+  const localY = (axisX.x * relative.y - axisX.y * relative.x) / determinant
+  return {
+    x: localX * targetViewport.width,
+    y: localY * targetViewport.height
+  }
+}
+
+export const localToViewport = (localX, localY, displaySize = {}, viewport = {}) => {
+  const display = normalizeViewport(displaySize)
+  const targetViewport = normalizeViewport(viewport)
+  if (!display.width || !display.height || !targetViewport.width || !targetViewport.height) return null
+  return {
+    x: localX * targetViewport.width / display.width,
+    y: localY * targetViewport.height / display.height
+  }
+}
+
+
+export const clockwiseRectToViewport = (clientX, clientY, displayRect = {}, viewport = {}) => {
+  const display = normalizeDisplayRect(displayRect)
+  const targetViewport = normalizeViewport(viewport)
+  if (!display.width || !display.height || !targetViewport.width || !targetViewport.height) return null
+  return {
+    x: (clientY - display.top) * targetViewport.width / display.height,
+    y: (display.left + display.width - clientX) * targetViewport.height / display.width
+  }
+}
+
 export const createViewportTransform = (displayRect, viewport) => {
   const display = normalizeDisplayRect(displayRect)
   const targetViewport = normalizeViewport(viewport)
