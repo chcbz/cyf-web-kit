@@ -1,5 +1,5 @@
 <template>
-  <section class="hall-stage" :class="{ 'is-virtual-landscape': orientationMode === 'landscape' && !deviceLandscape }">
+  <section class="hall-stage">
     <div class="stage-header">
       <div class="stage-heading">
         <div class="eyebrow">梁山泊传令中枢</div>
@@ -244,13 +244,7 @@ const editableFocused = () => {
 const viewportNow = () => ({ width: window.innerWidth, height: window.innerHeight })
 
 const stageViewportNow = () => {
-  const element = melonContainerRef.value
-  if (element && orientationMode.value === 'landscape' && !deviceLandscape.value) {
-    const width = element.clientWidth || element.offsetWidth
-    const height = element.clientHeight || element.offsetHeight
-    if (width > 0 && height > 0) return { width: Math.round(width), height: Math.round(height) }
-  }
-  const rect = element?.getBoundingClientRect?.()
+  const rect = melonContainerRef.value?.getBoundingClientRect?.()
   if (rect?.width > 0 && rect?.height > 0) {
     return { width: Math.round(rect.width), height: Math.round(rect.height) }
   }
@@ -425,7 +419,7 @@ const requestLandscapeLock = async (token) => {
     if (acquiredOrientation) ownsOrientationLock = false
     return
   }
-  if (isCurrentOrientationRequest(token)) orientationHint.value = failed ? '已切换横屏视图；微信内不支持系统横屏锁定' : ''
+  if (isCurrentOrientationRequest(token)) orientationHint.value = failed ? '请旋转手机横屏查看' : ''
 }
 
 const toggleOrientationMode = async () => {
@@ -434,7 +428,6 @@ const toggleOrientationMode = async () => {
   const requestToken = ++orientationRequestGeneration
   orientationRequestPending.value = true
   orientationMode.value = nextMode
-  scheduleViewportResize({ orientationChanged: true })
   try {
     if (nextMode === 'landscape') await requestLandscapeLock(requestToken)
     if (nextMode === 'portrait') {
@@ -781,26 +774,6 @@ button {
   font-weight: 600;
 }
 
-
-.hall-stage.is-virtual-landscape {
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 10;
-  width: var(--hall-visual-height, 100vh);
-  height: 100vw;
-  max-width: none;
-  max-height: none;
-  transform: rotate(90deg) translateY(-100%);
-  transform-origin: top left;
-  background: #211812;
-}
-
-.hall-stage.is-virtual-landscape .hall-board {
-  flex: 1 1 auto;
-  width: 100% !important;
-  height: 100% !important;
-}
 
 .hall-stage:has(.hall-board.is-scene-landscape) .stage-header {
   top: 4px;

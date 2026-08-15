@@ -971,7 +971,7 @@ describe('JuyiHall component behavior', () => {
       expect(lockCalls).to.deep.equal(['landscape'])
       expect(wrapper.find('.hall-board').classes()).to.include('is-app-landscape')
       expect(wrapper.find('.orientation-hint').exists()).to.equal(false)
-      expect(resizeCalls.some(call => call.kind === 'orientation' && call.orientationChanged === true)).to.equal(true)
+      expect(resizeCalls.filter(call => call.kind === 'orientation')).to.have.length(0)
 
       await toggle.trigger('click')
       await flushPromises()
@@ -998,7 +998,7 @@ describe('JuyiHall component behavior', () => {
     }
   })
 
-  it('uses virtual landscape and explains native lock limits when fullscreen or orientation lock APIs are missing', async () => {
+  it('keeps the page unrotated and asks for a physical rotation when orientation APIs are missing', async () => {
     const originalFullscreen = global.document.documentElement.requestFullscreen
     const originalScreen = global.screen
     const originalMatchMedia = global.window.matchMedia
@@ -1017,8 +1017,8 @@ describe('JuyiHall component behavior', () => {
       await flushPromises()
       await wrapper.find('.orientation-action').trigger('click')
       await flushPromises()
-      expect(wrapper.classes()).to.include('is-virtual-landscape')
-      expect(wrapper.find('.orientation-hint').text()).to.equal('已切换横屏视图；微信内不支持系统横屏锁定')
+      expect(wrapper.classes()).not.to.include('is-virtual-landscape')
+      expect(wrapper.find('.orientation-hint').text()).to.equal('请旋转手机横屏查看')
     } finally {
       wrapper?.unmount()
       global.document.documentElement.requestFullscreen = originalFullscreen
@@ -1046,8 +1046,8 @@ describe('JuyiHall component behavior', () => {
       await flushPromises()
       await wrapper.find('.orientation-action').trigger('click')
       await flushPromises()
-      expect(wrapper.classes()).to.include('is-virtual-landscape')
-      expect(wrapper.find('.orientation-hint').text()).to.equal('已切换横屏视图；微信内不支持系统横屏锁定')
+      expect(wrapper.classes()).not.to.include('is-virtual-landscape')
+      expect(wrapper.find('.orientation-hint').text()).to.equal('请旋转手机横屏查看')
     } finally {
       wrapper?.unmount()
       global.document.documentElement.requestFullscreen = originalFullscreen
@@ -1172,8 +1172,8 @@ describe('JuyiHall component behavior', () => {
     expect(source).to.include('@media (max-width: 640px)')
     expect(source).to.include('max-width: calc(100% - 16px);')
     expect(source).to.include('.stage-heading .eyebrow {\n    display: none;')
-    expect(source).to.include('.hall-stage.is-virtual-landscape {')
-    expect(source).to.include('transform: rotate(90deg) translateY(-100%);')
+    expect(source).not.to.include('.hall-stage.is-virtual-landscape {')
+    expect(source).not.to.include('transform: rotate(90deg) translateY(-100%);')
     expect(source).to.include('.hall-stage:has(.hall-board.is-scene-landscape) .stage-header {\n  top: 4px;')
     expect(source).to.include('.hall-stage:has(.hall-board.is-scene-landscape) .stage-heading .eyebrow {\n  display: none;')
     expect(source).to.include('.hall-stage:has(.hall-board.is-scene-landscape) .tool-action .tool-label {\n  display: none;')
