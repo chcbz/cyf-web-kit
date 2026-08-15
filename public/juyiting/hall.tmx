@@ -1656,7 +1656,7 @@
     <property name="from" value="jyt-node-council-v1"/>
     <property name="to" value="jyt-node-east-hall-v1"/>
    </properties>
-   <polyline points="0,0 408,200"/>
+   <polyline points="0,0 222,200 408,200"/>
   </object>
   <object id="112" x="1216" y="432">
    <properties>
@@ -1766,7 +1766,7 @@
     <property name="from" value="jyt-node-right-guard-v1"/>
     <property name="to" value="jyt-node-east-hall-v1"/>
    </properties>
-   <polyline points="0,0 78,26 118,46 206,86"/>
+   <polyline points="0,0 78,26 118,66 206,86"/>
   </object>
   </objectgroup>
  <objectgroup id="20" name="parking_slots">
