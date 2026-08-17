@@ -88,8 +88,13 @@ Implemented evidence:
 
 Remaining change:
 
-- Decide whether the old human-review image provenance is still needed.
-- If retained, move it out of `docs`; otherwise delete it with the legacy documentation cleanup.
+- The completed walk-cycle design and implementation plan have been moved to
+  `docs/archive/2026-07-songjiang-walk-cycle/`; they remain available only as
+  provenance, not as runtime requirements.
+- The completed E16B cleanup audit has been moved to
+  `docs/archive/2026-08-occlusion-maintenance/`.
+- Retain or remove human-review image provenance only when it is needed for a
+  concrete asset-license or visual-regression investigation.
 
 ## Implemented Legacy Documentation Candidates
 

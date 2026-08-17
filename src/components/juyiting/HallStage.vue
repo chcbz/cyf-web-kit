@@ -385,6 +385,19 @@ const releaseOwnedOrientation = async () => {
   await releaseAcquiredOrientation(acquired)
 }
 
+const requestMiniProgramOrientation = (mode) => {
+  const miniProgram = window.wx?.miniProgram
+  if (typeof miniProgram?.redirectTo !== 'function') return false
+  try {
+    miniProgram.redirectTo({
+      url: mode === 'landscape' ? '/pages/landscape/index' : '/pages/index/index'
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
 const requestLandscapeLock = async (token) => {
   let failed = false
   let acquiredFullscreen = false
@@ -425,6 +438,10 @@ const requestLandscapeLock = async (token) => {
 const toggleOrientationMode = async () => {
   if (isSceneMounting.value || orientationRequestPending.value) return
   const nextMode = sceneMode.value === 'landscape' ? 'portrait' : 'landscape'
+  if (requestMiniProgramOrientation(nextMode)) {
+    orientationHint.value = ''
+    return
+  }
   const requestToken = ++orientationRequestGeneration
   orientationRequestPending.value = true
   orientationMode.value = nextMode
