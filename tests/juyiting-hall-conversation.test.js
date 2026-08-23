@@ -8,6 +8,124 @@ import {
 } from '../src/composables/juyiting/hallConversationMessages.js'
 
 describe('useHallConversation scoped message loading', () => {
+  it('does not fetch or schedule SSE recovery when token acquisition returns null', async () => {
+    const originalFetch = global.fetch
+    const originalSetTimeout = window.setTimeout
+    let fetchCount = 0
+    let reconnectTimerCount = 0
+    let tokenCount = 0
+    global.fetch = async () => {
+      fetchCount += 1
+      throw new Error('fetch must not run without a token')
+    }
+    window.setTimeout = () => {
+      reconnectTimerCount += 1
+      return 1
+    }
+
+    try {
+      const chatContext = ref({
+        conversationScopeType: 'public',
+        conversationScopeKey: 'public',
+        mode: 'public',
+        participantAgentIds: [],
+        targetAgentIds: []
+      })
+      const conversation = useHallConversation({
+        apiStore: {
+          token: async () => {
+            tokenCount += 1
+            return null
+          }
+        },
+        chatApi: {
+          list: async (_path, _payload, options) => options.onSuccess({ data: [{ id: 1001 }] }),
+          getById: async (_path, _id, options) => options.onSuccess({ data: [] })
+        },
+        chatContext,
+        chatMode: ref('public'),
+        globalStore: { getJiacn: 'jia-user', user: {} },
+        log: { warn: () => {}, error: () => {} },
+        openPanel: () => {},
+        outgoingMetadata: ref({}),
+        portraitShortName: agent => agent?.name || agent?.agentId || '',
+        selectedAgent: ref(null),
+        selectedTask: ref(null),
+        showToast: () => {}
+      })
+
+      await conversation.loadHallMessages()
+      await new Promise(resolve => setImmediate(resolve))
+
+      expect(tokenCount).to.equal(1)
+      expect(fetchCount).to.equal(0)
+      expect(reconnectTimerCount).to.equal(0)
+      expect(conversation.eventStreamRecovering.value).to.equal(false)
+    } finally {
+      global.fetch = originalFetch
+      window.setTimeout = originalSetTimeout
+    }
+  })
+
+  it('does not reconnect or replay when the protected SSE endpoint returns 401', async () => {
+    const originalFetch = global.fetch
+    const originalSetTimeout = window.setTimeout
+    let fetchCount = 0
+    let cleanCount = 0
+    let authorizationCount = 0
+    let reconnectTimerCount = 0
+    global.fetch = async () => {
+      fetchCount += 1
+      return new Response('', { status: 401 })
+    }
+    window.setTimeout = () => {
+      reconnectTimerCount += 1
+      return 1
+    }
+
+    try {
+      const conversation = useHallConversation({
+        apiStore: {
+          token: async () => 'expired-token',
+          cleanToken: () => { cleanCount += 1 },
+          beginAuthorization: async () => { authorizationCount += 1 }
+        },
+        chatApi: {
+          list: async (_path, _payload, options) => options.onSuccess({ data: [{ id: 1001 }] }),
+          getById: async (_path, _id, options) => options.onSuccess({ data: [] })
+        },
+        chatContext: ref({
+          conversationScopeType: 'public',
+          conversationScopeKey: 'public',
+          mode: 'public',
+          participantAgentIds: [],
+          targetAgentIds: []
+        }),
+        chatMode: ref('public'),
+        globalStore: { getJiacn: 'jia-user', user: {} },
+        log: { warn: () => {}, error: () => {} },
+        openPanel: () => {},
+        outgoingMetadata: ref({}),
+        portraitShortName: agent => agent?.name || agent?.agentId || '',
+        selectedAgent: ref(null),
+        selectedTask: ref(null),
+        showToast: () => {}
+      })
+
+      await conversation.loadHallMessages()
+      await new Promise(resolve => setImmediate(resolve))
+
+      expect(fetchCount).to.equal(1)
+      expect(cleanCount).to.equal(1)
+      expect(authorizationCount).to.equal(1)
+      expect(reconnectTimerCount).to.equal(0)
+      expect(conversation.eventStreamRecovering.value).to.equal(false)
+    } finally {
+      global.fetch = originalFetch
+      window.setTimeout = originalSetTimeout
+    }
+  })
+
   it('clears stale messages when the current bounty scope has no conversation yet', async () => {
     const chatContext = ref({
       conversationScopeType: 'bounty',

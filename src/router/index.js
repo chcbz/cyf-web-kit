@@ -1,28 +1,12 @@
-import { useApiStore } from '@/stores/api'
-import { log } from '@/utils/logger'
 import PublicLanding from '@/components/public/PublicLanding.vue'
 import GuestDemo from '@/components/public/GuestDemo.vue'
+import OAuthCallback from '@/components/OAuthCallback.vue'
 
 export default [
   {
     path: '/oauth2/callback',
     name: 'OAuthCallback',
-    component: {
-      async beforeRouteEnter (to, from, next) {
-        try {
-          const code = to.query.code
-          if (!code) throw new Error('No authorization code provided')
-          const apiStore = useApiStore()
-          await apiStore.exchangeCodeForToken(code)
-          await apiStore.getUserInfo()
-          next(to.query.state || '/')
-        } catch (error) {
-          log.error('OAuth callback error:', error)
-          next('/')
-        }
-      },
-      render: () => null
-    },
+    component: OAuthCallback,
     meta: {
       title: 'app.task_list',
       showInMenu: false

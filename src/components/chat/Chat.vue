@@ -46,6 +46,7 @@ import { useAgentStore } from '../../stores/agent'
 import { useI18n } from 'vue-i18n'
 import { chatApi, phraseApi } from '../../composables/useHttp'
 import { log } from '../../utils/logger'
+import { fetchChatConversationEvents } from '../../utils/authenticatedSse.js'
 
 // 导入子组件
 import ChatMessageList from './ChatMessageList.vue'
@@ -175,12 +176,15 @@ const startConversationEventStream = async () => {
   conversationEventController = new AbortController()
 
   try {
-    const token = await apiStore.token()
-    const response = await fetch(apiStreamUrl('/chat/conversation/events', { id }), {
-      method: 'GET',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    const response = await fetchChatConversationEvents({
+      apiStore,
+      url: apiStreamUrl('/chat/conversation/events', { id }),
       signal: conversationEventController.signal
     })
+    if (!response) {
+      conversationEventController = null
+      return
+    }
     if (!response.ok || !response.body) {
       throw new Error(`Conversation event stream failed: ${response.status}`)
     }

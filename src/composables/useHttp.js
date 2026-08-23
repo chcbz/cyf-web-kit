@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { log } from '../utils/logger.js'
+import { initiateReauthentication } from '../utils/reauthentication.js'
 // import { useGlobalStore } from '../stores/global' // 预留
 // import { useUtilStore } from '../stores/util' // 预留
 
@@ -71,7 +72,7 @@ export function useHttp (options = {}) {
     headers: {}
   }
 
-  const execute = async (executeOptions = {}, retryCount = 0) => {
+  const execute = async (executeOptions = {}) => {
     const mergedOptions = { ...defaultOptions, ...options, ...executeOptions }
 
     const {
@@ -91,7 +92,8 @@ export function useHttp (options = {}) {
       onStreamEnd,
       onStreamOpen,
       streamChunks = false,
-      signal
+      signal,
+      authStore
     } = mergedOptions
 
     if (autoLoading) {
@@ -139,11 +141,14 @@ export function useHttp (options = {}) {
       let token = null
       if (needAuth) {
         try {
-          const apiStore = await resolveApiStore()
+          const apiStore = authStore || await resolveApiStore()
           token = await apiStore.token()
-          if (token) {
-            config.headers.Authorization = `Bearer ${token}`
+          if (!token) {
+            const authRequired = new Error('Authentication is required')
+            authRequired.code = 'AUTHENTICATION_REQUIRED'
+            throw authRequired
           }
+          config.headers.Authorization = `Bearer ${token}`
         } catch (authError) {
           throw new Error(`Authentication failed: ${authError.message}`)
         }
@@ -338,24 +343,14 @@ export function useHttp (options = {}) {
         error.value = '请求超时'
       } else if (err.status === 401 && needAuth) {
         // 清理旧的 token
-        const apiStore = await resolveApiStore()
+        const apiStore = authStore || await resolveApiStore()
         apiStore.cleanToken()
         log.warn('Authentication expired, token cleaned')
 
-        // 如果还没有重试过，尝试重新获取 token 并重试请求
-        if (retryCount === 0) {
-          log.debug('Attempting to refresh token and retry request...')
-          try {
-            // 重新获取 token
-            await apiStore.token()
-            // 重试请求，增加重试计数
-            return await execute(executeOptions, retryCount + 1)
-          } catch (refreshError) {
-            log.error('Failed to refresh token:', refreshError)
-            // token 刷新失败，继续抛出原始错误
-          }
-        } else {
-          log.warn('Already retried once, not retrying again')
+        try {
+          await initiateReauthentication(apiStore)
+        } catch {
+          log.warn('Reauthentication could not be started')
         }
       }
 

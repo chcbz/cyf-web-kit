@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { useUtilStore } from './util'
-import { log } from '@/utils/logger'
+import { log } from '../utils/logger.js'
 
 export const useGlobalStore = defineStore('global', {
   state: () => ({

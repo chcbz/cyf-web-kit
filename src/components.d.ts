@@ -40,6 +40,7 @@ declare module 'vue' {
     JuyiHallClassic: typeof import('./components/juyiting/JuyiHallClassic.vue')['default']
     LibraryPanel: typeof import('./components/juyiting/LibraryPanel.vue')['default']
     MessageCenter: typeof import('./components/MessageCenter.vue')['default']
+    OAuthCallback: typeof import('./components/OAuthCallback.vue')['default']
     OrderList: typeof import('./components/OrderList.vue')['default']
     PersonaCatalogPanel: typeof import('./components/juyiting/PersonaCatalogPanel.vue')['default']
     Phrase: typeof import('./components/Phrase.vue')['default']

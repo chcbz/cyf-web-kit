@@ -5,6 +5,9 @@ import {
   hasResolvedAgentReply,
   normalizeHallMessage
 } from './hallConversationMessages.js'
+import { fetchHallConversationEvents } from '../../utils/authenticatedSse.js'
+
+const runtimeEnv = import.meta.env ?? {}
 
 export const useHallConversation = ({
   apiStore,
@@ -102,7 +105,7 @@ export const useHallConversation = ({
   }
 
   const apiStreamUrl = (path, params = {}) => {
-    const baseURL = import.meta.env.VITE_API_BASE_URL || ''
+    const baseURL = runtimeEnv.VITE_API_BASE_URL || ''
     const requestPath = baseURL
       ? `${baseURL}${path.startsWith('/') ? path : `/${path}`}`
       : path
@@ -118,12 +121,15 @@ export const useHallConversation = ({
     hallEventController = new AbortController()
 
     try {
-      const token = await apiStore.token()
-      const response = await fetch(apiStreamUrl('/chat/conversation/events', { id }), {
-        method: 'GET',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      const response = await fetchHallConversationEvents({
+        apiStore,
+        url: apiStreamUrl('/chat/conversation/events', { id }),
         signal: hallEventController.signal
       })
+      if (!response) {
+        hallEventController = null
+        return
+      }
       if (!response.ok || !response.body) {
         throw new Error(`Hall event stream failed: ${response.status}`)
       }

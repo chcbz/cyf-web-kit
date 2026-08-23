@@ -1,78 +1,99 @@
 import { defineStore } from 'pinia'
 import { useUtilStore } from './util'
 import { useGlobalStore } from './global'
-import { log } from '@/utils/logger'
+import { log } from '../utils/logger.js'
+import { createCodeChallenge, createOAuthTransaction, safeAppRelativePath } from '../utils/oauthTransaction.js'
 
-// PKCE工具方法
-function generateRandomString (length) {
-  const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~'
-  let result = ''
-  const crypto = window.crypto || window.msCrypto
-  const values = new Uint8Array(length)
-  crypto.getRandomValues(values)
-  for (let i = 0; i < length; i++) {
-    result += charset[values[i] % charset.length]
-  }
-  return result
+const runtimeEnv = import.meta.env ?? {}
+
+function isNonblankRuntimeString (value) {
+  return typeof value === 'string' && value.trim() !== ''
 }
 
-async function generateCodeChallenge (codeVerifier) {
-  const encoder = new TextEncoder()
-  const data = encoder.encode(codeVerifier)
-  const digest = await window.crypto.subtle.digest('SHA-256', data)
-  return btoa(String.fromCharCode(...new Uint8Array(digest)))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '')
+function currentReturnPath () {
+  return safeAppRelativePath(`${window.location.pathname}${window.location.search}${window.location.hash}`)
+}
+
+function validateTokenResponse (data) {
+  if (!data || typeof data.access_token !== 'string' || data.access_token.trim() === '') {
+    throw new Error('Token response is missing access_token')
+  }
+  if (typeof data.token_type !== 'string' || data.token_type.toLowerCase() !== 'bearer') {
+    throw new Error('Token response has an invalid token_type')
+  }
+  const expiresIn = data.expires_in
+  if (typeof expiresIn !== 'number' || !Number.isFinite(expiresIn) || expiresIn <= 0) {
+    throw new Error('Token response has an invalid expires_in')
+  }
+  return { accessToken: data.access_token, expiresIn }
 }
 
 export const useApiStore = defineStore('api', {
   state: () => ({
-    baseUrl: import.meta.env.VITE_API_BASE_URL,
-    dwzDomain: import.meta.env.VITE_DWZ_DOMAIN
+    baseUrl: runtimeEnv.VITE_API_BASE_URL || '',
+    dwzDomain: runtimeEnv.VITE_DWZ_DOMAIN,
+    oauthClientId: runtimeEnv.VITE_OAUTH_CLIENT_ID,
+    authorizationStarted: false
   }),
   actions: {
-    async token () {
-      const utilStore = useUtilStore()
-      const _globalStore = useGlobalStore() // 预留用于未来功能
+    oauthRuntimeConfig () {
+      return Object.freeze({
+        clientId: this.oauthClientId,
+        redirectUri: `${window.location.origin}/oauth2/callback`,
+        authorizationServer: this.baseUrl || window.location.origin
+      })
+    },
 
-      const accessToken = utilStore.getLocalStorage('api_token')
-      if (!accessToken) {
-        // PKCE流程
-        const codeVerifier = generateRandomString(64)
-        const codeChallenge = await generateCodeChallenge(codeVerifier)
-        utilStore.setLocalStorage('pkce_code_verifier', codeVerifier)
-
+    async beginAuthorization (returnTo = currentReturnPath()) {
+      if (this.authorizationStarted) return false
+      this.authorizationStarted = true
+      try {
+        const config = this.oauthRuntimeConfig()
+        const transaction = await createOAuthTransaction({ returnTo, ...config })
+        const codeChallenge = await createCodeChallenge(transaction.codeVerifier)
         const params = new URLSearchParams({
           response_type: 'code',
-          client_id: import.meta.env.VITE_OAUTH_CLIENT_ID,
+          client_id: config.clientId,
           scope: 'openid',
-          redirect_uri: window.location.origin + '/oauth2/callback',
+          redirect_uri: config.redirectUri,
           code_challenge: codeChallenge,
           code_challenge_method: 'S256',
-          state: window.location.pathname,
-          access_type: 'offline'
+          state: transaction.state
         })
+        window.location.assign(`${config.authorizationServer}/oauth2/authorize?${params.toString()}`)
+        return true
+      } catch (error) {
+        this.authorizationStarted = false
+        throw error
+      }
+    },
 
-        window.location.href = `${this.baseUrl}/oauth2/authorize?${params.toString()}`
+    async token () {
+      const utilStore = useUtilStore()
+      const accessToken = utilStore.getLocalStorage('api_token')
+      if (!accessToken) {
+        await this.beginAuthorization()
+        return null
       }
       return accessToken
     },
 
-    async exchangeCodeForToken (code) {
-      const utilStore = useUtilStore()
-      const codeVerifier = utilStore.getLocalStorage('pkce_code_verifier')
-      if (!codeVerifier) throw new Error('No code verifier found')
-      log.debug('Exchanging code for token with verifier:', codeVerifier)
-      log.debug('Authorization code:', code)
+    async exchangeCodeForToken (code, transaction) {
+      if (typeof code !== 'string' || code.trim() === '' ||
+          typeof transaction?.codeVerifier !== 'string' || !/^[A-Za-z0-9_-]{86}$/.test(transaction.codeVerifier) ||
+          !isNonblankRuntimeString(transaction.clientId) ||
+          !isNonblankRuntimeString(transaction.redirectUri) ||
+          !isNonblankRuntimeString(transaction.authorizationServer)) {
+        throw new Error('Invalid authorization transaction')
+      }
       const params = new URLSearchParams({
         grant_type: 'authorization_code',
         code,
-        redirect_uri: window.location.origin + '/oauth2/callback',
-        client_id: import.meta.env.VITE_OAUTH_CLIENT_ID,
-        code_verifier: codeVerifier
+        redirect_uri: transaction.redirectUri,
+        client_id: transaction.clientId,
+        code_verifier: transaction.codeVerifier
       })
-      const response = await fetch(`${this.baseUrl}/oauth2/token`, {
+      const response = await fetch(`${transaction.authorizationServer}/oauth2/token`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
@@ -81,11 +102,10 @@ export const useApiStore = defineStore('api', {
       })
       if (!response.ok) throw new Error('Token exchange failed')
 
-      const data = await response.json()
-      log.info('Token exchange successful')
-      utilStore.removeLocalStorage('pkce_code_verifier')
-      utilStore.setLocalStorage('api_token', data.access_token, new Date().getTime() + data.expires_in * 1000 - 60000)
-      return data.access_token
+      const token = validateTokenResponse(await response.json())
+      const utilStore = useUtilStore()
+      utilStore.setLocalStorage('api_token', token.accessToken, Date.now() + token.expiresIn * 1000)
+      return token.accessToken
     },
     wxJsToken (url) {
       const utilStore = useUtilStore()
@@ -114,6 +134,7 @@ export const useApiStore = defineStore('api', {
 
     async getUserInfo () {
       const token = await this.token()
+      if (!token) throw new Error('Authentication is required')
       const globalStore = useGlobalStore()
 
       const response = await fetch(`${this.baseUrl}/user/my`, {
