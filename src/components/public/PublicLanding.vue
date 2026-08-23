@@ -220,9 +220,12 @@ h1 span {
   max-width: 720px;
 }
 
-.section-heading .eyebrow,
-.landing-cta .eyebrow {
+.section-heading .eyebrow {
   color: #2e6854;
+}
+
+.landing-cta .eyebrow {
+  color: #c9ddbd;
 }
 
 h2 {

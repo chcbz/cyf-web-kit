@@ -56,6 +56,8 @@ describe('public PWA beta entry packet', () => {
     expect(demo).to.include('#2e6854')
     expect(demo).to.include('#59645e')
     expect(landing).not.to.match(/#49866e|<br/)
+    expect(landing).to.include('.section-heading .eyebrow {\n  color: #2e6854;\n}')
+    expect(landing).to.include('.landing-cta .eyebrow {\n  color: #c9ddbd;\n}')
     expect(index).to.include('<meta name="theme-color" content="#173936">')
     expect(main).to.include('router.isReady().then(() => {')
     expect(main.indexOf('router.isReady().then(() => {')).to.be.lessThan(main.indexOf("app.mount('#app')"))
