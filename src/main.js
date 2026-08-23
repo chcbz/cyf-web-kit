@@ -34,9 +34,11 @@ app.use(i18n)
 
 app.use(router)
 
-// 挂载应用
-app.mount('#app')
+// Wait for the initial route so public-route metadata is available before App renders.
+router.isReady().then(() => {
+  app.mount('#app')
 
-registerPwa().catch(error => {
-  console.warn('PWA registration failed:', error)
+  registerPwa().catch(error => {
+    console.warn('PWA registration failed:', error)
+  })
 })

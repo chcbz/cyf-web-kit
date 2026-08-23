@@ -8,7 +8,7 @@
 
       <div class="hero-copy">
         <p class="eyebrow">把复杂工作交给一支会协作的 AI 小队</p>
-        <h1>从一个任务开始，<br>得到可以继续使用的成果。</h1>
+        <h1><span>从一个任务开始，</span><span>得到可以继续使用的成果。</span></h1>
         <p class="hero-description">
           聚义厅让研究、内容和项目协作变成清晰的工作流：说清目标，系统推荐合适的帮手，再把过程沉淀为可复用的结果。
         </p>
@@ -141,6 +141,10 @@ h1 {
   letter-spacing: -0.055em;
 }
 
+h1 span {
+  display: block;
+}
+
 .hero-description {
   max-width: 650px;
   color: #dae5db;
@@ -218,7 +222,7 @@ h1 {
 
 .section-heading .eyebrow,
 .landing-cta .eyebrow {
-  color: #49866e;
+  color: #2e6854;
 }
 
 h2 {
@@ -243,7 +247,7 @@ h2 {
 }
 
 .case-number {
-  color: #49866e;
+  color: #2e6854;
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.08em;

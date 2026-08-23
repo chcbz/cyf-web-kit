@@ -167,6 +167,11 @@ html, body {
   overflow: auto;
 }
 
+.app-content.public-entry > * {
+  width: 100%;
+  min-width: 0;
+}
+
 .menu-icon {
   margin-right: 12px;
   cursor: pointer;

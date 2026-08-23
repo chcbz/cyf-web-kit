@@ -1,5 +1,7 @@
 import { useApiStore } from '@/stores/api'
 import { log } from '@/utils/logger'
+import PublicLanding from '@/components/public/PublicLanding.vue'
+import GuestDemo from '@/components/public/GuestDemo.vue'
 
 export default [
   {
@@ -29,7 +31,7 @@ export default [
   {
     path: '/',
     name: 'PublicLanding',
-    component: () => import('@/components/public/PublicLanding'),
+    component: PublicLanding,
     meta: {
       showInMenu: false,
       publicEntry: true
@@ -38,7 +40,7 @@ export default [
   {
     path: '/demo',
     name: 'GuestDemo',
-    component: () => import('@/components/public/GuestDemo'),
+    component: GuestDemo,
     meta: {
       showInMenu: false,
       publicEntry: true

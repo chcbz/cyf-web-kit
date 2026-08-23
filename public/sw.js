@@ -1,5 +1,5 @@
-const CACHE_VERSION = 'cyf-pwa-v20260823-public-entry'
-const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest']
+const CACHE_VERSION = 'cyf-pwa-v20260823-public-entry-r2'
+const APP_SHELL = ['/', '/demo', '/index.html', '/manifest.webmanifest']
 const DEVELOPMENT_HOSTS = ['localhost', '127.0.0.1']
 
 const isDevelopmentOrigin = () => DEVELOPMENT_HOSTS.includes(self.location.hostname)

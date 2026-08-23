@@ -16,6 +16,7 @@
         v-for="step in guestDemoSteps"
         :key="step.id"
         :class="{ active: currentStep === step.id, complete: currentStep > step.id }"
+        :aria-current="currentStep === step.id ? 'step' : undefined"
       >
         <span>{{ step.id }}</span>{{ step.label }}
       </li>
@@ -34,6 +35,7 @@
             :key="template.id"
             class="template-card"
             :class="{ selected: selectedTemplate.id === template.id }"
+            :aria-pressed="selectedTemplate.id === template.id"
             type="button"
             @click="selectedTemplate = template"
           >
@@ -110,8 +112,13 @@ const restart = () => {
 
 <style scoped>
 .guest-demo {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 100%;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 28px clamp(20px, 6vw, 96px) 44px;
   color: #162421;
   background: linear-gradient(155deg, #edf4eb 0%, #f9f6ee 43%, #f4ead4 100%);
@@ -122,6 +129,9 @@ const restart = () => {
 .stepper,
 .demo-workspace,
 .guest-note {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
   max-width: 1050px;
   margin-right: auto;
   margin-left: auto;
@@ -129,12 +139,15 @@ const restart = () => {
 
 .demo-header {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
+  flex-wrap: wrap;
 }
 
 .back-link,
 .login-link {
+  max-width: 100%;
   color: #285a50;
   font-size: 14px;
   font-weight: 750;
@@ -148,7 +161,7 @@ const restart = () => {
 
 .eyebrow {
   margin: 0 0 12px;
-  color: #49866e;
+  color: #2e6854;
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.07em;
@@ -161,6 +174,7 @@ p {
 }
 
 h1 {
+  min-width: 0;
   margin-bottom: 18px;
   font-size: clamp(34px, 5vw, 58px);
   line-height: 1.1;
@@ -176,7 +190,7 @@ h1 {
 
 .stepper {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   padding: 0;
   margin-bottom: 28px;
@@ -184,11 +198,12 @@ h1 {
 }
 
 .stepper li {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
   min-height: 48px;
-  color: #78817c;
+  color: #59645e;
   font-size: 13px;
   font-weight: 650;
 }
@@ -237,12 +252,15 @@ h2 {
 
 .template-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
   margin: 32px 0 26px;
 }
 
 .template-card {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   min-height: 185px;
@@ -263,7 +281,7 @@ h2 {
 
 .template-card span,
 .result-card > span {
-  color: #49866e;
+  color: #2e6854;
   font-size: 12px;
   font-weight: 800;
 }
@@ -286,6 +304,8 @@ h2 {
 
 .next-action,
 .quiet-action {
+  box-sizing: border-box;
+  max-width: 100%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -318,13 +338,14 @@ h2 {
 
 .agent-list {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin: 32px 0;
 }
 
 .agent-list li,
 .execution-item {
+  min-width: 0;
   display: flex;
   gap: 13px;
   padding: 18px;
@@ -335,8 +356,13 @@ h2 {
 
 .agent-list li > span,
 .execution-item > span {
-  color: #49866e;
+  color: #2e6854;
   font-weight: 800;
+}
+
+.agent-list li > div,
+.execution-item > div {
+  min-width: 0;
 }
 
 .agent-list strong,
@@ -404,10 +430,22 @@ h2 {
 }
 
 @media (max-width: 760px) {
+  .guest-demo {
+    padding: 24px 20px 36px;
+  }
+
+  .demo-header {
+    align-items: flex-start;
+  }
+
+  .demo-intro {
+    padding-top: 56px;
+  }
+
   .stepper,
   .template-grid,
   .agent-list {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .stepper {
@@ -416,6 +454,17 @@ h2 {
 
   .stepper li {
     min-height: 32px;
+  }
+
+  h1,
+  h2,
+  .template-card strong,
+  .template-card small,
+  .stage-description,
+  .guest-note,
+  .back-link,
+  .login-link {
+    overflow-wrap: anywhere;
   }
 }
 </style>
