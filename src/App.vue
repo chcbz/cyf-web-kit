@@ -1,6 +1,6 @@
 <template>
   <div class="app-container">
-    <var-app-bar v-if="showAppBar" :title="title">
+    <var-app-bar v-if="showAppBar && !isPublicEntry" :title="title">
       <template #left>
         <var-icon
           v-if="leftOptions.showBack"
@@ -41,13 +41,13 @@
       </template>
     </var-app-bar>
 
-    <side-menu v-model="showSideMenu" style="height: 0px;" />
+    <side-menu v-if="!isPublicEntry" v-model="showSideMenu" style="height: 0px;" />
 
-    <div class="app-content" :class="{'show-menu': showSideMenu}">
+    <div class="app-content" :class="{ 'show-menu': showSideMenu, 'public-entry': isPublicEntry }">
       <router-view />
     </div>
 
-    <div v-if="isOfflineReady || hasUpdate" class="pwa-banner">
+    <div v-if="!isPublicEntry && (isOfflineReady || hasUpdate)" class="pwa-banner">
       <span>{{ hasUpdate ? '发现新版本，可立即刷新更新。' : '已启用离线缓存，可作为桌面应用安装。' }}</span>
       <div class="pwa-banner-actions">
         <button
@@ -80,12 +80,14 @@
 </template>
 
 <script setup>
-import { computed, watch } from 'vue'
-import SideMenu from '@/components/SideMenu'
+import { computed, defineAsyncComponent, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useGlobalStore } from '@/stores/global'
 import { applyAppUpdate, dismissOfflineReady, promptInstall, usePwaState } from '@/utils/pwa'
 
+const SideMenu = defineAsyncComponent(() => import('@/components/SideMenu'))
 const globalStore = useGlobalStore()
+const route = useRoute()
 const { hasUpdate, isInstallable, isOfflineReady } = usePwaState()
 
 // Action Sheet 相关状态 (预留功能)
@@ -107,6 +109,7 @@ const showSideMenu = computed({
 })
 const showMore = computed(() => globalStore.showMore)
 const showAppBar = computed(() => globalStore.showAppBar)
+const isPublicEntry = computed(() => route.meta?.publicEntry === true)
 
 const handleMoreClick = () => {
   // 同时更新右侧边栏状态
@@ -158,6 +161,10 @@ html, body {
   min-height: 0;
   overflow: hidden;
   transition: margin-left 0.3s;
+}
+
+.app-content.public-entry {
+  overflow: auto;
 }
 
 .menu-icon {

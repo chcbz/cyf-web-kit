@@ -28,9 +28,20 @@ export default [
   },
   {
     path: '/',
-    redirect: '/juyiting',
+    name: 'PublicLanding',
+    component: () => import('@/components/public/PublicLanding'),
     meta: {
-      showInMenu: false
+      showInMenu: false,
+      publicEntry: true
+    }
+  },
+  {
+    path: '/demo',
+    name: 'GuestDemo',
+    component: () => import('@/components/public/GuestDemo'),
+    meta: {
+      showInMenu: false,
+      publicEntry: true
     }
   },
   {

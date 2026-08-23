@@ -2,14 +2,43 @@
   "id": "/",
   "name": "聚义厅 Agent 协作台",
   "short_name": "聚义厅",
-  "description": "梁山风格的多 Agent 协作工作台",
+  "description": "把研究、内容和项目协作交给会分工的 Agent 小队",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#f6f1e7",
-  "theme_color": "#8b1e1e",
+  "theme_color": "#173936",
   "lang": "zh-CN",
-  "orientation": "portrait-primary",
+  "orientation": "any",
+  "categories": ["productivity", "business", "utilities"],
+  "shortcuts": [
+    {
+      "name": "立即体验",
+      "short_name": "体验",
+      "description": "无需登录，查看本地模拟的 Agent 协作流程",
+      "url": "/demo",
+      "icons": [
+        {
+          "src": "/pwa/icon-192-logo-v4.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "进入聚义厅",
+      "short_name": "聚义厅",
+      "description": "登录后进入真实的 Agent 协作工作台",
+      "url": "/juyiting",
+      "icons": [
+        {
+          "src": "/pwa/icon-192-logo-v4.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
   "icons": [
     {
       "src": "/pwa/icon-192-logo-v4.png",
