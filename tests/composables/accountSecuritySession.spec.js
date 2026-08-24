@@ -15,6 +15,25 @@ Object.defineProperty(global, 'localStorage', { value: window.localStorage, writ
 
 const put = (key, value) => window.localStorage.setItem(key, JSON.stringify({ data: value, expTime: Date.now() + 60_000 }))
 
+async function waitFor (predicate) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (predicate()) return
+    await new Promise(resolve => window.setTimeout(resolve, 5))
+  }
+  throw new Error('condition was not reached')
+}
+
+function expectMessageReset (store) {
+  expect(store.messages).to.deep.equal([])
+  expect(store.total).to.equal(0)
+  expect(store.unreadTotal).to.equal(0)
+  expect(store.loading).to.equal(false)
+  expect(store.error).to.equal(null)
+  expect(store.pageNum).to.equal(1)
+  expect(store.pageSize).to.equal(20)
+  expect(store.statusFilter).to.equal('all')
+}
+
 function rejected (status, code) {
   const error = new Error('request failed')
   error.status = status
@@ -175,6 +194,104 @@ describe('account security session boundary', () => {
     expect(await pending).to.equal(true)
     expect(clearCalls).to.equal(1)
     expect(routeCalls).to.equal(0)
+  })
+
+  it('aborts deferred user info on identity clear without restoring global or local identity', async () => {
+    put('api_token', 'token')
+    const store = useApiStore()
+    store.baseUrl = 'https://api.example'
+    let resolveProfile
+    let requestSignal
+    let fetchCalls = 0
+    let authorizationCalls = 0
+    store.beginAuthorization = async () => { authorizationCalls += 1 }
+    global.fetch = async (url, options) => {
+      fetchCalls += 1
+      expect(url).to.equal('https://api.example/user/my')
+      requestSignal = options.signal
+      return {
+        ok: true,
+        json: () => new Promise(resolve => { resolveProfile = resolve })
+      }
+    }
+
+    const pending = store.getUserInfo()
+    await waitFor(() => resolveProfile)
+    store.clearIdentity()
+    resolveProfile({ data: { id: 9, jiacn: 'late-hero', openid: 'late-openid' } })
+
+    let failure
+    try { await pending } catch (error) { failure = error }
+    expect(failure?.name).to.equal('AbortError')
+    expect(requestSignal.aborted).to.equal(true)
+    expect(fetchCalls).to.equal(1)
+    expect(authorizationCalls).to.equal(0)
+    expect(useGlobalStore().user.id).to.equal(null)
+    expect(window.localStorage.getItem('userId')).to.equal(null)
+    expect(window.localStorage.getItem('jiacn')).to.equal(null)
+    expect(window.localStorage.getItem('openid')).to.equal(null)
+  })
+
+  it('prevents a deferred user lookup from starting message fetch or restoring reset state after logout', async () => {
+    put('api_token', 'token')
+    const apiStore = useApiStore()
+    let authorizationCalls = 0
+    apiStore.beginAuthorization = async () => { authorizationCalls += 1 }
+    const messageStore = useMessageStore()
+    Object.assign(messageStore, {
+      messages: [{ id: 'old' }], total: 1, unreadTotal: 4, loading: true,
+      error: 'old', pageNum: 8, pageSize: 99, statusFilter: 'unread'
+    })
+    let resolveProfile
+    const urls = []
+    global.fetch = async (url) => {
+      urls.push(url)
+      return {
+        ok: true,
+        json: () => new Promise(resolve => { resolveProfile = resolve })
+      }
+    }
+
+    const pending = messageStore.fetchMessages()
+    await waitFor(() => resolveProfile)
+    apiStore.clearIdentity()
+    resolveProfile({ data: { id: 12, jiacn: 'late' } })
+    let failure
+    try { await pending } catch (error) { failure = error }
+
+    expect(failure?.name).to.equal('AbortError')
+    await messageStore.fetchMessages()
+    expect(urls).to.deep.equal(['/user/my'])
+    expect(authorizationCalls).to.equal(0)
+    expectMessageReset(messageStore)
+    messageStore.$dispose()
+  })
+
+  it('aborts a pending message request and preserves the exact identity reset', async () => {
+    put('api_token', 'token')
+    put('userId', 7)
+    const messageStore = useMessageStore()
+    Object.assign(messageStore, {
+      messages: [{ id: 'old' }], total: 1, unreadTotal: 4,
+      error: 'old', pageNum: 8, pageSize: 99, statusFilter: 'unread'
+    })
+    let requestSignal
+    global.fetch = (_url, options) => new Promise((_resolve, reject) => {
+      requestSignal = options.signal
+      options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true })
+    })
+
+    const pending = messageStore.fetchMessages({ pageNum: 3, statusFilter: 'read' })
+    await waitFor(() => requestSignal)
+    expect(messageStore.loading).to.equal(true)
+    useApiStore().clearIdentity()
+    let failure
+    try { await pending } catch (error) { failure = error }
+
+    expect(failure?.name).to.equal('AbortError')
+    expect(requestSignal.aborted).to.equal(true)
+    expectMessageReset(messageStore)
+    messageStore.$dispose()
   })
 
 })

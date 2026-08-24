@@ -327,11 +327,14 @@ export const useHallConversation = ({
   }
 
   const newHallConversation = () => {
+    resetLifecycle()
     stopHallEventStream()
     stopHallReplyStreaming()
     stopHallReplyPolling()
+    stopHallConversationSync()
     conversationId.value = ''
     messages.value = []
+    isStreaming.value = false
     isAwaitingReply.value = false
     showToast('已另起厅前话头')
   }

@@ -3,7 +3,7 @@ import { useUtilStore } from './util'
 import { useGlobalStore } from './global'
 import { log } from '../utils/logger.js'
 import { createCodeChallenge, createOAuthTransaction, safeAppRelativePath } from '../utils/oauthTransaction.js'
-import { stopIdentityBoundWork } from '../utils/identityLifecycle.js'
+import { registerIdentityCleanup, stopIdentityBoundWork } from '../utils/identityLifecycle.js'
 import { cancelReauthentication } from '../utils/reauthentication.js'
 import { combineAbortSignals, throwIfAborted } from '../utils/abortSignals.js'
 
@@ -36,6 +36,32 @@ async function responseErrorCode (response) {
     return typeof payload?.code === 'string' ? payload.code : null
   } catch {
     return null
+  }
+}
+
+function createIdentityOperation (apiStore, callerSignal) {
+  const authorizationGeneration = apiStore.authorizationGeneration
+  const identityController = new AbortController()
+  const combined = combineAbortSignals({ signals: [callerSignal, identityController.signal] })
+  const unregister = registerIdentityCleanup(() => {
+    identityController.abort(new DOMException('Identity cleared', 'AbortError'))
+  })
+  let cleaned = false
+
+  return {
+    signal: combined.signal,
+    assertCurrent () {
+      throwIfAborted(combined.signal)
+      if (authorizationGeneration !== apiStore.authorizationGeneration) {
+        throw new DOMException('Identity changed', 'AbortError')
+      }
+    },
+    cleanup () {
+      if (cleaned) return
+      cleaned = true
+      unregister()
+      combined.cleanup()
+    }
   }
 }
 
@@ -113,7 +139,7 @@ export const useApiStore = defineStore('api', {
       return accessToken
     },
 
-    async exchangeCodeForToken (code, transaction) {
+    async exchangeCodeForToken (code, transaction, { signal } = {}) {
       if (typeof code !== 'string' || code.trim() === '' ||
           typeof transaction?.codeVerifier !== 'string' || !/^[A-Za-z0-9_-]{86}$/.test(transaction.codeVerifier) ||
           !isNonblankRuntimeString(transaction.clientId) ||
@@ -121,26 +147,38 @@ export const useApiStore = defineStore('api', {
           !isNonblankRuntimeString(transaction.authorizationServer)) {
         throw new Error('Invalid authorization transaction')
       }
-      const params = new URLSearchParams({
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: transaction.redirectUri,
-        client_id: transaction.clientId,
-        code_verifier: transaction.codeVerifier
-      })
-      const response = await fetch(`${transaction.authorizationServer}/oauth2/token`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: params
-      })
-      if (!response.ok) throw new Error('Token exchange failed')
+      const operation = createIdentityOperation(this, signal)
+      try {
+        operation.assertCurrent()
+        const params = new URLSearchParams({
+          grant_type: 'authorization_code',
+          code,
+          redirect_uri: transaction.redirectUri,
+          client_id: transaction.clientId,
+          code_verifier: transaction.codeVerifier
+        })
+        const response = await fetch(`${transaction.authorizationServer}/oauth2/token`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          body: params,
+          signal: operation.signal
+        })
+        operation.assertCurrent()
+        if (!response.ok) throw new Error('Token exchange failed')
 
-      const token = validateTokenResponse(await response.json())
-      const utilStore = useUtilStore()
-      utilStore.setLocalStorage('api_token', token.accessToken, Date.now() + token.expiresIn * 1000)
-      return token.accessToken
+        const payload = await response.json()
+        operation.assertCurrent()
+        const token = validateTokenResponse(payload)
+        useUtilStore().setLocalStorage('api_token', token.accessToken, Date.now() + token.expiresIn * 1000)
+        return token.accessToken
+      } catch (error) {
+        operation.assertCurrent()
+        throw error
+      } finally {
+        operation.cleanup()
+      }
     },
     clearIdentity () {
       const pinia = getActivePinia()
@@ -207,31 +245,37 @@ export const useApiStore = defineStore('api', {
       utilStore.removeLocalStorage('api_token')
     },
 
-    async getUserInfo () {
-      const token = await this.token()
-      if (!token) throw new Error('Authentication is required')
-      const globalStore = useGlobalStore()
+    async getUserInfo ({ signal } = {}) {
+      const operation = createIdentityOperation(this, signal)
+      try {
+        operation.assertCurrent()
+        const token = await this.token()
+        operation.assertCurrent()
+        if (!token) throw unauthenticatedError()
 
-      const response = await fetch(`${this.baseUrl}/user/my`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
+        const response = await fetch(`${this.baseUrl}/user/my`, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${token}` },
+          signal: operation.signal
+        })
+        operation.assertCurrent()
+        if (!response.ok) throw new Error('Failed to get user info')
 
-      if (!response.ok) throw new Error('Failed to get user info')
-
-      const result = await response.json()
-      log.debug('User info retrieved:', result)
-      const data = result.data
-      globalStore.setUser(data)
-      if (data.jiacn) {
-        globalStore.setJiacn(data.jiacn)
+        const result = await response.json()
+        operation.assertCurrent()
+        log.debug('User info retrieved:', result)
+        const data = result.data
+        const globalStore = useGlobalStore()
+        globalStore.setUser(data)
+        if (data.jiacn) globalStore.setJiacn(data.jiacn)
+        if (data.openid) globalStore.setOpenid(data.openid)
+        return data
+      } catch (error) {
+        operation.assertCurrent()
+        throw error
+      } finally {
+        operation.cleanup()
       }
-      if (data.openid) {
-        globalStore.setOpenid(data.openid)
-      }
-      return data
     }
   }
 })

@@ -129,6 +129,25 @@ describe('OAuth API store token exchange', () => {
     expect(source).not.to.include('access_type')
     expect(source).not.to.match(/log\.(debug|info|warn|error)\([^\n]*(code|verifier|token)/i)
   })
+
+  it('does not commit a deferred token response after identity clear', async () => {
+    let resolveToken
+    global.fetch = async () => ({
+      ok: true,
+      json: () => new Promise(resolve => { resolveToken = resolve })
+    })
+    const store = useApiStore()
+    const pending = store.exchangeCodeForToken('authorization-code', transaction)
+    await Promise.resolve()
+    store.clearIdentity()
+    resolveToken({ access_token: 'late-token', token_type: 'Bearer', expires_in: 300 })
+
+    let failure
+    try { await pending } catch (error) { failure = error }
+    expect(failure?.name).to.equal('AbortError')
+    expect(window.localStorage.getItem('api_token')).to.equal(null)
+  })
+
 })
 
 function deferred () {

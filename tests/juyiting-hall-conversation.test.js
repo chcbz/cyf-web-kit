@@ -528,4 +528,56 @@ describe('Hall conversation identity lifecycle', () => {
     conversation.disposeHallConversation()
   })
 
+  it('resets an active reply when starting a new conversation and allows another send', async () => {
+    const requests = []
+    let firstCancelReason
+    const conversation = useHallConversation({
+      apiStore: { token: async () => 'token' },
+      chatApi: {
+        create: async (_path, payload, options) => {
+          requests.push({ payload, options })
+          options.onStreamOpen({
+            cancel: reason => {
+              if (requests.length === 1) firstCancelReason = reason
+            }
+          })
+          if (requests.length === 1) {
+            await new Promise((_resolve, reject) => {
+              options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true })
+            })
+            return
+          }
+          options.onStreamEnd()
+        }
+      },
+      chatContext: ref({ conversationScopeType: 'public', conversationScopeKey: 'public', participantAgentIds: [], targetAgentIds: [] }),
+      chatMode: ref('public'), globalStore: { getJiacn: 'hero', user: {} },
+      log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}),
+      portraitShortName: agent => agent?.name || '', selectedAgent: ref(null), selectedTask: ref(null), showToast: () => {}
+    })
+
+    conversation.setDraft('first')
+    const firstSend = conversation.sendHallMessage()
+    await Promise.resolve()
+    expect(conversation.isStreaming.value).to.equal(true)
+
+    const firstSignal = requests[0].options.signal
+    conversation.newHallConversation()
+    expect(firstSignal.aborted).to.equal(true)
+    expect(firstCancelReason?.name).to.equal('AbortError')
+    expect(conversation.isStreaming.value).to.equal(false)
+    expect(conversation.isAwaitingReply.value).to.equal(false)
+    expect(conversation.messages.value).to.deep.equal([])
+
+    conversation.setDraft('second')
+    const secondSend = conversation.sendHallMessage()
+    await Promise.all([firstSend, secondSend])
+
+    expect(requests).to.have.length(2)
+    expect(requests[1].payload.content).to.equal('second')
+    expect(requests[1].options.signal.aborted).to.equal(false)
+    expect(conversation.isStreaming.value).to.equal(false)
+    conversation.disposeHallConversation()
+  })
+
 })
