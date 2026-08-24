@@ -142,7 +142,7 @@ export const useApiStore = defineStore('api', {
       utilStore.setLocalStorage('api_token', token.accessToken, Date.now() + token.expiresIn * 1000)
       return token.accessToken
     },
-    async clearIdentity () {
+    clearIdentity () {
       const pinia = getActivePinia()
       this.authorizationGeneration += 1
       this.authorizationStarted = false
@@ -150,11 +150,17 @@ export const useApiStore = defineStore('api', {
       stopIdentityBoundWork()
       const utilStore = useUtilStore(pinia)
       for (const key of ['api_token', 'userId', 'jiacn', 'openid']) {
-        utilStore.removeLocalStorage(key)
+        try {
+          utilStore.removeLocalStorage(key)
+        } catch {
+          // Continue clearing independent identity state even if browser storage is unavailable.
+        }
       }
-      useGlobalStore(pinia).clearUserIdentity()
-      const { useMessageStore } = await import('./message.js')
-      useMessageStore(pinia).clearMessageState()
+      try {
+        useGlobalStore(pinia).clearUserIdentity()
+      } catch {
+        // Registered identity work and token removal are not rolled back by peripheral state failure.
+      }
     },
 
     async revokeAllSessions ({ signal, timeout = 15_000 } = {}) {

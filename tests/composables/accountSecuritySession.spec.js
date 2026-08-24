@@ -3,7 +3,10 @@ import { createPinia, setActivePinia } from 'pinia'
 import { useApiStore } from '../../src/stores/api.js'
 import { useGlobalStore } from '../../src/stores/global.js'
 import { useMessageStore } from '../../src/stores/message.js'
-import { registerIdentityCleanup } from '../../src/utils/identityLifecycle.js'
+import {
+  identityCleanupHandlerCount,
+  registerIdentityCleanup
+} from '../../src/utils/identityLifecycle.js'
 import { effectScope } from 'vue'
 import { useAccountSecuritySession } from '../../src/composables/useAccountSecuritySession.js'
 
@@ -98,13 +101,17 @@ describe('account security session boundary', () => {
     put('theme', 'dark')
     put('guest-demo', true)
     const globalStore = useGlobalStore()
+    const baselineHandlers = identityCleanupHandlerCount()
     const messageStore = useMessageStore()
+    expect(identityCleanupHandlerCount()).to.equal(baselineHandlers + 1)
     globalStore.setUser({ id: 7, jiacn: 'hero', openid: 'openid', username: 'hero' })
     Object.assign(messageStore, { messages: [{ id: 1 }], total: 1, unreadTotal: 1, loading: true, error: 'old', pageNum: 3, statusFilter: 'unread' })
     let stopped = 0
     const unregister = registerIdentityCleanup(() => { stopped += 1 })
 
-    await useApiStore().clearIdentity()
+    const cleanupResult = useApiStore().clearIdentity()
+    expect(cleanupResult).to.equal(undefined)
+    await cleanupResult
     unregister()
 
     expect(window.localStorage.getItem('api_token')).to.equal(null)
@@ -117,6 +124,8 @@ describe('account security session boundary', () => {
     expect(messageStore.messages).to.deep.equal([])
     expect(messageStore.unreadTotal).to.equal(0)
     expect(stopped).to.equal(1)
+    messageStore.$dispose()
+    expect(identityCleanupHandlerCount()).to.equal(baselineHandlers)
   })
 
   it('treats completed security cleanup as successful even when router.replace rejects', async () => {

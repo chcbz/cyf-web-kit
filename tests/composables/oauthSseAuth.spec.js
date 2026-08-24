@@ -4,7 +4,10 @@ import {
   fetchChatConversationEvents,
   fetchHallConversationEvents
 } from '../../src/utils/authenticatedSse.js'
-import { stopIdentityBoundWork } from '../../src/utils/identityLifecycle.js'
+import {
+  identityCleanupHandlerCount,
+  stopIdentityBoundWork
+} from '../../src/utils/identityLifecycle.js'
 
 async function expectNoUnauthenticatedFetch (openStream) {
   let fetchCount = 0
@@ -173,4 +176,49 @@ describe('direct SSE authentication boundary', () => {
     stopIdentityBoundWork()
     expect(identityAbort.aborted).to.equal(false)
   })
+  it('cancels an unconsumed response and unregisters cleanup on caller or identity abort', async () => {
+    for (const abortWithIdentity of [false, true]) {
+      const baselineHandlers = identityCleanupHandlerCount()
+      const caller = new AbortController()
+      let cancelReason
+      let cancelCount = 0
+      const response = await fetchChatConversationEvents({
+        apiStore: { authorizationGeneration: 3, token: async () => 'token' },
+        url: 'https://api.example/events',
+        signal: caller.signal,
+        fetchImpl: async () => new Response(new ReadableStream({
+          cancel (reason) { cancelReason = reason; cancelCount += 1 }
+        }), { status: 200 })
+      })
+
+      expect(response.status).to.equal(200)
+      expect(identityCleanupHandlerCount()).to.equal(baselineHandlers + 1)
+      if (abortWithIdentity) {
+        stopIdentityBoundWork()
+      } else {
+        caller.abort(new DOMException('caller stopped', 'AbortError'))
+      }
+      await new Promise(resolve => window.setTimeout(resolve, 0))
+      if (abortWithIdentity) caller.abort(new DOMException('late caller stop', 'AbortError'))
+      else stopIdentityBoundWork()
+      await Promise.resolve()
+
+      expect(cancelReason?.name).to.equal('AbortError')
+      expect(cancelCount).to.equal(1)
+      expect(identityCleanupHandlerCount()).to.equal(baselineHandlers)
+    }
+  })
+
+  it('keeps the Chat stream cancel handle and lifecycle signal available before the long request settles', () => {
+    const stream = streamFunctionSource(
+      'src/components/chat/Chat.vue',
+      'const sendMessage = async (message) => {',
+      '\nconst stopStream = async () => {'
+    )
+    expect(stream).to.include('signal: streamSignal.signal')
+    expect(stream).to.include('onStreamOpen: handle =>')
+    expect(stream).to.include('readerRef.value = handle')
+    expect(stream).to.match(/AbortError[\s\S]*?generation !== chatLifecycleGeneration/)
+  })
+
 })

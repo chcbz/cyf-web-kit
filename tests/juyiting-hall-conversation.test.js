@@ -1,6 +1,7 @@
 import { expect } from 'chai'
 import { ref } from 'vue'
 import { useHallConversation } from '../src/composables/juyiting/useHallConversation.js'
+import { stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 import {
   appendHallEventMessage,
   appendStreamPayload,
@@ -55,7 +56,8 @@ describe('useHallConversation scoped message loading', () => {
       })
 
       await conversation.loadHallMessages()
-      await new Promise(resolve => setImmediate(resolve))
+      await Promise.resolve()
+      await Promise.resolve()
 
       expect(tokenCount).to.equal(1)
       expect(fetchCount).to.equal(0)
@@ -113,7 +115,8 @@ describe('useHallConversation scoped message loading', () => {
       })
 
       await conversation.loadHallMessages()
-      await new Promise(resolve => setImmediate(resolve))
+      await Promise.resolve()
+      await Promise.resolve()
 
       expect(fetchCount).to.equal(1)
       expect(cleanCount).to.equal(1)
@@ -444,4 +447,85 @@ describe('Hall conversation identity lifecycle', () => {
       window.clearTimeout = originalClearTimeout
     }
   })
+
+  it('aborts deferred list and content requests on disposal and ignores their late success callbacks', async () => {
+    let listOptions
+    let contentOptions
+    let resolveContent
+    const conversation = useHallConversation({
+      apiStore: { token: async () => 'token' },
+      chatApi: {
+        list: async (_path, _payload, options) => {
+          listOptions = options
+          await options.onSuccess({ data: [{ id: 1001 }] })
+        },
+        getById: async (_path, _id, options) => {
+          contentOptions = options
+          await new Promise(resolve => { resolveContent = resolve })
+          options.onSuccess({ data: [{ id: 9, senderType: 'agent', content: 'late reply' }] })
+        }
+      },
+      chatContext: ref({ conversationScopeType: 'public', conversationScopeKey: 'public', targetAgentIds: [] }),
+      chatMode: ref('public'), globalStore: { getJiacn: 'hero', user: {} },
+      log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}),
+      portraitShortName: agent => agent?.name || '', selectedAgent: ref(null), selectedTask: ref(null), showToast: () => {}
+    })
+
+    const loading = conversation.loadHallMessages()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(listOptions.signal.aborted).to.equal(false)
+    expect(contentOptions.signal.aborted).to.equal(false)
+
+    conversation.disposeHallConversation()
+    expect(listOptions.signal.aborted).to.equal(true)
+    expect(contentOptions.signal.aborted).to.equal(true)
+    resolveContent()
+    await loading
+
+    expect(conversation.conversationId.value).to.equal('')
+    expect(conversation.messages.value).to.deep.equal([])
+  })
+
+  it('cancels an opened deferred reply stream on identity clear and filters all late callbacks', async () => {
+    let streamOptions
+    let resolveStream
+    let cancelReason
+    let errorWrites = 0
+    const conversation = useHallConversation({
+      apiStore: { token: async () => 'token' },
+      chatApi: {
+        create: async (_path, _payload, options) => {
+          streamOptions = options
+          options.onStreamOpen({ cancel: reason => { cancelReason = reason } })
+          await new Promise(resolve => { resolveStream = resolve })
+        }
+      },
+      chatContext: ref({ conversationScopeType: 'public', conversationScopeKey: 'public', participantAgentIds: [], targetAgentIds: [] }),
+      chatMode: ref('public'), globalStore: { getJiacn: 'hero', user: {} },
+      log: { warn: () => {}, error: () => { errorWrites += 1 } }, openPanel: () => {}, outgoingMetadata: ref({ stale: true }),
+      portraitShortName: agent => agent?.name || '', selectedAgent: ref(null), selectedTask: ref(null), showToast: () => {}
+    })
+
+    conversation.setDraft('hello')
+    const sending = conversation.sendHallMessage()
+    await Promise.resolve()
+    expect(streamOptions.signal.aborted).to.equal(false)
+
+    stopIdentityBoundWork()
+    expect(streamOptions.signal.aborted).to.equal(true)
+    expect(cancelReason?.name).to.equal('AbortError')
+    streamOptions.onStream('{"v":"late"}')
+    streamOptions.onStreamEnd()
+    streamOptions.onError('cancelled', streamOptions.signal.reason)
+    resolveStream()
+    await sending
+
+    expect(conversation.messages.value).to.deep.equal([])
+    expect(conversation.isStreaming.value).to.equal(false)
+    expect(conversation.isAwaitingReply.value).to.equal(false)
+    expect(errorWrites).to.equal(0)
+    conversation.disposeHallConversation()
+  })
+
 })

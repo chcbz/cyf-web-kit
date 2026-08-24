@@ -72,6 +72,8 @@ export function useHttp (options = {}) {
 
     let requestSignal = null
     let unregisterIdentityCleanup = null
+    let requestAuthStore = null
+    let authorizationGeneration
 
     try {
       // 准备请求配置
@@ -127,8 +129,9 @@ export function useHttp (options = {}) {
       let token = null
       if (needAuth) {
         try {
-          const apiStore = authStore || await resolveApiStore()
-          token = await apiStore.token()
+          requestAuthStore = authStore || await resolveApiStore()
+          authorizationGeneration = requestAuthStore.authorizationGeneration
+          token = await requestAuthStore.token()
           if (!token) {
             const authRequired = new Error('Authentication is required')
             authRequired.code = 'AUTHENTICATION_REQUIRED'
@@ -136,6 +139,8 @@ export function useHttp (options = {}) {
           }
           config.headers.Authorization = `Bearer ${token}`
         } catch (authError) {
+          throwIfAborted(requestSignal.signal)
+          if (authError?.name === 'AbortError' || authError?.name === 'TimeoutError') throw authError
           throw new Error(`Authentication failed: ${authError.message}`)
         }
       }
@@ -175,6 +180,7 @@ export function useHttp (options = {}) {
         } catch {
         // 如果无法解析为 JSON，使用默认错误消息
         }
+        throwIfAborted(requestSignal.signal)
 
         const error = new Error(errorMessage)
         error.status = response.status
@@ -194,7 +200,7 @@ export function useHttp (options = {}) {
         let buffer = ''
         const streamHandle = {
           reader,
-          cancel: () => reader.cancel()
+          cancel: reason => reader.cancel(reason)
         }
         if (onStreamOpen) {
           onStreamOpen(streamHandle, response)
@@ -316,29 +322,38 @@ export function useHttp (options = {}) {
       return resultObj
 
     } catch (err) {
-      error.value = err.message || '请求失败'
+      const aborted = requestSignal?.signal?.aborted
+      const failure = aborted
+        ? (requestSignal.signal.reason || new DOMException('The operation was aborted', 'AbortError'))
+        : err
+      const cancellation = failure?.name === 'AbortError' || failure?.name === 'TimeoutError'
+      error.value = cancellation ? '请求超时' : (failure.message || '请求失败')
 
-      // 处理认证错误（fetch 的错误结构不同）
-      if (err.name === 'AbortError' || err.name === 'TimeoutError') {
-        error.value = '请求超时'
-      } else if (err.status === 401 && needAuth) {
-        // 清理旧的 token
-        const apiStore = authStore || await resolveApiStore()
-        apiStore.cleanToken()
+      if (failure.status === 401 && needAuth && requestAuthStore &&
+          !requestSignal.signal.aborted &&
+          authorizationGeneration === requestAuthStore.authorizationGeneration) {
+        requestAuthStore.cleanToken()
         log.warn('Authentication expired, token cleaned')
 
-        try {
-          await initiateReauthentication(apiStore)
-        } catch {
-          log.warn('Reauthentication could not be started')
+        if (!requestSignal.signal.aborted &&
+            authorizationGeneration === requestAuthStore.authorizationGeneration) {
+          try {
+            await initiateReauthentication(requestAuthStore)
+          } catch {
+            log.warn('Reauthentication could not be started')
+          }
         }
       }
 
-      if (onError) {
-        onError(error.value, err)
+      if (requestSignal?.signal?.aborted) {
+        throw requestSignal.signal.reason || new DOMException('The operation was aborted', 'AbortError')
       }
 
-      throw err
+      if (onError && !cancellation) {
+        onError(error.value, failure)
+      }
+
+      throw failure
 
     } finally {
       requestSignal?.cleanup()

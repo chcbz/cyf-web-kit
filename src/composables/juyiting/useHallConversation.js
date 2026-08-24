@@ -7,6 +7,7 @@ import {
 } from './hallConversationMessages.js'
 import { fetchHallConversationEvents } from '../../utils/authenticatedSse.js'
 import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
+import { combineAbortSignals } from '../../utils/abortSignals.js'
 
 const runtimeEnv = import.meta.env ?? {}
 
@@ -38,7 +39,12 @@ export const useHallConversation = ({
   let hallReplyPollTimer = null
   let hallSyncTimers = []
   let lifecycleGeneration = 0
+  let lifecycleController = new AbortController()
   let disposed = false
+  let hallEventSignalCleanup = null
+  let hallReplyController = null
+  let hallReplySignalCleanup = null
+  let hallReplyStreamHandle = null
 
   const pendingAgentName = computed(() => {
     if (!selectedAgent.value) return ''
@@ -73,6 +79,12 @@ export const useHallConversation = ({
   const stopHallReplyStreaming = () => {
     hallReplyTimers.forEach(timer => window.clearTimeout(timer))
     hallReplyTimers = []
+    hallReplyController?.abort(new DOMException('Hall reply stopped', 'AbortError'))
+    hallReplyController = null
+    hallReplyStreamHandle?.cancel?.(new DOMException('Hall reply stopped', 'AbortError'))
+    hallReplyStreamHandle = null
+    hallReplySignalCleanup?.()
+    hallReplySignalCleanup = null
   }
 
   const stopHallReplyPolling = () => {
@@ -130,12 +142,14 @@ export const useHallConversation = ({
     stopHallEventStream()
     hallEventConversationId = id
     hallEventController = new AbortController()
+    const eventSignal = combineAbortSignals({ signals: [lifecycleController.signal, hallEventController.signal] })
+    hallEventSignalCleanup = eventSignal.cleanup
 
     try {
       const response = await fetchHallConversationEvents({
         apiStore,
         url: apiStreamUrl('/chat/conversation/events', { id }),
-        signal: hallEventController.signal
+        signal: eventSignal.signal
       })
       if (disposed || generation !== lifecycleGeneration || !response) {
         hallEventController = null
@@ -173,20 +187,33 @@ export const useHallConversation = ({
           startHallEventStream()
         }, 2500)
       }
+    } finally {
+      if (generation === lifecycleGeneration) {
+        hallEventSignalCleanup?.()
+        hallEventSignalCleanup = null
+      }
     }
   }
 
   const stopHallEventStream = () => {
     if (hallEventReconnectTimer) window.clearTimeout(hallEventReconnectTimer)
     hallEventReconnectTimer = null
-    if (hallEventController) hallEventController.abort()
+    if (hallEventController) hallEventController.abort(new DOMException('Hall event stream stopped', 'AbortError'))
     hallEventController = null
+    hallEventSignalCleanup?.()
+    hallEventSignalCleanup = null
     hallEventConversationId = ''
     eventStreamRecovering.value = false
   }
 
-  const clearHallConversationIdentityState = () => {
+  const resetLifecycle = () => {
     lifecycleGeneration += 1
+    lifecycleController.abort(new DOMException('Hall identity lifecycle reset', 'AbortError'))
+    if (!disposed) lifecycleController = new AbortController()
+  }
+
+  const clearHallConversationIdentityState = () => {
+    resetLifecycle()
     stopHallEventStream()
     stopHallReplyStreaming()
     stopHallReplyPolling()
@@ -207,22 +234,33 @@ export const useHallConversation = ({
   }
 
   const loadHallConversationContent = async (id = conversationId.value) => {
-    if (!id) return
-    await chatApi.getById('/conversation/content', id, {
-      autoLoading: false,
-      onSuccess: (contentResult) => {
-        messages.value = (contentResult?.data || []).map(normalizeHallMessage)
-        if (hasResolvedAgentReply(messages.value)) {
-          isAwaitingReply.value = false
-          isStreaming.value = false
-          stopHallReplyPolling()
+    if (disposed || !id) return
+    const generation = lifecycleGeneration
+    try {
+      await chatApi.getById('/conversation/content', id, {
+        autoLoading: false,
+        signal: lifecycleController.signal,
+        onSuccess: (contentResult) => {
+          if (disposed || generation !== lifecycleGeneration) return
+          messages.value = (contentResult?.data || []).map(normalizeHallMessage)
+          if (hasResolvedAgentReply(messages.value)) {
+            isAwaitingReply.value = false
+            isStreaming.value = false
+            stopHallReplyPolling()
+          }
+          startHallEventStream()
         }
-        startHallEventStream()
+      })
+    } catch (error) {
+      if (error?.name !== 'AbortError' && !disposed && generation === lifecycleGeneration) {
+        log.warn('加载聚义厅会话内容失败', error)
       }
-    })
+    }
   }
 
   const loadHallMessages = async () => {
+    if (disposed) return
+    const generation = lifecycleGeneration
     stopHallEventStream()
     stopHallReplyStreaming()
     stopHallReplyPolling()
@@ -243,7 +281,9 @@ export const useHallConversation = ({
         }
       }, {
         autoLoading: false,
+        signal: lifecycleController.signal,
         onSuccess: async (result) => {
+          if (disposed || generation !== lifecycleGeneration) return
           const hallConversation = result?.data?.[0]
           if (!hallConversation) return
           conversationId.value = hallConversation.id?.toString() || ''
@@ -251,7 +291,9 @@ export const useHallConversation = ({
         }
       })
     } catch (error) {
-      log.warn('加载聚义厅会话失败', error)
+      if (error?.name !== 'AbortError' && !disposed && generation === lifecycleGeneration) {
+        log.warn('加载聚义厅会话失败', error)
+      }
     }
   }
 
@@ -318,7 +360,8 @@ export const useHallConversation = ({
 
   const sendHallMessage = async () => {
     const content = String(draft.value || '').trim()
-    if (!content || isStreaming.value) return
+    if (disposed || !content || isStreaming.value) return
+    const generation = lifecycleGeneration
     clearDraft()
     stopHallReplyStreaming()
     messages.value.push({
@@ -331,6 +374,10 @@ export const useHallConversation = ({
     isStreaming.value = true
     isAwaitingReply.value = true
     stopHallReplyPolling()
+
+    hallReplyController = new AbortController()
+    const replySignal = combineAbortSignals({ signals: [lifecycleController.signal, hallReplyController.signal] })
+    hallReplySignalCleanup = replySignal.cleanup
 
     try {
       await chatApi.create('/stream', {
@@ -360,21 +407,35 @@ export const useHallConversation = ({
         responseType: 'stream',
         autoLoading: false,
         timeout: 1800000,
-        onStream: processStream,
+        signal: replySignal.signal,
+        onStreamOpen: handle => {
+          if (disposed || generation !== lifecycleGeneration) {
+            handle.cancel?.(new DOMException('Stale Hall reply stream', 'AbortError'))
+            return
+          }
+          hallReplyStreamHandle = handle
+        },
+        onStream: eventData => {
+          if (!disposed && generation === lifecycleGeneration) processStream(eventData)
+        },
         onStreamEnd: () => {
+          if (disposed || generation !== lifecycleGeneration) return
+          hallReplyStreamHandle = null
           isStreaming.value = false
           if (isAwaitingReply.value && conversationId.value) {
             startHallReplyPolling(conversationId.value)
           }
         },
-        onError: (message) => {
-          throw new Error(message)
+        onError: (message, requestError) => {
+          if (disposed || generation !== lifecycleGeneration || requestError?.name === 'AbortError') return
+          throw requestError || new Error(message)
         }
       })
-      if (outgoingMetadata) {
+      if (!disposed && generation === lifecycleGeneration && outgoingMetadata) {
         outgoingMetadata.value = {}
       }
     } catch (error) {
+      if (error?.name === 'AbortError' || disposed || generation !== lifecycleGeneration) return
       log.error('聚义厅消息发送失败', error)
       isStreaming.value = false
       isAwaitingReply.value = false
@@ -386,6 +447,13 @@ export const useHallConversation = ({
         timestamp: Date.now(),
         streaming: false
       })
+    } finally {
+      if (generation === lifecycleGeneration) {
+        hallReplyController = null
+        hallReplyStreamHandle = null
+        hallReplySignalCleanup?.()
+        hallReplySignalCleanup = null
+      }
     }
   }
 

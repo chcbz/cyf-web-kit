@@ -19,3 +19,7 @@ export function stopIdentityBoundWork () {
     }
   }
 }
+
+export function identityCleanupHandlerCount () {
+  return identityCleanupHandlers.size
+}

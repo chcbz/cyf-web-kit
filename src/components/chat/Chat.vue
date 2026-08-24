@@ -48,6 +48,7 @@ import { chatApi, phraseApi } from '../../composables/useHttp'
 import { log } from '../../utils/logger'
 import { fetchChatConversationEvents } from '../../utils/authenticatedSse.js'
 import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
+import { combineAbortSignals } from '../../utils/abortSignals.js'
 
 // 导入子组件
 import ChatMessageList from './ChatMessageList.vue'
@@ -104,7 +105,11 @@ let conversationEventReconnectTimer = null
 let activeEventConversationId = ''
 let deleteConversationRetryTimers = []
 let chatLifecycleGeneration = 0
+let chatLifecycleController = new AbortController()
 let chatDisposed = false
+let conversationEventSignalCleanup = null
+let chatStreamController = null
+let chatStreamSignalCleanup = null
 
 // 计算属性
 const hasMessages = computed(() => messages.value.length > 0)
@@ -163,9 +168,11 @@ const stopConversationEventStream = () => {
   }
   conversationEventReconnectTimer = null
   if (conversationEventController) {
-    conversationEventController.abort()
+    conversationEventController.abort(new DOMException('Chat event stream stopped', 'AbortError'))
   }
   conversationEventController = null
+  conversationEventSignalCleanup?.()
+  conversationEventSignalCleanup = null
   activeEventConversationId = ''
 }
 
@@ -174,12 +181,26 @@ const clearDeleteConversationRetries = () => {
   deleteConversationRetryTimers = []
 }
 
-const clearChatIdentityState = () => {
+const resetChatLifecycle = () => {
   chatLifecycleGeneration += 1
+  chatLifecycleController.abort(new DOMException('Chat identity lifecycle reset', 'AbortError'))
+  if (!chatDisposed) chatLifecycleController = new AbortController()
+}
+
+const cancelChatStream = reason => {
+  chatStreamController?.abort(reason)
+  chatStreamController = null
+  readerRef.value?.cancel?.(reason)
+  readerRef.value = null
+  chatStreamSignalCleanup?.()
+  chatStreamSignalCleanup = null
+}
+
+const clearChatIdentityState = () => {
+  resetChatLifecycle()
   stopConversationEventStream()
   clearDeleteConversationRetries()
-  readerRef.value?.cancel?.()
-  readerRef.value = null
+  cancelChatStream(new DOMException('Chat identity cleared', 'AbortError'))
   isLoading.value = false
   isStreaming.value = false
   error.value = null
@@ -199,12 +220,14 @@ const startConversationEventStream = async () => {
   stopConversationEventStream()
   activeEventConversationId = id
   conversationEventController = new AbortController()
+  const eventSignal = combineAbortSignals({ signals: [chatLifecycleController.signal, conversationEventController.signal] })
+  conversationEventSignalCleanup = eventSignal.cleanup
 
   try {
     const response = await fetchChatConversationEvents({
       apiStore,
       url: apiStreamUrl('/chat/conversation/events', { id }),
-      signal: conversationEventController.signal
+      signal: eventSignal.signal
     })
     if (chatDisposed || generation !== chatLifecycleGeneration || !response) {
       conversationEventController = null
@@ -240,11 +263,18 @@ const startConversationEventStream = async () => {
         startConversationEventStream()
       }, 2500)
     }
+  } finally {
+    if (generation === chatLifecycleGeneration) {
+      conversationEventSignalCleanup?.()
+      conversationEventSignalCleanup = null
+    }
   }
 }
 
 // 初始化
 const initializeApp = async () => {
+  if (chatDisposed) return
+  const generation = chatLifecycleGeneration
   // 同步路由查询参数
   conversationType.value = route.query.conversationType || ''
 
@@ -258,44 +288,52 @@ const initializeApp = async () => {
   globalStore.setShowBack(false)
 
   // 加载随机短语
-  await loadRandomPhrase()
+  await loadRandomPhrase(generation)
+  if (chatDisposed || generation !== chatLifecycleGeneration) return
 
   loadConversations()
 }
 
 // 加载随机短语
-const loadRandomPhrase = async () => {
+const loadRandomPhrase = async (generation = chatLifecycleGeneration) => {
+  if (chatDisposed) return
   try {
-    phraseApi.list('/get/random', {
+    await phraseApi.list('/get/random', {
       jiacn: globalStore.getJiacn
     }, {
-      autoLoading: false,
+      signal: chatLifecycleController.signal,
       onSuccess: (data) => {
+        if (chatDisposed || generation !== chatLifecycleGeneration) return
         if (data && data.data) {
           randomPhrase.value = data.data.content
-          phraseApi.getById('/read', data.data.id)
+          void phraseApi.getById('/read', data.data.id, { signal: chatLifecycleController.signal })
+            .catch(error => {
+              if (error?.name !== 'AbortError' && !chatDisposed && generation === chatLifecycleGeneration) {
+                log.warn('记录随机短语读取失败:', error)
+              }
+            })
         }
       },
       onError: (error) => {
-        log.warn('从服务端加载会话失败:', error)
+        if (error?.name !== 'AbortError' && !chatDisposed && generation === chatLifecycleGeneration) {
+          log.warn('从服务端加载会话失败:', error)
+        }
       }
     })
   } catch (error) {
-    log.warn('加载随机短语失败:', error)
-    // 保持默认文本
+    if (error?.name !== 'AbortError' && !chatDisposed && generation === chatLifecycleGeneration) {
+      log.warn('加载随机短语失败:', error)
+    }
   }
 }
 
 // 会话管理函数
 const loadConversations = async () => {
+  if (chatDisposed) return
+  const generation = chatLifecycleGeneration
   try {
-    const searchFilter = {
-      jiacn: globalStore.getJiacn
-    }
-    if (conversationType.value) {
-      searchFilter.conversationType = conversationType.value
-    }
-    // 从服务端加载会话列表
+    const searchFilter = { jiacn: globalStore.getJiacn }
+    if (conversationType.value) searchFilter.conversationType = conversationType.value
     await chatApi.list('/conversation/list', {
       pageNum: 1,
       pageSize: 100,
@@ -303,7 +341,9 @@ const loadConversations = async () => {
       search: searchFilter
     }, {
       autoLoading: false,
+      signal: chatLifecycleController.signal,
       onSuccess: (data) => {
+        if (chatDisposed || generation !== chatLifecycleGeneration) return
         if (data && data.data) {
           conversations.value = data.data.map(conv => ({
             id: conv.id.toString(),
@@ -312,53 +352,49 @@ const loadConversations = async () => {
             messages: [],
             conversationType: conv.conversationType || conversationType.value
           }))
-          if (isJuyiting.value && conversations.value.length) {
-            loadConversation(conversations.value[0].id)
-          }
+          if (isJuyiting.value && conversations.value.length) loadConversation(conversations.value[0].id)
         }
       },
-      onError: (error) => {
-        log.warn('从服务端加载会话失败:', error)
+      onError: error => {
+        if (error?.name !== 'AbortError' && !chatDisposed && generation === chatLifecycleGeneration) {
+          log.warn('从服务端加载会话失败:', error)
+        }
       }
     })
   } catch (error) {
-    log.warn('加载会话失败:', error)
+    if (error?.name !== 'AbortError' && !chatDisposed && generation === chatLifecycleGeneration) {
+      log.warn('加载会话失败:', error)
+    }
   }
 }
 
 const loadConversation = async (id) => {
-  const conversation = conversations.value.find((c) => c.id === id)
-  if (conversation) {
-    conversationId.value = id
-    globalStore.setTitle(conversation.title)
-
-    // 从服务端加载会话内容
-    try {
-      await chatApi.getById('/conversation/content', id, {
-        autoLoading: false,
-        onSuccess: (data) => {
-          if (data && data.data) {
-            // 根据接口返回的数据结构处理会话内容
-            const msgList = data.data || []
-
-            // 确保消息格式正确
-            messages.value = msgList.map(msg => normalizeLoadedMessage(msg, id))
-
-            // 加载完成后自动滚动到底部
-            scrollToBottom()
-            startConversationEventStream()
-          } else {
-            // 如果服务端没有消息，清空消息
-            messages.value = []
-            startConversationEventStream()
-          }
-        },
-        onError: (error) => {
+  if (chatDisposed) return
+  const generation = chatLifecycleGeneration
+  const conversation = conversations.value.find((item) => item.id === id)
+  if (!conversation) return
+  conversationId.value = id
+  globalStore.setTitle(conversation.title)
+  try {
+    await chatApi.getById('/conversation/content', id, {
+      autoLoading: false,
+      signal: chatLifecycleController.signal,
+      onSuccess: (data) => {
+        if (chatDisposed || generation !== chatLifecycleGeneration) return
+        const msgList = data?.data || []
+        messages.value = msgList.map(msg => normalizeLoadedMessage(msg, id))
+        scrollToBottom()
+        startConversationEventStream()
+      },
+      onError: error => {
+        if (error?.name !== 'AbortError' && !chatDisposed && generation === chatLifecycleGeneration) {
           log.warn('从服务端加载会话内容失败:', error)
           messages.value = []
         }
-      })
-    } catch (error) {
+      }
+    })
+  } catch (error) {
+    if (error?.name !== 'AbortError' && !chatDisposed && generation === chatLifecycleGeneration) {
       log.warn('加载会话内容失败:', error)
       messages.value = []
     }
@@ -475,106 +511,112 @@ const processBotResponse = (eventData) => {
 
 // 消息发送和流处理
 const sendMessage = async (message) => {
-  if (!message || isLoading.value) return
+  if (chatDisposed || !message || isLoading.value) return
+  const generation = chatLifecycleGeneration
 
   isLoading.value = true
   isStreaming.value = true
 
-  try {
-    // 添加用户消息
-    const userMessage = {
-      sender: 'USER',
-      content: message,
-      timestamp: new Date().getTime(),
-      conversationId: conversationId.value,
-      localId: `user-${Date.now()}`,
-      senderType: 'user'
-    }
+  cancelChatStream(new DOMException('Chat stream replaced', 'AbortError'))
+  chatStreamController = new AbortController()
+  const streamSignal = combineAbortSignals({ signals: [chatLifecycleController.signal, chatStreamController.signal] })
+  chatStreamSignalCleanup = streamSignal.cleanup
 
+  try {
     messages.value = [
       ...messages.value,
-      userMessage
+      {
+        sender: 'USER',
+        content: message,
+        timestamp: new Date().getTime(),
+        conversationId: conversationId.value,
+        localId: `user-${Date.now()}`,
+        senderType: 'user'
+      }
     ]
-
     scrollToBottom()
 
-    // 使用新的 useHttp 流式功能
-    const streamResult = await chatApi.create('/stream',
-      {
-        content: message,
-        conversationId: conversationId.value,
-        conversationType: conversationType.value,
-        senderType: 'user',
-        senderName: globalStore.getJiacn || '用户',
-        metadata: conversationType.value === 'juyiting' && agentStore.selectedAgentId
-          ? { selectedAgentId: agentStore.selectedAgentId }
-          : undefined
-      },
-      {
-        responseType: 'stream',
-        autoLoading: false,
-        timeout: 1800000,
-        onStream: (eventData) => {
-          log.debug('Stream data received:', eventData)
-          processBotResponse(eventData)
-        },
-        onStreamEnd: () => {
-          log.debug('Stream ended')
-          isStreaming.value = false
-          isLoading.value = false
-          readerRef.value = null
-        },
-        onError: (errorMessage) => {
-          log.error('发送消息失败:', errorMessage)
-          throw new Error(errorMessage)
+    await chatApi.create('/stream', {
+      content: message,
+      conversationId: conversationId.value,
+      conversationType: conversationType.value,
+      senderType: 'user',
+      senderName: globalStore.getJiacn || '用户',
+      metadata: conversationType.value === 'juyiting' && agentStore.selectedAgentId
+        ? { selectedAgentId: agentStore.selectedAgentId }
+        : undefined
+    }, {
+      responseType: 'stream',
+      autoLoading: false,
+      timeout: 1800000,
+      signal: streamSignal.signal,
+      onStreamOpen: handle => {
+        if (chatDisposed || generation !== chatLifecycleGeneration) {
+          handle.cancel?.(new DOMException('Stale Chat stream', 'AbortError'))
+          return
         }
+        readerRef.value = handle
+      },
+      onStream: eventData => {
+        if (chatDisposed || generation !== chatLifecycleGeneration) return
+        log.debug('Stream data received:', eventData)
+        processBotResponse(eventData)
+      },
+      onStreamEnd: () => {
+        if (chatDisposed || generation !== chatLifecycleGeneration) return
+        log.debug('Stream ended')
+        isStreaming.value = false
+        isLoading.value = false
+        readerRef.value = null
+      },
+      onError: (errorMessage, requestError) => {
+        if (chatDisposed || generation !== chatLifecycleGeneration || requestError?.name === 'AbortError') return
+        log.error('发送消息失败:', errorMessage)
+        throw requestError || new Error(errorMessage)
       }
-    )
-
-    // 保存reader引用以便后续取消
-    if (streamResult && streamResult.stream) {
-      readerRef.value = streamResult.stream.reader
-    }
-  } catch (err) {
-    log.error('发送消息失败:', err)
+    })
+  } catch (requestError) {
+    if (requestError?.name === 'AbortError' || chatDisposed || generation !== chatLifecycleGeneration) return
+    log.error('发送消息失败:', requestError)
+    error.value = requestError?.message || '发送消息失败'
     isStreaming.value = false
     isLoading.value = false
-    error.value = '发送消息失败，请重试'
     messages.value = [
       ...messages.value,
       {
         sender: 'SYSTEM',
-        content: '消息发送失败',
+        content: '发送消息失败，请稍后重试',
         isError: true,
         timestamp: new Date().getTime(),
         senderType: 'system'
       }
     ]
+  } finally {
+    if (generation === chatLifecycleGeneration) {
+      chatStreamController = null
+      readerRef.value = null
+      chatStreamSignalCleanup?.()
+      chatStreamSignalCleanup = null
+    }
   }
 }
 
 const stopStream = async () => {
-  if (readerRef.value) {
-    try {
-      await readerRef.value.cancel()
-      messages.value = [
-        ...messages.value,
-        {
-          sender: 'SYSTEM',
-          content: '已取消当前请求',
-          isInfo: true,
-          timestamp: new Date().getTime(),
-          senderType: 'system'
-        }
-      ]
-    } catch (err) {
-      log.error('取消请求失败:', err)
-    } finally {
-      isStreaming.value = false
-      isLoading.value = false
-      readerRef.value = null
+  if (!isStreaming.value && !readerRef.value && !chatStreamController) return
+  cancelChatStream(new DOMException('Chat request cancelled', 'AbortError'))
+  if (chatDisposed) return
+  messages.value = [
+    ...messages.value,
+    {
+      sender: 'SYSTEM',
+      content: '已取消当前请求',
+      isInfo: true,
+      timestamp: new Date().getTime(),
+      senderType: 'system'
     }
-  }
+  ]
+  isStreaming.value = false
+  isLoading.value = false
 }
 
 // 处理滚动事件
@@ -612,7 +654,9 @@ const deleteConversation = async (id, retryCount = 0) => {
   try {
     log.info('删除会话:', id)
     await chatApi.delete('/conversation/delete', id, {
+      signal: chatLifecycleController.signal,
       onSuccess: () => {
+        if (chatDisposed || generation !== chatLifecycleGeneration) return
         log.debug('删除会话成功:', id)
         const index = conversations.value.findIndex((c) => c.id === id)
         if (index !== -1) {
@@ -623,7 +667,8 @@ const deleteConversation = async (id, retryCount = 0) => {
           generateNewConversationId()
         }
       },
-      onError: (errorMessage) => {
+      onError: (errorMessage, requestError) => {
+        if (requestError?.name === 'AbortError' || chatDisposed || generation !== chatLifecycleGeneration) return
         log.error('删除会话失败:', errorMessage)
 
         const lastMessage = messages.value[messages.value.length - 1]
@@ -646,6 +691,7 @@ const deleteConversation = async (id, retryCount = 0) => {
       }
     })
   } catch (error) {
+    if (error?.name === 'AbortError' || chatDisposed || generation !== chatLifecycleGeneration) return
     log.error('删除会话失败:', error)
 
     const lastMessage = messages.value[messages.value.length - 1]
@@ -670,11 +716,15 @@ const deleteConversation = async (id, retryCount = 0) => {
 
 // 修改会话标题
 const updateConversationTitle = async (id, newTitle) => {
+  if (chatDisposed) return
+  const generation = chatLifecycleGeneration
   try {
     log.info('修改会话标题:', id, newTitle)
     await chatApi.update('/conversation/update', { id, title: newTitle }, {
       autoLoading: false,
+      signal: chatLifecycleController.signal,
       onSuccess: () => {
+        if (chatDisposed || generation !== chatLifecycleGeneration) return
         log.debug('修改会话标题成功:', id)
         // 更新本地会话列表中的标题
         const conversation = conversations.value.find((c) => c.id === id)
@@ -686,7 +736,8 @@ const updateConversationTitle = async (id, newTitle) => {
           globalStore.setTitle(newTitle)
         }
       },
-      onError: (errorMessage) => {
+      onError: (errorMessage, requestError) => {
+        if (requestError?.name === 'AbortError' || chatDisposed || generation !== chatLifecycleGeneration) return
         log.error('修改会话标题失败:', errorMessage)
         messages.value = [
           ...messages.value,
@@ -701,7 +752,9 @@ const updateConversationTitle = async (id, newTitle) => {
       }
     })
   } catch (error) {
-    log.error('修改会话标题失败:', error)
+    if (error?.name !== 'AbortError' && !chatDisposed && generation === chatLifecycleGeneration) {
+      log.error('修改会话标题失败:', error)
+    }
   }
 }
 

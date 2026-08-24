@@ -4,6 +4,7 @@ import { useApiStore } from './api.js'
 import { useGlobalStore } from './global.js'
 import { useUtilStore } from './util.js'
 import { log } from '../utils/logger.js'
+import { registerIdentityCleanup } from '../utils/identityLifecycle.js'
 
 const MSG_STATUS = {
   DELETED: 0,
@@ -11,7 +12,7 @@ const MSG_STATUS = {
   READ: 2
 }
 
-export const useMessageStore = defineStore('message', {
+const useMessageStoreBase = defineStore('message', {
   state: () => ({
     messages: [],
     total: 0,
@@ -166,3 +167,22 @@ export const useMessageStore = defineStore('message', {
 })
 
 export { MSG_STATUS }
+
+const messageCleanupByStore = new WeakMap()
+
+export function useMessageStore (pinia) {
+  const store = useMessageStoreBase(pinia)
+  if (!messageCleanupByStore.has(store)) {
+    const unregister = registerIdentityCleanup(() => store.clearMessageState())
+    const dispose = store.$dispose.bind(store)
+    store.$dispose = () => {
+      unregister()
+      messageCleanupByStore.delete(store)
+      dispose()
+    }
+    messageCleanupByStore.set(store, unregister)
+  }
+  return store
+}
+
+useMessageStore.$id = useMessageStoreBase.$id

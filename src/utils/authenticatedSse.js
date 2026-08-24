@@ -2,7 +2,7 @@ import { initiateReauthentication } from './reauthentication.js'
 import { registerIdentityCleanup } from './identityLifecycle.js'
 import { combineAbortSignals, throwIfAborted } from './abortSignals.js'
 
-function responseWithCleanup (response, cleanup) {
+function responseWithCleanup (response, signal, cleanup) {
   if (!response.body) {
     cleanup()
     return response
@@ -13,8 +13,27 @@ function responseWithCleanup (response, cleanup) {
   const finish = () => {
     if (settled) return
     settled = true
+    signal?.removeEventListener?.('abort', onAbort)
     cleanup()
   }
+  let cancelPromise = null
+  const cancelReader = reason => {
+    if (cancelPromise) return cancelPromise
+    cancelPromise = (async () => {
+      try {
+        await reader.cancel(reason)
+      } catch {
+        // Cancellation is best-effort; lifecycle cleanup must still complete.
+      } finally {
+        finish()
+      }
+    })()
+    return cancelPromise
+  }
+  const onAbort = () => { void cancelReader(signal.reason) }
+  signal?.addEventListener?.('abort', onAbort, { once: true })
+  if (signal?.aborted) onAbort()
+
   const body = new ReadableStream({
     async pull (controller) {
       try {
@@ -30,13 +49,7 @@ function responseWithCleanup (response, cleanup) {
         controller.error(error)
       }
     },
-    async cancel (reason) {
-      try {
-        await reader.cancel(reason)
-      } finally {
-        finish()
-      }
-    }
+    cancel: cancelReader
   })
   return new Response(body, {
     status: response.status,
@@ -52,6 +65,7 @@ async function fetchAuthenticatedSse ({
   fetchImpl = fetch
 }) {
   throwIfAborted(signal)
+  const authorizationGeneration = apiStore.authorizationGeneration
   const token = await apiStore.token()
   throwIfAborted(signal)
   if (!token) return null
@@ -61,7 +75,10 @@ async function fetchAuthenticatedSse ({
   const unregisterIdentityCleanup = registerIdentityCleanup(() => {
     identityController.abort(new DOMException('Identity cleared', 'AbortError'))
   })
+  let cleaned = false
   const cleanup = () => {
+    if (cleaned) return
+    cleaned = true
     unregisterIdentityCleanup()
     combined.cleanup()
   }
@@ -74,18 +91,21 @@ async function fetchAuthenticatedSse ({
       signal: combined.signal
     })
     if (response.status === 401) {
-      apiStore.cleanToken()
-      if (!combined.signal.aborted) {
-        try {
-          await initiateReauthentication(apiStore)
-        } catch {
-          // Navigation may interrupt authorization; a 401 is terminal for this stream attempt.
+      throwIfAborted(combined.signal)
+      if (authorizationGeneration === apiStore.authorizationGeneration) {
+        apiStore.cleanToken()
+        if (!combined.signal.aborted && authorizationGeneration === apiStore.authorizationGeneration) {
+          try {
+            await initiateReauthentication(apiStore)
+          } catch {
+            // Navigation may interrupt authorization; a 401 is terminal for this stream attempt.
+          }
         }
       }
       cleanup()
       return null
     }
-    return responseWithCleanup(response, cleanup)
+    return responseWithCleanup(response, combined.signal, cleanup)
   } catch (error) {
     cleanup()
     throw error
