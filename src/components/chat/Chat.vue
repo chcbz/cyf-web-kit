@@ -102,6 +102,9 @@ const { t } = useI18n()
 let conversationEventController = null
 let conversationEventReconnectTimer = null
 let activeEventConversationId = ''
+let deleteConversationRetryTimers = []
+let chatLifecycleGeneration = 0
+let chatDisposed = false
 
 // 计算属性
 const hasMessages = computed(() => messages.value.length > 0)
@@ -166,8 +169,15 @@ const stopConversationEventStream = () => {
   activeEventConversationId = ''
 }
 
+const clearDeleteConversationRetries = () => {
+  deleteConversationRetryTimers.forEach(timer => window.clearTimeout(timer))
+  deleteConversationRetryTimers = []
+}
+
 const clearChatIdentityState = () => {
+  chatLifecycleGeneration += 1
   stopConversationEventStream()
+  clearDeleteConversationRetries()
   readerRef.value?.cancel?.()
   readerRef.value = null
   isLoading.value = false
@@ -181,8 +191,8 @@ const clearChatIdentityState = () => {
 const unregisterIdentityCleanup = registerIdentityCleanup(clearChatIdentityState)
 
 const startConversationEventStream = async () => {
-  if (!isJuyiting.value) return
-
+  if (chatDisposed || !isJuyiting.value) return
+  const generation = chatLifecycleGeneration
   const id = conversationId.value?.toString()
   if (!id || activeEventConversationId === id) return
 
@@ -196,7 +206,7 @@ const startConversationEventStream = async () => {
       url: apiStreamUrl('/chat/conversation/events', { id }),
       signal: conversationEventController.signal
     })
-    if (!response) {
+    if (chatDisposed || generation !== chatLifecycleGeneration || !response) {
       conversationEventController = null
       return
     }
@@ -209,7 +219,7 @@ const startConversationEventStream = async () => {
     let buffer = ''
     while (true) {
       const { done, value } = await reader.read()
-      if (done) break
+      if (done || chatDisposed || generation !== chatLifecycleGeneration) break
       buffer += decoder.decode(value, { stream: true })
       let eventEndIndex
       while ((eventEndIndex = buffer.indexOf('\n')) !== -1) {
@@ -222,9 +232,10 @@ const startConversationEventStream = async () => {
       }
     }
   } catch (error) {
-    if (error.name !== 'AbortError') {
+    if (error.name !== 'AbortError' && !chatDisposed && generation === chatLifecycleGeneration) {
       log.warn('聚义厅会话事件流中断:', error)
       conversationEventReconnectTimer = window.setTimeout(() => {
+        if (chatDisposed || generation !== chatLifecycleGeneration) return
         activeEventConversationId = ''
         startConversationEventStream()
       }, 2500)
@@ -586,7 +597,18 @@ const toggleSidebar = () => {
 }
 
 // 删除会话（带重试机制）
+const scheduleDeleteConversationRetry = (id, retryCount, generation) => {
+  const timer = window.setTimeout(() => {
+    deleteConversationRetryTimers = deleteConversationRetryTimers.filter(item => item !== timer)
+    if (chatDisposed || generation !== chatLifecycleGeneration) return
+    deleteConversation(id, retryCount)
+  }, 1000 * retryCount)
+  deleteConversationRetryTimers.push(timer)
+}
+
 const deleteConversation = async (id, retryCount = 0) => {
+  if (chatDisposed) return
+  const generation = chatLifecycleGeneration
   try {
     log.info('删除会话:', id)
     await chatApi.delete('/conversation/delete', id, {
@@ -619,7 +641,7 @@ const deleteConversation = async (id, retryCount = 0) => {
         }
 
         if (retryCount < 3) {
-          setTimeout(() => deleteConversation(id, retryCount + 1), 1000 * (retryCount + 1))
+          scheduleDeleteConversationRetry(id, retryCount + 1, generation)
         }
       }
     })
@@ -641,7 +663,7 @@ const deleteConversation = async (id, retryCount = 0) => {
     }
 
     if (retryCount < 3) {
-      setTimeout(() => deleteConversation(id, retryCount + 1), 1000 * (retryCount + 1))
+      scheduleDeleteConversationRetry(id, retryCount + 1, generation)
     }
   }
 }
@@ -712,6 +734,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  chatDisposed = true
+  clearChatIdentityState()
   unregisterIdentityCleanup()
   stopConversationEventStream()
 })

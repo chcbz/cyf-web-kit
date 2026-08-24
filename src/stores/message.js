@@ -1,9 +1,9 @@
 import { defineStore } from 'pinia'
-import { msgApi } from '@/composables/useHttp'
-import { useApiStore } from '@/stores/api'
-import { useGlobalStore } from '@/stores/global'
-import { useUtilStore } from '@/stores/util'
-import { log } from '@/utils/logger'
+import { msgApi } from '../composables/useHttp.js'
+import { useApiStore } from './api.js'
+import { useGlobalStore } from './global.js'
+import { useUtilStore } from './util.js'
+import { log } from '../utils/logger.js'
 
 const MSG_STATUS = {
   DELETED: 0,

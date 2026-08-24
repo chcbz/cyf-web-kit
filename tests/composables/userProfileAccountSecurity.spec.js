@@ -16,11 +16,13 @@ describe('UserProfile account security controls', () => {
     expect(source).to.include(':disabled="busy"')
     expect(source).to.include('aria-live="polite"')
     expect(source).to.include('aria-live="assertive"')
-    expect(source).to.include('cancelConfirmationButton.value?.focus()')
+    expect(source).to.include('useConfirmationDialog')
+    expect(source).to.include('@keydown="onKeydown"')
+    expect(source).to.include('tabindex="-1"')
   })
 
   it('delegates session semantics to the tested account-security composable', () => {
-    expect(source).to.include("useAccountSecuritySession({ router })")
+    expect(source).to.include('useAccountSecuritySession({ router })')
     expect(source).to.include('signOutCurrentDevice')
     expect(source).to.include('signOutAllDevices')
   })

@@ -78,7 +78,8 @@ describe('useHttp', () => {
       global.fetch = originalFetch
     }
 
-    expect(receivedSignal).to.equal(controller.signal)
+    expect(receivedSignal).to.not.equal(controller.signal)
+    expect(receivedSignal.aborted).to.equal(false)
     expect(opened).to.have.length(1)
     expect(opened[0].cancel).to.be.a('function')
     expect(chunks.join('')).to.equal('id: 1\ndata: hello\n\n')
@@ -129,6 +130,46 @@ describe('useHttp', () => {
         failure = error
       }
       expect(failure).to.include({ status: 503, code: 'SCENE_EVENTS_DISABLED' })
+    } finally {
+      global.fetch = originalFetch
+    }
+  })
+
+  it('combines caller and timeout signals without starting OAuth for an already-aborted caller', async () => {
+    const caller = new AbortController()
+    const reason = new DOMException('caller cancelled', 'AbortError')
+    caller.abort(reason)
+    let tokenCalls = 0
+    let failure
+    try {
+      await useHttp().get('/protected', {}, {
+        signal: caller.signal,
+        authStore: { token: async () => { tokenCalls += 1; return 'token' } },
+        timeout: 20
+      })
+    } catch (error) {
+      failure = error
+    }
+    expect(failure).to.equal(reason)
+    expect(tokenCalls).to.equal(0)
+  })
+
+  it('keeps timeout active when the caller signal is present and cleans up after abort', async () => {
+    let receivedSignal
+    const originalFetch = global.fetch
+    global.fetch = (_url, config) => new Promise((_resolve, reject) => {
+      receivedSignal = config.signal
+      config.signal.addEventListener('abort', () => reject(config.signal.reason), { once: true })
+    })
+    try {
+      let failure
+      try {
+        await useHttp().get('/slow', {}, { needAuth: false, signal: new AbortController().signal, timeout: 1 })
+      } catch (error) {
+        failure = error
+      }
+      expect(receivedSignal.aborted).to.equal(true)
+      expect(failure?.name).to.equal('TimeoutError')
     } finally {
       global.fetch = originalFetch
     }

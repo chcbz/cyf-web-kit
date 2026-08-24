@@ -853,6 +853,7 @@ onUnmounted(() => {
   restorePanelFocus(panelPriorFocus)
   panelPriorFocus = null
   disposeHallConversation()
+  hallBackendSceneState?.dispose()
   stopHallEventStream()
   stopHallReplyStreaming()
   stopHallReplyPolling()

@@ -402,3 +402,46 @@ describe('useHallConversation scoped message loading', () => {
     })
   })
 })
+
+describe('Hall conversation identity lifecycle', () => {
+  it('clears 1.5s and 5s sync timers and prevents their callbacks from loading after disposal', async () => {
+    const timers = []
+    const cleared = []
+    const originalSetTimeout = window.setTimeout
+    const originalClearTimeout = window.clearTimeout
+    window.setTimeout = (callback, delay) => {
+      const timer = { callback, delay }
+      timers.push(timer)
+      return timer
+    }
+    window.clearTimeout = timer => cleared.push(timer)
+    try {
+      const chatContext = ref({ conversationScopeType: 'public', conversationScopeKey: 'public', targetAgentIds: [] })
+      let contentCalls = 0
+      const conversation = useHallConversation({
+        apiStore: { token: async () => null },
+        chatApi: {
+          create: async (_path, _payload, options) => {
+            options.onStream('{"conversationId":"1001"}')
+            options.onStreamEnd()
+          },
+          getById: async () => { contentCalls += 1 }
+        },
+        chatContext, chatMode: ref('public'), globalStore: { getJiacn: 'hero', user: {} },
+        log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}),
+        portraitShortName: agent => agent?.name || '', selectedAgent: ref(null), selectedTask: ref(null), showToast: () => {}
+      })
+      conversation.setDraft('hello')
+      await conversation.sendHallMessage()
+      expect(timers.map(timer => timer.delay)).to.include.members([1500, 5000])
+      conversation.disposeHallConversation()
+      conversation.disposeHallConversation()
+      expect(cleared).to.include.members(timers)
+      timers.forEach(timer => timer.callback())
+      expect(contentCalls).to.equal(0)
+    } finally {
+      window.setTimeout = originalSetTimeout
+      window.clearTimeout = originalClearTimeout
+    }
+  })
+})

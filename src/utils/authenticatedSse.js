@@ -1,42 +1,93 @@
 import { initiateReauthentication } from './reauthentication.js'
 import { registerIdentityCleanup } from './identityLifecycle.js'
+import { combineAbortSignals, throwIfAborted } from './abortSignals.js'
+
+function responseWithCleanup (response, cleanup) {
+  if (!response.body) {
+    cleanup()
+    return response
+  }
+
+  const reader = response.body.getReader()
+  let settled = false
+  const finish = () => {
+    if (settled) return
+    settled = true
+    cleanup()
+  }
+  const body = new ReadableStream({
+    async pull (controller) {
+      try {
+        const { done, value } = await reader.read()
+        if (done) {
+          finish()
+          controller.close()
+          return
+        }
+        controller.enqueue(value)
+      } catch (error) {
+        finish()
+        controller.error(error)
+      }
+    },
+    async cancel (reason) {
+      try {
+        await reader.cancel(reason)
+      } finally {
+        finish()
+      }
+    }
+  })
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers
+  })
+}
 
 async function fetchAuthenticatedSse ({
   apiStore,
   url,
   signal,
-  fetchImpl = globalThis.fetch
+  fetchImpl = fetch
 }) {
+  throwIfAborted(signal)
   const token = await apiStore.token()
+  throwIfAborted(signal)
   if (!token) return null
 
   const identityController = new AbortController()
-  const unregisterIdentityCleanup = registerIdentityCleanup(() => identityController.abort())
-  const abortForCaller = () => {
-    identityController.abort()
+  const combined = combineAbortSignals({ signals: [signal, identityController.signal] })
+  const unregisterIdentityCleanup = registerIdentityCleanup(() => {
+    identityController.abort(new DOMException('Identity cleared', 'AbortError'))
+  })
+  const cleanup = () => {
     unregisterIdentityCleanup()
+    combined.cleanup()
   }
-  signal?.addEventListener?.('abort', abortForCaller, { once: true })
 
   try {
+    throwIfAborted(combined.signal)
     const response = await fetchImpl(url, {
       method: 'GET',
       headers: { Authorization: `Bearer ${token}` },
-      signal: identityController.signal
+      signal: combined.signal
     })
     if (response.status === 401) {
       apiStore.cleanToken()
-      try {
-        await initiateReauthentication(apiStore)
-      } catch {
-        // Navigation may interrupt authorization; a 401 is still terminal for this stream attempt.
+      if (!combined.signal.aborted) {
+        try {
+          await initiateReauthentication(apiStore)
+        } catch {
+          // Navigation may interrupt authorization; a 401 is terminal for this stream attempt.
+        }
       }
-      unregisterIdentityCleanup()
+      cleanup()
       return null
     }
-    return response
+    return responseWithCleanup(response, cleanup)
   } catch (error) {
-    unregisterIdentityCleanup()
+    cleanup()
     throw error
   }
 }

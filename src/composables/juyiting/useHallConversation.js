@@ -36,6 +36,9 @@ export const useHallConversation = ({
   let hallEventReconnectTimer = null
   let hallReplyTimers = []
   let hallReplyPollTimer = null
+  let hallSyncTimers = []
+  let lifecycleGeneration = 0
+  let disposed = false
 
   const pendingAgentName = computed(() => {
     if (!selectedAgent.value) return ''
@@ -79,6 +82,11 @@ export const useHallConversation = ({
     }
   }
 
+  const stopHallConversationSync = () => {
+    hallSyncTimers.forEach(timer => window.clearTimeout(timer))
+    hallSyncTimers = []
+  }
+
   const setDraft = (value = '') => {
     draft.value = String(value || '')
   }
@@ -115,6 +123,8 @@ export const useHallConversation = ({
   }
 
   const startHallEventStream = async () => {
+    if (disposed) return
+    const generation = lifecycleGeneration
     const id = conversationId.value?.toString()
     if (!id || hallEventConversationId === id) return
     stopHallEventStream()
@@ -127,7 +137,7 @@ export const useHallConversation = ({
         url: apiStreamUrl('/chat/conversation/events', { id }),
         signal: hallEventController.signal
       })
-      if (!response) {
+      if (disposed || generation !== lifecycleGeneration || !response) {
         hallEventController = null
         return
       }
@@ -141,7 +151,7 @@ export const useHallConversation = ({
       let buffer = ''
       while (true) {
         const { done, value } = await reader.read()
-        if (done) break
+        if (done || disposed || generation !== lifecycleGeneration) break
         buffer += decoder.decode(value, { stream: true })
         let eventEndIndex
         while ((eventEndIndex = buffer.indexOf('\n')) !== -1) {
@@ -154,10 +164,11 @@ export const useHallConversation = ({
         }
       }
     } catch (error) {
-      if (error.name !== 'AbortError') {
+      if (error.name !== 'AbortError' && !disposed && generation === lifecycleGeneration) {
         log.warn('聚义厅实时消息连接中断', error)
         eventStreamRecovering.value = true
         hallEventReconnectTimer = window.setTimeout(() => {
+          if (disposed || generation !== lifecycleGeneration) return
           hallEventConversationId = ''
           startHallEventStream()
         }, 2500)
@@ -175,9 +186,11 @@ export const useHallConversation = ({
   }
 
   const clearHallConversationIdentityState = () => {
+    lifecycleGeneration += 1
     stopHallEventStream()
     stopHallReplyStreaming()
     stopHallReplyPolling()
+    stopHallConversationSync()
     conversationId.value = ''
     draft.value = ''
     messages.value = []
@@ -186,6 +199,12 @@ export const useHallConversation = ({
   }
 
   const unregisterIdentityCleanup = registerIdentityCleanup(clearHallConversationIdentityState)
+  const disposeHallConversation = () => {
+    if (disposed) return
+    disposed = true
+    clearHallConversationIdentityState()
+    unregisterIdentityCleanup()
+  }
 
   const loadHallConversationContent = async (id = conversationId.value) => {
     if (!id) return
@@ -237,10 +256,11 @@ export const useHallConversation = ({
   }
 
   const startHallReplyPolling = (id = conversationId.value) => {
-    if (!id) return
+    if (disposed || !id) return
+    const generation = lifecycleGeneration
     stopHallReplyPolling()
     hallReplyPollTimer = window.setInterval(() => {
-      if (!isAwaitingReply.value || conversationId.value?.toString() !== id.toString()) {
+      if (disposed || generation !== lifecycleGeneration || !isAwaitingReply.value || conversationId.value?.toString() !== id.toString()) {
         stopHallReplyPolling()
         return
       }
@@ -249,17 +269,19 @@ export const useHallConversation = ({
   }
 
   const scheduleHallConversationSync = (id) => {
-    if (!id) return
-    window.setTimeout(() => {
-      if (conversationId.value?.toString() === id.toString()) {
-        loadHallConversationContent(id)
-      }
-    }, 1500)
-    window.setTimeout(() => {
-      if (conversationId.value?.toString() === id.toString()) {
-        loadHallConversationContent(id)
-      }
-    }, 5000)
+    if (disposed || !id) return
+    const generation = lifecycleGeneration
+    const schedule = delay => {
+      const timer = window.setTimeout(() => {
+        hallSyncTimers = hallSyncTimers.filter(item => item !== timer)
+        if (!disposed && generation === lifecycleGeneration && conversationId.value?.toString() === id.toString()) {
+          loadHallConversationContent(id)
+        }
+      }, delay)
+      hallSyncTimers.push(timer)
+    }
+    schedule(1500)
+    schedule(5000)
   }
 
   const newHallConversation = () => {
@@ -404,7 +426,7 @@ export const useHallConversation = ({
     chatConnectionStatus,
     conversationId,
     clearDraft,
-    disposeHallConversation: unregisterIdentityCleanup,
+    disposeHallConversation,
     draft,
     eventStreamRecovering,
     insertAgentMention,

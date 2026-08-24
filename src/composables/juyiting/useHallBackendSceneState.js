@@ -34,6 +34,7 @@ export const useHallBackendSceneState = ({
   let sceneCursor = '0'
 
   let active = false
+  let disposed = false
   let stream = null
   let streamGeneration = 0
   let reconnectTimer = null
@@ -241,6 +242,7 @@ export const useHallBackendSceneState = ({
   }
 
   const start = async () => {
+    if (disposed) return null
     if (active) return startPromise || latestSnapshot.value
     active = true
     lifecycleGeneration += 1
@@ -292,6 +294,12 @@ export const useHallBackendSceneState = ({
   }
 
   const unregisterIdentityCleanup = registerIdentityCleanup(stop)
+  const dispose = () => {
+    if (disposed) return
+    disposed = true
+    stop()
+    unregisterIdentityCleanup()
+  }
 
   const retry = async () => {
     if (!active) return null
@@ -358,7 +366,7 @@ export const useHallBackendSceneState = ({
     warnings,
     start,
     stop,
-    dispose: unregisterIdentityCleanup,
+    dispose,
     retry,
     reportPhase
   }

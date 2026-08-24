@@ -2,41 +2,9 @@ import { ref } from 'vue'
 import { log } from '../utils/logger.js'
 import { initiateReauthentication } from '../utils/reauthentication.js'
 import { registerIdentityCleanup } from '../utils/identityLifecycle.js'
+import { combineAbortSignals, throwIfAborted } from '../utils/abortSignals.js'
 // import { useGlobalStore } from '../stores/global' // 预留
 // import { useUtilStore } from '../stores/util' // 预留
-
-/**
- * 创建超时信号，兼容不支持 AbortSignal.timeout() 的浏览器
- * @param {number} milliseconds - 超时时间（毫秒）
- * @returns {Object} 包含 signal 和 cleanup 函数的对象
- */
-function createTimeoutSignal (milliseconds) {
-  // 如果浏览器原生支持 AbortSignal.timeout，直接使用
-  if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
-    const signal = AbortSignal.timeout(milliseconds)
-    return {
-      signal,
-      cleanup: () => {} // 原生实现不需要清理
-    }
-  }
-
-  // 否则使用 AbortController 和 setTimeout 实现
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => {
-    controller.abort(new DOMException(`Request timed out after ${milliseconds}ms`, 'AbortError'))
-  }, milliseconds)
-
-  // 清理定时器，避免内存泄漏
-  const signal = controller.signal
-  const cleanup = () => {
-    clearTimeout(timeoutId)
-  }
-
-  // 当信号被中止时，也清除定时器（作为后备）
-  signal.addEventListener('abort', cleanup, { once: true })
-
-  return { signal, cleanup }
-}
 
 /**
  * 可复用的 HTTP 请求组合式函数
@@ -102,8 +70,7 @@ export function useHttp (options = {}) {
     }
     error.value = null
 
-    // 声明 timeoutSignal 变量，使其在 finally 块中可访问
-    let timeoutSignal = null
+    let requestSignal = null
     let unregisterIdentityCleanup = null
 
     try {
@@ -139,6 +106,23 @@ export function useHttp (options = {}) {
         requestUrl = `${requestUrl}${requestUrl.includes('?') ? '&' : '?'}${urlParams}`
       }
 
+      // Keep caller, timeout, and identity cancellation active together. This is
+      // created before token acquisition so an already-aborted caller cannot start OAuth.
+      const timeoutValue = timeout ||
+                          (runtimeEnv.VITE_HTTP_TIMEOUT ? parseInt(runtimeEnv.VITE_HTTP_TIMEOUT, 10) : null) ||
+                          60000
+      const identityController = needAuth ? new AbortController() : null
+      requestSignal = combineAbortSignals({
+        signals: [signal, identityController?.signal],
+        timeout: timeoutValue
+      })
+      if (identityController) {
+        unregisterIdentityCleanup = registerIdentityCleanup(() => {
+          identityController.abort(new DOMException('Identity cleared', 'AbortError'))
+        })
+      }
+      throwIfAborted(requestSignal.signal)
+
       // 如果需要认证，获取token
       let token = null
       if (needAuth) {
@@ -157,33 +141,12 @@ export function useHttp (options = {}) {
       }
 
       // 使用 fetch API 替代 axios，特别是为了支持 stream
-      // 计算超时时间：优先使用选项中的timeout，其次使用环境变量VITE_HTTP_TIMEOUT，最后使用默认值60000
-      const timeoutValue = timeout ||
-                          (runtimeEnv.VITE_HTTP_TIMEOUT ? parseInt(runtimeEnv.VITE_HTTP_TIMEOUT, 10) : null) ||
-                          60000
-      timeoutSignal = signal
-        ? { signal, cleanup: () => {} }
-        : createTimeoutSignal(timeoutValue)
-      if (needAuth) {
-        const requestSignal = timeoutSignal
-        const identityController = new AbortController()
-        const abortForIdentity = () => identityController.abort()
-        requestSignal.signal.addEventListener('abort', abortForIdentity, { once: true })
-        if (requestSignal.signal.aborted) abortForIdentity()
-        timeoutSignal = {
-          signal: identityController.signal,
-          cleanup: () => {
-            requestSignal.signal.removeEventListener?.('abort', abortForIdentity)
-            requestSignal.cleanup()
-          }
-        }
-        unregisterIdentityCleanup = registerIdentityCleanup(() => identityController.abort())
-      }
+      throwIfAborted(requestSignal.signal)
       const fetchConfig = {
         method: config.method,
         headers: config.headers,
         body: config.body,
-        signal: timeoutSignal.signal
+        signal: requestSignal.signal
       }
 
       // 对于 GET 请求，不要包含 body
@@ -356,7 +319,7 @@ export function useHttp (options = {}) {
       error.value = err.message || '请求失败'
 
       // 处理认证错误（fetch 的错误结构不同）
-      if (err.name === 'AbortError') {
+      if (err.name === 'AbortError' || err.name === 'TimeoutError') {
         error.value = '请求超时'
       } else if (err.status === 401 && needAuth) {
         // 清理旧的 token
@@ -378,10 +341,7 @@ export function useHttp (options = {}) {
       throw err
 
     } finally {
-      // 清理超时定时器
-      if (timeoutSignal && timeoutSignal.cleanup) {
-        timeoutSignal.cleanup()
-      }
+      requestSignal?.cleanup()
       unregisterIdentityCleanup?.()
 
       if (autoLoading) {

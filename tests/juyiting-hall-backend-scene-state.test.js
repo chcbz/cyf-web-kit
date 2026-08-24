@@ -433,3 +433,21 @@ describe('backend scene state', () => {
     state.stop()
   })
 })
+
+describe('backend scene disposal', () => {
+  it('dispose stops timers, aborts requests, unregisters identity cleanup, and is idempotent', async () => {
+    const intervals = []
+    const cleared = []
+    const state = useHallBackendSceneState({
+      agentApi: { execute: async () => ({ data: { data: snapshot(1) } }) },
+      sseEnabled: false,
+      setIntervalFn: callback => { intervals.push(callback); return 17 },
+      clearIntervalFn: id => cleared.push(id)
+    })
+    await state.start()
+    state.dispose()
+    state.dispose()
+    expect(cleared).to.deep.equal([17])
+    expect(await state.start()).to.equal(null)
+  })
+})

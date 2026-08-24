@@ -1,10 +1,11 @@
-import { defineStore } from 'pinia'
+import { defineStore, getActivePinia } from 'pinia'
 import { useUtilStore } from './util'
 import { useGlobalStore } from './global'
 import { log } from '../utils/logger.js'
 import { createCodeChallenge, createOAuthTransaction, safeAppRelativePath } from '../utils/oauthTransaction.js'
 import { stopIdentityBoundWork } from '../utils/identityLifecycle.js'
 import { cancelReauthentication } from '../utils/reauthentication.js'
+import { combineAbortSignals, throwIfAborted } from '../utils/abortSignals.js'
 
 const runtimeEnv = import.meta.env ?? {}
 
@@ -57,7 +58,8 @@ export const useApiStore = defineStore('api', {
     baseUrl: runtimeEnv.VITE_API_BASE_URL || '',
     dwzDomain: runtimeEnv.VITE_DWZ_DOMAIN,
     oauthClientId: runtimeEnv.VITE_OAUTH_CLIENT_ID,
-    authorizationStarted: false
+    authorizationStarted: false,
+    authorizationGeneration: 0
   }),
   actions: {
     oauthRuntimeConfig () {
@@ -70,11 +72,19 @@ export const useApiStore = defineStore('api', {
 
     async beginAuthorization (returnTo = currentReturnPath()) {
       if (this.authorizationStarted) return false
+      const authorizationGeneration = this.authorizationGeneration
+      if (authorizationGeneration !== this.authorizationGeneration) return false
       this.authorizationStarted = true
       try {
         const config = this.oauthRuntimeConfig()
+        // Yield once so a synchronous logout can cancel a queued reauthentication
+        // before it creates a PKCE transaction.
+        await Promise.resolve()
+        if (authorizationGeneration !== this.authorizationGeneration || !this.authorizationStarted) return false
         const transaction = await createOAuthTransaction({ returnTo, ...config })
+        if (authorizationGeneration !== this.authorizationGeneration || !this.authorizationStarted) return false
         const codeChallenge = await createCodeChallenge(transaction.codeVerifier)
+        if (authorizationGeneration !== this.authorizationGeneration || !this.authorizationStarted) return false
         const params = new URLSearchParams({
           response_type: 'code',
           client_id: config.clientId,
@@ -84,10 +94,11 @@ export const useApiStore = defineStore('api', {
           code_challenge_method: 'S256',
           state: transaction.state
         })
+        if (authorizationGeneration !== this.authorizationGeneration || !this.authorizationStarted) return false
         window.location.assign(`${config.authorizationServer}/oauth2/authorize?${params.toString()}`)
         return true
       } catch (error) {
-        this.authorizationStarted = false
+        if (authorizationGeneration === this.authorizationGeneration) this.authorizationStarted = false
         throw error
       }
     },
@@ -131,27 +142,38 @@ export const useApiStore = defineStore('api', {
       utilStore.setLocalStorage('api_token', token.accessToken, Date.now() + token.expiresIn * 1000)
       return token.accessToken
     },
-    clearIdentity () {
+    async clearIdentity () {
+      const pinia = getActivePinia()
+      this.authorizationGeneration += 1
+      this.authorizationStarted = false
+      cancelReauthentication(this)
       stopIdentityBoundWork()
-      const utilStore = useUtilStore()
+      const utilStore = useUtilStore(pinia)
       for (const key of ['api_token', 'userId', 'jiacn', 'openid']) {
         utilStore.removeLocalStorage(key)
       }
-      this.authorizationStarted = false
-      useGlobalStore().clearUserIdentity()
-      cancelReauthentication(this)
+      useGlobalStore(pinia).clearUserIdentity()
+      const { useMessageStore } = await import('./message.js')
+      useMessageStore(pinia).clearMessageState()
     },
 
-    async revokeAllSessions () {
+    async revokeAllSessions ({ signal, timeout = 15_000 } = {}) {
       const token = useUtilStore().getLocalStorage('api_token')
       if (!token) throw unauthenticatedError()
 
-      const response = await fetch(`${this.baseUrl}/user/me/sessions/revoke-all`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (response.status === 204) return
-      throw revokeError(response, await responseErrorCode(response))
+      const requestSignal = combineAbortSignals({ signals: [signal], timeout })
+      try {
+        throwIfAborted(requestSignal.signal)
+        const response = await fetch(`${this.baseUrl}/user/me/sessions/revoke-all`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          signal: requestSignal.signal
+        })
+        if (response.status === 204) return
+        throw revokeError(response, await responseErrorCode(response))
+      } finally {
+        requestSignal.cleanup()
+      }
     },
 
     wxJsToken (url) {

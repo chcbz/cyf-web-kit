@@ -45,6 +45,7 @@
       <div class="all-devices">
         <p>退出所有设备会使所有网页登录会话失效；不会停用 Agent/API Key，也不是注销账号。</p>
         <button
+          ref="allDevicesTrigger"
           class="security-button danger"
           type="button"
           :disabled="busy"
@@ -56,10 +57,13 @@
 
       <div
         v-if="confirmingAllDevices"
+        ref="dialog"
         class="confirmation"
         role="dialog"
+        tabindex="-1"
         aria-modal="true"
         aria-labelledby="revoke-all-title"
+        @keydown="onKeydown"
       >
         <h4 id="revoke-all-title">确认退出所有设备？</h4>
         <p>所有网页登录会话将失效。Agent/API Key 不会被停用，账号也不会被注销。</p>
@@ -95,37 +99,36 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGlobalStore } from '@/stores/global'
 import { useAccountSecuritySession } from '@/composables/useAccountSecuritySession'
+import { useConfirmationDialog } from '@/composables/useConfirmationDialog'
 
 const router = useRouter()
 const globalStore = useGlobalStore()
 const { busy, error, status, signOutCurrentDevice, signOutAllDevices } = useAccountSecuritySession({ router })
-const confirmingAllDevices = ref(false)
-const cancelConfirmationButton = ref(null)
+const allDevicesTrigger = ref(null)
+const { cancelButton: cancelConfirmationButton, close: closeConfirmation, confirming: confirmingAllDevices, dialog, onKeydown, open: openConfirmation } = useConfirmationDialog({
+  isBusy: () => busy.value
+})
 const user = computed(() => globalStore.user)
 const displayName = computed(() => user.value.nickname || user.value.username || '微信用户')
 
-const openAllDevicesConfirmation = async () => {
-  if (busy.value) return
-  confirmingAllDevices.value = true
-  await nextTick()
-  cancelConfirmationButton.value?.focus()
-}
+const openAllDevicesConfirmation = () => openConfirmation(allDevicesTrigger.value)
 
-const cancelAllDevicesConfirmation = () => {
-  if (busy.value) return
-  confirmingAllDevices.value = false
-}
+const cancelAllDevicesConfirmation = () => closeConfirmation()
 
 const handleCurrentDeviceSignOut = () => signOutCurrentDevice()
 
 const handleAllDevicesSignOut = async () => {
   const completed = await signOutAllDevices()
-  if (completed) confirmingAllDevices.value = false
+  if (completed) closeConfirmation({ force: true })
 }
+
+onBeforeUnmount(() => {
+  closeConfirmation({ force: true })
+})
 
 onMounted(() => {
   globalStore.setTitle('个人中心')
