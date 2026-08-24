@@ -6,6 +6,7 @@ import {
   normalizeHallMessage
 } from './hallConversationMessages.js'
 import { fetchHallConversationEvents } from '../../utils/authenticatedSse.js'
+import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
 
 const runtimeEnv = import.meta.env ?? {}
 
@@ -172,6 +173,19 @@ export const useHallConversation = ({
     hallEventConversationId = ''
     eventStreamRecovering.value = false
   }
+
+  const clearHallConversationIdentityState = () => {
+    stopHallEventStream()
+    stopHallReplyStreaming()
+    stopHallReplyPolling()
+    conversationId.value = ''
+    draft.value = ''
+    messages.value = []
+    isStreaming.value = false
+    isAwaitingReply.value = false
+  }
+
+  const unregisterIdentityCleanup = registerIdentityCleanup(clearHallConversationIdentityState)
 
   const loadHallConversationContent = async (id = conversationId.value) => {
     if (!id) return
@@ -390,6 +404,7 @@ export const useHallConversation = ({
     chatConnectionStatus,
     conversationId,
     clearDraft,
+    disposeHallConversation: unregisterIdentityCleanup,
     draft,
     eventStreamRecovering,
     insertAgentMention,

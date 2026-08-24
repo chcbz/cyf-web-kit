@@ -47,6 +47,7 @@ import { useI18n } from 'vue-i18n'
 import { chatApi, phraseApi } from '../../composables/useHttp'
 import { log } from '../../utils/logger'
 import { fetchChatConversationEvents } from '../../utils/authenticatedSse.js'
+import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
 
 // 导入子组件
 import ChatMessageList from './ChatMessageList.vue'
@@ -164,6 +165,20 @@ const stopConversationEventStream = () => {
   conversationEventController = null
   activeEventConversationId = ''
 }
+
+const clearChatIdentityState = () => {
+  stopConversationEventStream()
+  readerRef.value?.cancel?.()
+  readerRef.value = null
+  isLoading.value = false
+  isStreaming.value = false
+  error.value = null
+  messages.value = []
+  conversations.value = []
+  conversationId.value = ''
+}
+
+const unregisterIdentityCleanup = registerIdentityCleanup(clearChatIdentityState)
 
 const startConversationEventStream = async () => {
   if (!isJuyiting.value) return
@@ -697,6 +712,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  unregisterIdentityCleanup()
   stopConversationEventStream()
 })
 </script>

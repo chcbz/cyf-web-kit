@@ -27,6 +27,16 @@ export const useMessageStore = defineStore('message', {
     hasUnread: (state) => state.unreadTotal > 0
   },
   actions: {
+    clearMessageState () {
+      this.messages = []
+      this.total = 0
+      this.unreadTotal = 0
+      this.loading = false
+      this.error = null
+      this.pageNum = 1
+      this.statusFilter = 'all'
+    },
+
     async ensureUserId () {
       const globalStore = useGlobalStore()
       if (globalStore.getUserId) {

@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
 
 const SCENE_ID = 'juyiting-main'
 const SNAPSHOT_URL = `/agent/scenes/${SCENE_ID}/snapshot`
@@ -290,6 +291,8 @@ export const useHallBackendSceneState = ({
     closeStream()
   }
 
+  const unregisterIdentityCleanup = registerIdentityCleanup(stop)
+
   const retry = async () => {
     if (!active) return null
     clearReconnect()
@@ -355,6 +358,7 @@ export const useHallBackendSceneState = ({
     warnings,
     start,
     stop,
+    dispose: unregisterIdentityCleanup,
     retry,
     reportPhase
   }

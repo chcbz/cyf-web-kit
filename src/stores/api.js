@@ -3,6 +3,8 @@ import { useUtilStore } from './util'
 import { useGlobalStore } from './global'
 import { log } from '../utils/logger.js'
 import { createCodeChallenge, createOAuthTransaction, safeAppRelativePath } from '../utils/oauthTransaction.js'
+import { stopIdentityBoundWork } from '../utils/identityLifecycle.js'
+import { cancelReauthentication } from '../utils/reauthentication.js'
 
 const runtimeEnv = import.meta.env ?? {}
 
@@ -12,6 +14,28 @@ function isNonblankRuntimeString (value) {
 
 function currentReturnPath () {
   return safeAppRelativePath(`${window.location.pathname}${window.location.search}${window.location.hash}`)
+}
+
+function unauthenticatedError () {
+  const error = new Error('Authentication is required')
+  error.code = 'AUTHENTICATION_REQUIRED'
+  return error
+}
+
+function revokeError (response, code) {
+  const error = new Error('Session revocation failed')
+  error.status = response.status
+  if (code) error.code = code
+  return error
+}
+
+async function responseErrorCode (response) {
+  try {
+    const payload = await response.clone().json()
+    return typeof payload?.code === 'string' ? payload.code : null
+  } catch {
+    return null
+  }
 }
 
 function validateTokenResponse (data) {
@@ -107,6 +131,29 @@ export const useApiStore = defineStore('api', {
       utilStore.setLocalStorage('api_token', token.accessToken, Date.now() + token.expiresIn * 1000)
       return token.accessToken
     },
+    clearIdentity () {
+      stopIdentityBoundWork()
+      const utilStore = useUtilStore()
+      for (const key of ['api_token', 'userId', 'jiacn', 'openid']) {
+        utilStore.removeLocalStorage(key)
+      }
+      this.authorizationStarted = false
+      useGlobalStore().clearUserIdentity()
+      cancelReauthentication(this)
+    },
+
+    async revokeAllSessions () {
+      const token = useUtilStore().getLocalStorage('api_token')
+      if (!token) throw unauthenticatedError()
+
+      const response = await fetch(`${this.baseUrl}/user/me/sessions/revoke-all`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (response.status === 204) return
+      throw revokeError(response, await responseErrorCode(response))
+    },
+
     wxJsToken (url) {
       const utilStore = useUtilStore()
       const globalStore = useGlobalStore()

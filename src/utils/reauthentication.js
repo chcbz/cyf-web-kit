@@ -1,4 +1,4 @@
-const reauthenticationByStore = new WeakMap()
+const reauthenticationByStore = new Map()
 
 export function initiateReauthentication (apiStore) {
   if (!reauthenticationByStore.has(apiStore)) {
@@ -6,4 +6,8 @@ export function initiateReauthentication (apiStore) {
     reauthenticationByStore.set(apiStore, task)
   }
   return reauthenticationByStore.get(apiStore)
+}
+
+export function cancelReauthentication (apiStore) {
+  reauthenticationByStore.delete(apiStore)
 }

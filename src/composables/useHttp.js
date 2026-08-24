@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { log } from '../utils/logger.js'
 import { initiateReauthentication } from '../utils/reauthentication.js'
+import { registerIdentityCleanup } from '../utils/identityLifecycle.js'
 // import { useGlobalStore } from '../stores/global' // 预留
 // import { useUtilStore } from '../stores/util' // 预留
 
@@ -103,6 +104,7 @@ export function useHttp (options = {}) {
 
     // 声明 timeoutSignal 变量，使其在 finally 块中可访问
     let timeoutSignal = null
+    let unregisterIdentityCleanup = null
 
     try {
       // 准备请求配置
@@ -162,6 +164,21 @@ export function useHttp (options = {}) {
       timeoutSignal = signal
         ? { signal, cleanup: () => {} }
         : createTimeoutSignal(timeoutValue)
+      if (needAuth) {
+        const requestSignal = timeoutSignal
+        const identityController = new AbortController()
+        const abortForIdentity = () => identityController.abort()
+        requestSignal.signal.addEventListener('abort', abortForIdentity, { once: true })
+        if (requestSignal.signal.aborted) abortForIdentity()
+        timeoutSignal = {
+          signal: identityController.signal,
+          cleanup: () => {
+            requestSignal.signal.removeEventListener?.('abort', abortForIdentity)
+            requestSignal.cleanup()
+          }
+        }
+        unregisterIdentityCleanup = registerIdentityCleanup(() => identityController.abort())
+      }
       const fetchConfig = {
         method: config.method,
         headers: config.headers,
@@ -365,6 +382,7 @@ export function useHttp (options = {}) {
       if (timeoutSignal && timeoutSignal.cleanup) {
         timeoutSignal.cleanup()
       }
+      unregisterIdentityCleanup?.()
 
       if (autoLoading) {
         loading.value = false
