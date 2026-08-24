@@ -10,7 +10,11 @@
   "theme_color": "#173936",
   "lang": "zh-CN",
   "orientation": "any",
-  "categories": ["productivity", "business", "utilities"],
+  "categories": [
+    "productivity",
+    "business",
+    "utilities"
+  ],
   "shortcuts": [
     {
       "name": "立即体验",
@@ -63,6 +67,22 @@
       "sizes": "180x180",
       "type": "image/png",
       "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/pwa/screenshot-demo-wide-1280x720.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "聚义厅访客体验：选择任务并查看 Agent 协作流程"
+    },
+    {
+      "src": "/pwa/screenshot-demo-narrow-750x1334.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "聚义厅移动端访客体验"
     }
   ]
 }

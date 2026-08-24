@@ -1,5 +1,6 @@
 import { expect } from 'chai'
 import { existsSync, readFileSync } from 'node:fs'
+import { PNG } from 'pngjs'
 
 import { guestDemoSteps, guestDemoTemplates } from '../src/constants/publicBetaDemo.js'
 
@@ -64,7 +65,7 @@ describe('public PWA beta entry packet', () => {
     expect(worker).to.include("const APP_SHELL = ['/', '/demo', '/index.html', '/manifest.webmanifest']")
   })
 
-  it('references only real manifest assets and provides install shortcuts without screenshots', () => {
+  it('references only real manifest assets and provides install shortcuts with store-ready screenshots', () => {
     const manifest = JSON.parse(source('public/manifest.webmanifest'))
     const referencedAssets = [
       ...manifest.icons.map(icon => icon.src),
@@ -76,7 +77,37 @@ describe('public PWA beta entry packet', () => {
     expect(manifest.orientation).to.equal('any')
     expect(manifest.categories).to.include.members(['productivity', 'business'])
     expect(manifest.shortcuts.map(shortcut => shortcut.url)).to.deep.equal(['/demo', '/juyiting'])
-    expect(manifest).not.to.have.property('screenshots')
+    expect(manifest.screenshots.map(screenshot => screenshot.form_factor)).to.deep.equal(['wide', 'narrow'])
+    expect(manifest.screenshots.map(screenshot => screenshot.sizes)).to.deep.equal(['1280x720', '750x1334'])
     referencedAssets.forEach(asset => expect(existsSync(publicFile(asset)), asset).to.equal(true))
+
+    manifest.screenshots.forEach(screenshot => {
+      const image = PNG.sync.read(readFileSync(publicFile(screenshot.src)))
+      expect(`${image.width}x${image.height}`, screenshot.src).to.equal(screenshot.sizes)
+    })
   })
+
+  it('publishes canonical search and social metadata for the public entry', () => {
+    const index = source('index.html')
+    const robots = source('public/robots.txt')
+    const sitemap = source('public/sitemap.xml')
+
+    expect(index).to.include('<html lang="zh-CN">')
+    expect(index).to.include('<meta name="description"')
+    expect(index).to.include('<link rel="canonical" href="https://kit.chaoyoufan.cn/">')
+    expect(index).to.include('<meta property="og:image" content="https://kit.chaoyoufan.cn/pwa/og-juyiting-1200x630.png">')
+    expect(index).to.include('<meta name="twitter:card" content="summary_large_image">')
+    expect(index).to.include('<meta name="twitter:image:alt" content="聚义厅 AI Agent 协作台首页">')
+    expect(index).to.include('<meta property="og:image:width" content="1200">')
+    expect(index).to.include('<meta property="og:image:height" content="630">')
+    expect(existsSync('public/pwa/og-juyiting-1200x630.png')).to.equal(true)
+    const socialImage = PNG.sync.read(readFileSync('public/pwa/og-juyiting-1200x630.png'))
+    expect(`${socialImage.width}x${socialImage.height}`).to.equal('1200x630')
+    expect(robots).to.include('Sitemap: https://kit.chaoyoufan.cn/sitemap.xml')
+    expect(robots).to.include('Disallow: /oauth2/')
+    expect(robots).to.include('Disallow: /juyiting')
+    expect(sitemap).to.include('<loc>https://kit.chaoyoufan.cn/</loc>')
+    expect(sitemap).not.to.include('<loc>https://kit.chaoyoufan.cn/demo</loc>')
+  })
+
 })

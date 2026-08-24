@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /oauth2/
+Disallow: /juyiting
+
+Sitemap: https://kit.chaoyoufan.cn/sitemap.xml
