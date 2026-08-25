@@ -6,6 +6,22 @@ export const resolveHallExperienceMode = ({ isMobileCoarse, isPhysicalLandscape 
 
 const REQUEST_TIMEOUT_MS = 3000
 
+const orientationFromAngle = angle => {
+  if (!Number.isFinite(angle)) return null
+  return Math.abs(Math.trunc(angle) % 180) === 90
+}
+
+const orientationFromScreen = orientation => {
+  const type = orientation?.type
+  if (typeof type === 'string') {
+    if (type.startsWith('landscape')) return true
+    if (type.startsWith('portrait')) return false
+  }
+  return orientationFromAngle(orientation?.angle)
+}
+
+const orientationFromLegacyWindow = () => orientationFromAngle(globalThis.window?.orientation)
+
 export const useHallExperienceMode = () => {
   const isMobileCoarse = ref(false)
   const isPhysicalLandscape = ref(false)
@@ -19,44 +35,74 @@ export const useHallExperienceMode = () => {
   let isMounted = false
   let orientationMedia = null
   let coarseMedia = null
+  let screenOrientation = null
   let requestGeneration = 0
-  let requestTimeout = null
-  let ownsFullscreen = false
-  let ownsOrientationLock = false
+  let requestTimer = null
+  let requestOwnership = null
 
-  const clearRequestTimeout = () => {
-    if (requestTimeout !== null && typeof window !== 'undefined') window.clearTimeout(requestTimeout)
-    requestTimeout = null
+  const commitPhysicalOrientation = next => {
+    if (typeof next !== 'boolean' || next === isPhysicalLandscape.value) return false
+    isPhysicalLandscape.value = next
+    return true
   }
 
-  const updateFacts = ({ orientationEvent, allowViewportFallback = false } = {}) => {
-    const physicalLandscape = typeof orientationEvent?.matches === 'boolean'
-      ? orientationEvent.matches
-      : (typeof orientationMedia?.matches === 'boolean'
-          ? orientationMedia.matches
-          : (allowViewportFallback && typeof window !== 'undefined' ? window.innerWidth > window.innerHeight : isPhysicalLandscape.value))
-    isMobileCoarse.value = Boolean(coarseMedia?.matches)
-    isPhysicalLandscape.value = Boolean(physicalLandscape)
+  const readPhysicalOrientation = ({ source, event, allowInitialViewportFallback = false } = {}) => {
+    const screenTruth = orientationFromScreen(screenOrientation)
+    if (screenTruth !== null) return screenTruth
+
+    if (source === 'media' && typeof event?.matches === 'boolean') return event.matches
+
+    const legacyTruth = source === 'legacy' ? orientationFromLegacyWindow() : null
+    if (legacyTruth !== null) return legacyTruth
+
+    if (typeof orientationMedia?.matches === 'boolean') return orientationMedia.matches
+
+    const fallbackLegacyTruth = orientationFromLegacyWindow()
+    if (fallbackLegacyTruth !== null) return fallbackLegacyTruth
+
+    if (allowInitialViewportFallback && typeof window !== 'undefined') return window.innerWidth > window.innerHeight
+    return null
   }
 
-  const releaseAcquired = async ({ fullscreen = false, orientation = false } = {}) => {
-    if (orientation) {
-      try {
-        globalThis.screen?.orientation?.unlock?.()
-      } catch { /* best-effort ownership cleanup */ }
+  const commitPhysicalTruth = options => commitPhysicalOrientation(readPhysicalOrientation(options))
+
+  const clearRequestTimer = token => {
+    if (!requestTimer || (token !== undefined && requestTimer.token !== token)) return
+    window.clearTimeout(requestTimer.id)
+    requestTimer = null
+  }
+
+  const releaseFullscreenElement = async element => {
+    if (!element || globalThis.document?.fullscreenElement !== element) return
+    try {
+      await globalThis.document.exitFullscreen?.()
+    } catch { /* best-effort ownership cleanup */ }
+  }
+
+  const releaseRequestOwnership = async token => {
+    const ownership = requestOwnership
+    if (!ownership || ownership.token !== token) return
+    if (ownership.releasePromise) return ownership.releasePromise
+
+    ownership.releasePromise = (async () => {
+      if (ownership.orientationLocked) {
+        try {
+          globalThis.screen?.orientation?.unlock?.()
+        } catch { /* best-effort ownership cleanup */ }
+      }
+      await releaseFullscreenElement(ownership.fullscreenElement)
+    })()
+    requestOwnership = null
+    return ownership.releasePromise
+  }
+
+  const cancelRequest = async (token, { showHint = false } = {}) => {
+    clearRequestTimer(token)
+    if (token === requestGeneration) {
+      orientationRequestPending.value = false
+      if (showHint && isMounted) orientationHint.value = '请旋转手机横屏查看'
     }
-    if (fullscreen) {
-      try {
-        await globalThis.document?.exitFullscreen?.()
-      } catch { /* best-effort ownership cleanup */ }
-    }
-  }
-
-  const releaseOwnedOrientation = async () => {
-    const acquired = { fullscreen: ownsFullscreen, orientation: ownsOrientationLock }
-    ownsFullscreen = false
-    ownsOrientationLock = false
-    await releaseAcquired(acquired)
+    await releaseRequestOwnership(token)
   }
 
   const isCurrentRequest = token => (
@@ -67,35 +113,47 @@ export const useHallExperienceMode = () => {
     if (!isMounted || orientationRequestPending.value || !isMobileCoarse.value || isPhysicalLandscape.value) return false
 
     const token = ++requestGeneration
+    const fullscreenElement = globalThis.document?.documentElement || null
+    requestOwnership = { token, fullscreenElement: null, orientationLocked: false, releasePromise: null }
     orientationRequestPending.value = true
     orientationHint.value = ''
-    requestTimeout = window.setTimeout(() => {
-      if (!isCurrentRequest(token)) return
-      orientationRequestPending.value = false
-      orientationHint.value = '请旋转手机横屏查看'
-    }, REQUEST_TIMEOUT_MS)
+    requestTimer = {
+      token,
+      id: window.setTimeout(() => {
+        if (isCurrentRequest(token)) void cancelRequest(token, { showHint: true })
+      }, REQUEST_TIMEOUT_MS)
+    }
 
-    let acquiredFullscreen = false
-    let acquiredOrientation = false
     let failed = false
-    const requestFullscreen = globalThis.document?.documentElement?.requestFullscreen
+    const currentFullscreen = globalThis.document?.fullscreenElement
+    const requestFullscreen = fullscreenElement?.requestFullscreen
     const lockOrientation = globalThis.screen?.orientation?.lock
 
-    if (typeof requestFullscreen !== 'function') {
+    if (currentFullscreen) {
+      failed = true
+    } else if (typeof requestFullscreen !== 'function') {
       failed = true
     } else {
       try {
-        await requestFullscreen.call(globalThis.document.documentElement)
-        acquiredFullscreen = true
-        ownsFullscreen = true
+        await requestFullscreen.call(fullscreenElement)
+        if (globalThis.document?.fullscreenElement === fullscreenElement) {
+          if (requestOwnership?.token === token) requestOwnership.fullscreenElement = fullscreenElement
+        } else {
+          failed = true
+        }
       } catch {
         failed = true
       }
     }
 
     if (!isCurrentRequest(token)) {
-      if (acquiredFullscreen) ownsFullscreen = false
-      await releaseAcquired({ fullscreen: acquiredFullscreen })
+      await releaseFullscreenElement(globalThis.document?.fullscreenElement === fullscreenElement ? fullscreenElement : null)
+      await releaseRequestOwnership(token)
+      return false
+    }
+
+    if (failed) {
+      await cancelRequest(token, { showHint: true })
       return false
     }
 
@@ -104,59 +162,58 @@ export const useHallExperienceMode = () => {
     } else {
       try {
         await lockOrientation.call(globalThis.screen.orientation, 'landscape')
-        acquiredOrientation = true
-        ownsOrientationLock = true
+        if (requestOwnership?.token === token) requestOwnership.orientationLocked = true
+        else {
+          try {
+            globalThis.screen?.orientation?.unlock?.()
+          } catch { /* late lock cleanup */ }
+        }
       } catch {
         failed = true
       }
     }
 
-    if (!isCurrentRequest(token)) {
-      if (acquiredFullscreen) ownsFullscreen = false
-      if (acquiredOrientation) ownsOrientationLock = false
-      await releaseAcquired({ fullscreen: acquiredFullscreen, orientation: acquiredOrientation })
+    if (!isCurrentRequest(token) || failed) {
+      await cancelRequest(token, { showHint: isCurrentRequest(token) && failed })
       return false
     }
 
-    clearRequestTimeout()
+    clearRequestTimer(token)
     orientationRequestPending.value = false
-    if (!failed) return true
-
-    if (acquiredFullscreen) ownsFullscreen = false
-    if (acquiredOrientation) ownsOrientationLock = false
-    await releaseAcquired({ fullscreen: acquiredFullscreen, orientation: acquiredOrientation })
-    orientationHint.value = '请旋转手机横屏查看'
-    return false
+    return true
   }
 
-  const handleOrientationChange = event => updateFacts({ orientationEvent: event })
-  const handleCoarseChange = () => updateFacts()
-  const handleResize = () => {
-    if (!orientationMedia) updateFacts({ allowViewportFallback: true })
-  }
+  const handleOrientationMediaChange = event => commitPhysicalTruth({ source: 'media', event })
+  const handleScreenOrientationChange = () => commitPhysicalTruth({ source: 'screen' })
+  const handleLegacyOrientationChange = () => commitPhysicalTruth({ source: 'legacy' })
+  const handleCoarseChange = () => { isMobileCoarse.value = Boolean(coarseMedia?.matches) }
 
   onMounted(() => {
     if (typeof window === 'undefined') return
     isMounted = true
+    screenOrientation = globalThis.screen?.orientation || null
     orientationMedia = window.matchMedia?.('(orientation: landscape)') || null
     coarseMedia = window.matchMedia?.('(pointer: coarse)') || null
-    updateFacts({ allowViewportFallback: true })
-    orientationMedia?.addEventListener?.('change', handleOrientationChange)
+    isMobileCoarse.value = Boolean(coarseMedia?.matches)
+    commitPhysicalTruth({ allowInitialViewportFallback: true })
+    screenOrientation?.addEventListener?.('change', handleScreenOrientationChange)
+    orientationMedia?.addEventListener?.('change', handleOrientationMediaChange)
     coarseMedia?.addEventListener?.('change', handleCoarseChange)
-    window.addEventListener?.('resize', handleResize)
+    window.addEventListener?.('orientationchange', handleLegacyOrientationChange)
   })
 
   onBeforeUnmount(() => {
     isMounted = false
+    const activeGeneration = requestGeneration
+    void cancelRequest(activeGeneration)
     requestGeneration += 1
-    orientationRequestPending.value = false
-    clearRequestTimeout()
-    orientationMedia?.removeEventListener?.('change', handleOrientationChange)
+    screenOrientation?.removeEventListener?.('change', handleScreenOrientationChange)
+    orientationMedia?.removeEventListener?.('change', handleOrientationMediaChange)
     coarseMedia?.removeEventListener?.('change', handleCoarseChange)
-    window.removeEventListener?.('resize', handleResize)
+    window.removeEventListener?.('orientationchange', handleLegacyOrientationChange)
+    screenOrientation = null
     orientationMedia = null
     coarseMedia = null
-    void releaseOwnedOrientation()
   })
 
   return {
