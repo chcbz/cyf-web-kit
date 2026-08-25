@@ -46,11 +46,14 @@ export const useHallTaskActions = ({
     }
   }
 
-  const assignTask = async (task, agent = selectedAgent.value) => {
+  const assignTask = async (task, agent) => {
     const targetAgents = Array.isArray(agent) ? agent : [agent].filter(Boolean)
+    const hasExplicitAgentId = item => typeof item?.agentId === 'string' && Boolean(item.agentId.trim())
+    if (!task?.id || !targetAgents.length || targetAgents.some(item => !hasExplicitAgentId(item))) return false
+    if (targetAgents.some(item => !canAssign(task, item))) return false
+
     const targetAgent = targetAgents[0]
-    if (!task || !targetAgents.length) return
-    if (targetAgents.some(item => !canAssign(task, item))) return
+    let assignmentSucceeded = false
     try {
       await agentApi.create(`/tasks/${task.id}/assign`, {
         agentId: targetAgent.agentId,
@@ -71,14 +74,17 @@ export const useHallTaskActions = ({
           })
           selectedAgent.value = targetAgent
           selectedTask.value = task
+          assignmentSucceeded = true
           playSuccess()
           showToast(`${task.title} 已点给 ${task.assignedAgentName}`)
         }
       })
+      return assignmentSucceeded
     } catch (error) {
       log.warn('assign bounty task failed:', error)
       playError()
       showToast(`点将未成：${failureReason(error, '请重查厅中动静')}`)
+      return false
     }
   }
 

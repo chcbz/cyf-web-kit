@@ -684,11 +684,16 @@ const createTask = async (payload) => {
 
 const assignTask = async (task, agent) => {
   const targetAgents = Array.isArray(agent) ? agent : [agent].filter(Boolean)
+  const hasExplicitAgentId = item => typeof item?.agentId === 'string' && Boolean(item.agentId.trim())
+  if (!task?.id || !targetAgents.length || targetAgents.some(item => !hasExplicitAgentId(item))) return false
+  if (targetAgents.some(item => !canAssign(task, item))) return false
+
   taskWorkspaceBinding.clearExplicitActor()
-  await runAssignTask(task, agent)
-  if (task?.status === 'assigned' && targetAgents.length) {
-    markTaskAssigned(task, targetAgents)
-  }
+  const assignmentSucceeded = await runAssignTask(task, agent)
+  if (!assignmentSucceeded) return false
+
+  markTaskAssigned(task, targetAgents)
+  return true
 }
 
 const autoAssignTask = async (task) => {

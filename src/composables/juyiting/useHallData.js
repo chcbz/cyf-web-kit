@@ -71,8 +71,8 @@ export const useHallData = ({
       .map(item => item.agent)
   })
 
-  const canAssign = (task, agent = selectedAgent.value) => {
-    if (!task || !agent) return false
+  const canAssign = (task, agent) => {
+    if (!task || typeof agent?.agentId !== 'string' || !agent.agentId.trim()) return false
     if (normalizeStatus(task.status) !== 'open') return false
     if (agent.canOperate === false || agent.systemAgent) return false
     return normalizeStatus(agent.status) === 'online'
