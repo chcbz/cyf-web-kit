@@ -43,25 +43,34 @@ export const useHallExperienceMode = () => {
   const commitPhysicalOrientation = next => {
     if (typeof next !== 'boolean' || next === isPhysicalLandscape.value) return false
     isPhysicalLandscape.value = next
+    // A confirmed landscape fact replaces the advisory request, so release Hall-owned controls.
+    if (next && requestOwnership) void cancelRequest(requestOwnership.token)
     return true
   }
 
-  const readPhysicalOrientation = ({ source, event, allowInitialViewportFallback = false } = {}) => {
+  // Initialization only: Screen Orientation API, orientation media, legacy angle, then viewport fallback.
+  const readInitialPhysicalOrientation = ({ allowInitialViewportFallback = false } = {}) => {
     const screenTruth = orientationFromScreen(screenOrientation)
     if (screenTruth !== null) return screenTruth
-
-    if (source === 'media' && typeof event?.matches === 'boolean') return event.matches
-
-    const legacyTruth = source === 'legacy' ? orientationFromLegacyWindow() : null
-    if (legacyTruth !== null) return legacyTruth
-
     if (typeof orientationMedia?.matches === 'boolean') return orientationMedia.matches
-
-    const fallbackLegacyTruth = orientationFromLegacyWindow()
-    if (fallbackLegacyTruth !== null) return fallbackLegacyTruth
-
+    const legacyTruth = orientationFromLegacyWindow()
+    if (legacyTruth !== null) return legacyTruth
     if (allowInitialViewportFallback && typeof window !== 'undefined') return window.innerWidth > window.innerHeight
     return null
+  }
+
+  const readPhysicalOrientation = ({ source, event, allowInitialViewportFallback = false } = {}) => {
+    if (source === 'screen') {
+      const screenTruth = orientationFromScreen(screenOrientation)
+      if (screenTruth !== null) return screenTruth
+    }
+    if (source === 'media' && typeof event?.matches === 'boolean') return event.matches
+    if (source === 'legacy') {
+      const legacyTruth = orientationFromLegacyWindow()
+      if (legacyTruth !== null) return legacyTruth
+    }
+
+    return readInitialPhysicalOrientation({ allowInitialViewportFallback })
   }
 
   const commitPhysicalTruth = options => commitPhysicalOrientation(readPhysicalOrientation(options))
@@ -110,7 +119,7 @@ export const useHallExperienceMode = () => {
   )
 
   const requestLandscape = async () => {
-    if (!isMounted || orientationRequestPending.value || !isMobileCoarse.value || isPhysicalLandscape.value) return false
+    if (!isMounted || requestOwnership || orientationRequestPending.value || !isMobileCoarse.value || isPhysicalLandscape.value) return false
 
     const token = ++requestGeneration
     const fullscreenElement = globalThis.document?.documentElement || null
