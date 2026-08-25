@@ -70,6 +70,14 @@
           <div class="panel-title">
             <span :id="panelTitleId">{{ activePanelTitle }}</span>
             <button
+              v-if="taskWorkspaceEnabled && renderedPanel === 'tasks' && taskWorkspaceSubject"
+              class="panel-workspace-link"
+              type="button"
+              @click="openTaskWorkspace"
+            >
+              协作工作台
+            </button>
+            <button
               class="panel-close"
               type="button"
               aria-label="关闭面板"
@@ -126,6 +134,15 @@
             @select-agent="selectAgent"
             @select-task="selectTask"
             @set-status-filter="setTaskStatusFilter"
+          />
+
+          <TaskWorkspacePanel
+            v-if="taskWorkspaceEnabled && renderedPanel === 'workspace' && taskWorkspaceSubject"
+            :actor-agent-id="taskWorkspaceSubject.actorAgentId"
+            :connection-state="taskWorkspaceConnectionState"
+            :error="taskWorkspaceError"
+            :workspace="taskWorkspaceSnapshot"
+            @retry="retryTaskWorkspace"
           />
 
           <PersonaCatalogPanel
@@ -247,6 +264,11 @@ import { useHallSceneState } from '@/composables/juyiting/useHallSceneState'
 import { useHallSceneDebugBridge } from '@/composables/juyiting/useHallSceneDebugBridge'
 import { useHallSound } from '@/composables/juyiting/useHallSound'
 import { useHallTaskActions } from '@/composables/juyiting/useHallTaskActions'
+import { useTaskWorkspace } from '@/composables/juyiting/useTaskWorkspace'
+import { createDisabledTaskWorkspaceBinding, isTaskWorkspaceBuildEnabled } from '@/composables/juyiting/taskWorkspaceFeature'
+import { useTaskWorkspaceView } from '@/composables/juyiting/useTaskWorkspaceView'
+import { useTaskWorkspaceBinding } from '@/composables/juyiting/useTaskWorkspaceBinding'
+import TaskWorkspacePanel from '@/components/juyiting/TaskWorkspacePanel.vue'
 import { portraitName, portraitRole, portraitShortName, portraitStyle, roleClass } from '@/composables/juyiting/useWaterMarginRoles'
 import AgentPanel from '@/components/juyiting/AgentPanel.vue'
 import BountyDiscussionPanel from '@/components/juyiting/BountyDiscussionPanel.vue'
@@ -270,6 +292,19 @@ const apiStore = useApiStore()
 
 const selectedAgent = ref(null)
 const selectedTask = ref(null)
+// Stable FE2 entrypoint: taskWorkspace.workspace, connectionState, error, subject, retry, and reload.
+const taskWorkspaceEnabled = isTaskWorkspaceBuildEnabled(import.meta.env.VITE_JUYITING_TASK_WORKSPACE_ENABLED)
+const taskWorkspace = taskWorkspaceEnabled ? useTaskWorkspace() : null
+const taskWorkspaceBinding = taskWorkspaceEnabled
+  ? useTaskWorkspaceBinding({ selectedTask, selectedAgent, taskWorkspace })
+  : createDisabledTaskWorkspaceBinding(selectedAgent)
+const {
+  subject: taskWorkspaceSubject,
+  workspace: taskWorkspaceSnapshot,
+  connectionState: taskWorkspaceConnectionState,
+  error: taskWorkspaceError,
+  retry: retryTaskWorkspace
+} = useTaskWorkspaceView(taskWorkspace)
 const personaSetupResult = ref(null)
 const toast = ref('')
 const activePanel = ref('')
@@ -309,6 +344,7 @@ const activePanelTitle = computed(() => {
   if (renderedPanel.value === 'agents') return '点将册'
   if (renderedPanel.value === 'catalog') return '招贤令'
   if (renderedPanel.value === 'tasks') return '悬赏榜'
+  if (renderedPanel.value === 'workspace') return '协作工作台'
   if (renderedPanel.value === 'chat') return '厅前议事'
   if (renderedPanel.value === 'library') return '案卷阁'
   return ''
@@ -521,7 +557,7 @@ const selectTask = async (task) => {
 }
 
 const selectAgent = (agent) => {
-  selectedAgent.value = agent
+  taskWorkspaceBinding.selectExplicitActor(agent)
   playAgentSelect()
 }
 
@@ -548,6 +584,11 @@ const handleStagePanelOpen = (panel) => {
     return
   }
   openPanel(panel)
+}
+
+const openTaskWorkspace = () => {
+  if (!taskWorkspaceEnabled || !taskWorkspaceSubject.value?.taskId || !taskWorkspaceSubject.value?.actorAgentId) return
+  openPanel('workspace')
 }
 
 const closePanel = () => {
@@ -641,8 +682,9 @@ const createTask = async (payload) => {
   markTaskCreated(selectedTask.value)
 }
 
-const assignTask = async (task, agent = selectedAgent.value) => {
+const assignTask = async (task, agent) => {
   const targetAgents = Array.isArray(agent) ? agent : [agent].filter(Boolean)
+  taskWorkspaceBinding.clearExplicitActor()
   await runAssignTask(task, agent)
   if (task?.status === 'assigned' && targetAgents.length) {
     markTaskAssigned(task, targetAgents)
@@ -801,6 +843,7 @@ const handleStartAgentConversation = (agent) => {
     showToast(agent.systemAgent ? '宋江坐镇公议' : '只可与自家好汉密议')
     return
   }
+  taskWorkspaceBinding.selectExplicitActor(agent)
   playAgentSelect()
   enterPrivateConversation(agent)
   markAgentSpeaking(agent, '入席密议', 'system')
@@ -850,6 +893,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  taskWorkspaceBinding.dispose()
   restorePanelFocus(panelPriorFocus)
   panelPriorFocus = null
   disposeHallConversation()

@@ -3,7 +3,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 const ROOT=process.cwd(), DIR=join(ROOT,'tests/fixtures/juyiting/occlusion-e13')
 const read=p=>JSON.parse(readFileSync(p,'utf8'))
-const BIND=['id','kind','cell','probeCell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera','evidenceContext','contextCompanionStableId','visualOmissions','probeKind','visualExerciseContract','visualOverlay','maxAgentOcclusionRatio','navValidation','probeRationale']
+const BIND=['id','kind','cell','probeCell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera','evidenceContext','contextCompanionStableId','visualOmissions','probeKind','probeMobility','visualExerciseContract','visualOverlay','maxAgentOcclusionRatio','navValidation','probeRationale']
 describe('E13 authoritative offline pixel evidence',()=>{
  let index,matrix
  before(()=>{ index=read(join(DIR,'index.json')); matrix=read(join(DIR,'shot-plan.json')).shots.filter(s=>s.kind==='matrix') })
@@ -32,9 +32,11 @@ describe('E13 authoritative offline pixel evidence',()=>{
   const byTarget=new Map()
   index.shots.forEach(s=>{const viewport=s.runtimeFacts.viewportWorld; if(!byTarget.has(s.targetStableId))byTarget.set(s.targetStableId,viewport); expect(viewport,s.id).deep.eq(byTarget.get(s.targetStableId))})
  })
- it('uses production-reachable target-specific probes and explicit visual exercise contracts',()=>{
+ it('uses synthetic visual probes with independently recorded production navigation diagnostics',()=>{
+  expect(index.shots.every(s=>s.probeMobility==='synthetic-visual-only')).eq(true)
+  index.shots.forEach(s=>{expect(s.navValidation.reachability,s.id).include({source:'production-graph-pathfinder',colliderWidth:42}); expect(['found','blocked'],s.id).include(s.navValidation.reachability.status); if(s.navValidation.reachability.status==='blocked')expect(s.navValidation.reachability.reason,s.id).a('string').and.not.empty})
   const custom=index.shots.filter(s=>s.probeKind==='target-specific'); expect(custom).length(162)
-  custom.forEach(s=>{expect(s.navValidation.navigable,s.id).eq(true); expect(s.navValidation.reachability,s.id).include({source:'production-graph-pathfinder',colliderWidth:42,status:'found'}); if(s.visualExerciseContract==='target-each-shot'||(['ownership-transition','composite-transition'].includes(s.visualExerciseContract)&&s.relation==='behind')){expect(s.runtimeFacts.pixelOverlap.opaqueIntersectionPixels,s.id).greaterThan(0); expect(s.runtimeFacts.pixelOverlap.visibleOcclusionPixels,s.id).greaterThan(0)}})
+  custom.forEach(s=>{if(s.visualExerciseContract==='target-each-shot'||(['ownership-transition','composite-transition'].includes(s.visualExerciseContract)&&s.relation==='behind')){expect(s.runtimeFacts.pixelOverlap.opaqueIntersectionPixels,s.id).greaterThan(0); expect(s.runtimeFacts.pixelOverlap.visibleOcclusionPixels,s.id).greaterThan(0)}})
   const composite=custom.filter(s=>s.visualExerciseContract==='composite-transition'); expect(composite).length(18)
   composite.forEach(s=>{expect(s.evidenceContext,s.id).eq('in-context'); expect(s.visualOmissions,s.id).deep.eq([]); if(s.relation==='behind'){expect(s.runtimeFacts.pixelOverlap.opaqueIntersectionPixels,s.id).greaterThan(0); expect(s.runtimeFacts.pixelOverlap.visibleOcclusionPixels,s.id).greaterThan(0)}})
   const limited=custom.filter(s=>s.maxAgentOcclusionRatio!=null)

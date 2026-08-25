@@ -1,4 +1,5 @@
 import { expect } from 'chai'
+import { before } from 'mocha'
 import { readFileSync } from 'fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
 
@@ -48,6 +49,7 @@ const loadSfc = (relativePath) => {
     .replace(/^import\s+\{\s*juyitingGame\s*\}\s+from\s+['"]@\/game\/index\.js['"];?\s*$/gm, 'var juyitingGame = arguments[2]')
     .replace(/^import\s+\{\s*classifyViewportResize\s*\}\s+from\s+['"]@\/game\/camera\/resizePolicy\.js['"];?\s*$/gm, 'var classifyViewportResize = arguments[3]')
     .replace(/^import\s+BountyActionIcon\s+from\s+['"].\/BountyActionIcon\.vue['"];?\s*$/gm, 'var BountyActionIcon = { template: \'<span />\', props: [\'status\'] }')
+    .replace(/^import\s+ArchiveReader\s+from\s+['"].\/archive\/ArchiveReader\.vue['"];?\s*$/gm, 'var ArchiveReader = { template: \'<section class="archive-reader-stub">典籍阅读</section>\' }')
     .replace(/^import\s+(\w+)\s+from\s+['"]@\/assets\/juyiting\/[^'"]+['"];?\s*$/gm, 'var $1 = \'/mock-juyiting-asset.png\'')
     .replace(/^import\s+\{\s*hallPhysicalScene,\s*hallRoomPropVisuals\s*\}\s+from\s+['"]@\/constants\/juyiting['"];?\s*$/gm, 'var hallRoomPropVisuals = []; var hallPhysicalScene = { interactiveZones: [{ key: \'main\', panel: \'chat\', title: \'忠义堂公议\', subtitle: \'厅前公议 / 众好汉\', x: 50, y: 36, w: 12, h: 7, object: \'plaque\', hitShape: \'plaque\' }, { key: \'agents\', panel: \'agents\', title: \'点将册\', subtitle: \'点将调遣\', x: 21, y: 32, w: 13, h: 7, object: \'ledger\' }, { key: \'tasks\', panel: \'tasks\', title: \'悬赏榜\', subtitle: \'榜文\', x: 76, y: 47, w: 19, h: 18, object: \'notice-rack\' }, { key: \'catalog\', panel: \'catalog\', title: \'招贤令\', subtitle: \'遍请豪杰\', x: 14, y: 68, w: 12, h: 7, object: \'banner-flag\' }, { key: \'library\', panel: \'library\', title: \'案卷阁\', subtitle: \'查卷问典\', x: 82, y: 76, w: 22, h: 18, object: \'scroll-shelf\' }, { key: \'back\', panel: null, title: \'整装处\', subtitle: \'兵甲行囊\', x: 67, y: 26, w: 12, h: 8, object: \'rear-gear\' }] }')
     .replace(/^import\s+HallChatComposer\s+from\s+['"].\/HallChatComposer\.vue['"];?\s*$/gm, 'var HallChatComposer = arguments[1]')
@@ -907,7 +909,7 @@ describe('JuyiHall component behavior', () => {
     let fullscreenCalls = 0
     let exitFullscreenCalls = 0
     let unlockCalls = 0
-    let lockCalls = []
+    const lockCalls = []
     let matches = false
 
     global.window.matchMedia = query => ({
@@ -1989,12 +1991,41 @@ describe('JuyiHall component behavior', () => {
       }
     })
 
+    expect(wrapper.text()).to.include('典籍阅读')
+    expect(wrapper.find('.archive-reader-stub').exists()).to.equal(true)
+    await wrapper.get('#library-search-tab').trigger('click')
     await wrapper.find('form').trigger('submit')
     await wrapper.find('.result-card button').trigger('click')
 
     expect(wrapper.text()).to.include('藏书查卷')
     expect(wrapper.emitted('search-library')).to.have.length(1)
     expect(wrapper.emitted('cite-library')[0][0].content).to.equal('Deployment notes')
+  })
+
+  it('uses roving tab focus and keyboard navigation in LibraryPanel', async () => {
+    const wrapper = mount(LibraryPanel, {
+      global: { stubs },
+      attachTo: document.body,
+      props: {
+        formatTime: value => String(value),
+        results: []
+      }
+    })
+    const readerTab = wrapper.get('#library-reader-tab')
+    const searchTab = wrapper.get('#library-search-tab')
+
+    expect(readerTab.attributes('tabindex')).to.equal('0')
+    expect(searchTab.attributes('tabindex')).to.equal('-1')
+    await readerTab.trigger('keydown', { key: 'ArrowRight' })
+    expect(document.activeElement).to.equal(searchTab.element)
+    expect(searchTab.attributes('tabindex')).to.equal('0')
+    await searchTab.trigger('keydown', { key: 'Home' })
+    expect(document.activeElement).to.equal(readerTab.element)
+    await readerTab.trigger('keydown', { key: 'End' })
+    expect(document.activeElement).to.equal(searchTab.element)
+    await searchTab.trigger('keydown', { key: 'ArrowLeft' })
+    expect(document.activeElement).to.equal(readerTab.element)
+    wrapper.unmount()
   })
 
   it('shows public beta empty and error states for LibraryPanel', async () => {
@@ -2010,6 +2041,7 @@ describe('JuyiHall component behavior', () => {
       }
     })
 
+    await emptyWrapper.get('#library-search-tab').trigger('click')
     expect(emptyWrapper.text()).to.include('暂未查得案卷')
 
     const errorWrapper = mount(LibraryPanel, {
@@ -2025,6 +2057,7 @@ describe('JuyiHall component behavior', () => {
       }
     })
 
+    await errorWrapper.get('#library-search-tab').trigger('click')
     expect(errorWrapper.text()).to.include('案卷阁暂不可查，主线不受影响')
   })
 })
@@ -2092,7 +2125,6 @@ const createFakeGameMelon = ({ deferDeviceReady = false } = {}) => {
   return { deviceReadyCallbacks, loadCallbacks, me, stateChanges, stateSets, videoInitCalls: () => videoInitCalls }
 }
 
-
 const settleMountWithLoaderSuccess = async (fake, mountPromise, timeoutMs = 5_000) => {
   let settled = false
   mountPromise.finally(() => {
@@ -2103,7 +2135,7 @@ const settleMountWithLoaderSuccess = async (fake, mountPromise, timeoutMs = 5_00
   while (!settled && Date.now() < deadline) {
     const callbacks = fake.loadCallbacks.splice(0)
     callbacks.forEach(item => item.onload())
-    await new Promise(resolve => setImmediate(resolve))
+    await new Promise(resolve => setTimeout(resolve, 0))
   }
 
   if (!settled) throw new Error('timed out draining fake melonJS loader callbacks')
