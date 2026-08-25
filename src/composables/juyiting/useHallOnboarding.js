@@ -18,8 +18,37 @@ const SHA_256_ROUND_CONSTANTS = Object.freeze([
   0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
 ])
 
+function hasUnpairedSurrogate (value) {
+  for (let index = 0; index < value.length; index += 1) {
+    const codeUnit = value.charCodeAt(index)
+    if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
+      const trailing = value.charCodeAt(index + 1)
+      if (!(trailing >= 0xdc00 && trailing <= 0xdfff)) return true
+      index += 1
+    } else if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) {
+      return true
+    }
+  }
+  return false
+}
+
+// Keep identity input byte-for-byte exact. `trim()` is used only to reject blank values.
+function validStringSubject (value) {
+  return typeof value === 'string' && value.trim() !== '' && !controlCharacterPattern.test(value) && !hasUnpairedSurrogate(value)
+}
+
+function validSubject (value) {
+  return validStringSubject(value) || (typeof value === 'number' && Number.isSafeInteger(value))
+}
+
+function subjectInput (value) {
+  if (validStringSubject(value)) return `string:${value}`
+  if (typeof value === 'number' && Number.isSafeInteger(value)) return `number:${String(value)}`
+  return null
+}
+
 function nonblankString (value) {
-  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null
+  return validStringSubject(value) ? value : null
 }
 
 function safeRead (storage, key) {
@@ -49,15 +78,20 @@ function rotateRight (value, bits) {
 }
 
 function utf8Bytes (value) {
+  // Match JavaScript's standard UTF-8 encoding: each lone surrogate becomes U+FFFD.
   const bytes = []
   for (let index = 0; index < value.length; index += 1) {
     let codePoint = value.charCodeAt(index)
-    if (codePoint >= 0xd800 && codePoint <= 0xdbff && index + 1 < value.length) {
+    if (codePoint >= 0xd800 && codePoint <= 0xdbff) {
       const trailing = value.charCodeAt(index + 1)
       if (trailing >= 0xdc00 && trailing <= 0xdfff) {
         codePoint = 0x10000 + ((codePoint - 0xd800) << 10) + trailing - 0xdc00
         index += 1
+      } else {
+        codePoint = 0xfffd
       }
+    } else if (codePoint >= 0xdc00 && codePoint <= 0xdfff) {
+      codePoint = 0xfffd
     }
 
     if (codePoint <= 0x7f) bytes.push(codePoint)
@@ -69,7 +103,7 @@ function utf8Bytes (value) {
 }
 
 // Synchronous SHA-256 avoids exposing the subject and avoids the 32-bit FNV collision domain.
-function sha256Hex (value) {
+export function sha256Hex (value) {
   const bytes = utf8Bytes(value)
   const bitLength = bytes.length * 8
   bytes.push(0x80)
@@ -124,15 +158,20 @@ function sha256Hex (value) {
 }
 
 export function hallOnboardingSubject (globalStore) {
-  return nonblankString(globalStore?.getJiacn) ||
-    nonblankString(globalStore?.getOpenid) ||
-    nonblankString(globalStore?.getUserId)
+  const jiacn = globalStore?.getJiacn
+  if (validStringSubject(jiacn)) return jiacn
+
+  const openid = globalStore?.getOpenid
+  if (validStringSubject(openid)) return openid
+
+  const userId = globalStore?.getUserId
+  return validSubject(userId) ? userId : null
 }
 
 // The first 128 bits of SHA-256 give a deterministic, non-secret browser key with a negligible collision risk.
 export function encodeHallOnboardingSubject (subject) {
-  const normalized = nonblankString(subject)
-  return normalized ? `u${sha256Hex(normalized).slice(0, 32)}` : 'anonymous'
+  const exactTypedInput = subjectInput(subject)
+  return exactTypedInput ? `u${sha256Hex(exactTypedInput).slice(0, 32)}` : 'anonymous'
 }
 
 export function hallOnboardingStorageKey (subject, version = HALL_ONBOARDING_VERSION) {
@@ -166,8 +205,8 @@ export function consumeGuestDemoTemplateQuery (query, templates) {
 
 export function createHallOnboarding (options = {}) {
   const version = nonblankString(options.version) || HALL_ONBOARDING_VERSION
-  const subject = nonblankString(options.subject)
-  const persistentStorage = subject ? options.localStorage : options.sessionStorage
+  const subject = validSubject(options.subject) ? options.subject : null
+  const persistentStorage = subjectInput(subject) ? options.localStorage : options.sessionStorage
   const persistentKey = hallOnboardingStorageKey(subject, version)
   const sessionKey = hallOnboardingSessionKey(subject, version)
   const persistentStatus = safeRead(persistentStorage, persistentKey)?.status

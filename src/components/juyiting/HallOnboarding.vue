@@ -8,7 +8,7 @@
       aria-labelledby="hall-onboarding-title"
       aria-describedby="hall-onboarding-description"
       tabindex="-1"
-      @keydown.esc.prevent="later"
+      @keydown="handleDialogKeydown"
     >
       <div class="dialog-heading">
         <div>
@@ -50,24 +50,117 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { guestDemoTemplates } from '@/constants/publicBetaDemo'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
-  template: { type: String, default: null }
+  template: { type: String, default: null },
+  backgroundTarget: { type: Object, default: null },
+  returnFocusTarget: { type: Object, default: null }
 })
 
 const emit = defineEmits(['update:modelValue', 'later', 'skip', 'complete'])
 
 const dialogRef = ref(null)
+let previousActiveElement = null
+let backgroundState = null
 const templateLabel = computed(() => guestDemoTemplates.find(item => item.id === props.template)?.eyebrow || props.template)
 
-watch(() => props.modelValue, async visible => {
-  if (visible) {
-    await nextTick()
-    dialogRef.value?.focus()
+const focusableSelector = [
+  'a[href]', 'button:not([disabled])', 'input:not([disabled])', 'select:not([disabled])',
+  'textarea:not([disabled])', '[tabindex]:not([tabindex="-1"])'
+].join(',')
+
+const focusableElements = () => [...(dialogRef.value?.querySelectorAll(focusableSelector) || [])]
+  .filter(element => !element.hasAttribute('disabled') && element.getClientRects().length > 0)
+
+const restoreBackground = () => {
+  const state = backgroundState
+  backgroundState = null
+  if (!state?.target?.isConnected) return
+
+  if (state.hadInert) state.target.setAttribute('inert', state.inertValue)
+  else state.target.removeAttribute('inert')
+  if ('inert' in state.target) state.target.inert = state.inertProperty
+
+  if (state.hadAriaHidden) state.target.setAttribute('aria-hidden', state.ariaHidden)
+  else state.target.removeAttribute('aria-hidden')
+}
+
+const makeBackgroundInert = () => {
+  const target = props.backgroundTarget
+  if (!target || backgroundState) return
+
+  backgroundState = {
+    target,
+    hadInert: target.hasAttribute('inert'),
+    inertValue: target.getAttribute('inert'),
+    inertProperty: 'inert' in target ? target.inert : false,
+    hadAriaHidden: target.hasAttribute('aria-hidden'),
+    ariaHidden: target.getAttribute('aria-hidden')
   }
+  target.setAttribute('inert', '')
+  if ('inert' in target) target.inert = true
+  target.setAttribute('aria-hidden', 'true')
+}
+
+const restoreFocus = () => {
+  const target = previousActiveElement?.isConnected
+    ? previousActiveElement
+    : props.returnFocusTarget?.isConnected
+      ? props.returnFocusTarget
+      : null
+  previousActiveElement = null
+  target?.focus?.()
+}
+
+const openDialog = async () => {
+  previousActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  makeBackgroundInert()
+  await nextTick()
+  dialogRef.value?.focus()
+}
+
+const closeDialog = () => {
+  restoreBackground()
+  restoreFocus()
+}
+
+const handleDialogKeydown = event => {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    later()
+    return
+  }
+  if (event.key !== 'Tab') return
+
+  const elements = focusableElements()
+  if (elements.length === 0) {
+    event.preventDefault()
+    dialogRef.value?.focus()
+    return
+  }
+
+  const first = elements[0]
+  const last = elements[elements.length - 1]
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
+watch(() => props.modelValue, visible => {
+  if (visible) openDialog()
+  else closeDialog()
+}, { flush: 'post' })
+
+onBeforeUnmount(() => {
+  restoreBackground()
+  restoreFocus()
 })
 
 const later = () => {

@@ -9,6 +9,7 @@ import {
   encodeHallOnboardingSubject,
   hallOnboardingStorageKey,
   hallOnboardingSubject,
+  sha256Hex,
   validateGuestDemoTemplate
 } from '../src/composables/juyiting/useHallOnboarding.js'
 
@@ -42,9 +43,41 @@ test('first visit is visible and subject selection prioritizes jiacn without raw
   assert.equal(key.includes('jia-cn-77'), false)
   assert.equal(key.includes('openid-1'), false)
   assert.notEqual(hallOnboardingStorageKey('user-a'), hallOnboardingStorageKey('user-b'))
-  assert.equal(encodeHallOnboardingSubject('jia-cn-77'), 'u3bc495e536853d790e2b0747d00532d3')
+  assert.equal(encodeHallOnboardingSubject('jia-cn-77'), 'u60b3ac6c299b757433636b7cf3c424e9')
 })
 
+test('numeric getUserId is a persistent per-user subject and string and numeric inputs are type-tagged', () => {
+  const localStorage = memoryStorage()
+  const numericSubject = hallOnboardingSubject({ getUserId: 42 })
+  const stringSubject = hallOnboardingSubject({ getUserId: '42' })
+
+  assert.equal(numericSubject, 42)
+  assert.equal(stringSubject, '42')
+  assert.notEqual(encodeHallOnboardingSubject(numericSubject), 'anonymous')
+  assert.notEqual(encodeHallOnboardingSubject(numericSubject), encodeHallOnboardingSubject(stringSubject))
+
+  createHallOnboarding({ subject: numericSubject, localStorage, sessionStorage: memoryStorage() }).complete()
+  assert.equal(createHallOnboarding({ subject: numericSubject, localStorage, sessionStorage: memoryStorage() }).snapshot().visible, false)
+  assert.equal(createHallOnboarding({ localStorage, sessionStorage: memoryStorage() }).snapshot().visible, true)
+})
+
+test('identity subjects preserve exact strings and reject blank, control, and unpaired surrogate aliases', () => {
+  assert.notEqual(encodeHallOnboardingSubject('42'), encodeHallOnboardingSubject(' 42 '))
+  assert.notEqual(encodeHallOnboardingSubject('user'), encodeHallOnboardingSubject('user '))
+  assert.equal(hallOnboardingSubject({ getJiacn: '   ', getOpenid: '\u0000bad', getUserId: '\ud800' }), null)
+  assert.equal(encodeHallOnboardingSubject('   '), 'anonymous')
+  assert.equal(encodeHallOnboardingSubject('bad\u0000id'), 'anonymous')
+  assert.equal(encodeHallOnboardingSubject('bad\ud800'), 'anonymous')
+  assert.equal(encodeHallOnboardingSubject(Number.MAX_SAFE_INTEGER + 1), 'anonymous')
+  assert.equal(encodeHallOnboardingSubject(Infinity), 'anonymous')
+})
+
+test('SHA-256 uses standard JavaScript UTF-8 vectors, including replacement for lone surrogates', () => {
+  assert.equal(sha256Hex(''), 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')
+  assert.equal(sha256Hex('abc'), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
+  assert.equal(sha256Hex('\ud800'), '83d544ccc223c057d2bf80d3f2a32982c32c3c0db8e2674820da5064783fb097')
+  assert.equal(sha256Hex('\ud800'), sha256Hex('\ufffd'))
+})
 
 test('known 32-bit FNV collision subjects receive different SHA-256/128 storage keys and isolated dismissals', () => {
   // `costarring` and `liquid` collide under the prior 32-bit FNV-1a implementation.
@@ -148,13 +181,34 @@ test('guest template handoff accepts only one bounded whitelisted template and c
   })
 })
 
-test('the wrapper preserves PKCE return query/hash while consuming only template, and GuestDemo restricts handoff ids', () => {
+test('the wrapper preserves PKCE return query/hash, syncs after a cleanup rejection, and GuestDemo restricts handoff ids', () => {
   const entry = readFileSync(new URL('../src/components/world/JuyiHallEntry.vue', import.meta.url), 'utf8')
   const guestDemo = readFileSync(new URL('../src/components/public/GuestDemo.vue', import.meta.url), 'utf8')
 
   assert.match(entry, /<JuyiHall\s*\/>/)
   assert.match(entry, /consumeGuestDemoTemplateQuery\(route\.query, guestDemoTemplates\)/)
-  assert.match(entry, /router\.replace\(\{ path: route\.path, query: handoff\.query, hash: route\.hash \}\)/)
+  assert.match(entry, /try \{[\s\S]*await router\.replace\(\{ path: route\.path, query: handoff\.query, hash: route\.hash \}\)[\s\S]*\} catch \{[\s\S]*\} finally \{[\s\S]*syncOnboarding\(\)/)
+  assert.ok(entry.indexOf('await router.replace') < entry.indexOf('finally {'))
+  assert.ok(entry.indexOf('finally {') < entry.indexOf('syncOnboarding()', entry.indexOf('finally {')))
   assert.match(guestDemo, /new Set\(\['research', 'content', 'collaboration'\]\)/)
   assert.match(guestDemo, /allowedGuestDemoTemplateIds\.has\(id\)/)
+})
+
+test('the onboarding modal traps focus and restores the Juyi Hall background lifecycle', () => {
+  const modal = readFileSync(new URL('../src/components/juyiting/HallOnboarding.vue', import.meta.url), 'utf8')
+  const entry = readFileSync(new URL('../src/components/world/JuyiHallEntry.vue', import.meta.url), 'utf8')
+
+  assert.match(entry, /ref=\"juyiHallContainer\"/)
+  assert.match(entry, /:background-target=\"juyiHallContainer\"/)
+  assert.match(entry, /ref=\"reopenTriggerRef\"/)
+  assert.match(entry, /:return-focus-target=\"reopenTriggerRef\"/)
+  assert.match(modal, /@keydown=\"handleDialogKeydown\"/)
+  assert.match(modal, /event\.key !== 'Tab'/)
+  assert.match(modal, /event\.shiftKey && document\.activeElement === first/)
+  assert.match(modal, /!event\.shiftKey && document\.activeElement === last/)
+  assert.match(modal, /target\.setAttribute\('inert', ''\)/)
+  assert.match(modal, /target\.setAttribute\('aria-hidden', 'true'\)/)
+  assert.match(modal, /restoreBackground\(\)/)
+  assert.match(modal, /previousActiveElement\?\.isConnected/)
+  assert.match(modal, /onBeforeUnmount\(\(\) => \{[\s\S]*restoreBackground\(\)[\s\S]*restoreFocus\(\)/)
 })
