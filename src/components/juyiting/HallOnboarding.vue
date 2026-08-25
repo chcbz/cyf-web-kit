@@ -1,6 +1,7 @@
 <template>
-  <div v-if="modelValue" class="onboarding-overlay" @pointerdown.self="later">
-    <section
+  <Teleport to="body">
+    <div v-if="modelValue" ref="overlayRef" class="onboarding-overlay" @pointerdown.self="later">
+      <section
       ref="dialogRef"
       class="onboarding-dialog"
       role="dialog"
@@ -45,24 +46,25 @@
         <button class="skip-button" type="button" @click="$emit('skip')">跳过本版本</button>
         <button class="complete-button" type="button" @click="$emit('complete')">我知道了</button>
       </div>
-    </section>
-  </div>
+      </section>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { guestDemoTemplates } from '@/constants/publicBetaDemo'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   template: { type: String, default: null },
-  backgroundTarget: { type: Object, default: null },
   returnFocusTarget: { type: Object, default: null }
 })
 
 const emit = defineEmits(['update:modelValue', 'later', 'skip', 'complete'])
 
 const dialogRef = ref(null)
+const overlayRef = ref(null)
 let previousActiveElement = null
 let backgroundState = null
 const templateLabel = computed(() => guestDemoTemplates.find(item => item.id === props.template)?.eyebrow || props.template)
@@ -75,56 +77,74 @@ const focusableSelector = [
 const focusableElements = () => [...(dialogRef.value?.querySelectorAll(focusableSelector) || [])]
   .filter(element => !element.hasAttribute('disabled') && element.getClientRects().length > 0)
 
+const modalIsolationBoundary = () => overlayRef.value?.parentElement || document.body
+
 const restoreBackground = () => {
-  const state = backgroundState
+  const states = backgroundState
   backgroundState = null
-  if (!state?.target?.isConnected) return
+  if (!states) return
 
-  if (state.hadInert) state.target.setAttribute('inert', state.inertValue)
-  else state.target.removeAttribute('inert')
-  if ('inert' in state.target) state.target.inert = state.inertProperty
+  for (const state of states) {
+    const { target } = state
+    if (state.hadInert) target.setAttribute('inert', state.inertValue)
+    else target.removeAttribute('inert')
+    if ('inert' in target) target.inert = state.inertProperty
 
-  if (state.hadAriaHidden) state.target.setAttribute('aria-hidden', state.ariaHidden)
-  else state.target.removeAttribute('aria-hidden')
-}
-
-const makeBackgroundInert = () => {
-  const target = props.backgroundTarget
-  if (!target || backgroundState) return
-
-  backgroundState = {
-    target,
-    hadInert: target.hasAttribute('inert'),
-    inertValue: target.getAttribute('inert'),
-    inertProperty: 'inert' in target ? target.inert : false,
-    hadAriaHidden: target.hasAttribute('aria-hidden'),
-    ariaHidden: target.getAttribute('aria-hidden')
+    if (state.hadAriaHidden) target.setAttribute('aria-hidden', state.ariaHidden)
+    else target.removeAttribute('aria-hidden')
   }
-  target.setAttribute('inert', '')
-  if ('inert' in target) target.inert = true
-  target.setAttribute('aria-hidden', 'true')
 }
+
+const isolateBackground = () => {
+  const boundary = modalIsolationBoundary()
+  const overlay = overlayRef.value
+  if (!boundary || !overlay || backgroundState) return
+
+  const states = [...boundary.children]
+    .filter(target => target !== overlay)
+    .map(target => ({
+      target,
+      hadInert: target.hasAttribute('inert'),
+      inertValue: target.getAttribute('inert'),
+      inertProperty: 'inert' in target ? target.inert : false,
+      hadAriaHidden: target.hasAttribute('aria-hidden'),
+      ariaHidden: target.getAttribute('aria-hidden')
+    }))
+
+  backgroundState = states
+  try {
+    for (const { target } of states) {
+      target.setAttribute('inert', '')
+      if ('inert' in target) target.inert = true
+      target.setAttribute('aria-hidden', 'true')
+    }
+  } catch (error) {
+    restoreBackground()
+    throw error
+  }
+}
+
+const isValidReturnFocusTarget = target => target instanceof HTMLElement && target.isConnected &&
+  target !== document.body && target !== document.documentElement
 
 const restoreFocus = () => {
-  const target = previousActiveElement?.isConnected
+  const target = isValidReturnFocusTarget(previousActiveElement)
     ? previousActiveElement
-    : props.returnFocusTarget?.isConnected
+    : isValidReturnFocusTarget(props.returnFocusTarget)
       ? props.returnFocusTarget
       : null
   previousActiveElement = null
   target?.focus?.()
 }
 
-const openDialog = async () => {
-  previousActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null
-  makeBackgroundInert()
-  await nextTick()
-  dialogRef.value?.focus()
+const focusFirstElement = () => {
+  const [first] = focusableElements()
+  ;(first || dialogRef.value)?.focus?.()
 }
 
-const closeDialog = () => {
-  restoreBackground()
-  restoreFocus()
+const handleDocumentFocusin = event => {
+  const dialog = dialogRef.value
+  if (dialog && !dialog.contains(event.target)) focusFirstElement()
 }
 
 const handleDialogKeydown = event => {
@@ -142,16 +162,54 @@ const handleDialogKeydown = event => {
     return
   }
 
+  const dialog = dialogRef.value
+  const overlay = overlayRef.value
   const first = elements[0]
   const last = elements[elements.length - 1]
-  if (event.shiftKey && document.activeElement === first) {
+  const activeElement = document.activeElement
+  const insideDialog = dialog?.contains(activeElement)
+
+  if (event.shiftKey && (!insideDialog || activeElement === dialog || activeElement === overlay || activeElement === first)) {
     event.preventDefault()
     last.focus()
-  } else if (!event.shiftKey && document.activeElement === last) {
+  } else if (!event.shiftKey && (!insideDialog || activeElement === dialog || activeElement === overlay || activeElement === last)) {
     event.preventDefault()
     first.focus()
   }
 }
+
+const addModalListeners = () => {
+  document.addEventListener('keydown', handleDialogKeydown, true)
+  document.addEventListener('focusin', handleDocumentFocusin, true)
+}
+
+const removeModalListeners = () => {
+  document.removeEventListener('keydown', handleDialogKeydown, true)
+  document.removeEventListener('focusin', handleDocumentFocusin, true)
+}
+
+const openDialog = async () => {
+  const activeElement = document.activeElement
+  previousActiveElement = isValidReturnFocusTarget(activeElement) ? activeElement : null
+  try {
+    isolateBackground()
+    addModalListeners()
+    await nextTick()
+    focusFirstElement()
+  } catch {
+    removeModalListeners()
+    restoreBackground()
+    restoreFocus()
+  }
+}
+
+const closeDialog = () => {
+  removeModalListeners()
+  restoreBackground()
+  restoreFocus()
+}
+
+onMounted(() => props.modelValue && openDialog())
 
 watch(() => props.modelValue, visible => {
   if (visible) openDialog()
@@ -159,8 +217,7 @@ watch(() => props.modelValue, visible => {
 }, { flush: 'post' })
 
 onBeforeUnmount(() => {
-  restoreBackground()
-  restoreFocus()
+  closeDialog()
 })
 
 const later = () => {

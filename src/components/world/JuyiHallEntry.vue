@@ -8,7 +8,6 @@
     <HallOnboarding
       v-model="onboardingState.visible"
       :template="templateId"
-      :background-target="juyiHallContainer"
       :return-focus-target="reopenTriggerRef"
       @later="snooze"
       @skip="skip"

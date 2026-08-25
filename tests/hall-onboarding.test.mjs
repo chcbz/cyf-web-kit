@@ -194,21 +194,233 @@ test('the wrapper preserves PKCE return query/hash, syncs after a cleanup reject
   assert.match(guestDemo, /allowedGuestDemoTemplateIds\.has\(id\)/)
 })
 
-test('the onboarding modal traps focus and restores the Juyi Hall background lifecycle', () => {
-  const modal = readFileSync(new URL('../src/components/juyiting/HallOnboarding.vue', import.meta.url), 'utf8')
-  const entry = readFileSync(new URL('../src/components/world/JuyiHallEntry.vue', import.meta.url), 'utf8')
+class HarnessElement {
+  constructor (document, name) {
+    this.document = document
+    this.name = name
+    this.attributes = new Map()
+    this.children = []
+    this.parentElement = null
+    this.inert = false
+    this.throwOnFocus = false
+    this.focusables = []
+  }
 
-  assert.match(entry, /ref=\"juyiHallContainer\"/)
-  assert.match(entry, /:background-target=\"juyiHallContainer\"/)
-  assert.match(entry, /ref=\"reopenTriggerRef\"/)
-  assert.match(entry, /:return-focus-target=\"reopenTriggerRef\"/)
-  assert.match(modal, /@keydown=\"handleDialogKeydown\"/)
-  assert.match(modal, /event\.key !== 'Tab'/)
-  assert.match(modal, /event\.shiftKey && document\.activeElement === first/)
-  assert.match(modal, /!event\.shiftKey && document\.activeElement === last/)
-  assert.match(modal, /target\.setAttribute\('inert', ''\)/)
-  assert.match(modal, /target\.setAttribute\('aria-hidden', 'true'\)/)
-  assert.match(modal, /restoreBackground\(\)/)
-  assert.match(modal, /previousActiveElement\?\.isConnected/)
-  assert.match(modal, /onBeforeUnmount\(\(\) => \{[\s\S]*restoreBackground\(\)[\s\S]*restoreFocus\(\)/)
+  get isConnected () {
+    return this === this.document.body || this === this.document.documentElement || Boolean(this.parentElement?.isConnected)
+  }
+
+  append (...children) {
+    for (const child of children) {
+      child.parentElement = this
+      this.children.push(child)
+    }
+  }
+
+  setAttribute (name, value) {
+    this.attributes.set(name, String(value))
+  }
+
+  getAttribute (name) {
+    return this.attributes.has(name) ? this.attributes.get(name) : null
+  }
+
+  hasAttribute (name) {
+    return this.attributes.has(name)
+  }
+
+  removeAttribute (name) {
+    this.attributes.delete(name)
+  }
+
+  contains (target) {
+    return target === this || this.children.some(child => child.contains(target))
+  }
+
+  querySelectorAll () {
+    return this.focusables
+  }
+
+  getClientRects () {
+    return [this]
+  }
+
+  focus () {
+    if (this.throwOnFocus) throw new Error(`focus failed: ${this.name}`)
+    this.document.setActiveElement(this, true)
+  }
+}
+
+class HarnessDocument {
+  constructor () {
+    this.listeners = new Map()
+    this.documentElement = new HarnessElement(this, 'documentElement')
+    this.body = new HarnessElement(this, 'body')
+    this.documentElement.append(this.body)
+    this.activeElement = this.body
+  }
+
+  addEventListener (type, listener) {
+    const listeners = this.listeners.get(type) || new Set()
+    listeners.add(listener)
+    this.listeners.set(type, listeners)
+  }
+
+  removeEventListener (type, listener) {
+    this.listeners.get(type)?.delete(listener)
+  }
+
+  setActiveElement (target, dispatch) {
+    this.activeElement = target
+    if (dispatch) this.dispatch('focusin', { target })
+  }
+
+  dispatch (type, event) {
+    for (const listener of this.listeners.get(type) || []) listener(event)
+  }
+}
+
+const loadOnboardingLifecycle = ({ document, props }) => {
+  const modal = readFileSync(new URL('../src/components/juyiting/HallOnboarding.vue', import.meta.url), 'utf8')
+  const script = modal.match(/<script setup>\s*([\s\S]*?)<\/script>/)?.[1]
+  assert.ok(script, 'HallOnboarding script setup must exist')
+
+  const mountedCallbacks = []
+  const unmountCallbacks = []
+  const watchers = []
+  const executable = `${script.replace(/^import .*$/gm, '')}
+return { dialogRef, overlayRef, openDialog, closeDialog, handleDialogKeydown, handleDocumentFocusin }
+`
+  const setup = new Function(
+    'computed', 'nextTick', 'onBeforeUnmount', 'onMounted', 'ref', 'watch', 'guestDemoTemplates',
+    'document', 'HTMLElement', 'defineProps', 'defineEmits', executable
+  )
+  const lifecycle = setup(
+    getter => ({ get value () { return getter() } }),
+    () => Promise.resolve(),
+    callback => unmountCallbacks.push(callback),
+    callback => mountedCallbacks.push(callback),
+    value => ({ value }),
+    (source, callback, options) => watchers.push({ source, callback, options }),
+    [],
+    document,
+    HarnessElement,
+    () => props,
+    () => () => {}
+  )
+  lifecycle.mount = async () => { await Promise.all(mountedCallbacks.map(callback => callback())) }
+  lifecycle.unmount = () => unmountCallbacks.forEach(callback => callback())
+  return lifecycle
+}
+
+const keyEvent = (shiftKey = false) => ({
+  key: 'Tab',
+  shiftKey,
+  prevented: false,
+  preventDefault () { this.prevented = true }
+})
+
+const mountOnboardingHarness = ({ initialActive = 'body', throwOnInitialFocus = false } = {}) => {
+  const document = new HarnessDocument()
+  const appRoot = new HarnessElement(document, 'appRoot')
+  const externalControl = new HarnessElement(document, 'externalControl')
+  const overlay = new HarnessElement(document, 'overlay')
+  const dialog = new HarnessElement(document, 'dialog')
+  const first = new HarnessElement(document, 'first')
+  const last = new HarnessElement(document, 'last')
+  const reopen = new HarnessElement(document, 'reopen')
+  const previous = new HarnessElement(document, 'previous')
+
+  appRoot.setAttribute('inert', 'preserved-inert')
+  appRoot.inert = true
+  appRoot.setAttribute('aria-hidden', 'false')
+  externalControl.setAttribute('aria-hidden', 'preserved-external')
+  externalControl.inert = false
+  overlay.append(dialog)
+  dialog.append(first, last)
+  dialog.focusables = [first, last]
+  first.throwOnFocus = throwOnInitialFocus
+  appRoot.append(reopen, previous)
+  document.body.append(appRoot, externalControl, overlay)
+
+  if (initialActive === 'previous') document.setActiveElement(previous, false)
+  const lifecycle = loadOnboardingLifecycle({ document, props: { modelValue: true, returnFocusTarget: reopen } })
+  lifecycle.overlayRef.value = overlay
+  lifecycle.dialogRef.value = dialog
+  return { document, lifecycle, appRoot, externalControl, overlay, dialog, first, last, reopen, previous }
+}
+
+test('the executable onboarding DOM harness isolates every body sibling and contains Tab at dialog, boundaries, and outside focus', async () => {
+  const fixture = mountOnboardingHarness()
+  const { document, lifecycle, appRoot, externalControl, overlay, dialog, first, last } = fixture
+
+  await lifecycle.mount()
+  assert.equal(document.activeElement, first, 'automatic open focuses the first dialog control, never body or the dialog root')
+  assert.equal(appRoot.getAttribute('inert'), '')
+  assert.equal(appRoot.inert, true)
+  assert.equal(appRoot.getAttribute('aria-hidden'), 'true')
+  assert.equal(externalControl.getAttribute('inert'), '')
+  assert.equal(externalControl.inert, true)
+  assert.equal(externalControl.getAttribute('aria-hidden'), 'true')
+  assert.equal(overlay.hasAttribute('inert'), false, 'the teleported modal remains outside the isolated sibling set')
+
+  const reverse = keyEvent(true)
+  lifecycle.handleDialogKeydown(reverse)
+  assert.equal(reverse.prevented, true)
+  assert.equal(document.activeElement, last, 'initial Shift+Tab cycles from first to last')
+
+  const forward = keyEvent()
+  lifecycle.handleDialogKeydown(forward)
+  assert.equal(forward.prevented, true)
+  assert.equal(document.activeElement, first, 'Tab cycles from last to first')
+
+  document.setActiveElement(dialog, false)
+  const fromDialog = keyEvent(true)
+  lifecycle.handleDialogKeydown(fromDialog)
+  assert.equal(fromDialog.prevented, true)
+  assert.equal(document.activeElement, last, 'reverse Tab at dialog root stays contained')
+
+  document.setActiveElement(overlay, false)
+  const fromOverlay = keyEvent()
+  lifecycle.handleDialogKeydown(fromOverlay)
+  assert.equal(fromOverlay.prevented, true)
+  assert.equal(document.activeElement, first, 'forward Tab at modal root stays contained')
+
+  externalControl.focus()
+  assert.equal(document.activeElement, first, 'focusin outside the dialog is recaptured')
+})
+
+test('the executable onboarding DOM harness restores exact sibling state and auto-open falls back to reopen on close and unmount', async () => {
+  const fixture = mountOnboardingHarness()
+  const { document, lifecycle, appRoot, externalControl, reopen } = fixture
+
+  await lifecycle.mount()
+  lifecycle.closeDialog()
+  assert.equal(document.activeElement, reopen, 'body is not captured as a return target')
+  assert.equal(appRoot.getAttribute('inert'), 'preserved-inert')
+  assert.equal(appRoot.inert, true)
+  assert.equal(appRoot.getAttribute('aria-hidden'), 'false')
+  assert.equal(externalControl.hasAttribute('inert'), false)
+  assert.equal(externalControl.inert, false)
+  assert.equal(externalControl.getAttribute('aria-hidden'), 'preserved-external')
+
+  await lifecycle.mount()
+  lifecycle.unmount()
+  assert.equal(document.activeElement, reopen)
+  assert.equal(appRoot.getAttribute('inert'), 'preserved-inert')
+  assert.equal(appRoot.getAttribute('aria-hidden'), 'false')
+  assert.equal(externalControl.hasAttribute('inert'), false)
+  assert.equal(externalControl.getAttribute('aria-hidden'), 'preserved-external')
+})
+
+test('the executable onboarding DOM harness cleans up isolation when opening focus throws', async () => {
+  const fixture = mountOnboardingHarness({ throwOnInitialFocus: true })
+  const { document, lifecycle, appRoot, externalControl, reopen } = fixture
+
+  await lifecycle.mount()
+  assert.equal(document.activeElement, reopen, 'open failure restores fallback focus')
+  assert.equal(appRoot.getAttribute('inert'), 'preserved-inert')
+  assert.equal(appRoot.getAttribute('aria-hidden'), 'false')
+  assert.equal(externalControl.hasAttribute('inert'), false)
+  assert.equal(externalControl.getAttribute('aria-hidden'), 'preserved-external')
 })
