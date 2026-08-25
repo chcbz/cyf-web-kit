@@ -1,11 +1,14 @@
 <template>
-  <div class="juyi-page" :class="{ 'is-panel-open': activePanel }">
+  <div class="juyi-page" :class="{ 'is-panel-open': activePanel, [`experience-${experienceMode}`]: true }">
     <HallStage
       :agent-bubbles="agentBubbles"
       :agent-key="agentKey"
       :agent-style="sceneAgentStyle"
       :hidden-agent-count="hiddenAgentCount"
+      :experience-mode="experienceMode"
       :interaction-locked="Boolean(activePanel)"
+      :orientation-hint="orientationHint"
+      :orientation-request-pending="orientationRequestPending"
       :portrait-name="portraitName"
       :portrait-short-name="portraitShortName"
       :portrait-style="portraitStyle"
@@ -22,6 +25,7 @@
       :visible-agents="visibleAgents"
       @new-conversation="handleNewHallConversation"
       @open-panel="handleStagePanelOpen"
+      @request-landscape="requestLandscape"
       @refresh-hall="refreshHall"
       @select-agent="selectAgent"
       @simulation-phase-events="handleSimulationPhaseEvents"
@@ -258,6 +262,7 @@ import { useHallCommandQueue } from '@/composables/juyiting/useHallCommandQueue'
 import { useHallConversation } from '@/composables/juyiting/useHallConversation'
 import { useHallData } from '@/composables/juyiting/useHallData'
 import { useHallLibrary } from '@/composables/juyiting/useHallLibrary'
+import { useHallExperienceMode } from '@/composables/juyiting/useHallExperienceMode'
 import { focusHallPanel, restorePanelFocus, trapPanelFocus, useHallPanels } from '@/composables/juyiting/useHallPanels'
 import { useHallScene } from '@/composables/juyiting/useHallScene'
 import { useHallSceneState } from '@/composables/juyiting/useHallSceneState'
@@ -312,7 +317,14 @@ const renderedPanel = ref('')
 const hallRefreshing = ref(false)
 const agentBubbles = ref({})
 const outgoingMetadata = ref({})
-const { panelLayout } = useHallPanels()
+const {
+  experienceMode,
+  isMobileCoarse,
+  orientationHint,
+  orientationRequestPending,
+  requestLandscape
+} = useHallExperienceMode()
+const { panelLayout } = useHallPanels({ experienceMode, isMobileCoarse })
 const panelRef = ref(null)
 const panelTitleId = 'juyiting-floating-panel-title'
 let panelPriorFocus = null

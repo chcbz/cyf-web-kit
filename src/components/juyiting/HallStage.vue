@@ -26,9 +26,9 @@
         </button>
         <button
           class="tool-action orientation-action"
-          :disabled="isSceneMounting || orientationRequestPending"
-          :title="sceneMode === 'landscape' ? '切回竖屏视图' : '切到横屏视图'"
-          @click="toggleOrientationMode"
+          :disabled="isSceneMounting || orientationRequestPending || experienceMode === 'landscape-map'"
+          title="请求横屏全景"
+          @click="$emit('request-landscape')"
         >
           <span
             class="orientation-glyph"
@@ -48,8 +48,6 @@
       :class="{
         'is-melon-ready': melonReady,
         'has-scene-error': Boolean(sceneError),
-        'is-device-landscape': deviceLandscape,
-        'is-app-landscape': orientationMode === 'landscape',
         'is-scene-landscape': sceneMode === 'landscape',
         'is-scene-portrait': sceneMode === 'portrait'
       }"
@@ -104,7 +102,10 @@ const props = defineProps({
   agentKey: { type: Function, required: true },
   agentStyle: { type: Function, required: true },
   hiddenAgentCount: { type: Number, default: 0 },
+  experienceMode: { type: String, default: 'landscape-map' },
   interactionLocked: { type: Boolean, default: false },
+  orientationHint: { type: String, default: '' },
+  orientationRequestPending: { type: Boolean, default: false },
   portraitName: { type: Function, required: true },
   portraitShortName: { type: Function, required: true },
   portraitStyle: { type: Function, required: true },
@@ -124,6 +125,7 @@ const props = defineProps({
 const emit = defineEmits([
   'new-conversation',
   'open-panel',
+  'request-landscape',
   'refresh-hall',
   'select-agent',
   'simulation-phase-events',
@@ -137,14 +139,8 @@ const melonReady = ref(false)
 const sceneError = ref('')
 const isSceneMounting = ref(false)
 const showReturnButton = ref(false)
-const orientationHint = ref('')
-const orientationRequestPending = ref(false)
-const deviceLandscape = ref(false)
-const orientationMode = ref('auto')
 let sceneMountAttempt = 0
 let isUnmounted = false
-let orientationMedia = null
-let orientationMediaHandler = null
 let mountTimeout = null
 let previousLayoutViewport = { width: 0, height: 0 }
 let previousVisualHeight = 0
@@ -157,10 +153,7 @@ let lastOrientationDimensions = ''
 let stageResizeObserver = null
 let returnFrame = null
 let resetPollRemaining = 0
-let orientationRequestGeneration = 0
 let currentGameDestroyed = false
-let ownsFullscreen = false
-let ownsOrientationLock = false
 let fallbackFrameId = 0
 const fallbackFrames = new Map()
 
@@ -185,12 +178,7 @@ const loadingUnlockedAttempts = new Set()
 
 const presetZooms = { mobilePortrait: 1.25, mobileLandscape: 1.05, tabletLandscape: 0.92, desktop: 0.84 }
 
-const sceneMode = computed(() => {
-  if (orientationMode.value === 'landscape' || orientationMode.value === 'portrait') {
-    return orientationMode.value
-  }
-  return deviceLandscape.value ? 'landscape' : 'portrait'
-})
+const sceneMode = computed(() => props.experienceMode === 'landscape-map' ? 'landscape' : 'portrait')
 
 const sceneDebugRequested = () => (
   typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('scene-debug') === '1'
@@ -317,25 +305,6 @@ const scheduleViewportResize = ({ orientationChanged = false } = {}) => {
   resizeFrame = requestStageFrame(evaluateViewportResize)
 }
 
-const updateDeviceOrientation = (event) => {
-  const mediaMatches = typeof event?.matches === 'boolean' ? event.matches : orientationMedia?.matches
-  deviceLandscape.value = typeof mediaMatches === 'boolean' ? mediaMatches : window.innerWidth > window.innerHeight
-  scheduleViewportResize({ orientationChanged: Boolean(event) })
-}
-
-const setupOrientationTracking = () => {
-  if (typeof window === 'undefined') return
-  orientationMedia = window.matchMedia?.('(orientation: landscape)') || null
-  previousLayoutViewport = viewportNow()
-  previousVisualHeight = window.visualViewport?.height || previousLayoutViewport.height
-  document.documentElement.style.setProperty('--hall-visual-height', `${previousVisualHeight}px`)
-  orientationMediaHandler = event => updateDeviceOrientation(event)
-  orientationMedia?.addEventListener?.('change', orientationMediaHandler)
-  window.addEventListener?.('resize', handleWindowResize)
-  window.visualViewport?.addEventListener?.('resize', handleVisualResize)
-  updateDeviceOrientation()
-}
-
 const handleWindowResize = () => scheduleViewportResize()
 const handleVisualResize = () => scheduleViewportResize()
 
@@ -351,110 +320,6 @@ const teardownStageResizeObserver = () => {
   stageResizeObserver = null
 }
 
-const teardownOrientationTracking = () => {
-  orientationMedia?.removeEventListener?.('change', orientationMediaHandler)
-  window.removeEventListener?.('resize', handleWindowResize)
-  window.visualViewport?.removeEventListener?.('resize', handleVisualResize)
-  orientationMedia = null
-  orientationMediaHandler = null
-  if (resizeFrame !== null) cancelStageFrame(resizeFrame)
-  resizeFrame = null
-}
-
-const isCurrentOrientationRequest = token => (
-  !isUnmounted && token === orientationRequestGeneration && orientationMode.value === 'landscape'
-)
-
-const releaseAcquiredOrientation = async ({ fullscreen = false, orientation = false } = {}) => {
-  if (orientation) {
-    try {
-      screen.orientation?.unlock?.()
-    } catch { /* best-effort orientation cleanup */ }
-  }
-  if (fullscreen) {
-    try {
-      await document.exitFullscreen?.()
-    } catch { /* best-effort fullscreen cleanup */ }
-  }
-}
-
-const releaseOwnedOrientation = async () => {
-  const acquired = { fullscreen: ownsFullscreen, orientation: ownsOrientationLock }
-  ownsFullscreen = false
-  ownsOrientationLock = false
-  await releaseAcquiredOrientation(acquired)
-}
-
-const requestMiniProgramOrientation = (mode) => {
-  const miniProgram = window.wx?.miniProgram
-  if (typeof miniProgram?.redirectTo !== 'function') return false
-  try {
-    miniProgram.redirectTo({
-      url: mode === 'landscape' ? '/pages/landscape/index' : '/pages/index/index'
-    })
-    return true
-  } catch {
-    return false
-  }
-}
-
-const requestLandscapeLock = async (token) => {
-  let failed = false
-  let acquiredFullscreen = false
-  let acquiredOrientation = false
-  const requestFullscreen = document.documentElement.requestFullscreen
-  const lockOrientation = screen.orientation?.lock
-  const hostFullscreen = Boolean(document.fullscreenElement)
-  if (!hostFullscreen && typeof requestFullscreen !== 'function') failed = true
-  else if (!hostFullscreen) {
-    try {
-      await requestFullscreen.call(document.documentElement)
-      acquiredFullscreen = true
-      ownsFullscreen = true
-    } catch { failed = true }
-  }
-  if (!isCurrentOrientationRequest(token)) {
-    await releaseAcquiredOrientation({ fullscreen: acquiredFullscreen })
-    if (acquiredFullscreen) ownsFullscreen = false
-    return
-  }
-  if (typeof lockOrientation !== 'function') failed = true
-  else {
-    try {
-      await lockOrientation.call(screen.orientation, 'landscape')
-      acquiredOrientation = true
-      ownsOrientationLock = true
-    } catch { failed = true }
-  }
-  if (!isCurrentOrientationRequest(token)) {
-    await releaseAcquiredOrientation({ fullscreen: acquiredFullscreen, orientation: acquiredOrientation })
-    if (acquiredFullscreen) ownsFullscreen = false
-    if (acquiredOrientation) ownsOrientationLock = false
-    return
-  }
-  if (isCurrentOrientationRequest(token)) orientationHint.value = failed ? '请旋转手机横屏查看' : ''
-}
-
-const toggleOrientationMode = async () => {
-  if (isSceneMounting.value || orientationRequestPending.value) return
-  const nextMode = sceneMode.value === 'landscape' ? 'portrait' : 'landscape'
-  if (requestMiniProgramOrientation(nextMode)) {
-    orientationHint.value = ''
-    return
-  }
-  const requestToken = ++orientationRequestGeneration
-  orientationRequestPending.value = true
-  orientationMode.value = nextMode
-  try {
-    if (nextMode === 'landscape') await requestLandscapeLock(requestToken)
-    if (nextMode === 'portrait') {
-      orientationHint.value = ''
-      await releaseOwnedOrientation()
-    }
-  } finally {
-    if (!isUnmounted && requestToken === orientationRequestGeneration) orientationRequestPending.value = false
-  }
-}
 
 const mountScene = async () => {
   if (isUnmounted || isSceneMounting.value) return
@@ -594,7 +459,11 @@ const returnToMainHall = () => {
 
 onMounted(() => {
   if (sceneDebugRequested()) window.__JYTING_GAME__ = juyitingGame
-  setupOrientationTracking()
+  previousLayoutViewport = viewportNow()
+  previousVisualHeight = window.visualViewport?.height || previousLayoutViewport.height
+  document.documentElement.style.setProperty('--hall-visual-height', `${previousVisualHeight}px`)
+  window.addEventListener?.('resize', handleWindowResize)
+  window.visualViewport?.addEventListener?.('resize', handleVisualResize)
   setupStageResizeObserver()
   mountScene()
 })
@@ -602,13 +471,13 @@ onMounted(() => {
 onBeforeUnmount(() => {
   isUnmounted = true
   sceneMountAttempt += 1
-  orientationRequestGeneration += 1
-  orientationRequestPending.value = false
   teardownStageResizeObserver()
   if (window.__JYTING_GAME__ === juyitingGame) delete window.__JYTING_GAME__
-  void releaseOwnedOrientation()
   clearMountTimeout()
-  teardownOrientationTracking()
+  window.removeEventListener?.('resize', handleWindowResize)
+  window.visualViewport?.removeEventListener?.('resize', handleVisualResize)
+  if (resizeFrame !== null) cancelStageFrame(resizeFrame)
+  resizeFrame = null
   if (returnFrame !== null) cancelStageFrame(returnFrame)
   returnFrame = null
   resetPollRemaining = 0

@@ -131,10 +131,9 @@ describe('JuyiHall component behavior', () => {
   it('classifies panel layouts for desktop, landscape touch, and portrait touch viewports', async () => {
     const { classifyPanelLayout } = await import('../src/composables/juyiting/useHallPanels.js')
 
-    expect(classifyPanelLayout({ width: 1280, height: 720, coarsePointer: false })).to.equal('center-modal')
-    expect(classifyPanelLayout({ width: 900, height: 500, coarsePointer: true })).to.equal('right-drawer')
-    expect(classifyPanelLayout({ width: 500, height: 900, coarsePointer: true })).to.equal('bottom-drawer')
-    expect(classifyPanelLayout({ width: 500, height: 420, coarsePointer: true, orientationLandscape: false })).to.equal('bottom-drawer')
+    expect(classifyPanelLayout({ isMobileCoarse: false, experienceMode: 'portrait-command' })).to.equal('center-modal')
+    expect(classifyPanelLayout({ isMobileCoarse: true, experienceMode: 'landscape-map' })).to.equal('right-drawer')
+    expect(classifyPanelLayout({ isMobileCoarse: true, experienceMode: 'portrait-command' })).to.equal('bottom-drawer')
   })
 
   it('exposes accessible modal dialog wiring and focus lifecycle hooks', () => {
@@ -178,40 +177,23 @@ describe('JuyiHall component behavior', () => {
     }
   })
 
-  it('keeps a portrait bottom drawer while the keyboard shrinks innerHeight', async () => {
-    const originalMatchMedia = global.window.matchMedia
-    const originalInnerWidth = global.window.innerWidth
-    const originalInnerHeight = global.window.innerHeight
-    Object.defineProperty(global.window, 'innerWidth', { configurable: true, writable: true, value: 500 })
-    Object.defineProperty(global.window, 'innerHeight', { configurable: true, writable: true, value: 900 })
-    global.window.matchMedia = query => ({
-      media: query,
-      matches: query.includes('pointer'),
-      addEventListener: () => {},
-      removeEventListener: () => {}
-    })
+  it('keeps panel layout a pure experience-mode projection', async () => {
     const { useHallPanels } = await import('../src/composables/juyiting/useHallPanels.js')
+    const experienceMode = Vue.ref('portrait-command')
+    const isMobileCoarse = Vue.ref(true)
     const Harness = {
       setup() {
-        const { panelLayout } = useHallPanels()
+        const { panelLayout } = useHallPanels({ experienceMode, isMobileCoarse })
         return () => Vue.h('div', { class: panelLayout.value }, panelLayout.value)
       }
     }
-    let wrapper
-    try {
-      wrapper = mount(Harness)
-      await Vue.nextTick()
-      expect(wrapper.classes()).to.include('bottom-drawer')
-      global.window.innerHeight = 400
-      global.window.dispatchEvent(new global.window.Event('resize'))
-      await Vue.nextTick()
-      expect(wrapper.classes()).to.include('bottom-drawer')
-    } finally {
-      wrapper?.unmount()
-      global.window.matchMedia = originalMatchMedia
-      Object.defineProperty(global.window, 'innerWidth', { configurable: true, value: originalInnerWidth })
-      Object.defineProperty(global.window, 'innerHeight', { configurable: true, value: originalInnerHeight })
-    }
+    const wrapper = mount(Harness)
+    await Vue.nextTick()
+    expect(wrapper.classes()).to.include('bottom-drawer')
+    experienceMode.value = 'landscape-map'
+    await Vue.nextTick()
+    expect(wrapper.classes()).to.include('right-drawer')
+    wrapper.unmount()
   })
 
   it('wires the exact responsive panel class and immediate HallStage interaction lock', () => {
@@ -289,17 +271,14 @@ describe('JuyiHall component behavior', () => {
       innerWidth: global.window.innerWidth,
       innerHeight: global.window.innerHeight,
       visualViewport: global.window.visualViewport,
-      matchMedia: global.window.matchMedia,
       requestAnimationFrame: global.window.requestAnimationFrame,
       cancelAnimationFrame: global.window.cancelAnimationFrame
     }
     const visualListeners = []
-    const orientationListeners = []
     const frames = new Map()
     const resizeCalls = []
     let frameId = 0
     let visualHeight = 800
-    let landscape = false
     Object.defineProperty(global.window, 'innerWidth', { configurable: true, value: 500, writable: true })
     Object.defineProperty(global.window, 'innerHeight', { configurable: true, value: 800, writable: true })
     Object.defineProperty(global.window, 'visualViewport', { configurable: true, value: {
@@ -307,12 +286,6 @@ describe('JuyiHall component behavior', () => {
       addEventListener: (_event, callback) => visualListeners.push(callback),
       removeEventListener: () => {}
     } })
-    global.window.matchMedia = query => ({
-      media: query,
-      get matches() { return query.includes('orientation') ? landscape : true },
-      addEventListener: (_event, callback) => { if (query.includes('orientation')) orientationListeners.push(callback) },
-      removeEventListener: () => {}
-    })
     global.window.requestAnimationFrame = callback => { frames.set(++frameId, callback); return frameId }
     global.window.cancelAnimationFrame = id => frames.delete(id)
     const flushFrame = () => {
@@ -354,11 +327,9 @@ describe('JuyiHall component behavior', () => {
       expect(resizeCalls.at(-1).kind).to.equal('keyboard')
 
       resizeCalls.length = 0
-      landscape = true
       global.window.innerWidth = 800
       global.window.innerHeight = 500
       visualHeight = 500
-      orientationListeners.forEach(listener => listener({ matches: true }))
       global.window.dispatchEvent(new global.window.Event('resize'))
       visualListeners.forEach(listener => listener())
       flushFrame()
@@ -370,7 +341,6 @@ describe('JuyiHall component behavior', () => {
       Object.defineProperty(global.window, 'innerWidth', { configurable: true, value: originals.innerWidth })
       Object.defineProperty(global.window, 'innerHeight', { configurable: true, value: originals.innerHeight })
       Object.defineProperty(global.window, 'visualViewport', { configurable: true, value: originals.visualViewport })
-      global.window.matchMedia = originals.matchMedia
       global.window.requestAnimationFrame = originals.requestAnimationFrame
       global.window.cancelAnimationFrame = originals.cancelAnimationFrame
     }
@@ -899,250 +869,30 @@ describe('JuyiHall component behavior', () => {
     expect(zoomCalls).to.deep.equal([])
   })
 
-  it('adapts the hall stage orientation and exposes a landscape view toggle', async () => {
-    const originalMatchMedia = global.window.matchMedia
-    const originalFullscreen = global.document.documentElement.requestFullscreen
-    const originalExitFullscreen = global.document.exitFullscreen
-    const originalScreen = global.screen
-    const listeners = []
-    const resizeCalls = []
-    let fullscreenCalls = 0
-    let exitFullscreenCalls = 0
-    let unlockCalls = 0
-    const lockCalls = []
-    let matches = false
-
-    global.window.matchMedia = query => ({
-      media: query,
-      get matches() {
-        return matches
-      },
-      addEventListener: (_event, callback) => listeners.push(callback),
-      removeEventListener: (_event, callback) => {
-        const index = listeners.indexOf(callback)
-        if (index >= 0) listeners.splice(index, 1)
-      }
-    })
-    global.document.documentElement.requestFullscreen = async () => {
-      fullscreenCalls += 1
-    }
-    global.document.exitFullscreen = async () => {
-      exitFullscreenCalls += 1
-    }
-    global.screen = {
-      orientation: {
-        lock: async mode => lockCalls.push(mode),
-        unlock: () => {
-          unlockCalls += 1
-        }
-      }
-    }
+  it('renders HallStage from the supplied experience mode and delegates orientation requests', async () => {
     hallGameMock = {
-      destroy: () => {},
-      resizeViewport: change => resizeCalls.push(change),
-      mount: async (_container, options = {}) => {
-        options.onReady?.()
-      },
-      setSelectedAgent: () => {},
-      start: () => {},
-      syncAgents: () => {},
-      syncHotspots: () => {}
+      destroy: () => {}, mount: async (_container, options = {}) => options.onReady?.(),
+      setSelectedAgent: () => {}, start: () => {}, syncAgents: () => {}, syncHotspots: () => {}
     }
     HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
-
-    let wrapper
-    try {
-      wrapper = mount(HallStage, {
-        global: { stubs },
-        props: makeHallStageProps()
+    const wrapper = mount(HallStage, {
+      global: { stubs },
+      props: makeHallStageProps({
+        experienceMode: 'portrait-command',
+        orientationHint: '请旋转手机横屏查看'
       })
-      await flushPromises()
+    })
+    await flushPromises()
 
-      const board = wrapper.find('.hall-board')
-      const toggle = wrapper.find('.orientation-action')
+    expect(wrapper.find('.hall-board').classes()).to.include('is-scene-portrait')
+    expect(wrapper.find('.orientation-hint').text()).to.equal('请旋转手机横屏查看')
+    await wrapper.find('.orientation-action').trigger('click')
+    expect(wrapper.emitted('request-landscape')).to.have.length(1)
 
-      expect(board.classes()).to.include('is-scene-portrait')
-      expect(toggle.exists()).to.equal(true)
-      expect(toggle.text()).to.include('横屏')
-      expect(resizeCalls.some(call => call.kind === 'layout')).to.equal(true)
-
-      await toggle.trigger('click')
-      await flushPromises()
-
-      expect(fullscreenCalls).to.equal(1)
-      expect(lockCalls).to.deep.equal(['landscape'])
-      expect(wrapper.find('.hall-board').classes()).to.include('is-app-landscape')
-      expect(wrapper.find('.orientation-hint').exists()).to.equal(false)
-      expect(resizeCalls.filter(call => call.kind === 'orientation')).to.have.length(0)
-
-      await toggle.trigger('click')
-      await flushPromises()
-
-      expect(unlockCalls).to.equal(1)
-      expect(exitFullscreenCalls).to.equal(1)
-      expect(wrapper.find('.hall-board').classes()).not.to.include('is-app-landscape')
-      expect(wrapper.find('.hall-board').classes()).to.include('is-scene-portrait')
-      expect(wrapper.find('.orientation-action').text()).to.include('横屏')
-      expect(hallGameMock.fitToViewport).to.equal(undefined)
-
-      matches = true
-      listeners.forEach(listener => listener({ matches: true }))
-      await flushPromises()
-
-      expect(wrapper.find('.hall-board').classes()).to.include('is-device-landscape')
-      expect(resizeCalls.some(call => call.kind === 'orientation' && call.orientationChanged === true)).to.equal(true)
-    } finally {
-      wrapper?.unmount()
-      global.window.matchMedia = originalMatchMedia
-      global.document.documentElement.requestFullscreen = originalFullscreen
-      global.document.exitFullscreen = originalExitFullscreen
-      global.screen = originalScreen
-    }
-  })
-
-  it('keeps the page unrotated and asks for a physical rotation when orientation APIs are missing', async () => {
-    const originalFullscreen = global.document.documentElement.requestFullscreen
-    const originalScreen = global.screen
-    const originalMatchMedia = global.window.matchMedia
-    global.document.documentElement.requestFullscreen = undefined
-    global.screen = { orientation: {} }
-    global.window.matchMedia = query => ({ media: query, matches: false, addEventListener: () => {}, removeEventListener: () => {} })
-    hallGameMock = {
-      destroy: () => {}, mount: async (_container, options = {}) => options.onReady?.(),
-      setSelectedAgent: () => {}, start: () => {}, syncAgents: () => {}, syncHotspots: () => {}
-    }
-    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
-
-    let wrapper
-    try {
-      wrapper = mount(HallStage, { global: { stubs }, props: makeHallStageProps() })
-      await flushPromises()
-      await wrapper.find('.orientation-action').trigger('click')
-      await flushPromises()
-      expect(wrapper.classes()).not.to.include('is-virtual-landscape')
-      expect(wrapper.find('.orientation-hint').text()).to.equal('请旋转手机横屏查看')
-    } finally {
-      wrapper?.unmount()
-      global.document.documentElement.requestFullscreen = originalFullscreen
-      global.screen = originalScreen
-      global.window.matchMedia = originalMatchMedia
-    }
-  })
-
-  it('shows the rotation hint when fullscreen or orientation lock rejects', async () => {
-    const originalFullscreen = global.document.documentElement.requestFullscreen
-    const originalScreen = global.screen
-    const originalMatchMedia = global.window.matchMedia
-    global.document.documentElement.requestFullscreen = async () => { throw new Error('denied') }
-    global.screen = { orientation: { lock: async () => { throw new Error('denied') } } }
-    global.window.matchMedia = query => ({ media: query, matches: false, addEventListener: () => {}, removeEventListener: () => {} })
-    hallGameMock = {
-      destroy: () => {}, mount: async (_container, options = {}) => options.onReady?.(),
-      setSelectedAgent: () => {}, start: () => {}, syncAgents: () => {}, syncHotspots: () => {}
-    }
-    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
-
-    let wrapper
-    try {
-      wrapper = mount(HallStage, { global: { stubs }, props: makeHallStageProps() })
-      await flushPromises()
-      await wrapper.find('.orientation-action').trigger('click')
-      await flushPromises()
-      expect(wrapper.classes()).not.to.include('is-virtual-landscape')
-      expect(wrapper.find('.orientation-hint').text()).to.equal('请旋转手机横屏查看')
-    } finally {
-      wrapper?.unmount()
-      global.document.documentElement.requestFullscreen = originalFullscreen
-      global.screen = originalScreen
-      global.window.matchMedia = originalMatchMedia
-    }
-  })
-
-  it('releases fullscreen and orientation when a deferred request completes after unmount', async () => {
-    const originalFullscreen = global.document.documentElement.requestFullscreen
-    const originalExitFullscreen = global.document.exitFullscreen
-    const originalScreen = global.screen
-    const originalMatchMedia = global.window.matchMedia
-    const fullscreen = deferred()
-    let fullscreenCalls = 0
-    let lockCalls = 0
-    let unlockCalls = 0
-    let exitFullscreenCalls = 0
-    global.window.matchMedia = query => ({ media: query, matches: false, addEventListener: () => {}, removeEventListener: () => {} })
-    global.document.documentElement.requestFullscreen = () => { fullscreenCalls += 1; return fullscreen.promise }
-    global.document.exitFullscreen = async () => { exitFullscreenCalls += 1 }
-    global.screen = { orientation: {
-      lock: async () => { lockCalls += 1 },
-      unlock: () => { unlockCalls += 1 }
-    } }
-    hallGameMock = {
-      destroy: () => {}, mount: async (_container, options = {}) => options.onReady?.(),
-      setSelectedAgent: () => {}, start: () => {}, syncAgents: () => {}, syncHotspots: () => {}
-    }
-    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
-    let wrapper
-    try {
-      wrapper = mount(HallStage, { global: { stubs }, props: makeHallStageProps() })
-      await flushPromises()
-      const toggle = wrapper.find('.orientation-action')
-      await toggle.trigger('click')
-      await toggle.trigger('click')
-      expect(fullscreenCalls).to.equal(1)
-      expect(toggle.attributes('disabled')).to.not.equal(undefined)
-      wrapper.unmount()
-      wrapper = null
-      expect(unlockCalls).to.equal(0)
-      expect(exitFullscreenCalls).to.equal(0)
-      fullscreen.resolve()
-      await flushPromises()
-      expect(lockCalls).to.equal(0)
-      expect(unlockCalls).to.equal(0)
-      expect(exitFullscreenCalls).to.equal(1)
-    } finally {
-      wrapper?.unmount()
-      global.document.documentElement.requestFullscreen = originalFullscreen
-      global.document.exitFullscreen = originalExitFullscreen
-      global.screen = originalScreen
-      global.window.matchMedia = originalMatchMedia
-    }
-  })
-
-  it('does not release host-owned fullscreen or orientation state', async () => {
-    const originalExitFullscreen = global.document.exitFullscreen
-    const originalScreen = global.screen
-    const originalMatchMedia = global.window.matchMedia
-    const fullscreenDescriptor = Object.getOwnPropertyDescriptor(global.document, 'fullscreenElement')
-    const hostFullscreen = document.createElement('div')
-    let unlockCalls = 0
-    let exitFullscreenCalls = 0
-    Object.defineProperty(global.document, 'fullscreenElement', { configurable: true, value: hostFullscreen })
-    global.document.exitFullscreen = async () => { exitFullscreenCalls += 1 }
-    global.screen = { orientation: { unlock: () => { unlockCalls += 1 } } }
-    global.window.matchMedia = query => ({ media: query, matches: query.includes('orientation'), addEventListener: () => {}, removeEventListener: () => {} })
-    hallGameMock = {
-      destroy: () => {}, mount: async (_container, options = {}) => options.onReady?.(),
-      setSelectedAgent: () => {}, start: () => {}, syncAgents: () => {}, syncHotspots: () => {}
-    }
-    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
-    let wrapper
-    try {
-      wrapper = mount(HallStage, { global: { stubs }, props: makeHallStageProps() })
-      await flushPromises()
-      await wrapper.find('.orientation-action').trigger('click')
-      await flushPromises()
-      wrapper.unmount()
-      wrapper = null
-      await flushPromises()
-      expect(unlockCalls).to.equal(0)
-      expect(exitFullscreenCalls).to.equal(0)
-    } finally {
-      wrapper?.unmount()
-      if (fullscreenDescriptor) Object.defineProperty(global.document, 'fullscreenElement', fullscreenDescriptor)
-      else delete global.document.fullscreenElement
-      global.document.exitFullscreen = originalExitFullscreen
-      global.screen = originalScreen
-      global.window.matchMedia = originalMatchMedia
-    }
+    await wrapper.setProps({ experienceMode: 'landscape-map', orientationHint: '' })
+    expect(wrapper.find('.hall-board').classes()).to.include('is-scene-landscape')
+    expect(wrapper.find('.orientation-action').attributes('disabled')).to.not.equal(undefined)
+    wrapper.unmount()
   })
 
   it('uses supported Varlet icons for the orientation toggle', () => {

@@ -1,10 +1,8 @@
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, unref } from 'vue'
 
-export const classifyPanelLayout = ({ width, height, coarsePointer, orientationLandscape }) => {
-  if (!coarsePointer && width >= 1024) return 'center-modal'
-  return (typeof orientationLandscape === 'boolean' ? orientationLandscape : width > height)
-    ? 'right-drawer'
-    : 'bottom-drawer'
+export const classifyPanelLayout = ({ isMobileCoarse, experienceMode }) => {
+  if (!isMobileCoarse) return 'center-modal'
+  return experienceMode === 'landscape-map' ? 'right-drawer' : 'bottom-drawer'
 }
 
 const FOCUSABLE_SELECTOR = [
@@ -53,38 +51,9 @@ export const trapPanelFocus = (event, panel) => {
   return false
 }
 
-export const useHallPanels = () => {
-  const viewport = ref({ width: 0, height: 0, coarsePointer: false })
-  let orientationMedia = null
-  let coarseMedia = null
-
-  const updateViewport = () => {
-    viewport.value = {
-      width: window.innerWidth,
-      height: window.innerHeight,
-      coarsePointer: Boolean(coarseMedia?.matches),
-      orientationLandscape: typeof orientationMedia?.matches === 'boolean'
-        ? orientationMedia.matches
-        : window.innerWidth > window.innerHeight
-    }
-  }
-
-  onMounted(() => {
-    orientationMedia = window.matchMedia?.('(orientation: landscape)') || null
-    coarseMedia = window.matchMedia?.('(pointer: coarse)') || null
-    updateViewport()
-    window.addEventListener('resize', updateViewport)
-    orientationMedia?.addEventListener?.('change', updateViewport)
-    coarseMedia?.addEventListener?.('change', updateViewport)
-  })
-  onBeforeUnmount(() => {
-    window.removeEventListener('resize', updateViewport)
-    orientationMedia?.removeEventListener?.('change', updateViewport)
-    coarseMedia?.removeEventListener?.('change', updateViewport)
-  })
-
-  return {
-    panelLayout: computed(() => classifyPanelLayout(viewport.value)),
-    updatePanelLayout: updateViewport
-  }
-}
+export const useHallPanels = ({ experienceMode, isMobileCoarse }) => ({
+  panelLayout: computed(() => classifyPanelLayout({
+    experienceMode: unref(experienceMode),
+    isMobileCoarse: unref(isMobileCoarse)
+  }))
+})
