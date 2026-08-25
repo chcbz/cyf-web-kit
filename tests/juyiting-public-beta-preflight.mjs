@@ -3,9 +3,14 @@ import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
   applyLocalTlsPolicy,
+  cleanupFailure,
+  completeTrackedCleanup,
   createSafetyContext,
   credentialValuesFromEnv,
-  sanitizeError
+  fetchApprovedOrigin,
+  PREFLIGHT_CLEANUP_ERROR_CODE,
+  sanitizeError,
+  stopProcessTree
 } from './juyiting-preflight-safety.mjs'
 
 const ALLOWED_ASSET_SCRIPTS = new Set(['validate:juyiting-map', 'validate:juyiting-sprites'])
@@ -18,65 +23,44 @@ const parseOperationTimeout = (env) => {
   return value
 }
 
-const childIsRunning = child => (
-  child && child.exitCode === null && child.signalCode === null
-)
-
-const signalChildProcessTree = (child, signal) => {
-  if (!child) return
-  if (process.platform !== 'win32' && Number.isInteger(child.pid)) {
-    try {
-      process.kill(-child.pid, signal)
-      return
-    } catch {}
+const execFileWithGuard = ({ file, args, cwd, execFileImpl, guard, label, stopProcessTreeImpl }) => {
+  let child
+  let untrack = () => {}
+  let stopPromise
+  const stopTrackedChild = () => {
+    if (!stopPromise) stopPromise = stopProcessTreeImpl({ child, label: `npm ${label}` })
+    return stopPromise
   }
-  if (!childIsRunning(child)) return
-  try {
-    child.kill(signal)
-  } catch {}
-}
 
-const waitForChildExit = (child, timeoutMs) => {
-  if (!childIsRunning(child) || typeof child.once !== 'function') return Promise.resolve()
-  return new Promise(resolvePromise => {
-    const finish = () => {
-      clearTimeout(timer)
-      child.removeListener?.('exit', finish)
-      resolvePromise()
-    }
-    const timer = setTimeout(finish, timeoutMs)
-    timer.unref?.()
-    child.once('exit', finish)
-  })
-}
-
-const stopChildProcessTree = async (child) => {
-  signalChildProcessTree(child, 'SIGTERM')
-  await waitForChildExit(child, 1000)
-  if (process.platform !== 'win32' || childIsRunning(child)) {
-    signalChildProcessTree(child, 'SIGKILL')
-    await waitForChildExit(child, 1000)
-  }
-}
-
-const execFileWithGuard = ({ file, args, cwd, execFileImpl, guard, label }) => {
   const completion = new Promise((resolvePromise, rejectPromise) => {
     guard.beforeBoundary(label)
-    let child
-    let untrack = () => {}
+    let settled = false
+    const finish = error => {
+      if (settled) return
+      settled = true
+      queueMicrotask(async () => {
+        try {
+          await completeTrackedCleanup(stopTrackedChild, untrack)
+          if (error) rejectPromise(error)
+          else resolvePromise()
+        } catch (cleanupError) {
+          rejectPromise(cleanupFailure(
+            error ? [error, cleanupError] : [cleanupError],
+            `${label} failed and cleanup was incomplete`
+          ))
+        }
+      })
+    }
+
     try {
       child = execFileImpl(file, args, {
         cwd,
         detached: process.platform !== 'win32'
-      }, error => {
-        untrack()
-        if (error) rejectPromise(error)
-        else resolvePromise()
-      })
-      untrack = guard.trackCleanup(() => stopChildProcessTree(child))
+      }, finish)
+      child?.once?.('error', finish)
+      untrack = guard.trackCleanup(stopTrackedChild)
     } catch (error) {
-      untrack()
-      rejectPromise(error)
+      finish(error)
     }
   })
   return guard.runPromise(completion, label)
@@ -88,6 +72,7 @@ export async function runNpmScript (script, options = {}) {
   if (!guard) throw new Error('Preflight safety guard is required before npm child spawn')
   const cwd = options.cwd || process.cwd()
   const execFileImpl = options.execFileImpl || execFile
+  const stopProcessTreeImpl = options.stopProcessTreeImpl || stopProcessTree
   const npmExecPath = options.npmExecPath === undefined ? process.env.npm_execpath : options.npmExecPath
   const label = `npm ${script} child spawn`
 
@@ -98,7 +83,8 @@ export async function runNpmScript (script, options = {}) {
       cwd,
       execFileImpl,
       guard,
-      label
+      label,
+      stopProcessTreeImpl
     })
     return
   }
@@ -110,11 +96,14 @@ export async function runNpmScript (script, options = {}) {
       cwd,
       execFileImpl,
       guard,
-      label
+      label,
+      stopProcessTreeImpl
     })
     return
   }
-  await execFileWithGuard({ file: 'npm', args: ['run', script], cwd, execFileImpl, guard, label })
+  await execFileWithGuard({
+    file: 'npm', args: ['run', script], cwd, execFileImpl, guard, label, stopProcessTreeImpl
+  })
 }
 
 const rememberCookie = (state, response) => {
@@ -128,14 +117,22 @@ const rememberCookie = (state, response) => {
 const createRequest = ({ config, guard, fetchImpl, state, timeoutMs }) => async (path, options = {}, label = 'credentialed API request') => {
   guard.beforeBoundary(label)
   const url = new URL(path, config.targets.backend)
-  const response = await guard.runFetch(fetchImpl, url, {
-    ...options,
-    headers: {
-      ...(state.cookie ? { Cookie: state.cookie } : {}),
-      ...(options.headers || {})
+  const response = await fetchApprovedOrigin({
+    guard,
+    fetchImpl,
+    url,
+    options: {
+      ...options,
+      headers: {
+        ...(state.cookie ? { Cookie: state.cookie } : {}),
+        ...(options.headers || {})
+      }
     },
-    redirect: options.redirect || 'manual'
-  }, label, timeoutMs)
+    label,
+    timeoutMs,
+    expectedOrigin: config.targetOrigins.backend,
+    rejectRedirectStatus: false
+  })
   rememberCookie(state, response)
   return response
 }
@@ -143,6 +140,21 @@ const createRequest = ({ config, guard, fetchImpl, state, timeoutMs }) => async 
 const expectText = async (response, pattern, label) => {
   const text = await response.text()
   if (!pattern.test(text)) throw new Error(`${label} response did not match the required shape`)
+}
+
+export const checkFrontendRoute = async ({ config, guard, fetchImpl, timeoutMs }) => {
+  const response = await fetchApprovedOrigin({
+    guard,
+    fetchImpl,
+    url: new URL('/juyiting', config.targets.frontend),
+    options: { method: 'HEAD' },
+    label: 'frontend route request',
+    timeoutMs,
+    expectedOrigin: config.targetOrigins.frontend
+  })
+  if (![200, 304].includes(response.status)) {
+    throw new Error(`frontend route returned HTTP ${response.status}`)
+  }
 }
 
 const login = async ({ request, credentials, guard }) => {
@@ -222,7 +234,9 @@ const record = async ({ checks, name, fn, guard, secrets }) => {
       durationMs: Date.now() - startedAt,
       message: sanitizeError(error, secrets)
     })
-    if (error?.code === 'PREFLIGHT_TERMINATED' || guard.terminated) throw error
+    if (error?.code === 'PREFLIGHT_TERMINATED' ||
+        error?.code === PREFLIGHT_CLEANUP_ERROR_CODE ||
+        guard.terminated) throw error
   }
 }
 
@@ -308,19 +322,12 @@ export async function runPreflight (options = {}) {
       await expectText(response, /"code"\s*:\s*"E0"|status|data/, 'library search')
     })
 
-    await runRecord('frontend juyiting route available', async () => {
-      guard.beforeBoundary('frontend route request')
-      const response = await guard.runFetch(
-        fetchImpl,
-        new URL('/juyiting', config.targets.frontend),
-        { method: 'HEAD' },
-        'frontend route request',
-        timeoutMs
-      )
-      if (![200, 304].includes(response.status)) {
-        throw new Error(`frontend route returned HTTP ${response.status}`)
-      }
-    })
+    await runRecord('frontend juyiting route available', () => checkFrontendRoute({
+      config,
+      guard,
+      fetchImpl,
+      timeoutMs
+    }))
 
     await runRecord('simulation vertical slice browser smoke', async () => {
       guard.beforeBoundary('credentialed OAuth browser smoke')

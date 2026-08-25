@@ -6,14 +6,19 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
-import WebSocket from 'ws'
 import {
   applyLocalTlsPolicy,
+  assertApprovedHttpUrl,
+  cleanupFailure,
+  completeTrackedCleanup,
   createSafetyContext,
   credentialValuesFromEnv,
+  fetchApprovedOrigin,
   isLoopbackUrl,
   redactUrl,
-  sanitizeError
+  sanitizeError,
+  stopProcessTree,
+  waitForProcessTreeExit
 } from './juyiting-preflight-safety.mjs'
 
 const DEBUG_KEY = '__JYTING_SCENE_DEBUG__'
@@ -43,6 +48,146 @@ const SCENE_HOTSPOTS = {
   chat: 'main-seat',
   tasks: 'bounty-board',
   library: 'library-shelf'
+}
+
+const REQUIRED_BROWSER_API_PATHS = Object.freeze({
+  mapAgents: '/agent/map',
+  snapshot: '/agent/scenes/juyiting-main/snapshot',
+  events: '/agent/scenes/juyiting-main/events'
+})
+
+const headerValue = (headers, name) => {
+  const expected = name.toLowerCase()
+  for (const [key, value] of Object.entries(headers || {})) {
+    if (key.toLowerCase() === expected) return String(value)
+  }
+  return ''
+}
+
+const httpUrlOrNull = value => {
+  try {
+    const url = new URL(String(value))
+    return ['http:', 'https:'].includes(url.protocol) ? url : null
+  } catch {
+    return null
+  }
+}
+
+export class BrowserOriginPolicy {
+  constructor (config, token, now = Date.now) {
+    this.frontendOrigin = config.targetOrigins.frontend
+    this.backendOrigin = config.targetOrigins.backend
+    this.token = token
+    this.now = now
+    this.requiredApiPaths = new Set(Object.values(REQUIRED_BROWSER_API_PATHS))
+    this.observedRequiredApiPaths = new Set()
+    this.observedBearerOrigins = new Set()
+  }
+
+  assertDocumentUrl (value, label = 'browser document') {
+    let url
+    try {
+      url = new URL(String(value))
+    } catch {
+      throw new Error(`${label} URL is malformed`)
+    }
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
+      throw new Error(`${label} URL violates browser navigation safety policy`)
+    }
+    if (url.origin !== this.frontendOrigin) {
+      throw new Error(`${label} crossed an unapproved origin`)
+    }
+    return url
+  }
+
+  classifyApiPath (pathname) {
+    for (const [fixture, suffix] of Object.entries(REQUIRED_BROWSER_API_PATHS)) {
+      if (pathname === suffix || pathname.endsWith(`/api${suffix}`)) return { fixture, suffix }
+    }
+    return null
+  }
+
+  inspectPausedRequest ({ request, resourceType }) {
+    const rawUrl = request?.url || ''
+    if (resourceType === 'Document') this.assertDocumentUrl(rawUrl, 'browser frame navigation')
+
+    const url = httpUrlOrNull(rawUrl)
+    const authorization = headerValue(request?.headers, 'authorization')
+    if (authorization) {
+      if (!url || url.origin !== this.backendOrigin) {
+        throw new Error('Browser Bearer traffic crossed the approved backend origin')
+      }
+      if (authorization !== `Bearer ${this.token}`) {
+        throw new Error('Browser Bearer traffic did not use the approved smoke token')
+      }
+      this.observedBearerOrigins.add(url.origin)
+    }
+
+    if (!url) return null
+    const api = this.classifyApiPath(url.pathname)
+    if (!api) return null
+    if (url.origin !== this.backendOrigin) {
+      throw new Error('Built frontend API base does not match the approved backend origin')
+    }
+    if (request?.method === 'OPTIONS') {
+      if (headerValue(request.headers, 'origin') !== this.frontendOrigin) {
+        throw new Error('Browser API preflight did not originate from the approved frontend origin')
+      }
+      return { ...api, preflight: true }
+    }
+    if (authorization !== `Bearer ${this.token}`) {
+      throw new Error('Required browser API request did not carry the approved Bearer token')
+    }
+    this.observedRequiredApiPaths.add(api.suffix)
+    return { ...api, preflight: false }
+  }
+
+  assertFrameTree (frameTree) {
+    const visit = node => {
+      if (!node?.frame) throw new Error('CDP frame tree is malformed')
+      this.assertDocumentUrl(node.frame.url, 'browser frame')
+      for (const child of node.childFrames || []) visit(child)
+    }
+    visit(frameTree)
+  }
+
+  assertFinalState (state) {
+    if (!state?.isTopFrame) throw new Error('Final browser state is not the top frame')
+    const finalUrl = this.assertDocumentUrl(state.url, 'final browser navigation')
+    if (finalUrl.pathname !== '/juyiting') {
+      throw new Error('Final browser navigation left the approved Juyiting route')
+    }
+    if (state.storageOrigin !== this.frontendOrigin) {
+      throw new Error('Token localStorage was read outside the approved frontend origin')
+    }
+    let stored
+    try {
+      stored = JSON.parse(state.apiToken || '')
+    } catch {
+      throw new Error('Approved frontend api_token localStorage is malformed')
+    }
+    if (stored?.data !== this.token || !Number.isFinite(stored?.expTime) || stored.expTime <= this.now()) {
+      throw new Error('Approved frontend api_token localStorage does not contain the active smoke token')
+    }
+    const missing = [...this.requiredApiPaths].filter(path => !this.observedRequiredApiPaths.has(path))
+    if (missing.length) {
+      throw new Error(`Built frontend API base was not verified for required paths: ${missing.join(', ')}`)
+    }
+    if (this.observedBearerOrigins.size !== 1 || !this.observedBearerOrigins.has(this.backendOrigin)) {
+      throw new Error('Browser Bearer traffic was not exclusively bound to the approved backend origin')
+    }
+    return finalUrl
+  }
+
+  tokenBootstrapSource () {
+    return `(() => {
+      if (window.top !== window || location.origin !== ${JSON.stringify(this.frontendOrigin)}) return;
+      localStorage.setItem('api_token', ${JSON.stringify(JSON.stringify({
+        data: this.token,
+        expTime: this.now() + 24 * 60 * 60 * 1000
+      }))});
+    })();`
+  }
 }
 
 const parseBoundedTimeout = (raw, fallback, label) => {
@@ -96,15 +241,22 @@ class CookieJar {
   }
 }
 
-const requestJson = async (runtime, url, options = {}, label = 'credentialed JSON request') => {
-  runtime.guard.beforeBoundary(label)
-  const response = await runtime.guard.runFetch(
-    runtime.fetchImpl,
+export const requestJson = async (
+  runtime,
+  url,
+  options = {},
+  label = 'credentialed JSON request',
+  expectedOrigin = runtime.config.targetOrigins.backend
+) => {
+  const response = await fetchApprovedOrigin({
+    guard: runtime.guard,
+    fetchImpl: runtime.fetchImpl,
     url,
     options,
     label,
-    runtime.requestTimeoutMs
-  )
+    timeoutMs: runtime.requestTimeoutMs,
+    expectedOrigin
+  })
   if (!response.ok) throw new Error(`${label} failed with HTTP ${response.status}`)
   return response.json()
 }
@@ -120,11 +272,16 @@ const fetchWithCookies = async (runtime, jar, url, options = {}, label) => {
   const headers = new Headers(options.headers || {})
   const cookie = jar.header()
   if (cookie) headers.set('Cookie', cookie)
-  const response = await runtime.guard.runFetch(runtime.fetchImpl, url, {
-    ...options,
-    headers,
-    redirect: 'manual'
-  }, label, runtime.requestTimeoutMs)
+  const response = await fetchApprovedOrigin({
+    guard: runtime.guard,
+    fetchImpl: runtime.fetchImpl,
+    url,
+    options: { ...options, headers },
+    label,
+    timeoutMs: runtime.requestTimeoutMs,
+    expectedOrigin: runtime.config.targetOrigins.backend,
+    rejectRedirectStatus: false
+  })
   jar.store(response)
   return response
 }
@@ -219,13 +376,19 @@ const findChrome = async (runtime) => {
   throw new Error('Chrome or Edge executable not found. Set CHROME_PATH to run UI smoke.')
 }
 
-const waitForJson = async (runtime, url, timeoutMs = 15000) => {
+const waitForJson = async (runtime, url, expectedOrigin, timeoutMs = 15000) => {
   const deadlineAt = Date.now() + Math.min(timeoutMs, runtime.guard.remainingMs())
   let lastError
   while (Date.now() < deadlineAt) {
     runtime.guard.beforeBoundary('Chromium DevTools polling request')
     try {
-      return await requestJson(runtime, url, {}, 'Chromium DevTools polling request')
+      return await requestJson(
+        runtime,
+        url,
+        {},
+        'Chromium DevTools polling request',
+        expectedOrigin
+      )
     } catch (error) {
       if (runtime.guard.terminated) throw error
       lastError = error
@@ -235,7 +398,7 @@ const waitForJson = async (runtime, url, timeoutMs = 15000) => {
   throw lastError || new Error('Timed out waiting for Chromium DevTools JSON')
 }
 
-class CdpSession {
+export class CdpSession {
   constructor (runtime, webSocketUrl, WebSocketCtor) {
     runtime.guard.beforeBoundary('Chromium DevTools WebSocket connection')
     this.runtime = runtime
@@ -274,7 +437,7 @@ class CdpSession {
         this.events.push(message)
         const handler = this.handlers.get(message.method)
         if (handler) {
-          Promise.resolve(handler(message.params || {})).catch(error => {
+          Promise.resolve().then(() => handler(message.params || {})).catch(error => {
             this.handlerErrors.push(error)
           })
         }
@@ -308,14 +471,39 @@ class CdpSession {
   }
 
   close () {
-    if (this.closed) return
+    if (this.closePromise) return this.closePromise
     this.closed = true
     for (const { reject, timer } of this.pending.values()) {
       clearTimeout(timer)
       reject(new Error('CDP session closed'))
     }
     this.pending.clear()
-    this.ws.close()
+    this.closePromise = new Promise((resolvePromise, rejectPromise) => {
+      if (this.ws.readyState === 3) {
+        resolvePromise()
+        return
+      }
+      let timer
+      const finish = error => {
+        clearTimeout(timer)
+        this.ws.removeEventListener?.('close', onClose)
+        this.ws.removeEventListener?.('error', onError)
+        if (error) rejectPromise(error)
+        else resolvePromise()
+      }
+      const onClose = () => finish()
+      const onError = error => finish(error instanceof Error ? error : new Error('CDP WebSocket close failed'))
+      this.ws.addEventListener('close', onClose, { once: true })
+      this.ws.addEventListener('error', onError, { once: true })
+      timer = setTimeout(() => finish(new Error('CDP WebSocket did not close within 3000ms')), 3000)
+      timer.unref?.()
+      try {
+        this.ws.close()
+      } catch (error) {
+        finish(error)
+      }
+    })
+    return this.closePromise
   }
 }
 
@@ -353,7 +541,8 @@ const fulfillJson = (runtime, cdp, requestId, status, value) => cdp.send('Fetch.
   responseCode: status,
   responseHeaders: [
     { name: 'Content-Type', value: 'application/json; charset=utf-8' },
-    { name: 'Access-Control-Allow-Origin', value: runtime.config.targets.frontend.origin }
+    { name: 'Access-Control-Allow-Origin', value: runtime.config.targets.frontend.origin },
+    { name: 'Access-Control-Allow-Headers', value: 'Authorization, Content-Type' }
   ],
   body: Buffer.from(JSON.stringify(value)).toString('base64')
 })
@@ -364,9 +553,20 @@ const fulfillSse = (runtime, cdp, requestId, body) => cdp.send('Fetch.fulfillReq
   responseHeaders: [
     { name: 'Content-Type', value: 'text/event-stream; charset=utf-8' },
     { name: 'Cache-Control', value: 'no-cache' },
-    { name: 'Access-Control-Allow-Origin', value: runtime.config.targets.frontend.origin }
+    { name: 'Access-Control-Allow-Origin', value: runtime.config.targets.frontend.origin },
+    { name: 'Access-Control-Allow-Headers', value: 'Authorization, Content-Type' }
   ],
   body: Buffer.from(body).toString('base64')
+})
+
+const fulfillCorsPreflight = (runtime, cdp, requestId) => cdp.send('Fetch.fulfillRequest', {
+  requestId,
+  responseCode: 204,
+  responseHeaders: [
+    { name: 'Access-Control-Allow-Origin', value: runtime.config.targets.frontend.origin },
+    { name: 'Access-Control-Allow-Headers', value: 'Authorization, Content-Type' },
+    { name: 'Access-Control-Allow-Methods', value: 'GET, POST, OPTIONS' }
+  ]
 })
 
 const debugExpression = predicate => `(() => {
@@ -451,66 +651,87 @@ const sceneFixtures = () => {
   }
 }
 
-const signalProcessTree = (child, signal) => {
-  if (!child) return
-  if (process.platform !== 'win32' && Number.isInteger(child.pid)) {
-    try {
-      process.kill(-child.pid, signal)
+export const waitForChildSpawn = async (runtime, child, label = 'child process spawn') => {
+  runtime.guard.beforeBoundary(label)
+  await runtime.guard.runPromise(new Promise((resolvePromise, rejectPromise) => {
+    if (!child?.once) {
+      rejectPromise(new Error(`${label} did not return an observable child process`))
       return
-    } catch {}
-  }
-  if (child.exitCode !== null || child.signalCode !== null) return
-  try {
-    child.kill(signal)
-  } catch {}
+    }
+    const onSpawn = () => {
+      child.removeListener?.('error', onError)
+      resolvePromise()
+    }
+    const onError = error => {
+      child.removeListener?.('spawn', onSpawn)
+      rejectPromise(error)
+    }
+    child.once('spawn', onSpawn)
+    child.once('error', onError)
+  }), label)
 }
 
-const stopChrome = async (chrome, userDataDir, spawnImpl = spawn) => {
-  // Chrome is a multi-process application. Terminate the whole process tree so
-  // renderer children cannot outlive a deadline or keep the profile locked.
-  if (process.platform === 'win32' && chrome.pid) {
-    await Promise.race([
-      new Promise(resolvePromise => {
+const waitForTaskkill = child => new Promise((resolvePromise, rejectPromise) => {
+  const onError = error => {
+    child.removeListener?.('exit', onExit)
+    rejectPromise(error)
+  }
+  const onExit = code => {
+    child.removeListener?.('error', onError)
+    if (code === 0) resolvePromise()
+    else rejectPromise(new Error(`taskkill exited with code ${code}`))
+  }
+  child.once('error', onError)
+  child.once('exit', onExit)
+})
+
+export const stopChrome = async (chrome, userDataDir, options = {}) => {
+  const spawnImpl = options.spawnImpl || spawn
+  const removeImpl = options.removeImpl || rm
+  const stopProcessTreeImpl = options.stopProcessTreeImpl || stopProcessTree
+  const waitForProcessTreeExitImpl = options.waitForProcessTreeExitImpl || waitForProcessTreeExit
+  const errors = []
+  let chromeStopped = !chrome
+
+  if (chrome) {
+    try {
+      if (process.platform === 'win32' && chrome.pid) {
         const taskkill = spawnImpl('taskkill', ['/pid', String(chrome.pid), '/t', '/f'], {
           stdio: 'ignore',
           windowsHide: true
         })
-        taskkill.once('error', resolvePromise)
-        taskkill.once('exit', resolvePromise)
-      }),
-      delay(3000)
-    ])
-  } else {
-    signalProcessTree(chrome, 'SIGTERM')
-  }
-  if (chrome.exitCode === null && chrome.signalCode === null) {
-    await Promise.race([
-      new Promise(resolvePromise => chrome.once('exit', resolvePromise)),
-      delay(1500)
-    ])
-  }
-  if (process.platform !== 'win32') {
-    signalProcessTree(chrome, 'SIGKILL')
-    if (chrome.exitCode === null && chrome.signalCode === null) {
-      await Promise.race([
-        new Promise(resolvePromise => chrome.once('exit', resolvePromise)),
-        delay(1500)
-      ])
+        await waitForTaskkill(taskkill)
+        await waitForProcessTreeExitImpl({ child: chrome, label: 'Chromium', timeoutMs: 3000 })
+      } else {
+        await stopProcessTreeImpl({
+          child: chrome,
+          label: 'Chromium',
+          termTimeoutMs: 1500,
+          killTimeoutMs: 1500
+        })
+      }
+      chromeStopped = true
+    } catch (error) {
+      errors.push(error)
     }
   }
 
-  for (let attempt = 0; attempt < 5; attempt++) {
-    try {
-      await rm(userDataDir, { recursive: true, force: true })
-      return
-    } catch (error) {
-      if (attempt === 4) {
-        console.warn(`warning: could not remove temporary browser profile ${userDataDir}: ${error.message}`)
-        return
+  if (userDataDir && chromeStopped) {
+    let removed = false
+    for (let attempt = 0; attempt < 5 && !removed; attempt++) {
+      try {
+        await removeImpl(userDataDir, { recursive: true, force: true })
+        removed = true
+      } catch (error) {
+        if (attempt === 4) errors.push(new Error(`Temporary browser profile cleanup failed: ${error.message}`))
+        else await delay(500)
       }
-      await delay(500)
     }
+  } else if (userDataDir && !chromeStopped) {
+    errors.push(new Error('Temporary browser profile was retained because the Chromium process tree is still alive'))
   }
+
+  if (errors.length) throw new AggregateError(errors, 'Chromium cleanup failed')
 }
 
 const clickSceneHotspot = async (cdp, hotspotId) => {
@@ -631,17 +852,28 @@ export const runUiSmoke = async (options = {}) => {
   let untrackCdp = () => {}
   let stopTrackedChrome = async () => {}
   let token = ''
+  let runError
+  let finalUrl = ''
+  const cleanupErrors = []
 
   try {
+    const loadWebSocketModuleImpl = options.loadWebSocketModuleImpl || (() => import('ws'))
+    const WebSocketCtor = options.WebSocketCtor || (
+      await guard.runPromise(
+        Promise.resolve().then(() => loadWebSocketModuleImpl()),
+        'CDP WebSocket module load'
+      )
+    ).default
     guard.beforeBoundary('credentialed OAuth authorization flow')
     token = await getToken(runtime)
+    const browserPolicy = new BrowserOriginPolicy(config, token)
     const chromePath = await findChrome(runtime)
     userDataDir = await guard.runPromise(
       mkdtemp(join(tmpdir(), 'juyiting-ui-smoke-')),
       'temporary browser profile creation'
     )
     const debugPort = 9333 + Math.floor(Math.random() * 1000)
-    const WebSocketCtor = options.WebSocketCtor || WebSocket
+    const cdpHttpOrigin = `http://127.0.0.1:${debugPort}`
     const chromeArgs = [
       '--headless=new',
       '--disable-gpu',
@@ -660,17 +892,19 @@ export const runUiSmoke = async (options = {}) => {
     })
     let stopPromise
     stopTrackedChrome = () => {
-      if (!stopPromise) stopPromise = stopChrome(chrome, userDataDir, spawnImpl)
+      if (!stopPromise) stopPromise = stopChrome(chrome, userDataDir, { spawnImpl })
       return stopPromise
     }
     untrackChrome = guard.trackCleanup(stopTrackedChrome)
+    await waitForChildSpawn(runtime, chrome, 'Chromium browser spawn')
 
-    const version = await waitForJson(runtime, `http://127.0.0.1:${debugPort}/json/version`)
+    const version = await waitForJson(runtime, `${cdpHttpOrigin}/json/version`, cdpHttpOrigin)
     const target = await requestJson(
       runtime,
-      `http://127.0.0.1:${debugPort}/json/new?about:blank`,
+      `${cdpHttpOrigin}/json/new?about:blank`,
       { method: 'PUT' },
-      'Chromium DevTools target creation request'
+      'Chromium DevTools target creation request',
+      cdpHttpOrigin
     )
     const webSocketUrl = target.webSocketDebuggerUrl || version.webSocketDebuggerUrl
     let parsedWebSocketUrl
@@ -685,7 +919,8 @@ export const runUiSmoke = async (options = {}) => {
       throw new Error('Chromium DevTools WebSocket URL is not a safe loopback target')
     }
     cdp = new CdpSession(runtime, parsedWebSocketUrl, WebSocketCtor)
-    untrackCdp = guard.trackCleanup(() => cdp.close())
+    const closeTrackedCdp = () => cdp.close()
+    untrackCdp = guard.trackCleanup(closeTrackedCdp)
     await cdp.open()
     await cdp.send('Page.enable')
     await cdp.send('Runtime.enable')
@@ -696,53 +931,64 @@ export const runUiSmoke = async (options = {}) => {
     let pendingSseRequestId = null
     let sseDelivered = false
     let failRequiredSprite = false
-    cdp.on('Fetch.requestPaused', async ({ requestId, request }) => {
+    cdp.on('Page.frameNavigated', ({ frame }) => {
+      browserPolicy.assertDocumentUrl(frame?.url, 'browser frame navigation')
+    })
+    cdp.on('Fetch.requestPaused', async params => {
+      const { requestId, request } = params
       const url = request?.url || ''
-      if (url.includes('/agent/map')) {
-        await fulfillJson(runtime, cdp, requestId, 200, fixtures.mapAgents)
-        return
-      }
-      if (url.includes('/agent/scenes/juyiting-main/snapshot')) {
-        await fulfillJson(runtime, cdp, requestId, 200, fixtures.snapshot)
-        return
-      }
-      if (url.includes('/agent/scenes/juyiting-main/events')) {
-        if (!sseDelivered && !pendingSseRequestId) {
-          pendingSseRequestId = requestId
+      try {
+        const apiRequest = browserPolicy.inspectPausedRequest(params)
+        if (apiRequest?.preflight) {
+          await fulfillCorsPreflight(runtime, cdp, requestId)
           return
         }
-        await fulfillJson(runtime, cdp, requestId, 503, {
-          status: 503,
-          code: 'SCENE_EVENTS_DISABLED',
-          msg: 'Scene event stream is disabled'
-        })
-        return
+        if (apiRequest?.fixture === 'mapAgents') {
+          await fulfillJson(runtime, cdp, requestId, 200, fixtures.mapAgents)
+          return
+        }
+        if (apiRequest?.fixture === 'snapshot') {
+          await fulfillJson(runtime, cdp, requestId, 200, fixtures.snapshot)
+          return
+        }
+        if (apiRequest?.fixture === 'events') {
+          if (!sseDelivered && !pendingSseRequestId) {
+            pendingSseRequestId = requestId
+            return
+          }
+          await fulfillJson(runtime, cdp, requestId, 503, {
+            status: 503,
+            code: 'SCENE_EVENTS_DISABLED',
+            msg: 'Scene event stream is disabled'
+          })
+          return
+        }
+        if (url.includes('/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v3.webp') && failRequiredSprite) {
+          await cdp.send('Fetch.fulfillRequest', {
+            requestId,
+            responseCode: 404,
+            responseHeaders: [{ name: 'Content-Type', value: 'text/plain' }],
+            body: Buffer.from('required sprite intentionally unavailable').toString('base64')
+          })
+          return
+        }
+        await cdp.send('Fetch.continueRequest', { requestId })
+      } catch (error) {
+        try {
+          await cdp.send('Fetch.failRequest', { requestId, errorReason: 'BlockedByClient' })
+        } catch (failError) {
+          throw new AggregateError([error, failError], 'Unsafe browser request was blocked but CDP cleanup failed')
+        }
+        throw error
       }
-      if (url.includes('/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v3.webp') && failRequiredSprite) {
-        await cdp.send('Fetch.fulfillRequest', {
-          requestId,
-          responseCode: 404,
-          responseHeaders: [{ name: 'Content-Type', value: 'text/plain' }],
-          body: Buffer.from('required sprite intentionally unavailable').toString('base64')
-        })
-        return
-      }
-      await cdp.send('Fetch.continueRequest', { requestId })
     })
     await cdp.send('Fetch.enable', {
-      patterns: [
-        { urlPattern: '*://*/*agent/map*', requestStage: 'Request' },
-        { urlPattern: '*://*/*agent/scenes/juyiting-main/snapshot*', requestStage: 'Request' },
-        { urlPattern: '*://*/*agent/scenes/juyiting-main/events*', requestStage: 'Request' },
-        { urlPattern: '*://*/juyiting/sprites/persona-sheets-v1/songjiang-8-direction-v3.webp*', requestStage: 'Request' }
-      ]
+      patterns: [{ urlPattern: '*', requestStage: 'Request' }]
     })
 
+
     await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
-      source: `localStorage.setItem('api_token', ${JSON.stringify(JSON.stringify({
-        data: token,
-        expTime: Date.now() + 24 * 60 * 60 * 1000
-      }))})`
+      source: browserPolicy.tokenBootstrapSource()
     })
 
     guard.beforeBoundary('credentialed browser navigation')
@@ -986,7 +1232,7 @@ export const runUiSmoke = async (options = {}) => {
     await clickSceneHotspot(cdp, 'chat')
     await waitForExpression(runtime, cdp, 'Boolean(document.querySelector(".panel-chat"))')
 
-    const finalState = await evaluate(cdp, `(() => {
+    const interactionState = await evaluate(cdp, `(() => {
       const text = document.body.innerText || '';
       return {
         url: location.href,
@@ -994,8 +1240,8 @@ export const runUiSmoke = async (options = {}) => {
         text: text.slice(0, 2000)
       };
     })()`)
-    if (finalState.containsCoordination) {
-      throw new Error(`Low-value actions are visible: ${JSON.stringify(finalState)}`)
+    if (interactionState.containsCoordination) {
+      throw new Error(`Low-value actions are visible: ${JSON.stringify(interactionState)}`)
     }
 
     await cdp.send('Page.reload', { ignoreCache: true })
@@ -1035,23 +1281,60 @@ export const runUiSmoke = async (options = {}) => {
       throw new Error('Map transform stopped operating after required sprite degradation')
     }
 
-    console.log('聚义厅 UI smoke 验证通过')
-    console.log(JSON.stringify({
-      targets: config.targetOrigins,
-      finalUrl: redactUrl(finalState.url)
-    }, null, 2))
+    const { frameTree } = await cdp.send('Page.getFrameTree')
+    browserPolicy.assertFrameTree(frameTree)
+    const finalSecurityState = await evaluate(cdp, `(() => ({
+      url: location.href,
+      isTopFrame: window.top === window,
+      storageOrigin: location.origin,
+      apiToken: localStorage.getItem('api_token')
+    }))()`)
+    finalUrl = browserPolicy.assertFinalState(finalSecurityState).href
   } catch (error) {
-    throw new Error(sanitizeError(error, [...Object.values(config.credentials), token]))
+    runError = new Error(sanitizeError(error, [...Object.values(config.credentials), token]))
   } finally {
-    untrackCdp()
-    if (cdp) cdp.close()
-    untrackChrome()
-    if (chrome && userDataDir) await stopTrackedChrome()
-    else if (userDataDir) await rm(userDataDir, { recursive: true, force: true })
+    if (cdp) {
+      try {
+        await completeTrackedCleanup(() => cdp.close(), untrackCdp)
+      } catch (error) {
+        cleanupErrors.push(error)
+      }
+    }
+    if (chrome && userDataDir) {
+      try {
+        await completeTrackedCleanup(stopTrackedChrome, untrackChrome)
+      } catch (error) {
+        cleanupErrors.push(error)
+      }
+    } else if (userDataDir) {
+      try {
+        await rm(userDataDir, { recursive: true, force: true })
+      } catch (error) {
+        cleanupErrors.push(new Error(`Temporary browser profile cleanup failed: ${error.message}`))
+      }
+    }
     token = ''
     restoreTls()
-    if (ownsSafetyContext) await guard.dispose()
+    if (ownsSafetyContext) {
+      try {
+        await guard.dispose()
+      } catch (error) {
+        cleanupErrors.push(error)
+      }
+    }
   }
+
+  if (runError && cleanupErrors.length) {
+    throw cleanupFailure([runError, ...cleanupErrors], 'UI smoke failed and cleanup was incomplete')
+  }
+  if (runError) throw runError
+  if (cleanupErrors.length) throw cleanupFailure(cleanupErrors, 'UI smoke cleanup was incomplete')
+
+  console.log('聚义厅 UI smoke 验证通过')
+  console.log(JSON.stringify({
+    targets: config.targetOrigins,
+    finalUrl: redactUrl(finalUrl)
+  }, null, 2))
 }
 
 const isMainModule = process.argv[1]

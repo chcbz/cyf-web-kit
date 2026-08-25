@@ -4,15 +4,32 @@ import { EventEmitter } from 'node:events'
 import { readFileSync } from 'node:fs'
 import { describe as nodeDescribe, it as nodeIt } from 'node:test'
 
-import { runNpmScript, runPreflight } from './juyiting-public-beta-preflight.mjs'
+import {
+  checkFrontendRoute,
+  runNpmScript,
+  runPreflight
+} from './juyiting-public-beta-preflight.mjs'
+import {
+  BrowserOriginPolicy,
+  CdpSession,
+  requestJson,
+  runUiSmoke,
+  stopChrome,
+  waitForChildSpawn
+} from './juyiting-public-beta-ui-smoke.mjs'
 import {
   APPROVAL_MANIFEST_SCHEMA,
   MAX_PREFLIGHT_DEADLINE_MS,
   PREFLIGHT_APPROVAL_SCOPE,
+  PREFLIGHT_CLEANUP_ERROR_CODE,
   UI_SMOKE_APPROVAL_SCOPE,
   PreflightTerminationGuard,
+  cleanupFailure,
+  completeTrackedCleanup,
   createSafetyContext,
+  sanitizeError,
   sanitizeMessage,
+  stopProcessTree,
   validateSafetyConfig
 } from './juyiting-preflight-safety.mjs'
 
@@ -304,6 +321,30 @@ describe('juyiting public beta preflight safety', () => {
     assert.ok(firstNetworkCheck > spriteGate)
   })
 
+  it('asset-child cleanup failure aborts preflight before any credentialed boundary', async () => {
+    let npmCalls = 0
+    let fetchCalls = 0
+    let uiCalls = 0
+    await assert.rejects(
+      runPreflight({
+        env: localEnv(),
+        signalTarget: new EventEmitter(),
+        setTimeoutImpl: inertTimer,
+        clearTimeoutImpl: () => {},
+        runNpmScriptImpl: async () => {
+          npmCalls++
+          throw cleanupFailure(new Error('offline process tree survived'), 'asset cleanup failed')
+        },
+        fetchImpl: async () => { fetchCalls++; throw new Error('must not fetch') },
+        uiSmokeImpl: async () => { uiCalls++ }
+      }),
+      error => error?.code === PREFLIGHT_CLEANUP_ERROR_CODE
+    )
+    assert.equal(npmCalls, 1)
+    assert.equal(fetchCalls, 0)
+    assert.equal(uiCalls, 0)
+  })
+
   it('SIGTERM and deadline state prevent the next guarded boundary', async () => {
     const signalTarget = new EventEmitter()
     const signalGuard = makeGuard({ signalTarget })
@@ -447,6 +488,377 @@ describe('juyiting public beta preflight safety', () => {
     assert.throws(() => makeGuard({ deadlineMs: MAX_PREFLIGHT_DEADLINE_MS + 1 }), /at most 300000ms/)
   })
 
+  it('requestJson refuses redirects and response-origin drift before parsing credentialed bodies', async () => {
+    const guard = makeGuard()
+    const runtime = {
+      config: {
+        targetOrigins: { backend: 'https://api.example.test' }
+      },
+      guard,
+      requestTimeoutMs: 1000,
+      fetchImpl: async (url, options) => {
+        assert.equal(url.href, 'https://api.example.test/oauth2/token')
+        assert.equal(options.redirect, 'manual')
+        assert.equal(options.method, 'POST')
+        return {
+          ok: true,
+          status: 200,
+          redirected: false,
+          url: 'https://attacker.example/oauth2/token',
+          json: async () => ({ access_token: 'must-not-be-read' })
+        }
+      }
+    }
+    await assert.rejects(
+      requestJson(runtime, 'https://api.example.test/oauth2/token', {
+        method: 'POST',
+        body: 'credentialed-body',
+        redirect: 'follow'
+      }),
+      /unapproved origin/
+    )
+
+    let fetchCalls = 0
+    runtime.fetchImpl = async () => { fetchCalls++; throw new Error('must not fetch') }
+    await assert.rejects(
+      requestJson(runtime, 'https://attacker.example/oauth2/token', {
+        method: 'POST', body: 'credentialed-body'
+      }),
+      /unapproved origin/
+    )
+    assert.equal(fetchCalls, 0)
+    await guard.dispose()
+  })
+
+  it('frontend HEAD is manual-only and fails closed on redirects or response-origin drift', async () => {
+    const guard = makeGuard()
+    const config = {
+      targets: { frontend: new URL('https://app.example.test') },
+      targetOrigins: { frontend: 'https://app.example.test' }
+    }
+    let mode = 'redirect'
+    const fetchImpl = async (url, options) => {
+      assert.equal(url.href, 'https://app.example.test/juyiting')
+      assert.equal(options.method, 'HEAD')
+      assert.equal(options.redirect, 'manual')
+      if (mode === 'redirect') {
+        return { status: 302, ok: false, redirected: false, url: url.href }
+      }
+      return { status: 200, ok: true, redirected: false, url: 'https://attacker.example/juyiting' }
+    }
+    await assert.rejects(
+      checkFrontendRoute({ config, guard, fetchImpl, timeoutMs: 1000 }),
+      /refused HTTP redirect 302/
+    )
+    mode = 'origin'
+    await assert.rejects(
+      checkFrontendRoute({ config, guard, fetchImpl, timeoutMs: 1000 }),
+      /unapproved origin/
+    )
+    await guard.dispose()
+  })
+
+  it('browser origin policy binds navigation, frames, token storage, Bearer traffic, and built API base', () => {
+    const token = 'offline-smoke-token'
+    const config = {
+      targetOrigins: {
+        frontend: 'https://app.example.test',
+        backend: 'https://api.example.test'
+      }
+    }
+    const policy = new BrowserOriginPolicy(config, token, () => 1000)
+    const bearer = { Authorization: `Bearer ${token}` }
+
+    assert.throws(() => policy.inspectPausedRequest({
+      resourceType: 'Document',
+      request: { url: 'https://frames.example.test/juyiting', headers: {} }
+    }), /unapproved origin/)
+    assert.throws(() => policy.inspectPausedRequest({
+      resourceType: 'XHR',
+      request: { url: 'https://app.example.test/api/agent/map', headers: bearer }
+    }), /Bearer traffic crossed|API base/)
+    assert.throws(() => policy.inspectPausedRequest({
+      resourceType: 'XHR',
+      request: { url: 'https://attacker.example/collect', headers: bearer }
+    }), /Bearer traffic crossed/)
+
+    const corsPreflight = policy.inspectPausedRequest({
+      resourceType: 'XHR',
+      request: {
+        method: 'OPTIONS',
+        url: 'https://api.example.test/agent/map',
+        headers: { Origin: 'https://app.example.test' }
+      }
+    })
+    assert.deepEqual(corsPreflight, {
+      fixture: 'mapAgents',
+      suffix: '/agent/map',
+      preflight: true
+    })
+    assert.throws(() => policy.inspectPausedRequest({
+      resourceType: 'XHR',
+      request: {
+        method: 'OPTIONS',
+        url: 'https://api.example.test/agent/map',
+        headers: { Origin: 'https://attacker.example' }
+      }
+    }), /approved frontend origin/)
+
+    for (const path of [
+      '/agent/map',
+      '/agent/scenes/juyiting-main/snapshot',
+      '/agent/scenes/juyiting-main/events'
+    ]) {
+      policy.inspectPausedRequest({
+        resourceType: 'XHR',
+        request: { url: `https://api.example.test${path}`, headers: bearer }
+      })
+    }
+    policy.assertFrameTree({
+      frame: { url: 'https://app.example.test/juyiting?scene-debug=1' },
+      childFrames: [{ frame: { url: 'https://app.example.test/frame-helper#embedded' } }]
+    })
+    assert.throws(() => policy.assertFinalState({
+      url: 'https://attacker.example/juyiting',
+      isTopFrame: true,
+      storageOrigin: 'https://attacker.example',
+      apiToken: JSON.stringify({ data: token, expTime: 2000 })
+    }), /unapproved origin/)
+    assert.throws(() => policy.assertFinalState({
+      url: 'https://app.example.test/juyiting',
+      isTopFrame: true,
+      storageOrigin: 'https://app.example.test',
+      apiToken: JSON.stringify({ data: 'wrong-token', expTime: 2000 })
+    }), /active smoke token/)
+    const finalUrl = policy.assertFinalState({
+      url: 'https://app.example.test/juyiting?scene-debug=1',
+      isTopFrame: true,
+      storageOrigin: 'https://app.example.test',
+      apiToken: JSON.stringify({ data: token, expTime: 2000 })
+    })
+    assert.equal(finalUrl.origin, 'https://app.example.test')
+    const bootstrap = policy.tokenBootstrapSource()
+    assert.match(bootstrap, /window\.top !== window/)
+    assert.match(bootstrap, /location\.origin !== "https:\/\/app\.example\.test"/)
+  })
+
+  it('browser origin policy fails when the built API base never reaches every approved backend endpoint', () => {
+    const token = 'offline-smoke-token'
+    const policy = new BrowserOriginPolicy({
+      targetOrigins: {
+        frontend: 'https://app.example.test',
+        backend: 'https://api.example.test'
+      }
+    }, token, () => 1000)
+    policy.inspectPausedRequest({
+      resourceType: 'XHR',
+      request: {
+        url: 'https://api.example.test/agent/map',
+        headers: { authorization: `Bearer ${token}` }
+      }
+    })
+    assert.throws(() => policy.assertFinalState({
+      url: 'https://app.example.test/juyiting',
+      isTopFrame: true,
+      storageOrigin: 'https://app.example.test',
+      apiToken: JSON.stringify({ data: token, expTime: 2000 })
+    }), /API base was not verified/)
+  })
+
+  it('ambient process TLS bypass cannot be hidden by an injected options.env object', async () => {
+    const previous = process.env.NODE_TLS_REJECT_UNAUTHORIZED
+    const bytes = manifestBytes()
+    let approvalReads = 0
+    try {
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+      const env = approvedProductionEnv(bytes)
+      delete env.NODE_TLS_REJECT_UNAUTHORIZED
+      await assert.rejects(
+        validateSafetyConfig({
+          mode: 'preflight',
+          env,
+          readFileImpl: async () => { approvalReads++; return bytes }
+        }),
+        /ambient process state/
+      )
+      assert.equal(approvalReads, 0)
+    } finally {
+      if (previous === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED
+      else process.env.NODE_TLS_REJECT_UNAUTHORIZED = previous
+    }
+  })
+
+  it('direct UI smoke loads third-party CDP support only after the global guard exists', async () => {
+    const signalTarget = new EventEmitter()
+    let moduleLoads = 0
+    let fetchCalls = 0
+    await assert.rejects(
+      runUiSmoke({
+        env: localEnv(),
+        signalTarget,
+        setTimeoutImpl: inertTimer,
+        clearTimeoutImpl: () => {},
+        loadWebSocketModuleImpl: async () => {
+          moduleLoads++
+          signalTarget.emit('SIGTERM')
+          return { default: class OfflineWebSocket {} }
+        },
+        fetchImpl: async () => { fetchCalls++; throw new Error('must not fetch') },
+        spawnImpl: () => { throw new Error('must not spawn') }
+      }),
+      /received SIGTERM/
+    )
+    assert.equal(moduleLoads, 1)
+    assert.equal(fetchCalls, 0)
+    const source = readFileSync('tests/juyiting-public-beta-ui-smoke.mjs', 'utf8')
+    assert.equal(/import\s+WebSocket\s+from\s+['"]ws['"]/.test(source), false)
+  })
+
+  it('process-tree cleanup verifies SIGTERM, escalates to SIGKILL, and reports survivors', async () => {
+    let running = true
+    const signals = []
+    await stopProcessTree({
+      child: {},
+      label: 'offline child',
+      termTimeoutMs: 0,
+      killTimeoutMs: 0,
+      isRunningImpl: () => running,
+      signalImpl: (_child, signal) => {
+        signals.push(signal)
+        if (signal === 'SIGKILL') running = false
+      },
+      delayImpl: async () => {}
+    })
+    assert.deepEqual(signals, ['SIGTERM', 'SIGKILL'])
+
+    await assert.rejects(
+      stopProcessTree({
+        child: {},
+        label: 'stubborn child',
+        termTimeoutMs: 0,
+        killTimeoutMs: 0,
+        isRunningImpl: () => true,
+        signalImpl: () => {},
+        delayImpl: async () => {}
+      }),
+      /did not exit after SIGTERM\/SIGKILL/
+    )
+  })
+
+  it('global guard reports tracked cleanup failures explicitly', async () => {
+    const guard = makeGuard()
+    guard.trackCleanup(async () => { throw new Error('offline cleanup failure') })
+    guard.terminate('global deadline exceeded')
+    await assert.rejects(
+      guard.dispose(),
+      error => error?.code === PREFLIGHT_CLEANUP_ERROR_CODE && /Preflight cleanup failed/.test(error.message)
+    )
+  })
+
+  it('tracked cleanup cannot be cancelled before asynchronous close finishes', async () => {
+    let release
+    let untracked = false
+    const cleanup = completeTrackedCleanup(
+      () => new Promise(resolvePromise => { release = resolvePromise }),
+      () => { untracked = true }
+    )
+    await new Promise(resolvePromise => setImmediate(resolvePromise))
+    assert.equal(untracked, false)
+    release()
+    await cleanup
+    assert.equal(untracked, true)
+
+    let failureUntracked = false
+    await assert.rejects(
+      completeTrackedCleanup(
+        async () => { throw new Error('close failed') },
+        () => { failureUntracked = true }
+      ),
+      /close failed/
+    )
+    assert.equal(failureUntracked, false)
+  })
+
+  it('npm child spawn errors are observed and cleanup completes before rejection', async () => {
+    const guard = makeGuard()
+    const child = new EventEmitter()
+    child.exitCode = null
+    child.signalCode = null
+    const signals = []
+    child.kill = signal => {
+      signals.push(signal)
+      child.signalCode = signal
+      child.emit('exit', null, signal)
+    }
+    const execFileImpl = () => {
+      queueMicrotask(() => child.emit('error', new Error('offline spawn error')))
+      return child
+    }
+    await assert.rejects(
+      runNpmScript('validate:juyiting-map', {
+        guard,
+        execFileImpl,
+        npmExecPath: '/offline/npm-cli.js'
+      }),
+      /offline spawn error/
+    )
+    assert.deepEqual(signals, ['SIGTERM'])
+    await guard.dispose()
+  })
+
+  it('Chromium spawn/CDP close errors are observed and profile deletion waits for verified tree exit', async () => {
+    const guard = makeGuard()
+    const runtime = { guard }
+    const child = new EventEmitter()
+    const spawnWait = waitForChildSpawn(runtime, child, 'offline Chromium spawn')
+    child.emit('error', new Error('chromium spawn failed'))
+    await assert.rejects(spawnWait, /chromium spawn failed/)
+
+    let socket
+    class FakeSocket {
+      constructor () {
+        socket = this
+        this.readyState = 1
+        this.events = new EventEmitter()
+      }
+      addEventListener (name, listener, options) {
+        this.events[options?.once ? 'once' : 'on'](name, listener)
+      }
+      removeEventListener (name, listener) { this.events.off(name, listener) }
+      close () {
+        setImmediate(() => {
+          this.readyState = 3
+          this.events.emit('close')
+        })
+      }
+    }
+    const cdp = new CdpSession(runtime, 'ws://127.0.0.1/devtools/page/offline', FakeSocket)
+    let cdpClosed = false
+    const closing = cdp.close().then(() => { cdpClosed = true })
+    await Promise.resolve()
+    assert.equal(cdpClosed, false)
+    await closing
+    assert.equal(socket.readyState, 3)
+
+    const cleanupOrder = []
+    await stopChrome({ pid: 123, exitCode: null, signalCode: null }, '/owned/offline-profile', {
+      stopProcessTreeImpl: async () => { cleanupOrder.push('tree-exited') },
+      removeImpl: async () => { cleanupOrder.push('profile-removed') }
+    })
+    assert.deepEqual(cleanupOrder, ['tree-exited', 'profile-removed'])
+
+    let removeCalls = 0
+    await assert.rejects(
+      stopChrome({ pid: 123, exitCode: null, signalCode: null }, '/owned/offline-profile', {
+        stopProcessTreeImpl: async () => { throw new Error('tree survived') },
+        removeImpl: async () => { removeCalls++ }
+      }),
+      /Chromium cleanup failed/
+    )
+    assert.equal(removeCalls, 0)
+    await guard.dispose()
+  })
+
   it('sanitized output removes credential values and secret URL query/fragment data', () => {
     const secret = 'credential-value'
     const sanitized = sanitizeMessage(
@@ -457,5 +869,11 @@ describe('juyiting public beta preflight safety', () => {
     assert.equal(sanitized.includes('?'), false)
     assert.equal(sanitized.includes('#fragment'), false)
     assert.equal(sanitized, 'failed for [REDACTED] at https://api.example.test/oauth2/callback')
+    assert.match(
+      sanitizeError(new AggregateError([
+        new Error('Chromium process tree survived')
+      ], 'cleanup failed')),
+      /cleanup failed: Chromium process tree survived/
+    )
   })
 })

@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { isIP } from 'node:net'
 
 export const MAX_PREFLIGHT_DEADLINE_MS = 5 * 60 * 1000
+export const PREFLIGHT_CLEANUP_ERROR_CODE = 'PREFLIGHT_CLEANUP_FAILED'
 export const APPROVAL_MANIFEST_SCHEMA = 'juyiting-public-beta-preflight-approval-v1'
 export const PREFLIGHT_APPROVAL_SCOPE = Object.freeze([
   'agent-websocket',
@@ -99,6 +100,51 @@ export const isLoopbackUrl = (url) => {
   const ipVersion = isIP(hostname)
   if (ipVersion === 4) return hostname.split('.')[0] === '127'
   return ipVersion === 6 && hostname === '::1'
+}
+
+export const assertApprovedHttpUrl = (value, expectedOrigin, label = 'request') => {
+  let url
+  try {
+    url = value instanceof URL ? new URL(value.href) : new URL(String(value))
+  } catch {
+    throw new Error(`${label} URL is malformed`)
+  }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.hash) {
+    throw new Error(`${label} URL violates HTTP safety policy`)
+  }
+  if (url.origin !== expectedOrigin) {
+    throw new Error(`${label} crossed an unapproved origin`)
+  }
+  return url
+}
+
+export const fetchApprovedOrigin = async ({
+  guard,
+  fetchImpl,
+  url,
+  options = {},
+  label,
+  timeoutMs,
+  expectedOrigin,
+  rejectRedirectStatus = true
+}) => {
+  const approvedUrl = assertApprovedHttpUrl(url, expectedOrigin, label)
+  guard.beforeBoundary(label)
+  const response = await guard.runFetch(fetchImpl, approvedUrl, {
+    ...options,
+    redirect: 'manual'
+  }, label, timeoutMs)
+  if (response?.redirected) throw new Error(`${label} followed a redirect unexpectedly`)
+  if (response?.url) {
+    const responseUrl = assertApprovedHttpUrl(response.url, expectedOrigin, `${label} response`)
+    if (responseUrl.href !== approvedUrl.href) {
+      throw new Error(`${label} response URL changed unexpectedly`)
+    }
+  }
+  if (rejectRedirectStatus && response?.status >= 300 && response?.status < 400) {
+    throw new Error(`${label} refused HTTP redirect ${response.status}`)
+  }
+  return response
 }
 
 const assertTargetTransport = (url, label) => {
@@ -214,11 +260,12 @@ export const validateSafetyConfig = async ({
   if (localTlsFlag && localTlsFlag !== 'YES') {
     throw new Error(`${LOCAL_INSECURE_TLS_ENV} must be unset or exactly YES`)
   }
-  const inheritedInsecureTls = env.NODE_TLS_REJECT_UNAUTHORIZED === '0'
-  if ((localTlsFlag === 'YES' || inheritedInsecureTls) && !allLoopback) {
-    throw new Error('Insecure TLS is forbidden for non-loopback targets')
+  const configuredInsecureTls = env.NODE_TLS_REJECT_UNAUTHORIZED === '0'
+  const ambientInsecureTls = process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0'
+  if ((localTlsFlag === 'YES' || configuredInsecureTls || ambientInsecureTls) && !allLoopback) {
+    throw new Error('Insecure TLS is forbidden for non-loopback targets, including ambient process state')
   }
-  if (inheritedInsecureTls && localTlsFlag !== 'YES') {
+  if ((configuredInsecureTls || ambientInsecureTls) && localTlsFlag !== 'YES') {
     throw new Error(`Inherited insecure TLS requires explicit local-only ${LOCAL_INSECURE_TLS_ENV}=YES`)
   }
 
@@ -238,6 +285,15 @@ export const validateSafetyConfig = async ({
     allowInsecureTls: localTlsFlag === 'YES',
     deadlineMs
   }
+}
+
+export const cleanupFailure = (errors, message) => {
+  const failure = new AggregateError(
+    (Array.isArray(errors) ? errors : [errors]).filter(Boolean),
+    message
+  )
+  failure.code = PREFLIGHT_CLEANUP_ERROR_CODE
+  return failure
 }
 
 const terminationError = (label, reason) => {
@@ -264,6 +320,8 @@ export class PreflightTerminationGuard {
     this.controller = new AbortController()
     this.terminationReason = ''
     this.cleanups = new Set()
+    this.pendingCleanups = new Set()
+    this.cleanupErrors = []
     this.cleanupPromise = Promise.resolve([])
     this.signalHandlers = new Map()
 
@@ -328,6 +386,18 @@ export class PreflightTerminationGuard {
     return fetchImpl(url, { ...(options || {}), signal })
   }
 
+  scheduleCleanup (cleanup) {
+    const task = Promise.resolve().then(cleanup)
+    this.pendingCleanups.add(task)
+    task.catch(error => {
+      this.cleanupErrors.push(error)
+    }).finally(() => {
+      this.pendingCleanups.delete(task)
+    })
+    this.cleanupPromise = Promise.allSettled([...this.pendingCleanups])
+    return task
+  }
+
   trackCleanup (cleanup) {
     let active = true
     let invoked = false
@@ -337,10 +407,7 @@ export class PreflightTerminationGuard {
       return cleanup()
     }
     this.cleanups.add(run)
-    if (this.terminated) {
-      const lateCleanup = Promise.resolve().then(run)
-      this.cleanupPromise = Promise.allSettled([this.cleanupPromise, lateCleanup])
-    }
+    if (this.terminated) this.scheduleCleanup(run)
     return () => {
       active = false
       this.cleanups.delete(run)
@@ -351,8 +418,7 @@ export class PreflightTerminationGuard {
     if (this.terminated) return this.cleanupPromise
     this.terminationReason = reason
     this.controller.abort(terminationError('active operation', reason))
-    const cleanups = [...this.cleanups]
-    this.cleanupPromise = Promise.allSettled(cleanups.map(cleanup => Promise.resolve().then(cleanup)))
+    for (const cleanup of [...this.cleanups]) this.scheduleCleanup(cleanup)
     return this.cleanupPromise
   }
 
@@ -360,11 +426,13 @@ export class PreflightTerminationGuard {
     if (this.deadlineTimer) this.clearTimeoutImpl(this.deadlineTimer)
     for (const [signal, handler] of this.signalHandlers) this.signalTarget.off(signal, handler)
     this.signalHandlers.clear()
-    let pendingCleanup
-    do {
-      pendingCleanup = this.cleanupPromise
-      await pendingCleanup
-    } while (pendingCleanup !== this.cleanupPromise)
+    for (const cleanup of [...this.cleanups]) this.scheduleCleanup(cleanup)
+    while (this.pendingCleanups.size) {
+      await Promise.allSettled([...this.pendingCleanups])
+    }
+    if (this.cleanupErrors.length) {
+      throw cleanupFailure([...this.cleanupErrors], 'Preflight cleanup failed')
+    }
   }
 }
 
@@ -399,12 +467,118 @@ export const createSafetyContext = async ({
 
 export const applyLocalTlsPolicy = (context) => {
   const { config, env } = context
-  const previous = env.NODE_TLS_REJECT_UNAUTHORIZED
-  if (config.allowInsecureTls) env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
-  return () => {
-    if (previous === undefined) delete env.NODE_TLS_REJECT_UNAUTHORIZED
-    else env.NODE_TLS_REJECT_UNAUTHORIZED = previous
+  const targets = [...new Set([process.env, env])]
+  const previous = targets.map(target => [target, target.NODE_TLS_REJECT_UNAUTHORIZED])
+  if (config.allowInsecureTls) {
+    for (const target of targets) target.NODE_TLS_REJECT_UNAUTHORIZED = '0'
   }
+  return () => {
+    for (const [target, value] of previous) {
+      if (value === undefined) delete target.NODE_TLS_REJECT_UNAUTHORIZED
+      else target.NODE_TLS_REJECT_UNAUTHORIZED = value
+    }
+  }
+}
+
+export const processTreeIsRunning = (child, killImpl = process.kill) => {
+  if (!child) return false
+  if (process.platform !== 'win32' && Number.isInteger(child.pid)) {
+    try {
+      killImpl(-child.pid, 0)
+      return true
+    } catch (error) {
+      if (error?.code === 'ESRCH') return false
+      if (error?.code === 'EPERM') return true
+      throw error
+    }
+  }
+  return child.exitCode === null && child.signalCode === null
+}
+
+export const signalProcessTree = (child, signal, killImpl = process.kill) => {
+  if (!child) return
+  let groupError
+  if (process.platform !== 'win32' && Number.isInteger(child.pid)) {
+    try {
+      killImpl(-child.pid, signal)
+      return
+    } catch (error) {
+      if (error?.code === 'ESRCH') return
+      groupError = error
+    }
+  }
+  if (child.exitCode !== null || child.signalCode !== null) {
+    if (groupError) throw groupError
+    return
+  }
+  try {
+    child.kill(signal)
+  } catch (error) {
+    throw new AggregateError([groupError, error].filter(Boolean), `Could not send ${signal} to process tree`)
+  }
+}
+
+const cleanupDelay = ms => new Promise(resolvePromise => {
+  const timer = setTimeout(resolvePromise, ms)
+  timer.unref?.()
+})
+
+export const waitForProcessTreeExit = async ({
+  child,
+  label = 'child process',
+  timeoutMs = 1000,
+  pollMs = 25,
+  isRunningImpl = processTreeIsRunning,
+  delayImpl = cleanupDelay
+}) => {
+  const deadlineAt = Date.now() + timeoutMs
+  while (isRunningImpl(child)) {
+    if (Date.now() >= deadlineAt) {
+      throw new Error(`${label} process tree remained alive after ${timeoutMs}ms`)
+    }
+    await delayImpl(Math.min(pollMs, Math.max(1, deadlineAt - Date.now())))
+  }
+}
+
+export const stopProcessTree = async ({
+  child,
+  label = 'child process',
+  termTimeoutMs = 1000,
+  killTimeoutMs = 1000,
+  signalImpl = signalProcessTree,
+  isRunningImpl = processTreeIsRunning,
+  delayImpl = cleanupDelay
+}) => {
+  if (!child || !isRunningImpl(child)) return
+  signalImpl(child, 'SIGTERM')
+  try {
+    await waitForProcessTreeExit({
+      child,
+      label,
+      timeoutMs: termTimeoutMs,
+      isRunningImpl,
+      delayImpl
+    })
+    return
+  } catch (termError) {
+    signalImpl(child, 'SIGKILL')
+    try {
+      await waitForProcessTreeExit({
+        child,
+        label,
+        timeoutMs: killTimeoutMs,
+        isRunningImpl,
+        delayImpl
+      })
+    } catch (killError) {
+      throw new AggregateError([termError, killError], `${label} process tree did not exit after SIGTERM/SIGKILL`)
+    }
+  }
+}
+
+export const completeTrackedCleanup = async (cleanup, untrack) => {
+  await cleanup()
+  untrack()
 }
 
 export const redactUrl = (value) => {
@@ -438,4 +612,15 @@ export const sanitizeMessage = (value, secrets = []) => {
   return message.replace(URL_PATTERN, match => redactUrl(match))
 }
 
-export const sanitizeError = (error, secrets = []) => sanitizeMessage(error?.message || error, secrets)
+const errorText = (error, seen = new Set()) => {
+  if (!error || typeof error !== 'object') return String(error ?? '')
+  if (seen.has(error)) return '[repeated error]'
+  seen.add(error)
+  const message = error.message || String(error)
+  if (error instanceof AggregateError && error.errors?.length) {
+    return `${message}: ${error.errors.map(item => errorText(item, seen)).join('; ')}`
+  }
+  return message
+}
+
+export const sanitizeError = (error, secrets = []) => sanitizeMessage(errorText(error), secrets)
