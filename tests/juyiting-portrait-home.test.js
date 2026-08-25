@@ -48,16 +48,34 @@ describe('HallPortraitHome', () => {
     expect(portraitHomeSource).not.to.include('visualViewport')
   })
 
-  it('opens a tapped todo only after the tasks panel is mounted, including the same task again', () => {
-    const handler = hallSource.match(/const handlePortraitTaskOpen = async task => \{([\s\S]*?)\n\nconst openTaskWorkspace/)?.[1] || ''
+  it('opens a tapped todo in the page-owned portrait detail without depending on the bounty-panel watcher', () => {
+    const handler = hallSource.match(/const handlePortraitTaskOpen = task => \{([\s\S]*?)\n\}/)?.[1] || ''
+    const boardHandler = hallSource.match(/const handlePortraitTaskBoard = \(\) => \{([\s\S]*?)\n\}/)?.[1] || ''
+    const discussionHandler = hallSource.match(/const handlePortraitTaskDiscussion = task => \{([\s\S]*?)\n\}/)?.[1] || ''
+
     expect(portraitHomeSource).to.include("const openTask = task => emit('open-task', task)")
-    expect(handler).to.include("openPanel('tasks')")
-    expect(handler).to.include('await nextTick()')
-    expect(handler).to.include('selectedTask.value?.id === task.id')
-    expect(handler).to.include('selectedTask.value = null')
-    expect(handler).to.include('await selectTask(task)')
-    expect(handler.indexOf("openPanel('tasks')")).to.be.lessThan(handler.indexOf('await nextTick()'))
-    expect(handler.indexOf('await nextTick()')).to.be.lessThan(handler.lastIndexOf('await selectTask(task)'))
+    expect(portraitHomeSource).to.include('taskDetailOpen: Boolean')
+    expect(portraitHomeSource).to.include('v-if="taskDetailOpen && selectedTask"')
+    expect(portraitHomeSource).to.include('{{ taskStatusText(selectedTask.status) }}')
+    expect(portraitHomeSource).to.include('榜号 {{ selectedTask.id }}')
+    expect(portraitHomeSource).to.include("selectedTask.description || selectedTask.content || '暂无详情，待厅中议定。'")
+    expect(portraitHomeSource).to.include("selectedTask.requiredAbilities?.length ? selectedTask.requiredAbilities.join(' / ') : '不拘本领'")
+    expect(portraitHomeSource).to.include("emit('close-task-detail')")
+    expect(portraitHomeSource).to.include("emit('open-task-board')")
+    expect(portraitHomeSource).to.include("emit('discuss-task', selectedTask)")
+
+    expect(handler).to.include('const selection = selectTask(task)')
+    expect(handler).to.include('portraitTaskDetailOpen.value = true')
+    expect(handler).not.to.include("openPanel('tasks')")
+    expect(handler).not.to.include('nextTick')
+    expect(handler.indexOf('selectTask(task)')).to.be.lessThan(handler.indexOf('portraitTaskDetailOpen.value = true'))
+    expect(hallSource).to.include('const closePortraitTaskDetail = () => {')
+    expect(hallSource).to.include('portraitTaskDetailOpen.value = false')
+    expect(boardHandler).to.include('closePortraitTaskDetail()')
+    expect(boardHandler).to.include("openPanel('tasks')")
+    expect(discussionHandler).to.include('closePortraitTaskDetail()')
+    expect(discussionHandler).to.include('discussTask(task)')
+    expect(hallSource).to.include("if (mode !== 'portrait-command') closePortraitTaskDetail()")
   })
 
   it('consumes page-owned map, roster, task, and selected-context state without creating a second session', () => {
@@ -66,12 +84,16 @@ describe('HallPortraitHome', () => {
       ':map-agents="mapAgents"',
       ':tasks="tasks"',
       ':selected-agent="selectedAgent"',
-      ':selected-task="selectedTask"'
+      ':selected-task="selectedTask"',
+      ':task-detail-open="portraitTaskDetailOpen"'
     ]) expect(hallSource).to.include(binding)
 
     expect(portraitHomeSource).to.include("emit('select-agent', agent)")
     expect(portraitHomeSource).to.include("emit('open-task', task)")
     expect(hallSource).to.include('@open-task="handlePortraitTaskOpen"')
+    expect(hallSource).to.include('@close-task-detail="closePortraitTaskDetail"')
+    expect(hallSource).to.include('@open-task-board="handlePortraitTaskBoard"')
+    expect(hallSource).to.include('@discuss-task="handlePortraitTaskDiscussion"')
     expect(portraitHomeSource).to.not.include('useHallData')
     expect(portraitHomeSource).to.not.include('useHallConversation')
     expect(portraitHomeSource).to.not.include("ref(")

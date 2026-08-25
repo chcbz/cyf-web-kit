@@ -97,6 +97,27 @@
       </div>
       <button type="button" @click="emit('quick-action', 'discussion')">厅前议事</button>
     </section>
+
+    <section
+      v-if="taskDetailOpen && selectedTask"
+      class="portrait-task-detail"
+      role="dialog"
+      aria-modal="true"
+      aria-label="榜文详情"
+    >
+      <div class="task-detail-heading">
+        <span :class="taskStateClass(selectedTask.status)">{{ taskStatusText(selectedTask.status) }}</span>
+        <button type="button" aria-label="关闭榜文详情" @click="emit('close-task-detail')">关闭</button>
+      </div>
+      <p class="task-detail-id">榜号 {{ selectedTask.id }}</p>
+      <h2>{{ selectedTask.title || '未命名榜文' }}</h2>
+      <p class="task-detail-description">{{ selectedTask.description || selectedTask.content || '暂无详情，待厅中议定。' }}</p>
+      <p class="task-detail-abilities">所需本领：{{ selectedTask.requiredAbilities?.length ? selectedTask.requiredAbilities.join(' / ') : '不拘本领' }}</p>
+      <div class="task-detail-actions">
+        <button type="button" @click="emit('open-task-board')">进入悬赏榜</button>
+        <button type="button" @click="emit('discuss-task', selectedTask)">就此议事</button>
+      </div>
+    </section>
   </main>
 </template>
 
@@ -111,13 +132,14 @@ const props = defineProps({
   refreshing: Boolean,
   selectedAgent: { type: Object, default: null },
   selectedTask: { type: Object, default: null },
+  taskDetailOpen: Boolean,
   statusClass: { type: Function, required: true },
   taskStateClass: { type: Function, required: true },
   taskStatusText: { type: Function, required: true },
   tasks: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['open-task', 'quick-action', 'refresh-hall', 'request-landscape', 'select-agent'])
+const emit = defineEmits(['close-task-detail', 'discuss-task', 'open-task', 'open-task-board', 'quick-action', 'refresh-hall', 'request-landscape', 'select-agent'])
 
 const quickActions = Object.freeze([
   { key: 'agents', label: '点将册', icon: '将' },
@@ -155,6 +177,50 @@ const openTask = task => emit('open-task', task)
     linear-gradient(160deg, #211812 0%, #382418 45%, #171a18 100%);
   color: #fff5df;
 }
+
+.portrait-task-detail {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(247, 204, 112, 0.5);
+  border-radius: 14px;
+  background: #382418;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.32);
+}
+
+.task-detail-heading,
+.task-detail-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.task-detail-heading > span,
+.task-detail-id,
+.task-detail-abilities {
+  color: #f2ca79;
+  font-size: 12px;
+}
+
+.task-detail-heading button,
+.task-detail-actions button {
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 9px;
+  background: rgba(255, 239, 200, 0.13);
+  color: #fff4dc;
+  font-weight: 700;
+}
+
+.task-detail-actions button:last-child {
+  background: #a84928;
+}
+
+.task-detail-id,
+.task-detail-description,
+.task-detail-abilities { margin: 0; }
+.task-detail-description { color: rgba(255, 237, 199, 0.84); line-height: 1.55; }
 
 .portrait-header,
 .section-heading,

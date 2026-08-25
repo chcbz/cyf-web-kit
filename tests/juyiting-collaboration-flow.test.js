@@ -237,7 +237,8 @@ describe('JuyiHall collaboration flow contract', () => {
   it('keeps the portrait home as a shared-state presentation shell with separate map and roster flows', () => {
     expect(existsSync(portraitHomeUrl)).to.equal(true)
     expect(hallSource).to.include("import HallPortraitHome from '@/components/juyiting/HallPortraitHome.vue'")
-    expect(hallSource).to.match(/<HallPortraitHome[\s\S]*?:agents="agents"[\s\S]*?:map-agents="mapAgents"[\s\S]*?:selected-agent="selectedAgent"[\s\S]*?:selected-task="selectedTask"/)
+    expect(hallSource).to.match(/<HallPortraitHome[\s\S]*?:agents="agents"[\s\S]*?:map-agents="mapAgents"[\s\S]*?:selected-agent="selectedAgent"[\s\S]*?:selected-task="selectedTask"[\s\S]*?:task-detail-open="portraitTaskDetailOpen"/)
+    expect(hallSource).to.include('const portraitTaskDetailOpen = ref(false)')
     expect(hallSource).to.match(/<HallStage\s+v-else[\s\S]*?:map-agents="mapAgents"/)
     expect(portraitHomeSource).not.to.include('/agent/active')
     expect(portraitHomeSource).not.to.include('useHallData')

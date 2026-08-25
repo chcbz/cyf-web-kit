@@ -9,6 +9,7 @@
       :refreshing="hallRefreshing"
       :selected-agent="selectedAgent"
       :selected-task="selectedTask"
+      :task-detail-open="portraitTaskDetailOpen"
       :status-class="statusClass"
       :task-state-class="taskStateClass"
       :task-status-text="taskStatusText"
@@ -18,6 +19,9 @@
       @request-landscape="requestLandscape"
       @select-agent="selectAgent"
       @open-task="handlePortraitTaskOpen"
+      @close-task-detail="closePortraitTaskDetail"
+      @open-task-board="handlePortraitTaskBoard"
+      @discuss-task="handlePortraitTaskDiscussion"
     />
 
     <HallStage
@@ -273,7 +277,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useGlobalStore } from '@/stores/global'
 import { useApiStore } from '@/stores/api'
 import { agentApi, chatApi } from '@/composables/useHttp'
@@ -319,6 +323,7 @@ const apiStore = useApiStore()
 
 const selectedAgent = ref(null)
 const selectedTask = ref(null)
+const portraitTaskDetailOpen = ref(false)
 // Stable FE2 entrypoint: taskWorkspace.workspace, connectionState, error, subject, retry, and reload.
 const taskWorkspaceEnabled = isTaskWorkspaceBuildEnabled(import.meta.env.VITE_JUYITING_TASK_WORKSPACE_ENABLED)
 const taskWorkspace = taskWorkspaceEnabled ? useTaskWorkspace() : null
@@ -633,16 +638,32 @@ const handlePortraitQuickAction = (action) => {
   if (['agents', 'tasks', 'catalog', 'library'].includes(action)) openPanel(action)
 }
 
-const handlePortraitTaskOpen = async task => {
-  if (!task?.id) return
-  openPanel('tasks')
-  await nextTick()
-  if (selectedTask.value?.id === task.id) {
-    selectedTask.value = null
-    await nextTick()
-  }
-  await selectTask(task)
+const closePortraitTaskDetail = () => {
+  portraitTaskDetailOpen.value = false
 }
+
+const handlePortraitTaskOpen = task => {
+  if (!task?.id) return false
+  const selection = selectTask(task)
+  portraitTaskDetailOpen.value = true
+  return selection
+}
+
+const handlePortraitTaskBoard = () => {
+  closePortraitTaskDetail()
+  openPanel('tasks')
+}
+
+const handlePortraitTaskDiscussion = task => {
+  if (!task?.id) return false
+  closePortraitTaskDetail()
+  discussTask(task)
+  return true
+}
+
+watch(experienceMode, mode => {
+  if (mode !== 'portrait-command') closePortraitTaskDetail()
+})
 
 const openTaskWorkspace = () => {
   if (!taskWorkspaceEnabled || !taskWorkspaceSubject.value?.taskId || !taskWorkspaceSubject.value?.actorAgentId) return
