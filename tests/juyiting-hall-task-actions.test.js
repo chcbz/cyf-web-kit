@@ -1,8 +1,11 @@
 import { expect } from 'chai'
+import { readFileSync } from 'fs'
 import { ref } from 'vue'
 
 import { useHallData } from '../src/composables/juyiting/useHallData.js'
 import { useHallTaskActions } from '../src/composables/juyiting/useHallTaskActions.js'
+
+const hallSource = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
 
 const createHarness = (response, { canAssign = () => true } = {}) => {
   const apiCalls = []
@@ -70,6 +73,16 @@ describe('useHallTaskActions', () => {
     expect(harness.selectedTask.value).to.equal(null)
     expect(harness.calls).to.deep.equal({ error: 0, success: 0 })
     expect(harness.toasts).to.deep.equal([])
+  })
+
+  it('keeps the JuyiHall assignment wrapper fail-closed before delegating to task actions', () => {
+    const wrapper = hallSource.match(/const assignTask = async \(task, agent\) => \{([\s\S]*?)\n\}/)?.[1] || ''
+    expect(wrapper).to.include('const targetAgents = Array.isArray(agent) ? agent : [agent].filter(Boolean)')
+    expect(wrapper).to.include('const hasExplicitAgentId')
+    expect(wrapper).to.include('if (!task?.id || !targetAgents.length || targetAgents.some(item => !hasExplicitAgentId(item))) return false')
+    expect(wrapper).to.include('if (targetAgents.some(item => !canAssign(task, item))) return false')
+    expect(wrapper).to.include('await runAssignTask(task, agent)')
+    expect(wrapper).not.to.include('selectedAgent.value')
   })
 
   it('requires an explicit agent id in the real canAssign composable even when selectedAgent is populated', () => {

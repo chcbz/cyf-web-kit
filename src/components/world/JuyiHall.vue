@@ -1,6 +1,27 @@
 <template>
   <div class="juyi-page" :class="{ 'is-panel-open': activePanel, [`experience-${experienceMode}`]: true }">
+    <HallPortraitHome
+      v-if="!experienceReady || experienceMode === 'portrait-command'"
+      :agents="agents"
+      :map-agents="mapAgents"
+      :orientation-hint="orientationHint"
+      :orientation-request-pending="orientationRequestPending"
+      :refreshing="hallRefreshing"
+      :selected-agent="selectedAgent"
+      :selected-task="selectedTask"
+      :status-class="statusClass"
+      :task-state-class="taskStateClass"
+      :task-status-text="taskStatusText"
+      :tasks="tasks"
+      @quick-action="handlePortraitQuickAction"
+      @refresh-hall="refreshHall"
+      @request-landscape="requestLandscape"
+      @select-agent="selectAgent"
+      @select-task="selectTask"
+    />
+
     <HallStage
+      v-else
       :agent-bubbles="agentBubbles"
       :agent-key="agentKey"
       :agent-style="sceneAgentStyle"
@@ -278,6 +299,7 @@ import { portraitName, portraitRole, portraitShortName, portraitStyle, roleClass
 import AgentPanel from '@/components/juyiting/AgentPanel.vue'
 import BountyDiscussionPanel from '@/components/juyiting/BountyDiscussionPanel.vue'
 import BountyPanel from '@/components/juyiting/BountyPanel.vue'
+import HallPortraitHome from '@/components/juyiting/HallPortraitHome.vue'
 import HallStage from '@/components/juyiting/HallStage.vue'
 import LibraryPanel from '@/components/juyiting/LibraryPanel.vue'
 import PersonaCatalogPanel from '@/components/juyiting/PersonaCatalogPanel.vue'
@@ -315,6 +337,7 @@ const toast = ref('')
 const activePanel = ref('')
 const renderedPanel = ref('')
 const hallRefreshing = ref(false)
+const experienceReady = ref(false)
 const agentBubbles = ref({})
 const outgoingMetadata = ref({})
 const {
@@ -596,6 +619,18 @@ const handleStagePanelOpen = (panel) => {
     return
   }
   openPanel(panel)
+}
+
+const handlePortraitQuickAction = (action) => {
+  if (action === 'refresh') {
+    void refreshHall()
+    return
+  }
+  if (action === 'discussion') {
+    handleStagePanelOpen('chat')
+    return
+  }
+  if (['agents', 'tasks', 'catalog', 'library'].includes(action)) openPanel(action)
 }
 
 const openTaskWorkspace = () => {
@@ -905,6 +940,8 @@ onMounted(async () => {
   globalStore.setShowBack(false)
   globalStore.setShowAppBar(false)
   globalStore.setShowMore(false)
+  await nextTick()
+  experienceReady.value = true
   await refreshHall({ silent: true })
   startDialogueBubbles()
 })
