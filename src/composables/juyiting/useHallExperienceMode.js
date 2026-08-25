@@ -93,36 +93,38 @@ export const useHallExperienceMode = () => {
     } catch { /* best-effort ownership cleanup */ }
   }
 
-  const reconcileFullscreenCompletion = async (token, element) => {
-    if (!element || globalThis.document?.fullscreenElement !== element) return 'missing'
+  const attachOrCleanResource = async (token, attach, cleanup) => {
     const ownership = requestOwnership
-    if (ownership?.token === token && !ownership.releasing) {
-      ownership.fullscreenElement = element
-      return 'current'
+    if (ownership && !ownership.releasing) {
+      attach(ownership)
+      return ownership.token === token ? 'current' : 'newer'
     }
-    if (ownership && ownership.token !== token) {
-      ownership.fullscreenElement = element
-      return 'newer'
-    }
-    await releaseFullscreenElement(element)
+    await cleanup(ownership)
     return 'released'
   }
 
-  const reconcileOrientationLockCompletion = token => {
-    const ownership = requestOwnership
-    if (ownership?.token === token && !ownership.releasing) {
-      ownership.orientationLocked = true
-      return 'current'
-    }
-    if (ownership && ownership.token !== token) {
-      ownership.orientationLocked = true
-      return 'newer'
-    }
-    try {
-      globalThis.screen?.orientation?.unlock?.()
-    } catch { /* late lock cleanup */ }
-    return 'released'
+  const reconcileFullscreenCompletion = async (token, element) => {
+    if (!element || globalThis.document?.fullscreenElement !== element) return 'missing'
+    return attachOrCleanResource(
+      token,
+      ownership => { ownership.fullscreenElement = element },
+      ownership => (
+        ownership?.releasing && ownership.fullscreenElement === element && ownership.releasePromise
+          ? ownership.releasePromise
+          : releaseFullscreenElement(element)
+      )
+    )
   }
+
+  const reconcileOrientationLockCompletion = token => attachOrCleanResource(
+    token,
+    ownership => { ownership.orientationLocked = true },
+    () => {
+      try {
+        globalThis.screen?.orientation?.unlock?.()
+      } catch { /* late lock cleanup */ }
+    }
+  )
 
   const releaseRequestOwnership = async token => {
     const ownership = requestOwnership
@@ -206,7 +208,7 @@ export const useHallExperienceMode = () => {
     } else {
       try {
         await lockOrientation.call(globalThis.screen.orientation, 'landscape')
-        reconcileOrientationLockCompletion(token)
+        await reconcileOrientationLockCompletion(token)
       } catch {
         failed = true
       }

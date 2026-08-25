@@ -667,6 +667,239 @@ describe('Juyi Hall experience mode', () => {
     }
   })
 
+  it('cleans late resources when the only current owner is releasing', async () => {
+    const originalSetTimeout = global.window.setTimeout
+    const originalClearTimeout = global.window.clearTimeout
+
+    const failedNewOwnerEnv = setupEnvironment()
+    const oldLock = deferred()
+    const failedOwnerExit = deferred()
+    const failedOwnerTimers = []
+    let failedOwnerLockCalls = 0
+    let failedOwnerUnlockCalls = 0
+    let failedOwnerExitCalls = 0
+    global.window.setTimeout = callback => {
+      failedOwnerTimers.push(callback)
+      return failedOwnerTimers.length
+    }
+    global.window.clearTimeout = () => {}
+    global.document.documentElement.requestFullscreen = async () => setFullscreenElement(global.document.documentElement)
+    global.screen.orientation.lock = () => {
+      failedOwnerLockCalls += 1
+      return failedOwnerLockCalls === 1 ? oldLock.promise : Promise.reject(new Error('new lock rejected'))
+    }
+    global.screen.orientation.unlock = () => { failedOwnerUnlockCalls += 1 }
+    global.document.exitFullscreen = () => {
+      failedOwnerExitCalls += 1
+      if (failedOwnerExitCalls === 1) {
+        setFullscreenElement(null)
+        return Promise.resolve()
+      }
+      return failedOwnerExit.promise.then(() => setFullscreenElement(null))
+    }
+    try {
+      const { mode, wrapper } = await mountMode()
+      const oldRequest = mode.requestLandscape()
+      await flush()
+      failedOwnerTimers[0]()
+      await flush()
+      const newerRequest = mode.requestLandscape()
+      await flush()
+      expect(failedOwnerExitCalls).to.equal(2)
+      oldLock.resolve()
+      await flush()
+      expect(failedOwnerUnlockCalls).to.equal(1)
+      failedOwnerExit.resolve()
+      expect(await newerRequest).to.equal(false)
+      expect(await oldRequest).to.equal(false)
+      wrapper.unmount()
+    } finally {
+      global.window.setTimeout = originalSetTimeout
+      global.window.clearTimeout = originalClearTimeout
+      failedNewOwnerEnv.restore()
+    }
+
+    const unmountedNewOwnerEnv = setupEnvironment()
+    const unmountedOldLock = deferred()
+    const unmountedNewLock = deferred()
+    const unmountedExit = deferred()
+    const unmountedTimers = []
+    let unmountedLockCalls = 0
+    let unmountedUnlockCalls = 0
+    let unmountedExitCalls = 0
+    global.window.setTimeout = callback => {
+      unmountedTimers.push(callback)
+      return unmountedTimers.length
+    }
+    global.window.clearTimeout = () => {}
+    global.document.documentElement.requestFullscreen = async () => setFullscreenElement(global.document.documentElement)
+    global.screen.orientation.lock = () => {
+      unmountedLockCalls += 1
+      return unmountedLockCalls === 1 ? unmountedOldLock.promise : unmountedNewLock.promise
+    }
+    global.screen.orientation.unlock = () => { unmountedUnlockCalls += 1 }
+    global.document.exitFullscreen = () => {
+      unmountedExitCalls += 1
+      if (unmountedExitCalls === 1) {
+        setFullscreenElement(null)
+        return Promise.resolve()
+      }
+      return unmountedExit.promise.then(() => setFullscreenElement(null))
+    }
+    try {
+      const { mode, wrapper } = await mountMode()
+      const oldRequest = mode.requestLandscape()
+      await flush()
+      unmountedTimers[0]()
+      await flush()
+      const newerRequest = mode.requestLandscape()
+      await flush()
+      wrapper.unmount()
+      await flush()
+      unmountedOldLock.resolve()
+      await flush()
+      expect(unmountedUnlockCalls).to.equal(1)
+      unmountedExit.resolve()
+      expect(await oldRequest).to.equal(false)
+      unmountedNewLock.resolve()
+      expect(await newerRequest).to.equal(false)
+      await flush()
+      expect(unmountedUnlockCalls).to.equal(2)
+    } finally {
+      global.window.setTimeout = originalSetTimeout
+      global.window.clearTimeout = originalClearTimeout
+      unmountedNewOwnerEnv.restore()
+    }
+
+    const sameOwnerEnv = setupEnvironment()
+    const sameOwnerLock = deferred()
+    const sameOwnerExit = deferred()
+    const sameOwnerTimers = []
+    let sameOwnerUnlockCalls = 0
+    global.window.setTimeout = callback => {
+      sameOwnerTimers.push(callback)
+      return sameOwnerTimers.length
+    }
+    global.window.clearTimeout = () => {}
+    global.document.documentElement.requestFullscreen = async () => setFullscreenElement(global.document.documentElement)
+    global.screen.orientation.lock = () => sameOwnerLock.promise
+    global.screen.orientation.unlock = () => { sameOwnerUnlockCalls += 1 }
+    global.document.exitFullscreen = () => sameOwnerExit.promise.then(() => setFullscreenElement(null))
+    try {
+      const { mode, wrapper } = await mountMode()
+      const request = mode.requestLandscape()
+      await flush()
+      sameOwnerTimers[0]()
+      await flush()
+      sameOwnerLock.resolve()
+      await flush()
+      expect(sameOwnerUnlockCalls).to.equal(1)
+      sameOwnerExit.resolve()
+      expect(await request).to.equal(false)
+      wrapper.unmount()
+    } finally {
+      global.window.setTimeout = originalSetTimeout
+      global.window.clearTimeout = originalClearTimeout
+      sameOwnerEnv.restore()
+    }
+  })
+
+  it('cleans late fullscreen against releasing Hall ownership without touching host fullscreen', async () => {
+    const originalSetTimeout = global.window.setTimeout
+    const originalClearTimeout = global.window.clearTimeout
+    const hallEnv = setupEnvironment()
+    const oldFullscreen = deferred()
+    const hallExit = deferred()
+    const hallTimers = []
+    let fullscreenRequests = 0
+    let hallExitCalls = 0
+    global.window.setTimeout = callback => {
+      hallTimers.push(callback)
+      return hallTimers.length
+    }
+    global.window.clearTimeout = () => {}
+    global.document.documentElement.requestFullscreen = () => {
+      fullscreenRequests += 1
+      if (fullscreenRequests === 1) return oldFullscreen.promise
+      setFullscreenElement(global.document.documentElement)
+      return Promise.resolve()
+    }
+    global.screen.orientation.lock = async () => { throw new Error('new lock rejected') }
+    global.document.exitFullscreen = () => {
+      hallExitCalls += 1
+      return hallExit.promise.then(() => setFullscreenElement(null))
+    }
+    try {
+      const { mode, wrapper } = await mountMode()
+      const oldRequest = mode.requestLandscape()
+      await flush()
+      hallTimers[0]()
+      await flush()
+      const newerRequest = mode.requestLandscape()
+      await flush()
+      expect(hallExitCalls).to.equal(1)
+      oldFullscreen.resolve()
+      await flush()
+      expect(hallExitCalls).to.equal(1)
+      hallExit.resolve()
+      expect(await newerRequest).to.equal(false)
+      expect(await oldRequest).to.equal(false)
+      wrapper.unmount()
+    } finally {
+      global.window.setTimeout = originalSetTimeout
+      global.window.clearTimeout = originalClearTimeout
+      hallEnv.restore()
+    }
+
+    const hostEnv = setupEnvironment()
+    const hostFullscreen = deferred()
+    const hostExit = deferred()
+    const hostTimers = []
+    const hostElement = global.document.createElement('div')
+    let hostRequests = 0
+    let hostExitCalls = 0
+    global.window.setTimeout = callback => {
+      hostTimers.push(callback)
+      return hostTimers.length
+    }
+    global.window.clearTimeout = () => {}
+    global.document.documentElement.requestFullscreen = () => {
+      hostRequests += 1
+      if (hostRequests === 1) return hostFullscreen.promise
+      setFullscreenElement(global.document.documentElement)
+      return Promise.resolve()
+    }
+    global.screen.orientation.lock = async () => { throw new Error('new lock rejected') }
+    global.document.exitFullscreen = () => {
+      hostExitCalls += 1
+      return hostExit.promise
+    }
+    try {
+      const { mode, wrapper } = await mountMode()
+      const oldRequest = mode.requestLandscape()
+      await flush()
+      hostTimers[0]()
+      await flush()
+      const newerRequest = mode.requestLandscape()
+      await flush()
+      expect(hostExitCalls).to.equal(1)
+      setFullscreenElement(hostElement)
+      hostFullscreen.resolve()
+      await flush()
+      expect(hostExitCalls).to.equal(1)
+      expect(global.document.fullscreenElement).to.equal(hostElement)
+      hostExit.resolve()
+      expect(await newerRequest).to.equal(false)
+      expect(await oldRequest).to.equal(false)
+      expect(global.document.fullscreenElement).to.equal(hostElement)
+      wrapper.unmount()
+    } finally {
+      global.window.setTimeout = originalSetTimeout
+      global.window.clearTimeout = originalClearTimeout
+      hostEnv.restore()
+    }
+  })
+
   it('never claims, requests, or exits host-owned fullscreen', async () => {
     const env = setupEnvironment()
     const hostElement = global.document.createElement('div')
