@@ -826,10 +826,10 @@ describe('juyiting public beta preflight safety', () => {
         this.events[options?.once ? 'once' : 'on'](name, listener)
       }
       removeEventListener (name, listener) { this.events.off(name, listener) }
-      close () {
+      close (code, reason) {
         setImmediate(() => {
           this.readyState = 3
-          this.events.emit('close')
+          this.events.emit('close', { code, reason, wasClean: true })
         })
       }
     }
@@ -905,10 +905,10 @@ describe('juyiting public beta preflight safety', () => {
         })
       }
 
-      close () {
+      close (code, reason) {
         setImmediate(() => {
           this.readyState = 3
-          this.events.emit('close')
+          this.events.emit('close', { code, reason, wasClean: true })
         })
       }
     }
@@ -933,6 +933,72 @@ describe('juyiting public beta preflight safety', () => {
       }
     )
     await cdp.close()
+    assert.equal(socket.readyState, 3)
+    await guard.dispose()
+  })
+
+  it('queued remote close delivered during local cleanup cannot inherit local close provenance', async () => {
+    const guard = makeGuard()
+    const runtime = {
+      guard,
+      cdpCommandTimeoutMs: 100,
+      cdpCloseTimeoutMs: 100
+    }
+    let socket
+    class QueuedRemoteCloseSocket {
+      constructor () {
+        socket = this
+        this.readyState = 0
+        this.remoteCloseQueued = false
+        this.events = new EventEmitter()
+        queueMicrotask(() => {
+          this.readyState = 1
+          this.events.emit('open')
+        })
+      }
+
+      addEventListener (name, listener, options) {
+        this.events[options?.once ? 'once' : 'on'](name, listener)
+      }
+
+      removeEventListener (name, listener) { this.events.off(name, listener) }
+
+      send (payload) {
+        const request = JSON.parse(payload)
+        setImmediate(() => {
+          this.events.emit('message', {
+            data: JSON.stringify({ id: request.id, result: { result: { value: null } } })
+          })
+        })
+      }
+
+      queueRemoteClose () {
+        this.remoteCloseQueued = true
+      }
+
+      close (code, reason) {
+        assert.equal(this.remoteCloseQueued, true)
+        assert.equal(code, 1000)
+        assert.match(reason, /^juyiting-preflight-[a-f0-9]{16}$/)
+        setImmediate(() => {
+          this.readyState = 3
+          this.events.emit('close', {
+            code: 1006,
+            reason: 'remote failure queued before local close',
+            wasClean: false
+          })
+        })
+      }
+    }
+
+    const cdp = new CdpSession(runtime, 'ws://127.0.0.1/devtools/page/offline', QueuedRemoteCloseSocket)
+    await cdp.open()
+    await cdp.terminalBarrier()
+    socket.queueRemoteClose()
+    await assert.rejects(
+      cdp.close(),
+      /remote or unproven close was delivered with code 1006/
+    )
     assert.equal(socket.readyState, 3)
     await guard.dispose()
   })

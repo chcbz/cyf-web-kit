@@ -411,16 +411,21 @@ export class CdpSession {
     this.socketErrors = []
     this.activityVersion = 0
     this.opened = false
-    this.closing = false
     this.closed = false
+    this.localCloseHandshake = null
     this.ws = new WebSocketCtor(webSocketUrl)
     this.onSocketError = error => {
       if (!this.opened) return
       this.recordSocketError(error, 'CDP WebSocket emitted an error')
     }
-    this.onSocketClose = () => {
-      if (!this.opened || this.closing) return
-      this.recordSocketError(new Error('CDP WebSocket closed unexpectedly'))
+    this.onSocketClose = event => {
+      if (this.isExpectedLocalClose(event)) {
+        this.localCloseHandshake.confirmed = true
+        return
+      }
+      if (!this.opened && !this.localCloseHandshake?.initiated) return
+      const code = Number.isInteger(event?.code) ? ` with code ${event.code}` : ''
+      this.recordSocketError(new Error(`CDP WebSocket remote or unproven close was delivered${code}`))
     }
     this.ws.addEventListener('error', this.onSocketError)
     this.ws.addEventListener('close', this.onSocketClose)
@@ -498,16 +503,30 @@ export class CdpSession {
     this.socketErrors.push(this.normalizeSocketError(error, fallback))
   }
 
+  isExpectedLocalClose (event) {
+    const handshake = this.localCloseHandshake
+    return Boolean(
+      handshake?.initiated &&
+      event?.wasClean === true &&
+      event?.code === handshake.code &&
+      event?.reason === handshake.reason
+    )
+  }
+
+  takeTerminalErrors () {
+    return [
+      ...this.handlerErrors.splice(0),
+      ...this.socketErrors.splice(0)
+    ]
+  }
+
   throwHandlerErrors () {
     const error = this.handlerErrors.shift()
     if (error) throw error
   }
 
   throwTerminalErrors () {
-    const errors = [
-      ...this.handlerErrors.splice(0),
-      ...this.socketErrors.splice(0)
-    ]
+    const errors = this.takeTerminalErrors()
     if (errors.length === 1) throw errors[0]
     if (errors.length > 1) throw new AggregateError(errors, 'CDP terminal state reported errors')
   }
@@ -553,45 +572,72 @@ export class CdpSession {
 
   close () {
     if (this.closePromise) return this.closePromise
-    this.closing = true
     for (const { reject, timer } of this.pending.values()) {
       clearTimeout(timer)
       reject(new Error('CDP session closed'))
     }
     this.pending.clear()
-    const socketClosePromise = new Promise((resolvePromise, rejectPromise) => {
-      if (this.ws.readyState === 3) {
-        resolvePromise()
-        return
-      }
-      let timer
-      let settled = false
-      const finish = error => {
-        if (settled) return
-        settled = true
-        clearTimeout(timer)
-        this.ws.removeEventListener?.('close', onClose)
-        this.ws.removeEventListener?.('error', onError)
-        if (error) rejectPromise(error)
-        else resolvePromise()
-      }
-      const onClose = () => finish()
-      const onError = error => finish(error instanceof Error ? error : new Error('CDP WebSocket close failed'))
-      this.ws.addEventListener('close', onClose, { once: true })
-      this.ws.addEventListener('error', onError, { once: true })
-      const closeTimeoutMs = this.runtime.cdpCloseTimeoutMs || 3000
-      timer = setTimeout(() => finish(new Error(`CDP WebSocket did not close within ${closeTimeoutMs}ms`)), closeTimeoutMs)
-      try {
-        this.ws.close()
-      } catch (error) {
-        finish(error)
-      }
-    })
-    this.closePromise = socketClosePromise.then(async () => {
-      this.closed = true
+    this.closePromise = (async () => {
+      const closeErrors = []
       await this.waitForTrackedHandlers({ guarded: false })
-      this.throwTerminalErrors()
-    }).finally(() => {
+      closeErrors.push(...this.takeTerminalErrors())
+
+      let socketCloseSucceeded = false
+      if (this.ws.readyState === 3) {
+        closeErrors.push(new Error('CDP WebSocket was already closed before the local close handshake'))
+        socketCloseSucceeded = true
+      } else {
+        try {
+          await new Promise((resolvePromise, rejectPromise) => {
+            let timer
+            let settled = false
+            const finish = error => {
+              if (settled) return
+              settled = true
+              clearTimeout(timer)
+              this.ws.removeEventListener?.('close', onClose)
+              this.ws.removeEventListener?.('error', onError)
+              if (error) rejectPromise(error)
+              else resolvePromise()
+            }
+            const onClose = () => finish()
+            const onError = error => finish(error instanceof Error ? error : new Error('CDP WebSocket close failed'))
+            this.ws.addEventListener('close', onClose, { once: true })
+            this.ws.addEventListener('error', onError, { once: true })
+            const closeTimeoutMs = this.runtime.cdpCloseTimeoutMs || 3000
+            timer = setTimeout(() => finish(new Error(`CDP WebSocket did not close within ${closeTimeoutMs}ms`)), closeTimeoutMs)
+
+            if (this.ws.readyState !== 1) {
+              closeErrors.push(new Error('CDP WebSocket remote close was already in progress before the local close handshake'))
+              if (this.ws.readyState === 3) finish()
+              return
+            }
+            const code = 1000
+            const reason = `juyiting-preflight-${randomBytes(8).toString('hex')}`
+            this.localCloseHandshake = { code, reason, initiated: true, confirmed: false }
+            try {
+              this.ws.close(code, reason)
+            } catch (error) {
+              finish(error)
+            }
+          })
+          socketCloseSucceeded = true
+        } catch (error) {
+          closeErrors.push(error)
+        }
+      }
+
+      await this.waitForTrackedHandlers({ guarded: false })
+      const terminalErrors = this.takeTerminalErrors()
+      if (socketCloseSucceeded && this.localCloseHandshake?.initiated &&
+          !this.localCloseHandshake.confirmed && terminalErrors.length === 0) {
+        closeErrors.push(new Error('CDP WebSocket close did not confirm the local close handshake'))
+      }
+      closeErrors.push(...terminalErrors)
+      this.closed = this.ws.readyState === 3
+      if (closeErrors.length === 1) throw closeErrors[0]
+      if (closeErrors.length > 1) throw new AggregateError(closeErrors, 'CDP WebSocket close failed')
+    })().finally(() => {
       this.ws.removeEventListener?.('error', this.onSocketError)
       this.ws.removeEventListener?.('close', this.onSocketClose)
     })
