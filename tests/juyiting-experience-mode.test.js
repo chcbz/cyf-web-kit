@@ -11,15 +11,25 @@ const flush = async () => {
   await Vue.nextTick()
 }
 
+const deferred = () => {
+  let resolve
+  let reject
+  const promise = new Promise((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 const createMedia = (matches = false) => {
   const listeners = new Set()
   return {
     matches,
     addEventListener: (_event, listener) => listeners.add(listener),
     removeEventListener: (_event, listener) => listeners.delete(listener),
-    emit(next) {
+    emit(next, event = { matches: next }) {
       this.matches = next
-      listeners.forEach(listener => listener({ matches: next }))
+      listeners.forEach(listener => listener(event))
     },
     listenerCount: () => listeners.size
   }
@@ -126,7 +136,7 @@ describe('Juyi Hall experience mode', () => {
     }
   })
 
-  it('lets valid media and legacy events override stale screen truth in both directions', async () => {
+  it('uses per-source freshness so delayed stale callbacks cannot reverse newer media or legacy truth', async () => {
     const missingMedia = setupEnvironment({ mediaLandscape: null, screen: { type: 'portrait-primary', angle: 0 } })
     try {
       const { mode, wrapper } = await mountMode()
@@ -142,6 +152,7 @@ describe('Juyi Hall experience mode', () => {
     try {
       const { mode, wrapper } = await mountMode()
       staleScreenPortraitMedia.orientationMedia.emit(true)
+      staleScreenPortraitMedia.screenOrientation.emit({ nextType: 'portrait-primary', nextAngle: 0 })
       await flush()
       expect(mode.experienceMode.value).to.equal('landscape-map')
       wrapper.unmount()
@@ -153,6 +164,7 @@ describe('Juyi Hall experience mode', () => {
     try {
       const { mode, wrapper } = await mountMode()
       staleScreenLandscapeMedia.orientationMedia.emit(false)
+      staleScreenLandscapeMedia.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
       await flush()
       expect(mode.experienceMode.value).to.equal('portrait-command')
       wrapper.unmount()
@@ -165,6 +177,7 @@ describe('Juyi Hall experience mode', () => {
       const { mode, wrapper } = await mountMode()
       global.window.orientation = 90
       global.window.dispatchEvent(new global.window.Event('orientationchange'))
+      staleScreenPortraitLegacy.screenOrientation.emit({ nextType: 'portrait-primary', nextAngle: 0 })
       await flush()
       expect(mode.experienceMode.value).to.equal('landscape-map')
       wrapper.unmount()
@@ -177,11 +190,30 @@ describe('Juyi Hall experience mode', () => {
       const { mode, wrapper } = await mountMode()
       global.window.orientation = 0
       global.window.dispatchEvent(new global.window.Event('orientationchange'))
+      staleScreenLandscapeLegacy.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
       await flush()
       expect(mode.experienceMode.value).to.equal('portrait-command')
       wrapper.unmount()
     } finally {
       staleScreenLandscapeLegacy.restore()
+    }
+  })
+
+  it('commits changed current media without event.matches and ignores invalid source callbacks', async () => {
+    const env = setupEnvironment({ mediaLandscape: false, screen: { type: 'portrait-primary', angle: 0 }, legacyAngle: 0 })
+    try {
+      const { mode, wrapper } = await mountMode()
+      env.orientationMedia.emit(true, {})
+      await flush()
+      expect(mode.experienceMode.value).to.equal('landscape-map')
+      env.screenOrientation.emit({ nextType: 'unknown', nextAngle: Number.NaN })
+      global.window.orientation = undefined
+      global.window.dispatchEvent(new global.window.Event('orientationchange'))
+      await flush()
+      expect(mode.experienceMode.value).to.equal('landscape-map')
+      wrapper.unmount()
+    } finally {
+      env.restore()
     }
   })
 
@@ -286,34 +318,83 @@ describe('Juyi Hall experience mode', () => {
     }
   })
 
-  it('releases live Hall ownership when physical landscape truth arrives', async () => {
+  it('keeps release-in-flight fenced through a landscape-to-portrait race until exit settles', async () => {
     const env = setupEnvironment()
+    const exit = deferred()
     let requestCalls = 0
     let lockCalls = 0
     let exitCalls = 0
     let unlockCalls = 0
+    let timerCalls = 0
+    const originalSetTimeout = global.window.setTimeout
+    const originalClearTimeout = global.window.clearTimeout
     global.document.documentElement.requestFullscreen = async () => {
       requestCalls += 1
       setFullscreenElement(global.document.documentElement)
     }
-    global.document.exitFullscreen = async () => { exitCalls += 1; setFullscreenElement(null) }
+    global.document.exitFullscreen = () => { exitCalls += 1; return exit.promise }
     global.screen.orientation.lock = async () => { lockCalls += 1 }
     global.screen.orientation.unlock = () => { unlockCalls += 1 }
     try {
       const { mode, wrapper } = await mountMode()
+      global.window.setTimeout = () => ++timerCalls
+      global.window.clearTimeout = () => {}
       expect(await mode.requestLandscape()).to.equal(true)
+      const hintAfterSuccess = mode.orientationHint.value
       env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
       await flush()
       expect(mode.experienceMode.value).to.equal('landscape-map')
       expect(unlockCalls).to.equal(1)
       expect(exitCalls).to.equal(1)
+      env.screenOrientation.emit({ nextType: 'portrait-primary', nextAngle: 0 })
+      await flush()
+      expect(mode.experienceMode.value).to.equal('portrait-command')
       expect(await mode.requestLandscape()).to.equal(false)
       expect(requestCalls).to.equal(1)
       expect(lockCalls).to.equal(1)
+      expect(timerCalls).to.equal(1)
+      expect(mode.orientationHint.value).to.equal(hintAfterSuccess)
+      exit.resolve()
+      await flush()
+      setFullscreenElement(null)
+      expect(await mode.requestLandscape()).to.equal(true)
+      expect(requestCalls).to.equal(2)
+      expect(lockCalls).to.equal(2)
       wrapper.unmount()
       await flush()
-      expect(unlockCalls).to.equal(1)
-      expect(exitCalls).to.equal(1)
+    } finally {
+      global.window.setTimeout = originalSetTimeout
+      global.window.clearTimeout = originalClearTimeout
+      env.restore()
+    }
+  })
+
+  it('clears a release fence without exiting a host element that replaced Hall fullscreen', async () => {
+    const env = setupEnvironment()
+    const hostElement = global.document.createElement('div')
+    let requestCalls = 0
+    let exitCalls = 0
+    global.document.documentElement.requestFullscreen = async () => {
+      requestCalls += 1
+      setFullscreenElement(global.document.documentElement)
+    }
+    global.document.exitFullscreen = async () => { exitCalls += 1 }
+    global.screen.orientation.lock = async () => {}
+    global.screen.orientation.unlock = () => {}
+    try {
+      const { mode, wrapper } = await mountMode()
+      expect(await mode.requestLandscape()).to.equal(true)
+      setFullscreenElement(hostElement)
+      env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
+      await flush()
+      expect(exitCalls).to.equal(0)
+      expect(global.document.fullscreenElement).to.equal(hostElement)
+      env.screenOrientation.emit({ nextType: 'portrait-primary', nextAngle: 0 })
+      setFullscreenElement(null)
+      await flush()
+      expect(await mode.requestLandscape()).to.equal(true)
+      expect(requestCalls).to.equal(2)
+      wrapper.unmount()
     } finally {
       env.restore()
     }

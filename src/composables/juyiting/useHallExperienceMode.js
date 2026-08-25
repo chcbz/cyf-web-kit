@@ -36,6 +36,7 @@ export const useHallExperienceMode = () => {
   let orientationMedia = null
   let coarseMedia = null
   let screenOrientation = null
+  let observedOrientation = { screen: null, media: null, legacy: null }
   let requestGeneration = 0
   let requestTimer = null
   let requestOwnership = null
@@ -59,21 +60,11 @@ export const useHallExperienceMode = () => {
     return null
   }
 
-  const readPhysicalOrientation = ({ source, event, allowInitialViewportFallback = false } = {}) => {
-    if (source === 'screen') {
-      const screenTruth = orientationFromScreen(screenOrientation)
-      if (screenTruth !== null) return screenTruth
-    }
-    if (source === 'media' && typeof event?.matches === 'boolean') return event.matches
-    if (source === 'legacy') {
-      const legacyTruth = orientationFromLegacyWindow()
-      if (legacyTruth !== null) return legacyTruth
-    }
-
-    return readInitialPhysicalOrientation({ allowInitialViewportFallback })
+  const commitFreshSourceTruth = (source, next) => {
+    if (typeof next !== 'boolean' || observedOrientation[source] === next) return false
+    observedOrientation[source] = next
+    return commitPhysicalOrientation(next)
   }
-
-  const commitPhysicalTruth = options => commitPhysicalOrientation(readPhysicalOrientation(options))
 
   const clearRequestTimer = token => {
     if (!requestTimer || (token !== undefined && requestTimer.token !== token)) return
@@ -93,15 +84,19 @@ export const useHallExperienceMode = () => {
     if (!ownership || ownership.token !== token) return
     if (ownership.releasePromise) return ownership.releasePromise
 
+    ownership.releasing = true
     ownership.releasePromise = (async () => {
-      if (ownership.orientationLocked) {
-        try {
-          globalThis.screen?.orientation?.unlock?.()
-        } catch { /* best-effort ownership cleanup */ }
+      try {
+        if (ownership.orientationLocked) {
+          try {
+            globalThis.screen?.orientation?.unlock?.()
+          } catch { /* best-effort ownership cleanup */ }
+        }
+        await releaseFullscreenElement(ownership.fullscreenElement)
+      } finally {
+        if (requestOwnership === ownership) requestOwnership = null
       }
-      await releaseFullscreenElement(ownership.fullscreenElement)
     })()
-    requestOwnership = null
     return ownership.releasePromise
   }
 
@@ -123,7 +118,7 @@ export const useHallExperienceMode = () => {
 
     const token = ++requestGeneration
     const fullscreenElement = globalThis.document?.documentElement || null
-    requestOwnership = { token, fullscreenElement: null, orientationLocked: false, releasePromise: null }
+    requestOwnership = { token, fullscreenElement: null, orientationLocked: false, releasing: false, releasePromise: null }
     orientationRequestPending.value = true
     orientationHint.value = ''
     requestTimer = {
@@ -192,9 +187,16 @@ export const useHallExperienceMode = () => {
     return true
   }
 
-  const handleOrientationMediaChange = event => commitPhysicalTruth({ source: 'media', event })
-  const handleScreenOrientationChange = () => commitPhysicalTruth({ source: 'screen' })
-  const handleLegacyOrientationChange = () => commitPhysicalTruth({ source: 'legacy' })
+  const readScreenSource = () => orientationFromScreen(screenOrientation)
+  const readMediaSource = event => (
+    typeof event?.matches === 'boolean'
+      ? event.matches
+      : (typeof orientationMedia?.matches === 'boolean' ? orientationMedia.matches : null)
+  )
+  const readLegacySource = () => orientationFromLegacyWindow()
+  const handleScreenOrientationChange = () => commitFreshSourceTruth('screen', readScreenSource())
+  const handleOrientationMediaChange = event => commitFreshSourceTruth('media', readMediaSource(event))
+  const handleLegacyOrientationChange = () => commitFreshSourceTruth('legacy', readLegacySource())
   const handleCoarseChange = () => { isMobileCoarse.value = Boolean(coarseMedia?.matches) }
 
   onMounted(() => {
@@ -203,8 +205,13 @@ export const useHallExperienceMode = () => {
     screenOrientation = globalThis.screen?.orientation || null
     orientationMedia = window.matchMedia?.('(orientation: landscape)') || null
     coarseMedia = window.matchMedia?.('(pointer: coarse)') || null
+    observedOrientation = {
+      screen: readScreenSource(),
+      media: readMediaSource(),
+      legacy: readLegacySource()
+    }
     isMobileCoarse.value = Boolean(coarseMedia?.matches)
-    commitPhysicalTruth({ allowInitialViewportFallback: true })
+    commitPhysicalOrientation(readInitialPhysicalOrientation({ allowInitialViewportFallback: true }))
     screenOrientation?.addEventListener?.('change', handleScreenOrientationChange)
     orientationMedia?.addEventListener?.('change', handleOrientationMediaChange)
     coarseMedia?.addEventListener?.('change', handleCoarseChange)
