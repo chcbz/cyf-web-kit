@@ -98,26 +98,33 @@
       <button type="button" @click="emit('quick-action', 'discussion')">厅前议事</button>
     </section>
 
-    <section
-      v-if="taskDetailOpen && selectedTask"
-      class="portrait-task-detail"
-      role="dialog"
-      aria-modal="true"
-      aria-label="榜文详情"
-    >
-      <div class="task-detail-heading">
-        <span :class="taskStateClass(selectedTask.status)">{{ taskStatusText(selectedTask.status) }}</span>
-        <button type="button" aria-label="关闭榜文详情" @click="emit('close-task-detail')">关闭</button>
-      </div>
-      <p class="task-detail-id">榜号 {{ selectedTask.id }}</p>
-      <h2>{{ selectedTask.title || '未命名榜文' }}</h2>
-      <p class="task-detail-description">{{ selectedTask.description || selectedTask.content || '暂无详情，待厅中议定。' }}</p>
-      <p class="task-detail-abilities">所需本领：{{ selectedTask.requiredAbilities?.length ? selectedTask.requiredAbilities.join(' / ') : '不拘本领' }}</p>
-      <div class="task-detail-actions">
-        <button type="button" @click="emit('open-task-board')">进入悬赏榜</button>
-        <button type="button" @click="emit('discuss-task', selectedTask)">就此议事</button>
-      </div>
-    </section>
+    <div v-if="taskDetailOpen && selectedTask" class="portrait-task-overlay">
+      <button
+        class="portrait-task-backdrop"
+        type="button"
+        aria-label="关闭榜文详情"
+        @click="emit('close-task-detail')"
+      ></button>
+      <section
+        class="portrait-task-detail"
+        role="dialog"
+        aria-modal="true"
+        aria-label="榜文详情"
+      >
+        <div class="task-detail-heading">
+          <span :class="taskStateClass(selectedTask.status)">{{ taskStatusText(selectedTask.status) }}</span>
+          <button type="button" aria-label="关闭榜文详情" @click="emit('close-task-detail')">关闭</button>
+        </div>
+        <p class="task-detail-id">榜号 {{ selectedTask.id }}</p>
+        <h2>{{ selectedTask.title || '未命名榜文' }}</h2>
+        <p class="task-detail-description">{{ selectedTask.description || selectedTask.content || '暂无详情，待厅中议定。' }}</p>
+        <p class="task-detail-abilities">所需本领：{{ selectedTask.requiredAbilities?.length ? selectedTask.requiredAbilities.join(' / ') : '不拘本领' }}</p>
+        <div class="task-detail-actions">
+          <button type="button" @click="emit('open-task-board')">进入悬赏榜</button>
+          <button type="button" @click="emit('discuss-task', selectedTask)">就此议事</button>
+        </div>
+      </section>
+    </div>
   </main>
 </template>
 
@@ -178,14 +185,38 @@ const openTask = task => emit('open-task', task)
   color: #fff5df;
 }
 
+.portrait-task-overlay {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+}
+
+.portrait-task-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  min-height: 100%;
+  padding: 0;
+  background: rgba(8, 7, 6, 0.68);
+}
+
 .portrait-task-detail {
+  position: relative;
+  z-index: 1;
   display: grid;
   gap: 10px;
-  padding: 14px;
+  width: 100%;
+  max-height: min(78vh, calc(100dvh - 24px));
+  padding: 18px 16px calc(16px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid rgba(247, 204, 112, 0.5);
-  border-radius: 14px;
+  border-bottom: 0;
+  border-radius: 18px 18px 0 0;
   background: #382418;
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.32);
+  box-shadow: 0 -12px 30px rgba(0, 0, 0, 0.36);
 }
 
 .task-detail-heading,
@@ -205,12 +236,16 @@ const openTask = task => emit('open-task', task)
 
 .task-detail-heading button,
 .task-detail-actions button {
-  min-height: 38px;
+  min-height: 44px;
   padding: 0 12px;
   border-radius: 9px;
   background: rgba(255, 239, 200, 0.13);
   color: #fff4dc;
   font-weight: 700;
+}
+
+.task-detail-actions button {
+  flex: 1;
 }
 
 .task-detail-actions button:last-child {

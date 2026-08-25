@@ -54,8 +54,23 @@ describe('HallPortraitHome', () => {
     const discussionHandler = hallSource.match(/const handlePortraitTaskDiscussion = task => \{([\s\S]*?)\n\}/)?.[1] || ''
 
     expect(portraitHomeSource).to.include("const openTask = task => emit('open-task', task)")
+    const overlayStyles = portraitHomeSource.match(/\.portrait-task-overlay\s*\{([\s\S]*?)\n\}/)?.[1] || ''
+    const backdropStyles = portraitHomeSource.match(/\.portrait-task-backdrop\s*\{([\s\S]*?)\n\}/)?.[1] || ''
+    const sheetStyles = portraitHomeSource.match(/\.portrait-task-detail\s*\{([\s\S]*?)\n\}/)?.[1] || ''
+
     expect(portraitHomeSource).to.include('taskDetailOpen: Boolean')
-    expect(portraitHomeSource).to.include('v-if="taskDetailOpen && selectedTask"')
+    expect(portraitHomeSource).to.include('<div v-if="taskDetailOpen && selectedTask" class="portrait-task-overlay">')
+    expect(portraitHomeSource).to.include('class="portrait-task-backdrop"')
+    expect(portraitHomeSource).to.match(/<section[\s\S]*?class="portrait-task-detail"[\s\S]*?role="dialog"[\s\S]*?aria-modal="true"/)
+    expect(overlayStyles).to.include('position: fixed')
+    expect(overlayStyles).to.include('inset: 0')
+    expect(overlayStyles).to.include('align-items: flex-end')
+    expect(backdropStyles).to.include('position: absolute')
+    expect(backdropStyles).to.include('background: rgba(8, 7, 6, 0.68)')
+    expect(sheetStyles).to.include('max-height: min(78vh, calc(100dvh - 24px))')
+    expect(sheetStyles).to.include('overflow-y: auto')
+    expect(sheetStyles).to.include('env(safe-area-inset-bottom)')
+    expect(portraitHomeSource).to.include('min-height: 44px')
     expect(portraitHomeSource).to.include('{{ taskStatusText(selectedTask.status) }}')
     expect(portraitHomeSource).to.include('榜号 {{ selectedTask.id }}')
     expect(portraitHomeSource).to.include("selectedTask.description || selectedTask.content || '暂无详情，待厅中议定。'")
