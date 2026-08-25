@@ -117,7 +117,7 @@ const props = defineProps({
   tasks: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['quick-action', 'refresh-hall', 'request-landscape', 'select-agent', 'select-task'])
+const emit = defineEmits(['open-task', 'quick-action', 'refresh-hall', 'request-landscape', 'select-agent'])
 
 const quickActions = Object.freeze([
   { key: 'agents', label: '点将册', icon: '将' },
@@ -138,10 +138,7 @@ const todoTasks = computed(() => props.tasks.filter(task => ['open', 'assigned',
 const agentKey = agent => agent?.agentId || agent?.name || agent?.personaName || ''
 const agentName = agent => agent?.name || agent?.personaName || agent?.agentId || '未署名好汉'
 
-const openTask = task => {
-  emit('select-task', task)
-  emit('quick-action', 'tasks')
-}
+const openTask = task => emit('open-task', task)
 </script>
 
 <style scoped>

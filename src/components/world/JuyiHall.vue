@@ -17,7 +17,7 @@
       @refresh-hall="refreshHall"
       @request-landscape="requestLandscape"
       @select-agent="selectAgent"
-      @select-task="selectTask"
+      @open-task="handlePortraitTaskOpen"
     />
 
     <HallStage
@@ -631,6 +631,17 @@ const handlePortraitQuickAction = (action) => {
     return
   }
   if (['agents', 'tasks', 'catalog', 'library'].includes(action)) openPanel(action)
+}
+
+const handlePortraitTaskOpen = async task => {
+  if (!task?.id) return
+  openPanel('tasks')
+  await nextTick()
+  if (selectedTask.value?.id === task.id) {
+    selectedTask.value = null
+    await nextTick()
+  }
+  await selectTask(task)
 }
 
 const openTaskWorkspace = () => {

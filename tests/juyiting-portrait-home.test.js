@@ -48,6 +48,18 @@ describe('HallPortraitHome', () => {
     expect(portraitHomeSource).not.to.include('visualViewport')
   })
 
+  it('opens a tapped todo only after the tasks panel is mounted, including the same task again', () => {
+    const handler = hallSource.match(/const handlePortraitTaskOpen = async task => \{([\s\S]*?)\n\nconst openTaskWorkspace/)?.[1] || ''
+    expect(portraitHomeSource).to.include("const openTask = task => emit('open-task', task)")
+    expect(handler).to.include("openPanel('tasks')")
+    expect(handler).to.include('await nextTick()')
+    expect(handler).to.include('selectedTask.value?.id === task.id')
+    expect(handler).to.include('selectedTask.value = null')
+    expect(handler).to.include('await selectTask(task)')
+    expect(handler.indexOf("openPanel('tasks')")).to.be.lessThan(handler.indexOf('await nextTick()'))
+    expect(handler.indexOf('await nextTick()')).to.be.lessThan(handler.lastIndexOf('await selectTask(task)'))
+  })
+
   it('consumes page-owned map, roster, task, and selected-context state without creating a second session', () => {
     for (const binding of [
       ':agents="agents"',
@@ -58,7 +70,8 @@ describe('HallPortraitHome', () => {
     ]) expect(hallSource).to.include(binding)
 
     expect(portraitHomeSource).to.include("emit('select-agent', agent)")
-    expect(portraitHomeSource).to.include("emit('select-task', task)")
+    expect(portraitHomeSource).to.include("emit('open-task', task)")
+    expect(hallSource).to.include('@open-task="handlePortraitTaskOpen"')
     expect(portraitHomeSource).to.not.include('useHallData')
     expect(portraitHomeSource).to.not.include('useHallConversation')
     expect(portraitHomeSource).to.not.include("ref(")
