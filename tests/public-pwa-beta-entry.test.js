@@ -22,8 +22,13 @@ describe('public PWA beta entry packet', () => {
     expect(router).not.to.include("import('@/components/public/")
     expect(router).to.include("path: '/juyiting'")
     expect(router).to.include("name: 'JuyiHall'")
-    expect(router).to.include('@/components/world/JuyiHall')
+    expect(router).to.include("@/components/world/JuyiHallEntry.vue")
+    expect(router).not.to.include("component: () => import('@/components/world/JuyiHall'),")
     expect(router).not.to.include("redirect: '/juyiting'")
+
+    const entry = source('src/components/world/JuyiHallEntry.vue')
+    expect(entry).to.include('<JuyiHall />')
+    expect(entry).to.include("router.replace({ path: route.path, query: handoff.query, hash: route.hash })")
   })
 
   it('keeps the guest demo local and excludes app-shell API work on public routes', () => {
@@ -37,6 +42,8 @@ describe('public PWA beta entry packet', () => {
     expect(guestDemoTemplates.map(template => template.id)).to.deep.equal(['research', 'content', 'collaboration'])
     expect(guestDemoSteps.map(step => step.id)).to.deep.equal([1, 2, 3, 4])
     expect(demo).to.include('全程本地模拟')
+    expect(demo).to.include("new Set(['research', 'content', 'collaboration'])")
+    expect(demo).to.include('allowedGuestDemoTemplateIds.has(id)')
     expect(demo).to.include('不会发起登录、授权或受保护的 API 请求')
     expect(demo).not.to.match(/useHttp|agentApi|chatApi|useApiStore|fetch\s*\(|axios|XMLHttpRequest/)
     expect(app).to.include('route.meta?.publicEntry === true')

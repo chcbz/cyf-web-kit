@@ -45,7 +45,7 @@ export default [
   {
     path: '/juyiting',
     name: 'JuyiHall',
-    component: () => import('@/components/world/JuyiHall'),
+    component: () => import('@/components/world/JuyiHallEntry.vue'),
     meta: {
       title: 'juyiting.title',
       icon: 'account-circle',
