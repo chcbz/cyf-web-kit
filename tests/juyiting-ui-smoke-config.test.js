@@ -30,6 +30,17 @@ describe('juyiting ui smoke config', () => {
     assert.ok(source.includes('.hall-board.is-melon-ready'))
   })
 
+  it('runs the terminal CDP barrier after the final browser security state check', () => {
+    const source = readFileSync('tests/juyiting-public-beta-ui-smoke.mjs', 'utf8')
+    const finalStateIndex = source.indexOf('finalUrl = browserPolicy.assertFinalState(finalSecurityState).href')
+    const terminalBarrierIndex = source.indexOf('await cdp.terminalBarrier()', finalStateIndex)
+    const catchIndex = source.indexOf('} catch (error) {', finalStateIndex)
+
+    assert.ok(finalStateIndex >= 0)
+    assert.ok(terminalBarrierIndex > finalStateIndex)
+    assert.ok(catchIndex > terminalBarrierIndex)
+  })
+
   it('clicks canvas hotspots and asserts semantic panel containers', () => {
     const source = readFileSync('tests/juyiting-public-beta-ui-smoke.mjs', 'utf8')
 

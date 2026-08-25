@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { EventEmitter } from 'node:events'
 import { readFileSync } from 'node:fs'
@@ -857,6 +858,139 @@ describe('juyiting public beta preflight safety', () => {
     )
     assert.equal(removeCalls, 0)
     await guard.dispose()
+  })
+
+  it('terminal CDP barrier waits for late handlers and drains late socket errors', async () => {
+    const guard = makeGuard()
+    const runtime = {
+      guard,
+      cdpCommandTimeoutMs: 100,
+      cdpCloseTimeoutMs: 100
+    }
+    let socket
+    class LateErrorSocket {
+      constructor () {
+        socket = this
+        this.readyState = 0
+        this.events = new EventEmitter()
+        queueMicrotask(() => {
+          this.readyState = 1
+          this.events.emit('open')
+        })
+      }
+
+      addEventListener (name, listener, options) {
+        this.events[options?.once ? 'once' : 'on'](name, listener)
+      }
+
+      removeEventListener (name, listener) { this.events.off(name, listener) }
+
+      send (payload) {
+        const request = JSON.parse(payload)
+        setImmediate(() => {
+          this.events.emit('message', {
+            data: JSON.stringify({ id: request.id, result: { result: { value: null } } })
+          })
+          if (request.method === 'Runtime.evaluate') {
+            setImmediate(() => {
+              this.events.emit('message', {
+                data: JSON.stringify({
+                  method: 'Page.frameNavigated',
+                  params: { frame: { url: 'https://attacker.example/late-frame' } }
+                })
+              })
+              this.events.emit('error', new Error('late offline socket error'))
+            })
+          }
+        })
+      }
+
+      close () {
+        setImmediate(() => {
+          this.readyState = 3
+          this.events.emit('close')
+        })
+      }
+    }
+
+    const cdp = new CdpSession(runtime, 'ws://127.0.0.1/devtools/page/offline', LateErrorSocket)
+    cdp.on('Page.frameNavigated', async () => {
+      await new Promise(resolvePromise => setImmediate(resolvePromise))
+      throw new Error('late offline handler error')
+    })
+    await cdp.open()
+    await assert.rejects(
+      cdp.terminalBarrier(),
+      error => {
+        const messages = (error instanceof AggregateError ? error.errors : [error])
+          .map(candidate => candidate.message)
+          .sort()
+        assert.deepEqual(messages, [
+          'late offline handler error',
+          'late offline socket error'
+        ])
+        return true
+      }
+    )
+    await cdp.close()
+    assert.equal(socket.readyState, 3)
+    await guard.dispose()
+  })
+
+  it('process-tree cleanup polling keeps a real Node event loop alive until exit confirmation', () => {
+    const safetyModule = new URL('./juyiting-preflight-safety.mjs', import.meta.url).href
+    const script = `
+      import { waitForProcessTreeExit } from ${JSON.stringify(safetyModule)};
+      let checks = 0;
+      waitForProcessTreeExit({
+        child: {},
+        timeoutMs: 200,
+        pollMs: 25,
+        isRunningImpl: () => ++checks < 2
+      }).then(
+        () => process.stdout.write('process-tree-confirmed'),
+        error => { console.error(error); process.exitCode = 1; }
+      );
+    `
+    const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
+      encoding: 'utf8',
+      timeout: 1000
+    })
+    assert.equal(result.status, 0, result.error?.message || result.stderr)
+    assert.equal(result.stdout, 'process-tree-confirmed')
+  })
+
+  it('CDP close timeout keeps a real Node event loop alive until explicit failure', () => {
+    const uiSmokeModule = new URL('./juyiting-public-beta-ui-smoke.mjs', import.meta.url).href
+    const script = `
+      import { CdpSession } from ${JSON.stringify(uiSmokeModule)};
+      class NeverClosingSocket {
+        constructor () { this.readyState = 1; }
+        addEventListener () {}
+        removeEventListener () {}
+        close () {}
+      }
+      const guard = {
+        signal: new AbortController().signal,
+        beforeBoundary () {},
+        remainingMs () { return 1000; }
+      };
+      const cdp = new CdpSession({
+        guard,
+        cdpCommandTimeoutMs: 100,
+        cdpCloseTimeoutMs: 25
+      }, 'ws://127.0.0.1/devtools/page/offline', NeverClosingSocket);
+      cdp.close().then(
+        () => { console.error('unexpected close'); process.exitCode = 1; },
+        error => process.stdout.write(error.message)
+      );
+    `
+    const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
+      encoding: 'utf8',
+      timeout: 1000
+    })
+    assert.equal(result.status, 0, result.error?.message || result.stderr)
+    assert.equal(result.stdout, 'CDP WebSocket did not close within 25ms')
   })
 
   it('sanitized output removes credential values and secret URL query/fragment data', () => {

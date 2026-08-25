@@ -519,8 +519,7 @@ export const signalProcessTree = (child, signal, killImpl = process.kill) => {
 }
 
 const cleanupDelay = ms => new Promise(resolvePromise => {
-  const timer = setTimeout(resolvePromise, ms)
-  timer.unref?.()
+  setTimeout(resolvePromise, ms)
 })
 
 export const waitForProcessTreeExit = async ({

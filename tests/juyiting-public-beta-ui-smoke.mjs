@@ -406,27 +406,60 @@ export class CdpSession {
     this.pending = new Map()
     this.events = []
     this.handlers = new Map()
+    this.pendingHandlers = new Set()
     this.handlerErrors = []
+    this.socketErrors = []
+    this.activityVersion = 0
+    this.opened = false
+    this.closing = false
     this.closed = false
     this.ws = new WebSocketCtor(webSocketUrl)
+    this.onSocketError = error => {
+      if (!this.opened) return
+      this.recordSocketError(error, 'CDP WebSocket emitted an error')
+    }
+    this.onSocketClose = () => {
+      if (!this.opened || this.closing) return
+      this.recordSocketError(new Error('CDP WebSocket closed unexpectedly'))
+    }
+    this.ws.addEventListener('error', this.onSocketError)
+    this.ws.addEventListener('close', this.onSocketClose)
   }
 
   async open () {
     this.runtime.guard.beforeBoundary('Chromium DevTools WebSocket open')
     await new Promise((resolvePromise, rejectPromise) => {
-      const onAbort = () => rejectPromise(new Error('CDP open stopped by termination/deadline'))
-      this.runtime.guard.signal.addEventListener('abort', onAbort, { once: true })
-      this.ws.addEventListener('open', () => {
+      const cleanup = () => {
         this.runtime.guard.signal.removeEventListener('abort', onAbort)
-        resolvePromise()
-      }, { once: true })
-      this.ws.addEventListener('error', error => {
-        this.runtime.guard.signal.removeEventListener('abort', onAbort)
+        this.ws.removeEventListener?.('open', onOpen)
+        this.ws.removeEventListener?.('error', onOpenError)
+        this.ws.removeEventListener?.('close', onOpenClose)
+      }
+      const fail = error => {
+        cleanup()
         rejectPromise(error)
-      }, { once: true })
+      }
+      const onAbort = () => fail(new Error('CDP open stopped by termination/deadline'))
+      const onOpen = () => {
+        this.opened = true
+        cleanup()
+        resolvePromise()
+      }
+      const onOpenError = error => fail(this.normalizeSocketError(error, 'CDP WebSocket open failed'))
+      const onOpenClose = () => fail(new Error('CDP WebSocket closed before opening'))
+      this.runtime.guard.signal.addEventListener('abort', onAbort, { once: true })
+      this.ws.addEventListener('open', onOpen, { once: true })
+      this.ws.addEventListener('error', onOpenError, { once: true })
+      this.ws.addEventListener('close', onOpenClose, { once: true })
     })
     this.ws.addEventListener('message', event => {
-      const message = JSON.parse(event.data)
+      let message
+      try {
+        message = JSON.parse(event.data)
+      } catch (error) {
+        this.recordSocketError(error, 'CDP WebSocket delivered malformed JSON')
+        return
+      }
       if (message.id && this.pending.has(message.id)) {
         const { resolve, reject, timer } = this.pending.get(message.id)
         this.pending.delete(message.id)
@@ -437,8 +470,13 @@ export class CdpSession {
         this.events.push(message)
         const handler = this.handlers.get(message.method)
         if (handler) {
-          Promise.resolve().then(() => handler(message.params || {})).catch(error => {
-            this.handlerErrors.push(error)
+          this.activityVersion++
+          const task = Promise.resolve().then(() => handler(message.params || {}))
+          this.pendingHandlers.add(task)
+          task.catch(error => {
+            this.handlerErrors.push(error instanceof Error ? error : new Error(String(error)))
+          }).finally(() => {
+            this.pendingHandlers.delete(task)
           })
         }
       }
@@ -449,9 +487,52 @@ export class CdpSession {
     this.handlers.set(method, handler)
   }
 
+  normalizeSocketError (error, fallback) {
+    if (error instanceof Error) return error
+    if (error?.error instanceof Error) return error.error
+    return new Error(fallback)
+  }
+
+  recordSocketError (error, fallback = 'CDP WebSocket failed') {
+    this.activityVersion++
+    this.socketErrors.push(this.normalizeSocketError(error, fallback))
+  }
+
   throwHandlerErrors () {
     const error = this.handlerErrors.shift()
     if (error) throw error
+  }
+
+  throwTerminalErrors () {
+    const errors = [
+      ...this.handlerErrors.splice(0),
+      ...this.socketErrors.splice(0)
+    ]
+    if (errors.length === 1) throw errors[0]
+    if (errors.length > 1) throw new AggregateError(errors, 'CDP terminal state reported errors')
+  }
+
+  async waitForTrackedHandlers ({ guarded = true } = {}) {
+    while (true) {
+      if (guarded) this.runtime.guard.beforeBoundary('CDP tracked handler barrier')
+      const observedVersion = this.activityVersion
+      if (this.pendingHandlers.size) {
+        await Promise.allSettled([...this.pendingHandlers])
+      }
+      await new Promise(resolvePromise => setImmediate(resolvePromise))
+      if (!this.pendingHandlers.size && this.activityVersion === observedVersion) return
+    }
+  }
+
+  async terminalBarrier () {
+    this.runtime.guard.beforeBoundary('CDP terminal session barrier')
+    await this.send('Runtime.evaluate', {
+      expression: 'void 0',
+      returnByValue: true,
+      awaitPromise: true
+    })
+    await this.waitForTrackedHandlers()
+    this.throwTerminalErrors()
   }
 
   send (method, params = {}) {
@@ -472,19 +553,22 @@ export class CdpSession {
 
   close () {
     if (this.closePromise) return this.closePromise
-    this.closed = true
+    this.closing = true
     for (const { reject, timer } of this.pending.values()) {
       clearTimeout(timer)
       reject(new Error('CDP session closed'))
     }
     this.pending.clear()
-    this.closePromise = new Promise((resolvePromise, rejectPromise) => {
+    const socketClosePromise = new Promise((resolvePromise, rejectPromise) => {
       if (this.ws.readyState === 3) {
         resolvePromise()
         return
       }
       let timer
+      let settled = false
       const finish = error => {
+        if (settled) return
+        settled = true
         clearTimeout(timer)
         this.ws.removeEventListener?.('close', onClose)
         this.ws.removeEventListener?.('error', onError)
@@ -495,13 +579,21 @@ export class CdpSession {
       const onError = error => finish(error instanceof Error ? error : new Error('CDP WebSocket close failed'))
       this.ws.addEventListener('close', onClose, { once: true })
       this.ws.addEventListener('error', onError, { once: true })
-      timer = setTimeout(() => finish(new Error('CDP WebSocket did not close within 3000ms')), 3000)
-      timer.unref?.()
+      const closeTimeoutMs = this.runtime.cdpCloseTimeoutMs || 3000
+      timer = setTimeout(() => finish(new Error(`CDP WebSocket did not close within ${closeTimeoutMs}ms`)), closeTimeoutMs)
       try {
         this.ws.close()
       } catch (error) {
         finish(error)
       }
+    })
+    this.closePromise = socketClosePromise.then(async () => {
+      this.closed = true
+      await this.waitForTrackedHandlers({ guarded: false })
+      this.throwTerminalErrors()
+    }).finally(() => {
+      this.ws.removeEventListener?.('error', this.onSocketError)
+      this.ws.removeEventListener?.('close', this.onSocketClose)
     })
     return this.closePromise
   }
@@ -1290,6 +1382,7 @@ export const runUiSmoke = async (options = {}) => {
       apiToken: localStorage.getItem('api_token')
     }))()`)
     finalUrl = browserPolicy.assertFinalState(finalSecurityState).href
+    await cdp.terminalBarrier()
   } catch (error) {
     runError = new Error(sanitizeError(error, [...Object.values(config.credentials), token]))
   } finally {
