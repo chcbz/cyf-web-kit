@@ -7,17 +7,19 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
 import WebSocket from 'ws'
+import {
+  applyLocalTlsPolicy,
+  createSafetyContext,
+  credentialValuesFromEnv,
+  isLoopbackUrl,
+  redactUrl,
+  sanitizeError
+} from './juyiting-preflight-safety.mjs'
 
-const FRONTEND_URL = process.env.JUYITING_FRONTEND_URL || 'https://localhost:8080'
-const BACKEND_URL = process.env.JUYITING_BACKEND_URL || 'https://localhost:10018'
-const OAUTH_CLIENT_ID = process.env.JUYITING_OAUTH_CLIENT_ID || 'jiafewnnv58ec2379c'
-const LOGIN_USERNAME = process.env.JUYITING_USERNAME || 'chcbz'
-const LOGIN_PASSWORD = process.env.JUYITING_PASSWORD || '123'
-const OAUTH_REDIRECT_URI = process.env.JUYITING_OAUTH_REDIRECT_URI || `${FRONTEND_URL}/oauth2/callback`
 const DEBUG_KEY = '__JYTING_SCENE_DEBUG__'
 const EXPECTED_MANIFEST_VERSION = 'persona-sheets-v1'
-const REQUEST_TIMEOUT_MS = 15_000
-const CDP_COMMAND_TIMEOUT_MS = Number(process.env.JUYITING_CDP_COMMAND_TIMEOUT_MS) || 45_000
+const DEFAULT_REQUEST_TIMEOUT_MS = 15_000
+const DEFAULT_CDP_COMMAND_TIMEOUT_MS = 45_000
 const GAME_LOOKUP_SOURCE = `
   let juyitingGame = window.__JYTING_GAME__;
   if (!juyitingGame) {
@@ -27,8 +29,7 @@ const GAME_LOOKUP_SOURCE = `
   }
   if (!juyitingGame) throw new Error('Mounted Juyiting game instance is unavailable');
 `
-const CHROME_CANDIDATES = [
-  process.env.CHROME_PATH,
+const DEFAULT_CHROME_CANDIDATES = [
   '/usr/local/bin/chromium-headless-smoke',
   '/usr/bin/chromium-browser',
   '/usr/bin/chromium',
@@ -37,18 +38,43 @@ const CHROME_CANDIDATES = [
   'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
   'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
   'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
-].filter(Boolean)
+]
 const SCENE_HOTSPOTS = {
   chat: 'main-seat',
   tasks: 'bounty-board',
   library: 'library-shelf'
 }
 
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+const parseBoundedTimeout = (raw, fallback, label) => {
+  const value = raw === undefined || raw === '' ? fallback : Number(raw)
+  if (!Number.isInteger(value) || value <= 0 || value > 60_000) {
+    throw new Error(`${label} must be an integer from 1 through 60000`)
+  }
+  return value
+}
 
-const absoluteUrl = (location) => {
+const guardedDelay = async (runtime, durationMs, label) => {
+  runtime.guard.beforeBoundary(label)
+  await delay(Math.min(durationMs, runtime.guard.remainingMs()), undefined, { signal: runtime.guard.signal })
+  runtime.guard.beforeBoundary(label)
+}
+
+const resolveOAuthLocation = (runtime, location) => {
   if (!location) return ''
-  return location.startsWith('http') ? location : `${BACKEND_URL}${location.startsWith('/') ? '' : '/'}${location}`
+  let url
+  try {
+    url = new URL(location, runtime.config.targets.backend)
+  } catch {
+    throw new Error('OAuth redirect location is malformed')
+  }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.hash) {
+    throw new Error('OAuth redirect location violates URL safety policy')
+  }
+  const redirect = new URL(runtime.config.credentials.oauthRedirectUri)
+  if (![runtime.config.targets.backend.origin, redirect.origin].includes(url.origin)) {
+    throw new Error('OAuth redirect location crossed an unapproved origin')
+  }
+  return url.href
 }
 
 class CookieJar {
@@ -61,9 +87,7 @@ class CookieJar {
     for (const cookie of setCookie) {
       const [pair] = cookie.split(';')
       const index = pair.indexOf('=')
-      if (index > 0) {
-        this.cookies.set(pair.slice(0, index), pair.slice(index + 1))
-      }
+      if (index > 0) this.cookies.set(pair.slice(0, index), pair.slice(index + 1))
     }
   }
 
@@ -72,14 +96,16 @@ class CookieJar {
   }
 }
 
-const requestJson = async (url, options = {}) => {
-  const response = await fetch(url, {
-    signal: options.signal || AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    ...options
-  })
-  if (!response.ok) {
-    throw new Error(`${url} failed with ${response.status}: ${await response.text()}`)
-  }
+const requestJson = async (runtime, url, options = {}, label = 'credentialed JSON request') => {
+  runtime.guard.beforeBoundary(label)
+  const response = await runtime.guard.runFetch(
+    runtime.fetchImpl,
+    url,
+    options,
+    label,
+    runtime.requestTimeoutMs
+  )
+  if (!response.ok) throw new Error(`${label} failed with HTTP ${response.status}`)
   return response.json()
 }
 
@@ -89,63 +115,75 @@ const base64Url = (buffer) => buffer
   .replace(/\//g, '_')
   .replace(/=+$/, '')
 
-const fetchWithCookies = async (jar, url, options = {}) => {
+const fetchWithCookies = async (runtime, jar, url, options = {}, label) => {
+  runtime.guard.beforeBoundary(label)
   const headers = new Headers(options.headers || {})
   const cookie = jar.header()
   if (cookie) headers.set('Cookie', cookie)
-  const response = await fetch(url, {
+  const response = await runtime.guard.runFetch(runtime.fetchImpl, url, {
     ...options,
     headers,
-    signal: options.signal || AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     redirect: 'manual'
-  })
+  }, label, runtime.requestTimeoutMs)
   jar.store(response)
   return response
 }
 
-const getToken = async () => {
+const getToken = async (runtime) => {
   const jar = new CookieJar()
   const codeVerifier = base64Url(randomBytes(48))
   const codeChallenge = base64Url(createHash('sha256').update(codeVerifier).digest())
-  const redirectUri = OAUTH_REDIRECT_URI
-  const authorizeUrl = `${BACKEND_URL}/oauth2/authorize?${new URLSearchParams({
+  const redirectUri = runtime.config.credentials.oauthRedirectUri
+  const authorizeUrl = new URL('/oauth2/authorize', runtime.config.targets.backend)
+  authorizeUrl.search = new URLSearchParams({
     response_type: 'code',
-    client_id: OAUTH_CLIENT_ID,
+    client_id: runtime.config.credentials.oauthClientId,
     scope: 'openid',
     redirect_uri: redirectUri,
     code_challenge: codeChallenge,
     code_challenge_method: 'S256',
-    state: '/juyiting',
-    access_type: 'offline'
-  })}`
+    state: '/juyiting'
+  }).toString()
 
-  await fetchWithCookies(jar, authorizeUrl)
-  const loginResponse = await fetchWithCookies(jar, `${BACKEND_URL}/login`, {
+  runtime.guard.beforeBoundary('credentialed OAuth authorization request')
+  await fetchWithCookies(runtime, jar, authorizeUrl, {}, 'credentialed OAuth authorization request')
+  runtime.guard.beforeBoundary('credentialed OAuth login submission')
+  const loginResponse = await fetchWithCookies(runtime, jar, new URL('/login', runtime.config.targets.backend), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded'
     },
     body: new URLSearchParams({
       loginType: 'password',
-      username: LOGIN_USERNAME,
-      password: LOGIN_PASSWORD,
+      username: runtime.config.credentials.username,
+      password: runtime.config.credentials.password,
       redirect_uri: ''
     })
-  })
+  }, 'credentialed OAuth login submission')
 
-  let nextUrl = absoluteUrl(loginResponse.headers.get('location')) || authorizeUrl
+  let nextUrl = resolveOAuthLocation(runtime, loginResponse.headers.get('location')) || authorizeUrl.href
   let code = ''
+  const expectedRedirect = new URL(redirectUri)
   for (let i = 0; i < 8 && nextUrl; i++) {
-    if (nextUrl.startsWith(redirectUri)) {
-      code = new URL(nextUrl).searchParams.get('code') || ''
+    runtime.guard.beforeBoundary('credentialed OAuth redirect follow')
+    const parsedNext = new URL(nextUrl)
+    if (parsedNext.origin === expectedRedirect.origin && parsedNext.pathname === expectedRedirect.pathname) {
+      code = parsedNext.searchParams.get('code') || ''
       break
     }
-    const response = await fetchWithCookies(jar, nextUrl)
-    nextUrl = absoluteUrl(response.headers.get('location'))
+    const response = await fetchWithCookies(
+      runtime,
+      jar,
+      parsedNext,
+      {},
+      'credentialed OAuth redirect follow'
+    )
+    nextUrl = resolveOAuthLocation(runtime, response.headers.get('location'))
   }
   if (!code) throw new Error('OAuth authorization code was not returned')
 
-  const data = await requestJson(`${BACKEND_URL}/oauth2/token`, {
+  runtime.guard.beforeBoundary('credentialed OAuth token exchange')
+  const data = await requestJson(runtime, new URL('/oauth2/token', runtime.config.targets.backend), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded'
@@ -154,10 +192,10 @@ const getToken = async () => {
       grant_type: 'authorization_code',
       code,
       redirect_uri: redirectUri,
-      client_id: OAUTH_CLIENT_ID,
+      client_id: runtime.config.credentials.oauthClientId,
       code_verifier: codeVerifier
     })
-  })
+  }, 'credentialed OAuth token exchange')
   if (!data.access_token) throw new Error('OAuth token response did not include access_token')
   return data.access_token
 }
@@ -172,41 +210,57 @@ const pathExists = async (path) => {
   }
 }
 
-const findChrome = async () => {
-  for (const candidate of CHROME_CANDIDATES) {
-    if (await pathExists(candidate)) return candidate
+const findChrome = async (runtime) => {
+  const candidates = [runtime.env.CHROME_PATH, ...DEFAULT_CHROME_CANDIDATES].filter(Boolean)
+  for (const candidate of candidates) {
+    runtime.guard.beforeBoundary('Chromium executable lookup')
+    if (await runtime.guard.runPromise(pathExists(candidate), 'Chromium executable lookup')) return candidate
   }
   throw new Error('Chrome or Edge executable not found. Set CHROME_PATH to run UI smoke.')
 }
 
-const waitForJson = async (url, timeoutMs = 15000) => {
-  const deadline = Date.now() + timeoutMs
+const waitForJson = async (runtime, url, timeoutMs = 15000) => {
+  const deadlineAt = Date.now() + Math.min(timeoutMs, runtime.guard.remainingMs())
   let lastError
-  while (Date.now() < deadline) {
+  while (Date.now() < deadlineAt) {
+    runtime.guard.beforeBoundary('Chromium DevTools polling request')
     try {
-      return await requestJson(url)
+      return await requestJson(runtime, url, {}, 'Chromium DevTools polling request')
     } catch (error) {
+      if (runtime.guard.terminated) throw error
       lastError = error
-      await delay(250)
+      await guardedDelay(runtime, 250, 'Chromium DevTools polling delay')
     }
   }
-  throw lastError || new Error(`Timed out waiting for ${url}`)
+  throw lastError || new Error('Timed out waiting for Chromium DevTools JSON')
 }
 
 class CdpSession {
-  constructor (webSocketUrl) {
+  constructor (runtime, webSocketUrl, WebSocketCtor) {
+    runtime.guard.beforeBoundary('Chromium DevTools WebSocket connection')
+    this.runtime = runtime
     this.nextId = 1
     this.pending = new Map()
     this.events = []
     this.handlers = new Map()
     this.handlerErrors = []
-    this.ws = new WebSocket(webSocketUrl)
+    this.closed = false
+    this.ws = new WebSocketCtor(webSocketUrl)
   }
 
   async open () {
-    await new Promise((resolve, reject) => {
-      this.ws.addEventListener('open', resolve, { once: true })
-      this.ws.addEventListener('error', reject, { once: true })
+    this.runtime.guard.beforeBoundary('Chromium DevTools WebSocket open')
+    await new Promise((resolvePromise, rejectPromise) => {
+      const onAbort = () => rejectPromise(new Error('CDP open stopped by termination/deadline'))
+      this.runtime.guard.signal.addEventListener('abort', onAbort, { once: true })
+      this.ws.addEventListener('open', () => {
+        this.runtime.guard.signal.removeEventListener('abort', onAbort)
+        resolvePromise()
+      }, { once: true })
+      this.ws.addEventListener('error', error => {
+        this.runtime.guard.signal.removeEventListener('abort', onAbort)
+        rejectPromise(error)
+      }, { once: true })
     })
     this.ws.addEventListener('message', event => {
       const message = JSON.parse(event.data)
@@ -238,17 +292,24 @@ class CdpSession {
   }
 
   send (method, params = {}) {
+    this.runtime.guard.beforeBoundary(`CDP ${method}`)
     const id = this.nextId++
     this.ws.send(JSON.stringify({ id, method, params }))
-    return new Promise((resolve, reject) => {
+    return new Promise((resolvePromise, rejectPromise) => {
+      const timeoutMs = Math.max(1, Math.min(
+        this.runtime.cdpCommandTimeoutMs,
+        this.runtime.guard.remainingMs()
+      ))
       const timer = setTimeout(() => {
-        if (this.pending.delete(id)) reject(new Error(`${method} timed out`))
-      }, CDP_COMMAND_TIMEOUT_MS)
-      this.pending.set(id, { resolve, reject, timer })
+        if (this.pending.delete(id)) rejectPromise(new Error(`${method} timed out`))
+      }, timeoutMs)
+      this.pending.set(id, { resolve: resolvePromise, reject: rejectPromise, timer })
     })
   }
 
   close () {
+    if (this.closed) return
+    this.closed = true
     for (const { reject, timer } of this.pending.values()) {
       clearTimeout(timer)
       reject(new Error('CDP session closed'))
@@ -258,10 +319,11 @@ class CdpSession {
   }
 }
 
-const waitForExpression = async (cdp, expression, timeoutMs = 20000) => {
-  const deadline = Date.now() + timeoutMs
+const waitForExpression = async (runtime, cdp, expression, timeoutMs = 20000) => {
+  const deadlineAt = Date.now() + Math.min(timeoutMs, runtime.guard.remainingMs())
   let lastValue
-  while (Date.now() < deadline) {
+  while (Date.now() < deadlineAt) {
+    runtime.guard.beforeBoundary('CDP expression polling')
     cdp.throwHandlerErrors()
     const result = await cdp.send('Runtime.evaluate', {
       expression,
@@ -270,9 +332,9 @@ const waitForExpression = async (cdp, expression, timeoutMs = 20000) => {
     })
     lastValue = result.result?.value
     if (lastValue) return lastValue
-    await delay(500)
+    await guardedDelay(runtime, 500, 'CDP expression polling delay')
   }
-  throw new Error(`Timed out waiting for expression: ${expression}. Last value: ${JSON.stringify(lastValue)}`)
+  throw new Error(`Timed out waiting for expression. Last value: ${JSON.stringify(lastValue)}`)
 }
 
 const evaluate = async (cdp, expression) => {
@@ -282,29 +344,27 @@ const evaluate = async (cdp, expression) => {
     returnByValue: true,
     awaitPromise: true
   })
-  if (result.exceptionDetails) {
-    throw new Error(result.exceptionDetails.text || 'Runtime.evaluate failed')
-  }
+  if (result.exceptionDetails) throw new Error(result.exceptionDetails.text || 'Runtime.evaluate failed')
   return result.result?.value
 }
 
-const fulfillJson = (cdp, requestId, status, value) => cdp.send('Fetch.fulfillRequest', {
+const fulfillJson = (runtime, cdp, requestId, status, value) => cdp.send('Fetch.fulfillRequest', {
   requestId,
   responseCode: status,
   responseHeaders: [
     { name: 'Content-Type', value: 'application/json; charset=utf-8' },
-    { name: 'Access-Control-Allow-Origin', value: new URL(FRONTEND_URL).origin }
+    { name: 'Access-Control-Allow-Origin', value: runtime.config.targets.frontend.origin }
   ],
   body: Buffer.from(JSON.stringify(value)).toString('base64')
 })
 
-const fulfillSse = (cdp, requestId, body) => cdp.send('Fetch.fulfillRequest', {
+const fulfillSse = (runtime, cdp, requestId, body) => cdp.send('Fetch.fulfillRequest', {
   requestId,
   responseCode: 200,
   responseHeaders: [
     { name: 'Content-Type', value: 'text/event-stream; charset=utf-8' },
     { name: 'Cache-Control', value: 'no-cache' },
-    { name: 'Access-Control-Allow-Origin', value: new URL(FRONTEND_URL).origin }
+    { name: 'Access-Control-Allow-Origin', value: runtime.config.targets.frontend.origin }
   ],
   body: Buffer.from(body).toString('base64')
 })
@@ -391,26 +451,53 @@ const sceneFixtures = () => {
   }
 }
 
-const stopChrome = async (chrome, userDataDir) => {
-  // Chrome is a multi-process application. On Windows, killing only the
-  // launcher leaves renderer children holding the temporary profile lock;
-  // this in turn makes repeated local browser validation flaky.
-  if (process.platform === 'win32' && chrome.pid) {
-    await new Promise(resolve => {
-      const taskkill = spawn('taskkill', ['/pid', String(chrome.pid), '/t', '/f'], {
-        stdio: 'ignore',
-        windowsHide: true
-      })
-      taskkill.once('error', resolve)
-      taskkill.once('exit', resolve)
-    })
-  } else if (!chrome.killed) {
-    chrome.kill()
+const signalProcessTree = (child, signal) => {
+  if (!child) return
+  if (process.platform !== 'win32' && Number.isInteger(child.pid)) {
+    try {
+      process.kill(-child.pid, signal)
+      return
+    } catch {}
   }
-  await Promise.race([
-    new Promise(resolve => chrome.once('exit', resolve)),
-    delay(3000)
-  ])
+  if (child.exitCode !== null || child.signalCode !== null) return
+  try {
+    child.kill(signal)
+  } catch {}
+}
+
+const stopChrome = async (chrome, userDataDir, spawnImpl = spawn) => {
+  // Chrome is a multi-process application. Terminate the whole process tree so
+  // renderer children cannot outlive a deadline or keep the profile locked.
+  if (process.platform === 'win32' && chrome.pid) {
+    await Promise.race([
+      new Promise(resolvePromise => {
+        const taskkill = spawnImpl('taskkill', ['/pid', String(chrome.pid), '/t', '/f'], {
+          stdio: 'ignore',
+          windowsHide: true
+        })
+        taskkill.once('error', resolvePromise)
+        taskkill.once('exit', resolvePromise)
+      }),
+      delay(3000)
+    ])
+  } else {
+    signalProcessTree(chrome, 'SIGTERM')
+  }
+  if (chrome.exitCode === null && chrome.signalCode === null) {
+    await Promise.race([
+      new Promise(resolvePromise => chrome.once('exit', resolvePromise)),
+      delay(1500)
+    ])
+  }
+  if (process.platform !== 'win32') {
+    signalProcessTree(chrome, 'SIGKILL')
+    if (chrome.exitCode === null && chrome.signalCode === null) {
+      await Promise.race([
+        new Promise(resolvePromise => chrome.once('exit', resolvePromise)),
+        delay(1500)
+      ])
+    }
+  }
 
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
@@ -504,28 +591,101 @@ const closePanel = `
 })()
 `
 
-export const runUiSmoke = async () => {
-  const token = await getToken()
-  const chromePath = await findChrome()
-  const userDataDir = await mkdtemp(join(tmpdir(), 'juyiting-ui-smoke-'))
-  const debugPort = 9333 + Math.floor(Math.random() * 1000)
-  const chrome = spawn(chromePath, [
-    '--headless=new',
-    '--disable-gpu',
-    '--no-first-run',
-    '--no-default-browser-check',
-    '--ignore-certificate-errors',
-    '--window-size=1440,900',
-    `--remote-debugging-port=${debugPort}`,
-    `--user-data-dir=${userDataDir}`,
-    'about:blank'
-  ], { stdio: 'ignore' })
-
+export const runUiSmoke = async (options = {}) => {
+  const env = options.env || options.safetyContext?.env || process.env
+  const requestTimeoutMs = parseBoundedTimeout(
+    env.JUYITING_UI_REQUEST_TIMEOUT_MS,
+    DEFAULT_REQUEST_TIMEOUT_MS,
+    'JUYITING_UI_REQUEST_TIMEOUT_MS'
+  )
+  const cdpCommandTimeoutMs = parseBoundedTimeout(
+    env.JUYITING_CDP_COMMAND_TIMEOUT_MS,
+    DEFAULT_CDP_COMMAND_TIMEOUT_MS,
+    'JUYITING_CDP_COMMAND_TIMEOUT_MS'
+  )
+  const ownsSafetyContext = !options.safetyContext
+  const context = options.safetyContext || await createSafetyContext({
+    mode: 'ui',
+    env,
+    readFileImpl: options.readFileImpl,
+    signalTarget: options.signalTarget,
+    now: options.now,
+    setTimeoutImpl: options.setTimeoutImpl,
+    clearTimeoutImpl: options.clearTimeoutImpl
+  })
+  const { config, guard } = context
+  const restoreTls = ownsSafetyContext ? applyLocalTlsPolicy(context) : () => {}
+  const runtime = {
+    config,
+    guard,
+    env,
+    fetchImpl: options.fetchImpl || globalThis.fetch,
+    requestTimeoutMs,
+    cdpCommandTimeoutMs
+  }
+  const spawnImpl = options.spawnImpl || spawn
+  let chrome
   let cdp
+  let userDataDir
+  let untrackChrome = () => {}
+  let untrackCdp = () => {}
+  let stopTrackedChrome = async () => {}
+  let token = ''
+
   try {
-    const version = await waitForJson(`http://127.0.0.1:${debugPort}/json/version`)
-    const target = await requestJson(`http://127.0.0.1:${debugPort}/json/new?about:blank`, { method: 'PUT' })
-    cdp = new CdpSession(target.webSocketDebuggerUrl || version.webSocketDebuggerUrl)
+    guard.beforeBoundary('credentialed OAuth authorization flow')
+    token = await getToken(runtime)
+    const chromePath = await findChrome(runtime)
+    userDataDir = await guard.runPromise(
+      mkdtemp(join(tmpdir(), 'juyiting-ui-smoke-')),
+      'temporary browser profile creation'
+    )
+    const debugPort = 9333 + Math.floor(Math.random() * 1000)
+    const WebSocketCtor = options.WebSocketCtor || WebSocket
+    const chromeArgs = [
+      '--headless=new',
+      '--disable-gpu',
+      '--no-first-run',
+      '--no-default-browser-check',
+      ...(config.allowInsecureTls ? ['--ignore-certificate-errors'] : []),
+      '--window-size=1440,900',
+      `--remote-debugging-port=${debugPort}`,
+      `--user-data-dir=${userDataDir}`,
+      'about:blank'
+    ]
+    guard.beforeBoundary('Chromium browser spawn')
+    chrome = spawnImpl(chromePath, chromeArgs, {
+      stdio: 'ignore',
+      detached: process.platform !== 'win32'
+    })
+    let stopPromise
+    stopTrackedChrome = () => {
+      if (!stopPromise) stopPromise = stopChrome(chrome, userDataDir, spawnImpl)
+      return stopPromise
+    }
+    untrackChrome = guard.trackCleanup(stopTrackedChrome)
+
+    const version = await waitForJson(runtime, `http://127.0.0.1:${debugPort}/json/version`)
+    const target = await requestJson(
+      runtime,
+      `http://127.0.0.1:${debugPort}/json/new?about:blank`,
+      { method: 'PUT' },
+      'Chromium DevTools target creation request'
+    )
+    const webSocketUrl = target.webSocketDebuggerUrl || version.webSocketDebuggerUrl
+    let parsedWebSocketUrl
+    try {
+      parsedWebSocketUrl = new URL(webSocketUrl)
+    } catch {
+      throw new Error('Chromium DevTools WebSocket URL is malformed')
+    }
+    if (!['ws:', 'wss:'].includes(parsedWebSocketUrl.protocol) ||
+        parsedWebSocketUrl.username || parsedWebSocketUrl.password || parsedWebSocketUrl.hash ||
+        !isLoopbackUrl(parsedWebSocketUrl)) {
+      throw new Error('Chromium DevTools WebSocket URL is not a safe loopback target')
+    }
+    cdp = new CdpSession(runtime, parsedWebSocketUrl, WebSocketCtor)
+    untrackCdp = guard.trackCleanup(() => cdp.close())
     await cdp.open()
     await cdp.send('Page.enable')
     await cdp.send('Runtime.enable')
@@ -539,11 +699,11 @@ export const runUiSmoke = async () => {
     cdp.on('Fetch.requestPaused', async ({ requestId, request }) => {
       const url = request?.url || ''
       if (url.includes('/agent/map')) {
-        await fulfillJson(cdp, requestId, 200, fixtures.mapAgents)
+        await fulfillJson(runtime, cdp, requestId, 200, fixtures.mapAgents)
         return
       }
       if (url.includes('/agent/scenes/juyiting-main/snapshot')) {
-        await fulfillJson(cdp, requestId, 200, fixtures.snapshot)
+        await fulfillJson(runtime, cdp, requestId, 200, fixtures.snapshot)
         return
       }
       if (url.includes('/agent/scenes/juyiting-main/events')) {
@@ -551,7 +711,7 @@ export const runUiSmoke = async () => {
           pendingSseRequestId = requestId
           return
         }
-        await fulfillJson(cdp, requestId, 503, {
+        await fulfillJson(runtime, cdp, requestId, 503, {
           status: 503,
           code: 'SCENE_EVENTS_DISABLED',
           msg: 'Scene event stream is disabled'
@@ -585,13 +745,15 @@ export const runUiSmoke = async () => {
       }))})`
     })
 
-    await cdp.send('Page.navigate', { url: `${FRONTEND_URL}/juyiting?transition=none&scene-debug=1` })
-    await waitForExpression(cdp, 'Boolean(document.querySelector(".juyi-page"))')
-    await waitForExpression(cdp, '(document.body.innerText || "").includes("聚义厅")')
-    await waitForExpression(cdp, 'Boolean(document.querySelector(".hall-board.is-melon-ready .melon-layer canvas"))')
-    await waitForExpression(cdp, 'Boolean(document.querySelector(".hall-board.is-melon-ready .melon-layer canvas"))')
+    guard.beforeBoundary('credentialed browser navigation')
+    const pageUrl = new URL('/juyiting?transition=none&scene-debug=1', config.targets.frontend)
+    await cdp.send('Page.navigate', { url: pageUrl.href })
+    await waitForExpression(runtime, cdp, 'Boolean(document.querySelector(".juyi-page"))')
+    await waitForExpression(runtime, cdp, '(document.body.innerText || "").includes("聚义厅")')
+    await waitForExpression(runtime, cdp, 'Boolean(document.querySelector(".hall-board.is-melon-ready .melon-layer canvas"))')
+    await waitForExpression(runtime, cdp, 'Boolean(document.querySelector(".hall-board.is-melon-ready .melon-layer canvas"))')
     try {
-      await waitForExpression(cdp, debugExpression(`
+      await waitForExpression(runtime, cdp, debugExpression(`
         debug.ready === true &&
         debug.map?.tmxLoaded === true &&
         debug.map?.movementReady === true &&
@@ -603,7 +765,7 @@ export const runUiSmoke = async () => {
     } catch (error) {
       const pausedUrls = cdp.events
         .filter(event => event.method === 'Fetch.requestPaused')
-        .map(event => event.params?.request?.url)
+        .map(event => redactUrl(event.params?.request?.url))
       throw new Error(`${error.message}. Debug: ${JSON.stringify(await readDebug(cdp))}. Paused: ${JSON.stringify(pausedUrls)}`)
     }
 
@@ -668,18 +830,18 @@ export const runUiSmoke = async () => {
     const sseDeadline = Date.now() + 10_000
     while (!pendingSseRequestId && Date.now() < sseDeadline) {
       cdp.throwHandlerErrors()
-      await delay(100)
+      await guardedDelay(runtime, 100, 'Scene SSE polling delay')
     }
     if (!pendingSseRequestId) throw new Error('Scene SSE request was not opened')
     const sseRequestId = pendingSseRequestId
     pendingSseRequestId = null
     sseDelivered = true
-    await fulfillSse(cdp, sseRequestId,
+    await fulfillSse(runtime, cdp, sseRequestId,
       `id:129\nevent:agent-scene-state-updated\ndata:${JSON.stringify(fixtures.event)}\n\n`)
-    await waitForExpression(cdp, debugExpression('String(debug.backend?.sceneVersion) === \'129\''))
+    await waitForExpression(runtime, cdp, debugExpression('String(debug.backend?.sceneVersion) === \'129\''))
 
     try {
-      await waitForExpression(cdp, `(() => {
+      await waitForExpression(runtime, cdp, `(() => {
         ${GAME_LOOKUP_SOURCE}
         return Boolean(juyitingGame._hallScene?._inputController && juyitingGame.getCameraSnapshot?.());
       })()`)
@@ -743,7 +905,7 @@ export const runUiSmoke = async () => {
         runtimeErrors
       })}`)
     }
-    await waitForExpression(cdp, `(() => {
+    await waitForExpression(runtime, cdp, `(() => {
       ${GAME_LOOKUP_SOURCE}
       const transform = juyitingGame.getCameraSnapshot?.()?.transform;
       juyitingGame.getSceneDebugSnapshot?.();
@@ -765,7 +927,7 @@ export const runUiSmoke = async () => {
       type: 'mouseReleased', x: canvasCenter.x + 40, y: canvasCenter.y + 24,
       button: 'left', buttons: 0, clickCount: 1
     })
-    await waitForExpression(cdp, debugExpression(`
+    await waitForExpression(runtime, cdp, debugExpression(`
       Math.abs(debug.camera.offsetX - ${beforeDrag.offsetX}) > 1e-6 ||
       Math.abs(debug.camera.offsetY - ${beforeDrag.offsetY}) > 1e-6
     `))
@@ -806,23 +968,23 @@ export const runUiSmoke = async () => {
     await centerSceneHotspot(cdp, 'library')
     const beforePanel = (await readDebug(cdp)).camera
     await clickSceneHotspot(cdp, 'library')
-    await waitForExpression(cdp, 'Boolean(document.querySelector(".panel-library"))')
+    await waitForExpression(runtime, cdp, 'Boolean(document.querySelector(".panel-library"))')
     const panelDebug = await readDebug(cdp)
     if (!panelDebug.input.interactionLocked || !sameTransform(beforePanel, panelDebug.camera)) {
       throw new Error(`Panel opening changed the camera transform: ${JSON.stringify({ beforePanel, after: panelDebug.camera })}`)
     }
     await evaluate(cdp, closePanel)
-    await waitForExpression(cdp, '!document.querySelector(".panel-overlay")')
+    await waitForExpression(runtime, cdp, '!document.querySelector(".panel-overlay")')
 
     await centerSceneHotspot(cdp, 'tasks')
     await clickSceneHotspot(cdp, 'tasks')
-    await waitForExpression(cdp, 'Boolean(document.querySelector(".panel-tasks"))')
+    await waitForExpression(runtime, cdp, 'Boolean(document.querySelector(".panel-tasks"))')
     await evaluate(cdp, closePanel)
-    await waitForExpression(cdp, '!document.querySelector(".panel-overlay")')
+    await waitForExpression(runtime, cdp, '!document.querySelector(".panel-overlay")')
 
     await centerSceneHotspot(cdp, 'chat')
     await clickSceneHotspot(cdp, 'chat')
-    await waitForExpression(cdp, 'Boolean(document.querySelector(".panel-chat"))')
+    await waitForExpression(runtime, cdp, 'Boolean(document.querySelector(".panel-chat"))')
 
     const finalState = await evaluate(cdp, `(() => {
       const text = document.body.innerText || '';
@@ -837,10 +999,10 @@ export const runUiSmoke = async () => {
     }
 
     await cdp.send('Page.reload', { ignoreCache: true })
-    await waitForExpression(cdp, debugExpression(`
+    await waitForExpression(runtime, cdp, debugExpression(`
       debug.ready === true && debug.map?.movementReady === true && debug.simulation?.ready === true
     `))
-    const recovery = await waitForExpression(cdp, `(() => {
+    const recovery = await waitForExpression(runtime, cdp, `(() => {
       ${GAME_LOOKUP_SOURCE}
       const agent = juyitingGame._movementEngine?.snapshots?.()
         .find(candidate => candidate.personaCode === 'songjiang');
@@ -857,7 +1019,7 @@ export const runUiSmoke = async () => {
     failRequiredSprite = true
     pendingSseRequestId = null
     await cdp.send('Page.reload', { ignoreCache: true })
-    await waitForExpression(cdp, debugExpression(`
+    await waitForExpression(runtime, cdp, debugExpression(`
       debug.ready === true &&
       debug.degraded === true &&
       debug.map?.movementReady === true &&
@@ -875,13 +1037,20 @@ export const runUiSmoke = async () => {
 
     console.log('聚义厅 UI smoke 验证通过')
     console.log(JSON.stringify({
-      frontend: FRONTEND_URL,
-      backend: BACKEND_URL,
-      finalUrl: finalState.url
+      targets: config.targetOrigins,
+      finalUrl: redactUrl(finalState.url)
     }, null, 2))
+  } catch (error) {
+    throw new Error(sanitizeError(error, [...Object.values(config.credentials), token]))
   } finally {
+    untrackCdp()
     if (cdp) cdp.close()
-    await stopChrome(chrome, userDataDir)
+    untrackChrome()
+    if (chrome && userDataDir) await stopTrackedChrome()
+    else if (userDataDir) await rm(userDataDir, { recursive: true, force: true })
+    token = ''
+    restoreTls()
+    if (ownsSafetyContext) await guard.dispose()
   }
 }
 
@@ -891,7 +1060,7 @@ const isMainModule = process.argv[1]
 
 if (isMainModule) {
   runUiSmoke().catch(error => {
-    console.error(error)
-    process.exit(1)
+    console.error(sanitizeError(error, credentialValuesFromEnv(process.env)))
+    process.exitCode = 1
   })
 }
