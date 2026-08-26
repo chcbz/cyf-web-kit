@@ -950,6 +950,21 @@ const closePanel = `
 })()
 `
 
+// The smoke uses a new browser profile, so it must resolve the real onboarding overlay
+// before checking canvas interactions. This deliberately exercises the user-facing action;
+// it does not add a production-only bypass.
+const completeOnboarding = async (runtime, cdp) => {
+  await waitForExpression(runtime, cdp, 'Boolean(document.querySelector(".onboarding-overlay .complete-button"))')
+  const completed = await evaluate(cdp, `(() => {
+    const button = document.querySelector('.onboarding-overlay .complete-button');
+    if (!button) return false;
+    button.click();
+    return true;
+  })()`)
+  if (!completed) throw new Error('Onboarding completion button was unavailable')
+  await waitForExpression(runtime, cdp, '!document.querySelector(".onboarding-overlay")')
+}
+
 export const runUiSmoke = async (options = {}) => {
   const env = options.env || options.safetyContext?.env || process.env
   const requestTimeoutMs = parseBoundedTimeout(
@@ -1154,6 +1169,7 @@ export const runUiSmoke = async (options = {}) => {
     }
 
     const initialDebug = await readDebug(cdp)
+    await completeOnboarding(runtime, cdp)
     if (initialDebug.sprites.manifestVersion !== EXPECTED_MANIFEST_VERSION ||
       initialDebug.sprites.requiredMissingCount !== 0 ||
       initialDebug.sprites.optionalMissingCount !== 0 ||

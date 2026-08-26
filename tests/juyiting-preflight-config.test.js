@@ -1076,4 +1076,17 @@ describe('juyiting public beta preflight safety', () => {
       /cleanup failed: Chromium process tree survived/
     )
   })
+
+  it('explicitly completes onboarding before exercising canvas interactions', () => {
+    const source = readFileSync('tests/juyiting-public-beta-ui-smoke.mjs', 'utf8')
+    const initialDebugIndex = source.indexOf('const initialDebug = await readDebug(cdp)')
+    const onboardingIndex = source.indexOf('await completeOnboarding(runtime, cdp)')
+    const hotspotIndex = source.indexOf("await centerSceneHotspot(cdp, 'library')")
+
+    assert.ok(source.includes('document.querySelector(".onboarding-overlay .complete-button")'))
+    assert.ok(initialDebugIndex >= 0)
+    assert.ok(onboardingIndex > initialDebugIndex)
+    assert.ok(hotspotIndex > onboardingIndex)
+  })
+
 })
