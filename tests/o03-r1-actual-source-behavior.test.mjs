@@ -7,7 +7,7 @@ import test from 'node:test'
 
 const cwd = realpathSync(process.cwd())
 const sha256 = value => createHash('sha256').update(value).digest('hex')
-const base = Object.freeze({ head: 'e3b5dee131f6383c4ebf46b16d17256ba5ac48ce', tree: '0f7d270df92e40165b9162192c0bcecbe46432d9' })
+const base = Object.freeze({ head: '699a575b8e2a30faf7052ddf84687a533d0f082d', tree: '7d568c1c12ded13c75b98cfdd94006ac6c26b648' })
 const auditMode = process.argv.length === 3 && process.argv[2] === '--canonical-loader-self-audit'
 const sourcePins = Object.freeze({
   'src/game/camera/cameraController.ts': Object.freeze({ sourceSha256: '7e1711bc367ef32d652114c10f2cdcc56117de8613339fc486904cafd64830fd', sourceBytes: 9464 }),
@@ -17,9 +17,9 @@ const sourcePins = Object.freeze({
   'src/game/occlusion/sourceIdentity.ts': Object.freeze({ sourceSha256: 'a7fbae52a861642d0d76838c9579aaa23f4d18591da33df2bdb6eae46f3f2a1e', sourceBytes: 493 }),
   'src/game/viewportTransform.js': Object.freeze({ sourceSha256: '8a62359fc4617c9e0dd5c6afc08a0211700fde829760aa6c34a647456fd66169', sourceBytes: 1735 }),
   'src/game/config.js': Object.freeze({ sourceSha256: '4fb93c9021af1c59683d27ba314d8540f8ad5b356085f6a30697b5c6484be1e3', sourceBytes: 738 }),
-  'src/game/JuyitingGame.js': Object.freeze({ sourceSha256: 'ac292e1e7f72ac7a8a9da0802189bac8ccfc9f162e6710a15b47767475051ad7', sourceBytes: 43764 }),
+  'src/game/JuyitingGame.js': Object.freeze({ sourceSha256: '741b89dce8d6b29750d006f143c39105f14641d339726a5c8354043b5d3c9b99', sourceBytes: 44591 }),
   'src/game/scenes/HallScene.js': Object.freeze({ sourceSha256: 'f2fc50d683400c76832c30723bd37fe58a0e644637fd2836c95971920fb24817', sourceBytes: 122160 }),
-  'src/components/juyiting/HallStage.vue': Object.freeze({ sourceSha256: 'a47039aecf4e1e75a7f1f7b4d56e017661289e2416bb4478e36f39ac6a924eb4', sourceBytes: 35393 }),
+  'src/components/juyiting/HallStage.vue': Object.freeze({ sourceSha256: '3d5098d31ac28e25b0c940a2a5e5e2209978fcfd7ae8e16edd354de27e2fdfae', sourceBytes: 36369 }),
   'src/components/world/JuyiHall.vue': Object.freeze({ sourceSha256: '795308cc32e0aa12a9c3cc9a401f13ca4b5c46a694ae2db149da44a09281389d', sourceBytes: 56163 })
 })
 const canonicalManifest = Object.freeze([
@@ -142,7 +142,7 @@ const donor = Object.freeze({
   compilerBundleSha256: '1403634ad2e29389506b9b52e5d4ad7ba3c24be06d731a2fa13620836a1e3e90', compilerBundleBytes: 1668790,
   vuePackageSha256: '4860702ba0ca40f38fea0ceb765d497e638b90f720b60863b18698414ce558a5',
   vueBundleSha256: 'a674a5acecc3113ab07e244e73cbbf2ef719c5cfe4f6837359e4d1e7f8fe6364', vueBundleBytes: 367063,
-  hallStageScriptSha256: 'b9d2ee6961677c007f6358ca99808f6110f121059c81d9642f1635fad33f9754', hallStageScriptBytes: 25508
+  hallStageScriptSha256: '1dbfae919adffee942ab56482f0aa55236bbe9622412703ce3cc6aa8a6088c85', hallStageScriptBytes: 26484
 })
 const DYNAMIC_MELON_IMPORT_CONTRACT = Object.freeze({
   importer: resolve(cwd, 'src/game/JuyitingGame.js'),
@@ -636,7 +636,7 @@ const SELECTOR_FIXTURE_DELTAS = Object.freeze(Object.fromEntries(Object.entries(
   'actual near-edge restore applies source backing display and visible truth before one target commit': { HALL_STAGE: 0, SURFACE: 1, JUYI_SCRIPT: 0 },
   'actual commitViewport rejects once and HallStage performs fatal cleanup': { HALL_STAGE: 1, SURFACE: 0, JUYI_SCRIPT: 0 },
   'destroy cancels actual pending commit waiter without rejection or leaked frame': { HALL_STAGE: 0, SURFACE: 1, JUYI_SCRIPT: 0 },
-  'actual destroy/remount materializes explicit agent task target before one ACK with bounded failure': { HALL_STAGE: 1, SURFACE: 0, JUYI_SCRIPT: 0 },
+  'delayed optional persona availability rearms only the latest exhausted target for one ACK': { HALL_STAGE: 1, SURFACE: 0, JUYI_SCRIPT: 0 },
   'hotspot focus is immediate while stale target and lifecycle callbacks are fenced': { HALL_STAGE: 1, SURFACE: 0, JUYI_SCRIPT: 0 },
   'shared map generation is monotonic across two complete HallStage instances without weakening local fences': { HALL_STAGE: 2, SURFACE: 0, JUYI_SCRIPT: 0 }
 }).map(([name, delta]) => [name, Object.freeze(delta)])))
@@ -1293,10 +1293,19 @@ const gameDependencyExports = Object.freeze({
   './tiledMap.js': Object.freeze({ parseJuyiHallTmx: (raw, options) => { assert.equal(raw, '<map id="o03-minimal" />'); assert.deepEqual(Object.keys(options).sort(), ['movementEnabled']); assert.equal(options.movementEnabled, false); return mapData } }),
   './entities/HallAgent.js': Object.freeze({ createHallAgentClass: me => { assert.equal(me, meFacade); return createHallAgentFacade() } }),
   './sprites/spriteLoader.js': Object.freeze({ loadPersonaSprites: async (loader, manifest, options) => {
-    assert.equal(typeof loader, 'function'); assert.ok(manifest?.personas?.['persona-b']?.required); assert.equal(options?.timeoutMs, 15000)
+    assert.equal(typeof loader, 'function'); assert.equal(options?.timeoutMs, 15000)
+    const personas = manifest?.personas || {}
+    if (personas['persona-required']) {
+      assert.equal(personas['persona-required'].required, true); assert.equal(personas['persona-b'], undefined)
+      return Object.freeze({ available: new Set(['persona-required']), assets: new Map(), degraded: false, requiredMissingCount: 0, optionalMissingCount: 0, placeholderCount: 0, errors: Object.freeze([]) })
+    }
+    assert.equal(personas['persona-b']?.required, false); assert.equal(personas['persona-required'], undefined)
     return Object.freeze({ available: new Set(['persona-b']), assets: new Map(), degraded: false, requiredMissingCount: 0, optionalMissingCount: 0, placeholderCount: 0, errors: Object.freeze([]) })
   } }),
-  './sprites/personaSpriteManifest.js': Object.freeze({ PERSONA_SPRITE_MANIFEST: Object.freeze({ version: 1, personas: Object.freeze({ 'persona-b': Object.freeze({ personaCode: 'persona-b', required: true }) }) }) }),
+  './sprites/personaSpriteManifest.js': Object.freeze({ PERSONA_SPRITE_MANIFEST: Object.freeze({ version: 1, personas: Object.freeze({
+    'persona-required': Object.freeze({ personaCode: 'persona-required', required: true }),
+    'persona-b': Object.freeze({ personaCode: 'persona-b', required: false })
+  }) }) }),
   './simulation/movementEngine.js': Object.freeze(inert('./simulation/movementEngine.js', 'createMovementEngine')),
   './debug/sceneDebugAggregator.js': Object.freeze(inert('./debug/sceneDebugAggregator.js', 'aggregateSceneDebug'))
 })
@@ -1532,7 +1541,7 @@ const selfAudit = async () => {
   const hallParsed = compiler.parse(hallSource.bytes.toString('utf8'), { filename: hallSource.canonical })
   assert.equal(hallParsed.errors.length, 0, 'HallStage SFC parse errors')
   const hallSegments = [hallParsed.descriptor.template, hallParsed.descriptor.scriptSetup, hallParsed.descriptor.styles[0]]
-  const hallPins = [[3281, 'b919a16a27c707640f9b4fa61f3bcd93f3f313628165b0252e27b0616dae1af5'], [25508, donor.hallStageScriptSha256], [6533, 'afcca9abfcea4e9efb81d87c6584c169bd66d96f3b5104f7ba1bb70e26155a73']]
+  const hallPins = [[3281, 'b919a16a27c707640f9b4fa61f3bcd93f3f313628165b0252e27b0616dae1af5'], [26484, donor.hallStageScriptSha256], [6533, 'afcca9abfcea4e9efb81d87c6584c169bd66d96f3b5104f7ba1bb70e26155a73']]
   hallSegments.forEach((segment, index) => { const bytes = Buffer.from(segment.content, 'utf8'); assert.equal(bytes.length, hallPins[index][0]); assert.equal(sha256(bytes), hallPins[index][1]) })
   const hallScriptFirst = compiler.compileScript(hallParsed.descriptor, { id: 'o03-hall-stage', inlineTemplate: false })
   const hallScriptSecond = compiler.compileScript(hallParsed.descriptor, { id: 'o03-hall-stage', inlineTemplate: false })
@@ -2152,15 +2161,32 @@ selector('destroy cancels actual pending commit waiter without rejection or leak
   const writes = config.trace.canvasWrites.length; scheduler.control.fireCaptured(stale); await flushMicrotasks(2); assert.equal(config.trace.canvasWrites.length, writes); assert.equal(retainedScene._destroyed, true)
   await direct.surface.unmount(); return { identities, root: direct.surface.root }
 })
-selector('actual destroy/remount materializes explicit agent task target before one ACK with bounded failure', async transaction => {
+selector('delayed optional persona availability rearms only the latest exhausted target for one ACK', async transaction => {
   const agent = Object.freeze({ agentId: 'agent-B', personaCode: 'persona-b', name: 'Agent B' }); const task = Object.freeze({ id: 'task-B', assignedAgentIds: Object.freeze(['agent-B']), assignees: Object.freeze([]) })
-  const config = makeRuntimeFixture({ materializeAgents: false }); const game = new Game(); const mounted = mountStage(game, config, { sceneAgents: Object.freeze([agent]), tasks: Object.freeze([task]) }, transaction); await completeStageMount(mounted)
-  const identities = identityRecords(game._hallScene.constructor); const target = Object.freeze({ generation: 1, target: Object.freeze({ kind: 'task', taskId: 'task-B', agentId: 'agent-B' }) })
-  await mounted.updateProps({ landscapeEntryTarget: target }); await flushMicrotasks(20)
-  assert.equal(mounted.state().landscapeTargetWork.attempts, 8); assert.equal(mounted.state().landscapeTargetWork.state, 'exhausted'); assert.equal(mounted.events.filter(item => item.event === 'landscape-target-consumed').length, 0)
-  config.control.setMaterializeAgents(true); const retry = beginStageRetry(mounted, 'HallStage materialization retry'); await completeStageMount(mounted, retry); await flushMicrotasks(6)
-  const acknowledgements = mounted.events.filter(item => item.event === 'landscape-target-consumed'); assert.equal(acknowledgements.length, 1); assert.equal(acknowledgements[0].args[0], 1); assert.ok(game._hallScene.getAgent('agent-B')); assert.ok(config.trace.agentSupports >= 9)
-  await mounted.unmount(); return { identities, root: mounted.root }
+  const config = makeRuntimeFixture(); const game = new Game(); const mounted = mountStage(game, config, { sceneAgents: Object.freeze([agent]), tasks: Object.freeze([task]) }, transaction); await completeStageMount(mounted)
+  const identities = identityRecords(game._hallScene.constructor)
+  assert.ok(game.getSpriteLoadSnapshot().available.has('persona-required')); assert.equal(game.getSpriteLoadSnapshot().available.has('persona-b'), false); assert.equal(game._hallScene.getAgent('agent-B'), undefined)
+  const firstTarget = Object.freeze({ generation: 1, target: Object.freeze({ kind: 'task', taskId: 'task-B', agentId: 'agent-B' }) })
+  await mounted.updateProps({ landscapeEntryTarget: firstTarget }); await flushMicrotasks(20)
+  assert.equal(mounted.state().landscapeTargetWork.attempts, 8); assert.equal(mounted.state().landscapeTargetWork.state, 'exhausted'); assert.equal(mounted.events.filter(item => item.event === 'landscape-target-consumed').length, 0); assert.equal(config.trace.agentSupports, 0)
+  const secondTarget = Object.freeze({ generation: 2, target: Object.freeze({ kind: 'task', taskId: 'task-B', agentId: 'agent-B' }) })
+  await mounted.updateProps({ landscapeEntryTarget: secondTarget }); await flushMicrotasks(20)
+  assert.equal(mounted.state().landscapeTargetWork.targetGeneration, 2); assert.equal(mounted.state().landscapeTargetWork.attempts, 8); assert.equal(mounted.state().landscapeTargetWork.state, 'exhausted'); assert.equal(mounted.events.filter(item => item.event === 'landscape-target-consumed').length, 0)
+  const onPersonaAvailabilityChanged = game._callbacks.onPersonaAvailabilityChanged; assert.equal(typeof onPersonaAvailabilityChanged, 'function')
+  const deferredTimers = scheduler.control.pendingIds('timeout', 1200); assert.equal(deferredTimers.length, 1); scheduler.control.fire(deferredTimers[0]); await flushMicrotasks(4)
+  assert.ok(game.getSpriteLoadSnapshot().available.has('persona-b')); assert.ok(game._hallScene.getAgent('agent-B')); assert.equal(mounted.state().landscapeTargetWork.targetGeneration, 2); assert.equal(mounted.state().landscapeTargetWork.state, 'acknowledged'); assert.equal(mounted.state().landscapeTargetWork.attempts, 1)
+  let acknowledgements = mounted.events.filter(item => item.event === 'landscape-target-consumed'); assert.equal(acknowledgements.length, 1); assert.equal(acknowledgements[0].args[0], 2); assert.equal(acknowledgements.some(item => item.args[0] === 1), false); assert.equal(config.trace.agentSupports, 2)
+  onPersonaAvailabilityChanged(Object.freeze({ personaCodes: Object.freeze(['persona-b']) })); await flushMicrotasks(2)
+  acknowledgements = mounted.events.filter(item => item.event === 'landscape-target-consumed'); assert.equal(acknowledgements.length, 1); assert.equal(mounted.state().landscapeTargetWork.attempts, 1); assert.equal(config.trace.agentSupports, 2); assert.equal(mounted.state().landscapeTargetWork.frame, null); assert.equal(scheduler.control.pendingIds('timeout', 0).length, 0)
+  await mounted.updateProps({ experienceMode: 'portrait-command' }); await microtaskWaitFor(() => mounted.state().mapLifecycleState === 'suspended', 'persona availability suspension')
+  const suspendedEvents = mounted.events.length; const suspendedSupports = config.trace.agentSupports; const suspendedFrames = scheduler.control.pendingIds('timeout', 0).length; const suspendedTimers = facadeAudit.pendingTimers
+  onPersonaAvailabilityChanged(Object.freeze({ personaCodes: Object.freeze(['persona-b']) })); await flushMicrotasks(2)
+  assert.equal(mounted.events.length, suspendedEvents); assert.equal(config.trace.agentSupports, suspendedSupports); assert.equal(scheduler.control.pendingIds('timeout', 0).length, suspendedFrames); assert.equal(facadeAudit.pendingTimers, suspendedTimers)
+  await mounted.unmount()
+  const unmountedEvents = mounted.events.length; const unmountedSupports = config.trace.agentSupports; const unmountedFrames = scheduler.control.pendingIds('timeout', 0).length; const unmountedTimers = facadeAudit.pendingTimers
+  onPersonaAvailabilityChanged(Object.freeze({ personaCodes: Object.freeze(['persona-b']) })); await flushMicrotasks(2)
+  assert.equal(mounted.events.length, unmountedEvents); assert.equal(config.trace.agentSupports, unmountedSupports); assert.equal(scheduler.control.pendingIds('timeout', 0).length, unmountedFrames); assert.equal(facadeAudit.pendingTimers, unmountedTimers)
+  return { identities, root: mounted.root }
 })
 selector('hotspot focus is immediate while stale target and lifecycle callbacks are fenced', async transaction => {
   const config = makeRuntimeFixture(); const game = new Game(); const mounted = mountStage(game, config, { sceneHotspots: Object.freeze([Object.freeze({ id: 'hotspot-1' })]) }, transaction); await completeStageMount(mounted)
@@ -2185,7 +2211,7 @@ selector('shared map generation is monotonic across two complete HallStage insta
 test.after(() => {
   assert.equal(selectorPasses, 9); assert.equal(methodIdentityPasses, 144); assert.equal(syntheticFailFastCalls, 0); assert.equal(facadeCounters.forbiddenDomCalls, 0); assert.equal(facadeCounters.forbiddenGlobalWrites, 0); assert.equal(facadeCounters.insertStaticContentCalls, 0)
   assert.equal(facadeCounters.vueTemplateCreateCalls, 1); assert.equal(facadeCounters.vueFormatterPushCalls, 1); assert.equal(facadeCounters.vueHmrRuntimeSets, 1); assert.equal(facadeCounters.vueInstanceSetterPushes, 1); assert.equal(facadeCounters.vueSsrSetterPushes, 1); assert.equal(facadeCounters.vueRendererFlagSets, 1)
-  assert.equal(facadeCounters.dynamicMelonImports, 14); assert.equal(dynamicMelonImportGate.audit.observedCount, 14); assert.equal(dynamicMelonImportGate.audit.history.length, 14); assert.ok(dynamicMelonImportGate.audit.history.every(entry => entry.state === 'RELEASED'))
+  assert.equal(facadeCounters.dynamicMelonImports, 13); assert.equal(dynamicMelonImportGate.audit.observedCount, 13); assert.equal(dynamicMelonImportGate.audit.history.length, 13); assert.ok(dynamicMelonImportGate.audit.history.every(entry => entry.state === 'RELEASED'))
   assert.equal(dynamicMelonImportGate.audit.pendingWaiters, 0); assert.equal(dynamicMelonImportGate.audit.pendingWatchdogs, 0)
   const finalHostCounters = hostAudit.counters
   assert.equal(hostAudit.activeFixture, null); assert.equal(finalHostCounters.hostContractViolations, 0); assert.equal(finalHostCounters.hostFixturesOpened, 11); assert.equal(finalHostCounters.hostFixturesClosed, 11)

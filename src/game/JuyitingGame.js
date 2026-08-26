@@ -100,7 +100,8 @@ export class JuyitingGame {
         onAgentClick: options.onAgentClick || null,
         onHotspotClick: options.onHotspotClick || null,
         onReady: options.onReady || null,
-        onSimulationPhaseEvents: options.onSimulationPhaseEvents || null
+        onSimulationPhaseEvents: options.onSimulationPhaseEvents || null,
+        onPersonaAvailabilityChanged: options.onPersonaAvailabilityChanged || null
       }
 
       const config = createGameConfig()
@@ -260,9 +261,24 @@ export class JuyitingGame {
       void this._loadPersonaSpriteBatch(me, manifest, mountToken)
         .then(result => {
           if (!this._isCurrentMount(mountToken)) return
+          const previousAvailable = new Set(this._spriteLoadResult?.available || [])
           this._mergeSpriteLoadResult(result)
-          this._hallScene?.setAvailablePersonas(this._spriteLoadResult?.available || new Set())
+          const available = new Set(this._spriteLoadResult?.available || [])
+          const personaCodes = [...available]
+            .filter(personaCode => !previousAvailable.has(personaCode))
+            .map(personaCode => String(personaCode || '').toLowerCase())
+            .filter(Boolean)
+            .sort()
+          this._hallScene?.setAvailablePersonas(available)
           this._markSceneDebugDirty()
+          if (personaCodes.length) {
+            const payload = Object.freeze({ personaCodes: Object.freeze(personaCodes) })
+            try {
+              this._callbacks.onPersonaAvailabilityChanged?.(payload)
+            } catch (error) {
+              console.warn('[JuyitingGame] Persona availability callback failed:', error?.message || error)
+            }
+          }
         })
         .catch(error => {
           if (!this._isCurrentMount(mountToken)) return

@@ -372,6 +372,22 @@ const attemptAgentLandscapeTarget = work => {
   return false
 }
 
+const rearmExhaustedLandscapeAgentTarget = (attemptId, payload) => {
+  if (!isRunningGeneration(attemptId)) return false
+  const work = landscapeTargetWork
+  if (!work || work.state !== 'exhausted' || !currentLandscapeTarget(work)) return false
+  if (!['agent', 'task'].includes(work.target?.kind)) return false
+  const targetAgent = (props.sceneAgents || []).find(agent => agent?.agentId === work.target.agentId)
+  const personaCode = String(targetAgent?.personaCode || '').toLowerCase()
+  const newlyAvailable = Array.isArray(payload?.personaCodes)
+    ? payload.personaCodes.map(value => String(value || '').toLowerCase())
+    : []
+  if (!personaCode || !newlyAvailable.includes(personaCode)) return false
+  work.attempts = 0
+  work.state = 'idle'
+  return attemptAgentLandscapeTarget(work)
+}
+
 const attemptHotspotLandscapeTarget = work => {
   if (!currentLandscapeTarget(work) || !targetEligible(work.target)) return false
   work.frame = null
@@ -573,6 +589,11 @@ const mountScene = async () => {
       },
       onSimulationPhaseEvents: events => {
         if (isRunningGeneration(attemptId)) emit('simulation-phase-events', events)
+      },
+      onPersonaAvailabilityChanged: payload => {
+        if (isRunningGeneration(attemptId)) {
+          rearmExhaustedLandscapeAgentTarget(attemptId, payload)
+        }
       }
     })
     if (!isCurrentMountAttempt(attemptId)) return

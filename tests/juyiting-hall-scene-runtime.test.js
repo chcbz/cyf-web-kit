@@ -354,29 +354,103 @@ describe('HallScene melonJS runtime compatibility', () => {
     ])
   })
 
-  it('captures, restores, focuses, and clears map runtime facades without business state', () => {
+  it('captures, restores, focuses, and clears schema-2 map runtime facades without business state', async () => {
+    const originalRequestAnimationFrame = window.requestAnimationFrame
+    const originalCancelAnimationFrame = window.cancelAnimationFrame
+    const frames = new Map()
+    let nextFrame = 1
+    let containerRect = { left: 0, top: 0, width: 844, height: 390, right: 844, bottom: 390 }
     const calls = []
+    const cameraSnapshot = { presetKey: 'desktop', transform: { zoom: 1, offsetX: 0, offsetY: 0 } }
     const game = new JuyitingGame()
-    game._generation = 9
-    game._hallScene = {
-      getCameraSnapshot: () => ({ presetKey: 'desktop', transform: { zoom: 1, offsetX: 0, offsetY: 0 } }),
-      restoreCameraSnapshot: (snapshot, viewport) => calls.push(['restore', snapshot, viewport]),
-      focusAgent: id => calls.push(['agent', id]) || true,
-      focusHotspot: id => calls.push(['hotspot', id]) || true
-    }
+    const canvasVariables = new Map()
 
-    expect(game.captureResumeSnapshot()).to.deep.equal({
-      cameraSnapshot: { presetKey: 'desktop', transform: { zoom: 1, offsetX: 0, offsetY: 0 } },
-      mapGeneration: 9
-    })
-    expect(game.restoreResumeSnapshot({ cameraSnapshot: { presetKey: 'desktop' } }, { width: 844, height: 390 })).to.equal(true)
-    expect(game.focusAgent('agent-1')).to.equal(true)
-    expect(game.focusHotspot('hotspot-1')).to.equal(true)
-    expect(calls).to.deep.equal([
-      ['restore', { presetKey: 'desktop' }, { width: 844, height: 390 }],
-      ['agent', 'agent-1'],
-      ['hotspot', 'hotspot-1']
-    ])
+    try {
+      window.requestAnimationFrame = callback => {
+        const id = nextFrame++
+        frames.set(id, callback)
+        return id
+      }
+      window.cancelAnimationFrame = id => frames.delete(id)
+      game._generation = 77
+      game._mountToken = 77
+      game._lifecycleGeneration = 9
+      game._container = { getBoundingClientRect: () => ({ ...containerRect }) }
+      game._canvas = {
+        width: 1664,
+        height: 928,
+        style: {
+          transform: '',
+          setProperty: (name, value) => canvasVariables.set(name, value)
+        },
+        getBoundingClientRect: () => ({ ...containerRect })
+      }
+      game._me = { game: { viewport: { width: 1664, height: 928 } } }
+      game._markSceneDebugDirty = () => {}
+      game._hallScene = {
+        getCameraSnapshot: () => cameraSnapshot,
+        restoreCameraSnapshot: (snapshot, sourceViewport) => calls.push(['restore', snapshot, sourceViewport]) || true,
+        resizeViewport: change => calls.push(['resize', change]) || { resized: true },
+        focusAgent: id => {
+          calls.push(['agent', id])
+          return true
+        },
+        focusHotspot: id => {
+          calls.push(['hotspot', id])
+          return true
+        }
+      }
+
+      const snapshot = game.captureResumeSnapshot()
+      expect(snapshot).to.deep.equal({
+        schemaVersion: 2,
+        cameraSnapshot,
+        sourceViewport: {
+          backing: { width: 1664, height: 928 },
+          display: { width: 844, height: 390 },
+          visible: { x: 0, y: 0, width: 1664, height: 928 }
+        },
+        mapGeneration: 9
+      })
+
+      containerRect = { left: 0, top: 0, width: 390, height: 844, right: 390, bottom: 844 }
+      const pending = game.restoreResumeSnapshot(snapshot, { width: 390, height: 844 })
+      expect(pending).to.be.an.instanceof(Promise)
+      expect(game._viewportCommitWaiters).to.have.length(1)
+      const firstFrame = frames.entries().next().value
+      expect(firstFrame).to.not.equal(undefined)
+      frames.delete(firstFrame[0])
+      firstFrame[1]()
+      expect(game._viewportCommitWaiters).to.have.length(1)
+      const secondFrame = frames.entries().next().value
+      expect(secondFrame).to.not.equal(undefined)
+      expect(secondFrame[0]).to.not.equal(firstFrame[0])
+      frames.delete(secondFrame[0])
+      secondFrame[1]()
+
+      expect(await pending).to.deep.equal(cameraSnapshot)
+      expect(calls[0]).to.deep.equal(['restore', snapshot.cameraSnapshot, snapshot.sourceViewport])
+      expect(calls[1]).to.deep.equal(['resize', {
+        width: 1664,
+        height: 928,
+        kind: 'orientation',
+        orientationChanged: true,
+        displayViewport: { width: 390, height: 844 },
+        visibleViewport: { x: 0, y: 0, width: 1664, height: 928 }
+      }])
+      expect(game._committedViewportGeometrySignature).to.equal('390:844:1664:928')
+      expect(game._pendingViewportRestore).to.equal(null)
+      expect(game._pendingViewportChange).to.equal(null)
+      expect(game._viewportCommitCandidateSignature).to.equal('')
+      expect(game._viewportCommitFrame).to.equal(null)
+      expect(game._viewportCommitWaiters).to.have.length(0)
+      expect(game.focusAgent('agent-1')).to.equal(true)
+      expect(game.focusHotspot('hotspot-1')).to.equal(true)
+      expect(calls.slice(2)).to.deep.equal([['agent', 'agent-1'], ['hotspot', 'hotspot-1']])
+    } finally {
+      window.requestAnimationFrame = originalRequestAnimationFrame
+      window.cancelAnimationFrame = originalCancelAnimationFrame
+    }
   })
 
 
