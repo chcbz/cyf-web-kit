@@ -16,8 +16,8 @@
       :tasks="tasks"
       @quick-action="handlePortraitQuickAction"
       @refresh-hall="refreshHall"
-      @request-landscape="requestLandscape"
-      @select-agent="selectAgent"
+      @request-landscape="requestPortraitLandscape"
+      @select-agent="handlePortraitAgentSelect"
       @open-task="handlePortraitTaskOpen"
       @close-task-detail="closePortraitTaskDetail"
       @open-task-board="handlePortraitTaskBoard"
@@ -665,7 +665,53 @@ const handleLandscapeTargetConsumed = generation => {
   if (landscapeEntryTarget.value?.generation === generation) setLandscapeEntryTarget(null)
 }
 
+const portraitHotspotTargets = Object.freeze({
+  agents: 'agentRoster',
+  tasks: 'bountyBoard',
+  discussion: 'mainSeat',
+  catalog: 'personaCatalog',
+  library: 'libraryShelf'
+})
+
+const stagePortraitHotspotTarget = action => {
+  const hotspotId = portraitHotspotTargets[action]
+  if (!hasExactLandscapeId(hotspotId) || !sceneHotspots.value.some(hotspot => hotspot?.id === hotspotId)) {
+    setLandscapeEntryTarget(null)
+    return false
+  }
+  setLandscapeEntryTarget({ kind: 'hotspot', hotspotId })
+  return true
+}
+
+const handlePortraitAgentSelect = agent => {
+  selectAgent(agent)
+  if (hasExactLandscapeId(agent?.agentId) && mapAgents.value.some(item => item?.agentId === agent.agentId)) {
+    setLandscapeEntryTarget({ kind: 'agent', agentId: agent.agentId })
+    return true
+  }
+  setLandscapeEntryTarget(null)
+  return false
+}
+
+const requestPortraitLandscape = () => {
+  const selected = selectedAgent.value
+  const task = selectedTask.value
+  const assignedIds = Array.isArray(task?.assignedAgentIds) ? task.assignedAgentIds : []
+  const assigneeIds = Array.isArray(task?.assignees) ? task.assignees.map(item => item?.agentId) : []
+  if (hasExactLandscapeId(task?.id) && hasExactLandscapeId(selected?.agentId) &&
+    (assignedIds.includes(selected.agentId) || assigneeIds.includes(selected.agentId)) &&
+    mapAgents.value.some(agent => agent?.agentId === selected.agentId)) {
+    setLandscapeEntryTarget({ kind: 'task', taskId: task.id, agentId: selected.agentId })
+  } else if (hasExactLandscapeId(selected?.agentId) && mapAgents.value.some(agent => agent?.agentId === selected.agentId)) {
+    setLandscapeEntryTarget({ kind: 'agent', agentId: selected.agentId })
+  } else if (!landscapeEntryTarget.value) {
+    setLandscapeEntryTarget(null)
+  }
+  return requestLandscape()
+}
+
 const handlePortraitQuickAction = (action) => {
+  if (action !== 'refresh') stagePortraitHotspotTarget(action)
   if (action === 'refresh') {
     void refreshHall()
     return
@@ -684,6 +730,14 @@ const closePortraitTaskDetail = () => {
 const handlePortraitTaskOpen = task => {
   if (!task?.id) return false
   const selection = selectTask(task)
+  const selected = selectedAgent.value
+  const assignedIds = Array.isArray(task.assignedAgentIds) ? task.assignedAgentIds : []
+  const assigneeIds = Array.isArray(task.assignees) ? task.assignees.map(item => item?.agentId) : []
+  if (hasExactLandscapeId(selected?.agentId) && (assignedIds.includes(selected.agentId) || assigneeIds.includes(selected.agentId)) && mapAgents.value.some(agent => agent?.agentId === selected.agentId)) {
+    setLandscapeEntryTarget({ kind: 'task', taskId: task.id, agentId: selected.agentId })
+  } else {
+    setLandscapeEntryTarget(null)
+  }
   portraitTaskDetailOpen.value = true
   return selection
 }

@@ -222,6 +222,7 @@ const unlockLoading = (attemptId) => {
 
 const handleSceneReady = attemptId => {
   if (!isCurrentMountAttempt(attemptId)) return
+  clearMountTimeout()
   void finalizeSceneReady(attemptId)
 }
 
@@ -248,12 +249,23 @@ const stageViewportNow = () => {
 const isExactTargetId = value => typeof value === 'string' && value.length > 0
 
 const settleFinalViewport = attemptId => new Promise(resolve => {
+  const container = melonContainerRef.value
+  const ResizeObserverImpl = window.ResizeObserver || globalThis.ResizeObserver
+  let observer = null
+  let observerReported = !ResizeObserverImpl
   let previousSignature = ''
   let stableFrames = 0
+  const finish = viewport => {
+    observer?.disconnect?.()
+    resolve(viewport)
+  }
   const inspect = () => {
-    if (!isCurrentMountAttempt(attemptId)) return resolve(null)
-    const viewport = stageViewportNow()
-    if (!(viewport.width > 0 && viewport.height > 0)) {
+    if (!isCurrentMountAttempt(attemptId)) return finish(null)
+    const rect = container?.getBoundingClientRect?.()
+    const viewport = rect?.width > 0 && rect?.height > 0
+      ? { width: Math.round(rect.width), height: Math.round(rect.height) }
+      : null
+    if (!observerReported || !viewport) {
       requestStageFrame(inspect)
       return
     }
@@ -264,7 +276,11 @@ const settleFinalViewport = attemptId => new Promise(resolve => {
       requestStageFrame(inspect)
       return
     }
-    resolve(viewport)
+    finish(viewport)
+  }
+  if (ResizeObserverImpl && container) {
+    observer = new ResizeObserverImpl(() => { observerReported = true })
+    observer.observe(container)
   }
   requestStageFrame(inspect)
 })
@@ -297,7 +313,9 @@ const finalizeSceneReady = async attemptId => {
   if (!viewport || !isCurrentMountAttempt(attemptId) || settledViewportGeneration === attemptId) return
   settledViewportGeneration = attemptId
   // Exactly one final orientation viewport follows two stable non-zero frames.
-  juyitingGame.resizeViewport?.({ width: viewport.width, height: viewport.height, kind: 'orientation', orientationChanged: true })
+  await (juyitingGame.commitViewport?.({ width: viewport.width, height: viewport.height, kind: 'orientation', orientationChanged: true })
+    ?? juyitingGame.resizeViewport?.({ width: viewport.width, height: viewport.height, kind: 'orientation', orientationChanged: true }))
+  if (!isCurrentMountAttempt(attemptId)) return
   const snapshot = props.mapResumeSnapshot
   if (snapshot?.cameraSnapshot) {
     juyitingGame.restoreResumeSnapshot?.(snapshot, viewport)
@@ -320,7 +338,7 @@ const finalizeSceneReady = async attemptId => {
 
 const evaluateViewportResize = () => {
   resizeFrame = null
-  if (!isRunningGeneration(activeMapGeneration)) return
+  if (!isRunningGeneration(sceneMountAttempt)) return
   const nextLayoutViewport = viewportNow()
   const nextStageViewport = stageViewportNow()
   const nextVisualHeight = window.visualViewport?.height || nextLayoutViewport.height
@@ -380,19 +398,19 @@ const evaluateViewportResize = () => {
 }
 
 const scheduleViewportResize = ({ orientationChanged = false } = {}) => {
-  if (!isRunningGeneration(activeMapGeneration)) return
+  if (!isRunningGeneration(sceneMountAttempt)) return
   pendingOrientationSignal = pendingOrientationSignal || orientationChanged
   if (resizeFrame !== null) return
   resizeFrame = requestStageFrame(evaluateViewportResize)
 }
 
-const handleWindowResize = () => { if (isRunningGeneration(activeMapGeneration)) scheduleViewportResize() }
-const handleVisualResize = () => { if (isRunningGeneration(activeMapGeneration)) scheduleViewportResize() }
+const handleWindowResize = () => { if (isRunningGeneration(sceneMountAttempt)) scheduleViewportResize() }
+const handleVisualResize = () => { if (isRunningGeneration(sceneMountAttempt)) scheduleViewportResize() }
 
 const setupStageResizeObserver = () => {
   const ResizeObserverImpl = window.ResizeObserver || globalThis.ResizeObserver
   if (!ResizeObserverImpl || !melonContainerRef.value) return
-  const generation = activeMapGeneration
+  const generation = sceneMountAttempt
   stageResizeObserver = new ResizeObserverImpl(() => { if (isRunningGeneration(generation)) scheduleViewportResize() })
   stageResizeObserver.observe(melonContainerRef.value)
 }
@@ -410,7 +428,7 @@ const mountScene = async () => {
 
   const attemptId = ++sceneMountAttempt
   currentGameDestroyed = false
-  activeMapGeneration = attemptId
+  activeMapGeneration = juyitingGame.beginMapGeneration?.() ?? activeMapGeneration + 1
   mapLifecycleState.value = props.mapResumeSnapshot?.cameraSnapshot ? 'resuming' : 'mounting'
   resumeRequested = false
   settledViewportGeneration = 0
@@ -485,7 +503,7 @@ const retryScene = async () => {
 }
 
 const handleSceneKeydown = (event) => {
-  if (event.defaultPrevented || isSceneMounting.value || !isRunningGeneration(activeMapGeneration)) return
+  if (event.defaultPrevented || isSceneMounting.value || !isRunningGeneration(sceneMountAttempt)) return
   if (event.key === '+' || event.key === '=') {
     juyitingGame.zoomBy?.(0.12)
     event.preventDefault()
@@ -514,7 +532,7 @@ const worldCenterFromSnapshot = (viewport, transform) => {
 }
 
 const refreshReturnButton = () => {
-  if (isUnmounted || !isRunningGeneration(activeMapGeneration)) return null
+  if (isUnmounted || !isRunningGeneration(sceneMountAttempt)) return null
   const snapshot = juyitingGame.getCameraSnapshot?.()
   if (!snapshot?.transform) {
     showReturnButton.value = false
@@ -540,7 +558,7 @@ const runReturnRefresh = () => {
 }
 
 const scheduleReturnRefresh = () => {
-  if (isUnmounted || !isRunningGeneration(activeMapGeneration) || returnFrame !== null) return
+  if (isUnmounted || !isRunningGeneration(sceneMountAttempt) || returnFrame !== null) return
   returnFrame = requestStageFrame(runReturnRefresh)
 }
 
@@ -563,7 +581,7 @@ const cancelStageWork = () => {
 
 const captureMapSnapshot = () => {
   const snapshot = juyitingGame.captureResumeSnapshot?.()
-  if (snapshot?.cameraSnapshot) emit('map-snapshot', { ...snapshot, mapGeneration: activeMapGeneration })
+  if (snapshot?.cameraSnapshot) emit('map-snapshot', snapshot)
 }
 
 const suspendScene = () => {
@@ -613,6 +631,10 @@ onBeforeUnmount(() => {
   mapLifecycleState.value = 'unmounted'
 })
 
+watch(() => props.landscapeEntryTarget, () => {
+  if (isRunningGeneration(sceneMountAttempt)) consumeLandscapeEntryTarget(sceneMountAttempt)
+}, { deep: true })
+
 watch(() => props.experienceMode, mode => {
   if (mode === 'landscape-map') {
     if (mapLifecycleState.value === 'suspending') resumeRequested = true
@@ -628,15 +650,15 @@ watch(() => props.interactionLocked, value => {
 }, { immediate: true })
 
 watch(() => props.sceneAgents, (agents) => {
-  if (melonReady.value && isRunningGeneration(activeMapGeneration)) juyitingGame.syncAgents(agents || [])
+  if (melonReady.value && isRunningGeneration(sceneMountAttempt)) juyitingGame.syncAgents(agents || [])
 }, { deep: true })
 
 watch(() => props.sceneHotspots, (hotspots) => {
-  if (melonReady.value && isRunningGeneration(activeMapGeneration)) juyitingGame.syncHotspots?.(hotspots || [])
+  if (melonReady.value && isRunningGeneration(sceneMountAttempt)) juyitingGame.syncHotspots?.(hotspots || [])
 }, { deep: true })
 
 watch(() => props.selectedAgent, (agent) => {
-  if (melonReady.value && isRunningGeneration(activeMapGeneration)) juyitingGame.setSelectedAgent(agent?.agentId || null)
+  if (melonReady.value && isRunningGeneration(sceneMountAttempt)) juyitingGame.setSelectedAgent(agent?.agentId || null)
   scheduleReturnRefresh()
 })
 </script>

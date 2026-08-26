@@ -42,11 +42,13 @@ export class JuyitingGame {
     this._viewportCommitCandidateSignature = ''
     this._committedViewportGeometrySignature = ''
     this._pendingViewportChange = null
+    this._viewportCommitWaiters = []
     this._containerResizeObserver = null
     this._canvasCoverScale = 1
     this._pendingStart = false
     this._stateId = null
     this._generation = 0
+    this._lifecycleGeneration = 0
     this._mountToken = null
     this._movementEngine = null
     this._pendingSimulationPhaseEvents = []
@@ -323,6 +325,8 @@ export class JuyitingGame {
     this._viewportCommitCandidateSignature = ''
     this._committedViewportGeometrySignature = ''
     this._pendingViewportChange = null
+    const viewportWaiters = this._viewportCommitWaiters.splice(0)
+    viewportWaiters.forEach(waiter => waiter.resolve(undefined))
     this._hallScene = null
     this._container = null
     this._callbacks = {}
@@ -609,6 +613,24 @@ export class JuyitingGame {
     return result
   }
 
+  beginMapGeneration() {
+    this._lifecycleGeneration += 1
+    return this._lifecycleGeneration
+  }
+
+  getMapGeneration() {
+    return this._lifecycleGeneration
+  }
+
+  commitViewport(change = {}) {
+    const mountToken = this._mountToken
+    if (!this._geometrySnapshot()) return Promise.resolve(this._hallScene?.resizeViewport?.(change))
+    this.resizeViewport(change)
+    return new Promise(resolve => {
+      this._viewportCommitWaiters.push({ mountToken, resolve })
+    })
+  }
+
   resizeViewport(change = {}) {
     if (!this._geometrySnapshot()) {
       const result = this._hallScene?.resizeViewport?.(change)
@@ -654,12 +676,35 @@ export class JuyitingGame {
 
   captureResumeSnapshot() {
     const cameraSnapshot = this.getCameraSnapshot()
-    return cameraSnapshot ? { cameraSnapshot, mapGeneration: this._generation } : null
+    const viewport = this._me?.game?.viewport
+    const sourceViewport = Number(viewport?.width) > 0 && Number(viewport?.height) > 0
+      ? { width: Number(viewport.width), height: Number(viewport.height) }
+      : null
+    return cameraSnapshot && sourceViewport
+      ? { cameraSnapshot, sourceViewport, mapGeneration: this._lifecycleGeneration }
+      : null
   }
 
   restoreResumeSnapshot(snapshot, viewport) {
     if (!snapshot?.cameraSnapshot) return false
-    return this._hallScene?.restoreCameraSnapshot?.(snapshot.cameraSnapshot, viewport) || false
+    const source = snapshot.sourceViewport
+    const sourceViewport = Number(source?.width) > 0 && Number(source?.height) > 0
+      ? { width: Number(source.width), height: Number(source.height) }
+      : null
+    const targetViewport = Number(viewport?.width) > 0 && Number(viewport?.height) > 0
+      ? { width: Number(viewport.width), height: Number(viewport.height) }
+      : null
+    if (!sourceViewport || !targetViewport) return false
+    const restored = this._hallScene?.restoreCameraSnapshot?.(snapshot.cameraSnapshot, sourceViewport)
+    if (!restored) return false
+    this._hallScene?.resizeViewport?.({
+      width: targetViewport.width,
+      height: targetViewport.height,
+      kind: 'orientation',
+      orientationChanged: true
+    })
+    this._markSceneDebugDirty()
+    return this.getCameraSnapshot() || restored
   }
 
   focusAgent(agentId) {
@@ -757,10 +802,19 @@ export class JuyitingGame {
     }
   }
 
+  _resolveViewportCommitWaiters(result, mountToken = this._mountToken) {
+    const ready = this._viewportCommitWaiters.filter(waiter => waiter.mountToken === mountToken)
+    this._viewportCommitWaiters = this._viewportCommitWaiters.filter(waiter => waiter.mountToken !== mountToken)
+    ready.forEach(waiter => waiter.resolve(result))
+  }
+
   _commitViewportGeometry(geometry) {
     const change = this._pendingViewportChange || { kind: 'layout' }
     this._pendingViewportChange = null
-    if (geometry.signature === this._committedViewportGeometrySignature) return undefined
+    if (geometry.signature === this._committedViewportGeometrySignature) {
+      this._resolveViewportCommitWaiters(undefined)
+      return undefined
+    }
 
     this._applyCanvasCover(geometry)
     const finalGeometry = this._geometrySnapshot()
@@ -782,6 +836,7 @@ export class JuyitingGame {
       visibleViewport: this._visibleViewport(finalGeometry.containerRect, canvasRect)
     })
     this._committedViewportGeometrySignature = finalGeometry.signature
+    this._resolveViewportCommitWaiters(result)
     this._markSceneDebugDirty()
     return result
   }
