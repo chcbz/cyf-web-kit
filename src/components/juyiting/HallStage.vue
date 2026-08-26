@@ -169,6 +169,8 @@ let resetPollRemaining = 0
 let currentGameDestroyed = false
 let fallbackFrameId = 0
 const fallbackFrames = new Map()
+const LANDSCAPE_TARGET_MAX_ATTEMPTS = 8
+let landscapeTargetWork = null
 
 const requestStageFrame = callback => {
   if (typeof window.requestAnimationFrame === 'function') return window.requestAnimationFrame(callback)
@@ -311,27 +313,90 @@ const settleFinalViewport = attemptId => new Promise(resolve => {
   scheduleInspect()
 })
 
-const consumeLandscapeEntryTarget = attemptId => {
-  if (!isRunningGeneration(attemptId)) return false
-  const entry = props.landscapeEntryTarget
-  if (!entry || !Number.isInteger(entry.generation) || entry.generation <= consumedLandscapeTargetGeneration) return false
-  const target = entry.target
-  let focused = false
-  if (target?.kind === 'agent' && isExactTargetId(target.agentId)) {
-    focused = (props.sceneAgents || []).some(agent => agent?.agentId === target.agentId) && juyitingGame.focusAgent?.(target.agentId) === true
-  } else if (target?.kind === 'hotspot' && isExactTargetId(target.hotspotId)) {
-    focused = (props.sceneHotspots || []).some(hotspot => hotspot?.id === target.hotspotId) && juyitingGame.focusHotspot?.(target.hotspotId) === true
-  } else if (target?.kind === 'task' && isExactTargetId(target.taskId) && isExactTargetId(target.agentId)) {
+const cancelLandscapeTargetWork = () => {
+  const work = landscapeTargetWork
+  if (!work) return
+  if (work.frame !== null) cancelStageFrame(work.frame)
+  work.frame = null
+  work.state = 'cancelled'
+  if (landscapeTargetWork === work) landscapeTargetWork = null
+}
+
+const currentLandscapeTarget = work => (
+  isRunningGeneration(work.attemptId) &&
+  props.landscapeEntryTarget === work.entry &&
+  props.landscapeEntryTarget?.generation === work.targetGeneration &&
+  work.targetGeneration > consumedLandscapeTargetGeneration
+)
+
+const targetEligible = target => {
+  if (target?.kind === 'agent') {
+    return isExactTargetId(target.agentId) && (props.sceneAgents || []).some(agent => agent?.agentId === target.agentId)
+  }
+  if (target?.kind === 'task') {
+    if (!isExactTargetId(target.taskId) || !isExactTargetId(target.agentId)) return false
     const task = (props.tasks || []).find(item => item?.id === target.taskId)
     const assignedIds = Array.isArray(task?.assignedAgentIds) ? task.assignedAgentIds : []
     const assigneeIds = Array.isArray(task?.assignees) ? task.assignees.map(item => item?.agentId) : []
-    const belongsToTask = assignedIds.includes(target.agentId) || assigneeIds.includes(target.agentId)
-    focused = Boolean(task && belongsToTask && (props.sceneAgents || []).some(agent => agent?.agentId === target.agentId)) && juyitingGame.focusAgent?.(target.agentId) === true
+    return Boolean(task && (assignedIds.includes(target.agentId) || assigneeIds.includes(target.agentId)) && (props.sceneAgents || []).some(agent => agent?.agentId === target.agentId))
   }
-  if (!focused) juyitingGame.resetToMainHall?.()
-  consumedLandscapeTargetGeneration = entry.generation
-  emit('landscape-target-consumed', entry.generation)
-  return focused
+  return target?.kind === 'hotspot' && isExactTargetId(target.hotspotId) && (props.sceneHotspots || []).some(hotspot => hotspot?.id === target.hotspotId)
+}
+
+const acknowledgeLandscapeTarget = work => {
+  if (!currentLandscapeTarget(work) || work.state === 'acknowledged') return false
+  work.state = 'acknowledged'
+  if (work.frame !== null) cancelStageFrame(work.frame)
+  work.frame = null
+  consumedLandscapeTargetGeneration = work.targetGeneration
+  emit('landscape-target-consumed', work.targetGeneration)
+  return true
+}
+
+const attemptAgentLandscapeTarget = work => {
+  if (!currentLandscapeTarget(work) || !targetEligible(work.target) || work.state === 'exhausted') return false
+  work.frame = null
+  work.state = work.attempts === 0 ? 'armed' : 'retrying'
+  work.attempts += 1
+  let focused = false
+  try { focused = juyitingGame.syncAgentsAndFocusAgent?.(props.sceneAgents, work.target.agentId) === true } catch { focused = false }
+  if (focused && acknowledgeLandscapeTarget(work)) return true
+  if (!currentLandscapeTarget(work) || work.attempts >= LANDSCAPE_TARGET_MAX_ATTEMPTS) {
+    work.state = 'exhausted'
+    return false
+  }
+  work.frame = requestStageFrame(() => {
+    if (!currentLandscapeTarget(work) || landscapeTargetWork !== work) return
+    attemptAgentLandscapeTarget(work)
+  })
+  return false
+}
+
+const attemptHotspotLandscapeTarget = work => {
+  if (!currentLandscapeTarget(work) || !targetEligible(work.target)) return false
+  work.frame = null
+  work.state = 'armed'
+  let focused = false
+  try { focused = juyitingGame.focusHotspot?.(work.target.hotspotId) === true } catch { focused = false }
+  if (focused) return acknowledgeLandscapeTarget(work)
+  return false
+}
+
+const consumeLandscapeEntryTarget = (attemptId, { retryHotspot = false } = {}) => {
+  if (!isRunningGeneration(attemptId)) return false
+  const entry = props.landscapeEntryTarget
+  if (!entry || !Number.isInteger(entry.generation) || entry.generation <= consumedLandscapeTargetGeneration) {
+    cancelLandscapeTargetWork()
+    return false
+  }
+  const target = entry.target
+  const existing = landscapeTargetWork
+  if (existing && (existing.attemptId !== attemptId || existing.targetGeneration !== entry.generation || existing.entry !== entry)) cancelLandscapeTargetWork()
+  if (!targetEligible(target)) return false
+  if (landscapeTargetWork && !retryHotspot) return false
+  if (!landscapeTargetWork) landscapeTargetWork = { attemptId, targetGeneration: entry.generation, entry, target, attempts: 0, frame: null, state: 'idle' }
+  const work = landscapeTargetWork
+  return target.kind === 'hotspot' ? attemptHotspotLandscapeTarget(work) : attemptAgentLandscapeTarget(work)
 }
 
 const failSceneMount = (attemptId, error) => {
@@ -359,20 +424,17 @@ const finalizeSceneReady = async attemptId => {
     const viewport = await settleFinalViewport(attemptId)
     if (!viewport || !isCurrentMountAttempt(attemptId) || settledViewportGeneration === attemptId) return
     settledViewportGeneration = attemptId
-    // Exactly one final orientation viewport follows two stable non-zero frames.
-    await (juyitingGame.commitViewport?.({ width: viewport.width, height: viewport.height, kind: 'orientation', orientationChanged: true })
-      ?? juyitingGame.resizeViewport?.({ width: viewport.width, height: viewport.height, kind: 'orientation', orientationChanged: true }))
-    if (!isCurrentMountAttempt(attemptId)) return
     const snapshot = props.mapResumeSnapshot
-    if (snapshot?.cameraSnapshot) {
-      const restored = await juyitingGame.restoreResumeSnapshot?.(snapshot, viewport)
-      if (!restored) {
-        failSceneMount(attemptId, new Error('地图视角恢复失败，请重试'))
-        return
-      }
-      if (!isCurrentMountAttempt(attemptId)) return
-      emit('map-snapshot-clear', snapshot.mapGeneration)
+    const committed = snapshot?.cameraSnapshot
+      ? await juyitingGame.restoreResumeSnapshot?.(snapshot, viewport)
+      : await (juyitingGame.commitViewport?.({ width: viewport.width, height: viewport.height, kind: 'orientation', orientationChanged: true })
+        ?? juyitingGame.resizeViewport?.({ width: viewport.width, height: viewport.height, kind: 'orientation', orientationChanged: true }))
+    if (!isCurrentMountAttempt(attemptId)) return
+    if (snapshot?.cameraSnapshot && !committed) {
+      failSceneMount(attemptId, new Error('地图视角恢复失败，请重试'))
+      return
     }
+    if (snapshot?.cameraSnapshot) emit('map-snapshot-clear', snapshot.mapGeneration)
     juyitingGame.syncAgents(props.sceneAgents)
     juyitingGame.syncHotspots?.(props.sceneHotspots)
     // Selection is current page business state, never read from a map snapshot.
@@ -606,6 +668,7 @@ const returnToMainHall = () => {
 }
 
 const cancelStageWork = () => {
+  cancelLandscapeTargetWork()
   cancelFinalViewportWork()
   teardownStageResizeObserver()
   clearMountTimeout()
@@ -671,6 +734,7 @@ onBeforeUnmount(() => {
 
 watch(() => props.landscapeEntryTarget, () => {
   if (isRunningGeneration(sceneMountAttempt)) consumeLandscapeEntryTarget(sceneMountAttempt)
+  else if (!props.landscapeEntryTarget) cancelLandscapeTargetWork()
 }, { deep: true })
 
 watch(() => props.experienceMode, mode => {
@@ -688,11 +752,21 @@ watch(() => props.interactionLocked, value => {
 }, { immediate: true })
 
 watch(() => props.sceneAgents, (agents) => {
-  if (melonReady.value && isRunningGeneration(sceneMountAttempt)) juyitingGame.syncAgents(agents || [])
+  if (melonReady.value && isRunningGeneration(sceneMountAttempt)) {
+    juyitingGame.syncAgents(agents || [])
+    consumeLandscapeEntryTarget(sceneMountAttempt)
+  }
 }, { deep: true })
 
 watch(() => props.sceneHotspots, (hotspots) => {
-  if (melonReady.value && isRunningGeneration(sceneMountAttempt)) juyitingGame.syncHotspots?.(hotspots || [])
+  if (melonReady.value && isRunningGeneration(sceneMountAttempt)) {
+    juyitingGame.syncHotspots?.(hotspots || [])
+    consumeLandscapeEntryTarget(sceneMountAttempt, { retryHotspot: true })
+  }
+}, { deep: true })
+
+watch(() => props.tasks, () => {
+  if (melonReady.value && isRunningGeneration(sceneMountAttempt)) consumeLandscapeEntryTarget(sceneMountAttempt)
 }, { deep: true })
 
 watch(() => props.selectedAgent, (agent) => {

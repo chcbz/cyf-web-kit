@@ -242,6 +242,14 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._needsSync = true
     }
 
+    syncAgentsAndFocusAgent(list, agentId) {
+      if (this._destroyed || this._sceneBuilt !== true || typeof agentId !== 'string' || agentId.length === 0) return false
+      this.syncAgents(list)
+      if (this._needsSync) this._fullSyncAgents()
+      if (!this._agents.has(agentId)) return false
+      return this.focusAgent(agentId) === true
+    }
+
     syncHotspots(list = []) {
       this._hotspotState = new Map((list || []).map(item => [item.id, item]))
       this._hotspots.forEach(({ marker, data }) => {
@@ -548,16 +556,20 @@ export function createHallSceneClass(me, HallAgentClass) {
       return this._cameraController?.snapshot?.() || null
     }
 
-    restoreCameraSnapshot(snapshot, viewport) {
-      if (!this._ensureControllers()) return this.getTransform()
-      const current = this._viewportSize()
-      const next = {
-        width: Number.isFinite(viewport?.width) && viewport.width > 0 ? viewport.width : current.width,
-        height: Number.isFinite(viewport?.height) && viewport.height > 0 ? viewport.height : current.height
-      }
-      this._currentViewport = next
-      this._lastViewport = next
-      return this._cameraController?.restore?.(snapshot, next) || this.getTransform()
+    restoreCameraSnapshot(snapshot, sourceViewport) {
+      const backing = normalizeViewport(sourceViewport?.backing)
+      const display = normalizeViewport(sourceViewport?.display)
+      const visible = sourceViewport?.visible
+      const finite = value => Number.isFinite(Number(value))
+      if (!this._ensureControllers() || backing.width <= 0 || backing.height <= 0 || display.width <= 0 || display.height <= 0 ||
+        !finite(visible?.x) || Number(visible.x) < 0 || !finite(visible?.y) || Number(visible.y) < 0 ||
+        !finite(visible?.width) || Number(visible.width) <= 0 || !finite(visible?.height) || Number(visible.height) <= 0 ||
+        Number(visible.x) + Number(visible.width) > backing.width + 0.001 || Number(visible.y) + Number(visible.height) > backing.height + 0.001) return false
+      this._currentViewport = backing
+      this._displayViewport = display
+      this._visibleViewport = normalizeVisibleViewport(visible, backing)
+      this._lastViewport = backing
+      return this._cameraController?.restore?.(snapshot, backing) || false
     }
 
     _focusWorldPoint(point) {
