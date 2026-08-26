@@ -2,7 +2,7 @@
   <main class="guest-demo">
     <header class="demo-header">
       <RouterLink class="back-link" to="/">← 返回首页</RouterLink>
-      <RouterLink class="login-link" to="/juyiting">登录进入聚义厅</RouterLink>
+      <RouterLink class="login-link" :to="loginTarget">登录进入聚义厅</RouterLink>
     </header>
 
     <section class="demo-intro">
@@ -89,7 +89,7 @@
         </div>
         <div class="stage-actions">
           <button class="quiet-action" type="button" @click="restart">换一个模板</button>
-          <RouterLink class="next-action link-action" to="/juyiting">登录后创建真实任务</RouterLink>
+          <RouterLink class="next-action link-action" :to="loginTarget">登录后创建真实任务</RouterLink>
         </div>
       </div>
     </section>
@@ -99,11 +99,19 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { guestDemoSteps, guestDemoTemplates } from '@/constants/publicBetaDemo'
 
+const allowedGuestDemoTemplateIds = new Set(['research', 'content', 'collaboration'])
 const selectedTemplate = ref(guestDemoTemplates[0])
 const currentStep = ref(1)
+
+const loginTarget = computed(() => {
+  const id = selectedTemplate.value?.id
+  return allowedGuestDemoTemplateIds.has(id) && guestDemoTemplates.some(template => template.id === id)
+    ? `/juyiting?template=${encodeURIComponent(id)}`
+    : '/juyiting'
+})
 
 const restart = () => {
   currentStep.value = 1
