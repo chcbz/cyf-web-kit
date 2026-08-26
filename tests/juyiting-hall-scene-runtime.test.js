@@ -354,6 +354,32 @@ describe('HallScene melonJS runtime compatibility', () => {
     ])
   })
 
+  it('captures, restores, focuses, and clears map runtime facades without business state', () => {
+    const calls = []
+    const game = new JuyitingGame()
+    game._generation = 9
+    game._hallScene = {
+      getCameraSnapshot: () => ({ presetKey: 'desktop', transform: { zoom: 1, offsetX: 0, offsetY: 0 } }),
+      restoreCameraSnapshot: (snapshot, viewport) => calls.push(['restore', snapshot, viewport]),
+      focusAgent: id => calls.push(['agent', id]) || true,
+      focusHotspot: id => calls.push(['hotspot', id]) || true
+    }
+
+    expect(game.captureResumeSnapshot()).to.deep.equal({
+      cameraSnapshot: { presetKey: 'desktop', transform: { zoom: 1, offsetX: 0, offsetY: 0 } },
+      mapGeneration: 9
+    })
+    expect(game.restoreResumeSnapshot({ cameraSnapshot: { presetKey: 'desktop' } }, { width: 844, height: 390 })).to.equal(true)
+    expect(game.focusAgent('agent-1')).to.equal(true)
+    expect(game.focusHotspot('hotspot-1')).to.equal(true)
+    expect(calls).to.deep.equal([
+      ['restore', { presetKey: 'desktop' }, { width: 844, height: 390 }],
+      ['agent', 'agent-1'],
+      ['hotspot', 'hotspot-1']
+    ])
+  })
+
+
   it('uses non-container image layers so melonJS broadphase does not recurse into them', () => {
     const added = []
 

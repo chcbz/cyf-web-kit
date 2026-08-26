@@ -2030,3 +2030,17 @@ describe('HallScene melonJS pointer routing', () => {
 
 
 })
+
+describe('O03 HallScene snapshot focus facade', () => {
+  it('keeps restore finite/clamped and focus targets strict by stable IDs', () => {
+    const source = readFileSync('src/game/scenes/HallScene.js', 'utf8')
+    expect(source).to.include('restoreCameraSnapshot(snapshot, viewport)')
+    expect(source).to.include('this._cameraController?.restore?.(snapshot, next)')
+    expect(source).to.include('focusAgent(agentId)')
+    expect(source).to.include("typeof agentId !== 'string' || agentId.length === 0")
+    expect(source).to.include('this._agents.get(agentId)')
+    expect(source).to.include('focusHotspot(hotspotId)')
+    expect(source).to.include('item.data?.id === hotspotId')
+    expect(source).not.to.include('find(agent => agent.name === agentId)')
+  })
+})

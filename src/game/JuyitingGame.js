@@ -652,6 +652,24 @@ export class JuyitingGame {
     return this._hallScene?.getCameraSnapshot?.() || null
   }
 
+  captureResumeSnapshot() {
+    const cameraSnapshot = this.getCameraSnapshot()
+    return cameraSnapshot ? { cameraSnapshot, mapGeneration: this._generation } : null
+  }
+
+  restoreResumeSnapshot(snapshot, viewport) {
+    if (!snapshot?.cameraSnapshot) return false
+    return this._hallScene?.restoreCameraSnapshot?.(snapshot.cameraSnapshot, viewport) || false
+  }
+
+  focusAgent(agentId) {
+    return this._hallScene?.focusAgent?.(agentId) === true
+  }
+
+  focusHotspot(hotspotId) {
+    return this._hallScene?.focusHotspot?.(hotspotId) === true
+  }
+
   getInputSnapshot() {
     return this._hallScene?.inputSnapshot?.() || null
   }
@@ -672,19 +690,20 @@ export class JuyitingGame {
     return result
   }
 
-  _scheduleViewportCommit() {
-    if (!this._geometrySnapshot() || this._viewportCommitFrame !== null) return
+  _scheduleViewportCommit(mountToken = this._mountToken) {
+    if (!this._isCurrentMount(mountToken) || !this._geometrySnapshot() || this._viewportCommitFrame !== null) return
     const target = typeof window !== 'undefined' ? window : globalThis
     const schedule = typeof target.requestAnimationFrame === 'function'
       ? callback => target.requestAnimationFrame(callback)
       : callback => setTimeout(callback, 0)
     this._viewportCommitFrame = schedule(() => {
       this._viewportCommitFrame = null
+      if (!this._isCurrentMount(mountToken)) return
       const geometry = this._geometrySnapshot()
       if (!geometry) return
       if (geometry.signature !== this._viewportCommitCandidateSignature) {
         this._viewportCommitCandidateSignature = geometry.signature
-        this._scheduleViewportCommit()
+        this._scheduleViewportCommit(mountToken)
         return
       }
       this._viewportCommitCandidateSignature = ''
@@ -771,8 +790,10 @@ export class JuyitingGame {
     this._disconnectContainerResizeObserver()
     const ResizeObserverImpl = globalThis.ResizeObserver
     if (!ResizeObserverImpl || !this._container) return
+    const mountToken = this._mountToken
     this._containerResizeObserver = new ResizeObserverImpl(() => {
-      this._scheduleViewportCommit()
+      if (!this._isCurrentMount(mountToken)) return
+      this._scheduleViewportCommit(mountToken)
     })
     this._containerResizeObserver.observe(this._container)
   }

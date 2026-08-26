@@ -32,6 +32,8 @@
       :hidden-agent-count="hiddenAgentCount"
       :experience-mode="experienceMode"
       :interaction-locked="Boolean(activePanel)"
+      :landscape-entry-target="landscapeEntryTarget"
+      :map-resume-snapshot="mapResumeSnapshot"
       :orientation-hint="orientationHint"
       :orientation-request-pending="orientationRequestPending"
       :portrait-name="portraitName"
@@ -46,8 +48,12 @@
       :sound-enabled="soundEnabled"
       :status-class="statusClass"
       :status-text="statusText"
+      :tasks="tasks"
       :tasks-total="tasks.length"
       :visible-agents="visibleAgents"
+      @landscape-target-consumed="handleLandscapeTargetConsumed"
+      @map-snapshot="handleMapSnapshot"
+      @map-snapshot-clear="clearMapResumeSnapshot"
       @new-conversation="handleNewHallConversation"
       @open-panel="handleStagePanelOpen"
       @request-landscape="requestLandscape"
@@ -324,6 +330,10 @@ const apiStore = useApiStore()
 const selectedAgent = ref(null)
 const selectedTask = ref(null)
 const portraitTaskDetailOpen = ref(false)
+// Map-only runtime state survives HallStage destroy/remount; business selection stays above it.
+const mapResumeSnapshot = ref(null)
+const landscapeEntryTarget = ref(null)
+let landscapeEntryTargetGeneration = 0
 // Stable FE2 entrypoint: taskWorkspace.workspace, connectionState, error, subject, retry, and reload.
 const taskWorkspaceEnabled = isTaskWorkspaceBuildEnabled(import.meta.env.VITE_JUYITING_TASK_WORKSPACE_ENABLED)
 const taskWorkspace = taskWorkspaceEnabled ? useTaskWorkspace() : null
@@ -624,6 +634,35 @@ const handleStagePanelOpen = (panel) => {
     return
   }
   openPanel(panel)
+}
+
+const hasExactLandscapeId = value => typeof value === 'string' && value.length > 0
+
+const setLandscapeEntryTarget = target => {
+  const nextGeneration = ++landscapeEntryTargetGeneration
+  if (target === null) {
+    landscapeEntryTarget.value = null
+    return nextGeneration
+  }
+  const isAgent = target?.kind === 'agent' && hasExactLandscapeId(target.agentId)
+  const isHotspot = target?.kind === 'hotspot' && hasExactLandscapeId(target.hotspotId)
+  const isTask = target?.kind === 'task' && hasExactLandscapeId(target.taskId) && hasExactLandscapeId(target.agentId)
+  landscapeEntryTarget.value = (isAgent || isHotspot || isTask)
+    ? { generation: nextGeneration, target: { ...target } }
+    : null
+  return nextGeneration
+}
+
+const handleMapSnapshot = snapshot => {
+  mapResumeSnapshot.value = snapshot?.cameraSnapshot ? { ...snapshot } : null
+}
+
+const clearMapResumeSnapshot = mapGeneration => {
+  if (mapResumeSnapshot.value?.mapGeneration === mapGeneration) mapResumeSnapshot.value = null
+}
+
+const handleLandscapeTargetConsumed = generation => {
+  if (landscapeEntryTarget.value?.generation === generation) setLandscapeEntryTarget(null)
 }
 
 const handlePortraitQuickAction = (action) => {

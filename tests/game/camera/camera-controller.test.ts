@@ -448,3 +448,28 @@ describe('camera controller', () => {
     assert.doesNotThrow(() => controller.beginUserGesture())
   })
 })
+
+describe('camera controller snapshot restore', () => {
+  it('restores only finite camera snapshots into the new viewport and clamps hostile values', () => {
+    const fake = createAdapter({ width: 720, height: 390 })
+    const controller = createCameraController(fake.adapter, { minZoom: 0.5, maxZoom: 3.3 }, true)
+
+    const restored = controller.restore({
+      presetKey: 'mobileLandscape',
+      transform: { zoom: 2.1, offsetX: 180, offsetY: -95 }
+    }, { width: 844, height: 390 })
+
+    assert.ok(Number.isFinite(restored.zoom))
+    assert.ok(Number.isFinite(restored.offsetX))
+    assert.ok(Number.isFinite(restored.offsetY))
+    assert.equal(controller.snapshot().presetKey, 'mobileLandscape')
+
+    const fallback = controller.restore({
+      presetKey: 'desktop',
+      transform: { zoom: Number.NaN, offsetX: Infinity, offsetY: Number.NaN }
+    }, { width: 844, height: 390 })
+    assert.ok(Number.isFinite(fallback.zoom))
+    assert.ok(Number.isFinite(fallback.offsetX))
+    assert.ok(Number.isFinite(fallback.offsetY))
+  })
+})

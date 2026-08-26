@@ -547,6 +547,47 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._ensureControllers()
       return this._cameraController?.snapshot?.() || null
     }
+
+    restoreCameraSnapshot(snapshot, viewport) {
+      if (!this._ensureControllers()) return this.getTransform()
+      const current = this._viewportSize()
+      const next = {
+        width: Number.isFinite(viewport?.width) && viewport.width > 0 ? viewport.width : current.width,
+        height: Number.isFinite(viewport?.height) && viewport.height > 0 ? viewport.height : current.height
+      }
+      this._currentViewport = next
+      this._lastViewport = next
+      return this._cameraController?.restore?.(snapshot, next) || this.getTransform()
+    }
+
+    _focusWorldPoint(point) {
+      if (!this._ensureControllers() || !Number.isFinite(point?.x) || !Number.isFinite(point?.y)) return false
+      this._inputController?.cancelGesture?.()
+      const viewport = this._viewportSize()
+      const transform = this.getTransform()
+      const targetOffsetX = (viewport.width / 2 - point.x) * transform.zoom
+      const targetOffsetY = (viewport.height / 2 - point.y) * transform.zoom
+      this._cameraController?.panBy?.(targetOffsetX - transform.offsetX, targetOffsetY - transform.offsetY)
+      return true
+    }
+
+    focusAgent(agentId) {
+      if (typeof agentId !== 'string' || agentId.length === 0) return false
+      const agent = this._agents.get(agentId)
+      const bounds = agent?.getBounds?.()
+      const x = Number.isFinite(bounds?.x) ? bounds.x + bounds.width / 2 : agent?.pos?.x
+      const y = Number.isFinite(bounds?.y) ? bounds.y + bounds.height / 2 : agent?.pos?.y
+      return this._focusWorldPoint({ x, y })
+    }
+
+    focusHotspot(hotspotId) {
+      if (typeof hotspotId !== 'string' || hotspotId.length === 0) return false
+      const record = this._hotspots.find(item => item.data?.id === hotspotId)
+      const marker = record?.marker
+      if (!marker) return false
+      return this._focusWorldPoint({ x: marker.pos?.x + marker.width / 2, y: marker.pos?.y + marker.height / 2 })
+    }
+
     inputSnapshot() {
       this._ensureControllers()
       return this._inputController?.snapshot?.() || DEFAULT_INPUT_SNAPSHOT
