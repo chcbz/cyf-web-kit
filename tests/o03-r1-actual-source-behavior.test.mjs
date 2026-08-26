@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import test from 'node:test'
 import vm from 'node:vm'
 
-const root = '/home/isp/wsps/cyf/.worktrees/o01-juyiting-experience-mode'
-const baseCommit = process.env.O03_BASE_COMMIT || 'ceb6ad1f68e52a9d9010ad4373013c51b2fd6bdf'
-const baseTree = process.env.O03_BASE_TREE || 'c055d6e4e17d8e3c9eaa0e4fe26ec3ee8c3531ec'
+const root = resolve(process.cwd())
+assert.ok(existsSync(resolve(root, 'src/components/juyiting/HallStage.vue')), `O03 selector must run from the current worktree: ${root}`)
 const sha = value => createHash('sha256').update(value).digest('hex')
 const plain = value => value == null ? value : JSON.parse(JSON.stringify(value))
 const flushMicrotasks = async (turns = 4) => { for (let turn = 0; turn < turns; turn += 1) await Promise.resolve() }
@@ -27,9 +27,10 @@ const scriptSetup = (text, label) => {
 const hallStageSource = complete('src/components/juyiting/HallStage.vue')
 const juyiHallSource = complete('src/components/world/JuyiHall.vue')
 const gameSource = complete('src/game/JuyitingGame.js')
+const hallSceneSource = complete('src/game/scenes/HallScene.js')
 const hallStageScript = scriptSetup(hallStageSource, 'HallStage')
 const juyiHallScript = scriptSetup(juyiHallSource, 'JuyiHall')
-const stageSuffix = `\nexport const __O03_TEST__ = Object.freeze({ handleSceneReady, settleFinalViewport, finalizeSceneReady, consumeLandscapeEntryTarget, mountScene, captureMapSnapshot, isCurrentMountAttempt, isRunningGeneration, setContainer: value => { melonContainerRef.value = value }, patchProps: value => Object.assign(props, value), setLifecycle: value => { if ('sceneMountAttempt' in value) sceneMountAttempt = value.sceneMountAttempt; if ('activeMapGeneration' in value) activeMapGeneration = value.activeMapGeneration; if ('mapLifecycleState' in value) mapLifecycleState.value = value.mapLifecycleState; if ('isUnmounted' in value) isUnmounted = value.isUnmounted; if ('settledViewportGeneration' in value) settledViewportGeneration = value.settledViewportGeneration; if ('consumedLandscapeTargetGeneration' in value) consumedLandscapeTargetGeneration = value.consumedLandscapeTargetGeneration }, snapshot: () => ({ sceneMountAttempt, activeMapGeneration, mapLifecycleState: mapLifecycleState.value, settledViewportGeneration, consumedLandscapeTargetGeneration, melonReady: melonReady.value, isSceneMounting: isSceneMounting.value }) })\n`
+const stageSuffix = `\nexport const __O03_TEST__ = Object.freeze({ handleSceneReady, settleFinalViewport, finalizeSceneReady, consumeLandscapeEntryTarget, mountScene, captureMapSnapshot, cancelStageWork, failSceneMount, isCurrentMountAttempt, isRunningGeneration, setContainer: value => { melonContainerRef.value = value }, patchProps: value => Object.assign(props, value), setLifecycle: value => { if ('sceneMountAttempt' in value) sceneMountAttempt = value.sceneMountAttempt; if ('activeMapGeneration' in value) activeMapGeneration = value.activeMapGeneration; if ('mapLifecycleState' in value) mapLifecycleState.value = value.mapLifecycleState; if ('isUnmounted' in value) isUnmounted = value.isUnmounted; if ('settledViewportGeneration' in value) settledViewportGeneration = value.settledViewportGeneration; if ('consumedLandscapeTargetGeneration' in value) consumedLandscapeTargetGeneration = value.consumedLandscapeTargetGeneration }, snapshot: () => ({ sceneMountAttempt, activeMapGeneration, mapLifecycleState: mapLifecycleState.value, settledViewportGeneration, consumedLandscapeTargetGeneration, melonReady: melonReady.value, isSceneMounting: isSceneMounting.value, sceneError: sceneError.value, currentGameDestroyed }) })\n`
 const hallSuffix = `\nexport const __O03_TEST__ = Object.freeze({ setLandscapeEntryTarget, handleLandscapeTargetConsumed, stagePortraitHotspotTarget, handlePortraitAgentSelect, requestPortraitLandscape, handlePortraitTaskOpen, handlePortraitQuickAction, landscapeEntryTarget, selectedAgent, selectedTask, mapAgents, sceneHotspots, getTargetGeneration: () => landscapeEntryTargetGeneration })\n`
 const stageTransformed = `${hallStageScript}${stageSuffix}`
 const hallTransformed = `${juyiHallScript}${hallSuffix}`
@@ -130,6 +131,25 @@ const loadGame = async () => {
   return module.namespace.JuyitingGame
 }
 
+const loadActualHallScene = async () => {
+  const context = vm.createContext({ console, Promise, Object, Array, Set, Map, WeakMap, Number, String, Boolean, Math, Date, JSON, Error, TypeError, globalThis: null })
+  context.globalThis = context
+  const fn = () => undefined
+  const modules = {
+    '../config.js': { DEPTH_LAYERS: {}, HALL_SCENE_HEIGHT: 780, HALL_SCENE_WIDTH: 1664 },
+    '../camera/cameraController.js': { createCameraController: fn }, '../camera/resizePolicy.js': { classifyViewportResize: () => 'orientation' }, '../camera/cameraTransform.js': { screenToWorld: fn },
+    '../input/inputController.js': { createInputController: fn }, '../input/interactionLock.js': { createInteractionLock: fn }, '../viewportTransform.js': { clientToViewport: fn },
+    '../occlusion/shadowRenderer.js': { createShadowRenderer: fn, parseOcclusionDebugFlag: fn },
+    '../occlusion/hallSceneAssembly.js': { hasV2ActivationEnvelope: fn, assembleV2Scene: fn, computeUnifiedWorldOrder: fn, buildHitTestTargets: fn, hitTestPoint: fn, buildFrameProposal: fn, createEmptyMembershipState: () => ({}), registerAgentsInGrid: fn, unregisterAgentFromGrid: fn, createSceneActivationController: fn, projectActivationEnvelope: fn },
+    '../occlusion/runtimeAgentAdapter.js': { createRuntimeAgentAdapter: fn, defaultSpawnResolver: fn, defaultChunkResolver: fn }, '../occlusion/debugOverlay.js': { createDebugOverlay: fn },
+    '../occlusion/hallSceneDepthBands.js': { HALL_SCENE_DEPTH_BANDS: {}, HALL_SCENE_LEGACY_OCCLUDER_LAYERS: [], hallV2WorldDepth: fn }, '../occlusion/sourceIdentity.js': { isValidSourceEntityId: () => true }
+  }
+  const module = new vm.SourceTextModule(hallSceneSource, { context, identifier: sourcePath('src/game/scenes/HallScene.js') })
+  await module.link(specifier => { assert.ok(modules[specifier], `HallScene: unknown import ${specifier}`); return synthetic(context, modules[specifier], specifier) })
+  await module.evaluate()
+  return module.namespace.createHallSceneClass
+}
+
 const defaultProps = () => ({ experienceMode: 'landscape-map', simulationEnabled: false, mapResumeSnapshot: null, landscapeEntryTarget: null, sceneAgents: [{ agentId: 'agent-A' }], sceneHotspots: [{ id: 'bountyBoard' }], tasks: [{ id: 'task-7', assignedAgentIds: ['agent-A'] }], selectedAgent: { agentId: 'agent-A' }, interactionLocked: false, agentBubbles: {}, agentKey: fn, agentStyle: fn, hiddenAgentCount: 0, orientationHint: '', orientationRequestPending: false, portraitName: fn, portraitShortName: fn, portraitStyle: fn, refreshing: false, roleClass: fn, soundEnabled: true, statusClass: fn, statusText: fn, tasksTotal: 1, visibleAgents: [] })
 const container = (rect) => ({ getBoundingClientRect: () => ({ ...rect }), querySelector: () => null })
 
@@ -169,13 +189,77 @@ test('zero container cannot settle; observed positive geometry needs two stable 
   selectorPasses += 1
 })
 
-test('restore is post-commit and final world center equals saved world center', async () => {
-  const scheduler = createScheduler(); let resolveCommit; const calls = []; const props = defaultProps(); props.mapResumeSnapshot = { cameraSnapshot: { transform: { zoom: 2.1, offsetX: 180, offsetY: -95 } }, sourceViewport: { width: 720, height: 390 }, mapGeneration: 1 }
-  const game = { commitViewport: () => new Promise(resolve => { calls.push('commit'); resolveCommit = resolve }), restoreResumeSnapshot: (_snapshot, viewport) => calls.push(['restore', viewport]), syncAgents: fn, syncHotspots: fn, setSelectedAgent: fn, setInteractionLocked: fn }
+test('restore uses committed backing/display/visible viewport truth in the real HallScene and preserves world center', async () => {
+  const scheduler = createScheduler(); let resolveCommit; const calls = []; const props = defaultProps(); props.mapResumeSnapshot = { cameraSnapshot: { transform: { zoom: 2.1, offsetX: 180, offsetY: -95 } }, sourceViewport: { width: 1664, height: 928 }, mapGeneration: 1 }
+  const game = { commitViewport: () => new Promise(resolve => { calls.push('commit'); resolveCommit = resolve }), restoreResumeSnapshot: (_snapshot, viewport) => { calls.push(['restore', viewport]); return true }, syncAgents: fn, syncHotspots: fn, setSelectedAgent: fn, setInteractionLocked: fn }
   const stage = await instantiate({ script: hallStageScript, suffix: stageSuffix, label: 'HallStage-restore', scheduler, props, game, emits: [] })
-  stage.api.setContainer(container({ width: 844, height: 390 })); stage.api.setLifecycle({ sceneMountAttempt: 1, mapLifecycleState: 'mounting' }); const finalizing = stage.api.finalizeSceneReady(1); ManualResizeObserver.instances.at(-1).trigger({ width: 844, height: 390 }); scheduler.runRafs(2); await flushMicrotasks(); assert.deepEqual(plain(calls), ['commit']); resolveCommit(); await flushMicrotasks(); await finalizing; assert.deepEqual(plain(calls[1]), ['restore', { width: 844, height: 390 }])
-  const Game = await loadGame(); const actual = new Game(); const state = { viewport: { width: 720, height: 390 }, transform: { zoom: 2.1, offsetX: 180, offsetY: -95 } }; actual._me = { game: state }; actual._hallScene = { getCameraSnapshot: () => ({ transform: { ...state.transform } }), restoreCameraSnapshot: (snapshot, viewport) => { state.viewport = { ...viewport }; state.transform = { ...snapshot.transform }; return state.transform }, resizeViewport: change => { const old = state.viewport; const transform = state.transform; const center = { x: ((old.width / 2 - old.width / 2 - transform.offsetX) / transform.zoom) + old.width / 2, y: ((old.height / 2 - old.height / 2 - transform.offsetY) / transform.zoom) + old.height / 2 }; state.viewport = { width: change.width, height: change.height }; state.transform = { ...transform, offsetX: (state.viewport.width / 2 - center.x) * transform.zoom, offsetY: (state.viewport.height / 2 - center.y) * transform.zoom }; return state.transform } }
-  const snap = actual.captureResumeSnapshot(); const oldCenter = { x: ((720 / 2 - 720 / 2 - snap.cameraSnapshot.transform.offsetX) / 2.1) + 720 / 2, y: ((390 / 2 - 390 / 2 - snap.cameraSnapshot.transform.offsetY) / 2.1) + 390 / 2 }; actual.restoreResumeSnapshot(snap, { width: 844, height: 390 }); const finalCenter = { x: ((844 / 2 - 844 / 2 - state.transform.offsetX) / 2.1) + 844 / 2, y: ((390 / 2 - 390 / 2 - state.transform.offsetY) / 2.1) + 390 / 2 }; assert.ok(Math.abs(oldCenter.x - finalCenter.x) <= 1e-6 && Math.abs(oldCenter.y - finalCenter.y) <= 1e-6)
+  stage.api.setContainer(container({ width: 844, height: 390 })); stage.api.setLifecycle({ sceneMountAttempt: 1, mapLifecycleState: 'mounting' }); const finalizing = stage.api.finalizeSceneReady(1); ManualResizeObserver.instances.at(-1).trigger(); scheduler.runRafs(2); await flushMicrotasks(); assert.deepEqual(plain(calls), ['commit']); resolveCommit(); await finalizing; assert.deepEqual(plain(calls[1]), ['restore', { width: 844, height: 390 }])
+
+  const createHallSceneClass = await loadActualHallScene()
+  const me = { Stage: class {}, game: { viewport: { width: 1664, height: 928 } } }
+  const Scene = createHallSceneClass(me, class {})
+  const scene = new Scene()
+  let transform = { zoom: 2.1, offsetX: 180, offsetY: -95 }
+  let cameraViewport = { width: 1664, height: 928 }
+  scene.getCameraSnapshot = () => ({ transform: { ...transform } })
+  scene.restoreCameraSnapshot = (snapshot, viewport) => { transform = { ...snapshot.transform }; cameraViewport = { ...viewport }; scene._currentViewport = { ...viewport }; return scene.getCameraSnapshot() }
+  scene._cameraController = { resize: next => {
+    const center = { x: ((cameraViewport.width / 2 - cameraViewport.width / 2 - transform.offsetX) / transform.zoom) + cameraViewport.width / 2, y: ((cameraViewport.height / 2 - cameraViewport.height / 2 - transform.offsetY) / transform.zoom) + cameraViewport.height / 2 }
+    cameraViewport = { ...next }
+    transform = { ...transform, offsetX: (next.width / 2 - center.x) * transform.zoom, offsetY: (next.height / 2 - center.y) * transform.zoom }
+    return transform
+  } }
+  const Game = await loadGame(); const actual = new Game()
+  actual._me = { game: { viewport: { width: 1664, height: 928 } } }
+  actual._container = { getBoundingClientRect: () => ({ width: 390, height: 844, left: 0, top: 0, right: 390, bottom: 844 }) }
+  actual._canvas = { getBoundingClientRect: () => ({ width: 470.692, height: 844, left: -40.346, top: 0, right: 430.346, bottom: 844 }) }
+  actual._hallScene = scene; actual._markSceneDebugDirty = fn
+  const snapshot = actual.captureResumeSnapshot()
+  const oldCenter = { x: ((1664 / 2 - 1664 / 2 - snapshot.cameraSnapshot.transform.offsetX) / 2.1) + 1664 / 2, y: ((928 / 2 - 928 / 2 - snapshot.cameraSnapshot.transform.offsetY) / 2.1) + 928 / 2 }
+  actual._me.game.viewport = { width: 928, height: 1664 }
+  assert.ok(actual.restoreResumeSnapshot(snapshot, { width: 390, height: 844 }))
+  assert.deepEqual(plain(scene._currentViewport), { width: 928, height: 1664 })
+  assert.deepEqual(plain(scene._displayViewport), { width: 390, height: 844 })
+  assert.ok(scene._visibleViewport.width < 928 && scene._visibleViewport.height === 1664, 'real HallScene must retain backing-world visible geometry')
+  const finalCenter = { x: ((928 / 2 - 928 / 2 - transform.offsetX) / 2.1) + 928 / 2, y: ((1664 / 2 - 1664 / 2 - transform.offsetY) / 2.1) + 1664 / 2 }
+  assert.ok(Math.abs(oldCenter.x - finalCenter.x) <= 1e-6 && Math.abs(oldCenter.y - finalCenter.y) <= 1e-6)
+  selectorPasses += 1
+})
+
+test('commit rejection and restore false or throw enter fatal cleanup without consuming the snapshot', async () => {
+  const cases = [
+    { name: 'commit rejection', commitViewport: () => Promise.reject(new Error('commit failed')) },
+    { name: 'restore false', commitViewport: () => Promise.resolve(), restoreResumeSnapshot: () => false },
+    { name: 'restore throw', commitViewport: () => Promise.resolve(), restoreResumeSnapshot: () => { throw new Error('restore failed') } }
+  ]
+  for (const scenario of cases) {
+    ManualResizeObserver.instances.length = 0
+    const scheduler = createScheduler(); const events = []; const calls = []
+    const props = defaultProps(); props.mapResumeSnapshot = { cameraSnapshot: { transform: {} }, sourceViewport: { width: 1664, height: 928 }, mapGeneration: 9 }
+    const game = { commitViewport: scenario.commitViewport, restoreResumeSnapshot: scenario.restoreResumeSnapshot || (() => true), syncAgents: () => calls.push('sync'), syncHotspots: fn, setSelectedAgent: fn, setInteractionLocked: (locked, reason) => calls.push(['lock', locked, reason]), destroy: () => calls.push('destroy') }
+    const stage = await instantiate({ script: hallStageScript, suffix: stageSuffix, label: `HallStage-fatal-${scenario.name}`, scheduler, props, game, emits: events })
+    stage.api.setContainer(container({ width: 844, height: 390 })); stage.api.setLifecycle({ sceneMountAttempt: 1, mapLifecycleState: 'mounting' })
+    const pending = stage.api.finalizeSceneReady(1); ManualResizeObserver.instances.at(-1).trigger(); scheduler.runRafs(2); await pending
+    assert.equal(stage.api.snapshot().mapLifecycleState, 'unmounted', scenario.name)
+    assert.equal(stage.api.snapshot().currentGameDestroyed, true, scenario.name)
+    assert.equal(calls.filter(call => call === 'destroy').length, 1, scenario.name)
+    assert.equal(calls.filter(call => Array.isArray(call) && call[0] === 'lock' && call[1] === false && call[2] === 'loading').length, 1, scenario.name)
+    assert.equal(events.filter(([event]) => event === 'map-snapshot-clear').length, 0, scenario.name)
+    assert.equal(calls.includes('sync'), false, scenario.name)
+  }
+  selectorPasses += 1
+})
+
+test('destroy fences stale continuations and synchronously releases temporary observer and RAF handles', async () => {
+  ManualResizeObserver.instances.length = 0
+  const scheduler = createScheduler(); const calls = []; const stage = await instantiate({ script: hallStageScript, suffix: stageSuffix, label: 'HallStage-stale-cleanup', scheduler, props: defaultProps(), game: { destroy: () => calls.push('destroy'), setInteractionLocked: fn } })
+  stage.api.setContainer(container({ width: 844, height: 390 })); stage.api.setLifecycle({ sceneMountAttempt: 4, mapLifecycleState: 'mounting' })
+  const pending = stage.api.settleFinalViewport(4); const observer = ManualResizeObserver.instances.at(-1); assert.equal(scheduler.rafCount, 1)
+  stage.api.cancelStageWork(); assert.equal(observer.disconnects, 1); assert.equal(scheduler.rafCount, 0); assert.equal(await pending, null)
+  let rejectCommit; const staleGame = { commitViewport: () => new Promise((_resolve, reject) => { rejectCommit = reject }), syncAgents: () => calls.push('sync'), syncHotspots: fn, setSelectedAgent: fn, destroy: () => calls.push('destroy'), setInteractionLocked: fn }
+  const stale = await instantiate({ script: hallStageScript, suffix: stageSuffix, label: 'HallStage-stale', scheduler, props: defaultProps(), game: staleGame })
+  stale.api.setContainer(container({ width: 844, height: 390 })); stale.api.setLifecycle({ sceneMountAttempt: 5, mapLifecycleState: 'mounting' }); const finalizing = stale.api.finalizeSceneReady(5); ManualResizeObserver.instances.at(-1).trigger(); scheduler.runRafs(2); await flushMicrotasks(); stale.api.setLifecycle({ sceneMountAttempt: 6, mapLifecycleState: 'unmounted' }); rejectCommit(new Error('late rejection')); await finalizing
+  assert.equal(calls.includes('destroy'), false); assert.equal(calls.includes('sync'), false); assert.equal(stale.api.snapshot().mapLifecycleState, 'unmounted')
   selectorPasses += 1
 })
 
@@ -187,6 +271,6 @@ test('shared generation is monotonic across separate HallStage instances without
 })
 
 test.after(() => {
-  assert.equal(selectorPasses, 5)
-  console.log(JSON.stringify({ baseCommit, baseTree, node: process.version, sources: { HallStage: sourcePath('src/components/juyiting/HallStage.vue'), JuyiHall: sourcePath('src/components/world/JuyiHall.vue'), JuyitingGame: sourcePath('src/game/JuyitingGame.js') }, hashes: { HallStage: sha(hallStageSource), HallStageScript: sha(hallStageScript), HallStageTransformed: sha(stageTransformed), JuyiHall: sha(juyiHallSource), JuyiHallScript: sha(juyiHallScript), JuyiHallTransformed: sha(hallTransformed), JuyitingGame: sha(gameSource) }, selectors: 5 }))
+  assert.equal(selectorPasses, 7)
+  console.log(JSON.stringify({ cwd: root, node: process.version, sources: { HallStage: sourcePath('src/components/juyiting/HallStage.vue'), JuyiHall: sourcePath('src/components/world/JuyiHall.vue'), JuyitingGame: sourcePath('src/game/JuyitingGame.js') }, hashes: { HallStage: sha(hallStageSource), HallStageScript: sha(hallStageScript), HallStageTransformed: sha(stageTransformed), JuyiHall: sha(juyiHallSource), JuyiHallScript: sha(juyiHallScript), JuyiHallTransformed: sha(hallTransformed), JuyitingGame: sha(gameSource), HallScene: sha(hallSceneSource) }, selectors: 7 }))
 })

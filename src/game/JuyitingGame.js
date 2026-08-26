@@ -697,11 +697,27 @@ export class JuyitingGame {
     if (!sourceViewport || !targetViewport) return false
     const restored = this._hallScene?.restoreCameraSnapshot?.(snapshot.cameraSnapshot, sourceViewport)
     if (!restored) return false
+    // The commit path owns the backing viewport; use its geometry truth on
+    // restore so HallScene never receives CSS container dimensions as world space.
+    const geometry = this._geometrySnapshot()
+    const canvasRect = this._canvas?.getBoundingClientRect?.()
+    const restoredViewport = geometry
+      ? { width: geometry.viewportWidth, height: geometry.viewportHeight }
+      : targetViewport
     this._hallScene?.resizeViewport?.({
-      width: targetViewport.width,
-      height: targetViewport.height,
+      width: restoredViewport.width,
+      height: restoredViewport.height,
       kind: 'orientation',
-      orientationChanged: true
+      orientationChanged: true,
+      ...(geometry
+        ? {
+            displayViewport: {
+              width: geometry.containerRect.width,
+              height: geometry.containerRect.height
+            },
+            visibleViewport: this._visibleViewport(geometry.containerRect, canvasRect)
+          }
+        : {})
     })
     this._markSceneDebugDirty()
     return this.getCameraSnapshot() || restored

@@ -162,6 +162,8 @@ let pendingOrientationSignal = false
 let lastResizeSignature = ''
 let lastOrientationDimensions = ''
 let stageResizeObserver = null
+let finalViewportWork = null
+let settlingViewportGeneration = 0
 let returnFrame = null
 let resetPollRemaining = 0
 let currentGameDestroyed = false
@@ -248,41 +250,65 @@ const stageViewportNow = () => {
 
 const isExactTargetId = value => typeof value === 'string' && value.length > 0
 
+const cancelFinalViewportWork = () => {
+  finalViewportWork?.finish?.(null)
+}
+
 const settleFinalViewport = attemptId => new Promise(resolve => {
   const container = melonContainerRef.value
   const ResizeObserverImpl = window.ResizeObserver || globalThis.ResizeObserver
-  let observer = null
+  const work = {
+    attemptId,
+    frame: null,
+    observer: null,
+    finished: false,
+    finish: null
+  }
+  finalViewportWork = work
   let observerReported = !ResizeObserverImpl
   let previousSignature = ''
   let stableFrames = 0
   const finish = viewport => {
-    observer?.disconnect?.()
+    if (work.finished) return
+    work.finished = true
+    if (work.frame !== null) cancelStageFrame(work.frame)
+    work.frame = null
+    work.observer?.disconnect?.()
+    work.observer = null
+    if (finalViewportWork === work) finalViewportWork = null
     resolve(viewport)
   }
+  work.finish = finish
+  const scheduleInspect = () => {
+    work.frame = requestStageFrame(() => {
+      work.frame = null
+      inspect()
+    })
+  }
   const inspect = () => {
-    if (!isCurrentMountAttempt(attemptId)) return finish(null)
+    if (work.finished || !isCurrentMountAttempt(attemptId)) return finish(null)
     const rect = container?.getBoundingClientRect?.()
     const viewport = rect?.width > 0 && rect?.height > 0
       ? { width: Math.round(rect.width), height: Math.round(rect.height) }
       : null
     if (!observerReported || !viewport) {
-      requestStageFrame(inspect)
+      scheduleInspect()
       return
     }
     const signature = `${viewport.width}:${viewport.height}`
     stableFrames = signature === previousSignature ? stableFrames + 1 : 1
     previousSignature = signature
     if (stableFrames < 2) {
-      requestStageFrame(inspect)
+      scheduleInspect()
       return
     }
     finish(viewport)
   }
   if (ResizeObserverImpl && container) {
-    observer = new ResizeObserverImpl(() => { observerReported = true })
-    observer.observe(container)
+    work.observer = new ResizeObserverImpl(() => { observerReported = true })
+    work.observer.observe(container)
   }
-  requestStageFrame(inspect)
+  scheduleInspect()
 })
 
 const consumeLandscapeEntryTarget = attemptId => {
@@ -308,32 +334,63 @@ const consumeLandscapeEntryTarget = attemptId => {
   return focused
 }
 
-const finalizeSceneReady = async attemptId => {
-  const viewport = await settleFinalViewport(attemptId)
-  if (!viewport || !isCurrentMountAttempt(attemptId) || settledViewportGeneration === attemptId) return
-  settledViewportGeneration = attemptId
-  // Exactly one final orientation viewport follows two stable non-zero frames.
-  await (juyitingGame.commitViewport?.({ width: viewport.width, height: viewport.height, kind: 'orientation', orientationChanged: true })
-    ?? juyitingGame.resizeViewport?.({ width: viewport.width, height: viewport.height, kind: 'orientation', orientationChanged: true }))
-  if (!isCurrentMountAttempt(attemptId)) return
-  const snapshot = props.mapResumeSnapshot
-  if (snapshot?.cameraSnapshot) {
-    juyitingGame.restoreResumeSnapshot?.(snapshot, viewport)
-    emit('map-snapshot-clear', snapshot.mapGeneration)
-  }
-  juyitingGame.syncAgents(props.sceneAgents)
-  juyitingGame.syncHotspots?.(props.sceneHotspots)
-  // Selection is current page business state, never read from a map snapshot.
-  juyitingGame.setSelectedAgent(props.selectedAgent?.agentId || null)
-  lastResizeSignature = ''
-  mapLifecycleState.value = 'running'
-  melonReady.value = true
+const failSceneMount = (attemptId, error) => {
+  if (!isCurrentMountAttempt(attemptId)) return false
+  clearMountTimeout()
+  // Fence every ready/resize/restore continuation before synchronous teardown.
+  sceneMountAttempt += 1
+  cancelStageWork()
+  melonReady.value = false
   isSceneMounting.value = false
-  sceneError.value = ''
-  setupStageResizeObserver()
+  sceneError.value = error?.message || '聚义厅场景暂不可用，请重试'
+  mapLifecycleState.value = 'destroying'
   unlockLoading(attemptId)
-  consumeLandscapeEntryTarget(attemptId)
-  scheduleReturnRefresh()
+  emit('simulation-reset')
+  if (!currentGameDestroyed) juyitingGame.destroy()
+  currentGameDestroyed = true
+  mapLifecycleState.value = 'unmounted'
+  return true
+}
+
+const finalizeSceneReady = async attemptId => {
+  if (!isCurrentMountAttempt(attemptId) || settledViewportGeneration === attemptId || settlingViewportGeneration === attemptId) return
+  settlingViewportGeneration = attemptId
+  try {
+    const viewport = await settleFinalViewport(attemptId)
+    if (!viewport || !isCurrentMountAttempt(attemptId) || settledViewportGeneration === attemptId) return
+    settledViewportGeneration = attemptId
+    // Exactly one final orientation viewport follows two stable non-zero frames.
+    await (juyitingGame.commitViewport?.({ width: viewport.width, height: viewport.height, kind: 'orientation', orientationChanged: true })
+      ?? juyitingGame.resizeViewport?.({ width: viewport.width, height: viewport.height, kind: 'orientation', orientationChanged: true }))
+    if (!isCurrentMountAttempt(attemptId)) return
+    const snapshot = props.mapResumeSnapshot
+    if (snapshot?.cameraSnapshot) {
+      const restored = await juyitingGame.restoreResumeSnapshot?.(snapshot, viewport)
+      if (!restored) {
+        failSceneMount(attemptId, new Error('地图视角恢复失败，请重试'))
+        return
+      }
+      if (!isCurrentMountAttempt(attemptId)) return
+      emit('map-snapshot-clear', snapshot.mapGeneration)
+    }
+    juyitingGame.syncAgents(props.sceneAgents)
+    juyitingGame.syncHotspots?.(props.sceneHotspots)
+    // Selection is current page business state, never read from a map snapshot.
+    juyitingGame.setSelectedAgent(props.selectedAgent?.agentId || null)
+    lastResizeSignature = ''
+    mapLifecycleState.value = 'running'
+    melonReady.value = true
+    isSceneMounting.value = false
+    sceneError.value = ''
+    setupStageResizeObserver()
+    unlockLoading(attemptId)
+    consumeLandscapeEntryTarget(attemptId)
+    scheduleReturnRefresh()
+  } catch (error) {
+    failSceneMount(attemptId, error)
+  } finally {
+    if (settlingViewportGeneration === attemptId) settlingViewportGeneration = 0
+  }
 }
 
 const evaluateViewportResize = () => {
@@ -408,6 +465,7 @@ const handleWindowResize = () => { if (isRunningGeneration(sceneMountAttempt)) s
 const handleVisualResize = () => { if (isRunningGeneration(sceneMountAttempt)) scheduleViewportResize() }
 
 const setupStageResizeObserver = () => {
+  teardownStageResizeObserver()
   const ResizeObserverImpl = window.ResizeObserver || globalThis.ResizeObserver
   if (!ResizeObserverImpl || !melonContainerRef.value) return
   const generation = sceneMountAttempt
@@ -437,17 +495,7 @@ const mountScene = async () => {
   juyitingGame.setInteractionLocked?.(true, 'loading')
   clearMountTimeout()
   mountTimeout = window.setTimeout(() => {
-    if (!isCurrentMountAttempt(attemptId)) return
-    sceneMountAttempt += 1
-    isSceneMounting.value = false
-    melonReady.value = false
-    sceneError.value = '地图加载超时，请重试'
-    unlockLoading(attemptId)
-    emit('simulation-reset')
-    currentGameDestroyed = true
-    mapLifecycleState.value = 'destroying'
-    juyitingGame.destroy()
-    mapLifecycleState.value = 'unmounted'
+    failSceneMount(attemptId, new Error('地图加载超时，请重试'))
   }, 15000)
   try {
     await juyitingGame.mount(container, {
@@ -476,18 +524,7 @@ const mountScene = async () => {
     if (!melonReady.value) juyitingGame.setInteractionLocked?.(true, 'loading')
     juyitingGame.start()
   } catch (err) {
-    if (isCurrentMountAttempt(attemptId)) {
-      clearMountTimeout()
-      melonReady.value = false
-      sceneError.value = err?.message || '请稍后重试'
-      console.warn('[HallStage] melonJS:', err?.message || err)
-      isSceneMounting.value = false
-      unlockLoading(attemptId)
-      mapLifecycleState.value = 'destroying'
-      juyitingGame.destroy()
-      currentGameDestroyed = true
-      mapLifecycleState.value = 'unmounted'
-    }
+    if (failSceneMount(attemptId, err)) console.warn('[HallStage] melonJS:', err?.message || err)
   }
 }
 
@@ -569,6 +606,7 @@ const returnToMainHall = () => {
 }
 
 const cancelStageWork = () => {
+  cancelFinalViewportWork()
   teardownStageResizeObserver()
   clearMountTimeout()
   if (resizeFrame !== null) cancelStageFrame(resizeFrame)
