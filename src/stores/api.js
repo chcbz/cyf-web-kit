@@ -1,8 +1,11 @@
-import { defineStore } from 'pinia'
+import { defineStore, getActivePinia } from 'pinia'
 import { useUtilStore } from './util'
 import { useGlobalStore } from './global'
 import { log } from '../utils/logger.js'
 import { createCodeChallenge, createOAuthTransaction, safeAppRelativePath } from '../utils/oauthTransaction.js'
+import { registerIdentityCleanup, stopIdentityBoundWork } from '../utils/identityLifecycle.js'
+import { cancelReauthentication } from '../utils/reauthentication.js'
+import { combineAbortSignals, throwIfAborted } from '../utils/abortSignals.js'
 
 const runtimeEnv = import.meta.env ?? {}
 
@@ -12,6 +15,54 @@ function isNonblankRuntimeString (value) {
 
 function currentReturnPath () {
   return safeAppRelativePath(`${window.location.pathname}${window.location.search}${window.location.hash}`)
+}
+
+function unauthenticatedError () {
+  const error = new Error('Authentication is required')
+  error.code = 'AUTHENTICATION_REQUIRED'
+  return error
+}
+
+function revokeError (response, code) {
+  const error = new Error('Session revocation failed')
+  error.status = response.status
+  if (code) error.code = code
+  return error
+}
+
+async function responseErrorCode (response) {
+  try {
+    const payload = await response.clone().json()
+    return typeof payload?.code === 'string' ? payload.code : null
+  } catch {
+    return null
+  }
+}
+
+function createIdentityOperation (apiStore, callerSignal) {
+  const authorizationGeneration = apiStore.authorizationGeneration
+  const identityController = new AbortController()
+  const combined = combineAbortSignals({ signals: [callerSignal, identityController.signal] })
+  const unregister = registerIdentityCleanup(() => {
+    identityController.abort(new DOMException('Identity cleared', 'AbortError'))
+  })
+  let cleaned = false
+
+  return {
+    signal: combined.signal,
+    assertCurrent () {
+      throwIfAborted(combined.signal)
+      if (authorizationGeneration !== apiStore.authorizationGeneration) {
+        throw new DOMException('Identity changed', 'AbortError')
+      }
+    },
+    cleanup () {
+      if (cleaned) return
+      cleaned = true
+      unregister()
+      combined.cleanup()
+    }
+  }
 }
 
 function validateTokenResponse (data) {
@@ -33,7 +84,8 @@ export const useApiStore = defineStore('api', {
     baseUrl: runtimeEnv.VITE_API_BASE_URL || '',
     dwzDomain: runtimeEnv.VITE_DWZ_DOMAIN,
     oauthClientId: runtimeEnv.VITE_OAUTH_CLIENT_ID,
-    authorizationStarted: false
+    authorizationStarted: false,
+    authorizationGeneration: 0
   }),
   actions: {
     oauthRuntimeConfig () {
@@ -46,11 +98,19 @@ export const useApiStore = defineStore('api', {
 
     async beginAuthorization (returnTo = currentReturnPath()) {
       if (this.authorizationStarted) return false
+      const authorizationGeneration = this.authorizationGeneration
+      if (authorizationGeneration !== this.authorizationGeneration) return false
       this.authorizationStarted = true
       try {
         const config = this.oauthRuntimeConfig()
+        // Yield once so a synchronous logout can cancel a queued reauthentication
+        // before it creates a PKCE transaction.
+        await Promise.resolve()
+        if (authorizationGeneration !== this.authorizationGeneration || !this.authorizationStarted) return false
         const transaction = await createOAuthTransaction({ returnTo, ...config })
+        if (authorizationGeneration !== this.authorizationGeneration || !this.authorizationStarted) return false
         const codeChallenge = await createCodeChallenge(transaction.codeVerifier)
+        if (authorizationGeneration !== this.authorizationGeneration || !this.authorizationStarted) return false
         const params = new URLSearchParams({
           response_type: 'code',
           client_id: config.clientId,
@@ -60,10 +120,11 @@ export const useApiStore = defineStore('api', {
           code_challenge_method: 'S256',
           state: transaction.state
         })
+        if (authorizationGeneration !== this.authorizationGeneration || !this.authorizationStarted) return false
         window.location.assign(`${config.authorizationServer}/oauth2/authorize?${params.toString()}`)
         return true
       } catch (error) {
-        this.authorizationStarted = false
+        if (authorizationGeneration === this.authorizationGeneration) this.authorizationStarted = false
         throw error
       }
     },
@@ -78,7 +139,7 @@ export const useApiStore = defineStore('api', {
       return accessToken
     },
 
-    async exchangeCodeForToken (code, transaction) {
+    async exchangeCodeForToken (code, transaction, { signal } = {}) {
       if (typeof code !== 'string' || code.trim() === '' ||
           typeof transaction?.codeVerifier !== 'string' || !/^[A-Za-z0-9_-]{86}$/.test(transaction.codeVerifier) ||
           !isNonblankRuntimeString(transaction.clientId) ||
@@ -86,27 +147,79 @@ export const useApiStore = defineStore('api', {
           !isNonblankRuntimeString(transaction.authorizationServer)) {
         throw new Error('Invalid authorization transaction')
       }
-      const params = new URLSearchParams({
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: transaction.redirectUri,
-        client_id: transaction.clientId,
-        code_verifier: transaction.codeVerifier
-      })
-      const response = await fetch(`${transaction.authorizationServer}/oauth2/token`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: params
-      })
-      if (!response.ok) throw new Error('Token exchange failed')
+      const operation = createIdentityOperation(this, signal)
+      try {
+        operation.assertCurrent()
+        const params = new URLSearchParams({
+          grant_type: 'authorization_code',
+          code,
+          redirect_uri: transaction.redirectUri,
+          client_id: transaction.clientId,
+          code_verifier: transaction.codeVerifier
+        })
+        const response = await fetch(`${transaction.authorizationServer}/oauth2/token`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          body: params,
+          signal: operation.signal
+        })
+        operation.assertCurrent()
+        if (!response.ok) throw new Error('Token exchange failed')
 
-      const token = validateTokenResponse(await response.json())
-      const utilStore = useUtilStore()
-      utilStore.setLocalStorage('api_token', token.accessToken, Date.now() + token.expiresIn * 1000)
-      return token.accessToken
+        const payload = await response.json()
+        operation.assertCurrent()
+        const token = validateTokenResponse(payload)
+        useUtilStore().setLocalStorage('api_token', token.accessToken, Date.now() + token.expiresIn * 1000)
+        return token.accessToken
+      } catch (error) {
+        operation.assertCurrent()
+        throw error
+      } finally {
+        operation.cleanup()
+      }
     },
+    clearIdentity () {
+      const pinia = getActivePinia()
+      this.authorizationGeneration += 1
+      this.authorizationStarted = false
+      cancelReauthentication(this)
+      stopIdentityBoundWork()
+      const utilStore = useUtilStore(pinia)
+      for (const key of ['api_token', 'userId', 'jiacn', 'openid']) {
+        try {
+          utilStore.removeLocalStorage(key)
+        } catch {
+          // Continue clearing independent identity state even if browser storage is unavailable.
+        }
+      }
+      try {
+        useGlobalStore(pinia).clearUserIdentity()
+      } catch {
+        // Registered identity work and token removal are not rolled back by peripheral state failure.
+      }
+    },
+
+    async revokeAllSessions ({ signal, timeout = 15_000 } = {}) {
+      const token = useUtilStore().getLocalStorage('api_token')
+      if (!token) throw unauthenticatedError()
+
+      const requestSignal = combineAbortSignals({ signals: [signal], timeout })
+      try {
+        throwIfAborted(requestSignal.signal)
+        const response = await fetch(`${this.baseUrl}/user/me/sessions/revoke-all`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          signal: requestSignal.signal
+        })
+        if (response.status === 204) return
+        throw revokeError(response, await responseErrorCode(response))
+      } finally {
+        requestSignal.cleanup()
+      }
+    },
+
     wxJsToken (url) {
       const utilStore = useUtilStore()
       const globalStore = useGlobalStore()
@@ -132,31 +245,37 @@ export const useApiStore = defineStore('api', {
       utilStore.removeLocalStorage('api_token')
     },
 
-    async getUserInfo () {
-      const token = await this.token()
-      if (!token) throw new Error('Authentication is required')
-      const globalStore = useGlobalStore()
+    async getUserInfo ({ signal } = {}) {
+      const operation = createIdentityOperation(this, signal)
+      try {
+        operation.assertCurrent()
+        const token = await this.token()
+        operation.assertCurrent()
+        if (!token) throw unauthenticatedError()
 
-      const response = await fetch(`${this.baseUrl}/user/my`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
+        const response = await fetch(`${this.baseUrl}/user/my`, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${token}` },
+          signal: operation.signal
+        })
+        operation.assertCurrent()
+        if (!response.ok) throw new Error('Failed to get user info')
 
-      if (!response.ok) throw new Error('Failed to get user info')
-
-      const result = await response.json()
-      log.debug('User info retrieved:', result)
-      const data = result.data
-      globalStore.setUser(data)
-      if (data.jiacn) {
-        globalStore.setJiacn(data.jiacn)
+        const result = await response.json()
+        operation.assertCurrent()
+        log.debug('User info retrieved:', result)
+        const data = result.data
+        const globalStore = useGlobalStore()
+        globalStore.setUser(data)
+        if (data.jiacn) globalStore.setJiacn(data.jiacn)
+        if (data.openid) globalStore.setOpenid(data.openid)
+        return data
+      } catch (error) {
+        operation.assertCurrent()
+        throw error
+      } finally {
+        operation.cleanup()
       }
-      if (data.openid) {
-        globalStore.setOpenid(data.openid)
-      }
-      return data
     }
   }
 })

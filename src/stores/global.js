@@ -2,27 +2,31 @@ import { defineStore } from 'pinia'
 import { useUtilStore } from './util'
 import { log } from '../utils/logger.js'
 
+const runtimeEnv = import.meta.env ?? {}
+
+const anonymousUser = () => ({
+  id: null,
+  appid: runtimeEnv.VITE_WXMP_APPID,
+  username: null,
+  nickname: null,
+  openid: null,
+  jiacn: null,
+  avatar: null,
+  wxToken: null
+})
+
 export const useGlobalStore = defineStore('global', {
   state: () => ({
-    user: {
-      id: null,
-      appid: import.meta.env.VITE_WXMP_APPID,
-      username: null,
-      nickname: null,
-      openid: null,
-      jiacn: null,
-      avatar: null,
-      wxToken: null
-    },
+    user: anonymousUser(),
     menu: {},
-    title: import.meta.env.VITE_APP_TITLE,
+    title: runtimeEnv.VITE_APP_TITLE,
     showBack: false,
     showAppBar: true,
     showMore: false,
     showSideMenu: false,
     showRightSidebar: false,
-    copyright: import.meta.env.VITE_COPYRIGHT,
-    copyrightLink: import.meta.env.VITE_COPYRIGHT_LINK
+    copyright: runtimeEnv.VITE_COPYRIGHT,
+    copyrightLink: runtimeEnv.VITE_COPYRIGHT_LINK
   }),
   getters: {
     getOpenid () {
@@ -43,6 +47,9 @@ export const useGlobalStore = defineStore('global', {
     }
   },
   actions: {
+    clearUserIdentity () {
+      this.user = anonymousUser()
+    },
     setUser (user = {}) {
       if (user.id) {
         const utilStore = useUtilStore()

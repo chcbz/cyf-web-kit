@@ -681,6 +681,7 @@ const {
   pendingAgentName,
   sendHallMessage,
   senderText,
+  disposeHallConversation,
   stopHallEventStream,
   stopHallReplyPolling,
   stopHallReplyStreaming
@@ -851,6 +852,8 @@ onMounted(async () => {
 onUnmounted(() => {
   restorePanelFocus(panelPriorFocus)
   panelPriorFocus = null
+  disposeHallConversation()
+  hallBackendSceneState?.dispose()
   stopHallEventStream()
   stopHallReplyStreaming()
   stopHallReplyPolling()

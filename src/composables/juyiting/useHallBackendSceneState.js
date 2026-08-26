@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
 
 const SCENE_ID = 'juyiting-main'
 const SNAPSHOT_URL = `/agent/scenes/${SCENE_ID}/snapshot`
@@ -33,6 +34,7 @@ export const useHallBackendSceneState = ({
   let sceneCursor = '0'
 
   let active = false
+  let disposed = false
   let stream = null
   let streamGeneration = 0
   let reconnectTimer = null
@@ -240,6 +242,7 @@ export const useHallBackendSceneState = ({
   }
 
   const start = async () => {
+    if (disposed) return null
     if (active) return startPromise || latestSnapshot.value
     active = true
     lifecycleGeneration += 1
@@ -288,6 +291,14 @@ export const useHallBackendSceneState = ({
     pendingRequests.clear()
     for (const cancel of [...phaseRetryWaiters]) cancel()
     closeStream()
+  }
+
+  const unregisterIdentityCleanup = registerIdentityCleanup(stop)
+  const dispose = () => {
+    if (disposed) return
+    disposed = true
+    stop()
+    unregisterIdentityCleanup()
   }
 
   const retry = async () => {
@@ -355,6 +366,7 @@ export const useHallBackendSceneState = ({
     warnings,
     start,
     stop,
+    dispose,
     retry,
     reportPhase
   }

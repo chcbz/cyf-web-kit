@@ -2,6 +2,7 @@ import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { createPinia, setActivePinia } from 'pinia'
 import { useApiStore } from '../../src/stores/api.js'
+import { initiateReauthentication } from '../../src/utils/reauthentication.js'
 
 Object.defineProperty(global, 'location', { value: window.location, writable: true, configurable: true })
 Object.defineProperty(global, 'localStorage', { value: window.localStorage, writable: true, configurable: true })
@@ -127,5 +128,85 @@ describe('OAuth API store token exchange', () => {
     expect(source).not.to.include('pkce_code_verifier')
     expect(source).not.to.include('access_type')
     expect(source).not.to.match(/log\.(debug|info|warn|error)\([^\n]*(code|verifier|token)/i)
+  })
+
+  it('does not commit a deferred token response after identity clear', async () => {
+    let resolveToken
+    global.fetch = async () => ({
+      ok: true,
+      json: () => new Promise(resolve => { resolveToken = resolve })
+    })
+    const store = useApiStore()
+    const pending = store.exchangeCodeForToken('authorization-code', transaction)
+    await Promise.resolve()
+    store.clearIdentity()
+    resolveToken({ access_token: 'late-token', token_type: 'Bearer', expires_in: 300 })
+
+    let failure
+    try { await pending } catch (error) { failure = error }
+    expect(failure?.name).to.equal('AbortError')
+    expect(window.localStorage.getItem('api_token')).to.equal(null)
+  })
+
+})
+
+function deferred () {
+  let resolve
+  const promise = new Promise(result => { resolve = result })
+  return { promise, resolve }
+}
+
+describe('OAuth authorization cancellation', () => {
+  let originalCrypto
+  let originalAssign
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    window.localStorage.clear()
+    window.sessionStorage.clear()
+    originalCrypto = window.crypto
+    originalAssign = window.location.assign
+  })
+
+  afterEach(() => {
+    Object.defineProperty(window, 'crypto', { value: originalCrypto, configurable: true })
+    window.location.assign = originalAssign
+  })
+
+  it('cancels queued reauthentication before it creates an OAuth transaction', async () => {
+    const store = useApiStore()
+    const result = initiateReauthentication(store)
+    await store.clearIdentity()
+
+    expect(await result).to.equal(false)
+    expect(window.sessionStorage.getItem('cyf.oauth.pending.v1')).to.equal(null)
+  })
+
+  it('does not navigate when logout cancels an authorization awaiting PKCE crypto', async () => {
+    const digest = deferred()
+    let assigns = 0
+    Object.defineProperty(window, 'crypto', {
+      configurable: true,
+      value: {
+        getRandomValues (bytes) {
+          bytes.fill(7)
+          return bytes
+        },
+        subtle: { digest: () => digest.promise }
+      }
+    })
+    window.location.assign = () => { assigns += 1 }
+    const store = useApiStore()
+    store.baseUrl = 'https://api.example'
+    store.oauthClientId = 'public-web'
+
+    const authorization = store.beginAuthorization('/juyiting')
+    await new Promise(resolve => setTimeout(resolve, 0))
+    await store.clearIdentity()
+    digest.resolve(new Uint8Array(32).buffer)
+
+    expect(await authorization).to.equal(false)
+    expect(assigns).to.equal(0)
+    expect(store.authorizationStarted).to.equal(false)
   })
 })

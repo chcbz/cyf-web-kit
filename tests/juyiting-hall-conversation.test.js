@@ -1,6 +1,7 @@
 import { expect } from 'chai'
 import { ref } from 'vue'
 import { useHallConversation } from '../src/composables/juyiting/useHallConversation.js'
+import { stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 import {
   appendHallEventMessage,
   appendStreamPayload,
@@ -55,7 +56,8 @@ describe('useHallConversation scoped message loading', () => {
       })
 
       await conversation.loadHallMessages()
-      await new Promise(resolve => setImmediate(resolve))
+      await Promise.resolve()
+      await Promise.resolve()
 
       expect(tokenCount).to.equal(1)
       expect(fetchCount).to.equal(0)
@@ -113,7 +115,8 @@ describe('useHallConversation scoped message loading', () => {
       })
 
       await conversation.loadHallMessages()
-      await new Promise(resolve => setImmediate(resolve))
+      await Promise.resolve()
+      await Promise.resolve()
 
       expect(fetchCount).to.equal(1)
       expect(cleanCount).to.equal(1)
@@ -401,4 +404,180 @@ describe('useHallConversation scoped message loading', () => {
       content: '收到，马上处理'
     })
   })
+})
+
+describe('Hall conversation identity lifecycle', () => {
+  it('clears 1.5s and 5s sync timers and prevents their callbacks from loading after disposal', async () => {
+    const timers = []
+    const cleared = []
+    const originalSetTimeout = window.setTimeout
+    const originalClearTimeout = window.clearTimeout
+    window.setTimeout = (callback, delay) => {
+      const timer = { callback, delay }
+      timers.push(timer)
+      return timer
+    }
+    window.clearTimeout = timer => cleared.push(timer)
+    try {
+      const chatContext = ref({ conversationScopeType: 'public', conversationScopeKey: 'public', targetAgentIds: [] })
+      let contentCalls = 0
+      const conversation = useHallConversation({
+        apiStore: { token: async () => null },
+        chatApi: {
+          create: async (_path, _payload, options) => {
+            options.onStream('{"conversationId":"1001"}')
+            options.onStreamEnd()
+          },
+          getById: async () => { contentCalls += 1 }
+        },
+        chatContext, chatMode: ref('public'), globalStore: { getJiacn: 'hero', user: {} },
+        log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}),
+        portraitShortName: agent => agent?.name || '', selectedAgent: ref(null), selectedTask: ref(null), showToast: () => {}
+      })
+      conversation.setDraft('hello')
+      await conversation.sendHallMessage()
+      expect(timers.map(timer => timer.delay)).to.include.members([1500, 5000])
+      conversation.disposeHallConversation()
+      conversation.disposeHallConversation()
+      expect(cleared).to.include.members(timers)
+      timers.forEach(timer => timer.callback())
+      expect(contentCalls).to.equal(0)
+    } finally {
+      window.setTimeout = originalSetTimeout
+      window.clearTimeout = originalClearTimeout
+    }
+  })
+
+  it('aborts deferred list and content requests on disposal and ignores their late success callbacks', async () => {
+    let listOptions
+    let contentOptions
+    let resolveContent
+    const conversation = useHallConversation({
+      apiStore: { token: async () => 'token' },
+      chatApi: {
+        list: async (_path, _payload, options) => {
+          listOptions = options
+          await options.onSuccess({ data: [{ id: 1001 }] })
+        },
+        getById: async (_path, _id, options) => {
+          contentOptions = options
+          await new Promise(resolve => { resolveContent = resolve })
+          options.onSuccess({ data: [{ id: 9, senderType: 'agent', content: 'late reply' }] })
+        }
+      },
+      chatContext: ref({ conversationScopeType: 'public', conversationScopeKey: 'public', targetAgentIds: [] }),
+      chatMode: ref('public'), globalStore: { getJiacn: 'hero', user: {} },
+      log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}),
+      portraitShortName: agent => agent?.name || '', selectedAgent: ref(null), selectedTask: ref(null), showToast: () => {}
+    })
+
+    const loading = conversation.loadHallMessages()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(listOptions.signal.aborted).to.equal(false)
+    expect(contentOptions.signal.aborted).to.equal(false)
+
+    conversation.disposeHallConversation()
+    expect(listOptions.signal.aborted).to.equal(true)
+    expect(contentOptions.signal.aborted).to.equal(true)
+    resolveContent()
+    await loading
+
+    expect(conversation.conversationId.value).to.equal('')
+    expect(conversation.messages.value).to.deep.equal([])
+  })
+
+  it('cancels an opened deferred reply stream on identity clear and filters all late callbacks', async () => {
+    let streamOptions
+    let resolveStream
+    let cancelReason
+    let errorWrites = 0
+    const conversation = useHallConversation({
+      apiStore: { token: async () => 'token' },
+      chatApi: {
+        create: async (_path, _payload, options) => {
+          streamOptions = options
+          options.onStreamOpen({ cancel: reason => { cancelReason = reason } })
+          await new Promise(resolve => { resolveStream = resolve })
+        }
+      },
+      chatContext: ref({ conversationScopeType: 'public', conversationScopeKey: 'public', participantAgentIds: [], targetAgentIds: [] }),
+      chatMode: ref('public'), globalStore: { getJiacn: 'hero', user: {} },
+      log: { warn: () => {}, error: () => { errorWrites += 1 } }, openPanel: () => {}, outgoingMetadata: ref({ stale: true }),
+      portraitShortName: agent => agent?.name || '', selectedAgent: ref(null), selectedTask: ref(null), showToast: () => {}
+    })
+
+    conversation.setDraft('hello')
+    const sending = conversation.sendHallMessage()
+    await Promise.resolve()
+    expect(streamOptions.signal.aborted).to.equal(false)
+
+    stopIdentityBoundWork()
+    expect(streamOptions.signal.aborted).to.equal(true)
+    expect(cancelReason?.name).to.equal('AbortError')
+    streamOptions.onStream('{"v":"late"}')
+    streamOptions.onStreamEnd()
+    streamOptions.onError('cancelled', streamOptions.signal.reason)
+    resolveStream()
+    await sending
+
+    expect(conversation.messages.value).to.deep.equal([])
+    expect(conversation.isStreaming.value).to.equal(false)
+    expect(conversation.isAwaitingReply.value).to.equal(false)
+    expect(errorWrites).to.equal(0)
+    conversation.disposeHallConversation()
+  })
+
+  it('resets an active reply when starting a new conversation and allows another send', async () => {
+    const requests = []
+    let firstCancelReason
+    const conversation = useHallConversation({
+      apiStore: { token: async () => 'token' },
+      chatApi: {
+        create: async (_path, payload, options) => {
+          requests.push({ payload, options })
+          options.onStreamOpen({
+            cancel: reason => {
+              if (requests.length === 1) firstCancelReason = reason
+            }
+          })
+          if (requests.length === 1) {
+            await new Promise((_resolve, reject) => {
+              options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true })
+            })
+            return
+          }
+          options.onStreamEnd()
+        }
+      },
+      chatContext: ref({ conversationScopeType: 'public', conversationScopeKey: 'public', participantAgentIds: [], targetAgentIds: [] }),
+      chatMode: ref('public'), globalStore: { getJiacn: 'hero', user: {} },
+      log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}),
+      portraitShortName: agent => agent?.name || '', selectedAgent: ref(null), selectedTask: ref(null), showToast: () => {}
+    })
+
+    conversation.setDraft('first')
+    const firstSend = conversation.sendHallMessage()
+    await Promise.resolve()
+    expect(conversation.isStreaming.value).to.equal(true)
+
+    const firstSignal = requests[0].options.signal
+    conversation.newHallConversation()
+    expect(firstSignal.aborted).to.equal(true)
+    expect(firstCancelReason?.name).to.equal('AbortError')
+    expect(conversation.isStreaming.value).to.equal(false)
+    expect(conversation.isAwaitingReply.value).to.equal(false)
+    expect(conversation.messages.value).to.deep.equal([])
+
+    conversation.setDraft('second')
+    const secondSend = conversation.sendHallMessage()
+    await Promise.all([firstSend, secondSend])
+
+    expect(requests).to.have.length(2)
+    expect(requests[1].payload.content).to.equal('second')
+    expect(requests[1].options.signal.aborted).to.equal(false)
+    expect(conversation.isStreaming.value).to.equal(false)
+    conversation.disposeHallConversation()
+  })
+
 })
