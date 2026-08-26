@@ -199,7 +199,7 @@ describe('JuyiHall component behavior', () => {
   it('wires the exact responsive panel class and immediate HallStage interaction lock', () => {
     const source = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
 
-    expect(source).to.include(':interaction-locked="Boolean(activePanel)"')
+    expect(source).to.include(':interaction-locked="isPanelSessionActive"')
     expect(source).to.include(':class="[`panel-${renderedPanel}`, `layout-${panelLayout}`]"')
     expect(source).to.include('layout-bottom-drawer')
     expect(source).to.include('layout-right-drawer')
@@ -1981,4 +1981,252 @@ describe('O03 map snapshot lifecycle contract', () => {
     expect(hall).to.include('@map-snapshot="handleMapSnapshot"')
     expect(hall).to.include('@landscape-target-consumed="handleLandscapeTargetConsumed"')
   })
+})
+
+describe('O04 shared panel session contract', () => {
+  it('keeps the rendered session through leave, fences stale generations, and shields the active shell', async () => {
+    const source = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+    const { capturePanelReturnTarget, isCurrentPanelGeneration, resolvePanelReturnTarget } = await import('../src/composables/juyiting/useHallPanels.js')
+
+    expect(source).to.include('v-if="activePanel" :key="panelSessionGeneration"')
+    expect(source).to.include(':data-panel-generation="panelSessionGeneration"')
+    expect(source).to.include(':interaction-locked="isPanelSessionActive"')
+    expect(source).to.include(':inert="isPanelSessionActive ? \'\' : null"')
+    expect(source).to.include(':aria-hidden="isPanelSessionActive ? \'true\' : null"')
+    expect(source).to.include('const panelWhitelist = new Set(')
+    expect(source).to.include('if (!panelWhitelist.has(panel)) return false')
+    expect(source).to.include('isCurrentPanelGeneration({')
+    expect(source).to.include('await nextTick()')
+
+    expect(isCurrentPanelGeneration({ leavingGeneration: 1, closingGeneration: 1, sessionGeneration: 2, activePanel: '', disposed: false })).to.equal(false)
+    expect(isCurrentPanelGeneration({ leavingGeneration: 2, closingGeneration: 2, sessionGeneration: 2, activePanel: 'library', disposed: false })).to.equal(false)
+    expect(isCurrentPanelGeneration({ leavingGeneration: 2, closingGeneration: 2, sessionGeneration: 2, activePanel: '', disposed: true })).to.equal(false)
+    expect(isCurrentPanelGeneration({ leavingGeneration: 2, closingGeneration: 2, sessionGeneration: 2, activePanel: '', disposed: false })).to.equal(true)
+
+    const root = document.createElement('main')
+    const prior = document.createElement('button')
+    const rotatedTrigger = document.createElement('button')
+    prior.setAttribute('data-portrait-action', 'library')
+    rotatedTrigger.setAttribute('data-portrait-action', 'library')
+    root.append(rotatedTrigger)
+    document.body.append(prior, root)
+    try {
+      const origin = capturePanelReturnTarget(prior, 'library')
+      prior.remove()
+      expect(resolvePanelReturnTarget({ origin, root })).to.equal(rotatedTrigger)
+    } finally {
+      root.remove()
+      prior.remove()
+    }
+  })
+})
+
+const loadActualJuyiHall = (mocks) => {
+  const relativePath = '../src/components/world/JuyiHall.vue'
+  const filename = new URL(relativePath, import.meta.url).pathname
+  const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8')
+  const { descriptor } = parse(source, { filename })
+  const script = compileScript(descriptor, { id: 'o04-actual-juyi-hall', inlineTemplate: true }).content
+  const body = script
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, imports) => `var { ${imports} } = mocks`)
+    .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = mocks.${name}`)
+    .replace(/import\.meta\.env/g, 'mocks.env')
+    .replace('export default', 'return')
+  return new Function('Vue', 'mocks', body)(Vue, mocks)
+}
+
+const createActualHallMocks = ({ mode, mounts, counters = {} }) => {
+  const noop = () => {}
+  const asyncNoop = async () => {}
+  const value = Vue.ref([])
+  const scalar = Vue.ref('')
+  const HallPortraitHome = Vue.defineComponent({
+    emits: ['quick-action'],
+    setup (_props, { attrs, emit }) {
+      Vue.onMounted(() => { mounts.portrait = (mounts.portrait || 0) + 1 })
+      Vue.onUnmounted(() => { mounts.portraitUnmount = (mounts.portraitUnmount || 0) + 1 })
+      return () => Vue.h('main', { ...attrs, class: 'portrait-shell' }, [
+        ...['agents', 'tasks', 'discussion', 'catalog', 'library'].map(action => Vue.h('button', { type: 'button', 'data-portrait-action': action, onClick: () => emit('quick-action', action) }, action))
+      ])
+    }
+  })
+  const ArchiveReader = Vue.defineComponent({ setup: () => { Vue.onMounted(() => { mounts.archive += 1 }); Vue.onUnmounted(() => { mounts.archiveUnmount = (mounts.archiveUnmount || 0) + 1 }); return () => Vue.h('div', { class: 'archive-reader-instance' }, 'reader') } })
+  const LibraryPanel = Vue.defineComponent({ setup: () => { Vue.onMounted(() => { mounts.library += 1 }); Vue.onUnmounted(() => { mounts.libraryUnmount = (mounts.libraryUnmount || 0) + 1 }); return () => Vue.h('section', { class: 'library-panel-instance' }, [Vue.h('button', { class: 'library-last' }, '末项'), Vue.h(ArchiveReader)]) } })
+  const HallStage = Vue.defineComponent({ setup: (_props, { attrs }) => () => Vue.h('section', { ...attrs, class: 'hall-board', tabindex: 0 }) })
+  const EmptyPanel = Vue.defineComponent({ setup: () => () => Vue.h('section') })
+  counters.loads ||= { agents: 0, tasks: 0, messages: 0 }
+  counters.owners ||= { data: 0, conversation: 0, debug: 0 }
+  counters.refs ||= {
+    conversationId: Vue.ref('conversation-o04'),
+    draft: Vue.ref('draft-o04'),
+    messages: Vue.ref([{ id: 'message-o04', content: 'sentinel' }])
+  }
+  const hallData = {
+    applySceneEvent: noop, applySceneSnapshot: noop, agentFilter: scalar, agents: value, bindPersona: asyncNoop, canAssign: () => true,
+    filteredAgents: value, hiddenAgentCount: Vue.ref(0), loadAgents: async () => { counters.loads.agents += 1 }, loadTasks: async () => { counters.loads.tasks += 1 }, loadTaskRecommendations: asyncNoop,
+    mapAgents: value, personaCatalog: value, recommendedAgents: value, setAgentFilter: asyncNoop, setTaskStatusFilter: asyncNoop,
+    taskAbilityFilter: scalar, taskAbilityOptions: value, taskKeyword: scalar, tasks: value, taskStatusCount: Vue.ref({}), taskStatusFilter: scalar, unbindPersona: asyncNoop, visibleAgents: value
+  }
+  const panelHelpers = counters.panelHelpers || {}
+  return {
+    ...panelHelpers,
+    env: {}, capturePanelReturnTarget: panelHelpers.capturePanelReturnTarget, focusHallPanel: panelHelpers.focusHallPanel, isCurrentPanelGeneration: panelHelpers.isCurrentPanelGeneration, isSafePanelFocusTarget: panelHelpers.isSafePanelFocusTarget, resolvePanelReturnTarget: panelHelpers.resolvePanelReturnTarget, restorePanelFocus: panelHelpers.restorePanelFocus, trapPanelFocus: panelHelpers.trapPanelFocus,
+    useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({}), agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {},
+    roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
+    useHallData: ({ selectedAgent, selectedTask }) => { counters.owners.data += 1; selectedAgent.value = { agentId: 'agent-o04', name: 'sentinel-agent' }; selectedTask.value = { id: 'task-o04', title: 'sentinel-task' }; return hallData },
+    useHallExperienceMode: () => ({ experienceMode: mode, isMobileCoarse: Vue.ref(true), orientationHint: scalar, orientationRequestPending: Vue.ref(false), requestLandscape: asyncNoop }),
+    useHallPanels: ({ experienceMode, isMobileCoarse }) => ({ panelLayout: Vue.computed(() => isMobileCoarse.value ? (experienceMode.value === 'landscape-map' ? 'right-drawer' : 'bottom-drawer') : 'center-modal') }),
+    useHallSceneState: () => ({ setMapRuntime: noop, reset: noop, forwardPhaseEvents: asyncNoop }),
+    useHallCommandQueue: () => ({ ready: Vue.ref(false), setSimulation: noop }),
+    useHallBackendSceneState: () => ({ start: asyncNoop, stop: noop, dispose: noop, reportPhase: noop }), useHallSceneDebugBridge: () => { counters.owners.debug += 1; return { sentinel: 'debug-owner-o04', republish: noop, stop: noop } },
+    useHallSound: () => ({ playAgentSelect: noop, playError: noop, playPanelOpen: noop, playRefresh: noop, playSend: noop, playSuccess: noop, playTap: noop, setSoundEnabled: noop, soundEnabled: Vue.ref(false) }),
+    useHallChatContext: () => ({ chatContext: Vue.ref({}), chatMentionAgents: value, chatMode: Vue.ref('public'), chatTargetText: scalar, enterBountyDiscussion: noop, enterPrivateConversation: noop, resetToPublic: noop, setMentionAgent: noop }),
+    useHallScene: () => ({ markAgentSpeaking: noop, markDiscussionStarted: noop, markLibraryCitation: noop, markLibrarySearching: noop, markRecommendedAgents: noop, markTaskArchived: noop, markTaskAssigned: noop, markTaskAutoAssigned: noop, markTaskCreated: noop, resetSceneFeedback: noop, sceneAgents: value, sceneAgentStyle: () => ({}), sceneHotspots: value, syncAfterPersonaChanged: noop }),
+    useHallTaskActions: () => ({ archiveTask: asyncNoop, autoAssignTask: asyncNoop, assignTask: async () => true, createTask: asyncNoop }),
+    useHallConversation: () => { counters.owners.conversation += 1; return ({ chatConnectionStatus: scalar, conversationId: counters.refs.conversationId, draft: counters.refs.draft, eventStreamRecovering: Vue.ref(false), insertAgentMention: noop, isAwaitingReply: Vue.ref(false), isStreaming: Vue.ref(false), loadHallMessages: async () => { counters.loads.messages += 1 }, mentionAgent: noop, messages: counters.refs.messages, newHallConversation: noop, pendingAgentName: scalar, sendHallMessage: asyncNoop, senderText: scalar, disposeHallConversation: noop, stopHallEventStream: noop, stopHallReplyPolling: noop, stopHallReplyStreaming: noop }) },
+    useHallLibrary: () => ({ citeLibraryItem: noop, libraryErrorMessage: scalar, libraryHasSearched: Vue.ref(false), libraryKeyword: scalar, libraryLoading: Vue.ref(false), libraryResults: value, librarySourceType: scalar, searchLibrary: asyncNoop }),
+    useTaskWorkspace: () => null, createDisabledTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }), isTaskWorkspaceBuildEnabled: () => false, useTaskWorkspaceView: () => ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: scalar, error: Vue.ref(null), retry: noop }), useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop }),
+    portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '',
+    HallPortraitHome, HallStage, LibraryPanel, AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel, BountyPanel: EmptyPanel, TaskWorkspacePanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PrivateDiscussionPanel: EmptyPanel, PublicDiscussionPanel: EmptyPanel, SelectedAgentCard: EmptyPanel
+  }
+}
+
+describe('O04 actual-mounted JuyiHall panel identity', () => {
+  it('retains panel/state identity for five cycles and fences stale keyed leaves', async () => {
+    const mode = Vue.ref('portrait-command')
+    const mounts = { library: 0, archive: 0 }
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const JuyiHall = loadActualJuyiHall(createActualHallMocks({ mode, mounts, counters }))
+    const wrapper = mount(JuyiHall, { attachTo: document.body, global: { stubs: { ...stubs, transition: false } } })
+    try {
+      await flushPromises()
+      const originalTrigger = wrapper.find('[data-portrait-action="library"]').element
+      originalTrigger.focus()
+      await wrapper.find('[data-portrait-action="library"]').trigger('click')
+      await Vue.nextTick()
+      const floatingPanel = wrapper.find('.floating-panel').element
+      const library = wrapper.find('.library-panel-instance').element
+      const archive = wrapper.find('.archive-reader-instance').element
+      expect(document.activeElement).to.equal(wrapper.find('.panel-close').element)
+      expect(wrapper.find('.portrait-shell').attributes('inert')).to.equal('')
+      expect(wrapper.find('.portrait-shell').attributes('aria-hidden')).to.equal('true')
+      expect(counters.owners).to.deep.equal({ data: 1, conversation: 1, debug: 1 })
+      const initialLoads = { ...counters.loads }
+      const conversationId = counters.refs.conversationId.value
+      const draft = counters.refs.draft.value
+      const messages = counters.refs.messages.value
+
+      for (let cycle = 0; cycle < 5; cycle += 1) {
+        mode.value = 'landscape-map'; await Vue.nextTick()
+        expect(wrapper.find('.floating-panel').classes()).to.include('layout-right-drawer')
+        expect(wrapper.find('.hall-board').attributes('inert')).to.equal('')
+        mode.value = 'portrait-command'; await Vue.nextTick()
+        expect(wrapper.find('.floating-panel').classes()).to.include('layout-bottom-drawer')
+        expect(wrapper.find('.floating-panel').element).to.equal(floatingPanel)
+        expect(wrapper.find('.library-panel-instance').element).to.equal(library)
+        expect(wrapper.find('.archive-reader-instance').element).to.equal(archive)
+        expect(counters.refs.conversationId.value).to.equal(conversationId)
+        expect(counters.refs.draft.value).to.equal(draft)
+        expect(counters.refs.messages.value).to.equal(messages)
+        expect(counters.loads).to.deep.equal(initialLoads)
+        expect(mounts.libraryUnmount || 0).to.equal(0)
+        expect(mounts.archiveUnmount || 0).to.equal(0)
+      }
+
+      const state = wrapper.vm.$.setupState
+      const overlayA = wrapper.find('.panel-overlay').element
+      const generationA = overlayA.dataset.panelGeneration
+      state.closePanel()
+      state.openPanel('library')
+      await Vue.nextTick()
+      const overlayB = wrapper.find('.panel-overlay').element
+      expect(overlayB).not.to.equal(overlayA)
+      expect(overlayB.dataset.panelGeneration).not.to.equal(generationA)
+      await state.handlePanelAfterLeave(overlayA)
+      expect(wrapper.find('.panel-overlay').element).to.equal(overlayB)
+      state.closePanel()
+      await state.handlePanelAfterLeave(overlayA)
+      expect(state.renderedPanel).to.equal('library')
+      await state.handlePanelAfterLeave(overlayB)
+      await Vue.nextTick()
+      expect(state.renderedPanel).to.equal('')
+      expect(document.activeElement).to.equal(wrapper.find('[data-portrait-action="library"]').element)
+      expect(mounts.library).to.equal(1)
+      expect(mounts.archive).to.equal(1)
+    } finally {
+      wrapper.unmount()
+    }
+    expect(mounts.libraryUnmount).to.equal(1)
+    expect(mounts.archiveUnmount).to.equal(1)
+  })
+
+  it('cancels chat load and deferred focus when actual JuyiHall unmounts', async () => {
+    const mode = Vue.ref('portrait-command')
+    const mounts = { library: 0, archive: 0 }
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const JuyiHall = loadActualJuyiHall(createActualHallMocks({ mode, mounts, counters }))
+    const external = document.createElement('button')
+    document.body.append(external)
+    external.focus()
+    const wrapper = mount(JuyiHall, { attachTo: document.body, global: { stubs: { ...stubs, transition: false } } })
+    await flushPromises()
+    wrapper.vm.$.setupState.openPanel('chat')
+    wrapper.unmount()
+    await new Promise(resolve => setTimeout(resolve, 5))
+    expect(counters.loads.messages).to.equal(0)
+    expect(document.activeElement).to.equal(external)
+    external.remove()
+  })
+
+  it('converges Escape, close button, and backdrop and restores landscape/root fallbacks', async () => {
+    const mode = Vue.ref('portrait-command')
+    const mounts = { library: 0, archive: 0 }
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const JuyiHall = loadActualJuyiHall(createActualHallMocks({ mode, mounts, counters }))
+    const wrapper = mount(JuyiHall, { attachTo: document.body, global: { stubs: { ...stubs, transition: false } } })
+    const state = wrapper.vm.$.setupState
+    try {
+      await flushPromises()
+      const trigger = wrapper.find('[data-portrait-action="library"]')
+      trigger.element.focus()
+      await trigger.trigger('click')
+      await Vue.nextTick()
+      const last = wrapper.find('.library-last').element
+      last.focus()
+      await wrapper.find('.floating-panel').trigger('keydown', { key: 'Tab' })
+      expect(document.activeElement).to.equal(wrapper.find('.panel-close').element)
+      await wrapper.find('.floating-panel').trigger('keydown', { key: 'Tab', shiftKey: true })
+      expect(document.activeElement).to.equal(last)
+
+      mode.value = 'landscape-map'; await Vue.nextTick()
+      const escapeOverlay = wrapper.find('.panel-overlay').element
+      await wrapper.find('.floating-panel').trigger('keydown', { key: 'Escape' })
+      expect(state.activePanel).to.equal('')
+      await state.handlePanelAfterLeave(escapeOverlay)
+      await Vue.nextTick()
+      expect(document.activeElement).to.equal(wrapper.find('.hall-board').element)
+
+      document.activeElement.blur()
+      state.openPanel('library')
+      await Vue.nextTick()
+      const closeOverlay = wrapper.find('.panel-overlay').element
+      await wrapper.find('.panel-close').trigger('click')
+      expect(state.activePanel).to.equal('')
+      await state.handlePanelAfterLeave(closeOverlay)
+      await Vue.nextTick()
+      expect(document.activeElement).to.equal(wrapper.find('.juyi-page').element)
+
+      state.openPanel('library')
+      await Vue.nextTick()
+      const backdropOverlay = wrapper.find('.panel-overlay').element
+      await wrapper.find('.panel-overlay').trigger('pointerdown')
+      expect(state.activePanel).to.equal('')
+      await state.handlePanelAfterLeave(backdropOverlay)
+      expect(state.renderedPanel).to.equal('')
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
 })

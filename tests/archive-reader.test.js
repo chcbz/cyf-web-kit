@@ -4,6 +4,7 @@ import { readFileSync } from 'fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
 import { mount } from '@vue/test-utils'
 import * as Vue from 'vue'
+import * as HallPanelHelpers from '../src/composables/juyiting/useHallPanels.js'
 import {
   isCanonicalDecimal,
   mutationHeaders,
@@ -256,6 +257,84 @@ const loadArchiveReaderSfc = (archiveModule) => {
     )
     .replace('export default', 'return')
   return new Function('Vue', 'archiveModule', body)(Vue, archiveModule)
+}
+
+
+const loadActualHallForIntegration = (mocks, id) => {
+  const relativePath = '../src/components/world/JuyiHall.vue'
+  const filename = new URL(relativePath, import.meta.url).pathname
+  const { descriptor } = parse(readFileSync(new URL(relativePath, import.meta.url), 'utf8'), { filename })
+  const body = compileScript(descriptor, { id, inlineTemplate: true }).content
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, imports) => `var { ${imports} } = mocks`)
+    .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = mocks.${name}`)
+    .replace(/import\.meta\.env/g, 'mocks.env')
+    .replace('export default', 'return')
+  return new Function('Vue', 'mocks', body)(Vue, mocks)
+}
+
+const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, workspaceState = null, counters }) => {
+  const noop = () => {}
+  const asyncNoop = async () => {}
+  const list = Vue.ref([])
+  const text = Vue.ref('')
+  const EmptyPanel = Vue.defineComponent({ setup: () => () => Vue.h('section') })
+  const HallPortraitHome = Vue.defineComponent({
+    emits: ['quick-action'],
+    setup (_props, { attrs, emit }) {
+      return () => Vue.h('main', { ...attrs, class: 'portrait-shell' }, ['agents', 'tasks', 'discussion', 'catalog', 'library'].map(action =>
+        Vue.h('button', { type: 'button', 'data-portrait-action': action, onClick: () => emit('quick-action', action) }, action)))
+    }
+  })
+  const HallStage = Vue.defineComponent({ setup: (_props, { attrs }) => () => Vue.h('section', { ...attrs, class: 'hall-board', tabindex: 0 }) })
+  const hallData = {
+    applySceneEvent: noop, applySceneSnapshot: noop, agentFilter: Vue.ref('online'), agents: list, bindPersona: asyncNoop,
+    canAssign: () => true, filteredAgents: list, hiddenAgentCount: Vue.ref(0), loadAgents: async () => { counters.hallLoads += 1 },
+    loadTasks: async () => { counters.hallLoads += 1 }, loadTaskRecommendations: asyncNoop, mapAgents: list, personaCatalog: list,
+    recommendedAgents: list, setAgentFilter: asyncNoop, setTaskStatusFilter: asyncNoop, taskAbilityFilter: Vue.ref('ability-o04'),
+    taskAbilityOptions: list, taskKeyword: Vue.ref('task-filter-o04'), tasks: list, taskStatusCount: Vue.ref({}), taskStatusFilter: Vue.ref('open'),
+    unbindPersona: asyncNoop, visibleAgents: list
+  }
+  const taskWorkspace = workspaceState || null
+  return {
+    ...HallPanelHelpers,
+    env: { VITE_JUYITING_TASK_WORKSPACE_ENABLED: workspaceState ? 'true' : undefined },
+    useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({}),
+    agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {}, roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
+    useHallData: () => hallData,
+    useHallExperienceMode: () => ({ experienceMode: mode, isMobileCoarse: Vue.ref(true), orientationHint: text, orientationRequestPending: Vue.ref(false), requestLandscape: asyncNoop }),
+    useHallPanels: HallPanelHelpers.useHallPanels,
+    useHallSceneState: () => ({ setMapRuntime: noop, reset: noop, forwardPhaseEvents: asyncNoop }),
+    useHallCommandQueue: () => ({ ready: Vue.ref(false), setSimulation: noop }),
+    useHallBackendSceneState: () => ({ start: asyncNoop, stop: noop, dispose: noop, reportPhase: noop }),
+    useHallSceneDebugBridge: () => ({ sentinel: 'debug-o04', republish: noop, stop: noop }),
+    useHallSound: () => ({ playAgentSelect: noop, playError: noop, playPanelOpen: noop, playRefresh: noop, playSend: noop, playSuccess: noop, playTap: noop, setSoundEnabled: noop, soundEnabled: Vue.ref(false) }),
+    useHallChatContext: () => ({ chatContext: Vue.ref({ conversationScopeKey: 'scope-o04' }), chatMentionAgents: list, chatMode: Vue.ref('public'), chatTargetText: text, enterBountyDiscussion: noop, enterPrivateConversation: noop, resetToPublic: noop, setMentionAgent: noop }),
+    useHallScene: () => ({ markAgentSpeaking: noop, markDiscussionStarted: noop, markLibraryCitation: noop, markLibrarySearching: noop, markRecommendedAgents: noop, markTaskArchived: noop, markTaskAssigned: noop, markTaskAutoAssigned: noop, markTaskCreated: noop, resetSceneFeedback: noop, sceneAgents: list, sceneAgentStyle: () => ({}), sceneHotspots: list, syncAfterPersonaChanged: noop }),
+    useHallTaskActions: () => ({ archiveTask: asyncNoop, autoAssignTask: asyncNoop, assignTask: async () => true, createTask: asyncNoop }),
+    useHallConversation: () => ({ chatConnectionStatus: text, conversationId: Vue.ref('conversation-o04'), draft: Vue.ref('draft-o04'), eventStreamRecovering: Vue.ref(false), insertAgentMention: noop, isAwaitingReply: Vue.ref(false), isStreaming: Vue.ref(false), loadHallMessages: asyncNoop, mentionAgent: noop, messages: Vue.ref([{ id: 'message-o04' }]), newHallConversation: noop, pendingAgentName: text, sendHallMessage: asyncNoop, senderText: text, disposeHallConversation: noop, stopHallEventStream: noop, stopHallReplyPolling: noop, stopHallReplyStreaming: noop }),
+    useHallLibrary: () => ({ citeLibraryItem: noop, libraryErrorMessage: text, libraryHasSearched: Vue.ref(false), libraryKeyword: Vue.ref('library-filter-o04'), libraryLoading: Vue.ref(false), libraryResults: list, librarySourceType: Vue.ref('project'), searchLibrary: asyncNoop }),
+    useTaskWorkspace: () => taskWorkspace,
+    createDisabledTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }),
+    isTaskWorkspaceBuildEnabled: () => Boolean(workspaceState),
+    useTaskWorkspaceView: () => workspaceState ? ({ subject: workspaceState.subject, workspace: workspaceState.workspace, connectionState: workspaceState.connectionState, error: workspaceState.error, retry: workspaceState.retry }) : ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: text, error: Vue.ref(null), retry: noop }),
+    useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }),
+    portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '',
+    HallPortraitHome, HallStage, LibraryPanel: LibraryPanel || EmptyPanel, TaskWorkspacePanel: TaskWorkspacePanel || EmptyPanel,
+    AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel, BountyPanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PrivateDiscussionPanel: EmptyPanel, PublicDiscussionPanel: EmptyPanel, SelectedAgentCard: EmptyPanel
+  }
+}
+
+
+const loadLibraryPanelSfc = (ArchiveReader) => {
+  const relativePath = '../src/components/juyiting/LibraryPanel.vue'
+  const filename = new URL(relativePath, import.meta.url).pathname
+  const { descriptor } = parse(readFileSync(new URL(relativePath, import.meta.url), 'utf8'), { filename })
+  const body = compileScript(descriptor, { id: 'archive-library-integration', inlineTemplate: true }).content
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
+    .replace(/^import\s+ArchiveReader\s+from\s+['"].\/archive\/ArchiveReader\.vue['"];?\s*$/gm, 'var ArchiveReader = arguments[1]')
+    .replace('export default', 'return')
+  return new Function('Vue', 'ArchiveReader', body)(Vue, ArchiveReader)
 }
 
 const mountArchiveReader = (api, options = {}) => {
@@ -1622,4 +1701,56 @@ describe('archive reader contract behavior', () => {
     expect(source).not.to.include('selectedAgent')
     expect(source).not.to.include('/agent/active')
   })
+
+  it('keeps actual JuyiHall, LibraryPanel, and ArchiveReader identity/state across five cycles', async () => {
+    const api = makeApi()
+    let readerState
+    let readerMounts = 0
+    let readerUnmounts = 0
+    const ArchiveReader = loadArchiveReaderSfc({
+      useArchiveReader: () => {
+        readerMounts += 1
+        readerState = useArchiveReader({ api, autoInitialize: false, saveDelay: 1 })
+        primeReader(readerState, chapterEightyOne, { version: '9223372036854775807' })
+        Vue.onUnmounted(() => { readerUnmounts += 1 })
+        return readerState
+      },
+      utf8ByteLength
+    })
+    const LibraryPanel = loadLibraryPanelSfc(ArchiveReader)
+    const mode = Vue.ref('portrait-command')
+    const counters = { hallLoads: 0 }
+    const JuyiHall = loadActualHallForIntegration(createHallIntegrationMocks({ mode, LibraryPanel, counters }), 'archive-actual-juyi-hall')
+    const wrapper = mount(JuyiHall, { attachTo: document.body, global: { stubs: { 'var-icon': true, transition: false } } })
+    try {
+      await settle()
+      await wrapper.find('[data-portrait-action="library"]').trigger('click')
+      await settle()
+      const floating = wrapper.find('.floating-panel').element
+      const library = wrapper.findComponent(LibraryPanel)
+      const reader = wrapper.findComponent(ArchiveReader)
+      reader.vm.__switchEditorTargetForTest({ noteId: 'note-o04', version: '7' }, '五轮旋转仍须保留的批注')
+      await Vue.nextTick()
+      const location = readerState.currentLocation.value
+      const progress = readerState.progress.value
+      const loadCount = api.calls.length
+      for (let cycle = 0; cycle < 5; cycle += 1) {
+        mode.value = 'landscape-map'; await Vue.nextTick()
+        mode.value = 'portrait-command'; await Vue.nextTick()
+        expect(wrapper.find('.floating-panel').element).to.equal(floating)
+        expect(wrapper.findComponent(LibraryPanel).vm).to.equal(library.vm)
+        expect(wrapper.findComponent(ArchiveReader).vm).to.equal(reader.vm)
+        expect(readerState.currentLocation.value).to.equal(location)
+        expect(readerState.progress.value).to.equal(progress)
+        expect(wrapper.find('textarea').element.value).to.equal('五轮旋转仍须保留的批注')
+        expect(api.calls).to.have.length(loadCount)
+        expect(readerMounts).to.equal(1)
+        expect(readerUnmounts).to.equal(0)
+      }
+    } finally {
+      wrapper.unmount()
+    }
+    expect(readerUnmounts).to.equal(1)
+  })
+
 })

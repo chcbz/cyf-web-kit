@@ -113,4 +113,14 @@ describe('HallPortraitHome', () => {
     expect(portraitHomeSource).to.not.include('useHallConversation')
     expect(portraitHomeSource).to.not.include("ref(")
   })
+
+
+  it('keeps the keyed shared dialog outside both orientation shells with full-session shielding', () => {
+    expect(hallSource).to.match(/<HallPortraitHome[\s\S]*?<HallStage\s+v-else[\s\S]*?<transition\s+name="panel"/)
+    expect(hallSource).to.include('v-if="activePanel" :key="panelSessionGeneration"')
+    expect(hallSource).to.include(':data-panel-generation="panelSessionGeneration"')
+    expect(hallSource).to.include(':inert="isPanelSessionActive ? \'\' : null"')
+    expect(hallSource).to.include(':aria-hidden="isPanelSessionActive ? \'true\' : null"')
+    expect(hallSource).to.not.include(':key="experienceMode"')
+  })
 })
