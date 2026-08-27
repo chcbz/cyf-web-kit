@@ -939,3 +939,14 @@ describe('Juyi Hall experience mode', () => {
     expect(stageSource).not.to.include('transform: rotate(90deg)')
   })
 })
+
+describe('O04 panel projection ownership', () => {
+  it('keeps panel session ownership out of the orientation projection composable', () => {
+    const panelsSource = readFileSync(new URL('../src/composables/juyiting/useHallPanels.js', import.meta.url), 'utf8')
+    expect(panelsSource).to.include('export const isCurrentPanelGeneration')
+    expect(panelsSource).to.include('export const resolvePanelReturnTarget')
+    expect(panelsSource).not.to.include('addEventListener')
+    expect(panelsSource).not.to.include('matchMedia')
+    expect(panelsSource).not.to.include('orientation')
+  })
+})

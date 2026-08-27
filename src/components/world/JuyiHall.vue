@@ -1,5 +1,5 @@
 <template>
-  <div class="juyi-page" :class="{ 'is-panel-open': activePanel, [`experience-${experienceMode}`]: true }">
+  <div ref="hallRootRef" class="juyi-page" tabindex="-1" :class="{ 'is-panel-open': isPanelSessionActive, [`experience-${experienceMode}`]: true }">
     <HallPortraitHome
       v-if="!experienceReady || experienceMode === 'portrait-command'"
       :agents="agents"
@@ -14,6 +14,8 @@
       :task-state-class="taskStateClass"
       :task-status-text="taskStatusText"
       :tasks="tasks"
+      :inert="isPanelSessionActive ? '' : null"
+      :aria-hidden="isPanelSessionActive ? 'true' : null"
       @quick-action="handlePortraitQuickAction"
       @refresh-hall="refreshHall"
       @request-landscape="requestPortraitLandscape"
@@ -31,7 +33,9 @@
       :agent-style="sceneAgentStyle"
       :hidden-agent-count="hiddenAgentCount"
       :experience-mode="experienceMode"
-      :interaction-locked="Boolean(activePanel)"
+      :interaction-locked="isPanelSessionActive"
+      :inert="isPanelSessionActive ? '' : null"
+      :aria-hidden="isPanelSessionActive ? 'true' : null"
       :landscape-entry-target="landscapeEntryTarget"
       :map-resume-snapshot="mapResumeSnapshot"
       :orientation-hint="orientationHint"
@@ -83,7 +87,7 @@
     </HallStage>
 
     <transition name="panel" @after-leave="handlePanelAfterLeave">
-      <div v-if="activePanel" class="panel-overlay" @pointerdown.self="closePanel">
+      <div v-if="activePanel" :key="panelSessionGeneration" class="panel-overlay" :data-panel-generation="panelSessionGeneration" @pointerdown.self="closePanel">
         <section
           ref="panelRef"
           class="floating-panel"
@@ -294,7 +298,7 @@ import { useHallConversation } from '@/composables/juyiting/useHallConversation'
 import { useHallData } from '@/composables/juyiting/useHallData'
 import { useHallLibrary } from '@/composables/juyiting/useHallLibrary'
 import { useHallExperienceMode } from '@/composables/juyiting/useHallExperienceMode'
-import { focusHallPanel, restorePanelFocus, trapPanelFocus, useHallPanels } from '@/composables/juyiting/useHallPanels'
+import { capturePanelReturnTarget, focusHallPanel, isCurrentPanelGeneration, isSafePanelFocusTarget, resolvePanelReturnTarget, restorePanelFocus, trapPanelFocus, useHallPanels } from '@/composables/juyiting/useHallPanels'
 import { useHallScene } from '@/composables/juyiting/useHallScene'
 import { useHallSceneState } from '@/composables/juyiting/useHallSceneState'
 import { useHallSceneDebugBridge } from '@/composables/juyiting/useHallSceneDebugBridge'
@@ -349,8 +353,12 @@ const {
 } = useTaskWorkspaceView(taskWorkspace)
 const personaSetupResult = ref(null)
 const toast = ref('')
+const panelWhitelist = new Set(['agents', 'catalog', 'tasks', 'workspace', 'chat', 'library'])
 const activePanel = ref('')
 const renderedPanel = ref('')
+const panelSessionGeneration = ref(0)
+const panelClosingGeneration = ref(0)
+const isPanelSessionActive = computed(() => Boolean(renderedPanel.value))
 const hallRefreshing = ref(false)
 const experienceReady = ref(false)
 const agentBubbles = ref({})
@@ -363,9 +371,12 @@ const {
   requestLandscape
 } = useHallExperienceMode()
 const { panelLayout } = useHallPanels({ experienceMode, isMobileCoarse })
+const hallRootRef = ref(null)
 const panelRef = ref(null)
 const panelTitleId = 'juyiting-floating-panel-title'
-let panelPriorFocus = null
+let panelSessionOrigin = null
+let panelChatLoadTimer = null
+let panelDisposed = false
 let bubbleTimer = null
 let bubbleInitialTimer = null
 let bubbleClearTimer = null
@@ -611,9 +622,26 @@ const selectAgent = (agent) => {
   playAgentSelect()
 }
 
+const cancelPanelChatLoad = () => {
+  if (panelChatLoadTimer !== null) window.clearTimeout(panelChatLoadTimer)
+  panelChatLoadTimer = null
+}
+
 const openPanel = (panel, options = {}) => {
-  if (!activePanel.value) panelPriorFocus = document.activeElement
+  if (panelDisposed || !panelWhitelist.has(panel)) return false
+  const openingFromClosed = !activePanel.value
+  if (openingFromClosed) {
+    if (!renderedPanel.value) {
+      panelSessionOrigin = Object.freeze({
+        ...capturePanelReturnTarget(document.activeElement, panel),
+        captureGeneration: panelSessionGeneration.value + 1
+      })
+    }
+    panelSessionGeneration.value += 1
+    panelClosingGeneration.value = 0
+  }
   if (panel !== 'chat') {
+    cancelPanelChatLoad()
     resetToPublic()
   }
   if (panel === 'chat' && options.mode === 'public') {
@@ -621,11 +649,21 @@ const openPanel = (panel, options = {}) => {
   }
   renderedPanel.value = panel
   activePanel.value = panel
-  nextTick(() => focusHallPanel(panelRef.value))
+  const generation = panelSessionGeneration.value
+  nextTick(() => {
+    if (!panelDisposed && activePanel.value === panel && panelSessionGeneration.value === generation) {
+      focusHallPanel(panelRef.value)
+    }
+  })
   if (!options.silent) playPanelOpen()
   if (panel === 'chat') {
-    window.setTimeout(() => loadHallMessages(), 0)
+    cancelPanelChatLoad()
+    panelChatLoadTimer = window.setTimeout(() => {
+      panelChatLoadTimer = null
+      if (!panelDisposed && activePanel.value === 'chat' && panelSessionGeneration.value === generation) loadHallMessages()
+    }, 0)
   }
+  return true
 }
 
 const handleStagePanelOpen = (panel) => {
@@ -764,8 +802,12 @@ const openTaskWorkspace = () => {
 }
 
 const closePanel = () => {
+  if (panelDisposed || !activePanel.value) return false
+  cancelPanelChatLoad()
+  panelClosingGeneration.value = panelSessionGeneration.value
   activePanel.value = ''
   playTap()
+  return true
 }
 
 const handlePanelKeydown = (event) => {
@@ -778,12 +820,29 @@ const handlePanelKeydown = (event) => {
   trapPanelFocus(event, panelRef.value)
 }
 
-const handlePanelAfterLeave = () => {
-  if (!activePanel.value) {
-    renderedPanel.value = ''
-    restorePanelFocus(panelPriorFocus)
-    panelPriorFocus = null
-  }
+const handlePanelAfterLeave = async (element) => {
+  const leavingGeneration = Number(element?.dataset?.panelGeneration)
+  if (!isCurrentPanelGeneration({
+    leavingGeneration,
+    closingGeneration: panelClosingGeneration.value,
+    sessionGeneration: panelSessionGeneration.value,
+    activePanel: activePanel.value,
+    disposed: panelDisposed
+  })) return
+  cancelPanelChatLoad()
+  renderedPanel.value = ''
+  await nextTick()
+  if (!isCurrentPanelGeneration({
+    leavingGeneration,
+    closingGeneration: panelClosingGeneration.value,
+    sessionGeneration: panelSessionGeneration.value,
+    activePanel: activePanel.value,
+    disposed: panelDisposed
+  }) || renderedPanel.value) return
+  const returnTarget = resolvePanelReturnTarget({ origin: panelSessionOrigin, root: hallRootRef.value })
+  restorePanelFocus(returnTarget)
+  panelClosingGeneration.value = 0
+  panelSessionOrigin = null
 }
 
 const closeSelectedAgentCard = () => {
@@ -1072,9 +1131,16 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  panelDisposed = true
+  panelSessionGeneration.value += 1
+  panelClosingGeneration.value = 0
+  cancelPanelChatLoad()
+  const originalElement = panelSessionOrigin?.originalElement
+  if (isSafePanelFocusTarget(originalElement) && !hallRootRef.value?.contains(originalElement)) restorePanelFocus(originalElement)
+  panelSessionOrigin = null
+  activePanel.value = ''
+  renderedPanel.value = ''
   taskWorkspaceBinding.dispose()
-  restorePanelFocus(panelPriorFocus)
-  panelPriorFocus = null
   disposeHallConversation()
   hallBackendSceneState?.dispose()
   stopHallEventStream()

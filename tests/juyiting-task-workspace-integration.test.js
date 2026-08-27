@@ -2,6 +2,7 @@ import { expect } from 'chai'
 import { readFileSync } from 'fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
 import { useTaskWorkspaceView } from '../src/composables/juyiting/useTaskWorkspaceView.js'
+import * as HallPanelHelpers from '../src/composables/juyiting/useHallPanels.js'
 
 const hallSource = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
 const hallDataSource = readFileSync(new URL('../src/composables/juyiting/useHallData.js', import.meta.url), 'utf8')
@@ -33,6 +34,72 @@ const loadSfc = (relativePath, child = null) => {
     .replace(/^import\s+TaskTimeline\s+from\s+['"].\/TaskTimeline\.vue['"];?\s*$/gm, 'var TaskTimeline = arguments[1]')
     .replace('export default', 'return')
   return new Function('Vue', 'TaskTimeline', scriptBody)(Vue, child)
+}
+
+
+const loadActualHallForIntegration = (mocks, id) => {
+  const relativePath = '../src/components/world/JuyiHall.vue'
+  const filename = new URL(relativePath, import.meta.url).pathname
+  const { descriptor } = parse(readFileSync(new URL(relativePath, import.meta.url), 'utf8'), { filename })
+  const body = compileScript(descriptor, { id, inlineTemplate: true }).content
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, imports) => `var { ${imports} } = mocks`)
+    .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = mocks.${name}`)
+    .replace(/import\.meta\.env/g, 'mocks.env')
+    .replace('export default', 'return')
+  return new Function('Vue', 'mocks', body)(Vue, mocks)
+}
+
+const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, workspaceState = null, counters }) => {
+  const noop = () => {}
+  const asyncNoop = async () => {}
+  const list = Vue.ref([])
+  const text = Vue.ref('')
+  const EmptyPanel = Vue.defineComponent({ setup: () => () => Vue.h('section') })
+  const HallPortraitHome = Vue.defineComponent({
+    emits: ['quick-action'],
+    setup (_props, { attrs, emit }) {
+      return () => Vue.h('main', { ...attrs, class: 'portrait-shell' }, ['agents', 'tasks', 'discussion', 'catalog', 'library'].map(action =>
+        Vue.h('button', { type: 'button', 'data-portrait-action': action, onClick: () => emit('quick-action', action) }, action)))
+    }
+  })
+  const HallStage = Vue.defineComponent({ setup: (_props, { attrs }) => () => Vue.h('section', { ...attrs, class: 'hall-board', tabindex: 0 }) })
+  const hallData = {
+    applySceneEvent: noop, applySceneSnapshot: noop, agentFilter: Vue.ref('online'), agents: list, bindPersona: asyncNoop,
+    canAssign: () => true, filteredAgents: list, hiddenAgentCount: Vue.ref(0), loadAgents: async () => { counters.hallLoads += 1 },
+    loadTasks: async () => { counters.hallLoads += 1 }, loadTaskRecommendations: asyncNoop, mapAgents: list, personaCatalog: list,
+    recommendedAgents: list, setAgentFilter: asyncNoop, setTaskStatusFilter: asyncNoop, taskAbilityFilter: Vue.ref('ability-o04'),
+    taskAbilityOptions: list, taskKeyword: Vue.ref('task-filter-o04'), tasks: list, taskStatusCount: Vue.ref({}), taskStatusFilter: Vue.ref('open'),
+    unbindPersona: asyncNoop, visibleAgents: list
+  }
+  const taskWorkspace = workspaceState || null
+  return {
+    ...HallPanelHelpers,
+    env: { VITE_JUYITING_TASK_WORKSPACE_ENABLED: workspaceState ? 'true' : undefined },
+    useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({}),
+    agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {}, roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
+    useHallData: () => hallData,
+    useHallExperienceMode: () => ({ experienceMode: mode, isMobileCoarse: Vue.ref(true), orientationHint: text, orientationRequestPending: Vue.ref(false), requestLandscape: asyncNoop }),
+    useHallPanels: HallPanelHelpers.useHallPanels,
+    useHallSceneState: () => ({ setMapRuntime: noop, reset: noop, forwardPhaseEvents: asyncNoop }),
+    useHallCommandQueue: () => ({ ready: Vue.ref(false), setSimulation: noop }),
+    useHallBackendSceneState: () => ({ start: asyncNoop, stop: noop, dispose: noop, reportPhase: noop }),
+    useHallSceneDebugBridge: () => ({ sentinel: 'debug-o04', republish: noop, stop: noop }),
+    useHallSound: () => ({ playAgentSelect: noop, playError: noop, playPanelOpen: noop, playRefresh: noop, playSend: noop, playSuccess: noop, playTap: noop, setSoundEnabled: noop, soundEnabled: Vue.ref(false) }),
+    useHallChatContext: () => ({ chatContext: Vue.ref({ conversationScopeKey: 'scope-o04' }), chatMentionAgents: list, chatMode: Vue.ref('public'), chatTargetText: text, enterBountyDiscussion: noop, enterPrivateConversation: noop, resetToPublic: noop, setMentionAgent: noop }),
+    useHallScene: () => ({ markAgentSpeaking: noop, markDiscussionStarted: noop, markLibraryCitation: noop, markLibrarySearching: noop, markRecommendedAgents: noop, markTaskArchived: noop, markTaskAssigned: noop, markTaskAutoAssigned: noop, markTaskCreated: noop, resetSceneFeedback: noop, sceneAgents: list, sceneAgentStyle: () => ({}), sceneHotspots: list, syncAfterPersonaChanged: noop }),
+    useHallTaskActions: () => ({ archiveTask: asyncNoop, autoAssignTask: asyncNoop, assignTask: async () => true, createTask: asyncNoop }),
+    useHallConversation: () => ({ chatConnectionStatus: text, conversationId: Vue.ref('conversation-o04'), draft: Vue.ref('draft-o04'), eventStreamRecovering: Vue.ref(false), insertAgentMention: noop, isAwaitingReply: Vue.ref(false), isStreaming: Vue.ref(false), loadHallMessages: asyncNoop, mentionAgent: noop, messages: Vue.ref([{ id: 'message-o04' }]), newHallConversation: noop, pendingAgentName: text, sendHallMessage: asyncNoop, senderText: text, disposeHallConversation: noop, stopHallEventStream: noop, stopHallReplyPolling: noop, stopHallReplyStreaming: noop }),
+    useHallLibrary: () => ({ citeLibraryItem: noop, libraryErrorMessage: text, libraryHasSearched: Vue.ref(false), libraryKeyword: Vue.ref('library-filter-o04'), libraryLoading: Vue.ref(false), libraryResults: list, librarySourceType: Vue.ref('project'), searchLibrary: asyncNoop }),
+    useTaskWorkspace: () => taskWorkspace,
+    createDisabledTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }),
+    isTaskWorkspaceBuildEnabled: () => Boolean(workspaceState),
+    useTaskWorkspaceView: () => workspaceState ? ({ subject: workspaceState.subject, workspace: workspaceState.workspace, connectionState: workspaceState.connectionState, error: workspaceState.error, retry: workspaceState.retry }) : ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: text, error: Vue.ref(null), retry: noop }),
+    useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }),
+    portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '',
+    HallPortraitHome, HallStage, LibraryPanel: LibraryPanel || EmptyPanel, TaskWorkspacePanel: TaskWorkspacePanel || EmptyPanel,
+    AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel, BountyPanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PrivateDiscussionPanel: EmptyPanel, PublicDiscussionPanel: EmptyPanel, SelectedAgentCard: EmptyPanel
+  }
 }
 
 const workspaceFixture = () => ({
@@ -185,4 +252,49 @@ describe('C07 JuyiHall task workspace integration', () => {
     expect(hallSource).to.include('await runAssignTask(task, agent)')
     expect(taskActionsSource).to.include('agentId: targetAgent.agentId')
   })
+
+  it('retains actual-JuyiHall TaskWorkspacePanel identity and byte-exact state for five cycles', async () => {
+    const mode = Vue.ref('portrait-command')
+    const subjectValue = Object.freeze({ taskId: 'task-01', actorAgentId: 'agent-01' })
+    const retry = () => { retry.calls += 1 }
+    retry.calls = 0
+    const workspaceState = {
+      subject: Vue.ref(subjectValue),
+      workspace: Vue.ref({ ...workspaceFixture(), currentVersion: '9223372036854775807', recoverySequence: '18446744073709551615' }),
+      connectionState: Vue.ref('degraded'),
+      error: Vue.ref({ code: 'workspace-recovering', message: '等待重连' }),
+      retry
+    }
+    const counters = { hallLoads: 0 }
+    const JuyiHall = loadActualHallForIntegration(createHallIntegrationMocks({ mode, TaskWorkspacePanel, workspaceState, counters }), 'workspace-actual-juyi-hall')
+    const wrapper = mount(JuyiHall, { attachTo: document.body, global: { stubs: { 'var-icon': true, transition: false } } })
+    try {
+      await Vue.nextTick()
+      await wrapper.find('[data-portrait-action="tasks"]').trigger('click')
+      await Vue.nextTick()
+      await wrapper.find('.panel-workspace-link').trigger('click')
+      await Vue.nextTick()
+      const floating = wrapper.find('.floating-panel').element
+      const panel = wrapper.findComponent(TaskWorkspacePanel)
+      const retryIdentity = workspaceState.retry
+      const loads = counters.hallLoads
+      for (let cycle = 0; cycle < 5; cycle += 1) {
+        mode.value = 'landscape-map'; await Vue.nextTick()
+        mode.value = 'portrait-command'; await Vue.nextTick()
+        expect(wrapper.find('.floating-panel').element).to.equal(floating)
+        expect(wrapper.findComponent(TaskWorkspacePanel).vm).to.equal(panel.vm)
+        expect(workspaceState.subject.value).to.equal(subjectValue)
+        expect(panel.props('actorAgentId')).to.equal('agent-01')
+        expect(workspaceState.workspace.value.currentVersion).to.equal('9223372036854775807')
+        expect(workspaceState.workspace.value.recoverySequence).to.equal('18446744073709551615')
+        expect(workspaceState.connectionState.value).to.equal('degraded')
+        expect(workspaceState.error.value.code).to.equal('workspace-recovering')
+        expect(workspaceState.retry).to.equal(retryIdentity)
+        expect(counters.hallLoads).to.equal(loads)
+      }
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
 })
