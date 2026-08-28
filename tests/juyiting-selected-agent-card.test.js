@@ -52,7 +52,7 @@ describe('SelectedAgentCard interaction contract', () => {
     const quickBarSource = hallSource.slice(quickBarStart, quickBarEnd)
     expect(quickBarSource).to.include('<SelectedAgentCard')
     expect(quickBarSource).not.to.include('<BottomDock')
-    expect(hallSource).not.to.include("import BottomDock")
+    expect(hallSource).not.to.include('import BottomDock')
     expect(quickBarSource).not.to.include('<span class="dock-focus"')
     expect(hallSource).not.to.include('.dock-focus')
   })
@@ -119,7 +119,8 @@ describe('SelectedAgentCard interaction contract', () => {
     const selectAgentEnd = hallSource.indexOf('const openPanel', selectAgentStart)
     const selectAgentSource = hallSource.slice(selectAgentStart, selectAgentEnd)
 
-    expect(selectAgentSource).to.include('selectedAgent.value = agent')
+    expect(selectAgentSource).to.include('taskWorkspaceBinding.selectExplicitActor(agent)')
+    expect(selectAgentSource).not.to.include('selectedAgent.value = agent')
     expect(selectAgentSource).not.to.include('showToast')
     expect(hallSource).not.to.include('已选中')
     expect(hallSource).not.to.include('\\u5df2\\u9009\\u4e2d')
@@ -131,7 +132,7 @@ describe('SelectedAgentCard interaction contract', () => {
     const handlerSource = hallSource.slice(handlerStart, handlerEnd)
 
     expect(handlerSource).to.include('enterPrivateConversation(agent)')
-    expect(handlerSource).to.include("draft.value =")
+    expect(handlerSource).to.include('draft.value =')
     expect(handlerSource).to.include("openPanel('chat')")
     expect(handlerSource).not.to.include('startAgentConversation(agent)')
   })

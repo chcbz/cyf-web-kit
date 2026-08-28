@@ -26,9 +26,9 @@
         </button>
         <button
           class="tool-action orientation-action"
-          :disabled="isSceneMounting || orientationRequestPending"
-          :title="sceneMode === 'landscape' ? '切回竖屏视图' : '切到横屏视图'"
-          @click="toggleOrientationMode"
+          :disabled="isSceneMounting || orientationRequestPending || experienceMode === 'landscape-map'"
+          title="请求横屏全景"
+          @click="$emit('request-landscape')"
         >
           <span
             class="orientation-glyph"
@@ -48,8 +48,6 @@
       :class="{
         'is-melon-ready': melonReady,
         'has-scene-error': Boolean(sceneError),
-        'is-device-landscape': deviceLandscape,
-        'is-app-landscape': orientationMode === 'landscape',
         'is-scene-landscape': sceneMode === 'landscape',
         'is-scene-portrait': sceneMode === 'portrait'
       }"
@@ -104,7 +102,12 @@ const props = defineProps({
   agentKey: { type: Function, required: true },
   agentStyle: { type: Function, required: true },
   hiddenAgentCount: { type: Number, default: 0 },
+  experienceMode: { type: String, default: 'landscape-map' },
   interactionLocked: { type: Boolean, default: false },
+  landscapeEntryTarget: { type: Object, default: null },
+  mapResumeSnapshot: { type: Object, default: null },
+  orientationHint: { type: String, default: '' },
+  orientationRequestPending: { type: Boolean, default: false },
   portraitName: { type: Function, required: true },
   portraitShortName: { type: Function, required: true },
   portraitStyle: { type: Function, required: true },
@@ -113,6 +116,7 @@ const props = defineProps({
   simulationEnabled: { type: Boolean, default: true },
   sceneAgents: { type: Array, default: () => [] },
   sceneHotspots: { type: Array, default: () => [] },
+  tasks: { type: Array, default: () => [] },
   selectedAgent: { type: Object, default: null },
   soundEnabled: { type: Boolean, default: true },
   statusClass: { type: Function, required: true },
@@ -122,8 +126,12 @@ const props = defineProps({
 })
 
 const emit = defineEmits([
+  'landscape-target-consumed',
+  'map-snapshot',
+  'map-snapshot-clear',
   'new-conversation',
   'open-panel',
+  'request-landscape',
   'refresh-hall',
   'select-agent',
   'simulation-phase-events',
@@ -137,14 +145,13 @@ const melonReady = ref(false)
 const sceneError = ref('')
 const isSceneMounting = ref(false)
 const showReturnButton = ref(false)
-const orientationHint = ref('')
-const orientationRequestPending = ref(false)
-const deviceLandscape = ref(false)
-const orientationMode = ref('auto')
+const mapLifecycleState = ref('unmounted')
 let sceneMountAttempt = 0
+let activeMapGeneration = 0
+let resumeRequested = false
+let settledViewportGeneration = 0
+let consumedLandscapeTargetGeneration = 0
 let isUnmounted = false
-let orientationMedia = null
-let orientationMediaHandler = null
 let mountTimeout = null
 let previousLayoutViewport = { width: 0, height: 0 }
 let previousVisualHeight = 0
@@ -155,14 +162,15 @@ let pendingOrientationSignal = false
 let lastResizeSignature = ''
 let lastOrientationDimensions = ''
 let stageResizeObserver = null
+let finalViewportWork = null
+let settlingViewportGeneration = 0
 let returnFrame = null
 let resetPollRemaining = 0
-let orientationRequestGeneration = 0
 let currentGameDestroyed = false
-let ownsFullscreen = false
-let ownsOrientationLock = false
 let fallbackFrameId = 0
 const fallbackFrames = new Map()
+const LANDSCAPE_TARGET_MAX_ATTEMPTS = 8
+let landscapeTargetWork = null
 
 const requestStageFrame = callback => {
   if (typeof window.requestAnimationFrame === 'function') return window.requestAnimationFrame(callback)
@@ -185,19 +193,18 @@ const loadingUnlockedAttempts = new Set()
 
 const presetZooms = { mobilePortrait: 1.25, mobileLandscape: 1.05, tabletLandscape: 0.92, desktop: 0.84 }
 
-const sceneMode = computed(() => {
-  if (orientationMode.value === 'landscape' || orientationMode.value === 'portrait') {
-    return orientationMode.value
-  }
-  return deviceLandscape.value ? 'landscape' : 'portrait'
-})
+const sceneMode = computed(() => props.experienceMode === 'landscape-map' ? 'landscape' : 'portrait')
 
 const sceneDebugRequested = () => (
   typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('scene-debug') === '1'
 )
 
-const isCurrentMountAttempt = (attemptId) => (
-  !isUnmounted && attemptId === sceneMountAttempt
+const isCurrentMountAttempt = attemptId => (
+  !isUnmounted && attemptId === sceneMountAttempt && ['mounting', 'resuming', 'running'].includes(mapLifecycleState.value)
+)
+
+const isRunningGeneration = attemptId => (
+  isCurrentMountAttempt(attemptId) && mapLifecycleState.value === 'running'
 )
 
 const handleAgentClick = (agentData) => {
@@ -217,18 +224,10 @@ const unlockLoading = (attemptId) => {
   juyitingGame.setInteractionLocked?.(false, 'loading')
 }
 
-const handleSceneReady = (attemptId) => {
+const handleSceneReady = attemptId => {
+  if (!isCurrentMountAttempt(attemptId)) return
   clearMountTimeout()
-  sceneError.value = ''
-  melonReady.value = true
-  isSceneMounting.value = false
-  unlockLoading(attemptId)
-  juyitingGame.syncAgents(props.sceneAgents)
-  juyitingGame.syncHotspots?.(props.sceneHotspots)
-  juyitingGame.setSelectedAgent(props.selectedAgent?.agentId || null)
-  lastResizeSignature = ''
-  scheduleViewportResize()
-  scheduleReturnRefresh()
+  void finalizeSceneReady(attemptId)
 }
 
 const clearMountTimeout = () => {
@@ -251,8 +250,230 @@ const stageViewportNow = () => {
   return viewportNow()
 }
 
+const isExactTargetId = value => typeof value === 'string' && value.length > 0
+
+const cancelFinalViewportWork = () => {
+  finalViewportWork?.finish?.(null)
+}
+
+const settleFinalViewport = attemptId => new Promise(resolve => {
+  const container = melonContainerRef.value
+  const ResizeObserverImpl = window.ResizeObserver || globalThis.ResizeObserver
+  const work = {
+    attemptId,
+    frame: null,
+    observer: null,
+    finished: false,
+    finish: null
+  }
+  finalViewportWork = work
+  let observerReported = !ResizeObserverImpl
+  let previousSignature = ''
+  let stableFrames = 0
+  const finish = viewport => {
+    if (work.finished) return
+    work.finished = true
+    if (work.frame !== null) cancelStageFrame(work.frame)
+    work.frame = null
+    work.observer?.disconnect?.()
+    work.observer = null
+    if (finalViewportWork === work) finalViewportWork = null
+    resolve(viewport)
+  }
+  work.finish = finish
+  const scheduleInspect = () => {
+    work.frame = requestStageFrame(() => {
+      work.frame = null
+      inspect()
+    })
+  }
+  const inspect = () => {
+    if (work.finished || !isCurrentMountAttempt(attemptId)) return finish(null)
+    const rect = container?.getBoundingClientRect?.()
+    const viewport = rect?.width > 0 && rect?.height > 0
+      ? { width: Math.round(rect.width), height: Math.round(rect.height) }
+      : null
+    if (!observerReported || !viewport) {
+      scheduleInspect()
+      return
+    }
+    const signature = `${viewport.width}:${viewport.height}`
+    stableFrames = signature === previousSignature ? stableFrames + 1 : 1
+    previousSignature = signature
+    if (stableFrames < 2) {
+      scheduleInspect()
+      return
+    }
+    finish(viewport)
+  }
+  if (ResizeObserverImpl && container) {
+    work.observer = new ResizeObserverImpl(() => { observerReported = true })
+    work.observer.observe(container)
+  }
+  scheduleInspect()
+})
+
+const cancelLandscapeTargetWork = () => {
+  const work = landscapeTargetWork
+  if (!work) return
+  if (work.frame !== null) cancelStageFrame(work.frame)
+  work.frame = null
+  work.state = 'cancelled'
+  if (landscapeTargetWork === work) landscapeTargetWork = null
+}
+
+const currentLandscapeTarget = work => (
+  isRunningGeneration(work.attemptId) &&
+  props.landscapeEntryTarget === work.entry &&
+  props.landscapeEntryTarget?.generation === work.targetGeneration &&
+  work.targetGeneration > consumedLandscapeTargetGeneration
+)
+
+const targetEligible = target => {
+  if (target?.kind === 'agent') {
+    return isExactTargetId(target.agentId) && (props.sceneAgents || []).some(agent => agent?.agentId === target.agentId)
+  }
+  if (target?.kind === 'task') {
+    if (!isExactTargetId(target.taskId) || !isExactTargetId(target.agentId)) return false
+    const task = (props.tasks || []).find(item => item?.id === target.taskId)
+    const assignedIds = Array.isArray(task?.assignedAgentIds) ? task.assignedAgentIds : []
+    const assigneeIds = Array.isArray(task?.assignees) ? task.assignees.map(item => item?.agentId) : []
+    return Boolean(task && (assignedIds.includes(target.agentId) || assigneeIds.includes(target.agentId)) && (props.sceneAgents || []).some(agent => agent?.agentId === target.agentId))
+  }
+  return target?.kind === 'hotspot' && isExactTargetId(target.hotspotId) && (props.sceneHotspots || []).some(hotspot => hotspot?.id === target.hotspotId)
+}
+
+const acknowledgeLandscapeTarget = work => {
+  if (!currentLandscapeTarget(work) || work.state === 'acknowledged') return false
+  work.state = 'acknowledged'
+  if (work.frame !== null) cancelStageFrame(work.frame)
+  work.frame = null
+  consumedLandscapeTargetGeneration = work.targetGeneration
+  emit('landscape-target-consumed', work.targetGeneration)
+  return true
+}
+
+const attemptAgentLandscapeTarget = work => {
+  if (!currentLandscapeTarget(work) || !targetEligible(work.target) || work.state === 'exhausted') return false
+  work.frame = null
+  work.state = work.attempts === 0 ? 'armed' : 'retrying'
+  work.attempts += 1
+  let focused = false
+  try { focused = juyitingGame.syncAgentsAndFocusAgent?.(props.sceneAgents, work.target.agentId) === true } catch { focused = false }
+  if (focused && acknowledgeLandscapeTarget(work)) return true
+  if (!currentLandscapeTarget(work) || work.attempts >= LANDSCAPE_TARGET_MAX_ATTEMPTS) {
+    work.state = 'exhausted'
+    return false
+  }
+  work.frame = requestStageFrame(() => {
+    if (!currentLandscapeTarget(work) || landscapeTargetWork !== work) return
+    attemptAgentLandscapeTarget(work)
+  })
+  return false
+}
+
+const rearmExhaustedLandscapeAgentTarget = (attemptId, payload) => {
+  if (!isRunningGeneration(attemptId)) return false
+  const work = landscapeTargetWork
+  if (!work || work.state !== 'exhausted' || !currentLandscapeTarget(work)) return false
+  if (!['agent', 'task'].includes(work.target?.kind)) return false
+  const targetAgent = (props.sceneAgents || []).find(agent => agent?.agentId === work.target.agentId)
+  const personaCode = String(targetAgent?.personaCode || '').toLowerCase()
+  const newlyAvailable = Array.isArray(payload?.personaCodes)
+    ? payload.personaCodes.map(value => String(value || '').toLowerCase())
+    : []
+  if (!personaCode || !newlyAvailable.includes(personaCode)) return false
+  work.attempts = 0
+  work.state = 'idle'
+  return attemptAgentLandscapeTarget(work)
+}
+
+const attemptHotspotLandscapeTarget = work => {
+  if (!currentLandscapeTarget(work) || !targetEligible(work.target)) return false
+  work.frame = null
+  work.state = 'armed'
+  let focused = false
+  try { focused = juyitingGame.focusHotspot?.(work.target.hotspotId) === true } catch { focused = false }
+  if (focused) return acknowledgeLandscapeTarget(work)
+  return false
+}
+
+const consumeLandscapeEntryTarget = (attemptId, { retryHotspot = false } = {}) => {
+  if (!isRunningGeneration(attemptId)) return false
+  const entry = props.landscapeEntryTarget
+  if (!entry || !Number.isInteger(entry.generation) || entry.generation <= consumedLandscapeTargetGeneration) {
+    cancelLandscapeTargetWork()
+    return false
+  }
+  const target = entry.target
+  const existing = landscapeTargetWork
+  if (existing && (existing.attemptId !== attemptId || existing.targetGeneration !== entry.generation || existing.entry !== entry)) cancelLandscapeTargetWork()
+  if (!targetEligible(target)) return false
+  if (landscapeTargetWork && !retryHotspot) return false
+  if (!landscapeTargetWork) landscapeTargetWork = { attemptId, targetGeneration: entry.generation, entry, target, attempts: 0, frame: null, state: 'idle' }
+  const work = landscapeTargetWork
+  return target.kind === 'hotspot' ? attemptHotspotLandscapeTarget(work) : attemptAgentLandscapeTarget(work)
+}
+
+const failSceneMount = (attemptId, error) => {
+  if (!isCurrentMountAttempt(attemptId)) return false
+  clearMountTimeout()
+  // Fence every ready/resize/restore continuation before synchronous teardown.
+  sceneMountAttempt += 1
+  cancelStageWork()
+  melonReady.value = false
+  isSceneMounting.value = false
+  sceneError.value = error?.message || '聚义厅场景暂不可用，请重试'
+  mapLifecycleState.value = 'destroying'
+  unlockLoading(attemptId)
+  emit('simulation-reset')
+  if (!currentGameDestroyed) juyitingGame.destroy()
+  currentGameDestroyed = true
+  mapLifecycleState.value = 'unmounted'
+  return true
+}
+
+const finalizeSceneReady = async attemptId => {
+  if (!isCurrentMountAttempt(attemptId) || settledViewportGeneration === attemptId || settlingViewportGeneration === attemptId) return
+  settlingViewportGeneration = attemptId
+  try {
+    const viewport = await settleFinalViewport(attemptId)
+    if (!viewport || !isCurrentMountAttempt(attemptId) || settledViewportGeneration === attemptId) return
+    settledViewportGeneration = attemptId
+    const snapshot = props.mapResumeSnapshot
+    const committed = snapshot?.cameraSnapshot
+      ? await juyitingGame.restoreResumeSnapshot?.(snapshot, viewport)
+      : await (juyitingGame.commitViewport?.({ width: viewport.width, height: viewport.height, kind: 'orientation', orientationChanged: true })
+        ?? juyitingGame.resizeViewport?.({ width: viewport.width, height: viewport.height, kind: 'orientation', orientationChanged: true }))
+    if (!isCurrentMountAttempt(attemptId)) return
+    if (snapshot?.cameraSnapshot && !committed) {
+      failSceneMount(attemptId, new Error('地图视角恢复失败，请重试'))
+      return
+    }
+    if (snapshot?.cameraSnapshot) emit('map-snapshot-clear', snapshot.mapGeneration)
+    juyitingGame.syncAgents(props.sceneAgents)
+    juyitingGame.syncHotspots?.(props.sceneHotspots)
+    // Selection is current page business state, never read from a map snapshot.
+    juyitingGame.setSelectedAgent(props.selectedAgent?.agentId || null)
+    lastResizeSignature = ''
+    mapLifecycleState.value = 'running'
+    melonReady.value = true
+    isSceneMounting.value = false
+    sceneError.value = ''
+    setupStageResizeObserver()
+    unlockLoading(attemptId)
+    consumeLandscapeEntryTarget(attemptId)
+    scheduleReturnRefresh()
+  } catch (error) {
+    failSceneMount(attemptId, error)
+  } finally {
+    if (settlingViewportGeneration === attemptId) settlingViewportGeneration = 0
+  }
+}
+
 const evaluateViewportResize = () => {
   resizeFrame = null
+  if (!isRunningGeneration(sceneMountAttempt)) return
   const nextLayoutViewport = viewportNow()
   const nextStageViewport = stageViewportNow()
   const nextVisualHeight = window.visualViewport?.height || nextLayoutViewport.height
@@ -312,37 +533,21 @@ const evaluateViewportResize = () => {
 }
 
 const scheduleViewportResize = ({ orientationChanged = false } = {}) => {
+  if (!isRunningGeneration(sceneMountAttempt)) return
   pendingOrientationSignal = pendingOrientationSignal || orientationChanged
   if (resizeFrame !== null) return
   resizeFrame = requestStageFrame(evaluateViewportResize)
 }
 
-const updateDeviceOrientation = (event) => {
-  const mediaMatches = typeof event?.matches === 'boolean' ? event.matches : orientationMedia?.matches
-  deviceLandscape.value = typeof mediaMatches === 'boolean' ? mediaMatches : window.innerWidth > window.innerHeight
-  scheduleViewportResize({ orientationChanged: Boolean(event) })
-}
-
-const setupOrientationTracking = () => {
-  if (typeof window === 'undefined') return
-  orientationMedia = window.matchMedia?.('(orientation: landscape)') || null
-  previousLayoutViewport = viewportNow()
-  previousVisualHeight = window.visualViewport?.height || previousLayoutViewport.height
-  document.documentElement.style.setProperty('--hall-visual-height', `${previousVisualHeight}px`)
-  orientationMediaHandler = event => updateDeviceOrientation(event)
-  orientationMedia?.addEventListener?.('change', orientationMediaHandler)
-  window.addEventListener?.('resize', handleWindowResize)
-  window.visualViewport?.addEventListener?.('resize', handleVisualResize)
-  updateDeviceOrientation()
-}
-
-const handleWindowResize = () => scheduleViewportResize()
-const handleVisualResize = () => scheduleViewportResize()
+const handleWindowResize = () => { if (isRunningGeneration(sceneMountAttempt)) scheduleViewportResize() }
+const handleVisualResize = () => { if (isRunningGeneration(sceneMountAttempt)) scheduleViewportResize() }
 
 const setupStageResizeObserver = () => {
+  teardownStageResizeObserver()
   const ResizeObserverImpl = window.ResizeObserver || globalThis.ResizeObserver
   if (!ResizeObserverImpl || !melonContainerRef.value) return
-  stageResizeObserver = new ResizeObserverImpl(() => scheduleViewportResize())
+  const generation = sceneMountAttempt
+  stageResizeObserver = new ResizeObserverImpl(() => { if (isRunningGeneration(generation)) scheduleViewportResize() })
   stageResizeObserver.observe(melonContainerRef.value)
 }
 
@@ -351,110 +556,6 @@ const teardownStageResizeObserver = () => {
   stageResizeObserver = null
 }
 
-const teardownOrientationTracking = () => {
-  orientationMedia?.removeEventListener?.('change', orientationMediaHandler)
-  window.removeEventListener?.('resize', handleWindowResize)
-  window.visualViewport?.removeEventListener?.('resize', handleVisualResize)
-  orientationMedia = null
-  orientationMediaHandler = null
-  if (resizeFrame !== null) cancelStageFrame(resizeFrame)
-  resizeFrame = null
-}
-
-const isCurrentOrientationRequest = token => (
-  !isUnmounted && token === orientationRequestGeneration && orientationMode.value === 'landscape'
-)
-
-const releaseAcquiredOrientation = async ({ fullscreen = false, orientation = false } = {}) => {
-  if (orientation) {
-    try {
-      screen.orientation?.unlock?.()
-    } catch { /* best-effort orientation cleanup */ }
-  }
-  if (fullscreen) {
-    try {
-      await document.exitFullscreen?.()
-    } catch { /* best-effort fullscreen cleanup */ }
-  }
-}
-
-const releaseOwnedOrientation = async () => {
-  const acquired = { fullscreen: ownsFullscreen, orientation: ownsOrientationLock }
-  ownsFullscreen = false
-  ownsOrientationLock = false
-  await releaseAcquiredOrientation(acquired)
-}
-
-const requestMiniProgramOrientation = (mode) => {
-  const miniProgram = window.wx?.miniProgram
-  if (typeof miniProgram?.redirectTo !== 'function') return false
-  try {
-    miniProgram.redirectTo({
-      url: mode === 'landscape' ? '/pages/landscape/index' : '/pages/index/index'
-    })
-    return true
-  } catch {
-    return false
-  }
-}
-
-const requestLandscapeLock = async (token) => {
-  let failed = false
-  let acquiredFullscreen = false
-  let acquiredOrientation = false
-  const requestFullscreen = document.documentElement.requestFullscreen
-  const lockOrientation = screen.orientation?.lock
-  const hostFullscreen = Boolean(document.fullscreenElement)
-  if (!hostFullscreen && typeof requestFullscreen !== 'function') failed = true
-  else if (!hostFullscreen) {
-    try {
-      await requestFullscreen.call(document.documentElement)
-      acquiredFullscreen = true
-      ownsFullscreen = true
-    } catch { failed = true }
-  }
-  if (!isCurrentOrientationRequest(token)) {
-    await releaseAcquiredOrientation({ fullscreen: acquiredFullscreen })
-    if (acquiredFullscreen) ownsFullscreen = false
-    return
-  }
-  if (typeof lockOrientation !== 'function') failed = true
-  else {
-    try {
-      await lockOrientation.call(screen.orientation, 'landscape')
-      acquiredOrientation = true
-      ownsOrientationLock = true
-    } catch { failed = true }
-  }
-  if (!isCurrentOrientationRequest(token)) {
-    await releaseAcquiredOrientation({ fullscreen: acquiredFullscreen, orientation: acquiredOrientation })
-    if (acquiredFullscreen) ownsFullscreen = false
-    if (acquiredOrientation) ownsOrientationLock = false
-    return
-  }
-  if (isCurrentOrientationRequest(token)) orientationHint.value = failed ? '请旋转手机横屏查看' : ''
-}
-
-const toggleOrientationMode = async () => {
-  if (isSceneMounting.value || orientationRequestPending.value) return
-  const nextMode = sceneMode.value === 'landscape' ? 'portrait' : 'landscape'
-  if (requestMiniProgramOrientation(nextMode)) {
-    orientationHint.value = ''
-    return
-  }
-  const requestToken = ++orientationRequestGeneration
-  orientationRequestPending.value = true
-  orientationMode.value = nextMode
-  try {
-    if (nextMode === 'landscape') await requestLandscapeLock(requestToken)
-    if (nextMode === 'portrait') {
-      orientationHint.value = ''
-      await releaseOwnedOrientation()
-    }
-  } finally {
-    if (!isUnmounted && requestToken === orientationRequestGeneration) orientationRequestPending.value = false
-  }
-}
 
 const mountScene = async () => {
   if (isUnmounted || isSceneMounting.value) return
@@ -462,35 +563,37 @@ const mountScene = async () => {
   if (!container) return
 
   const attemptId = ++sceneMountAttempt
+  currentGameDestroyed = false
+  activeMapGeneration = juyitingGame.beginMapGeneration?.() ?? activeMapGeneration + 1
+  mapLifecycleState.value = props.mapResumeSnapshot?.cameraSnapshot ? 'resuming' : 'mounting'
+  resumeRequested = false
+  settledViewportGeneration = 0
   isSceneMounting.value = true
   sceneError.value = ''
   juyitingGame.setInteractionLocked?.(true, 'loading')
   clearMountTimeout()
   mountTimeout = window.setTimeout(() => {
-    if (!isCurrentMountAttempt(attemptId)) return
-    sceneMountAttempt += 1
-    isSceneMounting.value = false
-    melonReady.value = false
-    sceneError.value = '地图加载超时，请重试'
-    unlockLoading(attemptId)
-    emit('simulation-reset')
-    currentGameDestroyed = true
-    juyitingGame.destroy()
+    failSceneMount(attemptId, new Error('地图加载超时，请重试'))
   }, 15000)
   try {
     await juyitingGame.mount(container, {
       simulationEnabled: props.simulationEnabled,
       onAgentClick: (agentData) => {
-        if (isCurrentMountAttempt(attemptId)) handleAgentClick(agentData)
+        if (isRunningGeneration(attemptId)) handleAgentClick(agentData)
       },
       onHotspotClick: (hotspot) => {
-        if (isCurrentMountAttempt(attemptId)) handleHotspotClick(hotspot)
+        if (isRunningGeneration(attemptId)) handleHotspotClick(hotspot)
       },
       onReady: () => {
         if (isCurrentMountAttempt(attemptId)) handleSceneReady(attemptId)
       },
       onSimulationPhaseEvents: events => {
-        if (isCurrentMountAttempt(attemptId)) emit('simulation-phase-events', events)
+        if (isRunningGeneration(attemptId)) emit('simulation-phase-events', events)
+      },
+      onPersonaAvailabilityChanged: payload => {
+        if (isRunningGeneration(attemptId)) {
+          rearmExhaustedLandscapeAgentTarget(attemptId, payload)
+        }
       }
     })
     if (!isCurrentMountAttempt(attemptId)) return
@@ -504,14 +607,7 @@ const mountScene = async () => {
     if (!melonReady.value) juyitingGame.setInteractionLocked?.(true, 'loading')
     juyitingGame.start()
   } catch (err) {
-    if (isCurrentMountAttempt(attemptId)) {
-      clearMountTimeout()
-      melonReady.value = false
-      sceneError.value = err?.message || '请稍后重试'
-      console.warn('[HallStage] melonJS:', err?.message || err)
-      isSceneMounting.value = false
-      unlockLoading(attemptId)
-    }
+    if (failSceneMount(attemptId, err)) console.warn('[HallStage] melonJS:', err?.message || err)
   }
 }
 
@@ -527,7 +623,7 @@ const retryScene = async () => {
 }
 
 const handleSceneKeydown = (event) => {
-  if (event.defaultPrevented || isSceneMounting.value) return
+  if (event.defaultPrevented || isSceneMounting.value || !isRunningGeneration(sceneMountAttempt)) return
   if (event.key === '+' || event.key === '=') {
     juyitingGame.zoomBy?.(0.12)
     event.preventDefault()
@@ -556,7 +652,7 @@ const worldCenterFromSnapshot = (viewport, transform) => {
 }
 
 const refreshReturnButton = () => {
-  if (isUnmounted) return null
+  if (isUnmounted || !isRunningGeneration(sceneMountAttempt)) return null
   const snapshot = juyitingGame.getCameraSnapshot?.()
   if (!snapshot?.transform) {
     showReturnButton.value = false
@@ -582,7 +678,7 @@ const runReturnRefresh = () => {
 }
 
 const scheduleReturnRefresh = () => {
-  if (isUnmounted || returnFrame !== null) return
+  if (isUnmounted || !isRunningGeneration(sceneMountAttempt) || returnFrame !== null) return
   returnFrame = requestStageFrame(runReturnRefresh)
 }
 
@@ -592,32 +688,82 @@ const returnToMainHall = () => {
   scheduleReturnRefresh()
 }
 
-onMounted(() => {
-  if (sceneDebugRequested()) window.__JYTING_GAME__ = juyitingGame
-  setupOrientationTracking()
-  setupStageResizeObserver()
-  mountScene()
-})
-
-onBeforeUnmount(() => {
-  isUnmounted = true
-  sceneMountAttempt += 1
-  orientationRequestGeneration += 1
-  orientationRequestPending.value = false
+const cancelStageWork = () => {
+  cancelLandscapeTargetWork()
+  cancelFinalViewportWork()
   teardownStageResizeObserver()
-  if (window.__JYTING_GAME__ === juyitingGame) delete window.__JYTING_GAME__
-  void releaseOwnedOrientation()
   clearMountTimeout()
-  teardownOrientationTracking()
+  if (resizeFrame !== null) cancelStageFrame(resizeFrame)
+  resizeFrame = null
   if (returnFrame !== null) cancelStageFrame(returnFrame)
   returnFrame = null
   resetPollRemaining = 0
   fallbackFrames.clear()
-  juyitingGame.setInteractionLocked?.(false, 'panel')
-  juyitingGame.setInteractionLocked?.(false, 'loading')
+}
+
+const captureMapSnapshot = () => {
+  const snapshot = juyitingGame.captureResumeSnapshot?.()
+  if (snapshot?.cameraSnapshot) emit('map-snapshot', snapshot)
+}
+
+const suspendScene = () => {
+  if (isUnmounted || ['suspending', 'suspended', 'destroying', 'unmounted'].includes(mapLifecycleState.value)) return
+  mapLifecycleState.value = 'suspending'
+  juyitingGame.setInteractionLocked?.(true, 'suspend')
+  captureMapSnapshot()
+  // Invalidate loader/ready/observer/RAF/input callbacks before teardown.
+  sceneMountAttempt += 1
+  cancelStageWork()
   emit('simulation-reset')
   if (!currentGameDestroyed) juyitingGame.destroy()
   currentGameDestroyed = true
+  melonReady.value = false
+  isSceneMounting.value = false
+  mapLifecycleState.value = 'suspended'
+  if (resumeRequested && !isUnmounted) {
+    resumeRequested = false
+    void mountScene()
+  }
+}
+
+onMounted(() => {
+  if (sceneDebugRequested()) window.__JYTING_GAME__ = juyitingGame
+  previousLayoutViewport = viewportNow()
+  previousVisualHeight = window.visualViewport?.height || previousLayoutViewport.height
+  document.documentElement.style.setProperty('--hall-visual-height', `${previousVisualHeight}px`)
+  window.addEventListener?.('resize', handleWindowResize)
+  window.visualViewport?.addEventListener?.('resize', handleVisualResize)
+  void mountScene()
+})
+
+onBeforeUnmount(() => {
+  // Page teardown is terminal: no suspended/resuming transition may escape it.
+  mapLifecycleState.value = 'destroying'
+  juyitingGame.setInteractionLocked?.(true, 'destroy')
+  captureMapSnapshot()
+  isUnmounted = true
+  sceneMountAttempt += 1
+  cancelStageWork()
+  if (window.__JYTING_GAME__ === juyitingGame) delete window.__JYTING_GAME__
+  window.removeEventListener?.('resize', handleWindowResize)
+  window.visualViewport?.removeEventListener?.('resize', handleVisualResize)
+  emit('simulation-reset')
+  if (!currentGameDestroyed) juyitingGame.destroy()
+  currentGameDestroyed = true
+  mapLifecycleState.value = 'unmounted'
+})
+
+watch(() => props.landscapeEntryTarget, () => {
+  if (isRunningGeneration(sceneMountAttempt)) consumeLandscapeEntryTarget(sceneMountAttempt)
+  else if (!props.landscapeEntryTarget) cancelLandscapeTargetWork()
+}, { deep: true })
+
+watch(() => props.experienceMode, mode => {
+  if (mode === 'landscape-map') {
+    if (mapLifecycleState.value === 'suspending') resumeRequested = true
+    return
+  }
+  suspendScene()
 })
 
 watch(() => props.interactionLocked, value => {
@@ -627,15 +773,25 @@ watch(() => props.interactionLocked, value => {
 }, { immediate: true })
 
 watch(() => props.sceneAgents, (agents) => {
-  if (melonReady.value) juyitingGame.syncAgents(agents || [])
+  if (melonReady.value && isRunningGeneration(sceneMountAttempt)) {
+    juyitingGame.syncAgents(agents || [])
+    consumeLandscapeEntryTarget(sceneMountAttempt)
+  }
 }, { deep: true })
 
 watch(() => props.sceneHotspots, (hotspots) => {
-  if (melonReady.value) juyitingGame.syncHotspots?.(hotspots || [])
+  if (melonReady.value && isRunningGeneration(sceneMountAttempt)) {
+    juyitingGame.syncHotspots?.(hotspots || [])
+    consumeLandscapeEntryTarget(sceneMountAttempt, { retryHotspot: true })
+  }
+}, { deep: true })
+
+watch(() => props.tasks, () => {
+  if (melonReady.value && isRunningGeneration(sceneMountAttempt)) consumeLandscapeEntryTarget(sceneMountAttempt)
 }, { deep: true })
 
 watch(() => props.selectedAgent, (agent) => {
-  if (melonReady.value) juyitingGame.setSelectedAgent(agent?.agentId || null)
+  if (melonReady.value && isRunningGeneration(sceneMountAttempt)) juyitingGame.setSelectedAgent(agent?.agentId || null)
   scheduleReturnRefresh()
 })
 </script>

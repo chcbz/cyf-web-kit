@@ -242,6 +242,14 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._needsSync = true
     }
 
+    syncAgentsAndFocusAgent(list, agentId) {
+      if (this._destroyed || this._sceneBuilt !== true || typeof agentId !== 'string' || agentId.length === 0) return false
+      this.syncAgents(list)
+      if (this._needsSync) this._fullSyncAgents()
+      if (!this._agents.has(agentId)) return false
+      return this.focusAgent(agentId) === true
+    }
+
     syncHotspots(list = []) {
       this._hotspotState = new Map((list || []).map(item => [item.id, item]))
       this._hotspots.forEach(({ marker, data }) => {
@@ -547,6 +555,51 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._ensureControllers()
       return this._cameraController?.snapshot?.() || null
     }
+
+    restoreCameraSnapshot(snapshot, sourceViewport) {
+      const backing = normalizeViewport(sourceViewport?.backing)
+      const display = normalizeViewport(sourceViewport?.display)
+      const visible = sourceViewport?.visible
+      const finite = value => Number.isFinite(Number(value))
+      if (!this._ensureControllers() || backing.width <= 0 || backing.height <= 0 || display.width <= 0 || display.height <= 0 ||
+        !finite(visible?.x) || Number(visible.x) < 0 || !finite(visible?.y) || Number(visible.y) < 0 ||
+        !finite(visible?.width) || Number(visible.width) <= 0 || !finite(visible?.height) || Number(visible.height) <= 0 ||
+        Number(visible.x) + Number(visible.width) > backing.width + 0.001 || Number(visible.y) + Number(visible.height) > backing.height + 0.001) return false
+      this._currentViewport = backing
+      this._displayViewport = display
+      this._visibleViewport = normalizeVisibleViewport(visible, backing)
+      this._lastViewport = backing
+      return this._cameraController?.restore?.(snapshot, backing) || false
+    }
+
+    _focusWorldPoint(point) {
+      if (!this._ensureControllers() || !Number.isFinite(point?.x) || !Number.isFinite(point?.y)) return false
+      this._inputController?.cancelGesture?.()
+      const viewport = this._viewportSize()
+      const transform = this.getTransform()
+      const targetOffsetX = (viewport.width / 2 - point.x) * transform.zoom
+      const targetOffsetY = (viewport.height / 2 - point.y) * transform.zoom
+      this._cameraController?.panBy?.(targetOffsetX - transform.offsetX, targetOffsetY - transform.offsetY)
+      return true
+    }
+
+    focusAgent(agentId) {
+      if (typeof agentId !== 'string' || agentId.length === 0) return false
+      const agent = this._agents.get(agentId)
+      const bounds = agent?.getBounds?.()
+      const x = Number.isFinite(bounds?.x) ? bounds.x + bounds.width / 2 : agent?.pos?.x
+      const y = Number.isFinite(bounds?.y) ? bounds.y + bounds.height / 2 : agent?.pos?.y
+      return this._focusWorldPoint({ x, y })
+    }
+
+    focusHotspot(hotspotId) {
+      if (typeof hotspotId !== 'string' || hotspotId.length === 0) return false
+      const record = this._hotspots.find(item => item.data?.id === hotspotId)
+      const marker = record?.marker
+      if (!marker) return false
+      return this._focusWorldPoint({ x: marker.pos?.x + marker.width / 2, y: marker.pos?.y + marker.height / 2 })
+    }
+
     inputSnapshot() {
       this._ensureControllers()
       return this._inputController?.snapshot?.() || DEFAULT_INPUT_SNAPSHOT

@@ -1,11 +1,45 @@
 <template>
-  <div class="juyi-page" :class="{ 'is-panel-open': activePanel }">
+  <div ref="hallRootRef" class="juyi-page" tabindex="-1" :class="{ 'is-panel-open': isPanelSessionActive, [`experience-${experienceMode}`]: true }">
+    <HallPortraitHome
+      v-if="!experienceReady || experienceMode === 'portrait-command'"
+      :agents="agents"
+      :map-agents="mapAgents"
+      :orientation-hint="orientationHint"
+      :orientation-request-pending="orientationRequestPending"
+      :refreshing="hallRefreshing"
+      :selected-agent="selectedAgent"
+      :selected-task="selectedTask"
+      :task-detail-open="portraitTaskDetailOpen"
+      :status-class="statusClass"
+      :task-state-class="taskStateClass"
+      :task-status-text="taskStatusText"
+      :tasks="tasks"
+      :inert="isPanelSessionActive ? '' : null"
+      :aria-hidden="isPanelSessionActive ? 'true' : null"
+      @quick-action="handlePortraitQuickAction"
+      @refresh-hall="refreshHall"
+      @request-landscape="requestPortraitLandscape"
+      @select-agent="handlePortraitAgentSelect"
+      @open-task="handlePortraitTaskOpen"
+      @close-task-detail="closePortraitTaskDetail"
+      @open-task-board="handlePortraitTaskBoard"
+      @discuss-task="handlePortraitTaskDiscussion"
+    />
+
     <HallStage
+      v-else
       :agent-bubbles="agentBubbles"
       :agent-key="agentKey"
       :agent-style="sceneAgentStyle"
       :hidden-agent-count="hiddenAgentCount"
-      :interaction-locked="Boolean(activePanel)"
+      :experience-mode="experienceMode"
+      :interaction-locked="isPanelSessionActive"
+      :inert="isPanelSessionActive ? '' : null"
+      :aria-hidden="isPanelSessionActive ? 'true' : null"
+      :landscape-entry-target="landscapeEntryTarget"
+      :map-resume-snapshot="mapResumeSnapshot"
+      :orientation-hint="orientationHint"
+      :orientation-request-pending="orientationRequestPending"
       :portrait-name="portraitName"
       :portrait-short-name="portraitShortName"
       :portrait-style="portraitStyle"
@@ -18,10 +52,15 @@
       :sound-enabled="soundEnabled"
       :status-class="statusClass"
       :status-text="statusText"
+      :tasks="tasks"
       :tasks-total="tasks.length"
       :visible-agents="visibleAgents"
+      @landscape-target-consumed="handleLandscapeTargetConsumed"
+      @map-snapshot="handleMapSnapshot"
+      @map-snapshot-clear="clearMapResumeSnapshot"
       @new-conversation="handleNewHallConversation"
       @open-panel="handleStagePanelOpen"
+      @request-landscape="requestLandscape"
       @refresh-hall="refreshHall"
       @select-agent="selectAgent"
       @simulation-phase-events="handleSimulationPhaseEvents"
@@ -48,7 +87,7 @@
     </HallStage>
 
     <transition name="panel" @after-leave="handlePanelAfterLeave">
-      <div v-if="activePanel" class="panel-overlay" @pointerdown.self="closePanel">
+      <div v-if="activePanel" :key="panelSessionGeneration" class="panel-overlay" :data-panel-generation="panelSessionGeneration" @pointerdown.self="closePanel">
         <section
           ref="panelRef"
           class="floating-panel"
@@ -69,6 +108,14 @@
         >
           <div class="panel-title">
             <span :id="panelTitleId">{{ activePanelTitle }}</span>
+            <button
+              v-if="taskWorkspaceEnabled && renderedPanel === 'tasks' && taskWorkspaceSubject"
+              class="panel-workspace-link"
+              type="button"
+              @click="openTaskWorkspace"
+            >
+              协作工作台
+            </button>
             <button
               class="panel-close"
               type="button"
@@ -126,6 +173,15 @@
             @select-agent="selectAgent"
             @select-task="selectTask"
             @set-status-filter="setTaskStatusFilter"
+          />
+
+          <TaskWorkspacePanel
+            v-if="taskWorkspaceEnabled && renderedPanel === 'workspace' && taskWorkspaceSubject"
+            :actor-agent-id="taskWorkspaceSubject.actorAgentId"
+            :connection-state="taskWorkspaceConnectionState"
+            :error="taskWorkspaceError"
+            :workspace="taskWorkspaceSnapshot"
+            @retry="retryTaskWorkspace"
           />
 
           <PersonaCatalogPanel
@@ -231,7 +287,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useGlobalStore } from '@/stores/global'
 import { useApiStore } from '@/stores/api'
 import { agentApi, chatApi } from '@/composables/useHttp'
@@ -241,16 +297,23 @@ import { useHallCommandQueue } from '@/composables/juyiting/useHallCommandQueue'
 import { useHallConversation } from '@/composables/juyiting/useHallConversation'
 import { useHallData } from '@/composables/juyiting/useHallData'
 import { useHallLibrary } from '@/composables/juyiting/useHallLibrary'
-import { focusHallPanel, restorePanelFocus, trapPanelFocus, useHallPanels } from '@/composables/juyiting/useHallPanels'
+import { useHallExperienceMode } from '@/composables/juyiting/useHallExperienceMode'
+import { capturePanelReturnTarget, focusHallPanel, isCurrentPanelGeneration, isSafePanelFocusTarget, resolvePanelReturnTarget, restorePanelFocus, trapPanelFocus, useHallPanels } from '@/composables/juyiting/useHallPanels'
 import { useHallScene } from '@/composables/juyiting/useHallScene'
 import { useHallSceneState } from '@/composables/juyiting/useHallSceneState'
 import { useHallSceneDebugBridge } from '@/composables/juyiting/useHallSceneDebugBridge'
 import { useHallSound } from '@/composables/juyiting/useHallSound'
 import { useHallTaskActions } from '@/composables/juyiting/useHallTaskActions'
+import { useTaskWorkspace } from '@/composables/juyiting/useTaskWorkspace'
+import { createDisabledTaskWorkspaceBinding, isTaskWorkspaceBuildEnabled } from '@/composables/juyiting/taskWorkspaceFeature'
+import { useTaskWorkspaceView } from '@/composables/juyiting/useTaskWorkspaceView'
+import { useTaskWorkspaceBinding } from '@/composables/juyiting/useTaskWorkspaceBinding'
+import TaskWorkspacePanel from '@/components/juyiting/TaskWorkspacePanel.vue'
 import { portraitName, portraitRole, portraitShortName, portraitStyle, roleClass } from '@/composables/juyiting/useWaterMarginRoles'
 import AgentPanel from '@/components/juyiting/AgentPanel.vue'
 import BountyDiscussionPanel from '@/components/juyiting/BountyDiscussionPanel.vue'
 import BountyPanel from '@/components/juyiting/BountyPanel.vue'
+import HallPortraitHome from '@/components/juyiting/HallPortraitHome.vue'
 import HallStage from '@/components/juyiting/HallStage.vue'
 import LibraryPanel from '@/components/juyiting/LibraryPanel.vue'
 import PersonaCatalogPanel from '@/components/juyiting/PersonaCatalogPanel.vue'
@@ -270,17 +333,50 @@ const apiStore = useApiStore()
 
 const selectedAgent = ref(null)
 const selectedTask = ref(null)
+const portraitTaskDetailOpen = ref(false)
+// Map-only runtime state survives HallStage destroy/remount; business selection stays above it.
+const mapResumeSnapshot = ref(null)
+const landscapeEntryTarget = ref(null)
+let landscapeEntryTargetGeneration = 0
+// Stable FE2 entrypoint: taskWorkspace.workspace, connectionState, error, subject, retry, and reload.
+const taskWorkspaceEnabled = isTaskWorkspaceBuildEnabled(import.meta.env.VITE_JUYITING_TASK_WORKSPACE_ENABLED)
+const taskWorkspace = taskWorkspaceEnabled ? useTaskWorkspace() : null
+const taskWorkspaceBinding = taskWorkspaceEnabled
+  ? useTaskWorkspaceBinding({ selectedTask, selectedAgent, taskWorkspace })
+  : createDisabledTaskWorkspaceBinding(selectedAgent)
+const {
+  subject: taskWorkspaceSubject,
+  workspace: taskWorkspaceSnapshot,
+  connectionState: taskWorkspaceConnectionState,
+  error: taskWorkspaceError,
+  retry: retryTaskWorkspace
+} = useTaskWorkspaceView(taskWorkspace)
 const personaSetupResult = ref(null)
 const toast = ref('')
+const panelWhitelist = new Set(['agents', 'catalog', 'tasks', 'workspace', 'chat', 'library'])
 const activePanel = ref('')
 const renderedPanel = ref('')
+const panelSessionGeneration = ref(0)
+const panelClosingGeneration = ref(0)
+const isPanelSessionActive = computed(() => Boolean(renderedPanel.value))
 const hallRefreshing = ref(false)
+const experienceReady = ref(false)
 const agentBubbles = ref({})
 const outgoingMetadata = ref({})
-const { panelLayout } = useHallPanels()
+const {
+  experienceMode,
+  isMobileCoarse,
+  orientationHint,
+  orientationRequestPending,
+  requestLandscape
+} = useHallExperienceMode()
+const { panelLayout } = useHallPanels({ experienceMode, isMobileCoarse })
+const hallRootRef = ref(null)
 const panelRef = ref(null)
 const panelTitleId = 'juyiting-floating-panel-title'
-let panelPriorFocus = null
+let panelSessionOrigin = null
+let panelChatLoadTimer = null
+let panelDisposed = false
 let bubbleTimer = null
 let bubbleInitialTimer = null
 let bubbleClearTimer = null
@@ -309,6 +405,7 @@ const activePanelTitle = computed(() => {
   if (renderedPanel.value === 'agents') return '点将册'
   if (renderedPanel.value === 'catalog') return '招贤令'
   if (renderedPanel.value === 'tasks') return '悬赏榜'
+  if (renderedPanel.value === 'workspace') return '协作工作台'
   if (renderedPanel.value === 'chat') return '厅前议事'
   if (renderedPanel.value === 'library') return '案卷阁'
   return ''
@@ -521,13 +618,30 @@ const selectTask = async (task) => {
 }
 
 const selectAgent = (agent) => {
-  selectedAgent.value = agent
+  taskWorkspaceBinding.selectExplicitActor(agent)
   playAgentSelect()
 }
 
+const cancelPanelChatLoad = () => {
+  if (panelChatLoadTimer !== null) window.clearTimeout(panelChatLoadTimer)
+  panelChatLoadTimer = null
+}
+
 const openPanel = (panel, options = {}) => {
-  if (!activePanel.value) panelPriorFocus = document.activeElement
+  if (panelDisposed || !panelWhitelist.has(panel)) return false
+  const openingFromClosed = !activePanel.value
+  if (openingFromClosed) {
+    if (!renderedPanel.value) {
+      panelSessionOrigin = Object.freeze({
+        ...capturePanelReturnTarget(document.activeElement, panel),
+        captureGeneration: panelSessionGeneration.value + 1
+      })
+    }
+    panelSessionGeneration.value += 1
+    panelClosingGeneration.value = 0
+  }
   if (panel !== 'chat') {
+    cancelPanelChatLoad()
     resetToPublic()
   }
   if (panel === 'chat' && options.mode === 'public') {
@@ -535,11 +649,21 @@ const openPanel = (panel, options = {}) => {
   }
   renderedPanel.value = panel
   activePanel.value = panel
-  nextTick(() => focusHallPanel(panelRef.value))
+  const generation = panelSessionGeneration.value
+  nextTick(() => {
+    if (!panelDisposed && activePanel.value === panel && panelSessionGeneration.value === generation) {
+      focusHallPanel(panelRef.value)
+    }
+  })
   if (!options.silent) playPanelOpen()
   if (panel === 'chat') {
-    window.setTimeout(() => loadHallMessages(), 0)
+    cancelPanelChatLoad()
+    panelChatLoadTimer = window.setTimeout(() => {
+      panelChatLoadTimer = null
+      if (!panelDisposed && activePanel.value === 'chat' && panelSessionGeneration.value === generation) loadHallMessages()
+    }, 0)
   }
+  return true
 }
 
 const handleStagePanelOpen = (panel) => {
@@ -550,9 +674,140 @@ const handleStagePanelOpen = (panel) => {
   openPanel(panel)
 }
 
+const hasExactLandscapeId = value => typeof value === 'string' && value.length > 0
+
+const setLandscapeEntryTarget = target => {
+  const nextGeneration = ++landscapeEntryTargetGeneration
+  if (target === null) {
+    landscapeEntryTarget.value = null
+    return nextGeneration
+  }
+  const isAgent = target?.kind === 'agent' && hasExactLandscapeId(target.agentId)
+  const isHotspot = target?.kind === 'hotspot' && hasExactLandscapeId(target.hotspotId)
+  const isTask = target?.kind === 'task' && hasExactLandscapeId(target.taskId) && hasExactLandscapeId(target.agentId)
+  landscapeEntryTarget.value = (isAgent || isHotspot || isTask)
+    ? { generation: nextGeneration, target: { ...target } }
+    : null
+  return nextGeneration
+}
+
+const handleMapSnapshot = snapshot => {
+  mapResumeSnapshot.value = snapshot?.cameraSnapshot ? { ...snapshot } : null
+}
+
+const clearMapResumeSnapshot = mapGeneration => {
+  if (mapResumeSnapshot.value?.mapGeneration === mapGeneration) mapResumeSnapshot.value = null
+}
+
+const handleLandscapeTargetConsumed = generation => {
+  if (landscapeEntryTarget.value?.generation === generation) setLandscapeEntryTarget(null)
+}
+
+const portraitHotspotTargets = Object.freeze({
+  agents: 'agentRoster',
+  tasks: 'bountyBoard',
+  discussion: 'mainSeat',
+  catalog: 'personaCatalog',
+  library: 'libraryShelf'
+})
+
+const stagePortraitHotspotTarget = action => {
+  const hotspotId = portraitHotspotTargets[action]
+  if (!hasExactLandscapeId(hotspotId) || !sceneHotspots.value.some(hotspot => hotspot?.id === hotspotId)) {
+    setLandscapeEntryTarget(null)
+    return false
+  }
+  setLandscapeEntryTarget({ kind: 'hotspot', hotspotId })
+  return true
+}
+
+const handlePortraitAgentSelect = agent => {
+  selectAgent(agent)
+  if (hasExactLandscapeId(agent?.agentId) && mapAgents.value.some(item => item?.agentId === agent.agentId)) {
+    setLandscapeEntryTarget({ kind: 'agent', agentId: agent.agentId })
+    return true
+  }
+  setLandscapeEntryTarget(null)
+  return false
+}
+
+const requestPortraitLandscape = () => {
+  const selected = selectedAgent.value
+  const task = selectedTask.value
+  const assignedIds = Array.isArray(task?.assignedAgentIds) ? task.assignedAgentIds : []
+  const assigneeIds = Array.isArray(task?.assignees) ? task.assignees.map(item => item?.agentId) : []
+  if (hasExactLandscapeId(task?.id) && hasExactLandscapeId(selected?.agentId) &&
+    (assignedIds.includes(selected.agentId) || assigneeIds.includes(selected.agentId)) &&
+    mapAgents.value.some(agent => agent?.agentId === selected.agentId)) {
+    setLandscapeEntryTarget({ kind: 'task', taskId: task.id, agentId: selected.agentId })
+  } else if (hasExactLandscapeId(selected?.agentId) && mapAgents.value.some(agent => agent?.agentId === selected.agentId)) {
+    setLandscapeEntryTarget({ kind: 'agent', agentId: selected.agentId })
+  } else if (!landscapeEntryTarget.value) {
+    setLandscapeEntryTarget(null)
+  }
+  return requestLandscape()
+}
+
+const handlePortraitQuickAction = (action) => {
+  if (action !== 'refresh') stagePortraitHotspotTarget(action)
+  if (action === 'refresh') {
+    void refreshHall()
+    return
+  }
+  if (action === 'discussion') {
+    handleStagePanelOpen('chat')
+    return
+  }
+  if (['agents', 'tasks', 'catalog', 'library'].includes(action)) openPanel(action)
+}
+
+const closePortraitTaskDetail = () => {
+  portraitTaskDetailOpen.value = false
+}
+
+const handlePortraitTaskOpen = task => {
+  if (!task?.id) return false
+  const selection = selectTask(task)
+  const selected = selectedAgent.value
+  const assignedIds = Array.isArray(task.assignedAgentIds) ? task.assignedAgentIds : []
+  const assigneeIds = Array.isArray(task.assignees) ? task.assignees.map(item => item?.agentId) : []
+  if (hasExactLandscapeId(selected?.agentId) && (assignedIds.includes(selected.agentId) || assigneeIds.includes(selected.agentId)) && mapAgents.value.some(agent => agent?.agentId === selected.agentId)) {
+    setLandscapeEntryTarget({ kind: 'task', taskId: task.id, agentId: selected.agentId })
+  } else {
+    setLandscapeEntryTarget(null)
+  }
+  portraitTaskDetailOpen.value = true
+  return selection
+}
+
+const handlePortraitTaskBoard = () => {
+  closePortraitTaskDetail()
+  openPanel('tasks')
+}
+
+const handlePortraitTaskDiscussion = task => {
+  if (!task?.id) return false
+  closePortraitTaskDetail()
+  discussTask(task)
+  return true
+}
+
+watch(experienceMode, mode => {
+  if (mode !== 'portrait-command') closePortraitTaskDetail()
+})
+
+const openTaskWorkspace = () => {
+  if (!taskWorkspaceEnabled || !taskWorkspaceSubject.value?.taskId || !taskWorkspaceSubject.value?.actorAgentId) return
+  openPanel('workspace')
+}
+
 const closePanel = () => {
+  if (panelDisposed || !activePanel.value) return false
+  cancelPanelChatLoad()
+  panelClosingGeneration.value = panelSessionGeneration.value
   activePanel.value = ''
   playTap()
+  return true
 }
 
 const handlePanelKeydown = (event) => {
@@ -565,12 +820,29 @@ const handlePanelKeydown = (event) => {
   trapPanelFocus(event, panelRef.value)
 }
 
-const handlePanelAfterLeave = () => {
-  if (!activePanel.value) {
-    renderedPanel.value = ''
-    restorePanelFocus(panelPriorFocus)
-    panelPriorFocus = null
-  }
+const handlePanelAfterLeave = async (element) => {
+  const leavingGeneration = Number(element?.dataset?.panelGeneration)
+  if (!isCurrentPanelGeneration({
+    leavingGeneration,
+    closingGeneration: panelClosingGeneration.value,
+    sessionGeneration: panelSessionGeneration.value,
+    activePanel: activePanel.value,
+    disposed: panelDisposed
+  })) return
+  cancelPanelChatLoad()
+  renderedPanel.value = ''
+  await nextTick()
+  if (!isCurrentPanelGeneration({
+    leavingGeneration,
+    closingGeneration: panelClosingGeneration.value,
+    sessionGeneration: panelSessionGeneration.value,
+    activePanel: activePanel.value,
+    disposed: panelDisposed
+  }) || renderedPanel.value) return
+  const returnTarget = resolvePanelReturnTarget({ origin: panelSessionOrigin, root: hallRootRef.value })
+  restorePanelFocus(returnTarget)
+  panelClosingGeneration.value = 0
+  panelSessionOrigin = null
 }
 
 const closeSelectedAgentCard = () => {
@@ -641,12 +913,18 @@ const createTask = async (payload) => {
   markTaskCreated(selectedTask.value)
 }
 
-const assignTask = async (task, agent = selectedAgent.value) => {
+const assignTask = async (task, agent) => {
   const targetAgents = Array.isArray(agent) ? agent : [agent].filter(Boolean)
-  await runAssignTask(task, agent)
-  if (task?.status === 'assigned' && targetAgents.length) {
-    markTaskAssigned(task, targetAgents)
-  }
+  const hasExplicitAgentId = item => typeof item?.agentId === 'string' && Boolean(item.agentId.trim())
+  if (!task?.id || !targetAgents.length || targetAgents.some(item => !hasExplicitAgentId(item))) return false
+  if (targetAgents.some(item => !canAssign(task, item))) return false
+
+  taskWorkspaceBinding.clearExplicitActor()
+  const assignmentSucceeded = await runAssignTask(task, agent)
+  if (!assignmentSucceeded) return false
+
+  markTaskAssigned(task, targetAgents)
+  return true
 }
 
 const autoAssignTask = async (task) => {
@@ -801,6 +1079,7 @@ const handleStartAgentConversation = (agent) => {
     showToast(agent.systemAgent ? '宋江坐镇公议' : '只可与自家好汉密议')
     return
   }
+  taskWorkspaceBinding.selectExplicitActor(agent)
   playAgentSelect()
   enterPrivateConversation(agent)
   markAgentSpeaking(agent, '入席密议', 'system')
@@ -845,13 +1124,23 @@ onMounted(async () => {
   globalStore.setShowBack(false)
   globalStore.setShowAppBar(false)
   globalStore.setShowMore(false)
+  await nextTick()
+  experienceReady.value = true
   await refreshHall({ silent: true })
   startDialogueBubbles()
 })
 
 onUnmounted(() => {
-  restorePanelFocus(panelPriorFocus)
-  panelPriorFocus = null
+  panelDisposed = true
+  panelSessionGeneration.value += 1
+  panelClosingGeneration.value = 0
+  cancelPanelChatLoad()
+  const originalElement = panelSessionOrigin?.originalElement
+  if (isSafePanelFocusTarget(originalElement) && !hallRootRef.value?.contains(originalElement)) restorePanelFocus(originalElement)
+  panelSessionOrigin = null
+  activePanel.value = ''
+  renderedPanel.value = ''
+  taskWorkspaceBinding.dispose()
   disposeHallConversation()
   hallBackendSceneState?.dispose()
   stopHallEventStream()

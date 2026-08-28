@@ -39,6 +39,7 @@ export type CameraController = {
   panBy(dx: number, dy: number): CameraTransform
   zoomAt(point: Point, factor: number): CameraTransform
   resize(nextViewport: Viewport, kind: 'keyboard' | 'orientation' | 'layout'): CameraTransform
+  restore(snapshot: Partial<CameraSnapshot> | null | undefined, nextViewport: Viewport): CameraTransform
   resetTo(presetKey: ViewPresetKey, durationMs?: number): void
   beginUserGesture(): void
   isAwayFromPreset(): boolean
@@ -184,6 +185,22 @@ export const createCameraController = (
       const resized = apply(preserved)
       preservedMinimum = Math.min(normalBounds().minZoom, resized.zoom)
       return resized
+    },
+
+    restore(snapshot, nextViewport) {
+      if (disposed) return { ...transform }
+      cancelAnimation()
+      viewport = copyViewport(nextViewport)
+      const requestedPreset = snapshot?.presetKey
+      presetKey = requestedPreset && Object.prototype.hasOwnProperty.call(VIEW_PRESETS, requestedPreset)
+        ? requestedPreset
+        : selectViewPreset(currentPresetViewport(), coarsePointer)
+      preservedMinimum = null
+      const candidate = snapshot?.transform
+      if (!Number.isFinite(candidate?.zoom) || !Number.isFinite(candidate?.offsetX) || !Number.isFinite(candidate?.offsetY)) {
+        return apply(presetTransform(presetKey), normalBounds())
+      }
+      return apply({ zoom: candidate.zoom, offsetX: candidate.offsetX, offsetY: candidate.offsetY }, normalBounds())
     },
 
     resetTo(nextPresetKey, durationMs = DEFAULT_RESET_DURATION_MS) {

@@ -1,12 +1,19 @@
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, unref } from 'vue'
 
-export const classifyPanelLayout = ({ width, height, coarsePointer, orientationLandscape }) => {
-  if (!coarsePointer && width >= 1024) return 'center-modal'
-  return (typeof orientationLandscape === 'boolean' ? orientationLandscape : width > height)
-    ? 'right-drawer'
-    : 'bottom-drawer'
+export const classifyPanelLayout = ({ isMobileCoarse, experienceMode }) => {
+  if (!isMobileCoarse) return 'center-modal'
+  return experienceMode === 'landscape-map' ? 'right-drawer' : 'bottom-drawer'
 }
 
+const RETURN_ACTIONS = new Set(['agents', 'tasks', 'discussion', 'catalog', 'library'])
+const PANEL_RETURN_ACTIONS = Object.freeze({
+  agents: 'agents',
+  tasks: 'tasks',
+  workspace: 'tasks',
+  chat: 'discussion',
+  catalog: 'catalog',
+  library: 'library'
+})
 const FOCUSABLE_SELECTOR = [
   'button:not([disabled])',
   'a[href]',
@@ -16,8 +23,42 @@ const FOCUSABLE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])'
 ].join(',')
 
+const hasHiddenAncestor = element => Boolean(element?.closest?.('[hidden]'))
+const hasBlockedAncestor = element => Boolean(element?.closest?.('[inert], [aria-hidden="true"]'))
+const hasVisibleStyle = element => {
+  const getStyle = element?.ownerDocument?.defaultView?.getComputedStyle
+  if (!getStyle) return true
+  let current = element
+  while (current) {
+    const style = getStyle(current)
+    if (style.display === 'none' || style.visibility === 'hidden') return false
+    current = current.parentElement
+  }
+  return true
+}
+
+const isProgrammaticallyFocusable = element => element?.tabIndex >= 0 || element?.hasAttribute?.('tabindex')
+
+export const isSafePanelFocusTarget = element => Boolean(
+  element?.isConnected &&
+  element !== element?.ownerDocument?.body &&
+  element !== element?.ownerDocument?.documentElement &&
+  typeof element.focus === 'function' &&
+  isProgrammaticallyFocusable(element) &&
+  !element.disabled &&
+  !element.hidden &&
+  !hasHiddenAncestor(element) &&
+  !hasBlockedAncestor(element) &&
+  hasVisibleStyle(element)
+)
+
+export const isPanelTabbable = element => Boolean(
+  isSafePanelFocusTarget(element) &&
+  element.tabIndex >= 0
+)
+
 export const panelFocusableElements = panel => panel
-  ? [...panel.querySelectorAll(FOCUSABLE_SELECTOR)].filter(element => !element.hidden)
+  ? [...panel.querySelectorAll(FOCUSABLE_SELECTOR)].filter(isPanelTabbable)
   : []
 
 export const focusHallPanel = panel => {
@@ -26,9 +67,42 @@ export const focusHallPanel = panel => {
   ;(focusable[0] || panel).focus?.()
 }
 
-export const restorePanelFocus = element => {
-  if (element?.isConnected) element.focus?.()
+export const panelReturnAction = panel => PANEL_RETURN_ACTIONS[panel] || null
+
+export const capturePanelReturnTarget = (element, panel) => {
+  const domAction = element?.closest?.('[data-portrait-action]')?.getAttribute('data-portrait-action')
+  const logicalAction = RETURN_ACTIONS.has(domAction) ? domAction : panelReturnAction(panel)
+  return Object.freeze({
+    originalElement: element || null,
+    logicalAction: RETURN_ACTIONS.has(logicalAction) ? logicalAction : null
+  })
 }
+
+const findLogicalTarget = (root, logicalAction) => logicalAction
+  ? [...(root?.querySelectorAll?.('[data-portrait-action]') || [])]
+    .find(element => element.getAttribute('data-portrait-action') === logicalAction && isSafePanelFocusTarget(element))
+  : null
+
+export const resolvePanelReturnTarget = ({ origin, root }) => {
+  if (isSafePanelFocusTarget(origin?.originalElement)) return origin.originalElement
+  const logicalTarget = findLogicalTarget(root, origin?.logicalAction)
+  if (logicalTarget) return logicalTarget
+  const hallBoard = root?.querySelector?.('.hall-board')
+  if (isSafePanelFocusTarget(hallBoard)) return hallBoard
+  return isSafePanelFocusTarget(root) ? root : null
+}
+
+export const restorePanelFocus = element => {
+  if (isSafePanelFocusTarget(element)) element.focus()
+}
+
+export const isCurrentPanelGeneration = ({ leavingGeneration, closingGeneration, sessionGeneration, activePanel, disposed }) =>
+  !disposed &&
+  Number.isSafeInteger(leavingGeneration) &&
+  leavingGeneration > 0 &&
+  leavingGeneration === closingGeneration &&
+  leavingGeneration === sessionGeneration &&
+  !activePanel
 
 export const trapPanelFocus = (event, panel) => {
   if (event.key !== 'Tab' || !panel) return false
@@ -53,38 +127,9 @@ export const trapPanelFocus = (event, panel) => {
   return false
 }
 
-export const useHallPanels = () => {
-  const viewport = ref({ width: 0, height: 0, coarsePointer: false })
-  let orientationMedia = null
-  let coarseMedia = null
-
-  const updateViewport = () => {
-    viewport.value = {
-      width: window.innerWidth,
-      height: window.innerHeight,
-      coarsePointer: Boolean(coarseMedia?.matches),
-      orientationLandscape: typeof orientationMedia?.matches === 'boolean'
-        ? orientationMedia.matches
-        : window.innerWidth > window.innerHeight
-    }
-  }
-
-  onMounted(() => {
-    orientationMedia = window.matchMedia?.('(orientation: landscape)') || null
-    coarseMedia = window.matchMedia?.('(pointer: coarse)') || null
-    updateViewport()
-    window.addEventListener('resize', updateViewport)
-    orientationMedia?.addEventListener?.('change', updateViewport)
-    coarseMedia?.addEventListener?.('change', updateViewport)
-  })
-  onBeforeUnmount(() => {
-    window.removeEventListener('resize', updateViewport)
-    orientationMedia?.removeEventListener?.('change', updateViewport)
-    coarseMedia?.removeEventListener?.('change', updateViewport)
-  })
-
-  return {
-    panelLayout: computed(() => classifyPanelLayout(viewport.value)),
-    updatePanelLayout: updateViewport
-  }
-}
+export const useHallPanels = ({ experienceMode, isMobileCoarse }) => ({
+  panelLayout: computed(() => classifyPanelLayout({
+    experienceMode: unref(experienceMode),
+    isMobileCoarse: unref(isMobileCoarse)
+  }))
+})

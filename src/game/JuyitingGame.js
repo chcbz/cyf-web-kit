@@ -42,11 +42,14 @@ export class JuyitingGame {
     this._viewportCommitCandidateSignature = ''
     this._committedViewportGeometrySignature = ''
     this._pendingViewportChange = null
+    this._pendingViewportRestore = null
+    this._viewportCommitWaiters = []
     this._containerResizeObserver = null
     this._canvasCoverScale = 1
     this._pendingStart = false
     this._stateId = null
     this._generation = 0
+    this._lifecycleGeneration = 0
     this._mountToken = null
     this._movementEngine = null
     this._pendingSimulationPhaseEvents = []
@@ -97,7 +100,8 @@ export class JuyitingGame {
         onAgentClick: options.onAgentClick || null,
         onHotspotClick: options.onHotspotClick || null,
         onReady: options.onReady || null,
-        onSimulationPhaseEvents: options.onSimulationPhaseEvents || null
+        onSimulationPhaseEvents: options.onSimulationPhaseEvents || null,
+        onPersonaAvailabilityChanged: options.onPersonaAvailabilityChanged || null
       }
 
       const config = createGameConfig()
@@ -257,9 +261,24 @@ export class JuyitingGame {
       void this._loadPersonaSpriteBatch(me, manifest, mountToken)
         .then(result => {
           if (!this._isCurrentMount(mountToken)) return
+          const previousAvailable = new Set(this._spriteLoadResult?.available || [])
           this._mergeSpriteLoadResult(result)
-          this._hallScene?.setAvailablePersonas(this._spriteLoadResult?.available || new Set())
+          const available = new Set(this._spriteLoadResult?.available || [])
+          const personaCodes = [...available]
+            .filter(personaCode => !previousAvailable.has(personaCode))
+            .map(personaCode => String(personaCode || '').toLowerCase())
+            .filter(Boolean)
+            .sort()
+          this._hallScene?.setAvailablePersonas(available)
           this._markSceneDebugDirty()
+          if (personaCodes.length) {
+            const payload = Object.freeze({ personaCodes: Object.freeze(personaCodes) })
+            try {
+              this._callbacks.onPersonaAvailabilityChanged?.(payload)
+            } catch (error) {
+              console.warn('[JuyitingGame] Persona availability callback failed:', error?.message || error)
+            }
+          }
         })
         .catch(error => {
           if (!this._isCurrentMount(mountToken)) return
@@ -323,6 +342,8 @@ export class JuyitingGame {
     this._viewportCommitCandidateSignature = ''
     this._committedViewportGeometrySignature = ''
     this._pendingViewportChange = null
+    this._pendingViewportRestore = null
+    this._settleViewportCommitWaiters('cancel', undefined, undefined, true)
     this._hallScene = null
     this._container = null
     this._callbacks = {}
@@ -550,6 +571,10 @@ export class JuyitingGame {
     if (this._hallScene) this._hallScene.syncAgents(list)
   }
 
+  syncAgentsAndFocusAgent(list, agentId) {
+    return this._hallScene?.syncAgentsAndFocusAgent?.(list, agentId) === true
+  }
+
   syncAgentSnapshots(list) {
     this._hallScene?.syncAgentSnapshots?.(list)
     this._markSceneDebugDirty()
@@ -609,6 +634,41 @@ export class JuyitingGame {
     return result
   }
 
+  beginMapGeneration() {
+    this._lifecycleGeneration += 1
+    return this._lifecycleGeneration
+  }
+
+  getMapGeneration() {
+    return this._lifecycleGeneration
+  }
+
+  commitViewport(change = {}) {
+    const mountToken = this._mountToken
+    return new Promise((resolve, reject) => {
+      const waiter = { mountToken, status: 'pending', resolve, reject }
+      this._viewportCommitWaiters.push(waiter)
+      try {
+        if (!this._geometrySnapshot()) {
+          if (this._pendingViewportRestore?.mountToken === mountToken) {
+            this._pendingViewportChange = null
+            this._pendingViewportRestore = null
+            this._viewportCommitCandidateSignature = ''
+            this._settleViewportCommitWaiters('reject', new Error('Juyiting viewport geometry is unavailable'), mountToken)
+            return
+          }
+          Promise.resolve()
+            .then(() => this._hallScene?.resizeViewport?.(change))
+            .then(result => this._settleViewportCommitWaiters('resolve', result, mountToken), error => this._settleViewportCommitWaiters('reject', error, mountToken))
+          return
+        }
+        this.resizeViewport(change)
+      } catch (error) {
+        this._settleViewportCommitWaiters('reject', error, mountToken)
+      }
+    })
+  }
+
   resizeViewport(change = {}) {
     if (!this._geometrySnapshot()) {
       const result = this._hallScene?.resizeViewport?.(change)
@@ -652,6 +712,55 @@ export class JuyitingGame {
     return this._hallScene?.getCameraSnapshot?.() || null
   }
 
+  captureResumeSnapshot() {
+    const cameraSnapshot = this.getCameraSnapshot()
+    const geometry = this._geometrySnapshot()
+    const canvasRect = this._canvas?.getBoundingClientRect?.()
+    const visible = geometry ? this._visibleViewport(geometry.containerRect, canvasRect) : null
+    const sourceViewport = geometry && visible ? {
+      backing: { width: Number(geometry.viewportWidth), height: Number(geometry.viewportHeight) },
+      display: { width: Number(geometry.containerRect.width), height: Number(geometry.containerRect.height) },
+      visible: { x: Number(visible.x), y: Number(visible.y), width: Number(visible.width), height: Number(visible.height) }
+    } : null
+    return this._isValidResumeSnapshot({ schemaVersion: 2, cameraSnapshot, sourceViewport, mapGeneration: this._lifecycleGeneration })
+      ? { schemaVersion: 2, cameraSnapshot, sourceViewport, mapGeneration: this._lifecycleGeneration }
+      : null
+  }
+
+  restoreResumeSnapshot(snapshot, viewport) {
+    if (!this._isValidResumeSnapshot(snapshot)) return Promise.resolve(false)
+    const targetViewport = Number(viewport?.width) > 0 && Number(viewport?.height) > 0
+      ? { width: Number(viewport.width), height: Number(viewport.height) }
+      : null
+    if (!targetViewport || !this._isCurrentMount(this._mountToken)) return Promise.resolve(false)
+    const mountToken = this._mountToken
+    this._pendingViewportRestore = { mountToken, snapshot }
+    return this.commitViewport({ ...targetViewport, kind: 'orientation', orientationChanged: true })
+      .then(result => (this._isCurrentMount(mountToken) && result !== undefined ? (this.getCameraSnapshot() || false) : false))
+  }
+
+  _isValidResumeSnapshot(snapshot) {
+    if (snapshot?.schemaVersion !== 2 || !Number.isInteger(snapshot.mapGeneration)) return false
+    const transform = snapshot.cameraSnapshot?.transform
+    const backing = snapshot.sourceViewport?.backing
+    const display = snapshot.sourceViewport?.display
+    const visible = snapshot.sourceViewport?.visible
+    const finite = value => Number.isFinite(Number(value))
+    if (!finite(backing?.width) || Number(backing.width) <= 0 || !finite(backing?.height) || Number(backing.height) <= 0) return false
+    if (!finite(display?.width) || Number(display.width) <= 0 || !finite(display?.height) || Number(display.height) <= 0) return false
+    if (!finite(visible?.x) || Number(visible.x) < 0 || !finite(visible?.y) || Number(visible.y) < 0 || !finite(visible?.width) || Number(visible.width) <= 0 || !finite(visible?.height) || Number(visible.height) <= 0) return false
+    if (Number(visible.x) + Number(visible.width) > Number(backing.width) + 0.001 || Number(visible.y) + Number(visible.height) > Number(backing.height) + 0.001) return false
+    return finite(transform?.zoom) && Number(transform.zoom) > 0 && finite(transform?.offsetX) && finite(transform?.offsetY)
+  }
+
+  focusAgent(agentId) {
+    return this._hallScene?.focusAgent?.(agentId) === true
+  }
+
+  focusHotspot(hotspotId) {
+    return this._hallScene?.focusHotspot?.(hotspotId) === true
+  }
+
   getInputSnapshot() {
     return this._hallScene?.inputSnapshot?.() || null
   }
@@ -672,31 +781,54 @@ export class JuyitingGame {
     return result
   }
 
-  _scheduleViewportCommit() {
-    if (!this._geometrySnapshot() || this._viewportCommitFrame !== null) return
+  _scheduleViewportCommit(mountToken = this._mountToken) {
+    if (!this._isCurrentMount(mountToken) || this._viewportCommitFrame !== null) return
     const target = typeof window !== 'undefined' ? window : globalThis
     const schedule = typeof target.requestAnimationFrame === 'function'
       ? callback => target.requestAnimationFrame(callback)
       : callback => setTimeout(callback, 0)
     this._viewportCommitFrame = schedule(() => {
       this._viewportCommitFrame = null
+      if (!this._isCurrentMount(mountToken)) {
+        this._viewportCommitCandidateSignature = ''
+        this._pendingViewportRestore = this._pendingViewportRestore?.mountToken === mountToken ? null : this._pendingViewportRestore
+        this._settleViewportCommitWaiters('cancel', undefined, mountToken)
+        return
+      }
       const geometry = this._geometrySnapshot()
-      if (!geometry) return
+      if (!geometry) {
+        this._pendingViewportChange = null
+        this._viewportCommitCandidateSignature = ''
+        this._pendingViewportRestore = this._pendingViewportRestore?.mountToken === mountToken ? null : this._pendingViewportRestore
+        this._viewportCommitFrame = null
+        this._settleViewportCommitWaiters('reject', new Error('Juyiting viewport geometry is unavailable'), mountToken)
+        return
+      }
       if (geometry.signature !== this._viewportCommitCandidateSignature) {
         this._viewportCommitCandidateSignature = geometry.signature
-        this._scheduleViewportCommit()
+        this._scheduleViewportCommit(mountToken)
         return
       }
       this._viewportCommitCandidateSignature = ''
-      this._commitViewportGeometry(geometry)
+      try {
+        this._commitViewportGeometry(geometry)
+      } catch (error) {
+        this._pendingViewportChange = null
+        this._pendingViewportRestore = null
+        this._viewportCommitCandidateSignature = ''
+        this._fatalError = error instanceof Error ? error : new Error(String(error))
+        this._settleViewportCommitWaiters('reject', this._fatalError, mountToken)
+        this._markSceneDebugDirty()
+      }
     })
   }
 
   _cancelViewportCommit() {
-    if (this._viewportCommitFrame === null) return
-    const target = typeof window !== 'undefined' ? window : globalThis
-    if (typeof target.cancelAnimationFrame === 'function') target.cancelAnimationFrame(this._viewportCommitFrame)
-    else clearTimeout(this._viewportCommitFrame)
+    if (this._viewportCommitFrame !== null) {
+      const target = typeof window !== 'undefined' ? window : globalThis
+      if (typeof target.cancelAnimationFrame === 'function') target.cancelAnimationFrame(this._viewportCommitFrame)
+      else clearTimeout(this._viewportCommitFrame)
+    }
     this._viewportCommitFrame = null
     this._viewportCommitCandidateSignature = ''
   }
@@ -738,10 +870,30 @@ export class JuyitingGame {
     }
   }
 
+  _settleViewportCommitWaiters(mode, value, mountToken = this._mountToken, all = false) {
+    const matching = []
+    this._viewportCommitWaiters = this._viewportCommitWaiters.filter(waiter => {
+      if ((all || waiter.mountToken === mountToken) && waiter.status === 'pending') {
+        matching.push(waiter)
+        return false
+      }
+      return true
+    })
+    matching.forEach(waiter => {
+      waiter.status = mode === 'cancel' ? 'cancelled' : (mode === 'reject' ? 'rejected' : 'resolved')
+      if (mode === 'reject') waiter.reject(value instanceof Error ? value : new Error(String(value)))
+      else waiter.resolve(value)
+    })
+  }
+
   _commitViewportGeometry(geometry) {
     const change = this._pendingViewportChange || { kind: 'layout' }
+    const restore = this._pendingViewportRestore
     this._pendingViewportChange = null
-    if (geometry.signature === this._committedViewportGeometrySignature) return undefined
+    if (geometry.signature === this._committedViewportGeometrySignature && !restore) {
+      this._settleViewportCommitWaiters('resolve', undefined)
+      return undefined
+    }
 
     this._applyCanvasCover(geometry)
     const finalGeometry = this._geometrySnapshot()
@@ -752,17 +904,22 @@ export class JuyitingGame {
     }
 
     const canvasRect = this._canvas?.getBoundingClientRect?.()
-    const result = this._hallScene?.resizeViewport?.({
+    const targetChange = {
       ...change,
       width: finalGeometry.viewportWidth,
       height: finalGeometry.viewportHeight,
-      displayViewport: {
-        width: finalGeometry.containerRect.width,
-        height: finalGeometry.containerRect.height
-      },
+      displayViewport: { width: finalGeometry.containerRect.width, height: finalGeometry.containerRect.height },
       visibleViewport: this._visibleViewport(finalGeometry.containerRect, canvasRect)
-    })
+    }
+    if (restore) {
+      if (restore.mountToken !== this._mountToken || !this._hallScene?.restoreCameraSnapshot?.(restore.snapshot.cameraSnapshot, restore.snapshot.sourceViewport)) {
+        throw new Error('Juyiting camera restore is unavailable')
+      }
+    }
+    const result = this._hallScene?.resizeViewport?.(targetChange)
     this._committedViewportGeometrySignature = finalGeometry.signature
+    this._pendingViewportRestore = null
+    this._settleViewportCommitWaiters('resolve', result)
     this._markSceneDebugDirty()
     return result
   }
@@ -771,8 +928,10 @@ export class JuyitingGame {
     this._disconnectContainerResizeObserver()
     const ResizeObserverImpl = globalThis.ResizeObserver
     if (!ResizeObserverImpl || !this._container) return
+    const mountToken = this._mountToken
     this._containerResizeObserver = new ResizeObserverImpl(() => {
-      this._scheduleViewportCommit()
+      if (!this._isCurrentMount(mountToken)) return
+      this._scheduleViewportCommit(mountToken)
     })
     this._containerResizeObserver.observe(this._container)
   }

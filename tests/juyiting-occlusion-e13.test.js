@@ -90,13 +90,16 @@ describe('E13 evidence integrity (phase-1 + offline)', () => {
     }
   })
 
-  it('uses production-reachable target-specific probes for the four calibrated targets', () => {
+  it('marks visual matrix probes as synthetic while retaining production navigation diagnostics', () => {
+    expect(matrixShots.every(shot => shot.probeMobility === 'synthetic-visual-only')).to.equal(true)
+    matrixShots.forEach(shot => {
+      expect(shot.navValidation.reachability, shot.id).to.include({ source: 'production-graph-pathfinder', colliderWidth: 42 })
+      expect(['found', 'blocked'], shot.id).to.include(shot.navValidation.reachability.status)
+      if (shot.navValidation.reachability.status === 'blocked') expect(shot.navValidation.reachability.reason, shot.id).to.be.a('string').and.not.empty
+    })
     const custom = matrixShots.filter(shot => shot.probeKind === 'target-specific')
     expect(custom).to.have.length(162)
-    custom.forEach(shot => {
-      expect(shot.navValidation.navigable, shot.id).to.equal(true)
-      expect(shot.navValidation.reachability, shot.id).to.include({ source: 'production-graph-pathfinder', colliderWidth: 42, status: 'found' })
-    })
+    expect(matrixShots.filter(shot => shot.visualExerciseContract === 'depth-order-only')).to.have.length(108)
     expect(new Set(custom.map(shot => shot.targetStableId))).to.deep.equal(new Set([
       'jyt.occ.west-upper.lantern-01.v2',
       'jyt.prop.center-north.main-seat.v1',
@@ -108,6 +111,38 @@ describe('E13 evidence integrity (phase-1 + offline)', () => {
       'jyt.occ.entrance.lantern-post-01.v2',
       'jyt.occ.east-lower.worktable-01.v2',
     ]))
+  })
+
+  it('keeps real movement probes on an explicit production-only contract', () => {
+    const movement = shotPlan.shots.filter(shot => shot.kind === 'movement')
+    expect(movement).to.have.length(2)
+    expect(movement.map(shot => ({ mobility: shot.probeMobility, ...shot.movementContract }))).to.deep.equal([
+      { mobility: 'production-movement', actorPersonaCode: 'lujunyi', startRegionId: 'council-table', targetRegionId: 'bounty-board' },
+      { mobility: 'production-movement', actorPersonaCode: 'likui', startRegionId: 'right-guard', targetRegionId: 'gate' },
+    ])
+  })
+
+  it('drives live movement capture and validation from movementContract rather than shot-id hardcoding', () => {
+    const generator = readFileSync(join(REPO_ROOT, 'scripts/juyiting/e13/generate-e13-evidence.mjs'), 'utf8')
+    const validator = readFileSync(join(REPO_ROOT, 'scripts/juyiting/e13/validate-e13-live-evidence.mjs'), 'utf8')
+    expect(generator).to.include('shot.movementContract?.actorPersonaCode')
+    expect(generator).to.include('const { actorPersonaCode: actor, startRegionId, targetRegionId } = movementContract')
+    expect(validator).to.include('const contract = planShot?.movementContract')
+    expect(validator).to.not.include('const MOVEMENT_ACTOR')
+    expect(validator).to.not.include("id === 'E13-288' ? 'bounty-board' : 'gate'")
+  })
+
+  it('fails closed when matrix or movement mobility contracts are relabeled', function () {
+    this.timeout(15000)
+    const facts = loadSourceFacts()
+    const matrixRelabel = structuredClone(shotPlan.shots)
+    const blockedMatrix = matrixRelabel.find(shot => shot.kind === 'matrix' && shot.navValidation.reachability.status === 'blocked')
+    blockedMatrix.probeMobility = 'production-reachable'
+    expect(validateShotPlan(matrixRelabel, facts).some(error => error.includes('matrix probe must use synthetic-visual-only mobility'))).to.equal(true)
+
+    const movementRelabel = structuredClone(shotPlan.shots)
+    movementRelabel.find(shot => shot.kind === 'movement').probeMobility = 'synthetic-visual-only'
+    expect(validateShotPlan(movementRelabel, facts).some(error => error.includes('movement probe must use production-movement mobility'))).to.equal(true)
   })
 
   it('binds all E13 source hashes to the current production inputs', () => {
@@ -122,7 +157,7 @@ describe('E13 evidence integrity (phase-1 + offline)', () => {
     expect(index.matrixPass).to.equal(true)
     expect(index.releasePass).to.equal(false)
     expect(index.shots).to.have.length(270)
-    const fields = ['id','kind','cell','probeCell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera','evidenceContext','contextCompanionStableId','visualOmissions','probeKind','visualExerciseContract','visualOverlay','maxAgentOcclusionRatio','navValidation','probeRationale']
+    const fields = ['id','kind','cell','probeCell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera','evidenceContext','contextCompanionStableId','visualOmissions','probeKind','probeMobility','visualExerciseContract','visualOverlay','maxAgentOcclusionRatio','navValidation','probeRationale']
     matrixShots.forEach((plan, i) => fields.forEach(field => expect(index.shots[i][field], `${plan.id}:${field}`).to.deep.equal(plan[field])))
   })
 
