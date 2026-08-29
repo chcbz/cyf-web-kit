@@ -120,8 +120,8 @@ describe('C06 task workspace state', () => {
     assert.equal(failures.length, 7)
   })
 
-  it('releases snapshot ownership before synchronous stream resync reloads it', async () => {
-    let snapshots = 0; let streams = 0
+  it('releases snapshot ownership before a bounded resync retry reacquires it', async () => {
+    const timers = []; let snapshots = 0; let streams = 0
     const api = { execute: options => {
       if (options.url.endsWith('/workspace')) {
         snapshots += 1
@@ -132,8 +132,14 @@ describe('C06 task workspace state', () => {
       if (streams === 1) options.onStream(`event: resync_required\ndata: {"currentVersion":"${V}","reason":"gap"}\n\n`)
       return new Promise(() => {})
     } }
-    const instance = useTaskWorkspace({ agentApi: api, documentRef: new FakeDocument(), windowRef: new EventTarget() })
+    const instance = useTaskWorkspace({ agentApi: api, documentRef: new FakeDocument(), windowRef: new EventTarget(), jitter: () => 0, snapshotTimeoutMs: 0, setTimeoutFn: (callback, delay) => { timers.push({ callback, delay }); return timers.length }, clearTimeoutFn: () => {} })
     await instance.open({ taskId: 'task-a', actorAgentId: 'agent-a' })
+    for (let tick = 0; tick < 4; tick += 1) await Promise.resolve()
+    assert.equal(snapshots, 1)
+    assert.equal(streams, 1)
+    assert.equal(instance.connectionState.value, 'resyncing')
+    const retry = timers.shift(); assert.equal(retry.delay, 500)
+    retry.callback()
     for (let tick = 0; tick < 4; tick += 1) await Promise.resolve()
     assert.equal(snapshots, 2)
     assert.equal(streams, 2)
@@ -450,6 +456,44 @@ describe('C06 task workspace state', () => {
     assert.equal(remote.connectionState.value, 'error')
     assert.equal(timers.length, 0)
     local.dispose(); remote.dispose()
+  })
+
+  it('backs off persistent resync or malformed SSE before degrading to single-flight polling', async () => {
+    for (const failureWire of [
+      'event: task_event\ndata: {}\n\n',
+      `event: resync_required\ndata: {"currentVersion":"${V}","reason":"gap"}\n\n`
+    ]) {
+      const timers = []; let snapshots = 0; let streams = 0
+      const api = { execute: options => {
+        if (options.url.endsWith('/workspace')) {
+          snapshots += 1
+          return Promise.resolve({ data: { data: snapshot() } })
+        }
+        streams += 1
+        options.onStreamOpen({ cancel () {} })
+        options.onStream(failureWire)
+        return Promise.resolve()
+      } }
+      const instance = useTaskWorkspace({
+        agentApi: api,
+        documentRef: new FakeDocument(),
+        windowRef: new EventTarget(),
+        retryFailureThreshold: 2,
+        retryBaseMs: 5,
+        pollIntervalMs: 11,
+        jitter: () => 0,
+        snapshotTimeoutMs: 0,
+        setTimeoutFn: (callback, delay) => { timers.push({ callback, delay }); return timers.length },
+        clearTimeoutFn: () => {}
+      })
+      await instance.open({ taskId: 'task-a', actorAgentId: 'agent-a' })
+      await Promise.resolve()
+      assert.deepEqual({ snapshots, streams, timers: timers.map(timer => timer.delay) }, { snapshots: 1, streams: 1, timers: [5] })
+      timers.shift().callback()
+      for (let tick = 0; tick < 4; tick += 1) await Promise.resolve()
+      assert.deepEqual({ snapshots, streams, state: instance.connectionState.value, timers: timers.map(timer => timer.delay) }, { snapshots: 2, streams: 2, state: 'degraded', timers: [11] })
+      instance.dispose()
+    }
   })
 
   it('does not reset repeated open-to-EOF failures on open, then enters bounded degraded polling', async () => {

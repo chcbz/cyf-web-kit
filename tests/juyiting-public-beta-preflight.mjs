@@ -176,7 +176,7 @@ const login = async ({ request, credentials, guard }) => {
   }
 }
 
-const checkAgentWebSocket = async ({ config, guard, timeoutMs, WebSocketCtor }) => {
+export const checkAgentWebSocket = async ({ config, guard, timeoutMs, WebSocketCtor }) => {
   guard.beforeBoundary('credentialed agent WebSocket handshake')
   const Socket = WebSocketCtor || (
     await guard.runPromise(import('ws'), 'agent WebSocket module load')
@@ -188,37 +188,86 @@ const checkAgentWebSocket = async ({ config, guard, timeoutMs, WebSocketCtor }) 
   wsUrl.searchParams.set('api_key', config.credentials.apiKey)
   wsUrl.searchParams.set('agent_id', config.credentials.agentId)
   const ws = new Socket(wsUrl, { rejectUnauthorized: !config.allowInsecureTls })
-  const untrack = guard.trackCleanup(() => ws.close())
+  const closeTimeout = () => Math.max(1, Math.min(timeoutMs, guard.remainingMs()))
+  let closePromise = null
+  const closeAndWait = () => {
+    if (closePromise) return closePromise
+    closePromise = new Promise((resolvePromise, rejectPromise) => {
+      if (ws.readyState === 3 || (Number.isInteger(Socket.CLOSED) && ws.readyState === Socket.CLOSED)) {
+        resolvePromise()
+        return
+      }
+      const boundedTimeout = closeTimeout()
+      let settled = false
+      let timer
+      const finish = error => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        guard.signal.removeEventListener('abort', onAbort)
+        ws.removeListener?.('close', onClose)
+        ws.removeListener?.('error', onError)
+        if (error) rejectPromise(error)
+        else resolvePromise()
+      }
+      const onClose = () => finish()
+      const onError = error => finish(error instanceof Error ? error : new Error('agent websocket close failed'))
+      const onAbort = () => finish(new Error('agent websocket close stopped by termination/deadline'))
+      timer = setTimeout(() => {
+        try { ws.terminate?.() } catch (terminateError) { finish(terminateError); return }
+        finish(new Error(`agent websocket did not close within ${boundedTimeout}ms; terminated fail-closed`))
+      }, boundedTimeout)
+      guard.signal.addEventListener('abort', onAbort, { once: true })
+      ws.once('close', onClose)
+      ws.once('error', onError)
+      try { ws.close() } catch (error) { finish(error) }
+    })
+    return closePromise
+  }
+  const untrack = guard.trackCleanup(closeAndWait)
   try {
     await new Promise((resolvePromise, rejectPromise) => {
       const boundedTimeout = Math.max(1, Math.min(timeoutMs, guard.remainingMs()))
-      const timer = setTimeout(() => {
-        ws.close()
-        rejectPromise(new Error(`agent websocket connected event timed out after ${boundedTimeout}ms`))
-      }, boundedTimeout)
-      const finish = callback => (...values) => {
+      let settled = false
+      const timer = setTimeout(() => finish(new Error(`agent websocket connected event timed out after ${boundedTimeout}ms`)), boundedTimeout)
+      const finish = error => {
+        if (settled) return
+        settled = true
         clearTimeout(timer)
         guard.signal.removeEventListener('abort', onAbort)
-        callback(...values)
+        ws.removeListener?.('message', onMessage)
+        ws.removeListener?.('unexpected-response', onUnexpectedResponse)
+        ws.removeListener?.('error', onError)
+        if (error) rejectPromise(error)
+        else resolvePromise()
       }
-      const onAbort = finish(() => rejectPromise(new Error('agent websocket stopped by termination/deadline')))
-      guard.signal.addEventListener('abort', onAbort, { once: true })
-      ws.once('message', finish(data => {
+      const onAbort = () => finish(new Error('agent websocket stopped by termination/deadline'))
+      const onMessage = data => {
         const text = data.toString()
-        if (text.includes('"type":"connected"')) resolvePromise()
-        else rejectPromise(new Error('unexpected websocket event type'))
-      }))
-      ws.once('unexpected-response', finish((_, response) => {
+        if (text.includes('"type":"connected"')) finish()
+        else finish(new Error('unexpected websocket event type'))
+      }
+      const onUnexpectedResponse = (_, response) => {
         const hint = response.statusCode === 401
           ? 'invalid explicit agent API credential or disabled credential'
           : `HTTP ${response.statusCode}`
-        rejectPromise(new Error(`websocket handshake rejected: ${hint}`))
-      }))
-      ws.once('error', finish(rejectPromise))
+        finish(new Error(`websocket handshake rejected: ${hint}`))
+      }
+      const onError = error => finish(error)
+      guard.signal.addEventListener('abort', onAbort, { once: true })
+      ws.once('message', onMessage)
+      ws.once('unexpected-response', onUnexpectedResponse)
+      ws.once('error', onError)
     })
-  } finally {
+    await closeAndWait()
     untrack()
-    ws.close()
+  } catch (error) {
+    try {
+      await closeAndWait()
+    } catch (closeError) {
+      throw cleanupFailure([error, closeError], 'agent websocket preflight failed and cleanup was incomplete')
+    }
+    throw error
   }
 }
 

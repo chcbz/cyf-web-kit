@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs'
 import { describe as nodeDescribe, it as nodeIt } from 'node:test'
 
 import {
+  checkAgentWebSocket,
   checkFrontendRoute,
   runNpmScript,
   runPreflight
@@ -452,6 +453,60 @@ describe('juyiting public beta preflight safety', () => {
     )
     await guard.dispose()
     assert.equal(killCalls, 1)
+  })
+
+  it('waits for the credentialed agent WebSocket CLOSED event before accepting the preflight check', async () => {
+    const guard = makeGuard()
+    let socket
+    class ClosingSocket extends EventEmitter {
+      static CLOSED = 3
+      constructor () {
+        super()
+        socket = this
+        this.readyState = 1
+        queueMicrotask(() => this.emit('message', Buffer.from('{\"type\":\"connected\"}')))
+      }
+      close () {
+        this.readyState = ClosingSocket.CLOSED
+        this.emit('close')
+      }
+    }
+    await checkAgentWebSocket({
+      config: { targets: { backend: new URL('https://localhost:10018') }, credentials: { apiKey: 'key', agentId: 'agent' }, allowInsecureTls: false },
+      guard,
+      timeoutMs: 25,
+      WebSocketCtor: ClosingSocket
+    })
+    assert.equal(socket.readyState, ClosingSocket.CLOSED)
+    await guard.dispose()
+  })
+
+  it('terminates and fails closed when the credentialed agent WebSocket never reaches CLOSED', async () => {
+    const guard = makeGuard()
+    let socket
+    class StalledSocket extends EventEmitter {
+      static CLOSED = 3
+      constructor () {
+        super()
+        socket = this
+        this.readyState = 1
+        queueMicrotask(() => this.emit('message', Buffer.from('{\"type\":\"connected\"}')))
+      }
+      close () {}
+      terminate () { this.terminated = true }
+    }
+    await assert.rejects(
+      checkAgentWebSocket({
+        config: { targets: { backend: new URL('https://localhost:10018') }, credentials: { apiKey: 'key', agentId: 'agent' }, allowInsecureTls: false },
+        guard,
+        timeoutMs: 10,
+        WebSocketCtor: StalledSocket
+      }),
+      error => error?.code === PREFLIGHT_CLEANUP_ERROR_CODE &&
+        error.errors.some(cause => /terminated fail-closed/.test(cause.message))
+    )
+    assert.equal(socket.terminated, true)
+    await assert.rejects(guard.dispose(), error => error?.code === PREFLIGHT_CLEANUP_ERROR_CODE)
   })
 
   it('termination closes tracked WebSocket/CDP and kills tracked Chromium', async () => {

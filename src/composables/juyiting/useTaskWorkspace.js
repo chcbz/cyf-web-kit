@@ -34,10 +34,10 @@ export function useTaskWorkspace ({ agentApi = defaultAgentApi, setTimeoutFn = s
         connectionState.value = 'live'
         return
       }
-      if (outcome.kind === 'resync') reloadSnapshot(callbackGeneration, { resume: true, resync: true })
+      if (outcome.kind === 'resync') resyncConnection(callbackGeneration, 'workspace_event_resync')
     },
-    onResync: ({ generation: callbackGeneration }) => {
-      if (isCurrent(callbackGeneration)) reloadSnapshot(callbackGeneration, { resume: true, resync: true })
+    onResync: ({ generation: callbackGeneration, reason }) => {
+      if (isCurrent(callbackGeneration)) resyncConnection(callbackGeneration, reason || 'server_resync')
     },
     onEnd: ({ generation: callbackGeneration }) => {
       if (isCurrent(callbackGeneration)) failedConnection(callbackGeneration, new Error('Task event stream ended'))
@@ -181,7 +181,11 @@ export function useTaskWorkspace ({ agentApi = defaultAgentApi, setTimeoutFn = s
     failedConnection(failedGeneration, snapshotError)
   }
 
-  function failedConnection (failedGeneration, failure) {
+  function resyncConnection (failedGeneration, reason) {
+    failedConnection(failedGeneration, new Error(`Task event stream requires resync: ${reason}`), { resync: true })
+  }
+
+  function failedConnection (failedGeneration, failure, { resync = false } = {}) {
     if (!isCurrent(failedGeneration) || disabled) return
     error.value = observableError(failure)
     if (TERMINAL_STATUSES.has(failure?.status)) {
@@ -199,7 +203,7 @@ export function useTaskWorkspace ({ agentApi = defaultAgentApi, setTimeoutFn = s
       schedulePoll(failedGeneration)
       return
     }
-    connectionState.value = 'reconnecting'
+    connectionState.value = resync ? 'resyncing' : 'reconnecting'
     scheduleRetry(failedGeneration)
   }
 
