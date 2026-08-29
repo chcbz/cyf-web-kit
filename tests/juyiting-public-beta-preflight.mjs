@@ -176,7 +176,14 @@ const login = async ({ request, credentials, guard }) => {
   }
 }
 
-export const checkAgentWebSocket = async ({ config, guard, timeoutMs, WebSocketCtor }) => {
+export const checkAgentWebSocket = async ({
+  config,
+  guard,
+  timeoutMs,
+  WebSocketCtor,
+  setTimeoutFn = setTimeout,
+  clearTimeoutFn = clearTimeout
+}) => {
   guard.beforeBoundary('credentialed agent WebSocket handshake')
   const Socket = WebSocketCtor || (
     await guard.runPromise(import('ws'), 'agent WebSocket module load')
@@ -188,52 +195,102 @@ export const checkAgentWebSocket = async ({ config, guard, timeoutMs, WebSocketC
   wsUrl.searchParams.set('api_key', config.credentials.apiKey)
   wsUrl.searchParams.set('agent_id', config.credentials.agentId)
   const ws = new Socket(wsUrl, { rejectUnauthorized: !config.allowInsecureTls })
+  const closedReadyState = Number.isInteger(Socket.CLOSED) ? Socket.CLOSED : 3
+  const closeState = {
+    promise: null,
+    closeStarted: false,
+    terminateStarted: false,
+    failures: []
+  }
+  const isClosed = () => ws.readyState === closedReadyState
+  const recordCloseFailure = failure => {
+    const normalized = failure instanceof Error ? failure : new Error('agent websocket close failed')
+    if (!closeState.failures.includes(normalized)) closeState.failures.push(normalized)
+    return normalized
+  }
+  const closeFailure = () => {
+    if (closeState.failures.length === 0) return null
+    if (closeState.failures.length === 1) return closeState.failures[0]
+    return new AggregateError([...closeState.failures], 'agent websocket forced close failed')
+  }
   const closeTimeout = () => Math.max(1, Math.min(timeoutMs, guard.remainingMs()))
-  let closePromise = null
   const closeAndWait = () => {
-    if (closePromise) return closePromise
-    closePromise = new Promise((resolvePromise, rejectPromise) => {
-      if (ws.readyState === 3 || (Number.isInteger(Socket.CLOSED) && ws.readyState === Socket.CLOSED)) {
-        resolvePromise()
-        return
-      }
+    if (isClosed()) return Promise.resolve()
+    if (closeState.promise) return closeState.promise
+    const operation = new Promise((resolvePromise, rejectPromise) => {
       const boundedTimeout = closeTimeout()
+      let settled = false
+      let timer
+      const removeListeners = () => {
+        guard.signal.removeEventListener('abort', onAbort)
+        ws.removeListener?.('close', onClose)
+        ws.removeListener?.('error', onError)
+      }
+      const settle = error => {
+        if (settled) return
+        settled = true
+        clearTimeoutFn(timer)
+        removeListeners()
+        if (error) rejectPromise(error)
+        else resolvePromise()
+      }
+      const confirmClosed = () => {
+        if (!isClosed()) return false
+        settle()
+        return true
+      }
+      const forceTerminate = failure => {
+        recordCloseFailure(failure)
+        if (!closeState.terminateStarted) {
+          closeState.terminateStarted = true
+          try {
+            if (typeof ws.terminate !== 'function') throw new Error('agent websocket forced termination is unavailable')
+            ws.terminate()
+          } catch (terminateError) {
+            recordCloseFailure(terminateError)
+          }
+        }
+        confirmClosed()
+      }
+      const onClose = () => {
+        if (!confirmClosed()) forceTerminate(new Error('agent websocket emitted close without CLOSED readyState'))
+      }
+      const onError = error => forceTerminate(error instanceof Error ? error : new Error('agent websocket close failed'))
+      const onAbort = () => forceTerminate(new Error('agent websocket close stopped by termination/deadline'))
+      timer = setTimeoutFn(() => {
+        forceTerminate(new Error(`agent websocket did not close within ${boundedTimeout}ms; terminated fail-closed`))
+        if (!isClosed()) {
+          settle(cleanupFailure(closeState.failures, 'agent websocket remained live after bounded forced termination'))
+        }
+      }, boundedTimeout)
+      guard.signal.addEventListener('abort', onAbort, { once: true })
+      ws.on('close', onClose)
+      ws.on('error', onError)
+      if (guard.signal.aborted) {
+        onAbort()
+      } else if (!closeState.closeStarted) {
+        closeState.closeStarted = true
+        try { ws.close() } catch (error) { forceTerminate(error) }
+      }
+      confirmClosed()
+    })
+    const joined = operation.finally(() => {
+      if (closeState.promise === joined) closeState.promise = null
+    })
+    closeState.promise = joined
+    return joined
+  }
+  const untrack = guard.trackCleanup(closeAndWait)
+  let operationError = null
+  try {
+    await new Promise((resolvePromise, rejectPromise) => {
+      const boundedTimeout = Math.max(1, Math.min(timeoutMs, guard.remainingMs()))
       let settled = false
       let timer
       const finish = error => {
         if (settled) return
         settled = true
-        clearTimeout(timer)
-        guard.signal.removeEventListener('abort', onAbort)
-        ws.removeListener?.('close', onClose)
-        ws.removeListener?.('error', onError)
-        if (error) rejectPromise(error)
-        else resolvePromise()
-      }
-      const onClose = () => finish()
-      const onError = error => finish(error instanceof Error ? error : new Error('agent websocket close failed'))
-      const onAbort = () => finish(new Error('agent websocket close stopped by termination/deadline'))
-      timer = setTimeout(() => {
-        try { ws.terminate?.() } catch (terminateError) { finish(terminateError); return }
-        finish(new Error(`agent websocket did not close within ${boundedTimeout}ms; terminated fail-closed`))
-      }, boundedTimeout)
-      guard.signal.addEventListener('abort', onAbort, { once: true })
-      ws.once('close', onClose)
-      ws.once('error', onError)
-      try { ws.close() } catch (error) { finish(error) }
-    })
-    return closePromise
-  }
-  const untrack = guard.trackCleanup(closeAndWait)
-  try {
-    await new Promise((resolvePromise, rejectPromise) => {
-      const boundedTimeout = Math.max(1, Math.min(timeoutMs, guard.remainingMs()))
-      let settled = false
-      const timer = setTimeout(() => finish(new Error(`agent websocket connected event timed out after ${boundedTimeout}ms`)), boundedTimeout)
-      const finish = error => {
-        if (settled) return
-        settled = true
-        clearTimeout(timer)
+        clearTimeoutFn(timer)
         guard.signal.removeEventListener('abort', onAbort)
         ws.removeListener?.('message', onMessage)
         ws.removeListener?.('unexpected-response', onUnexpectedResponse)
@@ -254,21 +311,37 @@ export const checkAgentWebSocket = async ({ config, guard, timeoutMs, WebSocketC
         finish(new Error(`websocket handshake rejected: ${hint}`))
       }
       const onError = error => finish(error)
+      timer = setTimeoutFn(() => finish(new Error(`agent websocket connected event timed out after ${boundedTimeout}ms`)), boundedTimeout)
       guard.signal.addEventListener('abort', onAbort, { once: true })
       ws.once('message', onMessage)
       ws.once('unexpected-response', onUnexpectedResponse)
       ws.once('error', onError)
+      if (guard.signal.aborted) onAbort()
     })
-    await closeAndWait()
-    untrack()
   } catch (error) {
-    try {
-      await closeAndWait()
-    } catch (closeError) {
-      throw cleanupFailure([error, closeError], 'agent websocket preflight failed and cleanup was incomplete')
-    }
-    throw error
+    operationError = error
   }
+
+  let terminalCleanupError = null
+  try {
+    await closeAndWait()
+  } catch (error) {
+    terminalCleanupError = error
+  }
+  if (terminalCleanupError) {
+    throw cleanupFailure(
+      [operationError, terminalCleanupError].filter(Boolean),
+      'agent websocket preflight failed and cleanup was incomplete'
+    )
+  }
+  const forcedCloseError = closeFailure()
+  if (operationError && forcedCloseError) {
+    throw cleanupFailure([operationError, forcedCloseError], 'agent websocket preflight failed after forced cleanup')
+  }
+  if (operationError) throw operationError
+  if (forcedCloseError) throw forcedCloseError
+  if (!isClosed()) throw cleanupFailure([], 'agent websocket cleanup completed without CLOSED readyState')
+  untrack()
 }
 
 const record = async ({ checks, name, fn, guard, secrets }) => {

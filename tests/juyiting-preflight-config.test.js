@@ -83,6 +83,63 @@ const makeGuard = ({ deadlineMs = 1000, now = Date.now, signalTarget = new Event
   })
 )
 
+const agentWebSocketConfig = {
+  targets: { backend: new URL('https://localhost:10018') },
+  credentials: { apiKey: 'key', agentId: 'agent' },
+  allowInsecureTls: false
+}
+
+const flushMicrotasks = async (count = 4) => {
+  for (let index = 0; index < count; index++) await Promise.resolve()
+}
+
+const createManualTimers = () => {
+  let nextId = 0
+  const timers = new Map()
+  return {
+    setTimeoutFn (callback, delay) {
+      const id = ++nextId
+      timers.set(id, { callback, delay })
+      return id
+    },
+    clearTimeoutFn (id) { timers.delete(id) },
+    runNext () {
+      const entry = timers.entries().next().value
+      assert.ok(entry, 'expected one pending WebSocket timer')
+      const [id, timer] = entry
+      timers.delete(id)
+      timer.callback()
+      return timer.delay
+    },
+    get delays () { return [...timers.values()].map(timer => timer.delay) }
+  }
+}
+
+const errorContains = (error, pattern) => pattern.test(error?.message || '') ||
+  error?.errors?.some(cause => errorContains(cause, pattern))
+
+class ControlledAgentSocket extends EventEmitter {
+  static OPEN = 1
+  static CLOSING = 2
+  static CLOSED = 3
+  constructor () {
+    super()
+    this.readyState = ControlledAgentSocket.OPEN
+    this.closeCalls = 0
+    this.terminateCalls = 0
+    queueMicrotask(() => this.emit('message', Buffer.from('{"type":"connected"}')))
+  }
+  close () {
+    this.closeCalls += 1
+    this.readyState = ControlledAgentSocket.CLOSING
+  }
+  terminate () { this.terminateCalls += 1 }
+  confirmClosed () {
+    this.readyState = ControlledAgentSocket.CLOSED
+    this.emit('close')
+  }
+}
+
 describe('juyiting public beta preflight safety', () => {
   it('missing credentials fail before injected network or child/browser spawn calls', async () => {
     let fetchCalls = 0
@@ -455,58 +512,172 @@ describe('juyiting public beta preflight safety', () => {
     assert.equal(killCalls, 1)
   })
 
-  it('waits for the credentialed agent WebSocket CLOSED event before accepting the preflight check', async () => {
+  it('waits for confirmed CLOSED before succeeding and untracking the credentialed socket', async () => {
     const guard = makeGuard()
+    const timers = createManualTimers()
     let socket
-    class ClosingSocket extends EventEmitter {
-      static CLOSED = 3
-      constructor () {
-        super()
-        socket = this
-        this.readyState = 1
-        queueMicrotask(() => this.emit('message', Buffer.from('{\"type\":\"connected\"}')))
-      }
-      close () {
-        this.readyState = ClosingSocket.CLOSED
-        this.emit('close')
-      }
-    }
-    await checkAgentWebSocket({
-      config: { targets: { backend: new URL('https://localhost:10018') }, credentials: { apiKey: 'key', agentId: 'agent' }, allowInsecureTls: false },
+    class Socket extends ControlledAgentSocket { constructor (...args) { super(...args); socket = this } }
+    const check = checkAgentWebSocket({
+      config: agentWebSocketConfig,
       guard,
       timeoutMs: 25,
-      WebSocketCtor: ClosingSocket
+      WebSocketCtor: Socket,
+      ...timers
     })
-    assert.equal(socket.readyState, ClosingSocket.CLOSED)
+    let settled = false
+    check.then(() => { settled = true }, () => { settled = true })
+    await flushMicrotasks()
+    assert.equal(socket.closeCalls, 1)
+    assert.equal(socket.readyState, Socket.CLOSING)
+    assert.equal(settled, false)
+    assert.equal(guard.cleanups.size, 1)
+    socket.confirmClosed()
+    await check
+    assert.equal(guard.cleanups.size, 0)
     await guard.dispose()
   })
 
-  it('terminates and fails closed when the credentialed agent WebSocket never reaches CLOSED', async () => {
+  it('abort during CLOSING joins tracked cleanup and terminates exactly once', async () => {
     const guard = makeGuard()
+    const timers = createManualTimers()
     let socket
-    class StalledSocket extends EventEmitter {
-      static CLOSED = 3
-      constructor () {
-        super()
-        socket = this
-        this.readyState = 1
-        queueMicrotask(() => this.emit('message', Buffer.from('{\"type\":\"connected\"}')))
+    class Socket extends ControlledAgentSocket {
+      constructor (...args) { super(...args); socket = this }
+      terminate () {
+        super.terminate()
+        this.readyState = Socket.CLOSED
       }
-      close () {}
-      terminate () { this.terminated = true }
     }
-    await assert.rejects(
-      checkAgentWebSocket({
-        config: { targets: { backend: new URL('https://localhost:10018') }, credentials: { apiKey: 'key', agentId: 'agent' }, allowInsecureTls: false },
-        guard,
-        timeoutMs: 10,
-        WebSocketCtor: StalledSocket
-      }),
-      error => error?.code === PREFLIGHT_CLEANUP_ERROR_CODE &&
-        error.errors.some(cause => /terminated fail-closed/.test(cause.message))
-    )
-    assert.equal(socket.terminated, true)
-    await assert.rejects(guard.dispose(), error => error?.code === PREFLIGHT_CLEANUP_ERROR_CODE)
+    const check = checkAgentWebSocket({ config: agentWebSocketConfig, guard, timeoutMs: 25, WebSocketCtor: Socket, ...timers })
+    await flushMicrotasks()
+    guard.terminate('global deadline exceeded')
+    await assert.rejects(check, error => errorContains(error, /stopped by termination\/deadline/))
+    await guard.cleanupPromise
+    await guard.dispose()
+    assert.equal(socket.closeCalls, 1)
+    assert.equal(socket.terminateCalls, 1)
+    assert.equal(socket.readyState, Socket.CLOSED)
+  })
+
+  it('close error uses the same idempotent forced termination path', async () => {
+    const guard = makeGuard()
+    const timers = createManualTimers()
+    let socket
+    class Socket extends ControlledAgentSocket {
+      constructor (...args) { super(...args); socket = this }
+      terminate () {
+        super.terminate()
+        this.readyState = Socket.CLOSED
+      }
+    }
+    const check = checkAgentWebSocket({ config: agentWebSocketConfig, guard, timeoutMs: 25, WebSocketCtor: Socket, ...timers })
+    await flushMicrotasks()
+    socket.emit('error', new Error('close exploded'))
+    await assert.rejects(check, error => errorContains(error, /close exploded/))
+    await guard.dispose()
+    assert.equal(socket.closeCalls, 1)
+    assert.equal(socket.terminateCalls, 1)
+  })
+
+  it('timeout terminates once and fails even when termination reaches CLOSED', async () => {
+    const guard = makeGuard()
+    const timers = createManualTimers()
+    let socket
+    class Socket extends ControlledAgentSocket {
+      constructor (...args) { super(...args); socket = this }
+      terminate () {
+        super.terminate()
+        this.readyState = Socket.CLOSED
+      }
+    }
+    const check = checkAgentWebSocket({ config: agentWebSocketConfig, guard, timeoutMs: 25, WebSocketCtor: Socket, ...timers })
+    await flushMicrotasks()
+    assert.deepEqual(timers.delays, [25])
+    assert.equal(timers.runNext(), 25)
+    await assert.rejects(check, error => errorContains(error, /terminated fail-closed/))
+    await guard.dispose()
+    assert.equal(socket.closeCalls, 1)
+    assert.equal(socket.terminateCalls, 1)
+  })
+
+  it('terminate throw remains fail-closed while a late CLOSED transition makes repeated cleanup safe', async () => {
+    const guard = makeGuard()
+    const timers = createManualTimers()
+    let socket
+    class Socket extends ControlledAgentSocket {
+      constructor (...args) { super(...args); socket = this }
+      terminate () {
+        super.terminate()
+        throw new Error('terminate exploded')
+      }
+    }
+    const check = checkAgentWebSocket({ config: agentWebSocketConfig, guard, timeoutMs: 25, WebSocketCtor: Socket, ...timers })
+    await flushMicrotasks()
+    timers.runNext()
+    await assert.rejects(check, error => errorContains(error, /terminate exploded/) && errorContains(error, /remained live/))
+    assert.equal(socket.closeCalls, 1)
+    assert.equal(socket.terminateCalls, 1)
+    socket.confirmClosed()
+    await guard.dispose()
+    assert.equal(socket.terminateCalls, 1)
+  })
+
+  it('late close after bounded forced termination is observed by repeated cleanup without another terminate', async () => {
+    const guard = makeGuard()
+    const timers = createManualTimers()
+    let socket
+    class Socket extends ControlledAgentSocket { constructor (...args) { super(...args); socket = this } }
+    const check = checkAgentWebSocket({ config: agentWebSocketConfig, guard, timeoutMs: 25, WebSocketCtor: Socket, ...timers })
+    await flushMicrotasks()
+    timers.runNext()
+    await assert.rejects(check, error => errorContains(error, /remained live/))
+    assert.equal(socket.terminateCalls, 1)
+    const disposing = guard.dispose()
+    await flushMicrotasks()
+    assert.deepEqual(timers.delays, [25])
+    assert.equal(socket.terminateCalls, 1)
+    socket.confirmClosed()
+    await disposing
+    assert.equal(socket.closeCalls, 1)
+    assert.equal(socket.terminateCalls, 1)
+  })
+
+  it('synthetic close while non-CLOSED cannot succeed and forces only one termination', async () => {
+    const guard = makeGuard()
+    const timers = createManualTimers()
+    let socket
+    class Socket extends ControlledAgentSocket { constructor (...args) { super(...args); socket = this } }
+    const check = checkAgentWebSocket({ config: agentWebSocketConfig, guard, timeoutMs: 25, WebSocketCtor: Socket, ...timers })
+    let settled = false
+    check.then(() => { settled = true }, () => { settled = true })
+    await flushMicrotasks()
+    socket.emit('close')
+    await flushMicrotasks()
+    assert.equal(settled, false)
+    assert.equal(socket.readyState, Socket.CLOSING)
+    assert.equal(socket.terminateCalls, 1)
+    socket.confirmClosed()
+    await assert.rejects(check, error => errorContains(error, /without CLOSED readyState/))
+    await guard.dispose()
+    assert.equal(socket.terminateCalls, 1)
+  })
+
+  it('already-CLOSED socket succeeds without another close or termination attempt', async () => {
+    const guard = makeGuard()
+    const timers = createManualTimers()
+    let socket
+    class Socket extends ControlledAgentSocket {
+      constructor (...args) {
+        super(...args)
+        socket = this
+        this.once('message', () => { this.readyState = Socket.CLOSED })
+      }
+    }
+    await checkAgentWebSocket({ config: agentWebSocketConfig, guard, timeoutMs: 25, WebSocketCtor: Socket, ...timers })
+    assert.equal(socket.closeCalls, 0)
+    assert.equal(socket.terminateCalls, 0)
+    assert.equal(guard.cleanups.size, 0)
+    await guard.dispose()
   })
 
   it('termination closes tracked WebSocket/CDP and kills tracked Chromium', async () => {
