@@ -321,7 +321,7 @@ export class PreflightTerminationGuard {
     this.terminationReason = ''
     this.cleanups = new Set()
     this.pendingCleanups = new Set()
-    this.cleanupErrors = []
+    this.cleanupErrors = new Map()
     this.cleanupPromise = Promise.resolve([])
     this.signalHandlers = new Map()
 
@@ -389,9 +389,10 @@ export class PreflightTerminationGuard {
   scheduleCleanup (cleanup) {
     const task = Promise.resolve().then(cleanup)
     this.pendingCleanups.add(task)
-    task.catch(error => {
-      this.cleanupErrors.push(error)
-    }).finally(() => {
+    task.then(
+      () => { this.cleanupErrors.delete(cleanup) },
+      error => { this.cleanupErrors.set(cleanup, error) }
+    ).finally(() => {
       this.pendingCleanups.delete(task)
     })
     this.cleanupPromise = Promise.allSettled([...this.pendingCleanups])
@@ -400,24 +401,35 @@ export class PreflightTerminationGuard {
 
   trackCleanup (cleanup) {
     let active = true
-    let invoked = false
+    let completed = false
+    let inFlight = null
     const run = () => {
-      if (!active || invoked) return undefined
-      invoked = true
-      return cleanup()
+      if (!active || completed) return undefined
+      if (inFlight) return inFlight
+      const attempt = Promise.resolve().then(cleanup).then(result => {
+        completed = true
+        return result
+      })
+      inFlight = attempt.finally(() => {
+        if (inFlight === joined) inFlight = null
+      })
+      const joined = inFlight
+      return joined
     }
     this.cleanups.add(run)
     if (this.terminated) this.scheduleCleanup(run)
     return () => {
       active = false
       this.cleanups.delete(run)
+      this.cleanupErrors.delete(run)
     }
   }
 
   terminate (reason) {
-    if (this.terminated) return this.cleanupPromise
-    this.terminationReason = reason
-    this.controller.abort(terminationError('active operation', reason))
+    if (!this.terminated) {
+      this.terminationReason = reason
+      this.controller.abort(terminationError('active operation', reason))
+    }
     for (const cleanup of [...this.cleanups]) this.scheduleCleanup(cleanup)
     return this.cleanupPromise
   }
@@ -430,8 +442,8 @@ export class PreflightTerminationGuard {
     while (this.pendingCleanups.size) {
       await Promise.allSettled([...this.pendingCleanups])
     }
-    if (this.cleanupErrors.length) {
-      throw cleanupFailure([...this.cleanupErrors], 'Preflight cleanup failed')
+    if (this.cleanupErrors.size) {
+      throw cleanupFailure([...this.cleanupErrors.values()], 'Preflight cleanup failed')
     }
   }
 }

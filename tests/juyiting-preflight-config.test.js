@@ -477,6 +477,30 @@ describe('juyiting public beta preflight safety', () => {
     assert.equal(cleaned, true)
   })
 
+  it('tracked cleanup retries after failure while concurrent dispose calls share one in-flight attempt', async () => {
+    const guard = makeGuard()
+    let attempts = 0
+    let releaseRetry
+    guard.trackCleanup(() => {
+      attempts += 1
+      if (attempts === 1) throw new Error('first bounded cleanup failed')
+      return new Promise(resolvePromise => { releaseRetry = resolvePromise })
+    })
+
+    await guard.terminate('global deadline exceeded')
+    assert.equal(attempts, 1)
+
+    const firstDispose = guard.dispose()
+    const secondDispose = guard.dispose()
+    await flushMicrotasks()
+    assert.equal(attempts, 2)
+    assert.equal(typeof releaseRetry, 'function')
+    releaseRetry()
+    await Promise.all([firstDispose, secondDispose])
+    assert.equal(attempts, 2)
+    assert.equal(guard.pendingCleanups.size, 0)
+  })
+
   it('termination between npm spawn and cleanup registration still kills the child', async () => {
     const signalTarget = new EventEmitter()
     const guard = makeGuard({ signalTarget })
@@ -600,7 +624,7 @@ describe('juyiting public beta preflight safety', () => {
     assert.equal(socket.terminateCalls, 1)
   })
 
-  it('terminate throw remains fail-closed while a late CLOSED transition makes repeated cleanup safe', async () => {
+  it('terminate throw remains fail-closed while dispose establishes a bounded late-CLOSED wait', async () => {
     const guard = makeGuard()
     const timers = createManualTimers()
     let socket
@@ -617,29 +641,70 @@ describe('juyiting public beta preflight safety', () => {
     await assert.rejects(check, error => errorContains(error, /terminate exploded/) && errorContains(error, /remained live/))
     assert.equal(socket.closeCalls, 1)
     assert.equal(socket.terminateCalls, 1)
+
+    const disposing = guard.dispose()
+    await flushMicrotasks()
+    assert.deepEqual(timers.delays, [25])
     socket.confirmClosed()
-    await guard.dispose()
+    await disposing
     assert.equal(socket.terminateCalls, 1)
+    assert.deepEqual(timers.delays, [])
   })
 
-  it('late close after bounded forced termination is observed by repeated cleanup without another terminate', async () => {
+  it('global abort plus a no-op terminate retries cleanup on concurrent dispose and converges on late CLOSED', async () => {
     const guard = makeGuard()
     const timers = createManualTimers()
     let socket
     class Socket extends ControlledAgentSocket { constructor (...args) { super(...args); socket = this } }
     const check = checkAgentWebSocket({ config: agentWebSocketConfig, guard, timeoutMs: 25, WebSocketCtor: Socket, ...timers })
     await flushMicrotasks()
-    timers.runNext()
-    await assert.rejects(check, error => errorContains(error, /remained live/))
+
+    const terminating = guard.terminate('global deadline exceeded')
+    await flushMicrotasks()
     assert.equal(socket.terminateCalls, 1)
-    const disposing = guard.dispose()
+    assert.deepEqual(timers.delays, [25])
+    timers.runNext()
+    await assert.rejects(check, error => errorContains(error, /stopped by termination\/deadline/) && errorContains(error, /remained live/))
+    await terminating
+    assert.equal(socket.readyState, Socket.CLOSING)
+    assert.equal(guard.cleanups.size, 1)
+
+    const firstDispose = guard.dispose()
+    const secondDispose = guard.dispose()
     await flushMicrotasks()
     assert.deepEqual(timers.delays, [25])
     assert.equal(socket.terminateCalls, 1)
     socket.confirmClosed()
-    await disposing
+    await Promise.all([firstDispose, secondDispose])
+    assert.equal(socket.readyState, Socket.CLOSED)
     assert.equal(socket.closeCalls, 1)
     assert.equal(socket.terminateCalls, 1)
+    assert.equal(guard.pendingCleanups.size, 0)
+    assert.deepEqual(timers.delays, [])
+  })
+
+  it('dispose remains bounded and fails closed when a no-op terminate never receives late CLOSED', async () => {
+    const guard = makeGuard()
+    const timers = createManualTimers()
+    let socket
+    class Socket extends ControlledAgentSocket { constructor (...args) { super(...args); socket = this } }
+    const check = checkAgentWebSocket({ config: agentWebSocketConfig, guard, timeoutMs: 25, WebSocketCtor: Socket, ...timers })
+    await flushMicrotasks()
+    const terminating = guard.terminate('global deadline exceeded')
+    await flushMicrotasks()
+    timers.runNext()
+    await assert.rejects(check, error => errorContains(error, /remained live/))
+    await terminating
+
+    const disposing = guard.dispose()
+    await flushMicrotasks()
+    assert.deepEqual(timers.delays, [25])
+    timers.runNext()
+    await assert.rejects(disposing, error => errorContains(error, /Preflight cleanup failed/) && errorContains(error, /remained live/))
+    assert.equal(socket.readyState, Socket.CLOSING)
+    assert.equal(socket.terminateCalls, 1)
+    assert.equal(guard.pendingCleanups.size, 0)
+    assert.deepEqual(timers.delays, [])
   })
 
   it('synthetic close while non-CLOSED cannot succeed and forces only one termination', async () => {
