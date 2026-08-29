@@ -503,19 +503,13 @@ describe('juyiting public beta preflight safety', () => {
     assert.equal(guard.cleanupErrors.size, 0)
   })
 
-  it('simultaneous reentrant cleanups share one outer disposal epoch without mutual-await', async () => {
+  it('simultaneous synchronous reentrant cleanups share one outer disposal epoch without mutual-await', async () => {
     const guard = makeGuard()
     const calls = [0, 0]
     const returned = [false, false]
-    let entrants = 0
-    let releaseEntrants
-    const bothEntered = new Promise(resolvePromise => { releaseEntrants = resolvePromise })
     for (let index = 0; index < 2; index++) {
       guard.trackCleanup(async () => {
         calls[index] += 1
-        entrants += 1
-        if (entrants === 2) releaseEntrants()
-        await bothEntered
         await guard.dispose()
         returned[index] = true
       })
@@ -538,6 +532,112 @@ describe('juyiting public beta preflight safety', () => {
     assert.equal(outerSettled, true)
     assert.deepEqual(calls, [1, 1])
     assert.deepEqual(returned, [true, true])
+    assert.equal(guard.cleanups.size, 0)
+    assert.equal(guard.pendingCleanups.size, 0)
+    assert.equal(guard.pendingCleanupOwners.size, 0)
+    assert.equal(guard.cleanupErrors.size, 0)
+    assert.equal(guard.activeCleanupEpoch, null)
+  })
+
+  it('same-turn detached queueMicrotask after cleanup success waits for ordinary external accounting', async () => {
+    const guard = makeGuard()
+    let lateDispose
+    let markLateStarted
+    let releaseSibling
+    let lateSettled = false
+    const lateStarted = new Promise(resolvePromise => { markLateStarted = resolvePromise })
+    guard.trackCleanup(() => {
+      queueMicrotask(() => {
+        lateDispose = guard.dispose().finally(() => { lateSettled = true })
+        markLateStarted()
+      })
+    })
+    guard.trackCleanup(() => new Promise(resolvePromise => { releaseSibling = resolvePromise }))
+
+    const outerDispose = guard.dispose()
+    await lateStarted
+    await flushMicrotasks()
+    assert.equal(typeof releaseSibling, 'function')
+    assert.equal(lateSettled, false)
+    releaseSibling()
+    await Promise.all([outerDispose, lateDispose])
+    assert.equal(lateSettled, true)
+    assert.equal(guard.cleanups.size, 0)
+    assert.equal(guard.pendingCleanups.size, 0)
+    assert.equal(guard.pendingCleanupOwners.size, 0)
+    assert.equal(guard.cleanupErrors.size, 0)
+    assert.equal(guard.activeCleanupEpoch, null)
+  })
+
+  it('same-turn detached queueMicrotask after cleanup failure observes the outer fail-closed result', async () => {
+    const guard = makeGuard()
+    let attempts = 0
+    let lateDispose
+    let markLateStarted
+    const lateStarted = new Promise(resolvePromise => { markLateStarted = resolvePromise })
+    guard.trackCleanup(() => {
+      attempts += 1
+      if (attempts === 1) {
+        queueMicrotask(() => {
+          lateDispose = guard.dispose()
+          markLateStarted()
+        })
+        throw new Error('same-turn detached cleanup failure')
+      }
+    })
+
+    const outerDispose = guard.dispose()
+    await lateStarted
+    const [outerError, lateError] = await Promise.all([
+      outerDispose.then(() => null, error => error),
+      lateDispose.then(() => null, error => error)
+    ])
+    assert.equal(outerError?.code, PREFLIGHT_CLEANUP_ERROR_CODE)
+    assert.equal(lateError?.code, PREFLIGHT_CLEANUP_ERROR_CODE)
+    assert.equal(lateError.message, outerError.message)
+    assert.equal(errorContains(lateError, /same-turn detached cleanup failure/), true)
+    assert.equal(attempts, 1)
+
+    await guard.dispose()
+    assert.equal(attempts, 2)
+    assert.equal(guard.cleanups.size, 0)
+    assert.equal(guard.pendingCleanups.size, 0)
+    assert.equal(guard.pendingCleanupOwners.size, 0)
+    assert.equal(guard.cleanupErrors.size, 0)
+    assert.equal(guard.activeCleanupEpoch, null)
+  })
+
+  it('same-turn detached queueMicrotask cannot skip a sibling cleanup failure', async () => {
+    const guard = makeGuard()
+    let siblingAttempts = 0
+    let lateDispose
+    let markLateStarted
+    const lateStarted = new Promise(resolvePromise => { markLateStarted = resolvePromise })
+    guard.trackCleanup(() => {
+      queueMicrotask(() => {
+        lateDispose = guard.dispose()
+        markLateStarted()
+      })
+    })
+    guard.trackCleanup(() => {
+      siblingAttempts += 1
+      if (siblingAttempts === 1) throw new Error('same-turn sibling cleanup failure')
+    })
+
+    const outerDispose = guard.dispose()
+    await lateStarted
+    const [outerError, lateError] = await Promise.all([
+      outerDispose.then(() => null, error => error),
+      lateDispose.then(() => null, error => error)
+    ])
+    assert.equal(outerError?.code, PREFLIGHT_CLEANUP_ERROR_CODE)
+    assert.equal(lateError?.code, PREFLIGHT_CLEANUP_ERROR_CODE)
+    assert.equal(lateError.message, outerError.message)
+    assert.equal(errorContains(lateError, /same-turn sibling cleanup failure/), true)
+    assert.equal(siblingAttempts, 1)
+
+    await guard.dispose()
+    assert.equal(siblingAttempts, 2)
     assert.equal(guard.cleanups.size, 0)
     assert.equal(guard.pendingCleanups.size, 0)
     assert.equal(guard.pendingCleanupOwners.size, 0)
