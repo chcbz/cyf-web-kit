@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { isIP } from 'node:net'
@@ -19,6 +20,7 @@ const LOCAL_INSECURE_TLS_ENV = 'JUYITING_ALLOW_INSECURE_LOCAL_TLS'
 const DEADLINE_ENV = 'JUYITING_PREFLIGHT_DEADLINE_MS'
 const SHA256_PATTERN = /^[a-f0-9]{64}$/i
 const URL_PATTERN = /\b(?:https?|wss?):\/\/[^\s"'<>]+/gi
+const cleanupExecution = new AsyncLocalStorage()
 
 const REQUIREMENTS = {
   preflight: {
@@ -321,6 +323,7 @@ export class PreflightTerminationGuard {
     this.terminationReason = ''
     this.cleanups = new Set()
     this.pendingCleanups = new Set()
+    this.pendingCleanupOwners = new Map()
     this.cleanupErrors = new Map()
     this.cleanupPromise = Promise.resolve([])
     this.signalHandlers = new Map()
@@ -387,13 +390,17 @@ export class PreflightTerminationGuard {
   }
 
   scheduleCleanup (cleanup) {
-    const task = Promise.resolve().then(cleanup)
+    const task = Promise.resolve().then(() => (
+      cleanupExecution.run({ guard: this, cleanup }, cleanup)
+    ))
     this.pendingCleanups.add(task)
+    this.pendingCleanupOwners.set(task, cleanup)
     task.then(
       () => { this.cleanupErrors.delete(cleanup) },
       error => { this.cleanupErrors.set(cleanup, error) }
     ).finally(() => {
       this.pendingCleanups.delete(task)
+      this.pendingCleanupOwners.delete(task)
     })
     this.cleanupPromise = Promise.allSettled([...this.pendingCleanups])
     return task
@@ -403,11 +410,18 @@ export class PreflightTerminationGuard {
     let active = true
     let completed = false
     let inFlight = null
+    const deactivate = () => {
+      if (!active) return
+      active = false
+      this.cleanups.delete(run)
+      this.cleanupErrors.delete(run)
+    }
     const run = () => {
       if (!active || completed) return undefined
       if (inFlight) return inFlight
       const attempt = Promise.resolve().then(cleanup).then(result => {
         completed = true
+        deactivate()
         return result
       })
       inFlight = attempt.finally(() => {
@@ -418,11 +432,7 @@ export class PreflightTerminationGuard {
     }
     this.cleanups.add(run)
     if (this.terminated) this.scheduleCleanup(run)
-    return () => {
-      active = false
-      this.cleanups.delete(run)
-      this.cleanupErrors.delete(run)
-    }
+    return deactivate
   }
 
   terminate (reason) {
@@ -438,13 +448,22 @@ export class PreflightTerminationGuard {
     if (this.deadlineTimer) this.clearTimeoutImpl(this.deadlineTimer)
     for (const [signal, handler] of this.signalHandlers) this.signalTarget.off(signal, handler)
     this.signalHandlers.clear()
-    for (const cleanup of [...this.cleanups]) this.scheduleCleanup(cleanup)
+    const execution = cleanupExecution.getStore()
+    const reentrantCleanup = execution?.guard === this ? execution.cleanup : null
+    for (const cleanup of [...this.cleanups]) {
+      if (cleanup !== reentrantCleanup) this.scheduleCleanup(cleanup)
+    }
     while (this.pendingCleanups.size) {
-      await Promise.allSettled([...this.pendingCleanups])
+      const pending = [...this.pendingCleanups].filter(task => (
+        this.pendingCleanupOwners.get(task) !== reentrantCleanup
+      ))
+      if (pending.length === 0) break
+      await Promise.allSettled(pending)
     }
-    if (this.cleanupErrors.size) {
-      throw cleanupFailure([...this.cleanupErrors.values()], 'Preflight cleanup failed')
-    }
+    const errors = [...this.cleanupErrors.entries()]
+      .filter(([cleanup]) => cleanup !== reentrantCleanup)
+      .map(([, error]) => error)
+    if (errors.length) throw cleanupFailure(errors, 'Preflight cleanup failed')
   }
 }
 

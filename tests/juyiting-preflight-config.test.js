@@ -498,7 +498,40 @@ describe('juyiting public beta preflight safety', () => {
     releaseRetry()
     await Promise.all([firstDispose, secondDispose])
     assert.equal(attempts, 2)
+    assert.equal(guard.cleanups.size, 0)
     assert.equal(guard.pendingCleanups.size, 0)
+    assert.equal(guard.cleanupErrors.size, 0)
+  })
+
+  it('cleanup may await reentrant dispose without self-await and still preserves other cleanup ordering', async () => {
+    const guard = makeGuard()
+    let reentrantCalls = 0
+    let reentrantReturned = false
+    let otherCalls = 0
+    let releaseOther
+    guard.trackCleanup(async () => {
+      reentrantCalls += 1
+      await guard.dispose()
+      reentrantReturned = true
+    })
+    guard.trackCleanup(() => {
+      otherCalls += 1
+      return new Promise(resolvePromise => { releaseOther = resolvePromise })
+    })
+
+    const firstDispose = guard.dispose()
+    const secondDispose = guard.dispose()
+    await flushMicrotasks(8)
+    assert.equal(reentrantCalls, 1)
+    assert.equal(otherCalls, 1)
+    assert.equal(reentrantReturned, false)
+    assert.equal(typeof releaseOther, 'function')
+    releaseOther()
+    await Promise.all([firstDispose, secondDispose])
+    assert.equal(reentrantReturned, true)
+    assert.equal(guard.cleanups.size, 0)
+    assert.equal(guard.pendingCleanups.size, 0)
+    assert.equal(guard.pendingCleanupOwners.size, 0)
   })
 
   it('termination between npm spawn and cleanup registration still kills the child', async () => {
@@ -581,6 +614,8 @@ describe('juyiting public beta preflight safety', () => {
     assert.equal(socket.closeCalls, 1)
     assert.equal(socket.terminateCalls, 1)
     assert.equal(socket.readyState, Socket.CLOSED)
+    assert.equal(guard.cleanups.size, 0)
+    assert.equal(guard.pendingCleanups.size, 0)
   })
 
   it('close error uses the same idempotent forced termination path', async () => {
@@ -601,6 +636,9 @@ describe('juyiting public beta preflight safety', () => {
     await guard.dispose()
     assert.equal(socket.closeCalls, 1)
     assert.equal(socket.terminateCalls, 1)
+    assert.equal(socket.readyState, Socket.CLOSED)
+    assert.equal(guard.cleanups.size, 0)
+    assert.equal(guard.pendingCleanups.size, 0)
   })
 
   it('timeout terminates once and fails even when termination reaches CLOSED', async () => {
@@ -622,6 +660,9 @@ describe('juyiting public beta preflight safety', () => {
     await guard.dispose()
     assert.equal(socket.closeCalls, 1)
     assert.equal(socket.terminateCalls, 1)
+    assert.equal(socket.readyState, Socket.CLOSED)
+    assert.equal(guard.cleanups.size, 0)
+    assert.equal(guard.pendingCleanups.size, 0)
   })
 
   it('terminate throw remains fail-closed while dispose establishes a bounded late-CLOSED wait', async () => {
@@ -648,6 +689,10 @@ describe('juyiting public beta preflight safety', () => {
     socket.confirmClosed()
     await disposing
     assert.equal(socket.terminateCalls, 1)
+    assert.equal(guard.cleanups.size, 0)
+    assert.equal(guard.pendingCleanups.size, 0)
+    assert.equal(socket.listenerCount('close'), 0)
+    assert.equal(socket.listenerCount('error'), 0)
     assert.deepEqual(timers.delays, [])
   })
 
@@ -679,7 +724,11 @@ describe('juyiting public beta preflight safety', () => {
     assert.equal(socket.readyState, Socket.CLOSED)
     assert.equal(socket.closeCalls, 1)
     assert.equal(socket.terminateCalls, 1)
+    assert.equal(guard.cleanups.size, 0)
     assert.equal(guard.pendingCleanups.size, 0)
+    assert.equal(guard.cleanupErrors.size, 0)
+    assert.equal(socket.listenerCount('close'), 0)
+    assert.equal(socket.listenerCount('error'), 0)
     assert.deepEqual(timers.delays, [])
   })
 
@@ -703,6 +752,22 @@ describe('juyiting public beta preflight safety', () => {
     await assert.rejects(disposing, error => errorContains(error, /Preflight cleanup failed/) && errorContains(error, /remained live/))
     assert.equal(socket.readyState, Socket.CLOSING)
     assert.equal(socket.terminateCalls, 1)
+    assert.equal(guard.cleanups.size, 1)
+    assert.equal(guard.cleanupErrors.size, 1)
+    assert.equal(guard.pendingCleanups.size, 0)
+    assert.equal(socket.listenerCount('close'), 0)
+    assert.equal(socket.listenerCount('error'), 0)
+    assert.deepEqual(timers.delays, [])
+
+    const repeatedDispose = guard.dispose()
+    await flushMicrotasks()
+    assert.deepEqual(timers.delays, [25])
+    timers.runNext()
+    await assert.rejects(repeatedDispose, error => errorContains(error, /remained live/))
+    assert.equal(socket.readyState, Socket.CLOSING)
+    assert.equal(socket.terminateCalls, 1)
+    assert.equal(guard.cleanups.size, 1)
+    assert.equal(guard.cleanupErrors.size, 1)
     assert.equal(guard.pendingCleanups.size, 0)
     assert.deepEqual(timers.delays, [])
   })
@@ -725,6 +790,9 @@ describe('juyiting public beta preflight safety', () => {
     await assert.rejects(check, error => errorContains(error, /without CLOSED readyState/))
     await guard.dispose()
     assert.equal(socket.terminateCalls, 1)
+    assert.equal(socket.readyState, Socket.CLOSED)
+    assert.equal(guard.cleanups.size, 0)
+    assert.equal(guard.pendingCleanups.size, 0)
   })
 
   it('already-CLOSED socket succeeds without another close or termination attempt', async () => {
