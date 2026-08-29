@@ -503,35 +503,89 @@ describe('juyiting public beta preflight safety', () => {
     assert.equal(guard.cleanupErrors.size, 0)
   })
 
-  it('cleanup may await reentrant dispose without self-await and still preserves other cleanup ordering', async () => {
+  it('simultaneous reentrant cleanups share one outer disposal epoch without mutual-await', async () => {
     const guard = makeGuard()
-    let reentrantCalls = 0
-    let reentrantReturned = false
-    let otherCalls = 0
-    let releaseOther
-    guard.trackCleanup(async () => {
-      reentrantCalls += 1
-      await guard.dispose()
-      reentrantReturned = true
-    })
-    guard.trackCleanup(() => {
-      otherCalls += 1
-      return new Promise(resolvePromise => { releaseOther = resolvePromise })
-    })
+    const calls = [0, 0]
+    const returned = [false, false]
+    let entrants = 0
+    let releaseEntrants
+    const bothEntered = new Promise(resolvePromise => { releaseEntrants = resolvePromise })
+    for (let index = 0; index < 2; index++) {
+      guard.trackCleanup(async () => {
+        calls[index] += 1
+        entrants += 1
+        if (entrants === 2) releaseEntrants()
+        await bothEntered
+        await guard.dispose()
+        returned[index] = true
+      })
+    }
 
-    const firstDispose = guard.dispose()
+    let outerSettled = false
+    const firstDispose = guard.dispose().finally(() => { outerSettled = true })
     const secondDispose = guard.dispose()
-    await flushMicrotasks(8)
-    assert.equal(reentrantCalls, 1)
-    assert.equal(otherCalls, 1)
-    assert.equal(reentrantReturned, false)
-    assert.equal(typeof releaseOther, 'function')
-    releaseOther()
-    await Promise.all([firstDispose, secondDispose])
-    assert.equal(reentrantReturned, true)
+    let timeout
+    try {
+      await Promise.race([
+        Promise.all([firstDispose, secondDispose]),
+        new Promise((_resolvePromise, rejectPromise) => {
+          timeout = setTimeout(() => rejectPromise(new Error('reentrant disposal exceeded 250ms')), 250)
+        })
+      ])
+    } finally {
+      clearTimeout(timeout)
+    }
+    assert.equal(outerSettled, true)
+    assert.deepEqual(calls, [1, 1])
+    assert.deepEqual(returned, [true, true])
     assert.equal(guard.cleanups.size, 0)
     assert.equal(guard.pendingCleanups.size, 0)
     assert.equal(guard.pendingCleanupOwners.size, 0)
+    assert.equal(guard.cleanupErrors.size, 0)
+    assert.equal(guard.activeCleanupEpoch, null)
+  })
+
+  it('detached stale cleanup context takes the ordinary retry and fail-closed disposal path', async () => {
+    const guard = makeGuard()
+    let attempts = 0
+    let releaseLate
+    let markLateStarted
+    let lateDispose
+    const lateGate = new Promise(resolvePromise => { releaseLate = resolvePromise })
+    const lateStarted = new Promise(resolvePromise => { markLateStarted = resolvePromise })
+    guard.trackCleanup(async () => {
+      attempts += 1
+      if (attempts === 1) {
+        lateGate.then(() => {
+          lateDispose = guard.dispose()
+          markLateStarted()
+        })
+      }
+      throw new Error('persistent detached cleanup failure')
+    })
+
+    const firstError = await guard.dispose().then(
+      () => null,
+      error => error
+    )
+    assert.equal(firstError?.code, PREFLIGHT_CLEANUP_ERROR_CODE)
+    assert.match(firstError.message, /Preflight cleanup failed/)
+    assert.equal(attempts, 1)
+
+    releaseLate()
+    await lateStarted
+    const lateError = await lateDispose.then(
+      () => null,
+      error => error
+    )
+    assert.equal(lateError?.code, PREFLIGHT_CLEANUP_ERROR_CODE)
+    assert.equal(lateError.message, firstError.message)
+    assert.equal(attempts, 2)
+    assert.equal(guard.cleanups.size, 1)
+    assert.equal(guard.cleanupErrors.size, 1)
+    assert.equal(guard.pendingCleanups.size, 0)
+    assert.equal(guard.pendingCleanupOwners.size, 0)
+    assert.equal(guard.activeCleanupEpoch, null)
   })
 
   it('termination between npm spawn and cleanup registration still kills the child', async () => {

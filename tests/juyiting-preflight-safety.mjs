@@ -326,6 +326,7 @@ export class PreflightTerminationGuard {
     this.pendingCleanupOwners = new Map()
     this.cleanupErrors = new Map()
     this.cleanupPromise = Promise.resolve([])
+    this.activeCleanupEpoch = null
     this.signalHandlers = new Map()
 
     for (const signal of ['SIGINT', 'SIGTERM']) {
@@ -389,21 +390,52 @@ export class PreflightTerminationGuard {
     return fetchImpl(url, { ...(options || {}), signal })
   }
 
-  scheduleCleanup (cleanup) {
+  scheduleCleanup (cleanup, epoch) {
+    const existing = epoch.tasks.get(cleanup)
+    if (existing) return existing
+    const invocationToken = { active: true }
     const task = Promise.resolve().then(() => (
-      cleanupExecution.run({ guard: this, cleanup }, cleanup)
+      cleanupExecution.run({
+        guard: this,
+        epochToken: epoch.token,
+        invocationToken
+      }, cleanup)
     ))
+    epoch.tasks.set(cleanup, task)
     this.pendingCleanups.add(task)
-    this.pendingCleanupOwners.set(task, cleanup)
+    this.pendingCleanupOwners.set(task, { cleanup, epochToken: epoch.token })
     task.then(
       () => { this.cleanupErrors.delete(cleanup) },
       error => { this.cleanupErrors.set(cleanup, error) }
     ).finally(() => {
+      invocationToken.active = false
       this.pendingCleanups.delete(task)
       this.pendingCleanupOwners.delete(task)
     })
-    this.cleanupPromise = Promise.allSettled([...this.pendingCleanups])
     return task
+  }
+
+  startCleanupEpoch () {
+    if (this.activeCleanupEpoch) return this.activeCleanupEpoch
+    const epoch = { token: { active: true }, promise: null, tasks: new Map() }
+    this.activeCleanupEpoch = epoch
+    const operation = Promise.resolve().then(async () => {
+      for (const cleanup of [...this.cleanups]) this.scheduleCleanup(cleanup, epoch)
+      while (true) {
+        const pending = [...this.pendingCleanups].filter(task => (
+          this.pendingCleanupOwners.get(task)?.epochToken === epoch.token
+        ))
+        if (pending.length === 0) break
+        await Promise.allSettled(pending)
+      }
+      return [...this.cleanupErrors.values()]
+    })
+    epoch.promise = operation.finally(() => {
+      epoch.token.active = false
+      if (this.activeCleanupEpoch === epoch) this.activeCleanupEpoch = null
+    })
+    this.cleanupPromise = epoch.promise
+    return epoch
   }
 
   trackCleanup (cleanup) {
@@ -431,7 +463,10 @@ export class PreflightTerminationGuard {
       return joined
     }
     this.cleanups.add(run)
-    if (this.terminated) this.scheduleCleanup(run)
+    if (this.terminated) {
+      if (this.activeCleanupEpoch) this.scheduleCleanup(run, this.activeCleanupEpoch)
+      else this.startCleanupEpoch()
+    }
     return deactivate
   }
 
@@ -440,8 +475,7 @@ export class PreflightTerminationGuard {
       this.terminationReason = reason
       this.controller.abort(terminationError('active operation', reason))
     }
-    for (const cleanup of [...this.cleanups]) this.scheduleCleanup(cleanup)
-    return this.cleanupPromise
+    return (this.activeCleanupEpoch || this.startCleanupEpoch()).promise
   }
 
   async dispose () {
@@ -449,20 +483,15 @@ export class PreflightTerminationGuard {
     for (const [signal, handler] of this.signalHandlers) this.signalTarget.off(signal, handler)
     this.signalHandlers.clear()
     const execution = cleanupExecution.getStore()
-    const reentrantCleanup = execution?.guard === this ? execution.cleanup : null
-    for (const cleanup of [...this.cleanups]) {
-      if (cleanup !== reentrantCleanup) this.scheduleCleanup(cleanup)
-    }
-    while (this.pendingCleanups.size) {
-      const pending = [...this.pendingCleanups].filter(task => (
-        this.pendingCleanupOwners.get(task) !== reentrantCleanup
-      ))
-      if (pending.length === 0) break
-      await Promise.allSettled(pending)
-    }
-    const errors = [...this.cleanupErrors.entries()]
-      .filter(([cleanup]) => cleanup !== reentrantCleanup)
-      .map(([, error]) => error)
+    const activeEpoch = this.activeCleanupEpoch
+    const isActiveReentry = activeEpoch &&
+      execution?.guard === this &&
+      execution.epochToken === activeEpoch.token &&
+      execution.invocationToken?.active === true &&
+      activeEpoch.token.active === true
+    if (isActiveReentry) return
+    const epoch = activeEpoch || this.startCleanupEpoch()
+    const errors = await epoch.promise
     if (errors.length) throw cleanupFailure(errors, 'Preflight cleanup failed')
   }
 }
