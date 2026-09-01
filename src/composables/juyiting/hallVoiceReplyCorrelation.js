@@ -10,8 +10,14 @@ export const createHallVoiceReplyCorrelation = ({ onReply, spokenMessageIds = ne
     active = null
   }
 
+  const closeIfCurrent = (turnId, reason) => {
+    if (!active || typeof turnId !== 'string' || active.turnId !== turnId) return false
+    close(reason)
+    return true
+  }
+
   const start = ({ turnId, baselineSequence, messages, conversationIdBeforeSend }) => {
-    if (active || typeof turnId !== 'string' || !Number.isSafeInteger(baselineSequence) || typeof conversationIdBeforeSend !== 'string') return false
+    if (active || typeof turnId !== 'string' || !turnId || !Number.isSafeInteger(baselineSequence) || typeof conversationIdBeforeSend !== 'string') return false
     active = {
       turnId,
       sendTimestamp: Date.now(),
@@ -21,13 +27,13 @@ export const createHallVoiceReplyCorrelation = ({ onReply, spokenMessageIds = ne
       conversationIdAfterSend: conversationIdBeforeSend || null,
       terminal: null
     }
-    return true
+    return turnId
   }
 
-  const resolveConversation = conversationId => {
-    if (!active || typeof conversationId !== 'string' || !conversationId) return false
+  const resolveConversation = (conversationId, turnId = active?.turnId) => {
+    if (!active || active.turnId !== turnId || typeof conversationId !== 'string' || !conversationId) return false
     if (active.conversationIdAfterSend && active.conversationIdAfterSend !== conversationId) {
-      close('conversation_mismatch')
+      closeIfCurrent(turnId, 'conversation_mismatch')
       return false
     }
     active.conversationIdAfterSend = conversationId
@@ -51,6 +57,7 @@ export const createHallVoiceReplyCorrelation = ({ onReply, spokenMessageIds = ne
 
   return {
     close,
+    closeIfCurrent,
     observe,
     resolveConversation,
     start,

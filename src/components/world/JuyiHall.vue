@@ -1037,31 +1037,36 @@ hallVoice = useHallVoiceConversation({
   getDraftRevision: () => draftRevision.value,
   isReplyBusy: () => isStreaming.value || isAwaitingReply.value,
   onCaptureStateChange: capturing => setSoundSuppressed?.(capturing),
-  onReplyTurnTerminal: ({ reason }) => {
-    voiceReplyCorrelation.close(reason)
-    if (reason === 'reply_timeout') cancelHallReplyTurn(reason)
+  onReplyTurnTerminal: ({ reason, turnId }) => {
+    const closedCurrentTurn = voiceReplyCorrelation.closeIfCurrent(turnId, reason)
+    if (closedCurrentTurn && reason === 'reply_timeout') cancelHallReplyTurn(reason)
   },
   onOpenReview: () => { if (!activePanel.value) openPanel('chat') },
   onSendVoice: async ({ content, contextSnapshot, draftRevision: frozenDraftRevision, turnId }) => {
     if (isStreaming.value || isAwaitingReply.value) return false
-    const started = voiceReplyCorrelation.start({
+    const correlationTurnId = voiceReplyCorrelation.start({
       turnId,
       baselineSequence: replyEventSequence.value,
       messages: messages.value,
       conversationIdBeforeSend: contextSnapshot.conversationId
     })
-    if (!started) return false
+    if (correlationTurnId !== turnId) return false
     playSend()
-    const accepted = await sendHallMessage({
-      content,
-      contextSnapshot,
-      source: 'voice',
-      clearDraftRevision: frozenDraftRevision,
-      onConversationResolved: id => voiceReplyCorrelation.resolveConversation(id)
-    })
-    if (!accepted) voiceReplyCorrelation.close('send_failed')
-    else if (conversationId.value) voiceReplyCorrelation.resolveConversation(conversationId.value)
-    return accepted
+    try {
+      const accepted = await sendHallMessage({
+        content,
+        contextSnapshot,
+        source: 'voice',
+        clearDraftRevision: frozenDraftRevision,
+        onConversationResolved: id => voiceReplyCorrelation.resolveConversation(id, correlationTurnId)
+      })
+      if (!accepted) voiceReplyCorrelation.closeIfCurrent(correlationTurnId, 'send_failed')
+      else if (conversationId.value) voiceReplyCorrelation.resolveConversation(conversationId.value, correlationTurnId)
+      return accepted
+    } catch (cause) {
+      voiceReplyCorrelation.closeIfCurrent(correlationTurnId, 'send_exception')
+      throw cause
+    }
   },
   showToast
 })

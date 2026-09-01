@@ -9,6 +9,7 @@ export const HALL_VOICE_AUTO_SEND_DELAY_MS = 1_500
 const runtimeEnv = import.meta.env ?? {}
 const supportedMimes = ['audio/webm;codecs=opus', 'audio/mp4']
 const captureStates = new Set(['requesting_permission', 'recording', 'stopping', 'transcribing', 'pending_send'])
+const interactionLockedStates = new Set([...captureStates, 'review', 'conflict', 'sending'])
 const exactStringFields = [
   'conversationId',
   'conversationScopeType',
@@ -139,9 +140,9 @@ export const useHallVoiceConversation = ({
   let pendingFinalReply = null
   let replyTurnId = ''
 
-  const voiceInteractionLockedRef = computed(() => captureStates.has(stateRef.value))
+  const voiceInteractionLockedRef = computed(() => interactionLockedStates.has(stateRef.value))
   const recordingRef = computed(() => stateRef.value === 'recording')
-  const canRecordRef = computed(() => supportedRef.value && !['requesting_permission', 'recording', 'stopping', 'transcribing', 'pending_send', 'waiting_reply', 'synthesizing'].includes(stateRef.value) && !isReplyBusy())
+  const canRecordRef = computed(() => supportedRef.value && !['requesting_permission', 'recording', 'stopping', 'transcribing', 'pending_send', 'sending', 'waiting_reply', 'synthesizing'].includes(stateRef.value) && !isReplyBusy())
   const targetLabelRef = computed(() => frozenRef.value?.targetLabel || getContext()?.targetLabel || '当前议事对象')
 
   const setState = next => {

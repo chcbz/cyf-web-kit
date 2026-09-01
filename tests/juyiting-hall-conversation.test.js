@@ -568,12 +568,13 @@ describe('useHallConversation finalized reply routing', () => {
         spokenMessageIds,
         onReply: (message, _turn, payload) => spokenReplies.push({ source: payload.source, text: message.content })
       })
+      const turnId = `turn-${duplicatePath || 'existing'}`
       expect(tracker.start({
-        turnId: `turn-${duplicatePath || 'existing'}`,
+        turnId,
         baselineSequence: conversation.replyEventSequence.value,
         messages: conversation.messages.value,
         conversationIdBeforeSend: existingConversationId
-      })).to.equal(true)
+      })).to.equal(turnId)
 
       conversation.setDraft('请报完整回话')
       const accepted = await conversation.sendHallMessage({
