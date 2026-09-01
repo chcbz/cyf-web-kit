@@ -9,7 +9,7 @@
         <button
           class="tool-action refresh-action"
           :class="{ 'is-refreshing': refreshing }"
-          :disabled="refreshing"
+          :disabled="refreshing || interactionLocked"
           title="点验厅中动静"
           @click="$emit('refresh-hall')"
         >
@@ -18,6 +18,7 @@
         </button>
         <button
           class="tool-action sound-toggle"
+          :disabled="interactionLocked"
           :title="soundEnabled ? '歇下声响' : '开起声响'"
           @click="$emit('toggle-sound')"
         >
@@ -26,7 +27,7 @@
         </button>
         <button
           class="tool-action orientation-action"
-          :disabled="isSceneMounting || orientationRequestPending || experienceMode === 'landscape-map'"
+          :disabled="interactionLocked || isSceneMounting || orientationRequestPending || experienceMode === 'landscape-map'"
           title="请求横屏全景"
           @click="$emit('request-landscape')"
         >
@@ -626,7 +627,7 @@ const retryScene = async () => {
 }
 
 const handleSceneKeydown = (event) => {
-  if (event.defaultPrevented || isSceneMounting.value || !isRunningGeneration(sceneMountAttempt)) return
+  if (event.defaultPrevented || props.interactionLocked || isSceneMounting.value || !isRunningGeneration(sceneMountAttempt)) return
   if (event.key === '+' || event.key === '=') {
     juyitingGame.zoomBy?.(0.12)
     event.preventDefault()

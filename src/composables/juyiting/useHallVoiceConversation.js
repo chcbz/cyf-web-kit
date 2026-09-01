@@ -1,248 +1,596 @@
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, getCurrentInstance, onBeforeUnmount, reactive, ref } from 'vue'
 
-const MAX_DURATION_MS = 45_000
-const MAX_AUDIO_BYTES = 5 * 1024 * 1024
-const MAX_REPLY_CODE_POINTS = 2_000
-const MAX_TTS_BYTES = 8 * 1024 * 1024
-const AUTO_SEND_DELAY_MS = 1_500
+export const HALL_VOICE_MAX_DURATION_MS = 45_000
+export const HALL_VOICE_MAX_AUDIO_BYTES = 5 * 1024 * 1024
+export const HALL_VOICE_MAX_REPLY_CODE_POINTS = 2_000
+export const HALL_VOICE_MAX_TTS_BYTES = 8 * 1024 * 1024
+export const HALL_VOICE_AUTO_SEND_DELAY_MS = 1_500
+
+const runtimeEnv = import.meta.env ?? {}
 const supportedMimes = ['audio/webm;codecs=opus', 'audio/mp4']
-
+const captureStates = new Set(['requesting_permission', 'recording', 'stopping', 'transcribing', 'pending_send'])
+const exactStringFields = [
+  'conversationId',
+  'conversationScopeType',
+  'conversationScopeKey',
+  'mode'
+]
+const optionalExactIdFields = ['targetAgentId', 'selectedAgentId', 'selectedTaskId', 'taskId']
+const exactStringArrayFields = ['targetAgentIds', 'participantAgentIds', 'mentionAgentIds']
+const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key)
 const codePointLength = value => Array.from(String(value || '')).length
-const clone = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value))
-const canonical = value => {
-  if (value === null || typeof value !== 'object') return value
-  if (Array.isArray(value)) return value.map(canonical)
-  return Object.keys(value).sort().reduce((result, key) => ({ ...result, [key]: canonical(value[key]) }), {})
-}
-const normalizedIds = value => [...new Set((Array.isArray(value) ? value : []).map(item => String(item)))].sort()
-const safeRequestId = () => (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 128)
+const safeRequestId = cryptoObject => (cryptoObject?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 128)
+const utf16Sort = values => [...values].sort((left, right) => left < right ? -1 : (left > right ? 1 : 0))
 
-export const useHallVoiceConversation = ({ apiStore, chatApi, enabled, getContext, getDraft, getDraftRevision, isReplyBusy, onOpenReview, onSendVoice, showToast }) => {
-  const state = ref(enabled ? 'idle' : 'unsupported')
-  const transcript = ref('')
-  const error = ref('')
-  const elapsedMs = ref(0)
-  const countdownMs = ref(0)
-  const autoSendEnabled = ref(false)
-  const replyVoiceEnabled = ref(false)
-  const detached = ref(false)
-  const frozen = ref(null)
-  const supported = ref(Boolean(enabled && navigator?.mediaDevices?.getUserMedia && globalThis.MediaRecorder))
-  const voiceTurnActive = ref(false)
+const cloneJson = value => {
+  if (value === null || ['string', 'boolean'].includes(typeof value)) return value
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new TypeError('metadata number must be finite')
+    return value
+  }
+  if (Array.isArray(value)) return value.map(cloneJson)
+  if (!value || typeof value !== 'object' || Object.getPrototypeOf(value) !== Object.prototype) {
+    throw new TypeError('metadata must be JSON-compatible')
+  }
+  return Object.keys(value).reduce((result, key) => {
+    if (value[key] === undefined) throw new TypeError('metadata cannot contain undefined')
+    result[key] = cloneJson(value[key])
+    return result
+  }, {})
+}
+
+export const canonicalizeHallVoiceValue = value => {
+  if (value === undefined) return ['undefined']
+  if (value === null) return ['null']
+  if (Array.isArray(value)) return ['array', value.map(canonicalizeHallVoiceValue)]
+  if (typeof value === 'object') {
+    return ['object', Object.keys(value).sort().map(key => [key, canonicalizeHallVoiceValue(value[key])])]
+  }
+  return [typeof value, value]
+}
+
+const normalizeExactStringArray = value => {
+  if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) throw new TypeError('ID arrays require exact strings')
+  return utf16Sort([...new Set(value)])
+}
+
+export const captureHallVoiceSnapshot = ({ context, draft, draftRevision }) => {
+  if (!context || typeof context !== 'object' || typeof draft !== 'string' || !Number.isSafeInteger(draftRevision) || draftRevision < 0) return null
+  const snapshot = { draft, draftRevision }
+  try {
+    for (const key of exactStringFields) {
+      if (!hasOwn(context, key) || typeof context[key] !== 'string') return null
+      snapshot[key] = context[key]
+    }
+    for (const key of optionalExactIdFields) {
+      if (!hasOwn(context, key)) continue
+      if (context[key] !== null && typeof context[key] !== 'string') return null
+      snapshot[key] = context[key]
+    }
+    for (const key of exactStringArrayFields) {
+      if (!hasOwn(context, key)) continue
+      snapshot[key] = normalizeExactStringArray(context[key])
+    }
+    if (!hasOwn(snapshot, 'targetAgentIds') || !hasOwn(snapshot, 'participantAgentIds')) return null
+    if (hasOwn(context, 'outgoingMetadata')) snapshot.outgoingMetadata = cloneJson(context.outgoingMetadata)
+    if (hasOwn(context, 'targetLabel')) {
+      if (typeof context.targetLabel !== 'string') return null
+      snapshot.targetLabel = context.targetLabel
+    }
+  } catch {
+    return null
+  }
+  snapshot.cas = JSON.stringify(canonicalizeHallVoiceValue(snapshot))
+  return Object.freeze(snapshot)
+}
+
+const defaultBrowser = () => ({
+  navigator: globalThis.navigator,
+  MediaRecorder: globalThis.MediaRecorder,
+  Audio: globalThis.Audio,
+  URL: globalThis.URL,
+  fetch: globalThis.fetch,
+  document: globalThis.document,
+  window: globalThis.window,
+  crypto: globalThis.crypto
+})
+
+export const useHallVoiceConversation = ({
+  apiStore,
+  chatApi,
+  enabled,
+  getContext,
+  getDraft,
+  getDraftRevision,
+  isReplyBusy,
+  onOpenReview,
+  onSendVoice,
+  onCaptureStateChange,
+  showToast,
+  browser: browserOverride
+}) => {
+  const browser = { ...defaultBrowser(), ...(browserOverride || {}) }
+  const browserSupported = Boolean(enabled && browser.navigator?.mediaDevices?.getUserMedia && browser.MediaRecorder)
+  const stateRef = ref(browserSupported ? 'idle' : 'unsupported')
+  const transcriptRef = ref('')
+  const errorRef = ref('')
+  const elapsedMsRef = ref(0)
+  const countdownMsRef = ref(0)
+  const autoSendEnabledRef = ref(false)
+  const replyVoiceEnabledRef = ref(false)
+  const detachedRef = ref(false)
+  const frozenRef = ref(null)
+  const voiceTurnActiveRef = ref(false)
+  const supportedRef = ref(browserSupported)
   let generation = 0
-  let stream = null
-  let recorder = null
+  let mediaStream = null
+  let mediaRecorder = null
   let chunks = []
   let bytes = 0
   let ticker = null
-  let hardStop = null
-  let countdown = null
-  let replyTimeout = null
+  let hardStopTimer = null
+  let countdownTimer = null
+  let replyTimer = null
   let uploadController = null
   let ttsController = null
-  let audio = null
-  let objectUrl = ''
+  let playback = null
+  let playbackUrl = ''
+  let pendingFinalReply = null
 
-  const voiceInteractionLocked = computed(() => ['requesting_permission', 'recording', 'stopping', 'transcribing', 'pending_send', 'review', 'conflict', 'sending', 'waiting_reply', 'synthesizing', 'speaking'].includes(state.value))
-  const recording = computed(() => state.value === 'recording')
-  const canRecord = computed(() => supported.value && enabled && !voiceTurnActive.value && !isReplyBusy())
+  const voiceInteractionLockedRef = computed(() => captureStates.has(stateRef.value))
+  const recordingRef = computed(() => stateRef.value === 'recording')
+  const canRecordRef = computed(() => supportedRef.value && !['requesting_permission', 'recording', 'stopping', 'transcribing', 'pending_send', 'waiting_reply', 'synthesizing'].includes(stateRef.value) && !isReplyBusy())
+  const targetLabelRef = computed(() => frozenRef.value?.targetLabel || getContext()?.targetLabel || '当前议事对象')
 
-  const stopTracks = () => {
-    stream?.getTracks?.().forEach(track => track.stop?.())
-    stream = null
+  const setState = next => {
+    const wasCapturing = captureStates.has(stateRef.value)
+    stateRef.value = next
+    const isCapturing = captureStates.has(next)
+    if (wasCapturing !== isCapturing) onCaptureStateChange?.(isCapturing)
   }
-  const stopPlayback = () => {
-    if (audio) { audio.pause?.(); audio.src = ''; audio = null }
-    if (objectUrl) URL.revokeObjectURL?.(objectUrl)
-    objectUrl = ''
-  }
-  const clearTimers = () => {
-    if (ticker) window.clearInterval(ticker)
-    if (hardStop) window.clearTimeout(hardStop)
-    if (countdown) window.clearInterval(countdown)
-    if (replyTimeout) window.clearTimeout(replyTimeout)
-    ticker = hardStop = countdown = replyTimeout = null
-  }
-  const cleanupCapture = () => {
-    clearTimers()
-    if (recorder?.state !== 'inactive') recorder?.stop?.()
-    recorder = null
-    stopTracks()
-    chunks = []; bytes = 0
-  }
-  const cancel = ({ preserveReview = false } = {}) => {
-    generation += 1
-    uploadController?.abort(new DOMException('Voice turn cancelled', 'AbortError'))
-    uploadController = null
-    ttsController?.abort(new DOMException('Voice turn cancelled', 'AbortError'))
-    ttsController = null
-    cleanupCapture()
-    stopPlayback()
-    countdownMs.value = 0
-    if (!preserveReview) {
-      transcript.value = ''
-      frozen.value = null
-      detached.value = false
-      if (!voiceTurnActive.value) state.value = supported.value ? 'idle' : 'unsupported'
-    }
-  }
-  const snapshot = () => {
-    const context = getContext() || {}
-    return Object.freeze({
-      draft: String(getDraft() || ''),
-      draftRevision: getDraftRevision(),
-      conversationId: context.conversationId || '',
-      conversationScopeType: context.conversationScopeType || 'public',
-      conversationScopeKey: context.conversationScopeKey || 'public',
-      mode: context.mode || 'public',
-      targetAgentIds: normalizedIds(context.targetAgentIds),
-      targetAgentId: context.targetAgentId == null ? null : String(context.targetAgentId),
-      participantAgentIds: normalizedIds(context.participantAgentIds),
-      mentionAgentIds: normalizedIds(context.mentionAgentIds),
-      selectedAgentId: context.selectedAgentId == null ? null : String(context.selectedAgentId),
-      selectedTaskId: context.selectedTaskId == null ? null : String(context.selectedTaskId),
-      taskId: context.taskId == null ? null : String(context.taskId),
-      outgoingMetadata: canonical(clone(context.outgoingMetadata || {}))
+  const stopTracks = stream => {
+    stream?.getTracks?.().forEach(track => {
+      track.onended = null
+      track.stop?.()
     })
   }
-  const matchesFrozen = () => {
-    const current = snapshot()
-    const previous = frozen.value
-    return Boolean(previous && previous.draft === current.draft && previous.draftRevision === current.draftRevision && JSON.stringify(previous) === JSON.stringify(current))
+  const clearCaptureTimers = () => {
+    if (ticker !== null) browser.window?.clearInterval?.(ticker)
+    if (hardStopTimer !== null) browser.window?.clearTimeout?.(hardStopTimer)
+    if (countdownTimer !== null) browser.window?.clearInterval?.(countdownTimer)
+    ticker = hardStopTimer = countdownTimer = null
+  }
+  const clearReplyTimer = () => {
+    if (replyTimer !== null) browser.window?.clearTimeout?.(replyTimer)
+    replyTimer = null
+  }
+  const stopPlayback = () => {
+    if (playback) {
+      playback.onended = null
+      playback.onerror = null
+      playback.pause?.()
+      playback.src = ''
+      playback = null
+    }
+    if (playbackUrl) browser.URL?.revokeObjectURL?.(playbackUrl)
+    playbackUrl = ''
+  }
+  const invalidateAsyncWork = ({ stopAudio = true } = {}) => {
+    generation += 1
+    uploadController?.abort(new DOMException('Voice turn cancelled', 'AbortError'))
+    ttsController?.abort(new DOMException('Voice turn cancelled', 'AbortError'))
+    uploadController = ttsController = null
+    clearCaptureTimers()
+    clearReplyTimer()
+    const recorder = mediaRecorder
+    mediaRecorder = null
+    if (recorder) {
+      recorder.ondataavailable = null
+      recorder.onerror = null
+      recorder.onstop = null
+      try { if (recorder.state !== 'inactive') recorder.stop() } catch {}
+    }
+    stopTracks(mediaStream)
+    mediaStream = null
+    chunks = []
+    bytes = 0
+    pendingFinalReply = null
+    if (stopAudio) stopPlayback()
+    return generation
+  }
+  const terminal = (next, { clearTranscript = false, clearTurn = true, detached = false } = {}) => {
+    invalidateAsyncWork()
+    if (clearTranscript) transcriptRef.value = ''
+    frozenRef.value = clearTranscript ? null : frozenRef.value
+    detachedRef.value = detached
+    countdownMsRef.value = 0
+    if (clearTurn) voiceTurnActiveRef.value = false
+    setState(next)
   }
   const openReview = (conflict = false) => {
-    state.value = conflict ? 'conflict' : 'review'
-    detached.value = conflict
+    clearCaptureTimers()
+    countdownMsRef.value = 0
+    detachedRef.value = conflict
+    setState(conflict ? 'conflict' : 'review')
     onOpenReview?.()
   }
-  const startRecording = async () => {
-    if (!canRecord.value) return false
-    cancel()
-    const current = ++generation
-    frozen.value = snapshot()
-    error.value = ''; detached.value = false; elapsedMs.value = 0
-    state.value = 'requesting_permission'
+  const snapshotNow = () => captureHallVoiceSnapshot({
+    context: getContext(),
+    draft: getDraft(),
+    draftRevision: getDraftRevision()
+  })
+  const matchesFrozen = () => {
+    const current = snapshotNow()
+    return Boolean(current && frozenRef.value && current.cas === frozenRef.value.cas)
+  }
+  const failCapture = message => {
+    errorRef.value = message
+    terminal('error', { clearTranscript: false, clearTurn: true })
+  }
+  const finishReplyTurn = next => {
+    pendingFinalReply = null
+    frozenRef.value = null
+    voiceTurnActiveRef.value = false
+    setState(next)
+  }
+  const cancel = ({ preserveReview = false } = {}) => {
+    const hadTranscript = Boolean(transcriptRef.value)
+    const conflict = preserveReview && hadTranscript
+    terminal(conflict ? 'conflict' : (supportedRef.value ? 'idle' : 'unsupported'), {
+      clearTranscript: !conflict,
+      clearTurn: true,
+      detached: conflict
+    })
+    if (conflict) onOpenReview?.()
+  }
+  const discard = () => terminal(supportedRef.value ? 'idle' : 'unsupported', { clearTranscript: true, clearTurn: true })
+
+  const upload = async (current, blob, mimeType) => {
+    if (current !== generation) return false
+    stopTracks(mediaStream)
+    mediaStream = null
+    mediaRecorder = null
+    chunks = []
+    bytes = 0
+    if (!blob.size || blob.size > HALL_VOICE_MAX_AUDIO_BYTES) {
+      failCapture('录音无效或超过 5MiB')
+      return false
+    }
+    setState('transcribing')
+    uploadController = new AbortController()
+    const body = new FormData()
+    body.append('audio', blob, mimeType.includes('mp4') ? 'juyiting-voice.m4a' : 'juyiting-voice.webm')
+    body.append('requestId', safeRequestId(browser.crypto))
+    body.append('language', 'zh-CN')
+    body.append('durationMs', String(elapsedMsRef.value))
     try {
-      const capture = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 } })
-      if (current !== generation) { capture.getTracks().forEach(track => track.stop()); return false }
-      stream = capture
-      const mimeType = supportedMimes.find(type => !MediaRecorder.isTypeSupported || MediaRecorder.isTypeSupported(type)) || ''
-      recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
-      chunks = []; bytes = 0
+      const response = await chatApi.create('/speech/transcriptions', body, { autoLoading: false, signal: uploadController.signal })
+      if (current !== generation) return false
+      const text = String(response?.data?.data?.text || response?.data?.text || '').trim()
+      if (!text) throw new Error('未识别到语音内容')
+      transcriptRef.value = text
+      if (autoSendEnabledRef.value && matchesFrozen() && !isReplyBusy()) startCountdown(current)
+      else openReview(!matchesFrozen())
+      return true
+    } catch (cause) {
+      if (current !== generation || cause?.name === 'AbortError') return false
+      errorRef.value = cause?.message || '语音转写失败，仍可使用文字传令'
+      openReview(false)
+      return false
+    } finally {
+      if (current === generation) uploadController = null
+    }
+  }
+
+  const startRecording = async () => {
+    if (!canRecordRef.value) return false
+    invalidateAsyncWork()
+    const current = generation
+    const frozen = snapshotNow()
+    if (!frozen) {
+      errorRef.value = '当前议事上下文不完整，请使用文字传令'
+      setState('error')
+      return false
+    }
+    frozenRef.value = frozen
+    transcriptRef.value = ''
+    errorRef.value = ''
+    detachedRef.value = false
+    elapsedMsRef.value = 0
+    voiceTurnActiveRef.value = false
+    setState('requesting_permission')
+    try {
+      const capture = await browser.navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 } })
+      if (current !== generation) {
+        stopTracks(capture)
+        return false
+      }
+      mediaStream = capture
+      const mimeType = supportedMimes.find(type => !browser.MediaRecorder.isTypeSupported || browser.MediaRecorder.isTypeSupported(type))
+      if (!mimeType) throw new Error('当前浏览器没有可用的录音格式')
+      const recorder = new browser.MediaRecorder(capture, { mimeType })
+      mediaRecorder = recorder
+      chunks = []
+      bytes = 0
       recorder.ondataavailable = event => {
         if (current !== generation || !event.data?.size) return
         bytes += event.data.size
-        if (bytes > MAX_AUDIO_BYTES) { error.value = '录音超过 5MiB'; recorder?.stop?.(); return }
+        if (bytes > HALL_VOICE_MAX_AUDIO_BYTES) {
+          failCapture('录音超过 5MiB，已停止')
+          return
+        }
         chunks.push(event.data)
       }
-      recorder.onerror = () => { if (current === generation) { error.value = '录音设备出错'; openReview() } }
-      recorder.onstop = () => { if (current === generation) void upload(current, new Blob(chunks, { type: recorder?.mimeType || mimeType || 'audio/webm' })) }
+      recorder.onerror = () => {
+        if (current === generation) failCapture('录音设备出错，已停止')
+      }
+      recorder.onstop = () => {
+        if (current !== generation) return
+        clearCaptureTimers()
+        const blob = new Blob(chunks, { type: mimeType })
+        void upload(current, blob, mimeType)
+      }
       recorder.start(250)
-      state.value = 'recording'
-      const started = Date.now()
-      ticker = window.setInterval(() => { elapsedMs.value = Math.min(MAX_DURATION_MS, Date.now() - started) }, 100)
-      hardStop = window.setTimeout(() => stopRecording(), MAX_DURATION_MS)
-      stream.getTracks().forEach(track => { track.onended = () => { if (current === generation && state.value === 'recording') { error.value = '录音设备已断开'; cancel() } } })
+      setState('recording')
+      const startedAt = Date.now()
+      ticker = browser.window.setInterval(() => { elapsedMsRef.value = Math.min(HALL_VOICE_MAX_DURATION_MS, Date.now() - startedAt) }, 100)
+      hardStopTimer = browser.window.setTimeout(() => stopRecording(), HALL_VOICE_MAX_DURATION_MS)
+      capture.getTracks().forEach(track => {
+        track.onended = () => {
+          if (current === generation && ['requesting_permission', 'recording', 'stopping'].includes(stateRef.value)) failCapture('录音设备已断开')
+        }
+      })
       return true
     } catch (cause) {
       if (current !== generation) return false
-      error.value = cause?.name === 'NotAllowedError' ? '未获麦克风权限，仍可使用文字传令' : '当前浏览器无法录音，仍可使用文字传令'
-      state.value = supported.value ? 'error' : 'unsupported'
+      const message = cause?.name === 'NotAllowedError'
+        ? '未获麦克风权限，仍可使用文字传令'
+        : (cause?.message || '当前浏览器无法录音，仍可使用文字传令')
+      failCapture(message)
       return false
     }
   }
+
   const stopRecording = () => {
-    if (state.value !== 'recording') return
-    state.value = 'stopping'
-    clearTimers()
-    recorder?.stop?.()
-    stopTracks()
-  }
-  const upload = async (current, blob) => {
-    if (current !== generation) return
-    if (!blob.size || blob.size > MAX_AUDIO_BYTES || error.value === '录音超过 5MiB') { error.value = '录音无效或超过 5MiB'; openReview(); return }
-    state.value = 'transcribing'
-    uploadController = new AbortController()
-    const body = new FormData()
-    body.append('audio', blob, 'juyiting-voice.webm')
-    body.append('requestId', safeRequestId())
-    body.append('language', 'zh-CN')
-    body.append('durationMs', String(elapsedMs.value))
+    if (stateRef.value !== 'recording' || !mediaRecorder) return false
+    setState('stopping')
+    clearCaptureTimers()
+    stopTracks(mediaStream)
     try {
-      const response = await chatApi.create('/speech/transcriptions', body, { autoLoading: false, signal: uploadController.signal })
-      if (current !== generation) return
-      const text = String(response?.data?.data?.text || response?.data?.text || '').trim()
-      if (!text) throw new Error('未识别到语音内容')
-      transcript.value = text
-      if (autoSendEnabled.value && matchesFrozen() && !isReplyBusy()) startCountdown(current)
-      else openReview(!matchesFrozen())
+      mediaRecorder.stop()
+      return true
     } catch (cause) {
-      if (current !== generation || cause?.name === 'AbortError') return
-      error.value = cause?.message || '语音转写失败，仍可使用文字传令'
-      openReview()
-    } finally { if (current === generation) uploadController = null }
+      failCapture(cause?.message || '录音停止失败')
+      return false
+    }
   }
+
   const startCountdown = current => {
-    state.value = 'pending_send'; countdownMs.value = AUTO_SEND_DELAY_MS
-    const start = Date.now()
-    countdown = window.setInterval(() => {
+    setState('pending_send')
+    countdownMsRef.value = HALL_VOICE_AUTO_SEND_DELAY_MS
+    const startedAt = Date.now()
+    countdownTimer = browser.window.setInterval(() => {
       if (current !== generation) return
-      countdownMs.value = Math.max(0, AUTO_SEND_DELAY_MS - (Date.now() - start))
-      if (!matchesFrozen() || isReplyBusy()) { clearTimers(); openReview(true); return }
-      if (!countdownMs.value) { clearTimers(); void sendTranscript(current) }
+      countdownMsRef.value = Math.max(0, HALL_VOICE_AUTO_SEND_DELAY_MS - (Date.now() - startedAt))
+      if (!matchesFrozen() || isReplyBusy()) {
+        openReview(true)
+        return
+      }
+      if (!countdownMsRef.value) {
+        clearCaptureTimers()
+        void sendTranscript(current)
+      }
     }, 50)
   }
+
   const sendTranscript = async (current = generation) => {
-    if (current !== generation || !matchesFrozen() || !transcript.value || isReplyBusy()) { openReview(true); return false }
-    const content = `${frozen.value.draft}${frozen.value.draft ? '\n' : ''}${transcript.value}`
-    if (codePointLength(content) > 1200) { error.value = '合并内容超过 1200 字符，请手动整理'; openReview(); return false }
-    state.value = 'sending'; voiceTurnActive.value = true
-    const accepted = await onSendVoice?.({ content, contextSnapshot: frozen.value, turnId: safeRequestId() })
-    if (current !== generation) return false
-    if (!accepted) { voiceTurnActive.value = false; openReview(true); return false }
-    if (voiceTurnActive.value) {
-      state.value = 'waiting_reply'
-      replyTimeout = window.setTimeout(() => {
-        if (current === generation && voiceTurnActive.value) { voiceTurnActive.value = false; state.value = 'idle'; showToast?.('回话超时，文字传令仍可继续') }
-      }, 120_000)
+    if (current !== generation || !transcriptRef.value || !matchesFrozen() || isReplyBusy()) {
+      openReview(true)
+      return false
     }
-    transcript.value = ''; frozen.value = null
+    const content = `${frozenRef.value.draft}${frozenRef.value.draft ? '\n' : ''}${transcriptRef.value}`
+    if (codePointLength(content) > 1200) {
+      errorRef.value = '合并内容超过 1200 字符，请手动整理'
+      openReview(false)
+      return false
+    }
+    clearCaptureTimers()
+    setState('sending')
+    voiceTurnActiveRef.value = true
+    const frozen = frozenRef.value
+    const accepted = await onSendVoice?.({
+      content,
+      contextSnapshot: frozen,
+      draftRevision: frozen.draftRevision,
+      turnId: safeRequestId(browser.crypto)
+    })
+    if (current !== generation) return false
+    if (!accepted) {
+      pendingFinalReply = null
+      voiceTurnActiveRef.value = false
+      openReview(true)
+      return false
+    }
+    transcriptRef.value = ''
+    const finalizedDuringSend = pendingFinalReply
+    pendingFinalReply = null
+    if (voiceTurnActiveRef.value) {
+      setState('waiting_reply')
+      if (finalizedDuringSend) {
+        void completeReply(finalizedDuringSend)
+      } else {
+        replyTimer = browser.window.setTimeout(() => {
+          if (current === generation && voiceTurnActiveRef.value) {
+            finishReplyTurn('idle')
+            showToast?.('回话超时，文字传令仍可继续')
+          }
+        }, 120_000)
+      }
+    }
     return true
   }
+
+  const adoptCurrentContext = () => {
+    if (!transcriptRef.value || !detachedRef.value) return false
+    const current = snapshotNow()
+    if (!current) return false
+    frozenRef.value = current
+    detachedRef.value = false
+    errorRef.value = ''
+    setState('review')
+    return true
+  }
+
   const applyTranscript = mode => {
-    if (!transcript.value || detached.value) return false
-    const next = mode === 'append' ? `${getDraft() || ''}${getDraft() ? '\n' : ''}${transcript.value}` : transcript.value
-    if (codePointLength(next) > 1200) { error.value = '内容超过 1200 字符，请手动整理'; return false }
+    if (!transcriptRef.value || detachedRef.value) return false
+    if (!matchesFrozen()) {
+      openReview(true)
+      return false
+    }
+    const currentDraft = getDraft()
+    if (typeof currentDraft !== 'string') return false
+    const next = mode === 'append' ? `${currentDraft}${currentDraft ? '\n' : ''}${transcriptRef.value}` : transcriptRef.value
+    if (codePointLength(next) > 1200) {
+      errorRef.value = '内容超过 1200 字符，请手动整理'
+      return false
+    }
     return next
   }
+
   const synthesize = async text => {
-    if (!replyVoiceEnabled.value || !voiceTurnActive.value) return false
-    if (codePointLength(text) > MAX_REPLY_CODE_POINTS) { showToast?.('回话较长，已保留文字，未自动朗读'); voiceTurnActive.value = false; state.value = 'idle'; return false }
+    if (!replyVoiceEnabledRef.value) {
+      finishReplyTurn('idle')
+      return false
+    }
+    if (codePointLength(text) > HALL_VOICE_MAX_REPLY_CODE_POINTS) {
+      showToast?.('回话较长，已保留文字，未自动朗读')
+      finishReplyTurn('idle')
+      return false
+    }
     const current = ++generation
-    state.value = 'synthesizing'; ttsController = new AbortController()
+    voiceTurnActiveRef.value = false
+    setState('synthesizing')
+    ttsController = new AbortController()
     try {
       const token = await apiStore.token()
       if (current !== generation || !token) throw new Error('语音回答需要登录')
-      const base = import.meta.env.VITE_API_BASE_URL || ''
-      const response = await fetch(`${base}/chat/speech/synthesis`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId: safeRequestId(), text, voice: 'juyiting-default', format: 'mp3' }), signal: ttsController.signal })
-      if (!response.ok || !response.body || Number(response.headers.get('content-length') || 0) > MAX_TTS_BYTES) throw new Error('语音回答暂不可用')
-      const reader = response.body.getReader(); const parts = []; let total = 0
-      while (true) { const { done, value } = await reader.read(); if (done) break; total += value.byteLength; if (total > MAX_TTS_BYTES) { await reader.cancel(); throw new Error('语音回答过大') } parts.push(value) }
+      const response = await browser.fetch(`${runtimeEnv.VITE_API_BASE_URL || ''}/chat/speech/synthesis`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId: safeRequestId(browser.crypto), text, voice: 'juyiting-default', format: 'mp3' }),
+        signal: ttsController.signal
+      })
+      const declaredLength = Number(response.headers.get('content-length') || 0)
+      if (!response.ok || !response.body || declaredLength > HALL_VOICE_MAX_TTS_BYTES) throw new Error('语音回答暂不可用')
+      const reader = response.body.getReader()
+      const parts = []
+      let total = 0
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        total += value.byteLength
+        if (total > HALL_VOICE_MAX_TTS_BYTES) {
+          await reader.cancel()
+          throw new Error('语音回答过大')
+        }
+        parts.push(value)
+      }
       if (current !== generation || !total) return false
-      objectUrl = URL.createObjectURL(new Blob(parts, { type: response.headers.get('content-type') || 'audio/mpeg' }))
-      audio = new Audio(objectUrl); audio.onended = () => { if (current === generation) { stopPlayback(); voiceTurnActive.value = false; state.value = 'idle' } }; audio.onerror = () => { if (current === generation) { error.value = '语音播放失败，文字已保留'; voiceTurnActive.value = false; state.value = 'idle' } }
-      await audio.play(); state.value = 'speaking'; return true
-    } catch (cause) { if (current === generation && cause?.name !== 'AbortError') { error.value = cause?.message || '语音回答失败，文字已保留'; voiceTurnActive.value = false; state.value = 'idle' } return false } finally { if (current === generation) ttsController = null }
+      playbackUrl = browser.URL.createObjectURL(new Blob(parts, { type: response.headers.get('content-type') || 'audio/mpeg' }))
+      const player = new browser.Audio(playbackUrl)
+      playback = player
+      const finishPlayback = nextState => {
+        if (current !== generation) return
+        stopPlayback()
+        finishReplyTurn(nextState)
+      }
+      player.onended = () => finishPlayback('idle')
+      player.onerror = () => {
+        errorRef.value = '语音播放失败，文字已保留'
+        finishPlayback('error')
+      }
+      try {
+        await player.play()
+      } catch (cause) {
+        if (current === generation) {
+          errorRef.value = cause?.message || '语音播放失败，文字已保留'
+          finishPlayback('error')
+        }
+        return false
+      }
+      if (current !== generation) return false
+      setState('speaking')
+      return true
+    } catch (cause) {
+      if (current === generation && cause?.name !== 'AbortError') {
+        errorRef.value = cause?.message || '语音回答失败，文字已保留'
+        stopPlayback()
+        finishReplyTurn('error')
+      }
+      return false
+    } finally {
+      if (current === generation) ttsController = null
+    }
   }
+
   const completeReply = message => {
-    if (replyTimeout) window.clearTimeout(replyTimeout)
-    replyTimeout = null
-    if (!replyVoiceEnabled.value) { voiceTurnActive.value = false; state.value = 'idle'; return }
-    if (message?.content) void synthesize(message.content); else { voiceTurnActive.value = false; state.value = 'idle' }
+    if (!voiceTurnActiveRef.value || typeof message?.content !== 'string' || !message.content.trim()) {
+      clearReplyTimer()
+      finishReplyTurn('idle')
+      return false
+    }
+    if (stateRef.value === 'sending') {
+      pendingFinalReply = message
+      return true
+    }
+    clearReplyTimer()
+    return synthesize(message.content)
   }
-  const discard = () => { transcript.value = ''; frozen.value = null; detached.value = false; state.value = supported.value ? 'idle' : 'unsupported' }
-  const onVisibility = () => { if (document.hidden && ['recording', 'pending_send'].includes(state.value)) { cancel({ preserveReview: true }); openReview(true) } }
-  addEventListener?.('pagehide', cancel); document?.addEventListener?.('visibilitychange', onVisibility)
-  onBeforeUnmount(() => { removeEventListener?.('pagehide', cancel); document?.removeEventListener?.('visibilitychange', onVisibility); cancel() })
-  return { applyTranscript, autoSendEnabled, canRecord, cancel, completeReply, countdownMs, detached, discard, elapsedMs, error, replyVoiceEnabled, recording, startRecording, state, stopRecording, supported, transcript, voiceInteractionLocked, voiceTurnActive, sendTranscript }
+  const onVisibility = () => {
+    if (!browser.document?.hidden || !captureStates.has(stateRef.value)) return
+    const preserve = Boolean(transcriptRef.value)
+    terminal(preserve ? 'conflict' : (supportedRef.value ? 'idle' : 'unsupported'), {
+      clearTranscript: !preserve,
+      clearTurn: true,
+      detached: preserve
+    })
+    if (preserve) onOpenReview?.()
+  }
+  browser.window?.addEventListener?.('pagehide', cancel)
+  browser.document?.addEventListener?.('visibilitychange', onVisibility)
+  const dispose = () => {
+    browser.window?.removeEventListener?.('pagehide', cancel)
+    browser.document?.removeEventListener?.('visibilitychange', onVisibility)
+    terminal(supportedRef.value ? 'idle' : 'unsupported', { clearTranscript: true, clearTurn: true })
+  }
+  if (getCurrentInstance()) onBeforeUnmount(dispose)
+
+  return reactive({
+    state: stateRef,
+    transcript: transcriptRef,
+    error: errorRef,
+    elapsedMs: elapsedMsRef,
+    countdownMs: countdownMsRef,
+    autoSendEnabled: autoSendEnabledRef,
+    replyVoiceEnabled: replyVoiceEnabledRef,
+    detached: detachedRef,
+    supported: supportedRef,
+    recording: recordingRef,
+    canRecord: canRecordRef,
+    voiceInteractionLocked: voiceInteractionLockedRef,
+    voiceTurnActive: voiceTurnActiveRef,
+    targetLabel: targetLabelRef,
+    startRecording,
+    stopRecording,
+    cancel,
+    discard,
+    adoptCurrentContext,
+    applyTranscript,
+    sendTranscript,
+    completeReply,
+    stopPlayback,
+    dispose,
+    setAutoSendEnabled: value => { autoSendEnabledRef.value = value === true },
+    setReplyVoiceEnabled: value => { replyVoiceEnabledRef.value = value === true }
+  })
 }

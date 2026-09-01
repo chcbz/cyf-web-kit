@@ -12,6 +12,7 @@
           type="button"
           title="重取回话"
           aria-label="重取回话"
+          :disabled="voice?.voiceInteractionLocked"
           @click="$emit('load-messages')"
         >
           <var-icon name="refresh" />
@@ -21,6 +22,7 @@
           type="button"
           title="另起话头"
           aria-label="另起话头"
+          :disabled="voice?.voiceInteractionLocked"
           @click="$emit('new-conversation')"
         >
           <var-icon name="plus" />

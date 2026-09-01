@@ -6,6 +6,7 @@ export const useHallLibrary = ({
   log,
   openPanel,
   outgoingMetadata,
+  setDraft,
   playSuccess,
   showToast
 }) => {
@@ -51,7 +52,7 @@ export const useHallLibrary = ({
       librarySourceType: item.summaryType || item.sourceType || 'memory'
     }
     const excerpt = content.length > 120 ? `${content.slice(0, 120)}...` : content
-    draft.value = `${draft.value ? `${draft.value}\n\n` : ''}参看案卷阁案卷：${excerpt}`
+    setDraft(`${draft.value ? `${draft.value}\n\n` : ''}参看案卷阁案卷：${excerpt}`)
     openPanel('chat')
     playSuccess()
     showToast('案卷已引入传令')

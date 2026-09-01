@@ -308,6 +308,7 @@ import { useHallBackendSceneState } from '@/composables/juyiting/useHallBackendS
 import { useHallCommandQueue } from '@/composables/juyiting/useHallCommandQueue'
 import { useHallConversation } from '@/composables/juyiting/useHallConversation'
 import { useHallVoiceConversation } from '@/composables/juyiting/useHallVoiceConversation'
+import { createHallVoiceReplyCorrelation } from '@/composables/juyiting/hallVoiceReplyCorrelation'
 import { useHallData } from '@/composables/juyiting/useHallData'
 import { useHallLibrary } from '@/composables/juyiting/useHallLibrary'
 import { useHallExperienceMode } from '@/composables/juyiting/useHallExperienceMode'
@@ -380,7 +381,11 @@ const outgoingMetadata = ref({})
 const effectiveSceneMode = ref('portrait')
 const voiceFeatureEnabled = import.meta.env.VITE_JUYITING_VOICE_ENABLED === 'true'
 let hallVoice = null
-let activeVoiceReply = null
+const spokenVoiceReplyIds = new Set()
+const voiceReplyCorrelation = createHallVoiceReplyCorrelation({
+  spokenMessageIds: spokenVoiceReplyIds,
+  onReply: message => hallVoice?.completeReply(message)
+})
 const {
   experienceMode,
   isMobileCoarse,
@@ -416,6 +421,7 @@ const {
   playSuccess,
   playTap,
   setSoundEnabled,
+  setSoundSuppressed,
   soundEnabled
 } = useHallSound()
 
@@ -531,6 +537,7 @@ const hallSceneDebugBridge = useHallSceneDebugBridge({
 
 const {
   chatContext,
+  chatMentionAgentIds,
   chatMentionAgents,
   chatMode,
   chatTargetText,
@@ -998,13 +1005,7 @@ const {
   selectedTask,
   showToast,
   onFinalReply: payload => {
-    const active = activeVoiceReply
-    if (!active || payload.sequence <= active.baseline) return
-    const replyConversationId = payload.conversationId?.toString() || ''
-    if (active.conversationId && replyConversationId !== active.conversationId) return
-    active.conversationId = replyConversationId
-    activeVoiceReply = null
-    hallVoice?.completeReply(payload.message)
+    voiceReplyCorrelation.observe(payload)
   }
 })
 
@@ -1012,23 +1013,53 @@ hallVoice = useHallVoiceConversation({
   apiStore,
   chatApi,
   enabled: voiceFeatureEnabled,
-  getContext: () => ({ ...chatContext.value, conversationId: conversationId.value, selectedAgentId: selectedAgent.value?.agentId, selectedTaskId: selectedTask.value?.id, outgoingMetadata: outgoingMetadata.value }),
+  getContext: () => {
+    const current = chatContext.value || {}
+    return {
+      conversationId: conversationId.value,
+      conversationScopeType: current.conversationScopeType,
+      conversationScopeKey: current.conversationScopeKey,
+      mode: current.mode,
+      targetAgentIds: current.targetAgentIds,
+      targetAgentId: current.targetAgentId,
+      participantAgentIds: current.participantAgentIds,
+      mentionAgentIds: chatMentionAgentIds.value,
+      selectedAgentId: selectedAgent.value?.agentId ?? null,
+      selectedTaskId: selectedTask.value?.id ?? null,
+      taskId: current.taskId ?? null,
+      outgoingMetadata: outgoingMetadata.value,
+      targetLabel: chatTargetText.value
+    }
+  },
   getDraft: () => draft.value,
   getDraftRevision: () => draftRevision.value,
   isReplyBusy: () => isStreaming.value || isAwaitingReply.value,
+  onCaptureStateChange: capturing => setSoundSuppressed?.(capturing),
   onOpenReview: () => { if (!activePanel.value) openPanel('chat') },
-  onSendVoice: async ({ content, contextSnapshot, turnId }) => {
+  onSendVoice: async ({ content, contextSnapshot, draftRevision: frozenDraftRevision, turnId }) => {
     if (isStreaming.value || isAwaitingReply.value) return false
-    activeVoiceReply = { baseline: replyEventSequence.value, conversationId: conversationId.value?.toString() || '', turnId }
+    const started = voiceReplyCorrelation.start({
+      turnId,
+      baselineSequence: replyEventSequence.value,
+      messages: messages.value,
+      conversationIdBeforeSend: contextSnapshot.conversationId
+    })
+    if (!started) return false
     playSend()
-    const accepted = await sendHallMessage({ content, contextSnapshot, source: 'voice', turnId })
-    if (!accepted) activeVoiceReply = null
-    else activeVoiceReply.conversationId = conversationId.value?.toString() || activeVoiceReply.conversationId
+    const accepted = await sendHallMessage({
+      content,
+      contextSnapshot,
+      source: 'voice',
+      clearDraftRevision: frozenDraftRevision,
+      onConversationResolved: id => voiceReplyCorrelation.resolveConversation(id)
+    })
+    if (!accepted) voiceReplyCorrelation.close('send_failed')
+    else if (conversationId.value) voiceReplyCorrelation.resolveConversation(conversationId.value)
     return accepted
   },
   showToast
 })
-const voiceInteractionLocked = hallVoice.voiceInteractionLocked
+const voiceInteractionLocked = computed(() => hallVoice.voiceInteractionLocked)
 const applyVoiceTranscript = mode => {
   const next = hallVoice.applyTranscript(mode)
   if (typeof next === 'string') { setDraft(next); hallVoice.discard() }
@@ -1050,6 +1081,7 @@ const {
   log,
   openPanel,
   outgoingMetadata,
+  setDraft,
   playSuccess,
   showToast
 })
@@ -1098,7 +1130,7 @@ const showRandomAgentBubble = () => {
 
 
 const handleNewHallConversation = () => {
-  activeVoiceReply = null
+  voiceReplyCorrelation.close('new_conversation')
   hallVoice?.cancel()
   playPanelOpen()
   newHallConversation()
@@ -1106,7 +1138,8 @@ const handleNewHallConversation = () => {
 }
 
 const handleSendHallMessage = async () => {
-  activeVoiceReply = null
+  voiceReplyCorrelation.close('manual_text_send')
+  hallVoice?.cancel()
   playSend()
   const currentContext = chatContext.value || {}
   const targets = currentContext.targetAgentIds?.length ? currentContext.targetAgentIds : currentContext.participantAgentIds
@@ -1201,7 +1234,8 @@ onUnmounted(() => {
   activePanel.value = ''
   renderedPanel.value = ''
   taskWorkspaceBinding.dispose()
-  hallVoice?.cancel()
+  voiceReplyCorrelation.close('unmount')
+  hallVoice?.dispose()
   disposeHallConversation()
   hallBackendSceneState?.dispose()
   stopHallEventStream()

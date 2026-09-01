@@ -1,5 +1,6 @@
 <template>
-  <form class="hall-chat-composer chat-composer" :class="composerClass" @submit.prevent="submit">
+  <div class="hall-chat-composer chat-composer" :class="composerClass">
+    <form class="composer-submit" @submit.prevent="submit">
     <div class="composer-context" :class="`is-${discussionVariant}`">
       <span class="composer-context-label">{{ contextLabel }}</span>
       <div v-if="targetChips.length" class="composer-targets" aria-label="传话对象">
@@ -10,7 +11,7 @@
           :class="{ 'is-locked': chip.locked }"
           type="button"
           :title="chip.label"
-          :disabled="chip.locked || isStreaming"
+          :disabled="chip.locked || inputLocked"
           @click="removeTarget(chip)"
         >
           <span>@{{ chip.label }}</span>
@@ -68,14 +69,15 @@
       </button>
     </div>
 
-    <HallVoiceControls :voice="voice" @apply="$emit('voice-apply', $event)" />
+      <div class="composer-meta">
+        <span>{{ draftLength }}/{{ maxLength }}</span>
+        <span v-if="isStreaming">候回话</span>
+        <span v-else>{{ hintText }}</span>
+      </div>
+    </form>
 
-    <div class="composer-meta">
-      <span>{{ draftLength }}/{{ maxLength }}</span>
-      <span v-if="isStreaming">候回话</span>
-      <span v-else>{{ hintText }}</span>
-    </div>
-  </form>
+    <HallVoiceControls :voice="voice" @apply="$emit('voice-apply', $event)" />
+  </div>
 </template>
 
 <script setup>
@@ -231,6 +233,10 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
   padding: 9px 12px 8px;
   border-top: 1px solid rgba(116, 75, 35, 0.16);
   background: #fffaf0;
+}
+
+.composer-submit {
+  display: contents;
 }
 
 .composer-context {

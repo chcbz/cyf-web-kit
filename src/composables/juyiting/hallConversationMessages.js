@@ -45,7 +45,7 @@ export const hasResolvedAgentReply = (messages = []) => {
 }
 
 export const appendHallEventMessage = (state, event) => {
-  if (!event || event.conversationId?.toString() !== state.conversationId?.toString()) {
+  if (!event || typeof event.conversationId !== 'string' || typeof state.conversationId !== 'string' || event.conversationId !== state.conversationId) {
     return { type: 'ignored' }
   }
   if (event.type === 'agent_message_delta') {
@@ -101,12 +101,12 @@ export const appendHallEventMessage = (state, event) => {
     statusText: event.type === 'agent_message' ? '回话已毕' : ''
   }
   state.messages.push(message)
-  if (event.senderType !== 'agent') {
-    state.isAwaitingReply = false
-    state.isStreaming = false
-    return { type: 'message', message, shouldStopPolling: true, toastName: event.senderName }
+  state.isAwaitingReply = false
+  state.isStreaming = false
+  if (event.senderType === 'agent' && event.type === 'agent_message') {
+    return { type: 'final', message, shouldStopPolling: true, toastName: event.senderName }
   }
-  return { type: 'message', message, toastName: event.senderName }
+  return { type: 'message', message, shouldStopPolling: true, toastName: event.senderName }
 }
 
 export const appendStreamPayload = (state, eventData) => {
@@ -132,10 +132,13 @@ export const appendStreamPayload = (state, eventData) => {
     if (data.type === 'agent_message_delta' || data.type === 'agent_message') {
       return appendHallEventMessage(state, data)
     }
-    if (data.conversationId) {
-      const conversationId = data.conversationId?.toString() || ''
-      const previousConversationId = state.conversationId?.toString() || ''
-      const shouldReconnect = conversationId && conversationId !== previousConversationId
+    if (Object.prototype.hasOwnProperty.call(data, 'conversationId')) {
+      if (typeof data.conversationId !== 'string' || !data.conversationId || typeof state.conversationId !== 'string') {
+        return { type: 'invalid_conversation' }
+      }
+      const conversationId = data.conversationId
+      const previousConversationId = state.conversationId
+      const shouldReconnect = conversationId !== previousConversationId
       state.conversationId = conversationId
       return { type: 'conversation', conversationId, shouldReconnect }
     }

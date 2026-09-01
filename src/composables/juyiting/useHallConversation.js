@@ -8,6 +8,7 @@ import {
 import { fetchHallConversationEvents } from '../../utils/authenticatedSse.js'
 import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
 import { combineAbortSignals } from '../../utils/abortSignals.js'
+import { captureHallVoiceSnapshot } from './useHallVoiceConversation.js'
 
 const runtimeEnv = import.meta.env ?? {}
 
@@ -34,6 +35,8 @@ export const useHallConversation = ({
   const eventStreamRecovering = ref(false)
   const draftRevision = ref(0)
   const replyEventSequence = ref(0)
+  const observedFinalReplyIds = new Set()
+  let localMessageSequence = 0
   let streamFinalCandidate = null
 
   let hallEventController = null
@@ -112,6 +115,22 @@ export const useHallConversation = ({
     setDraft('')
   }
 
+
+  const notifyFinalReply = ({ message, source }) => {
+    const messageId = typeof message?.localId === 'string' ? message.localId : ''
+    if (!messageId || !String(message.content || '').trim() || observedFinalReplyIds.has(messageId)) return false
+    observedFinalReplyIds.add(messageId)
+    replyEventSequence.value += 1
+    onFinalReply?.({
+      conversationId: conversationId.value,
+      message,
+      messageId,
+      source,
+      sequence: replyEventSequence.value
+    })
+    return true
+  }
+
   const appendHallEventMessage = (event) => {
     const state = {
       conversationId: conversationId.value,
@@ -128,9 +147,8 @@ export const useHallConversation = ({
       stopHallReplyPolling()
     }
     if (result.toastName) showToast(`${result.toastName} 已回话`)
-    if ((result.type === 'final' || (event?.type === 'agent_message' && result.message?.sender === 'AGENT')) && result.message?.content) {
-      replyEventSequence.value += 1
-      onFinalReply?.({ conversationId: conversationId.value, message: result.message, source: 'agent_event', sequence: replyEventSequence.value })
+    if (result.type === 'final' && result.message?.sender === 'AGENT') {
+      notifyFinalReply({ message: result.message, source: 'agent_event' })
     }
   }
 
@@ -146,8 +164,8 @@ export const useHallConversation = ({
   const startHallEventStream = async () => {
     if (disposed) return
     const generation = lifecycleGeneration
-    const id = conversationId.value?.toString()
-    if (!id || hallEventConversationId === id) return
+    const id = conversationId.value
+    if (typeof id !== 'string' || !id || hallEventConversationId === id) return
     stopHallEventStream()
     hallEventConversationId = id
     hallEventController = new AbortController()
@@ -252,6 +270,8 @@ export const useHallConversation = ({
         onSuccess: (contentResult) => {
           if (disposed || generation !== lifecycleGeneration) return
           messages.value = (contentResult?.data || []).map(normalizeHallMessage)
+          const finalAgentReplies = messages.value.filter(message => message.sender === 'AGENT' && !message.streaming && String(message.content || '').trim())
+          finalAgentReplies.forEach(message => notifyFinalReply({ message, source: 'poll_final' }))
           if (hasResolvedAgentReply(messages.value)) {
             isAwaitingReply.value = false
             isStreaming.value = false
@@ -295,7 +315,8 @@ export const useHallConversation = ({
           if (disposed || generation !== lifecycleGeneration) return
           const hallConversation = result?.data?.[0]
           if (!hallConversation) return
-          conversationId.value = hallConversation.id?.toString() || ''
+          if (typeof hallConversation.id !== 'string' || !hallConversation.id) return
+          conversationId.value = hallConversation.id
           await loadHallConversationContent(conversationId.value)
         }
       })
@@ -307,11 +328,11 @@ export const useHallConversation = ({
   }
 
   const startHallReplyPolling = (id = conversationId.value) => {
-    if (disposed || !id) return
+    if (disposed || typeof id !== 'string' || !id) return
     const generation = lifecycleGeneration
     stopHallReplyPolling()
     hallReplyPollTimer = window.setInterval(() => {
-      if (disposed || generation !== lifecycleGeneration || !isAwaitingReply.value || conversationId.value?.toString() !== id.toString()) {
+      if (disposed || generation !== lifecycleGeneration || !isAwaitingReply.value || conversationId.value !== id) {
         stopHallReplyPolling()
         return
       }
@@ -325,7 +346,7 @@ export const useHallConversation = ({
     const schedule = delay => {
       const timer = window.setTimeout(() => {
         hallSyncTimers = hallSyncTimers.filter(item => item !== timer)
-        if (!disposed && generation === lifecycleGeneration && conversationId.value?.toString() === id.toString()) {
+        if (!disposed && generation === lifecycleGeneration && conversationId.value === id) {
           loadHallConversationContent(id)
         }
       }, delay)
@@ -365,22 +386,48 @@ export const useHallConversation = ({
     }
     if (result.toastName) showToast(`${result.toastName} 已回话`)
     if (result.type === 'assistant' && result.message?.content) streamFinalCandidate = result.message
+    if (result.type === 'final' && result.message?.sender === 'AGENT') notifyFinalReply({ message: result.message, source: 'agent_event' })
     if (result.shouldReconnect) {
       startHallEventStream()
       scheduleHallConversationSync(result.conversationId)
     }
   }
 
-  const sendHallMessage = async ({ content: explicitContent, contextSnapshot, source = 'text', turnId } = {}) => {
-    const content = String((explicitContent ?? draft.value) || '').trim()
+  const sendHallMessage = async ({
+    content: explicitContent,
+    contextSnapshot,
+    source = 'text',
+    clearDraftRevision,
+    onConversationResolved
+  } = {}) => {
+    const isVoiceSend = source === 'voice'
+    if (isVoiceSend && typeof explicitContent !== 'string') return false
+    const content = (isVoiceSend ? explicitContent : String((explicitContent ?? draft.value) || '')).trim()
     if (disposed || !content || isStreaming.value) return false
-    const sendContext = contextSnapshot || currentChatContext.value
+    let sendContext = contextSnapshot || currentChatContext.value
+    if (isVoiceSend) {
+      const validated = captureHallVoiceSnapshot({
+        context: contextSnapshot,
+        draft: contextSnapshot?.draft,
+        draftRevision: contextSnapshot?.draftRevision
+      })
+      if (!validated || validated.cas !== contextSnapshot?.cas || clearDraftRevision !== validated.draftRevision) return false
+      sendContext = validated
+    }
+    const requestConversationId = isVoiceSend ? sendContext.conversationId : conversationId.value
+    const metadataSource = isVoiceSend ? (sendContext.outgoingMetadata || {}) : (outgoingMetadata?.value || {})
+    const mentionAgentIds = Array.isArray(sendContext.mentionAgentIds) && sendContext.mentionAgentIds.length
+      ? sendContext.mentionAgentIds
+      : sendContext.targetAgentIds
+    const selectedAgentId = isVoiceSend ? sendContext.selectedAgentId : (sendContext.selectedAgentId ?? selectedAgent.value?.agentId)
+    const selectedTaskId = isVoiceSend ? sendContext.selectedTaskId : (sendContext.selectedTaskId ?? selectedTask.value?.id)
     const generation = lifecycleGeneration
     if (explicitContent === undefined) clearDraft()
     stopHallReplyStreaming()
     streamFinalCandidate = null
+    localMessageSequence += 1
     messages.value.push({
-      localId: `user-${Date.now()}`,
+      localId: `user-${Date.now()}-${localMessageSequence}`,
       sender: 'USER',
       content,
       timestamp: Date.now(),
@@ -397,26 +444,26 @@ export const useHallConversation = ({
     try {
       await chatApi.create('/stream', {
         content,
-        conversationId: conversationId.value,
+        conversationId: requestConversationId,
         conversationType: 'juyiting',
         conversationScopeType: sendContext.conversationScopeType,
         conversationScopeKey: sendContext.conversationScopeKey,
         targetAgentIds: sendContext.targetAgentIds,
         targetAgentId: sendContext.targetAgentId,
         taskId: sendContext.taskId,
-        forceNewConversation: !conversationId.value,
+        forceNewConversation: requestConversationId === '',
         senderType: 'user',
         senderName: globalStore.user?.name || globalStore.user?.nickname || '寨中来客',
         metadata: {
+          ...metadataSource,
           scene: 'juyiting',
           mode: sendContext.mode,
           scopeKey: sendContext.conversationScopeKey,
-          selectedAgentId: sendContext.selectedAgentId ?? selectedAgent.value?.agentId,
-          mentionAgentIds: sendContext.mentionAgentIds || sendContext.targetAgentIds,
+          selectedAgentId,
+          mentionAgentIds,
           participantAgentIds: sendContext.participantAgentIds,
           targetAgentIds: sendContext.targetAgentIds,
-          selectedTaskId: sendContext.selectedTaskId ?? selectedTask.value?.id,
-          ...(outgoingMetadata?.value || {})
+          selectedTaskId
         }
       }, {
         responseType: 'stream',
@@ -431,43 +478,45 @@ export const useHallConversation = ({
           hallReplyStreamHandle = handle
         },
         onStream: eventData => {
-          if (!disposed && generation === lifecycleGeneration) processStream(eventData)
+          if (disposed || generation !== lifecycleGeneration) return
+          const previousConversationId = conversationId.value
+          processStream(eventData)
+          if (conversationId.value && conversationId.value !== previousConversationId) onConversationResolved?.(conversationId.value)
         },
         onStreamEnd: () => {
           if (disposed || generation !== lifecycleGeneration) return
           hallReplyStreamHandle = null
           isStreaming.value = false
           if (streamFinalCandidate?.content) {
-            replyEventSequence.value += 1
-            onFinalReply?.({ conversationId: conversationId.value, message: streamFinalCandidate, source: 'stream_end', sequence: replyEventSequence.value })
+            notifyFinalReply({ message: streamFinalCandidate, source: 'stream_end' })
             streamFinalCandidate = null
           }
-          if (isAwaitingReply.value && conversationId.value) {
-            startHallReplyPolling(conversationId.value)
-          }
+          if (isAwaitingReply.value && conversationId.value) startHallReplyPolling(conversationId.value)
         },
         onError: (message, requestError) => {
           if (disposed || generation !== lifecycleGeneration || requestError?.name === 'AbortError') return
           throw requestError || new Error(message)
         }
       })
-      if (!disposed && generation === lifecycleGeneration && outgoingMetadata) {
-        outgoingMetadata.value = {}
-      }
+      if (disposed || generation !== lifecycleGeneration) return false
+      if (isVoiceSend && draftRevision.value === clearDraftRevision) clearDraft()
+      if (outgoingMetadata) outgoingMetadata.value = {}
       return true
     } catch (error) {
-      if (error?.name === 'AbortError' || disposed || generation !== lifecycleGeneration) return
+      if (error?.name === 'AbortError' || disposed || generation !== lifecycleGeneration) return false
       log.error('聚义厅消息发送失败', error)
       isStreaming.value = false
       isAwaitingReply.value = false
       stopHallReplyPolling()
+      localMessageSequence += 1
       messages.value.push({
-        localId: `system-${Date.now()}`,
+        localId: `system-${Date.now()}-${localMessageSequence}`,
         sender: 'SYSTEM',
         content: '传令未达，请稍后再试',
         timestamp: Date.now(),
         streaming: false
       })
+      return false
     } finally {
       if (generation === lifecycleGeneration) {
         hallReplyController = null
