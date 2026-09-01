@@ -106,6 +106,7 @@ export const useHallVoiceConversation = ({
   onOpenReview,
   onSendVoice,
   onCaptureStateChange,
+  onReplyTurnTerminal,
   showToast,
   browser: browserOverride
 }) => {
@@ -136,6 +137,7 @@ export const useHallVoiceConversation = ({
   let playback = null
   let playbackUrl = ''
   let pendingFinalReply = null
+  let replyTurnId = ''
 
   const voiceInteractionLockedRef = computed(() => captureStates.has(stateRef.value))
   const recordingRef = computed(() => stateRef.value === 'recording')
@@ -198,13 +200,22 @@ export const useHallVoiceConversation = ({
     if (stopAudio) stopPlayback()
     return generation
   }
-  const terminal = (next, { clearTranscript = false, clearTurn = true, detached = false } = {}) => {
+  const closeReplyTurn = reason => {
+    if (!replyTurnId) return
+    const turnId = replyTurnId
+    replyTurnId = ''
+    onReplyTurnTerminal?.({ reason, turnId })
+  }
+  const terminal = (next, { clearTranscript = false, clearTurn = true, detached = false, replyReason = 'cancelled' } = {}) => {
     invalidateAsyncWork()
     if (clearTranscript) transcriptRef.value = ''
     frozenRef.value = clearTranscript ? null : frozenRef.value
     detachedRef.value = detached
     countdownMsRef.value = 0
-    if (clearTurn) voiceTurnActiveRef.value = false
+    if (clearTurn) {
+      voiceTurnActiveRef.value = false
+      closeReplyTurn(replyReason)
+    }
     setState(next)
   }
   const openReview = (conflict = false) => {
@@ -227,10 +238,12 @@ export const useHallVoiceConversation = ({
     errorRef.value = message
     terminal('error', { clearTranscript: false, clearTurn: true })
   }
-  const finishReplyTurn = next => {
+  const finishReplyTurn = (next, reason = 'reply_complete') => {
+    clearReplyTimer()
     pendingFinalReply = null
     frozenRef.value = null
     voiceTurnActiveRef.value = false
+    closeReplyTurn(reason)
     setState(next)
   }
   const cancel = ({ preserveReview = false } = {}) => {
@@ -243,7 +256,7 @@ export const useHallVoiceConversation = ({
     })
     if (conflict) onOpenReview?.()
   }
-  const discard = () => terminal(supportedRef.value ? 'idle' : 'unsupported', { clearTranscript: true, clearTurn: true })
+  const discard = () => terminal(supportedRef.value ? 'idle' : 'unsupported', { clearTranscript: true, clearTurn: true, replyReason: 'discarded' })
 
   const upload = async (current, blob, mimeType) => {
     if (current !== generation) return false
@@ -285,6 +298,7 @@ export const useHallVoiceConversation = ({
   const startRecording = async () => {
     if (!canRecordRef.value) return false
     invalidateAsyncWork()
+    closeReplyTurn('superseded_by_capture')
     const current = generation
     const frozen = snapshotNow()
     if (!frozen) {
@@ -398,16 +412,19 @@ export const useHallVoiceConversation = ({
     setState('sending')
     voiceTurnActiveRef.value = true
     const frozen = frozenRef.value
+    const turnId = safeRequestId(browser.crypto)
+    replyTurnId = turnId
     const accepted = await onSendVoice?.({
       content,
       contextSnapshot: frozen,
       draftRevision: frozen.draftRevision,
-      turnId: safeRequestId(browser.crypto)
+      turnId
     })
     if (current !== generation) return false
     if (!accepted) {
       pendingFinalReply = null
       voiceTurnActiveRef.value = false
+      closeReplyTurn('send_rejected')
       openReview(true)
       return false
     }
@@ -421,7 +438,7 @@ export const useHallVoiceConversation = ({
       } else {
         replyTimer = browser.window.setTimeout(() => {
           if (current === generation && voiceTurnActiveRef.value) {
-            finishReplyTurn('idle')
+            finishReplyTurn('idle', 'reply_timeout')
             showToast?.('回话超时，文字传令仍可继续')
           }
         }, 120_000)
@@ -561,7 +578,7 @@ export const useHallVoiceConversation = ({
   const dispose = () => {
     browser.window?.removeEventListener?.('pagehide', cancel)
     browser.document?.removeEventListener?.('visibilitychange', onVisibility)
-    terminal(supportedRef.value ? 'idle' : 'unsupported', { clearTranscript: true, clearTurn: true })
+    terminal(supportedRef.value ? 'idle' : 'unsupported', { clearTranscript: true, clearTurn: true, replyReason: 'disposed' })
   }
   if (getCurrentInstance()) onBeforeUnmount(dispose)
 

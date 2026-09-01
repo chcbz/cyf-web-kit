@@ -38,6 +38,7 @@ export const useHallConversation = ({
   const observedFinalReplyIds = new Set()
   let localMessageSequence = 0
   let streamFinalCandidate = null
+  let activeBuiltInTurn = null
 
   let hallEventController = null
   let hallEventConversationId = ''
@@ -115,14 +116,43 @@ export const useHallConversation = ({
     setDraft('')
   }
 
+  const exactMessageId = message => typeof message?.localId === 'string' && message.localId ? message.localId : ''
+  const beginBuiltInTurn = requestConversationId => {
+    activeBuiltInTurn = {
+      conversationId: requestConversationId || null,
+      baselineMessageIds: new Set(messages.value.map(exactMessageId).filter(Boolean)),
+      stagedFinals: [],
+      stagedMessageIds: new Set()
+    }
+  }
+  const clearBuiltInTurn = () => {
+    activeBuiltInTurn = null
+    streamFinalCandidate = null
+  }
+  const resolveBuiltInTurnConversation = id => {
+    if (!activeBuiltInTurn || typeof id !== 'string' || !id) return
+    activeBuiltInTurn.conversationId = id
+  }
+  const stageActiveBuiltInFinal = ({ message, source, toastName, replyConversationId = conversationId.value }) => {
+    if (!activeBuiltInTurn) return false
+    if (activeBuiltInTurn.conversationId && replyConversationId !== activeBuiltInTurn.conversationId) return false
+    const messageId = exactMessageId(message)
+    if (!messageId) return false
+    if (activeBuiltInTurn.baselineMessageIds.has(messageId)) return true
+    if (!activeBuiltInTurn.stagedMessageIds.has(messageId)) {
+      activeBuiltInTurn.stagedMessageIds.add(messageId)
+      activeBuiltInTurn.stagedFinals.push({ message, source, toastName, conversationId: replyConversationId })
+    }
+    return true
+  }
 
-  const notifyFinalReply = ({ message, source }) => {
-    const messageId = typeof message?.localId === 'string' ? message.localId : ''
+  const notifyFinalReply = ({ message, source, replyConversationId = conversationId.value }) => {
+    const messageId = exactMessageId(message)
     if (!messageId || !String(message.content || '').trim() || observedFinalReplyIds.has(messageId)) return false
     observedFinalReplyIds.add(messageId)
     replyEventSequence.value += 1
     onFinalReply?.({
-      conversationId: conversationId.value,
+      conversationId: replyConversationId,
       message,
       messageId,
       source,
@@ -143,12 +173,22 @@ export const useHallConversation = ({
     messages.value = state.messages
     isAwaitingReply.value = state.isAwaitingReply
     isStreaming.value = state.isStreaming
+    if (result.type === 'final' && result.message?.sender === 'AGENT' && stageActiveBuiltInFinal({
+      message: result.message,
+      source: 'agent_event',
+      toastName: result.toastName,
+      replyConversationId: event.conversationId
+    })) {
+      isAwaitingReply.value = true
+      isStreaming.value = true
+      return
+    }
     if (result.shouldStopPolling) {
       stopHallReplyPolling()
     }
     if (result.toastName) showToast(`${result.toastName} 已回话`)
     if (result.type === 'final' && result.message?.sender === 'AGENT') {
-      notifyFinalReply({ message: result.message, source: 'agent_event' })
+      notifyFinalReply({ message: result.message, source: 'agent_event', replyConversationId: event.conversationId })
     }
   }
 
@@ -250,6 +290,7 @@ export const useHallConversation = ({
     messages.value = []
     isStreaming.value = false
     isAwaitingReply.value = false
+    clearBuiltInTurn()
   }
 
   const unregisterIdentityCleanup = registerIdentityCleanup(clearHallConversationIdentityState)
@@ -271,8 +312,16 @@ export const useHallConversation = ({
           if (disposed || generation !== lifecycleGeneration) return
           messages.value = (contentResult?.data || []).map(normalizeHallMessage).filter(Boolean)
           const finalAgentReplies = messages.value.filter(message => message.sender === 'AGENT' && !message.streaming && String(message.content || '').trim())
-          finalAgentReplies.forEach(message => notifyFinalReply({ message, source: 'poll_final' }))
-          if (hasResolvedAgentReply(messages.value)) {
+          const activeTurnForConversation = Boolean(activeBuiltInTurn && activeBuiltInTurn.conversationId === id)
+          finalAgentReplies.forEach(message => {
+            if (!stageActiveBuiltInFinal({ message, source: 'poll_final', replyConversationId: id })) {
+              notifyFinalReply({ message, source: 'poll_final', replyConversationId: id })
+            }
+          })
+          if (activeTurnForConversation) {
+            isAwaitingReply.value = true
+            isStreaming.value = true
+          } else if (hasResolvedAgentReply(messages.value)) {
             isAwaitingReply.value = false
             isStreaming.value = false
             stopHallReplyPolling()
@@ -366,6 +415,7 @@ export const useHallConversation = ({
     messages.value = []
     isStreaming.value = false
     isAwaitingReply.value = false
+    clearBuiltInTurn()
     showToast('已另起厅前话头')
   }
 
@@ -390,6 +440,7 @@ export const useHallConversation = ({
     if (result.type === 'stream_final' && result.message?.content) {
       streamFinalCandidate = { message: result.message, conversationId: result.conversationId, toastName: result.toastName }
     }
+    if (result.type === 'conversation') resolveBuiltInTurnConversation(result.conversationId)
     if (result.shouldReconnect) {
       startHallEventStream()
       scheduleHallConversationSync(result.conversationId)
@@ -427,7 +478,8 @@ export const useHallConversation = ({
     const generation = lifecycleGeneration
     if (explicitContent === undefined) clearDraft()
     stopHallReplyStreaming()
-    streamFinalCandidate = null
+    clearBuiltInTurn()
+    beginBuiltInTurn(requestConversationId)
     localMessageSequence += 1
     messages.value.push({
       localId: `user-${Date.now()}-${localMessageSequence}`,
@@ -491,13 +543,19 @@ export const useHallConversation = ({
           hallReplyStreamHandle = null
           isStreaming.value = false
           const finalized = streamFinalCandidate
+          const completedTurn = activeBuiltInTurn
+          activeBuiltInTurn = null
           streamFinalCandidate = null
           const finalConversationId = conversationId.value
           if (finalized?.message?.content && typeof finalConversationId === 'string' && finalConversationId &&
             (!finalized.conversationId || finalized.conversationId === finalConversationId)) {
             if (finalized.toastName) showToast(`${finalized.toastName} 已回话`)
-            notifyFinalReply({ message: finalized.message, source: 'stream_end' })
+            notifyFinalReply({ message: finalized.message, source: 'stream_end', replyConversationId: finalConversationId })
           }
+          completedTurn?.stagedFinals.forEach(staged => {
+            if (staged.toastName && !observedFinalReplyIds.has(exactMessageId(staged.message))) showToast(`${staged.toastName} 已回话`)
+            notifyFinalReply({ message: staged.message, source: staged.source, replyConversationId: staged.conversationId })
+          })
           if (isAwaitingReply.value && conversationId.value) startHallReplyPolling(conversationId.value)
         },
         onError: (message, requestError) => {
@@ -514,6 +572,7 @@ export const useHallConversation = ({
       log.error('聚义厅消息发送失败', error)
       isStreaming.value = false
       isAwaitingReply.value = false
+      clearBuiltInTurn()
       stopHallReplyPolling()
       localMessageSequence += 1
       messages.value.push({

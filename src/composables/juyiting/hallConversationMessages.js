@@ -129,7 +129,6 @@ const appendStreamAgentFinal = (state, event) => {
     return { type: 'ignored' }
   }
   const existing = state.messages.find(message => message.localId === event.messageId)
-  if (existing && !existing.streaming) return { type: 'duplicate', message: existing }
   const message = existing || {
     localId: event.messageId,
     sender: 'AGENT',

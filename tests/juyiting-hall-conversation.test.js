@@ -433,22 +433,31 @@ describe('useHallConversation finalized reply routing', () => {
     await Promise.resolve()
     await Promise.resolve()
     await Promise.resolve()
+    await Promise.resolve()
   }
 
-  const runBuiltInFinalScenario = async ({ existingConversationId = '', externalOrder = null }) => {
+  const runBuiltInFinalScenario = async ({ existingConversationId = '', duplicatePath = null }) => {
     const originalSetTimeout = window.setTimeout
     const originalClearTimeout = window.clearTimeout
+    const originalFetch = global.fetch
     const timers = []
+    let sseController = null
+    let contentCalls = 0
     window.setTimeout = (callback, delay) => {
       const timer = { callback, delay, cleared: false }
       timers.push(timer)
       return timer
     }
     window.clearTimeout = timer => { if (timer) timer.cleared = true }
+    if (duplicatePath === 'live_sse') {
+      global.fetch = async () => new Response(new ReadableStream({
+        start (controller) { sseController = controller }
+      }), { status: 200, headers: { 'content-type': 'text/event-stream' } })
+    }
 
     const finalConversationId = existingConversationId || 'conversation-new-9223372036854775807'
-    const finalMessageId = `reply-${externalOrder || 'stream'}-9223372036854775807`
-    const finalText = `完整回话-${externalOrder || 'stream'}`
+    const finalMessageId = `reply-${duplicatePath || 'stream'}-9223372036854775807`
+    const finalText = `完整回话-${duplicatePath || 'stream'}`
     const callbacks = []
     const spokenReplies = []
     const spokenMessageIds = new Set()
@@ -457,8 +466,9 @@ describe('useHallConversation finalized reply routing', () => {
 
     try {
       conversation = useHallConversation({
-        apiStore: { token: async () => null },
+        apiStore: { token: async () => duplicatePath === 'live_sse' ? 'token' : null },
         chatApi: {
+          list: async (_path, _payload, options) => options.onSuccess({ data: [{ id: existingConversationId }] }),
           create: async (_path, _payload, options) => {
             const finalEvent = JSON.stringify({
               type: 'agent_message',
@@ -470,13 +480,6 @@ describe('useHallConversation finalized reply routing', () => {
               content: finalText,
               timestamp: 1788000000000
             })
-            options.onStream(finalEvent)
-            expect(callbacks, 'built-in final must remain pending before conversation resolution').to.have.length(0)
-            options.onStream(finalEvent)
-            expect(callbacks, 'duplicate built-in final must not commit').to.have.length(0)
-            options.onStream(JSON.stringify({ conversationId: finalConversationId }))
-            expect(callbacks, 'trailing conversation id alone must not commit').to.have.length(0)
-
             const runPollDuplicate = async () => {
               const syncTimer = timers.find(timer => timer.delay === 1500 && !timer.cleared)
               expect(syncTimer, 'new-conversation sync timer').to.exist
@@ -484,19 +487,47 @@ describe('useHallConversation finalized reply routing', () => {
               await flushMicrotasks()
             }
 
-            if (externalOrder === 'before_stream_end') await runPollDuplicate()
+            if (duplicatePath === 'live_sse') {
+              sseController.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+                type: 'agent_message',
+                conversationId: finalConversationId,
+                messageId: finalMessageId,
+                agentId: 'wuyong',
+                senderType: 'agent',
+                senderName: '吴用',
+                content: '实时副本残片',
+                timestamp: 1787999999999
+              })}\n`))
+              sseController.close()
+              await flushMicrotasks()
+              expect(callbacks, 'live SSE duplicate must remain pending during the built-in turn').to.have.length(0)
+              options.onStream(finalEvent)
+              options.onStream(JSON.stringify({ conversationId: finalConversationId }))
+            } else if (duplicatePath === 'poll_before_stream_end') {
+              options.onStream(JSON.stringify({ conversationId: finalConversationId }))
+              await runPollDuplicate()
+              expect(callbacks, 'poll duplicate must remain pending during the built-in turn').to.have.length(0)
+              options.onStream(finalEvent)
+            } else {
+              options.onStream(finalEvent)
+              options.onStream(finalEvent)
+              options.onStream(JSON.stringify({ conversationId: finalConversationId }))
+            }
+            expect(callbacks, 'built-in final must remain pending until stream end').to.have.length(0)
             options.onStreamEnd()
             options.onStreamEnd()
-            if (externalOrder === 'after_stream_end') await runPollDuplicate()
+            if (duplicatePath === 'poll_after_stream_end') await runPollDuplicate()
           },
           getById: async (_path, id, options) => {
             expect(id).to.equal(finalConversationId)
-            await options.onSuccess({ data: [{
+            contentCalls += 1
+            const isInitialSseLoad = duplicatePath === 'live_sse' && contentCalls === 1
+            await options.onSuccess({ data: isInitialSseLoad ? [] : [{
               id: finalMessageId,
               senderType: 'agent',
               senderName: '吴用',
-              content: finalText,
-              createTime: 1788000000000,
+              content: '轮询副本残片',
+              createTime: 1787999999999,
               metadata: JSON.stringify({ agentId: 'wuyong' })
             }] })
           }
@@ -525,14 +556,20 @@ describe('useHallConversation finalized reply routing', () => {
           tracker.observe(payload)
         }
       })
-      conversation.conversationId.value = existingConversationId
+      if (duplicatePath === 'live_sse') {
+        await conversation.loadHallMessages()
+        await flushMicrotasks()
+        expect(sseController, 'existing-conversation live SSE controller').to.exist
+      } else {
+        conversation.conversationId.value = existingConversationId
+      }
       conversation.messages.value = [{ localId: 'baseline-old-reply', sender: 'AGENT', content: '旧回话', streaming: false }]
       tracker = createHallVoiceReplyCorrelation({
         spokenMessageIds,
         onReply: (message, _turn, payload) => spokenReplies.push({ source: payload.source, text: message.content })
       })
       expect(tracker.start({
-        turnId: `turn-${externalOrder || 'existing'}`,
+        turnId: `turn-${duplicatePath || 'existing'}`,
         baselineSequence: conversation.replyEventSequence.value,
         messages: conversation.messages.value,
         conversationIdBeforeSend: existingConversationId
@@ -551,18 +588,17 @@ describe('useHallConversation finalized reply routing', () => {
       expect(callbacks[0]).to.deep.include({
         conversationId: finalConversationId,
         messageId: finalMessageId,
-        sequence: 1
+        sequence: 1,
+        source: 'stream_end'
       })
-      expect(spokenReplies).to.deep.equal([{
-        source: externalOrder === 'before_stream_end' ? 'poll_final' : 'stream_end',
-        text: finalText
-      }])
+      expect(spokenReplies).to.deep.equal([{ source: 'stream_end', text: finalText }])
       expect(spokenMessageIds.has(finalMessageId)).to.equal(true)
       expect(spokenMessageIds.has('baseline-old-reply')).to.equal(false)
     } finally {
       conversation?.disposeHallConversation()
       window.setTimeout = originalSetTimeout
       window.clearTimeout = originalClearTimeout
+      global.fetch = originalFetch
     }
   }
 
@@ -570,9 +606,16 @@ describe('useHallConversation finalized reply routing', () => {
     await runBuiltInFinalScenario({ existingConversationId: 'conversation-existing-9223372036854775807' })
   })
 
-  it('deduplicates built-in and poll finals in both arrival orders for a new conversation', async () => {
-    await runBuiltInFinalScenario({ externalOrder: 'before_stream_end' })
-    await runBuiltInFinalScenario({ externalOrder: 'after_stream_end' })
+  it('makes stream end win over an existing-conversation live SSE duplicate', async () => {
+    await runBuiltInFinalScenario({ existingConversationId: 'conversation-existing-sse-9223372036854775807', duplicatePath: 'live_sse' })
+  })
+
+  it('makes stream end win over a new-conversation poll duplicate before end', async () => {
+    await runBuiltInFinalScenario({ duplicatePath: 'poll_before_stream_end' })
+  })
+
+  it('deduplicates a new-conversation poll replay after stream end', async () => {
+    await runBuiltInFinalScenario({ duplicatePath: 'poll_after_stream_end' })
   })
 })
 

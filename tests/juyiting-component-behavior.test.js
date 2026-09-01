@@ -16,6 +16,7 @@ let HallChatComposer
 let HallStage
 let LibraryPanel
 let PersonaCatalogPanel
+let SelectedAgentCard
 let hallGameMock
 let classifyViewportResizeMock
 
@@ -127,6 +128,7 @@ describe('JuyiHall component behavior', () => {
     HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
     LibraryPanel = loadSfc('../src/components/juyiting/LibraryPanel.vue')
     PersonaCatalogPanel = loadSfc('../src/components/juyiting/PersonaCatalogPanel.vue')
+    SelectedAgentCard = loadSfc('../src/components/juyiting/SelectedAgentCard.vue')
   })
 
   it('classifies panel layouts for desktop, landscape touch, and portrait touch viewports', async () => {
@@ -135,6 +137,45 @@ describe('JuyiHall component behavior', () => {
     expect(classifyPanelLayout({ isMobileCoarse: false, experienceMode: 'portrait-command' })).to.equal('center-modal')
     expect(classifyPanelLayout({ isMobileCoarse: true, experienceMode: 'landscape-map' })).to.equal('right-drawer')
     expect(classifyPanelLayout({ isMobileCoarse: true, experienceMode: 'portrait-command' })).to.equal('bottom-drawer')
+  })
+
+  it('locks every SelectedAgentCard action and pointer surface during voice capture', async () => {
+    const props = {
+      abilityText: () => '军情推演',
+      agent: { agentId: 'wuyong', name: '吴用', status: 'idle' },
+      canStartChat: true,
+      locked: true,
+      portraitName: () => '智多星',
+      portraitStyle: () => ({}),
+      statusText: () => '候令'
+    }
+    const wrapper = mount(SelectedAgentCard, { props, global: { stubs } })
+    const hallSource = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+
+    expect(hallSource).to.include(':locked="voiceInteractionLocked"')
+    expect(wrapper.attributes('inert')).to.equal('')
+    expect(wrapper.attributes('aria-disabled')).to.equal('true')
+    expect(wrapper.findAll('button')).to.have.length(3)
+    wrapper.findAll('button').forEach(button => expect(button.attributes('disabled')).to.equal(''))
+    await wrapper.find('.card-close').trigger('click')
+    await wrapper.find('.card-action.primary').trigger('click')
+    await wrapper.findAll('.card-action')[1].trigger('click')
+    await wrapper.trigger('pointerdown')
+    expect(wrapper.emitted('close-card')).to.equal(undefined)
+    expect(wrapper.emitted('start-chat')).to.equal(undefined)
+    expect(wrapper.emitted('open-agents')).to.equal(undefined)
+
+    await wrapper.setProps({ locked: false })
+    expect(wrapper.attributes('inert')).to.equal(undefined)
+    expect(wrapper.attributes('aria-disabled')).to.equal(undefined)
+    wrapper.findAll('button').forEach(button => expect(button.attributes('disabled')).to.equal(undefined))
+    await wrapper.find('.card-close').trigger('click')
+    await wrapper.find('.card-action.primary').trigger('click')
+    await wrapper.findAll('.card-action')[1].trigger('click')
+    expect(wrapper.emitted('close-card')).to.have.length(1)
+    expect(wrapper.emitted('start-chat')).to.have.length(1)
+    expect(wrapper.emitted('open-agents')).to.have.length(1)
+    wrapper.unmount()
   })
 
   it('exposes accessible modal dialog wiring and focus lifecycle hooks', () => {

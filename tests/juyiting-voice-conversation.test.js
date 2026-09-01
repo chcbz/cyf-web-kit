@@ -108,7 +108,7 @@ const browserHarness = ({ permission, AudioClass, fetchImpl } = {}) => {
   return { browser, documentListeners, listeners, makeStream, revoked, tracks }
 }
 
-const createVoice = ({ enabled = true, browser, chatCreate, onSendVoice, draft = '', revision = 0, context = validContext(), replyBusy = false, captureEvents = [] } = {}) => {
+const createVoice = ({ enabled = true, browser, chatCreate, onSendVoice, onReplyTurnTerminal, showToast = () => {}, draft = '', revision = 0, context = validContext(), replyBusy = false, captureEvents = [] } = {}) => {
   let currentDraft = draft
   let currentRevision = revision
   let currentContext = context
@@ -123,7 +123,8 @@ const createVoice = ({ enabled = true, browser, chatCreate, onSendVoice, draft =
     onOpenReview: () => {},
     onSendVoice: onSendVoice || (async () => true),
     onCaptureStateChange: value => captureEvents.push(value),
-    showToast: () => {},
+    onReplyTurnTerminal,
+    showToast,
     browser
   })
   return { voice, setDraft: value => { currentDraft = value; currentRevision += 1 }, setContext: value => { currentContext = value } }
@@ -336,6 +337,71 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
     expect(voice.adoptCurrentContext()).to.equal(true)
     expect(await voice.sendTranscript()).to.equal(true)
     expect(voice.state).to.equal('waiting_reply')
+    voice.cancel()
+  })
+
+  it('closes reply correlation at 120 seconds without TTS and permits the next turn', async () => {
+    FakeRecorder.instances = []
+    const timers = []
+    let ttsFetches = 0
+    const harness = browserHarness({ fetchImpl: async () => { ttsFetches += 1; throw new Error('late reply must not synthesize') } })
+    harness.browser.window.setTimeout = (callback, delay) => {
+      const timer = { callback, delay, cleared: false }
+      timers.push(timer)
+      return timer
+    }
+    harness.browser.window.clearTimeout = timer => { if (timer) timer.cleared = true }
+    const terminals = []
+    let sequence = 0
+    let voice
+    const tracker = createHallVoiceReplyCorrelation({
+      onReply: message => voice.completeReply(message)
+    })
+    ;({ voice } = createVoice({
+      browser: harness.browser,
+      onSendVoice: async ({ turnId }) => {
+        const started = tracker.start({
+          turnId,
+          baselineSequence: sequence,
+          messages: [],
+          conversationIdBeforeSend: 'conversation-timeout'
+        })
+        if (started) tracker.resolveConversation('conversation-timeout')
+        return started
+      },
+      onReplyTurnTerminal: payload => {
+        terminals.push(payload)
+        tracker.close(payload.reason)
+      }
+    }))
+    voice.setReplyVoiceEnabled(true)
+
+    await transcribeToReview(voice)
+    expect(await voice.sendTranscript()).to.equal(true)
+    expect(voice.state).to.equal('waiting_reply')
+    expect(tracker.hasActive()).to.equal(true)
+    const timeout = timers.find(timer => timer.delay === 120_000 && !timer.cleared)
+    expect(timeout, '120-second reply timeout').to.exist
+    timeout.callback()
+
+    expect(voice.state).to.equal('idle')
+    expect(voice.voiceTurnActive).to.equal(false)
+    expect(tracker.hasActive()).to.equal(false)
+    expect(terminals.at(-1)?.reason).to.equal('reply_timeout')
+    sequence += 1
+    expect(tracker.observe({
+      sequence,
+      conversationId: 'conversation-timeout',
+      messageId: 'late-final',
+      source: 'stream_end',
+      message: { content: '迟到回话' }
+    })).to.equal(false)
+    expect(ttsFetches).to.equal(0)
+
+    await transcribeToReview(voice)
+    expect(await voice.sendTranscript()).to.equal(true)
+    expect(voice.state).to.equal('waiting_reply')
+    expect(tracker.hasActive()).to.equal(true)
     voice.cancel()
   })
 

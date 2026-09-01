@@ -78,6 +78,7 @@
             :ability-text="abilityText"
             :agent="selectedAgent"
             :can-start-chat="canStartAgentConversation(selectedAgent)"
+            :locked="voiceInteractionLocked"
             :portrait-name="portraitName"
             :portrait-style="portraitStyle"
             :status-text="statusText"
@@ -1035,6 +1036,7 @@ hallVoice = useHallVoiceConversation({
   getDraftRevision: () => draftRevision.value,
   isReplyBusy: () => isStreaming.value || isAwaitingReply.value,
   onCaptureStateChange: capturing => setSoundSuppressed?.(capturing),
+  onReplyTurnTerminal: ({ reason }) => voiceReplyCorrelation.close(reason),
   onOpenReview: () => { if (!activePanel.value) openPanel('chat') },
   onSendVoice: async ({ content, contextSnapshot, draftRevision: frozenDraftRevision, turnId }) => {
     if (isStreaming.value || isAwaitingReply.value) return false
