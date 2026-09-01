@@ -35,6 +35,19 @@ const loadSfc = (relativePath, children = {}) => {
     .replace('export default', 'return')
   return new Function('Vue', 'children', body)(Vue, children)
 }
+
+const loadActualJuyiHall = mocks => {
+  const relativePath = '../src/components/world/JuyiHall.vue'
+  const filename = new URL(relativePath, import.meta.url).pathname
+  const { descriptor } = parse(requireSource(relativePath), { filename })
+  const body = compileScript(descriptor, { id: 'voice-timeout-actual-hall', inlineTemplate: true }).content
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, imports) => `var { ${imports} } = mocks`)
+    .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = mocks.${name}`)
+    .replace(/import\.meta\.env/g, 'mocks.env')
+    .replace('export default', 'return')
+  return new Function('Vue', 'mocks', body)(Vue, mocks)
+}
 const requireSource = relativePath => {
   const { readFileSync } = globalThis.__voiceFs
   return readFileSync(new URL(relativePath, import.meta.url), 'utf8')
@@ -137,6 +150,61 @@ const transcribeToReview = async voice => {
   voice.stopRecording()
   await flush()
   expect(voice.state).to.equal('review')
+}
+
+const createActualHallVoiceMocks = ({ chatApi, conversationRef, correlationRef, voiceRef }) => {
+  const noop = () => {}
+  const asyncNoop = async () => {}
+  const list = Vue.ref([])
+  const text = Vue.ref('')
+  const EmptyPanel = Vue.defineComponent({ inheritAttrs: false, setup: (_props, { attrs }) => () => Vue.h('section', attrs) })
+  const hallData = {
+    applySceneEvent: noop, applySceneSnapshot: noop, agentFilter: text, agents: list, bindPersona: asyncNoop, canAssign: () => true,
+    filteredAgents: list, hiddenAgentCount: Vue.ref(0), loadAgents: asyncNoop, loadTasks: asyncNoop, loadTaskRecommendations: asyncNoop,
+    mapAgents: list, personaCatalog: list, recommendedAgents: list, setAgentFilter: asyncNoop, setTaskStatusFilter: asyncNoop,
+    taskAbilityFilter: text, taskAbilityOptions: list, taskKeyword: text, tasks: list, taskStatusCount: Vue.ref({}), taskStatusFilter: text,
+    unbindPersona: asyncNoop, visibleAgents: list
+  }
+  return {
+    env: { VITE_JUYITING_VOICE_ENABLED: 'true' },
+    capturePanelReturnTarget: () => null, focusHallPanel: noop, isCurrentPanelGeneration: () => true, isSafePanelFocusTarget: () => false,
+    resolvePanelReturnTarget: () => null, restorePanelFocus: noop, trapPanelFocus: noop,
+    useGlobalStore: () => ({ getJiacn: 'hero', user: { name: 'Tester' }, setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }),
+    useApiStore: () => ({ token: async () => 'token' }), agentApi: {}, chatApi, log: { warn: noop, error: noop }, juyitingGame: {},
+    roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
+    useHallData: () => hallData,
+    useHallExperienceMode: () => ({ experienceMode: Vue.ref('portrait-command'), isMobileCoarse: Vue.ref(false), orientationHint: text, orientationRequestPending: Vue.ref(false), requestLandscape: asyncNoop }),
+    useHallPanels: () => ({ panelLayout: Vue.ref('center-modal') }),
+    useHallSceneState: () => ({ setMapRuntime: noop, reset: noop, forwardPhaseEvents: asyncNoop }),
+    useHallCommandQueue: () => ({ ready: Vue.ref(false), setSimulation: noop }),
+    useHallBackendSceneState: () => ({ start: asyncNoop, stop: noop, dispose: noop, reportPhase: noop }),
+    useHallSceneDebugBridge: () => ({ republish: noop, stop: noop }),
+    useHallSound: () => ({ playAgentSelect: noop, playError: noop, playPanelOpen: noop, playRefresh: noop, playSend: noop, playSuccess: noop, playTap: noop, setSoundEnabled: noop, setSoundSuppressed: noop, soundEnabled: Vue.ref(false) }),
+    useHallChatContext: () => ({
+      chatContext: Vue.ref(validContext()), chatMentionAgentIds: list, chatMentionAgents: list, chatMode: Vue.ref('public'), chatTargetText: Vue.ref('众好汉'),
+      enterBountyDiscussion: noop, enterPrivateConversation: noop, resetToPublic: noop, setMentionAgent: noop
+    }),
+    useHallScene: () => ({ markAgentSpeaking: noop, markDiscussionStarted: noop, markLibraryCitation: noop, markLibrarySearching: noop, markRecommendedAgents: noop, markTaskArchived: noop, markTaskAssigned: noop, markTaskAutoAssigned: noop, markTaskCreated: noop, resetSceneFeedback: noop, sceneAgents: list, sceneAgentStyle: () => ({}), sceneHotspots: list, syncAfterPersonaChanged: noop }),
+    useHallTaskActions: () => ({ archiveTask: asyncNoop, autoAssignTask: asyncNoop, assignTask: asyncNoop, createTask: asyncNoop }),
+    useHallConversation: options => {
+      conversationRef.value = useHallConversation(options)
+      return conversationRef.value
+    },
+    useHallVoiceConversation: options => {
+      voiceRef.value = useHallVoiceConversation(options)
+      return voiceRef.value
+    },
+    createHallVoiceReplyCorrelation: options => {
+      correlationRef.value = createHallVoiceReplyCorrelation(options)
+      return correlationRef.value
+    },
+    useHallLibrary: () => ({ citeLibraryItem: noop, libraryErrorMessage: text, libraryHasSearched: Vue.ref(false), libraryKeyword: text, libraryLoading: Vue.ref(false), libraryResults: list, librarySourceType: text, searchLibrary: asyncNoop }),
+    useTaskWorkspace: () => null, createDisabledTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }),
+    isTaskWorkspaceBuildEnabled: () => false, useTaskWorkspaceView: () => ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: text, error: Vue.ref(null), retry: noop }), useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop }),
+    portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: agent => agent?.name || '', portraitStyle: () => ({}), roleClass: () => '',
+    HallPortraitHome: EmptyPanel, HallStage: EmptyPanel, HallVoiceHud: EmptyPanel, LibraryPanel: EmptyPanel, AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel,
+    BountyPanel: EmptyPanel, TaskWorkspacePanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PrivateDiscussionPanel: EmptyPanel, PublicDiscussionPanel: EmptyPanel, SelectedAgentCard: EmptyPanel
+  }
 }
 
 before(async () => {
@@ -403,6 +471,91 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
     expect(voice.state).to.equal('waiting_reply')
     expect(tracker.hasActive()).to.equal(true)
     voice.cancel()
+  })
+
+  it('starts the mounted Hall watchdog before a pending send and cancels the stream at 120 seconds', async () => {
+    FakeRecorder.instances = []
+    const originalMediaRecorder = globalThis.MediaRecorder
+    const originalMediaDevices = globalThis.navigator.mediaDevices
+    const originalSetTimeout = window.setTimeout
+    const originalClearTimeout = window.clearTimeout
+    const timers = []
+    let streamOptions
+    let resolveStream
+    let streamCancelReason
+    let ttsFetches = 0
+    const conversationRef = { value: null }
+    const correlationRef = { value: null }
+    const voiceRef = { value: null }
+    const streamDeferred = new Promise(resolve => { resolveStream = resolve })
+    const track = { stopped: false, onended: null, stop () { this.stopped = true } }
+    const chatApi = {
+      create: async (path, _payload, options) => {
+        if (path === '/speech/transcriptions') return { data: { data: { text: '请报山寨军情' } } }
+        expect(path).to.equal('/stream')
+        streamOptions = options
+        options.onStreamOpen({ cancel: reason => { streamCancelReason = reason } })
+        return streamDeferred
+      },
+      list: async () => {},
+      getById: async () => {}
+    }
+    window.setTimeout = (callback, delay) => {
+      const timer = { callback, delay, cleared: false }
+      timers.push(timer)
+      return timer
+    }
+    window.clearTimeout = timer => { if (timer) timer.cleared = true }
+    Object.defineProperty(globalThis.navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => ({ getTracks: () => [track] }) } })
+    globalThis.MediaRecorder = FakeRecorder
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = async () => { ttsFetches += 1; throw new Error('late timeout reply must not synthesize') }
+    const JuyiHall = loadActualJuyiHall(createActualHallVoiceMocks({ chatApi, conversationRef, correlationRef, voiceRef }))
+    const wrapper = mount(JuyiHall, { attachTo: document.body, global: { stubs: { 'var-icon': true, transition: true } } })
+    try {
+      await flush()
+      const voice = voiceRef.value
+      const conversation = conversationRef.value
+      voice.setReplyVoiceEnabled(true)
+      await transcribeToReview(voice)
+      const sending = voice.sendTranscript()
+      await flush()
+
+      expect(streamOptions, 'pending Hall stream').to.exist
+      expect(streamOptions.timeout).to.equal(1_800_000)
+      expect(conversation.isStreaming.value).to.equal(true)
+      expect(conversation.isAwaitingReply.value).to.equal(true)
+      expect(correlationRef.value.hasActive()).to.equal(true)
+      const watchdog = timers.find(timer => timer.delay === 120_000 && !timer.cleared)
+      expect(watchdog, 'watchdog must exist while onSendVoice is still pending').to.exist
+      watchdog.callback()
+      await flush()
+
+      expect(voice.state).to.equal('idle')
+      expect(voice.voiceTurnActive).to.equal(false)
+      expect(conversation.isStreaming.value).to.equal(false)
+      expect(conversation.isAwaitingReply.value).to.equal(false)
+      expect(correlationRef.value.hasActive()).to.equal(false)
+      expect(streamOptions.signal.aborted).to.equal(true)
+      expect(streamCancelReason?.name).to.equal('AbortError')
+      expect(voice.canRecord).to.equal(true)
+      expect(await voice.startRecording()).to.equal(true)
+      voice.cancel()
+
+      streamOptions.onStream(JSON.stringify({ type: 'agent_message', conversationId: 'late-conversation', messageId: 'late-message', senderType: 'agent', content: '迟到回话' }))
+      streamOptions.onStreamEnd()
+      resolveStream()
+      expect(await sending).to.equal(false)
+      expect(ttsFetches).to.equal(0)
+      expect(correlationRef.value.hasActive()).to.equal(false)
+    } finally {
+      wrapper.unmount()
+      window.setTimeout = originalSetTimeout
+      window.clearTimeout = originalClearTimeout
+      Object.defineProperty(globalThis.navigator, 'mediaDevices', { configurable: true, value: originalMediaDevices })
+      globalThis.MediaRecorder = originalMediaRecorder
+      globalThis.fetch = originalFetch
+    }
   })
 
   it('accepts exactly one new correlated final across built-in/external ordering and rejects replay', () => {

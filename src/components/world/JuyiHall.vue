@@ -971,6 +971,7 @@ const archiveTask = async (task) => {
 }
 
 const {
+  cancelHallReplyTurn,
   chatConnectionStatus,
   conversationId,
   draft,
@@ -1036,7 +1037,10 @@ hallVoice = useHallVoiceConversation({
   getDraftRevision: () => draftRevision.value,
   isReplyBusy: () => isStreaming.value || isAwaitingReply.value,
   onCaptureStateChange: capturing => setSoundSuppressed?.(capturing),
-  onReplyTurnTerminal: ({ reason }) => voiceReplyCorrelation.close(reason),
+  onReplyTurnTerminal: ({ reason }) => {
+    voiceReplyCorrelation.close(reason)
+    if (reason === 'reply_timeout') cancelHallReplyTurn(reason)
+  },
   onOpenReview: () => { if (!activePanel.value) openPanel('chat') },
   onSendVoice: async ({ content, contextSnapshot, draftRevision: frozenDraftRevision, turnId }) => {
     if (isStreaming.value || isAwaitingReply.value) return false

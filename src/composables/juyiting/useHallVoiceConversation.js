@@ -414,14 +414,28 @@ export const useHallVoiceConversation = ({
     const frozen = frozenRef.value
     const turnId = safeRequestId(browser.crypto)
     replyTurnId = turnId
-    const accepted = await onSendVoice?.({
-      content,
-      contextSnapshot: frozen,
-      draftRevision: frozen.draftRevision,
-      turnId
-    })
+    replyTimer = browser.window.setTimeout(() => {
+      if (current === generation && voiceTurnActiveRef.value) {
+        generation += 1
+        finishReplyTurn('idle', 'reply_timeout')
+        showToast?.('回话超时，文字传令仍可继续')
+      }
+    }, 120_000)
+    let accepted = false
+    try {
+      accepted = await onSendVoice?.({
+        content,
+        contextSnapshot: frozen,
+        draftRevision: frozen.draftRevision,
+        turnId
+      })
+    } catch (cause) {
+      if (current !== generation || cause?.name === 'AbortError') return false
+      errorRef.value = cause?.message || '语音传令失败，请稍后再试'
+    }
     if (current !== generation) return false
     if (!accepted) {
+      clearReplyTimer()
       pendingFinalReply = null
       voiceTurnActiveRef.value = false
       closeReplyTurn('send_rejected')
@@ -435,13 +449,6 @@ export const useHallVoiceConversation = ({
       setState('waiting_reply')
       if (finalizedDuringSend) {
         void completeReply(finalizedDuringSend)
-      } else {
-        replyTimer = browser.window.setTimeout(() => {
-          if (current === generation && voiceTurnActiveRef.value) {
-            finishReplyTurn('idle', 'reply_timeout')
-            showToast?.('回话超时，文字传令仍可继续')
-          }
-        }, 120_000)
       }
     }
     return true

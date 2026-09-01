@@ -53,6 +53,7 @@ export const useHallConversation = ({
   let hallReplyController = null
   let hallReplySignalCleanup = null
   let hallReplyStreamHandle = null
+  let hallReplyGeneration = 0
 
   const pendingAgentName = computed(() => {
     if (!selectedAgent.value) return ''
@@ -105,6 +106,17 @@ export const useHallConversation = ({
   const stopHallConversationSync = () => {
     hallSyncTimers.forEach(timer => window.clearTimeout(timer))
     hallSyncTimers = []
+  }
+
+  const cancelHallReplyTurn = (reason = 'Hall reply cancelled') => {
+    hallReplyGeneration += 1
+    stopHallReplyStreaming()
+    stopHallReplyPolling()
+    stopHallConversationSync()
+    clearBuiltInTurn()
+    isStreaming.value = false
+    isAwaitingReply.value = false
+    return reason
   }
 
   const setDraft = (value = '') => {
@@ -476,6 +488,8 @@ export const useHallConversation = ({
     const selectedAgentId = isVoiceSend ? sendContext.selectedAgentId : (sendContext.selectedAgentId ?? selectedAgent.value?.agentId)
     const selectedTaskId = isVoiceSend ? sendContext.selectedTaskId : (sendContext.selectedTaskId ?? selectedTask.value?.id)
     const generation = lifecycleGeneration
+    const replyGeneration = ++hallReplyGeneration
+    const isCurrentReplyTurn = () => !disposed && generation === lifecycleGeneration && replyGeneration === hallReplyGeneration
     if (explicitContent === undefined) clearDraft()
     stopHallReplyStreaming()
     clearBuiltInTurn()
@@ -526,20 +540,20 @@ export const useHallConversation = ({
         timeout: 1800000,
         signal: replySignal.signal,
         onStreamOpen: handle => {
-          if (disposed || generation !== lifecycleGeneration) {
+          if (!isCurrentReplyTurn()) {
             handle.cancel?.(new DOMException('Stale Hall reply stream', 'AbortError'))
             return
           }
           hallReplyStreamHandle = handle
         },
         onStream: eventData => {
-          if (disposed || generation !== lifecycleGeneration) return
+          if (!isCurrentReplyTurn()) return
           const previousConversationId = conversationId.value
           processStream(eventData)
           if (conversationId.value && conversationId.value !== previousConversationId) onConversationResolved?.(conversationId.value)
         },
         onStreamEnd: () => {
-          if (disposed || generation !== lifecycleGeneration) return
+          if (!isCurrentReplyTurn()) return
           hallReplyStreamHandle = null
           isStreaming.value = false
           const finalized = streamFinalCandidate
@@ -559,16 +573,16 @@ export const useHallConversation = ({
           if (isAwaitingReply.value && conversationId.value) startHallReplyPolling(conversationId.value)
         },
         onError: (message, requestError) => {
-          if (disposed || generation !== lifecycleGeneration || requestError?.name === 'AbortError') return
+          if (!isCurrentReplyTurn() || requestError?.name === 'AbortError') return
           throw requestError || new Error(message)
         }
       })
-      if (disposed || generation !== lifecycleGeneration) return false
+      if (!isCurrentReplyTurn()) return false
       if (isVoiceSend && draftRevision.value === clearDraftRevision) clearDraft()
       if (outgoingMetadata) outgoingMetadata.value = {}
       return true
     } catch (error) {
-      if (error?.name === 'AbortError' || disposed || generation !== lifecycleGeneration) return false
+      if (error?.name === 'AbortError' || !isCurrentReplyTurn()) return false
       log.error('聚义厅消息发送失败', error)
       isStreaming.value = false
       isAwaitingReply.value = false
@@ -584,7 +598,7 @@ export const useHallConversation = ({
       })
       return false
     } finally {
-      if (generation === lifecycleGeneration) {
+      if (isCurrentReplyTurn()) {
         hallReplyController = null
         hallReplyStreamHandle = null
         hallReplySignalCleanup?.()
@@ -627,6 +641,7 @@ export const useHallConversation = ({
   }
 
   return {
+    cancelHallReplyTurn,
     chatConnectionStatus,
     conversationId,
     clearDraft,
