@@ -33,7 +33,7 @@
       :agent-style="sceneAgentStyle"
       :hidden-agent-count="hiddenAgentCount"
       :experience-mode="experienceMode"
-      :interaction-locked="isPanelSessionActive"
+      :interaction-locked="isPanelSessionActive || voiceInteractionLocked"
       :inert="isPanelSessionActive ? '' : null"
       :aria-hidden="isPanelSessionActive ? 'true' : null"
       :landscape-entry-target="landscapeEntryTarget"
@@ -66,8 +66,11 @@
       @simulation-phase-events="handleSimulationPhaseEvents"
       @simulation-ready="handleSimulationReady"
       @simulation-reset="resetSimulationLifecycle"
+      @scene-mode-change="handleSceneModeChange"
       @toggle-sound="toggleHallSound"
     >
+
+      <HallVoiceHud v-if="effectiveSceneMode === 'landscape' && !activePanel" :voice="hallVoice" @apply="applyVoiceTranscript" />
 
       <div v-if="selectedAgent" class="quick-bar">
         <transition name="agent-card">
@@ -197,7 +200,10 @@
 
           <PublicDiscussionPanel
             v-if="renderedPanel === 'chat' && chatMode === 'public'"
-            v-model:draft="draft"
+            :draft="draft"
+            :voice="hallVoice"
+            @update:draft="setDraft"
+            @voice-apply="applyVoiceTranscript"
             :agents="chatMentionAgents"
             :event-stream-recovering="eventStreamRecovering"
             :is-awaiting-reply="isAwaitingReply"
@@ -220,7 +226,10 @@
 
           <BountyDiscussionPanel
             v-if="renderedPanel === 'chat' && chatMode === 'bounty'"
-            v-model:draft="draft"
+            :draft="draft"
+            :voice="hallVoice"
+            @update:draft="setDraft"
+            @voice-apply="applyVoiceTranscript"
             :agents="chatMentionAgents"
             :event-stream-recovering="eventStreamRecovering"
             :is-awaiting-reply="isAwaitingReply"
@@ -243,7 +252,10 @@
 
           <PrivateDiscussionPanel
             v-if="renderedPanel === 'chat' && chatMode === 'private'"
-            v-model:draft="draft"
+            :draft="draft"
+            :voice="hallVoice"
+            @update:draft="setDraft"
+            @voice-apply="applyVoiceTranscript"
             :agents="chatMentionAgents"
             :event-stream-recovering="eventStreamRecovering"
             :is-awaiting-reply="isAwaitingReply"
@@ -295,6 +307,7 @@ import { useHallChatContext } from '@/composables/juyiting/useHallChatContext'
 import { useHallBackendSceneState } from '@/composables/juyiting/useHallBackendSceneState'
 import { useHallCommandQueue } from '@/composables/juyiting/useHallCommandQueue'
 import { useHallConversation } from '@/composables/juyiting/useHallConversation'
+import { useHallVoiceConversation } from '@/composables/juyiting/useHallVoiceConversation'
 import { useHallData } from '@/composables/juyiting/useHallData'
 import { useHallLibrary } from '@/composables/juyiting/useHallLibrary'
 import { useHallExperienceMode } from '@/composables/juyiting/useHallExperienceMode'
@@ -315,6 +328,7 @@ import BountyDiscussionPanel from '@/components/juyiting/BountyDiscussionPanel.v
 import BountyPanel from '@/components/juyiting/BountyPanel.vue'
 import HallPortraitHome from '@/components/juyiting/HallPortraitHome.vue'
 import HallStage from '@/components/juyiting/HallStage.vue'
+import HallVoiceHud from '@/components/juyiting/HallVoiceHud.vue'
 import LibraryPanel from '@/components/juyiting/LibraryPanel.vue'
 import PersonaCatalogPanel from '@/components/juyiting/PersonaCatalogPanel.vue'
 import PrivateDiscussionPanel from '@/components/juyiting/PrivateDiscussionPanel.vue'
@@ -363,6 +377,10 @@ const hallRefreshing = ref(false)
 const experienceReady = ref(false)
 const agentBubbles = ref({})
 const outgoingMetadata = ref({})
+const effectiveSceneMode = ref('portrait')
+const voiceFeatureEnabled = import.meta.env.VITE_JUYITING_VOICE_ENABLED === 'true'
+let hallVoice = null
+let activeVoiceReply = null
 const {
   experienceMode,
   isMobileCoarse,
@@ -860,7 +878,7 @@ const briefSelectedTask = (task = selectedTask.value, agent = selectedAgent.valu
   }
   const abilities = (task.requiredAbilities || []).join(' / ') || '不拘本领'
   const target = agent ? `可请 ${portraitShortName(agent)} / ${agent.name || agent.personaName || agent.agentId} 领令。` : '请点一位合适好汉领令。'
-  draft.value = `请就榜文「${task.title}」议事：榜号 ${task.id}，眼下 ${taskStatusText(task.status)}，所需本领 ${abilities}。${target}请说明险处与下一步章程。`
+  setDraft(`请就榜文「${task.title}」议事：榜号 ${task.id}，眼下 ${taskStatusText(task.status)}，所需本领 ${abilities}。${target}请说明险处与下一步章程。`)
   openPanel('chat')
   showToast('议事话头已备')
 }
@@ -869,7 +887,7 @@ const discussTask = (task) => {
   if (!task) return
   enterBountyDiscussion(task)
   markDiscussionStarted(task, chatContext.value?.participantAgentIds || [])
-  draft.value = `请就榜文「${task.title}」议事。`
+  setDraft(`请就榜文「${task.title}」议事。`)
   openPanel('chat')
 }
 
@@ -957,9 +975,12 @@ const {
   messages,
   newHallConversation,
   pendingAgentName,
+  replyEventSequence,
   sendHallMessage,
   senderText,
   disposeHallConversation,
+  draftRevision,
+  setDraft,
   stopHallEventStream,
   stopHallReplyPolling,
   stopHallReplyStreaming
@@ -975,8 +996,44 @@ const {
   portraitShortName,
   selectedAgent,
   selectedTask,
+  showToast,
+  onFinalReply: payload => {
+    const active = activeVoiceReply
+    if (!active || payload.sequence <= active.baseline) return
+    const replyConversationId = payload.conversationId?.toString() || ''
+    if (active.conversationId && replyConversationId !== active.conversationId) return
+    active.conversationId = replyConversationId
+    activeVoiceReply = null
+    hallVoice?.completeReply(payload.message)
+  }
+})
+
+hallVoice = useHallVoiceConversation({
+  apiStore,
+  chatApi,
+  enabled: voiceFeatureEnabled,
+  getContext: () => ({ ...chatContext.value, conversationId: conversationId.value, selectedAgentId: selectedAgent.value?.agentId, selectedTaskId: selectedTask.value?.id, outgoingMetadata: outgoingMetadata.value }),
+  getDraft: () => draft.value,
+  getDraftRevision: () => draftRevision.value,
+  isReplyBusy: () => isStreaming.value || isAwaitingReply.value,
+  onOpenReview: () => { if (!activePanel.value) openPanel('chat') },
+  onSendVoice: async ({ content, contextSnapshot, turnId }) => {
+    if (isStreaming.value || isAwaitingReply.value) return false
+    activeVoiceReply = { baseline: replyEventSequence.value, conversationId: conversationId.value?.toString() || '', turnId }
+    playSend()
+    const accepted = await sendHallMessage({ content, contextSnapshot, source: 'voice', turnId })
+    if (!accepted) activeVoiceReply = null
+    else activeVoiceReply.conversationId = conversationId.value?.toString() || activeVoiceReply.conversationId
+    return accepted
+  },
   showToast
 })
+const voiceInteractionLocked = hallVoice.voiceInteractionLocked
+const applyVoiceTranscript = mode => {
+  const next = hallVoice.applyTranscript(mode)
+  if (typeof next === 'string') { setDraft(next); hallVoice.discard() }
+}
+const handleSceneModeChange = mode => { effectiveSceneMode.value = mode === 'landscape' ? 'landscape' : 'portrait' }
 
 const {
   citeLibraryItem: runCiteLibraryItem,
@@ -1041,12 +1098,15 @@ const showRandomAgentBubble = () => {
 
 
 const handleNewHallConversation = () => {
+  activeVoiceReply = null
+  hallVoice?.cancel()
   playPanelOpen()
   newHallConversation()
   resetSceneFeedback()
 }
 
 const handleSendHallMessage = async () => {
+  activeVoiceReply = null
   playSend()
   const currentContext = chatContext.value || {}
   const targets = currentContext.targetAgentIds?.length ? currentContext.targetAgentIds : currentContext.participantAgentIds
@@ -1083,7 +1143,7 @@ const handleStartAgentConversation = (agent) => {
   playAgentSelect()
   enterPrivateConversation(agent)
   markAgentSpeaking(agent, '入席密议', 'system')
-  draft.value = ''
+  setDraft('')
   insertAgentMention(agent, '请报眼下动静、可领何榜、还需哪路照应。')
   openPanel('chat')
   showToast(`正与 ${portraitShortName(agent)} 密议`)
@@ -1141,6 +1201,7 @@ onUnmounted(() => {
   activePanel.value = ''
   renderedPanel.value = ''
   taskWorkspaceBinding.dispose()
+  hallVoice?.cancel()
   disposeHallConversation()
   hallBackendSceneState?.dispose()
   stopHallEventStream()

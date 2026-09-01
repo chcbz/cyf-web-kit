@@ -14,12 +14,14 @@
       placeholder="向众好汉传话，或 @某位好汉"
       subtitle="厅前公议"
       title="厅前公议"
+      :voice="voice"
       v-bind="chatProps"
       @clear-target="$emit('clear-target', $event)"
       @load-messages="$emit('load-messages')"
       @mention-agent="$emit('mention-agent', $event)"
       @new-conversation="$emit('new-conversation')"
       @send-message="$emit('send-message')"
+      @voice-apply="$emit('voice-apply', $event)"
     />
   </section>
 </template>
@@ -42,7 +44,8 @@ const props = defineProps({
   selectedTask: { type: Object, default: null },
   senderText: { type: Function, required: true },
   scopeHint: { type: String, default: 'public' },
-  targetText: { type: String, default: '众好汉' }
+  targetText: { type: String, default: '众好汉' },
+  voice: { type: Object, default: null }
 })
 
 const emit = defineEmits([
@@ -51,7 +54,8 @@ const emit = defineEmits([
   'mention-agent',
   'new-conversation',
   'send-message',
-  'update:draft'
+  'update:draft',
+  'voice-apply'
 ])
 
 const draftProxy = computed({

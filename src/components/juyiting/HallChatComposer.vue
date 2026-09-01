@@ -24,7 +24,7 @@
         ref="textareaRef"
         class="composer-textarea"
         :value="draft"
-        :disabled="isStreaming"
+        :disabled="inputLocked"
         :maxlength="maxLength"
         :placeholder="placeholder"
         rows="1"
@@ -68,6 +68,8 @@
       </button>
     </div>
 
+    <HallVoiceControls :voice="voice" @apply="$emit('voice-apply', $event)" />
+
     <div class="composer-meta">
       <span>{{ draftLength }}/{{ maxLength }}</span>
       <span v-if="isStreaming">候回话</span>
@@ -78,6 +80,7 @@
 
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
+import HallVoiceControls from './HallVoiceControls.vue'
 
 const props = defineProps({
   agents: { type: Array, default: () => [] },
@@ -88,22 +91,25 @@ const props = defineProps({
   placeholder: { type: String, default: '向聚义厅传话，或 @某位好汉' },
   selectedAgent: { type: Object, default: null },
   targetText: { type: String, default: '众好汉' },
-  maxLength: { type: Number, default: 1200 }
+  maxLength: { type: Number, default: 1200 },
+  voice: { type: Object, default: null }
 })
 
 const emit = defineEmits([
   'clear-target',
   'mention-agent',
   'send-message',
-  'update:draft'
+  'update:draft',
+  'voice-apply'
 ])
 
 const textareaRef = ref(null)
 const isFocused = ref(false)
 
 const draftLength = computed(() => String(props.draft || '').length)
-const canClear = computed(() => Boolean(String(props.draft || '').length) && !props.isStreaming)
-const canSend = computed(() => Boolean(String(props.draft || '').trim()) && !props.isStreaming)
+const inputLocked = computed(() => props.isStreaming || Boolean(props.voice?.voiceInteractionLocked))
+const canClear = computed(() => Boolean(String(props.draft || '').length) && !inputLocked.value)
+const canSend = computed(() => Boolean(String(props.draft || '').trim()) && !inputLocked.value)
 const composerClass = computed(() => ({
   'is-streaming': props.isStreaming,
   'has-draft': Boolean(String(props.draft || '').trim())
@@ -123,7 +129,7 @@ const orderedAgents = computed(() => {
 })
 
 const showMentionMenu = computed(() => {
-  if (props.isStreaming || !orderedAgents.value.length) return false
+  if (inputLocked.value || !orderedAgents.value.length) return false
   const value = String(props.draft || '')
   if (!isFocused.value && value !== '@') return false
   return /(^|\s)@[\S]*$/.test(value)

@@ -58,10 +58,12 @@
       :placeholder="placeholder"
       :selected-agent="selectedAgent"
       :target-text="targetText"
+      :voice="voice"
       @clear-target="$emit('clear-target', $event)"
       @mention-agent="$emit('mention-agent', $event)"
       @send-message="$emit('send-message')"
       @update:draft="$emit('update:draft', $event)"
+      @voice-apply="$emit('voice-apply', $event)"
     />
   </div>
 </template>
@@ -98,7 +100,8 @@ const props = defineProps({
   scopeHint: { type: String, default: 'public' },
   subtitle: { type: String, default: '' },
   title: { type: String, default: '议事' },
-  targetText: { type: String, default: '众好汉' }
+  targetText: { type: String, default: '众好汉' },
+  voice: { type: Object, default: null }
 })
 
 defineEmits([
@@ -107,7 +110,8 @@ defineEmits([
   'mention-agent',
   'new-conversation',
   'send-message',
-  'update:draft'
+  'update:draft',
+  'voice-apply'
 ])
 
 const messageBoxRef = ref(null)

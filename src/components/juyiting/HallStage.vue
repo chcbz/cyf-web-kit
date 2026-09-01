@@ -133,6 +133,7 @@ const emit = defineEmits([
   'open-panel',
   'request-landscape',
   'refresh-hall',
+  'scene-mode-change',
   'select-agent',
   'simulation-phase-events',
   'simulation-ready',
@@ -194,6 +195,8 @@ const loadingUnlockedAttempts = new Set()
 const presetZooms = { mobilePortrait: 1.25, mobileLandscape: 1.05, tabletLandscape: 0.92, desktop: 0.84 }
 
 const sceneMode = computed(() => props.experienceMode === 'landscape-map' ? 'landscape' : 'portrait')
+
+watch(sceneMode, mode => emit('scene-mode-change', mode), { immediate: true })
 
 const sceneDebugRequested = () => (
   typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('scene-debug') === '1'

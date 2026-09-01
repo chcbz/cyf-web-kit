@@ -23,7 +23,8 @@ export const useHallConversation = ({
   portraitShortName,
   selectedAgent,
   selectedTask,
-  showToast
+  showToast,
+  onFinalReply
 }) => {
   const messages = ref([])
   const conversationId = ref('')
@@ -31,6 +32,9 @@ export const useHallConversation = ({
   const isStreaming = ref(false)
   const isAwaitingReply = ref(false)
   const eventStreamRecovering = ref(false)
+  const draftRevision = ref(0)
+  const replyEventSequence = ref(0)
+  let streamFinalCandidate = null
 
   let hallEventController = null
   let hallEventConversationId = ''
@@ -101,6 +105,7 @@ export const useHallConversation = ({
 
   const setDraft = (value = '') => {
     draft.value = String(value || '')
+    draftRevision.value += 1
   }
 
   const clearDraft = () => {
@@ -123,6 +128,10 @@ export const useHallConversation = ({
       stopHallReplyPolling()
     }
     if (result.toastName) showToast(`${result.toastName} 已回话`)
+    if ((result.type === 'final' || (event?.type === 'agent_message' && result.message?.sender === 'AGENT')) && result.message?.content) {
+      replyEventSequence.value += 1
+      onFinalReply?.({ conversationId: conversationId.value, message: result.message, source: 'agent_event', sequence: replyEventSequence.value })
+    }
   }
 
   const apiStreamUrl = (path, params = {}) => {
@@ -219,7 +228,7 @@ export const useHallConversation = ({
     stopHallReplyPolling()
     stopHallConversationSync()
     conversationId.value = ''
-    draft.value = ''
+    setDraft('')
     messages.value = []
     isStreaming.value = false
     isAwaitingReply.value = false
@@ -355,18 +364,21 @@ export const useHallConversation = ({
       stopHallReplyPolling()
     }
     if (result.toastName) showToast(`${result.toastName} 已回话`)
+    if (result.type === 'assistant' && result.message?.content) streamFinalCandidate = result.message
     if (result.shouldReconnect) {
       startHallEventStream()
       scheduleHallConversationSync(result.conversationId)
     }
   }
 
-  const sendHallMessage = async () => {
-    const content = String(draft.value || '').trim()
-    if (disposed || !content || isStreaming.value) return
+  const sendHallMessage = async ({ content: explicitContent, contextSnapshot, source = 'text', turnId } = {}) => {
+    const content = String((explicitContent ?? draft.value) || '').trim()
+    if (disposed || !content || isStreaming.value) return false
+    const sendContext = contextSnapshot || currentChatContext.value
     const generation = lifecycleGeneration
-    clearDraft()
+    if (explicitContent === undefined) clearDraft()
     stopHallReplyStreaming()
+    streamFinalCandidate = null
     messages.value.push({
       localId: `user-${Date.now()}`,
       sender: 'USER',
@@ -387,23 +399,23 @@ export const useHallConversation = ({
         content,
         conversationId: conversationId.value,
         conversationType: 'juyiting',
-        conversationScopeType: chatContext.value.conversationScopeType,
-        conversationScopeKey: chatContext.value.conversationScopeKey,
-        targetAgentIds: chatContext.value.targetAgentIds,
-        targetAgentId: chatContext.value.targetAgentId,
-        taskId: chatContext.value.taskId,
+        conversationScopeType: sendContext.conversationScopeType,
+        conversationScopeKey: sendContext.conversationScopeKey,
+        targetAgentIds: sendContext.targetAgentIds,
+        targetAgentId: sendContext.targetAgentId,
+        taskId: sendContext.taskId,
         forceNewConversation: !conversationId.value,
         senderType: 'user',
         senderName: globalStore.user?.name || globalStore.user?.nickname || '寨中来客',
         metadata: {
           scene: 'juyiting',
-          mode: currentChatContext.value.mode,
-          scopeKey: currentChatContext.value.conversationScopeKey,
-          selectedAgentId: selectedAgent.value?.agentId,
-          mentionAgentIds: currentChatContext.value.targetAgentIds,
-          participantAgentIds: currentChatContext.value.participantAgentIds,
-          targetAgentIds: currentChatContext.value.targetAgentIds,
-          selectedTaskId: selectedTask.value?.id,
+          mode: sendContext.mode,
+          scopeKey: sendContext.conversationScopeKey,
+          selectedAgentId: sendContext.selectedAgentId ?? selectedAgent.value?.agentId,
+          mentionAgentIds: sendContext.mentionAgentIds || sendContext.targetAgentIds,
+          participantAgentIds: sendContext.participantAgentIds,
+          targetAgentIds: sendContext.targetAgentIds,
+          selectedTaskId: sendContext.selectedTaskId ?? selectedTask.value?.id,
           ...(outgoingMetadata?.value || {})
         }
       }, {
@@ -425,6 +437,11 @@ export const useHallConversation = ({
           if (disposed || generation !== lifecycleGeneration) return
           hallReplyStreamHandle = null
           isStreaming.value = false
+          if (streamFinalCandidate?.content) {
+            replyEventSequence.value += 1
+            onFinalReply?.({ conversationId: conversationId.value, message: streamFinalCandidate, source: 'stream_end', sequence: replyEventSequence.value })
+            streamFinalCandidate = null
+          }
           if (isAwaitingReply.value && conversationId.value) {
             startHallReplyPolling(conversationId.value)
           }
@@ -437,6 +454,7 @@ export const useHallConversation = ({
       if (!disposed && generation === lifecycleGeneration && outgoingMetadata) {
         outgoingMetadata.value = {}
       }
+      return true
     } catch (error) {
       if (error?.name === 'AbortError' || disposed || generation !== lifecycleGeneration) return
       log.error('聚义厅消息发送失败', error)
@@ -465,18 +483,18 @@ export const useHallConversation = ({
     const current = draft.value.trim()
     const replacement = suffix ? `${mention} ${suffix}` : `${mention} `
     if (!current) {
-      draft.value = replacement
+      setDraft(replacement)
       return
     }
     if (current.includes(mention)) {
-      draft.value = suffix && current === mention ? `${mention} ${suffix}` : draft.value
+      setDraft(suffix && current === mention ? `${mention} ${suffix}` : draft.value)
       return
     }
     if (/(^|\s)@\S*$/.test(current)) {
-      draft.value = current.replace(/(^|\s)@\S*$/, (_, prefix) => `${prefix}${replacement}`)
+      setDraft(current.replace(/(^|\s)@\S*$/, (_, prefix) => `${prefix}${replacement}`))
       return
     }
-    draft.value = `${current} ${mention}${suffix ? ` ${suffix}` : ' '}`
+    setDraft(`${current} ${mention}${suffix ? ` ${suffix}` : ' '}`)
   }
 
   const mentionAgent = (agent) => {
@@ -499,6 +517,7 @@ export const useHallConversation = ({
     clearDraft,
     disposeHallConversation,
     draft,
+    draftRevision,
     eventStreamRecovering,
     insertAgentMention,
     isAwaitingReply,
@@ -508,6 +527,7 @@ export const useHallConversation = ({
     messages,
     newHallConversation,
     pendingAgentName,
+    replyEventSequence,
     sendHallMessage,
     senderText,
     setDraft,
