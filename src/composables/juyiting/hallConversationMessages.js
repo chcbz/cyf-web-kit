@@ -8,10 +8,14 @@ export const parseMessageMetadata = (metadata) => {
   }
 }
 
-export const normalizeHallMessage = (item, index = 0) => {
+export const normalizeHallMessage = (item) => {
   const metadata = parseMessageMetadata(item.metadata)
+  const localId = typeof item?.id === 'string' && item.id
+    ? item.id
+    : (typeof metadata.messageId === 'string' && metadata.messageId ? metadata.messageId : '')
+  if (!localId) return null
   return {
-    localId: `${item.id || metadata.messageId || index}`,
+    localId,
     sender: item.senderType === 'agent' ? 'AGENT' : (item.messageType || item.senderType || 'SYSTEM'),
     senderName: item.senderName || metadata.senderName,
     agentId: metadata.agentId,
@@ -72,7 +76,13 @@ export const appendHallEventMessage = (state, event) => {
     return { type: 'delta', message: pendingMessage }
   }
 
-  const localId = `${event.messageId || `${event.agentId}-${event.timestamp || Date.now()}`}`
+  const isAgentFinal = event.senderType === 'agent' && event.type === 'agent_message'
+  if (isAgentFinal && (typeof event.messageId !== 'string' || !event.messageId)) {
+    return { type: 'invalid_message_id' }
+  }
+  const localId = typeof event.messageId === 'string' && event.messageId
+    ? event.messageId
+    : `event-${event.agentId || 'message'}-${event.timestamp || Date.now()}`
   const streamingMessage = event.senderType === 'agent' ? currentStreamingAgentMessage(state.messages, event) : null
   if (streamingMessage && event.senderType === 'agent') {
     streamingMessage.localId = localId
@@ -109,6 +119,44 @@ export const appendHallEventMessage = (state, event) => {
   return { type: 'message', message, shouldStopPolling: true, toastName: event.senderName }
 }
 
+const appendStreamAgentFinal = (state, event) => {
+  if (typeof event.messageId !== 'string' || !event.messageId) return { type: 'invalid_message_id' }
+  const hasConversationId = Object.prototype.hasOwnProperty.call(event, 'conversationId')
+  if (hasConversationId && (typeof event.conversationId !== 'string' || !event.conversationId)) {
+    return { type: 'invalid_conversation' }
+  }
+  if (hasConversationId && state.conversationId && event.conversationId !== state.conversationId) {
+    return { type: 'ignored' }
+  }
+  const existing = state.messages.find(message => message.localId === event.messageId)
+  if (existing && !existing.streaming) return { type: 'duplicate', message: existing }
+  const message = existing || {
+    localId: event.messageId,
+    sender: 'AGENT',
+    senderName: event.senderName,
+    agentId: event.agentId,
+    content: '',
+    timestamp: event.timestamp || Date.now(),
+    streaming: false,
+    statusText: '回话已毕'
+  }
+  message.sender = 'AGENT'
+  message.senderName = event.senderName || message.senderName
+  message.agentId = event.agentId || message.agentId
+  message.content = event.content || message.content
+  message.timestamp = event.timestamp || message.timestamp
+  message.streaming = false
+  message.statusText = '回话已毕'
+  if (!existing) state.messages.push(message)
+  state.isAwaitingReply = false
+  return {
+    type: 'stream_final',
+    message,
+    conversationId: hasConversationId ? event.conversationId : null,
+    toastName: event.senderName
+  }
+}
+
 export const appendStreamPayload = (state, eventData) => {
   let payload = eventData.startsWith('data:') ? eventData.slice(5).trim() : eventData.trim()
   if (!payload || payload === '[DONE]' || payload === '[EOM]') return { type: 'empty' }
@@ -129,9 +177,8 @@ export const appendStreamPayload = (state, eventData) => {
       state.messages.push(message)
       return { type: 'delivery', message }
     }
-    if (data.type === 'agent_message_delta' || data.type === 'agent_message') {
-      return appendHallEventMessage(state, data)
-    }
+    if (data.type === 'agent_message') return appendStreamAgentFinal(state, data)
+    if (data.type === 'agent_message_delta') return appendHallEventMessage(state, data)
     if (Object.prototype.hasOwnProperty.call(data, 'conversationId')) {
       if (typeof data.conversationId !== 'string' || !data.conversationId || typeof state.conversationId !== 'string') {
         return { type: 'invalid_conversation' }

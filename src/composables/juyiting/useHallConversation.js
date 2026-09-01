@@ -269,7 +269,7 @@ export const useHallConversation = ({
         signal: lifecycleController.signal,
         onSuccess: (contentResult) => {
           if (disposed || generation !== lifecycleGeneration) return
-          messages.value = (contentResult?.data || []).map(normalizeHallMessage)
+          messages.value = (contentResult?.data || []).map(normalizeHallMessage).filter(Boolean)
           const finalAgentReplies = messages.value.filter(message => message.sender === 'AGENT' && !message.streaming && String(message.content || '').trim())
           finalAgentReplies.forEach(message => notifyFinalReply({ message, source: 'poll_final' }))
           if (hasResolvedAgentReply(messages.value)) {
@@ -384,9 +384,12 @@ export const useHallConversation = ({
     if (result.shouldStopPolling) {
       stopHallReplyPolling()
     }
-    if (result.toastName) showToast(`${result.toastName} 已回话`)
-    if (result.type === 'assistant' && result.message?.content) streamFinalCandidate = result.message
-    if (result.type === 'final' && result.message?.sender === 'AGENT') notifyFinalReply({ message: result.message, source: 'agent_event' })
+    if (result.type === 'assistant' && result.message?.content) {
+      streamFinalCandidate = { message: result.message, conversationId: null, toastName: result.toastName }
+    }
+    if (result.type === 'stream_final' && result.message?.content) {
+      streamFinalCandidate = { message: result.message, conversationId: result.conversationId, toastName: result.toastName }
+    }
     if (result.shouldReconnect) {
       startHallEventStream()
       scheduleHallConversationSync(result.conversationId)
@@ -487,9 +490,13 @@ export const useHallConversation = ({
           if (disposed || generation !== lifecycleGeneration) return
           hallReplyStreamHandle = null
           isStreaming.value = false
-          if (streamFinalCandidate?.content) {
-            notifyFinalReply({ message: streamFinalCandidate, source: 'stream_end' })
-            streamFinalCandidate = null
+          const finalized = streamFinalCandidate
+          streamFinalCandidate = null
+          const finalConversationId = conversationId.value
+          if (finalized?.message?.content && typeof finalConversationId === 'string' && finalConversationId &&
+            (!finalized.conversationId || finalized.conversationId === finalConversationId)) {
+            if (finalized.toastName) showToast(`${finalized.toastName} 已回话`)
+            notifyFinalReply({ message: finalized.message, source: 'stream_end' })
           }
           if (isAwaitingReply.value && conversationId.value) startHallReplyPolling(conversationId.value)
         },
