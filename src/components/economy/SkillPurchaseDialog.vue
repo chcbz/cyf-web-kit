@@ -24,7 +24,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { formatSilverMicro } from '@/composables/useSkillMarket.js'
+import { codeUnitCompare, formatSilverMicro, normalizeApprovedPermissions } from '@/composables/useSkillMarket.js'
 
 const props = defineProps({
   show: { type: Boolean, default: false },
@@ -41,13 +41,13 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:show', 'update:approved-permissions', 'quote', 'purchase'])
 const visible = computed({ get: () => props.show, set: value => emit('update:show', value) })
-const permissions = computed(() => [...new Set((props.product?.permissions || []).map(item => String(item || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)))
+const permissions = computed(() => normalizeApprovedPermissions(props.product?.permissions))
 const formatMoney = (amount) => props.moneyFormatter ? props.moneyFormatter(amount) : formatSilverMicro(amount)
 const toggle = (permission, checked) => {
   const next = new Set(props.approvedPermissions)
   if (checked) next.add(permission)
   else next.delete(permission)
-  emit('update:approved-permissions', [...next].map(item => String(item).trim()).filter(Boolean).sort((a, b) => a.localeCompare(b)))
+  emit('update:approved-permissions', [...next].map(item => String(item).trim()).filter(Boolean).sort(codeUnitCompare))
 }
 </script>
 
