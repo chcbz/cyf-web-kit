@@ -9,7 +9,7 @@ import {
   useHallVoiceConversation
 } from '../src/composables/juyiting/useHallVoiceConversation.js'
 import { useHallConversation } from '../src/composables/juyiting/useHallConversation.js'
-import { stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
+import { identityCleanupHandlerCount, stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 
 const flush = async () => { await Promise.resolve(); await Promise.resolve(); await Vue.nextTick() }
 const deferred = () => {
@@ -155,7 +155,19 @@ const transcribeToReview = async voice => {
   expect(voice.voiceInteractionLocked).to.equal(true)
 }
 
-const createActualHallVoiceMocks = ({ chatApi, conversationRef, correlationRef, selectedAgentFixture = null, SelectedAgentCardComponent, voiceRef }) => {
+const createActualHallVoiceMocks = ({
+  chatApi,
+  conversationRef,
+  correlationRef,
+  selectedAgentFixture = null,
+  SelectedAgentCardComponent,
+  HallPortraitHomeComponent,
+  DiscussionPanelComponent,
+  HallVoiceHudComponent,
+  experienceMode = 'landscape-map',
+  requestLandscape,
+  voiceRef
+}) => {
   const noop = () => {}
   const asyncNoop = async () => {}
   const list = Vue.ref([])
@@ -181,7 +193,7 @@ const createActualHallVoiceMocks = ({ chatApi, conversationRef, correlationRef, 
     useApiStore: () => ({ token: async () => 'token' }), agentApi: {}, chatApi, log: { warn: noop, error: noop }, juyitingGame: {},
     roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
     useHallData: ({ selectedAgent }) => { selectedAgent.value = selectedAgentFixture; return hallData },
-    useHallExperienceMode: () => ({ experienceMode: Vue.ref('landscape-map'), isMobileCoarse: Vue.ref(false), orientationHint: text, orientationRequestPending: Vue.ref(false), requestLandscape: asyncNoop }),
+    useHallExperienceMode: () => ({ experienceMode: Vue.ref(experienceMode), isMobileCoarse: Vue.ref(false), orientationHint: text, orientationRequestPending: Vue.ref(false), requestLandscape: requestLandscape || asyncNoop }),
     useHallPanels: () => ({ panelLayout: Vue.ref('center-modal') }),
     useHallSceneState: () => ({ setMapRuntime: noop, reset: noop, forwardPhaseEvents: asyncNoop }),
     useHallCommandQueue: () => ({ ready: Vue.ref(false), setSimulation: noop }),
@@ -210,8 +222,8 @@ const createActualHallVoiceMocks = ({ chatApi, conversationRef, correlationRef, 
     useTaskWorkspace: () => null, createDisabledTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }),
     isTaskWorkspaceBuildEnabled: () => false, useTaskWorkspaceView: () => ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: text, error: Vue.ref(null), retry: noop }), useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop }),
     portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: agent => agent?.name || '', portraitStyle: () => ({}), roleClass: () => '',
-    HallPortraitHome: EmptyPanel, HallStage, HallVoiceHud: EmptyPanel, LibraryPanel: EmptyPanel, AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel,
-    BountyPanel: EmptyPanel, TaskWorkspacePanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PrivateDiscussionPanel: EmptyPanel, PublicDiscussionPanel: EmptyPanel, SelectedAgentCard: SelectedAgentCardComponent || EmptyPanel
+    HallPortraitHome: HallPortraitHomeComponent || EmptyPanel, HallStage, HallVoiceHud: HallVoiceHudComponent || EmptyPanel, LibraryPanel: EmptyPanel, AgentPanel: EmptyPanel, BountyDiscussionPanel: DiscussionPanelComponent || EmptyPanel,
+    BountyPanel: EmptyPanel, TaskWorkspacePanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PrivateDiscussionPanel: DiscussionPanelComponent || EmptyPanel, PublicDiscussionPanel: DiscussionPanelComponent || EmptyPanel, SelectedAgentCard: SelectedAgentCardComponent || EmptyPanel
   }
 }
 
@@ -336,6 +348,44 @@ describe('Juyi Hall voice lifecycle', () => {
     voice.cancel()
     expect(voice.state).to.equal('idle')
     expect(voice.voiceTurnActive).to.equal(false)
+  })
+})
+
+describe('Juyi Hall voice current-generation abort recovery', () => {
+  it('terminally recovers from direct STT and TTS AbortError failures', async () => {
+    FakeRecorder.instances = []
+    const sttHarness = browserHarness()
+    const sttVoice = createVoice({
+      browser: sttHarness.browser,
+      chatCreate: async () => { throw new DOMException('transcription aborted', 'AbortError') }
+    }).voice
+    await sttVoice.startRecording()
+    const recorder = FakeRecorder.instances.at(-1)
+    recorder.ondataavailable({ data: new Blob(['voice']) })
+    sttVoice.stopRecording()
+    await flush()
+    expect(sttVoice.state).to.equal('error')
+    expect(sttVoice.error).to.equal('语音转写已中止，仍可使用文字传令')
+    expect(sttVoice.voiceInteractionLocked).to.equal(false)
+    expect(sttVoice.canRecord).to.equal(true)
+    sttVoice.dispose()
+
+    const ttsHarness = browserHarness({
+      fetchImpl: async () => { throw new DOMException('synthesis aborted', 'AbortError') }
+    })
+    const terminals = []
+    const ttsVoice = createVoice({ browser: ttsHarness.browser, onReplyTurnTerminal: payload => terminals.push(payload) }).voice
+    ttsVoice.setReplyVoiceEnabled(true)
+    await transcribeToReview(ttsVoice)
+    await ttsVoice.sendTranscript()
+    expect(await ttsVoice.completeReply({ content: '回话' })).to.equal(false)
+    expect(ttsVoice.state).to.equal('error')
+    expect(ttsVoice.error).to.equal('语音回答已中止，文字已保留')
+    expect(ttsVoice.voiceTurnActive).to.equal(false)
+    expect(terminals).to.have.length(1)
+    expect(terminals[0].turnId).to.be.a('string').and.not.equal('')
+    expect(ttsVoice.canRecord).to.equal(true)
+    ttsVoice.dispose()
   })
 })
 
@@ -473,6 +523,220 @@ describe('Juyi Hall voice identity and capture controls', () => {
     expect(uploads).to.equal(0)
     wrapper.unmount()
     voice.dispose()
+  })
+  it('balances dispose registration and identity-cleans countdown, reply timers, and speaking playback', async () => {
+    const handlersBefore = identityCleanupHandlerCount()
+    const disposable = createVoice({ browser: browserHarness().browser }).voice
+    expect(identityCleanupHandlerCount()).to.equal(handlersBefore + 1)
+    disposable.dispose()
+    disposable.dispose()
+    expect(identityCleanupHandlerCount()).to.equal(handlersBefore)
+
+    const countdownIntervals = []
+    const countdownHarness = browserHarness()
+    countdownHarness.browser.window.setInterval = (callback, delay) => {
+      const timer = { callback, delay, cleared: false }
+      countdownIntervals.push(timer)
+      return timer
+    }
+    countdownHarness.browser.window.clearInterval = timer => { if (timer) timer.cleared = true }
+    const countdownVoice = createVoice({ browser: countdownHarness.browser }).voice
+    countdownVoice.setAutoSendEnabled(true)
+    await countdownVoice.startRecording()
+    let recorder = FakeRecorder.instances.at(-1)
+    recorder.ondataavailable({ data: new Blob(['voice']) })
+    countdownVoice.stopRecording()
+    await flush()
+    expect(countdownVoice.state).to.equal('pending_send')
+    const countdownTimer = countdownIntervals.find(timer => timer.delay === 50 && !timer.cleared)
+    expect(countdownTimer, 'active auto-send countdown').to.exist
+
+    const replyTimers = []
+    const replyHarness = browserHarness()
+    replyHarness.browser.window.setTimeout = (callback, delay) => {
+      const timer = { callback, delay, cleared: false }
+      replyTimers.push(timer)
+      return timer
+    }
+    replyHarness.browser.window.clearTimeout = timer => { if (timer) timer.cleared = true }
+    const replyVoice = createVoice({ browser: replyHarness.browser }).voice
+    await transcribeToReview(replyVoice)
+    await replyVoice.sendTranscript()
+    const replyTimer = replyTimers.find(timer => timer.delay === 120_000 && !timer.cleared)
+    expect(replyTimer, 'active reply watchdog').to.exist
+
+    class SpeakingAudio {
+      constructor () { SpeakingAudio.instance = this; this.paused = false }
+      play = async () => {}
+      pause () { this.paused = true }
+    }
+    const speakingHarness = browserHarness({
+      AudioClass: SpeakingAudio,
+      fetchImpl: async () => ({
+        ok: true,
+        headers: new Headers({ 'content-type': 'audio/mpeg', 'content-length': '3' }),
+        body: new ReadableStream({ start (controller) { controller.enqueue(new Uint8Array([1, 2, 3])); controller.close() } })
+      })
+    })
+    const speakingVoice = createVoice({ browser: speakingHarness.browser }).voice
+    speakingVoice.setReplyVoiceEnabled(true)
+    await transcribeToReview(speakingVoice)
+    await speakingVoice.sendTranscript()
+    await speakingVoice.completeReply({ content: '回话' })
+    expect(speakingVoice.state).to.equal('speaking')
+
+    stopIdentityBoundWork()
+    expect(countdownTimer.cleared).to.equal(true)
+    expect(countdownVoice.countdownMs).to.equal(0)
+    expect(countdownVoice.state).to.equal('idle')
+    expect(replyTimer.cleared).to.equal(true)
+    expect(replyVoice.voiceTurnActive).to.equal(false)
+    expect(replyVoice.state).to.equal('idle')
+    expect(SpeakingAudio.instance.paused).to.equal(true)
+    expect(speakingHarness.revoked).to.deep.equal(['blob:voice'])
+    expect(speakingVoice.state).to.equal('idle')
+
+    countdownVoice.dispose()
+    replyVoice.dispose()
+    speakingVoice.dispose()
+  })
+})
+
+describe('Juyi Hall portrait voice lock', () => {
+  it('keeps cancellation reachable and rejects panel/context changes while capture is locked', async () => {
+    FakeRecorder.instances = []
+    const originalMediaRecorder = globalThis.MediaRecorder
+    const originalMediaDevices = globalThis.navigator.mediaDevices
+    const permission = deferred()
+    const streams = []
+    let permissionRequests = 0
+    let landscapeRequests = 0
+    let uploadSignal
+    const upload = deferred()
+    const selectedAgentFixture = { agentId: 'wuyong', name: '吴用', status: 'idle', boundToMe: true, canOperate: true, systemAgent: false }
+    const alternateAgent = { agentId: 'linchong', name: '林冲', status: 'idle', boundToMe: true, canOperate: true, systemAgent: false }
+    const makeStream = () => {
+      const track = { stopped: false, onended: null, stop () { this.stopped = true } }
+      const stream = { getTracks: () => [track] }
+      streams.push(stream)
+      return stream
+    }
+    Object.defineProperty(globalThis.navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia: async () => {
+        permissionRequests += 1
+        if (permissionRequests === 1) return permission.promise
+        return makeStream()
+      } }
+    })
+    globalThis.MediaRecorder = FakeRecorder
+
+    const HallVoiceControls = loadSfc('../src/components/juyiting/HallVoiceControls.vue')
+    const HallVoiceHud = loadSfc('../src/components/juyiting/HallVoiceHud.vue', { HallVoiceControls })
+    const HallPortraitHome = Vue.defineComponent({
+      inheritAttrs: false,
+      props: { selectedAgent: { type: Object, default: null }, selectedTask: { type: Object, default: null } },
+      emits: ['open-task', 'quick-action', 'request-landscape', 'select-agent'],
+      setup: (props, { attrs, emit }) => () => Vue.h('main', { ...attrs, class: 'portrait-home-probe', 'data-selected-agent': props.selectedAgent?.agentId || '', 'data-selected-task': props.selectedTask?.id || '' }, [
+        Vue.h('button', { class: 'portrait-open-chat', onClick: () => emit('quick-action', 'discussion') }, 'chat'),
+        Vue.h('button', { class: 'portrait-switch-panel', onClick: () => emit('quick-action', 'agents') }, 'agents'),
+        Vue.h('button', { class: 'portrait-select-agent', onClick: () => emit('select-agent', alternateAgent) }, 'select'),
+        Vue.h('button', { class: 'portrait-open-task', onClick: () => emit('open-task', { id: 'task-late', title: '迟到榜文' }) }, 'task'),
+        Vue.h('button', { class: 'portrait-landscape', onClick: () => emit('request-landscape') }, 'landscape')
+      ])
+    })
+    const DiscussionPanel = Vue.defineComponent({
+      props: { voice: { type: Object, default: null } },
+      setup: props => () => Vue.h('section', { class: 'discussion-probe' }, [Vue.h(HallVoiceControls, { voice: props.voice })])
+    })
+    const conversationRef = { value: null }
+    const correlationRef = { value: null }
+    const voiceRef = { value: null }
+    const chatApi = {
+      create: async (path, _body, options) => {
+        expect(path).to.equal('/speech/transcriptions')
+        uploadSignal = options.signal
+        return upload.promise
+      },
+      list: async () => {},
+      getById: async () => {}
+    }
+    const JuyiHall = loadActualJuyiHall(createActualHallVoiceMocks({
+      chatApi,
+      conversationRef,
+      correlationRef,
+      selectedAgentFixture,
+      HallPortraitHomeComponent: HallPortraitHome,
+      DiscussionPanelComponent: DiscussionPanel,
+      HallVoiceHudComponent: HallVoiceHud,
+      experienceMode: 'portrait-command',
+      requestLandscape: async () => { landscapeRequests += 1 },
+      voiceRef
+    }))
+    const wrapper = mount(JuyiHall, { attachTo: document.body, global: { stubs: { 'var-icon': true, transition: true } } })
+    try {
+      await flush()
+      await wrapper.get('.portrait-open-chat').trigger('click')
+      await flush()
+      expect(wrapper.find('.panel-chat').exists()).to.equal(true)
+
+      const requesting = voiceRef.value.startRecording()
+      expect(voiceRef.value.state).to.equal('requesting_permission')
+      await flush()
+      expect(wrapper.get('.panel-close').attributes('disabled')).to.equal('')
+      expect(wrapper.get('.portrait-home-probe').attributes('inert')).to.equal('')
+      expect(wrapper.find('.panel-chat .voice-cancel').exists()).to.equal(true)
+      await wrapper.get('.panel-close').trigger('click')
+      await wrapper.get('.panel-overlay').trigger('pointerdown')
+      await wrapper.get('.floating-panel').trigger('keydown', { key: 'Escape' })
+      await wrapper.get('.portrait-switch-panel').trigger('click')
+      await wrapper.get('.portrait-select-agent').trigger('click')
+      await wrapper.get('.portrait-open-task').trigger('click')
+      await wrapper.get('.portrait-landscape').trigger('click')
+      expect(wrapper.find('.panel-chat').exists()).to.equal(true)
+      expect(wrapper.get('.portrait-home-probe').attributes('data-selected-agent')).to.equal('wuyong')
+      expect(wrapper.get('.portrait-home-probe').attributes('data-selected-task')).to.equal('')
+      expect(landscapeRequests).to.equal(0)
+
+      await wrapper.get('.panel-chat .voice-cancel').trigger('click')
+      const lateStream = makeStream()
+      permission.resolve(lateStream)
+      expect(await requesting).to.equal(false)
+      expect(lateStream.getTracks()[0].stopped).to.equal(true)
+      expect(wrapper.find('.panel-overlay').exists()).to.equal(true)
+
+      await voiceRef.value.startRecording()
+      const recorder = FakeRecorder.instances.at(-1)
+      recorder.ondataavailable({ data: new Blob(['voice']) })
+      voiceRef.value.stopRecording()
+      await flush()
+      expect(voiceRef.value.state).to.equal('transcribing')
+      expect(wrapper.get('.panel-close').attributes('disabled')).to.equal('')
+      expect(wrapper.find('.panel-chat .voice-cancel').exists()).to.equal(true)
+      await wrapper.get('.panel-overlay').trigger('pointerdown')
+      await wrapper.get('.floating-panel').trigger('keydown', { key: 'Escape' })
+      expect(wrapper.find('.panel-chat').exists()).to.equal(true)
+      await wrapper.get('.panel-chat .voice-cancel').trigger('click')
+      expect(uploadSignal.aborted).to.equal(true)
+      upload.resolve({ data: { data: { text: '迟到转写' } } })
+      await flush()
+      expect(voiceRef.value.state).to.equal('idle')
+      expect(voiceRef.value.transcript).to.equal('')
+
+      await wrapper.get('.panel-close').trigger('click')
+      await flush()
+      expect(wrapper.find('.panel-overlay').exists()).to.equal(false)
+      await voiceRef.value.startRecording()
+      await flush()
+      expect(wrapper.find('.hall-voice-hud .voice-cancel').exists()).to.equal(true)
+      expect(wrapper.get('.portrait-home-probe').attributes('inert')).to.equal('')
+      await wrapper.get('.hall-voice-hud .voice-cancel').trigger('click')
+      expect(voiceRef.value.state).to.equal('idle')
+    } finally {
+      wrapper.unmount()
+      Object.defineProperty(globalThis.navigator, 'mediaDevices', { configurable: true, value: originalMediaDevices })
+      globalThis.MediaRecorder = originalMediaRecorder
+    }
   })
 })
 
@@ -695,17 +959,12 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
       const conversation = conversationRef.value
       const map = () => wrapper.get('.hall-stage-probe')
       const card = () => wrapper.get('.selected-agent-card')
-      const closeReviewPanel = async () => {
-        await wrapper.get('.panel-close').trigger('click')
-        await flush()
-        expect(wrapper.find('.panel-overlay').exists()).to.equal(false)
-      }
       voice.setReplyVoiceEnabled(true)
       expect(voice.supported).to.equal(true)
       expect(voice.canRecord).to.equal(true)
 
       await transcribeToReview(voice)
-      await closeReviewPanel()
+      expect(wrapper.find('.panel-overlay').exists()).to.equal(false)
       const sendA = voice.sendTranscript()
       await flush()
       expect(streams).to.have.length(1)
@@ -730,7 +989,7 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
       expect(card().attributes('inert')).to.equal(undefined)
 
       await transcribeToReview(voice)
-      await closeReviewPanel()
+      expect(wrapper.find('.panel-overlay').exists()).to.equal(false)
       const sendB = voice.sendTranscript()
       await flush()
       expect(streams).to.have.length(2)

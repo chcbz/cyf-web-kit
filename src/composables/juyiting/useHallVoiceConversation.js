@@ -238,7 +238,7 @@ export const useHallVoiceConversation = ({
   }
   const failCapture = message => {
     errorRef.value = message
-    terminal('error', { clearTranscript: false, clearTurn: true })
+    terminal('error', { clearTranscript: true, clearTurn: true })
   }
   const finishReplyTurn = (next, reason = 'reply_complete') => {
     clearReplyTimer()
@@ -288,7 +288,11 @@ export const useHallVoiceConversation = ({
       else openReview(!matchesFrozen())
       return true
     } catch (cause) {
-      if (current !== generation || cause?.name === 'AbortError') return false
+      if (current !== generation) return false
+      if (cause?.name === 'AbortError') {
+        failCapture('语音转写已中止，仍可使用文字传令')
+        return false
+      }
       errorRef.value = cause?.message || '语音转写失败，仍可使用文字传令'
       openReview(false)
       return false
@@ -550,11 +554,12 @@ export const useHallVoiceConversation = ({
       setState('speaking')
       return true
     } catch (cause) {
-      if (current === generation && cause?.name !== 'AbortError') {
-        errorRef.value = cause?.message || '语音回答失败，文字已保留'
-        stopPlayback()
-        finishReplyTurn('error')
-      }
+      if (current !== generation) return false
+      errorRef.value = cause?.name === 'AbortError'
+        ? '语音回答已中止，文字已保留'
+        : (cause?.message || '语音回答失败，文字已保留')
+      stopPlayback()
+      finishReplyTurn('error')
       return false
     } finally {
       if (current === generation) ttsController = null

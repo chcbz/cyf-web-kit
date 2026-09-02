@@ -14,8 +14,8 @@
       :task-state-class="taskStateClass"
       :task-status-text="taskStatusText"
       :tasks="tasks"
-      :inert="isPanelSessionActive ? '' : null"
-      :aria-hidden="isPanelSessionActive ? 'true' : null"
+      :inert="isPanelSessionActive || voiceInteractionLocked ? '' : null"
+      :aria-hidden="isPanelSessionActive || voiceInteractionLocked ? 'true' : null"
       @quick-action="handlePortraitQuickAction"
       @refresh-hall="refreshHall"
       @request-landscape="requestPortraitLandscape"
@@ -90,6 +90,12 @@
       </div>
     </HallStage>
 
+    <HallVoiceHud
+      v-if="experienceMode === 'portrait-command' && voiceInteractionLocked && !activePanel"
+      :voice="hallVoice"
+      @apply="applyVoiceTranscript"
+    />
+
     <transition name="panel" @after-leave="handlePanelAfterLeave">
       <div v-if="activePanel" :key="panelSessionGeneration" class="panel-overlay" :data-panel-generation="panelSessionGeneration" @pointerdown.self="closePanel">
         <section
@@ -124,6 +130,7 @@
               class="panel-close"
               type="button"
               aria-label="关闭面板"
+              :disabled="voiceInteractionLocked"
               @click="closePanel"
             >
               <var-icon name="close-circle-outline" />
@@ -654,7 +661,7 @@ const cancelPanelChatLoad = () => {
 }
 
 const openPanel = (panel, options = {}) => {
-  if (panelDisposed || !panelWhitelist.has(panel)) return false
+  if (panelDisposed || voiceInteractionLocked.value || !panelWhitelist.has(panel)) return false
   const openingFromClosed = !activePanel.value
   if (openingFromClosed) {
     if (!renderedPanel.value) {
@@ -748,6 +755,7 @@ const stagePortraitHotspotTarget = action => {
 }
 
 const handlePortraitAgentSelect = agent => {
+  if (voiceInteractionLocked.value) return false
   selectAgent(agent)
   if (hasExactLandscapeId(agent?.agentId) && mapAgents.value.some(item => item?.agentId === agent.agentId)) {
     setLandscapeEntryTarget({ kind: 'agent', agentId: agent.agentId })
@@ -758,6 +766,7 @@ const handlePortraitAgentSelect = agent => {
 }
 
 const requestPortraitLandscape = () => {
+  if (voiceInteractionLocked.value) return false
   const selected = selectedAgent.value
   const task = selectedTask.value
   const assignedIds = Array.isArray(task?.assignedAgentIds) ? task.assignedAgentIds : []
@@ -775,6 +784,7 @@ const requestPortraitLandscape = () => {
 }
 
 const handlePortraitQuickAction = (action) => {
+  if (voiceInteractionLocked.value) return false
   if (action !== 'refresh') stagePortraitHotspotTarget(action)
   if (action === 'refresh') {
     void refreshHall()
@@ -788,11 +798,13 @@ const handlePortraitQuickAction = (action) => {
 }
 
 const closePortraitTaskDetail = () => {
+  if (voiceInteractionLocked.value) return false
   portraitTaskDetailOpen.value = false
+  return true
 }
 
 const handlePortraitTaskOpen = task => {
-  if (!task?.id) return false
+  if (voiceInteractionLocked.value || !task?.id) return false
   const selection = selectTask(task)
   const selected = selectedAgent.value
   const assignedIds = Array.isArray(task.assignedAgentIds) ? task.assignedAgentIds : []
@@ -807,12 +819,13 @@ const handlePortraitTaskOpen = task => {
 }
 
 const handlePortraitTaskBoard = () => {
+  if (voiceInteractionLocked.value) return false
   closePortraitTaskDetail()
   openPanel('tasks')
 }
 
 const handlePortraitTaskDiscussion = task => {
-  if (!task?.id) return false
+  if (voiceInteractionLocked.value || !task?.id) return false
   closePortraitTaskDetail()
   discussTask(task)
   return true
@@ -828,7 +841,7 @@ const openTaskWorkspace = () => {
 }
 
 const closePanel = () => {
-  if (panelDisposed || !activePanel.value) return false
+  if (panelDisposed || voiceInteractionLocked.value || !activePanel.value) return false
   cancelPanelChatLoad()
   panelClosingGeneration.value = panelSessionGeneration.value
   activePanel.value = ''
@@ -1075,7 +1088,11 @@ const applyVoiceTranscript = mode => {
   const next = hallVoice.applyTranscript(mode)
   if (typeof next === 'string') { setDraft(next); hallVoice.discard() }
 }
-const handleSceneModeChange = mode => { effectiveSceneMode.value = mode === 'landscape' ? 'landscape' : 'portrait' }
+const handleSceneModeChange = mode => {
+  if (voiceInteractionLocked.value) return false
+  effectiveSceneMode.value = mode === 'landscape' ? 'landscape' : 'portrait'
+  return true
+}
 
 const {
   citeLibraryItem: runCiteLibraryItem,
