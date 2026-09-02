@@ -66,7 +66,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import SkillProductCard from './SkillProductCard.vue'
 import SkillPurchaseDialog from './SkillPurchaseDialog.vue'
-import { formatInstalledSkillFact, orderStatusLabel, useSkillMarket } from '@/composables/useSkillMarket.js'
+import { formatEntitlementSkillFact, formatInstalledSkillFact, orderStatusLabel, useSkillMarket } from '@/composables/useSkillMarket.js'
 
 const props = defineProps({
   /** Must come from the API capability response; default false fails closed. */
@@ -79,7 +79,7 @@ const props = defineProps({
 })
 const purchaseVisible = ref(false)
 const market = useSkillMarket({ agentApi: props.agentApi || undefined, enabled: computed(() => props.previewEnabled) })
-const entitlementText = computed(() => market.entitlements.value.filter(item => String(item.status || '').toUpperCase() === 'ACTIVE').map(item => item.skillKey || item.productName || item.productVersionId).filter(Boolean).join('、') || '无有效权益')
+const entitlementText = computed(() => market.entitlements.value.filter(item => String(item.status || '').toUpperCase() === 'ACTIVE').map(formatEntitlementSkillFact).filter(Boolean).join('、') || '无有效权益')
 const installedText = computed(() => props.installedSkills.map(formatInstalledSkillFact).filter(Boolean).join('、') || '未报告已安装技能')
 const runtimeAbilityText = computed(() => Array.isArray(props.runtimeAbilities) ? props.runtimeAbilities.join('、') || '未报告运行时能力' : props.runtimeAbilities || '未报告运行时能力')
 

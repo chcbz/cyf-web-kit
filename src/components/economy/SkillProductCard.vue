@@ -3,7 +3,7 @@
     <div class="product-heading">
       <div>
         <h3>{{ product.name || product.skillKey || '未命名技能' }}</h3>
-        <p>{{ product.skillKey || product.productId }}</p>
+        <p>{{ productIdentity }}</p>
       </div>
       <strong>{{ formatMoney(product.priceMicro) }}</strong>
     </div>
@@ -28,7 +28,8 @@
 </template>
 
 <script setup>
-import { formatSilverMicro } from '@/composables/useSkillMarket.js'
+import { computed } from 'vue'
+import { formatSilverMicro, formatSkillProductIdentity } from '@/composables/useSkillMarket.js'
 
 const props = defineProps({
   product: { type: Object, required: true },
@@ -37,6 +38,7 @@ const props = defineProps({
 })
 
 defineEmits(['select'])
+const productIdentity = computed(() => formatSkillProductIdentity(props.product))
 const formatMoney = (amount) => props.moneyFormatter ? props.moneyFormatter(amount) : formatSilverMicro(amount)
 </script>
 

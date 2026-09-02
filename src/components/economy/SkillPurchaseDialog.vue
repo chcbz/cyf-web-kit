@@ -1,6 +1,7 @@
 <template>
   <var-dialog v-model:show="visible" :title="product?.name || product?.skillKey || '购买技能'" :confirm-button="false" :cancel-button="false">
     <div v-if="product" class="purchase-dialog">
+      <p class="identity">{{ productIdentity }}</p>
       <p class="price">报价：{{ formatMoney(quote?.priceMicro ?? product.priceMicro) }}</p>
       <p class="target">目标 Agent：{{ targetAgent?.name || targetAgent?.agentId || targetAgent?.id || '未选择' }}</p>
       <p v-if="!previewEnabled" class="reason">预览购买功能未启用。</p>
@@ -24,7 +25,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { codeUnitCompare, formatSilverMicro, normalizeApprovedPermissions } from '@/composables/useSkillMarket.js'
+import { codeUnitCompare, formatSilverMicro, formatSkillProductIdentity, normalizeApprovedPermissions } from '@/composables/useSkillMarket.js'
 
 const props = defineProps({
   show: { type: Boolean, default: false },
@@ -42,6 +43,7 @@ const props = defineProps({
 const emit = defineEmits(['update:show', 'update:approved-permissions', 'quote', 'purchase'])
 const visible = computed({ get: () => props.show, set: value => emit('update:show', value) })
 const permissions = computed(() => normalizeApprovedPermissions(props.product?.permissions))
+const productIdentity = computed(() => formatSkillProductIdentity(props.product))
 const formatMoney = (amount) => props.moneyFormatter ? props.moneyFormatter(amount) : formatSilverMicro(amount)
 const toggle = (permission, checked) => {
   const next = new Set(props.approvedPermissions)
@@ -52,5 +54,5 @@ const toggle = (permission, checked) => {
 </script>
 
 <style scoped>
-.purchase-dialog { display: grid; gap: 12px; min-width: min(420px, 78vw); } p { margin: 0; } .price { color: #167553; font-size: 17px; font-weight: 700; } .target, .quote-note { color: #5d6c80; font-size: 13px; } .section-title { color: #334b67; font-weight: 700; } .permission { display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid #e1e9f2; border-radius: 8px; } .reason { color: #a65a35; } .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.purchase-dialog { display: grid; gap: 12px; min-width: min(420px, 78vw); } p { margin: 0; } .identity, .target, .quote-note { color: #5d6c80; font-size: 13px; } .price { color: #167553; font-size: 17px; font-weight: 700; } .section-title { color: #334b67; font-weight: 700; } .permission { display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid #e1e9f2; border-radius: 8px; } .reason { color: #a65a35; } .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 </style>

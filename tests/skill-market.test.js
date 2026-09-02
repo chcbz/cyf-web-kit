@@ -10,6 +10,7 @@ import {
   orderStatusLabel,
   readSkillApiPayload,
   SKILL_ORDER_STATUSES,
+  formatSkillProductIdentity,
   useSkillMarket
 } from '../src/composables/useSkillMarket.js'
 
@@ -45,7 +46,7 @@ const createApi = () => {
       if (url === '/skill-products') return success({ items: seededProducts })
       if (url.includes('/skill-entitlements')) return success({ entitlements: [{ skillKey: 'repo-test', status: 'ACTIVE' }] })
       if (url.startsWith('/skill-products/')) return success(seededProducts.find(product => url.endsWith(product.productId)))
-      if (url.startsWith('/skill-orders/')) return success({ orderId: 'so-1', targetAgentId: 'agent-lin', status: orderStatuses.shift() || 'ACTIVE' })
+      if (url.startsWith('/skill-orders/')) return success({ orderId: 'so-1', targetAgentId: 'agent-lin', productVersionId: 'spv-repo-test-1', expectedAgentVersion: '7', status: orderStatuses.shift() || 'ACTIVE' })
       throw new Error(`Unexpected GET ${url}`)
     },
     post: async (url, payload, options) => {
@@ -55,10 +56,12 @@ const createApi = () => {
           quoteId: 'sq-1',
           productVersionId: payload.productVersionId,
           targetAgentId: payload.targetAgentId,
+          expectedAgentVersion: payload.expectedAgentVersion,
+          expiresAt: String(Date.now() + 60000),
           priceMicro: '30000000'
         })
       }
-      if (url === '/skill-orders') return success({ orderId: 'so-1', targetAgentId: payload.targetAgentId, status: 'FUNDS_HELD' })
+      if (url === '/skill-orders') return success({ orderId: 'so-1', targetAgentId: payload.targetAgentId, productVersionId: payload.productVersionId, expectedAgentVersion: payload.expectedAgentVersion, status: 'FUNDS_HELD' })
       throw new Error(`Unexpected POST ${url}`)
     }
   }
@@ -127,37 +130,79 @@ describe('skill market preview', () => {
     })
   })
 
-  it('persists one purchase idempotency key across an ambiguous failure and retry', async () => {
+  it('replays the original quote/purchase body and key after ambiguous reload before a new quote', async () => {
     const storage = memoryStorage()
-    const purchaseKeys = []
-    let purchaseAttempts = 0
+    const purchaseCalls = []
+    let quoteCalls = 0
     let generated = 0
     const api = {
       get: async () => success({ entitlements: [] }),
       post: async (url, payload, options) => {
-        if (url === '/skill-orders/quotes') return success({ quoteId: 'sq-stable', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, priceMicro: '30000000' })
-        purchaseKeys.push(options.headers['Idempotency-Key'])
-        purchaseAttempts += 1
-        if (purchaseAttempts === 1) throw new TypeError('network connection lost after send')
-        return success({ orderId: 'so-stable', targetAgentId: payload.targetAgentId, status: 'FUNDS_HELD' })
+        if (url === '/skill-orders/quotes') {
+          quoteCalls += 1
+          return success({ quoteId: `sq-${quoteCalls}`, productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
+        }
+        purchaseCalls.push({ payload, key: options.headers['Idempotency-Key'] })
+        if (purchaseCalls.length === 1) throw new TypeError('network connection lost after send')
+        return success({ orderId: 'so-stable', targetAgentId: payload.targetAgentId, productVersionId: payload.productVersionId, expectedAgentVersion: payload.expectedAgentVersion, status: 'FUNDS_HELD' })
       }
     }
-    const options = {
-      agentApi: api,
-      enabled: ref(true),
-      purchaseIdempotencyStorage: storage,
-      createIdempotencyKey: () => `generated-${++generated}`
-    }
+    const options = { agentApi: api, enabled: ref(true), purchaseIdempotencyStorage: storage, createIdempotencyKey: () => `generated-${++generated}` }
     const first = useSkillMarket(options)
     await preparePurchase(first)
     try { await first.purchase() } catch {}
-    expect(storage.values.size).to.equal(1)
 
     const remounted = useSkillMarket(options)
-    await preparePurchase(remounted)
+    remounted.selectProduct(seededProducts[2])
+    remounted.setTargetAgent({ agentId: 'agent-lin', version: '7' })
+    remounted.setApprovedPermissions(['repo.read', 'repo.write'])
+    expect(remounted.canRequestQuote.value).to.equal(false)
+    expect(await remounted.requestQuote()).to.equal(null)
     await remounted.purchase()
 
-    expect(purchaseKeys).to.deep.equal(['generated-2', 'generated-2'])
+    expect(quoteCalls).to.equal(1)
+    expect(purchaseCalls.map(call => call.key)).to.deep.equal(['generated-2', 'generated-2'])
+    expect(purchaseCalls[1].payload).to.deep.equal(purchaseCalls[0].payload)
+    expect(purchaseCalls[1].payload.quoteId).to.equal('sq-1')
+    expect(JSON.parse([...storage.values.values()][0]).records).to.have.length(1)
+  })
+
+  it('keeps multiple unresolved intents isolated instead of overwriting a global slot', async () => {
+    const storage = memoryStorage()
+    const requests = []
+    let generated = 0
+    const api = {
+      get: async () => success({ entitlements: [] }),
+      post: async (url, payload, options) => {
+        if (url === '/skill-orders/quotes') return success({ quoteId: `sq-${payload.targetAgentId}-${payload.productVersionId}`, productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
+        requests.push({ payload, key: options.headers['Idempotency-Key'] })
+        throw new TypeError('ambiguous send')
+      }
+    }
+    const market = useSkillMarket({ agentApi: api, enabled: ref(true), purchaseIdempotencyStorage: storage, createIdempotencyKey: () => `key-${++generated}` })
+    await preparePurchase(market, seededProducts[2])
+    try { await market.purchase() } catch {}
+    market.selectProduct(seededProducts[3])
+    market.setTargetAgent({ agentId: 'agent-song', version: '9' })
+    market.setApprovedPermissions(['repo.read'])
+    await market.requestQuote()
+    try { await market.purchase() } catch {}
+
+    const journal = JSON.parse([...storage.values.values()][0])
+    expect(journal.records).to.have.length(2)
+    expect(journal.records.map(record => record.purchaseRequest.quoteId)).to.deep.equal(['sq-agent-lin-spv-repo-test-1', 'sq-agent-song-spv-code-editor-1'])
+    expect(journal.records.map(record => record.idempotencyKey)).to.deep.equal(['key-2', 'key-4'])
+    expect(requests).to.have.length(2)
+  })
+
+  it('clears a journal entry only when the matching order reaches a terminal state', async () => {
+    const storage = memoryStorage()
+    const { api } = createApi()
+    const market = useSkillMarket({ agentApi: api, enabled: ref(true), purchaseIdempotencyStorage: storage, createIdempotencyKey: () => 'stable-key', wait: async () => {} })
+    await preparePurchase(market)
+    await market.purchase()
+    expect(JSON.parse([...storage.values.values()][0]).records).to.have.length(1)
+    await market.pollOrder({ maxAttempts: 2, intervalMs: 0 })
     expect(storage.values.size).to.equal(0)
   })
 
@@ -175,11 +220,86 @@ describe('skill market preview', () => {
 
     market.setTargetAgent({ agentId: 'agent-lin', version: '8' })
     market.setApprovedPermissions(['repo.read', 'repo.write'])
-    pending.resolve(success({ quoteId: 'late', productVersionId: 'spv-repo-test-1', targetAgentId: 'agent-lin', priceMicro: '30000000' }))
+    pending.resolve(success({ quoteId: 'late', productVersionId: 'spv-repo-test-1', targetAgentId: 'agent-lin', expectedAgentVersion: '7', expiresAt: String(Date.now() + 60000), priceMicro: '30000000' }))
 
     expect(await request).to.equal(null)
     expect(market.quote.value).to.equal(null)
     expect(market.canPurchase.value).to.equal(false)
+  })
+
+
+  it('fails closed for expired or mismatched quote echoes', async () => {
+    const responses = [
+      { quoteId: 'expired', productVersionId: 'spv-repo-test-1', targetAgentId: 'agent-lin', expectedAgentVersion: '7', expiresAt: '1000', priceMicro: '30000000' },
+      { quoteId: 'wrong-target', productVersionId: 'spv-repo-test-1', targetAgentId: 'agent-song', expectedAgentVersion: '7', expiresAt: '2000', priceMicro: '30000000' }
+    ]
+    const api = { get: async () => success([]), post: async () => success(responses.shift()) }
+    const market = useSkillMarket({ agentApi: api, enabled: ref(true), now: () => 1000 })
+    market.selectProduct(seededProducts[2])
+    market.setTargetAgent({ agentId: 'agent-lin', version: '7' })
+    market.setApprovedPermissions(['repo.read'])
+    expect(await market.requestQuote()).to.equal(null)
+    expect(market.quote.value).to.equal(null)
+    expect(market.canPurchase.value).to.equal(false)
+    expect(await market.requestQuote()).to.equal(null)
+    expect(market.error.value).to.include('报价无效')
+  })
+
+  it('fences stale order responses and preserves terminal order monotonicity', async () => {
+    const first = deferred()
+    const second = deferred()
+    const responses = [first, second]
+    const api = { get: async () => responses.shift().promise }
+    const market = useSkillMarket({ agentApi: api, enabled: ref(true) })
+    market.setTargetAgent({ agentId: 'agent-lin', version: '7' })
+    market.order.value = { orderId: 'so-1', targetAgentId: 'agent-lin', productVersionId: 'spv-repo-test-1', expectedAgentVersion: '7', status: 'FUNDS_HELD' }
+    const stale = market.loadOrder()
+    const latest = market.loadOrder()
+    second.resolve(success({ orderId: 'so-1', targetAgentId: 'agent-lin', productVersionId: 'spv-repo-test-1', expectedAgentVersion: '7', status: 'INSTALLING' }))
+    await latest
+    first.resolve(success({ orderId: 'so-1', targetAgentId: 'agent-lin', productVersionId: 'spv-repo-test-1', expectedAgentVersion: '7', status: 'ACTIVE' }))
+    expect(await stale).to.equal(null)
+    expect(market.order.value.status).to.equal('INSTALLING')
+
+    const terminalApi = { get: async () => success({ orderId: 'so-1', targetAgentId: 'agent-lin', productVersionId: 'spv-repo-test-1', expectedAgentVersion: '7', status: 'ACTIVE' }) }
+    const terminalMarket = useSkillMarket({ agentApi: terminalApi, enabled: ref(true) })
+    terminalMarket.setTargetAgent({ agentId: 'agent-lin', version: '7' })
+    terminalMarket.order.value = { orderId: 'so-1', targetAgentId: 'agent-lin', productVersionId: 'spv-repo-test-1', expectedAgentVersion: '7', status: 'INSTALLING' }
+    await terminalMarket.loadOrder()
+    terminalApi.get = async () => success({ orderId: 'so-1', targetAgentId: 'agent-lin', productVersionId: 'spv-repo-test-1', expectedAgentVersion: '7', status: 'INSTALLING' })
+    expect(await terminalMarket.loadOrder()).to.equal(null)
+    expect(terminalMarket.order.value.status).to.equal('ACTIVE')
+  })
+
+  it('fences delayed entitlement responses to the current target agent', async () => {
+    const lin = deferred()
+    const song = deferred()
+    const api = { get: async url => url.includes('agent-lin') ? lin.promise : song.promise }
+    const market = useSkillMarket({ agentApi: api, enabled: ref(true) })
+    market.setTargetAgent({ agentId: 'agent-lin', version: '7' })
+    const stale = market.loadEntitlements()
+    market.setTargetAgent({ agentId: 'agent-song', version: '8' })
+    const latest = market.loadEntitlements()
+    song.resolve(success({ entitlements: [{ skillKey: 'repo-test', skillVersion: '2.0.0', productVersionId: 'spv-song', status: 'ACTIVE' }] }))
+    await latest
+    lin.resolve(success({ entitlements: [{ skillKey: 'repo-test', skillVersion: '1.0.0', productVersionId: 'spv-lin', status: 'ACTIVE' }] }))
+    expect(await stale).to.equal(null)
+    expect(market.entitlements.value[0].productVersionId).to.equal('spv-song')
+  })
+
+  it('rejects order responses whose echoed target or version identity differs from the purchase', async () => {
+    const storage = memoryStorage()
+    const api = {
+      get: async () => success([]),
+      post: async (url, payload) => url === '/skill-orders/quotes'
+        ? success({ quoteId: 'sq-1', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
+        : success({ orderId: 'so-bad', targetAgentId: payload.targetAgentId, productVersionId: 'spv-other', expectedAgentVersion: payload.expectedAgentVersion, status: 'FUNDS_HELD' })
+    }
+    const market = useSkillMarket({ agentApi: api, enabled: ref(true), purchaseIdempotencyStorage: storage, createIdempotencyKey: () => 'bad-response-key' })
+    await preparePurchase(market)
+    expect(await market.purchase()).to.equal(null)
+    expect(market.order.value).to.equal(null)
+    expect(JSON.parse([...storage.values.values()][0]).records).to.have.length(1)
   })
 
   it('rejects non-E0 JsonResult business responses instead of treating them as payloads', async () => {
@@ -216,13 +336,14 @@ describe('skill market preview', () => {
     const api = {
       get: async (url) => {
         calls.push(url)
-        if (url === '/skill-orders/so-refund') return success({ orderId: 'so-refund', targetAgentId: 'agent-lin', status: 'REFUNDED' })
+        if (url === '/skill-orders/so-refund') return success({ orderId: 'so-refund', targetAgentId: 'agent-lin', productVersionId: 'spv-repo-test-1', expectedAgentVersion: '7', status: 'REFUNDED' })
         if (url === '/agent-lin/skill-entitlements') return success({ entitlements: [] })
         throw new Error(`Unexpected GET ${url}`)
       }
     }
     const market = useSkillMarket({ agentApi: api, enabled: ref(true) })
-    market.order.value = { orderId: 'so-refund', targetAgentId: 'agent-lin', status: 'INSTALLING' }
+    market.setTargetAgent({ agentId: 'agent-lin', version: '7' })
+    market.order.value = { orderId: 'so-refund', targetAgentId: 'agent-lin', productVersionId: 'spv-repo-test-1', expectedAgentVersion: '7', status: 'INSTALLING' }
     await market.loadOrder()
     expect(calls).to.deep.equal(['/skill-orders/so-refund', '/agent-lin/skill-entitlements'])
     expect(market.order.value.status).to.equal('REFUNDED')
@@ -253,7 +374,8 @@ describe('skill market preview', () => {
     expect(orderStatusLabel(SKILL_ORDER_STATUSES.ACTIVE)).to.include('激活')
     expect(orderStatusLabel(SKILL_ORDER_STATUSES.REFUNDED)).to.include('退款')
     expect(formatInstalledSkillFact({ skillKey: 'repo-test', skillVersion: '2.1.0' })).to.equal('repo-test@2.1.0')
-    expect(formatInstalledSkillFact({ skillKey: 'repo-test', version: '1.0.0' })).to.equal('repo-test@1.0.0')
+    expect(formatInstalledSkillFact({ skillKey: 'repo-test', version: '1.0.0' })).to.equal('repo-test@版本未报告')
+    expect(formatSkillProductIdentity({ skillKey: 'repo-test', skillVersion: '2.1.0', productVersionId: 'spv-repo-test-2', version: '99' })).to.equal('repo-test@2.1.0/spv-repo-test-2')
     expect(marketSource).to.include('权益（服务端授权）')
     expect(marketSource).to.include('运行时已安装（独立运行时快照）')
     expect(marketSource).to.include('运行时能力（自由文本）')
