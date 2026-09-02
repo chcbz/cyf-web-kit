@@ -1,12 +1,13 @@
 <template>
   <div v-if="voice?.supported" class="hall-voice-controls" @pointerdown.stop @keydown.stop>
     <span v-if="compact" class="voice-target" :title="voice.targetLabel">{{ voice.targetLabel }}</span>
-    <button v-if="!voice.recording" type="button" :disabled="!voice.canRecord" aria-label="开始录音" @click="voice.startRecording()">
+    <button v-if="voice.state !== 'recording'" type="button" :disabled="!voice.canRecord" aria-label="开始录音" @click="voice.startRecording()">
       <var-icon name="microphone" /><span>语音</span>
     </button>
-    <button v-else type="button" class="is-recording" aria-label="停止录音" @click="voice.stopRecording()">
-      <var-icon name="stop" /><span>{{ seconds }}s</span>
+    <button v-else type="button" class="is-recording" aria-label="停止录音并转写" @click="voice.stopRecording()">
+      <var-icon name="stop" /><span>停止并转写 {{ seconds }}s</span>
     </button>
+    <button v-if="canCancelCapture" type="button" class="voice-cancel" aria-label="取消并丢弃录音" @click="voice.cancel()">取消并丢弃</button>
     <label class="voice-toggle">
       <input :checked="voice.autoSendEnabled" type="checkbox" :disabled="voice.recording" @change="voice.setAutoSendEnabled($event.target.checked)" /> 自动发送
     </label>
@@ -35,6 +36,7 @@ import { computed } from 'vue'
 const props = defineProps({ compact: { type: Boolean, default: false }, voice: { type: Object, default: null } })
 defineEmits(['apply'])
 const seconds = computed(() => Math.ceil((props.voice?.elapsedMs || 0) / 1000))
+const canCancelCapture = computed(() => ['requesting_permission', 'recording', 'stopping', 'transcribing'].includes(props.voice?.state))
 </script>
 <style scoped>
 .hall-voice-controls{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.hall-voice-controls button{border:1px solid #d7c3a2;border-radius:7px;background:#fffdf6;color:#654122;padding:6px 8px;font:inherit}.hall-voice-controls button.is-recording{background:#8d2d22;color:#fff}.voice-target{max-width:150px;overflow:hidden;color:#654122;font-size:12px;font-weight:700;text-overflow:ellipsis;white-space:nowrap}.voice-toggle{font-size:11px;color:#765f40;white-space:nowrap}.voice-countdown,.voice-review{width:100%;font-size:12px;color:#765f40}.voice-review{padding:8px;border:1px dashed #c8a96e;background:#fff8e8}.voice-review p{margin:4px 0;white-space:pre-wrap}.voice-review button,.voice-countdown button{margin-right:5px}

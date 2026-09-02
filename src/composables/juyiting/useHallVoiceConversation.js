@@ -1,4 +1,5 @@
 import { computed, getCurrentInstance, onBeforeUnmount, reactive, ref } from 'vue'
+import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
 
 export const HALL_VOICE_MAX_DURATION_MS = 45_000
 export const HALL_VOICE_MAX_AUDIO_BYTES = 5 * 1024 * 1024
@@ -505,6 +506,7 @@ export const useHallVoiceConversation = ({
         body: JSON.stringify({ requestId: safeRequestId(browser.crypto), text, voice: 'juyiting-default', format: 'mp3' }),
         signal: ttsController.signal
       })
+      if (current !== generation) return false
       const declaredLength = Number(response.headers.get('content-length') || 0)
       if (!response.ok || !response.body || declaredLength > HALL_VOICE_MAX_TTS_BYTES) throw new Error('语音回答暂不可用')
       const reader = response.body.getReader()
@@ -520,7 +522,8 @@ export const useHallVoiceConversation = ({
         }
         parts.push(value)
       }
-      if (current !== generation || !total) return false
+      if (current !== generation) return false
+      if (!total) throw new Error('语音回答为空，文字已保留')
       playbackUrl = browser.URL.createObjectURL(new Blob(parts, { type: response.headers.get('content-type') || 'audio/mpeg' }))
       const player = new browser.Audio(playbackUrl)
       playback = player
@@ -581,12 +584,21 @@ export const useHallVoiceConversation = ({
     })
     if (preserve) onOpenReview?.()
   }
+  const clearHallVoiceIdentityState = () => {
+    terminal(supportedRef.value ? 'idle' : 'unsupported', {
+      clearTranscript: true,
+      clearTurn: true,
+      replyReason: 'identity_changed'
+    })
+  }
+  const unregisterIdentityCleanup = registerIdentityCleanup(clearHallVoiceIdentityState)
   browser.window?.addEventListener?.('pagehide', cancel)
   browser.document?.addEventListener?.('visibilitychange', onVisibility)
   const dispose = () => {
     browser.window?.removeEventListener?.('pagehide', cancel)
     browser.document?.removeEventListener?.('visibilitychange', onVisibility)
-    terminal(supportedRef.value ? 'idle' : 'unsupported', { clearTranscript: true, clearTurn: true, replyReason: 'disposed' })
+    clearHallVoiceIdentityState()
+    unregisterIdentityCleanup()
   }
   if (getCurrentInstance()) onBeforeUnmount(dispose)
 

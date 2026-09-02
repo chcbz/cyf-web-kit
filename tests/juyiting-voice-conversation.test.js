@@ -9,6 +9,7 @@ import {
   useHallVoiceConversation
 } from '../src/composables/juyiting/useHallVoiceConversation.js'
 import { useHallConversation } from '../src/composables/juyiting/useHallConversation.js'
+import { stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 
 const flush = async () => { await Promise.resolve(); await Promise.resolve(); await Vue.nextTick() }
 const deferred = () => {
@@ -335,6 +336,143 @@ describe('Juyi Hall voice lifecycle', () => {
     voice.cancel()
     expect(voice.state).to.equal('idle')
     expect(voice.voiceTurnActive).to.equal(false)
+  })
+})
+
+describe('Juyi Hall voice identity and capture controls', () => {
+  it('fails closed on identity cleanup across permission, capture, transcription, reply, and TTS late callbacks', async () => {
+    FakeRecorder.instances = []
+    const permission = deferred()
+    const permissionHarness = browserHarness({ permission: () => permission.promise })
+    const permissionVoice = createVoice({ browser: permissionHarness.browser }).voice
+    const requesting = permissionVoice.startRecording()
+    expect(permissionVoice.state).to.equal('requesting_permission')
+    stopIdentityBoundWork()
+    expect(permissionVoice.state).to.equal('idle')
+    const latePermissionStream = permissionHarness.makeStream()
+    permission.resolve(latePermissionStream)
+    expect(await requesting).to.equal(false)
+    expect(latePermissionStream.getTracks()[0].stopped).to.equal(true)
+    permissionVoice.dispose()
+
+    let uploads = 0
+    const stoppingHarness = browserHarness()
+    const stoppingVoice = createVoice({
+      browser: stoppingHarness.browser,
+      chatCreate: async () => { uploads += 1; return { data: { data: { text: '不应上传' } } } }
+    }).voice
+    await stoppingVoice.startRecording()
+    const stoppingRecorder = FakeRecorder.instances.at(-1)
+    stoppingRecorder.ondataavailable({ data: new Blob(['voice']) })
+    stoppingVoice.stopRecording()
+    expect(stoppingVoice.state).to.equal('stopping')
+    stopIdentityBoundWork()
+    await flush()
+    expect(stoppingVoice.state).to.equal('idle')
+    expect(stoppingHarness.tracks.at(-1).stopped).to.equal(true)
+    expect(uploads).to.equal(0)
+    stoppingVoice.dispose()
+
+    const transcription = deferred()
+    let transcriptionSignal
+    const transcriptionHarness = browserHarness()
+    const transcriptionVoice = createVoice({
+      browser: transcriptionHarness.browser,
+      chatCreate: async (_path, _body, options) => {
+        transcriptionSignal = options.signal
+        return transcription.promise
+      }
+    }).voice
+    await transcriptionVoice.startRecording()
+    const transcriptionRecorder = FakeRecorder.instances.at(-1)
+    transcriptionRecorder.ondataavailable({ data: new Blob(['voice']) })
+    transcriptionVoice.stopRecording()
+    await flush()
+    expect(transcriptionVoice.state).to.equal('transcribing')
+    stopIdentityBoundWork()
+    expect(transcriptionSignal.aborted).to.equal(true)
+    expect(transcriptionVoice.state).to.equal('idle')
+    transcription.resolve({ data: { data: { text: '迟到转写' } } })
+    await flush()
+    expect(transcriptionVoice.transcript).to.equal('')
+    transcriptionVoice.dispose()
+
+    const tts = deferred()
+    let ttsSignal
+    const replyHarness = browserHarness({ fetchImpl: async (_url, options) => {
+      ttsSignal = options.signal
+      return tts.promise
+    } })
+    const replyVoice = createVoice({ browser: replyHarness.browser }).voice
+    replyVoice.setReplyVoiceEnabled(true)
+    await transcribeToReview(replyVoice)
+    await replyVoice.sendTranscript()
+    const synthesizing = replyVoice.completeReply({ content: '回话' })
+    await flush()
+    expect(replyVoice.state).to.equal('synthesizing')
+    stopIdentityBoundWork()
+    expect(ttsSignal.aborted).to.equal(true)
+    expect(replyVoice.state).to.equal('idle')
+    expect(replyVoice.transcript).to.equal('')
+    expect(replyVoice.voiceTurnActive).to.equal(false)
+    tts.resolve({
+      ok: true,
+      headers: new Headers({ 'content-type': 'audio/mpeg', 'content-length': '3' }),
+      body: new ReadableStream({ start (controller) { controller.enqueue(new Uint8Array([1, 2, 3])); controller.close() } })
+    })
+    expect(await synthesizing).to.equal(false)
+    expect(replyVoice.state).to.equal('idle')
+    replyVoice.dispose()
+  })
+
+  it('keeps cancel-and-discard reachable through every capture phase, with stop and cancel during recording', async () => {
+    const HallVoiceControls = loadSfc('../src/components/juyiting/HallVoiceControls.vue')
+    for (const state of ['requesting_permission', 'recording', 'stopping', 'transcribing']) {
+      let cancelled = 0
+      let stopped = 0
+      const voice = Vue.reactive({
+        supported: true,
+        state,
+        recording: state === 'recording',
+        canRecord: false,
+        elapsedMs: 1_000,
+        autoSendEnabled: false,
+        replyVoiceEnabled: false,
+        targetLabel: '众好汉',
+        startRecording: () => {},
+        stopRecording: () => { stopped += 1 },
+        cancel: () => { cancelled += 1 },
+        setAutoSendEnabled: () => {},
+        setReplyVoiceEnabled: () => {}
+      })
+      const wrapper = mount(HallVoiceControls, { props: { voice }, global: { stubs: { 'var-icon': true } } })
+      expect(wrapper.get('.voice-cancel').attributes('aria-label')).to.equal('取消并丢弃录音')
+      await wrapper.get('.voice-cancel').trigger('click')
+      expect(cancelled).to.equal(1)
+      if (state === 'recording') {
+        expect(wrapper.get('.is-recording').attributes('aria-label')).to.equal('停止录音并转写')
+        await wrapper.get('.is-recording').trigger('click')
+        expect(stopped).to.equal(1)
+      }
+      wrapper.unmount()
+    }
+
+    let uploads = 0
+    const harness = browserHarness()
+    const voice = createVoice({
+      browser: harness.browser,
+      chatCreate: async () => { uploads += 1; return { data: { data: { text: '不应上传' } } } }
+    }).voice
+    await voice.startRecording()
+    const recorder = FakeRecorder.instances.at(-1)
+    recorder.ondataavailable({ data: new Blob(['voice']) })
+    const wrapper = mount(HallVoiceControls, { props: { voice }, global: { stubs: { 'var-icon': true } } })
+    await wrapper.get('.voice-cancel').trigger('click')
+    await flush()
+    expect(voice.state).to.equal('idle')
+    expect(uploads).to.equal(0)
+    wrapper.unmount()
+    voice.dispose()
   })
 })
 
@@ -727,6 +865,25 @@ describe('Juyi Hall TTS cleanup', () => {
     ErrorAudio.instance.onerror()
     expect(voice.state).to.equal('error')
     expect(harness.revoked).to.deep.equal(['blob:voice'])
+  })
+
+  it('routes a zero-byte successful TTS response through terminal error cleanup', async () => {
+    const emptyResponse = {
+      ok: true,
+      headers: new Headers({ 'content-type': 'audio/mpeg', 'content-length': '0' }),
+      body: new ReadableStream({ start (controller) { controller.close() } })
+    }
+    const harness = browserHarness({ fetchImpl: async () => emptyResponse })
+    const voice = createVoice({ browser: harness.browser }).voice
+    voice.setReplyVoiceEnabled(true)
+    await transcribeToReview(voice)
+    await voice.sendTranscript()
+    expect(await voice.completeReply({ content: '回话' })).to.equal(false)
+    expect(voice.state).to.equal('error')
+    expect(voice.error).to.equal('语音回答为空，文字已保留')
+    expect(voice.voiceTurnActive).to.equal(false)
+    expect(voice.canRecord).to.equal(true)
+    voice.dispose()
   })
 
   it('stops speaking playback when a new recording starts', async () => {
