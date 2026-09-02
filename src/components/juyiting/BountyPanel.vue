@@ -354,8 +354,12 @@ const submitCreateTask = () => {
     payload.settlementPolicy = 'GROSS_INCLUSIVE'
   }
   emit('create-task', payload)
-  taskForm.value = { title: '', description: '', requiredAbilities: '', funded: false, grossBountyAmountMicro: '' }
-  showCreateForm.value = false
+  // A funded command can be accepted after its response is lost. Keep the
+  // canonical form intact until the parent has independently confirmed it.
+  if (!payload.grossBountyAmountMicro) {
+    taskForm.value = { title: '', description: '', requiredAbilities: '', funded: false, grossBountyAmountMicro: '' }
+    showCreateForm.value = false
+  }
 }
 
 const toggleAssignee = (agent) => {

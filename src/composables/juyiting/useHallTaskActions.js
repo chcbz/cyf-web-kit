@@ -1,19 +1,27 @@
+const responseBody = result => result?.data ?? result
+
 const isBusinessSuccess = (result) => {
-  const code = result?.code
+  const code = responseBody(result)?.code
   return code === undefined || code === null || code === 'E0' || code === '0' || code === 0 || code === '200' || code === 200
 }
 
 const ensureBusinessSuccess = (result) => {
-  if (isBusinessSuccess(result)) return result
+  const body = responseBody(result)
+  if (isBusinessSuccess(body)) return body
 
-  const error = new Error(result?.msg || result?.message || '请求被拒绝')
-  error.code = result?.code
-  error.status = result?.status
+  const error = new Error(body?.msg || body?.message || '请求被拒绝')
+  error.code = body?.code
+  error.status = body?.status
+  error.businessFailure = true
   throw error
 }
 
 const failureReason = (error, fallback) => error?.message || fallback
-const unwrap = result => result?.data?.data ?? result?.data
+const unwrap = (result) => {
+  const body = responseBody(result)
+  if (body && typeof body === 'object' && Object.prototype.hasOwnProperty.call(body, 'code')) return body.data?.data ?? body.data
+  return body?.data ?? body
+}
 const isFundedTask = task => task?.funding?.mode === 'FUNDED_SINGLE_AGENT'
 const hasExplicitAgentId = item => typeof item?.agentId === 'string' && Boolean(item.agentId.trim())
 const taskVersion = task => typeof (task?.version ?? task?.taskVersion) === 'string' ? (task.version ?? task.taskVersion) : ''
@@ -31,21 +39,45 @@ export const useHallTaskActions = ({
   showToast,
   tasks
 }) => {
-  const createTask = async (payload) => {
+  // Keep the key for an unresolved request so retrying after a timeout or lost
+  // response replays the exact same server-side operation instead of charging twice.
+  const pendingOperationKeys = new Map()
+  const acquirePendingOperationKey = operation => {
+    if (!pendingOperationKeys.has(operation)) pendingOperationKeys.set(operation, createIdempotencyKey())
+    return pendingOperationKeys.get(operation)
+  }
+  const settlePendingOperation = operation => pendingOperationKeys.delete(operation)
+  const fundedRequest = async (operation, send) => {
     try {
-      await agentApi.create('/tasks', payload, {
-        autoLoading: false,
-        headers: payload?.grossBountyAmountMicro ? { 'Idempotency-Key': createIdempotencyKey() } : {},
-        onSuccess: (result) => {
-          const task = unwrap(ensureBusinessSuccess(result))
-          if (task) {
-            tasks.value = [task, ...tasks.value.filter(item => item.id !== task.id)]
-            selectedTask.value = task
-          }
-          playSuccess()
-          showToast('榜文已张')
-        }
-      })
+      const result = await send(acquirePendingOperationKey(operation))
+      const payload = unwrap(ensureBusinessSuccess(result))
+      // A decoded business envelope is completion certainty, including a
+      // rejected command. Transport failures intentionally retain the key.
+      settlePendingOperation(operation)
+      return payload
+    } catch (error) {
+      if (error?.businessFailure) settlePendingOperation(operation)
+      throw error
+    }
+  }
+
+  const createTask = async (payload) => {
+    const funded = Boolean(payload?.grossBountyAmountMicro)
+    const operation = funded ? `funded-create:${JSON.stringify(payload)}` : ''
+    try {
+      const task = funded
+        ? await fundedRequest(operation, key => agentApi.create('/tasks', payload, {
+          autoLoading: false,
+          headers: { 'Idempotency-Key': key },
+          onSuccess: ensureBusinessSuccess
+        }))
+        : unwrap(ensureBusinessSuccess(await agentApi.create('/tasks', payload, { autoLoading: false, onSuccess: ensureBusinessSuccess })))
+      if (task) {
+        tasks.value = [task, ...tasks.value.filter(item => item.id !== task.id)]
+        selectedTask.value = task
+      }
+      playSuccess()
+      showToast('榜文已张')
       return true
     } catch (error) {
       log.warn('create bounty task failed:', error)
@@ -64,22 +96,22 @@ export const useHallTaskActions = ({
     }
     let assignmentSucceeded = false
     try {
-      const quoteResult = await agentApi.create(`/tasks/${task.id}/quotes`, {
+      const quoteOperation = `funded-quote:${task.id}:${agent.agentId}:${version}`
+      const quote = await fundedRequest(quoteOperation, key => agentApi.create(`/tasks/${task.id}/quotes`, {
         agentId: agent.agentId,
         taskVersion: version
-      }, { autoLoading: false, headers: { 'Idempotency-Key': createIdempotencyKey() } })
-      const quote = unwrap(ensureBusinessSuccess(quoteResult))
+      }, { autoLoading: false, headers: { 'Idempotency-Key': key }, onSuccess: ensureBusinessSuccess }))
       if (!quote?.quoteId || quote.agentId !== agent.agentId || String(quote.taskVersion) !== version) {
         throw new Error('报价与当前好汉或榜文版本不一致')
       }
       task.quote = quote
-      const claimResult = await agentApi.create(`/tasks/${task.id}/claim`, {
+      const claimOperation = `funded-claim:${task.id}:${agent.agentId}:${version}:${quote.quoteId}`
+      const claimed = await fundedRequest(claimOperation, key => agentApi.create(`/tasks/${task.id}/claim`, {
         agentId: agent.agentId,
         quoteId: quote.quoteId,
         taskVersion: version,
         allowQueue: false
-      }, { autoLoading: false, headers: { 'Idempotency-Key': createIdempotencyKey() } })
-      const claimed = unwrap(ensureBusinessSuccess(claimResult))
+      }, { autoLoading: false, headers: { 'Idempotency-Key': key }, onSuccess: ensureBusinessSuccess }))
       Object.assign(task, claimed || { status: 'assigned', assignedAgentId: agent.agentId, assignedAgentIds: [agent.agentId] })
       agent.status = 'busy'
       agent.currentTaskTitle = task.title
@@ -108,30 +140,25 @@ export const useHallTaskActions = ({
     const targetAgent = targetAgents[0]
     let assignmentSucceeded = false
     try {
-      await agentApi.create(`/tasks/${task.id}/assign`, {
+      const assigned = unwrap(ensureBusinessSuccess(await agentApi.create(`/tasks/${task.id}/assign`, {
         agentId: targetAgent.agentId,
         agentIds: targetAgents.map(item => item.agentId)
-      }, {
-        autoLoading: false,
-        onSuccess: (result) => {
-          const assigned = unwrap(ensureBusinessSuccess(result))
-          Object.assign(task, assigned || {
-            status: 'assigned',
-            assignedAgentIds: targetAgents.map(item => item.agentId),
-            assignedAgentId: targetAgent.agentId,
-            assignedAgentName: targetAgents.map(item => item.name || item.personaName || item.agentId).join('、')
-          })
-          targetAgents.forEach(item => {
-            item.status = 'busy'
-            item.currentTaskTitle = task.title
-          })
-          selectedAgent.value = targetAgent
-          selectedTask.value = task
-          assignmentSucceeded = true
-          playSuccess()
-          showToast(`${task.title} 已点给 ${task.assignedAgentName}`)
-        }
+      }, { autoLoading: false, onSuccess: ensureBusinessSuccess })))
+      Object.assign(task, assigned || {
+        status: 'assigned',
+        assignedAgentIds: targetAgents.map(item => item.agentId),
+        assignedAgentId: targetAgent.agentId,
+        assignedAgentName: targetAgents.map(item => item.name || item.personaName || item.agentId).join('、')
       })
+      targetAgents.forEach(item => {
+        item.status = 'busy'
+        item.currentTaskTitle = task.title
+      })
+      selectedAgent.value = targetAgent
+      selectedTask.value = task
+      assignmentSucceeded = true
+      playSuccess()
+      showToast(`${task.title} 已点给 ${task.assignedAgentName}`)
       return assignmentSucceeded
     } catch (error) {
       log.warn('assign bounty task failed:', error)
@@ -144,8 +171,7 @@ export const useHallTaskActions = ({
   const loadSettlement = async (task) => {
     if (!task?.id || !isFundedTask(task)) return null
     try {
-      const result = await agentApi.get(`/tasks/${task.id}/settlement`, undefined, { autoLoading: false })
-      const settlement = unwrap(ensureBusinessSuccess(result))
+      const settlement = unwrap(ensureBusinessSuccess(await agentApi.get(`/tasks/${task.id}/settlement`, undefined, { autoLoading: false })))
       task.settlement = settlement
       selectedTask.value = task
       return settlement
@@ -159,11 +185,11 @@ export const useHallTaskActions = ({
 
   const cancelFunding = async (task) => {
     if (!task?.id || !isFundedTask(task) || !taskVersion(task)) return false
+    const version = taskVersion(task)
     try {
-      const result = await agentApi.create(`/tasks/${task.id}/funding/cancel`, {
-        expectedTaskVersion: taskVersion(task)
-      }, { autoLoading: false, headers: { 'Idempotency-Key': createIdempotencyKey() } })
-      const cancelled = unwrap(ensureBusinessSuccess(result))
+      const cancelled = await fundedRequest(`funded-cancel:${task.id}:${version}`, key => agentApi.create(`/tasks/${task.id}/funding/cancel`, {
+        expectedTaskVersion: version
+      }, { autoLoading: false, headers: { 'Idempotency-Key': key }, onSuccess: ensureBusinessSuccess }))
       Object.assign(task, cancelled || {})
       selectedTask.value = task
       playSuccess()
@@ -180,18 +206,13 @@ export const useHallTaskActions = ({
   const autoAssignTask = async (task) => {
     if (!task || task.status !== 'open' || isFundedTask(task)) return false
     try {
-      await agentApi.create(`/tasks/${task.id}/auto-assign`, {}, {
-        autoLoading: false,
-        onSuccess: (result) => {
-          const assigned = unwrap(ensureBusinessSuccess(result)) || { ...task, status: 'assigned' }
-          tasks.value = tasks.value.map(item => item.id === task.id ? { ...item, ...assigned } : item)
-          selectedTask.value = { ...task, ...assigned }
-          const assignedIds = assigned.assignedAgentIds || (assigned.assignedAgentId ? [assigned.assignedAgentId] : [])
-          const assignedNames = assigned.assignees?.map(item => item.agentName || item.agentId).filter(Boolean)
-          playSuccess()
-          showToast(`宋江已点 ${assignedNames?.length ? assignedNames.join('、') : assignedIds.join('、')} 领令`)
-        }
-      })
+      const assigned = unwrap(ensureBusinessSuccess(await agentApi.create(`/tasks/${task.id}/auto-assign`, {}, { autoLoading: false, onSuccess: ensureBusinessSuccess }))) || { ...task, status: 'assigned' }
+      tasks.value = tasks.value.map(item => item.id === task.id ? { ...item, ...assigned } : item)
+      selectedTask.value = { ...task, ...assigned }
+      const assignedIds = assigned.assignedAgentIds || (assigned.assignedAgentId ? [assigned.assignedAgentId] : [])
+      const assignedNames = assigned.assignees?.map(item => item.agentName || item.agentId).filter(Boolean)
+      playSuccess()
+      showToast(`宋江已点 ${assignedNames?.length ? assignedNames.join('、') : assignedIds.join('、')} 领令`)
       return true
     } catch (error) {
       log.warn('auto assign bounty task failed:', error)
@@ -204,16 +225,11 @@ export const useHallTaskActions = ({
   const archiveTask = async (task) => {
     if (!task) return false
     try {
-      await agentApi.create(`/tasks/${task.id}/archive`, {}, {
-        autoLoading: false,
-        onSuccess: (result) => {
-          const archived = unwrap(ensureBusinessSuccess(result)) || { ...task, status: 'archived' }
-          tasks.value = tasks.value.map(item => item.id === task.id ? archived : item)
-          selectedTask.value = archived
-          playSuccess()
-          showToast('榜文已收入案卷')
-        }
-      })
+      const archived = unwrap(ensureBusinessSuccess(await agentApi.create(`/tasks/${task.id}/archive`, {}, { autoLoading: false, onSuccess: ensureBusinessSuccess }))) || { ...task, status: 'archived' }
+      tasks.value = tasks.value.map(item => item.id === task.id ? archived : item)
+      selectedTask.value = archived
+      playSuccess()
+      showToast('榜文已收入案卷')
       return true
     } catch (error) {
       log.warn('archive bounty task failed:', error)

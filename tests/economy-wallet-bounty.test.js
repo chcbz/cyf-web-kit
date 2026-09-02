@@ -77,3 +77,129 @@ describe('economy preview wallet and funded bounty integration', () => {
     expect(calls[1].payload).to.deep.equal({ expectedTaskVersion: '9' })
   })
 })
+
+describe('funded bounty remediation', () => {
+  const fundedTask = (id = 'funded-remediation') => ({
+    id,
+    title: 'Funded',
+    status: 'open',
+    version: '8',
+    funding: { mode: 'FUNDED_SINGLE_AGENT', remainingMicro: '100' }
+  })
+  const actionOptions = (agentApi, overrides = {}) => ({
+    agentApi,
+    canAssign: () => true,
+    createIdempotencyKey: (() => { let sequence = 0; return () => `idem-${++sequence}` })(),
+    log: { warn: () => {} },
+    playError: () => {},
+    playSuccess: () => {},
+    selectedAgent: ref(null),
+    selectedTask: ref(null),
+    showToast: () => {},
+    tasks: ref([]),
+    ...overrides
+  })
+
+  it('rejects funded claim and cancel JsonResult bodies without optimistic task mutation', async () => {
+    const task = fundedTask()
+    const agent = { agentId: 'agent-explicit', name: 'Explicit', status: 'online' }
+    const successEvents = []
+    const toast = []
+    const actions = useHallTaskActions(actionOptions({
+      create: async (url) => url.endsWith('/quotes')
+        ? { data: { code: 'QUOTE_EXPIRED', msg: '报价已过期' } }
+        : { data: { code: 'CANCEL_NOT_ALLOWED', msg: '已开工' } },
+      get: async () => ({ data: { code: 'E0', data: {} } })
+    }, {
+      playSuccess: () => successEvents.push('success'),
+      showToast: message => toast.push(message),
+      tasks: ref([task])
+    }))
+
+    expect(await actions.assignTask(task, agent)).to.equal(false)
+    expect(task.status).to.equal('open')
+    expect(agent.status).to.equal('online')
+    expect(await actions.cancelFunding(task)).to.equal(false)
+    expect(task.funding.status).to.equal(undefined)
+    expect(successEvents).to.deep.equal([])
+    expect(toast.join(' ')).to.include('报价已过期')
+    expect(toast.join(' ')).to.include('已开工')
+  })
+
+  it('reuses funded create, quote, claim, and cancel keys after ambiguous transport failures', async () => {
+    const createKeys = []
+    let createAttempts = 0
+    const createActions = useHallTaskActions(actionOptions({
+      create: async (_url, _payload, options) => {
+        createKeys.push(options.headers['Idempotency-Key'])
+        if (++createAttempts === 1) throw new TypeError('response lost')
+        return { data: { code: 'E0', data: { id: 'created', title: 'Created' } } }
+      }
+    }))
+    const createPayload = { title: 'Created', grossBountyAmountMicro: '100', settlementPolicy: 'GROSS_INCLUSIVE' }
+    expect(await createActions.createTask(createPayload)).to.equal(false)
+    expect(await createActions.createTask(createPayload)).to.equal(true)
+    expect(createKeys).to.deep.equal(['idem-1', 'idem-1'])
+
+    const task = fundedTask('funded-retry')
+    const agent = { agentId: 'agent-explicit', name: 'Explicit', status: 'online' }
+    const quoteKeys = []
+    let quoteAttempts = 0
+    const quoteActions = useHallTaskActions(actionOptions({
+      create: async (url, _payload, options) => {
+        if (url.endsWith('/quotes')) {
+          quoteKeys.push(options.headers['Idempotency-Key'])
+          if (++quoteAttempts === 1) throw new TypeError('quote response lost')
+          return { data: { code: 'E0', data: { quoteId: 'q-retry', agentId: agent.agentId, taskVersion: '8' } } }
+        }
+        return { data: { code: 'E0', data: { ...task, status: 'assigned' } } }
+      }
+    }))
+    expect(await quoteActions.assignTask(task, agent)).to.equal(false)
+    expect(await quoteActions.assignTask(task, agent)).to.equal(true)
+    expect(quoteKeys).to.deep.equal(['idem-1', 'idem-1'])
+
+    const claimTask = fundedTask('funded-claim-retry')
+    const claimKeys = []
+    let claimAttempts = 0
+    const claimActions = useHallTaskActions(actionOptions({
+      create: async (url, _payload, options) => {
+        if (url.endsWith('/quotes')) return { data: { code: 'E0', data: { quoteId: 'q-claim', agentId: agent.agentId, taskVersion: '8' } } }
+        claimKeys.push(options.headers['Idempotency-Key'])
+        if (++claimAttempts === 1) throw new TypeError('claim response lost')
+        return { data: { code: 'E0', data: { ...claimTask, status: 'assigned' } } }
+      }
+    }))
+    expect(await claimActions.assignTask(claimTask, agent)).to.equal(false)
+    expect(await claimActions.assignTask(claimTask, agent)).to.equal(true)
+    expect(claimKeys).to.deep.equal(['idem-2', 'idem-2'])
+
+    const cancelTask = fundedTask('funded-cancel-retry')
+    const cancelKeys = []
+    let cancelAttempts = 0
+    const cancelActions = useHallTaskActions(actionOptions({
+      create: async (_url, _payload, options) => {
+        cancelKeys.push(options.headers['Idempotency-Key'])
+        if (++cancelAttempts === 1) throw new TypeError('cancel response lost')
+        return { data: { code: 'E0', data: { ...cancelTask, funding: { ...cancelTask.funding, status: 'CANCELLED' } } } }
+      }
+    }))
+    expect(await cancelActions.cancelFunding(cancelTask)).to.equal(false)
+    expect(await cancelActions.cancelFunding(cancelTask)).to.equal(true)
+    expect(cancelKeys).to.deep.equal(['idem-1', 'idem-1'])
+  })
+
+  it('keeps funded form state pending and gates skill market discovery and direct routing by the server capability', () => {
+    const profileSource = readFileSync(new URL('../src/components/UserProfile.vue', import.meta.url), 'utf8')
+    const routerSource = readFileSync(new URL('../src/router/index.js', import.meta.url), 'utf8')
+    expect(bountySource).to.include('if (!payload.grossBountyAmountMicro)')
+    expect(walletSource).to.include('const epochMillis = BigInt(value)')
+    expect(walletSource).to.include('MAX_ECMASCRIPT_EPOCH_MILLIS')
+    expect(profileSource).to.include('v-if="economyPreviewAvailable"')
+    expect(profileSource).to.include("economyApi.get('/wallet'")
+    expect(routerSource).to.include("path: '/skill-market'")
+    expect(routerSource).to.include("import('@/components/economy/SkillMarket.vue')")
+    expect(routerSource).to.include('beforeEnter: economyPreviewRouteGuard')
+    expect(routerSource).to.include("return { name: 'UserProfile' }")
+  })
+})

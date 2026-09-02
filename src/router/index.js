@@ -1,6 +1,28 @@
 import PublicLanding from '@/components/public/PublicLanding.vue'
 import GuestDemo from '@/components/public/GuestDemo.vue'
 import OAuthCallback from '@/components/OAuthCallback.vue'
+import { economyApi } from '@/composables/useHttp'
+import { isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
+
+const economyPreviewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
+const hasEconomyPreviewCapability = (result) => {
+  const body = result?.data ?? result
+  const code = body?.code
+  if (code !== undefined && code !== null && code !== 'E0' && code !== '0' && code !== 0 && code !== '200' && code !== 200) return false
+  const wallet = body?.data ?? body
+  return wallet?.currency === 'SILVER' && typeof wallet.availableMicro === 'string' && typeof wallet.heldMicro === 'string'
+}
+
+const economyPreviewRouteGuard = async () => {
+  if (!economyPreviewBuildEnabled) return { name: 'UserProfile' }
+  try {
+    return hasEconomyPreviewCapability(await economyApi.get('/wallet', undefined, { autoLoading: false }))
+      ? true
+      : { name: 'UserProfile' }
+  } catch {
+    return { name: 'UserProfile' }
+  }
+}
 
 export default [
   {
@@ -129,6 +151,16 @@ export default [
     component: () => import('@/components/Wallet.vue'),
     meta: {
       title: 'SILVER 钱袋',
+      showInMenu: false
+    }
+  },
+  {
+    path: '/skill-market',
+    name: 'SkillMarket',
+    component: () => import('@/components/economy/SkillMarket.vue'),
+    beforeEnter: economyPreviewRouteGuard,
+    meta: {
+      title: '技能集市',
       showInMenu: false
     }
   },

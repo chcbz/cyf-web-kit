@@ -30,7 +30,7 @@
       </dl>
     </section>
 
-    <section v-if="economyPreviewBuildEnabled" class="economy-discovery" aria-labelledby="economy-discovery-title">
+    <section v-if="economyPreviewAvailable" class="economy-discovery" aria-labelledby="economy-discovery-title">
       <h3 id="economy-discovery-title">开发预览</h3>
       <p>经济预览由服务端能力决定；未开启时不会显示可操作的钱包或市场功能。</p>
       <div class="discovery-links">
@@ -113,10 +113,12 @@ import { useRouter } from 'vue-router'
 import { useGlobalStore } from '@/stores/global'
 import { useAccountSecuritySession } from '@/composables/useAccountSecuritySession'
 import { useConfirmationDialog } from '@/composables/useConfirmationDialog'
+import { economyApi } from '@/composables/useHttp'
 import { isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
 
 const router = useRouter()
 const economyPreviewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
+const economyPreviewAvailable = ref(false)
 const globalStore = useGlobalStore()
 const { busy, error, status, signOutCurrentDevice, signOutAllDevices } = useAccountSecuritySession({ router })
 const allDevicesTrigger = ref(null)
@@ -137,6 +139,23 @@ const handleAllDevicesSignOut = async () => {
   if (completed) closeConfirmation({ force: true })
 }
 
+const hasEconomyPreviewCapability = (result) => {
+  const body = result?.data ?? result
+  const code = body?.code
+  if (code !== undefined && code !== null && code !== 'E0' && code !== '0' && code !== 0 && code !== '200' && code !== 200) return false
+  const wallet = body?.data ?? body
+  return wallet?.currency === 'SILVER' && typeof wallet.availableMicro === 'string' && typeof wallet.heldMicro === 'string'
+}
+
+const loadEconomyPreviewCapability = async () => {
+  if (!economyPreviewBuildEnabled) return
+  try {
+    economyPreviewAvailable.value = hasEconomyPreviewCapability(await economyApi.get('/wallet', undefined, { autoLoading: false }))
+  } catch {
+    economyPreviewAvailable.value = false
+  }
+}
+
 onBeforeUnmount(() => {
   closeConfirmation({ force: true })
 })
@@ -145,6 +164,7 @@ onMounted(() => {
   globalStore.setTitle('个人中心')
   globalStore.setShowBack(false)
   globalStore.setShowMore(false)
+  void loadEconomyPreviewCapability()
 })
 </script>
 

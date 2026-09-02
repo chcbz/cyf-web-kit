@@ -57,10 +57,17 @@ const error = ref('')
 
 const unwrap = result => result?.data?.data ?? result?.data ?? result
 const format = value => formatSilverMicro(typeof value === 'string' ? value : '0')
+const MAX_ECMASCRIPT_EPOCH_MILLIS = 8640000000000000n
 const formatPostedAt = value => {
-  if (typeof value !== 'string' || !/^\d+$/.test(value)) return ''
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString()
+  if (typeof value !== 'string' || !/^(0|[1-9]\d*)$/.test(value)) return ''
+  try {
+    const epochMillis = BigInt(value)
+    if (epochMillis > MAX_ECMASCRIPT_EPOCH_MILLIS) return ''
+    const date = new Date(Number(epochMillis))
+    return Number.isNaN(date.getTime()) ? '' : date.toLocaleString()
+  } catch {
+    return ''
+  }
 }
 
 const loadWallet = async () => {
