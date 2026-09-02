@@ -1,4 +1,4 @@
-import { computed, ref, watch } from 'vue'
+import { computed, getCurrentScope, onScopeDispose, ref, watch } from 'vue'
 import { agentApi as defaultAgentApi } from './useHttp.js'
 
 export const SKILL_ORDER_STATUSES = Object.freeze({
@@ -11,6 +11,7 @@ export const SKILL_ORDER_STATUSES = Object.freeze({
 const MICRO_PER_SILVER = 1000000n
 const PURCHASE_JOURNAL_STORAGE_KEY_PREFIX = 'cyf.skill-market.purchase-journal.v3'
 const PURCHASE_JOURNAL_SCHEMA_VERSION = 3
+const PURCHASE_OPERATION_LOCK_PREFIX = 'cyf.skill-market.purchase-operation.v1'
 const MAX_UNRESOLVED_PURCHASES = 12
 const TERMINAL_ORDER_STATUSES = new Set([
   SKILL_ORDER_STATUSES.ACTIVE,
@@ -140,6 +141,15 @@ export const orderStatusLabel = (status) => ({
   [SKILL_ORDER_STATUSES.REFUNDED]: '安装失败，已退款'
 }[orderStatus(status)] || '状态未知')
 
+const operationLockError = () => {
+  const failure = new Error('当前浏览器不支持安全的跨标签购买锁；购买操作已禁用。')
+  failure.code = 'PURCHASE_MULTITAB_LOCK_UNAVAILABLE'
+  return failure
+}
+
+const isAmbiguousTransportFailure = (failure) => !failure?.businessFailure && !failure?.response &&
+  !failure?.status && !failure?.statusCode && !failure?.httpStatus
+
 const storageError = () => {
   const failure = new Error('购买恢复记录无法安全保存或读取；请检查浏览器存储权限和可用空间后重试。')
   failure.code = 'PURCHASE_RECOVERY_STORAGE_UNAVAILABLE'
@@ -189,7 +199,10 @@ export function useSkillMarket ({
   /** Required opaque tenant/client/principal fingerprint from authenticated app state. */
   actorScopeKey = '',
   wait = delay,
-  now = () => Date.now()
+  now = () => Date.now(),
+  /** Web Locks API injection is only for isolated tests; production uses navigator.locks. */
+  operationLocks = typeof navigator !== 'undefined' ? navigator.locks : null,
+  recoveryPollOptions = { maxAttempts: 6, intervalMs: 1500 }
 } = {}) {
   const products = ref([])
   const selectedProduct = ref(null)
@@ -215,11 +228,14 @@ export function useSkillMarket ({
   let orderRequestGeneration = 0
   let entitlementGeneration = 0
   let activeOrderIdentity = null
+  let disposed = false
+  const operationAbortController = new AbortController()
 
   const previewEnabled = computed(() => Boolean(enabled?.value ?? enabled))
   const actorScopeFingerprint = computed(() => requiredString(actorScopeKey?.value ?? actorScopeKey))
   const journalStorageKey = computed(() => scopedJournalStorageKey(actorScopeFingerprint.value))
   const storageAvailable = ref(false)
+  const operationLockAvailable = computed(() => Boolean(operationLocks && typeof operationLocks.request === 'function'))
   const target = computed(() => explicitAgent(targetAgent.value))
   const selectedIdentity = computed(() => productIdentity(selectedProduct.value))
   const productVersionId = computed(() => selectedIdentity.value.productVersionId)
@@ -236,10 +252,12 @@ export function useSkillMarket ({
     expectedAgentVersion: target.value.expectedAgentVersion,
     approvedPermissions: normalizeApprovedPermissions(approvedPermissions.value)
   }))
-  const basePurchaseIntentReady = computed(() => previewEnabled.value && storageAvailable.value &&
+  const basePurchaseIntentReady = computed(() => previewEnabled.value && storageAvailable.value && operationLockAvailable.value &&
     selectedProduct.value?.canPurchase === true && Boolean(productVersionId.value) &&
     Boolean(target.value.targetAgentId) && Boolean(target.value.expectedAgentVersion))
   const unresolvedPurchase = computed(() => purchaseJournal.value.find(record => record.intentFingerprint === intentFingerprint.value) || null)
+  const hasUnresolvedOperation = computed(() => purchaseJournal.value.length > 0)
+  const hasUnresolvedOtherOperation = computed(() => purchaseJournal.value.some(record => record.intentFingerprint !== intentFingerprint.value))
   const unresolvedOperations = computed(() => purchaseJournal.value)
   const quoteIsUsable = computed(() => {
     const currentQuote = quote.value
@@ -250,8 +268,10 @@ export function useSkillMarket ({
       sameString(currentQuote?.expectedAgentVersion, target.value.expectedAgentVersion) &&
       quoteBinding.value === quoteRequestFingerprint.value
   })
-  const canRequestQuote = computed(() => basePurchaseIntentReady.value && !quoteLoading.value && !unresolvedPurchase.value)
-  const canPurchase = computed(() => basePurchaseIntentReady.value && !purchaseLoading.value &&
+  // An uncertain request may already have reached the server. Scope-wide blocking prevents a second
+  // intent from being persisted or dispatched until the exact operation is explicitly resumed/checked.
+  const canRequestQuote = computed(() => basePurchaseIntentReady.value && !quoteLoading.value && !hasUnresolvedOperation.value)
+  const canPurchase = computed(() => basePurchaseIntentReady.value && !purchaseLoading.value && !hasUnresolvedOtherOperation.value &&
     (Boolean(unresolvedPurchase.value?.phase === 'ORDER') || quoteIsUsable.value))
 
   const readPurchaseJournal = () => {
@@ -271,6 +291,37 @@ export function useSkillMarket ({
       storageAvailable.value = false
       error.value = storageError().message
       return []
+    }
+  }
+
+  const operationLockName = () => {
+    const scope = actorScopeFingerprint.value
+    return scope ? `${PURCHASE_OPERATION_LOCK_PREFIX}.${encodeURIComponent(scope)}` : ''
+  }
+
+  const awaitAbortable = (promise) => {
+    const signal = operationAbortController.signal
+    if (signal.aborted) return Promise.reject(signal.reason || new DOMException('Aborted', 'AbortError'))
+    return Promise.race([
+      promise,
+      new Promise((resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason || new DOMException('Aborted', 'AbortError')), { once: true }))
+    ])
+  }
+
+  const withOperationLock = async (operation) => {
+    const name = operationLockName()
+    if (!name || !operationLockAvailable.value || disposed) {
+      error.value = operationLockError().message
+      throw operationLockError()
+    }
+    try {
+      return await operationLocks.request(name, { mode: 'exclusive', signal: operationAbortController.signal }, async (lock) => {
+        if (!lock || disposed) throw operationLockError()
+        return operation()
+      })
+    } catch (failure) {
+      if (failure?.name === 'AbortError' || disposed) throw failure
+      throw failure
     }
   }
 
@@ -442,6 +493,12 @@ export function useSkillMarket ({
     return updated
   }
 
+  const clearQuotePurchaseRecord = (record) => {
+    const current = readPurchaseJournal()
+    if (!current.some(item => item.intentFingerprint === record?.intentFingerprint && item.phase === 'QUOTE')) return
+    persistPurchaseJournal(current.filter(item => item.intentFingerprint !== record.intentFingerprint))
+  }
+
   const createOrderRecord = (record) => {
     const currentQuote = quote.value
     if (!currentQuote || !quoteIsUsable.value || record?.phase !== 'QUOTE') return null
@@ -484,21 +541,26 @@ export function useSkillMarket ({
     quoteLoading.value = true
     error.value = ''
     try {
-      const response = await agentApi.post('/skill-orders/quotes', request, {
+      const response = await awaitAbortable(agentApi.post('/skill-orders/quotes', request, {
         autoLoading: false,
+        signal: operationAbortController.signal,
         headers: { 'Idempotency-Key': record.quoteIdempotencyKey }
-      })
+      }))
       const payload = readSkillApiPayload(response) || null
-      if (generation !== quoteGeneration || !sameString(target.value.targetAgentId, request.targetAgentId) ||
-        !sameString(target.value.expectedAgentVersion, request.expectedAgentVersion) || !quoteMatchesIntent(payload, request)) {
-        if (generation === quoteGeneration) error.value = '报价无效、身份不匹配或已过期，请恢复后重试'
+      if (!quoteMatchesIntent(payload, request)) {
+        clearQuotePurchaseRecord(record)
+        if (generation === quoteGeneration) error.value = '报价无效、身份不匹配或已过期；可重新获取报价'
         return null
       }
+      if (generation !== quoteGeneration || !sameString(target.value.targetAgentId, request.targetAgentId) ||
+        !sameString(target.value.expectedAgentVersion, request.expectedAgentVersion)) return null
       quote.value = payload
       quoteBinding.value = record.intentFingerprint
       return payload
     } catch (failure) {
-      if (generation === quoteGeneration) error.value = failure?.message || '报价获取失败；可使用恢复操作重放原请求'
+      // A business/HTTP outcome is definitive: it cannot be replayed as an uncertain mutation.
+      if (!isAmbiguousTransportFailure(failure)) clearQuotePurchaseRecord(record)
+      if (generation === quoteGeneration) error.value = failure?.message || (isAmbiguousTransportFailure(failure) ? '报价获取失败；可使用恢复操作重放原请求' : '报价请求被拒绝；可重新获取报价')
       throw failure
     } finally {
       if (generation === quoteGeneration) quoteLoading.value = false
@@ -506,30 +568,46 @@ export function useSkillMarket ({
   }
 
   const requestQuote = async () => {
-    if (!canRequestQuote.value) {
-      if (unresolvedPurchase.value && !error.value) error.value = '已有未解决购买请求，请使用恢复操作重放原请求'
+    if (!operationLockAvailable.value) {
+      error.value = operationLockError().message
       return null
     }
-    // This must complete (including readback) before the quote mutation is sent.
-    const record = createQuoteRecord()
-    const quoted = await sendQuoteRecord(record)
-    if (!quoted && !error.value) error.value = '报价无效、身份不匹配或已过期，请恢复后重试'
-    return quoted
+    if (!canRequestQuote.value) {
+      if (hasUnresolvedOperation.value && !error.value) error.value = '已有未解决购买请求，请先使用恢复操作检查或重放原请求'
+      return null
+    }
+    return withOperationLock(async () => {
+      // Re-read under the actor-wide exclusive lock: another tab may have persisted an uncertain intent.
+      const current = readPurchaseJournal()
+      purchaseJournal.value = current
+      if (current.length) {
+        error.value = '已有未解决购买请求，请先使用恢复操作检查或重放原请求'
+        return null
+      }
+      const record = createQuoteRecord()
+      const quoted = await sendQuoteRecord(record)
+      if (!quoted && !error.value) error.value = '报价无效、身份不匹配或已过期；可重新获取报价'
+      return quoted
+    })
   }
 
   const matchesIntent = (request, fingerprint) => recordFingerprint(request, request?.approvedPermissions) === fingerprint
 
-  const clearTerminalPurchaseRecord = (candidate) => {
+  const clearTerminalPurchaseRecord = async (candidate, insideOperationLock = false) => {
     if (!isTerminalOrder(candidate)) return
-    const current = readPurchaseJournal()
-    const matching = current.find(record => record.phase === 'ORDER' && requiredString(record.orderId) === requiredString(candidate?.orderId) &&
-      matchesIntent(record.purchaseRequest, record.intentFingerprint) &&
-      sameString(record.purchaseRequest.targetAgentId, candidate?.targetAgentId) &&
-      sameString(record.purchaseRequest.productVersionId, candidate?.productVersionId) &&
-      sameString(record.purchaseRequest.expectedAgentVersion, candidate?.expectedAgentVersion))
-    if (!matching) return
-    persistPurchaseJournal(current.filter(record => record.intentFingerprint !== matching.intentFingerprint))
-    if (purchaseIdempotencyKey.value === matching.orderIdempotencyKey) purchaseIdempotencyKey.value = ''
+    const clear = () => {
+      const current = readPurchaseJournal()
+      const matching = current.find(record => record.phase === 'ORDER' && requiredString(record.orderId) === requiredString(candidate?.orderId) &&
+        matchesIntent(record.purchaseRequest, record.intentFingerprint) &&
+        sameString(record.purchaseRequest.targetAgentId, candidate?.targetAgentId) &&
+        sameString(record.purchaseRequest.productVersionId, candidate?.productVersionId) &&
+        sameString(record.purchaseRequest.expectedAgentVersion, candidate?.expectedAgentVersion))
+      if (!matching) return
+      persistPurchaseJournal(current.filter(record => record.intentFingerprint !== matching.intentFingerprint))
+      if (purchaseIdempotencyKey.value === matching.orderIdempotencyKey) purchaseIdempotencyKey.value = ''
+    }
+    if (insideOperationLock) return clear()
+    return withOperationLock(clear)
   }
 
   const loadEntitlements = async (agentId = target.value.targetAgentId) => {
@@ -580,11 +658,11 @@ export function useSkillMarket ({
     return (ORDER_STATUS_RANK[candidateStatus] || 0) >= (ORDER_STATUS_RANK[currentStatus] || 0)
   }
 
-  const acceptOrder = async (candidate, expected) => {
+  const acceptOrder = async (candidate, expected, insideOperationLock = false) => {
     if (!matchingOrderResponse(candidate, expected) || !canAdvanceOrder(order.value, candidate)) return null
     order.value = candidate
     activeOrderIdentity = identityFromOrder(candidate)
-    clearTerminalPurchaseRecord(candidate)
+    await clearTerminalPurchaseRecord(candidate, insideOperationLock)
     await refreshTerminalEntitlements(candidate)
     return candidate
   }
@@ -599,10 +677,11 @@ export function useSkillMarket ({
     purchaseLoading.value = true
     error.value = ''
     try {
-      const response = await agentApi.post('/skill-orders', { ...request, approvedPermissions: [...request.approvedPermissions] }, {
+      const response = await awaitAbortable(agentApi.post('/skill-orders', { ...request, approvedPermissions: [...request.approvedPermissions] }, {
         autoLoading: false,
+        signal: operationAbortController.signal,
         headers: { 'Idempotency-Key': record.orderIdempotencyKey }
-      })
+      }))
       const payload = readSkillApiPayload(response) || null
       const expected = {
         orderId: requiredString(payload?.orderId),
@@ -613,7 +692,7 @@ export function useSkillMarket ({
       if (generation !== purchaseGeneration || !sameString(target.value.targetAgentId, request.targetAgentId) ||
         !sameString(target.value.expectedAgentVersion, request.expectedAgentVersion) || !matchingOrderResponse(payload, expected)) return null
       const updated = updatePurchaseRecord(record, { orderId: payload.orderId })
-      const accepted = await acceptOrder(payload, expected)
+      const accepted = await acceptOrder(payload, expected, true)
       if (!accepted) return null
       clearQuote()
       return accepted
@@ -626,17 +705,28 @@ export function useSkillMarket ({
   }
 
   const purchase = async () => {
+    if (!operationLockAvailable.value) {
+      error.value = operationLockError().message
+      return null
+    }
     if (!canPurchase.value) return null
-    let record = unresolvedPurchase.value
-    if (record?.phase === 'QUOTE') record = createOrderRecord(record)
-    return record?.phase === 'ORDER' ? sendOrderRecord(record) : null
+    return withOperationLock(async () => {
+      const current = readPurchaseJournal()
+      purchaseJournal.value = current
+      const record = current.find(item => item.intentFingerprint === intentFingerprint.value) || null
+      if (!record || current.some(item => item.intentFingerprint !== record.intentFingerprint)) {
+        error.value = '已有未解决购买请求，请先使用恢复操作检查或重放原请求'
+        return null
+      }
+      const next = record.phase === 'QUOTE' ? createOrderRecord(record) : record
+      return next?.phase === 'ORDER' ? sendOrderRecord(next) : null
+    })
   }
 
   const resumeOperation = async (candidate) => {
     const record = purchaseJournal.value.find(item => item.intentFingerprint === candidate?.intentFingerprint)
     if (!record) return null
     restoreOperation(record)
-    if (record.phase === 'QUOTE') return sendQuoteRecord(record)
     if (record.orderId) {
       order.value = {
         orderId: record.orderId,
@@ -646,12 +736,24 @@ export function useSkillMarket ({
         status: SKILL_ORDER_STATUSES.FUNDS_HELD
       }
       activeOrderIdentity = identityFromOrder(order.value)
-      return loadOrder(record.orderId)
+      const recovered = await loadOrder(record.orderId)
+      if (recovered && !isTerminalOrder(recovered)) pollOrder(recoveryPollOptions).catch(() => {})
+      return recovered
     }
-    return sendOrderRecord(record)
+    if (!operationLockAvailable.value) {
+      error.value = operationLockError().message
+      return null
+    }
+    return withOperationLock(async () => {
+      const current = readPurchaseJournal()
+      purchaseJournal.value = current
+      const persisted = current.find(item => item.intentFingerprint === record.intentFingerprint)
+      if (!persisted) return null
+      return persisted.phase === 'QUOTE' ? sendQuoteRecord(persisted) : sendOrderRecord(persisted)
+    })
   }
 
-  const loadOrder = async (orderId = order.value?.orderId) => {
+  const loadOrderUnlocked = async (orderId = order.value?.orderId) => {
     const id = requiredString(orderId)
     const expected = activeOrderIdentity || identityFromOrder(order.value)
     if (!id || !expected.orderId || !sameString(id, expected.orderId)) return null
@@ -671,6 +773,10 @@ export function useSkillMarket ({
       if (generation === orderRequestGeneration) orderLoading.value = false
     }
   }
+
+  // Order reads are deliberately not serialized: response fencing permits concurrent refreshes.
+  // The exclusive lock is reserved for persisted quote/order intent mutations and dispatch.
+  const loadOrder = async (orderId = order.value?.orderId) => loadOrderUnlocked(orderId)
 
   const pollOrder = async ({ maxAttempts = 6, intervalMs = 1500 } = {}) => {
     const id = requiredString(order.value?.orderId)
@@ -696,6 +802,14 @@ export function useSkillMarket ({
     }
   }
 
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      disposed = true
+      operationAbortController.abort()
+      stopOrderPolling()
+    })
+  }
+
   return {
     products,
     selectedProduct,
@@ -714,6 +828,7 @@ export function useSkillMarket ({
     previewEnabled,
     actorScopeFingerprint,
     storageAvailable,
+    operationLockAvailable,
     target,
     productVersionId,
     canRequestQuote,

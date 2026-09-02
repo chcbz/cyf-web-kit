@@ -7,6 +7,7 @@
     <p v-if="!market.previewEnabled" class="disabled-notice">预览功能当前未启用；购买操作已禁用。</p>
     <p v-else-if="!market.actorScopeFingerprint" class="disabled-notice">缺少已认证的购买范围；购买操作已禁用。</p>
     <p v-else-if="!market.storageAvailable" class="disabled-notice">购买恢复存储不可用；请允许站点存储并释放空间后重试。</p>
+    <p v-else-if="!market.operationLockAvailable" class="disabled-notice">当前浏览器不支持安全的跨标签购买锁；购买操作已禁用。</p>
     <p v-if="market.error" class="error">{{ market.error }}</p>
     <var-loading v-if="market.loading" />
     <var-empty v-else-if="!market.products.length" description="暂无技能商品" />

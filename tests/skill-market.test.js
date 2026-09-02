@@ -92,6 +92,32 @@ const memoryStorage = () => {
   }
 }
 
+const createTestWebLocks = () => {
+  const tails = new Map()
+  return {
+    request (name, options, callback) {
+      const prior = tails.get(name) || Promise.resolve()
+      let release
+      const tail = new Promise(resolve => { release = resolve })
+      tails.set(name, tail)
+      return prior.then(async () => {
+        if (options?.signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+        try {
+          return await callback({ name, mode: options?.mode || 'exclusive' })
+        } finally {
+          release()
+          if (tails.get(name) === tail) tails.delete(name)
+        }
+      })
+    }
+  }
+}
+
+const defaultOperationLocks = createTestWebLocks()
+const originalNavigatorLocks = globalThis.navigator?.locks
+Object.defineProperty(globalThis.navigator, 'locks', { configurable: true, value: defaultOperationLocks })
+after(() => Object.defineProperty(globalThis.navigator, 'locks', { configurable: true, value: originalNavigatorLocks }))
+
 describe('skill market preview', () => {
   it('keeps the frozen six seeded prices as decimal micro-silver strings', () => {
     expect(seededProducts.map(product => [product.skillKey, product.priceMicro])).to.deep.equal([
@@ -167,33 +193,54 @@ describe('skill market preview', () => {
     expect(JSON.parse([...storage.values.values()][0]).records).to.have.length(1)
   })
 
-  it('keeps multiple unresolved intents isolated instead of overwriting a global slot', async () => {
+  it('blocks every new same-actor intent while an ambiguous quote is unresolved', async () => {
     const storage = memoryStorage()
     const requests = []
-    let generated = 0
     const api = {
       get: async () => success({ entitlements: [] }),
       post: async (url, payload, options) => {
-        if (url === '/skill-orders/quotes') return success({ quoteId: `sq-${payload.targetAgentId}-${payload.productVersionId}`, productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
-        requests.push({ payload, key: options.headers['Idempotency-Key'] })
+        requests.push({ url, payload, key: options.headers['Idempotency-Key'] })
         throw new TypeError('ambiguous send')
       }
     }
-    const market = useSkillMarket({ actorScopeKey: 'actor-a', agentApi: api, enabled: ref(true), purchaseIdempotencyStorage: storage, createIdempotencyKey: () => `key-${++generated}` })
-    await preparePurchase(market, seededProducts[2])
-    try { await market.purchase() } catch {}
+    const market = useSkillMarket({ actorScopeKey: 'actor-a', agentApi: api, enabled: ref(true), purchaseIdempotencyStorage: storage, createIdempotencyKey: () => 'key-1' })
+    await preparePurchase(market, seededProducts[2]).catch(() => {})
     market.selectProduct(seededProducts[3])
     market.setTargetAgent({ agentId: 'agent-song', version: '9' })
     market.setApprovedPermissions(['repo.read'])
-    await market.requestQuote()
-    try { await market.purchase() } catch {}
 
+    expect(market.canRequestQuote.value).to.equal(false)
+    expect(await market.requestQuote()).to.equal(null)
     const journal = JSON.parse([...storage.values.values()][0])
-    expect(journal.records).to.have.length(2)
-    expect(journal.records.map(record => record.purchaseRequest.quoteId)).to.deep.equal(['sq-agent-lin-spv-repo-test-1', 'sq-agent-song-spv-code-editor-1'])
-    expect(journal.records.map(record => record.orderIdempotencyKey)).to.deep.equal(['key-2', 'key-4'])
-    expect(requests).to.have.length(2)
+    expect(journal.records).to.have.length(1)
+    expect(journal.records[0].productVersionId).to.equal('spv-repo-test-1')
+    expect(requests).to.have.length(1)
   })
+
+  it('blocks every new same-actor intent while an ambiguous order is unresolved', async () => {
+    const storage = memoryStorage()
+    const requests = []
+    const api = {
+      get: async () => success([]),
+      post: async (url, payload, options) => {
+        requests.push({ url, payload, key: options.headers['Idempotency-Key'] })
+        if (url === '/skill-orders/quotes') return success({ quoteId: 'sq-1', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
+        throw new TypeError('ambiguous order')
+      }
+    }
+    const market = useSkillMarket({ actorScopeKey: 'actor-a', agentApi: api, enabled: ref(true), purchaseIdempotencyStorage: storage, createIdempotencyKey: (() => { let n = 0; return () => `key-${++n}` })() })
+    await preparePurchase(market)
+    await market.purchase().catch(() => {})
+    market.selectProduct(seededProducts[3])
+    market.setTargetAgent({ agentId: 'agent-song', version: '9' })
+    market.setApprovedPermissions(['repo.read'])
+
+    expect(market.canRequestQuote.value).to.equal(false)
+    expect(await market.requestQuote()).to.equal(null)
+    expect(requests.filter(request => request.url === '/skill-orders')).to.have.length(1)
+    expect(JSON.parse([...storage.values.values()][0]).records).to.have.length(1)
+  })
+
 
   it('clears a journal entry only when the matching order reaches a terminal state', async () => {
     const storage = memoryStorage()
@@ -228,22 +275,38 @@ describe('skill market preview', () => {
   })
 
 
-  it('fails closed for expired or mismatched quote echoes', async () => {
+  it('clears expired or invalid quote responses so a fresh quote can use a new key', async () => {
+    const keys = []
     const responses = [
       { quoteId: 'expired', productVersionId: 'spv-repo-test-1', targetAgentId: 'agent-lin', expectedAgentVersion: '7', expiresAt: '1000', priceMicro: '30000000' },
-      { quoteId: 'wrong-target', productVersionId: 'spv-repo-test-1', targetAgentId: 'agent-song', expectedAgentVersion: '7', expiresAt: '2000', priceMicro: '30000000' }
+      { quoteId: 'fresh', productVersionId: 'spv-repo-test-1', targetAgentId: 'agent-lin', expectedAgentVersion: '7', expiresAt: '2000', priceMicro: '30000000' }
     ]
-    const api = { get: async () => success([]), post: async () => success(responses.shift()) }
-    const market = useSkillMarket({ actorScopeKey: 'actor-a', agentApi: api, enabled: ref(true), now: () => 1000 })
+    let generated = 0
+    const api = { get: async () => success([]), post: async (url, payload, options) => { keys.push(options.headers['Idempotency-Key']); return success(responses.shift()) } }
+    const market = useSkillMarket({ actorScopeKey: 'actor-expired', agentApi: api, enabled: ref(true), purchaseIdempotencyStorage: memoryStorage(), now: () => 1000, createIdempotencyKey: () => `quote-${++generated}` })
     market.selectProduct(seededProducts[2])
     market.setTargetAgent({ agentId: 'agent-lin', version: '7' })
     market.setApprovedPermissions(['repo.read'])
     expect(await market.requestQuote()).to.equal(null)
-    expect(market.quote.value).to.equal(null)
-    expect(market.canPurchase.value).to.equal(false)
-    expect(await market.requestQuote()).to.equal(null)
-    expect(market.error.value).to.include('恢复操作')
+    expect(market.unresolvedOperations.value).to.deep.equal([])
+    expect(market.canRequestQuote.value).to.equal(true)
+    expect((await market.requestQuote()).quoteId).to.equal('fresh')
+    expect(keys).to.deep.equal(['quote-1', 'quote-2'])
   })
+
+  it('clears a definitive quote failure but retains an ambiguous transport failure for exact replay', async () => {
+    const storage = memoryStorage()
+    const business = useSkillMarket({ actorScopeKey: 'actor-a', enabled: ref(true), purchaseIdempotencyStorage: storage, agentApi: { get: async () => success([]), post: async () => ({ data: { code: 'SKILL_NOT_AVAILABLE', msg: '已下架' } }) } })
+    business.selectProduct(seededProducts[2]); business.setTargetAgent({ agentId: 'agent-lin', version: '7' }); business.setApprovedPermissions(['repo.read'])
+    await business.requestQuote().catch(error => expect(error.code).to.equal('SKILL_NOT_AVAILABLE'))
+    expect(business.unresolvedOperations.value).to.deep.equal([])
+
+    const ambiguous = useSkillMarket({ actorScopeKey: 'actor-b', enabled: ref(true), purchaseIdempotencyStorage: storage, agentApi: { get: async () => success([]), post: async () => { throw new TypeError('connection lost') } } })
+    ambiguous.selectProduct(seededProducts[2]); ambiguous.setTargetAgent({ agentId: 'agent-lin', version: '7' }); ambiguous.setApprovedPermissions(['repo.read'])
+    await ambiguous.requestQuote().catch(() => {})
+    expect(ambiguous.unresolvedOperations.value).to.have.length(1)
+  })
+
 
   it('fences stale order responses and preserves terminal order monotonicity', async () => {
     const first = deferred()
@@ -528,5 +591,67 @@ describe('skill market recovery hardening', () => {
     expect(marketSource).to.include('actorScopeKey')
     expect(marketSource).to.include('发现未解决购买操作')
     expect(marketSource).to.include('恢复操作')
+  })
+
+
+  it('restarts bounded polling after recovery finds a nonterminal order', async () => {
+    const storage = memoryStorage()
+    const orderResponses = ['FUNDS_HELD', 'INSTALLING', 'ACTIVE']
+    const api = {
+      get: async url => url.startsWith('/skill-orders/')
+        ? success({ orderId: 'so-recover', targetAgentId: 'agent-lin', productVersionId: 'spv-repo-test-1', expectedAgentVersion: '7', status: orderResponses.shift() || 'ACTIVE' })
+        : success([]),
+      post: async (url, payload) => url === '/skill-orders/quotes'
+        ? success({ quoteId: 'sq-recover', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
+        : success({ orderId: 'so-recover', targetAgentId: payload.targetAgentId, productVersionId: payload.productVersionId, expectedAgentVersion: payload.expectedAgentVersion, status: 'FUNDS_HELD' })
+    }
+    const original = useSkillMarket({ actorScopeKey: 'actor-a', enabled: ref(true), purchaseIdempotencyStorage: storage, agentApi: api, createIdempotencyKey: (() => { let n = 0; return () => `recover-${++n}` })() })
+    await preparePurchase(original)
+    await original.purchase()
+    const recovered = useSkillMarket({ actorScopeKey: 'actor-a', enabled: ref(true), purchaseIdempotencyStorage: storage, agentApi: api, wait: async () => {}, recoveryPollOptions: { maxAttempts: 2, intervalMs: 0 } })
+    await recovered.resumeOperation(recovered.unresolvedOperations.value[0])
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(recovered.order.value.status).to.equal('ACTIVE')
+    expect(recovered.orderPollAttempts.value).to.equal(2)
+  })
+
+  it('serializes same-actor tabs with one exclusive Web Lock across journal write and dispatch', async () => {
+    const storage = memoryStorage()
+    const locks = createTestWebLocks()
+    const firstPost = deferred()
+    const calls = []
+    const api = {
+      get: async () => success([]),
+      post: async (url, payload) => {
+        calls.push({ url, payload })
+        if (calls.length === 1) return firstPost.promise
+        return success({ quoteId: 'unexpected', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
+      }
+    }
+    const one = useSkillMarket({ actorScopeKey: 'actor-a', enabled: ref(true), purchaseIdempotencyStorage: storage, agentApi: api, operationLocks: locks })
+    const two = useSkillMarket({ actorScopeKey: 'actor-a', enabled: ref(true), purchaseIdempotencyStorage: storage, agentApi: api, operationLocks: locks })
+    for (const market of [one, two]) { market.selectProduct(seededProducts[2]); market.setTargetAgent({ agentId: 'agent-lin', version: '7' }); market.setApprovedPermissions(['repo.read']) }
+    const first = one.requestQuote()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    await Promise.resolve()
+    expect(calls).to.have.length(1)
+    const second = two.requestQuote()
+    firstPost.reject(new TypeError('ambiguous'))
+    await first.catch(() => {})
+    expect(await second).to.equal(null)
+    expect(calls).to.have.length(1)
+    expect(two.unresolvedOperations.value).to.have.length(1)
+  })
+
+  it('fails closed for purchase mutation when Web Locks are unavailable while catalog browsing remains available', async () => {
+    const calls = []
+    const market = useSkillMarket({ actorScopeKey: 'actor-a', enabled: ref(true), operationLocks: null, agentApi: { get: async url => { calls.push(url); return success({ items: seededProducts }) }, post: async () => { throw new Error('must not post') } } })
+    expect((await market.loadProducts())).to.have.length(6)
+    market.selectProduct(seededProducts[2]); market.setTargetAgent({ agentId: 'agent-lin', version: '7' }); market.setApprovedPermissions(['repo.read'])
+    expect(market.operationLockAvailable.value).to.equal(false)
+    expect(market.canRequestQuote.value).to.equal(false)
+    expect(await market.requestQuote()).to.equal(null)
+    expect(market.error.value).to.include('跨标签购买锁')
+    expect(calls).to.deep.equal(['/skill-products'])
   })
 })
