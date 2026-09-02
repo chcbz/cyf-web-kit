@@ -261,6 +261,34 @@ describe('Juyi Hall voice mounted facade', () => {
   })
 })
 
+describe('Juyi Hall voice recording format support', () => {
+  it('rejects MP4-only recorders and falls back only to WebM/Opus when MIME probing is unavailable', async () => {
+    let permissionCalls = 0
+    class Mp4OnlyRecorder extends FakeRecorder {}
+    Mp4OnlyRecorder.isTypeSupported = type => type === 'audio/mp4'
+    const mp4Harness = browserHarness({ permission: async () => { permissionCalls += 1; return mp4Harness.makeStream() } })
+    mp4Harness.browser.MediaRecorder = Mp4OnlyRecorder
+    const mp4Voice = createVoice({ browser: mp4Harness.browser }).voice
+    expect(mp4Voice.supported).to.equal(false)
+    expect(mp4Voice.state).to.equal('unsupported')
+    expect(mp4Voice.canRecord).to.equal(false)
+    expect(await mp4Voice.startRecording()).to.equal(false)
+    expect(permissionCalls).to.equal(0)
+    mp4Voice.dispose()
+
+    class LegacyRecorder extends FakeRecorder {}
+    LegacyRecorder.isTypeSupported = undefined
+    const legacyHarness = browserHarness()
+    legacyHarness.browser.MediaRecorder = LegacyRecorder
+    const legacyVoice = createVoice({ browser: legacyHarness.browser }).voice
+    expect(legacyVoice.supported).to.equal(true)
+    expect(await legacyVoice.startRecording()).to.equal(true)
+    expect(FakeRecorder.instances.at(-1).mimeType).to.equal('audio/webm;codecs=opus')
+    legacyVoice.cancel()
+    legacyVoice.dispose()
+  })
+})
+
 describe('Juyi Hall voice lifecycle', () => {
   it('fences late permission and uniformly stops capture resources on cancel and 5MiB overflow', async () => {
     FakeRecorder.instances = []
@@ -736,6 +764,96 @@ describe('Juyi Hall portrait voice lock', () => {
       wrapper.unmount()
       Object.defineProperty(globalThis.navigator, 'mediaDevices', { configurable: true, value: originalMediaDevices })
       globalThis.MediaRecorder = originalMediaRecorder
+    }
+  })
+})
+
+describe('Juyi Hall voice sending escape', () => {
+  it('stops waiting from reachable controls and fences late accepted/rejected sends from the next turn', async () => {
+    FakeRecorder.instances = []
+    const attempts = []
+    const terminals = []
+    const toasts = []
+    let sequence = 0
+    let voice
+    const tracker = createHallVoiceReplyCorrelation({ onReply: message => voice.completeReply(message) })
+    const harness = browserHarness({ fetchImpl: async () => { throw new Error('stopped sends must not synthesize') } })
+    let requestSequence = 0
+    harness.browser.crypto.randomUUID = () => `voice-request-${++requestSequence}`
+    ;({ voice } = createVoice({
+      browser: harness.browser,
+      showToast: message => toasts.push(message),
+      onSendVoice: async ({ turnId }) => {
+        const pending = deferred()
+        const index = attempts.length
+        attempts.push({ pending, turnId })
+        expect(tracker.start({ turnId, baselineSequence: sequence, messages: [], conversationIdBeforeSend: '' })).to.equal(turnId)
+        const accepted = await pending.promise
+        if (accepted) tracker.resolveConversation(`conversation-${index}`, turnId)
+        else tracker.closeIfCurrent(turnId, 'send_failed')
+        return accepted
+      },
+      onReplyTurnTerminal: payload => {
+        terminals.push(payload)
+        tracker.closeIfCurrent(payload.turnId, payload.reason)
+      }
+    }))
+    const HallVoiceControls = loadSfc('../src/components/juyiting/HallVoiceControls.vue')
+    const wrapper = mount(HallVoiceControls, { props: { voice }, global: { stubs: { 'var-icon': true } } })
+    try {
+      await transcribeToReview(voice)
+      const sendA = voice.sendTranscript()
+      await flush()
+      expect(voice.state).to.equal('sending')
+      expect(voice.voiceInteractionLocked).to.equal(true)
+      expect(wrapper.find('.voice-stop-waiting').exists()).to.equal(true)
+      expect(wrapper.get('.voice-sending span').element.textContent).to.contain('可能已经送达')
+      await wrapper.get('.voice-stop-waiting').trigger('click')
+      expect(voice.state).to.equal('idle')
+      expect(voice.voiceInteractionLocked).to.equal(false)
+      expect(terminals.at(-1)?.reason).to.equal('stopped_waiting')
+      expect(tracker.hasActive()).to.equal(false)
+      expect(toasts.at(-1)).to.contain('文字发送仍会继续')
+
+      await transcribeToReview(voice)
+      const sendB = voice.sendTranscript()
+      await flush()
+      const turnB = attempts[1].turnId
+      expect(tracker.snapshot().turnId).to.equal(turnB)
+      attempts[0].pending.resolve(true)
+      expect(await sendA).to.equal(false)
+      expect(voice.state).to.equal('sending')
+      expect(tracker.snapshot().turnId).to.equal(turnB)
+
+      await wrapper.get('.voice-stop-waiting').trigger('click')
+      await transcribeToReview(voice)
+      const sendC = voice.sendTranscript()
+      await flush()
+      const turnC = attempts[2].turnId
+      expect(turnC).not.to.equal(turnB)
+      expect(tracker.snapshot().turnId).to.equal(turnC)
+      attempts[1].pending.resolve(false)
+      expect(await sendB).to.equal(false)
+      expect(voice.state).to.equal('sending')
+      expect(tracker.snapshot().turnId).to.equal(turnC)
+
+      attempts[2].pending.resolve(true)
+      expect(await sendC).to.equal(true)
+      expect(voice.state).to.equal('waiting_reply')
+      expect(attempts).to.have.length(3)
+      sequence += 1
+      expect(tracker.observe({
+        sequence,
+        conversationId: 'conversation-2',
+        messageId: 'reply-c',
+        source: 'agent_event',
+        message: { content: '丙轮回话' }
+      })).to.equal(true)
+      expect(voice.state).to.equal('idle')
+      expect(harness.revoked).to.deep.equal([])
+    } finally {
+      wrapper.unmount()
+      voice.dispose()
     }
   })
 })

@@ -19,6 +19,10 @@
       <button type="button" @click="voice.cancel({ preserveReview: true })">取消</button>
       <button type="button" @click="voice.sendTranscript()">立即发送</button>
     </div>
+    <div v-if="voice.state === 'sending'" class="voice-sending" role="status">
+      <span>传令可能已经送达；停止等待不会撤回文字发送。</span>
+      <button type="button" class="voice-stop-waiting" @click="voice.stopWaiting()">停止等待</button>
+    </div>
     <div v-if="['review', 'conflict', 'error'].includes(voice.state)" class="voice-review" role="status">
       <strong>{{ voice.detached ? '上下文已变化，请手动处理转写' : '语音转写' }}</strong>
       <p>{{ voice.transcript || voice.error }}</p>
@@ -39,5 +43,5 @@ const seconds = computed(() => Math.ceil((props.voice?.elapsedMs || 0) / 1000))
 const canCancelCapture = computed(() => ['requesting_permission', 'recording', 'stopping', 'transcribing'].includes(props.voice?.state))
 </script>
 <style scoped>
-.hall-voice-controls{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.hall-voice-controls button{border:1px solid #d7c3a2;border-radius:7px;background:#fffdf6;color:#654122;padding:6px 8px;font:inherit}.hall-voice-controls button.is-recording{background:#8d2d22;color:#fff}.voice-target{max-width:150px;overflow:hidden;color:#654122;font-size:12px;font-weight:700;text-overflow:ellipsis;white-space:nowrap}.voice-toggle{font-size:11px;color:#765f40;white-space:nowrap}.voice-countdown,.voice-review{width:100%;font-size:12px;color:#765f40}.voice-review{padding:8px;border:1px dashed #c8a96e;background:#fff8e8}.voice-review p{margin:4px 0;white-space:pre-wrap}.voice-review button,.voice-countdown button{margin-right:5px}
+.hall-voice-controls{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.hall-voice-controls button{border:1px solid #d7c3a2;border-radius:7px;background:#fffdf6;color:#654122;padding:6px 8px;font:inherit}.hall-voice-controls button.is-recording{background:#8d2d22;color:#fff}.voice-target{max-width:150px;overflow:hidden;color:#654122;font-size:12px;font-weight:700;text-overflow:ellipsis;white-space:nowrap}.voice-toggle{font-size:11px;color:#765f40;white-space:nowrap}.voice-countdown,.voice-sending,.voice-review{width:100%;font-size:12px;color:#765f40}.voice-review{padding:8px;border:1px dashed #c8a96e;background:#fff8e8}.voice-review p{margin:4px 0;white-space:pre-wrap}.voice-review button,.voice-countdown button,.voice-sending button{margin-right:5px}
 </style>

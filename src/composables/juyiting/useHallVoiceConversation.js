@@ -8,7 +8,7 @@ export const HALL_VOICE_MAX_TTS_BYTES = 8 * 1024 * 1024
 export const HALL_VOICE_AUTO_SEND_DELAY_MS = 1_500
 
 const runtimeEnv = import.meta.env ?? {}
-const supportedMimes = ['audio/webm;codecs=opus', 'audio/mp4']
+const supportedMimes = ['audio/webm;codecs=opus']
 const captureStates = new Set(['requesting_permission', 'recording', 'stopping', 'transcribing', 'pending_send'])
 const interactionLockedStates = new Set([...captureStates, 'review', 'conflict', 'sending'])
 const exactStringFields = [
@@ -113,7 +113,14 @@ export const useHallVoiceConversation = ({
   browser: browserOverride
 }) => {
   const browser = { ...defaultBrowser(), ...(browserOverride || {}) }
-  const browserSupported = Boolean(enabled && browser.navigator?.mediaDevices?.getUserMedia && browser.MediaRecorder)
+  const preferredMime = (() => {
+    if (!browser.MediaRecorder) return ''
+    if (typeof browser.MediaRecorder.isTypeSupported !== 'function') return supportedMimes[0]
+    return supportedMimes.find(type => {
+      try { return browser.MediaRecorder.isTypeSupported(type) } catch { return false }
+    }) || ''
+  })()
+  const browserSupported = Boolean(enabled && browser.navigator?.mediaDevices?.getUserMedia && browser.MediaRecorder && preferredMime)
   const stateRef = ref(browserSupported ? 'idle' : 'unsupported')
   const transcriptRef = ref('')
   const errorRef = ref('')
@@ -259,6 +266,16 @@ export const useHallVoiceConversation = ({
     if (conflict) onOpenReview?.()
   }
   const discard = () => terminal(supportedRef.value ? 'idle' : 'unsupported', { clearTranscript: true, clearTurn: true, replyReason: 'discarded' })
+  const stopWaiting = () => {
+    if (stateRef.value !== 'sending') return false
+    terminal(supportedRef.value ? 'idle' : 'unsupported', {
+      clearTranscript: true,
+      clearTurn: true,
+      replyReason: 'stopped_waiting'
+    })
+    showToast?.('已停止语音等待；传令可能已经送达，文字发送仍会继续')
+    return true
+  }
 
   const upload = async (current, blob, mimeType) => {
     if (current !== generation) return false
@@ -326,8 +343,7 @@ export const useHallVoiceConversation = ({
         return false
       }
       mediaStream = capture
-      const mimeType = supportedMimes.find(type => !browser.MediaRecorder.isTypeSupported || browser.MediaRecorder.isTypeSupported(type))
-      if (!mimeType) throw new Error('当前浏览器没有可用的录音格式')
+      const mimeType = preferredMime
       const recorder = new browser.MediaRecorder(capture, { mimeType })
       mediaRecorder = recorder
       chunks = []
@@ -629,6 +645,7 @@ export const useHallVoiceConversation = ({
     adoptCurrentContext,
     applyTranscript,
     sendTranscript,
+    stopWaiting,
     completeReply,
     stopPlayback,
     dispose,
