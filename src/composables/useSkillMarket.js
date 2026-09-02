@@ -9,8 +9,8 @@ export const SKILL_ORDER_STATUSES = Object.freeze({
 })
 
 const MICRO_PER_SILVER = 1000000n
-const PURCHASE_JOURNAL_STORAGE_KEY = 'cyf.skill-market.purchase-journal.v2'
-const PURCHASE_JOURNAL_SCHEMA_VERSION = 2
+const PURCHASE_JOURNAL_STORAGE_KEY_PREFIX = 'cyf.skill-market.purchase-journal.v3'
+const PURCHASE_JOURNAL_SCHEMA_VERSION = 3
 const MAX_UNRESOLVED_PURCHASES = 12
 const TERMINAL_ORDER_STATUSES = new Set([
   SKILL_ORDER_STATUSES.ACTIVE,
@@ -26,6 +26,7 @@ const ORDER_STATUS_RANK = Object.freeze({
 const asArray = (value) => Array.isArray(value) ? value : []
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key)
 const requiredString = value => String(value ?? '').trim()
+const canonicalDecimalString = value => typeof value === 'string' && /^(0|[1-9]\d*)$/.test(value) ? value : ''
 const sameString = (left, right) => requiredString(left) === requiredString(right)
 
 export const codeUnitCompare = (left, right) => left < right ? -1 : left > right ? 1 : 0
@@ -78,9 +79,8 @@ const explicitAgent = (agent) => {
   const expectedAgentVersion = agent?.expectedAgentVersion ?? agent?.agentVersion ?? agent?.version
   return {
     targetAgentId,
-    expectedAgentVersion: expectedAgentVersion === undefined || expectedAgentVersion === null
-      ? ''
-      : String(expectedAgentVersion)
+    // Versions are Java Long/CAS values on the wire: numbers would lose precision.
+    expectedAgentVersion: canonicalDecimalString(expectedAgentVersion)
   }
 }
 
@@ -101,12 +101,13 @@ const orderStatus = (value) => requiredString(value?.status || value).toUpperCas
 const isTerminalOrder = (value) => TERMINAL_ORDER_STATUSES.has(orderStatus(value))
 const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
 const decimalEpochMilliseconds = (value) => {
-  const raw = requiredString(value)
+  const raw = typeof value === 'string' ? value : ''
   if (!/^(0|[1-9]\d*)$/.test(raw)) return null
   const parsed = Number(raw)
   return Number.isSafeInteger(parsed) ? parsed : null
 }
-const validPriceMicro = value => /^(0|[1-9]\d*)$/.test(requiredString(value))
+const validPriceMicro = value => typeof value === 'string' && /^(0|[1-9]\d*)$/.test(value)
+const validVersion = canonicalDecimalString
 
 /** Formats decimal-string micro-silver without converting money through Number. */
 export const formatSilverMicro = (amountMicro) => {
@@ -139,21 +140,45 @@ export const orderStatusLabel = (status) => ({
   [SKILL_ORDER_STATUSES.REFUNDED]: '安装失败，已退款'
 }[orderStatus(status)] || '状态未知')
 
+const storageError = () => {
+  const failure = new Error('购买恢复记录无法安全保存或读取；请检查浏览器存储权限和可用空间后重试。')
+  failure.code = 'PURCHASE_RECOVERY_STORAGE_UNAVAILABLE'
+  return failure
+}
+
+const scopedJournalStorageKey = (actorScopeKey) => {
+  const scope = requiredString(actorScopeKey)
+  return scope ? `${PURCHASE_JOURNAL_STORAGE_KEY_PREFIX}.${encodeURIComponent(scope)}` : ''
+}
+
 const validJournalRecord = (record) => {
   const purchase = record?.purchaseRequest
   const quoted = record?.quoteRequest
-  return record && typeof record === 'object' && Boolean(requiredString(record.intentFingerprint)) &&
-    Boolean(requiredString(record.idempotencyKey)) && Boolean(requiredString(purchase?.quoteId)) &&
-    Boolean(requiredString(purchase?.productVersionId)) && Boolean(requiredString(purchase?.targetAgentId)) &&
-    Boolean(requiredString(purchase?.expectedAgentVersion)) && validPriceMicro(purchase?.expectedPriceMicro) &&
-    Boolean(requiredString(quoted?.productVersionId)) && Boolean(requiredString(quoted?.targetAgentId)) &&
-    Boolean(requiredString(quoted?.expectedAgentVersion)) && Array.isArray(purchase?.approvedPermissions)
+  const quoteKey = requiredString(record?.quoteIdempotencyKey)
+  const orderKey = requiredString(record?.orderIdempotencyKey)
+  const common = record && typeof record === 'object' && Boolean(requiredString(record.intentFingerprint)) &&
+    Boolean(requiredString(record.productVersionId)) && Boolean(requiredString(record.targetAgentId)) &&
+    Boolean(validVersion(record.expectedAgentVersion)) && Boolean(requiredString(quoted?.productVersionId)) &&
+    Boolean(requiredString(quoted?.targetAgentId)) && Boolean(validVersion(quoted?.expectedAgentVersion)) &&
+    Array.isArray(record.approvedPermissions)
+  if (!common || !sameString(record.productVersionId, quoted.productVersionId) ||
+    !sameString(record.targetAgentId, quoted.targetAgentId) ||
+    !sameString(record.expectedAgentVersion, quoted.expectedAgentVersion)) return false
+  if (record.phase === 'QUOTE') return Boolean(quoteKey) && !purchase && !orderKey
+  return record.phase === 'ORDER' && Boolean(quoteKey) && Boolean(orderKey) && purchase &&
+    Boolean(requiredString(purchase.quoteId)) && Boolean(requiredString(purchase.productVersionId)) &&
+    Boolean(requiredString(purchase.targetAgentId)) && Boolean(validVersion(purchase.expectedAgentVersion)) &&
+    validPriceMicro(purchase.expectedPriceMicro) && Array.isArray(purchase.approvedPermissions) &&
+    sameString(purchase.productVersionId, record.productVersionId) &&
+    sameString(purchase.targetAgentId, record.targetAgentId) &&
+    sameString(purchase.expectedAgentVersion, record.expectedAgentVersion) &&
+    JSON.stringify(normalizeApprovedPermissions(purchase.approvedPermissions)) === JSON.stringify(record.approvedPermissions)
 }
 
 const journalRecords = (stored) => {
   if (!stored || typeof stored !== 'object') return []
   if (stored.schemaVersion !== PURCHASE_JOURNAL_SCHEMA_VERSION || !Array.isArray(stored.records)) return []
-  return stored.records.filter(validJournalRecord)
+  return stored.records.filter(validJournalRecord).slice(0, MAX_UNRESOLVED_PURCHASES)
 }
 
 export function useSkillMarket ({
@@ -161,6 +186,8 @@ export function useSkillMarket ({
   enabled = ref(false),
   createIdempotencyKey = idempotencyKey,
   purchaseIdempotencyStorage = browserStorage(),
+  /** Required opaque tenant/client/principal fingerprint from authenticated app state. */
+  actorScopeKey = '',
   wait = delay,
   now = () => Date.now()
 } = {}) {
@@ -182,6 +209,7 @@ export function useSkillMarket ({
   const purchaseIdempotencyKey = ref('')
   const purchaseJournal = ref([])
   let quoteGeneration = 0
+  let productRequestGeneration = 0
   let purchaseGeneration = 0
   let orderPollGeneration = 0
   let orderRequestGeneration = 0
@@ -189,6 +217,9 @@ export function useSkillMarket ({
   let activeOrderIdentity = null
 
   const previewEnabled = computed(() => Boolean(enabled?.value ?? enabled))
+  const actorScopeFingerprint = computed(() => requiredString(actorScopeKey?.value ?? actorScopeKey))
+  const journalStorageKey = computed(() => scopedJournalStorageKey(actorScopeFingerprint.value))
+  const storageAvailable = ref(false)
   const target = computed(() => explicitAgent(targetAgent.value))
   const selectedIdentity = computed(() => productIdentity(selectedProduct.value))
   const productVersionId = computed(() => selectedIdentity.value.productVersionId)
@@ -205,14 +236,15 @@ export function useSkillMarket ({
     expectedAgentVersion: target.value.expectedAgentVersion,
     approvedPermissions: normalizeApprovedPermissions(approvedPermissions.value)
   }))
-  const basePurchaseIntentReady = computed(() => previewEnabled.value &&
+  const basePurchaseIntentReady = computed(() => previewEnabled.value && storageAvailable.value &&
     selectedProduct.value?.canPurchase === true && Boolean(productVersionId.value) &&
     Boolean(target.value.targetAgentId) && Boolean(target.value.expectedAgentVersion))
   const unresolvedPurchase = computed(() => purchaseJournal.value.find(record => record.intentFingerprint === intentFingerprint.value) || null)
+  const unresolvedOperations = computed(() => purchaseJournal.value)
   const quoteIsUsable = computed(() => {
     const currentQuote = quote.value
     const expiresAt = decimalEpochMilliseconds(currentQuote?.expiresAt)
-    return Boolean(currentQuote?.quoteId) && validPriceMicro(currentQuote?.priceMicro) && expiresAt !== null && now() < expiresAt &&
+    return Boolean(requiredString(currentQuote?.quoteId)) && validPriceMicro(currentQuote?.priceMicro) && expiresAt !== null && now() < expiresAt &&
       sameString(currentQuote?.productVersionId, productVersionId.value) &&
       sameString(currentQuote?.targetAgentId, target.value.targetAgentId) &&
       sameString(currentQuote?.expectedAgentVersion, target.value.expectedAgentVersion) &&
@@ -220,30 +252,60 @@ export function useSkillMarket ({
   })
   const canRequestQuote = computed(() => basePurchaseIntentReady.value && !quoteLoading.value && !unresolvedPurchase.value)
   const canPurchase = computed(() => basePurchaseIntentReady.value && !purchaseLoading.value &&
-    (Boolean(unresolvedPurchase.value) || quoteIsUsable.value))
+    (Boolean(unresolvedPurchase.value?.phase === 'ORDER') || quoteIsUsable.value))
 
   const readPurchaseJournal = () => {
+    const key = journalStorageKey.value
+    if (!key || !purchaseIdempotencyStorage) {
+      storageAvailable.value = false
+      return []
+    }
     try {
-      const stored = purchaseIdempotencyStorage?.getItem(PURCHASE_JOURNAL_STORAGE_KEY)
-      return journalRecords(stored ? JSON.parse(stored) : null)
-    } catch {
-      return purchaseJournal.value
+      const stored = purchaseIdempotencyStorage.getItem(key)
+      const records = stored === null ? [] : journalRecords(JSON.parse(stored))
+      // A malformed scoped journal cannot safely be treated as empty.
+      if (stored !== null && (!Array.isArray(JSON.parse(stored)?.records) || records.length !== JSON.parse(stored).records.length)) throw storageError()
+      storageAvailable.value = true
+      return records
+    } catch (failure) {
+      storageAvailable.value = false
+      error.value = storageError().message
+      return []
     }
   }
 
   const persistPurchaseJournal = (records) => {
+    const key = journalStorageKey.value
     const bounded = records.slice(0, MAX_UNRESOLVED_PURCHASES)
-    purchaseJournal.value = bounded
+    if (!key || !purchaseIdempotencyStorage) {
+      storageAvailable.value = false
+      error.value = '缺少已认证的购买范围，购买已禁用。'
+      throw storageError()
+    }
     try {
-      if (!bounded.length) purchaseIdempotencyStorage?.removeItem(PURCHASE_JOURNAL_STORAGE_KEY)
-      else purchaseIdempotencyStorage?.setItem(PURCHASE_JOURNAL_STORAGE_KEY, JSON.stringify({
-        schemaVersion: PURCHASE_JOURNAL_SCHEMA_VERSION,
-        records: bounded
-      }))
-    } catch {}
+      if (!bounded.length) {
+        purchaseIdempotencyStorage.removeItem(key)
+        if (purchaseIdempotencyStorage.getItem(key) !== null) throw storageError()
+      } else {
+        const serialized = JSON.stringify({ schemaVersion: PURCHASE_JOURNAL_SCHEMA_VERSION, records: bounded })
+        purchaseIdempotencyStorage.setItem(key, serialized)
+        if (purchaseIdempotencyStorage.getItem(key) !== serialized) throw storageError()
+      }
+      purchaseJournal.value = bounded
+      storageAvailable.value = true
+      return bounded
+    } catch (failure) {
+      storageAvailable.value = false
+      error.value = storageError().message
+      throw storageError()
+    }
   }
 
-  purchaseJournal.value = readPurchaseJournal()
+  watch(journalStorageKey, () => {
+    quote.value = null
+    quoteBinding.value = ''
+    purchaseJournal.value = readPurchaseJournal()
+  }, { immediate: true })
 
   const clearQuote = () => {
     quoteGeneration += 1
@@ -299,20 +361,23 @@ export function useSkillMarket ({
   const loadProduct = async (productId) => {
     const id = requiredString(productId)
     if (!id) return null
+    const generation = ++productRequestGeneration
     try {
       const response = await agentApi.get(`/skill-products/${encodeURIComponent(id)}`, {}, { autoLoading: false })
       const detail = readSkillApiPayload(response)
+      if (generation !== productRequestGeneration) return null
       clearQuote()
       selectedProduct.value = detail || null
       approvedPermissions.value = []
       return selectedProduct.value
     } catch (failure) {
-      error.value = failure?.message || '技能详情加载失败'
+      if (generation === productRequestGeneration) error.value = failure?.message || '技能详情加载失败'
       throw failure
     }
   }
 
   const selectProduct = (product) => {
+    productRequestGeneration += 1
     clearQuote()
     selectedProduct.value = product || null
     approvedPermissions.value = []
@@ -329,63 +394,23 @@ export function useSkillMarket ({
     return Boolean(requiredString(candidate?.quoteId)) && validPriceMicro(candidate?.priceMicro) && expiresAt !== null && now() < expiresAt &&
       sameString(candidate?.productVersionId, request.productVersionId) &&
       sameString(candidate?.targetAgentId, request.targetAgentId) &&
+      validVersion(candidate?.expectedAgentVersion) &&
       sameString(candidate?.expectedAgentVersion, request.expectedAgentVersion)
   }
 
-  const requestQuote = async () => {
-    if (!canRequestQuote.value) return null
-    const generation = ++quoteGeneration
-    const requestFingerprint = quoteRequestFingerprint.value
-    const request = quoteRequest()
-    quote.value = null
-    quoteBinding.value = ''
-    quoteLoading.value = true
-    error.value = ''
-    try {
-      const response = await agentApi.post('/skill-orders/quotes', request, {
-        autoLoading: false,
-        headers: { 'Idempotency-Key': createIdempotencyKey() }
-      })
-      const payload = readSkillApiPayload(response) || null
-      if (generation !== quoteGeneration || requestFingerprint !== quoteRequestFingerprint.value) return null
-      if (!quoteMatchesIntent(payload, request)) {
-        error.value = '报价无效、身份不匹配或已过期，请重新获取报价'
-        return null
-      }
-      quote.value = payload
-      quoteBinding.value = requestFingerprint
-      return quote.value
-    } catch (failure) {
-      if (generation === quoteGeneration) error.value = failure?.message || '报价获取失败'
-      throw failure
-    } finally {
-      if (generation === quoteGeneration) quoteLoading.value = false
-    }
-  }
-
-  const purchaseRequest = () => {
-    const currentQuote = quote.value
-    if (!currentQuote || !quoteIsUsable.value) return null
-    return {
-      quoteId: currentQuote.quoteId,
-      productVersionId: productVersionId.value,
-      targetAgentId: target.value.targetAgentId,
-      expectedPriceMicro: String(currentQuote.priceMicro),
-      expectedAgentVersion: target.value.expectedAgentVersion,
-      approvedPermissions: normalizeApprovedPermissions(approvedPermissions.value)
-    }
-  }
-
-  const matchesIntent = (request, fingerprint = intentFingerprint.value) => JSON.stringify({
+  const recordFingerprint = (request, permissions) => JSON.stringify({
     productVersionId: requiredString(request?.productVersionId),
     targetAgentId: requiredString(request?.targetAgentId),
-    expectedAgentVersion: requiredString(request?.expectedAgentVersion),
-    approvedPermissions: normalizeApprovedPermissions(request?.approvedPermissions)
-  }) === fingerprint
+    expectedAgentVersion: validVersion(request?.expectedAgentVersion),
+    approvedPermissions: normalizeApprovedPermissions(permissions)
+  })
 
-  const createPurchaseRecord = (request) => {
+  const createQuoteRecord = () => {
+    const request = quoteRequest()
+    const permissions = normalizeApprovedPermissions(approvedPermissions.value)
+    const fingerprint = recordFingerprint(request, permissions)
     const current = readPurchaseJournal()
-    const existing = current.find(record => record.intentFingerprint === intentFingerprint.value)
+    const existing = current.find(record => record.intentFingerprint === fingerprint)
     if (existing) return existing
     if (current.length >= MAX_UNRESOLVED_PURCHASES) {
       const failure = new Error('未解决购买请求过多，请先恢复已有购买')
@@ -393,10 +418,16 @@ export function useSkillMarket ({
       throw failure
     }
     const record = {
-      intentFingerprint: intentFingerprint.value,
-      quoteRequest: quoteRequest(),
-      purchaseRequest: { ...request, approvedPermissions: [...request.approvedPermissions] },
-      idempotencyKey: createIdempotencyKey(),
+      phase: 'QUOTE',
+      intentFingerprint: fingerprint,
+      productVersionId: request.productVersionId,
+      targetAgentId: request.targetAgentId,
+      expectedAgentVersion: request.expectedAgentVersion,
+      approvedPermissions: permissions,
+      quoteRequest: { ...request },
+      quoteIdempotencyKey: createIdempotencyKey(),
+      purchaseRequest: null,
+      orderIdempotencyKey: '',
       orderId: ''
     }
     persistPurchaseJournal([...current, record])
@@ -406,21 +437,99 @@ export function useSkillMarket ({
   const updatePurchaseRecord = (record, changes) => {
     const current = readPurchaseJournal()
     const updated = { ...record, ...changes }
+    if (!current.some(item => item.intentFingerprint === record.intentFingerprint)) throw storageError()
     persistPurchaseJournal(current.map(item => item.intentFingerprint === record.intentFingerprint ? updated : item))
     return updated
   }
 
+  const createOrderRecord = (record) => {
+    const currentQuote = quote.value
+    if (!currentQuote || !quoteIsUsable.value || record?.phase !== 'QUOTE') return null
+    const purchaseRequest = {
+      quoteId: currentQuote.quoteId,
+      productVersionId: record.productVersionId,
+      targetAgentId: record.targetAgentId,
+      expectedPriceMicro: String(currentQuote.priceMicro),
+      expectedAgentVersion: record.expectedAgentVersion,
+      approvedPermissions: [...record.approvedPermissions]
+    }
+    return updatePurchaseRecord(record, {
+      phase: 'ORDER',
+      purchaseRequest,
+      orderIdempotencyKey: createIdempotencyKey()
+    })
+  }
+
+  const restoreOperation = (record) => {
+    if (!validJournalRecord(record)) return null
+    const matchingProduct = products.value.find(product => sameString(productIdentity(product).productVersionId, record.productVersionId))
+    productRequestGeneration += 1
+    clearQuote()
+    selectedProduct.value = matchingProduct || {
+      productVersionId: record.productVersionId,
+      canPurchase: true,
+      recoveryOnly: true
+    }
+    targetAgent.value = { agentId: record.targetAgentId, version: record.expectedAgentVersion }
+    approvedPermissions.value = [...record.approvedPermissions]
+    return record
+  }
+
+  const sendQuoteRecord = async (record) => {
+    if (!validJournalRecord(record) || record.phase !== 'QUOTE') return null
+    const generation = ++quoteGeneration
+    const request = { ...record.quoteRequest }
+    quote.value = null
+    quoteBinding.value = ''
+    quoteLoading.value = true
+    error.value = ''
+    try {
+      const response = await agentApi.post('/skill-orders/quotes', request, {
+        autoLoading: false,
+        headers: { 'Idempotency-Key': record.quoteIdempotencyKey }
+      })
+      const payload = readSkillApiPayload(response) || null
+      if (generation !== quoteGeneration || !sameString(target.value.targetAgentId, request.targetAgentId) ||
+        !sameString(target.value.expectedAgentVersion, request.expectedAgentVersion) || !quoteMatchesIntent(payload, request)) {
+        if (generation === quoteGeneration) error.value = '报价无效、身份不匹配或已过期，请恢复后重试'
+        return null
+      }
+      quote.value = payload
+      quoteBinding.value = record.intentFingerprint
+      return payload
+    } catch (failure) {
+      if (generation === quoteGeneration) error.value = failure?.message || '报价获取失败；可使用恢复操作重放原请求'
+      throw failure
+    } finally {
+      if (generation === quoteGeneration) quoteLoading.value = false
+    }
+  }
+
+  const requestQuote = async () => {
+    if (!canRequestQuote.value) {
+      if (unresolvedPurchase.value && !error.value) error.value = '已有未解决购买请求，请使用恢复操作重放原请求'
+      return null
+    }
+    // This must complete (including readback) before the quote mutation is sent.
+    const record = createQuoteRecord()
+    const quoted = await sendQuoteRecord(record)
+    if (!quoted && !error.value) error.value = '报价无效、身份不匹配或已过期，请恢复后重试'
+    return quoted
+  }
+
+  const matchesIntent = (request, fingerprint) => recordFingerprint(request, request?.approvedPermissions) === fingerprint
+
   const clearTerminalPurchaseRecord = (candidate) => {
     if (!isTerminalOrder(candidate)) return
     const current = readPurchaseJournal()
-    const matching = current.find(record => requiredString(record.orderId) === requiredString(candidate?.orderId) &&
+    const matching = current.find(record => record.phase === 'ORDER' && requiredString(record.orderId) === requiredString(candidate?.orderId) &&
       matchesIntent(record.purchaseRequest, record.intentFingerprint) &&
       sameString(record.purchaseRequest.targetAgentId, candidate?.targetAgentId) &&
       sameString(record.purchaseRequest.productVersionId, candidate?.productVersionId) &&
       sameString(record.purchaseRequest.expectedAgentVersion, candidate?.expectedAgentVersion))
     if (!matching) return
     persistPurchaseJournal(current.filter(record => record.intentFingerprint !== matching.intentFingerprint))
-    if (purchaseIdempotencyKey.value === matching.idempotencyKey) purchaseIdempotencyKey.value = ''
+    if (purchaseIdempotencyKey.value === matching.orderIdempotencyKey) purchaseIdempotencyKey.value = ''
   }
 
   const loadEntitlements = async (agentId = target.value.targetAgentId) => {
@@ -451,10 +560,11 @@ export function useSkillMarket ({
     orderId: requiredString(currentOrder?.orderId),
     targetAgentId: requiredString(currentOrder?.targetAgentId),
     productVersionId: requiredString(currentOrder?.productVersionId),
-    expectedAgentVersion: requiredString(currentOrder?.expectedAgentVersion)
+    expectedAgentVersion: validVersion(currentOrder?.expectedAgentVersion)
   })
 
   const matchingOrderResponse = (candidate, expected) => Boolean(requiredString(candidate?.orderId)) &&
+    Boolean(validVersion(candidate?.expectedAgentVersion)) && Boolean(validVersion(expected?.expectedAgentVersion)) &&
     sameString(candidate?.orderId, expected.orderId) &&
     sameString(candidate?.targetAgentId, expected.targetAgentId) &&
     sameString(candidate?.productVersionId, expected.productVersionId) &&
@@ -479,22 +589,19 @@ export function useSkillMarket ({
     return candidate
   }
 
-  const purchase = async () => {
-    if (!canPurchase.value) return null
-    const generation = ++purchaseGeneration
-    const replay = unresolvedPurchase.value
-    const record = replay || createPurchaseRecord(purchaseRequest())
+  const sendOrderRecord = async (record) => {
     const request = record?.purchaseRequest
-    if (!request || !matchesIntent(request, record.intentFingerprint) || !matchesIntent(request)) return null
-
+    if (!validJournalRecord(record) || record.phase !== 'ORDER' || !request ||
+      !matchesIntent(request, record.intentFingerprint)) return null
+    const generation = ++purchaseGeneration
     stopOrderPolling()
-    purchaseIdempotencyKey.value = record.idempotencyKey
+    purchaseIdempotencyKey.value = record.orderIdempotencyKey
     purchaseLoading.value = true
     error.value = ''
     try {
-      const response = await agentApi.post('/skill-orders', request, {
+      const response = await agentApi.post('/skill-orders', { ...request, approvedPermissions: [...request.approvedPermissions] }, {
         autoLoading: false,
-        headers: { 'Idempotency-Key': record.idempotencyKey }
+        headers: { 'Idempotency-Key': record.orderIdempotencyKey }
       })
       const payload = readSkillApiPayload(response) || null
       const expected = {
@@ -504,18 +611,44 @@ export function useSkillMarket ({
         expectedAgentVersion: request.expectedAgentVersion
       }
       if (generation !== purchaseGeneration || !sameString(target.value.targetAgentId, request.targetAgentId) ||
-        !matchingOrderResponse(payload, expected)) return null
-      updatePurchaseRecord(record, { orderId: payload.orderId })
+        !sameString(target.value.expectedAgentVersion, request.expectedAgentVersion) || !matchingOrderResponse(payload, expected)) return null
+      const updated = updatePurchaseRecord(record, { orderId: payload.orderId })
       const accepted = await acceptOrder(payload, expected)
       if (!accepted) return null
       clearQuote()
       return accepted
     } catch (failure) {
-      if (generation === purchaseGeneration) error.value = failure?.message || '技能购买失败'
+      if (generation === purchaseGeneration) error.value = failure?.message || '技能购买失败；可使用恢复操作重放原请求'
       throw failure
     } finally {
       if (generation === purchaseGeneration) purchaseLoading.value = false
     }
+  }
+
+  const purchase = async () => {
+    if (!canPurchase.value) return null
+    let record = unresolvedPurchase.value
+    if (record?.phase === 'QUOTE') record = createOrderRecord(record)
+    return record?.phase === 'ORDER' ? sendOrderRecord(record) : null
+  }
+
+  const resumeOperation = async (candidate) => {
+    const record = purchaseJournal.value.find(item => item.intentFingerprint === candidate?.intentFingerprint)
+    if (!record) return null
+    restoreOperation(record)
+    if (record.phase === 'QUOTE') return sendQuoteRecord(record)
+    if (record.orderId) {
+      order.value = {
+        orderId: record.orderId,
+        targetAgentId: record.targetAgentId,
+        productVersionId: record.productVersionId,
+        expectedAgentVersion: record.expectedAgentVersion,
+        status: SKILL_ORDER_STATUSES.FUNDS_HELD
+      }
+      activeOrderIdentity = identityFromOrder(order.value)
+      return loadOrder(record.orderId)
+    }
+    return sendOrderRecord(record)
   }
 
   const loadOrder = async (orderId = order.value?.orderId) => {
@@ -579,6 +712,8 @@ export function useSkillMarket ({
     orderPollAttempts,
     error,
     previewEnabled,
+    actorScopeFingerprint,
+    storageAvailable,
     target,
     productVersionId,
     canRequestQuote,
@@ -586,6 +721,7 @@ export function useSkillMarket ({
     purchaseIdempotencyKey,
     purchaseJournal,
     unresolvedPurchase,
+    unresolvedOperations,
     clearQuote,
     setTargetAgent,
     setApprovedPermissions,
@@ -595,6 +731,7 @@ export function useSkillMarket ({
     selectProduct,
     requestQuote,
     purchase,
+    resumeOperation,
     loadOrder,
     pollOrder,
     stopOrderPolling,
