@@ -111,6 +111,13 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallTaskActionsSource).to.include('agentId: targetAgent.agentId')
   })
 
+  it('keeps funded-bounty preview wiring capability-gated without changing map and roster boundaries', () => {
+    expect(hallSource).to.include('ensureEconomyPreviewCapability')
+    expect(hallSource).to.include("economyApi.get('/wallet'")
+    expect(hallSource).to.include(':funded-preview-enabled="economyPreviewEnabled"')
+    expect(hallSource).not.to.include('/agent/active')
+  })
+
   it('keeps persistent command templates out of chat', () => {
     expect(chatSource).not.to.include('commandTemplates')
     expect(chatSource).not.to.include('command-templates')

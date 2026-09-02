@@ -149,6 +149,7 @@
             v-model:task-keyword="taskKeyword"
             :ability-text="abilityText"
             :can-assign="canAssign"
+            :funded-preview-enabled="economyPreviewEnabled"
             :format-time="formatTime"
             :portrait-name="portraitName"
             :portrait-style="portraitStyle"
@@ -168,6 +169,8 @@
             @archive-task="archiveTask"
             @brief-selected-task="briefSelectedTask"
             @create-task="createTask"
+            @cancel-funding="cancelFunding"
+            @load-settlement="loadSettlement"
             @discuss-task="discussTask"
             @load-tasks="loadTasks"
             @select-agent="selectAgent"
@@ -290,7 +293,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useGlobalStore } from '@/stores/global'
 import { useApiStore } from '@/stores/api'
-import { agentApi, chatApi } from '@/composables/useHttp'
+import { agentApi, chatApi, economyApi } from '@/composables/useHttp'
 import { useHallChatContext } from '@/composables/juyiting/useHallChatContext'
 import { useHallBackendSceneState } from '@/composables/juyiting/useHallBackendSceneState'
 import { useHallCommandQueue } from '@/composables/juyiting/useHallCommandQueue'
@@ -326,6 +329,7 @@ import {
   taskStatusFilters
 } from '@/constants/juyiting'
 import { log } from '@/utils/logger'
+import { isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
 import { juyitingGame } from '@/game/index.js'
 
 const globalStore = useGlobalStore()
@@ -333,6 +337,9 @@ const apiStore = useApiStore()
 
 const selectedAgent = ref(null)
 const selectedTask = ref(null)
+const economyPreviewEnabled = ref(false)
+const economyPreviewChecked = ref(false)
+const economyPreviewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
 const portraitTaskDetailOpen = ref(false)
 // Map-only runtime state survives HallStage destroy/remount; business selection stays above it.
 const mapResumeSnapshot = ref(null)
@@ -561,6 +568,25 @@ const handleSimulationPhaseEvents = events => {
   })
 }
 
+const unwrapEconomyResponse = result => result?.data?.data ?? result?.data ?? result
+
+const ensureEconomyPreviewCapability = async () => {
+  if (!economyPreviewBuildEnabled || economyPreviewChecked.value) return economyPreviewEnabled.value
+  economyPreviewChecked.value = true
+  try {
+    // The frozen V0 contract exposes no separate capability URL. A successful
+    // authenticated wallet capability response is the server-side enablement proof.
+    const result = await economyApi.get('/wallet', undefined, { autoLoading: false })
+    const wallet = unwrapEconomyResponse(result)
+    economyPreviewEnabled.value = wallet?.currency === 'SILVER' &&
+      typeof wallet.availableMicro === 'string' && typeof wallet.heldMicro === 'string'
+  } catch (error) {
+    economyPreviewEnabled.value = false
+    log.warn('economy preview capability is unavailable:', error)
+  }
+  return economyPreviewEnabled.value
+}
+
 const refreshHall = async ({ silent = false } = {}) => {
   if (hallRefreshing.value) return
   hallRefreshing.value = true
@@ -649,6 +675,7 @@ const openPanel = (panel, options = {}) => {
   }
   renderedPanel.value = panel
   activePanel.value = panel
+  if (panel === 'tasks') void ensureEconomyPreviewCapability()
   const generation = panelSessionGeneration.value
   nextTick(() => {
     if (!panelDisposed && activePanel.value === panel && panelSessionGeneration.value === generation) {
@@ -895,7 +922,9 @@ const {
   archiveTask: runArchiveTask,
   autoAssignTask: runAutoAssignTask,
   assignTask: runAssignTask,
-  createTask: runCreateTask
+  cancelFunding: runCancelFunding,
+  createTask: runCreateTask,
+  loadSettlement: runLoadSettlement
 } = useHallTaskActions({
   agentApi,
   canAssign,
@@ -928,6 +957,7 @@ const assignTask = async (task, agent) => {
 }
 
 const autoAssignTask = async (task) => {
+  if (task?.funding?.mode === 'FUNDED_SINGLE_AGENT') return false
   await runAutoAssignTask(task)
   const currentTask = selectedTask.value || task
   const assignedIds = currentTask?.assignedAgentIds || (currentTask?.assignedAgentId ? [currentTask.assignedAgentId] : [])
@@ -943,6 +973,14 @@ const archiveTask = async (task) => {
     markTaskArchived(selectedTask.value)
   }
 }
+
+const cancelFunding = async (task) => {
+  const cancelled = await runCancelFunding(task)
+  if (cancelled) await loadTasks()
+  return cancelled
+}
+
+const loadSettlement = async (task) => runLoadSettlement(task)
 
 const {
   chatConnectionStatus,

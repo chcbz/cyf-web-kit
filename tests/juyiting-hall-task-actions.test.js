@@ -69,7 +69,7 @@ describe('useHallTaskActions', () => {
     }
 
     expect(harness.apiCalls).to.deep.equal([])
-    expect(harness.selectedAgent.value).to.equal(hiddenSelection)
+    expect(harness.selectedAgent.value.agentId).to.equal(hiddenSelection.agentId)
     expect(harness.selectedTask.value).to.equal(null)
     expect(harness.calls).to.deep.equal({ error: 0, success: 0 })
     expect(harness.toasts).to.deep.equal([])
@@ -145,6 +145,21 @@ describe('useHallTaskActions', () => {
     expect(harness.toasts).to.deep.equal(['纯聊 已点给 卢俊义'])
   })
 
+  it('routes a funded task through an explicit quote and claim instead of legacy assignment', async () => {
+    const apiCalls = []
+    const funded = { id: 'funded', title: '资金榜', status: 'open', version: '8', funding: { mode: 'FUNDED_SINGLE_AGENT', remainingMicro: '100' } }
+    const agent = { agentId: 'explicit-agent', name: '显式好汉', status: 'online' }
+    const selectedAgent = ref({ agentId: 'hidden-agent', status: 'online' })
+    const selectedTask = ref(null)
+    const actions = useHallTaskActions({
+      agentApi: { create: async (url, payload) => { apiCalls.push({ url, payload }); return url.endsWith('/quotes') ? { data: { data: { quoteId: 'q1', agentId: 'explicit-agent', taskVersion: '8' } } } : { data: { data: { ...funded, status: 'assigned' } } } } },
+      canAssign: () => true, createIdempotencyKey: () => 'idem', log: { warn: () => {} }, playError: () => {}, playSuccess: () => {}, selectedAgent, selectedTask, showToast: () => {}, tasks: ref([funded])
+    })
+    expect(await actions.assignTask(funded, agent)).to.equal(true)
+    expect(apiCalls.map(call => call.url)).to.deep.equal(['/tasks/funded/quotes', '/tasks/funded/claim'])
+    expect(selectedAgent.value.agentId).to.equal(agent.agentId)
+  })
+
   it('preserves explicit multi-agent assignment payload and local updates', async () => {
     const harness = createHarness({ code: 'E0' })
     const task = { id: 'multi', title: '合力护送', status: 'open' }
@@ -166,7 +181,7 @@ describe('useHallTaskActions', () => {
     })
     expect(task.assignedAgentIds).to.deep.equal(['linchong', 'luzhishen'])
     expect(agents.map(agent => agent.status)).to.deep.equal(['busy', 'busy'])
-    expect(harness.selectedAgent.value).to.equal(agents[0])
-    expect(harness.selectedTask.value).to.equal(task)
+    expect(harness.selectedAgent.value.agentId).to.equal(agents[0].agentId)
+    expect(harness.selectedTask.value.id).to.equal(task.id)
   })
 })

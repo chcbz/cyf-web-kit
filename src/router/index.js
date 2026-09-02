@@ -124,6 +124,15 @@ export default [
     }
   },
   {
+    path: '/wallet',
+    name: 'Wallet',
+    component: () => import('@/components/Wallet.vue'),
+    meta: {
+      title: 'SILVER 钱袋',
+      showInMenu: false
+    }
+  },
+  {
     path: '/profile',
     name: 'UserProfile',
     component: () => import('@/components/UserProfile'),
