@@ -8,7 +8,7 @@
       class="archive-state"
       role="status"
     >
-      正在展开《水滸傳》…
+      正在整理阁中典籍…
     </div>
     <div
       v-else-if="reader.errorMessage && !reader.chapter"
@@ -18,276 +18,354 @@
       <p>{{ reader.errorMessage }}</p>
       <button
         type="button"
-        @click="runAction(reader.initialize, '典籍重试失败。')"
+        @click="retryCatalog"
       >
         重试
       </button>
     </div>
     <template v-else>
-      <header class="reader-header">
-        <div>
-          <p class="reader-kicker">固定典籍</p>
-          <h3>{{ reader.catalog?.title || '水滸傳' }}</h3>
-        </div>
-        <p
-          class="save-state"
-          role="status"
-        >
-          {{ saveLabel }}
-        </p>
-      </header>
-
-      <div class="reader-layout">
-        <nav
-          class="reader-catalog"
-          aria-label="《水滸傳》目录"
-        >
-          <button
-            v-for="block in reader.blocks"
-            :key="block.blockId"
-            type="button"
-            :class="{ active: block.blockId === reader.chapter?.blockId }"
-            :aria-current="block.blockId === reader.chapter?.blockId ? 'page' : undefined"
-            @click="openBlock(block)"
-          >
-            {{ block.number == null ? '引首' : `第${block.number}回` }} {{ block.title }}
-          </button>
-        </nav>
-
-        <article
-          ref="contentRef"
-          class="reader-content"
-          tabindex="0"
-          @scroll.passive="onScroll"
-        >
-          <div class="reader-actions">
-            <button
-              type="button"
-              :disabled="!reader.continueLocation || reader.chapterLoading"
-              @click="continueReading"
-            >
-              继续阅读
-            </button>
-            <button
-              type="button"
-              :disabled="!reader.canGoPrevious || reader.chapterLoading"
-              aria-label="上一回"
-              @click="runAction(reader.goPrevious, '上一回暂无法读取。')"
-            >
-              上一回
-            </button>
-            <button
-              type="button"
-              :disabled="!reader.canGoNext || reader.chapterLoading"
-              aria-label="下一回"
-              @click="runAction(reader.goNext, '下一回暂无法读取。')"
-            >
-              下一回
-            </button>
-            <button
-              type="button"
-              class="bookmark-create"
-              :disabled="!reader.currentLocation || reader.bookmarkPending"
-              @click="createBookmark"
-            >
-              {{ reader.bookmarkPending ? '保存中…' : '书签' }}
-            </button>
+      <div
+        v-if="!readingOpen"
+        class="archive-shelf"
+      >
+        <header class="archive-shelf-header">
+          <div>
+            <p class="reader-kicker">典籍阅读</p>
+            <h3>阁中典籍</h3>
+            <p>先择一部典籍，再进入沉浸翻阅。</p>
           </div>
+          <span class="archive-shelf-count">共 {{ reader.catalog ? 1 : 0 }} 部</span>
+        </header>
 
-          <div
-            v-if="reader.chapterLoading"
-            class="archive-state"
-            role="status"
-          >
-            正在打开章回…
+        <article class="archive-book-card">
+          <div class="archive-book-cover" aria-hidden="true">
+            <span>古典</span>
+            <strong>{{ reader.catalog?.title || '水滸傳' }}</strong>
+            <small>一百二十回</small>
           </div>
-          <template v-else-if="reader.chapter">
-            <h4>
-              {{ reader.chapter.number == null ? '引首' : `第${reader.chapter.number}回` }}
-              {{ reader.chapter.title }}
-            </h4>
-            <p
-              v-for="paragraph in reader.chapter.paragraphs"
-              :id="paragraph.paragraphId"
-              :key="paragraph.paragraphId"
-              :data-paragraph-id="paragraph.paragraphId"
-              tabindex="0"
-              class="reader-paragraph"
-              @focus="handleParagraphFocus(paragraph)"
-              @click="reader.setCurrentParagraph(paragraph)"
+          <div class="archive-book-info">
+            <p class="reader-kicker">已收录典籍</p>
+            <h4>{{ reader.catalog?.title || '水滸傳' }}</h4>
+            <p>含引首与 {{ chapterCount }} 回正文，可记录阅读进度、书签及私人手札。</p>
+            <button
+              type="button"
+              class="archive-book-open"
+              @click="enterReading"
             >
-              {{ paragraph.text }}
-            </p>
-          </template>
-          <div
-            v-else
-            class="archive-state"
-          >
-            目录中暂未找到正文。
+              进入翻阅
+            </button>
           </div>
         </article>
-
-        <aside
-          class="reader-notes"
-          aria-label="私人手札与书签"
-        >
-          <h4>私人手札</h4>
-          <textarea
-            v-model="noteText"
-            aria-label="当前段落私人手札"
-            aria-describedby="note-byte-hint"
-            placeholder="记录此处所思；仅自己可见。"
-          ></textarea>
-          <p
-            id="note-byte-hint"
-            :class="{ 'archive-error': noteBytes > 20000 }"
-          >
-            {{ noteBytes }} / 20,000 UTF-8 bytes
-          </p>
-          <button
-            type="button"
-            class="note-save"
-            :disabled="!noteText.trim() || !reader.currentLocation || noteBytes > 20000 || reader.notePending"
-            @click="saveNote"
-          >
-            {{ reader.notePending ? '保存中…' : '保存手札' }}
-          </button>
-          <p
-            v-if="reader.noteAnchorNotice"
-            class="archive-notice"
-            role="status"
-          >
-            {{ reader.noteAnchorNotice }}
-          </p>
-          <p
-            v-if="reader.noteRetryNotice"
-            class="archive-notice"
-            role="status"
-          >
-            {{ reader.noteRetryNotice }}
-          </p>
-          <p
-            v-if="reader.noteConflictDraft"
-            class="archive-error"
-            role="alert"
-          >
-            本地草稿已保留，需人工处理冲突。
-          </p>
-          <ul>
-            <li
-              v-for="note in reader.notes"
-              :key="note.noteId"
-            >
-              <p>{{ note.text }}</p>
-              <button
-                type="button"
-                class="note-edit"
-                :disabled="reader.notePending"
-                @click="editNote(note)"
-              >
-                编辑
-              </button>
-              <button
-                type="button"
-                class="note-delete"
-                :disabled="reader.notePending"
-                @click="removeNote(note)"
-              >
-                删除
-              </button>
-            </li>
-          </ul>
-
-          <section
-            class="archive-question"
-            aria-label="选文问案卷书吏"
-          >
-            <h4>选文问案卷书吏</h4>
-            <p class="archive-notice">Responder：archive-clerk-v1 · 案卷书吏（fallback）</p>
-            <textarea
-              v-model="questionText"
-              aria-label="向案卷书吏提问"
-              placeholder="先在当前章回正文中选取连续段落，再提出问题。"
-            ></textarea>
-            <button
-              type="button"
-              class="question-create"
-              :disabled="!questionText.trim() || reader.questionPending"
-              @click="askSelectedText"
-            >
-              {{ reader.questionPending ? '递交中…' : '向案卷书吏提问' }}
-            </button>
-            <article
-              v-if="reader.question"
-              class="archive-question-result"
-              aria-live="polite"
-            >
-              <p><strong>案卷书吏</strong> · {{ reader.question.status }}</p>
-              <p class="archive-question-selection">{{ reader.question.selectedText }}</p>
-              <p v-if="reader.question.answer">{{ reader.question.answer }}</p>
-              <p v-if="reader.question.lastErrorCode" class="archive-error">{{ reader.question.lastErrorCode }}</p>
-              <button
-                v-if="reader.question.status === 'FAILED_RETRYABLE'"
-                type="button"
-                class="question-retry"
-                :disabled="reader.questionPending"
-                @click="retryQuestion"
-              >
-                重试
-              </button>
-              <button
-                v-if="reader.question.status === 'SUCCEEDED' || reader.question.status === 'FAILED_FINAL'"
-                type="button"
-                @click="reader.closeQuestion"
-              >
-                关闭问答
-              </button>
-            </article>
-            <p v-if="reader.questionError" class="archive-error" role="alert">{{ reader.questionError }}</p>
-          </section>
-
-          <h4>书签</h4>
-          <ul>
-            <li
-              v-for="bookmark in reader.bookmarks"
-              :key="bookmark.bookmarkId"
-            >
-              <button
-                type="button"
-                @click="openBookmark(bookmark)"
-              >
-                {{ bookmark.location?.paragraphId || bookmark.location?.blockId }}
-              </button>
-              <button
-                type="button"
-                class="bookmark-delete"
-                aria-label="删除书签"
-                @click="removeBookmark(bookmark)"
-              >
-                删除
-              </button>
-            </li>
-          </ul>
-        </aside>
       </div>
 
-      <p
-        v-if="actionMessage || reader.errorMessage"
-        class="archive-error"
-        role="alert"
-      >
-        {{ actionMessage || reader.errorMessage }}
-      </p>
+      <Teleport to="body" :disabled="disableTeleport">
+        <section
+          v-if="readingOpen"
+          ref="dialogRef"
+          class="archive-reader-fullscreen"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="archive-reader-title"
+          tabindex="-1"
+        >
+          <header class="reader-header">
+            <div>
+              <p class="reader-kicker">固定典籍</p>
+              <h3 id="archive-reader-title">{{ reader.catalog?.title || '水滸傳' }}</h3>
+            </div>
+            <div class="reader-header-actions">
+              <p
+                class="save-state"
+                role="status"
+              >
+                {{ saveLabel }}
+              </p>
+              <button
+                type="button"
+                class="reader-header-button"
+                :aria-expanded="catalogOpen"
+                aria-controls="archive-reader-catalog"
+                @click="catalogOpen = !catalogOpen"
+              >
+                {{ catalogOpen ? '收起目录' : '目录' }}
+              </button>
+              <button
+                type="button"
+                class="reader-header-button reader-exit"
+                @click="closeReading"
+              >
+                返回典籍列表
+              </button>
+            </div>
+          </header>
+
+          <div class="reader-layout" :class="{ 'catalog-open': catalogOpen }">
+            <nav
+              v-if="catalogOpen"
+              id="archive-reader-catalog"
+              class="reader-catalog"
+              aria-label="《水滸傳》目录"
+            >
+              <button
+                v-for="block in reader.blocks"
+                :key="block.blockId"
+                type="button"
+                :class="{ active: block.blockId === reader.chapter?.blockId }"
+                :aria-current="block.blockId === reader.chapter?.blockId ? 'page' : undefined"
+                @click="openBlock(block)"
+              >
+                {{ block.number == null ? '引首' : `第${block.number}回` }} {{ block.title }}
+              </button>
+            </nav>
+
+            <article
+              ref="contentRef"
+              class="reader-content"
+              tabindex="0"
+              @scroll.passive="onScroll"
+            >
+              <div class="reader-actions">
+                <button
+                  type="button"
+                  :disabled="!reader.continueLocation || reader.chapterLoading"
+                  @click="continueReading"
+                >
+                  继续阅读
+                </button>
+                <button
+                  type="button"
+                  :disabled="!reader.canGoPrevious || reader.chapterLoading"
+                  aria-label="上一回"
+                  @click="runAction(reader.goPrevious, '上一回暂无法读取。')"
+                >
+                  上一回
+                </button>
+                <button
+                  type="button"
+                  :disabled="!reader.canGoNext || reader.chapterLoading"
+                  aria-label="下一回"
+                  @click="runAction(reader.goNext, '下一回暂无法读取。')"
+                >
+                  下一回
+                </button>
+                <button
+                  type="button"
+                  class="bookmark-create"
+                  :disabled="!reader.currentLocation || reader.bookmarkPending"
+                  @click="createBookmark"
+                >
+                  {{ reader.bookmarkPending ? '保存中…' : '书签' }}
+                </button>
+              </div>
+
+              <div
+                v-if="reader.chapterLoading"
+                class="archive-state"
+                role="status"
+              >
+                正在打开章回…
+              </div>
+              <template v-else-if="reader.chapter">
+                <h4>
+                  {{ reader.chapter.number == null ? '引首' : `第${reader.chapter.number}回` }}
+                  {{ reader.chapter.title }}
+                </h4>
+                <p
+                  v-for="paragraph in reader.chapter.paragraphs"
+                  :id="paragraph.paragraphId"
+                  :key="paragraph.paragraphId"
+                  :data-paragraph-id="paragraph.paragraphId"
+                  tabindex="0"
+                  class="reader-paragraph"
+                  @focus="handleParagraphFocus(paragraph)"
+                  @click="reader.setCurrentParagraph(paragraph)"
+                >
+                  {{ paragraph.text }}
+                </p>
+              </template>
+              <div
+                v-else
+                class="archive-state"
+              >
+                目录中暂未找到正文。
+              </div>
+            </article>
+
+            <aside
+              class="reader-notes"
+              aria-label="私人手札与书签"
+            >
+              <h4>私人手札</h4>
+              <textarea
+                v-model="noteText"
+                aria-label="当前段落私人手札"
+                aria-describedby="note-byte-hint"
+                placeholder="记录此处所思；仅自己可见。"
+              ></textarea>
+              <p
+                id="note-byte-hint"
+                :class="{ 'archive-error': noteBytes > 20000 }"
+              >
+                {{ noteBytes }} / 20,000 UTF-8 bytes
+              </p>
+              <button
+                type="button"
+                class="note-save"
+                :disabled="!noteText.trim() || !reader.currentLocation || noteBytes > 20000 || reader.notePending"
+                @click="saveNote"
+              >
+                {{ reader.notePending ? '保存中…' : '保存手札' }}
+              </button>
+              <p
+                v-if="reader.noteAnchorNotice"
+                class="archive-notice"
+                role="status"
+              >
+                {{ reader.noteAnchorNotice }}
+              </p>
+              <p
+                v-if="reader.noteRetryNotice"
+                class="archive-notice"
+                role="status"
+              >
+                {{ reader.noteRetryNotice }}
+              </p>
+              <p
+                v-if="reader.noteConflictDraft"
+                class="archive-error"
+                role="alert"
+              >
+                本地草稿已保留，需人工处理冲突。
+              </p>
+              <ul>
+                <li
+                  v-for="note in reader.notes"
+                  :key="note.noteId"
+                >
+                  <p>{{ note.text }}</p>
+                  <button
+                    type="button"
+                    class="note-edit"
+                    :disabled="reader.notePending"
+                    @click="editNote(note)"
+                  >
+                    编辑
+                  </button>
+                  <button
+                    type="button"
+                    class="note-delete"
+                    :disabled="reader.notePending"
+                    @click="removeNote(note)"
+                  >
+                    删除
+                  </button>
+                </li>
+              </ul>
+
+              <section
+                class="archive-question"
+                aria-label="选文问案卷书吏"
+              >
+                <h4>选文问案卷书吏</h4>
+                <p class="archive-notice">Responder：archive-clerk-v1 · 案卷书吏（fallback）</p>
+                <textarea
+                  v-model="questionText"
+                  aria-label="向案卷书吏提问"
+                  placeholder="先在当前章回正文中选取连续段落，再提出问题。"
+                ></textarea>
+                <button
+                  type="button"
+                  class="question-create"
+                  :disabled="!questionText.trim() || reader.questionPending"
+                  @click="askSelectedText"
+                >
+                  {{ reader.questionPending ? '递交中…' : '向案卷书吏提问' }}
+                </button>
+                <article
+                  v-if="reader.question"
+                  class="archive-question-result"
+                  aria-live="polite"
+                >
+                  <p><strong>案卷书吏</strong> · {{ reader.question.status }}</p>
+                  <p class="archive-question-selection">{{ reader.question.selectedText }}</p>
+                  <p v-if="reader.question.answer">{{ reader.question.answer }}</p>
+                  <p v-if="reader.question.lastErrorCode" class="archive-error">{{ reader.question.lastErrorCode }}</p>
+                  <button
+                    v-if="reader.question.status === 'FAILED_RETRYABLE'"
+                    type="button"
+                    class="question-retry"
+                    :disabled="reader.questionPending"
+                    @click="retryQuestion"
+                  >
+                    重试
+                  </button>
+                  <button
+                    v-if="reader.question.status === 'SUCCEEDED' || reader.question.status === 'FAILED_FINAL'"
+                    type="button"
+                    @click="reader.closeQuestion"
+                  >
+                    关闭问答
+                  </button>
+                </article>
+                <p v-if="reader.questionError" class="archive-error" role="alert">{{ reader.questionError }}</p>
+              </section>
+
+              <h4>书签</h4>
+              <ul>
+                <li
+                  v-for="bookmark in reader.bookmarks"
+                  :key="bookmark.bookmarkId"
+                >
+                  <button
+                    type="button"
+                    @click="openBookmark(bookmark)"
+                  >
+                    {{ bookmark.location?.paragraphId || bookmark.location?.blockId }}
+                  </button>
+                  <button
+                    type="button"
+                    class="bookmark-delete"
+                    aria-label="删除书签"
+                    @click="removeBookmark(bookmark)"
+                  >
+                    删除
+                  </button>
+                </li>
+              </ul>
+            </aside>
+          </div>
+
+          <p
+            v-if="actionMessage || reader.errorMessage"
+            class="archive-error reader-global-error"
+            role="alert"
+          >
+            {{ actionMessage || reader.errorMessage }}
+          </p>
+        </section>
+      </Teleport>
     </template>
   </section>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onUpdated, proxyRefs, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, proxyRefs, ref } from 'vue'
 import { useArchiveReader, utf8ByteLength } from '@/composables/juyiting/useArchiveReader'
 
-const readerState = useArchiveReader()
+const { disableTeleport, initialView } = defineProps({
+  disableTeleport: { type: Boolean, default: false },
+  initialView: {
+    type: String,
+    default: 'catalog',
+    validator: value => ['catalog', 'reader'].includes(value)
+  }
+})
+
+const readerState = useArchiveReader({ autoInitialize: false })
 const reader = proxyRefs(readerState)
+const readingOpen = ref(initialView === 'reader')
+const catalogOpen = ref(false)
+const dialogRef = ref(null)
 const contentRef = ref(null)
 const noteText = ref('')
 const questionText = ref('')
@@ -295,6 +373,7 @@ const editingNote = ref(null)
 const actionMessage = ref('')
 const NEW_NOTE_TARGET = Symbol('new-note-target')
 const noteBytes = computed(() => utf8ByteLength(noteText.value))
+const chapterCount = computed(() => reader.catalog?.activeEdition?.chapters?.length || 0)
 const saveLabel = computed(() => ({
   error: '未保存',
   idle: '阅读进度未保存',
@@ -308,6 +387,7 @@ let programmaticScrollTimer
 let programmaticFocusId = ''
 let programmaticScrollGeneration = 0
 let editorRevision = 0
+let returnFocusElement = null
 
 const runAction = async (action, fallbackMessage) => {
   actionMessage.value = ''
@@ -319,10 +399,79 @@ const runAction = async (action, fallbackMessage) => {
   }
 }
 
-const openBlock = block => runAction(
-  () => reader.loadBlock(block),
-  '章回暂无法读取。'
+const openBlock = async (block) => {
+  const opened = await runAction(
+    () => reader.loadBlock(block),
+    '章回暂无法读取。'
+  )
+  if (opened) catalogOpen.value = false
+  return opened
+}
+
+const retryCatalog = () => runAction(
+  () => reader.initialize({ openChapter: false }),
+  '典籍重试失败。'
 )
+
+const enterReading = async (event) => {
+  returnFocusElement = typeof event?.currentTarget?.focus === 'function'
+    ? event.currentTarget
+    : document.activeElement
+  const opened = reader.chapter
+    || await runAction(reader.initialize, '典籍暂无法读取，请稍后重试。')
+  if (!opened && !reader.chapter) return
+  catalogOpen.value = false
+  readingOpen.value = true
+  document.body?.classList.add('archive-reading-open')
+  await nextTick()
+  dialogRef.value?.focus()
+}
+
+const closeReading = async () => {
+  reader.cancelBlockLoad()
+  reader.flushProgress()
+  reader.closeQuestion()
+  readingOpen.value = false
+  catalogOpen.value = false
+  document.body?.classList.remove('archive-reading-open')
+  await nextTick()
+  const focusTarget = returnFocusElement?.isConnected
+    ? returnFocusElement
+    : document.querySelector('.archive-reader .archive-book-open')
+  focusTarget?.focus()
+  returnFocusElement = null
+}
+
+const focusableElements = () => [...(dialogRef.value?.querySelectorAll(
+  'button:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+) || [])].filter(element => !element.hasAttribute('hidden'))
+
+const handleReaderKeydown = (event) => {
+  if (!readingOpen.value) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeReading()
+    return
+  }
+  if (event.key !== 'Tab') return
+  const focusable = focusableElements()
+  if (!focusable.length) {
+    event.preventDefault()
+    dialogRef.value?.focus()
+    return
+  }
+  const first = focusable[0]
+  const last = focusable.at(-1)
+  const activeElement = document.activeElement
+  const focusOutsideContent = activeElement === dialogRef.value || !dialogRef.value?.contains(activeElement)
+  if (event.shiftKey && (activeElement === first || focusOutsideContent)) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && (activeElement === last || focusOutsideContent)) {
+    event.preventDefault()
+    first.focus()
+  }
+}
 const continueReading = () => runAction(
   reader.continueReading,
   '继续阅读位置暂无法读取。'
@@ -528,7 +677,15 @@ const focusRequestedLocation = () => {
 
 onUpdated(focusRequestedLocation)
 
+onMounted(() => {
+  window.addEventListener('keydown', handleReaderKeydown)
+  if (readingOpen.value) document.body?.classList.add('archive-reading-open')
+  reader.initialize({ openChapter: readingOpen.value }).catch(() => {})
+})
+
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleReaderKeydown)
+  document.body?.classList.remove('archive-reading-open')
   clearTimeout(scrollTimer)
   clearTimeout(programmaticScrollTimer)
   programmaticScrollGeneration = 0
@@ -542,23 +699,179 @@ onBeforeUnmount(() => {
   min-height: 0;
   flex: 1;
   flex-direction: column;
-  gap: 10px;
   color: #3f2815;
 }
 
+.archive-shelf {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.archive-shelf-header,
 .reader-header,
-.reader-actions {
+.reader-actions,
+.reader-header-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
+.archive-shelf-header h3,
+.archive-shelf-header p,
 .reader-header h3,
 .reader-header p,
-.reader-notes h4 {
+.reader-notes h4,
+.archive-book-info h4,
+.archive-book-info p {
   margin: 0;
+}
+
+.archive-shelf-header h3 {
+  margin: 2px 0 5px;
+  font-size: clamp(22px, 3vw, 30px);
+}
+
+.archive-shelf-header > div > p:last-child,
+.archive-book-info > p:not(.reader-kicker) {
+  color: #765f40;
+  line-height: 1.7;
+}
+
+.archive-shelf-count {
+  padding: 6px 10px;
+  border: 1px solid #dcc9a9;
+  border-radius: 999px;
+  background: rgba(255, 250, 240, 0.8);
+  color: #765f40;
+  font-size: 12px;
+}
+
+.archive-book-card {
+  display: grid;
+  grid-template-columns: minmax(128px, 180px) minmax(0, 1fr);
+  align-items: stretch;
+  gap: clamp(18px, 4vw, 34px);
+  max-width: 680px;
+  padding: clamp(18px, 4vw, 30px);
+  border: 1px solid #d8c09a;
+  border-radius: 16px;
+  background:
+    linear-gradient(90deg, rgba(116, 74, 35, 0.05) 1px, transparent 1px) 0 0 / 22px 100%,
+    linear-gradient(145deg, #fffaf0, #f3e3c4);
+  box-shadow: 0 16px 34px rgba(71, 44, 23, 0.12);
+}
+
+.archive-book-cover {
+  position: relative;
+  display: flex;
+  min-height: 218px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 14px;
+  border: 5px double rgba(255, 232, 173, 0.68);
+  border-radius: 7px 13px 13px 7px;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.14), transparent 12%),
+    linear-gradient(145deg, #6f1f19, #9c3327);
+  color: #fff1c1;
+  box-shadow: 7px 10px 18px rgba(65, 29, 17, 0.24);
+  text-align: center;
+}
+
+.archive-book-cover::after {
+  content: '';
+  position: absolute;
+  inset: 9px;
+  border: 1px solid rgba(255, 232, 173, 0.4);
+  pointer-events: none;
+}
+
+.archive-book-cover span,
+.archive-book-cover small {
+  position: relative;
+  z-index: 1;
+  font-size: 12px;
+  letter-spacing: 0.28em;
+}
+
+.archive-book-cover strong {
+  position: relative;
+  z-index: 1;
+  font-family: serif;
+  font-size: clamp(25px, 4vw, 34px);
+  letter-spacing: 0.24em;
+  writing-mode: vertical-rl;
+}
+
+.archive-book-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 10px;
+}
+
+.archive-book-info h4 {
+  font-family: serif;
+  font-size: clamp(24px, 4vw, 34px);
+}
+
+.archive-book-open,
+.reader-header-button,
+.reader-catalog button,
+.reader-notes button,
+.reader-actions button,
+.archive-state button {
+  padding: 8px 11px;
+  border: 0;
+  border-radius: 7px;
+  background: #eadabb;
+  color: #3f2815;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.archive-book-open {
+  min-width: 120px;
+  margin-top: 6px;
+  padding: 11px 18px;
+  background: #23483e;
+  color: #fff8e8;
+  text-align: center;
+  font-weight: 700;
+}
+
+.archive-reader-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  box-sizing: border-box;
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+  padding: clamp(12px, 2vw, 24px);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 0, rgba(214, 180, 119, 0.2), transparent 42%),
+    #f4ead6;
+  color: #3f2815;
+}
+
+.reader-header {
+  flex: 0 0 auto;
+  padding: 2px 4px 10px;
+  border-bottom: 1px solid rgba(98, 66, 34, 0.18);
 }
 
 .reader-kicker,
@@ -567,42 +880,48 @@ onBeforeUnmount(() => {
   font-size: 12px;
 }
 
+.reader-header-actions {
+  justify-content: flex-end;
+}
+
+.reader-header-button {
+  background: #d8c29d;
+}
+
+.reader-header-button.reader-exit {
+  background: #23483e;
+  color: #fff8e8;
+}
+
 .reader-layout {
+  position: relative;
   display: grid;
   min-height: 0;
   flex: 1;
-  grid-template-columns: minmax(150px, 0.65fr) minmax(280px, 1.8fr) minmax(190px, 0.8fr);
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 0.32fr);
+  gap: 12px;
+}
+
+.reader-layout.catalog-open {
+  grid-template-columns: minmax(190px, 0.28fr) minmax(0, 1fr) minmax(230px, 0.32fr);
 }
 
 .reader-catalog,
 .reader-content,
 .reader-notes {
   min-height: 0;
-  padding: 10px;
+  padding: clamp(12px, 2vw, 22px);
   overflow: auto;
   border: 1px solid #dcc9a9;
-  border-radius: 8px;
-  background: #fffaf0;
+  border-radius: 12px;
+  background: rgba(255, 250, 240, 0.94);
+  box-shadow: 0 8px 24px rgba(71, 44, 23, 0.08);
 }
 
 .reader-catalog {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-}
-
-.reader-catalog button,
-.reader-notes button,
-.reader-actions button,
-.archive-state button {
-  padding: 7px 9px;
-  border: 0;
-  border-radius: 6px;
-  background: #eadabb;
-  color: #3f2815;
-  cursor: pointer;
-  text-align: left;
+  gap: 5px;
 }
 
 .reader-catalog button.active,
@@ -617,8 +936,30 @@ onBeforeUnmount(() => {
   opacity: 0.5;
 }
 
+.reader-content {
+  scroll-behavior: smooth;
+}
+
 .reader-content h4 {
-  margin: 14px 0;
+  margin: 18px 0 24px;
+  font-family: serif;
+  font-size: clamp(22px, 2.5vw, 30px);
+  text-align: center;
+}
+
+.reader-paragraph {
+  max-width: 50em;
+  margin: 0 auto 1.05em;
+  font-family: serif;
+  font-size: clamp(16px, 1.35vw, 20px);
+  line-height: 2;
+  outline-offset: 3px;
+  cursor: text;
+  text-align: justify;
+}
+
+.reader-paragraph:focus {
+  outline: 2px solid #b07835;
 }
 
 .archive-question {
@@ -645,19 +986,10 @@ onBeforeUnmount(() => {
   white-space: pre-wrap;
 }
 
-.archive-question-selection {
+.archive-question-selection,
+.archive-notice {
   color: #765f40;
   font-size: 12px;
-}
-
-.reader-paragraph {
-  line-height: 1.9;
-  outline-offset: 3px;
-  cursor: text;
-}
-
-.reader-paragraph:focus {
-  outline: 2px solid #b07835;
 }
 
 .reader-notes textarea {
@@ -698,26 +1030,63 @@ onBeforeUnmount(() => {
   color: #9b2f26;
 }
 
-.archive-notice {
-  color: #765f40;
-  font-size: 12px;
+.reader-global-error {
+  flex: 0 0 auto;
+  margin: 0;
+  text-align: center;
 }
 
-@container (max-width: 760px) {
-  .reader-layout {
-    grid-template-columns: 1fr;
+:global(body.archive-reading-open) {
+  overflow: hidden;
+}
+
+@media (max-width: 900px) {
+  .archive-reader-fullscreen {
+    padding: 8px;
+  }
+
+  .reader-layout,
+  .reader-layout.catalog-open {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .reader-catalog {
-    max-height: 180px;
-  }
-
-  .reader-content {
-    min-height: 320px;
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 4;
+    width: min(82vw, 330px);
+    box-sizing: border-box;
+    box-shadow: 12px 0 30px rgba(45, 27, 16, 0.24);
   }
 
   .reader-notes {
-    max-height: 300px;
+    max-height: 34vh;
+  }
+
+  .reader-header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .save-state {
+    margin-right: auto;
+  }
+}
+
+@container (max-width: 520px) {
+  .archive-book-card {
+    grid-template-columns: 108px minmax(0, 1fr);
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .archive-book-cover {
+    min-height: 174px;
+    padding: 12px 8px;
+  }
+
+  .archive-book-cover strong {
+    font-size: 23px;
   }
 }
 </style>

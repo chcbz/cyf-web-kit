@@ -259,7 +259,6 @@ const loadArchiveReaderSfc = (archiveModule) => {
   return new Function('Vue', 'archiveModule', body)(Vue, archiveModule)
 }
 
-
 const loadActualHallForIntegration = (mocks, id) => {
   const relativePath = '../src/components/world/JuyiHall.vue'
   const filename = new URL(relativePath, import.meta.url).pathname
@@ -327,7 +326,6 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
   }
 }
 
-
 const loadLibraryPanelSfc = (ArchiveReader) => {
   const relativePath = '../src/components/juyiting/LibraryPanel.vue'
   const filename = new URL(relativePath, import.meta.url).pathname
@@ -342,13 +340,23 @@ const loadLibraryPanelSfc = (ArchiveReader) => {
 const mountArchiveReader = (api, options = {}) => {
   let readerState
   const component = loadArchiveReaderSfc({
-    useArchiveReader: () => {
-      readerState = useArchiveReader({ api, saveDelay: options.saveDelay ?? 1 })
+    useArchiveReader: (readerOptions = {}) => {
+      readerState = useArchiveReader({
+        ...readerOptions,
+        api,
+        saveDelay: options.saveDelay ?? 1
+      })
       return readerState
     },
     utf8ByteLength
   })
-  const wrapper = mount(component, { attachTo: document.body })
+  const wrapper = mount(component, {
+    attachTo: document.body,
+    props: {
+      disableTeleport: options.disableTeleport ?? true,
+      initialView: options.initialView ?? 'reader'
+    }
+  })
   wrapper.readerState = readerState
   return wrapper
 }
@@ -487,6 +495,104 @@ describe('archive reader contract behavior', () => {
     mounted.wrapper.unmount()
   })
 
+  it('shows the book shelf first, opens a fullscreen reader, and keeps the catalog collapsed by default', async () => {
+    const api = makeApi()
+    const wrapper = mountArchiveReader(api, { initialView: 'catalog' })
+    await waitFor(() => !wrapper.readerState.loading.value && wrapper.find('.archive-book-card').exists())
+
+    expect(wrapper.text()).to.include('阁中典籍')
+    expect(wrapper.text()).to.include('水滸傳')
+    expect(wrapper.find('.archive-reader-fullscreen').exists()).to.equal(false)
+    expect(api.calls.filter(call => call.path.includes('/chapters/') || call.path.endsWith('/preface'))).to.have.length(0)
+
+    await wrapper.get('.archive-book-open').trigger('click')
+    await waitFor(() => wrapper.find('.archive-reader-fullscreen').exists())
+    await waitFor(() => wrapper.findAll('.reader-paragraph').length === 2)
+    expect(wrapper.find('.reader-catalog').exists()).to.equal(false)
+
+    await wrapper.findAll('.reader-header-button')[0].trigger('click')
+    expect(wrapper.find('.reader-catalog').exists()).to.equal(true)
+    const progressReads = api.calls.filter(call => call.path.startsWith('/me/progress/')).length
+    await wrapper.get('.reader-exit').trigger('click')
+    expect(wrapper.find('.archive-reader-fullscreen').exists()).to.equal(false)
+    expect(wrapper.find('.archive-book-card').exists()).to.equal(true)
+
+    await wrapper.get('.archive-book-open').trigger('click')
+    await waitFor(() => wrapper.find('.archive-reader-fullscreen').exists())
+    expect(api.calls.filter(call => call.path.startsWith('/me/progress/'))).to.have.length(progressReads)
+    wrapper.unmount()
+  })
+
+  it('retries only the catalog before the user chooses a book', async () => {
+    let catalogAttempts = 0
+    const api = makeApi({
+      getCatalog: () => {
+        catalogAttempts += 1
+        if (catalogAttempts === 1) throw new Error('catalog unavailable')
+        return response(catalog)
+      }
+    })
+    const wrapper = mountArchiveReader(api, { initialView: 'catalog' })
+    await waitFor(() => wrapper.find('.archive-error button').exists())
+
+    await wrapper.get('.archive-error button').trigger('click')
+    await waitFor(() => wrapper.find('.archive-book-card').exists())
+    expect(api.calls.filter(call => call.path.startsWith('/me/progress/'))).to.have.length(0)
+    expect(api.calls.filter(call => call.path === '/me/bookmarks')).to.have.length(0)
+    expect(api.calls.filter(call => call.path.includes('/chapters/') || call.path.endsWith('/preface'))).to.have.length(0)
+    wrapper.unmount()
+  })
+
+  it('uses a real teleported modal and restores focus to the book after exit', async () => {
+    const api = makeApi()
+    const wrapper = mountArchiveReader(api, { initialView: 'catalog', disableTeleport: false })
+    await waitFor(() => !wrapper.readerState.loading.value && wrapper.find('.archive-book-open').exists())
+
+    const openButton = wrapper.get('.archive-book-open').element
+    openButton.focus()
+    await wrapper.get('.archive-book-open').trigger('click')
+    await waitFor(() => document.body.querySelector('.archive-reader-fullscreen'))
+
+    const dialog = document.body.querySelector('.archive-reader-fullscreen')
+    expect(dialog.getAttribute('role')).to.equal('dialog')
+    expect(dialog.getAttribute('aria-modal')).to.equal('true')
+    await waitFor(() => document.activeElement === dialog)
+    dialog.dispatchEvent(new window.KeyboardEvent('keydown', { bubbles: true, key: 'Tab', shiftKey: true }))
+    await waitFor(() => document.activeElement !== dialog && dialog.contains(document.activeElement))
+
+    dialog.querySelector('.reader-exit').dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await waitFor(() => !document.body.querySelector('.archive-reader-fullscreen'))
+    await waitFor(() => document.activeElement?.classList.contains('archive-book-open'))
+    wrapper.unmount()
+  })
+
+  it('cancels a delayed chapter switch when leaving the fullscreen reader', async () => {
+    const delayedChapter = deferred()
+    const api = makeApi({
+      getBlock: blockId => blockId === chapterEightyOne.blockId
+        ? delayedChapter.promise
+        : response(blocksById.get(blockId))
+    })
+    const wrapper = mountArchiveReader(api, { initialView: 'catalog' })
+    await waitFor(() => wrapper.readerState.catalog.value && !wrapper.readerState.loading.value)
+    await wrapper.get('.archive-book-open').trigger('click')
+    await waitFor(() => wrapper.readerState.chapter.value?.blockId === preface.blockId)
+
+    await wrapper.findAll('.reader-header-button')[0].trigger('click')
+    const delayedButton = wrapper.findAll('.reader-catalog button')
+      .find(button => button.text().includes('第81回'))
+    await delayedButton.trigger('click')
+    await waitFor(() => api.calls.some(call => call.path.endsWith(`/chapters/${chapterEightyOne.blockId}`)))
+    await wrapper.get('.reader-exit').trigger('click')
+    await wrapper.get('.archive-book-open').trigger('click')
+    delayedChapter.resolve(response(chapterEightyOne))
+    await settle()
+
+    expect(wrapper.readerState.chapter.value.blockId).to.equal(preface.blockId)
+    expect(wrapper.text()).to.include('引首第一段')
+    wrapper.unmount()
+  })
+
   it('continues to a non-first paragraph and focuses it after real DOM rendering', async () => {
     const target = point(chapterOne, chapterOne.paragraphs[1], 3)
     const api = makeApi({ progress: { editionId, location: target, version: '7' } })
@@ -604,6 +710,7 @@ describe('archive reader contract behavior', () => {
 
     notesByBlock[chapterEightyOne.blockId][0].text = '服务端重载长段手札'
     const noteGetsBeforeReload = api.calls.filter(call => call.path === '/me/notes').length
+    await wrapper.findAll('.reader-header-button')[0].trigger('click')
     const chapterButton = wrapper.findAll('.reader-catalog button')
       .find(button => button.text().includes('第81回'))
     await chapterButton.trigger('click')
@@ -999,6 +1106,147 @@ describe('archive reader contract behavior', () => {
     mounted.wrapper.unmount()
   })
 
+  it('does not let a stale progress GET overwrite a newer saved version', async () => {
+    const progressResponse = deferred()
+    const newerLocation = point(chapterOne, chapterOne.paragraphs[1], 3)
+    const staleLocation = point(chapterOne, chapterOne.paragraphs[0])
+    const api = makeApi({
+      progressEnvelope: progressResponse.promise,
+      putHandler: call => response({
+        editionId,
+        location: call.body.location,
+        state: 'IN_PROGRESS',
+        version: '2'
+      })
+    })
+    const mounted = mountReader(api)
+    const initializing = mounted.reader.initialize()
+    await waitFor(() => api.calls.some(call => call.path.startsWith('/me/progress/')))
+
+    mounted.reader.chapter.value = chapterOne
+    mounted.reader.currentLocation.value = newerLocation
+    await mounted.reader.saveProgress(newerLocation)
+    progressResponse.resolve(response({ editionId, location: staleLocation, state: 'IN_PROGRESS', version: '1' }))
+    await initializing
+
+    expect(mounted.reader.progress.value.version).to.equal('2')
+    expect(mounted.reader.progress.value.location).to.deep.equal(newerLocation)
+    mounted.wrapper.unmount()
+  })
+
+  it('does not let a stale progress PUT overwrite a newer loaded version', async () => {
+    const putResponse = deferred()
+    const savedLocation = point(chapterOne, chapterOne.paragraphs[1], 2)
+    const newerLocation = point(chapterEightyOne, chapterEightyOne.paragraphs[0], 4)
+    const api = makeApi({
+      progress: { editionId, location: newerLocation, state: 'IN_PROGRESS', version: '3' },
+      putHandler: () => putResponse.promise
+    })
+    const mounted = mountReader(api)
+    primeReader(mounted.reader, chapterOne, {
+      editionId,
+      location: point(chapterOne, chapterOne.paragraphs[0]),
+      state: 'IN_PROGRESS',
+      version: '1'
+    })
+    const saving = mounted.reader.saveProgress(savedLocation)
+    await waitFor(() => api.calls.some(call => call.method === 'put' && call.path.startsWith('/me/progress/')))
+
+    const initializing = mounted.reader.initialize()
+    await waitFor(() => mounted.reader.progress.value?.version === '3')
+    putResponse.resolve(response({ editionId, location: savedLocation, state: 'IN_PROGRESS', version: '2' }))
+    await Promise.all([saving, initializing])
+
+    expect(mounted.reader.progress.value.version).to.equal('3')
+    expect(mounted.reader.progress.value.location).to.deep.equal(newerLocation)
+    mounted.wrapper.unmount()
+  })
+
+  it('resets progress version ordering when the active edition changes', async () => {
+    const nextEditionId = 'shuihuzhuan-zh-120-v2'
+    const nextCatalog = {
+      ...catalog,
+      activeEdition: { ...catalog.activeEdition, editionId: nextEditionId }
+    }
+    const api = makeApi({
+      getCatalog: () => response(nextCatalog),
+      getBlock: blockId => response({ ...blocksById.get(blockId), editionId: nextEditionId }),
+      progress: null
+    })
+    const mounted = mountReader(api)
+    mounted.reader.progress.value = {
+      editionId,
+      location: point(chapterOne, chapterOne.paragraphs[0]),
+      state: 'IN_PROGRESS',
+      version: '100'
+    }
+
+    await mounted.reader.initialize()
+
+    expect(mounted.reader.edition.value.editionId).to.equal(nextEditionId)
+    expect(mounted.reader.progress.value).to.equal(null)
+    mounted.wrapper.unmount()
+  })
+
+  it('ignores an old-edition PUT response and drains the queued new-edition progress', async () => {
+    const nextEditionId = 'shuihuzhuan-zh-120-v2'
+    const nextCatalog = {
+      ...catalog,
+      activeEdition: { ...catalog.activeEdition, editionId: nextEditionId }
+    }
+    const firstResponse = deferred()
+    let writeCount = 0
+    const api = makeApi({
+      getCatalog: () => response(nextCatalog),
+      getBlock: blockId => response({ ...blocksById.get(blockId), editionId: nextEditionId }),
+      progress: null,
+      putHandler: async (call) => {
+        writeCount += 1
+        if (writeCount === 1) return firstResponse.promise
+        return response({
+          editionId: nextEditionId,
+          location: call.body.location,
+          state: 'IN_PROGRESS',
+          version: '1'
+        })
+      }
+    })
+    const mounted = mountReader(api)
+    primeReader(mounted.reader, chapterOne, {
+      editionId,
+      location: point(chapterOne, chapterOne.paragraphs[0]),
+      state: 'IN_PROGRESS',
+      version: '1'
+    })
+    const oldSave = mounted.reader.saveProgress(point(chapterOne, chapterOne.paragraphs[1]))
+    await waitFor(() => api.calls.filter(call => call.method === 'put').length === 1)
+    await mounted.reader.initialize()
+
+    const newLocation = {
+      ...point(preface, preface.paragraphs[1], 2),
+      editionManifestSha256: nextCatalog.activeEdition.manifestSha256
+    }
+    mounted.reader.currentLocation.value = newLocation
+    const newSave = mounted.reader.saveProgress(newLocation)
+    firstResponse.resolve(response({
+      editionId,
+      location: point(chapterOne, chapterOne.paragraphs[1]),
+      state: 'IN_PROGRESS',
+      version: '2'
+    }))
+    await Promise.all([oldSave, newSave])
+
+    const writes = api.calls.filter(call => call.method === 'put' && call.path.startsWith('/me/progress/'))
+    expect(writes).to.have.length(2)
+    expect(writes[0].path).to.include(editionId)
+    expect(writes[1].path).to.include(nextEditionId)
+    expect(writes[1].body.expectedVersion).to.equal('0')
+    expect(writes[1].body.location).to.deep.equal(newLocation)
+    expect(mounted.reader.progress.value.editionId).to.equal(nextEditionId)
+    expect(mounted.reader.progress.value.version).to.equal('1')
+    mounted.wrapper.unmount()
+  })
+
   it('serializes and coalesces progress saves before using the confirmed next version', async () => {
     const firstResponse = deferred()
     let active = 0
@@ -1162,6 +1410,50 @@ describe('archive reader contract behavior', () => {
     const save = api.calls.find(call => call.path.startsWith('/me/progress/'))
     expect(save.body.location.paragraphId).to.equal(chapterOne.paragraphs[1].paragraphId)
     mounted.wrapper.unmount()
+  })
+
+  it('flushes pending progress before component unmount disposal', async () => {
+    const api = makeApi()
+    const mounted = mountReader(api, { saveDelay: 1000 })
+    primeReader(mounted.reader)
+    mounted.reader.scheduleProgressSave(point(chapterOne, chapterOne.paragraphs[1]))
+    mounted.wrapper.unmount()
+
+    await waitFor(() => api.calls.some(call => call.path.startsWith('/me/progress/')))
+    const save = api.calls.find(call => call.path.startsWith('/me/progress/'))
+    expect(save.body.location.paragraphId).to.equal(chapterOne.paragraphs[1].paragraphId)
+  })
+
+  it('drains the latest queued progress after unmount while an older save is in flight', async () => {
+    const firstResponse = deferred()
+    const firstLocation = point(chapterOne, chapterOne.paragraphs[0])
+    const latestLocation = point(chapterOne, chapterOne.paragraphs[1], 5)
+    let writeCount = 0
+    const api = makeApi({
+      putHandler: async (call) => {
+        writeCount += 1
+        if (writeCount === 1) await firstResponse.promise
+        return response({
+          editionId,
+          location: call.body.location,
+          state: 'IN_PROGRESS',
+          version: String(writeCount)
+        })
+      }
+    })
+    const mounted = mountReader(api, { saveDelay: 1000 })
+    primeReader(mounted.reader)
+    const firstSave = mounted.reader.saveProgress(firstLocation)
+    await waitFor(() => api.calls.filter(call => call.path.startsWith('/me/progress/')).length === 1)
+    const latestSave = mounted.reader.saveProgress(latestLocation)
+    mounted.wrapper.unmount()
+    firstResponse.resolve()
+    await Promise.all([firstSave, latestSave])
+    await waitFor(() => api.calls.filter(call => call.path.startsWith('/me/progress/')).length === 2)
+
+    const writes = api.calls.filter(call => call.path.startsWith('/me/progress/'))
+    expect(writes[1].body.location).to.deep.equal(latestLocation)
+    expect(writes[1].body.expectedVersion).to.equal('1')
   })
 
   it('stops initialization after a deferred catalog resolves following unmount', async () => {
@@ -1723,7 +2015,7 @@ describe('archive reader contract behavior', () => {
     const mode = Vue.ref('portrait-command')
     const counters = { hallLoads: 0 }
     const JuyiHall = loadActualHallForIntegration(createHallIntegrationMocks({ mode, LibraryPanel, counters }), 'archive-actual-juyi-hall')
-    const wrapper = mount(JuyiHall, { attachTo: document.body, global: { stubs: { 'var-icon': true } } })
+    const wrapper = mount(JuyiHall, { attachTo: document.body, global: { stubs: { 'var-icon': true, teleport: true } } })
     try {
       await settle()
       await wrapper.find('[data-portrait-action="library"]').trigger('click')
@@ -1731,6 +2023,9 @@ describe('archive reader contract behavior', () => {
       const floating = wrapper.find('.floating-panel').element
       const library = wrapper.findComponent(LibraryPanel)
       const reader = wrapper.findComponent(ArchiveReader)
+      await waitFor(() => wrapper.find('.archive-book-open').exists())
+      await wrapper.get('.archive-book-open').trigger('click')
+      await waitFor(() => wrapper.find('.reader-notes textarea').exists())
       const switchEditorTarget = reader.vm.__switchEditorTargetForTest || reader.vm.$?.exposed?.__switchEditorTargetForTest
       expect(switchEditorTarget).to.be.a('function')
       switchEditorTarget({ noteId: 'note-o04', version: '7' }, '五轮旋转仍须保留的批注')

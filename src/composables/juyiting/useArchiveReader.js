@@ -103,6 +103,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
   let saveTimer
   let queuedProgressIntent = null
   let progressDrainPromise = null
+  let drainAfterDispose = false
   let loadGeneration = 0
   let initializeGeneration = 0
   let blockController = null
@@ -146,6 +147,28 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     if (errorMessage.value.startsWith(prefix)) errorMessage.value = ''
   }
 
+  const compareCanonicalDecimals = (left, right) => {
+    const leftValue = requireVersion(left, '阅读进度')
+    const rightValue = requireVersion(right, '阅读进度')
+    if (leftValue.length !== rightValue.length) return leftValue.length - rightValue.length
+    return leftValue === rightValue ? 0 : leftValue > rightValue ? 1 : -1
+  }
+
+  const applyProgressSnapshot = (nextProgress, targetEditionId) => {
+    if (!targetEditionId) throw new Error('阅读进度 editionId 缺失')
+    if (nextProgress !== null) {
+      requireVersion(nextProgress?.version, '阅读进度')
+      if (nextProgress?.editionId !== targetEditionId) throw new Error('阅读进度 editionId 不匹配')
+    }
+    const currentProgress = progress.value
+    const editionChanged = currentProgress?.editionId !== targetEditionId
+    const isFreshEnough = currentProgress === null
+      || editionChanged
+      || (nextProgress !== null && compareCanonicalDecimals(nextProgress.version, currentProgress.version) >= 0)
+    if (isFreshEnough) progress.value = nextProgress
+    return progress.value
+  }
+
   const loadCatalog = async (signal) => {
     if (disposed || signal?.aborted) return null
     const result = await api.get('/catalog', undefined, { autoLoading: false, signal })
@@ -164,10 +187,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       { autoLoading: false, signal }
     )
     if (disposed || signal?.aborted) return null
-    const nextProgress = unwrap(result)
-    if (nextProgress !== null) requireVersion(nextProgress?.version, '阅读进度')
-    progress.value = nextProgress
-    return nextProgress
+    return applyProgressSnapshot(unwrap(result), editionId)
   }
 
   const loadPage = async (path, params, label, signal) => {
@@ -263,6 +283,13 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     }
   }
 
+  const cancelBlockLoad = () => {
+    loadGeneration += 1
+    blockController?.abort()
+    blockController = null
+    chapterLoading.value = false
+  }
+
   const loadBlock = async (block, targetLocation = null, parentSignal) => {
     if (!block || !edition.value?.editionId || disposed || parentSignal?.aborted) return null
     const generation = ++loadGeneration
@@ -324,10 +351,17 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
 
   const sendProgress = async (intent) => {
     saveState.value = 'saving'
+    const requestEditionId = edition.value?.editionId
     try {
-      const expectedVersion = progress.value === null
+      if (!requestEditionId) throw new Error('阅读进度 editionId 缺失')
+      if (progress.value !== null) {
+        requireVersion(progress.value?.version, '阅读进度')
+        if (!progress.value?.editionId) throw new Error('阅读进度 editionId 缺失')
+      }
+      const currentProgress = progress.value?.editionId === requestEditionId ? progress.value : null
+      const expectedVersion = currentProgress === null
         ? '0'
-        : requireVersion(progress.value?.version, '阅读进度')
+        : requireVersion(currentProgress.version, '阅读进度')
       const body = {
         expectedVersion,
         location: intent.location,
@@ -335,16 +369,18 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       }
       const idempotencyKey = lowerUuid()
       const send = () => api.put(
-        `/me/progress/${encodeURIComponent(edition.value.editionId)}`,
+        `/me/progress/${encodeURIComponent(requestEditionId)}`,
         body,
         { autoLoading: false, headers: mutationHeaders({}, idempotencyKey) }
       )
       const result = await replayAmbiguousMutation(send)
       const saved = unwrap(result)
-      requireVersion(saved?.version, '阅读进度')
-      progress.value = saved
+      if (saved?.editionId !== requestEditionId) throw new Error('阅读进度 editionId 不匹配')
+      const latestProgress = edition.value?.editionId === requestEditionId
+        ? applyProgressSnapshot(saved, requestEditionId)
+        : progress.value
       clearActionError('阅读进度')
-      return saved
+      return latestProgress
     } catch (error) {
       saveState.value = 'error'
       queuedProgressIntent = null
@@ -364,7 +400,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
 
   const drainProgress = async () => {
     let saved = null
-    while (queuedProgressIntent && !disposed) {
+    while (queuedProgressIntent && (!disposed || drainAfterDispose)) {
       const intent = queuedProgressIntent
       queuedProgressIntent = null
       saved = await sendProgress(intent)
@@ -1195,7 +1231,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     return promise
   }
 
-  const initialize = async () => {
+  const initialize = async ({ openChapter = true } = {}) => {
     if (disposed) return null
     const generation = ++initializeGeneration
     initializeController?.abort()
@@ -1207,6 +1243,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     try {
       await loadCatalog(controller.signal)
       if (!isActive()) return null
+      if (!openChapter) return catalog.value
       await Promise.all([
         loadProgress(edition.value.editionId, controller.signal),
         loadBookmarks(controller.signal)
@@ -1225,11 +1262,13 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
 
   const flushProgress = () => {
     clearTimeout(saveTimer)
+    let flushPromise = progressDrainPromise
     if (queuedProgressIntent) {
-      startProgressDrain().catch(() => {})
+      flushPromise = startProgressDrain()
     } else if (saveState.value === 'pending') {
-      saveProgress(currentLocation.value).catch(() => {})
+      flushPromise = saveProgress(currentLocation.value)
     }
+    return flushPromise ? flushPromise.catch(() => null) : Promise.resolve(null)
   }
 
   const lifecycleTarget = globalThis.window || globalThis
@@ -1239,15 +1278,20 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     lifecycleTarget.addEventListener?.('pagehide', flushProgress)
   })
   onBeforeUnmount(() => {
+    drainAfterDispose = true
+    const finalProgressDrain = flushProgress()
     disposed = true
     initializeGeneration += 1
     loadGeneration += 1
     initializeController?.abort()
     blockController?.abort()
     clearTimeout(saveTimer)
-    queuedProgressIntent = null
     lifecycleTarget.removeEventListener?.('pagehide', flushProgress)
     closeQuestion()
+    finalProgressDrain.finally(() => {
+      drainAfterDispose = false
+      queuedProgressIntent = null
+    })
   })
 
   return {
@@ -1257,6 +1301,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     bookmarks,
     canGoNext,
     canGoPrevious,
+    cancelBlockLoad,
     catalog,
     chapter,
     chapterLoading,
@@ -1270,6 +1315,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     edition,
     errorMessage,
     focusRequest,
+    flushProgress,
     goNext,
     goPrevious,
     initialize,
