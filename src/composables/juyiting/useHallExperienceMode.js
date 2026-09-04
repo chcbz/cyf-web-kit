@@ -45,10 +45,7 @@ export const useHallExperienceMode = () => {
   const commitPhysicalOrientation = next => {
     if (typeof next !== 'boolean' || next === isPhysicalLandscape.value) return false
     isPhysicalLandscape.value = next
-    if (next && requestOwnership && orientationRequestPending.value) {
-      clearRequestTimer(requestOwnership.token)
-      orientationRequestPending.value = false
-    }
+    if (next && requestOwnership?.acquisitionComplete) completeRequest(requestOwnership.token)
     return true
   }
 
@@ -86,6 +83,22 @@ export const useHallExperienceMode = () => {
     if (!requestTimer || (token !== undefined && requestTimer.token !== token)) return
     window.clearTimeout(requestTimer.id)
     requestTimer = null
+  }
+
+  const settleRequest = (token, result) => {
+    const ownership = requestOwnership
+    if (!ownership || ownership.token !== token || !ownership.resolveCompletion) return
+    ownership.resolveCompletion(result)
+    ownership.resolveCompletion = null
+  }
+
+  const completeRequest = token => {
+    const ownership = requestOwnership
+    if (!isCurrentRequest(token) || !ownership?.acquisitionComplete || !isPhysicalLandscape.value) return false
+    clearRequestTimer(token)
+    orientationRequestPending.value = false
+    settleRequest(token, true)
+    return true
   }
 
   const releaseFullscreenElement = async element => {
@@ -155,6 +168,7 @@ export const useHallExperienceMode = () => {
       orientationRequestPending.value = false
       if (showHint && isMounted) orientationHint.value = '请旋转手机横屏查看'
     }
+    settleRequest(token, false)
     await releaseRequestOwnership(token)
   }
 
@@ -185,7 +199,17 @@ export const useHallExperienceMode = () => {
     }
 
     const token = ++requestGeneration
-    requestOwnership = { token, fullscreenElement: null, orientationLocked: false, releasing: false, releasePromise: null }
+    let resolveCompletion
+    const completion = new Promise(resolve => { resolveCompletion = resolve })
+    requestOwnership = {
+      token,
+      fullscreenElement: null,
+      orientationLocked: false,
+      acquisitionComplete: false,
+      releasing: false,
+      releasePromise: null,
+      resolveCompletion
+    }
     orientationRequestPending.value = true
     orientationHint.value = ''
     requestTimer = {
@@ -237,9 +261,9 @@ export const useHallExperienceMode = () => {
       return false
     }
 
-    clearRequestTimer(token)
-    orientationRequestPending.value = false
-    return true
+    requestOwnership.acquisitionComplete = true
+    if (completeRequest(token)) return true
+    return completion
   }
 
   const readScreenSource = () => orientationFromScreen(screenOrientation)
