@@ -118,17 +118,18 @@ export const useHallExperienceMode = () => {
     return 'released'
   }
 
-  const reconcileFullscreenCompletion = async (token, element) => {
+  const reconcileFullscreenCompletion = (token, element) => {
     if (!element || globalThis.document?.fullscreenElement !== element) return 'missing'
-    return attachOrCleanResource(
-      token,
-      ownership => { ownership.fullscreenElement = element },
-      ownership => (
-        ownership?.releasing && ownership.fullscreenElement === element && ownership.releasePromise
-          ? ownership.releasePromise
-          : releaseFullscreenElement(element)
-      )
-    )
+    const ownership = requestOwnership
+    if (!ownership) return 'unowned'
+    if (ownership.token === token && !ownership.releasing) {
+      ownership.fullscreenElement = element
+      return 'current'
+    }
+    if (!ownership.releasing && ownership.fullscreenElement === element) return 'newer'
+    // A stale request resolving while the same documentElement is fullscreen cannot prove
+    // that it, rather than the host or a newer request, owns the current fullscreen session.
+    return 'unowned'
   }
 
   const reconcileOrientationLockCompletion = token => attachOrCleanResource(
@@ -184,8 +185,44 @@ export const useHallExperienceMode = () => {
     }
   }
 
-  const requestLandscape = async () => {
-    if (!isMounted || requestOwnership || orientationRequestPending.value || !isMobileCoarse.value || isPhysicalLandscape.value) return false
+  const acquireLandscape = async ({ token, fullscreenElement, requestFullscreen, lockOrientation }) => {
+    try {
+      await requestFullscreen.call(fullscreenElement)
+    } catch {
+      if (isCurrentRequest(token)) await cancelRequest(token, { showHint: true })
+      return
+    }
+
+    const fullscreenStatus = reconcileFullscreenCompletion(token, fullscreenElement)
+    if (fullscreenStatus !== 'current') {
+      if (fullscreenStatus === 'missing' && isCurrentRequest(token)) {
+        await cancelRequest(token, { showHint: true })
+      }
+      return
+    }
+
+    if (!isCurrentRequest(token)) return
+    if (typeof lockOrientation !== 'function') {
+      await cancelRequest(token, { showHint: true })
+      return
+    }
+
+    try {
+      await lockOrientation.call(globalThis.screen.orientation, 'landscape')
+    } catch {
+      if (isCurrentRequest(token)) await cancelRequest(token, { showHint: true })
+      return
+    }
+
+    if (await reconcileOrientationLockCompletion(token) !== 'current' || !isCurrentRequest(token)) return
+    requestOwnership.acquisitionComplete = true
+    completeRequest(token)
+  }
+
+  const requestLandscape = () => {
+    if (!isMounted || requestOwnership || orientationRequestPending.value || !isMobileCoarse.value || isPhysicalLandscape.value) {
+      return Promise.resolve(false)
+    }
 
     const fullscreenElement = globalThis.document?.documentElement || null
     const currentFullscreen = globalThis.document?.fullscreenElement
@@ -195,7 +232,11 @@ export const useHallExperienceMode = () => {
     // (or wait for its timeout): tell the user immediately to rotate physically.
     if (typeof requestFullscreen !== 'function') {
       orientationHint.value = '请旋转手机横屏查看'
-      return false
+      return Promise.resolve(false)
+    }
+    if (currentFullscreen) {
+      orientationHint.value = '请旋转手机横屏查看'
+      return Promise.resolve(false)
     }
 
     const token = ++requestGeneration
@@ -221,48 +262,9 @@ export const useHallExperienceMode = () => {
       }, REQUEST_TIMEOUT_MS)
     }
 
-    let failed = false
-    if (currentFullscreen) {
-      failed = true
-    } else if (typeof requestFullscreen !== 'function') {
-      failed = true
-    } else {
-      try {
-        await requestFullscreen.call(fullscreenElement)
-        if (await reconcileFullscreenCompletion(token, fullscreenElement) === 'missing') failed = true
-      } catch {
-        failed = true
-      }
-    }
-
-    if (!isCurrentRequest(token)) {
-      await releaseRequestOwnership(token)
-      return false
-    }
-
-    if (failed) {
-      await cancelRequest(token, { showHint: true })
-      return false
-    }
-
-    if (typeof lockOrientation !== 'function') {
-      failed = true
-    } else {
-      try {
-        await lockOrientation.call(globalThis.screen.orientation, 'landscape')
-        await reconcileOrientationLockCompletion(token)
-      } catch {
-        failed = true
-      }
-    }
-
-    if (!isCurrentRequest(token) || failed) {
-      await cancelRequest(token, { showHint: isCurrentRequest(token) && failed })
-      return false
-    }
-
-    requestOwnership.acquisitionComplete = true
-    if (completeRequest(token)) return true
+    void acquireLandscape({ token, fullscreenElement, requestFullscreen, lockOrientation }).catch(() => {
+      if (isCurrentRequest(token)) void cancelRequest(token, { showHint: true })
+    })
     return completion
   }
 

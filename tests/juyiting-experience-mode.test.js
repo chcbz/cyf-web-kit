@@ -547,7 +547,7 @@ describe('Juyi Hall experience mode', () => {
     global.screen.orientation.unlock = () => { unlockCalls += 1 }
     try {
       const { mode, wrapper } = await mountMode()
-      void mode.requestLandscape()
+      const firstRequest = mode.requestLandscape()
       await flush()
       env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90, event: { timeStamp: 100 } })
       await flush()
@@ -558,6 +558,7 @@ describe('Juyi Hall experience mode', () => {
       expect(exitCalls).to.equal(0)
       expect(unlockCalls).to.equal(0)
       timers[0].callback()
+      expect(await firstRequest).to.equal(false)
       await flush()
       expect(mode.orientationRequestPending.value).to.equal(false)
       expect(exitCalls).to.equal(0)
@@ -607,7 +608,7 @@ describe('Juyi Hall experience mode', () => {
     global.screen.orientation.unlock = () => { unlockCalls += 1 }
     try {
       const { mode, wrapper } = await mountMode()
-      void mode.requestLandscape()
+      const firstRequest = mode.requestLandscape()
       await flush()
       env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90, event: { timeStamp: 100 } })
       await flush()
@@ -618,6 +619,7 @@ describe('Juyi Hall experience mode', () => {
       expect(exitCalls).to.equal(0)
       expect(unlockCalls).to.equal(0)
       timers[0].callback()
+      expect(await firstRequest).to.equal(false)
       await flush()
       expect(mode.orientationRequestPending.value).to.equal(false)
       expect(exitCalls).to.equal(1)
@@ -635,6 +637,44 @@ describe('Juyi Hall experience mode', () => {
       global.window.setTimeout = originalSetTimeout
       global.window.clearTimeout = originalClearTimeout
       env.restore()
+    }
+  })
+
+  it('settles pending fullscreen and lock requests on unmount and handles their late rejection', async () => {
+    const fullscreenEnv = setupEnvironment()
+    const fullscreen = deferred()
+    global.document.documentElement.requestFullscreen = () => fullscreen.promise
+    global.screen.orientation.lock = async () => { throw new Error('pending fullscreen must not lock') }
+    try {
+      const { mode, wrapper } = await mountMode()
+      const request = mode.requestLandscape()
+      await flush()
+      wrapper.unmount()
+      expect(await request).to.equal(false)
+      fullscreen.reject(new Error('late fullscreen rejection'))
+      await flush()
+    } finally {
+      fullscreenEnv.restore()
+    }
+
+    const lockEnv = setupEnvironment()
+    const lock = deferred()
+    let exitCalls = 0
+    global.document.documentElement.requestFullscreen = async () => setFullscreenElement(global.document.documentElement)
+    global.document.exitFullscreen = async () => { exitCalls += 1; setFullscreenElement(null) }
+    global.screen.orientation.lock = () => lock.promise
+    try {
+      const { mode, wrapper } = await mountMode()
+      const request = mode.requestLandscape()
+      await flush()
+      wrapper.unmount()
+      expect(await request).to.equal(false)
+      expect(exitCalls).to.equal(1)
+      lock.reject(new Error('late lock rejection'))
+      await flush()
+      expect(exitCalls).to.equal(1)
+    } finally {
+      lockEnv.restore()
     }
   })
 
@@ -663,6 +703,7 @@ describe('Juyi Hall experience mode', () => {
       expect(timers).to.have.length(1)
       expect(timers[0].delay).to.equal(3000)
       timers[0].callback()
+      expect(await pending).to.equal(false)
       await flush()
       expect(mode.orientationRequestPending.value).to.equal(false)
       expect(mode.orientationHint.value).to.equal('请旋转手机横屏查看')
@@ -670,7 +711,6 @@ describe('Juyi Hall experience mode', () => {
       expect(exitCalls).to.equal(1)
       expect(global.document.fullscreenElement).to.equal(null)
       resolveLock()
-      await pending
       await flush()
       expect(exitCalls).to.equal(1)
       expect(unlockCalls).to.equal(1)
@@ -682,7 +722,7 @@ describe('Juyi Hall experience mode', () => {
     }
   })
 
-  it('adopts late resources to a newer owner and releases them once when no owner remains', async () => {
+  it('adopts late resources to a newer owner and only releases provably owned resources', async () => {
     const originalSetTimeout = global.window.setTimeout
     const originalClearTimeout = global.window.clearTimeout
 
@@ -800,9 +840,9 @@ describe('Juyi Hall experience mode', () => {
       lateFullscreen.resolve()
       expect(await oldRequest).to.equal(false)
       await flush()
-      expect(noOwnerExits).to.equal(1)
+      expect(noOwnerExits).to.equal(0)
       expect(noOwnerUnlocks).to.equal(0)
-      expect(global.document.fullscreenElement).to.equal(null)
+      expect(global.document.fullscreenElement).to.equal(global.document.documentElement)
       wrapper.unmount()
     } finally {
       global.window.setTimeout = originalSetTimeout
@@ -839,6 +879,46 @@ describe('Juyi Hall experience mode', () => {
       global.window.setTimeout = originalSetTimeout
       global.window.clearTimeout = originalClearTimeout
       hostEnv.restore()
+    }
+  })
+
+  it('does not exit host fullscreen on documentElement after a stale request resolves', async () => {
+    const env = setupEnvironment()
+    const originalSetTimeout = global.window.setTimeout
+    const originalClearTimeout = global.window.clearTimeout
+    const fullscreen = deferred()
+    const timers = []
+    let exitCalls = 0
+    let lockCalls = 0
+    global.window.setTimeout = callback => {
+      timers.push(callback)
+      return timers.length
+    }
+    global.window.clearTimeout = () => {}
+    global.document.documentElement.requestFullscreen = () => fullscreen.promise
+    global.document.exitFullscreen = async () => { exitCalls += 1; setFullscreenElement(null) }
+    global.screen.orientation.lock = async () => { lockCalls += 1 }
+    try {
+      const { mode, wrapper } = await mountMode()
+      const request = mode.requestLandscape()
+      await flush()
+      timers[0]()
+      expect(await request).to.equal(false)
+      await flush()
+      setFullscreenElement(global.document.documentElement)
+      fullscreen.resolve()
+      await flush()
+      expect(exitCalls).to.equal(0)
+      expect(lockCalls).to.equal(0)
+      expect(global.document.fullscreenElement).to.equal(global.document.documentElement)
+      wrapper.unmount()
+      await flush()
+      expect(exitCalls).to.equal(0)
+      expect(global.document.fullscreenElement).to.equal(global.document.documentElement)
+    } finally {
+      global.window.setTimeout = originalSetTimeout
+      global.window.clearTimeout = originalClearTimeout
+      env.restore()
     }
   })
 
