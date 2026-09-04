@@ -45,8 +45,10 @@ export const useHallExperienceMode = () => {
   const commitPhysicalOrientation = next => {
     if (typeof next !== 'boolean' || next === isPhysicalLandscape.value) return false
     isPhysicalLandscape.value = next
-    // A confirmed landscape fact replaces the advisory request, so release Hall-owned controls.
-    if (next && requestOwnership) void cancelRequest(requestOwnership.token)
+    if (next && requestOwnership && orientationRequestPending.value) {
+      clearRequestTimer(requestOwnership.token)
+      orientationRequestPending.value = false
+    }
     return true
   }
 
@@ -157,8 +159,16 @@ export const useHallExperienceMode = () => {
   }
 
   const isCurrentRequest = token => (
-    isMounted && token === requestGeneration && orientationRequestPending.value
+    isMounted && token === requestGeneration && requestOwnership?.token === token && !requestOwnership.releasing
   )
+
+  const handleFullscreenChange = () => {
+    const ownership = requestOwnership
+    if (!ownership || ownership.releasing || !ownership.fullscreenElement) return
+    if (globalThis.document?.fullscreenElement !== ownership.fullscreenElement) {
+      void cancelRequest(ownership.token)
+    }
+  }
 
   const requestLandscape = async () => {
     if (!isMounted || requestOwnership || orientationRequestPending.value || !isMobileCoarse.value || isPhysicalLandscape.value) return false
@@ -181,7 +191,9 @@ export const useHallExperienceMode = () => {
     requestTimer = {
       token,
       id: window.setTimeout(() => {
-        if (isCurrentRequest(token)) void cancelRequest(token, { showHint: true })
+        if (isCurrentRequest(token) && orientationRequestPending.value) {
+          void cancelRequest(token, { showHint: true })
+        }
       }, REQUEST_TIMEOUT_MS)
     }
 
@@ -260,6 +272,7 @@ export const useHallExperienceMode = () => {
     orientationMedia?.addEventListener?.('change', handleOrientationMediaChange)
     coarseMedia?.addEventListener?.('change', handleCoarseChange)
     window.addEventListener?.('orientationchange', handleLegacyOrientationChange)
+    globalThis.document?.addEventListener?.('fullscreenchange', handleFullscreenChange)
   })
 
   onBeforeUnmount(() => {
@@ -271,6 +284,7 @@ export const useHallExperienceMode = () => {
     orientationMedia?.removeEventListener?.('change', handleOrientationMediaChange)
     coarseMedia?.removeEventListener?.('change', handleCoarseChange)
     window.removeEventListener?.('orientationchange', handleLegacyOrientationChange)
+    globalThis.document?.removeEventListener?.('fullscreenchange', handleFullscreenChange)
     screenOrientation = null
     orientationMedia = null
     coarseMedia = null
