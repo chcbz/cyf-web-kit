@@ -450,6 +450,28 @@ describe('Juyi Hall experience mode', () => {
     }
   })
 
+  it('shows the physical-rotation hint immediately when automatic landscape is unsupported', async () => {
+    const env = setupEnvironment()
+    const originalSetTimeout = global.window.setTimeout
+    let fullscreenCalls = 0
+    let timerCalls = 0
+    global.document.documentElement.requestFullscreen = undefined
+    global.screen.orientation.lock = async () => { fullscreenCalls += 1 }
+    global.window.setTimeout = () => { timerCalls += 1; return timerCalls }
+    try {
+      const { mode, wrapper } = await mountMode()
+      expect(await mode.requestLandscape()).to.equal(false)
+      expect(mode.orientationHint.value).to.equal('请旋转手机横屏查看')
+      expect(mode.orientationRequestPending.value).to.equal(false)
+      expect(fullscreenCalls).to.equal(0)
+      expect(timerCalls).to.equal(0)
+      wrapper.unmount()
+    } finally {
+      global.window.setTimeout = originalSetTimeout
+      env.restore()
+    }
+  })
+
   it('keeps portrait and releases Hall-owned fullscreen when orientation lock rejects', async () => {
     const env = setupEnvironment()
     let exitCalls = 0

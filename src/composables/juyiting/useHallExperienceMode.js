@@ -163,8 +163,18 @@ export const useHallExperienceMode = () => {
   const requestLandscape = async () => {
     if (!isMounted || requestOwnership || orientationRequestPending.value || !isMobileCoarse.value || isPhysicalLandscape.value) return false
 
-    const token = ++requestGeneration
     const fullscreenElement = globalThis.document?.documentElement || null
+    const currentFullscreen = globalThis.document?.fullscreenElement
+    const requestFullscreen = fullscreenElement?.requestFullscreen
+    const lockOrientation = globalThis.screen?.orientation?.lock
+    // WeChat H5 commonly exposes no fullscreen request API. Do not make a doomed request
+    // (or wait for its timeout): tell the user immediately to rotate physically.
+    if (typeof requestFullscreen !== 'function') {
+      orientationHint.value = '请旋转手机横屏查看'
+      return false
+    }
+
+    const token = ++requestGeneration
     requestOwnership = { token, fullscreenElement: null, orientationLocked: false, releasing: false, releasePromise: null }
     orientationRequestPending.value = true
     orientationHint.value = ''
@@ -176,10 +186,6 @@ export const useHallExperienceMode = () => {
     }
 
     let failed = false
-    const currentFullscreen = globalThis.document?.fullscreenElement
-    const requestFullscreen = fullscreenElement?.requestFullscreen
-    const lockOrientation = globalThis.screen?.orientation?.lock
-
     if (currentFullscreen) {
       failed = true
     } else if (typeof requestFullscreen !== 'function') {
