@@ -200,6 +200,7 @@
             :setup-result="personaSetupResult"
             @bind-persona="handleBindPersona"
             @clear-setup-result="personaSetupResult = null"
+            @hosting-changed="refreshHall({ silent: true })"
             @unbind-persona="handleUnbindPersona"
           />
 
@@ -1163,11 +1164,15 @@ const handleStartAgentConversation = (agent) => {
 const canStartAgentConversation = (agent) => Boolean(agent?.boundToMe && !agent?.systemAgent && agent?.canOperate !== false)
 
 const handleBindPersona = async (persona, mode = 'local') => {
+  if (mode !== 'local') {
+    showToast('山寨安顿请先打开服务端租约报价，不会直接免费开通。')
+    return false
+  }
   try {
     personaSetupResult.value = await bindPersona(persona, mode)
     syncAfterPersonaChanged()
     playSuccess()
-    showToast(mode === 'server' ? `${portraitShortName(persona)} 已在山寨安顿` : `${portraitShortName(persona)} 自家接应文书已备`)
+    showToast(`${portraitShortName(persona)} 自家接应文书已备`)
   } catch (error) {
     log.warn('bind persona failed:', error)
     playError()

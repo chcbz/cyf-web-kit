@@ -63,6 +63,14 @@
       </ol>
     </section>
 
+    <HostingRentPanel
+      v-if="hostingPersona"
+      :persona="hostingPersona"
+      :resolve-persona="resolveHostingPersona"
+      @close="hostingPersonaCode = null"
+      @hosting-changed="$emit('hosting-changed')"
+    />
+
     <div class="catalog-grid">
       <article
         v-for="persona in personas"
@@ -139,6 +147,7 @@
 
 <script setup>
 import { computed, onUnmounted, ref } from 'vue'
+import HostingRentPanel from './HostingRentPanel.vue'
 
 const PUBLIC_AGENT_WS_URL = 'wss://api.chaoyoufan.cn/ws/agent/channel'
 const INSTALL_GUIDE_URL = 'https://gitee.com/chcbz/isp-install/blob/master/skills/codex-ws-agent-install/SKILL.md'
@@ -151,9 +160,12 @@ const props = defineProps({
   setupResult: { type: Object, default: null }
 })
 
-const emit = defineEmits(['bind-persona', 'unbind-persona', 'clear-setup-result'])
+const emit = defineEmits(['bind-persona', 'unbind-persona', 'clear-setup-result', 'hosting-changed'])
 
 const activePersonaCode = ref(null)
+const hostingPersonaCode = ref(null)
+const hostingPersona = computed(() => props.personas.find(persona => persona.personaCode === hostingPersonaCode.value) || null)
+const resolveHostingPersona = persona => props.personas.find(item => item.personaCode === persona.personaCode) || null
 const copied = ref(false)
 let copiedTimer = null
 const boundToMeCount = computed(() => props.personas.filter(persona => persona.boundToMe).length)
@@ -294,6 +306,11 @@ const copySetupResult = async () => {
 
 const selectAccess = (persona, mode) => {
   activePersonaCode.value = null
+  if (mode === 'server') {
+    hostingPersonaCode.value = persona.personaCode
+    return
+  }
+  hostingPersonaCode.value = null
   emit('bind-persona', persona, mode)
 }
 
