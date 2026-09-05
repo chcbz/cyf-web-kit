@@ -46,6 +46,33 @@ describe('HallScene melonJS runtime compatibility', () => {
     }
   })
 
+  it('normalizes environment-specific melonJS TMX wrappers to fetched raw XML', async () => {
+    const originalFetch = globalThis.fetch
+    const mapDataCalls = []
+    const mountToken = Symbol('mount')
+    const game = new JuyitingGame()
+    game._mountToken = mountToken
+    game._simulationEnabled = false
+    game._hallScene = {
+      setMapData: value => mapDataCalls.push(value),
+      setTmxSha256: () => {}
+    }
+
+    try {
+      globalThis.fetch = async () => ({ ok: true, text: async () => HALL_XML })
+
+      await game._prepareMapData({
+        loader: { getTMX: () => ({ runtime: 'webview-wrapper' }) }
+      }, mountToken)
+
+      expect(mapDataCalls).to.have.length(1)
+      expect(mapDataCalls[0]).to.include({ width: 1664, height: 928 })
+      expect(mapDataCalls[0].movementReady).to.equal(false)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
   it('derives an identical canvas display rectangle regardless of prior melonJS fit styles', () => {
     const displayVariables = new Map()
     const canvas = {

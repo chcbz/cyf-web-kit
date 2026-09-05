@@ -439,7 +439,10 @@ export class JuyitingGame {
         const xmlText = await resp.text()
         if (!this._isCurrentMount(mountToken)) return
         rawXml = xmlText
-        if (!tmx) tmx = xmlText  // use raw XML for parsing too if melonJS had no cached object
+        // melonJS returned a parsed object or an environment-specific loader
+        // wrapper. Raw XML gives the visual and movement parsers one stable
+        // input across browsers and the Mini Program WebView.
+        tmx = xmlText
       } catch (err) {
         console.warn('[JuyitingGame] Direct TMX fetch failed:', err?.message || err)
       }
