@@ -5,7 +5,7 @@ import { compileScript, parse } from '@vue/compiler-sfc'
 import { mount } from '@vue/test-utils'
 import * as Vue from 'vue'
 import * as HallPanelHelpers from '../src/composables/juyiting/useHallPanels.js'
-import { stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
+import { registerIdentityCleanup, stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 import {
   isCanonicalDecimal,
   mutationHeaders,
@@ -237,6 +237,7 @@ const loadArchiveReaderSfc = (archiveModule) => {
     .replace(
       '</script>',
       `defineExpose({
+        __editorStateForTest: () => ({ editingNote: editingNote.value, noteText: noteText.value }),
         __switchEditorTargetForTest: (note, text) => {
           editingNote.value = note
           noteText.value = text
@@ -255,6 +256,10 @@ const loadArchiveReaderSfc = (archiveModule) => {
     .replace(
       /^import\s+\{\s*useArchiveReader,\s*utf8ByteLength\s*\}\s+from\s+['"]@\/composables\/juyiting\/useArchiveReader['"];?\s*$/gm,
       'var { useArchiveReader, utf8ByteLength } = archiveModule'
+    )
+    .replace(
+      /^import\s+\{\s*registerIdentityCleanup\s*\}\s+from\s+['"]@\/utils\/identityLifecycle\.js['"];?\s*$/gm,
+      'var { registerIdentityCleanup } = archiveModule'
     )
     .replace('export default', 'return')
   return new Function('Vue', 'archiveModule', body)(Vue, archiveModule)
@@ -298,6 +303,7 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
   const taskWorkspace = workspaceState || null
   return {
     ...HallPanelHelpers,
+    registerIdentityCleanup,
     env: { VITE_JUYITING_TASK_WORKSPACE_ENABLED: workspaceState ? 'true' : undefined },
     useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({}),
     agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {}, roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
@@ -349,6 +355,7 @@ const mountArchiveReader = (api, options = {}) => {
       })
       return readerState
     },
+    registerIdentityCleanup,
     utf8ByteLength
   })
   const wrapper = mount(component, {
@@ -1563,6 +1570,252 @@ describe('archive reader contract behavior', () => {
     }
   })
 
+  it('fences delayed bookmark and note CRUD across identity rotation while the new account proceeds independently', async () => {
+    const cases = [
+      {
+        name: 'bookmark create',
+        matches: call => call.method === 'put' && call.path.startsWith('/me/bookmarks/'),
+        pending: 'bookmarkPending',
+        prepare: (reader, identity) => {
+          reader.bookmarks.value = [{ bookmarkId: `bookmark-${identity}-seed`, identity, version: '1' }]
+          return null
+        },
+        start: reader => reader.createBookmark(),
+        result: call => response({
+          bookmarkId: call.path.split('/').at(-1),
+          location: call.body.location,
+          state: 'ACTIVE',
+          version: '1'
+        }),
+        assertBefore: reader => expect(reader.bookmarks.value.map(item => item.bookmarkId)).to.deep.equal(['bookmark-b-seed']),
+        assertAfter: (reader, call) => expect(reader.bookmarks.value.map(item => item.bookmarkId)).to.deep.equal([
+          call.path.split('/').at(-1),
+          'bookmark-b-seed'
+        ])
+      },
+      {
+        name: 'bookmark delete',
+        matches: call => call.method === 'delete' && call.path === '/me/bookmarks/shared-bookmark',
+        prepare: (reader, identity) => {
+          const bookmark = { bookmarkId: 'shared-bookmark', identity, version: identity === 'a' ? '1' : '9' }
+          reader.bookmarks.value = [bookmark]
+          return bookmark
+        },
+        start: (reader, bookmark) => reader.deleteBookmark(bookmark),
+        result: () => response({ state: 'DELETED', version: '10' }),
+        assertBefore: reader => expect(reader.bookmarks.value).to.deep.equal([
+          { bookmarkId: 'shared-bookmark', identity: 'b', version: '9' }
+        ]),
+        assertAfter: reader => expect(reader.bookmarks.value).to.deep.equal([])
+      },
+      {
+        name: 'note create',
+        matches: call => call.method === 'put' && call.path.startsWith('/me/notes/'),
+        pending: 'notePending',
+        prepare: (reader, identity) => {
+          reader.notes.value = [{ noteId: `note-${identity}-seed`, identity, version: '1' }]
+          return { text: `new note ${identity}`, version: '0' }
+        },
+        start: (reader, input) => reader.saveNote(input),
+        result: call => response({
+          anchor: call.body.anchor,
+          noteId: call.path.split('/').at(-1),
+          state: 'ACTIVE',
+          text: call.body.text,
+          version: '1'
+        }),
+        assertBefore: reader => expect(reader.notes.value.map(item => item.noteId)).to.deep.equal(['note-b-seed']),
+        assertAfter: (reader, call) => expect(reader.notes.value.map(item => item.noteId)).to.deep.equal([
+          call.path.split('/').at(-1),
+          'note-b-seed'
+        ])
+      },
+      {
+        name: 'note update',
+        matches: call => call.method === 'put' && call.path === '/me/notes/shared-note',
+        pending: 'notePending',
+        prepare: (reader, identity) => {
+          const note = { anchor: null, noteId: 'shared-note', identity, text: `note ${identity}`, version: identity === 'a' ? '1' : '9' }
+          reader.notes.value = [note]
+          return { ...note, text: `updated ${identity}` }
+        },
+        start: (reader, input) => reader.saveNote(input),
+        result: call => response({
+          anchor: call.body.anchor,
+          noteId: 'shared-note',
+          state: 'ACTIVE',
+          text: call.body.text,
+          version: call.body.expectedVersion === '1' ? '2' : '10'
+        }),
+        assertBefore: reader => expect(reader.notes.value).to.deep.equal([
+          { anchor: null, noteId: 'shared-note', identity: 'b', text: 'note b', version: '9' }
+        ]),
+        assertAfter: reader => expect(reader.notes.value[0]).to.include({ noteId: 'shared-note', text: 'updated b', version: '10' })
+      },
+      {
+        name: 'note delete',
+        matches: call => call.method === 'delete' && call.path === '/me/notes/shared-note',
+        pending: 'notePending',
+        prepare: (reader, identity) => {
+          const note = { anchor: null, noteId: 'shared-note', identity, text: `note ${identity}`, version: identity === 'a' ? '1' : '9' }
+          reader.notes.value = [note]
+          return note
+        },
+        start: (reader, note) => reader.deleteNote(note),
+        result: () => response({ state: 'DELETED', version: '10' }),
+        assertBefore: reader => expect(reader.notes.value).to.deep.equal([
+          { anchor: null, noteId: 'shared-note', identity: 'b', text: 'note b', version: '9' }
+        ]),
+        assertAfter: reader => expect(reader.notes.value).to.deep.equal([])
+      }
+    ]
+
+    for (const mutation of cases) {
+      const oldResponse = deferred()
+      const newResponse = deferred()
+      const mutationCalls = []
+      const handler = call => {
+        if (!mutation.matches(call)) throw new Error(`Unexpected ${mutation.name} request ${call.method} ${call.path}`)
+        mutationCalls.push(call)
+        return mutationCalls.length === 1 ? oldResponse.promise : newResponse.promise
+      }
+      const api = makeApi({
+        deleteHandler: mutation.name.includes('delete') ? handler : undefined,
+        putHandler: mutation.name.includes('delete') ? undefined : handler
+      })
+      const mounted = mountReader(api)
+      primeReader(mounted.reader)
+      const inputA = mutation.prepare(mounted.reader, 'a')
+      const pendingA = mutation.start(mounted.reader, inputA)
+      await waitFor(() => mutationCalls.length === 1)
+
+      stopIdentityBoundWork()
+      expect(mounted.reader.bookmarkPending.value, `${mutation.name} clears bookmark pending`).to.equal(false)
+      expect(mounted.reader.notePending.value, `${mutation.name} clears note pending`).to.equal(false)
+      expect(mounted.reader.noteConflictDraft.value, `${mutation.name} clears conflict draft`).to.equal(null)
+      expect(mounted.reader.noteRetryNotice.value, `${mutation.name} clears retry notice`).to.equal('')
+
+      primeReader(mounted.reader)
+      const inputB = mutation.prepare(mounted.reader, 'b')
+      const pendingB = mutation.start(mounted.reader, inputB)
+      await waitFor(() => mutationCalls.length === 2)
+      if (mutation.pending) expect(mounted.reader[mutation.pending].value, `${mutation.name} marks B pending`).to.equal(true)
+
+      oldResponse.resolve(mutation.result(mutationCalls[0]))
+      expect(await pendingA, `${mutation.name} ignores A result`).to.equal(null)
+      mutation.assertBefore(mounted.reader)
+      if (mutation.pending) expect(mounted.reader[mutation.pending].value, `${mutation.name} keeps B pending`).to.equal(true)
+
+      newResponse.resolve(mutation.result(mutationCalls[1]))
+      await pendingB
+      mutation.assertAfter(mounted.reader, mutationCalls[1])
+      if (mutation.pending) expect(mounted.reader[mutation.pending].value, `${mutation.name} settles B pending`).to.equal(false)
+      mounted.wrapper.unmount()
+      await Promise.resolve()
+    }
+  })
+
+  it('does not replay an ambiguous account-A bookmark or note mutation after identity rotation', async () => {
+    const cases = [
+      {
+        name: 'bookmark create',
+        matches: call => call.method === 'put' && call.path.startsWith('/me/bookmarks/'),
+        prepare: () => null,
+        start: reader => reader.createBookmark(),
+        result: call => response({ bookmarkId: call.path.split('/').at(-1), location: call.body.location, state: 'ACTIVE', version: '1' })
+      },
+      {
+        name: 'bookmark delete',
+        matches: call => call.method === 'delete' && call.path === '/me/bookmarks/shared-bookmark',
+        prepare: (reader, identity) => {
+          const bookmark = { bookmarkId: 'shared-bookmark', version: identity === 'a' ? '1' : '9' }
+          reader.bookmarks.value = [bookmark]
+          return bookmark
+        },
+        start: (reader, input) => reader.deleteBookmark(input),
+        result: () => response({ state: 'DELETED', version: '10' })
+      },
+      {
+        name: 'note create',
+        matches: call => call.method === 'put' && call.path.startsWith('/me/notes/'),
+        prepare: (_reader, identity) => ({ text: `note ${identity}`, version: '0' }),
+        start: (reader, input) => reader.saveNote(input),
+        result: call => response({ anchor: call.body.anchor, noteId: call.path.split('/').at(-1), state: 'ACTIVE', text: call.body.text, version: '1' })
+      },
+      {
+        name: 'note update',
+        matches: call => call.method === 'put' && call.path === '/me/notes/shared-note',
+        prepare: (reader, identity) => {
+          const note = { anchor: null, noteId: 'shared-note', text: `note ${identity}`, version: identity === 'a' ? '1' : '9' }
+          reader.notes.value = [note]
+          return { ...note, text: `updated ${identity}` }
+        },
+        start: (reader, input) => reader.saveNote(input),
+        result: call => response({ anchor: call.body.anchor, noteId: 'shared-note', state: 'ACTIVE', text: call.body.text, version: '10' })
+      },
+      {
+        name: 'note delete',
+        matches: call => call.method === 'delete' && call.path === '/me/notes/shared-note',
+        prepare: (reader, identity) => {
+          const note = { anchor: null, noteId: 'shared-note', text: `note ${identity}`, version: identity === 'a' ? '1' : '9' }
+          reader.notes.value = [note]
+          return note
+        },
+        start: (reader, input) => reader.deleteNote(input),
+        result: () => response({ state: 'DELETED', version: '10' })
+      }
+    ]
+
+    for (const mutation of cases) {
+      const lostResponse = deferred()
+      const mutationCalls = []
+      const handler = call => {
+        if (!mutation.matches(call)) throw new Error(`Unexpected ${mutation.name} request ${call.method} ${call.path}`)
+        mutationCalls.push(call)
+        return mutationCalls.length === 1 ? lostResponse.promise : mutation.result(call)
+      }
+      const api = makeApi({
+        deleteHandler: mutation.name.includes('delete') ? handler : undefined,
+        putHandler: mutation.name.includes('delete') ? undefined : handler
+      })
+      const mounted = mountReader(api)
+      primeReader(mounted.reader)
+      const pendingA = mutation.start(mounted.reader, mutation.prepare(mounted.reader, 'a'))
+      await waitFor(() => mutationCalls.length === 1)
+
+      stopIdentityBoundWork()
+      lostResponse.reject(new Error('account A response lost'))
+      expect(await pendingA, `${mutation.name} stale ambiguity`).to.equal(null)
+      await settle()
+      expect(mutationCalls, `${mutation.name} must not retry under B credentials`).to.have.length(1)
+
+      primeReader(mounted.reader)
+      const resultB = await mutation.start(mounted.reader, mutation.prepare(mounted.reader, 'b'))
+      expect(resultB, `${mutation.name} allows B independently`).not.to.equal(null)
+      expect(mutationCalls).to.have.length(2)
+      expect(mutationCalls[1].options.headers['Idempotency-Key'])
+        .not.to.equal(mutationCalls[0].options.headers['Idempotency-Key'])
+      mounted.wrapper.unmount()
+      await Promise.resolve()
+    }
+  })
+
+  it('clears the component-local note editor when the authenticated identity rotates', async () => {
+    const api = makeApi()
+    const wrapper = mountArchiveReader(api)
+    await waitFor(() => wrapper.find('textarea').exists())
+    wrapper.vm.__switchEditorTargetForTest({ noteId: 'account-a-note', text: 'A draft', version: '1' }, 'A private draft')
+    expect(wrapper.vm.__editorStateForTest()).to.deep.equal({
+      editingNote: { noteId: 'account-a-note', text: 'A draft', version: '1' },
+      noteText: 'A private draft'
+    })
+
+    stopIdentityBoundWork()
+
+    expect(wrapper.vm.__editorStateForTest()).to.deep.equal({ editingNote: null, noteText: '' })
+    wrapper.unmount()
+  })
+
   it('clears in-memory personal reader state when the authenticated identity rotates', async () => {
     const delayedSave = deferred()
     const api = makeApi({
@@ -2094,6 +2347,7 @@ describe('archive reader contract behavior', () => {
         Vue.onUnmounted(() => { readerUnmounts += 1 })
         return readerState
       },
+      registerIdentityCleanup,
       utf8ByteLength
     })
     const LibraryPanel = loadLibraryPanelSfc(ArchiveReader)

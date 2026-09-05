@@ -351,6 +351,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, proxyRefs, ref } from 'vue'
 import { useArchiveReader, utf8ByteLength } from '@/composables/juyiting/useArchiveReader'
+import { registerIdentityCleanup } from '@/utils/identityLifecycle.js'
 
 const { disableTeleport, initialView } = defineProps({
   disableTeleport: { type: Boolean, default: false },
@@ -388,6 +389,7 @@ let programmaticFocusId = ''
 let programmaticScrollGeneration = 0
 let editorRevision = 0
 let returnFocusElement = null
+let unregisterEditorIdentityCleanup = null
 
 const runAction = async (action, fallbackMessage) => {
   actionMessage.value = ''
@@ -689,12 +691,19 @@ const focusRequestedLocation = () => {
 onUpdated(focusRequestedLocation)
 
 onMounted(() => {
+  unregisterEditorIdentityCleanup = registerIdentityCleanup(() => {
+    noteText.value = ''
+    editingNote.value = null
+    editorRevision += 1
+  })
   window.addEventListener('keydown', handleReaderKeydown)
   if (readingOpen.value) document.body?.classList.add('archive-reading-open')
   reader.initialize({ openChapter: readingOpen.value }).catch(() => {})
 })
 
 onBeforeUnmount(() => {
+  unregisterEditorIdentityCleanup?.()
+  unregisterEditorIdentityCleanup = null
   window.removeEventListener('keydown', handleReaderKeydown)
   document.body?.classList.remove('archive-reading-open')
   void flushReadingPosition()

@@ -146,6 +146,17 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
 
   const isCurrentIdentity = generation => generation === identityGeneration && (!disposed || drainAfterDispose)
 
+  const replayIdentityMutation = async (generation, send) => {
+    if (!isCurrentIdentity(generation)) return null
+    try {
+      return await send()
+    } catch (error) {
+      if (!isCurrentIdentity(generation) || error?.name === 'AbortError') return null
+      if (!isAmbiguousMutationError(error)) throw error
+      return isCurrentIdentity(generation) ? send() : null
+    }
+  }
+
   const requireVersion = (value, label) => {
     if (!isCanonicalDecimal(value)) throw new Error(`${label} version is not a canonical decimal string`)
     return value
@@ -505,7 +516,9 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     ? loadBlock(blocks.value[currentIndex.value + 1])
     : Promise.resolve(null)
 
-  const runBookmarkCreate = async () => {
+  const runBookmarkCreate = () => {
+    const requestIdentity = identityGeneration
+    if (!isCurrentIdentity(requestIdentity)) return Promise.resolve(null)
     if (bookmarkCreatePromise) return bookmarkCreatePromise
     if (!bookmarkCreateOperation) {
       const bookmarkId = lowerUuid()
@@ -521,31 +534,37 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     }
     const operation = bookmarkCreateOperation
     bookmarkPending.value = true
-    bookmarkCreatePromise = replayAmbiguousMutation(() => api.put(
+    const promise = replayIdentityMutation(requestIdentity, () => api.put(
       `/me/bookmarks/${operation.bookmarkId}`,
       operation.body,
       { autoLoading: false, headers: mutationHeaders({}, operation.idempotencyKey) }
     )).then((result) => {
+      if (!isCurrentIdentity(requestIdentity)) return null
       const bookmark = unwrap(result)
       requireVersion(bookmark?.version, 'bookmark')
       bookmarks.value = [bookmark, ...bookmarks.value.filter(item => item.bookmarkId !== bookmark.bookmarkId)]
-      bookmarkCreateOperation = null
+      if (bookmarkCreateOperation === operation) bookmarkCreateOperation = null
       clearActionError('书签')
       return bookmark
     }).catch((error) => {
-      if (!isAmbiguousMutationError(error)) bookmarkCreateOperation = null
+      if (!isCurrentIdentity(requestIdentity) || error?.name === 'AbortError') return null
+      if (!isAmbiguousMutationError(error) && bookmarkCreateOperation === operation) bookmarkCreateOperation = null
       errorMessage.value = '书签暂未保存，请重试。'
       throw error
     }).finally(() => {
+      if (!isCurrentIdentity(requestIdentity)) return
       bookmarkPending.value = false
-      bookmarkCreatePromise = null
+      if (bookmarkCreatePromise === promise) bookmarkCreatePromise = null
     })
-    return bookmarkCreatePromise
+    bookmarkCreatePromise = promise
+    return promise
   }
 
   const createBookmark = () => runBookmarkCreate()
 
   const deleteBookmark = async (bookmark) => {
+    const requestIdentity = identityGeneration
+    if (!isCurrentIdentity(requestIdentity)) return null
     const key = bookmark.bookmarkId
     let operation = deleteBookmarkOperations.get(key)
     if (!operation) {
@@ -554,21 +573,25 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       deleteBookmarkOperations.set(key, operation)
     }
     try {
-      const result = await replayAmbiguousMutation(() => api.delete(
+      const result = await replayIdentityMutation(requestIdentity, () => api.delete(
         `/me/bookmarks/${bookmark.bookmarkId}`,
         {
           autoLoading: false,
           headers: mutationHeaders({ 'If-Match': `"v${operation.version}"` }, operation.idempotencyKey)
         }
       ))
+      if (!isCurrentIdentity(requestIdentity)) return null
       const deleted = unwrap(result)
       requireVersion(deleted?.version, 'bookmark')
       bookmarks.value = bookmarks.value.filter(item => item.bookmarkId !== bookmark.bookmarkId)
-      deleteBookmarkOperations.delete(key)
+      if (deleteBookmarkOperations.get(key) === operation) deleteBookmarkOperations.delete(key)
       clearActionError('书签')
       return deleted
     } catch (error) {
-      if (!isAmbiguousMutationError(error)) deleteBookmarkOperations.delete(key)
+      if (!isCurrentIdentity(requestIdentity) || error?.name === 'AbortError') return null
+      if (!isAmbiguousMutationError(error) && deleteBookmarkOperations.get(key) === operation) {
+        deleteBookmarkOperations.delete(key)
+      }
       errorMessage.value = '书签暂未删除，请重试。'
       throw error
     }
@@ -577,6 +600,8 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
   const buildNoteOperation = async ({ noteId, text, anchor, version }) => {
     requireVersion(version, 'note')
     if (utf8ByteLength(text) > NOTE_BYTE_LIMIT) throw new Error('手札不能超过 20,000 UTF-8 bytes')
+    const requestEditionId = edition.value?.editionId
+    if (!requestEditionId) throw new Error('手札 editionId 缺失')
     const sourceLocation = anchor === undefined && currentLocation.value
       ? { ...currentLocation.value }
       : null
@@ -586,7 +611,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       noteId: resourceId,
       body: {
         expectedVersion: version,
-        editionId: edition.value.editionId,
+        editionId: requestEditionId,
         text,
         anchor: authoritativeAnchor
       },
@@ -620,12 +645,13 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       : null
   })
 
-  const sendNoteOperation = async (operation) => {
-    const result = await replayAmbiguousMutation(() => api.put(
+  const sendNoteOperation = async (operation, requestIdentity) => {
+    const result = await replayIdentityMutation(requestIdentity, () => api.put(
       `/me/notes/${operation.noteId}`,
       operation.body,
       { autoLoading: false, headers: mutationHeaders({}, operation.idempotencyKey) }
     ))
+    if (!isCurrentIdentity(requestIdentity)) return null
     const note = unwrap(result)
     requireVersion(note?.version, 'note')
     const index = notes.value.findIndex(item => item.noteId === note.noteId)
@@ -638,22 +664,32 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
   }
 
   const saveNewNote = (input) => {
+    const requestIdentity = identityGeneration
+    if (!isCurrentIdentity(requestIdentity)) return Promise.resolve(null)
     if (newNotePromise) return newNotePromise
     let draftChanged = false
     notePending.value = true
-    newNotePromise = (async () => {
-      if (!newNoteOperation) newNoteOperation = await buildNoteOperation(input)
-      draftChanged = !noteOperationMatchesInput(newNoteOperation, input)
+    const promise = (async () => {
+      if (!newNoteOperation) {
+        const operation = await buildNoteOperation(input)
+        if (!isCurrentIdentity(requestIdentity)) return null
+        newNoteOperation = operation
+      }
+      const operation = newNoteOperation
+      draftChanged = !noteOperationMatchesInput(operation, input)
       if (draftChanged) noteRetryNotice.value = '正在确认上次保存；新稿不会直接作为旧请求重放。'
-      const note = await sendNoteOperation(newNoteOperation)
+      const note = await sendNoteOperation(operation, requestIdentity)
+      if (!note || !isCurrentIdentity(requestIdentity)) return null
       return noteSaveOutcome(note, input, draftChanged)
     })().then((outcome) => {
+      if (!outcome || !isCurrentIdentity(requestIdentity)) return null
       newNoteOperation = null
       noteRetryNotice.value = outcome.preservedDraft
         ? '上次保存已确认；新稿仍保留，请再次保存新稿。'
         : ''
       return outcome
     }).catch((error) => {
+      if (!isCurrentIdentity(requestIdentity) || error?.name === 'AbortError') return null
       if (error?.status === 409 && newNoteOperation) {
         noteConflictDraft.value = newNoteOperation.draft
         errorMessage.value = '手札已在另一处修改；本地草稿已保留，请人工处理后再保存。'
@@ -670,31 +706,38 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       }
       throw error
     }).finally(() => {
+      if (!isCurrentIdentity(requestIdentity)) return
       notePending.value = false
-      newNotePromise = null
+      if (newNotePromise === promise) newNotePromise = null
     })
-    return newNotePromise
+    newNotePromise = promise
+    return promise
   }
 
   const saveExistingNote = async (input) => {
+    const requestIdentity = identityGeneration
+    if (!isCurrentIdentity(requestIdentity)) return null
     const key = input.noteId
     let operation = noteOperations.get(key)
     if (!operation) {
       operation = await buildNoteOperation(input)
+      if (!isCurrentIdentity(requestIdentity)) return null
       noteOperations.set(key, operation)
     }
     const draftChanged = !noteOperationMatchesInput(operation, input)
     if (draftChanged) noteRetryNotice.value = '正在确认上次保存；新稿不会直接作为旧请求重放。'
     notePending.value = true
     try {
-      const note = await sendNoteOperation(operation)
-      noteOperations.delete(key)
+      const note = await sendNoteOperation(operation, requestIdentity)
+      if (!note || !isCurrentIdentity(requestIdentity)) return null
+      if (noteOperations.get(key) === operation) noteOperations.delete(key)
       const outcome = noteSaveOutcome(note, input, draftChanged)
       noteRetryNotice.value = outcome.preservedDraft
         ? '上次保存已确认；新稿仍保留，请再次保存新稿。'
         : ''
       return outcome
     } catch (error) {
+      if (!isCurrentIdentity(requestIdentity) || error?.name === 'AbortError') return null
       if (error?.status === 409) {
         noteConflictDraft.value = operation.draft
         errorMessage.value = '手札已在另一处修改；本地草稿已保留，请人工处理后再保存。'
@@ -706,18 +749,20 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
           ? '上次保存仍未确认；新稿已保留，不能直接以新稿重放。'
           : '上次保存结果不明确；请重试以确认原请求。'
       } else {
-        noteOperations.delete(key)
+        if (noteOperations.get(key) === operation) noteOperations.delete(key)
         noteRetryNotice.value = ''
       }
       throw error
     } finally {
-      notePending.value = false
+      if (isCurrentIdentity(requestIdentity)) notePending.value = false
     }
   }
 
   const saveNote = input => input.noteId ? saveExistingNote(input) : saveNewNote(input)
 
   const deleteNote = async (note) => {
+    const requestIdentity = identityGeneration
+    if (!isCurrentIdentity(requestIdentity)) return null
     const key = note.noteId
     let operation = deleteNoteOperations.get(key)
     if (!operation) {
@@ -727,26 +772,30 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     }
     notePending.value = true
     try {
-      const result = await replayAmbiguousMutation(() => api.delete(
+      const result = await replayIdentityMutation(requestIdentity, () => api.delete(
         `/me/notes/${note.noteId}`,
         {
           autoLoading: false,
           headers: mutationHeaders({ 'If-Match': `"v${operation.version}"` }, operation.idempotencyKey)
         }
       ))
+      if (!isCurrentIdentity(requestIdentity)) return null
       const deleted = unwrap(result)
       requireVersion(deleted?.version, 'note')
       notes.value = notes.value.filter(item => item.noteId !== note.noteId)
-      deleteNoteOperations.delete(key)
+      if (deleteNoteOperations.get(key) === operation) deleteNoteOperations.delete(key)
       noteRetryNotice.value = ''
       clearActionError('手札')
       return deleted
     } catch (error) {
-      if (!isAmbiguousMutationError(error)) deleteNoteOperations.delete(key)
+      if (!isCurrentIdentity(requestIdentity) || error?.name === 'AbortError') return null
+      if (!isAmbiguousMutationError(error) && deleteNoteOperations.get(key) === operation) {
+        deleteNoteOperations.delete(key)
+      }
       errorMessage.value = '手札暂未删除，请重试。'
       throw error
     } finally {
-      notePending.value = false
+      if (isCurrentIdentity(requestIdentity)) notePending.value = false
     }
   }
 
@@ -1328,6 +1377,13 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     loadGeneration += 1
     clearTimeout(saveTimer)
     queuedProgressIntent = null
+    bookmarkCreateOperation = null
+    bookmarkCreatePromise = null
+    deleteBookmarkOperations.clear()
+    newNoteOperation = null
+    newNotePromise = null
+    noteOperations.clear()
+    deleteNoteOperations.clear()
     blockLoadKey = null
     blockLoadPromise = null
     catalogLoadPromise = null
@@ -1346,6 +1402,11 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     saveState.value = 'idle'
     loading.value = false
     chapterLoading.value = false
+    bookmarkPending.value = false
+    notePending.value = false
+    noteAnchorNotice.value = ''
+    noteConflictDraft.value = null
+    noteRetryNotice.value = ''
     closeQuestion()
   }
 
