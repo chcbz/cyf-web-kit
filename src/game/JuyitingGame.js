@@ -48,6 +48,7 @@ export class JuyitingGame {
     this._canvasCoverScale = 1
     this._pendingStart = false
     this._stateId = null
+    this._nextStateSlot = 1
     this._generation = 0
     this._lifecycleGeneration = 0
     this._mountToken = null
@@ -482,9 +483,16 @@ export class JuyitingGame {
 
   _startGame(me, mountToken = this._mountToken) {
     if (!this._isCurrentMount(mountToken)) return
-    // Alternate between two private state slots so remounting cannot be ignored
-    // while the melonJS state registry remains bounded across repeated retries.
-    this._stateId = Number(me.state.USER ?? me.state.PLAY) + (Number(mountToken) % 2)
+    // Alternate between two private state slots so a remount cannot request the
+    // currently active melonJS state, while keeping the registry bounded.
+    const stateBase = Number(me.state.USER ?? me.state.PLAY)
+    const preferredSlot = this._nextStateSlot
+    const preferredStateId = stateBase + preferredSlot
+    const stateSlot = typeof me.state.isCurrent === 'function' && me.state.isCurrent(preferredStateId)
+      ? (preferredSlot + 1) % 2
+      : preferredSlot
+    this._nextStateSlot = (stateSlot + 1) % 2
+    this._stateId = stateBase + stateSlot
     me.state.set(this._stateId, this._hallScene)
     this._initialized = true
     this._fatalError = null

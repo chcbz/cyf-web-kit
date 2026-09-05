@@ -90,6 +90,39 @@ const createRuntimeMelon = () => {
   return { images, me, pendingLoads, stateSets, worldChildren }
 }
 
+const createSameSlotIgnoringMelon = () => {
+  const fake = createRuntimeMelon()
+  const stages = new Map()
+  const stateChanges = []
+  const ignoredChanges = []
+  const sceneEntries = []
+  let currentState = null
+
+  fake.me.state = {
+    USER: 100,
+    PLAY: 'PLAY',
+    set: (stateId, scene) => {
+      fake.stateSets.push([stateId, scene])
+      stages.set(stateId, scene)
+    },
+    change: stateId => {
+      if (stateId === currentState) {
+        ignoredChanges.push(stateId)
+        return
+      }
+      currentState = stateId
+      stateChanges.push(stateId)
+      const scene = stages.get(stateId)
+      sceneEntries.push(stateId)
+      scene?.onResetEvent?.()
+    },
+    isCurrent: stateId => stateId === currentState,
+    pause: () => {}
+  }
+
+  return { ...fake, ignoredChanges, sceneEntries, stateChanges }
+}
+
 const nextLoadBatch = async (fake, timeoutMs = 5_000) => {
   const deadline = Date.now() + timeoutMs
   while (fake.pendingLoads.length === 0 && Date.now() < deadline) {
@@ -128,6 +161,61 @@ const mountThroughBaseResources = async (game, fake) => {
 }
 
 describe('JuyitingGame sprite lifecycle', () => {
+  it('alternates bounded melon state slots across normal and cancelled mount lifecycles', async () => {
+    const fake = createSameSlotIgnoringMelon()
+    const game = new JuyitingGame()
+    let readyCallbacks = 0
+    const spriteLoadResult = {
+      available: new Set(),
+      unavailable: new Set(),
+      errors: [],
+      degraded: false,
+      requiredMissingCount: 0,
+      optionalMissingCount: 0
+    }
+    game._loadMelonJS = async () => {
+      game._me = fake.me
+      return fake.me
+    }
+    game._loadResources = async () => {}
+    game._prepareMapData = async (_me, mountToken) => {
+      if (!game._isCurrentMount(mountToken)) return
+      game._mapData = { movementReady: false }
+      game._hallScene.prepareRuntime = () => true
+      game._hallScene._buildScene = () => {
+        game._hallScene._sceneBuilt = true
+        game._hallScene._onReady?.()
+        return true
+      }
+    }
+    game._loadPersonaSpriteBatch = async () => spriteLoadResult
+    game._deferredPersonaSpriteManifest = () => ({ personas: {} })
+
+    const mount = () => game.mount({ querySelector: () => null }, { simulationEnabled: false, onReady: () => { readyCallbacks += 1 } })
+    const mountAndEnter = async () => {
+      await mount()
+      game.start()
+      game.destroy()
+    }
+
+    try {
+      await mountAndEnter()
+      await mount()
+      game.destroy()
+      await mountAndEnter()
+      await mountAndEnter()
+      await mountAndEnter()
+
+      expect(fake.stateChanges).to.deep.equal([101, 100, 101, 100])
+      expect(fake.sceneEntries).to.deep.equal([101, 100, 101, 100])
+      expect(readyCallbacks).to.equal(4)
+      expect(fake.ignoredChanges).to.deep.equal([])
+      expect(fake.stateSets.map(([stateId]) => stateId)).to.deep.equal([101, 100, 100, 101, 100])
+    } finally {
+      game.destroy()
+    }
+  })
+
   it('keeps the map ready and degraded when a required sprite fails', async () => {
     const fake = createRuntimeMelon()
     const game = new JuyitingGame()
