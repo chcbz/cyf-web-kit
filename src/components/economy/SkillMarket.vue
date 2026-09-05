@@ -132,7 +132,7 @@ watch(() => props.targetAgent, async (agent) => {
   try { await market.loadEntitlements(agent?.agentId || agent?.id) } catch {}
 }, { immediate: true })
 onMounted(refresh)
-onBeforeUnmount(market.stopOrderPolling)
+onBeforeUnmount(market.dispose)
 </script>
 
 <style scoped>

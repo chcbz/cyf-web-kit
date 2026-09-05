@@ -5,7 +5,8 @@ export const MICRO_SILVER_PER_SILVER = 1000000n
  * Keep this boundary separate from all display-only formatting so no floating
  * point representation can enter an economy request or response.
  */
-export const isCanonicalMicroAmount = value => typeof value === 'string' && /^(0|[1-9]\d*)$/.test(value)
+export const isCanonicalDecimalString = value => typeof value === 'string' && /^(0|[1-9]\d*)$/.test(value)
+export const isCanonicalMicroAmount = isCanonicalDecimalString
 
 export const microAmountToBigInt = (value) => {
   if (!isCanonicalMicroAmount(value)) throw new TypeError('SILVER amount must be a canonical non-negative decimal string')

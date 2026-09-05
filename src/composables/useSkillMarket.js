@@ -1,5 +1,6 @@
 import { computed, getCurrentScope, onScopeDispose, ref, watch } from 'vue'
 import { agentApi as defaultAgentApi } from './useHttp.js'
+import { formatSilverMicro as formatCanonicalSilverMicro, isCanonicalMicroAmount } from '../utils/silverAmount.js'
 
 export const SKILL_ORDER_STATUSES = Object.freeze({
   FUNDS_HELD: 'FUNDS_HELD',
@@ -8,7 +9,6 @@ export const SKILL_ORDER_STATUSES = Object.freeze({
   REFUNDED: 'REFUNDED'
 })
 
-const MICRO_PER_SILVER = 1000000n
 const PURCHASE_JOURNAL_STORAGE_KEY_PREFIX = 'cyf.skill-market.purchase-journal.v3'
 const PURCHASE_JOURNAL_SCHEMA_VERSION = 3
 const PURCHASE_OPERATION_LOCK_PREFIX = 'cyf.skill-market.purchase-operation.v1'
@@ -107,21 +107,12 @@ const decimalEpochMilliseconds = (value) => {
   const parsed = Number(raw)
   return Number.isSafeInteger(parsed) ? parsed : null
 }
-const validPriceMicro = value => typeof value === 'string' && /^(0|[1-9]\d*)$/.test(value)
+const validPriceMicro = isCanonicalMicroAmount
 const validVersion = canonicalDecimalString
 
-/** Formats decimal-string micro-silver without converting money through Number. */
-export const formatSilverMicro = (amountMicro) => {
-  try {
-    const amount = BigInt(String(amountMicro ?? '0'))
-    const sign = amount < 0n ? '-' : ''
-    const absolute = amount < 0n ? -amount : amount
-    const whole = absolute / MICRO_PER_SILVER
-    const fraction = (absolute % MICRO_PER_SILVER).toString().padStart(6, '0').replace(/0+$/, '')
-    return `${sign}${whole.toString()}${fraction ? `.${fraction}` : ''} SILVER`
-  } catch {
-    return '—'
-  }
+/** Formats canonical decimal-string micro-silver without Number conversion. */
+export const formatSilverMicro = value => {
+  try { return formatCanonicalSilverMicro(value) } catch { return '—' }
 }
 
 export const formatInstalledSkillFact = (skill) => {
@@ -149,6 +140,10 @@ const operationLockError = () => {
 
 const isAmbiguousTransportFailure = (failure) => !failure?.businessFailure && !failure?.response &&
   !failure?.status && !failure?.statusCode && !failure?.httpStatus
+const DEFINITIVE_NO_ORDER_FAILURE_CODES = new Set([
+  'PRICE_CHANGED', 'STALE_AGENT', 'PERMISSION_DENIED', 'ALREADY_ENTITLED', 'IDEMPOTENCY_CONFLICT'
+])
+const isDefinitiveNoOrderFailure = failure => DEFINITIVE_NO_ORDER_FAILURE_CODES.has(failure?.code)
 
 const storageError = () => {
   const failure = new Error('购买恢复记录无法安全保存或读取；请检查浏览器存储权限和可用空间后重试。')
@@ -229,7 +224,7 @@ export function useSkillMarket ({
   let entitlementGeneration = 0
   let activeOrderIdentity = null
   let disposed = false
-  const operationAbortController = new AbortController()
+  let operationAbortController = new AbortController()
 
   const previewEnabled = computed(() => Boolean(enabled?.value ?? enabled))
   const actorScopeFingerprint = computed(() => requiredString(actorScopeKey?.value ?? actorScopeKey))
@@ -302,10 +297,29 @@ export function useSkillMarket ({
   const awaitAbortable = (promise) => {
     const signal = operationAbortController.signal
     if (signal.aborted) return Promise.reject(signal.reason || new DOMException('Aborted', 'AbortError'))
-    return Promise.race([
-      promise,
-      new Promise((resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason || new DOMException('Aborted', 'AbortError')), { once: true }))
-    ])
+    return new Promise((resolve, reject) => {
+      const onAbort = () => reject(signal.reason || new DOMException('Aborted', 'AbortError'))
+      signal.addEventListener('abort', onAbort, { once: true })
+      Promise.resolve(promise).then(
+        value => { signal.removeEventListener('abort', onAbort); resolve(value) },
+        failure => { signal.removeEventListener('abort', onAbort); reject(failure) }
+      )
+    })
+  }
+
+  const cancelScopeOperations = () => {
+    quoteGeneration += 1
+    productRequestGeneration += 1
+    purchaseGeneration += 1
+    orderPollGeneration += 1
+    orderRequestGeneration += 1
+    entitlementGeneration += 1
+    operationAbortController.abort(new DOMException('Market scope changed', 'AbortError'))
+    if (!disposed) operationAbortController = new AbortController()
+    quoteLoading.value = false
+    purchaseLoading.value = false
+    orderLoading.value = false
+    orderPolling.value = false
   }
 
   const withOperationLock = async (operation) => {
@@ -358,6 +372,16 @@ export function useSkillMarket ({
     purchaseJournal.value = readPurchaseJournal()
   }, { immediate: true })
 
+  watch(actorScopeFingerprint, (next, previous) => {
+    if (previous === undefined || next === previous) return
+    cancelScopeOperations()
+    quote.value = null
+    quoteBinding.value = ''
+    order.value = null
+    activeOrderIdentity = null
+    entitlements.value = []
+  })
+
   const clearQuote = () => {
     quoteGeneration += 1
     quote.value = null
@@ -398,7 +422,7 @@ export function useSkillMarket ({
     loading.value = true
     error.value = ''
     try {
-      const response = await agentApi.get('/skill-products', {}, { autoLoading: false })
+      const response = await awaitAbortable(agentApi.get('/skill-products', {}, { autoLoading: false, signal: operationAbortController.signal }))
       products.value = productList(readSkillApiPayload(response))
       return products.value
     } catch (failure) {
@@ -414,10 +438,14 @@ export function useSkillMarket ({
     if (!id) return null
     const generation = ++productRequestGeneration
     try {
-      const response = await agentApi.get(`/skill-products/${encodeURIComponent(id)}`, {}, { autoLoading: false })
+      const response = await awaitAbortable(agentApi.get(`/skill-products/${encodeURIComponent(id)}`, {}, { autoLoading: false, signal: operationAbortController.signal }))
       const detail = readSkillApiPayload(response)
       if (generation !== productRequestGeneration) return null
       clearQuote()
+      if (isTerminalOrder(order.value) && !sameString(order.value?.productVersionId, productIdentity(detail).productVersionId)) {
+        order.value = null
+        activeOrderIdentity = null
+      }
       selectedProduct.value = detail || null
       approvedPermissions.value = []
       return selectedProduct.value
@@ -430,6 +458,10 @@ export function useSkillMarket ({
   const selectProduct = (product) => {
     productRequestGeneration += 1
     clearQuote()
+    if (isTerminalOrder(order.value) && !sameString(order.value?.productVersionId, productIdentity(product).productVersionId)) {
+      order.value = null
+      activeOrderIdentity = null
+    }
     selectedProduct.value = product || null
     approvedPermissions.value = []
   }
@@ -506,7 +538,7 @@ export function useSkillMarket ({
       quoteId: currentQuote.quoteId,
       productVersionId: record.productVersionId,
       targetAgentId: record.targetAgentId,
-      expectedPriceMicro: String(currentQuote.priceMicro),
+      expectedPriceMicro: currentQuote.priceMicro,
       expectedAgentVersion: record.expectedAgentVersion,
       approvedPermissions: [...record.approvedPermissions]
     }
@@ -618,7 +650,7 @@ export function useSkillMarket ({
     }
     const generation = ++entitlementGeneration
     try {
-      const response = await agentApi.get(`/${encodeURIComponent(id)}/skill-entitlements`, {}, { autoLoading: false })
+      const response = await awaitAbortable(agentApi.get(`/${encodeURIComponent(id)}/skill-entitlements`, {}, { autoLoading: false, signal: operationAbortController.signal }))
       const payload = entitlementList(readSkillApiPayload(response))
       if (generation !== entitlementGeneration || !sameString(target.value.targetAgentId, id)) return null
       entitlements.value = payload
@@ -659,7 +691,8 @@ export function useSkillMarket ({
   }
 
   const acceptOrder = async (candidate, expected, insideOperationLock = false) => {
-    if (!matchingOrderResponse(candidate, expected) || !canAdvanceOrder(order.value, candidate)) return null
+    const sameOrder = sameString(order.value?.orderId, candidate?.orderId)
+    if (!matchingOrderResponse(candidate, expected) || (sameOrder && !canAdvanceOrder(order.value, candidate))) return null
     order.value = candidate
     activeOrderIdentity = identityFromOrder(candidate)
     await clearTerminalPurchaseRecord(candidate, insideOperationLock)
@@ -697,6 +730,14 @@ export function useSkillMarket ({
       clearQuote()
       return accepted
     } catch (failure) {
+      // Only frozen, definitive no-order outcomes may release this persisted intent.
+      // Unknown HTTP/transport outcomes retain its idempotency key for exact replay.
+      if (isDefinitiveNoOrderFailure(failure)) {
+        const current = readPurchaseJournal()
+        if (current.some(item => item.intentFingerprint === record.intentFingerprint)) {
+          persistPurchaseJournal(current.filter(item => item.intentFingerprint !== record.intentFingerprint))
+        }
+      }
       if (generation === purchaseGeneration) error.value = failure?.message || '技能购买失败；可使用恢复操作重放原请求'
       throw failure
     } finally {
@@ -761,7 +802,7 @@ export function useSkillMarket ({
     orderLoading.value = true
     error.value = ''
     try {
-      const response = await agentApi.get(`/skill-orders/${encodeURIComponent(id)}`, {}, { autoLoading: false })
+      const response = await awaitAbortable(agentApi.get(`/skill-orders/${encodeURIComponent(id)}`, {}, { autoLoading: false, signal: operationAbortController.signal }))
       const payload = readSkillApiPayload(response) || null
       if (generation !== orderRequestGeneration || !sameString(order.value?.orderId, id) ||
         !sameString(target.value.targetAgentId, expected.targetAgentId)) return null
@@ -805,8 +846,7 @@ export function useSkillMarket ({
   if (getCurrentScope()) {
     onScopeDispose(() => {
       disposed = true
-      operationAbortController.abort()
-      stopOrderPolling()
+      cancelScopeOperations()
     })
   }
 
@@ -850,6 +890,12 @@ export function useSkillMarket ({
     loadOrder,
     pollOrder,
     stopOrderPolling,
+    dispose: () => {
+      if (!disposed) {
+        disposed = true
+        cancelScopeOperations()
+      }
+    },
     loadEntitlements
   }
 }

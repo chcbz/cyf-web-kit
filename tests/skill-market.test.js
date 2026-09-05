@@ -130,6 +130,8 @@ describe('skill market preview', () => {
     expect(formatSilverMicro('100000000')).to.equal('100 SILVER')
     expect(formatSilverMicro('9007199254740993000001')).to.equal('9007199254740993.000001 SILVER')
     expect(formatSilverMicro('not-money')).to.equal('—')
+    expect(formatSilverMicro('01')).to.equal('—')
+    expect(formatSilverMicro(-1)).to.equal('—')
   })
 
   it('uses byte-stable UTF-16 code-unit ordering instead of locale-dependent sorting', () => {
@@ -444,6 +446,109 @@ describe('skill market preview', () => {
     expect(marketSource).to.include('运行时能力（自由文本）')
     expect(dialogSource).to.include('切换目标 Agent 或批准权限会使报价失效')
   })
+
+  it('clears only documented definitive no-order failures and reuses the key after an ambiguous order error', async () => {
+    const cases = ['PRICE_CHANGED', 'STALE_AGENT', 'PERMISSION_DENIED', 'ALREADY_ENTITLED', 'IDEMPOTENCY_CONFLICT']
+    for (const code of cases) {
+      const storage = memoryStorage()
+      const market = useSkillMarket({
+        actorScopeKey: `actor-${code}`,
+        enabled: ref(true),
+        purchaseIdempotencyStorage: storage,
+        agentApi: {
+          get: async () => success([]),
+          post: async (url, payload) => url === '/skill-orders/quotes'
+            ? success({ quoteId: 'sq-1', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
+            : ({ data: { code, msg: code } })
+        }
+      })
+      await preparePurchase(market)
+      await market.purchase().catch(error => expect(error.code).to.equal(code))
+      expect(market.unresolvedOperations.value).to.deep.equal([])
+      expect(market.canRequestQuote.value).to.equal(true)
+    }
+
+    const storage = memoryStorage()
+    const keys = []
+    const market = useSkillMarket({
+      actorScopeKey: 'actor-ambiguous-order', enabled: ref(true), purchaseIdempotencyStorage: storage,
+      createIdempotencyKey: (() => { let n = 0; return () => `key-${++n}` })(),
+      agentApi: {
+        get: async () => success([]),
+        post: async (url, payload, options) => {
+          if (url === '/skill-orders/quotes') return success({ quoteId: 'sq-1', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
+          keys.push(options.headers['Idempotency-Key'])
+          throw new TypeError('response lost')
+        }
+      }
+    })
+    await preparePurchase(market)
+    await market.purchase().catch(() => {})
+    await market.purchase().catch(() => {})
+    expect(keys).to.deep.equal(['key-2', 'key-2'])
+    expect(market.unresolvedOperations.value).to.have.length(1)
+  })
+
+  it('accepts a new order identity after order A is ACTIVE and fences late A reads from order B', async () => {
+    const storage = memoryStorage()
+    const lateA = deferred()
+    let sequence = 0
+    const api = {
+      get: async url => url === '/skill-orders/so-a' ? lateA.promise : success([]),
+      post: async (url, payload) => {
+        if (url === '/skill-orders/quotes') return success({ quoteId: `sq-${++sequence}`, productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: payload.productVersionId.includes('editor') ? '50000000' : '30000000' })
+        return success({ orderId: sequence === 1 ? 'so-a' : 'so-b', targetAgentId: payload.targetAgentId, productVersionId: payload.productVersionId, expectedAgentVersion: payload.expectedAgentVersion, status: sequence === 1 ? 'ACTIVE' : 'FUNDS_HELD' })
+      }
+    }
+    const market = useSkillMarket({ actorScopeKey: 'actor-sequential', enabled: ref(true), purchaseIdempotencyStorage: storage, agentApi: api })
+    await preparePurchase(market, seededProducts[2])
+    expect((await market.purchase()).status).to.equal('ACTIVE')
+    const staleA = market.loadOrder('so-a')
+    market.selectProduct(seededProducts[3])
+    await preparePurchase(market, seededProducts[3])
+    expect((await market.purchase()).orderId).to.equal('so-b')
+    lateA.resolve(success({ orderId: 'so-a', targetAgentId: 'agent-lin', productVersionId: 'spv-repo-test-1', expectedAgentVersion: '7', status: 'ACTIVE' }))
+    expect(await staleA).to.equal(null)
+    expect(market.order.value).to.include({ orderId: 'so-b', status: 'FUNDS_HELD' })
+  })
+
+
+  it('aborts scoped reads on actor-scope change and component disposal without applying late state', async () => {
+    const actorScopeKey = ref('opaque-a')
+    const catalog = deferred()
+    let catalogOptions
+    const market = useSkillMarket({
+      actorScopeKey,
+      enabled: ref(true),
+      agentApi: {
+        get: async (_url, _params, options) => { catalogOptions = options; return catalog.promise }
+      }
+    })
+    const load = market.loadProducts().catch(error => error)
+    actorScopeKey.value = 'opaque-b'
+    const failure = await load
+    expect(failure.name).to.equal('AbortError')
+    expect(catalogOptions.signal.aborted).to.equal(true)
+    catalog.resolve(success({ items: seededProducts }))
+    await Promise.resolve()
+    expect(market.products.value).to.deep.equal([])
+
+    const entitlement = deferred()
+    let entitlementOptions
+    const disposed = useSkillMarket({
+      actorScopeKey: 'opaque-c', enabled: ref(true),
+      agentApi: { get: async (_url, _params, options) => { entitlementOptions = options; return entitlement.promise } }
+    })
+    disposed.setTargetAgent({ agentId: 'agent-lin', version: '7' })
+    const late = disposed.loadEntitlements().catch(error => error)
+    disposed.dispose()
+    expect((await late).name).to.equal('AbortError')
+    expect(entitlementOptions.signal.aborted).to.equal(true)
+    entitlement.resolve(success({ entitlements: [{ skillKey: 'late' }] }))
+    await Promise.resolve()
+    expect(disposed.entitlements.value).to.deep.equal([])
+  })
+
 })
 
 describe('skill market recovery hardening', () => {
