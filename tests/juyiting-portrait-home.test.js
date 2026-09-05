@@ -39,10 +39,16 @@ describe('HallPortraitHome', () => {
     expect(hallSource).to.include('void refreshHall()')
   })
 
-  it('uses the O01 request capability without preemptively changing the experience shell', () => {
+  it('opens full view through the page owner and exposes onboarding as a low-prominence existing-menu action', () => {
+    const entrySource = readFileSync(new URL('../src/components/world/JuyiHallEntry.vue', import.meta.url), 'utf8')
     expect(portraitHomeSource).to.include("emit('request-landscape')")
-    expect(hallSource).to.include('@request-landscape="requestLandscape"')
-    expect(portraitHomeSource).not.to.include('experienceMode')
+    expect(hallSource).to.include('@request-landscape="requestPortraitLandscape"')
+    expect(portraitHomeSource).to.include('class="onboarding-link"')
+    expect(portraitHomeSource).to.include("emit('open-onboarding')")
+    expect(hallSource).to.include('@open-onboarding="emit(\'open-onboarding\')"')
+    expect(entrySource).to.include('<JuyiHall @open-onboarding="reopen" />')
+    expect(entrySource).not.to.include('class="onboarding-reopen"')
+    expect(entrySource).not.to.include('position: fixed')
     expect(portraitHomeSource).not.to.match(/transform:\s*rotate|rotate\(/)
     expect(portraitHomeSource).not.to.include('miniProgram.redirectTo')
     expect(portraitHomeSource).not.to.include('visualViewport')

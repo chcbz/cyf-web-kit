@@ -186,6 +186,33 @@ describe('HallScene melonJS runtime compatibility', () => {
     ])
   })
 
+  it('alternates private melon state slots across successive map mounts', () => {
+    const calls = []
+    const game = new JuyitingGame()
+    const me = {
+      state: {
+        USER: 100,
+        PLAY: 3,
+        isCurrent: () => false,
+        set: (...args) => calls.push(['set', ...args])
+      }
+    }
+    game._markSceneDebugDirty = () => {}
+
+    game._mountToken = 1
+    game._hallScene = { mount: 1 }
+    game._startGame(me, 1)
+    game._initialized = false
+    game._mountToken = 2
+    game._hallScene = { mount: 2 }
+    game._startGame(me, 2)
+
+    expect(calls).to.deep.equal([
+      ['set', 101, { mount: 1 }],
+      ['set', 100, { mount: 2 }]
+    ])
+  })
+
   it('exposes command, snapshot, movement-map, and phase-event simulation facades', () => {
     const enqueued = []
     const synced = []

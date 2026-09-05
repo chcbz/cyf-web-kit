@@ -27,9 +27,9 @@
         </button>
         <button
           class="tool-action orientation-action"
-          :disabled="interactionLocked || isSceneMounting || orientationRequestPending || experienceMode === 'landscape-map'"
-          title="请求横屏全景"
-          @click="$emit('request-landscape')"
+          :disabled="interactionLocked || isSceneMounting || orientationRequestPending"
+          :title="sceneMode === 'landscape' ? '切换竖屏视图' : '打开全景视图'"
+          @click="$emit(sceneMode === 'landscape' ? 'request-portrait' : 'request-landscape')"
         >
           <span
             class="orientation-glyph"
@@ -133,6 +133,7 @@ const emit = defineEmits([
   'new-conversation',
   'open-panel',
   'request-landscape',
+  'request-portrait',
   'refresh-hall',
   'scene-mode-change',
   'select-agent',

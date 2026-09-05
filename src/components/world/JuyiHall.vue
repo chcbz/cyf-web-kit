@@ -17,6 +17,7 @@
       :inert="isPanelSessionActive || voiceInteractionLocked ? '' : null"
       :aria-hidden="isPanelSessionActive || voiceInteractionLocked ? 'true' : null"
       @quick-action="handlePortraitQuickAction"
+      @open-onboarding="emit('open-onboarding')"
       @refresh-hall="refreshHall"
       @request-landscape="requestPortraitLandscape"
       @select-agent="handlePortraitAgentSelect"
@@ -61,6 +62,7 @@
       @new-conversation="handleNewHallConversation"
       @open-panel="handleStagePanelOpen"
       @request-landscape="requestLandscape"
+      @request-portrait="requestPortrait"
       @refresh-hall="refreshHall"
       @select-agent="selectAgent"
       @simulation-phase-events="handleSimulationPhaseEvents"
@@ -351,6 +353,8 @@ import {
 import { log } from '@/utils/logger'
 import { juyitingGame } from '@/game/index.js'
 
+const emit = defineEmits(['open-onboarding'])
+
 const globalStore = useGlobalStore()
 const apiStore = useApiStore()
 
@@ -399,7 +403,8 @@ const {
   isMobileCoarse,
   orientationHint,
   orientationRequestPending,
-  requestLandscape
+  requestLandscape,
+  requestPortrait
 } = useHallExperienceMode()
 const { panelLayout } = useHallPanels({ experienceMode, isMobileCoarse })
 const hallRootRef = ref(null)
@@ -788,6 +793,10 @@ const handlePortraitQuickAction = (action) => {
   if (action !== 'refresh') stagePortraitHotspotTarget(action)
   if (action === 'refresh') {
     void refreshHall()
+    return
+  }
+  if (action === 'onboarding') {
+    emit('open-onboarding')
     return
   }
   if (action === 'discussion') {

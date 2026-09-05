@@ -1,7 +1,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
-export const resolveHallExperienceMode = ({ isMobileCoarse, isPhysicalLandscape }) => (
-  !isMobileCoarse || isPhysicalLandscape ? 'landscape-map' : 'portrait-command'
+export const resolveHallExperienceMode = ({ isMobileCoarse, isPhysicalLandscape, requestedMode = null }) => (
+  !isMobileCoarse ? 'landscape-map' : (requestedMode || (isPhysicalLandscape ? 'landscape-map' : 'portrait-command'))
 )
 
 const REQUEST_TIMEOUT_MS = 3000
@@ -22,14 +22,18 @@ const orientationFromScreen = orientation => {
 
 const orientationFromLegacyWindow = () => orientationFromAngle(globalThis.window?.orientation)
 
+const isWeChatWebView = () => /MicroMessenger/i.test(globalThis.navigator?.userAgent || '') || Boolean(globalThis.wx?.miniProgram)
+
 export const useHallExperienceMode = () => {
   const isMobileCoarse = ref(false)
   const isPhysicalLandscape = ref(false)
+  const requestedMode = ref(null)
   const orientationHint = ref('')
   const orientationRequestPending = ref(false)
   const experienceMode = computed(() => resolveHallExperienceMode({
     isMobileCoarse: isMobileCoarse.value,
-    isPhysicalLandscape: isPhysicalLandscape.value
+    isPhysicalLandscape: isPhysicalLandscape.value,
+    requestedMode: requestedMode.value
   }))
 
   let isMounted = false
@@ -45,6 +49,9 @@ export const useHallExperienceMode = () => {
   const commitPhysicalOrientation = next => {
     if (typeof next !== 'boolean' || next === isPhysicalLandscape.value) return false
     isPhysicalLandscape.value = next
+    // A real device rotation is authoritative over a prior local fallback or portrait request.
+    requestedMode.value = null
+    orientationHint.value = ''
     if (next && requestOwnership?.acquisitionComplete) completeRequest(requestOwnership.token)
     return true
   }
@@ -220,9 +227,26 @@ export const useHallExperienceMode = () => {
   }
 
   const requestLandscape = () => {
-    if (!isMounted || requestOwnership || orientationRequestPending.value || !isMobileCoarse.value || isPhysicalLandscape.value) {
+    if (!isMounted || requestOwnership || orientationRequestPending.value || !isMobileCoarse.value) {
       return Promise.resolve(false)
     }
+    // WeChat WebViews/mini-programs cannot safely enter the browser fullscreen and
+    // orientation-lock flow. Keep normal browsers on that path and select only the
+    // local Hall shell for this unsupported host.
+    if (isWeChatWebView()) {
+      if (experienceMode.value === 'landscape-map') return Promise.resolve(false)
+      requestedMode.value = 'landscape-map'
+      orientationHint.value = '当前容器不支持自动横屏，已打开全景视图'
+      return Promise.resolve(true)
+    }
+    // A portrait request can override a still-landscape physical device. Reopening
+    // full view in that state only clears the local override; it never reacquires.
+    if (requestedMode.value === 'portrait-command' && isPhysicalLandscape.value) {
+      requestedMode.value = null
+      orientationHint.value = ''
+      return Promise.resolve(true)
+    }
+    if (isPhysicalLandscape.value) return Promise.resolve(false)
 
     const fullscreenElement = globalThis.document?.documentElement || null
     const currentFullscreen = globalThis.document?.fullscreenElement
@@ -268,6 +292,19 @@ export const useHallExperienceMode = () => {
     return completion
   }
 
+  const requestPortrait = async () => {
+    if (!isMounted || !isMobileCoarse.value || (experienceMode.value === 'portrait-command' && !requestOwnership)) return false
+    requestedMode.value = 'portrait-command'
+    orientationHint.value = ''
+    const ownership = requestOwnership
+    if (!ownership) return true
+    clearRequestTimer(ownership.token)
+    orientationRequestPending.value = false
+    settleRequest(ownership.token, false)
+    await releaseRequestOwnership(ownership.token)
+    return true
+  }
+
   const readScreenSource = () => orientationFromScreen(screenOrientation)
   const readMediaSource = event => (
     typeof event?.matches === 'boolean'
@@ -278,7 +315,13 @@ export const useHallExperienceMode = () => {
   const handleScreenOrientationChange = event => commitFreshSourceTruth('screen', readScreenSource(), event)
   const handleOrientationMediaChange = event => commitFreshSourceTruth('media', readMediaSource(event), event)
   const handleLegacyOrientationChange = event => commitFreshSourceTruth('legacy', readLegacySource(), event)
-  const handleCoarseChange = () => { isMobileCoarse.value = Boolean(coarseMedia?.matches) }
+  const handleCoarseChange = () => {
+    isMobileCoarse.value = Boolean(coarseMedia?.matches)
+    if (!isMobileCoarse.value) {
+      requestedMode.value = null
+      orientationHint.value = ''
+    }
+  }
 
   onMounted(() => {
     if (typeof window === 'undefined') return
@@ -303,6 +346,7 @@ export const useHallExperienceMode = () => {
 
   onBeforeUnmount(() => {
     isMounted = false
+    requestedMode.value = null
     const activeGeneration = requestGeneration
     void cancelRequest(activeGeneration)
     requestGeneration += 1
@@ -322,6 +366,7 @@ export const useHallExperienceMode = () => {
     isPhysicalLandscape,
     orientationHint,
     orientationRequestPending,
-    requestLandscape
+    requestLandscape,
+    requestPortrait
   }
 }

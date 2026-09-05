@@ -2,6 +2,11 @@ import { expect } from 'chai'
 import { before } from 'mocha'
 import { readFileSync } from 'fs'
 
+// Keep this focused suite independently runnable; the full suite may initialize SVG globals in another file first.
+global.SVGElement = global.window?.SVGElement
+global.Element = global.window?.Element
+global.Node = global.window?.Node
+
 let mount
 let Vue
 
@@ -1179,6 +1184,50 @@ describe('Juyi Hall experience mode', () => {
     }
   })
 
+  it('uses a local full-view fallback in WeChat without requesting fullscreen or orientation lock', async () => {
+    const env = setupEnvironment()
+    const originalWx = global.wx
+    let fullscreenRequests = 0
+    let lockRequests = 0
+    global.wx = { miniProgram: {} }
+    global.document.documentElement.requestFullscreen = () => { fullscreenRequests += 1; return Promise.resolve() }
+    global.screen.orientation.lock = () => { lockRequests += 1; return Promise.resolve() }
+    try {
+      const { mode, wrapper } = await mountMode()
+      expect(await mode.requestLandscape()).to.equal(true)
+      expect(mode.experienceMode.value).to.equal('landscape-map')
+      expect(mode.orientationHint.value).to.equal('当前容器不支持自动横屏，已打开全景视图')
+      expect(fullscreenRequests).to.equal(0)
+      expect(lockRequests).to.equal(0)
+      wrapper.unmount()
+    } finally {
+      global.wx = originalWx
+      env.restore()
+    }
+  })
+
+  it('lets the explicit portrait control release Hall-owned native orientation state', async () => {
+    const env = setupEnvironment()
+    let unlocks = 0
+    let exits = 0
+    global.document.documentElement.requestFullscreen = async () => setFullscreenElement(global.document.documentElement)
+    global.document.exitFullscreen = async () => { exits += 1; setFullscreenElement(null) }
+    global.screen.orientation.lock = async () => env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
+    global.screen.orientation.unlock = () => { unlocks += 1 }
+    try {
+      const { mode, wrapper } = await mountMode()
+      expect(await mode.requestLandscape()).to.equal(true)
+      expect(mode.experienceMode.value).to.equal('landscape-map')
+      expect(await mode.requestPortrait()).to.equal(true)
+      expect(mode.experienceMode.value).to.equal('portrait-command')
+      expect(unlocks).to.equal(1)
+      expect(exits).to.equal(1)
+      wrapper.unmount()
+    } finally {
+      env.restore()
+    }
+  })
+
   it('keeps orientation ownership in the mode composable, not panels or stage', () => {
     const modeSource = readFileSync(new URL('../src/composables/juyiting/useHallExperienceMode.js', import.meta.url), 'utf8')
     const panelsSource = readFileSync(new URL('../src/composables/juyiting/useHallPanels.js', import.meta.url), 'utf8')
@@ -1186,6 +1235,8 @@ describe('Juyi Hall experience mode', () => {
 
     expect(modeSource).to.include("screenOrientation?.addEventListener?.('change'")
     expect(modeSource).to.include("window.addEventListener?.('orientationchange'")
+    expect(modeSource).to.include('const isWeChatWebView')
+    expect(modeSource).to.include("const requestPortrait = async () =>")
     expect(modeSource).not.to.include("addEventListener?.('resize'")
     expect(panelsSource).not.to.include('addEventListener')
     expect(panelsSource).not.to.include('matchMedia')

@@ -50,7 +50,10 @@
     <section class="portrait-section" aria-labelledby="portrait-shortcuts-title">
       <div class="section-heading">
         <h2 id="portrait-shortcuts-title">常用入口</h2>
-        <span>单手直达</span>
+        <div class="section-heading-actions">
+          <button class="onboarding-link" type="button" @click="emit('open-onboarding')">新手引导</button>
+          <span>单手直达</span>
+        </div>
       </div>
       <div class="portrait-shortcuts">
         <button
@@ -146,7 +149,7 @@ const props = defineProps({
   tasks: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['close-task-detail', 'discuss-task', 'open-task', 'open-task-board', 'quick-action', 'refresh-hall', 'request-landscape', 'select-agent'])
+const emit = defineEmits(['close-task-detail', 'discuss-task', 'open-task', 'open-onboarding', 'open-task-board', 'quick-action', 'refresh-hall', 'request-landscape', 'select-agent'])
 
 const quickActions = Object.freeze([
   { key: 'agents', label: '点将册', icon: '将' },
