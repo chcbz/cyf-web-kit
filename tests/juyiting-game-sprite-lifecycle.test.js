@@ -16,6 +16,9 @@ const DEFERRED_PERSONA_RESOURCE_NAMES = Object.values(PERSONA_SPRITE_MANIFEST.pe
 const PERSONA_BY_RESOURCE = new Map(Object.values(PERSONA_SPRITE_MANIFEST.personas)
   .map(definition => [personaSpriteResourceName(definition.personaCode), definition]))
 
+const isHallTmxUrl = url => String(url).split('?')[0].endsWith('/juyiting/hall.tmx')
+let originalFetch
+
 const createRuntimeMelon = () => {
   const pendingLoads = []
   const images = new Map()
@@ -161,6 +164,22 @@ const mountThroughBaseResources = async (game, fake) => {
 }
 
 describe('JuyitingGame sprite lifecycle', () => {
+  beforeEach(() => {
+    originalFetch = globalThis.fetch
+    globalThis.fetch = url => {
+      if (!isHallTmxUrl(url)) {
+        return Promise.reject(new Error(`Unexpected fetch in sprite lifecycle test: ${url}`))
+      }
+      return Promise.resolve({ ok: true, status: 200, text: async () => HALL_XML })
+    }
+  })
+
+  afterEach(() => {
+    if (originalFetch === undefined) delete globalThis.fetch
+    else globalThis.fetch = originalFetch
+    originalFetch = undefined
+  })
+
   it('alternates bounded melon state slots across normal and cancelled mount lifecycles', async () => {
     const fake = createSameSlotIgnoringMelon()
     const game = new JuyitingGame()
