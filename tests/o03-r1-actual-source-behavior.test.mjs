@@ -19,8 +19,8 @@ const sourcePins = Object.freeze({
   'src/game/config.js': Object.freeze({ sourceSha256: '4fb93c9021af1c59683d27ba314d8540f8ad5b356085f6a30697b5c6484be1e3', sourceBytes: 738 }),
   'src/game/JuyitingGame.js': Object.freeze({ sourceSha256: '741b89dce8d6b29750d006f143c39105f14641d339726a5c8354043b5d3c9b99', sourceBytes: 44591 }),
   'src/game/scenes/HallScene.js': Object.freeze({ sourceSha256: 'f2fc50d683400c76832c30723bd37fe58a0e644637fd2836c95971920fb24817', sourceBytes: 122160 }),
-  'src/components/juyiting/HallStage.vue': Object.freeze({ sourceSha256: '3d5098d31ac28e25b0c940a2a5e5e2209978fcfd7ae8e16edd354de27e2fdfae', sourceBytes: 36369 }),
-  'src/components/world/JuyiHall.vue': Object.freeze({ sourceSha256: '795308cc32e0aa12a9c3cc9a401f13ca4b5c46a694ae2db149da44a09281389d', sourceBytes: 56163 })
+  'src/components/juyiting/HallStage.vue': Object.freeze({ sourceSha256: '29771335ed11697209bdaa1f23cd5fa3491118bd49545b323b7fed9685446652', sourceBytes: 37058 }),
+  'src/components/world/JuyiHall.vue': Object.freeze({ sourceSha256: '0304e0d575377b3481db7edea274f3dc629a973215a23377a708f5c9958743a6', sourceBytes: 64513 })
 })
 const canonicalManifest = Object.freeze([
   Object.freeze({ path: 'src/game/camera/cameraTransform.ts', kind: 'ts-exact-erasure', ...sourcePins['src/game/camera/cameraTransform.ts'], rules: Object.freeze([
@@ -601,6 +601,8 @@ const HALL_INITIAL_CREATE_SEQUENCE = Object.freeze([
   freezeSignature({ context: 'hall:sound-button', type: 'button', classAll: ['tool-action', 'sound-toggle'], types: { onClick: 'function' } }),
   freezeSignature({ context: 'hall:sound-icon', type: 'var-icon', oneOf: { name: ['bell', 'bell-outline'] } }),
   freezeSignature({ context: 'hall:sound-label', type: 'span', classAll: ['tool-label'], textTarget: true }),
+  freezeSignature({ context: 'hall:onboarding-replay', type: 'button', classAll: ['tool-action', 'onboarding-replay'], exact: { title: '重看新手引导' }, types: { disabled: 'boolean', onClick: 'function' } }),
+  freezeSignature({ context: 'hall:onboarding-label', type: 'span', classAll: ['tool-label'], textTarget: true }),
   freezeSignature({ context: 'hall:orientation-button', type: 'button', classAll: ['tool-action', 'orientation-action'], types: { disabled: 'boolean', onClick: 'function' } }),
   freezeSignature({ context: 'hall:orientation-glyph', type: 'span', classAll: ['orientation-glyph'], exact: { 'aria-hidden': 'true' } }),
   freezeSignature({ context: 'hall:orientation-label', type: 'span', classAll: ['tool-label'], textTarget: true }),
@@ -1541,7 +1543,7 @@ const selfAudit = async () => {
   const hallParsed = compiler.parse(hallSource.bytes.toString('utf8'), { filename: hallSource.canonical })
   assert.equal(hallParsed.errors.length, 0, 'HallStage SFC parse errors')
   const hallSegments = [hallParsed.descriptor.template, hallParsed.descriptor.scriptSetup, hallParsed.descriptor.styles[0]]
-  const hallPins = [[3281, 'b919a16a27c707640f9b4fa61f3bcd93f3f313628165b0252e27b0616dae1af5'], [26484, donor.hallStageScriptSha256], [6533, 'afcca9abfcea4e9efb81d87c6584c169bd66d96f3b5104f7ba1bb70e26155a73']]
+  const hallPins = [[3744, 'b538b8424192914efcac1fef6159e338d62e7ed3c00d61fde668fb1a448f50ea'], [26710, '3edf42fb0cca716d0ce0ef1ff663d86d8f0f3dd5e5af877cabc98e82a7c7b588'], [6533, 'afcca9abfcea4e9efb81d87c6584c169bd66d96f3b5104f7ba1bb70e26155a73']]
   hallSegments.forEach((segment, index) => { const bytes = Buffer.from(segment.content, 'utf8'); assert.equal(bytes.length, hallPins[index][0]); assert.equal(sha256(bytes), hallPins[index][1]) })
   const hallScriptFirst = compiler.compileScript(hallParsed.descriptor, { id: 'o03-hall-stage', inlineTemplate: false })
   const hallScriptSecond = compiler.compileScript(hallParsed.descriptor, { id: 'o03-hall-stage', inlineTemplate: false })
@@ -1572,7 +1574,7 @@ const selfAudit = async () => {
   const juyiSource = rawSource('src/components/world/JuyiHall.vue')
   const juyiParsed = compiler.parse(juyiSource.bytes.toString('utf8'), { filename: juyiSource.canonical })
   assert.equal(juyiParsed.errors.length, 0, 'JuyiHall SFC parse errors')
-  const juyiPins = [[11017, 'c2b1427fc0511c996ea3b914bd7274a3329a8015483d0b4d0908c9c3316eb04e'], [25220, 'c700c6f443e671d4fc68e5685199ff7369767b0a03962e7e8cad13136db9b73b'], [19855, '46d0d655e23a9d193ff5c93baf4426a7b77a9e84b99596e12496b2006d8e0498']]
+  const juyiPins = [[12404, '5bfe9338f24491eb372ae023fddaa31831e1fcb57dc3e860de57d73fc3b9d0af'], [32183, '307465ed0769b588a15762afe9ee6ecf24c869a2fc6c1319696e8d6d6a589844'], [19855, '46d0d655e23a9d193ff5c93baf4426a7b77a9e84b99596e12496b2006d8e0498']]
   ;[juyiParsed.descriptor.template, juyiParsed.descriptor.scriptSetup, juyiParsed.descriptor.styles[0]].forEach((segment, index) => { const bytes = Buffer.from(segment.content, 'utf8'); assert.equal(bytes.length, juyiPins[index][0]); assert.equal(sha256(bytes), juyiPins[index][1]) })
   const juyiFirst = compiler.compileScript(juyiParsed.descriptor, { id: 'o03-juyi-hall', inlineTemplate: false }); const juyiSecond = compiler.compileScript(juyiParsed.descriptor, { id: 'o03-juyi-hall', inlineTemplate: false })
   assert.equal(juyiFirst.content, juyiSecond.content); assert.deepEqual(juyiFirst.bindings, juyiSecond.bindings)
@@ -1663,7 +1665,7 @@ const makeRuntimeFixture = ({ containerRect = completeRect({ left: 0, top: 0, wi
 }
 const defaultStageProps = overrides => Object.freeze({
   agentBubbles: Object.freeze({}), agentKey: agent => agent?.agentId || '', agentStyle: () => Object.freeze({}), hiddenAgentCount: 0,
-  experienceMode: 'landscape-map', interactionLocked: false, landscapeEntryTarget: null, mapResumeSnapshot: null, orientationHint: '', orientationRequestPending: false,
+  experienceMode: 'landscape-map', interactionLocked: false, isMobileCoarse: true, landscapeEntryTarget: null, mapResumeSnapshot: null, orientationHint: '', orientationRequestPending: false,
   portraitName: agent => agent?.name || '', portraitShortName: agent => agent?.name || '', portraitStyle: () => Object.freeze({}), refreshing: false, roleClass: () => '', simulationEnabled: false,
   sceneAgents: Object.freeze([]), sceneHotspots: Object.freeze([]), tasks: Object.freeze([]), selectedAgent: null, soundEnabled: true, statusClass: () => '', statusText: () => '', tasksTotal: 0, visibleAgents: Object.freeze([]),
   ...(overrides || {})
@@ -1803,7 +1805,7 @@ const mountStage = (game, config, props = {}, transaction) => {
   const activations = []
   const initialActivation = createMountActivation(config, 'HallStage initial mount')
   activations.push(initialActivation)
-  for (const event of ['landscape-target-consumed', 'map-snapshot', 'map-snapshot-clear', 'new-conversation', 'open-panel', 'request-landscape', 'refresh-hall', 'select-agent', 'simulation-phase-events', 'simulation-ready', 'simulation-reset', 'toggle-sound']) listeners[eventProp(event)] = (...args) => events.push(Object.freeze({ event, args: Object.freeze(args) }))
+  for (const event of ['landscape-target-consumed', 'map-snapshot', 'map-snapshot-clear', 'new-conversation', 'open-panel', 'request-landscape', 'request-portrait', 'refresh-hall', 'select-agent', 'simulation-phase-events', 'simulation-ready', 'simulation-reset', 'toggle-sound']) listeners[eventProp(event)] = (...args) => events.push(Object.freeze({ event, args: Object.freeze(args) }))
   const Parent = Object.freeze({ name: 'O03StageHarnessParent', setup() { return () => vue.createVNode(compiledArtifacts.hallStage, { ...propsRef.value, ...listeners }) } })
   const app = compiledArtifacts.renderer.createApp(Parent)
   hostControl.openFixture(HOST_FIXTURE_KINDS.HALL_STAGE, root)

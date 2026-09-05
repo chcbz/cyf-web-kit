@@ -7,6 +7,7 @@
     <HallOnboarding
       v-model="onboardingState.visible"
       :template="templateId"
+      :return-focus-target="onboardingReturnFocusTarget"
       @later="snooze"
       @skip="skip"
       @complete="complete"
@@ -33,6 +34,7 @@ const globalStore = useGlobalStore()
 const onboardingState = reactive({ visible: false, status: null, snoozed: false })
 const templateId = ref(null)
 const juyiHallContainer = ref(null)
+const onboardingReturnFocusTarget = ref(null)
 let onboarding = null
 
 const currentSubject = computed(() => hallOnboardingSubject(globalStore))
@@ -59,7 +61,10 @@ const updateOnboarding = action => {
   Object.assign(onboardingState, onboarding[action]())
 }
 
-const reopen = () => updateOnboarding('open')
+const reopen = invoker => {
+  onboardingReturnFocusTarget.value = invoker || null
+  updateOnboarding('open')
+}
 const snooze = () => updateOnboarding('snooze')
 const skip = () => updateOnboarding('skip')
 const complete = () => updateOnboarding('complete')

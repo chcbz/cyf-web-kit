@@ -26,6 +26,15 @@
           <span class="tool-label">{{ soundEnabled ? '声响开' : '声响歇' }}</span>
         </button>
         <button
+          class="tool-action onboarding-replay"
+          :disabled="interactionLocked"
+          title="重看新手引导"
+          @click="$emit('open-onboarding', $event.currentTarget)"
+        >
+          <span class="tool-label">引导</span>
+        </button>
+        <button
+          v-if="isMobileCoarse"
           class="tool-action orientation-action"
           :disabled="interactionLocked || isSceneMounting || orientationRequestPending"
           :title="sceneMode === 'landscape' ? '切换竖屏视图' : '打开全景视图'"
@@ -105,6 +114,7 @@ const props = defineProps({
   hiddenAgentCount: { type: Number, default: 0 },
   experienceMode: { type: String, default: 'landscape-map' },
   interactionLocked: { type: Boolean, default: false },
+  isMobileCoarse: { type: Boolean, default: false },
   landscapeEntryTarget: { type: Object, default: null },
   mapResumeSnapshot: { type: Object, default: null },
   orientationHint: { type: String, default: '' },
@@ -131,6 +141,7 @@ const emit = defineEmits([
   'map-snapshot',
   'map-snapshot-clear',
   'new-conversation',
+  'open-onboarding',
   'open-panel',
   'request-landscape',
   'request-portrait',

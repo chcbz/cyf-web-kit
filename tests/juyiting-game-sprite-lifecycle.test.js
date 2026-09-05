@@ -150,7 +150,7 @@ const succeedBatch = (fake, batch) => {
 const mountThroughBaseResources = async (game, fake) => {
   const mountPromise = game.mount({ querySelector: () => null })
   const bootBatch = await nextLoadBatch(fake)
-  expect(bootBatch.map(item => item.resource.name)).to.deep.equal(['juyiting-hall'])
+  expect(bootBatch.map(item => item.resource.name)).to.deep.equal(['liangshan-hall-base-clean-v3'])
   succeedBatch(fake, bootBatch)
 
   const baseBatch = await nextLoadBatch(fake)

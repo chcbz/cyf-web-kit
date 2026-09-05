@@ -51,7 +51,7 @@
       <div class="section-heading">
         <h2 id="portrait-shortcuts-title">常用入口</h2>
         <div class="section-heading-actions">
-          <button class="onboarding-link" type="button" @click="emit('open-onboarding')">新手引导</button>
+          <button class="onboarding-link" type="button" @click="emit('open-onboarding', $event.currentTarget)">新手引导</button>
           <span>单手直达</span>
         </div>
       </div>

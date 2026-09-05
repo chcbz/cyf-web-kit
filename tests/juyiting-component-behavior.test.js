@@ -921,6 +921,7 @@ describe('JuyiHall component behavior', () => {
       global: { stubs },
       props: makeHallStageProps({
         experienceMode: 'portrait-command',
+        isMobileCoarse: true,
         orientationHint: '请旋转手机横屏查看'
       })
     })
@@ -933,8 +934,20 @@ describe('JuyiHall component behavior', () => {
 
     await wrapper.setProps({ experienceMode: 'landscape-map', orientationHint: '' })
     expect(wrapper.find('.hall-board').classes()).to.include('is-scene-landscape')
-    expect(wrapper.find('.orientation-action').attributes('disabled')).to.not.equal(undefined)
+    expect(wrapper.find('.orientation-action').exists()).to.equal(true)
+    expect(readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8'))
+      .to.include("$emit(sceneMode === 'landscape' ? 'request-portrait' : 'request-landscape')")
+
+    await wrapper.setProps({ isMobileCoarse: false })
+    expect(wrapper.find('.orientation-action').exists()).to.equal(false)
     wrapper.unmount()
+  })
+
+  it('keeps the stage replay control discreet and forwards its invoking element upstream', () => {
+    const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
+
+    expect(source).to.include('class="tool-action onboarding-replay"')
+    expect(source).to.include("$emit('open-onboarding', $event.currentTarget)")
   })
 
   it('uses supported Varlet icons for the orientation toggle', () => {
