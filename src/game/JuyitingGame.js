@@ -33,6 +33,7 @@ export class JuyitingGame {
     // runtime tolerant of a cold browser cache and slower local dev servers.
     this._spriteLoadTimeoutMs = 15_000
     this._spriteLoadAbortController = null
+    this._cachedImageWaits = new Set()
     this._deferredSpriteLoadDelayMs = 1_200
     this._deferredSpriteLoadTimer = null
     this._readyTimer = null
@@ -237,18 +238,21 @@ export class JuyitingGame {
 
     const spriteLoadAbortController = new AbortController()
     this._spriteLoadAbortController = spriteLoadAbortController
-    const spriteLoadResult = await loadPersonaSprites(
-      definition => this._loadPersonaSprite(me, definition, mountToken),
-      manifest,
-      {
-        timeoutMs: this._spriteLoadTimeoutMs,
-        signal: spriteLoadAbortController.signal
+    try {
+      return await loadPersonaSprites(
+        definition => this._loadPersonaSprite(me, definition, mountToken, spriteLoadAbortController.signal),
+        manifest,
+        {
+          timeoutMs: this._spriteLoadTimeoutMs,
+          signal: spriteLoadAbortController.signal
+        }
+      )
+    } finally {
+      spriteLoadAbortController.abort()
+      if (this._spriteLoadAbortController === spriteLoadAbortController) {
+        this._spriteLoadAbortController = null
       }
-    )
-    if (this._spriteLoadAbortController === spriteLoadAbortController) {
-      this._spriteLoadAbortController = null
     }
-    return spriteLoadResult
   }
 
   _startDeferredPersonaSpriteLoading(me, mountToken = this._mountToken) {
@@ -326,6 +330,7 @@ export class JuyitingGame {
   }
 
   _cleanupRuntime(me = this._me) {
+    this._cancelCachedImageWaits()
     this._spriteLoadAbortController?.abort()
     this._spriteLoadAbortController = null
     this._clearDeferredSpriteLoadTimer()
@@ -359,23 +364,91 @@ export class JuyitingGame {
     this._simulationEnabled = true
   }
 
-  _loadPersonaSprite(me, definition, mountToken = this._mountToken) {
+  _cancelCachedImageWaits() {
+    for (const cancel of [...this._cachedImageWaits]) cancel()
+  }
+
+  _cachedImageState(me, resourceName) {
+    const image = me.loader.getImage?.(resourceName)
+    if (!image) return { status: 'missing', image: null }
+    if (image.complete === true) {
+      return Number(image.naturalWidth) > 0
+        ? { status: 'ready', image }
+        : { status: 'failed', image }
+    }
+    return { status: 'pending', image }
+  }
+
+  _waitForCachedImage(me, resourceName, mountToken, signal) {
+    const cached = this._cachedImageState(me, resourceName)
+    if (cached.status === 'ready') return Promise.resolve(cached.image)
+    if (cached.status === 'failed') return Promise.reject(new Error(`Cached image failed: ${resourceName}`))
+    if (cached.status === 'missing') return Promise.reject(new Error(`Cached image is unavailable: ${resourceName}`))
+
+    return new Promise((resolve, reject) => {
+      const image = cached.image
+      let settled = false
+      let cancelled
+      const cleanup = () => {
+        image.removeEventListener?.('load', onLoad)
+        image.removeEventListener?.('error', onError)
+        signal?.removeEventListener?.('abort', onAbort)
+        this._cachedImageWaits.delete(cancelled)
+      }
+      const finish = (callback, value) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        callback(value)
+      }
+      cancelled = () => finish(reject, new Error('Juyiting mount was cancelled'))
+      const onLoad = () => {
+        if (!this._isCurrentMount(mountToken)) return cancelled()
+        const state = this._cachedImageState(me, resourceName)
+        if (state.status === 'ready') finish(resolve, state.image)
+        else finish(reject, new Error(`Cached image failed: ${resourceName}`))
+      }
+      const onError = () => finish(reject, new Error(`Cached image failed: ${resourceName}`))
+      const onAbort = () => cancelled()
+
+      if (!this._isCurrentMount(mountToken) || signal?.aborted) return cancelled()
+      this._cachedImageWaits.add(cancelled)
+      image.addEventListener?.('load', onLoad, { once: true })
+      image.addEventListener?.('error', onError, { once: true })
+      signal?.addEventListener?.('abort', onAbort, { once: true })
+      if (image.complete === true) onLoad()
+    })
+  }
+
+  _loadPersonaSprite(me, definition, mountToken = this._mountToken, signal) {
     return new Promise((resolve, reject) => {
       if (!this._isCurrentMount(mountToken)) return reject(new Error('Juyiting mount was cancelled'))
       const resource = buildPersonaSpriteResource(definition)
+      const resourceName = personaSpriteResourceName(definition.personaCode)
+      let settled = false
+      const finish = (callback, value) => {
+        if (settled) return
+        settled = true
+        callback(value)
+      }
+      const resolveLoadedImage = () => {
+        if (!this._isCurrentMount(mountToken)) return finish(reject, new Error('Juyiting mount was cancelled'))
+        const image = me.loader.getImage(resourceName)
+        if (!image) return finish(reject, new Error(`Loaded image is unavailable for ${definition.personaCode}`))
+        finish(resolve, image)
+      }
       try {
-        me.loader.load(
+        const loadCount = me.loader.load(
           resource,
-          () => {
-            if (!this._isCurrentMount(mountToken)) return reject(new Error('Juyiting mount was cancelled'))
-            const image = me.loader.getImage(personaSpriteResourceName(definition.personaCode))
-            if (!image) return reject(new Error(`Loaded image is unavailable for ${definition.personaCode}`))
-            resolve(image)
-          },
-          error => reject(error instanceof Error ? error : new Error(String(error)))
+          resolveLoadedImage,
+          error => finish(reject, error instanceof Error ? error : new Error(String(error)))
         )
+        if (loadCount === 0 && !settled) {
+          this._waitForCachedImage(me, resourceName, mountToken, signal)
+            .then(image => finish(resolve, image), error => finish(reject, error))
+        }
       } catch (error) {
-        reject(error instanceof Error ? error : new Error(String(error)))
+        finish(reject, error instanceof Error ? error : new Error(String(error)))
       }
     })
   }
@@ -405,18 +478,33 @@ export class JuyitingGame {
       }
 
       await new Promise(resolve => {
-        try {
-          me.loader.load(
-            loadableResource,
-            () => resolve(),
-            (err) => {
-              console.warn('[JuyitingGame] Failed:', res.name, err)
-              resolve()
-            }
-          )
-        } catch (e) {
-          console.warn('[JuyitingGame] Load error:', res.name, e.message)
+        let settled = false
+        const finish = () => {
+          if (settled) return
+          settled = true
           resolve()
+        }
+        const failed = error => {
+          console.warn('[JuyitingGame] Failed:', res.name, error)
+          finish()
+        }
+        try {
+          const loadCount = me.loader.load(loadableResource, finish, failed)
+          if (loadCount !== 0 || settled) return
+          if (loadableResource.type === 'tmx' || loadableResource.type === 'tsx') {
+            if (me.loader.getTMX?.(loadableResource.name) != null) finish()
+            else failed(new Error(`Cached TMX is unavailable: ${loadableResource.name}`))
+            return
+          }
+          if (loadableResource.type === 'image') {
+            this._waitForCachedImage(me, loadableResource.name, mountToken)
+              .then(finish, failed)
+            return
+          }
+          finish()
+        } catch (error) {
+          console.warn('[JuyitingGame] Load error:', res.name, error.message)
+          finish()
         }
       })
     }))
