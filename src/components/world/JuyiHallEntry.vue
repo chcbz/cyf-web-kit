@@ -87,8 +87,8 @@ watch(currentSubject, (subject, previousSubject) => {
 </script>
 
 <style scoped>
-.juyi-hall-entry { position: relative; min-height: 100%; }
-.juyi-hall-background { min-height: 100%; }
+.juyi-hall-entry { position: relative; height: 100%; min-height: 100%; }
+.juyi-hall-background { height: 100%; min-height: 100%; }
 .onboarding-reopen { position: fixed; right: 16px; bottom: 16px; z-index: 210; min-height: 34px; padding: 0 12px; border: 1px solid rgba(255, 255, 255, 0.55); border-radius: 999px; color: #f6f3e8; font-size: 13px; font-weight: 750; background: rgba(23, 57, 54, 0.78); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18); cursor: pointer; }
 .onboarding-reopen:hover, .onboarding-reopen:focus-visible { background: #285a50; }
 </style>
