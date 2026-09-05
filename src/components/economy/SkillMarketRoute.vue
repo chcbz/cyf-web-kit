@@ -49,8 +49,8 @@ const unwrap = result => {
 }
 const rosterItems = payload => Array.isArray(payload) ? payload :
   (Array.isArray(payload?.items) ? payload.items : (Array.isArray(payload?.list) ? payload.list : []))
-const ownedRosterAgent = agent => typeof agent?.agentId === 'string' && Boolean(agent.agentId.trim()) &&
-  isCanonicalDecimalString(agent?.version)
+const ownedRosterAgent = agent => agent?.boundToMe === true && agent?.canOperate === true &&
+  typeof agent?.agentId === 'string' && Boolean(agent.agentId.trim()) && isCanonicalDecimalString(agent?.version)
 
 onMounted(async () => {
   try {
