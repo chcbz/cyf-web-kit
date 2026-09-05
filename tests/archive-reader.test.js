@@ -1800,6 +1800,53 @@ describe('archive reader contract behavior', () => {
     }
   })
 
+  it('does not replay an ambiguous account-A progress save after identity rotation', async () => {
+    const lostResponse = deferred()
+    const progressCalls = []
+    const api = makeApi({
+      putHandler: (call) => {
+        if (!call.path.startsWith('/me/progress/')) throw new Error(`Unexpected progress request ${call.path}`)
+        progressCalls.push(call)
+        if (progressCalls.length === 1) return lostResponse.promise
+        return response({
+          editionId,
+          location: call.body.location,
+          state: 'IN_PROGRESS',
+          version: '10'
+        })
+      }
+    })
+    const mounted = mountReader(api)
+    primeReader(mounted.reader, chapterOne, {
+      editionId,
+      location: point(chapterOne, chapterOne.paragraphs[0]),
+      version: '1'
+    })
+    const pendingA = mounted.reader.saveProgress(point(chapterOne, chapterOne.paragraphs[1]))
+    await waitFor(() => progressCalls.length === 1)
+
+    stopIdentityBoundWork()
+    lostResponse.reject(new Error('account A progress response lost'))
+    expect(await pendingA).to.equal(null)
+    await settle()
+    expect(progressCalls, 'stale progress must not retry under B credentials').to.have.length(1)
+    expect(mounted.reader.progress.value).to.equal(null)
+
+    primeReader(mounted.reader, chapterOne, {
+      editionId,
+      location: point(chapterOne, chapterOne.paragraphs[0]),
+      version: '9'
+    })
+    const savedB = await mounted.reader.saveProgress(point(chapterOne, chapterOne.paragraphs[1]))
+    expect(progressCalls).to.have.length(2)
+    expect(progressCalls[1].body.expectedVersion).to.equal('9')
+    expect(progressCalls[1].options.headers['Idempotency-Key'])
+      .not.to.equal(progressCalls[0].options.headers['Idempotency-Key'])
+    expect(savedB).to.include({ editionId, version: '10' })
+    expect(mounted.reader.progress.value).to.include({ editionId, version: '10' })
+    mounted.wrapper.unmount()
+  })
+
   it('clears the component-local note editor when the authenticated identity rotates', async () => {
     const api = makeApi()
     const wrapper = mountArchiveReader(api)

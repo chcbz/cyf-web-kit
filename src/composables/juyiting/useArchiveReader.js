@@ -429,7 +429,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
         body,
         { autoLoading: false, headers: mutationHeaders({}, idempotencyKey) }
       )
-      const result = await replayAmbiguousMutation(send)
+      const result = await replayIdentityMutation(requestIdentity, send)
       if (!isCurrentIdentity(requestIdentity)) return null
       const saved = unwrap(result)
       if (saved?.editionId !== requestEditionId) throw new Error('阅读进度 editionId 不匹配')
