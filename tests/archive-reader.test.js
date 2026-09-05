@@ -5,6 +5,7 @@ import { compileScript, parse } from '@vue/compiler-sfc'
 import { mount } from '@vue/test-utils'
 import * as Vue from 'vue'
 import * as HallPanelHelpers from '../src/composables/juyiting/useHallPanels.js'
+import { stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 import {
   isCanonicalDecimal,
   mutationHeaders,
@@ -719,6 +720,33 @@ describe('archive reader contract behavior', () => {
     wrapper.unmount()
   })
 
+  it('publishes a validated chapter before delayed personal collections settle', async () => {
+    const delayedBookmarks = deferred()
+    const delayedNotes = deferred()
+    const api = makeApi()
+    const baseGet = api.get
+    api.get = async (path, params, options) => {
+      if (path === '/me/bookmarks' || path === '/me/notes') {
+        api.calls.push({ method: 'get', options, params, path })
+        return path === '/me/bookmarks' ? delayedBookmarks.promise : delayedNotes.promise
+      }
+      return baseGet(path, params, options)
+    }
+    const mounted = mountReader(api)
+    const initializing = mounted.reader.initialize()
+
+    await waitFor(() => mounted.reader.chapter.value?.blockId === preface.blockId)
+    expect(mounted.reader.chapterLoading.value).to.equal(false)
+    expect(mounted.reader.notes.value).to.deep.equal([])
+    expect(api.calls.some(call => call.path === '/me/bookmarks')).to.equal(true)
+    expect(api.calls.some(call => call.path === '/me/notes')).to.equal(true)
+
+    delayedBookmarks.resolve(response({ items: [], nextCursor: null }))
+    delayedNotes.resolve(response({ items: [], nextCursor: null }))
+    await initializing
+    mounted.wrapper.unmount()
+  })
+
   it('commits only the latest block and notes when chapter requests resolve out of order', async () => {
     const requests = new Map([
       [chapterOne.blockId, deferred()],
@@ -741,6 +769,7 @@ describe('archive reader contract behavior', () => {
     await latest
     requests.get(chapterOne.blockId).resolve(response(chapterOne))
     await older
+    await settle()
 
     expect(mounted.reader.chapter.value.blockId).to.equal(chapterEightyOne.blockId)
     expect(mounted.reader.currentLocation.value.blockId).to.equal(chapterEightyOne.blockId)
@@ -1471,6 +1500,7 @@ describe('archive reader contract behavior', () => {
     expect(api.calls[0].path).to.equal('/catalog')
 
     mounted.wrapper.unmount()
+    await Promise.resolve()
     expect(catalogSignal.aborted).to.equal(true)
     catalogResponse.resolve(response(catalog))
     expect(await pending).to.equal(null)
@@ -1492,6 +1522,7 @@ describe('archive reader contract behavior', () => {
     mounted.reader.catalog.value = catalog
     const pending = mounted.reader.loadBlock(c1Summary)
     mounted.wrapper.unmount()
+    await Promise.resolve()
     expect(blockSignal.aborted).to.equal(true)
     blockResponse.resolve(response(chapterOne))
     expect(await pending).to.equal(null)
@@ -1499,17 +1530,69 @@ describe('archive reader contract behavior', () => {
     const domApi = makeApi({
       progress: { editionId, location: point(chapterOne, chapterOne.paragraphs[0]), version: '1' }
     })
-    const wrapper = mountArchiveReader(domApi, { saveDelay: 1 })
-    await waitFor(() => wrapper.findAll('.reader-paragraph').length === 2)
-    const content = wrapper.get('.reader-content')
-    const [first] = wrapper.findAll('.reader-paragraph')
-    content.element.getBoundingClientRect = () => ({ bottom: 100, top: 0 })
-    first.element.getBoundingClientRect = () => ({ bottom: 80, top: 10 })
-    await content.trigger('scroll')
-    wrapper.unmount()
-    await new Promise(resolve => setTimeout(resolve, 220))
-    expect(domApi.calls.some(call => call.method === 'put' && call.path.startsWith('/me/progress/')))
-      .to.equal(false)
+    const originalScrollIntoView = Element.prototype.scrollIntoView
+    let resumeScrolls = 0
+    Element.prototype.scrollIntoView = function () {
+      const content = this.closest('.reader-content')
+      if (!content) return
+      resumeScrolls += 1
+      content.dispatchEvent(new window.Event('scroll'))
+    }
+    let wrapper
+    try {
+      wrapper = mountArchiveReader(domApi, { saveDelay: 1 })
+      await waitFor(() => wrapper.findAll('.reader-paragraph').length === 2 && resumeScrolls === 1)
+      // Wait from the observed programmatic resume-scroll event, not paragraph discovery.
+      await new Promise(resolve => setTimeout(resolve, 190))
+      const content = wrapper.get('.reader-content')
+      const [first, second] = wrapper.findAll('.reader-paragraph')
+      content.element.getBoundingClientRect = () => ({ bottom: 100, top: 0 })
+      first.element.getBoundingClientRect = () => ({ bottom: -5, top: -80 })
+      second.element.getBoundingClientRect = () => ({ bottom: 90, top: 10 })
+      Object.defineProperty(content.element, 'clientHeight', { configurable: true, value: 100 })
+      Object.defineProperty(content.element, 'scrollHeight', { configurable: true, value: 300 })
+      Object.defineProperty(content.element, 'scrollTop', { configurable: true, value: 10, writable: true })
+      await content.trigger('scroll')
+      wrapper.unmount()
+      await waitFor(() => domApi.calls.some(call => call.method === 'put' && call.path.startsWith('/me/progress/')))
+      const save = domApi.calls.filter(call => call.method === 'put' && call.path.startsWith('/me/progress/')).at(-1)
+      expect(save.body.location.paragraphId).to.equal(chapterOne.paragraphs[1].paragraphId)
+    } finally {
+      wrapper?.unmount()
+      Element.prototype.scrollIntoView = originalScrollIntoView
+    }
+  })
+
+  it('clears in-memory personal reader state when the authenticated identity rotates', async () => {
+    const delayedSave = deferred()
+    const api = makeApi({
+      putHandler: call => call.path.startsWith('/me/progress/') ? delayedSave.promise : response({})
+    })
+    const mounted = mountReader(api)
+    primeReader(mounted.reader, chapterOne, {
+      editionId,
+      location: point(chapterOne, chapterOne.paragraphs[0]),
+      version: '1'
+    })
+    mounted.reader.bookmarks.value = [{ bookmarkId: 'bookmark-a' }]
+    mounted.reader.notes.value = [{ noteId: 'note-a' }]
+    const saving = mounted.reader.saveProgress(point(chapterOne, chapterOne.paragraphs[1]))
+    await waitFor(() => api.calls.some(call => call.method === 'put' && call.path.startsWith('/me/progress/')))
+
+    stopIdentityBoundWork()
+    delayedSave.resolve(response({
+      editionId,
+      location: point(chapterOne, chapterOne.paragraphs[1]),
+      version: '2'
+    }))
+    await saving
+
+    expect(mounted.reader.catalog.value).to.equal(null)
+    expect(mounted.reader.chapter.value).to.equal(null)
+    expect(mounted.reader.progress.value).to.equal(null)
+    expect(mounted.reader.bookmarks.value).to.deep.equal([])
+    expect(mounted.reader.notes.value).to.deep.equal([])
+    mounted.wrapper.unmount()
   })
 
   it('creates a UTF-8 multi-paragraph question anchor without any routing fields', async () => {
@@ -1802,6 +1885,7 @@ describe('archive reader contract behavior', () => {
     const pendingRetry = retrying.reader.retryQuestion()
     await waitFor(() => retryCall)
     retrying.wrapper.unmount()
+    await Promise.resolve()
     expect(retryCall.options.signal.aborted).to.equal(true)
     retryResponse.resolve(response({ ...questionSnapshot({ currentSequence: '4', version: '4' }), questionId: retryCall.path.split('/')[3] }))
     expect(await pendingRetry).to.equal(null)
@@ -1980,6 +2064,7 @@ describe('archive reader contract behavior', () => {
     api.emit(0, questionEvent('2', 'ANSWER_DELTA', { delta: '旧流' }))
     expect(mounted.reader.question.value.answer).to.equal('')
     mounted.wrapper.unmount()
+    await Promise.resolve()
     expect(api.sessions[1].cancelled).to.equal(true)
   })
 

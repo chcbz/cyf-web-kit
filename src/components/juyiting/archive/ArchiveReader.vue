@@ -429,7 +429,7 @@ const enterReading = async (event) => {
 
 const closeReading = async () => {
   reader.cancelBlockLoad()
-  reader.flushProgress()
+  void flushReadingPosition()
   reader.closeQuestion()
   readingOpen.value = false
   catalogOpen.value = false
@@ -636,6 +636,27 @@ const suppressProgrammaticScroll = (generation) => {
   )
 }
 
+const captureVisibleParagraph = (container) => {
+  const visible = container && visibleParagraph(container)
+  if (!visible) return
+  const paragraph = reader.chapter?.paragraphs?.find(
+    item => item.paragraphId === visible.element.dataset.paragraphId
+  )
+  if (!paragraph) return
+  const atEnd = container.scrollTop + container.clientHeight >= container.scrollHeight - 4
+  const isLast = paragraph.paragraphId === reader.chapter?.paragraphs?.at(-1)?.paragraphId
+  reader.setCurrentParagraph(paragraph, atEnd && isLast ? paragraph.utf8ByteLength : 0)
+}
+
+const flushReadingPosition = () => {
+  clearTimeout(scrollTimer)
+  const focusGeneration = reader.focusRequest?.generation
+  if (!programmaticScrollGeneration || programmaticScrollGeneration !== focusGeneration) {
+    captureVisibleParagraph(contentRef.value)
+  }
+  return reader.flushProgress()
+}
+
 const onScroll = (event) => {
   const container = event.currentTarget
   const focusGeneration = reader.focusRequest?.generation
@@ -645,17 +666,7 @@ const onScroll = (event) => {
     return
   }
   clearTimeout(scrollTimer)
-  scrollTimer = setTimeout(() => {
-    const visible = visibleParagraph(container)
-    if (!visible) return
-    const paragraph = reader.chapter?.paragraphs?.find(
-      item => item.paragraphId === visible.element.dataset.paragraphId
-    )
-    if (!paragraph) return
-    const atEnd = container.scrollTop + container.clientHeight >= container.scrollHeight - 4
-    const isLast = paragraph.paragraphId === reader.chapter?.paragraphs?.at(-1)?.paragraphId
-    reader.setCurrentParagraph(paragraph, atEnd && isLast ? paragraph.utf8ByteLength : 0)
-  }, 180)
+  scrollTimer = setTimeout(() => captureVisibleParagraph(container), 180)
 }
 
 let focusedGeneration = 0
@@ -686,7 +697,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleReaderKeydown)
   document.body?.classList.remove('archive-reading-open')
-  clearTimeout(scrollTimer)
+  void flushReadingPosition()
   clearTimeout(programmaticScrollTimer)
   programmaticScrollGeneration = 0
 })
