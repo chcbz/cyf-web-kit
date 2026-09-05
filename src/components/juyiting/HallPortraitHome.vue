@@ -177,6 +177,7 @@ const openTask = task => emit('open-task', task)
   gap: 14px;
   width: 100%;
   min-height: 100%;
+  box-sizing: border-box;
   padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
   overflow-y: auto;
   background:
