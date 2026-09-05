@@ -293,7 +293,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useGlobalStore } from '@/stores/global'
 import { useApiStore } from '@/stores/api'
-import { agentApi, chatApi, economyApi } from '@/composables/useHttp'
+import { agentApi, chatApi } from '@/composables/useHttp'
 import { useHallChatContext } from '@/composables/juyiting/useHallChatContext'
 import { useHallBackendSceneState } from '@/composables/juyiting/useHallBackendSceneState'
 import { useHallCommandQueue } from '@/composables/juyiting/useHallCommandQueue'
@@ -330,6 +330,7 @@ import {
 } from '@/constants/juyiting'
 import { log } from '@/utils/logger'
 import { isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
+import { isEconomyPreviewCapability, loadEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
 import { juyitingGame } from '@/game/index.js'
 
 const globalStore = useGlobalStore()
@@ -568,18 +569,11 @@ const handleSimulationPhaseEvents = events => {
   })
 }
 
-const unwrapEconomyResponse = result => result?.data?.data ?? result?.data ?? result
-
 const ensureEconomyPreviewCapability = async () => {
   if (!economyPreviewBuildEnabled || economyPreviewChecked.value) return economyPreviewEnabled.value
   economyPreviewChecked.value = true
   try {
-    // The frozen V0 contract exposes no separate capability URL. A successful
-    // authenticated wallet capability response is the server-side enablement proof.
-    const result = await economyApi.get('/wallet', undefined, { autoLoading: false })
-    const wallet = unwrapEconomyResponse(result)
-    economyPreviewEnabled.value = wallet?.currency === 'SILVER' &&
-      typeof wallet.availableMicro === 'string' && typeof wallet.heldMicro === 'string'
+    economyPreviewEnabled.value = isEconomyPreviewCapability(await loadEconomyPreviewCapability())
   } catch (error) {
     economyPreviewEnabled.value = false
     log.warn('economy preview capability is unavailable:', error)
@@ -937,9 +931,11 @@ const {
   tasks
 })
 
-const createTask = async (payload) => {
-  await runCreateTask(payload)
-  markTaskCreated(selectedTask.value)
+const createTask = async (payload, acknowledge = () => {}) => {
+  const created = await runCreateTask(payload)
+  if (created) markTaskCreated(selectedTask.value)
+  acknowledge(created)
+  return created
 }
 
 const assignTask = async (task, agent) => {

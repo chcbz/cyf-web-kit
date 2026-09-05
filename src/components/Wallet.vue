@@ -47,6 +47,7 @@
 import { onMounted, ref } from 'vue'
 import { economyApi } from '@/composables/useHttp'
 import { formatSilverMicro, isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
+import { isEconomyPreviewCapability, loadEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
 
 const previewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
 const wallet = ref(null)
@@ -76,6 +77,9 @@ const loadWallet = async () => {
   refreshing.value = Boolean(wallet.value)
   error.value = ''
   try {
+    if (!isEconomyPreviewCapability(await loadEconomyPreviewCapability())) {
+      throw new Error('经济预览能力当前未由服务端启用')
+    }
     const [walletResult, ledgerResult] = await Promise.all([
       economyApi.get('/wallet', undefined, { autoLoading: false }),
       economyApi.get('/ledger', { limit: '50' }, { autoLoading: false })

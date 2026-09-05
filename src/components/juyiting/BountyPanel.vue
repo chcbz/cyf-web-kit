@@ -42,7 +42,7 @@
         placeholder="总额（micro-SILVER）"
       />
       <small v-if="fundedPreviewEnabled && taskForm.funded && !validGrossAmount" class="funded-input-error">请输入规范的非负整数字符串。</small>
-      <button type="submit" :disabled="!taskForm.title || (taskForm.funded && !validGrossAmount)">张榜悬赏</button>
+      <button type="submit" :disabled="createPending || !taskForm.title || (taskForm.funded && !validGrossAmount)">{{ createPending ? '张榜中…' : '张榜悬赏' }}</button>
     </form>
 
     <div class="task-status-tabs">
@@ -309,6 +309,7 @@ const emit = defineEmits([
 
 const modalTask = ref(null)
 const showCreateForm = ref(false)
+const createPending = ref(false)
 const selectedAssigneeIds = ref([])
 const taskForm = ref({
   title: '',
@@ -353,13 +354,17 @@ const submitCreateTask = () => {
     payload.grossBountyAmountMicro = taskForm.value.grossBountyAmountMicro
     payload.settlementPolicy = 'GROSS_INCLUSIVE'
   }
-  emit('create-task', payload)
-  // A funded command can be accepted after its response is lost. Keep the
-  // canonical form intact until the parent has independently confirmed it.
-  if (!payload.grossBountyAmountMicro) {
-    taskForm.value = { title: '', description: '', requiredAbilities: '', funded: false, grossBountyAmountMicro: '' }
-    showCreateForm.value = false
-  }
+  if (createPending.value) return
+  createPending.value = true
+  emit('create-task', payload, (created) => {
+    createPending.value = false
+    // Reset only after the parent receives a definitive success acknowledgement.
+    // Recoverable/ambiguous failures retain the exact funded draft for retry.
+    if (created) {
+      taskForm.value = { title: '', description: '', requiredAbilities: '', funded: false, grossBountyAmountMicro: '' }
+      showCreateForm.value = false
+    }
+  })
 }
 
 const toggleAssignee = (agent) => {

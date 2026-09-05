@@ -1,24 +1,14 @@
 import PublicLanding from '@/components/public/PublicLanding.vue'
 import GuestDemo from '@/components/public/GuestDemo.vue'
 import OAuthCallback from '@/components/OAuthCallback.vue'
-import { economyApi } from '@/composables/useHttp'
 import { isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
+import { isEconomyPreviewCapability, isSkillMarketplaceCapability, loadEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
 
 const economyPreviewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
-const hasEconomyPreviewCapability = (result) => {
-  const body = result?.data ?? result
-  const code = body?.code
-  if (code !== undefined && code !== null && code !== 'E0' && code !== '0' && code !== 0 && code !== '200' && code !== 200) return false
-  const wallet = body?.data ?? body
-  return wallet?.currency === 'SILVER' && typeof wallet.availableMicro === 'string' && typeof wallet.heldMicro === 'string'
-}
-
-const economyPreviewRouteGuard = async () => {
+const economyPreviewRouteGuard = async (requiredCapability = isEconomyPreviewCapability) => {
   if (!economyPreviewBuildEnabled) return { name: 'UserProfile' }
   try {
-    return hasEconomyPreviewCapability(await economyApi.get('/wallet', undefined, { autoLoading: false }))
-      ? true
-      : { name: 'UserProfile' }
+    return requiredCapability(await loadEconomyPreviewCapability()) ? true : { name: 'UserProfile' }
   } catch {
     return { name: 'UserProfile' }
   }
@@ -149,6 +139,7 @@ export default [
     path: '/wallet',
     name: 'Wallet',
     component: () => import('@/components/Wallet.vue'),
+    beforeEnter: () => economyPreviewRouteGuard(isEconomyPreviewCapability),
     meta: {
       title: 'SILVER 钱袋',
       showInMenu: false
@@ -157,8 +148,8 @@ export default [
   {
     path: '/skill-market',
     name: 'SkillMarket',
-    component: () => import('@/components/economy/SkillMarket.vue'),
-    beforeEnter: economyPreviewRouteGuard,
+    component: () => import('@/components/economy/SkillMarketRoute.vue'),
+    beforeEnter: () => economyPreviewRouteGuard(isSkillMarketplaceCapability),
     meta: {
       title: '技能集市',
       showInMenu: false

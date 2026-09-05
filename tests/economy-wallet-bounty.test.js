@@ -2,11 +2,13 @@ import { expect } from 'chai'
 import { readFileSync } from 'fs'
 import { ref } from 'vue'
 import { useHallTaskActions } from '../src/composables/juyiting/useHallTaskActions.js'
+import { createApi } from '../src/composables/useHttp.js'
 
 const walletSource = readFileSync(new URL('../src/components/Wallet.vue', import.meta.url), 'utf8')
 const bountySource = readFileSync(new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url), 'utf8')
 const hallSource = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
 const httpSource = readFileSync(new URL('../src/composables/useHttp.js', import.meta.url), 'utf8')
+const skillMarketRouteSource = readFileSync(new URL('../src/components/economy/SkillMarketRoute.vue', import.meta.url), 'utf8')
 
 describe('economy preview wallet and funded bounty integration', () => {
   it('keeps wallet presentation default-off and formats canonical amounts without number money conversion', () => {
@@ -21,7 +23,7 @@ describe('economy preview wallet and funded bounty integration', () => {
   it('layers funded controls onto the legacy bounty board and leaves its explicit-agent event intact', () => {
     expect(bountySource).to.include('fundedPreviewEnabled')
     expect(bountySource).to.include('grossBountyAmountMicro')
-    expect(bountySource).to.include("settlementPolicy = 'GROSS_INCLUSIVE'")
+    expect(bountySource).to.include("payload.settlementPolicy = 'GROSS_INCLUSIVE'")
     expect(bountySource).to.include("$emit('assign-task', detailTask, agent)")
     expect(bountySource).to.include("$emit('cancel-funding', detailTask)")
     expect(bountySource).to.include("$emit('load-settlement', detailTask)")
@@ -192,14 +194,70 @@ describe('funded bounty remediation', () => {
   it('keeps funded form state pending and gates skill market discovery and direct routing by the server capability', () => {
     const profileSource = readFileSync(new URL('../src/components/UserProfile.vue', import.meta.url), 'utf8')
     const routerSource = readFileSync(new URL('../src/router/index.js', import.meta.url), 'utf8')
-    expect(bountySource).to.include('if (!payload.grossBountyAmountMicro)')
+    expect(bountySource).to.include("emit('create-task', payload, (created) =>")
+    expect(bountySource).to.include('createPending.value = true')
+    expect(bountySource).to.include('Reset only after the parent receives a definitive success acknowledgement')
     expect(walletSource).to.include('const epochMillis = BigInt(value)')
     expect(walletSource).to.include('MAX_ECMASCRIPT_EPOCH_MILLIS')
     expect(profileSource).to.include('v-if="economyPreviewAvailable"')
-    expect(profileSource).to.include("economyApi.get('/wallet'")
+    expect(profileSource).to.include('fetchEconomyPreviewCapability')
+    expect(profileSource).not.to.include("economyApi.get('/wallet'")
     expect(routerSource).to.include("path: '/skill-market'")
-    expect(routerSource).to.include("import('@/components/economy/SkillMarket.vue')")
+    expect(routerSource).to.include("import('@/components/economy/SkillMarketRoute.vue')")
+    expect(skillMarketRouteSource).to.include("agentApi.get('/roster'")
+    expect(skillMarketRouteSource).to.include('principalScopeFingerprint')
     expect(routerSource).to.include('beforeEnter: economyPreviewRouteGuard')
     expect(routerSource).to.include("return { name: 'UserProfile' }")
   })
+
+  it('classifies actual useHttp 409 error shapes by documented code while retaining ambiguous replay keys', async () => {
+    const actualHttpError = async (status, code) => {
+      const originalFetch = globalThis.fetch
+      globalThis.fetch = async () => new Response(JSON.stringify({ code, msg: code }), {
+        status,
+        headers: { 'Content-Type': 'application/json' }
+      })
+      try {
+        await createApi('/agent').post('/tasks', {}, { autoLoading: false, needAuth: false })
+      } catch (error) {
+        return error
+      } finally {
+        globalThis.fetch = originalFetch
+      }
+      throw new Error('expected HTTP failure')
+    }
+    const conflict = await actualHttpError(409, 'IDEMPOTENCY_CONFLICT')
+    const insufficient = await actualHttpError(409, 'INSUFFICIENT_SILVER')
+    expect(conflict).to.include({ status: 409, code: 'IDEMPOTENCY_CONFLICT' })
+    expect(conflict.response).to.be.instanceOf(Response)
+
+    const keys = []
+    const actions = useHallTaskActions(actionOptions({
+      create: async (_url, _payload, options) => {
+        keys.push(options.headers['Idempotency-Key'])
+        if (keys.length === 1) throw conflict
+        if (keys.length === 2) throw insufficient
+        throw new TypeError('response dropped after send')
+      }
+    }))
+    const payload = { title: 'HTTP shape', grossBountyAmountMicro: '1', settlementPolicy: 'GROSS_INCLUSIVE' }
+    expect(await actions.createTask(payload)).to.equal(false)
+    expect(await actions.createTask(payload)).to.equal(false)
+    expect(await actions.createTask(payload)).to.equal(false)
+    expect(keys).to.deep.equal(['idem-1', 'idem-2', 'idem-3'])
+    expect(await actions.createTask(payload)).to.equal(false)
+    expect(keys).to.deep.equal(['idem-1', 'idem-2', 'idem-3', 'idem-3'])
+  })
+
+  it('rejects numeric or noncanonical funded task/quote versions before a money mutation', async () => {
+    const calls = []
+    const actions = useHallTaskActions(actionOptions({
+      create: async (...args) => { calls.push(args); return { data: { code: 'E0', data: {} } } }
+    }))
+    const agent = { agentId: 'agent-explicit' }
+    expect(await actions.assignTask({ ...fundedTask('unsafe'), version: 9007199254740993 }, agent)).to.equal(false)
+    expect(await actions.assignTask({ ...fundedTask('leading-zero'), version: '08' }, agent)).to.equal(false)
+    expect(calls).to.deep.equal([])
+  })
+
 })

@@ -1,3 +1,5 @@
+import { isCanonicalDecimalString } from '@/utils/silverAmount'
+
 const responseBody = result => result?.data ?? result
 
 const isBusinessSuccess = (result) => {
@@ -24,7 +26,14 @@ const unwrap = (result) => {
 }
 const isFundedTask = task => task?.funding?.mode === 'FUNDED_SINGLE_AGENT'
 const hasExplicitAgentId = item => typeof item?.agentId === 'string' && Boolean(item.agentId.trim())
-const taskVersion = task => typeof (task?.version ?? task?.taskVersion) === 'string' ? (task.version ?? task.taskVersion) : ''
+const taskVersion = task => {
+  const version = task?.version ?? task?.taskVersion
+  return isCanonicalDecimalString(version) ? version : ''
+}
+const DEFINITIVE_FUNDED_FAILURE_CODES = new Set([
+  'INSUFFICIENT_SILVER', 'IDEMPOTENCY_CONFLICT', 'FUNDED_TEAM_NOT_SUPPORTED'
+])
+const isDefinitiveFundedFailure = error => DEFINITIVE_FUNDED_FAILURE_CODES.has(error?.code)
 const defaultIdempotencyKey = () => globalThis.crypto?.randomUUID?.() || `economy-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
 export const useHallTaskActions = ({
@@ -51,12 +60,12 @@ export const useHallTaskActions = ({
     try {
       const result = await send(acquirePendingOperationKey(operation))
       const payload = unwrap(ensureBusinessSuccess(result))
-      // A decoded business envelope is completion certainty, including a
-      // rejected command. Transport failures intentionally retain the key.
+      // A successful decoded response is completion certainty. Only documented
+      // definitive no-effect failures release a key; unknown outcomes replay it.
       settlePendingOperation(operation)
       return payload
     } catch (error) {
-      if (error?.businessFailure) settlePendingOperation(operation)
+      if (isDefinitiveFundedFailure(error)) settlePendingOperation(operation)
       throw error
     }
   }
@@ -101,7 +110,7 @@ export const useHallTaskActions = ({
         agentId: agent.agentId,
         taskVersion: version
       }, { autoLoading: false, headers: { 'Idempotency-Key': key }, onSuccess: ensureBusinessSuccess }))
-      if (!quote?.quoteId || quote.agentId !== agent.agentId || String(quote.taskVersion) !== version) {
+      if (!quote?.quoteId || quote.agentId !== agent.agentId || !isCanonicalDecimalString(quote.taskVersion) || quote.taskVersion !== version) {
         throw new Error('报价与当前好汉或榜文版本不一致')
       }
       task.quote = quote

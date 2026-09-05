@@ -113,8 +113,8 @@ import { useRouter } from 'vue-router'
 import { useGlobalStore } from '@/stores/global'
 import { useAccountSecuritySession } from '@/composables/useAccountSecuritySession'
 import { useConfirmationDialog } from '@/composables/useConfirmationDialog'
-import { economyApi } from '@/composables/useHttp'
 import { isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
+import { isEconomyPreviewCapability, loadEconomyPreviewCapability as fetchEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
 
 const router = useRouter()
 const economyPreviewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
@@ -139,18 +139,10 @@ const handleAllDevicesSignOut = async () => {
   if (completed) closeConfirmation({ force: true })
 }
 
-const hasEconomyPreviewCapability = (result) => {
-  const body = result?.data ?? result
-  const code = body?.code
-  if (code !== undefined && code !== null && code !== 'E0' && code !== '0' && code !== 0 && code !== '200' && code !== 200) return false
-  const wallet = body?.data ?? body
-  return wallet?.currency === 'SILVER' && typeof wallet.availableMicro === 'string' && typeof wallet.heldMicro === 'string'
-}
-
 const loadEconomyPreviewCapability = async () => {
   if (!economyPreviewBuildEnabled) return
   try {
-    economyPreviewAvailable.value = hasEconomyPreviewCapability(await economyApi.get('/wallet', undefined, { autoLoading: false }))
+    economyPreviewAvailable.value = isEconomyPreviewCapability(await fetchEconomyPreviewCapability())
   } catch {
     economyPreviewAvailable.value = false
   }
