@@ -1,6 +1,7 @@
 import { expect } from 'chai'
 import { readFileSync } from 'fs'
 import { ref } from 'vue'
+import { fundedQuote, fundedReceipt } from './funded-bounty-fixtures.js'
 
 import { useHallData } from '../src/composables/juyiting/useHallData.js'
 import { useHallTaskActions } from '../src/composables/juyiting/useHallTaskActions.js'
@@ -152,12 +153,13 @@ describe('useHallTaskActions', () => {
     const selectedAgent = ref({ agentId: 'hidden-agent', status: 'online' })
     const selectedTask = ref(null)
     const actions = useHallTaskActions({
-      agentApi: { create: async (url, payload) => { apiCalls.push({ url, payload }); return url.endsWith('/quotes') ? { data: { data: { quoteId: 'q1', agentId: 'explicit-agent', taskVersion: '8' } } } : { data: { data: { ...funded, status: 'assigned' } } } } },
-      canAssign: () => true, createIdempotencyKey: () => 'idem', log: { warn: () => {} }, playError: () => {}, playSuccess: () => {}, selectedAgent, selectedTask, showToast: () => {}, tasks: ref([funded])
+      agentApi: { create: async (url, payload) => { apiCalls.push({ url, payload }); return url.endsWith('/quotes') ? { data: { data: fundedQuote({ quoteId: 'q1' }) } } : { data: { data: fundedReceipt({ quoteId: 'q1' }) } } } },
+      canAssign: () => true, confirmFundedQuote: async () => true, createIdempotencyKey: () => 'idem', log: { warn: () => {} }, playError: () => {}, playSuccess: () => {}, selectedAgent, selectedTask, showToast: () => {}, tasks: ref([funded])
     })
     expect(await actions.assignTask(funded, agent)).to.equal(true)
     expect(apiCalls.map(call => call.url)).to.deep.equal(['/tasks/funded/quotes', '/tasks/funded/claim'])
-    expect(selectedAgent.value.agentId).to.equal(agent.agentId)
+    expect(selectedAgent.value.agentId).to.equal('hidden-agent')
+    expect(actions.fundedClaimState.value).to.include({ status: 'confirmed', refreshPending: true })
   })
 
   it('preserves explicit multi-agent assignment payload and local updates', async () => {

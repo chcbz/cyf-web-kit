@@ -1,6 +1,7 @@
-import { isCanonicalDecimalString } from '@/utils/silverAmount'
+import { computed, ref } from 'vue'
+import { isCanonicalDecimalString } from '../../utils/silverAmount.js'
 
-const responseBody = result => result?.data ?? result
+const responseBody = result => result && Object.prototype.hasOwnProperty.call(result, 'code') ? result : result?.data ?? result
 
 const isBusinessSuccess = (result) => {
   const code = responseBody(result)?.code
@@ -27,7 +28,7 @@ const unwrap = (result) => {
 const isFundedTask = task => task?.funding?.mode === 'FUNDED_SINGLE_AGENT'
 const hasExplicitAgentId = item => typeof item?.agentId === 'string' && Boolean(item.agentId.trim())
 const taskVersion = task => {
-  const version = task?.version ?? task?.taskVersion
+  const version = task?.taskVersion ?? task?.version
   return isCanonicalDecimalString(version) ? version : ''
 }
 const DEFINITIVE_FUNDED_FAILURE_CODES = new Set([
@@ -40,6 +41,9 @@ export const useHallTaskActions = ({
   agentApi,
   canAssign,
   createIdempotencyKey = defaultIdempotencyKey,
+  confirmFundedQuote = async () => false,
+  resolveFundedAgent = agent => agent,
+  now = () => Date.now(),
   log,
   playError,
   playSuccess,
@@ -96,52 +100,166 @@ export const useHallTaskActions = ({
     }
   }
 
-  const claimFundedTask = async (task, agent) => {
-    if (!task?.id || !hasExplicitAgentId(agent)) return false
-    const version = taskVersion(task)
-    if (!version) {
-      showToast('资金榜文缺少版本，暂不可领令')
+  const fundedClaimStates = ref(new Map())
+  const lastClaimTaskId = ref(null)
+  const fundedClaimState = computed(() => fundedClaimStates.value.get(selectedTask.value?.id || lastClaimTaskId.value) || null)
+  const setFundedClaimState = state => {
+    fundedClaimStates.value.set(state.taskId, state)
+    lastClaimTaskId.value = state.taskId
+  }
+  const fundedClaimsInFlight = new Set()
+  // Uncertain claims retain both the exact quote/body and key; never obtain a
+  // replacement quote merely because the claim response was lost.
+  const unresolvedClaims = new Map()
+  const confirmedClaims = new Map()
+  const validString = value => typeof value === 'string' && Boolean(value.trim())
+  const unexpired = quote => isCanonicalDecimalString(quote?.expiresAt) && BigInt(quote.expiresAt) > BigInt(now())
+  const matchingQuote = (quote, id, agentId, version) =>
+    validString(quote?.quoteId) && quote.taskId === id && quote.agentId === agentId &&
+    isCanonicalDecimalString(quote.taskVersion) && quote.taskVersion === version &&
+    validString(quote.priceBookVersion) && validString(quote.recommendation) &&
+    Array.isArray(quote.reasonCodes) && quote.reasonCodes.every(code => typeof code === 'string') &&
+    ['input', 'cachedInput', 'output', 'reasoning'].every(key => isCanonicalDecimalString(quote.estimatedTokens?.[key])) &&
+    ['estimatedComputeMicro', 'worstComputeMicro', 'platformFeeMicro', 'estimatedAgentPayoutMicro',
+      'worstAgentPayoutMicro'].every(key => isCanonicalDecimalString(quote[key])) &&
+    isCanonicalDecimalString(quote.expiresAt)
+  const definitiveClaimFailures = new Set(['QUOTE_EXPIRED', 'TASK_VERSION_CONFLICT', 'AGENT_NOT_READY',
+    'REQUIRED_SKILLS_MISMATCH', 'INSUFFICIENT_BOUNTY_BUDGET'])
+  const agentVersionOf = agent => agent?.version ?? agent?.agentVersion ?? agent?.expectedAgentVersion
+  const currentAgentMatches = (agent, agentId, version) => {
+    const current = resolveFundedAgent(agent)
+    return agent.agentId === agentId && agentVersionOf(agent) === version &&
+      current?.agentId === agentId && agentVersionOf(current) === version
+  }
+  const currentTaskSnapshots = (id, task) => [task, ...tasks.value, selectedTask.value].filter(item => item?.id === id)
+  const isCurrentPreview = (id, task, agent, agentId, version, agentVersion) =>
+    task.id === id && currentAgentMatches(agent, agentId, agentVersion) &&
+    currentTaskSnapshots(id, task).every(item => taskVersion(item) === version && item.status === 'open') &&
+    canAssign(task, agent) && canAssign(task, resolveFundedAgent(agent))
+  const matchingReceipt = (receipt, operation) => receipt?.taskId === operation.taskId &&
+    receipt.agentId === operation.body.agentId && receipt.quoteId === operation.body.quoteId &&
+    receipt.status === 'assigned' && isCanonicalDecimalString(receipt.taskVersion) &&
+    // W05 receiptVersion = request.taskVersion + 1, including idempotent replay.
+    BigInt(receipt.taskVersion) === BigInt(operation.body.taskVersion) + 1n &&
+    isCanonicalDecimalString(receipt.claimedAt)
+
+  const refreshClaimedTask = async (task, receipt) => {
+    const snapshot = unwrap(ensureBusinessSuccess(await agentApi.get(`/tasks/${encodeURIComponent(receipt.taskId)}`, undefined, { autoLoading: false })))
+    if (snapshot?.id !== receipt.taskId || !validString(snapshot.status) || !isCanonicalDecimalString(snapshot.taskVersion) ||
+      BigInt(snapshot.taskVersion) < BigInt(receipt.taskVersion) ||
+      (snapshot.taskVersion === receipt.taskVersion && (snapshot.status !== 'assigned' ||
+        snapshot.assignedAgentId !== receipt.agentId))) throw new Error('领令已确认，榜文快照尚未同步')
+    // Only canonical TaskDTO snapshots are applied. Never copy receipt fields or
+    // overwrite an equal/newer snapshot, including one delivered while GET ran.
+    for (const current of new Set(currentTaskSnapshots(receipt.taskId, task))) {
+      const version = taskVersion(current)
+      if (version && BigInt(snapshot.taskVersion) > BigInt(version)) Object.assign(current, snapshot)
+    }
+    const state = fundedClaimStates.value.get(receipt.taskId)
+    if (state?.quoteId === receipt.quoteId) state.refreshPending = false
+    return true
+  }
+
+  const refreshFundedClaim = async (task) => {
+    const receipt = confirmedClaims.get(task?.id)
+    if (!receipt) return false
+    try {
+      return await refreshClaimedTask(task, receipt)
+    } catch (error) {
+      log.warn('confirmed funded claim snapshot refresh pending:', error)
+      showToast('领令已确认；榜文刷新待完成，请稍后重查')
       return false
     }
-    let assignmentSucceeded = false
+  }
+
+  const claimFundedTask = async (task, agent) => {
+    if (!task?.id || !hasExplicitAgentId(agent)) return false
+    const id = task.id
+    if (fundedClaimsInFlight.has(id) || confirmedClaims.has(id)) return false
+    const agentId = agent.agentId
+    const agentVersion = agentVersionOf(agent)
+    const version = taskVersion(task)
+    const recovery = unresolvedClaims.get(id)
+    if (!version || (agentVersion !== undefined && !isCanonicalDecimalString(agentVersion)) ||
+      (recovery && recovery.body.agentId !== agentId)) {
+      showToast('榜文版本无效，或原领令尚待原好汉核对')
+      return false
+    }
+    fundedClaimsInFlight.add(id)
     try {
-      const quoteOperation = `funded-quote:${task.id}:${agent.agentId}:${version}`
-      const quote = await fundedRequest(quoteOperation, key => agentApi.create(`/tasks/${task.id}/quotes`, {
-        agentId: agent.agentId,
-        taskVersion: version
-      }, { autoLoading: false, headers: { 'Idempotency-Key': key }, onSuccess: ensureBusinessSuccess }))
-      if (!quote?.quoteId || quote.agentId !== agent.agentId || !isCanonicalDecimalString(quote.taskVersion) || quote.taskVersion !== version) {
-        throw new Error('报价与当前好汉或榜文版本不一致')
+      let operation = recovery
+      if (!operation) {
+        if (!isCurrentPreview(id, task, agent, agentId, version, agentVersion)) return false
+        const quote = await fundedRequest(`funded-quote:${id}:${agentId}:${version}`, key => agentApi.create(`/tasks/${encodeURIComponent(id)}/quotes`, {
+          agentId
+        }, { autoLoading: false, headers: { 'Idempotency-Key': key }, onSuccess: ensureBusinessSuccess }))
+        if (!matchingQuote(quote, id, agentId, version) || !unexpired(quote) ||
+          !isCurrentPreview(id, task, agent, agentId, version, agentVersion)) throw new Error('报价已过期或榜文/好汉已变，请重新预览')
+        operation = {
+          taskId: id,
+          quote: JSON.parse(JSON.stringify(quote)),
+          body: { agentId, quoteId: quote.quoteId, taskVersion: version, allowQueue: false },
+          key: null
+        }
       }
-      task.quote = quote
-      const claimOperation = `funded-claim:${task.id}:${agent.agentId}:${version}:${quote.quoteId}`
-      const claimed = await fundedRequest(claimOperation, key => agentApi.create(`/tasks/${task.id}/claim`, {
-        agentId: agent.agentId,
-        quoteId: quote.quoteId,
-        taskVersion: version,
-        allowQueue: false
-      }, { autoLoading: false, headers: { 'Idempotency-Key': key }, onSuccess: ensureBusinessSuccess }))
-      Object.assign(task, claimed || { status: 'assigned', assignedAgentId: agent.agentId, assignedAgentIds: [agent.agentId] })
-      agent.status = 'busy'
-      agent.currentTaskTitle = task.title
-      selectedAgent.value = agent
-      selectedTask.value = task
-      assignmentSucceeded = true
+      const approved = await confirmFundedQuote({
+        quote: JSON.parse(JSON.stringify(operation.quote)),
+        taskTitle: task.title,
+        agentName: agent.name || agent.personaName || agentId,
+        recovery: Boolean(recovery)
+      })
+      if (approved !== true) return false
+      // Recovery only replays the previously confirmed operation (even if its
+      // quote has since expired); it never silently replaces the quote/body.
+      if (task.id !== id || !currentAgentMatches(agent, agentId, agentVersion) ||
+        (!recovery && (!unexpired(operation.quote) ||
+          !isCurrentPreview(id, task, agent, agentId, version, agentVersion)))) {
+        showToast('报价已过期或榜文/好汉已变，请重新预览')
+        return false
+      }
+      if (!operation.key) operation.key = createIdempotencyKey()
+      unresolvedClaims.set(id, operation)
+      setFundedClaimState({ taskId: id, agentId, quoteId: operation.body.quoteId, status: 'confirming' })
+      let receipt
+      try {
+        receipt = unwrap(ensureBusinessSuccess(await agentApi.create(`/tasks/${encodeURIComponent(id)}/claim`, { ...operation.body }, {
+          autoLoading: false, headers: { 'Idempotency-Key': operation.key }, onSuccess: ensureBusinessSuccess
+        })))
+        if (!matchingReceipt(receipt, operation)) throw new Error('领令回执不匹配；请核对原领令，不要重新取价')
+      } catch (error) {
+        if (isDefinitiveFundedFailure(error) || definitiveClaimFailures.has(error?.code)) unresolvedClaims.delete(id)
+        setFundedClaimState({ taskId: id, agentId, quoteId: operation.body.quoteId,
+          status: unresolvedClaims.has(id) ? 'unresolved' : 'rejected' })
+        throw error
+      }
+      // Receipt success is durable knowledge before a fallible snapshot read.
+      confirmedClaims.set(id, receipt)
+      unresolvedClaims.delete(id)
+      setFundedClaimState({ taskId: id, agentId, quoteId: receipt.quoteId, status: 'confirmed', refreshPending: true })
       playSuccess()
-      showToast(`${task.title} 已按报价点给 ${agent.name || agent.personaName || agent.agentId}`)
+      showToast('领令已确认，正在刷新榜文')
+      try {
+        await refreshClaimedTask(task, receipt)
+      } catch (error) {
+        log.warn('confirmed funded claim snapshot refresh pending:', error)
+        showToast('领令已确认；榜文刷新待完成，请重查，勿重复领令')
+      }
+      return true
     } catch (error) {
       log.warn('claim funded bounty task failed:', error)
       playError()
-      showToast(`领资金榜未成：${failureReason(error, '请重取报价')}`)
+      showToast(`领资金榜未成：${failureReason(error, '请核对原领令')}`)
+      return false
+    } finally {
+      fundedClaimsInFlight.delete(id)
     }
-    return assignmentSucceeded
   }
 
   const assignTask = async (task, agent) => {
     const targetAgents = Array.isArray(agent) ? agent : [agent].filter(Boolean)
     if (!task?.id || !targetAgents.length || targetAgents.some(item => !hasExplicitAgentId(item))) return false
     if (isFundedTask(task)) {
-      if (targetAgents.length !== 1 || !canAssign(task, targetAgents[0])) return false
+      if (targetAgents.length !== 1) return false
       return claimFundedTask(task, targetAgents[0])
     }
     if (targetAgents.some(item => !canAssign(task, item))) return false
@@ -248,5 +366,5 @@ export const useHallTaskActions = ({
     }
   }
 
-  return { archiveTask, autoAssignTask, assignTask, cancelFunding, createTask, loadSettlement }
+  return { archiveTask, autoAssignTask, assignTask, cancelFunding, createTask, loadSettlement, fundedClaimState, refreshFundedClaim }
 }

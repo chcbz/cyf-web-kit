@@ -150,6 +150,11 @@
             :ability-text="abilityText"
             :can-assign="canAssign"
             :funded-preview-enabled="economyPreviewEnabled"
+            :funded-quote-preview="fundedQuotePreview"
+            :funded-claim-state="fundedClaimState"
+            @confirm-funded-quote="settleFundedQuote(true)"
+            @cancel-funded-quote="settleFundedQuote(false)"
+            @refresh-funded-claim="refreshFundedClaim"
             :format-time="formatTime"
             :portrait-name="portraitName"
             :portrait-style="portraitStyle"
@@ -912,7 +917,32 @@ const showToast = (message) => {
   }, 2200)
 }
 
+const fundedQuotePreview = ref(null)
+let fundedQuoteResolver = null
+const settleFundedQuote = (confirmed) => {
+  const resolve = fundedQuoteResolver
+  fundedQuoteResolver = null
+  fundedQuotePreview.value = null
+  resolve?.(confirmed === true)
+}
+const confirmFundedQuote = preview => new Promise(resolve => {
+  if (!economyPreviewEnabled.value || panelDisposed || renderedPanel.value !== 'tasks' || selectedTask.value?.id !== preview.quote.taskId) {
+    resolve(false)
+    return
+  }
+  settleFundedQuote(false)
+  fundedQuotePreview.value = preview
+  fundedQuoteResolver = resolve
+})
+// Closing/switching the task panel or changing a displayed selection cancels
+// only the preview. No hidden selection is ever used as the claim target.
+watch([() => selectedTask.value?.id, () => selectedTask.value?.taskVersion ?? selectedTask.value?.version,
+  () => selectedAgent.value?.agentId, () => renderedPanel.value, () => economyPreviewEnabled.value], () => settleFundedQuote(false), { flush: 'sync' })
+onUnmounted(() => settleFundedQuote(false))
+
 const {
+  fundedClaimState,
+  refreshFundedClaim,
   archiveTask: runArchiveTask,
   autoAssignTask: runAutoAssignTask,
   assignTask: runAssignTask,
@@ -921,6 +951,8 @@ const {
   loadSettlement: runLoadSettlement
 } = useHallTaskActions({
   agentApi,
+  confirmFundedQuote,
+  resolveFundedAgent: agent => agents.value.find(item => item.agentId === agent.agentId),
   canAssign,
   log,
   playError,
@@ -942,13 +974,18 @@ const assignTask = async (task, agent) => {
   const targetAgents = Array.isArray(agent) ? agent : [agent].filter(Boolean)
   const hasExplicitAgentId = item => typeof item?.agentId === 'string' && Boolean(item.agentId.trim())
   if (!task?.id || !targetAgents.length || targetAgents.some(item => !hasExplicitAgentId(item))) return false
-  if (targetAgents.some(item => !canAssign(task, item))) return false
+  if (task.funding?.mode === 'FUNDED_SINGLE_AGENT' && !economyPreviewEnabled.value) return false
+  if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT') {
+    if (targetAgents.some(item => !canAssign(task, item))) return false
+  }
 
   taskWorkspaceBinding.clearExplicitActor()
   const assignmentSucceeded = await runAssignTask(task, agent)
   if (!assignmentSucceeded) return false
 
-  markTaskAssigned(task, targetAgents)
+  const canonicalTask = tasks.value.find(item => item.id === task.id) || task
+  if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT' ||
+    (canonicalTask.status === 'assigned' && canonicalTask.assignedAgentId === targetAgents[0].agentId)) markTaskAssigned(canonicalTask, targetAgents)
   return true
 }
 
