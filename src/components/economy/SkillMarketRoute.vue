@@ -27,7 +27,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import SkillMarket from './SkillMarket.vue'
-import { agentApi } from '@/composables/useHttp'
+import { loadSkillMarketRoster } from '@/utils/skillMarketRoster.js'
 import { isCanonicalDecimalString } from '@/utils/silverAmount'
 import { isSkillMarketplaceCapability, loadEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
 
@@ -56,7 +56,7 @@ onMounted(async () => {
   try {
     capability.value = await loadEconomyPreviewCapability()
     if (!marketEnabled.value) return
-    ownedAgents.value = rosterItems(unwrap(await agentApi.get('/roster', undefined, { autoLoading: false })))
+    ownedAgents.value = rosterItems(unwrap(await loadSkillMarketRoster()))
       .filter(ownedRosterAgent)
   } catch (cause) {
     capability.value = null

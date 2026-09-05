@@ -3,6 +3,7 @@ import { readFileSync } from 'fs'
 import { ref } from 'vue'
 import { useHallTaskActions } from '../src/composables/juyiting/useHallTaskActions.js'
 import { createApi } from '../src/composables/useHttp.js'
+import { loadSkillMarketRoster } from '../src/utils/skillMarketRoster.js'
 
 const walletSource = readFileSync(new URL('../src/components/Wallet.vue', import.meta.url), 'utf8')
 const bountySource = readFileSync(new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url), 'utf8')
@@ -204,12 +205,43 @@ describe('funded bounty remediation', () => {
     expect(profileSource).not.to.include("economyApi.get('/wallet'")
     expect(routerSource).to.include("path: '/skill-market'")
     expect(routerSource).to.include("import('@/components/economy/SkillMarketRoute.vue')")
-    expect(skillMarketRouteSource).to.include("agentApi.get('/roster'")
+    expect(skillMarketRouteSource).to.include('await loadSkillMarketRoster()')
     expect(skillMarketRouteSource).to.include('principalScopeFingerprint')
     expect(skillMarketRouteSource).to.include('agent?.boundToMe === true && agent?.canOperate === true')
     expect(skillMarketRouteSource).to.include('isCanonicalDecimalString(agent?.version)')
-    expect(routerSource).to.include('beforeEnter: economyPreviewRouteGuard')
+    expect(routerSource).to.include('beforeEnter: () => economyPreviewRouteGuard(isSkillMarketplaceCapability)')
     expect(routerSource).to.include("return { name: 'UserProfile' }")
+  })
+
+  it('loads the skill route roster through actual createApi/useHttp POST with explicit pagination', async () => {
+    const originalFetch = globalThis.fetch
+    const requests = []
+    const roster = [{ agentId: 'owned-agent', boundToMe: true, canOperate: true, version: '17' }]
+    const controller = new AbortController()
+    globalThis.fetch = async (url, options) => {
+      requests.push({ url, options })
+      return new Response(JSON.stringify({ code: 'E0', data: roster }), {
+        status: 200, headers: { 'Content-Type': 'application/json' }
+      })
+    }
+    try {
+      const result = await loadSkillMarketRoster({
+        signal: controller.signal,
+        authStore: { authorizationGeneration: 1, token: async () => 'test-only-token' }
+      })
+      expect(requests).to.have.length(1)
+      const { url, options } = requests[0]
+      const requestUrl = new URL(url, 'http://localhost')
+      expect(requestUrl.pathname).to.match(/\/agent\/roster$/)
+      expect(requestUrl.search).to.equal('')
+      expect(options.method).to.equal('POST')
+      expect(JSON.parse(options.body)).to.deep.equal({ pageNum: 1, pageSize: 50 })
+      expect(options.headers.Authorization).to.equal('Bearer test-only-token')
+      expect(options.signal.aborted).to.equal(false)
+      expect(result.data).to.deep.equal({ code: 'E0', data: roster })
+    } finally {
+      globalThis.fetch = originalFetch
+    }
   })
 
   it('classifies actual useHttp 409 error shapes by documented code while retaining ambiguous replay keys', async () => {
