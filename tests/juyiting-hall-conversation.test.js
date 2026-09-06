@@ -2,6 +2,7 @@ import { expect } from 'chai'
 import { ref } from 'vue'
 import { useHallConversation } from '../src/composables/juyiting/useHallConversation.js'
 import { stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
+import { createHallVoiceReplyCorrelation } from '../src/composables/juyiting/hallVoiceReplyCorrelation.js'
 import {
   appendHallEventMessage,
   appendStreamPayload,
@@ -40,7 +41,7 @@ describe('useHallConversation scoped message loading', () => {
           }
         },
         chatApi: {
-          list: async (_path, _payload, options) => options.onSuccess({ data: [{ id: 1001 }] }),
+          list: async (_path, _payload, options) => options.onSuccess({ data: [{ id: '1001' }] }),
           getById: async (_path, _id, options) => options.onSuccess({ data: [] })
         },
         chatContext,
@@ -93,7 +94,7 @@ describe('useHallConversation scoped message loading', () => {
           beginAuthorization: async () => { authorizationCount += 1 }
         },
         chatApi: {
-          list: async (_path, _payload, options) => options.onSuccess({ data: [{ id: 1001 }] }),
+          list: async (_path, _payload, options) => options.onSuccess({ data: [{ id: '1001' }] }),
           getById: async (_path, _id, options) => options.onSuccess({ data: [] })
         },
         chatContext: ref({
@@ -296,7 +297,7 @@ describe('useHallConversation scoped message loading', () => {
 
   it('normalizes persisted agent messages with metadata', () => {
     const message = normalizeHallMessage({
-      id: 12,
+      id: '12',
       senderType: 'agent',
       senderName: '',
       content: '已完成',
@@ -317,6 +318,25 @@ describe('useHallConversation scoped message loading', () => {
       streaming: false,
       statusText: ''
     })
+  })
+
+  it('fails closed for numeric and unsafe Long wire IDs without coercion', () => {
+    expect(normalizeHallMessage({ id: 12, senderType: 'agent', content: 'numeric' })).to.equal(null)
+    expect(normalizeHallMessage({ id: 9223372036854775807, senderType: 'agent', content: 'unsafe' })).to.equal(null)
+    expect(normalizeHallMessage({ id: '9223372036854775807', senderType: 'agent', content: 'exact' })?.localId).to.equal('9223372036854775807')
+
+    const externalState = { conversationId: '1001', messages: [], isAwaitingReply: true, isStreaming: true }
+    const numericMessage = appendHallEventMessage(externalState, {
+      type: 'agent_message', conversationId: '1001', messageId: 9223372036854775807, senderType: 'agent', content: 'unsafe'
+    })
+    expect(numericMessage.type).to.equal('invalid_message_id')
+    expect(externalState.messages).to.deep.equal([])
+
+    const streamState = { conversationId: '', messages: [], isAwaitingReply: true, isStreaming: true }
+    expect(appendStreamPayload(streamState, '{"conversationId":9223372036854775807}').type).to.equal('invalid_conversation')
+    expect(appendStreamPayload(streamState, '{"type":"agent_message","messageId":9223372036854775807,"senderType":"agent","content":"unsafe"}').type).to.equal('invalid_message_id')
+    expect(streamState.conversationId).to.equal('')
+    expect(streamState.messages).to.deep.equal([])
   })
 
   it('merges agent delta and final events without duplicate messages', () => {
@@ -342,10 +362,10 @@ describe('useHallConversation scoped message loading', () => {
       content: '日志',
       timestamp: 11
     })
-    appendHallEventMessage(state, {
+    const externalFinal = appendHallEventMessage(state, {
       type: 'agent_message',
       conversationId: '1001',
-      messageId: 99,
+      messageId: '99',
       agentId: 'wuyong',
       senderType: 'agent',
       senderName: '吴用',
@@ -355,7 +375,7 @@ describe('useHallConversation scoped message loading', () => {
     appendHallEventMessage(state, {
       type: 'agent_message',
       conversationId: '1001',
-      messageId: 99,
+      messageId: '99',
       agentId: 'wuyong',
       senderType: 'agent',
       senderName: '吴用',
@@ -363,6 +383,7 @@ describe('useHallConversation scoped message loading', () => {
       timestamp: 13
     })
 
+    expect(externalFinal.type).to.equal('final')
     expect(state.messages).to.have.length(1)
     expect(state.messages[0]).to.deep.include({
       localId: '99',
@@ -403,6 +424,199 @@ describe('useHallConversation scoped message loading', () => {
       sender: 'ASSISTANT',
       content: '收到，马上处理'
     })
+  })
+})
+
+
+describe('useHallConversation finalized reply routing', () => {
+  const flushMicrotasks = async () => {
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+  }
+
+  const runBuiltInFinalScenario = async ({ existingConversationId = '', duplicatePath = null }) => {
+    const originalSetTimeout = window.setTimeout
+    const originalClearTimeout = window.clearTimeout
+    const originalFetch = global.fetch
+    const timers = []
+    let sseController = null
+    let contentCalls = 0
+    window.setTimeout = (callback, delay) => {
+      const timer = { callback, delay, cleared: false }
+      timers.push(timer)
+      return timer
+    }
+    window.clearTimeout = timer => { if (timer) timer.cleared = true }
+    if (duplicatePath === 'live_sse') {
+      global.fetch = async () => new Response(new ReadableStream({
+        start (controller) { sseController = controller }
+      }), { status: 200, headers: { 'content-type': 'text/event-stream' } })
+    }
+
+    const finalConversationId = existingConversationId || 'conversation-new-9223372036854775807'
+    const finalMessageId = `reply-${duplicatePath || 'stream'}-9223372036854775807`
+    const finalText = `完整回话-${duplicatePath || 'stream'}`
+    const callbacks = []
+    const spokenReplies = []
+    const spokenMessageIds = new Set()
+    let tracker
+    let conversation
+
+    try {
+      conversation = useHallConversation({
+        apiStore: { token: async () => duplicatePath === 'live_sse' ? 'token' : null },
+        chatApi: {
+          list: async (_path, _payload, options) => options.onSuccess({ data: [{ id: existingConversationId }] }),
+          create: async (_path, _payload, options) => {
+            const finalEvent = JSON.stringify({
+              type: 'agent_message',
+              conversationId: finalConversationId,
+              messageId: finalMessageId,
+              agentId: 'wuyong',
+              senderType: 'agent',
+              senderName: '吴用',
+              content: finalText,
+              timestamp: 1788000000000
+            })
+            const runPollDuplicate = async () => {
+              const syncTimer = timers.find(timer => timer.delay === 1500 && !timer.cleared)
+              expect(syncTimer, 'new-conversation sync timer').to.exist
+              syncTimer.callback()
+              await flushMicrotasks()
+            }
+
+            if (duplicatePath === 'live_sse') {
+              sseController.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+                type: 'agent_message',
+                conversationId: finalConversationId,
+                messageId: finalMessageId,
+                agentId: 'wuyong',
+                senderType: 'agent',
+                senderName: '吴用',
+                content: '实时副本残片',
+                timestamp: 1787999999999
+              })}\n`))
+              sseController.close()
+              await flushMicrotasks()
+              expect(callbacks, 'live SSE duplicate must remain pending during the built-in turn').to.have.length(0)
+              options.onStream(finalEvent)
+              options.onStream(JSON.stringify({ conversationId: finalConversationId }))
+            } else if (duplicatePath === 'poll_before_stream_end') {
+              options.onStream(JSON.stringify({ conversationId: finalConversationId }))
+              await runPollDuplicate()
+              expect(callbacks, 'poll duplicate must remain pending during the built-in turn').to.have.length(0)
+              options.onStream(finalEvent)
+            } else {
+              options.onStream(finalEvent)
+              options.onStream(finalEvent)
+              options.onStream(JSON.stringify({ conversationId: finalConversationId }))
+            }
+            expect(callbacks, 'built-in final must remain pending until stream end').to.have.length(0)
+            options.onStreamEnd()
+            options.onStreamEnd()
+            if (duplicatePath === 'poll_after_stream_end') await runPollDuplicate()
+          },
+          getById: async (_path, id, options) => {
+            expect(id).to.equal(finalConversationId)
+            contentCalls += 1
+            const isInitialSseLoad = duplicatePath === 'live_sse' && contentCalls === 1
+            await options.onSuccess({ data: isInitialSseLoad ? [] : [{
+              id: finalMessageId,
+              senderType: 'agent',
+              senderName: '吴用',
+              content: '轮询副本残片',
+              createTime: 1787999999999,
+              metadata: JSON.stringify({ agentId: 'wuyong' })
+            }] })
+          }
+        },
+        chatContext: ref({
+          conversationScopeType: 'public',
+          conversationScopeKey: 'public',
+          mode: 'public',
+          participantAgentIds: [],
+          targetAgentIds: [],
+          targetAgentId: '',
+          selectedTaskId: null,
+          taskId: null
+        }),
+        chatMode: ref('public'),
+        globalStore: { getJiacn: 'hero', user: {} },
+        log: { warn: () => {}, error: () => {} },
+        openPanel: () => {},
+        outgoingMetadata: ref({}),
+        portraitShortName: agent => agent?.name || '',
+        selectedAgent: ref(null),
+        selectedTask: ref(null),
+        showToast: () => {},
+        onFinalReply: payload => {
+          callbacks.push(payload)
+          tracker.observe(payload)
+        }
+      })
+      if (duplicatePath === 'live_sse') {
+        await conversation.loadHallMessages()
+        await flushMicrotasks()
+        expect(sseController, 'existing-conversation live SSE controller').to.exist
+      } else {
+        conversation.conversationId.value = existingConversationId
+      }
+      conversation.messages.value = [{ localId: 'baseline-old-reply', sender: 'AGENT', content: '旧回话', streaming: false }]
+      tracker = createHallVoiceReplyCorrelation({
+        spokenMessageIds,
+        onReply: (message, _turn, payload) => spokenReplies.push({ source: payload.source, text: message.content })
+      })
+      const turnId = `turn-${duplicatePath || 'existing'}`
+      expect(tracker.start({
+        turnId,
+        baselineSequence: conversation.replyEventSequence.value,
+        messages: conversation.messages.value,
+        conversationIdBeforeSend: existingConversationId
+      })).to.equal(turnId)
+
+      conversation.setDraft('请报完整回话')
+      const accepted = await conversation.sendHallMessage({
+        onConversationResolved: id => tracker.resolveConversation(id)
+      })
+      await flushMicrotasks()
+
+      expect(accepted).to.equal(true)
+      expect(conversation.conversationId.value).to.equal(finalConversationId)
+      expect(conversation.replyEventSequence.value).to.equal(1)
+      expect(callbacks).to.have.length(1)
+      expect(callbacks[0]).to.deep.include({
+        conversationId: finalConversationId,
+        messageId: finalMessageId,
+        sequence: 1,
+        source: 'stream_end'
+      })
+      expect(spokenReplies).to.deep.equal([{ source: 'stream_end', text: finalText }])
+      expect(spokenMessageIds.has(finalMessageId)).to.equal(true)
+      expect(spokenMessageIds.has('baseline-old-reply')).to.equal(false)
+    } finally {
+      conversation?.disposeHallConversation()
+      window.setTimeout = originalSetTimeout
+      window.clearTimeout = originalClearTimeout
+      global.fetch = originalFetch
+    }
+  }
+
+  it('defers a built-in final for an existing conversation until stream end and commits once', async () => {
+    await runBuiltInFinalScenario({ existingConversationId: 'conversation-existing-9223372036854775807' })
+  })
+
+  it('makes stream end win over an existing-conversation live SSE duplicate', async () => {
+    await runBuiltInFinalScenario({ existingConversationId: 'conversation-existing-sse-9223372036854775807', duplicatePath: 'live_sse' })
+  })
+
+  it('makes stream end win over a new-conversation poll duplicate before end', async () => {
+    await runBuiltInFinalScenario({ duplicatePath: 'poll_before_stream_end' })
+  })
+
+  it('deduplicates a new-conversation poll replay after stream end', async () => {
+    await runBuiltInFinalScenario({ duplicatePath: 'poll_after_stream_end' })
   })
 })
 
@@ -457,12 +671,12 @@ describe('Hall conversation identity lifecycle', () => {
       chatApi: {
         list: async (_path, _payload, options) => {
           listOptions = options
-          await options.onSuccess({ data: [{ id: 1001 }] })
+          await options.onSuccess({ data: [{ id: '1001' }] })
         },
         getById: async (_path, _id, options) => {
           contentOptions = options
           await new Promise(resolve => { resolveContent = resolve })
-          options.onSuccess({ data: [{ id: 9, senderType: 'agent', content: 'late reply' }] })
+          options.onSuccess({ data: [{ id: '9', senderType: 'agent', content: 'late reply' }] })
         }
       },
       chatContext: ref({ conversationScopeType: 'public', conversationScopeKey: 'public', targetAgentIds: [] }),

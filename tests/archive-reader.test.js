@@ -5,6 +5,8 @@ import { compileScript, parse } from '@vue/compiler-sfc'
 import { mount } from '@vue/test-utils'
 import * as Vue from 'vue'
 import * as HallPanelHelpers from '../src/composables/juyiting/useHallPanels.js'
+import { createApi } from '../src/composables/useHttp.js'
+import { registerIdentityCleanup, stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 import {
   isCanonicalDecimal,
   mutationHeaders,
@@ -236,6 +238,7 @@ const loadArchiveReaderSfc = (archiveModule) => {
     .replace(
       '</script>',
       `defineExpose({
+        __editorStateForTest: () => ({ editingNote: editingNote.value, noteText: noteText.value }),
         __switchEditorTargetForTest: (note, text) => {
           editingNote.value = note
           noteText.value = text
@@ -255,10 +258,13 @@ const loadArchiveReaderSfc = (archiveModule) => {
       /^import\s+\{\s*useArchiveReader,\s*utf8ByteLength\s*\}\s+from\s+['"]@\/composables\/juyiting\/useArchiveReader['"];?\s*$/gm,
       'var { useArchiveReader, utf8ByteLength } = archiveModule'
     )
+    .replace(
+      /^import\s+\{\s*registerIdentityCleanup\s*\}\s+from\s+['"]@\/utils\/identityLifecycle\.js['"];?\s*$/gm,
+      'var { registerIdentityCleanup } = archiveModule'
+    )
     .replace('export default', 'return')
   return new Function('Vue', 'archiveModule', body)(Vue, archiveModule)
 }
-
 
 const loadActualHallForIntegration = (mocks, id) => {
   const relativePath = '../src/components/world/JuyiHall.vue'
@@ -298,6 +304,7 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
   const taskWorkspace = workspaceState || null
   return {
     ...HallPanelHelpers,
+    registerIdentityCleanup,
     env: { VITE_JUYITING_TASK_WORKSPACE_ENABLED: workspaceState ? 'true' : undefined },
     useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({}),
     agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {}, roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
@@ -308,11 +315,13 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
     useHallCommandQueue: () => ({ ready: Vue.ref(false), setSimulation: noop }),
     useHallBackendSceneState: () => ({ start: asyncNoop, stop: noop, dispose: noop, reportPhase: noop }),
     useHallSceneDebugBridge: () => ({ sentinel: 'debug-o04', republish: noop, stop: noop }),
-    useHallSound: () => ({ playAgentSelect: noop, playError: noop, playPanelOpen: noop, playRefresh: noop, playSend: noop, playSuccess: noop, playTap: noop, setSoundEnabled: noop, soundEnabled: Vue.ref(false) }),
-    useHallChatContext: () => ({ chatContext: Vue.ref({ conversationScopeKey: 'scope-o04' }), chatMentionAgents: list, chatMode: Vue.ref('public'), chatTargetText: text, enterBountyDiscussion: noop, enterPrivateConversation: noop, resetToPublic: noop, setMentionAgent: noop }),
+    useHallSound: () => ({ playAgentSelect: noop, playError: noop, playPanelOpen: noop, playRefresh: noop, playSend: noop, playSuccess: noop, playTap: noop, setSoundEnabled: noop, setSoundSuppressed: noop, soundEnabled: Vue.ref(false) }),
+    useHallChatContext: () => ({ chatContext: Vue.ref({ conversationScopeKey: 'scope-o04' }), chatMentionAgentIds: Vue.ref([]), chatMentionAgents: list, chatMode: Vue.ref('public'), chatTargetText: text, enterBountyDiscussion: noop, enterPrivateConversation: noop, resetToPublic: noop, setMentionAgent: noop }),
     useHallScene: () => ({ markAgentSpeaking: noop, markDiscussionStarted: noop, markLibraryCitation: noop, markLibrarySearching: noop, markRecommendedAgents: noop, markTaskArchived: noop, markTaskAssigned: noop, markTaskAutoAssigned: noop, markTaskCreated: noop, resetSceneFeedback: noop, sceneAgents: list, sceneAgentStyle: () => ({}), sceneHotspots: list, syncAfterPersonaChanged: noop }),
     useHallTaskActions: () => ({ archiveTask: asyncNoop, autoAssignTask: asyncNoop, assignTask: async () => true, createTask: asyncNoop }),
-    useHallConversation: () => ({ chatConnectionStatus: text, conversationId: Vue.ref('conversation-o04'), draft: Vue.ref('draft-o04'), eventStreamRecovering: Vue.ref(false), insertAgentMention: noop, isAwaitingReply: Vue.ref(false), isStreaming: Vue.ref(false), loadHallMessages: asyncNoop, mentionAgent: noop, messages: Vue.ref([{ id: 'message-o04' }]), newHallConversation: noop, pendingAgentName: text, sendHallMessage: asyncNoop, senderText: text, disposeHallConversation: noop, stopHallEventStream: noop, stopHallReplyPolling: noop, stopHallReplyStreaming: noop }),
+    useHallConversation: () => ({ chatConnectionStatus: text, conversationId: Vue.ref('conversation-o04'), draft: Vue.ref('draft-o04'), draftRevision: Vue.ref(0), eventStreamRecovering: Vue.ref(false), insertAgentMention: noop, isAwaitingReply: Vue.ref(false), isStreaming: Vue.ref(false), loadHallMessages: asyncNoop, mentionAgent: noop, messages: Vue.ref([{ id: 'message-o04' }]), newHallConversation: noop, pendingAgentName: text, replyEventSequence: Vue.ref(0), sendHallMessage: asyncNoop, senderText: text, setDraft: noop, disposeHallConversation: noop, stopHallEventStream: noop, stopHallReplyPolling: noop, stopHallReplyStreaming: noop }),
+    useHallVoiceConversation: () => ({ supported: false, voiceInteractionLocked: false, cancel: noop, dispose: noop, applyTranscript: noop }),
+    createHallVoiceReplyCorrelation: () => ({ start: () => true, observe: noop, resolveConversation: () => true, close: noop }),
     useHallLibrary: () => ({ citeLibraryItem: noop, libraryErrorMessage: text, libraryHasSearched: Vue.ref(false), libraryKeyword: Vue.ref('library-filter-o04'), libraryLoading: Vue.ref(false), libraryResults: list, librarySourceType: Vue.ref('project'), searchLibrary: asyncNoop }),
     useTaskWorkspace: () => taskWorkspace,
     createDisabledTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }),
@@ -320,11 +329,10 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
     useTaskWorkspaceView: () => workspaceState ? ({ subject: workspaceState.subject, workspace: workspaceState.workspace, connectionState: workspaceState.connectionState, error: workspaceState.error, retry: workspaceState.retry }) : ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: text, error: Vue.ref(null), retry: noop }),
     useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }),
     portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '',
-    HallPortraitHome, HallStage, LibraryPanel: LibraryPanel || EmptyPanel, TaskWorkspacePanel: TaskWorkspacePanel || EmptyPanel,
+    HallPortraitHome, HallStage, HallVoiceHud: EmptyPanel, LibraryPanel: LibraryPanel || EmptyPanel, TaskWorkspacePanel: TaskWorkspacePanel || EmptyPanel,
     AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel, BountyPanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PrivateDiscussionPanel: EmptyPanel, PublicDiscussionPanel: EmptyPanel, SelectedAgentCard: EmptyPanel
   }
 }
-
 
 const loadLibraryPanelSfc = (ArchiveReader) => {
   const relativePath = '../src/components/juyiting/LibraryPanel.vue'
@@ -340,13 +348,24 @@ const loadLibraryPanelSfc = (ArchiveReader) => {
 const mountArchiveReader = (api, options = {}) => {
   let readerState
   const component = loadArchiveReaderSfc({
-    useArchiveReader: () => {
-      readerState = useArchiveReader({ api, saveDelay: options.saveDelay ?? 1 })
+    useArchiveReader: (readerOptions = {}) => {
+      readerState = useArchiveReader({
+        ...readerOptions,
+        api,
+        saveDelay: options.saveDelay ?? 1
+      })
       return readerState
     },
+    registerIdentityCleanup,
     utf8ByteLength
   })
-  const wrapper = mount(component, { attachTo: document.body })
+  const wrapper = mount(component, {
+    attachTo: document.body,
+    props: {
+      disableTeleport: options.disableTeleport ?? true,
+      initialView: options.initialView ?? 'reader'
+    }
+  })
   wrapper.readerState = readerState
   return wrapper
 }
@@ -445,6 +464,63 @@ afterEach(() => {
 })
 
 describe('archive reader contract behavior', () => {
+  it('sends progress through the real createApi and useHttp adapter contract', async () => {
+    const originalFetch = globalThis.fetch
+    const requests = []
+    let mounted
+    try {
+      globalThis.fetch = async (url, options) => {
+        const body = JSON.parse(options.body)
+        requests.push({ body, options, url: String(url) })
+        return new Response(JSON.stringify({
+          status: 200,
+          code: 'OK',
+          msg: 'ok',
+          data: {
+            editionId,
+            location: body.location,
+            state: 'IN_PROGRESS',
+            version: '1'
+          }
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+
+      const authStore = {
+        authorizationGeneration: 0,
+        token: async () => 'reader-adapter-fixture-token'
+      }
+      const realApi = createApi('/archive/v1')
+      const readerApi = {
+        ...realApi,
+        put: (uri, body, options = {}) => realApi.put(uri, body, { ...options, authStore })
+      }
+      mounted = mountReader(readerApi)
+      primeReader(mounted.reader)
+      await mounted.reader.saveProgress()
+
+      expect(requests).to.have.length(1)
+      const request = requests[0]
+      expect(request.url).to.equal(`/archive/v1/me/progress/${editionId}`)
+      expect(request.options.method).to.equal('PUT')
+      expect(request.options.headers).to.include({
+        Authorization: 'Bearer reader-adapter-fixture-token',
+        'Content-Type': 'application/json'
+      })
+      expect(request.options.headers['Idempotency-Key']).to.match(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+      )
+      expect(request.body).to.deep.equal({
+        expectedVersion: '0',
+        location: point(chapterOne, chapterOne.paragraphs[0]),
+        markCompleted: false
+      })
+      expect(mounted.reader.progress.value).to.include({ editionId, version: '1' })
+      expect(mounted.reader.saveState.value).to.equal('saved')
+    } finally {
+      mounted?.wrapper.unmount()
+      globalThis.fetch = originalFetch
+    }
+  })
   it('preserves JsonResult data:null and saves first progress with expectedVersion 0', async () => {
     const api = makeApi({ progress: null })
     const mounted = mountReader(api)
@@ -483,6 +559,104 @@ describe('archive reader contract behavior', () => {
     const save = api.calls.find(call => call.method === 'put' && call.path.startsWith('/me/progress/'))
     expect(save.body.expectedVersion).to.equal('0')
     mounted.wrapper.unmount()
+  })
+
+  it('shows the book shelf first, opens a fullscreen reader, and keeps the catalog collapsed by default', async () => {
+    const api = makeApi()
+    const wrapper = mountArchiveReader(api, { initialView: 'catalog' })
+    await waitFor(() => !wrapper.readerState.loading.value && wrapper.find('.archive-book-card').exists())
+
+    expect(wrapper.text()).to.include('阁中典籍')
+    expect(wrapper.text()).to.include('水滸傳')
+    expect(wrapper.find('.archive-reader-fullscreen').exists()).to.equal(false)
+    expect(api.calls.filter(call => call.path.includes('/chapters/') || call.path.endsWith('/preface'))).to.have.length(0)
+
+    await wrapper.get('.archive-book-open').trigger('click')
+    await waitFor(() => wrapper.find('.archive-reader-fullscreen').exists())
+    await waitFor(() => wrapper.findAll('.reader-paragraph').length === 2)
+    expect(wrapper.find('.reader-catalog').exists()).to.equal(false)
+
+    await wrapper.findAll('.reader-header-button')[0].trigger('click')
+    expect(wrapper.find('.reader-catalog').exists()).to.equal(true)
+    const progressReads = api.calls.filter(call => call.path.startsWith('/me/progress/')).length
+    await wrapper.get('.reader-exit').trigger('click')
+    expect(wrapper.find('.archive-reader-fullscreen').exists()).to.equal(false)
+    expect(wrapper.find('.archive-book-card').exists()).to.equal(true)
+
+    await wrapper.get('.archive-book-open').trigger('click')
+    await waitFor(() => wrapper.find('.archive-reader-fullscreen').exists())
+    expect(api.calls.filter(call => call.path.startsWith('/me/progress/'))).to.have.length(progressReads)
+    wrapper.unmount()
+  })
+
+  it('retries only the catalog before the user chooses a book', async () => {
+    let catalogAttempts = 0
+    const api = makeApi({
+      getCatalog: () => {
+        catalogAttempts += 1
+        if (catalogAttempts === 1) throw new Error('catalog unavailable')
+        return response(catalog)
+      }
+    })
+    const wrapper = mountArchiveReader(api, { initialView: 'catalog' })
+    await waitFor(() => wrapper.find('.archive-error button').exists())
+
+    await wrapper.get('.archive-error button').trigger('click')
+    await waitFor(() => wrapper.find('.archive-book-card').exists())
+    expect(api.calls.filter(call => call.path.startsWith('/me/progress/'))).to.have.length(0)
+    expect(api.calls.filter(call => call.path === '/me/bookmarks')).to.have.length(0)
+    expect(api.calls.filter(call => call.path.includes('/chapters/') || call.path.endsWith('/preface'))).to.have.length(0)
+    wrapper.unmount()
+  })
+
+  it('uses a real teleported modal and restores focus to the book after exit', async () => {
+    const api = makeApi()
+    const wrapper = mountArchiveReader(api, { initialView: 'catalog', disableTeleport: false })
+    await waitFor(() => !wrapper.readerState.loading.value && wrapper.find('.archive-book-open').exists())
+
+    const openButton = wrapper.get('.archive-book-open').element
+    openButton.focus()
+    await wrapper.get('.archive-book-open').trigger('click')
+    await waitFor(() => document.body.querySelector('.archive-reader-fullscreen'))
+
+    const dialog = document.body.querySelector('.archive-reader-fullscreen')
+    expect(dialog.getAttribute('role')).to.equal('dialog')
+    expect(dialog.getAttribute('aria-modal')).to.equal('true')
+    await waitFor(() => document.activeElement === dialog)
+    dialog.dispatchEvent(new window.KeyboardEvent('keydown', { bubbles: true, key: 'Tab', shiftKey: true }))
+    await waitFor(() => document.activeElement !== dialog && dialog.contains(document.activeElement))
+
+    dialog.querySelector('.reader-exit').dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await waitFor(() => !document.body.querySelector('.archive-reader-fullscreen'))
+    await waitFor(() => document.activeElement?.classList.contains('archive-book-open'))
+    wrapper.unmount()
+  })
+
+  it('cancels a delayed chapter switch when leaving the fullscreen reader', async () => {
+    const delayedChapter = deferred()
+    const api = makeApi({
+      getBlock: blockId => blockId === chapterEightyOne.blockId
+        ? delayedChapter.promise
+        : response(blocksById.get(blockId))
+    })
+    const wrapper = mountArchiveReader(api, { initialView: 'catalog' })
+    await waitFor(() => wrapper.readerState.catalog.value && !wrapper.readerState.loading.value)
+    await wrapper.get('.archive-book-open').trigger('click')
+    await waitFor(() => wrapper.readerState.chapter.value?.blockId === preface.blockId)
+
+    await wrapper.findAll('.reader-header-button')[0].trigger('click')
+    const delayedButton = wrapper.findAll('.reader-catalog button')
+      .find(button => button.text().includes('第81回'))
+    await delayedButton.trigger('click')
+    await waitFor(() => api.calls.some(call => call.path.endsWith(`/chapters/${chapterEightyOne.blockId}`)))
+    await wrapper.get('.reader-exit').trigger('click')
+    await wrapper.get('.archive-book-open').trigger('click')
+    delayedChapter.resolve(response(chapterEightyOne))
+    await settle()
+
+    expect(wrapper.readerState.chapter.value.blockId).to.equal(preface.blockId)
+    expect(wrapper.text()).to.include('引首第一段')
+    wrapper.unmount()
   })
 
   it('continues to a non-first paragraph and focuses it after real DOM rendering', async () => {
@@ -602,12 +776,40 @@ describe('archive reader contract behavior', () => {
 
     notesByBlock[chapterEightyOne.blockId][0].text = '服务端重载长段手札'
     const noteGetsBeforeReload = api.calls.filter(call => call.path === '/me/notes').length
+    await wrapper.findAll('.reader-header-button')[0].trigger('click')
     const chapterButton = wrapper.findAll('.reader-catalog button')
       .find(button => button.text().includes('第81回'))
     await chapterButton.trigger('click')
     await waitFor(() => api.calls.filter(call => call.path === '/me/notes').length > noteGetsBeforeReload)
     await waitFor(() => wrapper.text().includes('服务端重载长段手札'))
     wrapper.unmount()
+  })
+
+  it('publishes a validated chapter before delayed personal collections settle', async () => {
+    const delayedBookmarks = deferred()
+    const delayedNotes = deferred()
+    const api = makeApi()
+    const baseGet = api.get
+    api.get = async (path, params, options) => {
+      if (path === '/me/bookmarks' || path === '/me/notes') {
+        api.calls.push({ method: 'get', options, params, path })
+        return path === '/me/bookmarks' ? delayedBookmarks.promise : delayedNotes.promise
+      }
+      return baseGet(path, params, options)
+    }
+    const mounted = mountReader(api)
+    const initializing = mounted.reader.initialize()
+
+    await waitFor(() => mounted.reader.chapter.value?.blockId === preface.blockId)
+    expect(mounted.reader.chapterLoading.value).to.equal(false)
+    expect(mounted.reader.notes.value).to.deep.equal([])
+    expect(api.calls.some(call => call.path === '/me/bookmarks')).to.equal(true)
+    expect(api.calls.some(call => call.path === '/me/notes')).to.equal(true)
+
+    delayedBookmarks.resolve(response({ items: [], nextCursor: null }))
+    delayedNotes.resolve(response({ items: [], nextCursor: null }))
+    await initializing
+    mounted.wrapper.unmount()
   })
 
   it('commits only the latest block and notes when chapter requests resolve out of order', async () => {
@@ -632,6 +834,7 @@ describe('archive reader contract behavior', () => {
     await latest
     requests.get(chapterOne.blockId).resolve(response(chapterOne))
     await older
+    await settle()
 
     expect(mounted.reader.chapter.value.blockId).to.equal(chapterEightyOne.blockId)
     expect(mounted.reader.currentLocation.value.blockId).to.equal(chapterEightyOne.blockId)
@@ -997,6 +1200,147 @@ describe('archive reader contract behavior', () => {
     mounted.wrapper.unmount()
   })
 
+  it('does not let a stale progress GET overwrite a newer saved version', async () => {
+    const progressResponse = deferred()
+    const newerLocation = point(chapterOne, chapterOne.paragraphs[1], 3)
+    const staleLocation = point(chapterOne, chapterOne.paragraphs[0])
+    const api = makeApi({
+      progressEnvelope: progressResponse.promise,
+      putHandler: call => response({
+        editionId,
+        location: call.body.location,
+        state: 'IN_PROGRESS',
+        version: '2'
+      })
+    })
+    const mounted = mountReader(api)
+    const initializing = mounted.reader.initialize()
+    await waitFor(() => api.calls.some(call => call.path.startsWith('/me/progress/')))
+
+    mounted.reader.chapter.value = chapterOne
+    mounted.reader.currentLocation.value = newerLocation
+    await mounted.reader.saveProgress(newerLocation)
+    progressResponse.resolve(response({ editionId, location: staleLocation, state: 'IN_PROGRESS', version: '1' }))
+    await initializing
+
+    expect(mounted.reader.progress.value.version).to.equal('2')
+    expect(mounted.reader.progress.value.location).to.deep.equal(newerLocation)
+    mounted.wrapper.unmount()
+  })
+
+  it('does not let a stale progress PUT overwrite a newer loaded version', async () => {
+    const putResponse = deferred()
+    const savedLocation = point(chapterOne, chapterOne.paragraphs[1], 2)
+    const newerLocation = point(chapterEightyOne, chapterEightyOne.paragraphs[0], 4)
+    const api = makeApi({
+      progress: { editionId, location: newerLocation, state: 'IN_PROGRESS', version: '3' },
+      putHandler: () => putResponse.promise
+    })
+    const mounted = mountReader(api)
+    primeReader(mounted.reader, chapterOne, {
+      editionId,
+      location: point(chapterOne, chapterOne.paragraphs[0]),
+      state: 'IN_PROGRESS',
+      version: '1'
+    })
+    const saving = mounted.reader.saveProgress(savedLocation)
+    await waitFor(() => api.calls.some(call => call.method === 'put' && call.path.startsWith('/me/progress/')))
+
+    const initializing = mounted.reader.initialize()
+    await waitFor(() => mounted.reader.progress.value?.version === '3')
+    putResponse.resolve(response({ editionId, location: savedLocation, state: 'IN_PROGRESS', version: '2' }))
+    await Promise.all([saving, initializing])
+
+    expect(mounted.reader.progress.value.version).to.equal('3')
+    expect(mounted.reader.progress.value.location).to.deep.equal(newerLocation)
+    mounted.wrapper.unmount()
+  })
+
+  it('resets progress version ordering when the active edition changes', async () => {
+    const nextEditionId = 'shuihuzhuan-zh-120-v2'
+    const nextCatalog = {
+      ...catalog,
+      activeEdition: { ...catalog.activeEdition, editionId: nextEditionId }
+    }
+    const api = makeApi({
+      getCatalog: () => response(nextCatalog),
+      getBlock: blockId => response({ ...blocksById.get(blockId), editionId: nextEditionId }),
+      progress: null
+    })
+    const mounted = mountReader(api)
+    mounted.reader.progress.value = {
+      editionId,
+      location: point(chapterOne, chapterOne.paragraphs[0]),
+      state: 'IN_PROGRESS',
+      version: '100'
+    }
+
+    await mounted.reader.initialize()
+
+    expect(mounted.reader.edition.value.editionId).to.equal(nextEditionId)
+    expect(mounted.reader.progress.value).to.equal(null)
+    mounted.wrapper.unmount()
+  })
+
+  it('ignores an old-edition PUT response and drains the queued new-edition progress', async () => {
+    const nextEditionId = 'shuihuzhuan-zh-120-v2'
+    const nextCatalog = {
+      ...catalog,
+      activeEdition: { ...catalog.activeEdition, editionId: nextEditionId }
+    }
+    const firstResponse = deferred()
+    let writeCount = 0
+    const api = makeApi({
+      getCatalog: () => response(nextCatalog),
+      getBlock: blockId => response({ ...blocksById.get(blockId), editionId: nextEditionId }),
+      progress: null,
+      putHandler: async (call) => {
+        writeCount += 1
+        if (writeCount === 1) return firstResponse.promise
+        return response({
+          editionId: nextEditionId,
+          location: call.body.location,
+          state: 'IN_PROGRESS',
+          version: '1'
+        })
+      }
+    })
+    const mounted = mountReader(api)
+    primeReader(mounted.reader, chapterOne, {
+      editionId,
+      location: point(chapterOne, chapterOne.paragraphs[0]),
+      state: 'IN_PROGRESS',
+      version: '1'
+    })
+    const oldSave = mounted.reader.saveProgress(point(chapterOne, chapterOne.paragraphs[1]))
+    await waitFor(() => api.calls.filter(call => call.method === 'put').length === 1)
+    await mounted.reader.initialize()
+
+    const newLocation = {
+      ...point(preface, preface.paragraphs[1], 2),
+      editionManifestSha256: nextCatalog.activeEdition.manifestSha256
+    }
+    mounted.reader.currentLocation.value = newLocation
+    const newSave = mounted.reader.saveProgress(newLocation)
+    firstResponse.resolve(response({
+      editionId,
+      location: point(chapterOne, chapterOne.paragraphs[1]),
+      state: 'IN_PROGRESS',
+      version: '2'
+    }))
+    await Promise.all([oldSave, newSave])
+
+    const writes = api.calls.filter(call => call.method === 'put' && call.path.startsWith('/me/progress/'))
+    expect(writes).to.have.length(2)
+    expect(writes[0].path).to.include(editionId)
+    expect(writes[1].path).to.include(nextEditionId)
+    expect(writes[1].body.expectedVersion).to.equal('0')
+    expect(writes[1].body.location).to.deep.equal(newLocation)
+    expect(mounted.reader.progress.value.editionId).to.equal(nextEditionId)
+    expect(mounted.reader.progress.value.version).to.equal('1')
+    mounted.wrapper.unmount()
+  })
+
   it('serializes and coalesces progress saves before using the confirmed next version', async () => {
     const firstResponse = deferred()
     let active = 0
@@ -1162,6 +1506,50 @@ describe('archive reader contract behavior', () => {
     mounted.wrapper.unmount()
   })
 
+  it('flushes pending progress before component unmount disposal', async () => {
+    const api = makeApi()
+    const mounted = mountReader(api, { saveDelay: 1000 })
+    primeReader(mounted.reader)
+    mounted.reader.scheduleProgressSave(point(chapterOne, chapterOne.paragraphs[1]))
+    mounted.wrapper.unmount()
+
+    await waitFor(() => api.calls.some(call => call.path.startsWith('/me/progress/')))
+    const save = api.calls.find(call => call.path.startsWith('/me/progress/'))
+    expect(save.body.location.paragraphId).to.equal(chapterOne.paragraphs[1].paragraphId)
+  })
+
+  it('drains the latest queued progress after unmount while an older save is in flight', async () => {
+    const firstResponse = deferred()
+    const firstLocation = point(chapterOne, chapterOne.paragraphs[0])
+    const latestLocation = point(chapterOne, chapterOne.paragraphs[1], 5)
+    let writeCount = 0
+    const api = makeApi({
+      putHandler: async (call) => {
+        writeCount += 1
+        if (writeCount === 1) await firstResponse.promise
+        return response({
+          editionId,
+          location: call.body.location,
+          state: 'IN_PROGRESS',
+          version: String(writeCount)
+        })
+      }
+    })
+    const mounted = mountReader(api, { saveDelay: 1000 })
+    primeReader(mounted.reader)
+    const firstSave = mounted.reader.saveProgress(firstLocation)
+    await waitFor(() => api.calls.filter(call => call.path.startsWith('/me/progress/')).length === 1)
+    const latestSave = mounted.reader.saveProgress(latestLocation)
+    mounted.wrapper.unmount()
+    firstResponse.resolve()
+    await Promise.all([firstSave, latestSave])
+    await waitFor(() => api.calls.filter(call => call.path.startsWith('/me/progress/')).length === 2)
+
+    const writes = api.calls.filter(call => call.path.startsWith('/me/progress/'))
+    expect(writes[1].body.location).to.deep.equal(latestLocation)
+    expect(writes[1].body.expectedVersion).to.equal('1')
+  })
+
   it('stops initialization after a deferred catalog resolves following unmount', async () => {
     const catalogResponse = deferred()
     let catalogSignal
@@ -1177,6 +1565,7 @@ describe('archive reader contract behavior', () => {
     expect(api.calls[0].path).to.equal('/catalog')
 
     mounted.wrapper.unmount()
+    await Promise.resolve()
     expect(catalogSignal.aborted).to.equal(true)
     catalogResponse.resolve(response(catalog))
     expect(await pending).to.equal(null)
@@ -1198,6 +1587,7 @@ describe('archive reader contract behavior', () => {
     mounted.reader.catalog.value = catalog
     const pending = mounted.reader.loadBlock(c1Summary)
     mounted.wrapper.unmount()
+    await Promise.resolve()
     expect(blockSignal.aborted).to.equal(true)
     blockResponse.resolve(response(chapterOne))
     expect(await pending).to.equal(null)
@@ -1205,17 +1595,362 @@ describe('archive reader contract behavior', () => {
     const domApi = makeApi({
       progress: { editionId, location: point(chapterOne, chapterOne.paragraphs[0]), version: '1' }
     })
-    const wrapper = mountArchiveReader(domApi, { saveDelay: 1 })
-    await waitFor(() => wrapper.findAll('.reader-paragraph').length === 2)
-    const content = wrapper.get('.reader-content')
-    const [first] = wrapper.findAll('.reader-paragraph')
-    content.element.getBoundingClientRect = () => ({ bottom: 100, top: 0 })
-    first.element.getBoundingClientRect = () => ({ bottom: 80, top: 10 })
-    await content.trigger('scroll')
+    const originalScrollIntoView = Element.prototype.scrollIntoView
+    let resumeScrolls = 0
+    Element.prototype.scrollIntoView = function () {
+      const content = this.closest('.reader-content')
+      if (!content) return
+      resumeScrolls += 1
+      content.dispatchEvent(new window.Event('scroll'))
+    }
+    let wrapper
+    try {
+      wrapper = mountArchiveReader(domApi, { saveDelay: 1 })
+      await waitFor(() => wrapper.findAll('.reader-paragraph').length === 2 && resumeScrolls === 1)
+      // Wait from the observed programmatic resume-scroll event, not paragraph discovery.
+      await new Promise(resolve => setTimeout(resolve, 190))
+      const content = wrapper.get('.reader-content')
+      const [first, second] = wrapper.findAll('.reader-paragraph')
+      content.element.getBoundingClientRect = () => ({ bottom: 100, top: 0 })
+      first.element.getBoundingClientRect = () => ({ bottom: -5, top: -80 })
+      second.element.getBoundingClientRect = () => ({ bottom: 90, top: 10 })
+      Object.defineProperty(content.element, 'clientHeight', { configurable: true, value: 100 })
+      Object.defineProperty(content.element, 'scrollHeight', { configurable: true, value: 300 })
+      Object.defineProperty(content.element, 'scrollTop', { configurable: true, value: 10, writable: true })
+      await content.trigger('scroll')
+      wrapper.unmount()
+      await waitFor(() => domApi.calls.some(call => call.method === 'put' && call.path.startsWith('/me/progress/')))
+      const save = domApi.calls.filter(call => call.method === 'put' && call.path.startsWith('/me/progress/')).at(-1)
+      expect(save.body.location.paragraphId).to.equal(chapterOne.paragraphs[1].paragraphId)
+    } finally {
+      wrapper?.unmount()
+      Element.prototype.scrollIntoView = originalScrollIntoView
+    }
+  })
+
+  it('fences delayed bookmark and note CRUD across identity rotation while the new account proceeds independently', async () => {
+    const cases = [
+      {
+        name: 'bookmark create',
+        matches: call => call.method === 'put' && call.path.startsWith('/me/bookmarks/'),
+        pending: 'bookmarkPending',
+        prepare: (reader, identity) => {
+          reader.bookmarks.value = [{ bookmarkId: `bookmark-${identity}-seed`, identity, version: '1' }]
+          return null
+        },
+        start: reader => reader.createBookmark(),
+        result: call => response({
+          bookmarkId: call.path.split('/').at(-1),
+          location: call.body.location,
+          state: 'ACTIVE',
+          version: '1'
+        }),
+        assertBefore: reader => expect(reader.bookmarks.value.map(item => item.bookmarkId)).to.deep.equal(['bookmark-b-seed']),
+        assertAfter: (reader, call) => expect(reader.bookmarks.value.map(item => item.bookmarkId)).to.deep.equal([
+          call.path.split('/').at(-1),
+          'bookmark-b-seed'
+        ])
+      },
+      {
+        name: 'bookmark delete',
+        matches: call => call.method === 'delete' && call.path === '/me/bookmarks/shared-bookmark',
+        prepare: (reader, identity) => {
+          const bookmark = { bookmarkId: 'shared-bookmark', identity, version: identity === 'a' ? '1' : '9' }
+          reader.bookmarks.value = [bookmark]
+          return bookmark
+        },
+        start: (reader, bookmark) => reader.deleteBookmark(bookmark),
+        result: () => response({ state: 'DELETED', version: '10' }),
+        assertBefore: reader => expect(reader.bookmarks.value).to.deep.equal([
+          { bookmarkId: 'shared-bookmark', identity: 'b', version: '9' }
+        ]),
+        assertAfter: reader => expect(reader.bookmarks.value).to.deep.equal([])
+      },
+      {
+        name: 'note create',
+        matches: call => call.method === 'put' && call.path.startsWith('/me/notes/'),
+        pending: 'notePending',
+        prepare: (reader, identity) => {
+          reader.notes.value = [{ noteId: `note-${identity}-seed`, identity, version: '1' }]
+          return { text: `new note ${identity}`, version: '0' }
+        },
+        start: (reader, input) => reader.saveNote(input),
+        result: call => response({
+          anchor: call.body.anchor,
+          noteId: call.path.split('/').at(-1),
+          state: 'ACTIVE',
+          text: call.body.text,
+          version: '1'
+        }),
+        assertBefore: reader => expect(reader.notes.value.map(item => item.noteId)).to.deep.equal(['note-b-seed']),
+        assertAfter: (reader, call) => expect(reader.notes.value.map(item => item.noteId)).to.deep.equal([
+          call.path.split('/').at(-1),
+          'note-b-seed'
+        ])
+      },
+      {
+        name: 'note update',
+        matches: call => call.method === 'put' && call.path === '/me/notes/shared-note',
+        pending: 'notePending',
+        prepare: (reader, identity) => {
+          const note = { anchor: null, noteId: 'shared-note', identity, text: `note ${identity}`, version: identity === 'a' ? '1' : '9' }
+          reader.notes.value = [note]
+          return { ...note, text: `updated ${identity}` }
+        },
+        start: (reader, input) => reader.saveNote(input),
+        result: call => response({
+          anchor: call.body.anchor,
+          noteId: 'shared-note',
+          state: 'ACTIVE',
+          text: call.body.text,
+          version: call.body.expectedVersion === '1' ? '2' : '10'
+        }),
+        assertBefore: reader => expect(reader.notes.value).to.deep.equal([
+          { anchor: null, noteId: 'shared-note', identity: 'b', text: 'note b', version: '9' }
+        ]),
+        assertAfter: reader => expect(reader.notes.value[0]).to.include({ noteId: 'shared-note', text: 'updated b', version: '10' })
+      },
+      {
+        name: 'note delete',
+        matches: call => call.method === 'delete' && call.path === '/me/notes/shared-note',
+        pending: 'notePending',
+        prepare: (reader, identity) => {
+          const note = { anchor: null, noteId: 'shared-note', identity, text: `note ${identity}`, version: identity === 'a' ? '1' : '9' }
+          reader.notes.value = [note]
+          return note
+        },
+        start: (reader, note) => reader.deleteNote(note),
+        result: () => response({ state: 'DELETED', version: '10' }),
+        assertBefore: reader => expect(reader.notes.value).to.deep.equal([
+          { anchor: null, noteId: 'shared-note', identity: 'b', text: 'note b', version: '9' }
+        ]),
+        assertAfter: reader => expect(reader.notes.value).to.deep.equal([])
+      }
+    ]
+
+    for (const mutation of cases) {
+      const oldResponse = deferred()
+      const newResponse = deferred()
+      const mutationCalls = []
+      const handler = call => {
+        if (!mutation.matches(call)) throw new Error(`Unexpected ${mutation.name} request ${call.method} ${call.path}`)
+        mutationCalls.push(call)
+        return mutationCalls.length === 1 ? oldResponse.promise : newResponse.promise
+      }
+      const api = makeApi({
+        deleteHandler: mutation.name.includes('delete') ? handler : undefined,
+        putHandler: mutation.name.includes('delete') ? undefined : handler
+      })
+      const mounted = mountReader(api)
+      primeReader(mounted.reader)
+      const inputA = mutation.prepare(mounted.reader, 'a')
+      const pendingA = mutation.start(mounted.reader, inputA)
+      await waitFor(() => mutationCalls.length === 1)
+
+      stopIdentityBoundWork()
+      expect(mounted.reader.bookmarkPending.value, `${mutation.name} clears bookmark pending`).to.equal(false)
+      expect(mounted.reader.notePending.value, `${mutation.name} clears note pending`).to.equal(false)
+      expect(mounted.reader.noteConflictDraft.value, `${mutation.name} clears conflict draft`).to.equal(null)
+      expect(mounted.reader.noteRetryNotice.value, `${mutation.name} clears retry notice`).to.equal('')
+
+      primeReader(mounted.reader)
+      const inputB = mutation.prepare(mounted.reader, 'b')
+      const pendingB = mutation.start(mounted.reader, inputB)
+      await waitFor(() => mutationCalls.length === 2)
+      if (mutation.pending) expect(mounted.reader[mutation.pending].value, `${mutation.name} marks B pending`).to.equal(true)
+
+      oldResponse.resolve(mutation.result(mutationCalls[0]))
+      expect(await pendingA, `${mutation.name} ignores A result`).to.equal(null)
+      mutation.assertBefore(mounted.reader)
+      if (mutation.pending) expect(mounted.reader[mutation.pending].value, `${mutation.name} keeps B pending`).to.equal(true)
+
+      newResponse.resolve(mutation.result(mutationCalls[1]))
+      await pendingB
+      mutation.assertAfter(mounted.reader, mutationCalls[1])
+      if (mutation.pending) expect(mounted.reader[mutation.pending].value, `${mutation.name} settles B pending`).to.equal(false)
+      mounted.wrapper.unmount()
+      await Promise.resolve()
+    }
+  })
+
+  it('does not replay an ambiguous account-A bookmark or note mutation after identity rotation', async () => {
+    const cases = [
+      {
+        name: 'bookmark create',
+        matches: call => call.method === 'put' && call.path.startsWith('/me/bookmarks/'),
+        prepare: () => null,
+        start: reader => reader.createBookmark(),
+        result: call => response({ bookmarkId: call.path.split('/').at(-1), location: call.body.location, state: 'ACTIVE', version: '1' })
+      },
+      {
+        name: 'bookmark delete',
+        matches: call => call.method === 'delete' && call.path === '/me/bookmarks/shared-bookmark',
+        prepare: (reader, identity) => {
+          const bookmark = { bookmarkId: 'shared-bookmark', version: identity === 'a' ? '1' : '9' }
+          reader.bookmarks.value = [bookmark]
+          return bookmark
+        },
+        start: (reader, input) => reader.deleteBookmark(input),
+        result: () => response({ state: 'DELETED', version: '10' })
+      },
+      {
+        name: 'note create',
+        matches: call => call.method === 'put' && call.path.startsWith('/me/notes/'),
+        prepare: (_reader, identity) => ({ text: `note ${identity}`, version: '0' }),
+        start: (reader, input) => reader.saveNote(input),
+        result: call => response({ anchor: call.body.anchor, noteId: call.path.split('/').at(-1), state: 'ACTIVE', text: call.body.text, version: '1' })
+      },
+      {
+        name: 'note update',
+        matches: call => call.method === 'put' && call.path === '/me/notes/shared-note',
+        prepare: (reader, identity) => {
+          const note = { anchor: null, noteId: 'shared-note', text: `note ${identity}`, version: identity === 'a' ? '1' : '9' }
+          reader.notes.value = [note]
+          return { ...note, text: `updated ${identity}` }
+        },
+        start: (reader, input) => reader.saveNote(input),
+        result: call => response({ anchor: call.body.anchor, noteId: 'shared-note', state: 'ACTIVE', text: call.body.text, version: '10' })
+      },
+      {
+        name: 'note delete',
+        matches: call => call.method === 'delete' && call.path === '/me/notes/shared-note',
+        prepare: (reader, identity) => {
+          const note = { anchor: null, noteId: 'shared-note', text: `note ${identity}`, version: identity === 'a' ? '1' : '9' }
+          reader.notes.value = [note]
+          return note
+        },
+        start: (reader, input) => reader.deleteNote(input),
+        result: () => response({ state: 'DELETED', version: '10' })
+      }
+    ]
+
+    for (const mutation of cases) {
+      const lostResponse = deferred()
+      const mutationCalls = []
+      const handler = call => {
+        if (!mutation.matches(call)) throw new Error(`Unexpected ${mutation.name} request ${call.method} ${call.path}`)
+        mutationCalls.push(call)
+        return mutationCalls.length === 1 ? lostResponse.promise : mutation.result(call)
+      }
+      const api = makeApi({
+        deleteHandler: mutation.name.includes('delete') ? handler : undefined,
+        putHandler: mutation.name.includes('delete') ? undefined : handler
+      })
+      const mounted = mountReader(api)
+      primeReader(mounted.reader)
+      const pendingA = mutation.start(mounted.reader, mutation.prepare(mounted.reader, 'a'))
+      await waitFor(() => mutationCalls.length === 1)
+
+      stopIdentityBoundWork()
+      lostResponse.reject(new Error('account A response lost'))
+      expect(await pendingA, `${mutation.name} stale ambiguity`).to.equal(null)
+      await settle()
+      expect(mutationCalls, `${mutation.name} must not retry under B credentials`).to.have.length(1)
+
+      primeReader(mounted.reader)
+      const resultB = await mutation.start(mounted.reader, mutation.prepare(mounted.reader, 'b'))
+      expect(resultB, `${mutation.name} allows B independently`).not.to.equal(null)
+      expect(mutationCalls).to.have.length(2)
+      expect(mutationCalls[1].options.headers['Idempotency-Key'])
+        .not.to.equal(mutationCalls[0].options.headers['Idempotency-Key'])
+      mounted.wrapper.unmount()
+      await Promise.resolve()
+    }
+  })
+
+  it('does not replay an ambiguous account-A progress save after identity rotation', async () => {
+    const lostResponse = deferred()
+    const progressCalls = []
+    const api = makeApi({
+      putHandler: (call) => {
+        if (!call.path.startsWith('/me/progress/')) throw new Error(`Unexpected progress request ${call.path}`)
+        progressCalls.push(call)
+        if (progressCalls.length === 1) return lostResponse.promise
+        return response({
+          editionId,
+          location: call.body.location,
+          state: 'IN_PROGRESS',
+          version: '10'
+        })
+      }
+    })
+    const mounted = mountReader(api)
+    primeReader(mounted.reader, chapterOne, {
+      editionId,
+      location: point(chapterOne, chapterOne.paragraphs[0]),
+      version: '1'
+    })
+    const pendingA = mounted.reader.saveProgress(point(chapterOne, chapterOne.paragraphs[1]))
+    await waitFor(() => progressCalls.length === 1)
+
+    stopIdentityBoundWork()
+    lostResponse.reject(new Error('account A progress response lost'))
+    expect(await pendingA).to.equal(null)
+    await settle()
+    expect(progressCalls, 'stale progress must not retry under B credentials').to.have.length(1)
+    expect(mounted.reader.progress.value).to.equal(null)
+
+    primeReader(mounted.reader, chapterOne, {
+      editionId,
+      location: point(chapterOne, chapterOne.paragraphs[0]),
+      version: '9'
+    })
+    const savedB = await mounted.reader.saveProgress(point(chapterOne, chapterOne.paragraphs[1]))
+    expect(progressCalls).to.have.length(2)
+    expect(progressCalls[1].body.expectedVersion).to.equal('9')
+    expect(progressCalls[1].options.headers['Idempotency-Key'])
+      .not.to.equal(progressCalls[0].options.headers['Idempotency-Key'])
+    expect(savedB).to.include({ editionId, version: '10' })
+    expect(mounted.reader.progress.value).to.include({ editionId, version: '10' })
+    mounted.wrapper.unmount()
+  })
+
+  it('clears the component-local note editor when the authenticated identity rotates', async () => {
+    const api = makeApi()
+    const wrapper = mountArchiveReader(api)
+    await waitFor(() => wrapper.find('textarea').exists())
+    wrapper.vm.__switchEditorTargetForTest({ noteId: 'account-a-note', text: 'A draft', version: '1' }, 'A private draft')
+    expect(wrapper.vm.__editorStateForTest()).to.deep.equal({
+      editingNote: { noteId: 'account-a-note', text: 'A draft', version: '1' },
+      noteText: 'A private draft'
+    })
+
+    stopIdentityBoundWork()
+
+    expect(wrapper.vm.__editorStateForTest()).to.deep.equal({ editingNote: null, noteText: '' })
     wrapper.unmount()
-    await new Promise(resolve => setTimeout(resolve, 220))
-    expect(domApi.calls.some(call => call.method === 'put' && call.path.startsWith('/me/progress/')))
-      .to.equal(false)
+  })
+
+  it('clears in-memory personal reader state when the authenticated identity rotates', async () => {
+    const delayedSave = deferred()
+    const api = makeApi({
+      putHandler: call => call.path.startsWith('/me/progress/') ? delayedSave.promise : response({})
+    })
+    const mounted = mountReader(api)
+    primeReader(mounted.reader, chapterOne, {
+      editionId,
+      location: point(chapterOne, chapterOne.paragraphs[0]),
+      version: '1'
+    })
+    mounted.reader.bookmarks.value = [{ bookmarkId: 'bookmark-a' }]
+    mounted.reader.notes.value = [{ noteId: 'note-a' }]
+    const saving = mounted.reader.saveProgress(point(chapterOne, chapterOne.paragraphs[1]))
+    await waitFor(() => api.calls.some(call => call.method === 'put' && call.path.startsWith('/me/progress/')))
+
+    stopIdentityBoundWork()
+    delayedSave.resolve(response({
+      editionId,
+      location: point(chapterOne, chapterOne.paragraphs[1]),
+      version: '2'
+    }))
+    await saving
+
+    expect(mounted.reader.catalog.value).to.equal(null)
+    expect(mounted.reader.chapter.value).to.equal(null)
+    expect(mounted.reader.progress.value).to.equal(null)
+    expect(mounted.reader.bookmarks.value).to.deep.equal([])
+    expect(mounted.reader.notes.value).to.deep.equal([])
+    mounted.wrapper.unmount()
   })
 
   it('creates a UTF-8 multi-paragraph question anchor without any routing fields', async () => {
@@ -1508,6 +2243,7 @@ describe('archive reader contract behavior', () => {
     const pendingRetry = retrying.reader.retryQuestion()
     await waitFor(() => retryCall)
     retrying.wrapper.unmount()
+    await Promise.resolve()
     expect(retryCall.options.signal.aborted).to.equal(true)
     retryResponse.resolve(response({ ...questionSnapshot({ currentSequence: '4', version: '4' }), questionId: retryCall.path.split('/')[3] }))
     expect(await pendingRetry).to.equal(null)
@@ -1686,6 +2422,7 @@ describe('archive reader contract behavior', () => {
     api.emit(0, questionEvent('2', 'ANSWER_DELTA', { delta: '旧流' }))
     expect(mounted.reader.question.value.answer).to.equal('')
     mounted.wrapper.unmount()
+    await Promise.resolve()
     expect(api.sessions[1].cancelled).to.equal(true)
   })
 
@@ -1715,13 +2452,14 @@ describe('archive reader contract behavior', () => {
         Vue.onUnmounted(() => { readerUnmounts += 1 })
         return readerState
       },
+      registerIdentityCleanup,
       utf8ByteLength
     })
     const LibraryPanel = loadLibraryPanelSfc(ArchiveReader)
     const mode = Vue.ref('portrait-command')
     const counters = { hallLoads: 0 }
     const JuyiHall = loadActualHallForIntegration(createHallIntegrationMocks({ mode, LibraryPanel, counters }), 'archive-actual-juyi-hall')
-    const wrapper = mount(JuyiHall, { attachTo: document.body, global: { stubs: { 'var-icon': true, transition: false } } })
+    const wrapper = mount(JuyiHall, { attachTo: document.body, global: { stubs: { 'var-icon': true, teleport: true } } })
     try {
       await settle()
       await wrapper.find('[data-portrait-action="library"]').trigger('click')
@@ -1729,7 +2467,12 @@ describe('archive reader contract behavior', () => {
       const floating = wrapper.find('.floating-panel').element
       const library = wrapper.findComponent(LibraryPanel)
       const reader = wrapper.findComponent(ArchiveReader)
-      reader.vm.__switchEditorTargetForTest({ noteId: 'note-o04', version: '7' }, '五轮旋转仍须保留的批注')
+      await waitFor(() => wrapper.find('.archive-book-open').exists())
+      await wrapper.get('.archive-book-open').trigger('click')
+      await waitFor(() => wrapper.find('.reader-notes textarea').exists())
+      const switchEditorTarget = reader.vm.__switchEditorTargetForTest || reader.vm.$?.exposed?.__switchEditorTargetForTest
+      expect(switchEditorTarget).to.be.a('function')
+      switchEditorTarget({ noteId: 'note-o04', version: '7' }, '五轮旋转仍须保留的批注')
       await Vue.nextTick()
       const location = readerState.currentLocation.value
       const progress = readerState.progress.value

@@ -1,7 +1,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
-export const resolveHallExperienceMode = ({ isMobileCoarse, isPhysicalLandscape }) => (
-  !isMobileCoarse || isPhysicalLandscape ? 'landscape-map' : 'portrait-command'
+export const resolveHallExperienceMode = ({ isMobileCoarse, isPhysicalLandscape, requestedMode = null }) => (
+  !isMobileCoarse ? 'landscape-map' : (requestedMode || (isPhysicalLandscape ? 'landscape-map' : 'portrait-command'))
 )
 
 const REQUEST_TIMEOUT_MS = 3000
@@ -22,15 +22,23 @@ const orientationFromScreen = orientation => {
 
 const orientationFromLegacyWindow = () => orientationFromAngle(globalThis.window?.orientation)
 
+const isWeChatWebView = () => /MicroMessenger/i.test(globalThis.navigator?.userAgent || '') || Boolean(globalThis.wx?.miniProgram)
+
 export const useHallExperienceMode = () => {
   const isMobileCoarse = ref(false)
   const isPhysicalLandscape = ref(false)
+  const requestedMode = ref(null)
   const orientationHint = ref('')
   const orientationRequestPending = ref(false)
   const experienceMode = computed(() => resolveHallExperienceMode({
     isMobileCoarse: isMobileCoarse.value,
-    isPhysicalLandscape: isPhysicalLandscape.value
+    isPhysicalLandscape: isPhysicalLandscape.value,
+    requestedMode: requestedMode.value
   }))
+
+  const isVirtualLandscape = computed(() => (
+    isWeChatWebView() && requestedMode.value === 'landscape-map' && !isPhysicalLandscape.value
+  ))
 
   let isMounted = false
   let orientationMedia = null
@@ -45,8 +53,9 @@ export const useHallExperienceMode = () => {
   const commitPhysicalOrientation = next => {
     if (typeof next !== 'boolean' || next === isPhysicalLandscape.value) return false
     isPhysicalLandscape.value = next
-    // A confirmed landscape fact replaces the advisory request, so release Hall-owned controls.
-    if (next && requestOwnership) void cancelRequest(requestOwnership.token)
+    requestedMode.value = null
+    orientationHint.value = ''
+    if (next && requestOwnership?.acquisitionComplete) completeRequest(requestOwnership.token)
     return true
   }
 
@@ -86,6 +95,22 @@ export const useHallExperienceMode = () => {
     requestTimer = null
   }
 
+  const settleRequest = (token, result) => {
+    const ownership = requestOwnership
+    if (!ownership || ownership.token !== token || !ownership.resolveCompletion) return
+    ownership.resolveCompletion(result)
+    ownership.resolveCompletion = null
+  }
+
+  const completeRequest = token => {
+    const ownership = requestOwnership
+    if (!isCurrentRequest(token) || !ownership?.acquisitionComplete || !isPhysicalLandscape.value) return false
+    clearRequestTimer(token)
+    orientationRequestPending.value = false
+    settleRequest(token, true)
+    return true
+  }
+
   const releaseFullscreenElement = async element => {
     if (!element || globalThis.document?.fullscreenElement !== element) return
     try {
@@ -103,17 +128,18 @@ export const useHallExperienceMode = () => {
     return 'released'
   }
 
-  const reconcileFullscreenCompletion = async (token, element) => {
+  const reconcileFullscreenCompletion = (token, element) => {
     if (!element || globalThis.document?.fullscreenElement !== element) return 'missing'
-    return attachOrCleanResource(
-      token,
-      ownership => { ownership.fullscreenElement = element },
-      ownership => (
-        ownership?.releasing && ownership.fullscreenElement === element && ownership.releasePromise
-          ? ownership.releasePromise
-          : releaseFullscreenElement(element)
-      )
-    )
+    const ownership = requestOwnership
+    if (!ownership) return 'unowned'
+    if (ownership.token === token && !ownership.releasing) {
+      ownership.fullscreenElement = element
+      return 'current'
+    }
+    if (!ownership.releasing && ownership.fullscreenElement === element) return 'newer'
+    // A stale request resolving while the same documentElement is fullscreen cannot prove
+    // that it, rather than the host or a newer request, owns the current fullscreen session.
+    return 'unowned'
   }
 
   const reconcileOrientationLockCompletion = token => attachOrCleanResource(
@@ -153,74 +179,140 @@ export const useHallExperienceMode = () => {
       orientationRequestPending.value = false
       if (showHint && isMounted) orientationHint.value = '请旋转手机横屏查看'
     }
+    settleRequest(token, false)
     await releaseRequestOwnership(token)
   }
 
   const isCurrentRequest = token => (
-    isMounted && token === requestGeneration && orientationRequestPending.value
+    isMounted && token === requestGeneration && requestOwnership?.token === token && !requestOwnership.releasing
   )
 
-  const requestLandscape = async () => {
-    if (!isMounted || requestOwnership || orientationRequestPending.value || !isMobileCoarse.value || isPhysicalLandscape.value) return false
+  const handleFullscreenChange = () => {
+    const ownership = requestOwnership
+    if (!ownership || ownership.releasing || !ownership.fullscreenElement) return
+    if (globalThis.document?.fullscreenElement !== ownership.fullscreenElement) {
+      void cancelRequest(ownership.token)
+    }
+  }
+
+  const acquireLandscape = async ({ token, fullscreenElement, requestFullscreen, lockOrientation }) => {
+    try {
+      await requestFullscreen.call(fullscreenElement)
+    } catch {
+      if (isCurrentRequest(token)) await cancelRequest(token, { showHint: true })
+      return
+    }
+
+    const fullscreenStatus = reconcileFullscreenCompletion(token, fullscreenElement)
+    if (fullscreenStatus !== 'current') {
+      if (fullscreenStatus === 'missing' && isCurrentRequest(token)) {
+        await cancelRequest(token, { showHint: true })
+      }
+      return
+    }
+
+    if (!isCurrentRequest(token)) return
+    if (typeof lockOrientation !== 'function') {
+      await cancelRequest(token, { showHint: true })
+      return
+    }
+
+    try {
+      await lockOrientation.call(globalThis.screen.orientation, 'landscape')
+    } catch {
+      if (isCurrentRequest(token)) await cancelRequest(token, { showHint: true })
+      return
+    }
+
+    if (await reconcileOrientationLockCompletion(token) !== 'current' || !isCurrentRequest(token)) return
+    requestOwnership.acquisitionComplete = true
+    completeRequest(token)
+  }
+
+  const requestLandscape = () => {
+    if (!isMounted || requestOwnership || orientationRequestPending.value || !isMobileCoarse.value) {
+      return Promise.resolve(false)
+    }
+    // The Mini Program host cannot be orientation-locked by H5. Use the Hall's
+    // explicit virtual landscape shell instead; its canvas input is inverse-mapped
+    // by JuyitingGame, while normal browsers retain native fullscreen/lock behavior.
+    if (isWeChatWebView()) {
+      if (experienceMode.value === 'landscape-map') return Promise.resolve(false)
+      requestedMode.value = 'landscape-map'
+      orientationHint.value = ''
+      return Promise.resolve(true)
+    }
+    // Explicit UI mode wins over a still-landscape physical device. This does
+    // not reacquire fullscreen; it only clears the user's portrait override.
+    if (requestedMode.value === 'portrait-command' && isPhysicalLandscape.value) {
+      requestedMode.value = null
+      orientationHint.value = ''
+      return Promise.resolve(true)
+    }
+    if (isPhysicalLandscape.value) return Promise.resolve(false)
+
+    const fullscreenElement = globalThis.document?.documentElement || null
+    const currentFullscreen = globalThis.document?.fullscreenElement
+    const requestFullscreen = fullscreenElement?.requestFullscreen
+    const lockOrientation = globalThis.screen?.orientation?.lock
+    // WeChat H5 commonly exposes no fullscreen request API. Do not make a doomed request
+    // (or wait for its timeout): tell the user immediately to rotate physically.
+    if (typeof requestFullscreen !== 'function') {
+      orientationHint.value = '请旋转手机横屏查看'
+      return Promise.resolve(false)
+    }
+    if (currentFullscreen) {
+      orientationHint.value = '请旋转手机横屏查看'
+      return Promise.resolve(false)
+    }
 
     const token = ++requestGeneration
-    const fullscreenElement = globalThis.document?.documentElement || null
-    requestOwnership = { token, fullscreenElement: null, orientationLocked: false, releasing: false, releasePromise: null }
+    let resolveCompletion
+    const completion = new Promise(resolve => { resolveCompletion = resolve })
+    requestOwnership = {
+      token,
+      fullscreenElement: null,
+      orientationLocked: false,
+      acquisitionComplete: false,
+      releasing: false,
+      releasePromise: null,
+      resolveCompletion
+    }
     orientationRequestPending.value = true
     orientationHint.value = ''
     requestTimer = {
       token,
       id: window.setTimeout(() => {
-        if (isCurrentRequest(token)) void cancelRequest(token, { showHint: true })
+        if (isCurrentRequest(token) && orientationRequestPending.value) {
+          void cancelRequest(token, { showHint: true })
+        }
       }, REQUEST_TIMEOUT_MS)
     }
 
-    let failed = false
-    const currentFullscreen = globalThis.document?.fullscreenElement
-    const requestFullscreen = fullscreenElement?.requestFullscreen
-    const lockOrientation = globalThis.screen?.orientation?.lock
+    void acquireLandscape({ token, fullscreenElement, requestFullscreen, lockOrientation }).catch(() => {
+      if (isCurrentRequest(token)) void cancelRequest(token, { showHint: true })
+    })
+    return completion
+  }
 
-    if (currentFullscreen) {
-      failed = true
-    } else if (typeof requestFullscreen !== 'function') {
-      failed = true
-    } else {
-      try {
-        await requestFullscreen.call(fullscreenElement)
-        if (await reconcileFullscreenCompletion(token, fullscreenElement) === 'missing') failed = true
-      } catch {
-        failed = true
-      }
+  const requestPortrait = async () => {
+    if (!isMounted || !isMobileCoarse.value) return false
+    if (isWeChatWebView()) {
+      if (experienceMode.value === 'portrait-command') return false
+      requestedMode.value = 'portrait-command'
+      orientationHint.value = ''
+      return true
     }
-
-    if (!isCurrentRequest(token)) {
-      await releaseRequestOwnership(token)
-      return false
-    }
-
-    if (failed) {
-      await cancelRequest(token, { showHint: true })
-      return false
-    }
-
-    if (typeof lockOrientation !== 'function') {
-      failed = true
-    } else {
-      try {
-        await lockOrientation.call(globalThis.screen.orientation, 'landscape')
-        await reconcileOrientationLockCompletion(token)
-      } catch {
-        failed = true
-      }
-    }
-
-    if (!isCurrentRequest(token) || failed) {
-      await cancelRequest(token, { showHint: isCurrentRequest(token) && failed })
-      return false
-    }
-
-    clearRequestTimer(token)
+    // Native unlock is best effort only; retain the explicit command-mode
+    // override so the portrait button always changes the shell immediately.
+    requestedMode.value = 'portrait-command'
+    orientationHint.value = ''
+    const ownership = requestOwnership
+    if (!ownership) return true
+    clearRequestTimer(ownership.token)
     orientationRequestPending.value = false
+    settleRequest(ownership.token, false)
+    await releaseRequestOwnership(ownership.token)
     return true
   }
 
@@ -234,7 +326,13 @@ export const useHallExperienceMode = () => {
   const handleScreenOrientationChange = event => commitFreshSourceTruth('screen', readScreenSource(), event)
   const handleOrientationMediaChange = event => commitFreshSourceTruth('media', readMediaSource(event), event)
   const handleLegacyOrientationChange = event => commitFreshSourceTruth('legacy', readLegacySource(), event)
-  const handleCoarseChange = () => { isMobileCoarse.value = Boolean(coarseMedia?.matches) }
+  const handleCoarseChange = () => {
+    isMobileCoarse.value = Boolean(coarseMedia?.matches)
+    if (!isMobileCoarse.value) {
+      requestedMode.value = null
+      orientationHint.value = ''
+    }
+  }
 
   onMounted(() => {
     if (typeof window === 'undefined') return
@@ -254,10 +352,12 @@ export const useHallExperienceMode = () => {
     orientationMedia?.addEventListener?.('change', handleOrientationMediaChange)
     coarseMedia?.addEventListener?.('change', handleCoarseChange)
     window.addEventListener?.('orientationchange', handleLegacyOrientationChange)
+    globalThis.document?.addEventListener?.('fullscreenchange', handleFullscreenChange)
   })
 
   onBeforeUnmount(() => {
     isMounted = false
+    requestedMode.value = null
     const activeGeneration = requestGeneration
     void cancelRequest(activeGeneration)
     requestGeneration += 1
@@ -265,6 +365,7 @@ export const useHallExperienceMode = () => {
     orientationMedia?.removeEventListener?.('change', handleOrientationMediaChange)
     coarseMedia?.removeEventListener?.('change', handleCoarseChange)
     window.removeEventListener?.('orientationchange', handleLegacyOrientationChange)
+    globalThis.document?.removeEventListener?.('fullscreenchange', handleFullscreenChange)
     screenOrientation = null
     orientationMedia = null
     coarseMedia = null
@@ -274,8 +375,10 @@ export const useHallExperienceMode = () => {
     experienceMode,
     isMobileCoarse,
     isPhysicalLandscape,
+    isVirtualLandscape,
     orientationHint,
     orientationRequestPending,
-    requestLandscape
+    requestLandscape,
+    requestPortrait
   }
 }

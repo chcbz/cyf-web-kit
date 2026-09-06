@@ -2,6 +2,11 @@ import { expect } from 'chai'
 import { before } from 'mocha'
 import { readFileSync } from 'fs'
 
+// Keep this focused suite independently runnable; the full suite may initialize SVG globals in another file first.
+global.SVGElement = global.window?.SVGElement
+global.Element = global.window?.Element
+global.Node = global.window?.Node
+
 let mount
 let Vue
 
@@ -9,6 +14,14 @@ const flush = async () => {
   await Promise.resolve()
   await Promise.resolve()
   await Vue.nextTick()
+}
+
+const flushUntil = async (predicate, attempts = 8) => {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (predicate()) return
+    await flush()
+  }
+  expect(predicate()).to.equal(true)
 }
 
 const deferred = () => {
@@ -63,6 +76,8 @@ const dispatchLegacyOrientationChange = timeStamp => {
   if (timeStamp !== undefined) Object.defineProperty(event, 'timeStamp', { configurable: true, value: timeStamp })
   global.window.dispatchEvent(event)
 }
+
+const dispatchFullscreenChange = () => global.document.dispatchEvent(new global.window.Event('fullscreenchange'))
 
 const restoreProperty = (target, key, descriptor) => {
   if (descriptor) Object.defineProperty(target, key, descriptor)
@@ -306,19 +321,19 @@ describe('Juyi Hall experience mode', () => {
       let commits = 0
       const stop = Vue.watch(() => mode.isPhysicalLandscape.value, () => { commits += 1 })
       global.window.orientation = 90
-      global.window.dispatchEvent(new global.window.Event('orientationchange'))
-      global.window.dispatchEvent(new global.window.Event('orientationchange'))
+      dispatchLegacyOrientationChange(100)
+      dispatchLegacyOrientationChange(101)
       await flush()
       expect(mode.experienceMode.value).to.equal('landscape-map')
       expect(commits).to.equal(1)
       global.window.orientation = 0
-      global.window.dispatchEvent(new global.window.Event('orientationchange'))
+      dispatchLegacyOrientationChange(102)
       await flush()
       expect(mode.experienceMode.value).to.equal('portrait-command')
       expect(commits).to.equal(2)
       wrapper.unmount()
       global.window.orientation = 90
-      global.window.dispatchEvent(new global.window.Event('orientationchange'))
+      dispatchLegacyOrientationChange(103)
       await flush()
       expect(mode.experienceMode.value).to.equal('portrait-command')
       stop()
@@ -327,13 +342,14 @@ describe('Juyi Hall experience mode', () => {
     }
   })
 
-  it('keeps successful ownership live, dedupes repeat requests, and cleans it exactly once on unmount', async () => {
+  it('keeps Hall-owned fullscreen and orientation lock after a landscape event, then cleans them exactly once on unmount', async () => {
     const env = setupEnvironment()
     let requestCalls = 0
     let lockCalls = 0
     let exitCalls = 0
     let unlockCalls = 0
     let timerCalls = 0
+    let clearTimerCalls = 0
     const originalSetTimeout = global.window.setTimeout
     const originalClearTimeout = global.window.clearTimeout
     global.document.documentElement.requestFullscreen = async () => {
@@ -341,15 +357,20 @@ describe('Juyi Hall experience mode', () => {
       setFullscreenElement(global.document.documentElement)
     }
     global.document.exitFullscreen = async () => { exitCalls += 1; setFullscreenElement(null) }
-    global.screen.orientation.lock = async () => { lockCalls += 1 }
+    global.screen.orientation.lock = async () => {
+      lockCalls += 1
+      env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
+    }
     global.screen.orientation.unlock = () => { unlockCalls += 1 }
     try {
       const { mode, wrapper } = await mountMode()
       global.window.setTimeout = () => ++timerCalls
-      global.window.clearTimeout = () => {}
+      global.window.clearTimeout = () => { clearTimerCalls += 1 }
       expect(await mode.requestLandscape()).to.equal(true)
       const hintAfterFirst = mode.orientationHint.value
-      expect(mode.experienceMode.value).to.equal('portrait-command')
+      expect(mode.experienceMode.value).to.equal('landscape-map')
+      expect(mode.orientationRequestPending.value).to.equal(false)
+      expect(clearTimerCalls).to.equal(1)
       expect(await mode.requestLandscape()).to.equal(false)
       expect(requestCalls).to.equal(1)
       expect(lockCalls).to.equal(1)
@@ -368,7 +389,7 @@ describe('Juyi Hall experience mode', () => {
     }
   })
 
-  it('keeps release-in-flight fenced through a landscape-to-portrait race until exit settles', async () => {
+  it('keeps release ownership fenced through a landscape-to-portrait race until unmount cleanup settles', async () => {
     const env = setupEnvironment()
     const exit = deferred()
     let requestCalls = 0
@@ -383,7 +404,10 @@ describe('Juyi Hall experience mode', () => {
       setFullscreenElement(global.document.documentElement)
     }
     global.document.exitFullscreen = () => { exitCalls += 1; return exit.promise }
-    global.screen.orientation.lock = async () => { lockCalls += 1 }
+    global.screen.orientation.lock = async () => {
+      lockCalls += 1
+      env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
+    }
     global.screen.orientation.unlock = () => { unlockCalls += 1 }
     try {
       const { mode, wrapper } = await mountMode()
@@ -394,24 +418,26 @@ describe('Juyi Hall experience mode', () => {
       env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
       await flush()
       expect(mode.experienceMode.value).to.equal('landscape-map')
-      expect(unlockCalls).to.equal(1)
-      expect(exitCalls).to.equal(1)
+      expect(unlockCalls).to.equal(0)
+      expect(exitCalls).to.equal(0)
       env.screenOrientation.emit({ nextType: 'portrait-primary', nextAngle: 0 })
       await flush()
       expect(mode.experienceMode.value).to.equal('portrait-command')
+      expect(unlockCalls).to.equal(0)
+      expect(exitCalls).to.equal(0)
       expect(await mode.requestLandscape()).to.equal(false)
+      wrapper.unmount()
+      await flush()
+      expect(unlockCalls).to.equal(1)
+      expect(exitCalls).to.equal(1)
       expect(requestCalls).to.equal(1)
       expect(lockCalls).to.equal(1)
       expect(timerCalls).to.equal(1)
       expect(mode.orientationHint.value).to.equal(hintAfterSuccess)
       exit.resolve()
       await flush()
-      setFullscreenElement(null)
-      expect(await mode.requestLandscape()).to.equal(true)
-      expect(requestCalls).to.equal(2)
-      expect(lockCalls).to.equal(2)
-      wrapper.unmount()
-      await flush()
+      expect(unlockCalls).to.equal(1)
+      expect(exitCalls).to.equal(1)
     } finally {
       global.window.setTimeout = originalSetTimeout
       global.window.clearTimeout = originalClearTimeout
@@ -424,21 +450,28 @@ describe('Juyi Hall experience mode', () => {
     const hostElement = global.document.createElement('div')
     let requestCalls = 0
     let exitCalls = 0
+    let unlockCalls = 0
     global.document.documentElement.requestFullscreen = async () => {
       requestCalls += 1
       setFullscreenElement(global.document.documentElement)
     }
     global.document.exitFullscreen = async () => { exitCalls += 1 }
-    global.screen.orientation.lock = async () => {}
-    global.screen.orientation.unlock = () => {}
+    global.screen.orientation.lock = async () => {
+      env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
+    }
+    global.screen.orientation.unlock = () => { unlockCalls += 1 }
     try {
       const { mode, wrapper } = await mountMode()
       expect(await mode.requestLandscape()).to.equal(true)
       setFullscreenElement(hostElement)
-      env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
+      dispatchFullscreenChange()
+      dispatchFullscreenChange()
       await flush()
+      expect(unlockCalls).to.equal(1)
       expect(exitCalls).to.equal(0)
       expect(global.document.fullscreenElement).to.equal(hostElement)
+      env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
+      await flush()
       env.screenOrientation.emit({ nextType: 'portrait-primary', nextAngle: 0 })
       setFullscreenElement(null)
       await flush()
@@ -446,6 +479,28 @@ describe('Juyi Hall experience mode', () => {
       expect(requestCalls).to.equal(2)
       wrapper.unmount()
     } finally {
+      env.restore()
+    }
+  })
+
+  it('shows the physical-rotation hint immediately when automatic landscape is unsupported', async () => {
+    const env = setupEnvironment()
+    const originalSetTimeout = global.window.setTimeout
+    let fullscreenCalls = 0
+    let timerCalls = 0
+    global.document.documentElement.requestFullscreen = undefined
+    global.screen.orientation.lock = async () => { fullscreenCalls += 1 }
+    global.window.setTimeout = () => { timerCalls += 1; return timerCalls }
+    try {
+      const { mode, wrapper } = await mountMode()
+      expect(await mode.requestLandscape()).to.equal(false)
+      expect(mode.orientationHint.value).to.equal('请旋转手机横屏查看')
+      expect(mode.orientationRequestPending.value).to.equal(false)
+      expect(fullscreenCalls).to.equal(0)
+      expect(timerCalls).to.equal(0)
+      wrapper.unmount()
+    } finally {
+      global.window.setTimeout = originalSetTimeout
       env.restore()
     }
   })
@@ -465,6 +520,166 @@ describe('Juyi Hall experience mode', () => {
       wrapper.unmount()
     } finally {
       env.restore()
+    }
+  })
+
+  it('keeps the watchdog through requestFullscreen pending after landscape, then permits a portrait retry', async () => {
+    const env = setupEnvironment()
+    const originalSetTimeout = global.window.setTimeout
+    const originalClearTimeout = global.window.clearTimeout
+    const fullscreen = deferred()
+    const timers = []
+    let requestCalls = 0
+    let lockCalls = 0
+    let exitCalls = 0
+    let unlockCalls = 0
+    global.window.setTimeout = (callback, delay) => {
+      timers.push({ callback, delay, cleared: false })
+      return timers.length
+    }
+    global.window.clearTimeout = id => { if (timers[id - 1]) timers[id - 1].cleared = true }
+    global.document.documentElement.requestFullscreen = () => {
+      requestCalls += 1
+      if (requestCalls === 1) return fullscreen.promise
+      setFullscreenElement(global.document.documentElement)
+      return Promise.resolve()
+    }
+    global.document.exitFullscreen = async () => { exitCalls += 1; setFullscreenElement(null) }
+    global.screen.orientation.lock = async () => {
+      lockCalls += 1
+      env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90, event: { timeStamp: 102 } })
+    }
+    global.screen.orientation.unlock = () => { unlockCalls += 1 }
+    try {
+      const { mode, wrapper } = await mountMode()
+      const firstRequest = mode.requestLandscape()
+      await flush()
+      env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90, event: { timeStamp: 100 } })
+      await flush()
+      expect(mode.experienceMode.value).to.equal('landscape-map')
+      expect(mode.orientationRequestPending.value).to.equal(true)
+      expect(timers).to.have.length(1)
+      expect(timers[0].delay).to.equal(3000)
+      expect(exitCalls).to.equal(0)
+      expect(unlockCalls).to.equal(0)
+      timers[0].callback()
+      expect(await firstRequest).to.equal(false)
+      await flush()
+      expect(mode.orientationRequestPending.value).to.equal(false)
+      expect(exitCalls).to.equal(0)
+      expect(unlockCalls).to.equal(0)
+      env.screenOrientation.emit({ nextType: 'portrait-primary', nextAngle: 0, event: { timeStamp: 101 } })
+      await flush()
+      expect(await mode.requestLandscape()).to.equal(true)
+      expect(requestCalls).to.equal(2)
+      expect(lockCalls).to.equal(1)
+      wrapper.unmount()
+      await flush()
+      expect(unlockCalls).to.equal(1)
+      expect(exitCalls).to.equal(1)
+    } finally {
+      global.window.setTimeout = originalSetTimeout
+      global.window.clearTimeout = originalClearTimeout
+      env.restore()
+    }
+  })
+
+  it('keeps the watchdog through lock pending after landscape, then permits a portrait retry', async () => {
+    const env = setupEnvironment()
+    const originalSetTimeout = global.window.setTimeout
+    const originalClearTimeout = global.window.clearTimeout
+    const firstLock = deferred()
+    const timers = []
+    let requestCalls = 0
+    let lockCalls = 0
+    let exitCalls = 0
+    let unlockCalls = 0
+    global.window.setTimeout = (callback, delay) => {
+      timers.push({ callback, delay, cleared: false })
+      return timers.length
+    }
+    global.window.clearTimeout = id => { if (timers[id - 1]) timers[id - 1].cleared = true }
+    global.document.documentElement.requestFullscreen = async () => {
+      requestCalls += 1
+      setFullscreenElement(global.document.documentElement)
+    }
+    global.document.exitFullscreen = async () => { exitCalls += 1; setFullscreenElement(null) }
+    global.screen.orientation.lock = () => {
+      lockCalls += 1
+      if (lockCalls === 1) return firstLock.promise
+      env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90, event: { timeStamp: 102 } })
+      return Promise.resolve()
+    }
+    global.screen.orientation.unlock = () => { unlockCalls += 1 }
+    try {
+      const { mode, wrapper } = await mountMode()
+      const firstRequest = mode.requestLandscape()
+      await flush()
+      env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90, event: { timeStamp: 100 } })
+      await flush()
+      expect(mode.experienceMode.value).to.equal('landscape-map')
+      expect(mode.orientationRequestPending.value).to.equal(true)
+      expect(timers).to.have.length(1)
+      expect(timers[0].delay).to.equal(3000)
+      expect(exitCalls).to.equal(0)
+      expect(unlockCalls).to.equal(0)
+      timers[0].callback()
+      expect(await firstRequest).to.equal(false)
+      await flush()
+      expect(mode.orientationRequestPending.value).to.equal(false)
+      expect(exitCalls).to.equal(1)
+      expect(unlockCalls).to.equal(0)
+      env.screenOrientation.emit({ nextType: 'portrait-primary', nextAngle: 0, event: { timeStamp: 101 } })
+      await flush()
+      expect(await mode.requestLandscape()).to.equal(true)
+      expect(requestCalls).to.equal(2)
+      expect(lockCalls).to.equal(2)
+      wrapper.unmount()
+      await flush()
+      expect(unlockCalls).to.equal(1)
+      expect(exitCalls).to.equal(2)
+    } finally {
+      global.window.setTimeout = originalSetTimeout
+      global.window.clearTimeout = originalClearTimeout
+      env.restore()
+    }
+  })
+
+  it('settles pending fullscreen and lock requests on unmount and handles their late rejection', async () => {
+    const fullscreenEnv = setupEnvironment()
+    const fullscreen = deferred()
+    global.document.documentElement.requestFullscreen = () => fullscreen.promise
+    global.screen.orientation.lock = async () => { throw new Error('pending fullscreen must not lock') }
+    try {
+      const { mode, wrapper } = await mountMode()
+      const request = mode.requestLandscape()
+      await flush()
+      wrapper.unmount()
+      expect(await request).to.equal(false)
+      fullscreen.reject(new Error('late fullscreen rejection'))
+      await flush()
+    } finally {
+      fullscreenEnv.restore()
+    }
+
+    const lockEnv = setupEnvironment()
+    const lock = deferred()
+    let exitCalls = 0
+    global.document.documentElement.requestFullscreen = async () => setFullscreenElement(global.document.documentElement)
+    global.document.exitFullscreen = async () => { exitCalls += 1; setFullscreenElement(null) }
+    global.screen.orientation.lock = () => lock.promise
+    try {
+      const { mode, wrapper } = await mountMode()
+      const request = mode.requestLandscape()
+      await flush()
+      wrapper.unmount()
+      expect(await request).to.equal(false)
+      expect(exitCalls).to.equal(1)
+      lock.reject(new Error('late lock rejection'))
+      await flush()
+      expect(exitCalls).to.equal(1)
+    } finally {
+      lockEnv.restore()
     }
   })
 
@@ -493,6 +708,7 @@ describe('Juyi Hall experience mode', () => {
       expect(timers).to.have.length(1)
       expect(timers[0].delay).to.equal(3000)
       timers[0].callback()
+      expect(await pending).to.equal(false)
       await flush()
       expect(mode.orientationRequestPending.value).to.equal(false)
       expect(mode.orientationHint.value).to.equal('请旋转手机横屏查看')
@@ -500,7 +716,6 @@ describe('Juyi Hall experience mode', () => {
       expect(exitCalls).to.equal(1)
       expect(global.document.fullscreenElement).to.equal(null)
       resolveLock()
-      await pending
       await flush()
       expect(exitCalls).to.equal(1)
       expect(unlockCalls).to.equal(1)
@@ -512,7 +727,7 @@ describe('Juyi Hall experience mode', () => {
     }
   })
 
-  it('adopts late resources to a newer owner and releases them once when no owner remains', async () => {
+  it('adopts late resources to a newer owner and only releases provably owned resources', async () => {
     const originalSetTimeout = global.window.setTimeout
     const originalClearTimeout = global.window.clearTimeout
 
@@ -535,7 +750,10 @@ describe('Juyi Hall experience mode', () => {
       return Promise.resolve()
     }
     global.document.exitFullscreen = async () => { fullscreenExits += 1; setFullscreenElement(null) }
-    global.screen.orientation.lock = async () => { fullscreenLocks += 1 }
+    global.screen.orientation.lock = async () => {
+      fullscreenLocks += 1
+      oldFullscreenEnv.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
+    }
     global.screen.orientation.unlock = () => { fullscreenUnlocks += 1 }
     try {
       const { mode, wrapper } = await mountMode()
@@ -576,7 +794,9 @@ describe('Juyi Hall experience mode', () => {
     global.document.exitFullscreen = async () => { lockExitCalls += 1; setFullscreenElement(null) }
     global.screen.orientation.lock = () => {
       lockCalls += 1
-      return lockCalls === 1 ? oldLock.promise : Promise.resolve()
+      if (lockCalls === 1) return oldLock.promise
+      oldLockEnv.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
+      return Promise.resolve()
     }
     global.screen.orientation.unlock = () => { unlockCalls += 1 }
     try {
@@ -625,9 +845,9 @@ describe('Juyi Hall experience mode', () => {
       lateFullscreen.resolve()
       expect(await oldRequest).to.equal(false)
       await flush()
-      expect(noOwnerExits).to.equal(1)
+      expect(noOwnerExits).to.equal(0)
       expect(noOwnerUnlocks).to.equal(0)
-      expect(global.document.fullscreenElement).to.equal(null)
+      expect(global.document.fullscreenElement).to.equal(global.document.documentElement)
       wrapper.unmount()
     } finally {
       global.window.setTimeout = originalSetTimeout
@@ -664,6 +884,46 @@ describe('Juyi Hall experience mode', () => {
       global.window.setTimeout = originalSetTimeout
       global.window.clearTimeout = originalClearTimeout
       hostEnv.restore()
+    }
+  })
+
+  it('does not exit host fullscreen on documentElement after a stale request resolves', async () => {
+    const env = setupEnvironment()
+    const originalSetTimeout = global.window.setTimeout
+    const originalClearTimeout = global.window.clearTimeout
+    const fullscreen = deferred()
+    const timers = []
+    let exitCalls = 0
+    let lockCalls = 0
+    global.window.setTimeout = callback => {
+      timers.push(callback)
+      return timers.length
+    }
+    global.window.clearTimeout = () => {}
+    global.document.documentElement.requestFullscreen = () => fullscreen.promise
+    global.document.exitFullscreen = async () => { exitCalls += 1; setFullscreenElement(null) }
+    global.screen.orientation.lock = async () => { lockCalls += 1 }
+    try {
+      const { mode, wrapper } = await mountMode()
+      const request = mode.requestLandscape()
+      await flush()
+      timers[0]()
+      expect(await request).to.equal(false)
+      await flush()
+      setFullscreenElement(global.document.documentElement)
+      fullscreen.resolve()
+      await flush()
+      expect(exitCalls).to.equal(0)
+      expect(lockCalls).to.equal(0)
+      expect(global.document.fullscreenElement).to.equal(global.document.documentElement)
+      wrapper.unmount()
+      await flush()
+      expect(exitCalls).to.equal(0)
+      expect(global.document.fullscreenElement).to.equal(global.document.documentElement)
+    } finally {
+      global.window.setTimeout = originalSetTimeout
+      global.window.clearTimeout = originalClearTimeout
+      env.restore()
     }
   })
 
@@ -704,7 +964,7 @@ describe('Juyi Hall experience mode', () => {
       failedOwnerTimers[0]()
       await flush()
       const newerRequest = mode.requestLandscape()
-      await flush()
+      await flushUntil(() => failedOwnerExitCalls === 2)
       expect(failedOwnerExitCalls).to.equal(2)
       oldLock.resolve()
       await flush()
@@ -836,7 +1096,7 @@ describe('Juyi Hall experience mode', () => {
       hallTimers[0]()
       await flush()
       const newerRequest = mode.requestLandscape()
-      await flush()
+      await flushUntil(() => hallExitCalls === 1)
       expect(hallExitCalls).to.equal(1)
       oldFullscreen.resolve()
       await flush()
@@ -881,7 +1141,7 @@ describe('Juyi Hall experience mode', () => {
       hostTimers[0]()
       await flush()
       const newerRequest = mode.requestLandscape()
-      await flush()
+      await flushUntil(() => hostExitCalls === 1)
       expect(hostExitCalls).to.equal(1)
       setFullscreenElement(hostElement)
       hostFullscreen.resolve()
@@ -924,6 +1184,56 @@ describe('Juyi Hall experience mode', () => {
     }
   })
 
+  it('uses an interactive virtual landscape shell in WeChat without requesting fullscreen or orientation lock', async () => {
+    const env = setupEnvironment()
+    const originalWx = global.wx
+    let fullscreenRequests = 0
+    let lockRequests = 0
+    global.wx = { miniProgram: {} }
+    global.document.documentElement.requestFullscreen = () => { fullscreenRequests += 1; return Promise.resolve() }
+    global.screen.orientation.lock = () => { lockRequests += 1; return Promise.resolve() }
+    try {
+      const { mode, wrapper } = await mountMode()
+      expect(await mode.requestLandscape()).to.equal(true)
+      expect(mode.experienceMode.value).to.equal('landscape-map')
+      expect(mode.isVirtualLandscape.value).to.equal(true)
+      expect(mode.orientationHint.value).to.equal('')
+      expect(await mode.requestPortrait()).to.equal(true)
+      expect(mode.experienceMode.value).to.equal('portrait-command')
+      expect(mode.isVirtualLandscape.value).to.equal(false)
+      expect(fullscreenRequests).to.equal(0)
+      expect(lockRequests).to.equal(0)
+      wrapper.unmount()
+    } finally {
+      global.wx = originalWx
+      env.restore()
+    }
+  })
+
+  it('lets the explicit portrait control release Hall-owned native orientation state', async () => {
+    const env = setupEnvironment()
+    let unlocks = 0
+    let exits = 0
+    global.document.documentElement.requestFullscreen = async () => setFullscreenElement(global.document.documentElement)
+    global.document.exitFullscreen = async () => { exits += 1; setFullscreenElement(null) }
+    global.screen.orientation.lock = async () => env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
+    global.screen.orientation.unlock = () => { unlocks += 1 }
+    try {
+      const { mode, wrapper } = await mountMode()
+      expect(await mode.requestLandscape()).to.equal(true)
+      expect(mode.experienceMode.value).to.equal('landscape-map')
+      expect(await mode.requestPortrait()).to.equal(true)
+      // Releasing native ownership is best effort; the explicit control must
+      // switch the shell immediately even before the device reports rotation.
+      expect(mode.experienceMode.value).to.equal('portrait-command')
+      expect(unlocks).to.equal(1)
+      expect(exits).to.equal(1)
+      wrapper.unmount()
+    } finally {
+      env.restore()
+    }
+  })
+
   it('keeps orientation ownership in the mode composable, not panels or stage', () => {
     const modeSource = readFileSync(new URL('../src/composables/juyiting/useHallExperienceMode.js', import.meta.url), 'utf8')
     const panelsSource = readFileSync(new URL('../src/composables/juyiting/useHallPanels.js', import.meta.url), 'utf8')
@@ -931,6 +1241,8 @@ describe('Juyi Hall experience mode', () => {
 
     expect(modeSource).to.include("screenOrientation?.addEventListener?.('change'")
     expect(modeSource).to.include("window.addEventListener?.('orientationchange'")
+    expect(modeSource).to.include('const isWeChatWebView')
+    expect(modeSource).to.include("const requestPortrait = async () =>")
     expect(modeSource).not.to.include("addEventListener?.('resize'")
     expect(panelsSource).not.to.include('addEventListener')
     expect(panelsSource).not.to.include('matchMedia')

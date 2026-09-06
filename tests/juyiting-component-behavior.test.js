@@ -18,6 +18,7 @@ let HallChatComposer
 let HallStage
 let LibraryPanel
 let PersonaCatalogPanel
+let SelectedAgentCard
 let hallGameMock
 let classifyViewportResizeMock
 
@@ -56,6 +57,7 @@ const loadSfc = (relativePath) => {
     .replace(/^import\s+(\w+)\s+from\s+['"]@\/assets\/juyiting\/[^'"]+['"];?\s*$/gm, 'var $1 = \'/mock-juyiting-asset.png\'')
     .replace(/^import\s+\{\s*hallPhysicalScene,\s*hallRoomPropVisuals\s*\}\s+from\s+['"]@\/constants\/juyiting['"];?\s*$/gm, 'var hallRoomPropVisuals = []; var hallPhysicalScene = { interactiveZones: [{ key: \'main\', panel: \'chat\', title: \'忠义堂公议\', subtitle: \'厅前公议 / 众好汉\', x: 50, y: 36, w: 12, h: 7, object: \'plaque\', hitShape: \'plaque\' }, { key: \'agents\', panel: \'agents\', title: \'点将册\', subtitle: \'点将调遣\', x: 21, y: 32, w: 13, h: 7, object: \'ledger\' }, { key: \'tasks\', panel: \'tasks\', title: \'悬赏榜\', subtitle: \'榜文\', x: 76, y: 47, w: 19, h: 18, object: \'notice-rack\' }, { key: \'catalog\', panel: \'catalog\', title: \'招贤令\', subtitle: \'遍请豪杰\', x: 14, y: 68, w: 12, h: 7, object: \'banner-flag\' }, { key: \'library\', panel: \'library\', title: \'案卷阁\', subtitle: \'查卷问典\', x: 82, y: 76, w: 22, h: 18, object: \'scroll-shelf\' }, { key: \'back\', panel: null, title: \'整装处\', subtitle: \'兵甲行囊\', x: 67, y: 26, w: 12, h: 8, object: \'rear-gear\' }] }')
     .replace(/^import\s+HallChatComposer\s+from\s+['"].\/HallChatComposer\.vue['"];?\s*$/gm, 'var HallChatComposer = arguments[1]')
+    .replace(/^import\s+HallVoiceControls\s+from\s+['"].\/HallVoiceControls\.vue['"];?\s*$/gm, 'var HallVoiceControls = { template: \'<div class=\"hall-voice-controls-stub\"></div>\', props: [\'voice\'] }')
     .replace(/^import\s+\{\s*marked\s*\}\s+from\s+['"]marked['"];?\s*$/gm, 'var marked = { setOptions: () => {}, parse: value => value }')
     .replace(/^import\s+DOMPurify\s+from\s+['"]dompurify['"];?\s*$/gm, 'var DOMPurify = { sanitize: value => value }')
     .replace('export default', 'return')
@@ -129,6 +131,7 @@ describe('JuyiHall component behavior', () => {
     HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
     LibraryPanel = loadSfc('../src/components/juyiting/LibraryPanel.vue')
     PersonaCatalogPanel = loadSfc('../src/components/juyiting/PersonaCatalogPanel.vue')
+    SelectedAgentCard = loadSfc('../src/components/juyiting/SelectedAgentCard.vue')
   })
 
   it('classifies panel layouts for desktop, landscape touch, and portrait touch viewports', async () => {
@@ -137,6 +140,45 @@ describe('JuyiHall component behavior', () => {
     expect(classifyPanelLayout({ isMobileCoarse: false, experienceMode: 'portrait-command' })).to.equal('center-modal')
     expect(classifyPanelLayout({ isMobileCoarse: true, experienceMode: 'landscape-map' })).to.equal('right-drawer')
     expect(classifyPanelLayout({ isMobileCoarse: true, experienceMode: 'portrait-command' })).to.equal('bottom-drawer')
+  })
+
+  it('locks every SelectedAgentCard action and pointer surface during voice capture', async () => {
+    const props = {
+      abilityText: () => '军情推演',
+      agent: { agentId: 'wuyong', name: '吴用', status: 'idle' },
+      canStartChat: true,
+      locked: true,
+      portraitName: () => '智多星',
+      portraitStyle: () => ({}),
+      statusText: () => '候令'
+    }
+    const wrapper = mount(SelectedAgentCard, { props, global: { stubs } })
+    const hallSource = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+
+    expect(hallSource).to.include(':locked="voiceInteractionLocked"')
+    expect(wrapper.attributes('inert')).to.equal('')
+    expect(wrapper.attributes('aria-disabled')).to.equal('true')
+    expect(wrapper.findAll('button')).to.have.length(3)
+    wrapper.findAll('button').forEach(button => expect(button.attributes('disabled')).to.equal(''))
+    await wrapper.find('.card-close').trigger('click')
+    await wrapper.find('.card-action.primary').trigger('click')
+    await wrapper.findAll('.card-action')[1].trigger('click')
+    await wrapper.trigger('pointerdown')
+    expect(wrapper.emitted('close-card')).to.equal(undefined)
+    expect(wrapper.emitted('start-chat')).to.equal(undefined)
+    expect(wrapper.emitted('open-agents')).to.equal(undefined)
+
+    await wrapper.setProps({ locked: false })
+    expect(wrapper.attributes('inert')).to.equal(undefined)
+    expect(wrapper.attributes('aria-disabled')).to.equal(undefined)
+    wrapper.findAll('button').forEach(button => expect(button.attributes('disabled')).to.equal(undefined))
+    await wrapper.find('.card-close').trigger('click')
+    await wrapper.find('.card-action.primary').trigger('click')
+    await wrapper.findAll('.card-action')[1].trigger('click')
+    expect(wrapper.emitted('close-card')).to.have.length(1)
+    expect(wrapper.emitted('start-chat')).to.have.length(1)
+    expect(wrapper.emitted('open-agents')).to.have.length(1)
+    wrapper.unmount()
   })
 
   it('exposes accessible modal dialog wiring and focus lifecycle hooks', () => {
@@ -202,7 +244,7 @@ describe('JuyiHall component behavior', () => {
   it('wires the exact responsive panel class and immediate HallStage interaction lock', () => {
     const source = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
 
-    expect(source).to.include(':interaction-locked="isPanelSessionActive"')
+    expect(source).to.include(':interaction-locked="isPanelSessionActive || voiceInteractionLocked"')
     expect(source).to.include(':class="[`panel-${renderedPanel}`, `layout-${panelLayout}`]"')
     expect(source).to.include('layout-bottom-drawer')
     expect(source).to.include('layout-right-drawer')
@@ -882,6 +924,7 @@ describe('JuyiHall component behavior', () => {
       global: { stubs },
       props: makeHallStageProps({
         experienceMode: 'portrait-command',
+        isMobileCoarse: true,
         orientationHint: '请旋转手机横屏查看'
       })
     })
@@ -894,8 +937,20 @@ describe('JuyiHall component behavior', () => {
 
     await wrapper.setProps({ experienceMode: 'landscape-map', orientationHint: '' })
     expect(wrapper.find('.hall-board').classes()).to.include('is-scene-landscape')
-    expect(wrapper.find('.orientation-action').attributes('disabled')).to.not.equal(undefined)
+    expect(wrapper.find('.orientation-action').exists()).to.equal(true)
+    expect(readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8'))
+      .to.include("$emit(sceneMode === 'landscape' ? 'request-portrait' : 'request-landscape')")
+
+    await wrapper.setProps({ isMobileCoarse: false })
+    expect(wrapper.find('.orientation-action').exists()).to.equal(false)
     wrapper.unmount()
+  })
+
+  it('keeps the stage replay control discreet and forwards its invoking element upstream', () => {
+    const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
+
+    expect(source).to.include('class="tool-action onboarding-replay"')
+    expect(source).to.include("$emit('open-onboarding', $event.currentTarget)")
   })
 
   it('uses supported Varlet icons for the orientation toggle', () => {
@@ -927,8 +982,11 @@ describe('JuyiHall component behavior', () => {
     expect(source).to.include('@media (max-width: 640px)')
     expect(source).to.include('max-width: calc(100% - 16px);')
     expect(source).to.include('.stage-heading .eyebrow {\n    display: none;')
-    expect(source).not.to.include('.hall-stage.is-virtual-landscape {')
-    expect(source).not.to.include('transform: rotate(90deg) translateY(-100%);')
+    expect(source).to.include("'is-virtual-landscape': virtualLandscape")
+    expect(source).to.include('setVirtualViewport?.(props.virtualLandscape ? stageViewportNow() : null)')
+    const hallSource = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+    expect(hallSource).to.include('.juyi-page.is-virtual-landscape')
+    expect(hallSource).to.include('transform: rotate(90deg) translateY(-100%);')
     expect(source).to.include('.hall-stage:has(.hall-board.is-scene-landscape) .stage-header {\n  top: 4px;')
     expect(source).to.include('.hall-stage:has(.hall-board.is-scene-landscape) .stage-heading .eyebrow {\n  display: none;')
     expect(source).to.include('.hall-stage:has(.hall-board.is-scene-landscape) .tool-action .tool-label {\n  display: none;')
@@ -1919,6 +1977,42 @@ describe('JuyitingGame lifecycle guards', () => {
     expect(fake.videoInitCalls()).to.equal(1)
   })
 
+  it('inverse-maps virtual landscape pointer coordinates before melonJS reads them', async () => {
+    const { inverseVirtualLandscapePoint } = await import('../src/game/JuyitingGame.js')
+    expect(inverseVirtualLandscapePoint({ clientX: 92, clientY: 37 }, { width: 844, height: 390 }))
+      .to.deep.equal({ clientX: 37, clientY: 298 })
+  })
+
+  it('reuses the melonJS 15 global video canvas across a portrait destroy and later map mount', async () => {
+    const mod = await import('../src/game/JuyitingGame.js')
+    const game = new mod.JuyitingGame()
+    const fake = createFakeGameMelon()
+    const canvas = {
+      parentElement: null,
+      style: { setProperty: () => {} },
+      remove() { this.parentElement = null }
+    }
+    const firstContainer = {
+      querySelector: selector => selector === 'canvas' ? canvas : null,
+      appendChild: node => { node.parentElement = firstContainer }
+    }
+    const secondContainer = {
+      querySelector: selector => selector === 'canvas' ? null : null,
+      appendChild: node => { node.parentElement = secondContainer }
+    }
+    game._me = fake.me
+
+    await settleMountWithLoaderSuccess(fake, game.mount(firstContainer))
+    expect(fake.videoInitCalls()).to.equal(1)
+    game.destroy()
+    expect(canvas.parentElement).to.equal(null)
+
+    await settleMountWithLoaderSuccess(fake, game.mount(secondContainer))
+    expect(fake.videoInitCalls()).to.equal(1)
+    expect(canvas.parentElement).to.equal(secondContainer)
+    game.destroy()
+  })
+
   it('ignores stale loader callbacks after destroy invalidates a mount', async () => {
     const mod = await import('../src/game/JuyitingGame.js')
     expect(mod.JuyitingGame).to.be.a('function')
@@ -1998,7 +2092,7 @@ describe('O04 shared panel session contract', () => {
 
     expect(source).to.include('v-if="activePanel" :key="panelSessionGeneration"')
     expect(source).to.include(':data-panel-generation="panelSessionGeneration"')
-    expect(source).to.include(':interaction-locked="isPanelSessionActive"')
+    expect(source).to.include(':interaction-locked="isPanelSessionActive || voiceInteractionLocked"')
     expect(source).to.include(':inert="isPanelSessionActive ? \'\' : null"')
     expect(source).to.include(':aria-hidden="isPanelSessionActive ? \'true\' : null"')
     expect(source).to.include('const panelWhitelist = new Set(')
@@ -2089,15 +2183,17 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
     useHallSceneState: () => ({ setMapRuntime: noop, reset: noop, forwardPhaseEvents: asyncNoop }),
     useHallCommandQueue: () => ({ ready: Vue.ref(false), setSimulation: noop }),
     useHallBackendSceneState: () => ({ start: asyncNoop, stop: noop, dispose: noop, reportPhase: noop }), useHallSceneDebugBridge: () => { counters.owners.debug += 1; return { sentinel: 'debug-owner-o04', republish: noop, stop: noop } },
-    useHallSound: () => ({ playAgentSelect: noop, playError: noop, playPanelOpen: noop, playRefresh: noop, playSend: noop, playSuccess: noop, playTap: noop, setSoundEnabled: noop, soundEnabled: Vue.ref(false) }),
-    useHallChatContext: () => ({ chatContext: Vue.ref({}), chatMentionAgents: value, chatMode: Vue.ref('public'), chatTargetText: scalar, enterBountyDiscussion: noop, enterPrivateConversation: noop, resetToPublic: noop, setMentionAgent: noop }),
+    useHallSound: () => ({ playAgentSelect: noop, playError: noop, playPanelOpen: noop, playRefresh: noop, playSend: noop, playSuccess: noop, playTap: noop, setSoundEnabled: noop, setSoundSuppressed: noop, soundEnabled: Vue.ref(false) }),
+    useHallChatContext: () => ({ chatContext: Vue.ref({}), chatMentionAgentIds: Vue.ref([]), chatMentionAgents: value, chatMode: Vue.ref('public'), chatTargetText: scalar, enterBountyDiscussion: noop, enterPrivateConversation: noop, resetToPublic: noop, setMentionAgent: noop }),
     useHallScene: () => ({ markAgentSpeaking: noop, markDiscussionStarted: noop, markLibraryCitation: noop, markLibrarySearching: noop, markRecommendedAgents: noop, markTaskArchived: noop, markTaskAssigned: noop, markTaskAutoAssigned: noop, markTaskCreated: task => { counters.markedTasks ||= []; counters.markedTasks.push(task) }, resetSceneFeedback: noop, sceneAgents: value, sceneAgentStyle: () => ({}), sceneHotspots: value, syncAfterPersonaChanged: noop }),
     useHallTaskActions: () => taskActions || ({ archiveTask: asyncNoop, autoAssignTask: asyncNoop, assignTask: async () => true, createTask: asyncNoop, fundedClaimState: Vue.ref(null), fundedCreateRecovery: Vue.ref(null), refreshFundedClaim: asyncNoop, resumeFundedCreate: asyncNoop }),
-    useHallConversation: () => { counters.owners.conversation += 1; return ({ chatConnectionStatus: scalar, conversationId: counters.refs.conversationId, draft: counters.refs.draft, eventStreamRecovering: Vue.ref(false), insertAgentMention: noop, isAwaitingReply: Vue.ref(false), isStreaming: Vue.ref(false), loadHallMessages: async () => { counters.loads.messages += 1 }, mentionAgent: noop, messages: counters.refs.messages, newHallConversation: noop, pendingAgentName: scalar, sendHallMessage: asyncNoop, senderText: scalar, disposeHallConversation: noop, stopHallEventStream: noop, stopHallReplyPolling: noop, stopHallReplyStreaming: noop }) },
+    useHallConversation: () => { counters.owners.conversation += 1; return ({ chatConnectionStatus: scalar, conversationId: counters.refs.conversationId, draft: counters.refs.draft, draftRevision: Vue.ref(0), eventStreamRecovering: Vue.ref(false), insertAgentMention: noop, isAwaitingReply: Vue.ref(false), isStreaming: Vue.ref(false), loadHallMessages: async () => { counters.loads.messages += 1 }, mentionAgent: noop, messages: counters.refs.messages, newHallConversation: noop, pendingAgentName: scalar, replyEventSequence: Vue.ref(0), sendHallMessage: asyncNoop, senderText: scalar, setDraft: value => { counters.refs.draft.value = value }, disposeHallConversation: noop, stopHallEventStream: noop, stopHallReplyPolling: noop, stopHallReplyStreaming: noop }) },
+    useHallVoiceConversation: () => ({ supported: false, voiceInteractionLocked: false, cancel: noop, dispose: noop, applyTranscript: noop }),
+    createHallVoiceReplyCorrelation: () => ({ start: () => true, observe: noop, resolveConversation: () => true, close: noop }),
     useHallLibrary: () => ({ citeLibraryItem: noop, libraryErrorMessage: scalar, libraryHasSearched: Vue.ref(false), libraryKeyword: scalar, libraryLoading: Vue.ref(false), libraryResults: value, librarySourceType: scalar, searchLibrary: asyncNoop }),
     useTaskWorkspace: () => null, createDisabledTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }), isTaskWorkspaceBuildEnabled: () => false, useTaskWorkspaceView: () => ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: scalar, error: Vue.ref(null), retry: noop }), useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop }),
     portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '',
-    HallPortraitHome, HallStage, LibraryPanel, AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel, BountyPanel: actualBountyPanel || EmptyPanel, TaskWorkspacePanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PrivateDiscussionPanel: EmptyPanel, PublicDiscussionPanel: EmptyPanel, SelectedAgentCard: EmptyPanel
+    HallPortraitHome, HallStage, HallVoiceHud: EmptyPanel, LibraryPanel, AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel, BountyPanel: actualBountyPanel || EmptyPanel, TaskWorkspacePanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PrivateDiscussionPanel: EmptyPanel, PublicDiscussionPanel: EmptyPanel, SelectedAgentCard: EmptyPanel
   }
 }
 

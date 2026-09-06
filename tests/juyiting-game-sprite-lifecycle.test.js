@@ -16,6 +16,9 @@ const DEFERRED_PERSONA_RESOURCE_NAMES = Object.values(PERSONA_SPRITE_MANIFEST.pe
 const PERSONA_BY_RESOURCE = new Map(Object.values(PERSONA_SPRITE_MANIFEST.personas)
   .map(definition => [personaSpriteResourceName(definition.personaCode), definition]))
 
+const isHallTmxUrl = url => String(url).split('?')[0].endsWith('/juyiting/hall.tmx')
+let originalFetch
+
 const createRuntimeMelon = () => {
   const pendingLoads = []
   const images = new Map()
@@ -90,6 +93,39 @@ const createRuntimeMelon = () => {
   return { images, me, pendingLoads, stateSets, worldChildren }
 }
 
+const createSameSlotIgnoringMelon = () => {
+  const fake = createRuntimeMelon()
+  const stages = new Map()
+  const stateChanges = []
+  const ignoredChanges = []
+  const sceneEntries = []
+  let currentState = null
+
+  fake.me.state = {
+    USER: 100,
+    PLAY: 'PLAY',
+    set: (stateId, scene) => {
+      fake.stateSets.push([stateId, scene])
+      stages.set(stateId, scene)
+    },
+    change: stateId => {
+      if (stateId === currentState) {
+        ignoredChanges.push(stateId)
+        return
+      }
+      currentState = stateId
+      stateChanges.push(stateId)
+      const scene = stages.get(stateId)
+      sceneEntries.push(stateId)
+      scene?.onResetEvent?.()
+    },
+    isCurrent: stateId => stateId === currentState,
+    pause: () => {}
+  }
+
+  return { ...fake, ignoredChanges, sceneEntries, stateChanges }
+}
+
 const nextLoadBatch = async (fake, timeoutMs = 5_000) => {
   const deadline = Date.now() + timeoutMs
   while (fake.pendingLoads.length === 0 && Date.now() < deadline) {
@@ -98,6 +134,18 @@ const nextLoadBatch = async (fake, timeoutMs = 5_000) => {
     // of microtasks, which is flaky when the complete test suite is CPU-bound.
     await new Promise(resolve => setTimeout(resolve, 5))
   }
+  expect(fake.pendingLoads.length, `expected a runtime resource batch within ${timeoutMs}ms`).to.be.greaterThan(0)
+  return fake.pendingLoads.splice(0)
+}
+
+const nextLoadBatchOrMountFailure = async (fake, mountPromise, timeoutMs = 5_000) => {
+  let mountFailure = null
+  mountPromise.catch(error => { mountFailure = error })
+  const deadline = Date.now() + timeoutMs
+  while (fake.pendingLoads.length === 0 && !mountFailure && Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 5))
+  }
+  if (mountFailure) throw new Error(`mount rejected before the next runtime resource batch: ${mountFailure.message}`)
   expect(fake.pendingLoads.length, `expected a runtime resource batch within ${timeoutMs}ms`).to.be.greaterThan(0)
   return fake.pendingLoads.splice(0)
 }
@@ -128,6 +176,77 @@ const mountThroughBaseResources = async (game, fake) => {
 }
 
 describe('JuyitingGame sprite lifecycle', () => {
+  beforeEach(() => {
+    originalFetch = globalThis.fetch
+    globalThis.fetch = url => {
+      if (!isHallTmxUrl(url)) {
+        return Promise.reject(new Error(`Unexpected fetch in sprite lifecycle test: ${url}`))
+      }
+      return Promise.resolve({ ok: true, status: 200, text: async () => HALL_XML })
+    }
+  })
+
+  afterEach(() => {
+    if (originalFetch === undefined) delete globalThis.fetch
+    else globalThis.fetch = originalFetch
+    originalFetch = undefined
+  })
+
+  it('alternates bounded melon state slots across normal and cancelled mount lifecycles', async () => {
+    const fake = createSameSlotIgnoringMelon()
+    const game = new JuyitingGame()
+    let readyCallbacks = 0
+    const spriteLoadResult = {
+      available: new Set(),
+      unavailable: new Set(),
+      errors: [],
+      degraded: false,
+      requiredMissingCount: 0,
+      optionalMissingCount: 0
+    }
+    game._loadMelonJS = async () => {
+      game._me = fake.me
+      return fake.me
+    }
+    game._loadResources = async () => {}
+    game._prepareMapData = async (_me, mountToken) => {
+      if (!game._isCurrentMount(mountToken)) return
+      game._mapData = { movementReady: false }
+      game._hallScene.prepareRuntime = () => true
+      game._hallScene._buildScene = () => {
+        game._hallScene._sceneBuilt = true
+        game._hallScene._onReady?.()
+        return true
+      }
+    }
+    game._loadPersonaSpriteBatch = async () => spriteLoadResult
+    game._deferredPersonaSpriteManifest = () => ({ personas: {} })
+
+    const mount = () => game.mount({ querySelector: () => null }, { simulationEnabled: false, onReady: () => { readyCallbacks += 1 } })
+    const mountAndEnter = async () => {
+      await mount()
+      game.start()
+      game.destroy()
+    }
+
+    try {
+      await mountAndEnter()
+      await mount()
+      game.destroy()
+      await mountAndEnter()
+      await mountAndEnter()
+      await mountAndEnter()
+
+      expect(fake.stateChanges).to.deep.equal([101, 100, 101, 100])
+      expect(fake.sceneEntries).to.deep.equal([101, 100, 101, 100])
+      expect(readyCallbacks).to.equal(4)
+      expect(fake.ignoredChanges).to.deep.equal([])
+      expect(fake.stateSets.map(([stateId]) => stateId)).to.deep.equal([101, 100, 100, 101, 100])
+    } finally {
+      game.destroy()
+    }
+  })
+
   it('keeps the map ready and degraded when a required sprite fails', async () => {
     const fake = createRuntimeMelon()
     const game = new JuyitingGame()
@@ -214,25 +333,33 @@ describe('JuyitingGame sprite lifecycle', () => {
     expect(game.getMovementRuntime()).to.equal(null)
   })
 
-  it('cleans a fatal partial mount and retries with exactly one clean scene and canvas', async () => {
+  it('cleans a fatal partial mount and retries by reattaching the one melonJS 15 canvas', async () => {
     const fake = createRuntimeMelon()
     const canvases = []
+    let videoInitCalls = 0
     const container = {
+      appendChild: canvas => {
+        if (!canvases.includes(canvas)) canvases.push(canvas)
+        canvas.parentElement = container
+      },
       querySelector: selector => selector === 'canvas' ? canvases[0] || null : null
     }
     fake.me.video.init = (_width, _height, options) => {
+      videoInitCalls += 1
       const canvas = {
-        style: {},
+        parentElement: null,
+        style: { setProperty: () => {} },
         remove: () => {
           const index = canvases.indexOf(canvas)
           if (index >= 0) canvases.splice(index, 1)
+          canvas.parentElement = null
         }
       }
-      canvases.push(canvas)
       expect(options.parent).to.equal(container)
+      // melonJS Application.init appends its renderer canvas before video.init returns.
+      options.parent.appendChild(canvas)
       return true
     }
-    fake.me.video.destroy = () => canvases.slice().forEach(canvas => canvas.remove())
 
     let attempt = 0
     fake.me.loader.getTMX = () => {
@@ -243,7 +370,12 @@ describe('JuyitingGame sprite lifecycle', () => {
     }
 
     const game = new JuyitingGame()
-    game._loadMelonJS = async () => fake.me
+    // Match the production loader's cache side effect; retry must see the same
+    // melonJS Application instance that owns the reusable renderer canvas.
+    game._loadMelonJS = async () => {
+      game._me = fake.me
+      return fake.me
+    }
     const firstMount = game.mount(container, { onReady: () => {} })
     succeedBatch(fake, await nextLoadBatch(fake))
 
@@ -254,18 +386,22 @@ describe('JuyitingGame sprite lifecycle', () => {
     expect(game._hallScene).to.equal(null)
     expect(game._container).to.equal(null)
     expect(game._callbacks).to.deep.equal({})
-    expect(game._me).to.equal(null)
+    expect(game._me).to.equal(fake.me)
+    expect(game._engineCanvas).to.exist
     expect(game._mountToken).to.equal(null)
     expect(game._readyTimer).to.equal(null)
 
     const retryMount = game.mount(container)
-    succeedBatch(fake, await nextLoadBatch(fake))
-    succeedBatch(fake, await nextLoadBatch(fake))
-    succeedBatch(fake, await nextLoadBatch(fake))
+    succeedBatch(fake, await nextLoadBatchOrMountFailure(fake, retryMount))
+    succeedBatch(fake, await nextLoadBatchOrMountFailure(fake, retryMount))
+    succeedBatch(fake, await nextLoadBatchOrMountFailure(fake, retryMount))
     const outcome = await retryMount
 
     expect(outcome).to.include({ ready: true, movementReady: true, degraded: false })
     expect(canvases).to.have.length(1)
+    expect(canvases[0]).to.equal(game._engineCanvas)
+    expect(canvases[0].parentElement).to.equal(container)
+    expect(videoInitCalls).to.equal(1)
     expect(fake.stateSets).to.have.length(1)
     expect(game._hallScene).not.to.equal(null)
   })

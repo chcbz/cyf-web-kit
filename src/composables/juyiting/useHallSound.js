@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import { useStorage } from '@vueuse/core'
 
 const soundProfiles = {
@@ -35,6 +36,7 @@ const soundProfiles = {
 export const useHallSound = () => {
   const soundEnabled = useStorage('juyiting-sound-enabled', true)
   let audioContext = null
+  const soundSuppressed = ref(false)
 
   const getAudioContext = async () => {
     if (typeof window === 'undefined') return null
@@ -50,7 +52,7 @@ export const useHallSound = () => {
   }
 
   const playProfile = async (name) => {
-    if (!soundEnabled.value) return
+    if (!soundEnabled.value || soundSuppressed.value) return
     const profile = soundProfiles[name]
     if (!profile?.length) return
 
@@ -89,9 +91,13 @@ export const useHallSound = () => {
     playSend: () => playProfile('send'),
     playSuccess: () => playProfile('success'),
     playTap: () => playProfile('tap'),
+    setSoundSuppressed: nextValue => {
+      soundSuppressed.value = Boolean(nextValue)
+    },
     setSoundEnabled: (nextValue) => {
       soundEnabled.value = Boolean(nextValue)
     },
-    soundEnabled
+    soundEnabled,
+    soundSuppressed
   }
 }

@@ -9,7 +9,7 @@
         <button
           class="tool-action refresh-action"
           :class="{ 'is-refreshing': refreshing }"
-          :disabled="refreshing"
+          :disabled="refreshing || interactionLocked"
           title="点验厅中动静"
           @click="$emit('refresh-hall')"
         >
@@ -18,6 +18,7 @@
         </button>
         <button
           class="tool-action sound-toggle"
+          :disabled="interactionLocked"
           :title="soundEnabled ? '歇下声响' : '开起声响'"
           @click="$emit('toggle-sound')"
         >
@@ -25,10 +26,21 @@
           <span class="tool-label">{{ soundEnabled ? '声响开' : '声响歇' }}</span>
         </button>
         <button
+          class="tool-action onboarding-replay"
+          :disabled="interactionLocked"
+          title="重看新手引导"
+          @click="$emit('open-onboarding', $event.currentTarget)"
+          aria-label="重看新手引导"
+        >
+          <var-icon name="help-circle-outline" aria-hidden="true" />
+          <span class="tool-label">引导</span>
+        </button>
+        <button
+          v-if="isMobileCoarse"
           class="tool-action orientation-action"
-          :disabled="isSceneMounting || orientationRequestPending || experienceMode === 'landscape-map'"
-          title="请求横屏全景"
-          @click="$emit('request-landscape')"
+          :disabled="interactionLocked || isSceneMounting || orientationRequestPending"
+          :title="sceneMode === 'landscape' ? '切换竖屏视图' : '打开全景视图'"
+          @click="$emit(sceneMode === 'landscape' ? 'request-portrait' : 'request-landscape')"
         >
           <span
             class="orientation-glyph"
@@ -49,7 +61,8 @@
         'is-melon-ready': melonReady,
         'has-scene-error': Boolean(sceneError),
         'is-scene-landscape': sceneMode === 'landscape',
-        'is-scene-portrait': sceneMode === 'portrait'
+        'is-scene-portrait': sceneMode === 'portrait',
+        'is-virtual-landscape': virtualLandscape
       }"
       tabindex="0"
       aria-label="聚义厅 melonJS 场景，可使用加减号缩放，0 复位"
@@ -104,6 +117,7 @@ const props = defineProps({
   hiddenAgentCount: { type: Number, default: 0 },
   experienceMode: { type: String, default: 'landscape-map' },
   interactionLocked: { type: Boolean, default: false },
+  isMobileCoarse: { type: Boolean, default: false },
   landscapeEntryTarget: { type: Object, default: null },
   mapResumeSnapshot: { type: Object, default: null },
   orientationHint: { type: String, default: '' },
@@ -122,7 +136,8 @@ const props = defineProps({
   statusClass: { type: Function, required: true },
   statusText: { type: Function, required: true },
   tasksTotal: { type: Number, default: 0 },
-  visibleAgents: { type: Array, default: () => [] }
+  visibleAgents: { type: Array, default: () => [] },
+  virtualLandscape: { type: Boolean, default: false }
 })
 
 const emit = defineEmits([
@@ -130,9 +145,12 @@ const emit = defineEmits([
   'map-snapshot',
   'map-snapshot-clear',
   'new-conversation',
+  'open-onboarding',
   'open-panel',
   'request-landscape',
+  'request-portrait',
   'refresh-hall',
+  'scene-mode-change',
   'select-agent',
   'simulation-phase-events',
   'simulation-ready',
@@ -195,6 +213,8 @@ const presetZooms = { mobilePortrait: 1.25, mobileLandscape: 1.05, tabletLandsca
 
 const sceneMode = computed(() => props.experienceMode === 'landscape-map' ? 'landscape' : 'portrait')
 
+watch(sceneMode, mode => emit('scene-mode-change', mode), { immediate: true })
+
 const sceneDebugRequested = () => (
   typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('scene-debug') === '1'
 )
@@ -243,6 +263,7 @@ const editableFocused = () => {
 const viewportNow = () => ({ width: window.innerWidth, height: window.innerHeight })
 
 const stageViewportNow = () => {
+  if (props.virtualLandscape) return { width: window.innerHeight, height: window.innerWidth }
   const rect = melonContainerRef.value?.getBoundingClientRect?.()
   if (rect?.width > 0 && rect?.height > 0) {
     return { width: Math.round(rect.width), height: Math.round(rect.height) }
@@ -290,9 +311,11 @@ const settleFinalViewport = attemptId => new Promise(resolve => {
   const inspect = () => {
     if (work.finished || !isCurrentMountAttempt(attemptId)) return finish(null)
     const rect = container?.getBoundingClientRect?.()
-    const viewport = rect?.width > 0 && rect?.height > 0
-      ? { width: Math.round(rect.width), height: Math.round(rect.height) }
-      : null
+    const viewport = props.virtualLandscape
+      ? stageViewportNow()
+      : (rect?.width > 0 && rect?.height > 0
+        ? { width: Math.round(rect.width), height: Math.round(rect.height) }
+        : null)
     if (!observerReported || !viewport) {
       scheduleInspect()
       return
@@ -476,6 +499,7 @@ const evaluateViewportResize = () => {
   if (!isRunningGeneration(sceneMountAttempt)) return
   const nextLayoutViewport = viewportNow()
   const nextStageViewport = stageViewportNow()
+  if (props.virtualLandscape) juyitingGame.setVirtualViewport?.(nextStageViewport)
   const nextVisualHeight = window.visualViewport?.height || nextLayoutViewport.height
   const widthStable = Math.abs(nextLayoutViewport.width - previousLayoutViewport.width) <= 2
   const layoutHeightChanged = Math.abs(nextLayoutViewport.height - previousLayoutViewport.height) >= 120
@@ -565,6 +589,7 @@ const mountScene = async () => {
   const attemptId = ++sceneMountAttempt
   currentGameDestroyed = false
   activeMapGeneration = juyitingGame.beginMapGeneration?.() ?? activeMapGeneration + 1
+  juyitingGame.setVirtualViewport?.(props.virtualLandscape ? stageViewportNow() : null)
   mapLifecycleState.value = props.mapResumeSnapshot?.cameraSnapshot ? 'resuming' : 'mounting'
   resumeRequested = false
   settledViewportGeneration = 0
@@ -623,7 +648,7 @@ const retryScene = async () => {
 }
 
 const handleSceneKeydown = (event) => {
-  if (event.defaultPrevented || isSceneMounting.value || !isRunningGeneration(sceneMountAttempt)) return
+  if (event.defaultPrevented || props.interactionLocked || isSceneMounting.value || !isRunningGeneration(sceneMountAttempt)) return
   if (event.key === '+' || event.key === '=') {
     juyitingGame.zoomBy?.(0.12)
     event.preventDefault()
@@ -764,6 +789,11 @@ watch(() => props.experienceMode, mode => {
     return
   }
   suspendScene()
+})
+
+watch(() => props.virtualLandscape, virtual => {
+  juyitingGame.setVirtualViewport?.(virtual ? stageViewportNow() : null)
+  if (isRunningGeneration(sceneMountAttempt)) scheduleViewportResize({ orientationChanged: true })
 })
 
 watch(() => props.interactionLocked, value => {

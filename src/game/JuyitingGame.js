@@ -20,6 +20,27 @@ import { aggregateSceneDebug } from './debug/sceneDebugAggregator.js'
 
 const SCENE_DEBUG_KEY = '__JYTING_SCENE_DEBUG__'
 
+// melonJS exports one process-global Pointer instance. Keep the temporary
+// prototype patch singleton-scoped so a Hall teardown can restore the exact
+// method it replaced instead of leaking virtual-coordinate behavior.
+let virtualPointerPatch = null
+
+const virtualViewport = value => {
+  const width = Number(value?.width)
+  const height = Number(value?.height)
+  return Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0
+    ? { width, height }
+    : null
+}
+
+// `rotate(90deg) translateY(-100%)` maps virtual (x, y) to physical
+// (height - y, x). melonJS 15 normalizes those coordinates through
+// Pointer#setEvent, so adapt its numeric arguments without mutating host events.
+export const inverseVirtualLandscapePoint = ({ clientX, clientY }, viewport) => ({
+  clientX: Number(clientY),
+  clientY: Number(viewport.height) - Number(clientX)
+})
+
 export class JuyitingGame {
   constructor() {
     this._me = null
@@ -33,11 +54,22 @@ export class JuyitingGame {
     // runtime tolerant of a cold browser cache and slower local dev servers.
     this._spriteLoadTimeoutMs = 15_000
     this._spriteLoadAbortController = null
+    this._cachedImageWaits = new Set()
     this._deferredSpriteLoadDelayMs = 1_200
     this._deferredSpriteLoadTimer = null
     this._readyTimer = null
     this._readyPublished = false
     this._canvas = null
+    // melonJS 15 owns one process-global Application. It exposes no video.destroy(),
+    // so retain its canvas across HallScene destroy/remount cycles instead of calling
+    // video.init() again against a stale global renderer.
+    this._engineCanvas = null
+    this._virtualViewport = null
+    this._nativeCanvasRect = null
+    this._virtualInputCleanup = null
+    this._nativeRendererScaleRatio = null
+    this._pausedByHallCleanup = false
+    this._virtualCanvasRect = null
     this._viewportCommitFrame = null
     this._viewportCommitCandidateSignature = ''
     this._committedViewportGeometrySignature = ''
@@ -48,6 +80,7 @@ export class JuyitingGame {
     this._canvasCoverScale = 1
     this._pendingStart = false
     this._stateId = null
+    this._nextStateSlot = 1
     this._generation = 0
     this._lifecycleGeneration = 0
     this._mountToken = null
@@ -117,21 +150,38 @@ export class JuyitingGame {
       this._hallScene.onReady(() => {
         this._publishReadyIfSceneBuilt(mountToken)
       })
+      this._syncHallClientPointMapper()
 
-      // Init video (creates canvas inside container)
-      me.video.init(config.width, config.height, {
-        ...config,
-        parent: container,
-        scaleTarget: container,
-        renderer: me.video.CANVAS,
-        scale: 'auto',
-        scaleMethod: 'fit'
-      })
+      // melonJS 15.15 has a process-global Application and no video.destroy().
+      // Re-running video.init() after a portrait destroy leaves the old renderer and
+      // its listeners alive, then the next map can render into a stale canvas. Create
+      // that global video subsystem once; later HallScene mounts re-parent its canvas.
+      let canvas = this._engineCanvas
+      if (!canvas) {
+        const initialized = me.video.init(config.width, config.height, {
+          ...config,
+          parent: container,
+          scaleTarget: container,
+          renderer: me.video.CANVAS,
+          scale: 'auto',
+          scaleMethod: 'fit'
+        })
+        if (initialized === false) throw new Error('melonJS video initialization failed')
+        canvas = container.querySelector('canvas') || null
+        this._engineCanvas = canvas
+      } else if (canvas.parentElement !== container) {
+        container.appendChild(canvas)
+      }
+
+      // A reusable renderer keeps its original scaleTarget unless it is rebound.
+      // Point it at the current stage before any global melon resize event fires.
+      this._rebindEngineContainer(container)
+      this._reflowEngineForContainer(container)
 
       // Preserve melonJS's stable fit renderer. CSS controls the final display
       // rectangle so mobile viewport changes never resize the Canvas backing buffer.
-      const canvas = container.querySelector('canvas')
-      this._canvas = canvas || null
+      this._canvas = canvas
+      this._applyVirtualInputAdapter()
       if (canvas) {
         canvas.style.background = 'transparent'
         canvas.style.position = 'absolute'
@@ -236,18 +286,21 @@ export class JuyitingGame {
 
     const spriteLoadAbortController = new AbortController()
     this._spriteLoadAbortController = spriteLoadAbortController
-    const spriteLoadResult = await loadPersonaSprites(
-      definition => this._loadPersonaSprite(me, definition, mountToken),
-      manifest,
-      {
-        timeoutMs: this._spriteLoadTimeoutMs,
-        signal: spriteLoadAbortController.signal
+    try {
+      return await loadPersonaSprites(
+        definition => this._loadPersonaSprite(me, definition, mountToken, spriteLoadAbortController.signal),
+        manifest,
+        {
+          timeoutMs: this._spriteLoadTimeoutMs,
+          signal: spriteLoadAbortController.signal
+        }
+      )
+    } finally {
+      spriteLoadAbortController.abort()
+      if (this._spriteLoadAbortController === spriteLoadAbortController) {
+        this._spriteLoadAbortController = null
       }
-    )
-    if (this._spriteLoadAbortController === spriteLoadAbortController) {
-      this._spriteLoadAbortController = null
     }
-    return spriteLoadResult
   }
 
   _startDeferredPersonaSpriteLoading(me, mountToken = this._mountToken) {
@@ -325,6 +378,7 @@ export class JuyitingGame {
   }
 
   _cleanupRuntime(me = this._me) {
+    this._cancelCachedImageWaits()
     this._spriteLoadAbortController?.abort()
     this._spriteLoadAbortController = null
     this._clearDeferredSpriteLoadTimer()
@@ -333,10 +387,25 @@ export class JuyitingGame {
     this._readyPublished = false
     this._cancelViewportCommit()
     this._disconnectContainerResizeObserver()
-    try { me?.state?.pause?.() } catch { /* preserve the original mount failure */ }
+    try {
+      const state = me?.state
+      if (!this._pausedByHallCleanup) {
+        const wasPaused = typeof state?.isPaused === 'function' ? state.isPaused() : false
+        if (!wasPaused && typeof state?.pause === 'function') {
+          state.pause()
+          this._pausedByHallCleanup = true
+        }
+      }
+    } catch { /* preserve the original mount failure */ }
+    try { this._hallScene?.setClientPointMapper?.(null) } catch { /* best-effort mapper cleanup */ }
     try { this._hallScene?.onDestroyEvent?.() } catch { /* best-effort scene cleanup */ }
-    try { me?.video?.destroy?.() } catch { /* best-effort renderer cleanup */ }
-    try { this._canvas?.remove?.() } catch { /* best-effort canvas cleanup */ }
+    this._teardownVirtualInputAdapter()
+    this._restoreNativeRendererScaleRatio()
+    this._virtualViewport = null
+    this._virtualCanvasRect = null
+    // melonJS 15.15 intentionally has no me.video.destroy(). Removing only the DOM
+    // node is safe: retain it so the next HallScene can re-parent the one renderer.
+    try { this._canvas?.remove?.() } catch { /* best-effort canvas detach */ }
     this._canvas = null
     this._canvasCoverScale = 1
     this._viewportCommitCandidateSignature = ''
@@ -347,7 +416,7 @@ export class JuyitingGame {
     this._hallScene = null
     this._container = null
     this._callbacks = {}
-    this._me = null
+    // Keep `_me` and `_engineCanvas`: both belong to melonJS's global Application.
     this._initialized = false
     this._mapData = null
     this._spriteLoadResult = null
@@ -358,23 +427,91 @@ export class JuyitingGame {
     this._simulationEnabled = true
   }
 
-  _loadPersonaSprite(me, definition, mountToken = this._mountToken) {
+  _cancelCachedImageWaits() {
+    for (const cancel of [...this._cachedImageWaits]) cancel()
+  }
+
+  _cachedImageState(me, resourceName) {
+    const image = me.loader.getImage?.(resourceName)
+    if (!image) return { status: 'missing', image: null }
+    if (image.complete === true) {
+      return Number(image.naturalWidth) > 0
+        ? { status: 'ready', image }
+        : { status: 'failed', image }
+    }
+    return { status: 'pending', image }
+  }
+
+  _waitForCachedImage(me, resourceName, mountToken, signal) {
+    const cached = this._cachedImageState(me, resourceName)
+    if (cached.status === 'ready') return Promise.resolve(cached.image)
+    if (cached.status === 'failed') return Promise.reject(new Error(`Cached image failed: ${resourceName}`))
+    if (cached.status === 'missing') return Promise.reject(new Error(`Cached image is unavailable: ${resourceName}`))
+
+    return new Promise((resolve, reject) => {
+      const image = cached.image
+      let settled = false
+      let cancelled
+      const cleanup = () => {
+        image.removeEventListener?.('load', onLoad)
+        image.removeEventListener?.('error', onError)
+        signal?.removeEventListener?.('abort', onAbort)
+        this._cachedImageWaits.delete(cancelled)
+      }
+      const finish = (callback, value) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        callback(value)
+      }
+      cancelled = () => finish(reject, new Error('Juyiting mount was cancelled'))
+      const onLoad = () => {
+        if (!this._isCurrentMount(mountToken)) return cancelled()
+        const state = this._cachedImageState(me, resourceName)
+        if (state.status === 'ready') finish(resolve, state.image)
+        else finish(reject, new Error(`Cached image failed: ${resourceName}`))
+      }
+      const onError = () => finish(reject, new Error(`Cached image failed: ${resourceName}`))
+      const onAbort = () => cancelled()
+
+      if (!this._isCurrentMount(mountToken) || signal?.aborted) return cancelled()
+      this._cachedImageWaits.add(cancelled)
+      image.addEventListener?.('load', onLoad, { once: true })
+      image.addEventListener?.('error', onError, { once: true })
+      signal?.addEventListener?.('abort', onAbort, { once: true })
+      if (image.complete === true) onLoad()
+    })
+  }
+
+  _loadPersonaSprite(me, definition, mountToken = this._mountToken, signal) {
     return new Promise((resolve, reject) => {
       if (!this._isCurrentMount(mountToken)) return reject(new Error('Juyiting mount was cancelled'))
       const resource = buildPersonaSpriteResource(definition)
+      const resourceName = personaSpriteResourceName(definition.personaCode)
+      let settled = false
+      const finish = (callback, value) => {
+        if (settled) return
+        settled = true
+        callback(value)
+      }
+      const resolveLoadedImage = () => {
+        if (!this._isCurrentMount(mountToken)) return finish(reject, new Error('Juyiting mount was cancelled'))
+        const image = me.loader.getImage(resourceName)
+        if (!image) return finish(reject, new Error(`Loaded image is unavailable for ${definition.personaCode}`))
+        finish(resolve, image)
+      }
       try {
-        me.loader.load(
+        const loadCount = me.loader.load(
           resource,
-          () => {
-            if (!this._isCurrentMount(mountToken)) return reject(new Error('Juyiting mount was cancelled'))
-            const image = me.loader.getImage(personaSpriteResourceName(definition.personaCode))
-            if (!image) return reject(new Error(`Loaded image is unavailable for ${definition.personaCode}`))
-            resolve(image)
-          },
-          error => reject(error instanceof Error ? error : new Error(String(error)))
+          resolveLoadedImage,
+          error => finish(reject, error instanceof Error ? error : new Error(String(error)))
         )
+        if (loadCount === 0 && !settled) {
+          this._waitForCachedImage(me, resourceName, mountToken, signal)
+            .then(image => finish(resolve, image), error => finish(reject, error))
+        }
       } catch (error) {
-        reject(error instanceof Error ? error : new Error(String(error)))
+        finish(reject, error instanceof Error ? error : new Error(String(error)))
       }
     })
   }
@@ -404,18 +541,33 @@ export class JuyitingGame {
       }
 
       await new Promise(resolve => {
-        try {
-          me.loader.load(
-            loadableResource,
-            () => resolve(),
-            (err) => {
-              console.warn('[JuyitingGame] Failed:', res.name, err)
-              resolve()
-            }
-          )
-        } catch (e) {
-          console.warn('[JuyitingGame] Load error:', res.name, e.message)
+        let settled = false
+        const finish = () => {
+          if (settled) return
+          settled = true
           resolve()
+        }
+        const failed = error => {
+          console.warn('[JuyitingGame] Failed:', res.name, error)
+          finish()
+        }
+        try {
+          const loadCount = me.loader.load(loadableResource, finish, failed)
+          if (loadCount !== 0 || settled) return
+          if (loadableResource.type === 'tmx' || loadableResource.type === 'tsx') {
+            if (me.loader.getTMX?.(loadableResource.name) != null) finish()
+            else failed(new Error(`Cached TMX is unavailable: ${loadableResource.name}`))
+            return
+          }
+          if (loadableResource.type === 'image') {
+            this._waitForCachedImage(me, loadableResource.name, mountToken)
+              .then(finish, failed)
+            return
+          }
+          finish()
+        } catch (error) {
+          console.warn('[JuyitingGame] Load error:', res.name, error.message)
+          finish()
         }
       })
     }))
@@ -439,7 +591,10 @@ export class JuyitingGame {
         const xmlText = await resp.text()
         if (!this._isCurrentMount(mountToken)) return
         rawXml = xmlText
-        if (!tmx) tmx = xmlText  // use raw XML for parsing too if melonJS had no cached object
+        // melonJS returned a parsed object or an environment-specific loader
+        // wrapper. Raw XML gives the visual and movement parsers one stable
+        // input across browsers and the Mini Program WebView.
+        tmx = xmlText
       } catch (err) {
         console.warn('[JuyitingGame] Direct TMX fetch failed:', err?.message || err)
       }
@@ -482,9 +637,16 @@ export class JuyitingGame {
 
   _startGame(me, mountToken = this._mountToken) {
     if (!this._isCurrentMount(mountToken)) return
-    // Alternate between two private state slots so remounting cannot be ignored
-    // while the melonJS state registry remains bounded across repeated retries.
-    this._stateId = Number(me.state.USER ?? me.state.PLAY) + (Number(mountToken) % 2)
+    // Alternate between two private state slots so a remount cannot request the
+    // currently active melonJS state, while keeping the registry bounded.
+    const stateBase = Number(me.state.USER ?? me.state.PLAY)
+    const preferredSlot = this._nextStateSlot
+    const preferredStateId = stateBase + preferredSlot
+    const stateSlot = typeof me.state.isCurrent === 'function' && me.state.isCurrent(preferredStateId)
+      ? (preferredSlot + 1) % 2
+      : preferredSlot
+    this._nextStateSlot = (stateSlot + 1) % 2
+    this._stateId = stateBase + stateSlot
     me.state.set(this._stateId, this._hallScene)
     this._initialized = true
     this._fatalError = null
@@ -492,6 +654,7 @@ export class JuyitingGame {
     if (this._pendingStart) {
       this._pendingStart = false
       me.state.change(this._stateId, true)
+      this._resumeHallRunLoop()
     }
     this._scheduleViewportCommit()
     // A delayed confirmation may recover a missed scene callback, but it
@@ -540,6 +703,12 @@ export class JuyitingGame {
       return
     }
     this._me.state.change(this._stateId, true)
+    this._resumeHallRunLoop()
+  }
+
+  _resumeHallRunLoop() {
+    if (!this._pausedByHallCleanup) return
+    try { this._me?.state?.resume?.() } finally { this._pausedByHallCleanup = false }
   }
 
   pause() {
@@ -781,6 +950,125 @@ export class JuyitingGame {
     return result
   }
 
+  setVirtualViewport(viewport) {
+    const next = virtualViewport(viewport)
+    const current = this._virtualViewport
+    if (current?.width === next?.width && current?.height === next?.height) return
+    if (next && !current) this._nativeRendererScaleRatio = this._readRendererScaleRatio()
+    this._virtualViewport = next
+    this._virtualCanvasRect = null
+    this._syncHallClientPointMapper()
+    this._applyVirtualInputAdapter()
+    if (!next && current) {
+      this._restoreNativeRendererScaleRatio()
+      this._reflowEngineForContainer(this._container)
+    }
+    if (this._isCurrentMount(this._mountToken)) this._scheduleViewportCommit()
+  }
+
+  _syncHallClientPointMapper() {
+    const viewport = this._virtualViewport
+    this._hallScene?.setClientPointMapper?.(viewport
+      ? point => inverseVirtualLandscapePoint(point, viewport)
+      : null)
+  }
+
+  _rebindEngineContainer(container) {
+    const game = this._me?.game
+    if (!game || !container) return
+    game.parentElement = container
+    if (game.settings) {
+      game.settings.parent = container
+      game.settings.scaleTarget = container
+    }
+    if (game.renderer?.settings) {
+      game.renderer.settings.parent = container
+      game.renderer.settings.scaleTarget = container
+    }
+  }
+
+  _reflowEngineForContainer(container) {
+    if (!container || this._container !== container) return
+    const event = this._me?.event
+    try {
+      if (event?.WINDOW_ONRESIZE && typeof event.emit === 'function') event.emit(event.WINDOW_ONRESIZE)
+    } catch { /* the Hall observer remains the resize authority if host reflow rejects */ }
+  }
+
+  _readRendererScaleRatio() {
+    const scaleRatio = this._me?.game?.renderer?.scaleRatio
+    const x = Number(scaleRatio?.x)
+    const y = Number(scaleRatio?.y)
+    return Number.isFinite(x) && x > 0 && Number.isFinite(y) && y > 0 ? { x, y } : null
+  }
+
+  _restoreNativeRendererScaleRatio() {
+    const ratio = this._nativeRendererScaleRatio
+    this._nativeRendererScaleRatio = null
+    if (!ratio) return
+    const scaleRatio = this._me?.game?.renderer?.scaleRatio
+    if (typeof scaleRatio?.set === 'function') scaleRatio.set(ratio.x, ratio.y)
+    else if (scaleRatio) {
+      scaleRatio.x = ratio.x
+      scaleRatio.y = ratio.y
+    }
+  }
+
+  _canvasRectForGeometry() {
+    if (this._virtualViewport && this._virtualCanvasRect) return this._virtualCanvasRect
+    return this._canvas?.getBoundingClientRect?.()
+  }
+
+  _applyVirtualInputAdapter() {
+    this._teardownVirtualInputAdapter()
+    const canvas = this._canvas
+    const viewport = this._virtualViewport
+    const pointer = this._me?.input?.pointer
+    if (!canvas || !viewport || !pointer) return
+    const nativeRect = canvas.getBoundingClientRect?.bind(canvas)
+    if (nativeRect) {
+      this._nativeCanvasRect = nativeRect
+      canvas.getBoundingClientRect = () => this._virtualCanvasRect || nativeRect()
+    }
+    if (virtualPointerPatch?.owner && virtualPointerPatch.owner !== this) {
+      virtualPointerPatch.owner._teardownVirtualInputAdapter()
+    }
+    const prototype = Object.getPrototypeOf(pointer)
+    const originalSetEvent = prototype?.setEvent
+    if (typeof originalSetEvent !== 'function') return
+    const owner = this
+    const patchedSetEvent = function (event, pageX = 0, pageY = 0, clientX = 0, clientY = 0, pointerId = 1) {
+      const activeViewport = owner._virtualViewport
+      if (virtualPointerPatch?.owner === owner && activeViewport && event?.target === owner._canvas) {
+        const point = inverseVirtualLandscapePoint({ clientX, clientY }, activeViewport)
+        const pageOffsetX = Number(pageX) - Number(clientX)
+        const pageOffsetY = Number(pageY) - Number(clientY)
+        return originalSetEvent.call(this, event,
+          point.clientX + (Number.isFinite(pageOffsetX) ? pageOffsetX : 0),
+          point.clientY + (Number.isFinite(pageOffsetY) ? pageOffsetY : 0),
+          point.clientX,
+          point.clientY,
+          pointerId)
+      }
+      return originalSetEvent.call(this, event, pageX, pageY, clientX, clientY, pointerId)
+    }
+    prototype.setEvent = patchedSetEvent
+    virtualPointerPatch = { owner, prototype, originalSetEvent, patchedSetEvent }
+    this._virtualInputCleanup = () => {
+      if (virtualPointerPatch?.owner === owner) {
+        if (prototype.setEvent === patchedSetEvent) prototype.setEvent = originalSetEvent
+        virtualPointerPatch = null
+      }
+      if (this._nativeCanvasRect) canvas.getBoundingClientRect = this._nativeCanvasRect
+      this._nativeCanvasRect = null
+    }
+  }
+
+  _teardownVirtualInputAdapter() {
+    this._virtualInputCleanup?.()
+    this._virtualInputCleanup = null
+  }
+
   _scheduleViewportCommit(mountToken = this._mountToken) {
     if (!this._isCurrentMount(mountToken) || this._viewportCommitFrame !== null) return
     const target = typeof window !== 'undefined' ? window : globalThis
@@ -834,7 +1122,10 @@ export class JuyitingGame {
   }
 
   _geometrySnapshot() {
-    const containerRect = this._container?.getBoundingClientRect?.()
+    const virtual = this._virtualViewport
+    const containerRect = virtual
+      ? { left: 0, top: 0, right: virtual.width, bottom: virtual.height, width: virtual.width, height: virtual.height }
+      : this._container?.getBoundingClientRect?.()
     const viewport = this._me?.game?.viewport
     const viewportWidth = Number(viewport?.width)
     const viewportHeight = Number(viewport?.height)
@@ -903,7 +1194,7 @@ export class JuyitingGame {
       return undefined
     }
 
-    const canvasRect = this._canvas?.getBoundingClientRect?.()
+    const canvasRect = this._canvasRectForGeometry()
     const targetChange = {
       ...change,
       width: finalGeometry.viewportWidth,
@@ -929,8 +1220,10 @@ export class JuyitingGame {
     const ResizeObserverImpl = globalThis.ResizeObserver
     if (!ResizeObserverImpl || !this._container) return
     const mountToken = this._mountToken
+    const observedContainer = this._container
     this._containerResizeObserver = new ResizeObserverImpl(() => {
-      if (!this._isCurrentMount(mountToken)) return
+      if (!this._isCurrentMount(mountToken) || this._container !== observedContainer) return
+      this._reflowEngineForContainer(observedContainer)
       this._scheduleViewportCommit(mountToken)
     })
     this._containerResizeObserver.observe(this._container)
@@ -953,12 +1246,30 @@ export class JuyitingGame {
     const displayWidth = roundCanvasDimension(viewportWidth * presentationScale)
     const displayHeight = roundCanvasDimension(viewportHeight * presentationScale)
     this._canvasCoverScale = presentationScale
+    if (this._virtualViewport) {
+      const scaleRatio = this._me?.game?.renderer?.scaleRatio
+      if (typeof scaleRatio?.set === 'function') scaleRatio.set(presentationScale, presentationScale)
+      else if (scaleRatio) {
+        scaleRatio.x = presentationScale
+        scaleRatio.y = presentationScale
+      }
+    }
     canvas.style.setProperty('--juyiting-canvas-display-width', `${displayWidth}px`)
     canvas.style.setProperty('--juyiting-canvas-display-height', `${displayHeight}px`)
     canvas.style.transform = 'translate(-50%, -50%)'
+    this._virtualCanvasRect = this._virtualViewport
+      ? {
+          left: (containerRect.width - displayWidth) / 2,
+          top: (containerRect.height - displayHeight) / 2,
+          right: (containerRect.width + displayWidth) / 2,
+          bottom: (containerRect.height + displayHeight) / 2,
+          width: displayWidth,
+          height: displayHeight
+        }
+      : null
   }
 
-  _visibleViewport(containerRect, canvasRect = this._canvas?.getBoundingClientRect?.()) {
+  _visibleViewport(containerRect, canvasRect = this._canvasRectForGeometry()) {
     const viewport = this._me?.game?.viewport
     const viewportWidth = Number(viewport?.width)
     const viewportHeight = Number(viewport?.height)

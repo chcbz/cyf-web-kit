@@ -1,5 +1,6 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { createApi } from '../useHttp'
+import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
 
 const DECIMAL = /^(?:0|[1-9][0-9]{0,18})$/
 const MAX_DECIMAL = '9223372036854775807'
@@ -103,6 +104,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
   let saveTimer
   let queuedProgressIntent = null
   let progressDrainPromise = null
+  let drainAfterDispose = false
   let loadGeneration = 0
   let initializeGeneration = 0
   let blockController = null
@@ -126,6 +128,11 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
   let questionCreatePromise = null
   let questionRetryOperation = null
   let questionRetryPromise = null
+  let identityGeneration = 0
+  let unregisterIdentityCleanup = null
+  let blockLoadKey = null
+  let blockLoadPromise = null
+  let catalogLoadPromise = null
 
   const edition = computed(() => catalog.value?.activeEdition || null)
   const blocks = computed(() => edition.value
@@ -137,6 +144,19 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
   const canGoNext = computed(() => currentIndex.value >= 0 && currentIndex.value < blocks.value.length - 1)
   const continueLocation = computed(() => progress.value?.location || null)
 
+  const isCurrentIdentity = generation => generation === identityGeneration && (!disposed || drainAfterDispose)
+
+  const replayIdentityMutation = async (generation, send) => {
+    if (!isCurrentIdentity(generation)) return null
+    try {
+      return await send()
+    } catch (error) {
+      if (!isCurrentIdentity(generation) || error?.name === 'AbortError') return null
+      if (!isAmbiguousMutationError(error)) throw error
+      return isCurrentIdentity(generation) ? send() : null
+    }
+  }
+
   const requireVersion = (value, label) => {
     if (!isCanonicalDecimal(value)) throw new Error(`${label} version is not a canonical decimal string`)
     return value
@@ -146,28 +166,56 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     if (errorMessage.value.startsWith(prefix)) errorMessage.value = ''
   }
 
-  const loadCatalog = async (signal) => {
-    if (disposed || signal?.aborted) return null
-    const result = await api.get('/catalog', undefined, { autoLoading: false, signal })
-    if (disposed || signal?.aborted) return null
-    const nextCatalog = unwrap(result)
-    if (!nextCatalog?.activeEdition?.editionId) throw new Error('案卷阁目录响应不完整')
-    catalog.value = nextCatalog
-    return nextCatalog
+  const compareCanonicalDecimals = (left, right) => {
+    const leftValue = requireVersion(left, '阅读进度')
+    const rightValue = requireVersion(right, '阅读进度')
+    if (leftValue.length !== rightValue.length) return leftValue.length - rightValue.length
+    return leftValue === rightValue ? 0 : leftValue > rightValue ? 1 : -1
+  }
+
+  const applyProgressSnapshot = (nextProgress, targetEditionId) => {
+    if (!targetEditionId) throw new Error('阅读进度 editionId 缺失')
+    if (nextProgress !== null) {
+      requireVersion(nextProgress?.version, '阅读进度')
+      if (nextProgress?.editionId !== targetEditionId) throw new Error('阅读进度 editionId 不匹配')
+    }
+    const currentProgress = progress.value
+    const editionChanged = currentProgress?.editionId !== targetEditionId
+    const isFreshEnough = currentProgress === null
+      || editionChanged
+      || (nextProgress !== null && compareCanonicalDecimals(nextProgress.version, currentProgress.version) >= 0)
+    if (isFreshEnough) progress.value = nextProgress
+    return progress.value
+  }
+
+  const loadCatalog = (signal) => {
+    if (catalogLoadPromise) return catalogLoadPromise
+    const requestIdentity = identityGeneration
+    if (!isCurrentIdentity(requestIdentity) || signal?.aborted) return Promise.resolve(null)
+    const request = api.get('/catalog', undefined, { autoLoading: false, signal }).then((result) => {
+      if (!isCurrentIdentity(requestIdentity) || signal?.aborted) return null
+      const nextCatalog = unwrap(result)
+      if (!nextCatalog?.activeEdition?.editionId) throw new Error('案卷阁目录响应不完整')
+      catalog.value = nextCatalog
+      return nextCatalog
+    })
+    const pending = request.finally(() => {
+      if (catalogLoadPromise === pending) catalogLoadPromise = null
+    })
+    catalogLoadPromise = pending
+    return pending
   }
 
   const loadProgress = async (editionId = edition.value?.editionId, signal) => {
-    if (!editionId || disposed || signal?.aborted) return null
+    const requestIdentity = identityGeneration
+    if (!editionId || !isCurrentIdentity(requestIdentity) || signal?.aborted) return null
     const result = await api.get(
       `/me/progress/${encodeURIComponent(editionId)}`,
       undefined,
       { autoLoading: false, signal }
     )
-    if (disposed || signal?.aborted) return null
-    const nextProgress = unwrap(result)
-    if (nextProgress !== null) requireVersion(nextProgress?.version, '阅读进度')
-    progress.value = nextProgress
-    return nextProgress
+    if (!isCurrentIdentity(requestIdentity) || signal?.aborted) return null
+    return applyProgressSnapshot(unwrap(result), editionId)
   }
 
   const loadPage = async (path, params, label, signal) => {
@@ -208,9 +256,10 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
   }
 
   const loadBookmarks = async (signal) => {
-    if (!edition.value?.editionId || disposed || signal?.aborted) return []
+    const requestIdentity = identityGeneration
+    if (!edition.value?.editionId || !isCurrentIdentity(requestIdentity) || signal?.aborted) return []
     const rows = validateRows(await fetchBookmarks(signal), 'bookmark')
-    if (!disposed && !signal?.aborted) bookmarks.value = rows
+    if (isCurrentIdentity(requestIdentity) && !signal?.aborted) bookmarks.value = rows
     return rows
   }
 
@@ -263,8 +312,27 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     }
   }
 
-  const loadBlock = async (block, targetLocation = null, parentSignal) => {
-    if (!block || !edition.value?.editionId || disposed || parentSignal?.aborted) return null
+  const cancelBlockLoad = () => {
+    loadGeneration += 1
+    blockController?.abort()
+    blockController = null
+    chapterLoading.value = false
+  }
+
+  const locationKey = location => location
+    ? `${location.blockId}:${location.paragraphId}:${location.byteOffset}`
+    : 'default'
+
+  const loadBlock = (block, targetLocation = null, parentSignal) => {
+    if (!block || !edition.value?.editionId || disposed || parentSignal?.aborted) return Promise.resolve(null)
+    const requestIdentity = identityGeneration
+    const requestEditionId = edition.value.editionId
+    const requestManifest = edition.value.manifestSha256
+    const requestKey = `${requestIdentity}:${requestEditionId}:${requestManifest}:${block.blockId}:${locationKey(targetLocation)}`
+    const isCurrentEdition = () => edition.value?.editionId === requestEditionId &&
+      edition.value?.manifestSha256 === requestManifest
+    if (blockLoadKey === requestKey && blockLoadPromise) return blockLoadPromise
+
     const generation = ++loadGeneration
     if (chapter.value?.blockId !== block.blockId) closeQuestion()
     blockController?.abort()
@@ -274,36 +342,50 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     if (parentSignal?.aborted) controller.abort()
     blockController = controller
     chapterLoading.value = true
+    notes.value = []
     errorMessage.value = ''
-    try {
-      const path = block.blockType === 'PREFACE'
-        ? `/editions/${encodeURIComponent(edition.value.editionId)}/preface`
-        : `/editions/${encodeURIComponent(edition.value.editionId)}/chapters/${encodeURIComponent(block.blockId)}`
-      const [blockResult, nextNotes] = await Promise.all([
-        api.get(path, undefined, { autoLoading: false, signal: controller.signal }),
-        fetchNotes(block.blockId, controller.signal)
-      ])
-      const nextChapter = unwrap(blockResult)
-      if (!nextChapter?.blockId || !Array.isArray(nextChapter.paragraphs)) {
-        throw new Error('章回正文响应不完整')
+
+    const request = (async () => {
+      try {
+        const path = block.blockType === 'PREFACE'
+          ? `/editions/${encodeURIComponent(requestEditionId)}/preface`
+          : `/editions/${encodeURIComponent(requestEditionId)}/chapters/${encodeURIComponent(block.blockId)}`
+        const blockResult = await api.get(path, undefined, { autoLoading: false, signal: controller.signal })
+        if (!isCurrentIdentity(requestIdentity) || !isCurrentEdition() || generation !== loadGeneration || controller.signal.aborted) return null
+        const nextChapter = unwrap(blockResult)
+        if (!nextChapter?.blockId || !Array.isArray(nextChapter.paragraphs)) {
+          throw new Error('章回正文响应不完整')
+        }
+        const nextLocation = resolvedLocation(nextChapter, targetLocation)
+        chapter.value = nextChapter
+        currentLocation.value = nextLocation
+        chapterLoading.value = false
+        focusRequest.value = { generation, location: nextLocation }
+
+        void fetchNotes(block.blockId, controller.signal).then((nextNotes) => {
+          if (!isCurrentIdentity(requestIdentity) || !isCurrentEdition() || generation !== loadGeneration || controller.signal.aborted) return
+          notes.value = validateRows(nextNotes, 'note')
+        }).catch((error) => {
+          if (!isCurrentIdentity(requestIdentity) || !isCurrentEdition() || generation !== loadGeneration || error?.name === 'AbortError') return
+          errorMessage.value = '本章手札暂无法读取，请稍后重试。'
+        })
+        return nextChapter
+      } catch (error) {
+        if (!isCurrentIdentity(requestIdentity) || generation !== loadGeneration || error?.name === 'AbortError') return null
+        errorMessage.value = '章回暂无法读取，请稍后重试。'
+        throw error
+      } finally {
+        parentSignal?.removeEventListener('abort', abortFromParent)
+        if (isCurrentIdentity(requestIdentity) && generation === loadGeneration) chapterLoading.value = false
+        if (blockLoadKey === requestKey) {
+          blockLoadKey = null
+          blockLoadPromise = null
+        }
       }
-      const nextLocation = resolvedLocation(nextChapter, targetLocation)
-      validateRows(nextNotes, 'note')
-      if (disposed || generation !== loadGeneration) return null
-      chapter.value = nextChapter
-      currentLocation.value = nextLocation
-      notes.value = nextNotes
-      chapterLoading.value = false
-      focusRequest.value = { generation, location: nextLocation }
-      return nextChapter
-    } catch (error) {
-      if (disposed || generation !== loadGeneration || error?.name === 'AbortError') return null
-      errorMessage.value = '章回暂无法读取，请稍后重试。'
-      throw error
-    } finally {
-      parentSignal?.removeEventListener('abort', abortFromParent)
-      if (!disposed && generation === loadGeneration) chapterLoading.value = false
-    }
+    })()
+    blockLoadKey = requestKey
+    blockLoadPromise = request
+    return request
   }
 
   const progressIntentFor = (location) => {
@@ -323,11 +405,19 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
   }
 
   const sendProgress = async (intent) => {
+    const requestIdentity = identityGeneration
     saveState.value = 'saving'
+    const requestEditionId = edition.value?.editionId
     try {
-      const expectedVersion = progress.value === null
+      if (!requestEditionId) throw new Error('阅读进度 editionId 缺失')
+      if (progress.value !== null) {
+        requireVersion(progress.value?.version, '阅读进度')
+        if (!progress.value?.editionId) throw new Error('阅读进度 editionId 缺失')
+      }
+      const currentProgress = progress.value?.editionId === requestEditionId ? progress.value : null
+      const expectedVersion = currentProgress === null
         ? '0'
-        : requireVersion(progress.value?.version, '阅读进度')
+        : requireVersion(currentProgress.version, '阅读进度')
       const body = {
         expectedVersion,
         location: intent.location,
@@ -335,17 +425,21 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       }
       const idempotencyKey = lowerUuid()
       const send = () => api.put(
-        `/me/progress/${encodeURIComponent(edition.value.editionId)}`,
+        `/me/progress/${encodeURIComponent(requestEditionId)}`,
         body,
         { autoLoading: false, headers: mutationHeaders({}, idempotencyKey) }
       )
-      const result = await replayAmbiguousMutation(send)
+      const result = await replayIdentityMutation(requestIdentity, send)
+      if (!isCurrentIdentity(requestIdentity)) return null
       const saved = unwrap(result)
-      requireVersion(saved?.version, '阅读进度')
-      progress.value = saved
+      if (saved?.editionId !== requestEditionId) throw new Error('阅读进度 editionId 不匹配')
+      const latestProgress = edition.value?.editionId === requestEditionId
+        ? applyProgressSnapshot(saved, requestEditionId)
+        : progress.value
       clearActionError('阅读进度')
-      return saved
+      return latestProgress
     } catch (error) {
+      if (!isCurrentIdentity(requestIdentity) || error?.name === 'AbortError') return null
       saveState.value = 'error'
       queuedProgressIntent = null
       if (error?.status === 409) {
@@ -363,13 +457,14 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
   }
 
   const drainProgress = async () => {
+    const requestIdentity = identityGeneration
     let saved = null
-    while (queuedProgressIntent && !disposed) {
+    while (queuedProgressIntent && (!disposed || drainAfterDispose)) {
       const intent = queuedProgressIntent
       queuedProgressIntent = null
       saved = await sendProgress(intent)
     }
-    if (!disposed) saveState.value = 'saved'
+    if (isCurrentIdentity(requestIdentity)) saveState.value = 'saved'
     return saved
   }
 
@@ -421,7 +516,9 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     ? loadBlock(blocks.value[currentIndex.value + 1])
     : Promise.resolve(null)
 
-  const runBookmarkCreate = async () => {
+  const runBookmarkCreate = () => {
+    const requestIdentity = identityGeneration
+    if (!isCurrentIdentity(requestIdentity)) return Promise.resolve(null)
     if (bookmarkCreatePromise) return bookmarkCreatePromise
     if (!bookmarkCreateOperation) {
       const bookmarkId = lowerUuid()
@@ -437,31 +534,37 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     }
     const operation = bookmarkCreateOperation
     bookmarkPending.value = true
-    bookmarkCreatePromise = replayAmbiguousMutation(() => api.put(
+    const promise = replayIdentityMutation(requestIdentity, () => api.put(
       `/me/bookmarks/${operation.bookmarkId}`,
       operation.body,
       { autoLoading: false, headers: mutationHeaders({}, operation.idempotencyKey) }
     )).then((result) => {
+      if (!isCurrentIdentity(requestIdentity)) return null
       const bookmark = unwrap(result)
       requireVersion(bookmark?.version, 'bookmark')
       bookmarks.value = [bookmark, ...bookmarks.value.filter(item => item.bookmarkId !== bookmark.bookmarkId)]
-      bookmarkCreateOperation = null
+      if (bookmarkCreateOperation === operation) bookmarkCreateOperation = null
       clearActionError('书签')
       return bookmark
     }).catch((error) => {
-      if (!isAmbiguousMutationError(error)) bookmarkCreateOperation = null
+      if (!isCurrentIdentity(requestIdentity) || error?.name === 'AbortError') return null
+      if (!isAmbiguousMutationError(error) && bookmarkCreateOperation === operation) bookmarkCreateOperation = null
       errorMessage.value = '书签暂未保存，请重试。'
       throw error
     }).finally(() => {
+      if (!isCurrentIdentity(requestIdentity)) return
       bookmarkPending.value = false
-      bookmarkCreatePromise = null
+      if (bookmarkCreatePromise === promise) bookmarkCreatePromise = null
     })
-    return bookmarkCreatePromise
+    bookmarkCreatePromise = promise
+    return promise
   }
 
   const createBookmark = () => runBookmarkCreate()
 
   const deleteBookmark = async (bookmark) => {
+    const requestIdentity = identityGeneration
+    if (!isCurrentIdentity(requestIdentity)) return null
     const key = bookmark.bookmarkId
     let operation = deleteBookmarkOperations.get(key)
     if (!operation) {
@@ -470,21 +573,25 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       deleteBookmarkOperations.set(key, operation)
     }
     try {
-      const result = await replayAmbiguousMutation(() => api.delete(
+      const result = await replayIdentityMutation(requestIdentity, () => api.delete(
         `/me/bookmarks/${bookmark.bookmarkId}`,
         {
           autoLoading: false,
           headers: mutationHeaders({ 'If-Match': `"v${operation.version}"` }, operation.idempotencyKey)
         }
       ))
+      if (!isCurrentIdentity(requestIdentity)) return null
       const deleted = unwrap(result)
       requireVersion(deleted?.version, 'bookmark')
       bookmarks.value = bookmarks.value.filter(item => item.bookmarkId !== bookmark.bookmarkId)
-      deleteBookmarkOperations.delete(key)
+      if (deleteBookmarkOperations.get(key) === operation) deleteBookmarkOperations.delete(key)
       clearActionError('书签')
       return deleted
     } catch (error) {
-      if (!isAmbiguousMutationError(error)) deleteBookmarkOperations.delete(key)
+      if (!isCurrentIdentity(requestIdentity) || error?.name === 'AbortError') return null
+      if (!isAmbiguousMutationError(error) && deleteBookmarkOperations.get(key) === operation) {
+        deleteBookmarkOperations.delete(key)
+      }
       errorMessage.value = '书签暂未删除，请重试。'
       throw error
     }
@@ -493,6 +600,8 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
   const buildNoteOperation = async ({ noteId, text, anchor, version }) => {
     requireVersion(version, 'note')
     if (utf8ByteLength(text) > NOTE_BYTE_LIMIT) throw new Error('手札不能超过 20,000 UTF-8 bytes')
+    const requestEditionId = edition.value?.editionId
+    if (!requestEditionId) throw new Error('手札 editionId 缺失')
     const sourceLocation = anchor === undefined && currentLocation.value
       ? { ...currentLocation.value }
       : null
@@ -502,7 +611,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       noteId: resourceId,
       body: {
         expectedVersion: version,
-        editionId: edition.value.editionId,
+        editionId: requestEditionId,
         text,
         anchor: authoritativeAnchor
       },
@@ -536,12 +645,13 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       : null
   })
 
-  const sendNoteOperation = async (operation) => {
-    const result = await replayAmbiguousMutation(() => api.put(
+  const sendNoteOperation = async (operation, requestIdentity) => {
+    const result = await replayIdentityMutation(requestIdentity, () => api.put(
       `/me/notes/${operation.noteId}`,
       operation.body,
       { autoLoading: false, headers: mutationHeaders({}, operation.idempotencyKey) }
     ))
+    if (!isCurrentIdentity(requestIdentity)) return null
     const note = unwrap(result)
     requireVersion(note?.version, 'note')
     const index = notes.value.findIndex(item => item.noteId === note.noteId)
@@ -554,22 +664,32 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
   }
 
   const saveNewNote = (input) => {
+    const requestIdentity = identityGeneration
+    if (!isCurrentIdentity(requestIdentity)) return Promise.resolve(null)
     if (newNotePromise) return newNotePromise
     let draftChanged = false
     notePending.value = true
-    newNotePromise = (async () => {
-      if (!newNoteOperation) newNoteOperation = await buildNoteOperation(input)
-      draftChanged = !noteOperationMatchesInput(newNoteOperation, input)
+    const promise = (async () => {
+      if (!newNoteOperation) {
+        const operation = await buildNoteOperation(input)
+        if (!isCurrentIdentity(requestIdentity)) return null
+        newNoteOperation = operation
+      }
+      const operation = newNoteOperation
+      draftChanged = !noteOperationMatchesInput(operation, input)
       if (draftChanged) noteRetryNotice.value = '正在确认上次保存；新稿不会直接作为旧请求重放。'
-      const note = await sendNoteOperation(newNoteOperation)
+      const note = await sendNoteOperation(operation, requestIdentity)
+      if (!note || !isCurrentIdentity(requestIdentity)) return null
       return noteSaveOutcome(note, input, draftChanged)
     })().then((outcome) => {
+      if (!outcome || !isCurrentIdentity(requestIdentity)) return null
       newNoteOperation = null
       noteRetryNotice.value = outcome.preservedDraft
         ? '上次保存已确认；新稿仍保留，请再次保存新稿。'
         : ''
       return outcome
     }).catch((error) => {
+      if (!isCurrentIdentity(requestIdentity) || error?.name === 'AbortError') return null
       if (error?.status === 409 && newNoteOperation) {
         noteConflictDraft.value = newNoteOperation.draft
         errorMessage.value = '手札已在另一处修改；本地草稿已保留，请人工处理后再保存。'
@@ -586,31 +706,38 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       }
       throw error
     }).finally(() => {
+      if (!isCurrentIdentity(requestIdentity)) return
       notePending.value = false
-      newNotePromise = null
+      if (newNotePromise === promise) newNotePromise = null
     })
-    return newNotePromise
+    newNotePromise = promise
+    return promise
   }
 
   const saveExistingNote = async (input) => {
+    const requestIdentity = identityGeneration
+    if (!isCurrentIdentity(requestIdentity)) return null
     const key = input.noteId
     let operation = noteOperations.get(key)
     if (!operation) {
       operation = await buildNoteOperation(input)
+      if (!isCurrentIdentity(requestIdentity)) return null
       noteOperations.set(key, operation)
     }
     const draftChanged = !noteOperationMatchesInput(operation, input)
     if (draftChanged) noteRetryNotice.value = '正在确认上次保存；新稿不会直接作为旧请求重放。'
     notePending.value = true
     try {
-      const note = await sendNoteOperation(operation)
-      noteOperations.delete(key)
+      const note = await sendNoteOperation(operation, requestIdentity)
+      if (!note || !isCurrentIdentity(requestIdentity)) return null
+      if (noteOperations.get(key) === operation) noteOperations.delete(key)
       const outcome = noteSaveOutcome(note, input, draftChanged)
       noteRetryNotice.value = outcome.preservedDraft
         ? '上次保存已确认；新稿仍保留，请再次保存新稿。'
         : ''
       return outcome
     } catch (error) {
+      if (!isCurrentIdentity(requestIdentity) || error?.name === 'AbortError') return null
       if (error?.status === 409) {
         noteConflictDraft.value = operation.draft
         errorMessage.value = '手札已在另一处修改；本地草稿已保留，请人工处理后再保存。'
@@ -622,18 +749,20 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
           ? '上次保存仍未确认；新稿已保留，不能直接以新稿重放。'
           : '上次保存结果不明确；请重试以确认原请求。'
       } else {
-        noteOperations.delete(key)
+        if (noteOperations.get(key) === operation) noteOperations.delete(key)
         noteRetryNotice.value = ''
       }
       throw error
     } finally {
-      notePending.value = false
+      if (isCurrentIdentity(requestIdentity)) notePending.value = false
     }
   }
 
   const saveNote = input => input.noteId ? saveExistingNote(input) : saveNewNote(input)
 
   const deleteNote = async (note) => {
+    const requestIdentity = identityGeneration
+    if (!isCurrentIdentity(requestIdentity)) return null
     const key = note.noteId
     let operation = deleteNoteOperations.get(key)
     if (!operation) {
@@ -643,26 +772,30 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     }
     notePending.value = true
     try {
-      const result = await replayAmbiguousMutation(() => api.delete(
+      const result = await replayIdentityMutation(requestIdentity, () => api.delete(
         `/me/notes/${note.noteId}`,
         {
           autoLoading: false,
           headers: mutationHeaders({ 'If-Match': `"v${operation.version}"` }, operation.idempotencyKey)
         }
       ))
+      if (!isCurrentIdentity(requestIdentity)) return null
       const deleted = unwrap(result)
       requireVersion(deleted?.version, 'note')
       notes.value = notes.value.filter(item => item.noteId !== note.noteId)
-      deleteNoteOperations.delete(key)
+      if (deleteNoteOperations.get(key) === operation) deleteNoteOperations.delete(key)
       noteRetryNotice.value = ''
       clearActionError('手札')
       return deleted
     } catch (error) {
-      if (!isAmbiguousMutationError(error)) deleteNoteOperations.delete(key)
+      if (!isCurrentIdentity(requestIdentity) || error?.name === 'AbortError') return null
+      if (!isAmbiguousMutationError(error) && deleteNoteOperations.get(key) === operation) {
+        deleteNoteOperations.delete(key)
+      }
       errorMessage.value = '手札暂未删除，请重试。'
       throw error
     } finally {
-      notePending.value = false
+      if (isCurrentIdentity(requestIdentity)) notePending.value = false
     }
   }
 
@@ -1195,23 +1328,25 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     return promise
   }
 
-  const initialize = async () => {
+  const initialize = async ({ openChapter = true } = {}) => {
     if (disposed) return null
     const generation = ++initializeGeneration
-    initializeController?.abort()
+    if (catalog.value) initializeController?.abort()
     const controller = new AbortController()
     initializeController = controller
-    const isActive = () => !disposed && generation === initializeGeneration && !controller.signal.aborted
+    const requestIdentity = identityGeneration
+    const isActive = () => isCurrentIdentity(requestIdentity) && generation === initializeGeneration && !controller.signal.aborted
     loading.value = true
     errorMessage.value = ''
     try {
       await loadCatalog(controller.signal)
       if (!isActive()) return null
-      await Promise.all([
-        loadProgress(edition.value.editionId, controller.signal),
-        loadBookmarks(controller.signal)
-      ])
+      if (!openChapter) return catalog.value
+      await loadProgress(edition.value.editionId, controller.signal)
       if (!isActive()) return null
+      void loadBookmarks(controller.signal).catch((error) => {
+        if (isActive() && error?.name !== 'AbortError') errorMessage.value = '书签暂无法读取，请稍后重试。'
+      })
       const nextChapter = await continueReading(controller.signal)
       return isActive() ? nextChapter : null
     } catch (error) {
@@ -1225,29 +1360,83 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
 
   const flushProgress = () => {
     clearTimeout(saveTimer)
+    let flushPromise = progressDrainPromise
     if (queuedProgressIntent) {
-      startProgressDrain().catch(() => {})
+      flushPromise = startProgressDrain()
     } else if (saveState.value === 'pending') {
-      saveProgress(currentLocation.value).catch(() => {})
+      flushPromise = saveProgress(currentLocation.value)
     }
+    return flushPromise ? flushPromise.catch(() => null) : Promise.resolve(null)
   }
 
   const lifecycleTarget = globalThis.window || globalThis
 
+  const clearIdentityBoundState = () => {
+    identityGeneration += 1
+    initializeGeneration += 1
+    loadGeneration += 1
+    clearTimeout(saveTimer)
+    queuedProgressIntent = null
+    bookmarkCreateOperation = null
+    bookmarkCreatePromise = null
+    deleteBookmarkOperations.clear()
+    newNoteOperation = null
+    newNotePromise = null
+    noteOperations.clear()
+    deleteNoteOperations.clear()
+    blockLoadKey = null
+    blockLoadPromise = null
+    catalogLoadPromise = null
+    initializeController?.abort()
+    blockController?.abort()
+    initializeController = null
+    blockController = null
+    catalog.value = null
+    chapter.value = null
+    progress.value = null
+    bookmarks.value = []
+    notes.value = []
+    currentLocation.value = null
+    focusRequest.value = null
+    errorMessage.value = ''
+    saveState.value = 'idle'
+    loading.value = false
+    chapterLoading.value = false
+    bookmarkPending.value = false
+    notePending.value = false
+    noteAnchorNotice.value = ''
+    noteConflictDraft.value = null
+    noteRetryNotice.value = ''
+    closeQuestion()
+  }
+
   onMounted(() => {
+    unregisterIdentityCleanup = registerIdentityCleanup(clearIdentityBoundState)
     if (autoInitialize) initialize().catch(() => {})
     lifecycleTarget.addEventListener?.('pagehide', flushProgress)
   })
   onBeforeUnmount(() => {
-    disposed = true
-    initializeGeneration += 1
-    loadGeneration += 1
-    initializeController?.abort()
-    blockController?.abort()
-    clearTimeout(saveTimer)
-    queuedProgressIntent = null
+    // The host component may capture a trailing debounced scroll position in its
+    // own unmount hook. This composable hook is registered first, so defer final
+    // disposal one microtask and flush the resulting remote CAS intent afterward.
+    drainAfterDispose = true
     lifecycleTarget.removeEventListener?.('pagehide', flushProgress)
-    closeQuestion()
+    unregisterIdentityCleanup?.()
+    unregisterIdentityCleanup = null
+    queueMicrotask(() => {
+      const finalProgressDrain = flushProgress()
+      disposed = true
+      initializeGeneration += 1
+      loadGeneration += 1
+      initializeController?.abort()
+      blockController?.abort()
+      clearTimeout(saveTimer)
+      closeQuestion()
+      finalProgressDrain.finally(() => {
+        drainAfterDispose = false
+        queuedProgressIntent = null
+      })
+    })
   })
 
   return {
@@ -1257,6 +1446,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     bookmarks,
     canGoNext,
     canGoPrevious,
+    cancelBlockLoad,
     catalog,
     chapter,
     chapterLoading,
@@ -1270,6 +1460,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     edition,
     errorMessage,
     focusRequest,
+    flushProgress,
     goNext,
     goPrevious,
     initialize,

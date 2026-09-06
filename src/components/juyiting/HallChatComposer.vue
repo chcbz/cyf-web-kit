@@ -1,5 +1,6 @@
 <template>
-  <form class="hall-chat-composer chat-composer" :class="composerClass" @submit.prevent="submit">
+  <div class="hall-chat-composer chat-composer" :class="composerClass">
+    <form class="composer-submit" @submit.prevent="submit">
     <div class="composer-context" :class="`is-${discussionVariant}`">
       <span class="composer-context-label">{{ contextLabel }}</span>
       <div v-if="targetChips.length" class="composer-targets" aria-label="传话对象">
@@ -10,7 +11,7 @@
           :class="{ 'is-locked': chip.locked }"
           type="button"
           :title="chip.label"
-          :disabled="chip.locked || isStreaming"
+          :disabled="chip.locked || inputLocked"
           @click="removeTarget(chip)"
         >
           <span>@{{ chip.label }}</span>
@@ -24,7 +25,7 @@
         ref="textareaRef"
         class="composer-textarea"
         :value="draft"
-        :disabled="isStreaming"
+        :disabled="inputLocked"
         :maxlength="maxLength"
         :placeholder="placeholder"
         rows="1"
@@ -68,16 +69,20 @@
       </button>
     </div>
 
-    <div class="composer-meta">
-      <span>{{ draftLength }}/{{ maxLength }}</span>
-      <span v-if="isStreaming">候回话</span>
-      <span v-else>{{ hintText }}</span>
-    </div>
-  </form>
+      <div class="composer-meta">
+        <span>{{ draftLength }}/{{ maxLength }}</span>
+        <span v-if="isStreaming">候回话</span>
+        <span v-else>{{ hintText }}</span>
+      </div>
+    </form>
+
+    <HallVoiceControls :voice="voice" @apply="$emit('voice-apply', $event)" />
+  </div>
 </template>
 
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
+import HallVoiceControls from './HallVoiceControls.vue'
 
 const props = defineProps({
   agents: { type: Array, default: () => [] },
@@ -88,22 +93,25 @@ const props = defineProps({
   placeholder: { type: String, default: '向聚义厅传话，或 @某位好汉' },
   selectedAgent: { type: Object, default: null },
   targetText: { type: String, default: '众好汉' },
-  maxLength: { type: Number, default: 1200 }
+  maxLength: { type: Number, default: 1200 },
+  voice: { type: Object, default: null }
 })
 
 const emit = defineEmits([
   'clear-target',
   'mention-agent',
   'send-message',
-  'update:draft'
+  'update:draft',
+  'voice-apply'
 ])
 
 const textareaRef = ref(null)
 const isFocused = ref(false)
 
 const draftLength = computed(() => String(props.draft || '').length)
-const canClear = computed(() => Boolean(String(props.draft || '').length) && !props.isStreaming)
-const canSend = computed(() => Boolean(String(props.draft || '').trim()) && !props.isStreaming)
+const inputLocked = computed(() => props.isStreaming || Boolean(props.voice?.voiceInteractionLocked))
+const canClear = computed(() => Boolean(String(props.draft || '').length) && !inputLocked.value)
+const canSend = computed(() => Boolean(String(props.draft || '').trim()) && !inputLocked.value)
 const composerClass = computed(() => ({
   'is-streaming': props.isStreaming,
   'has-draft': Boolean(String(props.draft || '').trim())
@@ -123,7 +131,7 @@ const orderedAgents = computed(() => {
 })
 
 const showMentionMenu = computed(() => {
-  if (props.isStreaming || !orderedAgents.value.length) return false
+  if (inputLocked.value || !orderedAgents.value.length) return false
   const value = String(props.draft || '')
   if (!isFocused.value && value !== '@') return false
   return /(^|\s)@[\S]*$/.test(value)
@@ -225,6 +233,10 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
   padding: 9px 12px 8px;
   border-top: 1px solid rgba(116, 75, 35, 0.16);
   background: #fffaf0;
+}
+
+.composer-submit {
+  display: contents;
 }
 
 .composer-context {

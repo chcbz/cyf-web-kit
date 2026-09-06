@@ -1,10 +1,17 @@
 <template>
-  <aside v-if="agent" class="selected-agent-card">
+  <aside
+    v-if="agent"
+    class="selected-agent-card"
+    :class="{ 'is-locked': locked }"
+    :inert="locked ? '' : null"
+    :aria-disabled="locked ? 'true' : null"
+  >
     <button
       class="card-close"
       type="button"
       title="收起好汉牌"
-      @click="$emit('close-card')"
+      :disabled="locked"
+      @click="emitAction('close-card')"
     >
       <var-icon name="close-circle-outline" />
     </button>
@@ -22,12 +29,13 @@
           v-if="canStartChat"
           type="button"
           class="card-action primary"
-          @click="$emit('start-chat')"
+          :disabled="locked"
+          @click="emitAction('start-chat')"
         >
           <var-icon name="message-text-outline" />
           <span>密议</span>
         </button>
-        <button type="button" class="card-action" @click="$emit('open-agents')">
+        <button type="button" class="card-action" :disabled="locked" @click="emitAction('open-agents')">
           <var-icon name="account-circle" />
           <span>看牌</span>
         </button>
@@ -37,16 +45,21 @@
 </template>
 
 <script setup>
-defineProps({
+const props = defineProps({
   abilityText: { type: Function, required: true },
   agent: { type: Object, default: null },
   canStartChat: { type: Boolean, default: true },
+  locked: { type: Boolean, default: false },
   portraitName: { type: Function, required: true },
   portraitStyle: { type: Function, required: true },
   statusText: { type: Function, required: true }
 })
 
-defineEmits(['open-agents', 'start-chat', 'close-card'])
+const emit = defineEmits(['open-agents', 'start-chat', 'close-card'])
+
+const emitAction = event => {
+  if (!props.locked) emit(event)
+}
 </script>
 
 <style scoped>
@@ -72,6 +85,15 @@ button {
   border: 0;
   cursor: pointer;
   font: inherit;
+}
+
+.selected-agent-card.is-locked {
+  pointer-events: none;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .agent-card-body {

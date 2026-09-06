@@ -69,9 +69,9 @@ export const useHallChatContext = ({
           : `agent:${selectedAgent.value.agentId}`,
         mode: 'private',
         participantAgentIds: [selectedAgent.value.agentId],
-        selectedTaskId: selectedTask.value?.id,
+        selectedTaskId: selectedTask.value?.id ?? null,
         targetAgentIds: [selectedAgent.value.agentId],
-        taskId: selectedTask.value?.id,
+        taskId: selectedTask.value?.id ?? null,
         targetAgentId: selectedAgent.value.agentId
       }
     }
@@ -80,9 +80,9 @@ export const useHallChatContext = ({
       conversationScopeKey: 'public',
       mode: 'public',
       participantAgentIds: [],
-      selectedTaskId: selectedTask.value?.id,
+      selectedTaskId: selectedTask.value?.id ?? null,
       targetAgentIds: allowedMentionIds(chatMentionAgentIds.value),
-      taskId: selectedTask.value?.id,
+      taskId: selectedTask.value?.id ?? null,
       targetAgentId: allowedMentionIds(chatMentionAgentIds.value)[0] || ''
     }
   })
