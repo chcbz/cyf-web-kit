@@ -1,5 +1,5 @@
 <template>
-  <div ref="hallRootRef" class="juyi-page" tabindex="-1" :class="{ 'is-panel-open': isPanelSessionActive, [`experience-${experienceMode}`]: true }">
+  <div ref="hallRootRef" class="juyi-page" tabindex="-1" :style="hallViewportStyle" :class="{ 'is-panel-open': isPanelSessionActive, 'is-virtual-landscape': isVirtualLandscape, [`experience-${experienceMode}`]: true }">
     <HallPortraitHome
       v-if="!experienceReady || experienceMode === 'portrait-command'"
       :agents="agents"
@@ -55,6 +55,7 @@
       :status-class="statusClass"
       :status-text="statusText"
       :tasks="tasks"
+      :virtual-landscape="isVirtualLandscape"
       :tasks-total="tasks.length"
       :visible-agents="visibleAgents"
       @landscape-target-consumed="handleLandscapeTargetConsumed"
@@ -101,7 +102,7 @@
     />
 
     <transition name="panel" @after-leave="handlePanelAfterLeave">
-      <div v-if="activePanel" :key="panelSessionGeneration" class="panel-overlay" :data-panel-generation="panelSessionGeneration" @pointerdown.self="closePanel">
+      <div v-if="activePanel" :key="panelSessionGeneration" class="panel-overlay" :class="{ 'is-chat-overlay': renderedPanel === 'chat', 'is-compact-chat-overlay': renderedPanel === 'chat' && isCompactChat }" :data-panel-generation="panelSessionGeneration" @pointerdown.self="closePanel">
         <section
           ref="panelRef"
           class="floating-panel"
@@ -403,11 +404,20 @@ const voiceReplyCorrelation = createHallVoiceReplyCorrelation({
 const {
   experienceMode,
   isMobileCoarse,
+  isVirtualLandscape,
   orientationHint,
   orientationRequestPending,
+  hallViewportHeight,
   requestLandscape,
   requestPortrait
 } = useHallExperienceMode()
+const resolvedHallViewportHeight = computed(() => Number(hallViewportHeight?.value ?? hallViewportHeight) || 0)
+const hallViewportStyle = computed(() => {
+  const height = resolvedHallViewportHeight.value
+  return height > 0 ? { '--hall-visual-height': `${height}px` } : {}
+})
+// This follows the live visual viewport, including a keyboard-only shrink.
+const isCompactChat = computed(() => resolvedHallViewportHeight.value > 0 && resolvedHallViewportHeight.value <= 320)
 const { panelLayout } = useHallPanels({ experienceMode, isMobileCoarse })
 const hallRootRef = ref(null)
 const panelRef = ref(null)
@@ -1880,6 +1890,40 @@ button.hall-room {
   contain: layout paint;
 }
 
+.panel-overlay.is-chat-overlay {
+  top: 0;
+  bottom: auto;
+  height: min(100%, var(--hall-visual-height, 100%));
+  max-height: 100%;
+  align-items: flex-start;
+  justify-content: stretch;
+  padding: 0;
+}
+
+/* 厅前议事 is an immersive workspace, not an inset drawer. */
+.floating-panel.panel-chat,
+.floating-panel.panel-chat.layout-center-modal,
+.floating-panel.panel-chat.layout-right-drawer,
+.floating-panel.panel-chat.layout-bottom-drawer {
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  max-height: 100%;
+  border-radius: 0;
+}
+
+.panel-overlay.is-compact-chat-overlay .panel-title {
+  padding: 6px 10px;
+}
+
+.panel-overlay.is-compact-chat-overlay :deep(.discussion-brief) {
+  display: none;
+}
+
+.panel-overlay.is-compact-chat-overlay :deep(.hall-messages) {
+  padding: 4px 8px;
+}
+
 .floating-panel {
   position: relative;
   z-index: 1;
@@ -1909,9 +1953,6 @@ button.hall-room {
   max-height: calc(100% - 48px);
 }
 
-.panel-chat.layout-center-modal {
-  width: min(920px, calc(100% - 40px));
-}
 
 .panel-overlay:has(.layout-right-drawer) {
   align-items: stretch;
@@ -1927,10 +1968,6 @@ button.hall-room {
   border-radius: 8px 0 0 8px;
 }
 
-.panel-chat.layout-right-drawer {
-  width: min(92%, 720px);
-  max-width: 92%;
-}
 
 .panel-overlay:has(.layout-bottom-drawer) {
   align-items: flex-end;
@@ -1946,15 +1983,7 @@ button.hall-room {
   border-radius: 8px 8px 0 0;
 }
 
-.floating-panel.panel-chat.layout-bottom-drawer {
-  height: calc(var(--hall-visual-height, 100vh) - 12px);
-  max-height: calc(var(--hall-visual-height, 100vh) - 12px);
-}
 
-.panel-chat {
-  width: min(920px, calc(100vw - 32px));
-  height: min(760px, calc(100vh - 48px));
-}
 
 .panel-title {
   display: flex;
@@ -2069,6 +2098,20 @@ button.hall-room {
 
 .juyi-page.is-panel-open :deep(.map-world) {
   transition: none;
+}
+
+.juyi-page.is-virtual-landscape {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 30;
+  width: 100vh;
+  height: 100vw;
+  width: 100dvh;
+  height: 100dvw;
+  min-height: 0;
+  transform: rotate(90deg) translateY(-100%);
+  transform-origin: top left;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2297,7 +2340,6 @@ button.hall-room {
   }
 
   .panel-overlay {
-    --mobile-chat-panel-top-gap: 18px;
     align-items: flex-end;
     padding: 0;
   }
@@ -2314,12 +2356,6 @@ button.hall-room {
     border-radius: 8px 8px 0 0;
   }
 
-  .floating-panel.panel-chat {
-    width: calc(100% - 16px);
-    max-width: calc(100% - 16px);
-    height: min(760px, calc(100% - var(--mobile-chat-panel-top-gap)));
-    max-height: calc(100% - var(--mobile-chat-panel-top-gap));
-  }
 
 }
 </style>

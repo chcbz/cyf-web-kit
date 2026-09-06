@@ -30,13 +30,27 @@ export const useHallExperienceMode = () => {
   const requestedMode = ref(null)
   const orientationHint = ref('')
   const orientationRequestPending = ref(false)
+  // This is presentation-only viewport state. Physical orientation remains owned
+  // by Screen Orientation/media/legacy sources below.
+  const viewport = ref({ width: 0, height: 0 })
   const experienceMode = computed(() => resolveHallExperienceMode({
     isMobileCoarse: isMobileCoarse.value,
     isPhysicalLandscape: isPhysicalLandscape.value,
     requestedMode: requestedMode.value
   }))
 
+  const isVirtualLandscape = computed(() => (
+    isWeChatWebView() && requestedMode.value === 'landscape-map' && !isPhysicalLandscape.value
+  ))
+
+  // The rotated H5 shell's logical height is the physical viewport width. This
+  // only sizes presentation surfaces; it must not be used to infer orientation.
+  const hallViewportHeight = computed(() => (
+    isVirtualLandscape.value ? viewport.value.width : viewport.value.height
+  ))
+
   let isMounted = false
+  let visualViewport = null
   let orientationMedia = null
   let coarseMedia = null
   let screenOrientation = null
@@ -46,10 +60,15 @@ export const useHallExperienceMode = () => {
   let requestTimer = null
   let requestOwnership = null
 
+  const readViewport = () => {
+    const width = Number(visualViewport?.width) || Number(window?.innerWidth) || 0
+    const height = Number(visualViewport?.height) || Number(window?.innerHeight) || 0
+    viewport.value = { width, height }
+  }
+
   const commitPhysicalOrientation = next => {
     if (typeof next !== 'boolean' || next === isPhysicalLandscape.value) return false
     isPhysicalLandscape.value = next
-    // A real device rotation is authoritative over a prior local fallback or portrait request.
     requestedMode.value = null
     orientationHint.value = ''
     if (next && requestOwnership?.acquisitionComplete) completeRequest(requestOwnership.token)
@@ -230,17 +249,17 @@ export const useHallExperienceMode = () => {
     if (!isMounted || requestOwnership || orientationRequestPending.value || !isMobileCoarse.value) {
       return Promise.resolve(false)
     }
-    // WeChat WebViews/mini-programs cannot safely enter the browser fullscreen and
-    // orientation-lock flow. Keep normal browsers on that path and select only the
-    // local Hall shell for this unsupported host.
+    // The Mini Program host cannot be orientation-locked by H5. Use the Hall's
+    // explicit virtual landscape shell instead; its canvas input is inverse-mapped
+    // by JuyitingGame, while normal browsers retain native fullscreen/lock behavior.
     if (isWeChatWebView()) {
       if (experienceMode.value === 'landscape-map') return Promise.resolve(false)
       requestedMode.value = 'landscape-map'
-      orientationHint.value = '当前容器不支持自动横屏，已打开全景视图'
+      orientationHint.value = ''
       return Promise.resolve(true)
     }
-    // A portrait request can override a still-landscape physical device. Reopening
-    // full view in that state only clears the local override; it never reacquires.
+    // Explicit UI mode wins over a still-landscape physical device. This does
+    // not reacquire fullscreen; it only clears the user's portrait override.
     if (requestedMode.value === 'portrait-command' && isPhysicalLandscape.value) {
       requestedMode.value = null
       orientationHint.value = ''
@@ -293,7 +312,15 @@ export const useHallExperienceMode = () => {
   }
 
   const requestPortrait = async () => {
-    if (!isMounted || !isMobileCoarse.value || (experienceMode.value === 'portrait-command' && !requestOwnership)) return false
+    if (!isMounted || !isMobileCoarse.value) return false
+    if (isWeChatWebView()) {
+      if (experienceMode.value === 'portrait-command') return false
+      requestedMode.value = 'portrait-command'
+      orientationHint.value = ''
+      return true
+    }
+    // Native unlock is best effort only; retain the explicit command-mode
+    // override so the portrait button always changes the shell immediately.
     requestedMode.value = 'portrait-command'
     orientationHint.value = ''
     const ownership = requestOwnership
@@ -315,6 +342,8 @@ export const useHallExperienceMode = () => {
   const handleScreenOrientationChange = event => commitFreshSourceTruth('screen', readScreenSource(), event)
   const handleOrientationMediaChange = event => commitFreshSourceTruth('media', readMediaSource(event), event)
   const handleLegacyOrientationChange = event => commitFreshSourceTruth('legacy', readLegacySource(), event)
+  const handleViewportResize = () => readViewport()
+
   const handleCoarseChange = () => {
     isMobileCoarse.value = Boolean(coarseMedia?.matches)
     if (!isMobileCoarse.value) {
@@ -327,6 +356,8 @@ export const useHallExperienceMode = () => {
     if (typeof window === 'undefined') return
     isMounted = true
     screenOrientation = globalThis.screen?.orientation || null
+    visualViewport = window.visualViewport || null
+    readViewport()
     orientationMedia = window.matchMedia?.('(orientation: landscape)') || null
     coarseMedia = window.matchMedia?.('(pointer: coarse)') || null
     observedOrientation = {
@@ -341,6 +372,8 @@ export const useHallExperienceMode = () => {
     orientationMedia?.addEventListener?.('change', handleOrientationMediaChange)
     coarseMedia?.addEventListener?.('change', handleCoarseChange)
     window.addEventListener?.('orientationchange', handleLegacyOrientationChange)
+    window.addEventListener?.('resize', handleViewportResize)
+    visualViewport?.addEventListener?.('resize', handleViewportResize)
     globalThis.document?.addEventListener?.('fullscreenchange', handleFullscreenChange)
   })
 
@@ -354,18 +387,23 @@ export const useHallExperienceMode = () => {
     orientationMedia?.removeEventListener?.('change', handleOrientationMediaChange)
     coarseMedia?.removeEventListener?.('change', handleCoarseChange)
     window.removeEventListener?.('orientationchange', handleLegacyOrientationChange)
+    window.removeEventListener?.('resize', handleViewportResize)
+    visualViewport?.removeEventListener?.('resize', handleViewportResize)
     globalThis.document?.removeEventListener?.('fullscreenchange', handleFullscreenChange)
     screenOrientation = null
     orientationMedia = null
     coarseMedia = null
+    visualViewport = null
   })
 
   return {
     experienceMode,
     isMobileCoarse,
     isPhysicalLandscape,
+    isVirtualLandscape,
     orientationHint,
     orientationRequestPending,
+    hallViewportHeight,
     requestLandscape,
     requestPortrait
   }

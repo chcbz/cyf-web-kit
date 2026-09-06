@@ -138,6 +138,18 @@ const nextLoadBatch = async (fake, timeoutMs = 5_000) => {
   return fake.pendingLoads.splice(0)
 }
 
+const nextLoadBatchOrMountFailure = async (fake, mountPromise, timeoutMs = 5_000) => {
+  let mountFailure = null
+  mountPromise.catch(error => { mountFailure = error })
+  const deadline = Date.now() + timeoutMs
+  while (fake.pendingLoads.length === 0 && !mountFailure && Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 5))
+  }
+  if (mountFailure) throw new Error(`mount rejected before the next runtime resource batch: ${mountFailure.message}`)
+  expect(fake.pendingLoads.length, `expected a runtime resource batch within ${timeoutMs}ms`).to.be.greaterThan(0)
+  return fake.pendingLoads.splice(0)
+}
+
 const succeedBatch = (fake, batch) => {
   batch.forEach(({ resource, onload }) => {
     if (resource.type === 'image') {
@@ -321,25 +333,33 @@ describe('JuyitingGame sprite lifecycle', () => {
     expect(game.getMovementRuntime()).to.equal(null)
   })
 
-  it('cleans a fatal partial mount and retries with exactly one clean scene and canvas', async () => {
+  it('cleans a fatal partial mount and retries by reattaching the one melonJS 15 canvas', async () => {
     const fake = createRuntimeMelon()
     const canvases = []
+    let videoInitCalls = 0
     const container = {
+      appendChild: canvas => {
+        if (!canvases.includes(canvas)) canvases.push(canvas)
+        canvas.parentElement = container
+      },
       querySelector: selector => selector === 'canvas' ? canvases[0] || null : null
     }
     fake.me.video.init = (_width, _height, options) => {
+      videoInitCalls += 1
       const canvas = {
-        style: {},
+        parentElement: null,
+        style: { setProperty: () => {} },
         remove: () => {
           const index = canvases.indexOf(canvas)
           if (index >= 0) canvases.splice(index, 1)
+          canvas.parentElement = null
         }
       }
-      canvases.push(canvas)
       expect(options.parent).to.equal(container)
+      // melonJS Application.init appends its renderer canvas before video.init returns.
+      options.parent.appendChild(canvas)
       return true
     }
-    fake.me.video.destroy = () => canvases.slice().forEach(canvas => canvas.remove())
 
     let attempt = 0
     fake.me.loader.getTMX = () => {
@@ -350,7 +370,12 @@ describe('JuyitingGame sprite lifecycle', () => {
     }
 
     const game = new JuyitingGame()
-    game._loadMelonJS = async () => fake.me
+    // Match the production loader's cache side effect; retry must see the same
+    // melonJS Application instance that owns the reusable renderer canvas.
+    game._loadMelonJS = async () => {
+      game._me = fake.me
+      return fake.me
+    }
     const firstMount = game.mount(container, { onReady: () => {} })
     succeedBatch(fake, await nextLoadBatch(fake))
 
@@ -361,18 +386,22 @@ describe('JuyitingGame sprite lifecycle', () => {
     expect(game._hallScene).to.equal(null)
     expect(game._container).to.equal(null)
     expect(game._callbacks).to.deep.equal({})
-    expect(game._me).to.equal(null)
+    expect(game._me).to.equal(fake.me)
+    expect(game._engineCanvas).to.exist
     expect(game._mountToken).to.equal(null)
     expect(game._readyTimer).to.equal(null)
 
     const retryMount = game.mount(container)
-    succeedBatch(fake, await nextLoadBatch(fake))
-    succeedBatch(fake, await nextLoadBatch(fake))
-    succeedBatch(fake, await nextLoadBatch(fake))
+    succeedBatch(fake, await nextLoadBatchOrMountFailure(fake, retryMount))
+    succeedBatch(fake, await nextLoadBatchOrMountFailure(fake, retryMount))
+    succeedBatch(fake, await nextLoadBatchOrMountFailure(fake, retryMount))
     const outcome = await retryMount
 
     expect(outcome).to.include({ ready: true, movementReady: true, degraded: false })
     expect(canvases).to.have.length(1)
+    expect(canvases[0]).to.equal(game._engineCanvas)
+    expect(canvases[0].parentElement).to.equal(container)
+    expect(videoInitCalls).to.equal(1)
     expect(fake.stateSets).to.have.length(1)
     expect(game._hallScene).not.to.equal(null)
   })

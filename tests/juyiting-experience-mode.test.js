@@ -282,34 +282,99 @@ describe('Juyi Hall experience mode', () => {
     }
   })
 
-  it('uses viewport dimensions only for no-API initialization, never for later keyboard resize', async () => {
+  it('uses viewport dimensions only for no-API initialization and later updates presentation without changing physical mode', async () => {
     const originalWidth = global.window.innerWidth
     const originalHeight = global.window.innerHeight
     const originalVisualViewport = global.window.visualViewport
-    let visualListener = null
+    const visualListeners = new Set()
+    let visualWidth = 390
+    let visualHeight = 844
+    let wrapper
     Object.defineProperty(global.window, 'innerWidth', { configurable: true, writable: true, value: 390 })
     Object.defineProperty(global.window, 'innerHeight', { configurable: true, writable: true, value: 844 })
     Object.defineProperty(global.window, 'visualViewport', { configurable: true, value: {
-      addEventListener: (_event, listener) => { visualListener = listener },
-      removeEventListener: () => {},
-      height: 844
+      get width() { return visualWidth },
+      get height() { return visualHeight },
+      addEventListener: (_event, listener) => visualListeners.add(listener),
+      removeEventListener: (_event, listener) => visualListeners.delete(listener)
     } })
     const env = setupEnvironment({ mediaLandscape: null, screen: false })
     try {
-      const { mode, wrapper } = await mountMode()
-      expect(mode.experienceMode.value).to.equal('portrait-command')
+      const mounted = await mountMode()
+      wrapper = mounted.wrapper
+      expect(mounted.mode.experienceMode.value).to.equal('portrait-command')
+      expect(mounted.mode.hallViewportHeight.value).to.equal(844)
+      expect(visualListeners.size).to.equal(1)
       global.window.innerWidth = 844
       global.window.innerHeight = 390
+      visualWidth = 844
+      visualHeight = 390
       global.window.dispatchEvent(new global.window.Event('resize'))
-      visualListener?.(new global.window.Event('resize'))
+      visualListeners.forEach(listener => listener(new global.window.Event('resize')))
       await flush()
-      expect(visualListener).to.equal(null)
-      expect(mode.experienceMode.value).to.equal('portrait-command')
-      wrapper.unmount()
+      expect(mounted.mode.hallViewportHeight.value).to.equal(390)
+      expect(mounted.mode.isPhysicalLandscape.value).to.equal(false)
+      expect(mounted.mode.experienceMode.value).to.equal('portrait-command')
     } finally {
+      wrapper?.unmount()
+      expect(visualListeners.size).to.equal(0)
       Object.defineProperty(global.window, 'innerWidth', { configurable: true, value: originalWidth })
       Object.defineProperty(global.window, 'innerHeight', { configurable: true, value: originalHeight })
       Object.defineProperty(global.window, 'visualViewport', { configurable: true, value: originalVisualViewport })
+      env.restore()
+    }
+  })
+
+  it('tracks live viewport height separately from physical orientation and restores it after rotation', async () => {
+    const originals = {
+      innerWidth: global.window.innerWidth,
+      innerHeight: global.window.innerHeight,
+      visualViewport: global.window.visualViewport
+    }
+    const visualListeners = new Set()
+    let visualWidth = 844
+    let visualHeight = 390
+    Object.defineProperty(global.window, 'innerWidth', { configurable: true, writable: true, value: 844 })
+    Object.defineProperty(global.window, 'innerHeight', { configurable: true, writable: true, value: 390 })
+    Object.defineProperty(global.window, 'visualViewport', { configurable: true, value: {
+      get width() { return visualWidth },
+      get height() { return visualHeight },
+      addEventListener: (_event, listener) => visualListeners.add(listener),
+      removeEventListener: (_event, listener) => visualListeners.delete(listener)
+    } })
+    const env = setupEnvironment({ mediaLandscape: true, screen: false })
+    let wrapper
+    try {
+      const mounted = await mountMode()
+      const { mode } = mounted
+      wrapper = mounted.wrapper
+      expect(mode.isPhysicalLandscape.value).to.equal(true)
+      expect(mode.hallViewportHeight.value).to.equal(390)
+
+      // A keyboard resize changes only presentation height; it cannot change
+      // the physical orientation or leave a remembered 430px-style value.
+      visualHeight = 220
+      visualListeners.forEach(listener => listener(new global.window.Event('resize')))
+      await flush()
+      expect(mode.hallViewportHeight.value).to.equal(220)
+      expect(mode.isPhysicalLandscape.value).to.equal(true)
+
+      global.window.innerWidth = 390
+      global.window.innerHeight = 844
+      visualWidth = 390
+      visualHeight = 844
+      env.orientationMedia.emit(false, { matches: false, timeStamp: 100 })
+      global.window.dispatchEvent(new global.window.Event('resize'))
+      visualListeners.forEach(listener => listener(new global.window.Event('resize')))
+      await flush()
+      expect(mode.isPhysicalLandscape.value).to.equal(false)
+      expect(mode.hallViewportHeight.value).to.equal(844)
+    } finally {
+      wrapper?.unmount()
+      expect(visualListeners.size).to.equal(0)
+      Object.defineProperty(global.window, 'innerWidth', { configurable: true, value: originals.innerWidth })
+      Object.defineProperty(global.window, 'innerHeight', { configurable: true, value: originals.innerHeight })
+      Object.defineProperty(global.window, 'visualViewport', { configurable: true, value: originals.visualViewport })
       env.restore()
     }
   })
@@ -1184,7 +1249,7 @@ describe('Juyi Hall experience mode', () => {
     }
   })
 
-  it('uses a local full-view fallback in WeChat without requesting fullscreen or orientation lock', async () => {
+  it('uses an interactive virtual landscape shell in WeChat without requesting fullscreen or orientation lock', async () => {
     const env = setupEnvironment()
     const originalWx = global.wx
     let fullscreenRequests = 0
@@ -1196,7 +1261,11 @@ describe('Juyi Hall experience mode', () => {
       const { mode, wrapper } = await mountMode()
       expect(await mode.requestLandscape()).to.equal(true)
       expect(mode.experienceMode.value).to.equal('landscape-map')
-      expect(mode.orientationHint.value).to.equal('当前容器不支持自动横屏，已打开全景视图')
+      expect(mode.isVirtualLandscape.value).to.equal(true)
+      expect(mode.orientationHint.value).to.equal('')
+      expect(await mode.requestPortrait()).to.equal(true)
+      expect(mode.experienceMode.value).to.equal('portrait-command')
+      expect(mode.isVirtualLandscape.value).to.equal(false)
       expect(fullscreenRequests).to.equal(0)
       expect(lockRequests).to.equal(0)
       wrapper.unmount()
@@ -1219,6 +1288,8 @@ describe('Juyi Hall experience mode', () => {
       expect(await mode.requestLandscape()).to.equal(true)
       expect(mode.experienceMode.value).to.equal('landscape-map')
       expect(await mode.requestPortrait()).to.equal(true)
+      // Releasing native ownership is best effort; the explicit control must
+      // switch the shell immediately even before the device reports rotation.
       expect(mode.experienceMode.value).to.equal('portrait-command')
       expect(unlocks).to.equal(1)
       expect(exits).to.equal(1)
@@ -1237,7 +1308,7 @@ describe('Juyi Hall experience mode', () => {
     expect(modeSource).to.include("window.addEventListener?.('orientationchange'")
     expect(modeSource).to.include('const isWeChatWebView')
     expect(modeSource).to.include("const requestPortrait = async () =>")
-    expect(modeSource).not.to.include("addEventListener?.('resize'")
+    expect(modeSource).to.include("visualViewport?.addEventListener?.('resize'")
     expect(panelsSource).not.to.include('addEventListener')
     expect(panelsSource).not.to.include('matchMedia')
     expect(stageSource).not.to.include("matchMedia?.('(orientation: landscape)')")
