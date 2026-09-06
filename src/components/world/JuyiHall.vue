@@ -4,7 +4,7 @@
       ref="portraitHomeRef"
       v-show="!experienceReady || experienceMode === 'portrait-command'"
       :live-preview-enabled="true"
-      :live-preview-state="previewSceneState"
+      :live-preview-state="previewPresentationState"
       :live-preview-error="previewSceneError"
       :live-preview-map-width="previewSceneBounds.width"
       :live-preview-map-height="previewSceneBounds.height"
@@ -443,7 +443,10 @@ const landscapeTargetRef = ref(null)
 const hallStageRef = ref(null)
 const portraitPreviewVisible = ref(false)
 const documentPreviewVisible = ref(typeof document === 'undefined' || !document.hidden)
-const previewVisible = computed(() => portraitPreviewVisible.value && documentPreviewVisible.value)
+// Only the active full-page panel overlay is known to cover the preview.
+// Voice/loading interaction locks remain independent from draw visibility.
+const previewFullyCovered = computed(() => Boolean(activePanel.value))
+const previewVisible = computed(() => portraitPreviewVisible.value && documentPreviewVisible.value && !previewFullyCovered.value)
 const previewSceneState = ref('loading')
 const previewSceneError = ref('')
 const previewSceneBounds = ref({ width: 0, height: 0 })
@@ -454,8 +457,11 @@ const stageTarget = computed(() => experienceMode.value === 'portrait-command'
   ? portraitHomeRef.value?.livePreviewTarget || null
   : landscapeTargetRef.value)
 const stageMounted = computed(() => stageHasMounted.value)
+const previewPresentationState = computed(() => (
+  previewSceneState.value === 'ready' && !previewVisible.value ? 'paused' : previewSceneState.value
+))
 const permitStageMount = () => {
-  if (experienceReady.value && (experienceMode.value === 'landscape-map' || previewVisible.value)) {
+  if (stageTarget.value && experienceReady.value && (experienceMode.value === 'landscape-map' || previewVisible.value)) {
     stageHasMounted.value = true
   }
 }
@@ -478,11 +484,14 @@ const handlePreviewSceneBounds = bounds => {
   previewSceneBounds.value = bounds || { width: 0, height: 0 }
 }
 const retryLivePreview = () => {
-  previewSceneState.value = 'loading'
-  previewSceneError.value = ''
+  // A paused presentation retains a ready scene; do not turn it back into loading.
+  if (previewPresentationState.value !== 'paused') {
+    previewSceneState.value = 'loading'
+    previewSceneError.value = ''
+  }
   void hallStageRef.value?.retryScene?.()
 }
-watch([experienceReady, experienceMode, previewVisible], permitStageMount, { immediate: true })
+watch([experienceReady, experienceMode, previewVisible, stageTarget], permitStageMount, { immediate: true })
 
 const panelRef = ref(null)
 const panelTitleId = 'juyiting-floating-panel-title'

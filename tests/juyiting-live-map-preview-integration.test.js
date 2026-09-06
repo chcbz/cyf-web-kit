@@ -21,7 +21,7 @@ const loadStage = game => {
 }
 const flush = async () => { for (let i = 0; i < 4; i++) { await Promise.resolve(); await Vue.nextTick() } }
 const restoreDescriptor = (target, key, descriptor) => { if (descriptor) Object.defineProperty(target, key, descriptor); else delete target[key] }
-const props = { agentBubbles: {}, agentKey: () => '', agentStyle: () => ({}), portraitName: () => '', portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '', statusClass: () => '', statusText: () => '', readOnlyPreview: true, previewVisible: true }
+const props = { agentBubbles: {}, agentKey: () => '', agentStyle: () => ({}), portraitName: () => '', portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '', statusClass: () => '', statusText: () => '', experienceMode: 'portrait-command', readOnlyPreview: true, previewVisible: true }
 const fixture = () => {
   const calls = { destroy: 0, draw: [], locks: [], phases: [], ready: 0, reset: 0, targets: 0 }
   let handlers
@@ -69,10 +69,10 @@ describe('live map preview Stage adapter lifecycle', () => {
     expect(wrapper.emitted('simulation-phase-events')).to.equal(undefined)
     expect(f.calls.destroy).to.equal(0)
     expect(f.calls.locks.some(([, reason]) => reason === 'preview')).to.equal(true)
-    await wrapper.setProps({ readOnlyPreview: false }); await flush()
+    await wrapper.setProps({ experienceMode: 'landscape-map', readOnlyPreview: false }); await flush()
     expect(wrapper.emitted('simulation-ready')).to.have.length(1)
-    await wrapper.setProps({ readOnlyPreview: true }); f.handlers.onSimulationPhaseEvents([{ id: 'terminal' }]); await pump()
-    await wrapper.setProps({ readOnlyPreview: true }); await wrapper.setProps({ readOnlyPreview: false }); await wrapper.setProps({ readOnlyPreview: true }); await flush()
+    await wrapper.setProps({ experienceMode: 'portrait-command', readOnlyPreview: true }); f.handlers.onSimulationPhaseEvents([{ id: 'terminal' }]); await pump()
+    await wrapper.setProps({ experienceMode: 'portrait-command', readOnlyPreview: true }); await wrapper.setProps({ experienceMode: 'landscape-map', readOnlyPreview: false }); await wrapper.setProps({ experienceMode: 'portrait-command', readOnlyPreview: true }); await flush()
     expect(wrapper.emitted('simulation-ready')).to.have.length(1)
     expect(wrapper.emitted('simulation-phase-events')).to.have.length(1)
     expect(f.calls.destroy).to.equal(0)
@@ -152,15 +152,18 @@ describe('live map preview Hall page bridge', () => {
     try {
       await flush()
       expect(counters.stageMounts).to.equal(0)
+      expect(wrapper.find('.preview-target').exists()).to.equal(true)
       const portrait = wrapper.findComponent(counters.PortraitHome)
       portrait.vm.$emit('live-preview-visibility-change', true)
       await flush()
       expect(counters.stageMounts).to.equal(1)
       const stage = document.body.querySelector('.preview-stage')
       expect(stage?.parentElement?.classList.contains('preview-target')).to.equal(true)
+      expect(stage?.dataset.preview).to.equal('true')
       mode.value = 'landscape-map'; await flush()
       expect(counters.stageMounts).to.equal(1)
       expect(document.body.querySelector('.preview-stage')?.parentElement?.classList.contains('hall-live-landscape-target')).to.equal(true)
+      expect(document.body.querySelector('.preview-stage')?.dataset.preview).to.equal('false')
       mode.value = 'portrait-command'; await flush()
       expect(counters.stageMounts).to.equal(1)
       portrait.vm.$emit('retry-live-preview'); await flush()

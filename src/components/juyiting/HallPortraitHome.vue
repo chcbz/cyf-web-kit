@@ -186,6 +186,21 @@ const openTask = task => emit('open-task', task)
 </script>
 
 <style scoped>
+/* Stable Teleport destination: preview-frame → slot → target → Stage keeps a nonzero box. */
+.portrait-live-preview-target {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.portrait-live-preview-target > :deep(.hall-stage) {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
 .hall-portrait-home {
   display: grid;
   align-content: start;
