@@ -94,6 +94,7 @@ export class JuyitingGame {
     this._sceneDebugPublishHandle = null
     this._sceneDebugPublishCancel = null
     this._simulationEnabled = true
+    this._previewDraw = { enabled: false, visible: true, lastDrawAt: 0, wrapper: null, original: null }
   }
 
   async _loadMelonJS() {
@@ -425,6 +426,7 @@ export class JuyitingGame {
     this._movementEngine = null
     this._pendingSimulationPhaseEvents = []
     this._simulationEnabled = true
+    this._previewDraw = { enabled: false, visible: true, lastDrawAt: 0, wrapper: null, original: null }
   }
 
   _cancelCachedImageWaits() {
@@ -717,6 +719,7 @@ export class JuyitingGame {
   }
 
   destroy() {
+    this.clearPreviewDrawPolicy()
     this._generation += 1
     this._mountToken = null
     this._cancelSceneDebugPublication()
@@ -869,6 +872,30 @@ export class JuyitingGame {
       },
       visibleViewport: this._visibleViewport(containerRect, canvasRect)
     }
+  }
+
+  setPreviewDrawPolicy({ enabled = false, visible = true } = {}) {
+    const policy = this._previewDraw
+    policy.enabled = Boolean(enabled)
+    policy.visible = Boolean(visible)
+    const game = this._me?.game
+    if (!game?.draw) return false
+    if (!policy.wrapper) {
+      policy.original = game.draw
+      policy.wrapper = function (...args) {
+        if (policy.enabled && !policy.visible) return undefined
+        return policy.original.apply(this, args)
+      }
+      game.draw = policy.wrapper
+    }
+    return true
+  }
+
+  clearPreviewDrawPolicy() {
+    const policy = this._previewDraw
+    const game = this._me?.game
+    if (game && policy.wrapper && game.draw === policy.wrapper) game.draw = policy.original
+    policy.enabled = false; policy.visible = true; policy.wrapper = null; policy.original = null
   }
 
   setInteractionLocked(locked, reason = 'panel') {
