@@ -288,7 +288,8 @@ describe('funded bounty remediation', () => {
     expect(await actions.createTask(payload)).to.equal(false)
     expect(await actions.createTask(payload)).to.equal(false)
     expect(keys).to.deep.equal(['idem-1', 'idem-2', 'idem-3'])
-    expect(await actions.createTask(payload)).to.equal(false)
+    // An ambiguous funded create is recovered only through the public explicit resume.
+    expect(await actions.resumeFundedCreate()).to.equal(false)
     expect(keys).to.deep.equal(['idem-1', 'idem-2', 'idem-3', 'idem-3'])
   })
 

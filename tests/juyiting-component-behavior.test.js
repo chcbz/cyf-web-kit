@@ -1,11 +1,10 @@
 import { expect } from 'chai'
-import { before } from 'mocha'
+import { after, before } from 'mocha'
 import { readFileSync } from 'fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
 import { createEconomyRequestIntentStore } from '../src/composables/juyiting/economyRequestIntent.js'
 import { useHallTaskActions } from '../src/composables/juyiting/useHallTaskActions.js'
 
-global.SVGElement = global.window?.SVGElement
 
 let mount
 let Vue
@@ -21,6 +20,27 @@ let PersonaCatalogPanel
 let SelectedAgentCard
 let hallGameMock
 let classifyViewportResizeMock
+let silverAmount
+
+const globalDomDescriptors = new Map()
+const installGlobalDomRuntime = () => {
+  for (const key of ['SVGElement', 'Element', 'Node', 'requestAnimationFrame', 'cancelAnimationFrame']) {
+    globalDomDescriptors.set(key, Object.getOwnPropertyDescriptor(globalThis, key))
+  }
+  for (const key of ['SVGElement', 'Element', 'Node']) {
+    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value: globalThis.window?.[key] })
+  }
+  Object.defineProperty(globalThis, 'requestAnimationFrame', { configurable: true, writable: true, value: callback =>
+    globalThis.window?.requestAnimationFrame?.(callback) ?? setTimeout(callback, 0) })
+  Object.defineProperty(globalThis, 'cancelAnimationFrame', { configurable: true, writable: true, value: handle =>
+    globalThis.window?.cancelAnimationFrame?.(handle) ?? clearTimeout(handle) })
+}
+const restoreGlobalDomRuntime = () => {
+  for (const [key, descriptor] of globalDomDescriptors) {
+    if (descriptor) Object.defineProperty(globalThis, key, descriptor)
+    else delete globalThis[key]
+  }
+}
 
 const vueImportToVar = (_line, imports) => {
   const vueBindings = imports.split(',').map((part) => {
@@ -52,6 +72,7 @@ const loadSfc = (relativePath) => {
     .replace(/^import\s+\{\s*juyitingGame\s*\}\s+from\s+['"]@\/game\/index\.js['"];?\s*$/gm, 'var juyitingGame = arguments[2]')
     .replace(/^import\s+\{\s*classifyViewportResize\s*\}\s+from\s+['"]@\/game\/camera\/resizePolicy\.js['"];?\s*$/gm, 'var classifyViewportResize = arguments[3]')
     .replace(/^import\s+BountyActionIcon\s+from\s+['"].\/BountyActionIcon\.vue['"];?\s*$/gm, 'var BountyActionIcon = { template: \'<span />\', props: [\'status\'] }')
+    .replace(/^import\s+\{\s*formatSilverMicro,\s*isCanonicalMicroAmount\s*\}\s+from\s+['"]@\/utils\/silverAmount['"];?\s*$/gm, 'var { formatSilverMicro, isCanonicalMicroAmount } = arguments[4]')
     .replace(/^import\s+HostingRentPanel\s+from\s+['"].\/HostingRentPanel\.vue['"];?\s*$/gm, `var HostingRentPanel = { template: '<section class="hosting-rent-stub" />', props: ['persona', 'resolvePersona'] }`)
     .replace(/^import\s+ArchiveReader\s+from\s+['"].\/archive\/ArchiveReader\.vue['"];?\s*$/gm, 'var ArchiveReader = { template: \'<section class="archive-reader-stub">典籍阅读</section>\' }')
     .replace(/^import\s+(\w+)\s+from\s+['"]@\/assets\/juyiting\/[^'"]+['"];?\s*$/gm, 'var $1 = \'/mock-juyiting-asset.png\'')
@@ -62,7 +83,7 @@ const loadSfc = (relativePath) => {
     .replace(/^import\s+DOMPurify\s+from\s+['"]dompurify['"];?\s*$/gm, 'var DOMPurify = { sanitize: value => value }')
     .replace('export default', 'return')
 
-  return new Function('Vue', 'HallChatComposer', 'juyitingGame', 'classifyViewportResize', scriptBody)(Vue, HallChatComposer, hallGameMock, classifyViewportResizeMock)
+  return new Function('Vue', 'HallChatComposer', 'juyitingGame', 'classifyViewportResize', 'silverAmount', scriptBody)(Vue, HallChatComposer, hallGameMock, classifyViewportResizeMock, silverAmount)
 }
 
 const stubs = {
@@ -105,13 +126,14 @@ const flushPromises = async () => {
   await Vue.nextTick()
 }
 
+after(() => restoreGlobalDomRuntime())
+
 describe('JuyiHall component behavior', () => {
   before(async () => {
-    global.SVGElement = global.window?.SVGElement
-    global.Element = global.window?.Element
-    global.Node = global.window?.Node
+    installGlobalDomRuntime()
     ;({ mount } = await import('@vue/test-utils'))
     Vue = await import('vue')
+    silverAmount = await import('../src/utils/silverAmount.js')
     ;({ classifyViewportResize: classifyViewportResizeMock } = await import('../src/game/camera/resizePolicy.js'))
     hallGameMock = {
       destroy: () => {},
@@ -1917,10 +1939,11 @@ const createFakeGameMelon = ({ deferDeviceReady = false } = {}) => {
       }
     },
     loader: {
-      getImage: () => null,
+      getImage: () => ({ complete: true }),
       getTMX: () => VALID_HALL_TMX,
       load: (_resource, onload, onerror) => {
         loadCallbacks.push({ onload, onerror })
+        return 1
       }
     },
     state: {
@@ -2096,7 +2119,7 @@ describe('O04 shared panel session contract', () => {
     expect(source).to.include(':inert="isPanelSessionActive ? \'\' : null"')
     expect(source).to.include(':aria-hidden="isPanelSessionActive ? \'true\' : null"')
     expect(source).to.include('const panelWhitelist = new Set(')
-    expect(source).to.include('if (!panelWhitelist.has(panel)) return false')
+    expect(source).to.include('panelDisposed || voiceInteractionLocked.value || !panelWhitelist.has(panel)')
     expect(source).to.include('isCurrentPanelGeneration({')
     expect(source).to.include('await nextTick()')
 

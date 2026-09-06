@@ -27,6 +27,17 @@ const response = (data, status = 200) => new Response(JSON.stringify({ code: 'E0
   headers: { 'Content-Type': 'application/json' }
 })
 
+// Keep the actual capability utility in the Route chain while injecting its one
+// aliased dependency for Node's SFC Function harness.
+const loadEconomyPreviewCapability = async () => {
+  const source = readFileSync(new URL('../src/utils/economyPreviewCapability.js', import.meta.url), 'utf8')
+  const { economyApi } = await import('../src/composables/useHttp.js')
+  const body = source
+    .replace(/^import\s+\{\s*economyApi\s*\}\s+from\s+['"]@\/composables\/useHttp['"];?\s*$/gm, 'const economyApi = imports.economyApi')
+    .replace(/^export\s+const\s+/gm, 'const ')
+  return new Function('imports', `${body}\nreturn { readEconomyCapability, isEconomyPreviewCapability, isSkillMarketplaceCapability, loadEconomyPreviewCapability }`)({ economyApi })
+}
+
 const installDom = () => {
   for (const key of ['SVGElement', 'Element', 'Node', 'localStorage']) {
     domDescriptors[key] = Object.getOwnPropertyDescriptor(globalThis, key)
@@ -87,7 +98,7 @@ const components = async (id) => {
   })
   const roster = await import('../src/utils/skillMarketRoster.js')
   const amounts = await import('../src/utils/silverAmount.js')
-  const capability = await import('../src/utils/economyPreviewCapability.js')
+  const capability = await loadEconomyPreviewCapability()
   return compile('../src/components/economy/SkillMarketRoute.vue', `${id}-route`, {
     vue: Vue,
     './SkillMarket.vue': Market,

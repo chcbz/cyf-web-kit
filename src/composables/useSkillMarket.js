@@ -142,10 +142,17 @@ const isAmbiguousTransportFailure = (failure) => !failure?.businessFailure && !f
   !failure?.status && !failure?.statusCode && !failure?.httpStatus
 // Frozen W09 purchase mapping: these three outcomes occur before an order
 // reservation. Conflicts and all unknown/5xx results retain the exact intent.
-const DEFINITIVE_NO_ORDER_FAILURE_CODES = new Set([
-  'SKILL_QUOTE_EXPIRED', 'AGENT_VERSION_CONFLICT', 'INSUFFICIENT_FUNDS'
-])
-const isDefinitiveNoOrderFailure = failure => ({ SKILL_QUOTE_EXPIRED: 409, AGENT_VERSION_CONFLICT: 409, INSUFFICIENT_FUNDS: 422 }[failure?.code] === failure?.status)
+const DEFINITIVE_NO_ORDER_FAILURE_STATUSES = Object.freeze({
+  SKILL_QUOTE_EXPIRED: 409,
+  AGENT_VERSION_CONFLICT: 409,
+  INSUFFICIENT_FUNDS: 422
+})
+const isDefinitiveNoOrderFailure = failure => {
+  const code = failure?.code
+  return typeof code === 'string' &&
+    Object.prototype.hasOwnProperty.call(DEFINITIVE_NO_ORDER_FAILURE_STATUSES, code) &&
+    failure?.status === DEFINITIVE_NO_ORDER_FAILURE_STATUSES[code]
+}
 
 const storageError = () => {
   const failure = new Error('购买恢复记录无法安全保存或读取；请检查浏览器存储权限和可用空间后重试。')

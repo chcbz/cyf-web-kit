@@ -762,7 +762,7 @@ describe('skill market recovery hardening', () => {
 })
 
 describe('skill market W12 recovery closure', () => {
-  it('clears only exact frozen HTTP pre-order failures and retains statusless, mismatched, 5xx, unknown, and conflict ORDER evidence', async () => {
+  it('clears only exact frozen HTTP pre-order failures and retains TypeError, empty, statusless, 5xx, and unknown ORDER evidence', async () => {
     const quoteResponse = payload => success({ quoteId: 'sq-1', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
     for (const [code, status] of [['SKILL_QUOTE_EXPIRED', 409], ['AGENT_VERSION_CONFLICT', 409], ['INSUFFICIENT_FUNDS', 422]]) {
       const storage = memoryStorage()
@@ -775,23 +775,44 @@ describe('skill market W12 recovery closure', () => {
       await market.purchase().catch(() => {})
       expect(market.unresolvedOperations.value).to.deep.equal([])
     }
-    for (const [code, status] of [
-      ['SKILL_QUOTE_EXPIRED', undefined], ['AGENT_VERSION_CONFLICT', 500], ['INSUFFICIENT_FUNDS', 409], ['IDEMPOTENCY_CONFLICT', 409], ['UNKNOWN_FAILURE', 503]
-    ]) {
+    const retainedFailures = [
+      ['type-error', () => new TypeError('response lost')],
+      ['empty-object', () => ({})],
+      ['known-statusless', () => Object.assign(new Error('expired'), { code: 'SKILL_QUOTE_EXPIRED' })],
+      ['unknown-statusless', () => Object.assign(new Error('unknown'), { code: 'UNKNOWN_FAILURE' })],
+      ['known-5xx', () => Object.assign(new Error('expired'), { code: 'SKILL_QUOTE_EXPIRED', status: 500 })],
+      ['mismatched-status', () => Object.assign(new Error('funds'), { code: 'INSUFFICIENT_FUNDS', status: 409 })],
+      ['conflict', () => Object.assign(new Error('conflict'), { code: 'IDEMPOTENCY_CONFLICT', status: 409 })]
+    ]
+    for (const [name, createFailure] of retainedFailures) {
       const storage = memoryStorage()
       const sent = []
-      const market = useSkillMarket({ actorScopeKey: `actor-retain-${code}-${status}`, enabled: ref(true), purchaseIdempotencyStorage: storage,
+      const options = {
+        actorScopeKey: `actor-retain-${name}`, enabled: ref(true), purchaseIdempotencyStorage: storage,
+        operationLocks: createTestWebLocks(),
         createIdempotencyKey: (() => { let index = 0; return () => `retain-${++index}` })(),
-        agentApi: { get: async () => success([]), post: async (url, payload, options) => {
+        agentApi: { get: async () => success([]), post: async (url, payload, requestOptions) => {
           if (url === '/skill-orders/quotes') return quoteResponse(payload)
-          sent.push({ body: payload, key: options.headers['Idempotency-Key'] })
-          const error = new Error(code); error.code = code; if (status !== undefined) error.status = status; error.businessFailure = true; throw error
-        } } })
+          sent.push({ body: payload, key: requestOptions.headers['Idempotency-Key'] })
+          throw createFailure()
+        } }
+      }
+      const market = useSkillMarket(options)
       await preparePurchase(market)
       await market.purchase().catch(() => {})
+      const [record] = market.unresolvedOperations.value
       expect(market.unresolvedOperations.value).to.have.length(1)
-      expect(market.unresolvedOperations.value[0]).to.include({ phase: 'ORDER', orderIdempotencyKey: sent[0].key })
-      expect(market.unresolvedOperations.value[0].purchaseRequest).to.deep.equal(sent[0].body)
+      expect(record).to.include({ phase: 'ORDER', orderIdempotencyKey: sent[0].key })
+      expect(record.purchaseRequest).to.deep.equal(sent[0].body)
+      const persisted = [...storage.values.values()][0]
+      const remounted = useSkillMarket(options)
+      remounted.selectProduct(seededProducts[3])
+      remounted.setTargetAgent({ agentId: 'agent-song', version: '9' })
+      remounted.setApprovedPermissions(['repo.read'])
+      expect([...storage.values.values()][0]).to.equal(persisted)
+      expect(remounted.canRequestQuote.value).to.equal(false)
+      expect(remounted.unresolvedOperations.value[0]).to.deep.include({ phase: 'ORDER', orderIdempotencyKey: sent[0].key })
+      expect(remounted.unresolvedOperations.value[0].purchaseRequest).to.deep.equal(sent[0].body)
     }
   })
 
