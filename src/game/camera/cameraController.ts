@@ -87,7 +87,8 @@ export const createCameraController = (
   let disposed = false
   let animationGeneration = 0
   let preservedMinimum: number | null = null
-  let previewSnapshot: CameraTransform | null = null
+  let previewSnapshot: { transform: CameraTransform; viewport: Viewport; preservedMinimum: number | null } | null = null
+  let previewWorldBounds: { x: number; y: number; width: number; height: number } | null = null
 
   const normalBounds = (key = presetKey): CameraBounds => {
     const maxZoom = Math.min(positiveOr(configuredBounds.maxZoom, MAX_ZOOM), MAX_ZOOM)
@@ -182,6 +183,7 @@ export const createCameraController = (
       cancelAnimation()
       const oldViewport = viewport
       viewport = copyViewport(nextViewport)
+      if (previewWorldBounds !== null) return controller.applyPreviewContain(previewWorldBounds) || { ...transform }
       const preserved = preserveFocus(transform, oldViewport, viewport)
       presetKey = selectViewPreset(currentPresetViewport(), coarsePointer)
       preservedMinimum = transform.zoom
@@ -210,13 +212,14 @@ export const createCameraController = (
       if (disposed) return null
       const width = Number(worldBounds?.width)
       const height = Number(worldBounds?.height)
-      const x = Number(worldBounds?.x) || 0
-      const y = Number(worldBounds?.y) || 0
-      if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 || viewport.width <= 0 || viewport.height <= 0) return null
+      const x = Number(worldBounds?.x)
+      const y = Number(worldBounds?.y)
+      if (![x, y, width, height, viewport.width, viewport.height].every(Number.isFinite) || width <= 0 || height <= 0 || viewport.width <= 0 || viewport.height <= 0) return null
       const zoom = Math.min(viewport.width / width, viewport.height / height)
       if (!Number.isFinite(zoom) || zoom <= 0) return null
       cancelAnimation()
-      if (previewSnapshot === null) previewSnapshot = { ...transform }
+      if (previewSnapshot === null) previewSnapshot = { transform: { ...transform }, viewport: { ...viewport }, preservedMinimum }
+      previewWorldBounds = { x, y, width, height }
       const containOffsetX = viewport.width / 2 - (x + width / 2) * zoom
       const containOffsetY = viewport.height / 2 - (y + height / 2) * zoom
       return apply({ zoom, offsetX: containOffsetX - viewport.width / 2 * (1 - zoom), offsetY: containOffsetY - viewport.height / 2 * (1 - zoom) }, { minZoom: zoom, maxZoom: Math.max(normalBounds().maxZoom, zoom) })
@@ -227,7 +230,9 @@ export const createCameraController = (
       cancelAnimation()
       const snapshot = previewSnapshot
       previewSnapshot = null
-      return apply(snapshot, normalBounds())
+      previewWorldBounds = null
+      preservedMinimum = snapshot.preservedMinimum
+      return apply(preserveFocus(snapshot.transform, snapshot.viewport, viewport), normalBounds())
     },
 
     resetTo(nextPresetKey, durationMs = DEFAULT_RESET_DURATION_MS) {

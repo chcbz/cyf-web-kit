@@ -473,3 +473,13 @@ describe('camera controller snapshot restore', () => {
     assert.ok(Number.isFinite(fallback.offsetY))
   })
 })
+
+
+it('contains non-zero world bounds and rejects hostile preview bounds', () => {
+  const fake = createAdapter({ width: 300, height: 300 }, { width: 1000, height: 1000 })
+  const controller = createCameraController(fake.adapter, { minZoom: 0.1, maxZoom: 3.3 }, true)
+  const preview = controller.applyPreviewContain({ x: 100, y: 50, width: 400, height: 100 })
+  assert.ok(preview)
+  assert.equal(controller.applyPreviewContain({ x: Infinity, y: 0, width: 1, height: 1 }), null)
+  assert.equal(controller.applyPreviewContain({ x: 0, y: 0, width: Number.MAX_VALUE, height: Number.MIN_VALUE }), null)
+})
