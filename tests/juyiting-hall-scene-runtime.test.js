@@ -1,7 +1,7 @@
 ﻿import { expect } from 'chai'
 
 import { createHallSceneClass } from '../src/game/scenes/HallScene.js'
-import { JuyitingGame } from '../src/game/JuyitingGame.js'
+import { JuyitingGame, inverseVirtualLandscapePoint } from '../src/game/JuyitingGame.js'
 import { HALL_MAP_RESOURCE } from '../src/game/resources.js'
 import { readFileSync } from 'node:fs'
 import { useHallCommandQueue } from '../src/composables/juyiting/useHallCommandQueue.js'
@@ -346,6 +346,50 @@ describe('HallScene melonJS runtime compatibility', () => {
 
     expect(updates).to.equal(1)
     expect(drains).to.equal(1)
+  })
+
+  it('maps direct canvas DOM pointer drag coordinates through the virtual mapper without mutating host events', () => {
+    class Stage { update () {} }
+    const canvas = document.createElement('canvas')
+    document.body.appendChild(canvas)
+    canvas.getBoundingClientRect = () => ({ left: 0, top: 0, right: 844, bottom: 390, width: 844, height: 390 })
+    const HallScene = createHallSceneClass({
+      Stage,
+      video: { getCanvas: () => canvas },
+      game: { viewport: { width: 844, height: 390 }, world: {} }
+    }, class {})
+    const scene = new HallScene()
+    scene.setClientPointMapper(point => inverseVirtualLandscapePoint(point, { width: 844, height: 390 }))
+    const target = scene._createInputTarget()
+    const received = []
+    for (const type of ['pointerdown', 'pointermove', 'pointerup']) {
+      target.addEventListener(type, event => received.push({ type, x: event.clientX, y: event.clientY }))
+    }
+    const dispatch = (type, clientX, clientY) => {
+      const event = new window.Event(type, { bubbles: true, cancelable: true })
+      Object.defineProperties(event, {
+        clientX: { configurable: true, value: clientX },
+        clientY: { configurable: true, value: clientY },
+        pointerId: { configurable: true, value: 7 },
+        pointerType: { configurable: true, value: 'touch' }
+      })
+      canvas.dispatchEvent(event)
+      expect(event).to.include({ clientX, clientY })
+    }
+
+    dispatch('pointerdown', 92, 37)
+    dispatch('pointermove', 93, 38)
+    dispatch('pointerup', 94, 39)
+    expect(received).to.deep.equal([
+      { type: 'pointerdown', x: 37, y: 298 },
+      { type: 'pointermove', x: 38, y: 297 },
+      { type: 'pointerup', x: 39, y: 296 }
+    ])
+
+    scene.setClientPointMapper(null)
+    dispatch('pointerdown', 92, 37)
+    expect(received.at(-1)).to.deep.equal({ type: 'pointerdown', x: 92, y: 37 })
+    canvas.remove()
   })
 
   it('retries input controller creation after the canvas becomes available', () => {

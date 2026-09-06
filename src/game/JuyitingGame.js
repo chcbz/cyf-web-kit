@@ -20,6 +20,10 @@ import { aggregateSceneDebug } from './debug/sceneDebugAggregator.js'
 
 const SCENE_DEBUG_KEY = '__JYTING_SCENE_DEBUG__'
 
+// melonJS exports one process-global Pointer instance. Keep the temporary
+// prototype patch singleton-scoped so a Hall teardown can restore the exact
+// method it replaced instead of leaking virtual-coordinate behavior.
+let virtualPointerPatch = null
 
 const virtualViewport = value => {
   const width = Number(value?.width)
@@ -30,8 +34,8 @@ const virtualViewport = value => {
 }
 
 // `rotate(90deg) translateY(-100%)` maps virtual (x, y) to physical
-// (height - y, x). melonJS 15 reads client/page coordinates itself, so the
-// capture-phase adapter below supplies the inverse before its bubble listener.
+// (height - y, x). melonJS 15 normalizes those coordinates through
+// Pointer#setEvent, so adapt its numeric arguments without mutating host events.
 export const inverseVirtualLandscapePoint = ({ clientX, clientY }, viewport) => ({
   clientX: Number(clientY),
   clientY: Number(viewport.height) - Number(clientX)
@@ -63,6 +67,8 @@ export class JuyitingGame {
     this._virtualViewport = null
     this._nativeCanvasRect = null
     this._virtualInputCleanup = null
+    this._nativeRendererScaleRatio = null
+    this._pausedByHallCleanup = false
     this._virtualCanvasRect = null
     this._viewportCommitFrame = null
     this._viewportCommitCandidateSignature = ''
@@ -144,6 +150,7 @@ export class JuyitingGame {
       this._hallScene.onReady(() => {
         this._publishReadyIfSceneBuilt(mountToken)
       })
+      this._syncHallClientPointMapper()
 
       // melonJS 15.15 has a process-global Application and no video.destroy().
       // Re-running video.init() after a portrait destroy leaves the old renderer and
@@ -169,6 +176,7 @@ export class JuyitingGame {
       // A reusable renderer keeps its original scaleTarget unless it is rebound.
       // Point it at the current stage before any global melon resize event fires.
       this._rebindEngineContainer(container)
+      this._reflowEngineForContainer(container)
 
       // Preserve melonJS's stable fit renderer. CSS controls the final display
       // rectangle so mobile viewport changes never resize the Canvas backing buffer.
@@ -379,9 +387,21 @@ export class JuyitingGame {
     this._readyPublished = false
     this._cancelViewportCommit()
     this._disconnectContainerResizeObserver()
-    try { me?.state?.pause?.() } catch { /* preserve the original mount failure */ }
+    try {
+      const state = me?.state
+      if (!this._pausedByHallCleanup) {
+        const wasPaused = typeof state?.isPaused === 'function' ? state.isPaused() : false
+        if (!wasPaused && typeof state?.pause === 'function') {
+          state.pause()
+          this._pausedByHallCleanup = true
+        }
+      }
+    } catch { /* preserve the original mount failure */ }
+    try { this._hallScene?.setClientPointMapper?.(null) } catch { /* best-effort mapper cleanup */ }
     try { this._hallScene?.onDestroyEvent?.() } catch { /* best-effort scene cleanup */ }
     this._teardownVirtualInputAdapter()
+    this._restoreNativeRendererScaleRatio()
+    this._virtualViewport = null
     this._virtualCanvasRect = null
     // melonJS 15.15 intentionally has no me.video.destroy(). Removing only the DOM
     // node is safe: retain it so the next HallScene can re-parent the one renderer.
@@ -634,6 +654,7 @@ export class JuyitingGame {
     if (this._pendingStart) {
       this._pendingStart = false
       me.state.change(this._stateId, true)
+      this._resumeHallRunLoop()
     }
     this._scheduleViewportCommit()
     // A delayed confirmation may recover a missed scene callback, but it
@@ -682,6 +703,12 @@ export class JuyitingGame {
       return
     }
     this._me.state.change(this._stateId, true)
+    this._resumeHallRunLoop()
+  }
+
+  _resumeHallRunLoop() {
+    if (!this._pausedByHallCleanup) return
+    try { this._me?.state?.resume?.() } finally { this._pausedByHallCleanup = false }
   }
 
   pause() {
@@ -927,10 +954,23 @@ export class JuyitingGame {
     const next = virtualViewport(viewport)
     const current = this._virtualViewport
     if (current?.width === next?.width && current?.height === next?.height) return
+    if (next && !current) this._nativeRendererScaleRatio = this._readRendererScaleRatio()
     this._virtualViewport = next
     this._virtualCanvasRect = null
+    this._syncHallClientPointMapper()
     this._applyVirtualInputAdapter()
+    if (!next && current) {
+      this._restoreNativeRendererScaleRatio()
+      this._reflowEngineForContainer(this._container)
+    }
     if (this._isCurrentMount(this._mountToken)) this._scheduleViewportCommit()
+  }
+
+  _syncHallClientPointMapper() {
+    const viewport = this._virtualViewport
+    this._hallScene?.setClientPointMapper?.(viewport
+      ? point => inverseVirtualLandscapePoint(point, viewport)
+      : null)
   }
 
   _rebindEngineContainer(container) {
@@ -947,6 +987,33 @@ export class JuyitingGame {
     }
   }
 
+  _reflowEngineForContainer(container) {
+    if (!container || this._container !== container) return
+    const event = this._me?.event
+    try {
+      if (event?.WINDOW_ONRESIZE && typeof event.emit === 'function') event.emit(event.WINDOW_ONRESIZE)
+    } catch { /* the Hall observer remains the resize authority if host reflow rejects */ }
+  }
+
+  _readRendererScaleRatio() {
+    const scaleRatio = this._me?.game?.renderer?.scaleRatio
+    const x = Number(scaleRatio?.x)
+    const y = Number(scaleRatio?.y)
+    return Number.isFinite(x) && x > 0 && Number.isFinite(y) && y > 0 ? { x, y } : null
+  }
+
+  _restoreNativeRendererScaleRatio() {
+    const ratio = this._nativeRendererScaleRatio
+    this._nativeRendererScaleRatio = null
+    if (!ratio) return
+    const scaleRatio = this._me?.game?.renderer?.scaleRatio
+    if (typeof scaleRatio?.set === 'function') scaleRatio.set(ratio.x, ratio.y)
+    else if (scaleRatio) {
+      scaleRatio.x = ratio.x
+      scaleRatio.y = ratio.y
+    }
+  }
+
   _canvasRectForGeometry() {
     if (this._virtualViewport && this._virtualCanvasRect) return this._virtualCanvasRect
     return this._canvas?.getBoundingClientRect?.()
@@ -956,37 +1023,42 @@ export class JuyitingGame {
     this._teardownVirtualInputAdapter()
     const canvas = this._canvas
     const viewport = this._virtualViewport
-    if (!canvas || !viewport || typeof window === 'undefined') return
+    const pointer = this._me?.input?.pointer
+    if (!canvas || !viewport || !pointer) return
     const nativeRect = canvas.getBoundingClientRect?.bind(canvas)
-    if (!nativeRect) return
-    this._nativeCanvasRect = nativeRect
-    canvas.getBoundingClientRect = () => this._virtualCanvasRect || nativeRect()
-    const mapTouch = touch => {
-      const point = inverseVirtualLandscapePoint(touch, viewport)
-      return Object.assign(Object.create(touch), point, {
-        pageX: point.clientX + (globalThis.pageXOffset || 0),
-        pageY: point.clientY + (globalThis.pageYOffset || 0)
-      })
+    if (nativeRect) {
+      this._nativeCanvasRect = nativeRect
+      canvas.getBoundingClientRect = () => this._virtualCanvasRect || nativeRect()
     }
-    const mapEvent = event => {
-      if (event.target !== canvas) return
-      const point = inverseVirtualLandscapePoint(event, viewport)
-      try {
-        Object.defineProperties(event, {
-          clientX: { configurable: true, value: point.clientX },
-          clientY: { configurable: true, value: point.clientY },
-          pageX: { configurable: true, value: point.clientX + (globalThis.pageXOffset || 0) },
-          pageY: { configurable: true, value: point.clientY + (globalThis.pageYOffset || 0) }
-        })
-        for (const name of ['touches', 'targetTouches', 'changedTouches']) {
-          if (event[name]) Object.defineProperty(event, name, { configurable: true, value: Array.from(event[name], mapTouch) })
-        }
-      } catch { /* readonly host event: leave native coordinates untouched */ }
+    if (virtualPointerPatch?.owner && virtualPointerPatch.owner !== this) {
+      virtualPointerPatch.owner._teardownVirtualInputAdapter()
     }
-    const names = ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'mousedown', 'mousemove', 'mouseup', 'touchstart', 'touchmove', 'touchend', 'touchcancel']
-    names.forEach(name => window.addEventListener(name, mapEvent, true))
+    const prototype = Object.getPrototypeOf(pointer)
+    const originalSetEvent = prototype?.setEvent
+    if (typeof originalSetEvent !== 'function') return
+    const owner = this
+    const patchedSetEvent = function (event, pageX = 0, pageY = 0, clientX = 0, clientY = 0, pointerId = 1) {
+      const activeViewport = owner._virtualViewport
+      if (virtualPointerPatch?.owner === owner && activeViewport && event?.target === owner._canvas) {
+        const point = inverseVirtualLandscapePoint({ clientX, clientY }, activeViewport)
+        const pageOffsetX = Number(pageX) - Number(clientX)
+        const pageOffsetY = Number(pageY) - Number(clientY)
+        return originalSetEvent.call(this, event,
+          point.clientX + (Number.isFinite(pageOffsetX) ? pageOffsetX : 0),
+          point.clientY + (Number.isFinite(pageOffsetY) ? pageOffsetY : 0),
+          point.clientX,
+          point.clientY,
+          pointerId)
+      }
+      return originalSetEvent.call(this, event, pageX, pageY, clientX, clientY, pointerId)
+    }
+    prototype.setEvent = patchedSetEvent
+    virtualPointerPatch = { owner, prototype, originalSetEvent, patchedSetEvent }
     this._virtualInputCleanup = () => {
-      names.forEach(name => window.removeEventListener(name, mapEvent, true))
+      if (virtualPointerPatch?.owner === owner) {
+        if (prototype.setEvent === patchedSetEvent) prototype.setEvent = originalSetEvent
+        virtualPointerPatch = null
+      }
       if (this._nativeCanvasRect) canvas.getBoundingClientRect = this._nativeCanvasRect
       this._nativeCanvasRect = null
     }
@@ -1148,8 +1220,10 @@ export class JuyitingGame {
     const ResizeObserverImpl = globalThis.ResizeObserver
     if (!ResizeObserverImpl || !this._container) return
     const mountToken = this._mountToken
+    const observedContainer = this._container
     this._containerResizeObserver = new ResizeObserverImpl(() => {
-      if (!this._isCurrentMount(mountToken)) return
+      if (!this._isCurrentMount(mountToken) || this._container !== observedContainer) return
+      this._reflowEngineForContainer(observedContainer)
       this._scheduleViewportCommit(mountToken)
     })
     this._containerResizeObserver.observe(this._container)

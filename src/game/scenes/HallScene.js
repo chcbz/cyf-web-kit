@@ -75,6 +75,10 @@ export function createHallSceneClass(me, HallAgentClass) {
       this._interactionLock = null
       this._lockedReasons = new Set()
       this._inputTarget = null
+      // HallScene owns direct canvas DOM drag/wheel listeners in addition to
+      // melonJS Pointer hit testing. The owner may supply a numeric-only
+      // physical-to-virtual mapper; native Event objects stay untouched.
+      this._clientPointMapper = null
       this._destroyed = false
       // E6: shadow renderer (lazy init, both flags off → zero construct)
       this._shadowRenderer = null
@@ -115,6 +119,7 @@ export function createHallSceneClass(me, HallAgentClass) {
     onAgentClick(cb)   { this._onAgentClick = cb }
     onHotspotClick(cb) { this._onHotspotClick = cb }
     onReady(cb)        { this._onReady = cb }
+    setClientPointMapper(mapper) { this._clientPointMapper = typeof mapper === 'function' ? mapper : null }
 
     get sceneBuildState() {
       if (this._sceneBuilt) return 'ready'
@@ -379,12 +384,13 @@ export function createHallSceneClass(me, HallAgentClass) {
     }
 
     _clientToViewport(clientX, clientY) {
+      const mapped = this._clientPointMapper?.({ clientX, clientY }) || { clientX, clientY }
       const viewport = this._viewportSize()
       const rect = this._displayRect()
       if (!rect?.width || !rect?.height || viewport.width <= 0 || viewport.height <= 0) {
-        return { x: clientX, y: clientY }
+        return { x: mapped.clientX, y: mapped.clientY }
       }
-      return clientToViewport(clientX, clientY, rect, viewport)
+      return clientToViewport(mapped.clientX, mapped.clientY, rect, viewport)
     }
 
     _createInputTarget() {
