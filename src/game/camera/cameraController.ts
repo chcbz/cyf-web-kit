@@ -222,7 +222,12 @@ export const createCameraController = (
       previewWorldBounds = { x, y, width, height }
       const containOffsetX = viewport.width / 2 - (x + width / 2) * zoom
       const containOffsetY = viewport.height / 2 - (y + height / 2) * zoom
-      return apply({ zoom, offsetX: containOffsetX - viewport.width / 2 * (1 - zoom), offsetY: containOffsetY - viewport.height / 2 * (1 - zoom) }, { minZoom: zoom, maxZoom: Math.max(normalBounds().maxZoom, zoom) })
+      const previewTransform = { zoom, offsetX: containOffsetX - viewport.width / 2 * (1 - zoom), offsetY: containOffsetY - viewport.height / 2 * (1 - zoom) }
+      if (![previewTransform.zoom, previewTransform.offsetX, previewTransform.offsetY].every(Number.isFinite)) return null
+      // Preview presentation intentionally bypasses normal landscape cover/clamp.
+      transform = previewTransform
+      adapter.apply({ ...transform })
+      return { ...transform }
     },
 
     clearPreviewContain() {

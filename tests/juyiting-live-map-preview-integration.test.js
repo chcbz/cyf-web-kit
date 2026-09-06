@@ -35,8 +35,13 @@ const fixture = () => {
 describe('live map preview Stage adapter lifecycle', () => {
   it('mounts cold preview without business admission, then admits once and keeps the instance through returns', async () => {
     const f = fixture(); const Stage = loadStage(f.game)
-    const wrapper = mount(Stage, { props, global: { stubs: { 'var-icon': true } } })
-    await flush(); f.handlers.onReady(); await flush()
+    const originalRaf = global.requestAnimationFrame
+    global.requestAnimationFrame = callback => { callback(0); return 1 }
+    let wrapper
+    try {
+      wrapper = mount(Stage, { attachTo: document.body, props, global: { stubs: { 'var-icon': true } } })
+      wrapper.get('.melon-layer').element.getBoundingClientRect = () => ({ width: 390, height: 720 })
+      await flush(); f.handlers.onReady(); await flush()
     expect(wrapper.emitted('simulation-ready')).to.equal(undefined)
     expect(wrapper.emitted('simulation-phase-events')).to.equal(undefined)
     expect(f.calls.destroy).to.equal(0)
@@ -49,5 +54,6 @@ describe('live map preview Stage adapter lifecycle', () => {
     expect(wrapper.emitted('simulation-phase-events')).to.have.length(1)
     expect(f.calls.destroy).to.equal(0)
     wrapper.unmount(); expect(f.calls.destroy).to.equal(1)
+    } finally { wrapper?.unmount(); global.requestAnimationFrame = originalRaf }
   })
 })
