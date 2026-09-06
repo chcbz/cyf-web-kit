@@ -112,7 +112,7 @@ const loadHallPage = mocks => {
   return new Function('Vue', 'mocks', body)(Vue, mocks)
 }
 
-const makeHallPageMocks = ({ mode, counters }) => {
+const makeHallPageMocks = ({ mode, counters, voiceLocked = Vue.ref(false) }) => {
   const noop = () => {}
   const asyncNoop = async () => {}
   const list = Vue.ref([])
@@ -140,6 +140,10 @@ const makeHallPageMocks = ({ mode, counters }) => {
   })
   const Empty = Vue.defineComponent({ setup: () => () => Vue.h('section') })
   counters.PortraitHome = HallPortraitHome
+  // The production composable returns reactive(), so its voice lock property is
+  // an unwrapped boolean at this boundary (not a Ref object).
+  const hallVoice = Vue.reactive({ voiceInteractionLocked: voiceLocked, cancel: noop, dispose: noop, applyTranscript: noop })
+  counters.hallVoice = hallVoice
   const data = {
     applySceneEvent: noop, applySceneSnapshot: noop, agentFilter: text, agents: list, bindPersona: asyncNoop, canAssign: () => true,
     filteredAgents: list, hiddenAgentCount: Vue.ref(0), loadAgents: asyncNoop, loadTasks: asyncNoop, loadTaskRecommendations: asyncNoop,
@@ -158,7 +162,7 @@ const makeHallPageMocks = ({ mode, counters }) => {
     useHallSound: () => ({ playAgentSelect: noop, playError: noop, playPanelOpen: noop, playRefresh: noop, playSend: noop, playSuccess: noop, playTap: noop, setSoundEnabled: noop, setSoundSuppressed: noop, soundEnabled: Vue.ref(false) }),
     useHallTaskActions: () => ({ archiveTask: asyncNoop, autoAssignTask: asyncNoop, assignTask: asyncNoop, createTask: asyncNoop }),
     useHallConversation: () => ({ cancelHallReplyTurn: noop, chatConnectionStatus: text, conversationId: text, draft: text, eventStreamRecovering: Vue.ref(false), insertAgentMention: noop, isAwaitingReply: Vue.ref(false), isStreaming: Vue.ref(false), loadHallMessages: asyncNoop, mentionAgent: noop, messages: list, newHallConversation: noop, pendingAgentName: text, replyEventSequence: Vue.ref(0), sendHallMessage: asyncNoop, senderText: text, disposeHallConversation: noop, draftRevision: Vue.ref(0), setDraft: noop, stopHallEventStream: noop, stopHallReplyPolling: noop, stopHallReplyStreaming: noop }),
-    useHallVoiceConversation: () => ({ voiceInteractionLocked: Vue.ref(false), cancel: noop, dispose: noop, applyTranscript: noop }), createHallVoiceReplyCorrelation: () => ({ close: noop, closeIfCurrent: () => false, start: () => true, observe: noop, resolveConversation: noop }),
+    useHallVoiceConversation: () => hallVoice, createHallVoiceReplyCorrelation: () => ({ close: noop, closeIfCurrent: () => false, start: () => true, observe: noop, resolveConversation: noop }),
     useHallLibrary: () => ({ citeLibraryItem: noop, libraryErrorMessage: text, libraryHasSearched: Vue.ref(false), libraryKeyword: text, libraryLoading: Vue.ref(false), libraryResults: list, librarySourceType: text, searchLibrary: asyncNoop }),
     isTaskWorkspaceBuildEnabled: () => false, createDisabledTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }), useTaskWorkspaceView: () => ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: text, error: Vue.ref(null), retry: noop }), useTaskWorkspace: noop, useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }),
     portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '',
@@ -194,8 +198,9 @@ describe('live map preview Hall page bridge', () => {
     Object.defineProperty(window, 'requestAnimationFrame', { configurable: true, value: requestFrame })
     Object.defineProperty(window, 'cancelAnimationFrame', { configurable: true, value: cancelFrame })
     const mode = Vue.ref('portrait-command')
+    const voiceLocked = Vue.ref(false)
     const counters = { stageMounts: 0, retries: 0 }
-    const Hall = loadHallPage(makeHallPageMocks({ mode, counters }))
+    const Hall = loadHallPage(makeHallPageMocks({ mode, counters, voiceLocked }))
     let wrapper
     try {
       wrapper = mount(Hall, { attachTo: document.body, global: { stubs: { 'var-icon': true, transition: false } } })
@@ -223,6 +228,20 @@ describe('live map preview Hall page bridge', () => {
       document.dispatchEvent(new window.Event('visibilitychange'))
       await flush(); await pump()
       expect(document.body.querySelector('.preview-stage')?.dataset.visible).to.equal('true')
+
+      // Mirror the reactive composable boundary: page guards receive booleans,
+      // while a true voice lock must reject the same actual quick-action event.
+      expect(counters.hallVoice.voiceInteractionLocked).to.equal(false)
+      expect(typeof counters.hallVoice.voiceInteractionLocked).to.equal('boolean')
+      voiceLocked.value = true
+      await flush(); await pump()
+      expect(counters.hallVoice.voiceInteractionLocked).to.equal(true)
+      await portrait.find('.portrait-quick-agents').trigger('click')
+      await flush(); await pump()
+      expect(wrapper.find('.panel-overlay').exists()).to.equal(false)
+      voiceLocked.value = false
+      await flush(); await pump()
+      expect(counters.hallVoice.voiceInteractionLocked).to.equal(false)
 
       // Exercise the actual portrait quick-action and page close controls rather
       // than relying on compiler-private setupState implementation details.
