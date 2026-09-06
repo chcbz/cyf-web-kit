@@ -833,10 +833,15 @@ const completePreviewExit = async (attemptId, transitionGeneration) => {
     committed = await (juyitingGame.commitViewport?.({ width: viewport.width, height: viewport.height, kind: 'orientation', orientationChanged: true })
       ?? juyitingGame.resizeViewport?.({ width: viewport.width, height: viewport.height, kind: 'orientation', orientationChanged: true }))
   } catch (error) {
+    // A late rejection belongs to a superseded preview transition and must not
+    // tear down a newer re-entered preview instance.
+    if (!isRunningGeneration(attemptId) || props.readOnlyPreview || transitionGeneration !== previewTransitionGeneration) return
     failSceneMount(attemptId, error instanceof Error ? error : new Error('地图视口提交失败，请重试'))
     return
   }
   if (!committed) {
+    // Check the generation before treating a false result as a current failure.
+    if (!isRunningGeneration(attemptId) || props.readOnlyPreview || transitionGeneration !== previewTransitionGeneration) return
     failSceneMount(attemptId, new Error('地图视口提交失败，请重试'))
     return
   }

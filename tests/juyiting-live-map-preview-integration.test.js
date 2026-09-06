@@ -69,7 +69,7 @@ describe('live map preview Stage adapter lifecycle', () => {
     expect(wrapper.emitted('simulation-phase-events')).to.equal(undefined)
     expect(f.calls.destroy).to.equal(0)
     expect(f.calls.locks.some(([, reason]) => reason === 'preview')).to.equal(true)
-    await wrapper.setProps({ experienceMode: 'landscape-map', readOnlyPreview: false }); await flush()
+    await wrapper.setProps({ experienceMode: 'landscape-map', readOnlyPreview: false }); await pump()
     expect(wrapper.emitted('simulation-ready')).to.have.length(1)
     await wrapper.setProps({ experienceMode: 'portrait-command', readOnlyPreview: true }); f.handlers.onSimulationPhaseEvents([{ id: 'terminal' }]); await pump()
     await wrapper.setProps({ experienceMode: 'portrait-command', readOnlyPreview: true }); await wrapper.setProps({ experienceMode: 'landscape-map', readOnlyPreview: false }); await wrapper.setProps({ experienceMode: 'portrait-command', readOnlyPreview: true }); await flush()
@@ -262,9 +262,19 @@ describe('live map preview orientation target transaction', () => {
       await wrapper.setProps({ experienceMode: 'landscape-map', readOnlyPreview: false }); await pump()
       const lockCountBeforeReverse = f.calls.locks.length
       await wrapper.setProps({ experienceMode: 'portrait-command', readOnlyPreview: true })
-      pendingCommit.resolve({ committed: true }); await flush(); await pump()
+      pendingCommit.resolve(false); await flush(); await pump()
       expect(targets).to.deep.equal(['agent-1'])
+      expect(f.calls.destroy).to.equal(0)
       expect(f.calls.locks.slice(lockCountBeforeReverse)).not.to.deep.include([false, 'preview'])
+
+      pendingCommit = deferred()
+      await wrapper.setProps({ experienceMode: 'landscape-map', readOnlyPreview: false, landscapeEntryTarget: entry(3) }); await pump()
+      const lockCountBeforeReject = f.calls.locks.length
+      await wrapper.setProps({ experienceMode: 'portrait-command', readOnlyPreview: true })
+      pendingCommit.reject(new Error('late viewport rejection')); await flush(); await pump()
+      expect(targets).to.deep.equal(['agent-1'])
+      expect(f.calls.destroy).to.equal(0)
+      expect(f.calls.locks.slice(lockCountBeforeReject)).not.to.deep.include([false, 'preview'])
     } finally {
       wrapper?.unmount()
       frames.clear()
