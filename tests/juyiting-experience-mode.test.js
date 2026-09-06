@@ -282,31 +282,42 @@ describe('Juyi Hall experience mode', () => {
     }
   })
 
-  it('uses viewport dimensions only for no-API initialization, never for later keyboard resize', async () => {
+  it('uses viewport dimensions only for no-API initialization and later updates presentation without changing physical mode', async () => {
     const originalWidth = global.window.innerWidth
     const originalHeight = global.window.innerHeight
     const originalVisualViewport = global.window.visualViewport
-    let visualListener = null
+    const visualListeners = new Set()
+    let visualWidth = 390
+    let visualHeight = 844
+    let wrapper
     Object.defineProperty(global.window, 'innerWidth', { configurable: true, writable: true, value: 390 })
     Object.defineProperty(global.window, 'innerHeight', { configurable: true, writable: true, value: 844 })
     Object.defineProperty(global.window, 'visualViewport', { configurable: true, value: {
-      addEventListener: (_event, listener) => { visualListener = listener },
-      removeEventListener: () => {},
-      height: 844
+      get width() { return visualWidth },
+      get height() { return visualHeight },
+      addEventListener: (_event, listener) => visualListeners.add(listener),
+      removeEventListener: (_event, listener) => visualListeners.delete(listener)
     } })
     const env = setupEnvironment({ mediaLandscape: null, screen: false })
     try {
-      const { mode, wrapper } = await mountMode()
-      expect(mode.experienceMode.value).to.equal('portrait-command')
+      const mounted = await mountMode()
+      wrapper = mounted.wrapper
+      expect(mounted.mode.experienceMode.value).to.equal('portrait-command')
+      expect(mounted.mode.hallViewportHeight.value).to.equal(844)
+      expect(visualListeners.size).to.equal(1)
       global.window.innerWidth = 844
       global.window.innerHeight = 390
+      visualWidth = 844
+      visualHeight = 390
       global.window.dispatchEvent(new global.window.Event('resize'))
-      visualListener?.(new global.window.Event('resize'))
+      visualListeners.forEach(listener => listener(new global.window.Event('resize')))
       await flush()
-      expect(visualListener).to.equal(null)
-      expect(mode.experienceMode.value).to.equal('portrait-command')
-      wrapper.unmount()
+      expect(mounted.mode.hallViewportHeight.value).to.equal(390)
+      expect(mounted.mode.isPhysicalLandscape.value).to.equal(false)
+      expect(mounted.mode.experienceMode.value).to.equal('portrait-command')
     } finally {
+      wrapper?.unmount()
+      expect(visualListeners.size).to.equal(0)
       Object.defineProperty(global.window, 'innerWidth', { configurable: true, value: originalWidth })
       Object.defineProperty(global.window, 'innerHeight', { configurable: true, value: originalHeight })
       Object.defineProperty(global.window, 'visualViewport', { configurable: true, value: originalVisualViewport })
@@ -332,8 +343,11 @@ describe('Juyi Hall experience mode', () => {
       removeEventListener: (_event, listener) => visualListeners.delete(listener)
     } })
     const env = setupEnvironment({ mediaLandscape: true, screen: false })
+    let wrapper
     try {
-      const { mode, wrapper } = await mountMode()
+      const mounted = await mountMode()
+      const { mode } = mounted
+      wrapper = mounted.wrapper
       expect(mode.isPhysicalLandscape.value).to.equal(true)
       expect(mode.hallViewportHeight.value).to.equal(390)
 
@@ -355,9 +369,9 @@ describe('Juyi Hall experience mode', () => {
       await flush()
       expect(mode.isPhysicalLandscape.value).to.equal(false)
       expect(mode.hallViewportHeight.value).to.equal(844)
-      wrapper.unmount()
-      expect(visualListeners.size).to.equal(0)
     } finally {
+      wrapper?.unmount()
+      expect(visualListeners.size).to.equal(0)
       Object.defineProperty(global.window, 'innerWidth', { configurable: true, value: originals.innerWidth })
       Object.defineProperty(global.window, 'innerHeight', { configurable: true, value: originals.innerHeight })
       Object.defineProperty(global.window, 'visualViewport', { configurable: true, value: originals.visualViewport })

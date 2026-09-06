@@ -102,7 +102,7 @@
     />
 
     <transition name="panel" @after-leave="handlePanelAfterLeave">
-      <div v-if="activePanel" :key="panelSessionGeneration" class="panel-overlay" :data-panel-generation="panelSessionGeneration" @pointerdown.self="closePanel">
+      <div v-if="activePanel" :key="panelSessionGeneration" class="panel-overlay" :class="{ 'is-chat-overlay': renderedPanel === 'chat' }" :data-panel-generation="panelSessionGeneration" @pointerdown.self="closePanel">
         <section
           ref="panelRef"
           class="floating-panel"
@@ -1887,7 +1887,7 @@ button.hall-room {
   contain: layout paint;
 }
 
-.panel-overlay:has(.panel-chat) {
+.panel-overlay.is-chat-overlay {
   align-items: stretch;
   justify-content: stretch;
   padding: 0;
@@ -2321,7 +2321,6 @@ button.hall-room {
   }
 
   .panel-overlay {
-    --mobile-chat-panel-top-gap: 18px;
     align-items: flex-end;
     padding: 0;
   }
