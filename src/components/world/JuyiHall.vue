@@ -445,7 +445,7 @@ const portraitPreviewVisible = ref(false)
 const documentPreviewVisible = ref(typeof document === 'undefined' || !document.hidden)
 // Only the active full-page panel overlay is known to cover the preview.
 // Voice/loading interaction locks remain independent from draw visibility.
-const previewFullyCovered = computed(() => Boolean(activePanel.value))
+const previewFullyCovered = computed(() => activePanel.value === 'chat' && renderedPanel.value === 'chat')
 const previewVisible = computed(() => portraitPreviewVisible.value && documentPreviewVisible.value && !previewFullyCovered.value)
 const previewSceneState = ref('loading')
 const previewSceneError = ref('')

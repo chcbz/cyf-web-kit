@@ -160,6 +160,13 @@ describe('live map preview Hall page bridge', () => {
       const stage = document.body.querySelector('.preview-stage')
       expect(stage?.parentElement?.classList.contains('preview-target')).to.equal(true)
       expect(stage?.dataset.preview).to.equal('true')
+      expect(stage?.dataset.visible).to.equal('true')
+      const state = wrapper.vm.$.setupState
+      state.openPanel('agents'); await flush()
+      expect(document.body.querySelector('.preview-stage')?.dataset.visible).to.equal('true')
+      state.closePanel(); state.openPanel('chat'); await flush()
+      expect(document.body.querySelector('.preview-stage')?.dataset.visible).to.equal('false')
+      state.closePanel(); await flush()
       mode.value = 'landscape-map'; await flush()
       expect(counters.stageMounts).to.equal(1)
       expect(document.body.querySelector('.preview-stage')?.parentElement?.classList.contains('hall-live-landscape-target')).to.equal(true)

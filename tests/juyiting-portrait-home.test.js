@@ -9,6 +9,9 @@ const hallUrl = new URL('../src/components/world/JuyiHall.vue', import.meta.url)
 const portraitHomeSource = readFileSync(portraitHomeUrl, 'utf8').replace(/\r\n/g, '\n')
 const hallSource = readFileSync(hallUrl, 'utf8').replace(/\r\n/g, '\n')
 
+const vueImportToVar = (_line, imports) => `var { ${imports.split(',').map(part => { const [name, alias] = part.trim().split(/\s+as\s+/); return alias ? `${name}: ${alias}` : name }).join(', ')} } = Vue`
+const restoreDescriptor = (target, key, descriptor) => { if (descriptor) Object.defineProperty(target, key, descriptor); else delete target[key] }
+
 const quickActions = [
   ['agents', '点将册'],
   ['tasks', '悬赏榜'],
@@ -156,22 +159,32 @@ it('compiles the stable preview target CSS and mounts a concrete target node', (
   const style = descriptor.styles.find(block => block.scoped)
   const compiled = compileStyle({ source: style.content, filename: portraitHomeUrl.pathname, id: 'portrait-preview-target', scoped: true })
   expect(compiled.errors).to.deep.equal([])
-  expect(compiled.code).to.include('.portrait-live-preview-target[data-v-portrait-preview-target]')
-  expect(compiled.code).to.include('display:flex')
-  expect(compiled.code).to.include('width:100%')
-  expect(compiled.code).to.include('height:100%')
+  const normalizedCss = compiled.code.replace(/\s+/g, '')
+  expect(normalizedCss).to.include('.portrait-live-preview-target[data-v-portrait-preview-target]')
+  expect(normalizedCss).to.include('display:flex')
+  expect(normalizedCss).to.include('width:100%')
+  expect(normalizedCss).to.include('height:100%')
 
   const body = compileScript(descriptor, { id: 'portrait-preview-target', inlineTemplate: true }).content
-    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_line, names) => `var { ${names} } = Vue`)
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = children.${name}`)
     .replace('export default', 'return')
-  const HallLiveMapPreview = Vue.defineComponent({ setup: (_props, { slots }) => () => Vue.h('section', { class: 'preview-frame-fixture' }, slots.default?.()) })
-  const PortraitHome = new Function('Vue', 'children', body)(Vue, { HallLiveMapPreview })
-  const wrapper = mount(PortraitHome, {
-    props: { livePreviewEnabled: true, statusClass: () => '', taskStateClass: () => '', taskStatusText: () => '' }
-  })
+  const domDescriptors = Object.fromEntries(['Element', 'SVGElement', 'Node'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]))
+  Object.defineProperty(globalThis, 'Element', { configurable: true, value: globalThis.window?.Element })
+  Object.defineProperty(globalThis, 'SVGElement', { configurable: true, value: globalThis.window?.SVGElement })
+  Object.defineProperty(globalThis, 'Node', { configurable: true, value: globalThis.window?.Node })
+  let wrapper
   try {
+    const HallLiveMapPreview = Vue.defineComponent({ setup: (_props, { slots }) => () => Vue.h('section', { class: 'preview-frame-fixture' }, slots.default?.()) })
+    const PortraitHome = new Function('Vue', 'children', body)(Vue, { HallLiveMapPreview })
+    wrapper = mount(PortraitHome, {
+      attachTo: document.body,
+      props: { livePreviewEnabled: true, statusClass: () => '', taskStateClass: () => '', taskStatusText: () => '' }
+    })
     const target = wrapper.get('.portrait-live-preview-target')
     expect(target.element.parentElement?.classList.contains('preview-frame-fixture')).to.equal(true)
-  } finally { wrapper.unmount() }
+  } finally {
+    wrapper?.unmount()
+    for (const [key, descriptor] of Object.entries(domDescriptors)) restoreDescriptor(globalThis, key, descriptor)
+  }
 })
