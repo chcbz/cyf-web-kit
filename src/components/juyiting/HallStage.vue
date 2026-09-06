@@ -427,7 +427,7 @@ const attemptHotspotLandscapeTarget = work => {
 }
 
 const consumeLandscapeEntryTarget = (attemptId, { retryHotspot = false } = {}) => {
-  if (!isRunningGeneration(attemptId)) return false
+  if (!isRunningGeneration(attemptId) || props.readOnlyPreview) return false
   const entry = props.landscapeEntryTarget
   if (!entry || !Number.isInteger(entry.generation) || entry.generation <= consumedLandscapeTargetGeneration) {
     cancelLandscapeTargetWork()
@@ -491,12 +491,13 @@ const finalizeSceneReady = async attemptId => {
     setupStageResizeObserver()
     unlockLoading(attemptId)
     consumeLandscapeEntryTarget(attemptId)
-    emit('scene-state-change', 'ready')
-    emit('scene-bounds-change', juyitingGame.getSceneBounds?.() || null)
     if (props.readOnlyPreview) {
       juyitingGame.setInteractionLocked?.(true, 'preview')
       juyitingGame.applyPreviewContain?.(juyitingGame.getSceneBounds?.())
-    }
+      juyitingGame.setPreviewDrawPolicy?.({ enabled: true, visible: props.previewVisible })
+    } else publishSimulationReady(attemptId)
+    emit('scene-state-change', 'ready')
+    emit('scene-bounds-change', juyitingGame.getSceneBounds?.() || null)
     scheduleReturnRefresh()
   } catch (error) {
     failSceneMount(attemptId, error)
@@ -623,7 +624,7 @@ const mountScene = async () => {
         if (isCurrentMountAttempt(attemptId)) handleSceneReady(attemptId)
       },
       onSimulationPhaseEvents: events => {
-        if (isRunningGeneration(attemptId) && !props.readOnlyPreview) emit('simulation-phase-events', events)
+        if (isRunningGeneration(attemptId) && businessReadyGeneration === attemptId) emit('simulation-phase-events', events)
       },
       onPersonaAvailabilityChanged: payload => {
         if (isRunningGeneration(attemptId)) {
@@ -632,7 +633,6 @@ const mountScene = async () => {
       }
     })
     if (!isCurrentMountAttempt(attemptId)) return
-    publishSimulationReady(attemptId)
     if (!melonReady.value) juyitingGame.setInteractionLocked?.(true, 'loading')
     juyitingGame.start()
   } catch (err) {
@@ -809,7 +809,7 @@ watch(() => props.readOnlyPreview, preview => {
     juyitingGame.clearPreviewDrawPolicy?.()
     publishSimulationReady(sceneMountAttempt)
   }
-})
+}, { immediate: true })
 
 watch(() => props.previewVisible, visible => {
   if (props.readOnlyPreview) juyitingGame.setPreviewDrawPolicy?.({ enabled: true, visible })

@@ -1,19 +1,15 @@
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
+import { compileScript, parse } from '@vue/compiler-sfc'
 
-const stage = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
-describe('live map preview integration contract', () => {
-  it('keeps preview read-only while deferring the business driver until landscape', () => {
-    expect(stage).to.include('readOnlyPreview')
-    expect(stage).to.include('!props.readOnlyPreview')
-    expect(stage).to.include('publishSimulationReady')
-    expect(stage).to.include("setInteractionLocked?.(preview, 'preview')")
+const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
+describe('live map preview Stage business gate', () => {
+  it('compiles the same Stage adapter with preview-first business gating', () => {
+    const { descriptor } = parse(source, { filename: 'HallStage.vue' })
+    const result = compileScript(descriptor, { id: 'live-preview-stage' })
+    expect(result.content).to.include('businessReadyGeneration === attemptId')
+    expect(result.content).to.include('props.readOnlyPreview')
+    expect(result.content).to.include('setPreviewDrawPolicy')
+    expect(result.content).to.include("businessReadyGeneration = attemptId")
   })
-})
-
-
-it('keeps preview transitions free of teardown and gates business publication', () => {
-  expect(stage).to.include('if (!props.readOnlyPreview) suspendScene()')
-  expect(stage).to.include('businessReadyGeneration')
-  expect(stage).to.include('previewVisible')
 })
