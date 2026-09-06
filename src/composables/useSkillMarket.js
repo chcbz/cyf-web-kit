@@ -145,7 +145,7 @@ const isAmbiguousTransportFailure = (failure) => !failure?.businessFailure && !f
 const DEFINITIVE_NO_ORDER_FAILURE_CODES = new Set([
   'SKILL_QUOTE_EXPIRED', 'AGENT_VERSION_CONFLICT', 'INSUFFICIENT_FUNDS'
 ])
-const isDefinitiveNoOrderFailure = failure => DEFINITIVE_NO_ORDER_FAILURE_CODES.has(failure?.code)
+const isDefinitiveNoOrderFailure = failure => ({ SKILL_QUOTE_EXPIRED: 409, AGENT_VERSION_CONFLICT: 409, INSUFFICIENT_FUNDS: 422 }[failure?.code] === failure?.status)
 
 const storageError = () => {
   const failure = new Error('购买恢复记录无法安全保存或读取；请检查浏览器存储权限和可用空间后重试。')

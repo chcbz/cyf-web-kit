@@ -152,6 +152,7 @@
             :funded-preview-enabled="economyPreviewEnabled"
             :funded-quote-preview="fundedQuotePreview"
             :funded-claim-state="fundedClaimState"
+            :funded-create-recovery="fundedCreateRecovery"
             @confirm-funded-quote="settleFundedQuote(true)"
             @cancel-funded-quote="settleFundedQuote(false)"
             @refresh-funded-claim="refreshFundedClaim"
@@ -174,6 +175,8 @@
             @archive-task="archiveTask"
             @brief-selected-task="briefSelectedTask"
             @create-task="createTask"
+            @resume-funded-create="resumeFundedCreate"
+            @cancel-funded-create-recovery="showToast('原资金榜请求仍会保留；请在准备好后明确恢复。')"
             @cancel-funding="cancelFunding"
             @load-settlement="loadSettlement"
             @discuss-task="discussTask"
@@ -946,7 +949,9 @@ onUnmounted(() => settleFundedQuote(false))
 
 const {
   fundedClaimState,
+  fundedCreateRecovery,
   refreshFundedClaim,
+  resumeFundedCreate: runResumeFundedCreate,
   archiveTask: runArchiveTask,
   autoAssignTask: runAutoAssignTask,
   assignTask: runAssignTask,
@@ -972,6 +977,11 @@ const createTask = async (payload, acknowledge = () => {}) => {
   const created = await runCreateTask(payload)
   if (created) markTaskCreated(selectedTask.value)
   acknowledge(created)
+  return created
+}
+const resumeFundedCreate = async () => {
+  const created = await runResumeFundedCreate()
+  if (created) markTaskCreated(selectedTask.value)
   return created
 }
 

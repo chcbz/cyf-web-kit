@@ -149,7 +149,8 @@ describe('funded bounty remediation', () => {
     }))
     const createPayload = { title: 'Created', grossBountyAmountMicro: '100', settlementPolicy: 'GROSS_INCLUSIVE' }
     expect(await createActions.createTask(createPayload)).to.equal(false)
-    expect(await createActions.createTask(createPayload)).to.equal(true)
+    expect(await createActions.createTask(createPayload)).to.equal(false)
+    expect(await createActions.resumeFundedCreate()).to.equal(true)
     expect(createKeys).to.deep.equal(['idem-1', 'idem-1'])
 
     const task = fundedTask('funded-retry')

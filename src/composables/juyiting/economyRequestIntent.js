@@ -3,12 +3,9 @@ const PREFIX = 'cyf.juyiting.economy-request-intent.v1'
 
 const requiredString = value => typeof value === 'string' ? value.trim() : ''
 const clone = value => JSON.parse(JSON.stringify(value))
+const validRecord = record => record && typeof record === 'object' && record.body && typeof record.body === 'object' && Boolean(requiredString(record.key))
 
-/**
- * Stores one immutable, actor-scoped funded request before its first send.
- * Callers may only replay the stored body/key until they obtain a documented
- * no-effect result or a canonical success readback.
- */
+/** Actor-scoped funded-create recovery storage. ABSENT is the only writable state. */
 export const createEconomyRequestIntentStore = ({ storage, scopeKey }) => {
   const key = () => {
     const scope = requiredString(scopeKey?.())
@@ -16,11 +13,16 @@ export const createEconomyRequestIntentStore = ({ storage, scopeKey }) => {
   }
   const readAll = () => {
     const storageKey = key()
-    if (!storageKey || !storage) return {}
+    if (!storageKey || !storage) return { state: 'UNAVAILABLE' }
+    let raw
+    try { raw = storage.getItem(storageKey) } catch { return { state: 'UNAVAILABLE' } }
+    if (raw === null) return { state: 'ABSENT', records: {} }
     try {
-      const decoded = JSON.parse(storage.getItem(storageKey) || '{}')
-      return decoded?.schemaVersion === SCHEMA_VERSION && decoded.records && typeof decoded.records === 'object' ? decoded.records : {}
-    } catch { return {} }
+      const decoded = JSON.parse(raw)
+      if (decoded?.schemaVersion !== SCHEMA_VERSION || !decoded.records || typeof decoded.records !== 'object' || Array.isArray(decoded.records)) return { state: 'CORRUPT' }
+      if (Object.values(decoded.records).some(record => !validRecord(record))) return { state: 'CORRUPT' }
+      return { state: 'PRESENT', records: decoded.records }
+    } catch { return { state: 'CORRUPT' } }
   }
   const writeAll = records => {
     const storageKey = key()
@@ -33,20 +35,25 @@ export const createEconomyRequestIntentStore = ({ storage, scopeKey }) => {
   }
   return {
     get: operation => {
-      const record = readAll()[operation]
-      return record && typeof record === 'object' ? clone(record) : null
+      const read = readAll()
+      if (read.state !== 'PRESENT') return read
+      const record = read.records[operation]
+      return record ? { state: 'PRESENT', record: clone(record) } : { state: 'ABSENT' }
     },
     save: (operation, record) => {
-      const records = readAll()
-      if (records[operation]) return clone(records[operation])
-      const stored = { ...records, [operation]: clone(record) }
-      return writeAll(stored) ? clone(stored[operation]) : null
+      const read = readAll()
+      if (read.state === 'PRESENT' && read.records[operation]) return { state: 'PRESENT', record: clone(read.records[operation]) }
+      if (read.state !== 'ABSENT' || !validRecord(record)) return read.state === 'ABSENT' ? { state: 'CORRUPT' } : read
+      const records = { [operation]: clone(record) }
+      return writeAll(records) ? { state: 'PRESENT', record: clone(records[operation]) } : { state: 'UNAVAILABLE' }
     },
     remove: operation => {
-      const records = readAll()
-      if (!Object.prototype.hasOwnProperty.call(records, operation)) return true
+      const read = readAll()
+      if (read.state === 'ABSENT') return { state: 'ABSENT' }
+      if (read.state !== 'PRESENT') return read
+      const records = { ...read.records }
       delete records[operation]
-      return writeAll(records)
+      return writeAll(records) ? { state: 'ABSENT' } : { state: 'UNAVAILABLE' }
     }
   }
 }

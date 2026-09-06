@@ -58,7 +58,7 @@
     <SkillPurchaseDialog
       v-model:show="purchaseVisible"
       :product="market.selectedProduct"
-      :target-agent="targetAgent"
+      :target-agent="dialogTargetAgent"
       :preview-enabled="market.previewEnabled"
       :approved-permissions="market.approvedPermissions"
       :quote="market.quote"
@@ -100,6 +100,9 @@ const market = proxyRefs(useSkillMarket({
   enabled: computed(() => props.previewEnabled),
   actorScopeKey: computed(() => props.actorScopeKey)
 }))
+const dialogTargetAgent = computed(() => market.target?.targetAgentId
+  ? { agentId: market.target.targetAgentId, version: market.target.expectedAgentVersion }
+  : props.targetAgent)
 const entitlementText = computed(() => market.entitlements.filter(item => String(item.status || '').toUpperCase() === 'ACTIVE').map(formatEntitlementSkillFact).filter(Boolean).join('、') || '无有效权益')
 const installedText = computed(() => props.installedSkills.map(formatInstalledSkillFact).filter(Boolean).join('、') || '未报告已安装技能')
 const runtimeAbilityText = computed(() => Array.isArray(props.runtimeAbilities) ? props.runtimeAbilities.join('、') || '未报告运行时能力' : props.runtimeAbilities || '未报告运行时能力')

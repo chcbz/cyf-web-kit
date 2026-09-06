@@ -81,40 +81,57 @@ export const useHallTaskActions = ({
     }
   }
 
+  const fundedCreateRecovery = ref(null)
+  const fundedCreateStorageFailure = state => state === 'CORRUPT'
+    ? '资金榜恢复记录损坏或版本未知；为防止重复扣款，已停止张榜。'
+    : '资金榜恢复记录不可用；为防止重复扣款，已停止张榜。'
+  const readFundedCreateRecovery = () => {
+    const current = intentStore.get('funded-create')
+    fundedCreateRecovery.value = current.state === 'PRESENT' ? current.record : null
+    return current
+  }
+  readFundedCreateRecovery()
+  const sendFundedCreate = async (intent) => {
+    const task = unwrap(ensureBusinessSuccess(await agentApi.create('/tasks', intent.body, {
+      autoLoading: false, headers: { 'Idempotency-Key': intent.key }, onSuccess: ensureBusinessSuccess
+    })))
+    const removed = intentStore.remove('funded-create')
+    if (removed.state !== 'ABSENT') throw new Error(fundedCreateStorageFailure(removed.state))
+    fundedCreateRecovery.value = null
+    tasks.value = [task, ...tasks.value.filter(item => item.id !== task.id)]
+    selectedTask.value = task
+    playSuccess(); showToast('榜文已张')
+    return true
+  }
   const createTask = async (payload) => {
     const funded = Boolean(payload?.grossBountyAmountMicro)
-    const operation = 'funded-create'
-    try {
-      let fundedIntent = null
-      if (funded) {
-        fundedIntent = intentStore.get(operation)
-        if (!fundedIntent) {
-          const body = JSON.parse(JSON.stringify(payload))
-          fundedIntent = intentStore.save(operation, { body, key: createIdempotencyKey() })
-          if (!fundedIntent) throw new Error('资金榜请求恢复记录无法安全保存；请稍后重试')
-        }
-      }
-      const task = funded
-        ? unwrap(ensureBusinessSuccess(await agentApi.create('/tasks', fundedIntent.body, {
-          autoLoading: false,
-          headers: { 'Idempotency-Key': fundedIntent.key },
-          onSuccess: ensureBusinessSuccess
-        })))
-        : unwrap(ensureBusinessSuccess(await agentApi.create('/tasks', payload, { autoLoading: false, onSuccess: ensureBusinessSuccess })))
-      if (task) {
-        if (funded) intentStore.remove(operation)
-        tasks.value = [task, ...tasks.value.filter(item => item.id !== task.id)]
-        selectedTask.value = task
-      }
-      playSuccess()
-      showToast('榜文已张')
-      return true
-    } catch (error) {
-      if (funded && isDefinitiveFundedFailure(error)) intentStore.remove(operation)
-      log.warn('create bounty task failed:', error)
-      playError()
-      showToast(`张榜未成：${failureReason(error, '请稍后再试')}`)
+    if (!funded) {
+      try {
+        const task = unwrap(ensureBusinessSuccess(await agentApi.create('/tasks', payload, { autoLoading: false, onSuccess: ensureBusinessSuccess })))
+        if (task) { tasks.value = [task, ...tasks.value.filter(item => item.id !== task.id)]; selectedTask.value = task }
+        playSuccess(); showToast('榜文已张'); return true
+      } catch (error) { log.warn('create bounty task failed:', error); playError(); showToast(`张榜未成：${failureReason(error, '请稍后再试')}`); return false }
+    }
+    const current = readFundedCreateRecovery()
+    if (current.state === 'PRESENT') {
+      showToast('存在未确认的原资金榜请求；请核对原正文并明确选择恢复，当前编辑稿未提交。')
       return false
+    }
+    if (current.state !== 'ABSENT') { showToast(fundedCreateStorageFailure(current.state)); return false }
+    const saved = intentStore.save('funded-create', { body: JSON.parse(JSON.stringify(payload)), key: createIdempotencyKey() })
+    fundedCreateRecovery.value = saved.record || null
+    if (saved.state !== 'PRESENT') { showToast(fundedCreateStorageFailure(saved.state)); return false }
+    try { return await sendFundedCreate(saved.record) } catch (error) {
+      if (isDefinitiveFundedFailure(error)) { const removed = intentStore.remove('funded-create'); if (removed.state === 'ABSENT') fundedCreateRecovery.value = null }
+      log.warn('create bounty task failed:', error); playError(); showToast(`张榜未成：${failureReason(error, '请稍后再试')}`); return false
+    }
+  }
+  const resumeFundedCreate = async () => {
+    const current = readFundedCreateRecovery()
+    if (current.state !== 'PRESENT') { showToast(current.state === 'ABSENT' ? '没有待恢复的资金榜请求。' : fundedCreateStorageFailure(current.state)); return false }
+    try { return await sendFundedCreate(current.record) } catch (error) {
+      if (isDefinitiveFundedFailure(error)) { const removed = intentStore.remove('funded-create'); if (removed.state === 'ABSENT') fundedCreateRecovery.value = null }
+      log.warn('resume funded bounty create failed:', error); playError(); showToast(`原资金榜恢复未成：${failureReason(error, '请核对原请求')}`); return false
     }
   }
 
@@ -341,7 +358,9 @@ export const useHallTaskActions = ({
       const receipt = await fundedRequest(`funded-cancel:${task.id}:${version}`, key => agentApi.create(`/tasks/${task.id}/funding/cancel`, {
         expectedTaskVersion: version
       }, { autoLoading: false, headers: { 'Idempotency-Key': key }, onSuccess: ensureBusinessSuccess }))
-      if (receipt?.taskId !== task.id || receipt?.fundingStatus !== 'REFUNDED' || !isCanonicalDecimalString(receipt?.taskVersion)) {
+      if (receipt?.taskId !== task.id || receipt?.fundingStatus !== 'REFUNDED' ||
+        !validString(receipt?.refundTransactionId) || !['refundedMicro', 'remainingMicro', 'taskVersion', 'fundingVersion', 'refundedAt'].every(field => isCanonicalDecimalString(receipt?.[field])) ||
+        BigInt(receipt.taskVersion) <= BigInt(version)) {
         throw new Error('撤榜回执不匹配；请核对原撤榜，不要重复扣款')
       }
       try {
@@ -351,9 +370,8 @@ export const useHallTaskActions = ({
         }
         for (const current of new Set(currentTaskSnapshots(task.id, task))) {
           const currentVersion = taskVersion(current)
-          if (!currentVersion || BigInt(taskVersion(canonical)) > BigInt(currentVersion) || current === task) Object.assign(current, canonical)
+          if (!currentVersion || BigInt(taskVersion(canonical)) > BigInt(currentVersion)) Object.assign(current, canonical)
         }
-        selectedTask.value = canonical
         showToast('资金榜文已撤，余款已退回')
       } catch (refreshError) {
         // The immutable REFUNDED receipt is already confirmed. A stale/lost

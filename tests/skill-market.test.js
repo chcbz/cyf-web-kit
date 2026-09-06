@@ -448,8 +448,8 @@ describe('skill market preview', () => {
   })
 
   it('clears only documented definitive no-order failures and reuses the key after an ambiguous order error', async () => {
-    const cases = ['PRICE_CHANGED', 'STALE_AGENT', 'PERMISSION_DENIED', 'ALREADY_ENTITLED', 'IDEMPOTENCY_CONFLICT']
-    for (const code of cases) {
+    const cases = [['SKILL_QUOTE_EXPIRED', 409], ['AGENT_VERSION_CONFLICT', 409], ['INSUFFICIENT_FUNDS', 422]]
+    for (const [code, status] of cases) {
       const storage = memoryStorage()
       const market = useSkillMarket({
         actorScopeKey: `actor-${code}`,
@@ -459,7 +459,7 @@ describe('skill market preview', () => {
           get: async () => success([]),
           post: async (url, payload) => url === '/skill-orders/quotes'
             ? success({ quoteId: 'sq-1', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
-            : ({ data: { code, msg: code } })
+            : (() => { const error = new Error(code); error.code = code; error.status = status; error.businessFailure = true; throw error })()
         }
       })
       await preparePurchase(market)

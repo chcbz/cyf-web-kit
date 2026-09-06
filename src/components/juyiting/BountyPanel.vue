@@ -42,6 +42,13 @@
         placeholder="总额（micro-SILVER）"
       />
       <small v-if="fundedPreviewEnabled && taskForm.funded && !validGrossAmount" class="funded-input-error">请输入规范的非负整数字符串。</small>
+      <section v-if="fundedCreateRecovery" class="funded-create-recovery" role="status">
+        <strong>发现原资金榜请求，结果未知</strong>
+        <p>将恢复原正文：{{ fundedCreateRecovery.body.title }} / {{ fundedCreateRecovery.body.grossBountyAmountMicro }} micro-SILVER。</p>
+        <p>当前编辑稿不会提交或替换原请求。</p>
+        <button type="button" @click="$emit('resume-funded-create')">确认按原请求恢复</button>
+        <button type="button" @click="$emit('cancel-funded-create-recovery')">暂不恢复</button>
+      </section>
       <button type="submit" :disabled="createPending || !taskForm.title || (taskForm.funded && !validGrossAmount)">{{ createPending ? '张榜中…' : '张榜悬赏' }}</button>
     </form>
 
@@ -292,6 +299,7 @@ const props = defineProps({
   fundedPreviewEnabled: { type: Boolean, default: false },
   fundedQuotePreview: { type: Object, default: null },
   fundedClaimState: { type: Object, default: null },
+  fundedCreateRecovery: { type: Object, default: null },
   abilityText: { type: Function, required: true },
   canAssign: { type: Function, required: true },
   formatTime: { type: Function, required: true },
@@ -313,6 +321,8 @@ const emit = defineEmits([
   'cancel-funded-quote',
   'refresh-funded-claim',
   'create-task',
+  'resume-funded-create',
+  'cancel-funded-create-recovery',
   'discuss-task',
   'load-settlement',
   'load-tasks',
