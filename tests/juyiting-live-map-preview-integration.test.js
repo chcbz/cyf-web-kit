@@ -59,7 +59,8 @@ describe('live map preview Stage adapter lifecycle', () => {
     Object.defineProperty(window, 'cancelAnimationFrame', { configurable: true, value: cancelFrame })
     let wrapper
     try {
-      wrapper = mount(Stage, { attachTo: document.body, props, global: { stubs: { 'var-icon': true } } })
+      const states = []
+      wrapper = mount(Stage, { attachTo: document.body, props: { ...props, onSceneStateChange: value => states.push(value) }, global: { stubs: { 'var-icon': true } } })
       const container = wrapper.get('.melon-layer').element
       container.getBoundingClientRect = () => ({ width: 390, height: 720, top: 0, left: 0, right: 390, bottom: 720 })
       await flush(); f.handlers.onReady(); await pump(); expect(states).to.include('ready')
