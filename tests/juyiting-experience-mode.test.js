@@ -1184,7 +1184,7 @@ describe('Juyi Hall experience mode', () => {
     }
   })
 
-  it('uses a local full-view fallback in WeChat without requesting fullscreen or orientation lock', async () => {
+  it('uses an interactive virtual landscape shell in WeChat without requesting fullscreen or orientation lock', async () => {
     const env = setupEnvironment()
     const originalWx = global.wx
     let fullscreenRequests = 0
@@ -1196,7 +1196,11 @@ describe('Juyi Hall experience mode', () => {
       const { mode, wrapper } = await mountMode()
       expect(await mode.requestLandscape()).to.equal(true)
       expect(mode.experienceMode.value).to.equal('landscape-map')
-      expect(mode.orientationHint.value).to.equal('当前容器不支持自动横屏，已打开全景视图')
+      expect(mode.isVirtualLandscape.value).to.equal(true)
+      expect(mode.orientationHint.value).to.equal('')
+      expect(await mode.requestPortrait()).to.equal(true)
+      expect(mode.experienceMode.value).to.equal('portrait-command')
+      expect(mode.isVirtualLandscape.value).to.equal(false)
       expect(fullscreenRequests).to.equal(0)
       expect(lockRequests).to.equal(0)
       wrapper.unmount()
@@ -1219,6 +1223,8 @@ describe('Juyi Hall experience mode', () => {
       expect(await mode.requestLandscape()).to.equal(true)
       expect(mode.experienceMode.value).to.equal('landscape-map')
       expect(await mode.requestPortrait()).to.equal(true)
+      // Releasing native ownership is best effort; the explicit control must
+      // switch the shell immediately even before the device reports rotation.
       expect(mode.experienceMode.value).to.equal('portrait-command')
       expect(unlocks).to.equal(1)
       expect(exits).to.equal(1)

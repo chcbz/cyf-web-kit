@@ -979,8 +979,11 @@ describe('JuyiHall component behavior', () => {
     expect(source).to.include('@media (max-width: 640px)')
     expect(source).to.include('max-width: calc(100% - 16px);')
     expect(source).to.include('.stage-heading .eyebrow {\n    display: none;')
-    expect(source).not.to.include('.hall-stage.is-virtual-landscape {')
-    expect(source).not.to.include('transform: rotate(90deg) translateY(-100%);')
+    expect(source).to.include("'is-virtual-landscape': virtualLandscape")
+    expect(source).to.include('setVirtualViewport?.(props.virtualLandscape ? stageViewportNow() : null)')
+    const hallSource = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+    expect(hallSource).to.include('.juyi-page.is-virtual-landscape')
+    expect(hallSource).to.include('transform: rotate(90deg) translateY(-100%);')
     expect(source).to.include('.hall-stage:has(.hall-board.is-scene-landscape) .stage-header {\n  top: 4px;')
     expect(source).to.include('.hall-stage:has(.hall-board.is-scene-landscape) .stage-heading .eyebrow {\n  display: none;')
     expect(source).to.include('.hall-stage:has(.hall-board.is-scene-landscape) .tool-action .tool-label {\n  display: none;')
@@ -1964,6 +1967,42 @@ describe('JuyitingGame lifecycle guards', () => {
     await settleMountWithLoaderSuccess(fake, mountPromise)
 
     expect(fake.videoInitCalls()).to.equal(1)
+  })
+
+  it('inverse-maps virtual landscape pointer coordinates before melonJS reads them', async () => {
+    const { inverseVirtualLandscapePoint } = await import('../src/game/JuyitingGame.js')
+    expect(inverseVirtualLandscapePoint({ clientX: 92, clientY: 37 }, { width: 844, height: 390 }))
+      .to.deep.equal({ clientX: 37, clientY: 298 })
+  })
+
+  it('reuses the melonJS 15 global video canvas across a portrait destroy and later map mount', async () => {
+    const mod = await import('../src/game/JuyitingGame.js')
+    const game = new mod.JuyitingGame()
+    const fake = createFakeGameMelon()
+    const canvas = {
+      parentElement: null,
+      style: { setProperty: () => {} },
+      remove() { this.parentElement = null }
+    }
+    const firstContainer = {
+      querySelector: selector => selector === 'canvas' ? canvas : null,
+      appendChild: node => { node.parentElement = firstContainer }
+    }
+    const secondContainer = {
+      querySelector: selector => selector === 'canvas' ? null : null,
+      appendChild: node => { node.parentElement = secondContainer }
+    }
+    game._me = fake.me
+
+    await settleMountWithLoaderSuccess(fake, game.mount(firstContainer))
+    expect(fake.videoInitCalls()).to.equal(1)
+    game.destroy()
+    expect(canvas.parentElement).to.equal(null)
+
+    await settleMountWithLoaderSuccess(fake, game.mount(secondContainer))
+    expect(fake.videoInitCalls()).to.equal(1)
+    expect(canvas.parentElement).to.equal(secondContainer)
+    game.destroy()
   })
 
   it('ignores stale loader callbacks after destroy invalidates a mount', async () => {

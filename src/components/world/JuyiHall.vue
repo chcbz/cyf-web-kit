@@ -1,5 +1,5 @@
 <template>
-  <div ref="hallRootRef" class="juyi-page" tabindex="-1" :class="{ 'is-panel-open': isPanelSessionActive, [`experience-${experienceMode}`]: true }">
+  <div ref="hallRootRef" class="juyi-page" tabindex="-1" :class="{ 'is-panel-open': isPanelSessionActive, 'is-virtual-landscape': isVirtualLandscape, [`experience-${experienceMode}`]: true }">
     <HallPortraitHome
       v-if="!experienceReady || experienceMode === 'portrait-command'"
       :agents="agents"
@@ -55,6 +55,7 @@
       :status-class="statusClass"
       :status-text="statusText"
       :tasks="tasks"
+      :virtual-landscape="isVirtualLandscape"
       :tasks-total="tasks.length"
       :visible-agents="visibleAgents"
       @landscape-target-consumed="handleLandscapeTargetConsumed"
@@ -403,6 +404,7 @@ const voiceReplyCorrelation = createHallVoiceReplyCorrelation({
 const {
   experienceMode,
   isMobileCoarse,
+  isVirtualLandscape,
   orientationHint,
   orientationRequestPending,
   requestLandscape,
@@ -2069,6 +2071,20 @@ button.hall-room {
 
 .juyi-page.is-panel-open :deep(.map-world) {
   transition: none;
+}
+
+.juyi-page.is-virtual-landscape {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 30;
+  width: 100vh;
+  height: 100vw;
+  width: 100dvh;
+  height: 100dvw;
+  min-height: 0;
+  transform: rotate(90deg) translateY(-100%);
+  transform-origin: top left;
 }
 
 @media (prefers-reduced-motion: reduce) {
