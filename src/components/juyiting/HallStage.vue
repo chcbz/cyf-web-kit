@@ -126,6 +126,7 @@ const props = defineProps({
   portraitShortName: { type: Function, required: true },
   portraitStyle: { type: Function, required: true },
   readOnlyPreview: { type: Boolean, default: false },
+  previewVisible: { type: Boolean, default: true },
   refreshing: { type: Boolean, default: false },
   roleClass: { type: Function, required: true },
   simulationEnabled: { type: Boolean, default: true },
@@ -799,11 +800,19 @@ watch(() => props.landscapeEntryTarget, () => {
 
 watch(() => props.readOnlyPreview, preview => {
   juyitingGame.setInteractionLocked?.(preview, 'preview')
-  if (preview) juyitingGame.applyPreviewContain?.(juyitingGame.getSceneBounds?.())
+  if (preview) {
+    juyitingGame.applyPreviewContain?.(juyitingGame.getSceneBounds?.())
+    juyitingGame.setPreviewDrawPolicy?.({ enabled: true, visible: props.previewVisible })
+  }
   else {
     juyitingGame.clearPreviewContain?.()
+    juyitingGame.clearPreviewDrawPolicy?.()
     publishSimulationReady(sceneMountAttempt)
   }
+})
+
+watch(() => props.previewVisible, visible => {
+  if (props.readOnlyPreview) juyitingGame.setPreviewDrawPolicy?.({ enabled: true, visible })
 })
 
 watch(() => props.experienceMode, mode => {

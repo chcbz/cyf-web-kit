@@ -10,3 +10,10 @@ describe('live map preview runtime contract', () => {
     expect(scene).to.include('sceneBounds()')
   })
 })
+
+
+it('keeps draw policy separate from simulation updates and restores its wrapper', () => {
+  expect(game).to.include('setPreviewDrawPolicy')
+  expect(game).to.include('clearPreviewDrawPolicy')
+  expect(game).not.to.include('timer.maxfps')
+})

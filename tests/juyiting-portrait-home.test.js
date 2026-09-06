@@ -135,3 +135,10 @@ describe('HallPortraitHome', () => {
     expect(hallSource).to.not.include(':key="experienceMode"')
   })
 })
+
+
+it('reserves a stable live preview target without importing the engine', () => {
+  expect(portraitHomeSource).to.include('HallLiveMapPreview')
+  expect(portraitHomeSource).to.include('livePreviewTarget')
+  expect(portraitHomeSource).not.to.include('juyitingGame')
+})

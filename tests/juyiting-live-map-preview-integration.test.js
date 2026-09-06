@@ -10,3 +10,10 @@ describe('live map preview integration contract', () => {
     expect(stage).to.include("setInteractionLocked?.(preview, 'preview')")
   })
 })
+
+
+it('keeps preview transitions free of teardown and gates business publication', () => {
+  expect(stage).to.include('if (!props.readOnlyPreview) suspendScene()')
+  expect(stage).to.include('businessReadyGeneration')
+  expect(stage).to.include('previewVisible')
+})
