@@ -2,6 +2,8 @@ import { expect } from 'chai'
 import { before } from 'mocha'
 import { readFileSync } from 'fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
+import { createEconomyRequestIntentStore } from '../src/composables/juyiting/economyRequestIntent.js'
+import { useHallTaskActions } from '../src/composables/juyiting/useHallTaskActions.js'
 
 global.SVGElement = global.window?.SVGElement
 
@@ -2042,7 +2044,7 @@ const loadActualJuyiHall = (mocks) => {
   return new Function('Vue', 'mocks', body)(Vue, mocks)
 }
 
-const createActualHallMocks = ({ mode, mounts, counters = {} }) => {
+const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null, actualBountyPanel = null, economyCapability = null }) => {
   const noop = () => {}
   const asyncNoop = async () => {}
   const value = Vue.ref([])
@@ -2079,8 +2081,9 @@ const createActualHallMocks = ({ mode, mounts, counters = {} }) => {
     ...panelHelpers,
     env: {}, capturePanelReturnTarget: panelHelpers.capturePanelReturnTarget, focusHallPanel: panelHelpers.focusHallPanel, isCurrentPanelGeneration: panelHelpers.isCurrentPanelGeneration, isSafePanelFocusTarget: panelHelpers.isSafePanelFocusTarget, resolvePanelReturnTarget: panelHelpers.resolvePanelReturnTarget, restorePanelFocus: panelHelpers.restorePanelFocus, trapPanelFocus: panelHelpers.trapPanelFocus,
     useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({}), agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {},
+    isEconomyPreviewBuildEnabled: () => Boolean(economyCapability), isEconomyPreviewCapability: capability => capability === economyCapability, loadEconomyPreviewCapability: async () => economyCapability,
     roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
-    useHallData: ({ selectedAgent, selectedTask }) => { counters.owners.data += 1; selectedAgent.value = { agentId: 'agent-o04', name: 'sentinel-agent' }; selectedTask.value = { id: 'task-o04', title: 'sentinel-task' }; return hallData },
+    useHallData: ({ selectedAgent, selectedTask }) => { counters.owners.data += 1; selectedAgent.value = { agentId: 'agent-o04', name: 'sentinel-agent' }; selectedTask.value = counters.initialSelectedTask || { id: 'task-o04', title: 'sentinel-task' }; return hallData },
     useHallExperienceMode: () => ({ experienceMode: mode, isMobileCoarse: Vue.ref(true), orientationHint: scalar, orientationRequestPending: Vue.ref(false), requestLandscape: asyncNoop }),
     useHallPanels: ({ experienceMode, isMobileCoarse }) => ({ panelLayout: Vue.computed(() => isMobileCoarse.value ? (experienceMode.value === 'landscape-map' ? 'right-drawer' : 'bottom-drawer') : 'center-modal') }),
     useHallSceneState: () => ({ setMapRuntime: noop, reset: noop, forwardPhaseEvents: asyncNoop }),
@@ -2088,13 +2091,13 @@ const createActualHallMocks = ({ mode, mounts, counters = {} }) => {
     useHallBackendSceneState: () => ({ start: asyncNoop, stop: noop, dispose: noop, reportPhase: noop }), useHallSceneDebugBridge: () => { counters.owners.debug += 1; return { sentinel: 'debug-owner-o04', republish: noop, stop: noop } },
     useHallSound: () => ({ playAgentSelect: noop, playError: noop, playPanelOpen: noop, playRefresh: noop, playSend: noop, playSuccess: noop, playTap: noop, setSoundEnabled: noop, soundEnabled: Vue.ref(false) }),
     useHallChatContext: () => ({ chatContext: Vue.ref({}), chatMentionAgents: value, chatMode: Vue.ref('public'), chatTargetText: scalar, enterBountyDiscussion: noop, enterPrivateConversation: noop, resetToPublic: noop, setMentionAgent: noop }),
-    useHallScene: () => ({ markAgentSpeaking: noop, markDiscussionStarted: noop, markLibraryCitation: noop, markLibrarySearching: noop, markRecommendedAgents: noop, markTaskArchived: noop, markTaskAssigned: noop, markTaskAutoAssigned: noop, markTaskCreated: noop, resetSceneFeedback: noop, sceneAgents: value, sceneAgentStyle: () => ({}), sceneHotspots: value, syncAfterPersonaChanged: noop }),
-    useHallTaskActions: () => ({ archiveTask: asyncNoop, autoAssignTask: asyncNoop, assignTask: async () => true, createTask: asyncNoop }),
+    useHallScene: () => ({ markAgentSpeaking: noop, markDiscussionStarted: noop, markLibraryCitation: noop, markLibrarySearching: noop, markRecommendedAgents: noop, markTaskArchived: noop, markTaskAssigned: noop, markTaskAutoAssigned: noop, markTaskCreated: task => { counters.markedTasks ||= []; counters.markedTasks.push(task) }, resetSceneFeedback: noop, sceneAgents: value, sceneAgentStyle: () => ({}), sceneHotspots: value, syncAfterPersonaChanged: noop }),
+    useHallTaskActions: () => taskActions || ({ archiveTask: asyncNoop, autoAssignTask: asyncNoop, assignTask: async () => true, createTask: asyncNoop, fundedClaimState: Vue.ref(null), fundedCreateRecovery: Vue.ref(null), refreshFundedClaim: asyncNoop, resumeFundedCreate: asyncNoop }),
     useHallConversation: () => { counters.owners.conversation += 1; return ({ chatConnectionStatus: scalar, conversationId: counters.refs.conversationId, draft: counters.refs.draft, eventStreamRecovering: Vue.ref(false), insertAgentMention: noop, isAwaitingReply: Vue.ref(false), isStreaming: Vue.ref(false), loadHallMessages: async () => { counters.loads.messages += 1 }, mentionAgent: noop, messages: counters.refs.messages, newHallConversation: noop, pendingAgentName: scalar, sendHallMessage: asyncNoop, senderText: scalar, disposeHallConversation: noop, stopHallEventStream: noop, stopHallReplyPolling: noop, stopHallReplyStreaming: noop }) },
     useHallLibrary: () => ({ citeLibraryItem: noop, libraryErrorMessage: scalar, libraryHasSearched: Vue.ref(false), libraryKeyword: scalar, libraryLoading: Vue.ref(false), libraryResults: value, librarySourceType: scalar, searchLibrary: asyncNoop }),
     useTaskWorkspace: () => null, createDisabledTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }), isTaskWorkspaceBuildEnabled: () => false, useTaskWorkspaceView: () => ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: scalar, error: Vue.ref(null), retry: noop }), useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop }),
     portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '',
-    HallPortraitHome, HallStage, LibraryPanel, AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel, BountyPanel: EmptyPanel, TaskWorkspacePanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PrivateDiscussionPanel: EmptyPanel, PublicDiscussionPanel: EmptyPanel, SelectedAgentCard: EmptyPanel
+    HallPortraitHome, HallStage, LibraryPanel, AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel, BountyPanel: actualBountyPanel || EmptyPanel, TaskWorkspacePanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PrivateDiscussionPanel: EmptyPanel, PublicDiscussionPanel: EmptyPanel, SelectedAgentCard: EmptyPanel
   }
 }
 
@@ -2235,4 +2238,124 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
     }
   })
 
+})
+
+
+describe('W11 R9 actual JuyiHall stale funded acknowledgement', () => {
+  const memoryStorage = () => {
+    const values = new Map()
+    return { getItem: key => values.get(key) || null, setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key) }
+  }
+
+  for (const operation of ['ordinary create', 'explicit recovery']) {
+    for (const outcome of ['success', 'unknown failure']) {
+      it(`keeps B draft, selection, and journal when stale A ${operation} completes with ${outcome}`, async () => {
+        const scope = Vue.ref('actor-a')
+        const storage = memoryStorage()
+        const delayedA = deferred()
+        const effects = { errors: 0, successes: 0, toasts: [] }
+        const actionTasks = Vue.ref([])
+        const actionSelectedTask = Vue.ref(null)
+        const originalA = { title: 'A 原请求', description: 'A 原缘由', requiredAbilities: ['A 本领'], grossBountyAmountMicro: '10', settlementPolicy: 'GROSS_INCLUSIVE' }
+        const originalB = { title: 'B 草稿标题', description: 'B 草稿缘由', requiredAbilities: ['B 本领一', 'B 本领二'], grossBountyAmountMicro: '20', settlementPolicy: 'GROSS_INCLUSIVE' }
+        let aRequests = 0
+        let keyIndex = 0
+        const actions = useHallTaskActions({
+          agentApi: {
+            create: async (_url, body) => {
+              if (body.title === originalA.title) {
+                aRequests += 1
+                if (operation === 'explicit recovery' && aRequests === 1) throw new TypeError('A 初始响应丢失')
+                return delayedA.promise
+              }
+              if (body.title === originalB.title) throw new TypeError('B 响应丢失')
+              throw new Error('unexpected funded body')
+            }
+          },
+          canAssign: () => true,
+          fundedActorScopeKey: () => scope,
+          fundedIntentStorage: storage,
+          createIdempotencyKey: () => `r9-key-${++keyIndex}`,
+          log: { warn: () => {} },
+          playError: () => { effects.errors += 1 },
+          playSuccess: () => { effects.successes += 1 },
+          selectedAgent: Vue.ref(null),
+          selectedTask: actionSelectedTask,
+          showToast: message => effects.toasts.push(message),
+          tasks: actionTasks
+        })
+        if (operation === 'explicit recovery') {
+          expect(await actions.createTask(originalA)).to.equal(false)
+          effects.errors = 0
+          effects.successes = 0
+          effects.toasts.length = 0
+        }
+
+        const bSelection = { id: 'b-selected-task', title: 'B 选择保持' }
+        const counters = {
+          initialSelectedTask: bSelection,
+          panelHelpers: await import('../src/composables/juyiting/useHallPanels.js')
+        }
+        const capability = { principalScopeFingerprint: 'actor-a' }
+        const JuyiHall = loadActualJuyiHall(createActualHallMocks({
+          mode: Vue.ref('portrait-command'), mounts: { library: 0, archive: 0 }, counters,
+          taskActions: actions, actualBountyPanel: BountyPanel, economyCapability: capability
+        }))
+        const wrapper = mount(JuyiHall, { attachTo: document.body, global: { stubs: { ...stubs, transition: false } } })
+        const state = wrapper.vm.$.setupState
+        const writeDraft = async draft => {
+          await wrapper.find('input[name="taskTitle"]').setValue(draft.title)
+          await wrapper.find('textarea[name="taskDescription"]').setValue(draft.description)
+          await wrapper.find('input[name="requiredAbilities"]').setValue(draft.requiredAbilities.join(','))
+          const funded = wrapper.find('.funded-create-toggle input')
+          if (!funded.element.checked) await funded.setChecked(true)
+          await wrapper.find('input[name="grossBountyAmountMicro"]').setValue(draft.grossBountyAmountMicro)
+        }
+        try {
+          await flushPromises()
+          state.openPanel('tasks')
+          await flushPromises()
+          await wrapper.find('.new-task-button').trigger('click')
+          expect(wrapper.find('.task-create-form').exists()).to.equal(true)
+
+          if (operation === 'ordinary create') {
+            await writeDraft(originalA)
+            await wrapper.find('.task-create-form').trigger('submit')
+          } else {
+            const resume = wrapper.findAll('.funded-create-recovery button').find(button => button.text().includes('确认按原请求恢复'))
+            expect(resume).to.exist
+            await resume.trigger('click')
+          }
+          await Promise.resolve()
+
+          scope.value = 'actor-b'
+          await Vue.nextTick()
+          expect(await actions.createTask(originalB)).to.equal(false)
+          const bRecovery = JSON.parse(JSON.stringify(actions.fundedCreateRecovery.value))
+          await writeDraft(originalB)
+          const effectsBeforeStaleA = { ...effects, toasts: [...effects.toasts] }
+
+          expect(wrapper.find('.funded-create-recovery').text()).to.include('原榜文名目：B 草稿标题')
+          expect(state.selectedTask).to.deep.equal(bSelection)
+          if (outcome === 'success') delayedA.resolve({ data: { code: 'E0', data: { id: 'a-created', ...originalA } } })
+          else delayedA.reject(new TypeError('A 响应丢失'))
+          await flushPromises()
+          await flushPromises()
+
+          expect(counters.markedTasks || []).to.deep.equal([])
+          expect(effects).to.deep.equal(effectsBeforeStaleA)
+          expect(state.selectedTask).to.deep.equal(bSelection)
+          expect(wrapper.find('input[name="taskTitle"]').element.value).to.equal(originalB.title)
+          expect(wrapper.find('textarea[name="taskDescription"]').element.value).to.equal(originalB.description)
+          expect(wrapper.find('input[name="requiredAbilities"]').element.value).to.equal(originalB.requiredAbilities.join(','))
+          expect(wrapper.find('input[name="grossBountyAmountMicro"]').element.value).to.equal(originalB.grossBountyAmountMicro)
+          expect(wrapper.find('.funded-create-recovery').text()).to.include('原榜文名目：B 草稿标题')
+          const bStore = createEconomyRequestIntentStore({ storage, scopeKey: () => 'actor-b' })
+          expect(bStore.get('funded-create')).to.deep.equal({ state: 'PRESENT', record: bRecovery })
+        } finally {
+          wrapper.unmount()
+        }
+      })
+    }
+  }
 })

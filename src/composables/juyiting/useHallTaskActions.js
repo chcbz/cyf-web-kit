@@ -111,8 +111,9 @@ export const useHallTaskActions = ({
     const removed = intentStoreForScope(scope).remove('funded-create')
     if (removed.state !== 'ABSENT') throw new Error(fundedCreateStorageFailure(removed.state))
     // An old principal's success is durable, but it must not replace the newer
-    // principal's recovery panel, task list, selection, or toast presentation.
-    if (fundedActorScope.value !== scope) return true
+    // principal's recovery panel, task list, selection, toast, or parent success
+    // acknowledgement (which would otherwise clear the newer actor's draft).
+    if (fundedActorScope.value !== scope) return false
     fundedCreateRecovery.value = null
     tasks.value = [task, ...tasks.value.filter(item => item.id !== task.id)]
     selectedTask.value = task
@@ -144,6 +145,7 @@ export const useHallTaskActions = ({
         const removed = store.remove('funded-create')
         if (removed.state === 'ABSENT' && fundedActorScope.value === scope) fundedCreateRecovery.value = null
       }
+      if (fundedActorScope.value !== scope) return false
       log.warn('create bounty task failed:', error); playError(); showToast(`张榜未成：${failureReason(error, '请稍后再试')}`); return false
     }
   }
@@ -157,6 +159,7 @@ export const useHallTaskActions = ({
         const removed = store.remove('funded-create')
         if (removed.state === 'ABSENT' && fundedActorScope.value === scope) fundedCreateRecovery.value = null
       }
+      if (fundedActorScope.value !== scope) return false
       log.warn('resume funded bounty create failed:', error); playError(); showToast(`原资金榜恢复未成：${failureReason(error, '请核对原请求')}`); return false
     }
   }

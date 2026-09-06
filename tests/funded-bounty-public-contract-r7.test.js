@@ -142,6 +142,7 @@ describe('W11 funded-create public composable contract', () => {
     })
     const wrapper = mount(Harness)
     wrappers.push(wrapper)
+    await wrapper.find('.new-task-button').trigger('click')
 
     const recoveryText = wrapper.find('.funded-create-recovery').text()
     expect(recoveryText).to.include('原榜文名目：原资金榜正文')
@@ -191,6 +192,7 @@ describe('W11 funded-create public composable contract', () => {
     })
     const wrapper = mount(Harness)
     wrappers.push(wrapper)
+    await wrapper.find('.new-task-button').trigger('click')
 
     scope.value = 'actor-a'
     await Vue.nextTick()
@@ -262,10 +264,11 @@ describe('W11 funded-create public composable contract', () => {
     })
     const wrapper = mount(Harness)
     wrappers.push(wrapper)
+    await wrapper.find('.new-task-button').trigger('click')
     expect(wrapper.find('.funded-create-recovery').text()).to.include('原榜文名目：B 待恢复原文')
 
     delayedA.resolve(success({ id: 'a-created-task', ...originalA }))
-    expect(await pendingA).to.equal(true)
+    expect(await pendingA).to.equal(false)
     await Vue.nextTick()
 
     expect(actions.fundedCreateRecovery.value).to.deep.equal(bRecovery)
