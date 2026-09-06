@@ -102,7 +102,7 @@
     />
 
     <transition name="panel" @after-leave="handlePanelAfterLeave">
-      <div v-if="activePanel" :key="panelSessionGeneration" class="panel-overlay" :class="{ 'is-chat-overlay': renderedPanel === 'chat' }" :data-panel-generation="panelSessionGeneration" @pointerdown.self="closePanel">
+      <div v-if="activePanel" :key="panelSessionGeneration" class="panel-overlay" :class="{ 'is-chat-overlay': renderedPanel === 'chat', 'is-compact-chat-overlay': renderedPanel === 'chat' && isCompactChat }" :data-panel-generation="panelSessionGeneration" @pointerdown.self="closePanel">
         <section
           ref="panelRef"
           class="floating-panel"
@@ -411,10 +411,13 @@ const {
   requestLandscape,
   requestPortrait
 } = useHallExperienceMode()
+const resolvedHallViewportHeight = computed(() => Number(hallViewportHeight?.value ?? hallViewportHeight) || 0)
 const hallViewportStyle = computed(() => {
-  const height = Number(hallViewportHeight?.value ?? hallViewportHeight)
-  return Number.isFinite(height) && height > 0 ? { '--hall-visual-height': `${height}px` } : {}
+  const height = resolvedHallViewportHeight.value
+  return height > 0 ? { '--hall-visual-height': `${height}px` } : {}
 })
+// This follows the live visual viewport, including a keyboard-only shrink.
+const isCompactChat = computed(() => resolvedHallViewportHeight.value > 0 && resolvedHallViewportHeight.value <= 320)
 const { panelLayout } = useHallPanels({ experienceMode, isMobileCoarse })
 const hallRootRef = ref(null)
 const panelRef = ref(null)
@@ -1907,6 +1910,18 @@ button.hall-room {
   height: 100%;
   max-height: 100%;
   border-radius: 0;
+}
+
+.panel-overlay.is-compact-chat-overlay .panel-title {
+  padding: 6px 10px;
+}
+
+.panel-overlay.is-compact-chat-overlay :deep(.discussion-brief) {
+  display: none;
+}
+
+.panel-overlay.is-compact-chat-overlay :deep(.hall-messages) {
+  padding: 4px 8px;
 }
 
 .floating-panel {
