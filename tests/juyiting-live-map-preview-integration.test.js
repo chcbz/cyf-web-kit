@@ -35,25 +35,37 @@ const fixture = () => {
 describe('live map preview Stage adapter lifecycle', () => {
   it('mounts cold preview without business admission, then admits once and keeps the instance through returns', async () => {
     const f = fixture(); const Stage = loadStage(f.game)
-    const originalRaf = global.requestAnimationFrame
-    global.requestAnimationFrame = callback => { callback(0); return 1 }
+    const globalRaf = Object.getOwnPropertyDescriptor(global, 'requestAnimationFrame')
+    const windowRaf = Object.getOwnPropertyDescriptor(window, 'requestAnimationFrame')
+    const globalCancel = Object.getOwnPropertyDescriptor(global, 'cancelAnimationFrame')
+    const windowCancel = Object.getOwnPropertyDescriptor(window, 'cancelAnimationFrame')
+    const frames = new Map(); let nextFrame = 1
+    const requestFrame = callback => { const id = nextFrame++; frames.set(id, callback); return id }
+    const cancelFrame = id => frames.delete(id)
+    const pump = async (limit = 12) => { for (let i = 0; i < limit && frames.size; i++) { const queued = [...frames.entries()]; frames.clear(); queued.forEach(([, callback]) => callback(i * 16)); await flush() } }
+    Object.defineProperty(global, 'requestAnimationFrame', { configurable: true, value: requestFrame })
+    Object.defineProperty(window, 'requestAnimationFrame', { configurable: true, value: requestFrame })
+    Object.defineProperty(global, 'cancelAnimationFrame', { configurable: true, value: cancelFrame })
+    Object.defineProperty(window, 'cancelAnimationFrame', { configurable: true, value: cancelFrame })
     let wrapper
     try {
       wrapper = mount(Stage, { attachTo: document.body, props, global: { stubs: { 'var-icon': true } } })
-      wrapper.get('.melon-layer').element.getBoundingClientRect = () => ({ width: 390, height: 720 })
-      await flush(); f.handlers.onReady(); await flush()
+      const container = wrapper.get('.melon-layer').element
+      container.getBoundingClientRect = () => ({ width: 390, height: 720, top: 0, left: 0, right: 390, bottom: 720 })
+      await flush(); f.handlers.onReady(); await pump()
     expect(wrapper.emitted('simulation-ready')).to.equal(undefined)
+    f.handlers.onSimulationPhaseEvents([{ id: 'cold-terminal' }]); await pump()
     expect(wrapper.emitted('simulation-phase-events')).to.equal(undefined)
     expect(f.calls.destroy).to.equal(0)
     expect(f.calls.locks.some(([, reason]) => reason === 'preview')).to.equal(true)
     await wrapper.setProps({ readOnlyPreview: false }); await flush()
     expect(wrapper.emitted('simulation-ready')).to.have.length(1)
-    f.handlers.onSimulationPhaseEvents([{ id: 'terminal' }]); await flush()
+    await wrapper.setProps({ readOnlyPreview: true }); f.handlers.onSimulationPhaseEvents([{ id: 'terminal' }]); await pump()
     await wrapper.setProps({ readOnlyPreview: true }); await wrapper.setProps({ readOnlyPreview: false }); await wrapper.setProps({ readOnlyPreview: true }); await flush()
     expect(wrapper.emitted('simulation-ready')).to.have.length(1)
     expect(wrapper.emitted('simulation-phase-events')).to.have.length(1)
     expect(f.calls.destroy).to.equal(0)
     wrapper.unmount(); expect(f.calls.destroy).to.equal(1)
-    } finally { wrapper?.unmount(); global.requestAnimationFrame = originalRaf }
+    } finally { wrapper?.unmount(); Object.defineProperty(global, 'requestAnimationFrame', globalRaf); Object.defineProperty(window, 'requestAnimationFrame', windowRaf); Object.defineProperty(global, 'cancelAnimationFrame', globalCancel); Object.defineProperty(window, 'cancelAnimationFrame', windowCancel) }
   })
 })

@@ -481,7 +481,9 @@ it('contains non-zero world bounds and rejects hostile preview bounds', () => {
   const preview = controller.applyPreviewContain({ x: 100, y: 50, width: 400, height: 100 })
   assert.ok(preview)
   assert.equal(controller.applyPreviewContain({ x: Infinity, y: 0, width: 1, height: 1 }), null)
+  const beforeHostile = controller.snapshot().transform
   assert.equal(controller.applyPreviewContain({ x: 0, y: 0, width: Number.MAX_VALUE, height: Number.MIN_VALUE }), null)
+  assert.deepEqual(controller.snapshot().transform, beforeHostile)
 })
 
 

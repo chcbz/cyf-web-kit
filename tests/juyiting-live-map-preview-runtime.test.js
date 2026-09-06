@@ -9,7 +9,7 @@ describe('live map preview runtime adapter', () => {
     game.setPreviewDrawPolicy({ enabled: true, visible: true })
     const draw = game._me.game.draw
     const clock = { now: 0 }
-    const originalPerformance = globalThis.performance
+    const performanceDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'performance')
     Object.defineProperty(globalThis, 'performance', { configurable: true, value: { now: () => clock.now } })
     let now = 0
     try {
@@ -20,6 +20,6 @@ describe('live map preview runtime adapter', () => {
       expect(calls.length).to.be.within(19, 21)
       game.clearPreviewDrawPolicy()
       expect(game._me.game.draw).not.to.equal(draw)
-    } finally { Object.defineProperty(globalThis, 'performance', { configurable: true, value: originalPerformance }); game.clearPreviewDrawPolicy() }
+    } finally { Object.defineProperty(globalThis, 'performance', performanceDescriptor); game.clearPreviewDrawPolicy() }
   })
 })
