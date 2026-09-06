@@ -4,6 +4,10 @@ import { compileScript, parse } from '@vue/compiler-sfc'
 import { mount } from '@vue/test-utils'
 import * as Vue from 'vue'
 
+global.Element = global.window?.Element
+global.SVGElement = global.window?.SVGElement
+global.Node = global.window?.Node
+
 const vueImportToVar = (_line, imports) => `var { ${imports.split(',').map(part => { const [name, alias] = part.trim().split(/\s+as\s+/); return alias ? `${name}: ${alias}` : name }).join(', ')} } = Vue`
 const loadStage = game => {
   const url = new URL('../src/components/juyiting/HallStage.vue', import.meta.url)
@@ -36,6 +40,11 @@ const fixture = () => {
 describe('live map preview Stage adapter lifecycle', () => {
   it('mounts cold preview without business admission, then admits once and keeps the instance through returns', async () => {
     const f = fixture(); const Stage = loadStage(f.game)
+    const globalResize = Object.getOwnPropertyDescriptor(global, 'ResizeObserver')
+    const windowResize = Object.getOwnPropertyDescriptor(window, 'ResizeObserver')
+    class ResizeObserverStub { constructor (callback) { this.callback = callback } observe () { this.callback([]) } disconnect () {} }
+    Object.defineProperty(global, 'ResizeObserver', { configurable: true, value: ResizeObserverStub })
+    Object.defineProperty(window, 'ResizeObserver', { configurable: true, value: ResizeObserverStub })
     const globalRaf = Object.getOwnPropertyDescriptor(global, 'requestAnimationFrame')
     const windowRaf = Object.getOwnPropertyDescriptor(window, 'requestAnimationFrame')
     const globalCancel = Object.getOwnPropertyDescriptor(global, 'cancelAnimationFrame')
@@ -67,6 +76,6 @@ describe('live map preview Stage adapter lifecycle', () => {
     expect(wrapper.emitted('simulation-phase-events')).to.have.length(1)
     expect(f.calls.destroy).to.equal(0)
     wrapper.unmount(); expect(f.calls.destroy).to.equal(1)
-    } finally { if (wrapper?.exists?.()) wrapper.unmount(); frames.clear(); restoreDescriptor(global, 'requestAnimationFrame', globalRaf); restoreDescriptor(window, 'requestAnimationFrame', windowRaf); restoreDescriptor(global, 'cancelAnimationFrame', globalCancel); restoreDescriptor(window, 'cancelAnimationFrame', windowCancel) }
+    } finally { if (wrapper?.exists?.()) wrapper.unmount(); frames.clear(); restoreDescriptor(global, 'ResizeObserver', globalResize); restoreDescriptor(window, 'ResizeObserver', windowResize); restoreDescriptor(global, 'requestAnimationFrame', globalRaf); restoreDescriptor(window, 'requestAnimationFrame', windowRaf); restoreDescriptor(global, 'cancelAnimationFrame', globalCancel); restoreDescriptor(window, 'cancelAnimationFrame', windowCancel) }
   })
 })
