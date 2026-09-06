@@ -344,17 +344,24 @@ export const useHallTaskActions = ({
       if (receipt?.taskId !== task.id || receipt?.fundingStatus !== 'REFUNDED' || !isCanonicalDecimalString(receipt?.taskVersion)) {
         throw new Error('撤榜回执不匹配；请核对原撤榜，不要重复扣款')
       }
-      const canonical = unwrap(ensureBusinessSuccess(await agentApi.get(`/tasks/${encodeURIComponent(task.id)}`, undefined, { autoLoading: false })))
-      if (canonical?.id !== task.id || !isCanonicalDecimalString(taskVersion(canonical)) || BigInt(taskVersion(canonical)) < BigInt(receipt.taskVersion)) {
-        throw new Error('撤榜已确认，榜文快照尚未同步')
+      try {
+        const canonical = unwrap(ensureBusinessSuccess(await agentApi.get(`/tasks/${encodeURIComponent(task.id)}`, undefined, { autoLoading: false })))
+        if (canonical?.id !== task.id || !isCanonicalDecimalString(taskVersion(canonical)) || BigInt(taskVersion(canonical)) < BigInt(receipt.taskVersion)) {
+          throw new Error('榜文快照尚未同步')
+        }
+        for (const current of new Set(currentTaskSnapshots(task.id, task))) {
+          const currentVersion = taskVersion(current)
+          if (!currentVersion || BigInt(taskVersion(canonical)) > BigInt(currentVersion) || current === task) Object.assign(current, canonical)
+        }
+        selectedTask.value = canonical
+        showToast('资金榜文已撤，余款已退回')
+      } catch (refreshError) {
+        // The immutable REFUNDED receipt is already confirmed. A stale/lost
+        // readback is refresh-pending, never evidence to re-send the mutation.
+        log.warn('confirmed funded cancellation snapshot refresh pending:', refreshError)
+        showToast('资金榜文已撤确认；榜文刷新待完成，请稍后重查，勿重复撤榜')
       }
-      for (const current of new Set(currentTaskSnapshots(task.id, task))) {
-        const currentVersion = taskVersion(current)
-        if (!currentVersion || BigInt(taskVersion(canonical)) > BigInt(currentVersion) || current === task) Object.assign(current, canonical)
-      }
-      selectedTask.value = canonical
       playSuccess()
-      showToast('资金榜文已撤，余款已退回')
       return true
     } catch (error) {
       log.warn('cancel funded bounty failed:', error)

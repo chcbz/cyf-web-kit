@@ -389,3 +389,67 @@ describe('funded bounty explicit quote confirmation (W05 DTO)', () => {
     expect(panel).not.to.include('取价并领令')
   })
 })
+
+describe('funded bounty R5 durable intent and cancellation lifecycle', () => {
+  const memoryStorage = () => {
+    const records = new Map()
+    return { getItem: key => records.get(key) || null, setItem: (key, value) => records.set(key, value), removeItem: key => records.delete(key) }
+  }
+
+  it('rejects a quote missing the canonical minimum payout before confirmation', async () => {
+    let prompted = false
+    const h = harness({
+      agentApi: { create: async () => success(fundedQuote({ minimumAcceptedPayoutMicro: undefined })) },
+      confirmFundedQuote: async () => { prompted = true; return true }
+    })
+    expect(await h.actions.assignTask(h.task, h.agent)).to.equal(false)
+    expect(prompted).to.equal(false)
+  })
+
+  it('persists an unknown funded create across remount, preserves original body/key, and isolates another actor scope', async () => {
+    const storage = memoryStorage()
+    const requests = []
+    const api = {
+      create: async (_url, body, options) => {
+        requests.push({ body, key: options.headers['Idempotency-Key'] })
+        if (requests.length === 1) throw new TypeError('response lost after committed reserve')
+        return success({ id: `task-${requests.length}`, ...body })
+      }
+    }
+    const original = { title: 'original funded', grossBountyAmountMicro: '100', settlementPolicy: 'GROSS_INCLUSIVE' }
+    const first = harness({ agentApi: api, fundedActorScopeKey: () => 'actor-a', fundedIntentStorage: storage })
+    expect(await first.actions.createTask(original)).to.equal(false)
+    const otherScope = harness({ agentApi: api, fundedActorScopeKey: () => 'actor-b', fundedIntentStorage: storage })
+    expect(await otherScope.actions.createTask({ title: 'other actor', grossBountyAmountMicro: '200', settlementPolicy: 'GROSS_INCLUSIVE' })).to.equal(true)
+    const remounted = harness({ agentApi: api, fundedActorScopeKey: () => 'actor-a', fundedIntentStorage: storage })
+    expect(await remounted.actions.createTask({ title: 'edited draft', grossBountyAmountMicro: '999', settlementPolicy: 'GROSS_INCLUSIVE' })).to.equal(true)
+    expect(requests[2]).to.deep.equal(requests[0])
+    expect(requests[2].body).to.deep.equal(original)
+    expect(requests[1].body.title).to.equal('other actor')
+  })
+
+  it('reports an immutable REFUNDED receipt as confirmed when canonical cancellation readback is unavailable', async () => {
+    const h = harness({
+      agentApi: {
+        create: async () => success({ taskId: 'funded', fundingStatus: 'REFUNDED', refundTransactionId: 'tx-1', refundedMicro: '100', remainingMicro: '0', taskVersion: '9', fundingVersion: '2', refundedAt: '1000' }),
+        get: async () => { throw new TypeError('canonical readback unavailable') }
+      }
+    })
+    expect(await h.actions.cancelFunding(h.task)).to.equal(true)
+    expect(h.events).to.include('success')
+    expect(h.events.join(' ')).to.include('已撤确认')
+    expect(h.events.join(' ')).not.to.include('撤榜未成')
+  })
+  it('keeps a verified REFUNDED receipt confirmed when canonical readback is stale', async () => {
+    const h = harness({
+      agentApi: {
+        create: async () => success({ taskId: 'funded', fundingStatus: 'REFUNDED', refundTransactionId: 'tx-stale', refundedMicro: '100', remainingMicro: '0', taskVersion: '9', fundingVersion: '2', refundedAt: '1000' }),
+        get: async () => success({ id: 'funded', taskVersion: '8', status: 'open', funding: { mode: 'FUNDED_SINGLE_AGENT' } })
+      }
+    })
+    expect(await h.actions.cancelFunding(h.task)).to.equal(true)
+    expect(h.events).to.include('success')
+    expect(h.events.join(' ')).to.include('已撤确认')
+  })
+
+})

@@ -56,7 +56,7 @@ describe('economy preview wallet and funded bounty integration', () => {
 
     expect(await actions.assignTask(task, clickedAgent)).to.equal(true)
     expect(calls.map(call => call.url)).to.deep.equal(['/tasks/funded-1/quotes', '/tasks/funded-1/claim'])
-    expect(calls[0].payload).to.deep.equal({ agentId: 'clicked-agent' })
+    expect(calls[0].payload).to.deep.equal({ agentId: 'clicked-agent', modelPreference: { provider: 'openai', model: 'configured-model' }, contextRevision: '8', minimumAcceptedPayoutMicro: '0' })
     expect(calls[1].payload).to.deep.equal({ agentId: 'clicked-agent', quoteId: 'q-1', taskVersion: '8', allowQueue: false })
     expect(calls.every(call => call.options.headers['Idempotency-Key'] === 'idem-1')).to.equal(true)
     expect(calls.some(call => call.url.endsWith('/assign'))).to.equal(false)
@@ -70,15 +70,15 @@ describe('economy preview wallet and funded bounty integration', () => {
     const task = { id: 'funded-2', title: 'Funded', status: 'open', version: '9', funding: { mode: 'FUNDED_SINGLE_AGENT', remainingMicro: '10' } }
     const actions = useHallTaskActions({
       agentApi: {
-        create: async (url, payload, options = {}) => { calls.push({ url, payload, options }); return { data: { code: 'E0', data: { ...task, funding: { ...task.funding, status: 'CANCELLED' } } } } },
-        get: async url => { calls.push({ url }); return { data: { code: 'E0', data: { status: 'CANCELLED', refundMicro: '10' } } } }
+        create: async (url, payload, options = {}) => { calls.push({ url, payload, options }); return { data: { code: 'E0', data: { taskId: task.id, fundingStatus: 'REFUNDED', refundTransactionId: 'tx-1', refundedMicro: '10', remainingMicro: '0', taskVersion: '10', fundingVersion: '2', refundedAt: '1000' } } } },
+        get: async url => { calls.push({ url }); return { data: { code: 'E0', data: url.endsWith('/settlement') ? { status: 'CANCELLED', refundMicro: '10' } : { ...task, taskVersion: '10', status: 'cancelled', funding: { ...task.funding, status: 'REFUNDED' } } } } }
       }, canAssign: () => true, createIdempotencyKey: () => 'idem-2', log: { warn: () => {} }, playError: () => {}, playSuccess: () => {}, selectedAgent: ref(null), selectedTask: ref(null), showToast: () => {}, tasks: ref([task])
     })
     expect(await actions.assignTask(task, [{ agentId: 'a' }, { agentId: 'b' }])).to.equal(false)
     expect(calls).to.deep.equal([])
     expect((await actions.loadSettlement(task)).refundMicro).to.equal('10')
     expect(await actions.cancelFunding(task)).to.equal(true)
-    expect(calls.map(call => call.url)).to.deep.equal(['/tasks/funded-2/settlement', '/tasks/funded-2/funding/cancel'])
+    expect(calls.map(call => call.url)).to.deep.equal(['/tasks/funded-2/settlement', '/tasks/funded-2/funding/cancel', '/tasks/funded-2'])
     expect(calls[1].payload).to.deep.equal({ expectedTaskVersion: '9' })
   })
 })
@@ -91,8 +91,12 @@ describe('funded bounty remediation', () => {
     version: '8',
     funding: { mode: 'FUNDED_SINGLE_AGENT', remainingMicro: '100' }
   })
-  const actionOptions = (agentApi, overrides = {}) => ({
+  const actionOptions = (agentApi, overrides = {}) => {
+    const values = new Map()
+    return ({
     agentApi,
+    fundedActorScopeKey: () => 'funded-test-scope',
+    fundedIntentStorage: { getItem: key => values.get(key) || null, setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key) },
     canAssign: () => true,
     confirmFundedQuote: async () => true,
     createIdempotencyKey: (() => { let sequence = 0; return () => `idem-${++sequence}` })(),
@@ -104,7 +108,8 @@ describe('funded bounty remediation', () => {
     showToast: () => {},
     tasks: ref([]),
     ...overrides
-  })
+    })
+  }
 
   it('rejects funded claim and cancel JsonResult bodies without optimistic task mutation', async () => {
     const task = fundedTask()
@@ -187,7 +192,7 @@ describe('funded bounty remediation', () => {
       create: async (_url, _payload, options) => {
         cancelKeys.push(options.headers['Idempotency-Key'])
         if (++cancelAttempts === 1) throw new TypeError('cancel response lost')
-        return { data: { code: 'E0', data: { ...cancelTask, funding: { ...cancelTask.funding, status: 'CANCELLED' } } } }
+        return { data: { code: 'E0', data: { taskId: cancelTask.id, fundingStatus: 'REFUNDED', refundTransactionId: 'tx-2', refundedMicro: '100', remainingMicro: '0', taskVersion: '9', fundingVersion: '2', refundedAt: '1000' } } }
       }
     }))
     expect(await cancelActions.cancelFunding(cancelTask)).to.equal(false)
