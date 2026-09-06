@@ -118,11 +118,15 @@ const makeHallPageMocks = ({ mode, counters }) => {
   const list = Vue.ref([])
   const text = Vue.ref('')
   const HallPortraitHome = Vue.defineComponent({
-    emits: ['live-preview-visibility-change', 'retry-live-preview'],
-    setup (_props, { attrs, expose }) {
+    emits: ['live-preview-visibility-change', 'retry-live-preview', 'quick-action'],
+    setup (_props, { attrs, emit, expose }) {
       const livePreviewTarget = Vue.ref(null)
       expose({ livePreviewTarget })
-      return () => Vue.h('section', { ...attrs, class: 'preview-home' }, [Vue.h('div', { ref: livePreviewTarget, class: 'preview-target' })])
+      return () => Vue.h('section', { ...attrs, class: 'preview-home' }, [
+        Vue.h('div', { ref: livePreviewTarget, class: 'preview-target' }),
+        Vue.h('button', { type: 'button', class: 'portrait-quick-agents', onClick: () => emit('quick-action', 'agents') }, 'agents'),
+        Vue.h('button', { type: 'button', class: 'portrait-quick-discussion', onClick: () => emit('quick-action', 'discussion') }, 'discussion')
+      ])
     }
   })
   const HallStage = Vue.defineComponent({
@@ -166,26 +170,46 @@ describe('live map preview Hall page bridge', () => {
   it('waits for document and observed portrait visibility, then keeps one teleported Stage across landscape and retry', async () => {
     const originalHidden = Object.getOwnPropertyDescriptor(document, 'hidden')
     const originalVisibilityState = Object.getOwnPropertyDescriptor(document, 'visibilityState')
+    const globalRaf = Object.getOwnPropertyDescriptor(global, 'requestAnimationFrame')
+    const globalCancel = Object.getOwnPropertyDescriptor(global, 'cancelAnimationFrame')
+    const windowRaf = Object.getOwnPropertyDescriptor(window, 'requestAnimationFrame')
+    const windowCancel = Object.getOwnPropertyDescriptor(window, 'cancelAnimationFrame')
     let hidden = true
+    const frames = new Map(); let nextFrame = 1
+    const requestFrame = callback => { const id = nextFrame++; frames.set(id, callback); return id }
+    const cancelFrame = id => frames.delete(id)
+    const pump = async (limit = 12) => {
+      for (let step = 0; step < limit; step += 1) {
+        await flush()
+        const queued = [...frames.entries()]
+        if (!queued.length) continue
+        frames.clear()
+        queued.forEach(([, callback]) => callback(step * 16))
+      }
+    }
     Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden })
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => hidden ? 'hidden' : 'visible' })
+    Object.defineProperty(global, 'requestAnimationFrame', { configurable: true, value: requestFrame })
+    Object.defineProperty(global, 'cancelAnimationFrame', { configurable: true, value: cancelFrame })
+    Object.defineProperty(window, 'requestAnimationFrame', { configurable: true, value: requestFrame })
+    Object.defineProperty(window, 'cancelAnimationFrame', { configurable: true, value: cancelFrame })
     const mode = Vue.ref('portrait-command')
     const counters = { stageMounts: 0, retries: 0 }
     const Hall = loadHallPage(makeHallPageMocks({ mode, counters }))
     let wrapper
     try {
       wrapper = mount(Hall, { attachTo: document.body, global: { stubs: { 'var-icon': true, transition: false } } })
-      await flush()
+      await flush(); await pump()
       expect(counters.stageMounts).to.equal(0)
       expect(wrapper.find('.preview-target').exists()).to.equal(true)
       const portrait = wrapper.findComponent(counters.PortraitHome)
       portrait.vm.$emit('live-preview-visibility-change', true)
-      await flush()
+      await flush(); await pump()
       // The real document guard prevents a hidden tab from creating Stage.
       expect(counters.stageMounts).to.equal(0)
       hidden = false
       document.dispatchEvent(new window.Event('visibilitychange'))
-      await flush()
+      await flush(); await pump()
       expect(counters.stageMounts).to.equal(1)
       const stage = document.body.querySelector('.preview-stage')
       expect(stage?.parentElement?.classList.contains('preview-target')).to.equal(true)
@@ -193,30 +217,51 @@ describe('live map preview Hall page bridge', () => {
       expect(stage?.dataset.visible).to.equal('true')
       hidden = true
       document.dispatchEvent(new window.Event('visibilitychange'))
-      await flush()
+      await flush(); await pump()
       expect(document.body.querySelector('.preview-stage')?.dataset.visible).to.equal('false')
       hidden = false
       document.dispatchEvent(new window.Event('visibilitychange'))
-      await flush()
+      await flush(); await pump()
       expect(document.body.querySelector('.preview-stage')?.dataset.visible).to.equal('true')
-      const state = wrapper.vm.$.setupState
-      state.openPanel('agents'); await flush()
+
+      // Exercise the actual portrait quick-action and page close controls rather
+      // than relying on compiler-private setupState implementation details.
+      await portrait.find('.portrait-quick-agents').trigger('click')
+      await flush(); await pump()
+      expect(wrapper.find('.panel-overlay').exists()).to.equal(true)
+      expect(wrapper.find('.panel-overlay').classes()).not.to.include('is-chat-overlay')
       expect(document.body.querySelector('.preview-stage')?.dataset.visible).to.equal('true')
-      state.closePanel(); state.openPanel('chat'); await flush()
+      await wrapper.find('.panel-close').trigger('click')
+      await flush(); await pump()
+      expect(wrapper.find('.panel-overlay').exists()).to.equal(false)
+      expect(document.body.querySelector('.preview-stage')?.dataset.visible).to.equal('true')
+
+      await portrait.find('.portrait-quick-discussion').trigger('click')
+      await flush(); await pump()
+      expect(wrapper.find('.panel-overlay').classes()).to.include('is-chat-overlay')
       expect(document.body.querySelector('.preview-stage')?.dataset.visible).to.equal('false')
-      state.closePanel(); await flush()
-      mode.value = 'landscape-map'; await flush()
+      await wrapper.find('.panel-close').trigger('click')
+      await flush(); await pump()
+      expect(wrapper.find('.panel-overlay').exists()).to.equal(false)
+      expect(document.body.querySelector('.preview-stage')?.dataset.visible).to.equal('true')
+
+      mode.value = 'landscape-map'; await flush(); await pump()
       expect(counters.stageMounts).to.equal(1)
       expect(document.body.querySelector('.preview-stage')?.parentElement?.classList.contains('hall-live-landscape-target')).to.equal(true)
       expect(document.body.querySelector('.preview-stage')?.dataset.preview).to.equal('false')
-      mode.value = 'portrait-command'; await flush()
+      mode.value = 'portrait-command'; await flush(); await pump()
       expect(counters.stageMounts).to.equal(1)
-      portrait.vm.$emit('retry-live-preview'); await flush()
+      portrait.vm.$emit('retry-live-preview'); await flush(); await pump()
       expect(counters.retries).to.equal(1)
     } finally {
       wrapper?.unmount()
+      frames.clear()
       restoreDescriptor(document, 'hidden', originalHidden)
       restoreDescriptor(document, 'visibilityState', originalVisibilityState)
+      restoreDescriptor(global, 'requestAnimationFrame', globalRaf)
+      restoreDescriptor(global, 'cancelAnimationFrame', globalCancel)
+      restoreDescriptor(window, 'requestAnimationFrame', windowRaf)
+      restoreDescriptor(window, 'cancelAnimationFrame', windowCancel)
     }
   })
 })
