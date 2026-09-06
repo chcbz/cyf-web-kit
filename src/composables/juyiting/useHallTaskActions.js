@@ -425,5 +425,5 @@ export const useHallTaskActions = ({
     }
   }
 
-  return { archiveTask, autoAssignTask, assignTask, cancelFunding, createTask, loadSettlement, fundedClaimState, refreshFundedClaim }
+  return { archiveTask, autoAssignTask, assignTask, cancelFunding, createTask, loadSettlement, fundedClaimState, refreshFundedClaim, fundedCreateRecovery, resumeFundedCreate }
 }
