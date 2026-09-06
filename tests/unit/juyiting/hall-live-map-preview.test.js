@@ -95,17 +95,26 @@ describe('HallLiveMapPreview', () => {
       observe (target) { this.target = target }
       disconnect () { this.disconnectCalls += 1 }
     }
+    const visibilityEvents = []
     const Preview = loadPreview()
-    const wrapper = mount(Preview, { props: { state: 'ready' } })
+    const wrapper = mount(Preview, {
+      props: {
+        onVisibilityChange: visible => visibilityEvents.push([visible]),
+        state: 'ready'
+      }
+    })
     const observer = instances[0]
 
-    expect(wrapper.emitted('visibility-change')).to.deep.equal([[true]])
+    expect(visibilityEvents).to.deep.equal([])
+    observer.callback([{ isIntersecting: false, target: observer.target }])
+    observer.callback([{ isIntersecting: false, target: observer.target }])
     observer.callback([{ isIntersecting: true, target: observer.target }])
-    observer.callback([{ isIntersecting: false, target: observer.target }])
-    observer.callback([{ isIntersecting: false, target: observer.target }])
-    expect(wrapper.emitted('visibility-change')).to.deep.equal([[true], [false]])
+    observer.callback([{ isIntersecting: true, target: observer.target }])
+    expect(visibilityEvents).to.deep.equal([[false], [true]])
     wrapper.unmount()
     expect(observer.disconnectCalls).to.equal(1)
+    observer.callback([{ isIntersecting: false, target: observer.target }])
+    expect(visibilityEvents).to.deep.equal([[false], [true]])
   })
 
   it('uses valid and fallback aspect ratios, and degrades to visible without IntersectionObserver', async () => {
@@ -129,7 +138,11 @@ describe('HallLiveMapPreview', () => {
     expect(compiledStyle.code).to.include('.preview-map-slot[data-v-live-map-preview-test]')
     const readonlyRules = compiledStyle.code.match(/\.preview-map-slot[^}]*\{[^}]*pointer-events:\s*none/g) || []
     expect(readonlyRules).to.have.length.at.least(2)
-    await wrapper.setProps({ mapHeight: 0, mapWidth: NaN, state: 'paused' })
+    await wrapper.setProps({ mapHeight: Number.MIN_VALUE, mapWidth: Number.MAX_VALUE, state: 'paused' })
+    expect(wrapper.get('.preview-frame').attributes('style')).to.include('aspect-ratio: 1.793103448275862')
+    await wrapper.setProps({ mapHeight: Number.MAX_VALUE, mapWidth: Number.MIN_VALUE })
+    expect(wrapper.get('.preview-frame').attributes('style')).to.include('aspect-ratio: 1.793103448275862')
+    await wrapper.setProps({ mapHeight: 0, mapWidth: NaN })
     expect(wrapper.get('.preview-frame').attributes('style')).to.include('aspect-ratio: 1.793103448275862')
     expect(wrapper.text()).to.include('预览已暂停')
     await settle()

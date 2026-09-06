@@ -52,12 +52,13 @@ const emit = defineEmits(['request-landscape', 'retry', 'visibility-change'])
 const mapSlot = ref(null)
 const fallbackAspectRatio = 1664 / 928
 const isPositiveFinite = value => Number.isFinite(value) && value > 0
-const aspectRatio = computed(() => (
-  isPositiveFinite(props.mapWidth) && isPositiveFinite(props.mapHeight)
-    ? String(props.mapWidth / props.mapHeight)
-    : String(fallbackAspectRatio)
-))
+const aspectRatio = computed(() => {
+  if (!isPositiveFinite(props.mapWidth) || !isPositiveFinite(props.mapHeight)) return String(fallbackAspectRatio)
+  const ratio = props.mapWidth / props.mapHeight
+  return isPositiveFinite(ratio) ? String(ratio) : String(fallbackAspectRatio)
+})
 
+let disposed = false
 let observer = null
 let lastVisibility = null
 const notifyVisibility = visible => {
@@ -67,12 +68,16 @@ const notifyVisibility = visible => {
 }
 
 onMounted(() => {
-  // A first visible signal makes the fallback deterministic and is de-duplicated
-  // when IntersectionObserver later reports the same state.
-  notifyVisibility(true)
-  if (typeof IntersectionObserver === 'undefined' || !mapSlot.value) return
+  disposed = false
+  if (typeof IntersectionObserver === 'undefined') {
+    // Visibility APIs are unavailable: retain the documented visible fallback.
+    notifyVisibility(true)
+    return
+  }
+  if (!mapSlot.value) return
 
   observer = new IntersectionObserver(entries => {
+    if (disposed) return
     const entry = entries.find(candidate => candidate.target === mapSlot.value)
     if (entry) notifyVisibility(entry.isIntersecting)
   })
@@ -80,6 +85,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  disposed = true
   observer?.disconnect()
   observer = null
 })
