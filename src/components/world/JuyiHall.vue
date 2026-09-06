@@ -5,6 +5,7 @@
       v-show="!experienceReady || experienceMode === 'portrait-command'"
       :live-preview-enabled="true"
       :live-preview-state="previewSceneState"
+      :live-preview-error="previewSceneError"
       :live-preview-map-width="previewSceneBounds.width"
       :live-preview-map-height="previewSceneBounds.height"
       :agents="agents"
@@ -34,9 +35,11 @@
       @discuss-task="handlePortraitTaskDiscussion"
     />
 
-    <div ref="landscapeTargetRef" class="hall-live-landscape-target"></div>
+    <div ref="landscapeTargetRef" v-show="experienceMode === 'landscape-map'" class="hall-live-landscape-target"></div>
     <Teleport :to="stageTarget" :disabled="!stageTarget">
     <HallStage
+      v-if="stageMounted"
+      ref="hallStageRef"
       v-show="experienceReady"
       :read-only-preview="experienceMode === 'portrait-command'"
       :preview-visible="previewVisible"
@@ -83,8 +86,9 @@
       @simulation-ready="handleSimulationReady"
       @simulation-reset="resetSimulationLifecycle"
       @scene-mode-change="handleSceneModeChange"
-      @scene-state-change="state => { previewSceneState = state }"
-      @scene-bounds-change="bounds => { previewSceneBounds = bounds || { width: 0, height: 0 } }"
+      @scene-state-change="handlePreviewSceneState"
+      @scene-error="handlePreviewSceneError"
+      @scene-bounds-change="handlePreviewSceneBounds"
       @toggle-sound="toggleHallSound"
     >
 
@@ -436,14 +440,49 @@ const { panelLayout } = useHallPanels({ experienceMode, isMobileCoarse })
 const hallRootRef = ref(null)
 const portraitHomeRef = ref(null)
 const landscapeTargetRef = ref(null)
-const previewVisible = ref(false)
+const hallStageRef = ref(null)
+const portraitPreviewVisible = ref(false)
+const documentPreviewVisible = ref(typeof document === 'undefined' || !document.hidden)
+const previewVisible = computed(() => portraitPreviewVisible.value && documentPreviewVisible.value)
 const previewSceneState = ref('loading')
+const previewSceneError = ref('')
 const previewSceneBounds = ref({ width: 0, height: 0 })
+// The Stage is created only after a real landscape entry or observed portrait visibility,
+// then remains the sole scene owner until the Hall route unmounts.
+const stageHasMounted = ref(false)
 const stageTarget = computed(() => experienceMode.value === 'portrait-command'
   ? portraitHomeRef.value?.livePreviewTarget || null
   : landscapeTargetRef.value)
-const handlePreviewVisibility = visible => { previewVisible.value = Boolean(visible) }
-const retryLivePreview = () => { previewSceneState.value = 'loading' }
+const stageMounted = computed(() => stageHasMounted.value)
+const permitStageMount = () => {
+  if (experienceReady.value && (experienceMode.value === 'landscape-map' || previewVisible.value)) {
+    stageHasMounted.value = true
+  }
+}
+const handlePreviewVisibility = visible => {
+  portraitPreviewVisible.value = Boolean(visible)
+  permitStageMount()
+}
+const handleDocumentVisibility = () => {
+  documentPreviewVisible.value = typeof document === 'undefined' || !document.hidden
+}
+const handlePreviewSceneState = state => {
+  previewSceneState.value = state || 'loading'
+  if (state !== 'error') previewSceneError.value = ''
+}
+const handlePreviewSceneError = error => {
+  previewSceneState.value = 'error'
+  previewSceneError.value = error?.message || String(error || '')
+}
+const handlePreviewSceneBounds = bounds => {
+  previewSceneBounds.value = bounds || { width: 0, height: 0 }
+}
+const retryLivePreview = () => {
+  previewSceneState.value = 'loading'
+  previewSceneError.value = ''
+  void hallStageRef.value?.retryScene?.()
+}
+watch([experienceReady, experienceMode, previewVisible], permitStageMount, { immediate: true })
 
 const panelRef = ref(null)
 const panelTitleId = 'juyiting-floating-panel-title'
@@ -1293,11 +1332,15 @@ onMounted(async () => {
   globalStore.setShowMore(false)
   await nextTick()
   experienceReady.value = true
+  document.addEventListener?.('visibilitychange', handleDocumentVisibility)
+  handleDocumentVisibility()
+  permitStageMount()
   await refreshHall({ silent: true })
   startDialogueBubbles()
 })
 
 onUnmounted(() => {
+  document.removeEventListener?.('visibilitychange', handleDocumentVisibility)
   panelDisposed = true
   panelSessionGeneration.value += 1
   panelClosingGeneration.value = 0
@@ -1334,6 +1377,20 @@ onUnmounted(() => {
   overflow: hidden;
   background: #211812;
   color: #2f261c;
+}
+
+.hall-live-landscape-target {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.hall-live-landscape-target :deep(.hall-stage),
+:deep(.portrait-live-preview-target > .hall-stage) {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
 }
 
 .hall-stage {

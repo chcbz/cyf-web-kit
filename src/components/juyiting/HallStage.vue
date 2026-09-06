@@ -1,6 +1,6 @@
 <template>
   <section class="hall-stage">
-    <div class="stage-header">
+    <div v-if="!readOnlyPreview" class="stage-header">
       <div class="stage-heading">
         <div class="eyebrow">梁山泊传令中枢</div>
         <h1>聚义厅</h1>
@@ -64,8 +64,8 @@
         'is-scene-portrait': sceneMode === 'portrait',
         'is-virtual-landscape': virtualLandscape
       }"
-      tabindex="0"
-      aria-label="聚义厅 melonJS 场景，可使用加减号缩放，0 复位"
+      :tabindex="readOnlyPreview ? -1 : 0"
+      :aria-label="readOnlyPreview ? '聚义厅地图只读预览' : '聚义厅 melonJS 场景，可使用加减号缩放，0 复位'"
       @keydown="handleSceneKeydown"
       @wheel="scheduleReturnRefresh"
       @pointerup="scheduleReturnRefresh"
@@ -88,7 +88,7 @@
         </button>
       </div>
       <button
-        v-if="showReturnButton && !interactionLocked"
+        v-if="showReturnButton && !interactionLocked && !readOnlyPreview"
         class="return-main-hall"
         :class="{ 'is-raised': Boolean(selectedAgent) }"
         type="button"
@@ -101,7 +101,7 @@
       <div v-if="orientationHint" class="orientation-hint" role="status">{{ orientationHint }}</div>
     </div>
 
-    <slot></slot>
+    <slot v-if="!readOnlyPreview"></slot>
   </section>
 </template>
 
@@ -153,6 +153,7 @@ const emit = defineEmits([
   'request-portrait',
   'refresh-hall',
   'scene-bounds-change',
+  'scene-error',
   'scene-mode-change',
   'scene-state-change',
   'select-agent',
@@ -452,6 +453,8 @@ const failSceneMount = (attemptId, error) => {
   melonReady.value = false
   isSceneMounting.value = false
   sceneError.value = error?.message || '聚义厅场景暂不可用，请重试'
+  emit('scene-state-change', 'error')
+  emit('scene-error', error)
   mapLifecycleState.value = 'destroying'
   unlockLoading(attemptId)
   emit('simulation-reset')
@@ -606,6 +609,7 @@ const mountScene = async () => {
   settledViewportGeneration = 0
   isSceneMounting.value = true
   sceneError.value = ''
+  emit('scene-state-change', 'loading')
   juyitingGame.setInteractionLocked?.(true, 'loading')
   clearMountTimeout()
   mountTimeout = window.setTimeout(() => {
@@ -653,7 +657,18 @@ const publishSimulationReady = attemptId => {
 }
 
 const retryScene = async () => {
-  if (isSceneMounting.value) return
+  if (isSceneMounting.value) return false
+  // A paused/running preview only needs its owned presentation policy restored.
+  // A failed/unmounted scene takes the explicit reload path below.
+  if (mapLifecycleState.value === 'running' && !sceneError.value) {
+    if (props.readOnlyPreview) {
+      juyitingGame.setInteractionLocked?.(true, 'preview')
+      juyitingGame.applyPreviewContain?.(juyitingGame.getSceneBounds?.())
+      juyitingGame.setPreviewDrawPolicy?.({ enabled: true, visible: props.previewVisible })
+    }
+    emit('scene-state-change', 'ready')
+    return true
+  }
   emit('simulation-reset')
   sceneMountAttempt += 1
   clearMountTimeout()
@@ -661,6 +676,7 @@ const retryScene = async () => {
   if (!currentGameDestroyed) juyitingGame.destroy()
   currentGameDestroyed = false
   await mountScene()
+  return true
 }
 
 const handleSceneKeydown = (event) => {
@@ -856,6 +872,9 @@ watch(() => props.selectedAgent, (agent) => {
   if (melonReady.value && isRunningGeneration(sceneMountAttempt)) juyitingGame.setSelectedAgent(agent?.agentId || null)
   scheduleReturnRefresh()
 })
+
+// Page-owned preview controls delegate to this exact persistent Stage instance.
+defineExpose({ retryScene })
 </script>
 
 <style scoped>

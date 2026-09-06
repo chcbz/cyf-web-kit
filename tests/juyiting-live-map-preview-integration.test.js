@@ -80,3 +80,91 @@ describe('live map preview Stage adapter lifecycle', () => {
     } finally { if (wrapper?.exists?.()) wrapper.unmount(); frames.clear(); restoreDescriptor(global, 'ResizeObserver', globalResize); restoreDescriptor(window, 'ResizeObserver', windowResize); restoreDescriptor(global, 'requestAnimationFrame', globalRaf); restoreDescriptor(window, 'requestAnimationFrame', windowRaf); restoreDescriptor(global, 'cancelAnimationFrame', globalCancel); restoreDescriptor(window, 'cancelAnimationFrame', windowCancel) }
   })
 })
+
+const loadHallPage = mocks => {
+  const url = new URL('../src/components/world/JuyiHall.vue', import.meta.url)
+  const { descriptor } = parse(readFileSync(url, 'utf8'), { filename: url.pathname })
+  const body = compileScript(descriptor, { id: 'live-preview-page-harness', inlineTemplate: true }).content
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, imports) => `var { ${imports} } = mocks`)
+    .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = mocks.${name}`)
+    .replace(/import\.meta\.env/g, 'mocks.env')
+    .replace('export default', 'return')
+  return new Function('Vue', 'mocks', body)(Vue, mocks)
+}
+
+const makeHallPageMocks = ({ mode, counters }) => {
+  const noop = () => {}
+  const asyncNoop = async () => {}
+  const list = Vue.ref([])
+  const text = Vue.ref('')
+  const HallPortraitHome = Vue.defineComponent({
+    emits: ['live-preview-visibility-change', 'retry-live-preview'],
+    setup (_props, { attrs, expose }) {
+      const livePreviewTarget = Vue.ref(null)
+      expose({ livePreviewTarget })
+      return () => Vue.h('section', { ...attrs, class: 'preview-home' }, [Vue.h('div', { ref: livePreviewTarget, class: 'preview-target' })])
+    }
+  })
+  const HallStage = Vue.defineComponent({
+    props: { readOnlyPreview: Boolean, previewVisible: Boolean },
+    emits: ['scene-state-change', 'scene-bounds-change', 'scene-error'],
+    setup (props, { attrs, expose }) {
+      counters.stageMounts += 1
+      expose({ retryScene: () => { counters.retries += 1 } })
+      return () => Vue.h('section', { ...attrs, class: 'preview-stage', 'data-preview': String(props.readOnlyPreview), 'data-visible': String(props.previewVisible) })
+    }
+  })
+  const Empty = Vue.defineComponent({ setup: () => () => Vue.h('section') })
+  counters.PortraitHome = HallPortraitHome
+  const data = {
+    applySceneEvent: noop, applySceneSnapshot: noop, agentFilter: text, agents: list, bindPersona: asyncNoop, canAssign: () => true,
+    filteredAgents: list, hiddenAgentCount: Vue.ref(0), loadAgents: asyncNoop, loadTasks: asyncNoop, loadTaskRecommendations: asyncNoop,
+    mapAgents: list, personaCatalog: list, recommendedAgents: list, setAgentFilter: noop, setTaskStatusFilter: noop,
+    taskAbilityFilter: text, taskAbilityOptions: list, taskKeyword: text, tasks: list, taskStatusCount: Vue.ref({}), taskStatusFilter: text, unbindPersona: asyncNoop, visibleAgents: list
+  }
+  return {
+    env: {}, agentApi: {}, chatApi: {}, juyitingGame: {}, log: { warn: noop }, roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
+    useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({}),
+    useHallData: () => data, useHallBackendSceneState: () => ({ start: asyncNoop, stop: noop, dispose: noop, reportPhase: noop }),
+    useHallSceneDebugBridge: () => ({ republish: noop, stop: noop }), useHallExperienceMode: () => ({ experienceMode: mode, isMobileCoarse: Vue.ref(true), isVirtualLandscape: Vue.ref(false), orientationHint: text, orientationRequestPending: Vue.ref(false), hallViewportHeight: Vue.ref(0), requestLandscape: asyncNoop, requestPortrait: asyncNoop }),
+    capturePanelReturnTarget: noop, focusHallPanel: noop, isCurrentPanelGeneration: () => false, isSafePanelFocusTarget: () => false, resolvePanelReturnTarget: noop, restorePanelFocus: noop, trapPanelFocus: noop, useHallPanels: () => ({ panelLayout: Vue.ref('bottom-drawer') }),
+    useHallScene: () => ({ markAgentSpeaking: noop, markDiscussionStarted: noop, markLibraryCitation: noop, markLibrarySearching: noop, markRecommendedAgents: noop, markTaskArchived: noop, markTaskAssigned: noop, markTaskAutoAssigned: noop, markTaskCreated: noop, resetSceneFeedback: noop, sceneAgents: list, sceneAgentStyle: () => ({}), sceneHotspots: list, syncAfterPersonaChanged: noop }),
+    useHallSceneState: () => ({ setMapRuntime: noop, reset: noop, forwardPhaseEvents: asyncNoop }), useHallCommandQueue: () => ({ ready: Vue.ref(false), setSimulation: noop }),
+    useHallChatContext: () => ({ chatContext: Vue.ref({}), chatMentionAgentIds: list, chatMentionAgents: list, chatMode: text, chatTargetText: text, enterBountyDiscussion: noop, enterPrivateConversation: noop, resetToPublic: noop, setMentionAgent: noop }),
+    useHallSound: () => ({ playAgentSelect: noop, playError: noop, playPanelOpen: noop, playRefresh: noop, playSend: noop, playSuccess: noop, playTap: noop, setSoundEnabled: noop, setSoundSuppressed: noop, soundEnabled: Vue.ref(false) }),
+    useHallTaskActions: () => ({ archiveTask: asyncNoop, autoAssignTask: asyncNoop, assignTask: asyncNoop, createTask: asyncNoop }),
+    useHallConversation: () => ({ cancelHallReplyTurn: noop, chatConnectionStatus: text, conversationId: text, draft: text, eventStreamRecovering: Vue.ref(false), insertAgentMention: noop, isAwaitingReply: Vue.ref(false), isStreaming: Vue.ref(false), loadHallMessages: asyncNoop, mentionAgent: noop, messages: list, newHallConversation: noop, pendingAgentName: text, replyEventSequence: Vue.ref(0), sendHallMessage: asyncNoop, senderText: text, disposeHallConversation: noop, draftRevision: Vue.ref(0), setDraft: noop, stopHallEventStream: noop, stopHallReplyPolling: noop, stopHallReplyStreaming: noop }),
+    useHallVoiceConversation: () => ({ voiceInteractionLocked: Vue.ref(false), cancel: noop, dispose: noop, applyTranscript: noop }), createHallVoiceReplyCorrelation: () => ({ close: noop, closeIfCurrent: () => false, start: () => true, observe: noop, resolveConversation: noop }),
+    useHallLibrary: () => ({ citeLibraryItem: noop, libraryErrorMessage: text, libraryHasSearched: Vue.ref(false), libraryKeyword: text, libraryLoading: Vue.ref(false), libraryResults: list, librarySourceType: text, searchLibrary: asyncNoop }),
+    isTaskWorkspaceBuildEnabled: () => false, createDisabledTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }), useTaskWorkspaceView: () => ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: text, error: Vue.ref(null), retry: noop }), useTaskWorkspace: noop, useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }),
+    portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '',
+    HallPortraitHome, HallStage, HallVoiceHud: Empty, AgentPanel: Empty, BountyDiscussionPanel: Empty, BountyPanel: Empty, TaskWorkspacePanel: Empty, PersonaCatalogPanel: Empty, PrivateDiscussionPanel: Empty, PublicDiscussionPanel: Empty, SelectedAgentCard: Empty, LibraryPanel: Empty
+  }
+}
+
+describe('live map preview Hall page bridge', () => {
+  it('waits for observed portrait visibility, then keeps one teleported Stage across landscape and retry', async () => {
+    const mode = Vue.ref('portrait-command')
+    const counters = { stageMounts: 0, retries: 0 }
+    const Hall = loadHallPage(makeHallPageMocks({ mode, counters }))
+    const wrapper = mount(Hall, { attachTo: document.body, global: { stubs: { 'var-icon': true, transition: false } } })
+    try {
+      await flush()
+      expect(counters.stageMounts).to.equal(0)
+      const portrait = wrapper.findComponent(counters.PortraitHome)
+      portrait.vm.$emit('live-preview-visibility-change', true)
+      await flush()
+      expect(counters.stageMounts).to.equal(1)
+      const stage = document.body.querySelector('.preview-stage')
+      expect(stage?.parentElement?.classList.contains('preview-target')).to.equal(true)
+      mode.value = 'landscape-map'; await flush()
+      expect(counters.stageMounts).to.equal(1)
+      expect(document.body.querySelector('.preview-stage')?.parentElement?.classList.contains('hall-live-landscape-target')).to.equal(true)
+      mode.value = 'portrait-command'; await flush()
+      expect(counters.stageMounts).to.equal(1)
+      portrait.vm.$emit('retry-live-preview'); await flush()
+      expect(counters.retries).to.equal(1)
+    } finally { wrapper.unmount() }
+  })
+})
