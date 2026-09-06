@@ -379,6 +379,9 @@ export class JuyitingGame {
   }
 
   _cleanupRuntime(me = this._me) {
+    // Retire only this owner's wrapper before policy metadata is discarded.
+    // A newer/foreign draw owner remains untouched by clearPreviewDrawPolicy().
+    this.clearPreviewDrawPolicy()
     this._cancelCachedImageWaits()
     this._spriteLoadAbortController?.abort()
     this._spriteLoadAbortController = null
@@ -651,6 +654,9 @@ export class JuyitingGame {
     this._stateId = stateBase + stateSlot
     me.state.set(this._stateId, this._hallScene)
     this._initialized = true
+    // Materialize a pre-mount preview intent only after this instance owns a
+    // live scene, so failed initialization cannot strand a retained wrapper.
+    if (this._previewDraw.enabled) this.setPreviewDrawPolicy({ enabled: true, visible: this._previewDraw.visible })
     this._fatalError = null
     this._markSceneDebugDirty()
     if (this._pendingStart) {
@@ -879,7 +885,9 @@ export class JuyitingGame {
     policy.enabled = Boolean(enabled)
     policy.visible = Boolean(visible)
     const game = this._me?.game
-    if (!game?.draw) return false
+    // Pre-mount preview is intent only: never wrap a retained engine before this
+    // Hall instance owns a live initialized scene.
+    if (!this._initialized || !this._mountToken || !game?.draw) return false
     if (!policy.wrapper) {
       policy.original = game.draw
       policy.wrapper = function (...args) {

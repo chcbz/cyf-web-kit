@@ -237,7 +237,9 @@ export const createCameraController = (
       previewSnapshot = null
       previewWorldBounds = null
       preservedMinimum = snapshot.preservedMinimum
-      return apply(preserveFocus(snapshot.transform, snapshot.viewport, viewport), normalBounds())
+      // The preview snapshot may carry a valid landscape minimum below the
+      // current portrait/normal preset minimum; restore it with that allowance.
+      return apply(preserveFocus(snapshot.transform, snapshot.viewport, viewport), bounds(presetKey, snapshot.preservedMinimum))
     },
 
     resetTo(nextPresetKey, durationMs = DEFAULT_RESET_DURATION_MS) {

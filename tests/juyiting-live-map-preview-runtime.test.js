@@ -6,6 +6,8 @@ describe('live map preview runtime adapter', () => {
     const game = new JuyitingGame()
     const calls = []
     game._me = { game: { draw (...args) { calls.push(args) } } }
+    game._initialized = true
+    game._mountToken = 1
     game.setPreviewDrawPolicy({ enabled: true, visible: true })
     const draw = game._me.game.draw
     const clock = { now: 0 }
@@ -22,4 +24,26 @@ describe('live map preview runtime adapter', () => {
       expect(game._me.game.draw).not.to.equal(draw)
     } finally { Object.defineProperty(globalThis, 'performance', performanceDescriptor); game.clearPreviewDrawPolicy() }
   })
+})
+
+
+it('restores its failed-mount draw wrapper without overwriting a foreign newer owner', () => {
+  const game = new JuyitingGame()
+  const original = () => 'original'
+  game._me = { game: { draw: original } }
+  game._initialized = true
+  game._mountToken = 1
+  game.setPreviewDrawPolicy({ enabled: true, visible: true })
+  const owned = game._me.game.draw
+  expect(owned).not.to.equal(original)
+  game._cleanupFailedMount(game._me)
+  expect(game._me.game.draw).to.equal(original)
+
+  game._initialized = true
+  game._mountToken = 2
+  game.setPreviewDrawPolicy({ enabled: true, visible: true })
+  const foreign = () => 'foreign'
+  game._me.game.draw = foreign
+  game.clearPreviewDrawPolicy()
+  expect(game._me.game.draw).to.equal(foreign)
 })

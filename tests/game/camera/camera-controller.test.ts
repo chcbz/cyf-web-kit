@@ -496,3 +496,16 @@ it('maps non-zero contain corners and recomputes contain on resize', () => {
   const resized = controller.resize({ width: 600, height: 300 }, 'orientation')
   assert.equal(resized.zoom, 1.5)
 })
+
+
+  it('restores the saved preview minimum across a landscape preset change', () => {
+    const fake = createAdapter({ width: 390, height: 720 }, { width: 5000, height: 5000 })
+    const controller = createCameraController(fake.adapter, { minZoom: 0.5, maxZoom: 3.3 }, true)
+    controller.restore({ presetKey: 'desktop', transform: { zoom: 0.84, offsetX: 0, offsetY: 0 } }, { width: 390, height: 720 })
+    fake.setViewport({ width: 720, height: 390 })
+    controller.resize({ width: 720, height: 390 }, 'orientation')
+    assert.ok(controller.snapshot().transform.zoom < VIEW_PRESETS.mobileLandscape.zoom)
+    controller.applyPreviewContain({ x: 0, y: 0, width: 1664, height: 928 })
+    const restored = controller.clearPreviewContain()
+    closeTo(restored.zoom, 0.84)
+  })

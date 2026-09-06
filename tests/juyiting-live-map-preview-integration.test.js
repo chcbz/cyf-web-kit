@@ -178,3 +178,43 @@ describe('live map preview Hall page bridge', () => {
     } finally { wrapper.unmount() }
   })
 })
+
+const loadPreview = () => {
+  const url = new URL('../src/components/juyiting/HallLiveMapPreview.vue', import.meta.url)
+  const { descriptor } = parse(readFileSync(url, 'utf8'), { filename: url.pathname })
+  const body = compileScript(descriptor, { id: 'live-preview-status-harness', inlineTemplate: true }).content
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
+    .replace('export default', 'return')
+  return new Function('Vue', body)(Vue)
+}
+
+describe('live map preview status ownership', () => {
+  it('keeps a failed nested Stage retry hidden in preview and delegates one outer retry', async () => {
+    const Preview = loadPreview()
+    let mounts = 0
+    const game = {
+      beginMapGeneration: () => 1, mount: async () => { mounts += 1; throw new Error('map failed') }, destroy: () => {},
+      setInteractionLocked: () => {}, clearPreviewContain: () => {}, clearPreviewDrawPolicy: () => {}, getSceneBounds: () => null
+    }
+    const Stage = loadStage(game)
+    const Harness = Vue.defineComponent({
+      setup () {
+        const state = Vue.ref('loading'); const error = Vue.ref(''); const stage = Vue.ref(null)
+        return () => Vue.h(Preview, {
+          state: state.value, errorMessage: error.value,
+          onRetry: () => stage.value?.retryScene?.(),
+          onSceneError: cause => { state.value = 'error'; error.value = cause?.message || 'map failed' }
+        }, { default: () => Vue.h(Stage, { ref: stage, ...props, readOnlyPreview: true, onSceneError: cause => { state.value = 'error'; error.value = cause?.message || 'map failed' } }) })
+      }
+    })
+    const wrapper = mount(Harness, { attachTo: document.body, global: { stubs: { 'var-icon': true } } })
+    try {
+      await flush()
+      expect(wrapper.find('.scene-error').exists()).to.equal(false)
+      expect(wrapper.findAll('button').map(button => button.text())).to.include('重试地图预览')
+      await wrapper.findAll('button').find(button => button.text() === '重试地图预览').trigger('click')
+      await flush()
+      expect(mounts).to.equal(2)
+    } finally { wrapper.unmount() }
+  })
+})

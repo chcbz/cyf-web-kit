@@ -73,14 +73,14 @@
     >
       <div ref="melonContainerRef" class="melon-layer" aria-hidden="true"></div>
       <div
-        v-if="isSceneMounting && !sceneError"
+        v-if="!readOnlyPreview && isSceneMounting && !sceneError"
         class="scene-loading"
         role="status"
       >
         <span class="scene-spinner" aria-hidden="true"></span>
         <span>聚义厅地图加载中…</span>
       </div>
-      <div v-if="sceneError" class="scene-error" role="status">
+      <div v-if="!readOnlyPreview && sceneError" class="scene-error" role="status">
         <strong>聚义厅场景暂不可用</strong>
         <span>{{ sceneError }}</span>
         <button type="button" :disabled="isSceneMounting" @click="retryScene">
@@ -106,7 +106,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { juyitingGame } from '@/game/index.js'
 import { classifyViewportResize } from '@/game/camera/resizePolicy.js'
 
@@ -195,6 +195,9 @@ let fallbackFrameId = 0
 const fallbackFrames = new Map()
 const LANDSCAPE_TARGET_MAX_ATTEMPTS = 8
 let landscapeTargetWork = null
+let previewTransitionGeneration = 0
+let previewExitPending = false
+let previewPresentationActive = false
 
 const requestStageFrame = callback => {
   if (typeof window.requestAnimationFrame === 'function') return window.requestAnimationFrame(callback)
@@ -428,7 +431,7 @@ const attemptHotspotLandscapeTarget = work => {
 }
 
 const consumeLandscapeEntryTarget = (attemptId, { retryHotspot = false } = {}) => {
-  if (!isRunningGeneration(attemptId) || props.readOnlyPreview) return false
+  if (!isRunningGeneration(attemptId) || props.readOnlyPreview || previewExitPending) return false
   const entry = props.landscapeEntryTarget
   if (!entry || !Number.isInteger(entry.generation) || entry.generation <= consumedLandscapeTargetGeneration) {
     cancelLandscapeTargetWork()
@@ -814,17 +817,46 @@ watch(() => props.landscapeEntryTarget, () => {
   else if (!props.landscapeEntryTarget) cancelLandscapeTargetWork()
 }, { deep: true })
 
+const completePreviewExit = async (attemptId, transitionGeneration) => {
+  await nextTick()
+  if (!isRunningGeneration(attemptId) || props.readOnlyPreview || transitionGeneration !== previewTransitionGeneration) return
+  const viewport = await settleFinalViewport(attemptId)
+  if (!viewport || !isRunningGeneration(attemptId) || props.readOnlyPreview || transitionGeneration !== previewTransitionGeneration) return
+  await (juyitingGame.commitViewport?.({ width: viewport.width, height: viewport.height, kind: 'orientation', orientationChanged: true })
+    ?? juyitingGame.resizeViewport?.({ width: viewport.width, height: viewport.height, kind: 'orientation', orientationChanged: true }))
+  if (!isRunningGeneration(attemptId) || props.readOnlyPreview || transitionGeneration !== previewTransitionGeneration) return
+  juyitingGame.clearPreviewContain?.()
+  juyitingGame.clearPreviewDrawPolicy?.()
+  previewExitPending = false
+  previewPresentationActive = false
+  consumeLandscapeEntryTarget(attemptId)
+  publishSimulationReady(attemptId)
+  juyitingGame.setInteractionLocked?.(false, 'preview')
+  juyitingGame.setInteractionLocked?.(false, 'preview-transition')
+}
+
 watch(() => props.readOnlyPreview, preview => {
-  juyitingGame.setInteractionLocked?.(preview, 'preview')
+  const transitionGeneration = ++previewTransitionGeneration
   if (preview) {
+    previewPresentationActive = true
+    previewExitPending = false
+    juyitingGame.setInteractionLocked?.(true, 'preview-transition')
+    juyitingGame.setInteractionLocked?.(true, 'preview')
     juyitingGame.applyPreviewContain?.(juyitingGame.getSceneBounds?.())
     juyitingGame.setPreviewDrawPolicy?.({ enabled: true, visible: props.previewVisible })
+    juyitingGame.setInteractionLocked?.(false, 'preview-transition')
+    return
   }
-  else {
-    juyitingGame.clearPreviewContain?.()
-    juyitingGame.clearPreviewDrawPolicy?.()
-    publishSimulationReady(sceneMountAttempt)
+  // An initial landscape mount has no preview state to unwind.
+  if (!previewPresentationActive) {
+    previewExitPending = false
+    return
   }
+  // Teleport and its target geometry settle before this Stage restores its camera
+  // or consumes the pending explicit landscape target.
+  previewExitPending = true
+  juyitingGame.setInteractionLocked?.(true, 'preview-transition')
+  void completePreviewExit(sceneMountAttempt, transitionGeneration)
 }, { immediate: true })
 
 watch(() => props.previewVisible, visible => {
