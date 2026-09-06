@@ -52,7 +52,25 @@ describe('live map preview Stage adapter lifecycle', () => {
     const frames = new Map(); let nextFrame = 1
     const requestFrame = callback => { const id = nextFrame++; frames.set(id, callback); return id }
     const cancelFrame = id => frames.delete(id)
-    const pump = async (limit = 12) => { for (let i = 0; i < limit && frames.size; i++) { const queued = [...frames.entries()]; frames.clear(); queued.forEach(([, callback]) => callback(i * 16)); await flush() } }
+    // completePreviewExit first awaits nextTick before it schedules RAF. Always
+    // flush microtasks before inspecting the queue so the fixture cannot miss
+    // that first frame merely because the queue was initially empty.
+    const pump = async (limit = 12) => {
+      for (let i = 0; i < limit; i++) {
+        await flush()
+        const queued = [...frames.entries()]
+        if (!queued.length) continue
+        frames.clear()
+        queued.forEach(([, callback]) => callback(i * 16))
+      }
+    }
+    const settleUntil = async (predicate, limit = 24) => {
+      for (let i = 0; i < limit; i++) {
+        if (predicate()) return true
+        await pump(1)
+      }
+      return predicate()
+    }
     Object.defineProperty(global, 'requestAnimationFrame', { configurable: true, value: requestFrame })
     Object.defineProperty(window, 'requestAnimationFrame', { configurable: true, value: requestFrame })
     Object.defineProperty(global, 'cancelAnimationFrame', { configurable: true, value: cancelFrame })
@@ -69,7 +87,8 @@ describe('live map preview Stage adapter lifecycle', () => {
     expect(wrapper.emitted('simulation-phase-events')).to.equal(undefined)
     expect(f.calls.destroy).to.equal(0)
     expect(f.calls.locks.some(([, reason]) => reason === 'preview')).to.equal(true)
-    await wrapper.setProps({ experienceMode: 'landscape-map', readOnlyPreview: false }); await pump()
+    await wrapper.setProps({ experienceMode: 'landscape-map', readOnlyPreview: false })
+    expect(await settleUntil(() => wrapper.emitted('simulation-ready')?.length === 1)).to.equal(true)
     expect(wrapper.emitted('simulation-ready')).to.have.length(1)
     await wrapper.setProps({ experienceMode: 'portrait-command', readOnlyPreview: true }); f.handlers.onSimulationPhaseEvents([{ id: 'terminal' }]); await pump()
     await wrapper.setProps({ experienceMode: 'portrait-command', readOnlyPreview: true }); await wrapper.setProps({ experienceMode: 'landscape-map', readOnlyPreview: false }); await wrapper.setProps({ experienceMode: 'portrait-command', readOnlyPreview: true }); await flush()
@@ -144,23 +163,42 @@ const makeHallPageMocks = ({ mode, counters }) => {
 }
 
 describe('live map preview Hall page bridge', () => {
-  it('waits for observed portrait visibility, then keeps one teleported Stage across landscape and retry', async () => {
+  it('waits for document and observed portrait visibility, then keeps one teleported Stage across landscape and retry', async () => {
+    const originalHidden = Object.getOwnPropertyDescriptor(document, 'hidden')
+    const originalVisibilityState = Object.getOwnPropertyDescriptor(document, 'visibilityState')
+    let hidden = true
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden })
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => hidden ? 'hidden' : 'visible' })
     const mode = Vue.ref('portrait-command')
     const counters = { stageMounts: 0, retries: 0 }
     const Hall = loadHallPage(makeHallPageMocks({ mode, counters }))
-    const wrapper = mount(Hall, { attachTo: document.body, global: { stubs: { 'var-icon': true, transition: false } } })
+    let wrapper
     try {
+      wrapper = mount(Hall, { attachTo: document.body, global: { stubs: { 'var-icon': true, transition: false } } })
       await flush()
       expect(counters.stageMounts).to.equal(0)
       expect(wrapper.find('.preview-target').exists()).to.equal(true)
       const portrait = wrapper.findComponent(counters.PortraitHome)
       portrait.vm.$emit('live-preview-visibility-change', true)
       await flush()
+      // The real document guard prevents a hidden tab from creating Stage.
+      expect(counters.stageMounts).to.equal(0)
+      hidden = false
+      document.dispatchEvent(new window.Event('visibilitychange'))
+      await flush()
       expect(counters.stageMounts).to.equal(1)
       const stage = document.body.querySelector('.preview-stage')
       expect(stage?.parentElement?.classList.contains('preview-target')).to.equal(true)
       expect(stage?.dataset.preview).to.equal('true')
       expect(stage?.dataset.visible).to.equal('true')
+      hidden = true
+      document.dispatchEvent(new window.Event('visibilitychange'))
+      await flush()
+      expect(document.body.querySelector('.preview-stage')?.dataset.visible).to.equal('false')
+      hidden = false
+      document.dispatchEvent(new window.Event('visibilitychange'))
+      await flush()
+      expect(document.body.querySelector('.preview-stage')?.dataset.visible).to.equal('true')
       const state = wrapper.vm.$.setupState
       state.openPanel('agents'); await flush()
       expect(document.body.querySelector('.preview-stage')?.dataset.visible).to.equal('true')
@@ -175,7 +213,11 @@ describe('live map preview Hall page bridge', () => {
       expect(counters.stageMounts).to.equal(1)
       portrait.vm.$emit('retry-live-preview'); await flush()
       expect(counters.retries).to.equal(1)
-    } finally { wrapper.unmount() }
+    } finally {
+      wrapper?.unmount()
+      restoreDescriptor(document, 'hidden', originalHidden)
+      restoreDescriptor(document, 'visibilityState', originalVisibilityState)
+    }
   })
 })
 
@@ -241,7 +283,15 @@ describe('live map preview orientation target transaction', () => {
     f.game.commitViewport = change => { commits.push(change); return pendingCommit ? pendingCommit.promise : Promise.resolve({ committed: true }) }
     f.game.syncAgentsAndFocusAgent = (_agents, id) => { targets.push(id); return true }
     let wrapper
-    const pump = async (limit = 12) => { for (let step = 0; step < limit && frames.size; step += 1) { const current = [...frames.entries()]; frames.clear(); current.forEach(([, callback]) => callback(step * 16)); await flush() } }
+    const pump = async (limit = 12) => {
+      for (let step = 0; step < limit; step += 1) {
+        await flush()
+        const current = [...frames.entries()]
+        if (!current.length) continue
+        frames.clear()
+        current.forEach(([, callback]) => callback(step * 16))
+      }
+    }
     const entry = generation => ({ generation, target: { kind: 'agent', agentId: 'agent-1' } })
     try {
       wrapper = mount(Stage, { attachTo: document.body, props: { ...props, landscapeEntryTarget: entry(1), sceneAgents: [{ agentId: 'agent-1' }] }, global: { stubs: { 'var-icon': true } } })
@@ -268,7 +318,11 @@ describe('live map preview orientation target transaction', () => {
       expect(f.calls.locks.slice(lockCountBeforeReverse)).not.to.deep.include([false, 'preview'])
 
       pendingCommit = deferred()
-      await wrapper.setProps({ experienceMode: 'landscape-map', readOnlyPreview: false, landscapeEntryTarget: entry(3) }); await pump()
+      await wrapper.setProps({ experienceMode: 'landscape-map', readOnlyPreview: false, landscapeEntryTarget: entry(3) })
+      // The target watcher runs in this same batch; it must remain fenced until
+      // the preview exit has committed its stable landscape viewport.
+      expect(targets).to.deep.equal(['agent-1'])
+      await pump()
       const lockCountBeforeReject = f.calls.locks.length
       await wrapper.setProps({ experienceMode: 'portrait-command', readOnlyPreview: true })
       pendingCommit.reject(new Error('late viewport rejection')); await flush(); await pump()

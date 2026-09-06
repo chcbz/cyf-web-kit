@@ -356,6 +356,10 @@ const cancelLandscapeTargetWork = () => {
 
 const currentLandscapeTarget = work => (
   isRunningGeneration(work.attemptId) &&
+  // A target is meaningful only after the current preview presentation has
+  // committed its landscape viewport. This fences same-batch prop watchers
+  // and any queued retry frame independently of watcher registration order.
+  !previewPresentationActive &&
   props.landscapeEntryTarget === work.entry &&
   props.landscapeEntryTarget?.generation === work.targetGeneration &&
   work.targetGeneration > consumedLandscapeTargetGeneration
@@ -431,7 +435,9 @@ const attemptHotspotLandscapeTarget = work => {
 }
 
 const consumeLandscapeEntryTarget = (attemptId, { retryHotspot = false } = {}) => {
-  if (!isRunningGeneration(attemptId) || props.readOnlyPreview || previewExitPending) return false
+  // Preview exit owns the target until its stable viewport commit releases the
+  // presentation barrier. Do not let a landscape-target watcher consume early.
+  if (!isRunningGeneration(attemptId) || props.readOnlyPreview || previewExitPending || previewPresentationActive) return false
   const entry = props.landscapeEntryTarget
   if (!entry || !Number.isInteger(entry.generation) || entry.generation <= consumedLandscapeTargetGeneration) {
     cancelLandscapeTargetWork()
@@ -859,6 +865,9 @@ const completePreviewExit = async (attemptId, transitionGeneration) => {
 watch(() => props.readOnlyPreview, preview => {
   const transitionGeneration = ++previewTransitionGeneration
   if (preview) {
+    // Stop an armed landscape retry before re-entering the read-only preview.
+    // A later return will create fresh work after its committed viewport fence.
+    cancelLandscapeTargetWork()
     previewPresentationActive = true
     previewExitPending = false
     juyitingGame.setInteractionLocked?.(true, 'preview-transition')
