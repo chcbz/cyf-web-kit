@@ -5,6 +5,7 @@ import { compileScript, parse } from '@vue/compiler-sfc'
 import { mount } from '@vue/test-utils'
 import * as Vue from 'vue'
 import * as HallPanelHelpers from '../src/composables/juyiting/useHallPanels.js'
+import { createApi } from '../src/composables/useHttp.js'
 import { registerIdentityCleanup, stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 import {
   isCanonicalDecimal,
@@ -463,6 +464,63 @@ afterEach(() => {
 })
 
 describe('archive reader contract behavior', () => {
+  it('sends progress through the real createApi and useHttp adapter contract', async () => {
+    const originalFetch = globalThis.fetch
+    const requests = []
+    let mounted
+    try {
+      globalThis.fetch = async (url, options) => {
+        const body = JSON.parse(options.body)
+        requests.push({ body, options, url: String(url) })
+        return new Response(JSON.stringify({
+          status: 200,
+          code: 'OK',
+          msg: 'ok',
+          data: {
+            editionId,
+            location: body.location,
+            state: 'IN_PROGRESS',
+            version: '1'
+          }
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+
+      const authStore = {
+        authorizationGeneration: 0,
+        token: async () => 'reader-adapter-fixture-token'
+      }
+      const realApi = createApi('/archive/v1')
+      const readerApi = {
+        ...realApi,
+        put: (uri, body, options = {}) => realApi.put(uri, body, { ...options, authStore })
+      }
+      mounted = mountReader(readerApi)
+      primeReader(mounted.reader)
+      await mounted.reader.saveProgress()
+
+      expect(requests).to.have.length(1)
+      const request = requests[0]
+      expect(request.url).to.equal(`/archive/v1/me/progress/${editionId}`)
+      expect(request.options.method).to.equal('PUT')
+      expect(request.options.headers).to.include({
+        Authorization: 'Bearer reader-adapter-fixture-token',
+        'Content-Type': 'application/json'
+      })
+      expect(request.options.headers['Idempotency-Key']).to.match(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+      )
+      expect(request.body).to.deep.equal({
+        expectedVersion: '0',
+        location: point(chapterOne, chapterOne.paragraphs[0]),
+        markCompleted: false
+      })
+      expect(mounted.reader.progress.value).to.include({ editionId, version: '1' })
+      expect(mounted.reader.saveState.value).to.equal('saved')
+    } finally {
+      mounted?.wrapper.unmount()
+      globalThis.fetch = originalFetch
+    }
+  })
   it('preserves JsonResult data:null and saves first progress with expectedVersion 0', async () => {
     const api = makeApi({ progress: null })
     const mounted = mountReader(api)
