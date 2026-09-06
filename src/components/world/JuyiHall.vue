@@ -1,7 +1,12 @@
 <template>
   <div ref="hallRootRef" class="juyi-page" tabindex="-1" :style="hallViewportStyle" :class="{ 'is-panel-open': isPanelSessionActive, 'is-virtual-landscape': isVirtualLandscape, [`experience-${experienceMode}`]: true }">
     <HallPortraitHome
-      v-if="!experienceReady || experienceMode === 'portrait-command'"
+      ref="portraitHomeRef"
+      v-show="!experienceReady || experienceMode === 'portrait-command'"
+      :live-preview-enabled="true"
+      :live-preview-state="previewSceneState"
+      :live-preview-map-width="previewSceneBounds.width"
+      :live-preview-map-height="previewSceneBounds.height"
       :agents="agents"
       :map-agents="mapAgents"
       :orientation-hint="orientationHint"
@@ -20,6 +25,8 @@
       @open-onboarding="emit('open-onboarding', $event)"
       @refresh-hall="refreshHall"
       @request-landscape="requestPortraitLandscape"
+      @retry-live-preview="retryLivePreview"
+      @live-preview-visibility-change="handlePreviewVisibility"
       @select-agent="handlePortraitAgentSelect"
       @open-task="handlePortraitTaskOpen"
       @close-task-detail="closePortraitTaskDetail"
@@ -27,8 +34,12 @@
       @discuss-task="handlePortraitTaskDiscussion"
     />
 
+    <div ref="landscapeTargetRef" class="hall-live-landscape-target"></div>
+    <Teleport :to="stageTarget" :disabled="!stageTarget">
     <HallStage
-      v-else
+      v-show="experienceReady"
+      :read-only-preview="experienceMode === 'portrait-command'"
+      :preview-visible="previewVisible"
       :agent-bubbles="agentBubbles"
       :agent-key="agentKey"
       :agent-style="sceneAgentStyle"
@@ -72,6 +83,8 @@
       @simulation-ready="handleSimulationReady"
       @simulation-reset="resetSimulationLifecycle"
       @scene-mode-change="handleSceneModeChange"
+      @scene-state-change="state => { previewSceneState = state }"
+      @scene-bounds-change="bounds => { previewSceneBounds = bounds || { width: 0, height: 0 } }"
       @toggle-sound="toggleHallSound"
     >
 
@@ -94,6 +107,7 @@
         </transition>
       </div>
     </HallStage>
+    </Teleport>
 
     <HallVoiceHud
       v-if="experienceMode === 'portrait-command' && voiceInteractionLocked && !activePanel"
@@ -420,6 +434,17 @@ const hallViewportStyle = computed(() => {
 const isCompactChat = computed(() => resolvedHallViewportHeight.value > 0 && resolvedHallViewportHeight.value <= 320)
 const { panelLayout } = useHallPanels({ experienceMode, isMobileCoarse })
 const hallRootRef = ref(null)
+const portraitHomeRef = ref(null)
+const landscapeTargetRef = ref(null)
+const previewVisible = ref(false)
+const previewSceneState = ref('loading')
+const previewSceneBounds = ref({ width: 0, height: 0 })
+const stageTarget = computed(() => experienceMode.value === 'portrait-command'
+  ? portraitHomeRef.value?.livePreviewTarget || null
+  : landscapeTargetRef.value)
+const handlePreviewVisibility = visible => { previewVisible.value = Boolean(visible) }
+const retryLivePreview = () => { previewSceneState.value = 'loading' }
+
 const panelRef = ref(null)
 const panelTitleId = 'juyiting-floating-panel-title'
 let panelSessionOrigin = null
