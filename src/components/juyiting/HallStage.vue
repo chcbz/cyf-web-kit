@@ -168,6 +168,7 @@ const isSceneMounting = ref(false)
 const showReturnButton = ref(false)
 const mapLifecycleState = ref('unmounted')
 let sceneMountAttempt = 0
+let businessReadyGeneration = 0
 let activeMapGeneration = 0
 let resumeRequested = false
 let settledViewportGeneration = 0
@@ -621,7 +622,7 @@ const mountScene = async () => {
         if (isCurrentMountAttempt(attemptId)) handleSceneReady(attemptId)
       },
       onSimulationPhaseEvents: events => {
-        if (isRunningGeneration(attemptId)) emit('simulation-phase-events', events)
+        if (isRunningGeneration(attemptId) && !props.readOnlyPreview) emit('simulation-phase-events', events)
       },
       onPersonaAvailabilityChanged: payload => {
         if (isRunningGeneration(attemptId)) {
@@ -630,18 +631,24 @@ const mountScene = async () => {
       }
     })
     if (!isCurrentMountAttempt(attemptId)) return
-    emit('simulation-ready', {
-      movementRuntime: juyitingGame.getMovementRuntime?.(),
-      simulation: {
-        enqueue: command => juyitingGame.enqueueMovementCommands?.([command])?.[0],
-        cancel: (agentId, stateVersion) => juyitingGame.cancelMovement?.(agentId, stateVersion)
-      }
-    })
+    publishSimulationReady(attemptId)
     if (!melonReady.value) juyitingGame.setInteractionLocked?.(true, 'loading')
     juyitingGame.start()
   } catch (err) {
     if (failSceneMount(attemptId, err)) console.warn('[HallStage] melonJS:', err?.message || err)
   }
+}
+
+const publishSimulationReady = attemptId => {
+  if (props.readOnlyPreview || businessReadyGeneration === attemptId || !isRunningGeneration(attemptId)) return
+  businessReadyGeneration = attemptId
+  emit('simulation-ready', {
+    movementRuntime: juyitingGame.getMovementRuntime?.(),
+    simulation: {
+      enqueue: command => juyitingGame.enqueueMovementCommands?.([command])?.[0],
+      cancel: (agentId, stateVersion) => juyitingGame.cancelMovement?.(agentId, stateVersion)
+    }
+  })
 }
 
 const retryScene = async () => {
@@ -793,7 +800,10 @@ watch(() => props.landscapeEntryTarget, () => {
 watch(() => props.readOnlyPreview, preview => {
   juyitingGame.setInteractionLocked?.(preview, 'preview')
   if (preview) juyitingGame.applyPreviewContain?.(juyitingGame.getSceneBounds?.())
-  else juyitingGame.clearPreviewContain?.()
+  else {
+    juyitingGame.clearPreviewContain?.()
+    publishSimulationReady(sceneMountAttempt)
+  }
 })
 
 watch(() => props.experienceMode, mode => {
@@ -801,7 +811,7 @@ watch(() => props.experienceMode, mode => {
     if (mapLifecycleState.value === 'suspending') resumeRequested = true
     return
   }
-  suspendScene()
+  if (!props.readOnlyPreview) suspendScene()
 })
 
 watch(() => props.virtualLandscape, virtual => {
