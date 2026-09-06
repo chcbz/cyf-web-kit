@@ -16,6 +16,7 @@ const loadStage = game => {
   return new Function('Vue', 'game', body)(Vue, game)
 }
 const flush = async () => { for (let i = 0; i < 4; i++) { await Promise.resolve(); await Vue.nextTick() } }
+const restoreDescriptor = (target, key, descriptor) => { if (descriptor) Object.defineProperty(target, key, descriptor); else delete target[key] }
 const props = { agentBubbles: {}, agentKey: () => '', agentStyle: () => ({}), portraitName: () => '', portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '', statusClass: () => '', statusText: () => '', readOnlyPreview: true, previewVisible: true }
 const fixture = () => {
   const calls = { destroy: 0, draw: [], locks: [], phases: [], ready: 0, reset: 0, targets: 0 }
@@ -52,7 +53,7 @@ describe('live map preview Stage adapter lifecycle', () => {
       wrapper = mount(Stage, { attachTo: document.body, props, global: { stubs: { 'var-icon': true } } })
       const container = wrapper.get('.melon-layer').element
       container.getBoundingClientRect = () => ({ width: 390, height: 720, top: 0, left: 0, right: 390, bottom: 720 })
-      await flush(); f.handlers.onReady(); await pump()
+      await flush(); f.handlers.onReady(); await pump(); expect(states).to.include('ready')
     expect(wrapper.emitted('simulation-ready')).to.equal(undefined)
     f.handlers.onSimulationPhaseEvents([{ id: 'cold-terminal' }]); await pump()
     expect(wrapper.emitted('simulation-phase-events')).to.equal(undefined)
@@ -66,6 +67,6 @@ describe('live map preview Stage adapter lifecycle', () => {
     expect(wrapper.emitted('simulation-phase-events')).to.have.length(1)
     expect(f.calls.destroy).to.equal(0)
     wrapper.unmount(); expect(f.calls.destroy).to.equal(1)
-    } finally { wrapper?.unmount(); Object.defineProperty(global, 'requestAnimationFrame', globalRaf); Object.defineProperty(window, 'requestAnimationFrame', windowRaf); Object.defineProperty(global, 'cancelAnimationFrame', globalCancel); Object.defineProperty(window, 'cancelAnimationFrame', windowCancel) }
+    } finally { if (wrapper?.exists?.()) wrapper.unmount(); frames.clear(); restoreDescriptor(global, 'requestAnimationFrame', globalRaf); restoreDescriptor(window, 'requestAnimationFrame', windowRaf); restoreDescriptor(global, 'cancelAnimationFrame', globalCancel); restoreDescriptor(window, 'cancelAnimationFrame', windowCancel) }
   })
 })

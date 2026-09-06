@@ -216,14 +216,14 @@ export const createCameraController = (
       const y = Number(worldBounds?.y)
       if (![x, y, width, height, viewport.width, viewport.height].every(Number.isFinite) || width <= 0 || height <= 0 || viewport.width <= 0 || viewport.height <= 0) return null
       const zoom = Math.min(viewport.width / width, viewport.height / height)
-      if (!Number.isFinite(zoom) || zoom <= 0) return null
-      cancelAnimation()
-      if (previewSnapshot === null) previewSnapshot = { transform: { ...transform }, viewport: { ...viewport }, preservedMinimum }
-      previewWorldBounds = { x, y, width, height }
+      if (!Number.isFinite(zoom) || zoom <= 0 || !Number.isFinite(width * zoom) || !Number.isFinite(height * zoom) || width * zoom <= 0 || height * zoom <= 0) return null
       const containOffsetX = viewport.width / 2 - (x + width / 2) * zoom
       const containOffsetY = viewport.height / 2 - (y + height / 2) * zoom
       const previewTransform = { zoom, offsetX: containOffsetX - viewport.width / 2 * (1 - zoom), offsetY: containOffsetY - viewport.height / 2 * (1 - zoom) }
       if (![previewTransform.zoom, previewTransform.offsetX, previewTransform.offsetY].every(Number.isFinite)) return null
+      cancelAnimation()
+      if (previewSnapshot === null) previewSnapshot = { transform: { ...transform }, viewport: { ...viewport }, preservedMinimum }
+      previewWorldBounds = { x, y, width, height }
       // Preview presentation intentionally bypasses normal landscape cover/clamp.
       transform = previewTransform
       adapter.apply({ ...transform })
