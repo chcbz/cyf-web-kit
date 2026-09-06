@@ -883,7 +883,12 @@ export class JuyitingGame {
     if (!policy.wrapper) {
       policy.original = game.draw
       policy.wrapper = function (...args) {
-        if (policy.enabled && !policy.visible) return undefined
+        if (policy.enabled) {
+          if (!policy.visible) return undefined
+          const now = globalThis.performance?.now?.() ?? Date.now()
+          if (Number.isFinite(now) && now - policy.lastDrawAt < 50) return undefined
+          policy.lastDrawAt = Number.isFinite(now) ? now : policy.lastDrawAt
+        }
         return policy.original.apply(this, args)
       }
       game.draw = policy.wrapper
@@ -895,7 +900,7 @@ export class JuyitingGame {
     const policy = this._previewDraw
     const game = this._me?.game
     if (game && policy.wrapper && game.draw === policy.wrapper) game.draw = policy.original
-    policy.enabled = false; policy.visible = true; policy.wrapper = null; policy.original = null
+    policy.enabled = false; policy.visible = true; policy.lastDrawAt = 0; policy.wrapper = null; policy.original = null
   }
 
   setInteractionLocked(locked, reason = 'panel') {

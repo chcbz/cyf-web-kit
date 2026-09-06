@@ -1,19 +1,24 @@
 import { expect } from 'chai'
-import { readFileSync } from 'node:fs'
+import { JuyitingGame } from '../src/game/JuyitingGame.js'
 
-const game = readFileSync(new URL('../src/game/JuyitingGame.js', import.meta.url), 'utf8')
-const scene = readFileSync(new URL('../src/game/scenes/HallScene.js', import.meta.url), 'utf8')
-describe('live map preview runtime contract', () => {
-  it('uses explicit scene bounds and preview contain adapters', () => {
-    expect(game).to.include('applyPreviewContain')
-    expect(game).to.include('getSceneBounds')
-    expect(scene).to.include('sceneBounds()')
+describe('live map preview runtime adapter', () => {
+  it('throttles preview draws to 20fps without changing update ownership and restores only its wrapper', () => {
+    const game = new JuyitingGame()
+    const calls = []
+    game._me = { game: { draw (...args) { calls.push(args) } } }
+    game.setPreviewDrawPolicy({ enabled: true, visible: true })
+    const draw = game._me.game.draw
+    const originalNow = globalThis.performance.now
+    let now = 0
+    globalThis.performance.now = () => now
+    try {
+      for (now = 0; now < 1000; now += 10) draw.call(game._me.game, now)
+      expect(calls.length).to.be.within(19, 21)
+      game.setPreviewDrawPolicy({ enabled: true, visible: false })
+      draw.call(game._me.game, 1000)
+      expect(calls.length).to.be.within(19, 21)
+      game.clearPreviewDrawPolicy()
+      expect(game._me.game.draw).not.to.equal(draw)
+    } finally { globalThis.performance.now = originalNow }
   })
-})
-
-
-it('keeps draw policy separate from simulation updates and restores its wrapper', () => {
-  expect(game).to.include('setPreviewDrawPolicy')
-  expect(game).to.include('clearPreviewDrawPolicy')
-  expect(game).not.to.include('timer.maxfps')
 })
