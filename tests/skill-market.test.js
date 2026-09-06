@@ -762,27 +762,37 @@ describe('skill market recovery hardening', () => {
 })
 
 describe('skill market W12 recovery closure', () => {
-  it('clears only frozen pre-order failures and preserves conflicting evidence', async () => {
-    for (const code of ['SKILL_QUOTE_EXPIRED', 'AGENT_VERSION_CONFLICT', 'INSUFFICIENT_FUNDS']) {
+  it('clears only exact frozen HTTP pre-order failures and retains statusless, mismatched, 5xx, unknown, and conflict ORDER evidence', async () => {
+    const quoteResponse = payload => success({ quoteId: 'sq-1', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
+    for (const [code, status] of [['SKILL_QUOTE_EXPIRED', 409], ['AGENT_VERSION_CONFLICT', 409], ['INSUFFICIENT_FUNDS', 422]]) {
       const storage = memoryStorage()
-      const market = useSkillMarket({ actorScopeKey: `actor-${code}`, enabled: ref(true), purchaseIdempotencyStorage: storage,
-        agentApi: { get: async () => success([]), post: async url => {
-          if (url === '/skill-orders/quotes') return success({ quoteId: 'sq-1', productVersionId: 'spv-repo-test-1', targetAgentId: 'agent-lin', expectedAgentVersion: '7', expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
-          const error = new Error(code); error.code = code; error.businessFailure = true; throw error
+      const market = useSkillMarket({ actorScopeKey: `actor-clear-${code}`, enabled: ref(true), purchaseIdempotencyStorage: storage,
+        agentApi: { get: async () => success([]), post: async (url, payload) => {
+          if (url === '/skill-orders/quotes') return quoteResponse(payload)
+          const error = new Error(code); error.code = code; error.status = status; error.businessFailure = true; throw error
         } } })
       await preparePurchase(market)
       await market.purchase().catch(() => {})
       expect(market.unresolvedOperations.value).to.deep.equal([])
     }
-    const storage = memoryStorage()
-    const market = useSkillMarket({ actorScopeKey: 'actor-conflict', enabled: ref(true), purchaseIdempotencyStorage: storage,
-      agentApi: { get: async () => success([]), post: async url => {
-        if (url === '/skill-orders/quotes') return success({ quoteId: 'sq-1', productVersionId: 'spv-repo-test-1', targetAgentId: 'agent-lin', expectedAgentVersion: '7', expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
-        const error = new Error('IDEMPOTENCY_CONFLICT'); error.code = 'IDEMPOTENCY_CONFLICT'; error.businessFailure = true; throw error
-      } } })
-    await preparePurchase(market)
-    await market.purchase().catch(() => {})
-    expect(market.unresolvedOperations.value).to.have.length(1)
+    for (const [code, status] of [
+      ['SKILL_QUOTE_EXPIRED', undefined], ['AGENT_VERSION_CONFLICT', 500], ['INSUFFICIENT_FUNDS', 409], ['IDEMPOTENCY_CONFLICT', 409], ['UNKNOWN_FAILURE', 503]
+    ]) {
+      const storage = memoryStorage()
+      const sent = []
+      const market = useSkillMarket({ actorScopeKey: `actor-retain-${code}-${status}`, enabled: ref(true), purchaseIdempotencyStorage: storage,
+        createIdempotencyKey: (() => { let index = 0; return () => `retain-${++index}` })(),
+        agentApi: { get: async () => success([]), post: async (url, payload, options) => {
+          if (url === '/skill-orders/quotes') return quoteResponse(payload)
+          sent.push({ body: payload, key: options.headers['Idempotency-Key'] })
+          const error = new Error(code); error.code = code; if (status !== undefined) error.status = status; error.businessFailure = true; throw error
+        } } })
+      await preparePurchase(market)
+      await market.purchase().catch(() => {})
+      expect(market.unresolvedOperations.value).to.have.length(1)
+      expect(market.unresolvedOperations.value[0]).to.include({ phase: 'ORDER', orderIdempotencyKey: sent[0].key })
+      expect(market.unresolvedOperations.value[0].purchaseRequest).to.deep.equal(sent[0].body)
+    }
   })
 
   it('allows explicit abandon of a known quote but never treats it as an order recovery', async () => {

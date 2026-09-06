@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { computed, ref, unref, watch } from 'vue'
 import { isCanonicalDecimalString } from '../../utils/silverAmount.js'
 import { createEconomyRequestIntentStore } from './economyRequestIntent.js'
 
@@ -57,9 +57,15 @@ export const useHallTaskActions = ({
 }) => {
   // Keep the key for an unresolved request so retrying after a timeout or lost
   // response replays the exact same server-side operation instead of charging twice.
-  const intentStore = createEconomyRequestIntentStore({
+  const fundedActorScope = computed(() => {
+    const scope = unref(typeof fundedActorScopeKey === 'function' ? fundedActorScopeKey() : fundedActorScopeKey)
+    return typeof scope === 'string' ? scope.trim() : ''
+  })
+  // Cleanup must use the namespace that created the request, never whichever
+  // principal happened to load while its response was in flight.
+  const intentStoreForScope = scope => createEconomyRequestIntentStore({
     storage: fundedIntentStorage,
-    scopeKey: () => typeof fundedActorScopeKey === 'function' ? fundedActorScopeKey() : fundedActorScopeKey?.value ?? fundedActorScopeKey
+    scopeKey: () => scope
   })
   const pendingOperationKeys = new Map()
   const acquirePendingOperationKey = operation => {
@@ -86,17 +92,27 @@ export const useHallTaskActions = ({
     ? '资金榜恢复记录损坏或版本未知；为防止重复扣款，已停止张榜。'
     : '资金榜恢复记录不可用；为防止重复扣款，已停止张榜。'
   const readFundedCreateRecovery = () => {
-    const current = intentStore.get('funded-create')
+    const scope = fundedActorScope.value
+    const current = intentStoreForScope(scope).get('funded-create')
     fundedCreateRecovery.value = current.state === 'PRESENT' ? current.record : null
     return current
   }
-  readFundedCreateRecovery()
-  const sendFundedCreate = async (intent) => {
+  // The authenticated principal can arrive after this composable mounts. Scope
+  // changes must discard the prior actor presentation before reading its own
+  // namespace so no recovery action can cross actor boundaries.
+  watch(fundedActorScope, () => {
+    fundedCreateRecovery.value = null
+    readFundedCreateRecovery()
+  }, { immediate: true, flush: 'sync' })
+  const sendFundedCreate = async (intent, scope) => {
     const task = unwrap(ensureBusinessSuccess(await agentApi.create('/tasks', intent.body, {
       autoLoading: false, headers: { 'Idempotency-Key': intent.key }, onSuccess: ensureBusinessSuccess
     })))
-    const removed = intentStore.remove('funded-create')
+    const removed = intentStoreForScope(scope).remove('funded-create')
     if (removed.state !== 'ABSENT') throw new Error(fundedCreateStorageFailure(removed.state))
+    // An old principal's success is durable, but it must not replace the newer
+    // principal's recovery panel, task list, selection, or toast presentation.
+    if (fundedActorScope.value !== scope) return true
     fundedCreateRecovery.value = null
     tasks.value = [task, ...tasks.value.filter(item => item.id !== task.id)]
     selectedTask.value = task
@@ -112,25 +128,35 @@ export const useHallTaskActions = ({
         playSuccess(); showToast('榜文已张'); return true
       } catch (error) { log.warn('create bounty task failed:', error); playError(); showToast(`张榜未成：${failureReason(error, '请稍后再试')}`); return false }
     }
+    const scope = fundedActorScope.value
+    const store = intentStoreForScope(scope)
     const current = readFundedCreateRecovery()
     if (current.state === 'PRESENT') {
       showToast('存在未确认的原资金榜请求；请核对原正文并明确选择恢复，当前编辑稿未提交。')
       return false
     }
     if (current.state !== 'ABSENT') { showToast(fundedCreateStorageFailure(current.state)); return false }
-    const saved = intentStore.save('funded-create', { body: JSON.parse(JSON.stringify(payload)), key: createIdempotencyKey() })
+    const saved = store.save('funded-create', { body: JSON.parse(JSON.stringify(payload)), key: createIdempotencyKey() })
     fundedCreateRecovery.value = saved.record || null
     if (saved.state !== 'PRESENT') { showToast(fundedCreateStorageFailure(saved.state)); return false }
-    try { return await sendFundedCreate(saved.record) } catch (error) {
-      if (isDefinitiveFundedFailure(error)) { const removed = intentStore.remove('funded-create'); if (removed.state === 'ABSENT') fundedCreateRecovery.value = null }
+    try { return await sendFundedCreate(saved.record, scope) } catch (error) {
+      if (isDefinitiveFundedFailure(error)) {
+        const removed = store.remove('funded-create')
+        if (removed.state === 'ABSENT' && fundedActorScope.value === scope) fundedCreateRecovery.value = null
+      }
       log.warn('create bounty task failed:', error); playError(); showToast(`张榜未成：${failureReason(error, '请稍后再试')}`); return false
     }
   }
   const resumeFundedCreate = async () => {
+    const scope = fundedActorScope.value
+    const store = intentStoreForScope(scope)
     const current = readFundedCreateRecovery()
     if (current.state !== 'PRESENT') { showToast(current.state === 'ABSENT' ? '没有待恢复的资金榜请求。' : fundedCreateStorageFailure(current.state)); return false }
-    try { return await sendFundedCreate(current.record) } catch (error) {
-      if (isDefinitiveFundedFailure(error)) { const removed = intentStore.remove('funded-create'); if (removed.state === 'ABSENT') fundedCreateRecovery.value = null }
+    try { return await sendFundedCreate(current.record, scope) } catch (error) {
+      if (isDefinitiveFundedFailure(error)) {
+        const removed = store.remove('funded-create')
+        if (removed.state === 'ABSENT' && fundedActorScope.value === scope) fundedCreateRecovery.value = null
+      }
       log.warn('resume funded bounty create failed:', error); playError(); showToast(`原资金榜恢复未成：${failureReason(error, '请核对原请求')}`); return false
     }
   }

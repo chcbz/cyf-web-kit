@@ -44,7 +44,11 @@
       <small v-if="fundedPreviewEnabled && taskForm.funded && !validGrossAmount" class="funded-input-error">请输入规范的非负整数字符串。</small>
       <section v-if="fundedCreateRecovery" class="funded-create-recovery" role="status">
         <strong>发现原资金榜请求，结果未知</strong>
-        <p>将恢复原正文：{{ fundedCreateRecovery.body.title }} / {{ fundedCreateRecovery.body.grossBountyAmountMicro }} micro-SILVER。</p>
+        <p>原榜文名目：{{ fundedCreateRecovery.body.title }}</p>
+        <p>原榜文缘由：{{ fundedCreateRecovery.body.description || '未填写' }}</p>
+        <p>原所需本领：{{ fundedRecoveryAbilities }}</p>
+        <p>原结算规则：{{ fundedCreateRecovery.body.settlementPolicy || '未填写' }}</p>
+        <p>原总额：{{ fundedCreateRecovery.body.grossBountyAmountMicro }} micro-SILVER。</p>
         <p>当前编辑稿不会提交或替换原请求。</p>
         <button type="button" @click="$emit('resume-funded-create')">确认按原请求恢复</button>
         <button type="button" @click="$emit('cancel-funded-create-recovery')">暂不恢复</button>
@@ -346,6 +350,10 @@ const taskForm = ref({
 })
 const detailTask = computed(() => modalTask.value)
 const validGrossAmount = computed(() => isCanonicalMicroAmount(taskForm.value.grossBountyAmountMicro))
+const fundedRecoveryAbilities = computed(() => {
+  const abilities = props.fundedCreateRecovery?.body?.requiredAbilities
+  return Array.isArray(abilities) ? abilities.join('、') || '未填写' : abilities || '未填写'
+})
 const unassignedDiscussHint = '此榜文尚未点将，暂不可开议'
 const isFundedTask = task => task?.funding?.mode === 'FUNDED_SINGLE_AGENT'
 const fundedClaimBlocked = (task, agent) => {

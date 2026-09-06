@@ -43,8 +43,10 @@ export const createEconomyRequestIntentStore = ({ storage, scopeKey }) => {
     save: (operation, record) => {
       const read = readAll()
       if (read.state === 'PRESENT' && read.records[operation]) return { state: 'PRESENT', record: clone(read.records[operation]) }
-      if (read.state !== 'ABSENT' || !validRecord(record)) return read.state === 'ABSENT' ? { state: 'CORRUPT' } : read
-      const records = { [operation]: clone(record) }
+      if ((read.state !== 'ABSENT' && read.state !== 'PRESENT') || !validRecord(record)) return read.state === 'ABSENT' ? { state: 'CORRUPT' } : read
+      // A valid legacy empty envelope means this operation is absent. Preserve
+      // any sibling unresolved intent rather than replacing its namespace.
+      const records = { ...(read.records || {}), [operation]: clone(record) }
       return writeAll(records) ? { state: 'PRESENT', record: clone(records[operation]) } : { state: 'UNAVAILABLE' }
     },
     remove: operation => {

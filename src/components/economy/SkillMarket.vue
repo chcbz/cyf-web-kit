@@ -76,7 +76,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, proxyRefs, ref, watch }
+import { computed, onBeforeUnmount, onMounted, proxyRefs, ref, watch } from 'vue'
 import SkillProductCard from './SkillProductCard.vue'
 import SkillPurchaseDialog from './SkillPurchaseDialog.vue'
 import { formatEntitlementSkillFact, formatInstalledSkillFact, orderStatusLabel, useSkillMarket } from '@/composables/useSkillMarket.js'
