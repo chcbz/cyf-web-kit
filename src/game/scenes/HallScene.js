@@ -625,6 +625,22 @@ export function createHallSceneClass(me, HallAgentClass) {
       return this._cameraController?.zoomAt?.({ x: this._viewportSize().width / 2, y: this._viewportSize().height / 2 }, factor) || this.getTransform()
     }
 
+    applyPreviewContain(worldBounds) {
+      this._ensureControllers()
+      this._inputController?.cancelGesture?.()
+      return this._cameraController?.applyPreviewContain?.(worldBounds) || null
+    }
+
+    clearPreviewContain() {
+      this._ensureControllers()
+      return this._cameraController?.clearPreviewContain?.() || this.getTransform()
+    }
+
+    sceneBounds() {
+      const size = this._sceneSize()
+      return { x: 0, y: 0, width: size.width, height: size.height }
+    }
+
     resetToMainHall() {
       this._ensureControllers()
       this._inputController?.cancelGesture?.()

@@ -944,6 +944,22 @@ export class JuyitingGame {
     }
   }
 
+  applyPreviewContain(worldBounds) {
+    const result = this._hallScene?.applyPreviewContain?.(worldBounds) || null
+    this._markSceneDebugDirty()
+    return result
+  }
+
+  clearPreviewContain() {
+    const result = this._hallScene?.clearPreviewContain?.() || null
+    this._markSceneDebugDirty()
+    return result
+  }
+
+  getSceneBounds() {
+    return this._hallScene?.sceneBounds?.() || null
+  }
+
   resetToMainHall() {
     const result = this._hallScene?.resetToMainHall?.()
     this._markSceneDebugDirty()

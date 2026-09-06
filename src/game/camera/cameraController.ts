@@ -41,6 +41,8 @@ export type CameraController = {
   resize(nextViewport: Viewport, kind: 'keyboard' | 'orientation' | 'layout'): CameraTransform
   restore(snapshot: Partial<CameraSnapshot> | null | undefined, nextViewport: Viewport): CameraTransform
   resetTo(presetKey: ViewPresetKey, durationMs?: number): void
+  applyPreviewContain(bounds: { x?: number; y?: number; width: number; height: number }): CameraTransform | null
+  clearPreviewContain(): CameraTransform
   beginUserGesture(): void
   isAwayFromPreset(): boolean
   snapshot(): CameraSnapshot
@@ -85,6 +87,7 @@ export const createCameraController = (
   let disposed = false
   let animationGeneration = 0
   let preservedMinimum: number | null = null
+  let previewSnapshot: CameraTransform | null = null
 
   const normalBounds = (key = presetKey): CameraBounds => {
     const maxZoom = Math.min(positiveOr(configuredBounds.maxZoom, MAX_ZOOM), MAX_ZOOM)
@@ -201,6 +204,30 @@ export const createCameraController = (
         return apply(presetTransform(presetKey), normalBounds())
       }
       return apply({ zoom: candidate.zoom, offsetX: candidate.offsetX, offsetY: candidate.offsetY }, normalBounds())
+    },
+
+    applyPreviewContain(worldBounds) {
+      if (disposed) return null
+      const width = Number(worldBounds?.width)
+      const height = Number(worldBounds?.height)
+      const x = Number(worldBounds?.x) || 0
+      const y = Number(worldBounds?.y) || 0
+      if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 || viewport.width <= 0 || viewport.height <= 0) return null
+      const zoom = Math.min(viewport.width / width, viewport.height / height)
+      if (!Number.isFinite(zoom) || zoom <= 0) return null
+      cancelAnimation()
+      if (previewSnapshot === null) previewSnapshot = { ...transform }
+      const containOffsetX = viewport.width / 2 - (x + width / 2) * zoom
+      const containOffsetY = viewport.height / 2 - (y + height / 2) * zoom
+      return apply({ zoom, offsetX: containOffsetX - viewport.width / 2 * (1 - zoom), offsetY: containOffsetY - viewport.height / 2 * (1 - zoom) }, { minZoom: zoom, maxZoom: Math.max(normalBounds().maxZoom, zoom) })
+    },
+
+    clearPreviewContain() {
+      if (disposed || previewSnapshot === null) return { ...transform }
+      cancelAnimation()
+      const snapshot = previewSnapshot
+      previewSnapshot = null
+      return apply(snapshot, normalBounds())
     },
 
     resetTo(nextPresetKey, durationMs = DEFAULT_RESET_DURATION_MS) {

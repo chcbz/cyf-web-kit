@@ -125,6 +125,7 @@ const props = defineProps({
   portraitName: { type: Function, required: true },
   portraitShortName: { type: Function, required: true },
   portraitStyle: { type: Function, required: true },
+  readOnlyPreview: { type: Boolean, default: false },
   refreshing: { type: Boolean, default: false },
   roleClass: { type: Function, required: true },
   simulationEnabled: { type: Boolean, default: true },
@@ -150,7 +151,9 @@ const emit = defineEmits([
   'request-landscape',
   'request-portrait',
   'refresh-hall',
+  'scene-bounds-change',
   'scene-mode-change',
+  'scene-state-change',
   'select-agent',
   'simulation-phase-events',
   'simulation-ready',
@@ -486,6 +489,12 @@ const finalizeSceneReady = async attemptId => {
     setupStageResizeObserver()
     unlockLoading(attemptId)
     consumeLandscapeEntryTarget(attemptId)
+    emit('scene-state-change', 'ready')
+    emit('scene-bounds-change', juyitingGame.getSceneBounds?.() || null)
+    if (props.readOnlyPreview) {
+      juyitingGame.setInteractionLocked?.(true, 'preview')
+      juyitingGame.applyPreviewContain?.(juyitingGame.getSceneBounds?.())
+    }
     scheduleReturnRefresh()
   } catch (error) {
     failSceneMount(attemptId, error)
@@ -780,6 +789,12 @@ watch(() => props.landscapeEntryTarget, () => {
   if (isRunningGeneration(sceneMountAttempt)) consumeLandscapeEntryTarget(sceneMountAttempt)
   else if (!props.landscapeEntryTarget) cancelLandscapeTargetWork()
 }, { deep: true })
+
+watch(() => props.readOnlyPreview, preview => {
+  juyitingGame.setInteractionLocked?.(preview, 'preview')
+  if (preview) juyitingGame.applyPreviewContain?.(juyitingGame.getSceneBounds?.())
+  else juyitingGame.clearPreviewContain?.()
+})
 
 watch(() => props.experienceMode, mode => {
   if (mode === 'landscape-map') {
