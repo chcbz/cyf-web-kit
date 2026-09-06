@@ -529,7 +529,6 @@ const evaluateViewportResize = () => {
   const resizeHeight = kind === 'keyboard'
     ? Math.min(nextStageViewport.height, nextVisualHeight)
     : nextStageViewport.height
-  document.documentElement.style.setProperty('--hall-visual-height', `${nextVisualHeight}px`)
   const change = {
     width: nextStageViewport.width,
     height: resizeHeight,
@@ -755,7 +754,6 @@ onMounted(() => {
   if (sceneDebugRequested()) window.__JYTING_GAME__ = juyitingGame
   previousLayoutViewport = viewportNow()
   previousVisualHeight = window.visualViewport?.height || previousLayoutViewport.height
-  document.documentElement.style.setProperty('--hall-visual-height', `${previousVisualHeight}px`)
   window.addEventListener?.('resize', handleWindowResize)
   window.visualViewport?.addEventListener?.('resize', handleVisualResize)
   void mountScene()

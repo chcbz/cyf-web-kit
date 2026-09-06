@@ -30,6 +30,9 @@ export const useHallExperienceMode = () => {
   const requestedMode = ref(null)
   const orientationHint = ref('')
   const orientationRequestPending = ref(false)
+  // This is presentation-only viewport state. Physical orientation remains owned
+  // by Screen Orientation/media/legacy sources below.
+  const viewport = ref({ width: 0, height: 0 })
   const experienceMode = computed(() => resolveHallExperienceMode({
     isMobileCoarse: isMobileCoarse.value,
     isPhysicalLandscape: isPhysicalLandscape.value,
@@ -40,7 +43,14 @@ export const useHallExperienceMode = () => {
     isWeChatWebView() && requestedMode.value === 'landscape-map' && !isPhysicalLandscape.value
   ))
 
+  // The rotated H5 shell's logical height is the physical viewport width. This
+  // only sizes presentation surfaces; it must not be used to infer orientation.
+  const hallViewportHeight = computed(() => (
+    isVirtualLandscape.value ? viewport.value.width : viewport.value.height
+  ))
+
   let isMounted = false
+  let visualViewport = null
   let orientationMedia = null
   let coarseMedia = null
   let screenOrientation = null
@@ -49,6 +59,12 @@ export const useHallExperienceMode = () => {
   let requestGeneration = 0
   let requestTimer = null
   let requestOwnership = null
+
+  const readViewport = () => {
+    const width = Number(visualViewport?.width) || Number(window?.innerWidth) || 0
+    const height = Number(visualViewport?.height) || Number(window?.innerHeight) || 0
+    viewport.value = { width, height }
+  }
 
   const commitPhysicalOrientation = next => {
     if (typeof next !== 'boolean' || next === isPhysicalLandscape.value) return false
@@ -326,6 +342,8 @@ export const useHallExperienceMode = () => {
   const handleScreenOrientationChange = event => commitFreshSourceTruth('screen', readScreenSource(), event)
   const handleOrientationMediaChange = event => commitFreshSourceTruth('media', readMediaSource(event), event)
   const handleLegacyOrientationChange = event => commitFreshSourceTruth('legacy', readLegacySource(), event)
+  const handleViewportResize = () => readViewport()
+
   const handleCoarseChange = () => {
     isMobileCoarse.value = Boolean(coarseMedia?.matches)
     if (!isMobileCoarse.value) {
@@ -338,6 +356,8 @@ export const useHallExperienceMode = () => {
     if (typeof window === 'undefined') return
     isMounted = true
     screenOrientation = globalThis.screen?.orientation || null
+    visualViewport = window.visualViewport || null
+    readViewport()
     orientationMedia = window.matchMedia?.('(orientation: landscape)') || null
     coarseMedia = window.matchMedia?.('(pointer: coarse)') || null
     observedOrientation = {
@@ -352,6 +372,8 @@ export const useHallExperienceMode = () => {
     orientationMedia?.addEventListener?.('change', handleOrientationMediaChange)
     coarseMedia?.addEventListener?.('change', handleCoarseChange)
     window.addEventListener?.('orientationchange', handleLegacyOrientationChange)
+    window.addEventListener?.('resize', handleViewportResize)
+    visualViewport?.addEventListener?.('resize', handleViewportResize)
     globalThis.document?.addEventListener?.('fullscreenchange', handleFullscreenChange)
   })
 
@@ -365,10 +387,13 @@ export const useHallExperienceMode = () => {
     orientationMedia?.removeEventListener?.('change', handleOrientationMediaChange)
     coarseMedia?.removeEventListener?.('change', handleCoarseChange)
     window.removeEventListener?.('orientationchange', handleLegacyOrientationChange)
+    window.removeEventListener?.('resize', handleViewportResize)
+    visualViewport?.removeEventListener?.('resize', handleViewportResize)
     globalThis.document?.removeEventListener?.('fullscreenchange', handleFullscreenChange)
     screenOrientation = null
     orientationMedia = null
     coarseMedia = null
+    visualViewport = null
   })
 
   return {
@@ -378,6 +403,7 @@ export const useHallExperienceMode = () => {
     isVirtualLandscape,
     orientationHint,
     orientationRequestPending,
+    hallViewportHeight,
     requestLandscape,
     requestPortrait
   }

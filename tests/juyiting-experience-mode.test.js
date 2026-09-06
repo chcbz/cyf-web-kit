@@ -314,6 +314,57 @@ describe('Juyi Hall experience mode', () => {
     }
   })
 
+  it('tracks live viewport height separately from physical orientation and restores it after rotation', async () => {
+    const originals = {
+      innerWidth: global.window.innerWidth,
+      innerHeight: global.window.innerHeight,
+      visualViewport: global.window.visualViewport
+    }
+    const visualListeners = new Set()
+    let visualWidth = 844
+    let visualHeight = 390
+    Object.defineProperty(global.window, 'innerWidth', { configurable: true, writable: true, value: 844 })
+    Object.defineProperty(global.window, 'innerHeight', { configurable: true, writable: true, value: 390 })
+    Object.defineProperty(global.window, 'visualViewport', { configurable: true, value: {
+      get width() { return visualWidth },
+      get height() { return visualHeight },
+      addEventListener: (_event, listener) => visualListeners.add(listener),
+      removeEventListener: (_event, listener) => visualListeners.delete(listener)
+    } })
+    const env = setupEnvironment({ mediaLandscape: true, screen: false })
+    try {
+      const { mode, wrapper } = await mountMode()
+      expect(mode.isPhysicalLandscape.value).to.equal(true)
+      expect(mode.hallViewportHeight.value).to.equal(390)
+
+      // A keyboard resize changes only presentation height; it cannot change
+      // the physical orientation or leave a remembered 430px-style value.
+      visualHeight = 220
+      visualListeners.forEach(listener => listener(new global.window.Event('resize')))
+      await flush()
+      expect(mode.hallViewportHeight.value).to.equal(220)
+      expect(mode.isPhysicalLandscape.value).to.equal(true)
+
+      global.window.innerWidth = 390
+      global.window.innerHeight = 844
+      visualWidth = 390
+      visualHeight = 844
+      env.orientationMedia.emit(false, { matches: false, timeStamp: 100 })
+      global.window.dispatchEvent(new global.window.Event('resize'))
+      visualListeners.forEach(listener => listener(new global.window.Event('resize')))
+      await flush()
+      expect(mode.isPhysicalLandscape.value).to.equal(false)
+      expect(mode.hallViewportHeight.value).to.equal(844)
+      wrapper.unmount()
+      expect(visualListeners.size).to.equal(0)
+    } finally {
+      Object.defineProperty(global.window, 'innerWidth', { configurable: true, value: originals.innerWidth })
+      Object.defineProperty(global.window, 'innerHeight', { configurable: true, value: originals.innerHeight })
+      Object.defineProperty(global.window, 'visualViewport', { configurable: true, value: originals.visualViewport })
+      env.restore()
+    }
+  })
+
   it('commits legacy physical orientation events once, uses latest truth, and removes them on unmount', async () => {
     const env = setupEnvironment({ mediaLandscape: null, screen: false, legacyAngle: 0 })
     try {
@@ -1243,7 +1294,7 @@ describe('Juyi Hall experience mode', () => {
     expect(modeSource).to.include("window.addEventListener?.('orientationchange'")
     expect(modeSource).to.include('const isWeChatWebView')
     expect(modeSource).to.include("const requestPortrait = async () =>")
-    expect(modeSource).not.to.include("addEventListener?.('resize'")
+    expect(modeSource).to.include("visualViewport?.addEventListener?.('resize'")
     expect(panelsSource).not.to.include('addEventListener')
     expect(panelsSource).not.to.include('matchMedia')
     expect(stageSource).not.to.include("matchMedia?.('(orientation: landscape)')")

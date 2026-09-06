@@ -1068,6 +1068,8 @@ onBeforeUnmount(() => {
   .reader-layout,
   .reader-layout.catalog-open {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 38%);
+    overflow: hidden;
   }
 
   .reader-catalog {
@@ -1079,8 +1081,13 @@ onBeforeUnmount(() => {
     box-shadow: 12px 0 30px rgba(45, 27, 16, 0.24);
   }
 
+  .reader-content,
   .reader-notes {
-    max-height: 34vh;
+    min-height: 0;
+  }
+
+  .reader-notes {
+    max-height: none;
   }
 
   .reader-header-actions {
@@ -1090,6 +1097,17 @@ onBeforeUnmount(() => {
 
   .save-state {
     margin-right: auto;
+  }
+}
+
+@media (max-height: 540px) and (orientation: landscape) {
+  .archive-reader-fullscreen {
+    gap: 8px;
+    padding: 8px max(12px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  }
+
+  .reader-header {
+    padding-bottom: 6px;
   }
 }
 

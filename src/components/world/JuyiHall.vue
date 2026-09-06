@@ -1,5 +1,5 @@
 <template>
-  <div ref="hallRootRef" class="juyi-page" tabindex="-1" :class="{ 'is-panel-open': isPanelSessionActive, 'is-virtual-landscape': isVirtualLandscape, [`experience-${experienceMode}`]: true }">
+  <div ref="hallRootRef" class="juyi-page" tabindex="-1" :style="hallViewportStyle" :class="{ 'is-panel-open': isPanelSessionActive, 'is-virtual-landscape': isVirtualLandscape, [`experience-${experienceMode}`]: true }">
     <HallPortraitHome
       v-if="!experienceReady || experienceMode === 'portrait-command'"
       :agents="agents"
@@ -407,9 +407,14 @@ const {
   isVirtualLandscape,
   orientationHint,
   orientationRequestPending,
+  hallViewportHeight,
   requestLandscape,
   requestPortrait
 } = useHallExperienceMode()
+const hallViewportStyle = computed(() => {
+  const height = Number(hallViewportHeight?.value ?? hallViewportHeight)
+  return Number.isFinite(height) && height > 0 ? { '--hall-visual-height': `${height}px` } : {}
+})
 const { panelLayout } = useHallPanels({ experienceMode, isMobileCoarse })
 const hallRootRef = ref(null)
 const panelRef = ref(null)
@@ -1882,6 +1887,24 @@ button.hall-room {
   contain: layout paint;
 }
 
+.panel-overlay:has(.panel-chat) {
+  align-items: stretch;
+  justify-content: stretch;
+  padding: 0;
+}
+
+/* 厅前议事 is an immersive workspace, not an inset drawer. */
+.floating-panel.panel-chat,
+.floating-panel.panel-chat.layout-center-modal,
+.floating-panel.panel-chat.layout-right-drawer,
+.floating-panel.panel-chat.layout-bottom-drawer {
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  max-height: 100%;
+  border-radius: 0;
+}
+
 .floating-panel {
   position: relative;
   z-index: 1;
@@ -1911,9 +1934,6 @@ button.hall-room {
   max-height: calc(100% - 48px);
 }
 
-.panel-chat.layout-center-modal {
-  width: min(920px, calc(100% - 40px));
-}
 
 .panel-overlay:has(.layout-right-drawer) {
   align-items: stretch;
@@ -1929,10 +1949,6 @@ button.hall-room {
   border-radius: 8px 0 0 8px;
 }
 
-.panel-chat.layout-right-drawer {
-  width: min(92%, 720px);
-  max-width: 92%;
-}
 
 .panel-overlay:has(.layout-bottom-drawer) {
   align-items: flex-end;
@@ -1948,15 +1964,7 @@ button.hall-room {
   border-radius: 8px 8px 0 0;
 }
 
-.floating-panel.panel-chat.layout-bottom-drawer {
-  height: calc(var(--hall-visual-height, 100vh) - 12px);
-  max-height: calc(var(--hall-visual-height, 100vh) - 12px);
-}
 
-.panel-chat {
-  width: min(920px, calc(100vw - 32px));
-  height: min(760px, calc(100vh - 48px));
-}
 
 .panel-title {
   display: flex;
@@ -2330,12 +2338,6 @@ button.hall-room {
     border-radius: 8px 8px 0 0;
   }
 
-  .floating-panel.panel-chat {
-    width: calc(100% - 16px);
-    max-width: calc(100% - 16px);
-    height: min(760px, calc(100% - var(--mobile-chat-panel-top-gap)));
-    max-height: calc(100% - var(--mobile-chat-panel-top-gap));
-  }
 
 }
 </style>
