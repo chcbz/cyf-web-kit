@@ -62,7 +62,7 @@ describe('funded bounty explicit quote confirmation (W05 DTO)', () => {
     h.confirmation.resolve(true)
     expect(await pending).to.equal(true)
     expect(h.calls.map(item => item.url)).to.deep.equal(['/tasks/funded/quotes', '/tasks/funded/claim', '/tasks/funded'])
-    expect(h.calls[0].body).to.deep.equal({ agentId: 'explicit-agent' })
+    expect(h.calls[0].body).to.deep.equal({ agentId: 'explicit-agent', modelPreference: { provider: 'openai', model: 'configured-model' }, contextRevision: '8', minimumAcceptedPayoutMicro: '0' })
     expect(h.calls[1].body).to.deep.equal({ agentId: 'explicit-agent', quoteId: 'q-1', taskVersion: '8', allowQueue: false })
     expect(h.task).to.include({ id: 'funded', taskVersion: '9', status: 'assigned', assignedAgentId: 'explicit-agent' })
     expect(h.task).not.to.have.property('claimedAt')
@@ -328,7 +328,7 @@ describe('funded bounty explicit quote confirmation (W05 DTO)', () => {
       h.task.taskVersion = version
       expect(await h.actions.assignTask(h.task, h.agent)).to.equal(true)
       expect(requests.map(item => item.method)).to.deep.equal(['POST', 'POST', 'GET'])
-      expect(requests[0].body).to.deep.equal({ agentId: 'explicit-agent' })
+      expect(requests[0].body).to.deep.equal({ agentId: 'explicit-agent', modelPreference: { provider: 'openai', model: 'configured-model' }, contextRevision: version, minimumAcceptedPayoutMicro: '0' })
       expect(requests[1].body.taskVersion).to.equal(version)
       expect(h.task.taskVersion).to.equal(nextVersion)
     } finally {

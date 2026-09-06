@@ -70,15 +70,18 @@
       @update:approved-permissions="market.setApprovedPermissions"
       @quote="market.requestQuote"
       @purchase="completePurchase"
+      @update:show="handleDialogVisibility"
     />
   </section>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, proxyRefs, ref, watch }
 import SkillProductCard from './SkillProductCard.vue'
 import SkillPurchaseDialog from './SkillPurchaseDialog.vue'
 import { formatEntitlementSkillFact, formatInstalledSkillFact, orderStatusLabel, useSkillMarket } from '@/composables/useSkillMarket.js'
+
+const emit = defineEmits(['refresh-roster'])
 
 const props = defineProps({
   /** Must come from the API capability response; default false fails closed. */
@@ -92,12 +95,12 @@ const props = defineProps({
   actorScopeKey: { type: String, default: '' }
 })
 const purchaseVisible = ref(false)
-const market = useSkillMarket({
+const market = proxyRefs(useSkillMarket({
   agentApi: props.agentApi || undefined,
   enabled: computed(() => props.previewEnabled),
   actorScopeKey: computed(() => props.actorScopeKey)
-})
-const entitlementText = computed(() => market.entitlements.value.filter(item => String(item.status || '').toUpperCase() === 'ACTIVE').map(formatEntitlementSkillFact).filter(Boolean).join('、') || '无有效权益')
+}))
+const entitlementText = computed(() => market.entitlements.filter(item => String(item.status || '').toUpperCase() === 'ACTIVE').map(formatEntitlementSkillFact).filter(Boolean).join('、') || '无有效权益')
 const installedText = computed(() => props.installedSkills.map(formatInstalledSkillFact).filter(Boolean).join('、') || '未报告已安装技能')
 const runtimeAbilityText = computed(() => Array.isArray(props.runtimeAbilities) ? props.runtimeAbilities.join('、') || '未报告运行时能力' : props.runtimeAbilities || '未报告运行时能力')
 
@@ -105,6 +108,12 @@ const refresh = async () => {
   try { return await market.loadProducts() } catch { return null }
 }
 const openPurchase = async (product) => {
+  const existing = market.unresolvedOperations.find(operation => operation.phase === 'QUOTE' && operation.productVersionId === (product?.productVersionId || product?.currentVersion?.productVersionId))
+  if (existing) {
+    const recovered = await resumeOperation(existing)
+    if (recovered) purchaseVisible.value = true
+    return
+  }
   market.selectProduct(product)
   const id = product?.productId || product?.id
   if (id) {
@@ -117,6 +126,7 @@ const completePurchase = async () => {
   try { order = await market.purchase() } catch { return }
   if (order) {
     purchaseVisible.value = false
+    emit('refresh-roster')
     market.pollOrder({ maxAttempts: 6, intervalMs: 1500 }).catch(() => {})
   }
 }
@@ -124,7 +134,16 @@ const refreshOrder = async () => {
   try { return await market.loadOrder() } catch { return null }
 }
 const resumeOperation = async (operation) => {
-  try { return await market.resumeOperation(operation) } catch { return null }
+  try {
+    const recovered = await market.resumeOperation(operation)
+    if (recovered?.quoteId) purchaseVisible.value = true
+    if (recovered?.orderId) emit('refresh-roster')
+    return recovered
+  } catch { return null }
+}
+const handleDialogVisibility = visible => {
+  purchaseVisible.value = visible
+  if (!visible) market.abandonQuote()
 }
 
 watch(() => props.targetAgent, async (agent) => {

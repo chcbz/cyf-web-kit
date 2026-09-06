@@ -345,6 +345,7 @@ const apiStore = useApiStore()
 const selectedAgent = ref(null)
 const selectedTask = ref(null)
 const economyPreviewEnabled = ref(false)
+const economyPreviewCapability = ref(null)
 const economyPreviewChecked = ref(false)
 const economyPreviewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
 const portraitTaskDetailOpen = ref(false)
@@ -579,8 +580,10 @@ const ensureEconomyPreviewCapability = async () => {
   if (!economyPreviewBuildEnabled || economyPreviewChecked.value) return economyPreviewEnabled.value
   economyPreviewChecked.value = true
   try {
-    economyPreviewEnabled.value = isEconomyPreviewCapability(await loadEconomyPreviewCapability())
+    economyPreviewCapability.value = await loadEconomyPreviewCapability()
+    economyPreviewEnabled.value = isEconomyPreviewCapability(economyPreviewCapability.value)
   } catch (error) {
+    economyPreviewCapability.value = null
     economyPreviewEnabled.value = false
     log.warn('economy preview capability is unavailable:', error)
   }
@@ -953,6 +956,7 @@ const {
 } = useHallTaskActions({
   agentApi,
   confirmFundedQuote,
+  fundedActorScopeKey: computed(() => economyPreviewCapability.value?.principalScopeFingerprint || ''),
   resolveFundedAgent: agent => agents.value.find(item => item.agentId === agent.agentId),
   canAssign,
   log,

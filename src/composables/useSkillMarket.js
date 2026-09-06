@@ -140,8 +140,10 @@ const operationLockError = () => {
 
 const isAmbiguousTransportFailure = (failure) => !failure?.businessFailure && !failure?.response &&
   !failure?.status && !failure?.statusCode && !failure?.httpStatus
+// Frozen W09 purchase mapping: these three outcomes occur before an order
+// reservation. Conflicts and all unknown/5xx results retain the exact intent.
 const DEFINITIVE_NO_ORDER_FAILURE_CODES = new Set([
-  'PRICE_CHANGED', 'STALE_AGENT', 'PERMISSION_DENIED', 'ALREADY_ENTITLED', 'IDEMPOTENCY_CONFLICT'
+  'SKILL_QUOTE_EXPIRED', 'AGENT_VERSION_CONFLICT', 'INSUFFICIENT_FUNDS'
 ])
 const isDefinitiveNoOrderFailure = failure => DEFINITIVE_NO_ORDER_FAILURE_CODES.has(failure?.code)
 
@@ -531,6 +533,16 @@ export function useSkillMarket ({
     persistPurchaseJournal(current.filter(item => item.intentFingerprint !== record.intentFingerprint))
   }
 
+  // A quote has no purchase/order side effect. It may be abandoned explicitly,
+  // unlike an unknown ORDER intent whose original key must be retained.
+  const abandonQuote = () => {
+    const record = purchaseJournal.value.find(item => item.intentFingerprint === quoteBinding.value && item.phase === 'QUOTE')
+    if (!record) return false
+    clearQuotePurchaseRecord(record)
+    clearQuote()
+    return true
+  }
+
   const createOrderRecord = (record) => {
     const currentQuote = quote.value
     if (!currentQuote || !quoteIsUsable.value || record?.phase !== 'QUOTE') return null
@@ -878,6 +890,7 @@ export function useSkillMarket ({
     unresolvedPurchase,
     unresolvedOperations,
     clearQuote,
+    abandonQuote,
     setTargetAgent,
     setApprovedPermissions,
     togglePermission,

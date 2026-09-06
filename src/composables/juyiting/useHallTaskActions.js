@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { isCanonicalDecimalString } from '../../utils/silverAmount.js'
+import { createEconomyRequestIntentStore } from './economyRequestIntent.js'
 
 const responseBody = result => result && Object.prototype.hasOwnProperty.call(result, 'code') ? result : result?.data ?? result
 
@@ -40,6 +41,8 @@ const defaultIdempotencyKey = () => globalThis.crypto?.randomUUID?.() || `econom
 export const useHallTaskActions = ({
   agentApi,
   canAssign,
+  fundedActorScopeKey = () => '',
+  fundedIntentStorage = typeof window !== 'undefined' ? window.localStorage : null,
   createIdempotencyKey = defaultIdempotencyKey,
   confirmFundedQuote = async () => false,
   resolveFundedAgent = agent => agent,
@@ -54,6 +57,10 @@ export const useHallTaskActions = ({
 }) => {
   // Keep the key for an unresolved request so retrying after a timeout or lost
   // response replays the exact same server-side operation instead of charging twice.
+  const intentStore = createEconomyRequestIntentStore({
+    storage: fundedIntentStorage,
+    scopeKey: () => typeof fundedActorScopeKey === 'function' ? fundedActorScopeKey() : fundedActorScopeKey?.value ?? fundedActorScopeKey
+  })
   const pendingOperationKeys = new Map()
   const acquirePendingOperationKey = operation => {
     if (!pendingOperationKeys.has(operation)) pendingOperationKeys.set(operation, createIdempotencyKey())
@@ -76,16 +83,26 @@ export const useHallTaskActions = ({
 
   const createTask = async (payload) => {
     const funded = Boolean(payload?.grossBountyAmountMicro)
-    const operation = funded ? `funded-create:${JSON.stringify(payload)}` : ''
+    const operation = 'funded-create'
     try {
+      let fundedIntent = null
+      if (funded) {
+        fundedIntent = intentStore.get(operation)
+        if (!fundedIntent) {
+          const body = JSON.parse(JSON.stringify(payload))
+          fundedIntent = intentStore.save(operation, { body, key: createIdempotencyKey() })
+          if (!fundedIntent) throw new Error('资金榜请求恢复记录无法安全保存；请稍后重试')
+        }
+      }
       const task = funded
-        ? await fundedRequest(operation, key => agentApi.create('/tasks', payload, {
+        ? unwrap(ensureBusinessSuccess(await agentApi.create('/tasks', fundedIntent.body, {
           autoLoading: false,
-          headers: { 'Idempotency-Key': key },
+          headers: { 'Idempotency-Key': fundedIntent.key },
           onSuccess: ensureBusinessSuccess
-        }))
+        })))
         : unwrap(ensureBusinessSuccess(await agentApi.create('/tasks', payload, { autoLoading: false, onSuccess: ensureBusinessSuccess })))
       if (task) {
+        if (funded) intentStore.remove(operation)
         tasks.value = [task, ...tasks.value.filter(item => item.id !== task.id)]
         selectedTask.value = task
       }
@@ -93,6 +110,7 @@ export const useHallTaskActions = ({
       showToast('榜文已张')
       return true
     } catch (error) {
+      if (funded && isDefinitiveFundedFailure(error)) intentStore.remove(operation)
       log.warn('create bounty task failed:', error)
       playError()
       showToast(`张榜未成：${failureReason(error, '请稍后再试')}`)
@@ -121,7 +139,7 @@ export const useHallTaskActions = ({
     Array.isArray(quote.reasonCodes) && quote.reasonCodes.every(code => typeof code === 'string') &&
     ['input', 'cachedInput', 'output', 'reasoning'].every(key => isCanonicalDecimalString(quote.estimatedTokens?.[key])) &&
     ['estimatedComputeMicro', 'worstComputeMicro', 'platformFeeMicro', 'estimatedAgentPayoutMicro',
-      'worstAgentPayoutMicro'].every(key => isCanonicalDecimalString(quote[key])) &&
+      'worstAgentPayoutMicro', 'minimumAcceptedPayoutMicro'].every(key => isCanonicalDecimalString(quote[key])) &&
     isCanonicalDecimalString(quote.expiresAt)
   const definitiveClaimFailures = new Set(['QUOTE_EXPIRED', 'TASK_VERSION_CONFLICT', 'AGENT_NOT_READY',
     'REQUIRED_SKILLS_MISMATCH', 'INSUFFICIENT_BOUNTY_BUDGET'])
@@ -190,9 +208,15 @@ export const useHallTaskActions = ({
       let operation = recovery
       if (!operation) {
         if (!isCurrentPreview(id, task, agent, agentId, version, agentVersion)) return false
-        const quote = await fundedRequest(`funded-quote:${id}:${agentId}:${version}`, key => agentApi.create(`/tasks/${encodeURIComponent(id)}/quotes`, {
-          agentId
-        }, { autoLoading: false, headers: { 'Idempotency-Key': key }, onSuccess: ensureBusinessSuccess }))
+        // This is a synthetic preview route, not provider billing. These frozen
+        // canonical fields are required by the quote DTO and must not be omitted.
+        const quoteRequest = {
+          agentId,
+          modelPreference: { provider: 'openai', model: 'configured-model' },
+          contextRevision: version,
+          minimumAcceptedPayoutMicro: '0'
+        }
+        const quote = await fundedRequest(`funded-quote:${id}:${agentId}:${version}`, key => agentApi.create(`/tasks/${encodeURIComponent(id)}/quotes`, quoteRequest, { autoLoading: false, headers: { 'Idempotency-Key': key }, onSuccess: ensureBusinessSuccess }))
         if (!matchingQuote(quote, id, agentId, version) || !unexpired(quote) ||
           !isCurrentPreview(id, task, agent, agentId, version, agentVersion)) throw new Error('报价已过期或榜文/好汉已变，请重新预览')
         operation = {
@@ -314,11 +338,21 @@ export const useHallTaskActions = ({
     if (!task?.id || !isFundedTask(task) || !taskVersion(task)) return false
     const version = taskVersion(task)
     try {
-      const cancelled = await fundedRequest(`funded-cancel:${task.id}:${version}`, key => agentApi.create(`/tasks/${task.id}/funding/cancel`, {
+      const receipt = await fundedRequest(`funded-cancel:${task.id}:${version}`, key => agentApi.create(`/tasks/${task.id}/funding/cancel`, {
         expectedTaskVersion: version
       }, { autoLoading: false, headers: { 'Idempotency-Key': key }, onSuccess: ensureBusinessSuccess }))
-      Object.assign(task, cancelled || {})
-      selectedTask.value = task
+      if (receipt?.taskId !== task.id || receipt?.fundingStatus !== 'REFUNDED' || !isCanonicalDecimalString(receipt?.taskVersion)) {
+        throw new Error('撤榜回执不匹配；请核对原撤榜，不要重复扣款')
+      }
+      const canonical = unwrap(ensureBusinessSuccess(await agentApi.get(`/tasks/${encodeURIComponent(task.id)}`, undefined, { autoLoading: false })))
+      if (canonical?.id !== task.id || !isCanonicalDecimalString(taskVersion(canonical)) || BigInt(taskVersion(canonical)) < BigInt(receipt.taskVersion)) {
+        throw new Error('撤榜已确认，榜文快照尚未同步')
+      }
+      for (const current of new Set(currentTaskSnapshots(task.id, task))) {
+        const currentVersion = taskVersion(current)
+        if (!currentVersion || BigInt(taskVersion(canonical)) > BigInt(currentVersion) || current === task) Object.assign(current, canonical)
+      }
+      selectedTask.value = canonical
       playSuccess()
       showToast('资金榜文已撤，余款已退回')
       return true

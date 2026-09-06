@@ -19,6 +19,7 @@
         :preview-enabled="marketEnabled"
         :actor-scope-key="capability.principalScopeFingerprint"
         :target-agent="selectedAgent"
+        @refresh-roster="refreshRoster"
       />
     </template>
   </section>
@@ -52,12 +53,19 @@ const rosterItems = payload => Array.isArray(payload) ? payload :
 const ownedRosterAgent = agent => agent?.boundToMe === true && agent?.canOperate === true &&
   typeof agent?.agentId === 'string' && Boolean(agent.agentId.trim()) && isCanonicalDecimalString(agent?.version)
 
+const refreshRoster = async () => {
+  const priorSelection = selectedAgentId.value
+  const refreshed = rosterItems(unwrap(await loadSkillMarketRoster())).filter(ownedRosterAgent)
+  ownedAgents.value = refreshed
+  selectedAgentId.value = refreshed.some(agent => agent.agentId === priorSelection) ? priorSelection : ''
+  return refreshed
+}
+
 onMounted(async () => {
   try {
     capability.value = await loadEconomyPreviewCapability()
     if (!marketEnabled.value) return
-    ownedAgents.value = rosterItems(unwrap(await loadSkillMarketRoster()))
-      .filter(ownedRosterAgent)
+    await refreshRoster()
   } catch (cause) {
     capability.value = null
     error.value = cause?.message || '技能集市预览能力暂不可用。'

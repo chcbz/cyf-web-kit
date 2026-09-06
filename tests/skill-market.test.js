@@ -760,3 +760,38 @@ describe('skill market recovery hardening', () => {
     expect(calls).to.deep.equal(['/skill-products'])
   })
 })
+
+describe('skill market W12 recovery closure', () => {
+  it('clears only frozen pre-order failures and preserves conflicting evidence', async () => {
+    for (const code of ['SKILL_QUOTE_EXPIRED', 'AGENT_VERSION_CONFLICT', 'INSUFFICIENT_FUNDS']) {
+      const storage = memoryStorage()
+      const market = useSkillMarket({ actorScopeKey: `actor-${code}`, enabled: ref(true), purchaseIdempotencyStorage: storage,
+        agentApi: { get: async () => success([]), post: async url => {
+          if (url === '/skill-orders/quotes') return success({ quoteId: 'sq-1', productVersionId: 'spv-repo-test-1', targetAgentId: 'agent-lin', expectedAgentVersion: '7', expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
+          const error = new Error(code); error.code = code; error.businessFailure = true; throw error
+        } } })
+      await preparePurchase(market)
+      await market.purchase().catch(() => {})
+      expect(market.unresolvedOperations.value).to.deep.equal([])
+    }
+    const storage = memoryStorage()
+    const market = useSkillMarket({ actorScopeKey: 'actor-conflict', enabled: ref(true), purchaseIdempotencyStorage: storage,
+      agentApi: { get: async () => success([]), post: async url => {
+        if (url === '/skill-orders/quotes') return success({ quoteId: 'sq-1', productVersionId: 'spv-repo-test-1', targetAgentId: 'agent-lin', expectedAgentVersion: '7', expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
+        const error = new Error('IDEMPOTENCY_CONFLICT'); error.code = 'IDEMPOTENCY_CONFLICT'; error.businessFailure = true; throw error
+      } } })
+    await preparePurchase(market)
+    await market.purchase().catch(() => {})
+    expect(market.unresolvedOperations.value).to.have.length(1)
+  })
+
+  it('allows explicit abandon of a known quote but never treats it as an order recovery', async () => {
+    const storage = memoryStorage()
+    const market = useSkillMarket({ actorScopeKey: 'actor-quote-abandon', enabled: ref(true), purchaseIdempotencyStorage: storage, agentApi: createApi().api })
+    await preparePurchase(market)
+    expect(market.unresolvedOperations.value[0].phase).to.equal('QUOTE')
+    expect(market.abandonQuote()).to.equal(true)
+    expect(market.unresolvedOperations.value).to.deep.equal([])
+    expect(market.quote.value).to.equal(null)
+  })
+})
