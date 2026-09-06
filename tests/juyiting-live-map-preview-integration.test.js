@@ -218,3 +218,59 @@ describe('live map preview status ownership', () => {
     } finally { wrapper.unmount() }
   })
 })
+
+const deferred = () => {
+  let resolve
+  let reject
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej })
+  return { promise, resolve, reject }
+}
+
+describe('live map preview orientation target transaction', () => {
+  it('consumes a preview-queued target only after stable viewport commit and fences a reversed transition', async () => {
+    const f = fixture(); const Stage = loadStage(f.game)
+    const originalRaf = Object.getOwnPropertyDescriptor(window, 'requestAnimationFrame')
+    const originalCancel = Object.getOwnPropertyDescriptor(window, 'cancelAnimationFrame')
+    const originalResize = Object.getOwnPropertyDescriptor(window, 'ResizeObserver')
+    const frames = new Map(); let frame = 0
+    const commits = []; const targets = []; let pendingCommit = null
+    class ResizeObserverStub { constructor (callback) { this.callback = callback } observe () { this.callback([]) } disconnect () {} }
+    Object.defineProperty(window, 'ResizeObserver', { configurable: true, value: ResizeObserverStub })
+    window.requestAnimationFrame = callback => { frames.set(++frame, callback); return frame }
+    window.cancelAnimationFrame = id => frames.delete(id)
+    f.game.commitViewport = change => { commits.push(change); return pendingCommit ? pendingCommit.promise : Promise.resolve({ committed: true }) }
+    f.game.syncAgentsAndFocusAgent = (_agents, id) => { targets.push(id); return true }
+    let wrapper
+    const pump = async (limit = 12) => { for (let step = 0; step < limit && frames.size; step += 1) { const current = [...frames.entries()]; frames.clear(); current.forEach(([, callback]) => callback(step * 16)); await flush() } }
+    const entry = generation => ({ generation, target: { kind: 'agent', agentId: 'agent-1' } })
+    try {
+      wrapper = mount(Stage, { attachTo: document.body, props: { ...props, landscapeEntryTarget: entry(1), sceneAgents: [{ agentId: 'agent-1' }] }, global: { stubs: { 'var-icon': true } } })
+      wrapper.get('.melon-layer').element.getBoundingClientRect = () => ({ width: 390, height: 720, top: 0, left: 0, right: 390, bottom: 720 })
+      await flush(); f.handlers.onReady(); await pump()
+      pendingCommit = deferred()
+      await wrapper.setProps({ experienceMode: 'landscape-map', readOnlyPreview: false }); await pump()
+      expect(targets).to.deep.equal([])
+      expect(f.calls.locks).to.deep.include([true, 'preview-transition'])
+      expect(f.calls.locks).not.to.deep.include([false, 'preview'])
+      pendingCommit.resolve({ committed: true }); await flush(); await pump()
+      expect(targets).to.deep.equal(['agent-1'])
+      expect(f.calls.locks).to.deep.include([false, 'preview'])
+      expect(commits.length).to.be.greaterThan(1)
+
+      pendingCommit = deferred()
+      await wrapper.setProps({ experienceMode: 'portrait-command', readOnlyPreview: true, landscapeEntryTarget: entry(2) })
+      await wrapper.setProps({ experienceMode: 'landscape-map', readOnlyPreview: false }); await pump()
+      const lockCountBeforeReverse = f.calls.locks.length
+      await wrapper.setProps({ experienceMode: 'portrait-command', readOnlyPreview: true })
+      pendingCommit.resolve({ committed: true }); await flush(); await pump()
+      expect(targets).to.deep.equal(['agent-1'])
+      expect(f.calls.locks.slice(lockCountBeforeReverse)).not.to.deep.include([false, 'preview'])
+    } finally {
+      wrapper?.unmount()
+      frames.clear()
+      restoreDescriptor(window, 'requestAnimationFrame', originalRaf)
+      restoreDescriptor(window, 'cancelAnimationFrame', originalCancel)
+      restoreDescriptor(window, 'ResizeObserver', originalResize)
+    }
+  })
+})

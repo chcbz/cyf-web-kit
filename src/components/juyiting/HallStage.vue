@@ -496,12 +496,18 @@ const finalizeSceneReady = async attemptId => {
     sceneError.value = ''
     setupStageResizeObserver()
     unlockLoading(attemptId)
-    consumeLandscapeEntryTarget(attemptId)
     if (props.readOnlyPreview) {
       juyitingGame.setInteractionLocked?.(true, 'preview')
       juyitingGame.applyPreviewContain?.(juyitingGame.getSceneBounds?.())
       juyitingGame.setPreviewDrawPolicy?.({ enabled: true, visible: props.previewVisible })
-    } else publishSimulationReady(attemptId)
+    } else if (previewExitPending) {
+      // A portrait→landscape switch may arrive while the first scene mount is
+      // still loading; complete its fenced exit only after this ready point.
+      void completePreviewExit(attemptId, previewTransitionGeneration)
+    } else {
+      consumeLandscapeEntryTarget(attemptId)
+      publishSimulationReady(attemptId)
+    }
     emit('scene-state-change', 'ready')
     emit('scene-bounds-change', juyitingGame.getSceneBounds?.() || null)
     scheduleReturnRefresh()
@@ -822,8 +828,18 @@ const completePreviewExit = async (attemptId, transitionGeneration) => {
   if (!isRunningGeneration(attemptId) || props.readOnlyPreview || transitionGeneration !== previewTransitionGeneration) return
   const viewport = await settleFinalViewport(attemptId)
   if (!viewport || !isRunningGeneration(attemptId) || props.readOnlyPreview || transitionGeneration !== previewTransitionGeneration) return
-  await (juyitingGame.commitViewport?.({ width: viewport.width, height: viewport.height, kind: 'orientation', orientationChanged: true })
-    ?? juyitingGame.resizeViewport?.({ width: viewport.width, height: viewport.height, kind: 'orientation', orientationChanged: true }))
+  let committed
+  try {
+    committed = await (juyitingGame.commitViewport?.({ width: viewport.width, height: viewport.height, kind: 'orientation', orientationChanged: true })
+      ?? juyitingGame.resizeViewport?.({ width: viewport.width, height: viewport.height, kind: 'orientation', orientationChanged: true }))
+  } catch (error) {
+    failSceneMount(attemptId, error instanceof Error ? error : new Error('地图视口提交失败，请重试'))
+    return
+  }
+  if (!committed) {
+    failSceneMount(attemptId, new Error('地图视口提交失败，请重试'))
+    return
+  }
   if (!isRunningGeneration(attemptId) || props.readOnlyPreview || transitionGeneration !== previewTransitionGeneration) return
   juyitingGame.clearPreviewContain?.()
   juyitingGame.clearPreviewDrawPolicy?.()

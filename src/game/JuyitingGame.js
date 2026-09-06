@@ -889,7 +889,8 @@ export class JuyitingGame {
     // Hall instance owns a live initialized scene.
     if (!this._initialized || !this._mountToken || !game?.draw) return false
     if (!policy.wrapper) {
-      policy.original = game.draw
+      const original = game.draw
+      policy.original = original
       policy.wrapper = function (...args) {
         if (policy.enabled) {
           if (!policy.visible) return undefined
@@ -897,7 +898,9 @@ export class JuyitingGame {
           if (Number.isFinite(now) && now - policy.lastDrawAt < 50) return undefined
           policy.lastDrawAt = Number.isFinite(now) ? now : policy.lastDrawAt
         }
-        return policy.original.apply(this, args)
+        // Close over the original so a foreign wrapper that still calls this
+        // retired wrapper remains transparent after policy metadata is cleared.
+        return original.apply(this, args)
       }
       game.draw = policy.wrapper
     }

@@ -29,7 +29,8 @@ describe('live map preview runtime adapter', () => {
 
 it('restores its failed-mount draw wrapper without overwriting a foreign newer owner', () => {
   const game = new JuyitingGame()
-  const original = () => 'original'
+  let originalCalls = 0
+  const original = () => { originalCalls += 1; return 'original' }
   game._me = { game: { draw: original } }
   game._initialized = true
   game._mountToken = 1
@@ -42,8 +43,10 @@ it('restores its failed-mount draw wrapper without overwriting a foreign newer o
   game._initialized = true
   game._mountToken = 2
   game.setPreviewDrawPolicy({ enabled: true, visible: true })
-  const foreign = () => 'foreign'
+  const foreign = function (...args) { return owned.apply(this, args) }
   game._me.game.draw = foreign
   game.clearPreviewDrawPolicy()
   expect(game._me.game.draw).to.equal(foreign)
+  expect(game._me.game.draw()).to.equal('original')
+  expect(originalCalls).to.equal(1)
 })
