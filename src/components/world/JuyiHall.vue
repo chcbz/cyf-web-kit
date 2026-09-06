@@ -1888,7 +1888,11 @@ button.hall-room {
 }
 
 .panel-overlay.is-chat-overlay {
-  align-items: stretch;
+  top: 0;
+  bottom: auto;
+  height: min(100%, var(--hall-visual-height, 100%));
+  max-height: 100%;
+  align-items: flex-start;
   justify-content: stretch;
   padding: 0;
 }
