@@ -1,6 +1,8 @@
 import { expect } from 'chai'
 import { JuyitingGame } from '../src/game/JuyitingGame.js'
 
+const restoreDescriptor = (target, key, descriptor) => { if (descriptor) Object.defineProperty(target, key, descriptor); else delete target[key] }
+
 describe('live map preview runtime adapter', () => {
   it('throttles preview draws to 20fps without changing update ownership and restores only its wrapper', () => {
     const game = new JuyitingGame()
@@ -71,8 +73,8 @@ it('keeps visible landscape draws unthrottled while suppressing hidden draws wit
 
 it('returns an explicit receipt for an idempotent live viewport commit while stale cancellation remains undefined', async () => {
   const game = new JuyitingGame()
-  const originalRaf = window.requestAnimationFrame
-  const originalCancel = window.cancelAnimationFrame
+  const originalRaf = Object.getOwnPropertyDescriptor(window, 'requestAnimationFrame')
+  const originalCancel = Object.getOwnPropertyDescriptor(window, 'cancelAnimationFrame')
   const frames = new Map(); let nextFrame = 0
   const variables = new Map([['--juyiting-canvas-display-width', '844px'], ['--juyiting-canvas-display-height', '390px']])
   const rect = { left: 0, top: 0, width: 844, height: 390, right: 844, bottom: 390 }
@@ -82,8 +84,8 @@ it('returns an explicit receipt for an idempotent live viewport commit while sta
   const resizes = []
   const advance = () => { const entry = frames.entries().next().value; expect(entry).to.not.equal(undefined); frames.delete(entry[0]); entry[1](); }
   try {
-    window.requestAnimationFrame = callback => { const id = ++nextFrame; frames.set(id, callback); return id }
-    window.cancelAnimationFrame = id => frames.delete(id)
+    Object.defineProperty(window, 'requestAnimationFrame', { configurable: true, value: callback => { const id = ++nextFrame; frames.set(id, callback); return id } })
+    Object.defineProperty(window, 'cancelAnimationFrame', { configurable: true, value: id => frames.delete(id) })
     game._mountToken = 1
     game._isCurrentMount = token => token === game._mountToken
     game._container = { getBoundingClientRect: () => ({ ...rect }) }
@@ -103,7 +105,8 @@ it('returns an explicit receipt for an idempotent live viewport commit while sta
     advance()
     expect(await stale).to.equal(undefined)
   } finally {
-    window.requestAnimationFrame = originalRaf
-    window.cancelAnimationFrame = originalCancel
+    frames.clear()
+    restoreDescriptor(window, 'requestAnimationFrame', originalRaf)
+    restoreDescriptor(window, 'cancelAnimationFrame', originalCancel)
   }
 })

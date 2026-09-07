@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
 import { mount } from '@vue/test-utils'
 import * as Vue from 'vue'
+import { resolveLiveMapPreviewActivation } from '../src/composables/juyiting/liveMapPreviewPolicy.js'
 
 global.Element = global.window?.Element
 global.SVGElement = global.window?.SVGElement
@@ -151,11 +152,6 @@ const makeHallPageMocks = ({ mode, counters, voiceLocked = Vue.ref(false) }) => 
     filteredAgents: list, hiddenAgentCount: Vue.ref(0), loadAgents: asyncNoop, loadTasks: asyncNoop, loadTaskRecommendations: asyncNoop,
     mapAgents: list, personaCatalog: list, recommendedAgents: list, setAgentFilter: noop, setTaskStatusFilter: noop,
     taskAbilityFilter: text, taskAbilityOptions: list, taskKeyword: text, tasks: list, taskStatusCount: Vue.ref({}), taskStatusFilter: text, unbindPersona: asyncNoop, visibleAgents: list
-  }
-  const resolveLiveMapPreviewActivation = ({ documentHidden, landscapeActive, overlayCovered, portraitOffscreen, ready }) => {
-    if (!ready) return { shouldRender: false, state: 'loading' }
-    if (documentHidden || overlayCovered || portraitOffscreen && !landscapeActive) return { shouldRender: false, state: 'paused' }
-    return { shouldRender: true, state: 'ready' }
   }
   return {
     resolveLiveMapPreviewActivation,
@@ -401,6 +397,10 @@ describe('live map preview orientation target transaction', () => {
       pendingCommit.resolve({ committed: true }); await flush(); await pump()
       expect(targets).to.deep.equal(['agent-1'])
       expect(wrapper.get('.hall-board').attributes('tabindex')).to.equal('0')
+      await wrapper.get('.refresh-action').trigger('click')
+      await wrapper.get('.hall-board').trigger('keydown', { key: '+' })
+      expect(wrapper.emitted('refresh-hall')).to.have.length(1)
+      expect(f.calls.zoom).to.equal(1)
       expect(f.calls.locks).to.deep.include([false, 'preview'])
       expect(commits.length).to.be.greaterThan(1)
 
@@ -409,7 +409,7 @@ describe('live map preview orientation target transaction', () => {
       await wrapper.setProps({ experienceMode: 'landscape-map', readOnlyPreview: false }); await pump()
       const lockCountBeforeReverse = f.calls.locks.length
       await wrapper.setProps({ experienceMode: 'portrait-command', readOnlyPreview: true })
-      pendingCommit.resolve(false); await flush(); await pump()
+      pendingCommit.resolve(undefined); await flush(); await pump()
       expect(targets).to.deep.equal(['agent-1'])
       expect(f.calls.destroy).to.equal(0)
       expect(f.calls.locks.slice(lockCountBeforeReverse)).not.to.deep.include([false, 'preview'])

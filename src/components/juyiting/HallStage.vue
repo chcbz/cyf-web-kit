@@ -196,13 +196,13 @@ const fallbackFrames = new Map()
 const LANDSCAPE_TARGET_MAX_ATTEMPTS = 8
 let landscapeTargetWork = null
 let previewTransitionGeneration = 0
-let previewExitPending = false
+const previewExitPending = ref(false)
 let previewPresentationActive = false
 
 // This is a DOM/handler barrier distinct from the engine lock. A Teleport
 // transition can have a running scene while its final viewport is not ready.
 const stageInputLocked = computed(() => (
-  props.readOnlyPreview || props.interactionLocked || isSceneMounting.value || previewExitPending
+  props.readOnlyPreview || props.interactionLocked || isSceneMounting.value || previewExitPending.value
 ))
 
 const requestStageFrame = callback => {
@@ -443,7 +443,7 @@ const attemptHotspotLandscapeTarget = work => {
 const consumeLandscapeEntryTarget = (attemptId, { retryHotspot = false } = {}) => {
   // Preview exit owns the target until its stable viewport commit releases the
   // presentation barrier. Do not let a landscape-target watcher consume early.
-  if (!isRunningGeneration(attemptId) || props.readOnlyPreview || previewExitPending || previewPresentationActive) return false
+  if (!isRunningGeneration(attemptId) || props.readOnlyPreview || previewExitPending.value || previewPresentationActive) return false
   const entry = props.landscapeEntryTarget
   if (!entry || !Number.isInteger(entry.generation) || entry.generation <= consumedLandscapeTargetGeneration) {
     cancelLandscapeTargetWork()
@@ -512,7 +512,7 @@ const finalizeSceneReady = async attemptId => {
       juyitingGame.setInteractionLocked?.(true, 'preview')
       juyitingGame.applyPreviewContain?.(juyitingGame.getSceneBounds?.())
       juyitingGame.setPreviewDrawPolicy?.({ enabled: true, visible: props.previewVisible })
-    } else if (previewExitPending) {
+    } else if (previewExitPending.value) {
       // A portrait→landscape switch may arrive while the first scene mount is
       // still loading; complete its fenced exit only after this ready point.
       void completePreviewExit(attemptId, previewTransitionGeneration)
@@ -872,19 +872,18 @@ const completePreviewExit = async (attemptId, transitionGeneration) => {
     failSceneMount(attemptId, error instanceof Error ? error : new Error('地图视口提交失败，请重试'))
     return
   }
-  if (committed === false) {
-    // A valid idempotent viewport commit has an explicit success receipt; only
-    // false is a current failure. Stale/cancelled undefined is fenced below.
-    if (!isRunningGeneration(attemptId) || props.readOnlyPreview || transitionGeneration !== previewTransitionGeneration) return
+  // Cancellation and stale-mount outcomes use undefined. Fence them before
+  // outcome inspection; a current undefined/false receipt never admits input.
+  if (!isRunningGeneration(attemptId) || props.readOnlyPreview || transitionGeneration !== previewTransitionGeneration) return
+  if (committed === undefined || committed === false) {
     failSceneMount(attemptId, new Error('地图视口提交失败，请重试'))
     return
   }
-  if (!isRunningGeneration(attemptId) || props.readOnlyPreview || transitionGeneration !== previewTransitionGeneration) return
   juyitingGame.clearPreviewContain?.()
   // Keep the owned wrapper across modes: landscape remains unthrottled, while
   // hidden or fully-covered presentations still suppress draw without pausing update.
   juyitingGame.setPreviewDrawPolicy?.({ enabled: false, visible: props.previewVisible })
-  previewExitPending = false
+  previewExitPending.value = false
   previewPresentationActive = false
   consumeLandscapeEntryTarget(attemptId)
   publishSimulationReady(attemptId)
@@ -899,7 +898,7 @@ watch(() => props.readOnlyPreview, preview => {
     // A later return will create fresh work after its committed viewport fence.
     cancelLandscapeTargetWork()
     previewPresentationActive = true
-    previewExitPending = false
+    previewExitPending.value = false
     juyitingGame.setInteractionLocked?.(true, 'preview-transition')
     juyitingGame.setInteractionLocked?.(true, 'preview')
     juyitingGame.applyPreviewContain?.(juyitingGame.getSceneBounds?.())
@@ -909,12 +908,12 @@ watch(() => props.readOnlyPreview, preview => {
   }
   // An initial landscape mount has no preview state to unwind.
   if (!previewPresentationActive) {
-    previewExitPending = false
+    previewExitPending.value = false
     return
   }
   // Teleport and its target geometry settle before this Stage restores its camera
   // or consumes the pending explicit landscape target.
-  previewExitPending = true
+  previewExitPending.value = true
   juyitingGame.setInteractionLocked?.(true, 'preview-transition')
   void completePreviewExit(sceneMountAttempt, transitionGeneration)
 }, { immediate: true })
