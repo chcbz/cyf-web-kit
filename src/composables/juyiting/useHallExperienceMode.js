@@ -1,4 +1,5 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { enterNativeLandscape, leaveNativeLandscape, nativeOrientationFromLocation } from './miniProgramOrientation.js'
 
 export const resolveHallExperienceMode = ({ isMobileCoarse, isPhysicalLandscape, requestedMode = null }) => (
   !isMobileCoarse ? 'landscape-map' : (requestedMode || (isPhysicalLandscape ? 'landscape-map' : 'portrait-command'))
@@ -28,19 +29,29 @@ export const useHallExperienceMode = () => {
   const isMobileCoarse = ref(false)
   const isPhysicalLandscape = ref(false)
   const requestedMode = ref(null)
+  const nativeOrientation = ref(null)
   const orientationHint = ref('')
   const orientationRequestPending = ref(false)
   // This is presentation-only viewport state. Physical orientation remains owned
   // by Screen Orientation/media/legacy sources below.
   const viewport = ref({ width: 0, height: 0 })
+  const isNativeOrientationRoute = computed(() => nativeOrientation.value !== null)
+  const effectivePhysicalLandscape = computed(() => (
+    nativeOrientation.value === 'landscape'
+      ? true
+      : (nativeOrientation.value === 'portrait' ? false : isPhysicalLandscape.value)
+  ))
   const experienceMode = computed(() => resolveHallExperienceMode({
     isMobileCoarse: isMobileCoarse.value,
-    isPhysicalLandscape: isPhysicalLandscape.value,
+    isPhysicalLandscape: effectivePhysicalLandscape.value,
     requestedMode: requestedMode.value
   }))
 
   const isVirtualLandscape = computed(() => (
-    isWeChatWebView() && requestedMode.value === 'landscape-map' && !isPhysicalLandscape.value
+    !isNativeOrientationRoute.value &&
+    isWeChatWebView() &&
+    requestedMode.value === 'landscape-map' &&
+    !isPhysicalLandscape.value
   ))
 
   // The rotated H5 shell's logical height is the physical viewport width. This
@@ -245,13 +256,24 @@ export const useHallExperienceMode = () => {
     completeRequest(token)
   }
 
-  const requestLandscape = () => {
+  const requestLandscape = async () => {
     if (!isMounted || requestOwnership || orientationRequestPending.value || !isMobileCoarse.value) {
       return Promise.resolve(false)
     }
-    // The Mini Program host cannot be orientation-locked by H5. Use the Hall's
-    // explicit virtual landscape shell instead; its canvas input is inverse-mapped
-    // by JuyitingGame, while normal browsers retain native fullscreen/lock behavior.
+    // A WebView opened by the dedicated portrait Mini Program page must switch
+    // to the dedicated native landscape page. Never disguise this route as CSS rotation.
+    if (nativeOrientation.value === 'portrait') {
+      orientationRequestPending.value = true
+      orientationHint.value = ''
+      const accepted = await enterNativeLandscape()
+      orientationRequestPending.value = false
+      if (!accepted && isMounted) orientationHint.value = '小程序横屏桥接未就绪，请重试'
+      return accepted
+    }
+    if (nativeOrientation.value === 'landscape') return false
+
+    // A generic WeChat browser that is not hosted by our marked Mini Program
+    // keeps the interactive virtual-landscape fallback.
     if (isWeChatWebView()) {
       if (experienceMode.value === 'landscape-map') return Promise.resolve(false)
       requestedMode.value = 'landscape-map'
@@ -313,6 +335,15 @@ export const useHallExperienceMode = () => {
 
   const requestPortrait = async () => {
     if (!isMounted || !isMobileCoarse.value) return false
+    if (nativeOrientation.value === 'landscape') {
+      orientationRequestPending.value = true
+      orientationHint.value = ''
+      const accepted = await leaveNativeLandscape()
+      orientationRequestPending.value = false
+      if (!accepted && isMounted) orientationHint.value = '小程序竖屏桥接未就绪，请重试'
+      return accepted
+    }
+    if (nativeOrientation.value === 'portrait') return false
     if (isWeChatWebView()) {
       if (experienceMode.value === 'portrait-command') return false
       requestedMode.value = 'portrait-command'
@@ -355,6 +386,7 @@ export const useHallExperienceMode = () => {
   onMounted(() => {
     if (typeof window === 'undefined') return
     isMounted = true
+    nativeOrientation.value = nativeOrientationFromLocation(window.location)
     screenOrientation = globalThis.screen?.orientation || null
     visualViewport = window.visualViewport || null
     readViewport()
@@ -400,6 +432,7 @@ export const useHallExperienceMode = () => {
     experienceMode,
     isMobileCoarse,
     isPhysicalLandscape,
+    isNativeOrientationRoute,
     isVirtualLandscape,
     orientationHint,
     orientationRequestPending,

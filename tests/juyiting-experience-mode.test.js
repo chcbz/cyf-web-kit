@@ -1275,6 +1275,61 @@ describe('Juyi Hall experience mode', () => {
     }
   })
 
+  it('hands a marked portrait Mini Program route to the native landscape page without virtual rotation', async () => {
+    const env = setupEnvironment()
+    const originalUrl = global.window.location.href
+    const originalWx = global.window.wx
+    const calls = []
+    global.window.history.replaceState({}, '', '/juyiting?nativeOrientation=portrait&entry=direct')
+    global.window.wx = {
+      miniProgram: {
+        navigateTo: options => calls.push(options),
+        redirectTo: options => calls.push(options)
+      }
+    }
+    try {
+      const { mode, wrapper } = await mountMode()
+      expect(mode.isNativeOrientationRoute.value).to.equal(true)
+      expect(mode.isVirtualLandscape.value).to.equal(false)
+      expect(mode.experienceMode.value).to.equal('portrait-command')
+      expect(await mode.requestLandscape()).to.equal(true)
+      expect(calls[0].url).to.equal('/pages/landscape/index?entry=portrait')
+      expect(mode.isVirtualLandscape.value).to.equal(false)
+      wrapper.unmount()
+    } finally {
+      global.window.wx = originalWx
+      global.window.history.replaceState({}, '', originalUrl)
+      env.restore()
+    }
+  })
+
+  it('hands a marked landscape Mini Program route back to the native portrait page', async () => {
+    const env = setupEnvironment()
+    const originalUrl = global.window.location.href
+    const originalWx = global.window.wx
+    const calls = []
+    global.window.history.replaceState({}, '', '/juyiting?nativeOrientation=landscape&entry=portrait')
+    global.window.wx = {
+      miniProgram: {
+        navigateBack: options => calls.push(options),
+        redirectTo: options => calls.push(options)
+      }
+    }
+    try {
+      const { mode, wrapper } = await mountMode()
+      expect(mode.isNativeOrientationRoute.value).to.equal(true)
+      expect(mode.isVirtualLandscape.value).to.equal(false)
+      expect(mode.experienceMode.value).to.equal('landscape-map')
+      expect(await mode.requestPortrait()).to.equal(true)
+      expect(calls[0].delta).to.equal(1)
+      wrapper.unmount()
+    } finally {
+      global.window.wx = originalWx
+      global.window.history.replaceState({}, '', originalUrl)
+      env.restore()
+    }
+  })
+
   it('lets the explicit portrait control release Hall-owned native orientation state', async () => {
     const env = setupEnvironment()
     let unlocks = 0
@@ -1307,7 +1362,7 @@ describe('Juyi Hall experience mode', () => {
     expect(modeSource).to.include("screenOrientation?.addEventListener?.('change'")
     expect(modeSource).to.include("window.addEventListener?.('orientationchange'")
     expect(modeSource).to.include('const isWeChatWebView')
-    expect(modeSource).to.include("const requestPortrait = async () =>")
+    expect(modeSource).to.include('const requestPortrait = async () =>')
     expect(modeSource).to.include("visualViewport?.addEventListener?.('resize'")
     expect(panelsSource).not.to.include('addEventListener')
     expect(panelsSource).not.to.include('matchMedia')
