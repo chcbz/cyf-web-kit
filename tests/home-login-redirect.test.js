@@ -1,4 +1,5 @@
 import { expect } from 'chai'
+import { readFileSync } from 'node:fs'
 import { createPinia, setActivePinia } from 'pinia'
 import { redirectLoggedInHome } from '../src/router/homeLoginRedirect.js'
 
@@ -12,6 +13,11 @@ const destination = Object.freeze({
 
 function putToken (data, expTime = Date.now() + 60_000) {
   window.localStorage.setItem('api_token', JSON.stringify({ data, expTime }))
+}
+
+function expectLanding (rawToken) {
+  window.localStorage.setItem('api_token', rawToken)
+  expect(redirectLoggedInHome(destination)).to.equal(undefined)
 }
 
 describe('home login redirect', () => {
@@ -36,18 +42,35 @@ describe('home login redirect', () => {
     })
   })
 
-  it('keeps expired, missing, malformed, and blank tokens on the landing page', () => {
+  it('keeps expired tokens on landing and clears them', () => {
     putToken('expired-token', Date.now() - 1)
+
     expect(redirectLoggedInHome(destination)).to.equal(undefined)
     expect(window.localStorage.getItem('api_token')).to.equal(null)
+  })
 
-    expect(redirectLoggedInHome(destination)).to.equal(undefined)
+  it('keeps exact-expiry tokens on landing and clears them', () => {
+    const originalNow = Date.now
+    Date.now = () => 1_000
+    try {
+      putToken('boundary-token', 1_000)
+      expect(redirectLoggedInHome(destination)).to.equal(undefined)
+      expect(window.localStorage.getItem('api_token')).to.equal(null)
+    } finally {
+      Date.now = originalNow
+    }
+  })
 
-    window.localStorage.setItem('api_token', '{not-json')
+  it('keeps missing, malformed, and invalid token envelopes on landing', () => {
     expect(redirectLoggedInHome(destination)).to.equal(undefined)
-
-    putToken('   ')
-    expect(redirectLoggedInHome(destination)).to.equal(undefined)
+    expectLanding('{not-json')
+    expectLanding('[]')
+    expectLanding(JSON.stringify({ data: 'token' }))
+    expectLanding(JSON.stringify({ data: 'token', expTime: null }))
+    expectLanding(JSON.stringify({ data: 'token', expTime: '9999999999999' }))
+    expectLanding('{"data":"token","expTime":1e999}')
+    expectLanding(JSON.stringify({ data: 7, expTime: Date.now() + 60_000 }))
+    expectLanding(JSON.stringify({ data: '   ', expTime: Date.now() + 60_000 }))
   })
 
   it('keeps the landing page when local storage is unavailable', () => {
@@ -60,9 +83,8 @@ describe('home login redirect', () => {
     expect(redirectLoggedInHome(destination)).to.equal(undefined)
   })
 
-  it('attaches the guard only to the home route, leaving demo and OAuth routes public', async () => {
-    const { readFile } = await import('node:fs/promises')
-    const routes = await readFile('src/router/index.js', 'utf8')
+  it('attaches the guard only to the home route, leaving demo and OAuth routes public', () => {
+    const routes = readFileSync('src/router/index.js', 'utf8')
 
     const homeRoute = routes.slice(routes.indexOf("path: '/'"), routes.indexOf("path: '/demo'"))
     const demoRoute = routes.slice(routes.indexOf("path: '/demo'"), routes.indexOf("path: '/chat'"))
