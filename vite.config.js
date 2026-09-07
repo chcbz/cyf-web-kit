@@ -16,6 +16,9 @@ export default defineConfig(({ mode }) => {
   const enableLegacy = env.VITE_LEGACY_BUILD === 'true' || process.env.LEGACY_BUILD === 'true'
 
   return {
+    esbuild: {
+      drop: mode === 'production' ? ['console', 'debugger'] : ['debugger']
+    },
     plugins: [
       vue({
         include: [/\.vue$/],
@@ -62,6 +65,7 @@ export default defineConfig(({ mode }) => {
       include: ['melonjs'],
     },
     css: {
+      preprocessorMaxWorkers: 1,
       preprocessorOptions: {
         less: {
           javascriptEnabled: true,
@@ -105,16 +109,11 @@ export default defineConfig(({ mode }) => {
       }
     },
     build: {
+      reportCompressedSize: false,
       outDir: 'dist',
       assetsDir: 'static',
       sourcemap: env.VITE_BUILD_SOURCEMAP === 'true',      chunkSizeWarningLimit: 650,
-      minify: 'terser',
-      terserOptions: {
-        compress: {
-          drop_console: mode === 'production',
-          drop_debugger: true
-        }
-      },
+      minify: 'esbuild',
       rollupOptions: {
         output: {
           manualChunks: {
