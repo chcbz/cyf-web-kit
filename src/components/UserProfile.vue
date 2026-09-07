@@ -30,6 +30,15 @@
       </dl>
     </section>
 
+    <section v-if="economyPreviewAvailable" class="economy-discovery" aria-labelledby="economy-discovery-title">
+      <h3 id="economy-discovery-title">开发预览</h3>
+      <p>经济预览由服务端能力决定；未开启时不会显示可操作的钱包或市场功能。</p>
+      <div class="discovery-links">
+        <router-link to="/wallet">查看 SILVER 钱袋</router-link>
+        <router-link to="/skill-market">发现技能市场</router-link>
+      </div>
+    </section>
+
     <section class="account-security" aria-labelledby="account-security-title">
       <h3 id="account-security-title">登录与安全</h3>
       <p>退出当前设备只会清除此浏览器的登录状态。</p>
@@ -104,8 +113,12 @@ import { useRouter } from 'vue-router'
 import { useGlobalStore } from '@/stores/global'
 import { useAccountSecuritySession } from '@/composables/useAccountSecuritySession'
 import { useConfirmationDialog } from '@/composables/useConfirmationDialog'
+import { isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
+import { isEconomyPreviewCapability, loadEconomyPreviewCapability as fetchEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
 
 const router = useRouter()
+const economyPreviewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
+const economyPreviewAvailable = ref(false)
 const globalStore = useGlobalStore()
 const { busy, error, status, signOutCurrentDevice, signOutAllDevices } = useAccountSecuritySession({ router })
 const allDevicesTrigger = ref(null)
@@ -126,6 +139,15 @@ const handleAllDevicesSignOut = async () => {
   if (completed) closeConfirmation({ force: true })
 }
 
+const loadEconomyPreviewCapability = async () => {
+  if (!economyPreviewBuildEnabled) return
+  try {
+    economyPreviewAvailable.value = isEconomyPreviewCapability(await fetchEconomyPreviewCapability())
+  } catch {
+    economyPreviewAvailable.value = false
+  }
+}
+
 onBeforeUnmount(() => {
   closeConfirmation({ force: true })
 })
@@ -134,6 +156,7 @@ onMounted(() => {
   globalStore.setTitle('个人中心')
   globalStore.setShowBack(false)
   globalStore.setShowMore(false)
+  void loadEconomyPreviewCapability()
 })
 </script>
 
@@ -147,6 +170,7 @@ onMounted(() => {
 
 .profile-card,
 .profile-details,
+.economy-discovery,
 .account-security {
   background: #fff;
   border-radius: 12px;
@@ -195,6 +219,7 @@ onMounted(() => {
 }
 
 .profile-details,
+.economy-discovery,
 .account-security {
   padding: 20px;
 }
@@ -231,9 +256,22 @@ onMounted(() => {
   word-break: break-all;
 }
 
+.economy-discovery,
 .account-security {
   margin-top: 16px;
 }
+
+.economy-discovery {
+  padding: 20px;
+}
+
+.economy-discovery h3 { margin: 0; color: var(--color-text); font-size: 17px; }
+
+.economy-discovery p { color: var(--color-text-secondary); }
+
+.discovery-links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+
+.discovery-links a { padding: 9px 12px; border-radius: 8px; background: #fff3cc; color: #75430b; text-decoration: none; }
 
 .all-devices,
 .confirmation {

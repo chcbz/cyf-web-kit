@@ -185,6 +185,13 @@
             v-model:task-keyword="taskKeyword"
             :ability-text="abilityText"
             :can-assign="canAssign"
+            :funded-preview-enabled="economyPreviewEnabled"
+            :funded-quote-preview="fundedQuotePreview"
+            :funded-claim-state="fundedClaimState"
+            :funded-create-recovery="fundedCreateRecovery"
+            @confirm-funded-quote="settleFundedQuote(true)"
+            @cancel-funded-quote="settleFundedQuote(false)"
+            @refresh-funded-claim="refreshFundedClaim"
             :format-time="formatTime"
             :portrait-name="portraitName"
             :portrait-style="portraitStyle"
@@ -204,6 +211,10 @@
             @archive-task="archiveTask"
             @brief-selected-task="briefSelectedTask"
             @create-task="createTask"
+            @resume-funded-create="resumeFundedCreate"
+            @cancel-funded-create-recovery="showToast('原资金榜请求仍会保留；请在准备好后明确恢复。')"
+            @cancel-funding="cancelFunding"
+            @load-settlement="loadSettlement"
             @discuss-task="discussTask"
             @load-tasks="loadTasks"
             @select-agent="selectAgent"
@@ -228,6 +239,7 @@
             :setup-result="personaSetupResult"
             @bind-persona="handleBindPersona"
             @clear-setup-result="personaSetupResult = null"
+            @hosting-changed="refreshHall({ silent: true })"
             @unbind-persona="handleUnbindPersona"
           />
 
@@ -376,6 +388,8 @@ import {
   taskStatusFilters
 } from '@/constants/juyiting'
 import { log } from '@/utils/logger'
+import { isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
+import { isEconomyPreviewCapability, loadEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
 import { juyitingGame } from '@/game/index.js'
 
 const emit = defineEmits(['open-onboarding'])
@@ -385,6 +399,10 @@ const apiStore = useApiStore()
 
 const selectedAgent = ref(null)
 const selectedTask = ref(null)
+const economyPreviewEnabled = ref(false)
+const economyPreviewCapability = ref(null)
+const economyPreviewChecked = ref(false)
+const economyPreviewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
 const portraitTaskDetailOpen = ref(false)
 // Map-only runtime state survives HallStage destroy/remount; business selection stays above it.
 const mapResumeSnapshot = ref(null)
@@ -699,6 +717,20 @@ const handleSimulationPhaseEvents = events => {
   })
 }
 
+const ensureEconomyPreviewCapability = async () => {
+  if (!economyPreviewBuildEnabled || economyPreviewChecked.value) return economyPreviewEnabled.value
+  economyPreviewChecked.value = true
+  try {
+    economyPreviewCapability.value = await loadEconomyPreviewCapability()
+    economyPreviewEnabled.value = isEconomyPreviewCapability(economyPreviewCapability.value)
+  } catch (error) {
+    economyPreviewCapability.value = null
+    economyPreviewEnabled.value = false
+    log.warn('economy preview capability is unavailable:', error)
+  }
+  return economyPreviewEnabled.value
+}
+
 const refreshHall = async ({ silent = false } = {}) => {
   if (hallRefreshing.value) return
   hallRefreshing.value = true
@@ -787,6 +819,7 @@ const openPanel = (panel, options = {}) => {
   }
   renderedPanel.value = panel
   activePanel.value = panel
+  if (panel === 'tasks') void ensureEconomyPreviewCapability()
   const generation = panelSessionGeneration.value
   nextTick(() => {
     if (!panelDisposed && activePanel.value === panel && panelSessionGeneration.value === generation) {
@@ -1039,13 +1072,45 @@ const showToast = (message) => {
   }, 2200)
 }
 
+const fundedQuotePreview = ref(null)
+let fundedQuoteResolver = null
+const settleFundedQuote = (confirmed) => {
+  const resolve = fundedQuoteResolver
+  fundedQuoteResolver = null
+  fundedQuotePreview.value = null
+  resolve?.(confirmed === true)
+}
+const confirmFundedQuote = preview => new Promise(resolve => {
+  if (!economyPreviewEnabled.value || panelDisposed || renderedPanel.value !== 'tasks' || selectedTask.value?.id !== preview.quote.taskId) {
+    resolve(false)
+    return
+  }
+  settleFundedQuote(false)
+  fundedQuotePreview.value = preview
+  fundedQuoteResolver = resolve
+})
+// Closing/switching the task panel or changing a displayed selection cancels
+// only the preview. No hidden selection is ever used as the claim target.
+watch([() => selectedTask.value?.id, () => selectedTask.value?.taskVersion ?? selectedTask.value?.version,
+  () => selectedAgent.value?.agentId, () => renderedPanel.value, () => economyPreviewEnabled.value], () => settleFundedQuote(false), { flush: 'sync' })
+onUnmounted(() => settleFundedQuote(false))
+
 const {
+  fundedClaimState,
+  fundedCreateRecovery,
+  refreshFundedClaim,
+  resumeFundedCreate: runResumeFundedCreate,
   archiveTask: runArchiveTask,
   autoAssignTask: runAutoAssignTask,
   assignTask: runAssignTask,
-  createTask: runCreateTask
+  cancelFunding: runCancelFunding,
+  createTask: runCreateTask,
+  loadSettlement: runLoadSettlement
 } = useHallTaskActions({
   agentApi,
+  confirmFundedQuote,
+  fundedActorScopeKey: computed(() => economyPreviewCapability.value?.principalScopeFingerprint || ''),
+  resolveFundedAgent: agent => agents.value.find(item => item.agentId === agent.agentId),
   canAssign,
   log,
   playError,
@@ -1056,26 +1121,39 @@ const {
   tasks
 })
 
-const createTask = async (payload) => {
-  await runCreateTask(payload)
-  markTaskCreated(selectedTask.value)
+const createTask = async (payload, acknowledge = () => {}) => {
+  const created = await runCreateTask(payload)
+  if (created) markTaskCreated(selectedTask.value)
+  acknowledge(created)
+  return created
+}
+const resumeFundedCreate = async () => {
+  const created = await runResumeFundedCreate()
+  if (created) markTaskCreated(selectedTask.value)
+  return created
 }
 
 const assignTask = async (task, agent) => {
   const targetAgents = Array.isArray(agent) ? agent : [agent].filter(Boolean)
   const hasExplicitAgentId = item => typeof item?.agentId === 'string' && Boolean(item.agentId.trim())
   if (!task?.id || !targetAgents.length || targetAgents.some(item => !hasExplicitAgentId(item))) return false
-  if (targetAgents.some(item => !canAssign(task, item))) return false
+  if (task.funding?.mode === 'FUNDED_SINGLE_AGENT' && !economyPreviewEnabled.value) return false
+  if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT') {
+    if (targetAgents.some(item => !canAssign(task, item))) return false
+  }
 
   taskWorkspaceBinding.clearExplicitActor()
   const assignmentSucceeded = await runAssignTask(task, agent)
   if (!assignmentSucceeded) return false
 
-  markTaskAssigned(task, targetAgents)
+  const canonicalTask = tasks.value.find(item => item.id === task.id) || task
+  if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT' ||
+    (canonicalTask.status === 'assigned' && canonicalTask.assignedAgentId === targetAgents[0].agentId)) markTaskAssigned(canonicalTask, targetAgents)
   return true
 }
 
 const autoAssignTask = async (task) => {
+  if (task?.funding?.mode === 'FUNDED_SINGLE_AGENT') return false
   await runAutoAssignTask(task)
   const currentTask = selectedTask.value || task
   const assignedIds = currentTask?.assignedAgentIds || (currentTask?.assignedAgentId ? [currentTask.assignedAgentId] : [])
@@ -1091,6 +1169,14 @@ const archiveTask = async (task) => {
     markTaskArchived(selectedTask.value)
   }
 }
+
+const cancelFunding = async (task) => {
+  const cancelled = await runCancelFunding(task)
+  if (cancelled) await loadTasks()
+  return cancelled
+}
+
+const loadSettlement = async (task) => runLoadSettlement(task)
 
 const {
   cancelHallReplyTurn,
@@ -1340,11 +1426,15 @@ const handleStartAgentConversation = (candidate) => {
 const canStartAgentConversation = agent => Boolean(resolvePermittedConversationAgent(agent))
 
 const handleBindPersona = async (persona, mode = 'local') => {
+  if (mode !== 'local') {
+    showToast('山寨安顿请先打开服务端租约报价，不会直接免费开通。')
+    return false
+  }
   try {
     personaSetupResult.value = await bindPersona(persona, mode)
     syncAfterPersonaChanged()
     playSuccess()
-    showToast(mode === 'server' ? `${portraitShortName(persona)} 已在山寨安顿` : `${portraitShortName(persona)} 自家接应文书已备`)
+    showToast(`${portraitShortName(persona)} 自家接应文书已备`)
   } catch (error) {
     log.warn('bind persona failed:', error)
     playError()

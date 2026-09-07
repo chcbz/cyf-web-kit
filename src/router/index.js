@@ -1,7 +1,19 @@
 import PublicLanding from '@/components/public/PublicLanding.vue'
 import GuestDemo from '@/components/public/GuestDemo.vue'
 import OAuthCallback from '@/components/OAuthCallback.vue'
+import { isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
+import { isEconomyPreviewCapability, isSkillMarketplaceCapability, loadEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
 import { redirectLoggedInHome } from './homeLoginRedirect.js'
+
+const economyPreviewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
+const economyPreviewRouteGuard = async (requiredCapability = isEconomyPreviewCapability) => {
+  if (!economyPreviewBuildEnabled) return { name: 'UserProfile' }
+  try {
+    return requiredCapability(await loadEconomyPreviewCapability()) ? true : { name: 'UserProfile' }
+  } catch {
+    return { name: 'UserProfile' }
+  }
+}
 
 export default [
   {
@@ -122,6 +134,26 @@ export default [
     component: () => import('@/components/OrderList'),
     meta: {
       title: 'gift.order_list',
+      showInMenu: false
+    }
+  },
+  {
+    path: '/wallet',
+    name: 'Wallet',
+    component: () => import('@/components/Wallet.vue'),
+    beforeEnter: () => economyPreviewRouteGuard(isEconomyPreviewCapability),
+    meta: {
+      title: 'SILVER 钱袋',
+      showInMenu: false
+    }
+  },
+  {
+    path: '/skill-market',
+    name: 'SkillMarket',
+    component: () => import('@/components/economy/SkillMarketRoute.vue'),
+    beforeEnter: () => economyPreviewRouteGuard(isSkillMarketplaceCapability),
+    meta: {
+      title: '技能集市',
       showInMenu: false
     }
   },

@@ -30,7 +30,30 @@
       <input v-model.trim="taskForm.title" name="taskTitle" placeholder="榜文名目" />
       <textarea v-model.trim="taskForm.description" name="taskDescription" placeholder="榜文缘由"></textarea>
       <input v-model.trim="taskForm.requiredAbilities" name="requiredAbilities" placeholder="所需本领，逗号分隔" />
-      <button type="submit" :disabled="!taskForm.title">张榜悬赏</button>
+      <label v-if="fundedPreviewEnabled" class="funded-create-toggle">
+        <input v-model="taskForm.funded" type="checkbox" /> 资金悬赏（开发预览）
+      </label>
+      <input
+        v-if="fundedPreviewEnabled && taskForm.funded"
+        v-model.trim="taskForm.grossBountyAmountMicro"
+        class="gross-bounty-input"
+        name="grossBountyAmountMicro"
+        inputmode="numeric"
+        placeholder="总额（micro-SILVER）"
+      />
+      <small v-if="fundedPreviewEnabled && taskForm.funded && !validGrossAmount" class="funded-input-error">请输入规范的非负整数字符串。</small>
+      <section v-if="fundedCreateRecovery" class="funded-create-recovery" role="status">
+        <strong>发现原资金榜请求，结果未知</strong>
+        <p>原榜文名目：{{ fundedCreateRecovery.body.title }}</p>
+        <p>原榜文缘由：{{ fundedCreateRecovery.body.description || '未填写' }}</p>
+        <p>原所需本领：{{ fundedRecoveryAbilities }}</p>
+        <p>原结算规则：{{ fundedCreateRecovery.body.settlementPolicy || '未填写' }}</p>
+        <p>原总额：{{ fundedCreateRecovery.body.grossBountyAmountMicro }} micro-SILVER。</p>
+        <p>当前编辑稿不会提交或替换原请求。</p>
+        <button type="button" @click="$emit('resume-funded-create')">确认按原请求恢复</button>
+        <button type="button" @click="$emit('cancel-funded-create-recovery')">暂不恢复</button>
+      </section>
+      <button type="submit" :disabled="createPending || !taskForm.title || (taskForm.funded && !validGrossAmount)">{{ createPending ? '张榜中…' : '张榜悬赏' }}</button>
     </form>
 
     <div class="task-status-tabs">
@@ -64,6 +87,7 @@
             <span v-if="task.assignedAgentName">领令：{{ task.assignedAgentName }}</span>
             <span v-if="task.updatedAt">{{ formatTime(task.updatedAt) }}</span>
           </div>
+          <p v-if="isFundedTask(task)" class="funding-summary">已托管：{{ formatMoney(task.funding.remainingMicro || task.funding.grossBountyAmountMicro) }}</p>
           <div class="ability-tags">
             <span v-for="ability in task.requiredAbilities || []" :key="ability">{{ ability }}</span>
             <span v-if="!(task.requiredAbilities || []).length">不拘本领</span>
@@ -84,6 +108,25 @@
           </div>
 
           <div class="bounty-modal-body">
+            <section v-if="fundedQuotePreview" class="funded-preview-details funded-quote-confirmation" role="dialog" aria-modal="false" aria-label="确认资金榜报价">
+              <h3>先看报价，再决定领令</h3>
+              <p>{{ fundedQuotePreview.taskTitle }} / {{ fundedQuotePreview.agentName }}</p>
+              <p>榜号 {{ fundedQuotePreview.quote.taskId }} / 好汉 {{ fundedQuotePreview.quote.agentId }} / 榜文版本 {{ fundedQuotePreview.quote.taskVersion }}</p>
+              <p>价簿 {{ fundedQuotePreview.quote.priceBookVersion }} / 报价 {{ fundedQuotePreview.quote.quoteId }}</p>
+              <p>输入 {{ fundedQuotePreview.quote.estimatedTokens.input }} / 缓存输入 {{ fundedQuotePreview.quote.estimatedTokens.cachedInput }} / 输出 {{ fundedQuotePreview.quote.estimatedTokens.output }} / 推理 {{ fundedQuotePreview.quote.estimatedTokens.reasoning }}</p>
+              <p>预估/最坏算力：{{ formatMoney(fundedQuotePreview.quote.estimatedComputeMicro) }} / {{ formatMoney(fundedQuotePreview.quote.worstComputeMicro) }}；平台费：{{ formatMoney(fundedQuotePreview.quote.platformFeeMicro) }}</p>
+              <p>好汉预估/最坏所得：{{ formatMoney(fundedQuotePreview.quote.estimatedAgentPayoutMicro) }} / {{ formatMoney(fundedQuotePreview.quote.worstAgentPayoutMicro) }}</p>
+              <p>建议：{{ fundedQuotePreview.quote.recommendation }}；缘由：{{ fundedQuotePreview.quote.reasonCodes.join('、') || '无' }}</p>
+              <p>到期时间：{{ formatTime(fundedQuotePreview.quote.expiresAt) }}（{{ fundedQuotePreview.quote.expiresAt }} ms）</p>
+              <p v-if="fundedQuotePreview.recovery">原领令结果未知；仅重放此前确认的原报价和请求，不会重新取价。</p>
+              <button type="button" @click="$emit('confirm-funded-quote')">{{ fundedQuotePreview.recovery ? '核对原领令' : '确认此报价并领令' }}</button>
+              <button type="button" @click="$emit('cancel-funded-quote')">{{ fundedQuotePreview.recovery ? '暂不核对' : '取消，不领令' }}</button>
+            </section>
+            <p v-if="fundedClaimState?.taskId === detailTask.id && fundedClaimState.status === 'confirmed'" class="funding-summary" role="status">
+              榜文 {{ fundedClaimState.taskId }} 已确认由 {{ fundedClaimState.agentId }} 领令。
+              <span v-if="fundedClaimState.refreshPending">榜文刷新待完成，请重查；勿重复领令。<button type="button" @click="$emit('refresh-funded-claim', detailTask)">重查已确认榜文</button></span>
+            </p>
+            <p v-else-if="fundedClaimState?.taskId === detailTask.id && fundedClaimState.status === 'unresolved'" role="status">原领令结果未知，请由原好汉核对，不要重新取价。</p>
             <div class="modal-task-info">
               <div class="task-detail-head">
                 <div>
@@ -94,6 +137,13 @@
               </div>
 
               <p>{{ detailTask.description || '榜文尚未写明缘由' }}</p>
+              <section v-if="isFundedTask(detailTask)" class="funded-preview-details" aria-label="资金悬赏详情">
+                <p class="funding-summary">已托管：{{ formatMoney(detailTask.funding.remainingMicro || detailTask.funding.grossBountyAmountMicro) }}</p>
+                <p>仅可由一位明确好汉按报价领令；组队、宋江代点和旧式点将已禁用。</p>
+                <button v-if="canCancelFunding(detailTask)" type="button" class="funded-detail-button" @click="$emit('cancel-funding', detailTask)">开工前撤榜并退款</button>
+                <button type="button" class="funded-detail-button" @click="$emit('load-settlement', detailTask)">查看结算详情</button>
+                <pre v-if="detailTask.settlement" class="settlement-detail">{{ JSON.stringify(detailTask.settlement, null, 2) }}</pre>
+              </section>
 
               <div class="ability-tags">
                 <span v-for="ability in detailTask.requiredAbilities || []" :key="ability">{{ ability }}</span>
@@ -103,7 +153,7 @@
               <div class="task-operation-grid">
                 <button
                   :aria-label="agentDisplayName(selectedAgent) ? `点当前好汉 ${agentDisplayName(selectedAgent)} 领令` : '先择好汉再点将'"
-                  :disabled="!canAssign(detailTask, selectedAgent)"
+                  :disabled="isFundedTask(detailTask) || !canAssign(detailTask, selectedAgent)"
                   :title="agentDisplayName(selectedAgent) ? `点当前好汉领令：${agentDisplayName(selectedAgent)}` : '先择好汉再点将'"
                   @click="$emit('assign-task', detailTask, selectedAgent)"
                 >
@@ -122,7 +172,7 @@
                   class="assign-selected-agents"
                   type="button"
                   :aria-label="`点已选 ${selectedAssignees.length} 人领令`"
-                  :disabled="!selectedAssignees.length"
+                  :disabled="isFundedTask(detailTask) || !selectedAssignees.length"
                   :title="`点已选 ${selectedAssignees.length} 人领令`"
                   @click="$emit('assign-task', detailTask, selectedAssignees)"
                 >
@@ -134,7 +184,7 @@
                   class="auto-assign-task"
                   type="button"
                   aria-label="宋江代为点将"
-                  :disabled="detailTask.status !== 'open' || !recommendedAgents.length"
+                  :disabled="isFundedTask(detailTask) || detailTask.status !== 'open' || !recommendedAgents.length"
                   title="宋江代为点将"
                   @click="$emit('auto-assign-task', detailTask)"
                 >
@@ -181,6 +231,7 @@
                     class="assignee-check"
                     type="checkbox"
                     :checked="selectedAssigneeIds.includes(agent.agentId)"
+                    :disabled="isFundedTask(detailTask)"
                     @click.stop
                     @change="toggleAssignee(agent)"
                   />
@@ -206,9 +257,9 @@
                   </button>
                   <button
                     type="button"
-                    :aria-label="`点 ${agentDisplayName(agent)} 领令`"
-                    :disabled="!canAssign(detailTask, agent)"
-                    :title="`点 ${agentDisplayName(agent)} 领令`"
+                    :aria-label="isFundedTask(detailTask) ? `向 ${agentDisplayName(agent)} 预览报价` : `点 ${agentDisplayName(agent)} 领令`"
+                    :disabled="isFundedTask(detailTask) ? fundedClaimBlocked(detailTask, agent) : !canAssign(detailTask, agent)"
+                    :title="isFundedTask(detailTask) ? `向 ${agentDisplayName(agent)} 预览报价` : `点 ${agentDisplayName(agent)} 领令`"
                     @click="$emit('assign-task', detailTask, agent)"
                   >
                     <BountyActionIcon name="assign" />
@@ -237,6 +288,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import BountyActionIcon from './BountyActionIcon.vue'
+import { formatSilverMicro, isCanonicalMicroAmount } from '@/utils/silverAmount'
 
 const props = defineProps({
   tasks: { type: Array, default: () => [] },
@@ -248,6 +300,10 @@ const props = defineProps({
   taskAbilityFilter: { type: String, default: '' },
   taskKeyword: { type: String, default: '' },
   taskStatusFilter: { type: String, default: '' },
+  fundedPreviewEnabled: { type: Boolean, default: false },
+  fundedQuotePreview: { type: Object, default: null },
+  fundedClaimState: { type: Object, default: null },
+  fundedCreateRecovery: { type: Object, default: null },
   abilityText: { type: Function, required: true },
   canAssign: { type: Function, required: true },
   formatTime: { type: Function, required: true },
@@ -264,8 +320,15 @@ const emit = defineEmits([
   'archive-task',
   'auto-assign-task',
   'brief-selected-task',
+  'cancel-funding',
+  'confirm-funded-quote',
+  'cancel-funded-quote',
+  'refresh-funded-claim',
   'create-task',
+  'resume-funded-create',
+  'cancel-funded-create-recovery',
   'discuss-task',
+  'load-settlement',
   'load-tasks',
   'select-agent',
   'select-task',
@@ -276,14 +339,34 @@ const emit = defineEmits([
 
 const modalTask = ref(null)
 const showCreateForm = ref(false)
+const createPending = ref(false)
 const selectedAssigneeIds = ref([])
 const taskForm = ref({
   title: '',
   description: '',
-  requiredAbilities: ''
+  requiredAbilities: '',
+  funded: false,
+  grossBountyAmountMicro: ''
 })
 const detailTask = computed(() => modalTask.value)
+const validGrossAmount = computed(() => isCanonicalMicroAmount(taskForm.value.grossBountyAmountMicro))
+const fundedRecoveryAbilities = computed(() => {
+  const abilities = props.fundedCreateRecovery?.body?.requiredAbilities
+  return Array.isArray(abilities) ? abilities.join('、') || '未填写' : abilities || '未填写'
+})
 const unassignedDiscussHint = '此榜文尚未点将，暂不可开议'
+const isFundedTask = task => task?.funding?.mode === 'FUNDED_SINGLE_AGENT'
+const fundedClaimBlocked = (task, agent) => {
+  if (!props.fundedPreviewEnabled || props.fundedQuotePreview) return true
+  const state = props.fundedClaimState
+  if (state?.taskId === task.id) {
+    if (state.status === 'confirmed' || state.status === 'confirming') return true
+    if (state.status === 'unresolved') return state.agentId !== agent.agentId
+  }
+  return !props.canAssign(task, agent)
+}
+const formatMoney = value => formatSilverMicro(typeof value === 'string' && isCanonicalMicroAmount(value) ? value : '0')
+const canCancelFunding = task => isFundedTask(task) && task.status === 'open' && typeof (task.version ?? task.taskVersion) === 'string'
 const selectedAssignees = computed(() => {
   const selected = new Set(selectedAssigneeIds.value)
   return props.recommendedAgents.filter(agent => selected.has(agent.agentId))
@@ -300,19 +383,34 @@ const taskAssigneeIds = (task) => {
 
 const submitCreateTask = () => {
   if (!taskForm.value.title) return
-  emit('create-task', {
+  if (taskForm.value.funded && !validGrossAmount.value) return
+  const payload = {
     title: taskForm.value.title,
     description: taskForm.value.description,
     requiredAbilities: taskForm.value.requiredAbilities
       .split(',')
       .map(item => item.trim())
       .filter(Boolean)
+  }
+  if (props.fundedPreviewEnabled && taskForm.value.funded) {
+    payload.grossBountyAmountMicro = taskForm.value.grossBountyAmountMicro
+    payload.settlementPolicy = 'GROSS_INCLUSIVE'
+  }
+  if (createPending.value) return
+  createPending.value = true
+  emit('create-task', payload, (created) => {
+    createPending.value = false
+    // Reset only after the parent receives a definitive success acknowledgement.
+    // Recoverable/ambiguous failures retain the exact funded draft for retry.
+    if (created) {
+      taskForm.value = { title: '', description: '', requiredAbilities: '', funded: false, grossBountyAmountMicro: '' }
+      showCreateForm.value = false
+    }
   })
-  taskForm.value = { title: '', description: '', requiredAbilities: '' }
-  showCreateForm.value = false
 }
 
 const toggleAssignee = (agent) => {
+  if (isFundedTask(detailTask.value)) return
   const id = agent?.agentId
   if (!id) return
   if (selectedAssigneeIds.value.includes(id)) {
@@ -1035,4 +1133,17 @@ button:disabled {
     max-height: 100%;
   }
 }
+
+/* ECO-V0 funded-preview additions; legacy bounty layout stays intact. */
+.funded-create-toggle { display: inline-flex; align-items: center; gap: 6px; color: #765f40; font-size: 12px; }
+.gross-bounty-input { min-width: 180px; }
+.funded-input-error { color: #b42318; font-size: 12px; }
+.funded-quote-confirmation { max-height: 50vh; overflow-y: auto; flex-shrink: 0; padding: 12px; }
+.funding-summary { margin: 8px 0 0; color: #75430b !important; font-weight: 700; }
+.funded-preview-details { margin: 10px 0; padding: 10px; border-radius: 8px; background: #fff3cc; color: #6b4a12; font-size: 12px; }
+.funded-preview-details p { margin: 6px 0; }
+.funded-detail-button { margin: 4px 6px 4px 0; padding: 7px 9px; border-radius: 7px; background: #7c1f1b; color: #fff8e8; font-size: 12px; }
+.quote-summary { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(117, 67, 11, .22); }
+.settlement-detail { max-height: 180px; margin: 8px 0 0; overflow: auto; white-space: pre-wrap; font-size: 11px; }
+
 </style>
