@@ -1,6 +1,6 @@
 <template>
   <section class="hall-stage">
-    <div class="stage-header">
+    <div v-if="!readOnlyPreview" class="stage-header">
       <div class="stage-heading">
         <div class="eyebrow">梁山泊传令中枢</div>
         <h1>聚义厅</h1>
@@ -9,27 +9,27 @@
         <button
           class="tool-action refresh-action"
           :class="{ 'is-refreshing': refreshing }"
-          :disabled="refreshing || interactionLocked"
+          :disabled="refreshing || stageInputLocked"
           title="点验厅中动静"
-          @click="$emit('refresh-hall')"
+          @click="emitStageAction('refresh-hall')"
         >
           <var-icon name="refresh" />
           <span class="tool-label">{{ refreshing ? '点验中' : '点验' }}</span>
         </button>
         <button
           class="tool-action sound-toggle"
-          :disabled="interactionLocked"
+          :disabled="stageInputLocked"
           :title="soundEnabled ? '歇下声响' : '开起声响'"
-          @click="$emit('toggle-sound')"
+          @click="emitStageAction('toggle-sound')"
         >
           <var-icon :name="soundEnabled ? 'bell' : 'bell-outline'" />
           <span class="tool-label">{{ soundEnabled ? '声响开' : '声响歇' }}</span>
         </button>
         <button
           class="tool-action onboarding-replay"
-          :disabled="interactionLocked"
+          :disabled="stageInputLocked"
           title="重看新手引导"
-          @click="$emit('open-onboarding', $event.currentTarget)"
+          @click="emitOnboarding($event.currentTarget)"
           aria-label="重看新手引导"
         >
           <var-icon name="help-circle-outline" aria-hidden="true" />
@@ -38,9 +38,9 @@
         <button
           v-if="isMobileCoarse"
           class="tool-action orientation-action"
-          :disabled="interactionLocked || isSceneMounting || orientationRequestPending"
+          :disabled="stageInputLocked || orientationRequestPending"
           :title="sceneMode === 'landscape' ? '切换竖屏视图' : '打开全景视图'"
-          @click="$emit(sceneMode === 'landscape' ? 'request-portrait' : 'request-landscape')"
+          @click="emitOrientationRequest()"
         >
           <span
             class="orientation-glyph"
@@ -64,8 +64,8 @@
         'is-scene-portrait': sceneMode === 'portrait',
         'is-virtual-landscape': virtualLandscape
       }"
-      tabindex="0"
-      aria-label="聚义厅 melonJS 场景，可使用加减号缩放，0 复位"
+      :tabindex="stageInputLocked ? -1 : 0"
+      :aria-label="readOnlyPreview ? '聚义厅地图只读预览' : '聚义厅 melonJS 场景，可使用加减号缩放，0 复位'"
       @keydown="handleSceneKeydown"
       @wheel="scheduleReturnRefresh"
       @pointerup="scheduleReturnRefresh"
@@ -73,14 +73,14 @@
     >
       <div ref="melonContainerRef" class="melon-layer" aria-hidden="true"></div>
       <div
-        v-if="isSceneMounting && !sceneError"
+        v-if="!readOnlyPreview && isSceneMounting && !sceneError"
         class="scene-loading"
         role="status"
       >
         <span class="scene-spinner" aria-hidden="true"></span>
         <span>聚义厅地图加载中…</span>
       </div>
-      <div v-if="sceneError" class="scene-error" role="status">
+      <div v-if="!readOnlyPreview && sceneError" class="scene-error" role="status">
         <strong>聚义厅场景暂不可用</strong>
         <span>{{ sceneError }}</span>
         <button type="button" :disabled="isSceneMounting" @click="retryScene">
@@ -88,7 +88,7 @@
         </button>
       </div>
       <button
-        v-if="showReturnButton && !interactionLocked"
+        v-if="showReturnButton && !stageInputLocked"
         class="return-main-hall"
         :class="{ 'is-raised': Boolean(selectedAgent) }"
         type="button"
@@ -101,12 +101,12 @@
       <div v-if="orientationHint" class="orientation-hint" role="status">{{ orientationHint }}</div>
     </div>
 
-    <slot></slot>
+    <slot v-if="!readOnlyPreview"></slot>
   </section>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { juyitingGame } from '@/game/index.js'
 import { classifyViewportResize } from '@/game/camera/resizePolicy.js'
 
@@ -125,6 +125,8 @@ const props = defineProps({
   portraitName: { type: Function, required: true },
   portraitShortName: { type: Function, required: true },
   portraitStyle: { type: Function, required: true },
+  readOnlyPreview: { type: Boolean, default: false },
+  previewVisible: { type: Boolean, default: true },
   refreshing: { type: Boolean, default: false },
   roleClass: { type: Function, required: true },
   simulationEnabled: { type: Boolean, default: true },
@@ -150,7 +152,10 @@ const emit = defineEmits([
   'request-landscape',
   'request-portrait',
   'refresh-hall',
+  'scene-bounds-change',
+  'scene-error',
   'scene-mode-change',
+  'scene-state-change',
   'select-agent',
   'simulation-phase-events',
   'simulation-ready',
@@ -165,6 +170,7 @@ const isSceneMounting = ref(false)
 const showReturnButton = ref(false)
 const mapLifecycleState = ref('unmounted')
 let sceneMountAttempt = 0
+let businessReadyGeneration = 0
 let activeMapGeneration = 0
 let resumeRequested = false
 let settledViewportGeneration = 0
@@ -189,6 +195,15 @@ let fallbackFrameId = 0
 const fallbackFrames = new Map()
 const LANDSCAPE_TARGET_MAX_ATTEMPTS = 8
 let landscapeTargetWork = null
+let previewTransitionGeneration = 0
+const previewExitPending = ref(false)
+let previewPresentationActive = false
+
+// This is a DOM/handler barrier distinct from the engine lock. A Teleport
+// transition can have a running scene while its final viewport is not ready.
+const stageInputLocked = computed(() => (
+  props.readOnlyPreview || props.interactionLocked || isSceneMounting.value || previewExitPending.value
+))
 
 const requestStageFrame = callback => {
   if (typeof window.requestAnimationFrame === 'function') return window.requestAnimationFrame(callback)
@@ -347,6 +362,10 @@ const cancelLandscapeTargetWork = () => {
 
 const currentLandscapeTarget = work => (
   isRunningGeneration(work.attemptId) &&
+  // A target is meaningful only after the current preview presentation has
+  // committed its landscape viewport. This fences same-batch prop watchers
+  // and any queued retry frame independently of watcher registration order.
+  !previewPresentationActive &&
   props.landscapeEntryTarget === work.entry &&
   props.landscapeEntryTarget?.generation === work.targetGeneration &&
   work.targetGeneration > consumedLandscapeTargetGeneration
@@ -422,7 +441,9 @@ const attemptHotspotLandscapeTarget = work => {
 }
 
 const consumeLandscapeEntryTarget = (attemptId, { retryHotspot = false } = {}) => {
-  if (!isRunningGeneration(attemptId)) return false
+  // Preview exit owns the target until its stable viewport commit releases the
+  // presentation barrier. Do not let a landscape-target watcher consume early.
+  if (!isRunningGeneration(attemptId) || props.readOnlyPreview || previewExitPending.value || previewPresentationActive) return false
   const entry = props.landscapeEntryTarget
   if (!entry || !Number.isInteger(entry.generation) || entry.generation <= consumedLandscapeTargetGeneration) {
     cancelLandscapeTargetWork()
@@ -447,6 +468,8 @@ const failSceneMount = (attemptId, error) => {
   melonReady.value = false
   isSceneMounting.value = false
   sceneError.value = error?.message || '聚义厅场景暂不可用，请重试'
+  emit('scene-state-change', 'error')
+  emit('scene-error', error)
   mapLifecycleState.value = 'destroying'
   unlockLoading(attemptId)
   emit('simulation-reset')
@@ -485,7 +508,21 @@ const finalizeSceneReady = async attemptId => {
     sceneError.value = ''
     setupStageResizeObserver()
     unlockLoading(attemptId)
-    consumeLandscapeEntryTarget(attemptId)
+    if (props.readOnlyPreview) {
+      juyitingGame.setInteractionLocked?.(true, 'preview')
+      juyitingGame.applyPreviewContain?.(juyitingGame.getSceneBounds?.())
+      juyitingGame.setPreviewDrawPolicy?.({ enabled: true, visible: props.previewVisible })
+    } else if (previewExitPending.value) {
+      // A portrait→landscape switch may arrive while the first scene mount is
+      // still loading; complete its fenced exit only after this ready point.
+      void completePreviewExit(attemptId, previewTransitionGeneration)
+    } else {
+      juyitingGame.setPreviewDrawPolicy?.({ enabled: false, visible: props.previewVisible })
+      consumeLandscapeEntryTarget(attemptId)
+      publishSimulationReady(attemptId)
+    }
+    emit('scene-state-change', 'ready')
+    emit('scene-bounds-change', juyitingGame.getSceneBounds?.() || null)
     scheduleReturnRefresh()
   } catch (error) {
     failSceneMount(attemptId, error)
@@ -594,6 +631,7 @@ const mountScene = async () => {
   settledViewportGeneration = 0
   isSceneMounting.value = true
   sceneError.value = ''
+  emit('scene-state-change', 'loading')
   juyitingGame.setInteractionLocked?.(true, 'loading')
   clearMountTimeout()
   mountTimeout = window.setTimeout(() => {
@@ -612,7 +650,7 @@ const mountScene = async () => {
         if (isCurrentMountAttempt(attemptId)) handleSceneReady(attemptId)
       },
       onSimulationPhaseEvents: events => {
-        if (isRunningGeneration(attemptId)) emit('simulation-phase-events', events)
+        if (isRunningGeneration(attemptId) && businessReadyGeneration === attemptId) emit('simulation-phase-events', events)
       },
       onPersonaAvailabilityChanged: payload => {
         if (isRunningGeneration(attemptId)) {
@@ -621,13 +659,6 @@ const mountScene = async () => {
       }
     })
     if (!isCurrentMountAttempt(attemptId)) return
-    emit('simulation-ready', {
-      movementRuntime: juyitingGame.getMovementRuntime?.(),
-      simulation: {
-        enqueue: command => juyitingGame.enqueueMovementCommands?.([command])?.[0],
-        cancel: (agentId, stateVersion) => juyitingGame.cancelMovement?.(agentId, stateVersion)
-      }
-    })
     if (!melonReady.value) juyitingGame.setInteractionLocked?.(true, 'loading')
     juyitingGame.start()
   } catch (err) {
@@ -635,8 +666,31 @@ const mountScene = async () => {
   }
 }
 
+const publishSimulationReady = attemptId => {
+  if (props.readOnlyPreview || businessReadyGeneration === attemptId || !isRunningGeneration(attemptId)) return
+  businessReadyGeneration = attemptId
+  emit('simulation-ready', {
+    movementRuntime: juyitingGame.getMovementRuntime?.(),
+    simulation: {
+      enqueue: command => juyitingGame.enqueueMovementCommands?.([command])?.[0],
+      cancel: (agentId, stateVersion) => juyitingGame.cancelMovement?.(agentId, stateVersion)
+    }
+  })
+}
+
 const retryScene = async () => {
-  if (isSceneMounting.value) return
+  if (isSceneMounting.value) return false
+  // A paused/running preview only needs its owned presentation policy restored.
+  // A failed/unmounted scene takes the explicit reload path below.
+  if (mapLifecycleState.value === 'running' && !sceneError.value) {
+    if (props.readOnlyPreview) {
+      juyitingGame.setInteractionLocked?.(true, 'preview')
+      juyitingGame.applyPreviewContain?.(juyitingGame.getSceneBounds?.())
+    }
+    juyitingGame.setPreviewDrawPolicy?.({ enabled: props.readOnlyPreview, visible: props.previewVisible })
+    emit('scene-state-change', 'ready')
+    return true
+  }
   emit('simulation-reset')
   sceneMountAttempt += 1
   clearMountTimeout()
@@ -644,10 +698,11 @@ const retryScene = async () => {
   if (!currentGameDestroyed) juyitingGame.destroy()
   currentGameDestroyed = false
   await mountScene()
+  return true
 }
 
 const handleSceneKeydown = (event) => {
-  if (event.defaultPrevented || props.interactionLocked || isSceneMounting.value || !isRunningGeneration(sceneMountAttempt)) return
+  if (event.defaultPrevented || stageInputLocked.value || !isRunningGeneration(sceneMountAttempt)) return
   if (event.key === '+' || event.key === '=') {
     juyitingGame.zoomBy?.(0.12)
     event.preventDefault()
@@ -701,12 +756,32 @@ const runReturnRefresh = () => {
   }
 }
 
+const emitStageAction = event => {
+  if (stageInputLocked.value) return false
+  emit(event)
+  return true
+}
+
+const emitOnboarding = target => {
+  if (stageInputLocked.value) return false
+  emit('open-onboarding', target)
+  return true
+}
+
+const emitOrientationRequest = () => {
+  if (stageInputLocked.value || props.orientationRequestPending) return false
+  emit(sceneMode.value === 'landscape' ? 'request-portrait' : 'request-landscape')
+  return true
+}
+
 const scheduleReturnRefresh = () => {
+  if (stageInputLocked.value) { showReturnButton.value = false; return }
   if (isUnmounted || !isRunningGeneration(sceneMountAttempt) || returnFrame !== null) return
   returnFrame = requestStageFrame(runReturnRefresh)
 }
 
 const returnToMainHall = () => {
+  if (stageInputLocked.value) return false
   juyitingGame.resetToMainHall?.()
   resetPollRemaining = 30
   scheduleReturnRefresh()
@@ -781,12 +856,78 @@ watch(() => props.landscapeEntryTarget, () => {
   else if (!props.landscapeEntryTarget) cancelLandscapeTargetWork()
 }, { deep: true })
 
+const completePreviewExit = async (attemptId, transitionGeneration) => {
+  await nextTick()
+  if (!isRunningGeneration(attemptId) || props.readOnlyPreview || transitionGeneration !== previewTransitionGeneration) return
+  const viewport = await settleFinalViewport(attemptId)
+  if (!viewport || !isRunningGeneration(attemptId) || props.readOnlyPreview || transitionGeneration !== previewTransitionGeneration) return
+  let committed
+  try {
+    committed = await (juyitingGame.commitViewport?.({ width: viewport.width, height: viewport.height, kind: 'orientation', orientationChanged: true })
+      ?? juyitingGame.resizeViewport?.({ width: viewport.width, height: viewport.height, kind: 'orientation', orientationChanged: true }))
+  } catch (error) {
+    // A late rejection belongs to a superseded preview transition and must not
+    // tear down a newer re-entered preview instance.
+    if (!isRunningGeneration(attemptId) || props.readOnlyPreview || transitionGeneration !== previewTransitionGeneration) return
+    failSceneMount(attemptId, error instanceof Error ? error : new Error('地图视口提交失败，请重试'))
+    return
+  }
+  // Cancellation and stale-mount outcomes use undefined. Fence them before
+  // outcome inspection; a current undefined/false receipt never admits input.
+  if (!isRunningGeneration(attemptId) || props.readOnlyPreview || transitionGeneration !== previewTransitionGeneration) return
+  if (committed === undefined || committed === false) {
+    failSceneMount(attemptId, new Error('地图视口提交失败，请重试'))
+    return
+  }
+  juyitingGame.clearPreviewContain?.()
+  // Keep the owned wrapper across modes: landscape remains unthrottled, while
+  // hidden or fully-covered presentations still suppress draw without pausing update.
+  juyitingGame.setPreviewDrawPolicy?.({ enabled: false, visible: props.previewVisible })
+  previewExitPending.value = false
+  previewPresentationActive = false
+  consumeLandscapeEntryTarget(attemptId)
+  publishSimulationReady(attemptId)
+  juyitingGame.setInteractionLocked?.(false, 'preview')
+  juyitingGame.setInteractionLocked?.(false, 'preview-transition')
+}
+
+watch(() => props.readOnlyPreview, preview => {
+  const transitionGeneration = ++previewTransitionGeneration
+  if (preview) {
+    // Stop an armed landscape retry before re-entering the read-only preview.
+    // A later return will create fresh work after its committed viewport fence.
+    cancelLandscapeTargetWork()
+    previewPresentationActive = true
+    previewExitPending.value = false
+    juyitingGame.setInteractionLocked?.(true, 'preview-transition')
+    juyitingGame.setInteractionLocked?.(true, 'preview')
+    juyitingGame.applyPreviewContain?.(juyitingGame.getSceneBounds?.())
+    juyitingGame.setPreviewDrawPolicy?.({ enabled: true, visible: props.previewVisible })
+    juyitingGame.setInteractionLocked?.(false, 'preview-transition')
+    return
+  }
+  // An initial landscape mount has no preview state to unwind.
+  if (!previewPresentationActive) {
+    previewExitPending.value = false
+    return
+  }
+  // Teleport and its target geometry settle before this Stage restores its camera
+  // or consumes the pending explicit landscape target.
+  previewExitPending.value = true
+  juyitingGame.setInteractionLocked?.(true, 'preview-transition')
+  void completePreviewExit(sceneMountAttempt, transitionGeneration)
+}, { immediate: true })
+
+watch(() => props.previewVisible, visible => {
+  juyitingGame.setPreviewDrawPolicy?.({ enabled: props.readOnlyPreview, visible })
+})
+
 watch(() => props.experienceMode, mode => {
   if (mode === 'landscape-map') {
     if (mapLifecycleState.value === 'suspending') resumeRequested = true
     return
   }
-  suspendScene()
+  if (!props.readOnlyPreview) suspendScene()
 })
 
 watch(() => props.virtualLandscape, virtual => {
@@ -822,6 +963,9 @@ watch(() => props.selectedAgent, (agent) => {
   if (melonReady.value && isRunningGeneration(sceneMountAttempt)) juyitingGame.setSelectedAgent(agent?.agentId || null)
   scheduleReturnRefresh()
 })
+
+// Page-owned preview controls delegate to this exact persistent Stage instance.
+defineExpose({ retryScene })
 </script>
 
 <style scoped>

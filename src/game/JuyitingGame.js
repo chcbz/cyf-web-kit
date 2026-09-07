@@ -94,6 +94,7 @@ export class JuyitingGame {
     this._sceneDebugPublishHandle = null
     this._sceneDebugPublishCancel = null
     this._simulationEnabled = true
+    this._previewDraw = { enabled: false, visible: true, lastDrawAt: 0, wrapper: null, original: null }
   }
 
   async _loadMelonJS() {
@@ -378,6 +379,9 @@ export class JuyitingGame {
   }
 
   _cleanupRuntime(me = this._me) {
+    // Retire only this owner's wrapper before policy metadata is discarded.
+    // A newer/foreign draw owner remains untouched by clearPreviewDrawPolicy().
+    this.clearPreviewDrawPolicy()
     this._cancelCachedImageWaits()
     this._spriteLoadAbortController?.abort()
     this._spriteLoadAbortController = null
@@ -425,6 +429,7 @@ export class JuyitingGame {
     this._movementEngine = null
     this._pendingSimulationPhaseEvents = []
     this._simulationEnabled = true
+    this._previewDraw = { enabled: false, visible: true, lastDrawAt: 0, wrapper: null, original: null }
   }
 
   _cancelCachedImageWaits() {
@@ -649,6 +654,9 @@ export class JuyitingGame {
     this._stateId = stateBase + stateSlot
     me.state.set(this._stateId, this._hallScene)
     this._initialized = true
+    // Materialize a pre-mount preview intent only after this instance owns a
+    // live scene, so failed initialization cannot strand a retained wrapper.
+    if (this._previewDraw.enabled) this.setPreviewDrawPolicy({ enabled: true, visible: this._previewDraw.visible })
     this._fatalError = null
     this._markSceneDebugDirty()
     if (this._pendingStart) {
@@ -717,6 +725,7 @@ export class JuyitingGame {
   }
 
   destroy() {
+    this.clearPreviewDrawPolicy()
     this._generation += 1
     this._mountToken = null
     this._cancelSceneDebugPublication()
@@ -871,6 +880,42 @@ export class JuyitingGame {
     }
   }
 
+  setPreviewDrawPolicy({ enabled = false, visible = true } = {}) {
+    const policy = this._previewDraw
+    policy.enabled = Boolean(enabled)
+    policy.visible = Boolean(visible)
+    const game = this._me?.game
+    // Pre-mount preview is intent only: never wrap a retained engine before this
+    // Hall instance owns a live initialized scene.
+    if (!this._initialized || !this._mountToken || !game?.draw) return false
+    if (!policy.wrapper) {
+      const original = game.draw
+      policy.original = original
+      policy.wrapper = function (...args) {
+        // Visibility is an all-mode draw gate. `enabled` only adds the 20fps
+        // preview budget; normal landscape remains unthrottled when visible.
+        if (!policy.visible) return undefined
+        if (policy.enabled) {
+          const now = globalThis.performance?.now?.() ?? Date.now()
+          if (Number.isFinite(now) && now - policy.lastDrawAt < 50) return undefined
+          policy.lastDrawAt = Number.isFinite(now) ? now : policy.lastDrawAt
+        }
+        // Close over the original so a foreign wrapper that still calls this
+        // retired wrapper remains transparent after policy metadata is cleared.
+        return original.apply(this, args)
+      }
+      game.draw = policy.wrapper
+    }
+    return true
+  }
+
+  clearPreviewDrawPolicy() {
+    const policy = this._previewDraw
+    const game = this._me?.game
+    if (game && policy.wrapper && game.draw === policy.wrapper) game.draw = policy.original
+    policy.enabled = false; policy.visible = true; policy.lastDrawAt = 0; policy.wrapper = null; policy.original = null
+  }
+
   setInteractionLocked(locked, reason = 'panel') {
     const result = this._hallScene?.setInteractionLocked?.(locked, reason)
     this._markSceneDebugDirty()
@@ -942,6 +987,22 @@ export class JuyitingGame {
       assets: new Map(this._spriteLoadResult.assets),
       errors: this._spriteLoadResult.errors.map(error => ({ ...error }))
     }
+  }
+
+  applyPreviewContain(worldBounds) {
+    const result = this._hallScene?.applyPreviewContain?.(worldBounds) || null
+    this._markSceneDebugDirty()
+    return result
+  }
+
+  clearPreviewContain() {
+    const result = this._hallScene?.clearPreviewContain?.() || null
+    this._markSceneDebugDirty()
+    return result
+  }
+
+  getSceneBounds() {
+    return this._hallScene?.sceneBounds?.() || null
   }
 
   resetToMainHall() {
@@ -1182,8 +1243,10 @@ export class JuyitingGame {
     const restore = this._pendingViewportRestore
     this._pendingViewportChange = null
     if (geometry.signature === this._committedViewportGeometrySignature && !restore) {
-      this._settleViewportCommitWaiters('resolve', undefined)
-      return undefined
+      // A live repeated geometry is a successful no-op. Keep undefined reserved
+      // for cancelled/stale mount waiters so Stage can distinguish the outcomes.
+      this._settleViewportCommitWaiters('resolve', true)
+      return true
     }
 
     this._applyCanvasCover(geometry)

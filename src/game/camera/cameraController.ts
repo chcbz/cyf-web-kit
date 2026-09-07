@@ -41,6 +41,8 @@ export type CameraController = {
   resize(nextViewport: Viewport, kind: 'keyboard' | 'orientation' | 'layout'): CameraTransform
   restore(snapshot: Partial<CameraSnapshot> | null | undefined, nextViewport: Viewport): CameraTransform
   resetTo(presetKey: ViewPresetKey, durationMs?: number): void
+  applyPreviewContain(bounds: { x?: number; y?: number; width: number; height: number }): CameraTransform | null
+  clearPreviewContain(): CameraTransform
   beginUserGesture(): void
   isAwayFromPreset(): boolean
   snapshot(): CameraSnapshot
@@ -85,6 +87,8 @@ export const createCameraController = (
   let disposed = false
   let animationGeneration = 0
   let preservedMinimum: number | null = null
+  let previewSnapshot: { transform: CameraTransform; viewport: Viewport; preservedMinimum: number | null } | null = null
+  let previewWorldBounds: { x: number; y: number; width: number; height: number } | null = null
 
   const normalBounds = (key = presetKey): CameraBounds => {
     const maxZoom = Math.min(positiveOr(configuredBounds.maxZoom, MAX_ZOOM), MAX_ZOOM)
@@ -179,6 +183,7 @@ export const createCameraController = (
       cancelAnimation()
       const oldViewport = viewport
       viewport = copyViewport(nextViewport)
+      if (previewWorldBounds !== null) return controller.applyPreviewContain(previewWorldBounds) || { ...transform }
       const preserved = preserveFocus(transform, oldViewport, viewport)
       presetKey = selectViewPreset(currentPresetViewport(), coarsePointer)
       preservedMinimum = transform.zoom
@@ -201,6 +206,40 @@ export const createCameraController = (
         return apply(presetTransform(presetKey), normalBounds())
       }
       return apply({ zoom: candidate.zoom, offsetX: candidate.offsetX, offsetY: candidate.offsetY }, normalBounds())
+    },
+
+    applyPreviewContain(worldBounds) {
+      if (disposed) return null
+      const width = Number(worldBounds?.width)
+      const height = Number(worldBounds?.height)
+      const x = Number(worldBounds?.x)
+      const y = Number(worldBounds?.y)
+      if (![x, y, width, height, viewport.width, viewport.height].every(Number.isFinite) || width <= 0 || height <= 0 || viewport.width <= 0 || viewport.height <= 0) return null
+      const zoom = Math.min(viewport.width / width, viewport.height / height)
+      if (!Number.isFinite(zoom) || zoom <= 0 || !Number.isFinite(width * zoom) || !Number.isFinite(height * zoom) || width * zoom <= 0 || height * zoom <= 0) return null
+      const containOffsetX = viewport.width / 2 - (x + width / 2) * zoom
+      const containOffsetY = viewport.height / 2 - (y + height / 2) * zoom
+      const previewTransform = { zoom, offsetX: containOffsetX - viewport.width / 2 * (1 - zoom), offsetY: containOffsetY - viewport.height / 2 * (1 - zoom) }
+      if (![previewTransform.zoom, previewTransform.offsetX, previewTransform.offsetY].every(Number.isFinite)) return null
+      cancelAnimation()
+      if (previewSnapshot === null) previewSnapshot = { transform: { ...transform }, viewport: { ...viewport }, preservedMinimum }
+      previewWorldBounds = { x, y, width, height }
+      // Preview presentation intentionally bypasses normal landscape cover/clamp.
+      transform = previewTransform
+      adapter.apply({ ...transform })
+      return { ...transform }
+    },
+
+    clearPreviewContain() {
+      if (disposed || previewSnapshot === null) return { ...transform }
+      cancelAnimation()
+      const snapshot = previewSnapshot
+      previewSnapshot = null
+      previewWorldBounds = null
+      preservedMinimum = snapshot.preservedMinimum
+      // The preview snapshot may carry a valid landscape minimum below the
+      // current portrait/normal preset minimum; restore it with that allowance.
+      return apply(preserveFocus(snapshot.transform, snapshot.viewport, viewport), bounds(presetKey, snapshot.preservedMinimum))
     },
 
     resetTo(nextPresetKey, durationMs = DEFAULT_RESET_DURATION_MS) {

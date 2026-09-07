@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'fs'
 import { expect } from 'chai'
-import { compileScript, parse } from '@vue/compiler-sfc'
+import { compileScript, compileStyle, parse } from '@vue/compiler-sfc'
 import { mount } from '@vue/test-utils'
 import * as Vue from 'vue'
 
@@ -21,12 +21,16 @@ const vueImportToVar = (_line, imports) => {
   return `var { ${bindings} } = Vue`
 }
 
+const restoreDescriptor = (target, key, descriptor) => { if (descriptor) Object.defineProperty(target, key, descriptor); else delete target[key] }
+const previewFixture = Vue.defineComponent({ setup: (_props, { slots }) => () => Vue.h('section', { class: 'preview-frame-fixture' }, slots.default?.()) })
+
 const loadPortraitHome = () => {
   const { descriptor } = parse(portraitHomeSource, { filename: portraitHomeUrl.pathname })
   const body = compileScript(descriptor, { id: 'portrait-home-followups', inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
+    .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = children.${name}`)
     .replace('export default', 'return')
-  return new Function('Vue', body)(Vue)
+  return new Function('Vue', 'children', body)(Vue, { HallLiveMapPreview: previewFixture })
 }
 
 const baseProps = overrides => ({
@@ -52,7 +56,11 @@ const quickActions = [
 describe('HallPortraitHome', () => {
   it('keeps first portrait entry outside the melon stage mount path', () => {
     expect(existsSync(portraitHomeUrl)).to.equal(true)
-    expect(hallSource).to.match(/<HallPortraitHome\s+v-if="!experienceReady \|\| experienceMode === 'portrait-command'"[\s\S]*?\/>\s*\n\s*<HallStage\s+v-else/)
+    expect(hallSource).to.include(`v-show="!experienceReady || experienceMode === 'portrait-command'"`)
+    expect(hallSource).to.include('v-if="stageMounted"')
+    expect(hallSource).to.include('<Teleport :to="stageTarget" :disabled="!stageTarget">')
+    expect(hallSource).to.include('const stageHasMounted = ref(false)')
+    expect(hallSource).to.include('watch([experienceReady, experienceMode, previewVisible, stageTarget], permitStageMount, { immediate: true })')
     expect(portraitHomeSource).not.to.include('juyitingGame')
     expect(portraitHomeSource).not.to.include('<canvas')
     expect(portraitHomeSource).not.to.include('melon')
@@ -81,7 +89,11 @@ describe('HallPortraitHome', () => {
     expect(portraitHomeSource).to.include('class="onboarding-link"')
     expect(portraitHomeSource).to.include("emit('open-onboarding', $event.currentTarget)")
     expect(stageSource).to.include('class="tool-action onboarding-replay"')
-    expect(stageSource).to.include("$emit('open-onboarding', $event.currentTarget)")
+    expect(stageSource).to.include('@click="emitOnboarding($event.currentTarget)"')
+    expect(stageSource).to.include('const emitOnboarding = target => {')
+    expect(stageSource).to.include('if (stageInputLocked.value) return false')
+    expect(stageSource).to.include("emit('open-onboarding', target)")
+    expect(stageSource).not.to.include("$emit('open-onboarding', $event.currentTarget)")
     expect(hallSource).to.include('@open-onboarding="emit(\'open-onboarding\', $event)"')
     expect(entrySource).to.include('<JuyiHall @open-onboarding="reopen" />')
     expect(entrySource).to.include(':return-focus-target="onboardingReturnFocusTarget"')
@@ -158,7 +170,7 @@ describe('HallPortraitHome', () => {
     expect(hallSource).to.include('@discuss-task="handlePortraitTaskDiscussion"')
     expect(portraitHomeSource).to.not.include('useHallData')
     expect(portraitHomeSource).to.not.include('useHallConversation')
-    expect(portraitHomeSource).to.not.include("ref(")
+    expect(portraitHomeSource).to.include('defineExpose({ livePreviewTarget })')
   })
 
 
@@ -194,11 +206,54 @@ describe('HallPortraitHome', () => {
 
 
   it('keeps the keyed shared dialog outside both orientation shells with full-session shielding', () => {
-    expect(hallSource).to.match(/<HallPortraitHome[\s\S]*?<HallStage\s+v-else[\s\S]*?<transition\s+name="panel"/)
+    expect(hallSource).to.match(/<HallPortraitHome[\s\S]*?<Teleport :to="stageTarget"[\s\S]*?<HallStage[\s\S]*?<transition\s+name="panel"/)
     expect(hallSource).to.include('v-if="activePanel" :key="panelSessionGeneration"')
     expect(hallSource).to.include(':data-panel-generation="panelSessionGeneration"')
     expect(hallSource).to.include(':inert="isPanelSessionActive ? \'\' : null"')
     expect(hallSource).to.include(':aria-hidden="isPanelSessionActive ? \'true\' : null"')
     expect(hallSource).to.not.include(':key="experienceMode"')
   })
+})
+
+
+it('reserves a stable live preview target without importing the engine', () => {
+  expect(portraitHomeSource).to.include('HallLiveMapPreview')
+  expect(portraitHomeSource).to.include('livePreviewTarget')
+  expect(portraitHomeSource).not.to.include('juyitingGame')
+})
+
+
+it('compiles the stable preview target CSS and mounts a concrete target node', () => {
+  const { descriptor } = parse(portraitHomeSource, { filename: portraitHomeUrl.pathname })
+  const style = descriptor.styles.find(block => block.scoped)
+  const compiled = compileStyle({ source: style.content, filename: portraitHomeUrl.pathname, id: 'portrait-preview-target', scoped: true })
+  expect(compiled.errors).to.deep.equal([])
+  const normalizedCss = compiled.code.replace(/\s+/g, '')
+  expect(normalizedCss).to.include('.portrait-live-preview-target[data-v-portrait-preview-target]')
+  expect(normalizedCss).to.include('display:flex')
+  expect(normalizedCss).to.include('width:100%')
+  expect(normalizedCss).to.include('height:100%')
+
+  const body = compileScript(descriptor, { id: 'portrait-preview-target', inlineTemplate: true }).content
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
+    .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = children.${name}`)
+    .replace('export default', 'return')
+  const domDescriptors = Object.fromEntries(['Element', 'SVGElement', 'Node'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]))
+  Object.defineProperty(globalThis, 'Element', { configurable: true, value: globalThis.window?.Element })
+  Object.defineProperty(globalThis, 'SVGElement', { configurable: true, value: globalThis.window?.SVGElement })
+  Object.defineProperty(globalThis, 'Node', { configurable: true, value: globalThis.window?.Node })
+  let wrapper
+  try {
+    const HallLiveMapPreview = Vue.defineComponent({ setup: (_props, { slots }) => () => Vue.h('section', { class: 'preview-frame-fixture' }, slots.default?.()) })
+    const PortraitHome = new Function('Vue', 'children', body)(Vue, { HallLiveMapPreview })
+    wrapper = mount(PortraitHome, {
+      attachTo: document.body,
+      props: { livePreviewEnabled: true, canStartAgentConversation: () => false, statusClass: () => '', taskStateClass: () => '', taskStatusText: () => '' }
+    })
+    const target = wrapper.get('.portrait-live-preview-target')
+    expect(target.element.parentElement?.classList.contains('preview-frame-fixture')).to.equal(true)
+  } finally {
+    wrapper?.unmount()
+    for (const [key, descriptor] of Object.entries(domDescriptors)) restoreDescriptor(globalThis, key, descriptor)
+  }
 })

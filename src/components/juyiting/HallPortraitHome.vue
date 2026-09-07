@@ -23,7 +23,9 @@
       <div><strong>{{ openTaskCount }}</strong><span>待办</span></div>
     </section>
 
-    <section class="portrait-scene" aria-label="聚义厅轻量实景窗口">
+    <section class="portrait-scene" aria-label="聚义厅实景窗口">
+      <HallLiveMapPreview v-if="livePreviewEnabled" :state="livePreviewState" :error-message="livePreviewError" :map-width="livePreviewMapWidth" :map-height="livePreviewMapHeight" :orientation-request-pending="orientationRequestPending" :orientation-hint="orientationHint" @request-landscape="emit('request-landscape')" @retry="emit('retry-live-preview')" @visibility-change="visible => emit('live-preview-visibility-change', visible)"><div ref="livePreviewTarget" class="portrait-live-preview-target"></div></HallLiveMapPreview>
+      <template v-else>
       <div class="scene-sky" aria-hidden="true"></div>
       <div class="scene-hall" aria-hidden="true"><span>聚义</span></div>
       <div class="scene-courtyard" aria-hidden="true"></div>
@@ -45,6 +47,7 @@
         {{ orientationRequestPending ? '正在请求横屏…' : '横屏看全景' }}
       </button>
       <p v-if="orientationHint" class="orientation-hint" role="status">{{ orientationHint }}</p>
+      </template>
     </section>
 
     <section class="portrait-section" aria-labelledby="portrait-shortcuts-title">
@@ -161,11 +164,17 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import HallLiveMapPreview from './HallLiveMapPreview.vue'
 
 const props = defineProps({
   agents: { type: Array, default: () => [] },
   canStartAgentConversation: { type: Function, required: true },
+  livePreviewEnabled: Boolean,
+  livePreviewError: { type: String, default: '' },
+  livePreviewMapHeight: { type: Number, default: 0 },
+  livePreviewMapWidth: { type: Number, default: 0 },
+  livePreviewState: { type: String, default: 'loading' },
   mapAgents: { type: Array, default: () => [] },
   orientationHint: { type: String, default: '' },
   orientationRequestPending: Boolean,
@@ -179,7 +188,10 @@ const props = defineProps({
   tasks: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['close-task-detail', 'discuss-task', 'open-task', 'open-onboarding', 'open-task-board', 'quick-action', 'refresh-hall', 'request-landscape', 'select-agent', 'start-agent-conversation'])
+const emit = defineEmits(['close-task-detail', 'discuss-task', 'open-task', 'open-onboarding', 'open-task-board', 'quick-action', 'refresh-hall', 'request-landscape', 'retry-live-preview', 'live-preview-visibility-change', 'select-agent', 'start-agent-conversation'])
+
+const livePreviewTarget = ref(null)
+defineExpose({ livePreviewTarget })
 
 const quickActions = Object.freeze([
   { key: 'agents', label: '点将册', icon: '将' },
@@ -205,6 +217,21 @@ const openTask = task => emit('open-task', task)
 </script>
 
 <style scoped>
+/* Stable Teleport destination: preview-frame → slot → target → Stage keeps a nonzero box. */
+.portrait-live-preview-target {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.portrait-live-preview-target > :deep(.hall-stage) {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
 .hall-portrait-home {
   display: grid;
   align-content: start;

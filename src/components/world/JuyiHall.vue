@@ -1,7 +1,13 @@
 <template>
   <div ref="hallRootRef" class="juyi-page" tabindex="-1" :style="hallViewportStyle" :class="{ 'is-panel-open': isPanelSessionActive, 'is-virtual-landscape': isVirtualLandscape, [`experience-${experienceMode}`]: true }">
     <HallPortraitHome
-      v-if="!experienceReady || experienceMode === 'portrait-command'"
+      ref="portraitHomeRef"
+      v-show="!experienceReady || experienceMode === 'portrait-command'"
+      :live-preview-enabled="true"
+      :live-preview-state="previewPresentationState"
+      :live-preview-error="previewSceneError"
+      :live-preview-map-width="previewSceneBounds.width"
+      :live-preview-map-height="previewSceneBounds.height"
       :agents="agents"
       :map-agents="mapAgents"
       :orientation-hint="orientationHint"
@@ -21,6 +27,8 @@
       @open-onboarding="emit('open-onboarding', $event)"
       @refresh-hall="refreshHall"
       @request-landscape="requestPortraitLandscape"
+      @retry-live-preview="retryLivePreview"
+      @live-preview-visibility-change="handlePreviewVisibility"
       @select-agent="handlePortraitAgentSelect"
       @start-agent-conversation="handleStartAgentConversation"
       @open-task="handlePortraitTaskOpen"
@@ -29,8 +37,14 @@
       @discuss-task="handlePortraitTaskDiscussion"
     />
 
+    <div ref="landscapeTargetRef" v-show="experienceMode === 'landscape-map'" class="hall-live-landscape-target"></div>
+    <Teleport :to="stageTarget" :disabled="!stageTarget">
     <HallStage
-      v-else
+      v-if="stageMounted"
+      ref="hallStageRef"
+      v-show="experienceReady"
+      :read-only-preview="experienceMode === 'portrait-command'"
+      :preview-visible="stageDrawVisible"
       :agent-bubbles="agentBubbles"
       :agent-key="agentKey"
       :agent-style="sceneAgentStyle"
@@ -74,6 +88,9 @@
       @simulation-ready="handleSimulationReady"
       @simulation-reset="resetSimulationLifecycle"
       @scene-mode-change="handleSceneModeChange"
+      @scene-state-change="handlePreviewSceneState"
+      @scene-error="handlePreviewSceneError"
+      @scene-bounds-change="handlePreviewSceneBounds"
       @toggle-sound="toggleHallSound"
     >
 
@@ -96,6 +113,7 @@
         </transition>
       </div>
     </HallStage>
+    </Teleport>
 
     <HallVoiceHud
       v-if="experienceMode === 'portrait-command' && voiceInteractionLocked && !activePanel"
@@ -327,6 +345,7 @@ import { useHallVoiceConversation } from '@/composables/juyiting/useHallVoiceCon
 import { createHallVoiceReplyCorrelation } from '@/composables/juyiting/hallVoiceReplyCorrelation'
 import { useHallData } from '@/composables/juyiting/useHallData'
 import { useHallLibrary } from '@/composables/juyiting/useHallLibrary'
+import { resolveLiveMapPreviewActivation } from '@/composables/juyiting/liveMapPreviewPolicy'
 import { useHallExperienceMode } from '@/composables/juyiting/useHallExperienceMode'
 import { capturePanelReturnTarget, focusHallPanel, isCurrentPanelGeneration, isSafePanelFocusTarget, resolvePanelReturnTarget, restorePanelFocus, trapPanelFocus, useHallPanels } from '@/composables/juyiting/useHallPanels'
 import { useHallScene } from '@/composables/juyiting/useHallScene'
@@ -423,6 +442,72 @@ const hallViewportStyle = computed(() => {
 const isCompactChat = computed(() => resolvedHallViewportHeight.value > 0 && resolvedHallViewportHeight.value <= 320)
 const { panelLayout } = useHallPanels({ experienceMode, isMobileCoarse })
 const hallRootRef = ref(null)
+const portraitHomeRef = ref(null)
+const landscapeTargetRef = ref(null)
+const hallStageRef = ref(null)
+const portraitPreviewVisible = ref(false)
+const documentPreviewVisible = ref(typeof document === 'undefined' || !document.hidden)
+// Only the active full-page panel overlay is known to cover the preview.
+// Voice/loading interaction locks remain independent from draw visibility.
+const previewFullyCovered = computed(() => activePanel.value === 'chat' && renderedPanel.value === 'chat')
+// Portrait observation gates only first mount. Draw policy is mode-independent:
+// an active landscape ignores a stale offscreen portrait observer, but document
+// hidden and the known full chat overlay still suppress draw in either mode.
+const previewVisible = computed(() => portraitPreviewVisible.value && documentPreviewVisible.value && !previewFullyCovered.value)
+const previewSceneState = ref('loading')
+const previewDrawActivation = computed(() => resolveLiveMapPreviewActivation({
+  documentHidden: !documentPreviewVisible.value,
+  landscapeActive: experienceMode.value === 'landscape-map',
+  overlayCovered: previewFullyCovered.value,
+  portraitOffscreen: !portraitPreviewVisible.value,
+  ready: previewSceneState.value === 'ready'
+}))
+const stageDrawVisible = computed(() => previewDrawActivation.value.shouldRender)
+const previewSceneError = ref('')
+const previewSceneBounds = ref({ width: 0, height: 0 })
+// The Stage is created only after a real landscape entry or observed portrait visibility,
+// then remains the sole scene owner until the Hall route unmounts.
+const stageHasMounted = ref(false)
+const stageTarget = computed(() => experienceMode.value === 'portrait-command'
+  ? portraitHomeRef.value?.livePreviewTarget || null
+  : landscapeTargetRef.value)
+const stageMounted = computed(() => stageHasMounted.value)
+const previewPresentationState = computed(() => (
+  previewSceneState.value === 'ready' ? previewDrawActivation.value.state : previewSceneState.value
+))
+const permitStageMount = () => {
+  if (stageTarget.value && experienceReady.value && (experienceMode.value === 'landscape-map' || previewVisible.value)) {
+    stageHasMounted.value = true
+  }
+}
+const handlePreviewVisibility = visible => {
+  portraitPreviewVisible.value = Boolean(visible)
+  permitStageMount()
+}
+const handleDocumentVisibility = () => {
+  documentPreviewVisible.value = typeof document === 'undefined' || !document.hidden
+}
+const handlePreviewSceneState = state => {
+  previewSceneState.value = state || 'loading'
+  if (state !== 'error') previewSceneError.value = ''
+}
+const handlePreviewSceneError = error => {
+  previewSceneState.value = 'error'
+  previewSceneError.value = error?.message || String(error || '')
+}
+const handlePreviewSceneBounds = bounds => {
+  previewSceneBounds.value = bounds || { width: 0, height: 0 }
+}
+const retryLivePreview = () => {
+  // A paused presentation retains a ready scene; do not turn it back into loading.
+  if (previewPresentationState.value !== 'paused') {
+    previewSceneState.value = 'loading'
+    previewSceneError.value = ''
+  }
+  void hallStageRef.value?.retryScene?.()
+}
+watch([experienceReady, experienceMode, previewVisible, stageTarget], permitStageMount, { immediate: true })
+
 const panelRef = ref(null)
 const panelTitleId = 'juyiting-floating-panel-title'
 let panelSessionOrigin = null
@@ -1289,11 +1374,15 @@ onMounted(async () => {
   globalStore.setShowMore(false)
   await nextTick()
   experienceReady.value = true
+  document.addEventListener?.('visibilitychange', handleDocumentVisibility)
+  handleDocumentVisibility()
+  permitStageMount()
   await refreshHall({ silent: true })
   startDialogueBubbles()
 })
 
 onUnmounted(() => {
+  document.removeEventListener?.('visibilitychange', handleDocumentVisibility)
   panelDisposed = true
   panelSessionGeneration.value += 1
   panelClosingGeneration.value = 0
@@ -1330,6 +1419,20 @@ onUnmounted(() => {
   overflow: hidden;
   background: #211812;
   color: #2f261c;
+}
+
+.hall-live-landscape-target {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.hall-live-landscape-target :deep(.hall-stage),
+:deep(.portrait-live-preview-target > .hall-stage) {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
 }
 
 .hall-stage {

@@ -473,3 +473,39 @@ describe('camera controller snapshot restore', () => {
     assert.ok(Number.isFinite(fallback.offsetY))
   })
 })
+
+
+it('contains non-zero world bounds and rejects hostile preview bounds', () => {
+  const fake = createAdapter({ width: 300, height: 300 }, { width: 1000, height: 1000 })
+  const controller = createCameraController(fake.adapter, { minZoom: 0.1, maxZoom: 3.3 }, true)
+  const preview = controller.applyPreviewContain({ x: 100, y: 50, width: 400, height: 100 })
+  assert.ok(preview)
+  assert.equal(controller.applyPreviewContain({ x: Infinity, y: 0, width: 1, height: 1 }), null)
+  const beforeHostile = controller.snapshot().transform
+  assert.equal(controller.applyPreviewContain({ x: 0, y: 0, width: Number.MAX_VALUE, height: Number.MIN_VALUE }), null)
+  assert.deepEqual(controller.snapshot().transform, beforeHostile)
+})
+
+
+it('maps non-zero contain corners and recomputes contain on resize', () => {
+  const fake = createAdapter({ width: 300, height: 300 }, { width: 2000, height: 2000 })
+  const controller = createCameraController(fake.adapter, { minZoom: 0.1, maxZoom: 3.3 }, true)
+  const transform = controller.applyPreviewContain({ x: 100, y: 50, width: 400, height: 100 })!
+  assert.deepEqual(screenToWorld({ x: 0, y: 112.5 }, transform, { width: 300, height: 300 }), { x: 100, y: 50 })
+  fake.setViewport({ width: 600, height: 300 })
+  const resized = controller.resize({ width: 600, height: 300 }, 'orientation')
+  assert.equal(resized.zoom, 1.5)
+})
+
+
+  it('restores the saved preview minimum across a landscape preset change', () => {
+    const fake = createAdapter({ width: 390, height: 720 }, { width: 5000, height: 5000 })
+    const controller = createCameraController(fake.adapter, { minZoom: 0.5, maxZoom: 3.3 }, true)
+    controller.restore({ presetKey: 'desktop', transform: { zoom: 0.84, offsetX: 0, offsetY: 0 } }, { width: 390, height: 720 })
+    fake.setViewport({ width: 720, height: 390 })
+    controller.resize({ width: 720, height: 390 }, 'orientation')
+    assert.ok(controller.snapshot().transform.zoom < VIEW_PRESETS.mobileLandscape.zoom)
+    controller.applyPreviewContain({ x: 0, y: 0, width: 1664, height: 928 })
+    const restored = controller.clearPreviewContain()
+    closeTo(restored.zoom, 0.84)
+  })
