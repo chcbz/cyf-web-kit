@@ -1885,6 +1885,10 @@ button.hall-room {
 .panel-overlay {
   position: absolute;
   inset: 0;
+  top: 0;
+  bottom: auto;
+  height: min(100%, var(--hall-visual-height, 100%));
+  max-height: 100%;
   z-index: 20;
   display: flex;
   align-items: center;
