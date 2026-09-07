@@ -4,6 +4,7 @@ import { compileScript, parse } from '@vue/compiler-sfc'
 import { mount } from '@vue/test-utils'
 import * as Vue from 'vue'
 import { resolveLiveMapPreviewActivation } from '../src/composables/juyiting/liveMapPreviewPolicy.js'
+import { JuyitingGame } from '../src/game/JuyitingGame.js'
 
 global.Element = global.window?.Element
 global.SVGElement = global.window?.SVGElement
@@ -409,10 +410,19 @@ describe('live map preview orientation target transaction', () => {
       await wrapper.setProps({ experienceMode: 'landscape-map', readOnlyPreview: false }); await pump()
       const lockCountBeforeReverse = f.calls.locks.length
       await wrapper.setProps({ experienceMode: 'portrait-command', readOnlyPreview: true })
-      pendingCommit.resolve(undefined); await flush(); await pump()
+      pendingCommit.resolve(false); await flush(); await pump()
       expect(targets).to.deep.equal(['agent-1'])
       expect(f.calls.destroy).to.equal(0)
       expect(f.calls.locks.slice(lockCountBeforeReverse)).not.to.deep.include([false, 'preview'])
+
+      pendingCommit = deferred()
+      await wrapper.setProps({ experienceMode: 'landscape-map', readOnlyPreview: false }); await pump()
+      const lockCountBeforeUndefined = f.calls.locks.length
+      await wrapper.setProps({ experienceMode: 'portrait-command', readOnlyPreview: true })
+      pendingCommit.resolve(undefined); await flush(); await pump()
+      expect(targets).to.deep.equal(['agent-1'])
+      expect(f.calls.destroy).to.equal(0)
+      expect(f.calls.locks.slice(lockCountBeforeUndefined)).not.to.deep.include([false, 'preview'])
 
       pendingCommit = deferred()
       await wrapper.setProps({ experienceMode: 'landscape-map', readOnlyPreview: false, landscapeEntryTarget: entry(3) })
@@ -426,6 +436,16 @@ describe('live map preview orientation target transaction', () => {
       expect(targets).to.deep.equal(['agent-1'])
       expect(f.calls.destroy).to.equal(0)
       expect(f.calls.locks.slice(lockCountBeforeReject)).not.to.deep.include([false, 'preview'])
+
+      // A receipt from the current transition is different: false remains a
+      // failed viewport commit and must not release the presentation barrier.
+      pendingCommit = deferred()
+      await wrapper.setProps({ experienceMode: 'landscape-map', readOnlyPreview: false, landscapeEntryTarget: entry(4) }); await pump()
+      const lockCountBeforeCurrentFalse = f.calls.locks.length
+      pendingCommit.resolve(false); await flush(); await pump()
+      expect(wrapper.emitted('scene-error')).to.have.length(1)
+      expect(f.calls.destroy).to.equal(1)
+      expect(f.calls.locks.slice(lockCountBeforeCurrentFalse)).not.to.deep.include([false, 'preview'])
     } finally {
       wrapper?.unmount()
       frames.clear()
@@ -433,5 +453,39 @@ describe('live map preview orientation target transaction', () => {
       restoreDescriptor(window, 'cancelAnimationFrame', originalCancel)
       restoreDescriptor(window, 'ResizeObserver', originalResize)
     }
+  })
+})
+
+
+describe('live map preview Stage viewport receipts', () => {
+  it('admits a real idempotent JuyitingGame receipt without destroying Stage', async () => {
+    const f = fixture(); const Stage = loadStage(f.game); const real = new JuyitingGame()
+    const raf = Object.getOwnPropertyDescriptor(window, 'requestAnimationFrame'); const cancel = Object.getOwnPropertyDescriptor(window, 'cancelAnimationFrame')
+    const frames = new Map(); let next = 0; let wrapper
+    const pump = async () => { for (let i = 0; i < 16; i++) { await flush(); const queued = [...frames.entries()]; if (!queued.length) continue; frames.clear(); queued.forEach(([, cb]) => cb(i * 16)) } }
+    try {
+      Object.defineProperty(window, 'requestAnimationFrame', { configurable: true, value: cb => { const id = ++next; frames.set(id, cb); return id } })
+      Object.defineProperty(window, 'cancelAnimationFrame', { configurable: true, value: id => frames.delete(id) })
+      const rect = { left: 0, top: 0, width: 390, height: 720, right: 390, bottom: 720 }
+      const canvas = { style: { setProperty: () => {} }, getBoundingClientRect: () => ({ ...rect }) }
+      real._mountToken = 1; real._isCurrentMount = token => token === real._mountToken
+      real._container = { getBoundingClientRect: () => ({ ...rect }) }; real._canvas = canvas
+      real._me = { game: { viewport: { width: 1664, height: 928 } } }; real._hallScene = { resizeViewport: () => ({ committed: true }) }; real._markSceneDebugDirty = () => {}
+      // This is the exact stable geometry that a Stage exit requests below.
+      // Keeping it committed routes the real Game through its explicit live
+      // idempotent-success branch instead of a fixture-shaped truthy result.
+      real._committedViewportGeometrySignature = '390:720:1664:928'
+      const receipts = []
+      const commitViewport = real.commitViewport.bind(real)
+      f.game.commitViewport = change => commitViewport(change).then(receipt => { receipts.push(receipt); return receipt })
+      wrapper = mount(Stage, { attachTo: document.body, props, global: { stubs: { 'var-icon': true } } })
+      wrapper.get('.melon-layer').element.getBoundingClientRect = () => ({ ...rect })
+      await flush(); f.handlers.onReady(); await pump()
+      const receiptsBeforeExit = receipts.length
+      await wrapper.setProps({ experienceMode: 'landscape-map', readOnlyPreview: false }); await pump()
+      expect(receipts.slice(receiptsBeforeExit)).to.deep.equal([true])
+      expect(wrapper.emitted('simulation-ready')).to.have.length(1)
+      expect(f.calls.destroy).to.equal(0)
+    } finally { wrapper?.unmount(); frames.clear(); restoreDescriptor(window, 'requestAnimationFrame', raf); restoreDescriptor(window, 'cancelAnimationFrame', cancel) }
   })
 })
