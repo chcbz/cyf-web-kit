@@ -138,6 +138,8 @@ onBeforeUnmount(() => {
 
 .preview-map-slot {
   position: absolute;
+  z-index: 0;
+  isolation: isolate;
   inset: 0;
   display: grid;
   place-items: center;
@@ -150,7 +152,7 @@ onBeforeUnmount(() => {
 
 .preview-status-layer {
   position: absolute;
-  z-index: 1;
+  z-index: 2;
   inset: 0;
   display: grid;
   place-content: center;

@@ -138,6 +138,11 @@ describe('HallLiveMapPreview', () => {
     expect(compiledStyle.code).to.include('.preview-map-slot[data-v-live-map-preview-test]')
     const readonlyRules = compiledStyle.code.match(/\.preview-map-slot[^}]*\{[^}]*pointer-events:\s*none/g) || []
     expect(readonlyRules).to.have.length.at.least(2)
+    // The Teleported Stage owns high-z Canvas descendants; keep that subtree in
+    // a low isolated context so the authoritative outer status/retry layer wins.
+    const normalizedCss = compiledStyle.code.replace(/\s+/g, ' ')
+    expect(normalizedCss).to.match(/\.preview-map-slot[^}]*z-index:\s*0[^}]*isolation:\s*isolate/)
+    expect(normalizedCss).to.match(/\.preview-status-layer[^}]*z-index:\s*2/)
     await wrapper.setProps({ mapHeight: Number.MIN_VALUE, mapWidth: Number.MAX_VALUE, state: 'paused' })
     expect(wrapper.get('.preview-frame').attributes('style')).to.include('aspect-ratio: 1.793103448275862')
     await wrapper.setProps({ mapHeight: Number.MAX_VALUE, mapWidth: Number.MIN_VALUE })

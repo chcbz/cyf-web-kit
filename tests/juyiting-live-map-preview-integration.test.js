@@ -23,7 +23,7 @@ const flush = async () => { for (let i = 0; i < 4; i++) { await Promise.resolve(
 const restoreDescriptor = (target, key, descriptor) => { if (descriptor) Object.defineProperty(target, key, descriptor); else delete target[key] }
 const props = { agentBubbles: {}, agentKey: () => '', agentStyle: () => ({}), portraitName: () => '', portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '', statusClass: () => '', statusText: () => '', experienceMode: 'portrait-command', readOnlyPreview: true, previewVisible: true }
 const fixture = () => {
-  const calls = { destroy: 0, draw: [], locks: [], phases: [], ready: 0, reset: 0, targets: 0 }
+  const calls = { destroy: 0, draw: [], locks: [], phases: [], ready: 0, reset: 0, targets: 0, zoom: 0, returns: 0 }
   let handlers
   const game = {
     beginMapGeneration: () => 1, getSceneBounds: () => ({ x: 0, y: 0, width: 1664, height: 928 }),
@@ -33,6 +33,7 @@ const fixture = () => {
     getMovementRuntime: () => ({}), enqueueMovementCommands: () => [], cancelMovement: () => {},
     commitViewport: async () => ({}), resizeViewport: () => ({}), syncAgents: () => {}, syncHotspots: () => {}, setSelectedAgent: () => {},
     getCameraSnapshot: () => null, setVirtualViewport: () => {}, getMapGeneration: () => 1, captureResumeSnapshot: () => null,
+    zoomBy: () => { calls.zoom += 1 }, resetToMainHall: () => { calls.returns += 1 },
     setInteractionLocked: (...args) => calls.locks.push(args), focusAgent: () => { calls.targets++; return true }, focusHotspot: () => false
   }
   return { calls, game, get handlers () { return handlers } }
@@ -132,8 +133,9 @@ const makeHallPageMocks = ({ mode, counters, voiceLocked = Vue.ref(false) }) => 
   const HallStage = Vue.defineComponent({
     props: { readOnlyPreview: Boolean, previewVisible: Boolean },
     emits: ['scene-state-change', 'scene-bounds-change', 'scene-error'],
-    setup (props, { attrs, expose }) {
+    setup (props, { attrs, emit, expose }) {
       counters.stageMounts += 1
+      Vue.onMounted(() => emit('scene-state-change', 'ready'))
       expose({ retryScene: () => { counters.retries += 1 } })
       return () => Vue.h('section', { ...attrs, class: 'preview-stage', 'data-preview': String(props.readOnlyPreview), 'data-visible': String(props.previewVisible) })
     }
@@ -150,7 +152,13 @@ const makeHallPageMocks = ({ mode, counters, voiceLocked = Vue.ref(false) }) => 
     mapAgents: list, personaCatalog: list, recommendedAgents: list, setAgentFilter: noop, setTaskStatusFilter: noop,
     taskAbilityFilter: text, taskAbilityOptions: list, taskKeyword: text, tasks: list, taskStatusCount: Vue.ref({}), taskStatusFilter: text, unbindPersona: asyncNoop, visibleAgents: list
   }
+  const resolveLiveMapPreviewActivation = ({ documentHidden, landscapeActive, overlayCovered, portraitOffscreen, ready }) => {
+    if (!ready) return { shouldRender: false, state: 'loading' }
+    if (documentHidden || overlayCovered || portraitOffscreen && !landscapeActive) return { shouldRender: false, state: 'paused' }
+    return { shouldRender: true, state: 'ready' }
+  }
   return {
+    resolveLiveMapPreviewActivation,
     env: {}, agentApi: {}, chatApi: {}, juyitingGame: {}, log: { warn: noop }, roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
     useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({}),
     useHallData: () => data, useHallBackendSceneState: () => ({ start: asyncNoop, stop: noop, dispose: noop, reportPhase: noop }),
@@ -268,6 +276,21 @@ describe('live map preview Hall page bridge', () => {
       expect(counters.stageMounts).to.equal(1)
       expect(document.body.querySelector('.preview-stage')?.parentElement?.classList.contains('hall-live-landscape-target')).to.equal(true)
       expect(document.body.querySelector('.preview-stage')?.dataset.preview).to.equal('false')
+      portrait.vm.$emit('live-preview-visibility-change', false)
+      await flush(); await pump()
+      expect(document.body.querySelector('.preview-stage')?.dataset.visible).to.equal('true')
+      hidden = true; document.dispatchEvent(new window.Event('visibilitychange'))
+      await flush(); await pump()
+      expect(document.body.querySelector('.preview-stage')?.dataset.visible).to.equal('false')
+      hidden = false; document.dispatchEvent(new window.Event('visibilitychange'))
+      await flush(); await pump()
+      expect(document.body.querySelector('.preview-stage')?.dataset.visible).to.equal('true')
+      await portrait.find('.portrait-quick-discussion').trigger('click')
+      await flush(); await pump()
+      expect(document.body.querySelector('.preview-stage')?.dataset.visible).to.equal('false')
+      await wrapper.find('.panel-close').trigger('click')
+      await flush(); await pump()
+      expect(document.body.querySelector('.preview-stage')?.dataset.visible).to.equal('true')
       mode.value = 'portrait-command'; await flush(); await pump()
       expect(counters.stageMounts).to.equal(1)
       portrait.vm.$emit('retry-live-preview'); await flush(); await pump()
@@ -362,12 +385,22 @@ describe('live map preview orientation target transaction', () => {
       wrapper.get('.melon-layer').element.getBoundingClientRect = () => ({ width: 390, height: 720, top: 0, left: 0, right: 390, bottom: 720 })
       await flush(); f.handlers.onReady(); await pump()
       pendingCommit = deferred()
-      await wrapper.setProps({ experienceMode: 'landscape-map', readOnlyPreview: false }); await pump()
+      await wrapper.setProps({ experienceMode: 'landscape-map', readOnlyPreview: false }); await flush()
+      // Post-Teleport settlement is a Stage-owned DOM/handler barrier, not just
+      // an engine lock: tools, focus, keyboard zoom and return all remain inert.
+      expect(wrapper.get('.hall-board').attributes('tabindex')).to.equal('-1')
+      expect(wrapper.get('.refresh-action').attributes('disabled')).to.equal('')
+      await wrapper.get('.refresh-action').trigger('click')
+      await wrapper.get('.hall-board').trigger('keydown', { key: '+' })
+      expect(wrapper.emitted('refresh-hall')).to.equal(undefined)
+      expect(f.calls.zoom).to.equal(0)
+      await pump()
       expect(targets).to.deep.equal([])
       expect(f.calls.locks).to.deep.include([true, 'preview-transition'])
       expect(f.calls.locks).not.to.deep.include([false, 'preview'])
       pendingCommit.resolve({ committed: true }); await flush(); await pump()
       expect(targets).to.deep.equal(['agent-1'])
+      expect(wrapper.get('.hall-board').attributes('tabindex')).to.equal('0')
       expect(f.calls.locks).to.deep.include([false, 'preview'])
       expect(commits.length).to.be.greaterThan(1)
 

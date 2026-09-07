@@ -42,7 +42,7 @@
       ref="hallStageRef"
       v-show="experienceReady"
       :read-only-preview="experienceMode === 'portrait-command'"
-      :preview-visible="previewVisible"
+      :preview-visible="stageDrawVisible"
       :agent-bubbles="agentBubbles"
       :agent-key="agentKey"
       :agent-style="sceneAgentStyle"
@@ -342,6 +342,7 @@ import { useHallVoiceConversation } from '@/composables/juyiting/useHallVoiceCon
 import { createHallVoiceReplyCorrelation } from '@/composables/juyiting/hallVoiceReplyCorrelation'
 import { useHallData } from '@/composables/juyiting/useHallData'
 import { useHallLibrary } from '@/composables/juyiting/useHallLibrary'
+import { resolveLiveMapPreviewActivation } from '@/composables/juyiting/liveMapPreviewPolicy'
 import { useHallExperienceMode } from '@/composables/juyiting/useHallExperienceMode'
 import { capturePanelReturnTarget, focusHallPanel, isCurrentPanelGeneration, isSafePanelFocusTarget, resolvePanelReturnTarget, restorePanelFocus, trapPanelFocus, useHallPanels } from '@/composables/juyiting/useHallPanels'
 import { useHallScene } from '@/composables/juyiting/useHallScene'
@@ -446,8 +447,19 @@ const documentPreviewVisible = ref(typeof document === 'undefined' || !document.
 // Only the active full-page panel overlay is known to cover the preview.
 // Voice/loading interaction locks remain independent from draw visibility.
 const previewFullyCovered = computed(() => activePanel.value === 'chat' && renderedPanel.value === 'chat')
+// Portrait observation gates only first mount. Draw policy is mode-independent:
+// an active landscape ignores a stale offscreen portrait observer, but document
+// hidden and the known full chat overlay still suppress draw in either mode.
 const previewVisible = computed(() => portraitPreviewVisible.value && documentPreviewVisible.value && !previewFullyCovered.value)
 const previewSceneState = ref('loading')
+const previewDrawActivation = computed(() => resolveLiveMapPreviewActivation({
+  documentHidden: !documentPreviewVisible.value,
+  landscapeActive: experienceMode.value === 'landscape-map',
+  overlayCovered: previewFullyCovered.value,
+  portraitOffscreen: !portraitPreviewVisible.value,
+  ready: previewSceneState.value === 'ready'
+}))
+const stageDrawVisible = computed(() => previewDrawActivation.value.shouldRender)
 const previewSceneError = ref('')
 const previewSceneBounds = ref({ width: 0, height: 0 })
 // The Stage is created only after a real landscape entry or observed portrait visibility,
@@ -458,7 +470,7 @@ const stageTarget = computed(() => experienceMode.value === 'portrait-command'
   : landscapeTargetRef.value)
 const stageMounted = computed(() => stageHasMounted.value)
 const previewPresentationState = computed(() => (
-  previewSceneState.value === 'ready' && !previewVisible.value ? 'paused' : previewSceneState.value
+  previewSceneState.value === 'ready' ? previewDrawActivation.value.state : previewSceneState.value
 ))
 const permitStageMount = () => {
   if (stageTarget.value && experienceReady.value && (experienceMode.value === 'landscape-map' || previewVisible.value)) {

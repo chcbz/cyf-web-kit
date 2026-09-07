@@ -892,8 +892,10 @@ export class JuyitingGame {
       const original = game.draw
       policy.original = original
       policy.wrapper = function (...args) {
+        // Visibility is an all-mode draw gate. `enabled` only adds the 20fps
+        // preview budget; normal landscape remains unthrottled when visible.
+        if (!policy.visible) return undefined
         if (policy.enabled) {
-          if (!policy.visible) return undefined
           const now = globalThis.performance?.now?.() ?? Date.now()
           if (Number.isFinite(now) && now - policy.lastDrawAt < 50) return undefined
           policy.lastDrawAt = Number.isFinite(now) ? now : policy.lastDrawAt
@@ -1241,8 +1243,10 @@ export class JuyitingGame {
     const restore = this._pendingViewportRestore
     this._pendingViewportChange = null
     if (geometry.signature === this._committedViewportGeometrySignature && !restore) {
-      this._settleViewportCommitWaiters('resolve', undefined)
-      return undefined
+      // A live repeated geometry is a successful no-op. Keep undefined reserved
+      // for cancelled/stale mount waiters so Stage can distinguish the outcomes.
+      this._settleViewportCommitWaiters('resolve', true)
+      return true
     }
 
     this._applyCanvasCover(geometry)
