@@ -363,7 +363,8 @@ const mountArchiveReader = (api, options = {}) => {
     attachTo: document.body,
     props: {
       disableTeleport: options.disableTeleport ?? true,
-      initialView: options.initialView ?? 'reader'
+      initialView: options.initialView ?? 'reader',
+      virtualLandscape: options.virtualLandscape ?? false
     }
   })
   wrapper.readerState = readerState
@@ -575,8 +576,16 @@ describe('archive reader contract behavior', () => {
     await waitFor(() => wrapper.find('.archive-reader-fullscreen').exists())
     await waitFor(() => wrapper.findAll('.reader-paragraph').length === 2)
     expect(wrapper.find('.reader-catalog').exists()).to.equal(false)
+    expect(wrapper.get('.reader-header').element.firstElementChild.classList.contains('reader-exit')).to.equal(true)
 
-    await wrapper.findAll('.reader-header-button')[0].trigger('click')
+    const readerSource = readFileSync(new URL('../src/components/juyiting/archive/ArchiveReader.vue', import.meta.url), 'utf8')
+    const librarySource = readFileSync(new URL('../src/components/juyiting/LibraryPanel.vue', import.meta.url), 'utf8')
+    expect(readerSource).to.match(/\.archive-shelf\s*\{[\s\S]*?overflow:\s*auto;/)
+    expect(readerSource).to.match(/@media \(max-height: 540px\) and \(orientation: landscape\)[\s\S]*?grid-template-columns: minmax\(0, 1fr\) minmax\(190px, 32%\)/)
+    expect(readerSource).to.match(/\.reader-catalog,\s*\n\s*\.reader-content,\s*\n\s*\.reader-notes \{[\s\S]*?overflow:\s*auto;/)
+    expect(librarySource).to.match(/\.library-panel\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?overflow:\s*hidden;/)
+
+    await wrapper.get('.reader-header-actions .reader-header-button').trigger('click')
     expect(wrapper.find('.reader-catalog').exists()).to.equal(true)
     const progressReads = api.calls.filter(call => call.path.startsWith('/me/progress/')).length
     await wrapper.get('.reader-exit').trigger('click')
@@ -586,6 +595,26 @@ describe('archive reader contract behavior', () => {
     await wrapper.get('.archive-book-open').trigger('click')
     await waitFor(() => wrapper.find('.archive-reader-fullscreen').exists())
     expect(api.calls.filter(call => call.path.startsWith('/me/progress/'))).to.have.length(progressReads)
+    wrapper.unmount()
+  })
+
+  it('mounts the virtual-landscape shelf and rotated fullscreen reader without relying on physical orientation media', async () => {
+    const api = makeApi()
+    const wrapper = mountArchiveReader(api, { initialView: 'catalog', virtualLandscape: true })
+    await waitFor(() => !wrapper.readerState.loading.value && wrapper.find('.archive-book-open').exists())
+    expect(wrapper.get('.archive-reader').classes()).to.include('is-virtual-landscape-reader')
+
+    await wrapper.get('.archive-book-open').trigger('click')
+    await waitFor(() => wrapper.find('.archive-reader-fullscreen').exists())
+    expect(wrapper.get('.archive-reader-fullscreen').classes()).to.include('is-virtual-landscape-reader')
+
+    const readerSource = readFileSync(new URL('../src/components/juyiting/archive/ArchiveReader.vue', import.meta.url), 'utf8')
+    const librarySource = readFileSync(new URL('../src/components/juyiting/LibraryPanel.vue', import.meta.url), 'utf8')
+    const hallSource = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+    expect(readerSource).to.match(/\.archive-reader-fullscreen\.is-virtual-landscape-reader\s*\{[\s\S]*?width:\s*100dvh;[\s\S]*?height:\s*100dvw;[\s\S]*?rotate\(90deg\)/)
+    expect(readerSource).to.match(/\.archive-reader-fullscreen\.is-virtual-landscape-reader \.reader-layout,[\s\S]*?grid-template-columns: minmax\(0, 1fr\) minmax\(190px, 32%\)/)
+    expect(librarySource).to.include(':virtual-landscape="virtualLandscape"')
+    expect(hallSource).to.include(':virtual-landscape="isVirtualLandscape"')
     wrapper.unmount()
   })
 
@@ -644,7 +673,7 @@ describe('archive reader contract behavior', () => {
     await wrapper.get('.archive-book-open').trigger('click')
     await waitFor(() => wrapper.readerState.chapter.value?.blockId === preface.blockId)
 
-    await wrapper.findAll('.reader-header-button')[0].trigger('click')
+    await wrapper.get('.reader-header-actions .reader-header-button').trigger('click')
     const delayedButton = wrapper.findAll('.reader-catalog button')
       .find(button => button.text().includes('第81回'))
     await delayedButton.trigger('click')
@@ -776,7 +805,7 @@ describe('archive reader contract behavior', () => {
 
     notesByBlock[chapterEightyOne.blockId][0].text = '服务端重载长段手札'
     const noteGetsBeforeReload = api.calls.filter(call => call.path === '/me/notes').length
-    await wrapper.findAll('.reader-header-button')[0].trigger('click')
+    await wrapper.get('.reader-header-actions .reader-header-button').trigger('click')
     const chapterButton = wrapper.findAll('.reader-catalog button')
       .find(button => button.text().includes('第81回'))
     await chapterButton.trigger('click')

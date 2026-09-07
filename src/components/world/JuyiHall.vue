@@ -9,6 +9,7 @@
       :refreshing="hallRefreshing"
       :selected-agent="selectedAgent"
       :selected-task="selectedTask"
+      :can-start-agent-conversation="canStartAgentConversation"
       :task-detail-open="portraitTaskDetailOpen"
       :status-class="statusClass"
       :task-state-class="taskStateClass"
@@ -21,6 +22,7 @@
       @refresh-hall="refreshHall"
       @request-landscape="requestPortraitLandscape"
       @select-agent="handlePortraitAgentSelect"
+      @start-agent-conversation="handleStartAgentConversation"
       @open-task="handlePortraitTaskOpen"
       @close-task-detail="closePortraitTaskDetail"
       @open-task-board="handlePortraitTaskBoard"
@@ -122,15 +124,6 @@
           @click.stop
         >
           <div class="panel-title">
-            <span :id="panelTitleId">{{ activePanelTitle }}</span>
-            <button
-              v-if="taskWorkspaceEnabled && renderedPanel === 'tasks' && taskWorkspaceSubject"
-              class="panel-workspace-link"
-              type="button"
-              @click="openTaskWorkspace"
-            >
-              协作工作台
-            </button>
             <button
               class="panel-close"
               type="button"
@@ -139,6 +132,15 @@
               @click="closePanel"
             >
               <var-icon name="close-circle-outline" />
+            </button>
+            <span :id="panelTitleId">{{ activePanelTitle }}</span>
+            <button
+              v-if="taskWorkspaceEnabled && renderedPanel === 'tasks' && taskWorkspaceSubject"
+              class="panel-workspace-link"
+              type="button"
+              @click="openTaskWorkspace"
+            >
+              协作工作台
             </button>
           </div>
 
@@ -231,7 +233,7 @@
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
             @clear-target="handleClearChatTarget"
-            @load-messages="loadHallMessages(conversationId)"
+            @load-messages="loadHallMessages({ force: true })"
             @mention-agent="handleMentionAgent"
             @new-conversation="handleNewHallConversation"
             @send-message="handleSendHallMessage"
@@ -257,7 +259,7 @@
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
             @clear-target="handleClearChatTarget"
-            @load-messages="loadHallMessages(conversationId)"
+            @load-messages="loadHallMessages({ force: true })"
             @mention-agent="handleMentionAgent"
             @new-conversation="handleNewHallConversation"
             @send-message="handleSendHallMessage"
@@ -283,7 +285,7 @@
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
             @clear-target="handleClearChatTarget"
-            @load-messages="loadHallMessages(conversationId)"
+            @load-messages="loadHallMessages({ force: true })"
             @mention-agent="handleMentionAgent"
             @new-conversation="handleNewHallConversation"
             @send-message="handleSendHallMessage"
@@ -298,6 +300,7 @@
             :has-searched="libraryHasSearched"
             :loading="libraryLoading"
             :results="libraryResults"
+            :virtual-landscape="isVirtualLandscape"
             @cite-library="citeLibraryItem"
             @search-library="searchLibrary"
           />
@@ -1215,11 +1218,28 @@ const handleClearChatTarget = () => {
   }
 }
 
-const handleStartAgentConversation = (agent) => {
-  if (!agent) return
-  if (!canStartAgentConversation(agent)) {
-    showToast(agent.systemAgent ? '宋江坐镇公议' : '只可与自家好汉密议')
-    return
+const exactAgentId = value => (
+  typeof value === 'string' && value.length > 0 && value.trim() === value
+    ? value
+    : ''
+)
+
+const resolvePermittedConversationAgent = candidate => {
+  const agentId = exactAgentId(candidate?.agentId)
+  if (!agentId) return null
+  return agents.value.find(agent => (
+    agent?.agentId === agentId &&
+    agent.boundToMe === true &&
+    agent.canOperate !== false &&
+    !agent.systemAgent
+  )) || null
+}
+
+const handleStartAgentConversation = (candidate) => {
+  const agent = resolvePermittedConversationAgent(candidate)
+  if (!agent) {
+    showToast('只可与自家好汉密议')
+    return false
   }
   taskWorkspaceBinding.selectExplicitActor(agent)
   playAgentSelect()
@@ -1229,9 +1249,10 @@ const handleStartAgentConversation = (agent) => {
   insertAgentMention(agent, '请报眼下动静、可领何榜、还需哪路照应。')
   openPanel('chat')
   showToast(`正与 ${portraitShortName(agent)} 密议`)
+  return true
 }
 
-const canStartAgentConversation = (agent) => Boolean(agent?.boundToMe && !agent?.systemAgent && agent?.canOperate !== false)
+const canStartAgentConversation = agent => Boolean(resolvePermittedConversationAgent(agent))
 
 const handleBindPersona = async (persona, mode = 'local') => {
   try {
@@ -1900,11 +1921,26 @@ button.hall-room {
   padding: 0;
 }
 
-/* 厅前议事 is an immersive workspace, not an inset drawer. */
-.floating-panel.panel-chat,
-.floating-panel.panel-chat.layout-center-modal,
-.floating-panel.panel-chat.layout-right-drawer,
-.floating-panel.panel-chat.layout-bottom-drawer {
+.experience-landscape-map .panel-overlay.is-chat-overlay {
+  align-items: stretch;
+  justify-content: flex-end;
+}
+
+.experience-landscape-map .floating-panel.panel-chat,
+.experience-landscape-map .floating-panel.panel-chat.layout-center-modal,
+.experience-landscape-map .floating-panel.panel-chat.layout-right-drawer,
+.experience-landscape-map .floating-panel.panel-chat.layout-bottom-drawer {
+  width: 50%;
+  max-width: 50%;
+  height: 100%;
+  max-height: 100%;
+  border-radius: 8px 0 0 8px;
+}
+
+.experience-portrait-command .floating-panel.panel-chat,
+.experience-portrait-command .floating-panel.panel-chat.layout-center-modal,
+.experience-portrait-command .floating-panel.panel-chat.layout-right-drawer,
+.experience-portrait-command .floating-panel.panel-chat.layout-bottom-drawer {
   width: 100%;
   max-width: 100%;
   height: 100%;
@@ -2004,6 +2040,7 @@ button.hall-room {
 
 .panel-title > span {
   min-width: 0;
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

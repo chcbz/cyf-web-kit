@@ -70,6 +70,7 @@ const createHallMocks = ({ SelectedAgentCard, counters }) => {
   const list = Vue.ref([])
   const text = Vue.ref('')
   const selected = { agentId: 'wuyong', name: '吴用', personaName: '智多星', status: 'idle', boundToMe: true, canOperate: true, systemAgent: false }
+  counters.rosterAgent = selected
   const HallStage = Vue.defineComponent({ inheritAttrs: false, setup: (_props, { attrs, slots }) => () => Vue.h('section', { ...attrs, class: 'hall-board' }, slots.default?.()) })
   const EmptyPanel = Vue.defineComponent({ setup: () => () => Vue.h('section') })
   const hallData = {
@@ -198,7 +199,8 @@ describe('SelectedAgentCard interaction contract', () => {
     const floatingPanelRule = cssRule(hallSource, '.floating-panel')
     const chatOverlayRule = cssRule(hallSource, '.panel-overlay.is-chat-overlay')
     const compactTitleRule = cssRule(hallSource, '.panel-overlay.is-compact-chat-overlay .panel-title')
-    const fullChatRule = hallSource.match(/\.floating-panel\.panel-chat,[\s\S]*?\n}/)?.[0] || ''
+    const landscapeChatRule = hallSource.match(/\.experience-landscape-map \.floating-panel\.panel-chat,[\s\S]*?\n}/)?.[0] || ''
+    const portraitChatRule = hallSource.match(/\.experience-portrait-command \.floating-panel\.panel-chat,[\s\S]*?\n}/)?.[0] || ''
     const panelCloseRule = cssRule(hallSource, '.panel-close')
     const taskCardRule = cssRule(bountySource, '.task-card')
     const taskDetailRule = cssRule(bountySource, '.task-detail-card')
@@ -217,8 +219,12 @@ describe('SelectedAgentCard interaction contract', () => {
     expect(chatOverlayRule).to.include('height: min(100%, var(--hall-visual-height, 100%))')
     expect(chatOverlayRule).to.include('align-items: flex-start')
     expect(chatOverlayRule).to.include('padding: 0')
-    expect(fullChatRule).to.include('width: 100%')
-    expect(fullChatRule).to.include('height: 100%')
+    expect(landscapeChatRule).to.include('width: 50%')
+    expect(landscapeChatRule).to.include('max-width: 50%')
+    expect(landscapeChatRule).to.include('height: 100%')
+    expect(portraitChatRule).to.include('width: 100%')
+    expect(portraitChatRule).to.include('max-width: 100%')
+    expect(hallSource).to.include("'is-virtual-landscape': isVirtualLandscape")
     expect(compactTitleRule).to.include('padding: 6px 10px')
     expect(hallSource).to.include('.panel-overlay.is-compact-chat-overlay :deep(.discussion-brief)')
     expect(hallSource).to.include('display: none')
@@ -228,6 +234,7 @@ describe('SelectedAgentCard interaction contract', () => {
     expect(panelOverlayRule).not.to.include('bottom: 10px')
     expect(hallSource).not.to.include('height: calc(100dvh - 32px)')
     expect(panelCloseRule).to.include('flex: 0 0 36px')
+    expect(hallSource.indexOf('class="panel-close"')).to.be.lessThan(hallSource.indexOf('<span :id="panelTitleId">'))
     expect(taskCardRule).to.include('box-sizing: border-box')
     expect(taskDetailRule).to.include('box-sizing: border-box')
     expect(taskDetailRule).to.include('max-width: 100%')
@@ -276,4 +283,35 @@ describe('SelectedAgentCard interaction contract', () => {
       wrapper.unmount()
     }
   })
+
+  it('resolves portrait private requests to the authoritative roster instance and rejects invalid candidates without fallback', async () => {
+    const counters = { drafts: [], mentions: [], privateTargets: [], explicitActors: [] }
+    const CandidatePortrait = Vue.defineComponent({
+      emits: ['start-agent-conversation'],
+      setup (_props, { emit }) {
+        const candidates = [
+          { agentId: 'wuyong', name: '伪造吴用', boundToMe: true },
+          { agentId: 'foreign', boundToMe: true },
+          { agentId: '' },
+          { agentId: ' wuyong ' }
+        ]
+        return () => Vue.h('main', { class: 'candidate-portrait' }, candidates.map((candidate, index) =>
+          Vue.h('button', { class: `candidate-${index}`, onClick: () => emit('start-agent-conversation', candidate) }, String(index))))
+      }
+    })
+    const mocks = createHallMocks({ SelectedAgentCard: loadSelectedAgentCard(), counters })
+    mocks.HallPortraitHome = CandidatePortrait
+    mocks.useHallExperienceMode = () => ({ experienceMode: Vue.ref('portrait-command'), isMobileCoarse: Vue.ref(true), orientationHint: Vue.ref(''), orientationRequestPending: Vue.ref(false), requestLandscape: async () => {} })
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs: { 'var-icon': true } } })
+    try {
+      await flushMounted()
+      for (let index = 0; index < 4; index += 1) await wrapper.get(`.candidate-${index}`).trigger('click')
+      expect(counters.privateTargets).to.deep.equal([counters.rosterAgent])
+      expect(counters.explicitActors).to.deep.equal([counters.rosterAgent])
+      expect(counters.mentions.map(item => item.agent)).to.deep.equal([counters.rosterAgent])
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
 })

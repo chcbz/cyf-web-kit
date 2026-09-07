@@ -98,7 +98,36 @@
         <span>当前榜文</span>
         <strong>{{ selectedTask?.title || '尚未选定' }}</strong>
       </div>
-      <button type="button" @click="emit('quick-action', 'discussion')">厅前议事</button>
+      <div class="portrait-context-actions">
+        <button type="button" @click="emit('quick-action', 'discussion')">厅前议事</button>
+        <button
+          v-if="selectedAgent && canStartAgentConversation(selectedAgent)"
+          type="button"
+          class="portrait-private-action"
+          data-portrait-action="private-discussion"
+          @click="emit('start-agent-conversation', selectedAgent)"
+        >
+          与{{ agentName(selectedAgent) }}密议
+        </button>
+        <button
+          v-else-if="eligibleAgents.length"
+          type="button"
+          class="portrait-private-guidance"
+          data-portrait-action="pick-agent"
+          @click="emit('quick-action', 'agents')"
+        >
+          先去点将再密议
+        </button>
+        <button
+          v-else
+          type="button"
+          class="portrait-private-guidance"
+          data-portrait-action="recruit-agent"
+          @click="emit('quick-action', 'catalog')"
+        >
+          先去招贤再密议
+        </button>
+      </div>
     </section>
 
     <div v-if="taskDetailOpen && selectedTask" class="portrait-task-overlay">
@@ -136,6 +165,7 @@ import { computed } from 'vue'
 
 const props = defineProps({
   agents: { type: Array, default: () => [] },
+  canStartAgentConversation: { type: Function, required: true },
   mapAgents: { type: Array, default: () => [] },
   orientationHint: { type: String, default: '' },
   orientationRequestPending: Boolean,
@@ -149,7 +179,7 @@ const props = defineProps({
   tasks: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['close-task-detail', 'discuss-task', 'open-task', 'open-onboarding', 'open-task-board', 'quick-action', 'refresh-hall', 'request-landscape', 'select-agent'])
+const emit = defineEmits(['close-task-detail', 'discuss-task', 'open-task', 'open-onboarding', 'open-task-board', 'quick-action', 'refresh-hall', 'request-landscape', 'select-agent', 'start-agent-conversation'])
 
 const quickActions = Object.freeze([
   { key: 'agents', label: '点将册', icon: '将' },
@@ -166,6 +196,7 @@ const busyCount = computed(() => props.agents.filter(agent => ['busy', 'running'
 const issueCount = computed(() => props.agents.filter(agent => ['error', 'offline'].includes(normalizedStatus(agent.status))).length)
 const openTaskCount = computed(() => props.tasks.filter(task => normalizedStatus(task.status) === 'open').length)
 const sceneAgents = computed(() => props.mapAgents.slice(0, 4))
+const eligibleAgents = computed(() => props.agents.filter(agent => props.canStartAgentConversation(agent)))
 const todoTasks = computed(() => props.tasks.filter(task => ['open', 'assigned', 'running'].includes(normalizedStatus(task.status))).slice(0, 3))
 const agentKey = agent => agent?.agentId || agent?.name || agent?.personaName || ''
 const agentName = agent => agent?.name || agent?.personaName || agent?.agentId || '未署名好汉'
@@ -187,6 +218,23 @@ const openTask = task => emit('open-task', task)
     radial-gradient(circle at 80% 0%, rgba(234, 180, 84, 0.18), transparent 34%),
     linear-gradient(160deg, #211812 0%, #382418 45%, #171a18 100%);
   color: #fff5df;
+}
+
+
+.portrait-context-actions {
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 7px;
+}
+
+.portrait-private-action {
+  background: #a84928;
+}
+
+.portrait-private-guidance {
+  background: rgba(255, 239, 200, 0.13);
+  color: #f2ca79;
 }
 
 .portrait-task-overlay {
@@ -265,7 +313,8 @@ const openTask = task => emit('open-task', task)
 .section-heading,
 .portrait-context,
 .portrait-overview,
-.portrait-shortcuts {
+.portrait-shortcuts,
+.portrait-context-actions {
   display: flex;
   align-items: center;
 }
@@ -318,7 +367,7 @@ button:disabled {
 .portrait-refresh,
 .landscape-entry,
 .section-heading button,
-.portrait-context > button {
+.portrait-context-actions > button {
   min-height: 40px;
   padding: 0 13px;
   border-radius: 10px;
@@ -553,7 +602,7 @@ button:disabled {
 
 .portrait-context > div { display: grid; gap: 4px; min-width: 0; }
 .portrait-context strong { overflow: hidden; max-width: 108px; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
-.portrait-context > button { align-self: center; min-height: 34px; padding: 0 9px; background: rgba(255, 241, 207, 0.16); font-size: 12px; }
+.portrait-context-actions > button { align-self: center; min-height: 34px; padding: 0 9px; background: rgba(255, 241, 207, 0.16); font-size: 12px; }
 
 @media (max-width: 360px) {
   .hall-portrait-home { padding-right: 12px; padding-left: 12px; }

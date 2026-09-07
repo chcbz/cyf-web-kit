@@ -9,6 +9,21 @@ import {
   normalizeHallMessage
 } from '../src/composables/juyiting/hallConversationMessages.js'
 
+const scopedConversation = (id = '1001', overrides = {}) => ({
+  id,
+  jiacn: 'hero',
+  conversationType: 'juyiting',
+  conversationScopeType: 'public',
+  conversationScopeKey: 'public',
+  ...overrides
+})
+
+const deferred = () => {
+  let resolve
+  const promise = new Promise(resolvePromise => { resolve = resolvePromise })
+  return { promise, resolve }
+}
+
 describe('useHallConversation scoped message loading', () => {
   it('does not fetch or schedule SSE recovery when token acquisition returns null', async () => {
     const originalFetch = global.fetch
@@ -41,7 +56,7 @@ describe('useHallConversation scoped message loading', () => {
           }
         },
         chatApi: {
-          list: async (_path, _payload, options) => options.onSuccess({ data: [{ id: '1001' }] }),
+          list: async (_path, _payload, options) => options.onSuccess({ data: [scopedConversation()] }),
           getById: async (_path, _id, options) => options.onSuccess({ data: [] })
         },
         chatContext,
@@ -94,7 +109,7 @@ describe('useHallConversation scoped message loading', () => {
           beginAuthorization: async () => { authorizationCount += 1 }
         },
         chatApi: {
-          list: async (_path, _payload, options) => options.onSuccess({ data: [{ id: '1001' }] }),
+          list: async (_path, _payload, options) => options.onSuccess({ data: [scopedConversation()] }),
           getById: async (_path, _id, options) => options.onSuccess({ data: [] })
         },
         chatContext: ref({
@@ -428,6 +443,208 @@ describe('useHallConversation scoped message loading', () => {
 })
 
 
+
+describe('useHallConversation authenticated public restore', () => {
+  const createConversation = ({ chatApi, chatContext = ref({ conversationScopeType: 'public', conversationScopeKey: 'public', targetAgentIds: [] }) }) => useHallConversation({
+    apiStore: {},
+    chatApi,
+    chatContext,
+    chatMode: ref('public'),
+    globalStore: { getJiacn: 'stale-local-user', user: {} },
+    log: { warn: () => {}, error: () => {} },
+    openPanel: () => {},
+    outgoingMetadata: ref({}),
+    portraitShortName: agent => agent?.name || '',
+    selectedAgent: ref(null),
+    selectedTask: ref(null),
+    showToast: () => {}
+  })
+
+  it('restores a safe numeric backend Long using exact public scope and no trusted local jiacn', async () => {
+    const payloads = []
+    const contentIds = []
+    const conversation = createConversation({
+      chatApi: {
+        list: async (_path, payload) => {
+          payloads.push(payload)
+          const id = payloads.length === 1 ? 1001 : '9223372036854775807'
+          return { data: { data: [scopedConversation(id)] } }
+        },
+        getById: async (_path, id, options) => {
+          contentIds.push(id)
+          await options.onSuccess({ data: [] })
+        }
+      }
+    })
+
+    await conversation.loadHallMessages()
+
+    expect(payloads[0]).to.deep.include({ pageNum: 1, pageSize: 1, orderBy: 'update_time desc' })
+    expect(payloads[0].search).to.deep.equal({ conversationType: 'juyiting', conversationScopeType: 'public', conversationScopeKey: 'public' })
+    expect(contentIds).to.deep.equal(['1001'])
+    expect(conversation.conversationId.value).to.equal('1001')
+    await conversation.loadHallMessages()
+    expect(payloads).to.have.length(1)
+    await conversation.loadHallMessages({ force: true })
+    expect(payloads).to.have.length(2)
+    expect(contentIds).to.deep.equal(['1001', '9223372036854775807'])
+    conversation.disposeHallConversation()
+  })
+
+  it('fails closed for unsafe numeric and malformed conversation ids', async () => {
+    for (const id of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, '', ' 1001 ', '01', '1.0', 'abc', '9223372036854775808', '100000000000000000000']) {
+      let contentCalls = 0
+      const conversation = createConversation({
+        chatApi: {
+          list: async (_path, _payload, options) => options.onSuccess({ data: [scopedConversation(id)] }),
+          getById: async () => { contentCalls += 1 }
+        }
+      })
+      await conversation.loadHallMessages()
+      expect(contentCalls, String(id)).to.equal(0)
+      expect(conversation.conversationId.value, String(id)).to.equal('')
+      conversation.disposeHallConversation()
+    }
+  })
+
+  it('rejects non-public, bounty, private, and non-Juyi Hall rows before content fetch', async () => {
+    for (const overrides of [
+      { conversationType: 'other' },
+      { conversationScopeType: 'private', conversationScopeKey: 'agent:wuyong' },
+      { conversationScopeType: 'bounty', conversationScopeKey: 'task:1' },
+      { conversationScopeKey: 'not-public' }
+    ]) {
+      let contentCalls = 0
+      const conversation = createConversation({
+        chatApi: {
+          list: async (_path, _payload, options) => options.onSuccess({ data: [scopedConversation(1001, overrides)] }),
+          getById: async () => { contentCalls += 1 }
+        }
+      })
+      await conversation.loadHallMessages()
+      expect(contentCalls).to.equal(0)
+      conversation.disposeHallConversation()
+    }
+  })
+
+  it('deduplicates repeated restores and fences a deferred public row after a private scope switch', async () => {
+    const gate = deferred()
+    const chatContext = ref({ conversationScopeType: 'public', conversationScopeKey: 'public', targetAgentIds: [] })
+    let listCalls = 0
+    let contentCalls = 0
+    const conversation = createConversation({
+      chatContext,
+      chatApi: {
+        list: async (_path, _payload, options) => {
+          listCalls += 1
+          await gate.promise
+          await options.onSuccess({ data: [scopedConversation(1001)] })
+        },
+        getById: async () => { contentCalls += 1 }
+      }
+    })
+
+    const first = conversation.loadHallMessages()
+    const duplicate = conversation.loadHallMessages()
+    expect(listCalls).to.equal(1)
+    chatContext.value = { conversationScopeType: 'private', conversationScopeKey: 'agent:wuyong', targetAgentIds: ['wuyong'] }
+    gate.resolve()
+    await Promise.all([first, duplicate])
+
+    expect(contentCalls).to.equal(0)
+    expect(conversation.conversationId.value).to.equal('')
+    expect(conversation.messages.value).to.deep.equal([])
+    conversation.disposeHallConversation()
+  })
+
+  it('keeps restore pending through content and retries an earlier empty readiness result', async () => {
+    const contentGate = deferred()
+    let listCalls = 0
+    let contentCalls = 0
+    const conversation = createConversation({
+      chatApi: {
+        list: async () => {
+          listCalls += 1
+          return { data: { data: listCalls === 1 ? [] : [scopedConversation(1001)] } }
+        },
+        getById: async (_path, _id, options) => {
+          contentCalls += 1
+          await contentGate.promise
+          options.onSuccess({ data: [] })
+        }
+      }
+    })
+
+    expect(await conversation.loadHallMessages()).to.equal(false)
+    expect(conversation.conversationId.value).to.equal('')
+    const restoring = conversation.loadHallMessages()
+    await Promise.resolve()
+    const duplicate = conversation.loadHallMessages()
+    expect(listCalls).to.equal(2)
+    expect(contentCalls).to.equal(1)
+    contentGate.resolve()
+    await Promise.all([restoring, duplicate])
+    expect(conversation.conversationId.value).to.equal('1001')
+    conversation.disposeHallConversation()
+  })
+
+  it('fences a deferred authenticated restore when identity is cleared', async () => {
+    const gate = deferred()
+    let contentCalls = 0
+    const conversation = createConversation({
+      chatApi: {
+        list: async () => {
+          await gate.promise
+          return { data: { data: [scopedConversation(1001)] } }
+        },
+        getById: async () => { contentCalls += 1 }
+      }
+    })
+
+    const loading = conversation.loadHallMessages()
+    stopIdentityBoundWork()
+    gate.resolve()
+    await loading
+    expect(contentCalls).to.equal(0)
+    expect(conversation.conversationId.value).to.equal('')
+    conversation.disposeHallConversation()
+  })
+
+  it('keeps explicit new chat empty across reopen restores and fences deferred prior content', async () => {
+    const gate = deferred()
+    let listCalls = 0
+    let contentCalls = 0
+    const conversation = createConversation({
+      chatApi: {
+        list: async () => {
+          listCalls += 1
+          return { data: { data: [scopedConversation(1001)] } }
+        },
+        getById: async (_path, _id, options) => {
+          contentCalls += 1
+          await gate.promise
+          options.onSuccess({ data: [{ id: '9', senderType: 'agent', content: 'stale' }] })
+        }
+      }
+    })
+
+    const loading = conversation.loadHallMessages()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(contentCalls).to.equal(1)
+    conversation.newHallConversation()
+    gate.resolve()
+    await loading
+    await conversation.loadHallMessages()
+    await conversation.loadHallMessages({ force: true })
+
+    expect(listCalls).to.equal(1)
+    expect(conversation.messages.value).to.deep.equal([])
+    expect(conversation.conversationId.value).to.equal('')
+    conversation.disposeHallConversation()
+  })
+})
+
 describe('useHallConversation finalized reply routing', () => {
   const flushMicrotasks = async () => {
     await Promise.resolve()
@@ -468,7 +685,7 @@ describe('useHallConversation finalized reply routing', () => {
       conversation = useHallConversation({
         apiStore: { token: async () => duplicatePath === 'live_sse' ? 'token' : null },
         chatApi: {
-          list: async (_path, _payload, options) => options.onSuccess({ data: [{ id: existingConversationId }] }),
+          list: async (_path, _payload, options) => options.onSuccess({ data: [scopedConversation(existingConversationId)] }),
           create: async (_path, _payload, options) => {
             const finalEvent = JSON.stringify({
               type: 'agent_message',
@@ -608,7 +825,7 @@ describe('useHallConversation finalized reply routing', () => {
   })
 
   it('makes stream end win over an existing-conversation live SSE duplicate', async () => {
-    await runBuiltInFinalScenario({ existingConversationId: 'conversation-existing-sse-9223372036854775807', duplicatePath: 'live_sse' })
+    await runBuiltInFinalScenario({ existingConversationId: '9223372036854775807', duplicatePath: 'live_sse' })
   })
 
   it('makes stream end win over a new-conversation poll duplicate before end', async () => {
@@ -671,7 +888,7 @@ describe('Hall conversation identity lifecycle', () => {
       chatApi: {
         list: async (_path, _payload, options) => {
           listOptions = options
-          await options.onSuccess({ data: [{ id: '1001' }] })
+          await options.onSuccess({ data: [scopedConversation()] })
         },
         getById: async (_path, _id, options) => {
           contentOptions = options

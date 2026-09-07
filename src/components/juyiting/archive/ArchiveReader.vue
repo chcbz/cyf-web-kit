@@ -1,6 +1,7 @@
 <template>
   <section
     class="archive-reader"
+    :class="{ 'is-virtual-landscape-reader': virtualLandscape }"
     aria-label="典籍阅读"
   >
     <div
@@ -63,13 +64,21 @@
           v-if="readingOpen"
           ref="dialogRef"
           class="archive-reader-fullscreen"
+          :class="{ 'is-virtual-landscape-reader': virtualLandscape }"
           role="dialog"
           aria-modal="true"
           aria-labelledby="archive-reader-title"
           tabindex="-1"
         >
           <header class="reader-header">
-            <div>
+            <button
+              type="button"
+              class="reader-header-button reader-exit"
+              @click="closeReading"
+            >
+              返回典籍列表
+            </button>
+            <div class="reader-heading">
               <p class="reader-kicker">固定典籍</p>
               <h3 id="archive-reader-title">{{ reader.catalog?.title || '水滸傳' }}</h3>
             </div>
@@ -88,13 +97,6 @@
                 @click="catalogOpen = !catalogOpen"
               >
                 {{ catalogOpen ? '收起目录' : '目录' }}
-              </button>
-              <button
-                type="button"
-                class="reader-header-button reader-exit"
-                @click="closeReading"
-              >
-                返回典籍列表
               </button>
             </div>
           </header>
@@ -353,13 +355,14 @@ import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, proxyRefs, r
 import { useArchiveReader, utf8ByteLength } from '@/composables/juyiting/useArchiveReader'
 import { registerIdentityCleanup } from '@/utils/identityLifecycle.js'
 
-const { disableTeleport, initialView } = defineProps({
+const { disableTeleport, initialView, virtualLandscape } = defineProps({
   disableTeleport: { type: Boolean, default: false },
   initialView: {
     type: String,
     default: 'catalog',
     validator: value => ['catalog', 'reader'].includes(value)
-  }
+  },
+  virtualLandscape: Boolean
 })
 
 const readerState = useArchiveReader({ autoInitialize: false })
@@ -718,6 +721,7 @@ onBeforeUnmount(() => {
   display: flex;
   min-height: 0;
   flex: 1;
+  overflow: hidden;
   flex-direction: column;
   color: #3f2815;
 }
@@ -728,6 +732,9 @@ onBeforeUnmount(() => {
   flex: 1;
   flex-direction: column;
   gap: 18px;
+  padding-right: 4px;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .archive-shelf-header,
@@ -888,6 +895,17 @@ onBeforeUnmount(() => {
   color: #3f2815;
 }
 
+.archive-reader-fullscreen.is-virtual-landscape-reader {
+  top: 0;
+  right: auto;
+  bottom: auto;
+  left: 0;
+  width: 100dvh;
+  height: 100dvw;
+  transform: rotate(90deg) translateY(-100%);
+  transform-origin: top left;
+}
+
 .reader-header {
   flex: 0 0 auto;
   padding: 2px 4px 10px;
@@ -898,6 +916,11 @@ onBeforeUnmount(() => {
 .save-state {
   color: #765f40;
   font-size: 12px;
+}
+
+.reader-heading {
+  min-width: 0;
+  flex: 1;
 }
 
 .reader-header-actions {
@@ -1100,14 +1123,161 @@ onBeforeUnmount(() => {
   }
 }
 
+.archive-reader.is-virtual-landscape-reader .archive-shelf {
+  gap: 10px;
+}
+
+.archive-reader.is-virtual-landscape-reader .archive-shelf-header > div > p:last-child {
+  display: none;
+}
+
+.archive-reader.is-virtual-landscape-reader .archive-book-card {
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px;
+}
+
+.archive-reader.is-virtual-landscape-reader .archive-book-cover {
+  min-height: 118px;
+  padding: 8px 6px;
+}
+
+.archive-reader.is-virtual-landscape-reader .archive-book-cover strong {
+  font-size: 20px;
+}
+
+.archive-reader-fullscreen.is-virtual-landscape-reader {
+  gap: 6px;
+  padding: 6px max(12px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+}
+
+.archive-reader-fullscreen.is-virtual-landscape-reader .reader-header {
+  flex-wrap: nowrap;
+  padding-bottom: 4px;
+}
+
+.archive-reader-fullscreen.is-virtual-landscape-reader .reader-header .reader-kicker {
+  display: none;
+}
+
+.archive-reader-fullscreen.is-virtual-landscape-reader .reader-header h3,
+.archive-reader-fullscreen.is-virtual-landscape-reader .save-state,
+.archive-reader-fullscreen.is-virtual-landscape-reader .reader-header-button {
+  white-space: nowrap;
+}
+
+.archive-reader-fullscreen.is-virtual-landscape-reader .reader-header h3 {
+  overflow: hidden;
+  font-size: 18px;
+  text-overflow: ellipsis;
+}
+
+.archive-reader-fullscreen.is-virtual-landscape-reader .reader-header-actions {
+  width: auto;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}
+
+.archive-reader-fullscreen.is-virtual-landscape-reader .save-state {
+  margin: 0;
+}
+
+.archive-reader-fullscreen.is-virtual-landscape-reader .reader-layout,
+.archive-reader-fullscreen.is-virtual-landscape-reader .reader-layout.catalog-open {
+  grid-template-columns: minmax(0, 1fr) minmax(190px, 32%);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.archive-reader-fullscreen.is-virtual-landscape-reader .reader-catalog {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: min(38%, 280px);
+  box-sizing: border-box;
+}
+
+.archive-reader-fullscreen.is-virtual-landscape-reader .reader-catalog,
+.archive-reader-fullscreen.is-virtual-landscape-reader .reader-content,
+.archive-reader-fullscreen.is-virtual-landscape-reader .reader-notes {
+  padding: 10px;
+}
+
 @media (max-height: 540px) and (orientation: landscape) {
+  .archive-shelf {
+    gap: 10px;
+  }
+
+  .archive-shelf-header > div > p:last-child {
+    display: none;
+  }
+
+  .archive-book-card {
+    grid-template-columns: 92px minmax(0, 1fr);
+    gap: 12px;
+    padding: 10px;
+  }
+
+  .archive-book-cover {
+    min-height: 118px;
+    padding: 8px 6px;
+  }
+
+  .archive-book-cover strong {
+    font-size: 20px;
+  }
+
   .archive-reader-fullscreen {
-    gap: 8px;
-    padding: 8px max(12px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    gap: 6px;
+    padding: 6px max(12px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
   }
 
   .reader-header {
-    padding-bottom: 6px;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+  }
+
+  .reader-header .reader-kicker {
+    display: none;
+  }
+
+  .reader-header h3,
+  .save-state,
+  .reader-header-button {
+    white-space: nowrap;
+  }
+
+  .reader-header h3 {
+    overflow: hidden;
+    font-size: 18px;
+    text-overflow: ellipsis;
+  }
+
+  .reader-header-actions {
+    width: auto;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+  }
+
+  .save-state {
+    margin: 0;
+  }
+
+  .reader-layout,
+  .reader-layout.catalog-open {
+    grid-template-columns: minmax(0, 1fr) minmax(190px, 32%);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .reader-catalog {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: min(38vw, 280px);
+    box-sizing: border-box;
+  }
+
+  .reader-catalog,
+  .reader-content,
+  .reader-notes {
+    padding: 10px;
   }
 }
 

@@ -40,6 +40,7 @@
       id="library-reader-panel"
       role="tabpanel"
       aria-labelledby="library-reader-tab"
+      :virtual-landscape="virtualLandscape"
     />
 
     <div
@@ -155,7 +156,8 @@ defineProps({
   keyword: { type: String, default: '' },
   loading: { type: Boolean, default: false },
   results: { type: Array, default: () => [] },
-  sourceType: { type: String, default: '' }
+  sourceType: { type: String, default: '' },
+  virtualLandscape: Boolean
 })
 
 defineEmits(['cite-library', 'search-library', 'update:keyword', 'update:sourceType'])
@@ -185,6 +187,7 @@ const scoreText = (score) => {
   flex-direction: column;
   gap: 12px;
   padding: 14px;
+  overflow: hidden;
 }
 
 button,
@@ -205,6 +208,7 @@ button:disabled {
 
 .library-tabs {
   display: flex;
+  flex: 0 0 auto;
   gap: 8px;
 }
 

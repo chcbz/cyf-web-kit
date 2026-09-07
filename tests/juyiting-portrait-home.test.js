@@ -1,10 +1,44 @@
 import { existsSync, readFileSync } from 'fs'
 import { expect } from 'chai'
+import { compileScript, parse } from '@vue/compiler-sfc'
+import { mount } from '@vue/test-utils'
+import * as Vue from 'vue'
 
 const portraitHomeUrl = new URL('../src/components/juyiting/HallPortraitHome.vue', import.meta.url)
 const hallUrl = new URL('../src/components/world/JuyiHall.vue', import.meta.url)
 const portraitHomeSource = readFileSync(portraitHomeUrl, 'utf8').replace(/\r\n/g, '\n')
 const hallSource = readFileSync(hallUrl, 'utf8').replace(/\r\n/g, '\n')
+
+global.Element = global.window?.Element
+global.SVGElement = global.window?.SVGElement
+global.Node = global.window?.Node
+
+const vueImportToVar = (_line, imports) => {
+  const bindings = imports.split(',').map(part => {
+    const [name, alias] = part.trim().split(/\s+as\s+/)
+    return alias ? `${name}: ${alias}` : name
+  }).join(', ')
+  return `var { ${bindings} } = Vue`
+}
+
+const loadPortraitHome = () => {
+  const { descriptor } = parse(portraitHomeSource, { filename: portraitHomeUrl.pathname })
+  const body = compileScript(descriptor, { id: 'portrait-home-followups', inlineTemplate: true }).content
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
+    .replace('export default', 'return')
+  return new Function('Vue', body)(Vue)
+}
+
+const baseProps = overrides => ({
+  agents: [],
+  canStartAgentConversation: agent => Boolean(agent?.boundToMe && !agent?.systemAgent && agent?.canOperate !== false),
+  mapAgents: [],
+  statusClass: () => '',
+  taskStateClass: () => '',
+  taskStatusText: () => '',
+  tasks: [],
+  ...overrides
+})
 
 const quickActions = [
   ['agents', '点将册'],
@@ -111,11 +145,13 @@ describe('HallPortraitHome', () => {
       ':tasks="tasks"',
       ':selected-agent="selectedAgent"',
       ':selected-task="selectedTask"',
+      ':can-start-agent-conversation="canStartAgentConversation"',
       ':task-detail-open="portraitTaskDetailOpen"'
     ]) expect(hallSource).to.include(binding)
 
     expect(portraitHomeSource).to.include("emit('select-agent', agent)")
     expect(portraitHomeSource).to.include("emit('open-task', task)")
+    expect(hallSource).to.include('@start-agent-conversation="handleStartAgentConversation"')
     expect(hallSource).to.include('@open-task="handlePortraitTaskOpen"')
     expect(hallSource).to.include('@close-task-detail="closePortraitTaskDetail"')
     expect(hallSource).to.include('@open-task-board="handlePortraitTaskBoard"')
@@ -123,6 +159,37 @@ describe('HallPortraitHome', () => {
     expect(portraitHomeSource).to.not.include('useHallData')
     expect(portraitHomeSource).to.not.include('useHallConversation')
     expect(portraitHomeSource).to.not.include("ref(")
+  })
+
+
+  it('mounts an eligible selected-agent private CTA and emits the exact selected agent', async () => {
+    const eligible = { agentId: 'wuyong', name: '吴用', boundToMe: true, systemAgent: false, canOperate: true }
+    const wrapper = mount(loadPortraitHome(), { props: baseProps({ agents: [eligible], selectedAgent: eligible }) })
+    const action = wrapper.get('[data-portrait-action="private-discussion"]')
+    expect(action.text()).to.include('与吴用密议')
+    await action.trigger('click')
+    expect(wrapper.emitted('start-agent-conversation')).to.deep.equal([[eligible]])
+    wrapper.unmount()
+  })
+
+  it('guides toward point selection when another eligible self-owned agent exists', async () => {
+    const system = { agentId: 'songjiang', name: '宋江', boundToMe: true, systemAgent: true, canOperate: true }
+    const eligible = { agentId: 'wuyong', name: '吴用', boundToMe: true, systemAgent: false, canOperate: true }
+    const wrapper = mount(loadPortraitHome(), { props: baseProps({ agents: [system, eligible], selectedAgent: system }) })
+    expect(wrapper.find('[data-portrait-action="private-discussion"]').exists()).to.equal(false)
+    await wrapper.get('[data-portrait-action="pick-agent"]').trigger('click')
+    expect(wrapper.emitted('quick-action')).to.deep.equal([['agents']])
+    expect(wrapper.emitted('start-agent-conversation')).to.equal(undefined)
+    wrapper.unmount()
+  })
+
+  it('guides toward recruitment when there is no eligible private-discussion agent', async () => {
+    const foreign = { agentId: 'linchong', name: '林冲', boundToMe: false, systemAgent: false, canOperate: true }
+    const wrapper = mount(loadPortraitHome(), { props: baseProps({ agents: [foreign], selectedAgent: foreign }) })
+    await wrapper.get('[data-portrait-action="recruit-agent"]').trigger('click')
+    expect(wrapper.emitted('quick-action')).to.deep.equal([['catalog']])
+    expect(wrapper.emitted('start-agent-conversation')).to.equal(undefined)
+    wrapper.unmount()
   })
 
 
