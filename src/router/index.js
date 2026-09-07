@@ -1,6 +1,7 @@
 import PublicLanding from '@/components/public/PublicLanding.vue'
 import GuestDemo from '@/components/public/GuestDemo.vue'
 import OAuthCallback from '@/components/OAuthCallback.vue'
+import { redirectLoggedInHome } from './homeLoginRedirect.js'
 
 export default [
   {
@@ -16,6 +17,7 @@ export default [
     path: '/',
     name: 'PublicLanding',
     component: PublicLanding,
+    beforeEnter: redirectLoggedInHome,
     meta: {
       showInMenu: false,
       publicEntry: true
