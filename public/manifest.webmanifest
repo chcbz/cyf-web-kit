@@ -17,8 +17,8 @@
   ],
   "shortcuts": [
     {
-      "name": "立即体验",
-      "short_name": "体验",
+      "name": "免登录看示例",
+      "short_name": "协作示例",
       "description": "无需登录，查看本地模拟的 Agent 协作流程",
       "url": "/demo",
       "icons": [
@@ -30,8 +30,8 @@
       ]
     },
     {
-      "name": "进入聚义厅",
-      "short_name": "聚义厅",
+      "name": "进入工作台",
+      "short_name": "工作台",
       "description": "登录后进入真实的 Agent 协作工作台",
       "url": "/juyiting",
       "icons": [

@@ -1,8 +1,8 @@
 export const guestDemoSteps = [
-  { id: 1, label: '选择任务（揭榜）' },
-  { id: 2, label: '推荐合适的帮手（点将）' },
-  { id: 3, label: '模拟执行过程（协同办事）' },
-  { id: 4, label: '保存可复用成果（成果入库）' }
+  { id: 1, label: '选任务' },
+  { id: 2, label: '看分工' },
+  { id: 3, label: '看流程' },
+  { id: 4, label: '看成果' }
 ]
 
 export const guestDemoTemplates = [

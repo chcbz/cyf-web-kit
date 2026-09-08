@@ -1,74 +1,79 @@
 <template>
   <main class="landing-page">
     <section class="landing-hero">
-      <div class="landing-nav">
-        <RouterLink class="brand" to="/">聚义厅</RouterLink>
-        <RouterLink class="nav-login" to="/juyiting">登录进入聚义厅</RouterLink>
-      </div>
+      <nav class="landing-nav" aria-label="首页导航">
+        <RouterLink class="brand" :to="homeTarget">聚义厅 <small>AI 协作工作台</small></RouterLink>
+        <RouterLink class="nav-login" :to="hallTarget">进入工作台 →</RouterLink>
+      </nav>
 
-      <div class="hero-copy">
-        <p class="eyebrow">把复杂工作交给一支会协作的 AI 小队</p>
-        <h1><span>从一个任务开始，</span><span>得到可以继续使用的成果。</span></h1>
-        <p class="hero-description">
-          聚义厅让研究、内容和项目协作变成清晰的工作流：说清目标，系统推荐合适的帮手，再把过程沉淀为可复用的结果。
-        </p>
-        <div class="hero-actions">
-          <RouterLink class="primary-action" to="/demo">立即体验</RouterLink>
-          <RouterLink class="secondary-action" to="/juyiting">登录进入聚义厅</RouterLink>
+      <div class="hero-layout">
+        <div class="hero-copy">
+          <p class="eyebrow">一个目标，多个 AI 分工协作</p>
+          <h1><span>你说要做什么，</span><span>让 AI 小队一起办。</span></h1>
+          <p class="hero-description">聚义厅是一个 AI 协作工作台。你可以发布任务、选择 AI 帮手、跟进进度，在同一个地方查看任务和对话。</p>
+          <div class="hero-actions">
+            <RouterLink class="primary-action" :to="demoTarget">免登录看示例 →</RouterLink>
+            <RouterLink class="secondary-action" :to="hallTarget">进入工作台</RouterLink>
+          </div>
+          <p class="entry-note">第一次来？先看协作示例，无需登录。要处理自己的任务，请进入工作台并登录。</p>
         </div>
-      </div>
-
-      <div class="hero-proof" aria-label="聚义厅的工作方式">
-        <div><strong>1</strong><span>说明你想完成的事</span></div>
-        <div><strong>2</strong><span>让合适的 AI 帮手协同完成</span></div>
-        <div><strong>3</strong><span>带走可继续编辑的成果</span></div>
+        <aside class="hero-example" aria-label="AI 协作示例预览">
+          <p class="example-badge">示例预览 · 非真实执行</p>
+          <h2>“帮我准备一套新品发布文案”</h2>
+          <ol>
+            <li><span>01</span><div><strong>策划</strong><p>明确受众，列出内容大纲</p></div></li>
+            <li><span>02</span><div><strong>写作</strong><p>起草长文和三条短帖</p></div></li>
+            <li><span>03</span><div><strong>校对</strong><p>检查信息，整理发布清单</p></div></li>
+          </ol>
+          <p class="example-result">示例产出：长文初稿、渠道短帖、检查表</p>
+          <RouterLink class="example-link" :to="demoTarget">选择一个协作示例 →</RouterLink>
+        </aside>
       </div>
     </section>
 
     <section class="use-cases" aria-labelledby="use-cases-title">
       <div class="section-heading">
-        <p class="eyebrow">常见使用场景</p>
-        <h2 id="use-cases-title">不是多开几个聊天窗口，而是把事情推进下去。</h2>
+        <p class="eyebrow">可以用来做什么</p>
+        <h2 id="use-cases-title">从一件具体的事开始。</h2>
+        <p>先用示例了解协作方式，再进入工作台处理自己的任务。</p>
       </div>
       <div class="use-case-grid">
-        <article>
-          <span class="case-number">01</span>
-          <h3>资料研究</h3>
-          <p>把问题、证据和建议整理在一起，方便做判断和向团队说明。</p>
-        </article>
-        <article>
-          <span class="case-number">02</span>
-          <h3>内容生产</h3>
-          <p>从选题到多渠道素材，保留统一口径和可继续编辑的内容包。</p>
-        </article>
-        <article>
-          <span class="case-number">03</span>
-          <h3>项目与代码协作</h3>
-          <p>让需求、实现、检查和交接围绕同一份任务结果协同推进。</p>
-        </article>
+        <article><span class="case-number">01 / 资料研究</span><h3>做一份研究简报</h3><p>拆解问题、整理资料、核对证据，把零散信息变成可讨论的结论。</p></article>
+        <article><span class="case-number">02 / 内容生产</span><h3>准备一套发布文案</h3><p>从内容大纲到多渠道初稿，再检查事实、语气和发布事项。</p></article>
+        <article><span class="case-number">03 / 项目协作</span><h3>梳理一次功能交付</h3><p>明确需求、拆分实现步骤、列出风险和验收清单。</p></article>
       </div>
     </section>
 
     <section class="landing-cta">
-      <div>
-        <p class="eyebrow">无需登录即可试看</p>
-        <h2>先体验一次完整协作，再决定怎样开始。</h2>
-      </div>
-      <RouterLink class="primary-action" to="/demo">立即体验</RouterLink>
+      <div><p class="eyebrow">准备好处理自己的任务了？</p><h2>进入工作台，开始实际协作。</h2><p>需要登录；示例中的内容不会自动执行或保存为真实任务。</p></div>
+      <RouterLink class="primary-action" :to="hallTarget">进入工作台 →</RouterLink>
     </section>
   </main>
 </template>
 
+<script setup>
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+import { publicEntryTarget } from '@/utils/publicEntryNavigation'
+
+const route = useRoute()
+const homeTarget = computed(() => publicEntryTarget('/', route.query))
+const demoTarget = computed(() => publicEntryTarget('/demo', route.query))
+const hallTarget = computed(() => publicEntryTarget('/juyiting', route.query))
+</script>
+
 <style scoped>
 .landing-page {
+  box-sizing: border-box;
   min-height: 100%;
+  min-width: 0;
   overflow: auto;
   color: #18201f;
   background: #f7f4ed;
 }
 
 .landing-hero {
-  min-height: 610px;
+  min-height: 560px;
   padding: 28px clamp(24px, 7vw, 112px) 56px;
   color: #fffaf0;
   background:
@@ -79,7 +84,6 @@
 
 .landing-nav,
 .hero-copy,
-.hero-proof,
 .use-cases,
 .landing-cta {
   max-width: 1160px;
@@ -90,7 +94,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .brand,
@@ -114,8 +119,8 @@
 }
 
 .hero-copy {
-  max-width: 800px;
-  padding-top: clamp(84px, 12vw, 142px);
+  min-width: 0;
+  padding-top: 0;
 }
 
 .eyebrow {
@@ -136,8 +141,8 @@ p {
 h1 {
   max-width: 760px;
   margin-bottom: 22px;
-  font-size: clamp(40px, 6vw, 72px);
-  line-height: 1.08;
+  font-size: clamp(32px, 4.8vw, 62px);
+  line-height: 1.22;
   letter-spacing: -0.055em;
 }
 
@@ -182,36 +187,6 @@ h1 span {
   border: 1px solid rgba(255, 250, 240, 0.42);
 }
 
-.hero-proof {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1px;
-  margin-top: 70px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.17);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.17);
-}
-
-.hero-proof div {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 76px;
-  padding: 16px 20px;
-  background: rgba(17, 48, 45, 0.72);
-}
-
-.hero-proof strong {
-  color: #f6c64a;
-  font-size: 20px;
-}
-
-.hero-proof span {
-  font-size: 14px;
-  line-height: 1.45;
-}
-
 .use-cases {
   padding: 88px clamp(24px, 7vw, 112px);
 }
@@ -236,13 +211,14 @@ h2 {
 
 .use-case-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
   margin-top: 38px;
 }
 
 .use-case-grid article {
-  min-height: 215px;
+  min-width: 0;
+  min-height: 190px;
   padding: 28px;
   border: 1px solid #ded8cc;
   border-radius: 18px;
@@ -257,7 +233,7 @@ h2 {
 }
 
 h3 {
-  margin: 46px 0 12px;
+  margin: 28px 0 12px;
   font-size: 22px;
 }
 
@@ -293,18 +269,123 @@ h3 {
     min-height: auto;
   }
 
-  .hero-proof,
   .use-case-grid {
     grid-template-columns: 1fr;
-  }
-
-  .hero-proof {
-    margin-top: 50px;
   }
 
   .landing-cta {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+.hero-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: clamp(28px, 5vw, 72px);
+  align-items: center;
+  max-width: 1160px;
+  margin: 64px auto 0;
+}
+.brand small {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  letter-spacing: .06em;
+  font-weight: 500;
+  color: #dae5db;
+}
+.entry-note {
+  max-width: 500px;
+  margin: 18px 0 0;
+  color: #dae5db;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.hero-example {
+  min-width: 0;
+  padding: 26px;
+  border: 1px solid #54716a;
+  border-radius: 22px;
+  background: #234641;
+}
+.example-badge {
+  color: #f6d57a;
+  font-size: 12px;
+}
+.hero-example h2 {
+  font-size: 23px;
+  line-height: 1.5;
+  letter-spacing: 0;
+}
+.hero-example ol {
+  list-style: none;
+  padding: 0;
+  margin: 22px 0;
+}
+.hero-example li {
+  display: flex;
+  gap: 14px;
+  padding: 14px 0;
+  border-top: 1px solid #4b6962;
+}
+.hero-example li > span {
+  color: #f6c64a;
+  font-size: 13px;
+}
+.hero-example li p {
+  margin: 5px 0 0;
+  color: #dae5db;
+  font-size: 13px;
+}
+.example-result {
+  font-size: 13px;
+  line-height: 1.8;
+}
+.example-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: #f6d57a;
+  font-weight: 700;
+  font-size: 14px;
+}
+.landing-cta p:last-child {
+  margin: 16px 0 0;
+  line-height: 1.8;
+  color: #dae5db;
+}
+.landing-page a:focus-visible {
+  outline: 3px solid #cf8732;
+  outline-offset: 5px;
+}
+.landing-nav a {
+  min-height: 44px;
+  display: inline-flex;
+  justify-content: center;
+  flex-direction: column;
+}
+@media (max-width: 720px) {
+  .hero-layout {
+    grid-template-columns: minmax(0, 1fr);
+    margin-top: 34px;
+  }
+  .landing-hero {
+    padding: calc(20px + env(safe-area-inset-top, 0px)) 20px 32px;
+  }
+  .hero-description {
+    font-size: 16px;
+  }
+  .hero-actions {
+    margin-top: 22px;
+  }
+  .use-cases {
+    padding: 44px 20px;
+  }
+  .hero-example {
+    padding: 22px;
+  }
+  .landing-cta {
+    margin-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   }
 }
 </style>

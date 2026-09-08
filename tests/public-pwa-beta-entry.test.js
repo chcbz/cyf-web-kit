@@ -4,7 +4,7 @@ import { PNG } from 'pngjs'
 
 import { guestDemoSteps, guestDemoTemplates } from '../src/constants/publicBetaDemo.js'
 
-const source = (path) => readFileSync(path, 'utf8')
+const source = (path) => readFileSync(path, 'utf8').replace(/\r\n/g, '\n')
 const publicFile = (url) => `public${new URL(url, 'https://juyiting.test').pathname}`
 
 describe('public PWA beta entry packet', () => {
@@ -27,7 +27,7 @@ describe('public PWA beta entry packet', () => {
     expect(router).not.to.include("redirect: '/juyiting'")
 
     const entry = source('src/components/world/JuyiHallEntry.vue')
-    expect(entry).to.include('<JuyiHall />')
+    expect(entry).to.match(/<JuyiHall\b[^>]*\/>/)
     expect(entry).to.include("router.replace({ path: route.path, query: handoff.query, hash: route.hash })")
   })
 
@@ -44,7 +44,7 @@ describe('public PWA beta entry packet', () => {
     expect(demo).to.include('全程本地模拟')
     expect(demo).to.include("new Set(['research', 'content', 'collaboration'])")
     expect(demo).to.include('allowedGuestDemoTemplateIds.has(id)')
-    expect(demo).to.include('不会发起登录、授权或受保护的 API 请求')
+    expect(demo).to.include('不会调用真实 AI，也不会创建或保存任务')
     expect(demo).not.to.match(/useHttp|agentApi|chatApi|useApiStore|fetch\s*\(|axios|XMLHttpRequest/)
     expect(app).to.include('route.meta?.publicEntry === true')
     expect(app).to.include("defineAsyncComponent(() => import('@/components/SideMenu'))")
@@ -84,6 +84,8 @@ describe('public PWA beta entry packet', () => {
     expect(manifest.orientation).to.equal('any')
     expect(manifest.categories).to.include.members(['productivity', 'business'])
     expect(manifest.shortcuts.map(shortcut => shortcut.url)).to.deep.equal(['/demo', '/juyiting'])
+    expect(manifest.shortcuts.map(shortcut => shortcut.name)).to.deep.equal(['免登录看示例', '进入工作台'])
+    expect(manifest.shortcuts.map(shortcut => shortcut.short_name)).to.deep.equal(['协作示例', '工作台'])
     expect(manifest.screenshots.map(screenshot => screenshot.form_factor)).to.deep.equal(['wide', 'narrow'])
     expect(manifest.screenshots.map(screenshot => screenshot.sizes)).to.deep.equal(['1280x720', '750x1334'])
     referencedAssets.forEach(asset => expect(existsSync(publicFile(asset)), asset).to.equal(true))

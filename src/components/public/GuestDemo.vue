@@ -1,14 +1,14 @@
 <template>
   <main class="guest-demo">
     <header class="demo-header">
-      <RouterLink class="back-link" to="/">← 返回首页</RouterLink>
-      <RouterLink class="login-link" :to="loginTarget">登录进入聚义厅</RouterLink>
+      <RouterLink class="back-link" :to="homeTarget">← 返回产品介绍</RouterLink>
+      <RouterLink class="login-link" :to="loginTarget">进入工作台 →</RouterLink>
     </header>
 
     <section class="demo-intro">
-      <p class="eyebrow">访客体验 · 全程本地模拟</p>
-      <h1>用四步，看看一支 AI 小队怎样把任务推进下去。</h1>
-      <p>无需登录，不会读取账号信息，也不会发送任何工作请求。</p>
+      <p class="eyebrow">协作示例 · 全程本地模拟</p>
+      <h1>选一个示例，看懂 AI 如何分工。</h1>
+      <p>这里是可点击的示例，不是真实 AI 执行。选任务 → 看分工 → 看流程 → 看成果，无需登录。</p>
     </section>
 
     <ol class="stepper" aria-label="体验步骤">
@@ -22,11 +22,11 @@
       </li>
     </ol>
 
-    <section class="demo-workspace" aria-live="polite">
+    <section ref="workspace" class="demo-workspace" aria-live="polite">
       <div v-if="currentStep === 1" class="template-stage">
         <div class="stage-copy">
           <p class="eyebrow">第一步</p>
-          <h2>选择一个你想推进的任务。</h2>
+          <h2 tabindex="-1">选择一个你想推进的任务。</h2>
           <p>每个模板都使用本地示例数据，方便你直接查看协作过程。</p>
         </div>
         <div class="template-grid">
@@ -45,13 +45,13 @@
           </button>
         </div>
         <button class="next-action" type="button" @click="currentStep = 2">
-          请系统推荐帮手
+          下一步：看示例分工
         </button>
       </div>
 
       <div v-else-if="currentStep === 2" class="recommendation-stage">
         <p class="eyebrow">第二步</p>
-        <h2>系统已为「{{ selectedTemplate.eyebrow }}」推荐三位帮手。</h2>
+        <h2 tabindex="-1">这个任务，可以这样分给三位帮手。</h2>
         <p class="stage-description">推荐依据是任务目标、所需工作方式和结果形式；这里展示的是模拟推荐，不会连接真实聚义厅。</p>
         <ul class="agent-list">
           <li v-for="(agent, index) in selectedTemplate.agents" :key="agent.name">
@@ -61,56 +61,74 @@
         </ul>
         <div class="stage-actions">
           <button class="quiet-action" type="button" @click="currentStep = 1">更换任务</button>
-          <button class="next-action" type="button" @click="currentStep = 3">查看模拟执行</button>
+          <button class="next-action" type="button" @click="currentStep = 3">下一步：看协作流程</button>
         </div>
       </div>
 
       <div v-else-if="currentStep === 3" class="execution-stage">
         <p class="eyebrow">第三步</p>
-        <h2>任务正在按清晰分工推进。</h2>
+        <h2 tabindex="-1">这三步，展示任务如何接力完成。</h2>
         <div class="execution-list">
           <div v-for="(item, index) in selectedTemplate.execution" :key="item" class="execution-item">
             <span>{{ index + 1 }}</span>
-            <div><strong>{{ item }}</strong><small>{{ index === 2 ? '已完成 · 等待汇总' : '已完成 · 已交给下一位帮手' }}</small></div>
+            <div><strong>{{ item }}</strong><small>{{ index === 2 ? '示例步骤 · 汇总结果' : '示例步骤 · 交接给下一位帮手' }}</small></div>
           </div>
         </div>
-        <button class="next-action" type="button" @click="currentStep = 4">查看可复用结果</button>
+        <div class="stage-actions">
+          <button class="quiet-action" type="button" @click="currentStep = 2">上一步：看分工</button>
+          <button class="next-action" type="button" @click="currentStep = 4">下一步：看成果示例</button>
+        </div>
       </div>
 
       <div v-else class="result-stage">
         <p class="eyebrow">第四步</p>
-        <h2>{{ selectedTemplate.result.title }}</h2>
+        <h2 tabindex="-1">{{ selectedTemplate.result.title }}</h2>
         <p class="stage-description">{{ selectedTemplate.result.summary }}</p>
         <div class="result-card">
-          <span>可继续使用的成果</span>
+          <span>示例交付清单 · 非现场生成</span>
           <ul>
             <li v-for="item in selectedTemplate.result.items" :key="item">{{ item }}</li>
           </ul>
         </div>
         <div class="stage-actions">
-          <button class="quiet-action" type="button" @click="restart">换一个模板</button>
-          <RouterLink class="next-action link-action" :to="loginTarget">登录后创建真实任务</RouterLink>
+          <button class="quiet-action" type="button" @click="currentStep = 3">上一步：看流程</button>
+          <button class="quiet-action" type="button" @click="restart">换一个示例</button>
+          <RouterLink class="next-action link-action" :to="loginTarget">进入工作台，处理自己的任务</RouterLink>
         </div>
       </div>
     </section>
 
-    <p class="guest-note">这是独立的访客演示：所有内容都保存在当前页面内，不会发起登录、授权或受保护的 API 请求。</p>
+    <p class="guest-note">示例仅供了解流程，不会调用真实 AI，也不会创建或保存任务。处理自己的任务，请进入工作台并登录。</p>
   </main>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { publicEntryTarget } from '@/utils/publicEntryNavigation'
 import { guestDemoSteps, guestDemoTemplates } from '@/constants/publicBetaDemo'
+
+const route = useRoute()
+const homeTarget = computed(() => publicEntryTarget('/', route.query))
 
 const allowedGuestDemoTemplateIds = new Set(['research', 'content', 'collaboration'])
 const selectedTemplate = ref(guestDemoTemplates[0])
 const currentStep = ref(1)
+const workspace = ref(null)
+
+// Switching from a long mobile template list must reveal the new step, not leave users at its footer.
+watch(currentStep, async () => {
+  await nextTick()
+  workspace.value?.querySelector('h2')?.focus({ preventScroll: true })
+  workspace.value?.scrollIntoView({ block: 'start', behavior: 'auto' })
+})
 
 const loginTarget = computed(() => {
   const id = selectedTemplate.value?.id
-  return allowedGuestDemoTemplateIds.has(id) && guestDemoTemplates.some(template => template.id === id)
-    ? `/juyiting?template=${encodeURIComponent(id)}`
-    : '/juyiting'
+  const query = allowedGuestDemoTemplateIds.has(id) && guestDemoTemplates.some(template => template.id === id)
+    ? { template: id }
+    : {}
+  return publicEntryTarget('/juyiting', route.query, query)
 })
 
 const restart = () => {
@@ -318,7 +336,7 @@ h2 {
   align-items: center;
   justify-content: center;
   min-height: 45px;
-  padding: 0 20px;
+  padding: 10px 20px;
   border: 0;
   border-radius: 999px;
   font-size: 14px;
@@ -439,7 +457,7 @@ h2 {
 
 @media (max-width: 760px) {
   .guest-demo {
-    padding: 24px 20px 36px;
+    padding: calc(20px + env(safe-area-inset-top, 0px)) 20px calc(36px + env(safe-area-inset-bottom, 0px));
   }
 
   .demo-header {
@@ -447,16 +465,16 @@ h2 {
   }
 
   .demo-intro {
-    padding-top: 56px;
+    padding-top: 30px;
   }
 
-  .stepper,
   .template-grid,
   .agent-list {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .stepper {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 4px;
   }
 
@@ -474,5 +492,12 @@ h2 {
   .login-link {
     overflow-wrap: anywhere;
   }
+}
+.guest-demo :is(a, button):focus-visible {
+  outline: 3px solid #285a50;
+  outline-offset: 4px;
+}
+.stepper span {
+  flex-shrink: 0;
 }
 </style>
