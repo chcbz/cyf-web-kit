@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import test from 'node:test'
+import { it as test } from 'mocha'
 import { fileURLToPath } from 'node:url'
 import { loadEnv } from 'vite'
 
