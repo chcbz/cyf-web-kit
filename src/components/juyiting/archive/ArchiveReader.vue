@@ -64,7 +64,10 @@
           v-if="readingOpen"
           ref="dialogRef"
           class="archive-reader-fullscreen"
-          :class="{ 'is-virtual-landscape-reader': virtualLandscape }"
+          :class="{
+            'is-virtual-landscape-reader': virtualLandscape,
+            'has-reader-capsule': hasReaderCapsule
+          }"
           role="dialog"
           aria-modal="true"
           aria-labelledby="archive-reader-title"
@@ -353,6 +356,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, proxyRefs, ref } from 'vue'
 import { useArchiveReader, utf8ByteLength } from '@/composables/juyiting/useArchiveReader'
+import { nativeOrientationFromLocation } from '@/composables/juyiting/miniProgramOrientation.js'
 import { registerIdentityCleanup } from '@/utils/identityLifecycle.js'
 
 const { disableTeleport, initialView, virtualLandscape } = defineProps({
@@ -364,6 +368,11 @@ const { disableTeleport, initialView, virtualLandscape } = defineProps({
   },
   virtualLandscape: Boolean
 })
+
+// The SDK also exposes wx.miniProgram in ordinary browsers; use host markers only.
+const hasReaderCapsule = /MicroMessenger/i.test(globalThis.navigator?.userAgent || '')
+  || globalThis.window?.__wxjs_environment === 'miniprogram'
+  || nativeOrientationFromLocation(globalThis.window?.location) !== null
 
 const readerState = useArchiveReader({ autoInitialize: false })
 const reader = proxyRefs(readerState)
@@ -1176,8 +1185,6 @@ onBeforeUnmount(() => {
   width: auto;
   flex: 0 0 auto;
   flex-wrap: nowrap;
-  /* Keep the catalog action clear of the WeChat Mini Program close capsule. */
-  padding-right: max(56px, env(safe-area-inset-right));
 }
 
 .archive-reader-fullscreen.is-virtual-landscape-reader .save-state {
@@ -1281,6 +1288,24 @@ onBeforeUnmount(() => {
   .reader-notes {
     padding: 10px;
   }
+}
+
+.archive-reader-fullscreen.has-reader-capsule {
+  padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+}
+
+.archive-reader-fullscreen.has-reader-capsule:not(.is-virtual-landscape-reader) .reader-header {
+  padding-right: 112px;
+}
+
+.archive-reader-fullscreen.has-reader-capsule.is-virtual-landscape-reader {
+  /* rotate(90deg): physical top/right/bottom/left become logical left/top/right/bottom. */
+  padding: max(6px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-top));
+}
+
+.archive-reader-fullscreen.has-reader-capsule.is-virtual-landscape-reader .reader-header {
+  /* The physical top-right capsule sits at the rotated header's logical top-left. */
+  padding-left: 112px;
 }
 
 @container (max-width: 520px) {

@@ -5,6 +5,7 @@ import { compileScript, parse } from '@vue/compiler-sfc'
 import { mount } from '@vue/test-utils'
 import * as Vue from 'vue'
 import * as HallPanelHelpers from '../src/composables/juyiting/useHallPanels.js'
+import { nativeOrientationFromLocation } from '../src/composables/juyiting/miniProgramOrientation.js'
 import { createApi } from '../src/composables/useHttp.js'
 import { registerIdentityCleanup, stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 import {
@@ -262,8 +263,12 @@ const loadArchiveReaderSfc = (archiveModule) => {
       /^import\s+\{\s*registerIdentityCleanup\s*\}\s+from\s+['"]@\/utils\/identityLifecycle\.js['"];?\s*$/gm,
       'var { registerIdentityCleanup } = archiveModule'
     )
+    .replace(
+      /^import\s+\{\s*nativeOrientationFromLocation\s*\}\s+from\s+['"]@\/composables\/juyiting\/miniProgramOrientation\.js['"];?\s*$/gm,
+      'var { nativeOrientationFromLocation } = orientationModule'
+    )
     .replace('export default', 'return')
-  return new Function('Vue', 'archiveModule', body)(Vue, archiveModule)
+  return new Function('Vue', 'archiveModule', 'orientationModule', body)(Vue, archiveModule, { nativeOrientationFromLocation })
 }
 
 const loadActualHallForIntegration = (mocks, id) => {
@@ -615,11 +620,64 @@ describe('archive reader contract behavior', () => {
     const hallSource = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
     expect(readerSource).to.match(/\.archive-reader-fullscreen\.is-virtual-landscape-reader\s*\{[\s\S]*?width:\s*100dvh;[\s\S]*?height:\s*100dvw;[\s\S]*?rotate\(90deg\)/)
     expect(readerSource).to.match(/\.archive-reader-fullscreen\.is-virtual-landscape-reader \.reader-layout,[\s\S]*?grid-template-columns: minmax\(0, 1fr\) minmax\(190px, 32%\)/)
-    expect(readerSource).to.match(/\.archive-reader-fullscreen\.is-virtual-landscape-reader \.reader-header-actions\s*\{[\s\S]*?padding-right:\s*max\(56px, env\(safe-area-inset-right\)\)/)
     expect(librarySource).to.include(':virtual-landscape="virtualLandscape"')
     expect(hallSource).to.include(':virtual-landscape="isVirtualLandscape"')
     wrapper.unmount()
   })
+
+  for (const environment of [
+    { name: 'ordinary browser', capsule: false },
+    { name: 'SDK-only browser', sdk: true, capsule: false },
+    { name: 'WeChat user agent', userAgent: 'Mozilla/5.0 MicroMessenger/8.0', capsule: true },
+    { name: 'case-insensitive WeChat user agent', userAgent: 'Mozilla/5.0 micromessenger/8.0', capsule: true },
+    { name: 'mini program host marker', marker: 'miniprogram', capsule: true },
+    { name: 'unrelated host marker', marker: 'browser', capsule: false },
+    { name: 'native portrait route', query: '?nativeOrientation=portrait', capsule: true },
+    { name: 'native landscape route', query: '?nativeOrientation=landscape', capsule: true },
+    { name: 'invalid native route with SDK', query: '?nativeOrientation=auto', sdk: true, capsule: false }
+  ]) {
+    for (const virtualLandscape of [false, true]) {
+      it(`binds capsule protection on the teleported ${virtualLandscape ? 'rotated' : 'unrotated'} reader in a ${environment.name}`, async () => {
+        const originalUrl = window.location.href
+        const originals = [
+          [globalThis.navigator, 'userAgent'],
+          [window, '__wxjs_environment'],
+          [window, 'wx'],
+          [globalThis, 'wx']
+        ].map(([host, key]) => [host, key, Object.getOwnPropertyDescriptor(host, key)])
+        let wrapper
+        try {
+          Object.defineProperty(globalThis.navigator, 'userAgent', {
+            configurable: true, value: environment.userAgent || 'Mozilla/5.0 Chrome/130.0'
+          })
+          window.__wxjs_environment = environment.marker
+          window.wx = globalThis.wx = environment.sdk ? { miniProgram: {} } : undefined
+          window.history.replaceState(null, '', `/juyiting${environment.query || ''}`)
+          wrapper = mountArchiveReader(makeApi(), { initialView: 'catalog', disableTeleport: false, virtualLandscape })
+          await waitFor(() => !wrapper.readerState.loading.value && wrapper.find('.archive-book-open').exists())
+          await wrapper.get('.archive-book-open').trigger('click')
+          await waitFor(() => document.body.querySelector('.archive-reader-fullscreen'))
+
+          const dialog = document.body.querySelector('.archive-reader-fullscreen')
+          expect(dialog.parentElement).to.equal(document.body)
+          expect(wrapper.element.contains(dialog)).to.equal(false)
+          expect(dialog.classList.contains('has-reader-capsule')).to.equal(environment.capsule)
+          expect(dialog.classList.contains('is-virtual-landscape-reader')).to.equal(virtualLandscape)
+
+          await wrapper.setProps({ virtualLandscape: !virtualLandscape })
+          expect(dialog.classList.contains('has-reader-capsule')).to.equal(environment.capsule)
+          expect(dialog.classList.contains('is-virtual-landscape-reader')).to.equal(!virtualLandscape)
+        } finally {
+          wrapper?.unmount()
+          window.history.replaceState(null, '', originalUrl)
+          for (const [host, key, descriptor] of originals) {
+            if (descriptor) Object.defineProperty(host, key, descriptor)
+            else delete host[key]
+          }
+        }
+      })
+    }
+  }
 
   it('retries only the catalog before the user chooses a book', async () => {
     let catalogAttempts = 0
