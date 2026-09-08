@@ -5,9 +5,10 @@
         <div class="eyebrow">梁山泊传令中枢</div>
         <h1>聚义厅</h1>
       </div>
-      <div class="stage-tools">
+      <div data-tour="landscape-tools" class="stage-tools">
         <button
           class="tool-action refresh-action"
+          data-tour="landscape-refresh"
           :class="{ 'is-refreshing': refreshing }"
           :disabled="refreshing || stageInputLocked"
           title="点验厅中动静"
@@ -18,6 +19,7 @@
         </button>
         <button
           class="tool-action sound-toggle"
+          data-tour="landscape-sound"
           :disabled="stageInputLocked"
           :title="soundEnabled ? '歇下声响' : '开起声响'"
           @click="emitStageAction('toggle-sound')"
@@ -27,6 +29,7 @@
         </button>
         <button
           class="tool-action onboarding-replay"
+          data-tour="landscape-onboarding"
           :disabled="stageInputLocked"
           title="重看新手引导"
           @click="emitOnboarding($event.currentTarget)"
@@ -38,6 +41,7 @@
         <button
           v-if="isMobileCoarse"
           class="tool-action orientation-action"
+          data-tour="landscape-orientation"
           :disabled="stageInputLocked || orientationRequestPending"
           :title="sceneMode === 'landscape' ? '切换竖屏视图' : '打开全景视图'"
           @click="emitOrientationRequest()"
@@ -57,6 +61,7 @@
 
     <div
       class="hall-board"
+      data-tour="landscape-map"
       :class="{
         'is-melon-ready': melonReady,
         'has-scene-error': Boolean(sceneError),

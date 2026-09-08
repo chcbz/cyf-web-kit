@@ -12,6 +12,12 @@ import {
   sha256Hex,
   validateGuestDemoTemplate
 } from '../src/composables/juyiting/useHallOnboarding.js'
+import {
+  paddedTargetRect,
+  positionOnboardingDialog,
+  rectFromEdges,
+  viewportBoundsToClientRect
+} from '../src/components/juyiting/hallOnboardingGeometry.js'
 
 const templates = [
   { id: 'research' },
@@ -32,6 +38,79 @@ const brokenStorage = {
   getItem () { throw new Error('storage unavailable') },
   setItem () { throw new Error('storage unavailable') }
 }
+
+test('target-based onboarding keeps separate portrait and landscape anchors', () => {
+  const modal = readFileSync(new URL('../src/components/juyiting/HallOnboarding.vue', import.meta.url), 'utf8')
+  const portrait = readFileSync(new URL('../src/components/juyiting/HallPortraitHome.vue', import.meta.url), 'utf8')
+  const stage = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
+
+  assert.match(modal, /'portrait-command'/)
+  assert.match(modal, /'landscape-map'/)
+  assert.match(modal, /onboarding-spotlight/)
+  assert.match(modal, /MutationObserver/)
+  assert.match(modal, /getHotspotScreenBounds/)
+  assert.match(modal, /focusHotspot/)
+  assert.match(modal, />上一步</)
+  assert.match(portrait, /data-tour="portrait-preview"/)
+  assert.match(portrait, /data-tour="portrait-shortcuts"/)
+  assert.match(portrait, /data-tour="portrait-todos"/)
+  assert.match(portrait, /data-tour="portrait-context"/)
+  assert.match(portrait, /:data-tour="`portrait-action-\$\{action\.key\}`"/)
+  assert.match(stage, /data-tour="landscape-map"/)
+  assert.match(stage, /data-tour="landscape-tools"/)
+  assert.match(modal, /hotspotId: 'agent-roster'/)
+  assert.match(modal, /hotspotId: 'bounty-board'/)
+  assert.match(modal, /hotspotId: 'roster-book'/)
+  assert.match(modal, /hotspotId: 'library-shelf'/)
+  assert.doesNotMatch(modal, /juyitingGame\?\._hallScene|_hitProvider/)
+})
+
+test('onboarding geometry always returns finite edges and clamps the full dialog to the viewport', () => {
+  const target = paddedTargetRect({ left: 930, top: 690, width: 120, height: 80 }, { width: 1024, height: 768 })
+  assert.deepEqual(target, { left: 922, top: 682, right: 1020, bottom: 764, width: 98, height: 82 })
+
+  const layout = positionOnboardingDialog({
+    targetRect: target,
+    dialogSize: { width: 360, height: 310 },
+    viewport: { width: 1024, height: 768 }
+  })
+  assert.ok(layout)
+  for (const value of Object.values(layout.dialog)) assert.equal(Number.isFinite(value), true)
+  assert.ok(layout.dialog.left >= 12)
+  assert.ok(layout.dialog.top >= 12)
+  assert.ok(layout.dialog.right <= 1012)
+  assert.ok(layout.dialog.bottom <= 756)
+})
+
+test('missing targets center a usable card and virtual landscape hotspot mapping rotates all four edges', () => {
+  const missing = positionOnboardingDialog({
+    targetRect: null,
+    dialogSize: { width: 336, height: 280 },
+    viewport: { width: 390, height: 844 }
+  })
+  assert.equal(missing.placement, 'center')
+  assert.equal(missing.arrow, null)
+  assert.deepEqual(missing.dialog, { left: 27, top: 282, right: 363, bottom: 562, width: 336, height: 280 })
+
+  const rotated = viewportBoundsToClientRect({
+    bounds: { x: 100, y: 40, width: 60, height: 30 },
+    canvasRect: { left: 10, top: 20, width: 800, height: 400 },
+    viewport: { width: 400, height: 200 },
+    virtualLandscape: true
+  })
+  assert.deepEqual(rotated, { left: 530, top: 120, right: 650, bottom: 180, width: 120, height: 60 })
+})
+
+test('landscape guide hotspot ids are an exact subset of the shipped TMX hotspot fixture', () => {
+  const modal = readFileSync(new URL('../src/components/juyiting/HallOnboarding.vue', import.meta.url), 'utf8')
+  const tmx = readFileSync(new URL('../public/juyiting/hall.tmx', import.meta.url), 'utf8')
+  const hotspotGroup = tmx.match(/<objectgroup[^>]+name="hotspots"[\s\S]*?<\/objectgroup>/)?.[0] || ''
+  const shippedIds = new Set([...hotspotGroup.matchAll(/<object[^>]+name="([^"]+)"/g)].map(match => match[1]))
+  const guidedIds = [...modal.matchAll(/hotspotId: '([^']+)'/g)].map(match => match[1])
+
+  assert.deepEqual(guidedIds, ['main-seat', 'agent-roster', 'bounty-board', 'roster-book', 'library-shelf'])
+  for (const hotspotId of guidedIds) assert.equal(shippedIds.has(hotspotId), true, `${hotspotId} must exist in hall.tmx hotspots`)
+})
 
 test('first visit is visible and subject selection prioritizes jiacn without raw identifiers in keys', () => {
   const subject = hallOnboardingSubject({ getJiacn: 'jia-cn-77', getOpenid: 'openid-1', getUserId: 'user-1' })
@@ -123,7 +202,7 @@ test('skip is versioned and completion persists independently for each user', ()
 
   assert.equal(userA.skip().status, 'skipped')
   assert.equal(createHallOnboarding({ subject: 'user-a', localStorage, sessionStorage: memoryStorage() }).snapshot().visible, false)
-  assert.equal(createHallOnboarding({ subject: 'user-a', version: 'v2', localStorage, sessionStorage: memoryStorage() }).snapshot().visible, true)
+  assert.equal(createHallOnboarding({ subject: 'user-a', version: 'v3', localStorage, sessionStorage: memoryStorage() }).snapshot().visible, true)
 
   const userB = createHallOnboarding({ subject: 'user-b', localStorage, sessionStorage: memoryStorage() })
   assert.equal(userB.snapshot().visible, true)
@@ -185,7 +264,7 @@ test('the wrapper preserves PKCE return query/hash, syncs after a cleanup reject
   const entry = readFileSync(new URL('../src/components/world/JuyiHallEntry.vue', import.meta.url), 'utf8')
   const guestDemo = readFileSync(new URL('../src/components/public/GuestDemo.vue', import.meta.url), 'utf8')
 
-  assert.match(entry, /<JuyiHall\s*\/>/)
+  assert.match(entry, /<JuyiHall\s+@open-onboarding="reopen"\s*\/>/)
   assert.match(entry, /consumeGuestDemoTemplateQuery\(route\.query, guestDemoTemplates\)/)
   assert.match(entry, /try \{[\s\S]*await router\.replace\(\{ path: route\.path, query: handoff\.query, hash: route\.hash \}\)[\s\S]*\} catch \{[\s\S]*\} finally \{[\s\S]*syncOnboarding\(\)/)
   assert.ok(entry.indexOf('await router.replace') < entry.indexOf('finally {'))
@@ -327,12 +406,29 @@ const loadOnboardingLifecycle = ({ document, props }) => {
   const unmountCallbacks = []
   const watchers = []
   const emissions = []
+  const harnessWindow = {
+    innerWidth: 1024,
+    innerHeight: 768,
+    visualViewport: null,
+    addEventListener () {},
+    removeEventListener () {},
+    requestAnimationFrame () { return 1 },
+    cancelAnimationFrame () {},
+    setTimeout () { return 1 },
+    clearTimeout () {}
+  }
+  const juyitingGame = {
+    focusHotspot: () => false,
+    getHotspotScreenBounds: () => null,
+    getRenderSnapshot: () => ({ viewport: { width: 1024, height: 768 } })
+  }
   const executable = `${script.replace(/^import .*$/gm, '')}
 return { dialogRef, overlayRef, openDialog, closeDialog, handleDocumentKeydown, handleDocumentFocusin }
 `
   const setup = new Function(
     'computed', 'nextTick', 'onBeforeUnmount', 'onMounted', 'ref', 'watch', 'guestDemoTemplates',
-    'document', 'HTMLElement', 'defineProps', 'defineEmits', executable
+    'juyitingGame', 'paddedTargetRect', 'positionOnboardingDialog', 'rectFromEdges', 'viewportBoundsToClientRect',
+    'window', 'document', 'HTMLElement', 'defineProps', 'defineEmits', executable
   )
   const lifecycle = setup(
     getter => ({ get value () { return getter() } }),
@@ -342,6 +438,12 @@ return { dialogRef, overlayRef, openDialog, closeDialog, handleDocumentKeydown, 
     value => ({ value }),
     (source, callback, options) => watchers.push({ source, callback, options }),
     [],
+    juyitingGame,
+    paddedTargetRect,
+    positionOnboardingDialog,
+    rectFromEdges,
+    viewportBoundsToClientRect,
+    harnessWindow,
     document,
     HarnessElement,
     () => props,

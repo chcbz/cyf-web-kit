@@ -975,6 +975,11 @@ export class JuyitingGame {
     return this._hallScene?.focusHotspot?.(hotspotId) === true
   }
 
+  getHotspotScreenBounds(hotspotId) {
+    const bounds = this._hallScene?.hotspotScreenBounds?.(hotspotId)
+    return bounds ? Object.freeze({ ...bounds }) : null
+  }
+
   getInputSnapshot() {
     return this._hallScene?.inputSnapshot?.() || null
   }

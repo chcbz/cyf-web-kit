@@ -606,6 +606,18 @@ export function createHallSceneClass(me, HallAgentClass) {
       return this._focusWorldPoint({ x: marker.pos?.x + marker.width / 2, y: marker.pos?.y + marker.height / 2 })
     }
 
+    hotspotScreenBounds(hotspotId) {
+      if (typeof hotspotId !== 'string' || hotspotId.length === 0) return null
+      const bounds = this._hitProvider().hotspots.find(item => item.id === hotspotId)?.bounds
+      if (!bounds || ![bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite) || bounds.width <= 0 || bounds.height <= 0) return null
+      return Object.freeze({
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height
+      })
+    }
+
     inputSnapshot() {
       this._ensureControllers()
       return this._inputController?.snapshot?.() || DEFAULT_INPUT_SNAPSHOT

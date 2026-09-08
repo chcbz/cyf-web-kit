@@ -1,4 +1,5 @@
-export const HALL_ONBOARDING_VERSION = 'v1'
+// v2 introduces mode-specific, target-based guidance and should be shown once to v1 users.
+export const HALL_ONBOARDING_VERSION = 'v2'
 export const HALL_ONBOARDING_STORAGE_PREFIX = 'cyf:juyiting:onboarding'
 
 const validStatuses = new Set(['skipped', 'completed'])

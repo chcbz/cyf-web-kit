@@ -955,13 +955,29 @@ const closePanel = `
 // it does not add a production-only bypass.
 const completeOnboarding = async (runtime, cdp) => {
   await waitForExpression(runtime, cdp, 'Boolean(document.querySelector(".onboarding-overlay .complete-button"))')
-  const completed = await evaluate(cdp, `(() => {
-    const button = document.querySelector('.onboarding-overlay .complete-button');
-    if (!button) return false;
-    button.click();
-    return true;
-  })()`)
-  if (!completed) throw new Error('Onboarding completion button was unavailable')
+  let finished = false
+  for (let attempt = 0; attempt < 32; attempt += 1) {
+    const result = await evaluate(cdp, `(() => {
+      const next = document.querySelector('.onboarding-overlay .next-button');
+      const complete = document.querySelector('.onboarding-overlay .complete-button');
+      const button = next || complete;
+      const progress = document.querySelector('.onboarding-overlay .step-progress')?.textContent || '';
+      if (!button) return { clicked: false, final: false, progress };
+      const final = !next;
+      button.click();
+      return { clicked: true, final, progress };
+    })()`)
+    if (!result?.clicked) throw new Error('Onboarding completion button was unavailable')
+    if (result.final) {
+      finished = true
+      break
+    }
+    await waitForExpression(runtime, cdp, `(() => {
+      const progress = document.querySelector('.onboarding-overlay .step-progress')?.textContent || '';
+      return progress && progress !== ${JSON.stringify(result.progress)};
+    })()`)
+  }
+  if (!finished) throw new Error('Onboarding exceeded the 32-step smoke safety bound')
   await waitForExpression(runtime, cdp, '!document.querySelector(".onboarding-overlay")')
 }
 

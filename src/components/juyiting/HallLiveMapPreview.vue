@@ -8,6 +8,7 @@
       <div class="preview-orientation-controls">
         <button
           class="preview-landscape-entry"
+          data-tour="portrait-landscape"
           type="button"
           :disabled="orientationRequestPending"
           @click="emit('request-landscape')"

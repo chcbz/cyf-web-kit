@@ -496,7 +496,8 @@ describe('HallScene melonJS runtime compatibility', () => {
         focusHotspot: id => {
           calls.push(['hotspot', id])
           return true
-        }
+        },
+        hotspotScreenBounds: id => id === 'hotspot-1' ? Object.freeze({ x: 10, y: 20, width: 30, height: 40 }) : null
       }
 
       const snapshot = game.captureResumeSnapshot()
@@ -544,6 +545,10 @@ describe('HallScene melonJS runtime compatibility', () => {
       expect(game._viewportCommitWaiters).to.have.length(0)
       expect(game.focusAgent('agent-1')).to.equal(true)
       expect(game.focusHotspot('hotspot-1')).to.equal(true)
+      const hotspotBounds = game.getHotspotScreenBounds('hotspot-1')
+      expect(hotspotBounds).to.deep.equal({ x: 10, y: 20, width: 30, height: 40 })
+      expect(Object.isFrozen(hotspotBounds)).to.equal(true)
+      expect(game.getHotspotScreenBounds('missing')).to.equal(null)
       expect(calls.slice(2)).to.deep.equal([['agent', 'agent-1'], ['hotspot', 'hotspot-1']])
     } finally {
       window.requestAnimationFrame = originalRequestAnimationFrame

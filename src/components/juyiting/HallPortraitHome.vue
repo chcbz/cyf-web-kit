@@ -7,6 +7,7 @@
       </div>
       <button
         class="portrait-refresh"
+        data-tour="portrait-refresh"
         type="button"
         :disabled="refreshing"
         aria-label="点验刷新"
@@ -23,7 +24,7 @@
       <div><strong>{{ openTaskCount }}</strong><span>待办</span></div>
     </section>
 
-    <section class="portrait-scene" :class="{ 'has-live-preview': livePreviewEnabled }" aria-label="聚义厅实景窗口">
+    <section data-tour="portrait-preview" class="portrait-scene" :class="{ 'has-live-preview': livePreviewEnabled }" aria-label="聚义厅实景窗口">
       <HallLiveMapPreview v-if="livePreviewEnabled" :state="livePreviewState" :error-message="livePreviewError" :map-width="livePreviewMapWidth" :map-height="livePreviewMapHeight" :orientation-request-pending="orientationRequestPending" :orientation-hint="orientationHint" @request-landscape="emit('request-landscape')" @retry="emit('retry-live-preview')" @visibility-change="visible => emit('live-preview-visibility-change', visible)">
         <template #controls>
           <ul v-if="operableAgents.length" class="scene-agent-list preview-agent-list" aria-label="厅中好汉">
@@ -53,6 +54,7 @@
       <p v-else class="scene-empty">厅前静候点将</p>
       <button
         class="landscape-entry"
+        data-tour="portrait-landscape"
         type="button"
         :disabled="orientationRequestPending"
         @click="emit('request-landscape')"
@@ -71,13 +73,14 @@
           <span>单手直达</span>
         </div>
       </div>
-      <div class="portrait-shortcuts">
+      <div data-tour="portrait-shortcuts" class="portrait-shortcuts">
         <button
           v-for="action in quickActions"
           :key="action.key"
           class="portrait-shortcut"
           type="button"
           :data-portrait-action="action.key"
+          :data-tour="`portrait-action-${action.key}`"
           @click="emit('quick-action', action.key)"
         >
           <span aria-hidden="true">{{ action.icon }}</span>
@@ -86,7 +89,7 @@
       </div>
     </section>
 
-    <section class="portrait-section portrait-todos" aria-labelledby="portrait-todos-title">
+    <section data-tour="portrait-todos" class="portrait-section portrait-todos" aria-labelledby="portrait-todos-title">
       <div class="section-heading">
         <h2 id="portrait-todos-title">待办榜文</h2>
         <button type="button" @click="emit('quick-action', 'tasks')">查看悬赏榜</button>
@@ -105,7 +108,7 @@
       <p v-if="!todoTasks.length" class="portrait-empty">眼下无待办榜文，可先点验厅中人手。</p>
     </section>
 
-    <section class="portrait-context" aria-label="当前上下文">
+    <section data-tour="portrait-context" class="portrait-context" aria-label="当前上下文">
       <div>
         <span>当前好汉</span>
         <strong>{{ selectedAgent ? agentName(selectedAgent) : '尚未点将' }}</strong>
