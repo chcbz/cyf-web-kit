@@ -615,6 +615,7 @@ describe('archive reader contract behavior', () => {
     const hallSource = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
     expect(readerSource).to.match(/\.archive-reader-fullscreen\.is-virtual-landscape-reader\s*\{[\s\S]*?width:\s*100dvh;[\s\S]*?height:\s*100dvw;[\s\S]*?rotate\(90deg\)/)
     expect(readerSource).to.match(/\.archive-reader-fullscreen\.is-virtual-landscape-reader \.reader-layout,[\s\S]*?grid-template-columns: minmax\(0, 1fr\) minmax\(190px, 32%\)/)
+    expect(readerSource).to.match(/\.archive-reader-fullscreen\.is-virtual-landscape-reader \.reader-header-actions\s*\{[\s\S]*?padding-right:\s*max\(56px, env\(safe-area-inset-right\)\)/)
     expect(librarySource).to.include(':virtual-landscape="virtualLandscape"')
     expect(hallSource).to.include(':virtual-landscape="isVirtualLandscape"')
     wrapper.unmount()

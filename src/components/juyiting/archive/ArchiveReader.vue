@@ -1176,6 +1176,8 @@ onBeforeUnmount(() => {
   width: auto;
   flex: 0 0 auto;
   flex-wrap: nowrap;
+  /* Keep the catalog action clear of the WeChat Mini Program close capsule. */
+  padding-right: max(56px, env(safe-area-inset-right));
 }
 
 .archive-reader-fullscreen.is-virtual-landscape-reader .save-state {
