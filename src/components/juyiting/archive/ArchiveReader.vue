@@ -423,7 +423,7 @@ const enterReading = async (event) => {
     ? event.currentTarget
     : document.activeElement
   const opened = reader.chapter
-    || await runAction(() => reader.initialize({ reuseCatalog: true, deferPrivateState: true }), '典籍暂无法读取，请稍后重试。')
+    || await runAction(() => reader.initialize({ reuseCatalog: true }), '典籍暂无法读取，请稍后重试。')
   if (!opened && !reader.chapter) return
   catalogOpen.value = false
   readingOpen.value = true

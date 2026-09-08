@@ -1328,7 +1328,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     return promise
   }
 
-  const initialize = async ({ openChapter = true, reuseCatalog = false, deferPrivateState = false } = {}) => {
+  const initialize = async ({ openChapter = true, reuseCatalog = false } = {}) => {
     if (disposed) return null
     const generation = ++initializeGeneration
     if (catalog.value) initializeController?.abort()
@@ -1342,25 +1342,12 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       if (!reuseCatalog || !catalog.value) await loadCatalog(controller.signal)
       if (!isActive()) return null
       if (!openChapter) return catalog.value
-      if (!deferPrivateState) {
-        await loadProgress(edition.value.editionId, controller.signal)
-        if (!isActive()) return null
-        void loadBookmarks(controller.signal).catch((error) => {
-          if (isActive() && error?.name !== 'AbortError') errorMessage.value = '书签暂无法读取，请稍后重试。'
-        })
-        const nextChapter = await continueReading(controller.signal)
-        return isActive() ? nextChapter : null
-      }
-      // Catalog and chapter text are immutable edition content; private reading state must not
-      // delay entering the reader from its already-open shelf.
-      const nextChapterPromise = continueReading(controller.signal)
-      void loadProgress(edition.value.editionId, controller.signal).catch((error) => {
-        if (isActive() && error?.name !== 'AbortError') errorMessage.value = '阅读进度暂无法读取，已从卷首打开。'
-      })
+      await loadProgress(edition.value.editionId, controller.signal)
+      if (!isActive()) return null
       void loadBookmarks(controller.signal).catch((error) => {
         if (isActive() && error?.name !== 'AbortError') errorMessage.value = '书签暂无法读取，请稍后重试。'
       })
-      const nextChapter = await nextChapterPromise
+      const nextChapter = await continueReading(controller.signal)
       return isActive() ? nextChapter : null
     } catch (error) {
       if (!isActive() || error?.name === 'AbortError') return null

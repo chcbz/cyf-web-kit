@@ -96,7 +96,7 @@ describe('useHallData operable roster', () => {
     await hallData.loadAgents()
 
     expect(hallData.operableRosterAgents.value.map(agent => agent.agentId)).to.deep.equal(['huyanzhuo', 'personal-runtime'])
-    expect(calls.filter(call => call.url === '/roster')).to.have.length(2)
+    expect(calls.filter(call => call.url === '/roster')).to.have.length(1)
     expect(calls.find(call => call.params.status === undefined && call.params.pageSize === 100)).to.exist
   })
 
@@ -120,6 +120,44 @@ describe('useHallData operable roster', () => {
     expect(hallData.mapAgents.value).to.deep.equal([])
     expect(hallData.operableRosterAgents.value.map(agent => agent.agentId)).to.deep.equal(['huyanzhuo'])
     expect(selectedAgent.value?.agentId).to.equal('huyanzhuo')
+  })
+
+  it('denies persona runtimes absent from catalog, preserves non-persona runtimes, and refreshes filtered and operable projections together', async () => {
+    const first = [
+      { agentId: 'huyanzhuo-old', personaCode: 'huyanzhuo', boundToMe: true, canOperate: true, status: 'offline' },
+      { agentId: 'runtime-only', boundToMe: true, canOperate: true, status: 'offline' }
+    ]
+    const refreshed = [
+      { agentId: 'huyanzhuo-old', personaCode: 'huyanzhuo', boundToMe: true, canOperate: true, status: 'online', fresh: true },
+      { agentId: 'runtime-only', boundToMe: true, canOperate: true, status: 'offline' }
+    ]
+    const selectedAgent = ref(first[0])
+    let rosterReads = 0
+    const agentApi = {
+      get: async (url, _params, options) => options.onSuccess({ data: url === '/personas/catalog' ? [{ personaCode: 'huyanzhuo', boundToMe: true }] : [] }),
+      search: async (url, _params, options) => {
+        if (url !== '/roster') throw new Error(`unexpected ${url}`)
+        rosterReads += 1
+        options.onSuccess({ data: rosterReads === 1 ? first : refreshed })
+      }
+    }
+    const hallData = useHallData({ agentApi, log: { warn: () => {} }, normalizeStatus: (status = '') => status.toLowerCase(), selectedAgent, selectedTask: ref(null), taskAgentMatchScore: () => 0 })
+
+    await hallData.loadAgents()
+    expect(hallData.operableRosterAgents.value.map(agent => agent.agentId)).to.deep.equal(['huyanzhuo-old', 'runtime-only'])
+    expect(selectedAgent.value).to.equal(hallData.operableRosterAgents.value[0])
+    await hallData.setAgentFilter('online')
+    expect(hallData.agents.value.map(agent => agent.agentId)).to.deep.equal(['huyanzhuo-old'])
+    expect(hallData.operableRosterAgents.value.map(agent => agent.agentId)).to.deep.equal(['huyanzhuo-old', 'runtime-only'])
+    expect(selectedAgent.value?.fresh).to.equal(true)
+    expect(rosterReads).to.equal(2)
+
+    const omittedCatalogData = useHallData({
+      agentApi: { get: async (_url, _params, options) => options.onSuccess({ data: [] }), search: async (_url, _params, options) => options.onSuccess({ data: first }) },
+      log: { warn: () => {} }, normalizeStatus: (status = '') => status.toLowerCase(), selectedAgent: ref(null), selectedTask: ref(null), taskAgentMatchScore: () => 0
+    })
+    await omittedCatalogData.loadAgents()
+    expect(omittedCatalogData.operableRosterAgents.value.map(agent => agent.agentId)).to.deep.equal(['runtime-only'])
   })
 
   it('reports an unbind no-op truthfully and refreshes every roster projection after DELETE', async () => {

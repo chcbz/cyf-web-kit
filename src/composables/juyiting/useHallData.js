@@ -18,6 +18,7 @@ export const useHallData = ({
   const agents = ref([])
   const mapAgents = ref([])
   const operableRosterAgents = ref([])
+  const allRosterAgents = ref([])
   const personaCatalog = ref([])
   const tasks = ref([])
   const taskRecommendations = ref({})
@@ -137,70 +138,68 @@ export const useHallData = ({
     return recommendations
   }
 
+  const reconcileSelectedAgent = () => {
+    const selectedId = selectedAgent.value?.agentId
+    if (!selectedId) return
+    const freshOperableAgent = operableRosterAgents.value.find(agent => agent?.agentId === selectedId)
+    if (freshOperableAgent) {
+      selectedAgent.value = freshOperableAgent
+      return
+    }
+    if (!mapAgents.value.some(agent => agent?.agentId === selectedId)) selectedAgent.value = null
+  }
+
+  const deriveRosterProjections = () => {
+    agents.value = agentFilter.value === 'all'
+      ? allRosterAgents.value
+      : allRosterAgents.value.filter(agent => normalizeStatus(agent?.status) === agentFilter.value)
+    const catalogByPersona = new Map(personaCatalog.value
+      .filter(persona => typeof persona?.personaCode === 'string' && persona.personaCode)
+      .map(persona => [persona.personaCode, persona]))
+    operableRosterAgents.value = allRosterAgents.value.filter(agent => {
+      if (!isCurrentUserOperable(agent)) return false
+      // Persona runtimes have an authoritative binding projection in the catalog. A missing
+      // catalog record is not authority to retain a stale persona runtime after dismissal.
+      if (agent?.personaCode) return catalogByPersona.get(agent.personaCode)?.boundToMe === true
+      return true
+    })
+    reconcileSelectedAgent()
+  }
+
   const loadMapAgents = async () => {
     try {
       await agentApi.get('/map', {}, {
         autoLoading: false,
         onSuccess: (result) => {
           mapAgents.value = (result?.data || []).filter(agent => ['online', 'busy'].includes(normalizeStatus(agent.status)))
-          if (selectedAgent.value && !mapAgents.value.some(agent => agent.agentId === selectedAgent.value.agentId) &&
-            !isCurrentUserOperable(selectedAgent.value)) {
-            selectedAgent.value = null
-          }
         }
       })
     } catch (error) {
       log.warn('load map agents failed:', error)
       mapAgents.value = []
-      selectedAgent.value = null
     }
   }
 
   const loadOperableRosterAgents = async () => {
-    try {
-      await agentApi.search('/roster', {
-        pageNum: 1,
-        pageSize: 100
-      }, {
-        autoLoading: false,
-        onSuccess: (result) => {
-          const catalogByPersona = new Map(personaCatalog.value
-            .filter(persona => typeof persona?.personaCode === 'string' && persona.personaCode)
-            .map(persona => [persona.personaCode, persona]))
-          operableRosterAgents.value = (result?.data || []).filter(agent => {
-            if (!isCurrentUserOperable(agent)) return false
-            const authoritativePersona = agent?.personaCode ? catalogByPersona.get(agent.personaCode) : null
-            // A catalog-backed persona may retain a stale runtime after dismissal. Do not
-            // apply this catalog check to non-persona personal agents.
-            return !authoritativePersona || authoritativePersona.boundToMe === true
-          })
-          if (selectedAgent.value && !mapAgents.value.some(agent => agent?.agentId === selectedAgent.value.agentId) &&
-            !operableRosterAgents.value.some(agent => agent?.agentId === selectedAgent.value.agentId)) {
-            selectedAgent.value = null
-          }
-        }
-      })
-    } catch (error) {
-      log.warn('load operable roster agents failed:', error)
-      operableRosterAgents.value = []
-    }
+    deriveRosterProjections()
   }
 
-  const loadRosterAgents = async () => {
+  const loadRosterAgents = async ({ derive = true } = {}) => {
     try {
       await agentApi.search('/roster', {
-        status: agentFilter.value === 'all' ? undefined : agentFilter.value,
         pageNum: 1,
         pageSize: 100
       }, {
         autoLoading: false,
         onSuccess: (result) => {
-          agents.value = result?.data || []
+          allRosterAgents.value = result?.data || []
         }
       })
+      if (derive) deriveRosterProjections()
     } catch (error) {
       log.warn('load roster agents failed:', error)
-      agents.value = []
+      allRosterAgents.value = []
+      if (derive) deriveRosterProjections()
     }
   }
 
@@ -230,8 +229,8 @@ export const useHallData = ({
         bindResult = result?.data || null
       }
     })
-    await Promise.all([loadPersonaCatalog(), loadRosterAgents(), loadMapAgents()])
-    await loadOperableRosterAgents()
+    await Promise.all([loadPersonaCatalog(), loadRosterAgents({ derive: false }), loadMapAgents()])
+    deriveRosterProjections()
     return bindResult
   }
 
@@ -240,14 +239,14 @@ export const useHallData = ({
     await agentApi.delete(`/personas/${persona.personaCode}/bind`, {
       autoLoading: false
     })
-    await Promise.all([loadPersonaCatalog(), loadRosterAgents(), loadMapAgents()])
-    await loadOperableRosterAgents()
+    await Promise.all([loadPersonaCatalog(), loadRosterAgents({ derive: false }), loadMapAgents()])
+    deriveRosterProjections()
     return true
   }
 
   const loadAgents = async () => {
-    await Promise.all([loadMapAgents(), loadRosterAgents(), loadPersonaCatalog()])
-    await loadOperableRosterAgents()
+    await Promise.all([loadMapAgents(), loadRosterAgents({ derive: false }), loadPersonaCatalog()])
+    deriveRosterProjections()
   }
 
   const loadTasks = async () => {

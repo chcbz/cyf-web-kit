@@ -296,7 +296,7 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
   const hallData = {
     applySceneEvent: noop, applySceneSnapshot: noop, agentFilter: Vue.ref('online'), agents: list, bindPersona: asyncNoop,
     canAssign: () => true, filteredAgents: list, hiddenAgentCount: Vue.ref(0), loadAgents: async () => { counters.hallLoads += 1 },
-    loadTasks: async () => { counters.hallLoads += 1 }, loadTaskRecommendations: asyncNoop, mapAgents: list, personaCatalog: list,
+    loadTasks: async () => { counters.hallLoads += 1 }, loadTaskRecommendations: asyncNoop, mapAgents: list, operableRosterAgents: list, personaCatalog: list,
     recommendedAgents: list, setAgentFilter: asyncNoop, setTaskStatusFilter: asyncNoop, taskAbilityFilter: Vue.ref('ability-o04'),
     taskAbilityOptions: list, taskKeyword: Vue.ref('task-filter-o04'), tasks: list, taskStatusCount: Vue.ref({}), taskStatusFilter: Vue.ref('open'),
     unbindPersona: asyncNoop, visibleAgents: list
@@ -326,6 +326,8 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
     useTaskWorkspace: () => taskWorkspace,
     createDisabledTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }),
     isTaskWorkspaceBuildEnabled: () => Boolean(workspaceState),
+    isEconomyPreviewBuildEnabled: () => false, isEconomyPreviewCapability: () => false, loadEconomyPreviewCapability: asyncNoop,
+    resolveLiveMapPreviewActivation: () => false,
     useTaskWorkspaceView: () => workspaceState ? ({ subject: workspaceState.subject, workspace: workspaceState.workspace, connectionState: workspaceState.connectionState, error: workspaceState.error, retry: workspaceState.retry }) : ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: text, error: Vue.ref(null), retry: noop }),
     useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }),
     portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '',
@@ -1234,24 +1236,27 @@ describe('archive reader contract behavior', () => {
     const mounted = mountReader(api)
 
     await mounted.reader.initialize({ openChapter: false })
-    await mounted.reader.initialize({ reuseCatalog: true, deferPrivateState: true })
+    await mounted.reader.initialize({ reuseCatalog: true })
 
     expect(api.calls.filter(call => call.path === '/catalog')).to.have.length(1)
     mounted.wrapper.unmount()
   })
 
-  it('opens immutable chapter text without waiting for deferred private progress', async () => {
+  it('waits for persisted progress, resumes its chapter and byte offset, and issues no passive progress PUT', async () => {
     const progressResponse = deferred()
+    const location = point(chapterOne, chapterOne.paragraphs[1], 3)
     const api = makeApi({ progressEnvelope: progressResponse.promise })
     const mounted = mountReader(api)
 
-    const opened = await mounted.reader.initialize({ deferPrivateState: true })
+    const initializing = mounted.reader.initialize({ reuseCatalog: true })
+    await waitFor(() => api.calls.some(call => call.path.startsWith('/me/progress/')))
+    expect(api.calls.some(call => call.path.includes('/chapters/'))).to.equal(false)
+    progressResponse.resolve(response({ editionId, location, state: 'IN_PROGRESS', version: '1' }))
+    const opened = await initializing
 
-    expect(opened?.blockId).to.equal(preface.blockId)
-    expect(mounted.reader.chapter.value?.blockId).to.equal(preface.blockId)
-    expect(api.calls.some(call => call.path.startsWith('/me/progress/'))).to.equal(true)
-    progressResponse.resolve(response({ editionId, location: point(chapterOne, chapterOne.paragraphs[0]), state: 'IN_PROGRESS', version: '1' }))
-    await waitFor(() => mounted.reader.progress.value?.version === '1')
+    expect(opened?.blockId).to.equal(chapterOne.blockId)
+    expect(mounted.reader.currentLocation.value).to.deep.equal(location)
+    expect(api.calls.filter(call => call.method === 'put' && call.path.startsWith('/me/progress/'))).to.have.length(0)
     mounted.wrapper.unmount()
   })
 
