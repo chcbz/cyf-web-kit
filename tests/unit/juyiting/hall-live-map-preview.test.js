@@ -51,16 +51,22 @@ describe('HallLiveMapPreview', () => {
     const wrapper = mount(Preview, {
       attachTo: document.body,
       props: { state: 'loading' },
-      slots: { default: '<canvas data-test="stable-map-slot"></canvas>' }
+      slots: {
+        default: '<canvas data-test="stable-map-slot"></canvas>',
+        controls: '<button data-test="agent-control" type="button">林冲</button>'
+      }
     })
 
     const stableSlot = wrapper.get('[data-test="stable-map-slot"]').element
     expect(wrapper.get('.preview-map-slot').attributes('inert')).to.equal('')
+    expect(wrapper.find('.preview-map-slot [data-test="agent-control"]').exists()).to.equal(false)
+    expect(wrapper.get('.preview-map-controls [data-test="agent-control"]').text()).to.equal('林冲')
     expect(wrapper.text()).to.include('地图预览加载中')
     await wrapper.setProps({ errorMessage: '资源加载失败', state: 'error' })
     expect(wrapper.get('[data-test="stable-map-slot"]').element).to.equal(stableSlot)
     expect(wrapper.text()).to.include('资源加载失败')
-    expect(wrapper.get('button').text()).to.equal('横屏看全景')
+    expect(wrapper.get('.preview-landscape-entry').text()).to.equal('横屏看全景')
+    expect(wrapper.text()).not.to.include('厅中实景')
     wrapper.unmount()
   })
 
@@ -71,19 +77,19 @@ describe('HallLiveMapPreview', () => {
       props: { orientationHint: '请允许横屏', orientationRequestPending: true, state: 'ready' }
     })
 
-    const buttons = wrapper.findAll('button')
-    expect(buttons[0].attributes('disabled')).to.equal('')
-    expect(buttons[0].text()).to.equal('正在请求横屏…')
+    const landscapeButton = wrapper.get('.preview-landscape-entry')
+    expect(landscapeButton.attributes('disabled')).to.equal('')
+    expect(landscapeButton.text()).to.equal('正在请求横屏…')
     expect(wrapper.text()).to.include('请允许横屏')
-    await buttons[0].trigger('click')
+    await landscapeButton.trigger('click')
     expect(wrapper.emitted('request-landscape')).to.equal(undefined)
 
     await wrapper.setProps({ orientationRequestPending: false })
-    await wrapper.findAll('button')[0].trigger('click')
+    await wrapper.get('.preview-landscape-entry').trigger('click')
     expect(wrapper.emitted('request-landscape')).to.have.length(1)
     expect(wrapper.emitted('select-agent')).to.equal(undefined)
     await wrapper.setProps({ errorMessage: '资源加载失败', state: 'error' })
-    await wrapper.findAll('button')[1].trigger('click')
+    await wrapper.findAll('.preview-status-layer button')[0].trigger('click')
     expect(wrapper.emitted('retry')).to.have.length(1)
     wrapper.unmount()
   })

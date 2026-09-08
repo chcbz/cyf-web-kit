@@ -23,15 +23,28 @@
       <div><strong>{{ openTaskCount }}</strong><span>待办</span></div>
     </section>
 
-    <section class="portrait-scene" aria-label="聚义厅实景窗口">
-      <HallLiveMapPreview v-if="livePreviewEnabled" :state="livePreviewState" :error-message="livePreviewError" :map-width="livePreviewMapWidth" :map-height="livePreviewMapHeight" :orientation-request-pending="orientationRequestPending" :orientation-hint="orientationHint" @request-landscape="emit('request-landscape')" @retry="emit('retry-live-preview')" @visibility-change="visible => emit('live-preview-visibility-change', visible)"><div ref="livePreviewTarget" class="portrait-live-preview-target"></div></HallLiveMapPreview>
+    <section class="portrait-scene" :class="{ 'has-live-preview': livePreviewEnabled }" aria-label="聚义厅实景窗口">
+      <HallLiveMapPreview v-if="livePreviewEnabled" :state="livePreviewState" :error-message="livePreviewError" :map-width="livePreviewMapWidth" :map-height="livePreviewMapHeight" :orientation-request-pending="orientationRequestPending" :orientation-hint="orientationHint" @request-landscape="emit('request-landscape')" @retry="emit('retry-live-preview')" @visibility-change="visible => emit('live-preview-visibility-change', visible)">
+        <template #controls>
+          <ul v-if="sceneAgents.length" class="scene-agent-list preview-agent-list" aria-label="厅中好汉">
+            <li v-for="agent in sceneAgents" :key="agentKey(agent)">
+              <button type="button" :aria-pressed="isSelectedAgent(agent)" @click="emit('select-agent', agent)">
+                <span class="agent-dot" :class="statusClass(agent.status)"></span>
+                <span>{{ agentName(agent) }}</span>
+              </button>
+            </li>
+          </ul>
+          <p v-else class="scene-empty preview-scene-empty">厅前静候点将</p>
+        </template>
+        <div ref="livePreviewTarget" class="portrait-live-preview-target"></div>
+      </HallLiveMapPreview>
       <template v-else>
       <div class="scene-sky" aria-hidden="true"></div>
       <div class="scene-hall" aria-hidden="true"><span>聚义</span></div>
       <div class="scene-courtyard" aria-hidden="true"></div>
       <ul v-if="sceneAgents.length" class="scene-agent-list" aria-label="厅中好汉">
         <li v-for="agent in sceneAgents" :key="agentKey(agent)">
-          <button type="button" @click="emit('select-agent', agent)">
+          <button type="button" :aria-pressed="isSelectedAgent(agent)" @click="emit('select-agent', agent)">
             <span class="agent-dot" :class="statusClass(agent.status)"></span>
             <span>{{ agentName(agent) }}</span>
           </button>
@@ -211,6 +224,10 @@ const sceneAgents = computed(() => props.mapAgents.slice(0, 4))
 const eligibleAgents = computed(() => props.agents.filter(agent => props.canStartAgentConversation(agent)))
 const todoTasks = computed(() => props.tasks.filter(task => ['open', 'assigned', 'running'].includes(normalizedStatus(task.status))).slice(0, 3))
 const agentKey = agent => agent?.agentId || agent?.name || agent?.personaName || ''
+const isSelectedAgent = agent => {
+  const key = agentKey(agent)
+  return Boolean(key) && key === agentKey(props.selectedAgent)
+}
 const agentName = agent => agent?.name || agent?.personaName || agent?.agentId || '未署名好汉'
 
 const openTask = task => emit('open-task', task)
@@ -439,6 +456,15 @@ button:disabled {
   box-shadow: inset 0 -46px 54px rgba(0, 0, 0, 0.25);
 }
 
+.portrait-scene.has-live-preview {
+  min-height: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .scene-sky {
   position: absolute;
   inset: 0 0 44% 0;
@@ -503,6 +529,11 @@ button:disabled {
   white-space: nowrap;
 }
 
+.scene-agent-list button[aria-pressed="true"] {
+  border-color: #f7cc70;
+  background: rgba(126, 57, 31, 0.94);
+}
+
 .agent-dot {
   width: 8px;
   height: 8px;
@@ -513,6 +544,22 @@ button:disabled {
 .agent-dot.is-busy { background: #e7b04d; }
 .agent-dot.is-error,
 .agent-dot.is-offline { background: #c86c58; }
+
+.preview-agent-list {
+  position: static;
+  width: max-content;
+  max-width: none;
+  padding: 10px 12px;
+}
+
+.preview-scene-empty {
+  position: static;
+  display: block;
+  width: max-content;
+  margin: 0;
+  padding: 12px 16px;
+  background: linear-gradient(90deg, rgba(27, 20, 15, 0.82), transparent);
+}
 
 .scene-empty {
   position: absolute;

@@ -24,13 +24,13 @@ const vueImportToVar = (_line, imports) => {
 const restoreDescriptor = (target, key, descriptor) => { if (descriptor) Object.defineProperty(target, key, descriptor); else delete target[key] }
 const previewFixture = Vue.defineComponent({ setup: (_props, { slots }) => () => Vue.h('section', { class: 'preview-frame-fixture' }, slots.default?.()) })
 
-const loadPortraitHome = () => {
+const loadPortraitHome = (HallLiveMapPreview = previewFixture) => {
   const { descriptor } = parse(portraitHomeSource, { filename: portraitHomeUrl.pathname })
   const body = compileScript(descriptor, { id: 'portrait-home-followups', inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = children.${name}`)
     .replace('export default', 'return')
-  return new Function('Vue', 'children', body)(Vue, { HallLiveMapPreview: previewFixture })
+  return new Function('Vue', 'children', body)(Vue, { HallLiveMapPreview })
 }
 
 const baseProps = overrides => ({
@@ -174,6 +174,29 @@ describe('HallPortraitHome', () => {
   })
 
 
+  it('renders map agents in the non-inert preview controls and emits the exact selected map agent', async () => {
+    const selected = { agentId: 'linchong', name: '林冲', status: 'online' }
+    const other = { agentId: 'wuyong', name: '吴用', status: 'busy' }
+    const HallLiveMapPreview = Vue.defineComponent({
+      setup: (_props, { slots }) => () => Vue.h('section', { class: 'preview-frame-fixture' }, [
+        Vue.h('div', { class: 'preview-map-slot', inert: '' }, slots.default?.()),
+        Vue.h('div', { class: 'preview-map-controls' }, slots.controls?.())
+      ])
+    })
+    const wrapper = mount(loadPortraitHome(HallLiveMapPreview), {
+      props: baseProps({ livePreviewEnabled: true, mapAgents: [selected, other], selectedAgent: selected })
+    })
+
+    const controls = wrapper.get('.preview-map-controls')
+    expect(controls.findAll('.preview-agent-list button')).to.have.length(2)
+    const selectedControl = controls.get('.preview-agent-list button')
+    expect(selectedControl.attributes('aria-pressed')).to.equal('true')
+    expect(controls.findAll('.preview-agent-list button')[1].attributes('aria-pressed')).to.equal('false')
+    await selectedControl.trigger('click')
+    expect(wrapper.emitted('select-agent')).to.deep.equal([[selected]])
+    wrapper.unmount()
+  })
+
   it('mounts an eligible selected-agent private CTA and emits the exact selected agent', async () => {
     const eligible = { agentId: 'wuyong', name: '吴用', boundToMe: true, systemAgent: false, canOperate: true }
     const wrapper = mount(loadPortraitHome(), { props: baseProps({ agents: [eligible], selectedAgent: eligible }) })
@@ -219,6 +242,8 @@ describe('HallPortraitHome', () => {
 it('reserves a stable live preview target without importing the engine', () => {
   expect(portraitHomeSource).to.include('HallLiveMapPreview')
   expect(portraitHomeSource).to.include('livePreviewTarget')
+  expect(portraitHomeSource).to.include('<template #controls>')
+  expect(portraitHomeSource).to.include('class="scene-agent-list preview-agent-list"')
   expect(portraitHomeSource).not.to.include('juyitingGame')
 })
 
