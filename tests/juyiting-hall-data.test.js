@@ -160,6 +160,31 @@ describe('useHallData operable roster', () => {
     expect(omittedCatalogData.operableRosterAgents.value.map(agent => agent.agentId)).to.deep.equal(['runtime-only'])
   })
 
+  it('replaces a formerly operable selection with its fresh map object when a refresh revokes operation', async () => {
+    const oldSelection = { agentId: 'huyanzhuo', boundToMe: true, canOperate: true, status: 'online', staleFlag: true }
+    const freshMapAgent = { agentId: 'huyanzhuo', boundToMe: true, canOperate: false, status: 'busy' }
+    const selectedAgent = ref(oldSelection)
+    const agentApi = {
+      get: async (url, _params, options) => options.onSuccess({ data: url === '/personas/catalog' ? [] : [freshMapAgent] }),
+      search: async (_url, _params, options) => options.onSuccess({ data: [{ ...freshMapAgent }] })
+    }
+    const hallData = useHallData({
+      agentApi,
+      log: { warn: () => {} },
+      normalizeStatus: (status = '') => status.toLowerCase(),
+      selectedAgent,
+      selectedTask: ref(null),
+      taskAgentMatchScore: () => 0
+    })
+
+    await hallData.loadAgents()
+
+    expect(hallData.operableRosterAgents.value).to.deep.equal([])
+    expect(selectedAgent.value).to.equal(hallData.mapAgents.value[0])
+    expect(selectedAgent.value).to.not.have.property('staleFlag')
+    expect(selectedAgent.value).to.include({ agentId: 'huyanzhuo', canOperate: false, status: 'busy' })
+  })
+
   it('reports an unbind no-op truthfully and refreshes every roster projection after DELETE', async () => {
     const calls = []
     const agentApi = {

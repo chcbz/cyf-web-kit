@@ -146,7 +146,8 @@ export const useHallData = ({
       selectedAgent.value = freshOperableAgent
       return
     }
-    if (!mapAgents.value.some(agent => agent?.agentId === selectedId)) selectedAgent.value = null
+    const freshMapAgent = mapAgents.value.find(agent => agent?.agentId === selectedId)
+    selectedAgent.value = freshMapAgent || null
   }
 
   const deriveRosterProjections = () => {
