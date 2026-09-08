@@ -61,3 +61,90 @@ describe('useHallData bounty status counts', () => {
     expect(calls[2].params).to.include({ status: 'assigned' })
   })
 })
+
+describe('useHallData operable roster', () => {
+  it('loads an unfiltered current-user operable roster separately from map and visible roster state', async () => {
+    const calls = []
+    const roster = [
+      { agentId: 'huyanzhuo', boundToMe: true, canOperate: true, status: 'offline' },
+      { agentId: 'linchong', boundToMe: true, canOperate: false, status: 'online' },
+      { agentId: 'wuyong', boundToMe: false, canOperate: true, status: 'online' },
+      { agentId: 'missing-contract', boundToMe: true, status: 'online' },
+      { agentId: 'songjiang', boundToMe: true, canOperate: true, systemAgent: true, status: 'online' },
+      { agentId: 'stale-persona-agent', personaCode: 'stale-persona', boundToMe: true, canOperate: true, status: 'offline' },
+      { agentId: 'personal-runtime', boundToMe: true, canOperate: true, status: 'offline' }
+    ]
+    const agentApi = {
+      search: async (url, params, options) => {
+        calls.push({ url, params })
+        options.onSuccess({ data: roster })
+      },
+      get: async (url, _params, options) => options.onSuccess({ data: url === '/personas/catalog' ? [
+        { personaCode: 'huyanzhuo', boundToMe: true },
+        { personaCode: 'stale-persona', boundToMe: false }
+      ] : [] })
+    }
+    const hallData = useHallData({
+      agentApi,
+      log: { warn: () => {} },
+      normalizeStatus: (status = '') => status.toLowerCase(),
+      selectedAgent: ref(null),
+      selectedTask: ref(null),
+      taskAgentMatchScore: () => 0
+    })
+
+    await hallData.loadAgents()
+
+    expect(hallData.operableRosterAgents.value.map(agent => agent.agentId)).to.deep.equal(['huyanzhuo', 'personal-runtime'])
+    expect(calls.filter(call => call.url === '/roster')).to.have.length(2)
+    expect(calls.find(call => call.params.status === undefined && call.params.pageSize === 100)).to.exist
+  })
+
+  it('keeps an explicitly operable offline roster selection when the shared map refresh omits it', async () => {
+    const selectedAgent = ref({ agentId: 'huyanzhuo', boundToMe: true, canOperate: true, status: 'offline' })
+    const agentApi = {
+      get: async (url, _params, options) => options.onSuccess({ data: url === '/personas/catalog' ? [] : [] }),
+      search: async (_url, _params, options) => options.onSuccess({ data: [selectedAgent.value] })
+    }
+    const hallData = useHallData({
+      agentApi,
+      log: { warn: () => {} },
+      normalizeStatus: (status = '') => status.toLowerCase(),
+      selectedAgent,
+      selectedTask: ref(null),
+      taskAgentMatchScore: () => 0
+    })
+
+    await hallData.loadAgents()
+
+    expect(hallData.mapAgents.value).to.deep.equal([])
+    expect(hallData.operableRosterAgents.value.map(agent => agent.agentId)).to.deep.equal(['huyanzhuo'])
+    expect(selectedAgent.value?.agentId).to.equal('huyanzhuo')
+  })
+
+  it('reports an unbind no-op truthfully and refreshes every roster projection after DELETE', async () => {
+    const calls = []
+    const agentApi = {
+      delete: async (url, options) => calls.push({ options, url }),
+      get: async (_url, _params, options) => options.onSuccess({ data: [] }),
+      search: async (url, _params, options) => {
+        calls.push({ url })
+        options.onSuccess({ data: [] })
+      }
+    }
+    const hallData = useHallData({
+      agentApi,
+      log: { warn: () => {} },
+      normalizeStatus: (status = '') => status.toLowerCase(),
+      selectedAgent: ref(null),
+      selectedTask: ref(null),
+      taskAgentMatchScore: () => 0
+    })
+
+    expect(await hallData.unbindPersona({ personaCode: 'huyanzhuo', boundToMe: false })).to.equal(false)
+    expect(calls).to.deep.equal([])
+    expect(await hallData.unbindPersona({ personaCode: 'huyanzhuo', boundToMe: true })).to.equal(true)
+    expect(calls[0].url).to.equal('/personas/huyanzhuo/bind')
+    expect(calls.filter(call => call.url === '/roster')).to.have.length(2)
+  })
+})

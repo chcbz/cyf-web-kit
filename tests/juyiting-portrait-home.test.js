@@ -35,8 +35,9 @@ const loadPortraitHome = (HallLiveMapPreview = previewFixture) => {
 
 const baseProps = overrides => ({
   agents: [],
-  canStartAgentConversation: agent => Boolean(agent?.boundToMe && !agent?.systemAgent && agent?.canOperate !== false),
+  canStartAgentConversation: agent => Boolean(agent?.boundToMe === true && !agent?.systemAgent && agent?.canOperate === true),
   mapAgents: [],
+  operableAgents: [],
   statusClass: () => '',
   taskStateClass: () => '',
   taskStatusText: () => '',
@@ -154,6 +155,7 @@ describe('HallPortraitHome', () => {
     for (const binding of [
       ':agents="agents"',
       ':map-agents="mapAgents"',
+      ':operable-agents="operableRosterAgents"',
       ':tasks="tasks"',
       ':selected-agent="selectedAgent"',
       ':selected-task="selectedTask"',
@@ -174,9 +176,10 @@ describe('HallPortraitHome', () => {
   })
 
 
-  it('renders map agents in the non-inert preview controls and emits the exact selected map agent', async () => {
-    const selected = { agentId: 'linchong', name: '林冲', status: 'online' }
-    const other = { agentId: 'wuyong', name: '吴用', status: 'busy' }
+  it('renders every eligible current-user roster agent in non-inert preview controls and emits the exact clicked agent', async () => {
+    const selected = { agentId: 'linchong', name: '林冲', status: 'online', boundToMe: true, canOperate: true }
+    const other = { agentId: 'wuyong', name: '吴用', status: 'busy', boundToMe: true, canOperate: true }
+    const mapOnly = { agentId: 'foreign', name: '外来好汉', status: 'online', boundToMe: false, canOperate: false }
     const HallLiveMapPreview = Vue.defineComponent({
       setup: (_props, { slots }) => () => Vue.h('section', { class: 'preview-frame-fixture' }, [
         Vue.h('div', { class: 'preview-map-slot', inert: '' }, slots.default?.()),
@@ -184,7 +187,7 @@ describe('HallPortraitHome', () => {
       ])
     })
     const wrapper = mount(loadPortraitHome(HallLiveMapPreview), {
-      props: baseProps({ livePreviewEnabled: true, mapAgents: [selected, other], selectedAgent: selected })
+      props: baseProps({ livePreviewEnabled: true, mapAgents: [mapOnly], operableAgents: [selected, other], selectedAgent: selected })
     })
 
     const controls = wrapper.get('.preview-map-controls')
@@ -210,7 +213,7 @@ describe('HallPortraitHome', () => {
   it('guides toward point selection when another eligible self-owned agent exists', async () => {
     const system = { agentId: 'songjiang', name: '宋江', boundToMe: true, systemAgent: true, canOperate: true }
     const eligible = { agentId: 'wuyong', name: '吴用', boundToMe: true, systemAgent: false, canOperate: true }
-    const wrapper = mount(loadPortraitHome(), { props: baseProps({ agents: [system, eligible], selectedAgent: system }) })
+    const wrapper = mount(loadPortraitHome(), { props: baseProps({ agents: [system, eligible], operableAgents: [eligible], selectedAgent: system }) })
     expect(wrapper.find('[data-portrait-action="private-discussion"]').exists()).to.equal(false)
     await wrapper.get('[data-portrait-action="pick-agent"]').trigger('click')
     expect(wrapper.emitted('quick-action')).to.deep.equal([['agents']])

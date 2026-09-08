@@ -26,8 +26,8 @@
     <section class="portrait-scene" :class="{ 'has-live-preview': livePreviewEnabled }" aria-label="聚义厅实景窗口">
       <HallLiveMapPreview v-if="livePreviewEnabled" :state="livePreviewState" :error-message="livePreviewError" :map-width="livePreviewMapWidth" :map-height="livePreviewMapHeight" :orientation-request-pending="orientationRequestPending" :orientation-hint="orientationHint" @request-landscape="emit('request-landscape')" @retry="emit('retry-live-preview')" @visibility-change="visible => emit('live-preview-visibility-change', visible)">
         <template #controls>
-          <ul v-if="sceneAgents.length" class="scene-agent-list preview-agent-list" aria-label="厅中好汉">
-            <li v-for="agent in sceneAgents" :key="agentKey(agent)">
+          <ul v-if="operableAgents.length" class="scene-agent-list preview-agent-list" aria-label="厅中好汉">
+            <li v-for="agent in operableAgents" :key="agentKey(agent)">
               <button type="button" :aria-pressed="isSelectedAgent(agent)" @click="emit('select-agent', agent)">
                 <span class="agent-dot" :class="statusClass(agent.status)"></span>
                 <span>{{ agentName(agent) }}</span>
@@ -42,8 +42,8 @@
       <div class="scene-sky" aria-hidden="true"></div>
       <div class="scene-hall" aria-hidden="true"><span>聚义</span></div>
       <div class="scene-courtyard" aria-hidden="true"></div>
-      <ul v-if="sceneAgents.length" class="scene-agent-list" aria-label="厅中好汉">
-        <li v-for="agent in sceneAgents" :key="agentKey(agent)">
+      <ul v-if="operableAgents.length" class="scene-agent-list" aria-label="厅中好汉">
+        <li v-for="agent in operableAgents" :key="agentKey(agent)">
           <button type="button" :aria-pressed="isSelectedAgent(agent)" @click="emit('select-agent', agent)">
             <span class="agent-dot" :class="statusClass(agent.status)"></span>
             <span>{{ agentName(agent) }}</span>
@@ -189,6 +189,7 @@ const props = defineProps({
   livePreviewMapWidth: { type: Number, default: 0 },
   livePreviewState: { type: String, default: 'loading' },
   mapAgents: { type: Array, default: () => [] },
+  operableAgents: { type: Array, default: () => [] },
   orientationHint: { type: String, default: '' },
   orientationRequestPending: Boolean,
   refreshing: Boolean,
@@ -220,8 +221,7 @@ const idleCount = computed(() => props.agents.filter(agent => normalizedStatus(a
 const busyCount = computed(() => props.agents.filter(agent => ['busy', 'running'].includes(normalizedStatus(agent.status))).length)
 const issueCount = computed(() => props.agents.filter(agent => ['error', 'offline'].includes(normalizedStatus(agent.status))).length)
 const openTaskCount = computed(() => props.tasks.filter(task => normalizedStatus(task.status) === 'open').length)
-const sceneAgents = computed(() => props.mapAgents.slice(0, 4))
-const eligibleAgents = computed(() => props.agents.filter(agent => props.canStartAgentConversation(agent)))
+const eligibleAgents = computed(() => props.operableAgents.filter(agent => props.canStartAgentConversation(agent)))
 const todoTasks = computed(() => props.tasks.filter(task => ['open', 'assigned', 'running'].includes(normalizedStatus(task.status))).slice(0, 3))
 const agentKey = agent => agent?.agentId || agent?.name || agent?.personaName || ''
 const isSelectedAgent = agent => {

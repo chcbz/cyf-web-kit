@@ -1229,6 +1229,32 @@ describe('archive reader contract behavior', () => {
     mounted.wrapper.unmount()
   })
 
+  it('reuses an identity-scoped catalog when opening the reader from its shelf', async () => {
+    const api = makeApi()
+    const mounted = mountReader(api)
+
+    await mounted.reader.initialize({ openChapter: false })
+    await mounted.reader.initialize({ reuseCatalog: true, deferPrivateState: true })
+
+    expect(api.calls.filter(call => call.path === '/catalog')).to.have.length(1)
+    mounted.wrapper.unmount()
+  })
+
+  it('opens immutable chapter text without waiting for deferred private progress', async () => {
+    const progressResponse = deferred()
+    const api = makeApi({ progressEnvelope: progressResponse.promise })
+    const mounted = mountReader(api)
+
+    const opened = await mounted.reader.initialize({ deferPrivateState: true })
+
+    expect(opened?.blockId).to.equal(preface.blockId)
+    expect(mounted.reader.chapter.value?.blockId).to.equal(preface.blockId)
+    expect(api.calls.some(call => call.path.startsWith('/me/progress/'))).to.equal(true)
+    progressResponse.resolve(response({ editionId, location: point(chapterOne, chapterOne.paragraphs[0]), state: 'IN_PROGRESS', version: '1' }))
+    await waitFor(() => mounted.reader.progress.value?.version === '1')
+    mounted.wrapper.unmount()
+  })
+
   it('does not let a stale progress GET overwrite a newer saved version', async () => {
     const progressResponse = deferred()
     const newerLocation = point(chapterOne, chapterOne.paragraphs[1], 3)

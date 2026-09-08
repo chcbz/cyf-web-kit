@@ -10,6 +10,7 @@
       :live-preview-map-height="previewSceneBounds.height"
       :agents="agents"
       :map-agents="mapAgents"
+      :operable-agents="operableRosterAgents"
       :orientation-hint="orientationHint"
       :orientation-request-pending="orientationRequestPending"
       :refreshing="hallRefreshing"
@@ -632,6 +633,7 @@ const {
   loadTasks,
   loadTaskRecommendations,
   mapAgents,
+  operableRosterAgents,
   personaCatalog,
   recommendedAgents,
   setAgentFilter,
@@ -1398,10 +1400,10 @@ const exactAgentId = value => (
 const resolvePermittedConversationAgent = candidate => {
   const agentId = exactAgentId(candidate?.agentId)
   if (!agentId) return null
-  return agents.value.find(agent => (
+  return operableRosterAgents.value.find(agent => (
     agent?.agentId === agentId &&
     agent.boundToMe === true &&
-    agent.canOperate !== false &&
+    agent.canOperate === true &&
     !agent.systemAgent
   )) || null
 }
@@ -1444,7 +1446,11 @@ const handleBindPersona = async (persona, mode = 'local') => {
 
 const handleUnbindPersona = async (persona) => {
   try {
-    await unbindPersona(persona)
+    const unbound = await unbindPersona(persona)
+    if (!unbound) {
+      showToast('该好汉未在当前名册中，未执行除名')
+      return false
+    }
     if (selectedAgent.value?.personaCode === persona.personaCode) selectedAgent.value = null
     if (personaSetupResult.value?.agent?.personaCode === persona.personaCode) personaSetupResult.value = null
     syncAfterPersonaChanged()

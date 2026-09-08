@@ -17,6 +17,7 @@ export const useHallData = ({
 }) => {
   const agents = ref([])
   const mapAgents = ref([])
+  const operableRosterAgents = ref([])
   const personaCatalog = ref([])
   const tasks = ref([])
   const taskRecommendations = ref({})
@@ -30,6 +31,7 @@ export const useHallData = ({
   let backendSceneCursor = '0'
 
   const filteredAgents = computed(() => agents.value)
+  const isCurrentUserOperable = agent => agent?.boundToMe === true && agent?.canOperate === true && !agent?.systemAgent
 
   const visibleAgents = computed(() => mapAgents.value
     .filter(agent => ['online', 'busy'].includes(normalizeStatus(agent.status)))
@@ -141,7 +143,8 @@ export const useHallData = ({
         autoLoading: false,
         onSuccess: (result) => {
           mapAgents.value = (result?.data || []).filter(agent => ['online', 'busy'].includes(normalizeStatus(agent.status)))
-          if (selectedAgent.value && !mapAgents.value.some(agent => agent.agentId === selectedAgent.value.agentId)) {
+          if (selectedAgent.value && !mapAgents.value.some(agent => agent.agentId === selectedAgent.value.agentId) &&
+            !isCurrentUserOperable(selectedAgent.value)) {
             selectedAgent.value = null
           }
         }
@@ -150,6 +153,36 @@ export const useHallData = ({
       log.warn('load map agents failed:', error)
       mapAgents.value = []
       selectedAgent.value = null
+    }
+  }
+
+  const loadOperableRosterAgents = async () => {
+    try {
+      await agentApi.search('/roster', {
+        pageNum: 1,
+        pageSize: 100
+      }, {
+        autoLoading: false,
+        onSuccess: (result) => {
+          const catalogByPersona = new Map(personaCatalog.value
+            .filter(persona => typeof persona?.personaCode === 'string' && persona.personaCode)
+            .map(persona => [persona.personaCode, persona]))
+          operableRosterAgents.value = (result?.data || []).filter(agent => {
+            if (!isCurrentUserOperable(agent)) return false
+            const authoritativePersona = agent?.personaCode ? catalogByPersona.get(agent.personaCode) : null
+            // A catalog-backed persona may retain a stale runtime after dismissal. Do not
+            // apply this catalog check to non-persona personal agents.
+            return !authoritativePersona || authoritativePersona.boundToMe === true
+          })
+          if (selectedAgent.value && !mapAgents.value.some(agent => agent?.agentId === selectedAgent.value.agentId) &&
+            !operableRosterAgents.value.some(agent => agent?.agentId === selectedAgent.value.agentId)) {
+            selectedAgent.value = null
+          }
+        }
+      })
+    } catch (error) {
+      log.warn('load operable roster agents failed:', error)
+      operableRosterAgents.value = []
     }
   }
 
@@ -198,19 +231,23 @@ export const useHallData = ({
       }
     })
     await Promise.all([loadPersonaCatalog(), loadRosterAgents(), loadMapAgents()])
+    await loadOperableRosterAgents()
     return bindResult
   }
 
   const unbindPersona = async (persona) => {
-    if (!persona?.personaCode || !persona.boundToMe || persona.systemAgent) return
+    if (!persona?.personaCode || persona.boundToMe !== true || persona.systemAgent) return false
     await agentApi.delete(`/personas/${persona.personaCode}/bind`, {
       autoLoading: false
     })
     await Promise.all([loadPersonaCatalog(), loadRosterAgents(), loadMapAgents()])
+    await loadOperableRosterAgents()
+    return true
   }
 
   const loadAgents = async () => {
     await Promise.all([loadMapAgents(), loadRosterAgents(), loadPersonaCatalog()])
+    await loadOperableRosterAgents()
   }
 
   const loadTasks = async () => {
@@ -292,11 +329,13 @@ export const useHallData = ({
     hiddenAgentCount,
     loadAgents,
     loadMapAgents,
+    loadOperableRosterAgents,
     loadPersonaCatalog,
     loadRosterAgents,
     loadTaskRecommendations,
     loadTasks,
     mapAgents,
+    operableRosterAgents,
     personaCatalog,
     recommendedAgents,
     setAgentFilter,
