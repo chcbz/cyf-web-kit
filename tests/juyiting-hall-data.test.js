@@ -183,6 +183,6 @@ describe('useHallData operable roster', () => {
     expect(calls).to.deep.equal([])
     expect(await hallData.unbindPersona({ personaCode: 'huyanzhuo', boundToMe: true })).to.equal(true)
     expect(calls[0].url).to.equal('/personas/huyanzhuo/bind')
-    expect(calls.filter(call => call.url === '/roster')).to.have.length(2)
+    expect(calls.filter(call => call.url === '/roster')).to.have.length(1)
   })
 })

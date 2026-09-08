@@ -674,6 +674,7 @@ describe('archive reader contract behavior', () => {
     await waitFor(() => wrapper.readerState.catalog.value && !wrapper.readerState.loading.value)
     await wrapper.get('.archive-book-open').trigger('click')
     await waitFor(() => wrapper.readerState.chapter.value?.blockId === preface.blockId)
+    await waitFor(() => wrapper.find('.reader-header-actions .reader-header-button').exists())
 
     await wrapper.get('.reader-header-actions .reader-header-button').trigger('click')
     const delayedButton = wrapper.findAll('.reader-catalog button')
