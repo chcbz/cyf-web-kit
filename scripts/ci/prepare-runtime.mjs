@@ -25,6 +25,9 @@ export const PINS = Object.freeze({
   },
 })
 export const WEBP_LIBRARY_SHA256 = 'cddced092a8452bb7df72743d7810d736b4043cf9b00f41a4fdf72e120f438a0'
+// E9B records the launcher path. Install and execute the real historical path,
+// while its exec target remains this run's freshly verified Chrome binary.
+export const CHROME_LAUNCHER_PATH = '/usr/local/bin/chromium-headless-smoke'
 
 export async function hashFile(path) {
   const hash = createHash('sha256')
@@ -146,7 +149,8 @@ export async function prepareRuntime({ repo, env, log = console.log }) {
   const childEnv = { ...env, PATH: `${dirname(node)}:${env.PATH || '/usr/bin:/bin'}`, E13_WEBP_LIBRARY: webp }
   const version = runChecked(node, ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], env: childEnv })
   if (version !== 'v20.20.2') throw new Error(`unexpected pinned Node version: ${version}`)
-  const wrapper = join(work, 'chromium-headless-ci')
+  const wrapper = CHROME_LAUNCHER_PATH
+  await mkdir(dirname(wrapper), { recursive: true })
   await writeFile(wrapper, chromeWrapperSource(binary), { mode: 0o755 })
   const libraries = runChecked('ldd', [binary], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], env: childEnv })
   if (/\bnot found\b/.test(libraries)) throw new Error(`missing pinned Chrome dependencies: ${libraries}`)

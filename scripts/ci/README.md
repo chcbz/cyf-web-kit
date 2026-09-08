@@ -27,6 +27,9 @@ any benchmark. No E14 sampling, performance threshold or test timeout is changed
 The pinned Node is first on PATH and executes E14 and Mocha. Both CHROME_PATH
 and CHROMIUM_HEADLESS point to an exec wrapper with --no-sandbox so E8 uses
 the original Chrome and E14 can hash the real executable through /proc.
+The wrapper is actually installed at `/usr/local/bin/chromium-headless-smoke`,
+the E9B historical launcher path; its exec target is the fresh verified binary.
+This avoids embedding a random cache-run path in deterministic atlas provenance.
 Shallow origin history is fetched before historical tests.
 
 Each CI test job first runs the existing restricted E14 benchmark with its

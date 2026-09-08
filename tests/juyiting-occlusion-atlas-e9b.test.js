@@ -279,13 +279,19 @@ describe('E9B Determinism', () => {
   it('regenerates every atlas, manifest and evidence artifact byte-for-byte', function () {
     this.timeout(180000)
     const snapshot = atlasFileSnapshot()
-    for (let run = 0; run < 2; run++) {
-      const result = runNode(GENERATOR, [], 90000)
-      expect(result.status, result.stderr).to.equal(0)
-      const after = atlasFileSnapshot()
-      for (const [path, hash] of Object.entries(snapshot)) {
-        expect(after[path], `run ${run + 1} changed ${path}`).to.equal(hash)
+    const originalBytes = Object.keys(snapshot).map(path => ({ path: join(REPO_ROOT, path), bytes: readFileSync(join(REPO_ROOT, path)) }))
+    try {
+      for (let run = 0; run < 2; run++) {
+        const result = runNode(GENERATOR, [], 90000)
+        expect(result.status, result.stderr).to.equal(0)
+        const after = atlasFileSnapshot()
+        for (const [path, hash] of Object.entries(snapshot)) {
+          expect(after[path], `run ${run + 1} changed ${path}`).to.equal(hash)
+        }
       }
+    } finally {
+      // A failed regeneration must not poison the E10 provenance tests next.
+      atomicWriteBytesBatch(originalBytes, 'restore E9B determinism inputs')
     }
   })
 })

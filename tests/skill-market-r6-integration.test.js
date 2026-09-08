@@ -7,6 +7,8 @@ let Vue
 let mount
 let flushPromises
 let marketModule
+let pinia
+let useApiStore
 const wrappers = []
 const domDescriptors = {}
 const storageKey = 'cyf.skill-market.purchase-journal.v3.actor-a'
@@ -39,7 +41,7 @@ const loadEconomyPreviewCapability = async () => {
 }
 
 const installDom = () => {
-  for (const key of ['SVGElement', 'Element', 'Node', 'localStorage']) {
+  for (const key of ['SVGElement', 'Element', 'Node', 'localStorage', 'location']) {
     domDescriptors[key] = Object.getOwnPropertyDescriptor(globalThis, key)
     Object.defineProperty(globalThis, key, { configurable: true, writable: true, value: globalThis.window?.[key] })
   }
@@ -48,7 +50,7 @@ const installDom = () => {
 }
 
 const restoreDom = () => {
-  for (const key of ['SVGElement', 'Element', 'Node', 'localStorage']) {
+  for (const key of ['SVGElement', 'Element', 'Node', 'localStorage', 'location']) {
     const descriptor = domDescriptors[key]
     if (descriptor) Object.defineProperty(globalThis, key, descriptor)
     else delete globalThis[key]
@@ -61,6 +63,15 @@ const settle = async () => {
   await flushPromises()
   await Vue.nextTick()
   await flushPromises()
+}
+
+const waitForUi = async (wrapper, predicate) => {
+  for (let turn = 0; turn < 100; turn++) {
+    await settle()
+    if (predicate()) return
+    await new Promise(resolve => window.setTimeout(resolve, 5))
+  }
+  expect(predicate(), wrapper.html()).to.equal(true)
 }
 
 const installToken = () => {
@@ -110,9 +121,13 @@ const components = async (id) => {
 
 const mountRoute = async (id) => {
   const Route = await components(id)
-  const wrapper = mount(Route, { attachTo: document.body, global: varlet() })
+  const wrapper = mount(Route, { attachTo: document.body, global: { ...varlet(), plugins: [pinia] } })
   wrappers.push(wrapper)
-  await settle()
+  // useHttp dynamically imports the auth store; two flushPromises turns are not
+  // a readiness contract. Wait for the real capability/roster mount to finish.
+  await waitForUi(wrapper, () => !wrapper.text().includes('正在核对服务端预览能力'))
+  expect(wrapper.text()).not.to.include('正在核对服务端预览能力')
+  expect(wrapper.find('[role="alert"]').exists(), wrapper.html()).to.equal(false)
   return wrapper
 }
 
@@ -131,23 +146,24 @@ const dialogButton = (wrapper, text) => {
 }
 
 const selectAgent = async (wrapper, agentId) => {
+  expect(wrapper.find('select').exists(), wrapper.html()).to.equal(true)
   await wrapper.find('select').setValue(agentId)
-  await settle()
+  await waitForUi(wrapper, () => wrapper.find('.skill-product-card').exists())
 }
 
 const openProduct = async (wrapper, skillKey) => {
   await productButton(wrapper, skillKey).trigger('click')
-  await settle()
+  await waitForUi(wrapper, () => wrapper.find('.purchase-dialog').exists())
 }
 
 const quote = async wrapper => {
   await dialogButton(wrapper, '获取报价').trigger('click')
-  await settle()
+  await waitForUi(wrapper, () => wrapper.find('.quote-note').exists())
 }
 
 const purchase = async wrapper => {
   await dialogButton(wrapper, '确认购买').trigger('click')
-  await settle()
+  await waitForUi(wrapper, () => !wrapper.find('.purchase-dialog').exists() || wrapper.find('.skill-market .error').exists())
 }
 
 const closeDialog = async wrapper => {
@@ -174,12 +190,15 @@ describe('R6 actual skill-market route purchase chain', () => {
     Vue = await import('vue')
     ;({ mount, flushPromises } = await import('@vue/test-utils'))
     marketModule = await import('../src/composables/useSkillMarket.js')
+    ;({ useApiStore } = await import('../src/stores/api.js'))
   })
 
-  beforeEach(() => {
-    setActivePinia(createPinia())
+  beforeEach(async () => {
+    pinia = createPinia()
+    setActivePinia(pinia)
     window.localStorage.clear()
     installToken()
+    expect(await useApiStore(pinia).token()).to.equal('test-token')
   })
 
   afterEach(async () => {
@@ -219,6 +238,7 @@ describe('R6 actual skill-market route purchase chain', () => {
       await openProduct(wrapper, 'one')
       await quote(wrapper)
       await purchase(wrapper)
+      await waitForUi(wrapper, () => wrapper.find('option[value="agent-a"]').text().includes('v8'))
       await openProduct(wrapper, 'two')
       await quote(wrapper)
       await purchase(wrapper)
@@ -337,6 +357,10 @@ describe('R6 actual skill-market route purchase chain', () => {
       const recovery = second.findAll('.recovery-item button').find(button => button.text().includes('恢复操作'))
       expect(recovery).to.exist
       await recovery.trigger('click')
+      await waitForUi(second, () => second.find('.order-status').exists())
+      // Recovery emits an async roster refresh after exposing the order. Keep
+      // the transport installed until that real request has also completed.
+      await waitForUi(second, () => requests.filter(request => request.path === '/agent/roster').length === 3)
       await settle()
 
       const orderRequests = requests.filter(request => request.path === '/agent/skill-orders' && request.body?.quoteId)

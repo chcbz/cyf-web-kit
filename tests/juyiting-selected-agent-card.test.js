@@ -3,6 +3,8 @@ import { expect } from 'chai'
 import { compileScript, parse } from '@vue/compiler-sfc'
 import { mount } from '@vue/test-utils'
 import * as Vue from 'vue'
+import { resolveLiveMapPreviewActivation } from '../src/composables/juyiting/liveMapPreviewPolicy.js'
+import { isEconomyPreviewBuildEnabled } from '../src/utils/silverAmount.js'
 
 global.SVGElement = global.window?.SVGElement
 global.Element = global.window?.Element
@@ -76,12 +78,14 @@ const createHallMocks = ({ SelectedAgentCard, counters }) => {
   const hallData = {
     applySceneEvent: noop, applySceneSnapshot: noop, agentFilter: text, agents: Vue.ref([selected]), bindPersona: asyncNoop, canAssign: () => true,
     filteredAgents: Vue.ref([selected]), hiddenAgentCount: Vue.ref(0), loadAgents: asyncNoop, loadTasks: asyncNoop, loadTaskRecommendations: asyncNoop,
-    mapAgents: Vue.ref([selected]), personaCatalog: list, recommendedAgents: list, setAgentFilter: asyncNoop, setTaskStatusFilter: asyncNoop,
+    mapAgents: Vue.ref([selected]), operableRosterAgents: Vue.ref([selected]), personaCatalog: list, recommendedAgents: list, setAgentFilter: asyncNoop, setTaskStatusFilter: asyncNoop,
     taskAbilityFilter: text, taskAbilityOptions: list, taskKeyword: text, tasks: list, taskStatusCount: Vue.ref({}), taskStatusFilter: text,
     unbindPersona: asyncNoop, visibleAgents: Vue.ref([selected])
   }
   const conversationDraft = Vue.ref('旧话头')
   return {
+    resolveLiveMapPreviewActivation, isEconomyPreviewBuildEnabled,
+    isEconomyPreviewCapability: () => false, loadEconomyPreviewCapability: async () => null,
     env: {}, capturePanelReturnTarget: () => null, focusHallPanel: noop, isCurrentPanelGeneration: () => true, isSafePanelFocusTarget: () => false,
     resolvePanelReturnTarget: () => null, restorePanelFocus: noop, trapPanelFocus: noop,
     useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({}),

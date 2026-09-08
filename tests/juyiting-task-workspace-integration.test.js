@@ -3,6 +3,8 @@ import { readFileSync } from 'fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
 import { useTaskWorkspaceView } from '../src/composables/juyiting/useTaskWorkspaceView.js'
 import * as HallPanelHelpers from '../src/composables/juyiting/useHallPanels.js'
+import { resolveLiveMapPreviewActivation } from '../src/composables/juyiting/liveMapPreviewPolicy.js'
+import { isEconomyPreviewBuildEnabled } from '../src/utils/silverAmount.js'
 
 const hallSource = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
 const hallDataSource = readFileSync(new URL('../src/composables/juyiting/useHallData.js', import.meta.url), 'utf8')
@@ -67,7 +69,7 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
   const hallData = {
     applySceneEvent: noop, applySceneSnapshot: noop, agentFilter: Vue.ref('online'), agents: list, bindPersona: asyncNoop,
     canAssign: () => true, filteredAgents: list, hiddenAgentCount: Vue.ref(0), loadAgents: async () => { counters.hallLoads += 1 },
-    loadTasks: async () => { counters.hallLoads += 1 }, loadTaskRecommendations: asyncNoop, mapAgents: list, personaCatalog: list,
+    loadTasks: async () => { counters.hallLoads += 1 }, loadTaskRecommendations: asyncNoop, mapAgents: list, operableRosterAgents: list, personaCatalog: list,
     recommendedAgents: list, setAgentFilter: asyncNoop, setTaskStatusFilter: asyncNoop, taskAbilityFilter: Vue.ref('ability-o04'),
     taskAbilityOptions: list, taskKeyword: Vue.ref('task-filter-o04'), tasks: list, taskStatusCount: Vue.ref({}), taskStatusFilter: Vue.ref('open'),
     unbindPersona: asyncNoop, visibleAgents: list
@@ -75,6 +77,8 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
   const taskWorkspace = workspaceState || null
   return {
     ...HallPanelHelpers,
+    resolveLiveMapPreviewActivation, isEconomyPreviewBuildEnabled,
+    isEconomyPreviewCapability: () => false, loadEconomyPreviewCapability: async () => null,
     env: { VITE_JUYITING_TASK_WORKSPACE_ENABLED: workspaceState ? 'true' : undefined },
     useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({}),
     agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {}, roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],

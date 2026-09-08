@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { bootstrapEnabled, runTests, MOCHA_ARGS, REPORT, assertFreshBenchmark } from '../scripts/ci-test.mjs'
-import { downloadVerified, chromeWrapperSource, extractApprovedWebp, PINS, systemDependencyInstallPolicy, installDependencies } from '../scripts/ci/prepare-runtime.mjs'
+import { downloadVerified, chromeWrapperSource, extractApprovedWebp, PINS, systemDependencyInstallPolicy, installDependencies, CHROME_LAUNCHER_PATH } from '../scripts/ci/prepare-runtime.mjs'
 
 const root = process.cwd()
 const digest = bytes => createHash('sha256').update(bytes).digest('hex')
@@ -22,6 +22,18 @@ describe('repository npm test bootstrap', () => {
   let dir
   beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'cyf-ci-unit-')) })
   afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
+
+  it('installs the real Chrome launcher at the frozen E9B path rather than inventing historical provenance', async () => {
+    const manifest = JSON.parse(await readFile(join(root, 'tests/fixtures/juyiting/occlusion-v2-atlases/atlas-manifest.json'), 'utf8'))
+    expect(CHROME_LAUNCHER_PATH).to.equal('/usr/local/bin/chromium-headless-smoke')
+    expect(CHROME_LAUNCHER_PATH).to.equal(manifest.generator.chromium)
+    const source = await readFile(join(root, 'scripts/ci/prepare-runtime.mjs'), 'utf8')
+    expect(source).to.include('const wrapper = CHROME_LAUNCHER_PATH')
+    expect(source).to.include('await writeFile(wrapper, chromeWrapperSource(binary), { mode: 0o755 })')
+    expect(source).to.include("runChecked(wrapper, ['--version']")
+    expect(source).to.include('CHROME_PATH: wrapper, CHROMIUM_HEADLESS: wrapper')
+    expect(source).not.to.include('CHROMIUM_PROVENANCE:')
+  })
 
   it('limits the 20-minute budget to signed dependency installation, with cached metadata and no weak dependencies', () => {
     const policy = systemDependencyInstallPolicy('/root/.cache/cyf-test-runtime')

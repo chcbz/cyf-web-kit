@@ -10,8 +10,22 @@ import {
 } from '../src/composables/juyiting/useHallVoiceConversation.js'
 import { useHallConversation } from '../src/composables/juyiting/useHallConversation.js'
 import { identityCleanupHandlerCount, stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
+import { resolveLiveMapPreviewActivation } from '../src/composables/juyiting/liveMapPreviewPolicy.js'
+import { isEconomyPreviewBuildEnabled } from '../src/utils/silverAmount.js'
 
 const flush = async () => { await Promise.resolve(); await Promise.resolve(); await Vue.nextTick() }
+const withVoiceBrowserState = async run => {
+  const originals = [
+    [window, 'setTimeout'], [window, 'clearTimeout'], [navigator, 'mediaDevices'],
+    [globalThis, 'MediaRecorder'], [globalThis, 'Audio'], [globalThis, 'fetch']
+  ].map(([owner, key]) => ({ owner, key, descriptor: Object.getOwnPropertyDescriptor(owner, key) }))
+  try { return await run() } finally {
+    for (const { owner, key, descriptor } of originals) {
+      if (descriptor) Object.defineProperty(owner, key, descriptor)
+      else delete owner[key]
+    }
+  }
+}
 const deferred = () => {
   let resolve
   let reject
@@ -181,12 +195,14 @@ const createActualHallVoiceMocks = ({
   const hallData = {
     applySceneEvent: noop, applySceneSnapshot: noop, agentFilter: text, agents: agentList, bindPersona: asyncNoop, canAssign: () => true,
     filteredAgents: agentList, hiddenAgentCount: Vue.ref(0), loadAgents: asyncNoop, loadTasks: asyncNoop, loadTaskRecommendations: asyncNoop,
-    mapAgents: agentList, personaCatalog: list, recommendedAgents: list, setAgentFilter: asyncNoop, setTaskStatusFilter: asyncNoop,
+    mapAgents: agentList, operableRosterAgents: agentList, personaCatalog: list, recommendedAgents: list, setAgentFilter: asyncNoop, setTaskStatusFilter: asyncNoop,
     taskAbilityFilter: text, taskAbilityOptions: list, taskKeyword: text, tasks: list, taskStatusCount: Vue.ref({}), taskStatusFilter: text,
     unbindPersona: asyncNoop, visibleAgents: agentList
   }
   return {
     env: { VITE_JUYITING_VOICE_ENABLED: 'true' },
+    resolveLiveMapPreviewActivation, isEconomyPreviewBuildEnabled,
+    isEconomyPreviewCapability: () => false, loadEconomyPreviewCapability: async () => null,
     capturePanelReturnTarget: () => null, focusHallPanel: noop, isCurrentPanelGeneration: () => true, isSafePanelFocusTarget: () => false,
     resolvePanelReturnTarget: () => null, restorePanelFocus: noop, trapPanelFocus: noop,
     useGlobalStore: () => ({ getJiacn: 'hero', user: { name: 'Tester' }, setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }),
@@ -637,10 +653,29 @@ describe('Juyi Hall voice identity and capture controls', () => {
 })
 
 describe('Juyi Hall portrait voice lock', () => {
-  it('keeps cancellation reachable and rejects panel/context changes while capture is locked', async () => {
+  it('restores browser timers and transport even when a Hall mount throws', async () => {
+    const timer = window.setTimeout
+    const fetch = globalThis.fetch
+    const media = Object.getOwnPropertyDescriptor(navigator, 'mediaDevices')
+    const failure = new Error('injected Hall setup failure')
+    let caught
+    try {
+      await withVoiceBrowserState(async () => {
+        window.setTimeout = () => 1
+        globalThis.fetch = async () => new Response(null, { status: 204 })
+        Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {} })
+        mount(Vue.defineComponent({ setup () { throw failure } }), { global: { config: { warnHandler: () => {} } } })
+      })
+    } catch (error) { caught = error }
+    expect(caught).to.equal(failure)
+    expect(window.setTimeout).to.equal(timer)
+    expect(globalThis.fetch).to.equal(fetch)
+    expect(Object.getOwnPropertyDescriptor(navigator, 'mediaDevices')).to.deep.equal(media)
+    await new Promise(resolve => window.setTimeout(resolve, 0))
+  })
+
+  it('keeps cancellation reachable and rejects panel/context changes while capture is locked', () => withVoiceBrowserState(async () => {
     FakeRecorder.instances = []
-    const originalMediaRecorder = globalThis.MediaRecorder
-    const originalMediaDevices = globalThis.navigator.mediaDevices
     const permission = deferred()
     const streams = []
     let permissionRequests = 0
@@ -768,10 +803,8 @@ describe('Juyi Hall portrait voice lock', () => {
       expect(voiceRef.value.state).to.equal('idle')
     } finally {
       wrapper.unmount()
-      Object.defineProperty(globalThis.navigator, 'mediaDevices', { configurable: true, value: originalMediaDevices })
-      globalThis.MediaRecorder = originalMediaRecorder
     }
-  })
+  }))
 })
 
 describe('Juyi Hall voice sending escape', () => {
@@ -1012,14 +1045,8 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
     voice.cancel()
   })
 
-  it('keeps mounted Hall locked while sending and preserves turn B when timed-out turn A settles late', async () => {
+  it('keeps mounted Hall locked while sending and preserves turn B when timed-out turn A settles late', () => withVoiceBrowserState(async () => {
     FakeRecorder.instances = []
-    const originalMediaRecorder = globalThis.MediaRecorder
-    const originalMediaDevices = globalThis.navigator.mediaDevices
-    const originalAudio = globalThis.Audio
-    const originalFetch = globalThis.fetch
-    const originalSetTimeout = window.setTimeout
-    const originalClearTimeout = window.clearTimeout
     const timers = []
     const streams = []
     const tracks = []
@@ -1159,14 +1186,8 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
       expect(voice.state).to.equal('idle')
     } finally {
       wrapper.unmount()
-      window.setTimeout = originalSetTimeout
-      window.clearTimeout = originalClearTimeout
-      Object.defineProperty(globalThis.navigator, 'mediaDevices', { configurable: true, value: originalMediaDevices })
-      globalThis.MediaRecorder = originalMediaRecorder
-      globalThis.Audio = originalAudio
-      globalThis.fetch = originalFetch
     }
-  })
+  }))
 
   it('accepts exactly one new correlated final across built-in/external ordering and rejects replay', () => {
     const spoken = new Set(['already-spoken'])
