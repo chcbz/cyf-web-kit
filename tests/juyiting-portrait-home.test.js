@@ -244,6 +244,7 @@ it('reserves a stable live preview target without importing the engine', () => {
   expect(portraitHomeSource).to.include('livePreviewTarget')
   expect(portraitHomeSource).to.include('<template #controls>')
   expect(portraitHomeSource).to.include('class="scene-agent-list preview-agent-list"')
+  expect(portraitHomeSource).to.include('.scene-empty.preview-scene-empty')
   expect(portraitHomeSource).not.to.include('juyitingGame')
 })
 

@@ -552,7 +552,7 @@ button:disabled {
   padding: 10px 12px;
 }
 
-.preview-scene-empty {
+.scene-empty.preview-scene-empty {
   position: static;
   display: block;
   width: max-content;

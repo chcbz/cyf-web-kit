@@ -182,4 +182,44 @@ onBeforeUnmount(() => {
 
 .preview-status-layer p { margin: 0; }
 .preview-status-layer button { padding: 0 14px; pointer-events: auto; }
+
+@media (max-width: 360px) {
+  .preview-orientation-controls {
+    left: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: none;
+  }
+
+  .orientation-hint {
+    min-width: 0;
+    max-width: calc(100% - 100px);
+    max-height: 40px;
+    overflow: auto;
+    white-space: nowrap;
+  }
+
+  .preview-status-layer {
+    top: 60px;
+    bottom: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 4px 12px;
+    overflow: hidden;
+  }
+
+  .preview-status-layer p {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-height: 40px;
+    overflow: auto;
+    line-height: 1.2;
+    text-align: left;
+  }
+
+  .preview-status-layer button { flex: 0 0 auto; }
+}
 </style>

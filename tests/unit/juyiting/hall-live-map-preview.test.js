@@ -149,6 +149,11 @@ describe('HallLiveMapPreview', () => {
     const normalizedCss = compiledStyle.code.replace(/\s+/g, ' ')
     expect(normalizedCss).to.match(/\.preview-map-slot[^}]*z-index:\s*0[^}]*isolation:\s*isolate/)
     expect(normalizedCss).to.match(/\.preview-status-layer[^}]*z-index:\s*2/)
+    const compactStyles = source.match(/@media \(max-width: 360px\) \{([\s\S]*)\n\}/)?.[1] || ''
+    expect(compactStyles).to.include('top: 60px')
+    expect(compactStyles).to.include('bottom: 52px')
+    expect(compactStyles).to.include('overflow: auto')
+    expect(compactStyles).to.include('flex: 0 0 auto')
     await wrapper.setProps({ mapHeight: Number.MIN_VALUE, mapWidth: Number.MAX_VALUE, state: 'paused' })
     expect(wrapper.get('.preview-frame').attributes('style')).to.include('aspect-ratio: 1.793103448275862')
     await wrapper.setProps({ mapHeight: Number.MAX_VALUE, mapWidth: Number.MIN_VALUE })
