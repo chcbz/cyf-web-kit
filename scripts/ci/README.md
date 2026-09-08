@@ -13,6 +13,17 @@ integrity failure always stops. RPM extraction uses system rpm2cpio/cpio
 (rpmfile 2.2.1 requires a newer Python than Alinux3's default). The extracted
 WebP library also has an exact SHA and decoder ABI/version check.
 
+System dependency installation alone has a 20-minute first-run network budget.
+DNF/YUM keeps distribution signature verification (`gpgcheck=1`) and the existing
+repositories, disables weak dependencies (`install_weak_deps=False`), and uses
+`~/.cache/cyf-test-runtime/dnf` (root Flow: `/root/.cache/cyf-test-runtime/dnf`)
+created before installation, within Flow's existing cache scope. Cached packages
+still go through the signed package manager; this is not unchecked extraction.
+The `rpm` and `cpio` packages provide extraction tools, verified with `command -v`;
+`rpm-build` is unnecessary. All other explicit dependencies are retained, and
+Chrome must pass `ldd` (no missing libraries) and the exact version check before
+any benchmark. No E14 sampling, performance threshold or test timeout is changed.
+
 The pinned Node is first on PATH and executes E14 and Mocha. Both CHROME_PATH
 and CHROMIUM_HEADLESS point to an exec wrapper with --no-sandbox so E8 uses
 the original Chrome and E14 can hash the real executable through /proc.

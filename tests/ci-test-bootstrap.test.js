@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { bootstrapEnabled, runTests, MOCHA_ARGS, REPORT, assertFreshBenchmark } from '../scripts/ci-test.mjs'
-import { downloadVerified, chromeWrapperSource, extractApprovedWebp, PINS } from '../scripts/ci/prepare-runtime.mjs'
+import { downloadVerified, chromeWrapperSource, extractApprovedWebp, PINS, systemDependencyInstallPolicy, installDependencies } from '../scripts/ci/prepare-runtime.mjs'
 
 const root = process.cwd()
 const digest = bytes => createHash('sha256').update(bytes).digest('hex')
@@ -22,6 +22,53 @@ describe('repository npm test bootstrap', () => {
   let dir
   beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'cyf-ci-unit-')) })
   afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
+
+  it('limits the 20-minute budget to signed dependency installation, with cached metadata and no weak dependencies', () => {
+    const policy = systemDependencyInstallPolicy('/root/.cache/cyf-test-runtime')
+    expect(policy.cachedir).to.equal('/root/.cache/cyf-test-runtime/dnf')
+    expect(policy.timeout).to.equal(20 * 60 * 1000)
+    expect(policy.args).to.deep.equal([
+      '-y', '--setopt=gpgcheck=1', '--setopt=install_weak_deps=False', '--setopt=cachedir=/root/.cache/cyf-test-runtime/dnf', 'install',
+      'gcc', 'python3', 'git', 'tar', 'xz', 'rpm', 'cpio', 'ca-certificates',
+      'nss', 'nspr', 'atk', 'at-spi2-atk', 'at-spi2-core', 'cups-libs', 'libdrm', 'libX11',
+      'libXcomposite', 'libXdamage', 'libXext', 'libXfixes', 'libXrandr',
+      'libxcb', 'libxkbcommon', 'mesa-libgbm', 'pango', 'cairo', 'alsa-lib',
+      'fontconfig', 'liberation-fonts', 'gtk3', 'libcurl', 'dbus-libs', 'expat',
+      'glib2', 'systemd-libs', 'vulkan-loader', 'wget', 'xdg-utils',
+    ])
+  })
+
+  it('creates the task cache before installation and explicitly checks extraction and runtime tools', async () => {
+    const cache = join(dir, 'cache with spaces')
+    const policy = systemDependencyInstallPolicy(cache)
+    const calls = []
+    await installDependencies(cache, (command, args, options) => {
+      expect(existsSync(policy.cachedir)).to.equal(true)
+      calls.push({ command, args, options })
+    }, { uid: 0, manager: '/usr/bin/dnf' })
+    expect(calls).to.deep.equal([
+      { command: '/usr/bin/dnf', args: policy.args, options: { timeout: 1200000 } },
+      { command: '/bin/sh', args: ['-c', 'command -v rpm2cpio && command -v cpio'], options: undefined },
+      { command: 'gcc', args: ['--version'], options: undefined },
+      { command: 'python3', args: ['-c', 'import ctypes, hashlib, lzma, zipfile; print("Python runtime dependencies ready")'], options: undefined },
+    ])
+  })
+
+  it('stops on signed installation or missing extraction tools instead of continuing runtime preparation', async () => {
+    for (const failAt of ['/usr/bin/dnf', '/bin/sh']) {
+      const calls = []
+      const failure = new Error(`unavailable: ${failAt}`)
+      let error
+      try {
+        await installDependencies(join(dir, 'cache'), command => {
+          calls.push(command)
+          if (command === failAt) throw failure
+        }, { uid: 0, manager: '/usr/bin/dnf' })
+      } catch (caught) { error = caught }
+      expect(error).to.equal(failure)
+      expect(calls).to.deep.equal(failAt === '/usr/bin/dnf' ? ['/usr/bin/dnf'] : ['/usr/bin/dnf', '/bin/sh'])
+    }
+  })
 
   it('enables only CI/Flow or explicit opt-in, including Node23 Flow without CI', () => {
     for (const env of [{ CI: 'true' }, { CI: '1' }, { PIPELINE_ID: '4403172' }, { CYF_CI_BOOTSTRAP: '1' }]) expect(bootstrapEnabled(env)).to.equal(true)

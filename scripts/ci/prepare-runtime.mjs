@@ -73,22 +73,32 @@ export function runChecked(command, args, options = {}) {
   return typeof result.stdout === 'string' ? result.stdout.trim() : result.stdout
 }
 
-function installDependencies() {
-  // Alinux3 Flow workers are root amd64 containers. RPM dependencies are verified
-  // by the configured distribution's signing keys, never by unsigned downloads.
-  if (process.getuid?.() !== 0) throw new Error('CI runtime preparation requires root for signed OS dependencies')
-  const manager = ['/usr/bin/dnf', '/usr/bin/yum'].find(existsSync)
-  if (!manager) throw new Error('CI runtime preparation requires the Alinux3 dnf/yum worker')
-  runChecked(manager, ['-y', '--setopt=gpgcheck=1', 'install',
-    'gcc', 'python3', 'git', 'tar', 'xz', 'rpm', 'rpm-build', 'cpio', 'ca-certificates',
+export function systemDependencyInstallPolicy(cache) {
+  const cachedir = join(cache, 'dnf')
+  return { cachedir, args: ['-y', '--setopt=gpgcheck=1', '--setopt=install_weak_deps=False', `--setopt=cachedir=${cachedir}`, 'install',
+    'gcc', 'python3', 'git', 'tar', 'xz', 'rpm', 'cpio', 'ca-certificates',
     'nss', 'nspr', 'atk', 'at-spi2-atk', 'at-spi2-core', 'cups-libs', 'libdrm', 'libX11',
     'libXcomposite', 'libXdamage', 'libXext', 'libXfixes', 'libXrandr',
     'libxcb', 'libxkbcommon', 'mesa-libgbm', 'pango', 'cairo', 'alsa-lib',
     'fontconfig', 'liberation-fonts', 'gtk3', 'libcurl', 'dbus-libs', 'expat',
     'glib2', 'systemd-libs', 'vulkan-loader', 'wget', 'xdg-utils',
-  ], { timeout: 600000 })
-  runChecked('gcc', ['--version'])
-  runChecked('python3', ['-c', 'import ctypes, hashlib, lzma, zipfile; print("Python runtime dependencies ready")'])
+  ], timeout: 1200000 }
+}
+
+export async function installDependencies(cache, execute = runChecked, {
+  uid = process.getuid?.(), manager = ['/usr/bin/dnf', '/usr/bin/yum'].find(existsSync),
+} = {}) {
+  // Alinux3 Flow workers are root amd64 containers. RPM dependencies are verified
+  // by the configured distribution's signing keys, never by unsigned downloads.
+  if (uid !== 0) throw new Error('CI runtime preparation requires root for signed OS dependencies')
+  if (!manager) throw new Error('CI runtime preparation requires the Alinux3 dnf/yum worker')
+  const policy = systemDependencyInstallPolicy(cache)
+  await mkdir(policy.cachedir, { recursive: true })
+  execute(manager, policy.args, { timeout: policy.timeout })
+  // rpm supplies rpm2cpio on Alinux/RHEL; no build toolchain RPM is needed.
+  execute('/bin/sh', ['-c', 'command -v rpm2cpio && command -v cpio'])
+  execute('gcc', ['--version'])
+  execute('python3', ['-c', 'import ctypes, hashlib, lzma, zipfile; print("Python runtime dependencies ready")'])
 }
 
 export function chromeWrapperSource(binary) {
@@ -113,9 +123,9 @@ export async function prepareRuntime({ repo, env, log = console.log }) {
   if (process.platform !== 'linux' || process.arch !== 'x64') {
     throw new Error('Pinned Chrome133/WebP1.2 CI gates require a Linux x64 worker')
   }
-  installDependencies()
   const cache = join(homedir(), '.cache', 'cyf-test-runtime')
   await mkdir(cache, { recursive: true })
+  await installDependencies(cache)
   const work = await mkdtemp(join(cache, 'run-'))
   const archives = {}
   for (const [name, pin] of Object.entries(PINS)) {
@@ -138,6 +148,8 @@ export async function prepareRuntime({ repo, env, log = console.log }) {
   if (version !== 'v20.20.2') throw new Error(`unexpected pinned Node version: ${version}`)
   const wrapper = join(work, 'chromium-headless-ci')
   await writeFile(wrapper, chromeWrapperSource(binary), { mode: 0o755 })
+  const libraries = runChecked('ldd', [binary], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], env: childEnv })
+  if (/\bnot found\b/.test(libraries)) throw new Error(`missing pinned Chrome dependencies: ${libraries}`)
   const chromeVersion = runChecked(wrapper, ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], env: childEnv })
   if (!/\b133\.0\.6943\.141\b/.test(chromeVersion)) throw new Error(`unexpected pinned Chrome version: ${chromeVersion}`)
   Object.assign(childEnv, { CHROME_PATH: wrapper, CHROMIUM_HEADLESS: wrapper, E14_REQUIRE_REPORT: '1', MOCHAWESOME_CONSOLEREPORTER: 'dot' })
