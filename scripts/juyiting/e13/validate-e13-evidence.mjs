@@ -55,7 +55,7 @@ function main () {
   results.push(...validateReviewedEvidenceBindings({ repo, evidenceDir: evidence, reviewedEvidenceDir: reviewed }))
 
   const pythonReviewResult = run('python3', ['-m', 'offline_pixel_renderer.validate', '--repo-root', repo, '--evidence-dir', evidence, '--review-bindings-only', '--reviewed-evidence-dir', reviewed], 30000, { ...process.env, PYTHONPATH: join(repo, 'scripts/juyiting/e13') })
-  check('Python validator independently enforces V6 reviewed-artifact SHA/set/PNG bindings', pythonReviewResult.status === 0,
+  check('Python validator independently enforces V7 reviewed-artifact SHA/set/PNG bindings', pythonReviewResult.status === 0,
     `${pythonReviewResult.stderr || pythonReviewResult.stdout || ''}`.trim().slice(0, 2000) || `exit ${pythonReviewResult.status}`)
 
   const mappingDir = join(reviewed, 'mask-structure-mapping')
@@ -147,6 +147,7 @@ function main () {
       pixelRecomputeReportSha256: existsSync(join(evidence, 'pixel-recompute-report.json')) ? hash(join(evidence, 'pixel-recompute-report.json')) : null,
       visualReviewV5Sha256: existsSync(visualV5Path) ? hash(visualV5Path) : null,
       visualReviewV6Sha256: existsSync(join(reviewed, 'visual-review-v6.json')) ? hash(join(reviewed, 'visual-review-v6.json')) : null,
+      visualReviewV7Sha256: existsSync(join(reviewed, 'visual-review-v7.json')) ? hash(join(reviewed, 'visual-review-v7.json')) : null,
       maskStructureMappingSha256: existsSync(mappingPath) ? hash(mappingPath) : null,
       maskStructureMappingSvgSha256: existsSync(mappingSvgPath) ? hash(mappingSvgPath) : null,
       liveIndexSha256: existsSync(liveIndexPath) ? hash(liveIndexPath) : null,

@@ -1,0 +1,347 @@
+{
+  "$schema": "juyiting-occlusion-e13-visual-review-v7-v1",
+  "schemaVersion": 1,
+  "taskId": "E13",
+  "reviewRound": 7,
+  "reviewedAt": "2026-09-08",
+  "reviewer": {
+    "role": "independent multimodal matrix and mask-mapping visual reviewer",
+    "nickname": "ZhangZeduan",
+    "agentId": "01a0812b-ec52-7991-9455-ace1f5742dac"
+  },
+  "provenance": {
+    "transcription": "Transcribed by the implementation writer from the independent review supplied by the main agent; these are the reviewer's actual findings, not a renewed signature copied from V5/V6.",
+    "reviewedAgainstCommit": "fce21d20a5a3ba761365a8eb411f1519bdc47099"
+  },
+  "pass": true,
+  "verdict": "PASS",
+  "highestSeverity": "NONE",
+  "contactSheetsReviewed": 15,
+  "shotsReviewed": 270,
+  "mappingCardsReviewed": 37,
+  "scope": {
+    "includes": [
+      "E13 static matrix",
+      "37-mask structure mapping"
+    ],
+    "excludes": [
+      "live",
+      "production movement reachability",
+      "mobile",
+      "release approval"
+    ],
+    "method": "真实打开 15/15 张 755×398 contact sheets，覆盖 270 个带稳定 ID 的 shots；打开 19/19 张 mapping 行预览，覆盖 mask 48–84 共 37 卡。另仅放大 11 张疑点原图。未批量打开 270 原图，未读取 live，未运行 matrix/性能，未修改文件。",
+    "originalShotsEnlarged": [
+      "E13-019",
+      "E13-020",
+      "E13-021",
+      "E13-022",
+      "E13-025",
+      "E13-163",
+      "E13-164",
+      "E13-165",
+      "E13-253",
+      "E13-254",
+      "E13-255"
+    ],
+    "mappingRowPreviewsReviewed": 19,
+    "probeMobility": "synthetic-visual-only",
+    "navDiagnostics": {
+      "blocked": 246,
+      "found": 24
+    },
+    "reachabilityClaim": "None: static synthetic probes are not asserted production-reachable."
+  },
+  "contract": {
+    "behind": "人物在目标后",
+    "boundary": "tie 后按 tieBias/stableId 决定，允许强遮挡",
+    "front": "人物在目标前",
+    "actors": [
+      "宋江",
+      "卢俊义",
+      "扈三娘",
+      "李逵",
+      "林冲",
+      "吴用"
+    ]
+  },
+  "bindings": {
+    "tmxSha256": "7b304c11fd4a121d92f5fb1430f8073d4d590b3d42eb9b9a18e0e0c9bd22ff53",
+    "shotPlanSha256": "0ddebb69accdad706ee2bd7273a119122d470860e0b4b975bb9a7d4c633723bf",
+    "indexSha256": "72151ac5919c5534346ff2769b468bbd6670bea2498f7c935654af97c40cd09d",
+    "maskMappingSha256": "8144f158e2dfdf49943da02d24641a5672de1436bed85a2edf149fbdd4edf9a2",
+    "maskMappingSvgSha256": "a42bc76f95daa29ad6a059673da93409bbbf11bddfba9d166b383725ee0bba9a",
+    "visualReviewV6Sha256": "794438ff0813ff3335b6fd563d0d9f2165260f11d720112b37ed3649eda905ef",
+    "machinesGateSha256AtReview": "e5d9ce573f8048896628740bd80e7c97790d5dd568e9becb62924f904a1a9b3e",
+    "machinesGatePathAtReview": "history/machines-gate-at-v7-review.json",
+    "contactSheets": {
+      "cell-center-jyt_occ_west-upper_diagonal-brace-01_v2.png": "1e58f47c0ca9e90b8feab6e88d904d78b08a0cfbee8c65cd909ce2f89485077e",
+      "cell-east_center-jyt_occ_east-upper_pillar-01_v2.png": "e69b56732380f6fa329a56b456e182626517f4cc035ce712c3ee72b245a3a38e",
+      "cell-north_center-jyt_prop_center-north_main-seat_v1.png": "91076549a7c7b87bf29b127519217d0015412aadb2df29fdce001d2cccdf0421",
+      "cell-northeast-jyt_occ_east-upper_scroll-table-front-01_v2.png": "d664252b8623e73e7f3c18d961d3f3b1e1d97be9ab2d5427cce19f2a7a140a53",
+      "cell-northeast-jyt_prop_northeast_bounty-board_v1.png": "03defcfd758d8636cf8237961a16cedd68d558157f7b8b375333cc3531743883",
+      "cell-northwest-jyt_occ_west-upper_lantern-01_v2.png": "a22f49d274f0a46d2fbe16ff7af4f926f57a26cba04fd36bef2310877587b10e",
+      "cell-south_center-jyt_occ_entrance_hanging-banner-01_v2.png": "747ae7186a4a4e74fb1a0e81e21878533b6641cee977bbe65eab11d8bfde7d88",
+      "cell-south_center-jyt_occ_entrance_lantern-post-01_v2.png": "72591fb35b08f54aa6354fafcbf587e2f9938f7e8e15edb7b24c7515ef3ac7fe",
+      "cell-south_center-jyt_occ_west-lower_railing-01_v2.png": "0233cb252b0bde27806767818e624b0bbdaf2b6bb48183dfc5a7706ff1c9b066",
+      "cell-southeast-jyt_occ_east-lower_railing-post-01_v2.png": "cf5ed90c484261bfbcc2178255ccd862f40f25455a99319ab74991e04c490781",
+      "cell-southeast-jyt_occ_east-lower_worktable-01_v2.png": "5051838cd8a60bf6f9cba82ace600d4cbb54d5febb59e35410690523ea172cd3",
+      "cell-southeast-jyt_occ_east-upper_pillar-02_v2.png": "2a24064b61ab4ba03fb2fe6b1d74a9e2233106bc320352e73d498e05b83746ad",
+      "cell-southeast-jyt_prop_southeast_library-shelf_v1.png": "fcea331d7faa83b7b5e448c662a347925c8cfe9e1c1f5d670a074054603e6ab0",
+      "cell-southwest-jyt_occ_west-lower_railing-02_v2.png": "cce816944da372360fef874483e8ae7a87ff1c38094a4c91509d514ed424bc61",
+      "cell-west_center-jyt_occ_west-upper_wall-sconce-02_v2.png": "3d788caeac4b7cb4b466cbe47ba378568174fb911252d4b754eb723894a5432f"
+    }
+  },
+  "sheetResults": [
+    {
+      "sheet": "cell-northwest-jyt_occ_west-upper_lantern-01_v2.png",
+      "target": "lantern-01",
+      "shotRange": "E13-001..018",
+      "verdict": "PASS",
+      "highestSeverity": "NONE",
+      "finding": "behind 目标遮人物 76–689px，boundary/front 由人物覆盖目标 99–616/212–439px；头肩轮廓连续，无吞人。"
+    },
+    {
+      "sheet": "cell-north_center-jyt_prop_center-north_main-seat_v1.png",
+      "target": "main-seat",
+      "shotRange": "E13-019..036",
+      "verdict": "PASS",
+      "highestSeverity": "NONE",
+      "finding": "behind 遮挡 205–760px但六角色均保留头肩或侧身；E13-020 boundary 强遮挡 1066px符合 tie 解析，E13-021 明确位于座前。"
+    },
+    {
+      "sheet": "cell-northeast-jyt_prop_northeast_bounty-board_v1.png",
+      "target": "bounty-board",
+      "shotRange": "E13-037..054",
+      "verdict": "PASS",
+      "highestSeverity": "NONE",
+      "finding": "behind 276–723px；boundary/front 人物覆盖目标 178–712/365–707px，脚点落地。"
+    },
+    {
+      "sheet": "cell-west_center-jyt_occ_west-upper_wall-sconce-02_v2.png",
+      "target": "wall-sconce-02",
+      "shotRange": "E13-055..072",
+      "verdict": "PASS",
+      "highestSeverity": "NONE",
+      "finding": "behind 壁灯/立柱在前；boundary 连续翻转，front 人物已移至下方，即使部分角色无像素相交也无反向遮挡。"
+    },
+    {
+      "sheet": "cell-center-jyt_occ_west-upper_diagonal-brace-01_v2.png",
+      "target": "diagonal-brace-01",
+      "shotRange": "E13-073..090",
+      "verdict": "PASS",
+      "highestSeverity": "NONE",
+      "finding": "behind 81–115px，boundary/front 411–444/160–259px；斜撑边界无透明裂缝。"
+    },
+    {
+      "sheet": "cell-east_center-jyt_occ_east-upper_pillar-01_v2.png",
+      "target": "pillar-01",
+      "shotRange": "E13-091..108",
+      "verdict": "PASS",
+      "highestSeverity": "NONE",
+      "finding": "behind 96–723px且保留头肩；boundary/front 柱体分别被覆盖 823–1445/813–1430px。"
+    },
+    {
+      "sheet": "cell-southwest-jyt_occ_west-lower_railing-02_v2.png",
+      "target": "railing-02",
+      "shotRange": "E13-109..126",
+      "verdict": "PASS",
+      "highestSeverity": "NONE",
+      "finding": "behind 仅遮腿脚 34–164px；boundary/front 栏杆覆盖关系正确，无悬空。"
+    },
+    {
+      "sheet": "cell-south_center-jyt_occ_entrance_hanging-banner-01_v2.png",
+      "target": "hanging-banner-01",
+      "shotRange": "E13-127..144",
+      "verdict": "PASS",
+      "highestSeverity": "NONE",
+      "finding": "behind 挂布遮人物中下段 573–1069px；boundary/front 正确翻转，无边缘裂缝。"
+    },
+    {
+      "sheet": "cell-southeast-jyt_prop_southeast_library-shelf_v1.png",
+      "target": "library-shelf",
+      "shotRange": "E13-145..162",
+      "verdict": "PASS",
+      "highestSeverity": "NONE",
+      "finding": "behind 296–719px；boundary tie 解析为人物仍在架后 55–409px，front 人物覆盖书架 381–554px。"
+    },
+    {
+      "sheet": "cell-northeast-jyt_occ_east-upper_scroll-table-front-01_v2.png",
+      "target": "scroll-table-front",
+      "shotRange": "E13-163..180",
+      "verdict": "PASS",
+      "highestSeverity": "NONE",
+      "finding": "粉框目标与黄探针稳定；E13-163 目标遮人物 307px，164 人物覆盖目标26px，165 探针越过前基线。ownership-transition 成立。"
+    },
+    {
+      "sheet": "cell-south_center-jyt_occ_west-lower_railing-01_v2.png",
+      "target": "railing-01",
+      "shotRange": "E13-181..198",
+      "verdict": "PASS",
+      "highestSeverity": "NONE",
+      "finding": "behind 虽仅5–28px，但可见栏杆切过脚部；boundary/front 256–683/6–66px，无反向遮挡。"
+    },
+    {
+      "sheet": "cell-southeast-jyt_occ_east-lower_railing-post-01_v2.png",
+      "target": "railing-post-01",
+      "shotRange": "E13-199..216",
+      "verdict": "PASS",
+      "highestSeverity": "NONE",
+      "finding": "behind 222–259px；boundary/front 209–267/18–53px，细柱边界没有异常扩张。"
+    },
+    {
+      "sheet": "cell-southeast-jyt_occ_east-upper_pillar-02_v2.png",
+      "target": "pillar-02",
+      "shotRange": "E13-217..234",
+      "verdict": "PASS",
+      "highestSeverity": "NONE",
+      "finding": "behind 140–765px且人物主体可辨；boundary/front 281–661/277–654px。"
+    },
+    {
+      "sheet": "cell-south_center-jyt_occ_entrance_lantern-post-01_v2.png",
+      "target": "lantern-post-01",
+      "shotRange": "E13-235..252",
+      "verdict": "PASS",
+      "highestSeverity": "NONE",
+      "finding": "behind 52–214px并保留完整头肩；boundary/front 760–1358/756–1340px，强遮挡方向正确。"
+    },
+    {
+      "sheet": "cell-southeast-jyt_occ_east-lower_worktable-01_v2.png",
+      "target": "worktable",
+      "shotRange": "E13-253..270",
+      "verdict": "PASS",
+      "highestSeverity": "NONE",
+      "finding": "粉框 fragment、青框 composite prop、黄探针分离清楚；behind 可见遮挡50–61px，boundary 无交叠但位于左侧 tie 基线，front 覆盖目标12–48px。"
+    }
+  ],
+  "crossSheet": {
+    "verdict": "PASS",
+    "highestSeverity": "NONE",
+    "finding": "地面锚点、fragment 接缝、白色 matte 边、标签图像带分离均 PASS。每个目标18格使用唯一 viewportWorld、固定 zoom 1.1。未提供 bubble/mobile 矩阵证据，故不作其全局结论。"
+  },
+  "mappingReview": {
+    "verdict": "PASS",
+    "highestSeverity": "NONE",
+    "cardsReviewed": 37,
+    "maskIdRange": [
+      48,
+      84
+    ],
+    "uniqueTargetOwners": 32,
+    "finding": "每项 actualOwnerCount=1、polygonToOwnerPixelDistance=0；JSON、TMX object properties 与 SVG 卡的 stableId、polygon、owner runs AABB 相符。七个 declared/geometric 粗分格不同项均不是归属错误。",
+    "coarseRegionDifferences": [
+      {
+        "maskId": 49,
+        "verdict": "PASS",
+        "highestSeverity": "NONE",
+        "finding": "long-table-frame，mask/owner 均为 (117,601)-(238,718)，2727/2900px；跨 west_center/southwest。"
+      },
+      {
+        "maskId": 54,
+        "verdict": "PASS",
+        "highestSeverity": "NONE",
+        "finding": "west pillar，mask/owner (543,306)-(598,468)，4813/4981px；柱体跨 north/center 分界。"
+      },
+      {
+        "maskId": 57,
+        "verdict": "PASS",
+        "highestSeverity": "NONE",
+        "finding": "east pillar-01，(1158,305)-(1203,463)，4534/4701px；跨 northeast/east_center。"
+      },
+      {
+        "maskId": 74,
+        "verdict": "PASS",
+        "highestSeverity": "NONE",
+        "finding": "worktable 的 legacy corner (1592,674)-(1612,700)，同一 owner (1499,574)-(1618,700)，244px交叠。"
+      },
+      {
+        "maskId": 76,
+        "verdict": "PASS",
+        "highestSeverity": "NONE",
+        "finding": "primary diagonal brace，mask (1334,560)-(1510,767)，owner (1308,560)-(1510,767)，11150/12954px；结构跨分格。"
+      },
+      {
+        "maskId": 80,
+        "verdict": "PASS",
+        "highestSeverity": "NONE",
+        "finding": "pillar-02 lower extension (1202,606)-(1251,702)，归属同一完整柱 owner，2551/5188px。"
+      },
+      {
+        "maskId": 83,
+        "verdict": "PASS",
+        "highestSeverity": "NONE",
+        "finding": "west-lower secondary brace，mask/owner (474,641)-(516,758)，2032/2160px；跨 west_center/southwest。"
+      }
+    ],
+    "remainingMasks": {
+      "maskIds": [
+        48,
+        50,
+        51,
+        52,
+        53,
+        55,
+        56,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        75,
+        77,
+        78,
+        79,
+        81,
+        82,
+        84
+      ],
+      "verdict": "PASS",
+      "finding": "其余30项均 PASS；无需修复。"
+    }
+  },
+  "v5Findings": [
+    {
+      "id": "P1-01",
+      "verdict": "PASS",
+      "status": "closed by actual current review",
+      "finding": "behind 不再整人吞没；main-seat boundary 强遮挡不误判为 behind。"
+    },
+    {
+      "id": "P1-02",
+      "verdict": "PASS",
+      "status": "closed by actual current review",
+      "finding": "worktable 按 composite-transition 合同完整展示 behind/boundary/front。"
+    },
+    {
+      "id": "P1-03",
+      "verdict": "PASS",
+      "status": "closed by actual current review",
+      "finding": "scroll-table 的目标轮廓和探针明确展示 ownership transition。"
+    },
+    {
+      "id": "P1-04",
+      "verdict": "PASS",
+      "status": "closed by actual current review",
+      "finding": "15/15 目标内部背景固定，viewportWorld 唯一数均为1。"
+    },
+    {
+      "id": "P1-05",
+      "verdict": "PASS",
+      "status": "closed by actual current review",
+      "finding": "37/37 mapping 卡全部实际查看并核对 JSON/SVG/TMX。"
+    }
+  ],
+  "additionalFindings": [],
+  "releaseNote": "审查时 machines-gate 为旧聚合/FAIL 状态；本次静态 PASS 不替代 live 审查或 independent release_guard。"
+}

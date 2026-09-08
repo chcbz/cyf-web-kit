@@ -13,12 +13,12 @@
     },
     "e10bManifest": {
       "path": "tests/fixtures/juyiting/occlusion-v2-masks/mask-tmx-manifest.json",
-      "wholeFileSha256": "96053f6cda115ecc437085ef431ef1d4ec766403f4c2e6a2bda6c8093bbdb0e7",
-      "generationId": "0440e4963703f0d2f572d60c37f2ea1c1bd34f3fa9a77889b6f672bb108c57f0"
+      "wholeFileSha256": "f5ea1d0a349d9d4e5cbae3a3904f7576cdca5339226cf164bcbf214d813c2439",
+      "generationId": "fd028fc9a9ea3f468994cd441ce54bbde5717570e52802ea20967b896911577b"
     },
     "tmx": {
       "path": "public/juyiting/hall.tmx",
-      "sha256": "885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f"
+      "sha256": "7b304c11fd4a121d92f5fb1430f8073d4d590b3d42eb9b9a18e0e0c9bd22ff53"
     },
     "e4e5Contracts": {
       "src/game/occlusion/schema.ts": "172a293a9b873482be25fed706da05e49ddcc02cfa8717ff329311159e51b9d1",

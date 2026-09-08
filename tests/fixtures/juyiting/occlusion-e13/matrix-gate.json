@@ -50,7 +50,7 @@
       "detail": ""
     },
     {
-      "check": "target-specific probes are production reachable and satisfy their visual exercise contract",
+      "check": "synthetic visual probes retain production navigation diagnostics and target-specific pixel exercise constraints",
       "ok": true,
       "detail": ""
     },
@@ -146,10 +146,10 @@
     }
   ],
   "sourceHashes": {
-    "shotPlanSha256": "a78bc573ec5adeb3fd6c09972f88127e24ba49ab156a17011db6d3782b1d5f01",
-    "indexSha256": "c703e3471b2493e16e8da7c230efd89c4cebf648501eff9694092fe3eead85b0",
-    "oracleSha256": "d61af98bd6e238a5ff0f55d5b5db8db058b8b9c9bf9203c43ffb1a656238d999",
-    "pixelRecomputeReportSha256": "0fac75645476cdb3b73056b3222c51f691015598d3d84cce16c122c53a016e67",
+    "shotPlanSha256": "0ddebb69accdad706ee2bd7273a119122d470860e0b4b975bb9a7d4c633723bf",
+    "indexSha256": "72151ac5919c5534346ff2769b468bbd6670bea2498f7c935654af97c40cd09d",
+    "oracleSha256": "015a69aa72d67d1de185ae8616061f1189088343e8a99c4109d4958138c73ae9",
+    "pixelRecomputeReportSha256": "9e982840b75ff91511496349e9458c8bc736754a0aee8033e2bd430f9a9303ff",
     "contactSheets": {
       "cell-center-jyt_occ_west-upper_diagonal-brace-01_v2.png": "1e58f47c0ca9e90b8feab6e88d904d78b08a0cfbee8c65cd909ce2f89485077e",
       "cell-east_center-jyt_occ_east-upper_pillar-01_v2.png": "e69b56732380f6fa329a56b456e182626517f4cc035ce712c3ee72b245a3a38e",

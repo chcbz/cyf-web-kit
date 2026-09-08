@@ -13,9 +13,10 @@ const hashOrNull = path => existsSync(path) ? sha256File(path) : null
 export function validateReviewedEvidenceBindings ({ repo, evidenceDir, reviewedEvidenceDir }) {
   const results = []
   const check = (name, ok, detail = '') => results.push({ check: name, ok: Boolean(ok), detail: String(detail) })
-  const visualPath = join(reviewedEvidenceDir, 'visual-review-v6.json')
+  const visualPath = join(reviewedEvidenceDir, 'visual-review-v7.json')
+  const historicalV6Path = join(reviewedEvidenceDir, 'visual-review-v6.json')
   if (!existsSync(visualPath)) {
-    check('GPT V6 review file exists', false, visualPath)
+    check('GPT V7 review file exists', false, visualPath)
     return results
   }
 
@@ -34,38 +35,42 @@ export function validateReviewedEvidenceBindings ({ repo, evidenceDir, reviewedE
   const expectedNames = Object.keys(boundSheets).sort()
   const diskComparison = compareExactNames(exactDirectoryEntries(sheetsDir), expectedNames)
 
-  check('GPT V6 full visual audit passes all 15 sheets and 37 mask cards',
+  check('GPT V7 full visual audit passes all 15 sheets and 37 mask cards',
+    visual.$schema === 'juyiting-occlusion-e13-visual-review-v7-v1' && visual.reviewRound === 7 &&
     visual.pass === true && visual.verdict === 'PASS' && visual.highestSeverity === 'NONE' &&
     visual.contactSheetsReviewed === 15 && visual.shotsReviewed === 270 && visual.mappingCardsReviewed === 37 &&
     visual.v5Findings?.length === 5 && visual.v5Findings.every(finding => finding.verdict === 'PASS') &&
     visual.additionalFindings?.length === 0)
-  check('GPT V6 binds the actual current TMX, shot-plan and matrix index hashes',
+  check('GPT V7 binds the immutable historical V6 review SHA-256',
+    existsSync(historicalV6Path) && bindings.visualReviewV6Sha256 === hashOrNull(historicalV6Path),
+    `v6=${bindings.visualReviewV6Sha256}/${hashOrNull(historicalV6Path)}`)
+  check('GPT V7 binds the actual current TMX, shot-plan and matrix index hashes',
     bindings.tmxSha256 === hashOrNull(tmxPath) &&
     bindings.shotPlanSha256 === hashOrNull(planPath) &&
     bindings.indexSha256 === hashOrNull(indexPath),
     `tmx=${bindings.tmxSha256}/${hashOrNull(tmxPath)} plan=${bindings.shotPlanSha256}/${hashOrNull(planPath)} index=${bindings.indexSha256}/${hashOrNull(indexPath)}`)
-  check('GPT V6 binds the actual 37-mask mapping JSON and SVG hashes',
+  check('GPT V7 binds the actual 37-mask mapping JSON and SVG hashes',
     bindings.maskMappingSha256 === hashOrNull(mappingPath) &&
     bindings.maskMappingSvgSha256 === hashOrNull(mappingSvgPath),
     `json=${bindings.maskMappingSha256}/${hashOrNull(mappingPath)} svg=${bindings.maskMappingSvgSha256}/${hashOrNull(mappingSvgPath)}`)
-  check('GPT V6 contact-sheet binding declares exactly 15 unique files',
+  check('GPT V7 contact-sheet binding declares exactly 15 unique files',
     expectedNames.length === 15 && new Set(expectedNames).size === 15,
     `got ${expectedNames.length}`)
-  check('reviewed contact-sheets directory exactly matches the V6-bound file set', diskComparison.ok,
+  check('reviewed contact-sheets directory exactly matches the V7-bound file set', diskComparison.ok,
     `missing=${diskComparison.missing.join(',')} extras=${diskComparison.extras.join(',')}`)
 
   const pngFailures = inspectPngFiles(sheetsDir, expectedNames, { width: 755, height: 398 })
-  check('all 15 V6-bound contact sheets have PNG signature and 755x398 dimensions', pngFailures.length === 0, pngFailures.join('; '))
+  check('all 15 V7-bound contact sheets have PNG signature and 755x398 dimensions', pngFailures.length === 0, pngFailures.join('; '))
   const hashFailures = expectedNames.filter(name => existsSync(join(sheetsDir, name)) && hashOrNull(join(sheetsDir, name)) !== boundSheets[name])
-  check('all 15 reviewed contact-sheet bytes match their V6 SHA-256 bindings', hashFailures.length === 0, hashFailures.join(', '))
+  check('all 15 reviewed contact-sheet bytes match their V7 SHA-256 bindings', hashFailures.length === 0, hashFailures.join(', '))
 
   const sheetResults = Array.isArray(visual.sheetResults) ? visual.sheetResults : []
   const resultNames = sheetResults.map(result => result?.sheet).sort()
   const resultComparison = compareExactNames(resultNames, expectedNames)
-  check('V6 sheetResults is the exact bound 15-sheet set with PASS verdicts',
+  check('V7 sheetResults is the exact bound 15-sheet set with PASS verdicts',
     resultComparison.ok && new Set(resultNames).size === 15 && sheetResults.every(result => result?.verdict === 'PASS'),
     `missing=${resultComparison.missing.join(',')} extras=${resultComparison.extras.join(',')}`)
-  check('V6 machinesGateSha256AtReview is retained as a non-circular historical SHA-256 binding',
+  check('V7 machinesGateSha256AtReview is retained as a non-circular historical SHA-256 binding',
     /^[0-9a-f]{64}$/.test(bindings.machinesGateSha256AtReview || ''), String(bindings.machinesGateSha256AtReview))
   return results
 }

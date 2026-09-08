@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
 import { get as httpsGet } from 'node:https'
 import {
-  launchChrome, stopChrome, waitForExpression, evaluate, fulfillJson, fulfillSse,
+  findChrome, launchChrome, stopChrome, waitForExpression, evaluate, fulfillJson, fulfillSse,
   captureCanvasPng, captureViewportPng, GAME_LOOKUP_SOURCE, isMainModule,
 } from './lib/cdp-harness.mjs'
 
@@ -33,6 +33,7 @@ const SHOTS_DIR = join(EVIDENCE_DIR, 'shots')
 const CONTACT_DIR = join(EVIDENCE_DIR, 'contact-sheets')
 
 const FRONTEND_URL = process.env.JUYITING_FRONTEND_URL || 'https://localhost:8080'
+const FRONTEND_ORIGIN = new URL(FRONTEND_URL).origin
 const DEBUG_KEY = '__JYTING_SCENE_DEBUG__'
 
 const PERSONAS = Object.freeze([
@@ -74,6 +75,10 @@ const sceneFixtures = () => {
     mapAgents: { status: 200, code: 'E0', msg: 'ok', data: mapAgents },
     roster: { status: 200, code: 'E0', msg: 'ok', data: [] },
     catalog: { status: 200, code: 'E0', msg: 'ok', data: [] },
+    // The library panel opens only the catalog landing page; this capture does
+    // not enter a chapter or create a conversation. Both are read-only fixtures.
+    archiveCatalog: { status: 200, code: 'E0', msg: 'ok', data: { activeEdition: { editionId: 'e13-fixture-edition', title: 'E13 案卷目录', chapters: [] } } },
+    conversations: { status: 200, code: 'E0', msg: 'ok', data: [] },
     tasks: { status: 200, code: 'E0', msg: 'ok', data: [] },
     statusCounts: { status: 200, code: 'E0', msg: 'ok', data: [] },
     snapshot: {
@@ -84,39 +89,86 @@ const sceneFixtures = () => {
   }
 }
 
-const setupInterception = (cdp) => {
+export const setupInterception = (cdp) => {
   const fixtures = sceneFixtures()
-  const pausedSse = new Set()
-  cdp.on('Fetch.requestPaused', async ({ requestId, request }) => {
+  const blockedRequests = []
+  const pending = new Set()
+  const errors = []
+  const fixtureRoutes = new Map([
+    ['GET /agent/map', fixtures.mapAgents],
+    ['POST /agent/roster', fixtures.roster],
+    ['GET /agent/personas/catalog', fixtures.catalog],
+    ['POST /agent/tasks/search', fixtures.tasks],
+    ['POST /agent/tasks/status-counts', fixtures.statusCounts],
+    ['GET /agent/scenes/juyiting-main/snapshot', fixtures.snapshot],
+    ['POST /agent/scenes/juyiting-main/phases', fixtures.phases],
+    ['GET /agent/scenes/juyiting-main/events', 'sse'],
+    ['GET /archive/v1/catalog', fixtures.archiveCatalog],
+    ['POST /chat/conversation/list', fixtures.conversations],
+  ])
+  const header = (request, name) => Object.entries(request.headers || {}).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1] || ''
+  const corsHeaders = (method, requestedHeaders = '') => [
+    { name: 'Access-Control-Allow-Origin', value: FRONTEND_ORIGIN },
+    { name: 'Access-Control-Allow-Methods', value: `${method}, OPTIONS` },
+    { name: 'Access-Control-Allow-Headers', value: requestedHeaders || 'authorization, content-type' },
+    { name: 'Vary', value: 'Origin, Access-Control-Request-Method, Access-Control-Request-Headers' },
+  ]
+  const blockBackend = (requestId, reason) => cdp.send('Fetch.fulfillRequest', {
+    requestId, responseCode: 403,
+    responseHeaders: [{ name: 'Content-Type', value: 'application/json; charset=utf-8' }, { name: 'Access-Control-Allow-Origin', value: FRONTEND_ORIGIN }],
+    body: Buffer.from(JSON.stringify({ status: 403, code: 'E13_BLOCKED_BACKEND', msg: reason })).toString('base64'),
+  })
+  const isFrontendAsset = (url, method) => {
+    if (method !== 'GET' || url.origin !== FRONTEND_ORIGIN) return false
+    const path = decodeURIComponent(url.pathname)
+    if (path.includes('\\') || path.split('/').some(part => /^(?:api|agent|auth|oauth|graphql|rpc|\.\.)$/i.test(part))) return false
+    return ['/', '/juyiting', '/juyiting/', '/juyiting/hall.tmx', '/manifest.webmanifest', '/favicon.ico', '/sw.js'].includes(path) ||
+      ['/static/', '/assets/', '/pwa/', '/juyiting-portraits/', '/juyiting/images/', '/juyiting/sprites/', '/juyiting/tiles/'].some(prefix => path.startsWith(prefix))
+  }
+  const handle = async ({ requestId, request }) => {
     const url = request?.url || ''
-    try {
-      if (url.includes('/agent/map')) return void (await fulfillJson(cdp, requestId, 200, fixtures.mapAgents))
-      if (url.includes('/agent/roster')) return void (await fulfillJson(cdp, requestId, 200, fixtures.roster))
-      if (url.includes('/agent/personas/catalog')) return void (await fulfillJson(cdp, requestId, 200, fixtures.catalog))
-      if (url.includes('/agent/tasks/search')) return void (await fulfillJson(cdp, requestId, 200, fixtures.tasks))
-      if (url.includes('/agent/tasks/status-counts')) return void (await fulfillJson(cdp, requestId, 200, fixtures.statusCounts))
-      if (url.includes('/agent/scenes/juyiting-main/snapshot')) return void (await fulfillJson(cdp, requestId, 200, fixtures.snapshot))
-      if (url.includes('/agent/scenes/juyiting-main/phases')) return void (await fulfillJson(cdp, requestId, 200, fixtures.phases))
-      if (url.includes('/agent/scenes/juyiting-main/events')) {
-        // Hold the SSE stream open (no further events during evidence capture)
-        pausedSse.add(requestId)
-        return
+    const parsed = new URL(url)
+    if (request.method === 'OPTIONS') {
+      const method = header(request, 'Access-Control-Request-Method')
+      if (header(request, 'Origin') === FRONTEND_ORIGIN && fixtureRoutes.has(`${method} ${parsed.pathname}`)) {
+        return cdp.send('Fetch.fulfillRequest', {
+          requestId, responseCode: 204,
+          responseHeaders: corsHeaders(method, header(request, 'Access-Control-Request-Headers')), body: '',
+        })
       }
-      await cdp.send('Fetch.continueRequest', { requestId })
-    } catch (error) {
-      console.error(`[interception] ${url}: ${error.message}`)
+      blockedRequests.push({ method: 'OPTIONS', url, requestedMethod: method, reason: 'unapproved fixture preflight' })
+      return blockBackend(requestId, 'E13 capture blocks unapproved preflight')
     }
+    const fixture = fixtureRoutes.get(`${request.method} ${parsed.pathname}`)
+    if (fixture === 'sse') return fulfillSse(cdp, requestId, ': E13 fixture stream\n\n', FRONTEND_ORIGIN)
+    if (fixture) return fulfillJson(cdp, requestId, 200, fixture, FRONTEND_ORIGIN)
+    if (isFrontendAsset(parsed, request.method)) return cdp.send('Fetch.continueRequest', { requestId })
+    blockedRequests.push({ method: request.method, url, reason: 'unapproved method/path' })
+    return blockBackend(requestId, 'E13 capture blocks unapproved method/path')
+  }
+  cdp.on('Fetch.requestPaused', event => {
+    const task = handle(event).catch(error => { errors.push(error) }).finally(() => pending.delete(task))
+    pending.add(task)
+    return task
   })
-  return cdp.send('Fetch.enable', {
-    patterns: [
-      { urlPattern: '*://*/*agent/map*', requestStage: 'Request' },
-      { urlPattern: '*://*/*agent/roster*', requestStage: 'Request' },
-      { urlPattern: '*://*/*agent/personas/catalog*', requestStage: 'Request' },
-      { urlPattern: '*://*/*agent/tasks/search*', requestStage: 'Request' },
-      { urlPattern: '*://*/*agent/tasks/status-counts*', requestStage: 'Request' },
-      { urlPattern: '*://*/*agent/scenes/juyiting-main/*', requestStage: 'Request' },
-    ]
-  })
+  const assertClean = async () => {
+    // Responses can themselves cause new requests; drain until the tracked set
+    // converges, with a CDP round trip to deliver events already in flight.
+    do {
+      await Promise.all([...pending])
+      await cdp.send('Page.getFrameTree')
+    } while (pending.size)
+    if (errors.length) throw new Error(`interception handler failed: ${errors.map(error => error.message).join('; ')}`)
+    if (blockedRequests.length) throw new Error(`unexpected backend traffic was blocked: ${JSON.stringify(blockedRequests)}`)
+  }
+  const finish = async () => {
+    // Close the capture document after its last snapshot so polling/timers can
+    // no longer introduce requests after the final audit. Keep Fetch enabled.
+    await cdp.send('Page.navigate', { url: 'about:blank' })
+    await waitForExpression(cdp, 'location.href === "about:blank"', 8000)
+    await assertClean()
+  }
+  return cdp.send('Fetch.enable', { patterns: [{ urlPattern: '*', requestStage: 'Request' }] }).then(() => ({ blockedRequests, assertClean, finish }))
 }
 
 const PAGE_PROBE_SOURCE = `
@@ -239,6 +291,15 @@ window.__E13_RUNTIME__ = (() => {
 
 const waitForReady = async (cdp) => {
   await waitForExpression(cdp, 'Boolean(document.querySelector(".juyi-page"))')
+  const onboarding = await evaluate(cdp, `(() => {
+    const overlay = document.querySelector('.onboarding-overlay')
+    if (!overlay) return { visible: false }
+    const button = overlay.querySelector('button.skip-button') || [...overlay.querySelectorAll('button')].find(item => item.textContent?.trim() === '跳过本版本')
+    if (!button) throw new Error('visible HallOnboarding has no real 跳过本版本 button')
+    button.click()
+    return { visible: true, selector: button.matches('.skip-button') ? '.skip-button' : 'button:text(跳过本版本)' }
+  })()`)
+  if (onboarding.visible) await waitForExpression(cdp, '!document.querySelector(".onboarding-overlay")', 8000)
   await waitForExpression(cdp, 'Boolean(document.querySelector(".hall-board.is-melon-ready .melon-layer canvas"))')
   await waitForExpression(cdp, debugExpression(`
     debug.ready === true && debug.map?.tmxLoaded === true && debug.map?.movementReady === true &&
@@ -305,6 +366,7 @@ export async function run (planPath = join(EVIDENCE_DIR, 'shot-plan.json'), outp
       throw new Error(`frontend unreachable: ${FRONTEND_URL} (network restricted or server not running)`)
     }
     const debugPort = 9400 + Math.floor(Math.random() * 400)
+    const chromeExecutable = await findChrome()
     ;({ chrome, cdp, userDataDir } = await launchChrome({ debugPort }))
     cdp.on('Runtime.consoleAPICalled', event => {
       const text = (event.args || []).map(arg => arg.value ?? arg.description ?? '').join(' ')
@@ -312,7 +374,7 @@ export async function run (planPath = join(EVIDENCE_DIR, 'shot-plan.json'), outp
         probes.push({ probe: 'browser-console', ok: !/failed|error/i.test(text), type: event.type, detail: text })
       }
     })
-    await setupInterception(cdp)
+    const interception = await setupInterception(cdp)
     await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
       source: `window.__JYT_V2_ENABLED = true; window.__JYT_OCCLUSION_SHADOW_ENABLED = false;`
     })
@@ -320,7 +382,7 @@ export async function run (planPath = join(EVIDENCE_DIR, 'shot-plan.json'), outp
     await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
       source: `localStorage.setItem('api_token', ${JSON.stringify(JSON.stringify({ data: 'e13-evidence-token', expTime: Date.now() + 86400000 }))})`
     })
-    await cdp.send('Page.navigate', { url: `${FRONTEND_URL}/juyiting?transition=none&scene-debug=1` })
+    await cdp.send('Page.navigate', { url: new URL('/juyiting/?transition=none&scene-debug=1', FRONTEND_URL).href })
     try {
       await waitForReady(cdp)
     } catch (error) {
@@ -355,6 +417,7 @@ export async function run (planPath = join(EVIDENCE_DIR, 'shot-plan.json'), outp
       probes.push({ probe: 'v2-runtime-readiness', ok: false, detail: runtimeDiagnostic })
       throw new Error(`${error.message}; runtimeDiagnostic=${JSON.stringify(runtimeDiagnostic)}`)
     }
+    await interception.assertClean()
     await evaluate(cdp, `(() => { ${GAME_LOOKUP_SOURCE}; window.__E13_RUNTIME__.clearBubbles(); return true; })()`)
 
     for (const shot of selectedShots) {
@@ -399,6 +462,11 @@ export async function run (planPath = join(EVIDENCE_DIR, 'shot-plan.json'), outp
       generatedAt: new Date().toISOString(),
       frontendUrl: FRONTEND_URL,
       chromium: await evaluate(cdp, `navigator.userAgent`),
+      captureProvenance: {
+        browserExecutable: chromeExecutable,
+        browserVersion: await evaluate(cdp, `navigator.userAgent`),
+        generatorSha256: sha256(readFileSync(fileURLToPath(import.meta.url))),
+      },
       worldModelSha256: sha256(readFileSync(join(EVIDENCE_DIR, 'world-model.json'))),
       shotPlanSha256: sha256(readFileSync(planPath)),
       selection: {
@@ -409,6 +477,7 @@ export async function run (planPath = join(EVIDENCE_DIR, 'shot-plan.json'), outp
       status: 'GENERATED',
       shots: records,
     }
+    await interception.finish()
     writeFileSync(join(outputDir, 'index.json'), `${JSON.stringify(index, null, 2)}\n`)
     console.log(`E13 evidence generated: ${records.length} shots -> ${outputDir}`)
     return index
@@ -473,7 +542,7 @@ async function collectRuntimeFacts (cdp, shot) {
     const scene = juyitingGame._hallScene;
     const canvas = document.querySelector('.melon-layer canvas');
     const rect = canvas?.getBoundingClientRect?.();
-    const movementActor = ${JSON.stringify(shot.movementCase === 'movement-bounty-board' ? 'lujunyi' : shot.movementCase === 'movement-front-door' ? 'likui' : '')};
+    const movementActor = ${JSON.stringify(shot.movementContract?.actorPersonaCode || '')};
     const movementSnapshot = movementActor
       ? (juyitingGame._movementEngine?.snapshots?.() || []).find(item => item.agentId === movementActor) || null
       : null;
@@ -678,8 +747,13 @@ async function settleMovementVisual (cdp, actor, snapshot) {
   }
   await evaluate(cdp, `(() => {
     ${GAME_LOOKUP_SOURCE}
+    const game = juyitingGame._me?.game;
+    if (!game || typeof game.repaint !== 'function' || typeof game.draw !== 'function') {
+      throw new Error('real melon repaint/draw is unavailable');
+    }
     juyitingGame._hallScene.update(0);
-    juyitingGame._me?.game?.repaint?.();
+    game.repaint();
+    game.draw();
     return true;
   })()`)
   await waitForExpression(cdp, `(() => {
@@ -714,39 +788,21 @@ async function captureMovement (cdp, shot) {
     juyitingGame.resetToMainHall();
     return true;
   })()`)
-  const { movementCase } = shot
-  const targetRegionId = movementCase === 'movement-bounty-board' ? 'bounty-board' : 'gate'
-  const actor = movementCase === 'movement-bounty-board' ? 'lujunyi' : 'likui'
-  if (actor === 'lujunyi') {
-    // The frozen six-agent fixture initially parks Husanniang in the first
-    // bounty-board slot. Move her to a different real region before auditing
-    // Lujunyi so the arrival evidence uses the primary, visually readable
-    // bounty-board slot instead of the secondary slot behind the wall rail.
-    const relocation = await evaluate(cdp, `(() => {
-      ${GAME_LOOKUP_SOURCE}
-      const g = juyitingGame;
-      g.cancelMovement('husanniang', 2);
-      const accepted = g.enqueueMovementCommands([{
-        commandId: 'e13-relocate-husanniang-' + Date.now(),
-        agentId: 'husanniang', personaCode: 'husanniang',
-        source: 'local', type: 'MOVE_TO_REGION', targetRegionId: 'agent-roster',
-        priority: 5, stateVersion: 3, startedAt: new Date().toISOString(),
-      }])[0];
-      g._movementEngine.update(60000);
-      const snapshot = g._movementEngine.snapshots().find(item => item.agentId === 'husanniang') || null;
-      return { accepted, snapshot };
-    })()` )
-    if (relocation?.accepted?.accepted !== true || relocation?.snapshot?.regionId !== 'agent-roster' || relocation?.snapshot?.phase !== 'arrived') {
-      throw new Error(`failed to free primary bounty-board slot: ${JSON.stringify(relocation)}`)
-    }
-  } else if (actor === 'likui') {
-    // Finish the mocked backend trip to right-guard first, so the audited
-    // local command starts at a real region slot and has a valid route to gate.
-    await evaluate(cdp, `(() => { ${GAME_LOOKUP_SOURCE}; juyitingGame._movementEngine.update(60000); return true; })()`)
+  const movementContract = shot.movementContract
+  if (!movementContract || shot.probeMobility !== 'production-movement') throw new Error(`movement shot lacks production contract: ${shot.id}`)
+  const { actorPersonaCode: actor, startRegionId, targetRegionId } = movementContract
+  if (![actor, startRegionId, targetRegionId].every(value => typeof value === 'string' && value.length > 0)) {
+    throw new Error(`movement contract is incomplete: ${shot.id}`)
   }
+  // Resolve any fixture-backed in-flight state before asserting the plan's
+  // contract start region. The command itself remains a real engine movement.
+  await evaluate(cdp, `(() => { ${GAME_LOOKUP_SOURCE}; juyitingGame._movementEngine.update(60000); return true; })()`)
   const snapshot = () => evaluate(cdp, `(() => { ${GAME_LOOKUP_SOURCE}; return (juyitingGame._movementEngine?.snapshots?.() || []).find(item => item.agentId === ${JSON.stringify(actor)}) || null; })()`)
   const before = await snapshot()
   if (!before) throw new Error(`movement actor unavailable before command: ${actor}`)
+  if (before.regionId !== startRegionId || before.phase !== 'arrived') {
+    throw new Error(`movement contract start mismatch: expected ${startRegionId}, got ${JSON.stringify(before)}`)
+  }
   const beforeVisual = await settleMovementVisual(cdp, actor, before)
   const beforeBuffer = await captureCanvasPng(cdp)
   const enqueueResult = await evaluate(cdp, `(() => {
@@ -755,22 +811,40 @@ async function captureMovement (cdp, shot) {
     g._movementEngine.setLocalPatrols([]);
     g.cancelMovement(${JSON.stringify(actor)}, 1);
     return g.enqueueMovementCommands([{
-      commandId: 'e13-move-${movementCase}-' + Date.now(),
+      commandId: 'e13-move-${shot.movementCase}-' + Date.now(),
       agentId: ${JSON.stringify(actor)}, personaCode: ${JSON.stringify(actor)},
       source: 'local', type: 'MOVE_TO_REGION', targetRegionId: ${JSON.stringify(targetRegionId)},
       priority: 5, stateVersion: 2, startedAt: new Date().toISOString(),
     }])[0];
   })()`)
   if (enqueueResult?.accepted !== true) throw new Error(`movement command rejected: ${JSON.stringify(enqueueResult)}`)
-  await evaluate(cdp, `(() => { ${GAME_LOOKUP_SOURCE}; juyitingGame._movementEngine.update(3000); return true; })()` )
+  await evaluate(cdp, `(() => { ${GAME_LOOKUP_SOURCE}; juyitingGame._movementEngine.update(1000); return true; })()` )
   const mid = await snapshot()
+  if (!mid || mid.phase !== 'moving' || !Number.isFinite(mid.x) || !Number.isFinite(mid.y)) {
+    throw new Error(`movement mid-frame must be finite and moving: ${JSON.stringify(mid)}`)
+  }
+  if (Math.hypot(mid.x - before.x, mid.y - before.y) <= 0.5) {
+    throw new Error(`movement mid-frame did not displace from start: before=${JSON.stringify(before)} mid=${JSON.stringify(mid)}`)
+  }
   const midVisual = await settleMovementVisual(cdp, actor, mid)
   const midBuffer = await captureCanvasPng(cdp)
-  await evaluate(cdp, `(() => { ${GAME_LOOKUP_SOURCE}; juyitingGame._movementEngine.update(8000); return true; })()` )
-  const after = await snapshot()
+  const afterResult = await evaluate(cdp, `(() => {
+    ${GAME_LOOKUP_SOURCE}
+    const engine = juyitingGame._movementEngine;
+    for (let step = 1; step <= 60; step++) {
+      engine.update(1000);
+      const current = (engine.snapshots?.() || []).find(item => item.agentId === ${JSON.stringify(actor)});
+      if (current?.phase === 'arrived') return { snapshot: current, steps: step };
+    }
+    return { snapshot: (engine.snapshots?.() || []).find(item => item.agentId === ${JSON.stringify(actor)}) || null, steps: 60 };
+  })()`)
+  const after = afterResult?.snapshot
+  if (!after || after.phase !== 'arrived' || after.regionId !== targetRegionId) {
+    throw new Error(`movement did not arrive at ${targetRegionId} within ${afterResult?.steps ?? 0} seconds: ${JSON.stringify(after)}`)
+  }
   const afterVisual = await settleMovementVisual(cdp, actor, after)
   const afterBuffer = await captureCanvasPng(cdp)
-  const movementProbe = { actor, targetRegionId, before, mid, after, visuals: { before: beforeVisual, mid: midVisual, after: afterVisual } }
+  const movementProbe = { actor, startRegionId, targetRegionId, before, mid, after, arrivalSteps: afterResult.steps, visuals: { before: beforeVisual, mid: midVisual, after: afterVisual } }
   await evaluate(cdp, `window.__E13_MOVEMENT_PROBE__ = ${JSON.stringify(movementProbe)}`)
   return {
     buffer: midBuffer,

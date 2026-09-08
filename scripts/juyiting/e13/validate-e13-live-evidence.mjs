@@ -16,8 +16,8 @@
  *   - interaction shots: 281 selects songjiang; 282/283/284 open the planned
  *     panel class with interactionLocked; 285 keeps bubbles on
  *     宋江/卢俊义/吴用; 286/287 keep lighting present+attached at depth 300
- *   - movement shots: movementSnapshot non-empty, finite coordinates,
- *     bound to the planned actor
+ *   - movement shots: exact start/mid/arrival movement contract, three
+ *     distinct finite actor positions, and hash-bound rendered frames
  *   - the three contact sheets (camera/interaction/movement) exist
  *
  * Writes live/validation.json and exits 0 only when every check passes.
@@ -51,11 +51,6 @@ const PANEL_CLASS = Object.freeze({
   'E13-283': 'panel-library',    // hotspot-library-shelf
   'E13-284': 'panel-chat',       // hotspot-main-seat
 })
-const MOVEMENT_ACTOR = Object.freeze({
-  'E13-288': 'lujunyi',          // movement-bounty-board
-  'E13-289': 'likui',            // movement-front-door
-})
-
 const results = []
 const check = (name, ok, detail = '') => results.push({ check: name, ok: Boolean(ok), detail: String(detail) })
 
@@ -199,8 +194,8 @@ function main () {
       cameraBad.push(...validateCamera(id, record, facts, planShot))
     } else if (id >= 'E13-281' && id <= 'E13-287') {
       interactionBad.push(...validateInteraction(id, record, facts))
-    } else if (id === 'E13-288' || id === 'E13-289') {
-      const movementFailures = validateMovement(id, record, facts)
+    } else if (record.kind === 'movement') {
+      const movementFailures = validateMovement(id, record, facts, planShot)
       movementBad.push(...movementFailures)
       movementVisualBad.push(...movementFailures.filter(failure => failure.includes('visual')))
     }
@@ -396,10 +391,19 @@ function validateInteraction (id, record, facts) {
   return failures
 }
 
-function validateMovement (id, record, facts) {
+export function validateMovement (id, record, facts, planShot) {
   const failures = []
   const snapshot = facts.movementSnapshot
-  const actor = MOVEMENT_ACTOR[id]
+  const contract = planShot?.movementContract
+  if (planShot?.probeMobility !== 'production-movement' || !contract) {
+    failures.push(`${id}:planned production movement contract missing`)
+    return failures
+  }
+  const { actorPersonaCode: actor, startRegionId, targetRegionId: expectedRegion } = contract
+  if (![actor, startRegionId, expectedRegion].every(value => typeof value === 'string' && value.length > 0)) {
+    failures.push(`${id}:planned movement contract incomplete`)
+    return failures
+  }
   if (!snapshot || typeof snapshot !== 'object') {
     failures.push(`${id}:movementSnapshot missing`)
     return failures
@@ -410,11 +414,11 @@ function validateMovement (id, record, facts) {
   }
   if (snapshot.stateVersion !== 2) failures.push(`${id}:movementSnapshot.stateVersion ${JSON.stringify(snapshot.stateVersion)} != 2`)
   if (snapshot.behavior !== 'moving_to_region') failures.push(`${id}:movementSnapshot.behavior ${JSON.stringify(snapshot.behavior)} != moving_to_region`)
-  if (!['moving', 'arrived'].includes(snapshot.phase)) failures.push(`${id}:movementSnapshot.phase ${JSON.stringify(snapshot.phase)} is not moving/arrived`)
-  const expectedRegion = id === 'E13-288' ? 'bounty-board' : 'gate'
+  if (snapshot.phase !== 'arrived') failures.push(`${id}:movementSnapshot.phase ${JSON.stringify(snapshot.phase)} != arrived`)
+  if (snapshot.regionId !== expectedRegion) failures.push(`${id}:movementSnapshot.regionId ${JSON.stringify(snapshot.regionId)} != ${expectedRegion}`)
   const probe = facts.movementProbe
-  if (!probe || probe.actor !== actor || probe.targetRegionId !== expectedRegion) {
-    failures.push(`${id}:movementProbe actor/target mismatch`)
+  if (!probe || probe.actor !== actor || probe.startRegionId !== startRegionId || probe.targetRegionId !== expectedRegion) {
+    failures.push(`${id}:movementProbe actor/start/target mismatch`)
   } else {
     const frames = [probe.before, probe.mid, probe.after]
     if (frames.some(frame => !frame || frame.agentId !== actor || !finiteNumber(frame.x) || !finiteNumber(frame.y))) {
@@ -422,8 +426,10 @@ function validateMovement (id, record, facts) {
     } else {
       const total = Math.hypot(probe.after.x - probe.before.x, probe.after.y - probe.before.y)
       const firstLeg = Math.hypot(probe.mid.x - probe.before.x, probe.mid.y - probe.before.y)
+      const finalLeg = Math.hypot(probe.after.x - probe.mid.x, probe.after.y - probe.mid.y)
       if (!(total > 10)) failures.push(`${id}:total displacement ${total.toFixed(3)} <= 10`)
       if (!(firstLeg > 0.5)) failures.push(`${id}:before-to-mid displacement ${firstLeg.toFixed(3)} <= 0.5`)
+      if (!(finalLeg > 0.5)) failures.push(`${id}:mid-to-after displacement ${finalLeg.toFixed(3)} <= 0.5`)
       const visuals = probe.visuals
       for (const stage of ['before', 'mid', 'after']) {
         const engine = probe[stage]
@@ -436,6 +442,18 @@ function validateMovement (id, record, facts) {
         if (drift > 0.5) failures.push(`${id}:${stage} visual drift ${drift.toFixed(3)} > 0.5`)
       }
     }
+    if (probe.before?.regionId !== startRegionId || probe.before?.phase !== 'arrived') {
+      failures.push(`${id}:movementProbe before start region ${JSON.stringify(probe.before?.regionId)} != ${startRegionId}`)
+    }
+    if (probe.mid?.phase !== 'moving' || probe.mid?.targetRegionId !== expectedRegion) {
+      failures.push(`${id}:movementProbe mid must be moving toward ${expectedRegion}`)
+    }
+    if (probe.after?.phase !== 'arrived' || probe.after?.regionId !== expectedRegion) {
+      failures.push(`${id}:movementProbe after must arrive at ${expectedRegion}`)
+    }
+    if (!Number.isInteger(probe.arrivalSteps) || probe.arrivalSteps < 1 || probe.arrivalSteps > 60) {
+      failures.push(`${id}:movementProbe arrivalSteps must be 1..60`)
+    }
   }
   const finalVisual = Array.isArray(facts.agentVisuals) ? facts.agentVisuals.find(item => item?.id === actor) : null
   if (!finalVisual || !finiteNumber(finalVisual.x) || !finiteNumber(finalVisual.y)) {
@@ -444,18 +462,14 @@ function validateMovement (id, record, facts) {
     const finalDrift = Math.hypot(finalVisual.x - snapshot.x, finalVisual.y - snapshot.y)
     if (finalDrift > 0.5) failures.push(`${id}:final visual drift ${finalDrift.toFixed(3)} > 0.5`)
   }
-  if (snapshot.phase === 'moving' && snapshot.targetRegionId !== expectedRegion) {
-    failures.push(`${id}:moving targetRegionId ${JSON.stringify(snapshot.targetRegionId)} != ${expectedRegion}`)
-  }
-  if (snapshot.phase === 'arrived' && snapshot.regionId !== expectedRegion) {
-    failures.push(`${id}:arrived regionId ${JSON.stringify(snapshot.regionId)} != ${expectedRegion}`)
-  }
   return failures
 }
 
-try {
-  main()
-} catch (error) {
-  console.error(`[validate-e13-live] FAIL: ${error.message}`)
-  process.exit(1)
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  try {
+    main()
+  } catch (error) {
+    console.error(`[validate-e13-live] FAIL: ${error.message}`)
+    process.exit(1)
+  }
 }

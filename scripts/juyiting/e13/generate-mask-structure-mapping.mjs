@@ -31,7 +31,7 @@ import { atomicWriteUtf8 } from '../lib/atomic-write.mjs'
 const here = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(here, '..', '..', '..')
 
-const CURRENT_TMX_SHA256 = '885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f'
+const CURRENT_TMX_SHA256 = '7b304c11fd4a121d92f5fb1430f8073d4d590b3d42eb9b9a18e0e0c9bd22ff53'
 const OUT_DIR = join(REPO_ROOT, 'tests/fixtures/juyiting/occlusion-e13', 'mask-structure-mapping')
 const MANIFEST_PATH = join(OUT_DIR, 'mask-structure-mapping.json')
 const SVG_PATH = join(OUT_DIR, 'mask-structure-mapping.svg')

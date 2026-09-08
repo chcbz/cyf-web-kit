@@ -42,7 +42,7 @@ const MANIFEST_PATH = join(DIR, 'mask-structure-mapping.json')
 const SVG_PATH = join(DIR, 'mask-structure-mapping.svg')
 const VERIFY_PATH = join(DIR, 'mask-structure-mapping.verify.json')
 
-const CURRENT_TMX_SHA256 = '885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f'
+const CURRENT_TMX_SHA256 = '7b304c11fd4a121d92f5fb1430f8073d4d590b3d42eb9b9a18e0e0c9bd22ff53'
 const PATHS = {
   ledger: 'tests/fixtures/juyiting/occlusion-v2-masks/migration-ledger.json',
   manifest: 'tests/fixtures/juyiting/occlusion-v2-masks/mask-tmx-manifest.json',
@@ -165,7 +165,7 @@ export function runVerify({ mapping, svg, ledger, manifest, fragSpec, tmxBytes }
   check('uniqueTargetFragmentCount matches resolved fragments', mapping.uniqueTargetFragmentCount === new Set(mapping.entries.map((e) => e.targetFragmentStableId)).size, `got ${mapping.uniqueTargetFragmentCount}`)
 
   const tmxSha = sha256(tmxBytes)
-  check('current TMX file hash is bound SHA 885471a1…', tmxSha === CURRENT_TMX_SHA256, tmxSha)
+  check('current TMX file hash is bound SHA 7b304c11…', tmxSha === CURRENT_TMX_SHA256, tmxSha)
   check('manifest currentTmxSha256 matches bound SHA', mapping.currentTmxSha256 === CURRENT_TMX_SHA256)
   check('manifest tmx provenance matches mask-tmx-manifest current/baseline', mapping.provenance.tmx.currentSha256 === manifest.provenance.tmx.currentSha256 && mapping.provenance.tmx.baselineSha256 === manifest.provenance.tmx.baselineSha256)
   check('provenance wholeFileSha256 fields match source files', mapping.provenance.migrationLedger.wholeFileSha256 === sha256(read(PATHS.ledger)) && mapping.provenance.maskTmxManifest.wholeFileSha256 === sha256(read(PATHS.manifest)) && mapping.provenance.fragmentOwnershipSpec.wholeFileSha256 === sha256(read(PATHS.fragSpec)))

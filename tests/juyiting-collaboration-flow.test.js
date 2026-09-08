@@ -113,7 +113,8 @@ describe('JuyiHall collaboration flow contract', () => {
 
   it('keeps funded-bounty preview wiring capability-gated without changing map and roster boundaries', () => {
     expect(hallSource).to.include('ensureEconomyPreviewCapability')
-    expect(hallSource).to.include('isEconomyPreviewCapability(await loadEconomyPreviewCapability())')
+    expect(hallSource).to.include('economyPreviewCapability.value = await loadEconomyPreviewCapability()')
+    expect(hallSource).to.include('economyPreviewEnabled.value = isEconomyPreviewCapability(economyPreviewCapability.value)')
     expect(hallSource).to.include(':funded-preview-enabled="economyPreviewEnabled"')
     expect(hallSource).not.to.include('/agent/active')
   })
@@ -125,10 +126,14 @@ describe('JuyiHall collaboration flow contract', () => {
   })
 
   it('keeps both agent and task context in outgoing chat metadata', () => {
-    expect(hallConversationSource).to.include('selectedAgentId: selectedAgent.value?.agentId')
-    expect(hallConversationSource).to.include('mentionAgentIds: currentChatContext.value.targetAgentIds')
-    expect(hallConversationSource).to.include('selectedTaskId: selectedTask.value?.id')
-    expect(hallConversationSource).to.include('...(outgoingMetadata?.value || {})')
+    expect(hallConversationSource).to.include('const selectedAgentId = isVoiceSend ? sendContext.selectedAgentId : (sendContext.selectedAgentId ?? selectedAgent.value?.agentId)')
+    expect(hallConversationSource).to.include('const mentionAgentIds = Array.isArray(sendContext.mentionAgentIds)')
+    expect(hallConversationSource).to.include('const selectedTaskId = isVoiceSend ? sendContext.selectedTaskId : (sendContext.selectedTaskId ?? selectedTask.value?.id)')
+    expect(hallConversationSource).to.include('selectedAgentId,')
+    expect(hallConversationSource).to.include('mentionAgentIds,')
+    expect(hallConversationSource).to.include('selectedTaskId')
+    expect(hallConversationSource).to.include('const metadataSource = isVoiceSend ? (sendContext.outgoingMetadata || {}) : (outgoingMetadata?.value || {})')
+    expect(hallConversationSource).to.include('...metadataSource,')
   })
 
   it('sends hall messages with durable public bounty and private conversation scopes', () => {
@@ -139,15 +144,15 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallChatContextSource).to.include("conversationScopeKey: 'public'")
     expect(hallChatContextSource).to.include("conversationScopeType: 'bounty'")
     expect(hallChatContextSource).to.include("conversationScopeType: 'private'")
-    expect(hallConversationSource).to.include('conversationScopeType: chatContext.value.conversationScopeType')
-    expect(hallConversationSource).to.include('conversationScopeKey: chatContext.value.conversationScopeKey')
-    expect(hallConversationSource).to.include('targetAgentIds: chatContext.value.targetAgentIds')
+    expect(hallConversationSource).to.include('conversationScopeType: sendContext.conversationScopeType')
+    expect(hallConversationSource).to.include('conversationScopeKey: sendContext.conversationScopeKey')
+    expect(hallConversationSource).to.include('targetAgentIds: sendContext.targetAgentIds')
     expect(hallConversationSource).to.include('forceNewConversation')
   })
 
   it('loads hall messages by conversation scope instead of the latest juyiting conversation only', () => {
-    expect(hallConversationSource).to.include('conversationScopeType: chatContext.value.conversationScopeType')
-    expect(hallConversationSource).to.include('conversationScopeKey: chatContext.value.conversationScopeKey')
+    expect(hallConversationSource).to.include('conversationScopeType: expectedScope.type')
+    expect(hallConversationSource).to.include('conversationScopeKey: expectedScope.key')
     expect(hallConversationSource).not.to.include('pageSize: 1,\n        orderBy: \'update_time desc\',\n        search: {\n          jiacn: globalStore.getJiacn,\n          conversationType: \'juyiting\'\n        }')
   })
 
@@ -246,7 +251,7 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallSource).to.include("import HallPortraitHome from '@/components/juyiting/HallPortraitHome.vue'")
     expect(hallSource).to.match(/<HallPortraitHome[\s\S]*?:agents="agents"[\s\S]*?:map-agents="mapAgents"[\s\S]*?:selected-agent="selectedAgent"[\s\S]*?:selected-task="selectedTask"[\s\S]*?:task-detail-open="portraitTaskDetailOpen"/)
     expect(hallSource).to.include('const portraitTaskDetailOpen = ref(false)')
-    expect(hallSource).to.match(/<HallStage\s+v-else[\s\S]*?:map-agents="mapAgents"/)
+    expect(hallSource).to.match(/<HallStage\s+v-if="stageMounted"[\s\S]*?:scene-agents="sceneAgents"/)
     expect(portraitHomeSource).not.to.include('/agent/active')
     expect(portraitHomeSource).not.to.include('useHallData')
     expect(hallDataSource).to.include("agentApi.get('/map'")

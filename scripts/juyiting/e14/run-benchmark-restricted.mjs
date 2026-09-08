@@ -307,6 +307,8 @@ try {
   report.pass = Object.values(report.gates).every(Boolean)
   await mkdir(resolve(REPORT, '..'), { recursive: true })
   await writeFile(REPORT, `${JSON.stringify(report, null, 2)}\n`)
+  // Emit the complete fresh evidence before browser shutdown or later test failures.
+  console.log(`CYF_E14_REPORT_BASE64=${Buffer.from(JSON.stringify(report)).toString('base64')}`)
   console.log(JSON.stringify({ report: REPORT, pass: report.pass, timing: report.timing, gates: report.gates, environment: report.environment }, null, 2))
   if (!report.pass) process.exitCode = 1
 } finally {

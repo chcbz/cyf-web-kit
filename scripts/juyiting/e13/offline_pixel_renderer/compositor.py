@@ -2,6 +2,15 @@
 """Deterministic crop compositor matching HallScene/melonJS production draw semantics."""
 import os
 from .png_io import load_image
+from .native_raster import blit_region as native_blit_region
+
+
+def sequential_float_sum(values):
+    """Fixed left-to-right IEEE-754 accumulation (Python 3.6 sum semantics)."""
+    total = 0.0
+    for value in values:
+        total += value
+    return total
 
 
 class PixelBuffer:
@@ -16,6 +25,14 @@ class PixelBuffer:
         self.pixels[:] = bytes(rgba) * (self.width * self.height)
 
     def blit_region(self, src, sx, sy, sw, sh, dx, dy, dw=None, dh=None, opacity=1.0, blend='source-over', smoothing=True, clip=None):
+        dw, dh = int(dw if dw is not None else sw), int(dh if dh is not None else sh)
+        if native_blit_region(src, self, sx, sy, sw, sh, dx, dy, dw, dh, opacity, blend, smoothing, clip):
+            return
+        self._blit_region_reference(src, sx, sy, sw, sh, dx, dy, dw, dh, opacity, blend, smoothing, clip)
+
+    # Exact scalar reference retained for fail-closed fallback and differential
+    # testing. E13_REFERENCE_RASTER=1 routes every blit through this method.
+    def _blit_region_reference(self, src, sx, sy, sw, sh, dx, dy, dw=None, dh=None, opacity=1.0, blend='source-over', smoothing=True, clip=None):
         dw, dh = int(dw if dw is not None else sw), int(dh if dh is not None else sh)
         if dw <= 0 or dh <= 0 or sw <= 0 or sh <= 0:
             return
@@ -50,12 +67,12 @@ class PixelBuffer:
                     wx, wy = fx - (fx // 1), fy - (fy // 1)
                     weights = ((x0, y0, (1-wx)*(1-wy)), (x1, y0, wx*(1-wy)),
                                (x0, y1, (1-wx)*wy), (x1, y1, wx*wy))
-                    alpha = sum(sp[(yy * src.width + xx) * 4 + 3] / 255.0 * weight for xx, yy, weight in weights)
+                    alpha = sequential_float_sum(sp[(yy * src.width + xx) * 4 + 3] / 255.0 * weight for xx, yy, weight in weights)
                     if alpha <= 0:
                         continue
                     sc = []
                     for c in range(3):
-                        premul = sum((sp[(yy * src.width + xx) * 4 + c] / 255.0) *
+                        premul = sequential_float_sum((sp[(yy * src.width + xx) * 4 + c] / 255.0) *
                                      (sp[(yy * src.width + xx) * 4 + 3] / 255.0) * weight
                                      for xx, yy, weight in weights)
                         sc.append(premul / alpha)

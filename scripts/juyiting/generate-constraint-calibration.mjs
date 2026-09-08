@@ -76,8 +76,10 @@ function verifyHysteresisConstants(rootDir) {
 
 // ── Frozen SHAs ──
 const EXPECTED_LEDGER_SHA = '700b2ac6d27ceb58ce5fe0dd92b3f0dc7012a6ecafd03f7c23a9d3a3c42704b1'
-const EXPECTED_MANIFEST_SHA = '96053f6cda115ecc437085ef431ef1d4ec766403f4c2e6a2bda6c8093bbdb0e7'
-const EXPECTED_TMX_SHA = '885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f'
+// O00 (4ab34b5) accepted the updated navigation TMX without changing mask
+// bindings or frozen constraint sources. Re-run every proof for that baseline.
+const EXPECTED_MANIFEST_SHA = 'f5ea1d0a349d9d4e5cbae3a3904f7576cdca5339226cf164bcbf214d813c2439'
+const EXPECTED_TMX_SHA = '7b304c11fd4a121d92f5fb1430f8073d4d590b3d42eb9b9a18e0e0c9bd22ff53'
 
 /**
  * Generate a calibration report from frozen inputs.

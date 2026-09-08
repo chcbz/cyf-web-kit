@@ -11,7 +11,7 @@
     84
   ],
   "uniqueTargetFragmentCount": 32,
-  "currentTmxSha256": "885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f",
+  "currentTmxSha256": "7b304c11fd4a121d92f5fb1430f8073d4d590b3d42eb9b9a18e0e0c9bd22ff53",
   "passedChecks": 16,
   "totalChecks": 16,
   "failures": [],
@@ -52,9 +52,9 @@
       "detail": "got 32"
     },
     {
-      "check": "current TMX file hash is bound SHA 885471a1…",
+      "check": "current TMX file hash is bound SHA 7b304c11…",
       "ok": true,
-      "detail": "885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f"
+      "detail": "7b304c11fd4a121d92f5fb1430f8073d4d590b3d42eb9b9a18e0e0c9bd22ff53"
     },
     {
       "check": "manifest currentTmxSha256 matches bound SHA",
@@ -74,12 +74,12 @@
     {
       "check": "manifest contentSha256 recomputes",
       "ok": true,
-      "detail": "4789ccaa73de93edc10fe58c259eeb22f7984a8a078aa48fb46e1a7324123501"
+      "detail": "550c8c4dbeed3c96040b287cec8f0465d1a3e9bf192c619754e9f191fd97fd41"
     },
     {
       "check": "visualization.sha256 matches SVG file",
       "ok": true,
-      "detail": "b2c705f0bc0512257637e957b287856138e1a7638cb42a93e275535f06993ec1"
+      "detail": "a42bc76f95daa29ad6a059673da93409bbbf11bddfba9d166b383725ee0bba9a"
     },
     {
       "check": "SVG renders exactly 37 mask cards 48..84",
@@ -98,8 +98,8 @@
     }
   ],
   "sourceHashes": {
-    "manifestSha256": "06f764c6a11d02d1608e1e3f509231cfc6316d6897fe7b4b11b40c431e86c906",
-    "svgSha256": "b2c705f0bc0512257637e957b287856138e1a7638cb42a93e275535f06993ec1",
-    "tmxSha256": "885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f"
+    "manifestSha256": "8144f158e2dfdf49943da02d24641a5672de1436bed85a2edf149fbdd4edf9a2",
+    "svgSha256": "a42bc76f95daa29ad6a059673da93409bbbf11bddfba9d166b383725ee0bba9a",
+    "tmxSha256": "7b304c11fd4a121d92f5fb1430f8073d4d590b3d42eb9b9a18e0e0c9bd22ff53"
   }
 }

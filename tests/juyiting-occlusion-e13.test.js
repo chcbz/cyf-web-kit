@@ -205,7 +205,7 @@ describe('E13 evidence integrity (phase-1 + offline)', () => {
     expect(gate.releasePass).to.equal(false)
     expect(gate.pass).to.equal(false)
     expect(gate.checks.find(check => check.check.includes('GPT V5 rejection'))?.ok).to.equal(true)
-    expect(gate.checks.find(check => check.check.includes('GPT V6 full visual audit'))?.ok).to.equal(true)
+    expect(gate.checks.find(check => check.check.includes('GPT V7 full visual audit'))?.ok).to.equal(true)
     expect(gate.checks.find(check => check.check.includes('37/37 mask'))?.ok).to.equal(true)
     expect(gate.releaseBlockers).to.not.include('GPT V5 visual review REJECT/P1; rebuilt evidence requires V6 PASS')
     expect(gate.releaseBlockers).to.deep.equal(['independent release_guard pending'])

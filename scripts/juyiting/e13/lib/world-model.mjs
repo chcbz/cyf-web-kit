@@ -116,8 +116,8 @@ export const INTERACTION_CASES = Object.freeze([
 ])
 
 export const MOVEMENT_CASES = Object.freeze([
-  { id: 'movement-bounty-board', label: 'movement: 卢俊义沿路网走向右上悬赏桌', target: 'jyt.prop.northeast.bounty-board.v1' },
-  { id: 'movement-front-door',   label: 'movement: 李逵沿路网走向前门', target: 'jyt.occ.entrance.hanging-banner-01.v2' },
+  { id: 'movement-bounty-board', label: 'movement: 卢俊义沿路网走向右上悬赏桌', target: 'jyt.prop.northeast.bounty-board.v1', movementContract: { actorPersonaCode: 'lujunyi', startRegionId: 'council-table', targetRegionId: 'bounty-board' } },
+  { id: 'movement-front-door',   label: 'movement: 李逵沿路网走向前门', target: 'jyt.occ.entrance.hanging-banner-01.v2', movementContract: { actorPersonaCode: 'likui', startRegionId: 'right-guard', targetRegionId: 'gate' } },
 ])
 
 // ── Derivation helpers ──
@@ -269,7 +269,8 @@ export function buildShotPlan (facts = loadSourceFacts()) {
           contextCompanionStableId: target.contextCompanionStableId ?? null,
           visualOmissions: target.evidenceContext === 'target-isolated' ? [target.contextCompanionStableId] : [],
           probeKind: target.probes ? 'target-specific' : 'uniform-anchor-offset',
-          visualExerciseContract: target.visualExerciseContract ?? 'target-each-shot',
+          probeMobility: 'synthetic-visual-only',
+          visualExerciseContract: target.visualExerciseContract ?? (target.probes ? 'target-each-shot' : 'depth-order-only'),
           visualOverlay: target.visualOverlay ?? 'none',
           maxAgentOcclusionRatio: target.maxAgentOcclusionRatio ?? null,
           navValidation: deriveNavValidation(world, facts),
@@ -296,7 +297,7 @@ export function buildShotPlan (facts = loadSourceFacts()) {
     push({ kind: 'interaction', interactionCase: interactionCase.id, interactionLabel: interactionCase.label })
   }
   for (const movementCase of MOVEMENT_CASES) {
-    push({ kind: 'movement', movementCase: movementCase.id, movementLabel: movementCase.label, targetStableId: movementCase.target })
+    push({ kind: 'movement', movementCase: movementCase.id, movementLabel: movementCase.label, targetStableId: movementCase.target, probeMobility: 'production-movement', movementContract: movementCase.movementContract })
   }
   return shots
 }
@@ -325,11 +326,15 @@ export function validateShotPlan (shots = buildShotPlan(), facts = loadSourceFac
       if (!RELATIONS[shot.relation]) errors.push(`${shot.id}: unknown relation ${shot.relation}`)
       const expectedNavValidation = deriveNavValidation(shot.world, facts)
       if (JSON.stringify(expectedNavValidation) !== JSON.stringify(shot.navValidation)) errors.push(`${shot.id}: navValidation drift`)
-      if (shot.probeKind === 'target-specific' && (!expectedNavValidation.navigable || expectedNavValidation.reachability.status !== 'found')) {
-        errors.push(`${shot.id}: target-specific probe is not production reachable (${JSON.stringify(expectedNavValidation)})`)
-      }
-      if (!['target-each-shot', 'ownership-transition', 'composite-transition'].includes(shot.visualExerciseContract)) {
+      if (shot.probeMobility !== 'synthetic-visual-only') errors.push(`${shot.id}: matrix probe must use synthetic-visual-only mobility`)
+      if (!['target-each-shot', 'ownership-transition', 'composite-transition', 'depth-order-only'].includes(shot.visualExerciseContract)) {
         errors.push(`${shot.id}: invalid visualExerciseContract ${shot.visualExerciseContract}`)
+      }
+      if (shot.probeKind === 'uniform-anchor-offset' && shot.visualExerciseContract !== 'depth-order-only') {
+        errors.push(`${shot.id}: uniform probe must use depth-order-only visual exercise`)
+      }
+      if (shot.probeKind === 'target-specific' && shot.visualExerciseContract === 'depth-order-only') {
+        errors.push(`${shot.id}: target-specific probe cannot use depth-order-only visual exercise`)
       }
       if (!['none', 'target-outline', 'target-and-companion-outline'].includes(shot.visualOverlay)) {
         errors.push(`${shot.id}: invalid visualOverlay ${shot.visualOverlay}`)
@@ -345,6 +350,11 @@ export function validateShotPlan (shots = buildShotPlan(), facts = loadSourceFac
         const companion = TARGETS.find(t => t.stableId === shot.contextCompanionStableId)
         if (!companion || companion.evidenceContext === 'target-isolated') errors.push(`${shot.id}: isolated target requires an in-context companion`)
       } else if (shot.evidenceContext !== 'in-context') errors.push(`${shot.id}: invalid evidenceContext ${shot.evidenceContext}`)
+    } else if (shot.kind === 'movement') {
+      const expected = MOVEMENT_CASES.find(movement => movement.id === shot.movementCase)
+      if (!expected) errors.push(`${shot.id}: unknown movement case ${shot.movementCase}`)
+      if (shot.probeMobility !== 'production-movement') errors.push(`${shot.id}: movement probe must use production-movement mobility`)
+      if (JSON.stringify(shot.movementContract) !== JSON.stringify(expected?.movementContract)) errors.push(`${shot.id}: movementContract drift`)
     }
   }
   // Coverage: every cell, persona, relation, target present

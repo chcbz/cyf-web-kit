@@ -75,7 +75,7 @@ def main():
         pixels,order,depths,facts=renderer.render_shot_small(shot,fragments,props,400,300)
         name=f'{shot["id"]}.png'; path=os.path.join(shots_dir,name)
         write_png(path,400,300,pixels)
-        record={k:shot[k] for k in ('id','kind','cell','probeCell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera','evidenceContext','contextCompanionStableId','visualOmissions','probeKind','visualExerciseContract','visualOverlay','maxAgentOcclusionRatio','navValidation','probeRationale')}
+        record={k:shot[k] for k in ('id','kind','cell','probeCell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera','evidenceContext','contextCompanionStableId','visualOmissions','probeKind','probeMobility','visualExerciseContract','visualOverlay','maxAgentOcclusionRatio','navValidation','probeRationale')}
         record.update({'semanticRelation':shot['relation'],'resolvedExpectedOrdering':shot['resolvedExpectedOrdering'],'screenshotFile':f'shots/{name}','sha256':sha(path),'runtimeFacts':facts})
         records.append(record)
         if (i+1)%45==0: print(f'[{i+1}/{len(selected)}]',flush=True)
@@ -83,7 +83,7 @@ def main():
         updated={r['id']:r for r in records}
         prior={r['id']:r for r in existing_records}
         merged=[]
-        bind_fields=('id','kind','cell','probeCell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera','evidenceContext','contextCompanionStableId','visualOmissions','probeKind','visualExerciseContract','visualOverlay','maxAgentOcclusionRatio','navValidation','probeRationale')
+        bind_fields=('id','kind','cell','probeCell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera','evidenceContext','contextCompanionStableId','visualOmissions','probeKind','probeMobility','visualExerciseContract','visualOverlay','maxAgentOcclusionRatio','navValidation','probeRationale')
         for shot in shots:
             record=updated.get(shot['id']) or prior.get(shot['id'])
             if record is None:

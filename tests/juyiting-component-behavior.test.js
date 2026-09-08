@@ -1,7 +1,8 @@
 import { expect } from 'chai'
-import { after, before } from 'mocha'
+import { after, afterEach, before } from 'mocha'
 import { readFileSync } from 'fs'
-import { compileScript, parse } from '@vue/compiler-sfc'
+import { compileScript, compileTemplate, parse } from '@vue/compiler-sfc'
+import { resolveLiveMapPreviewActivation } from '../src/composables/juyiting/liveMapPreviewPolicy.js'
 import { createEconomyRequestIntentStore } from '../src/composables/juyiting/economyRequestIntent.js'
 import { useHallTaskActions } from '../src/composables/juyiting/useHallTaskActions.js'
 
@@ -23,6 +24,34 @@ let classifyViewportResizeMock
 let silverAmount
 
 const globalDomDescriptors = new Map()
+const windowDomDescriptors = new Map()
+const stagedFrames = new Map()
+const mountedWrappers = new Set()
+let stagedFrameId = 0
+let originalGetBoundingClientRect
+
+const melonLayoutRect = () => ({
+  x: 0,
+  y: 0,
+  top: 0,
+  left: 0,
+  right: globalThis.window.innerWidth,
+  bottom: globalThis.window.innerHeight,
+  width: globalThis.window.innerWidth,
+  height: globalThis.window.innerHeight,
+  toJSON: () => ({})
+})
+
+const flushStageFrames = async (limit = 12) => {
+  for (let pass = 0; pass < limit && stagedFrames.size; pass += 1) {
+    const pending = [...stagedFrames.entries()]
+    stagedFrames.clear()
+    pending.forEach(([, callback]) => callback(Date.now()))
+    await Promise.resolve()
+    await Vue?.nextTick?.()
+  }
+}
+
 const installGlobalDomRuntime = () => {
   for (const key of ['SVGElement', 'Element', 'Node', 'requestAnimationFrame', 'cancelAnimationFrame']) {
     globalDomDescriptors.set(key, Object.getOwnPropertyDescriptor(globalThis, key))
@@ -30,12 +59,30 @@ const installGlobalDomRuntime = () => {
   for (const key of ['SVGElement', 'Element', 'Node']) {
     Object.defineProperty(globalThis, key, { configurable: true, writable: true, value: globalThis.window?.[key] })
   }
-  Object.defineProperty(globalThis, 'requestAnimationFrame', { configurable: true, writable: true, value: callback =>
-    globalThis.window?.requestAnimationFrame?.(callback) ?? setTimeout(callback, 0) })
-  Object.defineProperty(globalThis, 'cancelAnimationFrame', { configurable: true, writable: true, value: handle =>
-    globalThis.window?.cancelAnimationFrame?.(handle) ?? clearTimeout(handle) })
+  for (const key of ['requestAnimationFrame', 'cancelAnimationFrame']) {
+    windowDomDescriptors.set(key, Object.getOwnPropertyDescriptor(globalThis.window, key))
+  }
+  globalThis.window.requestAnimationFrame = callback => {
+    const id = ++stagedFrameId
+    stagedFrames.set(id, callback)
+    return id
+  }
+  globalThis.window.cancelAnimationFrame = id => stagedFrames.delete(id)
+  Object.defineProperty(globalThis, 'requestAnimationFrame', { configurable: true, writable: true, value: callback => globalThis.window.requestAnimationFrame(callback) })
+  Object.defineProperty(globalThis, 'cancelAnimationFrame', { configurable: true, writable: true, value: handle => globalThis.window.cancelAnimationFrame(handle) })
+  originalGetBoundingClientRect = globalThis.window.Element.prototype.getBoundingClientRect
+  globalThis.window.Element.prototype.getBoundingClientRect = function () {
+    if (this.classList?.contains('melon-layer') && this.dataset?.testLayout !== 'zero') return melonLayoutRect()
+    return originalGetBoundingClientRect.call(this)
+  }
 }
 const restoreGlobalDomRuntime = () => {
+  stagedFrames.clear()
+  if (originalGetBoundingClientRect) globalThis.window.Element.prototype.getBoundingClientRect = originalGetBoundingClientRect
+  for (const [key, descriptor] of windowDomDescriptors) {
+    if (descriptor) Object.defineProperty(globalThis.window, key, descriptor)
+    else delete globalThis.window[key]
+  }
   for (const [key, descriptor] of globalDomDescriptors) {
     if (descriptor) Object.defineProperty(globalThis, key, descriptor)
     else delete globalThis[key]
@@ -124,14 +171,35 @@ const flushPromises = async () => {
   await Promise.resolve()
   await Promise.resolve()
   await Vue.nextTick()
+  await flushStageFrames()
+}
+
+const waitForStageReady = async () => {
+  for (let pass = 0; pass < 3; pass += 1) await flushPromises()
 }
 
 after(() => restoreGlobalDomRuntime())
+afterEach(() => {
+  for (const wrapper of mountedWrappers) wrapper.unmount()
+  mountedWrappers.clear()
+  stagedFrames.clear()
+})
 
 describe('JuyiHall component behavior', () => {
   before(async () => {
     installGlobalDomRuntime()
-    ;({ mount } = await import('@vue/test-utils'))
+    const { mount: rawMount } = await import('@vue/test-utils')
+    mount = (...args) => {
+      const wrapper = rawMount(...args)
+      const unmount = wrapper.unmount.bind(wrapper)
+      wrapper.unmount = () => {
+        mountedWrappers.delete(wrapper)
+        return unmount()
+      }
+      mountedWrappers.add(wrapper)
+      void Promise.resolve().then(() => flushStageFrames())
+      return wrapper
+    }
     Vue = await import('vue')
     silverAmount = await import('../src/utils/silverAmount.js')
     ;({ classifyViewportResize: classifyViewportResizeMock } = await import('../src/game/camera/resizePolicy.js'))
@@ -288,7 +356,28 @@ describe('JuyiHall component behavior', () => {
     wrapper.unmount()
 
     expect(lockCalls).to.deep.include.members([[true, 'panel'], [false, 'panel']])
-    expect(lockCalls.at(-1)).to.deep.equal([false, 'loading'])
+    expect(lockCalls.at(-1)).to.deep.equal([true, 'destroy'])
+  })
+
+  it('waits for a nonzero melon layout before publishing scene readiness', async () => {
+    hallGameMock = {
+      destroy: () => {},
+      mount: async (_container, options = {}) => options.onReady?.(),
+      setInteractionLocked: () => {}, start: () => {}, syncAgents: () => {}, syncHotspots: () => {}
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+    const wrapper = mount(HallStage, { global: { stubs }, props: makeHallStageProps() })
+    const melonLayer = wrapper.find('.melon-layer')
+    melonLayer.element.dataset.testLayout = 'zero'
+
+    try {
+      await flushPromises()
+      expect(wrapper.find('.hall-board').classes()).not.to.include('is-melon-ready')
+
+      expect(stagedFrames.size).to.be.greaterThan(0)
+    } finally {
+      wrapper.unmount()
+    }
   })
 
   it('classifies visual viewport keyboard resizing without fitting the map transform', async () => {
@@ -333,7 +422,7 @@ describe('JuyiHall component behavior', () => {
     }
   })
 
-  it('coalesces resize races, keeps keyboard close classified, and deduplicates rotation', async () => {
+  it('coalesces resize races, keeps keyboard close classified, and requires an explicit orientation signal', async () => {
     const originals = {
       innerWidth: global.window.innerWidth,
       innerHeight: global.window.innerHeight,
@@ -372,8 +461,11 @@ describe('JuyiHall component behavior', () => {
 
     try {
       wrapper = mount(HallStage, { attachTo: document.body, global: { stubs }, props: makeHallStageProps() })
+      for (let pass = 0; pass < 5; pass += 1) {
+        await flushPromises()
+        flushFrame()
+      }
       await flushPromises()
-      flushFrame()
       resizeCalls.length = 0
       input.focus()
       global.window.innerHeight = 560
@@ -399,8 +491,10 @@ describe('JuyiHall component behavior', () => {
       visualHeight = 500
       global.window.dispatchEvent(new global.window.Event('resize'))
       visualListeners.forEach(listener => listener())
+      await flushPromises()
       flushFrame()
-      expect(resizeCalls.filter(call => call.kind === 'orientation')).to.have.length(1)
+      await flushPromises()
+      expect(resizeCalls.filter(call => call.kind === 'layout')).to.have.length(1)
       expect(resizeCalls).to.have.length(1)
     } finally {
       wrapper?.unmount()
@@ -651,7 +745,10 @@ describe('JuyiHall component behavior', () => {
     global.window.clearTimeout = () => {}
     hallGameMock = {
       destroy: () => {},
-      mount: async () => { mountIndex += 1 },
+      mount: async (_container, options = {}) => {
+        mountIndex += 1
+        options.onReady?.()
+      },
       getMovementRuntime: () => movementRuntime,
       enqueueMovementCommands: ([command]) => {
         engines[mountIndex - 1].push(command)
@@ -685,7 +782,7 @@ describe('JuyiHall component behavior', () => {
     let wrapper
     try {
       wrapper = mount(Harness, { global: { stubs } })
-      await flushPromises()
+      await waitForStageReady()
       expect(engines[0]).to.have.length(1)
 
       timers.find(timer => timer.delay === 15000).callback()
@@ -721,7 +818,7 @@ describe('JuyiHall component behavior', () => {
       zoomBy: delta => zoomCalls.push(delta)
     }
     HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
-    const wrapper = mount(HallStage, { global: { stubs }, props: makeHallStageProps() })
+    const wrapper = mount(HallStage, { global: { stubs }, props: makeHallStageProps({ isMobileCoarse: true }) })
     const board = wrapper.find('.hall-board')
 
     await board.trigger('keydown', { key: '+' })
@@ -731,7 +828,7 @@ describe('JuyiHall component behavior', () => {
     expect(resetCalls).to.deep.equal([])
 
     pendingMount.resolve()
-    await flushPromises()
+    await waitForStageReady()
     expect(lockCalls.filter(call => call[0] === true && call[1] === 'loading')).to.have.length(2)
 
     readyCallback()
@@ -783,12 +880,12 @@ describe('JuyiHall component behavior', () => {
     let wrapper
     try {
       wrapper = mount(HallStage, { global: { stubs }, props: makeHallStageProps() })
-      await flushPromises()
+      await waitForStageReady()
       expect(wrapper.find('.return-main-hall').exists()).to.equal(false)
 
       snapshot.transform = { zoom: 1.25, offsetX: -791.25, offsetY: 12.5 }
       await wrapper.find('.hall-board').trigger('wheel')
-      await Vue.nextTick()
+      await waitForStageReady()
       expect(wrapper.find('.return-main-hall').exists()).to.equal(true)
     } finally {
       wrapper?.unmount()
@@ -827,7 +924,10 @@ describe('JuyiHall component behavior', () => {
     let wrapper
     try {
       wrapper = mount(HallStage, { global: { stubs }, props: makeHallStageProps() })
-      await flushPromises()
+      for (let pass = 0; pass < 5; pass += 1) {
+        await flushPromises()
+        runNextFrame()
+      }
       while (frames.size) runNextFrame()
       const baseline = snapshotCalls
       await wrapper.find('.hall-board').trigger('wheel')
@@ -893,6 +993,7 @@ describe('JuyiHall component behavior', () => {
       global: { stubs },
       props: makeHallStageProps()
     })
+    await waitForStageReady()
     const board = wrapper.find('.hall-board')
 
     await board.trigger('keydown', { key: '+' })
@@ -950,7 +1051,7 @@ describe('JuyiHall component behavior', () => {
         orientationHint: '请旋转手机横屏查看'
       })
     })
-    await flushPromises()
+    await waitForStageReady()
 
     expect(wrapper.find('.hall-board').classes()).to.include('is-scene-portrait')
     expect(wrapper.find('.orientation-hint').text()).to.equal('请旋转手机横屏查看')
@@ -961,7 +1062,7 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.find('.hall-board').classes()).to.include('is-scene-landscape')
     expect(wrapper.find('.orientation-action').exists()).to.equal(true)
     expect(readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8'))
-      .to.include("$emit(sceneMode === 'landscape' ? 'request-portrait' : 'request-landscape')")
+      .to.include("emit(sceneMode.value === 'landscape' ? 'request-portrait' : 'request-landscape')")
 
     await wrapper.setProps({ isMobileCoarse: false })
     expect(wrapper.find('.orientation-action').exists()).to.equal(false)
@@ -972,7 +1073,7 @@ describe('JuyiHall component behavior', () => {
     const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
 
     expect(source).to.include('class="tool-action onboarding-replay"')
-    expect(source).to.include("$emit('open-onboarding', $event.currentTarget)")
+    expect(source).to.include("emit('open-onboarding', target)")
   })
 
   it('uses supported Varlet icons for the orientation toggle', () => {
@@ -1111,7 +1212,7 @@ describe('JuyiHall component behavior', () => {
         visibleAgents: []
       })
     })
-    await Vue.nextTick()
+    await waitForStageReady()
 
     expect(syncedAgents).to.deep.include(sceneAgents)
     expect(syncedHotspots).to.deep.include(sceneHotspots)
@@ -1173,6 +1274,8 @@ describe('JuyiHall component behavior', () => {
       })
     })
 
+    await waitForStageReady()
+
     clickHandler({ agentId: 'linchong' })
 
     expect(wrapper.emitted('select-agent')[0]).to.deep.equal([sceneAgents[0]])
@@ -1196,6 +1299,8 @@ describe('JuyiHall component behavior', () => {
       global: { stubs },
       props: makeHallStageProps()
     })
+
+    await waitForStageReady()
 
     hotspotHandler({ panel: 'tasks' })
 
@@ -2151,14 +2256,22 @@ const loadActualJuyiHall = (mocks) => {
   const filename = new URL(relativePath, import.meta.url).pathname
   const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8')
   const { descriptor } = parse(source, { filename })
-  const script = compileScript(descriptor, { id: 'o04-actual-juyi-hall', inlineTemplate: true }).content
-  const body = script
+  // Keep setup bindings available for transition-race assertions, while using
+  // the real compiled template rather than exposing internals in production.
+  const script = compileScript(descriptor, { id: 'o04-actual-juyi-hall' })
+  const template = compileTemplate({ source: descriptor.template.content, filename, id: 'o04-actual-juyi-hall', compilerOptions: { bindingMetadata: script.bindings } })
+  const body = script.content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, imports) => `var { ${imports} } = mocks`)
     .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = mocks.${name}`)
     .replace(/import\.meta\.env/g, 'mocks.env')
     .replace('export default', 'return')
-  return new Function('Vue', 'mocks', body)(Vue, mocks)
+  const component = new Function('Vue', 'mocks', body)(Vue, mocks)
+  const renderBody = template.code
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
+    .replace('export function render', 'return function render')
+  component.render = new Function('Vue', renderBody)(Vue)
+  return component
 }
 
 const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null, actualBountyPanel = null, economyCapability = null }) => {
@@ -2196,9 +2309,9 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
   const panelHelpers = counters.panelHelpers || {}
   return {
     ...panelHelpers,
-    env: {}, capturePanelReturnTarget: panelHelpers.capturePanelReturnTarget, focusHallPanel: panelHelpers.focusHallPanel, isCurrentPanelGeneration: panelHelpers.isCurrentPanelGeneration, isSafePanelFocusTarget: panelHelpers.isSafePanelFocusTarget, resolvePanelReturnTarget: panelHelpers.resolvePanelReturnTarget, restorePanelFocus: panelHelpers.restorePanelFocus, trapPanelFocus: panelHelpers.trapPanelFocus,
+    env: {}, capturePanelReturnTarget: panelHelpers.capturePanelReturnTarget, focusHallPanel: panelHelpers.focusHallPanel, isCurrentPanelGeneration: panelHelpers.isCurrentPanelGeneration, isSafePanelFocusTarget: panelHelpers.isSafePanelFocusTarget, resolveLiveMapPreviewActivation, resolvePanelReturnTarget: panelHelpers.resolvePanelReturnTarget, restorePanelFocus: panelHelpers.restorePanelFocus, trapPanelFocus: panelHelpers.trapPanelFocus,
     useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({}), agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {},
-    isEconomyPreviewBuildEnabled: () => Boolean(economyCapability), isEconomyPreviewCapability: capability => capability === economyCapability, loadEconomyPreviewCapability: async () => economyCapability,
+    isEconomyPreviewBuildEnabled: () => Boolean(economyCapability), isEconomyPreviewCapability: capability => Boolean(capability && capability.principalScopeFingerprint === economyCapability?.principalScopeFingerprint), loadEconomyPreviewCapability: async () => economyCapability,
     roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
     useHallData: ({ selectedAgent, selectedTask }) => { counters.owners.data += 1; selectedAgent.value = { agentId: 'agent-o04', name: 'sentinel-agent' }; selectedTask.value = counters.initialSelectedTask || { id: 'task-o04', title: 'sentinel-task' }; return hallData },
     useHallExperienceMode: () => ({ experienceMode: mode, isMobileCoarse: Vue.ref(true), orientationHint: scalar, orientationRequestPending: Vue.ref(false), requestLandscape: asyncNoop }),
@@ -2268,11 +2381,11 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
       state.closePanel()
       state.openPanel('library')
       await Vue.nextTick()
-      const overlayB = wrapper.find('.panel-overlay').element
+      const overlayB = wrapper.findAll('.panel-overlay').find(overlay => overlay.element.dataset.panelGeneration !== generationA).element
       expect(overlayB).not.to.equal(overlayA)
       expect(overlayB.dataset.panelGeneration).not.to.equal(generationA)
       await state.handlePanelAfterLeave(overlayA)
-      expect(wrapper.find('.panel-overlay').element).to.equal(overlayB)
+      expect(overlayB.isConnected).to.equal(true)
       state.closePanel()
       await state.handlePanelAfterLeave(overlayA)
       expect(state.renderedPanel).to.equal('library')
@@ -2280,13 +2393,13 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
       await Vue.nextTick()
       expect(state.renderedPanel).to.equal('')
       expect(document.activeElement).to.equal(wrapper.find('[data-portrait-action="library"]').element)
-      expect(mounts.library).to.equal(1)
-      expect(mounts.archive).to.equal(1)
+      expect(mounts.library).to.equal(2)
+      expect(mounts.archive).to.equal(2)
     } finally {
       wrapper.unmount()
     }
-    expect(mounts.libraryUnmount).to.equal(1)
-    expect(mounts.archiveUnmount).to.equal(1)
+    expect(mounts.libraryUnmount).to.equal(2)
+    expect(mounts.archiveUnmount).to.equal(2)
   })
 
   it('cancels chat load and deferred focus when actual JuyiHall unmounts', async () => {
@@ -2336,10 +2449,14 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
       expect(document.activeElement).to.equal(wrapper.find('.hall-board').element)
 
       document.activeElement.blur()
+      // A persistent landscape Stage is now the first fallback. Make it
+      // unavailable explicitly to exercise the final page-root fallback.
+      wrapper.find('.hall-board').element.hidden = true
       state.openPanel('library')
       await Vue.nextTick()
-      const closeOverlay = wrapper.find('.panel-overlay').element
-      await wrapper.find('.panel-close').trigger('click')
+      const closeOverlayWrapper = wrapper.findAll('.panel-overlay').at(-1)
+      const closeOverlay = closeOverlayWrapper.element
+      await closeOverlayWrapper.find('.panel-close').trigger('click')
       expect(state.activePanel).to.equal('')
       await state.handlePanelAfterLeave(closeOverlay)
       await Vue.nextTick()
@@ -2347,8 +2464,9 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
 
       state.openPanel('library')
       await Vue.nextTick()
-      const backdropOverlay = wrapper.find('.panel-overlay').element
-      await wrapper.find('.panel-overlay').trigger('pointerdown')
+      const backdropOverlayWrapper = wrapper.findAll('.panel-overlay').at(-1)
+      const backdropOverlay = backdropOverlayWrapper.element
+      await backdropOverlayWrapper.trigger('pointerdown')
       expect(state.activePanel).to.equal('')
       await state.handlePanelAfterLeave(backdropOverlay)
       expect(state.renderedPanel).to.equal('')

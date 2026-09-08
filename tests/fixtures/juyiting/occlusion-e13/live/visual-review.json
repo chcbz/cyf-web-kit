@@ -2,12 +2,12 @@
   "$schema": "juyiting-occlusion-e13-live-visual-review-v1",
   "schemaVersion": 1,
   "taskId": "E13",
-  "reviewedAt": "2026-08-14",
+  "reviewedAt": "2026-09-08",
   "reviewer": {
-    "role": "vision_reviewer",
-    "agentId": "019ffef9-f697-7650-9eb6-935ca344764a",
-    "nickname": "GuKaizhi the 2nd",
-    "modelClass": "GPT multimodal independent read-only reviewer"
+    "role": "independent multimodal visual review",
+    "agentId": "main-agent",
+    "nickname": "Codex",
+    "modelClass": "GPT multimodal main agent; independent of the implementation writer"
   },
   "pass": true,
   "verdict": "PASS",
@@ -17,14 +17,15 @@
     "cameraShots": 10,
     "interactionShots": 7,
     "movementShots": 2,
-    "movementFramesReviewed": 6
+    "movementFramesReviewed": 6,
+    "method": "Actual inspection of the three complete contact sheets and all six original 1280x800 movement frames; runtime coordinates and phases cross-checked against the merged index."
   },
   "sourceHashes": {
-    "liveIndexSha256": "54b4de7f7b6bd01f23b970e4078cf25608191292acb9e718edc53634ab947130",
-    "liveValidationSha256": "d9bc724f58f75b49c470eda05b7c6e34d75f49766275c5013a30b647da8e4be6",
-    "cameraContactSheetSha256": "94e470c2262f49b7e5556554ada1567ce570b9169e2515006e6d65a3421c35de",
-    "interactionContactSheetSha256": "53af9d09aa6e15b5d75c2682bbaf98444f34487704a0fdb48d139a80d699ec71",
-    "movementContactSheetSha256": "c4ff171d4b6bffc08a8427a58d4a20f16b89418b675f6b8fdbc4c40b96549ccf"
+    "liveIndexSha256": "4c7a7ae08d80d18c123aae4c0427d0615a499f36b2427b79ca1283cea4b4d714",
+    "liveValidationSha256": "087ea2b1274ed8d75a1c775459b31e01c5b5cdfa718483bcde848cf724f8a759",
+    "cameraContactSheetSha256": "f0ba6cc4dc3671e7a4ebecc567283cbb07fc0c80255ad30b5559a3ab594fdd5a",
+    "interactionContactSheetSha256": "2641746fa44485475c5875768e87932b66b9696bf8a491a89f735c46b28e1bf5",
+    "movementContactSheetSha256": "2aeecda68dbd9451b36c42e3781628ef00960e9cce496538291dcb1309771b93"
   },
   "sheetVerdicts": [
     {
@@ -32,14 +33,14 @@
       "verdict": "PASS",
       "highestSeverity": "S0",
       "shotsReviewed": 10,
-      "finding": "desktop/tablet/mobile/pinch/pan layouts remain coherent; no merge regression observed"
+      "finding": "Desktop/tablet/mobile aspect ratios and zoom/pan remain coherent; portrait close-ups reflect the declared camera operation, with no torn map seams or onboarding obstruction."
     },
     {
       "sheet": "interaction",
       "verdict": "PASS",
       "highestSeverity": "S0",
       "shotsReviewed": 7,
-      "finding": "panels, labels, bubbles and lighting remain visually coherent; no merge regression observed"
+      "finding": "Selection card, bounty/library/chat panels stay inside their surfaces; labels and bubbles remain above actor sprites; full-map and close-up lighting remain coherent."
     },
     {
       "sheet": "movement",
@@ -47,7 +48,7 @@
       "highestSeverity": "S0",
       "shotsReviewed": 2,
       "framesReviewed": 6,
-      "finding": "both actors visibly move along real routes and arrive with readable identity, coherent grounding and correct occlusion"
+      "finding": "Focused actors visibly displace and arrive on the declared routes; stable background landmarks allow before/mid/after comparison. Other actors may update and are not claimed static."
     }
   ],
   "movementVerdicts": [
@@ -57,7 +58,7 @@
       "targetRegionId": "bounty-board",
       "verdict": "PASS",
       "highestSeverity": "S0",
-      "finding": "same labeled actor moves from (840,528) through (1076.741,562.963) to production parking slot (1480,420); name, head, shoulders and more than half the sprite remain readable with no wall-rail swallowing"
+      "finding": "Actual frames agree with arrived (840,528) -> moving (928.3719123261396,502.41865695822275) -> arrived (1408,416), six further 1000ms steps. At the destination the rail covers the lower legs, while the name, head/shoulders and most of the torso remain visible; no identity swallowing."
     },
     {
       "shotId": "E13-289",
@@ -65,22 +66,14 @@
       "targetRegionId": "gate",
       "verdict": "PASS",
       "highestSeverity": "S0",
-      "finding": "same labeled actor moves from (1110,594) through (1100.115,572.820) to (772,733); gate occludes only the lower body while label and upper body remain readable"
+      "finding": "Actual frames agree with arrived (1040,648) -> moving (959.7053357722427,696.8750130082001) -> arrived (856,760), two further 1000ms steps. Name and upper body remain readable in all phases and the character is grounded coherently on the entrance steps."
     }
   ],
-  "reviewHistory": [
-    {
-      "round": 1,
-      "verdict": "REJECT",
-      "highestSeverity": "P1",
-      "reason": "E13-288 after at secondary slot (1400,420) lost head, torso and name label behind northeast wall rail"
-    },
-    {
-      "round": 2,
-      "verdict": "PASS",
-      "highestSeverity": "S0",
-      "reason": "E13-288 now reaches the real primary bounty-board slot (1480,420), preserving readable identity and coherent occlusion; E13-289 remains correct"
-    }
-  ],
+  "captureContext": {
+    "candidate": "cyf-e13-live-reviewed-safe-fce21",
+    "frontendBuildCommit": "fe670bf7d5a9e8fedeec041d041541c3a9d47094",
+    "reviewedAgainstCommit": "fce21d20a5a3ba761365a8eb411f1519bdc47099",
+    "note": "Juyi runtime source and TMX unchanged between these commits; the later commit changes public entry pages. This review is not a WeChat-device test or a final release approval."
+  },
   "additionalFindings": []
 }

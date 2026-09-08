@@ -3,10 +3,10 @@
   "schemaVersion": 1,
   "taskId": "E13",
   "pass": true,
-  "checkedAt": "2026-08-14T06:43:13.274Z",
-  "liveDir": "tests/fixtures/juyiting/occlusion-e13/live",
-  "worldModelSha256": "f212c93a82322e2640eb13573fa49d85c9493bc89015a22c319d499ab82eb177",
-  "shotPlanSha256": "a78bc573ec5adeb3fd6c09972f88127e24ba49ab156a17011db6d3782b1d5f01",
+  "checkedAt": "2026-09-08T13:05:16.789Z",
+  "liveDir": "../cyf-e13-live-reviewed-safe-fce21",
+  "worldModelSha256": "f3773af6a65a35428f86a47b1beab0532b8d9d2e01107c65126721717ce67c0b",
+  "shotPlanSha256": "0ddebb69accdad706ee2bd7273a119122d470860e0b4b975bb9a7d4c633723bf",
   "shotCount": 19,
   "cameraShots": 10,
   "interactionShots": 7,
@@ -18,12 +18,12 @@
     {
       "check": "live index worldModelSha256 binds current world-model.json",
       "ok": true,
-      "detail": "f212c93a82322e2640eb13573fa49d85c9493bc89015a22c319d499ab82eb177 vs f212c93a82322e2640eb13573fa49d85c9493bc89015a22c319d499ab82eb177"
+      "detail": "f3773af6a65a35428f86a47b1beab0532b8d9d2e01107c65126721717ce67c0b vs f3773af6a65a35428f86a47b1beab0532b8d9d2e01107c65126721717ce67c0b"
     },
     {
       "check": "live index shotPlanSha256 binds current shot-plan.json",
       "ok": true,
-      "detail": "a78bc573ec5adeb3fd6c09972f88127e24ba49ab156a17011db6d3782b1d5f01 vs a78bc573ec5adeb3fd6c09972f88127e24ba49ab156a17011db6d3782b1d5f01"
+      "detail": "0ddebb69accdad706ee2bd7273a119122d470860e0b4b975bb9a7d4c633723bf vs 0ddebb69accdad706ee2bd7273a119122d470860e0b4b975bb9a7d4c633723bf"
     },
     {
       "check": "live evidence has exactly 19 shots",

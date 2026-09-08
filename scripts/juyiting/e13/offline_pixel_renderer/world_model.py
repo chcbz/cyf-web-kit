@@ -29,6 +29,7 @@ PERSONA_SPRITE = {
     'linchong': {'src': 'linchong-8-direction-v1.webp', 'frame_w': 128, 'frame_h': 128, 'cols': 8, 'anchor_x': 0.5, 'anchor_y': 0.86},
     'wuyong': {'src': 'wuyong-8-direction-v1.webp', 'frame_w': 128, 'frame_h': 128, 'cols': 8, 'anchor_x': 0.5, 'anchor_y': 0.86},
 }
+MATRIX_MOBILITY_FIELDS = ('probeMobility', 'probeKind', 'visualExerciseContract', 'navValidation')
 
 
 def default_repo_root():
@@ -154,6 +155,17 @@ def build_shot_plan(repo_root=None):
             raise RuntimeError(f'{shot["id"]}: target absent from production TMX: {shot["targetStableId"]}')
         if shot['targetKind'] != target['kind']:
             raise RuntimeError(f'{shot["id"]}: targetKind drift: plan={shot["targetKind"]} TMX={target["kind"]}')
+        if any(field not in shot for field in MATRIX_MOBILITY_FIELDS):
+            raise RuntimeError(f'{shot["id"]}: mobility contract fields missing')
+        if shot['probeMobility'] != 'synthetic-visual-only':
+            raise RuntimeError(f'{shot["id"]}: matrix mobility must be synthetic-visual-only')
+        reachability = shot['navValidation'].get('reachability', {}) if isinstance(shot['navValidation'], dict) else {}
+        if reachability.get('source') != 'production-graph-pathfinder' or reachability.get('status') not in ('found', 'blocked'):
+            raise RuntimeError(f'{shot["id"]}: production navigation diagnostic missing')
+        if shot['probeKind'] == 'uniform-anchor-offset' and shot['visualExerciseContract'] != 'depth-order-only':
+            raise RuntimeError(f'{shot["id"]}: uniform probe must be depth-order-only')
+        if shot['probeKind'] == 'target-specific' and shot['visualExerciseContract'] == 'depth-order-only':
+            raise RuntimeError(f'{shot["id"]}: target-specific probe cannot be depth-order-only')
         agent = build_agent_scene_object(shot['persona'], shot['world']['x'], shot['world']['y'])
         cmp = compare_sort_keys(compute_world_sort_key(agent), compute_world_sort_key(target))
         shot['resolvedExpectedOrdering'] = 'agent_behind_target' if cmp < 0 else ('agent_in_front' if cmp > 0 else 'tie')

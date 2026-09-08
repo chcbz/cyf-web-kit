@@ -1,0 +1,300 @@
+{
+  "$schema": "juyiting-occlusion-e13-machines-gate-v6",
+  "taskId": "E13",
+  "generatedBy": "validate-e13-evidence.mjs",
+  "scope": "aggregate-reviewed-evidence",
+  "evidenceDir": "tests/fixtures/juyiting/occlusion-e13",
+  "reviewedEvidenceDir": "tests/fixtures/juyiting/occlusion-e13",
+  "pass": false,
+  "matrixPass": false,
+  "livePass": false,
+  "evidencePass": false,
+  "releasePass": false,
+  "releaseBlockers": [
+    "independent release_guard pending"
+  ],
+  "passedChecks": 42,
+  "totalChecks": 48,
+  "failures": [
+    {
+      "check": "every matrix probe navValidation is independently re-derived from the production TMX parser + graph pathfinder",
+      "detail": "E13-001; E13-002; E13-003; E13-004; E13-005; E13-006; E13-007; E13-008; E13-009; E13-010; E13-011; E13-012"
+    },
+    {
+      "check": "live Python offline validator re-derives all 270 pixel metrics from production assets and committed PNGs (exit 0 required)",
+      "detail": "Python E13 validator: 26/28 checks passed |   FAIL WebP decoder provenance fail-closed: fail-closed: required libwebp.so.7 was not found |   FAIL all 270 pixelOverlap facts independently recomputed from production assets and final-composite PNGs: E13-001:fail-closed: required libwebp.so.7 was not found; E13-002:fail-closed: required libwebp.so.7 was not found; E13-003:fail-closed: required libwebp.so.7 was not found; E13-004:fail-closed: required libwebp.so.7 was not found; E13-005:fail-closed: required libwebp.so.7 was not found; E13-006:fail-closed: required libwebp.so.7 was not found; E13-007:fail-closed: required libwebp.so.7 was not found; E13-008:fail-closed: required libwebp.so.7 was not found"
+    },
+    {
+      "check": "mechanical 270-shot matrix gate passes independently",
+      "detail": "E13 mechanical matrix gate: FAIL 25/27"
+    },
+    {
+      "check": "GPT V6 binds the actual current TMX, shot-plan and matrix index hashes",
+      "detail": "tmx=885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f/7b304c11fd4a121d92f5fb1430f8073d4d590b3d42eb9b9a18e0e0c9bd22ff53 plan=a78bc573ec5adeb3fd6c09972f88127e24ba49ab156a17011db6d3782b1d5f01/a78bc573ec5adeb3fd6c09972f88127e24ba49ab156a17011db6d3782b1d5f01 index=c703e3471b2493e16e8da7c230efd89c4cebf648501eff9694092fe3eead85b0/c703e3471b2493e16e8da7c230efd89c4cebf648501eff9694092fe3eead85b0"
+    },
+    {
+      "check": "Python validator independently enforces V6 reviewed-artifact SHA/set/PNG bindings",
+      "detail": "Python E13 V6 binding validator: 4/5 checks passed\n  FAIL Python V6 binds actual TMX/plan/index/mapping JSON/SVG SHA-256: tmxSha256"
+    },
+    {
+      "check": "mask mapping binds current TMX and passes independent 16/16 verification",
+      "detail": ""
+    }
+  ],
+  "checks": [
+    {
+      "check": "authoritative plan has 270 matrix shots",
+      "ok": true,
+      "detail": "got 270"
+    },
+    {
+      "check": "index status GENERATED_OFFLINE",
+      "ok": true,
+      "detail": "GENERATED_OFFLINE"
+    },
+    {
+      "check": "index has 270 ordered matrix shots",
+      "ok": true,
+      "detail": "got 270"
+    },
+    {
+      "check": "every index id/target/persona/relation/world/expected field binds authoritative plan",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "270/270 resolved depth matches",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "270/270 mapped world depths are above base and below lighting",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "270/270 alpha plus final-composite visibility facts",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "all 18 shots per target reuse one fixed viewportWorld",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "target-specific probes are production reachable and satisfy their visual exercise contract",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "composite-transition probes use real context and visibly exercise behind",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "declared agent occlusion ratios stay within visual readability limits",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "every matrix probe navValidation is independently re-derived from the production TMX parser + graph pathfinder",
+      "ok": false,
+      "detail": "E13-001; E13-002; E13-003; E13-004; E13-005; E13-006; E13-007; E13-008; E13-009; E13-010; E13-011; E13-012"
+    },
+    {
+      "check": "270/270 committed pixelOverlap cross-check the independent pixel recompute report",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "live Python offline validator re-derives all 270 pixel metrics from production assets and committed PNGs (exit 0 required)",
+      "ok": false,
+      "detail": "Python E13 validator: 26/28 checks passed |   FAIL WebP decoder provenance fail-closed: fail-closed: required libwebp.so.7 was not found |   FAIL all 270 pixelOverlap facts independently recomputed from production assets and final-composite PNGs: E13-001:fail-closed: required libwebp.so.7 was not found; E13-002:fail-closed: required libwebp.so.7 was not found; E13-003:fail-closed: required libwebp.so.7 was not found; E13-004:fail-closed: required libwebp.so.7 was not found; E13-005:fail-closed: required libwebp.so.7 was not found; E13-006:fail-closed: required libwebp.so.7 was not found; E13-007:fail-closed: required libwebp.so.7 was not found; E13-008:fail-closed: required libwebp.so.7 was not found"
+    },
+    {
+      "check": "isolated evidence omits only the declared independent companion",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "270 screenshotFile paths are canonical and exist",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "shots directory is the exact 270-file planned set",
+      "ok": true,
+      "detail": "missing= extras="
+    },
+    {
+      "check": "contact-sheets directory is the exact deterministic 15-file set",
+      "ok": true,
+      "detail": "missing= extras="
+    },
+    {
+      "check": "15 mechanical contact sheets have PNG signature and 755x398 dimensions",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "idle/down/frame0 is the declared audit sample",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "idle-down frames 0..3 alpha bounds invariant checked for six personas",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "repaired base/world/lighting stack and lighting semantics recorded",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "production antiAlias raster semantics and browser-bit caveat recorded",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "legacy duplicate full-map occluders are detached in V2",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "WebP ABI/hash/API fail-closed provenance recorded",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "offline matrix index keeps browser-only scopes explicitly separate",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "direct production TypeScript oracle passes all 270",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "mechanical 270-shot matrix gate passes independently",
+      "ok": false,
+      "detail": "E13 mechanical matrix gate: FAIL 25/27"
+    },
+    {
+      "check": "GPT V5 rejection is retained as historical provenance",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "GPT V6 full visual audit passes all 15 sheets and 37 mask cards",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "GPT V6 binds the actual current TMX, shot-plan and matrix index hashes",
+      "ok": false,
+      "detail": "tmx=885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f/7b304c11fd4a121d92f5fb1430f8073d4d590b3d42eb9b9a18e0e0c9bd22ff53 plan=a78bc573ec5adeb3fd6c09972f88127e24ba49ab156a17011db6d3782b1d5f01/a78bc573ec5adeb3fd6c09972f88127e24ba49ab156a17011db6d3782b1d5f01 index=c703e3471b2493e16e8da7c230efd89c4cebf648501eff9694092fe3eead85b0/c703e3471b2493e16e8da7c230efd89c4cebf648501eff9694092fe3eead85b0"
+    },
+    {
+      "check": "GPT V6 binds the actual 37-mask mapping JSON and SVG hashes",
+      "ok": true,
+      "detail": "json=06f764c6a11d02d1608e1e3f509231cfc6316d6897fe7b4b11b40c431e86c906/06f764c6a11d02d1608e1e3f509231cfc6316d6897fe7b4b11b40c431e86c906 svg=b2c705f0bc0512257637e957b287856138e1a7638cb42a93e275535f06993ec1/b2c705f0bc0512257637e957b287856138e1a7638cb42a93e275535f06993ec1"
+    },
+    {
+      "check": "GPT V6 contact-sheet binding declares exactly 15 unique files",
+      "ok": true,
+      "detail": "got 15"
+    },
+    {
+      "check": "reviewed contact-sheets directory exactly matches the V6-bound file set",
+      "ok": true,
+      "detail": "missing= extras="
+    },
+    {
+      "check": "all 15 V6-bound contact sheets have PNG signature and 755x398 dimensions",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "all 15 reviewed contact-sheet bytes match their V6 SHA-256 bindings",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "V6 sheetResults is the exact bound 15-sheet set with PASS verdicts",
+      "ok": true,
+      "detail": "missing= extras="
+    },
+    {
+      "check": "V6 machinesGateSha256AtReview is retained as a non-circular historical SHA-256 binding",
+      "ok": true,
+      "detail": "e0ced2a4ad1f26c4053e7d15a1c704d3112defe72ee707bab4e04bdccf1f83d8"
+    },
+    {
+      "check": "Python validator independently enforces V6 reviewed-artifact SHA/set/PNG bindings",
+      "ok": false,
+      "detail": "Python E13 V6 binding validator: 4/5 checks passed\n  FAIL Python V6 binds actual TMX/plan/index/mapping JSON/SVG SHA-256: tmxSha256"
+    },
+    {
+      "check": "37/37 mask to structure mappings cover TMX ids 48..84 without duplicates",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "mask mapping binds current TMX and passes independent 16/16 verification",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "check": "mask mapping visualization hash matches the actual reviewed SVG",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "live Chromium validator reruns successfully against the reviewed bytes",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "live Chromium evidence has exactly 10 camera, 7 interaction and 2 movement shots",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "live Chromium validator passes every fail-closed check",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "live Chromium evidence binds the explicitly consumed world model and shot plan",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "GPT live visual audit passes camera, interaction and movement sequences",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "GPT live visual audit hashes bind the current live index, validation and exact contact sheets",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "sourceHashes": {
+    "matrixGateSha256": "ae903cf09f1efba066611ee026e776df0aeebc0e0df7ec1f51cabff06a935a5e",
+    "shotPlanSha256": "a78bc573ec5adeb3fd6c09972f88127e24ba49ab156a17011db6d3782b1d5f01",
+    "indexSha256": "c703e3471b2493e16e8da7c230efd89c4cebf648501eff9694092fe3eead85b0",
+    "oracleSha256": "d61af98bd6e238a5ff0f55d5b5db8db058b8b9c9bf9203c43ffb1a656238d999",
+    "pixelRecomputeReportSha256": "0fac75645476cdb3b73056b3222c51f691015598d3d84cce16c122c53a016e67",
+    "visualReviewV5Sha256": "6843f877e01eef6180a50c57159237ae68f81d66b2d470a4d5c48720afa6bdfb",
+    "visualReviewV6Sha256": "794438ff0813ff3335b6fd563d0d9f2165260f11d720112b37ed3649eda905ef",
+    "maskStructureMappingSha256": "06f764c6a11d02d1608e1e3f509231cfc6316d6897fe7b4b11b40c431e86c906",
+    "maskStructureMappingSvgSha256": "b2c705f0bc0512257637e957b287856138e1a7638cb42a93e275535f06993ec1",
+    "liveIndexSha256": "54b4de7f7b6bd01f23b970e4078cf25608191292acb9e718edc53634ab947130",
+    "liveValidationSha256": "d9bc724f58f75b49c470eda05b7c6e34d75f49766275c5013a30b647da8e4be6",
+    "liveVisualReviewSha256": "cc7e6f0946436b23433078493ff1ecc2a36e3cce9145d3a278942ff77aa9fae6"
+  }
+}

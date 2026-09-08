@@ -48,7 +48,7 @@ suite('Juyiting occlusion E14 fixed Chromium benchmark', () => {
     expect(report.browser.jsVersion).to.be.a('string')
     expect(report.browser.launcherSha256).to.match(/^[0-9a-f]{64}$/)
     expect(report.browser.executableSha256).to.match(/^[0-9a-f]{64}$/)
-    expect(report.browser.executablePath).to.match(/headless_shell$/)
+    expect(report.browser.executablePath).to.match(/\/(?:headless_shell|chrome-headless-shell|chromium-headless-shell)$/)
   })
 
   it('uses the fixed production benchmark dimensions', () => {

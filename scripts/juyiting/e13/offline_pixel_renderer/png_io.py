@@ -9,6 +9,7 @@ No interlacing, no palette (PLTE), no ancillary chunks.
 """
 import struct
 import zlib
+from .webp_profiles import APPROVED_DECODERS, REFERENCE_SHA, RGBA_PROOFS
 
 
 def _paeth(a, b, c):
@@ -231,17 +232,30 @@ def webp_decoder_provenance():
     if _WEBP_STATE is not None:
         return dict(_WEBP_STATE['provenance'])
     import ctypes
-    import ctypes.util
     import hashlib
     import os
-    candidates = ['/lib64/libwebp.so.7', '/usr/lib64/libwebp.so.7', ctypes.util.find_library('webp')]
-    selected = next((p for p in candidates if p and (os.path.isabs(p) and os.path.exists(p))), None)
+    import sysconfig
+    explicit = os.environ.get('E13_WEBP_LIBRARY')
+    multiarch = sysconfig.get_config_var('MULTIARCH') or ''
+    candidates = [explicit] if explicit else [
+        '/lib64/libwebp.so.7', '/usr/lib64/libwebp.so.7',
+        '/usr/lib/' + multiarch + '/libwebp.so.7',
+    ]
+    selected = None
+    rejected = []
+    for candidate in candidates:
+        if not candidate or not os.path.isabs(candidate) or not os.path.isfile(candidate):
+            continue
+        with open(os.path.realpath(candidate), 'rb') as stream:
+            digest = hashlib.sha256(stream.read()).hexdigest()
+        if digest in APPROVED_DECODERS:
+            selected = candidate
+            break
+        rejected.append(candidate + ' sha256=' + digest)
     if not selected:
-        raise RuntimeError('fail-closed: required libwebp.so.7 was not found')
+        raise RuntimeError('fail-closed: no approved libwebp.so.7; ' + '; '.join(rejected))
     realpath = os.path.realpath(selected)
-    digest = hashlib.sha256(open(realpath, 'rb').read()).hexdigest()
-    if digest != EXPECTED_WEBP['sha256']:
-        raise RuntimeError(f'fail-closed: libwebp decoder hash drift: {realpath} sha256={digest}')
+    expected_hex, expected_version = APPROVED_DECODERS[digest]
     lib = ctypes.CDLL(selected)
     for symbol in EXPECTED_WEBP['api']:
         if not hasattr(lib, symbol):
@@ -249,7 +263,7 @@ def webp_decoder_provenance():
     lib.WebPGetDecoderVersion.restype = ctypes.c_int
     version = lib.WebPGetDecoderVersion()
     version_hex = f'0x{version:06x}'
-    if version_hex != EXPECTED_WEBP['decoderVersionHex']:
+    if version_hex != expected_hex:
         raise RuntimeError(f'fail-closed: libwebp decoder version drift: {version_hex}')
     lib.WebPGetInfo.argtypes = [ctypes.c_char_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int)]
     lib.WebPGetInfo.restype = ctypes.c_int
@@ -258,19 +272,46 @@ def webp_decoder_provenance():
     lib.WebPFree.argtypes = [ctypes.c_void_p]
     lib.WebPFree.restype = None
     provenance = {
-        **EXPECTED_WEBP, 'loadedPath': selected, 'realPath': realpath,
-        'crossHostPolicy': 'fail-closed: exact SONAME ABI, decoder version, exported API, and library SHA-256 must match',
+        **EXPECTED_WEBP, 'sha256': digest,
+        'decoderVersionHex': version_hex, 'decoderVersion': expected_version,
+        'loadedPath': selected, 'realPath': realpath,
+        'equivalentReferenceSha256': REFERENCE_SHA,
+        'crossHostPolicy': 'fail-closed: approved library SHA/version/API plus exact source and full RGBA proofs; independently verify final composites',
     }
     _WEBP_STATE = {'lib': lib, 'provenance': provenance}
     return dict(provenance)
 
 
+def compatible_recorded_decoder(recorded):
+    """Installation paths are diagnostic; binary identity is not interchangeable.
+
+    A historical approved decoder may be replayed by another explicitly proven
+    build. Each decode below still verifies the reference input/output bytes.
+    """
+    if not isinstance(recorded, dict):
+        return False
+    profile = APPROVED_DECODERS.get(recorded.get('sha256'))
+    is_reference = recorded.get('sha256') == REFERENCE_SHA
+    equivalent_reference = recorded.get('equivalentReferenceSha256')
+    equivalent_ok = (('equivalentReferenceSha256' not in recorded) or equivalent_reference == REFERENCE_SHA) if is_reference else equivalent_reference == REFERENCE_SHA
+    return bool(profile and recorded.get('soname') == EXPECTED_WEBP['soname']
+        and recorded.get('abi') == EXPECTED_WEBP['abi']
+        and recorded.get('api') == EXPECTED_WEBP['api']
+        and (recorded.get('decoderVersionHex'), recorded.get('decoderVersion')) == profile
+        and 'fail-closed' in recorded.get('crossHostPolicy', '')
+        and equivalent_ok)
+
+
 def decode_webp(filepath):
     import ctypes
+    import hashlib
     webp_decoder_provenance()
     lib = _WEBP_STATE['lib']
     with open(filepath, 'rb') as f:
         data = f.read()
+    proof = RGBA_PROOFS.get(hashlib.sha256(data).hexdigest())
+    if proof is None:
+        raise RuntimeError(f'fail-closed: unreviewed WebP source bytes: {filepath}')
     w, h = ctypes.c_int(), ctypes.c_int()
     if not lib.WebPGetInfo(data, len(data), ctypes.byref(w), ctypes.byref(h)):
         raise RuntimeError(f'Invalid WebP: {filepath}')
@@ -282,6 +323,8 @@ def decode_webp(filepath):
         pixels = bytes(ctypes.cast(ptr, ctypes.POINTER(ctypes.c_uint8 * size)).contents)
     finally:
         lib.WebPFree(ptr)
+    if (w.value, h.value, hashlib.sha256(pixels).hexdigest()) != proof:
+        raise RuntimeError(f'fail-closed: reference RGBA proof mismatch: {filepath}')
     return w.value, h.value, 4, pixels
 
 

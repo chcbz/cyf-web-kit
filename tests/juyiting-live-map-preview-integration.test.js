@@ -156,6 +156,9 @@ const makeHallPageMocks = ({ mode, counters, voiceLocked = Vue.ref(false) }) => 
   }
   return {
     resolveLiveMapPreviewActivation,
+    isEconomyPreviewBuildEnabled: () => false,
+    isEconomyPreviewCapability: () => false,
+    loadEconomyPreviewCapability: async () => null,
     env: {}, agentApi: {}, chatApi: {}, juyitingGame: {}, log: { warn: noop }, roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
     useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({}),
     useHallData: () => data, useHallBackendSceneState: () => ({ start: asyncNoop, stop: noop, dispose: noop, reportPhase: noop }),

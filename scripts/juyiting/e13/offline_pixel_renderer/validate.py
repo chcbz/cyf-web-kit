@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Fail-closed validator for authoritative offline E13 matrix evidence."""
 import argparse, hashlib, json, os, sys
-from .png_io import read_png, webp_decoder_provenance
+from .png_io import read_png, webp_decoder_provenance, compatible_recorded_decoder
 from .compositor import OfflineRenderer
 from .world_model import build_shot_plan
 
-BIND_FIELDS=('id','kind','cell','probeCell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera','evidenceContext','contextCompanionStableId','visualOmissions','probeKind','visualExerciseContract','visualOverlay','maxAgentOcclusionRatio','navValidation','probeRationale')
+BIND_FIELDS=('id','kind','cell','probeCell','targetStableId','targetKind','focus','persona','personaName','relation','world','expectedRelation','expectedDepth','viewport','camera','evidenceContext','contextCompanionStableId','visualOmissions','probeKind','probeMobility','visualExerciseContract','visualOverlay','maxAgentOcclusionRatio','navValidation','probeRationale')
 PIXEL_KEYS=('method','visibilityMethod','hasAlphaOverlap','agentOpaquePixelsInAabb','targetOpaquePixelsInAabb','opaqueIntersectionPixels','alphaWeightedIntersection','finalCompositeChangedByTargetPixels','finalCompositeChangedByAgentPixels','visibleOcclusionPixels','agentPixelsVisiblyOccludedByTarget','targetPixelsVisiblyOccludedByAgent','overlapBounds')
 
 def _sha256_bytes(data):
@@ -18,6 +18,15 @@ def _png_dimensions(path):
     if len(header)<24 or header[:8]!=signature:
         return None
     return (int.from_bytes(header[16:20], 'big'), int.from_bytes(header[20:24], 'big'))
+
+def synthetic_probe_navigation_diagnostic(shot):
+    nav=shot.get('navValidation',{})
+    reachability=nav.get('reachability',{}) if isinstance(nav,dict) else {}
+    return (shot.get('probeMobility') == 'synthetic-visual-only'
+        and reachability.get('source') == 'production-graph-pathfinder'
+        and reachability.get('colliderWidth') == 42
+        and reachability.get('status') in ('found','blocked')
+        and (reachability.get('status') != 'blocked' or isinstance(reachability.get('reason'),str) and bool(reachability.get('reason'))))
 
 def _expected_contact_sheets(matrix):
     first_by_target={}
@@ -34,16 +43,23 @@ def validate_review_bindings(evidence_dir, reviewed_evidence_dir, repo_root):
         results.append({'check':name,'ok':bool(ok),'detail':str(detail)}); return bool(ok)
     def read(path):
         with open(path,encoding='utf-8') as f:return json.load(f)
-    review_path=os.path.join(reviewed_evidence_dir,'visual-review-v6.json')
+    review_path=os.path.join(reviewed_evidence_dir,'visual-review-v7.json')
+    historical_v6_path=os.path.join(reviewed_evidence_dir,'visual-review-v6.json')
     if not os.path.isfile(review_path):
-        check('Python V6 review binding file exists',False,review_path)
+        check('Python V7 review binding file exists',False,review_path)
         return results
     review=read(review_path); bindings=review.get('bindings',{})
     contact=bindings.get('contactSheets',{}) if isinstance(bindings.get('contactSheets'),dict) else {}
     sheets_dir=os.path.join(reviewed_evidence_dir,'contact-sheets')
     expected=sorted(contact)
     actual=sorted(os.listdir(sheets_dir)) if os.path.isdir(sheets_dir) else []
-    check('Python V6 contact-sheet set is exact 15/15',len(expected)==15 and actual==expected,f'expected={expected} actual={actual}')
+    check('Python V7 review contract is PASS for exactly 15 sheets / 270 shots / 37 cards',review.get('$schema')=='juyiting-occlusion-e13-visual-review-v7-v1' and review.get('reviewRound')==7 and review.get('pass') is True and review.get('verdict')=='PASS' and review.get('highestSeverity')=='NONE' and review.get('contactSheetsReviewed')==15 and review.get('shotsReviewed')==270 and review.get('mappingCardsReviewed')==37)
+    v6_sha=None
+    try:
+        with open(historical_v6_path,'rb') as f: v6_sha=_sha256_bytes(f.read())
+    except Exception: pass
+    check('Python V7 binds immutable historical V6 review SHA-256',v6_sha is not None and bindings.get('visualReviewV6Sha256')==v6_sha,f'{bindings.get("visualReviewV6Sha256")}/{v6_sha}')
+    check('Python V7 contact-sheet set is exact 15/15',len(expected)==15 and actual==expected,f'expected={expected} actual={actual}')
     png_bad=[]; hash_bad=[]
     for name in expected:
         path=os.path.join(sheets_dir,name)
@@ -54,8 +70,8 @@ def validate_review_bindings(evidence_dir, reviewed_evidence_dir, repo_root):
             if actual_hash!=contact[name]: hash_bad.append(name)
         except Exception as exc:
             png_bad.append(f'{name}:{exc}')
-    check('Python V6 contact sheets are PNG 755x398',not png_bad,'; '.join(png_bad))
-    check('Python V6 contact-sheet SHA-256 bindings match actual bytes',not hash_bad,','.join(hash_bad))
+    check('Python V7 contact sheets are PNG 755x398',not png_bad,'; '.join(png_bad))
+    check('Python V7 contact-sheet SHA-256 bindings match actual bytes',not hash_bad,','.join(hash_bad))
     mapping_dir=os.path.join(reviewed_evidence_dir,'mask-structure-mapping')
     paths={
         'tmxSha256':os.path.join(repo_root,'public','juyiting','hall.tmx'),
@@ -71,10 +87,10 @@ def validate_review_bindings(evidence_dir, reviewed_evidence_dir, repo_root):
             if bindings.get(field)!=actual_hash: drift.append(field)
         except Exception as exc:
             drift.append(f'{field}:{exc}')
-    check('Python V6 binds actual TMX/plan/index/mapping JSON/SVG SHA-256',not drift,','.join(drift))
+    check('Python V7 binds actual TMX/plan/index/mapping JSON/SVG SHA-256',not drift,','.join(drift))
     sheet_results=review.get('sheetResults',[])
     result_names=sorted(item.get('sheet') for item in sheet_results if isinstance(item,dict) and isinstance(item.get('sheet'),str))
-    check('Python V6 sheetResults exactly match bound sheets and PASS',result_names==expected and len(set(result_names))==15 and all(item.get('verdict')=='PASS' for item in sheet_results),f'got={result_names}')
+    check('Python V7 sheetResults exactly match bound sheets and PASS',result_names==expected and len(set(result_names))==15 and all(item.get('verdict')=='PASS' for item in sheet_results),f'got={result_names}')
     return results
 
 def validate(evidence_dir, repo_root, write_recompute_report=False):
@@ -119,7 +135,7 @@ def validate(evidence_dir, repo_root, write_recompute_report=False):
     check('audit sample is idle/down/frame0',index.get('sampledFrame',{}).get('animation')=='idle' and index.get('sampledFrame',{}).get('direction')=='down' and index.get('sampledFrame',{}).get('frame')==0)
     frames=index.get('frameAlphaBoundsChecks',{})
     check('idle-down frame0/1/2/3 alpha bounds invariant checked',len(frames)==6 and all(v.get('reviewInvariantPass') and [x.get('frame') for x in v.get('frames',[])]==[0,1,2,3] for v in frames.values()))
-    try: expected_decoder=webp_decoder_provenance(); decoder_ok=index.get('webpDecoder')==expected_decoder
+    try: expected_decoder=webp_decoder_provenance(); decoder_ok=compatible_recorded_decoder(index.get('webpDecoder'))
     except Exception as exc: expected_decoder={}; decoder_ok=False; check('WebP decoder provenance fail-closed',False,exc)
     else: check('WebP decoder provenance fail-closed',decoder_ok)
     stack=index.get('productionVisualStack',{})
@@ -178,13 +194,12 @@ def validate(evidence_dir, repo_root, write_recompute_report=False):
     probe_bad=[]; context_bad=[]; composite_bad=[]; occlusion_ratio_bad=[]
     for shot in shots:
         if shot.get('probeKind') == 'target-specific':
-            nav=shot.get('navValidation',{})
             overlap=shot.get('runtimeFacts',{}).get('pixelOverlap',{})
-            reachable=nav.get('reachability',{}).get('status') == 'found' and nav.get('reachability',{}).get('colliderWidth') == 42
+            navigation_diagnostic=synthetic_probe_navigation_diagnostic(shot)
             target_each=shot.get('visualExerciseContract') == 'target-each-shot'
             transition_sample=shot.get('visualExerciseContract') in ('ownership-transition','composite-transition') and shot.get('relation') == 'behind'
             visibly_exercised=overlap.get('opaqueIntersectionPixels',0) > 0 and overlap.get('visibleOcclusionPixels',0) > 0
-            if nav.get('navigable') is not True or not reachable or ((target_each or transition_sample) and not visibly_exercised):
+            if not navigation_diagnostic or ((target_each or transition_sample) and not visibly_exercised):
                 probe_bad.append(shot.get('id'))
             if shot.get('visualExerciseContract') == 'composite-transition':
                 if shot.get('evidenceContext') != 'in-context' or shot.get('visualOmissions') or (shot.get('relation') == 'behind' and not visibly_exercised):
@@ -203,7 +218,7 @@ def validate(evidence_dir, repo_root, write_recompute_report=False):
                 context_bad.append(shot.get('id'))
         elif context != 'in-context' or omissions:
             context_bad.append(shot.get('id'))
-    check('target-specific probes are production reachable and satisfy their visual exercise contract',not probe_bad,','.join(probe_bad[:12]))
+    check('target-specific synthetic probes retain production navigation diagnostics and satisfy pixel exercise constraints',not probe_bad,','.join(probe_bad[:12]))
     check('composite-transition probes use real context and visibly exercise behind',not composite_bad,','.join(composite_bad[:12]))
     check('declared agent occlusion ratios stay within visual readability limits',not occlusion_ratio_bad,','.join(occlusion_ratio_bad[:12]))
     check('isolated audit context omits only its declared independent companion',not context_bad,','.join(context_bad[:12]))

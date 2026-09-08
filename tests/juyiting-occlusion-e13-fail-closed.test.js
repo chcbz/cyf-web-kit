@@ -39,7 +39,7 @@ function makeShotsDir (dir, mutateShot) {
 
 function gateEvidence (mutateIndex, mutatePlan, mutateReport, mutateShot) {
   const dir = mkdtempSync(join(tmpdir(), 'cyf-e13-fail-closed-gate-'))
-  for (const name of ['index.json', 'shot-plan.json', 'world-model.json', 'oracle-report.json', 'visual-review-v5.json', 'visual-review-v6.json', 'pixel-recompute-report.json']) {
+  for (const name of ['index.json', 'shot-plan.json', 'world-model.json', 'oracle-report.json', 'visual-review-v5.json', 'visual-review-v6.json', 'visual-review-v7.json', 'pixel-recompute-report.json']) {
     copyFileSync(join(FIXTURE, name), join(dir, name))
   }
   if (mutateShot) makeShotsDir(dir, mutateShot)
@@ -200,6 +200,22 @@ function reviewedBindingFixture () {
   for (const name of ['index.json', 'shot-plan.json', 'visual-review-v6.json']) copyFileSync(join(FIXTURE, name), join(dir, name))
   cpSync(join(FIXTURE, 'contact-sheets'), join(dir, 'contact-sheets'), { recursive: true })
   cpSync(join(FIXTURE, 'mask-structure-mapping'), join(dir, 'mask-structure-mapping'), { recursive: true })
+  const v6 = readJson(join(dir, 'visual-review-v6.json'))
+  const v7 = {
+    ...v6,
+    $schema: 'juyiting-occlusion-e13-visual-review-v7-v1',
+    reviewRound: 7,
+    bindings: {
+      ...v6.bindings,
+      visualReviewV6Sha256: createHash('sha256').update(readFileSync(join(dir, 'visual-review-v6.json'))).digest('hex'),
+      tmxSha256: createHash('sha256').update(readFileSync(join(ROOT, 'public/juyiting/hall.tmx'))).digest('hex'),
+      shotPlanSha256: createHash('sha256').update(readFileSync(join(dir, 'shot-plan.json'))).digest('hex'),
+      indexSha256: createHash('sha256').update(readFileSync(join(dir, 'index.json'))).digest('hex'),
+      maskMappingSha256: createHash('sha256').update(readFileSync(join(dir, 'mask-structure-mapping/mask-structure-mapping.json'))).digest('hex'),
+      maskMappingSvgSha256: createHash('sha256').update(readFileSync(join(dir, 'mask-structure-mapping/mask-structure-mapping.svg'))).digest('hex'),
+    },
+  }
+  writeJson(join(dir, 'visual-review-v7.json'), v7)
   return dir
 }
 
@@ -209,7 +225,13 @@ function failedReviewChecks (dir) {
 
 function hardlinkTreeFiles (src, dst) {
   mkdirSync(dst, { recursive: true })
-  for (const name of readdirSync(src)) linkSync(join(src, name), join(dst, name))
+  for (const name of readdirSync(src)) {
+    try { linkSync(join(src, name), join(dst, name)) } catch (error) {
+      // TMPDIR may be on disk while the isolated release worktree is on tmpfs.
+      if (error.code !== 'EXDEV') throw error
+      copyFileSync(join(src, name), join(dst, name))
+    }
+  }
 }
 
 function liveEvidenceFixture (mutate) {
@@ -230,10 +252,28 @@ function runLiveGate (dir) {
   })
 }
 
-describe('E13 V6 reviewed-artifact bindings fail closed (P2-1)', () => {
-  it('accepts the committed exact 15-sheet/hash/dimension and mapping bindings', () => {
+describe('E13 V7 reviewed-artifact bindings fail closed (P2-1)', () => {
+  it('accepts a current V7 review with exact 15-sheet/hash/dimension and mapping bindings', () => {
     const dir = reviewedBindingFixture()
     try { expect(failedReviewChecks(dir)).to.deep.equal([]) } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+
+  it('fails closed when the current V7 review is absent, even with historical V6 present', () => {
+    const dir = reviewedBindingFixture()
+    try {
+      unlinkSync(join(dir, 'visual-review-v7.json'))
+      expect(failedReviewChecks(dir).map(failure => failure.check)).to.include('GPT V7 review file exists')
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+
+  it('rejects a V7 review that does not bind the immutable V6 review hash', () => {
+    const dir = reviewedBindingFixture()
+    try {
+      const review = readJson(join(dir, 'visual-review-v7.json'))
+      review.bindings.visualReviewV6Sha256 = '0'.repeat(64)
+      writeJson(join(dir, 'visual-review-v7.json'), review)
+      expect(failedReviewChecks(dir).map(failure => failure.check)).to.include('GPT V7 binds the immutable historical V6 review SHA-256')
+    } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 
   for (const mutation of [
@@ -291,7 +331,7 @@ describe('E13 V6 reviewed-artifact bindings fail closed (P2-1)', () => {
         cwd: ROOT, encoding: 'utf8', timeout: 30000, env: { ...process.env, PYTHONPATH: join(ROOT, 'scripts/juyiting/e13') },
       })
       expect(result.status).to.not.equal(0)
-      expect(result.stdout).to.include('Python V6 contact sheets are PNG 755x398')
+      expect(result.stdout).to.include('Python V7 contact sheets are PNG 755x398')
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 })
@@ -361,7 +401,7 @@ describe('E13 isolated mechanical rebuild scope (P2-2)', () => {
       expect(result.status, result.stderr).to.equal(0)
       expect(existsSync(join(dir, 'index.json'))).to.equal(true)
       expect(existsSync(join(dir, 'shots/E13-001.png'))).to.equal(true)
-      for (const name of ['visual-review-v5.json', 'visual-review-v6.json', 'live', 'mask-structure-mapping', 'machines-gate.json']) {
+      for (const name of ['visual-review-v5.json', 'visual-review-v6.json', 'visual-review-v7.json', 'live', 'mask-structure-mapping', 'machines-gate.json']) {
         expect(existsSync(join(dir, name)), name).to.equal(false)
       }
     } finally { rmSync(dir, { recursive: true, force: true }) }

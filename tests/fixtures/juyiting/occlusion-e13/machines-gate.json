@@ -13,8 +13,8 @@
   "releaseBlockers": [
     "independent release_guard pending"
   ],
-  "passedChecks": 48,
-  "totalChecks": 48,
+  "passedChecks": 49,
+  "totalChecks": 49,
   "failures": [],
   "checks": [
     {
@@ -58,7 +58,7 @@
       "detail": ""
     },
     {
-      "check": "target-specific probes are production reachable and satisfy their visual exercise contract",
+      "check": "synthetic visual probes retain production navigation diagnostics and target-specific pixel exercise constraints",
       "ok": true,
       "detail": ""
     },
@@ -163,54 +163,59 @@
       "detail": ""
     },
     {
-      "check": "GPT V6 full visual audit passes all 15 sheets and 37 mask cards",
+      "check": "GPT V7 full visual audit passes all 15 sheets and 37 mask cards",
       "ok": true,
       "detail": ""
     },
     {
-      "check": "GPT V6 binds the actual current TMX, shot-plan and matrix index hashes",
+      "check": "GPT V7 binds the immutable historical V6 review SHA-256",
       "ok": true,
-      "detail": "tmx=885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f/885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f plan=a78bc573ec5adeb3fd6c09972f88127e24ba49ab156a17011db6d3782b1d5f01/a78bc573ec5adeb3fd6c09972f88127e24ba49ab156a17011db6d3782b1d5f01 index=c703e3471b2493e16e8da7c230efd89c4cebf648501eff9694092fe3eead85b0/c703e3471b2493e16e8da7c230efd89c4cebf648501eff9694092fe3eead85b0"
+      "detail": "v6=794438ff0813ff3335b6fd563d0d9f2165260f11d720112b37ed3649eda905ef/794438ff0813ff3335b6fd563d0d9f2165260f11d720112b37ed3649eda905ef"
     },
     {
-      "check": "GPT V6 binds the actual 37-mask mapping JSON and SVG hashes",
+      "check": "GPT V7 binds the actual current TMX, shot-plan and matrix index hashes",
       "ok": true,
-      "detail": "json=06f764c6a11d02d1608e1e3f509231cfc6316d6897fe7b4b11b40c431e86c906/06f764c6a11d02d1608e1e3f509231cfc6316d6897fe7b4b11b40c431e86c906 svg=b2c705f0bc0512257637e957b287856138e1a7638cb42a93e275535f06993ec1/b2c705f0bc0512257637e957b287856138e1a7638cb42a93e275535f06993ec1"
+      "detail": "tmx=7b304c11fd4a121d92f5fb1430f8073d4d590b3d42eb9b9a18e0e0c9bd22ff53/7b304c11fd4a121d92f5fb1430f8073d4d590b3d42eb9b9a18e0e0c9bd22ff53 plan=0ddebb69accdad706ee2bd7273a119122d470860e0b4b975bb9a7d4c633723bf/0ddebb69accdad706ee2bd7273a119122d470860e0b4b975bb9a7d4c633723bf index=72151ac5919c5534346ff2769b468bbd6670bea2498f7c935654af97c40cd09d/72151ac5919c5534346ff2769b468bbd6670bea2498f7c935654af97c40cd09d"
     },
     {
-      "check": "GPT V6 contact-sheet binding declares exactly 15 unique files",
+      "check": "GPT V7 binds the actual 37-mask mapping JSON and SVG hashes",
+      "ok": true,
+      "detail": "json=8144f158e2dfdf49943da02d24641a5672de1436bed85a2edf149fbdd4edf9a2/8144f158e2dfdf49943da02d24641a5672de1436bed85a2edf149fbdd4edf9a2 svg=a42bc76f95daa29ad6a059673da93409bbbf11bddfba9d166b383725ee0bba9a/a42bc76f95daa29ad6a059673da93409bbbf11bddfba9d166b383725ee0bba9a"
+    },
+    {
+      "check": "GPT V7 contact-sheet binding declares exactly 15 unique files",
       "ok": true,
       "detail": "got 15"
     },
     {
-      "check": "reviewed contact-sheets directory exactly matches the V6-bound file set",
+      "check": "reviewed contact-sheets directory exactly matches the V7-bound file set",
       "ok": true,
       "detail": "missing= extras="
     },
     {
-      "check": "all 15 V6-bound contact sheets have PNG signature and 755x398 dimensions",
+      "check": "all 15 V7-bound contact sheets have PNG signature and 755x398 dimensions",
       "ok": true,
       "detail": ""
     },
     {
-      "check": "all 15 reviewed contact-sheet bytes match their V6 SHA-256 bindings",
+      "check": "all 15 reviewed contact-sheet bytes match their V7 SHA-256 bindings",
       "ok": true,
       "detail": ""
     },
     {
-      "check": "V6 sheetResults is the exact bound 15-sheet set with PASS verdicts",
+      "check": "V7 sheetResults is the exact bound 15-sheet set with PASS verdicts",
       "ok": true,
       "detail": "missing= extras="
     },
     {
-      "check": "V6 machinesGateSha256AtReview is retained as a non-circular historical SHA-256 binding",
+      "check": "V7 machinesGateSha256AtReview is retained as a non-circular historical SHA-256 binding",
       "ok": true,
-      "detail": "e0ced2a4ad1f26c4053e7d15a1c704d3112defe72ee707bab4e04bdccf1f83d8"
+      "detail": "e5d9ce573f8048896628740bd80e7c97790d5dd568e9becb62924f904a1a9b3e"
     },
     {
-      "check": "Python validator independently enforces V6 reviewed-artifact SHA/set/PNG bindings",
+      "check": "Python validator independently enforces V7 reviewed-artifact SHA/set/PNG bindings",
       "ok": true,
-      "detail": "Python E13 V6 binding validator: 5/5 checks passed"
+      "detail": "Python E13 V6 binding validator: 7/7 checks passed"
     },
     {
       "check": "37/37 mask to structure mappings cover TMX ids 48..84 without duplicates",
@@ -259,17 +264,18 @@
     }
   ],
   "sourceHashes": {
-    "matrixGateSha256": "80f0c08a4d6a43a0b6f63dd2bc21b93a225293b31e0a97cd621d091eae16e471",
-    "shotPlanSha256": "a78bc573ec5adeb3fd6c09972f88127e24ba49ab156a17011db6d3782b1d5f01",
-    "indexSha256": "c703e3471b2493e16e8da7c230efd89c4cebf648501eff9694092fe3eead85b0",
-    "oracleSha256": "d61af98bd6e238a5ff0f55d5b5db8db058b8b9c9bf9203c43ffb1a656238d999",
-    "pixelRecomputeReportSha256": "0fac75645476cdb3b73056b3222c51f691015598d3d84cce16c122c53a016e67",
+    "matrixGateSha256": "6b524d7b41358c3fc5510e7929858206fc5503017a7263c25bca8315967cae3b",
+    "shotPlanSha256": "0ddebb69accdad706ee2bd7273a119122d470860e0b4b975bb9a7d4c633723bf",
+    "indexSha256": "72151ac5919c5534346ff2769b468bbd6670bea2498f7c935654af97c40cd09d",
+    "oracleSha256": "015a69aa72d67d1de185ae8616061f1189088343e8a99c4109d4958138c73ae9",
+    "pixelRecomputeReportSha256": "9e982840b75ff91511496349e9458c8bc736754a0aee8033e2bd430f9a9303ff",
     "visualReviewV5Sha256": "6843f877e01eef6180a50c57159237ae68f81d66b2d470a4d5c48720afa6bdfb",
     "visualReviewV6Sha256": "794438ff0813ff3335b6fd563d0d9f2165260f11d720112b37ed3649eda905ef",
-    "maskStructureMappingSha256": "06f764c6a11d02d1608e1e3f509231cfc6316d6897fe7b4b11b40c431e86c906",
-    "maskStructureMappingSvgSha256": "b2c705f0bc0512257637e957b287856138e1a7638cb42a93e275535f06993ec1",
-    "liveIndexSha256": "54b4de7f7b6bd01f23b970e4078cf25608191292acb9e718edc53634ab947130",
-    "liveValidationSha256": "d9bc724f58f75b49c470eda05b7c6e34d75f49766275c5013a30b647da8e4be6",
-    "liveVisualReviewSha256": "cc7e6f0946436b23433078493ff1ecc2a36e3cce9145d3a278942ff77aa9fae6"
+    "visualReviewV7Sha256": "0951c75c085a38ceb7d5d1c6c6ed2845b19fbbf1a5ddf6903375ecce433c6553",
+    "maskStructureMappingSha256": "8144f158e2dfdf49943da02d24641a5672de1436bed85a2edf149fbdd4edf9a2",
+    "maskStructureMappingSvgSha256": "a42bc76f95daa29ad6a059673da93409bbbf11bddfba9d166b383725ee0bba9a",
+    "liveIndexSha256": "4c7a7ae08d80d18c123aae4c0427d0615a499f36b2427b79ca1283cea4b4d714",
+    "liveValidationSha256": "087ea2b1274ed8d75a1c775459b31e01c5b5cdfa718483bcde848cf724f8a759",
+    "liveVisualReviewSha256": "f22b523cf4dbddfceb4e064082c7881a3658a77fd1404732b5ddb69c98e730f9"
   }
 }

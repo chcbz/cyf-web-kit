@@ -28,8 +28,8 @@ const LEDGER_PATH = path.join(ROOT, 'tests/fixtures/juyiting/occlusion-v2-masks/
 const MANIFEST_PATH = path.join(ROOT, 'tests/fixtures/juyiting/occlusion-v2-masks/mask-tmx-manifest.json')
 
 const EXPECTED_LEDGER_WHOLE_SHA = '700b2ac6d27ceb58ce5fe0dd92b3f0dc7012a6ecafd03f7c23a9d3a3c42704b1'
-const EXPECTED_MANIFEST_WHOLE_SHA = '96053f6cda115ecc437085ef431ef1d4ec766403f4c2e6a2bda6c8093bbdb0e7'
-const EXPECTED_TMX_SHA = '885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f'
+const EXPECTED_MANIFEST_WHOLE_SHA = 'f5ea1d0a349d9d4e5cbae3a3904f7576cdca5339226cf164bcbf214d813c2439'
+const EXPECTED_TMX_SHA = '7b304c11fd4a121d92f5fb1430f8073d4d590b3d42eb9b9a18e0e0c9bd22ff53'
 
 const CONTRACT_PATHS = [
   'src/game/occlusion/schema.ts',
@@ -304,13 +304,13 @@ describe('E11 - provenance', () => {
     const actualSha = sha256(readFileSync(MANIFEST_PATH))
     assert.equal(r.provenance.e10bManifest.wholeFileSha256, actualSha)
     assert.equal(r.provenance.e10bManifest.generationId,
-      '0440e4963703f0d2f572d60c37f2ea1c1bd34f3fa9a77889b6f672bb108c57f0')
+      'fd028fc9a9ea3f468994cd441ce54bbde5717570e52802ea20967b896911577b')
   })
 
   it('binds correct TMX SHA', () => {
     const r = loadJson(REPORT_PATH)
     assert.equal(r.provenance.tmx.sha256,
-      '885471a17ac080d4d766f3e86c69836bcac8ba66b9cab125a6ca3ac978d82d9f')
+      '7b304c11fd4a121d92f5fb1430f8073d4d590b3d42eb9b9a18e0e0c9bd22ff53')
   })
 
   it('binds correct E4/E5 contract hashes', () => {

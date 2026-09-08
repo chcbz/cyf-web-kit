@@ -3,7 +3,7 @@
   "taskId": "E13",
   "pass": true,
   "matrixShots": 270,
-  "indexSha256": "c703e3471b2493e16e8da7c230efd89c4cebf648501eff9694092fe3eead85b0",
+  "indexSha256": "72151ac5919c5534346ff2769b468bbd6670bea2498f7c935654af97c40cd09d",
   "methodology": "offline_pixel_renderer.compositor re-derives each overlap region from production assets (persona sprite alpha, TMX target source/destination rects) and the committed final-composite PNG; runtimeFacts.pixelOverlap is never read.",
   "recomputed": {
     "E13-001": {

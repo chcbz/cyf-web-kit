@@ -17,6 +17,8 @@ import { unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { PNG } from 'pngjs'
+import Packer from 'pngjs/lib/packer.js'
+import { deflate } from 'pako'
 
 import {
   CHROMIUM,
@@ -292,7 +294,19 @@ export function encodePng(width, height, rgba, options = PNG_ENCODE_OPTIONS) {
   Buffer.from(rgba.buffer, rgba.byteOffset, rgba.byteLength).copy(png.data)
   // pngjs mutates the options object (deflateChunkSize etc.); pass a copy so
   // the frozen constant stays immutable and the encoding stays deterministic.
-  return PNG.sync.write(png, { ...options })
+  // Node's bundled zlib has architecture/version-specific compressor changes.
+  // Pin the JS deflater while retaining pngjs' reviewed filter/chunk format:
+  // this reproduces the original six atlases byte-for-byte on arm64 and x64.
+  const packer = new Packer({ ...options })
+  const filtered = packer.filterData(png.data, width, height)
+  const compressed = Buffer.from(deflate(filtered, {
+    level: options.deflateLevel,
+    strategy: options.deflateStrategy,
+  }))
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    packer.packIHDR(width, height), packer.packIDAT(compressed), packer.packIEND(),
+  ])
 }
 
 export function decodePng(bytes) {
