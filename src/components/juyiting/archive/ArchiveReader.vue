@@ -79,7 +79,8 @@
               class="reader-header-button reader-exit"
               @click="closeReading"
             >
-              返回典籍列表
+              <span class="reader-exit-long">返回典籍列表</span>
+              <span class="reader-exit-short">返回</span>
             </button>
             <div class="reader-heading">
               <p class="reader-kicker">固定典籍</p>
@@ -94,17 +95,26 @@
               </p>
               <button
                 type="button"
-                class="reader-header-button"
+                class="reader-header-button reader-catalog-toggle"
                 :aria-expanded="catalogOpen"
                 aria-controls="archive-reader-catalog"
-                @click="catalogOpen = !catalogOpen"
+                @click="toggleCatalog"
               >
                 {{ catalogOpen ? '收起目录' : '目录' }}
+              </button>
+              <button
+                type="button"
+                class="reader-header-button reader-notes-toggle"
+                :aria-expanded="notesOpen"
+                aria-controls="archive-reader-notes"
+                @click="toggleNotes"
+              >
+                手札
               </button>
             </div>
           </header>
 
-          <div class="reader-layout" :class="{ 'catalog-open': catalogOpen }">
+          <div class="reader-layout" :class="{ 'catalog-open': catalogOpen, 'notes-open': notesOpen }">
             <nav
               v-if="catalogOpen"
               id="archive-reader-catalog"
@@ -129,40 +139,6 @@
               tabindex="0"
               @scroll.passive="onScroll"
             >
-              <div class="reader-actions">
-                <button
-                  type="button"
-                  :disabled="!reader.continueLocation || reader.chapterLoading"
-                  @click="continueReading"
-                >
-                  继续阅读
-                </button>
-                <button
-                  type="button"
-                  :disabled="!reader.canGoPrevious || reader.chapterLoading"
-                  aria-label="上一回"
-                  @click="runAction(reader.goPrevious, '上一回暂无法读取。')"
-                >
-                  上一回
-                </button>
-                <button
-                  type="button"
-                  :disabled="!reader.canGoNext || reader.chapterLoading"
-                  aria-label="下一回"
-                  @click="runAction(reader.goNext, '下一回暂无法读取。')"
-                >
-                  下一回
-                </button>
-                <button
-                  type="button"
-                  class="bookmark-create"
-                  :disabled="!reader.currentLocation || reader.bookmarkPending"
-                  @click="createBookmark"
-                >
-                  {{ reader.bookmarkPending ? '保存中…' : '书签' }}
-                </button>
-              </div>
-
               <div
                 v-if="reader.chapterLoading"
                 class="archive-state"
@@ -197,6 +173,7 @@
             </article>
 
             <aside
+              id="archive-reader-notes"
               class="reader-notes"
               aria-label="私人手札与书签"
             >
@@ -340,6 +317,40 @@
             </aside>
           </div>
 
+          <footer class="reader-actions" aria-label="阅读操作">
+            <button
+              type="button"
+              :disabled="!reader.continueLocation || reader.chapterLoading"
+              @click="continueReading"
+            >
+              继续阅读
+            </button>
+            <button
+              type="button"
+              :disabled="!reader.canGoPrevious || reader.chapterLoading"
+              aria-label="上一回"
+              @click="runAction(reader.goPrevious, '上一回暂无法读取。')"
+            >
+              上一回
+            </button>
+            <button
+              type="button"
+              :disabled="!reader.canGoNext || reader.chapterLoading"
+              aria-label="下一回"
+              @click="runAction(reader.goNext, '下一回暂无法读取。')"
+            >
+              下一回
+            </button>
+            <button
+              type="button"
+              class="bookmark-create"
+              :disabled="!reader.currentLocation || reader.bookmarkPending"
+              @click="createBookmark"
+            >
+              {{ reader.bookmarkPending ? '保存中…' : '书签' }}
+            </button>
+          </footer>
+
           <p
             v-if="actionMessage || reader.errorMessage"
             class="archive-error reader-global-error"
@@ -378,6 +389,7 @@ const readerState = useArchiveReader({ autoInitialize: false })
 const reader = proxyRefs(readerState)
 const readingOpen = ref(initialView === 'reader')
 const catalogOpen = ref(false)
+const notesOpen = ref(false)
 const dialogRef = ref(null)
 const contentRef = ref(null)
 const noteText = ref('')
@@ -413,6 +425,16 @@ const runAction = async (action, fallbackMessage) => {
   }
 }
 
+const toggleCatalog = () => {
+  catalogOpen.value = !catalogOpen.value
+  if (catalogOpen.value) notesOpen.value = false
+}
+
+const toggleNotes = () => {
+  notesOpen.value = !notesOpen.value
+  if (notesOpen.value) catalogOpen.value = false
+}
+
 const openBlock = async (block) => {
   const opened = await runAction(
     () => reader.loadBlock(block),
@@ -435,6 +457,7 @@ const enterReading = async (event) => {
     || await runAction(() => reader.initialize({ reuseCatalog: true }), '典籍暂无法读取，请稍后重试。')
   if (!opened && !reader.chapter) return
   catalogOpen.value = false
+  notesOpen.value = false
   readingOpen.value = true
   document.body?.classList.add('archive-reading-open')
   await nextTick()
@@ -447,6 +470,7 @@ const closeReading = async () => {
   reader.closeQuestion()
   readingOpen.value = false
   catalogOpen.value = false
+  notesOpen.value = false
   document.body?.classList.remove('archive-reading-open')
   await nextTick()
   const focusTarget = returnFocusElement?.isConnected
@@ -458,7 +482,13 @@ const closeReading = async () => {
 
 const focusableElements = () => [...(dialogRef.value?.querySelectorAll(
   'button:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
-) || [])].filter(element => !element.hasAttribute('hidden'))
+) || [])].filter((element) => {
+  if (element.hasAttribute('hidden')) return false
+  for (let ancestor = element; ancestor && ancestor !== dialogRef.value; ancestor = ancestor.parentElement) {
+    if (globalThis.getComputedStyle?.(ancestor).display === 'none') return false
+  }
+  return true
+})
 
 const handleReaderKeydown = (event) => {
   if (!readingOpen.value) return
@@ -748,7 +778,6 @@ onBeforeUnmount(() => {
 
 .archive-shelf-header,
 .reader-header,
-.reader-actions,
 .reader-header-actions {
   display: flex;
   align-items: center;
@@ -917,8 +946,14 @@ onBeforeUnmount(() => {
 
 .reader-header {
   flex: 0 0 auto;
+  flex-wrap: nowrap;
+  min-width: 0;
   padding: 2px 4px 10px;
   border-bottom: 1px solid rgba(98, 66, 34, 0.18);
+}
+
+.reader-exit-short {
+  display: none;
 }
 
 .reader-kicker,
@@ -933,7 +968,24 @@ onBeforeUnmount(() => {
 }
 
 .reader-header-actions {
+  flex: 0 0 auto;
   justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+
+.reader-actions {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.reader-actions button {
+  min-width: 0;
+  min-height: 40px;
+  padding-inline: 8px;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .reader-header-button {
@@ -1100,35 +1152,37 @@ onBeforeUnmount(() => {
   .reader-layout,
   .reader-layout.catalog-open {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) minmax(0, 38%);
+    grid-template-rows: minmax(0, 1fr);
     overflow: hidden;
   }
 
-  .reader-catalog {
+  .reader-catalog,
+  .reader-notes {
     position: absolute;
-    inset: 0 auto 0 0;
     z-index: 4;
-    width: min(82vw, 330px);
     box-sizing: border-box;
     box-shadow: 12px 0 30px rgba(45, 27, 16, 0.24);
   }
 
-  .reader-content,
-  .reader-notes {
-    min-height: 0;
+  .reader-catalog {
+    inset: 0 auto 0 0;
+    width: min(82vw, 330px);
   }
 
   .reader-notes {
+    display: none;
+    inset: 0 0 0 auto;
+    width: min(88vw, 390px);
     max-height: none;
   }
 
-  .reader-header-actions {
-    width: 100%;
-    justify-content: space-between;
+  .reader-layout.notes-open .reader-notes {
+    display: block;
   }
 
-  .save-state {
-    margin-right: auto;
+  .reader-header-actions {
+    width: auto;
+    justify-content: flex-end;
   }
 }
 
@@ -1210,6 +1264,23 @@ onBeforeUnmount(() => {
   padding: 10px;
 }
 
+.archive-reader-fullscreen.is-virtual-landscape-reader .reader-notes {
+  position: static;
+  display: block;
+  width: auto;
+  box-shadow: 0 8px 24px rgba(71, 44, 23, 0.08);
+}
+
+.archive-reader-fullscreen.is-virtual-landscape-reader .reader-notes-toggle {
+  display: none;
+}
+
+@media (min-width: 901px) {
+  .reader-notes-toggle {
+    display: none;
+  }
+}
+
 @media (max-height: 540px) and (orientation: landscape) {
   .archive-shelf {
     gap: 10px;
@@ -1288,6 +1359,17 @@ onBeforeUnmount(() => {
   .reader-notes {
     padding: 10px;
   }
+
+  .reader-notes {
+    position: static;
+    display: block;
+    width: auto;
+    box-shadow: 0 8px 24px rgba(71, 44, 23, 0.08);
+  }
+
+  .reader-notes-toggle {
+    display: none;
+  }
 }
 
 .archive-reader-fullscreen.has-reader-capsule {
@@ -1306,6 +1388,60 @@ onBeforeUnmount(() => {
 .archive-reader-fullscreen.has-reader-capsule.is-virtual-landscape-reader .reader-header {
   /* The physical top-right capsule sits at the rotated header's logical top-left. */
   padding-left: 112px;
+}
+
+@media (max-width: 900px) and (orientation: portrait) {
+  .reader-header {
+    gap: 4px;
+  }
+
+  .reader-exit-long,
+  .reader-kicker,
+  .save-state {
+    display: none;
+  }
+
+  .reader-exit-short {
+    display: inline;
+  }
+
+  .reader-heading {
+    overflow: hidden;
+  }
+
+  .reader-heading h3 {
+    overflow: hidden;
+    font-size: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .reader-header-actions {
+    gap: 4px;
+  }
+
+  .reader-header-button {
+    padding: 7px;
+    white-space: nowrap;
+  }
+
+  .reader-catalog-toggle {
+    font-size: 0;
+  }
+
+  .reader-catalog-toggle::after {
+    content: '目录';
+    font-size: 14px;
+  }
+
+  .reader-actions {
+    gap: 4px;
+  }
+
+  .reader-actions button {
+    padding-inline: 4px;
+    font-size: 13px;
+  }
 }
 
 @container (max-width: 520px) {

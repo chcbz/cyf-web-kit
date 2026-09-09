@@ -605,6 +605,65 @@ describe('archive reader contract behavior', () => {
     wrapper.unmount()
   })
 
+  it('keeps reader controls outside the scrolling text, navigates chapter boundaries, and exposes the portrait handnote overlay', async () => {
+    const navigationFailure = Object.assign(new Error('chapter unavailable'), { status: 503 })
+    const api = makeApi({
+      getBlock: blockId => blockId === chapterEightyOne.blockId
+        ? Promise.reject(navigationFailure)
+        : response(blocksById.get(blockId))
+    })
+    const wrapper = mountArchiveReader(api)
+    await waitFor(() => wrapper.readerState.chapter.value?.blockId === preface.blockId)
+
+    const actions = wrapper.get('.reader-actions')
+    expect(wrapper.get('.reader-content').find('.reader-actions').exists()).to.equal(false)
+    expect(actions.element.parentElement).to.equal(wrapper.get('.archive-reader-fullscreen').element)
+    expect(actions.findAll('button')).to.have.length(4)
+    expect(actions.get('[aria-label="上一回"]').attributes('disabled')).to.equal('')
+
+    await actions.get('[aria-label="下一回"]').trigger('click')
+    await waitFor(() => wrapper.readerState.chapter.value?.blockId === chapterOne.blockId)
+    expect(actions.get('[aria-label="上一回"]').attributes('disabled')).to.equal(undefined)
+
+    await actions.get('[aria-label="上一回"]').trigger('click')
+    await waitFor(() => wrapper.readerState.chapter.value?.blockId === preface.blockId)
+    await actions.get('[aria-label="下一回"]').trigger('click')
+    await waitFor(() => wrapper.readerState.chapter.value?.blockId === chapterOne.blockId)
+    await actions.get('[aria-label="下一回"]').trigger('click')
+    await waitFor(() => wrapper.find('[role="alert"]').exists())
+    expect(wrapper.readerState.chapter.value?.blockId).to.equal(chapterOne.blockId)
+
+    const catalogToggle = wrapper.get('.reader-catalog-toggle')
+    const notesToggle = wrapper.get('.reader-notes-toggle')
+    expect(notesToggle.attributes('aria-expanded')).to.equal('false')
+    await notesToggle.trigger('click')
+    expect(notesToggle.attributes('aria-expanded')).to.equal('true')
+    expect(wrapper.get('.reader-layout').classes()).to.include('notes-open')
+    expect(wrapper.get('.reader-layout').classes()).not.to.include('catalog-open')
+    await catalogToggle.trigger('click')
+    expect(catalogToggle.attributes('aria-expanded')).to.equal('true')
+    expect(notesToggle.attributes('aria-expanded')).to.equal('false')
+    expect(wrapper.get('.reader-layout').classes()).to.include('catalog-open')
+    expect(wrapper.get('.reader-layout').classes()).not.to.include('notes-open')
+
+    const hiddenNotes = wrapper.get('.reader-notes').element
+    hiddenNotes.style.display = 'none'
+    actions.get('.bookmark-create').element.focus()
+    wrapper.get('.archive-reader-fullscreen').element.dispatchEvent(new window.KeyboardEvent('keydown', { bubbles: true, key: 'Tab' }))
+    expect(document.activeElement?.classList.contains('reader-exit')).to.equal(true)
+
+    const source = readFileSync(new URL('../src/components/juyiting/archive/ArchiveReader.vue', import.meta.url), 'utf8')
+    expect(source).to.match(/@media \(max-width: 900px\) \{[\s\S]*?\.reader-layout\.notes-open \.reader-notes\s*\{[\s\S]*?display:\s*block;/)
+    expect(source).to.match(/@media \(max-width: 900px\) and \(orientation: portrait\) \{[\s\S]*?\.reader-exit-long,[\s\S]*?\.reader-exit-short \{[\s\S]*?display:\s*inline;/)
+    expect(source).to.match(/\.reader-notes\s*\{[\s\S]*?display:\s*none;/)
+    expect(source).to.match(/\.is-virtual-landscape-reader \.reader-notes\s*\{[\s\S]*?position:\s*static;[\s\S]*?display:\s*block;/)
+    expect(source).to.match(/@media \(max-height: 540px\) and \(orientation: landscape\)[\s\S]*?\.reader-notes\s*\{[\s\S]*?position:\s*static;[\s\S]*?display:\s*block;/)
+    expect(source).to.match(/\.reader-actions\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/)
+    expect(source).to.match(/\.reader-actions button\s*\{[\s\S]*?min-height:\s*40px;/)
+    expect(source).to.match(/\.has-reader-capsule:not\(\.is-virtual-landscape-reader\) \.reader-header\s*\{[\s\S]*?padding-right:\s*112px;/)
+    wrapper.unmount()
+  })
+
   it('mounts the virtual-landscape shelf and rotated fullscreen reader without relying on physical orientation media', async () => {
     const api = makeApi()
     const wrapper = mountArchiveReader(api, { initialView: 'catalog', virtualLandscape: true })
