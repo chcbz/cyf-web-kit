@@ -12,6 +12,7 @@ import { captureHallVoiceSnapshot } from './useHallVoiceConversation.js'
 import { exactHallConversationId, normalizeHallConversationHistory } from './hallConversationHistory.js'
 
 const runtimeEnv = import.meta.env ?? {}
+const HALL_HISTORY_PAGE_SIZE = 100
 
 export const useHallConversation = ({
   apiStore,
@@ -33,6 +34,11 @@ export const useHallConversation = ({
   const conversationHistory = ref([])
   const conversationHistoryLoading = ref(false)
   const conversationHistoryError = ref('')
+  const conversationHistoryHasMore = ref(true)
+  const conversationHistoryPage = ref(0)
+  const conversationLoadError = ref('')
+  const isConversationLoading = ref(false)
+  const selectedHallConversationId = ref('')
   const draft = ref('')
   const isStreaming = ref(false)
   const isAwaitingReply = ref(false)
@@ -94,7 +100,7 @@ export const useHallConversation = ({
     return hallConversationHistoryGeneration
   }
 
-  const isConversationBusy = computed(() => isStreaming.value || isAwaitingReply.value)
+  const isConversationBusy = computed(() => isStreaming.value || isAwaitingReply.value || isConversationLoading.value)
 
   const pendingAgentName = computed(() => {
     if (!selectedAgent.value) return ''
@@ -340,6 +346,11 @@ export const useHallConversation = ({
     conversationHistory.value = []
     conversationHistoryLoading.value = false
     conversationHistoryError.value = ''
+    conversationHistoryHasMore.value = true
+    conversationHistoryPage.value = 0
+    conversationLoadError.value = ''
+    isConversationLoading.value = false
+    selectedHallConversationId.value = ''
     loadedConversationScopeSignature = ''
     suppressedRestoreScopes.clear()
     resetLifecycle()
@@ -366,6 +377,11 @@ export const useHallConversation = ({
       conversationHistory.value = []
       conversationHistoryLoading.value = false
       conversationHistoryError.value = ''
+      conversationHistoryHasMore.value = true
+      conversationHistoryPage.value = 0
+      conversationLoadError.value = ''
+      isConversationLoading.value = false
+      selectedHallConversationId.value = ''
       loadedConversationScopeSignature = ''
       resetLifecycle()
       stopHallEventStream()
@@ -392,10 +408,11 @@ export const useHallConversation = ({
 
   const loadHallConversationContent = async (id = conversationId.value, guard = {}) => {
     const exactId = exactRuntimeId(id)
-    if (disposed || !exactId) return
+    if (disposed || !exactId) return false
     const generation = lifecycleGeneration
     const loadGeneration = guard.loadGeneration ?? hallConversationLoadGeneration
     const expectedScope = guard.scope || scopeSnapshot()
+    const isSelectedLoad = guard.selection === true
     const isCurrentContentLoad = () => (
       !disposed &&
       generation === lifecycleGeneration &&
@@ -403,6 +420,21 @@ export const useHallConversation = ({
       conversationId.value === exactId &&
       sameScope(expectedScope)
     )
+    let loaded = false
+    let contentFailed = false
+    const failContentLoad = error => {
+      if (!isCurrentContentLoad()) return
+      contentFailed = true
+      if (error?.name !== 'AbortError') log.warn('加载聚义厅会话内容失败', error)
+      if (isSelectedLoad && error?.name !== 'AbortError') {
+        messages.value = []
+        conversationLoadError.value = '这段旧话暂不可取，请重试。'
+      }
+    }
+    if (isSelectedLoad) {
+      isConversationLoading.value = true
+      conversationLoadError.value = ''
+    }
     try {
       await chatApi.getById('/conversation/content', exactId, {
         autoLoading: false,
@@ -426,13 +458,19 @@ export const useHallConversation = ({
             isStreaming.value = false
             stopHallReplyPolling()
           }
+          if (isSelectedLoad) conversationLoadError.value = ''
+          loaded = true
           startHallEventStream()
-        }
+        },
+        onError: failContentLoad
       })
+      if (!loaded && !contentFailed && isCurrentContentLoad()) failContentLoad(new Error('Hall conversation content response was empty'))
+      return loaded && isCurrentContentLoad()
     } catch (error) {
-      if (error?.name !== 'AbortError' && isCurrentContentLoad()) {
-        log.warn('加载聚义厅会话内容失败', error)
-      }
+      failContentLoad(error)
+      return false
+    } finally {
+      if (isSelectedLoad && isCurrentContentLoad()) isConversationLoading.value = false
     }
   }
 
@@ -450,6 +488,8 @@ export const useHallConversation = ({
     stopHallReplyStreaming()
     stopHallReplyPolling()
     conversationId.value = ''
+    selectedHallConversationId.value = ''
+    conversationLoadError.value = ''
     messages.value = []
     isAwaitingReply.value = false
     isStreaming.value = false
@@ -480,12 +520,10 @@ export const useHallConversation = ({
       const id = exactRuntimeId(hallConversation.id)
       if (!id) return false
       conversationId.value = id
-      await loadHallConversationContent(id, { loadGeneration, scope: expectedScope })
-      return isCurrentLoad()
+      selectedHallConversationId.value = id
+      return loadHallConversationContent(id, { loadGeneration, scope: expectedScope })
     } catch (error) {
-      if (error?.name !== 'AbortError' && isCurrentLoad()) {
-        log.warn('加载聚义厅会话失败', error)
-      }
+      if (error?.name !== 'AbortError' && isCurrentLoad()) log.warn('加载聚义厅会话失败', error)
       return false
     }
   }
@@ -510,31 +548,41 @@ export const useHallConversation = ({
     })
   }
 
-  const loadHallConversationHistory = ({ force = false } = {}) => {
+  const readHistoryRows = result => {
+    if (Array.isArray(result?.data)) return result.data
+    if (Array.isArray(result?.data?.data)) return result.data.data
+    return []
+  }
+
+  const loadHallConversationHistory = ({ force = false, loadMore = false } = {}) => {
     if (disposed) return Promise.resolve([])
     const expectedScope = scopeSnapshot()
-    if (!expectedScope) return Promise.resolve([])
+    if (!expectedScope || (loadMore && !conversationHistoryHasMore.value)) return Promise.resolve([])
     const expectedSignature = scopeSignature(expectedScope)
-    if (!force && pendingHallConversationHistoryLoad?.signature === expectedSignature) {
-      return pendingHallConversationHistoryLoad.promise
-    }
+    if (pendingHallConversationHistoryLoad?.signature === expectedSignature) return pendingHallConversationHistoryLoad.promise
 
     const generation = lifecycleGeneration
     const historyGeneration = invalidateConversationHistoryLoads()
+    const pageNum = loadMore ? conversationHistoryPage.value + 1 : 1
     const isCurrentHistoryLoad = () => (
       !disposed &&
       generation === lifecycleGeneration &&
       historyGeneration === hallConversationHistoryGeneration &&
       sameScope(expectedScope)
     )
+    if (!loadMore) {
+      conversationHistory.value = []
+      conversationHistoryPage.value = 0
+      conversationHistoryHasMore.value = true
+    }
     conversationHistoryLoading.value = true
     conversationHistoryError.value = ''
     const promise = (async () => {
       try {
         let callbackResult
         const response = await chatApi.list('/conversation/list', {
-          pageNum: 1,
-          pageSize: 100,
+          pageNum,
+          pageSize: HALL_HISTORY_PAGE_SIZE,
           orderBy: 'update_time desc',
           search: {
             conversationType: 'juyiting',
@@ -547,18 +595,23 @@ export const useHallConversation = ({
           onSuccess: result => { callbackResult = result }
         })
         if (!isCurrentHistoryLoad()) return []
-        const result = callbackResult ?? response?.data
-        const rows = Array.isArray(result?.data)
-          ? result.data
-          : (Array.isArray(result?.data?.data) ? result.data.data : [])
-        conversationHistory.value = rows
-          .map(row => normalizeHallConversationHistory(row, expectedScope))
-          .filter(Boolean)
+        const rawRows = readHistoryRows(callbackResult ?? response?.data)
+        const nextRows = rawRows.map(row => normalizeHallConversationHistory(row, expectedScope)).filter(Boolean)
+        const merged = loadMore ? [...conversationHistory.value] : []
+        const seen = new Set(merged.map(item => item.id))
+        nextRows.forEach(item => {
+          if (seen.has(item.id)) return
+          seen.add(item.id)
+          merged.push(item)
+        })
+        conversationHistory.value = merged
+        conversationHistoryPage.value = pageNum
+        // The current service loses true PageInfo totals; raw page fullness is authoritative.
+        conversationHistoryHasMore.value = rawRows.length === HALL_HISTORY_PAGE_SIZE
         return conversationHistory.value
       } catch (error) {
         if (error?.name !== 'AbortError' && isCurrentHistoryLoad()) {
           log.warn('加载聚义厅话头记录失败', error)
-          conversationHistory.value = []
           conversationHistoryError.value = '旧话头暂不可取，请稍后重试。'
         }
         return []
@@ -571,6 +624,8 @@ export const useHallConversation = ({
       if (pendingHallConversationHistoryLoad?.promise === promise) pendingHallConversationHistoryLoad = null
     })
   }
+
+  const loadMoreHallConversationHistory = () => loadHallConversationHistory({ loadMore: true })
 
   const selectHallConversation = async (id) => {
     if (disposed || isConversationBusy.value) return false
@@ -587,12 +642,17 @@ export const useHallConversation = ({
     stopHallReplyPolling()
     stopHallConversationSync()
     conversationId.value = exactId
+    selectedHallConversationId.value = exactId
     messages.value = []
     isStreaming.value = false
     isAwaitingReply.value = false
     clearBuiltInTurn()
-    await loadHallConversationContent(exactId, { loadGeneration, scope: expectedScope })
-    return !disposed && loadGeneration === hallConversationLoadGeneration && conversationId.value === exactId && sameScope(expectedScope)
+    return loadHallConversationContent(exactId, { loadGeneration, scope: expectedScope, selection: true })
+  }
+
+  const retryHallConversation = () => {
+    if (conversationLoadError.value && selectedHallConversationId.value) return selectHallConversation(selectedHallConversationId.value)
+    return loadHallMessages({ force: true })
   }
 
   const startHallReplyPolling = (id = conversationId.value) => {
@@ -628,7 +688,14 @@ export const useHallConversation = ({
     const currentScopeSignature = scopeSignature(scopeSnapshot())
     if (currentScopeSignature) suppressedRestoreScopes.add(currentScopeSignature)
     invalidateConversationLoads()
+    invalidateConversationHistoryLoads()
     pendingHallConversationLoad = null
+    pendingHallConversationHistoryLoad = null
+    conversationHistoryLoading.value = false
+    conversationHistoryError.value = ''
+    conversationLoadError.value = ''
+    isConversationLoading.value = false
+    selectedHallConversationId.value = ''
     loadedConversationScopeSignature = ''
     resetLifecycle()
     stopHallEventStream()
@@ -684,7 +751,7 @@ export const useHallConversation = ({
     const isVoiceSend = source === 'voice'
     if (isVoiceSend && typeof explicitContent !== 'string') return false
     const content = (isVoiceSend ? explicitContent : String((explicitContent ?? draft.value) || '')).trim()
-    if (disposed || !content || isStreaming.value) return false
+    if (disposed || !content || isStreaming.value || isAwaitingReply.value || isConversationLoading.value || conversationLoadError.value) return false
     let sendContext = contextSnapshot || currentChatContext.value
     if (isVoiceSend) {
       const validated = captureHallVoiceSnapshot({
@@ -860,8 +927,10 @@ export const useHallConversation = ({
     chatConnectionStatus,
     conversationHistory,
     conversationHistoryError,
+    conversationHistoryHasMore,
     conversationHistoryLoading,
     conversationId,
+    conversationLoadError,
     clearDraft,
     disposeHallConversation,
     draft,
@@ -873,14 +942,17 @@ export const useHallConversation = ({
     isStreaming,
     loadHallConversationHistory,
     loadHallMessages,
+    loadMoreHallConversationHistory,
     mentionAgent,
     messages,
     newHallConversation,
     pendingAgentName,
     replyEventSequence,
+    retryHallConversation,
     sendHallMessage,
     senderText,
     selectHallConversation,
+    selectedHallConversationId,
     setDraft,
     startAgentConversation,
     stopHallEventStream,

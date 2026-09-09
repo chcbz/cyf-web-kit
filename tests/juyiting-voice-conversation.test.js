@@ -260,6 +260,9 @@ describe('Juyi Hall voice mounted facade', () => {
     expect(offVoice.voiceInteractionLocked).to.equal(false)
     expect(off.find('textarea').attributes('disabled')).to.equal(undefined)
     expect(off.find('.composer-send').attributes('disabled')).to.equal(undefined)
+    await off.setProps({ isAwaitingReply: true })
+    expect(off.find('textarea').attributes('disabled')).to.equal('')
+    expect(off.find('.composer-send').attributes('disabled')).to.equal('')
     expect(off.find('.hall-voice-controls').exists()).to.equal(false)
     off.unmount()
 

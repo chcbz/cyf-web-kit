@@ -3,9 +3,10 @@
     <div v-if="loading" class="history-state" role="status">正在翻检话头…</div>
     <div v-else-if="error" class="history-state is-error" role="alert">{{ error }}</div>
     <div v-else-if="!conversations.length" class="history-state">此处暂无旧话头。</div>
-    <ul v-else class="history-list">
-      <li v-for="conversation in conversations" :key="conversation.id">
-        <button
+    <template v-else>
+      <ul class="history-list">
+        <li v-for="conversation in conversations" :key="conversation.id">
+          <button
           type="button"
           class="history-item"
           :class="{ selected: conversation.id === selectedId }"
@@ -15,9 +16,19 @@
         >
           <strong>{{ conversation.title }}</strong>
           <small>{{ formatTime(conversation.updateTime) }}</small>
-        </button>
-      </li>
-    </ul>
+          </button>
+        </li>
+      </ul>
+      <button
+        v-if="hasMore"
+        class="history-load-more"
+        type="button"
+        :disabled="disabled || loading"
+        @click="$emit('load-more')"
+      >
+        {{ loading ? '正在翻检…' : '再取旧话头' }}
+      </button>
+    </template>
   </section>
 </template>
 
@@ -26,11 +37,12 @@ defineProps({
   conversations: { type: Array, default: () => [] },
   disabled: { type: Boolean, default: false },
   error: { type: String, default: '' },
+  hasMore: { type: Boolean, default: false },
   loading: { type: Boolean, default: false },
   selectedId: { type: String, default: '' }
 })
 
-defineEmits(['select'])
+defineEmits(['load-more', 'select'])
 
 const formatTime = value => {
   if (value === null || value === undefined || value === '') return '时间未记'
@@ -116,5 +128,24 @@ const formatTime = value => {
 
 .history-state.is-error {
   color: #a23f32;
+}
+
+.history-load-more {
+  display: block;
+  width: calc(100% - 16px);
+  margin: 3px 8px 8px;
+  padding: 8px;
+  border: 1px solid rgba(116, 75, 35, 0.2);
+  border-radius: 7px;
+  background: #fff8e8;
+  color: #765f40;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.history-load-more:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 </style>

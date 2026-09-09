@@ -46,10 +46,17 @@
       :conversations="conversationHistory"
       :disabled="conversationBusy || voice?.voiceInteractionLocked"
       :error="conversationHistoryError"
+      :has-more="conversationHistoryHasMore"
       :loading="conversationHistoryLoading"
       :selected-id="conversationId"
+      @load-more="$emit('load-more-history')"
       @select="$emit('select-conversation', $event)"
     />
+
+    <div v-if="conversationLoadError" class="conversation-load-error" role="alert">
+      <span>{{ conversationLoadError }}</span>
+      <button type="button" :disabled="conversationBusy || voice?.voiceInteractionLocked" @click="$emit('retry-conversation')">重试</button>
+    </div>
 
     <div ref="messageBoxRef" class="hall-messages">
       <div
@@ -76,6 +83,7 @@
       :agents="agents"
       :discussion-variant="discussionVariant"
       :draft="draft"
+      :is-awaiting-reply="isAwaitingReply"
       :is-streaming="isStreaming"
       :mention-label="mentionLabel"
       :placeholder="placeholder"
@@ -110,7 +118,9 @@ const props = defineProps({
   connectionStatus: { type: String, default: '' },
   conversationHistory: { type: Array, default: () => [] },
   conversationHistoryError: { type: String, default: '' },
+  conversationHistoryHasMore: { type: Boolean, default: false },
   conversationHistoryLoading: { type: Boolean, default: false },
+  conversationLoadError: { type: String, default: '' },
   conversationBusy: { type: Boolean, default: false },
   conversationId: { type: String, default: '' },
   discussionVariant: { type: String, default: 'public' },
@@ -136,9 +146,11 @@ const props = defineProps({
 const emit = defineEmits([
   'clear-target',
   'load-history',
+  'load-more-history',
   'load-messages',
   'mention-agent',
   'new-conversation',
+  'retry-conversation',
   'select-conversation',
   'send-message',
   'update:draft',
@@ -268,6 +280,27 @@ button:disabled {
 .icon-button.primary {
   background: #6d3f1f;
   color: #fff8e8;
+}
+
+.conversation-load-error {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #fff0ea;
+  color: #a23f32;
+  font-size: 12px;
+}
+
+.conversation-load-error button {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border: 1px solid currentColor;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
 }
 
 .hall-messages {

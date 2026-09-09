@@ -19,9 +19,11 @@
       v-bind="chatProps"
       @clear-target="$emit('clear-target', $event)"
       @load-history="$emit('load-history')"
+      @load-more-history="$emit('load-more-history')"
       @load-messages="$emit('load-messages')"
       @mention-agent="$emit('mention-agent', $event)"
       @new-conversation="$emit('new-conversation')"
+      @retry-conversation="$emit('retry-conversation')"
       @select-conversation="$emit('select-conversation', $event)"
       @send-message="$emit('send-message')"
       @voice-apply="$emit('voice-apply', $event)"
@@ -38,7 +40,9 @@ const props = defineProps({
   connectionStatus: { type: String, default: '' },
   conversationHistory: { type: Array, default: () => [] },
   conversationHistoryError: { type: String, default: '' },
+  conversationHistoryHasMore: { type: Boolean, default: false },
   conversationHistoryLoading: { type: Boolean, default: false },
+  conversationLoadError: { type: String, default: '' },
   conversationBusy: { type: Boolean, default: false },
   conversationId: { type: String, default: '' },
   draft: { type: String, default: '' },
@@ -59,9 +63,11 @@ const props = defineProps({
 const emit = defineEmits([
   'clear-target',
   'load-history',
+  'load-more-history',
   'load-messages',
   'mention-agent',
   'new-conversation',
+  'retry-conversation',
   'select-conversation',
   'send-message',
   'update:draft',
@@ -83,7 +89,9 @@ const chatProps = computed(() => ({
   connectionStatus: props.connectionStatus,
   conversationHistory: props.conversationHistory,
   conversationHistoryError: props.conversationHistoryError,
+  conversationHistoryHasMore: props.conversationHistoryHasMore,
   conversationHistoryLoading: props.conversationHistoryLoading,
+  conversationLoadError: props.conversationLoadError,
   conversationBusy: props.conversationBusy,
   conversationId: props.conversationId,
   eventStreamRecovering: props.eventStreamRecovering,

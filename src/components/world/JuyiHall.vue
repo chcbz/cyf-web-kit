@@ -264,15 +264,19 @@
             :conversation-busy="isConversationBusy"
             :conversation-history="conversationHistory"
             :conversation-history-error="conversationHistoryError"
+            :conversation-history-has-more="conversationHistoryHasMore"
             :conversation-history-loading="conversationHistoryLoading"
             :conversation-id="conversationId"
+            :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
             @clear-target="handleClearChatTarget"
             @load-history="loadHallConversationHistory({ force: true })"
-            @load-messages="loadHallMessages({ force: true })"
+            @load-more-history="loadMoreHallConversationHistory"
+            @load-messages="retryHallConversation"
             @mention-agent="handleMentionAgent"
             @new-conversation="handleNewHallConversation"
+            @retry-conversation="retryHallConversation"
             @select-conversation="selectHallConversation"
             @send-message="handleSendHallMessage"
           />
@@ -297,15 +301,19 @@
             :conversation-busy="isConversationBusy"
             :conversation-history="conversationHistory"
             :conversation-history-error="conversationHistoryError"
+            :conversation-history-has-more="conversationHistoryHasMore"
             :conversation-history-loading="conversationHistoryLoading"
             :conversation-id="conversationId"
+            :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
             @clear-target="handleClearChatTarget"
             @load-history="loadHallConversationHistory({ force: true })"
-            @load-messages="loadHallMessages({ force: true })"
+            @load-more-history="loadMoreHallConversationHistory"
+            @load-messages="retryHallConversation"
             @mention-agent="handleMentionAgent"
             @new-conversation="handleNewHallConversation"
+            @retry-conversation="retryHallConversation"
             @select-conversation="selectHallConversation"
             @send-message="handleSendHallMessage"
           />
@@ -330,15 +338,19 @@
             :conversation-busy="isConversationBusy"
             :conversation-history="conversationHistory"
             :conversation-history-error="conversationHistoryError"
+            :conversation-history-has-more="conversationHistoryHasMore"
             :conversation-history-loading="conversationHistoryLoading"
             :conversation-id="conversationId"
+            :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
             @clear-target="handleClearChatTarget"
             @load-history="loadHallConversationHistory({ force: true })"
-            @load-messages="loadHallMessages({ force: true })"
+            @load-more-history="loadMoreHallConversationHistory"
+            @load-messages="retryHallConversation"
             @mention-agent="handleMentionAgent"
             @new-conversation="handleNewHallConversation"
+            @retry-conversation="retryHallConversation"
             @select-conversation="selectHallConversation"
             @send-message="handleSendHallMessage"
           />
@@ -1206,8 +1218,10 @@ const {
   chatConnectionStatus,
   conversationHistory,
   conversationHistoryError,
+  conversationHistoryHasMore,
   conversationHistoryLoading,
   conversationId,
+  conversationLoadError,
   draft,
   eventStreamRecovering,
   insertAgentMention,
@@ -1216,11 +1230,13 @@ const {
   isStreaming,
   loadHallConversationHistory,
   loadHallMessages,
+  loadMoreHallConversationHistory,
   mentionAgent,
   messages,
   newHallConversation,
   pendingAgentName,
   replyEventSequence,
+  retryHallConversation,
   sendHallMessage,
   senderText,
   selectHallConversation,

@@ -48,10 +48,10 @@
           class="composer-send"
           type="submit"
           :disabled="!canSend"
-          :title="isStreaming ? '回话中' : '传令'"
-          :aria-label="isStreaming ? '回话中' : '传令'"
+          :title="isStreaming || isAwaitingReply ? '回话中' : '传令'"
+          :aria-label="isStreaming || isAwaitingReply ? '回话中' : '传令'"
         >
-          <var-icon :name="isStreaming ? 'refresh' : 'chevron-right'" />
+          <var-icon :name="isStreaming || isAwaitingReply ? 'refresh' : 'chevron-right'" />
         </button>
       </div>
     </div>
@@ -71,7 +71,7 @@
 
       <div class="composer-meta">
         <span>{{ draftLength }}/{{ maxLength }}</span>
-        <span v-if="isStreaming">候回话</span>
+        <span v-if="isStreaming || isAwaitingReply">候回话</span>
         <span v-else>{{ hintText }}</span>
       </div>
     </form>
@@ -88,6 +88,7 @@ const props = defineProps({
   agents: { type: Array, default: () => [] },
   discussionVariant: { type: String, default: 'public' },
   draft: { type: String, default: '' },
+  isAwaitingReply: { type: Boolean, default: false },
   isStreaming: { type: Boolean, default: false },
   mentionLabel: { type: Function, required: true },
   placeholder: { type: String, default: '向聚义厅传话，或 @某位好汉' },
@@ -109,7 +110,7 @@ const textareaRef = ref(null)
 const isFocused = ref(false)
 
 const draftLength = computed(() => String(props.draft || '').length)
-const inputLocked = computed(() => props.isStreaming || Boolean(props.voice?.voiceInteractionLocked))
+const inputLocked = computed(() => props.isStreaming || props.isAwaitingReply || Boolean(props.voice?.voiceInteractionLocked))
 const canClear = computed(() => Boolean(String(props.draft || '').length) && !inputLocked.value)
 const canSend = computed(() => Boolean(String(props.draft || '').trim()) && !inputLocked.value)
 const composerClass = computed(() => ({
