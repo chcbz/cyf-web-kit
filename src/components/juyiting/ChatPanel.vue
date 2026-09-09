@@ -12,23 +12,44 @@
           type="button"
           title="重取回话"
           aria-label="重取回话"
-          :disabled="voice?.voiceInteractionLocked"
+          :disabled="conversationBusy || voice?.voiceInteractionLocked"
           @click="$emit('load-messages')"
         >
           <var-icon name="refresh" />
+        </button>
+        <button
+          class="icon-button"
+          type="button"
+          title="话头记录"
+          aria-label="话头记录"
+          :aria-expanded="historyOpen ? 'true' : 'false'"
+          :disabled="voice?.voiceInteractionLocked"
+          @click="toggleHistory"
+        >
+          <var-icon name="history" />
         </button>
         <button
           class="icon-button primary"
           type="button"
           title="另起话头"
           aria-label="另起话头"
-          :disabled="voice?.voiceInteractionLocked"
+          :disabled="conversationBusy || voice?.voiceInteractionLocked"
           @click="$emit('new-conversation')"
         >
           <var-icon name="plus" />
         </button>
       </div>
     </div>
+
+    <HallConversationHistory
+      v-if="historyOpen"
+      :conversations="conversationHistory"
+      :disabled="conversationBusy || voice?.voiceInteractionLocked"
+      :error="conversationHistoryError"
+      :loading="conversationHistoryLoading"
+      :selected-id="conversationId"
+      @select="$emit('select-conversation', $event)"
+    />
 
     <div ref="messageBoxRef" class="hall-messages">
       <div
@@ -75,6 +96,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import HallChatComposer from './HallChatComposer.vue'
+import HallConversationHistory from './HallConversationHistory.vue'
 
 marked.setOptions({
   breaks: true,
@@ -86,6 +108,11 @@ marked.setOptions({
 const props = defineProps({
   agents: { type: Array, default: () => [] },
   connectionStatus: { type: String, default: '' },
+  conversationHistory: { type: Array, default: () => [] },
+  conversationHistoryError: { type: String, default: '' },
+  conversationHistoryLoading: { type: Boolean, default: false },
+  conversationBusy: { type: Boolean, default: false },
+  conversationId: { type: String, default: '' },
   discussionVariant: { type: String, default: 'public' },
   draft: { type: String, default: '' },
   emptyText: { type: String, default: '厅中暂无话头，可先传一句。' },
@@ -106,18 +133,25 @@ const props = defineProps({
   voice: { type: Object, default: null }
 })
 
-defineEmits([
+const emit = defineEmits([
   'clear-target',
+  'load-history',
   'load-messages',
   'mention-agent',
   'new-conversation',
+  'select-conversation',
   'send-message',
   'update:draft',
   'voice-apply'
 ])
 
 const messageBoxRef = ref(null)
+const historyOpen = ref(false)
 const pendingAuthor = '聚义厅'
+const toggleHistory = () => {
+  historyOpen.value = !historyOpen.value
+  if (historyOpen.value) emit('load-history')
+}
 const taskText = computed(() => props.selectedTask?.title || '未选榜文')
 const resolvedSubtitle = computed(() => {
   if (props.subtitle) return props.subtitle

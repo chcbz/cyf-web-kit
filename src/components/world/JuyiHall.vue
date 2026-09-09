@@ -261,12 +261,19 @@
             :selected-task="selectedTask"
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
+            :conversation-busy="isConversationBusy"
+            :conversation-history="conversationHistory"
+            :conversation-history-error="conversationHistoryError"
+            :conversation-history-loading="conversationHistoryLoading"
+            :conversation-id="conversationId"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
             @clear-target="handleClearChatTarget"
+            @load-history="loadHallConversationHistory({ force: true })"
             @load-messages="loadHallMessages({ force: true })"
             @mention-agent="handleMentionAgent"
             @new-conversation="handleNewHallConversation"
+            @select-conversation="selectHallConversation"
             @send-message="handleSendHallMessage"
           />
 
@@ -287,12 +294,19 @@
             :selected-task="selectedTask"
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
+            :conversation-busy="isConversationBusy"
+            :conversation-history="conversationHistory"
+            :conversation-history-error="conversationHistoryError"
+            :conversation-history-loading="conversationHistoryLoading"
+            :conversation-id="conversationId"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
             @clear-target="handleClearChatTarget"
+            @load-history="loadHallConversationHistory({ force: true })"
             @load-messages="loadHallMessages({ force: true })"
             @mention-agent="handleMentionAgent"
             @new-conversation="handleNewHallConversation"
+            @select-conversation="selectHallConversation"
             @send-message="handleSendHallMessage"
           />
 
@@ -313,12 +327,19 @@
             :selected-task="selectedTask"
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
+            :conversation-busy="isConversationBusy"
+            :conversation-history="conversationHistory"
+            :conversation-history-error="conversationHistoryError"
+            :conversation-history-loading="conversationHistoryLoading"
+            :conversation-id="conversationId"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
             @clear-target="handleClearChatTarget"
+            @load-history="loadHallConversationHistory({ force: true })"
             @load-messages="loadHallMessages({ force: true })"
             @mention-agent="handleMentionAgent"
             @new-conversation="handleNewHallConversation"
+            @select-conversation="selectHallConversation"
             @send-message="handleSendHallMessage"
           />
 
@@ -1183,12 +1204,17 @@ const loadSettlement = async (task) => runLoadSettlement(task)
 const {
   cancelHallReplyTurn,
   chatConnectionStatus,
+  conversationHistory,
+  conversationHistoryError,
+  conversationHistoryLoading,
   conversationId,
   draft,
   eventStreamRecovering,
   insertAgentMention,
   isAwaitingReply,
+  isConversationBusy,
   isStreaming,
+  loadHallConversationHistory,
   loadHallMessages,
   mentionAgent,
   messages,
@@ -1197,6 +1223,7 @@ const {
   replyEventSequence,
   sendHallMessage,
   senderText,
+  selectHallConversation,
   disposeHallConversation,
   draftRevision,
   setDraft,
@@ -1355,11 +1382,13 @@ const showRandomAgentBubble = () => {
 
 
 const handleNewHallConversation = () => {
+  if (isConversationBusy.value) return false
   voiceReplyCorrelation.close('new_conversation')
   hallVoice?.cancel()
   playPanelOpen()
   newHallConversation()
   resetSceneFeedback()
+  return true
 }
 
 const handleSendHallMessage = async () => {

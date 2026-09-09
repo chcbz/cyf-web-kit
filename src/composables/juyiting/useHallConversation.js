@@ -9,6 +9,7 @@ import { fetchHallConversationEvents } from '../../utils/authenticatedSse.js'
 import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
 import { combineAbortSignals } from '../../utils/abortSignals.js'
 import { captureHallVoiceSnapshot } from './useHallVoiceConversation.js'
+import { exactHallConversationId, normalizeHallConversationHistory } from './hallConversationHistory.js'
 
 const runtimeEnv = import.meta.env ?? {}
 
@@ -29,6 +30,9 @@ export const useHallConversation = ({
 }) => {
   const messages = ref([])
   const conversationId = ref('')
+  const conversationHistory = ref([])
+  const conversationHistoryLoading = ref(false)
+  const conversationHistoryError = ref('')
   const draft = ref('')
   const isStreaming = ref(false)
   const isAwaitingReply = ref(false)
@@ -55,18 +59,14 @@ export const useHallConversation = ({
   let hallReplyStreamHandle = null
   let hallReplyGeneration = 0
   let hallConversationLoadGeneration = 0
+  let hallConversationHistoryGeneration = 0
   let pendingHallConversationLoad = null
+  let pendingHallConversationHistoryLoad = null
   let loadedConversationScopeSignature = ''
   const suppressedRestoreScopes = new Set()
   let stopScopeWatch = () => {}
 
-  const JAVA_LONG_MAX = '9223372036854775807'
-  const exactRuntimeId = value => {
-    if (typeof value === 'string' && /^[1-9]\d*$/.test(value) &&
-        (value.length < JAVA_LONG_MAX.length || (value.length === JAVA_LONG_MAX.length && value <= JAVA_LONG_MAX))) return value
-    if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0) return String(value)
-    return ''
-  }
+  const exactRuntimeId = exactHallConversationId
 
   const scopeSnapshot = () => {
     const context = chatContext?.value || {}
@@ -88,6 +88,13 @@ export const useHallConversation = ({
     hallConversationLoadGeneration += 1
     return hallConversationLoadGeneration
   }
+
+  const invalidateConversationHistoryLoads = () => {
+    hallConversationHistoryGeneration += 1
+    return hallConversationHistoryGeneration
+  }
+
+  const isConversationBusy = computed(() => isStreaming.value || isAwaitingReply.value)
 
   const pendingAgentName = computed(() => {
     if (!selectedAgent.value) return ''
@@ -327,7 +334,12 @@ export const useHallConversation = ({
 
   const clearHallConversationIdentityState = () => {
     invalidateConversationLoads()
+    invalidateConversationHistoryLoads()
     pendingHallConversationLoad = null
+    pendingHallConversationHistoryLoad = null
+    conversationHistory.value = []
+    conversationHistoryLoading.value = false
+    conversationHistoryError.value = ''
     loadedConversationScopeSignature = ''
     suppressedRestoreScopes.clear()
     resetLifecycle()
@@ -348,7 +360,12 @@ export const useHallConversation = ({
     (nextScope, previousScope) => {
       if (!previousScope || nextScope === previousScope || disposed) return
       invalidateConversationLoads()
+      invalidateConversationHistoryLoads()
       pendingHallConversationLoad = null
+      pendingHallConversationHistoryLoad = null
+      conversationHistory.value = []
+      conversationHistoryLoading.value = false
+      conversationHistoryError.value = ''
       loadedConversationScopeSignature = ''
       resetLifecycle()
       stopHallEventStream()
@@ -491,6 +508,91 @@ export const useHallConversation = ({
     return promise.finally(() => {
       if (pendingHallConversationLoad?.promise === promise) pendingHallConversationLoad = null
     })
+  }
+
+  const loadHallConversationHistory = ({ force = false } = {}) => {
+    if (disposed) return Promise.resolve([])
+    const expectedScope = scopeSnapshot()
+    if (!expectedScope) return Promise.resolve([])
+    const expectedSignature = scopeSignature(expectedScope)
+    if (!force && pendingHallConversationHistoryLoad?.signature === expectedSignature) {
+      return pendingHallConversationHistoryLoad.promise
+    }
+
+    const generation = lifecycleGeneration
+    const historyGeneration = invalidateConversationHistoryLoads()
+    const isCurrentHistoryLoad = () => (
+      !disposed &&
+      generation === lifecycleGeneration &&
+      historyGeneration === hallConversationHistoryGeneration &&
+      sameScope(expectedScope)
+    )
+    conversationHistoryLoading.value = true
+    conversationHistoryError.value = ''
+    const promise = (async () => {
+      try {
+        let callbackResult
+        const response = await chatApi.list('/conversation/list', {
+          pageNum: 1,
+          pageSize: 100,
+          orderBy: 'update_time desc',
+          search: {
+            conversationType: 'juyiting',
+            conversationScopeType: expectedScope.type,
+            conversationScopeKey: expectedScope.key
+          }
+        }, {
+          autoLoading: false,
+          signal: lifecycleController.signal,
+          onSuccess: result => { callbackResult = result }
+        })
+        if (!isCurrentHistoryLoad()) return []
+        const result = callbackResult ?? response?.data
+        const rows = Array.isArray(result?.data)
+          ? result.data
+          : (Array.isArray(result?.data?.data) ? result.data.data : [])
+        conversationHistory.value = rows
+          .map(row => normalizeHallConversationHistory(row, expectedScope))
+          .filter(Boolean)
+        return conversationHistory.value
+      } catch (error) {
+        if (error?.name !== 'AbortError' && isCurrentHistoryLoad()) {
+          log.warn('加载聚义厅话头记录失败', error)
+          conversationHistory.value = []
+          conversationHistoryError.value = '旧话头暂不可取，请稍后重试。'
+        }
+        return []
+      } finally {
+        if (isCurrentHistoryLoad()) conversationHistoryLoading.value = false
+      }
+    })()
+    pendingHallConversationHistoryLoad = { signature: expectedSignature, promise }
+    return promise.finally(() => {
+      if (pendingHallConversationHistoryLoad?.promise === promise) pendingHallConversationHistoryLoad = null
+    })
+  }
+
+  const selectHallConversation = async (id) => {
+    if (disposed || isConversationBusy.value) return false
+    const expectedScope = scopeSnapshot()
+    const exactId = exactRuntimeId(id)
+    if (!expectedScope || !exactId || !conversationHistory.value.some(item => item.id === exactId)) return false
+
+    const loadGeneration = invalidateConversationLoads()
+    pendingHallConversationLoad = null
+    loadedConversationScopeSignature = ''
+    resetLifecycle()
+    stopHallEventStream()
+    stopHallReplyStreaming()
+    stopHallReplyPolling()
+    stopHallConversationSync()
+    conversationId.value = exactId
+    messages.value = []
+    isStreaming.value = false
+    isAwaitingReply.value = false
+    clearBuiltInTurn()
+    await loadHallConversationContent(exactId, { loadGeneration, scope: expectedScope })
+    return !disposed && loadGeneration === hallConversationLoadGeneration && conversationId.value === exactId && sameScope(expectedScope)
   }
 
   const startHallReplyPolling = (id = conversationId.value) => {
@@ -756,6 +858,9 @@ export const useHallConversation = ({
   return {
     cancelHallReplyTurn,
     chatConnectionStatus,
+    conversationHistory,
+    conversationHistoryError,
+    conversationHistoryLoading,
     conversationId,
     clearDraft,
     disposeHallConversation,
@@ -764,7 +869,9 @@ export const useHallConversation = ({
     eventStreamRecovering,
     insertAgentMention,
     isAwaitingReply,
+    isConversationBusy,
     isStreaming,
+    loadHallConversationHistory,
     loadHallMessages,
     mentionAgent,
     messages,
@@ -773,6 +880,7 @@ export const useHallConversation = ({
     replyEventSequence,
     sendHallMessage,
     senderText,
+    selectHallConversation,
     setDraft,
     startAgentConversation,
     stopHallEventStream,
