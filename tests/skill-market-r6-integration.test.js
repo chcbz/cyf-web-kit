@@ -88,10 +88,10 @@ const trackedFetch = (handler) => {
 const settleOwnedTransport = async (transport) => {
   for (let turn = 0; turn < 100; turn++) {
     await settle()
-    if (transport.pending() === 0) return true
+    if (transport.pending() === 0) return
     await new Promise(resolve => window.setTimeout(resolve, 5))
   }
-  return transport.pending() === 0
+  expect(transport.pending(), 'fixture-owned HTTP did not settle before cleanup').to.equal(0)
 }
 
 const waitForRosterRefresh = async (wrapper, requests, transport, expectedCount) => {
@@ -290,8 +290,11 @@ describe('R6 actual skill-market route purchase chain', () => {
         .to.deep.equal([['pv-one', 'agent-a', '7'], ['pv-two', 'agent-a', '8']])
       expect(createdOrders).to.equal(2)
     } finally {
-      await cleanupOwned(transport)
-      globalThis.fetch = originalFetch
+      try {
+        await cleanupOwned(transport)
+      } finally {
+        globalThis.fetch = originalFetch
+      }
     }
   })
 
@@ -338,8 +341,11 @@ describe('R6 actual skill-market route purchase chain', () => {
       const orderRequest = requests.find(item => item.path === '/agent/skill-orders' && item.body?.quoteId)
       expect(orderRequest.body).to.include({ targetAgentId: 'agent-a', expectedAgentVersion: '7', productVersionId: 'pv-a' })
     } finally {
-      await cleanupOwned(transport)
-      globalThis.fetch = originalFetch
+      try {
+        await cleanupOwned(transport)
+      } finally {
+        globalThis.fetch = originalFetch
+      }
     }
   })
 
@@ -413,8 +419,11 @@ describe('R6 actual skill-market route purchase chain', () => {
       expect(orderRequests.map(request => request.body)).to.deep.equal([retainedBody, retainedBody])
       expect(chargeCount).to.equal(1)
     } finally {
-      await cleanupOwned(transport)
-      globalThis.fetch = originalFetch
+      try {
+        await cleanupOwned(transport)
+      } finally {
+        globalThis.fetch = originalFetch
+      }
     }
   })
 })
