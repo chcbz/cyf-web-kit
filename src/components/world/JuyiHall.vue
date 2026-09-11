@@ -261,12 +261,25 @@
             :selected-task="selectedTask"
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
+            :conversation-busy="isConversationBusy"
+            :conversation-history="conversationHistory"
+            :conversation-history-deleting-id="conversationHistoryDeletingId"
+            :conversation-history-error="conversationHistoryError"
+            :conversation-history-has-more="conversationHistoryHasMore"
+            :conversation-history-loading="conversationHistoryLoading"
+            :conversation-id="conversationId"
+            :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
             @clear-target="handleClearChatTarget"
-            @load-messages="loadHallMessages({ force: true })"
+            @delete-conversation="deleteHallConversation"
+            @load-history="loadHallConversationHistory({ force: true })"
+            @load-more-history="loadMoreHallConversationHistory"
+            @load-messages="retryHallConversation"
             @mention-agent="handleMentionAgent"
             @new-conversation="handleNewHallConversation"
+            @retry-conversation="retryHallConversation"
+            @select-conversation="selectHallConversation"
             @send-message="handleSendHallMessage"
           />
 
@@ -287,12 +300,25 @@
             :selected-task="selectedTask"
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
+            :conversation-busy="isConversationBusy"
+            :conversation-history="conversationHistory"
+            :conversation-history-deleting-id="conversationHistoryDeletingId"
+            :conversation-history-error="conversationHistoryError"
+            :conversation-history-has-more="conversationHistoryHasMore"
+            :conversation-history-loading="conversationHistoryLoading"
+            :conversation-id="conversationId"
+            :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
             @clear-target="handleClearChatTarget"
-            @load-messages="loadHallMessages({ force: true })"
+            @delete-conversation="deleteHallConversation"
+            @load-history="loadHallConversationHistory({ force: true })"
+            @load-more-history="loadMoreHallConversationHistory"
+            @load-messages="retryHallConversation"
             @mention-agent="handleMentionAgent"
             @new-conversation="handleNewHallConversation"
+            @retry-conversation="retryHallConversation"
+            @select-conversation="selectHallConversation"
             @send-message="handleSendHallMessage"
           />
 
@@ -313,12 +339,25 @@
             :selected-task="selectedTask"
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
+            :conversation-busy="isConversationBusy"
+            :conversation-history="conversationHistory"
+            :conversation-history-deleting-id="conversationHistoryDeletingId"
+            :conversation-history-error="conversationHistoryError"
+            :conversation-history-has-more="conversationHistoryHasMore"
+            :conversation-history-loading="conversationHistoryLoading"
+            :conversation-id="conversationId"
+            :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
             @clear-target="handleClearChatTarget"
-            @load-messages="loadHallMessages({ force: true })"
+            @delete-conversation="deleteHallConversation"
+            @load-history="loadHallConversationHistory({ force: true })"
+            @load-more-history="loadMoreHallConversationHistory"
+            @load-messages="retryHallConversation"
             @mention-agent="handleMentionAgent"
             @new-conversation="handleNewHallConversation"
+            @retry-conversation="retryHallConversation"
+            @select-conversation="selectHallConversation"
             @send-message="handleSendHallMessage"
           />
 
@@ -340,7 +379,7 @@
     </transition>
 
     <transition name="toast">
-      <div v-if="toast" class="toast">{{ toast }}</div>
+      <div v-if="toast" class="toast" role="status" aria-live="polite">{{ toast }}</div>
     </transition>
   </div>
 </template>
@@ -1183,20 +1222,32 @@ const loadSettlement = async (task) => runLoadSettlement(task)
 const {
   cancelHallReplyTurn,
   chatConnectionStatus,
+  conversationHistory,
+  conversationHistoryDeletingId,
+  conversationHistoryError,
+  conversationHistoryHasMore,
+  conversationHistoryLoading,
   conversationId,
+  conversationLoadError,
   draft,
+  deleteHallConversation,
   eventStreamRecovering,
   insertAgentMention,
   isAwaitingReply,
+  isConversationBusy,
   isStreaming,
+  loadHallConversationHistory,
   loadHallMessages,
+  loadMoreHallConversationHistory,
   mentionAgent,
   messages,
   newHallConversation,
   pendingAgentName,
   replyEventSequence,
+  retryHallConversation,
   sendHallMessage,
   senderText,
+  selectHallConversation,
   disposeHallConversation,
   draftRevision,
   setDraft,
@@ -1355,11 +1406,13 @@ const showRandomAgentBubble = () => {
 
 
 const handleNewHallConversation = () => {
+  if (isConversationBusy.value) return false
   voiceReplyCorrelation.close('new_conversation')
   hallVoice?.cancel()
   playPanelOpen()
   newHallConversation()
   resetSceneFeedback()
+  return true
 }
 
 const handleSendHallMessage = async () => {

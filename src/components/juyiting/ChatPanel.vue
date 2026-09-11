@@ -12,22 +12,52 @@
           type="button"
           title="重取回话"
           aria-label="重取回话"
-          :disabled="voice?.voiceInteractionLocked"
+          :disabled="conversationBusy || voice?.voiceInteractionLocked"
           @click="$emit('load-messages')"
         >
           <var-icon name="refresh" />
+        </button>
+        <button
+          class="icon-button"
+          type="button"
+          title="话头记录"
+          aria-label="话头记录"
+          :aria-expanded="historyOpen ? 'true' : 'false'"
+          :disabled="Boolean(conversationHistoryDeletingId) || voice?.voiceInteractionLocked"
+          @click="toggleHistory"
+        >
+          <var-icon name="history" />
         </button>
         <button
           class="icon-button primary"
           type="button"
           title="另起话头"
           aria-label="另起话头"
-          :disabled="voice?.voiceInteractionLocked"
+          :disabled="conversationBusy || voice?.voiceInteractionLocked"
           @click="$emit('new-conversation')"
         >
           <var-icon name="plus" />
         </button>
       </div>
+    </div>
+
+    <HallConversationHistory
+      v-if="historyOpen"
+      :conversations="conversationHistory"
+      :deleting-id="conversationHistoryDeletingId"
+      :disabled="conversationBusy || voice?.voiceInteractionLocked"
+      :error="conversationHistoryError"
+      :has-more="conversationHistoryHasMore"
+      :loading="conversationHistoryLoading"
+      :selected-id="conversationId"
+      @delete="$emit('delete-conversation', $event)"
+      @load-more="$emit('load-more-history')"
+      @select="$emit('select-conversation', $event)"
+    />
+
+    <div v-if="conversationLoadError" class="conversation-load-error" role="alert">
+      <span>{{ conversationLoadError }}</span>
+      <button type="button" :disabled="conversationBusy || voice?.voiceInteractionLocked" @click="$emit('retry-conversation')">重试</button>
     </div>
 
     <div ref="messageBoxRef" class="hall-messages">
@@ -55,6 +85,8 @@
       :agents="agents"
       :discussion-variant="discussionVariant"
       :draft="draft"
+      :interaction-locked="conversationBusy"
+      :is-awaiting-reply="isAwaitingReply"
       :is-streaming="isStreaming"
       :mention-label="mentionLabel"
       :placeholder="placeholder"
@@ -75,6 +107,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import HallChatComposer from './HallChatComposer.vue'
+import HallConversationHistory from './HallConversationHistory.vue'
 
 marked.setOptions({
   breaks: true,
@@ -86,6 +119,14 @@ marked.setOptions({
 const props = defineProps({
   agents: { type: Array, default: () => [] },
   connectionStatus: { type: String, default: '' },
+  conversationHistory: { type: Array, default: () => [] },
+  conversationHistoryDeletingId: { type: String, default: '' },
+  conversationHistoryError: { type: String, default: '' },
+  conversationHistoryHasMore: { type: Boolean, default: false },
+  conversationHistoryLoading: { type: Boolean, default: false },
+  conversationLoadError: { type: String, default: '' },
+  conversationBusy: { type: Boolean, default: false },
+  conversationId: { type: String, default: '' },
   discussionVariant: { type: String, default: 'public' },
   draft: { type: String, default: '' },
   emptyText: { type: String, default: '厅中暂无话头，可先传一句。' },
@@ -106,18 +147,28 @@ const props = defineProps({
   voice: { type: Object, default: null }
 })
 
-defineEmits([
+const emit = defineEmits([
   'clear-target',
+  'delete-conversation',
+  'load-history',
+  'load-more-history',
   'load-messages',
   'mention-agent',
   'new-conversation',
+  'retry-conversation',
+  'select-conversation',
   'send-message',
   'update:draft',
   'voice-apply'
 ])
 
 const messageBoxRef = ref(null)
+const historyOpen = ref(false)
 const pendingAuthor = '聚义厅'
+const toggleHistory = () => {
+  historyOpen.value = !historyOpen.value
+  if (historyOpen.value) emit('load-history')
+}
 const taskText = computed(() => props.selectedTask?.title || '未选榜文')
 const resolvedSubtitle = computed(() => {
   if (props.subtitle) return props.subtitle
@@ -234,6 +285,27 @@ button:disabled {
 .icon-button.primary {
   background: #6d3f1f;
   color: #fff8e8;
+}
+
+.conversation-load-error {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #fff0ea;
+  color: #a23f32;
+  font-size: 12px;
+}
+
+.conversation-load-error button {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border: 1px solid currentColor;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
 }
 
 .hall-messages {

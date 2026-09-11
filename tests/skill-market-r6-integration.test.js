@@ -74,6 +74,45 @@ const waitForUi = async (wrapper, predicate) => {
   expect(predicate(), wrapper.html()).to.equal(true)
 }
 
+const trackedFetch = (handler) => {
+  let pending = 0
+  return {
+    fetch: async (...args) => {
+      pending += 1
+      try { return await handler(...args) } finally { pending -= 1 }
+    },
+    pending: () => pending
+  }
+}
+
+const settleOwnedTransport = async (transport) => {
+  for (let turn = 0; turn < 100; turn++) {
+    await settle()
+    if (transport.pending() === 0) return
+    await new Promise(resolve => window.setTimeout(resolve, 5))
+  }
+  expect(transport.pending(), 'fixture-owned HTTP did not settle before cleanup').to.equal(0)
+}
+
+const waitForRosterRefresh = async (wrapper, requests, transport, expectedCount) => {
+  await waitForUi(wrapper, () => transport.pending() === 0 && requests.filter(request => request.path === '/agent/roster').length === expectedCount)
+  expect(requests.filter(request => request.path === '/agent/roster')).to.have.length(expectedCount)
+}
+
+const unmountOwned = async (wrapper, transport) => {
+  await settleOwnedTransport(transport)
+  wrapper.unmount()
+  const index = wrappers.indexOf(wrapper)
+  if (index >= 0) wrappers.splice(index, 1)
+  await settleOwnedTransport(transport)
+}
+
+const cleanupOwned = async (transport) => {
+  await settleOwnedTransport(transport)
+  for (const wrapper of wrappers.splice(0)) wrapper.unmount()
+  await settleOwnedTransport(transport)
+}
+
 const installToken = () => {
   window.localStorage.setItem('api_token', JSON.stringify({ data: 'test-token', expTime: Date.now() + 60_000 }))
 }
@@ -215,7 +254,7 @@ describe('R6 actual skill-market route purchase chain', () => {
     let rosterVersion = '7'
     let createdOrders = 0
     const originalFetch = globalThis.fetch
-    globalThis.fetch = async (url, options = {}) => {
+    const transport = trackedFetch(async (url, options = {}) => {
       const path = new URL(String(url), 'http://localhost').pathname
       const body = options.body ? JSON.parse(options.body) : null
       requests.push({ path, method: options.method, body, key: options.headers?.['Idempotency-Key'] })
@@ -231,7 +270,8 @@ describe('R6 actual skill-market route purchase chain', () => {
       }
       if (path.endsWith('/skill-entitlements')) return response({ entitlements: [] })
       throw new Error(`unexpected HTTP ${options.method} ${path}`)
-    }
+    })
+    globalThis.fetch = transport.fetch
     try {
       const wrapper = await mountRoute('r6-sequential')
       await selectAgent(wrapper, 'agent-a')
@@ -239,16 +279,22 @@ describe('R6 actual skill-market route purchase chain', () => {
       await quote(wrapper)
       await purchase(wrapper)
       await waitForUi(wrapper, () => wrapper.find('option[value="agent-a"]').text().includes('v8'))
+      await waitForRosterRefresh(wrapper, requests, transport, 2)
       await openProduct(wrapper, 'two')
       await quote(wrapper)
       await purchase(wrapper)
+      await waitForRosterRefresh(wrapper, requests, transport, 3)
 
       const orderRequests = requests.filter(item => item.path === '/agent/skill-orders' && item.body?.quoteId)
       expect(orderRequests.map(item => [item.body.productVersionId, item.body.targetAgentId, item.body.expectedAgentVersion]))
         .to.deep.equal([['pv-one', 'agent-a', '7'], ['pv-two', 'agent-a', '8']])
       expect(createdOrders).to.equal(2)
     } finally {
-      globalThis.fetch = originalFetch
+      try {
+        await cleanupOwned(transport)
+      } finally {
+        globalThis.fetch = originalFetch
+      }
     }
   })
 
@@ -257,7 +303,7 @@ describe('R6 actual skill-market route purchase chain', () => {
     const savedProduct = product('a', 'alpha')
     let roster = [{ agentId: 'agent-a', name: 'Agent A', version: '7', boundToMe: true, canOperate: true }]
     const originalFetch = globalThis.fetch
-    globalThis.fetch = async (url, options = {}) => {
+    const transport = trackedFetch(async (url, options = {}) => {
       const path = new URL(String(url), 'http://localhost').pathname
       const body = options.body ? JSON.parse(options.body) : null
       requests.push({ path, method: options.method, body, key: options.headers?.['Idempotency-Key'] })
@@ -269,7 +315,8 @@ describe('R6 actual skill-market route purchase chain', () => {
       if (path === '/agent/skill-orders' && options.method === 'POST') return response({ orderId: 'order-a', productVersionId: body.productVersionId, targetAgentId: body.targetAgentId, expectedAgentVersion: body.expectedAgentVersion, status: 'FUNDS_HELD' })
       if (path.endsWith('/skill-entitlements')) return response({ entitlements: [] })
       throw new Error(`unexpected HTTP ${options.method} ${path}`)
-    }
+    })
+    globalThis.fetch = transport.fetch
     try {
       const first = await mountRoute('r6-recovery-a')
       await selectAgent(first, 'agent-a')
@@ -278,8 +325,7 @@ describe('R6 actual skill-market route purchase chain', () => {
       const generatedJournal = JSON.parse(window.localStorage.getItem(storageKey))
       expect(generatedJournal.records).to.have.length(1)
       expect(generatedJournal.records[0]).to.include({ phase: 'QUOTE', targetAgentId: 'agent-a', expectedAgentVersion: '7' })
-      first.unmount()
-      wrappers.splice(wrappers.indexOf(first), 1)
+      await unmountOwned(first, transport)
 
       roster = [{ agentId: 'agent-b', name: 'Agent B', version: '9', boundToMe: true, canOperate: true }]
       const second = await mountRoute('r6-recovery-b')
@@ -287,14 +333,19 @@ describe('R6 actual skill-market route purchase chain', () => {
       const recovery = second.findAll('.recovery-item button').find(item => item.text().includes('恢复操作'))
       expect(recovery).to.exist
       await recovery.trigger('click')
-      await settle()
+      await waitForUi(second, () => second.find('.purchase-dialog').exists())
       expect(second.find('.purchase-dialog').text()).to.include('目标 Agent：agent-a')
       await purchase(second)
+      await waitForRosterRefresh(second, requests, transport, 3)
 
       const orderRequest = requests.find(item => item.path === '/agent/skill-orders' && item.body?.quoteId)
       expect(orderRequest.body).to.include({ targetAgentId: 'agent-a', expectedAgentVersion: '7', productVersionId: 'pv-a' })
     } finally {
-      globalThis.fetch = originalFetch
+      try {
+        await cleanupOwned(transport)
+      } finally {
+        globalThis.fetch = originalFetch
+      }
     }
   })
 
@@ -305,7 +356,7 @@ describe('R6 actual skill-market route purchase chain', () => {
     let firstOrderResponseIsLost = true
     let chargeCount = 0
     const originalFetch = globalThis.fetch
-    globalThis.fetch = async (url, options = {}) => {
+    const transport = trackedFetch(async (url, options = {}) => {
       const path = new URL(String(url), 'http://localhost').pathname
       const body = options.body ? JSON.parse(options.body) : null
       const key = options.headers?.['Idempotency-Key']
@@ -328,7 +379,8 @@ describe('R6 actual skill-market route purchase chain', () => {
       }
       if (path.endsWith('/skill-entitlements')) return response({ entitlements: [] })
       throw new Error(`unexpected HTTP ${options.method} ${path}`)
-    }
+    })
+    globalThis.fetch = transport.fetch
     try {
       const first = await mountRoute('r6-order-unknown-first')
       await selectAgent(first, 'agent-a')
@@ -348,8 +400,7 @@ describe('R6 actual skill-market route purchase chain', () => {
       expect(retained.records[0].phase).to.equal('ORDER')
       const retainedKey = retained.records[0].orderIdempotencyKey
       const retainedBody = retained.records[0].purchaseRequest
-      first.unmount()
-      wrappers.splice(wrappers.indexOf(first), 1)
+      await unmountOwned(first, transport)
 
       const second = await mountRoute('r6-order-unknown-second')
       await selectAgent(second, 'agent-a')
@@ -360,8 +411,7 @@ describe('R6 actual skill-market route purchase chain', () => {
       await waitForUi(second, () => second.find('.order-status').exists())
       // Recovery emits an async roster refresh after exposing the order. Keep
       // the transport installed until that real request has also completed.
-      await waitForUi(second, () => requests.filter(request => request.path === '/agent/roster').length === 3)
-      await settle()
+      await waitForRosterRefresh(second, requests, transport, 3)
 
       const orderRequests = requests.filter(request => request.path === '/agent/skill-orders' && request.body?.quoteId)
       expect(orderRequests).to.have.length(2)
@@ -369,7 +419,11 @@ describe('R6 actual skill-market route purchase chain', () => {
       expect(orderRequests.map(request => request.body)).to.deep.equal([retainedBody, retainedBody])
       expect(chargeCount).to.equal(1)
     } finally {
-      globalThis.fetch = originalFetch
+      try {
+        await cleanupOwned(transport)
+      } finally {
+        globalThis.fetch = originalFetch
+      }
     }
   })
 })

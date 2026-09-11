@@ -897,11 +897,23 @@ describe('JuyiHall component behavior', () => {
   it('throttles return refresh, polls reset completion, and cancels callbacks on unmount', async () => {
     const originalRaf = global.window.requestAnimationFrame
     const originalCancelRaf = global.window.cancelAnimationFrame
+    const originalInnerWidth = global.window.innerWidth
+    const originalInnerHeight = global.window.innerHeight
+    const originalResizeObserver = Object.getOwnPropertyDescriptor(global.window, 'ResizeObserver')
+    const viewportRect = { x: 0, y: 0, top: 0, left: 0, right: 960, bottom: 640, width: 960, height: 640, toJSON: () => ({}) }
     const frames = new Map()
     let frameId = 0
     let snapshotCalls = 0
     let resetCalls = 0
     let animation = null
+    class FixtureResizeObserver {
+      constructor(callback) { this.callback = callback }
+      observe(target) { this.callback([{ target, contentRect: viewportRect }]) }
+      disconnect() {}
+    }
+    Object.defineProperty(global.window, 'innerWidth', { configurable: true, value: 960 })
+    Object.defineProperty(global.window, 'innerHeight', { configurable: true, value: 640 })
+    Object.defineProperty(global.window, 'ResizeObserver', { configurable: true, value: FixtureResizeObserver })
     global.window.requestAnimationFrame = callback => { frames.set(++frameId, callback); return frameId }
     global.window.cancelAnimationFrame = id => frames.delete(id)
     const runNextFrame = () => {
@@ -910,6 +922,15 @@ describe('JuyiHall component behavior', () => {
       frames.delete(entry[0])
       entry[1](0)
       return entry[1]
+    }
+    const pumpFrames = async (limit = 8) => {
+      for (let pass = 0; pass < limit; pass += 1) {
+        await flushPromises()
+        if (!frames.size) return
+        runNextFrame()
+      }
+      await flushPromises()
+      expect(frames.size, `viewport fixture did not settle within ${limit} frames`).to.equal(0)
     }
     hallGameMock = {
       destroy: () => {}, mount: async (_container, options = {}) => options.onReady?.(),
@@ -924,11 +945,8 @@ describe('JuyiHall component behavior', () => {
     let wrapper
     try {
       wrapper = mount(HallStage, { global: { stubs }, props: makeHallStageProps() })
-      for (let pass = 0; pass < 5; pass += 1) {
-        await flushPromises()
-        runNextFrame()
-      }
-      while (frames.size) runNextFrame()
+      wrapper.find('.melon-layer').element.getBoundingClientRect = () => viewportRect
+      await pumpFrames()
       const baseline = snapshotCalls
       await wrapper.find('.hall-board').trigger('wheel')
       await wrapper.find('.hall-board').trigger('wheel')
@@ -952,6 +970,10 @@ describe('JuyiHall component behavior', () => {
       wrapper?.unmount()
       global.window.requestAnimationFrame = originalRaf
       global.window.cancelAnimationFrame = originalCancelRaf
+      Object.defineProperty(global.window, 'innerWidth', { configurable: true, value: originalInnerWidth })
+      Object.defineProperty(global.window, 'innerHeight', { configurable: true, value: originalInnerHeight })
+      if (originalResizeObserver) Object.defineProperty(global.window, 'ResizeObserver', originalResizeObserver)
+      else delete global.window.ResizeObserver
     }
   })
 

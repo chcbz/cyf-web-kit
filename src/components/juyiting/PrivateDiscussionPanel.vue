@@ -18,9 +18,14 @@
       :voice="voice"
       v-bind="chatProps"
       @clear-target="$emit('clear-target', $event)"
+      @delete-conversation="$emit('delete-conversation', $event)"
+      @load-history="$emit('load-history')"
+      @load-more-history="$emit('load-more-history')"
       @load-messages="$emit('load-messages')"
       @mention-agent="$emit('mention-agent', $event)"
       @new-conversation="$emit('new-conversation')"
+      @retry-conversation="$emit('retry-conversation')"
+      @select-conversation="$emit('select-conversation', $event)"
       @send-message="$emit('send-message')"
       @voice-apply="$emit('voice-apply', $event)"
     />
@@ -34,6 +39,14 @@ import ChatPanel from './ChatPanel.vue'
 const props = defineProps({
   agents: { type: Array, default: () => [] },
   connectionStatus: { type: String, default: '' },
+  conversationHistory: { type: Array, default: () => [] },
+  conversationHistoryDeletingId: { type: String, default: '' },
+  conversationHistoryError: { type: String, default: '' },
+  conversationHistoryHasMore: { type: Boolean, default: false },
+  conversationHistoryLoading: { type: Boolean, default: false },
+  conversationLoadError: { type: String, default: '' },
+  conversationBusy: { type: Boolean, default: false },
+  conversationId: { type: String, default: '' },
   draft: { type: String, default: '' },
   eventStreamRecovering: { type: Boolean, default: false },
   isAwaitingReply: { type: Boolean, default: false },
@@ -51,9 +64,14 @@ const props = defineProps({
 
 const emit = defineEmits([
   'clear-target',
+  'delete-conversation',
+  'load-history',
+  'load-more-history',
   'load-messages',
   'mention-agent',
   'new-conversation',
+  'retry-conversation',
+  'select-conversation',
   'send-message',
   'update:draft',
   'voice-apply'
@@ -72,6 +90,14 @@ const privateSubtitle = computed(() => {
 const chatProps = computed(() => ({
   agents: props.agents,
   connectionStatus: props.connectionStatus,
+  conversationHistory: props.conversationHistory,
+  conversationHistoryDeletingId: props.conversationHistoryDeletingId,
+  conversationHistoryError: props.conversationHistoryError,
+  conversationHistoryHasMore: props.conversationHistoryHasMore,
+  conversationHistoryLoading: props.conversationHistoryLoading,
+  conversationLoadError: props.conversationLoadError,
+  conversationBusy: props.conversationBusy,
+  conversationId: props.conversationId,
   eventStreamRecovering: props.eventStreamRecovering,
   isAwaitingReply: props.isAwaitingReply,
   isStreaming: props.isStreaming,

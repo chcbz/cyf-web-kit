@@ -1012,3 +1012,337 @@ describe('Hall conversation identity lifecycle', () => {
   })
 
 })
+
+describe('useHallConversation history selection', () => {
+  const createConversation = ({ chatApi, chatContext = ref({ conversationScopeType: 'public', conversationScopeKey: 'public', mode: 'public', targetAgentIds: [] }) }) => useHallConversation({
+    apiStore: { token: async () => '' },
+    chatApi,
+    chatContext,
+    chatMode: ref('public'),
+    globalStore: { getJiacn: 'untrusted-local-user', user: {} },
+    log: { warn: () => {}, error: () => {} },
+    openPanel: () => {},
+    outgoingMetadata: ref({}),
+    portraitShortName: agent => agent?.name || agent?.agentId || '',
+    selectedAgent: ref(null),
+    selectedTask: ref(null),
+    showToast: () => {}
+  })
+
+  it('loads only the current scoped Juyi Hall history through the authenticated list endpoint', async () => {
+    const calls = []
+    const conversation = createConversation({
+      chatApi: {
+        list: async (path, payload, options) => {
+          calls.push({ path, payload })
+          options.onSuccess({ data: [
+            scopedConversation('1002', { title: '厅前旧议', updateTime: 1782000000000 }),
+            scopedConversation('1003', { conversationScopeType: 'task_thread', conversationScopeKey: 'task:2', title: '保留任务线' }),
+            scopedConversation('1004', { conversationType: 'normal', title: '非聚义厅' })
+          ] })
+        }
+      }
+    })
+
+    await conversation.loadHallConversationHistory()
+
+    expect(calls).to.have.length(1)
+    expect(calls[0].path).to.equal('/conversation/list')
+    expect(calls[0].payload.search).to.deep.equal({
+      conversationType: 'juyiting',
+      conversationScopeType: 'public',
+      conversationScopeKey: 'public'
+    })
+    expect(calls[0].payload.search).not.to.have.property('jiacn')
+    expect(conversation.conversationHistory.value).to.deep.equal([
+      { id: '1002', title: '厅前旧议', updateTime: 1782000000000 }
+    ])
+    conversation.disposeHallConversation()
+  })
+
+  it('switches an approved history item to persisted content and its own SSE stream', async () => {
+    const contentIds = []
+    const conversation = createConversation({
+      chatApi: {
+        list: async (_path, _payload, options) => options.onSuccess({ data: [scopedConversation('1002', { title: '旧议' })] }),
+        getById: async (_path, id, options) => {
+          contentIds.push(id)
+          options.onSuccess({ data: [{ id: '99', senderType: 'user', content: '旧话', createTime: 1 }] })
+        }
+      }
+    })
+
+    await conversation.loadHallConversationHistory()
+    const selected = await conversation.selectHallConversation('1002')
+
+    expect(selected).to.equal(true)
+    expect(contentIds).to.deep.equal(['1002'])
+    expect(conversation.conversationId.value).to.equal('1002')
+    expect(conversation.messages.value.map(message => message.content)).to.deep.equal(['旧话'])
+    conversation.disposeHallConversation()
+  })
+
+  it('does not leak a late history response into a changed scope', async () => {
+    const request = deferred()
+    const chatContext = ref({ conversationScopeType: 'public', conversationScopeKey: 'public', mode: 'public', targetAgentIds: [] })
+    const conversation = createConversation({
+      chatContext,
+      chatApi: { list: async () => request.promise }
+    })
+
+    const loading = conversation.loadHallConversationHistory()
+    chatContext.value = { conversationScopeType: 'bounty', conversationScopeKey: 'task:2', mode: 'bounty', targetAgentIds: ['wuyong'] }
+    request.resolve({ data: { data: [scopedConversation('1002', { title: '旧厅议' })] } })
+    await loading
+
+    expect(conversation.conversationHistory.value).to.deep.equal([])
+    expect(conversation.conversationHistoryError.value).to.equal('')
+    conversation.disposeHallConversation()
+  })
+
+  it('does not apply late selected content after a scope change', async () => {
+    const request = deferred()
+    const chatContext = ref({ conversationScopeType: 'public', conversationScopeKey: 'public', mode: 'public', targetAgentIds: [] })
+    const conversation = createConversation({
+      chatContext,
+      chatApi: {
+        list: async (_path, _payload, options) => options.onSuccess({ data: [scopedConversation('1002', { title: '旧议' })] }),
+        getById: async (_path, _id, options) => {
+          await request.promise
+          options.onSuccess({ data: [{ id: '99', senderType: 'user', content: '过期旧话', createTime: 1 }] })
+        }
+      }
+    })
+
+    await conversation.loadHallConversationHistory()
+    const selecting = conversation.selectHallConversation('1002')
+    chatContext.value = { conversationScopeType: 'private', conversationScopeKey: 'agent:wuyong', mode: 'private', targetAgentIds: ['wuyong'] }
+    request.resolve()
+    expect(await selecting).to.equal(false)
+    expect(conversation.conversationId.value).to.equal('')
+    expect(conversation.messages.value).to.deep.equal([])
+    conversation.disposeHallConversation()
+  })
+
+})
+
+describe('useHallConversation history remediation', () => {
+  const createConversation = ({ chatApi, chatContext = ref({ conversationScopeType: 'public', conversationScopeKey: 'public', mode: 'public', targetAgentIds: [] }) }) => useHallConversation({
+    apiStore: { token: async () => '' },
+    chatApi,
+    chatContext,
+    chatMode: ref('public'),
+    globalStore: { getJiacn: 'untrusted-local-user', user: {} },
+    log: { warn: () => {}, error: () => {} },
+    openPanel: () => {},
+    outgoingMetadata: ref({}),
+    portraitShortName: agent => agent?.name || agent?.agentId || '',
+    selectedAgent: ref(null),
+    selectedTask: ref(null),
+    showToast: () => {}
+  })
+
+  it('blocks a direct second send while the first turn is awaiting an agent reply', async () => {
+    const payloads = []
+    const conversation = createConversation({
+      chatApi: {
+        create: async (_path, payload, options) => {
+          payloads.push(payload)
+          options.onStream('{"conversationId":"1002"}')
+          options.onStreamEnd()
+        }
+      }
+    })
+
+    expect(await conversation.sendHallMessage({ content: '先传一令' })).to.equal(true)
+    expect(conversation.isStreaming.value).to.equal(false)
+    expect(conversation.isAwaitingReply.value).to.equal(true)
+    expect(await conversation.sendHallMessage({ content: '不可覆盖前令' })).to.equal(false)
+    expect(payloads).to.have.length(1)
+    conversation.disposeHallConversation()
+  })
+
+  it('loads history pages past the collapsed backend total and deduplicates page boundaries', async () => {
+    const pageCalls = []
+    const row = id => scopedConversation(String(id), { title: `旧议 ${id}`, updateTime: id })
+    const firstPage = Array.from({ length: 100 }, (_item, index) => row(index + 1))
+    const secondPage = [row(100), ...Array.from({ length: 99 }, (_item, index) => row(index + 101))]
+    const conversation = createConversation({
+      chatApi: {
+        list: async (_path, payload, options) => {
+          pageCalls.push(payload.pageNum)
+          const rows = payload.pageNum === 1 ? firstPage : (payload.pageNum === 2 ? secondPage : [])
+          options.onSuccess({ data: rows, total: 100, pageNum: 1 })
+        }
+      }
+    })
+
+    await conversation.loadHallConversationHistory({ force: true })
+    await conversation.loadMoreHallConversationHistory()
+    await conversation.loadMoreHallConversationHistory()
+
+    expect(pageCalls).to.deep.equal([1, 2, 3])
+    expect(conversation.conversationHistory.value).to.have.length(199)
+    expect(conversation.conversationHistory.value.filter(item => item.id === '100')).to.have.length(1)
+    expect(conversation.conversationHistoryHasMore.value).to.equal(false)
+    conversation.disposeHallConversation()
+  })
+
+  it('deletes a scoped history item and reloads the first page to keep pagination exact', async () => {
+    const deleteCalls = []
+    let listCalls = 0
+    const conversation = createConversation({
+      chatApi: {
+        list: async (_path, _payload, options) => {
+          listCalls += 1
+          const rows = listCalls === 1
+            ? [scopedConversation('1002', { title: '待删除旧议' }), scopedConversation('1003', { title: '保留旧议' })]
+            : [scopedConversation('1003', { title: '保留旧议' })]
+          options.onSuccess({ data: rows })
+        },
+        delete: async (path, id, options) => {
+          deleteCalls.push({ path, id, signal: options.signal })
+        }
+      }
+    })
+
+    await conversation.loadHallConversationHistory()
+    expect(await conversation.deleteHallConversation('1002')).to.equal(true)
+
+    expect(deleteCalls).to.have.length(1)
+    expect(deleteCalls[0].path).to.equal('/conversation/delete')
+    expect(deleteCalls[0].id).to.equal('1002')
+    expect(deleteCalls[0].signal.aborted).to.equal(false)
+    expect(listCalls).to.equal(2)
+    expect(conversation.conversationHistory.value.map(item => item.id)).to.deep.equal(['1003'])
+    expect(conversation.conversationHistoryDeletingId.value).to.equal('')
+    conversation.disposeHallConversation()
+  })
+
+  it('locks selection, sending, and pagination while a deletion is in flight', async () => {
+    const deletion = deferred()
+    let listCalls = 0
+    const conversation = createConversation({
+      chatApi: {
+        list: async (_path, _payload, options) => {
+          listCalls += 1
+          options.onSuccess({ data: listCalls === 1 ? [scopedConversation('1002', { title: '删除中旧议' })] : [] })
+        },
+        delete: async () => deletion.promise,
+        create: async () => { throw new Error('send must be locked while deleting') }
+      }
+    })
+
+    await conversation.loadHallConversationHistory()
+    conversation.setDraft('不可并发发送')
+    const deleting = conversation.deleteHallConversation('1002')
+    await Promise.resolve()
+
+    expect(conversation.conversationHistoryDeletingId.value).to.equal('1002')
+    expect(conversation.isConversationBusy.value).to.equal(true)
+    expect(await conversation.selectHallConversation('1002')).to.equal(false)
+    expect(await conversation.sendHallMessage()).to.equal(false)
+    expect(await conversation.loadMoreHallConversationHistory()).to.deep.equal([])
+    expect(listCalls).to.equal(1)
+
+    deletion.resolve()
+    expect(await deleting).to.equal(true)
+    expect(listCalls).to.equal(2)
+    conversation.disposeHallConversation()
+  })
+
+  it('deleting the active history item clears its content and suppresses automatic restoration', async () => {
+    let listCalls = 0
+    const conversation = createConversation({
+      chatApi: {
+        list: async (_path, _payload, options) => {
+          listCalls += 1
+          options.onSuccess({ data: listCalls === 1 ? [scopedConversation('1002', { title: '当前旧议' })] : [] })
+        },
+        getById: async (_path, _id, options) => {
+          options.onSuccess({ data: [{ id: '99', senderType: 'user', content: '即将删除', createTime: 1 }] })
+        },
+        delete: async () => {}
+      }
+    })
+
+    await conversation.loadHallConversationHistory()
+    expect(await conversation.selectHallConversation('1002')).to.equal(true)
+    expect(await conversation.deleteHallConversation('1002')).to.equal(true)
+
+    expect(conversation.conversationId.value).to.equal('')
+    expect(conversation.selectedHallConversationId.value).to.equal('')
+    expect(conversation.messages.value).to.deep.equal([])
+    expect(conversation.conversationHistory.value).to.deep.equal([])
+    expect(await conversation.loadHallMessages({ force: true })).to.equal(false)
+    expect(listCalls).to.equal(2)
+    conversation.disposeHallConversation()
+  })
+
+  it('keeps the history item visible when deletion fails', async () => {
+    const conversation = createConversation({
+      chatApi: {
+        list: async (_path, _payload, options) => options.onSuccess({ data: [scopedConversation('1002', { title: '不可删旧议' })] }),
+        delete: async () => { throw new Error('delete failed') }
+      }
+    })
+
+    await conversation.loadHallConversationHistory()
+    expect(await conversation.deleteHallConversation('1002')).to.equal(false)
+
+    expect(conversation.conversationHistory.value.map(item => item.id)).to.deep.equal(['1002'])
+    expect(conversation.conversationHistoryDeletingId.value).to.equal('')
+    expect(conversation.conversationHistoryError.value).to.equal('')
+    conversation.disposeHallConversation()
+  })
+
+  it('reports selected content failure, blocks send, and retries the same selected id', async () => {
+    let contentAttempts = 0
+    let listCalls = 0
+    const conversation = createConversation({
+      chatApi: {
+        list: async (_path, _payload, options) => {
+          listCalls += 1
+          options.onSuccess({ data: [scopedConversation('1002', { title: '需重取旧议' })] })
+        },
+        getById: async (_path, id, options) => {
+          contentAttempts += 1
+          if (contentAttempts === 1) {
+            options.onError(new Error('content unavailable'))
+            return
+          }
+          expect(id).to.equal('1002')
+          options.onSuccess({ data: [{ id: '99', senderType: 'user', content: '重取成功', createTime: 1 }] })
+        },
+        create: async () => { throw new Error('send must remain blocked after selected content failure') }
+      }
+    })
+
+    await conversation.loadHallConversationHistory()
+    expect(await conversation.selectHallConversation('1002')).to.equal(false)
+    expect(conversation.selectedHallConversationId.value).to.equal('1002')
+    expect(conversation.conversationLoadError.value).to.equal('这段旧话暂不可取，请重试。')
+    expect(await conversation.sendHallMessage({ content: '不应发送' })).to.equal(false)
+    expect(await conversation.retryHallConversation()).to.equal(true)
+    expect(contentAttempts).to.equal(2)
+    expect(listCalls).to.equal(1)
+    expect(conversation.messages.value.map(message => message.content)).to.deep.equal(['重取成功'])
+    conversation.disposeHallConversation()
+  })
+
+  it('clears the history spinner and fences a late history page when starting a new conversation', async () => {
+    const request = deferred()
+    const conversation = createConversation({ chatApi: { list: async () => request.promise } })
+
+    const loading = conversation.loadHallConversationHistory({ force: true })
+    expect(conversation.conversationHistoryLoading.value).to.equal(true)
+    conversation.newHallConversation()
+    expect(conversation.conversationHistoryLoading.value).to.equal(false)
+    request.resolve({ data: { data: [scopedConversation('1002', { title: '过期旧议' })] } })
+    await loading
+
+    expect(conversation.conversationHistory.value).to.deep.equal([])
+    expect(conversation.conversationHistoryLoading.value).to.equal(false)
+    conversation.disposeHallConversation()
+  })
+})
