@@ -5,17 +5,28 @@
     <div v-else-if="!conversations.length" class="history-state">此处暂无旧话头。</div>
     <template v-else>
       <ul class="history-list">
-        <li v-for="conversation in conversations" :key="conversation.id">
+        <li v-for="conversation in conversations" :key="conversation.id" class="history-row">
           <button
-          type="button"
-          class="history-item"
-          :class="{ selected: conversation.id === selectedId }"
-          :aria-current="conversation.id === selectedId ? 'page' : null"
-          :disabled="disabled"
-          @click="$emit('select', conversation.id)"
-        >
-          <strong>{{ conversation.title }}</strong>
-          <small>{{ formatTime(conversation.updateTime) }}</small>
+            type="button"
+            class="history-item"
+            :class="{ selected: conversation.id === selectedId }"
+            :aria-current="conversation.id === selectedId ? 'page' : null"
+            :disabled="disabled || conversation.id === deletingId"
+            @click="$emit('select', conversation.id)"
+          >
+            <strong>{{ conversation.title }}</strong>
+            <small>{{ formatTime(conversation.updateTime) }}</small>
+          </button>
+          <button
+            type="button"
+            class="history-delete"
+            :title="`删除话头：${conversation.title}`"
+            :aria-label="conversation.id === deletingId ? `正在删除话头：${conversation.title}` : `删除话头：${conversation.title}`"
+            :disabled="disabled || loading || Boolean(deletingId)"
+            @click.stop="requestDelete(conversation)"
+          >
+            <span v-if="conversation.id === deletingId" role="status" aria-live="polite">删除中</span>
+            <var-icon v-else name="delete" />
           </button>
         </li>
       </ul>
@@ -29,12 +40,28 @@
         {{ loading ? '正在翻检…' : '再取旧话头' }}
       </button>
     </template>
+
+    <var-dialog
+      v-model:show="showDeleteDialog"
+      title="删除话头"
+      :message="deleteDialogMessage"
+      confirm-button
+      confirm-button-text="删除"
+      cancel-button
+      cancel-button-text="取消"
+      :close-on-click-overlay="false"
+      @confirm="confirmDelete"
+      @closed="clearDeleteCandidate"
+    />
   </section>
 </template>
 
 <script setup>
-defineProps({
+import { computed, ref } from 'vue'
+
+const props = defineProps({
   conversations: { type: Array, default: () => [] },
+  deletingId: { type: String, default: '' },
   disabled: { type: Boolean, default: false },
   error: { type: String, default: '' },
   hasMore: { type: Boolean, default: false },
@@ -42,7 +69,27 @@ defineProps({
   selectedId: { type: String, default: '' }
 })
 
-defineEmits(['load-more', 'select'])
+const emit = defineEmits(['delete', 'load-more', 'select'])
+const showDeleteDialog = ref(false)
+const deleteCandidate = ref(null)
+const deleteDialogMessage = computed(() => `确认删除“${deleteCandidate.value?.title || '未题话头'}”吗？删除后无法恢复。`)
+
+const requestDelete = conversation => {
+  if (props.disabled || props.loading || props.deletingId || !conversation?.id) return
+  deleteCandidate.value = conversation
+  showDeleteDialog.value = true
+}
+
+const clearDeleteCandidate = () => {
+  if (!showDeleteDialog.value) deleteCandidate.value = null
+}
+
+const confirmDelete = () => {
+  const id = deleteCandidate.value?.id
+  showDeleteDialog.value = false
+  deleteCandidate.value = null
+  if (id) emit('delete', id)
+}
 
 const formatTime = value => {
   if (value === null || value === undefined || value === '') return '时间未记'
@@ -70,6 +117,13 @@ const formatTime = value => {
   margin: 0;
   padding: 5px 8px;
   list-style: none;
+}
+
+.history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px;
+  align-items: stretch;
 }
 
 .history-item {
@@ -102,6 +156,31 @@ const formatTime = value => {
 .history-item:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.history-delete {
+  display: inline-flex;
+  min-width: 38px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #a14b3e;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+.history-delete:hover:not(:disabled),
+.history-delete:focus-visible {
+  background: rgba(161, 75, 62, 0.12);
+  outline: none;
+}
+
+.history-delete:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .history-item strong,

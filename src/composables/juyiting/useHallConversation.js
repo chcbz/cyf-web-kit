@@ -32,6 +32,7 @@ export const useHallConversation = ({
   const messages = ref([])
   const conversationId = ref('')
   const conversationHistory = ref([])
+  const conversationHistoryDeletingId = ref('')
   const conversationHistoryLoading = ref(false)
   const conversationHistoryError = ref('')
   const conversationHistoryHasMore = ref(true)
@@ -100,7 +101,7 @@ export const useHallConversation = ({
     return hallConversationHistoryGeneration
   }
 
-  const isConversationBusy = computed(() => isStreaming.value || isAwaitingReply.value || isConversationLoading.value)
+  const isConversationBusy = computed(() => isStreaming.value || isAwaitingReply.value || isConversationLoading.value || Boolean(conversationHistoryDeletingId.value))
 
   const pendingAgentName = computed(() => {
     if (!selectedAgent.value) return ''
@@ -344,6 +345,7 @@ export const useHallConversation = ({
     pendingHallConversationLoad = null
     pendingHallConversationHistoryLoad = null
     conversationHistory.value = []
+    conversationHistoryDeletingId.value = ''
     conversationHistoryLoading.value = false
     conversationHistoryError.value = ''
     conversationHistoryHasMore.value = true
@@ -375,6 +377,7 @@ export const useHallConversation = ({
       pendingHallConversationLoad = null
       pendingHallConversationHistoryLoad = null
       conversationHistory.value = []
+      conversationHistoryDeletingId.value = ''
       conversationHistoryLoading.value = false
       conversationHistoryError.value = ''
       conversationHistoryHasMore.value = true
@@ -557,7 +560,7 @@ export const useHallConversation = ({
   const loadHallConversationHistory = ({ force = false, loadMore = false } = {}) => {
     if (disposed) return Promise.resolve([])
     const expectedScope = scopeSnapshot()
-    if (!expectedScope || (loadMore && !conversationHistoryHasMore.value)) return Promise.resolve([])
+    if (!expectedScope || conversationHistoryDeletingId.value || (loadMore && !conversationHistoryHasMore.value)) return Promise.resolve([])
     const expectedSignature = scopeSignature(expectedScope)
     if (pendingHallConversationHistoryLoad?.signature === expectedSignature) return pendingHallConversationHistoryLoad.promise
 
@@ -627,6 +630,49 @@ export const useHallConversation = ({
 
   const loadMoreHallConversationHistory = () => loadHallConversationHistory({ loadMore: true })
 
+  const deleteHallConversation = async (id) => {
+    if (disposed || isConversationBusy.value || conversationHistoryLoading.value || conversationHistoryDeletingId.value) return false
+    const expectedScope = scopeSnapshot()
+    const exactId = exactRuntimeId(id)
+    if (!expectedScope || !exactId || !conversationHistory.value.some(item => item.id === exactId)) return false
+
+    const generation = lifecycleGeneration
+    const expectedSignature = scopeSignature(expectedScope)
+    invalidateConversationHistoryLoads()
+    pendingHallConversationHistoryLoad = null
+    conversationHistoryLoading.value = false
+    conversationHistoryDeletingId.value = exactId
+    conversationHistoryError.value = ''
+    try {
+      await chatApi.delete('/conversation/delete', exactId, {
+        autoLoading: false,
+        signal: lifecycleController.signal
+      })
+      if (disposed || generation !== lifecycleGeneration || !sameScope(expectedScope)) return false
+
+      conversationHistory.value = conversationHistory.value.filter(item => item.id !== exactId)
+      conversationHistoryDeletingId.value = ''
+      if (conversationId.value === exactId) {
+        newHallConversation({ notify: false })
+        showToast('话头已删除，已另起新话头')
+      } else {
+        showToast('旧话头已删除')
+      }
+      if (!disposed && sameScope(expectedScope) && scopeSignature(scopeSnapshot()) === expectedSignature) {
+        await loadHallConversationHistory({ force: true })
+      }
+      return true
+    } catch (error) {
+      if (error?.name !== 'AbortError' && !disposed && generation === lifecycleGeneration && sameScope(expectedScope)) {
+        log.warn('删除聚义厅话头失败', error)
+        showToast('删除话头未成，请稍后重试')
+      }
+      return false
+    } finally {
+      if (conversationHistoryDeletingId.value === exactId) conversationHistoryDeletingId.value = ''
+    }
+  }
+
   const selectHallConversation = async (id) => {
     if (disposed || isConversationBusy.value) return false
     const expectedScope = scopeSnapshot()
@@ -684,7 +730,7 @@ export const useHallConversation = ({
     schedule(5000)
   }
 
-  const newHallConversation = () => {
+  const newHallConversation = ({ notify = true } = {}) => {
     const currentScopeSignature = scopeSignature(scopeSnapshot())
     if (currentScopeSignature) suppressedRestoreScopes.add(currentScopeSignature)
     invalidateConversationLoads()
@@ -707,7 +753,7 @@ export const useHallConversation = ({
     isStreaming.value = false
     isAwaitingReply.value = false
     clearBuiltInTurn()
-    showToast('已另起厅前话头')
+    if (notify) showToast('已另起厅前话头')
   }
 
   const processStream = (eventData) => {
@@ -751,7 +797,7 @@ export const useHallConversation = ({
     const isVoiceSend = source === 'voice'
     if (isVoiceSend && typeof explicitContent !== 'string') return false
     const content = (isVoiceSend ? explicitContent : String((explicitContent ?? draft.value) || '')).trim()
-    if (disposed || !content || isStreaming.value || isAwaitingReply.value || isConversationLoading.value || conversationLoadError.value) return false
+    if (disposed || !content || isStreaming.value || isAwaitingReply.value || isConversationLoading.value || conversationHistoryDeletingId.value || conversationLoadError.value) return false
     let sendContext = contextSnapshot || currentChatContext.value
     if (isVoiceSend) {
       const validated = captureHallVoiceSnapshot({
@@ -926,6 +972,7 @@ export const useHallConversation = ({
     cancelHallReplyTurn,
     chatConnectionStatus,
     conversationHistory,
+    conversationHistoryDeletingId,
     conversationHistoryError,
     conversationHistoryHasMore,
     conversationHistoryLoading,
@@ -935,6 +982,7 @@ export const useHallConversation = ({
     disposeHallConversation,
     draft,
     draftRevision,
+    deleteHallConversation,
     eventStreamRecovering,
     insertAgentMention,
     isAwaitingReply,

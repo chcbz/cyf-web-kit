@@ -17,6 +17,7 @@
       :voice="voice"
       v-bind="chatProps"
       @clear-target="$emit('clear-target', $event)"
+      @delete-conversation="$emit('delete-conversation', $event)"
       @load-history="$emit('load-history')"
       @load-more-history="$emit('load-more-history')"
       @load-messages="$emit('load-messages')"
@@ -38,6 +39,7 @@ const props = defineProps({
   agents: { type: Array, default: () => [] },
   connectionStatus: { type: String, default: '' },
   conversationHistory: { type: Array, default: () => [] },
+  conversationHistoryDeletingId: { type: String, default: '' },
   conversationHistoryError: { type: String, default: '' },
   conversationHistoryHasMore: { type: Boolean, default: false },
   conversationHistoryLoading: { type: Boolean, default: false },
@@ -61,6 +63,7 @@ const props = defineProps({
 
 const emit = defineEmits([
   'clear-target',
+  'delete-conversation',
   'load-history',
   'load-more-history',
   'load-messages',
@@ -88,6 +91,7 @@ const chatProps = computed(() => ({
   agents: props.agents,
   connectionStatus: props.connectionStatus,
   conversationHistory: props.conversationHistory,
+  conversationHistoryDeletingId: props.conversationHistoryDeletingId,
   conversationHistoryError: props.conversationHistoryError,
   conversationHistoryHasMore: props.conversationHistoryHasMore,
   conversationHistoryLoading: props.conversationHistoryLoading,

@@ -23,7 +23,7 @@
           title="话头记录"
           aria-label="话头记录"
           :aria-expanded="historyOpen ? 'true' : 'false'"
-          :disabled="voice?.voiceInteractionLocked"
+          :disabled="Boolean(conversationHistoryDeletingId) || voice?.voiceInteractionLocked"
           @click="toggleHistory"
         >
           <var-icon name="history" />
@@ -44,11 +44,13 @@
     <HallConversationHistory
       v-if="historyOpen"
       :conversations="conversationHistory"
+      :deleting-id="conversationHistoryDeletingId"
       :disabled="conversationBusy || voice?.voiceInteractionLocked"
       :error="conversationHistoryError"
       :has-more="conversationHistoryHasMore"
       :loading="conversationHistoryLoading"
       :selected-id="conversationId"
+      @delete="$emit('delete-conversation', $event)"
       @load-more="$emit('load-more-history')"
       @select="$emit('select-conversation', $event)"
     />
@@ -83,6 +85,7 @@
       :agents="agents"
       :discussion-variant="discussionVariant"
       :draft="draft"
+      :interaction-locked="conversationBusy"
       :is-awaiting-reply="isAwaitingReply"
       :is-streaming="isStreaming"
       :mention-label="mentionLabel"
@@ -117,6 +120,7 @@ const props = defineProps({
   agents: { type: Array, default: () => [] },
   connectionStatus: { type: String, default: '' },
   conversationHistory: { type: Array, default: () => [] },
+  conversationHistoryDeletingId: { type: String, default: '' },
   conversationHistoryError: { type: String, default: '' },
   conversationHistoryHasMore: { type: Boolean, default: false },
   conversationHistoryLoading: { type: Boolean, default: false },
@@ -145,6 +149,7 @@ const props = defineProps({
 
 const emit = defineEmits([
   'clear-target',
+  'delete-conversation',
   'load-history',
   'load-more-history',
   'load-messages',

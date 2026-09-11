@@ -1188,6 +1188,114 @@ describe('useHallConversation history remediation', () => {
     conversation.disposeHallConversation()
   })
 
+  it('deletes a scoped history item and reloads the first page to keep pagination exact', async () => {
+    const deleteCalls = []
+    let listCalls = 0
+    const conversation = createConversation({
+      chatApi: {
+        list: async (_path, _payload, options) => {
+          listCalls += 1
+          const rows = listCalls === 1
+            ? [scopedConversation('1002', { title: '待删除旧议' }), scopedConversation('1003', { title: '保留旧议' })]
+            : [scopedConversation('1003', { title: '保留旧议' })]
+          options.onSuccess({ data: rows })
+        },
+        delete: async (path, id, options) => {
+          deleteCalls.push({ path, id, signal: options.signal })
+        }
+      }
+    })
+
+    await conversation.loadHallConversationHistory()
+    expect(await conversation.deleteHallConversation('1002')).to.equal(true)
+
+    expect(deleteCalls).to.have.length(1)
+    expect(deleteCalls[0].path).to.equal('/conversation/delete')
+    expect(deleteCalls[0].id).to.equal('1002')
+    expect(deleteCalls[0].signal.aborted).to.equal(false)
+    expect(listCalls).to.equal(2)
+    expect(conversation.conversationHistory.value.map(item => item.id)).to.deep.equal(['1003'])
+    expect(conversation.conversationHistoryDeletingId.value).to.equal('')
+    conversation.disposeHallConversation()
+  })
+
+  it('locks selection, sending, and pagination while a deletion is in flight', async () => {
+    const deletion = deferred()
+    let listCalls = 0
+    const conversation = createConversation({
+      chatApi: {
+        list: async (_path, _payload, options) => {
+          listCalls += 1
+          options.onSuccess({ data: listCalls === 1 ? [scopedConversation('1002', { title: '删除中旧议' })] : [] })
+        },
+        delete: async () => deletion.promise,
+        create: async () => { throw new Error('send must be locked while deleting') }
+      }
+    })
+
+    await conversation.loadHallConversationHistory()
+    conversation.setDraft('不可并发发送')
+    const deleting = conversation.deleteHallConversation('1002')
+    await Promise.resolve()
+
+    expect(conversation.conversationHistoryDeletingId.value).to.equal('1002')
+    expect(conversation.isConversationBusy.value).to.equal(true)
+    expect(await conversation.selectHallConversation('1002')).to.equal(false)
+    expect(await conversation.sendHallMessage()).to.equal(false)
+    expect(await conversation.loadMoreHallConversationHistory()).to.deep.equal([])
+    expect(listCalls).to.equal(1)
+
+    deletion.resolve()
+    expect(await deleting).to.equal(true)
+    expect(listCalls).to.equal(2)
+    conversation.disposeHallConversation()
+  })
+
+  it('deleting the active history item clears its content and suppresses automatic restoration', async () => {
+    let listCalls = 0
+    const conversation = createConversation({
+      chatApi: {
+        list: async (_path, _payload, options) => {
+          listCalls += 1
+          options.onSuccess({ data: listCalls === 1 ? [scopedConversation('1002', { title: '当前旧议' })] : [] })
+        },
+        getById: async (_path, _id, options) => {
+          options.onSuccess({ data: [{ id: '99', senderType: 'user', content: '即将删除', createTime: 1 }] })
+        },
+        delete: async () => {}
+      }
+    })
+
+    await conversation.loadHallConversationHistory()
+    expect(await conversation.selectHallConversation('1002')).to.equal(true)
+    expect(await conversation.deleteHallConversation('1002')).to.equal(true)
+
+    expect(conversation.conversationId.value).to.equal('')
+    expect(conversation.selectedHallConversationId.value).to.equal('')
+    expect(conversation.messages.value).to.deep.equal([])
+    expect(conversation.conversationHistory.value).to.deep.equal([])
+    expect(await conversation.loadHallMessages({ force: true })).to.equal(false)
+    expect(listCalls).to.equal(2)
+    conversation.disposeHallConversation()
+  })
+
+  it('keeps the history item visible when deletion fails', async () => {
+    const conversation = createConversation({
+      chatApi: {
+        list: async (_path, _payload, options) => options.onSuccess({ data: [scopedConversation('1002', { title: '不可删旧议' })] }),
+        delete: async () => { throw new Error('delete failed') }
+      }
+    })
+
+    await conversation.loadHallConversationHistory()
+    expect(await conversation.deleteHallConversation('1002')).to.equal(false)
+
+    expect(conversation.conversationHistory.value.map(item => item.id)).to.deep.equal(['1002'])
+    expect(conversation.conversationHistoryDeletingId.value).to.equal('')
+    expect(conversation.conversationHistoryError.value).to.equal('')
+    conversation.disposeHallConversation()
+  })
+
   it('reports selected content failure, blocks send, and retries the same selected id', async () => {
     let contentAttempts = 0
     let listCalls = 0

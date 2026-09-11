@@ -88,6 +88,7 @@ const props = defineProps({
   agents: { type: Array, default: () => [] },
   discussionVariant: { type: String, default: 'public' },
   draft: { type: String, default: '' },
+  interactionLocked: { type: Boolean, default: false },
   isAwaitingReply: { type: Boolean, default: false },
   isStreaming: { type: Boolean, default: false },
   mentionLabel: { type: Function, required: true },
@@ -110,7 +111,7 @@ const textareaRef = ref(null)
 const isFocused = ref(false)
 
 const draftLength = computed(() => String(props.draft || '').length)
-const inputLocked = computed(() => props.isStreaming || props.isAwaitingReply || Boolean(props.voice?.voiceInteractionLocked))
+const inputLocked = computed(() => props.interactionLocked || props.isStreaming || props.isAwaitingReply || Boolean(props.voice?.voiceInteractionLocked))
 const canClear = computed(() => Boolean(String(props.draft || '').length) && !inputLocked.value)
 const canSend = computed(() => Boolean(String(props.draft || '').trim()) && !inputLocked.value)
 const composerClass = computed(() => ({

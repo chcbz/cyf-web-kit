@@ -263,6 +263,7 @@
             :connection-status="chatConnectionStatus"
             :conversation-busy="isConversationBusy"
             :conversation-history="conversationHistory"
+            :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
             :conversation-history-has-more="conversationHistoryHasMore"
             :conversation-history-loading="conversationHistoryLoading"
@@ -271,6 +272,7 @@
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
             @clear-target="handleClearChatTarget"
+            @delete-conversation="deleteHallConversation"
             @load-history="loadHallConversationHistory({ force: true })"
             @load-more-history="loadMoreHallConversationHistory"
             @load-messages="retryHallConversation"
@@ -300,6 +302,7 @@
             :connection-status="chatConnectionStatus"
             :conversation-busy="isConversationBusy"
             :conversation-history="conversationHistory"
+            :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
             :conversation-history-has-more="conversationHistoryHasMore"
             :conversation-history-loading="conversationHistoryLoading"
@@ -308,6 +311,7 @@
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
             @clear-target="handleClearChatTarget"
+            @delete-conversation="deleteHallConversation"
             @load-history="loadHallConversationHistory({ force: true })"
             @load-more-history="loadMoreHallConversationHistory"
             @load-messages="retryHallConversation"
@@ -337,6 +341,7 @@
             :connection-status="chatConnectionStatus"
             :conversation-busy="isConversationBusy"
             :conversation-history="conversationHistory"
+            :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
             :conversation-history-has-more="conversationHistoryHasMore"
             :conversation-history-loading="conversationHistoryLoading"
@@ -345,6 +350,7 @@
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
             @clear-target="handleClearChatTarget"
+            @delete-conversation="deleteHallConversation"
             @load-history="loadHallConversationHistory({ force: true })"
             @load-more-history="loadMoreHallConversationHistory"
             @load-messages="retryHallConversation"
@@ -373,7 +379,7 @@
     </transition>
 
     <transition name="toast">
-      <div v-if="toast" class="toast">{{ toast }}</div>
+      <div v-if="toast" class="toast" role="status" aria-live="polite">{{ toast }}</div>
     </transition>
   </div>
 </template>
@@ -1217,12 +1223,14 @@ const {
   cancelHallReplyTurn,
   chatConnectionStatus,
   conversationHistory,
+  conversationHistoryDeletingId,
   conversationHistoryError,
   conversationHistoryHasMore,
   conversationHistoryLoading,
   conversationId,
   conversationLoadError,
   draft,
+  deleteHallConversation,
   eventStreamRecovering,
   insertAgentMention,
   isAwaitingReply,
