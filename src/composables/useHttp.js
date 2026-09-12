@@ -153,9 +153,9 @@ export function useHttp (options = {}) {
       let token = null
       if (needAuth) {
         try {
-          requestAuthStore = authStore || await resolveApiStore()
+          requestAuthStore = authStore || await awaitWithAbortSignal(resolveApiStore(), requestSignal.signal)
           authorizationGeneration = requestAuthStore.authorizationGeneration
-          token = await requestAuthStore.token()
+          token = await awaitWithAbortSignal(requestAuthStore.token(), requestSignal.signal)
           if (!token) {
             const authRequired = new Error('Authentication is required')
             authRequired.code = 'AUTHENTICATION_REQUIRED'
@@ -492,6 +492,31 @@ function resolveConfiguredTimeout (timeout, runtimeEnv) {
 function throwIfRequestDeadlineElapsed (deadline) {
   if (deadline === null || Date.now() < deadline) return
   throw new DOMException('Request deadline exceeded', 'TimeoutError')
+}
+
+function awaitWithAbortSignal (value, signal) {
+  throwIfAborted(signal)
+  if (!signal) return Promise.resolve(value)
+
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      cleanup()
+      reject(signal.reason || new DOMException('The operation was aborted', 'AbortError'))
+    }
+    const cleanup = () => signal.removeEventListener('abort', onAbort)
+
+    signal.addEventListener('abort', onAbort, { once: true })
+    Promise.resolve(value).then(
+      result => {
+        cleanup()
+        resolve(result)
+      },
+      failure => {
+        cleanup()
+        reject(failure)
+      }
+    )
+  })
 }
 
 function classifyRequestFailure (failure) {

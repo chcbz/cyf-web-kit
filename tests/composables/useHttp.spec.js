@@ -212,6 +212,42 @@ describe('useHttp', () => {
     }
   })
 
+  it('enforces the JSON budget while authentication is still pending', async () => {
+    const originalFetch = global.fetch
+    const originalTimeout = Object.getOwnPropertyDescriptor(AbortSignal, 'timeout')
+    const timeoutController = new AbortController()
+    let fetchCalls = 0
+    Object.defineProperty(AbortSignal, 'timeout', {
+      configurable: true,
+      writable: true,
+      value: () => timeoutController.signal
+    })
+    global.fetch = async () => {
+      fetchCalls += 1
+      return new Response(JSON.stringify({ ok: true }), { status: 200 })
+    }
+
+    try {
+      let failure
+      try {
+        await useHttp().get('/protected', {}, {
+          authStore: {
+            token: () => new Promise(() => {
+              queueMicrotask(() => timeoutController.abort(new DOMException('Request timed out', 'TimeoutError')))
+            })
+          }
+        })
+      } catch (error) {
+        failure = error
+      }
+      expect(failure).to.include({ name: 'TimeoutError', requestErrorClass: 'deadline_exceeded' })
+      expect(fetchCalls).to.equal(0)
+    } finally {
+      global.fetch = originalFetch
+      Object.defineProperty(AbortSignal, 'timeout', originalTimeout)
+    }
+  })
+
   it('classifies caller cancellation separately from deadline exhaustion', async () => {
     const caller = new AbortController()
     const reason = new DOMException('caller cancelled', 'AbortError')
