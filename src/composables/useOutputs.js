@@ -70,6 +70,7 @@ export function useOutputs (source, options = {}) {
   const snapshotAt = ref(null)
   const loading = ref(false)
   const error = ref(null)
+  const listRevision = ref(0)
   const versions = ref([])
   const versionTarget = ref(null)
   const versionNextCursor = ref(null)
@@ -204,6 +205,7 @@ export function useOutputs (source, options = {}) {
       nextCursor.value = cursor
       snapshotAt.value = pages[0].snapshotAt ?? null
       loadedPageCount = more ? loadedPageCount + pages.length : pages.length
+      if (!more) listRevision.value += 1
       error.value = null
       pollDelay = POLL_START_MS
     } catch (failure) {
@@ -366,6 +368,7 @@ export function useOutputs (source, options = {}) {
     snapshotAt,
     loading,
     error,
+    listRevision,
     versions,
     versionTarget,
     versionNextCursor,

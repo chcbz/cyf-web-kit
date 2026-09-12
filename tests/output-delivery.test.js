@@ -641,6 +641,44 @@ describe('OD05 shared output retrieval', () => {
     expect(wrapper.text()).not.to.include('第7版交付件')
   })
 
+  it('revalidates a focused historical resource after refresh and clears it when access is revoked', async () => {
+    const { OutputList } = loadOutputComponents()
+    const source = ref({ type: 'CONVERSATION', id: 'conversation-a' })
+    const requestedResource = ref({ source: source.value, outputId: 'revoked-secret', version: '1' })
+    let revoked = false
+    const focused = item({ outputId: 'revoked-secret', version: '1', title: '撤权前标题', previewKind: 'TEXT' })
+    const http = {
+      get: url => {
+        if (url.endsWith('/outputs')) return Promise.resolve(page(source.value, []))
+        if (revoked) return Promise.reject(Object.assign(new Error('成果已不可访问'), { status: 404, retryable: false }))
+        return Promise.resolve({ data: { data: { item: focused, content: '撤权前正文' } } })
+      }
+    }
+    let outputs
+    const Harness = defineComponent({
+      setup () {
+        outputs = useOutputs(source, { http, requestedResource })
+        return () => h(OutputList, { outputs })
+      }
+    })
+    const wrapper = mount(Harness)
+    wrappers.add(wrapper)
+    await flush(12)
+    expect(wrapper.text()).to.include('撤权前标题')
+    expect(wrapper.text()).to.include('撤权前正文')
+    expect(wrapper.findAll('.output-card')).to.have.length(1)
+
+    revoked = true
+    await outputs.refresh()
+    await flush(12)
+    expect(outputs.items.value).to.deep.equal([])
+    expect(wrapper.findAll('.output-card')).to.have.length(0)
+    expect(wrapper.find('.output-preview').exists()).to.equal(false)
+    expect(wrapper.text()).not.to.include('撤权前标题')
+    expect(wrapper.text()).not.to.include('撤权前正文')
+    expect(wrapper.text()).to.include('成果已不可访问')
+  })
+
   it('keeps all three product entrypoints on the shared list with explicit syncing signals', () => {
     const panel = readFileSync(new URL('../src/components/juyiting/ChatPanel.vue', import.meta.url), 'utf8')
     const bounty = readFileSync(new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url), 'utf8')

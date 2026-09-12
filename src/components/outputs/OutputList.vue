@@ -113,6 +113,7 @@ const displayItems = computed(() => {
 const nextCursor = computed(() => unref(props.outputs.nextCursor))
 const loading = computed(() => Boolean(unref(props.outputs.loading)))
 const error = computed(() => unref(props.outputs.error))
+const listRevision = computed(() => unref(props.outputs.listRevision) || 0)
 const versions = computed(() => unref(props.outputs.versions) || [])
 const versionTarget = computed(() => unref(props.outputs.versionTarget))
 const versionNextCursor = computed(() => unref(props.outputs.versionNextCursor))
@@ -130,6 +131,7 @@ const normalizeActionError = failure => ({
   retryable: typeof failure?.retryable === 'boolean' ? failure.retryable : (!failure?.status || failure.status === 429 || failure.status >= 500),
   requestId: failure?.requestId || ''
 })
+const permanentlyInaccessible = failure => [403, 404, 410].includes(Number(failure?.status)) || failure?.retryable === false
 const download = async item => {
   downloadError.value = null
   downloadErrorItem.value = null
@@ -193,7 +195,13 @@ const loadRequestedResource = async () => {
     requestedItem.value = payload.item
     if (payload.item.previewKind !== 'NONE') previewItem.value = payload.item
   } catch (failure) {
-    if (failure?.name !== 'AbortError' && requestSequence === requestedSequence && requestLifecycle === lifecycleKey.value) resourceError.value = normalizeActionError(failure)
+    if (failure?.name !== 'AbortError' && requestSequence === requestedSequence && requestLifecycle === lifecycleKey.value) {
+      if (permanentlyInaccessible(failure)) {
+        requestedItem.value = null
+        previewItem.value = null
+      }
+      resourceError.value = normalizeActionError(failure)
+    }
   } finally {
     if (requestSequence === requestedSequence && requestedController === controller) requestedController = null
   }
@@ -220,6 +228,23 @@ watch(items, current => {
   if (!listed) return
   requestedItem.value = listed
   if (listed.previewKind !== 'NONE') previewItem.value = listed
+})
+watch(listRevision, () => {
+  const listed = items.value.find(isRequested)
+  if (listed) {
+    requestedItem.value = listed
+    if (listed.previewKind !== 'NONE') previewItem.value = listed
+  } else {
+    void loadRequestedResource()
+  }
+})
+watch(error, failure => {
+  if (!permanentlyInaccessible(failure)) return
+  requestedSequence += 1
+  requestedController?.abort(new DOMException('Output source is no longer accessible', 'AbortError'))
+  requestedController = null
+  requestedItem.value = null
+  previewItem.value = null
 })
 onBeforeUnmount(clearLocalState)
 </script>
