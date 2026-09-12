@@ -74,11 +74,12 @@ describe('backend scene state', () => {
 
     let firstError
     try { await backend.start() } catch (error) { firstError = error }
-    const recovered = await backend.start()
 
     expect(firstError?.message).to.equal('temporary snapshot failure')
     expect(backend.snapshotError.value).to.equal('temporary snapshot failure')
     expect(backend.snapshotLoading.value).to.equal(false)
+
+    const recovered = await backend.start()
     expect(snapshotCalls).to.equal(2)
     expect(recovered).to.include({ sceneId: 'juyiting-main', sceneVersion: 7 })
     expect(backend.snapshotReady.value).to.equal(true)
