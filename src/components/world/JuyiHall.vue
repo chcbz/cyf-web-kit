@@ -189,6 +189,7 @@
             :ability-text="abilityText"
             :can-assign="canAssign"
             :funded-preview-enabled="economyPreviewEnabled"
+            :work-item-plan-enabled="workItemPlanEnabled"
             :funded-quote-preview="fundedQuotePreview"
             :funded-claim-state="fundedClaimState"
             :funded-create-recovery="fundedCreateRecovery"
@@ -448,6 +449,7 @@ const apiStore = useApiStore()
 const selectedAgent = ref(null)
 const selectedTask = ref(null)
 const economyPreviewEnabled = ref(false)
+const workItemPlanEnabled = import.meta.env.VITE_JUYITING_WORK_ITEM_PLAN_ENABLED === 'true'
 const economyPreviewCapability = ref(null)
 const economyPreviewChecked = ref(false)
 const economyPreviewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
