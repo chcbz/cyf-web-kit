@@ -17,6 +17,7 @@
         @send="sendMessage"
         @cancel="stopStream"
       />
+      <OutputList v-if="resourceOutputRequest || (isJuyiting && conversationId)" :outputs="outputs" />
     </div>
 
     <div :class="['chat-overlay', { show: showSidebar }]" @click="toggleSidebar"></div>
@@ -54,6 +55,8 @@ import { combineAbortSignals } from '../../utils/abortSignals.js'
 import ChatMessageList from './ChatMessageList.vue'
 import ChatInput from './ChatInput.vue'
 import ChatSidebar from './ChatSidebar.vue'
+import OutputList from '../outputs/OutputList.vue'
+import { parseOutputResourceQuery, useOutputs } from '../../composables/useOutputs.js'
 
 // 配置marked
 marked.setOptions({
@@ -114,6 +117,11 @@ let chatStreamSignalCleanup = null
 // 计算属性
 const hasMessages = computed(() => messages.value.length > 0)
 const isJuyiting = computed(() => conversationType.value === 'juyiting')
+const resourceOutputRequest = computed(() => parseOutputResourceQuery(route.query))
+const activeOutputSource = computed(() => resourceOutputRequest.value?.source ||
+  (isJuyiting.value && conversationId.value ? { type: 'CONVERSATION', id: conversationId.value } : null))
+const outputSyncing = computed(() => !resourceOutputRequest.value && isJuyiting.value && (isLoading.value || isStreaming.value))
+const outputs = useOutputs(activeOutputSource, { syncing: outputSyncing })
 // sortedConversations 预留用于未来排序功能
 // const sortedConversations = computed(() =>
 //   [...conversations.value].sort((a, b) => new Date(b.lastUpdated) - new Date(a.lastUpdated))

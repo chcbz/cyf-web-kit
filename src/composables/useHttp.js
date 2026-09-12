@@ -16,7 +16,7 @@ import { combineAbortSignals, throwIfAborted } from '../utils/abortSignals.js'
  * @param {Object} options.headers - 自定义请求头
  * @param {boolean} options.autoLoading - 是否自动管理loading状态，默认为true
  * @param {boolean} options.needAuth - 是否需要认证，默认为true
- * @param {string} options.responseType - 响应类型，支持 'json'（默认）、'text'（文本）和 'stream'（流式响应）
+ * @param {string} options.responseType - 响应类型，支持 'json'（默认）、'text'、'blob' 和 'stream'（流式响应）
  * @param {number} options.timeout - 请求超时时间（毫秒），默认为环境变量 VITE_HTTP_TIMEOUT 或 60000（60秒）
  * @param {Function} options.onSuccess - 成功回调
  * @param {Function} options.onError - 错误回调
@@ -165,10 +165,11 @@ export function useHttp (options = {}) {
       if (!response.ok) {
         let errorMessage = `HTTP error! status: ${response.status}`
         let errorCode
+        let errorData
 
         // 尝试从响应中提取错误消息
         try {
-          const errorData = await response.clone().json()
+          errorData = await response.clone().json()
           if (errorData && typeof errorData.code === 'string') {
             errorCode = errorData.code
           }
@@ -185,6 +186,8 @@ export function useHttp (options = {}) {
         const error = new Error(errorMessage)
         error.status = response.status
         if (errorCode) error.code = errorCode
+        if (typeof errorData?.retryable === 'boolean') error.retryable = errorData.retryable
+        if (typeof errorData?.requestId === 'string') error.requestId = errorData.requestId
         error.response = response
         throw error
       }
@@ -268,6 +271,24 @@ export function useHttp (options = {}) {
           config: fetchConfig,
           stream: streamHandle
         }
+      }
+
+      // Binary responses must not pass through the JSON envelope parser.  This
+      // keeps authenticated downloads on the same identity/abort lifecycle.
+      if (responseType === 'blob') {
+        const blob = await response.blob()
+        throwIfAborted(requestSignal.signal)
+        const resultObj = {
+          data: blob,
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries()),
+          config: fetchConfig
+        }
+        response.value = resultObj
+        data.value = blob
+        if (onSuccess) onSuccess(blob, resultObj)
+        return resultObj
       }
 
       // 处理响应数据

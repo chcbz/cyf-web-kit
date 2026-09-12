@@ -137,6 +137,7 @@
               </div>
 
               <p>{{ detailTask.description || '榜文尚未写明缘由' }}</p>
+              <OutputList :outputs="outputs" />
               <section v-if="isFundedTask(detailTask)" class="funded-preview-details" aria-label="资金悬赏详情">
                 <p class="funding-summary">已托管：{{ formatMoney(detailTask.funding.remainingMicro || detailTask.funding.grossBountyAmountMicro) }}</p>
                 <p>仅可由一位明确好汉按报价领令；组队、宋江代点和旧式点将已禁用。</p>
@@ -288,6 +289,8 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import BountyActionIcon from './BountyActionIcon.vue'
+import OutputList from '../outputs/OutputList.vue'
+import { outputSource, useOutputs } from '../../composables/useOutputs.js'
 import { formatSilverMicro, isCanonicalMicroAmount } from '@/utils/silverAmount'
 
 const props = defineProps({
@@ -349,6 +352,8 @@ const taskForm = ref({
   grossBountyAmountMicro: ''
 })
 const detailTask = computed(() => modalTask.value)
+const outputSyncing = computed(() => ['assigned', 'running', 'reviewing'].includes(String(detailTask.value?.status || '').toLowerCase()))
+const outputs = useOutputs(outputSource('TASK', () => detailTask.value?.id), { syncing: outputSyncing })
 const validGrossAmount = computed(() => isCanonicalMicroAmount(taskForm.value.grossBountyAmountMicro))
 const fundedRecoveryAbilities = computed(() => {
   const abilities = props.fundedCreateRecovery?.body?.requiredAbilities

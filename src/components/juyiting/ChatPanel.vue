@@ -60,6 +60,8 @@
       <button type="button" :disabled="conversationBusy || voice?.voiceInteractionLocked" @click="$emit('retry-conversation')">重试</button>
     </div>
 
+    <OutputList v-if="conversationId" :outputs="outputs" />
+
     <div ref="messageBoxRef" class="hall-messages">
       <div
         v-for="message in messages"
@@ -108,6 +110,8 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import HallChatComposer from './HallChatComposer.vue'
 import HallConversationHistory from './HallConversationHistory.vue'
+import OutputList from '../outputs/OutputList.vue'
+import { outputSource, useOutputs } from '../../composables/useOutputs.js'
 
 marked.setOptions({
   breaks: true,
@@ -163,6 +167,8 @@ const emit = defineEmits([
 ])
 
 const messageBoxRef = ref(null)
+const outputSyncing = computed(() => props.isStreaming || props.isAwaitingReply || props.eventStreamRecovering)
+const outputs = useOutputs(outputSource('CONVERSATION', () => props.conversationId), { syncing: outputSyncing })
 const historyOpen = ref(false)
 const pendingAuthor = '聚义厅'
 const toggleHistory = () => {
