@@ -176,6 +176,8 @@
             :status-filters="statusFilters"
             :status-text="statusText"
             :agent-filter="agentFilter"
+            :loading="rosterLoading"
+            :error-message="rosterError"
             @set-agent-filter="setAgentFilter"
             @select-agent="selectAgent"
           />
@@ -207,6 +209,10 @@
             :task-status-filters="taskStatusFilters"
             :task-status-text="taskStatusText"
             :tasks="tasks"
+            :loading="tasksLoading"
+            :error-message="tasksError"
+            :counts-loading="taskCountsLoading"
+            :counts-error-message="taskCountsError"
             @auto-assign-task="autoAssignTask"
             @assign-task="assignTask"
             @archive-task="archiveTask"
@@ -238,6 +244,8 @@
             :portrait-name="portraitName"
             :portrait-style="portraitStyle"
             :setup-result="personaSetupResult"
+            :loading="catalogLoading"
+            :error-message="catalogError"
             @bind-persona="handleBindPersona"
             @clear-setup-result="personaSetupResult = null"
             @hosting-changed="refreshHall({ silent: true })"
@@ -666,21 +674,32 @@ const {
   agents,
   bindPersona,
   canAssign,
+  catalogError,
+  catalogLoading,
   filteredAgents,
   hiddenAgentCount,
-  loadAgents,
+  loadMapAgents,
+  loadPersonaCatalog,
+  loadRosterAgents,
   loadTasks,
   loadTaskRecommendations,
   mapAgents,
+  mapError,
   operableRosterAgents,
   personaCatalog,
   recommendedAgents,
+  rosterError,
+  rosterLoading,
   setAgentFilter,
   setTaskStatusFilter,
   taskAbilityFilter,
   taskAbilityOptions,
   taskKeyword,
+  taskCountsError,
+  taskCountsLoading,
   tasks,
+  tasksError,
+  tasksLoading,
   taskStatusCount,
   taskStatusFilter,
   unbindPersona,
@@ -772,16 +791,27 @@ const ensureEconomyPreviewCapability = async () => {
   return economyPreviewEnabled.value
 }
 
+const loadPanelData = async (panel) => {
+  if (panel === 'agents') return Promise.all([loadRosterAgents(), loadPersonaCatalog()])
+  if (panel === 'catalog') return loadPersonaCatalog()
+  if (panel === 'tasks') return loadTasks()
+  return null
+}
+
 const refreshHall = async ({ silent = false } = {}) => {
   if (hallRefreshing.value) return
   hallRefreshing.value = true
   if (!silent) playRefresh()
   try {
-    await Promise.all([loadAgents(), loadTasks()])
+    // The map is the only initial data dependency. Scene snapshot startup remains
+    // independent and begins as soon as the simulation is ready; optional panel
+    // sources are fetched only for the panel currently in use.
+    await loadMapAgents()
     if (simulationEnabled && hallCommandQueue.ready.value && !backendSceneStarted) {
       await startBackendSceneState()
     }
-    if (!silent) showToast('厅中动静已点验')
+    await loadPanelData(activePanel.value)
+    if (!silent) showToast(mapError.value ? '厅中点将暂无法读取' : '厅中动静已点验')
   } finally {
     hallRefreshing.value = false
   }
@@ -860,6 +890,7 @@ const openPanel = (panel, options = {}) => {
   }
   renderedPanel.value = panel
   activePanel.value = panel
+  void loadPanelData(panel)
   if (panel === 'tasks') void ensureEconomyPreviewCapability()
   const generation = panelSessionGeneration.value
   nextTick(() => {

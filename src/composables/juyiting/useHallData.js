@@ -27,6 +27,18 @@ export const useHallData = ({
   const taskStatusFilter = ref('open')
   const taskAbilityFilter = ref('')
   const taskKeyword = ref('')
+  // Each independently fetched source owns its state so a slow optional panel
+  // never blocks the map or hides a successful sibling result.
+  const mapLoading = ref(false)
+  const mapError = ref('')
+  const rosterLoading = ref(false)
+  const rosterError = ref('')
+  const catalogLoading = ref(false)
+  const catalogError = ref('')
+  const tasksLoading = ref(false)
+  const tasksError = ref('')
+  const taskCountsLoading = ref(false)
+  const taskCountsError = ref('')
   const backendSceneAgents = ref([])
   const backendSceneVersion = ref(0)
   let backendSceneCursor = '0'
@@ -101,17 +113,29 @@ export const useHallData = ({
   }
 
   const loadTaskStatusCounts = async () => {
+    taskCountsLoading.value = true
+    taskCountsError.value = ''
     let counts = {}
-    await agentApi.search('/tasks/status-counts', {
-      ability: taskAbilityFilter.value || undefined,
-      keyword: taskKeyword.value || undefined
-    }, {
-      autoLoading: false,
-      onSuccess: (result) => {
-        counts = result?.data || {}
-      }
-    })
-    return counts
+    try {
+      await agentApi.search('/tasks/status-counts', {
+        ability: taskAbilityFilter.value || undefined,
+        keyword: taskKeyword.value || undefined
+      }, {
+        autoLoading: false,
+        onSuccess: (result) => {
+          counts = result?.data || {}
+        }
+      })
+      taskStatusCounts.value = counts
+      return counts
+    } catch (error) {
+      log.warn('load task status counts failed:', error)
+      taskCountsError.value = error?.message || '悬赏数目暂无法读取'
+      taskStatusCounts.value = {}
+      return {}
+    } finally {
+      taskCountsLoading.value = false
+    }
   }
 
   const loadTaskRecommendations = async (task = selectedTask.value) => {
@@ -168,6 +192,8 @@ export const useHallData = ({
   }
 
   const loadMapAgents = async () => {
+    mapLoading.value = true
+    mapError.value = ''
     try {
       await agentApi.get('/map', {}, {
         autoLoading: false,
@@ -177,7 +203,10 @@ export const useHallData = ({
       })
     } catch (error) {
       log.warn('load map agents failed:', error)
+      mapError.value = error?.message || '厅中点将暂无法读取'
       mapAgents.value = []
+    } finally {
+      mapLoading.value = false
     }
   }
 
@@ -186,6 +215,8 @@ export const useHallData = ({
   }
 
   const loadRosterAgents = async ({ derive = true } = {}) => {
+    rosterLoading.value = true
+    rosterError.value = ''
     try {
       await agentApi.search('/roster', {
         pageNum: 1,
@@ -199,12 +230,17 @@ export const useHallData = ({
       if (derive) deriveRosterProjections()
     } catch (error) {
       log.warn('load roster agents failed:', error)
+      rosterError.value = error?.message || '点将册暂无法读取'
       allRosterAgents.value = []
       if (derive) deriveRosterProjections()
+    } finally {
+      rosterLoading.value = false
     }
   }
 
   const loadPersonaCatalog = async () => {
+    catalogLoading.value = true
+    catalogError.value = ''
     try {
       await agentApi.get('/personas/catalog', {}, {
         autoLoading: false,
@@ -212,9 +248,14 @@ export const useHallData = ({
           personaCatalog.value = result?.data || []
         }
       })
+      deriveRosterProjections()
     } catch (error) {
       log.warn('load persona catalog failed:', error)
+      catalogError.value = error?.message || '招贤令暂无法读取'
       personaCatalog.value = []
+      deriveRosterProjections()
+    } finally {
+      catalogLoading.value = false
     }
   }
 
@@ -251,35 +292,40 @@ export const useHallData = ({
   }
 
   const loadTasks = async () => {
-    try {
-      const baseParams = {
-        ability: taskAbilityFilter.value || undefined,
-        keyword: taskKeyword.value || undefined,
-        pageNum: 1,
-        pageSize: 30
-      }
-      const displayParams = {
-        ...baseParams,
-        status: taskStatusFilter.value || undefined
-      }
-      const [list, counts] = await Promise.all([
-        searchTasks(displayParams),
-        loadTaskStatusCounts()
-      ])
-
-      tasks.value = list
-      taskStatusCounts.value = counts
-      if (selectedTask.value && !tasks.value.some(task => task.id === selectedTask.value.id)) {
-        selectedTask.value = null
-      } else if (selectedTask.value) {
-        await loadTaskRecommendations(selectedTask.value)
-      }
-    } catch (error) {
-      log.warn('load bounty tasks failed:', error)
-      tasks.value = []
-      taskStatusCounts.value = {}
-      selectedTask.value = null
+    tasksLoading.value = true
+    tasksError.value = ''
+    const baseParams = {
+      ability: taskAbilityFilter.value || undefined,
+      keyword: taskKeyword.value || undefined,
+      pageNum: 1,
+      pageSize: 30
     }
+    const displayParams = {
+      ...baseParams,
+      status: taskStatusFilter.value || undefined
+    }
+    const listRequest = (async () => {
+      try {
+        const list = await searchTasks(displayParams)
+        tasks.value = list
+        if (selectedTask.value && !tasks.value.some(task => task.id === selectedTask.value.id)) {
+          selectedTask.value = null
+        } else if (selectedTask.value) {
+          await loadTaskRecommendations(selectedTask.value)
+        }
+        return list
+      } catch (error) {
+        log.warn('load bounty tasks failed:', error)
+        tasksError.value = error?.message || '悬赏榜暂无法读取'
+        tasks.value = []
+        selectedTask.value = null
+        return []
+      } finally {
+        tasksLoading.value = false
+      }
+    })()
+    const [, counts] = await Promise.all([listRequest, loadTaskStatusCounts()])
+    return counts
   }
 
   const setAgentFilter = async (status) => {
@@ -325,6 +371,8 @@ export const useHallData = ({
     backendSceneVersion,
     bindPersona,
     canAssign,
+    catalogError,
+    catalogLoading,
     filteredAgents,
     hiddenAgentCount,
     loadAgents,
@@ -335,18 +383,26 @@ export const useHallData = ({
     loadTaskRecommendations,
     loadTasks,
     mapAgents,
+    mapError,
+    mapLoading,
     operableRosterAgents,
     personaCatalog,
     recommendedAgents,
+    rosterError,
+    rosterLoading,
     setAgentFilter,
     setTaskStatusFilter,
     taskAbilityFilter,
     taskAbilityOptions,
     taskKeyword,
+    taskCountsError,
+    taskCountsLoading,
     taskRecommendations,
     tasks,
     taskStatusCount,
     taskStatusFilter,
+    tasksError,
+    tasksLoading,
     unbindPersona,
     visibleAgents
   }

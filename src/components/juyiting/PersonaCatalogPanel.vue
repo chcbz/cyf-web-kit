@@ -4,6 +4,8 @@
       <span>{{ personas.length }} 位待请豪杰</span>
       <span>{{ boundToMeCount }} 位已入伙</span>
     </div>
+    <p v-if="loading" class="catalog-data-state" role="status">招贤令读取中…</p>
+    <p v-else-if="errorMessage" class="catalog-data-state is-error" role="alert">{{ errorMessage }}</p>
 
     <section v-if="setupResult" class="setup-result">
       <div class="setup-head">
@@ -155,6 +157,8 @@ const LOCAL_API_KEY_PLACEHOLDER = '<key>'
 
 const props = defineProps({
   personas: { type: Array, default: () => [] },
+  loading: { type: Boolean, default: false },
+  errorMessage: { type: String, default: '' },
   portraitName: { type: Function, required: true },
   portraitStyle: { type: Function, required: true },
   setupResult: { type: Object, default: null }
@@ -345,6 +349,15 @@ onUnmounted(() => {
   color: #765f40;
   font-size: 13px;
 }
+
+.catalog-data-state {
+  flex: 0 0 auto;
+  margin: 0 16px 8px;
+  color: #765f40;
+  font-size: 13px;
+}
+
+.catalog-data-state.is-error { color: #b3261e; }
 
 .setup-result {
   flex: 0 0 auto;
