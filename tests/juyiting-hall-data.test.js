@@ -300,3 +300,47 @@ describe('useHallData deferred Juyi Hall sources', () => {
     expect(hallData.rosterLoading.value).to.equal(false)
   })
 })
+
+describe('useHallData E01 candidate compatibility', () => {
+  it('preserves authoritative candidate details, denies explicitly excluded candidates, and accepts legacy recommendations', async () => {
+    const selectedTask = ref({ id: 'task-e01', status: 'open', requiredAbilities: ['planning'] })
+    const hallData = useHallData({
+      agentApi: {
+        create: async (_url, _body, options) => options.onSuccess({ data: [{
+          score: 74,
+          eligible: false,
+          exclusionReasons: ['AGENT_ABILITY_MISMATCH'],
+          scoreParts: { ability: 0, availability: 20, success: 11, load: 15, context: 8, riskPenalty: 0 },
+          reason: '宋江首领不建议：AGENT_ABILITY_MISMATCH。',
+          matchedAbilities: [],
+          agent: { agentId: 'agent-excluded', status: 'online', canOperate: true }
+        }, {
+          score: 94,
+          agent: { agentId: 'agent-legacy', status: 'online', canOperate: true }
+        }] })
+      },
+      log: { warn: () => {} },
+      normalizeStatus: (status = '') => status.toLowerCase(),
+      selectedAgent: ref(null),
+      selectedTask,
+      taskAgentMatchScore: () => 0
+    })
+
+    await hallData.loadTaskRecommendations()
+
+    const [excluded, legacy] = hallData.recommendedAgents.value
+    expect(excluded).to.include({
+      agentId: 'agent-excluded',
+      eligible: false,
+      recommendationScore: 74,
+      recommendationReason: '宋江首领不建议：AGENT_ABILITY_MISMATCH。'
+    })
+    expect(excluded.exclusionReasons).to.deep.equal(['AGENT_ABILITY_MISMATCH'])
+    expect(excluded.scoreParts).to.deep.equal({
+      ability: 0, availability: 20, success: 11, load: 15, context: 8, riskPenalty: 0
+    })
+    expect(hallData.canAssign(selectedTask.value, excluded)).to.equal(false)
+    expect(legacy.eligible).to.equal(undefined)
+    expect(hallData.canAssign(selectedTask.value, legacy)).to.equal(true)
+  })
+})

@@ -1557,6 +1557,66 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.emitted('auto-assign-task')[0]).to.deep.equal([selectedTask])
   })
 
+  it('shows E01 exclusion reasons and score parts without allowing excluded single or group assignment', async () => {
+    const selectedTask = {
+      id: 'task-e01',
+      title: 'Inspect the camp',
+      status: 'open',
+      description: 'Inspect every outpost',
+      requiredAbilities: ['planning']
+    }
+    const excluded = {
+      agentId: 'agent-excluded',
+      name: 'Excluded',
+      status: 'online',
+      canOperate: true,
+      eligible: false,
+      exclusionReasons: ['AGENT_ABILITY_MISMATCH'],
+      scoreParts: { ability: 0, availability: 20, success: 11, load: 15, context: 8, riskPenalty: 0 }
+    }
+    const eligible = {
+      agentId: 'agent-eligible',
+      name: 'Eligible',
+      status: 'online',
+      canOperate: true,
+      eligible: true,
+      scoreParts: { ability: 40, availability: 20, success: 11, load: 15, context: 8, riskPenalty: 0 }
+    }
+    const wrapper = mount(BountyPanel, {
+      global: { stubs },
+      props: {
+        tasks: [selectedTask],
+        selectedTask,
+        selectedAgent: excluded,
+        recommendedAgents: [excluded, eligible],
+        taskAbilityOptions: ['planning'],
+        taskStatusFilters: [],
+        abilityText: item => (item.abilities || []).join(' / '),
+        canAssign: (task, targetAgent) => Boolean(task && targetAgent && targetAgent.eligible !== false),
+        formatTime: value => value,
+        portraitName: item => item.name,
+        portraitStyle: () => ({}),
+        taskAgentMatchScore: () => 98,
+        taskStateClass: () => 'is-open',
+        taskStatusCount: () => 1,
+        taskStatusText: status => status
+      }
+    })
+
+    await wrapper.find('.task-card').trigger('click')
+
+    const checkboxes = wrapper.findAll('.assignee-check')
+    expect(checkboxes[0].attributes('disabled')).to.not.equal(undefined)
+    expect(wrapper.findAll('.recommended-agent-actions button')[1].attributes('disabled')).to.not.equal(undefined)
+    expect(wrapper.text()).to.include('不宜点将：AGENT_ABILITY_MISMATCH')
+    expect(wrapper.text()).to.include('评分明细：本领 0 / 可用 20 / 成功 11 / 负载 15 / 上下文 8 / 风险扣减 0')
+
+    await checkboxes[1].setChecked(true)
+    await wrapper.find('.assign-selected-agents').trigger('click')
+
+    expect(wrapper.emitted('assign-task')[0]).to.deep.equal([selectedTask, [eligible]])
+  })
+
   it('does not reopen BountyPanel detail modal from a stale selected task', async () => {
     const selectedTask = {
       id: 'task-1',

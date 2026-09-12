@@ -236,7 +236,7 @@
                     class="assignee-check"
                     type="checkbox"
                     :checked="selectedAssigneeIds.includes(agent.agentId)"
-                    :disabled="isFundedTask(detailTask)"
+                    :disabled="isFundedTask(detailTask) || !canAssign(detailTask, agent)"
                     @click.stop
                     @change="toggleAssignee(agent)"
                   />
@@ -249,6 +249,12 @@
                 </button>
                 <p v-if="recommendationReason(agent)" class="recommendation-reason">
                   {{ recommendationReason(agent) }}
+                </p>
+                <p v-if="recommendationExclusionReasons(agent).length" class="recommendation-reason recommendation-exclusions">
+                  不宜点将：{{ recommendationExclusionReasons(agent).join('、') }}
+                </p>
+                <p v-if="recommendationScoreParts(agent).length" class="recommendation-reason recommendation-score-parts">
+                  评分明细：{{ recommendationScoreParts(agent).join(' / ') }}
                 </p>
                 <div class="recommended-agent-actions">
                   <button
@@ -378,11 +384,30 @@ const formatMoney = value => formatSilverMicro(typeof value === 'string' && isCa
 const canCancelFunding = task => isFundedTask(task) && task.status === 'open' && typeof (task.version ?? task.taskVersion) === 'string'
 const selectedAssignees = computed(() => {
   const selected = new Set(selectedAssigneeIds.value)
-  return props.recommendedAgents.filter(agent => selected.has(agent.agentId))
+  return props.recommendedAgents.filter(agent =>
+    selected.has(agent.agentId) && props.canAssign(detailTask.value, agent))
 })
 
 const agentDisplayName = (agent) => agent?.name || agent?.personaName || agent?.agentId || ''
 const recommendationReason = (agent) => agent?.recommendationReason || ''
+const recommendationExclusionReasons = (agent) => Array.isArray(agent?.exclusionReasons)
+  ? agent.exclusionReasons.filter(reason => typeof reason === 'string' && reason)
+  : []
+const scorePartLabels = {
+  ability: '本领',
+  availability: '可用',
+  success: '成功',
+  load: '负载',
+  context: '上下文',
+  riskPenalty: '风险扣减'
+}
+const recommendationScoreParts = (agent) => {
+  const parts = agent?.scoreParts
+  if (!parts || typeof parts !== 'object' || Array.isArray(parts)) return []
+  return Object.entries(parts)
+    .filter(([key, value]) => scorePartLabels[key] && typeof value === 'number')
+    .map(([key, value]) => `${scorePartLabels[key]} ${value}`)
+}
 const recommendationScore = (task, agent) => agent?.recommendationScore ?? props.taskAgentMatchScore(task, agent)
 const taskAssigneeIds = (task) => {
   if (!task) return []
@@ -419,7 +444,7 @@ const submitCreateTask = () => {
 }
 
 const toggleAssignee = (agent) => {
-  if (isFundedTask(detailTask.value)) return
+  if (isFundedTask(detailTask.value) || !props.canAssign(detailTask.value, agent)) return
   const id = agent?.agentId
   if (!id) return
   if (selectedAssigneeIds.value.includes(id)) {

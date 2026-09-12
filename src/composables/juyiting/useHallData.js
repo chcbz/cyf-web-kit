@@ -67,13 +67,16 @@ export const useHallData = ({
           ...(recommendation.agent || {}),
           recommendationScore: recommendation.score,
           recommendationReason: recommendation.reason,
-          recommendationParts: {
-            ability: recommendation.abilityScore,
-            status: recommendation.statusScore,
-            success: recommendation.successScore,
-            load: recommendation.loadScore,
-            recent: recommendation.recentScore
-          },
+          // E01 returns one authoritative eligibility verdict and weighted parts.
+          // Preserve both unchanged; absent eligibility remains compatible with legacy responses.
+          eligible: recommendation.eligible,
+          exclusionReasons: Array.isArray(recommendation.exclusionReasons)
+            ? recommendation.exclusionReasons
+            : [],
+          scoreParts: recommendation.scoreParts && typeof recommendation.scoreParts === 'object'
+            && !Array.isArray(recommendation.scoreParts)
+            ? recommendation.scoreParts
+            : null,
           matchedAbilities: recommendation.matchedAbilities || [],
           capability: recommendation.capability || null
         }))
@@ -89,6 +92,7 @@ export const useHallData = ({
   const canAssign = (task, agent) => {
     if (!task || typeof agent?.agentId !== 'string' || !agent.agentId.trim()) return false
     if (normalizeStatus(task.status) !== 'open') return false
+    if (agent.eligible === false) return false
     if (agent.canOperate === false || agent.systemAgent) return false
     return normalizeStatus(agent.status) === 'online'
   }
