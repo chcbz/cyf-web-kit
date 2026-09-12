@@ -3,6 +3,8 @@ import { log } from '../utils/logger.js'
 import { initiateReauthentication } from '../utils/reauthentication.js'
 import { registerIdentityCleanup } from '../utils/identityLifecycle.js'
 import { combineAbortSignals, throwIfAborted } from '../utils/abortSignals.js'
+
+const JSON_REQUEST_BUDGET_MS = 5000
 // import { useGlobalStore } from '../stores/global' // 预留
 // import { useUtilStore } from '../stores/util' // 预留
 
@@ -17,7 +19,8 @@ import { combineAbortSignals, throwIfAborted } from '../utils/abortSignals.js'
  * @param {boolean} options.autoLoading - 是否自动管理loading状态，默认为true
  * @param {boolean} options.needAuth - 是否需要认证，默认为true
  * @param {string} options.responseType - 响应类型，支持 'json'（默认）、'text'（文本）和 'stream'（流式响应）
- * @param {number} options.timeout - 请求超时时间（毫秒），默认为环境变量 VITE_HTTP_TIMEOUT 或 60000（60秒）
+ * @param {number} options.timeout - 请求超时时间（毫秒）；普通 JSON 请求总预算最多为 5000ms
+ * @param {AbortSignal} options.signal - 调用方取消信号；取消会保留为可区分的请求取消错误
  * @param {Function} options.onSuccess - 成功回调
  * @param {Function} options.onError - 错误回调
  * @param {Function} options.onFinally - 最终回调
@@ -71,6 +74,7 @@ export function useHttp (options = {}) {
     error.value = null
 
     let requestSignal = null
+    let requestDeadline = null
     let unregisterIdentityCleanup = null
     let requestAuthStore = null
     let authorizationGeneration
@@ -108,11 +112,15 @@ export function useHttp (options = {}) {
         requestUrl = `${requestUrl}${requestUrl.includes('?') ? '&' : '?'}${urlParams}`
       }
 
-      // Keep caller, timeout, and identity cancellation active together. This is
-      // created before token acquisition so an already-aborted caller cannot start OAuth.
-      const timeoutValue = timeout ||
-                          (runtimeEnv.VITE_HTTP_TIMEOUT ? parseInt(runtimeEnv.VITE_HTTP_TIMEOUT, 10) : null) ||
-                          60000
+      // The five-second budget applies only to ordinary JSON APIs. Streaming,
+      // FormData uploads, and non-JSON transfers retain their existing timeout behavior.
+      // Start it before token acquisition so authentication consumes the same total budget.
+      const ordinaryJsonRequest = responseType === 'json' && !isFormData
+      const configuredTimeout = resolveConfiguredTimeout(timeout, runtimeEnv)
+      const timeoutValue = ordinaryJsonRequest
+        ? Math.min(configuredTimeout, JSON_REQUEST_BUDGET_MS)
+        : configuredTimeout
+      requestDeadline = ordinaryJsonRequest ? Date.now() + timeoutValue : null
       const identityController = needAuth ? new AbortController() : null
       requestSignal = combineAbortSignals({
         signals: [signal, identityController?.signal],
@@ -124,6 +132,7 @@ export function useHttp (options = {}) {
         })
       }
       throwIfAborted(requestSignal.signal)
+      throwIfRequestDeadlineElapsed(requestDeadline)
 
       // 如果需要认证，获取token
       let token = null
@@ -140,6 +149,7 @@ export function useHttp (options = {}) {
           config.headers.Authorization = `Bearer ${token}`
         } catch (authError) {
           throwIfAborted(requestSignal.signal)
+          throwIfRequestDeadlineElapsed(requestDeadline)
           if (authError?.name === 'AbortError' || authError?.name === 'TimeoutError') throw authError
           throw new Error(`Authentication failed: ${authError.message}`)
         }
@@ -147,6 +157,7 @@ export function useHttp (options = {}) {
 
       // 使用 fetch API 替代 axios，特别是为了支持 stream
       throwIfAborted(requestSignal.signal)
+      throwIfRequestDeadlineElapsed(requestDeadline)
       const fetchConfig = {
         method: config.method,
         headers: config.headers,
@@ -326,8 +337,10 @@ export function useHttp (options = {}) {
       const failure = aborted
         ? (requestSignal.signal.reason || new DOMException('The operation was aborted', 'AbortError'))
         : err
-      const cancellation = failure?.name === 'AbortError' || failure?.name === 'TimeoutError'
-      error.value = cancellation ? '请求超时' : (failure.message || '请求失败')
+      const failureClass = classifyRequestFailure(failure)
+      const cancellation = failureClass === 'deadline_exceeded' || failureClass === 'cancelled'
+      if (failure && typeof failure === 'object') failure.requestErrorClass = failureClass
+      error.value = requestErrorMessage(failure, failureClass)
 
       if (failure.status === 401 && needAuth && requestAuthStore &&
           !requestSignal.signal.aborted &&
@@ -400,6 +413,36 @@ export function useHttp (options = {}) {
       response.value = null
     }
   }
+}
+
+function resolveConfiguredTimeout (timeout, runtimeEnv) {
+  const requestedTimeout = Number(timeout)
+  if (Number.isFinite(requestedTimeout) && requestedTimeout >= 0) return requestedTimeout
+
+  const environmentTimeout = Number.parseInt(runtimeEnv.VITE_HTTP_TIMEOUT, 10)
+  if (Number.isFinite(environmentTimeout) && environmentTimeout >= 0) return environmentTimeout
+
+  return 60000
+}
+
+function throwIfRequestDeadlineElapsed (deadline) {
+  if (deadline === null || Date.now() < deadline) return
+  throw new DOMException('Request deadline exceeded', 'TimeoutError')
+}
+
+function classifyRequestFailure (failure) {
+  if (failure?.name === 'TimeoutError') return 'deadline_exceeded'
+  if (failure?.name === 'AbortError') return 'cancelled'
+  if (Number.isInteger(failure?.status)) return 'http'
+  if (failure instanceof TypeError) return 'network'
+  return 'unknown'
+}
+
+function requestErrorMessage (failure, failureClass) {
+  if (failureClass === 'deadline_exceeded') return '请求超时，请重试'
+  if (failureClass === 'cancelled') return '请求已取消'
+  if (failureClass === 'network') return '网络连接失败，请检查网络后重试'
+  return failure?.message || '请求失败'
 }
 
 /**

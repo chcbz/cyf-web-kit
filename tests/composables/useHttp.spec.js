@@ -135,6 +135,99 @@ describe('useHttp', () => {
     }
   })
 
+  it('caps ordinary JSON requests at the five-second total budget', async () => {
+    const originalFetch = global.fetch
+    const originalTimeout = Object.getOwnPropertyDescriptor(AbortSignal, 'timeout')
+    const observedTimeouts = []
+    Object.defineProperty(AbortSignal, 'timeout', {
+      configurable: true,
+      writable: true,
+      value: milliseconds => {
+        observedTimeouts.push(milliseconds)
+        return new AbortController().signal
+      }
+    })
+    global.fetch = async () => new Response(JSON.stringify({ ok: true }), { status: 200 })
+
+    try {
+      await useHttp().get('/ordinary-json', {}, { needAuth: false, timeout: 60_000 })
+    } finally {
+      global.fetch = originalFetch
+      Object.defineProperty(AbortSignal, 'timeout', originalTimeout)
+    }
+
+    expect(observedTimeouts).to.deep.equal([5000])
+  })
+
+  it('leaves stream, upload, and non-JSON transfer timeout defaults unchanged', async () => {
+    const originalFetch = global.fetch
+    const originalTimeout = Object.getOwnPropertyDescriptor(AbortSignal, 'timeout')
+    const observedTimeouts = []
+    Object.defineProperty(AbortSignal, 'timeout', {
+      configurable: true,
+      writable: true,
+      value: milliseconds => {
+        observedTimeouts.push(milliseconds)
+        return new AbortController().signal
+      }
+    })
+    global.fetch = async () => new Response('ok', { status: 200 })
+
+    try {
+      await useHttp().get('/events', {}, { needAuth: false, responseType: 'stream' })
+      await useHttp().post('/upload', new FormData(), { needAuth: false })
+      await useHttp().get('/download', {}, { needAuth: false, responseType: 'text' })
+    } finally {
+      global.fetch = originalFetch
+      Object.defineProperty(AbortSignal, 'timeout', originalTimeout)
+    }
+
+    expect(observedTimeouts).to.deep.equal([60000, 60000, 60000])
+  })
+
+  it('uses the remaining JSON deadline after authentication and classifies the failure', async () => {
+    const originalNow = Date.now
+    const originalFetch = global.fetch
+    let now = 1000
+    Date.now = () => now
+    global.fetch = async () => {
+      throw new Error('fetch must not start after the deadline')
+    }
+    const http = useHttp()
+
+    try {
+      let failure
+      try {
+        await http.get('/protected', {}, {
+          authStore: { token: async () => { now += 5000; return 'token' } }
+        })
+      } catch (error) {
+        failure = error
+      }
+      expect(failure).to.include({ name: 'TimeoutError', requestErrorClass: 'deadline_exceeded' })
+      expect(http.error.value).to.equal('请求超时，请重试')
+    } finally {
+      Date.now = originalNow
+      global.fetch = originalFetch
+    }
+  })
+
+  it('classifies caller cancellation separately from deadline exhaustion', async () => {
+    const caller = new AbortController()
+    const reason = new DOMException('caller cancelled', 'AbortError')
+    caller.abort(reason)
+    const http = useHttp()
+
+    try {
+      await http.get('/cancelled', {}, { needAuth: false, signal: caller.signal })
+      expect.fail('expected caller cancellation')
+    } catch (error) {
+      expect(error).to.equal(reason)
+      expect(error.requestErrorClass).to.equal('cancelled')
+      expect(http.error.value).to.equal('请求已取消')
+    }
+  })
+
   it('combines caller and timeout signals without starting OAuth for an already-aborted caller', async () => {
     const caller = new AbortController()
     const reason = new DOMException('caller cancelled', 'AbortError')
