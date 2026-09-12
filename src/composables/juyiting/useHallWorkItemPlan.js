@@ -28,7 +28,8 @@ const apiFailure = error => {
 }
 
 /** Manual-only E03 client boundary. It never assigns, dispatches, probes, or infers an actor. */
-export const useHallWorkItemPlan = ({ api = createApi('/agent'), enabled = false, task, actorAgentId, createIdempotencyKey = requestKey } = {}) => {
+export const useHallWorkItemPlan = ({ api = createApi('/agent'), enabled = false, task, actorAgentId,
+  authorizationGeneration = 0, createIdempotencyKey = requestKey } = {}) => {
   const objective = ref('')
   const maxItems = ref(4)
   const dependencyMode = ref('sequential')
@@ -46,8 +47,9 @@ export const useHallWorkItemPlan = ({ api = createApi('/agent'), enabled = false
   const currentTask = computed(() => unref(task) || null)
   const actor = computed(() => unref(actorAgentId) || '')
   const available = computed(() => unref(enabled) === true)
+  const identityGeneration = computed(() => unref(authorizationGeneration))
   const operable = computed(() => available.value && ID(currentTask.value?.id) && ID(actor.value))
-  const scope = computed(() => `${currentTask.value?.id || ''}\u0000${actor.value}`)
+  const scope = computed(() => `${currentTask.value?.id || ''}\u0000${actor.value}\u0000${identityGeneration.value}`)
   const confirmationBody = () => suggestion.value ? {
     confirmed: true,
     sourcePlanId: suggestion.value.sourcePlanId,
@@ -57,6 +59,9 @@ export const useHallWorkItemPlan = ({ api = createApi('/agent'), enabled = false
   } : null
   const validSuggestion = value => value && ID(value.taskId) && typeof value.sourcePlanId === 'string' &&
     typeof value.sourcePlanDigest === 'string' && typeof value.expectedTaskVersion === 'string' && Array.isArray(value.items)
+  const matchingConfirmation = (value, body, taskId) => value?.confirmed === true && Array.isArray(value.items) &&
+    value.taskId === taskId && value.sourcePlanId === body.sourcePlanId &&
+    value.sourcePlanDigest === body.sourcePlanDigest && value.expectedTaskVersion === body.expectedTaskVersion
 
   const reset = () => {
     generation += 1
@@ -75,17 +80,25 @@ export const useHallWorkItemPlan = ({ api = createApi('/agent'), enabled = false
       autoLoading: false, signal: controller.signal, headers })
   }
   const suggest = async () => {
+    // Do not cancel a submitted confirmation: its key must remain available for an
+    // explicit retry if the outcome becomes unknown.
+    if (state.value === 'confirming') return null
     if (!available.value) { message.value = '任务计划功能尚未在此环境启用。'; return null }
     if (!operable.value) { message.value = '未取得此榜文的明确协调者身份，不能代猜或操作。'; return null }
     const captured = ++generation
     const taskId = currentTask.value.id
     const capturedActor = actor.value
-    state.value = 'suggesting'; message.value = ''; stale.value = false
+    const capturedIdentityGeneration = identityGeneration.value
+    // A fresh suggestion supersedes any prior server plan. A failed refresh must not leave
+    // an older plan confirmable under a new intent.
+    suggestion.value = null; items.value = []; stale.value = false
+    state.value = 'suggesting'; message.value = ''
     try {
       const result = unwrap(await send(`/tasks/${encodeURIComponent(taskId)}/work-item-plans/suggest`, {
         objective: objective.value, maxItems: maxItems.value, dependencyMode: dependencyMode.value
       }, { }))
-      if (captured !== generation || taskId !== currentTask.value?.id || capturedActor !== actor.value) return null
+      if (captured !== generation || taskId !== currentTask.value?.id || capturedActor !== actor.value ||
+        capturedIdentityGeneration !== identityGeneration.value) return null
       if (!validSuggestion(result) || result.taskId !== taskId) throw new Error('服务返回的任务计划无效')
       suggestion.value = clone(result); items.value = planItems(result); state.value = 'editing'
       confirmFingerprint = ''; confirmKey = ''
@@ -104,13 +117,15 @@ export const useHallWorkItemPlan = ({ api = createApi('/agent'), enabled = false
     const captured = ++generation
     const taskId = currentTask.value.id
     const capturedActor = actor.value
+    const capturedIdentityGeneration = identityGeneration.value
     state.value = 'confirming'; message.value = ''
     try {
       const result = unwrap(await send(`/tasks/${encodeURIComponent(taskId)}/work-item-plans/confirm`, body, {
         'Idempotency-Key': confirmKey
       }))
-      if (captured !== generation || taskId !== currentTask.value?.id || capturedActor !== actor.value) return null
-      if (!result?.confirmed || !Array.isArray(result.items)) throw new Error('服务未确认创建工作项')
+      if (captured !== generation || taskId !== currentTask.value?.id || capturedActor !== actor.value ||
+        capturedIdentityGeneration !== identityGeneration.value) return null
+      if (!matchingConfirmation(result, body, taskId)) throw new Error('服务确认回执与原计划不匹配')
       confirmedItems.value = clone(result.items); state.value = 'confirmed'; message.value = '已确认创建未分配工作项；未自动点将或派发。'
       return result
     } catch (error) {

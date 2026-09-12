@@ -150,7 +150,7 @@
                 <pre v-if="detailTask.settlement" class="settlement-detail">{{ JSON.stringify(detailTask.settlement, null, 2) }}</pre>
               </section>
 
-              <WorkItemPlanPanel :task="detailTask" :enabled="workItemPlanEnabled" />
+              <WorkItemPlanPanel :task="detailTask" :enabled="workItemPlanEnabled" :authorization-generation="authorizationGeneration" />
 
               <div class="ability-tags">
                 <span v-for="ability in detailTask.requiredAbilities || []" :key="ability">{{ ability }}</span>
@@ -320,6 +320,7 @@ const props = defineProps({
   taskStatusFilter: { type: String, default: '' },
   fundedPreviewEnabled: { type: Boolean, default: false },
   workItemPlanEnabled: { type: Boolean, default: false },
+  authorizationGeneration: { type: Number, default: 0 },
   fundedQuotePreview: { type: Object, default: null },
   fundedClaimState: { type: Object, default: null },
   fundedCreateRecovery: { type: Object, default: null },

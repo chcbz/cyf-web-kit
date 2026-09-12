@@ -190,6 +190,7 @@
             :can-assign="canAssign"
             :funded-preview-enabled="economyPreviewEnabled"
             :work-item-plan-enabled="workItemPlanEnabled"
+            :authorization-generation="apiStore.authorizationGeneration"
             :funded-quote-preview="fundedQuotePreview"
             :funded-claim-state="fundedClaimState"
             :funded-create-recovery="fundedCreateRecovery"

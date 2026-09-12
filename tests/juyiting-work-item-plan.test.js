@@ -16,8 +16,9 @@ const suggested = (taskId = 'task-1') => ({
 })
 const ok = data => ({ data: { data } })
 const error = (status, code = '') => Object.assign(new Error(code || `HTTP error! status: ${status}`), { status, code })
-const fixture = ({ task = ref({ id: 'task-1', coordinatorAgentId: 'agent-a' }), actor = ref('agent-a'), enabled = ref(true), api, key = () => 'plan-key-0001' } = {}) =>
-  useHallWorkItemPlan({ task, actorAgentId: actor, enabled, api, createIdempotencyKey: key })
+const fixture = ({ task = ref({ id: 'task-1', coordinatorAgentId: 'agent-a' }), actor = ref('agent-a'),
+  identity = ref(0), enabled = ref(true), api, key = () => 'plan-key-0001' } = {}) =>
+  useHallWorkItemPlan({ task, actorAgentId: actor, authorizationGeneration: identity, enabled, api, createIdempotencyKey: key })
 
 describe('E03 manual work item plan client', () => {
   it('keeps the panel explicit-actor only and outside existing assignment/recommendation paths', () => {
@@ -25,8 +26,10 @@ describe('E03 manual work item plan client', () => {
     const panel = readFileSync(new URL('../src/components/juyiting/WorkItemPlanPanel.vue', import.meta.url), 'utf8')
     expect(source).to.include('params: { actorAgentId: actor.value }')
     expect(source).not.to.include('selectedAgent')
-    expect(source).not.to.match(/auto-assign|dispatch|\/assign/)
+    expect(source).to.include("state.value === 'confirming'")
+    expect(source).to.include('authorizationGeneration')
     expect(panel).to.include('coordinatorAgentId')
+    expect(panel).to.include('onBeforeUnmount(() => plan.dispose())')
     expect(panel).not.to.include('v-html')
   })
   it('uses the real createApi/useHttp boundary with explicit task and actor query, body, and idempotency header', async () => {
@@ -98,6 +101,68 @@ describe('E03 manual work item plan client', () => {
     stalePlan.objective.value = '目标'; await stalePlan.suggest(); await stalePlan.confirm()
     expect(stalePlan.stale.value).to.equal(true)
     expect(stalePlan.confirmedItems.value).to.deep.equal([])
+  })
+
+  it('does not let a new suggestion cancel an in-flight confirmation', async () => {
+    const confirmation = deferred()
+    const calls = []
+    const plan = fixture({ api: { execute: async call => {
+      calls.push(call)
+      return call.url.includes('/suggest') ? ok(suggested()) : confirmation.promise
+    } } })
+    plan.objective.value = '目标'; await plan.suggest()
+    const pendingConfirm = plan.confirm()
+    expect(await plan.suggest()).to.equal(null)
+    expect(calls.filter(call => call.url.includes('/suggest'))).to.have.length(1)
+    expect(calls.at(-1).signal.aborted).to.equal(false)
+    confirmation.resolve(ok({ ...suggested(), confirmed: true, items: [{ ...suggested().items[0], workItemId: 'work-1', status: 'pending' }] }))
+    expect((await pendingConfirm).confirmed).to.equal(true)
+  })
+
+  it('requires the confirm receipt to bind the exact task and original source fields', async () => {
+    const plan = fixture({ api: { execute: async call => call.url.includes('/suggest')
+      ? ok(suggested())
+      : ok({ ...suggested(), confirmed: true, sourcePlanId: 'other-source', items: [] }) } })
+    plan.objective.value = '目标'
+    await plan.suggest(); await plan.confirm()
+    expect(plan.confirmedItems.value).to.deep.equal([])
+    expect(plan.message.value).to.include('回执与原计划不匹配')
+  })
+
+  it('clears an old suggestion before a failed refresh so it cannot be confirmed', async () => {
+    let suggestions = 0
+    const calls = []
+    const plan = fixture({ api: { execute: async call => {
+      calls.push(call)
+      if (call.url.includes('/suggest') && ++suggestions === 1) return ok(suggested())
+      throw error(503, 'WORK_ITEM_PLAN_UNAVAILABLE')
+    } } })
+    plan.objective.value = '目标'
+    await plan.suggest(); expect(plan.items.value).to.have.length(1)
+    await plan.suggest()
+    expect(plan.suggestion.value).to.equal(null)
+    expect(plan.items.value).to.deep.equal([])
+    await plan.confirm()
+    expect(calls.filter(call => call.url.includes('/confirm'))).to.have.length(0)
+  })
+
+  it('clears retrieved plans and ignores in-flight replies when authorization generation changes', async () => {
+    const identity = ref(1)
+    const plan = fixture({ identity, api: { execute: async () => ok(suggested()) } })
+    plan.objective.value = '目标'; await plan.suggest()
+    identity.value = 2
+    expect(plan.suggestion.value).to.equal(null)
+    expect(plan.items.value).to.deep.equal([])
+
+    const pending = deferred()
+    const inFlight = fixture({ identity, api: { execute: async () => pending.promise } })
+    inFlight.objective.value = '目标'
+    const request = inFlight.suggest()
+    identity.value = 3
+    pending.resolve(ok(suggested()))
+    expect(await request).to.equal(null)
+    expect(inFlight.suggestion.value).to.equal(null)
+    expect(inFlight.items.value).to.deep.equal([])
   })
 
   it('aborts and ignores a late response when explicit task or actor changes', async () => {

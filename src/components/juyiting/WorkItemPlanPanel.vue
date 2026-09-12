@@ -8,7 +8,7 @@
         <textarea v-model.trim="objective" placeholder="拆解目标"></textarea>
         <select v-model="dependencyMode"><option value="sequential">按顺序</option><option value="parallel">可并行</option></select>
         <input v-model.number="maxItems" type="number" min="1" :max="MAX_ITEMS" aria-label="最大条目" />
-        <button type="button" :disabled="state === 'suggesting' || !objective" @click="suggest">手动获取建议</button>
+        <button type="button" :disabled="state === 'suggesting' || state === 'confirming' || !objective" @click="suggest">手动获取建议</button>
       </div>
       <p v-if="message" class="plan-state" :class="{ 'is-error': state === 'error' }" role="status">{{ message }}</p>
       <div v-if="items.length" class="plan-editor">
@@ -25,20 +25,23 @@
         </article>
         <p class="plan-preview">确认将创建 {{ items.length }} 个未分配工作项；不会自动点将或派发。</p>
         <button type="button" :disabled="state === 'confirming' || stale" @click="confirm">显式确认提交</button>
-        <button v-if="stale" type="button" @click="suggest">重新获取建议</button>
+        <button v-if="stale" type="button" :disabled="state === 'confirming'" @click="suggest">重新获取建议</button>
       </div>
       <ul v-if="confirmedItems.length" class="confirmed-items"><li v-for="item in confirmedItems" :key="item.workItemId || item.itemKey">{{ item.title }}（{{ item.status || 'pending' }}，未分配）</li></ul>
     </template>
   </section>
 </template>
 <script setup>
-import { computed, toRef } from 'vue'
+import { computed, onBeforeUnmount, toRef } from 'vue'
 import { useHallWorkItemPlan } from '@/composables/juyiting/useHallWorkItemPlan'
-const props = defineProps({ task: { type: Object, required: true }, enabled: { type: Boolean, default: false } })
+const props = defineProps({ task: { type: Object, required: true }, enabled: { type: Boolean, default: false },
+  authorizationGeneration: { type: Number, default: 0 } })
 const actorAgentId = computed(() => props.task?.coordinatorAgentId || '')
-const plan = useHallWorkItemPlan({ enabled: toRef(props, 'enabled'), task: toRef(props, 'task'), actorAgentId })
+const plan = useHallWorkItemPlan({ enabled: toRef(props, 'enabled'), task: toRef(props, 'task'), actorAgentId,
+  authorizationGeneration: computed(() => props.authorizationGeneration) })
 const { MAX_ITEMS, objective, maxItems, dependencyMode, items, state, message, confirmedItems, stale, available, operable, suggest, confirm } = plan
 const workTypes = ['analysis', 'implementation', 'verification', 'review', 'coordination', 'documentation']
+onBeforeUnmount(() => plan.dispose())
 </script>
 <style scoped>
 .work-item-plan { margin: 12px 0; padding: 10px; border-radius: 8px; background: #e9f0e7; color: #23483e; font-size: 12px; }
