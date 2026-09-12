@@ -13,6 +13,7 @@ const validSource = value => value && (value.type === 'CONVERSATION' || value.ty
 const pathPart = value => encodeURIComponent(String(value))
 const itemKey = item => `${String(item?.outputId)}:${String(item?.version)}`
 const abortFailure = message => new DOMException(message, 'AbortError')
+const sourcePermanentlyInaccessible = failure => [401, 403, 404, 410].includes(Number(failure?.status)) || failure?.retryable === false
 
 const mergeUnique = (preferred, retained = []) => {
   const seen = new Set()
@@ -94,6 +95,7 @@ export function useOutputs (source, options = {}) {
   let pollTimer = null
   let pollDelay = POLL_START_MS
   let generation = 0
+  let sourceInvalidated = false
   let disposed = false
   let refreshAfterLoad = false
   let loadedPageCount = 1
@@ -137,9 +139,10 @@ export function useOutputs (source, options = {}) {
     versionsLoading.value = false
     versionsError.value = null
   }
-  const clear = () => {
+  const resetSourceState = ({ preservedError = null, invalidated = false } = {}) => {
     generation += 1
     lifecycleKey.value += 1
+    sourceInvalidated = invalidated
     cancelPoll()
     listController?.abort()
     listController = null
@@ -149,12 +152,17 @@ export function useOutputs (source, options = {}) {
     items.value = []
     nextCursor.value = null
     snapshotAt.value = null
-    error.value = null
+    error.value = preservedError
     loading.value = false
     pollDelay = POLL_START_MS
     refreshAfterLoad = false
     loadedPageCount = 1
   }
+  const clear = () => resetSourceState()
+  const invalidateSource = failure => resetSourceState({
+    preservedError: normalizeOutputError(failure),
+    invalidated: true
+  })
   const operation = (signal) => {
     const controller = new AbortController()
     const forwardAbort = () => controller.abort(signal?.reason || abortFailure('Operation cancelled'))
@@ -201,6 +209,7 @@ export function useOutputs (source, options = {}) {
       }
       if (!pages.length) return
       const received = pages.flatMap(page => page.items)
+      sourceInvalidated = false
       items.value = more ? mergeUnique(items.value, received) : mergeUnique(received)
       nextCursor.value = cursor
       snapshotAt.value = pages[0].snapshotAt ?? null
@@ -210,8 +219,13 @@ export function useOutputs (source, options = {}) {
       pollDelay = POLL_START_MS
     } catch (failure) {
       if (failure?.name === 'AbortError' || !isCurrent(current, requestGeneration)) return
-      error.value = normalizeOutputError(failure)
-      if (reason === 'poll' && error.value.retryable) pollDelay = Math.min(pollDelay * 2, POLL_MAX_MS)
+      const normalized = normalizeOutputError(failure)
+      if (sourcePermanentlyInaccessible(normalized)) {
+        invalidateSource(normalized)
+      } else {
+        error.value = normalized
+        if (reason === 'poll' && error.value.retryable) pollDelay = Math.min(pollDelay * 2, POLL_MAX_MS)
+      }
     } finally {
       if (isCurrent(current, requestGeneration)) {
         loading.value = false
@@ -230,6 +244,7 @@ export function useOutputs (source, options = {}) {
   const loadVersions = async (item, { more = false } = {}) => {
     const current = sourceValue.value
     assertCurrentItem(current, item)
+    if (sourceInvalidated) throw abortFailure('Output source is no longer accessible')
     const sameTarget = versionTarget.value?.outputId === item.outputId
     if (more && (!sameTarget || !versionNextCursor.value)) return
     if (versionsLoading.value) return
@@ -266,6 +281,7 @@ export function useOutputs (source, options = {}) {
   const detail = async (item, { signal } = {}) => {
     const current = sourceValue.value
     assertCurrentItem(current, item)
+    if (sourceInvalidated) throw abortFailure('Output source is no longer accessible')
     const requestGeneration = generation
     const active = operation(signal)
     try {
@@ -283,6 +299,7 @@ export function useOutputs (source, options = {}) {
   const downloadBlob = async (item, { signal } = {}) => {
     const current = sourceValue.value
     assertCurrentItem(current, item)
+    if (sourceInvalidated) throw abortFailure('Output source is no longer accessible')
     const requestGeneration = generation
     const active = operation(signal)
     try {
@@ -300,6 +317,7 @@ export function useOutputs (source, options = {}) {
   const download = async item => {
     const current = sourceValue.value
     assertCurrentItem(current, item)
+    if (sourceInvalidated) throw abortFailure('Output source is no longer accessible')
     const requestGeneration = generation
     const active = operation()
     try {
@@ -321,6 +339,7 @@ export function useOutputs (source, options = {}) {
   const resourceRoute = item => {
     const current = sourceValue.value
     assertCurrentItem(current, item)
+    if (sourceInvalidated) throw abortFailure('Output source is no longer accessible')
     const origin = routeLocation?.origin || new URL(routeLocation?.href || 'http://localhost/').origin
     const url = new URL('/chat', origin)
     url.searchParams.set('outputSourceType', current.type)

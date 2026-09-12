@@ -408,6 +408,149 @@ describe('OD05 shared output retrieval', () => {
     expect(timer.tasks).to.deep.equal([])
   })
 
+  it('invalidates every source cache and in-flight operation for permanent list denials', async () => {
+    const { OutputList } = loadOutputComponents()
+    const denialCases = [
+      { status: 401 },
+      { status: 403 },
+      { status: 404 },
+      { status: 410 },
+      { status: 503, retryable: false }
+    ]
+    for (const denial of denialCases) {
+      const source = ref({ type: 'CONVERSATION', id: `conversation-${denial.status}` })
+      const focused = item({
+        source: source.value,
+        outputId: 'source-secret',
+        version: '2',
+        title: `来源失效前-${denial.status}`,
+        previewKind: 'TEXT'
+      })
+      const requestedResource = ref({ source: source.value, outputId: focused.outputId, version: focused.version })
+      const heldDetail = deferred()
+      const heldPreviewBlob = deferred()
+      const heldDownload = deferred()
+      let revoked = false
+      let holdDetail = false
+      let heldDetailSignal
+      let heldPreviewBlobSignal
+      let downloadSignal
+      let detailCalls = 0
+      let saves = 0
+      const http = {
+        get: (url, _params, config = {}) => {
+          if (url.endsWith('/outputs')) {
+            if (revoked) {
+              return Promise.reject(Object.assign(new Error(`来源已拒绝-${denial.status}`), {
+                status: denial.status,
+                retryable: denial.retryable,
+                requestId: `source-request-${denial.status}`
+              }))
+            }
+            return Promise.resolve(page(source.value, [focused], 'next-list', 'snapshot-list'))
+          }
+          if (url.endsWith('/versions')) return Promise.resolve(page(source.value, [focused], 'next-version', 'snapshot-version'))
+          if (url.endsWith('/download')) {
+            heldPreviewBlobSignal = config.signal
+            return heldPreviewBlob.promise
+          }
+          if (url.endsWith('/versions/2')) {
+            detailCalls += 1
+            if (holdDetail) {
+              heldDetailSignal = config.signal
+              return heldDetail.promise
+            }
+            return Promise.resolve({ data: { data: { item: focused, content: `旧详情-${denial.status}` } } })
+          }
+          throw new Error(`Unexpected output URL: ${url}`)
+        }
+      }
+      let outputs
+      const Harness = defineComponent({
+        setup () {
+          outputs = useOutputs(source, {
+            http,
+            requestedResource,
+            download: async ({ signal, assertActive }) => {
+              downloadSignal = signal
+              await heldDownload.promise
+              assertActive()
+              saves += 1
+            }
+          })
+          return () => h(OutputList, { outputs })
+        }
+      })
+      const wrapper = mount(Harness)
+      wrappers.add(wrapper)
+      await flush(12)
+      await outputs.loadVersions(focused)
+      expect(wrapper.text()).to.include(focused.title)
+      expect(outputs.nextCursor.value).to.equal('next-list')
+      expect(outputs.versions.value).to.have.length(1)
+
+      holdDetail = true
+      const pendingDetail = outputs.detail(focused).catch(error => error)
+      const pendingPreviewBlob = outputs.downloadBlob(focused).catch(error => error)
+      const pendingDownload = outputs.download(focused).catch(error => error)
+      await flush()
+      revoked = true
+      const lifecycleBeforeDenial = outputs.lifecycleKey.value
+      await outputs.refresh()
+      await flush(12)
+
+      expect(outputs.error.value).to.include({
+        status: denial.status,
+        retryable: false,
+        requestId: `source-request-${denial.status}`
+      })
+      expect(outputs.lifecycleKey.value).to.equal(lifecycleBeforeDenial + 1)
+      expect(outputs.items.value).to.deep.equal([])
+      expect(outputs.nextCursor.value).to.equal(null)
+      expect(outputs.snapshotAt.value).to.equal(null)
+      expect(outputs.versions.value).to.deep.equal([])
+      expect(outputs.versionTarget.value).to.equal(null)
+      expect(outputs.versionNextCursor.value).to.equal(null)
+      expect(outputs.versionSnapshotAt.value).to.equal(null)
+      expect(heldDetailSignal.aborted).to.equal(true)
+      expect(heldPreviewBlobSignal.aborted).to.equal(true)
+      expect(downloadSignal.aborted).to.equal(true)
+      expect(wrapper.findAll('.output-card')).to.have.length(0)
+      expect(wrapper.find('.output-preview').exists()).to.equal(false)
+      expect(wrapper.text()).not.to.include(focused.title)
+      expect(wrapper.text()).to.include(`source-request-${denial.status}`)
+      const callsAfterDenial = detailCalls
+      await flush(8)
+      expect(detailCalls).to.equal(callsAfterDenial)
+
+      heldDetail.resolve({ data: { data: { item: focused, content: `过期详情-${denial.status}` } } })
+      heldPreviewBlob.resolve({ data: new Blob([`过期预览-${denial.status}`]) })
+      heldDownload.resolve()
+      expect((await pendingDetail).name).to.equal('AbortError')
+      expect((await pendingPreviewBlob).name).to.equal('AbortError')
+      expect((await pendingDownload).name).to.equal('AbortError')
+      await flush()
+      expect(saves).to.equal(0)
+      expect(wrapper.findAll('.output-card')).to.have.length(0)
+      expect(detailCalls).to.equal(callsAfterDenial)
+
+      const directRetry = await outputs.detail(focused).catch(error => error)
+      expect(directRetry.name).to.equal('AbortError')
+      expect(detailCalls).to.equal(callsAfterDenial)
+
+      revoked = false
+      holdDetail = false
+      await outputs.refresh()
+      await flush(12)
+      expect(outputs.error.value).to.equal(null)
+      expect(outputs.items.value).to.have.length(1)
+      expect(wrapper.text()).to.include(focused.title)
+
+      wrapper.unmount()
+      wrappers.delete(wrapper)
+    }
+  })
+
   it('polls only while syncing or retryable, backs off, pauses hidden, and refreshes once on completion', async () => {
     const source = ref({ type: 'CONVERSATION', id: 'conversation-a' })
     const syncing = ref(false)

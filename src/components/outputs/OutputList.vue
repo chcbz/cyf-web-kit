@@ -131,7 +131,7 @@ const normalizeActionError = failure => ({
   retryable: typeof failure?.retryable === 'boolean' ? failure.retryable : (!failure?.status || failure.status === 429 || failure.status >= 500),
   requestId: failure?.requestId || ''
 })
-const permanentlyInaccessible = failure => [403, 404, 410].includes(Number(failure?.status)) || failure?.retryable === false
+const permanentlyInaccessible = failure => [401, 403, 404, 410].includes(Number(failure?.status)) || failure?.retryable === false
 const download = async item => {
   downloadError.value = null
   downloadErrorItem.value = null
