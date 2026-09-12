@@ -10,6 +10,10 @@ export interface HttpOptions {
   needAuth?: boolean
   responseType?: 'json' | 'stream'
   timeout?: number
+  rum?: boolean
+  rumRoute?: string
+  rumSampleRate?: number
+  rumReporter?: (payload: { route: string, requestId: string, durationMs: number, errorClass: string }) => void | Promise<void>
   onSuccess?: (data: any, response: any) => void
   onError?: (errorMessage: string, error: any) => void
   onFinally?: () => void

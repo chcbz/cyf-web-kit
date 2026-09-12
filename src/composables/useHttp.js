@@ -3,6 +3,7 @@ import { log } from '../utils/logger.js'
 import { initiateReauthentication } from '../utils/reauthentication.js'
 import { registerIdentityCleanup } from '../utils/identityLifecycle.js'
 import { combineAbortSignals, throwIfAborted } from '../utils/abortSignals.js'
+import { classifyRequestOutcome, recordRequestTiming, resolveRequestId, sampleRequestTiming } from './useRequestRum.js'
 
 const JSON_REQUEST_BUDGET_MS = 5000
 // import { useGlobalStore } from '../stores/global' // 预留
@@ -65,7 +66,11 @@ export function useHttp (options = {}) {
       onStreamOpen,
       streamChunks = false,
       signal,
-      authStore
+      authStore,
+      rum = true,
+      rumRoute,
+      rumSampleRate,
+      rumReporter
     } = mergedOptions
 
     if (autoLoading) {
@@ -78,6 +83,10 @@ export function useHttp (options = {}) {
     let unregisterIdentityCleanup = null
     let requestAuthStore = null
     let authorizationGeneration
+    let rumStartedAt = null
+    let rumSampled = false
+    let rumRequestId = null
+    let requestUrl = url
 
     try {
       // 准备请求配置
@@ -100,7 +109,7 @@ export function useHttp (options = {}) {
       // 添加URL参数和baseURL
       const runtimeEnv = import.meta.env ?? {}
       const baseURL = runtimeEnv.VITE_API_BASE_URL || ''
-      let requestUrl = url
+      requestUrl = url
 
       // 如果URL不是绝对路径，添加baseURL
       if (!url.startsWith('http://') && !url.startsWith('https://') && baseURL) {
@@ -116,6 +125,12 @@ export function useHttp (options = {}) {
       // FormData uploads, and non-JSON transfers retain their existing timeout behavior.
       // Start it before token acquisition so authentication consumes the same total budget.
       const ordinaryJsonRequest = responseType === 'json' && !isFormData
+      if (ordinaryJsonRequest) {
+        rumStartedAt = performanceNow()
+        rumSampled = rum !== false && sampleRequestTiming(rumSampleRate)
+        rumRequestId = resolveRequestId(findHeader(headers, 'X-Request-Id'))
+        setHeader(headers, 'X-Request-Id', rumRequestId)
+      }
       const configuredTimeout = resolveConfiguredTimeout(timeout, runtimeEnv)
       const timeoutValue = ordinaryJsonRequest
         ? Math.min(configuredTimeout, JSON_REQUEST_BUDGET_MS)
@@ -171,6 +186,9 @@ export function useHttp (options = {}) {
       }
 
       const response = await fetch(requestUrl, fetchConfig)
+      if (ordinaryJsonRequest) {
+        rumRequestId = resolveRequestId(response.headers.get('X-Request-Id') || rumRequestId)
+      }
 
       // 检查 HTTP 错误状态（fetch 不会自动抛出非 2xx 的错误）
       if (!response.ok) {
@@ -330,6 +348,16 @@ export function useHttp (options = {}) {
         onSuccess(result, resultObj)
       }
 
+      reportRequestRum({
+        startedAt: rumStartedAt,
+        sampled: rumSampled,
+        route: rumRoute,
+        url: requestUrl,
+        requestId: rumRequestId,
+        errorClass: classifyRequestOutcome({ status: response.status }),
+        reporter: rumReporter,
+        endpoint: runtimeEnv.VITE_RUM_ENDPOINT
+      })
       return resultObj
 
     } catch (err) {
@@ -340,6 +368,16 @@ export function useHttp (options = {}) {
       const failureClass = classifyRequestFailure(failure)
       const cancellation = failureClass === 'deadline_exceeded' || failureClass === 'cancelled'
       if (failure && typeof failure === 'object') failure.requestErrorClass = failureClass
+      reportRequestRum({
+        startedAt: rumStartedAt,
+        sampled: rumSampled,
+        route: rumRoute,
+        url: typeof requestUrl === 'string' ? requestUrl : url,
+        requestId: rumRequestId,
+        errorClass: classifyRequestOutcome({ status: failure?.status, failureClass }),
+        reporter: rumReporter,
+        endpoint: (import.meta.env ?? {}).VITE_RUM_ENDPOINT
+      })
       error.value = requestErrorMessage(failure, failureClass)
 
       if (failure.status === 401 && needAuth && requestAuthStore &&
@@ -413,6 +451,32 @@ export function useHttp (options = {}) {
       response.value = null
     }
   }
+}
+
+function reportRequestRum (options) {
+  if (options.startedAt === null) return
+  recordRequestTiming({
+    ...options,
+    durationMs: performanceNow() - options.startedAt
+  })
+}
+
+function performanceNow () {
+  return typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now()
+}
+
+function findHeader (headers, name) {
+  const matchingKey = Object.keys(headers).find(key => key.toLowerCase() === name.toLowerCase())
+  return matchingKey ? headers[matchingKey] : undefined
+}
+
+function setHeader (headers, name, value) {
+  for (const key of Object.keys(headers)) {
+    if (key.toLowerCase() === name.toLowerCase()) delete headers[key]
+  }
+  headers[name] = value
 }
 
 function resolveConfiguredTimeout (timeout, runtimeEnv) {
