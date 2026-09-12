@@ -77,9 +77,13 @@ describe('backend scene state', () => {
     const recovered = await backend.start()
 
     expect(firstError?.message).to.equal('temporary snapshot failure')
+    expect(backend.snapshotError.value).to.equal('temporary snapshot failure')
+    expect(backend.snapshotLoading.value).to.equal(false)
     expect(snapshotCalls).to.equal(2)
     expect(recovered).to.include({ sceneId: 'juyiting-main', sceneVersion: 7 })
     expect(backend.snapshotReady.value).to.equal(true)
+    expect(backend.snapshotError.value).to.equal('')
+    expect(backend.snapshotLoading.value).to.equal(false)
     backend.stop()
   })
   it('loads the REST snapshot and parses resumable complete SSE records once', async () => {

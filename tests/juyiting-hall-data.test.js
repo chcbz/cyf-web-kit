@@ -211,3 +211,92 @@ describe('useHallData operable roster', () => {
     expect(calls.filter(call => call.url === '/roster')).to.have.length(1)
   })
 })
+
+describe('useHallData deferred Juyi Hall sources', () => {
+  it('loads map independently before optional roster, catalog, tasks, and counts', async () => {
+    const calls = []
+    const hallData = useHallData({
+      agentApi: {
+        get: async (url, _params, options) => {
+          calls.push(url)
+          if (url !== '/map') throw new Error(`unexpected get ${url}`)
+          options.onSuccess({ data: [{ agentId: 'map-agent', status: 'online' }] })
+        },
+        search: async url => {
+          calls.push(url)
+          throw new Error(`unexpected search ${url}`)
+        }
+      },
+      log: { warn: () => {} },
+      normalizeStatus: (status = '') => status.toLowerCase(),
+      selectedAgent: ref(null),
+      selectedTask: ref(null),
+      taskAgentMatchScore: () => 0
+    })
+
+    await hallData.loadMapAgents()
+
+    expect(calls).to.deep.equal(['/map'])
+    expect(hallData.mapAgents.value.map(agent => agent.agentId)).to.deep.equal(['map-agent'])
+    expect(hallData.mapLoading.value).to.equal(false)
+    expect(hallData.mapError.value).to.equal('')
+    expect(hallData.rosterLoading.value).to.equal(false)
+    expect(hallData.catalogLoading.value).to.equal(false)
+    expect(hallData.tasksLoading.value).to.equal(false)
+    expect(hallData.taskCountsLoading.value).to.equal(false)
+  })
+
+  it('keeps a successful task list when independent status-count loading fails', async () => {
+    const hallData = useHallData({
+      agentApi: {
+        search: async (url, _params, options) => {
+          if (url === '/tasks/search') {
+            options.onSuccess({ data: [{ id: 'task-1', status: 'open' }] })
+            return
+          }
+          if (url === '/tasks/status-counts') throw new Error('counts offline')
+          throw new Error(`unexpected search ${url}`)
+        }
+      },
+      log: { warn: () => {} },
+      normalizeStatus: (status = '') => status.toLowerCase(),
+      selectedAgent: ref(null),
+      selectedTask: ref(null),
+      taskAgentMatchScore: () => 0
+    })
+
+    await hallData.loadTasks()
+
+    expect(hallData.tasks.value.map(task => task.id)).to.deep.equal(['task-1'])
+    expect(hallData.tasksError.value).to.equal('')
+    expect(hallData.taskCountsError.value).to.equal('counts offline')
+    expect(hallData.tasksLoading.value).to.equal(false)
+    expect(hallData.taskCountsLoading.value).to.equal(false)
+    expect(hallData.taskStatusCount('open')).to.equal(1)
+  })
+
+  it('records a failed roster independently without clearing the map source state', async () => {
+    const hallData = useHallData({
+      agentApi: {
+        get: async (url, _params, options) => {
+          if (url !== '/map') throw new Error(`unexpected get ${url}`)
+          options.onSuccess({ data: [{ agentId: 'map-agent', status: 'online' }] })
+        },
+        search: async () => { throw new Error('roster offline') }
+      },
+      log: { warn: () => {} },
+      normalizeStatus: (status = '') => status.toLowerCase(),
+      selectedAgent: ref(null),
+      selectedTask: ref(null),
+      taskAgentMatchScore: () => 0
+    })
+
+    await hallData.loadMapAgents()
+    await hallData.loadRosterAgents()
+
+    expect(hallData.mapAgents.value.map(agent => agent.agentId)).to.deep.equal(['map-agent'])
+    expect(hallData.mapError.value).to.equal('')
+    expect(hallData.rosterError.value).to.equal('roster offline')
+    expect(hallData.rosterLoading.value).to.equal(false)
+  })
+})

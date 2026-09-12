@@ -13,6 +13,8 @@
       </div>
       <span>簿上 {{ agents.length }} / 厅中 {{ mapAgents.length }}</span>
     </div>
+    <p v-if="loading" class="panel-data-state" role="status">点将册读取中…</p>
+    <p v-else-if="errorMessage" class="panel-data-state is-error" role="alert">{{ errorMessage }}</p>
 
     <div class="agent-panel-body">
       <div class="agent-list">
@@ -64,6 +66,8 @@
 <script setup>
 defineProps({
   agents: { type: Array, default: () => [] },
+  loading: { type: Boolean, default: false },
+  errorMessage: { type: String, default: '' },
   filteredAgents: { type: Array, default: () => [] },
   mapAgents: { type: Array, default: () => [] },
   selectedAgent: { type: Object, default: null },
@@ -126,6 +130,14 @@ button {
   background: #23483e;
   color: #fff;
 }
+
+.panel-data-state {
+  margin: 0 16px 8px;
+  color: #765f40;
+  font-size: 13px;
+}
+
+.panel-data-state.is-error { color: #b3261e; }
 
 .agent-panel-body {
   display: grid;

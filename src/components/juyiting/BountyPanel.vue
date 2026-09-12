@@ -56,6 +56,11 @@
       <button type="submit" :disabled="createPending || !taskForm.title || (taskForm.funded && !validGrossAmount)">{{ createPending ? '张榜中…' : '张榜悬赏' }}</button>
     </form>
 
+    <p v-if="loading" class="task-data-state" role="status">悬赏榜读取中…</p>
+    <p v-else-if="errorMessage" class="task-data-state is-error" role="alert">{{ errorMessage }}</p>
+    <p v-if="countsLoading" class="task-data-state" role="status">榜文数目统计中…</p>
+    <p v-else-if="countsErrorMessage" class="task-data-state is-error" role="alert">{{ countsErrorMessage }}</p>
+
     <div class="task-status-tabs">
       <button
         v-for="item in taskStatusFilters"
@@ -292,6 +297,10 @@ import { formatSilverMicro, isCanonicalMicroAmount } from '@/utils/silverAmount'
 
 const props = defineProps({
   tasks: { type: Array, default: () => [] },
+  loading: { type: Boolean, default: false },
+  errorMessage: { type: String, default: '' },
+  countsLoading: { type: Boolean, default: false },
+  countsErrorMessage: { type: String, default: '' },
   selectedTask: { type: Object, default: null },
   selectedAgent: { type: Object, default: null },
   recommendedAgents: { type: Array, default: () => [] },
@@ -531,6 +540,14 @@ button:disabled {
   background: #7c1f1b;
   color: #fff8e8;
 }
+
+.task-data-state {
+  margin: 0 16px 8px;
+  color: #765f40;
+  font-size: 13px;
+}
+
+.task-data-state.is-error { color: #b3261e; }
 
 .task-status-tabs {
   display: flex;

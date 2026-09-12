@@ -23,6 +23,8 @@ export const useHallBackendSceneState = ({
   if (!agentApi?.execute) throw new TypeError('agentApi.execute is required')
 
   const snapshotReady = ref(false)
+  const snapshotLoading = ref(false)
+  const snapshotError = ref('')
   const sceneVersion = ref(0)
   const sseConnected = ref(false)
   const lastEventAt = ref(null)
@@ -63,24 +65,33 @@ export const useHallBackendSceneState = ({
   }
 
   const fetchSnapshot = async (generation = lifecycleGeneration) => {
-    const response = await request({ url: SNAPSHOT_URL, method: 'GET', responseType: 'text' })
-    const value = unwrapPayload(response)
-    const cursor = normalizeVersion(value?.sceneVersion)
-    if (!value || value.sceneId !== SCENE_ID || cursor == null) {
-      throw new Error('Invalid Juyiting scene snapshot')
+    snapshotLoading.value = true
+    snapshotError.value = ''
+    try {
+      const response = await request({ url: SNAPSHOT_URL, method: 'GET', responseType: 'text' })
+      const value = unwrapPayload(response)
+      const cursor = normalizeVersion(value?.sceneVersion)
+      if (!value || value.sceneId !== SCENE_ID || cursor == null) {
+        throw new Error('Invalid Juyiting scene snapshot')
+      }
+      if (snapshotReady.value && compareVersions(cursor, sceneCursor) < 0) {
+        throw new Error('Stale Juyiting scene snapshot')
+      }
+      if (!active || generation !== lifecycleGeneration) return value
+      const published = { ...value, sceneVersion: publishVersion(cursor) }
+      sceneCursor = cursor
+      latestSnapshot.value = published
+      sceneVersion.value = published.sceneVersion
+      snapshotReady.value = true
+      degraded.value = eventsDisabledByBackend
+      onSnapshot(published)
+      return published
+    } catch (error) {
+      snapshotError.value = error?.message || '聚义厅场景快照暂无法读取'
+      throw error
+    } finally {
+      snapshotLoading.value = false
     }
-    if (snapshotReady.value && compareVersions(cursor, sceneCursor) < 0) {
-      throw new Error('Stale Juyiting scene snapshot')
-    }
-    if (!active || generation !== lifecycleGeneration) return value
-    const published = { ...value, sceneVersion: publishVersion(cursor) }
-    sceneCursor = cursor
-    latestSnapshot.value = published
-    sceneVersion.value = published.sceneVersion
-    snapshotReady.value = true
-    degraded.value = eventsDisabledByBackend
-    onSnapshot(published)
-    return published
   }
 
   const closeStream = () => {
@@ -356,6 +367,8 @@ export const useHallBackendSceneState = ({
 
   return {
     snapshotReady,
+    snapshotLoading,
+    snapshotError,
     sceneVersion,
     sseConnected,
     lastEventAt,
