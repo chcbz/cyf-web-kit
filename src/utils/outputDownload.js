@@ -1,4 +1,5 @@
 import { useHttp } from '../composables/useHttp.js'
+import { throwIfAborted } from './abortSignals.js'
 
 const unsafeFilename = /[\\/:*?"<>|]/g
 const attachmentParameter = /(?:^|;)\s*filename\*?\s*=\s*(?:UTF-8''([^;]+)|"([^"]*)"|([^;]+))/i
@@ -28,10 +29,12 @@ export function contentDispositionFilename (value = '') {
   return (match[2] ?? match[3] ?? '').trim()
 }
 
-export async function downloadOutput ({ url, item, signal, authStore, timeout, http } = {}) {
+export async function downloadOutput ({ url, item, signal, authStore, timeout, http, assertActive } = {}) {
   if (!url) throw new TypeError('A download URL is required')
   const request = http || useHttp()
   const result = await request.get(url, undefined, { responseType: 'blob', signal, authStore, timeout })
+  throwIfAborted(signal)
+  assertActive?.()
   const responseName = contentDispositionFilename(result.headers?.['content-disposition'])
   const objectUrl = URL.createObjectURL(result.data)
   let anchor
@@ -42,6 +45,8 @@ export async function downloadOutput ({ url, item, signal, authStore, timeout, h
     anchor.rel = 'noopener'
     anchor.style.display = 'none'
     document.body.appendChild(anchor)
+    throwIfAborted(signal)
+    assertActive?.()
     anchor.click()
   } finally {
     anchor?.remove()

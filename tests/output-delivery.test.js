@@ -2,7 +2,7 @@ import { expect } from 'chai'
 import { afterEach, before } from 'mocha'
 import { readFileSync } from 'fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
-import { defineComponent, h, nextTick, ref } from 'vue'
+import { computed, defineComponent, h, nextTick, ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import * as Vue from 'vue'
 import { useHttp } from '../src/composables/useHttp.js'
@@ -78,15 +78,7 @@ const loadOutputComponents = () => {
   const OutputPreview = compileSfc('../src/components/outputs/OutputPreview.vue')
   const OutputList = compileSfc('../src/components/outputs/OutputList.vue', [
     [/^import\s+OutputCard.*$/gm, 'var OutputCard = dependency0', OutputCard],
-    [/^import\s+OutputPreview.*$/gm, 'var OutputPreview = dependency1', OutputPreview],
-    [/^import\s+\{\s*parseOutputResourceQuery\s*\}\s+from.*$/gm, 'var parseOutputResourceQuery = dependency2', (query) => {
-      const get = key => query.get(key)
-      const sourceType = get('outputSourceType')
-      const sourceId = get('outputSourceId')
-      const outputId = get('outputId')
-      const version = get('outputVersion')
-      return ['CONVERSATION', 'TASK'].includes(sourceType) && sourceId && outputId && version ? { source: { type: sourceType, id: sourceId }, outputId, version } : null
-    }]
+    [/^import\s+OutputPreview.*$/gm, 'var OutputPreview = dependency1', OutputPreview]
   ])
   return { OutputCard, OutputPreview, OutputList }
 }
@@ -280,7 +272,8 @@ describe('OD05 shared output retrieval', () => {
     const listResponses = [
       page(source.value, [{ outputId: 'newer', version: '2' }], 'cursor-1', '100'),
       page(source.value, [{ outputId: 'older', version: '1' }], null, '100'),
-      page(source.value, [{ outputId: 'latest', version: '3' }, { outputId: 'newer', version: '2' }], 'cursor-2', '200')
+      page(source.value, [{ outputId: 'latest', version: '3' }, { outputId: 'newer', version: '2' }], 'cursor-2', '200'),
+      page(source.value, [{ outputId: 'older', version: '1' }], null, '200')
     ]
     const http = { get: () => Promise.resolve(listResponses.shift()) }
     const longDownload = deferred()
@@ -304,6 +297,61 @@ describe('OD05 shared output retrieval', () => {
     expect(await downloading).to.equal(undefined)
   })
 
+  it('does not create a Blob URL or save after identity cleanup wins the response race', async () => {
+    const source = ref({ type: 'CONVERSATION', id: 'conversation-a' })
+    const events = []
+    globalThis.URL.createObjectURL = () => {
+      events.push('create-old-blob-url')
+      return 'blob:old-identity'
+    }
+    globalThis.URL.revokeObjectURL = () => {}
+    const onClick = event => {
+      if (event.target.tagName === 'A') {
+        events.push('save-old-identity-file')
+        event.preventDefault()
+      }
+    }
+    document.addEventListener('click', onClick, true)
+    globalThis.fetch = async url => {
+      if (!String(url).endsWith('/download')) return new Response(JSON.stringify(page(source.value, []).data), { status: 200 })
+      const response = new Response('old-identity-secret', { status: 200 })
+      response.blob = async () => {
+        queueMicrotask(() => queueMicrotask(() => {
+          events.push('identity-cleared')
+          stopIdentityBoundWork()
+        }))
+        return new Blob(['old-identity-secret'])
+      }
+      return response
+    }
+    const authStore = { token: async () => 'test-token', authorizationGeneration: 1 }
+    const http = { get: (url, params, config) => useHttp().get(url, params, { ...config, authStore }) }
+    const { outputs } = mountOutputs(source, { http })
+    await flush()
+    let failure
+    try {
+      failure = await outputs.download(item()).catch(error => error)
+    } finally {
+      document.removeEventListener('click', onClick, true)
+    }
+    expect(failure.name).to.equal('AbortError')
+    expect(events).to.deep.equal(['identity-cleared'])
+  })
+
+  it('removes revoked rows when an authoritative refresh is empty', async () => {
+    const source = ref({ type: 'CONVERSATION', id: 'conversation-a' })
+    const responses = [
+      page(source.value, [{ outputId: 'revoked-secret', version: '1' }]),
+      page(source.value, [])
+    ]
+    const { outputs } = mountOutputs(source, { http: { get: () => Promise.resolve(responses.shift()) } })
+    await flush()
+    expect(outputs.items.value).to.have.length(1)
+    await outputs.refresh()
+    expect(outputs.items.value).to.deep.equal([])
+    expect(outputs.nextCursor.value).to.equal(null)
+  })
+
   it('paginates historical versions for one exact output ID', async () => {
     const source = ref({ type: 'CONVERSATION', id: 'conversation-a' })
     const responses = [
@@ -318,6 +366,46 @@ describe('OD05 shared output retrieval', () => {
     await outputs.loadVersions(item(), { more: true })
     expect(outputs.versions.value.map(value => value.version)).to.deep.equal(['2', '1'])
     expect(outputs.versionNextCursor.value).to.equal(null)
+  })
+
+  it('ignores a cancelled historical-version response after another output is opened', async () => {
+    const source = ref({ type: 'CONVERSATION', id: 'conversation-a' })
+    const requestA = deferred()
+    const requestB = deferred()
+    const http = {
+      get: url => {
+        if (url.endsWith('/outputs')) return Promise.resolve(page(source.value, []))
+        return url.includes('/a/versions') ? requestA.promise : requestB.promise
+      }
+    }
+    const { outputs } = mountOutputs(source, { http })
+    await flush()
+    const itemA = item({ outputId: 'a' })
+    const itemB = item({ outputId: 'b' })
+    const pendingA = outputs.loadVersions(itemA)
+    await flush()
+    outputs.clearVersions()
+    const pendingB = outputs.loadVersions(itemB)
+    await flush()
+    requestA.resolve(page(source.value, [itemA]))
+    await pendingA
+    expect(outputs.versionTarget.value.outputId).to.equal('b')
+    expect(outputs.versions.value).to.deep.equal([])
+    expect(outputs.versionsLoading.value).to.equal(true)
+    requestB.resolve(page(source.value, [itemB]))
+    await pendingB
+    expect(outputs.versions.value.map(value => value.outputId)).to.deep.equal(['b'])
+  })
+
+  it('does not poll an explicitly non-retryable error while a source is syncing', async () => {
+    const source = ref({ type: 'CONVERSATION', id: 'conversation-a' })
+    const syncing = ref(true)
+    const timer = new FakeTimer()
+    const failure = Object.assign(new Error('无权读取成果'), { status: 403, retryable: false })
+    const { outputs } = mountOutputs(source, { syncing, timer, document: new VisibilityDocument(), http: { get: () => Promise.reject(failure) } })
+    await flush()
+    expect(outputs.error.value).to.include({ status: 403, retryable: false })
+    expect(timer.tasks).to.deep.equal([])
   })
 
   it('polls only while syncing or retryable, backs off, pauses hidden, and refreshes once on completion', async () => {
@@ -505,31 +593,34 @@ describe('OD05 shared output retrieval', () => {
     expect(safeOutputFilename({ name: '../报告?.pdf' })).to.equal('_报告_.pdf')
   })
 
-  it('consumes a copied route and requests the exact historical version without an Agent', async () => {
+  it('reacts to copied-route version changes and requests the exact version without an Agent', async () => {
     window.history.replaceState({}, '', '/chat?outputSourceType=TASK&outputSourceId=task-9&outputId=deliverable&outputVersion=7')
     const { OutputList } = loadOutputComponents()
-    const resourceRequest = parseOutputResourceQuery(new URLSearchParams(window.location.search))
-    const source = ref(resourceRequest.source)
+    const resourceRequest = ref(parseOutputResourceQuery(new URLSearchParams(window.location.search)))
+    const source = computed(() => resourceRequest.value.source)
     const calls = []
-    const exact = item({
-      source: source.value,
-      outputId: 'deliverable',
-      version: '7',
-      title: '第七版交付件',
-      previewKind: 'TEXT',
-      publicationKind: 'OWNER_SHARE'
-    })
     const http = {
       get: url => {
         calls.push(url)
-        if (url.endsWith('/versions/7')) return Promise.resolve({ data: { data: { item: exact, content: '精确历史正文' } } })
-        return Promise.resolve(page(source.value, [{ outputId: 'deliverable', version: '8', title: '最新版本' }]))
+        if (!url.endsWith('/artifacts')) {
+          const version = url.split('/').at(-1)
+          const exact = item({
+            source: source.value,
+            outputId: 'deliverable',
+            version,
+            title: `第${version}版交付件`,
+            previewKind: 'TEXT',
+            publicationKind: 'OWNER_SHARE'
+          })
+          return Promise.resolve({ data: { data: { item: exact, content: `精确历史正文-${version}` } } })
+        }
+        return Promise.resolve(page(source.value, []))
       }
     }
     let outputs
     const Harness = defineComponent({
       setup () {
-        outputs = useOutputs(source, { http })
+        outputs = useOutputs(source, { http, requestedResource: resourceRequest })
         return () => h(OutputList, { outputs })
       }
     })
@@ -537,9 +628,17 @@ describe('OD05 shared output retrieval', () => {
     wrappers.add(wrapper)
     await flush(12)
     expect(calls.filter(url => url.endsWith('/deliverable/versions/7')).length).to.be.at.least(1)
-    expect(wrapper.text()).to.include('第七版交付件')
+    expect(wrapper.text()).to.include('第7版交付件')
     expect(wrapper.text()).to.include('精确历史正文')
     expect(wrapper.find('.is-targeted').exists()).to.equal(true)
+
+    window.history.replaceState({}, '', '/chat?outputSourceType=TASK&outputSourceId=task-9&outputId=deliverable&outputVersion=8')
+    resourceRequest.value = parseOutputResourceQuery(new URLSearchParams(window.location.search))
+    await flush(12)
+    expect(calls.some(url => url.endsWith('/deliverable/versions/8'))).to.equal(true)
+    expect(wrapper.text()).to.include('第8版交付件')
+    expect(wrapper.text()).to.include('精确历史正文-8')
+    expect(wrapper.text()).not.to.include('第7版交付件')
   })
 
   it('keeps all three product entrypoints on the shared list with explicit syncing signals', () => {
@@ -552,7 +651,7 @@ describe('OD05 shared output retrieval', () => {
     expect(bounty).to.include("outputSource('TASK', () => detailTask.value?.id), { syncing: outputSyncing }")
     expect(chat).to.include('<OutputList v-if="resourceOutputRequest || (isJuyiting && conversationId)" :outputs="outputs" />')
     expect(chat).to.include('const resourceOutputRequest = computed(() => parseOutputResourceQuery(route.query))')
-    expect(chat).to.include('const outputs = useOutputs(activeOutputSource, { syncing: outputSyncing })')
+    expect(chat).to.include('const outputs = useOutputs(activeOutputSource, { syncing: outputSyncing, requestedResource: resourceOutputRequest })')
     expect([panel, bounty, chat].join('\n')).not.to.match(/accept|request_changes|验收通过/)
   })
 })

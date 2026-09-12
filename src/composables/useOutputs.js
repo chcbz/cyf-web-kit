@@ -78,7 +78,9 @@ export function useOutputs (source, options = {}) {
   const versionsError = ref(null)
   const lifecycleKey = ref(0)
   const sourceValue = computed(() => source?.value ?? source ?? null)
+  const sourceKey = computed(() => validSource(sourceValue.value) ? JSON.stringify([sourceValue.value.type, sourceValue.value.id]) : '')
   const syncing = computed(() => Boolean(unref(options.syncing)))
+  const requestedResource = computed(() => unref(options.requestedResource) || null)
   const requestClient = () => options.http || options.httpFactory?.() || useHttp()
   const downloadHandler = options.download || downloadOutput
   const timerApi = options.timer || globalThis
@@ -87,11 +89,13 @@ export function useOutputs (source, options = {}) {
   const operationControllers = new Set()
   let listController = null
   let versionController = null
+  let versionRequestSequence = 0
   let pollTimer = null
   let pollDelay = POLL_START_MS
   let generation = 0
   let disposed = false
   let refreshAfterLoad = false
+  let loadedPageCount = 1
 
   const basePath = current => current.type === 'TASK'
     ? `/agent/tasks/${pathPart(current.id)}/artifacts`
@@ -111,7 +115,8 @@ export function useOutputs (source, options = {}) {
     if (pollTimer != null) timerApi.clearTimeout(pollTimer)
     pollTimer = null
   }
-  const shouldPoll = () => validSource(sourceValue.value) && (syncing.value || error.value?.retryable === true)
+  const shouldPoll = () => validSource(sourceValue.value) && error.value?.retryable !== false &&
+    (syncing.value || error.value?.retryable === true)
   const schedulePoll = () => {
     cancelPoll()
     if (!shouldPoll() || !isVisible() || disposed) return
@@ -121,6 +126,7 @@ export function useOutputs (source, options = {}) {
     }, error.value?.retryable ? pollDelay : POLL_START_MS)
   }
   const clearVersions = () => {
+    versionRequestSequence += 1
     versionController?.abort()
     versionController = null
     versions.value = []
@@ -146,6 +152,7 @@ export function useOutputs (source, options = {}) {
     loading.value = false
     pollDelay = POLL_START_MS
     refreshAfterLoad = false
+    loadedPageCount = 1
   }
   const operation = (signal) => {
     const controller = new AbortController()
@@ -175,16 +182,28 @@ export function useOutputs (source, options = {}) {
     loading.value = true
     if (reason !== 'poll') error.value = null
     try {
-      const result = await requestClient().get(basePath(current), {
-        limit: LIMIT,
-        ...(more ? { cursor: nextCursor.value } : {})
-      }, { signal: requestController.signal })
-      if (!isCurrent(current, requestGeneration)) return
-      const page = result.data?.data
-      if (!outputPageMatchesSource(page, current)) throw new Error('成果列表来源不匹配')
-      items.value = more ? mergeUnique(items.value, page.items) : mergeUnique(page.items, items.value)
-      nextCursor.value = page.nextCursor ?? null
-      snapshotAt.value = page.snapshotAt ?? null
+      const pages = []
+      let cursor = more ? nextCursor.value : null
+      const targetPageCount = more ? 1 : Math.max(1, loadedPageCount)
+      for (let pageIndex = 0; pageIndex < targetPageCount; pageIndex += 1) {
+        if (pageIndex > 0 && !cursor) break
+        const result = await requestClient().get(basePath(current), {
+          limit: LIMIT,
+          ...(cursor ? { cursor } : {})
+        }, { signal: requestController.signal })
+        if (!isCurrent(current, requestGeneration) || listController !== requestController) return
+        const page = result.data?.data
+        if (!outputPageMatchesSource(page, current)) throw new Error('成果列表来源不匹配')
+        if (pages.length && page.snapshotAt !== pages[0].snapshotAt) throw new Error('成果分页快照不匹配')
+        pages.push(page)
+        cursor = page.nextCursor ?? null
+      }
+      if (!pages.length) return
+      const received = pages.flatMap(page => page.items)
+      items.value = more ? mergeUnique(items.value, received) : mergeUnique(received)
+      nextCursor.value = cursor
+      snapshotAt.value = pages[0].snapshotAt ?? null
+      loadedPageCount = more ? loadedPageCount + pages.length : pages.length
       error.value = null
       pollDelay = POLL_START_MS
     } catch (failure) {
@@ -217,6 +236,7 @@ export function useOutputs (source, options = {}) {
       versionTarget.value = item
     }
     const requestGeneration = generation
+    const requestSequence = ++versionRequestSequence
     versionController?.abort()
     const requestController = new AbortController()
     versionController = requestController
@@ -227,18 +247,18 @@ export function useOutputs (source, options = {}) {
         limit: LIMIT,
         ...(more ? { cursor: versionNextCursor.value } : {})
       }, { signal: requestController.signal })
-      if (!isCurrent(current, requestGeneration)) return
+      if (!isCurrent(current, requestGeneration) || requestSequence !== versionRequestSequence || versionController !== requestController) return
       const page = result.data?.data
       if (!outputVersionPageMatches(page, current, item.outputId)) throw new Error('成果历史版本来源不匹配')
       versions.value = more ? mergeUnique(versions.value, page.items) : mergeUnique(page.items, versions.value)
       versionNextCursor.value = page.nextCursor ?? null
       versionSnapshotAt.value = page.snapshotAt ?? null
     } catch (failure) {
-      if (failure?.name === 'AbortError' || !isCurrent(current, requestGeneration)) return
+      if (failure?.name === 'AbortError' || !isCurrent(current, requestGeneration) || requestSequence !== versionRequestSequence) return
       versionsError.value = normalizeOutputError(failure, '历史版本暂时无法取得')
     } finally {
-      if (isCurrent(current, requestGeneration)) versionsLoading.value = false
-      if (versionController === requestController) versionController = null
+      if (isCurrent(current, requestGeneration) && requestSequence === versionRequestSequence) versionsLoading.value = false
+      if (requestSequence === versionRequestSequence && versionController === requestController) versionController = null
     }
   }
   const detail = async (item, { signal } = {}) => {
@@ -286,7 +306,10 @@ export function useOutputs (source, options = {}) {
         item,
         signal: active.controller.signal,
         timeout: DOWNLOAD_TIMEOUT_MS,
-        http: requestClient()
+        http: requestClient(),
+        assertActive: () => {
+          if (active.controller.signal.aborted || !isCurrent(current, requestGeneration)) throw abortFailure('Source changed')
+        }
       })
       if (!isCurrent(current, requestGeneration)) throw abortFailure('Source changed')
     } finally {
@@ -312,10 +335,10 @@ export function useOutputs (source, options = {}) {
     else void load({ reason: 'visibility' })
   }
 
-  watch(sourceValue, () => {
+  watch(sourceKey, () => {
     clear()
     if (validSource(sourceValue.value)) void load({ reason: 'open' })
-  }, { immediate: true, deep: true })
+  }, { immediate: true })
   watch(syncing, (active, previous) => {
     if (active) {
       schedulePoll()
@@ -336,6 +359,7 @@ export function useOutputs (source, options = {}) {
 
   return {
     source: sourceValue,
+    requestedResource,
     lifecycleKey,
     items,
     nextCursor,

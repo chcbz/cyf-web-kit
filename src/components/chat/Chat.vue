@@ -121,7 +121,7 @@ const resourceOutputRequest = computed(() => parseOutputResourceQuery(route.quer
 const activeOutputSource = computed(() => resourceOutputRequest.value?.source ||
   (isJuyiting.value && conversationId.value ? { type: 'CONVERSATION', id: conversationId.value } : null))
 const outputSyncing = computed(() => !resourceOutputRequest.value && isJuyiting.value && (isLoading.value || isStreaming.value))
-const outputs = useOutputs(activeOutputSource, { syncing: outputSyncing })
+const outputs = useOutputs(activeOutputSource, { syncing: outputSyncing, requestedResource: resourceOutputRequest })
 // sortedConversations 预留用于未来排序功能
 // const sortedConversations = computed(() =>
 //   [...conversations.value].sort((a, b) => new Date(b.lastUpdated) - new Date(a.lastUpdated))

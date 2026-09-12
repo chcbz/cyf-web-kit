@@ -89,8 +89,7 @@
   </section>
 </template>
 <script setup>
-import { computed, ref, unref, watch } from 'vue'
-import { parseOutputResourceQuery } from '../../composables/useOutputs.js'
+import { computed, onBeforeUnmount, ref, unref, watch } from 'vue'
 import OutputCard from './OutputCard.vue'
 import OutputPreview from './OutputPreview.vue'
 
@@ -103,6 +102,8 @@ const resourceError = ref(null)
 const resourceRoute = ref('')
 const copyStatus = ref('')
 const source = computed(() => unref(props.outputs.source))
+const sourceKey = computed(() => source.value ? JSON.stringify([source.value.type, source.value.id]) : '')
+const requested = computed(() => unref(props.outputs.requestedResource) || null)
 const lifecycleKey = computed(() => unref(props.outputs.lifecycleKey) || 0)
 const items = computed(() => unref(props.outputs.items) || [])
 const displayItems = computed(() => {
@@ -117,9 +118,11 @@ const versionTarget = computed(() => unref(props.outputs.versionTarget))
 const versionNextCursor = computed(() => unref(props.outputs.versionNextCursor))
 const versionsLoading = computed(() => Boolean(unref(props.outputs.versionsLoading)))
 const versionsError = computed(() => unref(props.outputs.versionsError))
-const previewSourceKey = computed(() => `${source.value?.type || ''}:${source.value?.id || ''}:${lifecycleKey.value}`)
+const requestedKey = computed(() => requested.value
+  ? `${requested.value.source.type}:${requested.value.source.id}:${requested.value.outputId}:${requested.value.version}`
+  : '')
+const previewSourceKey = computed(() => `${source.value?.type || ''}:${source.value?.id || ''}:${lifecycleKey.value}:${requestedKey.value}`)
 const isWechat = computed(() => /MicroMessenger/i.test(navigator.userAgent || ''))
-const requested = computed(() => parseOutputResourceQuery(new URLSearchParams(window.location.search)))
 const isRequested = item => requested.value?.source.type === source.value?.type &&
   requested.value?.source.id === source.value?.id && requested.value?.outputId === item.outputId && requested.value?.version === item.version
 const normalizeActionError = failure => ({
@@ -159,27 +162,46 @@ const copyResourceRoute = item => {
   copyStatus.value = ''
   void copyText(resourceRoute.value)
 }
+let requestedController = null
+let requestedSequence = 0
 const loadRequestedResource = async () => {
+  requestedController?.abort(new DOMException('Requested output changed', 'AbortError'))
+  const controller = new AbortController()
+  requestedController = controller
+  const requestSequence = ++requestedSequence
   const target = requested.value
-  if (!target || target.source.type !== source.value?.type || target.source.id !== source.value?.id) return
+  if (!target || target.source.type !== source.value?.type || target.source.id !== source.value?.id) {
+    requestedController = null
+    return
+  }
   resourceError.value = null
   const listed = items.value.find(isRequested)
   if (listed) {
+    requestedController = null
     requestedItem.value = listed
     if (listed.previewKind !== 'NONE') previewItem.value = listed
     return
   }
   const requestLifecycle = lifecycleKey.value
+  const requestKey = requestedKey.value
   try {
-    const payload = await props.outputs.detail({ source: target.source, outputId: target.outputId, version: target.version })
-    if (requestLifecycle !== lifecycleKey.value || target.source.type !== source.value?.type || target.source.id !== source.value?.id) return
+    const payload = await props.outputs.detail(
+      { source: target.source, outputId: target.outputId, version: target.version },
+      { signal: controller.signal }
+    )
+    if (controller.signal.aborted || requestSequence !== requestedSequence || requestLifecycle !== lifecycleKey.value || requestKey !== requestedKey.value) return
     requestedItem.value = payload.item
     if (payload.item.previewKind !== 'NONE') previewItem.value = payload.item
   } catch (failure) {
-    if (failure?.name !== 'AbortError' && requestLifecycle === lifecycleKey.value) resourceError.value = normalizeActionError(failure)
+    if (failure?.name !== 'AbortError' && requestSequence === requestedSequence && requestLifecycle === lifecycleKey.value) resourceError.value = normalizeActionError(failure)
+  } finally {
+    if (requestSequence === requestedSequence && requestedController === controller) requestedController = null
   }
 }
 const clearLocalState = () => {
+  requestedSequence += 1
+  requestedController?.abort(new DOMException('Output list changed', 'AbortError'))
+  requestedController = null
   previewItem.value = null
   downloadError.value = null
   downloadErrorItem.value = null
@@ -189,16 +211,17 @@ const clearLocalState = () => {
   resourceError.value = null
 }
 watch(lifecycleKey, clearLocalState)
-watch(source, () => {
+watch([sourceKey, requestedKey], () => {
   clearLocalState()
   void loadRequestedResource()
-}, { deep: true, immediate: true })
+}, { immediate: true })
 watch(items, current => {
   const listed = current.find(isRequested)
   if (!listed) return
   requestedItem.value = listed
   if (listed.previewKind !== 'NONE') previewItem.value = listed
 })
+onBeforeUnmount(clearLocalState)
 </script>
 <style scoped>
 .output-list { padding:8px; border-top:1px solid rgba(116,75,35,.16); background:#fffaf0; }
