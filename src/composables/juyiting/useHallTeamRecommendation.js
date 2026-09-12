@@ -45,11 +45,13 @@ export const useHallTeamRecommendation = ({ api = createApi('/agent'), task, aut
   const taskId = computed(() => currentTask.value?.id || '')
   const highRisk = computed(() => highRiskFor(currentTask.value))
   const reviewerRequired = computed(() => hasRequiredReviewer(currentTask.value))
+  const taskVersion = computed(() => currentTask.value?.taskVersion ?? currentTask.value?.version ?? '')
+  const requiredAbilities = computed(() => strings(currentTask.value?.requiredAbilities))
   const maxAgents = computed(() => Number.isInteger(currentTask.value?.maxAgents) && currentTask.value.maxAgents > 0
     ? currentTask.value.maxAgents : 0)
   const operable = computed(() => ID(taskId.value) && ['low', 'medium', 'high'].includes(currentTask.value?.riskLevel) &&
     typeof currentTask.value?.reviewRequired === 'boolean' && maxAgents.value > 0)
-  const scope = computed(() => `${taskId.value}\u0000${currentTask.value?.riskLevel || ''}\u0000${currentTask.value?.reviewRequired}\u0000${maxAgents.value}\u0000${identityGeneration.value}`)
+  const scope = computed(() => `${taskId.value}\u0000${taskVersion.value}\u0000${requiredAbilities.value.join('\u0001')}\u0000${currentTask.value?.riskLevel || ''}\u0000${currentTask.value?.reviewRequired}\u0000${maxAgents.value}\u0000${identityGeneration.value}`)
   const selectedIdSet = computed(() => new Set(manualSelectedIds.value))
   const memberById = computed(() => new Map((preview.value?.members || []).map(member => [member.agentId, member])))
   const lockedReviewerIds = computed(() => new Set((preview.value?.members || [])
@@ -64,11 +66,20 @@ export const useHallTeamRecommendation = ({ api = createApi('/agent'), task, aut
   const localMembers = computed(() => (preview.value?.candidates || [])
     .filter(candidate => selectedIdSet.value.has(candidate.agentId))
     .map(candidate => ({ ...candidate, role: memberById.value.get(candidate.agentId)?.role || 'PRODUCER' })))
+  const localCoveredAbilities = computed(() => {
+    const matched = new Set(localMembers.value.flatMap(member => strings(member.matchedAbilities)))
+    return requiredAbilities.value.filter(ability => matched.has(ability))
+  })
+  const localMissingAbilities = computed(() => {
+    const covered = new Set(localCoveredAbilities.value)
+    return requiredAbilities.value.filter(ability => !covered.has(ability))
+  })
   const localOverride = computed(() => {
     const baseline = (preview.value?.members || []).map(member => member.agentId)
     return baseline.length !== manualSelectedIds.value.length || baseline.some(id => !selectedIdSet.value.has(id))
   })
-  const localConstraintsSatisfied = computed(() => localMembers.value.length <= localLimit.value &&
+  const localConstraintsSatisfied = computed(() => localMissingAbilities.value.length === 0 &&
+    localMembers.value.length <= localLimit.value &&
     (!reviewerRequired.value || (preview.value?.independentReviewerSatisfied === true &&
       [...lockedReviewerIds.value].every(id => selectedIdSet.value.has(id)))) &&
     localMembers.value.every(member => member.eligible === true))
@@ -153,8 +164,8 @@ export const useHallTeamRecommendation = ({ api = createApi('/agent'), task, aut
   const dispose = () => { generation += 1; controller?.abort(); controller = null }
 
   return {
-    maxTeamSize, budgetUnits, preview, state, message, operable, highRisk, reviewerRequired,
-    localMembers, localOverride, localConstraintsSatisfied, localLimit, lockedReviewerIds,
+    maxTeamSize, budgetUnits, preview, state, message, operable, highRisk, reviewerRequired, requiredAbilities,
+    localMembers, localCoveredAbilities, localMissingAbilities, localOverride, localConstraintsSatisfied, localLimit, lockedReviewerIds,
     request, toggleCandidate, canToggleCandidate, reset, dispose,
     strings
   }

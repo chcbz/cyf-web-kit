@@ -11,7 +11,7 @@ const deferred = () => {
 }
 const ok = data => ({ data: { data } })
 const failure = status => Object.assign(new Error(`HTTP error! status: ${status}`), { status })
-const task = (overrides = {}) => ({ id: 'task-1', riskLevel: 'high', reviewRequired: true, maxAgents: 3, ...overrides })
+const task = (overrides = {}) => ({ id: 'task-1', taskVersion: '1', requiredAbilities: ['plan', 'verify'], riskLevel: 'high', reviewRequired: true, maxAgents: 3, ...overrides })
 const preview = (taskId = 'task-1') => ({
   taskId, taskVersion: '8', requiredAbilities: ['plan', 'verify'], coveredAbilities: ['plan', 'verify'], missingAbilities: [],
   requestedMaxTeamSize: 3, taskMaxAgents: 3, maxTeamSize: 3, budgetUnits: 3, totalCostUnits: 2,
@@ -64,8 +64,13 @@ describe('E07 team recommendation preview client', () => {
     const replacement = plan.preview.value.candidates[2]
     expect(plan.toggleCandidate(reviewer)).to.equal(false)
     expect(plan.toggleCandidate(producer)).to.equal(true)
+    expect(plan.localCoveredAbilities.value).to.deep.equal(['verify'])
+    expect(plan.localMissingAbilities.value).to.deep.equal(['plan'])
+    expect(plan.localConstraintsSatisfied.value).to.equal(false)
     expect(plan.toggleCandidate(replacement)).to.equal(true)
     expect(plan.localMembers.value.map(member => member.agentId)).to.deep.equal(['agent-r', 'agent-b'])
+    expect(plan.localCoveredAbilities.value).to.deep.equal(['plan', 'verify'])
+    expect(plan.localMissingAbilities.value).to.deep.equal([])
     expect(plan.localOverride.value).to.equal(true)
     expect(plan.localConstraintsSatisfied.value).to.equal(true)
   })
@@ -101,6 +106,19 @@ describe('E07 team recommendation preview client', () => {
     expect(loaded.preview.value?.taskId).to.equal('task-2')
     identity.value = 2
     expect(loaded.preview.value).to.equal(null)
+  })
+
+  it('invalidates a same-task preview when the authoritative version or required abilities change', async () => {
+    const currentTask = ref(task({ taskVersion: '7' }))
+    const plan = fixture({ currentTask, api: { execute: async () => ok(preview()) } })
+    await plan.request()
+    expect(plan.preview.value?.taskId).to.equal('task-1')
+    currentTask.value = task({ taskVersion: '8' })
+    expect(plan.preview.value).to.equal(null)
+    await plan.request()
+    expect(plan.preview.value?.taskId).to.equal('task-1')
+    currentTask.value = task({ taskVersion: '8', requiredAbilities: ['release'] })
+    expect(plan.preview.value).to.equal(null)
   })
 
   it('fails closed for missing authoritative task data and 404/403/409 without claiming success', async () => {

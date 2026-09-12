@@ -24,8 +24,10 @@
       >{{ message }}</p>
       <template v-if="preview">
         <dl class="team-summary">
-          <div><dt>覆盖</dt><dd>{{ names(preview.coveredAbilities) || '未知' }}</dd></div>
-          <div><dt>缺口</dt><dd>{{ names(preview.missingAbilities) || '无' }}</dd></div>
+          <div><dt>服务端原覆盖</dt><dd>{{ names(preview.coveredAbilities) || '未知' }}</dd></div>
+          <div><dt>服务端原缺口</dt><dd>{{ names(preview.missingAbilities) || '无' }}</dd></div>
+          <div><dt>本地覆盖</dt><dd>{{ names(localCoveredAbilities) || '无' }}</dd></div>
+          <div><dt>本地缺口</dt><dd>{{ names(localMissingAbilities) || '无' }}</dd></div>
           <div><dt>人数</dt><dd>{{ localMembers.length }} / {{ preview.maxTeamSize }}</dd></div>
           <div><dt>席位</dt><dd>{{ localMembers.length }} / {{ preview.budgetUnits }}（非货币；金额未知）</dd></div>
         </dl>
@@ -38,7 +40,7 @@
         </div>
         <p class="team-override" :class="{ 'is-error': !localConstraintsSatisfied }">
           {{ localOverride ? '人工覆盖仅在本地预览，尚无服务端最终团队确认 API。' : '尚未进行人工覆盖；此结果仍只是服务端预览。' }}
-          <span v-if="!localConstraintsSatisfied">本地预览不满足人数、预算或产品 reviewer 约束。</span>
+          <span v-if="!localConstraintsSatisfied">本地预览不满足能力覆盖、人数、预算或产品 reviewer 约束。</span>
         </p>
         <h5>候选与解释（服务端稳定顺序）</h5>
         <ul class="team-candidates">
@@ -73,7 +75,8 @@ import { useHallTeamRecommendation } from '@/composables/juyiting/useHallTeamRec
 const props = defineProps({ task: { type: Object, required: true }, authorizationGeneration: { type: Number, default: 0 } })
 const plan = useHallTeamRecommendation({ task: toRef(props, 'task'), authorizationGeneration: computed(() => props.authorizationGeneration) })
 const { maxTeamSize, budgetUnits, preview, state, message, operable, highRisk, reviewerRequired, localMembers,
-  localOverride, localConstraintsSatisfied, lockedReviewerIds, request, toggleCandidate, canToggleCandidate } = plan
+  localCoveredAbilities, localMissingAbilities, localOverride, localConstraintsSatisfied, lockedReviewerIds,
+  request, toggleCandidate, canToggleCandidate } = plan
 const names = value => Array.isArray(value) ? value.filter(item => typeof item === 'string' && item).join('、') : ''
 const roleText = value => value === 'REVIEWER' ? '产品 reviewer' : value === 'PRODUCER' ? '产出成员' : '未说明角色'
 onBeforeUnmount(() => plan.dispose())
