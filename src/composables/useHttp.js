@@ -187,7 +187,7 @@ export function useHttp (options = {}) {
 
       const response = await fetch(requestUrl, fetchConfig)
       if (ordinaryJsonRequest) {
-        rumRequestId = resolveRequestId(response.headers.get('X-Request-Id') || rumRequestId)
+        rumRequestId = resolveRequestId(response.headers?.get?.('X-Request-Id') || rumRequestId)
       }
 
       // 检查 HTTP 错误状态（fetch 不会自动抛出非 2xx 的错误）
