@@ -6,6 +6,9 @@ import Varlet from '@varlet/ui'
 import '@varlet/ui/es/style'
 import { registerPwa } from './utils/pwa'
 import { pinia } from './stores/pinia'
+import { installRequestRum } from './composables/useRequestRum'
+
+installRequestRum({ endpoint: import.meta.env.VITE_RUM_ENDPOINT })
 
 // 创建应用实例
 const app = createApp(App)

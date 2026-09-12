@@ -2,10 +2,26 @@ const DEFAULT_SAMPLE_RATE = 0.01
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9._-]{8,128}$/
 const SENSITIVE_ROUTE_SEGMENT = /(?:authorization|bearer|cookie|password|secret|token|session|credential|api[-_]?key)/i
 const OPAQUE_ROUTE_SEGMENT = /^(?:\d+|[0-9a-f]{8,}|[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}|[A-Za-z0-9_-]{32,})$/i
+const SAFE_ROUTE_SEGMENTS = new Set([
+  'agent', 'map', 'roster', 'tasks', 'search', 'status-counts', 'personas',
+  'catalog', 'scenes', 'snapshot', 'chat', 'stream', 'conversation', 'events',
+  'user', 'users', 'session', 'sessions', 'oauth2', 'token', 'auth', 'health'
+])
+
+let installedEndpoint = null
+
+/**
+ * Configures the optional same-origin RUM collector at app startup. Request
+ * instrumentation remains inert when no valid endpoint is configured.
+ */
+export function installRequestRum ({ endpoint } = {}) {
+  installedEndpoint = normalizeRumEndpoint(endpoint)
+  return Boolean(installedEndpoint)
+}
 
 /**
  * Browser-side request timing with a deliberately small, fixed schema. The
- * reporter never receives request headers, bodies, query strings, or errors.
+ * reporter only receives route, request ID, duration, and a bounded status.
  */
 export function recordRequestTiming ({
   endpoint,
@@ -14,12 +30,13 @@ export function recordRequestTiming ({
   url,
   requestId,
   durationMs,
+  status,
   errorClass,
   sampled = sampleRequestTiming()
 } = {}) {
   if (!sampled) return false
 
-  const payload = createRequestTimingPayload({ route, url, requestId, durationMs, errorClass })
+  const payload = createRequestTimingPayload({ route, url, requestId, durationMs, status, errorClass })
   if (!payload) return false
 
   try {
@@ -28,7 +45,7 @@ export function recordRequestTiming ({
       return true
     }
 
-    const rumEndpoint = normalizeRumEndpoint(endpoint)
+    const rumEndpoint = normalizeRumEndpoint(endpoint) || installedEndpoint
     if (!rumEndpoint) return false
     sendRumPayload(rumEndpoint, payload)
     return true
@@ -38,7 +55,7 @@ export function recordRequestTiming ({
   }
 }
 
-export function createRequestTimingPayload ({ route, url, requestId, durationMs, errorClass } = {}) {
+export function createRequestTimingPayload ({ route, url, requestId, durationMs, status, errorClass } = {}) {
   const normalizedRoute = normalizeRouteTemplate(route || url)
   const normalizedRequestId = normalizeRequestId(requestId)
   if (!normalizedRoute || !normalizedRequestId) return null
@@ -47,7 +64,7 @@ export function createRequestTimingPayload ({ route, url, requestId, durationMs,
     route: normalizedRoute,
     requestId: normalizedRequestId,
     durationMs: normalizeDuration(durationMs),
-    errorClass: normalizeErrorClass(errorClass)
+    status: normalizeStatus(status, errorClass)
   }
 }
 
@@ -89,7 +106,7 @@ export function normalizeRouteTemplate (input) {
 }
 
 export function classifyRequestOutcome ({ status, failureClass } = {}) {
-  if (failureClass && failureClass !== 'http') return normalizeErrorClass(failureClass)
+  if (failureClass && failureClass !== 'http') return failureClass
   if (Number.isInteger(status)) {
     if (status >= 200 && status < 400) return 'success'
     if (status >= 400 && status < 500) return 'http_4xx'
@@ -120,7 +137,7 @@ function normalizeRouteSegment (segment) {
   }
   if (/^:[A-Za-z][A-Za-z0-9_-]{0,30}$/.test(decoded)) return decoded
   if (OPAQUE_ROUTE_SEGMENT.test(decoded)) return ':id'
-  return decoded.replace(/[^A-Za-z0-9._~-]/g, '-')
+  return SAFE_ROUTE_SEGMENTS.has(decoded) ? decoded : ':segment'
 }
 
 function normalizeDuration (durationMs) {
@@ -129,12 +146,21 @@ function normalizeDuration (durationMs) {
   return Math.round(Math.min(duration, 24 * 60 * 60 * 1000))
 }
 
-function normalizeErrorClass (value) {
-  const errorClass = typeof value === 'string' ? value : ''
-  return new Set([
-    'success', 'http_4xx', 'http_5xx', 'http_other',
-    'network', 'deadline_exceeded', 'cancelled', 'unknown'
-  ]).has(errorClass) ? errorClass : 'unknown'
+function normalizeStatus (status, failureClass) {
+  const code = Number(status)
+  if (Number.isInteger(code) && code >= 100 && code <= 599) return `${Math.floor(code / 100)}xx`
+
+  return new Set(['network', 'deadline_exceeded', 'cancelled']).has(failureClass)
+    ? failureClass
+    : failureClass === 'success'
+      ? '2xx'
+      : failureClass === 'http_4xx'
+        ? '4xx'
+        : failureClass === 'http_5xx'
+          ? '5xx'
+          : failureClass === 'http_other'
+            ? 'other'
+            : 'unknown'
 }
 
 function normalizeRumEndpoint (endpoint) {
