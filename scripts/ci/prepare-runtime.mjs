@@ -76,28 +76,56 @@ export function runChecked(command, args, options = {}) {
   return typeof result.stdout === 'string' ? result.stdout.trim() : result.stdout
 }
 
-export function systemDependencyInstallPolicy(cache) {
+export const SYSTEM_DEPENDENCIES = Object.freeze([
+  'gcc', 'python3', 'git', 'tar', 'xz', 'rpm', 'cpio', 'ca-certificates',
+  'nss', 'nspr', 'atk', 'at-spi2-atk', 'at-spi2-core', 'cups-libs', 'libdrm', 'libX11',
+  'libXcomposite', 'libXdamage', 'libXext', 'libXfixes', 'libXrandr',
+  'libxcb', 'libxkbcommon', 'mesa-libgbm', 'pango', 'cairo', 'alsa-lib',
+  'fontconfig', 'liberation-fonts', 'gtk3', 'libcurl', 'dbus-libs', 'expat',
+  'glib2', 'systemd-libs', 'vulkan-loader', 'wget', 'xdg-utils',
+])
+
+export function systemDependencyInstallPolicy(cache, packages = SYSTEM_DEPENDENCIES) {
+  if (!packages.every(packageName => SYSTEM_DEPENDENCIES.includes(packageName))) {
+    throw new Error('system dependency install policy only accepts fixed allowlisted packages')
+  }
   const cachedir = join(cache, 'dnf')
-  return { cachedir, args: ['-y', '--setopt=gpgcheck=1', '--setopt=install_weak_deps=False', `--setopt=cachedir=${cachedir}`, 'install',
-    'gcc', 'python3', 'git', 'tar', 'xz', 'rpm', 'cpio', 'ca-certificates',
-    'nss', 'nspr', 'atk', 'at-spi2-atk', 'at-spi2-core', 'cups-libs', 'libdrm', 'libX11',
-    'libXcomposite', 'libXdamage', 'libXext', 'libXfixes', 'libXrandr',
-    'libxcb', 'libxkbcommon', 'mesa-libgbm', 'pango', 'cairo', 'alsa-lib',
-    'fontconfig', 'liberation-fonts', 'gtk3', 'libcurl', 'dbus-libs', 'expat',
-    'glib2', 'systemd-libs', 'vulkan-loader', 'wget', 'xdg-utils',
-  ], timeout: 1200000 }
+  return { cachedir, args: ['-y', '--setopt=gpgcheck=1', '--setopt=install_weak_deps=False', `--setopt=cachedir=${cachedir}`, 'install', ...packages], timeout: 1200000 }
+}
+
+// This uses the signed RPM database only; it does not contact repositories or
+// mutate the worker. A status other than installed (0) or absent (1) is unsafe
+// to interpret as installed and therefore stops preparation before DNF/YUM.
+export function rpmPackageProbe(packageName, spawn = spawnSync) {
+  const result = spawn('/usr/bin/rpm', ['--quiet', '--query', packageName], { stdio: 'ignore', timeout: 30000 })
+  if (result.error) throw result.error
+  if (result.signal || !Number.isInteger(result.status) || ![0, 1].includes(result.status)) {
+    throw new Error(`RPM package query failed for ${packageName} (exit=${result.status}, signal=${result.signal})`)
+  }
+  return result.status === 0
+}
+
+export function missingSystemDependencies(packageProbe = rpmPackageProbe) {
+  const missing = []
+  for (const packageName of SYSTEM_DEPENDENCIES) {
+    if (packageProbe(packageName) !== true) missing.push(packageName)
+  }
+  return missing
 }
 
 export async function installDependencies(cache, execute = runChecked, {
-  uid = process.getuid?.(), manager = ['/usr/bin/dnf', '/usr/bin/yum'].find(existsSync),
+  uid = process.getuid?.(), manager = ['/usr/bin/dnf', '/usr/bin/yum'].find(existsSync), packageProbe = rpmPackageProbe,
 } = {}) {
   // Alinux3 Flow workers are root amd64 containers. RPM dependencies are verified
   // by the configured distribution's signing keys, never by unsigned downloads.
   if (uid !== 0) throw new Error('CI runtime preparation requires root for signed OS dependencies')
-  if (!manager) throw new Error('CI runtime preparation requires the Alinux3 dnf/yum worker')
-  const policy = systemDependencyInstallPolicy(cache)
-  await mkdir(policy.cachedir, { recursive: true })
-  execute(manager, policy.args, { timeout: policy.timeout })
+  const missing = missingSystemDependencies(packageProbe)
+  if (missing.length > 0) {
+    if (!manager) throw new Error('CI runtime preparation requires the Alinux3 dnf/yum worker')
+    const policy = systemDependencyInstallPolicy(cache, missing)
+    await mkdir(policy.cachedir, { recursive: true })
+    execute(manager, policy.args, { timeout: policy.timeout })
+  }
   // rpm supplies rpm2cpio on Alinux/RHEL; no build toolchain RPM is needed.
   execute('/bin/sh', ['-c', 'command -v rpm2cpio && command -v cpio'])
   execute('gcc', ['--version'])

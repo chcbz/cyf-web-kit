@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { bootstrapEnabled, runTests, MOCHA_ARGS, REPORT, assertFreshBenchmark } from '../scripts/ci-test.mjs'
-import { downloadVerified, chromeWrapperSource, extractApprovedWebp, PINS, systemDependencyInstallPolicy, installDependencies, CHROME_LAUNCHER_PATH } from '../scripts/ci/prepare-runtime.mjs'
+import { downloadVerified, chromeWrapperSource, extractApprovedWebp, PINS, SYSTEM_DEPENDENCIES, systemDependencyInstallPolicy, rpmPackageProbe, installDependencies, CHROME_LAUNCHER_PATH } from '../scripts/ci/prepare-runtime.mjs'
 
 const root = process.cwd()
 const digest = bytes => createHash('sha256').update(bytes).digest('hex')
@@ -35,7 +35,7 @@ describe('repository npm test bootstrap', () => {
     expect(source).not.to.include('CHROMIUM_PROVENANCE:')
   })
 
-  it('limits the 20-minute budget to signed dependency installation, with cached metadata and no weak dependencies', () => {
+  it('retains the signed full allowlist and 20-minute policy, while allowing a fixed missing subset only', () => {
     const policy = systemDependencyInstallPolicy('/root/.cache/cyf-test-runtime')
     expect(policy.cachedir).to.equal('/root/.cache/cyf-test-runtime/dnf')
     expect(policy.timeout).to.equal(20 * 60 * 1000)
@@ -48,38 +48,73 @@ describe('repository npm test bootstrap', () => {
       'fontconfig', 'liberation-fonts', 'gtk3', 'libcurl', 'dbus-libs', 'expat',
       'glib2', 'systemd-libs', 'vulkan-loader', 'wget', 'xdg-utils',
     ])
+    expect(systemDependencyInstallPolicy('/cache', ['gcc', 'libX11']).args.slice(5)).to.deep.equal(['gcc', 'libX11'])
+    expect(() => systemDependencyInstallPolicy('/cache', ['untrusted-package'])).to.throw('fixed allowlisted packages')
   })
 
-  it('creates the task cache before installation and explicitly checks extraction and runtime tools', async () => {
-    const cache = join(dir, 'cache with spaces')
-    const policy = systemDependencyInstallPolicy(cache)
+  it('uses only a read-only RPM query and fails closed when the query is indeterminate', () => {
     const calls = []
-    await installDependencies(cache, (command, args, options) => {
-      expect(existsSync(policy.cachedir)).to.equal(true)
-      calls.push({ command, args, options })
-    }, { uid: 0, manager: '/usr/bin/dnf' })
+    expect(rpmPackageProbe('gcc', (...args) => { calls.push(args); return { status: 0 } })).to.equal(true)
+    expect(rpmPackageProbe('gcc', () => ({ status: 1 }))).to.equal(false)
+    expect(calls).to.deep.equal([['/usr/bin/rpm', ['--quiet', '--query', 'gcc'], { stdio: 'ignore', timeout: 30000 }]])
+    expect(() => rpmPackageProbe('gcc', () => ({ status: 2 }))).to.throw('RPM package query failed for gcc')
+    expect(() => rpmPackageProbe('gcc', () => ({ error: new Error('rpm unavailable') }))).to.throw('rpm unavailable')
+  })
+
+  it('skips DNF/YUM when every allowlisted RPM is installed but retains runtime validations', async () => {
+    const calls = []
+    await installDependencies(join(dir, 'cache'), (command, args, options) => calls.push({ command, args, options }), {
+      uid: 0, manager: null, packageProbe: () => true,
+    })
     expect(calls).to.deep.equal([
-      { command: '/usr/bin/dnf', args: policy.args, options: { timeout: 1200000 } },
       { command: '/bin/sh', args: ['-c', 'command -v rpm2cpio && command -v cpio'], options: undefined },
       { command: 'gcc', args: ['--version'], options: undefined },
       { command: 'python3', args: ['-c', 'import ctypes, hashlib, lzma, zipfile; print("Python runtime dependencies ready")'], options: undefined },
     ])
   })
 
-  it('stops on signed installation or missing extraction tools instead of continuing runtime preparation', async () => {
-    for (const failAt of ['/usr/bin/dnf', '/bin/sh']) {
-      const calls = []
-      const failure = new Error(`unavailable: ${failAt}`)
-      let error
-      try {
-        await installDependencies(join(dir, 'cache'), command => {
-          calls.push(command)
-          if (command === failAt) throw failure
-        }, { uid: 0, manager: '/usr/bin/dnf' })
-      } catch (caught) { error = caught }
-      expect(error).to.equal(failure)
-      expect(calls).to.deep.equal(failAt === '/usr/bin/dnf' ? ['/usr/bin/dnf'] : ['/usr/bin/dnf', '/bin/sh'])
-    }
+  it('installs only missing allowlisted RPMs, including when none are installed', async () => {
+    const cache = join(dir, 'cache with spaces')
+    const partialCalls = []
+    await installDependencies(cache, (command, args, options) => {
+      if (command === '/usr/bin/dnf') expect(existsSync(join(cache, 'dnf'))).to.equal(true)
+      partialCalls.push({ command, args, options })
+    }, { uid: 0, manager: '/usr/bin/dnf', packageProbe: name => !['gcc', 'libX11'].includes(name) })
+    expect(partialCalls[0]).to.deep.equal({
+      command: '/usr/bin/dnf', args: systemDependencyInstallPolicy(cache, ['gcc', 'libX11']).args, options: { timeout: 1200000 },
+    })
+    const noneCalls = []
+    await installDependencies(join(dir, 'none'), (command, args, options) => noneCalls.push({ command, args, options }), {
+      uid: 0, manager: '/usr/bin/dnf', packageProbe: () => false,
+    })
+    expect(noneCalls[0].args).to.deep.equal(systemDependencyInstallPolicy(join(dir, 'none'), SYSTEM_DEPENDENCIES).args)
+  })
+
+  it('fails closed on RPM query failure and does not attempt installation or runtime validation', async () => {
+    const calls = []
+    const failure = new Error('rpm database unreadable')
+    let error
+    try {
+      await installDependencies(join(dir, 'cache'), command => calls.push(command), {
+        uid: 0, manager: '/usr/bin/dnf', packageProbe: () => { throw failure },
+      })
+    } catch (caught) { error = caught }
+    expect(error).to.equal(failure)
+    expect(calls).to.deep.equal([])
+  })
+
+  it('stops on signed installation failure before runtime validation', async () => {
+    const calls = []
+    const failure = new Error('unavailable: /usr/bin/dnf')
+    let error
+    try {
+      await installDependencies(join(dir, 'cache'), command => {
+        calls.push(command)
+        if (command === '/usr/bin/dnf') throw failure
+      }, { uid: 0, manager: '/usr/bin/dnf', packageProbe: () => false })
+    } catch (caught) { error = caught }
+    expect(error).to.equal(failure)
+    expect(calls).to.deep.equal(['/usr/bin/dnf'])
   })
 
   it('enables only CI/Flow or explicit opt-in, including Node23 Flow without CI', () => {

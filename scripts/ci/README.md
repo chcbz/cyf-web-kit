@@ -14,7 +14,11 @@ integrity failure always stops. RPM extraction uses system rpm2cpio/cpio
 WebP library also has an exact SHA and decoder ABI/version check.
 
 System dependency installation alone has a 20-minute first-run network budget.
-DNF/YUM keeps distribution signature verification (`gpgcheck=1`) and the existing
+Before contacting DNF/YUM, the bootstrap performs a read-only `/usr/bin/rpm --quiet
+--query` for every package in the fixed allowlist. If every package is installed,
+DNF/YUM is not invoked; if any are absent, only those fixed allowlisted names are
+installed. An indeterminate RPM query fails closed before installation. DNF/YUM
+keeps distribution signature verification (`gpgcheck=1`) and the existing
 repositories, disables weak dependencies (`install_weak_deps=False`), and uses
 `~/.cache/cyf-test-runtime/dnf` (root Flow: `/root/.cache/cyf-test-runtime/dnf`)
 created before installation, within Flow's existing cache scope. Cached packages
