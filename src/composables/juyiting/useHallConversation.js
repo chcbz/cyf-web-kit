@@ -13,6 +13,8 @@ import { exactHallConversationId, normalizeHallConversationHistory } from './hal
 
 const runtimeEnv = import.meta.env ?? {}
 const HALL_HISTORY_PAGE_SIZE = 100
+const HALL_EVENT_RETRY_BASE_MS = 1_000
+const HALL_EVENT_RETRY_CAP_MS = 30_000
 
 export const useHallConversation = ({
   apiStore,
@@ -54,6 +56,8 @@ export const useHallConversation = ({
   let hallEventController = null
   let hallEventConversationId = ''
   let hallEventReconnectTimer = null
+  let hallEventReconnectFailures = 0
+  let hallEventTerminal = false
   let hallReplyTimers = []
   let hallReplyPollTimer = null
   let hallSyncTimers = []
@@ -261,12 +265,59 @@ export const useHallConversation = ({
     return searchParams ? `${requestPath}?${searchParams}` : requestPath
   }
 
+  const clearHallEventReconnect = () => {
+    if (hallEventReconnectTimer != null) window.clearTimeout(hallEventReconnectTimer)
+    hallEventReconnectTimer = null
+  }
+
+  const stopHallEventTransport = () => {
+    clearHallEventReconnect()
+    if (hallEventController) hallEventController.abort(new DOMException('Hall event stream stopped', 'AbortError'))
+    hallEventController = null
+    hallEventSignalCleanup?.()
+    hallEventSignalCleanup = null
+    hallEventConversationId = ''
+    eventStreamRecovering.value = false
+  }
+
+  const resetHallEventRecovery = () => {
+    hallEventReconnectFailures = 0
+    hallEventTerminal = false
+  }
+
+  const scheduleHallEventReconnect = (generation) => {
+    if (disposed || generation !== lifecycleGeneration || hallEventTerminal || hallEventReconnectTimer != null || !isPageVisible()) return
+    const exponent = Math.max(0, hallEventReconnectFailures - 1)
+    const base = Math.min(HALL_EVENT_RETRY_CAP_MS, HALL_EVENT_RETRY_BASE_MS * (2 ** exponent))
+    const delay = Math.min(HALL_EVENT_RETRY_CAP_MS, base + Math.floor(base * boundedJitter()))
+    hallEventReconnectTimer = window.setTimeout(() => {
+      hallEventReconnectTimer = null
+      if (disposed || generation !== lifecycleGeneration || hallEventTerminal || !isPageVisible()) return
+      hallEventConversationId = ''
+      startHallEventStream()
+    }, delay)
+  }
+
+  const failHallEventStream = (generation, error) => {
+    if (disposed || generation !== lifecycleGeneration || error?.name === 'AbortError') return
+    if (isTerminalHallEventError(error)) {
+      hallEventTerminal = true
+      clearHallEventReconnect()
+      eventStreamRecovering.value = false
+      return
+    }
+    log.warn('聚义厅实时消息连接中断', error)
+    hallEventReconnectFailures += 1
+    eventStreamRecovering.value = true
+    scheduleHallEventReconnect(generation)
+  }
+
   const startHallEventStream = async () => {
-    if (disposed) return
+    if (disposed || hallEventTerminal || !isPageVisible()) return
     const generation = lifecycleGeneration
     const id = conversationId.value
     if (typeof id !== 'string' || !id || hallEventConversationId === id) return
-    stopHallEventStream()
+    stopHallEventTransport()
     hallEventConversationId = id
     hallEventController = new AbortController()
     const eventSignal = combineAbortSignals({ signals: [lifecycleController.signal, hallEventController.signal] })
@@ -279,11 +330,14 @@ export const useHallConversation = ({
         signal: eventSignal.signal
       })
       if (disposed || generation !== lifecycleGeneration || !response) {
+        if (!response && generation === lifecycleGeneration) hallEventTerminal = true
         hallEventController = null
         return
       }
       if (!response.ok || !response.body) {
-        throw new Error(`Hall event stream failed: ${response.status}`)
+        const failure = new Error(`Hall event stream failed: ${response.status}`)
+        failure.status = response.status
+        throw failure
       }
       eventStreamRecovering.value = false
 
@@ -302,17 +356,21 @@ export const useHallConversation = ({
           const payload = line.slice(5).trim()
           if (!payload) continue
           appendHallEventMessage(JSON.parse(payload))
+          hallEventReconnectFailures = 0
         }
       }
+      if (!disposed && generation === lifecycleGeneration && !eventSignal.signal.aborted) {
+        hallEventConversationId = ''
+        hallEventController = null
+        hallEventSignalCleanup?.()
+        hallEventSignalCleanup = null
+        failHallEventStream(generation, new Error('Hall event stream ended'))
+      }
     } catch (error) {
-      if (error.name !== 'AbortError' && !disposed && generation === lifecycleGeneration) {
-        log.warn('聚义厅实时消息连接中断', error)
-        eventStreamRecovering.value = true
-        hallEventReconnectTimer = window.setTimeout(() => {
-          if (disposed || generation !== lifecycleGeneration) return
-          hallEventConversationId = ''
-          startHallEventStream()
-        }, 2500)
+      if (!disposed && generation === lifecycleGeneration) {
+        hallEventConversationId = ''
+        hallEventController = null
+        failHallEventStream(generation, error)
       }
     } finally {
       if (generation === lifecycleGeneration) {
@@ -323,14 +381,22 @@ export const useHallConversation = ({
   }
 
   const stopHallEventStream = () => {
-    if (hallEventReconnectTimer) window.clearTimeout(hallEventReconnectTimer)
-    hallEventReconnectTimer = null
-    if (hallEventController) hallEventController.abort(new DOMException('Hall event stream stopped', 'AbortError'))
-    hallEventController = null
-    hallEventSignalCleanup?.()
-    hallEventSignalCleanup = null
-    hallEventConversationId = ''
-    eventStreamRecovering.value = false
+    stopHallEventTransport()
+    resetHallEventRecovery()
+  }
+
+  const handleHallEventVisibility = () => {
+    if (disposed) return
+    if (!isPageVisible()) {
+      stopHallEventTransport()
+      return
+    }
+    startHallEventStream()
+  }
+
+  const handleHallEventFocus = () => {
+    if (!isPageVisible() || hallEventReconnectTimer != null) return
+    startHallEventStream()
   }
 
   const resetLifecycle = () => {
@@ -400,10 +466,15 @@ export const useHallConversation = ({
     { flush: 'sync' }
   )
 
+  browserDocument()?.addEventListener?.('visibilitychange', handleHallEventVisibility)
+  browserWindow()?.addEventListener?.('focus', handleHallEventFocus)
+
   const unregisterIdentityCleanup = registerIdentityCleanup(clearHallConversationIdentityState)
   const disposeHallConversation = () => {
     if (disposed) return
     disposed = true
+    browserDocument()?.removeEventListener?.('visibilitychange', handleHallEventVisibility)
+    browserWindow()?.removeEventListener?.('focus', handleHallEventFocus)
     stopScopeWatch()
     clearHallConversationIdentityState()
     unregisterIdentityCleanup()
@@ -697,6 +768,7 @@ export const useHallConversation = ({
   }
 
   const retryHallConversation = () => {
+    resetHallEventRecovery()
     if (conversationLoadError.value && selectedHallConversationId.value) return selectHallConversation(selectedHallConversationId.value)
     return loadHallMessages({ force: true })
   }
@@ -1007,4 +1079,25 @@ export const useHallConversation = ({
     stopHallReplyPolling,
     stopHallReplyStreaming
   }
+}
+
+function isTerminalHallEventError (error) {
+  return error?.status === 401 || error?.status === 403
+}
+
+function isPageVisible () {
+  return !browserDocument() || browserDocument().visibilityState !== 'hidden'
+}
+
+function boundedJitter () {
+  const random = Math.random()
+  return typeof random === 'number' && random >= 0 && random <= 1 ? random : 0
+}
+
+function browserWindow () {
+  return typeof window === 'undefined' ? null : window
+}
+
+function browserDocument () {
+  return typeof document === 'undefined' ? null : document
 }

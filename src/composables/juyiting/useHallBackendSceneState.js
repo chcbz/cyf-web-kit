@@ -6,6 +6,8 @@ const SNAPSHOT_URL = `/agent/scenes/${SCENE_ID}/snapshot`
 const EVENTS_URL = `/agent/scenes/${SCENE_ID}/events`
 const PHASES_URL = `/agent/scenes/${SCENE_ID}/phases`
 const POLL_INTERVAL = 15_000
+const RECONNECT_BASE_MS = 1_000
+const RECONNECT_CAP_MS = 30_000
 const JAVA_LONG_MAX = 9223372036854775807n
 
 export const useHallBackendSceneState = ({
@@ -18,7 +20,9 @@ export const useHallBackendSceneState = ({
   setTimeoutFn = setTimeout,
   clearTimeoutFn = clearTimeout,
   setIntervalFn = setInterval,
-  clearIntervalFn = clearInterval
+  clearIntervalFn = clearInterval,
+  documentRef = globalThis.document,
+  jitter = Math.random
 }) => {
   if (!agentApi?.execute) throw new TypeError('agentApi.execute is required')
 
@@ -46,6 +50,9 @@ export const useHallBackendSceneState = ({
   let lifecycleGeneration = 0
   let streamModeEnabled = Boolean(sseEnabled)
   let eventsDisabledByBackend = false
+  let eventsTerminal = false
+  let reconnectFailures = 0
+  let streamOpening = false
   const pendingRequests = new Set()
   const phaseRetryWaiters = new Set()
 
@@ -96,6 +103,7 @@ export const useHallBackendSceneState = ({
 
   const closeStream = () => {
     streamGeneration += 1
+    streamOpening = false
     sseConnected.value = false
     const closing = stream
     stream = null
@@ -131,11 +139,31 @@ export const useHallBackendSceneState = ({
   }
 
   const scheduleReconnect = () => {
-    if (!active || !streamModeEnabled || reconnectTimer != null || resyncPromise) return
+    if (!active || !streamModeEnabled || eventsTerminal || reconnectTimer != null || resyncPromise || !isVisible(documentRef)) return
+    const exponent = Math.max(0, reconnectFailures - 1)
+    const base = Math.min(RECONNECT_CAP_MS, RECONNECT_BASE_MS * (2 ** exponent))
+    const random = typeof jitter === 'function' ? jitter() : 0
+    const bounded = typeof random === 'number' && random >= 0 && random <= 1 ? random : 0
+    const delay = Math.min(RECONNECT_CAP_MS, base + Math.floor(base * bounded))
     reconnectTimer = setTimeoutFn(() => {
       reconnectTimer = null
-      if (active && !sseConnected.value) openStream()
-    }, 1000)
+      if (active && !sseConnected.value && !eventsTerminal && isVisible(documentRef)) openStream()
+    }, delay)
+  }
+
+  const handleStreamFailure = error => {
+    if (!active) return
+    sseConnected.value = false
+    if (isTerminalStreamError(error)) {
+      eventsTerminal = true
+      clearReconnect()
+      closeStream()
+      degraded.value = true
+      return
+    }
+    reconnectFailures += 1
+    degraded.value = true
+    scheduleReconnect()
   }
 
   const resync = () => {
@@ -148,7 +176,7 @@ export const useHallBackendSceneState = ({
     resyncPromise = fetchSnapshot(generation)
       .then(() => {
         resyncPromise = null
-        if (active && generation === lifecycleGeneration && streamModeEnabled) openStream()
+        if (active && generation === lifecycleGeneration && streamModeEnabled && !eventsTerminal && isVisible(documentRef)) openStream()
       })
       .catch(() => {
         resyncPromise = null
@@ -187,13 +215,14 @@ export const useHallBackendSceneState = ({
     lastEventAt.value = now()
     lastEvent.value = eventValue
     degraded.value = false
+    reconnectFailures = 0
     onEvent(eventValue)
   }
 
   const openStream = () => {
-    if (!active || !streamModeEnabled || resyncPromise) return
+    if (!active || !streamModeEnabled || eventsTerminal || resyncPromise || !isVisible(documentRef) || stream || streamOpening) return
     clearReconnect()
-    closeStream()
+    streamOpening = true
     const generation = streamGeneration
     const parser = createSseParser(record => {
       if (active && generation === streamGeneration) applySseRecord(record)
@@ -215,41 +244,56 @@ export const useHallBackendSceneState = ({
       onClose: () => {
         if (active && generation === streamGeneration) {
           parser.finish()
-          sseConnected.value = false
-          degraded.value = true
-          scheduleReconnect()
+          stream = null
+          streamOpening = false
+          handleStreamFailure()
         }
       },
       onError: error => {
         if (active && generation === streamGeneration) {
-          sseConnected.value = false
+          stream = null
+          streamOpening = false
           if (isEventsDisabled(error)) {
             switchToPolling()
             return
           }
-          degraded.value = true
-          scheduleReconnect()
+          handleStreamFailure(error)
         }
       }
     }
     const factory = streamFactory || (streamOptions => authenticatedStream(agentApi, streamOptions))
     try {
       stream = factory(options) || null
+      streamOpening = false
       if (stream && typeof stream.then === 'function') {
         stream.catch(options.onError)
       }
     } catch (error) {
+      streamOpening = false
       options.onError(error)
     }
   }
 
   const onFocus = () => {
-    if (!active) return
+    if (!active || !isVisible(documentRef)) return
     if (streamModeEnabled) {
-      if (!sseConnected.value && !resyncPromise) openStream()
+      if (!sseConnected.value && !resyncPromise && !eventsTerminal) {
+        clearReconnect()
+        openStream()
+      }
     } else {
       void fetchSnapshot().catch(() => { degraded.value = true })
     }
+  }
+
+  const onVisibilityChange = () => {
+    if (!active) return
+    if (!isVisible(documentRef)) {
+      clearReconnect()
+      closeStream()
+      return
+    }
+    onFocus()
   }
 
   const start = async () => {
@@ -260,7 +304,10 @@ export const useHallBackendSceneState = ({
     const generation = lifecycleGeneration
     streamModeEnabled = Boolean(sseEnabled)
     eventsDisabledByBackend = false
+    eventsTerminal = false
+    reconnectFailures = 0
     browserWindow()?.addEventListener?.('focus', onFocus)
+    documentRef?.addEventListener?.('visibilitychange', onVisibilityChange)
     startPromise = (async () => {
       try {
         const value = await fetchSnapshot(generation)
@@ -277,6 +324,7 @@ export const useHallBackendSceneState = ({
           active = false
           lifecycleGeneration += 1
           browserWindow()?.removeEventListener?.('focus', onFocus)
+          documentRef?.removeEventListener?.('visibilitychange', onVisibilityChange)
           clearReconnect()
           closeStream()
         }
@@ -292,7 +340,10 @@ export const useHallBackendSceneState = ({
     const wasActive = active
     active = false
     lifecycleGeneration += 1
-    if (wasActive) browserWindow()?.removeEventListener?.('focus', onFocus)
+    if (wasActive) {
+      browserWindow()?.removeEventListener?.('focus', onFocus)
+      documentRef?.removeEventListener?.('visibilitychange', onVisibilityChange)
+    }
     clearReconnect()
     if (pollTimer != null) {
       clearIntervalFn(pollTimer)
@@ -316,9 +367,11 @@ export const useHallBackendSceneState = ({
     if (!active) return null
     clearReconnect()
     closeStream()
+    eventsTerminal = false
+    reconnectFailures = 0
     const generation = lifecycleGeneration
     const value = await fetchSnapshot(generation)
-    if (active && generation === lifecycleGeneration && streamModeEnabled) openStream()
+    if (active && generation === lifecycleGeneration && streamModeEnabled && isVisible(documentRef)) openStream()
     return value
   }
 
@@ -595,8 +648,16 @@ function epochMilliseconds (value) {
   return timestamp
 }
 
+function isTerminalStreamError (error) {
+  return error?.status === 401 || error?.status === 403
+}
+
 function isEventsDisabled (error) {
   return error?.status === 503 && error?.code === 'SCENE_EVENTS_DISABLED'
+}
+
+function isVisible (documentRef) {
+  return !documentRef || documentRef.visibilityState !== 'hidden'
 }
 
 function browserWindow () {

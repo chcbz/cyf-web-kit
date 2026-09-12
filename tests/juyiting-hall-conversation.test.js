@@ -1346,3 +1346,113 @@ describe('useHallConversation history remediation', () => {
     conversation.disposeHallConversation()
   })
 })
+
+describe('useHallConversation event-stream recovery policy', () => {
+  const flush = async () => {
+    for (let index = 0; index < 5; index += 1) await Promise.resolve()
+  }
+
+  const createConversation = ({ apiStore = { token: async () => 'token' } } = {}) => useHallConversation({
+    apiStore,
+    chatApi: {
+      list: async (_path, _payload, options) => options.onSuccess({ data: [scopedConversation()] }),
+      getById: async (_path, _id, options) => options.onSuccess({ data: [] })
+    },
+    chatContext: ref({ conversationScopeType: 'public', conversationScopeKey: 'public', mode: 'public', participantAgentIds: [], targetAgentIds: [] }),
+    chatMode: ref('public'),
+    globalStore: { getJiacn: 'jia-user', user: {} },
+    log: { warn: () => {}, error: () => {} },
+    openPanel: () => {},
+    outgoingMetadata: ref({}),
+    portraitShortName: agent => agent?.name || agent?.agentId || '',
+    selectedAgent: ref(null),
+    selectedTask: ref(null),
+    showToast: () => {}
+  })
+
+  it('does not blindly reconnect the protected event stream after a 403', async () => {
+    const originalFetch = global.fetch
+    const originalSetTimeout = window.setTimeout
+    let fetchCount = 0
+    let timers = 0
+    global.fetch = async () => {
+      fetchCount += 1
+      return new Response('', { status: 403 })
+    }
+    window.setTimeout = () => { timers += 1; return 1 }
+
+    try {
+      const conversation = createConversation()
+      await conversation.loadHallMessages()
+      await flush()
+      window.dispatchEvent(new window.Event('focus'))
+      await flush()
+      expect({ fetchCount, timers, recovering: conversation.eventStreamRecovering.value }).to.deep.equal({ fetchCount: 1, timers: 0, recovering: false })
+      conversation.disposeHallConversation()
+    } finally {
+      global.fetch = originalFetch
+      window.setTimeout = originalSetTimeout
+    }
+  })
+
+  it('uses exponential jittered reconnects after EOF while keeping one event stream per conversation', async () => {
+    const originalFetch = global.fetch
+    const originalSetTimeout = window.setTimeout
+    const originalRandom = Math.random
+    const timers = []
+    let fetchCount = 0
+    global.fetch = async () => {
+      fetchCount += 1
+      return new Response('')
+    }
+    Math.random = () => 0
+    window.setTimeout = (callback, delay) => { const timer = { callback, delay, active: true }; timers.push(timer); return timer }
+    try {
+      const conversation = createConversation()
+      await conversation.loadHallMessages()
+      await flush()
+      expect({ fetchCount, delays: timers.map(timer => timer.delay) }).to.deep.equal({ fetchCount: 1, delays: [1000] })
+
+      window.dispatchEvent(new window.Event('focus'))
+      await flush()
+      expect(fetchCount).to.equal(1)
+      timers[0].callback()
+      await flush()
+      expect({ fetchCount, delays: timers.map(timer => timer.delay) }).to.deep.equal({ fetchCount: 2, delays: [1000, 2000] })
+      conversation.disposeHallConversation()
+    } finally {
+      global.fetch = originalFetch
+      window.setTimeout = originalSetTimeout
+      Math.random = originalRandom
+    }
+  })
+
+  it('pauses the conversation event stream while the page is hidden and resumes on visibility', async () => {
+    const originalFetch = global.fetch
+    const descriptor = Object.getOwnPropertyDescriptor(document, 'visibilityState')
+    let fetchCount = 0
+    global.fetch = async () => {
+      fetchCount += 1
+      return new Response(new ReadableStream({ start () {} }))
+    }
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    try {
+      const conversation = createConversation()
+      await conversation.loadHallMessages()
+      await flush()
+      expect(fetchCount).to.equal(1)
+
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
+      document.dispatchEvent(new window.Event('visibilitychange'))
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+      document.dispatchEvent(new window.Event('visibilitychange'))
+      await flush()
+      expect(fetchCount).to.equal(2)
+      conversation.disposeHallConversation()
+    } finally {
+      global.fetch = originalFetch
+      if (descriptor) Object.defineProperty(document, 'visibilityState', descriptor)
+      else delete document.visibilityState
+    }
+  })
+})

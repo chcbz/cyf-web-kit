@@ -455,3 +455,84 @@ describe('backend scene disposal', () => {
     expect(await state.start()).to.equal(null)
   })
 })
+
+describe('backend scene stream recovery policy', () => {
+  it('deduplicates one session stream and uses capped exponential jittered reconnect delays', async () => {
+    const timers = []
+    const streams = []
+    const state = useHallBackendSceneState({
+      agentApi: { execute: async () => ({ data: { data: snapshot(1) } }) },
+      streamFactory: options => {
+        const stream = { ...options, close () { this.closed = true } }
+        streams.push(stream)
+        options.onOpen()
+        return stream
+      },
+      jitter: () => 0.5,
+      setTimeoutFn: (callback, delay) => { const timer = { callback, delay, active: true }; timers.push(timer); return timer },
+      clearTimeoutFn: timer => { timer.active = false }
+    })
+
+    await state.start()
+    streams[0].onClose()
+    window.dispatchEvent(new window.Event('focus'))
+    expect(streams).to.have.length(2)
+    expect(timers.map(timer => [timer.delay, timer.active])).to.deep.equal([[1500, false]])
+
+    streams[1].onClose()
+    expect(timers.map(timer => [timer.delay, timer.active])).to.deep.equal([[1500, false], [3000, true]])
+    state.stop()
+  })
+
+  it('pauses scene SSE while hidden and resumes one deduplicated Last-Event-ID stream when visible', async () => {
+    const documentRef = new EventTarget()
+    documentRef.visibilityState = 'visible'
+    const { state, streams } = harness()
+    // Recreate the state with the owned document so visibility state is deterministic.
+    state.stop()
+    const resumed = useHallBackendSceneState({
+      agentApi: { execute: async () => ({ data: { data: snapshot(128) } }) },
+      documentRef,
+      streamFactory: options => {
+        const stream = { ...options, close () { this.closed = true } }
+        streams.push(stream)
+        options.onOpen()
+        return stream
+      }
+    })
+
+    await resumed.start()
+    documentRef.visibilityState = 'hidden'
+    documentRef.dispatchEvent(new Event('visibilitychange'))
+    expect(streams[0].closed).to.equal(true)
+
+    documentRef.visibilityState = 'visible'
+    documentRef.dispatchEvent(new Event('visibilitychange'))
+    expect(streams).to.have.length(2)
+    expect(streams[1].headers['Last-Event-ID']).to.equal('128')
+    resumed.stop()
+  })
+
+  it('stops retrying scene SSE for 401 or 403 until an explicit retry', async () => {
+    for (const status of [401, 403]) {
+      const timers = []
+      const streams = []
+      const state = useHallBackendSceneState({
+        agentApi: { execute: async () => ({ data: { data: snapshot(1) } }) },
+        streamFactory: options => {
+          streams.push(options)
+          options.onError(Object.assign(new Error('denied'), { status }))
+          return { close () {} }
+        },
+        setTimeoutFn: (callback, delay) => { timers.push({ callback, delay }); return timers.length },
+        clearTimeoutFn: () => {}
+      })
+      await state.start()
+      window.dispatchEvent(new window.Event('focus'))
+      expect({ status, streams: streams.length, timers: timers.length }).to.deep.equal({ status, streams: 1, timers: 0 })
+      await state.retry()
+      expect(streams).to.have.length(2)
+      state.stop()
+    }
+  })
+})
