@@ -150,6 +150,11 @@
                 <pre v-if="detailTask.settlement" class="settlement-detail">{{ JSON.stringify(detailTask.settlement, null, 2) }}</pre>
               </section>
 
+              <TeamRecommendationPanel
+                :task="detailTask"
+                :authorization-generation="authorizationGeneration"
+              />
+
               <WorkItemPlanPanel :task="detailTask" :enabled="workItemPlanEnabled" :authorization-generation="authorizationGeneration" />
 
               <div class="ability-tags">
@@ -302,6 +307,7 @@
 import { computed, ref, watch } from 'vue'
 import BountyActionIcon from './BountyActionIcon.vue'
 import WorkItemPlanPanel from './WorkItemPlanPanel.vue'
+import TeamRecommendationPanel from './TeamRecommendationPanel.vue'
 import { formatSilverMicro, isCanonicalMicroAmount } from '@/utils/silverAmount'
 
 const props = defineProps({
