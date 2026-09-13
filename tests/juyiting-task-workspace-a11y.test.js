@@ -1,4 +1,4 @@
-/* global before, beforeEach, after */
+/* global before, after */
 import { expect } from 'chai'
 import { readFileSync } from 'fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
@@ -6,6 +6,7 @@ import { compileScript, parse } from '@vue/compiler-sfc'
 let mount
 let Vue
 let TaskTimeline
+let WorkItemBoard
 let TaskWorkspacePanel
 const domGlobalDescriptors = {}
 const domGlobalKeys = ['SVGElement', 'Element', 'Node']
@@ -22,7 +23,7 @@ const vueImportToVar = (_line, imports) => {
   return vueBindings ? `var { ${vueBindings} } = Vue` : ''
 }
 
-const loadSfc = (relativePath, child = null) => {
+const loadSfc = (relativePath, child = null, board = null, boardComposable = null) => {
   const filename = new URL(relativePath, import.meta.url).pathname
   const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8')
   const { descriptor } = parse(source, { filename })
@@ -31,8 +32,10 @@ const loadSfc = (relativePath, child = null) => {
   const scriptBody = script
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace(/^import\s+TaskTimeline\s+from\s+['"].\/TaskTimeline\.vue['"];?\s*$/gm, 'var TaskTimeline = arguments[1]')
+    .replace(/^import\s+WorkItemBoard\s+from\s+['"].\/WorkItemBoard\.vue['"];?\s*$/gm, 'var WorkItemBoard = arguments[2]')
+    .replace(/^import\s+\{\s*useHallWorkItemBoard\s*\}\s+from\s+['"]@\/composables\/juyiting\/useHallWorkItemBoard['"];?\s*$/gm, 'var useHallWorkItemBoard = arguments[3]')
     .replace('export default', 'return')
-  return new Function('Vue', 'TaskTimeline', scriptBody)(Vue, child)
+  return new Function('Vue', 'TaskTimeline', 'WorkItemBoard', 'useHallWorkItemBoard', scriptBody)(Vue, child, board, boardComposable)
 }
 
 const componentDeclarations = readFileSync(new URL('../src/components.d.ts', import.meta.url), 'utf8')
@@ -75,7 +78,9 @@ describe('C07C task workspace accessibility and responsive contract', () => {
     ;({ mount } = await import('@vue/test-utils'))
     Vue = await import('vue')
     TaskTimeline = loadSfc('../src/components/juyiting/TaskTimeline.vue')
-    TaskWorkspacePanel = loadSfc('../src/components/juyiting/TaskWorkspacePanel.vue', TaskTimeline)
+    const { useHallWorkItemBoard } = await import('../src/composables/juyiting/useHallWorkItemBoard.js')
+    WorkItemBoard = loadSfc('../src/components/juyiting/WorkItemBoard.vue', null, null, useHallWorkItemBoard)
+    TaskWorkspacePanel = loadSfc('../src/components/juyiting/TaskWorkspacePanel.vue', TaskTimeline, WorkItemBoard)
   })
 
   beforeEach(() => {
@@ -88,6 +93,19 @@ describe('C07C task workspace accessibility and responsive contract', () => {
       if (descriptor) Object.defineProperty(global, key, descriptor)
       else delete global[key]
     }
+  })
+
+  it('mounts the real nested work-item board and keeps legacy details collapsed', () => {
+    const wrapper = mount(TaskWorkspacePanel, {
+      props: { actorAgentId: 'agent-1', connectionState: 'live', workspace: workspaceFixture() }
+    })
+    expect(wrapper.find('.work-item-board').exists()).to.equal(true)
+    expect(wrapper.findAll('.work-item-board-card')).to.have.length(1)
+    expect(wrapper.find('.work-item-board-column:nth-child(4)').text()).to.include('执行中')
+    expect(wrapper.find('.work-item-board-column:nth-child(4) .work-item-board-card').exists()).to.equal(true)
+    expect(wrapper.find('.task-work-item-details').element.open).to.equal(false)
+    expect(wrapper.find('.work-item-board-limit').text()).to.equal('当前支持查看进度，协作操作暂未开放。')
+    wrapper.unmount()
   })
 
   it('renders semantic status, error, retry intent, and stable empty states', async () => {
