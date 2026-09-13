@@ -244,6 +244,11 @@
               :workspace="taskWorkspaceSnapshot"
               :identity-epoch="apiStore.authorizationGeneration"
             />
+            <ArtifactOutcomePanel
+              :subject="taskWorkspaceSubject"
+              :workspace="taskWorkspaceSnapshot"
+              :identity-epoch="apiStore.authorizationGeneration"
+            />
           </template>
 
           <PersonaCatalogPanel
@@ -427,6 +432,7 @@ import { useTaskWorkspaceView } from '@/composables/juyiting/useTaskWorkspaceVie
 import { useTaskWorkspaceBinding } from '@/composables/juyiting/useTaskWorkspaceBinding'
 import TaskWorkspacePanel from '@/components/juyiting/TaskWorkspacePanel.vue'
 import ArtifactTransferPanel from '@/components/juyiting/ArtifactTransferPanel.vue'
+import ArtifactOutcomePanel from '@/components/juyiting/ArtifactOutcomePanel.vue'
 import { portraitName, portraitRole, portraitShortName, portraitStyle, roleClass } from '@/composables/juyiting/useWaterMarginRoles'
 import AgentPanel from '@/components/juyiting/AgentPanel.vue'
 import BountyDiscussionPanel from '@/components/juyiting/BountyDiscussionPanel.vue'
