@@ -3,9 +3,9 @@ import { ref } from 'vue'
 import { useHallArtifactOutcomes } from '../src/composables/juyiting/useHallArtifactOutcomes.js'
 
 const subject = ref({ taskId: 'task-1', actorAgentId: 'agent-1' })
-const workspace = ref({ recentArtifacts: [{ artifactId: 'draft-1', artifactVersion: '3', title: '当前成果', artifactType: 'report' }] })
+const workspace = ref({ recentArtifacts: [{ artifactId: 'draft-1', artifactVersion: '3', title: '当前成果', artifactType: 'analysis' }] })
 const identity = ref(1)
-const row = (overrides = {}) => ({ artifactId: 'accepted-1', taskId: 'task-1', workItemId: null, producerAgentId: 'agent-2', artifactType: 'report', title: '已接受成果', contentHash: 'a'.repeat(64), artifactVersion: 2, visibility: 'task_members', createdAt: 1, outcomeState: 'accepted', outcomeVersion: 4, decisionId: 'decision-existing', decidedByAgentId: 'agent-2', decidedAt: 2, ...overrides })
+const row = (overrides = {}) => ({ artifactId: 'accepted-1', taskId: 'task-1', workItemId: null, producerAgentId: 'agent-2', artifactType: 'analysis', title: '已接受成果', contentHash: 'a'.repeat(64), artifactVersion: 2, visibility: 'task_members', createdAt: 1, outcomeState: 'accepted', outcomeVersion: 4, decisionId: 'decision-existing', decidedByAgentId: 'agent-2', decidedAt: 2, ...overrides })
 const outcome = options => useHallArtifactOutcomes({ subject, workspace, identityEpoch: identity, idempotencyKeyFactory: () => 'f06-test-idempotency-key', ...options })
 const tick = () => new Promise(resolve => setTimeout(resolve, 0))
 
@@ -26,7 +26,6 @@ describe('F06 Juyi Hall artifact outcome interaction', () => {
     expect(t.accepted.value).to.deep.equal([row()])
     expect(t.acceptedState.value).to.equal('ready')
     expect(t.selectArtifact(t.workspaceArtifacts.value[0])).to.equal(true)
-    t.expectedOutcomeVersion.value = '0'
     expect(t.toggleSuperseded(t.accepted.value[0])).to.equal(true)
     t.confirmed.value = true
     const receipt = await t.accept()
@@ -72,7 +71,7 @@ describe('F06 Juyi Hall artifact outcome interaction', () => {
       if (options.method === 'GET') return { data: [row()] }
       throw Object.assign(new Error('changed'), { status: 409 })
     } } })
-    await tick(); t.selectArtifact(t.workspaceArtifacts.value[0]); t.expectedOutcomeVersion.value = '0'; t.confirmed.value = true
+    await tick(); t.selectArtifact(t.workspaceArtifacts.value[0]); t.confirmed.value = true
     const first = t.accept(); const second = await t.accept()
     expect(second).to.equal(null); await first
     expect(t.submitState.value).to.equal('conflict')
@@ -108,7 +107,8 @@ describe('F06 ArtifactOutcomePanel binding', () => {
     try {
       await tick()
       const select = wrapper.find('select'); await select.setValue('draft-1\u00003')
-      const version = wrapper.find('input[inputmode="numeric"]'); await version.setValue('0')
+      expect(wrapper.find('input[inputmode="numeric"]').exists()).to.equal(false)
+      expect(wrapper.text()).to.include('由服务器原子核验')
       await wrapper.find('.artifact-outcome-confirm input').setValue(true)
       expect(wrapper.find('button[type="submit"]').attributes('disabled')).to.equal(undefined)
       await wrapper.find('form').trigger('submit')
@@ -119,5 +119,80 @@ describe('F06 ArtifactOutcomePanel binding', () => {
       Object.defineProperty(globalThis, 'crypto', { configurable: true, value: originalCrypto })
       for (const [key, descriptor] of Object.entries(globals)) { if (descriptor) Object.defineProperty(global, key, descriptor); else delete global[key] }
     }
+  })
+})
+
+describe('F06 cross-operation race regressions', () => {
+  it('does not let refresh invalidate a pending acceptance or strand submitting state', async () => {
+    subject.value = { taskId: 'task-1', actorAgentId: 'agent-1' }; identity.value = 21
+    let resolvePost; let gets = 0
+    const t = outcome({ api: { execute: options => {
+      if (options.method === 'GET') { gets += 1; return Promise.resolve({ data: [row()] }) }
+      return new Promise(resolve => { resolvePost = resolve })
+    } } })
+    try {
+      await tick(); t.selectArtifact(t.workspaceArtifacts.value[0]); t.confirmed.value = true
+      const pending = t.accept(); await tick(); await t.refreshAccepted()
+      expect(gets).to.equal(1)
+      resolvePost({ data: row({ artifactId: 'draft-1', artifactVersion: 3, outcomeVersion: 1, decisionId: 'f06-test-idempotency-key', decidedByAgentId: 'agent-1' }) })
+      await pending; expect(t.submitState.value).to.equal('accepted')
+    } finally { t.dispose() }
+  })
+
+  it('does not let submission invalidate a pending initial read or strand loading state', async () => {
+    subject.value = { taskId: 'task-1', actorAgentId: 'agent-1' }; identity.value = 22
+    let resolveList; let posts = 0
+    const t = outcome({ api: { execute: options => {
+      if (options.method === 'GET') return new Promise(resolve => { resolveList = resolve })
+      posts += 1; return Promise.resolve({ data: row({ artifactId: 'draft-1', artifactVersion: 3, outcomeVersion: 1, decisionId: 'f06-test-idempotency-key' }) })
+    } } })
+    try {
+      await tick(); t.selectArtifact(t.workspaceArtifacts.value[0]); t.confirmed.value = true
+      await t.accept(); expect(posts).to.equal(0)
+      resolveList({ data: [row()] }); await tick(); expect(t.acceptedState.value).to.equal('ready')
+    } finally { t.dispose() }
+  })
+
+  it('requires successful explicit refresh after conflict before another acceptance attempt', async () => {
+    subject.value = { taskId: 'task-1', actorAgentId: 'agent-1' }; identity.value = 23
+    let posts = 0
+    const t = outcome({ api: { execute: async options => {
+      if (options.method === 'GET') return { data: [row()] }
+      posts += 1; throw Object.assign(new Error('changed'), { status: 409 })
+    } } })
+    try {
+      await tick(); t.selectArtifact(t.workspaceArtifacts.value[0]); t.confirmed.value = true
+      await t.accept(); await t.accept(); expect(posts).to.equal(1)
+      await t.refreshAccepted(); t.selectArtifact(t.workspaceArtifacts.value[0]); t.confirmed.value = true
+      await t.accept(); expect(posts).to.equal(2)
+    } finally { t.dispose() }
+  })
+})
+
+describe('F06 wire and uncertainty regressions', () => {
+  it('accepts nullable workItemId omitted by JSON serialization but rejects extra fields', async () => {
+    subject.value = { taskId: 'task-1', actorAgentId: 'agent-1' }; identity.value = 24
+    const optional = row(); delete optional.workItemId
+    const t = outcome({ api: { execute: async () => ({ data: [optional] }) } })
+    try { await tick(); expect(t.acceptedState.value).to.equal('ready') } finally { t.dispose() }
+    const poisoned = outcome({ api: { execute: async () => ({ data: [{ ...optional, storageUri: 'private-value' }] }) } })
+    try { await tick(); expect(poisoned.accepted.value).to.deep.equal([]); expect(poisoned.acceptedState.value).to.equal('error') } finally { poisoned.dispose() }
+  })
+  it('keeps uncertain POST outcomes blocked until a successful authoritative refresh', async () => {
+    subject.value = { taskId: 'task-1', actorAgentId: 'agent-1' }; identity.value = 25
+    let posts = 0; let failRead = false
+    const t = outcome({ api: { execute: async options => {
+      if (options.method === 'GET') { if (failRead) throw Object.assign(new Error('off'), { status: 503 }); return { data: [] } }
+      posts += 1; throw new TypeError('connection lost')
+    } } })
+    try {
+      await tick(); t.selectArtifact(t.workspaceArtifacts.value[0]); t.confirmed.value = true; await t.accept()
+      expect(t.submitState.value).to.equal('unknown'); expect(t.refreshRequired.value).to.equal(true)
+      expect(t.selectArtifact(t.workspaceArtifacts.value[0])).to.equal(false)
+      await t.accept(); expect(posts).to.equal(1)
+      failRead = true; await t.refreshAccepted(); expect(t.refreshRequired.value).to.equal(true)
+      failRead = false; await t.refreshAccepted(); expect(t.refreshRequired.value).to.equal(false)
+      expect(t.confirmed.value).to.equal(false)
+    } finally { t.dispose() }
   })
 })

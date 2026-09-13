@@ -3,7 +3,11 @@ import { createApi } from '../useHttp.js'
 
 const MAX_ARTIFACT_VERSION = 2147483647
 const MAX_SAFE_OUTCOME_VERSION = Number.MAX_SAFE_INTEGER - 1
-const ID = value => typeof value === 'string' && value.length > 0 && value.length <= 100 && !/^\s|\s$/.test(value) && !/[\x00-\x1f\x7f]/.test(value)
+const hasControl = value => Array.from(value).some(character => {
+  const code = character.codePointAt(0)
+  return code < 32 || (code >= 127 && code <= 159)
+})
+const ID = value => typeof value === 'string' && value.length > 0 && value.length <= 100 && !/^\s|\s$/.test(value) && !hasControl(value)
 const resolveValue = value => typeof value === 'function' ? value() : unref(value)
 const unwrap = result => {
   let value = result
@@ -11,15 +15,9 @@ const unwrap = result => {
   return value
 }
 const exactArtifactVersion = value => Number.isInteger(value) && value >= 1 && value <= MAX_ARTIFACT_VERSION
-const exactOutcomeVersion = value => Number.isSafeInteger(value) && value >= 0 && value <= MAX_SAFE_OUTCOME_VERSION
-const parseOutcomeVersion = value => {
-  if (typeof value === 'number') return exactOutcomeVersion(value) ? value : null
-  if (typeof value !== 'string' || !/^(0|[1-9][0-9]{0,15})$/.test(value)) return null
-  const parsed = Number(value)
-  return exactOutcomeVersion(parsed) && String(parsed) === value ? parsed : null
-}
 const workspaceArtifact = item => ID(item?.artifactId) && exactArtifactVersion(Number(item?.artifactVersion))
-const acceptedRow = (row, taskId) => row && Object.keys(row).length === 15 &&
+const ACCEPTED_FIELDS = new Set('artifactId taskId workItemId producerAgentId artifactType title contentHash artifactVersion visibility createdAt outcomeState outcomeVersion decisionId decidedByAgentId decidedAt'.split(' '))
+const acceptedRow = (row, taskId) => row && typeof row === 'object' && !Array.isArray(row) && Object.keys(row).every(key => ACCEPTED_FIELDS.has(key)) &&
   ID(row.artifactId) && row.taskId === taskId && (row.workItemId == null || ID(row.workItemId)) &&
   ID(row.producerAgentId) && typeof row.artifactType === 'string' && row.artifactType.length > 0 &&
   typeof row.title === 'string' && row.title.length > 0 && typeof row.contentHash === 'string' && /^[0-9a-f]{64}$/.test(row.contentHash) &&
@@ -46,7 +44,7 @@ export const useHallArtifactOutcomes = ({ api = createApi('/agent'), subject, wo
   const acceptedMessage = ref('')
   const acceptedSelection = ref('')
   const supersededSelections = ref([])
-  const expectedOutcomeVersion = ref('')
+  const refreshRequired = ref(false)
   const confirmed = ref(false)
   const submitState = ref('idle')
   const submitMessage = ref('')
@@ -67,7 +65,7 @@ export const useHallArtifactOutcomes = ({ api = createApi('/agent'), subject, wo
     const rows = Array.isArray(currentWorkspace.value?.recentArtifacts) ? currentWorkspace.value.recentArtifacts : []
     const keys = new Set()
     return rows.filter(item => {
-      if (!workspaceArtifact(item)) return false
+      if (!workspaceArtifact(item) || accepted.value.some(row => row.artifactId === item.artifactId && row.artifactVersion === Number(item.artifactVersion))) return false
       const key = `${item.artifactId}\u0000${Number(item.artifactVersion)}`
       if (keys.has(key)) return false
       keys.add(key)
@@ -76,22 +74,25 @@ export const useHallArtifactOutcomes = ({ api = createApi('/agent'), subject, wo
   })
   const selectedArtifact = computed(() => workspaceArtifacts.value.find(item => item.key === acceptedSelection.value) || null)
   const selectedSuperseded = computed(() => accepted.value.filter(row => supersededSelections.value.includes(`${row.artifactId}\u0000${row.artifactVersion}`)))
-  const canSubmit = computed(() => operable.value && Boolean(selectedArtifact.value) && exactOutcomeVersion(parseOutcomeVersion(expectedOutcomeVersion.value)) && confirmed.value && submitState.value !== 'submitting')
+  const busy = computed(() => acceptedState.value === 'loading' || submitState.value === 'submitting')
+  const readReady = computed(() => acceptedState.value === 'ready' || acceptedState.value === 'empty')
+  const canSubmit = computed(() => operable.value && readReady.value && !busy.value && !refreshRequired.value && Boolean(selectedArtifact.value) && confirmed.value)
   const current = (captured, capturedTask, capturedActor, capturedEpoch, controller) => captured === generation && !controller.signal.aborted && capturedTask === taskId.value && capturedActor === actorAgentId.value && capturedEpoch === currentEpoch.value
-  const clearSelection = () => { acceptedSelection.value = ''; supersededSelections.value = []; expectedOutcomeVersion.value = ''; confirmed.value = false; receipt.value = null }
+  const clearSelection = () => { acceptedSelection.value = ''; supersededSelections.value = []; confirmed.value = false; receipt.value = null }
   const reset = () => {
     generation += 1
     listController?.abort(); submitController?.abort(); listController = null; submitController = null
     accepted.value = []; acceptedState.value = 'idle'; acceptedMessage.value = ''; submitState.value = 'idle'; submitMessage.value = ''
-    clearSelection()
+    refreshRequired.value = false; clearSelection()
   }
   const request = (options, controller) => api.execute({ ...options, autoLoading: false, needAuth: true, signal: controller.signal })
 
   const refreshAccepted = async () => {
-    if (listController || !operable.value) return null
+    if (listController || submitController || !operable.value) return null
     const captured = ++generation
     const capturedTask = taskId.value; const capturedActor = actorAgentId.value; const capturedEpoch = currentEpoch.value
     const controller = new AbortController(); listController = controller
+    clearSelection(); submitState.value = 'idle'; submitMessage.value = ''
     acceptedState.value = 'loading'; acceptedMessage.value = ''
     try {
       const rows = unwrap(await request({ url: `/tasks/${encodeURIComponent(capturedTask)}/artifact-outcomes/accepted`, method: 'GET', params: { limit: 100 } }, controller))
@@ -99,7 +100,7 @@ export const useHallArtifactOutcomes = ({ api = createApi('/agent'), subject, wo
       if (!Array.isArray(rows) || rows.length > 100 || !rows.every(row => acceptedRow(row, capturedTask))) throw new Error('权威接受结果格式无效，未展示为权威状态。')
       const keys = new Set()
       if (rows.some(row => { const key = `${row.artifactId}\u0000${row.artifactVersion}`; if (keys.has(key)) return true; keys.add(key); return false })) throw new Error('权威接受结果存在重复项，未展示为权威状态。')
-      accepted.value = rows
+      accepted.value = rows; refreshRequired.value = false
       supersededSelections.value = supersededSelections.value.filter(key => keys.has(key))
       acceptedState.value = rows.length ? 'ready' : 'empty'
       acceptedMessage.value = rows.length ? '以下仅为服务端确认的已接受成果。' : '服务端尚未返回已接受成果。'
@@ -114,14 +115,14 @@ export const useHallArtifactOutcomes = ({ api = createApi('/agent'), subject, wo
   }
 
   const selectArtifact = artifact => {
-    if (!workspaceArtifact(artifact)) return false
+    if (busy.value || refreshRequired.value || !readReady.value || !workspaceArtifact(artifact)) return false
     const key = `${artifact.artifactId}\u0000${Number(artifact.artifactVersion)}`
     if (!workspaceArtifacts.value.some(item => item.key === key)) return false
-    acceptedSelection.value = key; expectedOutcomeVersion.value = ''; confirmed.value = false; receipt.value = null
+    acceptedSelection.value = key; confirmed.value = false; receipt.value = null
     return true
   }
   const toggleSuperseded = row => {
-    if (!acceptedRow(row, taskId.value)) return false
+    if (busy.value || refreshRequired.value || !readReady.value || !acceptedRow(row, taskId.value)) return false
     const key = `${row.artifactId}\u0000${row.artifactVersion}`
     supersededSelections.value = supersededSelections.value.includes(key)
       ? supersededSelections.value.filter(value => value !== key)
@@ -131,20 +132,21 @@ export const useHallArtifactOutcomes = ({ api = createApi('/agent'), subject, wo
   }
 
   const accept = async () => {
-    if (submitController) return null
+    if (submitController || listController || refreshRequired.value) return null
     const artifact = selectedArtifact.value
-    const outcomeVersion = parseOutcomeVersion(expectedOutcomeVersion.value)
-    if (!operable.value || !artifact || outcomeVersion == null || !confirmed.value) {
-      submitState.value = 'error'; submitMessage.value = '请从当前工作台可见成果中选择一个成果，填写精确裁决版本，并明确确认。'; return null
+    if (!operable.value || !readReady.value || !artifact || !confirmed.value) {
+      submitState.value = 'error'; submitMessage.value = '请从当前工作台可见成果中选择一个成果，并明确确认仅接受尚未裁决的成果。'; return null
     }
-    const acceptedRef = { artifactId: artifact.artifactId, artifactVersion: artifact.artifactVersion, expectedOutcomeVersion: outcomeVersion }
+    // The service permits a target only when its outcome row is absent. Zero is
+    // an atomic accept-if-undecided PRECONDITION, not an inferred current state.
+    const acceptedRef = { artifactId: artifact.artifactId, artifactVersion: artifact.artifactVersion, expectedOutcomeVersion: 0 }
     const superseded = selectedSuperseded.value.map(row => ({ artifactId: row.artifactId, artifactVersion: row.artifactVersion, expectedOutcomeVersion: row.outcomeVersion }))
     if (superseded.some(row => row.artifactId === acceptedRef.artifactId && row.artifactVersion === acceptedRef.artifactVersion)) {
       submitState.value = 'error'; submitMessage.value = '接受成果不能同时作为被取代成果。'; return null
     }
     let idempotencyKey
     try { idempotencyKey = idempotencyKeyFactory() } catch (error) { submitState.value = 'error'; submitMessage.value = error.message; return null }
-    if (typeof idempotencyKey !== 'string' || !/^[A-Za-z0-9._~:/+\-]{8,100}$/.test(idempotencyKey)) { submitState.value = 'error'; submitMessage.value = '生成的幂等键无效，未发送裁决。'; return null }
+    if (typeof idempotencyKey !== 'string' || !/^[A-Za-z0-9._~:/+-]{8,100}$/.test(idempotencyKey)) { submitState.value = 'error'; submitMessage.value = '生成的幂等键无效，未发送裁决。'; return null }
     const captured = ++generation
     const capturedTask = taskId.value; const capturedActor = actorAgentId.value; const capturedEpoch = currentEpoch.value
     const controller = new AbortController(); submitController = controller
@@ -163,7 +165,10 @@ export const useHallArtifactOutcomes = ({ api = createApi('/agent'), subject, wo
       if (!current(captured, capturedTask, capturedActor, capturedEpoch, controller) || error?.name === 'AbortError') return null
       const [state, message] = errorPresentation(error)
       submitState.value = state; submitMessage.value = message
-      if (state === 'inaccessible') clearSelection()
+      // A failed HTTP reply does not prove that no decision committed. Require
+      // an explicit authoritative refresh before any further submission.
+      refreshRequired.value = true
+      clearSelection()
       return null
     } finally { if (submitController === controller) submitController = null }
   }
@@ -171,5 +176,5 @@ export const useHallArtifactOutcomes = ({ api = createApi('/agent'), subject, wo
   const stopScope = watch(scope, () => { reset(); if (operable.value) void refreshAccepted() }, { immediate: true, flush: 'sync' })
   const dispose = () => { stopScope(); reset() }
   if (getCurrentInstance()) onUnmounted(dispose)
-  return { accepted, acceptedState, acceptedMessage, acceptedSelection, supersededSelections, expectedOutcomeVersion, confirmed, submitState, submitMessage, receipt, workspaceArtifacts, selectedArtifact, selectedSuperseded, canSubmit, refreshAccepted, selectArtifact, toggleSuperseded, accept, dispose }
+  return { accepted, acceptedState, acceptedMessage, acceptedSelection, supersededSelections, refreshRequired, busy, confirmed, submitState, submitMessage, receipt, workspaceArtifacts, selectedArtifact, selectedSuperseded, canSubmit, refreshAccepted, selectArtifact, toggleSuperseded, accept, dispose }
 }
