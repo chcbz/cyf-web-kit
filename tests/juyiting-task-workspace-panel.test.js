@@ -23,6 +23,8 @@ describe('C07B task workspace presentation', () => {
     expect(panelSource).to.include('workspace.members')
     expect(panelSource).to.include('workspace.workItems')
     expect(panelSource).to.include('<WorkItemBoard :workspace="workspace" />')
+    expect(panelSource).to.include('<details v-if="workspace.workItems.length" class="task-work-item-details">')
+    expect(panelSource).to.include('查看工作项详情（{{ workspace.workItems.length }} 项）')
     expect(panelSource).to.include('workspace.openRequests')
     expect(panelSource).to.include('workspace.recentArtifacts')
     expect(panelSource).to.include('workspace.conversationId')

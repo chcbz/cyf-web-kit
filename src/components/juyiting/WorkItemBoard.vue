@@ -39,8 +39,9 @@
                     {{ dependency.title }}<template v-if="dependency.status">（{{ dependency.status }}）</template><template v-else>（当前快照未包含）</template>
                   </li>
                 </ul>
+                <p v-if="item.remainingDependencyCount">另有 {{ item.remainingDependencyCount }} 项依赖未展开。</p>
+                <p>{{ item.completedDependencyCount }} / {{ item.dependencyCount }} 项依赖已完成。</p>
                 <p v-if="item.missingDependencyIds.length" class="work-item-board-warning">有 {{ item.missingDependencyIds.length }} 项依赖未在当前快照中提供。</p>
-                <p v-else>{{ item.completedDependencyCount }} / {{ item.dependencyCount }} 项依赖已完成。</p>
               </template>
             </div>
           </li>
@@ -48,7 +49,7 @@
       </section>
     </div>
 
-    <p class="work-item-board-limit" role="note">当前已认证协作接口仅提供快照与实时状态；领取、开始、阻塞、提交、验收、重派及成果上传尚无已发布的浏览器操作接口，因此未提供会产生假成功的按钮。</p>
+    <p class="work-item-board-limit" role="note">当前支持查看进度，协作操作暂未开放。</p>
   </section>
 </template>
 

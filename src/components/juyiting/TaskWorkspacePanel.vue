@@ -86,21 +86,24 @@
           <span>{{ workspace.workItems.length }} 项</span>
         </div>
         <WorkItemBoard :workspace="workspace" />
-        <ul v-if="workspace.workItems.length" class="task-card-list" aria-label="工作项详情">
-          <li v-for="item in workspace.workItems" :key="item.workItemId" class="task-work-card">
-            <div class="task-card-heading">
-              <strong :title="item.title">{{ item.title }}</strong>
-              <span class="task-status" :title="item.status">{{ item.status }}</span>
-            </div>
-            <p>{{ item.description || '未提供工作项说明。' }}</p>
-            <dl class="task-card-meta">
-              <div><dt>类型</dt><dd :title="item.workType">{{ item.workType }}</dd></div>
-              <div><dt>承办</dt><dd :title="item.assigneeAgentId || '未指派'">{{ item.assigneeAgentId || '未指派' }}</dd></div>
-              <div><dt>进度</dt><dd>{{ item.attemptCount }} / {{ item.maxAttempts }}</dd></div>
-              <div><dt>必要</dt><dd>{{ item.requiredItem ? '是' : '否' }}</dd></div>
-            </dl>
-          </li>
-        </ul>
+        <details v-if="workspace.workItems.length" class="task-work-item-details">
+          <summary>查看工作项详情（{{ workspace.workItems.length }} 项）</summary>
+          <ul class="task-card-list" aria-label="工作项详情">
+            <li v-for="item in workspace.workItems" :key="item.workItemId" class="task-work-card">
+              <div class="task-card-heading">
+                <strong :title="item.title">{{ item.title }}</strong>
+                <span class="task-status" :title="item.status">{{ item.status }}</span>
+              </div>
+              <p>{{ item.description || '未提供工作项说明。' }}</p>
+              <dl class="task-card-meta">
+                <div><dt>类型</dt><dd :title="item.workType">{{ item.workType }}</dd></div>
+                <div><dt>承办</dt><dd :title="item.assigneeAgentId || '未指派'">{{ item.assigneeAgentId || '未指派' }}</dd></div>
+                <div><dt>进度</dt><dd>{{ item.attemptCount }} / {{ item.maxAttempts }}</dd></div>
+                <div><dt>必要</dt><dd>{{ item.requiredItem ? '是' : '否' }}</dd></div>
+              </dl>
+            </li>
+          </ul>
+        </details>
       </section>
 
       <section class="task-workspace-section" aria-labelledby="task-requests-heading">

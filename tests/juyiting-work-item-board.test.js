@@ -26,7 +26,7 @@ describe('E08 work item board', () => {
     const board = useHallWorkItemBoard({ workspace })
 
     expect(board.columns.value.map(column => column.status)).to.deep.equal([
-      'pending', 'ready', 'claimed', 'running', 'blocked', 'submitted', 'completed', 'failed', 'cancelled'
+      'pending', 'ready', 'claimed', 'running', 'blocked', 'submitted', 'completed', 'failed', 'cancelled', 'unknown'
     ])
     const pending = board.columns.value.find(column => column.status === 'pending').items[0]
     expect(pending.dependencyItems).to.deep.equal([
@@ -36,6 +36,28 @@ describe('E08 work item board', () => {
     expect(pending.completedDependencyCount).to.equal(1)
     expect(pending.missingDependencyIds).to.deep.equal(['work-missing'])
     expect(board.columns.value.find(column => column.status === 'completed').items[0].assigneeRole).to.equal('worker')
+  })
+
+  it('keeps unknown statuses out of the pending column and bounds dependency rows without losing totals', () => {
+    const dependencyIds = Array.from({ length: 9 }, (_, index) => `dependency-${index + 1}`)
+    const workspace = ref({
+      members: [],
+      workItems: [
+        workItem({ workItemId: 'work-unknown', status: 'server-new-status', dependencyJson: JSON.stringify(dependencyIds) }),
+        ...dependencyIds.slice(0, 8).map(workItemId => workItem({ workItemId, status: 'completed' }))
+      ]
+    })
+    const board = useHallWorkItemBoard({ workspace })
+    const unknown = board.entries.value.find(item => item.workItemId === 'work-unknown')
+
+    expect(unknown.status).to.equal('unknown')
+    expect(board.columns.value.find(column => column.status === 'pending').items).to.have.length(0)
+    expect(board.columns.value.find(column => column.status === 'unknown').items).to.deep.equal([unknown])
+    expect(unknown.dependencyItems).to.have.length(8)
+    expect(unknown.remainingDependencyCount).to.equal(1)
+    expect(unknown.dependencyCount).to.equal(9)
+    expect(unknown.completedDependencyCount).to.equal(8)
+    expect(unknown.missingDependencyIds).to.deep.equal(['dependency-9'])
   })
 
   it('does not infer a ready transition from dependencies and bounds malformed dependency display', () => {
@@ -55,7 +77,9 @@ describe('E08 work item board', () => {
     expect(panelSource).to.include("import WorkItemBoard from './WorkItemBoard.vue'")
     expect(panelSource).to.include('<WorkItemBoard :workspace="workspace" />')
     expect(boardSource).to.include('系统负责依赖解锁')
-    expect(boardSource).to.include('尚无已发布的浏览器操作接口')
+    expect(boardSource).to.include('当前支持查看进度，协作操作暂未开放')
+    expect(panelSource).to.include('<details v-if="workspace.workItems.length" class="task-work-item-details">')
+    expect(panelSource).to.include('查看工作项详情（{{ workspace.workItems.length }} 项）')
     expect(boardSource).to.not.match(/agentApi|fetch\(|EventSource|work-item-plans|upload|assign-task|auto-assign|create-task/)
     expect(adapterSource).to.not.match(/agentApi|fetch\(|EventSource|execute\(|Idempotency-Key|work-item-plans|upload/)
   })

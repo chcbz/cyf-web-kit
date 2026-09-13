@@ -1,6 +1,6 @@
 import { computed, unref } from 'vue'
 
-const BOARD_STATUSES = Object.freeze(['pending', 'ready', 'claimed', 'running', 'blocked', 'submitted', 'completed', 'failed', 'cancelled'])
+const BOARD_STATUSES = Object.freeze(['pending', 'ready', 'claimed', 'running', 'blocked', 'submitted', 'completed', 'failed', 'cancelled', 'unknown'])
 const STATUS_LABELS = Object.freeze({
   pending: '等待依赖',
   ready: '可领取',
@@ -10,11 +10,13 @@ const STATUS_LABELS = Object.freeze({
   submitted: '待验收',
   completed: '已完成',
   failed: '已失败',
-  cancelled: '已取消'
+  cancelled: '已取消',
+  unknown: '状态未知'
 })
 const MAX_DEPENDENCY_JSON_BYTES = 65535
 const MAX_DEPENDENCIES = 499
 const MAX_DEPENDENCY_ID_CODE_POINTS = 100
+const MAX_DISPLAYED_DEPENDENCIES = 8
 
 /**
  * Read-only presentation adapter for the C04 workspace snapshot.  The server
@@ -41,9 +43,9 @@ export const useHallWorkItemBoard = ({ workspace } = {}) => {
 
 function toEntry (item, itemsById, membersById) {
   const dependency = parseDependencies(item?.dependencyJson)
-  const dependencyItems = dependency.ids.map(id => itemsById.get(id) || null)
+  const dependencyItems = dependency.ids.slice(0, MAX_DISPLAYED_DEPENDENCIES).map(id => itemsById.get(id) || null)
   const missingDependencyIds = dependency.ids.filter(id => !itemsById.has(id))
-  const completedDependencyCount = dependencyItems.filter(item => item?.status === 'completed').length
+  const completedDependencyCount = dependency.ids.reduce((count, id) => count + (itemsById.get(id)?.status === 'completed' ? 1 : 0), 0)
   const assignee = validId(item?.assigneeAgentId) ? membersById.get(item.assigneeAgentId) || null : null
 
   return Object.freeze({
@@ -51,7 +53,7 @@ function toEntry (item, itemsById, membersById) {
     title: item?.title || '',
     description: item?.description || '',
     workType: item?.workType || '',
-    status: BOARD_STATUSES.includes(item?.status) ? item.status : 'pending',
+    status: BOARD_STATUSES.includes(item?.status) ? item.status : 'unknown',
     statusLabel: STATUS_LABELS[item?.status] || '状态未知',
     assigneeAgentId: validId(item?.assigneeAgentId) ? item.assigneeAgentId : null,
     assigneeRole: assignee?.role || null,
@@ -68,7 +70,8 @@ function toEntry (item, itemsById, membersById) {
     }))),
     missingDependencyIds: Object.freeze(missingDependencyIds),
     completedDependencyCount,
-    dependencyCount: dependency.ids.length
+    dependencyCount: dependency.ids.length,
+    remainingDependencyCount: Math.max(0, dependency.ids.length - dependencyItems.length)
   })
 }
 
