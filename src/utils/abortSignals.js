@@ -1,5 +1,5 @@
 /**
- * Combines caller, timeout, and lifecycle abort signals without dropping the
+ * Combines caller, explicit transport-timeout, and lifecycle abort signals without dropping the
  * first abort reason. Native AbortSignal.any/timeout are preferred when
  * available; the fallback removes every listener during cleanup.
  */

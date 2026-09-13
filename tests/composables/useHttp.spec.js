@@ -14,6 +14,49 @@ const mockUseHttp = () => {
   }
 }
 
+function installFakeTimers () {
+  const originalSetTimeout = global.setTimeout
+  const originalClearTimeout = global.clearTimeout
+  const originalPerformance = Object.getOwnPropertyDescriptor(globalThis, 'performance')
+  let now = 0
+  let nextId = 1
+  const timers = new Map()
+
+  global.setTimeout = (callback, delay = 0, ...args) => {
+    const id = nextId++
+    timers.set(id, { at: now + Math.max(0, Number(delay) || 0), callback, args })
+    return id
+  }
+  global.clearTimeout = id => timers.delete(id)
+  Object.defineProperty(globalThis, 'performance', {
+    configurable: true,
+    value: { now: () => now }
+  })
+
+  return {
+    advanceBy (milliseconds) {
+      const target = now + milliseconds
+      while (true) {
+        const due = [...timers.entries()]
+          .filter(([, timer]) => timer.at <= target)
+          .sort(([, left], [, right]) => left.at - right.at)[0]
+        if (!due) break
+        const [id, timer] = due
+        timers.delete(id)
+        now = timer.at
+        timer.callback(...timer.args)
+      }
+      now = target
+    },
+    restore () {
+      global.setTimeout = originalSetTimeout
+      global.clearTimeout = originalClearTimeout
+      if (originalPerformance) Object.defineProperty(globalThis, 'performance', originalPerformance)
+      else delete globalThis.performance
+    }
+  }
+}
+
 describe('useHttp', () => {
   afterEach(() => {
     cleanup()
@@ -135,7 +178,7 @@ describe('useHttp', () => {
     }
   })
 
-  it('caps ordinary JSON requests at the five-second total budget', async () => {
+  it('does not impose a default timeout on ordinary JSON requests', async () => {
     const originalFetch = global.fetch
     const originalTimeout = Object.getOwnPropertyDescriptor(AbortSignal, 'timeout')
     const observedTimeouts = []
@@ -150,16 +193,48 @@ describe('useHttp', () => {
     global.fetch = async () => new Response(JSON.stringify({ ok: true }), { status: 200 })
 
     try {
-      await useHttp().get('/ordinary-json', {}, { needAuth: false, timeout: 60_000 })
+      await useHttp().get('/ordinary-json', {}, { needAuth: false })
     } finally {
       global.fetch = originalFetch
       Object.defineProperty(AbortSignal, 'timeout', originalTimeout)
     }
 
-    expect(observedTimeouts).to.deep.equal([5000])
+    expect(observedTimeouts).to.deep.equal([])
   })
 
-  it('leaves stream, upload, and non-JSON transfer timeout defaults unchanged', async () => {
+  it('accepts a JSON response after more than five seconds and reports its latency', async () => {
+    const originalFetch = global.fetch
+    const timers = installFakeTimers()
+    const reports = []
+    let receivedSignal
+    global.fetch = (_url, config) => {
+      receivedSignal = config.signal
+      return new Promise(resolve => {
+        setTimeout(() => resolve(new Response(JSON.stringify({ ok: true }), { status: 200 })), 5001)
+      })
+    }
+
+    try {
+      const pending = useHttp().get('/slow-success', {}, {
+        needAuth: false,
+        rumSampleRate: 1,
+        rumReporter: payload => reports.push(payload)
+      })
+      await Promise.resolve()
+      timers.advanceBy(5001)
+      const result = await pending
+
+      expect(result.data).to.deep.equal({ ok: true })
+      expect(receivedSignal).to.equal(undefined)
+      expect(reports).to.have.length(1)
+      expect(reports[0]).to.include({ route: '/slow-success', durationMs: 5001, status: '2xx' })
+    } finally {
+      timers.restore()
+      global.fetch = originalFetch
+    }
+  })
+
+  it('applies an explicit transport timeout without imposing one on other requests', async () => {
     const originalFetch = global.fetch
     const originalTimeout = Object.getOwnPropertyDescriptor(AbortSignal, 'timeout')
     const observedTimeouts = []
@@ -174,7 +249,7 @@ describe('useHttp', () => {
     global.fetch = async () => new Response('ok', { status: 200 })
 
     try {
-      await useHttp().get('/events', {}, { needAuth: false, responseType: 'stream' })
+      await useHttp().get('/events', {}, { needAuth: false, responseType: 'stream', timeout: 60_000 })
       await useHttp().post('/upload', new FormData(), { needAuth: false })
       await useHttp().get('/download', {}, { needAuth: false, responseType: 'text' })
     } finally {
@@ -182,37 +257,37 @@ describe('useHttp', () => {
       Object.defineProperty(AbortSignal, 'timeout', originalTimeout)
     }
 
-    expect(observedTimeouts).to.deep.equal([60000, 60000, 60000])
+    expect(observedTimeouts).to.deep.equal([60000])
   })
 
-  it('uses the remaining JSON deadline after authentication and classifies the failure', async () => {
-    const originalNow = Date.now
+  it('allows authentication that takes longer than five seconds before fetching', async () => {
     const originalFetch = global.fetch
-    let now = 1000
-    Date.now = () => now
+    const timers = installFakeTimers()
+    let fetchCalls = 0
     global.fetch = async () => {
-      throw new Error('fetch must not start after the deadline')
+      fetchCalls += 1
+      return new Response(JSON.stringify({ ok: true }), { status: 200 })
     }
-    const http = useHttp()
 
     try {
-      let failure
-      try {
-        await http.get('/protected', {}, {
-          authStore: { token: async () => { now += 5000; return 'token' } }
-        })
-      } catch (error) {
-        failure = error
-      }
-      expect(failure).to.include({ name: 'TimeoutError', requestErrorClass: 'deadline_exceeded' })
-      expect(http.error.value).to.equal('请求超时，请重试')
+      const pending = useHttp().get('/protected', {}, {
+        authStore: {
+          token: () => new Promise(resolve => setTimeout(() => resolve('token'), 5001))
+        }
+      })
+      await Promise.resolve()
+      timers.advanceBy(5001)
+      const result = await pending
+
+      expect(result.data).to.deep.equal({ ok: true })
+      expect(fetchCalls).to.equal(1)
     } finally {
-      Date.now = originalNow
+      timers.restore()
       global.fetch = originalFetch
     }
   })
 
-  it('enforces the JSON budget while authentication is still pending', async () => {
+  it('applies an explicit transport timeout while authentication is pending', async () => {
     const originalFetch = global.fetch
     const originalTimeout = Object.getOwnPropertyDescriptor(AbortSignal, 'timeout')
     const timeoutController = new AbortController()
@@ -231,6 +306,7 @@ describe('useHttp', () => {
       let failure
       try {
         await useHttp().get('/protected', {}, {
+          timeout: 20,
           authStore: {
             token: () => new Promise(() => {
               queueMicrotask(() => timeoutController.abort(new DOMException('Request timed out', 'TimeoutError')))
@@ -248,7 +324,7 @@ describe('useHttp', () => {
     }
   })
 
-  it('classifies caller cancellation separately from deadline exhaustion', async () => {
+  it('classifies caller cancellation separately from an explicit transport timeout', async () => {
     const caller = new AbortController()
     const reason = new DOMException('caller cancelled', 'AbortError')
     caller.abort(reason)

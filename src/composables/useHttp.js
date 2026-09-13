@@ -5,7 +5,6 @@ import { registerIdentityCleanup } from '../utils/identityLifecycle.js'
 import { combineAbortSignals, throwIfAborted } from '../utils/abortSignals.js'
 import { classifyRequestOutcome, recordRequestTiming, resolveRequestId, sampleRequestTiming } from './useRequestRum.js'
 
-const JSON_REQUEST_BUDGET_MS = 5000
 // import { useGlobalStore } from '../stores/global' // 预留
 // import { useUtilStore } from '../stores/util' // 预留
 
@@ -20,7 +19,7 @@ const JSON_REQUEST_BUDGET_MS = 5000
  * @param {boolean} options.autoLoading - 是否自动管理loading状态，默认为true
  * @param {boolean} options.needAuth - 是否需要认证，默认为true
  * @param {string} options.responseType - 响应类型，支持 'json'（默认）、'text'（文本）和 'stream'（流式响应）
- * @param {number} options.timeout - 请求超时时间（毫秒）；普通 JSON 请求总预算最多为 5000ms
+ * @param {number} options.timeout - 可选的显式传输超时（毫秒）；未设置时不会因本组合式函数的时限而取消请求
  * @param {AbortSignal} options.signal - 调用方取消信号；取消会保留为可区分的请求取消错误
  * @param {Function} options.onSuccess - 成功回调
  * @param {Function} options.onError - 错误回调
@@ -79,7 +78,6 @@ export function useHttp (options = {}) {
     error.value = null
 
     let requestSignal = null
-    let requestDeadline = null
     let unregisterIdentityCleanup = null
     let requestAuthStore = null
     let authorizationGeneration
@@ -121,9 +119,9 @@ export function useHttp (options = {}) {
         requestUrl = `${requestUrl}${requestUrl.includes('?') ? '&' : '?'}${urlParams}`
       }
 
-      // The five-second budget applies only to ordinary JSON APIs. Streaming,
-      // FormData uploads, and non-JSON transfers retain their existing timeout behavior.
-      // Start it before token acquisition so authentication consumes the same total budget.
+      // Ordinary JSON requests are observed through RUM but are not rejected by an
+      // implicit client deadline. A transport timeout applies only when the caller or
+      // deployment explicitly configures one.
       const ordinaryJsonRequest = responseType === 'json' && !isFormData
       if (ordinaryJsonRequest) {
         rumStartedAt = performanceNow()
@@ -131,11 +129,7 @@ export function useHttp (options = {}) {
         rumRequestId = resolveRequestId(findHeader(headers, 'X-Request-Id'))
         setHeader(headers, 'X-Request-Id', rumRequestId)
       }
-      const configuredTimeout = resolveConfiguredTimeout(timeout, runtimeEnv)
-      const timeoutValue = ordinaryJsonRequest
-        ? Math.min(configuredTimeout, JSON_REQUEST_BUDGET_MS)
-        : configuredTimeout
-      requestDeadline = ordinaryJsonRequest ? Date.now() + timeoutValue : null
+      const timeoutValue = resolveConfiguredTimeout(timeout, runtimeEnv)
       const identityController = needAuth ? new AbortController() : null
       requestSignal = combineAbortSignals({
         signals: [signal, identityController?.signal],
@@ -147,7 +141,6 @@ export function useHttp (options = {}) {
         })
       }
       throwIfAborted(requestSignal.signal)
-      throwIfRequestDeadlineElapsed(requestDeadline)
 
       // 如果需要认证，获取token
       let token = null
@@ -164,7 +157,6 @@ export function useHttp (options = {}) {
           config.headers.Authorization = `Bearer ${token}`
         } catch (authError) {
           throwIfAborted(requestSignal.signal)
-          throwIfRequestDeadlineElapsed(requestDeadline)
           if (authError?.name === 'AbortError' || authError?.name === 'TimeoutError') throw authError
           throw new Error(`Authentication failed: ${authError.message}`)
         }
@@ -172,7 +164,6 @@ export function useHttp (options = {}) {
 
       // 使用 fetch API 替代 axios，特别是为了支持 stream
       throwIfAborted(requestSignal.signal)
-      throwIfRequestDeadlineElapsed(requestDeadline)
       const fetchConfig = {
         method: config.method,
         headers: config.headers,
@@ -486,12 +477,7 @@ function resolveConfiguredTimeout (timeout, runtimeEnv) {
   const environmentTimeout = Number.parseInt(runtimeEnv.VITE_HTTP_TIMEOUT, 10)
   if (Number.isFinite(environmentTimeout) && environmentTimeout >= 0) return environmentTimeout
 
-  return 60000
-}
-
-function throwIfRequestDeadlineElapsed (deadline) {
-  if (deadline === null || Date.now() < deadline) return
-  throw new DOMException('Request deadline exceeded', 'TimeoutError')
+  return undefined
 }
 
 function awaitWithAbortSignal (value, signal) {
