@@ -14,6 +14,7 @@ const panelSource = readFileSync(new URL('../src/components/juyiting/TaskWorkspa
 let mount
 let Vue
 let TaskTimeline
+let WorkItemBoard
 let TaskWorkspacePanel
 const domGlobalDescriptors = {}
 
@@ -25,7 +26,7 @@ const vueImportToVar = (_line, imports) => {
   return vueBindings ? `var { ${vueBindings} } = Vue` : ''
 }
 
-const loadSfc = (relativePath, child = null) => {
+const loadSfc = (relativePath, child = null, board = null) => {
   const filename = new URL(relativePath, import.meta.url).pathname
   const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8')
   const { descriptor } = parse(source, { filename })
@@ -34,10 +35,10 @@ const loadSfc = (relativePath, child = null) => {
   const scriptBody = script
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace(/^import\s+TaskTimeline\s+from\s+['"].\/TaskTimeline\.vue['"];?\s*$/gm, 'var TaskTimeline = arguments[1]')
+    .replace(/^import\s+WorkItemBoard\s+from\s+['"].\/WorkItemBoard\.vue['"];?\s*$/gm, 'var WorkItemBoard = arguments[2]')
     .replace('export default', 'return')
-  return new Function('Vue', 'TaskTimeline', scriptBody)(Vue, child)
+  return new Function('Vue', 'TaskTimeline', 'WorkItemBoard', scriptBody)(Vue, child, board)
 }
-
 
 const loadActualHallForIntegration = (mocks, id) => {
   const relativePath = '../src/components/world/JuyiHall.vue'
@@ -137,7 +138,8 @@ describe('C07 JuyiHall task workspace integration', () => {
     ;({ mount } = await import('@vue/test-utils'))
     Vue = await import('vue')
     TaskTimeline = Vue.defineComponent({ render: () => null })
-    TaskWorkspacePanel = loadSfc('../src/components/juyiting/TaskWorkspacePanel.vue', TaskTimeline)
+    WorkItemBoard = Vue.defineComponent({ render: () => null })
+    TaskWorkspacePanel = loadSfc('../src/components/juyiting/TaskWorkspacePanel.vue', TaskTimeline, WorkItemBoard)
   })
 
   after(() => {

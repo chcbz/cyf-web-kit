@@ -7,6 +7,7 @@ const timelineSource = readFileSync(new URL('../src/components/juyiting/TaskTime
 describe('C07B task workspace presentation', () => {
   it('keeps the workspace panel as a pure read-only presentation surface', () => {
     expect(panelSource).to.include("import TaskTimeline from './TaskTimeline.vue'")
+    expect(panelSource).to.include("import WorkItemBoard from './WorkItemBoard.vue'")
     expect(panelSource).to.include("defineEmits(['retry'])")
     expect(panelSource).not.to.match(/agentApi|fetch\(|EventSource|setTimeout|setInterval|useTaskWorkspace|taskWorkspaceReducer|useTaskEventStream/)
     expect(timelineSource).not.to.match(/agentApi|fetch\(|EventSource|setTimeout|setInterval|taskWorkspaceReducer|useTaskEventStream/)
@@ -21,6 +22,7 @@ describe('C07B task workspace presentation', () => {
     }
     expect(panelSource).to.include('workspace.members')
     expect(panelSource).to.include('workspace.workItems')
+    expect(panelSource).to.include('<WorkItemBoard :workspace="workspace" />')
     expect(panelSource).to.include('workspace.openRequests')
     expect(panelSource).to.include('workspace.recentArtifacts')
     expect(panelSource).to.include('workspace.conversationId')

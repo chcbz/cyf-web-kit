@@ -85,8 +85,8 @@
           <h3 id="task-work-items-heading">工作项</h3>
           <span>{{ workspace.workItems.length }} 项</span>
         </div>
-        <p v-if="!workspace.workItems.length" class="task-empty-state">暂无工作项。</p>
-        <ul v-else class="task-card-list" aria-label="工作项">
+        <WorkItemBoard :workspace="workspace" />
+        <ul v-if="workspace.workItems.length" class="task-card-list" aria-label="工作项详情">
           <li v-for="item in workspace.workItems" :key="item.workItemId" class="task-work-card">
             <div class="task-card-heading">
               <strong :title="item.title">{{ item.title }}</strong>
@@ -151,6 +151,7 @@
 <script setup>
 import { computed } from 'vue'
 import TaskTimeline from './TaskTimeline.vue'
+import WorkItemBoard from './WorkItemBoard.vue'
 
 const props = defineProps({
   actorAgentId: { type: String, default: '' },
