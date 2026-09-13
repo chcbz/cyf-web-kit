@@ -5,10 +5,11 @@ export const MAX_UPLOAD_BYTES = 16 * 1024 * 1024
 export const MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024
 const MAX_INT = 2147483647
 const MIME = /^[a-z0-9][a-z0-9!#$&^_.+-]{0,63}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,63}$/
+const hasControl = value => Array.from(value).some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)
 const ID = value => typeof value === 'string' && value.length > 0 && value.length <= 100 &&
-  !/^[\s]|[\s]$|[\x00-\x1f\x7f]/.test(value)
+  !/^[\s]|[\s]$/.test(value) && !hasControl(value)
 const TEXT = (value, maximum) => typeof value === 'string' && value.length > 0 && value.length <= maximum &&
-  !/^[\s]|[\s]$|[\x00-\x1f\x7f]/.test(value)
+  !/^[\s]|[\s]$/.test(value) && !hasControl(value)
 const ALLOWED_MIME_TYPES = new Set([
   'text/plain', 'text/markdown', 'text/csv', 'application/json', 'application/pdf',
   'image/png', 'image/jpeg', 'application/zip'

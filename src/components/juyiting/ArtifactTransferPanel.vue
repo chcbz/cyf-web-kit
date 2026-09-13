@@ -2,22 +2,42 @@
   <section class="artifact-transfer-panel" aria-labelledby="artifact-transfer-heading">
     <header><span>成果传输</span><h3 id="artifact-transfer-heading">上传或下载精确成果版本</h3></header>
     <p class="artifact-transfer-note">仅使用当前任务与明确好汉身份。上传上限 16 MiB，下载上限 64 MiB；不会自动重试或代为确认保存。</p>
-    <p v-if="transfer.message" class="artifact-transfer-status" :class="`is-${transfer.state}`" role="status" aria-live="polite">{{ transfer.message }}</p>
+    <p
+      v-if="transfer.message"
+      class="artifact-transfer-status"
+      :class="`is-${transfer.state}`"
+      role="status"
+      aria-live="polite"
+    >{{ transfer.message }}</p>
     <p v-if="transfer.conflict" class="artifact-transfer-conflict" role="alert">版本冲突后请先手动刷新协作状态，再重新填写版本。</p>
 
     <form class="artifact-upload-form" @submit.prevent="transfer.publish">
       <h4>明确上传</h4>
-      <label>成果标识 <input v-model.trim="transfer.draft.artifactId" maxlength="100" required></label>
-      <label>成果类型 <input v-model.trim="transfer.draft.artifactType" maxlength="30" required></label>
-      <label>标题 <input v-model.trim="transfer.draft.title" maxlength="255" required></label>
-      <label>工作项（可选） <input v-model.trim="transfer.draft.workItemId" maxlength="100"></label>
-      <label>前一版本 <input v-model.number="transfer.draft.expectedPreviousVersion" type="number" min="0" max="2147483646" step="1" required></label>
-      <label>本次版本 <input v-model.number="transfer.draft.artifactVersion" type="number" min="1" max="2147483647" step="1" required></label>
+      <label>成果标识 <input v-model.trim="transfer.draft.artifactId" maxlength="100" required /></label>
+      <label>成果类型 <input v-model.trim="transfer.draft.artifactType" maxlength="30" required /></label>
+      <label>标题 <input v-model.trim="transfer.draft.title" maxlength="255" required /></label>
+      <label>工作项（可选） <input v-model.trim="transfer.draft.workItemId" maxlength="100" /></label>
+      <label>前一版本 <input
+        v-model.number="transfer.draft.expectedPreviousVersion"
+        type="number"
+        min="0"
+        max="2147483646"
+        step="1"
+        required
+      /></label>
+      <label>本次版本 <input
+        v-model.number="transfer.draft.artifactVersion"
+        type="number"
+        min="1"
+        max="2147483647"
+        step="1"
+        required
+      /></label>
       <label>可见范围
         <select v-model="transfer.draft.visibility"><option value="task_members">任务成员</option><option value="reviewer">审阅者</option><option value="private">私有</option></select>
       </label>
       <label>文件
-        <input type="file" accept=".txt,.md,.csv,.json,.pdf,.png,.jpg,.jpeg,.zip,text/plain,text/markdown,text/csv,application/json,application/pdf,image/png,image/jpeg,application/zip" @change="onFile">
+        <input type="file" accept=".txt,.md,.csv,.json,.pdf,.png,.jpg,.jpeg,.zip,text/plain,text/markdown,text/csv,application/json,application/pdf,image/png,image/jpeg,application/zip" @change="onFile" />
       </label>
       <p v-if="transfer.file">已选择：{{ transfer.file.name }}（{{ transfer.file.size }} bytes）</p>
       <div class="artifact-transfer-actions"><button type="submit" :disabled="!transfer.operable || ['publishing', 'downloading'].includes(transfer.state)">明确上传</button><button v-if="transfer.state === 'publishing'" type="button" @click="transfer.cancel">取消</button></div>
@@ -25,8 +45,8 @@
 
     <section class="artifact-download-form" aria-labelledby="artifact-download-heading">
       <h4 id="artifact-download-heading">精确下载</h4>
-      <label>成果标识 <input v-model.trim="transfer.download.artifactId" maxlength="100"></label>
-      <label>成果版本 <input v-model.trim="transfer.download.artifactVersion" inputmode="numeric" pattern="[1-9][0-9]*"></label>
+      <label>成果标识 <input v-model.trim="transfer.download.artifactId" maxlength="100" /></label>
+      <label>成果版本 <input v-model.trim="transfer.download.artifactVersion" inputmode="numeric" pattern="[1-9][0-9]*" /></label>
       <div class="artifact-transfer-actions"><button type="button" :disabled="!transfer.operable || ['publishing', 'downloading'].includes(transfer.state)" @click="transfer.downloadExact">下载指定版本</button><button v-if="transfer.state === 'downloading'" type="button" @click="transfer.cancel">取消</button></div>
       <ul v-if="transfer.artifacts.length" class="artifact-transfer-recent" aria-label="可见成果版本">
         <li v-for="artifact in transfer.artifacts" :key="`${artifact.artifactId}:${artifact.artifactVersion}`"><span>{{ artifact.title }} · v{{ artifact.artifactVersion }}</span><button type="button" @click="transfer.selectDownload(artifact)">填入下载</button><button type="button" @click="transfer.prepareNextVersion(artifact)">填入下一版</button></li>

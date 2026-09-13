@@ -1,3 +1,4 @@
+import { before, after } from 'mocha'
 import { expect } from 'chai'
 import { readFileSync } from 'fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
