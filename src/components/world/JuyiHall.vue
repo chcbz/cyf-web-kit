@@ -231,14 +231,20 @@
             @set-status-filter="setTaskStatusFilter"
           />
 
-          <TaskWorkspacePanel
-            v-if="taskWorkspaceEnabled && renderedPanel === 'workspace' && taskWorkspaceSubject"
-            :actor-agent-id="taskWorkspaceSubject.actorAgentId"
-            :connection-state="taskWorkspaceConnectionState"
-            :error="taskWorkspaceError"
-            :workspace="taskWorkspaceSnapshot"
-            @retry="retryTaskWorkspace"
-          />
+          <template v-if="taskWorkspaceEnabled && renderedPanel === 'workspace' && taskWorkspaceSubject">
+            <TaskWorkspacePanel
+              :actor-agent-id="taskWorkspaceSubject.actorAgentId"
+              :connection-state="taskWorkspaceConnectionState"
+              :error="taskWorkspaceError"
+              :workspace="taskWorkspaceSnapshot"
+              @retry="retryTaskWorkspace"
+            />
+            <ArtifactTransferPanel
+              :subject="taskWorkspaceSubject"
+              :workspace="taskWorkspaceSnapshot"
+              :identity-epoch="apiStore.authorizationGeneration"
+            />
+          </template>
 
           <PersonaCatalogPanel
             v-if="renderedPanel === 'catalog'"
@@ -420,6 +426,7 @@ import { createDisabledTaskWorkspaceBinding, isTaskWorkspaceBuildEnabled } from 
 import { useTaskWorkspaceView } from '@/composables/juyiting/useTaskWorkspaceView'
 import { useTaskWorkspaceBinding } from '@/composables/juyiting/useTaskWorkspaceBinding'
 import TaskWorkspacePanel from '@/components/juyiting/TaskWorkspacePanel.vue'
+import ArtifactTransferPanel from '@/components/juyiting/ArtifactTransferPanel.vue'
 import { portraitName, portraitRole, portraitShortName, portraitStyle, roleClass } from '@/composables/juyiting/useWaterMarginRoles'
 import AgentPanel from '@/components/juyiting/AgentPanel.vue'
 import BountyDiscussionPanel from '@/components/juyiting/BountyDiscussionPanel.vue'

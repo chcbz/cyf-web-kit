@@ -16,6 +16,7 @@ let Vue
 let TaskTimeline
 let WorkItemBoard
 let TaskWorkspacePanel
+let ArtifactTransferPanel
 const domGlobalDescriptors = {}
 
 const vueImportToVar = (_line, imports) => {
@@ -104,7 +105,7 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
     useTaskWorkspaceView: () => workspaceState ? ({ subject: workspaceState.subject, workspace: workspaceState.workspace, connectionState: workspaceState.connectionState, error: workspaceState.error, retry: workspaceState.retry }) : ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: text, error: Vue.ref(null), retry: noop }),
     useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }),
     portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '',
-    HallPortraitHome, HallStage, HallVoiceHud: EmptyPanel, LibraryPanel: LibraryPanel || EmptyPanel, TaskWorkspacePanel: TaskWorkspacePanel || EmptyPanel,
+    HallPortraitHome, HallStage, HallVoiceHud: EmptyPanel, LibraryPanel: LibraryPanel || EmptyPanel, TaskWorkspacePanel: TaskWorkspacePanel || EmptyPanel, ArtifactTransferPanel: ArtifactTransferPanel || EmptyPanel,
     AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel, BountyPanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PrivateDiscussionPanel: EmptyPanel, PublicDiscussionPanel: EmptyPanel, SelectedAgentCard: EmptyPanel
   }
 }
@@ -140,6 +141,7 @@ describe('C07 JuyiHall task workspace integration', () => {
     TaskTimeline = Vue.defineComponent({ render: () => null })
     WorkItemBoard = Vue.defineComponent({ render: () => null })
     TaskWorkspacePanel = loadSfc('../src/components/juyiting/TaskWorkspacePanel.vue', TaskTimeline, WorkItemBoard)
+    ArtifactTransferPanel = Vue.defineComponent({ props: ['subject', 'workspace', 'identityEpoch'], render: () => Vue.h('section', { class: 'artifact-transfer-stub' }) })
   })
 
   after(() => {
@@ -151,18 +153,21 @@ describe('C07 JuyiHall task workspace integration', () => {
   })
   it('uses the existing Hall dialog and concrete top-level values from the single FE1 workspace state source', () => {
     expect(hallSource).to.include("import TaskWorkspacePanel from '@/components/juyiting/TaskWorkspacePanel.vue'")
+    expect(hallSource).to.include("import ArtifactTransferPanel from '@/components/juyiting/ArtifactTransferPanel.vue'")
     expect(hallSource).to.include("import { useTaskWorkspaceView } from '@/composables/juyiting/useTaskWorkspaceView'")
     expect(hallSource).to.include('subject: taskWorkspaceSubject')
     expect(hallSource).to.include('workspace: taskWorkspaceSnapshot')
     expect(hallSource).to.include('connectionState: taskWorkspaceConnectionState')
     expect(hallSource).to.include('error: taskWorkspaceError')
     expect(hallSource).to.include('retry: retryTaskWorkspace')
-    expect(hallSource).to.include("v-if=\"taskWorkspaceEnabled && renderedPanel === 'workspace' && taskWorkspaceSubject\"")
+    expect(hallSource).to.include("<template v-if=\"taskWorkspaceEnabled && renderedPanel === 'workspace' && taskWorkspaceSubject\">")
     expect(hallSource).to.include(':workspace="taskWorkspaceSnapshot"')
     expect(hallSource).to.include(':connection-state="taskWorkspaceConnectionState"')
     expect(hallSource).to.include(':error="taskWorkspaceError"')
     expect(hallSource).to.include(':actor-agent-id="taskWorkspaceSubject.actorAgentId"')
     expect(hallSource).to.include('@retry="retryTaskWorkspace"')
+    expect(hallSource).to.include(':subject="taskWorkspaceSubject"')
+    expect(hallSource).to.include(':identity-epoch="apiStore.authorizationGeneration"')
     expect(hallSource).not.to.include(':workspace="taskWorkspace?.workspace"')
     expect(hallSource).not.to.include(':connection-state="taskWorkspace?.connectionState"')
     expect(hallSource).not.to.include(':error="taskWorkspace?.error"')
