@@ -121,7 +121,7 @@ describe('useHttp', () => {
       global.fetch = originalFetch
     }
 
-    expect(receivedSignal).to.not.equal(controller.signal)
+    expect(receivedSignal).to.equal(controller.signal)
     expect(receivedSignal.aborted).to.equal(false)
     expect(opened).to.have.length(1)
     expect(opened[0].cancel).to.be.a('function')
@@ -215,7 +215,7 @@ describe('useHttp', () => {
     }
 
     try {
-      const pending = useHttp().get('/slow-success', {}, {
+      const pending = useHttp().get('/agent/map', {}, {
         needAuth: false,
         rumSampleRate: 1,
         rumReporter: payload => reports.push(payload)
@@ -227,7 +227,7 @@ describe('useHttp', () => {
       expect(result.data).to.deep.equal({ ok: true })
       expect(receivedSignal).to.equal(undefined)
       expect(reports).to.have.length(1)
-      expect(reports[0]).to.include({ route: '/slow-success', durationMs: 5001, status: '2xx' })
+      expect(reports[0]).to.include({ route: '/agent/map', durationMs: 5001, status: '2xx' })
     } finally {
       timers.restore()
       global.fetch = originalFetch
