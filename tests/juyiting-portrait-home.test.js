@@ -80,6 +80,9 @@ describe('HallPortraitHome', () => {
     expect(hallSource).to.include("handleStagePanelOpen('chat')")
     expect(hallSource).to.include("['agents', 'tasks', 'catalog', 'library'].includes(action)")
     expect(hallSource).to.include('void refreshHall()')
+    const refresh = hallSource.match(/const refreshHall = async \([^)]*\) => \{([\s\S]*?)\n\}/)?.[1] || ''
+    expect(refresh).to.include('await loadAgents()')
+    expect(refresh).not.to.include('await loadMapAgents()')
   })
 
   it('opens full view through the page owner and exposes onboarding as a low-prominence existing-menu action', () => {

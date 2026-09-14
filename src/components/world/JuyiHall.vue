@@ -694,6 +694,7 @@ const {
   catalogLoading,
   filteredAgents,
   hiddenAgentCount,
+  loadAgents,
   loadMapAgents,
   loadPersonaCatalog,
   loadRosterAgents,
@@ -819,10 +820,10 @@ const refreshHall = async ({ silent = false } = {}) => {
   hallRefreshing.value = true
   if (!silent) playRefresh()
   try {
-    // The map is the only initial data dependency. Scene snapshot startup remains
-    // independent and begins as soon as the simulation is ready; optional panel
-    // sources are fetched only for the panel currently in use.
-    await loadMapAgents()
+    // The portrait entry exposes current-user operable agents immediately, so its
+    // initial refresh must keep the map, roster, and catalog projections in sync.
+    // Scene snapshot startup remains independent of those reads.
+    await loadAgents()
     if (simulationEnabled && hallCommandQueue.ready.value && !backendSceneStarted) {
       await startBackendSceneState()
     }
