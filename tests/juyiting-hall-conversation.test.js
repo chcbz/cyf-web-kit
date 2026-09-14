@@ -6,7 +6,8 @@ import { createHallVoiceReplyCorrelation } from '../src/composables/juyiting/hal
 import {
   appendHallEventMessage,
   appendStreamPayload,
-  normalizeHallMessage
+  normalizeHallMessage,
+  resolveHallUserSenderName
 } from '../src/composables/juyiting/hallConversationMessages.js'
 
 const scopedConversation = (id = '1001', overrides = {}) => ({
@@ -284,7 +285,7 @@ describe('useHallConversation scoped message loading', () => {
       },
       chatContext,
       chatMode: ref('private'),
-      globalStore: { getJiacn: 'jia-user', user: { name: 'Tester' } },
+      globalStore: { getJiacn: 'jia-user', user: { name: 'legacy-name', nickname: '  Test\u0000er  ', username: 'account-name' } },
       log: { warn: () => {}, error: () => {} },
       openPanel: () => {},
       outgoingMetadata: ref({}),
@@ -299,6 +300,7 @@ describe('useHallConversation scoped message loading', () => {
 
     expect(payloads[0]).to.deep.include({
       content: 'discuss this task',
+      senderName: 'Tester',
       conversationType: 'juyiting',
       conversationScopeType: 'private',
       conversationScopeKey: 'task:task-2:agent:wuyong',
@@ -307,7 +309,13 @@ describe('useHallConversation scoped message loading', () => {
     })
     expect(payloads[0].targetAgentIds).to.deep.equal(['wuyong'])
     expect(payloads[0].metadata.mentionAgentIds).to.deep.equal(['wuyong'])
-    expect(conversation.messages.value[0].content).to.equal('discuss this task')
+    expect(conversation.messages.value[0]).to.include({ content: 'discuss this task', senderName: 'Tester' })
+  })
+
+  it('resolves a safe hall sender name from nickname, then username, then self label', () => {
+    expect(resolveHallUserSenderName({ nickname: '  林\u0000冲\n', username: '豹子头' })).to.equal('林冲')
+    expect(resolveHallUserSenderName({ nickname: '\u0000\n', username: '  豹子\u007F头  ' })).to.equal('豹子头')
+    expect(resolveHallUserSenderName({ name: 'legacy-name', nickname: '', username: '\t' })).to.equal('你')
   })
 
   it('normalizes persisted agent messages with metadata', () => {
@@ -333,6 +341,18 @@ describe('useHallConversation scoped message loading', () => {
       streaming: false,
       statusText: ''
     })
+  })
+
+  it('removes control characters from persisted sender names before rendering', () => {
+    const message = normalizeHallMessage({
+      id: '13',
+      senderType: 'agent',
+      senderName: '\u0000\n',
+      content: '已收到',
+      metadata: JSON.stringify({ senderName: '  公孙\u007F胜  ' })
+    })
+
+    expect(message.senderName).to.equal('公孙胜')
   })
 
   it('fails closed for numeric and unsafe Long wire IDs without coercion', () => {

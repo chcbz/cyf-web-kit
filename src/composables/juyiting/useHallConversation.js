@@ -3,7 +3,9 @@ import {
   appendHallEventMessage as reduceHallEventMessage,
   appendStreamPayload,
   hasResolvedAgentReply,
-  normalizeHallMessage
+  normalizeHallMessage,
+  normalizeSenderName,
+  resolveHallUserSenderName
 } from './hallConversationMessages.js'
 import { fetchHallConversationEvents } from '../../utils/authenticatedSse.js'
 import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
@@ -131,7 +133,8 @@ export const useHallConversation = ({
   })
 
   const senderText = (message) => {
-    if (message.senderName) return message.senderName
+    const senderName = normalizeSenderName(message?.senderName)
+    if (senderName) return senderName
     if (message.sender === 'USER') return '你'
     if (message.sender === 'SYSTEM') return '传令牌'
     return '聚义厅'
@@ -898,6 +901,7 @@ export const useHallConversation = ({
     messages.value.push({
       localId: `user-${Date.now()}-${localMessageSequence}`,
       sender: 'USER',
+      senderName: resolveHallUserSenderName(globalStore.user),
       content,
       timestamp: Date.now(),
       streaming: false
@@ -922,7 +926,7 @@ export const useHallConversation = ({
         taskId: sendContext.taskId,
         forceNewConversation: requestConversationId === '',
         senderType: 'user',
-        senderName: globalStore.user?.name || globalStore.user?.nickname || '寨中来客',
+        senderName: resolveHallUserSenderName(globalStore.user),
         metadata: {
           ...metadataSource,
           scene: 'juyiting',

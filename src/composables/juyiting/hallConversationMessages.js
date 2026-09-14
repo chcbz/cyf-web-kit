@@ -8,6 +8,15 @@ export const parseMessageMetadata = (metadata) => {
   }
 }
 
+export const normalizeSenderName = (value) => {
+  if (typeof value !== 'string') return ''
+  return value.replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim()
+}
+
+export const resolveHallUserSenderName = (user) => {
+  return normalizeSenderName(user?.nickname) || normalizeSenderName(user?.username) || '你'
+}
+
 export const normalizeHallMessage = (item) => {
   const metadata = parseMessageMetadata(item.metadata)
   const localId = typeof item?.id === 'string' && item.id
@@ -17,7 +26,7 @@ export const normalizeHallMessage = (item) => {
   return {
     localId,
     sender: item.senderType === 'agent' ? 'AGENT' : (item.messageType || item.senderType || 'SYSTEM'),
-    senderName: item.senderName || metadata.senderName,
+    senderName: normalizeSenderName(item.senderName) || normalizeSenderName(metadata.senderName),
     agentId: metadata.agentId,
     content: item.content || '',
     timestamp: item.createTime || metadata.timestamp || Date.now(),
@@ -52,13 +61,14 @@ export const appendHallEventMessage = (state, event) => {
   if (!event || typeof event.conversationId !== 'string' || typeof state.conversationId !== 'string' || event.conversationId !== state.conversationId) {
     return { type: 'ignored' }
   }
+  const senderName = normalizeSenderName(event.senderName)
   if (event.type === 'agent_message_delta') {
     let pendingMessage = currentStreamingAgentMessage(state.messages, event)
     if (!pendingMessage) {
       pendingMessage = {
         localId: `delta-${event.agentId || 'agent'}-${event.timestamp || Date.now()}`,
         sender: 'AGENT',
-        senderName: event.senderName,
+        senderName,
         agentId: event.agentId,
         content: '',
         timestamp: event.timestamp || Date.now(),
@@ -69,7 +79,7 @@ export const appendHallEventMessage = (state, event) => {
     }
     pendingMessage.content += event.content || ''
     pendingMessage.timestamp = event.timestamp || pendingMessage.timestamp
-    pendingMessage.senderName = event.senderName || pendingMessage.senderName
+    pendingMessage.senderName = senderName || pendingMessage.senderName
     pendingMessage.streaming = true
     pendingMessage.statusText = '正在回话'
     state.isAwaitingReply = false
@@ -88,13 +98,13 @@ export const appendHallEventMessage = (state, event) => {
     streamingMessage.localId = localId
     streamingMessage.content = event.content || streamingMessage.content
     streamingMessage.timestamp = event.timestamp || streamingMessage.timestamp
-    streamingMessage.senderName = event.senderName || streamingMessage.senderName
+    streamingMessage.senderName = senderName || streamingMessage.senderName
     streamingMessage.agentId = event.agentId || streamingMessage.agentId
     streamingMessage.streaming = false
     streamingMessage.statusText = '回话已毕'
     state.isAwaitingReply = false
     state.isStreaming = false
-    return { type: 'final', message: streamingMessage, shouldStopPolling: true, toastName: event.senderName }
+    return { type: 'final', message: streamingMessage, shouldStopPolling: true, toastName: senderName }
   }
   if (state.messages.some(message => message.localId === localId)) {
     return { type: 'duplicate' }
@@ -103,7 +113,7 @@ export const appendHallEventMessage = (state, event) => {
   const message = {
     localId,
     sender: event.senderType === 'agent' ? 'AGENT' : (event.messageType || 'ASSISTANT'),
-    senderName: event.senderName,
+    senderName,
     agentId: event.agentId,
     content: event.content || '',
     timestamp: event.timestamp || Date.now(),
@@ -114,9 +124,9 @@ export const appendHallEventMessage = (state, event) => {
   state.isAwaitingReply = false
   state.isStreaming = false
   if (event.senderType === 'agent' && event.type === 'agent_message') {
-    return { type: 'final', message, shouldStopPolling: true, toastName: event.senderName }
+    return { type: 'final', message, shouldStopPolling: true, toastName: senderName }
   }
-  return { type: 'message', message, shouldStopPolling: true, toastName: event.senderName }
+  return { type: 'message', message, shouldStopPolling: true, toastName: senderName }
 }
 
 const appendStreamAgentFinal = (state, event) => {
@@ -128,11 +138,12 @@ const appendStreamAgentFinal = (state, event) => {
   if (hasConversationId && state.conversationId && event.conversationId !== state.conversationId) {
     return { type: 'ignored' }
   }
+  const senderName = normalizeSenderName(event.senderName)
   const existing = state.messages.find(message => message.localId === event.messageId)
   const message = existing || {
     localId: event.messageId,
     sender: 'AGENT',
-    senderName: event.senderName,
+    senderName,
     agentId: event.agentId,
     content: '',
     timestamp: event.timestamp || Date.now(),
@@ -140,7 +151,7 @@ const appendStreamAgentFinal = (state, event) => {
     statusText: '回话已毕'
   }
   message.sender = 'AGENT'
-  message.senderName = event.senderName || message.senderName
+  message.senderName = senderName || message.senderName
   message.agentId = event.agentId || message.agentId
   message.content = event.content || message.content
   message.timestamp = event.timestamp || message.timestamp
@@ -152,7 +163,7 @@ const appendStreamAgentFinal = (state, event) => {
     type: 'stream_final',
     message,
     conversationId: hasConversationId ? event.conversationId : null,
-    toastName: event.senderName
+    toastName: senderName
   }
 }
 
