@@ -39,6 +39,14 @@ const brokenStorage = {
   setItem () { throw new Error('storage unavailable') }
 }
 
+test('onboarding template labels are whitelist-only and never echo arbitrary props', () => {
+  const modal = readFileSync(new URL('../src/components/juyiting/HallOnboarding.vue', import.meta.url), 'utf8')
+
+  assert.match(modal, /const templateLabel = computed\(\(\) =>[\s\S]*\?\.eyebrow \|\| ''\)/)
+  assert.match(modal, /<p v-if="templateLabel" class="template-note">/)
+  assert.doesNotMatch(modal, /\?\.eyebrow \|\| props\.template/)
+})
+
 test('target-based onboarding keeps separate portrait and landscape anchors', () => {
   const modal = readFileSync(new URL('../src/components/juyiting/HallOnboarding.vue', import.meta.url), 'utf8')
   const portrait = readFileSync(new URL('../src/components/juyiting/HallPortraitHome.vue', import.meta.url), 'utf8')

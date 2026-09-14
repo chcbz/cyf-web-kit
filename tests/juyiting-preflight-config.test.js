@@ -27,6 +27,7 @@ import {
   UI_SMOKE_APPROVAL_SCOPE,
   PreflightTerminationGuard,
   cleanupFailure,
+  credentialValuesFromEnv,
   completeTrackedCleanup,
   createSafetyContext,
   sanitizeError,
@@ -1582,6 +1583,16 @@ describe('juyiting public beta preflight safety', () => {
     assert.equal(sanitized.includes('?'), false)
     assert.equal(sanitized.includes('#fragment'), false)
     assert.equal(sanitized, 'failed for [REDACTED] at https://api.example.test/oauth2/callback')
+
+    const shortSecret = 'z'
+    const websocketSanitized = sanitizeMessage(
+      `failed for ${shortSecret} at wss://api.example.test/ws/agent/channel?api_key=${shortSecret}`,
+      [shortSecret]
+    )
+    assert.equal(websocketSanitized.includes(shortSecret), false)
+    assert.equal(websocketSanitized, 'failed for [REDACTED] at wss://api.example.test/ws/agent/channel')
+    assert.deepEqual(credentialValuesFromEnv({ JIA_AGENT_API_KEY: shortSecret }), [shortSecret])
+
     assert.match(
       sanitizeError(new AggregateError([
         new Error('Chromium process tree survived')

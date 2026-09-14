@@ -668,7 +668,7 @@ export const credentialValuesFromEnv = (env = process.env) => [
   env.JIA_AGENT_WS_AGENT_ID,
   env.JIA_AGENT_SMOKE_AGENT_ID,
   env.JUYITING_OAUTH_CLIENT_ID
-].filter(value => typeof value === 'string' && value.length >= 3)
+].filter(value => typeof value === 'string' && value.length > 0)
 
 export const sanitizeMessage = (value, secrets = []) => {
   let message = String(value ?? '')

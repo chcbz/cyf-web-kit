@@ -43,7 +43,7 @@
         <p class="sr-only" aria-live="polite" aria-atomic="true">{{ currentStep.title }}。{{ currentStep.description }}</p>
         <p v-if="!targetRect" class="target-note" role="status">{{ targetNote }}</p>
         <p class="step-progress">第 {{ stepIndex + 1 }} 步，共 {{ steps.length }} 步</p>
-        <p v-if="template" class="template-note">访客体验参考：{{ templateLabel }}</p>
+        <p v-if="templateLabel" class="template-note">访客体验参考：{{ templateLabel }}</p>
 
         <div class="dialog-actions">
           <button class="later-button" type="button" @click="later">稍后</button>
@@ -206,7 +206,7 @@ let observedGeometryTarget = null
 let focusedHotspotKey = null
 let scrolledTargetKey = null
 
-const templateLabel = computed(() => guestDemoTemplates.find(item => item.id === props.template)?.eyebrow || props.template)
+const templateLabel = computed(() => guestDemoTemplates.find(item => item.id === props.template)?.eyebrow || '')
 const steps = computed(() => TOUR_STEPS[activeMode.value] || TOUR_STEPS['portrait-command'])
 const currentStep = computed(() => steps.value[Math.min(stepIndex.value, steps.value.length - 1)])
 const modeLabel = computed(() => activeMode.value === 'landscape-map' ? '横屏全景' : '竖屏掌上')
