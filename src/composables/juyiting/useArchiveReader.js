@@ -1342,12 +1342,23 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       if (!reuseCatalog || !catalog.value) await loadCatalog(controller.signal)
       if (!isActive()) return null
       if (!openChapter) return catalog.value
-      await loadProgress(edition.value.editionId, controller.signal)
+      let progressUnavailable = false
+      try {
+        await loadProgress(edition.value.editionId, controller.signal)
+      } catch (error) {
+        if (!isActive() || error?.name === 'AbortError') throw error
+        // Reading content remains available even if private resume state cannot be read.
+        // Do not turn a progress read failure into a rejection of the whole book.
+        progressUnavailable = true
+      }
       if (!isActive()) return null
       void loadBookmarks(controller.signal).catch((error) => {
         if (isActive() && error?.name !== 'AbortError') errorMessage.value = '书签暂无法读取，请稍后重试。'
       })
-      const nextChapter = await continueReading(controller.signal)
+      const nextChapter = progressUnavailable
+        ? await loadBlock(blocks.value[0], null, controller.signal)
+        : await continueReading(controller.signal)
+      if (isActive() && progressUnavailable) errorMessage.value = '阅读进度暂无法读取，已从卷首打开。'
       return isActive() ? nextChapter : null
     } catch (error) {
       if (!isActive() || error?.name === 'AbortError') return null

@@ -1361,6 +1361,19 @@ describe('archive reader contract behavior', () => {
     mounted.wrapper.unmount()
   })
 
+  it('keeps the first chapter readable when private progress cannot be loaded', async () => {
+    const api = makeApi({ progressEnvelope: Promise.reject(new Error('progress unavailable')) })
+    const mounted = mountReader(api)
+
+    const opened = await mounted.reader.initialize()
+
+    expect(opened?.blockId).to.equal(preface.blockId)
+    expect(mounted.reader.chapter.value?.blockId).to.equal(preface.blockId)
+    expect(mounted.reader.errorMessage.value).to.equal('阅读进度暂无法读取，已从卷首打开。')
+    expect(api.calls.some(call => call.path === `/editions/${editionId}/preface`)).to.equal(true)
+    mounted.wrapper.unmount()
+  })
+
   it('waits for persisted progress, resumes its chapter and byte offset, and issues no passive progress PUT', async () => {
     const progressResponse = deferred()
     const location = point(chapterOne, chapterOne.paragraphs[1], 3)
