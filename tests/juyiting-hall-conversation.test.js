@@ -433,6 +433,44 @@ describe('useHallConversation scoped message loading', () => {
     expect(state.isStreaming).to.equal(false)
   })
 
+  it('reconciles an SSE agent delta when its final reply arrives on the request stream', () => {
+    const state = {
+      conversationId: '1001',
+      messages: [],
+      isAwaitingReply: false,
+      isStreaming: true
+    }
+
+    appendHallEventMessage(state, {
+      type: 'agent_message_delta',
+      conversationId: '1001',
+      agentId: 'wuyong',
+      senderName: '吴用',
+      content: '正在核对',
+      timestamp: 10
+    })
+    const final = appendStreamPayload(state, JSON.stringify({
+      type: 'agent_message',
+      conversationId: '1001',
+      messageId: '100000000000000001',
+      agentId: 'wuyong',
+      senderType: 'agent',
+      senderName: '吴用',
+      content: '正在核对，请稍候。',
+      timestamp: 11
+    }))
+
+    expect(final.type).to.equal('stream_final')
+    expect(state.messages).to.have.length(1)
+    expect(state.messages[0]).to.deep.include({
+      localId: '100000000000000001',
+      sender: 'AGENT',
+      content: '正在核对，请稍候。',
+      streaming: false,
+      statusText: '回话已毕'
+    })
+  })
+
   it('reduces stream payloads for delivery, conversation id, and assistant text', () => {
     const state = {
       conversationId: '',

@@ -140,7 +140,10 @@ const appendStreamAgentFinal = (state, event) => {
   }
   const senderName = normalizeSenderName(event.senderName)
   const existing = state.messages.find(message => message.localId === event.messageId)
-  const message = existing || {
+  // SSE can start the visible reply with a delta before this request stream delivers
+  // its authoritative final. Promote that placeholder instead of adding a second row.
+  const streamingMessage = currentStreamingAgentMessage(state.messages, event)
+  const message = existing || streamingMessage || {
     localId: event.messageId,
     sender: 'AGENT',
     senderName,
@@ -150,6 +153,10 @@ const appendStreamAgentFinal = (state, event) => {
     streaming: false,
     statusText: '回话已毕'
   }
+  if (existing && streamingMessage && streamingMessage !== existing) {
+    state.messages.splice(state.messages.indexOf(streamingMessage), 1)
+  }
+  message.localId = event.messageId
   message.sender = 'AGENT'
   message.senderName = senderName || message.senderName
   message.agentId = event.agentId || message.agentId
@@ -157,7 +164,7 @@ const appendStreamAgentFinal = (state, event) => {
   message.timestamp = event.timestamp || message.timestamp
   message.streaming = false
   message.statusText = '回话已毕'
-  if (!existing) state.messages.push(message)
+  if (!existing && !streamingMessage) state.messages.push(message)
   state.isAwaitingReply = false
   return {
     type: 'stream_final',
