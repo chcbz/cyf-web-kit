@@ -39,6 +39,14 @@ const hallTaskActionsSource = readFileSync(hallTaskActionsUrl, 'utf8')
 const hallConversationMessagesSource = readFileSync(hallConversationMessagesUrl, 'utf8')
 
 describe('JuyiHall collaboration flow contract', () => {
+  it('starts OAuth before any protected hall load or background activity', () => {
+    const mounted = hallSource.match(/onMounted\(async \(\) => \{([\s\S]*?)\n\}\)/)?.[1]
+    expect(mounted).to.include('if (!await apiStore.token()) return')
+    expect(mounted.indexOf('apiStore.token()')).to.be.lessThan(mounted.indexOf('permitStageMount()'))
+    expect(mounted.indexOf('apiStore.token()')).to.be.lessThan(mounted.indexOf('refreshHall({ silent: true })'))
+    expect(mounted.indexOf('apiStore.token()')).to.be.lessThan(mounted.indexOf('startDialogueBubbles()'))
+  })
+
   it('uses the stage header as the primary action surface without the duplicate dock', () => {
     expect(hallSource).not.to.include('<BottomDock')
     expect(hallSource).not.to.include("import BottomDock")

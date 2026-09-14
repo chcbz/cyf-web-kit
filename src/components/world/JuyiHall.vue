@@ -1572,6 +1572,10 @@ onMounted(async () => {
   experienceReady.value = true
   document.addEventListener?.('visibilitychange', handleDocumentVisibility)
   handleDocumentVisibility()
+  // token() initiates the one OAuth redirect when identity is absent. Do not mount
+  // the live hall workflow while that redirect is pending: its protected loaders
+  // would otherwise race the redirect and turn authentication into a fetch error.
+  if (!await apiStore.token()) return
   permitStageMount()
   await refreshHall({ silent: true })
   startDialogueBubbles()
