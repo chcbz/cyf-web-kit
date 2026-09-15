@@ -61,8 +61,8 @@ describe('RB05 output directory boundary', () => {
     expect(uncertain.message.value).to.not.equal('暂无可领取成果。')
   })
 
-  it('uses a stable no-output empty state while the API adapter contract is not supplied', async () => {
-    const outputs = useOutputs({ source: ref({ type: 'task', id: 'task-1' }), identityFingerprint: ref('user-a') })
+  it('keeps an unmapped conversation as a stable no-output empty state', async () => {
+    const outputs = useOutputs({ source: ref({ type: 'conversation', id: 'conversation-1' }), identityFingerprint: ref('user-a') })
     await tick()
     expect(outputs.state.value).to.equal('empty')
     expect(outputs.items.value).to.deep.equal([])
@@ -78,6 +78,13 @@ describe('RB05 output directory boundary', () => {
     await tick()
     await outputs.download(outputs.items.value[0])
     expect(calls).to.deep.equal([{ sourceType: 'task', sourceId: 'task-1', artifactId: 'artifact-1', artifactVersion: '2', signal: undefined }])
+  })
+
+  it('uses the authenticated task deliverables routes without legacy actor parameters', () => {
+    const composable = readFileSync(new URL('../src/composables/useOutputs.js', import.meta.url), 'utf8')
+    expect(composable).to.include('/tasks/${encodeURIComponent(sourceId)}/deliverables')
+    expect(composable).to.include("responseType: 'blob'")
+    expect(composable).to.not.include('actorAgentId')
   })
 
   it('keeps browser upload and provisional chat mapping out of the RB05 UI', () => {

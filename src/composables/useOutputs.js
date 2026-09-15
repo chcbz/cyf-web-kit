@@ -1,4 +1,5 @@
 import { computed, getCurrentInstance, onBeforeUnmount, ref, unref, watch } from 'vue'
+import { createApi } from './useHttp.js'
 import { registerIdentityCleanup } from '../utils/identityLifecycle.js'
 
 const MAX_PAGE_SIZE = 100
@@ -11,12 +12,70 @@ const validId = value => typeof value === 'string' && value.length > 0 && value.
 const validSource = value => value && ['task', 'conversation'].includes(value.type) && validId(value.id)
 const abortError = message => new DOMException(message, 'AbortError')
 
+const DELIVERABLE_PAGE_FIELDS = new Set(['items', 'nextCursor'])
+const DELIVERABLE_FIELDS = new Set([
+  'artifactId', 'taskId', 'workItemId', 'producerAgentId', 'artifactType', 'title',
+  'contentHash', 'contentByteLength', 'contentMimeType', 'artifactVersion', 'visibility', 'createdAt'
+])
+const unwrap = result => {
+  let value = result
+  for (let index = 0; index < 3 && value && typeof value === 'object' && Object.hasOwn(value, 'data'); index += 1) value = value.data
+  return value
+}
+const exactId = value => typeof value === 'string' && value.length > 0 && value.length <= 100 &&
+  !/^\s|\s$/.test(value) && ![...value].some(char => { const code = char.codePointAt(0); return code < 32 || (code >= 127 && code <= 159) })
+const exactText = (value, maximum) => typeof value === 'string' && value.length > 0 && value.length <= maximum &&
+  !/^\s|\s$/.test(value) && ![...value].some(char => { const code = char.codePointAt(0); return code < 32 || (code >= 127 && code <= 159) })
+const exactVersion = value => Number.isInteger(value) && value >= 1 && value <= 2147483647
+const exactByteLength = value => Number.isSafeInteger(value) && value >= 0 && value <= 64 * 1024 * 1024
+const exactMime = value => typeof value === 'string' && /^[a-z0-9][a-z0-9!#$&^_.+-]{0,63}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,63}$/.test(value)
+const taskDeliverable = (value, taskId) => value && typeof value === 'object' && !Array.isArray(value) &&
+  Object.keys(value).every(key => DELIVERABLE_FIELDS.has(key)) && value.taskId === taskId &&
+  exactId(value.artifactId) && (value.workItemId == null || exactId(value.workItemId)) &&
+  exactId(value.producerAgentId) && exactText(value.artifactType, 100) && exactText(value.title, 255) &&
+  typeof value.contentHash === 'string' && /^[0-9a-f]{64}$/.test(value.contentHash) &&
+  exactByteLength(value.contentByteLength) && exactMime(value.contentMimeType) &&
+  exactVersion(value.artifactVersion) && typeof value.visibility === 'string' &&
+  Number.isSafeInteger(value.createdAt) && value.createdAt >= 0
+const validatedTaskPage = (value, taskId, limit) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.keys(value).every(key => DELIVERABLE_PAGE_FIELDS.has(key)) ||
+    !Array.isArray(value.items) || value.items.length > limit || value.nextCursor != null || !value.items.every(item => taskDeliverable(item, taskId))) {
+    throw new Error('成果目录返回格式无效，未展示可能不完整的数据。')
+  }
+  const seen = new Set()
+  if (value.items.some(item => { const key = `${item.artifactId}\u0000${item.artifactVersion}`; if (seen.has(key)) return true; seen.add(key); return false })) {
+    throw new Error('成果目录返回了重复版本，未展示可能不完整的数据。')
+  }
+  return { items: value.items, nextCursor: null }
+}
+
+/** Authenticated Day 1 task/bounty read adapter; conversations stay a stable empty state until a proven mapping exists. */
 export const outputReadAdapter = Object.freeze({
-  // The API DTO/routes are being frozen in parallel. Until an authenticated adapter is supplied,
-  // do not probe legacy artifact endpoints that require an actorAgentId.
-  async list () { return { state: 'empty', items: [], nextCursor: null } },
-  async download () { throw Object.assign(new Error('成果目录暂未对接。'), { status: 503, retryable: true }) },
-  async preview () { throw Object.assign(new Error('成果预览暂未对接。'), { status: 503, retryable: true }) }
+  async list ({ sourceType, sourceId, cursor, limit, signal } = {}) {
+    if (sourceType === 'conversation') return { state: 'empty', items: [], nextCursor: null }
+    if (sourceType !== 'task' || !validId(sourceId) || cursor != null || !Number.isInteger(limit) || limit < 1 || limit > MAX_PAGE_SIZE) {
+      throw Object.assign(new Error('成果目录请求无效。'), { retryable: false })
+    }
+    const api = createApi('/agent')
+    const result = unwrap(await api.execute({
+      url: `/tasks/${encodeURIComponent(sourceId)}/deliverables`, method: 'GET',
+      params: { limit }, autoLoading: false, needAuth: true, signal
+    }))
+    return validatedTaskPage(result, sourceId, limit)
+  },
+  async download ({ sourceType, sourceId, artifactId, artifactVersion, signal } = {}) {
+    if (sourceType !== 'task' || !validId(sourceId) || !validId(artifactId) || !/^[1-9][0-9]{0,9}$/.test(String(artifactVersion))) {
+      throw Object.assign(new Error('成果下载请求无效。'), { retryable: false })
+    }
+    const api = createApi('/agent')
+    const blob = unwrap(await api.execute({
+      url: `/tasks/${encodeURIComponent(sourceId)}/deliverables/${encodeURIComponent(artifactId)}/versions/${artifactVersion}/content`,
+      method: 'GET', responseType: 'blob', autoLoading: false, needAuth: true, signal
+    }))
+    if (!(blob instanceof Blob) || blob.size > 64 * 1024 * 1024) throw new Error('成果下载响应无效，未创建文件。')
+    return blob
+  },
+  async preview (request = {}) { return this.download(request) }
 })
 
 export const outputSource = (type, id) => computed(() => {

@@ -18,7 +18,7 @@ import { classifyRequestOutcome, recordRequestTiming, resolveRequestId, sampleRe
  * @param {Object} options.headers - 自定义请求头
  * @param {boolean} options.autoLoading - 是否自动管理loading状态，默认为true
  * @param {boolean} options.needAuth - 是否需要认证，默认为true
- * @param {string} options.responseType - 响应类型，支持 'json'（默认）、'text'（文本）和 'stream'（流式响应）
+ * @param {string} options.responseType - 响应类型，支持 'json'（默认）、'text'（文本）、'blob'（二进制）和 'stream'（流式响应）
  * @param {number} options.timeout - 可选的显式传输超时（毫秒）；未设置时不会因本组合式函数的时限而取消请求
  * @param {AbortSignal} options.signal - 调用方取消信号；取消会保留为可区分的请求取消错误
  * @param {Function} options.onSuccess - 成功回调
@@ -293,41 +293,34 @@ export function useHttp (options = {}) {
       // 处理响应数据
       let result
       let resultObj
+      const responseMetadata = {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        config: fetchConfig
+      }
 
-      // 首先读取响应文本
-      const responseText = await response.text()
-      if (responseType === 'text') {
-        // 处理文本响应
-        result = responseText
-        resultObj = {
-          data: responseText,
-          status: response.status,
-          statusText: response.statusText,
-          headers: Object.fromEntries(response.headers.entries()),
-          config: fetchConfig
-        }
+      // Binary is an explicit, authenticated response mode. Do not feed it through the
+      // text/stream decoders: callers receive the exact Blob returned by the server.
+      if (responseType === 'blob') {
+        const blob = await response.blob()
+        result = blob
+        resultObj = { data: blob, ...responseMetadata }
       } else {
-        // 处理 JSON 响应（默认）
-        // 尝试解析为 JSON
-        try {
-          const jsonResult = JSON.parse(responseText)
-          result = jsonResult
-          resultObj = {
-            data: jsonResult,
-            status: response.status,
-            statusText: response.statusText,
-            headers: Object.fromEntries(response.headers.entries()),
-            config: fetchConfig
-          }
-        } catch {
-        // JSON 解析失败，作为文本处理
+        const responseText = await response.text()
+        if (responseType === 'text') {
           result = responseText
-          resultObj = {
-            data: responseText,
-            status: response.status,
-            statusText: response.statusText,
-            headers: Object.fromEntries(response.headers.entries()),
-            config: fetchConfig
+          resultObj = { data: responseText, ...responseMetadata }
+        } else {
+          // 处理 JSON 响应（默认）
+          try {
+            const jsonResult = JSON.parse(responseText)
+            result = jsonResult
+            resultObj = { data: jsonResult, ...responseMetadata }
+          } catch {
+            // JSON 解析失败，作为文本处理
+            result = responseText
+            resultObj = { data: responseText, ...responseMetadata }
           }
         }
       }
