@@ -1,0 +1,103 @@
+import { expect } from 'chai'
+import { readFileSync } from 'node:fs'
+import { nextTick, ref } from 'vue'
+import { outputCacheKey, useOutputs } from '../src/composables/useOutputs.js'
+import { safeOutputFilename, saveOutputBlob } from '../src/utils/outputDownload.js'
+
+const tick = async () => { await Promise.resolve(); await nextTick(); await Promise.resolve() }
+const item = overrides => ({
+  artifactId: 'artifact-1', artifactVersion: 1, title: '报告.md', artifactType: 'report',
+  contentMimeType: 'text/markdown', contentByteLength: 12, sha256: 'a'.repeat(64), ...overrides
+})
+
+describe('RB05 output directory boundary', () => {
+  it('keys each directory by identity plus source and never calls a legacy actor endpoint', async () => {
+    const source = ref({ type: 'task', id: 'task-1' })
+    const identity = ref('user-a:client-a:1')
+    const calls = []
+    const adapter = {
+      async list (request) { calls.push(request); return { items: [item()], nextCursor: null } },
+      async download () { throw new Error('not needed') }, async preview () { throw new Error('not needed') }
+    }
+    const outputs = useOutputs({ source, identityFingerprint: identity, adapter })
+    await tick()
+    expect(outputCacheKey(identity.value, source.value)).to.equal('user-a:client-a:1\u0000task\u0000task-1')
+    expect(calls).to.have.length(1)
+    expect(calls[0]).to.include({ sourceType: 'task', sourceId: 'task-1', cursor: null, limit: 20 })
+    expect(calls[0]).not.to.have.property('actorAgentId')
+    expect(outputs.items.value).to.have.length(1)
+  })
+
+  it('aborts and fences an old identity/source response before it can populate the new directory', async () => {
+    const source = ref({ type: 'task', id: 'task-old' })
+    const identity = ref('user-a:client-a:1')
+    let resolveOld
+    const adapter = {
+      list: ({ sourceId }) => sourceId === 'task-old'
+        ? new Promise(resolve => { resolveOld = resolve })
+        : Promise.resolve({ items: [item({ artifactId: 'artifact-new', title: '新成果' })] }),
+      async download () {}, async preview () {}
+    }
+    const outputs = useOutputs({ source, identityFingerprint: identity, adapter })
+    await tick()
+    source.value = { type: 'task', id: 'task-new' }
+    identity.value = 'user-b:client-b:2'
+    await tick()
+    resolveOld({ items: [item({ artifactId: 'artifact-old', title: '旧成果' })] })
+    await tick()
+    expect(outputs.cacheKey.value).to.equal('user-b:client-b:2\u0000task\u0000task-new')
+    expect(outputs.items.value.map(value => value.artifactId)).to.deep.equal(['artifact-new'])
+  })
+
+  it('keeps forbidden and uncertain directory states distinct from an empty directory', async () => {
+    const source = ref({ type: 'task', id: 'task-1' })
+    const forbidden = useOutputs({ source, identityFingerprint: ref('user-a'), adapter: { async list () { throw Object.assign(new Error('forbidden'), { status: 403 }) } } })
+    await tick()
+    expect(forbidden.state.value).to.equal('forbidden')
+    expect(forbidden.message.value).to.equal('无访问权限。')
+    const uncertain = useOutputs({ source, identityFingerprint: ref('user-b'), adapter: { async list () { throw new TypeError('network unavailable') } } })
+    await tick()
+    expect(uncertain.state.value).to.equal('unavailable')
+    expect(uncertain.message.value).to.not.equal('暂无可领取成果。')
+  })
+
+  it('uses a stable no-output empty state while the API adapter contract is not supplied', async () => {
+    const outputs = useOutputs({ source: ref({ type: 'task', id: 'task-1' }), identityFingerprint: ref('user-a') })
+    await tick()
+    expect(outputs.state.value).to.equal('empty')
+    expect(outputs.items.value).to.deep.equal([])
+    expect(outputs.message.value).to.equal('暂无可领取成果。')
+  })
+
+  it('asks the injected adapter for only the selected artifact version', async () => {
+    const calls = []
+    const outputs = useOutputs({
+      source: ref({ type: 'task', id: 'task-1' }), identityFingerprint: ref('user-a'),
+      adapter: { async list () { return { items: [item({ artifactVersion: 2 })] } }, async download (request) { calls.push(request); return new Blob(['v2']) }, async preview () {} }
+    })
+    await tick()
+    await outputs.download(outputs.items.value[0])
+    expect(calls).to.deep.equal([{ sourceType: 'task', sourceId: 'task-1', artifactId: 'artifact-1', artifactVersion: '2', signal: undefined }])
+  })
+
+  it('keeps browser upload and provisional chat mapping out of the RB05 UI', () => {
+    const outputs = readFileSync(new URL('../src/components/outputs/OutputList.vue', import.meta.url), 'utf8')
+    const bounty = readFileSync(new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url), 'utf8')
+    const chat = readFileSync(new URL('../src/components/chat/Chat.vue', import.meta.url), 'utf8')
+    expect(outputs).to.not.include('type="file"')
+    expect(outputs).to.not.include('v-html')
+    expect(bounty).to.include('<OutputList')
+    expect(bounty).to.include("{ type: 'task', id: String(detailTask.value.id) }")
+    expect(chat).to.not.include('OutputList')
+  })
+
+  it('downloads only the exact adapter-returned Blob and sanitizes the local filename', () => {
+    expect(safeOutputFilename({ title: '../evil:\u0000name?.txt' })).to.equal('_evil__name_.txt')
+    const clicks = []
+    const anchor = { style: {}, remove () {}, click () { clicks.push(this.download) } }
+    const documentRef = { body: { appendChild () {} }, createElement: () => anchor }
+    const urls = { createObjectURL: blob => { expect(blob).to.be.instanceOf(Blob); return 'blob:exact' }, revokeObjectURL: href => expect(href).to.equal('blob:exact') }
+    saveOutputBlob({ blob: new Blob(['exact version']), item: { title: '成果-v2.txt' }, documentRef, urlApi: urls })
+    expect(clicks).to.deep.equal(['成果-v2.txt'])
+  })
+})

@@ -191,6 +191,7 @@
             :funded-preview-enabled="economyPreviewEnabled"
             :work-item-plan-enabled="workItemPlanEnabled"
             :authorization-generation="apiStore.authorizationGeneration"
+            :output-identity-fingerprint="outputIdentityFingerprint"
             :funded-quote-preview="fundedQuotePreview"
             :funded-claim-state="fundedClaimState"
             :funded-create-recovery="fundedCreateRecovery"
@@ -459,6 +460,12 @@ const emit = defineEmits(['open-onboarding'])
 
 const globalStore = useGlobalStore()
 const apiStore = useApiStore()
+const outputIdentityFingerprint = computed(() => {
+  const principal = globalStore.getUserId || globalStore.user?.id
+  if (!principal) return ''
+  const client = globalStore.user?.appid || 'default-client'
+  return `${principal}:${client}:${apiStore.authorizationGeneration}`
+})
 
 const selectedAgent = ref(null)
 const selectedTask = ref(null)
