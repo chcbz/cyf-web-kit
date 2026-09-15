@@ -119,6 +119,7 @@ const loadSfc = (relativePath) => {
     .replace(/^import\s+\{\s*juyitingGame\s*\}\s+from\s+['"]@\/game\/index\.js['"];?\s*$/gm, 'var juyitingGame = arguments[2]')
     .replace(/^import\s+\{\s*classifyViewportResize\s*\}\s+from\s+['"]@\/game\/camera\/resizePolicy\.js['"];?\s*$/gm, 'var classifyViewportResize = arguments[3]')
     .replace(/^import\s+BountyActionIcon\s+from\s+['"].\/BountyActionIcon\.vue['"];?\s*$/gm, 'var BountyActionIcon = { template: \'<span />\', props: [\'status\'] }')
+    .replace(/^import\s+OutputList\s+from\s+['"]\.\.\/outputs\/OutputList\.vue['"];?\s*$/gm, 'var OutputList = { template: \'<section class="output-list-stub" />\', props: [\'source\', \'identityFingerprint\'] }')
     .replace(/^import\s+\{\s*formatSilverMicro,\s*isCanonicalMicroAmount\s*\}\s+from\s+['"]@\/utils\/silverAmount['"];?\s*$/gm, 'var { formatSilverMicro, isCanonicalMicroAmount } = arguments[4]')
     .replace(/^import\s+WorkItemPlanPanel\s+from\s+['"]\.\/WorkItemPlanPanel\.vue['"];?\s*$/gm, `var WorkItemPlanPanel = { template: '<section class="work-item-plan-stub" />', props: ['task', 'enabled', 'authorizationGeneration'] }`)
     .replace(/^import\s+TeamRecommendationPanel\s+from\s+['"]\.\/TeamRecommendationPanel\.vue['"];?\s*$/gm, `var TeamRecommendationPanel = { template: '<section class="team-recommendation-stub" />', props: ['task', 'authorizationGeneration'] }`)
