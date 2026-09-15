@@ -601,8 +601,38 @@ describe('archive reader contract behavior', () => {
 
     await wrapper.get('.archive-book-open').trigger('click')
     await waitFor(() => wrapper.find('.archive-reader-fullscreen').exists())
-    expect(api.calls.filter(call => call.path.startsWith('/me/progress/'))).to.have.length(progressReads)
+    await waitFor(() => api.calls.filter(call => call.path.startsWith('/me/progress/')).length === progressReads + 1)
     wrapper.unmount()
+  })
+
+  it('restores the saved paragraph whenever the fullscreen reader is reopened', async () => {
+    const target = point(chapterOne, chapterOne.paragraphs[1], 3)
+    const api = makeApi({ progress: { editionId, location: target, version: '7' } })
+    const originalScrollIntoView = Element.prototype.scrollIntoView
+    const resumeTargets = []
+    Element.prototype.scrollIntoView = function () {
+      if (this.classList.contains('reader-paragraph')) resumeTargets.push(this.dataset.paragraphId)
+    }
+
+    let wrapper
+    try {
+      wrapper = mountArchiveReader(api, { initialView: 'catalog' })
+      await waitFor(() => !wrapper.readerState.loading.value && wrapper.find('.archive-book-open').exists())
+      await wrapper.get('.archive-book-open').trigger('click')
+      await waitFor(() => resumeTargets.length === 1)
+      expect(resumeTargets).to.deep.equal([target.paragraphId])
+
+      await wrapper.get('.reader-exit').trigger('click')
+      await waitFor(() => wrapper.find('.archive-book-open').exists())
+      await wrapper.get('.archive-book-open').trigger('click')
+      await waitFor(() => resumeTargets.length === 2)
+
+      expect(resumeTargets).to.deep.equal([target.paragraphId, target.paragraphId])
+      expect(api.calls.filter(call => call.path.startsWith('/me/progress/'))).to.have.length(2)
+    } finally {
+      wrapper?.unmount()
+      Element.prototype.scrollIntoView = originalScrollIntoView
+    }
   })
 
   it('keeps reader controls outside the scrolling text, navigates chapter boundaries, and exposes the portrait handnote overlay', async () => {

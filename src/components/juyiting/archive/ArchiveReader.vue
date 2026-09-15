@@ -413,6 +413,7 @@ let programmaticFocusId = ''
 let programmaticScrollGeneration = 0
 let editorRevision = 0
 let returnFocusElement = null
+let closeProgressPromise = Promise.resolve(null)
 let unregisterEditorIdentityCleanup = null
 
 const runAction = async (action, fallbackMessage) => {
@@ -453,8 +454,11 @@ const enterReading = async (event) => {
   returnFocusElement = typeof event?.currentTarget?.focus === 'function'
     ? event.currentTarget
     : document.activeElement
-  const opened = reader.chapter
-    || await runAction(() => reader.initialize({ reuseCatalog: true }), '典籍暂无法读取，请稍后重试。')
+  await closeProgressPromise
+  const opened = await runAction(
+    () => reader.initialize({ reuseCatalog: true }),
+    '典籍暂无法读取，请稍后重试。'
+  )
   if (!opened && !reader.chapter) return
   catalogOpen.value = false
   notesOpen.value = false
@@ -466,7 +470,7 @@ const enterReading = async (event) => {
 
 const closeReading = async () => {
   reader.cancelBlockLoad()
-  void flushReadingPosition()
+  closeProgressPromise = flushReadingPosition()
   reader.closeQuestion()
   readingOpen.value = false
   catalogOpen.value = false
