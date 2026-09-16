@@ -1077,7 +1077,8 @@ button:disabled {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .modal-task-info {
@@ -1086,11 +1087,9 @@ button:disabled {
 }
 
 .modal-agent-scroll {
-  flex: 1;
-  min-height: 0;
+  flex: 0 0 auto;
   margin-top: 12px;
   padding: 0 16px 16px;
-  overflow-y: auto;
 }
 
 /* Modal Transition */

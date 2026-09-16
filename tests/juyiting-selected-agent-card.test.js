@@ -248,6 +248,16 @@ describe('SelectedAgentCard interaction contract', () => {
     expect(taskDetailRule).to.include('max-width: 100%')
   })
 
+  it('keeps the BountyPanel point-general modal content scrollable as one bounded surface', () => {
+    const modalBodyRule = cssRule(bountySource, '.bounty-modal-body')
+    const agentScrollRule = cssRule(bountySource, '.modal-agent-scroll')
+
+    expect(modalBodyRule).to.include('overflow-y: auto')
+    expect(modalBodyRule).to.include('overflow-x: hidden')
+    expect(agentScrollRule).to.include('flex: 0 0 auto')
+    expect(agentScrollRule).not.to.include('overflow-y: auto')
+  })
+
   it('does not resize the map when the selected agent card appears', () => {
     const quickBarRule = cssRule(hallSource, '.quick-bar')
 
