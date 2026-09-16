@@ -147,6 +147,11 @@
                 :identity-fingerprint="outputIdentityFingerprint"
                 :adapter="outputAdapter"
               />
+              <FormalDeliveryList
+                :task-id="detailTask.id"
+                :identity-fingerprint="outputIdentityFingerprint"
+                :adapter="formalDeliveryAdapter"
+              />
               <section v-if="isFundedTask(detailTask)" class="funded-preview-details" aria-label="资金悬赏详情">
                 <p class="funding-summary">已托管：{{ formatMoney(detailTask.funding.remainingMicro || detailTask.funding.grossBountyAmountMicro) }}</p>
                 <p>仅可由一位明确好汉按报价领令；组队、宋江代点和旧式点将已禁用。</p>
@@ -314,6 +319,7 @@ import BountyActionIcon from './BountyActionIcon.vue'
 import WorkItemPlanPanel from './WorkItemPlanPanel.vue'
 import TeamRecommendationPanel from './TeamRecommendationPanel.vue'
 import OutputList from '../outputs/OutputList.vue'
+import FormalDeliveryList from '../deliveries/FormalDeliveryList.vue'
 import { formatSilverMicro, isCanonicalMicroAmount } from '@/utils/silverAmount'
 
 const props = defineProps({
@@ -334,6 +340,7 @@ const props = defineProps({
   workItemPlanEnabled: { type: Boolean, default: false },
   authorizationGeneration: { type: Number, default: 0 },
   outputAdapter: { type: Object, default: undefined },
+  formalDeliveryAdapter: { type: Object, default: undefined },
   outputIdentityFingerprint: { type: String, default: '' },
   fundedQuotePreview: { type: Object, default: null },
   fundedClaimState: { type: Object, default: null },
