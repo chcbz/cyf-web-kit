@@ -33,9 +33,10 @@
         <p v-if="delivery.reviewedAt">{{ formatTime(delivery.reviewedAt) }}</p>
         <p>{{ delivery.reviewReason || '未填写验收意见。' }}</p>
       </section>
-      <form v-if="delivery.state === 'submitted'" class="formal-decision" @submit.prevent="submitDecision(delivery)">
+      <form v-if="delivery.state === 'submitted'" class="formal-decision" @submit.prevent="submitDecision(delivery, $event)">
         <h4>验收此正式交付</h4>
-        <label>验收意见（可选）<textarea v-model="reviewReasons[delivery.deliveryId]" maxlength="4000" :disabled="isBusy(delivery) || deliveries.refreshRequired.value" /></label>
+        <p>验收通过不会记录说明；要求修改时必须填写说明。</p>
+        <label>要求修改说明（要求修改时必填）<textarea v-model="reviewReasons[delivery.deliveryId]" maxlength="4000" :disabled="isBusy(delivery) || deliveries.refreshRequired.value" /></label>
         <div>
           <button type="submit" name="decision" value="accepted" :disabled="isBusy(delivery) || deliveries.refreshRequired.value">{{ isBusy(delivery) ? '提交中…' : '验收通过' }}</button>
           <button type="submit" name="decision" value="changes_requested" :disabled="isBusy(delivery) || deliveries.refreshRequired.value">要求修改</button>

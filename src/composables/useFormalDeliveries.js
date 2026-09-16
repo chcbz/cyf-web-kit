@@ -9,9 +9,11 @@ const validId = value => typeof value === 'string' && value.length > 0 && value.
   !/^\s|\s$/.test(value) && ![...value].some(character => { const code = character.codePointAt(0); return code < 32 || (code >= 127 && code <= 159) })
 const validText = (value, maximum = 4000) => typeof value === 'string' && value.length <= maximum &&
   ![...value].some(character => { const code = character.codePointAt(0); return code < 32 || (code >= 127 && code <= 159) })
-const validVersion = value => Number.isSafeInteger(value) && value >= 1 && value <= MAX_VERSION
+const validRevision = value => Number.isSafeInteger(value) && value >= 1 && value <= MAX_VERSION
+const validEntityVersion = value => Number.isSafeInteger(value) && value >= 0 && value <= MAX_VERSION
 const validTimestamp = value => (Number.isSafeInteger(value) && value >= 0) || (typeof value === 'string' && value.length > 0 && Number.isFinite(Date.parse(value)))
 const validHash = value => typeof value === 'string' && /^[a-f0-9]{64}$/i.test(value)
+const validReviewReason = value => validText(value, 4000) && value.length > 0 && value === value.trim()
 const unwrap = result => {
   let value = result
   for (let index = 0; index < 3 && value && typeof value === 'object' && Object.hasOwn(value, 'data'); index += 1) value = value.data
@@ -30,12 +32,12 @@ const formalItem = item => item && typeof item === 'object' && !Array.isArray(it
   validHash(item.contentHash) && validText(item.purpose, 1000)
 const formalDelivery = (delivery, taskId) => delivery && typeof delivery === 'object' && !Array.isArray(delivery) &&
   Object.keys(delivery).every(key => DELIVERY_FIELDS.has(key)) && delivery.taskId === taskId && validId(delivery.workItemId) &&
-  validId(delivery.deliveryId) && validVersion(delivery.revision) && validText(delivery.state, 100) &&
+  validId(delivery.deliveryId) && validRevision(delivery.revision) && validText(delivery.state, 100) &&
   validId(delivery.runId) && validId(delivery.producerAgentId) && validText(delivery.summary, 4000) &&
-  validId(delivery.manifestArtifactId) && validVersion(delivery.manifestArtifactVersion) && validTimestamp(delivery.submittedAt) &&
+  validId(delivery.manifestArtifactId) && validRevision(delivery.manifestArtifactVersion) && validTimestamp(delivery.submittedAt) &&
   (delivery.reviewedAt == null || validTimestamp(delivery.reviewedAt)) &&
-  (delivery.reviewReason == null || validText(delivery.reviewReason, 4000)) && validVersion(delivery.taskVersion) &&
-  validVersion(delivery.workItemVersion) && Array.isArray(delivery.items) && delivery.items.length <= 100 && delivery.items.every(formalItem)
+  (delivery.reviewReason == null || validText(delivery.reviewReason, 4000)) && validEntityVersion(delivery.taskVersion) &&
+  validEntityVersion(delivery.workItemVersion) && Array.isArray(delivery.items) && delivery.items.length <= 100 && delivery.items.every(formalItem)
 const validatedPage = (value, taskId) => {
   if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.keys(value).every(key => PAGE_FIELDS.has(key)) ||
     !Array.isArray(value.items) || value.items.length > 100 || !value.items.every(item => formalDelivery(item, taskId))) {
@@ -58,13 +60,14 @@ export const formalDeliveryReadAdapter = Object.freeze({
     return validatedPage(result, taskId)
   },
   async decide ({ taskId, deliveryId, expectedTaskVersion, expectedDeliveryVersion, decision, reviewReason, idempotencyKey, signal } = {}) {
-    if (!validId(taskId) || !validId(deliveryId) || !validVersion(expectedTaskVersion) || !validVersion(expectedDeliveryVersion) ||
-      !['accepted', 'changes_requested'].includes(decision) || !validText(reviewReason || '', 4000) ||
+    const normalizedReviewReason = decision === 'changes_requested' ? String(reviewReason || '') : ''
+    if (!validId(taskId) || !validId(deliveryId) || !validEntityVersion(expectedTaskVersion) || !validEntityVersion(expectedDeliveryVersion) ||
+      !['accepted', 'changes_requested'].includes(decision) || (decision === 'changes_requested' && !validReviewReason(normalizedReviewReason)) ||
       typeof idempotencyKey !== 'string' || !/^[A-Za-z0-9._~:/+-]{8,100}$/.test(idempotencyKey)) {
       throw Object.assign(new Error('正式交付验收请求无效，未发送。'), { retryable: false })
     }
     const body = { expectedTaskVersion, expectedDeliveryVersion, decision }
-    if (reviewReason) body.reviewReason = reviewReason
+    if (normalizedReviewReason) body.reviewReason = normalizedReviewReason
     const api = createApi('/agent')
     await api.execute({
       url: `/tasks/${encodeURIComponent(taskId)}/formal-deliveries/${encodeURIComponent(deliveryId)}/decision`, method: 'POST',

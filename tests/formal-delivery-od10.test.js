@@ -16,18 +16,18 @@ describe('OD10 formal delivery UI boundary', () => {
     const calls = []
     const deliveries = useFormalDeliveries({
       taskId: ref('task-1'), identityFingerprint: ref('owner:client:1'),
-      adapter: { async list (request) { calls.push(request); return [delivery()] }, async decide () {} }
+      adapter: { async list (request) { calls.push(request); return [delivery({ taskVersion: 0, workItemVersion: 0 })] }, async decide () {} }
     })
     await tick()
     expect(calls).to.have.length(1)
     expect(calls[0]).to.include({ taskId: 'task-1' })
     expect(calls[0]).not.to.have.property('params')
-    expect(deliveries.items.value[0]).to.deep.include({ deliveryId: 'delivery-1', revision: 2, taskVersion: 3, workItemVersion: 4 })
+    expect(deliveries.items.value[0]).to.deep.include({ deliveryId: 'delivery-1', revision: 2, taskVersion: 0, workItemVersion: 0 })
     expect(deliveries.items.value[0].items).to.deep.equal([artifact()])
     deliveries.dispose()
   })
 
-  it('sends only the frozen decision body and a fresh idempotency key, then refreshes authoritative state', async () => {
+  it('does not send an accepted-note forbidden by the API and then refreshes authoritative state', async () => {
     const calls = []
     let listCount = 0
     const deliveries = useFormalDeliveries({
@@ -41,7 +41,7 @@ describe('OD10 formal delivery UI boundary', () => {
     await deliveries.decide({ delivery: deliveries.items.value[0], decision: 'accepted', reviewReason: '符合榜文要求。' })
     expect(calls).to.deep.equal([{
       taskId: 'task-1', deliveryId: 'delivery-1', expectedTaskVersion: 3, expectedDeliveryVersion: 2,
-      decision: 'accepted', reviewReason: '符合榜文要求。', idempotencyKey: 'formal-test-key-0001', signal: calls[0].signal
+      decision: 'accepted', reviewReason: '', idempotencyKey: 'formal-test-key-0001', signal: calls[0].signal
     }])
     expect(listCount).to.equal(2)
     expect(deliveries.items.value[0].state).to.equal('accepted')
