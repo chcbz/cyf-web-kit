@@ -93,6 +93,7 @@ describe('RB05 output directory boundary', () => {
     const chat = readFileSync(new URL('../src/components/chat/Chat.vue', import.meta.url), 'utf8')
     expect(outputs).to.not.include('type="file"')
     expect(outputs).to.not.include('v-html')
+    expect(outputs).to.include("outputs.state.value === 'available' && outputs.items.value.length")
     expect(bounty).to.include('<OutputList')
     expect(bounty).to.include("{ type: 'task', id: String(detailTask.value.id) }")
     expect(chat).to.not.include('OutputList')

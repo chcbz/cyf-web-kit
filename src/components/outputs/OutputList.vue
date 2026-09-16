@@ -1,7 +1,7 @@
 <template>
   <section class="output-list" aria-label="已分享成果">
     <header><strong>已分享成果</strong><button type="button" :disabled="outputs.loading.value" @click="outputs.refresh">刷新</button></header>
-    <p class="output-hint">已分享，非正式验收。</p>
+    <p v-if="outputs.state.value === 'available' && outputs.items.value.length" class="output-hint">已分享，非正式验收。</p>
     <p v-if="outputs.state.value === 'empty' && !outputs.loading.value" class="output-state">暂无可领取成果。</p>
     <p v-else-if="outputs.state.value === 'syncing'" class="output-state">成果同步中，聊天和悬赏主体不受影响。</p>
     <p v-else-if="outputs.state.value === 'forbidden'" class="output-state is-error">无访问权限。</p>
