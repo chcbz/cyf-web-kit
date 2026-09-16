@@ -344,3 +344,37 @@ describe('useHallData E01 candidate compatibility', () => {
     expect(hallData.canAssign(selectedTask.value, legacy)).to.equal(true)
   })
 })
+
+describe('useHallData bounty title reload', () => {
+  it('keeps the persisted bounty title returned by task search after a refresh', async () => {
+    const persistedTask = {
+      id: '42',
+      title: '夜探祝家庄榜文',
+      description: '先探路，再回厅前公议',
+      status: 'open',
+      requiredAbilities: ['planning']
+    }
+    const agentApi = {
+      search: async (url, _params, options) => {
+        options.onSuccess({
+          data: url === '/tasks/search' ? [persistedTask] : { total: 1, open: 1 }
+        })
+      },
+      get: async () => {}
+    }
+    const hallData = useHallData({
+      agentApi,
+      log: { warn: () => {} },
+      normalizeStatus: (status = '') => status.toLowerCase(),
+      selectedAgent: ref(null),
+      selectedTask: ref(null),
+      taskAgentMatchScore: () => 0
+    })
+
+    await hallData.loadTasks()
+    await hallData.loadTasks()
+
+    expect(hallData.tasks.value).to.deep.equal([persistedTask])
+    expect(hallData.tasks.value[0].title).to.equal('夜探祝家庄榜文')
+  })
+})
