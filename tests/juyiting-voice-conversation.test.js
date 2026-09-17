@@ -528,9 +528,9 @@ describe('Juyi Hall voice identity and capture controls', () => {
     replyVoice.dispose()
   })
 
-  it('keeps cancel-and-discard reachable through every capture phase, with stop and cancel during recording', async () => {
+  it('keeps cancel-and-discard reachable through capture, synthesis, and playback, with stop during recording', async () => {
     const HallVoiceControls = loadSfc('../src/components/juyiting/HallVoiceControls.vue')
-    for (const state of ['requesting_permission', 'recording', 'stopping', 'transcribing']) {
+    for (const state of ['requesting_permission', 'recording', 'stopping', 'transcribing', 'synthesizing', 'speaking']) {
       let cancelled = 0
       let stopped = 0
       const voice = Vue.reactive({
@@ -1313,6 +1313,61 @@ describe('Juyi Hall TTS cleanup', () => {
     expect(voice.voiceTurnActive).to.equal(false)
     expect(voice.canRecord).to.equal(true)
     voice.dispose()
+  })
+
+  it('stops pending TTS or playback when reply voice is explicitly disabled and ignores stale reply callbacks', async () => {
+    const pendingSynthesis = deferred()
+    let ttsRequests = 0
+    let ttsSignal
+    const pendingHarness = browserHarness({
+      fetchImpl: async (_url, options) => {
+        ttsRequests += 1
+        ttsSignal = options.signal
+        return pendingSynthesis.promise
+      }
+    })
+    const pendingVoice = createVoice({ browser: pendingHarness.browser }).voice
+    pendingVoice.setReplyVoiceEnabled(true)
+    await transcribeToReview(pendingVoice)
+    await pendingVoice.sendTranscript()
+    const synthesizing = pendingVoice.completeReply({ content: '回话' })
+    await flush()
+    expect(pendingVoice.state).to.equal('synthesizing')
+    expect(ttsRequests).to.equal(1)
+    pendingVoice.setReplyVoiceEnabled(false)
+    expect(ttsSignal.aborted).to.equal(true)
+    expect(pendingVoice.state).to.equal('idle')
+    pendingSynthesis.resolve(audioResponse())
+    expect(await synthesizing).to.equal(false)
+    expect(ttsRequests).to.equal(1)
+    pendingVoice.dispose()
+
+    class ToggleAudio {
+      constructor () { ToggleAudio.instance = this; this.paused = false }
+      play = async () => {}
+      pause () { this.paused = true }
+    }
+    const playbackHarness = browserHarness({ AudioClass: ToggleAudio, fetchImpl: async () => audioResponse() })
+    const playbackVoice = createVoice({ browser: playbackHarness.browser }).voice
+    playbackVoice.setReplyVoiceEnabled(true)
+    await transcribeToReview(playbackVoice)
+    await playbackVoice.sendTranscript()
+    await playbackVoice.completeReply({ content: '回话' })
+    expect(playbackVoice.state).to.equal('speaking')
+    const staleOnError = ToggleAudio.instance.onerror
+    playbackVoice.setReplyVoiceEnabled(false)
+    expect(ToggleAudio.instance.paused).to.equal(true)
+    expect(playbackHarness.revoked).to.deep.equal(['blob:voice'])
+    expect(playbackVoice.state).to.equal('idle')
+
+    await playbackVoice.startRecording()
+    expect(playbackVoice.state).to.equal('recording')
+    staleOnError()
+    expect(playbackVoice.error).to.equal('')
+    expect(playbackVoice.state).to.equal('recording')
+    expect(playbackVoice.completeReply({ content: '迟到回话' })).to.equal(false)
+    expect(playbackVoice.state).to.equal('recording')
+    playbackVoice.cancel()
   })
 
   it('stops speaking playback when a new recording starts', async () => {

@@ -49,7 +49,7 @@ import { computed } from 'vue'
 const props = defineProps({ compact: { type: Boolean, default: false }, voice: { type: Object, default: null } })
 defineEmits(['apply'])
 const seconds = computed(() => Math.ceil((props.voice?.elapsedMs || 0) / 1000))
-const canCancelCapture = computed(() => ['requesting_permission', 'recording', 'stopping', 'transcribing'].includes(props.voice?.state))
+const canCancelCapture = computed(() => ['requesting_permission', 'recording', 'stopping', 'transcribing', 'synthesizing', 'speaking'].includes(props.voice?.state))
 </script>
 <style scoped>
 .hall-voice-controls{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.voice-reply-setting{display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap}.voice-disclosure{padding:2px 5px;border:1px solid rgba(118,95,64,.28);border-radius:4px;color:#765f40;font-size:10px;line-height:1.3;white-space:nowrap}.hall-voice-controls button{border:1px solid #d7c3a2;border-radius:7px;background:#fffdf6;color:#654122;padding:6px 8px;font:inherit}.hall-voice-controls button.is-recording{background:#8d2d22;color:#fff}.voice-target{max-width:150px;overflow:hidden;color:#654122;font-size:12px;font-weight:700;text-overflow:ellipsis;white-space:nowrap}.voice-toggle{font-size:11px;color:#765f40;white-space:nowrap}.voice-countdown,.voice-sending,.voice-review{width:100%;font-size:12px;color:#765f40}.voice-review{padding:8px;border:1px dashed #c8a96e;background:#fff8e8}.voice-review p{margin:4px 0;white-space:pre-wrap}.voice-review button,.voice-countdown button,.voice-sending button{margin-right:5px}

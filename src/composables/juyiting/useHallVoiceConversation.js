@@ -539,6 +539,7 @@ export const useHallVoiceConversation = ({
       }
       player.onended = () => finishPlayback('idle')
       player.onerror = () => {
+        if (current !== generation) return
         errorRef.value = '语音播放失败，文字已保留'
         finishPlayback('error')
       }
@@ -568,7 +569,8 @@ export const useHallVoiceConversation = ({
   }
 
   const completeReply = message => {
-    if (!voiceTurnActiveRef.value || typeof message?.content !== 'string' || !message.content.trim()) {
+    if (!voiceTurnActiveRef.value) return false
+    if (typeof message?.content !== 'string' || !message.content.trim()) {
       finishReplyTurn('idle')
       return false
     }
@@ -577,6 +579,19 @@ export const useHallVoiceConversation = ({
       return true
     }
     return synthesize(message.content)
+  }
+  const setReplyVoiceEnabled = value => {
+    const enabled = value === true
+    if (!enabled && replyVoiceEnabledRef.value && ['synthesizing', 'speaking'].includes(stateRef.value)) {
+      replyVoiceEnabledRef.value = false
+      terminal(supportedRef.value ? 'idle' : 'unsupported', {
+        clearTranscript: true,
+        clearTurn: true,
+        replyReason: 'reply_voice_disabled'
+      })
+      return
+    }
+    replyVoiceEnabledRef.value = enabled
   }
   const onVisibility = () => {
     if (!browser.document?.hidden || !captureStates.has(stateRef.value)) return
@@ -633,6 +648,6 @@ export const useHallVoiceConversation = ({
     stopPlayback,
     dispose,
     setAutoSendEnabled: value => { autoSendEnabledRef.value = value === true },
-    setReplyVoiceEnabled: value => { replyVoiceEnabledRef.value = value === true }
+    setReplyVoiceEnabled
   })
 }
