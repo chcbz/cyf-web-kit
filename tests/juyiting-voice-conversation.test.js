@@ -549,7 +549,9 @@ describe('Juyi Hall voice identity and capture controls', () => {
         setReplyVoiceEnabled: () => {}
       })
       const wrapper = mount(HallVoiceControls, { props: { voice }, global: { stubs: { 'var-icon': true } } })
-      expect(wrapper.get('.voice-cancel').attributes('aria-label')).to.equal('取消并丢弃录音')
+      const expectedCancelLabel = state === 'synthesizing' ? '取消语音生成' : (state === 'speaking' ? '停止朗读' : '取消并丢弃录音')
+      expect(wrapper.get('.voice-cancel').attributes('aria-label')).to.equal(expectedCancelLabel)
+      expect(wrapper.get('.voice-cancel').element.textContent).to.equal(expectedCancelLabel)
       await wrapper.get('.voice-cancel').trigger('click')
       expect(cancelled).to.equal(1)
       if (state === 'recording') {
@@ -1316,6 +1318,7 @@ describe('Juyi Hall TTS cleanup', () => {
   })
 
   it('stops pending TTS or playback when reply voice is explicitly disabled and ignores stale reply callbacks', async () => {
+    const HallVoiceControls = loadSfc('../src/components/juyiting/HallVoiceControls.vue')
     const pendingSynthesis = deferred()
     let ttsRequests = 0
     let ttsSignal
@@ -1334,13 +1337,37 @@ describe('Juyi Hall TTS cleanup', () => {
     await flush()
     expect(pendingVoice.state).to.equal('synthesizing')
     expect(ttsRequests).to.equal(1)
-    pendingVoice.setReplyVoiceEnabled(false)
+    const pendingWrapper = mount(HallVoiceControls, { props: { voice: pendingVoice }, global: { stubs: { 'var-icon': true } } })
+    expect(pendingWrapper.get('.voice-cancel').attributes('aria-label')).to.equal('取消语音生成')
+    await pendingWrapper.get('.voice-cancel').trigger('click')
     expect(ttsSignal.aborted).to.equal(true)
     expect(pendingVoice.state).to.equal('idle')
     pendingSynthesis.resolve(audioResponse())
     expect(await synthesizing).to.equal(false)
     expect(ttsRequests).to.equal(1)
+    pendingWrapper.unmount()
     pendingVoice.dispose()
+
+    const toggleSynthesis = deferred()
+    let toggleSignal
+    const toggleHarness = browserHarness({
+      fetchImpl: async (_url, options) => {
+        toggleSignal = options.signal
+        return toggleSynthesis.promise
+      }
+    })
+    const toggleVoice = createVoice({ browser: toggleHarness.browser }).voice
+    toggleVoice.setReplyVoiceEnabled(true)
+    await transcribeToReview(toggleVoice)
+    await toggleVoice.sendTranscript()
+    const toggling = toggleVoice.completeReply({ content: '回话' })
+    await flush()
+    toggleVoice.setReplyVoiceEnabled(false)
+    expect(toggleSignal.aborted).to.equal(true)
+    expect(toggleVoice.state).to.equal('idle')
+    toggleSynthesis.resolve(audioResponse())
+    expect(await toggling).to.equal(false)
+    toggleVoice.dispose()
 
     class ToggleAudio {
       constructor () { ToggleAudio.instance = this; this.paused = false }
@@ -1355,10 +1382,13 @@ describe('Juyi Hall TTS cleanup', () => {
     await playbackVoice.completeReply({ content: '回话' })
     expect(playbackVoice.state).to.equal('speaking')
     const staleOnError = ToggleAudio.instance.onerror
-    playbackVoice.setReplyVoiceEnabled(false)
+    const playbackWrapper = mount(HallVoiceControls, { props: { voice: playbackVoice }, global: { stubs: { 'var-icon': true } } })
+    expect(playbackWrapper.get('.voice-cancel').attributes('aria-label')).to.equal('停止朗读')
+    await playbackWrapper.get('.voice-cancel').trigger('click')
     expect(ToggleAudio.instance.paused).to.equal(true)
     expect(playbackHarness.revoked).to.deep.equal(['blob:voice'])
     expect(playbackVoice.state).to.equal('idle')
+    playbackWrapper.unmount()
 
     await playbackVoice.startRecording()
     expect(playbackVoice.state).to.equal('recording')
