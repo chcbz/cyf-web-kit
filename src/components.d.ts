@@ -32,6 +32,7 @@ declare module 'vue' {
     ChatSidebar: typeof import('./components/chat/ChatSidebar.vue')['default']
     CommandPanel: typeof import('./components/juyiting/CommandPanel.vue')['default']
     CoordinationPanel: typeof import('./components/juyiting/CoordinationPanel.vue')['default']
+    EconomyReadOnlyPreview: typeof import('./components/economy/EconomyReadOnlyPreview.vue')['default']
     FormalDeliveryList: typeof import('./components/deliveries/FormalDeliveryList.vue')['default']
     GiftList: typeof import('./components/GiftList.vue')['default']
     GiftPay: typeof import('./components/GiftPay.vue')['default']
