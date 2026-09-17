@@ -124,8 +124,8 @@ function validResponseBinding(binding) {
   return isRecord(binding)
     && typeof binding.scopeFingerprint === 'string'
     && binding.scopeFingerprint.length > 0
-    && typeof binding.agentId === 'string'
-    && binding.agentId.length > 0
+    && (binding.agentId === null
+      || (typeof binding.agentId === 'string' && binding.agentId.length > 0))
     && Number.isSafeInteger(binding.requestGeneration)
     && binding.requestGeneration >= 0
     && Number.isSafeInteger(binding.authGeneration)
@@ -134,7 +134,9 @@ function validResponseBinding(binding) {
 
 /**
  * Evaluates whether an asynchronous response still belongs to the current
- * authenticated preview context. `authGeneration` is intentionally compared
+ * authenticated preview context. `agentId` may be explicitly `null` for a
+ * card with no Agent selection; omitted and empty IDs remain invalid.
+ * `authGeneration` is intentionally compared
  * even when scope returns to the same value: this rejects an A -> B -> A
  * late response from the earlier A session.
  *

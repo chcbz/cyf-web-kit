@@ -128,6 +128,20 @@ test('rejects unknown actions and output cannot mutate or retain input reference
   assert.equal(result.capabilities.features.wallet, true);
 });
 
+test('response acceptance permits an explicit null agent but rejects Agent switches and undefined', () => {
+  const noAgent = binding({ agentId: null });
+  assert.deepEqual(evaluateReadOnlyPreviewResponse(noAgent, binding({ agentId: null })), {
+    accepted: true,
+    reason: null,
+  });
+  assert.equal(evaluateReadOnlyPreviewResponse(noAgent, binding({ agentId: 'agent-1' })).reason,
+    'RESPONSE_AGENT_STALE');
+  assert.equal(evaluateReadOnlyPreviewResponse(binding({ agentId: 'agent-1' }), noAgent).reason,
+    'RESPONSE_AGENT_STALE');
+  assert.equal(evaluateReadOnlyPreviewResponse(noAgent, binding({ agentId: undefined })).reason,
+    'RESPONSE_BINDING_MALFORMED');
+});
+
 test('response acceptance compares scope, agent, request, auth generation, and rejects ABA', () => {
   const current = binding();
   assert.deepEqual(evaluateReadOnlyPreviewResponse(current, binding()), { accepted: true, reason: null });
