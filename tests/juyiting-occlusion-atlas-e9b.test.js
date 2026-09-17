@@ -276,18 +276,38 @@ describe('E9B Six-Region Occluder Atlases (directed)', () => {
 })
 
 describe('E9B Determinism', () => {
-  it('regenerates every atlas, manifest and evidence artifact byte-for-byte', function () {
+  it('preserves frozen pixels and regenerates every artifact byte-for-byte under the actual browser provenance', function () {
     this.timeout(180000)
     const snapshot = atlasFileSnapshot()
     const originalBytes = Object.keys(snapshot).map(path => ({ path: join(REPO_ROOT, path), bytes: readFileSync(join(REPO_ROOT, path)) }))
+    // A different real launcher path changes provenance and its derived manifest ID,
+    // not pixels. Do not pretend that this run used the historical launcher.
+    const expectedManifest = structuredClone(manifest)
+    expectedManifest.generator.chromium = CHROMIUM_ENV.CHROMIUM_PROVENANCE
+    expectedManifest.manifestId = computeManifestId(expectedManifest)
+    const expectedJson = new Map([
+      [MANIFEST_PATH, expectedManifest],
+      [GOLDEN_PATH, { ...goldenReport, manifestId: expectedManifest.manifestId }],
+      [SEAM_REPORT_PATH, { ...seamReport, manifestId: expectedManifest.manifestId }],
+    ])
+    let firstFreshSnapshot
     try {
       for (let run = 0; run < 2; run++) {
         const result = runNode(GENERATOR, [], 90000)
         expect(result.status, result.stderr).to.equal(0)
         const after = atlasFileSnapshot()
         for (const [path, hash] of Object.entries(snapshot)) {
-          expect(after[path], `run ${run + 1} changed ${path}`).to.equal(hash)
+          if (expectedJson.has(path)) {
+            expect(JSON.parse(readFileSync(join(REPO_ROOT, path), 'utf8')), path)
+              .to.deep.equal(expectedJson.get(path))
+          } else {
+            expect(after[path], `run ${run + 1} changed frozen pixels/evidence ${path}`).to.equal(hash)
+          }
+          if (firstFreshSnapshot) {
+            expect(after[path], `run ${run + 1} changed fresh artifact ${path}`).to.equal(firstFreshSnapshot[path])
+          }
         }
+        firstFreshSnapshot = after
       }
     } finally {
       // A failed regeneration must not poison the E10 provenance tests next.
