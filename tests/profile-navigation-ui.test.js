@@ -132,6 +132,44 @@ describe('profile navigation mounted behavior', () => {
     expect(wrapper.find('a[href="/economy-preview"]').exists()).to.equal(true)
   })
 
+  it('hydrates a refreshed profile before discovering preview and supports explicit retry', async () => {
+    const globalStore = Vue.reactive({ user: {}, setTitle: () => {}, setShowBack: () => {}, setShowMore: () => {} })
+    let requests = 0; let capabilityRequests = 0
+    const apiStore = Vue.reactive({ authorizationGeneration: 0, getUserInfo: async ({ signal }) => {
+      expect(signal.aborted).to.equal(false)
+      if (++requests === 1) throw new Error('network')
+      globalStore.user = { id: 'refreshed-user', username: 'refreshed' }
+    } })
+    const router = await routerAt('/profile')
+    const wrapper = mount(profileComponent({ globalStore, apiStore, client: { capabilities: async () => { capabilityRequests++; return capabilities(true) } } }), { global: { plugins: [router], stubs: { 'var-icon': true } } })
+    wrappers.push(wrapper)
+    await flushPromises()
+    expect(wrapper.text()).to.include('当前用户资料暂时无法读取')
+    expect(capabilityRequests).to.equal(0)
+    await wrapper.get('.profile-identity-retry').trigger('click')
+    await flushPromises()
+    expect(requests).to.equal(2)
+    expect(wrapper.text()).to.include('refreshed')
+    expect(wrapper.find('a[href="/economy-preview"]').exists()).to.equal(true)
+    expect(wrapper.find('.profile-identity-retry').exists()).to.equal(false)
+  })
+
+  it('aborts profile hydration on unmount and starts a fresh request after auth generation changes', async () => {
+    const globalStore = Vue.reactive({ user: {}, setTitle: () => {}, setShowBack: () => {}, setShowMore: () => {} })
+    const signals = []
+    const apiStore = Vue.reactive({ authorizationGeneration: 0, getUserInfo: ({ signal }) => { signals.push(signal); return new Promise(() => {}) } })
+    const router = await routerAt('/profile')
+    const wrapper = mount(profileComponent({ globalStore, apiStore, client: { capabilities: async () => capabilities(true) } }), { global: { plugins: [router], stubs: { 'var-icon': true } } })
+    await flushPromises()
+    apiStore.authorizationGeneration++
+    await flushPromises()
+    expect(signals).to.have.length(2)
+    expect(signals[0].aborted).to.equal(true)
+    expect(signals[1].aborted).to.equal(false)
+    wrapper.unmount()
+    expect(signals[1].aborted).to.equal(true)
+  })
+
   it('uses replace for both mounted explicit return buttons', async () => {
     const router = await routerAt('/profile')
     const profile = mount(profileComponent({

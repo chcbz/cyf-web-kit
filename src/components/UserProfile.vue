@@ -7,6 +7,12 @@
 
     <p v-if="navigationFailure" class="navigation-notice" role="alert">{{ navigationFailure }}</p>
 
+    <p v-if="identityLoading" role="status">正在读取当前用户资料…</p>
+    <div v-else-if="identityError" role="alert">
+      <p>{{ identityError }}</p>
+      <button type="button" class="profile-identity-retry" @click="loadCurrentIdentity">重试读取资料</button>
+    </div>
+
     <section class="profile-card">
       <div class="profile-avatar">
         <img
@@ -151,6 +157,9 @@ const economyReadOnlyPreviewBuildEnabled = import.meta.env.VITE_ECONOMY_READONLY
 const economyPreviewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
 const economyPreviewAvailable = ref(false)
 const avatarFailed = ref(false)
+const identityLoading = ref(false)
+const identityError = ref('')
+let identityRequest = null
 const readOnlyPreviewState = ref('idle')
 const readOnlyPreviewError = ref('')
 let economyPreviewRequest = 0
@@ -197,6 +206,32 @@ const resetPreviewCapabilityState = () => {
 }
 
 const hasCurrentProfileIdentity = () => Boolean(user.value.id || user.value.username || user.value.openid)
+
+// A persisted access token survives refresh; the in-memory profile does not.
+// Use the auth store's generation-fenced request, never trust cached profile IDs.
+const loadCurrentIdentity = async () => {
+  if (disposed || identityRequest || hasCurrentProfileIdentity()) return
+  const controller = new AbortController()
+  const generation = apiStore.authorizationGeneration
+  identityRequest = controller
+  identityLoading.value = true
+  identityError.value = ''
+  try {
+    await apiStore.getUserInfo({ signal: controller.signal })
+    if (!disposed && generation === apiStore.authorizationGeneration && !hasCurrentProfileIdentity()) {
+      identityError.value = '当前用户资料暂未同步，请重试。'
+    }
+  } catch {
+    if (!disposed && !controller.signal.aborted && generation === apiStore.authorizationGeneration) {
+      identityError.value = '当前用户资料暂时无法读取，请重试或重新登录。'
+    }
+  } finally {
+    if (identityRequest === controller) {
+      identityRequest = null
+      identityLoading.value = false
+    }
+  }
+}
 
 const reloadPreviewCapabilities = () => {
   resetPreviewCapabilityState()
@@ -252,8 +287,17 @@ watch(
   { flush: 'sync' }
 )
 
+watch(() => apiStore.authorizationGeneration, () => {
+  identityRequest?.abort()
+  identityRequest = null
+  identityLoading.value = false
+  identityError.value = ''
+  if (profileMounted) void loadCurrentIdentity()
+}, { flush: 'post' })
+
 onBeforeUnmount(() => {
   disposed = true
+  identityRequest?.abort()
   resetPreviewCapabilityState()
   closeConfirmation({ force: true })
 })
@@ -264,6 +308,7 @@ onMounted(() => {
   globalStore.setShowMore(false)
   profileMounted = true
   reloadPreviewCapabilities()
+  void loadCurrentIdentity()
 })
 </script>
 
