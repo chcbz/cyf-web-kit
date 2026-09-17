@@ -1214,7 +1214,7 @@ button {
   display: inline-flex;
 }
 
-.hall-stage:has(.hall-board.is-scene-landscape) .stage-landscape-account :deep(.hall-account-copy) {
+.hall-stage:has(.hall-board.is-scene-landscape) .stage-landscape-account :deep(.hall-account-name) {
   display: none;
 }
 

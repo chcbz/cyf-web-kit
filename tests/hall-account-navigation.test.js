@@ -69,6 +69,7 @@ describe('V1-8 hall account navigation', () => {
     expect(portraitSource).to.include('<HallAccountEntry')
     expect(portraitSource).to.include("@open-profile=\"emit('open-profile')\"")
     expect(stageSource).to.include('class="stage-landscape-account"')
+    expect(stageSource).not.to.match(/:deep\(\.hall-account-copy\)\s*\{\s*display:\s*none/)
     expect(stageSource).to.include('.hall-stage:has(.hall-board.is-scene-landscape) .stage-landscape-account')
     expect(stageSource).to.include("emitStageAction('open-profile')")
   })
