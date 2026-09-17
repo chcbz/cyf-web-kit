@@ -5,16 +5,24 @@
         <p class="portrait-eyebrow">聚义厅 · 掌上调度</p>
         <h1>厅中动静</h1>
       </div>
-      <button
-        class="portrait-refresh"
-        data-tour="portrait-refresh"
-        type="button"
-        :disabled="refreshing"
-        aria-label="点验刷新"
-        @click="emit('refresh-hall')"
-      >
-        {{ refreshing ? '点验中…' : '点验刷新' }}
-      </button>
+      <div class="portrait-header-actions">
+        <HallAccountEntry
+          :avatar="accountAvatar"
+          :display-name="accountDisplayName"
+          :disabled="accountEntryDisabled"
+          @open-profile="emit('open-profile')"
+        />
+        <button
+          class="portrait-refresh"
+          data-tour="portrait-refresh"
+          type="button"
+          :disabled="refreshing"
+          aria-label="点验刷新"
+          @click="emit('refresh-hall')"
+        >
+          {{ refreshing ? '点验中…' : '点验刷新' }}
+        </button>
+      </div>
     </header>
 
     <section class="portrait-overview" aria-label="状态概览">
@@ -181,9 +189,13 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import HallAccountEntry from './HallAccountEntry.vue'
 import HallLiveMapPreview from './HallLiveMapPreview.vue'
 
 const props = defineProps({
+  accountAvatar: { type: String, default: '' },
+  accountDisplayName: { type: String, default: '' },
+  accountEntryDisabled: Boolean,
   agents: { type: Array, default: () => [] },
   canStartAgentConversation: { type: Function, required: true },
   livePreviewEnabled: Boolean,
@@ -205,7 +217,7 @@ const props = defineProps({
   tasks: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['close-task-detail', 'discuss-task', 'open-task', 'open-onboarding', 'open-task-board', 'quick-action', 'refresh-hall', 'request-landscape', 'retry-live-preview', 'live-preview-visibility-change', 'select-agent', 'start-agent-conversation'])
+const emit = defineEmits(['open-profile', 'close-task-detail', 'discuss-task', 'open-task', 'open-onboarding', 'open-task-board', 'quick-action', 'refresh-hall', 'request-landscape', 'retry-live-preview', 'live-preview-visibility-change', 'select-agent', 'start-agent-conversation'])
 
 const livePreviewTarget = ref(null)
 defineExpose({ livePreviewTarget })
@@ -357,6 +369,7 @@ const openTask = task => emit('open-task', task)
 .task-detail-description { color: rgba(255, 237, 199, 0.84); line-height: 1.55; }
 
 .portrait-header,
+.portrait-header-actions,
 .section-heading,
 .portrait-context,
 .portrait-overview,
@@ -367,6 +380,7 @@ const openTask = task => emit('open-task', task)
 }
 
 .portrait-header,
+.portrait-header-actions,
 .section-heading,
 .portrait-context {
   justify-content: space-between;

@@ -92,6 +92,14 @@
           {{ isSceneMounting ? '重试中' : '重试' }}
         </button>
       </div>
+      <HallAccountEntry
+        v-if="!readOnlyPreview"
+        class="stage-landscape-account"
+        :avatar="accountAvatar"
+        :display-name="accountDisplayName"
+        :disabled="accountEntryDisabled || stageInputLocked"
+        @open-profile="emitStageAction('open-profile')"
+      />
       <button
         v-if="showReturnButton && !stageInputLocked"
         class="return-main-hall"
@@ -114,8 +122,12 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { juyitingGame } from '@/game/index.js'
 import { classifyViewportResize } from '@/game/camera/resizePolicy.js'
+import HallAccountEntry from './HallAccountEntry.vue'
 
 const props = defineProps({
+  accountAvatar: { type: String, default: '' },
+  accountDisplayName: { type: String, default: '' },
+  accountEntryDisabled: { type: Boolean, default: false },
   agentBubbles: { type: Object, default: () => ({}) },
   agentKey: { type: Function, required: true },
   agentStyle: { type: Function, required: true },
@@ -151,6 +163,7 @@ const emit = defineEmits([
   'landscape-target-consumed',
   'map-snapshot',
   'map-snapshot-clear',
+  'open-profile',
   'new-conversation',
   'open-onboarding',
   'open-panel',
@@ -1172,6 +1185,22 @@ button {
   background:
     radial-gradient(circle at 50% 48%, rgba(239, 197, 118, 0.2), transparent 34%),
     linear-gradient(135deg, #14100c, #23170f 54%, #0d0b09);
+}
+
+.stage-landscape-account {
+  display: none;
+}
+
+.hall-stage:has(.hall-board.is-scene-landscape) .stage-landscape-account {
+  position: absolute;
+  top: 5px;
+  right: 8px;
+  z-index: 11;
+  display: inline-flex;
+}
+
+.hall-stage:has(.hall-board.is-scene-landscape) .stage-landscape-account :deep(.hall-account-copy) {
+  display: none;
 }
 
 .hall-board::after {

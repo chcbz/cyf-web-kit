@@ -23,14 +23,15 @@ const vueImportToVar = (_line, imports) => {
 
 const restoreDescriptor = (target, key, descriptor) => { if (descriptor) Object.defineProperty(target, key, descriptor); else delete target[key] }
 const previewFixture = Vue.defineComponent({ setup: (_props, { slots }) => () => Vue.h('section', { class: 'preview-frame-fixture' }, slots.default?.()) })
+const accountEntryFixture = Vue.defineComponent({ props: ['avatar', 'displayName', 'disabled'], emits: ['open-profile'], template: '<button class="account-entry-fixture" type="button" :disabled="disabled" @click="$emit(\'open-profile\')">个人中心</button>' })
 
-const loadPortraitHome = (HallLiveMapPreview = previewFixture) => {
+const loadPortraitHome = (HallLiveMapPreview = previewFixture, HallAccountEntry = accountEntryFixture) => {
   const { descriptor } = parse(portraitHomeSource, { filename: portraitHomeUrl.pathname })
   const body = compileScript(descriptor, { id: 'portrait-home-followups', inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = children.${name}`)
     .replace('export default', 'return')
-  return new Function('Vue', 'children', body)(Vue, { HallLiveMapPreview })
+  return new Function('Vue', 'children', body)(Vue, { HallLiveMapPreview, HallAccountEntry })
 }
 
 const baseProps = overrides => ({

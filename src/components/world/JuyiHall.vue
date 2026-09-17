@@ -4,6 +4,9 @@
       ref="portraitHomeRef"
       v-show="!experienceReady || experienceMode === 'portrait-command'"
       :live-preview-enabled="true"
+      :account-avatar="accountAvatar"
+      :account-display-name="accountDisplayName"
+      :account-entry-disabled="accountEntryDisabled"
       :live-preview-state="previewPresentationState"
       :live-preview-error="previewSceneError"
       :live-preview-map-width="previewSceneBounds.width"
@@ -25,6 +28,7 @@
       :inert="isPanelSessionActive || voiceInteractionLocked ? '' : null"
       :aria-hidden="isPanelSessionActive || voiceInteractionLocked ? 'true' : null"
       @quick-action="handlePortraitQuickAction"
+      @open-profile="openProfile"
       @open-onboarding="emit('open-onboarding', $event)"
       @refresh-hall="refreshHall"
       @request-landscape="requestPortraitLandscape"
@@ -45,6 +49,9 @@
       ref="hallStageRef"
       v-show="experienceReady"
       :read-only-preview="experienceMode === 'portrait-command'"
+      :account-avatar="accountAvatar"
+      :account-display-name="accountDisplayName"
+      :account-entry-disabled="accountEntryDisabled"
       :preview-visible="stageDrawVisible"
       :agent-bubbles="agentBubbles"
       :agent-key="agentKey"
@@ -78,6 +85,7 @@
       @landscape-target-consumed="handleLandscapeTargetConsumed"
       @map-snapshot="handleMapSnapshot"
       @map-snapshot-clear="clearMapResumeSnapshot"
+      @open-profile="openProfile"
       @new-conversation="handleNewHallConversation"
       @open-panel="handleStagePanelOpen"
       @request-landscape="requestLandscape"
@@ -408,6 +416,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { useGlobalStore } from '@/stores/global'
 import { useApiStore } from '@/stores/api'
 import { agentApi, chatApi } from '@/composables/useHttp'
@@ -416,6 +425,7 @@ import { useHallBackendSceneState } from '@/composables/juyiting/useHallBackendS
 import { useHallCommandQueue } from '@/composables/juyiting/useHallCommandQueue'
 import { useHallConversation } from '@/composables/juyiting/useHallConversation'
 import { useHallVoiceConversation } from '@/composables/juyiting/useHallVoiceConversation'
+import { confirmHallLeave, hasMeaningfulHallLeaveWork } from '@/composables/juyiting/hallAccountNavigation'
 import { createHallVoiceReplyCorrelation } from '@/composables/juyiting/hallVoiceReplyCorrelation'
 import { useHallData } from '@/composables/juyiting/useHallData'
 import { useHallLibrary } from '@/composables/juyiting/useHallLibrary'
@@ -460,11 +470,18 @@ const emit = defineEmits(['open-onboarding'])
 
 const globalStore = useGlobalStore()
 const apiStore = useApiStore()
+const router = useRouter()
 const outputIdentityFingerprint = computed(() => {
   const principal = globalStore.getUserId || globalStore.user?.id
   if (!principal) return ''
   const client = globalStore.user?.appid || 'default-client'
   return `${principal}:${client}:${apiStore.authorizationGeneration}`
+})
+
+const accountAvatar = computed(() => String(globalStore.user?.avatar || '').trim())
+const accountDisplayName = computed(() => {
+  const user = globalStore.user || {}
+  return String(user.nickname || user.username || globalStore.getUserId || '个人中心').trim() || '个人中心'
 })
 
 const selectedAgent = ref(null)
@@ -1387,6 +1404,28 @@ hallVoice = useHallVoiceConversation({
   showToast
 })
 const voiceInteractionLocked = computed(() => hallVoice.voiceInteractionLocked)
+const accountEntryDisabled = computed(() => isPanelSessionActive.value || voiceInteractionLocked.value)
+const hallLeaveHasMeaningfulWork = computed(() => hasMeaningfulHallLeaveWork({
+  draft: draft.value,
+  isAwaitingReply: isAwaitingReply.value,
+  isStreaming: isStreaming.value,
+  voiceInteractionLocked: voiceInteractionLocked.value,
+  voiceTurnActive: hallVoice?.voiceTurnActive?.value
+}))
+const confirmLeavingHall = () => confirmHallLeave({ hasMeaningfulWork: hallLeaveHasMeaningfulWork.value })
+let approvedHallLeave = false
+const openProfile = async () => {
+  if (!confirmLeavingHall()) return false
+  approvedHallLeave = true
+  try {
+    await router.push({ name: 'UserProfile' })
+    return true
+  } finally {
+    approvedHallLeave = false
+  }
+}
+onBeforeRouteLeave(() => approvedHallLeave || confirmLeavingHall())
+
 const applyVoiceTranscript = mode => {
   const next = hallVoice.applyTranscript(mode)
   if (typeof next === 'string') { setDraft(next); hallVoice.discard() }

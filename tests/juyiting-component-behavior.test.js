@@ -131,6 +131,7 @@ const loadSfc = (relativePath) => {
     .replace(/^import\s+HallChatComposer\s+from\s+['"].\/HallChatComposer\.vue['"];?\s*$/gm, 'var HallChatComposer = arguments[1]')
     .replace(/^import\s+HallConversationHistory\s+from\s+['"]\.\/HallConversationHistory\.vue['"];?\s*$/gm, `var HallConversationHistory = { template: '<section class="hall-conversation-history-stub" />', props: ['conversations', 'deletingId', 'disabled', 'error', 'hasMore', 'loading', 'selectedId'] }`)
     .replace(/^import\s+HallVoiceControls\s+from\s+['"].\/HallVoiceControls\.vue['"];?\s*$/gm, 'var HallVoiceControls = { template: \'<div class=\"hall-voice-controls-stub\"></div>\', props: [\'voice\'] }')
+    .replace(/^import\s+HallAccountEntry\s+from\s+['"]\.\/HallAccountEntry\.vue['"];?\s*$/gm, 'var HallAccountEntry = { template: \'<button class="hall-account-entry-stub" type="button"></button>\', props: [\'avatar\', \'displayName\', \'disabled\'] }')
     .replace(/^import\s+\{\s*marked\s*\}\s+from\s+['"]marked['"];?\s*$/gm, 'var marked = { setOptions: () => {}, parse: value => value }')
     .replace(/^import\s+DOMPurify\s+from\s+['"]dompurify['"];?\s*$/gm, 'var DOMPurify = { sanitize: value => value }')
     .replace('export default', 'return')
@@ -2399,7 +2400,7 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
   return {
     ...panelHelpers,
     env: {}, capturePanelReturnTarget: panelHelpers.capturePanelReturnTarget, focusHallPanel: panelHelpers.focusHallPanel, isCurrentPanelGeneration: panelHelpers.isCurrentPanelGeneration, isSafePanelFocusTarget: panelHelpers.isSafePanelFocusTarget, resolveLiveMapPreviewActivation, resolvePanelReturnTarget: panelHelpers.resolvePanelReturnTarget, restorePanelFocus: panelHelpers.restorePanelFocus, trapPanelFocus: panelHelpers.trapPanelFocus,
-    useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({ token: asyncNoop }), agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {},
+    onBeforeRouteLeave: noop, useRouter: () => ({ push: asyncNoop }), confirmHallLeave: () => true, hasMeaningfulHallLeaveWork: () => false, useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({ token: asyncNoop }), agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {},
     isEconomyPreviewBuildEnabled: () => Boolean(economyCapability), isEconomyPreviewCapability: capability => Boolean(capability && capability.principalScopeFingerprint === economyCapability?.principalScopeFingerprint), loadEconomyPreviewCapability: async () => economyCapability,
     roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
     useHallData: ({ selectedAgent, selectedTask }) => { counters.owners.data += 1; selectedAgent.value = { agentId: 'agent-o04', name: 'sentinel-agent' }; selectedTask.value = counters.initialSelectedTask || { id: 'task-o04', title: 'sentinel-task' }; return hallData },
