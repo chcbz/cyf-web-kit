@@ -30,6 +30,7 @@ declare module 'vue' {
     ChatMessageTime: typeof import('./components/chat/ChatMessageTime.vue')['default']
     ChatPanel: typeof import('./components/juyiting/ChatPanel.vue')['default']
     ChatSidebar: typeof import('./components/chat/ChatSidebar.vue')['default']
+    CommandObservability: typeof import('./components/CommandObservability.vue')['default']
     CommandPanel: typeof import('./components/juyiting/CommandPanel.vue')['default']
     CoordinationPanel: typeof import('./components/juyiting/CoordinationPanel.vue')['default']
     EconomyReadOnlyPreview: typeof import('./components/economy/EconomyReadOnlyPreview.vue')['default']
