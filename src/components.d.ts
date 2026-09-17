@@ -37,6 +37,7 @@ declare module 'vue' {
     GiftList: typeof import('./components/GiftList.vue')['default']
     GiftPay: typeof import('./components/GiftPay.vue')['default']
     GuestDemo: typeof import('./components/public/GuestDemo.vue')['default']
+    HallAccountEntry: typeof import('./components/juyiting/HallAccountEntry.vue')['default']
     HallChatComposer: typeof import('./components/juyiting/HallChatComposer.vue')['default']
     HallConversationHistory: typeof import('./components/juyiting/HallConversationHistory.vue')['default']
     HallLiveMapPreview: typeof import('./components/juyiting/HallLiveMapPreview.vue')['default']
