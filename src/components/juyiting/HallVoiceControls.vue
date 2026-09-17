@@ -28,7 +28,7 @@
       <button type="button" @click="voice.cancel({ preserveReview: true })">取消</button>
       <button type="button" @click="voice.sendTranscript()">立即发送</button>
     </div>
-    <div v-if="voice.state === 'sending'" class="voice-sending" role="status">
+    <div v-if="['sending', 'waiting_reply'].includes(voice.state)" class="voice-sending" role="status">
       <span>传令可能已经送达；停止等待不会撤回文字发送。</span>
       <button type="button" class="voice-stop-waiting" @click="voice.stopWaiting()">停止等待</button>
     </div>

@@ -140,7 +140,6 @@ export const useHallVoiceConversation = ({
   let ticker = null
   let hardStopTimer = null
   let countdownTimer = null
-  let replyTimer = null
   let uploadController = null
   let ttsController = null
   let playback = null
@@ -171,10 +170,6 @@ export const useHallVoiceConversation = ({
     if (countdownTimer !== null) browser.window?.clearInterval?.(countdownTimer)
     ticker = hardStopTimer = countdownTimer = null
   }
-  const clearReplyTimer = () => {
-    if (replyTimer !== null) browser.window?.clearTimeout?.(replyTimer)
-    replyTimer = null
-  }
   const stopPlayback = () => {
     if (playback) {
       playback.onended = null
@@ -192,7 +187,6 @@ export const useHallVoiceConversation = ({
     ttsController?.abort(new DOMException('Voice turn cancelled', 'AbortError'))
     uploadController = ttsController = null
     clearCaptureTimers()
-    clearReplyTimer()
     const recorder = mediaRecorder
     mediaRecorder = null
     if (recorder) {
@@ -248,7 +242,6 @@ export const useHallVoiceConversation = ({
     terminal('error', { clearTranscript: true, clearTurn: true })
   }
   const finishReplyTurn = (next, reason = 'reply_complete') => {
-    clearReplyTimer()
     pendingFinalReply = null
     frozenRef.value = null
     voiceTurnActiveRef.value = false
@@ -267,7 +260,7 @@ export const useHallVoiceConversation = ({
   }
   const discard = () => terminal(supportedRef.value ? 'idle' : 'unsupported', { clearTranscript: true, clearTurn: true, replyReason: 'discarded' })
   const stopWaiting = () => {
-    if (stateRef.value !== 'sending') return false
+    if (!['sending', 'waiting_reply'].includes(stateRef.value)) return false
     terminal(supportedRef.value ? 'idle' : 'unsupported', {
       clearTranscript: true,
       clearTurn: true,
@@ -436,13 +429,6 @@ export const useHallVoiceConversation = ({
     const frozen = frozenRef.value
     const turnId = safeRequestId(browser.crypto)
     replyTurnId = turnId
-    replyTimer = browser.window.setTimeout(() => {
-      if (current === generation && voiceTurnActiveRef.value) {
-        generation += 1
-        finishReplyTurn('idle', 'reply_timeout')
-        showToast?.('回话超时，文字传令仍可继续')
-      }
-    }, 120_000)
     let accepted = false
     try {
       accepted = await onSendVoice?.({
@@ -457,7 +443,6 @@ export const useHallVoiceConversation = ({
     }
     if (current !== generation) return false
     if (!accepted) {
-      clearReplyTimer()
       pendingFinalReply = null
       voiceTurnActiveRef.value = false
       closeReplyTurn('send_rejected')
@@ -584,7 +569,6 @@ export const useHallVoiceConversation = ({
 
   const completeReply = message => {
     if (!voiceTurnActiveRef.value || typeof message?.content !== 'string' || !message.content.trim()) {
-      clearReplyTimer()
       finishReplyTurn('idle')
       return false
     }
@@ -592,7 +576,6 @@ export const useHallVoiceConversation = ({
       pendingFinalReply = message
       return true
     }
-    clearReplyTimer()
     return synthesize(message.content)
   }
   const onVisibility = () => {

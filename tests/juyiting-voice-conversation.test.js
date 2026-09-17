@@ -604,19 +604,10 @@ describe('Juyi Hall voice identity and capture controls', () => {
     const countdownTimer = countdownIntervals.find(timer => timer.delay === 50 && !timer.cleared)
     expect(countdownTimer, 'active auto-send countdown').to.exist
 
-    const replyTimers = []
-    const replyHarness = browserHarness()
-    replyHarness.browser.window.setTimeout = (callback, delay) => {
-      const timer = { callback, delay, cleared: false }
-      replyTimers.push(timer)
-      return timer
-    }
-    replyHarness.browser.window.clearTimeout = timer => { if (timer) timer.cleared = true }
-    const replyVoice = createVoice({ browser: replyHarness.browser }).voice
+    const replyVoice = createVoice({ browser: browserHarness().browser }).voice
     await transcribeToReview(replyVoice)
     await replyVoice.sendTranscript()
-    const replyTimer = replyTimers.find(timer => timer.delay === 120_000 && !timer.cleared)
-    expect(replyTimer, 'active reply watchdog').to.exist
+    expect(replyVoice.state).to.equal('waiting_reply')
 
     class SpeakingAudio {
       constructor () { SpeakingAudio.instance = this; this.paused = false }
@@ -642,7 +633,6 @@ describe('Juyi Hall voice identity and capture controls', () => {
     expect(countdownTimer.cleared).to.equal(true)
     expect(countdownVoice.countdownMs).to.equal(0)
     expect(countdownVoice.state).to.equal('idle')
-    expect(replyTimer.cleared).to.equal(true)
     expect(replyVoice.voiceTurnActive).to.equal(false)
     expect(replyVoice.state).to.equal('idle')
     expect(SpeakingAudio.instance.paused).to.equal(true)
@@ -882,16 +872,21 @@ describe('Juyi Hall voice sending escape', () => {
       attempts[2].pending.resolve(true)
       expect(await sendC).to.equal(true)
       expect(voice.state).to.equal('waiting_reply')
-      expect(attempts).to.have.length(3)
+      await flush()
+      expect(wrapper.find('.voice-stop-waiting').exists()).to.equal(true)
+      await wrapper.get('.voice-stop-waiting').trigger('click')
+      expect(voice.state).to.equal('idle')
+      expect(terminals.at(-1)?.reason).to.equal('stopped_waiting')
+      expect(tracker.hasActive()).to.equal(false)
       sequence += 1
       expect(tracker.observe({
         sequence,
         conversationId: 'conversation-2',
-        messageId: 'reply-c',
+        messageId: 'reply-c-after-stop',
         source: 'agent_event',
-        message: { content: '丙轮回话' }
-      })).to.equal(true)
-      expect(voice.state).to.equal('idle')
+        message: { content: '停止后的迟到回话' }
+      })).to.equal(false)
+      expect(attempts).to.have.length(3)
       expect(harness.revoked).to.deep.equal([])
     } finally {
       wrapper.unmount()
@@ -983,74 +978,77 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
     voice.cancel()
   })
 
-  it('closes reply correlation at 120 seconds without TTS and permits the next turn', async () => {
+  it('processes a reply after the former 120-second boundary and rejects an explicitly cancelled late reply without duplicate sends', async () => {
     FakeRecorder.instances = []
     const timers = []
-    let ttsFetches = 0
-    const harness = browserHarness({ fetchImpl: async () => { ttsFetches += 1; throw new Error('late reply must not synthesize') } })
+    let sends = 0
+    let sequence = 0
+    let voice
+    const tracker = createHallVoiceReplyCorrelation({
+      onReply: message => voice.completeReply(message)
+    })
+    const harness = browserHarness()
     harness.browser.window.setTimeout = (callback, delay) => {
       const timer = { callback, delay, cleared: false }
       timers.push(timer)
       return timer
     }
     harness.browser.window.clearTimeout = timer => { if (timer) timer.cleared = true }
-    const terminals = []
-    let sequence = 0
-    let voice
-    const tracker = createHallVoiceReplyCorrelation({
-      onReply: message => voice.completeReply(message)
-    })
     ;({ voice } = createVoice({
       browser: harness.browser,
       onSendVoice: async ({ turnId }) => {
+        sends += 1
         const started = tracker.start({
           turnId,
           baselineSequence: sequence,
           messages: [],
-          conversationIdBeforeSend: 'conversation-timeout'
+          conversationIdBeforeSend: 'conversation-availability'
         })
-        if (started) tracker.resolveConversation('conversation-timeout')
+        if (started) tracker.resolveConversation('conversation-availability')
         return started
       },
-      onReplyTurnTerminal: payload => {
-        terminals.push(payload)
-        tracker.close(payload.reason)
-      }
+      onReplyTurnTerminal: ({ turnId, reason }) => tracker.closeIfCurrent(turnId, reason)
     }))
-    voice.setReplyVoiceEnabled(true)
 
     await transcribeToReview(voice)
     expect(await voice.sendTranscript()).to.equal(true)
     expect(voice.state).to.equal('waiting_reply')
     expect(tracker.hasActive()).to.equal(true)
-    const timeout = timers.find(timer => timer.delay === 120_000 && !timer.cleared)
-    expect(timeout, '120-second reply timeout').to.exist
-    timeout.callback()
+    expect(timers.some(timer => timer.delay === 120_000 && !timer.cleared), 'no elapsed reply watchdog').to.equal(false)
 
-    expect(voice.state).to.equal('idle')
-    expect(voice.voiceTurnActive).to.equal(false)
-    expect(tracker.hasActive()).to.equal(false)
-    expect(terminals.at(-1)?.reason).to.equal('reply_timeout')
     sequence += 1
     expect(tracker.observe({
       sequence,
-      conversationId: 'conversation-timeout',
-      messageId: 'late-final',
+      conversationId: 'conversation-availability',
+      messageId: 'reply-after-former-boundary',
       source: 'stream_end',
-      message: { content: '迟到回话' }
-    })).to.equal(false)
-    expect(ttsFetches).to.equal(0)
+      message: { content: '迟到回话仍应处理' }
+    })).to.equal(true)
+    expect(voice.state).to.equal('idle')
+    expect(tracker.hasActive()).to.equal(false)
+    expect(sends).to.equal(1)
 
     await transcribeToReview(voice)
     expect(await voice.sendTranscript()).to.equal(true)
     expect(voice.state).to.equal('waiting_reply')
-    expect(tracker.hasActive()).to.equal(true)
     voice.cancel()
+    expect(voice.state).to.equal('idle')
+    expect(tracker.hasActive()).to.equal(false)
+
+    sequence += 1
+    expect(tracker.observe({
+      sequence,
+      conversationId: 'conversation-availability',
+      messageId: 'cancelled-late-reply',
+      source: 'stream_end',
+      message: { content: '取消后的迟到回话' }
+    })).to.equal(false)
+    expect(sends).to.equal(2)
+    voice.dispose()
   })
 
-  it('keeps mounted Hall locked while sending and preserves turn B when timed-out turn A settles late', () => withVoiceBrowserState(async () => {
+  it('keeps mounted Hall locked while sending and preserves turn B when explicitly stopped turn A settles late', () => withVoiceBrowserState(async () => {
     FakeRecorder.instances = []
-    const timers = []
     const streams = []
     const tracks = []
     let transcriptionCount = 0
@@ -1078,12 +1076,6 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
       list: async () => {},
       getById: async () => {}
     }
-    window.setTimeout = (callback, delay) => {
-      const timer = { callback, delay, cleared: false }
-      timers.push(timer)
-      return timer
-    }
-    window.clearTimeout = timer => { if (timer) timer.cleared = true }
     Object.defineProperty(globalThis.navigator, 'mediaDevices', {
       configurable: true,
       value: { getUserMedia: async () => {
@@ -1129,9 +1121,7 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
       card().findAll('button').forEach(button => expect(button.attributes('disabled')).to.equal(''))
       expect(streams[0].options.timeout).to.equal(1_800_000)
       const turnA = correlationRef.value.snapshot().turnId
-      const watchdogA = timers.find(timer => timer.delay === 120_000 && !timer.cleared)
-      expect(watchdogA, 'turn A watchdog must exist while send is pending').to.exist
-      watchdogA.callback()
+      expect(voice.stopWaiting()).to.equal(true)
       await flush()
 
       expect(voice.state).to.equal('idle')
