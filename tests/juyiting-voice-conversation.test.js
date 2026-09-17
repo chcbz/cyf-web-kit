@@ -577,7 +577,7 @@ describe('Juyi Hall voice identity and capture controls', () => {
     wrapper.unmount()
     voice.dispose()
   })
-  it('balances dispose registration and identity-cleans countdown, reply timers, and speaking playback', async () => {
+  it('balances dispose registration and identity-cleans countdown, reply turns, and speaking playback', async () => {
     const handlersBefore = identityCleanupHandlerCount()
     const disposable = createVoice({ browser: browserHarness().browser }).voice
     expect(identityCleanupHandlerCount()).to.equal(handlersBefore + 1)
@@ -980,81 +980,143 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
 
   it('processes a reply after the former 120-second boundary and rejects an explicitly cancelled late reply without duplicate sends', async () => {
     FakeRecorder.instances = []
-    const timers = []
+    const originalDateNow = Date.now
+    let now = 1_788_000_000_000
+    let nextTimerId = 0
+    const timers = new Map()
+    const clock = {
+      setTimeout: (callback, delay = 0) => {
+        const id = ++nextTimerId
+        timers.set(id, { callback, delay, dueAt: now + delay })
+        return id
+      },
+      clearTimeout: id => timers.delete(id),
+      advance: milliseconds => {
+        const target = now + milliseconds
+        while (true) {
+          const due = [...timers.entries()]
+            .filter(([, timer]) => timer.dueAt <= target)
+            .sort(([, left], [, right]) => left.dueAt - right.dueAt || left.delay - right.delay)[0]
+          if (!due) break
+          const [id, timer] = due
+          timers.delete(id)
+          now = timer.dueAt
+          timer.callback()
+        }
+        now = target
+      }
+    }
+    const firstAcceptance = deferred()
     let sends = 0
+    let ttsFetches = 0
+    let audioPlays = 0
     let sequence = 0
     let voice
+    class SpeakingAudio {
+      constructor () { SpeakingAudio.instance = this }
+      play = async () => { audioPlays += 1 }
+      pause () {}
+    }
     const tracker = createHallVoiceReplyCorrelation({
       onReply: message => voice.completeReply(message)
     })
-    const harness = browserHarness()
-    harness.browser.window.setTimeout = (callback, delay) => {
-      const timer = { callback, delay, cleared: false }
-      timers.push(timer)
-      return timer
+    const harness = browserHarness({
+      AudioClass: SpeakingAudio,
+      fetchImpl: async () => {
+        ttsFetches += 1
+        return {
+          ok: true,
+          headers: new Headers({ 'content-type': 'audio/mpeg', 'content-length': '3' }),
+          body: new ReadableStream({ start (controller) { controller.enqueue(new Uint8Array([1, 2, 3])); controller.close() } })
+        }
+      }
+    })
+    harness.browser.window.setTimeout = clock.setTimeout
+    harness.browser.window.clearTimeout = clock.clearTimeout
+    Date.now = () => now
+    try {
+      ;({ voice } = createVoice({
+        browser: harness.browser,
+        onSendVoice: async ({ turnId }) => {
+          sends += 1
+          const started = tracker.start({
+            turnId,
+            baselineSequence: sequence,
+            messages: [],
+            conversationIdBeforeSend: 'conversation-availability'
+          })
+          if (started) tracker.resolveConversation('conversation-availability')
+          return sends === 1 ? firstAcceptance.promise : started
+        },
+        onReplyTurnTerminal: ({ turnId, reason }) => tracker.closeIfCurrent(turnId, reason)
+      }))
+      voice.setReplyVoiceEnabled(true)
+
+      await transcribeToReview(voice)
+      const firstSend = voice.sendTranscript()
+      await flush()
+      expect(voice.state).to.equal('sending')
+      expect(sends).to.equal(1)
+      clock.advance(120_001)
+      expect(voice.state).to.equal('sending')
+      expect(sends).to.equal(1)
+
+      firstAcceptance.resolve(true)
+      expect(await firstSend).to.equal(true)
+      expect(voice.state).to.equal('waiting_reply')
+      expect(tracker.hasActive()).to.equal(true)
+      clock.advance(120_001)
+      expect(voice.state).to.equal('waiting_reply')
+      expect(tracker.hasActive()).to.equal(true)
+
+      sequence += 1
+      expect(tracker.observe({
+        sequence,
+        conversationId: 'conversation-availability',
+        messageId: 'reply-after-former-boundary',
+        source: 'stream_end',
+        message: { content: '迟到回话仍应处理' }
+      })).to.equal(true)
+      await flush()
+      await flush()
+      expect(ttsFetches).to.equal(1)
+      expect(audioPlays).to.equal(1)
+      expect(voice.state).to.equal('speaking')
+      SpeakingAudio.instance.onended()
+      expect(voice.state).to.equal('idle')
+      expect(sends).to.equal(1)
+
+      await transcribeToReview(voice)
+      expect(await voice.sendTranscript()).to.equal(true)
+      expect(voice.state).to.equal('waiting_reply')
+      voice.cancel()
+      expect(voice.state).to.equal('idle')
+      expect(tracker.hasActive()).to.equal(false)
+      clock.advance(120_001)
+
+      sequence += 1
+      expect(tracker.observe({
+        sequence,
+        conversationId: 'conversation-availability',
+        messageId: 'cancelled-late-reply',
+        source: 'stream_end',
+        message: { content: '取消后的迟到回话' }
+      })).to.equal(false)
+      expect(ttsFetches).to.equal(1)
+      expect(sends).to.equal(2)
+    } finally {
+      voice?.dispose()
+      Date.now = originalDateNow
     }
-    harness.browser.window.clearTimeout = timer => { if (timer) timer.cleared = true }
-    ;({ voice } = createVoice({
-      browser: harness.browser,
-      onSendVoice: async ({ turnId }) => {
-        sends += 1
-        const started = tracker.start({
-          turnId,
-          baselineSequence: sequence,
-          messages: [],
-          conversationIdBeforeSend: 'conversation-availability'
-        })
-        if (started) tracker.resolveConversation('conversation-availability')
-        return started
-      },
-      onReplyTurnTerminal: ({ turnId, reason }) => tracker.closeIfCurrent(turnId, reason)
-    }))
-
-    await transcribeToReview(voice)
-    expect(await voice.sendTranscript()).to.equal(true)
-    expect(voice.state).to.equal('waiting_reply')
-    expect(tracker.hasActive()).to.equal(true)
-    expect(timers.some(timer => timer.delay === 120_000 && !timer.cleared), 'no elapsed reply watchdog').to.equal(false)
-
-    sequence += 1
-    expect(tracker.observe({
-      sequence,
-      conversationId: 'conversation-availability',
-      messageId: 'reply-after-former-boundary',
-      source: 'stream_end',
-      message: { content: '迟到回话仍应处理' }
-    })).to.equal(true)
-    expect(voice.state).to.equal('idle')
-    expect(tracker.hasActive()).to.equal(false)
-    expect(sends).to.equal(1)
-
-    await transcribeToReview(voice)
-    expect(await voice.sendTranscript()).to.equal(true)
-    expect(voice.state).to.equal('waiting_reply')
-    voice.cancel()
-    expect(voice.state).to.equal('idle')
-    expect(tracker.hasActive()).to.equal(false)
-
-    sequence += 1
-    expect(tracker.observe({
-      sequence,
-      conversationId: 'conversation-availability',
-      messageId: 'cancelled-late-reply',
-      source: 'stream_end',
-      message: { content: '取消后的迟到回话' }
-    })).to.equal(false)
-    expect(sends).to.equal(2)
-    voice.dispose()
   })
 
-  it('keeps mounted Hall locked while sending and preserves turn B when explicitly stopped turn A settles late', () => withVoiceBrowserState(async () => {
+  it('keeps mounted Hall locked while sending and leaves text delivery active after explicitly stopping voice wait', () => withVoiceBrowserState(async () => {
     FakeRecorder.instances = []
     const streams = []
     const tracks = []
     let transcriptionCount = 0
     let ttsFetches = 0
     let audioPlays = 0
-    let audioInstance
     const conversationRef = { value: null }
     const correlationRef = { value: null }
     const voiceRef = { value: null }
@@ -1086,7 +1148,6 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
     })
     globalThis.MediaRecorder = FakeRecorder
     globalThis.Audio = class {
-      constructor () { audioInstance = this }
       play = async () => { audioPlays += 1 }
       pause () {}
     }
@@ -1120,63 +1181,34 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
       expect(card().attributes('inert')).to.equal('')
       card().findAll('button').forEach(button => expect(button.attributes('disabled')).to.equal(''))
       expect(streams[0].options.timeout).to.equal(1_800_000)
-      const turnA = correlationRef.value.snapshot().turnId
       expect(voice.stopWaiting()).to.equal(true)
       await flush()
 
       expect(voice.state).to.equal('idle')
-      expect(conversation.isStreaming.value).to.equal(false)
-      expect(conversation.isAwaitingReply.value).to.equal(false)
-      expect(correlationRef.value.hasActive()).to.equal(false)
-      expect(streams[0].options.signal.aborted).to.equal(true)
-      expect(streams[0].cancelReason?.name).to.equal('AbortError')
-      expect(card().attributes('inert')).to.equal(undefined)
-
-      await transcribeToReview(voice)
-      expect(wrapper.find('.panel-overlay').exists()).to.equal(false)
-      const sendB = voice.sendTranscript()
-      await flush()
-      expect(streams).to.have.length(2)
-      expect(voice.state).to.equal('sending')
-      expect(map().attributes('data-interaction-locked')).to.equal('true')
-      expect(card().attributes('inert')).to.equal('')
-      const turnB = correlationRef.value.snapshot().turnId
-      expect(turnB).not.to.equal(turnA)
-
-      streams[0].pending.resolve()
-      expect(await sendA).to.equal(false)
-      expect(correlationRef.value.snapshot().turnId).to.equal(turnB)
       expect(conversation.isStreaming.value).to.equal(true)
       expect(conversation.isAwaitingReply.value).to.equal(true)
-      expect(ttsFetches).to.equal(0)
+      expect(correlationRef.value.hasActive()).to.equal(false)
+      expect(streams[0].options.signal.aborted).to.equal(false)
+      expect(streams[0].cancelReason).to.equal(null)
+      expect(card().attributes('inert')).to.equal(undefined)
 
-      const finalB = JSON.stringify({
-        type: 'agent_message', conversationId: 'conversation-b', messageId: 'reply-b', agentId: 'wuyong',
-        senderType: 'agent', senderName: '吴用', content: '乙轮完整回话', timestamp: 1788000000000
+      const finalA = JSON.stringify({
+        type: 'agent_message', conversationId: 'conversation-a', messageId: 'reply-a', agentId: 'wuyong',
+        senderType: 'agent', senderName: '吴用', content: '甲轮完整回话', timestamp: 1788000000000
       })
-      streams[1].options.onStream(finalB)
-      streams[1].options.onStream(JSON.stringify({ conversationId: 'conversation-b' }))
-      streams[1].options.onStreamEnd()
-      streams[1].pending.resolve()
-      expect(await sendB).to.equal(true)
+      streams[0].options.onStream(finalA)
+      streams[0].options.onStream(JSON.stringify({ conversationId: 'conversation-a' }))
+      streams[0].options.onStreamEnd()
+      streams[0].pending.resolve()
+      expect(await sendA).to.equal(false)
       await flush()
 
       expect(conversation.replyEventSequence.value).to.equal(1)
       expect(correlationRef.value.hasActive()).to.equal(false)
-      expect(ttsFetches).to.equal(1)
-      expect(audioPlays).to.equal(1)
-      expect(voice.state).to.equal('speaking')
-      expect(voice.voiceInteractionLocked).to.equal(false)
-      expect(card().attributes('inert')).to.equal(undefined)
-
-      streams[1].options.onStream(finalB)
-      streams[1].options.onStreamEnd()
-      await flush()
-      expect(conversation.replyEventSequence.value).to.equal(1)
-      expect(ttsFetches).to.equal(1)
-      expect(audioPlays).to.equal(1)
-      audioInstance.onended()
+      expect(ttsFetches).to.equal(0)
+      expect(audioPlays).to.equal(0)
       expect(voice.state).to.equal('idle')
+
     } finally {
       wrapper.unmount()
     }
