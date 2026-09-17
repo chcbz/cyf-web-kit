@@ -7,11 +7,11 @@
       "width": 1664,
       "height": 928
     },
-    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/133.0.6943.141 Safari/537.36",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/133.0.0.0 Safari/537.36",
     "executionEngine": "chromium-cdp-pipe-restricted-host",
     "chromiumGateEligible": true,
     "transport": "file-url+cdp-pipe",
-    "processModel": "single-process+no-zygote",
+    "processModel": "multi-process",
     "runtimeViewport": {
       "innerWidth": 1664,
       "innerHeight": 928,
@@ -30,292 +30,292 @@
   "timing": {
     "warmupMs": 10000,
     "sampleMs": 60000,
-    "frames": 3595,
+    "frames": 3596,
     "total": {
       "min": 0.7999992370605469,
-      "mean": 1.2593045931034856,
-      "p50": 1.2000007629394531,
-      "p95": 1.7999992370605469,
-      "p99": 2.299999237060547,
-      "max": 7.8000030517578125
+      "mean": 1.1757229867580867,
+      "p50": 1.1000022888183594,
+      "p95": 1.5999984741210938,
+      "p99": 1.9000015258789062,
+      "max": 4
     },
     "gridUpdate": {
       "min": 0,
-      "mean": 0.12731569207924961,
+      "mean": 0.11490544222618503,
       "p50": 0.10000228881835938,
       "p95": 0.20000076293945312,
-      "p99": 0.3000030517578125,
-      "max": 1.3999977111816406
+      "p99": 0.2999992370605469,
+      "max": 0.5999984741210938
     },
     "worldOrder": {
-      "min": 0.7000007629394531,
-      "mean": 1.131988901024236,
-      "p50": 1.0999984741210938,
-      "p95": 1.6000022888183594,
-      "p99": 2.0999984741210938,
-      "max": 7.600002288818359
+      "min": 0.6999969482421875,
+      "mean": 1.0608175445319017,
+      "p50": 1,
+      "p95": 1.4000015258789062,
+      "p99": 1.7000007629394531,
+      "max": 3.799999237060547
     }
   },
   "complexity": {
     "theoreticalAgentsTimesAllZonesPerFrame": 3996,
-    "auditFrameMembershipChecks": 46,
-    "membershipChecksPerFrameMean": 46,
+    "auditFrameMembershipChecks": 47,
+    "membershipChecksPerFrameMean": 47,
     "maxChecksPerAgent": 1,
     "maxUniqueZoneCandidates": 37,
     "instrumentationScope": "one representative post-sample frame; excluded from timed production path",
     "spatialGridDelta": {
-      "candidateCount": 5337326,
+      "candidateCount": 5338826,
       "cellQueryCount": 0,
       "scanCount": 0,
-      "updateCellVisitCount": 12126
+      "updateCellVisitCount": 12132
     }
   },
   "memory": {
     "browserHeapSamples": [
       {
-        "elapsedMs": 16.89999771118164,
-        "usedBytes": 9505177
+        "elapsedMs": 16.400001525878906,
+        "usedBytes": 9646893
       },
       {
-        "elapsedMs": 1032.8999977111816,
-        "usedBytes": 6619213
+        "elapsedMs": 1033.1000022888184,
+        "usedBytes": 8263145
       },
       {
-        "elapsedMs": 2033.2999992370605,
-        "usedBytes": 10087253
+        "elapsedMs": 2049.2999992370605,
+        "usedBytes": 5919865
       },
       {
-        "elapsedMs": 3049.5,
-        "usedBytes": 6402185
+        "elapsedMs": 3049.400001525879,
+        "usedBytes": 9680077
       },
       {
-        "elapsedMs": 4049.599998474121,
-        "usedBytes": 10115209
+        "elapsedMs": 4049.400001525879,
+        "usedBytes": 6721973
       },
       {
-        "elapsedMs": 5050.099998474121,
-        "usedBytes": 6847285
+        "elapsedMs": 5049.900001525879,
+        "usedBytes": 10067429
       },
       {
-        "elapsedMs": 6066.700000762939,
-        "usedBytes": 10703453
+        "elapsedMs": 6066.799999237061,
+        "usedBytes": 7319197
       },
       {
-        "elapsedMs": 7083.399997711182,
-        "usedBytes": 7778441
+        "elapsedMs": 7082.5,
+        "usedBytes": 11347845
       },
       {
-        "elapsedMs": 8084.700000762939,
-        "usedBytes": 11119469
+        "elapsedMs": 8083.600002288818,
+        "usedBytes": 8052565
       },
       {
-        "elapsedMs": 9099.5,
-        "usedBytes": 8213421
+        "elapsedMs": 9099.29999923706,
+        "usedBytes": 5152593
       },
       {
-        "elapsedMs": 10100.79999923706,
-        "usedBytes": 11763909
+        "elapsedMs": 10116.5,
+        "usedBytes": 8900257
       },
       {
-        "elapsedMs": 11102.29999923706,
-        "usedBytes": 8816497
+        "elapsedMs": 11132.600002288818,
+        "usedBytes": 5973349
       },
       {
-        "elapsedMs": 12115.70000076294,
-        "usedBytes": 5867293
+        "elapsedMs": 12135.29999923706,
+        "usedBytes": 9376677
       },
       {
-        "elapsedMs": 13116,
-        "usedBytes": 15936077
+        "elapsedMs": 13149,
+        "usedBytes": 13154533
       },
       {
-        "elapsedMs": 14117,
-        "usedBytes": 6629165
+        "elapsedMs": 14149.100002288818,
+        "usedBytes": 16901229
       },
       {
-        "elapsedMs": 15132.70000076294,
-        "usedBytes": 10595969
+        "elapsedMs": 15165.400001525879,
+        "usedBytes": 7765897
       },
       {
-        "elapsedMs": 16148.899997711182,
-        "usedBytes": 14195253
+        "elapsedMs": 16165.70000076294,
+        "usedBytes": 11150881
       },
       {
-        "elapsedMs": 17151.59999847412,
-        "usedBytes": 17793261
+        "elapsedMs": 17182,
+        "usedBytes": 15235897
       },
       {
-        "elapsedMs": 18165.79999923706,
-        "usedBytes": 8769625
+        "elapsedMs": 18182.20000076294,
+        "usedBytes": 19014317
       },
       {
-        "elapsedMs": 19165.79999923706,
-        "usedBytes": 12273913
+        "elapsedMs": 19199.10000228882,
+        "usedBytes": 9207457
       },
       {
-        "elapsedMs": 20182.29999923706,
-        "usedBytes": 16049549
+        "elapsedMs": 20215.29999923706,
+        "usedBytes": 12990005
       },
       {
-        "elapsedMs": 21182.59999847412,
-        "usedBytes": 6834073
+        "elapsedMs": 21215.29999923706,
+        "usedBytes": 16844813
       },
       {
-        "elapsedMs": 22199,
-        "usedBytes": 10840617
+        "elapsedMs": 22231.90000152588,
+        "usedBytes": 7722093
       },
       {
-        "elapsedMs": 23215.5,
-        "usedBytes": 14437317
+        "elapsedMs": 23231.90000152588,
+        "usedBytes": 11128061
       },
       {
-        "elapsedMs": 24216.39999771118,
-        "usedBytes": 18067749
+        "elapsedMs": 24232.20000076294,
+        "usedBytes": 14912301
       },
       {
-        "elapsedMs": 25219.09999847412,
-        "usedBytes": 8407073
+        "elapsedMs": 25249.40000152588,
+        "usedBytes": 18929149
       },
       {
-        "elapsedMs": 26231.79999923706,
-        "usedBytes": 11754337
+        "elapsedMs": 26265.20000076294,
+        "usedBytes": 9482565
       },
       {
-        "elapsedMs": 27231.79999923706,
-        "usedBytes": 15156145
+        "elapsedMs": 27265.60000228882,
+        "usedBytes": 12942261
       },
       {
-        "elapsedMs": 28232.09999847412,
-        "usedBytes": 19034677
+        "elapsedMs": 28281.70000076294,
+        "usedBytes": 17032001
       },
       {
-        "elapsedMs": 29248.5,
-        "usedBytes": 9916749
+        "elapsedMs": 29281.70000076294,
+        "usedBytes": 7635017
       },
       {
-        "elapsedMs": 30248.59999847412,
-        "usedBytes": 13267169
+        "elapsedMs": 30298.20000076294,
+        "usedBytes": 11264773
       },
       {
-        "elapsedMs": 31265,
-        "usedBytes": 17094937
+        "elapsedMs": 31298.20000076294,
+        "usedBytes": 14815669
       },
       {
-        "elapsedMs": 32265.29999923706,
-        "usedBytes": 20854145
+        "elapsedMs": 32298.29999923706,
+        "usedBytes": 18590373
       },
       {
-        "elapsedMs": 33281.59999847412,
-        "usedBytes": 11784897
+        "elapsedMs": 33314.70000076294,
+        "usedBytes": 9479069
       },
       {
-        "elapsedMs": 34285.5,
-        "usedBytes": 15132445
+        "elapsedMs": 34314.70000076294,
+        "usedBytes": 12862933
       },
       {
-        "elapsedMs": 35299,
-        "usedBytes": 18991261
+        "elapsedMs": 35331.70000076294,
+        "usedBytes": 16967853
       },
       {
-        "elapsedMs": 36315,
-        "usedBytes": 9884601
+        "elapsedMs": 36348,
+        "usedBytes": 21017457
       },
       {
-        "elapsedMs": 37315,
-        "usedBytes": 13234297
+        "elapsedMs": 37348,
+        "usedBytes": 11257893
       },
       {
-        "elapsedMs": 38315.29999923706,
-        "usedBytes": 16755289
+        "elapsedMs": 38364.60000228882,
+        "usedBytes": 15027865
       },
       {
-        "elapsedMs": 39331.5,
-        "usedBytes": 20888873
+        "elapsedMs": 39381.20000076294,
+        "usedBytes": 19085853
       },
       {
-        "elapsedMs": 40332.70000076294,
-        "usedBytes": 24489589
+        "elapsedMs": 40381.29999923706,
+        "usedBytes": 22676469
       },
       {
-        "elapsedMs": 41348.09999847412,
-        "usedBytes": 15237281
+        "elapsedMs": 41397.90000152588,
+        "usedBytes": 13251369
       },
       {
-        "elapsedMs": 42348.5,
-        "usedBytes": 32015113
+        "elapsedMs": 42397.90000152588,
+        "usedBytes": 30043469
       },
       {
-        "elapsedMs": 43364.70000076294,
-        "usedBytes": 23130269
+        "elapsedMs": 43414.29999923706,
+        "usedBytes": 20778205
       },
       {
-        "elapsedMs": 44381.09999847412,
-        "usedBytes": 6178009
+        "elapsedMs": 44430.79999923706,
+        "usedBytes": 8280367
       },
       {
-        "elapsedMs": 45381.39999771118,
-        "usedBytes": 24161117
+        "elapsedMs": 45432.10000228882,
+        "usedBytes": 26250395
       },
       {
-        "elapsedMs": 46397.89999771118,
-        "usedBytes": 16736109
+        "elapsedMs": 46447.5,
+        "usedBytes": 18786823
       },
       {
-        "elapsedMs": 47398.09999847412,
-        "usedBytes": 8181505
+        "elapsedMs": 47447.90000152588,
+        "usedBytes": 10145479
       },
       {
-        "elapsedMs": 48414.29999923706,
-        "usedBytes": 24959997
+        "elapsedMs": 48464,
+        "usedBytes": 26872095
       },
       {
-        "elapsedMs": 49414.5,
-        "usedBytes": 15734173
+        "elapsedMs": 49464,
+        "usedBytes": 17655883
       },
       {
-        "elapsedMs": 50414.59999847412,
-        "usedBytes": 6647801
+        "elapsedMs": 50464,
+        "usedBytes": 8623231
       },
       {
-        "elapsedMs": 51430.89999771118,
-        "usedBytes": 23628205
+        "elapsedMs": 51464.79999923706,
+        "usedBytes": 25237015
       },
       {
-        "elapsedMs": 52447.39999771118,
-        "usedBytes": 14457193
+        "elapsedMs": 52480.60000228882,
+        "usedBytes": 16082255
       },
       {
-        "elapsedMs": 53447.39999771118,
-        "usedBytes": 5306825
+        "elapsedMs": 53485.10000228882,
+        "usedBytes": 7005703
       },
       {
-        "elapsedMs": 54447.59999847412,
-        "usedBytes": 22198613
+        "elapsedMs": 54507.40000152588,
+        "usedBytes": 24134699
       },
       {
-        "elapsedMs": 55447.70000076294,
-        "usedBytes": 12755013
+        "elapsedMs": 55515,
+        "usedBytes": 14644203
       },
       {
-        "elapsedMs": 56464.29999923706,
-        "usedBytes": 29640145
+        "elapsedMs": 56516.29999923706,
+        "usedBytes": 5305123
       },
       {
-        "elapsedMs": 57480.70000076294,
-        "usedBytes": 20832721
+        "elapsedMs": 57521.5,
+        "usedBytes": 21626955
       },
       {
-        "elapsedMs": 58480.79999923706,
-        "usedBytes": 11607769
+        "elapsedMs": 58540.40000152588,
+        "usedBytes": 12641931
       },
       {
-        "elapsedMs": 59497.20000076294,
-        "usedBytes": 28295557
+        "elapsedMs": 59547.5,
+        "usedBytes": 29346731
       }
     ],
-    "browserHeapMinBytes": 5306825,
-    "browserHeapMaxBytes": 32015113,
-    "browserHeapGrowthBytes": 18790380,
+    "browserHeapMinBytes": 5152593,
+    "browserHeapMaxBytes": 30043469,
+    "browserHeapGrowthBytes": 19699838,
     "heapDropsOver1Mb": 26
   },
   "rendering": {
@@ -331,16 +331,16 @@
     "maxDurationMs": 0
   },
   "provenance": {
-    "generatedAt": "2026-08-14T15:12:00.809Z",
+    "generatedAt": "2026-09-17T02:34:07.086Z",
     "inputs": {
       "scripts/juyiting/e14/benchmark-entry.ts": "cba7be0b281f73b3abea7d36c7d520c2185ae908896801bcda1d8564d8edeae2",
-      "scripts/juyiting/e14/run-benchmark-restricted.mjs": "0da75483fbab1f5cce040a3c127792107c6e07f7f7b24524fd0532b0dce917a4",
+      "scripts/juyiting/e14/run-benchmark-restricted.mjs": "a28876b6cbbafb277628856ccc48adf71ffdefa1615ee8f407375ee331291c60",
       "scripts/juyiting/e14/shutdown-eperm-compat.c": "cedb3b34815854d9f751688db8a766eda9a676b0c91893468dae9a3c9a61231a",
       "scripts/juyiting/e14/vite.config.mjs": "c390ae4f7372ff94cf32b6e1d5960571ebb82854ecaa4c9401f89287fe0ece82",
       "src/game/occlusion/canonicalIr.ts": "d4e7102a869010219a1f5feed9d49981ac2479420d555182847d6cec41beb50f",
       "src/game/occlusion/constraintResolver.ts": "fe2e2903c1830b402db3ca18edfdbd132306ffbde3523397a356bb3541ca88bd",
       "src/game/occlusion/debugOverlay.ts": "109dca86d9513590dec382b75912a40a932e3cacee6c0318256a689c4a0be2e4",
-      "src/game/occlusion/hallSceneAssembly.ts": "d4b6e652bfab92365fec735d8770d985e78c957a939e18ac5d743d17d5fabd7c",
+      "src/game/occlusion/hallSceneAssembly.ts": "728cdfd851e55b2d7376544628498c05250545c8d335ad374c89e383a4d6fe85",
       "src/game/occlusion/polygonGeometry.ts": "586c716e541e874776ab28aed60212f2550957ab3df5661443d931653dc31a4e",
       "src/game/occlusion/runtimeAgentAdapter.ts": "2c55fffc69e132a722420b2f2468afb926f693eea04cb71e935b2dd349f798da",
       "src/game/occlusion/sceneActivation.ts": "c22c3ac155f304a70b1137efe10ac1e66deb491a63fc75b87e76a54aeba3b868",
@@ -350,26 +350,113 @@
       "src/game/occlusion/spatialGrid.ts": "492a71beab5baa2601ec70317061aa8387c4fba3e84a9b83dcf96a59dae6ca05",
       "src/game/occlusion/validation.ts": "7b4bcfed5ec2cb39003d2f06709113c837b89600138e991a0aec60d1903b0eeb",
       "src/game/occlusion/worldOrder.ts": "ccb3bc5eaa55055c78f04090a74f0fea4b37e36780349f09eff4ac9f9249942c",
-      "tests/juyiting-occlusion-e14.test.js": "a8bc16560aeb0916ce2947d57cd0aa9583802dc30aa820e8c2fb08945d215655"
+      "tests/juyiting-occlusion-e14.test.js": "59adb957b8e753c5269d5a335c3eb2adf29daa56f5ba47e7a4b64a27854b03e2"
     }
   },
   "browser": {
-    "product": "HeadlessChrome/133.0.6943.141",
+    "product": "Chrome/133.0.6943.141",
     "protocolVersion": "1.3",
     "jsVersion": "13.3.415.23",
-    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/133.0.6943.141 Safari/537.36",
-    "launcherPath": "/usr/local/bin/chromium-headless-smoke",
-    "launcherSha256": "040026829c2b35b1f2a837649c89c3976b131e9cc4d80885427e5e28313fc388",
-    "executablePath": "/usr/lib64/chromium-browser/headless_shell",
-    "executableSha256": "3af7bf7c9ce8db5f312ab41eb5191a10a9ace3ee3bcff211b6e9e25db38bb035"
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/133.0.0.0 Safari/537.36",
+    "launcherPath": "/usr/bin/chromium-browser",
+    "launcherSha256": "5ca843e570a1d9a057b2759f9a3edd03ff2cfe2459883230b5052e009cd75335",
+    "executablePath": "/usr/lib64/chromium-browser/chromium-browser",
+    "executableSha256": "08c7cca9bf311291f3e4f52843ecfd2d9003f067db1b5bd3df567743fa60ad13",
+    "processId": 1679030,
+    "processInfo": [
+      {
+        "type": "browser",
+        "id": 1679030,
+        "cpuTime": 1.34
+      },
+      {
+        "type": "renderer",
+        "id": 1679130,
+        "cpuTime": 0.02
+      },
+      {
+        "type": "renderer",
+        "id": 1679118,
+        "cpuTime": 8.22
+      },
+      {
+        "type": "renderer",
+        "id": 1679116,
+        "cpuTime": 0.03
+      },
+      {
+        "type": "GPU",
+        "id": 1679066,
+        "cpuTime": 1.02
+      },
+      {
+        "type": "network.mojom.NetworkService",
+        "id": 1679067,
+        "cpuTime": 0.18
+      },
+      {
+        "type": "storage.mojom.StorageService",
+        "id": 1679068,
+        "cpuTime": 0.01
+      }
+    ],
+    "launchArguments": [
+      "--headless=new",
+      "--enable-automation",
+      "--disable-gpu",
+      "--disable-dev-shm-usage",
+      "--disable-breakpad",
+      "--enable-precise-memory-info",
+      "--no-first-run",
+      "--no-default-browser-check",
+      "--user-data-dir=/tmp/cyf-e14-a97Jxy/profile",
+      "--no-sandbox",
+      "--allow-file-access-from-files",
+      "--remote-debugging-pipe",
+      "--window-size=1664,928",
+      "about:blank"
+    ],
+    "executableArguments": [
+      "/usr/bin/chromium-browser",
+      "--enable-plugins",
+      "--enable-extensions",
+      "--enable-user-scripts",
+      "--enable-printing",
+      "--enable-sync",
+      "--auto-ssl-client-auth",
+      "--headless=new",
+      "--enable-automation",
+      "--disable-gpu",
+      "--disable-dev-shm-usage",
+      "--disable-breakpad",
+      "--enable-precise-memory-info",
+      "--no-first-run",
+      "--no-default-browser-check",
+      "--user-data-dir=/tmp/cyf-e14-a97Jxy/profile",
+      "--no-sandbox",
+      "--allow-file-access-from-files",
+      "--remote-debugging-pipe",
+      "--window-size=1664,928",
+      "--noerrdialogs",
+      "--ozone-platform=headless",
+      "--ozone-override-screen-size=800,600",
+      "--use-angle=swiftshader-webgl",
+      "--flag-switches-begin",
+      "--flag-switches-end",
+      "about:blank"
+    ],
+    "executableArgumentsSource": "Browser.getBrowserCommandLine",
+    "processCommandLine": [
+      "/usr/lib64/chromium-browser/chromium-browser --enable-plugins --enable-extensions --enable-user-scripts --enable-printing --enable-sync --auto-ssl-client-auth --headless=new --enable-automation --disable-gpu --disable-dev-shm-usage --disable-breakpad --enable-precise-memory-info --no-first-run --no-default-browser-check --user-data-dir=/tmp/cyf-e14-a97Jxy/profile --no-sandbox --allow-file-access-from-files --remote-debugging-pipe --window-size=1664,928 --noerrdialogs --ozone-platform=headless --ozone-override-screen-size=800,600 --use-angle=swiftshader-webgl about:blank"
+    ]
   },
   "network": {
     "requestCount": 2,
     "transferredBytes": 54466,
     "resources": [
       {
-        "requestId": "82300F3F52844769D00C89F2CFCED891",
-        "url": "file:///home/isp/wsps/cyf/web/dist/e14-benchmark/index.html",
+        "requestId": "E694089821A8EC5955B0F6886F3341C4",
+        "url": "file:///home/isp/wsps/cyf/.worktrees/v1-6-voice-availability-20260917/dist/e14-benchmark/index.html",
         "method": "GET",
         "type": "Document",
         "status": 200,
@@ -378,8 +465,8 @@
         "finished": true
       },
       {
-        "requestId": "4012064.2",
-        "url": "file:///home/isp/wsps/cyf/web/dist/e14-benchmark/assets/index-DOBG5ntY.js",
+        "requestId": "1679118.2",
+        "url": "file:///home/isp/wsps/cyf/.worktrees/v1-6-voice-availability-20260917/dist/e14-benchmark/assets/index-DOBG5ntY.js",
         "method": "GET",
         "type": "Script",
         "status": 200,
@@ -406,12 +493,12 @@
     "source": "production-build-artifact-inventory"
   },
   "cdp": {
-    "jsHeapUsedBytes": 14436188,
-    "jsHeapTotalBytes": 76038144,
-    "taskDurationSeconds": 7.033876,
-    "scriptDurationSeconds": 0.07018,
-    "layoutCount": 4,
-    "recalcStyleCount": 4,
+    "jsHeapUsedBytes": 15521376,
+    "jsHeapTotalBytes": 76173312,
+    "taskDurationSeconds": 6.497766,
+    "scriptDurationSeconds": 0.056507,
+    "layoutCount": 5,
+    "recalcStyleCount": 5,
     "nodes": 21,
     "documents": 2
   },

@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, readdir, readlink, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, readlink, rm, stat, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -9,7 +10,6 @@ const ROOT = process.cwd()
 const DIST = resolve(ROOT, 'dist/e14-benchmark')
 const REPORT = resolve(ROOT, 'tests/fixtures/juyiting/occlusion-e14/benchmark-report.json')
 const SHIM_SOURCE = resolve(ROOT, 'scripts/juyiting/e14/shutdown-eperm-compat.c')
-const SHIM_LIBRARY = '/tmp/libe14-shutdown-eperm-compat.so'
 const CHROME = process.env.CHROME_PATH || '/usr/local/bin/chromium-headless-smoke'
 const COMMAND_TIMEOUT_MS = 45_000
 
@@ -76,6 +76,20 @@ class PipeCdpSession {
     this.events = []
     this.buffer = Buffer.alloc(0)
     chrome.stdio[4].on('data', chunk => this.onData(chunk))
+    chrome.once('error', error => this.fail(error))
+    chrome.once('exit', (code, signal) => this.fail(new Error(`Chromium exited (code=${code}, signal=${signal})`)))
+    chrome.stdio[3].on('error', error => this.fail(error))
+    chrome.stdio[4].on('error', error => this.fail(error))
+    chrome.stdio[4].once('end', () => this.fail(new Error('Chromium CDP pipe ended')))
+  }
+
+  fail(error) {
+    this.failure ||= error
+    for (const { reject, timer } of this.pending.values()) {
+      clearTimeout(timer)
+      reject(this.failure)
+    }
+    this.pending.clear()
   }
 
   onData(chunk) {
@@ -99,6 +113,7 @@ class PipeCdpSession {
   }
 
   send(method, params = {}, sessionId) {
+    if (this.failure) return Promise.reject(this.failure)
     const id = this.nextId++
     return new Promise((resolvePromise, reject) => {
       const timer = setTimeout(() => {
@@ -115,11 +130,7 @@ class PipeCdpSession {
   }
 
   close() {
-    for (const { reject, timer } of this.pending.values()) {
-      clearTimeout(timer)
-      reject(new Error('CDP pipe closed'))
-    }
-    this.pending.clear()
+    this.fail(new Error('CDP pipe closed'))
     this.chrome.stdio[3].end()
   }
 }
@@ -172,24 +183,27 @@ async function terminateChrome(chrome) {
   ])
 }
 
-async function launchChrome() {
-  const chrome = spawn(CHROME, [
+async function launchChrome(shimLibrary, profileDir) {
+  const launchArguments = [
     '--headless=new',
+    '--enable-automation',
     '--disable-gpu',
     '--disable-dev-shm-usage',
     '--disable-breakpad',
     '--enable-precise-memory-info',
     '--no-first-run',
     '--no-default-browser-check',
-    '--single-process',
-    '--no-zygote',
+    // A private profile prevents connecting to another task's running browser.
+    `--user-data-dir=${profileDir}`,
+    ...(process.getuid?.() === 0 ? ['--no-sandbox'] : []),
     '--allow-file-access-from-files',
     '--remote-debugging-pipe',
     '--window-size=1664,928',
     'about:blank',
-  ], {
+  ]
+  const chrome = spawn(CHROME, launchArguments, {
     cwd: ROOT,
-    env: { ...process.env, LD_PRELOAD: SHIM_LIBRARY },
+    env: { ...process.env, LD_PRELOAD: [shimLibrary, process.env.LD_PRELOAD].filter(Boolean).join(' ') },
     stdio: ['ignore', 'ignore', 'inherit', 'pipe', 'pipe'],
   })
   const cdp = new PipeCdpSession(chrome)
@@ -201,7 +215,9 @@ async function launchChrome() {
     await cdp.send('Performance.enable', {}, sessionId)
     await cdp.send('Network.enable', {}, sessionId)
     await cdp.send('Network.setCacheDisabled', { cacheDisabled: true }, sessionId)
-    return { chrome, cdp, sessionId }
+    // Full Chromium includes browser chrome in window-size; pin the measured page viewport.
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1664, height: 928, deviceScaleFactor: 1, mobile: false }, sessionId)
+    return { chrome, cdp, sessionId, launchArguments }
   } catch (error) {
     cdp.close()
     await terminateChrome(chrome)
@@ -242,16 +258,20 @@ async function stopChrome(chrome, cdp) {
 
 // Fail closed: a failed or interrupted run must never leave an older PASS report usable.
 await rm(REPORT, { force: true })
-await run(process.execPath, ['./node_modules/vite/bin/vite.js', 'build', '--config', 'scripts/juyiting/e14/vite.config.mjs'])
-await run('gcc', ['-shared', '-fPIC', '-O2', '-o', SHIM_LIBRARY, SHIM_SOURCE, '-ldl'])
+// This ESM config needs no bundling; keep borrowed node_modules read-only (.vite-temp).
+await run(process.execPath, ['./node_modules/vite/bin/vite.js', 'build', '--configLoader', 'native', '--config', 'scripts/juyiting/e14/vite.config.mjs'])
+const runDir = await mkdtemp(resolve(tmpdir(), 'cyf-e14-'))
+const shimLibrary = resolve(runDir, 'shutdown-eperm-compat.so')
 
 const pageUrl = pathToFileURL(resolve(DIST, 'index.html')).href
 const artifactInventory = await inventoryBuildArtifacts(DIST)
 let chrome
 let cdp
 let sessionId
+let launchArguments
 try {
-  ;({ chrome, cdp, sessionId } = await launchChrome())
+  await run('gcc', ['-shared', '-fPIC', '-O2', '-o', shimLibrary, SHIM_SOURCE, '-ldl'])
+  ;({ chrome, cdp, sessionId, launchArguments } = await launchChrome(shimLibrary, resolve(runDir, 'profile')))
   await cdp.send('Page.navigate', { url: pageUrl }, sessionId)
   await waitForExpression(cdp, sessionId, `globalThis.__E14_STATUS__ === 'running' || globalThis.__E14_STATUS__ === 'failed'`, 20_000)
   await waitForExpression(cdp, sessionId, `globalThis.__E14_STATUS__ === 'complete' || globalThis.__E14_STATUS__ === 'failed'`, 85_000)
@@ -265,13 +285,21 @@ try {
   })`)
   const browserVersion = await cdp.send('Browser.getVersion')
   const executablePath = await readlink(`/proc/${chrome.pid}/exe`)
+  // Chromium may rewrite /proc cmdline to a single process title; CDP retains argv boundaries.
+  const processCommandLine = (await readFile(`/proc/${chrome.pid}/cmdline`, 'utf8')).split('\0').filter(Boolean)
+  const { arguments: executableArguments } = await cdp.send('Browser.getBrowserCommandLine')
+  const { processInfo } = await cdp.send('SystemInfo.getProcessInfo')
+  if (!processInfo.some(process => process.type === 'browser' && process.id === chrome.pid) ||
+      !processInfo.some(process => process.type === 'renderer' && process.id !== chrome.pid)) {
+    throw new Error('Expected an owned Chromium browser with a separate renderer process')
+  }
   const perf = await cdp.send('Performance.getMetrics', {}, sessionId)
   const heap = await cdp.send('Runtime.getHeapUsage', {}, sessionId)
   const metrics = Object.fromEntries((perf.metrics || []).map(({ name, value }) => [name, value]))
   report.environment.executionEngine = 'chromium-cdp-pipe-restricted-host'
   report.environment.chromiumGateEligible = true
   report.environment.transport = 'file-url+cdp-pipe'
-  report.environment.processModel = 'single-process+no-zygote'
+  report.environment.processModel = 'multi-process'
   report.environment.runtimeViewport = runtimeViewport
   report.environment.seccompCompatibility = 'tracked AF_UNIX socketpair shutdown(2) EPERM-only fallback'
   report.provenance = await collectProvenance()
@@ -284,6 +312,12 @@ try {
     launcherSha256: await sha256(CHROME),
     executablePath,
     executableSha256: await sha256(executablePath),
+    processId: chrome.pid,
+    processInfo,
+    launchArguments,
+    executableArguments,
+    executableArgumentsSource: 'Browser.getBrowserCommandLine',
+    processCommandLine,
   }
   report.network = collectNetworkEvidence(cdp.events)
   report.artifactInventory = artifactInventory
@@ -313,4 +347,5 @@ try {
   if (!report.pass) process.exitCode = 1
 } finally {
   if (chrome && cdp) await stopChrome(chrome, cdp)
+  await rm(runDir, { recursive: true, force: true })
 }

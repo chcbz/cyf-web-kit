@@ -43,12 +43,27 @@ suite('Juyiting occlusion E14 fixed Chromium benchmark', () => {
   it('is fresh for the current benchmark and occlusion implementation sources', () => {
     expect(report.provenance.generatedAt).to.be.a('string')
     expect(report.provenance.inputs).to.deep.equal(currentBenchmarkInputs())
-    expect(report.browser.product).to.match(/^HeadlessChrome\/\d+/)
+    expect(report.browser.product).to.match(/^(?:HeadlessChrome|Chrome)\/\d+/)
+    expect(report.browser.product.split('/')[1].split('.')[0]).to.equal(report.environment.userAgent.match(/HeadlessChrome\/(\d+)/)[1])
+    expect(report.browser.userAgent).to.equal(report.environment.userAgent)
     expect(report.browser.protocolVersion).to.be.a('string')
     expect(report.browser.jsVersion).to.be.a('string')
     expect(report.browser.launcherSha256).to.match(/^[0-9a-f]{64}$/)
     expect(report.browser.executableSha256).to.match(/^[0-9a-f]{64}$/)
-    expect(report.browser.executablePath).to.match(/\/(?:headless_shell|chrome-headless-shell|chromium-headless-shell)$/)
+    expect(report.browser.executablePath).to.match(/\/(?:headless_shell|chrome-headless-shell|chromium-headless-shell|chromium-browser|chromium|chrome)$/)
+  })
+
+  it('runs an isolated multi-process Chromium with actual executable provenance', () => {
+    expect(report.environment.processModel).to.equal('multi-process')
+    expect(report.browser.launcherPath).to.be.a('string').and.not.equal('')
+    expect(report.browser.processInfo.some(process => process.type === 'browser' && process.id === report.browser.processId)).to.equal(true)
+    expect(report.browser.processInfo.some(process => process.type === 'renderer' && process.id !== report.browser.processId)).to.equal(true)
+    expect(report.browser.launchArguments.some(argument => argument.startsWith('--user-data-dir='))).to.equal(true)
+    expect(report.browser.executableArgumentsSource).to.equal('Browser.getBrowserCommandLine')
+    expect(report.browser.processCommandLine).to.be.an('array').and.not.be.empty
+    expect(report.browser.executableArguments).to.include.members(report.browser.launchArguments)
+    expect(report.browser.executableArguments).not.to.include('--single-process')
+    expect(report.browser.executableArguments).not.to.include('--no-zygote')
   })
 
   it('uses the fixed production benchmark dimensions', () => {
