@@ -1,4 +1,6 @@
 import { expect } from 'chai'
+import { createMemoryHistory, createRouter } from 'vue-router'
+import { hasMeaningfulHallLeaveWork } from '../src/composables/juyiting/hallAccountNavigation.js'
 import { after, afterEach, before } from 'mocha'
 import { readFileSync } from 'fs'
 import { compileScript, compileTemplate, parse } from '@vue/compiler-sfc'
@@ -131,7 +133,7 @@ const loadSfc = (relativePath) => {
     .replace(/^import\s+HallChatComposer\s+from\s+['"].\/HallChatComposer\.vue['"];?\s*$/gm, 'var HallChatComposer = arguments[1]')
     .replace(/^import\s+HallConversationHistory\s+from\s+['"]\.\/HallConversationHistory\.vue['"];?\s*$/gm, `var HallConversationHistory = { template: '<section class="hall-conversation-history-stub" />', props: ['conversations', 'deletingId', 'disabled', 'error', 'hasMore', 'loading', 'selectedId'] }`)
     .replace(/^import\s+HallVoiceControls\s+from\s+['"].\/HallVoiceControls\.vue['"];?\s*$/gm, 'var HallVoiceControls = { template: \'<div class=\"hall-voice-controls-stub\"></div>\', props: [\'voice\'] }')
-    .replace(/^import\s+HallAccountEntry\s+from\s+['"]\.\/HallAccountEntry\.vue['"];?\s*$/gm, 'var HallAccountEntry = { template: \'<button class="hall-account-entry-stub" type="button"></button>\', props: [\'avatar\', \'displayName\', \'disabled\'] }')
+    .replace(/^import\s+HallAccountEntry\s+from\s+['"]\.\/HallAccountEntry\.vue['"];?\s*$/gm, `var HallAccountEntry = { name: 'HallAccountEntry', template: '<button class="hall-account-entry-stub" type="button"></button>', props: ['avatar', 'compact', 'displayName', 'disabled'], emits: ['open-profile'] }`)
     .replace(/^import\s+\{\s*marked\s*\}\s+from\s+['"]marked['"];?\s*$/gm, 'var marked = { setOptions: () => {}, parse: value => value }')
     .replace(/^import\s+DOMPurify\s+from\s+['"]dompurify['"];?\s*$/gm, 'var DOMPurify = { sanitize: value => value }')
     .replace('export default', 'return')
@@ -1097,6 +1099,39 @@ describe('JuyiHall component behavior', () => {
     await wrapper.setProps({ isMobileCoarse: false })
     expect(wrapper.find('.orientation-action').exists()).to.equal(false)
     wrapper.unmount()
+  })
+
+  it('mounts exactly one account control in each non-readonly stage mode and forwards its event', async () => {
+    hallGameMock = {
+      destroy: () => {}, mount: async (_container, options = {}) => options.onReady?.(),
+      setSelectedAgent: () => {}, start: () => {}, syncAgents: () => {}, syncHotspots: () => {}
+    }
+    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+    const portrait = mount(HallStage, {
+      global: { stubs },
+      props: makeHallStageProps({ experienceMode: 'portrait-command' })
+    })
+    await waitForStageReady()
+    expect(portrait.findAll('.hall-account-entry-stub')).to.have.length(1)
+    expect(portrait.find('.stage-header-account.hall-account-entry-stub').exists()).to.equal(true)
+    expect(portrait.find('.stage-landscape-account.hall-account-entry-stub').exists()).to.equal(false)
+    portrait.findComponent({ name: 'HallAccountEntry' }).vm.$emit('open-profile')
+    await Vue.nextTick()
+    expect(portrait.emitted('open-profile')).to.have.length(1)
+    portrait.unmount()
+
+    const landscape = mount(HallStage, {
+      global: { stubs },
+      props: makeHallStageProps({ experienceMode: 'landscape-map' })
+    })
+    await waitForStageReady()
+    expect(landscape.findAll('.hall-account-entry-stub')).to.have.length(1)
+    expect(landscape.find('.stage-header-account.hall-account-entry-stub').exists()).to.equal(false)
+    expect(landscape.find('.stage-landscape-account.hall-account-entry-stub').exists()).to.equal(true)
+    landscape.findComponent({ name: 'HallAccountEntry' }).vm.$emit('open-profile')
+    await Vue.nextTick()
+    expect(landscape.emitted('open-profile')).to.have.length(1)
+    landscape.unmount()
   })
 
   it('keeps the stage replay control discreet and forwards its invoking element upstream', () => {
@@ -2364,17 +2399,18 @@ const loadActualJuyiHall = (mocks) => {
   return component
 }
 
-const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null, actualBountyPanel = null, economyCapability = null }) => {
+const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null, actualBountyPanel = null, economyCapability = null, navigation = null }) => {
   const noop = () => {}
   const asyncNoop = async () => {}
   const value = Vue.ref([])
   const scalar = Vue.ref('')
   const HallPortraitHome = Vue.defineComponent({
-    emits: ['quick-action'],
+    emits: ['quick-action', 'open-profile'],
     setup (_props, { attrs, emit }) {
       Vue.onMounted(() => { mounts.portrait = (mounts.portrait || 0) + 1 })
       Vue.onUnmounted(() => { mounts.portraitUnmount = (mounts.portraitUnmount || 0) + 1 })
       return () => Vue.h('main', { ...attrs, class: 'portrait-shell' }, [
+        Vue.h('button', { type: 'button', 'data-hall-account-entry': 'portrait', onClick: () => emit('open-profile') }, '个人中心'),
         ...['agents', 'tasks', 'discussion', 'catalog', 'library'].map(action => Vue.h('button', { type: 'button', 'data-portrait-action': action, onClick: () => emit('quick-action', action) }, action))
       ])
     }
@@ -2400,7 +2436,7 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
   return {
     ...panelHelpers,
     env: {}, capturePanelReturnTarget: panelHelpers.capturePanelReturnTarget, focusHallPanel: panelHelpers.focusHallPanel, isCurrentPanelGeneration: panelHelpers.isCurrentPanelGeneration, isSafePanelFocusTarget: panelHelpers.isSafePanelFocusTarget, resolveLiveMapPreviewActivation, resolvePanelReturnTarget: panelHelpers.resolvePanelReturnTarget, restorePanelFocus: panelHelpers.restorePanelFocus, trapPanelFocus: panelHelpers.trapPanelFocus,
-    onBeforeRouteLeave: noop, useRouter: () => ({ push: asyncNoop }), confirmHallLeave: () => true, hasMeaningfulHallLeaveWork: () => false, useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({ token: asyncNoop }), agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {},
+    onBeforeRouteLeave: navigation?.onBeforeRouteLeave || noop, useRouter: () => navigation?.router || ({ push: asyncNoop }), confirmHallLeave: navigation?.confirmHallLeave || (() => true), hasMeaningfulHallLeaveWork: navigation?.hasMeaningfulHallLeaveWork || (() => false), useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({ token: asyncNoop }), agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {},
     isEconomyPreviewBuildEnabled: () => Boolean(economyCapability), isEconomyPreviewCapability: capability => Boolean(capability && capability.principalScopeFingerprint === economyCapability?.principalScopeFingerprint), loadEconomyPreviewCapability: async () => economyCapability,
     roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
     useHallData: ({ selectedAgent, selectedTask }) => { counters.owners.data += 1; selectedAgent.value = { agentId: 'agent-o04', name: 'sentinel-agent' }; selectedTask.value = counters.initialSelectedTask || { id: 'task-o04', title: 'sentinel-task' }; return hallData },
@@ -2414,7 +2450,7 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
     useHallScene: () => ({ markAgentSpeaking: noop, markDiscussionStarted: noop, markLibraryCitation: noop, markLibrarySearching: noop, markRecommendedAgents: noop, markTaskArchived: noop, markTaskAssigned: noop, markTaskAutoAssigned: noop, markTaskCreated: task => { counters.markedTasks ||= []; counters.markedTasks.push(task) }, resetSceneFeedback: noop, sceneAgents: value, sceneAgentStyle: () => ({}), sceneHotspots: value, syncAfterPersonaChanged: noop }),
     useHallTaskActions: () => taskActions || ({ archiveTask: asyncNoop, autoAssignTask: asyncNoop, assignTask: async () => true, createTask: asyncNoop, fundedClaimState: Vue.ref(null), fundedCreateRecovery: Vue.ref(null), refreshFundedClaim: asyncNoop, resumeFundedCreate: asyncNoop }),
     useHallConversation: () => { counters.owners.conversation += 1; return ({ chatConnectionStatus: scalar, conversationId: counters.refs.conversationId, draft: counters.refs.draft, draftRevision: Vue.ref(0), eventStreamRecovering: Vue.ref(false), insertAgentMention: noop, isAwaitingReply: Vue.ref(false), isStreaming: Vue.ref(false), loadHallMessages: async () => { counters.loads.messages += 1 }, mentionAgent: noop, messages: counters.refs.messages, newHallConversation: noop, pendingAgentName: scalar, replyEventSequence: Vue.ref(0), sendHallMessage: asyncNoop, senderText: scalar, setDraft: value => { counters.refs.draft.value = value }, disposeHallConversation: noop, stopHallEventStream: noop, stopHallReplyPolling: noop, stopHallReplyStreaming: noop }) },
-    useHallVoiceConversation: () => ({ supported: false, voiceInteractionLocked: false, cancel: noop, dispose: noop, applyTranscript: noop }),
+    useHallVoiceConversation: () => ({ supported: false, voiceInteractionLocked: navigation?.voiceInteractionLocked ?? false, voiceTurnActive: navigation?.voiceTurnActive ?? false, cancel: noop, dispose: noop, applyTranscript: noop }),
     createHallVoiceReplyCorrelation: () => ({ start: () => true, observe: noop, resolveConversation: () => true, close: noop }),
     useHallLibrary: () => ({ citeLibraryItem: noop, libraryErrorMessage: scalar, libraryHasSearched: Vue.ref(false), libraryKeyword: scalar, libraryLoading: Vue.ref(false), libraryResults: value, librarySourceType: scalar, searchLibrary: asyncNoop }),
     useTaskWorkspace: () => null, createDisabledTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }), isTaskWorkspaceBuildEnabled: () => false, useTaskWorkspaceView: () => ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: scalar, error: Vue.ref(null), retry: noop }), useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop }),
@@ -2567,6 +2603,82 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
 
 })
 
+
+describe('V1-8 actual JuyiHall profile route leave guard', () => {
+  it('stays on cancellation, confirms a voice-only turn once, and ignores a duplicate profile click while navigation is pending', async () => {
+    global.history = global.window.history
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/juyiting', name: 'JuyiHall', component: { template: '<div />' } },
+        { path: '/profile', name: 'UserProfile', component: { template: '<div />' } }
+      ]
+    })
+    await router.push({ name: 'JuyiHall' })
+    await router.isReady()
+    let profilePushes = 0
+    const originalPush = router.push.bind(router)
+    router.push = target => {
+      if (target?.name === 'UserProfile') profilePushes += 1
+      return originalPush(target)
+    }
+    const decisions = [false, true, true]
+    let confirmCalls = 0
+    const routeGate = deferred()
+    const navigation = {
+      router,
+      voiceInteractionLocked: false,
+      voiceTurnActive: true,
+      hasMeaningfulHallLeaveWork,
+      confirmHallLeave: ({ hasMeaningfulWork }) => {
+        confirmCalls += 1
+        expect(hasMeaningfulWork).to.equal(true)
+        return decisions.shift()
+      },
+      onBeforeRouteLeave: guard => router.beforeEach(async (to, from) => {
+        if (from.name !== 'JuyiHall') return true
+        const allowed = guard(to, from)
+        if (!allowed) return false
+        if (to.name === 'UserProfile') await routeGate.promise
+        return true
+      })
+    }
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const JuyiHall = loadActualJuyiHall(createActualHallMocks({
+      mode: Vue.ref('portrait-command'), mounts: { library: 0, archive: 0 }, counters, navigation
+    }))
+    const wrapper = mount(JuyiHall, { attachTo: document.body, global: { stubs: { ...stubs, transition: false } } })
+    try {
+      await flushPromises()
+      const account = wrapper.get('[data-hall-account-entry="portrait"]')
+      await account.trigger('click')
+      await Vue.nextTick()
+      expect(router.currentRoute.value.name).to.equal('JuyiHall')
+      expect(confirmCalls).to.equal(1)
+      expect(profilePushes).to.equal(0)
+
+      await account.trigger('click')
+      await account.trigger('click')
+      expect(confirmCalls).to.equal(2)
+      expect(profilePushes).to.equal(1)
+      routeGate.resolve()
+      await new Promise(resolve => setTimeout(resolve, 0))
+      await Vue.nextTick()
+      expect(router.currentRoute.value.name).to.equal('UserProfile')
+      expect(confirmCalls).to.equal(2)
+
+      await router.push({ name: 'JuyiHall' })
+      await account.trigger('click')
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(router.currentRoute.value.name).to.equal('UserProfile')
+      expect(profilePushes).to.equal(2)
+      expect(confirmCalls).to.equal(3)
+    } finally {
+      routeGate.resolve()
+      wrapper.unmount()
+    }
+  })
+})
 
 describe('W11 R9 actual JuyiHall stale funded acknowledgement', () => {
   const memoryStorage = () => {

@@ -1410,18 +1410,21 @@ const hallLeaveHasMeaningfulWork = computed(() => hasMeaningfulHallLeaveWork({
   isAwaitingReply: isAwaitingReply.value,
   isStreaming: isStreaming.value,
   voiceInteractionLocked: voiceInteractionLocked.value,
-  voiceTurnActive: hallVoice?.voiceTurnActive?.value
+  voiceTurnActive: Boolean(hallVoice?.voiceTurnActive)
 }))
 const confirmLeavingHall = () => confirmHallLeave({ hasMeaningfulWork: hallLeaveHasMeaningfulWork.value })
 let approvedHallLeave = false
+let profileNavigationPending = false
 const openProfile = async () => {
-  if (!confirmLeavingHall()) return false
+  if (profileNavigationPending || !confirmLeavingHall()) return false
+  profileNavigationPending = true
   approvedHallLeave = true
   try {
     await router.push({ name: 'UserProfile' })
     return true
   } finally {
     approvedHallLeave = false
+    profileNavigationPending = false
   }
 }
 onBeforeRouteLeave(() => approvedHallLeave || confirmLeavingHall())

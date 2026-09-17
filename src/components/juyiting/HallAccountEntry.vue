@@ -20,7 +20,7 @@
       <span v-else class="hall-account-fallback">我</span>
     </span>
     <span class="hall-account-copy">
-      <span class="hall-account-label">个人中心</span>
+      <span class="hall-account-label">{{ compact ? '我的' : '个人中心' }}</span>
       <span class="hall-account-name">{{ safeDisplayName }}</span>
     </span>
   </button>
@@ -31,6 +31,7 @@ import { computed, ref, watch } from 'vue'
 
 const props = defineProps({
   avatar: { type: String, default: '' },
+  compact: Boolean,
   disabled: Boolean,
   displayName: { type: String, default: '' }
 })
@@ -114,7 +115,7 @@ watch(safeAvatar, () => {
 }
 
 @media (max-width: 640px) {
-  .hall-account-copy { display: none; }
-  .hall-account-entry { min-width: 36px; padding: 4px; justify-content: center; }
+  .hall-account-entry { min-width: 0; padding-right: 7px; }
+  .hall-account-name { display: none; }
 }
 </style>

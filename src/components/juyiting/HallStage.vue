@@ -6,6 +6,15 @@
         <h1>聚义厅</h1>
       </div>
       <div data-tour="landscape-tools" class="stage-tools">
+        <HallAccountEntry
+          v-if="sceneMode !== 'landscape'"
+          class="stage-header-account"
+          compact
+          :avatar="accountAvatar"
+          :display-name="accountDisplayName"
+          :disabled="accountEntryDisabled || stageInputLocked"
+          @open-profile="emitStageAction('open-profile')"
+        />
         <button
           class="tool-action refresh-action"
           data-tour="landscape-refresh"
@@ -93,8 +102,9 @@
         </button>
       </div>
       <HallAccountEntry
-        v-if="!readOnlyPreview"
+        v-if="!readOnlyPreview && sceneMode === 'landscape'"
         class="stage-landscape-account"
+        compact
         :avatar="accountAvatar"
         :display-name="accountDisplayName"
         :disabled="accountEntryDisabled || stageInputLocked"
@@ -1185,6 +1195,11 @@ button {
   background:
     radial-gradient(circle at 50% 48%, rgba(239, 197, 118, 0.2), transparent 34%),
     linear-gradient(135deg, #14100c, #23170f 54%, #0d0b09);
+}
+
+.stage-header-account,
+.stage-landscape-account {
+  flex: 0 0 auto;
 }
 
 .stage-landscape-account {
