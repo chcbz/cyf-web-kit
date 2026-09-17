@@ -119,6 +119,50 @@ describe('economy readonly preview UI behavior', () => {
     } finally { scope.stop() }
   })
 
+  it('does not commit a resolved roster or page after an auth microtask runs before its business continuation', async () => {
+    const roster = deferred(); const nextPage = deferred()
+    const { scope, preview } = scopedPreview(baseClient({
+      capabilities: async () => capabilities({ ledger: true }), roster: () => roster.promise,
+      ledger: ({ cursor }) => !cursor ? Promise.resolve({ items: [{ transactionId: 't1', entryId: 'e1' }], nextCursor: 'c1' }) : nextPage.promise
+    }))
+    try {
+      const initial = preview.refresh(); await tick()
+      roster.resolve(success({ items: [{ agentId: 'old', boundToMe: true, canOperate: true }] }))
+      queueMicrotask(() => { useApiStore().authorizationGeneration += 1 })
+      await initial; await tick()
+      expect(preview.agents.value).to.deep.equal([])
+      expect(preview.ledger.value.data).to.equal(null)
+
+      const fresh = scopedPreview(baseClient({
+        capabilities: async () => capabilities({ ledger: true }),
+        ledger: ({ cursor }) => !cursor ? Promise.resolve({ items: [{ transactionId: 't1', entryId: 'e1' }], nextCursor: 'c1' }) : nextPage.promise
+      }))
+      try {
+        await fresh.preview.refresh()
+        const page = fresh.preview.loadLedger('c1'); await tick()
+        nextPage.resolve({ items: [{ transactionId: 'old-page', entryId: 'e2' }], nextCursor: null })
+        queueMicrotask(() => { useApiStore().authorizationGeneration += 1 })
+        await page; await tick()
+        expect(fresh.preview.ledger.value.data).to.equal(null)
+      } finally { fresh.scope.stop() }
+    } finally { scope.stop() }
+  })
+
+  it('does not let a stale refresh borrow a newer refresh capability result', async () => {
+    const firstCapability = deferred(); const secondCapability = deferred(); let capabilityCalls = 0; let walletCalls = 0
+    const { scope, preview } = scopedPreview(baseClient({
+      capabilities: () => (++capabilityCalls === 1 ? firstCapability.promise : secondCapability.promise),
+      wallet: async () => { walletCalls += 1; return { currency: 'SILVER', availableMicro: '1', heldMicro: '0', version: '1' } }
+    }))
+    try {
+      const first = preview.refresh(); await tick()
+      const second = preview.refresh(); await tick()
+      secondCapability.resolve(capabilities({ wallet: true })); await second
+      firstCapability.resolve(capabilities({ wallet: true })); await first
+      expect(walletCalls).to.equal(1)
+    } finally { scope.stop() }
+  })
+
   it('mounts the actual component and shows installation evidence even with observedAt', async () => {
     const page = source('../src/components/economy/EconomyReadOnlyPreview.vue')
     const { descriptor } = parse(page, { filename: 'EconomyReadOnlyPreview.vue' })

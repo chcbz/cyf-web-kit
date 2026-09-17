@@ -52,13 +52,13 @@ export function useEconomyReadOnlyPreview ({ client = economyReadOnlyPreviewClie
     const captured = begin(entry, agentId, preserveData)
     try {
       const data = await action({ signal: entry.controller.signal })
-      if (!current(entry, captured)) return { accepted: false, data: null }
+      if (!current(entry, captured)) return { accepted: false, data: null, captured }
       entry.state.value = { status: data == null || (Array.isArray(data?.items) && data.items.length === 0) ? 'empty' : 'ready', data, error: '' }
-      return { accepted: true, data }
+      return { accepted: true, data, captured }
     } catch (error) {
-      if (!current(entry, captured)) return { accepted: false, data: null }
+      if (!current(entry, captured)) return { accepted: false, data: null, captured }
       if (!aborted(error)) entry.state.value = { status: error?.status === 503 ? 'unavailable' : 'error', data: null, error: error?.message || '读取失败，请重试。' }
-      return { accepted: false, data: null }
+      return { accepted: false, data: null, captured }
     }
   }
   const reset = () => {
@@ -67,36 +67,37 @@ export function useEconomyReadOnlyPreview ({ client = economyReadOnlyPreviewClie
     selectedAgentId.value = ''; agents.value = []
   }
   const requireFeature = key => enabled.value && features.value[key] === true
+  const capabilityCurrent = captured => !disposed && cards.capabilities.generation === captured.requestGeneration && authGeneration() === captured.authGeneration
   const loadCapabilities = async () => {
     const entry = cards.capabilities
     const captured = begin(entry)
     try {
       const value = await client.capabilities({ signal: entry.controller.signal })
       // Capabilities establish the scope; only card/auth generation can be compared here.
-      if (disposed || entry.generation !== captured.requestGeneration || authGeneration() !== captured.authGeneration) return null
+      if (!capabilityCurrent(captured)) return { accepted: false, capabilities: null, captured }
       const next = assessReadOnlyPreviewCapabilities(value)
       capability.value = value
       capabilityError.value = next.available || next.reason === 'PREVIEW_DISABLED' ? '' : '经济预览协议不可用。'
       protocolError.value = next.available || next.reason === 'PREVIEW_DISABLED' ? '' : next.reason
       entry.state.value = { status: next.available ? 'ready' : 'unavailable', data: value, error: capabilityError.value }
-      return next.capabilities
+      return { accepted: true, capabilities: next.capabilities, captured }
     } catch (error) {
-      if (!disposed && entry.generation === captured.requestGeneration && authGeneration() === captured.authGeneration && !aborted(error)) capabilityError.value = error?.message || '无法读取经济预览能力。'
-      return null
+      if (capabilityCurrent(captured) && !aborted(error)) capabilityError.value = error?.message || '无法读取经济预览能力。'
+      return { accepted: false, capabilities: null, captured }
     }
   }
   const loadRoster = () => finish(cards.roster, async options => {
     const response = await client.roster(options)
     return rosterItems(readEconomyReadOnlyPreviewPayload(response)).filter(ownRosterAgent)
   }).then(result => {
-    if (!result.accepted) return null
+    if (!result.accepted || !current(cards.roster, result.captured)) return null
     agents.value = result.data
     if (!result.data.some(agent => agent.agentId === selectedAgentId.value)) selectedAgentId.value = ''
     return result.data
   })
   const loadWallet = () => requireFeature('wallet') ? finish(cards.wallet, options => client.wallet(options)) : null
   const appendPage = (entry, previousItems, result, identity) => {
-    if (!result.accepted) return null
+    if (!result.accepted || !current(entry, result.captured)) return null
     if (previousItems.length === 0) return result.data
     const seen = new Set(previousItems.map(identity))
     const items = [...previousItems, ...(result.data.items || []).filter(item => !seen.has(identity(item)))]
@@ -131,8 +132,8 @@ export function useEconomyReadOnlyPreview ({ client = economyReadOnlyPreviewClie
   }
   const refresh = async () => {
     reset()
-    await loadCapabilities()
-    if (!enabled.value) return
+    const loaded = await loadCapabilities()
+    if (!loaded?.accepted || !loaded.capabilities || !capabilityCurrent(loaded.captured) || !enabled.value) return
     await Promise.all([loadWallet(), loadLedger(), loadCatalog(), loadHostingPlan(), loadRoster()])
   }
 
