@@ -47,8 +47,8 @@ describe('economy readonly preview UI behavior', () => {
   afterEach(() => { for (const wrapper of wrappers.splice(0)) wrapper.unmount() })
 
   it('uses its own authenticated route and dedicated read namespace without legacy mutations', () => {
-    const router = source('../src/router/index.js'); const profile = source('../src/components/UserProfile.vue'); const adapter = source('../src/composables/economyReadOnlyPreviewApi.js')
-    expect(router).to.include("path: '/economy-preview'"); expect(router).to.include('VITE_ECONOMY_READONLY_PREVIEW_ENABLED'); expect(profile).to.include('to="/economy-preview"'); expect(adapter).to.include("createApi('/economy/preview')")
+    const router = source('../src/router/index.js'); const profile = source('../src/components/UserProfile.vue'); const navigation = source('../src/utils/profileNavigation.js'); const adapter = source('../src/composables/economyReadOnlyPreviewApi.js')
+    expect(router).to.include('path: \'/economy-preview\''); expect(router).to.include('VITE_ECONOMY_READONLY_PREVIEW_ENABLED'); expect(profile).to.include('economyPreviewTarget()'); expect(navigation).to.include('const ECONOMY_PREVIEW_ROUTE = \'EconomyReadOnlyPreview\''); expect(navigation).to.include('const economyPreviewTarget'); expect(adapter).to.include('createApi(\'/economy/preview\')')
     for (const legacy of ['/quotes', '/purchase', '/bind', '/renew', '/reprovision', 'purchase-journal']) expect(adapter).not.to.include(legacy)
   })
 

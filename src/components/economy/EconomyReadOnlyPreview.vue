@@ -1,11 +1,14 @@
 <template>
   <main class="economy-preview" aria-label="经济只读预览">
     <header class="page-header">
-      <div><h1>经济预览</h1><p>只读预览：本次操作不扣款、不下单、不安装、不启用托管。</p></div>
-      <button type="button" :disabled="refreshing" @click="refresh">{{ refreshing ? '正在刷新…' : '刷新全部' }}</button>
+      <div><h1>经济预览</h1><p>仅查看当前已授权的数据：不会扣款、下单、创建订单、安装或启用托管。</p></div>
+      <div class="header-actions">
+        <button type="button" @click="returnToProfile">返回个人中心</button>
+        <button type="button" :disabled="refreshing" @click="refresh">{{ refreshing ? '正在刷新…' : '刷新全部' }}</button>
+      </div>
     </header>
-    <p v-if="preview.capabilityError" class="card-error" role="alert">{{ preview.capabilityError }}</p>
-    <p v-else-if="!preview.enabled" class="notice" role="status">经济只读预览当前未启用。</p>
+    <p v-if="preview.capabilityError" class="card-error" role="alert">经济只读预览暂时不可用。{{ preview.capabilityError }} 不会扣款、下单、安装或启用托管；可刷新重试或返回个人中心。</p>
+    <p v-else-if="!preview.enabled" class="notice" role="status">经济只读预览当前未启用。不会扣款、下单、安装或启用托管；可返回个人中心。</p>
 
     <template v-if="preview.enabled">
       <section class="preview-card" aria-labelledby="wallet-title">
@@ -70,11 +73,12 @@
 </template>
 
 <script setup>
-import { onMounted, proxyRefs, reactive, ref } from 'vue'
+import { getCurrentInstance, onMounted, proxyRefs, reactive, ref } from 'vue'
 import { useGlobalStore } from '@/stores/global.js'
 import { formatSilverMicro } from '@/utils/silverAmount.js'
 import { useEconomyReadOnlyPreview } from '@/composables/useEconomyReadOnlyPreview.js'
 
+const router = getCurrentInstance()?.proxy?.$router
 const preview = proxyRefs(useEconomyReadOnlyPreview())
 const refreshing = ref(false)
 const tokenKinds = ['input', 'cachedInput', 'output', 'reasoning']
@@ -86,11 +90,12 @@ const tokenLabel = key => ({ input: '输入 Token', cachedInput: '缓存输入 T
 const timestamp = value => typeof value === 'string' && /^(0|[1-9]\d*)$/.test(value) && Number.isSafeInteger(Number(value)) ? new Date(Number(value)).toLocaleString() : '未报告时间'
 const period = value => typeof value === 'string' && /^(0|[1-9]\d*)$/.test(value) ? `${value} 秒` : '未报告周期'
 const evidence = item => item?.status === 'VERIFIED_INSTALLED' && item?.evidenceKind ? '已验证安装' : '未确认'
+const returnToProfile = () => router?.replace({ name: 'UserProfile' })
 const refresh = async () => { refreshing.value = true; try { await preview.refresh() } finally { refreshing.value = false } }
 const estimate = async () => { estimateInputError.value = ''; const values = [form.grossBountyAmountMicro, form.minimumAcceptedPayoutMicro, ...tokenKinds.flatMap(key => [form.estimatedTokens[key], form.worstTokens[key]])]; if (!values.every(preview.canonical)) { estimateInputError.value = '所有金额和 Token 必须是规范非负十进制字符串。'; return }; if (tokenKinds.some(key => BigInt(form.estimatedTokens[key]) > BigInt(form.worstTokens[key]))) { estimateInputError.value = '每类预计 Token 不得大于最坏 Token。'; return }; await preview.submitEstimate(JSON.parse(JSON.stringify(form))) }
 onMounted(() => { const store = useGlobalStore(); store.setTitle('经济预览'); store.setShowBack(true); store.setShowMore(false); void refresh() })
 </script>
 
 <style scoped>
-.economy-preview { flex: 1; min-width: 0; overflow: auto; padding: 16px; color: #27364a; background: #f4f7fb; } .page-header, .preview-card header { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; } .page-header { margin-bottom: 16px; } h1,h2,h3,p { margin: 0; } h1 { font-size: 24px; } .page-header p,.muted { margin-top: 6px; color: #64748b; } .preview-card { display: grid; gap: 12px; margin-bottom: 16px; padding: 16px; border-radius: 12px; background: #fff; box-shadow: 0 4px 14px rgba(30,41,59,.08); overflow-wrap: anywhere; } button { min-height: 36px; padding: 7px 12px; border: 1px solid #355d99; border-radius: 8px; background: #fff; color: #244b83; cursor: pointer; } button:disabled { opacity: .6; cursor: not-allowed; } .notice,.card-error { padding: 12px; border-radius: 8px; } .notice { background: #fff7df; color: #855d12; } .card-error { background: #fff0f0; color: #a32d2d; } .money-grid,.result-grid,.two-columns { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; } .money-grid p,.result-grid div,.catalog-grid article,.two-columns section,.detail { padding: 12px; border: 1px solid #dbe5f0; border-radius: 8px; } .money-grid strong { display: block; margin-top: 5px; font-size: 18px; } .rows { display: grid; gap: 7px; padding: 0; margin: 0; list-style: none; } .rows li { display: grid; gap: 3px; padding: 9px 0; border-bottom: 1px solid #edf2f7; } small { color:#64748b; } .estimate-form { display: grid; gap: 10px; } label { display: grid; gap: 5px; color: #40556d; } input,select { min-width: 0; min-height: 38px; box-sizing: border-box; padding: 7px; border: 1px solid #b8c7d8; border-radius: 7px; background: #fff; } .token-grid,.catalog-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 10px; } .token-grid > div { display: grid; gap: 8px; } .result-grid dt { color:#64748b; font-size: 13px; } .result-grid dd { margin: 4px 0 0; font-weight: 700; } .catalog-grid article { display: grid; gap: 8px; } .catalog-grid h3 { font-size: 16px; } .pill { padding: 4px 8px; border-radius: 999px; background: #e8f0ff; color:#315a96; font-size: 12px; } .detail { background:#f8fbff; } @media (max-width: 640px) { .economy-preview { padding: 12px; } .page-header,.preview-card header { flex-direction: column; } .money-grid,.result-grid,.two-columns { grid-template-columns: 1fr; } }
+.header-actions { display: flex; flex-wrap: wrap; gap: 8px; } .economy-preview { flex: 1; min-width: 0; overflow: auto; padding: 16px; color: #27364a; background: #f4f7fb; } .page-header, .preview-card header { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; } .page-header { margin-bottom: 16px; } h1,h2,h3,p { margin: 0; } h1 { font-size: 24px; } .page-header p,.muted { margin-top: 6px; color: #64748b; } .preview-card { display: grid; gap: 12px; margin-bottom: 16px; padding: 16px; border-radius: 12px; background: #fff; box-shadow: 0 4px 14px rgba(30,41,59,.08); overflow-wrap: anywhere; } button { min-height: 36px; padding: 7px 12px; border: 1px solid #355d99; border-radius: 8px; background: #fff; color: #244b83; cursor: pointer; } button:disabled { opacity: .6; cursor: not-allowed; } .notice,.card-error { padding: 12px; border-radius: 8px; } .notice { background: #fff7df; color: #855d12; } .card-error { background: #fff0f0; color: #a32d2d; } .money-grid,.result-grid,.two-columns { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; } .money-grid p,.result-grid div,.catalog-grid article,.two-columns section,.detail { padding: 12px; border: 1px solid #dbe5f0; border-radius: 8px; } .money-grid strong { display: block; margin-top: 5px; font-size: 18px; } .rows { display: grid; gap: 7px; padding: 0; margin: 0; list-style: none; } .rows li { display: grid; gap: 3px; padding: 9px 0; border-bottom: 1px solid #edf2f7; } small { color:#64748b; } .estimate-form { display: grid; gap: 10px; } label { display: grid; gap: 5px; color: #40556d; } input,select { min-width: 0; min-height: 38px; box-sizing: border-box; padding: 7px; border: 1px solid #b8c7d8; border-radius: 7px; background: #fff; } .token-grid,.catalog-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 10px; } .token-grid > div { display: grid; gap: 8px; } .result-grid dt { color:#64748b; font-size: 13px; } .result-grid dd { margin: 4px 0 0; font-weight: 700; } .catalog-grid article { display: grid; gap: 8px; } .catalog-grid h3 { font-size: 16px; } .pill { padding: 4px 8px; border-radius: 999px; background: #e8f0ff; color:#315a96; font-size: 12px; } .detail { background:#f8fbff; } @media (max-width: 640px) { .header-actions { display: flex; flex-wrap: wrap; gap: 8px; } .economy-preview { padding: 12px; } .page-header,.preview-card header { flex-direction: column; } .money-grid,.result-grid,.two-columns { grid-template-columns: 1fr; } }
 </style>

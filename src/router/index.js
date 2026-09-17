@@ -4,15 +4,17 @@ import OAuthCallback from '@/components/OAuthCallback.vue'
 import { isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
 import { assessReadOnlyPreviewCapabilities } from '@/utils/economyReadOnlyPreviewPolicy'
 import { economyReadOnlyPreviewClient } from '@/composables/economyReadOnlyPreviewApi'
+import { profilePreviewFailureTarget } from '@/utils/profileNavigation'
 
 const economyReadOnlyPreviewBuildEnabled = import.meta.env.VITE_ECONOMY_READONLY_PREVIEW_ENABLED === 'true'
 const economyReadOnlyPreviewRouteGuard = async () => {
-  if (!economyReadOnlyPreviewBuildEnabled) return { name: 'UserProfile' }
+  if (!economyReadOnlyPreviewBuildEnabled) return profilePreviewFailureTarget('PREVIEW_DISABLED')
   try {
-    return assessReadOnlyPreviewCapabilities(await economyReadOnlyPreviewClient.capabilities()).available
-      ? true : { name: 'UserProfile' }
+    const assessment = assessReadOnlyPreviewCapabilities(await economyReadOnlyPreviewClient.capabilities())
+    return assessment.available ? true : profilePreviewFailureTarget(assessment.reason)
   } catch {
-    return { name: 'UserProfile' }
+    // Keep transport details out of the URL while making the failed redirect visible.
+    return profilePreviewFailureTarget('PREVIEW_UNAVAILABLE')
   }
 }
 import { isEconomyPreviewCapability, isSkillMarketplaceCapability, loadEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
