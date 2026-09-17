@@ -480,13 +480,12 @@ describe('useHallConversation scoped message loading', () => {
     }
 
     const delivery = appendStreamPayload(state, 'data: {"agentDelivery":{"agentId":"linchong","delivered":false},"conversationId":"1002"}')
-    const conversation = appendStreamPayload(state, '{"conversationId":"1002"}')
     appendStreamPayload(state, '{"v":"收到"}')
     appendStreamPayload(state, '{"content":"，马上处理"}')
 
     expect(delivery.type).to.equal('delivery')
-    expect(conversation.type).to.equal('conversation')
-    expect(conversation.conversationId).to.equal('1002')
+    expect(delivery.conversationId).to.equal('1002')
+    expect(delivery.shouldReconnect).to.equal(true)
     expect(state.conversationId).to.equal('1002')
     expect(state.messages[0]).to.deep.include({
       sender: 'SYSTEM',

@@ -181,6 +181,16 @@ export const appendStreamPayload = (state, eventData) => {
   try {
     const data = JSON.parse(payload)
     if (data.agentDelivery) {
+      let conversationId = null
+      let shouldReconnect = false
+      if (Object.prototype.hasOwnProperty.call(data, 'conversationId')) {
+        if (typeof data.conversationId !== 'string' || !data.conversationId || typeof state.conversationId !== 'string') {
+          return { type: 'invalid_conversation' }
+        }
+        conversationId = data.conversationId
+        shouldReconnect = conversationId !== state.conversationId
+        state.conversationId = conversationId
+      }
       const agentId = data.agentDelivery.agentId || 'agent'
       const delivered = data.agentDelivery.delivered === true
       const message = {
@@ -192,7 +202,7 @@ export const appendStreamPayload = (state, eventData) => {
         statusText: delivered ? '已递到' : '未递到'
       }
       state.messages.push(message)
-      return { type: 'delivery', message }
+      return { type: 'delivery', message, conversationId, shouldReconnect }
     }
     if (data.type === 'agent_message') return appendStreamAgentFinal(state, data)
     if (data.type === 'agent_message_delta') return appendHallEventMessage(state, data)
