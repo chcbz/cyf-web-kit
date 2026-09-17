@@ -1,9 +1,22 @@
 <template>
   <div class="user-profile">
+    <header class="profile-page-header">
+      <h1>个人中心</h1>
+      <button type="button" @click="returnToHall">返回聚义厅</button>
+    </header>
+
+    <p v-if="navigationFailure" class="navigation-notice" role="alert">{{ navigationFailure }}</p>
+
     <section class="profile-card">
       <div class="profile-avatar">
-        <img v-if="user.avatar" :src="user.avatar" :alt="displayName" />
-        <var-icon v-else name="account-circle" />
+        <img
+          v-if="user.avatar && !avatarFailed"
+          :key="avatarKey"
+          :src="user.avatar"
+          :alt="displayName"
+          @error="avatarFailed = true"
+        />
+        <var-icon v-else name="account-circle" aria-label="默认账号头像" />
       </div>
 
       <div class="profile-summary">
@@ -32,8 +45,13 @@
 
     <section v-if="economyReadOnlyPreviewBuildEnabled" class="economy-discovery" aria-labelledby="economy-readonly-preview-title">
       <h3 id="economy-readonly-preview-title">经济预览</h3>
-      <p>只读预览不会扣款、下单、安装或启用托管；实际可读能力由服务端认证后确认。</p>
-      <div class="discovery-links"><router-link to="/economy-preview">进入经济预览</router-link></div>
+      <p>只读，不扣款、不下单、不安装、不启用托管；实际可读能力由服务端认证后确认。</p>
+      <p v-if="readOnlyPreviewState === 'loading'" class="capability-status" role="status">正在确认经济预览是否可用…</p>
+      <p v-else-if="readOnlyPreviewError" class="capability-error" role="alert">{{ readOnlyPreviewError }}</p>
+      <div class="discovery-links">
+        <button v-if="readOnlyPreviewError" type="button" @click="loadReadOnlyPreviewCapability">重试</button>
+        <router-link v-else-if="readOnlyPreviewState === 'ready'" :to="economyPreviewTarget()">进入经济预览</router-link>
+      </div>
     </section>
 
     <section v-if="economyPreviewAvailable" class="economy-discovery" aria-labelledby="economy-discovery-title">
@@ -114,18 +132,30 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useGlobalStore } from '@/stores/global'
 import { useAccountSecuritySession } from '@/composables/useAccountSecuritySession'
 import { useConfirmationDialog } from '@/composables/useConfirmationDialog'
 import { isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
 import { isEconomyPreviewCapability, loadEconomyPreviewCapability as fetchEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
+import { assessReadOnlyPreviewCapabilities } from '@/utils/economyReadOnlyPreviewPolicy'
+import { economyReadOnlyPreviewClient } from '@/composables/economyReadOnlyPreviewApi'
+import { economyPreviewTarget, previewFailureFromRoute, previewFailureMessage, returnToJuyiHall } from '@/utils/profileNavigation'
+import { useApiStore } from '@/stores/api'
 
 const router = useRouter()
+const route = useRoute()
+const apiStore = useApiStore()
 const economyReadOnlyPreviewBuildEnabled = import.meta.env.VITE_ECONOMY_READONLY_PREVIEW_ENABLED === 'true'
 const economyPreviewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
 const economyPreviewAvailable = ref(false)
+const avatarFailed = ref(false)
+const readOnlyPreviewState = ref('idle')
+const readOnlyPreviewError = ref('')
+let economyPreviewRequest = 0
+let readOnlyPreviewRequest = 0
+let disposed = false
 const globalStore = useGlobalStore()
 const { busy, error, status, signOutCurrentDevice, signOutAllDevices } = useAccountSecuritySession({ router })
 const allDevicesTrigger = ref(null)
@@ -133,7 +163,12 @@ const { cancelButton: cancelConfirmationButton, close: closeConfirmation, confir
   isBusy: () => busy.value
 })
 const user = computed(() => globalStore.user)
-const displayName = computed(() => user.value.nickname || user.value.username || '微信用户')
+const displayName = computed(() => user.value.nickname || user.value.username || '个人中心')
+const avatarKey = computed(() => `${user.value.id || 'anonymous'}:${user.value.avatar || ''}`)
+const navigationFailure = computed(() => {
+  const reason = previewFailureFromRoute(route)
+  return reason ? previewFailureMessage(reason) : ''
+})
 
 const openAllDevicesConfirmation = () => openConfirmation(allDevicesTrigger.value)
 
@@ -146,16 +181,57 @@ const handleAllDevicesSignOut = async () => {
   if (completed) closeConfirmation({ force: true })
 }
 
+const returnToHall = () => returnToJuyiHall(router)
+
+const loadReadOnlyPreviewCapability = async () => {
+  const request = ++readOnlyPreviewRequest
+  const authGeneration = apiStore.authorizationGeneration
+  readOnlyPreviewState.value = 'loading'
+  readOnlyPreviewError.value = ''
+  try {
+    const assessment = assessReadOnlyPreviewCapabilities(await economyReadOnlyPreviewClient.capabilities())
+    if (disposed || request !== readOnlyPreviewRequest || authGeneration !== apiStore.authorizationGeneration) return
+    if (assessment.available) {
+      readOnlyPreviewState.value = 'ready'
+      return
+    }
+    readOnlyPreviewState.value = 'unavailable'
+    readOnlyPreviewError.value = previewFailureMessage(assessment.reason)
+  } catch {
+    if (disposed || request !== readOnlyPreviewRequest || authGeneration !== apiStore.authorizationGeneration) return
+    readOnlyPreviewState.value = 'unavailable'
+    readOnlyPreviewError.value = previewFailureMessage('PREVIEW_UNAVAILABLE')
+  }
+}
+
 const loadEconomyPreviewCapability = async () => {
   if (!economyPreviewBuildEnabled) return
+  const request = ++economyPreviewRequest
+  const authGeneration = apiStore.authorizationGeneration
   try {
-    economyPreviewAvailable.value = isEconomyPreviewCapability(await fetchEconomyPreviewCapability())
+    const available = isEconomyPreviewCapability(await fetchEconomyPreviewCapability())
+    if (disposed || request !== economyPreviewRequest || authGeneration !== apiStore.authorizationGeneration) return
+    economyPreviewAvailable.value = available
   } catch {
+    if (disposed || request !== economyPreviewRequest || authGeneration !== apiStore.authorizationGeneration) return
     economyPreviewAvailable.value = false
   }
 }
 
+watch(() => user.value.id, () => { avatarFailed.value = false })
+watch(() => user.value.avatar, () => { avatarFailed.value = false })
+watch(() => apiStore.authorizationGeneration, () => {
+  economyPreviewRequest += 1
+  economyPreviewAvailable.value = false
+  readOnlyPreviewRequest += 1
+  readOnlyPreviewState.value = 'idle'
+  readOnlyPreviewError.value = ''
+}, { flush: 'sync' })
+
 onBeforeUnmount(() => {
+  disposed = true
+  economyPreviewRequest += 1
+  readOnlyPreviewRequest += 1
   closeConfirmation({ force: true })
 })
 
@@ -164,6 +240,7 @@ onMounted(() => {
   globalStore.setShowBack(false)
   globalStore.setShowMore(false)
   void loadEconomyPreviewCapability()
+  if (economyReadOnlyPreviewBuildEnabled) void loadReadOnlyPreviewCapability()
 })
 </script>
 
@@ -175,6 +252,7 @@ onMounted(() => {
   background: var(--color-body);
 }
 
+.profile-page-header,
 .profile-card,
 .profile-details,
 .economy-discovery,
@@ -182,6 +260,50 @@ onMounted(() => {
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 4px 16px rgba(35, 28, 20, 0.08);
+}
+
+.profile-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.profile-page-header h1 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 22px;
+}
+
+.profile-page-header button,
+.discovery-links button {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid #4f46e5;
+  border-radius: 8px;
+  background: #fff;
+  color: #4338ca;
+  cursor: pointer;
+}
+
+.navigation-notice,
+.capability-status,
+.capability-error {
+  margin: 0 0 16px;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.navigation-notice,
+.capability-error {
+  background: #fff0f0;
+  color: #a32d2d;
+}
+
+.capability-status {
+  background: #fff7df;
+  color: #855d12;
 }
 
 .profile-card {
