@@ -1,3 +1,4 @@
+import { confirmHallLeave, hasMeaningfulHallLeaveWork } from '../src/composables/juyiting/hallAccountNavigation.js'
 import { expect } from 'chai'
 import { createHash } from 'crypto'
 import { readFileSync } from 'fs'
@@ -309,6 +310,10 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
   const taskWorkspace = workspaceState || null
   return {
     ...HallPanelHelpers,
+    useRouter: () => ({ push: asyncNoop }),
+    onBeforeRouteLeave: noop,
+    confirmHallLeave,
+    hasMeaningfulHallLeaveWork,
     registerIdentityCleanup,
     env: { VITE_JUYITING_TASK_WORKSPACE_ENABLED: workspaceState ? 'true' : undefined },
     useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({}),
