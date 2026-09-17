@@ -121,6 +121,7 @@ const loadSfc = (relativePath) => {
     .replace(/^import\s+BountyActionIcon\s+from\s+['"].\/BountyActionIcon\.vue['"];?\s*$/gm, 'var BountyActionIcon = { template: \'<span />\', props: [\'status\'] }')
     .replace(/^import\s+OutputList\s+from\s+['"]\.\.\/outputs\/OutputList\.vue['"];?\s*$/gm, 'var OutputList = { template: \'<section class="output-list-stub" />\', props: [\'source\', \'identityFingerprint\'] }')
     .replace(/^import\s+\{\s*formatSilverMicro,\s*isCanonicalMicroAmount\s*\}\s+from\s+['"]@\/utils\/silverAmount['"];?\s*$/gm, 'var { formatSilverMicro, isCanonicalMicroAmount } = arguments[4]')
+    .replace(/^import\s+FormalDeliveryList\s+from\s+['"]\.\.\/deliveries\/FormalDeliveryList\.vue['"];?\s*$/gm, `var FormalDeliveryList = { template: '<section class="formal-delivery-list-stub" />', props: ['taskId', 'identityFingerprint'] }`)
     .replace(/^import\s+WorkItemPlanPanel\s+from\s+['"]\.\/WorkItemPlanPanel\.vue['"];?\s*$/gm, `var WorkItemPlanPanel = { template: '<section class="work-item-plan-stub" />', props: ['task', 'enabled', 'authorizationGeneration'] }`)
     .replace(/^import\s+TeamRecommendationPanel\s+from\s+['"]\.\/TeamRecommendationPanel\.vue['"];?\s*$/gm, `var TeamRecommendationPanel = { template: '<section class="team-recommendation-stub" />', props: ['task', 'authorizationGeneration'] }`)
     .replace(/^import\s+HostingRentPanel\s+from\s+['"].\/HostingRentPanel\.vue['"];?\s*$/gm, `var HostingRentPanel = { template: '<section class="hosting-rent-stub" />', props: ['persona', 'resolvePersona'] }`)
@@ -189,44 +190,46 @@ afterEach(() => {
   stagedFrames.clear()
 })
 
+// Shared by the component and actual-mounted Hall suites, including targeted runs.
+before(async () => {
+  installGlobalDomRuntime()
+  const { mount: rawMount } = await import('@vue/test-utils')
+  mount = (...args) => {
+    const wrapper = rawMount(...args)
+    const unmount = wrapper.unmount.bind(wrapper)
+    wrapper.unmount = () => {
+      mountedWrappers.delete(wrapper)
+      return unmount()
+    }
+    mountedWrappers.add(wrapper)
+    void Promise.resolve().then(() => flushStageFrames())
+    return wrapper
+  }
+  Vue = await import('vue')
+  silverAmount = await import('../src/utils/silverAmount.js')
+  ;({ classifyViewportResize: classifyViewportResizeMock } = await import('../src/game/camera/resizePolicy.js'))
+  hallGameMock = {
+    destroy: () => {},
+    mount: async (_container, options = {}) => {
+      options.onReady?.()
+    },
+    setSelectedAgent: () => {},
+    start: () => {},
+    syncAgents: () => {}
+  }
+  BottomDock = loadSfc('../src/components/juyiting/BottomDock.vue')
+  BountyPanel = loadSfc('../src/components/juyiting/BountyPanel.vue')
+  HallChatComposer = loadSfc('../src/components/juyiting/HallChatComposer.vue')
+  ChatPanel = loadSfc('../src/components/juyiting/ChatPanel.vue')
+  CommandPanel = loadSfc('../src/components/juyiting/CommandPanel.vue')
+  CoordinationPanel = loadSfc('../src/components/juyiting/CoordinationPanel.vue')
+  HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
+  LibraryPanel = loadSfc('../src/components/juyiting/LibraryPanel.vue')
+  PersonaCatalogPanel = loadSfc('../src/components/juyiting/PersonaCatalogPanel.vue')
+  SelectedAgentCard = loadSfc('../src/components/juyiting/SelectedAgentCard.vue')
+})
+
 describe('JuyiHall component behavior', () => {
-  before(async () => {
-    installGlobalDomRuntime()
-    const { mount: rawMount } = await import('@vue/test-utils')
-    mount = (...args) => {
-      const wrapper = rawMount(...args)
-      const unmount = wrapper.unmount.bind(wrapper)
-      wrapper.unmount = () => {
-        mountedWrappers.delete(wrapper)
-        return unmount()
-      }
-      mountedWrappers.add(wrapper)
-      void Promise.resolve().then(() => flushStageFrames())
-      return wrapper
-    }
-    Vue = await import('vue')
-    silverAmount = await import('../src/utils/silverAmount.js')
-    ;({ classifyViewportResize: classifyViewportResizeMock } = await import('../src/game/camera/resizePolicy.js'))
-    hallGameMock = {
-      destroy: () => {},
-      mount: async (_container, options = {}) => {
-        options.onReady?.()
-      },
-      setSelectedAgent: () => {},
-      start: () => {},
-      syncAgents: () => {}
-    }
-    BottomDock = loadSfc('../src/components/juyiting/BottomDock.vue')
-    BountyPanel = loadSfc('../src/components/juyiting/BountyPanel.vue')
-    HallChatComposer = loadSfc('../src/components/juyiting/HallChatComposer.vue')
-    ChatPanel = loadSfc('../src/components/juyiting/ChatPanel.vue')
-    CommandPanel = loadSfc('../src/components/juyiting/CommandPanel.vue')
-    CoordinationPanel = loadSfc('../src/components/juyiting/CoordinationPanel.vue')
-    HallStage = loadSfc('../src/components/juyiting/HallStage.vue')
-    LibraryPanel = loadSfc('../src/components/juyiting/LibraryPanel.vue')
-    PersonaCatalogPanel = loadSfc('../src/components/juyiting/PersonaCatalogPanel.vue')
-    SelectedAgentCard = loadSfc('../src/components/juyiting/SelectedAgentCard.vue')
-  })
 
   it('classifies panel layouts for desktop, landscape touch, and portrait touch viewports', async () => {
     const { classifyPanelLayout } = await import('../src/composables/juyiting/useHallPanels.js')
@@ -2390,13 +2393,13 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
     applySceneEvent: noop, applySceneSnapshot: noop, agentFilter: scalar, agents: value, bindPersona: asyncNoop, canAssign: () => true,
     filteredAgents: value, hiddenAgentCount: Vue.ref(0), loadAgents: async () => { counters.loads.agents += 1 }, loadTasks: async () => { counters.loads.tasks += 1 }, loadTaskRecommendations: asyncNoop,
     mapAgents: value, personaCatalog: value, recommendedAgents: value, setAgentFilter: asyncNoop, setTaskStatusFilter: asyncNoop,
-    taskAbilityFilter: scalar, taskAbilityOptions: value, taskKeyword: scalar, tasks: value, taskStatusCount: Vue.ref({}), taskStatusFilter: scalar, unbindPersona: asyncNoop, visibleAgents: value
+    taskAbilityFilter: scalar, taskAbilityOptions: value, taskKeyword: scalar, tasks: value, taskStatusCount: () => 0, taskStatusFilter: scalar, unbindPersona: asyncNoop, visibleAgents: value
   }
   const panelHelpers = counters.panelHelpers || {}
   return {
     ...panelHelpers,
     env: {}, capturePanelReturnTarget: panelHelpers.capturePanelReturnTarget, focusHallPanel: panelHelpers.focusHallPanel, isCurrentPanelGeneration: panelHelpers.isCurrentPanelGeneration, isSafePanelFocusTarget: panelHelpers.isSafePanelFocusTarget, resolveLiveMapPreviewActivation, resolvePanelReturnTarget: panelHelpers.resolvePanelReturnTarget, restorePanelFocus: panelHelpers.restorePanelFocus, trapPanelFocus: panelHelpers.trapPanelFocus,
-    useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({}), agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {},
+    useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({ token: asyncNoop }), agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {},
     isEconomyPreviewBuildEnabled: () => Boolean(economyCapability), isEconomyPreviewCapability: capability => Boolean(capability && capability.principalScopeFingerprint === economyCapability?.principalScopeFingerprint), loadEconomyPreviewCapability: async () => economyCapability,
     roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
     useHallData: ({ selectedAgent, selectedTask }) => { counters.owners.data += 1; selectedAgent.value = { agentId: 'agent-o04', name: 'sentinel-agent' }; selectedTask.value = counters.initialSelectedTask || { id: 'task-o04', title: 'sentinel-task' }; return hallData },
@@ -2636,9 +2639,10 @@ describe('W11 R9 actual JuyiHall stale funded acknowledgement', () => {
         }
         try {
           await flushPromises()
-          state.openPanel('tasks')
+          expect(state.openPanel('tasks')).to.equal(true)
           await flushPromises()
-          await wrapper.find('.new-task-button').trigger('click')
+          expect(wrapper.findComponent(BountyPanel).exists()).to.equal(true)
+          await wrapper.get('.new-task-button').trigger('click')
           expect(wrapper.find('.task-create-form').exists()).to.equal(true)
 
           if (operation === 'ordinary create') {

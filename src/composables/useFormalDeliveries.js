@@ -28,7 +28,7 @@ const DELIVERY_FIELDS = new Set([
 ])
 const ITEM_FIELDS = new Set(['artifactId', 'artifactVersion', 'contentHash', 'purpose'])
 const formalItem = item => item && typeof item === 'object' && !Array.isArray(item) &&
-  Object.keys(item).every(key => ITEM_FIELDS.has(key)) && validId(item.artifactId) && validVersion(item.artifactVersion) &&
+  Object.keys(item).every(key => ITEM_FIELDS.has(key)) && validId(item.artifactId) && validRevision(item.artifactVersion) &&
   validHash(item.contentHash) && validText(item.purpose, 1000)
 const formalDelivery = (delivery, taskId) => delivery && typeof delivery === 'object' && !Array.isArray(delivery) &&
   Object.keys(delivery).every(key => DELIVERY_FIELDS.has(key)) && delivery.taskId === taskId && validId(delivery.workItemId) &&
@@ -142,7 +142,7 @@ export function useFormalDeliveries ({ taskId, identityFingerprint, adapter = fo
     const captured = generation; const capturedTask = taskValue.value; const capturedScope = scope.value
     const requestController = new AbortController(); controller = requestController; busyDeliveryId.value = delivery.deliveryId; message.value = ''
     try {
-      await adapter.decide({ taskId: capturedTask, deliveryId: delivery.deliveryId, expectedTaskVersion: delivery.taskVersion, expectedDeliveryVersion: delivery.revision, decision, reviewReason, idempotencyKey, signal: requestController.signal })
+      await adapter.decide({ taskId: capturedTask, deliveryId: delivery.deliveryId, expectedTaskVersion: delivery.taskVersion, expectedDeliveryVersion: delivery.revision, decision, reviewReason: decision === 'changes_requested' ? reviewReason : '', idempotencyKey, signal: requestController.signal })
       if (!current(captured, capturedScope, requestController)) return null
       controller = null; busyDeliveryId.value = ''
       const rows = await refresh()

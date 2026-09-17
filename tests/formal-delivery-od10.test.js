@@ -27,6 +27,61 @@ describe('OD10 formal delivery UI boundary', () => {
     deliveries.dispose()
   })
 
+  it('keeps artifact revisions positive while accepting zero entity versions', async () => {
+    const calls = []
+    const deliveries = useFormalDeliveries({
+      taskId: ref('task-1'), identityFingerprint: ref('owner:client:1'), idempotencyKeyFactory: () => 'formal-version-key-0001',
+      adapter: { async list () { return [delivery()] }, async decide (request) { calls.push(request) } }
+    })
+    try {
+      await tick()
+      for (const artifactVersion of [0, -1, 1.5, '1', NaN, 2147483648]) {
+        expect(await deliveries.decide({ delivery: delivery({ items: [artifact({ artifactVersion })] }), decision: 'accepted' })).to.equal(null)
+      }
+      expect(calls).to.have.length(0)
+      for (const artifactVersion of [1, 2147483647]) {
+        await deliveries.decide({ delivery: delivery({ taskVersion: 0, workItemVersion: 0, items: [artifact({ artifactVersion })] }), decision: 'accepted' })
+      }
+      expect(calls).to.have.length(2)
+      calls.forEach(request => expect(request.expectedTaskVersion).to.equal(0))
+    } finally {
+      deliveries.dispose()
+    }
+  })
+
+  for (const outcome of ['success', 'unknown failure']) {
+    it(`ignores a stale decision ${outcome} after identity changes`, async () => {
+      const identity = ref('owner-a:client:1')
+      let settle
+      let oldSignal
+      let calls = 0
+      const pending = new Promise((resolve, reject) => { settle = outcome === 'success' ? resolve : () => reject(new TypeError('response lost')) })
+      const deliveries = useFormalDeliveries({
+        taskId: ref('task-1'), identityFingerprint: identity, idempotencyKeyFactory: () => 'formal-identity-key-0001',
+        adapter: {
+          async list () { return [delivery({ summary: identity.value })] },
+          async decide ({ signal }) { calls += 1; oldSignal = signal; return pending }
+        }
+      })
+      try {
+        await tick()
+        const deciding = deliveries.decide({ delivery: deliveries.items.value[0], decision: 'accepted' })
+        identity.value = 'owner-b:client:1'
+        await tick()
+        expect(oldSignal.aborted).to.equal(true)
+        expect(deliveries.items.value[0].summary).to.equal('owner-b:client:1')
+        settle()
+        expect(await deciding).to.equal(null)
+        expect(deliveries.state.value).to.equal('ready')
+        expect(deliveries.items.value[0].summary).to.equal('owner-b:client:1')
+        expect(deliveries.refreshRequired.value).to.equal(false)
+        expect(calls).to.equal(1)
+      } finally {
+        deliveries.dispose()
+      }
+    })
+  }
+
   it('does not send an accepted-note forbidden by the API and then refreshes authoritative state', async () => {
     const calls = []
     let listCount = 0
@@ -55,22 +110,27 @@ describe('OD10 formal delivery UI boundary', () => {
       adapter: { async list () { return [delivery()] }, async decide () { decisionCalls += 1; throw Object.assign(new Error('conflict'), { status: 409 }) } }
     })
     await tick()
-    await conflict.decide({ delivery: conflict.items.value[0], decision: 'changes_requested' })
+    await conflict.decide({ delivery: conflict.items.value[0], decision: 'changes_requested', reviewReason: '请补充交付报告。' })
     expect(decisionCalls).to.equal(1)
     expect(conflict.state.value).to.equal('conflict')
     expect(conflict.refreshRequired.value).to.equal(true)
     expect(conflict.message.value).to.include('刷新')
+    await conflict.decide({ delivery: conflict.items.value[0], decision: 'accepted' })
+    expect(decisionCalls).to.equal(1)
     conflict.dispose()
 
+    let unknownCalls = 0
     const unknown = useFormalDeliveries({
       taskId: ref('task-1'), identityFingerprint: ref('owner:client:1'), idempotencyKeyFactory: () => 'formal-test-key-0003',
-      adapter: { async list () { return [delivery()] }, async decide () { throw new TypeError('network unavailable') } }
+      adapter: { async list () { return [delivery()] }, async decide () { unknownCalls += 1; throw new TypeError('network unavailable') } }
     })
     await tick()
     await unknown.decide({ delivery: unknown.items.value[0], decision: 'accepted' })
     expect(unknown.state.value).to.equal('unknown')
     expect(unknown.refreshRequired.value).to.equal(true)
     expect(unknown.message.value).to.include('刷新')
+    await unknown.decide({ delivery: unknown.items.value[0], decision: 'accepted' })
+    expect(unknownCalls).to.equal(1)
     unknown.dispose()
   })
 
