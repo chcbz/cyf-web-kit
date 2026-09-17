@@ -1,6 +1,7 @@
 const PROFILE_ROUTE = 'UserProfile'
 const JUYI_HALL_ROUTE = 'JuyiHall'
 const ECONOMY_PREVIEW_ROUTE = 'EconomyReadOnlyPreview'
+const COMMAND_OBSERVABILITY_ROUTE = 'CommandObservability'
 
 const PREVIEW_FAILURE_REASON = Object.freeze({
   DISABLED: 'disabled',
@@ -10,6 +11,7 @@ const PREVIEW_FAILURE_REASON = Object.freeze({
 const profileTarget = () => ({ name: PROFILE_ROUTE })
 const juyiHallTarget = () => ({ name: JUYI_HALL_ROUTE })
 const economyPreviewTarget = () => ({ name: ECONOMY_PREVIEW_ROUTE })
+const commandObservabilityTarget = () => ({ name: COMMAND_OBSERVABILITY_ROUTE })
 
 /** Only fixed, internal reasons may cross the route guard boundary. */
 const previewFailureReason = reason => reason === 'PREVIEW_DISABLED' || reason === PREVIEW_FAILURE_REASON.DISABLED
@@ -33,16 +35,20 @@ const previewFailureFromRoute = route => {
 }
 
 const openEconomyPreview = router => router.push(economyPreviewTarget())
+const openCommandObservability = router => router.push(commandObservabilityTarget())
 const returnToProfile = router => router.replace(profileTarget())
 const returnToJuyiHall = router => router.replace(juyiHallTarget())
 
 export {
+  COMMAND_OBSERVABILITY_ROUTE,
   ECONOMY_PREVIEW_ROUTE,
   JUYI_HALL_ROUTE,
   PREVIEW_FAILURE_REASON,
   PROFILE_ROUTE,
+  commandObservabilityTarget,
   economyPreviewTarget,
   juyiHallTarget,
+  openCommandObservability,
   openEconomyPreview,
   previewFailureFromRoute,
   previewFailureMessage,

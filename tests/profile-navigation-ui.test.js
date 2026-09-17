@@ -47,7 +47,8 @@ const routerAt = async path => {
     routes: [
       { path: '/profile', name: 'UserProfile', component: { template: '<div />' } },
       { path: '/economy-preview', name: 'EconomyReadOnlyPreview', component: { template: '<div />' } },
-      { path: '/juyiting', name: 'JuyiHall', component: { template: '<div />' } }
+      { path: '/juyiting', name: 'JuyiHall', component: { template: '<div />' } },
+      { path: '/command-observability', name: 'CommandObservability', component: { template: '<div />' } }
     ]
   })
   await router.push(path)
@@ -66,6 +67,8 @@ const profileComponent = ({ globalStore, apiStore, client }) => compileComponent
   '@/utils/economyPreviewCapability': { isEconomyPreviewCapability: () => false, loadEconomyPreviewCapability: async () => ({}) },
   '@/utils/economyReadOnlyPreviewPolicy': { assessReadOnlyPreviewCapabilities },
   '@/composables/economyReadOnlyPreviewApi': { economyReadOnlyPreviewClient: client },
+  '@/composables/commandObservabilityApi': { commandObservabilityClient: client.commandObservability || { capabilities: async () => ({ contractVersion: 'command-observability-v1', available: false, readOnly: true, reason: 'FORBIDDEN' }) } },
+  '@/utils/commandObservabilityPolicy': { assessCommandObservabilityCapability: value => value?.contractVersion === 'command-observability-v1' && value?.available === true && value?.readOnly === true && value?.reason === null ? { available: true, reason: null } : { available: false, reason: value?.reason || 'MALFORMED' }, capabilityUnavailableMessage: () => '不可用' },
   '@/utils/profileNavigation': profileNavigation
 }, { VITE_ECONOMY_READONLY_PREVIEW_ENABLED: 'true', VITE_ECONOMY_PREVIEW_ENABLED: 'false' })
 
@@ -194,5 +197,41 @@ describe('profile navigation mounted behavior', () => {
     await preview.get('.header-actions button').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.name).to.equal('UserProfile')
+  })
+})
+
+describe('profile command observability discovery', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+  afterEach(() => { for (const wrapper of wrappers.splice(0)) wrapper.unmount() })
+
+  it('uses only capability discovery, exposes the fixed internal route when allowed, and hides it for deny/disabled/malformed states', async () => {
+    const results = [
+      { contractVersion: 'command-observability-v1', available: true, readOnly: true, reason: null },
+      { contractVersion: 'command-observability-v1', available: false, readOnly: true, reason: 'FORBIDDEN' },
+      { contractVersion: 'command-observability-v1', available: false, readOnly: true, reason: 'DISABLED' },
+      { contractVersion: 'wrong', available: true, readOnly: true, reason: null }
+    ]
+    let calls = 0
+    const client = {
+      capabilities: async () => capabilities(false),
+      commandObservability: { capabilities: async () => { calls++; return results.shift() } }
+    }
+    const globalStore = Vue.reactive({ user: Vue.reactive({ id: 'user-a', username: 'alice', openid: 'a' }), setTitle: () => {}, setShowBack: () => {}, setShowMore: () => {} })
+    const apiStore = Vue.reactive({ authorizationGeneration: 0 })
+    const router = await routerAt('/profile')
+    const wrapper = mount(profileComponent({ globalStore, apiStore, client }), { global: { plugins: [router], stubs: { 'var-icon': true } } })
+    wrappers.push(wrapper)
+    await flushPromises()
+    expect(calls).to.equal(1)
+    expect(wrapper.find('a[href="/command-observability"]').exists()).to.equal(true)
+    await wrapper.get('a[href="/command-observability"]').trigger('click'); await flushPromises()
+    expect(router.currentRoute.value.name).to.equal('CommandObservability')
+
+    for (const id of ['user-b', 'user-c', 'user-d']) {
+      globalStore.user = Vue.reactive({ id, username: id, openid: id })
+      await flushPromises()
+      expect(wrapper.find('a[href="/command-observability"]').exists()).to.equal(false)
+    }
+    expect(calls).to.equal(4)
   })
 })

@@ -49,6 +49,17 @@
       </dl>
     </section>
 
+    <section class="economy-discovery command-observability-discovery" aria-labelledby="command-observability-title">
+      <h3 id="command-observability-title">协作运行看板</h3>
+      <p>仅内部只读查看投递、死信和已有操作审计；命令投递不等同于 Agent 任务完成。</p>
+      <p v-if="commandObservabilityState === 'loading'" class="capability-status" role="status">正在确认协作运行看板是否可用…</p>
+      <p v-else-if="commandObservabilityState === 'error'" class="capability-error" role="alert">{{ commandObservabilityError }}</p>
+      <div class="discovery-links">
+        <button v-if="commandObservabilityState === 'error'" type="button" @click="loadCommandObservabilityCapability">重试</button>
+        <router-link v-else-if="commandObservabilityState === 'ready'" :to="commandObservabilityTarget()">进入协作运行看板</router-link>
+      </div>
+    </section>
+
     <section v-if="economyReadOnlyPreviewBuildEnabled" class="economy-discovery" aria-labelledby="economy-readonly-preview-title">
       <h3 id="economy-readonly-preview-title">经济预览</h3>
       <p>只读，不扣款、不下单、不安装、不启用托管；实际可读能力由服务端认证后确认。</p>
@@ -147,7 +158,9 @@ import { isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
 import { isEconomyPreviewCapability, loadEconomyPreviewCapability as fetchEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
 import { assessReadOnlyPreviewCapabilities } from '@/utils/economyReadOnlyPreviewPolicy'
 import { economyReadOnlyPreviewClient } from '@/composables/economyReadOnlyPreviewApi'
-import { economyPreviewTarget, previewFailureFromRoute, previewFailureMessage, returnToJuyiHall } from '@/utils/profileNavigation'
+import { commandObservabilityClient } from '@/composables/commandObservabilityApi'
+import { assessCommandObservabilityCapability, capabilityUnavailableMessage } from '@/utils/commandObservabilityPolicy'
+import { commandObservabilityTarget, economyPreviewTarget, previewFailureFromRoute, previewFailureMessage, returnToJuyiHall } from '@/utils/profileNavigation'
 import { useApiStore } from '@/stores/api'
 
 const router = useRouter()
@@ -164,6 +177,10 @@ const readOnlyPreviewState = ref('idle')
 const readOnlyPreviewError = ref('')
 let economyPreviewRequest = 0
 let readOnlyPreviewRequest = 0
+const commandObservabilityState = ref('idle')
+const commandObservabilityError = ref('')
+let commandObservabilityRequest = 0
+let commandObservabilityController = null
 let profileMounted = false
 let disposed = false
 const globalStore = useGlobalStore()
@@ -203,6 +220,11 @@ const resetPreviewCapabilityState = () => {
   readOnlyPreviewRequest += 1
   readOnlyPreviewState.value = 'idle'
   readOnlyPreviewError.value = ''
+  commandObservabilityRequest += 1
+  commandObservabilityController?.abort()
+  commandObservabilityController = null
+  commandObservabilityState.value = 'idle'
+  commandObservabilityError.value = ''
 }
 
 const hasCurrentProfileIdentity = () => Boolean(user.value.id || user.value.username || user.value.openid)
@@ -238,6 +260,7 @@ const reloadPreviewCapabilities = () => {
   if (!profileMounted || !hasCurrentProfileIdentity()) return
   void loadEconomyPreviewCapability()
   if (economyReadOnlyPreviewBuildEnabled) void loadReadOnlyPreviewCapability()
+  void loadCommandObservabilityCapability()
 }
 
 const loadReadOnlyPreviewCapability = async () => {
@@ -259,6 +282,33 @@ const loadReadOnlyPreviewCapability = async () => {
     if (disposed || request !== readOnlyPreviewRequest || authGeneration !== apiStore.authorizationGeneration) return
     readOnlyPreviewState.value = 'unavailable'
     readOnlyPreviewError.value = previewFailureMessage('PREVIEW_UNAVAILABLE')
+  }
+}
+
+const loadCommandObservabilityCapability = async () => {
+  const request = ++commandObservabilityRequest
+  const authGeneration = apiStore.authorizationGeneration
+  commandObservabilityController?.abort()
+  const controller = new AbortController()
+  commandObservabilityController = controller
+  commandObservabilityState.value = 'loading'
+  commandObservabilityError.value = ''
+  try {
+    const assessment = assessCommandObservabilityCapability(await commandObservabilityClient.capabilities({ signal: controller.signal }))
+    if (disposed || request !== commandObservabilityRequest || authGeneration !== apiStore.authorizationGeneration) return
+    if (assessment.available) {
+      commandObservabilityState.value = 'ready'
+      return
+    }
+    // FORBIDDEN/DISABLED are normal server-computed states. Do not expose a usable link.
+    commandObservabilityState.value = 'unavailable'
+    commandObservabilityError.value = capabilityUnavailableMessage(assessment.reason)
+  } catch {
+    if (disposed || controller.signal.aborted || request !== commandObservabilityRequest || authGeneration !== apiStore.authorizationGeneration) return
+    commandObservabilityState.value = 'error'
+    commandObservabilityError.value = '暂时无法确认协作运行看板是否可用，请稍后重试。'
+  } finally {
+    if (commandObservabilityController === controller) commandObservabilityController = null
   }
 }
 

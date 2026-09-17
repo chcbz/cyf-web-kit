@@ -183,6 +183,15 @@ export default [
     }
   },
   {
+    path: '/command-observability',
+    name: 'CommandObservability',
+    component: () => import('@/components/CommandObservability.vue'),
+    meta: {
+      title: '协作运行看板',
+      showInMenu: false
+    }
+  },
+  {
     path: '/profile',
     name: 'UserProfile',
     component: () => import('@/components/UserProfile'),
