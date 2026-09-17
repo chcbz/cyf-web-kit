@@ -53,7 +53,7 @@
       <h3 id="command-observability-title">协作运行看板</h3>
       <p>仅内部只读查看投递、死信和已有操作审计；命令投递不等同于 Agent 任务完成。</p>
       <p v-if="commandObservabilityState === 'loading'" class="capability-status" role="status">正在确认协作运行看板是否可用…</p>
-      <p v-else-if="commandObservabilityState === 'error'" class="capability-error" role="alert">{{ commandObservabilityError }}</p>
+      <p v-else-if="commandObservabilityState === 'error' || commandObservabilityState === 'unavailable'" class="capability-error" role="alert">{{ commandObservabilityError }}</p>
       <div class="discovery-links">
         <button v-if="commandObservabilityState === 'error'" type="button" @click="loadCommandObservabilityCapability">重试</button>
         <router-link v-else-if="commandObservabilityState === 'ready'" :to="commandObservabilityTarget()">进入协作运行看板</router-link>

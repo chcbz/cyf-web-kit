@@ -7,7 +7,8 @@ const own = (value, key) => Object.prototype.hasOwnProperty.call(value, key)
 
 export const isSafeObservationNumber = value => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 export const observationValue = value => isSafeObservationNumber(value) ? String(value) : '未知'
-export const observationTimestamp = value => isSafeObservationNumber(value) && value > 0
+export const observationDuration = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= Number.MAX_SAFE_INTEGER ? String(value) : '未知'
+export const observationTimestamp = value => isSafeObservationNumber(value) && value > 0 && !Number.isNaN(new Date(value).getTime())
   ? new Date(value).toLocaleString()
   : '未知'
 export const observationString = value => typeof value === 'string' && value.length > 0 ? value : '未知'
@@ -24,17 +25,20 @@ export function assessCommandObservabilityCapability (value) {
   return Object.freeze({ available: value.available, reason: value.reason, capability: Object.freeze({ ...value }) })
 }
 
+const validCursor = value => typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value) && (value.length < 19 || (value.length === 19 && value <= '9223372036854775807'))
+const cursorAdvanced = (next, previous) => validCursor(next) && validCursor(previous) && (next.length > previous.length || (next.length === previous.length && next > previous))
+
 const pageShape = (value, cursorKey, requestedCursor) => {
   if (!isRecord(value) || !Array.isArray(value.items) || typeof value.hasMore !== 'boolean' || !own(value, cursorKey)) {
     throw new Error('看板分页响应格式无效。')
   }
   const cursor = value[cursorKey]
-  if (value.hasMore && (typeof cursor !== 'string' || cursor.length === 0 || cursor === requestedCursor)) {
+  if (value.hasMore && !cursorAdvanced(cursor, requestedCursor)) {
     const error = new Error('看板分页游标未前进。')
     error.protocol = true
     throw error
   }
-  if (!value.hasMore && cursor !== null && typeof cursor !== 'string') throw new Error('看板分页游标格式无效。')
+  if (!value.hasMore && cursor !== null && !validCursor(cursor)) throw new Error('看板分页游标格式无效。')
   return Object.freeze({ items: value.items, nextCursor: cursor, hasMore: value.hasMore })
 }
 

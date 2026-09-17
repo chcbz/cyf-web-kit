@@ -5,7 +5,7 @@
         <h1>协作运行看板</h1>
         <p>仅供内部只读排查。命令投递或回执不等同于 Agent 任务已经完成。</p>
       </div>
-      <button type="button" @click="returnToProfile">返回个人中心</button>
+      <div class="page-actions"><button type="button" class="refresh-all" :disabled="capabilityState === 'loading'" @click="refresh">刷新全部</button><button type="button" @click="returnToProfile">返回个人中心</button></div>
     </header>
 
     <section v-if="capabilityState === 'loading'" class="notice" role="status">正在确认看板访问权限…</section>
@@ -23,7 +23,7 @@
         <p v-if="metrics.status === 'loading'" role="status">正在读取指标…</p>
         <template v-else>
           <dl class="metric-grid">
-            <template v-for="key in metricKeys" :key="key"><dt>{{ metricLabels[key] }}</dt><dd>{{ metricValue(metrics.data?.[key]) }}</dd></template>
+            <template v-for="key in metricKeys" :key="key"><dt>{{ metricLabels[key] }}</dt><dd>{{ key === 'ackLatencySeconds' ? duration(metrics.data?.[key]) : metricValue(metrics.data?.[key]) }}</dd></template>
             <dt>采集时间</dt><dd>{{ timestamp(metrics.data?.capturedAt) }}</dd>
           </dl>
           <div v-for="key in statusMapKeys" :key="key" class="status-map"><strong>{{ metricLabels[key] }}</strong><span v-if="statusEntries(metrics.data?.[key]).length">{{ statusEntries(metrics.data?.[key]).map(([name, value]) => `${name}: ${metricValue(value)}`).join('；') }}</span><span v-else>未知</span></div>
@@ -35,7 +35,7 @@
         <div class="card-heading"><h2 id="dlq-title">失败/死信列表</h2><button type="button" :disabled="dlq.status === 'loading'" @click="loadDlq({ reset: true })">刷新</button></div>
         <p v-if="dlq.error" class="block-error" role="alert">{{ dlq.error }} <button type="button" @click="loadDlq({ reset: !dlq.items.length })">重试</button></p>
         <p v-if="dlq.status === 'loading' && !dlq.items.length" role="status">正在读取失败/死信列表…</p>
-        <div v-else class="table-scroll"><table><thead><tr><th>投递 ID</th><th>命令 ID</th><th>事件 ID</th><th>任务 ID</th><th>目标 Agent</th><th>投递状态</th><th>Outbox</th><th>Inbox</th><th>结果</th><th>活动尝试</th><th>发布次数</th><th>更新时间</th></tr></thead><tbody><tr v-for="row in dlq.items" :key="rowKey(row, 'deliveryId')"><td v-for="key in dlqKeys" :key="key" class="long-value">{{ cell(row, key) }}</td></tr><tr v-if="!dlq.items.length && dlq.status === 'ready'"><td :colspan="dlqKeys.length">暂无可显示的失败/死信记录。</td></tr></tbody></table></div>
+        <div v-else class="table-scroll"><table><thead><tr><th v-for="key in dlqKeys" :key="key">{{ dlqLabels[key] }}</th></tr></thead><tbody><tr v-for="row in dlq.items" :key="rowKey(row, 'deliveryId')"><td v-for="key in dlqKeys" :key="key" class="long-value">{{ cell(row, key) }}</td></tr><tr v-if="!dlq.items.length && dlq.status === 'ready'"><td :colspan="dlqKeys.length">暂无可显示的失败/死信记录。</td></tr></tbody></table></div>
         <p v-if="dlq.status === 'stale'" class="stale">显示的是上次成功读取的数据，可能已过期。</p>
         <button
           v-if="dlq.hasMore"
@@ -68,7 +68,7 @@ import { useRouter } from 'vue-router'
 import { useApiStore } from '@/stores/api'
 import { useGlobalStore } from '@/stores/global'
 import { useCommandObservability } from '@/composables/useCommandObservability'
-import { observationString, observationTimestamp, observationValue } from '@/utils/commandObservabilityPolicy'
+import { observationDuration, observationString, observationTimestamp, observationValue } from '@/utils/commandObservabilityPolicy'
 import { returnToProfile as navigateToProfile } from '@/utils/profileNavigation'
 
 const router = useRouter()
@@ -81,10 +81,12 @@ const metricKeys = ['ackLatencySeconds', 'outboxBacklog', 'outboxOldestAgeSecond
 const metricLabels = Object.freeze({ ackLatencySeconds: '确认延迟秒数', deliveryByStatus: '投递状态统计', inboxByStatus: 'Inbox 状态统计', inboxByResult: 'Inbox 结果统计', outboxByStatus: 'Outbox 状态统计', operationsByTypeAndOutcome: '操作结果统计', outboxBacklog: 'Outbox 积压', outboxOldestAgeSeconds: '最旧 Outbox 秒数', publishFailureTotal: '发布失败总数', rabbitDlqCount: 'Rabbit 死信数', waitingDueCount: '待处理到期数', sentUnacknowledgedCount: '已发送未确认数', reconnectQueueDepth: '重连队列深度', expiryProximityCount: '接近过期数' })
 const statusMapKeys = ['deliveryByStatus', 'inboxByStatus', 'inboxByResult', 'outboxByStatus', 'operationsByTypeAndOutcome']
 const dlqKeys = ['deliveryId', 'commandId', 'eventId', 'messageId', 'taskId', 'targetAgentId', 'deliveryStatus', 'outboxStatus', 'inboxStatus', 'inboxResultStatus', 'activeAttempt', 'publishAttemptCount', 'publishedAt', 'processedAt', 'expiresAt', 'updatedAt']
+const dlqLabels = Object.freeze({ deliveryId: '投递 ID', commandId: '命令 ID', eventId: '事件 ID', messageId: '消息 ID', taskId: '任务 ID', targetAgentId: '目标 Agent', deliveryStatus: '投递状态', outboxStatus: 'Outbox', inboxStatus: 'Inbox', inboxResultStatus: '结果', activeAttempt: '活动尝试', publishAttemptCount: '发布次数', publishedAt: '发布时间', processedAt: '处理时间', expiresAt: '到期时间', updatedAt: '更新时间' })
 const auditKeys = ['id', 'operationId', 'phase', 'operationType', 'taskId', 'targetAgentId', 'deliveryId', 'sourceAttempt', 'newAttempt', 'requestedAt', 'completedAt', 'outcome', 'errorCode', 'createdAt']
 const auditLabels = Object.freeze({ id: '审计 ID', operationId: '操作 ID', phase: '阶段', operationType: '类型', taskId: '任务 ID', targetAgentId: '目标 Agent', deliveryId: '投递 ID', sourceAttempt: '来源尝试', newAttempt: '新尝试', requestedAt: '请求时间', completedAt: '完成时间', outcome: '结果', errorCode: '错误码', createdAt: '创建时间' })
 const timestampKeys = new Set(['publishedAt', 'processedAt', 'expiresAt', 'updatedAt', 'requestedAt', 'completedAt', 'createdAt'])
 const numericKeys = new Set(['activeAttempt', 'publishAttemptCount', 'sourceAttempt', 'newAttempt'])
+const duration = observationDuration
 const metricValue = observationValue
 const timestamp = observationTimestamp
 const statusEntries = value => value && typeof value === 'object' && !Array.isArray(value) ? Object.entries(value).filter(([key]) => typeof key === 'string' && key.length > 0) : []
@@ -103,6 +105,7 @@ onBeforeUnmount(dispose)
 
 <style scoped>
 .command-observability { flex: 1; overflow: auto; padding: 16px; background: var(--color-body, #f8fafc); color: #172033; }
+.page-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .page-header, .card-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .page-header { flex-wrap: wrap; margin-bottom: 16px; }.page-header h1, .card h2 { margin: 0; }.page-header p { margin: 6px 0 0; color: #475569; }
 .card, .notice { margin-bottom: 16px; padding: 16px; border: 1px solid #dbe3ee; border-radius: 10px; background: #fff; }.error, .block-error { color: #991b1b; }.block-error button { margin-left: 8px; }.refresh-note, .stale { color: #64748b; font-size: .9rem; }.stale { margin-bottom: 0; }.metric-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 16px; }.metric-grid dt { color: #475569; }.metric-grid dd { margin: 2px 0 0; font-weight: 600; }

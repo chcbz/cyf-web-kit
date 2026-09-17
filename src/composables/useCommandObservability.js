@@ -58,6 +58,7 @@ export function useCommandObservability ({
   }
 
   const loadMetrics = async (captured = snapshot()) => {
+    if (disposed || !available.value || !current(captured)) return
     const request = ++requests.metrics
     controllers.metrics?.abort()
     const controller = new AbortController(); controllers.metrics = controller
@@ -75,6 +76,7 @@ export function useCommandObservability ({
   }
 
   const loadPage = async (kind, { reset = false } = {}, captured = snapshot()) => {
+    if (disposed || !available.value || !current(captured)) return
     const target = kind === 'dlq' ? dlq : audit
     const cursorKey = kind === 'dlq' ? 'afterDeliveryId' : 'afterId'
     const normalize = kind === 'dlq' ? normalizeDlqPage : normalizeAuditPage
@@ -110,6 +112,7 @@ export function useCommandObservability ({
   }
 
   const refresh = async () => {
+    if (disposed) return
     lifecycle += 1
     abortAll()
     capability.value = null; capabilityState.value = 'loading'; capabilityError.value = ''; clearCards()
@@ -133,5 +136,5 @@ export function useCommandObservability ({
 
   const resetForIdentity = () => invalidate()
   const dispose = () => { disposed = true; invalidate() }
-  return { capability, capabilityState, capabilityError, metrics, dlq, audit, available, refresh, loadMetrics, loadDlq: options => loadPage('dlq', options), loadAudit: options => loadPage('audit', options), resetForIdentity, dispose }
+  return { capability, capabilityState, capabilityError, metrics, dlq, audit, available, refresh, loadMetrics: () => loadMetrics(), loadDlq: options => loadPage('dlq', options), loadAudit: options => loadPage('audit', options), resetForIdentity, dispose }
 }

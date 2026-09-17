@@ -4,6 +4,8 @@ import { effectScope } from 'vue'
 import {
   assessCommandObservabilityCapability,
   normalizeDlqPage,
+  observationDuration,
+  observationTimestamp,
   observationValue
 } from '../src/utils/commandObservabilityPolicy.js'
 import { useCommandObservability } from '../src/composables/useCommandObservability.js'
@@ -29,20 +31,27 @@ describe('command observability read-only policy and lifecycle', () => {
     expect(assessCommandObservabilityCapability({ ...capability(), unexpected: true }).reason).to.equal('MALFORMED')
     expect(assessCommandObservabilityCapability({ ...capability(), readOnly: false }).reason).to.equal('MALFORMED')
     expect(observationValue(9007199254740992)).to.equal('未知')
+    expect(observationDuration(0.125)).to.equal('0.125')
+    expect(observationDuration(Infinity)).to.equal('未知')
+    expect(observationDuration(-1)).to.equal('未知')
+    expect(observationTimestamp(Number.MAX_SAFE_INTEGER)).to.equal('未知')
   })
 
   it('preserves string cursors, deduplicates pagination, and stops a non-advancing cursor', async () => {
     const reads = []
     const client = {
       capabilities: async () => capability(), metrics: async () => metrics(), audit: async () => auditPage([], null, false),
-      dlq: ({ afterDeliveryId }) => { reads.push(afterDeliveryId); return afterDeliveryId === '0' ? Promise.resolve(page([{ deliveryId: '0009' }], 'cursor-1', true)) : Promise.resolve(page([{ deliveryId: '0009' }, { deliveryId: '0010' }], 'cursor-2', false)) }
+      dlq: ({ afterDeliveryId }) => { reads.push(afterDeliveryId); return afterDeliveryId === '0' ? Promise.resolve(page([{ deliveryId: '0009' }], '9007199254740993', true)) : Promise.resolve(page([{ deliveryId: '0009' }, { deliveryId: '0010' }], '9007199254740994', false)) }
     }
     const fixture = board({ client })
     try {
       await fixture.value.refresh(); await fixture.value.loadDlq()
-      expect(reads).to.deep.equal(['0', 'cursor-1'])
+      expect(reads).to.deep.equal(['0', '9007199254740993'])
       expect(fixture.value.dlq.value.items.map(row => row.deliveryId)).to.deep.equal(['0009', '0010'])
       expect(() => normalizeDlqPage(page([], '0', true), '0')).to.throw
+      for (const cursor of ['1', '02', 'cursor-2', '-1', '9223372036854775808']) {
+        expect(() => normalizeDlqPage(page([], cursor, true), '2')).to.throw
+      }
     } finally { fixture.scope.stop() }
   })
 
@@ -113,6 +122,37 @@ describe('command observability pagination interaction', () => {
       await refresh; await flush()
       expect(fixture.value.dlq.value.status).to.equal('error')
       expect(fixture.value.dlq.value.items).to.deep.equal([])
+    } finally { fixture.scope.stop() }
+  })
+})
+
+
+describe('command observability eligibility guards', () => {
+  it('does not issue data requests before capability success, after invalidation or after disposal', async () => {
+    let reads = 0
+    const client = { capabilities: async () => capability(), metrics: async () => { reads++; return metrics() }, dlq: async () => { reads++; return page([], null, false) }, audit: async () => { reads++; return auditPage([], null, false) } }
+    const fixture = board({ client })
+    try {
+      await fixture.value.loadMetrics(); await fixture.value.loadDlq({ reset: true }); await fixture.value.loadAudit({ reset: true })
+      expect(reads).to.equal(0)
+      await fixture.value.refresh(); expect(reads).to.equal(3)
+      fixture.value.resetForIdentity()
+      await fixture.value.loadMetrics(); expect(reads).to.equal(3)
+      fixture.value.dispose()
+      await fixture.value.refresh(); await fixture.value.loadAudit({ reset: true }); expect(reads).to.equal(3)
+    } finally { fixture.scope.stop() }
+  })
+
+  it('discards an old pending append after a full refresh and retains decimal IDs without precision loss', async () => {
+    const oldAppend = deferred(); let reads = 0
+    const client = { capabilities: async () => capability(), metrics: async () => metrics(), audit: async () => auditPage([], null, false), dlq: async () => { reads++; return reads === 1 ? page([{ deliveryId: '9007199254740993' }], '9007199254740993', true) : reads === 2 ? oldAppend.promise : page([{ deliveryId: '9007199254740995' }], null, false) } }
+    const fixture = board({ client })
+    try {
+      await fixture.value.refresh()
+      const append = fixture.value.loadDlq(); await flush()
+      await fixture.value.refresh()
+      oldAppend.resolve(page([{ deliveryId: '9007199254740994' }], null, false)); await append
+      expect(fixture.value.dlq.value.items.map(r => r.deliveryId)).to.deep.equal(['9007199254740995'])
     } finally { fixture.scope.stop() }
   })
 })
