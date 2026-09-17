@@ -2,6 +2,19 @@ import PublicLanding from '@/components/public/PublicLanding.vue'
 import GuestDemo from '@/components/public/GuestDemo.vue'
 import OAuthCallback from '@/components/OAuthCallback.vue'
 import { isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
+import { assessReadOnlyPreviewCapabilities } from '@/utils/economyReadOnlyPreviewPolicy'
+import { economyReadOnlyPreviewClient } from '@/composables/economyReadOnlyPreviewApi'
+
+const economyReadOnlyPreviewBuildEnabled = import.meta.env.VITE_ECONOMY_READONLY_PREVIEW_ENABLED === 'true'
+const economyReadOnlyPreviewRouteGuard = async () => {
+  if (!economyReadOnlyPreviewBuildEnabled) return { name: 'UserProfile' }
+  try {
+    return assessReadOnlyPreviewCapabilities(await economyReadOnlyPreviewClient.capabilities()).available
+      ? true : { name: 'UserProfile' }
+  } catch {
+    return { name: 'UserProfile' }
+  }
+}
 import { isEconomyPreviewCapability, isSkillMarketplaceCapability, loadEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
 import { redirectLoggedInHome } from './homeLoginRedirect.js'
 
@@ -134,6 +147,16 @@ export default [
     component: () => import('@/components/OrderList'),
     meta: {
       title: 'gift.order_list',
+      showInMenu: false
+    }
+  },
+  {
+    path: '/economy-preview',
+    name: 'EconomyReadOnlyPreview',
+    component: () => import('@/components/economy/EconomyReadOnlyPreview.vue'),
+    beforeEnter: economyReadOnlyPreviewRouteGuard,
+    meta: {
+      title: '经济预览',
       showInMenu: false
     }
   },

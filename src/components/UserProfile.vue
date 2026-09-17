@@ -30,6 +30,12 @@
       </dl>
     </section>
 
+    <section v-if="economyReadOnlyPreviewBuildEnabled" class="economy-discovery" aria-labelledby="economy-readonly-preview-title">
+      <h3 id="economy-readonly-preview-title">经济预览</h3>
+      <p>只读预览不会扣款、下单、安装或启用托管；实际可读能力由服务端认证后确认。</p>
+      <div class="discovery-links"><router-link to="/economy-preview">进入经济预览</router-link></div>
+    </section>
+
     <section v-if="economyPreviewAvailable" class="economy-discovery" aria-labelledby="economy-discovery-title">
       <h3 id="economy-discovery-title">开发预览</h3>
       <p>经济预览由服务端能力决定；未开启时不会显示可操作的钱包或市场功能。</p>
@@ -117,6 +123,7 @@ import { isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
 import { isEconomyPreviewCapability, loadEconomyPreviewCapability as fetchEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
 
 const router = useRouter()
+const economyReadOnlyPreviewBuildEnabled = import.meta.env.VITE_ECONOMY_READONLY_PREVIEW_ENABLED === 'true'
 const economyPreviewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
 const economyPreviewAvailable = ref(false)
 const globalStore = useGlobalStore()
