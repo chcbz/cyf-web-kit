@@ -12,13 +12,13 @@ const juyiHallTarget = () => ({ name: JUYI_HALL_ROUTE })
 const economyPreviewTarget = () => ({ name: ECONOMY_PREVIEW_ROUTE })
 
 /** Only fixed, internal reasons may cross the route guard boundary. */
-const previewFailureReason = reason => reason === 'PREVIEW_DISABLED'
+const previewFailureReason = reason => reason === 'PREVIEW_DISABLED' || reason === PREVIEW_FAILURE_REASON.DISABLED
   ? PREVIEW_FAILURE_REASON.DISABLED
   : PREVIEW_FAILURE_REASON.UNAVAILABLE
 
-const previewFailureMessage = reason => reason === PREVIEW_FAILURE_REASON.DISABLED
-  ? '经济只读预览当前未开放。未读取或修改任何经济数据。'
-  : '经济只读预览暂时不可用。请稍后重试；未读取或修改任何经济数据。'
+const previewFailureMessage = reason => previewFailureReason(reason) === PREVIEW_FAILURE_REASON.DISABLED
+  ? '经济只读预览当前未开放。不会扣款、下单、安装或启用托管。'
+  : '经济只读预览暂时不可用。请稍后重试；不会扣款、下单、安装或启用托管。'
 
 const profilePreviewFailureTarget = reason => ({
   ...profileTarget(),

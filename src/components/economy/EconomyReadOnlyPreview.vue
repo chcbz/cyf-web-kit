@@ -7,8 +7,8 @@
         <button type="button" :disabled="refreshing" @click="refresh">{{ refreshing ? '正在刷新…' : '刷新全部' }}</button>
       </div>
     </header>
-    <p v-if="preview.capabilityError" class="card-error" role="alert">经济只读预览暂时不可用。{{ preview.capabilityError }} 未读取或修改任何经济数据；可刷新重试或返回个人中心。</p>
-    <p v-else-if="!preview.enabled" class="notice" role="status">经济只读预览当前未启用。未读取或修改任何经济数据；可返回个人中心。</p>
+    <p v-if="preview.capabilityError" class="card-error" role="alert">经济只读预览暂时不可用。{{ preview.capabilityError }} 不会扣款、下单、安装或启用托管；可刷新重试或返回个人中心。</p>
+    <p v-else-if="!preview.enabled" class="notice" role="status">经济只读预览当前未启用。不会扣款、下单、安装或启用托管；可返回个人中心。</p>
 
     <template v-if="preview.enabled">
       <section class="preview-card" aria-labelledby="wallet-title">

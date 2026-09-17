@@ -155,6 +155,7 @@ const readOnlyPreviewState = ref('idle')
 const readOnlyPreviewError = ref('')
 let economyPreviewRequest = 0
 let readOnlyPreviewRequest = 0
+let profileMounted = false
 let disposed = false
 const globalStore = useGlobalStore()
 const { busy, error, status, signOutCurrentDevice, signOutAllDevices } = useAccountSecuritySession({ router })
@@ -183,6 +184,27 @@ const handleAllDevicesSignOut = async () => {
 
 const returnToHall = () => returnToJuyiHall(router)
 
+const clearPreviewFailureQuery = () => {
+  if (previewFailureFromRoute(route)) void router.replace({ name: 'UserProfile' })
+}
+
+const resetPreviewCapabilityState = () => {
+  economyPreviewRequest += 1
+  economyPreviewAvailable.value = false
+  readOnlyPreviewRequest += 1
+  readOnlyPreviewState.value = 'idle'
+  readOnlyPreviewError.value = ''
+}
+
+const hasCurrentProfileIdentity = () => Boolean(user.value.id || user.value.username || user.value.openid)
+
+const reloadPreviewCapabilities = () => {
+  resetPreviewCapabilityState()
+  if (!profileMounted || !hasCurrentProfileIdentity()) return
+  void loadEconomyPreviewCapability()
+  if (economyReadOnlyPreviewBuildEnabled) void loadReadOnlyPreviewCapability()
+}
+
 const loadReadOnlyPreviewCapability = async () => {
   const request = ++readOnlyPreviewRequest
   const authGeneration = apiStore.authorizationGeneration
@@ -193,6 +215,7 @@ const loadReadOnlyPreviewCapability = async () => {
     if (disposed || request !== readOnlyPreviewRequest || authGeneration !== apiStore.authorizationGeneration) return
     if (assessment.available) {
       readOnlyPreviewState.value = 'ready'
+      clearPreviewFailureQuery()
       return
     }
     readOnlyPreviewState.value = 'unavailable'
@@ -218,20 +241,20 @@ const loadEconomyPreviewCapability = async () => {
   }
 }
 
-watch(() => user.value.id, () => { avatarFailed.value = false })
 watch(() => user.value.avatar, () => { avatarFailed.value = false })
-watch(() => apiStore.authorizationGeneration, () => {
-  economyPreviewRequest += 1
-  economyPreviewAvailable.value = false
-  readOnlyPreviewRequest += 1
-  readOnlyPreviewState.value = 'idle'
-  readOnlyPreviewError.value = ''
-}, { flush: 'sync' })
+watch(
+  () => [user.value.id, user.value.username, user.value.openid, apiStore.authorizationGeneration],
+  () => {
+    avatarFailed.value = false
+    clearPreviewFailureQuery()
+    reloadPreviewCapabilities()
+  },
+  { flush: 'sync' }
+)
 
 onBeforeUnmount(() => {
   disposed = true
-  economyPreviewRequest += 1
-  readOnlyPreviewRequest += 1
+  resetPreviewCapabilityState()
   closeConfirmation({ force: true })
 })
 
@@ -239,8 +262,8 @@ onMounted(() => {
   globalStore.setTitle('个人中心')
   globalStore.setShowBack(false)
   globalStore.setShowMore(false)
-  void loadEconomyPreviewCapability()
-  if (economyReadOnlyPreviewBuildEnabled) void loadReadOnlyPreviewCapability()
+  profileMounted = true
+  reloadPreviewCapabilities()
 })
 </script>
 

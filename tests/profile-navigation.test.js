@@ -51,5 +51,7 @@ describe('profile navigation contract', () => {
     expect(previewFailureFromRoute({ query: { preview: 'disabled', returnUrl: 'https://example.invalid' } })).to.equal('disabled')
     expect(previewFailureFromRoute({ query: { preview: 'token-value' } })).to.equal('')
     expect(previewFailureMessage('disabled')).to.not.include('token')
+    expect(previewFailureMessage('PREVIEW_DISABLED')).to.include('当前未开放')
+    expect(previewFailureMessage('PREVIEW_DISABLED')).to.not.include('未读取')
   })
 })
