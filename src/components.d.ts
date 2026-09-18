@@ -60,6 +60,7 @@ declare module 'vue' {
     OutputList: typeof import('./components/outputs/OutputList.vue')['default']
     OutputPreview: typeof import('./components/outputs/OutputPreview.vue')['default']
     PersonaCatalogPanel: typeof import('./components/juyiting/PersonaCatalogPanel.vue')['default']
+    PersonalWorkspace: typeof import('./components/workspace/PersonalWorkspace.vue')['default']
     Phrase: typeof import('./components/Phrase.vue')['default']
     PhraseAddDialog: typeof import('./components/phrase/PhraseAddDialog.vue')['default']
     PhraseFeedbackDialog: typeof import('./components/phrase/PhraseFeedbackDialog.vue')['default']
