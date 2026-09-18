@@ -4,14 +4,14 @@
       <div>
         <p class="workspace-eyebrow">个人中心</p>
         <h1>我的工作空间</h1>
-        <p>保存自己上传的文件和后续交付件。本版仅管理本人上传内容，不会把文件发送给 Agent。</p>
+        <p>保存自己上传的文件和后续交付件。只有你主动创建私人执行时，当前选定版本才会被授权给已选 Agent。</p>
       </div>
       <button type="button" @click="router.push({ name: 'UserProfile' })">返回个人中心</button>
     </header>
 
     <section class="workspace-card" aria-labelledby="workspace-upload-title">
       <h2 id="workspace-upload-title">上传文件</h2>
-      <p class="workspace-note">支持 PNG、JPEG、纯文本、PDF、DOCX、XLSX、PPTX。图片可直接预览；Office/PDF 提供只读文本预览，原文件始终可下载。Agent 修改功能将在后续版本开放。</p>
+      <p class="workspace-note">支持 PNG、JPEG、纯文本、PDF、DOCX、XLSX、PPTX。图片可直接预览；Office/PDF 提供只读文本预览，原文件始终可下载。当前私人执行仅接受 DOCX，其他格式仍可上传管理。</p>
       <label class="file-picker">
         <span>选择文件</span>
         <input type="file" :accept="acceptTypes" @change="onUploadFile" />
@@ -30,7 +30,7 @@
 
     <section class="workspace-card" aria-labelledby="workspace-files-title">
       <div class="section-heading">
-        <div><h2 id="workspace-files-title">{{ state === 'TRASHED' ? '回收站' : '我的文件' }}</h2><p>“全部文件”目前只包含此页面上传的文件；已有 Agent 成果统一归档将在 1.11 接入。</p></div>
+        <div><h2 id="workspace-files-title">{{ state === 'TRASHED' ? '回收站' : '我的文件' }}</h2><p>“全部文件”包含本人上传和已归档交付件；来源与执行状态由服务端确认。</p></div>
         <button type="button" :disabled="workspace.loading.value" @click="refresh">刷新</button>
       </div>
       <form class="filters" @submit.prevent="refresh">
@@ -65,10 +65,11 @@
 
     <section v-if="workspace.detail.value?.file.state === 'ACTIVE'" class="workspace-card execution-card" aria-labelledby="workspace-execution-title">
       <div class="section-heading">
-        <div><h2 id="workspace-execution-title">交给 Agent 执行</h2><p>受控试行，Agent 连接可用后执行。仅提交当前选择的一个文件版本；不会声明 Word、图片或 PPT 已可用。</p></div>
+        <div><h2 id="workspace-execution-title">交给 Agent 执行</h2><p>受控试行。仅提交当前选择的一个 DOCX 版本给明确 Agent；完成与交付件归档必须由服务端回执确认。</p></div>
         <button type="button" :disabled="execution.rosterState.value === 'loading'" @click="loadExecutionAgents">刷新 Agent</button>
       </div>
-      <p class="workspace-note">已选材料：{{ workspace.detail.value.file.displayName }} · v{{ selectedVersion }}</p>
+      <p class="workspace-note">已选材料：{{ workspace.detail.value.file.displayName }} · v{{ selectedVersion }}<template v-if="selectedExecutionVersion"> · {{ selectedExecutionVersion.contentMimeType }}</template></p>
+      <p v-if="!canExecuteSelectedVersion" class="workspace-note">当前受控执行只接受 DOCX；图片、PPT、Excel、PDF 仍可在空间管理，尚未开放给此执行通道。</p>
       <label><span>已有 Agent</span><select :value="execution.selectedAgentId.value" :disabled="execution.rosterState.value === 'loading'" @change="selectExecutionAgent($event.target.value)"><option value="">请选择已有 Agent</option><option v-for="agent in execution.agents.value" :key="agent.agentId" :value="agent.agentId">{{ agent.name }}{{ agent.status ? `（${agent.status}）` : '' }}</option></select></label>
       <p v-if="execution.rosterState.value === 'loading'" role="status">正在读取已有 Agent…</p><p v-else-if="execution.rosterState.value === 'empty'" class="workspace-note">当前没有可选择的 Agent；不会使用演示 Agent 代替。</p><p v-else-if="execution.rosterError.value" class="workspace-error" role="alert">{{ execution.rosterError.value }}</p>
       <label><span>需求说明</span><textarea v-model="executionInstruction" maxlength="4000" placeholder="例如：请按要求处理此文件，并说明保留项。"></textarea></label>
@@ -154,7 +155,10 @@ const versionFile = ref(null)
 const uploadDisplayName = ref('')
 const renameValue = ref('')
 const executionInstruction = ref('')
-const canCreateExecution = computed(() => Boolean(workspace.detail.value?.file?.fileId && selectedVersion.value && execution.selectedAgent.value && executionInstruction.value.trim() && execution.executionState.value !== 'creating'))
+const WORD_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+const selectedExecutionVersion = computed(() => workspace.detail.value?.versions?.find(version => version.version === selectedVersion.value) || null)
+const canExecuteSelectedVersion = computed(() => selectedExecutionVersion.value?.contentMimeType === WORD_MIME)
+const canCreateExecution = computed(() => Boolean(workspace.detail.value?.file?.fileId && selectedVersion.value && canExecuteSelectedVersion.value && execution.selectedAgent.value && executionInstruction.value.trim() && execution.executionState.value !== 'creating'))
 const acceptTypes = '.png,.jpg,.jpeg,.txt,.pdf,.docx,.xlsx,.pptx,image/png,image/jpeg,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation'
 
 const byteText = size => Number.isFinite(size) ? size < 1024 ? `${size} B` : size < 1024 * 1024 ? `${Math.ceil(size / 1024)} KiB` : `${(size / (1024 * 1024)).toFixed(1)} MiB` : '大小未知'
