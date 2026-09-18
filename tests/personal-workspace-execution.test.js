@@ -3,6 +3,8 @@ import { describe, it } from 'mocha'
 import { ref } from 'vue'
 import { usePersonalWorkspaceExecution } from '../src/composables/usePersonalWorkspaceExecution.js'
 
+const flushAsync = () => new Promise(resolve => setImmediate(resolve))
+
 const executionView = (overrides = {}) => ({
   executionId: 'exec_1', taskId: 'task_1', runId: 'run_1', conversationId: null,
   targetAgentId: 'agent_1', state: 'QUEUED', grantRevision: 1,
@@ -82,6 +84,35 @@ describe('personal workspace execution adapter', () => {
     const create = calls.find(call => call.url === '/personal-workspace/executions')
     assert.deepEqual(create.data.inputs, [{ fileId: 'sheet_1', version: '2' }, { fileId: 'brief_1', version: '1' }])
     assert.equal(create.data.outputContentMimeType, 'application/vnd.openxmlformats-officedocument.presentationml.presentation')
+    adapter.dispose()
+  })
+
+  it('stops polling and renders the server-controlled terminal failure without fabricating a delivery', async () => {
+    const timerApi = timers()
+    let reads = 0
+    const api = { execute: async options => {
+      if (options.url === '/roster') return { data: { items: [{ agentId: 'agent_1', name: '已有 Agent' }] } }
+      if (options.url === '/personal-workspace/executions/capabilities') return { data: { allowedMimeTypes: ['image/png'], generationEnabled: true } }
+      if (options.method === 'POST') return { data: executionView({ outputContentMimeType: 'image/png', inputs: [] }) }
+      reads += 1
+      return { data: reads === 1
+        ? executionView({ outputContentMimeType: 'image/png', inputs: [] })
+        : executionView({ outputContentMimeType: 'image/png', inputs: [], state: 'FAILED', failureCode: 'AGENT_DELIVERY_FAILED', failureMessage: 'Agent 未能完成本次交付，请调整需求后重新创建执行。' }) }
+    } }
+    const adapter = usePersonalWorkspaceExecution({ api, identityEpoch: ref('owner-a'), timerApi })
+    await adapter.loadAgents()
+    await adapter.loadCapabilities()
+    adapter.selectAgent('agent_1')
+    await adapter.create({ instruction: '生成一张海报', outputContentMimeType: 'image/png' })
+    await flushAsync()
+    assert.equal(timerApi.scheduled.length, 1)
+    timerApi.scheduled[0]()
+    await flushAsync()
+
+    assert.equal(adapter.execution.value.state, 'FAILED')
+    assert.equal(adapter.execution.value.failureCode, 'AGENT_DELIVERY_FAILED')
+    assert.equal(adapter.error.value, 'Agent 未能完成本次交付，请调整需求后重新创建执行。')
+    assert.equal(timerApi.scheduled.length, 1)
     adapter.dispose()
   })
 

@@ -34,10 +34,15 @@ const validCapabilities = value => value && typeof value === 'object' && Array.i
   value.allowedMimeTypes.every(validOutputMime) && new Set(value.allowedMimeTypes).size === value.allowedMimeTypes.length &&
   typeof value.generationEnabled === 'boolean'
 const validInput = value => validSelection(value) && ID(value.inputRef)
+const EXECUTION_STATES = new Set(['QUEUED', 'INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'FAILED'])
+const TERMINAL_EXECUTION_STATES = new Set(['INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'FAILED'])
 const validRuntimeCommand = value => value == null || (value && typeof value === 'object' && ID(value.taskId) && ID(value.runId) && Array.isArray(value.inputManifest) && Array.isArray(value.outputManifest))
+const validFailure = value => value?.state !== 'FAILED'
+  ? value?.failureCode == null && value?.failureMessage == null
+  : value.failureCode === 'AGENT_DELIVERY_FAILED' && TEXT(value.failureMessage, 255)
 const validExecution = value => value && typeof value === 'object' && ID(value.executionId) && ID(value.taskId) && ID(value.runId) &&
-  (value.conversationId == null || ID(value.conversationId)) && ID(value.targetAgentId) && TEXT(value.state, 80) &&
-  REVISION(value.grantRevision) && validOutputMime(value.outputContentMimeType) && Array.isArray(value.inputs) &&
+  (value.conversationId == null || ID(value.conversationId)) && ID(value.targetAgentId) && EXECUTION_STATES.has(value.state) &&
+  validFailure(value) && REVISION(value.grantRevision) && validOutputMime(value.outputContentMimeType) && Array.isArray(value.inputs) &&
   value.inputs.every(validInput) && validRuntimeCommand(value.runtimeCommand)
 const abortError = message => new DOMException(message, 'AbortError')
 const errorMessage = error => {
@@ -111,11 +116,17 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     if (!validExecution(value)) throw new Error('执行状态返回格式无效，未将其显示为成功。')
     execution.value = value
     executionState.value = 'ready'
-    // OUTPUT_COMMITTED is the server-side receipt after output manifest verification and workspace archive.
-    // Other states remain server-owned and continue to be polled rather than guessed.
+    // Terminal states are server-owned. Stop polling on every terminal fact; never infer a delivery.
     if (value.state === 'OUTPUT_COMMITTED') {
       stopPolling()
       completionNotice.value = '交付件已归档到工作空间。请刷新文件列表领取成果；文件可用性以本次服务端回执和下载结果为准。'
+    } else if (value.state === 'INPUTS_REVOKED') {
+      stopPolling()
+      completionNotice.value = '输入授权已撤销，本次执行不会再继续。'
+    } else if (value.state === 'FAILED') {
+      stopPolling()
+      completionNotice.value = ''
+      error.value = value.failureMessage
     }
     return value
   }
@@ -165,7 +176,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     const snapshot = { generation, epoch: currentEpoch.value }
     try {
       const result = applyExecution(await request({ url: `/personal-workspace/executions/${encodeURIComponent(executionId)}`, method: 'GET' }, snapshot))
-      if (result.state !== 'OUTPUT_COMMITTED' && !disposed && execution.value?.executionId === executionId) {
+      if (!TERMINAL_EXECUTION_STATES.has(result.state) && !disposed && execution.value?.executionId === executionId) {
         polling = timerApi.setTimeout?.(() => { void poll(executionId) }, pollInterval) ?? null
       }
       return result
@@ -213,7 +224,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
         url: `/personal-workspace/executions/${encodeURIComponent(current.executionId)}/revoke-inputs`, method: 'POST',
         data: { expectedGrantRevision: current.grantRevision }, headers: { 'Idempotency-Key': randomKey() }
       }, snapshot))
-      if (result.state !== 'OUTPUT_COMMITTED') void startPolling(result.executionId)
+      if (!TERMINAL_EXECUTION_STATES.has(result.state)) void startPolling(result.executionId)
       return result
     } catch (cause) {
       if (cause?.name !== 'AbortError' && snapshot.generation === generation) { error.value = errorMessage(cause); executionState.value = 'error' }
