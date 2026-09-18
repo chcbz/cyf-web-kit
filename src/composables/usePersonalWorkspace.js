@@ -105,7 +105,7 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     lastOperation.value = null
     revokePreview()
   }
-  const stillCurrent = (snapshot, controller) => !disposed && snapshot === generation &&
+  const stillCurrent = (snapshot, controller) => !disposed && snapshot.generation === generation &&
     !controller.signal.aborted && currentEpoch.value === snapshot.epoch
   const request = async (options, snapshot = { generation, epoch: currentEpoch.value }) => {
     const controller = new AbortController()
