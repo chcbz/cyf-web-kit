@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'cyf-pwa-v20260918-hall-account-layout-r1'
+const CACHE_VERSION = 'cyf-pwa-v20260918-hall-account-avatar-only-r1'
 const APP_SHELL = ['/', '/demo', '/index.html', '/manifest.webmanifest']
 const DEVELOPMENT_HOSTS = ['localhost', '127.0.0.1']
 

@@ -19,7 +19,7 @@
       />
       <span v-else class="hall-account-fallback">我</span>
     </span>
-    <span class="hall-account-copy">
+    <span v-if="!avatarOnly" class="hall-account-copy">
       <span class="hall-account-label">{{ compact ? '我的' : '个人中心' }}</span>
       <span class="hall-account-name">{{ safeDisplayName }}</span>
     </span>
@@ -32,6 +32,7 @@ import { computed, ref, watch } from 'vue'
 const props = defineProps({
   avatar: { type: String, default: '' },
   compact: Boolean,
+  avatarOnly: Boolean,
   disabled: Boolean,
   displayName: { type: String, default: '' }
 })

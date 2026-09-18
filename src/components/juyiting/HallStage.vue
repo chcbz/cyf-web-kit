@@ -18,7 +18,7 @@
         <HallAccountEntry
           v-else-if="!readOnlyPreview"
           class="stage-landscape-account"
-          compact
+          avatar-only
           :avatar="accountAvatar"
           :display-name="accountDisplayName"
           :disabled="accountEntryDisabled || stageInputLocked"
@@ -1210,8 +1210,20 @@ button {
   display: inline-flex;
 }
 
-.hall-stage:has(.hall-board.is-scene-landscape) .stage-landscape-account :deep(.hall-account-name) {
-  display: none;
+.hall-stage:has(.hall-board.is-scene-landscape) .stage-landscape-account :deep(.hall-account-entry) {
+  width: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.hall-stage:has(.hall-board.is-scene-landscape) .stage-landscape-account :deep(.hall-account-avatar) {
+  width: 28px;
+  height: 28px;
 }
 
 .hall-board::after {
