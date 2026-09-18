@@ -7,5 +7,8 @@ describe('PWA service worker localhost contract', () => {
 
     expect(source).to.include('isDevelopmentOrigin')
     expect(source).to.include('self.registration.unregister')
+    expect(source).to.include("const CACHE_VERSION = 'cyf-pwa-v20260918-hall-account-layout-r1'")
+    expect(source).to.include('self.skipWaiting()')
+    expect(source).to.include('self.clients.claim()')
   })
 })
