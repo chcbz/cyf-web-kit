@@ -33,6 +33,24 @@ describe('personal workspace browser adapter', () => {
     workspace.dispose()
   })
 
+  it('accepts legacy rows without originKind so a web rollout does not hide pre-migration files', async () => {
+    const api = { execute: async () => ({ data: { items: [fileView({ originKind: undefined })], nextCursor: null } }) }
+    const workspace = usePersonalWorkspace({ api, identityEpoch: ref('owner-a') })
+
+    assert.equal(await workspace.refresh({ state: 'ACTIVE' }), true)
+    assert.equal(workspace.items.value[0].originKind, undefined)
+    workspace.dispose()
+  })
+
+  it('rejects an untrusted workspace origin enum rather than rendering a fabricated source', async () => {
+    const api = { execute: async () => ({ data: { items: [fileView({ originKind: 'OTHER_OWNER' })], nextCursor: null } }) }
+    const workspace = usePersonalWorkspace({ api, identityEpoch: ref('owner-a') })
+
+    assert.equal(await workspace.refresh({ state: 'ACTIVE' }), false)
+    assert.equal(workspace.listState.value, 'error')
+    workspace.dispose()
+  })
+
   it('drops a late list response after the authenticated identity epoch changes', async () => {
     const epoch = ref('owner-a')
     const wait = deferred()

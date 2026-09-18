@@ -61,6 +61,7 @@ const errorMessage = error => {
 const isImagePreviewable = mime => ['image/png', 'image/jpeg'].includes(normalizeMime(mime))
 const validFile = file => file && typeof file.name === 'string' && TEXT(file.name, 255) && Number.isFinite(file.size) && file.size >= 0
 const validFileView = value => value && typeof value === 'object' && ID(value.fileId) && TEXT(value.displayName, 255) &&
+  (value.originKind == null || ['USER_UPLOAD', 'AGENT_DELIVERY'].includes(value.originKind)) &&
   ['ACTIVE', 'TRASHED'].includes(value.state) && VERSION(value.latestVersion) && Number.isSafeInteger(value.metadataRevision) && value.metadataRevision >= 1
 const validVersion = value => value && typeof value === 'object' && ID(value.fileId) && VERSION(value.version) &&
   TEXT(value.originalFilename, 255) && ALLOWED_MIME_TYPES.has(normalizeMime(value.contentMimeType)) &&

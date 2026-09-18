@@ -50,8 +50,8 @@
           @click="select(file.fileId)"
         >
           <span class="file-icon" aria-hidden="true">{{ iconFor(file.mediaFamily) }}</span>
-          <span class="file-summary"><strong>{{ file.displayName }}</strong><small>版本 {{ file.latestVersion }} · {{ familyText(file.mediaFamily) }} · {{ formatDate(file.createdAt) }}</small></span>
-          <span class="file-state">{{ file.state === 'TRASHED' ? '已移入回收站' : '可用' }}</span>
+          <span class="file-summary"><strong>{{ file.displayName }}</strong><small>版本 {{ file.latestVersion }} · {{ familyText(file.mediaFamily) }} · {{ originText(file.originKind) }} · {{ formatDate(file.createdAt) }}</small></span>
+          <span class="file-state">{{ file.state === 'TRASHED' ? '已移入回收站' : originText(file.originKind) }}</span>
         </button>
       </div>
       <button
@@ -87,6 +87,7 @@
         <div><dt>显示名</dt><dd>{{ workspace.detail.value.file.displayName }}</dd></div>
         <div><dt>最新版本</dt><dd>v{{ workspace.detail.value.file.latestVersion }}</dd></div>
         <div><dt>状态</dt><dd>{{ workspace.detail.value.file.state === 'TRASHED' ? '回收站' : '可用' }}</dd></div>
+        <div><dt>来源</dt><dd>{{ originText(workspace.detail.value.file.originKind) }}</dd></div>
       </dl>
 
       <template v-if="workspace.detail.value.file.state === 'ACTIVE'">
@@ -164,6 +165,7 @@ const acceptTypes = '.png,.jpg,.jpeg,.txt,.pdf,.docx,.xlsx,.pptx,image/png,image
 const byteText = size => Number.isFinite(size) ? size < 1024 ? `${size} B` : size < 1024 * 1024 ? `${Math.ceil(size / 1024)} KiB` : `${(size / (1024 * 1024)).toFixed(1)} MiB` : '大小未知'
 const formatDate = value => Number.isFinite(value) ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '时间未知'
 const familyText = value => ({ IMAGE: '图片', TEXT: '文本', DOCUMENT: 'Word 文档', SPREADSHEET: 'Excel 表格', PRESENTATION: 'PPT 演示', PDF: 'PDF' })[value] || '文件'
+const originText = value => ({ USER_UPLOAD: '本人上传', AGENT_DELIVERY: 'Agent 交付' })[value] || '来源待确认'
 const iconFor = value => ({ IMAGE: '🖼', TEXT: '📝', DOCUMENT: '📄', SPREADSHEET: '📊', PRESENTATION: '📽', PDF: '📕' })[value] || '📁'
 const currentFilters = () => ({ q: query.value.trim(), mediaFamily: mediaFamily.value, state: state.value })
 const refresh = () => workspace.refresh(currentFilters())
@@ -204,7 +206,7 @@ onBeforeUnmount(() => { workspace.dispose(); execution.dispose() })
 .selected-file,.workspace-receipt { color: #475569; font-size: 14px; }.actions,.filter-actions,.version-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }.section-heading { display: flex; justify-content: space-between; gap: 16px; }.section-heading h2 { margin-bottom: 6px; }
 .filters { display: grid; grid-template-columns: minmax(0,1fr) 180px auto; align-items: end; gap: 12px; padding: 12px 0; border-top: 1px solid #e2e8f0; }.filter-actions { margin: 0; }.filter-actions .active { background: #4f46e5; color: #fff; }.file-list { display: grid; gap: 8px; }
 .file-row { display: grid; grid-template-columns: 32px minmax(0,1fr) auto; align-items: center; width: 100%; text-align: left; border-color: #e2e8f0 !important; color: #1f2937 !important; }.file-row.selected { border-color: #4f46e5 !important; background: #eef2ff !important; }.file-summary { display: grid; min-width: 0; gap: 3px; }.file-summary strong,.file-summary small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.file-summary small,.file-state { color: #64748b; }.file-state { font-size: 12px; }.workspace-empty { padding: 24px 0; color: #64748b; }.load-more { margin-top: 12px; }
-.file-details { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }.file-details div { padding: 10px; border-radius: 8px; background: #f8fafc; }.file-details dt { color: #64748b; font-size: 12px; }.file-details dd { margin: 4px 0 0; word-break: break-word; }.inline-form,.version-upload { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0; }.inline-form label { flex: 1; min-width: 220px; margin: 0; }.version-upload .file-picker { margin: 0; }
+.file-details { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }.file-details div { padding: 10px; border-radius: 8px; background: #f8fafc; }.file-details dt { color: #64748b; font-size: 12px; }.file-details dd { margin: 4px 0 0; word-break: break-word; }.inline-form,.version-upload { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0; }.inline-form label { flex: 1; min-width: 220px; margin: 0; }.version-upload .file-picker { margin: 0; }
 .versions { margin-top: 20px; }.version-row { display: grid; grid-template-columns: auto minmax(0,1fr) auto auto; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #e2e8f0; }.version-row.active { background: #f8fafc; }.version-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.version-row small { color: #64748b; }.version-actions { justify-content: flex-end; margin: 0; }
 .execution-status { margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0; }.execution-notice { margin-top: 14px; padding: 12px; border-radius: 8px; background: #ecfdf5; color: #166534; }
 .preview { margin-top: 16px; overflow: auto; border-radius: 8px; background: #f8fafc; }.preview pre { margin: 0; padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }.preview img { display: block; max-width: 100%; max-height: 460px; margin: auto; object-fit: contain; }.preview p { padding: 12px; color: #64748b; }.preview .preview-note { margin: 0; padding-top: 0; font-size: 13px; }
