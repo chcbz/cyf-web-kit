@@ -47,17 +47,19 @@ describe('personal workspace browser adapter', () => {
     workspace.dispose()
   })
 
-  it('does not claim preview support for Office and PDF versions', async () => {
+  it('renders the available read-only Office/PDF text preview without claiming edit support', async () => {
     const api = { execute: async options => {
-      if (options.url.endsWith('/preview')) return { data: { state: 'UNSUPPORTED', parts: [], partial: false, reason: '下载查看' } }
+      if (options.url.endsWith('/preview')) return { data: { state: 'READY', parts: [{ partId: 'content', contentMimeType: 'text/plain' }], partial: true, reason: '文本已截断' } }
+      if (options.url.endsWith('/preview/parts/content')) return { data: new Blob(['第一页标题'], { type: 'text/plain' }) }
       return { data: { file: fileView({ mediaFamily: 'PRESENTATION' }), latestVersion: versionView({ contentMimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', originalFilename: 'deck.pptx' }), versions: [versionView({ contentMimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', originalFilename: 'deck.pptx' })], relations: [], derivation: [] }, headers: { etag: '"pws_file:1"' } }
     } }
     const workspace = usePersonalWorkspace({ api, identityEpoch: ref('owner-a') })
     await workspace.select('pws_file')
     await workspace.previewVersion(1)
 
-    assert.equal(workspace.preview.value.kind, 'unsupported')
-    assert.match(workspace.preview.value.message, /可下载/)
+    assert.equal(workspace.preview.value.kind, 'text')
+    assert.equal(workspace.preview.value.text, '第一页标题')
+    assert.match(workspace.preview.value.message, /截断/)
     workspace.dispose()
   })
 })

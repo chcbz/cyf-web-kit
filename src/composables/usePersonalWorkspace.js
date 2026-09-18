@@ -58,7 +58,7 @@ const errorMessage = error => {
   if (error?.status === 503) return '工作空间存储暂不可用，请稍后重试。'
   return error?.message || '工作空间请求未完成，请刷新确认。'
 }
-const isPreviewable = mime => ['image/png', 'image/jpeg', 'text/plain'].includes(normalizeMime(mime))
+const isImagePreviewable = mime => ['image/png', 'image/jpeg'].includes(normalizeMime(mime))
 const validFile = file => file && typeof file.name === 'string' && TEXT(file.name, 255) && Number.isFinite(file.size) && file.size >= 0
 const validFileView = value => value && typeof value === 'object' && ID(value.fileId) && TEXT(value.displayName, 255) &&
   ['ACTIVE', 'TRASHED'].includes(value.state) && VERSION(value.latestVersion) && Number.isSafeInteger(value.metadataRevision) && value.metadataRevision >= 1
@@ -314,14 +314,15 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
         url: `/personal-workspace/files/${encodeURIComponent(file.fileId)}/versions/${Number(version)}/preview`, method: 'GET'
       }, snapshot)
       const versionInfo = detail.value?.versions?.find(item => Number(item.version) === Number(version)) || detail.value?.latestVersion
-      if (data?.state !== 'READY' || !isPreviewable(versionInfo?.contentMimeType)) {
-        preview.value = { kind: 'unsupported', message: '此文件可下载，预览和 Agent 编辑尚未开放。' }
+      if (data?.state !== 'READY' || !Array.isArray(data.parts) || !data.parts.some(part => part?.partId === 'content' && normalizeMime(part?.contentMimeType) === 'text/plain')) {
+        preview.value = { kind: 'unsupported', message: data?.reason || '此文件可下载，但暂时无法生成可用预览。' }
         actionState.value = 'ready'
         return preview.value
       }
       const content = await readBlob(file.fileId, version, 'preview/parts/content')
-      if (normalizeMime(versionInfo.contentMimeType) === 'text/plain') {
-        preview.value = { kind: 'text', text: await content.blob.text(), message: '' }
+      if (!isImagePreviewable(versionInfo?.contentMimeType)) {
+        const note = data.partial ? '预览内容已截断；请下载原文件查看完整内容。' : ''
+        preview.value = { kind: 'text', text: await content.blob.text(), message: note }
       } else {
         const url = urlApi?.createObjectURL?.(content.blob)
         if (!url) throw new Error('当前浏览器不能安全创建预览。')
