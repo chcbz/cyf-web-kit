@@ -20,7 +20,7 @@ const timers = () => {
 }
 
 describe('personal workspace execution adapter', () => {
-  it('uses the real roster, submits one explicit file version, polls it, and asks the user to refresh only after completion', async () => {
+  it('uses the real roster, submits explicit pinned file versions, polls it, and asks the user to refresh only after completion', async () => {
     const calls = []
     const timerApi = timers()
     let reads = 0
@@ -58,6 +58,30 @@ describe('personal workspace execution adapter', () => {
     assert.equal(adapter.execution.value.state, 'OUTPUT_COMMITTED')
     assert.match(adapter.completionNotice.value, /刷新文件列表领取成果/)
     assert.match(adapter.completionNotice.value, /文件可用性以本次服务端回执和下载结果为准/)
+    adapter.dispose()
+  })
+
+  it('allows multiple distinct pinned materials for a cross-format delivery without fabricating a result', async () => {
+    const calls = []
+    const api = { execute: async options => {
+      calls.push(options)
+      if (options.url === '/roster') return { data: { items: [{ agentId: 'agent_1', name: '已有 Agent' }] } }
+      if (options.url === '/personal-workspace/executions/capabilities') return { data: { allowedMimeTypes: ['application/pdf', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'], generationEnabled: true } }
+      return { data: executionView({ outputContentMimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', inputs: [{ inputRef: 'input_1', fileId: 'sheet_1', version: 2 }, { inputRef: 'input_2', fileId: 'brief_1', version: 1 }] }) }
+    } }
+    const adapter = usePersonalWorkspaceExecution({ api, identityEpoch: ref('owner-a'), timerApi: { setTimeout: () => null, clearTimeout: () => {} } })
+    await adapter.loadAgents()
+    await adapter.loadCapabilities()
+    adapter.selectAgent('agent_1')
+    await adapter.create({
+      inputs: [{ fileId: 'sheet_1', version: '2' }, { fileId: 'brief_1', version: '1' }],
+      instruction: '根据 Excel 和 PDF 制作项目介绍 PPT',
+      outputContentMimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    })
+
+    const create = calls.find(call => call.url === '/personal-workspace/executions')
+    assert.deepEqual(create.data.inputs, [{ fileId: 'sheet_1', version: '2' }, { fileId: 'brief_1', version: '1' }])
+    assert.equal(create.data.outputContentMimeType, 'application/vnd.openxmlformats-officedocument.presentationml.presentation')
     adapter.dispose()
   })
 

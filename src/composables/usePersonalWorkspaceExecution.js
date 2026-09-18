@@ -28,6 +28,7 @@ const normalizeAgent = value => ({
   status: typeof value.status === 'string' ? value.status : ''
 })
 const validSelection = value => value && typeof value === 'object' && ID(value.fileId) && REVISION(value.version)
+const validSelections = value => Array.isArray(value) && value.length <= 128 && value.every(validSelection) && new Set(value.map(item => item.fileId)).size === value.length
 const validOutputMime = value => EXECUTION_MIME_TYPES.has(value)
 const validCapabilities = value => value && typeof value === 'object' && Array.isArray(value.allowedMimeTypes) &&
   value.allowedMimeTypes.every(validOutputMime) && new Set(value.allowedMimeTypes).size === value.allowedMimeTypes.length &&
@@ -177,12 +178,13 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     stopPolling()
     return poll(executionId)
   }
-  const create = async ({ fileId = null, version = null, instruction, outputContentMimeType, taskId = null, conversationId = null } = {}) => {
+  const create = async ({ fileId = null, version = null, inputs = null, instruction, outputContentMimeType, taskId = null, conversationId = null } = {}) => {
     const agent = selectedAgent.value
-    const hasInput = fileId != null || version != null
-    if (hasInput && !validSelection({ fileId, version: String(version ?? '') })) { error.value = '请选择一个明确的文件版本。'; return null }
+    const legacyHasInput = fileId != null || version != null
+    const selections = inputs == null ? (legacyHasInput ? [{ fileId, version: String(version ?? '') }] : []) : inputs.map(item => ({ fileId: item?.fileId, version: String(item?.version ?? '') }))
+    if (!validSelections(selections)) { error.value = '请选择不重复的明确文件版本。'; return null }
     if (!validOutputMime(outputContentMimeType) || !allowedMimeTypes.value.includes(outputContentMimeType)) { error.value = '该交付类型当前未开放；请刷新执行能力后重试。'; return null }
-    if (!hasInput && !generationEnabled.value) { error.value = '当前 Agent 执行通道未开放无文件生成。'; return null }
+    if (!selections.length && !generationEnabled.value) { error.value = '当前 Agent 执行通道未开放无文件生成。'; return null }
     if (!agent) { error.value = '请明确选择一个已有 Agent。'; return null }
     if (!TEXT(instruction, 4000)) { error.value = '请填写需求说明。'; return null }
     const snapshot = { generation, epoch: currentEpoch.value }
@@ -190,7 +192,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     try {
       const result = applyExecution(await request({
         url: '/personal-workspace/executions', method: 'POST',
-        data: { conversationId, targetAgentId: agent.agentId, taskId, instruction: instruction.trim(), outputContentMimeType, inputs: hasInput ? [{ fileId, version: String(version) }] : [] },
+        data: { conversationId, targetAgentId: agent.agentId, taskId, instruction: instruction.trim(), outputContentMimeType, inputs: selections },
         headers: { 'Idempotency-Key': randomKey() }
       }, snapshot))
       void startPolling(result.executionId)

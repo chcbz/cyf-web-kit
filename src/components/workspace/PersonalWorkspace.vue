@@ -81,14 +81,18 @@
 
     <section v-if="workspace.detail.value?.file.state === 'ACTIVE'" class="workspace-card execution-card" aria-labelledby="workspace-execution-title">
       <div class="section-heading">
-        <div><h2 id="workspace-execution-title">交给 Agent 执行</h2><p>仅提交当前选择的一个明确版本给已选 Agent；文件类型必须由服务端执行能力确认，完成与归档以服务端回执为准。</p></div>
+        <div><h2 id="workspace-execution-title">交给 Agent 执行</h2><p>仅提交你明确加入的文件版本给已选 Agent；可同时选择多个资料，服务端逐项固定版本并确认交付类型。</p></div>
         <button type="button" :disabled="execution.rosterState.value === 'loading'" @click="loadExecutionAgents">刷新 Agent</button>
       </div>
-      <p class="workspace-note">已选材料：{{ workspace.detail.value.file.displayName }} · v{{ selectedVersion }}<template v-if="selectedExecutionVersion"> · {{ selectedExecutionVersion.contentMimeType }}</template></p>
+      <p class="workspace-note">当前版本：{{ workspace.detail.value.file.displayName }} · v{{ selectedVersion }}<template v-if="selectedExecutionVersion"> · {{ selectedExecutionVersion.contentMimeType }}</template></p>
+      <div class="material-actions"><button type="button" :disabled="!canAddSelectedMaterial" @click="addSelectedMaterial">加入执行资料</button><button v-for="item in executionMaterials" :key="item.fileId" type="button" @click="removeExecutionMaterial(item.fileId)">{{ materialLabel(item) }} ×</button></div>
+      <p v-if="!executionMaterials.length" class="workspace-note">请从版本列表将至少一份资料加入本次执行；同一文件仅能选择一个固定版本。</p>
+      <p v-else class="workspace-note">本次已授权 {{ executionMaterials.length }} 份固定版本资料；Agent 不能读取未列入此处的其他文件。</p>
       <p v-if="!canExecuteSelectedVersion" class="workspace-note">当前文件类型未被服务端执行通道确认开放；文件仍可在空间管理和下载。</p>
       <label><span>已有 Agent</span><select :value="execution.selectedAgentId.value" :disabled="execution.rosterState.value === 'loading'" @change="selectExecutionAgent($event.target.value)"><option value="">请选择已有 Agent</option><option v-for="agent in execution.agents.value" :key="agent.agentId" :value="agent.agentId">{{ agent.name }}{{ agent.status ? `（${agent.status}）` : '' }}</option></select></label>
       <p v-if="execution.rosterState.value === 'loading'" role="status">正在读取已有 Agent…</p><p v-else-if="execution.rosterState.value === 'empty'" class="workspace-note">当前没有可选择的 Agent；不会使用演示 Agent 代替。</p><p v-else-if="execution.rosterError.value" class="workspace-error" role="alert">{{ execution.rosterError.value }}</p>
-      <label><span>需求说明</span><textarea v-model="executionInstruction" maxlength="4000" placeholder="例如：请按要求处理此文件，并说明保留项。"></textarea></label>
+      <label><span>交付类型</span><select v-model="executionOutputMime"><option v-for="mime in execution.allowedMimeTypes.value" :key="mime" :value="mime">{{ deliveryTypeText(mime) }}</option></select></label>
+      <label><span>需求说明</span><textarea v-model="executionInstruction" maxlength="4000" placeholder="例如：请根据所选资料制作 PPT，或按要求修改指定文件，并说明保留项。"></textarea></label>
       <div class="actions"><button type="button" :disabled="!canCreateExecution" @click="createExecution">创建私人执行</button></div>
       <section v-if="execution.execution.value" class="execution-status" aria-live="polite"><dl class="file-details"><div><dt>执行状态</dt><dd>{{ execution.execution.value.state }}</dd></div><div><dt>目标 Agent</dt><dd>{{ execution.execution.value.targetAgentId }}</dd></div><div><dt>执行编号</dt><dd>{{ execution.execution.value.executionId }}</dd></div></dl><div class="actions"><button type="button" :disabled="execution.executionState.value === 'creating' || execution.executionState.value === 'revoking'" @click="refreshExecution">刷新进度</button><button type="button" :disabled="execution.executionState.value === 'revoking'" @click="revokeExecutionInputs">撤销尚未开始的输入授权</button></div><p class="workspace-note">撤销请求由服务端确认实际授权与执行状态；已开始的读取不承诺瞬时收回。</p></section>
       <p v-if="execution.completionNotice.value" class="execution-notice" role="status">{{ execution.completionNotice.value }}</p><p v-if="execution.error.value" class="workspace-error" role="alert">{{ execution.error.value }}</p>
@@ -121,7 +125,7 @@
         >
           <button type="button" @click="selectedVersion = version.version">v{{ version.version }}</button>
           <span>{{ version.originalFilename }}</span><small>{{ byteText(version.byteLength) }} · {{ formatDate(version.createdAt) }}</small>
-          <div class="version-actions"><button type="button" @click="preview(version.version)">预览</button><button type="button" @click="download(version.version)">下载</button></div>
+          <div class="version-actions"><button type="button" :disabled="!canAddVersionAsMaterial(version)" @click="addExecutionMaterial({ fileId: workspace.detail.value.file.fileId, version: version.version, displayName: workspace.detail.value.file.displayName, contentMimeType: version.contentMimeType })">{{ isExecutionMaterial(workspace.detail.value.file.fileId) ? '已选资料' : '加入资料' }}</button><button type="button" @click="preview(version.version)">预览</button><button type="button" @click="download(version.version)">下载</button></div>
         </div>
       </section>
 
@@ -174,9 +178,12 @@ const renameValue = ref('')
 const executionInstruction = ref('')
 const generationInstruction = ref('')
 const generationMime = ref('')
+const executionOutputMime = ref('')
+const executionMaterials = ref([])
 const selectedExecutionVersion = computed(() => workspace.detail.value?.versions?.find(version => version.version === selectedVersion.value) || null)
 const canExecuteSelectedVersion = computed(() => Boolean(selectedExecutionVersion.value?.contentMimeType && execution.allowedMimeTypes.value.includes(selectedExecutionVersion.value.contentMimeType)))
-const canCreateExecution = computed(() => Boolean(workspace.detail.value?.file?.fileId && selectedVersion.value && canExecuteSelectedVersion.value && execution.selectedAgent.value && executionInstruction.value.trim() && execution.executionState.value !== 'creating'))
+const canAddSelectedMaterial = computed(() => Boolean(workspace.detail.value?.file?.fileId && selectedExecutionVersion.value && canExecuteSelectedVersion.value && !executionMaterials.value.some(item => item.fileId === workspace.detail.value.file.fileId)))
+const canCreateExecution = computed(() => Boolean(executionMaterials.value.length && executionOutputMime.value && execution.allowedMimeTypes.value.includes(executionOutputMime.value) && execution.selectedAgent.value && executionInstruction.value.trim() && execution.executionState.value !== 'creating'))
 const canCreateGeneration = computed(() => Boolean(execution.generationEnabled.value && generationMime.value && execution.allowedMimeTypes.value.includes(generationMime.value) && execution.selectedAgent.value && generationInstruction.value.trim() && execution.executionState.value !== 'creating'))
 const acceptTypes = '.png,.jpg,.jpeg,.txt,.pdf,.docx,.xlsx,.pptx,image/png,image/jpeg,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation'
 
@@ -204,10 +211,19 @@ const restore = async () => { const result = await workspace.restore(); if (resu
 const loadExecutionAgents = () => execution.loadAgents()
 const loadExecutionCapabilities = async () => {
   const result = await execution.loadCapabilities()
-  if (result?.allowedMimeTypes?.length && !result.allowedMimeTypes.includes(generationMime.value)) generationMime.value = result.allowedMimeTypes[0]
+  if (result?.allowedMimeTypes?.length) {
+    if (!result.allowedMimeTypes.includes(generationMime.value)) generationMime.value = result.allowedMimeTypes[0]
+    if (!result.allowedMimeTypes.includes(executionOutputMime.value)) executionOutputMime.value = result.allowedMimeTypes[0]
+  }
 }
 const selectExecutionAgent = agentId => execution.selectAgent(agentId)
-const createExecution = () => execution.create({ fileId: workspace.detail.value.file.fileId, version: String(selectedVersion.value), instruction: executionInstruction.value, outputContentMimeType: selectedExecutionVersion.value.contentMimeType })
+const materialLabel = item => `${item.displayName || item.fileId} · v${item.version}`
+const isExecutionMaterial = fileId => executionMaterials.value.some(item => item.fileId === fileId)
+const canAddVersionAsMaterial = version => Boolean(version?.contentMimeType && execution.allowedMimeTypes.value.includes(version.contentMimeType) && !isExecutionMaterial(workspace.detail.value.file.fileId))
+const addExecutionMaterial = item => { if (!item?.fileId || !Number.isSafeInteger(Number(item.version)) || isExecutionMaterial(item.fileId) || !execution.allowedMimeTypes.value.includes(item.contentMimeType)) return; executionMaterials.value = [...executionMaterials.value, { fileId: item.fileId, version: String(item.version), displayName: item.displayName, contentMimeType: item.contentMimeType }]; if (!executionOutputMime.value) executionOutputMime.value = item.contentMimeType }
+const addSelectedMaterial = () => addExecutionMaterial({ fileId: workspace.detail.value.file.fileId, version: selectedVersion.value, displayName: workspace.detail.value.file.displayName, contentMimeType: selectedExecutionVersion.value?.contentMimeType })
+const removeExecutionMaterial = fileId => { executionMaterials.value = executionMaterials.value.filter(item => item.fileId !== fileId) }
+const createExecution = () => execution.create({ inputs: executionMaterials.value.map(({ fileId, version }) => ({ fileId, version })), instruction: executionInstruction.value, outputContentMimeType: executionOutputMime.value })
 const createGeneration = () => execution.create({ instruction: generationInstruction.value, outputContentMimeType: generationMime.value })
 const refreshExecution = () => execution.refreshExecution()
 const revokeExecutionInputs = () => execution.revokeInputs()
@@ -232,7 +248,7 @@ onBeforeUnmount(() => { workspace.dispose(); execution.dispose() })
 .file-row { display: grid; grid-template-columns: 32px minmax(0,1fr) auto; align-items: center; width: 100%; text-align: left; border-color: #e2e8f0 !important; color: #1f2937 !important; }.file-row.selected { border-color: #4f46e5 !important; background: #eef2ff !important; }.file-summary { display: grid; min-width: 0; gap: 3px; }.file-summary strong,.file-summary small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.file-summary small,.file-state { color: #64748b; }.file-state { font-size: 12px; }.workspace-empty { padding: 24px 0; color: #64748b; }.load-more { margin-top: 12px; }
 .file-details { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }.file-details div { padding: 10px; border-radius: 8px; background: #f8fafc; }.file-details dt { color: #64748b; font-size: 12px; }.file-details dd { margin: 4px 0 0; word-break: break-word; }.inline-form,.version-upload { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0; }.inline-form label { flex: 1; min-width: 220px; margin: 0; }.version-upload .file-picker { margin: 0; }
 .versions { margin-top: 20px; }.version-row { display: grid; grid-template-columns: auto minmax(0,1fr) auto auto; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #e2e8f0; }.version-row.active { background: #f8fafc; }.version-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.version-row small { color: #64748b; }.version-actions { justify-content: flex-end; margin: 0; }
-.execution-status { margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0; }.execution-notice { margin-top: 14px; padding: 12px; border-radius: 8px; background: #ecfdf5; color: #166534; }
+.material-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }.execution-status { margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0; }.execution-notice { margin-top: 14px; padding: 12px; border-radius: 8px; background: #ecfdf5; color: #166534; }
 .preview { margin-top: 16px; overflow: auto; border-radius: 8px; background: #f8fafc; }.preview pre { margin: 0; padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }.preview img { display: block; max-width: 100%; max-height: 460px; margin: auto; object-fit: contain; }.preview p { padding: 12px; color: #64748b; }.preview .preview-note { margin: 0; padding-top: 0; font-size: 13px; }
 .danger-zone { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid #e2e8f0; }.danger-zone p { margin: 0; color: #64748b; }.danger-zone .danger { border-color: #dc2626; color: #b91c1c; }.workspace-error { max-width: 980px; margin: 0 auto 16px; padding: 12px; border-radius: 8px; background: #fef2f2; color: #b91c1c; }.workspace-receipt { max-width: 980px; margin: 0 auto; }
 @media (max-width: 700px) { .workspace-header,.section-heading { align-items: flex-start; flex-direction: column; }.filters { grid-template-columns: 1fr; }.file-details { grid-template-columns: 1fr; }.version-row { grid-template-columns: auto minmax(0,1fr); }.version-row small,.version-actions { grid-column: 2; justify-content: flex-start; }.file-state { display: none; } }
