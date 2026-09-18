@@ -7,21 +7,12 @@
       </div>
       <div class="portrait-header-actions">
         <HallAccountEntry
+          class="portrait-header-account"
           :avatar="accountAvatar"
           :display-name="accountDisplayName"
           :disabled="accountEntryDisabled"
           @open-profile="emit('open-profile')"
         />
-        <button
-          class="portrait-refresh"
-          data-tour="portrait-refresh"
-          type="button"
-          :disabled="refreshing"
-          aria-label="点验刷新"
-          @click="emit('refresh-hall')"
-        >
-          {{ refreshing ? '点验中…' : '点验刷新' }}
-        </button>
       </div>
     </header>
 
@@ -387,6 +378,20 @@ const openTask = task => emit('open-task', task)
   gap: 12px;
 }
 
+.portrait-header > :first-child {
+  min-width: 0;
+}
+
+.portrait-header-actions {
+  flex: 0 0 auto;
+}
+
+.portrait-header-account :deep(.hall-account-entry) {
+  min-height: 40px;
+  border-color: rgba(255, 230, 174, 0.5);
+  background: #a84928;
+}
+
 .portrait-eyebrow,
 .section-heading span,
 .portrait-context span,
@@ -425,7 +430,6 @@ button:disabled {
   opacity: 0.62;
 }
 
-.portrait-refresh,
 .landscape-entry,
 .section-heading button,
 .portrait-context-actions > button {

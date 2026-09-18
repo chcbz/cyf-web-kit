@@ -86,6 +86,24 @@ describe('HallPortraitHome', () => {
     expect(refresh).not.to.include('await loadMapAgents()')
   })
 
+  it('prioritizes a visible personal-center button in the portrait header while retaining refresh in shortcuts', async () => {
+    const wrapper = mount(loadPortraitHome(), { props: baseProps() })
+    try {
+      expect(wrapper.get('.portrait-header-account.account-entry-fixture').text()).to.equal('个人中心')
+      expect(wrapper.find('.portrait-refresh').exists()).to.equal(false)
+      expect(portraitHomeSource).not.to.include('data-tour="portrait-refresh"')
+      expect(portraitHomeSource).to.include("{ key: 'refresh', label: '点验刷新'")
+      expect(portraitHomeSource).to.include('class="portrait-header-account"')
+      expect(portraitHomeSource).to.include('.portrait-header-account :deep(.hall-account-entry)')
+      await wrapper.get('.portrait-header-account.account-entry-fixture').trigger('click')
+      expect(wrapper.emitted('open-profile')).to.deep.equal([[]])
+      await wrapper.get('[data-portrait-action="refresh"]').trigger('click')
+      expect(wrapper.emitted('quick-action')).to.deep.equal([['refresh']])
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
   it('opens full view through the page owner and exposes onboarding as a low-prominence existing-menu action', () => {
     const entrySource = readFileSync(new URL('../src/components/world/JuyiHallEntry.vue', import.meta.url), 'utf8')
     expect(portraitHomeSource).to.include("emit('request-landscape')")

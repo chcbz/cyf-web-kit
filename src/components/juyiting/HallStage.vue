@@ -15,6 +15,15 @@
           :disabled="accountEntryDisabled || stageInputLocked"
           @open-profile="emitStageAction('open-profile')"
         />
+        <HallAccountEntry
+          v-else-if="!readOnlyPreview"
+          class="stage-landscape-account"
+          compact
+          :avatar="accountAvatar"
+          :display-name="accountDisplayName"
+          :disabled="accountEntryDisabled || stageInputLocked"
+          @open-profile="emitStageAction('open-profile')"
+        />
         <button
           class="tool-action refresh-action"
           data-tour="landscape-refresh"
@@ -101,15 +110,6 @@
           {{ isSceneMounting ? '重试中' : '重试' }}
         </button>
       </div>
-      <HallAccountEntry
-        v-if="!readOnlyPreview && sceneMode === 'landscape'"
-        class="stage-landscape-account"
-        compact
-        :avatar="accountAvatar"
-        :display-name="accountDisplayName"
-        :disabled="accountEntryDisabled || stageInputLocked"
-        @open-profile="emitStageAction('open-profile')"
-      />
       <button
         v-if="showReturnButton && !stageInputLocked"
         class="return-main-hall"
@@ -1207,10 +1207,6 @@ button {
 }
 
 .hall-stage:has(.hall-board.is-scene-landscape) .stage-landscape-account {
-  position: absolute;
-  top: 5px;
-  right: 8px;
-  z-index: 11;
   display: inline-flex;
 }
 

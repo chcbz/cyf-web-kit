@@ -71,6 +71,11 @@ describe('V1-8 hall account navigation', () => {
     expect(stageSource).to.include('class="stage-landscape-account"')
     expect(stageSource).not.to.match(/:deep\(\.hall-account-copy\)\s*\{\s*display:\s*none/)
     expect(stageSource).to.include('.hall-stage:has(.hall-board.is-scene-landscape) .stage-landscape-account')
+    expect(stageSource).to.match(/<div data-tour="landscape-tools" class="stage-tools">[\s\S]*?<HallAccountEntry[\s\S]*?class="stage-landscape-account"/)
+    const landscapeAccountStyles = stageSource.match(/\.hall-stage:has\(\.hall-board\.is-scene-landscape\) \.stage-landscape-account\s*\{([\s\S]*?)\n\}/)?.[1] || ''
+    expect(landscapeAccountStyles).to.include('display: inline-flex')
+    expect(landscapeAccountStyles).not.to.include('position: absolute')
+    expect(landscapeAccountStyles).not.to.include('right:')
     expect(stageSource).to.include("emitStageAction('open-profile')")
   })
 
