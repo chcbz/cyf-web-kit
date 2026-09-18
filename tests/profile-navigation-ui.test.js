@@ -173,6 +173,27 @@ describe('profile navigation mounted behavior', () => {
     expect(signals[1].aborted).to.equal(true)
   })
 
+  it('repairs legacy UTF-8 mojibake before rendering profile names', async () => {
+    const router = await routerAt('/profile')
+    const globalStore = Vue.reactive({
+      user: Vue.reactive({ id: 'user-a', nickname: 'ä½ å¥½', username: '%E5%B8%90%E5%8F%B7', openid: 'a' }),
+      setTitle: () => {}, setShowBack: () => {}, setShowMore: () => {}
+    })
+    const profile = mount(profileComponent({
+      globalStore,
+      apiStore: Vue.reactive({ authorizationGeneration: 0 }),
+      client: { capabilities: async () => capabilities(true) }
+    }), { global: { plugins: [router], stubs: { 'var-icon': true } } })
+    wrappers.push(profile)
+    await flushPromises()
+
+    expect(profile.get('.profile-summary h2').text()).to.equal('你好')
+    expect(profile.get('.profile-summary p').text()).to.equal('帐号')
+    const profileDetails = profile.findAll('.profile-details dd')
+    expect(profileDetails[0].text()).to.equal('你好')
+    expect(profileDetails[1].text()).to.equal('帐号')
+  })
+
   it('uses replace for both mounted explicit return buttons', async () => {
     const router = await routerAt('/profile')
     const profile = mount(profileComponent({

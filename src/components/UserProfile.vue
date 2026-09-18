@@ -1,8 +1,13 @@
 <template>
   <div class="user-profile">
     <header class="profile-page-header">
-      <h1>个人中心</h1>
-      <button type="button" @click="returnToHall">返回聚义厅</button>
+      <div class="profile-page-heading">
+        <h1>个人中心</h1>
+      </div>
+      <button class="return-to-hall" type="button" @click="returnToHall">
+        <var-icon name="chevron-left" aria-hidden="true" />
+        <span>返回聚义厅</span>
+      </button>
     </header>
 
     <p v-if="navigationFailure" class="navigation-notice" role="alert">{{ navigationFailure }}</p>
@@ -27,7 +32,7 @@
 
       <div class="profile-summary">
         <h2>{{ displayName }}</h2>
-        <p>{{ user.username || '暂未设置账号' }}</p>
+        <p>{{ accountName || '暂未设置账号' }}</p>
       </div>
     </section>
 
@@ -36,11 +41,11 @@
       <dl>
         <div>
           <dt>昵称</dt>
-          <dd>{{ user.nickname || '暂未设置' }}</dd>
+          <dd>{{ nickname || '暂未设置' }}</dd>
         </div>
         <div>
           <dt>账号</dt>
-          <dd>{{ user.username || '暂未设置' }}</dd>
+          <dd>{{ accountName || '暂未设置' }}</dd>
         </div>
         <div>
           <dt>用户编号</dt>
@@ -190,7 +195,36 @@ const { cancelButton: cancelConfirmationButton, close: closeConfirmation, confir
   isBusy: () => busy.value
 })
 const user = computed(() => globalStore.user)
-const displayName = computed(() => user.value.nickname || user.value.username || '个人中心')
+
+// Some legacy profile records were saved after UTF-8 bytes had been interpreted as
+// Latin-1. Repair only that recognizable pattern; normal Unicode names are left intact.
+const looksLikeUtf8Mojibake = value => /[\u00c2-\u00f4][\u0080-\u00bf]/u.test(value)
+const looksLikePercentEncodedUtf8 = value => /%(?:[89a-fA-F][0-9a-fA-F])/.test(value)
+
+const normalizeProfileText = value => {
+  if (typeof value !== 'string') return ''
+  let normalized = value.trim()
+  if (looksLikePercentEncodedUtf8(normalized)) {
+    try {
+      normalized = decodeURIComponent(normalized).trim()
+    } catch {
+      // Keep the original account value when it is not valid percent-encoded UTF-8.
+    }
+  }
+  if (!normalized || !looksLikeUtf8Mojibake(normalized) || typeof TextDecoder === 'undefined') return normalized
+
+  const bytes = Array.from(normalized, character => character.charCodeAt(0))
+  if (bytes.some(byte => byte > 0xff)) return normalized
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(bytes)).trim() || normalized
+  } catch {
+    return normalized
+  }
+}
+
+const nickname = computed(() => normalizeProfileText(user.value.nickname))
+const accountName = computed(() => normalizeProfileText(user.value.username))
+const displayName = computed(() => nickname.value || accountName.value || '个人中心')
 const avatarKey = computed(() => `${user.value.id || 'anonymous'}:${user.value.avatar || ''}`)
 const navigationFailure = computed(() => {
   const reason = previewFailureFromRoute(route)
@@ -386,6 +420,12 @@ onMounted(() => {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 16px;
+  padding: 12px 14px 12px 18px;
+  border: 1px solid #e8e8f5;
+}
+
+.profile-page-heading {
+  min-width: 0;
 }
 
 .profile-page-header h1 {
@@ -403,6 +443,47 @@ onMounted(() => {
   background: #fff;
   color: #4338ca;
   cursor: pointer;
+}
+
+.return-to-hall {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: 0 1px 2px rgba(67, 56, 202, 0.1);
+}
+
+.return-to-hall:hover {
+  background: #f5f3ff;
+}
+
+.return-to-hall:focus-visible {
+  outline: 3px solid rgba(79, 70, 229, 0.28);
+  outline-offset: 2px;
+}
+
+.return-to-hall :deep(.var-icon) {
+  font-size: 18px;
+}
+
+@media (max-width: 380px) {
+  .profile-page-header {
+    padding-left: 14px;
+  }
+
+  .profile-page-header h1 {
+    font-size: 20px;
+  }
+
+  .return-to-hall {
+    min-height: 36px;
+    padding: 0 10px;
+    font-size: 13px;
+  }
 }
 
 .navigation-notice,
