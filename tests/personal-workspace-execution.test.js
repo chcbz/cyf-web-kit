@@ -5,8 +5,8 @@ import { usePersonalWorkspaceExecution } from '../src/composables/usePersonalWor
 
 const executionView = (overrides = {}) => ({
   executionId: 'exec_1', taskId: 'task_1', runId: 'run_1', conversationId: null,
-  targetAgentId: 'agent_1', state: 'QUEUED', grantRevision: '1',
-  inputs: [{ fileId: 'file_1', version: '2' }], runtimeCommand: null, ...overrides
+  targetAgentId: 'agent_1', state: 'QUEUED', grantRevision: 1,
+  inputs: [{ inputRef: 'input_1', fileId: 'file_1', version: 2 }], runtimeCommand: null, ...overrides
 })
 
 const timers = () => {
@@ -28,7 +28,7 @@ describe('personal workspace execution adapter', () => {
       if (options.url === '/roster') return { data: { data: { items: [{ agentId: 'agent_1', name: '已有 Agent', status: 'online' }] } } }
       if (options.method === 'POST' && options.url === '/personal-workspace/executions') return { data: executionView() }
       reads += 1
-      return { data: executionView({ state: reads === 1 ? 'RUNNING' : 'COMPLETED' }) }
+      return { data: executionView({ state: reads === 1 ? 'QUEUED' : 'OUTPUT_COMMITTED' }) }
     } }
     const adapter = usePersonalWorkspaceExecution({ api, identityEpoch: ref('owner-a'), timerApi })
 
@@ -51,8 +51,8 @@ describe('personal workspace execution adapter', () => {
     timerApi.scheduled[0]()
     await Promise.resolve()
     await Promise.resolve()
-    assert.equal(adapter.execution.value.state, 'COMPLETED')
-    assert.match(adapter.completionNotice.value, /刷新空间领取成果/)
+    assert.equal(adapter.execution.value.state, 'OUTPUT_COMMITTED')
+    assert.match(adapter.completionNotice.value, /刷新文件列表领取成果/)
     assert.match(adapter.completionNotice.value, /不表示 Word、图片或 PPT 已可用/)
     adapter.dispose()
   })
@@ -62,7 +62,7 @@ describe('personal workspace execution adapter', () => {
     const api = { execute: async options => {
       calls.push(options)
       if (options.url === '/roster') return { data: { items: [{ agentId: 'agent_1', name: '已有 Agent' }] } }
-      if (options.url.endsWith('/revoke-inputs')) return { data: executionView({ state: 'REVOKE_REQUESTED', grantRevision: '2' }) }
+      if (options.url.endsWith('/revoke-inputs')) return { data: executionView({ state: 'INPUTS_REVOKED', grantRevision: 2 }) }
       return { data: executionView() }
     } }
     const adapter = usePersonalWorkspaceExecution({ api, identityEpoch: ref('owner-a'), timerApi: { setTimeout: () => null, clearTimeout: () => {} } })
@@ -72,10 +72,10 @@ describe('personal workspace execution adapter', () => {
     await adapter.revokeInputs()
 
     const revoke = calls.find(call => call.url.endsWith('/revoke-inputs'))
-    assert.deepEqual(revoke.data, { expectedGrantRevision: '1' })
+    assert.deepEqual(revoke.data, { expectedGrantRevision: 1 })
     assert.ok(revoke.headers['Idempotency-Key'])
-    assert.equal(adapter.execution.value.grantRevision, '2')
-    assert.equal(adapter.execution.value.state, 'REVOKE_REQUESTED')
+    assert.equal(adapter.execution.value.grantRevision, 2)
+    assert.equal(adapter.execution.value.state, 'INPUTS_REVOKED')
     adapter.dispose()
   })
 })

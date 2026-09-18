@@ -5,7 +5,7 @@ import { registerIdentityCleanup } from '../utils/identityLifecycle.js'
 const MAX_ID_LENGTH = 100
 const ID = value => typeof value === 'string' && value.length > 0 && value.length <= MAX_ID_LENGTH && !/^\s|\s$/u.test(value)
 const TEXT = (value, maximum) => typeof value === 'string' && value.trim().length > 0 && value.length <= maximum
-const REVISION = value => typeof value === 'string' && /^(0|[1-9]\d*)$/u.test(value)
+const REVISION = value => (typeof value === 'string' && /^(0|[1-9]\d*)$/u.test(value)) || (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0)
 const valueOf = value => typeof value === 'function' ? value() : unref(value)
 const randomKey = () => globalThis.crypto?.randomUUID?.() || `pws-execution-${Date.now()}-${Math.random().toString(36).slice(2)}`
 const unwrap = result => {
@@ -20,11 +20,12 @@ const normalizeAgent = value => ({
   name: TEXT(value.name, 160) ? value.name : (TEXT(value.personaName, 160) ? value.personaName : (value.agentId || value.id)),
   status: typeof value.status === 'string' ? value.status : ''
 })
-const validInput = value => value && typeof value === 'object' && ID(value.fileId) && typeof value.version === 'string' && REVISION(value.version)
+const validSelection = value => value && typeof value === 'object' && ID(value.fileId) && REVISION(value.version)
+const validInput = value => validSelection(value) && ID(value.inputRef)
+const validRuntimeCommand = value => value == null || (value && typeof value === 'object' && ID(value.taskId) && ID(value.runId) && Array.isArray(value.inputManifest) && Array.isArray(value.outputManifest))
 const validExecution = value => value && typeof value === 'object' && ID(value.executionId) && ID(value.taskId) && ID(value.runId) &&
   (value.conversationId == null || ID(value.conversationId)) && ID(value.targetAgentId) && TEXT(value.state, 80) &&
-  REVISION(value.grantRevision) && Array.isArray(value.inputs) && value.inputs.every(validInput) &&
-  (value.runtimeCommand == null || typeof value.runtimeCommand === 'string')
+  REVISION(value.grantRevision) && Array.isArray(value.inputs) && value.inputs.every(validInput) && validRuntimeCommand(value.runtimeCommand)
 const abortError = message => new DOMException(message, 'AbortError')
 const errorMessage = error => {
   if (error?.name === 'AbortError') return ''
@@ -89,11 +90,11 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     if (!validExecution(value)) throw new Error('执行状态返回格式无效，未将其显示为成功。')
     execution.value = value
     executionState.value = 'ready'
-    // COMPLETED is the only terminal output signal exposed by this frozen browser contract.
+    // OUTPUT_COMMITTED is the server-side receipt after output manifest verification and workspace archive.
     // Other states remain server-owned and continue to be polled rather than guessed.
-    if (value.state === 'COMPLETED') {
+    if (value.state === 'OUTPUT_COMMITTED') {
       stopPolling()
-      completionNotice.value = '执行状态已完成。请刷新空间领取成果；受控试行不表示 Word、图片或 PPT 已可用。'
+      completionNotice.value = '交付件已归档到工作空间。请刷新文件列表领取成果；受控试行不表示 Word、图片或 PPT 已可用。'
     }
     return value
   }
@@ -125,7 +126,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     const snapshot = { generation, epoch: currentEpoch.value }
     try {
       const result = applyExecution(await request({ url: `/personal-workspace/executions/${encodeURIComponent(executionId)}`, method: 'GET' }, snapshot))
-      if (result.state !== 'COMPLETED' && !disposed && execution.value?.executionId === executionId) {
+      if (result.state !== 'OUTPUT_COMMITTED' && !disposed && execution.value?.executionId === executionId) {
         polling = timerApi.setTimeout?.(() => { void poll(executionId) }, pollInterval) ?? null
       }
       return result
@@ -140,7 +141,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
   }
   const create = async ({ fileId, version, instruction, taskId = null, conversationId = null } = {}) => {
     const agent = selectedAgent.value
-    if (!validInput({ fileId, version: String(version ?? '') })) { error.value = '请先选择当前文件的一个明确版本。'; return null }
+    if (!validSelection({ fileId, version: String(version ?? '') })) { error.value = '请先选择当前文件的一个明确版本。'; return null }
     if (!agent) { error.value = '请明确选择一个已有 Agent。'; return null }
     if (!TEXT(instruction, 4000)) { error.value = '请填写需求说明。'; return null }
     const snapshot = { generation, epoch: currentEpoch.value }
@@ -169,7 +170,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
         url: `/personal-workspace/executions/${encodeURIComponent(current.executionId)}/revoke-inputs`, method: 'POST',
         data: { expectedGrantRevision: current.grantRevision }, headers: { 'Idempotency-Key': randomKey() }
       }, snapshot))
-      if (result.state !== 'COMPLETED') void startPolling(result.executionId)
+      if (result.state !== 'OUTPUT_COMMITTED') void startPolling(result.executionId)
       return result
     } catch (cause) {
       if (cause?.name !== 'AbortError' && snapshot.generation === generation) { error.value = errorMessage(cause); executionState.value = 'error' }
