@@ -204,6 +204,18 @@ export default [
     }
   },
   {
+    path: '/workspace',
+    name: 'PersonalWorkspace',
+    component: () => import('@/components/workspace/PersonalWorkspace.vue'),
+    meta: {
+      title: '我的工作空间',
+      showInMenu: true,
+      menuOrder: 1,
+      icon: 'folder-account-outline',
+      iconColor: '#4f46e5'
+    }
+  },
+  {
     path: '/messages',
     name: 'MessageCenter',
     component: () => import('@/components/MessageCenter'),

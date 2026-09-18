@@ -54,6 +54,14 @@
       </dl>
     </section>
 
+    <section class="economy-discovery workspace-discovery" aria-labelledby="workspace-discovery-title">
+      <h3 id="workspace-discovery-title">我的工作空间</h3>
+      <p>管理本人上传的文件、历史版本和可下载内容。当前不读取或修改 Agent 文件，也不自动关联悬赏。</p>
+      <div class="discovery-links">
+        <router-link :to="{ name: 'PersonalWorkspace' }">进入我的工作空间</router-link>
+      </div>
+    </section>
+
     <section class="economy-discovery command-observability-discovery" aria-labelledby="command-observability-title">
       <h3 id="command-observability-title">协作运行看板</h3>
       <p>仅内部只读查看投递、死信和已有操作审计；命令投递不等同于 Agent 任务完成。</p>
