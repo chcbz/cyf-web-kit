@@ -3,6 +3,13 @@ import { createApi } from './useHttp.js'
 import { registerIdentityCleanup } from '../utils/identityLifecycle.js'
 
 const MAX_ID_LENGTH = 100
+export const PERSONAL_WORKSPACE_EXECUTION_MIME_TYPES = Object.freeze([
+  'image/png', 'image/jpeg', 'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+])
+const EXECUTION_MIME_TYPES = new Set(PERSONAL_WORKSPACE_EXECUTION_MIME_TYPES)
 const ID = value => typeof value === 'string' && value.length > 0 && value.length <= MAX_ID_LENGTH && !/^\s|\s$/u.test(value)
 const TEXT = (value, maximum) => typeof value === 'string' && value.trim().length > 0 && value.length <= maximum
 const REVISION = value => (typeof value === 'string' && /^(0|[1-9]\d*)$/u.test(value)) || (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0)
@@ -21,11 +28,16 @@ const normalizeAgent = value => ({
   status: typeof value.status === 'string' ? value.status : ''
 })
 const validSelection = value => value && typeof value === 'object' && ID(value.fileId) && REVISION(value.version)
+const validOutputMime = value => EXECUTION_MIME_TYPES.has(value)
+const validCapabilities = value => value && typeof value === 'object' && Array.isArray(value.allowedMimeTypes) &&
+  value.allowedMimeTypes.every(validOutputMime) && new Set(value.allowedMimeTypes).size === value.allowedMimeTypes.length &&
+  typeof value.generationEnabled === 'boolean'
 const validInput = value => validSelection(value) && ID(value.inputRef)
 const validRuntimeCommand = value => value == null || (value && typeof value === 'object' && ID(value.taskId) && ID(value.runId) && Array.isArray(value.inputManifest) && Array.isArray(value.outputManifest))
 const validExecution = value => value && typeof value === 'object' && ID(value.executionId) && ID(value.taskId) && ID(value.runId) &&
   (value.conversationId == null || ID(value.conversationId)) && ID(value.targetAgentId) && TEXT(value.state, 80) &&
-  REVISION(value.grantRevision) && Array.isArray(value.inputs) && value.inputs.every(validInput) && validRuntimeCommand(value.runtimeCommand)
+  REVISION(value.grantRevision) && validOutputMime(value.outputContentMimeType) && Array.isArray(value.inputs) &&
+  value.inputs.every(validInput) && validRuntimeCommand(value.runtimeCommand)
 const abortError = message => new DOMException(message, 'AbortError')
 const errorMessage = error => {
   if (error?.name === 'AbortError') return ''
@@ -45,6 +57,10 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
   const rosterState = ref('idle')
   const rosterError = ref('')
   const selectedAgentId = ref('')
+  const allowedMimeTypes = ref([])
+  const capabilityState = ref('idle')
+  const capabilityError = ref('')
+  const generationEnabled = ref(false)
   const execution = ref(null)
   const executionState = ref('idle')
   const error = ref('')
@@ -69,6 +85,10 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     rosterState.value = 'idle'
     rosterError.value = ''
     selectedAgentId.value = ''
+    allowedMimeTypes.value = []
+    capabilityState.value = 'idle'
+    capabilityError.value = ''
+    generationEnabled.value = false
     execution.value = null
     executionState.value = 'idle'
     error.value = ''
@@ -94,9 +114,27 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     // Other states remain server-owned and continue to be polled rather than guessed.
     if (value.state === 'OUTPUT_COMMITTED') {
       stopPolling()
-      completionNotice.value = '交付件已归档到工作空间。请刷新文件列表领取成果；受控试行不表示 Word、图片或 PPT 已可用。'
+      completionNotice.value = '交付件已归档到工作空间。请刷新文件列表领取成果；文件可用性以本次服务端回执和下载结果为准。'
     }
     return value
+  }
+  const loadCapabilities = async () => {
+    const snapshot = { generation, epoch: currentEpoch.value }
+    capabilityState.value = 'loading'; capabilityError.value = ''
+    try {
+      const value = await request({ url: '/personal-workspace/executions/capabilities', method: 'GET' }, snapshot)
+      if (!validCapabilities(value)) throw new Error('执行能力返回格式无效，未开放任何交付类型。')
+      allowedMimeTypes.value = [...value.allowedMimeTypes]
+      generationEnabled.value = value.generationEnabled
+      capabilityState.value = value.allowedMimeTypes.length ? 'ready' : 'empty'
+      return value
+    } catch (cause) {
+      if (cause?.name !== 'AbortError' && snapshot.generation === generation) {
+        capabilityError.value = errorMessage(cause)
+        capabilityState.value = 'error'
+      }
+      return null
+    }
   }
   const loadAgents = async () => {
     const snapshot = { generation, epoch: currentEpoch.value }
@@ -139,9 +177,12 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     stopPolling()
     return poll(executionId)
   }
-  const create = async ({ fileId, version, instruction, taskId = null, conversationId = null } = {}) => {
+  const create = async ({ fileId = null, version = null, instruction, outputContentMimeType, taskId = null, conversationId = null } = {}) => {
     const agent = selectedAgent.value
-    if (!validSelection({ fileId, version: String(version ?? '') })) { error.value = '请先选择当前文件的一个明确版本。'; return null }
+    const hasInput = fileId != null || version != null
+    if (hasInput && !validSelection({ fileId, version: String(version ?? '') })) { error.value = '请选择一个明确的文件版本。'; return null }
+    if (!validOutputMime(outputContentMimeType) || !allowedMimeTypes.value.includes(outputContentMimeType)) { error.value = '该交付类型当前未开放；请刷新执行能力后重试。'; return null }
+    if (!hasInput && !generationEnabled.value) { error.value = '当前 Agent 执行通道未开放无文件生成。'; return null }
     if (!agent) { error.value = '请明确选择一个已有 Agent。'; return null }
     if (!TEXT(instruction, 4000)) { error.value = '请填写需求说明。'; return null }
     const snapshot = { generation, epoch: currentEpoch.value }
@@ -149,7 +190,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     try {
       const result = applyExecution(await request({
         url: '/personal-workspace/executions', method: 'POST',
-        data: { conversationId, targetAgentId: agent.agentId, taskId, instruction: instruction.trim(), inputs: [{ fileId, version: String(version) }] },
+        data: { conversationId, targetAgentId: agent.agentId, taskId, instruction: instruction.trim(), outputContentMimeType, inputs: hasInput ? [{ fileId, version: String(version) }] : [] },
         headers: { 'Idempotency-Key': randomKey() }
       }, snapshot))
       void startPolling(result.executionId)
@@ -188,5 +229,5 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
   }
   if (getCurrentInstance()) onBeforeUnmount(dispose)
 
-  return { agents, rosterState, rosterError, selectedAgentId, selectedAgent, execution, executionState, error, completionNotice, loadAgents, selectAgent, create, refreshExecution, revokeInputs, stopPolling, reset, dispose }
+  return { agents, rosterState, rosterError, selectedAgentId, selectedAgent, allowedMimeTypes, capabilityState, capabilityError, generationEnabled, execution, executionState, error, completionNotice, loadCapabilities, loadAgents, selectAgent, create, refreshExecution, revokeInputs, stopPolling, reset, dispose }
 }

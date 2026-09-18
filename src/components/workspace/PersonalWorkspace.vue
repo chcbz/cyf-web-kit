@@ -11,7 +11,7 @@
 
     <section class="workspace-card" aria-labelledby="workspace-upload-title">
       <h2 id="workspace-upload-title">上传文件</h2>
-      <p class="workspace-note">支持 PNG、JPEG、纯文本、PDF、DOCX、XLSX、PPTX。图片可直接预览；Office/PDF 提供只读文本预览，原文件始终可下载。当前私人执行仅接受 DOCX，其他格式仍可上传管理。</p>
+      <p class="workspace-note">支持 PNG、JPEG、纯文本、PDF、DOCX、XLSX、PPTX。图片可直接预览；Office/PDF 提供只读文本预览，原文件始终可下载。可执行类型由服务端实时确认，上传成功不代表已开放 Agent 处理。</p>
       <label class="file-picker">
         <span>选择文件</span>
         <input type="file" :accept="acceptTypes" @change="onUploadFile" />
@@ -26,6 +26,22 @@
           {{ workspace.actionState.value === 'uploading' ? '上传中…' : '上传到工作空间' }}
         </button>
       </div>
+    </section>
+
+    <section class="workspace-card execution-card" aria-labelledby="workspace-generation-title">
+      <div class="section-heading">
+        <div><h2 id="workspace-generation-title">直接生成交付件</h2><p>无需先上传文件。仅显示服务端当前实际开放的交付类型；执行、保存和下载均以服务端回执为准。</p></div>
+        <button type="button" :disabled="execution.capabilityState.value === 'loading'" @click="loadExecutionCapabilities">刷新能力</button>
+      </div>
+      <p v-if="execution.capabilityState.value === 'loading'" class="workspace-note">正在读取可执行交付类型…</p>
+      <p v-else-if="execution.capabilityError.value" class="workspace-error" role="alert">{{ execution.capabilityError.value }}</p>
+      <template v-else-if="execution.allowedMimeTypes.value.length">
+        <label><span>交付类型</span><select v-model="generationMime"><option v-for="mime in execution.allowedMimeTypes.value" :key="mime" :value="mime">{{ deliveryTypeText(mime) }}</option></select></label>
+        <label><span>已有 Agent</span><select :value="execution.selectedAgentId.value" :disabled="execution.rosterState.value === 'loading'" @change="selectExecutionAgent($event.target.value)"><option value="">请选择已有 Agent</option><option v-for="agent in execution.agents.value" :key="agent.agentId" :value="agent.agentId">{{ agent.name }}{{ agent.status ? `（${agent.status}）` : '' }}</option></select></label>
+        <label><span>需求说明</span><textarea v-model="generationInstruction" maxlength="4000" placeholder="例如：生成一份面向客户的项目介绍 PPT，包含目标、方案和时间表。"></textarea></label>
+        <div class="actions"><button type="button" :disabled="!canCreateGeneration" @click="createGeneration">生成交付件</button></div>
+      </template>
+      <p v-else class="workspace-note">当前没有已确认开放的直接生成类型，不会用演示内容代替。</p>
     </section>
 
     <section class="workspace-card" aria-labelledby="workspace-files-title">
@@ -65,11 +81,11 @@
 
     <section v-if="workspace.detail.value?.file.state === 'ACTIVE'" class="workspace-card execution-card" aria-labelledby="workspace-execution-title">
       <div class="section-heading">
-        <div><h2 id="workspace-execution-title">交给 Agent 执行</h2><p>受控试行。仅提交当前选择的一个 DOCX 版本给明确 Agent；完成与交付件归档必须由服务端回执确认。</p></div>
+        <div><h2 id="workspace-execution-title">交给 Agent 执行</h2><p>仅提交当前选择的一个明确版本给已选 Agent；文件类型必须由服务端执行能力确认，完成与归档以服务端回执为准。</p></div>
         <button type="button" :disabled="execution.rosterState.value === 'loading'" @click="loadExecutionAgents">刷新 Agent</button>
       </div>
       <p class="workspace-note">已选材料：{{ workspace.detail.value.file.displayName }} · v{{ selectedVersion }}<template v-if="selectedExecutionVersion"> · {{ selectedExecutionVersion.contentMimeType }}</template></p>
-      <p v-if="!canExecuteSelectedVersion" class="workspace-note">当前受控执行只接受 DOCX；图片、PPT、Excel、PDF 仍可在空间管理，尚未开放给此执行通道。</p>
+      <p v-if="!canExecuteSelectedVersion" class="workspace-note">当前文件类型未被服务端执行通道确认开放；文件仍可在空间管理和下载。</p>
       <label><span>已有 Agent</span><select :value="execution.selectedAgentId.value" :disabled="execution.rosterState.value === 'loading'" @change="selectExecutionAgent($event.target.value)"><option value="">请选择已有 Agent</option><option v-for="agent in execution.agents.value" :key="agent.agentId" :value="agent.agentId">{{ agent.name }}{{ agent.status ? `（${agent.status}）` : '' }}</option></select></label>
       <p v-if="execution.rosterState.value === 'loading'" role="status">正在读取已有 Agent…</p><p v-else-if="execution.rosterState.value === 'empty'" class="workspace-note">当前没有可选择的 Agent；不会使用演示 Agent 代替。</p><p v-else-if="execution.rosterError.value" class="workspace-error" role="alert">{{ execution.rosterError.value }}</p>
       <label><span>需求说明</span><textarea v-model="executionInstruction" maxlength="4000" placeholder="例如：请按要求处理此文件，并说明保留项。"></textarea></label>
@@ -156,16 +172,19 @@ const versionFile = ref(null)
 const uploadDisplayName = ref('')
 const renameValue = ref('')
 const executionInstruction = ref('')
-const WORD_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+const generationInstruction = ref('')
+const generationMime = ref('')
 const selectedExecutionVersion = computed(() => workspace.detail.value?.versions?.find(version => version.version === selectedVersion.value) || null)
-const canExecuteSelectedVersion = computed(() => selectedExecutionVersion.value?.contentMimeType === WORD_MIME)
+const canExecuteSelectedVersion = computed(() => Boolean(selectedExecutionVersion.value?.contentMimeType && execution.allowedMimeTypes.value.includes(selectedExecutionVersion.value.contentMimeType)))
 const canCreateExecution = computed(() => Boolean(workspace.detail.value?.file?.fileId && selectedVersion.value && canExecuteSelectedVersion.value && execution.selectedAgent.value && executionInstruction.value.trim() && execution.executionState.value !== 'creating'))
+const canCreateGeneration = computed(() => Boolean(execution.generationEnabled.value && generationMime.value && execution.allowedMimeTypes.value.includes(generationMime.value) && execution.selectedAgent.value && generationInstruction.value.trim() && execution.executionState.value !== 'creating'))
 const acceptTypes = '.png,.jpg,.jpeg,.txt,.pdf,.docx,.xlsx,.pptx,image/png,image/jpeg,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation'
 
 const byteText = size => Number.isFinite(size) ? size < 1024 ? `${size} B` : size < 1024 * 1024 ? `${Math.ceil(size / 1024)} KiB` : `${(size / (1024 * 1024)).toFixed(1)} MiB` : '大小未知'
 const formatDate = value => Number.isFinite(value) ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '时间未知'
 const familyText = value => ({ IMAGE: '图片', TEXT: '文本', DOCUMENT: 'Word 文档', SPREADSHEET: 'Excel 表格', PRESENTATION: 'PPT 演示', PDF: 'PDF' })[value] || '文件'
 const originText = value => ({ USER_UPLOAD: '本人上传', AGENT_DELIVERY: 'Agent 交付' })[value] || '来源待确认'
+const deliveryTypeText = value => ({ 'image/png': 'PNG 图片', 'image/jpeg': 'JPEG 图片', 'application/pdf': 'PDF', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word（DOCX）', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel（XLSX）', 'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'PPT（PPTX）' })[value] || '未知交付类型'
 const iconFor = value => ({ IMAGE: '🖼', TEXT: '📝', DOCUMENT: '📄', SPREADSHEET: '📊', PRESENTATION: '📽', PDF: '📕' })[value] || '📁'
 const currentFilters = () => ({ q: query.value.trim(), mediaFamily: mediaFamily.value, state: state.value })
 const refresh = () => workspace.refresh(currentFilters())
@@ -183,12 +202,17 @@ const download = async version => { const result = await workspace.download(vers
 const trash = async () => { const usage = await workspace.usage(); if (!usage) return; const references = (usage.taskReferences?.length || 0) + (usage.activeExecutions?.length || 0); const message = references ? `该文件仍有 ${references} 个关联引用，确认移入回收站吗？` : '确认将该文件移入回收站吗？'; if (!globalThis.confirm?.(message)) return; const result = await workspace.trash(usage); if (result) { closeDetail(); await refresh() } }
 const restore = async () => { const result = await workspace.restore(); if (result) { closeDetail(); await refresh() } }
 const loadExecutionAgents = () => execution.loadAgents()
+const loadExecutionCapabilities = async () => {
+  const result = await execution.loadCapabilities()
+  if (result?.allowedMimeTypes?.length && !result.allowedMimeTypes.includes(generationMime.value)) generationMime.value = result.allowedMimeTypes[0]
+}
 const selectExecutionAgent = agentId => execution.selectAgent(agentId)
-const createExecution = () => execution.create({ fileId: workspace.detail.value.file.fileId, version: String(selectedVersion.value), instruction: executionInstruction.value })
+const createExecution = () => execution.create({ fileId: workspace.detail.value.file.fileId, version: String(selectedVersion.value), instruction: executionInstruction.value, outputContentMimeType: selectedExecutionVersion.value.contentMimeType })
+const createGeneration = () => execution.create({ instruction: generationInstruction.value, outputContentMimeType: generationMime.value })
 const refreshExecution = () => execution.refreshExecution()
 const revokeExecutionInputs = () => execution.revokeInputs()
 
-onMounted(() => { void refresh(); void loadExecutionAgents() })
+onMounted(() => { void refresh(); void loadExecutionAgents(); void loadExecutionCapabilities() })
 onBeforeUnmount(() => { workspace.dispose(); execution.dispose() })
 </script>
 

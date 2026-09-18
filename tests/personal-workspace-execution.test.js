@@ -6,6 +6,7 @@ import { usePersonalWorkspaceExecution } from '../src/composables/usePersonalWor
 const executionView = (overrides = {}) => ({
   executionId: 'exec_1', taskId: 'task_1', runId: 'run_1', conversationId: null,
   targetAgentId: 'agent_1', state: 'QUEUED', grantRevision: 1,
+  outputContentMimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   inputs: [{ inputRef: 'input_1', fileId: 'file_1', version: 2 }], runtimeCommand: null, ...overrides
 })
 
@@ -26,6 +27,7 @@ describe('personal workspace execution adapter', () => {
     const api = { execute: async options => {
       calls.push(options)
       if (options.url === '/roster') return { data: { data: { items: [{ agentId: 'agent_1', name: '已有 Agent', status: 'online' }] } } }
+      if (options.url === '/personal-workspace/executions/capabilities') return { data: { allowedMimeTypes: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'], generationEnabled: true } }
       if (options.method === 'POST' && options.url === '/personal-workspace/executions') return { data: executionView() }
       reads += 1
       return { data: executionView({ state: reads === 1 ? 'QUEUED' : 'OUTPUT_COMMITTED' }) }
@@ -33,19 +35,21 @@ describe('personal workspace execution adapter', () => {
     const adapter = usePersonalWorkspaceExecution({ api, identityEpoch: ref('owner-a'), timerApi })
 
     await adapter.loadAgents()
+    await adapter.loadCapabilities()
     assert.equal(adapter.selectAgent('agent_1'), true)
-    const created = await adapter.create({ fileId: 'file_1', version: '2', instruction: '保留标题并修改正文' })
+    const created = await adapter.create({ fileId: 'file_1', version: '2', instruction: '保留标题并修改正文', outputContentMimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
     await Promise.resolve()
 
     assert.equal(created.executionId, 'exec_1')
     assert.equal(calls[0].url, '/roster')
     assert.deepEqual(calls[0].data, { pageNum: 1, pageSize: 100 })
-    assert.equal(calls[1].url, '/personal-workspace/executions')
-    assert.deepEqual(calls[1].data, {
-      conversationId: null, targetAgentId: 'agent_1', taskId: null, instruction: '保留标题并修改正文', inputs: [{ fileId: 'file_1', version: '2' }]
+    assert.equal(calls[1].url, '/personal-workspace/executions/capabilities')
+    assert.equal(calls[2].url, '/personal-workspace/executions')
+    assert.deepEqual(calls[2].data, {
+      conversationId: null, targetAgentId: 'agent_1', taskId: null, instruction: '保留标题并修改正文', outputContentMimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', inputs: [{ fileId: 'file_1', version: '2' }]
     })
-    assert.ok(calls[1].headers['Idempotency-Key'])
-    assert.equal(calls[2].url, '/personal-workspace/executions/exec_1')
+    assert.ok(calls[2].headers['Idempotency-Key'])
+    assert.equal(calls[3].url, '/personal-workspace/executions/exec_1')
     assert.equal(timerApi.scheduled.length, 1)
 
     timerApi.scheduled[0]()
@@ -53,7 +57,7 @@ describe('personal workspace execution adapter', () => {
     await Promise.resolve()
     assert.equal(adapter.execution.value.state, 'OUTPUT_COMMITTED')
     assert.match(adapter.completionNotice.value, /刷新文件列表领取成果/)
-    assert.match(adapter.completionNotice.value, /不表示 Word、图片或 PPT 已可用/)
+    assert.match(adapter.completionNotice.value, /文件可用性以本次服务端回执和下载结果为准/)
     adapter.dispose()
   })
 
@@ -62,13 +66,15 @@ describe('personal workspace execution adapter', () => {
     const api = { execute: async options => {
       calls.push(options)
       if (options.url === '/roster') return { data: { items: [{ agentId: 'agent_1', name: '已有 Agent' }] } }
+      if (options.url === '/personal-workspace/executions/capabilities') return { data: { allowedMimeTypes: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'], generationEnabled: true } }
       if (options.url.endsWith('/revoke-inputs')) return { data: executionView({ state: 'INPUTS_REVOKED', grantRevision: 2 }) }
       return { data: executionView() }
     } }
     const adapter = usePersonalWorkspaceExecution({ api, identityEpoch: ref('owner-a'), timerApi: { setTimeout: () => null, clearTimeout: () => {} } })
     await adapter.loadAgents()
+    await adapter.loadCapabilities()
     adapter.selectAgent('agent_1')
-    await adapter.create({ fileId: 'file_1', version: '2', instruction: '处理文件' })
+    await adapter.create({ fileId: 'file_1', version: '2', instruction: '处理文件', outputContentMimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
     await adapter.revokeInputs()
 
     const revoke = calls.find(call => call.url.endsWith('/revoke-inputs'))
