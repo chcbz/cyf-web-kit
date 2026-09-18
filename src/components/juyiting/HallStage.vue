@@ -1210,7 +1210,7 @@ button {
   display: inline-flex;
 }
 
-.hall-stage:has(.hall-board.is-scene-landscape) .stage-landscape-account :deep(.hall-account-entry) {
+.hall-stage:has(.hall-board.is-scene-landscape) .stage-landscape-account {
   width: 30px;
   min-width: 30px;
   min-height: 30px;
