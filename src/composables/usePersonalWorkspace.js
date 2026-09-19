@@ -58,23 +58,24 @@ const errorMessage = error => {
   if (error?.status === 503) return '工作空间存储暂不可用，请稍后重试。'
   return error?.message || '工作空间请求未完成，请刷新确认。'
 }
-const previewPartMimeTypes = new Set(['text/plain', 'image/png'])
-// `view=parts` opts into the 1.13.1 representation contract; default callers keep
-// the legacy single EXTRACTED_TEXT/content response.
+const previewPartMimeTypes = new Set(['text/plain', 'image/png', 'image/jpeg'])
+// PreviewView from the current API does not carry a representation field. A known
+// label is tolerated during rollout but never controls rendering or authorization.
 const PREVIEW_REPRESENTATIONS = new Set(['EXTRACTED_TEXT', 'PAGED_IMAGE', 'SHEET_TEXT', 'PAGED_TEXT'])
 const validPreviewPart = part => part && typeof part === 'object' && !Array.isArray(part) &&
   Object.keys(part).every(key => ['partId', 'contentMimeType'].includes(key)) && ID(part.partId) && previewPartMimeTypes.has(normalizeMime(part.contentMimeType))
 const validPreviewView = value => {
   if (!value || typeof value !== 'object' || Array.isArray(value) ||
     !Object.keys(value).every(key => ['state', 'representation', 'parts', 'partial', 'reason'].includes(key)) ||
-    value.state !== 'READY' || !PREVIEW_REPRESENTATIONS.has(value.representation) || typeof value.partial !== 'boolean' ||
-    (value.reason != null && !TEXT(value.reason, 255)) || !Array.isArray(value.parts) || !value.parts.length ||
-    !value.parts.every(validPreviewPart) || new Set(value.parts.map(part => part.partId)).size !== value.parts.length) return false
-  if (value.representation === 'EXTRACTED_TEXT') return value.parts.length === 1 && value.parts[0].partId === 'content' && normalizeMime(value.parts[0].contentMimeType) === 'text/plain'
-  if (value.representation === 'PAGED_IMAGE') return value.parts.every(part => normalizeMime(part.contentMimeType) === 'image/png')
-  return value.parts.every(part => normalizeMime(part.contentMimeType) === 'text/plain')
+    value.state !== 'READY' || (value.representation != null && !PREVIEW_REPRESENTATIONS.has(value.representation)) ||
+    typeof value.partial !== 'boolean' || (value.reason != null && !TEXT(value.reason, 255)) ||
+    !Array.isArray(value.parts) || !value.parts.length || !value.parts.every(validPreviewPart) ||
+    new Set(value.parts.map(part => part.partId)).size !== value.parts.length) return false
+  return true
 }
-const displayPreviewParts = preview => preview.representation === 'SHEET_TEXT' && preview.parts.some(part => part.partId !== 'content')
+// Rich PPT/PDF/XLSX previews append content/text only for old clients. Named parts
+// remain the user-facing navigation sequence for every rich preview type.
+const displayPreviewParts = preview => preview.parts.some(part => part.partId !== 'content')
   ? preview.parts.filter(part => part.partId !== 'content')
   : preview.parts
 const validFile = file => file && typeof file.name === 'string' && TEXT(file.name, 255) && Number.isFinite(file.size) && file.size >= 0

@@ -76,26 +76,27 @@ const conversationDeliverable = value => {
   if (value.formalDeliveryState === 'submitted') return value.formalDecisionVersion === 0 && value.formalReviewedAt == null
   return value.formalDecisionVersion >= 1 && Number.isSafeInteger(value.formalReviewedAt) && value.formalReviewedAt > 0
 }
-// `view=parts` opts into the 1.13.1 representation contract. The default endpoint
-// remains the old one-part EXTRACTED_TEXT view for 1.13.0 clients.
+// The actual PreviewView is intentionally representation-free: it carries only
+// server-authorized part IDs and MIME types. Some in-flight clients may still include a
+// known representation label, which is ignored rather than used to infer a part URL.
 const PREVIEW_REPRESENTATIONS = new Set(['EXTRACTED_TEXT', 'PAGED_IMAGE', 'SHEET_TEXT', 'PAGED_TEXT'])
 const validPreviewView = value => {
   if (!value || typeof value !== 'object' || Array.isArray(value) ||
     !Object.keys(value).every(key => ['state', 'representation', 'parts', 'partial', 'reason'].includes(key)) ||
-    value.state !== 'READY' || !PREVIEW_REPRESENTATIONS.has(value.representation) || !exactBoolean(value.partial) ||
-    (value.reason != null && !exactText(value.reason, 255)) || !Array.isArray(value.parts) || value.parts.length < 1 ||
+    value.state !== 'READY' || (value.representation != null && !PREVIEW_REPRESENTATIONS.has(value.representation)) ||
+    !exactBoolean(value.partial) || (value.reason != null && !exactText(value.reason, 255)) ||
+    !Array.isArray(value.parts) || value.parts.length < 1 ||
     !value.parts.every(part => part && typeof part === 'object' && !Array.isArray(part) &&
       Object.keys(part).every(key => ['partId', 'contentMimeType'].includes(key)) &&
       exactId(part.partId) && previewPartMimeTypes.has(part.contentMimeType)) ||
     new Set(value.parts.map(part => part.partId)).size !== value.parts.length) return false
-  if (value.representation === 'EXTRACTED_TEXT') return value.parts.length === 1 && value.parts[0].partId === 'content' && value.parts[0].contentMimeType === TEXT_PREVIEW_MIME
-  if (value.representation === 'PAGED_IMAGE') return value.parts.every(part => part.contentMimeType === 'image/png')
-  return value.parts.every(part => part.contentMimeType === TEXT_PREVIEW_MIME)
+  return true
 }
-const displayPreviewParts = preview => preview.representation === 'SHEET_TEXT' && preview.parts.some(part => part.partId !== 'content')
+// PPT/PDF/XLSX rich previews append the legacy content/text fallback after named
+// slide/page/sheet parts. Never turn that fallback into another navigation item.
+const displayPreviewParts = preview => preview.parts.some(part => part.partId !== 'content')
   ? preview.parts.filter(part => part.partId !== 'content')
   : preview.parts
-
 
 const validatedPage = (value, sourceType, sourceId, limit) => {
   const itemValidator = sourceType === 'task'

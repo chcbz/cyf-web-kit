@@ -90,7 +90,7 @@ watch(() => [props.item?.artifactId, props.item?.artifactVersion, props.item?.fi
     const received = previewParts(result, kind, item)
     if (!received.length) throw new Error('预览内容为空，请下载原文件查看。')
     for (const part of received) {
-      if (!part || typeof part.partId !== 'string' || !['text/plain', 'image/png', item.mimeType].includes(part.contentMimeType) || !(part.blob instanceof Blob) || part.blob.type !== part.contentMimeType || ((part.legacyPdf || part.contentMimeType === 'image/png') && part.blob.size > MAX_PREVIEW_BYTES)) {
+      if (!part || typeof part.partId !== 'string' || !['text/plain', 'image/png', item.mimeType].includes(part.contentMimeType) || !(part.blob instanceof Blob) || part.blob.type !== part.contentMimeType || (part.legacyPdf && part.blob.size > MAX_PREVIEW_BYTES)) {
         throw new Error('预览分片无效，请下载原文件查看。')
       }
       if (part.contentMimeType === TEXT_PREVIEW_MIME) rendered.push({ partId: part.partId, contentMimeType: part.contentMimeType, text: await part.blob.text(), imageUrl: '', pdfUrl: '' })

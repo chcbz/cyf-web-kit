@@ -68,7 +68,7 @@ describe('personal workspace browser adapter', () => {
   it('renders a server-confirmed image preview only when the preview part preserves the image MIME type', async () => {
     const urls = []
     const api = { execute: async options => {
-      if (options.url.endsWith('/preview')) return { data: { state: 'READY', representation: 'PAGED_IMAGE', parts: [{ partId: 'content', contentMimeType: 'image/png' }], partial: false } }
+      if (options.url.endsWith('/preview')) return { data: { state: 'READY', parts: [{ partId: 'content', contentMimeType: 'image/png' }], partial: false } }
       if (options.url.endsWith('/preview/parts/content')) return { data: new Blob(['png-bytes'], { type: 'image/png' }) }
       return { data: { file: fileView({ mediaFamily: 'IMAGE', displayName: 'poster.png' }), latestVersion: versionView({ contentMimeType: 'image/png', originalFilename: 'poster.png' }), versions: [versionView({ contentMimeType: 'image/png', originalFilename: 'poster.png' })], relations: [], derivation: [] }, headers: { etag: '"pws_file:1"' } }
     } }
@@ -84,7 +84,7 @@ describe('personal workspace browser adapter', () => {
 
   it('keeps the old single content text preview for PDF compatibility', async () => {
     const api = { execute: async options => {
-      if (options.url.endsWith('/preview')) return { data: { state: 'READY', representation: 'EXTRACTED_TEXT', parts: [{ partId: 'content', contentMimeType: 'text/plain' }], partial: true, reason: '文本已截断' } }
+      if (options.url.endsWith('/preview')) return { data: { state: 'READY', parts: [{ partId: 'content', contentMimeType: 'text/plain' }], partial: true, reason: '文本已截断' } }
       if (options.url.endsWith('/preview/parts/content')) return { data: new Blob(['第一页标题'], { type: 'text/plain' }) }
       return { data: { file: fileView({ mediaFamily: 'PDF' }), latestVersion: versionView({ contentMimeType: 'application/pdf', originalFilename: 'legacy.pdf' }), versions: [versionView({ contentMimeType: 'application/pdf', originalFilename: 'legacy.pdf' })], relations: [], derivation: [] }, headers: { etag: '"pws_file:1"' } }
     } }
@@ -102,7 +102,7 @@ describe('personal workspace browser adapter', () => {
 describe('1.13.1 workspace PDF preview parts', () => {
   it('navigates server-declared PAGED_TEXT pages without treating a PNG fixture as a PDF contract', async () => {
     const api = { execute: async options => {
-      if (options.url.endsWith('/preview')) return { data: { state: 'READY', representation: 'PAGED_TEXT', parts: [{ partId: 'page-1', contentMimeType: 'text/plain' }, { partId: 'page-2', contentMimeType: 'text/plain' }], partial: false } }
+      if (options.url.endsWith('/preview')) return { data: { state: 'READY', parts: [{ partId: 'page-1', contentMimeType: 'text/plain' }, { partId: 'page-2', contentMimeType: 'text/plain' }, { partId: 'content', contentMimeType: 'text/plain' }], partial: false } }
       if (options.url.endsWith('/preview/parts/page-1')) return { data: new Blob(['第一页'], { type: 'text/plain' }) }
       if (options.url.endsWith('/preview/parts/page-2')) return { data: new Blob(['第二页'], { type: 'text/plain' }) }
       return { data: { file: fileView({ mediaFamily: 'PDF' }), latestVersion: versionView({ contentMimeType: 'application/pdf', originalFilename: 'pages.pdf' }), versions: [versionView({ contentMimeType: 'application/pdf', originalFilename: 'pages.pdf' })], relations: [], derivation: [] }, headers: { etag: '"pws_file:1"' } }
@@ -124,7 +124,7 @@ describe('1.13.1 workspace multi-part previews', () => {
     const calls = []
     const api = { execute: async options => {
       calls.push(options)
-      if (options.url.endsWith('/preview')) return { data: { state: 'READY', representation: 'PAGED_IMAGE', parts: [{ partId: 'slide-1', contentMimeType: 'image/png' }, { partId: 'slide-2', contentMimeType: 'image/png' }], partial: false } }
+      if (options.url.endsWith('/preview')) return { data: { state: 'READY', parts: [{ partId: 'slide-1', contentMimeType: 'image/png' }, { partId: 'slide-2', contentMimeType: 'image/png' }, { partId: 'content', contentMimeType: 'text/plain' }], partial: false } }
       if (options.url.endsWith('/preview/parts/slide-1') || options.url.endsWith('/preview/parts/slide-2')) return { data: new Blob(['png'], { type: 'image/png' }) }
       return { data: { file: fileView({ mediaFamily: 'PRESENTATION' }), latestVersion: versionView({ contentMimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', originalFilename: 'deck.pptx' }), versions: [versionView({ contentMimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', originalFilename: 'deck.pptx' })], relations: [], derivation: [] }, headers: { etag: '"pws_file:1"' } }
     } }
@@ -146,7 +146,7 @@ describe('1.13.1 workspace multi-part previews', () => {
   it('revokes URLs created before a later preview part fails', async () => {
     const revoked = []
     const api = { execute: async options => {
-      if (options.url.endsWith('/preview')) return { data: { state: 'READY', representation: 'PAGED_IMAGE', parts: [{ partId: 'page-1', contentMimeType: 'image/png' }, { partId: 'page-2', contentMimeType: 'image/png' }], partial: false } }
+      if (options.url.endsWith('/preview')) return { data: { state: 'READY', parts: [{ partId: 'page-1', contentMimeType: 'image/png' }, { partId: 'page-2', contentMimeType: 'image/png' }, { partId: 'content', contentMimeType: 'text/plain' }], partial: false } }
       if (options.url.endsWith('/preview/parts/page-1')) return { data: new Blob(['png'], { type: 'image/png' }) }
       if (options.url.endsWith('/preview/parts/page-2')) throw new Error('second part failed')
       return { data: { file: fileView({ mediaFamily: 'PRESENTATION' }), latestVersion: versionView({ contentMimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', originalFilename: 'deck.pptx' }), versions: [versionView({ contentMimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', originalFilename: 'deck.pptx' })], relations: [], derivation: [] }, headers: { etag: '"pws_file:1"' } }
@@ -166,7 +166,7 @@ describe('1.13.1 workspace Excel preview parts', () => {
     const calls = []
     const api = { execute: async options => {
       calls.push(options.url)
-      if (options.url.endsWith('/preview')) return { data: { state: 'READY', representation: 'SHEET_TEXT', parts: [{ partId: 'sheet-1', contentMimeType: 'text/plain' }, { partId: 'sheet-2', contentMimeType: 'text/plain' }, { partId: 'content', contentMimeType: 'text/plain' }], partial: false } }
+      if (options.url.endsWith('/preview')) return { data: { state: 'READY', parts: [{ partId: 'sheet-1', contentMimeType: 'text/plain' }, { partId: 'sheet-2', contentMimeType: 'text/plain' }, { partId: 'content', contentMimeType: 'text/plain' }], partial: false } }
       if (options.url.endsWith('/preview/parts/sheet-1')) return { data: new Blob(['汇总'], { type: 'text/plain' }) }
       if (options.url.endsWith('/preview/parts/sheet-2')) return { data: new Blob(['明细'], { type: 'text/plain' }) }
       return { data: { file: fileView({ mediaFamily: 'SPREADSHEET' }), latestVersion: versionView({ contentMimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', originalFilename: 'data.xlsx' }), versions: [versionView({ contentMimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', originalFilename: 'data.xlsx' })], relations: [], derivation: [] }, headers: { etag: '"pws_file:1"' } }
