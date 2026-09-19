@@ -64,7 +64,7 @@ const conversationDeliverable = value => {
     !exactVersion(value.formalDeliveryRevision) || !Number.isSafeInteger(value.formalDecisionVersion) ||
     value.formalDecisionVersion < 0 || (value.formalReviewedAt != null && !exactTimestamp(value.formalReviewedAt))) return false
   if (value.formalDeliveryState === 'submitted') return value.formalDecisionVersion === 0 && value.formalReviewedAt == null
-  return value.formalDecisionVersion >= 1 && exactTimestamp(value.formalReviewedAt)
+  return value.formalDecisionVersion >= 1 && Number.isSafeInteger(value.formalReviewedAt) && value.formalReviewedAt > 0
 }
 const validatedPage = (value, sourceType, sourceId, limit) => {
   const itemValidator = sourceType === 'task'

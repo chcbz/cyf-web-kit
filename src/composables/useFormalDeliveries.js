@@ -12,6 +12,7 @@ const validText = (value, maximum = 4000) => typeof value === 'string' && value.
 const validRevision = value => Number.isSafeInteger(value) && value >= 1 && value <= MAX_VERSION
 const validEntityVersion = value => Number.isSafeInteger(value) && value >= 0 && value <= MAX_VERSION
 const validTimestamp = value => (Number.isSafeInteger(value) && value >= 0) || (typeof value === 'string' && value.length > 0 && Number.isFinite(Date.parse(value)))
+const positiveTimestamp = value => (Number.isSafeInteger(value) && value > 0) || (typeof value === 'string' && value.length > 0 && Date.parse(value) > 0)
 const validHash = value => typeof value === 'string' && /^[a-f0-9]{64}$/i.test(value)
 const validReviewReason = value => validText(value, 4000) && value.length > 0 && value === value.trim()
 const unwrap = result => {
@@ -48,7 +49,7 @@ const formalDelivery = (delivery, taskId) => delivery && typeof delivery === 'ob
   (delivery.reviewReason == null || validText(delivery.reviewReason, 4000)) && validEntityVersion(delivery.taskVersion) &&
   validEntityVersion(delivery.workItemVersion) && Array.isArray(delivery.items) && delivery.items.length <= 100 && delivery.items.every(formalItem) &&
   (delivery.state === 'submitted' ? delivery.deliveryVersion === 0 && delivery.reviewedAt == null && delivery.reviewReason == null
-    : delivery.deliveryVersion >= 1 && validTimestamp(delivery.reviewedAt) &&
+    : delivery.deliveryVersion >= 1 && positiveTimestamp(delivery.reviewedAt) &&
       (delivery.state === 'accepted' ? delivery.reviewReason == null : validReviewReason(delivery.reviewReason)))
 const validatedPage = (value, taskId) => {
   if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.keys(value).every(key => PAGE_FIELDS.has(key)) ||
