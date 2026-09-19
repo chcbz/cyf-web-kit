@@ -65,6 +65,23 @@ describe('personal workspace browser adapter', () => {
     workspace.dispose()
   })
 
+  it('renders a server-confirmed image preview only when the preview part preserves the image MIME type', async () => {
+    const urls = []
+    const api = { execute: async options => {
+      if (options.url.endsWith('/preview')) return { data: { state: 'READY', parts: [{ partId: 'content', contentMimeType: 'image/png' }], partial: false } }
+      if (options.url.endsWith('/preview/parts/content')) return { data: new Blob(['png-bytes'], { type: 'image/png' }) }
+      return { data: { file: fileView({ mediaFamily: 'IMAGE', displayName: 'poster.png' }), latestVersion: versionView({ contentMimeType: 'image/png', originalFilename: 'poster.png' }), versions: [versionView({ contentMimeType: 'image/png', originalFilename: 'poster.png' })], relations: [], derivation: [] }, headers: { etag: '"pws_file:1"' } }
+    } }
+    const workspace = usePersonalWorkspace({ api, identityEpoch: ref('owner-a'), urlApi: { createObjectURL: blob => { urls.push(blob); return 'blob:preview' }, revokeObjectURL: () => {} } })
+    await workspace.select('pws_file')
+    await workspace.previewVersion(1)
+
+    assert.equal(workspace.preview.value.kind, 'image')
+    assert.equal(workspace.preview.value.url, 'blob:preview')
+    assert.equal(urls[0].type, 'image/png')
+    workspace.dispose()
+  })
+
   it('renders the available read-only Office/PDF text preview without claiming edit support', async () => {
     const api = { execute: async options => {
       if (options.url.endsWith('/preview')) return { data: { state: 'READY', parts: [{ partId: 'content', contentMimeType: 'text/plain' }], partial: true, reason: '文本已截断' } }

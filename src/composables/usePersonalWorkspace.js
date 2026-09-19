@@ -315,7 +315,10 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
         url: `/personal-workspace/files/${encodeURIComponent(file.fileId)}/versions/${Number(version)}/preview`, method: 'GET'
       }, snapshot)
       const versionInfo = detail.value?.versions?.find(item => Number(item.version) === Number(version)) || detail.value?.latestVersion
-      if (data?.state !== 'READY' || !Array.isArray(data.parts) || !data.parts.some(part => part?.partId === 'content' && normalizeMime(part?.contentMimeType) === 'text/plain')) {
+      const previewMime = isImagePreviewable(versionInfo?.contentMimeType)
+        ? normalizeMime(versionInfo.contentMimeType)
+        : 'text/plain'
+      if (data?.state !== 'READY' || !Array.isArray(data.parts) || !data.parts.some(part => part?.partId === 'content' && normalizeMime(part?.contentMimeType) === previewMime)) {
         preview.value = { kind: 'unsupported', message: data?.reason || '此文件可下载，但暂时无法生成可用预览。' }
         actionState.value = 'ready'
         return preview.value
