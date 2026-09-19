@@ -12,11 +12,16 @@ const validId = value => typeof value === 'string' && value.length > 0 && value.
 const validSource = value => value && ['task', 'conversation'].includes(value.type) && validId(value.id)
 const abortError = message => new DOMException(message, 'AbortError')
 
-const DELIVERABLE_PAGE_FIELDS = new Set(['items', 'nextCursor'])
-const DELIVERABLE_FIELDS = new Set([
+const DELIVERABLE_PAGE_FIELDS = new Set(['items', 'nextCursor', 'publicationPending', 'state'])
+const TASK_DELIVERABLE_FIELDS = new Set([
   'artifactId', 'taskId', 'workItemId', 'producerAgentId', 'artifactType', 'title',
   'contentHash', 'contentByteLength', 'contentMimeType', 'artifactVersion', 'visibility', 'createdAt'
 ])
+const CONVERSATION_DELIVERABLE_FIELDS = new Set([
+  'outputId', 'executionId', 'fileId', 'fileVersion', 'contentHash', 'contentMimeType',
+  'byteLength', 'committedAt', 'state', 'publicationState', 'formalDeliveryState'
+])
+const DELIVERABLE_STATES = new Set(['AVAILABLE', 'EMPTY', 'SYNCING'])
 const unwrap = result => {
   let value = result
   for (let index = 0; index < 3 && value && typeof value === 'object' && Object.hasOwn(value, 'data'); index += 1) value = value.data
@@ -29,39 +34,64 @@ const exactText = (value, maximum) => typeof value === 'string' && value.length 
 const exactVersion = value => Number.isInteger(value) && value >= 1 && value <= 2147483647
 const exactByteLength = value => Number.isSafeInteger(value) && value >= 0 && value <= 64 * 1024 * 1024
 const exactMime = value => typeof value === 'string' && /^[a-z0-9][a-z0-9!#$&^_.+-]{0,63}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,63}$/.test(value)
+const exactTimestamp = value => Number.isSafeInteger(value) && value >= 0
+const exactState = value => typeof value === 'string' && DELIVERABLE_STATES.has(value)
 const taskDeliverable = (value, taskId) => value && typeof value === 'object' && !Array.isArray(value) &&
-  Object.keys(value).every(key => DELIVERABLE_FIELDS.has(key)) && value.taskId === taskId &&
+  Object.keys(value).every(key => TASK_DELIVERABLE_FIELDS.has(key)) && value.taskId === taskId &&
   exactId(value.artifactId) && (value.workItemId == null || exactId(value.workItemId)) &&
   exactId(value.producerAgentId) && exactText(value.artifactType, 100) && exactText(value.title, 255) &&
   typeof value.contentHash === 'string' && /^[0-9a-f]{64}$/.test(value.contentHash) &&
   exactByteLength(value.contentByteLength) && exactMime(value.contentMimeType) &&
   exactVersion(value.artifactVersion) && typeof value.visibility === 'string' &&
-  Number.isSafeInteger(value.createdAt) && value.createdAt >= 0
-const validatedTaskPage = (value, taskId, limit) => {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.keys(value).every(key => DELIVERABLE_PAGE_FIELDS.has(key)) ||
-    !Array.isArray(value.items) || value.items.length > limit || value.nextCursor != null || !value.items.every(item => taskDeliverable(item, taskId))) {
+  exactTimestamp(value.createdAt)
+const conversationDeliverable = value => value && typeof value === 'object' && !Array.isArray(value) &&
+  Object.keys(value).every(key => CONVERSATION_DELIVERABLE_FIELDS.has(key)) &&
+  exactId(value.outputId) && exactId(value.executionId) && exactId(value.fileId) &&
+  exactVersion(value.fileVersion) && typeof value.contentHash === 'string' && /^[0-9a-f]{64}$/.test(value.contentHash) &&
+  exactMime(value.contentMimeType) && exactByteLength(value.byteLength) && exactTimestamp(value.committedAt) &&
+  value.state === 'AVAILABLE' && value.publicationState === 'WORKSPACE_COMMITTED' &&
+  value.formalDeliveryState === 'NOT_APPLICABLE'
+const validatedPage = (value, sourceType, sourceId, limit) => {
+  const itemValidator = sourceType === 'task'
+    ? item => taskDeliverable(item, sourceId)
+    : conversationDeliverable
+  if (!value || typeof value !== 'object' || Array.isArray(value) ||
+    !Object.keys(value).every(key => DELIVERABLE_PAGE_FIELDS.has(key)) ||
+    !Array.isArray(value.items) || value.items.length > limit || !itemValidator || !value.items.every(itemValidator) ||
+    (value.state != null && !exactState(value.state)) ||
+    (value.publicationPending != null && typeof value.publicationPending !== 'boolean') ||
+    (value.nextCursor != null && !exactText(value.nextCursor, 200))) {
     throw new Error('成果目录返回格式无效，未展示可能不完整的数据。')
   }
   const seen = new Set()
-  if (value.items.some(item => { const key = `${item.artifactId}\u0000${item.artifactVersion}`; if (seen.has(key)) return true; seen.add(key); return false })) {
+  const keyFor = sourceType === 'conversation'
+    ? item => `${item.outputId}\u0000${item.fileId}\u0000${item.fileVersion}`
+    : item => `${item.artifactId}\u0000${item.artifactVersion}`
+  if (value.items.some(item => { const key = keyFor(item); if (seen.has(key)) return true; seen.add(key); return false })) {
     throw new Error('成果目录返回了重复版本，未展示可能不完整的数据。')
   }
-  return { items: value.items, nextCursor: null }
+  return {
+    state: value.state || (value.items.length ? 'AVAILABLE' : 'EMPTY'),
+    items: value.items,
+    publicationPending: value.publicationPending === true,
+    nextCursor: value.nextCursor || null
+  }
 }
 
-/** Authenticated Day 1 task/bounty read adapter; conversations stay a stable empty state until a proven mapping exists. */
+/** Authenticated read adapter. Conversation delivery is reference-only until W04 supplies content actions. */
 export const outputReadAdapter = Object.freeze({
   async list ({ sourceType, sourceId, cursor, limit, signal } = {}) {
-    if (sourceType === 'conversation') return { state: 'empty', items: [], nextCursor: null }
-    if (sourceType !== 'task' || !validId(sourceId) || cursor != null || !Number.isInteger(limit) || limit < 1 || limit > MAX_PAGE_SIZE) {
+    if (!['task', 'conversation'].includes(sourceType) || !validId(sourceId) || cursor != null || !Number.isInteger(limit) || limit < 1 || limit > MAX_PAGE_SIZE) {
       throw Object.assign(new Error('成果目录请求无效。'), { retryable: false })
     }
     const api = createApi('/agent')
+    const path = sourceType === 'conversation'
+      ? `/conversations/${encodeURIComponent(sourceId)}/deliverables`
+      : `/tasks/${encodeURIComponent(sourceId)}/deliverables`
     const result = unwrap(await api.execute({
-      url: `/tasks/${encodeURIComponent(sourceId)}/deliverables`, method: 'GET',
-      params: { limit }, autoLoading: false, needAuth: true, signal
+      url: path, method: 'GET', params: { limit }, autoLoading: false, needAuth: true, signal
     }))
-    return validatedTaskPage(result, sourceId, limit)
+    return validatedPage(result, sourceType, sourceId, limit)
   },
   async download ({ sourceType, sourceId, artifactId, artifactVersion, signal } = {}) {
     if (sourceType !== 'task' || !validId(sourceId) || !validId(artifactId) || !/^[1-9][0-9]{0,9}$/.test(String(artifactVersion))) {
@@ -95,24 +125,48 @@ const normalizeBytes = value => {
   const parsed = typeof value === 'number' ? value : Number(value)
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null
 }
-const normalizeItem = item => {
-  if (!item || typeof item !== 'object') return null
-  const artifactId = item.artifactId || item.outputId
-  const artifactVersion = item.artifactVersion ?? item.version
-  const mimeType = String(item.contentMimeType || item.mimeType || item.mime || '').toLowerCase()
-  const byteLength = normalizeBytes(item.contentByteLength ?? item.byteLength ?? item.size)
-  if (!validId(artifactId) || !/^[1-9][0-9]{0,18}$/.test(String(artifactVersion))) return null
+const normalizeItem = (item, sourceType) => {
+  if (sourceType === 'conversation') {
+    if (!conversationDeliverable(item)) return null
+    return Object.freeze({
+      outputId: item.outputId,
+      executionId: item.executionId,
+      artifactId: '',
+      artifactVersion: '',
+      title: '执行成果',
+      artifactType: '执行成果',
+      mimeType: item.contentMimeType,
+      byteLength: item.byteLength,
+      sha256: item.contentHash,
+      createdAt: item.committedAt,
+      state: item.state,
+      publicationState: item.publicationState,
+      formalDeliveryState: item.formalDeliveryState,
+      fileRef: Object.freeze({ fileId: item.fileId, fileVersion: String(item.fileVersion) }),
+      artifactRef: null,
+      canDownload: false,
+      canPreview: false
+    })
+  }
+  if (!taskDeliverable(item, item?.taskId)) return null
   return Object.freeze({
-    artifactId,
-    artifactVersion: String(artifactVersion),
-    title: safeText(item.title || item.name || '未命名成果'),
-    artifactType: safeText(item.artifactType || item.type || '文件', 80),
-    mimeType,
-    byteLength,
-    sha256: /^[a-f0-9]{64}$/i.test(String(item.sha256 || item.contentHash || '')) ? String(item.sha256 || item.contentHash).toLowerCase() : '',
-    createdAt: item.createdAt ?? item.publishedAt ?? null,
-    state: String(item.state || 'AVAILABLE').toUpperCase(),
-    canDownload: item.canDownload !== false
+    outputId: '',
+    executionId: '',
+    artifactId: item.artifactId,
+    artifactVersion: String(item.artifactVersion),
+    title: safeText(item.title),
+    artifactType: safeText(item.artifactType, 80),
+    mimeType: item.contentMimeType,
+    byteLength: normalizeBytes(item.contentByteLength),
+    sha256: item.contentHash,
+    createdAt: item.createdAt,
+    state: 'AVAILABLE',
+    publicationState: '',
+    formalDeliveryState: '',
+    fileRef: null,
+    artifactRef: Object.freeze({ artifactId: item.artifactId, artifactVersion: String(item.artifactVersion) }),
+    canDownload: true,
+    canPreview: true
   })
 }
 
@@ -186,12 +240,12 @@ export function useOutputs ({ source, identityFingerprint, adapter = outputReadA
         items.value = []
         nextCursor.value = null
         state.value = 'syncing'
-        message.value = '成果同步中，聊天和悬赏主体不受影响。'
+        message.value = '交付同步中，尚未提交待验收。'
         return true
       }
-      const received = Array.isArray(page?.items) ? page.items.map(normalizeItem).filter(Boolean) : []
+      const received = Array.isArray(page?.items) ? page.items.map(item => normalizeItem(item, currentSource.type)).filter(Boolean) : []
       const combined = more ? [...items.value, ...received] : received
-      const unique = new Map(combined.map(item => [`${item.artifactId}\u0000${item.artifactVersion}`, item]))
+      const unique = new Map(combined.map(item => [`${item.outputId || item.artifactId}\u0000${item.fileRef?.fileId || item.artifactRef?.artifactId || ''}\u0000${item.fileRef?.fileVersion || item.artifactRef?.artifactVersion || ''}`, item]))
       items.value = [...unique.values()]
       nextCursor.value = typeof page?.nextCursor === 'string' && page.nextCursor ? page.nextCursor : null
       state.value = items.value.length ? 'available' : 'empty'

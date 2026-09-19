@@ -79,6 +79,32 @@
         <div class="message-content" v-html="renderMarkdown(pendingLabel)"></div>
       </div>
       <div v-if="!messages.length" class="empty-list">{{ emptyText }}</div>
+
+      <section v-if="conversationId" class="deliverable-directory" aria-label="本话头执行与成果">
+        <div class="deliverable-directory-head">
+          <strong>执行与成果</strong>
+          <button type="button" :disabled="deliverables.loading.value" @click="refreshDeliverables">刷新</button>
+        </div>
+        <p v-if="deliverables.state.value === 'syncing'" class="deliverable-syncing" role="status">交付同步中，尚未提交待验收。</p>
+        <div v-else-if="deliverables.state.value === 'unavailable' || deliverables.state.value === 'forbidden' || deliverables.state.value === 'error'" class="deliverable-error" role="alert">
+          <span>{{ deliverables.message.value }}</span>
+          <button type="button" @click="refreshDeliverables">重试</button>
+        </div>
+        <ol v-else-if="deliverables.items.value.length" class="deliverable-list">
+          <li v-for="item in deliverables.items.value" :key="`${item.outputId}\u0000${item.fileRef?.fileId}\u0000${item.fileRef?.fileVersion}`" class="deliverable-card">
+            <div>
+              <strong>执行成果</strong>
+              <small>{{ item.mimeType }} · {{ formatBytes(item.byteLength) }}</small>
+            </div>
+            <p>已保存至个人空间，非正式验收。</p>
+            <div class="deliverable-actions">
+              <button type="button" :disabled="!item.fileRef" @click="emitDeliverableAction('preview', item)">预览</button>
+              <button type="button" :disabled="!item.fileRef" @click="emitDeliverableAction('download', item)">下载</button>
+            </div>
+          </li>
+        </ol>
+        <p v-else-if="deliverables.state.value !== 'loading'" class="deliverable-empty">暂无执行成果。</p>
+      </section>
     </div>
 
     <HallChatComposer
@@ -108,6 +134,7 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import HallChatComposer from './HallChatComposer.vue'
 import HallConversationHistory from './HallConversationHistory.vue'
+import { outputSource, useOutputs } from '../../composables/useOutputs.js'
 
 marked.setOptions({
   breaks: true,
@@ -150,6 +177,7 @@ const props = defineProps({
 const emit = defineEmits([
   'clear-target',
   'delete-conversation',
+  'download-deliverable',
   'load-history',
   'load-more-history',
   'load-messages',
@@ -157,12 +185,30 @@ const emit = defineEmits([
   'new-conversation',
   'retry-conversation',
   'select-conversation',
+  'preview-deliverable',
   'send-message',
   'update:draft',
   'voice-apply'
 ])
 
 const messageBoxRef = ref(null)
+const deliverableSource = outputSource('conversation', () => props.conversationId)
+// The conversation id changes before a different thread is rendered; identity lifecycle cleanup
+// also clears this directory, so no prior identity's references survive a switch.
+const deliverables = useOutputs({ source: deliverableSource, identityFingerprint: () => props.conversationId })
+const formatBytes = value => Number.isSafeInteger(value) ? `${value} 字节` : '大小待确认'
+const refreshDeliverables = () => { void deliverables.refresh() }
+const emitDeliverableAction = (action, item) => {
+  if (!item?.fileRef || !props.conversationId) return
+  // This is a reference-only handoff. Never retain or render URLs, storage locations, leases, or credentials.
+  const reference = Object.freeze({
+    conversationId: props.conversationId,
+    outputId: item.outputId,
+    executionId: item.executionId,
+    fileRef: Object.freeze({ fileId: item.fileRef.fileId, fileVersion: item.fileRef.fileVersion })
+  })
+  emit(action === 'preview' ? 'preview-deliverable' : 'download-deliverable', reference)
+}
 const historyOpen = ref(false)
 const pendingAuthor = '聚义厅'
 const toggleHistory = () => {
@@ -187,6 +233,10 @@ const pendingLabel = computed(() => {
   return '正在整理回报...'
 })
 const renderMarkdown = (content = '') => DOMPurify.sanitize(marked(String(content || '')))
+
+watch(() => props.eventStreamRecovering, (recovering, wasRecovering) => {
+  if (wasRecovering && !recovering && props.conversationId) refreshDeliverables()
+})
 
 watch(() => props.messages, () => {
   nextTick(() => {
@@ -481,4 +531,43 @@ button:disabled {
     max-width: 94%;
   }
 }
+</style>
+
+
+<style scoped>
+.deliverable-directory {
+  margin: 12px 0 4px;
+  padding: 10px;
+  border: 1px solid rgba(116, 75, 35, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 253, 246, 0.9);
+  color: #4a3423;
+}
+
+.deliverable-directory-head,
+.deliverable-actions,
+.deliverable-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.deliverable-directory-head strong { font-size: 13px; }
+.deliverable-directory button {
+  padding: 4px 8px;
+  border: 1px solid rgba(109, 63, 31, 0.45);
+  border-radius: 5px;
+  background: transparent;
+  color: #6d3f1f;
+  font-size: 12px;
+}
+.deliverable-list { display: grid; gap: 8px; margin: 8px 0 0; padding: 0; list-style: none; }
+.deliverable-card { padding: 8px; border-radius: 6px; background: #fff8e8; }
+.deliverable-card > div:first-child { display: flex; justify-content: space-between; gap: 8px; }
+.deliverable-card small { color: #8a6f4b; overflow-wrap: anywhere; }
+.deliverable-card p, .deliverable-empty, .deliverable-syncing { margin: 6px 0 0; color: #765f40; font-size: 12px; }
+.deliverable-syncing { color: #9a6e40; }
+.deliverable-error { margin-top: 8px; color: #a23f32; font-size: 12px; }
+.deliverable-actions { justify-content: flex-end; margin-top: 8px; }
 </style>
