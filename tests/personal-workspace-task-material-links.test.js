@@ -93,7 +93,8 @@ describe('W06 workspace bounty material links', () => {
 
     assert.match(wrapper.text(), /成果关联由执行流程管理/)
     assert.match(wrapper.text(), /正式交付状态仍需以正式交付回执确认/)
-    assert.equal(wrapper.find('.task-link-row.output button').exists(), false)
+    assert.equal(wrapper.find('.task-link-row.output .open-linked-file').exists(), true)
+    assert.equal(wrapper.find('.task-link-row.output button:not(.open-linked-file)').exists(), false)
   })
 
   it('clears the local exact-version draft when the authenticated identity changes', async () => {
@@ -107,7 +108,9 @@ describe('W06 workspace bounty material links', () => {
     assert.equal(wrapper.find('.attach-material').exists(), true)
 
     await wrapper.setProps({ identityEpoch: 2 })
-    assert.equal(wrapper.find('.attach-material').exists(), false)
+    const attach = wrapper.find('.attach-material')
+    assert.equal(attach.exists(), true)
+    assert.equal(attach.attributes('disabled'), '')
   })
 
   it('wires the actual bounty detail to the shared material surface and preserves the existing task discussion event', () => {

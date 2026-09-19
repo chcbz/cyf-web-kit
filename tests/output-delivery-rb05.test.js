@@ -6,7 +6,8 @@ import { safeOutputFilename, saveOutputBlob } from '../src/utils/outputDownload.
 
 const tick = async () => { await Promise.resolve(); await nextTick(); await Promise.resolve() }
 const item = overrides => ({
-  artifactId: 'artifact-1', artifactVersion: 1, title: '报告.md', artifactType: 'report',
+  artifactId: 'artifact-1', artifactVersion: 1, taskId: 'task-1', workItemId: 'work-item-1', producerAgentId: 'agent-1',
+  title: '报告.md', artifactType: 'report', visibility: 'OWNER', createdAt: 1,
   contentMimeType: 'text/markdown', contentByteLength: 12, contentHash: 'a'.repeat(64), ...overrides
 })
 
@@ -35,7 +36,7 @@ describe('RB05 output directory boundary', () => {
     const adapter = {
       list: ({ sourceId }) => sourceId === 'task-old'
         ? new Promise(resolve => { resolveOld = resolve })
-        : Promise.resolve({ items: [item({ artifactId: 'artifact-new', title: '新成果' })] }),
+        : Promise.resolve({ items: [item({ artifactId: 'artifact-new', taskId: 'task-new', title: '新成果' })] }),
       async download () {}, async preview () {}
     }
     const outputs = useOutputs({ source, identityFingerprint: identity, adapter })
@@ -61,9 +62,18 @@ describe('RB05 output directory boundary', () => {
     expect(uncertain.message.value).to.not.equal('暂无可领取成果。')
   })
 
-  it('keeps an unmapped conversation as a stable no-output empty state', async () => {
-    const outputs = useOutputs({ source: ref({ type: 'conversation', id: 'conversation-1' }), identityFingerprint: ref('user-a') })
+  it('reads an authenticated conversation directory and renders a confirmed empty response', async () => {
+    const calls = []
+    const outputs = useOutputs({
+      source: ref({ type: 'conversation', id: 'conversation-1' }), identityFingerprint: ref('user-a'),
+      adapter: {
+        async list (request) { calls.push(request); return { items: [], nextCursor: null } },
+        async download () { throw new Error('not needed') }, async preview () { throw new Error('not needed') }
+      }
+    })
     await tick()
+    expect(calls).to.have.length(1)
+    expect(calls[0]).to.include({ sourceType: 'conversation', sourceId: 'conversation-1', cursor: null, limit: 20 })
     expect(outputs.state.value).to.equal('empty')
     expect(outputs.items.value).to.deep.equal([])
     expect(outputs.message.value).to.equal('暂无可领取成果。')
@@ -79,7 +89,7 @@ describe('RB05 output directory boundary', () => {
     await outputs.download(outputs.items.value[0])
     expect(calls).to.deep.equal([{
       sourceType: 'task', sourceId: 'task-1', taskId: 'task-1',
-      artifactId: 'artifact-1', artifactVersion: '2', fileId: null, fileVersion: null, signal: undefined
+      artifactId: 'artifact-1', artifactVersion: '2', fileId: null, fileVersion: null, contentMimeType: 'text/markdown', signal: undefined
     }])
   })
 
