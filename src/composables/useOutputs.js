@@ -76,9 +76,9 @@ const conversationDeliverable = value => {
   if (value.formalDeliveryState === 'submitted') return value.formalDecisionVersion === 0 && value.formalReviewedAt == null
   return value.formalDecisionVersion >= 1 && Number.isSafeInteger(value.formalReviewedAt) && value.formalReviewedAt > 0
 }
-// The actual PreviewView is intentionally representation-free: it carries only
-// server-authorized part IDs and MIME types. Some in-flight clients may still include a
-// known representation label, which is ignored rather than used to infer a part URL.
+// Task deliverable metadata may include a known representation label; private workspace
+// PreviewView intentionally omits it. Both forms carry only server-authorized part IDs
+// and MIME types, and the label never infers a part URL.
 const PREVIEW_REPRESENTATIONS = new Set(['EXTRACTED_TEXT', 'PAGED_IMAGE', 'SHEET_TEXT', 'PAGED_TEXT'])
 const validPreviewView = value => {
   if (!value || typeof value !== 'object' || Array.isArray(value) ||
