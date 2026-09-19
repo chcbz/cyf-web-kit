@@ -3,7 +3,6 @@
  * against an in-process mock HTTP service; it never starts an Agent Provider
  * and is intentionally not a real-service E2E result.
  */
-import assert from 'node:assert/strict'
 import http from 'node:http'
 import https from 'node:https'
 import { spawn } from 'node:child_process'
@@ -14,13 +13,21 @@ import { fileURLToPath } from 'node:url'
 import { launchChrome, evaluate, stopChrome, waitForExpression } from '../scripts/juyiting/e13/lib/cdp-harness.mjs'
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
-const evidenceDir = resolve(process.env.JUYITING_A19_EVIDENCE_DIR || 'tests/evidence/a19-browser-smoke')
+const evidenceDir = resolve(process.env.JUYITING_A19_EVIDENCE_DIR || `/var/tmp/cyf-a19-browser-smoke-${process.pid}`)
 const vitePort = Number(process.env.JUYITING_A19_VITE_PORT || 18480)
 const apiPort = Number(process.env.JUYITING_A19_API_PORT || 18481)
 const debugPort = Number(process.env.JUYITING_A19_CDP_PORT || 19481)
 const appOrigin = `https://127.0.0.1:${vitePort}`
 const apiOrigin = `http://127.0.0.1:${apiPort}`
 const requests = []
+const unexpectedRequests = []
+const preflightRequests = []
+const checks = []
+const cleanupEvidence = []
+const check = (name, condition, detail = null) => {
+  if (!condition) throw new Error(`check failed: ${name}${detail ? ` (${detail})` : ''}`)
+  checks.push({ name, passed: true })
+}
 let vite = null
 let apiServer = null
 let chrome = null
@@ -46,7 +53,7 @@ const execution = () => ({ executionId: 'execution-a19', taskId: 'pwe-task-a19',
 const startMockApi = () => new Promise((resolveStart, reject) => {
   apiServer = http.createServer(async (req, res) => {
     const url = new URL(req.url || '/', apiOrigin)
-    if (req.method === 'OPTIONS') return json(res, 204, {})
+    if (req.method === 'OPTIONS') { preflightRequests.push({ path: url.pathname, origin: req.headers.origin || '' }); return json(res, 204, {}) }
     const body = await readBody(req)
     let payload = null
     try { payload = body ? JSON.parse(body) : null } catch { payload = body }
@@ -58,6 +65,7 @@ const startMockApi = () => new Promise((resolveStart, reject) => {
     if (req.method === 'GET' && path === '/agent/personal-workspace/executions/capabilities') return json(res, 200, { allowedMimeTypes: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'], inputMimeTypes: [versions[0].contentMimeType], generationEnabled: false })
     if (req.method === 'POST' && path === '/agent/roster') return json(res, 200, { data: [agent] })
     if (req.method === 'POST' && path === '/agent/personal-workspace/executions') return json(res, 200, execution())
+    if (req.method === 'GET' && path === '/agent/personal-workspace/executions/execution-a19') return json(res, 200, execution())
     if (req.method === 'POST' && path === '/agent/personal-workspace/executions/execution-a19/revoke-inputs') return json(res, 200, { ...execution(), state: 'INPUTS_REVOKED' })
     if (req.method === 'GET' && path === '/agent/map') return json(res, 200, { data: [{ ...agent, x: 8, y: 8 }] })
     if (req.method === 'GET' && path === '/agent/personas/catalog') return json(res, 200, { data: [] })
@@ -71,17 +79,17 @@ const startMockApi = () => new Promise((resolveStart, reject) => {
     }
     if (req.method === 'GET' && path === '/agent/scenes/juyiting-main/snapshot') return json(res, 200, { version: '0', agents: [] })
     if (req.method === 'GET' && path === '/agent/scenes/juyiting-main/events') return json(res, 200, { events: [] })
-    if (path.startsWith('/chat/') || path.startsWith('/agent/conversations/')) return json(res, 200, { data: [] })
-    return json(res, 200, { data: [] })
+    unexpectedRequests.push({ method: req.method, path, query: Object.fromEntries(url.searchParams), payload })
+    return json(res, 404, { message: `No explicit A19 mock for ${req.method} ${path}` })
   })
   apiServer.once('error', reject)
   apiServer.listen(apiPort, '127.0.0.1', () => resolveStart())
 })
 const stop = async () => {
-  if (cdp) { cdp.close(); cdp = null }
-  if (chrome) { await stopChrome(chrome, profile); chrome = null; profile = null }
-  if (vite && !vite.killed) { vite.kill('SIGTERM'); await Promise.race([new Promise(resolve => vite.once('exit', resolve)), delay(3000)]); vite = null }
-  if (apiServer) { await new Promise(resolve => apiServer.close(resolve)); apiServer = null }
+  if (cdp) { cdp.close(); cdp = null; cleanupEvidence.push({ resource: 'cdp', status: 'closed' }) }
+  if (chrome) { await stopChrome(chrome, profile); chrome = null; profile = null; cleanupEvidence.push({ resource: 'chromium', status: 'stopped-and-profile-removed' }) }
+  if (vite && !vite.killed) { vite.kill('SIGTERM'); await Promise.race([new Promise(resolve => vite.once('exit', resolve)), delay(3000)]); vite = null; cleanupEvidence.push({ resource: 'vite', status: 'stopped' }) }
+  if (apiServer) { await new Promise(resolve => apiServer.close(resolve)); apiServer = null; cleanupEvidence.push({ resource: 'mock-api', status: 'closed' }) }
 }
 const waitForVite = async () => {
   for (let attempt = 0; attempt < 120; attempt += 1) {
@@ -103,7 +111,7 @@ const visibleText = text => `document.body.innerText.includes(${JSON.stringify(t
 const tokenBootstrap = `localStorage.setItem('api_token', JSON.stringify({data:'a19-local-smoke-token', expTime: Date.now() + 3600000}))`
 const noHorizontalOverflow = async label => {
   const dimensions = await evaluate(cdp, '({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth })')
-  assert.ok(dimensions.scrollWidth <= dimensions.width, `${label} horizontally overflows: ${JSON.stringify(dimensions)}`)
+  check(`${label}: no horizontal overflow`, dimensions.scrollWidth <= dimensions.width, JSON.stringify(dimensions))
 }
 
 async function run () {
@@ -130,13 +138,13 @@ async function run () {
   await clickText('创建私人执行')
   await waitForExpression(cdp, visibleText('execution-a19'), 20_000)
   const create = requests.find(request => request.method === 'POST' && request.path === '/agent/personal-workspace/executions')
-  assert.deepEqual(create?.payload?.inputs, [{ fileId: file.fileId, version: '1' }], 'execution must preserve the exact selected version')
-  assert.equal(create?.payload?.targetAgentId, agent.agentId, 'execution must transmit the explicit Agent')
-  assert.equal(create?.payload?.instruction, '根据 v1 制作 PPT')
+  check('workspace execution preserves explicit v1', JSON.stringify(create?.payload?.inputs) === JSON.stringify([{ fileId: file.fileId, version: '1' }]))
+  check('workspace execution transmits explicit Agent', create?.payload?.targetAgentId === agent.agentId)
+  check('workspace execution preserves instruction', create?.payload?.instruction === '根据 v1 制作 PPT')
   await clickText('撤销尚未开始的输入授权')
   await waitForExpression(cdp, visibleText('输入授权已撤销'), 20_000)
   const revoke = requests.find(request => request.method === 'POST' && request.path === '/agent/personal-workspace/executions/execution-a19/revoke-inputs')
-  assert.equal(revoke?.payload?.expectedGrantRevision, 1, 'cancel must preserve the server grant revision')
+  check('revoke preserves grant revision', revoke?.payload?.expectedGrantRevision === 1)
   await noHorizontalOverflow('desktop workspace')
 
   // Narrow-screen: the same actual workspace surface remains usable with no horizontal overflow.
@@ -161,21 +169,33 @@ async function run () {
   await evaluate(cdp, `(() => { const selects = document.querySelectorAll('.task-material-links select'); const version = selects[0]; version.value = '1'; version.dispatchEvent(new Event('change', { bubbles: true })); })()`)
   await clickText('关联此精确版本')
   await waitForExpression(cdp, `document.querySelectorAll('.task-link-row').length === 1`, 20_000)
-  assert.ok(requests.some(request => request.path === '/agent/map'), 'Hall must request map data')
-  assert.ok(requests.some(request => request.path === '/agent/roster'), 'Hall must request roster data')
+  check('Hall requests map data', requests.some(request => request.path === '/agent/map'))
+  check('Hall requests roster data', requests.some(request => request.path === '/agent/roster'))
   const attach = requests.find(request => request.method === 'POST' && request.path === `/agent/tasks/${task.id}/file-links`)
-  assert.deepEqual(attach?.payload, { fileId: file.fileId, version: 1, role: 'INPUT' }, 'task entry must attach the fixed selected version without execution')
-  assert.equal(requests.filter(request => request.path === '/agent/personal-workspace/executions').length, 1, 'task material attachment must not start another execution')
+  check('task material preserves fixed v1 INPUT link', JSON.stringify(attach?.payload) === JSON.stringify({ fileId: file.fileId, version: 1, role: 'INPUT' }))
+  check('task material does not create another execution', requests.filter(request => request.path === '/agent/personal-workspace/executions').length === 1)
   await noHorizontalOverflow('landscape Hall task material picker')
 
-  // Keyboard-height regression: visualViewport-like reduced height keeps the task picker reachable.
+  // Layout viewport diagnostic only: this is not visualViewport-only virtual-keyboard evidence.
   await setViewport(390, 300)
   await waitForExpression(cdp, `document.querySelector('.task-material-links')?.getBoundingClientRect().width > 0`, 10_000)
   await noHorizontalOverflow('keyboard-height Hall')
 
-  const report = { kind: 'mock-service-browser-regression-not-real-service-e2e', viewports: ['1440x900', '390x844', '844x390', '390x300'], requests: requests.map(({ method, path, payload }) => ({ method, path, payload })), assertions: 18 }
+  check('no unexpected mock routes', unexpectedRequests.length === 0, JSON.stringify(unexpectedRequests))
+  await stop()
+  const report = {
+    kind: 'mock-service-browser-regression-not-real-service-e2e',
+    viewports: ['1440x900', '390x844', '844x390', '390x300-layout-viewport-only'],
+    checks,
+    assertionCount: checks.length,
+    requests: requests.map(({ method, path, payload }) => ({ method, path, payload })),
+    unexpectedRequests,
+    preflightRequests,
+    cleanup: cleanupEvidence,
+    coverageLimits: ['390x300 changes the layout viewport only; it is not visualViewport-only keyboard evidence.', 'identity cleanup invokes the Pinia API store directly; it is not a user-visible logout-button flow.', 'mock service only; no Provider and no real-service E2E.']
+  }
   await writeFile(resolve(evidenceDir, 'report.json'), `${JSON.stringify(report, null, 2)}\n`)
-  console.log(JSON.stringify({ status: 'PASS', assertions: report.assertions, evidenceDir, mockServiceOnly: true }))
+  console.log(JSON.stringify({ status: 'PASS', assertionCount: report.assertionCount, evidenceDir, unexpectedRequests: report.unexpectedRequests.length, cleanup: report.cleanup, mockServiceOnly: true }))
 }
 
-run().catch(async error => { try { await mkdir(evidenceDir, { recursive: true }); const dom = cdp ? await evaluate(cdp, '({text: document.body.innerText, url: location.href})').catch(() => null) : null; await writeFile(resolve(evidenceDir, 'failure.json'), `${JSON.stringify({error: error.stack || String(error), requests, dom}, null, 2)}\n`) } catch {} console.error(error.stack || error); process.exitCode = 1 }).finally(stop)
+run().catch(async error => { try { await mkdir(evidenceDir, { recursive: true }); const dom = cdp ? await evaluate(cdp, '({text: document.body.innerText, url: location.href})').catch(() => null) : null; await writeFile(resolve(evidenceDir, 'failure.json'), `${JSON.stringify({error: error.stack || String(error), requests, unexpectedRequests, checks, dom}, null, 2)}\n`) } catch {} console.error(error.stack || error); process.exitCode = 1 }).finally(stop)
