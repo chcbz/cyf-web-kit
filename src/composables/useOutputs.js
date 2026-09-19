@@ -7,6 +7,12 @@ const DEFAULT_PAGE_SIZE = 20
 const textMimeTypes = new Set(['text/plain', 'text/markdown', 'text/csv', 'application/json'])
 const imageMimeTypes = new Set(['image/png', 'image/jpeg'])
 const pdfMimeTypes = new Set(['application/pdf'])
+const documentPreviewMimeTypes = new Set([
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+])
+const TEXT_PREVIEW_MIME = 'text/plain'
 
 const valueOf = value => typeof value === 'function' ? value() : unref(value)
 const validId = value => typeof value === 'string' && value.length > 0 && value.length <= 100 && !/\s/.test(value)
@@ -39,6 +45,7 @@ const exactVersion = value => Number.isInteger(value) && value >= 1 && value <= 
 const exactByteLength = value => Number.isSafeInteger(value) && value >= 0 && value <= 64 * 1024 * 1024
 const exactMime = value => typeof value === 'string' && /^[a-z0-9][a-z0-9!#$&^_.+-]{0,63}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,63}$/.test(value)
 const exactTimestamp = value => Number.isSafeInteger(value) && value >= 0
+const exactBoolean = value => typeof value === 'boolean'
 const exactState = value => typeof value === 'string' && DELIVERABLE_STATES.has(value)
 const taskDeliverable = (value, taskId) => value && typeof value === 'object' && !Array.isArray(value) &&
   Object.keys(value).every(key => TASK_DELIVERABLE_FIELDS.has(key)) && value.taskId === taskId &&
@@ -67,6 +74,14 @@ const conversationDeliverable = value => {
   if (value.formalDeliveryState === 'submitted') return value.formalDecisionVersion === 0 && value.formalReviewedAt == null
   return value.formalDecisionVersion >= 1 && Number.isSafeInteger(value.formalReviewedAt) && value.formalReviewedAt > 0
 }
+const validTextPreview = value => value && typeof value === 'object' && !Array.isArray(value) &&
+  Object.keys(value).every(key => ['state', 'parts', 'partial', 'reason'].includes(key)) &&
+  value.state === 'READY' && exactBoolean(value.partial) &&
+  (value.reason == null || exactText(value.reason, 255)) && Array.isArray(value.parts) && value.parts.length === 1 &&
+  value.parts.every(part => part && typeof part === 'object' && !Array.isArray(part) &&
+    Object.keys(part).every(key => ['partId', 'contentMimeType'].includes(key)) &&
+    part.partId === 'content' && part.contentMimeType === TEXT_PREVIEW_MIME)
+
 const validatedPage = (value, sourceType, sourceId, limit) => {
   const itemValidator = sourceType === 'task'
     ? item => taskDeliverable(item, sourceId)
@@ -133,7 +148,35 @@ export const outputReadAdapter = Object.freeze({
     if (!(blob instanceof Blob) || blob.size > 64 * 1024 * 1024) throw new Error('成果下载响应无效，未创建文件。')
     return blob
   },
-  async preview (request = {}) { return this.download(request) }
+  async preview ({ sourceType, sourceId, taskId = null, artifactId = null, artifactVersion = null, fileId = null, fileVersion = null, contentMimeType = null, signal } = {}) {
+    if (!documentPreviewMimeTypes.has(contentMimeType)) {
+      return this.download({ sourceType, sourceId, taskId, artifactId, artifactVersion, fileId, fileVersion, signal })
+    }
+    if (!['task', 'conversation'].includes(sourceType) || !validId(sourceId)) {
+      throw Object.assign(new Error('成果预览请求无效。'), { retryable: false })
+    }
+    const artifactRequest = validId(artifactId) && /^[1-9][0-9]{0,9}$/.test(String(artifactVersion))
+    const fileRequest = validId(fileId) && /^[1-9][0-9]{0,9}$/.test(String(fileVersion))
+    const resolvedTaskId = sourceType === 'task' ? sourceId : taskId
+    if ((artifactRequest && !validId(resolvedTaskId)) || (!artifactRequest && !fileRequest)) {
+      throw Object.assign(new Error('成果预览引用不完整，未发起读取。'), { retryable: false })
+    }
+    const api = createApi('/agent')
+    const base = artifactRequest
+      ? `/tasks/${encodeURIComponent(resolvedTaskId)}/deliverables/${encodeURIComponent(artifactId)}/versions/${artifactVersion}`
+      : `/personal-workspace/files/${encodeURIComponent(fileId)}/versions/${fileVersion}`
+    const preview = unwrap(await api.execute({
+      url: `${base}/preview`, method: 'GET', autoLoading: false, needAuth: true, signal
+    }))
+    if (!validTextPreview(preview)) throw new Error('成果内容预览返回格式无效，未展示可能不完整的数据。')
+    const blob = unwrap(await api.execute({
+      url: `${base}/preview/parts/content`, method: 'GET', responseType: 'blob', autoLoading: false, needAuth: true, signal
+    }))
+    if (!(blob instanceof Blob) || blob.type !== TEXT_PREVIEW_MIME) {
+      throw new Error('成果内容预览类型无效，请下载原文件查看。')
+    }
+    return blob
+  }
 })
 
 export const outputSource = (type, id) => computed(() => {
@@ -327,6 +370,7 @@ export function useOutputs ({ source, taskId = null, identityFingerprint, adapte
     artifactVersion: item?.artifactRef?.artifactVersion || null,
     fileId: item?.fileRef?.fileId || null,
     fileVersion: item?.fileRef?.fileVersion || null,
+    contentMimeType: item?.mimeType || null,
     signal: options.signal
   })
   const download = async (item, options = {}) => {
@@ -359,5 +403,6 @@ export const outputPreviewKind = item => {
   if (textMimeTypes.has(item.mimeType)) return 'text'
   if (imageMimeTypes.has(item.mimeType)) return 'image'
   if (pdfMimeTypes.has(item.mimeType)) return 'pdf'
+  if (documentPreviewMimeTypes.has(item.mimeType)) return 'text'
   return 'none'
 }

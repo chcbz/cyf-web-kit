@@ -2,7 +2,7 @@
   <section v-if="item" class="output-preview" :aria-label="`${item.title} 预览`">
     <p v-if="loading">正在读取预览…</p>
     <p v-else-if="message" class="output-preview-error">{{ message }}</p>
-    <pre v-else-if="text" v-text="text"></pre>
+    <template v-else-if="text"><pre v-text="text"></pre><p v-if="previewNote" class="output-preview-note">{{ previewNote }}</p></template>
     <img
       v-else-if="imageUrl"
       :src="imageUrl"
@@ -27,12 +27,19 @@ import { outputPreviewKind } from '../../composables/useOutputs.js'
 
 const MAX_PREVIEW_BYTES = 1024 * 1024
 const PDF_MIME = 'application/pdf'
+const TEXT_PREVIEW_MIME = 'text/plain'
+const documentPreviewMimeTypes = new Set([
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+])
 const props = defineProps({ item: { type: Object, default: null }, load: { type: Function, required: true }, contextKey: { type: String, default: '' } })
 const loading = ref(false)
 const text = ref('')
 const imageUrl = ref('')
 const pdfUrl = ref('')
 const message = ref('')
+const previewNote = ref('')
 let controller = null
 let generation = 0
 const release = () => {
@@ -41,8 +48,9 @@ const release = () => {
   imageUrl.value = ''
   pdfUrl.value = ''
 }
-const reset = () => { generation += 1; controller?.abort(); controller = null; release(); text.value = ''; message.value = ''; loading.value = false }
+const reset = () => { generation += 1; controller?.abort(); controller = null; release(); text.value = ''; message.value = ''; previewNote.value = ''; loading.value = false }
 const failImage = () => { release(); message.value = '图片预览不可用，请下载文件查看。' }
+const isDocumentTextPreview = item => documentPreviewMimeTypes.has(item?.mimeType)
 const previewKind = item => {
   const kind = outputPreviewKind(item)
   if (kind !== 'none') return kind
@@ -82,10 +90,14 @@ watch(() => [props.item?.artifactId, props.item?.artifactVersion, props.item?.mi
     if (current !== generation || requestController.signal.aborted) return
     const blob = result instanceof Blob ? result : result?.blob
     if (!(blob instanceof Blob) || blob.size > MAX_PREVIEW_BYTES) throw new Error('预览内容超过安全边界，请下载文件查看。')
-    if (blob.type !== item.mimeType) throw new Error('文件类型不匹配，请下载文件查看。')
+    const expectedMime = kind === 'text' && isDocumentTextPreview(item) ? TEXT_PREVIEW_MIME : item.mimeType
+    if (blob.type !== expectedMime) throw new Error('文件类型不匹配，请下载文件查看。')
     if (kind === 'text') {
       const decoded = await blob.text()
-      if (current === generation && !requestController.signal.aborted) text.value = decoded
+      if (current === generation && !requestController.signal.aborted) {
+        text.value = decoded
+        if (isDocumentTextPreview(item)) previewNote.value = '这是文档内容预览；版式、分页与公式计算请以下载原文件为准。'
+      }
     } else {
       const url = URL.createObjectURL(blob)
       if (kind === 'pdf') {
@@ -115,4 +127,5 @@ onBeforeUnmount(reset)
 .output-preview img { display: block; max-width: 100%; max-height: 240px; object-fit: contain; }
 .output-preview-pdf { display: block; width: 100%; height: 240px; border: 0; background: #fff; }
 .output-preview-error { color: #9b3a28; }
+.output-preview-note { margin: 8px 0 0; color: #765f40; }
 </style>
