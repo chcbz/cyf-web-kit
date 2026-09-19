@@ -80,6 +80,40 @@
       </div>
       <div v-if="!messages.length" class="empty-list">{{ emptyText }}</div>
 
+      <section v-if="conversationId && executionEnabled" class="execution-directory" aria-label="交给 Agent 执行">
+        <div class="deliverable-directory-head">
+          <strong>交给 Agent 执行</strong>
+          <button type="button" :disabled="executionLoading" @click="refreshExecutionMaterials">刷新资料</button>
+        </div>
+        <p class="execution-note">此处是明确执行指令，不会因普通聊天自动发起文件处理或模型调用。</p>
+        <p v-if="taskExecutionMode" class="execution-note">当前榜文：{{ selectedTaskId }}。仅已关联且获授权的精确版本可由服务端接受。</p>
+        <p v-else class="execution-note">私人执行仅归档到自己的工作空间，不会变成悬赏正式交付。</p>
+        <p v-if="execution.capabilityState.value === 'loading' || workspace.listState.value === 'loading'" class="execution-note" role="status">正在读取执行能力与工作空间…</p>
+        <p v-else-if="execution.capabilityError.value || workspace.error.value || execution.rosterError.value" class="deliverable-error" role="alert">{{ execution.capabilityError.value || workspace.error.value || execution.rosterError.value }}</p>
+        <template v-else>
+          <label class="execution-field"><span>交付格式</span><select v-model="executionOutputMime"><option v-for="mime in execution.allowedMimeTypes.value" :key="mime" :value="mime">{{ outputMimeLabel(mime) }}</option></select></label>
+          <label class="execution-field"><span>执行说明</span><textarea v-model="executionInstruction" maxlength="4000" placeholder="例如：根据已选资料生成 5 页中文项目汇报 PPT；或修改图片背景。"></textarea></label>
+          <div class="execution-materials">
+            <strong>固定资料版本</strong>
+            <p v-if="!workspace.items.value.length" class="execution-note">暂无可选文件；可先在工作空间上传，或在此处直接生成图片/PPT。</p>
+            <div v-else class="execution-file-list">
+              <button v-for="file in workspace.items.value" :key="file.fileId" type="button" :class="{ selected: selectedExecutionFileId === file.fileId }" @click="selectExecutionFile(file.fileId)">{{ file.displayName }} · v{{ file.latestVersion }}</button>
+            </div>
+            <label v-if="workspace.detail.value?.file?.state === 'ACTIVE'" class="execution-field"><span>文件版本</span><select v-model.number="selectedExecutionVersion"><option v-for="version in workspace.detail.value.versions" :key="version.version" :value="version.version">v{{ version.version }} · {{ version.originalFilename }}</option></select></label>
+            <button v-if="workspace.detail.value?.file?.state === 'ACTIVE'" type="button" :disabled="!canAddExecutionMaterial" @click="addExecutionMaterial">加入本轮资料</button>
+            <ul v-if="executionMaterials.length" class="execution-material-list"><li v-for="material in executionMaterials" :key="`${material.fileId}:${material.version}`">{{ material.label }} <button type="button" @click="removeExecutionMaterial(material.fileId)">移除</button></li></ul>
+          </div>
+          <div class="deliverable-actions">
+            <button type="button" :disabled="!canCreateExecution" @click="createExecution">确认交给 {{ executionTargetName }} 执行</button>
+            <button v-if="execution.execution.value?.state === 'QUEUED'" type="button" @click="revokeExecutionInputs">撤销未开始输入</button>
+          </div>
+          <p v-if="execution.executionState.value === 'creating'" class="execution-note" role="status">正在创建唯一执行记录…</p>
+          <p v-if="execution.execution.value" class="execution-note">执行 {{ execution.execution.value.executionId }}：{{ execution.execution.value.state }}<template v-if="execution.execution.value.executionMode === 'TASK'">（任务工作项 {{ execution.execution.value.workItemState || '状态确认中' }}）</template></p>
+          <p v-if="execution.completionNotice.value" class="execution-note" role="status">{{ execution.completionNotice.value }}</p>
+          <p v-if="execution.error.value" class="deliverable-error" role="alert">{{ execution.error.value }}</p>
+        </template>
+      </section>
+
       <section v-if="conversationId" class="deliverable-directory" aria-label="本话头执行与成果">
         <div class="deliverable-directory-head">
           <strong>执行与成果</strong>
@@ -131,7 +165,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import HallChatComposer from './HallChatComposer.vue'
@@ -139,6 +173,8 @@ import HallConversationHistory from './HallConversationHistory.vue'
 import OutputPreview from '../outputs/OutputPreview.vue'
 import { outputPreviewKind, outputSource, useOutputs } from '../../composables/useOutputs.js'
 import { saveOutputBlob } from '../../utils/outputDownload.js'
+import { usePersonalWorkspace } from '../../composables/usePersonalWorkspace.js'
+import { usePersonalWorkspaceExecution } from '../../composables/usePersonalWorkspaceExecution.js'
 
 marked.setOptions({
   breaks: true,
@@ -211,6 +247,68 @@ const deliverables = useOutputs({
 const previewItem = ref(null)
 const downloadingOutputId = ref('')
 const deliverableActionError = ref('')
+const executionEnabled = computed(() => ['bounty', 'private'].includes(props.discussionVariant))
+const taskExecutionMode = computed(() => props.discussionVariant === 'bounty' && Boolean(selectedTaskId.value))
+const executionTargetId = computed(() => {
+  const candidate = String(props.selectedAgent?.agentId || props.selectedAgent?.id || '')
+  return candidate.length > 0 && candidate.length <= 100 && !/\s/.test(candidate) ? candidate : ''
+})
+const executionTargetName = computed(() => String(props.selectedAgent?.name || props.selectedAgent?.personaName || executionTargetId.value || '当前 Agent'))
+const executionIdentity = computed(() => `${props.conversationId}\u0000${executionTargetId.value}`)
+const workspace = usePersonalWorkspace({ identityEpoch: executionIdentity })
+const execution = usePersonalWorkspaceExecution({ identityEpoch: executionIdentity })
+const executionInstruction = ref('')
+const executionOutputMime = ref('')
+const selectedExecutionFileId = ref('')
+const selectedExecutionVersion = ref(null)
+const executionMaterials = ref([])
+const executionLoading = computed(() => workspace.loading.value || execution.rosterState.value === 'loading' || execution.capabilityState.value === 'loading')
+const selectedExecutionVersionDetail = computed(() => workspace.detail.value?.versions?.find(version => Number(version.version) === Number(selectedExecutionVersion.value)) || null)
+const canAddExecutionMaterial = computed(() => Boolean(workspace.detail.value?.file?.fileId && selectedExecutionVersionDetail.value && !executionMaterials.value.some(material => material.fileId === workspace.detail.value.file.fileId)))
+const canCreateExecution = computed(() => Boolean(
+  executionEnabled.value && props.conversationId && executionTargetId.value && execution.selectedAgent.value &&
+  executionOutputMime.value && execution.allowedMimeTypes.value.includes(executionOutputMime.value) &&
+  executionInstruction.value.trim() && execution.executionState.value !== 'creating' &&
+  (executionMaterials.value.length || execution.generationEnabled.value)
+))
+const outputMimeLabel = mime => ({
+  'image/png': 'PNG 图片', 'image/jpeg': 'JPEG 图片', 'application/pdf': 'PDF',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word（DOCX）',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel（XLSX）',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'PPT（PPTX）'
+})[mime] || mime
+const syncExecutionTarget = async () => {
+  await execution.loadAgents()
+  if (executionTargetId.value) execution.selectAgent(executionTargetId.value)
+}
+const refreshExecutionMaterials = async () => {
+  await Promise.all([workspace.refresh({ state: 'ACTIVE' }), execution.loadCapabilities(), syncExecutionTarget()])
+  if (!execution.allowedMimeTypes.value.includes(executionOutputMime.value)) executionOutputMime.value = execution.allowedMimeTypes.value[0] || ''
+}
+const selectExecutionFile = async fileId => {
+  const detail = await workspace.select(fileId)
+  if (!detail || detail.file.state !== 'ACTIVE') return
+  selectedExecutionFileId.value = detail.file.fileId
+  selectedExecutionVersion.value = detail.latestVersion.version
+}
+const addExecutionMaterial = () => {
+  const file = workspace.detail.value?.file
+  const version = selectedExecutionVersionDetail.value
+  if (!file?.fileId || !version || executionMaterials.value.some(material => material.fileId === file.fileId)) return
+  executionMaterials.value = [...executionMaterials.value, { fileId: file.fileId, version: String(version.version), label: `${file.displayName} · v${version.version}` }]
+}
+const removeExecutionMaterial = fileId => { executionMaterials.value = executionMaterials.value.filter(material => material.fileId !== fileId) }
+const createExecution = async () => {
+  const result = await execution.create({
+    inputs: executionMaterials.value.map(({ fileId, version }) => ({ fileId, version })),
+    instruction: executionInstruction.value,
+    outputContentMimeType: executionOutputMime.value,
+    taskId: taskExecutionMode.value ? selectedTaskId.value : null,
+    conversationId: props.conversationId
+  })
+  if (result) executionInstruction.value = ''
+}
+const revokeExecutionInputs = () => { void execution.revokeInputs() }
 const formatBytes = value => Number.isSafeInteger(value) ? `${value} 字节` : '大小待确认'
 const refreshDeliverables = () => { void deliverables.refresh() }
 const deliveryStateText = item => {
@@ -277,6 +375,21 @@ watch(() => props.conversationId, () => {
   downloadingOutputId.value = ''
   deliverableActionError.value = ''
 })
+
+watch(executionIdentity, () => {
+  selectedExecutionFileId.value = ''
+  selectedExecutionVersion.value = null
+  executionMaterials.value = []
+  executionInstruction.value = ''
+  if (executionEnabled.value && props.conversationId) void refreshExecutionMaterials()
+}, { flush: 'sync' })
+
+watch(() => execution.execution.value?.state, state => {
+  if (state === 'OUTPUT_COMMITTED') refreshDeliverables()
+})
+
+onMounted(() => { if (executionEnabled.value && props.conversationId) void refreshExecutionMaterials() })
+onBeforeUnmount(() => { workspace.dispose(); execution.dispose() })
 
 watch(() => props.messages, () => {
   nextTick(() => {
@@ -610,4 +723,13 @@ button:disabled {
 .deliverable-syncing { color: #9a6e40; }
 .deliverable-error { margin-top: 8px; color: #a23f32; font-size: 12px; }
 .deliverable-actions { justify-content: flex-end; margin-top: 8px; }
+.execution-directory { display: grid; gap: 8px; margin-top: 12px; padding: 10px; border: 1px solid #d7c3a2; border-radius: 7px; background: #fffdf6; }
+.execution-note { margin: 0; color: #765f40; font-size: 12px; line-height: 1.5; }
+.execution-field { display: grid; gap: 4px; color: #4a3423; font-size: 12px; }
+.execution-field select,.execution-field textarea { box-sizing: border-box; width: 100%; border: 1px solid #d7c3a2; border-radius: 6px; background: #fff; color: #4a3423; font: inherit; }
+.execution-field textarea { min-height: 72px; padding: 7px; resize: vertical; }
+.execution-materials { display: grid; gap: 6px; }.execution-materials > strong { font-size: 12px; }.execution-file-list { display: grid; max-height: 140px; gap: 5px; overflow: auto; }
+.execution-file-list button,.execution-material-list button { text-align: left; border: 1px solid #d7c3a2; border-radius: 5px; background: #fff; color: #4a3423; padding: 5px 7px; }.execution-file-list button.selected { border-color: #7c1f1b; background: #f3e0bc; }
+.execution-material-list { display: grid; gap: 4px; margin: 0; padding-left: 18px; color: #765f40; font-size: 12px; }.execution-material-list li { display: flex; justify-content: space-between; gap: 8px; }
+.execution-material-list button { padding: 1px 5px; }
 </style>
