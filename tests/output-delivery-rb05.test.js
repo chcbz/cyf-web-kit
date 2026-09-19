@@ -7,7 +7,7 @@ import { safeOutputFilename, saveOutputBlob } from '../src/utils/outputDownload.
 const tick = async () => { await Promise.resolve(); await nextTick(); await Promise.resolve() }
 const item = overrides => ({
   artifactId: 'artifact-1', artifactVersion: 1, title: '报告.md', artifactType: 'report',
-  contentMimeType: 'text/markdown', contentByteLength: 12, sha256: 'a'.repeat(64), ...overrides
+  contentMimeType: 'text/markdown', contentByteLength: 12, contentHash: 'a'.repeat(64), ...overrides
 })
 
 describe('RB05 output directory boundary', () => {
@@ -77,7 +77,10 @@ describe('RB05 output directory boundary', () => {
     })
     await tick()
     await outputs.download(outputs.items.value[0])
-    expect(calls).to.deep.equal([{ sourceType: 'task', sourceId: 'task-1', artifactId: 'artifact-1', artifactVersion: '2', signal: undefined }])
+    expect(calls).to.deep.equal([{
+      sourceType: 'task', sourceId: 'task-1', taskId: 'task-1',
+      artifactId: 'artifact-1', artifactVersion: '2', fileId: null, fileVersion: null, signal: undefined
+    }])
   })
 
   it('uses the authenticated task deliverables routes without legacy actor parameters', () => {

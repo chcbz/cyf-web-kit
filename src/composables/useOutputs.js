@@ -19,8 +19,10 @@ const TASK_DELIVERABLE_FIELDS = new Set([
 ])
 const CONVERSATION_DELIVERABLE_FIELDS = new Set([
   'outputId', 'executionId', 'fileId', 'fileVersion', 'contentHash', 'contentMimeType',
-  'byteLength', 'committedAt', 'state', 'publicationState', 'formalDeliveryState'
+  'byteLength', 'committedAt', 'state', 'publicationState', 'formalDeliveryState',
+  'artifactId', 'artifactVersion'
 ])
+const FORMAL_DELIVERY_STATES = new Set(['submitted', 'accepted', 'changes_requested'])
 const DELIVERABLE_STATES = new Set(['AVAILABLE', 'EMPTY', 'SYNCING'])
 const unwrap = result => {
   let value = result
@@ -44,13 +46,21 @@ const taskDeliverable = (value, taskId) => value && typeof value === 'object' &&
   exactByteLength(value.contentByteLength) && exactMime(value.contentMimeType) &&
   exactVersion(value.artifactVersion) && typeof value.visibility === 'string' &&
   exactTimestamp(value.createdAt)
-const conversationDeliverable = value => value && typeof value === 'object' && !Array.isArray(value) &&
-  Object.keys(value).every(key => CONVERSATION_DELIVERABLE_FIELDS.has(key)) &&
-  exactId(value.outputId) && exactId(value.executionId) && exactId(value.fileId) &&
-  exactVersion(value.fileVersion) && typeof value.contentHash === 'string' && /^[0-9a-f]{64}$/.test(value.contentHash) &&
-  exactMime(value.contentMimeType) && exactByteLength(value.byteLength) && exactTimestamp(value.committedAt) &&
-  value.state === 'AVAILABLE' && value.publicationState === 'WORKSPACE_COMMITTED' &&
-  value.formalDeliveryState === 'NOT_APPLICABLE'
+const conversationDeliverable = value => {
+  if (!value || typeof value !== 'object' || Array.isArray(value) ||
+    !Object.keys(value).every(key => CONVERSATION_DELIVERABLE_FIELDS.has(key)) ||
+    !exactId(value.outputId) || !exactId(value.executionId) || !exactId(value.fileId) ||
+    !exactVersion(value.fileVersion) || typeof value.contentHash !== 'string' || !/^[0-9a-f]{64}$/.test(value.contentHash) ||
+    !exactMime(value.contentMimeType) || !exactByteLength(value.byteLength) || !exactTimestamp(value.committedAt) ||
+    value.state !== 'AVAILABLE') return false
+  if (value.publicationState === 'WORKSPACE_COMMITTED') {
+    return value.formalDeliveryState === 'NOT_APPLICABLE' &&
+      (value.artifactId == null || value.artifactId === '') &&
+      (value.artifactVersion == null || value.artifactVersion === '')
+  }
+  return value.publicationState === 'PUBLISHED' && FORMAL_DELIVERY_STATES.has(value.formalDeliveryState) &&
+    exactId(value.artifactId) && exactVersion(value.artifactVersion)
+}
 const validatedPage = (value, sourceType, sourceId, limit) => {
   const itemValidator = sourceType === 'task'
     ? item => taskDeliverable(item, sourceId)
@@ -78,7 +88,11 @@ const validatedPage = (value, sourceType, sourceId, limit) => {
   }
 }
 
-/** Authenticated read adapter. Conversation delivery is reference-only until W04 supplies content actions. */
+/**
+ * Authenticated read adapter. Browser actions use an exact workspace file version for
+ * private outputs and an exact task artifact version for formally published task outputs.
+ * It never accepts or exposes a storage URI, runtime credential, lease, or prompt text.
+ */
 export const outputReadAdapter = Object.freeze({
   async list ({ sourceType, sourceId, cursor, limit, signal } = {}) {
     if (!['task', 'conversation'].includes(sourceType) || !validId(sourceId) || cursor != null || !Number.isInteger(limit) || limit < 1 || limit > MAX_PAGE_SIZE) {
@@ -93,14 +107,22 @@ export const outputReadAdapter = Object.freeze({
     }))
     return validatedPage(result, sourceType, sourceId, limit)
   },
-  async download ({ sourceType, sourceId, artifactId, artifactVersion, signal } = {}) {
-    if (sourceType !== 'task' || !validId(sourceId) || !validId(artifactId) || !/^[1-9][0-9]{0,9}$/.test(String(artifactVersion))) {
+  async download ({ sourceType, sourceId, taskId = null, artifactId = null, artifactVersion = null, fileId = null, fileVersion = null, signal } = {}) {
+    if (!['task', 'conversation'].includes(sourceType) || !validId(sourceId)) {
       throw Object.assign(new Error('成果下载请求无效。'), { retryable: false })
     }
+    const artifactRequest = validId(artifactId) && /^[1-9][0-9]{0,9}$/.test(String(artifactVersion))
+    const fileRequest = validId(fileId) && /^[1-9][0-9]{0,9}$/.test(String(fileVersion))
+    const resolvedTaskId = sourceType === 'task' ? sourceId : taskId
+    if ((artifactRequest && !validId(resolvedTaskId)) || (!artifactRequest && !fileRequest)) {
+      throw Object.assign(new Error('成果引用不完整，未发起下载。'), { retryable: false })
+    }
     const api = createApi('/agent')
+    const url = artifactRequest
+      ? `/tasks/${encodeURIComponent(resolvedTaskId)}/deliverables/${encodeURIComponent(artifactId)}/versions/${artifactVersion}/content`
+      : `/personal-workspace/files/${encodeURIComponent(fileId)}/versions/${fileVersion}/content`
     const blob = unwrap(await api.execute({
-      url: `/tasks/${encodeURIComponent(sourceId)}/deliverables/${encodeURIComponent(artifactId)}/versions/${artifactVersion}/content`,
-      method: 'GET', responseType: 'blob', autoLoading: false, needAuth: true, signal
+      url, method: 'GET', responseType: 'blob', autoLoading: false, needAuth: true, signal
     }))
     if (!(blob instanceof Blob) || blob.size > 64 * 1024 * 1024) throw new Error('成果下载响应无效，未创建文件。')
     return blob
@@ -125,16 +147,21 @@ const normalizeBytes = value => {
   const parsed = typeof value === 'number' ? value : Number(value)
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null
 }
-const normalizeItem = (item, sourceType) => {
+const normalizeItem = (item, sourceType, taskId = null) => {
   if (sourceType === 'conversation') {
     if (!conversationDeliverable(item)) return null
+    const taskPublished = item.publicationState === 'PUBLISHED'
+    const artifactRef = taskPublished
+      ? Object.freeze({ artifactId: item.artifactId, artifactVersion: String(item.artifactVersion), taskId: validId(taskId) ? taskId : '' })
+      : null
+    const fileRef = Object.freeze({ fileId: item.fileId, fileVersion: String(item.fileVersion) })
     return Object.freeze({
       outputId: item.outputId,
       executionId: item.executionId,
-      artifactId: '',
-      artifactVersion: '',
-      title: '执行成果',
-      artifactType: '执行成果',
+      artifactId: taskPublished ? item.artifactId : '',
+      artifactVersion: taskPublished ? String(item.artifactVersion) : '',
+      title: taskPublished ? '正式交付成果' : '执行成果',
+      artifactType: taskPublished ? '正式交付' : '执行成果',
       mimeType: item.contentMimeType,
       byteLength: item.byteLength,
       sha256: item.contentHash,
@@ -142,10 +169,10 @@ const normalizeItem = (item, sourceType) => {
       state: item.state,
       publicationState: item.publicationState,
       formalDeliveryState: item.formalDeliveryState,
-      fileRef: Object.freeze({ fileId: item.fileId, fileVersion: String(item.fileVersion) }),
-      artifactRef: null,
-      canDownload: false,
-      canPreview: false
+      fileRef,
+      artifactRef,
+      canDownload: taskPublished ? Boolean(artifactRef.taskId) : true,
+      canPreview: taskPublished ? Boolean(artifactRef.taskId) : true
     })
   }
   if (!taskDeliverable(item, item?.taskId)) return null
@@ -186,7 +213,7 @@ const normalizeFailure = failure => {
  * Read-only output directory boundary. The injected adapter is the only API seam;
  * components never embed provisional output endpoints or browser upload behavior.
  */
-export function useOutputs ({ source, identityFingerprint, adapter = outputReadAdapter, pageSize = DEFAULT_PAGE_SIZE } = {}) {
+export function useOutputs ({ source, taskId = null, identityFingerprint, adapter = outputReadAdapter, pageSize = DEFAULT_PAGE_SIZE } = {}) {
   const items = ref([])
   const state = ref('empty')
   const message = ref('暂无可领取成果。')
@@ -195,7 +222,14 @@ export function useOutputs ({ source, identityFingerprint, adapter = outputReadA
   const requestGeneration = ref(0)
   const sourceValue = computed(() => valueOf(source))
   const identityValue = computed(() => String(valueOf(identityFingerprint) || ''))
-  const cacheKey = computed(() => outputCacheKey(identityValue.value, sourceValue.value))
+  const taskValue = computed(() => {
+    const value = valueOf(taskId)
+    return validId(value) ? value : ''
+  })
+  const cacheKey = computed(() => {
+    const base = outputCacheKey(identityValue.value, sourceValue.value)
+    return base && sourceValue.value?.type === 'conversation' && taskValue.value ? `${base}\u0000${taskValue.value}` : base
+  })
   let controller = null
   let disposed = false
 
@@ -243,13 +277,17 @@ export function useOutputs ({ source, identityFingerprint, adapter = outputReadA
         message.value = '交付同步中，尚未提交待验收。'
         return true
       }
-      const received = Array.isArray(page?.items) ? page.items.map(item => normalizeItem(item, currentSource.type)).filter(Boolean) : []
+      const scopedTaskId = currentSource.type === 'task' ? currentSource.id : taskValue.value
+      const received = Array.isArray(page?.items) ? page.items.map(item => normalizeItem(item, currentSource.type, scopedTaskId)).filter(Boolean) : []
       const combined = more ? [...items.value, ...received] : received
       const unique = new Map(combined.map(item => [`${item.outputId || item.artifactId}\u0000${item.fileRef?.fileId || item.artifactRef?.artifactId || ''}\u0000${item.fileRef?.fileVersion || item.artifactRef?.artifactVersion || ''}`, item]))
       items.value = [...unique.values()]
       nextCursor.value = typeof page?.nextCursor === 'string' && page.nextCursor ? page.nextCursor : null
       state.value = items.value.length ? 'available' : 'empty'
-      message.value = items.value.length ? '已分享，非正式验收。' : '暂无可领取成果。'
+      const formalCount = items.value.filter(item => item.publicationState === 'PUBLISHED').length
+      message.value = !items.value.length ? '暂无可领取成果。'
+        : formalCount === items.value.length ? '正式交付已同步，验收状态以榜文为准。'
+          : formalCount ? '包含正式交付，验收状态以榜文为准。' : '已归档到工作空间，非正式验收。'
       return true
     } catch (failure) {
       const normalized = normalizeFailure(failure)
@@ -267,13 +305,23 @@ export function useOutputs ({ source, identityFingerprint, adapter = outputReadA
 
   const refresh = () => load()
   const loadMore = () => load({ more: true })
+  const outputRequest = (item, options = {}) => ({
+    sourceType: sourceValue.value.type,
+    sourceId: sourceValue.value.id,
+    taskId: item?.artifactRef?.taskId || (sourceValue.value.type === 'task' ? sourceValue.value.id : taskValue.value),
+    artifactId: item?.artifactRef?.artifactId || null,
+    artifactVersion: item?.artifactRef?.artifactVersion || null,
+    fileId: item?.fileRef?.fileId || null,
+    fileVersion: item?.fileRef?.fileVersion || null,
+    signal: options.signal
+  })
   const download = async (item, options = {}) => {
-    if (!items.value.includes(item) || !validSource(sourceValue.value) || !cacheKey.value) throw abortError('Output context changed')
-    return adapter.download({ sourceType: sourceValue.value.type, sourceId: sourceValue.value.id, artifactId: item.artifactId, artifactVersion: item.artifactVersion, signal: options.signal })
+    if (!items.value.includes(item) || !validSource(sourceValue.value) || !cacheKey.value || !item?.canDownload) throw abortError('Output context changed')
+    return adapter.download(outputRequest(item, options))
   }
   const preview = async (item, options = {}) => {
-    if (!items.value.includes(item) || !validSource(sourceValue.value) || !cacheKey.value) throw abortError('Output context changed')
-    return adapter.preview({ sourceType: sourceValue.value.type, sourceId: sourceValue.value.id, artifactId: item.artifactId, artifactVersion: item.artifactVersion, signal: options.signal })
+    if (!items.value.includes(item) || !validSource(sourceValue.value) || !cacheKey.value || !item?.canPreview) throw abortError('Output context changed')
+    return adapter.preview(outputRequest(item, options))
   }
 
   watch(cacheKey, () => {

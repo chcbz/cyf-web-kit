@@ -91,18 +91,20 @@
           <button type="button" @click="refreshDeliverables">重试</button>
         </div>
         <ol v-else-if="deliverables.items.value.length" class="deliverable-list">
-          <li v-for="item in deliverables.items.value" :key="`${item.outputId}\u0000${item.fileRef?.fileId}\u0000${item.fileRef?.fileVersion}`" class="deliverable-card">
+          <li v-for="item in deliverables.items.value" :key="`${item.outputId || item.artifactId}\u0000${item.fileRef?.fileId || item.artifactRef?.artifactId}\u0000${item.fileRef?.fileVersion || item.artifactRef?.artifactVersion}`" class="deliverable-card">
             <div>
-              <strong>执行成果</strong>
+              <strong>{{ item.title }}</strong>
               <small>{{ item.mimeType }} · {{ formatBytes(item.byteLength) }}</small>
             </div>
-            <p>已保存至个人空间，非正式验收。</p>
+            <p>{{ deliveryStateText(item) }}</p>
             <div class="deliverable-actions">
-              <button type="button" :disabled="!item.fileRef" @click="emitDeliverableAction('preview', item)">预览</button>
-              <button type="button" :disabled="!item.fileRef" @click="emitDeliverableAction('download', item)">下载</button>
+              <button type="button" :disabled="!item.canPreview || outputPreviewKind(item) === 'none'" @click="emitDeliverableAction('preview', item)">预览</button>
+              <button type="button" :disabled="!item.canDownload || downloadingOutputId === item.outputId" @click="emitDeliverableAction('download', item)">{{ downloadingOutputId === item.outputId ? '下载中…' : '下载' }}</button>
             </div>
+            <OutputPreview v-if="previewItem === item" :item="previewItem" :load="deliverables.preview" :context-key="deliverables.cacheKey.value" />
           </li>
         </ol>
+        <p v-if="deliverableActionError" class="deliverable-error" role="alert">{{ deliverableActionError }}</p>
         <p v-else-if="deliverables.state.value !== 'loading'" class="deliverable-empty">暂无执行成果。</p>
       </section>
     </div>
@@ -134,7 +136,9 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import HallChatComposer from './HallChatComposer.vue'
 import HallConversationHistory from './HallConversationHistory.vue'
-import { outputSource, useOutputs } from '../../composables/useOutputs.js'
+import OutputPreview from '../outputs/OutputPreview.vue'
+import { outputPreviewKind, outputSource, useOutputs } from '../../composables/useOutputs.js'
+import { saveOutputBlob } from '../../utils/outputDownload.js'
 
 marked.setOptions({
   breaks: true,
@@ -193,21 +197,51 @@ const emit = defineEmits([
 
 const messageBoxRef = ref(null)
 const deliverableSource = outputSource('conversation', () => props.conversationId)
+const selectedTaskId = computed(() => {
+  const candidate = String(props.selectedTask?.taskId || props.selectedTask?.id || '')
+  return candidate.length > 0 && candidate.length <= 100 && !/\s/.test(candidate) ? candidate : ''
+})
 // The conversation id changes before a different thread is rendered; identity lifecycle cleanup
 // also clears this directory, so no prior identity's references survive a switch.
-const deliverables = useOutputs({ source: deliverableSource, identityFingerprint: () => props.conversationId })
+const deliverables = useOutputs({
+  source: deliverableSource,
+  taskId: () => selectedTaskId.value,
+  identityFingerprint: () => props.conversationId
+})
+const previewItem = ref(null)
+const downloadingOutputId = ref('')
+const deliverableActionError = ref('')
 const formatBytes = value => Number.isSafeInteger(value) ? `${value} 字节` : '大小待确认'
 const refreshDeliverables = () => { void deliverables.refresh() }
+const deliveryStateText = item => {
+  if (item?.publicationState !== 'PUBLISHED') return '已归档到个人空间，非正式验收。'
+  return ({ submitted: '已提交正式待验收。', accepted: '已正式验收通过。', changes_requested: '已要求修改，需按指定版本返工。' })[item.formalDeliveryState] || '正式交付状态待确认。'
+}
+const deliverableReference = item => Object.freeze({
+  conversationId: props.conversationId,
+  outputId: item.outputId,
+  executionId: item.executionId,
+  fileRef: item.fileRef ? Object.freeze({ fileId: item.fileRef.fileId, fileVersion: item.fileRef.fileVersion }) : null,
+  artifactRef: item.artifactRef ? Object.freeze({ artifactId: item.artifactRef.artifactId, artifactVersion: item.artifactRef.artifactVersion, taskId: item.artifactRef.taskId }) : null
+})
+const downloadDeliverable = async item => {
+  downloadingOutputId.value = item.outputId
+  deliverableActionError.value = ''
+  try {
+    const blob = await deliverables.download(item)
+    saveOutputBlob({ blob, item })
+  } catch (error) {
+    if (error?.name !== 'AbortError') deliverableActionError.value = error?.message || '下载失败，请刷新后确认。'
+  } finally {
+    if (downloadingOutputId.value === item.outputId) downloadingOutputId.value = ''
+  }
+}
 const emitDeliverableAction = (action, item) => {
-  if (!item?.fileRef || !props.conversationId) return
-  // This is a reference-only handoff. Never retain or render URLs, storage locations, leases, or credentials.
-  const reference = Object.freeze({
-    conversationId: props.conversationId,
-    outputId: item.outputId,
-    executionId: item.executionId,
-    fileRef: Object.freeze({ fileId: item.fileRef.fileId, fileVersion: item.fileRef.fileVersion })
-  })
-  emit(action === 'preview' ? 'preview-deliverable' : 'download-deliverable', reference)
+  if (!item || !props.conversationId || (action === 'download' && !item.canDownload) || (action === 'preview' && !item.canPreview)) return
+  // Reference-only compatibility event: never retain or render URLs, storage locations, leases, credentials, or prompt content.
+  emit(action === 'preview' ? 'preview-deliverable' : 'download-deliverable', deliverableReference(item))
+  if (action === 'preview') { previewItem.value = previewItem.value === item ? null : item; deliverableActionError.value = '' }
+  else void downloadDeliverable(item)
 }
 const historyOpen = ref(false)
 const pendingAuthor = '聚义厅'
@@ -236,6 +270,12 @@ const renderMarkdown = (content = '') => DOMPurify.sanitize(marked(String(conten
 
 watch(() => props.eventStreamRecovering, (recovering, wasRecovering) => {
   if (wasRecovering && !recovering && props.conversationId) refreshDeliverables()
+})
+
+watch(() => props.conversationId, () => {
+  previewItem.value = null
+  downloadingOutputId.value = ''
+  deliverableActionError.value = ''
 })
 
 watch(() => props.messages, () => {

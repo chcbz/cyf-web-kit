@@ -41,12 +41,42 @@ describe('1.13.1 W07 hall deliverable directory', () => {
         formalDeliveryState: 'NOT_APPLICABLE'
       })
       expect(outputs.items.value[0].fileRef).to.deep.equal({ fileId: 'file-1', fileVersion: '2' })
+      expect(outputs.items.value[0].canDownload).to.equal(true)
       expect(outputs.items.value[0]).not.to.have.any.keys('storageUri', 'leaseToken', 'runtimeCredential', 'content')
     } finally {
       outputs.dispose()
     }
   })
 
+
+  it('accepts only a published task artifact with an authoritative formal state and preserves no secrets', async () => {
+    const source = ref({ type: 'conversation', id: 'conversation-1' })
+    const outputs = useOutputs({
+      source,
+      taskId: () => 'task-1',
+      identityFingerprint: ref('owner-a'),
+      adapter: {
+        list: async () => ({
+          state: 'AVAILABLE', publicationPending: false, nextCursor: null,
+          items: [privateDeliverable({
+            publicationState: 'PUBLISHED', formalDeliveryState: 'submitted',
+            artifactId: 'artifact-1', artifactVersion: 3
+          })]
+        }),
+        async download () { return new Blob(['exact artifact']) },
+        async preview () { return new Blob(['exact artifact']) }
+      }
+    })
+    try {
+      await tick()
+      const item = outputs.items.value[0]
+      expect(item).to.include({ artifactId: 'artifact-1', artifactVersion: '3', formalDeliveryState: 'submitted', canDownload: true })
+      expect(item.artifactRef).to.deep.equal({ artifactId: 'artifact-1', artifactVersion: '3', taskId: 'task-1' })
+      expect(item).not.to.have.any.keys('storageUri', 'leaseToken', 'runtimeCredential', 'content')
+    } finally {
+      outputs.dispose()
+    }
+  })
   it('shows TASK publication lag as syncing rather than a pseudo-delivery', async () => {
     const source = ref({ type: 'conversation', id: 'conversation-1' })
     const outputs = useOutputs({
@@ -103,7 +133,8 @@ describe('1.13.1 W07 hall deliverable directory', () => {
     expect(source).to.include('交付同步中，尚未提交待验收。')
     expect(source).to.include("'preview-deliverable'")
     expect(source).to.include("'download-deliverable'")
-    expect(source).to.include('fileRef: Object.freeze({ fileId: item.fileRef.fileId, fileVersion: item.fileRef.fileVersion })')
+    expect(source).to.include('artifactRef: item.artifactRef')
+    expect(source).to.include('saveOutputBlob({ blob, item })')
     expect(source).not.to.match(/storageUri|leaseToken|runtimeCredential/)
   })
 })
