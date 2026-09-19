@@ -59,6 +59,10 @@ const errorMessage = error => {
   return error?.message || '工作空间请求未完成，请刷新确认。'
 }
 const isImagePreviewable = mime => ['image/png', 'image/jpeg'].includes(normalizeMime(mime))
+const previewPartMimeTypes = new Set(['text/plain', 'image/png'])
+const legacyPreviewPartMimeTypes = new Set([...previewPartMimeTypes, 'image/jpeg'])
+const validPreviewPart = part => part && typeof part === 'object' && !Array.isArray(part) &&
+  Object.keys(part).every(key => ['partId', 'contentMimeType'].includes(key)) && ID(part.partId) && legacyPreviewPartMimeTypes.has(normalizeMime(part.contentMimeType))
 const validFile = file => file && typeof file.name === 'string' && TEXT(file.name, 255) && Number.isFinite(file.size) && file.size >= 0
 const validFileView = value => value && typeof value === 'object' && ID(value.fileId) && TEXT(value.displayName, 255) &&
   (value.originKind == null || ['USER_UPLOAD', 'AGENT_DELIVERY'].includes(value.originKind)) &&
@@ -305,37 +309,53 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
       return null
     }
   }
+  const selectPreviewPart = index => {
+    const parts = preview.value?.parts
+    if (!Array.isArray(parts) || !Number.isInteger(index) || index < 0 || index >= parts.length) return false
+    preview.value = { ...preview.value, selectedIndex: index }
+    return true
+  }
   const previewVersion = async (version = detail.value?.latestVersion) => {
     const file = detail.value?.file
     if (!validFileView(file) || !VERSION(version)) return null
     const snapshot = { generation, epoch: currentEpoch.value }
     revokePreview(); actionState.value = 'loading-preview'; error.value = ''
     try {
-      const { data } = await request({
-        url: `/personal-workspace/files/${encodeURIComponent(file.fileId)}/versions/${Number(version)}/preview`, method: 'GET'
-      }, snapshot)
+      const { data } = await request({ url: `/personal-workspace/files/${encodeURIComponent(file.fileId)}/versions/${Number(version)}/preview`, method: 'GET' }, snapshot)
       const versionInfo = detail.value?.versions?.find(item => Number(item.version) === Number(version)) || detail.value?.latestVersion
-      const previewMime = isImagePreviewable(versionInfo?.contentMimeType)
-        ? normalizeMime(versionInfo.contentMimeType)
-        : 'text/plain'
-      if (data?.state !== 'READY' || !Array.isArray(data.parts) || !data.parts.some(part => part?.partId === 'content' && normalizeMime(part?.contentMimeType) === previewMime)) {
+      const legacyMime = isImagePreviewable(versionInfo?.contentMimeType) ? normalizeMime(versionInfo.contentMimeType) : 'text/plain'
+      const parts = Array.isArray(data?.parts) ? data.parts : []
+      const legacyContent = parts.length === 1 && parts[0]?.partId === 'content' && normalizeMime(parts[0]?.contentMimeType) === legacyMime
+      if (data?.state !== 'READY' || !parts.length || !parts.every(validPreviewPart) || new Set(parts.map(part => part.partId)).size !== parts.length || (!legacyContent && !parts.every(part => previewPartMimeTypes.has(normalizeMime(part.contentMimeType))))) {
         preview.value = { kind: 'unsupported', message: data?.reason || '此文件可下载，但暂时无法生成可用预览。' }
         actionState.value = 'ready'
         return preview.value
       }
-      const content = await readBlob(file.fileId, version, 'preview/parts/content')
-      if (!isImagePreviewable(versionInfo?.contentMimeType)) {
-        const note = data.partial ? '预览内容已截断；请下载原文件查看完整内容。' : ''
-        preview.value = { kind: 'text', text: await content.blob.text(), message: note }
-      } else {
-        const url = urlApi?.createObjectURL?.(content.blob)
-        if (!url) throw new Error('当前浏览器不能安全创建预览。')
-        activeUrls.add(url)
-        preview.value = { kind: 'image', url, message: '' }
+      const rendered = []
+      for (const part of parts) {
+        const content = await readBlob(file.fileId, version, `preview/parts/${encodeURIComponent(part.partId)}`)
+        const mime = normalizeMime(part.contentMimeType)
+        if (normalizeMime(content.blob.type) !== mime) throw new Error('预览分片类型无效，请下载原文件查看。')
+        if (mime === 'text/plain') rendered.push({ partId: part.partId, contentMimeType: mime, kind: 'text', text: await content.blob.text(), url: '' })
+        else {
+          const url = urlApi?.createObjectURL?.(content.blob)
+          if (!url) throw new Error('当前浏览器不能安全创建预览。')
+          activeUrls.add(url)
+          rendered.push({ partId: part.partId, contentMimeType: mime, kind: 'image', text: '', url })
+        }
       }
+      const note = data.partial ? (data.reason || '预览内容不完整；请下载原文件查看。') : ''
+      if (rendered.length === 1) {
+        const first = rendered[0]
+        preview.value = first.kind === 'text'
+          ? { kind: 'text', text: first.text, message: note, parts: rendered, selectedIndex: 0 }
+          : { kind: 'image', url: first.url, message: note, parts: rendered, selectedIndex: 0 }
+      } else preview.value = { kind: 'parts', parts: rendered, selectedIndex: 0, message: note }
       actionState.value = 'ready'
       return preview.value
     } catch (cause) {
+      // Revoke any URLs created before a later part fails or the request is cancelled.
+      revokePreview()
       if (cause?.name !== 'AbortError' && snapshot.generation === generation) {
         error.value = errorMessage(cause)
         preview.value = { kind: 'error', message: error.value }
@@ -344,6 +364,7 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
       return null
     }
   }
+
   const operation = async operationId => {
     if (!ID(operationId)) return null
     const snapshot = { generation, epoch: currentEpoch.value }
@@ -371,7 +392,7 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
   return {
     items, nextCursor, listState, loading, actionState, error, detail, preview, lastOperation,
     refresh, loadMore, select, upload, appendVersion, rename, usage, trash, restore,
-    download, previewVersion, operation, revokePreview, reset, dispose
+    download, previewVersion, selectPreviewPart, operation, revokePreview, reset, dispose
   }
 }
 

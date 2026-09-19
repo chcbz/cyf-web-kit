@@ -13,6 +13,8 @@ const documentPreviewMimeTypes = new Set([
   'application/vnd.openxmlformats-officedocument.presentationml.presentation'
 ])
 const TEXT_PREVIEW_MIME = 'text/plain'
+const previewPartMimeTypes = new Set([TEXT_PREVIEW_MIME, 'image/png'])
+const structuredPreviewMimeTypes = new Set([...documentPreviewMimeTypes, 'application/pdf'])
 
 const valueOf = value => typeof value === 'function' ? value() : unref(value)
 const validId = value => typeof value === 'string' && value.length > 0 && value.length <= 100 && !/\s/.test(value)
@@ -74,17 +76,21 @@ const conversationDeliverable = value => {
   if (value.formalDeliveryState === 'submitted') return value.formalDecisionVersion === 0 && value.formalReviewedAt == null
   return value.formalDecisionVersion >= 1 && Number.isSafeInteger(value.formalReviewedAt) && value.formalReviewedAt > 0
 }
-// Task artifacts explicitly identify a bounded extracted-text representation. Private workspace
-// previews predate that field, so they remain compatible but do not gain a layout-preview claim.
-const validTextPreview = (value, requireExtractedText = false) => value && typeof value === 'object' && !Array.isArray(value) &&
+// PreviewView carries only opaque part identifiers and server-declared safe representations.
+// Legacy previews retain their single `content` text part; rendered Office/PDF previews may
+// provide one image/png part per page and Excel one text/plain part per worksheet.
+const validPreviewView = (value, requireExtractedText = false) => value && typeof value === 'object' && !Array.isArray(value) &&
   Object.keys(value).every(key => ['state', 'representation', 'parts', 'partial', 'reason'].includes(key)) &&
-  (!requireExtractedText || value.representation === 'EXTRACTED_TEXT') &&
+  // Existing task artifacts still declare EXTRACTED_TEXT. New multi-part views are permitted
+  // to omit representation because the frozen PreviewView contract is parts-based.
+  (!requireExtractedText || value.representation == null || value.representation === 'EXTRACTED_TEXT') &&
   (value.representation == null || value.representation === 'EXTRACTED_TEXT') &&
   value.state === 'READY' && exactBoolean(value.partial) &&
-  (value.reason == null || exactText(value.reason, 255)) && Array.isArray(value.parts) && value.parts.length === 1 &&
+  (value.reason == null || exactText(value.reason, 255)) && Array.isArray(value.parts) && value.parts.length >= 1 &&
   value.parts.every(part => part && typeof part === 'object' && !Array.isArray(part) &&
     Object.keys(part).every(key => ['partId', 'contentMimeType'].includes(key)) &&
-    part.partId === 'content' && part.contentMimeType === TEXT_PREVIEW_MIME)
+    exactId(part.partId) && previewPartMimeTypes.has(part.contentMimeType)) &&
+  new Set(value.parts.map(part => part.partId)).size === value.parts.length
 
 const validatedPage = (value, sourceType, sourceId, limit) => {
   const itemValidator = sourceType === 'task'
@@ -153,7 +159,7 @@ export const outputReadAdapter = Object.freeze({
     return blob
   },
   async preview ({ sourceType, sourceId, taskId = null, artifactId = null, artifactVersion = null, fileId = null, fileVersion = null, contentMimeType = null, signal } = {}) {
-    if (!documentPreviewMimeTypes.has(contentMimeType)) {
+    if (!structuredPreviewMimeTypes.has(contentMimeType)) {
       return this.download({ sourceType, sourceId, taskId, artifactId, artifactVersion, fileId, fileVersion, signal })
     }
     if (!['task', 'conversation'].includes(sourceType) || !validId(sourceId)) {
@@ -172,14 +178,18 @@ export const outputReadAdapter = Object.freeze({
     const preview = unwrap(await api.execute({
       url: `${base}/preview`, method: 'GET', autoLoading: false, needAuth: true, signal
     }))
-    if (!validTextPreview(preview, artifactRequest)) throw new Error('成果内容预览返回格式无效，未展示可能不完整的数据。')
-    const blob = unwrap(await api.execute({
-      url: `${base}/preview/parts/content`, method: 'GET', responseType: 'blob', autoLoading: false, needAuth: true, signal
-    }))
-    if (!(blob instanceof Blob) || blob.type !== TEXT_PREVIEW_MIME) {
-      throw new Error('成果内容预览类型无效，请下载原文件查看。')
+    if (!validPreviewView(preview, artifactRequest)) throw new Error('成果内容预览返回格式无效，未展示可能不完整的数据。')
+    const parts = []
+    for (const part of preview.parts) {
+      const blob = unwrap(await api.execute({
+        url: `${base}/preview/parts/${encodeURIComponent(part.partId)}`, method: 'GET', responseType: 'blob', autoLoading: false, needAuth: true, signal
+      }))
+      if (!(blob instanceof Blob) || blob.type !== part.contentMimeType) {
+        throw new Error('成果预览分片类型无效，请下载原文件查看。')
+      }
+      parts.push(Object.freeze({ partId: part.partId, contentMimeType: part.contentMimeType, blob }))
     }
-    return blob
+    return Object.freeze({ parts: Object.freeze(parts), partial: preview.partial, reason: preview.reason || '' })
   }
 })
 

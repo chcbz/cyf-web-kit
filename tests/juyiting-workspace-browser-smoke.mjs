@@ -42,12 +42,16 @@ const versions = [
 const agent = { agentId: 'agent-alpha', name: 'Alpha', status: 'online', canOperate: true, boundToMe: true, abilities: ['document'] }
 const task = { id: 'task-a19', title: '制作项目汇报', description: '根据固定版本资料制作汇报。', status: 'open', requiredAbilities: ['document'], collaborationMode: 'single', riskLevel: 'low', maxAgents: 1, assignees: [agent], assignedAgentIds: [agent.agentId] }
 const links = []
+const conversationId = 'conversation-a19-private'
+const deliverable = { outputId: 'output-a19-ppt', executionId: 'execution-a19', fileId: 'output-file-a19', fileVersion: 1, contentHash: 'b'.repeat(64), contentMimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', byteLength: 12, committedAt: 1_700_000_030_000, state: 'AVAILABLE', publicationState: 'WORKSPACE_COMMITTED', formalDeliveryState: 'NOT_APPLICABLE' }
+const previewPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL8NwAAAABJRU5ErkJggg==', 'base64')
 
 const json = (res, status, body, headers = {}) => {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'access-control-allow-origin': appOrigin, 'access-control-allow-headers': 'Authorization, Content-Type, Idempotency-Key, X-Request-Id', 'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS', 'access-control-expose-headers': 'ETag', ...headers })
   res.end(JSON.stringify(body))
 }
 const readBody = req => new Promise(resolve => { let text = ''; req.on('data', chunk => { text += chunk }); req.on('end', () => resolve(text)) })
+const binary = (res, status, body, contentType) => { res.writeHead(status, { 'content-type': contentType, 'access-control-allow-origin': appOrigin }); res.end(body) }
 const execution = () => ({ executionId: 'execution-a19', taskId: 'pwe-task-a19', runId: 'run-a19', state: 'QUEUED', targetAgentId: agent.agentId, grantRevision: 1, outputContentMimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', inputs: [{ fileId: file.fileId, version: '1', inputRef: 'input-a19' }] })
 
 const startMockApi = () => new Promise((resolveStart, reject) => {
@@ -63,6 +67,14 @@ const startMockApi = () => new Promise((resolveStart, reject) => {
     if (req.method === 'GET' && path === '/agent/personal-workspace/files') return json(res, 200, { items: [file], nextCursor: null })
     if (req.method === 'GET' && path === `/agent/personal-workspace/files/${file.fileId}`) return json(res, 200, { file, latestVersion: versions[1], versions })
     if (req.method === 'GET' && path === '/agent/personal-workspace/executions/capabilities') return json(res, 200, { allowedMimeTypes: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'], inputMimeTypes: [versions[0].contentMimeType], generationEnabled: false })
+    if (req.method === 'POST' && path === '/chat/conversation/list') return json(res, 200, { data: [{ id: conversationId, title: 'Alpha 密议', updateTime: 1_700_000_030_000, conversationType: 'juyiting', conversationScopeType: 'private', conversationScopeKey: `agent:${agent.agentId}` }] })
+    if (req.method === 'GET' && path === '/chat/conversation/content') return json(res, 200, { data: [] })
+    if (req.method === 'GET' && path === '/chat/conversation/events') { res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', 'access-control-allow-origin': appOrigin }); return res.end() }
+    if (req.method === 'GET' && path === `/agent/conversations/${conversationId}/deliverables`) return json(res, 200, { items: [deliverable], nextCursor: null, state: 'AVAILABLE', publicationPending: false })
+    if (req.method === 'GET' && path === `/agent/personal-workspace/files/${deliverable.fileId}/versions/1/preview`) return json(res, 200, { state: 'READY', parts: [{ partId: 'page-1', contentMimeType: 'image/png' }, { partId: 'page-2', contentMimeType: 'image/png' }], partial: false })
+    if (req.method === 'GET' && path === `/agent/personal-workspace/files/${deliverable.fileId}/versions/1/preview/parts/page-1`) return binary(res, 200, previewPng, 'image/png')
+    if (req.method === 'GET' && path === `/agent/personal-workspace/files/${deliverable.fileId}/versions/1/preview/parts/page-2`) return binary(res, 200, previewPng, 'image/png')
+    if (req.method === 'GET' && path === `/agent/personal-workspace/files/${deliverable.fileId}/versions/1/content`) return binary(res, 200, Buffer.from('pptx-mock'), deliverable.contentMimeType)
     if (req.method === 'POST' && path === '/agent/roster') return json(res, 200, { data: [agent] })
     if (req.method === 'POST' && path === '/agent/personal-workspace/executions') return json(res, 200, execution())
     if (req.method === 'GET' && path === '/agent/personal-workspace/executions/execution-a19') return json(res, 200, execution())
@@ -176,6 +188,35 @@ async function run () {
   check('task material does not create another execution', requests.filter(request => request.path === '/agent/personal-workspace/executions').length === 1)
   await noHorizontalOverflow('landscape Hall task material picker')
 
+  // Third journey: a real Vue private-discussion surface consumes only mock-authorized
+  // conversation deliverable references, then renders server-declared PPT page parts.
+  await setViewport(390, 844)
+  await cdp.send('Page.navigate', { url: `${appOrigin}/juyiting` })
+  await waitForExpression(cdp, `document.querySelector('.scene-agent-list button') != null`, 30_000)
+  await clickSelector('.scene-agent-list button')
+  await waitForExpression(cdp, `document.querySelector('[data-portrait-action="private-discussion"]') != null`, 10_000)
+  await clickSelector('[data-portrait-action="private-discussion"]')
+  await waitForExpression(cdp, visibleText('本话头执行与成果'), 30_000)
+  await waitForExpression(cdp, visibleText('执行成果'), 20_000)
+  await clickText('预览')
+  await waitForExpression(cdp, visibleText('第 1 / 2 页'), 20_000)
+  await clickText('下一页')
+  await waitForExpression(cdp, visibleText('第 2 / 2 页'), 10_000)
+  await clickText('下载')
+  check('private discussion lists only its conversation deliverable', requests.some(request => request.method === 'GET' && request.path === `/agent/conversations/${conversationId}/deliverables`))
+  check('private discussion loads both declared PPT preview pages', requests.filter(request => request.method === 'GET' && request.path.startsWith(`/agent/personal-workspace/files/${deliverable.fileId}/versions/1/preview/parts/`)).length === 2)
+  check('private discussion downloads its exact output version', requests.some(request => request.method === 'GET' && request.path === `/agent/personal-workspace/files/${deliverable.fileId}/versions/1/content`))
+  await noHorizontalOverflow('private discussion output preview')
+
+  // Restore the task-material surface before the layout viewport diagnostic; do not
+  // assert against a panel that the preceding private-discussion journey has closed.
+  await cdp.send('Page.navigate', { url: `${appOrigin}/juyiting` })
+  await waitForExpression(cdp, `document.querySelector('[data-portrait-action="tasks"]') != null`, 30_000)
+  await clickSelector('[data-portrait-action="tasks"]')
+  await waitForExpression(cdp, visibleText('制作项目汇报'), 20_000)
+  await clickSelector('.task-card')
+  await waitForExpression(cdp, `document.querySelector('.task-material-links')?.getBoundingClientRect().width > 0`, 20_000)
+
   // Layout viewport diagnostic only: this is not visualViewport-only virtual-keyboard evidence.
   await setViewport(390, 300)
   await waitForExpression(cdp, `document.querySelector('.task-material-links')?.getBoundingClientRect().width > 0`, 10_000)
@@ -192,7 +233,7 @@ async function run () {
     unexpectedRequests,
     preflightRequests,
     cleanup: cleanupEvidence,
-    coverageLimits: ['390x300 changes the layout viewport only; it is not visualViewport-only keyboard evidence.', 'identity cleanup invokes the Pinia API store directly; it is not a user-visible logout-button flow.', 'mock service only; no Provider and no real-service E2E.']
+    coverageLimits: ['390x300 changes the layout viewport only; it is not visualViewport-only keyboard evidence.', 'identity cleanup invokes the Pinia API store directly; it is not a user-visible logout-button flow.', 'mock service only; no Provider and no real-service E2E.', 'Private discussion uses a mock conversation and mock-authorized preview/download responses; it is not persistent real HTTP evidence.']
   }
   await writeFile(resolve(evidenceDir, 'report.json'), `${JSON.stringify(report, null, 2)}\n`)
   console.log(JSON.stringify({ status: 'PASS', assertionCount: report.assertionCount, evidenceDir, unexpectedRequests: report.unexpectedRequests.length, cleanup: report.cleanup, mockServiceOnly: true }))

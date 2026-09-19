@@ -86,6 +86,7 @@
           <button type="button" :disabled="executionLoading" @click="refreshExecutionMaterials">刷新资料</button>
         </div>
         <p class="execution-note">此处是明确执行指令，不会因普通聊天自动发起文件处理或模型调用。</p>
+        <p class="execution-note">确认执行会将本轮资料交给所选 Agent 及其配置的 Provider；资料可能外发并产生费用，费用未知。此提示不代表已获得本轮收费或外发授权。</p>
         <p v-if="taskExecutionMode" class="execution-note">当前榜文：{{ selectedTaskId }}。仅已关联且获授权的精确版本可由服务端接受。</p>
         <p v-else class="execution-note">私人执行仅归档到自己的工作空间，不会变成悬赏正式交付。</p>
         <p v-if="taskExecutionMode" class="execution-note">将资料加入本轮时，系统会先固定为该榜文的 INPUT 版本关联；REFERENCE 不会被当作执行输入。</p>

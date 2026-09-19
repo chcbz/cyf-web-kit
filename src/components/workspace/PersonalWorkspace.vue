@@ -11,7 +11,7 @@
 
     <section class="workspace-card" aria-labelledby="workspace-upload-title">
       <h2 id="workspace-upload-title">上传文件</h2>
-      <p class="workspace-note">支持 PNG、JPEG、纯文本、PDF、DOCX、XLSX、PPTX。图片可直接预览；Office/PDF 提供只读文本预览，原文件始终可下载。可执行类型由服务端实时确认，上传成功不代表已开放 Agent 处理。</p>
+      <p class="workspace-note">支持 PNG、JPEG、纯文本、PDF、DOCX、XLSX、PPTX。PPT/PDF 可按服务端页预览，Excel 可按工作表读取文本；版式、分页与公式计算请以下载原文件为准。可执行类型由服务端实时确认，上传成功不代表已开放 Agent 处理。</p>
       <label class="file-picker">
         <span>选择文件</span>
         <input type="file" :accept="acceptTypes" @change="onUploadFile" />
@@ -38,6 +38,7 @@
       <template v-else-if="execution.allowedMimeTypes.value.length">
         <label><span>交付类型</span><select v-model="generationMime"><option v-for="mime in execution.allowedMimeTypes.value" :key="mime" :value="mime">{{ deliveryTypeText(mime) }}</option></select></label>
         <label><span>已有 Agent</span><select :value="execution.selectedAgentId.value" :disabled="execution.rosterState.value === 'loading'" @change="selectExecutionAgent($event.target.value)"><option value="">请选择已有 Agent</option><option v-for="agent in execution.agents.value" :key="agent.agentId" :value="agent.agentId">{{ agent.name }}{{ agent.status ? `（${agent.status}）` : '' }}</option></select></label>
+        <p class="workspace-note">提交会将本轮需求交给所选 Agent 及其配置的 Provider；资料可能外发并产生费用，费用未知。此提示不代表已获得本轮收费或外发授权。</p>
         <label><span>需求说明</span><textarea v-model="generationInstruction" maxlength="4000" placeholder="例如：生成一份面向客户的项目介绍 PPT，包含目标、方案和时间表。"></textarea></label>
         <div class="actions"><button type="button" :disabled="!canCreateGeneration" @click="createGeneration">生成交付件</button></div>
       </template>
@@ -88,6 +89,7 @@
       <div class="material-actions"><button type="button" :disabled="!canAddSelectedMaterial" @click="addSelectedMaterial">加入执行资料</button><button v-for="item in executionMaterials" :key="item.fileId" type="button" @click="removeExecutionMaterial(item.fileId)">{{ materialLabel(item) }} ×</button></div>
       <p v-if="!executionMaterials.length" class="workspace-note">请从版本列表将至少一份资料加入本次执行；同一文件仅能选择一个固定版本。</p>
       <p v-else class="workspace-note">本次已授权 {{ executionMaterials.length }} 份固定版本资料；Agent 不能读取未列入此处的其他文件。</p>
+      <p class="workspace-note">提交会将所选资料交给所选 Agent 及其配置的 Provider；资料可能外发并产生费用，费用未知。此提示不代表已获得本轮收费或外发授权。</p>
       <p v-if="!canExecuteSelectedVersion" class="workspace-note">当前文件类型未被服务端确认可作为本次执行资料；文件仍可在空间管理和下载。</p>
       <label><span>已有 Agent</span><select :value="execution.selectedAgentId.value" :disabled="execution.rosterState.value === 'loading'" @change="selectExecutionAgent($event.target.value)"><option value="">请选择已有 Agent</option><option v-for="agent in execution.agents.value" :key="agent.agentId" :value="agent.agentId">{{ agent.name }}{{ agent.status ? `（${agent.status}）` : '' }}</option></select></label>
       <p v-if="execution.rosterState.value === 'loading'" role="status">正在读取已有 Agent…</p><p v-else-if="execution.rosterState.value === 'empty'" class="workspace-note">当前没有可选择的 Agent；不会使用演示 Agent 代替。</p><p v-else-if="execution.rosterError.value" class="workspace-error" role="alert">{{ execution.rosterError.value }}</p>
@@ -131,8 +133,18 @@
 
       <section class="preview" aria-live="polite">
         <p v-if="workspace.actionState.value === 'loading-preview'">正在读取预览…</p>
+        <template v-else-if="workspace.preview.value.kind === 'parts'">
+          <div class="preview-navigation" aria-label="预览分片导航">
+            <button type="button" :disabled="workspace.preview.value.selectedIndex === 0" @click="workspace.selectPreviewPart(workspace.preview.value.selectedIndex - 1)">上一页</button>
+            <span>第 {{ workspace.preview.value.selectedIndex + 1 }} / {{ workspace.preview.value.parts.length }} {{ selectedPreviewPart?.kind === 'text' ? '项' : '页' }}</span>
+            <button type="button" :disabled="workspace.preview.value.selectedIndex >= workspace.preview.value.parts.length - 1" @click="workspace.selectPreviewPart(workspace.preview.value.selectedIndex + 1)">下一页</button>
+          </div>
+          <pre v-if="selectedPreviewPart?.kind === 'text'" v-text="selectedPreviewPart.text"></pre>
+          <img v-else-if="selectedPreviewPart?.kind === 'image'" :src="selectedPreviewPart.url" :alt="`${workspace.detail.value.file.displayName} 第 ${workspace.preview.value.selectedIndex + 1} 页`" />
+          <p v-if="workspace.preview.value.message" class="preview-note">{{ workspace.preview.value.message }}</p>
+        </template>
         <pre v-else-if="workspace.preview.value.kind === 'text'" v-text="workspace.preview.value.text"></pre>
-        <p v-if="workspace.preview.value.kind === 'text' && workspace.preview.value.message" class="preview-note">{{ workspace.preview.value.message }}</p>
+        <p v-if="['text', 'image'].includes(workspace.preview.value.kind) && workspace.preview.value.message" class="preview-note">{{ workspace.preview.value.message }}</p>
         <img v-else-if="workspace.preview.value.kind === 'image'" :src="workspace.preview.value.url" :alt="workspace.detail.value.file.displayName" />
         <p v-else-if="workspace.preview.value.kind === 'unsupported'">{{ workspace.preview.value.message }}</p>
         <p v-else-if="workspace.preview.value.kind === 'error'" class="workspace-error">{{ workspace.preview.value.message }}</p>
@@ -204,6 +216,7 @@ const select = async fileId => { const detail = await workspace.select(fileId); 
 const closeDetail = () => { selectedId.value = ''; versionFile.value = null; workspace.revokePreview(); workspace.detail.value = null }
 const rename = async () => { const result = await workspace.rename(renameValue.value); if (result) renameValue.value = result.displayName }
 const appendVersion = async () => { const result = await workspace.appendVersion(versionFile.value); if (result) { versionFile.value = null; selectedVersion.value = result.version.version; await refresh() } }
+const selectedPreviewPart = computed(() => workspace.preview.value?.parts?.[workspace.preview.value?.selectedIndex] || null)
 const preview = version => { selectedVersion.value = version; void workspace.previewVersion(version) }
 const download = async version => { const result = await workspace.download(version); if (result) savePersonalWorkspaceBlob(result) }
 const trash = async () => { const usage = await workspace.usage(); if (!usage) return; const references = (usage.taskReferences?.length || 0) + (usage.activeExecutions?.length || 0); const message = references ? `该文件仍有 ${references} 个关联引用，确认移入回收站吗？` : '确认将该文件移入回收站吗？'; if (!globalThis.confirm?.(message)) return; const result = await workspace.trash(usage); if (result) { closeDetail(); await refresh() } }
@@ -249,6 +262,7 @@ onBeforeUnmount(() => { workspace.dispose(); execution.dispose() })
 .file-details { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }.file-details div { padding: 10px; border-radius: 8px; background: #f8fafc; }.file-details dt { color: #64748b; font-size: 12px; }.file-details dd { margin: 4px 0 0; word-break: break-word; }.inline-form,.version-upload { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0; }.inline-form label { flex: 1; min-width: 220px; margin: 0; }.version-upload .file-picker { margin: 0; }
 .versions { margin-top: 20px; }.version-row { display: grid; grid-template-columns: auto minmax(0,1fr) auto auto; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #e2e8f0; }.version-row.active { background: #f8fafc; }.version-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.version-row small { color: #64748b; }.version-actions { justify-content: flex-end; margin: 0; }
 .material-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }.execution-status { margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0; }.execution-notice { margin-top: 14px; padding: 12px; border-radius: 8px; background: #ecfdf5; color: #166534; }
+.preview-navigation { display: flex; align-items: center; gap: 8px; padding: 10px 12px 0; }.preview-navigation button { min-height: 30px; padding: 0 8px; }
 .preview { margin-top: 16px; overflow: auto; border-radius: 8px; background: #f8fafc; }.preview pre { margin: 0; padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }.preview img { display: block; max-width: 100%; max-height: 460px; margin: auto; object-fit: contain; }.preview p { padding: 12px; color: #64748b; }.preview .preview-note { margin: 0; padding-top: 0; font-size: 13px; }
 .danger-zone { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid #e2e8f0; }.danger-zone p { margin: 0; color: #64748b; }.danger-zone .danger { border-color: #dc2626; color: #b91c1c; }.workspace-error { max-width: 980px; margin: 0 auto 16px; padding: 12px; border-radius: 8px; background: #fef2f2; color: #b91c1c; }.workspace-receipt { max-width: 980px; margin: 0 auto; }
 @media (max-width: 700px) { .workspace-header,.section-heading { align-items: flex-start; flex-direction: column; }.filters { grid-template-columns: 1fr; }.file-details { grid-template-columns: 1fr; }.version-row { grid-template-columns: auto minmax(0,1fr); }.version-row small,.version-actions { grid-column: 2; justify-content: flex-start; }.file-state { display: none; } }
