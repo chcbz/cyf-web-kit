@@ -5,7 +5,6 @@ import path from 'path'
 import fs from 'fs'
 import yaml from '@rollup/plugin-yaml'
 import { visualizer } from 'rollup-plugin-visualizer'
-import viteCompression from 'vite-plugin-compression'
 import legacy from '@vitejs/plugin-legacy'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
@@ -32,9 +31,6 @@ export default defineConfig(({ mode }) => {
       yaml(),
       enableLegacy && legacy({
         targets: ['defaults', 'not IE 11']
-      }),
-      viteCompression({
-        verbose: false
       }),
       enableAnalyze && visualizer({
         open: false,
