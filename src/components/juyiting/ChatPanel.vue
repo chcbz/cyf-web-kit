@@ -89,8 +89,12 @@
         <p v-if="taskExecutionMode" class="execution-note">当前榜文：{{ selectedTaskId }}。仅已关联且获授权的精确版本可由服务端接受。</p>
         <p v-else class="execution-note">私人执行仅归档到自己的工作空间，不会变成悬赏正式交付。</p>
         <p v-if="taskExecutionMode" class="execution-note">将资料加入本轮时，系统会先固定为该榜文的 INPUT 版本关联；REFERENCE 不会被当作执行输入。</p>
+        <p v-if="activeConversationInputLinks.length" class="execution-note">本话头已固定 {{ activeConversationInputLinks.length }} 份资料；解除关联不会撤销已开始执行的输入快照。</p>
+        <ul v-if="activeConversationInputLinks.length" class="execution-material-list conversation-material-list" aria-label="已固定议事资料">
+          <li v-for="link in activeConversationInputLinks" :key="link.relationId">{{ conversationMaterialLabel(link) }} <button type="button" :disabled="conversationLinks.actionState.value === 'removing'" @click="detachConversationInput(link)">解除议事资料</button></li>
+        </ul>
         <p v-if="execution.capabilityState.value === 'loading' || workspace.listState.value === 'loading'" class="execution-note" role="status">正在读取执行能力与工作空间…</p>
-        <p v-else-if="execution.capabilityError.value || workspace.error.value || taskLinks.error.value || execution.rosterError.value" class="deliverable-error" role="alert">{{ execution.capabilityError.value || workspace.error.value || taskLinks.error.value || execution.rosterError.value }}</p>
+        <p v-else-if="execution.capabilityError.value || workspace.error.value || conversationLinks.error.value || taskLinks.error.value || execution.rosterError.value" class="deliverable-error" role="alert">{{ execution.capabilityError.value || workspace.error.value || conversationLinks.error.value || taskLinks.error.value || execution.rosterError.value }}</p>
         <template v-else>
           <label class="execution-field"><span>交付格式</span><select v-model="executionOutputMime"><option v-for="mime in execution.allowedMimeTypes.value" :key="mime" :value="mime">{{ outputMimeLabel(mime) }}</option></select></label>
           <label class="execution-field"><span>执行说明</span><textarea v-model="executionInstruction" maxlength="4000" placeholder="例如：根据已选资料生成 5 页中文项目汇报 PPT；或修改图片背景。"></textarea></label>
@@ -188,6 +192,7 @@ import { saveOutputBlob } from '../../utils/outputDownload.js'
 import { usePersonalWorkspace } from '../../composables/usePersonalWorkspace.js'
 import { usePersonalWorkspaceExecution } from '../../composables/usePersonalWorkspaceExecution.js'
 import { usePersonalWorkspaceTaskLinks } from '../../composables/usePersonalWorkspaceTaskLinks.js'
+import { usePersonalWorkspaceConversationLinks } from '../../composables/usePersonalWorkspaceConversationLinks.js'
 
 marked.setOptions({
   breaks: true,
@@ -270,15 +275,17 @@ const executionTargetName = computed(() => String(props.selectedAgent?.name || p
 const executionIdentity = computed(() => `${props.conversationId}\u0000${executionTargetId.value}`)
 const workspace = usePersonalWorkspace({ identityEpoch: executionIdentity })
 const taskLinks = usePersonalWorkspaceTaskLinks({ taskId: () => taskExecutionMode.value ? selectedTaskId.value : '', identityEpoch: executionIdentity })
+const conversationLinks = usePersonalWorkspaceConversationLinks({ conversationId: () => props.conversationId, identityEpoch: executionIdentity })
 const execution = usePersonalWorkspaceExecution({ identityEpoch: executionIdentity })
 const executionInstruction = ref('')
 const executionOutputMime = ref('')
 const selectedExecutionFileId = ref('')
 const selectedExecutionVersion = ref(null)
 const executionMaterials = ref([])
-const executionLoading = computed(() => workspace.loading.value || execution.rosterState.value === 'loading' || execution.capabilityState.value === 'loading')
+const executionLoading = computed(() => workspace.loading.value || conversationLinks.loading.value || execution.rosterState.value === 'loading' || execution.capabilityState.value === 'loading')
 const selectedExecutionVersionDetail = computed(() => workspace.detail.value?.versions?.find(version => Number(version.version) === Number(selectedExecutionVersion.value)) || null)
 const activeTaskInputLinks = computed(() => taskLinks.links.value.filter(link => link.state === 'ACTIVE' && link.role === 'INPUT'))
+const activeConversationInputLinks = computed(() => conversationLinks.links.value.filter(link => link.state === 'ACTIVE' && link.role === 'INPUT'))
 const executionWorkspaceFiles = computed(() => workspace.items.value)
 const selectedTaskInputLinked = computed(() => {
   const fileId = workspace.detail.value?.file?.fileId
@@ -292,6 +299,10 @@ const canCreateExecution = computed(() => Boolean(
   executionInstruction.value.trim() && execution.executionState.value !== 'creating' &&
   (executionMaterials.value.length || execution.generationEnabled.value)
 ))
+const conversationMaterialLabel = link => {
+  const file = workspace.items.value.find(item => item.fileId === link.fileId)
+  return `${file?.displayName || link.fileId} · v${link.version}`
+}
 const outputMimeLabel = mime => ({
   'image/png': 'PNG 图片', 'image/jpeg': 'JPEG 图片', 'application/pdf': 'PDF',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word（DOCX）',
@@ -303,7 +314,7 @@ const syncExecutionTarget = async () => {
   if (executionTargetId.value) execution.selectAgent(executionTargetId.value)
 }
 const refreshExecutionMaterials = async () => {
-  await Promise.all([workspace.refresh({ state: 'ACTIVE' }), taskExecutionMode.value ? taskLinks.load() : Promise.resolve(false), execution.loadCapabilities(), syncExecutionTarget()])
+  await Promise.all([workspace.refresh({ state: 'ACTIVE' }), conversationLinks.load(), taskExecutionMode.value ? taskLinks.load() : Promise.resolve(false), execution.loadCapabilities(), syncExecutionTarget()])
   if (!execution.allowedMimeTypes.value.includes(executionOutputMime.value)) executionOutputMime.value = execution.allowedMimeTypes.value[0] || ''
 }
 const selectExecutionFile = async fileId => {
@@ -323,7 +334,20 @@ const addExecutionMaterial = async () => {
   executionMaterials.value = [...executionMaterials.value, { fileId: file.fileId, version: String(version.version), label: `${file.displayName} · v${version.version}` }]
 }
 const removeExecutionMaterial = fileId => { executionMaterials.value = executionMaterials.value.filter(material => material.fileId !== fileId) }
+const detachConversationInput = link => { void conversationLinks.detach(link) }
+const ensureConversationInputs = async () => {
+  for (const material of executionMaterials.value) {
+    const alreadyLinked = conversationLinks.links.value.some(link => link.state === 'ACTIVE' &&
+      link.role === 'INPUT' && link.fileId === material.fileId && String(link.version) === String(material.version))
+    if (!alreadyLinked && !await conversationLinks.attach({ fileId: material.fileId, version: Number(material.version), role: 'INPUT' })) return false
+  }
+  return true
+}
 const createExecution = async () => {
+  // Selection remains a local draft until this one explicit confirmation.  The confirmed
+  // execution first pins every input to this authorized conversation; task mode also pins
+  // the same exact versions to the bounty before the runtime request is created.
+  if (!await ensureConversationInputs()) return
   const result = await execution.create({
     inputs: executionMaterials.value.map(({ fileId, version }) => ({ fileId, version })),
     instruction: executionInstruction.value,
@@ -419,7 +443,7 @@ watch(() => execution.execution.value?.state, state => {
 })
 
 onMounted(() => { if (executionEnabled.value && props.conversationId) void refreshExecutionMaterials() })
-onBeforeUnmount(() => { workspace.dispose(); taskLinks.dispose(); execution.dispose() })
+onBeforeUnmount(() => { workspace.dispose(); taskLinks.dispose(); conversationLinks.dispose(); execution.dispose() })
 
 watch(() => props.messages, () => {
   nextTick(() => {

@@ -122,6 +122,7 @@ const loadSfc = (relativePath) => {
     .replace(/^import\s+\{\s*classifyViewportResize\s*\}\s+from\s+['"]@\/game\/camera\/resizePolicy\.js['"];?\s*$/gm, 'var classifyViewportResize = arguments[3]')
     .replace(/^import\s+BountyActionIcon\s+from\s+['"].\/BountyActionIcon\.vue['"];?\s*$/gm, 'var BountyActionIcon = { template: \'<span />\', props: [\'status\'] }')
     .replace(/^import\s+OutputList\s+from\s+['"]\.\.\/outputs\/OutputList\.vue['"];?\s*$/gm, 'var OutputList = { template: \'<section class="output-list-stub" />\', props: [\'source\', \'identityFingerprint\'] }')
+    .replace(/^import\s+TaskMaterialLinks\s+from\s+['"]\.\.\/personal-workspace\/TaskMaterialLinks\.vue['"];?\s*$/gm, `var TaskMaterialLinks = { template: '<section class="task-material-links-stub" />', props: ['taskId', 'identityFingerprint'] }`)
     .replace(/^import\s+\{\s*formatSilverMicro,\s*isCanonicalMicroAmount\s*\}\s+from\s+['"]@\/utils\/silverAmount['"];?\s*$/gm, 'var { formatSilverMicro, isCanonicalMicroAmount } = arguments[4]')
     .replace(/^import\s+FormalDeliveryList\s+from\s+['"]\.\.\/deliveries\/FormalDeliveryList\.vue['"];?\s*$/gm, `var FormalDeliveryList = { template: '<section class="formal-delivery-list-stub" />', props: ['taskId', 'identityFingerprint'] }`)
     .replace(/^import\s+WorkItemPlanPanel\s+from\s+['"]\.\/WorkItemPlanPanel\.vue['"];?\s*$/gm, `var WorkItemPlanPanel = { template: '<section class="work-item-plan-stub" />', props: ['task', 'enabled', 'authorizationGeneration'] }`)
@@ -131,6 +132,13 @@ const loadSfc = (relativePath) => {
     .replace(/^import\s+(\w+)\s+from\s+['"]@\/assets\/juyiting\/[^'"]+['"];?\s*$/gm, 'var $1 = \'/mock-juyiting-asset.png\'')
     .replace(/^import\s+\{\s*hallPhysicalScene,\s*hallRoomPropVisuals\s*\}\s+from\s+['"]@\/constants\/juyiting['"];?\s*$/gm, 'var hallRoomPropVisuals = []; var hallPhysicalScene = { interactiveZones: [{ key: \'main\', panel: \'chat\', title: \'忠义堂公议\', subtitle: \'厅前公议 / 众好汉\', x: 50, y: 36, w: 12, h: 7, object: \'plaque\', hitShape: \'plaque\' }, { key: \'agents\', panel: \'agents\', title: \'点将册\', subtitle: \'点将调遣\', x: 21, y: 32, w: 13, h: 7, object: \'ledger\' }, { key: \'tasks\', panel: \'tasks\', title: \'悬赏榜\', subtitle: \'榜文\', x: 76, y: 47, w: 19, h: 18, object: \'notice-rack\' }, { key: \'catalog\', panel: \'catalog\', title: \'招贤令\', subtitle: \'遍请豪杰\', x: 14, y: 68, w: 12, h: 7, object: \'banner-flag\' }, { key: \'library\', panel: \'library\', title: \'案卷阁\', subtitle: \'查卷问典\', x: 82, y: 76, w: 22, h: 18, object: \'scroll-shelf\' }, { key: \'back\', panel: null, title: \'整装处\', subtitle: \'兵甲行囊\', x: 67, y: 26, w: 12, h: 8, object: \'rear-gear\' }] }')
     .replace(/^import\s+HallChatComposer\s+from\s+['"].\/HallChatComposer\.vue['"];?\s*$/gm, 'var HallChatComposer = arguments[1]')
+    .replace(/^import\s+OutputPreview\s+from\s+['"]\.\.\/outputs\/OutputPreview\.vue['"];?\s*$/gm, `var OutputPreview = { template: '<section class="output-preview-stub" />', props: ['item', 'load', 'contextKey'] }`)
+    .replace(/^import\s+\{\s*outputPreviewKind,\s*outputSource,\s*useOutputs\s*\}\s+from\s+['"]\.\.\/\.\.\/composables\/useOutputs\.js['"];?\s*$/gm, 'var { outputPreviewKind, outputSource, useOutputs } = arguments[5]')
+    .replace(/^import\s+\{\s*saveOutputBlob\s*\}\s+from\s+['"]\.\.\/\.\.\/utils\/outputDownload\.js['"];?\s*$/gm, 'var { saveOutputBlob } = arguments[5]')
+    .replace(/^import\s+\{\s*usePersonalWorkspace\s*\}\s+from\s+['"]\.\.\/\.\.\/composables\/usePersonalWorkspace\.js['"];?\s*$/gm, 'var { usePersonalWorkspace } = arguments[5]')
+    .replace(/^import\s+\{\s*usePersonalWorkspaceExecution\s*\}\s+from\s+['"]\.\.\/\.\.\/composables\/usePersonalWorkspaceExecution\.js['"];?\s*$/gm, 'var { usePersonalWorkspaceExecution } = arguments[5]')
+    .replace(/^import\s+\{\s*usePersonalWorkspaceTaskLinks\s*\}\s+from\s+['"]\.\.\/\.\.\/composables\/usePersonalWorkspaceTaskLinks\.js['"];?\s*$/gm, 'var { usePersonalWorkspaceTaskLinks } = arguments[5]')
+    .replace(/^import\s+\{\s*usePersonalWorkspaceConversationLinks\s*\}\s+from\s+['"]\.\.\/\.\.\/composables\/usePersonalWorkspaceConversationLinks\.js['"];?\s*$/gm, 'var { usePersonalWorkspaceConversationLinks } = arguments[5]')
     .replace(/^import\s+HallConversationHistory\s+from\s+['"]\.\/HallConversationHistory\.vue['"];?\s*$/gm, `var HallConversationHistory = { template: '<section class="hall-conversation-history-stub" />', props: ['conversations', 'deletingId', 'disabled', 'error', 'hasMore', 'loading', 'selectedId'] }`)
     .replace(/^import\s+HallVoiceControls\s+from\s+['"].\/HallVoiceControls\.vue['"];?\s*$/gm, 'var HallVoiceControls = { template: \'<div class=\"hall-voice-controls-stub\"></div>\', props: [\'voice\'] }')
     .replace(/^import\s+HallAccountEntry\s+from\s+['"]\.\/HallAccountEntry\.vue['"];?\s*$/gm, `var HallAccountEntry = { name: 'HallAccountEntry', template: '<button class="hall-account-entry-stub" type="button"></button>', props: ['avatar', 'compact', 'displayName', 'disabled'], emits: ['open-profile'] }`)
@@ -138,11 +146,46 @@ const loadSfc = (relativePath) => {
     .replace(/^import\s+DOMPurify\s+from\s+['"]dompurify['"];?\s*$/gm, 'var DOMPurify = { sanitize: value => value }')
     .replace('export default', 'return')
 
-  return new Function('Vue', 'HallChatComposer', 'juyitingGame', 'classifyViewportResize', 'silverAmount', scriptBody)(Vue, HallChatComposer, hallGameMock, classifyViewportResizeMock, silverAmount)
+  return new Function('Vue', 'HallChatComposer', 'juyitingGame', 'classifyViewportResize', 'silverAmount', 'chatPanelDependencies', scriptBody)(Vue, HallChatComposer, hallGameMock, classifyViewportResizeMock, silverAmount, chatPanelDependencies)
 }
 
 const stubs = {
   'var-icon': { template: '<i />' }
+}
+
+
+// ChatPanel's delivery adapters are covered by dedicated contract tests. Component tests
+// substitute network-bound surfaces, keeping this SFC test focused on presentation behavior.
+let chatPanelDependencies
+const createChatPanelDependencies = () => {
+  const directory = () => ({
+    links: Vue.ref([]), nextCursor: Vue.ref(null), listState: Vue.ref('empty'), loading: Vue.ref(false),
+    actionState: Vue.ref('idle'), error: Vue.ref(''), load: async () => true, loadMore: async () => false,
+    attach: async () => null, detach: async () => null, dispose: () => {}
+  })
+  return {
+    outputPreviewKind: () => 'none',
+    outputSource: (...parts) => parts,
+    useOutputs: () => ({
+      state: Vue.ref('ready'), message: Vue.ref(''), items: Vue.ref([]), loading: Vue.ref(false),
+      cacheKey: Vue.ref(''), refresh: async () => true, preview: async () => new Blob(), download: async () => new Blob()
+    }),
+    saveOutputBlob: () => {},
+    usePersonalWorkspace: () => ({
+      loading: Vue.ref(false), listState: Vue.ref('empty'), error: Vue.ref(''), items: Vue.ref([]),
+      detail: Vue.ref(null), refresh: async () => true, select: async () => null, dispose: () => {}
+    }),
+    usePersonalWorkspaceExecution: () => ({
+      rosterState: Vue.ref('ready'), capabilityState: Vue.ref('ready'), capabilityError: Vue.ref(''),
+      rosterError: Vue.ref(''), selectedAgent: Vue.ref(null), allowedMimeTypes: Vue.ref([]),
+      generationEnabled: Vue.ref(false), executionState: Vue.ref('idle'), execution: Vue.ref(null),
+      completionNotice: Vue.ref(''), error: Vue.ref(''), loadCapabilities: async () => true,
+      loadAgents: async () => true, selectAgent: () => {}, create: async () => null,
+      adoptExecution: () => false, revokeInputs: async () => null, dispose: () => {}
+    }),
+    usePersonalWorkspaceTaskLinks: directory,
+    usePersonalWorkspaceConversationLinks: directory
+  }
 }
 
 const makeHallStageProps = (overrides = {}) => ({
@@ -209,6 +252,7 @@ before(async () => {
     return wrapper
   }
   Vue = await import('vue')
+  chatPanelDependencies = createChatPanelDependencies()
   silverAmount = await import('../src/utils/silverAmount.js')
   ;({ classifyViewportResize: classifyViewportResizeMock } = await import('../src/game/camera/resizePolicy.js'))
   hallGameMock = {
@@ -1583,7 +1627,7 @@ describe('JuyiHall component behavior', () => {
     await wrapper.find('.task-card').trigger('click')
 
     expect(wrapper.text()).to.include('议事')
-    expect(wrapper.text()).to.include('榜文议事')
+    expect(wrapper.text()).to.include('进入议事')
     expect(wrapper.text()).not.to.include('单独议事')
     expect(wrapper.text()).not.to.include('传令议事')
 
