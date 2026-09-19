@@ -32,6 +32,8 @@ const validSelections = value => Array.isArray(value) && value.length <= 128 && 
 const validOutputMime = value => EXECUTION_MIME_TYPES.has(value)
 const validCapabilities = value => value && typeof value === 'object' && Array.isArray(value.allowedMimeTypes) &&
   value.allowedMimeTypes.every(validOutputMime) && new Set(value.allowedMimeTypes).size === value.allowedMimeTypes.length &&
+  (value.inputMimeTypes == null || (Array.isArray(value.inputMimeTypes) &&
+    value.inputMimeTypes.every(validOutputMime) && new Set(value.inputMimeTypes).size === value.inputMimeTypes.length)) &&
   typeof value.generationEnabled === 'boolean'
 const validInput = value => validSelection(value) && ID(value.inputRef)
 const EXECUTION_STATES = new Set(['QUEUED', 'INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'FAILED'])
@@ -64,6 +66,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
   const rosterError = ref('')
   const selectedAgentId = ref('')
   const allowedMimeTypes = ref([])
+  const inputMimeTypes = ref([])
   const capabilityState = ref('idle')
   const capabilityError = ref('')
   const generationEnabled = ref(false)
@@ -92,6 +95,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     rosterError.value = ''
     selectedAgentId.value = ''
     allowedMimeTypes.value = []
+    inputMimeTypes.value = []
     capabilityState.value = 'idle'
     capabilityError.value = ''
     generationEnabled.value = false
@@ -137,6 +141,10 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
       const value = await request({ url: '/personal-workspace/executions/capabilities', method: 'GET' }, snapshot)
       if (!validCapabilities(value)) throw new Error('执行能力返回格式无效，未开放任何交付类型。')
       allowedMimeTypes.value = [...value.allowedMimeTypes]
+      // Older deployments did not emit inputMimeTypes. Falling back to the output list
+      // keeps the UI fail-closed until the paired 1.13.1 API is available.
+      inputMimeTypes.value = Array.isArray(value.inputMimeTypes)
+        ? [...value.inputMimeTypes] : [...value.allowedMimeTypes]
       generationEnabled.value = value.generationEnabled
       capabilityState.value = value.allowedMimeTypes.length ? 'ready' : 'empty'
       return value
@@ -253,5 +261,5 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
   }
   if (getCurrentInstance()) onBeforeUnmount(dispose)
 
-  return { agents, rosterState, rosterError, selectedAgentId, selectedAgent, allowedMimeTypes, capabilityState, capabilityError, generationEnabled, execution, executionState, error, completionNotice, loadCapabilities, loadAgents, selectAgent, create, adoptExecution, refreshExecution, revokeInputs, stopPolling, reset, dispose }
+  return { agents, rosterState, rosterError, selectedAgentId, selectedAgent, allowedMimeTypes, inputMimeTypes, capabilityState, capabilityError, generationEnabled, execution, executionState, error, completionNotice, loadCapabilities, loadAgents, selectAgent, create, adoptExecution, refreshExecution, revokeInputs, stopPolling, reset, dispose }
 }

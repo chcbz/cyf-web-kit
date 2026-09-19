@@ -87,6 +87,31 @@ describe('personal workspace execution adapter', () => {
     adapter.dispose()
   })
 
+  it('keeps a configured PPT output separate from six supported source material formats', async () => {
+    const api = { execute: async options => {
+      if (options.url === '/personal-workspace/executions/capabilities') return { data: {
+        allowedMimeTypes: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+        inputMimeTypes: [
+          'image/jpeg', 'image/png', 'application/pdf',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+        ], generationEnabled: true
+      } }
+      return { data: { items: [] } }
+    } }
+    const adapter = usePersonalWorkspaceExecution({ api, identityEpoch: ref('owner-a') })
+    await adapter.loadCapabilities()
+    assert.deepEqual(adapter.allowedMimeTypes.value, ['application/vnd.openxmlformats-officedocument.presentationml.presentation'])
+    assert.deepEqual(adapter.inputMimeTypes.value, [
+      'image/jpeg', 'image/png', 'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    ])
+    adapter.dispose()
+  })
+
   it('stops polling and renders the server-controlled terminal failure without fabricating a delivery', async () => {
     const timerApi = timers()
     let reads = 0

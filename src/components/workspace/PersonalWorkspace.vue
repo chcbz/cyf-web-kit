@@ -88,7 +88,7 @@
       <div class="material-actions"><button type="button" :disabled="!canAddSelectedMaterial" @click="addSelectedMaterial">加入执行资料</button><button v-for="item in executionMaterials" :key="item.fileId" type="button" @click="removeExecutionMaterial(item.fileId)">{{ materialLabel(item) }} ×</button></div>
       <p v-if="!executionMaterials.length" class="workspace-note">请从版本列表将至少一份资料加入本次执行；同一文件仅能选择一个固定版本。</p>
       <p v-else class="workspace-note">本次已授权 {{ executionMaterials.length }} 份固定版本资料；Agent 不能读取未列入此处的其他文件。</p>
-      <p v-if="!canExecuteSelectedVersion" class="workspace-note">当前文件类型未被服务端执行通道确认开放；文件仍可在空间管理和下载。</p>
+      <p v-if="!canExecuteSelectedVersion" class="workspace-note">当前文件类型未被服务端确认可作为本次执行资料；文件仍可在空间管理和下载。</p>
       <label><span>已有 Agent</span><select :value="execution.selectedAgentId.value" :disabled="execution.rosterState.value === 'loading'" @change="selectExecutionAgent($event.target.value)"><option value="">请选择已有 Agent</option><option v-for="agent in execution.agents.value" :key="agent.agentId" :value="agent.agentId">{{ agent.name }}{{ agent.status ? `（${agent.status}）` : '' }}</option></select></label>
       <p v-if="execution.rosterState.value === 'loading'" role="status">正在读取已有 Agent…</p><p v-else-if="execution.rosterState.value === 'empty'" class="workspace-note">当前没有可选择的 Agent；不会使用演示 Agent 代替。</p><p v-else-if="execution.rosterError.value" class="workspace-error" role="alert">{{ execution.rosterError.value }}</p>
       <label><span>交付类型</span><select v-model="executionOutputMime"><option v-for="mime in execution.allowedMimeTypes.value" :key="mime" :value="mime">{{ deliveryTypeText(mime) }}</option></select></label>
@@ -181,7 +181,7 @@ const generationMime = ref('')
 const executionOutputMime = ref('')
 const executionMaterials = ref([])
 const selectedExecutionVersion = computed(() => workspace.detail.value?.versions?.find(version => version.version === selectedVersion.value) || null)
-const canExecuteSelectedVersion = computed(() => Boolean(selectedExecutionVersion.value?.contentMimeType && execution.allowedMimeTypes.value.includes(selectedExecutionVersion.value.contentMimeType)))
+const canExecuteSelectedVersion = computed(() => Boolean(selectedExecutionVersion.value?.contentMimeType && execution.inputMimeTypes.value.includes(selectedExecutionVersion.value.contentMimeType)))
 const canAddSelectedMaterial = computed(() => Boolean(workspace.detail.value?.file?.fileId && selectedExecutionVersion.value && canExecuteSelectedVersion.value && !executionMaterials.value.some(item => item.fileId === workspace.detail.value.file.fileId)))
 const canCreateExecution = computed(() => Boolean(executionMaterials.value.length && executionOutputMime.value && execution.allowedMimeTypes.value.includes(executionOutputMime.value) && execution.selectedAgent.value && executionInstruction.value.trim() && execution.executionState.value !== 'creating'))
 const canCreateGeneration = computed(() => Boolean(execution.generationEnabled.value && generationMime.value && execution.allowedMimeTypes.value.includes(generationMime.value) && execution.selectedAgent.value && generationInstruction.value.trim() && execution.executionState.value !== 'creating'))
@@ -219,8 +219,8 @@ const loadExecutionCapabilities = async () => {
 const selectExecutionAgent = agentId => execution.selectAgent(agentId)
 const materialLabel = item => `${item.displayName || item.fileId} · v${item.version}`
 const isExecutionMaterial = fileId => executionMaterials.value.some(item => item.fileId === fileId)
-const canAddVersionAsMaterial = version => Boolean(version?.contentMimeType && execution.allowedMimeTypes.value.includes(version.contentMimeType) && !isExecutionMaterial(workspace.detail.value.file.fileId))
-const addExecutionMaterial = item => { if (!item?.fileId || !Number.isSafeInteger(Number(item.version)) || isExecutionMaterial(item.fileId) || !execution.allowedMimeTypes.value.includes(item.contentMimeType)) return; executionMaterials.value = [...executionMaterials.value, { fileId: item.fileId, version: String(item.version), displayName: item.displayName, contentMimeType: item.contentMimeType }]; if (!executionOutputMime.value) executionOutputMime.value = item.contentMimeType }
+const canAddVersionAsMaterial = version => Boolean(version?.contentMimeType && execution.inputMimeTypes.value.includes(version.contentMimeType) && !isExecutionMaterial(workspace.detail.value.file.fileId))
+const addExecutionMaterial = item => { if (!item?.fileId || !Number.isSafeInteger(Number(item.version)) || isExecutionMaterial(item.fileId) || !execution.inputMimeTypes.value.includes(item.contentMimeType)) return; executionMaterials.value = [...executionMaterials.value, { fileId: item.fileId, version: String(item.version), displayName: item.displayName, contentMimeType: item.contentMimeType }]; if (!executionOutputMime.value) executionOutputMime.value = execution.allowedMimeTypes.value[0] || '' }
 const addSelectedMaterial = () => addExecutionMaterial({ fileId: workspace.detail.value.file.fileId, version: selectedVersion.value, displayName: workspace.detail.value.file.displayName, contentMimeType: selectedExecutionVersion.value?.contentMimeType })
 const removeExecutionMaterial = fileId => { executionMaterials.value = executionMaterials.value.filter(item => item.fileId !== fileId) }
 const createExecution = () => execution.create({ inputs: executionMaterials.value.map(({ fileId, version }) => ({ fileId, version })), instruction: executionInstruction.value, outputContentMimeType: executionOutputMime.value })

@@ -74,8 +74,12 @@ const conversationDeliverable = value => {
   if (value.formalDeliveryState === 'submitted') return value.formalDecisionVersion === 0 && value.formalReviewedAt == null
   return value.formalDecisionVersion >= 1 && Number.isSafeInteger(value.formalReviewedAt) && value.formalReviewedAt > 0
 }
-const validTextPreview = value => value && typeof value === 'object' && !Array.isArray(value) &&
-  Object.keys(value).every(key => ['state', 'parts', 'partial', 'reason'].includes(key)) &&
+// Task artifacts explicitly identify a bounded extracted-text representation. Private workspace
+// previews predate that field, so they remain compatible but do not gain a layout-preview claim.
+const validTextPreview = (value, requireExtractedText = false) => value && typeof value === 'object' && !Array.isArray(value) &&
+  Object.keys(value).every(key => ['state', 'representation', 'parts', 'partial', 'reason'].includes(key)) &&
+  (!requireExtractedText || value.representation === 'EXTRACTED_TEXT') &&
+  (value.representation == null || value.representation === 'EXTRACTED_TEXT') &&
   value.state === 'READY' && exactBoolean(value.partial) &&
   (value.reason == null || exactText(value.reason, 255)) && Array.isArray(value.parts) && value.parts.length === 1 &&
   value.parts.every(part => part && typeof part === 'object' && !Array.isArray(part) &&
@@ -168,7 +172,7 @@ export const outputReadAdapter = Object.freeze({
     const preview = unwrap(await api.execute({
       url: `${base}/preview`, method: 'GET', autoLoading: false, needAuth: true, signal
     }))
-    if (!validTextPreview(preview)) throw new Error('成果内容预览返回格式无效，未展示可能不完整的数据。')
+    if (!validTextPreview(preview, artifactRequest)) throw new Error('成果内容预览返回格式无效，未展示可能不完整的数据。')
     const blob = unwrap(await api.execute({
       url: `${base}/preview/parts/content`, method: 'GET', responseType: 'blob', autoLoading: false, needAuth: true, signal
     }))

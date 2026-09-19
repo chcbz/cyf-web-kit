@@ -10,6 +10,8 @@ assert.match(source, /personal-workspace\/files\/\$\{encodeURIComponent\(fileId\
 assert.match(source, /\$\{base\}\/preview/)
 assert.match(source, /\$\{base\}\/preview\/parts\/content/)
 assert.match(source, /blob\.type !== TEXT_PREVIEW_MIME/)
+assert.match(source, /validTextPreview\(preview, artifactRequest\)/)
+assert.match(source, /value\.representation === 'EXTRACTED_TEXT'/)
 assert.match(source, /if \(documentPreviewMimeTypes\.has\(item\.mimeType\)\) return 'text'/)
 assert.match(source, /if \(item\.byteLength > 1024 \* 1024\) return 'none'/)
 assert.doesNotMatch(source, /storageUri/)
