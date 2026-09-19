@@ -58,11 +58,25 @@ const errorMessage = error => {
   if (error?.status === 503) return '工作空间存储暂不可用，请稍后重试。'
   return error?.message || '工作空间请求未完成，请刷新确认。'
 }
-const isImagePreviewable = mime => ['image/png', 'image/jpeg'].includes(normalizeMime(mime))
 const previewPartMimeTypes = new Set(['text/plain', 'image/png'])
-const legacyPreviewPartMimeTypes = new Set([...previewPartMimeTypes, 'image/jpeg'])
+// `view=parts` opts into the 1.13.1 representation contract; default callers keep
+// the legacy single EXTRACTED_TEXT/content response.
+const PREVIEW_REPRESENTATIONS = new Set(['EXTRACTED_TEXT', 'PAGED_IMAGE', 'SHEET_TEXT', 'PAGED_TEXT'])
 const validPreviewPart = part => part && typeof part === 'object' && !Array.isArray(part) &&
-  Object.keys(part).every(key => ['partId', 'contentMimeType'].includes(key)) && ID(part.partId) && legacyPreviewPartMimeTypes.has(normalizeMime(part.contentMimeType))
+  Object.keys(part).every(key => ['partId', 'contentMimeType'].includes(key)) && ID(part.partId) && previewPartMimeTypes.has(normalizeMime(part.contentMimeType))
+const validPreviewView = value => {
+  if (!value || typeof value !== 'object' || Array.isArray(value) ||
+    !Object.keys(value).every(key => ['state', 'representation', 'parts', 'partial', 'reason'].includes(key)) ||
+    value.state !== 'READY' || !PREVIEW_REPRESENTATIONS.has(value.representation) || typeof value.partial !== 'boolean' ||
+    (value.reason != null && !TEXT(value.reason, 255)) || !Array.isArray(value.parts) || !value.parts.length ||
+    !value.parts.every(validPreviewPart) || new Set(value.parts.map(part => part.partId)).size !== value.parts.length) return false
+  if (value.representation === 'EXTRACTED_TEXT') return value.parts.length === 1 && value.parts[0].partId === 'content' && normalizeMime(value.parts[0].contentMimeType) === 'text/plain'
+  if (value.representation === 'PAGED_IMAGE') return value.parts.every(part => normalizeMime(part.contentMimeType) === 'image/png')
+  return value.parts.every(part => normalizeMime(part.contentMimeType) === 'text/plain')
+}
+const displayPreviewParts = preview => preview.representation === 'SHEET_TEXT' && preview.parts.some(part => part.partId !== 'content')
+  ? preview.parts.filter(part => part.partId !== 'content')
+  : preview.parts
 const validFile = file => file && typeof file.name === 'string' && TEXT(file.name, 255) && Number.isFinite(file.size) && file.size >= 0
 const validFileView = value => value && typeof value === 'object' && ID(value.fileId) && TEXT(value.displayName, 255) &&
   (value.originKind == null || ['USER_UPLOAD', 'AGENT_DELIVERY'].includes(value.originKind)) &&
@@ -321,18 +335,14 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     const snapshot = { generation, epoch: currentEpoch.value }
     revokePreview(); actionState.value = 'loading-preview'; error.value = ''
     try {
-      const { data } = await request({ url: `/personal-workspace/files/${encodeURIComponent(file.fileId)}/versions/${Number(version)}/preview`, method: 'GET' }, snapshot)
-      const versionInfo = detail.value?.versions?.find(item => Number(item.version) === Number(version)) || detail.value?.latestVersion
-      const legacyMime = isImagePreviewable(versionInfo?.contentMimeType) ? normalizeMime(versionInfo.contentMimeType) : 'text/plain'
-      const parts = Array.isArray(data?.parts) ? data.parts : []
-      const legacyContent = parts.length === 1 && parts[0]?.partId === 'content' && normalizeMime(parts[0]?.contentMimeType) === legacyMime
-      if (data?.state !== 'READY' || !parts.length || !parts.every(validPreviewPart) || new Set(parts.map(part => part.partId)).size !== parts.length || (!legacyContent && !parts.every(part => previewPartMimeTypes.has(normalizeMime(part.contentMimeType))))) {
+      const { data } = await request({ url: `/personal-workspace/files/${encodeURIComponent(file.fileId)}/versions/${Number(version)}/preview`, method: 'GET', params: { view: 'parts' } }, snapshot)
+      if (!validPreviewView(data)) {
         preview.value = { kind: 'unsupported', message: data?.reason || '此文件可下载，但暂时无法生成可用预览。' }
         actionState.value = 'ready'
         return preview.value
       }
       const rendered = []
-      for (const part of parts) {
+      for (const part of displayPreviewParts(data)) {
         const content = await readBlob(file.fileId, version, `preview/parts/${encodeURIComponent(part.partId)}`)
         const mime = normalizeMime(part.contentMimeType)
         if (normalizeMime(content.blob.type) !== mime) throw new Error('预览分片类型无效，请下载原文件查看。')

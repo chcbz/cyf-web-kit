@@ -20,10 +20,20 @@ const debugPort = Number(process.env.JUYITING_A19_CDP_PORT || 19481)
 const appOrigin = `https://127.0.0.1:${vitePort}`
 const apiOrigin = `http://127.0.0.1:${apiPort}`
 const requests = []
+const requestWaiters = new Set()
 const unexpectedRequests = []
 const preflightRequests = []
 const checks = []
 const cleanupEvidence = []
+const waitForMockRequest = (predicate, description) => {
+  const existing = requests.find(predicate)
+  if (existing) return Promise.resolve(existing)
+  return new Promise((resolveWaiter, rejectWaiter) => {
+    const waiter = { predicate, resolve: resolveWaiter, reject: rejectWaiter, timer: null }
+    waiter.timer = setTimeout(() => { requestWaiters.delete(waiter); rejectWaiter(new Error(`Timed out waiting for mock request: ${description}`)) }, 10_000)
+    requestWaiters.add(waiter)
+  })
+}
 const check = (name, condition, detail = null) => {
   if (!condition) throw new Error(`check failed: ${name}${detail ? ` (${detail})` : ''}`)
   checks.push({ name, passed: true })
@@ -42,7 +52,9 @@ const versions = [
 const agent = { agentId: 'agent-alpha', name: 'Alpha', status: 'online', canOperate: true, boundToMe: true, abilities: ['document'] }
 const task = { id: 'task-a19', title: '制作项目汇报', description: '根据固定版本资料制作汇报。', status: 'open', requiredAbilities: ['document'], collaborationMode: 'single', riskLevel: 'low', maxAgents: 1, assignees: [agent], assignedAgentIds: [agent.agentId] }
 const links = []
-const conversationId = 'conversation-a19-private'
+// Hall conversation identifiers are Java long values; use a valid mock ID so this
+// browser journey exercises the real client scope validator before deliverables load.
+const conversationId = '19001'
 const deliverable = { outputId: 'output-a19-ppt', executionId: 'execution-a19', fileId: 'output-file-a19', fileVersion: 1, contentHash: 'b'.repeat(64), contentMimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', byteLength: 12, committedAt: 1_700_000_030_000, state: 'AVAILABLE', publicationState: 'WORKSPACE_COMMITTED', formalDeliveryState: 'NOT_APPLICABLE' }
 const previewPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL8NwAAAABJRU5ErkJggg==', 'base64')
 
@@ -61,19 +73,26 @@ const startMockApi = () => new Promise((resolveStart, reject) => {
     const body = await readBody(req)
     let payload = null
     try { payload = body ? JSON.parse(body) : null } catch { payload = body }
-    requests.push({ method: req.method, path: url.pathname, query: Object.fromEntries(url.searchParams), payload, authorization: req.headers.authorization || '' })
+    const requestRecord = { method: req.method, path: url.pathname, query: Object.fromEntries(url.searchParams), payload, authorization: req.headers.authorization || '' }
+    requests.push(requestRecord)
+    for (const waiter of [...requestWaiters]) {
+      if (!waiter.predicate(requestRecord)) continue
+      clearTimeout(waiter.timer); requestWaiters.delete(waiter); waiter.resolve(requestRecord)
+    }
     if (req.headers.authorization !== 'Bearer a19-local-smoke-token') return json(res, 401, { message: 'mock token required' })
     const path = url.pathname
     if (req.method === 'GET' && path === '/agent/personal-workspace/files') return json(res, 200, { items: [file], nextCursor: null })
     if (req.method === 'GET' && path === `/agent/personal-workspace/files/${file.fileId}`) return json(res, 200, { file, latestVersion: versions[1], versions })
+    if (req.method === 'GET' && path === `/agent/personal-workspace/files/${file.fileId}/versions/1/preview`) return json(res, 200, { state: 'READY', representation: 'EXTRACTED_TEXT', parts: [{ partId: 'content', contentMimeType: 'text/plain' }], partial: false })
+    if (req.method === 'GET' && path === `/agent/personal-workspace/files/${file.fileId}/versions/1/preview/parts/content`) return binary(res, 200, Buffer.from('旧 content 预览'), 'text/plain')
     if (req.method === 'GET' && path === '/agent/personal-workspace/executions/capabilities') return json(res, 200, { allowedMimeTypes: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'], inputMimeTypes: [versions[0].contentMimeType], generationEnabled: false })
     if (req.method === 'POST' && path === '/chat/conversation/list') return json(res, 200, { data: [{ id: conversationId, title: 'Alpha 密议', updateTime: 1_700_000_030_000, conversationType: 'juyiting', conversationScopeType: 'private', conversationScopeKey: `agent:${agent.agentId}` }] })
     if (req.method === 'GET' && path === '/chat/conversation/content') return json(res, 200, { data: [] })
     if (req.method === 'GET' && path === '/chat/conversation/events') { res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', 'access-control-allow-origin': appOrigin }); return res.end() }
     if (req.method === 'GET' && path === `/agent/conversations/${conversationId}/deliverables`) return json(res, 200, { items: [deliverable], nextCursor: null, state: 'AVAILABLE', publicationPending: false })
-    if (req.method === 'GET' && path === `/agent/personal-workspace/files/${deliverable.fileId}/versions/1/preview`) return json(res, 200, { state: 'READY', parts: [{ partId: 'page-1', contentMimeType: 'image/png' }, { partId: 'page-2', contentMimeType: 'image/png' }], partial: false })
-    if (req.method === 'GET' && path === `/agent/personal-workspace/files/${deliverable.fileId}/versions/1/preview/parts/page-1`) return binary(res, 200, previewPng, 'image/png')
-    if (req.method === 'GET' && path === `/agent/personal-workspace/files/${deliverable.fileId}/versions/1/preview/parts/page-2`) return binary(res, 200, previewPng, 'image/png')
+    if (req.method === 'GET' && path === `/agent/personal-workspace/files/${deliverable.fileId}/versions/1/preview`) return json(res, 200, { state: 'READY', representation: 'PAGED_IMAGE', parts: [{ partId: 'slide-1', contentMimeType: 'image/png' }, { partId: 'slide-2', contentMimeType: 'image/png' }], partial: false })
+    if (req.method === 'GET' && path === `/agent/personal-workspace/files/${deliverable.fileId}/versions/1/preview/parts/slide-1`) return binary(res, 200, previewPng, 'image/png')
+    if (req.method === 'GET' && path === `/agent/personal-workspace/files/${deliverable.fileId}/versions/1/preview/parts/slide-2`) return binary(res, 200, previewPng, 'image/png')
     if (req.method === 'GET' && path === `/agent/personal-workspace/files/${deliverable.fileId}/versions/1/content`) return binary(res, 200, Buffer.from('pptx-mock'), deliverable.contentMimeType)
     if (req.method === 'POST' && path === '/agent/roster') return json(res, 200, { data: [agent] })
     if (req.method === 'POST' && path === '/agent/personal-workspace/executions') return json(res, 200, execution())
@@ -145,6 +164,11 @@ async function run () {
   await setControl('section[aria-labelledby="workspace-execution-title"] select', agent.agentId)
   await evaluate(cdp, `document.querySelector('.version-row button').click()`)
   await waitForExpression(cdp, visibleText('当前版本：项目资料 · v1'), 10_000)
+  await clickText('预览')
+  await waitForExpression(cdp, visibleText('旧 content 预览'), 10_000)
+  const legacyPreviewMeta = requests.find(request => request.method === 'GET' && request.path === `/agent/personal-workspace/files/${file.fileId}/versions/1/preview`)
+  check('workspace explicitly opts into multi-part view metadata', legacyPreviewMeta?.query?.view === 'parts')
+  check('workspace renders old EXTRACTED_TEXT content compatibility part', requests.some(request => request.method === 'GET' && request.path === `/agent/personal-workspace/files/${file.fileId}/versions/1/preview/parts/content`))
   await clickText('加入执行资料')
   await setControl('section[aria-labelledby="workspace-execution-title"] textarea', '根据 v1 制作 PPT')
   await clickText('创建私人执行')
@@ -192,18 +216,27 @@ async function run () {
   // conversation deliverable references, then renders server-declared PPT page parts.
   await setViewport(390, 844)
   await cdp.send('Page.navigate', { url: `${appOrigin}/juyiting` })
-  await waitForExpression(cdp, `document.querySelector('.scene-agent-list button') != null`, 30_000)
-  await clickSelector('.scene-agent-list button')
-  await waitForExpression(cdp, `document.querySelector('[data-portrait-action="private-discussion"]') != null`, 10_000)
+  // Close the unrelated onboarding overlay through its own explicit control; this does
+  // not stand in for identity logout/exit coverage.
+  await waitForExpression(cdp, `document.querySelector('.skip-button') != null || document.querySelector('.scene-agent-list button') != null`, 30_000)
+  if (await evaluate(cdp, `Boolean(document.querySelector('.skip-button'))`)) await clickSelector('.skip-button')
+  await waitForExpression(cdp, `document.querySelector('.scene-agent-list button') != null || document.querySelector('[data-portrait-action="private-discussion"]') != null`, 30_000)
+  if (!await evaluate(cdp, `Boolean(document.querySelector('[data-portrait-action="private-discussion"]'))`)) {
+    await clickSelector('.scene-agent-list button')
+    await waitForExpression(cdp, `document.querySelector('[data-portrait-action="private-discussion"]') != null`, 10_000)
+  }
   await clickSelector('[data-portrait-action="private-discussion"]')
-  await waitForExpression(cdp, visibleText('本话头执行与成果'), 30_000)
+  await waitForExpression(cdp, `document.querySelector('.deliverable-directory[aria-label="本话头执行与成果"]') != null`, 30_000)
   await waitForExpression(cdp, visibleText('执行成果'), 20_000)
   await clickText('预览')
   await waitForExpression(cdp, visibleText('第 1 / 2 页'), 20_000)
   await clickText('下一页')
   await waitForExpression(cdp, visibleText('第 2 / 2 页'), 10_000)
   await clickText('下载')
+  // Wait for the authenticated blob read itself, rather than racing the mock log.
+  await waitForMockRequest(request => request.method === 'GET' && request.path === `/agent/personal-workspace/files/${deliverable.fileId}/versions/1/content`, 'private discussion exact-version download')
   check('private discussion lists only its conversation deliverable', requests.some(request => request.method === 'GET' && request.path === `/agent/conversations/${conversationId}/deliverables`))
+  check('private discussion explicitly opts into multi-part view metadata', requests.some(request => request.method === 'GET' && request.path === `/agent/personal-workspace/files/${deliverable.fileId}/versions/1/preview` && request.query.view === 'parts'))
   check('private discussion loads both declared PPT preview pages', requests.filter(request => request.method === 'GET' && request.path.startsWith(`/agent/personal-workspace/files/${deliverable.fileId}/versions/1/preview/parts/`)).length === 2)
   check('private discussion downloads its exact output version', requests.some(request => request.method === 'GET' && request.path === `/agent/personal-workspace/files/${deliverable.fileId}/versions/1/content`))
   await noHorizontalOverflow('private discussion output preview')

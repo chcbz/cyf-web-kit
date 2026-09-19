@@ -76,21 +76,26 @@ const conversationDeliverable = value => {
   if (value.formalDeliveryState === 'submitted') return value.formalDecisionVersion === 0 && value.formalReviewedAt == null
   return value.formalDecisionVersion >= 1 && Number.isSafeInteger(value.formalReviewedAt) && value.formalReviewedAt > 0
 }
-// PreviewView carries only opaque part identifiers and server-declared safe representations.
-// Legacy previews retain their single `content` text part; rendered Office/PDF previews may
-// provide one image/png part per page and Excel one text/plain part per worksheet.
-const validPreviewView = (value, requireExtractedText = false) => value && typeof value === 'object' && !Array.isArray(value) &&
-  Object.keys(value).every(key => ['state', 'representation', 'parts', 'partial', 'reason'].includes(key)) &&
-  // Existing task artifacts still declare EXTRACTED_TEXT. New multi-part views are permitted
-  // to omit representation because the frozen PreviewView contract is parts-based.
-  (!requireExtractedText || value.representation == null || value.representation === 'EXTRACTED_TEXT') &&
-  (value.representation == null || value.representation === 'EXTRACTED_TEXT') &&
-  value.state === 'READY' && exactBoolean(value.partial) &&
-  (value.reason == null || exactText(value.reason, 255)) && Array.isArray(value.parts) && value.parts.length >= 1 &&
-  value.parts.every(part => part && typeof part === 'object' && !Array.isArray(part) &&
-    Object.keys(part).every(key => ['partId', 'contentMimeType'].includes(key)) &&
-    exactId(part.partId) && previewPartMimeTypes.has(part.contentMimeType)) &&
-  new Set(value.parts.map(part => part.partId)).size === value.parts.length
+// `view=parts` opts into the 1.13.1 representation contract. The default endpoint
+// remains the old one-part EXTRACTED_TEXT view for 1.13.0 clients.
+const PREVIEW_REPRESENTATIONS = new Set(['EXTRACTED_TEXT', 'PAGED_IMAGE', 'SHEET_TEXT', 'PAGED_TEXT'])
+const validPreviewView = value => {
+  if (!value || typeof value !== 'object' || Array.isArray(value) ||
+    !Object.keys(value).every(key => ['state', 'representation', 'parts', 'partial', 'reason'].includes(key)) ||
+    value.state !== 'READY' || !PREVIEW_REPRESENTATIONS.has(value.representation) || !exactBoolean(value.partial) ||
+    (value.reason != null && !exactText(value.reason, 255)) || !Array.isArray(value.parts) || value.parts.length < 1 ||
+    !value.parts.every(part => part && typeof part === 'object' && !Array.isArray(part) &&
+      Object.keys(part).every(key => ['partId', 'contentMimeType'].includes(key)) &&
+      exactId(part.partId) && previewPartMimeTypes.has(part.contentMimeType)) ||
+    new Set(value.parts.map(part => part.partId)).size !== value.parts.length) return false
+  if (value.representation === 'EXTRACTED_TEXT') return value.parts.length === 1 && value.parts[0].partId === 'content' && value.parts[0].contentMimeType === TEXT_PREVIEW_MIME
+  if (value.representation === 'PAGED_IMAGE') return value.parts.every(part => part.contentMimeType === 'image/png')
+  return value.parts.every(part => part.contentMimeType === TEXT_PREVIEW_MIME)
+}
+const displayPreviewParts = preview => preview.representation === 'SHEET_TEXT' && preview.parts.some(part => part.partId !== 'content')
+  ? preview.parts.filter(part => part.partId !== 'content')
+  : preview.parts
+
 
 const validatedPage = (value, sourceType, sourceId, limit) => {
   const itemValidator = sourceType === 'task'
@@ -176,11 +181,11 @@ export const outputReadAdapter = Object.freeze({
       ? `/tasks/${encodeURIComponent(resolvedTaskId)}/deliverables/${encodeURIComponent(artifactId)}/versions/${artifactVersion}`
       : `/personal-workspace/files/${encodeURIComponent(fileId)}/versions/${fileVersion}`
     const preview = unwrap(await api.execute({
-      url: `${base}/preview`, method: 'GET', autoLoading: false, needAuth: true, signal
+      url: `${base}/preview`, method: 'GET', params: { view: 'parts' }, autoLoading: false, needAuth: true, signal
     }))
-    if (!validPreviewView(preview, artifactRequest)) throw new Error('成果内容预览返回格式无效，未展示可能不完整的数据。')
+    if (!validPreviewView(preview)) throw new Error('成果内容预览返回格式无效，未展示可能不完整的数据。')
     const parts = []
-    for (const part of preview.parts) {
+    for (const part of displayPreviewParts(preview)) {
       const blob = unwrap(await api.execute({
         url: `${base}/preview/parts/${encodeURIComponent(part.partId)}`, method: 'GET', responseType: 'blob', autoLoading: false, needAuth: true, signal
       }))
