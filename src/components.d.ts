@@ -83,6 +83,7 @@ declare module 'vue' {
     TaskIndex: typeof import('./components/TaskIndex.vue')['default']
     TaskList: typeof import('./components/TaskList.vue')['default']
     TaskListPanel: typeof import('./components/task/TaskListPanel.vue')['default']
+    TaskMaterialLinks: typeof import('./components/personal-workspace/TaskMaterialLinks.vue')['default']
     TaskTimeline: typeof import('./components/juyiting/TaskTimeline.vue')['default']
     TaskWorkspacePanel: typeof import('./components/juyiting/TaskWorkspacePanel.vue')['default']
     TeamRecommendationPanel: typeof import('./components/juyiting/TeamRecommendationPanel.vue')['default']
