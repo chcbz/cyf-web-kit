@@ -42,18 +42,41 @@
           <button type="submit" name="decision" value="changes_requested" :disabled="isBusy(delivery) || deliveries.refreshRequired.value">要求修改</button>
         </div>
       </form>
+      <form v-else-if="delivery.state === 'changes_requested' && reworkSource(delivery)" class="formal-rework" @submit.prevent="submitRework(delivery)">
+        <h4>按指定版本返工</h4>
+        <p>源成果 {{ reworkSource(delivery).outputId }} / 工作空间文件 {{ reworkSource(delivery).fileRef.fileId }} · v{{ reworkSource(delivery).fileRef.fileVersion }}。系统只发送这一固定版本。</p>
+        <label>返工说明<textarea v-model="reworkInstructions[delivery.deliveryId]" maxlength="4000" :disabled="isReworkBusy(delivery) || deliveries.refreshRequired.value" placeholder="例如：按验收意见缩短第 3 页，并增加总结页。" /></label>
+        <p>交付格式：{{ reworkSource(delivery).mimeType }}</p>
+        <button type="submit" :disabled="isReworkBusy(delivery) || deliveries.refreshRequired.value || !reworkInstructions[delivery.deliveryId]?.trim()">{{ isReworkBusy(delivery) ? '创建返工中…' : '明确交给 Agent 返工' }}</button>
+      </form>
+      <section v-else-if="delivery.state === 'changes_requested'" class="formal-rework formal-rework-hint">
+        <h4>要求修改已记录</h4>
+        <p>请进入该悬赏的议事，选择负责 Agent 后基于指定成果版本明确创建返工；不会自动重新调用模型。</p>
+      </section>
     </article>
   </section>
 </template>
 
 <script setup>
-import { onBeforeUnmount, reactive } from 'vue'
+import { computed, onBeforeUnmount, reactive } from 'vue'
 import { useFormalDeliveries } from '../../composables/useFormalDeliveries.js'
 
-const props = defineProps({ taskId: { type: [String, Number], default: '' }, identityFingerprint: { type: [String, Object, Function], default: '' }, adapter: { type: Object, default: undefined } })
+const props = defineProps({
+  taskId: { type: [String, Number], default: '' },
+  identityFingerprint: { type: [String, Object, Function], default: '' },
+  adapter: { type: Object, default: undefined },
+  conversationId: { type: String, default: '' },
+  targetAgentId: { type: String, default: '' },
+  outputs: { type: Array, default: () => [] }
+})
+const emit = defineEmits(['rework-created'])
 const deliveries = useFormalDeliveries({ taskId: () => String(props.taskId || ''), identityFingerprint: () => props.identityFingerprint, adapter: props.adapter })
 const reviewReasons = reactive({})
+const reworkInstructions = reactive({})
+const safeOutputs = computed(() => Array.isArray(props.outputs) ? props.outputs : [])
 const isBusy = delivery => deliveries.busyDeliveryId.value === delivery.deliveryId
+const isReworkBusy = delivery => deliveries.reworkBusyDeliveryId.value === delivery.deliveryId
+const reworkSource = delivery => safeOutputs.value.find(output => output && output.formalDeliveryId === delivery.deliveryId && output.formalDecisionVersion === delivery.deliveryVersion && output.formalDeliveryState === 'changes_requested' && output.outputId && output.fileRef?.fileId && output.fileRef?.fileVersion && output.mimeType) || null
 const formatTime = value => { const time = typeof value === 'number' ? value : Date.parse(value); return Number.isFinite(time) ? new Date(time).toLocaleString('zh-CN', { hour12: false }) : '时间不可用' }
 const stateText = state => ({ submitted: '待验收', accepted: '已验收', changes_requested: '要求修改' })[state] || state
 const submitDecision = (delivery, event) => {
@@ -61,9 +84,21 @@ const submitDecision = (delivery, event) => {
   if (!['accepted', 'changes_requested'].includes(decision)) return
   void deliveries.decide({ delivery, decision, reviewReason: String(reviewReasons[delivery.deliveryId] || '').trim() })
 }
+const submitRework = async delivery => {
+  const source = reworkSource(delivery)
+  if (!source) return
+  const result = await deliveries.createRework({
+    delivery, source, conversationId: props.conversationId, targetAgentId: props.targetAgentId,
+    instruction: String(reworkInstructions[delivery.deliveryId] || '').trim(), outputContentMimeType: source.mimeType
+  })
+  if (result) {
+    reworkInstructions[delivery.deliveryId] = ''
+    emit('rework-created', result)
+  }
+}
 onBeforeUnmount(() => deliveries.dispose())
 </script>
 
 <style scoped>
-.formal-delivery-list{display:grid;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(117,67,11,.22)}.formal-delivery-list header{display:flex;justify-content:space-between;align-items:center;gap:8px}.formal-delivery-list button{border:1px solid #315d4e;border-radius:5px;padding:5px 9px;color:#fff;background:#315d4e}.formal-delivery-list button[disabled]{opacity:.55}.formal-delivery-state{margin:0;padding:8px;border-radius:6px;background:#f7edcf;color:#765d2d}.formal-delivery-state.is-error{background:#fae7e1;color:#7a3026}.formal-delivery-card{display:grid;gap:6px;padding:10px;border:1px solid #ded3bf;border-radius:8px;background:#fffdf7}.formal-delivery-card p,.formal-delivery-card h4{margin:0}.formal-delivery-head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}.formal-delivery-head span,.formal-delivery-card>p{font-size:12px;color:#6c6258;overflow-wrap:anywhere}.formal-delivery-summary{font-size:14px!important;color:#3d332a!important}.formal-artifacts,.formal-review,.formal-decision{display:grid;gap:6px;padding-top:8px;border-top:1px solid #eee3d0}.formal-artifacts ul{display:grid;gap:5px;margin:0;padding-left:18px}.formal-artifacts li{display:grid;gap:2px;font-size:12px;overflow-wrap:anywhere}.formal-artifacts li span{color:#6c6258}.formal-review{font-size:13px}.formal-decision label{display:grid;gap:4px;font-size:13px}.formal-decision textarea{min-height:58px;padding:6px;border:1px solid #b8aa94;border-radius:4px;resize:vertical}.formal-decision>div{display:flex;gap:8px;flex-wrap:wrap}.formal-decision button:last-child{background:#7c1f1b;border-color:#7c1f1b}
+.formal-delivery-list{display:grid;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(117,67,11,.22)}.formal-delivery-list header{display:flex;justify-content:space-between;align-items:center;gap:8px}.formal-delivery-list button{border:1px solid #315d4e;border-radius:5px;padding:5px 9px;color:#fff;background:#315d4e}.formal-delivery-list button[disabled]{opacity:.55}.formal-delivery-state{margin:0;padding:8px;border-radius:6px;background:#f7edcf;color:#765d2d}.formal-delivery-state.is-error{background:#fae7e1;color:#7a3026}.formal-delivery-card{display:grid;gap:6px;padding:10px;border:1px solid #ded3bf;border-radius:8px;background:#fffdf7}.formal-delivery-card p,.formal-delivery-card h4{margin:0}.formal-delivery-head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}.formal-delivery-head span,.formal-delivery-card>p{font-size:12px;color:#6c6258;overflow-wrap:anywhere}.formal-delivery-summary{font-size:14px!important;color:#3d332a!important}.formal-artifacts,.formal-review,.formal-decision,.formal-rework{display:grid;gap:6px;padding-top:8px;border-top:1px solid #eee3d0}.formal-artifacts ul{display:grid;gap:5px;margin:0;padding-left:18px}.formal-artifacts li{display:grid;gap:2px;font-size:12px;overflow-wrap:anywhere}.formal-artifacts li span{color:#6c6258}.formal-review{font-size:13px}.formal-decision label,.formal-rework label{display:grid;gap:4px;font-size:13px}.formal-decision textarea,.formal-rework textarea{min-height:58px;padding:6px;border:1px solid #b8aa94;border-radius:4px;resize:vertical}.formal-decision>div{display:flex;gap:8px;flex-wrap:wrap}.formal-decision button:last-child{background:#7c1f1b;border-color:#7c1f1b}.formal-rework-hint{font-size:13px;color:#765d2d}
 </style>

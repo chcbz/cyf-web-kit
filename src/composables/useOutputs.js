@@ -20,7 +20,8 @@ const TASK_DELIVERABLE_FIELDS = new Set([
 const CONVERSATION_DELIVERABLE_FIELDS = new Set([
   'outputId', 'executionId', 'fileId', 'fileVersion', 'contentHash', 'contentMimeType',
   'byteLength', 'committedAt', 'state', 'publicationState', 'formalDeliveryState',
-  'artifactId', 'artifactVersion'
+  'artifactId', 'artifactVersion', 'formalDeliveryId', 'formalDeliveryRevision',
+  'formalDecisionVersion', 'formalReviewedAt'
 ])
 const FORMAL_DELIVERY_STATES = new Set(['submitted', 'accepted', 'changes_requested'])
 const DELIVERABLE_STATES = new Set(['AVAILABLE', 'EMPTY', 'SYNCING'])
@@ -58,8 +59,12 @@ const conversationDeliverable = value => {
       (value.artifactId == null || value.artifactId === '') &&
       (value.artifactVersion == null || value.artifactVersion === '')
   }
-  return value.publicationState === 'PUBLISHED' && FORMAL_DELIVERY_STATES.has(value.formalDeliveryState) &&
-    exactId(value.artifactId) && exactVersion(value.artifactVersion)
+  if (value.publicationState !== 'PUBLISHED' || !FORMAL_DELIVERY_STATES.has(value.formalDeliveryState) ||
+    !exactId(value.artifactId) || !exactVersion(value.artifactVersion) || !exactId(value.formalDeliveryId) ||
+    !exactVersion(value.formalDeliveryRevision) || !Number.isSafeInteger(value.formalDecisionVersion) ||
+    value.formalDecisionVersion < 0 || (value.formalReviewedAt != null && !exactTimestamp(value.formalReviewedAt))) return false
+  if (value.formalDeliveryState === 'submitted') return value.formalDecisionVersion === 0 && value.formalReviewedAt == null
+  return value.formalDecisionVersion >= 1 && exactTimestamp(value.formalReviewedAt)
 }
 const validatedPage = (value, sourceType, sourceId, limit) => {
   const itemValidator = sourceType === 'task'
@@ -169,6 +174,10 @@ const normalizeItem = (item, sourceType, taskId = null) => {
       state: item.state,
       publicationState: item.publicationState,
       formalDeliveryState: item.formalDeliveryState,
+      formalDeliveryId: taskPublished ? item.formalDeliveryId : '',
+      formalDeliveryRevision: taskPublished ? item.formalDeliveryRevision : null,
+      formalDecisionVersion: taskPublished ? item.formalDecisionVersion : null,
+      formalReviewedAt: taskPublished ? item.formalReviewedAt : null,
       fileRef,
       artifactRef,
       canDownload: taskPublished ? Boolean(artifactRef.taskId) : true,
@@ -190,6 +199,10 @@ const normalizeItem = (item, sourceType, taskId = null) => {
     state: 'AVAILABLE',
     publicationState: '',
     formalDeliveryState: '',
+    formalDeliveryId: '',
+    formalDeliveryRevision: null,
+    formalDecisionVersion: null,
+    formalReviewedAt: null,
     fileRef: null,
     artifactRef: Object.freeze({ artifactId: item.artifactId, artifactVersion: String(item.artifactVersion) }),
     canDownload: true,

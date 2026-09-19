@@ -6,7 +6,7 @@ import { useFormalDeliveries } from '../src/composables/useFormalDeliveries.js'
 const tick = async () => { await Promise.resolve(); await nextTick(); await Promise.resolve() }
 const artifact = overrides => ({ artifactId: 'artifact-1', artifactVersion: 1, contentHash: 'a'.repeat(64), purpose: '交付报告', ...overrides })
 const delivery = overrides => ({
-  taskId: 'task-1', workItemId: 'work-1', deliveryId: 'delivery-1', revision: 2, state: 'submitted', runId: 'run-1', producerAgentId: 'agent-1',
+  taskId: 'task-1', workItemId: 'work-1', deliveryId: 'delivery-1', revision: 2, deliveryVersion: 0, state: 'submitted', runId: 'run-1', producerAgentId: 'agent-1',
   summary: '正式交付摘要', manifestArtifactId: 'manifest-1', manifestArtifactVersion: 1, submittedAt: 1, taskVersion: 3, workItemVersion: 4,
   items: [artifact()], ...overrides
 })
@@ -88,7 +88,7 @@ describe('OD10 formal delivery UI boundary', () => {
     const deliveries = useFormalDeliveries({
       taskId: ref('task-1'), identityFingerprint: ref('owner:client:1'), idempotencyKeyFactory: () => 'formal-test-key-0001',
       adapter: {
-        async list () { listCount += 1; return [delivery({ state: listCount === 1 ? 'submitted' : 'accepted', reviewedAt: 2, reviewReason: '符合榜文要求。' })] },
+        async list () { listCount += 1; return [delivery({ state: listCount === 1 ? 'submitted' : 'accepted', deliveryVersion: listCount === 1 ? 0 : 1, reviewedAt: listCount === 1 ? null : 2, reviewReason: null })] },
         async decide (request) { calls.push(request) }
       }
     })
@@ -134,6 +134,33 @@ describe('OD10 formal delivery UI boundary', () => {
     unknown.dispose()
   })
 
+  it('creates one explicit rework only from the changed-requested exact output version', async () => {
+    const calls = []
+    const changed = delivery({ state: 'changes_requested', deliveryVersion: 4, reviewedAt: 2, reviewReason: '请补充总结页。' })
+    const source = {
+      outputId: 'output-1', formalDeliveryId: 'delivery-1', formalDecisionVersion: 4,
+      formalDeliveryState: 'changes_requested', mimeType: 'application/pdf', fileRef: { fileId: 'file-1', fileVersion: '2' }
+    }
+    const deliveries = useFormalDeliveries({
+      taskId: ref('task-1'), identityFingerprint: ref('owner:client:1'), idempotencyKeyFactory: () => 'formal-rework-key-0001',
+      adapter: {
+        async list () { return [changed] },
+        async decide () {},
+        async createRework (request) { calls.push(request); return { executionId: 'execution-2', taskId: 'task-1', runId: 'run-2', conversationId: 'conversation-1', targetAgentId: 'agent-1', state: 'QUEUED' } }
+      }
+    })
+    try {
+      await tick()
+      const result = await deliveries.createRework({ delivery: deliveries.items.value[0], source, conversationId: 'conversation-1', targetAgentId: 'agent-1', instruction: '补充总结页。', outputContentMimeType: 'application/pdf' })
+      expect(result).to.include({ executionId: 'execution-2', state: 'QUEUED' })
+      expect(calls).to.have.length(1)
+      expect(calls[0]).to.include({ taskId: 'task-1', conversationId: 'conversation-1', targetAgentId: 'agent-1', outputContentMimeType: 'application/pdf', idempotencyKey: 'formal-rework-key-0001' })
+      expect(calls[0].source).to.equal(source)
+      expect(await deliveries.createRework({ delivery: deliveries.items.value[0], source: { ...source, formalDecisionVersion: 3 }, conversationId: 'conversation-1', targetAgentId: 'agent-1', instruction: '篡改版本。', outputContentMimeType: 'application/pdf' })).to.equal(null)
+      expect(calls).to.have.length(1)
+    } finally { deliveries.dispose() }
+  })
+
   it('keeps formal delivery separate from the existing shared-output list and never renders credentials', () => {
     const bounty = readFileSync(new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url), 'utf8')
     const panel = readFileSync(new URL('../src/components/deliveries/FormalDeliveryList.vue', import.meta.url), 'utf8')
@@ -142,10 +169,12 @@ describe('OD10 formal delivery UI boundary', () => {
     expect(bounty).to.include('<FormalDeliveryList')
     expect(composable).to.include('/formal-deliveries')
     expect(composable).to.include('/decision')
+    expect(composable).to.include('/rework-executions')
     expect(composable).to.not.include('leaseToken')
     expect(panel).to.not.include('leaseToken')
     expect(panel).to.not.include('Authorization')
     expect(panel).to.include("delivery.state === 'submitted'")
+    expect(panel).to.include("delivery.state === 'changes_requested'")
     expect(panel).to.include('固定 artifact 列表')
     expect(panel).to.include('验收意见')
   })

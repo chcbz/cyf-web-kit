@@ -213,6 +213,17 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
       return null
     }
   }
+  const adoptExecution = value => {
+    try {
+      const result = applyExecution(value)
+      if (!TERMINAL_EXECUTION_STATES.has(result.state)) void startPolling(result.executionId)
+      return result
+    } catch (cause) {
+      error.value = cause?.message || '执行状态返回格式无效，未显示为成功。'
+      executionState.value = 'error'
+      return null
+    }
+  }
   const refreshExecution = () => execution.value?.executionId ? startPolling(execution.value.executionId) : Promise.resolve(null)
   const revokeInputs = async () => {
     const current = execution.value
@@ -242,5 +253,5 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
   }
   if (getCurrentInstance()) onBeforeUnmount(dispose)
 
-  return { agents, rosterState, rosterError, selectedAgentId, selectedAgent, allowedMimeTypes, capabilityState, capabilityError, generationEnabled, execution, executionState, error, completionNotice, loadCapabilities, loadAgents, selectAgent, create, refreshExecution, revokeInputs, stopPolling, reset, dispose }
+  return { agents, rosterState, rosterError, selectedAgentId, selectedAgent, allowedMimeTypes, capabilityState, capabilityError, generationEnabled, execution, executionState, error, completionNotice, loadCapabilities, loadAgents, selectAgent, create, adoptExecution, refreshExecution, revokeInputs, stopPolling, reset, dispose }
 }

@@ -60,7 +60,9 @@ describe('1.13.1 W07 hall deliverable directory', () => {
           state: 'AVAILABLE', publicationPending: false, nextCursor: null,
           items: [privateDeliverable({
             publicationState: 'PUBLISHED', formalDeliveryState: 'submitted',
-            artifactId: 'artifact-1', artifactVersion: 3
+            artifactId: 'artifact-1', artifactVersion: 3,
+            formalDeliveryId: 'delivery-1', formalDeliveryRevision: 2,
+            formalDecisionVersion: 0, formalReviewedAt: null
           })]
         }),
         async download () { return new Blob(['exact artifact']) },
@@ -70,7 +72,7 @@ describe('1.13.1 W07 hall deliverable directory', () => {
     try {
       await tick()
       const item = outputs.items.value[0]
-      expect(item).to.include({ artifactId: 'artifact-1', artifactVersion: '3', formalDeliveryState: 'submitted', canDownload: true })
+      expect(item).to.include({ artifactId: 'artifact-1', artifactVersion: '3', formalDeliveryState: 'submitted', formalDeliveryId: 'delivery-1', formalDecisionVersion: 0, canDownload: true })
       expect(item.artifactRef).to.deep.equal({ artifactId: 'artifact-1', artifactVersion: '3', taskId: 'task-1' })
       expect(item).not.to.have.any.keys('storageUri', 'leaseToken', 'runtimeCredential', 'content')
     } finally {
@@ -137,6 +139,8 @@ describe('1.13.1 W07 hall deliverable directory', () => {
     expect(source).to.include('saveOutputBlob({ blob, item })')
     expect(source).to.include('此处是明确执行指令，不会因普通聊天自动发起文件处理或模型调用。')
     expect(source).to.include('taskId: taskExecutionMode.value ? selectedTaskId.value : null')
+    expect(source).to.include("role: 'INPUT'")
+    expect(source).to.include('<FormalDeliveryList')
     expect(source).to.include('conversationId: props.conversationId')
     expect(source).not.to.match(/storageUri|leaseToken|runtimeCredential/)
   })

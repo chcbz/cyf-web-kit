@@ -19,10 +19,18 @@ const unwrap = result => {
   for (let index = 0; index < 3 && value && typeof value === 'object' && Object.hasOwn(value, 'data'); index += 1) value = value.data
   return value
 }
+const validMime = value => typeof value === 'string' && /^[a-z0-9][a-z0-9!#$&^_.+-]{0,63}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,63}$/.test(value)
+const reworkSource = (value, delivery) => value && typeof value === 'object' &&
+  validId(value.outputId) && value.fileRef && validId(value.fileRef.fileId) && validRevision(Number(value.fileRef.fileVersion)) &&
+  value.formalDeliveryId === delivery.deliveryId && validEntityVersion(value.formalDecisionVersion) &&
+  value.formalDecisionVersion === delivery.deliveryVersion && value.formalDeliveryState === 'changes_requested' && validMime(value.mimeType)
+const reworkExecution = (value, command) => value && typeof value === 'object' &&
+  validId(value.executionId) && value.taskId === command.taskId && validId(value.runId) &&
+  value.conversationId === command.conversationId && value.targetAgentId === command.targetAgentId && value.state === 'QUEUED'
 
 const PAGE_FIELDS = new Set(['items'])
 const DELIVERY_FIELDS = new Set([
-  'taskId', 'workItemId', 'deliveryId', 'revision', 'state', 'runId', 'producerAgentId', 'summary',
+  'taskId', 'workItemId', 'deliveryId', 'revision', 'deliveryVersion', 'state', 'runId', 'producerAgentId', 'summary',
   'manifestArtifactId', 'manifestArtifactVersion', 'submittedAt', 'reviewedAt', 'reviewReason',
   'taskVersion', 'workItemVersion', 'items'
 ])
@@ -32,12 +40,16 @@ const formalItem = item => item && typeof item === 'object' && !Array.isArray(it
   validHash(item.contentHash) && validText(item.purpose, 1000)
 const formalDelivery = (delivery, taskId) => delivery && typeof delivery === 'object' && !Array.isArray(delivery) &&
   Object.keys(delivery).every(key => DELIVERY_FIELDS.has(key)) && delivery.taskId === taskId && validId(delivery.workItemId) &&
-  validId(delivery.deliveryId) && validRevision(delivery.revision) && validText(delivery.state, 100) &&
+  validId(delivery.deliveryId) && validRevision(delivery.revision) && validEntityVersion(delivery.deliveryVersion) &&
+  ['submitted', 'accepted', 'changes_requested'].includes(delivery.state) &&
   validId(delivery.runId) && validId(delivery.producerAgentId) && validText(delivery.summary, 4000) &&
   validId(delivery.manifestArtifactId) && validRevision(delivery.manifestArtifactVersion) && validTimestamp(delivery.submittedAt) &&
   (delivery.reviewedAt == null || validTimestamp(delivery.reviewedAt)) &&
   (delivery.reviewReason == null || validText(delivery.reviewReason, 4000)) && validEntityVersion(delivery.taskVersion) &&
-  validEntityVersion(delivery.workItemVersion) && Array.isArray(delivery.items) && delivery.items.length <= 100 && delivery.items.every(formalItem)
+  validEntityVersion(delivery.workItemVersion) && Array.isArray(delivery.items) && delivery.items.length <= 100 && delivery.items.every(formalItem) &&
+  (delivery.state === 'submitted' ? delivery.deliveryVersion === 0 && delivery.reviewedAt == null && delivery.reviewReason == null
+    : delivery.deliveryVersion >= 1 && validTimestamp(delivery.reviewedAt) &&
+      (delivery.state === 'accepted' ? delivery.reviewReason == null : validReviewReason(delivery.reviewReason)))
 const validatedPage = (value, taskId) => {
   if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.keys(value).every(key => PAGE_FIELDS.has(key)) ||
     !Array.isArray(value.items) || value.items.length > 100 || !value.items.every(item => formalDelivery(item, taskId))) {
@@ -73,6 +85,31 @@ export const formalDeliveryReadAdapter = Object.freeze({
       url: `/tasks/${encodeURIComponent(taskId)}/formal-deliveries/${encodeURIComponent(deliveryId)}/decision`, method: 'POST',
       headers: { 'Idempotency-Key': idempotencyKey }, data: body, autoLoading: false, needAuth: true, signal
     })
+  },
+  async createRework ({ taskId, delivery, source, conversationId, targetAgentId, instruction, outputContentMimeType, idempotencyKey, signal } = {}) {
+    if (!validId(taskId) || !formalDelivery(delivery, taskId) || delivery.state !== 'changes_requested' || delivery.deliveryVersion < 1 ||
+      !reworkSource(source, delivery) || !validId(conversationId) || !validId(targetAgentId) || !validReviewReason(String(instruction || '')) ||
+      !validMime(outputContentMimeType) || typeof idempotencyKey !== 'string' || !/^[A-Za-z0-9._~:/+-]{8,100}$/.test(idempotencyKey)) {
+      throw Object.assign(new Error('正式返工请求无效，未发送。'), { retryable: false })
+    }
+    const command = { taskId, conversationId, targetAgentId }
+    const body = {
+      expectedDecisionVersion: delivery.deliveryVersion,
+      conversationId,
+      targetAgentId,
+      sourceOutputId: source.outputId,
+      sourceFileId: source.fileRef.fileId,
+      sourceFileVersion: Number(source.fileRef.fileVersion),
+      instruction: String(instruction).trim(),
+      outputContentMimeType
+    }
+    const api = createApi('/agent')
+    const result = unwrap(await api.execute({
+      url: `/tasks/${encodeURIComponent(taskId)}/formal-deliveries/${encodeURIComponent(delivery.deliveryId)}/rework-executions`, method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey }, data: body, autoLoading: false, needAuth: true, signal
+    }))
+    if (!reworkExecution(result, command)) throw new Error('返工执行回执无效，未显示为已创建。')
+    return result
   }
 })
 
@@ -96,6 +133,7 @@ export function useFormalDeliveries ({ taskId, identityFingerprint, adapter = fo
   const message = ref('')
   const loading = ref(false)
   const busyDeliveryId = ref('')
+  const reworkBusyDeliveryId = ref('')
   const refreshRequired = ref(false)
   const taskValue = computed(() => String(valueOf(taskId) || ''))
   const identityValue = computed(() => String(valueOf(identityFingerprint) || ''))
@@ -108,11 +146,11 @@ export function useFormalDeliveries ({ taskId, identityFingerprint, adapter = fo
     generation += 1
     controller?.abort(abortError('Formal delivery context changed'))
     controller = null
-    items.value = []; state.value = 'idle'; message.value = ''; loading.value = false; busyDeliveryId.value = ''; refreshRequired.value = false
+    items.value = []; state.value = 'idle'; message.value = ''; loading.value = false; busyDeliveryId.value = ''; reworkBusyDeliveryId.value = ''; refreshRequired.value = false
   }
   const current = (captured, capturedScope, requestController) => !disposed && captured === generation && capturedScope === scope.value && controller === requestController && !requestController.signal.aborted
   const refresh = async () => {
-    if (!scope.value || loading.value || busyDeliveryId.value) return null
+    if (!scope.value || loading.value || busyDeliveryId.value || reworkBusyDeliveryId.value) return null
     const captured = generation
     const capturedTask = taskValue.value
     const capturedScope = scope.value
@@ -161,9 +199,37 @@ export function useFormalDeliveries ({ taskId, identityFingerprint, adapter = fo
     }
   }
 
+  const createRework = async ({ delivery, source, conversationId, targetAgentId, instruction, outputContentMimeType } = {}) => {
+    if (controller || busyDeliveryId.value || reworkBusyDeliveryId.value || refreshRequired.value || !scope.value ||
+      !formalDelivery(delivery, taskValue.value) || delivery.state !== 'changes_requested' ||
+      !reworkSource(source, delivery) || !validId(conversationId) || !validId(targetAgentId) ||
+      !validReviewReason(String(instruction || '')) || !validMime(outputContentMimeType)) return null
+    let idempotencyKey
+    try { idempotencyKey = idempotencyKeyFactory() } catch (error) { state.value = 'error'; message.value = error.message; return null }
+    if (typeof idempotencyKey !== 'string' || !/^[A-Za-z0-9._~:/+-]{8,100}$/.test(idempotencyKey)) { state.value = 'error'; message.value = '生成的幂等键无效，未发送返工执行。'; return null }
+    const captured = generation; const capturedTask = taskValue.value; const capturedScope = scope.value
+    const requestController = new AbortController(); controller = requestController; reworkBusyDeliveryId.value = delivery.deliveryId; message.value = ''
+    try {
+      const result = await adapter.createRework({ taskId: capturedTask, delivery, source, conversationId, targetAgentId, instruction, outputContentMimeType, idempotencyKey, signal: requestController.signal })
+      if (!current(captured, capturedScope, requestController)) return null
+      state.value = 'ready'; message.value = '返工执行已创建，等待 Agent 交付新的正式成果。'
+      return result
+    } catch (error) {
+      const presentation = classifyFailure(error)
+      if (!presentation || !current(captured, capturedScope, requestController)) return null
+      state.value = presentation[0]; message.value = presentation[0] === 'unknown'
+        ? '返工执行结果未知，请刷新正式交付和执行成果确认；系统未自动重试。' : presentation[1]
+      refreshRequired.value = presentation[0] === 'conflict' || presentation[0] === 'unknown'
+      return null
+    } finally {
+      if (controller === requestController) controller = null
+      if (!disposed && captured === generation && capturedScope === scope.value) reworkBusyDeliveryId.value = ''
+    }
+  }
+
   watch(scope, () => { reset(); if (scope.value) void refresh() }, { immediate: true })
   const unregisterIdentityCleanup = registerIdentityCleanup(reset)
   const dispose = () => { if (disposed) return; disposed = true; reset(); unregisterIdentityCleanup() }
   if (getCurrentInstance()) onBeforeUnmount(dispose)
-  return { items, state, message, loading, busyDeliveryId, refreshRequired, refresh, decide, dispose }
+  return { items, state, message, loading, busyDeliveryId, reworkBusyDeliveryId, refreshRequired, refresh, decide, createRework, dispose }
 }
