@@ -142,6 +142,7 @@
               </div>
 
               <p>{{ detailTask.description || '榜文尚未写明缘由' }}</p>
+              <TaskMaterialLinks :key="`${detailTask.id}:${authorizationGeneration}`" :task-id="String(detailTask.id)" :identity-epoch="authorizationGeneration" />
               <OutputList
                 :source="outputSource"
                 :identity-fingerprint="outputIdentityFingerprint"
@@ -216,13 +217,13 @@
                 <button
                   class="discuss-task-button"
                   type="button"
-                  aria-label="榜文议事"
+                  aria-label="进入议事"
                   :disabled="!taskAssigneeIds(detailTask).length"
-                  :title="!taskAssigneeIds(detailTask).length ? unassignedDiscussHint : ''"
+                  :title="!taskAssigneeIds(detailTask).length ? unassignedDiscussHint : '进入该悬赏的既有议事入口'"
                   @click="$emit('discuss-task', detailTask)"
                 >
                   <BountyActionIcon name="discuss" />
-                  <span class="visually-hidden">榜文议事</span>
+                  <span class="visually-hidden">进入议事</span>
                 </button>
                 <button
                   class="archive-task-button"
@@ -320,6 +321,7 @@ import WorkItemPlanPanel from './WorkItemPlanPanel.vue'
 import TeamRecommendationPanel from './TeamRecommendationPanel.vue'
 import OutputList from '../outputs/OutputList.vue'
 import FormalDeliveryList from '../deliveries/FormalDeliveryList.vue'
+import TaskMaterialLinks from '../personal-workspace/TaskMaterialLinks.vue'
 import { formatSilverMicro, isCanonicalMicroAmount } from '@/utils/silverAmount'
 
 const props = defineProps({
