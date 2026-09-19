@@ -6,6 +6,7 @@ const MAX_PAGE_SIZE = 100
 const DEFAULT_PAGE_SIZE = 20
 const textMimeTypes = new Set(['text/plain', 'text/markdown', 'text/csv', 'application/json'])
 const imageMimeTypes = new Set(['image/png', 'image/jpeg'])
+const pdfMimeTypes = new Set(['application/pdf'])
 
 const valueOf = value => typeof value === 'function' ? value() : unref(value)
 const validId = value => typeof value === 'string' && value.length > 0 && value.length <= 100 && !/\s/.test(value)
@@ -357,5 +358,6 @@ export const outputPreviewKind = item => {
   if (!item || item.byteLength == null || item.byteLength > 1024 * 1024) return 'none'
   if (textMimeTypes.has(item.mimeType)) return 'text'
   if (imageMimeTypes.has(item.mimeType)) return 'image'
+  if (pdfMimeTypes.has(item.mimeType)) return 'pdf'
   return 'none'
 }
