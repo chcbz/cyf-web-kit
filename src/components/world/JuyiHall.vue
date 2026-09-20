@@ -261,7 +261,6 @@
           <PersonalWorkspace
             v-if="renderedPanel === 'treasure'"
             embedded
-            @close="closePanel"
           />
 
           <PersonaCatalogPanel

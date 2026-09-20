@@ -15,6 +15,10 @@ describe('1.13.3 Babao-box hall presentation', () => {
     assert.match(workspace, /--treasure-line: #d7c3a2/)
     assert.match(workspace, /聚义厅 · 内堂收纳/)
     assert.match(workspace, /百宝箱/)
+    assert.match(workspace, /class="treasure-workbench"/)
+    assert.match(workspace, /class="workbench-toolbar"/)
+    assert.match(workspace, /class="workbench-layout"/)
+    assert.doesNotMatch(workspace, /回聚义厅|workspace-card/)
     assert.doesNotMatch(workspace, /#4f46e5|#eef2ff|#f7f8fc/)
   })
 
