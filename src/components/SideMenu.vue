@@ -69,7 +69,7 @@ const isMobile = computed(() => width.value < 768)
 const menuPlacement = computed(() => (isMobile.value ? 'bottom' : 'right'))
 const menuOffsetX = computed(() => (isMobile.value ? 0 : -16))
 const menuOffsetY = computed(() => (isMobile.value ? 0 : 56))
-const personalMenuRouteNames = new Set(['UserProfile', 'PersonalWorkspace', 'MessageCenter', 'HelpCenter'])
+const personalMenuRouteNames = new Set(['UserProfile', 'MessageCenter', 'HelpCenter'])
 
 const menuRoutes = computed(() => {
   return router
