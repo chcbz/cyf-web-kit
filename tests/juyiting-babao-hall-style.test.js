@@ -7,7 +7,7 @@ const profile = readFileSync(new URL('../src/components/UserProfile.vue', import
 const router = readFileSync(new URL('../src/router/index.js', import.meta.url), 'utf8')
 const sideMenu = readFileSync(new URL('../src/components/SideMenu.vue', import.meta.url), 'utf8')
 
-describe('1.13.5 Babao-box layered hall presentation', () => {
+describe('1.13.6 Babao-box modal-stack hall presentation', () => {
   it('uses the embedded Juyi Hall treasure style instead of the former blue-white workspace shell', () => {
     assert.match(workspace, /:class="\{ 'is-hall-treasure': embedded \}"/)
     assert.match(workspace, /--treasure-wood: #6d3f1f/)
@@ -15,16 +15,15 @@ describe('1.13.5 Babao-box layered hall presentation', () => {
     assert.match(workspace, /--treasure-line: #d7c3a2/)
     assert.match(workspace, /聚义厅 · 内堂收纳/)
     assert.match(workspace, /百宝箱/)
-    assert.match(workspace, /class="treasure-workbench"/)
-    assert.match(workspace, /class="workbench-toolbar"/)
-    assert.match(workspace, /class="workbench-deck"/)
-    assert.match(workspace, /class="treasure-overview"/)
-    assert.match(workspace, /class="workbench-drawer"/)
-    assert.match(workspace, /const activeLayer = ref\('overview'\)/)
-    assert.match(workspace, /一层<\/span>箱面/)
-    assert.match(workspace, /二层<\/span>资料柜/)
-    assert.match(workspace, /三层 · 资料详情与办事笺/)
-    assert.doesNotMatch(workspace, /回聚义厅|workspace-card|workbench-layout/)
+    assert.match(workspace, /class="modal-stage"/)
+    assert.match(workspace, /class="babao-modal box-modal"/)
+    assert.match(workspace, /class="babao-modal child-modal library-modal"/)
+    assert.match(workspace, /class="babao-modal detail-modal"/)
+    assert.match(workspace, /const activeModal = ref\('home'\)/)
+    assert.match(workspace, /第一层 · 箱面/)
+    assert.match(workspace, /第二层 · 资料柜/)
+    assert.match(workspace, /第三层 · 文件详情/)
+    assert.doesNotMatch(workspace, /回聚义厅|workspace-card|workbench-layout|workbench-deck/)
     assert.doesNotMatch(workspace, /#4f46e5|#eef2ff|#f7f8fc/)
   })
 
