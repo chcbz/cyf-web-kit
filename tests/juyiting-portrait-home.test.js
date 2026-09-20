@@ -129,16 +129,25 @@ describe('HallPortraitHome', () => {
     expect(portraitHomeSource).not.to.include('visualViewport')
   })
 
-  it('contains long todo feeds in their own scroll region so shortcuts retain their layout', () => {
+  it('scrolls the full operation area below the map instead of making todo notices scroll independently', () => {
+    const homeStyles = portraitHomeSource.match(/\.hall-portrait-home\s*\{([\s\S]*?)\n\}/)?.[1] || ''
+    const belowMapStyles = portraitHomeSource.match(/\.portrait-below-map-scroll\s*\{([\s\S]*?)\n\}/)?.[1] || ''
     const todoListStyles = portraitHomeSource.match(/\.portrait-todo-list\s*\{([\s\S]*?)\n\}/)?.[1] || ''
-    const todoSectionStyles = portraitHomeSource.match(/\.portrait-todos\s*\{([\s\S]*?)\n\}/)?.[1] || ''
+    const mapEnd = portraitHomeSource.indexOf('</section>', portraitHomeSource.indexOf('class="portrait-scene"'))
+    const belowMapStart = portraitHomeSource.indexOf('class="portrait-below-map-scroll"')
 
-    expect(portraitHomeSource).to.include('class="portrait-todo-list" aria-label="待办榜文列表"')
-    expect(todoSectionStyles).to.include('min-height: 0')
-    expect(todoListStyles).to.include('max-height: min(36vh, 264px)')
-    expect(todoListStyles).to.include('max-height: min(36dvh, 264px)')
-    expect(todoListStyles).to.include('overflow-y: auto')
-    expect(todoListStyles).to.include('overscroll-behavior: contain')
+    expect(portraitHomeSource).to.include('class="portrait-below-map-scroll" aria-label="地图以下操作区"')
+    expect(belowMapStart).to.be.greaterThan(mapEnd)
+    expect(homeStyles).to.include('display: flex')
+    expect(homeStyles).to.include('flex-direction: column')
+    expect(homeStyles).to.include('height: min(100%, var(--hall-visual-height, 100%))')
+    expect(homeStyles).to.include('overflow: hidden')
+    expect(belowMapStyles).to.include('flex: 1 1 auto')
+    expect(belowMapStyles).to.include('min-height: 0')
+    expect(belowMapStyles).to.include('overflow-y: auto')
+    expect(belowMapStyles).to.include('overscroll-behavior-y: contain')
+    expect(todoListStyles).to.not.include('max-height')
+    expect(todoListStyles).to.not.include('overflow-y')
   })
 
   it('opens a tapped todo in the page-owned portrait detail without depending on the bounty-panel watcher', () => {

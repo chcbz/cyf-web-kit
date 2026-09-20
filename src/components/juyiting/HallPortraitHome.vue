@@ -64,91 +64,93 @@
       </template>
     </section>
 
-    <section class="portrait-section" aria-labelledby="portrait-shortcuts-title">
-      <div class="section-heading">
-        <h2 id="portrait-shortcuts-title">常用入口</h2>
-        <div class="section-heading-actions">
-          <button class="onboarding-link" type="button" @click="emit('open-onboarding', $event.currentTarget)">新手引导</button>
-          <span>单手直达</span>
+    <div class="portrait-below-map-scroll" aria-label="地图以下操作区">
+      <section class="portrait-section" aria-labelledby="portrait-shortcuts-title">
+        <div class="section-heading">
+          <h2 id="portrait-shortcuts-title">常用入口</h2>
+          <div class="section-heading-actions">
+            <button class="onboarding-link" type="button" @click="emit('open-onboarding', $event.currentTarget)">新手引导</button>
+            <span>单手直达</span>
+          </div>
         </div>
-      </div>
-      <div data-tour="portrait-shortcuts" class="portrait-shortcuts">
-        <button
-          v-for="action in quickActions"
-          :key="action.key"
-          class="portrait-shortcut"
-          type="button"
-          :data-portrait-action="action.key"
-          :data-tour="`portrait-action-${action.key}`"
-          @click="emit('quick-action', action.key)"
-        >
-          <span aria-hidden="true">{{ action.icon }}</span>
-          <span>{{ action.label }}</span>
-        </button>
-      </div>
-    </section>
+        <div data-tour="portrait-shortcuts" class="portrait-shortcuts">
+          <button
+            v-for="action in quickActions"
+            :key="action.key"
+            class="portrait-shortcut"
+            type="button"
+            :data-portrait-action="action.key"
+            :data-tour="`portrait-action-${action.key}`"
+            @click="emit('quick-action', action.key)"
+          >
+            <span aria-hidden="true">{{ action.icon }}</span>
+            <span>{{ action.label }}</span>
+          </button>
+        </div>
+      </section>
 
-    <section data-tour="portrait-todos" class="portrait-section portrait-todos" aria-labelledby="portrait-todos-title">
-      <div class="section-heading">
-        <h2 id="portrait-todos-title">待办榜文</h2>
-        <button type="button" @click="emit('quick-action', 'tasks')">查看悬赏榜</button>
-      </div>
-      <div class="portrait-todo-list" aria-label="待办榜文列表">
-        <button
-          v-for="task in todoTasks"
-          :key="task.id"
-          class="portrait-todo"
-          type="button"
-          @click="openTask(task)"
-        >
-          <span :class="taskStateClass(task.status)">{{ taskStatusText(task.status) }}</span>
-          <strong>{{ task.title || '未命名榜文' }}</strong>
-          <small>{{ task.requiredAbilities?.length ? task.requiredAbilities.join(' / ') : '待议定人手' }}</small>
-        </button>
-        <p v-if="!todoTasks.length" class="portrait-empty">眼下无待办榜文，可先点验厅中人手。</p>
-      </div>
-    </section>
+      <section data-tour="portrait-todos" class="portrait-section portrait-todos" aria-labelledby="portrait-todos-title">
+        <div class="section-heading">
+          <h2 id="portrait-todos-title">待办榜文</h2>
+          <button type="button" @click="emit('quick-action', 'tasks')">查看悬赏榜</button>
+        </div>
+        <div class="portrait-todo-list" aria-label="待办榜文列表">
+          <button
+            v-for="task in todoTasks"
+            :key="task.id"
+            class="portrait-todo"
+            type="button"
+            @click="openTask(task)"
+          >
+            <span :class="taskStateClass(task.status)">{{ taskStatusText(task.status) }}</span>
+            <strong>{{ task.title || '未命名榜文' }}</strong>
+            <small>{{ task.requiredAbilities?.length ? task.requiredAbilities.join(' / ') : '待议定人手' }}</small>
+          </button>
+          <p v-if="!todoTasks.length" class="portrait-empty">眼下无待办榜文，可先点验厅中人手。</p>
+        </div>
+      </section>
 
-    <section data-tour="portrait-context" class="portrait-context" aria-label="当前上下文">
-      <div>
-        <span>当前好汉</span>
-        <strong>{{ selectedAgent ? agentName(selectedAgent) : '尚未点将' }}</strong>
-      </div>
-      <div>
-        <span>当前榜文</span>
-        <strong>{{ selectedTask?.title || '尚未选定' }}</strong>
-      </div>
-      <div class="portrait-context-actions">
-        <button type="button" @click="emit('quick-action', 'discussion')">厅前议事</button>
-        <button
-          v-if="selectedAgent && canStartAgentConversation(selectedAgent)"
-          type="button"
-          class="portrait-private-action"
-          data-portrait-action="private-discussion"
-          @click="emit('start-agent-conversation', selectedAgent)"
-        >
-          与{{ agentName(selectedAgent) }}密议
-        </button>
-        <button
-          v-else-if="eligibleAgents.length"
-          type="button"
-          class="portrait-private-guidance"
-          data-portrait-action="pick-agent"
-          @click="emit('quick-action', 'agents')"
-        >
-          先去点将再密议
-        </button>
-        <button
-          v-else
-          type="button"
-          class="portrait-private-guidance"
-          data-portrait-action="recruit-agent"
-          @click="emit('quick-action', 'catalog')"
-        >
-          先去招贤再密议
-        </button>
-      </div>
-    </section>
+      <section data-tour="portrait-context" class="portrait-context" aria-label="当前上下文">
+        <div>
+          <span>当前好汉</span>
+          <strong>{{ selectedAgent ? agentName(selectedAgent) : '尚未点将' }}</strong>
+        </div>
+        <div>
+          <span>当前榜文</span>
+          <strong>{{ selectedTask?.title || '尚未选定' }}</strong>
+        </div>
+        <div class="portrait-context-actions">
+          <button type="button" @click="emit('quick-action', 'discussion')">厅前议事</button>
+          <button
+            v-if="selectedAgent && canStartAgentConversation(selectedAgent)"
+            type="button"
+            class="portrait-private-action"
+            data-portrait-action="private-discussion"
+            @click="emit('start-agent-conversation', selectedAgent)"
+          >
+            与{{ agentName(selectedAgent) }}密议
+          </button>
+          <button
+            v-else-if="eligibleAgents.length"
+            type="button"
+            class="portrait-private-guidance"
+            data-portrait-action="pick-agent"
+            @click="emit('quick-action', 'agents')"
+          >
+            先去点将再密议
+          </button>
+          <button
+            v-else
+            type="button"
+            class="portrait-private-guidance"
+            data-portrait-action="recruit-agent"
+            @click="emit('quick-action', 'catalog')"
+          >
+            先去招贤再密议
+          </button>
+        </div>
+      </section>
+    </div>
 
     <div v-if="taskDetailOpen && selectedTask" class="portrait-task-overlay">
       <button
@@ -257,14 +259,16 @@ const openTask = task => emit('open-task', task)
 }
 
 .hall-portrait-home {
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
   gap: 14px;
   width: 100%;
-  min-height: 100%;
+  height: min(100%, var(--hall-visual-height, 100%));
+  min-height: 0;
   box-sizing: border-box;
   padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
-  overflow-y: auto;
+  overflow: hidden;
   background:
     radial-gradient(circle at 80% 0%, rgba(234, 180, 84, 0.18), transparent 34%),
     linear-gradient(160deg, #211812 0%, #382418 45%, #171a18 100%);
@@ -654,8 +658,17 @@ button:disabled {
   font-weight: 800;
 }
 
-.portrait-todos {
+.portrait-below-map-scroll {
+  display: grid;
+  flex: 1 1 auto;
+  align-content: start;
   min-height: 0;
+  gap: 14px;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.portrait-todos {
   padding: 12px;
   border: 1px solid rgba(255, 227, 170, 0.16);
   border-radius: 14px;
@@ -664,11 +677,6 @@ button:disabled {
 
 .portrait-todo-list {
   display: grid;
-  min-height: 0;
-  max-height: min(36vh, 264px);
-  max-height: min(36dvh, 264px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
 
 .portrait-todo {
