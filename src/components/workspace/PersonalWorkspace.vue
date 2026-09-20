@@ -4,7 +4,7 @@
       <div>
         <p class="workspace-eyebrow">聚义厅 · 内堂收纳</p>
         <h1>百宝箱</h1>
-        <p>资料、版本和交付件都在这里收纳；选定资料后即可交给 Agent 继续办事。</p>
+        <p>先看箱内全貌，再取用资料；需要时再把选定版本交给 Agent 办事。</p>
       </div>
       <p class="workspace-header-note">资料只在你明确提交时，才会授权给所选 Agent。</p>
     </header>
@@ -13,7 +13,7 @@
       <div class="workbench-toolbar">
         <div class="toolbar-copy">
           <strong>收纳、调用、交付</strong>
-          <span>先放入资料，再从右侧发起交付；文件详情会在下方接续展开。</span>
+          <span>箱面看全局，资料柜与交付台处理事项，详情与办事笺按需展开。</span>
         </div>
         <div class="toolbar-upload">
           <label class="file-picker">
@@ -31,85 +31,136 @@
         <p v-if="uploadFile" class="selected-file">待收入：{{ uploadFile.name }}（{{ byteText(uploadFile.size) }}）</p>
       </div>
 
-      <div class="workbench-layout">
-        <section class="workbench-library" aria-labelledby="workspace-files-title">
+      <nav class="workbench-deck" aria-label="百宝箱层次">
+        <button type="button" :class="{ active: activeLayer === 'overview' }" @click="showLayer('overview')">
+          <span>一层</span>箱面
+        </button>
+        <button type="button" :class="{ active: activeLayer === 'library' }" @click="showLayer('library')">
+          <span>二层</span>资料柜
+        </button>
+        <button type="button" :class="{ active: activeLayer === 'delivery' }" @click="showLayer('delivery')">
+          <span>二层</span>交付台
+        </button>
+        <p>选定资料后，会在当前工作层下展开三层详情与办事笺。</p>
+      </nav>
+
+      <section v-if="activeLayer === 'overview'" class="treasure-overview" aria-labelledby="treasure-overview-title">
+        <div class="overview-intro">
+          <p class="section-kicker">箱面 · 全局</p>
+          <h2 id="treasure-overview-title">这一箱资料，接下来办什么？</h2>
+          <p>不把所有表单堆在眼前；从资料、交付或正在进行的办事中选一件继续即可。</p>
+        </div>
+        <dl class="overview-ledger" aria-label="百宝箱概况">
+          <div><dt>当前资料</dt><dd>{{ workspace.items.value.length }}</dd><small>本次已读入列表</small></div>
+          <div><dt>待交办资料</dt><dd>{{ executionMaterials.length }}</dd><small>固定版本待确认</small></div>
+          <div><dt>最近执行</dt><dd>{{ execution.execution.value?.state || '暂无' }}</dd><small>以服务端回执为准</small></div>
+        </dl>
+        <div class="overview-flow" aria-label="建议下一步">
+          <button type="button" @click="showLayer('library')"><span>先收纳</span>翻看资料柜</button>
+          <button type="button" @click="showLayer('delivery')"><span>直接交付</span>写一份需求</button>
+          <button type="button" :disabled="!workspace.items.value.length" @click="openRecentFile"><span>继续办事</span>取出最近资料</button>
+        </div>
+        <div class="recent-shelf">
           <div class="section-heading">
-            <div>
-              <p class="section-kicker">资料柜</p>
-              <h2 id="workspace-files-title">{{ state === 'TRASHED' ? '回收站' : '我的文件' }}</h2>
-              <p>本人上传和已归档交付件统一按版本保管。</p>
-            </div>
+            <div><p class="section-kicker">最近取用</p><h3>箱内近况</h3></div>
             <button
               type="button"
               class="quiet-action"
               :disabled="workspace.loading.value"
               @click="refresh"
-            >刷新</button>
+            >刷新箱面</button>
           </div>
-          <form class="filters" @submit.prevent="refresh">
-            <label><span>搜索</span><input v-model="query" maxlength="100" placeholder="按显示名搜索" /></label>
-            <label><span>类型</span><select v-model="mediaFamily"><option value="">全部类型</option><option value="IMAGE">图片</option><option value="TEXT">文本</option><option value="DOCUMENT">Word 文档</option><option value="SPREADSHEET">Excel 表格</option><option value="PRESENTATION">PPT 演示</option><option value="PDF">PDF</option></select></label>
-            <div class="filter-actions"><button type="submit">筛选</button><button type="button" :class="{ active: state === 'ACTIVE' }" @click="switchState('ACTIVE')">文件</button><button type="button" :class="{ active: state === 'TRASHED' }" @click="switchState('TRASHED')">回收站</button></div>
-          </form>
           <p v-if="workspace.listState.value === 'loading'" class="workspace-note" role="status">正在翻看资料…</p>
-          <p v-else-if="workspace.listState.value === 'empty'" class="workspace-empty">{{ state === 'TRASHED' ? '回收站为空。' : '还没有文件。先添入一份资料，或直接发起交付。' }}</p>
-          <div v-else class="file-list">
+          <p v-else-if="workspace.listState.value === 'empty'" class="workspace-empty">还没有资料。可先添入文件，或前往交付台直接生成。</p>
+          <div v-else class="recent-file-list">
             <button
-              v-for="file in workspace.items.value"
+              v-for="file in workspace.items.value.slice(0, 3)"
               :key="file.fileId"
               type="button"
-              class="file-row"
-              :class="{ selected: selectedId === file.fileId }"
-              @click="select(file.fileId)"
+              @click="openFile(file.fileId)"
             >
               <span class="file-icon" aria-hidden="true">{{ iconFor(file.mediaFamily) }}</span>
-              <span class="file-summary"><strong>{{ file.displayName }}</strong><small>版本 {{ file.latestVersion }} · {{ familyText(file.mediaFamily) }} · {{ originText(file.originKind) }} · {{ formatDate(file.createdAt) }}</small></span>
-              <span class="file-state">{{ file.state === 'TRASHED' ? '已移入回收站' : originText(file.originKind) }}</span>
+              <span><strong>{{ file.displayName }}</strong><small>v{{ file.latestVersion }} · {{ originText(file.originKind) }}</small></span>
+              <span class="recent-file-action">取出</span>
             </button>
           </div>
-          <button
-            v-if="workspace.nextCursor.value"
-            type="button"
-            class="load-more quiet-action"
-            :disabled="workspace.loading.value"
-            @click="loadMore"
-          >加载更多</button>
-        </section>
+        </div>
+      </section>
 
-        <section class="workbench-composer" aria-labelledby="workspace-generation-title">
-          <div class="section-heading">
-            <div>
-              <p class="section-kicker">交付台</p>
-              <h2 id="workspace-generation-title">直接生成交付件</h2>
-              <p>无需先上传；可用类型、执行与归档均以服务端回执为准。</p>
-            </div>
-            <button
-              type="button"
-              class="quiet-action"
-              :disabled="execution.capabilityState.value === 'loading'"
-              @click="loadExecutionCapabilities"
-            >刷新能力</button>
-          </div>
-          <p v-if="execution.capabilityState.value === 'loading'" class="workspace-note">正在读取可执行交付类型…</p>
-          <p v-else-if="execution.capabilityError.value" class="workspace-error" role="alert">{{ execution.capabilityError.value }}</p>
-          <template v-else-if="execution.allowedMimeTypes.value.length">
-            <label><span>交付类型</span><select v-model="generationMime"><option v-for="mime in execution.allowedMimeTypes.value" :key="mime" :value="mime">{{ deliveryTypeText(mime) }}</option></select></label>
-            <label><span>已有 Agent</span><select :value="execution.selectedAgentId.value" :disabled="execution.rosterState.value === 'loading'" @change="selectExecutionAgent($event.target.value)"><option value="">请选择已有 Agent</option><option v-for="agent in execution.agents.value" :key="agent.agentId" :value="agent.agentId">{{ agent.name }}{{ agent.status ? `（${agent.status}）` : '' }}</option></select></label>
-            <label><span>需求说明</span><textarea v-model="generationInstruction" maxlength="4000" placeholder="例如：生成一份面向客户的项目介绍 PPT，包含目标、方案和时间表。"></textarea></label>
-            <p class="workspace-note consent-note">提交会将本轮需求交给所选 Agent 及其配置的 Provider；资料可能外发并产生费用，费用未知。</p>
-            <div class="actions"><button type="button" :disabled="!canCreateGeneration" @click="createGeneration">生成交付件</button></div>
-          </template>
-          <p v-else class="workspace-note">当前没有已确认开放的直接生成类型，不会用演示内容代替。</p>
-        </section>
-      </div>
-
-      <section v-if="workspace.detail.value" class="workbench-detail" aria-labelledby="workspace-detail-title">
-        <div class="section-heading detail-heading">
+      <section v-else-if="activeLayer === 'library'" class="workbench-layer workbench-library" aria-labelledby="workspace-files-title">
+        <div class="section-heading">
           <div>
-            <p class="section-kicker">已取出的资料</p>
-            <h2 id="workspace-detail-title">{{ workspace.detail.value.file.displayName }}</h2>
-            <p>当前条目与其历史版本均只属于当前登录用户。</p>
+            <p class="section-kicker">二层 · 资料柜</p>
+            <h2 id="workspace-files-title">{{ state === 'TRASHED' ? '回收站' : '我的文件' }}</h2>
+            <p>本人上传和已归档交付件统一按版本保管；选中后再展开详情。</p>
           </div>
+          <button
+            type="button"
+            class="quiet-action"
+            :disabled="workspace.loading.value"
+            @click="refresh"
+          >刷新</button>
+        </div>
+        <form class="filters" @submit.prevent="refresh">
+          <label><span>搜索</span><input v-model="query" maxlength="100" placeholder="按显示名搜索" /></label>
+          <label><span>类型</span><select v-model="mediaFamily"><option value="">全部类型</option><option value="IMAGE">图片</option><option value="TEXT">文本</option><option value="DOCUMENT">Word 文档</option><option value="SPREADSHEET">Excel 表格</option><option value="PRESENTATION">PPT 演示</option><option value="PDF">PDF</option></select></label>
+          <div class="filter-actions"><button type="submit">筛选</button><button type="button" :class="{ active: state === 'ACTIVE' }" @click="switchState('ACTIVE')">文件</button><button type="button" :class="{ active: state === 'TRASHED' }" @click="switchState('TRASHED')">回收站</button></div>
+        </form>
+        <p v-if="workspace.listState.value === 'loading'" class="workspace-note" role="status">正在翻看资料…</p>
+        <p v-else-if="workspace.listState.value === 'empty'" class="workspace-empty">{{ state === 'TRASHED' ? '回收站为空。' : '还没有文件。先添入一份资料，或直接发起交付。' }}</p>
+        <div v-else class="file-list">
+          <button
+            v-for="file in workspace.items.value"
+            :key="file.fileId"
+            type="button"
+            class="file-row"
+            :class="{ selected: selectedId === file.fileId }"
+            @click="select(file.fileId)"
+          >
+            <span class="file-icon" aria-hidden="true">{{ iconFor(file.mediaFamily) }}</span>
+            <span class="file-summary"><strong>{{ file.displayName }}</strong><small>版本 {{ file.latestVersion }} · {{ familyText(file.mediaFamily) }} · {{ originText(file.originKind) }} · {{ formatDate(file.createdAt) }}</small></span>
+            <span class="file-state">{{ file.state === 'TRASHED' ? '已移入回收站' : originText(file.originKind) }}</span>
+          </button>
+        </div>
+        <button
+          v-if="workspace.nextCursor.value"
+          type="button"
+          class="load-more quiet-action"
+          :disabled="workspace.loading.value"
+          @click="loadMore"
+        >加载更多</button>
+      </section>
+
+      <section v-else class="workbench-layer workbench-composer" aria-labelledby="workspace-generation-title">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">二层 · 交付台</p>
+            <h2 id="workspace-generation-title">直接生成交付件</h2>
+            <p>无需先上传；按“选 Agent、定类型、写需求”完成一条清晰的交付流程。</p>
+          </div>
+          <button
+            type="button"
+            class="quiet-action"
+            :disabled="execution.capabilityState.value === 'loading'"
+            @click="loadExecutionCapabilities"
+          >刷新能力</button>
+        </div>
+        <ol class="composer-steps" aria-label="直接交付步骤"><li>选 Agent</li><li>定交付类型</li><li>写需求并生成</li></ol>
+        <p v-if="execution.capabilityState.value === 'loading'" class="workspace-note">正在读取可执行交付类型…</p>
+        <p v-else-if="execution.capabilityError.value" class="workspace-error" role="alert">{{ execution.capabilityError.value }}</p>
+        <template v-else-if="execution.allowedMimeTypes.value.length">
+          <label><span>交付类型</span><select v-model="generationMime"><option v-for="mime in execution.allowedMimeTypes.value" :key="mime" :value="mime">{{ deliveryTypeText(mime) }}</option></select></label>
+          <label><span>已有 Agent</span><select :value="execution.selectedAgentId.value" :disabled="execution.rosterState.value === 'loading'" @change="selectExecutionAgent($event.target.value)"><option value="">请选择已有 Agent</option><option v-for="agent in execution.agents.value" :key="agent.agentId" :value="agent.agentId">{{ agent.name }}{{ agent.status ? `（${agent.status}）` : '' }}</option></select></label>
+          <label><span>需求说明</span><textarea v-model="generationInstruction" maxlength="4000" placeholder="例如：生成一份面向客户的项目介绍 PPT，包含目标、方案和时间表。"></textarea></label>
+          <p class="workspace-note consent-note">提交会将本轮需求交给所选 Agent 及其配置的 Provider；资料可能外发并产生费用，费用未知。</p>
+          <div class="actions"><button type="button" :disabled="!canCreateGeneration" @click="createGeneration">生成交付件</button></div>
+        </template>
+        <p v-else class="workspace-note">当前没有已确认开放的直接生成类型，不会用演示内容代替。</p>
+      </section>
+
+      <section v-if="workspace.detail.value && activeLayer === 'library'" class="workbench-drawer" aria-labelledby="workspace-detail-title">
+        <div class="drawer-title">
+          <div><p class="section-kicker">三层 · 资料详情与办事笺</p><h2 id="workspace-detail-title">{{ workspace.detail.value.file.displayName }}</h2><p>查看、维护版本，或把明确选定的资料交给 Agent。</p></div>
           <button type="button" class="quiet-action" @click="closeDetail">收起详情</button>
         </div>
 
@@ -211,6 +262,7 @@ const execution = usePersonalWorkspaceExecution({ identityEpoch })
 const query = ref('')
 const mediaFamily = ref('')
 const state = ref('ACTIVE')
+const activeLayer = ref('overview')
 const selectedId = ref('')
 const selectedVersion = ref(1)
 const uploadFile = ref(null)
@@ -239,9 +291,12 @@ const currentFilters = () => ({ q: query.value.trim(), mediaFamily: mediaFamily.
 const refresh = () => workspace.refresh(currentFilters())
 const loadMore = () => workspace.loadMore(currentFilters())
 const switchState = next => { if (state.value === next) return; state.value = next; closeDetail(); void refresh() }
+const showLayer = layer => { activeLayer.value = layer; if (layer !== 'library') closeDetail() }
+const openFile = async fileId => { activeLayer.value = 'library'; await select(fileId) }
+const openRecentFile = () => { const recent = workspace.items.value[0]; if (recent) void openFile(recent.fileId) }
 const onUploadFile = event => { uploadFile.value = event.target.files?.[0] || null }
 const onVersionFile = event => { versionFile.value = event.target.files?.[0] || null }
-const upload = async () => { const result = await workspace.upload(uploadFile.value, uploadDisplayName.value); if (result) { uploadFile.value = null; uploadDisplayName.value = ''; selectedId.value = result.file.fileId; selectedVersion.value = result.version.version; await refresh() } }
+const upload = async () => { const result = await workspace.upload(uploadFile.value, uploadDisplayName.value); if (result) { uploadFile.value = null; uploadDisplayName.value = ''; activeLayer.value = 'library'; selectedId.value = result.file.fileId; selectedVersion.value = result.version.version; await refresh() } }
 const select = async fileId => { const detail = await workspace.select(fileId); if (detail) { selectedId.value = fileId; selectedVersion.value = detail.latestVersion.version; renameValue.value = detail.file.displayName; versionFile.value = null } }
 const closeDetail = () => { selectedId.value = ''; versionFile.value = null; workspace.revokePreview(); workspace.detail.value = null }
 const rename = async () => { const result = await workspace.rename(renameValue.value); if (result) renameValue.value = result.displayName }
@@ -290,37 +345,122 @@ onBeforeUnmount(() => { workspace.dispose(); execution.dispose() })
   overflow: auto;
   padding: 20px;
   color: var(--treasure-ink);
-  background: radial-gradient(circle at 14% 0, rgba(255,255,255,.7), transparent 27%), linear-gradient(135deg, rgba(114,70,35,.12), transparent 36%), #e7d5b5;
+  background: radial-gradient(circle at 14% 0, rgba(255, 255, 255, .7), transparent 27%), linear-gradient(135deg, rgba(114, 70, 35, .12), transparent 36%), #e7d5b5;
 }
-.personal-workspace.is-hall-treasure { border-top: 2px solid rgba(109,63,31,.5); box-shadow: inset 0 10px 22px rgba(64,37,20,.1); }
-.workspace-header,
-.treasure-workbench,
-.workspace-page-message,
-.workspace-receipt { max-width: 1080px; margin-inline: auto; }
+.personal-workspace.is-hall-treasure { border-top: 2px solid rgba(109, 63, 31, .5); box-shadow: inset 0 10px 22px rgba(64, 37, 20, .1); }
+.workspace-header, .treasure-workbench, .workspace-page-message, .workspace-receipt { max-width: 1080px; margin-inline: auto; }
 .workspace-header { display: flex; align-items: end; justify-content: space-between; gap: 24px; padding: 8px 4px 18px; }
 .workspace-header h1 { margin: 5px 0; color: var(--treasure-wood-dark); font-family: serif; font-size: clamp(26px, 4vw, 34px); letter-spacing: .16em; }
 .workspace-header p { margin: 0; color: var(--treasure-muted); line-height: 1.65; }
-.workspace-eyebrow,.section-kicker { color: var(--treasure-red) !important; font-size: 12px; font-weight: 700; letter-spacing: .12em; }
+.workspace-eyebrow, .section-kicker { color: var(--treasure-red) !important; font-size: 12px; font-weight: 700; letter-spacing: .12em; }
 .workspace-header-note { max-width: 260px; padding-left: 15px; border-left: 2px solid #b88940; font-size: 13px; }
-.treasure-workbench { overflow: hidden; border: 1px solid var(--treasure-line); border-radius: 7px; background: linear-gradient(90deg, rgba(136,90,45,.06) 1px, transparent 1px) 0 0 / 28px 28px, linear-gradient(rgba(136,90,45,.04) 1px, transparent 1px) 0 0 / 28px 28px, var(--treasure-paper); box-shadow: 0 4px 0 rgba(86,47,25,.12), 0 12px 28px rgba(65,39,21,.14); }
-.workbench-toolbar { display: grid; grid-template-columns: minmax(220px,1fr) auto; gap: 12px 20px; align-items: center; padding: 18px 22px; border-bottom: 1px solid var(--treasure-line); background: linear-gradient(90deg, rgba(112,70,33,.1), transparent 48%); }
-.toolbar-copy { display: grid; gap: 4px; }.toolbar-copy strong { color: var(--treasure-wood-dark); font-family: serif; font-size: 18px; letter-spacing: .06em; }.toolbar-copy span,.workspace-note,.section-heading p { color: var(--treasure-muted); font-size: 13px; line-height: 1.65; }
-.toolbar-upload { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }.selected-file { grid-column: 1 / -1; margin: -3px 0 0; color: #694b2a; font-size: 13px; }
-.workbench-layout { display: grid; grid-template-columns: minmax(0,1.55fr) minmax(300px,.9fr); }
-.workbench-library,.workbench-composer,.workbench-detail { padding: 22px; }
-.workbench-composer { border-left: 1px solid var(--treasure-line); background: rgba(244,230,201,.34); }
-.section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }.section-heading h2,.section-heading h3 { margin: 3px 0 5px; color: var(--treasure-wood-dark); font-family: serif; letter-spacing: .06em; }.section-heading p { margin: 0; }.section-kicker { margin: 0; }
-.personal-workspace button { min-height: 35px; padding: 0 11px; border: 1px solid #56331b; border-radius: 5px; background: linear-gradient(#82502a, var(--treasure-wood)); box-shadow: inset 0 1px rgba(255,239,194,.3), 0 1px 1px rgba(74,42,20,.24); color: #fff8e8; cursor: pointer; font: inherit; }.personal-workspace button:hover { background: linear-gradient(#956033, #59331b); }.personal-workspace button:disabled { cursor: not-allowed; opacity: .58; }.personal-workspace button:focus-visible,.personal-workspace input:focus-visible,.personal-workspace select:focus-visible,.personal-workspace textarea:focus-visible { outline: 2px solid #bd8633; outline-offset: 2px; }
-.quiet-action { border-color: #b99761 !important; background: rgba(255,248,232,.8) !important; box-shadow: none !important; color: #654122 !important; }.quiet-action:hover { background: #f1dfb6 !important; }
-.personal-workspace label { display: grid; gap: 6px; margin-top: 14px; color: #644526; font-size: 13px; font-weight: 700; }.personal-workspace input,.personal-workspace select,.personal-workspace textarea { min-height: 37px; padding: 0 10px; border: 1px solid #c5a978; border-radius: 4px; background: rgba(255,253,246,.9); box-shadow: inset 0 1px 3px rgba(88,51,25,.1); color: var(--treasure-ink); font: inherit; }.personal-workspace textarea { min-height: 104px; padding: 10px; resize: vertical; }
-.file-picker { display: inline-flex !important; width: fit-content; position: relative; overflow: hidden; margin: 0 !important; padding: 8px 11px; border: 1px dashed #9a6d36; border-radius: 4px; background: #f5e8c7; color: #5a3519 !important; cursor: pointer; }.file-picker:hover { background: #ecd7a8; }.file-picker input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }.inline-name { display: block !important; margin: 0 !important; }.inline-name input { width: min(190px, 36vw); }
-.filters { display: grid; grid-template-columns: minmax(0,1fr) 150px auto; align-items: end; gap: 10px; margin: 15px 0 10px; padding: 12px 0; border-top: 1px solid rgba(191,159,108,.5); border-bottom: 1px solid rgba(191,159,108,.5); }.filters label { margin: 0; }.filter-actions,.actions,.version-actions,.material-actions { display: flex; flex-wrap: wrap; gap: 7px; }.filter-actions { align-items: end; }.filter-actions .active { border-color: #412516; background: #442717; color: #fff8e8; }
-.file-list { display: grid; gap: 7px; }.file-row { display: grid; grid-template-columns: 30px minmax(0,1fr) auto; align-items: center; width: 100%; border-color: #dac69f !important; background: rgba(255,253,246,.56) !important; color: var(--treasure-ink) !important; text-align: left; }.file-row:hover { border-color: #a8773a !important; background: #f7e9ca !important; }.file-row.selected { border-color: #8b5a2b !important; background: #f1dfb6 !important; box-shadow: inset 4px 0 #8c2f20; }.file-icon { color: var(--treasure-red); font-size: 17px; }.file-summary { display: grid; min-width: 0; gap: 3px; }.file-summary strong,.file-summary small,.version-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.file-summary strong { color: #4b2d19; }.file-summary small,.file-state,.version-row small { color: var(--treasure-muted); }.file-state { font-size: 12px; }.workspace-empty { padding: 25px 0; color: var(--treasure-muted); }.load-more { margin-top: 11px; }
-.consent-note { padding-left: 10px; border-left: 2px solid #c59a55; }.actions { margin-top: 14px; }.workbench-detail { border-top: 1px solid var(--treasure-line); background: linear-gradient(90deg, rgba(244,230,201,.38), transparent 65%); }.detail-heading { padding-bottom: 15px; border-bottom: 1px solid rgba(191,159,108,.5); }.file-details { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin: 15px 0; }.file-details div { padding: 9px; border: 1px solid rgba(202,177,130,.5); border-radius: 4px; background: rgba(244,230,201,.62); }.file-details dt { color: var(--treasure-muted); font-size: 12px; }.file-details dd { margin: 4px 0 0; color: #4b2d19; word-break: break-word; }
-.detail-maintenance { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 14px; padding-bottom: 15px; border-bottom: 1px solid rgba(191,159,108,.5); }.inline-form,.version-upload { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }.inline-form label { flex: 1; min-width: 180px; margin: 0; }.version-upload { align-items: center; }.versions { margin-top: 18px; }.versions h3 { margin: 0 0 8px; color: #58361e; font-family: serif; }.version-row { display: grid; grid-template-columns: auto minmax(0,1fr) auto auto; align-items: center; gap: 9px; padding: 9px 0; border-bottom: 1px solid #decba7; }.version-row.active { margin-inline: -8px; padding-inline: 8px; background: #f2e1b9; }.version-actions { justify-content: flex-end; }
-.preview { margin-top: 15px; overflow: auto; border: 1px solid #d4bc91; border-radius: 4px; background: #f5e8cc; }.preview pre { margin: 0; padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; color: #4d301d; }.preview img { display: block; max-width: 100%; max-height: 460px; margin: auto; object-fit: contain; }.preview p { padding: 12px; color: var(--treasure-muted); }.preview .preview-note { margin: 0; padding-top: 0; font-size: 13px; }.preview-navigation { display: flex; align-items: center; gap: 8px; padding: 10px 12px 0; color: #654122; }.preview-navigation button { min-height: 30px; padding: 0 8px; }
-.detail-execution { margin-top: 20px; padding-top: 18px; border-top: 1px solid rgba(191,159,108,.6); }.execution-form { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }.execution-form label { min-width: 0; }.material-actions { margin: 10px 0; }.execution-status { margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--treasure-line); }.execution-notice { margin-top: 14px; padding: 11px; border: 1px solid #9da877; border-radius: 4px; background: #e8efd6; color: #405322; }.danger-zone { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--treasure-line); }.danger-zone p { margin: 0; color: var(--treasure-muted); }.danger-zone .danger { border-color: #76271c; background: linear-gradient(#9d3e2b, var(--treasure-red)); }
-.workspace-error { padding: 11px; border: 1px solid #c88174; border-radius: 4px; background: #f7e1d9; color: #7e271c; }.workspace-page-message { margin-top: 14px; }.workspace-receipt { margin-top: 12px; padding: 8px 12px; border-left: 3px solid #b88940; background: rgba(255,248,232,.72); color: #694b2a; font-size: 14px; }.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
-@media (max-width: 800px) { .workbench-layout { grid-template-columns: 1fr; }.workbench-composer { border-top: 1px solid var(--treasure-line); border-left: 0; }.toolbar-upload { justify-content: flex-start; }.detail-maintenance { grid-template-columns: 1fr; }.execution-form { grid-template-columns: 1fr; } }
-@media (max-width: 620px) { .personal-workspace { padding: 13px; }.workspace-header { align-items: flex-start; flex-direction: column; gap: 7px; }.workspace-header-note { max-width: none; }.workbench-toolbar,.workbench-library,.workbench-composer,.workbench-detail { padding: 16px; }.workbench-toolbar { grid-template-columns: 1fr; }.toolbar-upload { align-items: stretch; }.toolbar-upload > button { flex: 1; }.inline-name input { width: 100%; }.filters { grid-template-columns: 1fr; }.file-details { grid-template-columns: 1fr; }.version-row { grid-template-columns: auto minmax(0,1fr); }.version-row small,.version-actions { grid-column: 2; justify-content: flex-start; }.file-state { display: none; } }
+.treasure-workbench { overflow: hidden; border: 1px solid var(--treasure-line); border-radius: 7px; background: linear-gradient(90deg, rgba(136, 90, 45, .06) 1px, transparent 1px) 0 0 / 28px 28px, linear-gradient(rgba(136, 90, 45, .04) 1px, transparent 1px) 0 0 / 28px 28px, var(--treasure-paper); box-shadow: 0 4px 0 rgba(86, 47, 25, .12), 0 12px 28px rgba(65, 39, 21, .14); }
+.workbench-toolbar { display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 12px 20px; align-items: center; padding: 18px 22px; border-bottom: 1px solid var(--treasure-line); background: linear-gradient(90deg, rgba(112, 70, 33, .1), transparent 48%); }
+.toolbar-copy { display: grid; gap: 4px; }
+.toolbar-copy strong { color: var(--treasure-wood-dark); font-family: serif; font-size: 18px; letter-spacing: .06em; }
+.toolbar-copy span, .workspace-note, .section-heading p, .overview-intro > p { color: var(--treasure-muted); font-size: 13px; line-height: 1.65; }
+.toolbar-upload { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.selected-file { grid-column: 1 / -1; margin: -3px 0 0; color: #694b2a; font-size: 13px; }
+.workbench-deck { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0; padding: 0 22px; border-bottom: 1px solid var(--treasure-line); background: rgba(244, 230, 201, .38); }
+.workbench-deck button { display: grid; min-width: 118px; gap: 2px; padding: 11px 15px !important; border: 0 !important; border-right: 1px solid rgba(168, 121, 63, .38) !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; color: #654122 !important; text-align: left; }
+.workbench-deck button:first-child { border-left: 1px solid rgba(168, 121, 63, .38) !important; }
+.workbench-deck button:hover { background: rgba(241, 223, 182, .72) !important; }
+.workbench-deck button.active { background: var(--treasure-wood) !important; color: #fff8e8 !important; }
+.workbench-deck button span { color: inherit; font-size: 11px; opacity: .76; }
+.workbench-deck p { align-self: center; margin: 0 0 0 auto; color: var(--treasure-muted); font-size: 12px; }
+.treasure-overview, .workbench-layer, .workbench-drawer { padding: 24px; }
+.overview-intro { max-width: 650px; }
+.overview-intro h2 { margin: 4px 0 6px; color: var(--treasure-wood-dark); font-family: serif; letter-spacing: .06em; }
+.overview-intro > p { margin: 0; }
+.overview-ledger { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin: 20px 0 12px; }
+.overview-ledger div { padding: 12px 14px; border: 1px solid rgba(187, 149, 91, .55); border-radius: 5px; background: linear-gradient(135deg, rgba(255, 252, 241, .9), rgba(242, 221, 179, .56)); }
+.overview-ledger dt, .overview-ledger small { color: var(--treasure-muted); font-size: 12px; }
+.overview-ledger dd { margin: 5px 0 2px; color: var(--treasure-wood-dark); font-family: serif; font-size: 22px; font-weight: 700; word-break: break-word; }
+.overview-flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 16px 0 22px; }
+.overview-flow button { min-height: 58px !important; padding: 10px 13px !important; text-align: left; }
+.overview-flow button span { display: block; margin-bottom: 2px; color: #f9df9b; font-size: 11px; }
+.recent-shelf { padding-top: 18px; border-top: 1px solid rgba(191, 159, 108, .58); }
+.recent-shelf h3, .versions h3 { margin: 3px 0 0; color: #58361e; font-family: serif; }
+.recent-file-list { display: grid; gap: 7px; margin-top: 12px; }
+.recent-file-list button { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; gap: 7px; width: 100%; border-color: #dac69f !important; background: rgba(255, 253, 246, .58) !important; color: var(--treasure-ink) !important; text-align: left; }
+.recent-file-list button:hover { border-color: #a8773a !important; background: #f7e9ca !important; }
+.recent-file-list strong, .recent-file-list small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent-file-list small, .recent-file-action { color: var(--treasure-muted); font-size: 12px; }
+.workbench-library { background: rgba(255, 250, 237, .38); }
+.workbench-composer { background: linear-gradient(90deg, rgba(244, 230, 201, .5), rgba(255, 248, 232, .7)); }
+.section-heading, .drawer-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.section-heading h2, .section-heading h3, .drawer-title h2 { margin: 3px 0 5px; color: var(--treasure-wood-dark); font-family: serif; letter-spacing: .06em; }
+.section-heading p, .drawer-title p { margin: 0; }
+.personal-workspace button { min-height: 35px; padding: 0 11px; border: 1px solid #56331b; border-radius: 5px; background: linear-gradient(#82502a, var(--treasure-wood)); box-shadow: inset 0 1px rgba(255, 239, 194, .3), 0 1px 1px rgba(74, 42, 20, .24); color: #fff8e8; cursor: pointer; font: inherit; }
+.personal-workspace button:hover { background: linear-gradient(#956033, #59331b); }
+.personal-workspace button:disabled { cursor: not-allowed; opacity: .58; }
+.personal-workspace button:focus-visible, .personal-workspace input:focus-visible, .personal-workspace select:focus-visible, .personal-workspace textarea:focus-visible { outline: 2px solid #bd8633; outline-offset: 2px; }
+.quiet-action { border-color: #b99761 !important; background: rgba(255, 248, 232, .8) !important; box-shadow: none !important; color: #654122 !important; }
+.quiet-action:hover { background: #f1dfb6 !important; }
+.personal-workspace label { display: grid; gap: 6px; margin-top: 14px; color: #644526; font-size: 13px; font-weight: 700; }
+.personal-workspace input, .personal-workspace select, .personal-workspace textarea { min-height: 37px; padding: 0 10px; border: 1px solid #c5a978; border-radius: 4px; background: rgba(255, 253, 246, .9); box-shadow: inset 0 1px 3px rgba(88, 51, 25, .1); color: var(--treasure-ink); font: inherit; }
+.personal-workspace textarea { min-height: 104px; padding: 10px; resize: vertical; }
+.file-picker { display: inline-flex !important; width: fit-content; position: relative; overflow: hidden; margin: 0 !important; padding: 8px 11px; border: 1px dashed #9a6d36; border-radius: 4px; background: #f5e8c7; color: #5a3519 !important; cursor: pointer; }
+.file-picker:hover { background: #ecd7a8; }
+.file-picker input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.inline-name { display: block !important; margin: 0 !important; }
+.inline-name input { width: min(190px, 36vw); }
+.filters { display: grid; grid-template-columns: minmax(0, 1fr) 150px auto; align-items: end; gap: 10px; margin: 15px 0 10px; padding: 12px 0; border-top: 1px solid rgba(191, 159, 108, .5); border-bottom: 1px solid rgba(191, 159, 108, .5); }
+.filters label { margin: 0; }
+.filter-actions, .actions, .version-actions, .material-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.filter-actions { align-items: end; }
+.filter-actions .active { border-color: #412516; background: #442717; color: #fff8e8; }
+.file-list { display: grid; gap: 7px; }
+.file-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; width: 100%; border-color: #dac69f !important; background: rgba(255, 253, 246, .56) !important; color: var(--treasure-ink) !important; text-align: left; }
+.file-row:hover { border-color: #a8773a !important; background: #f7e9ca !important; }
+.file-row.selected { border-color: #8b5a2b !important; background: #f1dfb6 !important; box-shadow: inset 4px 0 #8c2f20; }
+.file-icon { color: var(--treasure-red); font-size: 17px; }
+.file-summary { display: grid; min-width: 0; gap: 3px; }
+.file-summary strong, .file-summary small, .version-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-summary strong { color: #4b2d19; }
+.file-summary small, .file-state, .version-row small { color: var(--treasure-muted); }
+.file-state { font-size: 12px; }
+.workspace-empty { padding: 25px 0; color: var(--treasure-muted); }
+.load-more { margin-top: 11px; }
+.composer-steps { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 17px 0 2px; list-style: none; counter-reset: composer-step; }
+.composer-steps li { padding: 5px 9px; border: 1px solid rgba(184, 137, 64, .58); border-radius: 999px; color: #644526; font-size: 12px; }
+.composer-steps li::before { counter-increment: composer-step; content: counter(composer-step) ' · '; color: var(--treasure-red); font-weight: 700; }
+.consent-note { padding-left: 10px; border-left: 2px solid #c59a55; }
+.actions { margin-top: 14px; }
+.workbench-drawer { border-top: 2px solid rgba(109, 63, 31, .42); background: linear-gradient(90deg, rgba(235, 214, 171, .52), rgba(255, 248, 232, .9)); }
+.drawer-title { padding-bottom: 15px; border-bottom: 1px solid rgba(191, 159, 108, .5); }
+.file-details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 15px 0; }
+.file-details div { padding: 9px; border: 1px solid rgba(202, 177, 130, .5); border-radius: 4px; background: rgba(244, 230, 201, .62); }
+.file-details dt { color: var(--treasure-muted); font-size: 12px; }
+.file-details dd { margin: 4px 0 0; color: #4b2d19; word-break: break-word; }
+.detail-maintenance { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; padding-bottom: 15px; border-bottom: 1px solid rgba(191, 159, 108, .5); }
+.inline-form, .version-upload { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.inline-form label { flex: 1; min-width: 180px; margin: 0; }
+.version-upload { align-items: center; }
+.versions { margin-top: 18px; }
+.version-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 9px; padding: 9px 0; border-bottom: 1px solid #decba7; }
+.version-row.active { margin-inline: -8px; padding-inline: 8px; background: #f2e1b9; }
+.version-actions { justify-content: flex-end; }
+.preview { margin-top: 15px; overflow: auto; border: 1px solid #d4bc91; border-radius: 4px; background: #f5e8cc; }
+.preview pre { margin: 0; padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; color: #4d301d; }
+.preview img { display: block; max-width: 100%; max-height: 460px; margin: auto; object-fit: contain; }
+.preview p { padding: 12px; color: var(--treasure-muted); }
+.preview .preview-note { margin: 0; padding-top: 0; font-size: 13px; }
+.preview-navigation { display: flex; align-items: center; gap: 8px; padding: 10px 12px 0; color: #654122; }
+.preview-navigation button { min-height: 30px; padding: 0 8px; }
+.detail-execution { margin-top: 20px; padding-top: 18px; border-top: 1px solid rgba(191, 159, 108, .6); }
+.execution-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.execution-form label { min-width: 0; }
+.material-actions { margin: 10px 0; }
+.execution-status { margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--treasure-line); }
+.execution-notice { margin-top: 14px; padding: 11px; border: 1px solid #9da877; border-radius: 4px; background: #e8efd6; color: #405322; }
+.danger-zone { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--treasure-line); }
+.danger-zone p { margin: 0; color: var(--treasure-muted); }
+.danger-zone .danger { border-color: #76271c; background: linear-gradient(#9d3e2b, var(--treasure-red)); }
+.workspace-error { padding: 11px; border: 1px solid #c88174; border-radius: 4px; background: #f7e1d9; color: #7e271c; }
+.workspace-page-message { margin-top: 14px; }
+.workspace-receipt { margin-top: 12px; padding: 8px 12px; border-left: 3px solid #b88940; background: rgba(255, 248, 232, .72); color: #694b2a; font-size: 14px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+@media (max-width: 800px) { .workbench-deck p { flex-basis: 100%; margin: 0; padding: 8px 0; }.overview-flow { grid-template-columns: 1fr; }.detail-maintenance { grid-template-columns: 1fr; }.execution-form { grid-template-columns: 1fr; } }
+@media (max-width: 620px) { .personal-workspace { padding: 13px; }.workspace-header { align-items: flex-start; flex-direction: column; gap: 7px; }.workspace-header-note { max-width: none; }.workbench-toolbar, .treasure-overview, .workbench-layer, .workbench-drawer { padding: 16px; }.workbench-toolbar { grid-template-columns: 1fr; }.toolbar-upload { align-items: stretch; }.toolbar-upload > button { flex: 1; }.inline-name input { width: 100%; }.workbench-deck { padding: 0 16px; }.workbench-deck button { min-width: 0; flex: 1; padding-inline: 9px !important; }.workbench-deck p { display: none; }.overview-ledger { grid-template-columns: 1fr; }.filters { grid-template-columns: 1fr; }.file-details { grid-template-columns: 1fr; }.version-row { grid-template-columns: auto minmax(0, 1fr); }.version-row small, .version-actions { grid-column: 2; justify-content: flex-start; }.file-state { display: none; } }
 </style>
