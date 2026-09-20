@@ -2,11 +2,11 @@
   <main class="personal-workspace">
     <header class="workspace-header">
       <div>
-        <p class="workspace-eyebrow">个人中心</p>
-        <h1>我的工作空间</h1>
+        <p class="workspace-eyebrow">{{ embedded ? '聚义厅' : '个人中心' }}</p>
+        <h1>{{ embedded ? '百宝箱' : '我的工作空间' }}</h1>
         <p>保存自己上传的文件和后续交付件。只有你主动创建私人执行时，当前选定版本才会被授权给已选 Agent。</p>
       </div>
-      <button type="button" @click="router.push({ name: 'UserProfile' })">返回个人中心</button>
+      <button type="button" @click="embedded ? emit('close') : router.push({ name: 'UserProfile' })">{{ embedded ? '回聚义厅' : '返回个人中心' }}</button>
     </header>
 
     <section class="workspace-card" aria-labelledby="workspace-upload-title">
@@ -172,6 +172,9 @@ import { useRouter } from 'vue-router'
 import { useApiStore } from '@/stores/api'
 import { savePersonalWorkspaceBlob, usePersonalWorkspace } from '@/composables/usePersonalWorkspace'
 import { usePersonalWorkspaceExecution } from '@/composables/usePersonalWorkspaceExecution'
+
+const { embedded } = defineProps({ embedded: { type: Boolean, default: false } })
+const emit = defineEmits(['close'])
 
 const router = useRouter()
 const apiStore = useApiStore()

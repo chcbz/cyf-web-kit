@@ -198,7 +198,6 @@ const props = defineProps({
   operableAgents: { type: Array, default: () => [] },
   orientationHint: { type: String, default: '' },
   orientationRequestPending: Boolean,
-  refreshing: Boolean,
   selectedAgent: { type: Object, default: null },
   selectedTask: { type: Object, default: null },
   taskDetailOpen: Boolean,
@@ -208,7 +207,7 @@ const props = defineProps({
   tasks: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['open-profile', 'close-task-detail', 'discuss-task', 'open-task', 'open-onboarding', 'open-task-board', 'quick-action', 'refresh-hall', 'request-landscape', 'retry-live-preview', 'live-preview-visibility-change', 'select-agent', 'start-agent-conversation'])
+const emit = defineEmits(['open-profile', 'close-task-detail', 'discuss-task', 'open-task', 'open-onboarding', 'open-task-board', 'quick-action', 'request-landscape', 'retry-live-preview', 'live-preview-visibility-change', 'select-agent', 'start-agent-conversation'])
 
 const livePreviewTarget = ref(null)
 defineExpose({ livePreviewTarget })
@@ -219,7 +218,7 @@ const quickActions = Object.freeze([
   { key: 'discussion', label: '厅前议事', icon: '议' },
   { key: 'catalog', label: '招贤令', icon: '贤' },
   { key: 'library', label: '案卷阁', icon: '卷' },
-  { key: 'refresh', label: '点验刷新', icon: '验' }
+  { key: 'treasure', label: '百宝箱', icon: '宝' }
 ])
 
 const normalizedStatus = status => String(status || '').toLowerCase()

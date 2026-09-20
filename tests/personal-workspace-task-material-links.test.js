@@ -113,10 +113,11 @@ describe('W06 workspace bounty material links', () => {
     assert.equal(attach.attributes('disabled'), '')
   })
 
-  it('wires the actual bounty detail to the shared material surface and preserves the existing task discussion event', () => {
+  it('keeps task material controls out of the bounty detail and preserves the existing task discussion event', () => {
     const bounty = readFileSync(new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url), 'utf8')
-    assert.match(bounty, /TaskMaterialLinks/)
-    assert.match(bounty, /:task-id="String\(detailTask\.id\)"/)
+    assert.doesNotMatch(bounty, /TaskMaterialLinks/)
+    assert.match(bounty, /workspace-shortcut/)
+    assert.match(bounty, /open-workspace/)
     assert.match(bounty, /@click="\$emit\('discuss-task', detailTask\)"/)
     assert.match(bounty, /进入议事/)
   })

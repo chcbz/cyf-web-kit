@@ -161,12 +161,13 @@ describe('OD10 formal delivery UI boundary', () => {
     } finally { deliveries.dispose() }
   })
 
-  it('keeps formal delivery separate from the existing shared-output list and never renders credentials', () => {
+  it('keeps the formal-delivery component credential-free after task detail moves to the Babao entry', () => {
     const bounty = readFileSync(new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url), 'utf8')
     const panel = readFileSync(new URL('../src/components/deliveries/FormalDeliveryList.vue', import.meta.url), 'utf8')
     const composable = readFileSync(new URL('../src/composables/useFormalDeliveries.js', import.meta.url), 'utf8')
-    expect(bounty).to.include('<OutputList')
-    expect(bounty).to.include('<FormalDeliveryList')
+    expect(bounty).to.not.include('<OutputList')
+    expect(bounty).to.not.include('<FormalDeliveryList')
+    expect(bounty).to.include("$emit('open-workspace')")
     expect(composable).to.include('/formal-deliveries')
     expect(composable).to.include('/decision')
     expect(composable).to.include('/rework-executions')

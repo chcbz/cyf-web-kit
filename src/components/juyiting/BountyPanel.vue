@@ -113,7 +113,13 @@
           </div>
 
           <div class="bounty-modal-body">
-            <section v-if="fundedQuotePreview" class="funded-preview-details funded-quote-confirmation" role="dialog" aria-modal="false" aria-label="确认资金榜报价">
+            <section
+              v-if="fundedQuotePreview"
+              class="funded-preview-details funded-quote-confirmation"
+              role="dialog"
+              aria-modal="false"
+              aria-label="确认资金榜报价"
+            >
               <h3>先看报价，再决定领令</h3>
               <p>{{ fundedQuotePreview.taskTitle }} / {{ fundedQuotePreview.agentName }}</p>
               <p>榜号 {{ fundedQuotePreview.quote.taskId }} / 好汉 {{ fundedQuotePreview.quote.agentId }} / 榜文版本 {{ fundedQuotePreview.quote.taskVersion }}</p>
@@ -142,21 +148,22 @@
               </div>
 
               <p>{{ detailTask.description || '榜文尚未写明缘由' }}</p>
-              <TaskMaterialLinks :key="`${detailTask.id}:${authorizationGeneration}`" :task-id="String(detailTask.id)" :identity-epoch="authorizationGeneration" />
-              <OutputList
-                :source="outputSource"
-                :identity-fingerprint="outputIdentityFingerprint"
-                :adapter="outputAdapter"
-              />
-              <FormalDeliveryList
-                :task-id="detailTask.id"
-                :identity-fingerprint="outputIdentityFingerprint"
-                :adapter="formalDeliveryAdapter"
-              />
+              <section class="workspace-shortcut" aria-label="榜文百宝箱入口">
+                <div>
+                  <strong>资料与交付</strong>
+                  <p>文件、版本和交付件统一收在百宝箱，不再挤占榜文详情。</p>
+                </div>
+                <button type="button" @click="$emit('open-workspace')">打开百宝箱</button>
+              </section>
               <section v-if="isFundedTask(detailTask)" class="funded-preview-details" aria-label="资金悬赏详情">
                 <p class="funding-summary">已托管：{{ formatMoney(detailTask.funding.remainingMicro || detailTask.funding.grossBountyAmountMicro) }}</p>
                 <p>仅可由一位明确好汉按报价领令；组队、宋江代点和旧式点将已禁用。</p>
-                <button v-if="canCancelFunding(detailTask)" type="button" class="funded-detail-button" @click="$emit('cancel-funding', detailTask)">开工前撤榜并退款</button>
+                <button
+                  v-if="canCancelFunding(detailTask)"
+                  type="button"
+                  class="funded-detail-button"
+                  @click="$emit('cancel-funding', detailTask)"
+                >开工前撤榜并退款</button>
                 <button type="button" class="funded-detail-button" @click="$emit('load-settlement', detailTask)">查看结算详情</button>
                 <pre v-if="detailTask.settlement" class="settlement-detail">{{ JSON.stringify(detailTask.settlement, null, 2) }}</pre>
               </section>
@@ -319,9 +326,6 @@ import { computed, ref, watch } from 'vue'
 import BountyActionIcon from './BountyActionIcon.vue'
 import WorkItemPlanPanel from './WorkItemPlanPanel.vue'
 import TeamRecommendationPanel from './TeamRecommendationPanel.vue'
-import OutputList from '../outputs/OutputList.vue'
-import FormalDeliveryList from '../deliveries/FormalDeliveryList.vue'
-import TaskMaterialLinks from '../personal-workspace/TaskMaterialLinks.vue'
 import { formatSilverMicro, isCanonicalMicroAmount } from '@/utils/silverAmount'
 
 const props = defineProps({
@@ -341,9 +345,6 @@ const props = defineProps({
   fundedPreviewEnabled: { type: Boolean, default: false },
   workItemPlanEnabled: { type: Boolean, default: false },
   authorizationGeneration: { type: Number, default: 0 },
-  outputAdapter: { type: Object, default: undefined },
-  formalDeliveryAdapter: { type: Object, default: undefined },
-  outputIdentityFingerprint: { type: String, default: '' },
   fundedQuotePreview: { type: Object, default: null },
   fundedClaimState: { type: Object, default: null },
   fundedCreateRecovery: { type: Object, default: null },
@@ -372,6 +373,7 @@ const emit = defineEmits([
   'cancel-funded-create-recovery',
   'discuss-task',
   'load-settlement',
+  'open-workspace',
   'load-tasks',
   'select-agent',
   'select-task',
@@ -380,9 +382,6 @@ const emit = defineEmits([
   'update:taskKeyword'
 ])
 
-// A task/bounty has a trusted task id. Conversation output remains intentionally absent
-// until API supplies a proven task↔conversation read mapping.
-const outputSource = computed(() => detailTask.value?.id ? { type: 'task', id: String(detailTask.value.id) } : null)
 const modalTask = ref(null)
 const showCreateForm = ref(false)
 const createPending = ref(false)
@@ -1088,6 +1087,39 @@ button:disabled {
   flex-direction: column;
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+.workspace-shortcut {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid #d7c3a2;
+  border-radius: 8px;
+  background: #fff8e8;
+}
+
+.workspace-shortcut strong,
+.workspace-shortcut p {
+  display: block;
+  margin: 0;
+}
+
+.workspace-shortcut p {
+  margin-top: 3px;
+  color: #765f40;
+  font-size: 12px;
+}
+
+.workspace-shortcut button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 7px;
+  background: #6d3f1f;
+  color: #fff8e8;
 }
 
 .modal-task-info {

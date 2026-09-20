@@ -18,6 +18,7 @@ const loadStage = game => {
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace(/^import\s+\{\s*juyitingGame\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var juyitingGame = game')
     .replace(/^import\s+\{\s*classifyViewportResize\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, "var classifyViewportResize = () => 'layout'")
+    .replace(/^import\s+HallAccountEntry\s+from\s+['"][^'"]+['"];?\s*$/gm, "var HallAccountEntry = { template: '<button />' }")
     .replace('export default', 'return')
   return new Function('Vue', 'game', body)(Vue, game)
 }
@@ -160,7 +161,7 @@ const makeHallPageMocks = ({ mode, counters, voiceLocked = Vue.ref(false) }) => 
     isEconomyPreviewCapability: () => false,
     loadEconomyPreviewCapability: async () => null,
     env: {}, agentApi: {}, chatApi: {}, juyitingGame: {}, log: { warn: noop }, roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
-    useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({}),
+    useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({}), useRouter: () => ({ push: noop }), onBeforeRouteLeave: noop,
     useHallData: () => data, useHallBackendSceneState: () => ({ start: asyncNoop, stop: noop, dispose: noop, reportPhase: noop }),
     useHallSceneDebugBridge: () => ({ republish: noop, stop: noop }), useHallExperienceMode: () => ({ experienceMode: mode, isMobileCoarse: Vue.ref(true), isVirtualLandscape: Vue.ref(false), orientationHint: text, orientationRequestPending: Vue.ref(false), hallViewportHeight: Vue.ref(0), requestLandscape: asyncNoop, requestPortrait: asyncNoop }),
     capturePanelReturnTarget: noop, focusHallPanel: noop, isCurrentPanelGeneration: () => false, isSafePanelFocusTarget: () => false, resolvePanelReturnTarget: noop, restorePanelFocus: noop, trapPanelFocus: noop, useHallPanels: () => ({ panelLayout: Vue.ref('bottom-drawer') }),
@@ -174,7 +175,7 @@ const makeHallPageMocks = ({ mode, counters, voiceLocked = Vue.ref(false) }) => 
     useHallLibrary: () => ({ citeLibraryItem: noop, libraryErrorMessage: text, libraryHasSearched: Vue.ref(false), libraryKeyword: text, libraryLoading: Vue.ref(false), libraryResults: list, librarySourceType: text, searchLibrary: asyncNoop }),
     isTaskWorkspaceBuildEnabled: () => false, createDisabledTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }), useTaskWorkspaceView: () => ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: text, error: Vue.ref(null), retry: noop }), useTaskWorkspace: noop, useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }),
     portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '',
-    HallPortraitHome, HallStage, HallVoiceHud: Empty, AgentPanel: Empty, BountyDiscussionPanel: Empty, BountyPanel: Empty, TaskWorkspacePanel: Empty, PersonaCatalogPanel: Empty, PrivateDiscussionPanel: Empty, PublicDiscussionPanel: Empty, SelectedAgentCard: Empty, LibraryPanel: Empty
+    HallPortraitHome, HallStage, HallVoiceHud: Empty, AgentPanel: Empty, BountyDiscussionPanel: Empty, BountyPanel: Empty, TaskWorkspacePanel: Empty, PersonaCatalogPanel: Empty, PrivateDiscussionPanel: Empty, PublicDiscussionPanel: Empty, SelectedAgentCard: Empty, PersonalWorkspace: Empty, LibraryPanel: Empty
   }
 }
 
@@ -389,13 +390,13 @@ describe('live map preview orientation target transaction', () => {
       // Post-Teleport settlement is a Stage-owned DOM/handler barrier, not just
       // an engine lock: tools, focus, keyboard zoom and return all remain inert.
       expect(wrapper.get('.hall-board').attributes('tabindex')).to.equal('-1')
-      expect(wrapper.get('.refresh-action').attributes('disabled')).to.equal('')
+      expect(wrapper.get('.babao-action').attributes('disabled')).to.equal('')
       const onboardingButton = wrapper.get('button.onboarding-replay')
       expect(onboardingButton.attributes('disabled')).to.equal('')
-      await wrapper.get('.refresh-action').trigger('click')
+      await wrapper.get('.babao-action').trigger('click')
       await onboardingButton.trigger('click')
       await wrapper.get('.hall-board').trigger('keydown', { key: '+' })
-      expect(wrapper.emitted('refresh-hall')).to.equal(undefined)
+      expect(wrapper.emitted('open-workspace')).to.equal(undefined)
       expect(wrapper.emitted('open-onboarding')).to.equal(undefined)
       expect(f.calls.zoom).to.equal(0)
       await pump()
@@ -405,9 +406,9 @@ describe('live map preview orientation target transaction', () => {
       pendingCommit.resolve({ committed: true }); await flush(); await pump()
       expect(targets).to.deep.equal(['agent-1'])
       expect(wrapper.get('.hall-board').attributes('tabindex')).to.equal('0')
-      await wrapper.get('.refresh-action').trigger('click')
+      await wrapper.get('.babao-action').trigger('click')
       await wrapper.get('.hall-board').trigger('keydown', { key: '+' })
-      expect(wrapper.emitted('refresh-hall')).to.have.length(1)
+      expect(wrapper.emitted('open-workspace')).to.have.length(1)
       expect(f.calls.zoom).to.equal(1)
       expect(f.calls.locks).to.deep.include([false, 'preview'])
       expect(onboardingButton.attributes('disabled')).to.equal(undefined)

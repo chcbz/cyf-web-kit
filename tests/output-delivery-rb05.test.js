@@ -100,15 +100,18 @@ describe('RB05 output directory boundary', () => {
     expect(composable).to.not.include('actorAgentId')
   })
 
-  it('keeps browser upload and provisional chat mapping out of the RB05 UI', () => {
+  it('keeps deliverable management out of the bounty detail and routes users to the compact Babao entry', () => {
     const outputs = readFileSync(new URL('../src/components/outputs/OutputList.vue', import.meta.url), 'utf8')
     const bounty = readFileSync(new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url), 'utf8')
     const chat = readFileSync(new URL('../src/components/chat/Chat.vue', import.meta.url), 'utf8')
     expect(outputs).to.not.include('type="file"')
     expect(outputs).to.not.include('v-html')
     expect(outputs).to.include("outputs.state.value === 'available' && outputs.items.value.length")
-    expect(bounty).to.include('<OutputList')
-    expect(bounty).to.include("{ type: 'task', id: String(detailTask.value.id) }")
+    expect(bounty).to.not.include('<OutputList')
+    expect(bounty).to.not.include('<FormalDeliveryList')
+    expect(bounty).to.not.include('TaskMaterialLinks')
+    expect(bounty).to.include('class="workspace-shortcut"')
+    expect(bounty).to.include("$emit('open-workspace')")
     expect(chat).to.not.include('OutputList')
   })
 

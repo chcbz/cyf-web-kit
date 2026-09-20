@@ -595,9 +595,9 @@ const HALL_INITIAL_CREATE_SEQUENCE = Object.freeze([
   freezeSignature({ context: 'hall:eyebrow', type: 'div', classAll: ['eyebrow'], textTarget: true }),
   freezeSignature({ context: 'hall:title', type: 'h1', propsKind: 'null', textTarget: true }),
   freezeSignature({ context: 'hall:stage-tools', type: 'div', classAll: ['stage-tools'] }),
-  freezeSignature({ context: 'hall:refresh-button', type: 'button', classAll: ['tool-action', 'refresh-action'], types: { disabled: 'boolean', onClick: 'function' } }),
-  freezeSignature({ context: 'hall:refresh-icon', type: 'var-icon', exact: { name: 'refresh' } }),
-  freezeSignature({ context: 'hall:refresh-label', type: 'span', classAll: ['tool-label'], textTarget: true }),
+  freezeSignature({ context: 'hall:babao-button', type: 'button', classAll: ['tool-action', 'babao-action'], exact: { title: '打开百宝箱', 'aria-label': '打开百宝箱' }, types: { disabled: 'boolean', onClick: 'function' } }),
+  freezeSignature({ context: 'hall:babao-icon', type: 'var-icon', exact: { name: 'briefcase-variant-outline' } }),
+  freezeSignature({ context: 'hall:babao-label', type: 'span', classAll: ['tool-label'], textTarget: true }),
   freezeSignature({ context: 'hall:sound-button', type: 'button', classAll: ['tool-action', 'sound-toggle'], types: { onClick: 'function' } }),
   freezeSignature({ context: 'hall:sound-icon', type: 'var-icon', oneOf: { name: ['bell', 'bell-outline'] } }),
   freezeSignature({ context: 'hall:sound-label', type: 'span', classAll: ['tool-label'], textTarget: true }),
@@ -971,16 +971,16 @@ const hostOps = Object.freeze({
     else if (!(key === 'class' && previous === null)) hostStrictEqual(previous, props[key], `stored previous for ${key}`)
     if (next === null) hostRequire(present, `removal of absent host prop: ${key}`)
     else if (key === 'class') hostRequire(typeof next === 'string' && next.length > 0, 'class value contract')
-    else if (key === 'title') hostRequire(['点验厅中动静', '歇下声响', '开起声响', '请求横屏全景', '回主厅'].includes(next), `title value contract: ${next}`)
+    else if (key === 'title') hostRequire(['打开百宝箱', '歇下声响', '开起声响', '请求横屏全景', '回主厅'].includes(next), `title value contract: ${next}`)
     else if (key === 'disabled') hostStrictEqual(typeof next, 'boolean', 'disabled value type')
     else if (key === 'tabindex') hostStrictEqual(next, '0', 'tabindex value')
-    else if (key === 'aria-label') hostRequire(['聚义厅 melonJS 场景，可使用加减号缩放，0 复位', '回主厅'].includes(next), `aria-label value contract: ${next}`)
+    else if (key === 'aria-label') hostRequire(['打开百宝箱', '聚义厅 melonJS 场景，可使用加减号缩放，0 复位', '回主厅'].includes(next), `aria-label value contract: ${next}`)
     else if (key === 'aria-hidden') hostStrictEqual(next, 'true', 'aria-hidden value')
     else if (key === 'role') hostStrictEqual(next, 'status', 'role value')
     else if (key === 'type') hostStrictEqual(next, 'button', 'type value')
     else if (key === 'name') {
       hostStrictEqual(node.type, 'var-icon', 'name is reviewed only for the compiled var-icon fallback')
-      hostRequire(['refresh', 'bell', 'bell-outline'].includes(next), `unreviewed var-icon name: ${next}`)
+      hostRequire(['briefcase-variant-outline', 'bell', 'bell-outline'].includes(next), `unreviewed var-icon name: ${next}`)
     } else hostStrictEqual(typeof next, 'function', `${key} event value type`)
     recordHostCall(fixture, 'patchProp', { tag: node.type, context: nodeCreateRecords.get(node)?.context, key, operation: next === null ? 'remove' : present ? 'update' : 'mount-or-add', argumentCount: arguments.length })
     if (next === null) delete props[key]
@@ -1805,7 +1805,7 @@ const mountStage = (game, config, props = {}, transaction) => {
   const activations = []
   const initialActivation = createMountActivation(config, 'HallStage initial mount')
   activations.push(initialActivation)
-  for (const event of ['landscape-target-consumed', 'map-snapshot', 'map-snapshot-clear', 'new-conversation', 'open-panel', 'request-landscape', 'request-portrait', 'refresh-hall', 'select-agent', 'simulation-phase-events', 'simulation-ready', 'simulation-reset', 'toggle-sound']) listeners[eventProp(event)] = (...args) => events.push(Object.freeze({ event, args: Object.freeze(args) }))
+  for (const event of ['landscape-target-consumed', 'map-snapshot', 'map-snapshot-clear', 'new-conversation', 'open-panel', 'open-workspace', 'request-landscape', 'request-portrait', 'select-agent', 'simulation-phase-events', 'simulation-ready', 'simulation-reset', 'toggle-sound']) listeners[eventProp(event)] = (...args) => events.push(Object.freeze({ event, args: Object.freeze(args) }))
   const Parent = Object.freeze({ name: 'O03StageHarnessParent', setup() { return () => vue.createVNode(compiledArtifacts.hallStage, { ...propsRef.value, ...listeners }) } })
   const app = compiledArtifacts.renderer.createApp(Parent)
   hostControl.openFixture(HOST_FIXTURE_KINDS.HALL_STAGE, root)

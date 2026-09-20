@@ -25,15 +25,15 @@
           @open-profile="emitStageAction('open-profile')"
         />
         <button
-          class="tool-action refresh-action"
-          data-tour="landscape-refresh"
-          :class="{ 'is-refreshing': refreshing }"
-          :disabled="refreshing || stageInputLocked"
-          title="点验厅中动静"
-          @click="emitStageAction('refresh-hall')"
+          class="tool-action babao-action"
+          data-tour="landscape-babao-box"
+          :disabled="stageInputLocked"
+          title="打开百宝箱"
+          aria-label="打开百宝箱"
+          @click="emitStageAction('open-workspace')"
         >
-          <var-icon name="refresh" />
-          <span class="tool-label">{{ refreshing ? '点验中' : '点验' }}</span>
+          <var-icon name="briefcase-variant-outline" />
+          <span class="tool-label">百宝箱</span>
         </button>
         <button
           class="tool-action sound-toggle"
@@ -154,7 +154,6 @@ const props = defineProps({
   portraitStyle: { type: Function, required: true },
   readOnlyPreview: { type: Boolean, default: false },
   previewVisible: { type: Boolean, default: true },
-  refreshing: { type: Boolean, default: false },
   roleClass: { type: Function, required: true },
   simulationEnabled: { type: Boolean, default: true },
   sceneAgents: { type: Array, default: () => [] },
@@ -174,12 +173,12 @@ const emit = defineEmits([
   'map-snapshot',
   'map-snapshot-clear',
   'open-profile',
+  'open-workspace',
   'new-conversation',
   'open-onboarding',
   'open-panel',
   'request-landscape',
   'request-portrait',
-  'refresh-hall',
   'scene-bounds-change',
   'scene-error',
   'scene-mode-change',
@@ -1125,17 +1124,14 @@ button {
   transform: translateY(50%);
 }
 
-.refresh-action {
-  background: rgba(255, 244, 212, 0.2);
+.babao-action {
+  background: rgba(132, 102, 50, 0.42);
+  color: #fff0bd;
 }
 
 .tool-action:disabled {
   cursor: default;
   opacity: 0.72;
-}
-
-.refresh-action.is-refreshing :deep(.var-icon) {
-  animation: refreshSpin 0.8s linear infinite;
 }
 
 .tool-action :deep(.var-icon) {

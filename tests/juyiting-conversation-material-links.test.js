@@ -3,19 +3,21 @@ import { readFileSync } from 'node:fs'
 import { describe, it } from 'mocha'
 
 const source = readFileSync(new URL('../src/components/juyiting/ChatPanel.vue', import.meta.url), 'utf8')
+const workspaceSource = readFileSync(new URL('../src/components/workspace/PersonalWorkspace.vue', import.meta.url), 'utf8')
 
-describe('Juyi Hall conversation material persistence', () => {
-  it('pins local draft inputs to the current authorized conversation before the one execution request', () => {
-    assert.match(source, /usePersonalWorkspaceConversationLinks/)
-    assert.match(source, /conversationId: \(\) => props\.conversationId/)
-    assert.match(source, /const ensureConversationInputs = async \(\) =>/)
-    assert.match(source, /conversationLinks\.attach\(\{ fileId: material\.fileId, version: Number\(material\.version\), role: 'INPUT' \}\)/)
-    assert.match(source, /if \(!await ensureConversationInputs\(\)\) return/)
-    assert.match(source, /conversationLinks\.dispose\(\)/)
+describe('Juyi Hall Babao-box workspace entry', () => {
+  it('keeps conversation detail focused on messages and exposes only the compact workspace entry', () => {
+    assert.match(source, /class="icon-button workspace-entry"/)
+    assert.match(source, /\$emit\('open-workspace'\)/)
+    assert.doesNotMatch(source, /usePersonalWorkspaceConversationLinks/)
+    assert.doesNotMatch(source, /execution-directory/)
+    assert.doesNotMatch(source, /deliverable-directory/)
   })
 
-  it('keeps attachment removal explicit and does not claim it revokes an already-started execution snapshot', () => {
-    assert.match(source, /解除关联不会撤销已开始执行的输入快照/)
-    assert.match(source, /detachConversationInput = link => \{ void conversationLinks\.detach\(link\) \}/)
+  it('keeps the full file and execution workspace in the dedicated embedded module', () => {
+    assert.match(workspaceSource, /usePersonalWorkspace/)
+    assert.match(workspaceSource, /usePersonalWorkspaceExecution/)
+    assert.match(workspaceSource, /const \{ embedded \} = defineProps/)
+    assert.match(workspaceSource, /百宝箱/)
   })
 })

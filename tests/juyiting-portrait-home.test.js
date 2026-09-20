@@ -52,7 +52,7 @@ const quickActions = [
   ['discussion', '厅前议事'],
   ['catalog', '招贤令'],
   ['library', '案卷阁'],
-  ['refresh', '点验刷新']
+  ['treasure', '百宝箱']
 ]
 
 describe('HallPortraitHome', () => {
@@ -79,26 +79,27 @@ describe('HallPortraitHome', () => {
     expect(portraitHomeSource).to.include("emit('quick-action', action.key)")
     expect(hallSource).to.include('const handlePortraitQuickAction = (action) => {')
     expect(hallSource).to.include("handleStagePanelOpen('chat')")
-    expect(hallSource).to.include("['agents', 'tasks', 'catalog', 'library'].includes(action)")
-    expect(hallSource).to.include('void refreshHall()')
+    expect(hallSource).to.include("['agents', 'tasks', 'catalog', 'library', 'treasure'].includes(action)")
+    expect(hallSource).to.include('openBabaoBox()')
+    expect(hallSource).to.match(/<HallStage[\s\S]*?@open-workspace="openBabaoBox"/)
     const refresh = hallSource.match(/const refreshHall = async \([^)]*\) => \{([\s\S]*?)\n\}/)?.[1] || ''
     expect(refresh).to.include('await loadAgents()')
     expect(refresh).not.to.include('await loadMapAgents()')
   })
 
-  it('prioritizes a visible personal-center button in the portrait header while retaining refresh in shortcuts', async () => {
+  it('prioritizes a visible personal-center button in the portrait header while exposing Babao box in shortcuts', async () => {
     const wrapper = mount(loadPortraitHome(), { props: baseProps() })
     try {
       expect(wrapper.get('.portrait-header-account.account-entry-fixture').text()).to.equal('个人中心')
       expect(wrapper.find('.portrait-refresh').exists()).to.equal(false)
       expect(portraitHomeSource).not.to.include('data-tour="portrait-refresh"')
-      expect(portraitHomeSource).to.include("{ key: 'refresh', label: '点验刷新'")
+      expect(portraitHomeSource).to.include("{ key: 'treasure', label: '百宝箱'")
       expect(portraitHomeSource).to.include('class="portrait-header-account"')
       expect(portraitHomeSource).to.include('.portrait-header-account :deep(.hall-account-entry)')
       await wrapper.get('.portrait-header-account.account-entry-fixture').trigger('click')
       expect(wrapper.emitted('open-profile')).to.deep.equal([[]])
-      await wrapper.get('[data-portrait-action="refresh"]').trigger('click')
-      expect(wrapper.emitted('quick-action')).to.deep.equal([['refresh']])
+      await wrapper.get('[data-portrait-action="treasure"]').trigger('click')
+      expect(wrapper.emitted('quick-action')).to.deep.equal([['treasure']])
     } finally {
       wrapper.unmount()
     }

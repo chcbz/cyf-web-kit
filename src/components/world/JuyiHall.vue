@@ -16,7 +16,6 @@
       :operable-agents="operableRosterAgents"
       :orientation-hint="orientationHint"
       :orientation-request-pending="orientationRequestPending"
-      :refreshing="hallRefreshing"
       :selected-agent="selectedAgent"
       :selected-task="selectedTask"
       :can-start-agent-conversation="canStartAgentConversation"
@@ -29,8 +28,8 @@
       :aria-hidden="isPanelSessionActive || voiceInteractionLocked ? 'true' : null"
       @quick-action="handlePortraitQuickAction"
       @open-profile="openProfile"
+      @open-workspace="openBabaoBox"
       @open-onboarding="emit('open-onboarding', $event)"
-      @refresh-hall="refreshHall"
       @request-landscape="requestPortraitLandscape"
       @retry-live-preview="retryLivePreview"
       @live-preview-visibility-change="handlePreviewVisibility"
@@ -71,7 +70,6 @@
       :portrait-style="portraitStyle"
       :role-class="roleClass"
       :simulation-enabled="simulationEnabled"
-      :refreshing="hallRefreshing"
       :scene-agents="sceneAgents"
       :scene-hotspots="sceneHotspots"
       :selected-agent="selectedAgent"
@@ -86,12 +84,12 @@
       @map-snapshot="handleMapSnapshot"
       @map-snapshot-clear="clearMapResumeSnapshot"
       @open-profile="openProfile"
+      @open-workspace="openBabaoBox"
       @new-conversation="handleNewHallConversation"
       @open-panel="handleStagePanelOpen"
       @request-landscape="requestLandscape"
       @request-portrait="requestPortrait"
       @open-onboarding="emit('open-onboarding', $event)"
-      @refresh-hall="refreshHall"
       @select-agent="selectAgent"
       @simulation-phase-events="handleSimulationPhaseEvents"
       @simulation-ready="handleSimulationReady"
@@ -199,7 +197,6 @@
             :funded-preview-enabled="economyPreviewEnabled"
             :work-item-plan-enabled="workItemPlanEnabled"
             :authorization-generation="apiStore.authorizationGeneration"
-            :output-identity-fingerprint="outputIdentityFingerprint"
             :funded-quote-preview="fundedQuotePreview"
             :funded-claim-state="fundedClaimState"
             :funded-create-recovery="fundedCreateRecovery"
@@ -233,6 +230,7 @@
             @cancel-funded-create-recovery="showToast('原资金榜请求仍会保留；请在准备好后明确恢复。')"
             @cancel-funding="cancelFunding"
             @load-settlement="loadSettlement"
+            @open-workspace="openBabaoBox"
             @discuss-task="discussTask"
             @load-tasks="loadTasks"
             @select-agent="selectAgent"
@@ -259,6 +257,12 @@
               :identity-epoch="apiStore.authorizationGeneration"
             />
           </template>
+
+          <PersonalWorkspace
+            v-if="renderedPanel === 'treasure'"
+            embedded
+            @close="closePanel"
+          />
 
           <PersonaCatalogPanel
             v-if="renderedPanel === 'catalog'"
@@ -308,6 +312,7 @@
             @load-messages="retryHallConversation"
             @mention-agent="handleMentionAgent"
             @new-conversation="handleNewHallConversation"
+            @open-workspace="openBabaoBox"
             @retry-conversation="retryHallConversation"
             @select-conversation="selectHallConversation"
             @send-message="handleSendHallMessage"
@@ -347,6 +352,7 @@
             @load-messages="retryHallConversation"
             @mention-agent="handleMentionAgent"
             @new-conversation="handleNewHallConversation"
+            @open-workspace="openBabaoBox"
             @retry-conversation="retryHallConversation"
             @select-conversation="selectHallConversation"
             @send-message="handleSendHallMessage"
@@ -386,6 +392,7 @@
             @load-messages="retryHallConversation"
             @mention-agent="handleMentionAgent"
             @new-conversation="handleNewHallConversation"
+            @open-workspace="openBabaoBox"
             @retry-conversation="retryHallConversation"
             @select-conversation="selectHallConversation"
             @send-message="handleSendHallMessage"
@@ -456,6 +463,7 @@ import PersonaCatalogPanel from '@/components/juyiting/PersonaCatalogPanel.vue'
 import PrivateDiscussionPanel from '@/components/juyiting/PrivateDiscussionPanel.vue'
 import PublicDiscussionPanel from '@/components/juyiting/PublicDiscussionPanel.vue'
 import SelectedAgentCard from '@/components/juyiting/SelectedAgentCard.vue'
+import PersonalWorkspace from '@/components/workspace/PersonalWorkspace.vue'
 import {
   roleDialogues,
   statusFilters,
@@ -471,13 +479,6 @@ const emit = defineEmits(['open-onboarding'])
 const globalStore = useGlobalStore()
 const apiStore = useApiStore()
 const router = useRouter()
-const outputIdentityFingerprint = computed(() => {
-  const principal = globalStore.getUserId || globalStore.user?.id
-  if (!principal) return ''
-  const client = globalStore.user?.appid || 'default-client'
-  return `${principal}:${client}:${apiStore.authorizationGeneration}`
-})
-
 const accountAvatar = computed(() => String(globalStore.user?.avatar || '').trim())
 const accountDisplayName = computed(() => {
   const user = globalStore.user || {}
@@ -511,7 +512,7 @@ const {
 } = useTaskWorkspaceView(taskWorkspace)
 const personaSetupResult = ref(null)
 const toast = ref('')
-const panelWhitelist = new Set(['agents', 'catalog', 'tasks', 'workspace', 'chat', 'library'])
+const panelWhitelist = new Set(['agents', 'catalog', 'tasks', 'workspace', 'treasure', 'chat', 'library'])
 const activePanel = ref('')
 const renderedPanel = ref('')
 const panelSessionGeneration = ref(0)
@@ -649,6 +650,7 @@ const activePanelTitle = computed(() => {
   if (renderedPanel.value === 'catalog') return '招贤令'
   if (renderedPanel.value === 'tasks') return '悬赏榜'
   if (renderedPanel.value === 'workspace') return '协作工作台'
+  if (renderedPanel.value === 'treasure') return '百宝箱'
   if (renderedPanel.value === 'chat') return '厅前议事'
   if (renderedPanel.value === 'library') return '案卷阁'
   return ''
@@ -719,7 +721,6 @@ const {
   filteredAgents,
   hiddenAgentCount,
   loadAgents,
-  loadMapAgents,
   loadPersonaCatalog,
   loadRosterAgents,
   loadTasks,
@@ -1036,9 +1037,9 @@ const requestPortraitLandscape = () => {
 
 const handlePortraitQuickAction = (action) => {
   if (voiceInteractionLocked.value) return false
-  if (action !== 'refresh') stagePortraitHotspotTarget(action)
-  if (action === 'refresh') {
-    void refreshHall()
+  if (action !== 'treasure') stagePortraitHotspotTarget(action)
+  if (action === 'treasure') {
+    openBabaoBox()
     return
   }
   if (action === 'onboarding') {
@@ -1049,7 +1050,7 @@ const handlePortraitQuickAction = (action) => {
     handleStagePanelOpen('chat')
     return
   }
-  if (['agents', 'tasks', 'catalog', 'library'].includes(action)) openPanel(action)
+  if (['agents', 'tasks', 'catalog', 'library', 'treasure'].includes(action)) openPanel(action)
 }
 
 const closePortraitTaskDetail = () => {
@@ -1089,6 +1090,11 @@ const handlePortraitTaskDiscussion = task => {
 watch(experienceMode, mode => {
   if (mode !== 'portrait-command') closePortraitTaskDetail()
 })
+
+const openBabaoBox = () => {
+  if (voiceInteractionLocked.value) return false
+  return openPanel('treasure')
+}
 
 const openTaskWorkspace = () => {
   if (!taskWorkspaceEnabled || !taskWorkspaceSubject.value?.taskId || !taskWorkspaceSubject.value?.actorAgentId) return
@@ -2339,6 +2345,10 @@ button.hall-room {
   contain: layout paint;
   will-change: transform, opacity;
   isolation: isolate;
+}
+
+.floating-panel.panel-treasure {
+  width: min(1040px, calc(100% - 40px));
 }
 
 .floating-panel.layout-center-modal {

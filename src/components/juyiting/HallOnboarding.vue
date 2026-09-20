@@ -114,9 +114,9 @@ const TOUR_STEPS = Object.freeze({
       description: '在案卷阁沉淀和检索可复用的协作成果。'
     },
     {
-      target: '[data-tour="portrait-action-refresh"]',
-      title: '点验刷新：更新厅中状态',
-      description: '需要最新的好汉和榜文状态时，使用点验刷新。'
+      target: '[data-tour="portrait-action-treasure"]',
+      title: '百宝箱：集中管理资料与交付',
+      description: '文件、版本和交付件统一在百宝箱管理，不再占用榜文和议事详情。'
     },
     {
       target: '[data-tour="portrait-todos"]',
@@ -161,9 +161,9 @@ const TOUR_STEPS = Object.freeze({
       description: '点击案卷阁查找和沉淀可复用资料。'
     },
     {
-      target: '[data-tour="landscape-refresh"]',
-      title: '点验获取最新状态',
-      description: '需要刷新厅中人手与榜文时使用点验；引导只介绍位置，不会替你触发刷新。'
+      target: '[data-tour="landscape-babao-box"]',
+      title: '百宝箱：集中管理资料与交付',
+      description: '打开百宝箱可管理文件、版本和交付件；引导只介绍位置，不会替你执行操作。'
     },
     {
       target: '[data-tour="landscape-sound"]',

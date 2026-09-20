@@ -23,6 +23,7 @@
       @load-messages="$emit('load-messages')"
       @mention-agent="$emit('mention-agent', $event)"
       @new-conversation="$emit('new-conversation')"
+      @open-workspace="$emit('open-workspace')"
       @retry-conversation="$emit('retry-conversation')"
       @select-conversation="$emit('select-conversation', $event)"
       @send-message="$emit('send-message')"
@@ -69,6 +70,7 @@ const emit = defineEmits([
   'load-messages',
   'mention-agent',
   'new-conversation',
+  'open-workspace',
   'retry-conversation',
   'select-conversation',
   'send-message',

@@ -19,7 +19,7 @@ const privateDeliverable = (overrides = {}) => ({
   ...overrides
 })
 
-describe('1.13.1 W07 hall deliverable directory', () => {
+describe('1.13.2 Babao-box workspace entry', () => {
   it('renders only canonical private output references and never promotes them to formal acceptance', async () => {
     const source = ref({ type: 'conversation', id: 'conversation-1' })
     const identity = ref('owner-a')
@@ -128,20 +128,17 @@ describe('1.13.1 W07 hall deliverable directory', () => {
     }
   })
 
-  it('keeps the ChatPanel reference-only: its user actions carry only output and file identifiers', async () => {
+  it('keeps ChatPanel focused on discussion and delegates workspace work to the explicit Babao entry', async () => {
     const { readFileSync } = await import('node:fs')
     const source = readFileSync(new URL('../src/components/juyiting/ChatPanel.vue', import.meta.url), 'utf8')
-    expect(source).to.include("outputSource('conversation', () => props.conversationId)")
-    expect(source).to.include('交付同步中，尚未提交待验收。')
-    expect(source).to.include("'preview-deliverable'")
-    expect(source).to.include("'download-deliverable'")
-    expect(source).to.include('artifactRef: item.artifactRef')
-    expect(source).to.include('saveOutputBlob({ blob, item })')
-    expect(source).to.include('此处是明确执行指令，不会因普通聊天自动发起文件处理或模型调用。')
-    expect(source).to.include('taskId: taskExecutionMode.value ? selectedTaskId.value : null')
-    expect(source).to.include("role: 'INPUT'")
-    expect(source).to.include('<FormalDeliveryList')
-    expect(source).to.include('conversationId: props.conversationId')
-    expect(source).not.to.match(/storageUri|leaseToken|runtimeCredential/)
+    const hall = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+    expect(source).to.include('class="icon-button workspace-entry"')
+    expect(source).to.include("$emit('open-workspace')")
+    expect(source).to.not.include('usePersonalWorkspaceExecution')
+    expect(source).to.not.include('usePersonalWorkspaceConversationLinks')
+    expect(source).to.not.include('<FormalDeliveryList')
+    expect(source).to.not.match(/storageUri|leaseToken|runtimeCredential/)
+    expect(hall).to.include('<PersonalWorkspace')
+    expect(hall).to.include("renderedPanel === 'treasure'")
   })
 })

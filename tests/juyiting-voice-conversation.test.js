@@ -205,6 +205,7 @@ const createActualHallVoiceMocks = ({
     isEconomyPreviewCapability: () => false, loadEconomyPreviewCapability: async () => null,
     capturePanelReturnTarget: () => null, focusHallPanel: noop, isCurrentPanelGeneration: () => true, isSafePanelFocusTarget: () => false,
     resolvePanelReturnTarget: () => null, restorePanelFocus: noop, trapPanelFocus: noop,
+    onBeforeRouteLeave: noop, useRouter: () => ({ push: asyncNoop }),
     useGlobalStore: () => ({ getJiacn: 'hero', user: { name: 'Tester' }, setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }),
     useApiStore: () => ({ token: async () => 'token' }), agentApi: {}, chatApi, log: { warn: noop, error: noop }, juyitingGame: {},
     roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
@@ -239,7 +240,7 @@ const createActualHallVoiceMocks = ({
     isTaskWorkspaceBuildEnabled: () => false, useTaskWorkspaceView: () => ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: text, error: Vue.ref(null), retry: noop }), useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop }),
     portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: agent => agent?.name || '', portraitStyle: () => ({}), roleClass: () => '',
     HallPortraitHome: HallPortraitHomeComponent || EmptyPanel, HallStage, HallVoiceHud: HallVoiceHudComponent || EmptyPanel, LibraryPanel: EmptyPanel, AgentPanel: EmptyPanel, BountyDiscussionPanel: DiscussionPanelComponent || EmptyPanel,
-    BountyPanel: EmptyPanel, TaskWorkspacePanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PrivateDiscussionPanel: DiscussionPanelComponent || EmptyPanel, PublicDiscussionPanel: DiscussionPanelComponent || EmptyPanel, SelectedAgentCard: SelectedAgentCardComponent || EmptyPanel
+    BountyPanel: EmptyPanel, TaskWorkspacePanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PersonalWorkspace: EmptyPanel, PrivateDiscussionPanel: DiscussionPanelComponent || EmptyPanel, PublicDiscussionPanel: DiscussionPanelComponent || EmptyPanel, SelectedAgentCard: SelectedAgentCardComponent || EmptyPanel
   }
 }
 
