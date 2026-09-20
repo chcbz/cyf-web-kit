@@ -129,6 +129,18 @@ describe('HallPortraitHome', () => {
     expect(portraitHomeSource).not.to.include('visualViewport')
   })
 
+  it('contains long todo feeds in their own scroll region so shortcuts retain their layout', () => {
+    const todoListStyles = portraitHomeSource.match(/\.portrait-todo-list\s*\{([\s\S]*?)\n\}/)?.[1] || ''
+    const todoSectionStyles = portraitHomeSource.match(/\.portrait-todos\s*\{([\s\S]*?)\n\}/)?.[1] || ''
+
+    expect(portraitHomeSource).to.include('class="portrait-todo-list" aria-label="待办榜文列表"')
+    expect(todoSectionStyles).to.include('min-height: 0')
+    expect(todoListStyles).to.include('max-height: min(36vh, 264px)')
+    expect(todoListStyles).to.include('max-height: min(36dvh, 264px)')
+    expect(todoListStyles).to.include('overflow-y: auto')
+    expect(todoListStyles).to.include('overscroll-behavior: contain')
+  })
+
   it('opens a tapped todo in the page-owned portrait detail without depending on the bounty-panel watcher', () => {
     const handler = hallSource.match(/const handlePortraitTaskOpen = task => \{([\s\S]*?)\n\}/)?.[1] || ''
     const boardHandler = hallSource.match(/const handlePortraitTaskBoard = \(\) => \{([\s\S]*?)\n\}/)?.[1] || ''

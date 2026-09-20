@@ -93,18 +93,20 @@
         <h2 id="portrait-todos-title">待办榜文</h2>
         <button type="button" @click="emit('quick-action', 'tasks')">查看悬赏榜</button>
       </div>
-      <button
-        v-for="task in todoTasks"
-        :key="task.id"
-        class="portrait-todo"
-        type="button"
-        @click="openTask(task)"
-      >
-        <span :class="taskStateClass(task.status)">{{ taskStatusText(task.status) }}</span>
-        <strong>{{ task.title || '未命名榜文' }}</strong>
-        <small>{{ task.requiredAbilities?.length ? task.requiredAbilities.join(' / ') : '待议定人手' }}</small>
-      </button>
-      <p v-if="!todoTasks.length" class="portrait-empty">眼下无待办榜文，可先点验厅中人手。</p>
+      <div class="portrait-todo-list" aria-label="待办榜文列表">
+        <button
+          v-for="task in todoTasks"
+          :key="task.id"
+          class="portrait-todo"
+          type="button"
+          @click="openTask(task)"
+        >
+          <span :class="taskStateClass(task.status)">{{ taskStatusText(task.status) }}</span>
+          <strong>{{ task.title || '未命名榜文' }}</strong>
+          <small>{{ task.requiredAbilities?.length ? task.requiredAbilities.join(' / ') : '待议定人手' }}</small>
+        </button>
+        <p v-if="!todoTasks.length" class="portrait-empty">眼下无待办榜文，可先点验厅中人手。</p>
+      </div>
     </section>
 
     <section data-tour="portrait-context" class="portrait-context" aria-label="当前上下文">
@@ -653,10 +655,20 @@ button:disabled {
 }
 
 .portrait-todos {
+  min-height: 0;
   padding: 12px;
   border: 1px solid rgba(255, 227, 170, 0.16);
   border-radius: 14px;
   background: rgba(28, 26, 21, 0.72);
+}
+
+.portrait-todo-list {
+  display: grid;
+  min-height: 0;
+  max-height: min(36vh, 264px);
+  max-height: min(36dvh, 264px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .portrait-todo {
