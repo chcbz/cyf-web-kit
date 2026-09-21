@@ -139,9 +139,9 @@ describe('JuyiHall collaboration flow contract', () => {
   })
 
   it('keeps both agent and task context in outgoing chat metadata', () => {
-    expect(hallConversationSource).to.include('const selectedAgentId = isVoiceSend ? sendContext.selectedAgentId : (sendContext.selectedAgentId ?? selectedAgent.value?.agentId)')
+    expect(hallConversationSource).to.include("const selectedAgentId = isVoiceSend ? sendContext.selectedAgentId : (Object.hasOwn(sendContext, 'selectedAgentId') ? sendContext.selectedAgentId : selectedAgent.value?.agentId)")
     expect(hallConversationSource).to.include('const mentionAgentIds = Array.isArray(sendContext.mentionAgentIds)')
-    expect(hallConversationSource).to.include('const selectedTaskId = isVoiceSend ? sendContext.selectedTaskId : (sendContext.selectedTaskId ?? selectedTask.value?.id)')
+    expect(hallConversationSource).to.include("const selectedTaskId = isVoiceSend ? sendContext.selectedTaskId : (Object.hasOwn(sendContext, 'selectedTaskId') ? sendContext.selectedTaskId : selectedTask.value?.id)")
     expect(hallConversationSource).to.include('selectedAgentId,')
     expect(hallConversationSource).to.include('mentionAgentIds,')
     expect(hallConversationSource).to.include('selectedTaskId')
@@ -175,7 +175,7 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallChatContextSource).to.include("chatMode.value = 'bounty'")
     expect(hallChatContextSource).to.include("chatMode.value = 'private'")
     expect(hallChatContextSource).to.include('participantAgentIds')
-    expect(hallChatContextSource).to.include('task:${selectedTask.value.id}:agent:${selectedAgent.value.agentId}')
+    expect(hallChatContextSource).to.include('task:${task.id}:agent:${agentId}')
     expect(hallChatContextSource).to.include('taskDiscussionAgentIds.value = taskAssigneeIds(selectedTask.value)')
     expect(hallChatContextSource).to.include('selectedAgent.value = null')
   })

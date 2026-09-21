@@ -1,7 +1,7 @@
 <template>
   <section
     class="archive-reader"
-    :class="{ 'is-virtual-landscape-reader': virtualLandscape }"
+    :class="{ 'is-virtual-landscape-reader': virtualLandscape, 'is-embedded-reader': embedded }"
     aria-label="典籍阅读"
   >
     <div
@@ -51,15 +51,17 @@
             <button
               type="button"
               class="archive-book-open"
+              :disabled="embedded && !detailAllowed"
               @click="enterReading"
             >
               进入翻阅
             </button>
+            <p v-if="embedded && !detailAllowed">请先返回，再进入翻阅。</p>
           </div>
         </article>
       </div>
 
-      <Teleport to="body" :disabled="disableTeleport">
+      <Teleport to="body" :disabled="disableTeleport || embedded">
         <section
           v-if="readingOpen"
           ref="dialogRef"
@@ -68,8 +70,8 @@
             'is-virtual-landscape-reader': virtualLandscape,
             'has-reader-capsule': hasReaderCapsule
           }"
-          role="dialog"
-          aria-modal="true"
+          :role="embedded ? 'region' : 'dialog'"
+          :aria-modal="embedded ? undefined : 'true'"
           aria-labelledby="archive-reader-title"
           tabindex="-1"
         >
@@ -365,12 +367,15 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, proxyRefs, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, proxyRefs, ref, watch } from 'vue'
 import { useArchiveReader, utf8ByteLength } from '@/composables/juyiting/useArchiveReader'
 import { nativeOrientationFromLocation } from '@/composables/juyiting/miniProgramOrientation.js'
 import { registerIdentityCleanup } from '@/utils/identityLifecycle.js'
 
-const { disableTeleport, initialView, virtualLandscape } = defineProps({
+const { disableTeleport, initialView, virtualLandscape, embedded, active, detailAllowed } = defineProps({
+  embedded: { type: Boolean, default: false },
+  detailAllowed: { type: Boolean, default: true },
+  active: { type: Boolean, default: true },
   disableTeleport: { type: Boolean, default: false },
   initialView: {
     type: String,
@@ -379,6 +384,8 @@ const { disableTeleport, initialView, virtualLandscape } = defineProps({
   },
   virtualLandscape: Boolean
 })
+
+const emit = defineEmits(['navigation-state'])
 
 // The SDK also exposes wx.miniProgram in ordinary browsers; use host markers only.
 const hasReaderCapsule = /MicroMessenger/i.test(globalThis.navigator?.userAgent || '')
@@ -451,6 +458,7 @@ const retryCatalog = () => runAction(
 )
 
 const enterReading = async (event) => {
+  if (embedded && !detailAllowed) return
   returnFocusElement = typeof event?.currentTarget?.focus === 'function'
     ? event.currentTarget
     : document.activeElement
@@ -459,11 +467,11 @@ const enterReading = async (event) => {
     () => reader.initialize({ reuseCatalog: true }),
     '典籍暂无法读取，请稍后重试。'
   )
-  if (!opened && !reader.chapter) return
+  if ((!opened && !reader.chapter) || (embedded && (!detailAllowed || !active))) return
   catalogOpen.value = false
   notesOpen.value = false
   readingOpen.value = true
-  document.body?.classList.add('archive-reading-open')
+  if (!embedded) document.body?.classList.add('archive-reading-open')
   await nextTick()
   dialogRef.value?.focus()
 }
@@ -475,7 +483,7 @@ const closeReading = async () => {
   readingOpen.value = false
   catalogOpen.value = false
   notesOpen.value = false
-  document.body?.classList.remove('archive-reading-open')
+  if (!embedded) document.body?.classList.remove('archive-reading-open')
   await nextTick()
   const focusTarget = returnFocusElement?.isConnected
     ? returnFocusElement
@@ -495,7 +503,7 @@ const focusableElements = () => [...(dialogRef.value?.querySelectorAll(
 })
 
 const handleReaderKeydown = (event) => {
-  if (!readingOpen.value) return
+  if (embedded || !active || !readingOpen.value || event.isComposing || event.keyCode === 229) return
   if (event.key === 'Escape') {
     event.preventDefault()
     closeReading()
@@ -734,7 +742,16 @@ const focusRequestedLocation = () => {
   }
 }
 
-onUpdated(focusRequestedLocation)
+const back = () => {
+  if (!readingOpen.value) return false
+  if (notesOpen.value) notesOpen.value = false
+  else if (catalogOpen.value) catalogOpen.value = false
+  else void closeReading()
+  return true
+}
+defineExpose({ back })
+watch(readingOpen, value => emit('navigation-state', value), { immediate: true })
+onUpdated(() => { if (active) focusRequestedLocation() })
 
 onMounted(() => {
   unregisterEditorIdentityCleanup = registerIdentityCleanup(() => {
@@ -743,7 +760,7 @@ onMounted(() => {
     editorRevision += 1
   })
   window.addEventListener('keydown', handleReaderKeydown)
-  if (readingOpen.value) document.body?.classList.add('archive-reading-open')
+  if (readingOpen.value && !embedded) document.body?.classList.add('archive-reading-open')
   reader.initialize({ openChapter: readingOpen.value }).catch(() => {})
 })
 
@@ -751,7 +768,7 @@ onBeforeUnmount(() => {
   unregisterEditorIdentityCleanup?.()
   unregisterEditorIdentityCleanup = null
   window.removeEventListener('keydown', handleReaderKeydown)
-  document.body?.classList.remove('archive-reading-open')
+  if (!embedded) document.body?.classList.remove('archive-reading-open')
   void flushReadingPosition()
   clearTimeout(programmaticScrollTimer)
   programmaticScrollGeneration = 0
@@ -1464,4 +1481,18 @@ onBeforeUnmount(() => {
     font-size: 23px;
   }
 }
+.archive-reader.is-embedded-reader .archive-reader-fullscreen {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  z-index: auto;
+  transform: none;
+  flex: 1;
+}
+.archive-reader.is-embedded-reader .reader-header {
+  padding-top: 8px;
+}
+
 </style>

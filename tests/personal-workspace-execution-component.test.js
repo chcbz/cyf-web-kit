@@ -93,4 +93,44 @@ describe('personal workspace execution receipt presentation', () => {
     assert.equal(wrapper.find('.detail-modal').exists(), true)
     wrapper.unmount()
   })
+  it('W04 embeds only file browsing, keeps the source list inert in detail, and consumes one local return', async () => {
+    const workspace = workspaceMock()
+    const execution = executionMock()
+    let executionLoads = 0
+    execution.loadAgents = execution.loadCapabilities = execution.recover = async () => { executionLoads += 1 }
+    const component = new Function('Vue', 'deps', script)(Vue, {
+      useApiStore: () => ({ authorizationGeneration: 1, oauthClientId: 'web-client' }),
+      useGlobalStore: () => ({ user: { id: 'owner-a' } }),
+      usePersonalWorkspace: () => workspace, usePersonalWorkspaceExecution: () => execution, savePersonalWorkspaceBlob: () => {}
+    })
+    const wrapper = mount(component, { attachTo: document.body, props: { embedded: true } })
+    try {
+      await Vue.nextTick()
+      assert.equal(wrapper.find('.box-modal').exists(), false)
+      assert.equal(wrapper.find('.delivery-modal').exists(), false)
+      assert.equal(executionLoads, 0)
+      const list = wrapper.find('.library-modal').element
+      await wrapper.setProps({ detailAllowed: false })
+      assert.equal(wrapper.find('.file-row').element.disabled, true)
+      await wrapper.find('.file-row').trigger('click')
+      assert.equal(workspace.detail.value, null)
+      await wrapper.setProps({ detailAllowed: true })
+      await wrapper.find('.file-row').trigger('click')
+      await Vue.nextTick()
+      assert.equal(wrapper.find('.detail-modal').exists(), true)
+      assert.equal(list.getAttribute('inert'), '')
+      assert.equal(list.getAttribute('aria-hidden'), 'true')
+      assert.equal(wrapper.text().includes('办事笺'), false)
+      assert.equal(wrapper.vm.canGoBack, true)
+      assert.equal(wrapper.vm.back(), true)
+      await Vue.nextTick()
+      assert.equal(wrapper.find('.library-modal').element, list)
+      assert.equal(list.hasAttribute('inert'), false)
+      assert.equal(document.activeElement, wrapper.find('.file-row').element)
+      assert.equal(wrapper.vm.back(), false)
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
 })

@@ -11,6 +11,7 @@
           {{ item.label }}
         </button>
       </div>
+      <button type="button" @click="$emit('open-catalog')">招贤令</button>
       <span>簿上 {{ agents.length }} / 厅中 {{ mapAgents.length }}</span>
     </div>
     <p v-if="loading" class="panel-data-state" role="status">点将册读取中…</p>
@@ -55,6 +56,11 @@
             <span v-for="ability in selectedAgent.abilities || []" :key="ability">{{ ability }}</span>
             <span v-if="!(selectedAgent.abilities || []).length">未录本领</span>
           </div>
+          <button
+            v-if="canStartConversation(selectedAgent)"
+            type="button"
+            @click="$emit('start-conversation', selectedAgent)"
+          >与这位好汉密议</button>
           <p>{{ selectedAgent.errorMessage || selectedAgent.currentTaskTitle || '正在厅中候令，可从悬赏榜点将。' }}</p>
         </template>
         <p v-else>点一位厅中好汉，查看动静、本领与所领榜文。</p>
@@ -65,6 +71,7 @@
 
 <script setup>
 defineProps({
+  canStartConversation: { type: Function, default: () => false },
   agents: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   errorMessage: { type: String, default: '' },
@@ -80,7 +87,7 @@ defineProps({
   statusText: { type: Function, required: true }
 })
 
-defineEmits(['set-agent-filter', 'select-agent'])
+defineEmits(['set-agent-filter', 'select-agent', 'start-conversation', 'open-catalog'])
 </script>
 
 <style scoped>

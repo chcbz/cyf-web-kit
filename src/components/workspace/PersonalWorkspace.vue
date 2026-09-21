@@ -1,12 +1,17 @@
 <template>
   <main class="personal-workspace" :class="{ 'is-hall-treasure': embedded, 'is-progress-view': activeModal === 'delivery' && showDeliveryProgress }">
-    <header class="workspace-header">
+    <header v-if="!embedded" class="workspace-header">
       <div><p class="workspace-eyebrow">聚义厅 · 内堂收纳</p><h1>百宝箱</h1><p>打开一件事，再专心办完它。</p></div>
       <p class="workspace-header-note">资料只在你明确提交时，才会授权给所选 Agent。</p>
     </header>
 
     <section class="modal-stage" :class="{ 'has-child-modal': activeModal !== 'home', 'has-detail-modal': activeModal === 'detail' }" aria-label="百宝箱多层弹窗">
-      <section class="babao-modal box-modal" :class="{ recessed: activeModal !== 'home' }" aria-labelledby="babao-box-title">
+      <section
+        v-if="!embedded"
+        class="babao-modal box-modal"
+        :class="{ recessed: activeModal !== 'home' }"
+        aria-labelledby="babao-box-title"
+      >
         <p class="section-kicker">第一层 · 箱面</p><h2 id="babao-box-title">这一箱，先办哪一件？</h2>
         <p class="modal-copy">百宝箱只保留入口；资料、交付和文件详情在下一层分别打开。</p>
         <div class="box-actions">
@@ -19,11 +24,19 @@
 
       <section
         v-if="isLibraryModal"
+        v-show="!embedded || activeModal === 'library'"
+        :inert="embedded && activeModal !== 'library' ? '' : null"
+        :aria-hidden="embedded && activeModal !== 'library' ? 'true' : null"
         class="babao-modal child-modal library-modal"
         :class="{ recessed: activeModal === 'detail' }"
         aria-labelledby="workspace-files-title"
       >
-        <div class="modal-heading"><div><p class="section-kicker">第二层 · 资料柜</p><h2 id="workspace-files-title">{{ state === 'TRASHED' ? '回收站' : '我的文件' }}</h2><p>从这里取出一份资料，再进入第三层处理。</p></div><button type="button" class="quiet-action" @click="backToBox">返回箱面</button></div>
+        <div class="modal-heading"><div><p v-if="!embedded" class="section-kicker">第二层 · 资料柜</p><h2 id="workspace-files-title">{{ state === 'TRASHED' ? '回收站' : '我的文件' }}</h2><p>选择资料，查看固定版本、预览及来源。</p></div><button
+          v-if="!embedded"
+          type="button"
+          class="quiet-action"
+          @click="backToBox"
+        >返回箱面</button></div>
         <div class="library-tools">
           <label class="file-picker"><span>添入资料</span><input type="file" :accept="acceptTypes" @change="onUploadFile" /></label>
           <label class="inline-name"><span class="sr-only">显示名（可选）</span><input v-model="uploadDisplayName" maxlength="255" placeholder="显示名（可选）" /></label>
@@ -31,14 +44,17 @@
         </div>
         <p v-if="uploadFile" class="selected-file">待收入：{{ uploadFile.name }}（{{ byteText(uploadFile.size) }}）</p>
         <form class="filters" @submit.prevent="refresh"><label><span>搜索</span><input v-model="query" maxlength="100" placeholder="按显示名搜索" /></label><label><span>类型</span><select v-model="mediaFamily"><option value="">全部类型</option><option value="IMAGE">图片</option><option value="TEXT">文本</option><option value="DOCUMENT">Word 文档</option><option value="SPREADSHEET">Excel 表格</option><option value="PRESENTATION">PPT 演示</option><option value="PDF">PDF</option></select></label><div class="filter-actions"><button type="submit">筛选</button><button type="button" :class="{ active: state === 'ACTIVE' }" @click="switchState('ACTIVE')">文件</button><button type="button" :class="{ active: state === 'TRASHED' }" @click="switchState('TRASHED')">回收站</button></div></form>
-        <p v-if="workspace.listState.value === 'loading'" class="workspace-note" role="status">正在翻看资料…</p><p v-else-if="workspace.listState.value === 'empty'" class="workspace-empty">{{ state === 'TRASHED' ? '回收站为空。' : '还没有文件。可先添入资料，或返回箱面打开交付台。' }}</p>
-        <div v-else class="file-list"><button
+        <p v-if="workspace.listState.value === 'loading'" class="workspace-note" role="status">正在翻看资料…</p><p v-else-if="workspace.listState.value === 'empty'" class="workspace-empty">{{ state === 'TRASHED' ? '回收站为空。' : embedded ? '还没有文件。可先添入资料。' : '还没有文件。可先添入资料，或返回箱面打开交付台。' }}</p>
+        <div v-else ref="fileListRef" class="file-list"><button
           v-for="file in workspace.items.value"
           :key="file.fileId"
+          :data-file-id="file.fileId"
           type="button"
           class="file-row"
+          :disabled="embedded && !detailAllowed"
           @click="openFile(file.fileId)"
         ><span class="file-icon" aria-hidden="true">{{ iconFor(file.mediaFamily) }}</span><span class="file-summary"><strong>{{ file.displayName }}</strong><small>v{{ file.latestVersion }} · {{ familyText(file.mediaFamily) }} · {{ originText(file.originKind) }}</small></span><span class="file-state">取出</span></button></div>
+        <p v-if="embedded && !detailAllowed" class="workspace-note">请先返回，再打开文件详情。</p>
         <button
           v-if="workspace.nextCursor.value"
           type="button"
@@ -48,7 +64,7 @@
         >加载更多</button>
       </section>
 
-      <section v-if="activeModal === 'delivery'" class="babao-modal child-modal delivery-modal" aria-labelledby="workspace-generation-title">
+      <section v-if="!embedded && activeModal === 'delivery'" class="babao-modal child-modal delivery-modal" aria-labelledby="workspace-generation-title">
         <div class="modal-heading"><div><p class="section-kicker">第二层 · 交付台</p><h2 id="workspace-generation-title">{{ showDeliveryProgress ? '交付进度' : '直接生成交付件' }}</h2><p>{{ showDeliveryProgress ? '服务端回执与查询结果在此处显示。' : '只保留一条清晰流程：选 Agent、定类型、写需求。' }}</p></div><button type="button" class="quiet-action" @click="backToBox">返回箱面</button></div>
         <section v-if="showDeliveryProgress" class="execution-status delivery-receipt" aria-live="polite"><p class="receipt-title">本次交付回执</p><template v-if="execution.receipt.value"><dl class="file-details"><div><dt>执行状态</dt><dd>{{ executionStateText(execution.receipt.value.state) }}</dd></div><div><dt>目标 Agent</dt><dd>{{ execution.selectedExecutionAgent.value?.name || execution.receipt.value.targetAgentId }}</dd></div><div><dt>执行编号</dt><dd>{{ execution.receipt.value.executionId }}</dd></div></dl><p v-if="execution.receipt.value.state === 'QUEUED'" class="workspace-note">服务端已接受请求，正在等待结果；尚未确认任何运行阶段或交付完成。</p></template><p v-else class="workspace-note">{{ execution.executionState.value === 'creating' ? '正在提交原请求；尚未收到服务端执行回执。' : '原请求结果待确认；只查询原请求，不会再次提交。' }}</p><div class="actions"><button type="button" @click="refreshExecution">刷新进度</button><button type="button" :disabled="execution.execution.value?.state !== 'QUEUED'" @click="revokeExecutionInputs">撤销尚未开始的输入授权</button><button
           type="button"
@@ -88,9 +104,9 @@
       </section>
 
       <section v-if="activeModal === 'detail' && workspace.detail.value" class="babao-modal detail-modal" aria-labelledby="workspace-detail-title">
-        <div class="modal-heading"><div><p class="section-kicker">第三层 · 文件详情</p><h2 id="workspace-detail-title">{{ workspace.detail.value.file.displayName }}</h2><p>每次只处理一个角度：概况、版本或办事笺。</p></div><button type="button" class="quiet-action" @click="backToLibrary">返回资料柜</button></div>
+        <div class="modal-heading"><div><p v-if="!embedded" class="section-kicker">第三层 · 文件详情</p><h2 id="workspace-detail-title" ref="detailTitleRef" tabindex="-1">{{ workspace.detail.value.file.displayName }}</h2><p>{{ embedded ? '旧版本仍可查看，上传新版本不会替换已交办的资料。' : '每次只处理一个角度：概况、版本或办事笺。' }}</p></div><button type="button" class="quiet-action" @click="backToLibrary">返回资料柜</button></div>
         <nav class="detail-tabs" aria-label="文件详情操作"><button type="button" :class="{ active: detailPane === 'summary' }" @click="detailPane = 'summary'">概况</button><button type="button" :class="{ active: detailPane === 'versions' }" @click="detailPane = 'versions'">版本与预览</button><button
-          v-if="workspace.detail.value.file.state === 'ACTIVE'"
+          v-if="!embedded && workspace.detail.value.file.state === 'ACTIVE'"
           type="button"
           :class="{ active: detailPane === 'execution' }"
           @click="detailPane = 'execution'"
@@ -106,7 +122,12 @@
           :key="version.version"
           class="version-row"
           :class="{ active: selectedVersion === version.version }"
-        ><button type="button" @click="selectedVersion = version.version">v{{ version.version }}</button><span>{{ version.originalFilename }}</span><small>{{ byteText(version.byteLength) }} · {{ formatDate(version.createdAt) }}</small><div class="version-actions"><button type="button" :disabled="!canAddVersionAsMaterial(version)" @click="addExecutionMaterial({ fileId: workspace.detail.value.file.fileId, version: version.version, displayName: workspace.detail.value.file.displayName, contentMimeType: version.contentMimeType })">{{ isExecutionMaterial(workspace.detail.value.file.fileId) ? '已选资料' : '加入资料' }}</button><button type="button" @click="preview(version.version)">预览</button><button type="button" @click="download(version.version)">下载</button></div></div><section class="preview" aria-live="polite"><p v-if="workspace.actionState.value === 'loading-preview'">正在读取预览…</p><template v-else-if="workspace.preview.value.kind === 'parts'"><div class="preview-navigation"><button type="button" :disabled="workspace.preview.value.selectedIndex === 0" @click="workspace.selectPreviewPart(workspace.preview.value.selectedIndex - 1)">上一页</button><span>第 {{ workspace.preview.value.selectedIndex + 1 }} / {{ workspace.preview.value.parts.length }} {{ selectedPreviewPart?.kind === 'text' ? '项' : '页' }}</span><button type="button" :disabled="workspace.preview.value.selectedIndex >= workspace.preview.value.parts.length - 1" @click="workspace.selectPreviewPart(workspace.preview.value.selectedIndex + 1)">下一页</button></div><pre v-if="selectedPreviewPart?.kind === 'text'" v-text="selectedPreviewPart.text"></pre><img v-else-if="selectedPreviewPart?.kind === 'image'" :src="selectedPreviewPart.url" :alt="workspace.detail.value.file.displayName" /></template><pre v-else-if="workspace.preview.value.kind === 'text'" v-text="workspace.preview.value.text"></pre><img v-else-if="workspace.preview.value.kind === 'image'" :src="workspace.preview.value.url" :alt="workspace.detail.value.file.displayName" /><p v-else-if="workspace.preview.value.kind === 'unsupported'">{{ workspace.preview.value.message }}</p><p v-else-if="workspace.preview.value.kind === 'error'" class="workspace-error">{{ workspace.preview.value.message }}</p></section></section>
+        ><button type="button" @click="selectedVersion = version.version">v{{ version.version }}</button><span>{{ version.originalFilename }}</span><small>{{ byteText(version.byteLength) }} · {{ formatDate(version.createdAt) }}</small><div class="version-actions"><button
+          v-if="!embedded"
+          type="button"
+          :disabled="!canAddVersionAsMaterial(version)"
+          @click="addExecutionMaterial({ fileId: workspace.detail.value.file.fileId, version: version.version, displayName: workspace.detail.value.file.displayName, contentMimeType: version.contentMimeType })"
+        >{{ isExecutionMaterial(workspace.detail.value.file.fileId) ? '已选资料' : '加入资料' }}</button><button type="button" @click="preview(version.version)">预览</button><button type="button" @click="download(version.version)">下载</button></div></div><section class="preview" aria-live="polite"><p v-if="workspace.actionState.value === 'loading-preview'">正在读取预览…</p><template v-else-if="workspace.preview.value.kind === 'parts'"><div class="preview-navigation"><button type="button" :disabled="workspace.preview.value.selectedIndex === 0" @click="workspace.selectPreviewPart(workspace.preview.value.selectedIndex - 1)">上一页</button><span>第 {{ workspace.preview.value.selectedIndex + 1 }} / {{ workspace.preview.value.parts.length }} {{ selectedPreviewPart?.kind === 'text' ? '项' : '页' }}</span><button type="button" :disabled="workspace.preview.value.selectedIndex >= workspace.preview.value.parts.length - 1" @click="workspace.selectPreviewPart(workspace.preview.value.selectedIndex + 1)">下一页</button></div><pre v-if="selectedPreviewPart?.kind === 'text'" v-text="selectedPreviewPart.text"></pre><img v-else-if="selectedPreviewPart?.kind === 'image'" :src="selectedPreviewPart.url" :alt="workspace.detail.value.file.displayName" /></template><pre v-else-if="workspace.preview.value.kind === 'text'" v-text="workspace.preview.value.text"></pre><img v-else-if="workspace.preview.value.kind === 'image'" :src="workspace.preview.value.url" :alt="workspace.detail.value.file.displayName" /><p v-else-if="workspace.preview.value.kind === 'unsupported'">{{ workspace.preview.value.message }}</p><p v-else-if="workspace.preview.value.kind === 'error'" class="workspace-error">{{ workspace.preview.value.message }}</p></section></section>
         <section v-else class="detail-pane execution-pane"><p class="workspace-note">当前版本：{{ workspace.detail.value.file.displayName }} · v{{ selectedVersion }}</p><div class="material-actions"><button type="button" :disabled="!canAddSelectedMaterial" @click="addSelectedMaterial">加入执行资料</button><button
           v-for="item in executionMaterials"
           :key="item.fileId"
@@ -130,13 +151,16 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useApiStore } from '@/stores/api'
 import { useGlobalStore } from '@/stores/global'
 import { savePersonalWorkspaceBlob, usePersonalWorkspace } from '@/composables/usePersonalWorkspace'
 import { usePersonalWorkspaceExecution } from '@/composables/usePersonalWorkspaceExecution'
 
-const { embedded } = defineProps({ embedded: { type: Boolean, default: false } })
+const { embedded, detailAllowed } = defineProps({
+  embedded: { type: Boolean, default: false },
+  detailAllowed: { type: Boolean, default: true }
+})
 const apiStore = useApiStore()
 const globalStore = useGlobalStore()
 const identityEpoch = computed(() => apiStore.authorizationGeneration)
@@ -151,7 +175,7 @@ const execution = usePersonalWorkspaceExecution({ identityEpoch, identityScope: 
 const query = ref('')
 const mediaFamily = ref('')
 const state = ref('ACTIVE')
-const activeModal = ref('home')
+const activeModal = ref(embedded ? 'library' : 'home')
 const detailPane = ref('summary')
 const isLibraryModal = computed(() => activeModal.value === 'library' || activeModal.value === 'detail')
 const selectedId = ref('')
@@ -193,9 +217,30 @@ const refresh = () => workspace.refresh(currentFilters())
 const loadMore = () => workspace.loadMore(currentFilters())
 const switchState = next => { if (state.value === next) return; state.value = next; closeDetail(); void refresh() }
 const openModal = modal => { activeModal.value = modal; if (modal !== 'detail') closeDetail() }
-const backToBox = () => { closeDetail(); activeModal.value = 'home' }
-const backToLibrary = () => { closeDetail(); activeModal.value = 'library' }
-const openFile = async fileId => { const detail = await select(fileId); if (detail) { detailPane.value = 'summary'; activeModal.value = 'detail' }; return detail }
+const backToBox = () => { closeDetail(); activeModal.value = embedded ? 'library' : 'home' }
+const fileListRef = ref(null)
+const detailTitleRef = ref(null)
+const backToLibrary = () => {
+  const fileId = selectedId.value
+  closeDetail()
+  activeModal.value = 'library'
+  nextTick(() => {
+    const row = [...(fileListRef.value?.querySelectorAll('[data-file-id]') || [])]
+      .find(element => element.dataset.fileId === fileId)
+    row?.focus({ preventScroll: true })
+  })
+}
+const openFile = async fileId => {
+  if (embedded && !detailAllowed) return null
+  const detail = await select(fileId)
+  if (detail && (!embedded || detailAllowed)) {
+    detailPane.value = 'summary'
+    activeModal.value = 'detail'
+    await nextTick()
+    detailTitleRef.value?.focus({ preventScroll: true })
+  }
+  return detail
+}
 const openRecentFile = () => { const recent = workspace.items.value[0]; if (recent) void openFile(recent.fileId) }
 const onUploadFile = event => { uploadFile.value = event.target.files?.[0] || null }
 const onVersionFile = event => { versionFile.value = event.target.files?.[0] || null }
@@ -232,11 +277,47 @@ const prepareNewExecution = () => execution.prepareNewRequest()
 const chooseHistoryExecution = executionId => execution.selectHistoryExecution(executionId)
 const loadMoreExecutionHistory = () => { const cursor = execution.historyNextCursor.value; return cursor ? execution.loadHistory({ beforeCreatedAt: cursor.createdAt, beforeExecutionId: cursor.executionId, append: true, adopt: false }) : Promise.resolve([]) }
 
-onMounted(() => { void refresh(); void loadExecutionAgents(); void loadExecutionCapabilities(); void execution.recover() })
+const canGoBack = computed(() => activeModal.value === 'detail')
+const back = () => {
+  if (!canGoBack.value) return false
+  backToLibrary()
+  return true
+}
+defineExpose({ canGoBack, back })
+
+onMounted(() => {
+  void refresh()
+  if (!embedded) {
+    void loadExecutionAgents()
+    void loadExecutionCapabilities()
+    void execution.recover()
+  }
+})
 onBeforeUnmount(() => { workspace.dispose(); execution.dispose() })
 </script>
 
 <style scoped>
+/* In Hall this is content of the one work window, not an app behind stacked cards. */
+.is-hall-treasure .modal-stage {
+  min-height: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.is-hall-treasure .babao-modal {
+  position: static;
+  overflow: visible;
+  padding: 12px;
+  box-shadow: none;
+}
+.is-hall-treasure .babao-modal.recessed {
+  filter: none;
+  opacity: 1;
+  transform: none;
+}
+
 .personal-workspace { --treasure-ink: #3f2818; --treasure-muted: #806542; --treasure-wood: #6d3f1f; --treasure-wood-dark: #452817; --treasure-line: #d7c3a2; --treasure-paper: #fff8e8; --treasure-red: #8c2f20; flex:1; min-width:0; overflow:auto; padding:20px; color:var(--treasure-ink); background:radial-gradient(circle at 14% 0,rgba(255,255,255,.7),transparent 27%),linear-gradient(135deg,rgba(114,70,35,.12),transparent 36%),#e7d5b5; }
 .personal-workspace.is-hall-treasure { border-top:2px solid rgba(109,63,31,.5); box-shadow:inset 0 10px 22px rgba(64,37,20,.1); }
 .workspace-header,.modal-stage,.workspace-page-message,.workspace-receipt { max-width:920px; margin-inline:auto; }

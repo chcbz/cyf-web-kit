@@ -20,7 +20,7 @@ describe('1.13.6 Babao-box modal-stack hall presentation', () => {
     assert.match(workspace, /class="babao-modal box-modal"/)
     assert.match(workspace, /class="babao-modal child-modal library-modal"/)
     assert.match(workspace, /class="babao-modal detail-modal"/)
-    assert.match(workspace, /const activeModal = ref\('home'\)/)
+    assert.match(workspace, /const activeModal = ref\(embedded \? 'library' : 'home'\)/)
     assert.match(workspace, /第一层 · 箱面/)
     assert.match(workspace, /第二层 · 资料柜/)
     assert.match(workspace, /第三层 · 文件详情/)

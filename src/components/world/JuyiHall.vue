@@ -164,7 +164,7 @@
               <var-icon name="close-circle-outline" />
             </button>
             <button
-              v-if="panelReturnPanel"
+              v-if="panelReturnPanel || panelChildCanReturn"
               class="panel-return"
               type="button"
               aria-label="返回上一层"
@@ -190,7 +190,10 @@
           </div>
 
           <AgentPanel
-            v-if="renderedPanel === 'agents'"
+            v-if="panelFrames.includes('agents')"
+            v-show="renderedPanel === 'agents'"
+            :inert="renderedPanel !== 'agents' ? '' : null"
+            :aria-hidden="renderedPanel !== 'agents' ? 'true' : null"
             :ability-text="abilityText"
             :agents="agents"
             :filtered-agents="filteredAgents"
@@ -206,10 +209,16 @@
             :error-message="rosterError"
             @set-agent-filter="setAgentFilter"
             @select-agent="selectAgent"
+            :can-start-conversation="canStartAgentConversation"
+            @start-conversation="handleStartAgentConversation"
+            @open-catalog="openPanel('catalog')"
           />
 
           <BountyPanel
-            v-if="renderedPanel === 'tasks'"
+            v-if="panelFrames.includes('tasks')"
+            v-show="renderedPanel === 'tasks'"
+            :inert="renderedPanel !== 'tasks' ? '' : null"
+            :aria-hidden="renderedPanel !== 'tasks' ? 'true' : null"
             v-model:task-ability-filter="taskAbilityFilter"
             v-model:task-keyword="taskKeyword"
             :ability-text="abilityText"
@@ -281,12 +290,20 @@
           </template>
 
           <PersonalWorkspace
-            v-if="renderedPanel === 'treasure'"
+            v-if="panelFrames.includes('treasure')"
+            v-show="renderedPanel === 'treasure'"
+            :inert="renderedPanel !== 'treasure' ? '' : null"
+            :aria-hidden="renderedPanel !== 'treasure' ? 'true' : null"
+            ref="treasurePanelRef"
+            :detail-allowed="canOpenPanelDetail"
             embedded
           />
 
           <PersonaCatalogPanel
-            v-if="renderedPanel === 'catalog'"
+            v-if="panelFrames.includes('catalog')"
+            v-show="renderedPanel === 'catalog'"
+            :inert="renderedPanel !== 'catalog' ? '' : null"
+            :aria-hidden="renderedPanel !== 'catalog' ? 'true' : null"
             :personas="personaCatalog"
             :portrait-name="portraitName"
             :portrait-style="portraitStyle"
@@ -300,7 +317,10 @@
           />
 
           <PublicDiscussionPanel
-            v-if="renderedPanel === 'chat' && chatMode === 'public'"
+            v-if="panelFrames.includes('chat') && chatMode === 'public'"
+            v-show="renderedPanel === 'chat'"
+            :inert="renderedPanel !== 'chat' ? '' : null"
+            :aria-hidden="renderedPanel !== 'chat' ? 'true' : null"
             :draft="draft"
             :voice="hallVoice"
             @update:draft="setDraft"
@@ -312,8 +332,8 @@
             :messages="messages"
             :mention-label="portraitShortName"
             :pending-agent-name="pendingAgentName"
-            :selected-agent="selectedAgent"
-            :selected-task="selectedTask"
+            :selected-agent="conversationAgent"
+            :selected-task="conversationTask"
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
             :conversation-busy="isConversationBusy"
@@ -340,7 +360,10 @@
           />
 
           <BountyDiscussionPanel
-            v-if="renderedPanel === 'chat' && chatMode === 'bounty'"
+            v-if="panelFrames.includes('chat') && chatMode === 'bounty'"
+            v-show="renderedPanel === 'chat'"
+            :inert="renderedPanel !== 'chat' ? '' : null"
+            :aria-hidden="renderedPanel !== 'chat' ? 'true' : null"
             :draft="draft"
             :voice="hallVoice"
             @update:draft="setDraft"
@@ -352,8 +375,8 @@
             :messages="messages"
             :mention-label="portraitShortName"
             :pending-agent-name="pendingAgentName"
-            :selected-agent="selectedAgent"
-            :selected-task="selectedTask"
+            :selected-agent="conversationAgent"
+            :selected-task="conversationTask"
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
             :conversation-busy="isConversationBusy"
@@ -380,7 +403,10 @@
           />
 
           <PrivateDiscussionPanel
-            v-if="renderedPanel === 'chat' && chatMode === 'private'"
+            v-if="panelFrames.includes('chat') && chatMode === 'private'"
+            v-show="renderedPanel === 'chat'"
+            :inert="renderedPanel !== 'chat' ? '' : null"
+            :aria-hidden="renderedPanel !== 'chat' ? 'true' : null"
             :draft="draft"
             :voice="hallVoice"
             @update:draft="setDraft"
@@ -392,8 +418,8 @@
             :messages="messages"
             :mention-label="portraitShortName"
             :pending-agent-name="pendingAgentName"
-            :selected-agent="selectedAgent"
-            :selected-task="selectedTask"
+            :selected-agent="conversationAgent"
+            :selected-task="conversationTask"
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
             :conversation-busy="isConversationBusy"
@@ -420,7 +446,10 @@
           />
 
           <LibraryPanel
-            v-if="renderedPanel === 'library'"
+            v-if="panelFrames.includes('library')"
+            v-show="renderedPanel === 'library'"
+            :inert="renderedPanel !== 'library' ? '' : null"
+            :aria-hidden="renderedPanel !== 'library' ? 'true' : null"
             v-model:keyword="libraryKeyword"
             v-model:source-type="librarySourceType"
             :error-message="libraryErrorMessage"
@@ -428,6 +457,10 @@
             :has-searched="libraryHasSearched"
             :loading="libraryLoading"
             :results="libraryResults"
+            ref="libraryPanelRef"
+            :detail-allowed="canOpenPanelDetail"
+            embedded
+            :active="renderedPanel === 'library'"
             :virtual-landscape="isVirtualLandscape"
             @cite-library="citeLibraryItem"
             @search-library="searchLibrary"
@@ -546,6 +579,21 @@ const renderedPanel = ref('')
 const panelSessionGeneration = ref(0)
 const panelClosingGeneration = ref(0)
 const panelReturnPanel = ref('')
+// Source panes stay mounted only for this navigation session; hidden panes are inert.
+const panelFrames = ref([])
+const panelLocations = new Map()
+const treasurePanelRef = ref(null)
+const libraryPanelRef = ref(null)
+// Retained file/reading detail also consumes a logical layer while its source is hidden.
+const panelDepth = computed(() => panelFrames.value.length
+  + Number(panelFrames.value.includes('treasure') && Boolean(treasurePanelRef.value?.canGoBack))
+  + Number(panelFrames.value.includes('library') && Boolean(libraryPanelRef.value?.canGoBack)))
+const canOpenPanelDetail = computed(() => panelDepth.value < 3)
+const panelChildCanReturn = computed(() => {
+  if (renderedPanel.value === 'treasure') return Boolean(treasurePanelRef.value?.canGoBack)
+  if (renderedPanel.value === 'library') return Boolean(libraryPanelRef.value?.canGoBack)
+  return false
+})
 const isPanelSessionActive = computed(() => Boolean(renderedPanel.value))
 const hallRefreshing = ref(false)
 const experienceReady = ref(false)
@@ -800,6 +848,8 @@ const hallSceneDebugBridge = useHallSceneDebugBridge({
 
 const {
   chatContext,
+  conversationAgent,
+  conversationTask,
   chatMentionAgentIds,
   chatMentionAgents,
   chatMode,
@@ -943,9 +993,17 @@ const cancelPanelChatLoad = () => {
 const openPanel = (panel, options = {}) => {
   if (panelDisposed || voiceInteractionLocked.value || !panelWhitelist.has(panel)) return false
   const openingFromClosed = !activePanel.value
-  if (!openingFromClosed && panel !== activePanel.value && panel === 'workspace' && activePanel.value === 'tasks') {
-    panelReturnPanel.value = 'tasks'
+  const existingIndex = panelFrames.value.indexOf(panel)
+  if (!openingFromClosed && panel !== activePanel.value && existingIndex < 0 && panelDepth.value >= 3) {
+    showToast('请先返回上一层，再打开新的办理入口')
+    return false
   }
+  if (!openingFromClosed && panel !== activePanel.value) {
+    panelLocations.set(activePanel.value, { focus: document.activeElement, scrollTop: panelRef.value?.scrollTop || 0 })
+  }
+  panelFrames.value = openingFromClosed ? [panel]
+    : existingIndex >= 0 ? panelFrames.value.slice(0, existingIndex + 1) : [...panelFrames.value, panel]
+  panelReturnPanel.value = panelFrames.value.at(-2) || ''
   if (openingFromClosed) {
     panelReturnPanel.value = ''
     if (!renderedPanel.value) {
@@ -959,23 +1017,25 @@ const openPanel = (panel, options = {}) => {
   }
   if (panel !== 'chat') {
     cancelPanelChatLoad()
-    resetToPublic()
   }
   if (panel === 'chat' && options.mode === 'public') {
     resetToPublic({ clearSelection: true })
   }
   renderedPanel.value = panel
   activePanel.value = panel
-  void loadPanelData(panel)
+  if (!options.restore) void loadPanelData(panel)
   if (panel === 'tasks') void ensureEconomyPreviewCapability()
   const generation = panelSessionGeneration.value
   nextTick(() => {
     if (!panelDisposed && activePanel.value === panel && panelSessionGeneration.value === generation) {
-      focusHallPanel(panelRef.value)
+      const location = options.restore ? panelLocations.get(panel) : null
+      if (location && panelRef.value) panelRef.value.scrollTop = location.scrollTop
+      if (location && isSafePanelFocusTarget(location.focus)) restorePanelFocus(location.focus)
+      else focusHallPanel(panelRef.value)
     }
   })
   if (!options.silent) playPanelOpen()
-  if (panel === 'chat') {
+  if (panel === 'chat' && !options.restore) {
     cancelPanelChatLoad()
     panelChatLoadTimer = window.setTimeout(() => {
       panelChatLoadTimer = null
@@ -1142,10 +1202,13 @@ const requestPanelOrientation = () => {
 }
 
 const returnPanel = () => {
-  if (panelDisposed || voiceInteractionLocked.value || !panelReturnPanel.value) return false
-  const parent = panelReturnPanel.value
-  panelReturnPanel.value = ''
-  return openPanel(parent, { silent: true })
+  if (panelDisposed || voiceInteractionLocked.value) return false
+  if (panelChildCanReturn.value) {
+    const child = renderedPanel.value === 'treasure' ? treasurePanelRef.value : libraryPanelRef.value
+    return child.back()
+  }
+  if (!panelReturnPanel.value) return false
+  return openPanel(panelReturnPanel.value, { silent: true, restore: true })
 }
 
 const closePanel = () => {
@@ -1159,7 +1222,7 @@ const closePanel = () => {
 
 const handlePanelKeydown = (event) => {
   event.stopPropagation()
-  if (event.key === 'Escape') {
+  if (event.key === 'Escape' && !event.isComposing && event.keyCode !== 229) {
     event.preventDefault()
     if (!returnPanel()) closePanel()
     return
@@ -1178,6 +1241,8 @@ const handlePanelAfterLeave = async (element) => {
   })) return
   cancelPanelChatLoad()
   renderedPanel.value = ''
+  panelFrames.value = []
+  panelLocations.clear()
   await nextTick()
   if (!isCurrentPanelGeneration({
     leavingGeneration,
@@ -1193,32 +1258,44 @@ const handlePanelAfterLeave = async (element) => {
   panelSessionOrigin = null
 }
 
+watch([() => apiStore.authorizationGeneration, hallIdentityScope], () => {
+  cancelPanelChatLoad()
+  panelSessionGeneration.value += 1
+  panelClosingGeneration.value = 0
+  activePanel.value = ''
+  renderedPanel.value = ''
+  panelFrames.value = []
+  panelReturnPanel.value = ''
+  panelLocations.clear()
+  panelSessionOrigin = null
+  resetToPublic({ clearSelection: true })
+}, { flush: 'sync' })
+
 const closeSelectedAgentCard = () => {
   selectedAgent.value = null
   playTap()
 }
 
 const briefSelectedTask = (task = selectedTask.value, agent = selectedAgent.value) => {
-  if (!task) return
+  if (!task || (agent && !canStartAgentConversation(agent))) return false
+  if (!openPanel('chat')) return false
   selectedTask.value = task
   if (agent) {
-    enterPrivateConversation(agent)
+    enterPrivateConversation(agent, { task })
   } else {
     enterBountyDiscussion(task)
   }
   const abilities = (task.requiredAbilities || []).join(' / ') || '不拘本领'
   const target = agent ? `可请 ${portraitShortName(agent)} / ${agent.name || agent.personaName || agent.agentId} 领令。` : '请点一位合适好汉领令。'
-  setDraft(`请就榜文「${task.title}」议事：榜号 ${task.id}，眼下 ${taskStatusText(task.status)}，所需本领 ${abilities}。${target}请说明险处与下一步章程。`)
-  openPanel('chat')
+  if (!draft.value.trim()) setDraft(`请就榜文「${task.title}」议事：榜号 ${task.id}，眼下 ${taskStatusText(task.status)}，所需本领 ${abilities}。${target}请说明险处与下一步章程。`)
   showToast('议事话头已备')
 }
 
 const discussTask = (task) => {
-  if (!task) return
+  if (!task || !openPanel('chat')) return false
   enterBountyDiscussion(task)
   markDiscussionStarted(task, chatContext.value?.participantAgentIds || [])
-  setDraft(`请就榜文「${task.title}」议事。`)
-  openPanel('chat')
+  if (!draft.value.trim()) setDraft(`请就榜文「${task.title}」议事。`)
 }
 
 const toggleHallSound = () => {
@@ -1413,8 +1490,8 @@ hallVoice = useHallVoiceConversation({
       targetAgentId: current.targetAgentId,
       participantAgentIds: current.participantAgentIds,
       mentionAgentIds: chatMentionAgentIds.value,
-      selectedAgentId: selectedAgent.value?.agentId ?? null,
-      selectedTaskId: selectedTask.value?.id ?? null,
+      selectedAgentId: current.selectedAgentId ?? null,
+      selectedTaskId: current.selectedTaskId ?? null,
       taskId: current.taskId ?? null,
       outgoingMetadata: outgoingMetadata.value,
       targetLabel: chatTargetText.value
@@ -1618,13 +1695,12 @@ const handleStartAgentConversation = (candidate) => {
     showToast('只可与自家好汉密议')
     return false
   }
+  if (!openPanel('chat')) return false
   taskWorkspaceBinding.selectExplicitActor(agent)
   playAgentSelect()
   enterPrivateConversation(agent)
   markAgentSpeaking(agent, '入席密议', 'system')
-  setDraft('')
-  insertAgentMention(agent, '请报眼下动静、可领何榜、还需哪路照应。')
-  openPanel('chat')
+  if (!draft.value.trim()) insertAgentMention(agent, '请报眼下动静、可领何榜、还需哪路照应。')
   showToast(`正与 ${portraitShortName(agent)} 密议`)
   return true
 }

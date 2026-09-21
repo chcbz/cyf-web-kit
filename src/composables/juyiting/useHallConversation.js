@@ -45,6 +45,7 @@ export const useHallConversation = ({
   const isConversationLoading = ref(false)
   const selectedHallConversationId = ref('')
   const draft = ref('')
+  const scopeDrafts = new Map()
   const isStreaming = ref(false)
   const isAwaitingReply = ref(false)
   const eventStreamRecovering = ref(false)
@@ -430,7 +431,9 @@ export const useHallConversation = ({
     stopHallReplyPolling()
     stopHallConversationSync()
     conversationId.value = ''
+    scopeDrafts.clear()
     setDraft('')
+    if (outgoingMetadata) outgoingMetadata.value = {}
     messages.value = []
     isStreaming.value = false
     isAwaitingReply.value = false
@@ -441,6 +444,10 @@ export const useHallConversation = ({
     () => `${chatContext?.value?.conversationScopeType || ''}\u0000${chatContext?.value?.conversationScopeKey || ''}`,
     (nextScope, previousScope) => {
       if (!previousScope || nextScope === previousScope || disposed) return
+      scopeDrafts.set(previousScope, { text: draft.value, metadata: { ...(outgoingMetadata?.value || {}) } })
+      const restored = scopeDrafts.get(nextScope)
+      setDraft(restored?.text || '')
+      if (outgoingMetadata) outgoingMetadata.value = { ...(restored?.metadata || {}) }
       invalidateConversationLoads()
       invalidateConversationHistoryLoads()
       pendingHallConversationLoad = null
@@ -888,8 +895,8 @@ export const useHallConversation = ({
     const mentionAgentIds = Array.isArray(sendContext.mentionAgentIds) && sendContext.mentionAgentIds.length
       ? sendContext.mentionAgentIds
       : sendContext.targetAgentIds
-    const selectedAgentId = isVoiceSend ? sendContext.selectedAgentId : (sendContext.selectedAgentId ?? selectedAgent.value?.agentId)
-    const selectedTaskId = isVoiceSend ? sendContext.selectedTaskId : (sendContext.selectedTaskId ?? selectedTask.value?.id)
+    const selectedAgentId = isVoiceSend ? sendContext.selectedAgentId : (Object.hasOwn(sendContext, 'selectedAgentId') ? sendContext.selectedAgentId : selectedAgent.value?.agentId)
+    const selectedTaskId = isVoiceSend ? sendContext.selectedTaskId : (Object.hasOwn(sendContext, 'selectedTaskId') ? sendContext.selectedTaskId : selectedTask.value?.id)
     const generation = lifecycleGeneration
     const replyGeneration = ++hallReplyGeneration
     const isCurrentReplyTurn = () => !disposed && generation === lifecycleGeneration && replyGeneration === hallReplyGeneration

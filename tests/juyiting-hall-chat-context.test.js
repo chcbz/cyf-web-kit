@@ -26,8 +26,8 @@ describe('useHallChatContext', () => {
       conversationScopeType: 'public',
       conversationScopeKey: 'public',
       mode: 'public',
-      selectedTaskId: 'task-1',
-      taskId: 'task-1',
+      selectedTaskId: null,
+      taskId: null,
       targetAgentId: 'linchong'
     })
     expect(context.chatContext.value.targetAgentIds).to.deep.equal(['linchong'])
@@ -72,10 +72,10 @@ describe('useHallChatContext', () => {
     const mapAgents = ref(agents)
     const context = useHallChatContext({ agents: rosterAgents, mapAgents, portraitShortName, selectedAgent, selectedTask })
 
-    context.enterPrivateConversation(agents[0])
+    context.enterPrivateConversation(agents[0], { task: selectedTask.value })
 
     expect(context.chatMode.value).to.equal('private')
-    expect(context.chatTargetText.value).to.equal('密议 / 吴用')
+    expect(context.chatTargetText.value).to.equal('事项密议 / 吴用 / 整理纪要')
     expect(context.chatContext.value).to.deep.include({
       conversationScopeType: 'private',
       conversationScopeKey: 'task:task-3:agent:wuyong',
@@ -104,4 +104,36 @@ describe('useHallChatContext', () => {
     expect(context.chatContext.value.conversationScopeKey).to.equal('public')
     expect(context.chatContext.value.targetAgentIds).to.deep.equal([])
   })
+  it('keeps ordinary private chat independent from browsing another task or agent', () => {
+    const selectedAgent = ref(agents[0])
+    const selectedTask = ref({ id: 'task-old', title: '旧榜文' })
+    const roster = ref([...agents])
+    const context = useHallChatContext({ agents: roster, portraitShortName, selectedAgent, selectedTask })
+    context.enterPrivateConversation(agents[0])
+    expect(context.chatContext.value.conversationScopeKey).to.equal('agent:wuyong')
+    expect(context.chatContext.value.taskId).to.equal(null)
+    selectedTask.value = { id: 'task-new', title: '正在浏览的新榜文' }
+    selectedAgent.value = agents[1]
+    expect(context.chatContext.value.conversationScopeKey).to.equal('agent:wuyong')
+    expect(context.chatContext.value.targetAgentId).to.equal('wuyong')
+    expect(context.chatTargetText.value).to.equal('普通密议 / 吴用')
+    roster.value = [agents[1]]
+    expect(context.chatContext.value.conversationScopeKey).to.equal('agent:wuyong')
+    expect(context.chatContext.value.targetAgentIds).to.deep.equal([])
+    expect(context.conversationAgent.value).to.equal(null)
+  })
+
+  it('pins an explicitly chosen task discussion until another discussion is explicitly entered', () => {
+    const selectedAgent = ref(agents[0])
+    const selectedTask = ref({ id: 'task-a', title: '事项甲', assignedAgentIds: ['wuyong'] })
+    const context = useHallChatContext({ agents: ref(agents), portraitShortName, selectedAgent, selectedTask })
+    context.enterBountyDiscussion(selectedTask.value)
+    selectedTask.value = { id: 'task-b', title: '事项乙', assignedAgentIds: ['linchong'] }
+    expect(context.chatContext.value.conversationScopeKey).to.equal('task:task-a')
+    expect(context.chatContext.value.targetAgentIds).to.deep.equal(['wuyong'])
+    context.enterBountyDiscussion(selectedTask.value)
+    expect(context.chatContext.value.conversationScopeKey).to.equal('task:task-b')
+    expect(context.chatContext.value.targetAgentIds).to.deep.equal(['linchong'])
+  })
+
 })

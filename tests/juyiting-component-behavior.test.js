@@ -2511,6 +2511,88 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
 }
 
 describe('O04 actual-mounted JuyiHall panel identity', () => {
+  it('W04 returns from treasure to the same source pane, focus and unsaved text without resetting chat', async () => {
+    const mode = Vue.ref('portrait-command')
+    const mounts = { library: 0, archive: 0 }
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const mocks = createActualHallMocks({ mode, mounts, counters })
+    let publicResets = 0
+    const makeChatContext = mocks.useHallChatContext
+    mocks.useHallChatContext = () => ({ ...makeChatContext(), resetToPublic: () => { publicResets += 1 } })
+    const SourcePane = Vue.defineComponent({
+      setup () {
+        const text = Vue.ref('尚未保存的来源编辑')
+        return () => Vue.h('section', { class: 'w04-source' }, [
+          Vue.h('textarea', { value: text.value, onInput: event => { text.value = event.target.value } }),
+          Vue.h('button', { class: 'w04-source-trigger' }, '取资料')
+        ])
+      }
+    })
+    mocks.BountyPanel = SourcePane
+    mocks.PersonalWorkspace = Vue.defineComponent({ setup: () => () => Vue.h('section', { class: 'w04-files' }, '资料列表') })
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+    try {
+      await flushPromises()
+      const state = wrapper.vm.$.setupState
+      state.openPanel('tasks')
+      await Vue.nextTick()
+      const source = wrapper.find('.w04-source').element
+      const trigger = wrapper.find('.w04-source-trigger').element
+      trigger.focus()
+      wrapper.find('.floating-panel').element.scrollTop = 91
+      state.openBabaoBox()
+      await Vue.nextTick()
+      expect(state.panelFrames).to.deep.equal(['tasks', 'treasure'])
+      expect(source.getAttribute('inert')).to.equal('')
+      expect(source.getAttribute('aria-hidden')).to.equal('true')
+      expect(wrapper.findAll('[role="dialog"]')).to.have.length(1)
+      mode.value = 'landscape-map'
+      await Vue.nextTick()
+      state.returnPanel()
+      await Vue.nextTick()
+      expect(wrapper.find('.w04-source').element).to.equal(source)
+      expect(wrapper.find('.w04-source textarea').element.value).to.equal('尚未保存的来源编辑')
+      expect(source.hasAttribute('inert')).to.equal(false)
+      expect(wrapper.find('.floating-panel').element.scrollTop).to.equal(91)
+      expect(document.activeElement).to.equal(trigger)
+      expect(publicResets).to.equal(0)
+      expect(counters.loads.tasks).to.equal(1)
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
+  it('W04 bounds navigation to three frames, does not consume composing Escape, and clears hidden panes on identity change', async () => {
+    const mode = Vue.ref('portrait-command')
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const mocks = createActualHallMocks({ mode, mounts: { library: 0, archive: 0 }, counters })
+    const apiStore = Vue.reactive({ authorizationGeneration: 1, oauthClientId: 'client-a', token: async () => '' })
+    mocks.useApiStore = () => apiStore
+    mocks.PersonalWorkspace = Vue.defineComponent({ setup: () => () => Vue.h('section', 'files') })
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+    try {
+      await flushPromises()
+      const state = wrapper.vm.$.setupState
+      state.openPanel('agents')
+      state.openPanel('chat')
+      state.openPanel('treasure')
+      expect(state.openPanel('catalog')).to.equal(false)
+      expect(state.panelFrames).to.deep.equal(['agents', 'chat', 'treasure'])
+      await Vue.nextTick()
+      await wrapper.find('.floating-panel').trigger('keydown', { key: 'Escape', isComposing: true })
+      expect(state.activePanel).to.equal('treasure')
+      await wrapper.find('.floating-panel').trigger('keydown', { key: 'Escape' })
+      expect(state.activePanel).to.equal('chat')
+      apiStore.authorizationGeneration += 1
+      await Vue.nextTick()
+      expect(state.activePanel).to.equal('')
+      expect(state.panelFrames).to.deep.equal([])
+      expect(wrapper.find('.floating-panel').exists()).to.equal(false)
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
   it('retains panel/state identity for five cycles and fences stale keyed leaves', async () => {
     const mode = Vue.ref('portrait-command')
     const mounts = { library: 0, archive: 0 }

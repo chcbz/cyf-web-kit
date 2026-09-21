@@ -1,6 +1,7 @@
 <template>
   <div class="library-panel">
     <div
+      v-show="!readerHasBack"
       class="library-tabs"
       role="tablist"
       aria-label="案卷阁入口"
@@ -36,15 +37,22 @@
     </div>
 
     <ArchiveReader
-      v-if="activeTab === 'reader'"
+      v-show="activeTab === 'reader'"
       id="library-reader-panel"
+      ref="readerRef"
+      :embedded="embedded"
+      :detail-allowed="detailAllowed"
+      :active="active && activeTab === 'reader'"
+      :inert="activeTab !== 'reader' ? '' : null"
+      :aria-hidden="activeTab !== 'reader' ? 'true' : null"
       role="tabpanel"
       aria-labelledby="library-reader-tab"
       :virtual-landscape="virtualLandscape"
+      @navigation-state="readerHasBack = $event"
     />
 
     <div
-      v-else
+      v-show="activeTab === 'search'"
       id="library-search-panel"
       role="tabpanel"
       aria-labelledby="library-search-tab"
@@ -122,10 +130,15 @@
 </template>
 
 <script setup>
-import { nextTick, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import ArchiveReader from './archive/ArchiveReader.vue'
 
 const activeTab = ref('reader')
+const readerRef = ref(null)
+const readerHasBack = ref(false)
+const canGoBack = computed(() => activeTab.value === 'reader' && readerHasBack.value)
+const back = () => canGoBack.value ? readerRef.value?.back() : false
+defineExpose({ canGoBack, back })
 const readerTab = ref(null)
 const searchTab = ref(null)
 const tabOrder = ['reader', 'search']
@@ -150,6 +163,9 @@ const handleTabKeydown = (event, currentTab) => {
 }
 
 defineProps({
+  embedded: { type: Boolean, default: false },
+  detailAllowed: { type: Boolean, default: true },
+  active: { type: Boolean, default: true },
   errorMessage: { type: String, default: '' },
   formatTime: { type: Function, required: true },
   hasSearched: { type: Boolean, default: false },

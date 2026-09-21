@@ -237,9 +237,11 @@ const loadArchiveReaderSfc = (archiveModule) => {
   const relativePath = '../src/components/juyiting/archive/ArchiveReader.vue'
   const filename = new URL(relativePath, import.meta.url).pathname
   const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8')
+    .replace('defineExpose({ back })', '')
     .replace(
       '</script>',
       `defineExpose({
+        back,
         __editorStateForTest: () => ({ editingNote: editingNote.value, noteText: noteText.value }),
         __switchEditorTargetForTest: (note, text) => {
           editingNote.value = note
@@ -275,7 +277,9 @@ const loadArchiveReaderSfc = (archiveModule) => {
 const loadActualHallForIntegration = (mocks, id) => {
   const relativePath = '../src/components/world/JuyiHall.vue'
   const filename = new URL(relativePath, import.meta.url).pathname
-  const { descriptor } = parse(readFileSync(new URL(relativePath, import.meta.url), 'utf8'), { filename })
+  const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8')
+    .replace('</script>', 'defineExpose({ openPanel, returnPanel, panelDepth, panelFrames })\n</script>')
+  const { descriptor } = parse(source, { filename })
   const body = compileScript(descriptor, { id, inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, imports) => `var { ${imports} } = mocks`)
@@ -316,10 +320,11 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
     hasMeaningfulHallLeaveWork,
     registerIdentityCleanup,
     env: { VITE_JUYITING_TASK_WORKSPACE_ENABLED: workspaceState ? 'true' : undefined },
-    useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({}),
+    useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({ token: async () => false }),
     agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {}, roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
     useHallData: () => hallData,
     useHallExperienceMode: () => ({ experienceMode: mode, isMobileCoarse: Vue.ref(true), orientationHint: text, orientationRequestPending: Vue.ref(false), requestLandscape: asyncNoop }),
+    useHallHomeMode: () => ({ homeMode: Vue.ref('map'), isOverviewHome: Vue.ref(false), setHomeMode: noop }),
     useHallPanels: HallPanelHelpers.useHallPanels,
     useHallSceneState: () => ({ setMapRuntime: noop, reset: noop, forwardPhaseEvents: asyncNoop }),
     useHallCommandQueue: () => ({ ready: Vue.ref(false), setSimulation: noop }),
@@ -2701,6 +2706,9 @@ describe('archive reader contract behavior', () => {
       expect(switchEditorTarget).to.be.a('function')
       switchEditorTarget({ noteId: 'note-o04', version: '7' }, '五轮旋转仍须保留的批注')
       await Vue.nextTick()
+      expect(wrapper.findAll('[role="dialog"]')).to.have.length(1)
+      expect(wrapper.find('.archive-reader-fullscreen').attributes('role')).to.equal('region')
+      expect(wrapper.find('.panel-orientation').exists()).to.equal(true)
       const location = readerState.currentLocation.value
       const progress = readerState.progress.value
       const loadCount = api.calls.length
@@ -2717,6 +2725,31 @@ describe('archive reader contract behavior', () => {
         expect(readerMounts).to.equal(1)
         expect(readerUnmounts).to.equal(0)
       }
+      const hall = wrapper.vm
+      // The reader is a retained logical detail, not another modal.
+      expect(hall.panelDepth).to.equal(2)
+      expect(hall.openPanel('catalog')).to.equal(true)
+      await Vue.nextTick()
+      expect(hall.panelDepth).to.equal(3)
+      expect(hall.openPanel('treasure')).to.equal(false)
+      expect(wrapper.findComponent(ArchiveReader).vm).to.equal(reader.vm)
+      expect(wrapper.findComponent(LibraryPanel).attributes('inert')).to.equal('')
+      expect(hall.returnPanel()).to.equal(true)
+      await Vue.nextTick()
+      expect(readerState.currentLocation.value).to.equal(location)
+      expect(wrapper.find('textarea').element.value).to.equal('五轮旋转仍须保留的批注')
+      expect(api.calls).to.have.length(loadCount)
+      expect(hall.returnPanel()).to.equal(true)
+      await settle()
+      expect(wrapper.find('.archive-reader-fullscreen').exists()).to.equal(false)
+      expect(wrapper.find('.archive-book-open').exists()).to.equal(true)
+      expect(hall.panelFrames).to.deep.equal(['library'])
+      expect(readerUnmounts).to.equal(0)
+      // At a third source frame, entering another reading detail is unavailable.
+      hall.openPanel('agents')
+      hall.openPanel('tasks')
+      await Vue.nextTick()
+      expect(reader.props('detailAllowed')).to.equal(false)
     } finally {
       wrapper.unmount()
     }
