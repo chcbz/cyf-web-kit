@@ -27,10 +27,16 @@ const workspaceMock = () => {
   workspace.select = async fileId => { const value = { file: { fileId, displayName: '案卷.txt', state: 'ACTIVE', latestVersion: 1 }, latestVersion: { version: 1 }, versions: [{ version: 1, originalFilename: '案卷.txt', byteLength: 1, createdAt: 1, contentMimeType: 'text/plain' }] }; detail.value = value; return value }
   return workspace
 }
-const executionMock = () => ({
-  agents: Vue.ref([{ agentId: 'agent_1', name: '林冲', status: 'online' }]), rosterState: Vue.ref('ready'), rosterError: Vue.ref(''), selectedAgentId: Vue.ref('agent_1'), selectedAgent: Vue.ref({ agentId: 'agent_1', name: '林冲' }), selectedExecutionAgent: Vue.ref({ agentId: 'agent_1', name: '林冲' }), allowedMimeTypes: Vue.ref(['image/png']), inputMimeTypes: Vue.ref(['text/plain']), capabilityState: Vue.ref('ready'), capabilityError: Vue.ref(''), generationEnabled: Vue.ref(true), execution: Vue.ref({ executionId: 'exec_1', state: 'QUEUED' }), receipt: Vue.ref({ executionId: 'exec_1', targetAgentId: 'agent_1', state: 'QUEUED', outputContentMimeType: 'image/png' }), executionState: Vue.ref('ready'), pending: Vue.ref(true), error: Vue.ref(''), completionNotice: Vue.ref(''), history: Vue.ref([]), historyState: Vue.ref('empty'), historyError: Vue.ref(''), historyNextCursor: Vue.ref(null),
-  loadCapabilities: async () => ({ allowedMimeTypes: ['image/png'] }), loadAgents: async () => [], loadHistory: async () => [], recover: async () => [], selectAgent: () => true, create: async () => null, prepareNewRequest: () => true, selectHistoryExecution: async () => null, refreshExecution: async () => null, revokeInputs: async () => null, dispose: () => {}
-})
+const executionMock = () => {
+  const receipt = Vue.ref({ executionId: 'exec_1', targetAgentId: 'agent_1', state: 'QUEUED', outputContentMimeType: 'image/png' })
+  const pending = Vue.ref(true)
+  const execution = {
+    agents: Vue.ref([{ agentId: 'agent_1', name: '林冲', status: 'online' }]), rosterState: Vue.ref('ready'), rosterError: Vue.ref(''), selectedAgentId: Vue.ref('agent_1'), selectedAgent: Vue.ref({ agentId: 'agent_1', name: '林冲' }), selectedExecutionAgent: Vue.ref({ agentId: 'agent_1', name: '林冲' }), allowedMimeTypes: Vue.ref(['image/png']), inputMimeTypes: Vue.ref(['text/plain']), capabilityState: Vue.ref('ready'), capabilityError: Vue.ref(''), generationEnabled: Vue.ref(true), execution: Vue.ref({ executionId: 'exec_1', state: 'QUEUED' }), receipt, executionState: Vue.ref('ready'), pending, unresolvedIntent: Vue.ref(null), error: Vue.ref(''), completionNotice: Vue.ref(''), history: Vue.ref([{ executionId: 'exec_old', targetAgentId: 'agent_1', state: 'FAILED', outputContentMimeType: 'image/png', createdAt: 1 }]), historyState: Vue.ref('ready'), historyError: Vue.ref(''), historyNextCursor: Vue.ref(null),
+    loadCapabilities: async () => ({ allowedMimeTypes: ['image/png'] }), loadAgents: async () => [], loadHistory: async () => [], recover: async () => [], selectAgent: () => true, create: async () => null, selectHistoryExecution: async () => null, refreshExecution: async () => null, revokeInputs: async () => null, dispose: () => {}
+  }
+  execution.prepareNewRequest = () => { receipt.value = null; pending.value = false; execution.execution.value = null; execution.executionState.value = 'idle'; return true }
+  return execution
+}
 
 describe('personal workspace execution receipt presentation', () => {
   it('mounts the delivery receipt at submission location, shows terminal errors, and keeps file selection navigation working', async () => {
@@ -41,16 +47,39 @@ describe('personal workspace execution receipt presentation', () => {
     })
     const wrapper = mount(component)
     assert.equal(executionOptions.identityScope.value, 'tenant-a\u0000web-client\u0000owner-a')
-    await wrapper.findAll('.box-actions button')[1].trigger('click')
-    assert.match(wrapper.find('.delivery-modal').text(), /本次交付回执/)
-    assert.match(wrapper.find('.delivery-modal').text(), /已接受，等待结果/)
-    assert.match(wrapper.find('.delivery-modal').text(), /服务端已接受请求，正在等待结果/)
-    assert.equal(wrapper.findAll('.delivery-modal button').find(button => button.text() === '生成交付件').element.disabled, true)
-    execution.receipt.value = { ...execution.receipt.value, state: 'FAILED' }; execution.error.value = 'Agent 未能完成本次交付'
+    execution.receipt.value = null; execution.historyState.value = 'loading'
     await Vue.nextTick()
-    assert.match(wrapper.find('.delivery-modal').text(), /交付失败/)
-    assert.match(wrapper.find('.delivery-modal').text(), /Agent 未能完成本次交付/)
-    await wrapper.find('.delivery-modal .quiet-action').trigger('click')
+    assert.match(wrapper.find('.box-footnote').text(), /最近执行：查询中/)
+    execution.historyState.value = 'error'
+    await Vue.nextTick()
+    assert.match(wrapper.find('.box-footnote').text(), /最近执行：查询失败/)
+    execution.historyState.value = 'empty'; execution.history.value = []
+    await Vue.nextTick()
+    assert.match(wrapper.find('.box-footnote').text(), /最近执行：暂无/)
+    execution.receipt.value = { executionId: 'exec_1', targetAgentId: 'agent_1', state: 'QUEUED', outputContentMimeType: 'image/png' }; execution.historyState.value = 'ready'; execution.history.value = [{ executionId: 'exec_old', targetAgentId: 'agent_1', state: 'FAILED', outputContentMimeType: 'image/png', createdAt: 1 }]
+    await Vue.nextTick()
+    await wrapper.findAll('.box-actions button')[1].trigger('click')
+    const delivery = wrapper.find('.delivery-modal')
+    assert.equal(wrapper.classes().includes('is-progress-view'), true)
+    assert.equal(delivery.element.children[1].classList.contains('delivery-receipt'), true)
+    assert.match(delivery.text(), /交付进度/)
+    assert.match(delivery.text(), /本次交付回执/)
+    assert.match(delivery.text(), /已接受，等待结果/)
+    assert.equal(delivery.find('.composer-steps').exists(), false)
+    assert.equal(delivery.find('details.execution-history').attributes('open'), undefined)
+    await delivery.find('summary').trigger('click')
+    assert.equal(delivery.find('details.execution-history').element.open, true)
+    assert.equal(delivery.find('.history-row').element.disabled, false)
+    execution.receipt.value = { ...execution.receipt.value, state: 'FAILED' }; execution.pending.value = false; execution.error.value = 'Agent 未能完成本次交付'
+    await Vue.nextTick()
+    assert.match(delivery.text(), /交付失败/)
+    const newRequest = delivery.findAll('button').find(button => button.text().includes('另起一项新交付'))
+    await newRequest.trigger('click')
+    await Vue.nextTick()
+    assert.match(delivery.text(), /直接生成交付件/)
+    assert.equal(delivery.find('.composer-steps').exists(), true)
+    assert.equal(wrapper.classes().includes('is-progress-view'), false)
+    await wrapper.find('.delivery-modal .modal-heading .quiet-action').trigger('click')
     await wrapper.findAll('.box-actions button')[0].trigger('click')
     await wrapper.find('.file-row').trigger('click')
     await Vue.nextTick(); await Vue.nextTick()

@@ -245,6 +245,17 @@ describe('personal workspace execution receipt and recovery', () => {
     failed.dispose()
   })
 
+  it('clears a terminal receipt only when the user explicitly starts a new request', () => {
+    const adapter = usePersonalWorkspaceExecution({ identityEpoch: ref('owner-a'), storage: memoryStorage() })
+    adapter.adoptExecution(executionView({ state: 'FAILED', failureCode: 'AGENT_DELIVERY_FAILED', failureMessage: 'terminal failure' }))
+    assert.equal(adapter.receipt.value.state, 'FAILED')
+    assert.equal(adapter.prepareNewRequest(), true)
+    assert.equal(adapter.receipt.value, null)
+    assert.equal(adapter.execution.value, null)
+    assert.equal(adapter.executionState.value, 'idle')
+    adapter.dispose()
+  })
+
   it('keeps a persisted 404-unknown original intent through terminal history and blocks a duplicate request', async () => {
     const storage = memoryStorage(); let posts = 0; let lookups = 0; let detailReads = 0
     const api = { execute: async options => {

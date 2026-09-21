@@ -264,7 +264,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
   }
   const prepareNewRequest = () => {
     if (unresolvedIntent.value || executionState.value === 'creating' || executionState.value === 'reconciling' || executionState.value === 'unknown') { error.value = '原请求尚未确认；请继续查询原请求，不能安全地另起执行。'; return false }
-    if (!pending.value) return true
+    if (!receipt.value && !pending.value) return true
     // This deliberately does not retry, cancel, or alter the server execution.
     recoveryStore.clear(); selectionSequence += 1; stopPolling(); execution.value = null; receipt.value = null; executionState.value = 'idle'; error.value = ''; completionNotice.value = ''
     return true

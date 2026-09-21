@@ -9,7 +9,8 @@ const sideMenu = readFileSync(new URL('../src/components/SideMenu.vue', import.m
 
 describe('1.13.6 Babao-box modal-stack hall presentation', () => {
   it('uses the embedded Juyi Hall treasure style instead of the former blue-white workspace shell', () => {
-    assert.match(workspace, /:class="\{ 'is-hall-treasure': embedded \}"/)
+    assert.match(workspace, /'is-hall-treasure': embedded/)
+    assert.match(workspace, /'is-progress-view': activeModal === 'delivery' && showDeliveryProgress/)
     assert.match(workspace, /--treasure-wood: #6d3f1f/)
     assert.match(workspace, /--treasure-paper: #fff8e8/)
     assert.match(workspace, /--treasure-line: #d7c3a2/)
