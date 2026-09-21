@@ -3,7 +3,8 @@ import { describe, it } from 'mocha'
 import { ref } from 'vue'
 import { usePersonalWorkspaceExecution } from '../src/composables/usePersonalWorkspaceExecution.js'
 
-const flushAsync = () => new Promise(resolve => setImmediate(resolve))
+const flushAsync = () => new Promise(resolve => globalThis.setImmediate(resolve))
+const deferred = () => { let resolve; const promise = new Promise(res => { resolve = res }); return { promise, resolve } }
 
 const executionView = (overrides = {}) => ({
   executionId: 'exec_1', taskId: 'task_1', runId: 'run_1', conversationId: null,
@@ -162,6 +163,119 @@ describe('personal workspace execution adapter', () => {
     assert.ok(revoke.headers['Idempotency-Key'])
     assert.equal(adapter.execution.value.grantRevision, 2)
     assert.equal(adapter.execution.value.state, 'INPUTS_REVOKED')
+    adapter.dispose()
+  })
+})
+
+const memoryStorage = () => {
+  const values = new Map()
+  return { getItem: key => values.has(key) ? values.get(key) : null, setItem: (key, value) => values.set(key, String(value)), removeItem: key => values.delete(key) }
+}
+
+const readyAdapter = async (api, options = {}) => {
+  const adapter = usePersonalWorkspaceExecution({ api, identityEpoch: ref('owner-a'), storage: memoryStorage(), timerApi: { setTimeout: () => null, clearTimeout: () => {} }, ...options })
+  await adapter.loadAgents(); await adapter.loadCapabilities(); adapter.selectAgent('agent_1')
+  return adapter
+}
+
+describe('personal workspace execution receipt and recovery', () => {
+  it('programmatically accepts only one rapid submission and keeps the accepted queued receipt', async () => {
+    const posted = deferred(); let posts = 0
+    const adapter = await readyAdapter({ execute: async options => {
+      if (options.url === '/roster') return { data: { items: [{ agentId: 'agent_1', name: '林冲' }] } }
+      if (options.url.endsWith('/capabilities')) return { data: { allowedMimeTypes: ['image/png'], generationEnabled: true } }
+      if (options.method === 'POST') { posts += 1; return posted.promise }
+      return { data: executionView({ outputContentMimeType: 'image/png', inputs: [] }) }
+    } })
+    const first = adapter.create({ instruction: '生成海报', outputContentMimeType: 'image/png' })
+    const second = adapter.create({ instruction: '生成海报', outputContentMimeType: 'image/png' })
+    assert.equal(await second, null)
+    assert.equal(posts, 1)
+    posted.resolve({ data: executionView({ outputContentMimeType: 'image/png', inputs: [] }) })
+    await first
+    assert.equal(adapter.receipt.value.state, 'QUEUED')
+    assert.equal(adapter.pending.value, true)
+    adapter.dispose()
+  })
+
+  it('reconciles an ambiguous post through its original key without a duplicate post, and keeps 404 honest', async () => {
+    const calls = []
+    const adapter = await readyAdapter({ execute: async options => {
+      calls.push(options)
+      if (options.url === '/roster') return { data: { items: [{ agentId: 'agent_1', name: '林冲' }] } }
+      if (options.url.endsWith('/capabilities')) return { data: { allowedMimeTypes: ['image/png'], generationEnabled: true } }
+      if (options.method === 'POST') throw Object.assign(new Error('network lost'), { status: 503 })
+      if (options.url.endsWith('/request')) throw Object.assign(new Error('not found'), { status: 404, code: 'EXECUTION_NOT_FOUND' })
+      throw new Error(`unexpected ${options.url}`)
+    } })
+    assert.equal(await adapter.create({ instruction: '生成海报', outputContentMimeType: 'image/png' }), null)
+    assert.equal(calls.filter(call => call.method === 'POST' && call.url === '/personal-workspace/executions').length, 1)
+    assert.equal(calls.filter(call => call.url.endsWith('/request')).length, 1)
+    assert.equal(adapter.executionState.value, 'unknown')
+    assert.match(adapter.error.value, /仍可能稍后被服务端确认/)
+    assert.equal(await adapter.create({ instruction: '生成海报', outputContentMimeType: 'image/png' }), null)
+    assert.equal(calls.filter(call => call.method === 'POST' && call.url === '/personal-workspace/executions').length, 1)
+    assert.equal(adapter.prepareNewRequest(), false)
+    adapter.dispose()
+  })
+
+  it('reloads server-owned history, adopts the most recent queued execution, and distinguishes empty from failure', async () => {
+    const storage = memoryStorage(); const calls = []
+    const api = { execute: async options => {
+      calls.push(options)
+      if (options.url === '/personal-workspace/executions') return { data: { items: [{ executionId: 'pwe_fbdca6bb2b654ee2ad555c576af7d74c', targetAgentId: 'agent_1', state: 'QUEUED', outputContentMimeType: 'image/png', createdAt: 9 }], nextCursor: null } }
+      if (options.url.includes('/executions/pwe_fbdca6bb2b654ee2ad555c576af7d74c')) return { data: executionView({ executionId: 'pwe_fbdca6bb2b654ee2ad555c576af7d74c', outputContentMimeType: 'image/png', inputs: [] }) }
+      throw new Error(`unexpected ${options.url}`)
+    } }
+    const adapter = usePersonalWorkspaceExecution({ api, identityEpoch: ref('owner-a'), identityScope: ref('owner-a'), storage, timerApi: { setTimeout: () => null, clearTimeout: () => {} } })
+    await adapter.recover(); await flushAsync()
+    assert.equal(adapter.historyState.value, 'ready')
+    assert.equal(adapter.receipt.value.executionId, 'pwe_fbdca6bb2b654ee2ad555c576af7d74c')
+    assert.ok(calls.some(call => call.url === '/personal-workspace/executions' && call.method === 'GET'))
+    adapter.dispose()
+
+    const empty = usePersonalWorkspaceExecution({ api: { execute: async () => ({ data: { items: [], nextCursor: null } }) }, identityEpoch: ref('owner-empty'), storage: memoryStorage() })
+    await empty.loadHistory()
+    assert.equal(empty.historyState.value, 'empty')
+    empty.dispose()
+    const failed = usePersonalWorkspaceExecution({ api: { execute: async () => { throw new Error('history offline') } }, identityEpoch: ref('owner-failed'), storage: memoryStorage() })
+    await failed.loadHistory()
+    assert.equal(failed.historyState.value, 'error')
+    assert.match(failed.historyError.value, /history offline/)
+    failed.dispose()
+  })
+
+  it('fences an older history selection response behind a newer selection', async () => {
+    const older = deferred(); const newer = deferred()
+    const adapter = usePersonalWorkspaceExecution({ api: { execute: options => {
+      if (options.url === '/personal-workspace/executions') return Promise.resolve({ data: { items: [
+        { executionId: 'exec_new', targetAgentId: 'agent_1', state: 'QUEUED', outputContentMimeType: 'image/png', createdAt: 2 },
+        { executionId: 'exec_old', targetAgentId: 'agent_1', state: 'QUEUED', outputContentMimeType: 'image/png', createdAt: 1 }
+      ], nextCursor: null } })
+      if (options.url.endsWith('/exec_old')) return older.promise
+      if (options.url.endsWith('/exec_new')) return newer.promise
+      throw new Error(`unexpected ${options.url}`)
+    } }, identityEpoch: ref('owner-a'), storage: memoryStorage(), timerApi: { setTimeout: () => null, clearTimeout: () => {} } })
+    await adapter.loadHistory()
+    const first = adapter.selectHistoryExecution('exec_old')
+    const second = adapter.selectHistoryExecution('exec_new')
+    newer.resolve({ data: executionView({ executionId: 'exec_new', outputContentMimeType: 'image/png', inputs: [] }) })
+    await second
+    older.resolve({ data: executionView({ executionId: 'exec_old', outputContentMimeType: 'image/png', inputs: [] }) })
+    await first
+    assert.equal(adapter.receipt.value.executionId, 'exec_new')
+    adapter.dispose()
+  })
+
+  it('drops a late history callback after identity scope changes', async () => {
+    const scope = ref('owner-a'); const epoch = ref('epoch-a'); const wait = deferred()
+    const adapter = usePersonalWorkspaceExecution({ api: { execute: () => wait.promise }, identityEpoch: epoch, identityScope: scope, storage: memoryStorage() })
+    const loading = adapter.loadHistory()
+    scope.value = 'owner-b'; epoch.value = 'epoch-b'
+    wait.resolve({ data: { items: [{ executionId: 'exec_old', targetAgentId: 'agent_1', state: 'QUEUED', outputContentMimeType: 'image/png', createdAt: 1 }], nextCursor: null } })
+    await loading
+    assert.deepEqual(adapter.history.value, [])
+    assert.equal(adapter.historyState.value, 'idle')
     adapter.dispose()
   })
 })

@@ -135,6 +135,8 @@ const loadSfc = (relativePath) => {
     .replace(/^import\s+OutputPreview\s+from\s+['"]\.\.\/outputs\/OutputPreview\.vue['"];?\s*$/gm, `var OutputPreview = { template: '<section class="output-preview-stub" />', props: ['item', 'load', 'contextKey'] }`)
     .replace(/^import\s+\{\s*outputPreviewKind,\s*outputSource,\s*useOutputs\s*\}\s+from\s+['"]\.\.\/\.\.\/composables\/useOutputs\.js['"];?\s*$/gm, 'var { outputPreviewKind, outputSource, useOutputs } = arguments[5]')
     .replace(/^import\s+\{\s*saveOutputBlob\s*\}\s+from\s+['"]\.\.\/\.\.\/utils\/outputDownload\.js['"];?\s*$/gm, 'var { saveOutputBlob } = arguments[5]')
+    .replace(/^import\s+\{\s*useApiStore\s*\}\s+from\s+['"]@\/stores\/api['"];?\s*$/gm, 'var { useApiStore } = arguments[5]')
+    .replace(/^import\s+\{\s*useGlobalStore\s*\}\s+from\s+['"]@\/stores\/global['"];?\s*$/gm, 'var { useGlobalStore } = arguments[5]')
     .replace(/^import\s+\{\s*usePersonalWorkspace\s*\}\s+from\s+['"]\.\.\/\.\.\/composables\/usePersonalWorkspace\.js['"];?\s*$/gm, 'var { usePersonalWorkspace } = arguments[5]')
     .replace(/^import\s+\{\s*usePersonalWorkspaceExecution\s*\}\s+from\s+['"]\.\.\/\.\.\/composables\/usePersonalWorkspaceExecution\.js['"];?\s*$/gm, 'var { usePersonalWorkspaceExecution } = arguments[5]')
     .replace(/^import\s+\{\s*usePersonalWorkspaceTaskLinks\s*\}\s+from\s+['"]\.\.\/\.\.\/composables\/usePersonalWorkspaceTaskLinks\.js['"];?\s*$/gm, 'var { usePersonalWorkspaceTaskLinks } = arguments[5]')
@@ -171,6 +173,8 @@ const createChatPanelDependencies = () => {
       cacheKey: Vue.ref(''), refresh: async () => true, preview: async () => new Blob(), download: async () => new Blob()
     }),
     saveOutputBlob: () => {},
+    useApiStore: () => ({ authorizationGeneration: 0 }),
+    useGlobalStore: () => ({ user: {}, getUserId: '', getOpenid: '' }),
     usePersonalWorkspace: () => ({
       loading: Vue.ref(false), listState: Vue.ref('empty'), error: Vue.ref(''), items: Vue.ref([]),
       detail: Vue.ref(null), refresh: async () => true, select: async () => null, dispose: () => {}

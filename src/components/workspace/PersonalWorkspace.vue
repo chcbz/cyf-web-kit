@@ -52,13 +52,43 @@
         <div class="modal-heading"><div><p class="section-kicker">第二层 · 交付台</p><h2 id="workspace-generation-title">直接生成交付件</h2><p>只保留一条清晰流程：选 Agent、定类型、写需求。</p></div><button type="button" class="quiet-action" @click="backToBox">返回箱面</button></div>
         <ol class="composer-steps"><li>选 Agent</li><li>定交付类型</li><li>写需求并生成</li></ol>
         <p v-if="execution.capabilityState.value === 'loading'" class="workspace-note">正在读取可执行交付类型…</p><p v-else-if="execution.capabilityError.value" class="workspace-error" role="alert">{{ execution.capabilityError.value }}</p>
-        <template v-else-if="execution.allowedMimeTypes.value.length"><label><span>已有 Agent</span><select :value="execution.selectedAgentId.value" :disabled="execution.rosterState.value === 'loading'" @change="selectExecutionAgent($event.target.value)"><option value="">请选择已有 Agent</option><option v-for="agent in execution.agents.value" :key="agent.agentId" :value="agent.agentId">{{ agent.name }}{{ agent.status ? `（${agent.status}）` : '' }}</option></select></label><label><span>交付类型</span><select v-model="generationMime"><option v-for="mime in execution.allowedMimeTypes.value" :key="mime" :value="mime">{{ deliveryTypeText(mime) }}</option></select></label><label><span>需求说明</span><textarea v-model="generationInstruction" maxlength="4000" placeholder="例如：生成一份面向客户的项目介绍 PPT，包含目标、方案和时间表。"></textarea></label><p class="workspace-note consent-note">提交会将本轮需求交给所选 Agent 及其配置的 Provider；资料可能外发并产生费用，费用未知。</p><div class="actions"><button type="button" :disabled="!canCreateGeneration" @click="createGeneration">生成交付件</button><button
+        <template v-else-if="execution.allowedMimeTypes.value.length"><label><span>已有 Agent</span><select :value="execution.selectedAgentId.value" :disabled="execution.rosterState.value === 'loading' || execution.pending.value" @change="selectExecutionAgent($event.target.value)"><option value="">请选择已有 Agent</option><option v-for="agent in execution.agents.value" :key="agent.agentId" :value="agent.agentId">{{ agent.name }}{{ agent.status ? `（${agent.status}）` : '' }}</option></select></label><label><span>交付类型</span><select v-model="generationMime" :disabled="execution.pending.value"><option v-for="mime in execution.allowedMimeTypes.value" :key="mime" :value="mime">{{ deliveryTypeText(mime) }}</option></select></label><label><span>需求说明</span><textarea
+          v-model="generationInstruction"
+          :disabled="execution.pending.value"
+          maxlength="4000"
+          placeholder="例如：生成一份面向客户的项目介绍 PPT，包含目标、方案和时间表。"
+        ></textarea></label><p class="workspace-note consent-note">提交会将本轮需求交给所选 Agent 及其配置的 Provider；资料可能外发并产生费用，费用未知。</p><div class="actions"><button type="button" :disabled="!canCreateGeneration" @click="createGeneration">生成交付件</button><button
+          v-if="execution.pending.value"
+          type="button"
+          class="quiet-action"
+          @click="prepareNewExecution"
+        >另起一项新交付（不重试当前）</button><button
           type="button"
           class="quiet-action"
           :disabled="execution.capabilityState.value === 'loading'"
           @click="loadExecutionCapabilities"
         >刷新能力</button></div></template>
         <p v-else class="workspace-note">当前没有已确认开放的直接生成类型，不会用演示内容代替。</p>
+        <section v-if="execution.receipt.value" class="execution-status delivery-receipt" aria-live="polite"><p class="receipt-title">本次交付回执</p><dl class="file-details"><div><dt>执行状态</dt><dd>{{ executionStateText(execution.receipt.value.state) }}</dd></div><div><dt>目标 Agent</dt><dd>{{ execution.selectedExecutionAgent.value?.name || execution.receipt.value.targetAgentId }}</dd></div><div><dt>执行编号</dt><dd>{{ execution.receipt.value.executionId }}</dd></div></dl><p v-if="execution.receipt.value.state === 'QUEUED'" class="workspace-note">服务端已接受请求，正在等待结果；尚未确认任何运行阶段或交付完成。</p><div class="actions"><button type="button" @click="refreshExecution">刷新进度</button><button type="button" :disabled="execution.execution.value?.state !== 'QUEUED'" @click="revokeExecutionInputs">撤销尚未开始的输入授权</button></div></section><p v-if="execution.completionNotice.value" class="execution-notice" role="status">{{ execution.completionNotice.value }}</p><p v-if="execution.error.value" class="workspace-error" role="alert">{{ execution.error.value }}</p>
+        <section class="execution-history" aria-label="服务端执行历史"><div class="history-heading"><strong>最近执行</strong><button
+          type="button"
+          class="quiet-action"
+          :disabled="execution.historyState.value === 'loading'"
+          @click="execution.loadHistory({ adopt: false })"
+        >刷新记录</button></div><p v-if="execution.historyState.value === 'loading'" class="workspace-note" role="status">正在读取服务端执行记录…</p><p v-else-if="execution.historyState.value === 'error'" class="workspace-error" role="alert">{{ execution.historyError.value }}</p><p v-else-if="execution.historyState.value === 'empty'" class="workspace-note">服务端暂无最近执行记录。</p><div v-else-if="execution.historyState.value === 'ready'" class="history-list"><button
+          v-for="item in execution.history.value"
+          :key="item.executionId"
+          type="button"
+          class="history-row"
+          :class="{ active: execution.receipt.value?.executionId === item.executionId }"
+          @click="chooseHistoryExecution(item.executionId)"
+        ><span><strong>{{ executionStateText(item.state) }}</strong><small>{{ execution.selectedExecutionAgent.value?.agentId === item.targetAgentId ? execution.selectedExecutionAgent.value?.name : item.targetAgentId }}</small></span><small>{{ item.executionId }}</small></button></div><button
+          v-if="execution.historyNextCursor.value"
+          type="button"
+          class="load-more quiet-action"
+          :disabled="execution.historyState.value === 'loading'"
+          @click="loadMoreExecutionHistory"
+        >加载更早记录</button></section>
       </section>
 
       <section v-if="activeModal === 'detail' && workspace.detail.value" class="babao-modal detail-modal" aria-labelledby="workspace-detail-title">
@@ -91,7 +121,12 @@
           class="quiet-action"
           :disabled="execution.rosterState.value === 'loading'"
           @click="loadExecutionAgents"
-        >刷新 Agent</button></div><section v-if="execution.execution.value" class="execution-status"><dl class="file-details"><div><dt>执行状态</dt><dd>{{ execution.execution.value.state }}</dd></div><div><dt>目标 Agent</dt><dd>{{ execution.execution.value.targetAgentId }}</dd></div><div><dt>执行编号</dt><dd>{{ execution.execution.value.executionId }}</dd></div></dl><div class="actions"><button type="button" @click="refreshExecution">刷新进度</button><button type="button" :disabled="execution.execution.value.state !== 'QUEUED'" @click="revokeExecutionInputs">撤销尚未开始的输入授权</button></div></section><p v-if="execution.completionNotice.value" class="execution-notice" role="status">{{ execution.completionNotice.value }}</p><p v-if="execution.error.value" class="workspace-error" role="alert">{{ execution.error.value }}</p></section>
+        >刷新 Agent</button><button
+          v-if="execution.pending.value"
+          type="button"
+          class="quiet-action"
+          @click="prepareNewExecution"
+        >另起一项新交付（不重试当前）</button></div><section v-if="execution.receipt.value" class="execution-status"><dl class="file-details"><div><dt>执行状态</dt><dd>{{ executionStateText(execution.receipt.value.state) }}</dd></div><div><dt>目标 Agent</dt><dd>{{ execution.selectedExecutionAgent.value?.name || execution.receipt.value.targetAgentId }}</dd></div><div><dt>执行编号</dt><dd>{{ execution.receipt.value.executionId }}</dd></div></dl><p v-if="execution.receipt.value.state === 'QUEUED'" class="workspace-note">服务端已接受请求，正在等待结果；尚未确认任何运行阶段或交付完成。</p><div class="actions"><button type="button" @click="refreshExecution">刷新进度</button><button type="button" :disabled="execution.execution.value?.state !== 'QUEUED'" @click="revokeExecutionInputs">撤销尚未开始的输入授权</button></div></section><p v-if="execution.completionNotice.value" class="execution-notice" role="status">{{ execution.completionNotice.value }}</p><p v-if="execution.error.value" class="workspace-error" role="alert">{{ execution.error.value }}</p></section>
       </section>
     </section>
     <p v-if="workspace.error.value" class="workspace-error workspace-page-message" role="alert">{{ workspace.error.value }}</p><p v-if="workspace.lastOperation.value" class="workspace-receipt" role="status">最近操作：{{ workspace.lastOperation.value.operationId }}（{{ workspace.lastOperation.value.state }}）</p>
@@ -101,14 +136,17 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useApiStore } from '@/stores/api'
+import { useGlobalStore } from '@/stores/global'
 import { savePersonalWorkspaceBlob, usePersonalWorkspace } from '@/composables/usePersonalWorkspace'
 import { usePersonalWorkspaceExecution } from '@/composables/usePersonalWorkspaceExecution'
 
 const { embedded } = defineProps({ embedded: { type: Boolean, default: false } })
 const apiStore = useApiStore()
+const globalStore = useGlobalStore()
 const identityEpoch = computed(() => apiStore.authorizationGeneration)
+const executionIdentityScope = computed(() => String(globalStore.user?.id || globalStore.user?.openid || globalStore.getUserId || globalStore.getOpenid || ''))
 const workspace = usePersonalWorkspace({ identityEpoch })
-const execution = usePersonalWorkspaceExecution({ identityEpoch })
+const execution = usePersonalWorkspaceExecution({ identityEpoch, identityScope: executionIdentityScope })
 const query = ref('')
 const mediaFamily = ref('')
 const state = ref('ACTIVE')
@@ -129,14 +167,15 @@ const executionMaterials = ref([])
 const selectedExecutionVersion = computed(() => workspace.detail.value?.versions?.find(version => version.version === selectedVersion.value) || null)
 const canExecuteSelectedVersion = computed(() => Boolean(selectedExecutionVersion.value?.contentMimeType && execution.inputMimeTypes.value.includes(selectedExecutionVersion.value.contentMimeType)))
 const canAddSelectedMaterial = computed(() => Boolean(workspace.detail.value?.file?.fileId && selectedExecutionVersion.value && canExecuteSelectedVersion.value && !executionMaterials.value.some(item => item.fileId === workspace.detail.value.file.fileId)))
-const canCreateExecution = computed(() => Boolean(executionMaterials.value.length && executionOutputMime.value && execution.allowedMimeTypes.value.includes(executionOutputMime.value) && execution.selectedAgent.value && executionInstruction.value.trim() && execution.executionState.value !== 'creating'))
-const canCreateGeneration = computed(() => Boolean(execution.generationEnabled.value && generationMime.value && execution.allowedMimeTypes.value.includes(generationMime.value) && execution.selectedAgent.value && generationInstruction.value.trim() && execution.executionState.value !== 'creating'))
+const canCreateExecution = computed(() => Boolean(!execution.pending.value && executionMaterials.value.length && executionOutputMime.value && execution.allowedMimeTypes.value.includes(executionOutputMime.value) && execution.selectedAgent.value && executionInstruction.value.trim()))
+const canCreateGeneration = computed(() => Boolean(!execution.pending.value && execution.generationEnabled.value && generationMime.value && execution.allowedMimeTypes.value.includes(generationMime.value) && execution.selectedAgent.value && generationInstruction.value.trim()))
 const acceptTypes = '.png,.jpg,.jpeg,.txt,.pdf,.docx,.xlsx,.pptx,image/png,image/jpeg,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation'
 
 const byteText = size => Number.isFinite(size) ? size < 1024 ? `${size} B` : size < 1024 * 1024 ? `${Math.ceil(size / 1024)} KiB` : `${(size / (1024 * 1024)).toFixed(1)} MiB` : '大小未知'
 const formatDate = value => Number.isFinite(value) ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '时间未知'
 const familyText = value => ({ IMAGE: '图片', TEXT: '文本', DOCUMENT: 'Word 文档', SPREADSHEET: 'Excel 表格', PRESENTATION: 'PPT 演示', PDF: 'PDF' })[value] || '文件'
 const originText = value => ({ USER_UPLOAD: '本人上传', AGENT_DELIVERY: 'Agent 交付' })[value] || '来源待确认'
+const executionStateText = value => ({ QUEUED: '已接受，等待结果', OUTPUT_COMMITTED: '交付已归档', FAILED: '交付失败', INPUTS_REVOKED: '输入已撤销', UNKNOWN: '提交结果待确认' })[value] || '状态待确认'
 const deliveryTypeText = value => ({ 'image/png': 'PNG 图片', 'image/jpeg': 'JPEG 图片', 'application/pdf': 'PDF', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word（DOCX）', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel（XLSX）', 'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'PPT（PPTX）' })[value] || '未知交付类型'
 const iconFor = value => ({ IMAGE: '🖼', TEXT: '📝', DOCUMENT: '📄', SPREADSHEET: '📊', PRESENTATION: '📽', PDF: '📕' })[value] || '📁'
 const currentFilters = () => ({ q: query.value.trim(), mediaFamily: mediaFamily.value, state: state.value })
@@ -146,12 +185,12 @@ const switchState = next => { if (state.value === next) return; state.value = ne
 const openModal = modal => { activeModal.value = modal; if (modal !== 'detail') closeDetail() }
 const backToBox = () => { closeDetail(); activeModal.value = 'home' }
 const backToLibrary = () => { closeDetail(); activeModal.value = 'library' }
-const openFile = async fileId => { const detail = await select(fileId); if (detail) { detailPane.value = 'summary'; activeModal.value = 'detail' } }
+const openFile = async fileId => { const detail = await select(fileId); if (detail) { detailPane.value = 'summary'; activeModal.value = 'detail' }; return detail }
 const openRecentFile = () => { const recent = workspace.items.value[0]; if (recent) void openFile(recent.fileId) }
 const onUploadFile = event => { uploadFile.value = event.target.files?.[0] || null }
 const onVersionFile = event => { versionFile.value = event.target.files?.[0] || null }
 const upload = async () => { const result = await workspace.upload(uploadFile.value, uploadDisplayName.value); if (result) { uploadFile.value = null; uploadDisplayName.value = ''; activeModal.value = 'library'; selectedId.value = result.file.fileId; selectedVersion.value = result.version.version; await refresh() } }
-const select = async fileId => { const detail = await workspace.select(fileId); if (detail) { selectedId.value = fileId; selectedVersion.value = detail.latestVersion.version; renameValue.value = detail.file.displayName; versionFile.value = null } }
+const select = async fileId => { const detail = await workspace.select(fileId); if (detail) { selectedId.value = fileId; selectedVersion.value = detail.latestVersion.version; renameValue.value = detail.file.displayName; versionFile.value = null }; return detail }
 const closeDetail = () => { selectedId.value = ''; versionFile.value = null; workspace.revokePreview(); workspace.detail.value = null }
 const rename = async () => { const result = await workspace.rename(renameValue.value); if (result) renameValue.value = result.displayName }
 const appendVersion = async () => { const result = await workspace.appendVersion(versionFile.value); if (result) { versionFile.value = null; selectedVersion.value = result.version.version; await refresh() } }
@@ -179,8 +218,11 @@ const createExecution = () => execution.create({ inputs: executionMaterials.valu
 const createGeneration = () => execution.create({ instruction: generationInstruction.value, outputContentMimeType: generationMime.value })
 const refreshExecution = () => execution.refreshExecution()
 const revokeExecutionInputs = () => execution.revokeInputs()
+const prepareNewExecution = () => execution.prepareNewRequest()
+const chooseHistoryExecution = executionId => execution.selectHistoryExecution(executionId)
+const loadMoreExecutionHistory = () => { const cursor = execution.historyNextCursor.value; return cursor ? execution.loadHistory({ beforeCreatedAt: cursor.createdAt, beforeExecutionId: cursor.executionId, append: true, adopt: false }) : Promise.resolve([]) }
 
-onMounted(() => { void refresh(); void loadExecutionAgents(); void loadExecutionCapabilities() })
+onMounted(() => { void refresh(); void loadExecutionAgents(); void loadExecutionCapabilities(); void execution.recover() })
 onBeforeUnmount(() => { workspace.dispose(); execution.dispose() })
 </script>
 
@@ -217,7 +259,7 @@ onBeforeUnmount(() => { workspace.dispose(); execution.dispose() })
 .composer-steps { display:flex; flex-wrap:wrap; gap:6px; padding:0; margin:17px 0 2px; list-style:none; counter-reset:composer-step; }.composer-steps li { padding:5px 9px; border:1px solid rgba(184,137,64,.58); border-radius:999px; color:#644526; font-size:12px; }.composer-steps li::before { counter-increment:composer-step; content:counter(composer-step) ' · '; color:var(--treasure-red); font-weight:700; }.consent-note { padding-left:10px; border-left:2px solid #c59a55; }.actions { margin-top:14px; }
 .detail-tabs { display:flex; gap:7px; margin:16px 0; padding-bottom:12px; border-bottom:1px solid rgba(191,159,108,.5); }.detail-tabs button { background:rgba(255,248,232,.82); color:#654122; box-shadow:none; border-color:#b99761; }.detail-pane { max-width:760px; margin:auto; }.file-details { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:15px 0; }.file-details div { padding:9px; border:1px solid rgba(202,177,130,.5); border-radius:4px; background:rgba(244,230,201,.62); }.file-details dt { color:var(--treasure-muted); font-size:12px; }.file-details dd { margin:4px 0 0; color:#4b2d19; word-break:break-word; }.version-upload { align-items:center; }.version-row { display:grid; grid-template-columns:auto minmax(0,1fr) auto auto; align-items:center; gap:9px; padding:9px 0; border-bottom:1px solid #decba7; }.version-row.active { margin-inline:-8px; padding-inline:8px; background:#f2e1b9; }.version-actions { justify-content:flex-end; }
 .preview { margin-top:15px; overflow:auto; border:1px solid #d4bc91; border-radius:4px; background:#f5e8cc; }.preview pre { margin:0; padding:12px; white-space:pre-wrap; overflow-wrap:anywhere; color:#4d301d; }.preview img { display:block; max-width:100%; max-height:380px; margin:auto; object-fit:contain; }.preview p { padding:12px; color:var(--treasure-muted); }.preview-navigation { display:flex; align-items:center; gap:8px; padding:10px 12px 0; color:#654122; }.preview-navigation button { min-height:30px; padding:0 8px; }
-.execution-pane { max-width:600px; }.execution-status { margin-top:15px; padding-top:15px; border-top:1px solid var(--treasure-line); }.execution-notice { margin-top:14px; padding:11px; border:1px solid #9da877; border-radius:4px; background:#e8efd6; color:#405322; }.danger-zone { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-top:20px; padding-top:15px; border-top:1px solid var(--treasure-line); }.danger-zone p { margin:0; color:var(--treasure-muted); }.danger-zone .danger { border-color:#76271c; background:linear-gradient(#9d3e2b,var(--treasure-red)); }
+.execution-pane { max-width:600px; }.delivery-receipt { margin-top:18px; }.receipt-title { margin:0; color:var(--treasure-wood-dark); font-family:serif; font-weight:700; }.execution-history { margin-top:18px; padding-top:14px; border-top:1px solid var(--treasure-line); }.history-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; color:var(--treasure-wood-dark); }.history-heading .quiet-action { min-height:30px; }.history-list { display:grid; gap:7px; margin-top:10px; }.history-row { display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; text-align:left; border-color:#dac69f!important; background:rgba(255,253,246,.58)!important; color:var(--treasure-ink)!important; }.history-row.active { border-color:#a8773a!important; background:#f2e1b9!important; }.history-row span { display:grid; gap:2px; min-width:0; }.history-row small { color:var(--treasure-muted); overflow-wrap:anywhere; }.execution-status { margin-top:15px; padding-top:15px; border-top:1px solid var(--treasure-line); }.execution-notice { margin-top:14px; padding:11px; border:1px solid #9da877; border-radius:4px; background:#e8efd6; color:#405322; }.danger-zone { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-top:20px; padding-top:15px; border-top:1px solid var(--treasure-line); }.danger-zone p { margin:0; color:var(--treasure-muted); }.danger-zone .danger { border-color:#76271c; background:linear-gradient(#9d3e2b,var(--treasure-red)); }
 .workspace-error { padding:11px; border:1px solid #c88174; border-radius:4px; background:#f7e1d9; color:#7e271c; }.workspace-page-message { margin-top:14px; }.workspace-receipt { margin-top:12px; padding:8px 12px; border-left:3px solid #b88940; background:rgba(255,248,232,.72); color:#694b2a; font-size:14px; }.sr-only { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 @media (max-width:700px) { .personal-workspace { padding:13px; }.workspace-header { align-items:flex-start; flex-direction:column; gap:7px; }.workspace-header-note { max-width:none; }.modal-stage { min-height:580px; padding:15px; }.babao-modal { inset:15px; padding:18px; }.child-modal { inset:8px; }.detail-modal { inset:0; }.filters { grid-template-columns:1fr; }.file-details { grid-template-columns:1fr; }.version-row { grid-template-columns:auto minmax(0,1fr); }.version-row small,.version-actions { grid-column:2; justify-content:flex-start; }.file-state { display:none; }.modal-heading { flex-direction:column; }.inline-name input { width:100%; } }
 </style>
