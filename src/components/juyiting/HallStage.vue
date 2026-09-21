@@ -69,8 +69,9 @@
           v-if="isMobileCoarse"
           class="tool-action orientation-action"
           data-tour="landscape-orientation"
-          :disabled="stageInputLocked || orientationRequestPending"
-          :title="sceneMode === 'landscape' ? '切换竖屏视图' : '打开全景视图'"
+          :disabled="stageInputLocked"
+          :title="orientationRequestPending ? '取消方向请求' : (sceneMode === 'landscape' ? '切换竖屏视图' : '打开全景视图')"
+          aria-label="方向控制"
           @click="emitOrientationRequest()"
         >
           <span
@@ -81,7 +82,7 @@
             }"
             aria-hidden="true"
           ></span>
-          <span class="tool-label">{{ sceneMode === 'landscape' ? '竖屏视图' : '横屏全景' }}</span>
+          <span class="tool-label">{{ orientationRequestPending ? '取消切换' : (sceneMode === 'landscape' ? '竖屏视图' : '横屏全景') }}</span>
         </button>
       </div>
     </div>
@@ -807,7 +808,13 @@ const emitOnboarding = target => {
 }
 
 const emitOrientationRequest = () => {
-  if (stageInputLocked.value || props.orientationRequestPending) return false
+  if (stageInputLocked.value) return false
+  // A pending request must retain an explicit user exit. The parent releases
+  // only Hall-owned fullscreen/orientation resources and fences late callbacks.
+  if (props.orientationRequestPending) {
+    emit('request-portrait')
+    return true
+  }
   emit(sceneMode.value === 'landscape' ? 'request-portrait' : 'request-landscape')
   return true
 }

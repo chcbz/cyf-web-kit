@@ -10,10 +10,11 @@
           class="preview-landscape-entry"
           data-tour="portrait-landscape"
           type="button"
-          :disabled="orientationRequestPending"
-          @click="emit('request-landscape')"
+          :disabled="false"
+          :aria-label="orientationRequestPending ? '取消方向请求' : '横屏看全景'"
+          @click="emit(orientationRequestPending ? 'cancel-orientation' : 'request-landscape')"
         >
-          {{ orientationRequestPending ? '正在请求横屏…' : '横屏看全景' }}
+          {{ orientationRequestPending ? '取消切换' : '横屏看全景' }}
         </button>
         <p v-if="orientationHint" class="orientation-hint" role="status">{{ orientationHint }}</p>
       </div>
@@ -49,7 +50,7 @@ const props = defineProps({
   state: { type: String, default: 'loading' }
 })
 
-const emit = defineEmits(['request-landscape', 'retry', 'visibility-change'])
+const emit = defineEmits(['cancel-orientation', 'request-landscape', 'retry', 'visibility-change'])
 const mapSlot = ref(null)
 const fallbackAspectRatio = 1664 / 928
 const isPositiveFinite = value => Number.isFinite(value) && value > 0

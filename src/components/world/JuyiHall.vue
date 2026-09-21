@@ -33,6 +33,7 @@
       @open-workspace="openBabaoBox"
       @open-onboarding="emit('open-onboarding', $event)"
       @request-landscape="requestPortraitLandscape"
+      @cancel-orientation="requestPortrait"
       @retry-live-preview="retryLivePreview"
       @live-preview-visibility-change="handlePreviewVisibility"
       @select-agent="handlePortraitAgentSelect"
@@ -174,10 +175,10 @@
             <button
               class="panel-orientation"
               type="button"
-              :aria-label="experienceMode === 'landscape-map' ? '切换竖向布局' : '切换横向布局'"
-              :disabled="voiceInteractionLocked || orientationRequestPending"
+              :aria-label="orientationRequestPending ? '取消方向请求' : (experienceMode === 'landscape-map' ? '切换竖向布局' : '切换横向布局')"
+              :disabled="voiceInteractionLocked"
               @click="requestPanelOrientation"
-            >{{ orientationRequestPending ? '切换中' : (experienceMode === 'landscape-map' ? '竖向' : '横向') }}</button>
+            >{{ orientationRequestPending ? '取消切换' : (experienceMode === 'landscape-map' ? '竖向' : '横向') }}</button>
             <button
               v-if="taskWorkspaceEnabled && renderedPanel === 'tasks' && taskWorkspaceSubject"
               class="panel-workspace-link"
@@ -1127,7 +1128,8 @@ const openTaskWorkspace = () => {
 }
 
 const requestPanelOrientation = () => {
-  if (voiceInteractionLocked.value || orientationRequestPending.value) return false
+  if (voiceInteractionLocked.value) return false
+  if (orientationRequestPending.value) return requestPortrait()
   return experienceMode.value === 'landscape-map' ? requestPortrait() : requestLandscape()
 }
 

@@ -27,7 +27,7 @@
     </section>
 
     <section data-tour="portrait-preview" class="portrait-scene" :class="{ 'has-live-preview': livePreviewEnabled }" aria-label="聚义厅实景窗口">
-      <HallLiveMapPreview v-if="livePreviewEnabled" :state="livePreviewState" :error-message="livePreviewError" :map-width="livePreviewMapWidth" :map-height="livePreviewMapHeight" :orientation-request-pending="orientationRequestPending" :orientation-hint="orientationHint" @request-landscape="emit('request-landscape')" @retry="emit('retry-live-preview')" @visibility-change="visible => emit('live-preview-visibility-change', visible)">
+      <HallLiveMapPreview v-if="livePreviewEnabled" :state="livePreviewState" :error-message="livePreviewError" :map-width="livePreviewMapWidth" :map-height="livePreviewMapHeight" :orientation-request-pending="orientationRequestPending" :orientation-hint="orientationHint" @request-landscape="emit('request-landscape')" @cancel-orientation="emit('cancel-orientation')" @retry="emit('retry-live-preview')" @visibility-change="visible => emit('live-preview-visibility-change', visible)">
         <template #controls>
           <ul v-if="operableAgents.length" class="scene-agent-list preview-agent-list" aria-label="厅中好汉">
             <li v-for="agent in operableAgents" :key="agentKey(agent)">
@@ -58,10 +58,10 @@
         class="landscape-entry"
         data-tour="portrait-landscape"
         type="button"
-        :disabled="orientationRequestPending"
-        @click="emit('request-landscape')"
+        :aria-label="orientationRequestPending ? '取消方向请求' : '横屏看全景'"
+        @click="emit(orientationRequestPending ? 'cancel-orientation' : 'request-landscape')"
       >
-        {{ orientationRequestPending ? '正在请求横屏…' : '横屏看全景' }}
+        {{ orientationRequestPending ? '取消切换' : '横屏看全景' }}
       </button>
       <p v-if="orientationHint" class="orientation-hint" role="status">{{ orientationHint }}</p>
       </template>
@@ -215,7 +215,7 @@ const props = defineProps({
   tasks: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['set-home-mode', 'open-profile', 'close-task-detail', 'discuss-task', 'open-task', 'open-onboarding', 'open-task-board', 'quick-action', 'request-landscape', 'retry-live-preview', 'live-preview-visibility-change', 'select-agent', 'start-agent-conversation'])
+const emit = defineEmits(['cancel-orientation', 'set-home-mode', 'open-profile', 'close-task-detail', 'discuss-task', 'open-task', 'open-onboarding', 'open-task-board', 'quick-action', 'request-landscape', 'retry-live-preview', 'live-preview-visibility-change', 'select-agent', 'start-agent-conversation'])
 
 const livePreviewTarget = ref(null)
 defineExpose({ livePreviewTarget })
@@ -393,12 +393,13 @@ const openTask = task => emit('open-task', task)
 .portrait-context,
 .portrait-overview,
 .portrait-shortcuts,
-.portrait-home-mode,
-.portrait-home-mode-hint {
-  font: inherit;
+.portrait-context-actions {
+  display: flex;
+  align-items: center;
 }
 
 .portrait-home-mode {
+  font: inherit;
   min-height: 36px;
   border: 1px solid rgba(255, 245, 223, 0.3);
   border-radius: 8px;

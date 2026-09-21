@@ -65,4 +65,14 @@ describe('JYT-UX-W01 unified Hall shell', () => {
     expect(source).to.include('const returnPanel = () =>')
     expect(source).to.include('layout-full-window')
   })
+
+  it('keeps the Portrait Home flex layout and exposes a pending-request exit', () => {
+    const portrait = readFileSync(new URL('../src/components/juyiting/HallPortraitHome.vue', import.meta.url), 'utf8')
+    const stage = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
+    const hall = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+    expect(portrait).to.include('.portrait-context-actions {\n  display: flex;\n  align-items: center;')
+    expect(portrait).to.include('@cancel-orientation="emit(\'cancel-orientation\')"')
+    expect(stage).to.include("if (props.orientationRequestPending) {\n    emit('request-portrait')")
+    expect(hall).to.include('if (orientationRequestPending.value) return requestPortrait()')
+  })
 })
