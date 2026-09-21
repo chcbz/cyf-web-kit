@@ -127,6 +127,7 @@ const loadSfc = (relativePath) => {
     .replace(/^import\s+FormalDeliveryList\s+from\s+['"]\.\.\/deliveries\/FormalDeliveryList\.vue['"];?\s*$/gm, `var FormalDeliveryList = { template: '<section class="formal-delivery-list-stub" />', props: ['taskId', 'identityFingerprint'] }`)
     .replace(/^import\s+WorkItemPlanPanel\s+from\s+['"]\.\/WorkItemPlanPanel\.vue['"];?\s*$/gm, `var WorkItemPlanPanel = { template: '<section class="work-item-plan-stub" />', props: ['task', 'enabled', 'authorizationGeneration'] }`)
     .replace(/^import\s+TeamRecommendationPanel\s+from\s+['"]\.\/TeamRecommendationPanel\.vue['"];?\s*$/gm, `var TeamRecommendationPanel = { template: '<section class="team-recommendation-stub" />', props: ['task', 'authorizationGeneration'] }`)
+    .replace(/^import\s+HallDraftEditor\s+from\s+['"]\.\/HallDraftEditor\.vue['"];?\s*$/gm, `var HallDraftEditor = { template: '<section class="hall-draft-editor-stub" />', props: ['agents', 'selectedAgent', 'identityEpoch'], emits: ['close'] }`)
     .replace(/^import\s+HostingRentPanel\s+from\s+['"].\/HostingRentPanel\.vue['"];?\s*$/gm, `var HostingRentPanel = { template: '<section class="hosting-rent-stub" />', props: ['persona', 'resolvePersona'] }`)
     .replace(/^import\s+ArchiveReader\s+from\s+['"].\/archive\/ArchiveReader\.vue['"];?\s*$/gm, 'var ArchiveReader = { template: \'<section class="archive-reader-stub">典籍阅读</section>\' }')
     .replace(/^import\s+(\w+)\s+from\s+['"]@\/assets\/juyiting\/[^'"]+['"];?\s*$/gm, 'var $1 = \'/mock-juyiting-asset.png\'')

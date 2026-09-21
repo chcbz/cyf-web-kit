@@ -20,10 +20,15 @@
         <BountyActionIcon name="refresh" />
         <span>重查</span>
       </button>
-      <button class="new-task-button" type="button" @click="showCreateForm = !showCreateForm">
-        <BountyActionIcon name="plus" />
-        <span>张榜</span>
-      </button>
+      <div class="task-create-actions">
+        <button class="new-task-button" type="button" @click="showCreateForm = !showCreateForm">
+          <BountyActionIcon name="plus" />
+          <span>张榜</span>
+        </button>
+        <button class="new-task-button" type="button" @click="showDraftEditor = !showDraftEditor">
+          <span>{{ showDraftEditor ? '收起草稿' : '起草交办' }}</span>
+        </button>
+      </div>
     </div>
 
     <form v-if="showCreateForm" class="task-create-form" @submit.prevent="submitCreateTask">
@@ -55,6 +60,14 @@
       </section>
       <button type="submit" :disabled="createPending || !taskForm.title || (taskForm.funded && !validGrossAmount)">{{ createPending ? '张榜中…' : '张榜悬赏' }}</button>
     </form>
+
+    <HallDraftEditor
+      v-if="showDraftEditor"
+      :agents="operableAgents"
+      :selected-agent="selectedAgent"
+      :identity-epoch="authorizationGeneration"
+      @close="showDraftEditor = false"
+    />
 
     <p v-if="loading" class="task-data-state" role="status">悬赏榜读取中…</p>
     <p v-else-if="errorMessage" class="task-data-state is-error" role="alert">{{ errorMessage }}</p>
@@ -326,6 +339,7 @@ import { computed, ref, watch } from 'vue'
 import BountyActionIcon from './BountyActionIcon.vue'
 import WorkItemPlanPanel from './WorkItemPlanPanel.vue'
 import TeamRecommendationPanel from './TeamRecommendationPanel.vue'
+import HallDraftEditor from './HallDraftEditor.vue'
 import { formatSilverMicro, isCanonicalMicroAmount } from '@/utils/silverAmount'
 
 const props = defineProps({
@@ -336,6 +350,7 @@ const props = defineProps({
   countsErrorMessage: { type: String, default: '' },
   selectedTask: { type: Object, default: null },
   selectedAgent: { type: Object, default: null },
+  operableAgents: { type: Array, default: () => [] },
   recommendedAgents: { type: Array, default: () => [] },
   taskAbilityOptions: { type: Array, default: () => [] },
   taskStatusFilters: { type: Array, default: () => [] },
@@ -399,6 +414,7 @@ const fundedRecoveryAbilities = computed(() => {
   const abilities = props.fundedCreateRecovery?.body?.requiredAbilities
   return Array.isArray(abilities) ? abilities.join('、') || '未填写' : abilities || '未填写'
 })
+const showDraftEditor = ref(false)
 const unassignedDiscussHint = '此榜文尚未点将，暂不可开议'
 const isFundedTask = task => task?.funding?.mode === 'FUNDED_SINGLE_AGENT'
 const fundedClaimBlocked = (task, agent) => {
@@ -540,6 +556,8 @@ button:disabled {
   color: #765f40;
   font-size: 13px;
 }
+
+.task-create-actions { display: inline-flex; flex: 0 0 auto; gap: 8px; }
 
 .panel-toolbar button {
   display: inline-flex;

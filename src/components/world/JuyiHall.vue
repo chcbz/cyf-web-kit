@@ -228,6 +228,7 @@
             :portrait-style="portraitStyle"
             :recommended-agents="recommendedAgents"
             :selected-agent="selectedAgent"
+            :operable-agents="operableRosterAgents"
             :selected-task="selectedTask"
             :task-ability-options="taskAbilityOptions"
             :task-agent-match-score="taskAgentMatchScore"
