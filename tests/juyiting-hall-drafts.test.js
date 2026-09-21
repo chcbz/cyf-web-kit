@@ -127,6 +127,38 @@ describe('JYT-UX-W03 Hall draft submission and recovery adapter', () => {
     second.dispose()
   })
 
+  it('keeps the unknown original key locked through a rejected reconciliation and reuses it after reauthorization', async () => {
+    const calls = []
+    const storage = memoryStorage()
+    let requestReads = 0
+    const api = { execute: async request => {
+      calls.push(request)
+      if (request.url === '/hall/drafts') return { data: draft() }
+      if (request.url.endsWith('/submit')) { const error = new Error('lost'); error.status = 503; throw error }
+      if (request.url === '/hall/submissions/request') {
+        requestReads += 1
+        if (requestReads < 3) { const error = new Error('reauthorize'); error.status = requestReads === 1 ? 401 : 403; throw error }
+        return { data: receipt() }
+      }
+      if (request.url === '/hall/cases/case-1') return { data: { caseId: 'case-1', title: '整理案卷', revision: 1, executions: [], allowedActions: [], sourceRef: { originRef: 'juyiting' } } }
+      throw new Error(`unexpected ${request.url}`)
+    } }
+    const { useHallDrafts } = await import('../src/composables/juyiting/useHallDrafts.js')
+    const drafts = useHallDrafts({ agentApi: api, identityScope: 'tenant\u0000client\u0000owner', storage, keyFactory: () => 'original-key' })
+    await createSaved(drafts)
+    await drafts.submit({ authorizationAcknowledgement: true })
+    await drafts.reconcileSubmission()
+    expect(drafts.unresolvedIntent.value.idempotencyKey).to.equal('original-key')
+    expect(await drafts.submit({ authorizationAcknowledgement: true })).to.equal(null)
+    await drafts.reconcileSubmission()
+    expect(drafts.unresolvedIntent.value.idempotencyKey).to.equal('original-key')
+    await drafts.reconcileSubmission()
+    expect(drafts.receipt.value.ref.sourceType).to.equal('PRIVATE_CASE')
+    expect(calls.filter(call => call.url.endsWith('/submit'))).to.have.length(1)
+    expect(calls.filter(call => call.url === '/hall/submissions/request').map(call => call.headers['Idempotency-Key'])).to.deep.equal(['original-key', 'original-key', 'original-key'])
+    drafts.dispose()
+  })
+
   it('clears the prior owner recovery entry when identity scope becomes empty', async () => {
     const storage = memoryStorage()
     const scope = ref('tenant-a\u0000client-a\u0000owner-a')
@@ -181,6 +213,49 @@ describe('JYT-UX-W03 Hall draft submission and recovery adapter', () => {
     expect(drafts.draft.value.state).to.equal('EDITING')
     expect(storage.entries().filter(([key]) => key.startsWith('cyf.hall.submission-recovery.v1.') && !key.endsWith('.browser'))).to.deep.equal([])
     expect(drafts.error.value).to.match(/原正式入口/)
+    drafts.dispose()
+  })
+
+  it('reads only the frozen private-execution results path and preserves fixed output versions', async () => {
+    const calls = []
+    const results = {
+      executionId: 'exec-1', state: 'OUTPUT_COMMITTED', manifestId: 'manifest-1',
+      items: [
+        { outputId: 'output-1', fileId: 'file-1', fileVersion: 2, mime: 'application/pdf', filename: '结案.pdf', byteLength: 12, sha256: 'a'.repeat(64), availability: 'AVAILABLE' },
+        { outputId: 'output-2', fileId: 'file-2', fileVersion: 7, mime: 'text/plain', filename: '缺失.txt', byteLength: 3, sha256: 'b'.repeat(64), availability: 'UNAVAILABLE' }
+      ],
+      allowedActions: ['VIEW', 'CREATE_REVISION']
+    }
+    const api = { execute: async request => { calls.push(request); return { data: results } } }
+    const { useHallDrafts } = await import('../src/composables/juyiting/useHallDrafts.js')
+    const drafts = useHallDrafts({ agentApi: api })
+    const loaded = await drafts.loadResults('exec-1')
+    expect(loaded.items.map(item => [item.fileId, item.fileVersion, item.availability])).to.deep.equal([
+      ['file-1', 2, 'AVAILABLE'], ['file-2', 7, 'UNAVAILABLE']
+    ])
+    expect(calls).to.have.length(1)
+    expect(calls[0]).to.include({ url: '/hall/executions/exec-1/results', method: 'GET' })
+    expect(calls[0]).to.not.have.property('params')
+    expect(calls[0]).to.not.have.property('data')
+    drafts.dispose()
+  })
+
+  it('shows an empty result set only for a nonterminal execution and rejects malformed committed output', async () => {
+    const responses = [
+      { executionId: 'exec-1', state: 'QUEUED', manifestId: null, items: [], allowedActions: [] },
+      { executionId: 'exec-1', state: 'OUTPUT_COMMITTED', manifestId: null, items: [], allowedActions: ['VIEW'] },
+      { executionId: 'exec-1', state: 'OUTPUT_COMMITTED', manifestId: 'manifest-1', items: [{ outputId: 'output-1', fileId: 'file-1', fileVersion: 2, mime: 'application/pdf', filename: '坏结果.pdf', byteLength: 1, sha256: 'not-a-hash', availability: 'AVAILABLE' }], allowedActions: ['VIEW'] }
+    ]
+    const api = { execute: async () => ({ data: responses.shift() }) }
+    const { useHallDrafts } = await import('../src/composables/juyiting/useHallDrafts.js')
+    const drafts = useHallDrafts({ agentApi: api })
+    expect((await drafts.loadResults('exec-1')).items).to.deep.equal([])
+    expect(drafts.resultsState.value).to.equal('empty')
+    expect(await drafts.loadResults('exec-1')).to.equal(null)
+    expect(drafts.resultsState.value).to.equal('error')
+    expect(drafts.executionResults.value).to.equal(null)
+    expect(await drafts.loadResults('exec-1')).to.equal(null)
+    expect(drafts.resultsError.value).to.match(/成果回执无效/)
     drafts.dispose()
   })
 

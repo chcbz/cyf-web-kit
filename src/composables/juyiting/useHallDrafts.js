@@ -45,6 +45,17 @@ const validExecution = value => value && typeof value === 'object' && ID(value.e
 // B01B currently returns an execution and task:null for both private CREATE/REVISION and TASK_ACTION.
 const validReceipt = value => value && typeof value === 'object' && validRef(value.ref) && validExecution(value.execution) &&
   value.task == null && Number.isSafeInteger(value.submittedAt) && value.submittedAt >= 0
+const validResultItem = value => value && typeof value === 'object' && ID(value.outputId) && ID(value.fileId) &&
+  VERSION(value.fileVersion) && typeof value.mime === 'string' && value.mime.length > 0 && TEXT(value.filename) &&
+  Number.isSafeInteger(value.byteLength) && value.byteLength >= 0 && typeof value.sha256 === 'string' &&
+  /^[a-f0-9]{64}$/i.test(value.sha256) && ['AVAILABLE', 'UNAVAILABLE'].includes(value.availability)
+const validResults = value => value && typeof value === 'object' && ID(value.executionId) &&
+  ['QUEUED', 'INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'FAILED'].includes(value.state) &&
+  Array.isArray(value.items) && value.items.every(validResultItem) &&
+  Array.isArray(value.allowedActions) && value.allowedActions.every(action => ['VIEW', 'CREATE_REVISION'].includes(action)) &&
+  (value.state === 'OUTPUT_COMMITTED'
+    ? ID(value.manifestId) && value.items.length > 0 && value.allowedActions.includes('VIEW')
+    : value.manifestId == null && value.items.length === 0)
 const validCase = value => value && typeof value === 'object' && ID(value.caseId) && TEXT(value.title) &&
   Number.isSafeInteger(value.revision) && value.revision >= 0 && Array.isArray(value.executions) &&
   Array.isArray(value.allowedActions) && value.sourceRef && typeof value.sourceRef === 'object' &&
@@ -129,6 +140,9 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
   const caseView = ref(null)
   const submissionRecovery = ref(null)
   const unresolvedIntent = ref(null)
+  const executionResults = ref(null)
+  const resultsState = ref('idle')
+  const resultsError = ref('')
   const currentEpoch = computed(() => String(valueOf(identityEpoch) ?? ''))
   const currentScope = computed(() => sameScope(valueOf(identityScope)))
   const recoveryStore = createHallSubmissionRecoveryStore({ storage, scopeKey: currentScope, keyFactory })
@@ -150,6 +164,9 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
     receipt.value = null
     submissionState.value = 'idle'
     caseView.value = null
+    executionResults.value = null
+    resultsState.value = 'idle'
+    resultsError.value = ''
     submissionRecovery.value = recoveryStore.read()
     unresolvedIntent.value = submissionRecovery.value?.uncertain ? submissionRecovery.value : null
   }
@@ -303,14 +320,35 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
       return value
     } catch (cause) {
       if (cause?.name !== 'AbortError' && snapshot.generation === generation) {
-        // A GET 404 is expressly inconclusive; other 4xx are determinate and unlock the draft.
-        if (uncertainFailure(cause) || cause?.status === 404) retainUnknown(intent)
-        else releaseRejected()
+        // A rejected read never proves the earlier POST was rejected. Keep its exact key locked.
+        retainUnknown(intent)
         error.value = errorMessage(cause)
       }
       return null
     }
   }
+  const loadResults = async executionId => {
+    if (!ID(executionId)) return null
+    const snapshot = snapshotNow()
+    executionResults.value = null
+    resultsState.value = 'loading'
+    resultsError.value = ''
+    try {
+      const value = await request({ url: `/hall/executions/${encodeURIComponent(executionId)}/results`, method: 'GET' }, snapshot)
+      if (!validResults(value) || value.executionId !== executionId) throw new Error('成果回执无效，未展示可能不完整的成果。')
+      executionResults.value = value
+      resultsState.value = value.items.length ? 'ready' : 'empty'
+      return value
+    } catch (cause) {
+      if (cause?.name !== 'AbortError' && snapshot.generation === generation) {
+        executionResults.value = null
+        resultsState.value = 'error'
+        resultsError.value = errorMessage(cause)
+      }
+      return null
+    }
+  }
+
   const loadCase = async caseId => {
     if (!ID(caseId)) return null
     const snapshot = snapshotNow()
@@ -333,5 +371,5 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
   const unregisterIdentityCleanup = registerIdentityCleanup(() => { recoveryStore.clear(); reset() })
   const dispose = () => { if (!disposed) { disposed = true; unregisterIdentityCleanup(); reset() } }
   if (getCurrentInstance()) onBeforeUnmount(dispose)
-  return { draft, summaries, nextCursor, state, error, reloadRequired, receipt, submissionState, caseView, submissionRecovery, unresolvedIntent, create, save, list, loadMore, load, discard, submit, reconcileSubmission, loadCase, reset, dispose }
+  return { draft, summaries, nextCursor, state, error, reloadRequired, receipt, submissionState, caseView, submissionRecovery, unresolvedIntent, executionResults, resultsState, resultsError, create, save, list, loadMore, load, discard, submit, reconcileSubmission, loadCase, loadResults, reset, dispose }
 }
