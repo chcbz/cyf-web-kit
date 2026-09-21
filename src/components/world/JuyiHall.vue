@@ -217,6 +217,7 @@
             :funded-preview-enabled="economyPreviewEnabled"
             :work-item-plan-enabled="workItemPlanEnabled"
             :authorization-generation="apiStore.authorizationGeneration"
+            :identity-scope="hallIdentityScope"
             :funded-quote-preview="fundedQuotePreview"
             :funded-claim-state="fundedClaimState"
             :funded-create-recovery="fundedCreateRecovery"
@@ -504,6 +505,12 @@ const accountAvatar = computed(() => String(globalStore.user?.avatar || '').trim
 const accountDisplayName = computed(() => {
   const user = globalStore.user || {}
   return String(user.nickname || user.username || globalStore.getUserId || '个人中心').trim() || '个人中心'
+})
+const hallIdentityScope = computed(() => {
+  const owner = String(globalStore.user?.id || globalStore.user?.openid || globalStore.getUserId || globalStore.getOpenid || '').trim()
+  const client = String(apiStore.oauthClientId || '').trim()
+  const tenant = String(globalStore.user?.tenantId || globalStore.user?.tenantCode || globalStore.user?.tenant || '').trim()
+  return owner && client ? [tenant, client, owner].filter(Boolean).join('\u0000') : ''
 })
 
 const selectedAgent = ref(null)

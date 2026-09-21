@@ -66,6 +66,7 @@
       :agents="operableAgents"
       :selected-agent="selectedAgent"
       :identity-epoch="authorizationGeneration"
+      :identity-scope="identityScope"
       @close="showDraftEditor = false"
     />
 
@@ -360,6 +361,7 @@ const props = defineProps({
   fundedPreviewEnabled: { type: Boolean, default: false },
   workItemPlanEnabled: { type: Boolean, default: false },
   authorizationGeneration: { type: Number, default: 0 },
+  identityScope: { type: String, default: '' },
   fundedQuotePreview: { type: Object, default: null },
   fundedClaimState: { type: Object, default: null },
   fundedCreateRecovery: { type: Object, default: null },

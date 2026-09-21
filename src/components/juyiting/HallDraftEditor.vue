@@ -79,9 +79,10 @@
       <p v-if="drafts.reloadRequired.value" class="draft-error" role="alert">服务端版本已变化；本地输入未覆盖。请先恢复草稿再决定是否重填。</p>
       <p v-else-if="drafts.draft.value?.state === 'EDITING'" class="draft-saved" role="status">草稿 {{ drafts.draft.value.draftId }} 已保存为 r{{ drafts.draft.value.revision }}；尚未交办。</p>
       <section v-if="drafts.draft.value?.state === 'EDITING'" class="draft-confirmation" aria-label="交办确认">
-        <label><input v-model="authorizationAcknowledgement" type="checkbox" /> 我已确认本次私人交办会按固定资料版本创建新的执行。</label>
-        <p>确认后显示“已受理”；这不表示已完成或已有成果。</p>
-        <button type="button" :disabled="busy || !authorizationAcknowledgement || Boolean(drafts.unresolvedIntent.value)" @click="submit">确认授权并交办</button>
+        <label><input v-model="authorizationAcknowledgement" :disabled="!isCurrentDraftSaved" type="checkbox" /> 我已确认本次私人交办会按固定资料版本创建新的执行。</label>
+        <p v-if="!isCurrentDraftSaved">草稿内容已修改；请先保存本次修改，确认授权会随修改撤回。</p>
+        <p v-else>确认后显示“已受理”；这不表示已完成或已有成果。</p>
+        <button type="button" :disabled="busy || !isCurrentDraftSaved || !authorizationAcknowledgement || Boolean(drafts.unresolvedIntent.value)" @click="submit">确认授权并交办</button>
       </section>
       <section v-if="drafts.receipt.value" class="hall-case-detail" aria-label="事项进展">
         <header><div><h4>事项进展</h4><p>来源：{{ drafts.receipt.value.ref.sourceType }} · {{ drafts.receipt.value.ref.sourceId }}</p></div><button
@@ -90,13 +91,12 @@
           :disabled="busy"
           @click="refreshCase"
         >核对进展</button></header>
-        <p v-if="drafts.receipt.value.execution">已受理，尚未取得成果。执行编号 {{ drafts.receipt.value.execution.executionId }} · {{ executionText(drafts.receipt.value.execution.state) }}</p>
+        <p v-if="drafts.receipt.value.execution">{{ executionSummary(drafts.receipt.value.execution) }} 执行编号 {{ drafts.receipt.value.execution.executionId }} · {{ executionText(drafts.receipt.value.execution.state) }}</p>
         <p v-else>该正式事项已由原正式服务受理；聚义厅不以私人执行替代正式流程。</p>
         <div v-if="drafts.caseView.value?.executions?.length" class="case-executions"><p v-for="item in drafts.caseView.value.executions" :key="`${item.revisionNo}:${item.execution.executionId}`">第 {{ item.revisionNo }} 次执行 · {{ item.execution.executionId }} · {{ executionText(item.execution.state) }}</p></div>
-        <nav class="case-tabs" aria-label="事项视图"><strong>进展</strong><span>资料固定于草稿</span><span>成果</span></nav>
-        <p class="case-results-note">成果仅在真实 manifest/输出索引开放后显示固定 file/version；当前合同未提供该索引，不伪造“完成”或下载链接。新修改须新建草稿和新执行，旧执行不会重跑。</p>
+        <p class="case-results-note">当前只显示已受理的进展；成果可读取后才显示固定版本和可用动作。新修改须新建草稿和新执行，旧执行不会重跑。</p>
       </section>
-      <footer><button v-if="drafts.draft.value?.state === 'EDITING'" type="submit" :disabled="busy">{{ drafts.draft.value ? '保存修改' : '确认保存草稿' }}</button><button
+      <footer><button v-if="!drafts.draft.value || drafts.draft.value?.state === 'EDITING'" type="submit" :disabled="busy">{{ drafts.draft.value ? '保存修改' : '确认保存草稿' }}</button><button
         v-if="drafts.draft.value?.state === 'EDITING'"
         type="button"
         :disabled="busy"
@@ -111,35 +111,68 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { usePersonalWorkspace } from '@/composables/usePersonalWorkspace'
 import { useHallDrafts } from '@/composables/juyiting/useHallDrafts'
 
-const props = defineProps({ agents: { type: Array, default: () => [] }, selectedAgent: { type: Object, default: null }, identityEpoch: { type: [Number, String], default: 0 } })
+const props = defineProps({
+  agents: { type: Array, default: () => [] },
+  selectedAgent: { type: Object, default: null },
+  identityEpoch: { type: [Number, String], default: 0 },
+  identityScope: { type: String, default: '' }
+})
 defineEmits(['close'])
-const drafts = useHallDrafts({ identityEpoch: () => props.identityEpoch })
+const drafts = useHallDrafts({
+  identityEpoch: () => props.identityEpoch,
+  identityScope: () => props.identityScope
+})
 const workspace = usePersonalWorkspace({ identityEpoch: () => props.identityEpoch })
 const form = reactive({ title: '', instruction: '', targetAgentId: '', outputMime: '', inputs: [] })
 const selectedFileId = ref(''); const selectedVersion = ref(null)
 const busy = computed(() => ['creating', 'saving', 'loading', 'discarding'].includes(drafts.state.value) || ['submitting', 'reconciling'].includes(drafts.submissionState.value))
 const authorizationAcknowledgement = ref(false)
+const savedFormSnapshot = ref('')
+const formSnapshot = () => JSON.stringify({
+  title: form.title,
+  instruction: form.instruction,
+  targetAgentId: form.targetAgentId,
+  outputMime: form.outputMime,
+  inputs: form.inputs.map(input => ({ fileId: input.fileId, version: input.version }))
+})
+const isCurrentDraftSaved = computed(() => drafts.draft.value?.state === 'EDITING' && savedFormSnapshot.value === formSnapshot())
 const canAddInput = computed(() => workspace.detail.value?.file?.state === 'ACTIVE' && Number.isSafeInteger(selectedVersion.value) && selectedVersion.value > 0)
 const agentName = agent => agent?.name || agent?.personaName || agent?.agentId || '未知好汉'
-const fill = fields => { form.title = fields?.title || ''; form.instruction = fields?.instruction || ''; form.targetAgentId = fields?.targetAgentId || ''; form.outputMime = fields?.outputMime || ''; form.inputs = Array.isArray(fields?.inputs) ? fields.inputs.map(input => ({ fileId: input.fileId, version: input.version })) : [] }
+const fill = fields => {
+  form.title = fields?.title || ''
+  form.instruction = fields?.instruction || ''
+  form.targetAgentId = fields?.targetAgentId || ''
+  form.outputMime = fields?.outputMime || ''
+  form.inputs = Array.isArray(fields?.inputs) ? fields.inputs.map(input => ({ fileId: input.fileId, version: input.version })) : []
+  savedFormSnapshot.value = fields ? formSnapshot() : ''
+  authorizationAcknowledgement.value = false
+}
 const selectFile = async fileId => { const detail = await workspace.select(fileId); if (detail?.file?.state === 'ACTIVE') { selectedFileId.value = detail.file.fileId; selectedVersion.value = detail.latestVersion.version } }
 const addInput = () => { if (!canAddInput.value) return; const input = { fileId: workspace.detail.value.file.fileId, version: selectedVersion.value }; if (!form.inputs.some(item => item.fileId === input.fileId && item.version === input.version)) form.inputs.push(input) }
 const removeInput = input => { form.inputs = form.inputs.filter(item => item.fileId !== input.fileId || item.version !== input.version) }
 const preview = () => { if (canAddInput.value) void workspace.previewVersion(selectedVersion.value) }
-const persist = async () => { const payload = { ...form, inputs: form.inputs.map(input => ({ ...input })) }; const saved = drafts.draft.value ? await drafts.save(payload) : await drafts.create(payload); if (saved) fill(saved.editableFields) }
+const persist = async () => {
+  const payload = { ...form, inputs: form.inputs.map(input => ({ ...input })) }
+  const saved = drafts.draft.value ? await drafts.save(payload) : await drafts.create(payload)
+  if (saved) fill(saved.editableFields)
+}
 const loadRecoverable = () => { void drafts.list() }
 const openDraft = async id => { const loaded = await drafts.load(id); if (loaded) fill(loaded.editableFields) }
 const discard = async () => { if (await drafts.discard()) fill({}) }
-const submit = () => { void drafts.submit({ authorizationAcknowledgement: authorizationAcknowledgement.value }) }
+const submit = () => { if (isCurrentDraftSaved.value) void drafts.submit({ authorizationAcknowledgement: authorizationAcknowledgement.value }) }
 const reconcile = () => { void drafts.reconcileSubmission() }
 const refreshCase = () => { const ref = drafts.receipt.value?.ref; if (ref?.sourceType === 'PRIVATE_CASE') void drafts.loadCase(ref.sourceId) }
 const executionText = state => ({ QUEUED: '等待执行', OUTPUT_COMMITTED: '已有已归档输出', INPUTS_REVOKED: '输入授权已撤销', FAILED: '执行未完成' })[state] || '状态待核对'
+const executionSummary = execution => execution?.state === 'OUTPUT_COMMITTED'
+  ? '执行已有已归档输出；成果索引开放前不显示伪造下载。'
+  : '已受理，尚未取得成果。'
 watch(() => props.selectedAgent?.agentId, id => { if (!drafts.draft.value && id) form.targetAgentId = id }, { immediate: true })
-watch(() => props.identityEpoch, () => { fill({}); selectedFileId.value = ''; selectedVersion.value = null; authorizationAcknowledgement.value = false }, { flush: 'sync' })
+watch(form, () => { if (savedFormSnapshot.value !== formSnapshot()) authorizationAcknowledgement.value = false }, { deep: true })
+watch([() => props.identityEpoch, () => props.identityScope], () => { fill({}); selectedFileId.value = ''; selectedVersion.value = null }, { flush: 'sync' })
 onMounted(() => { void workspace.refresh({ state: 'ACTIVE' }) })
 onBeforeUnmount(() => { workspace.dispose(); drafts.dispose() })
 </script>
 
 <style scoped>
-.hall-draft-editor { max-height: min(60vh, 560px); display:grid; gap:12px; padding:14px 16px 18px; overflow:auto; color:#4a3423; }.hall-draft-editor header,.draft-header-actions,.hall-draft-editor footer,.draft-material-actions { display:flex; align-items:center; justify-content:space-between; gap:8px; }.hall-draft-editor h3,.hall-draft-editor h4 { margin:0; }.hall-draft-editor p { margin:4px 0 0; font-size:12px; line-height:1.5; color:#765f40; }.hall-draft-editor form,.draft-materials { display:grid; gap:10px; }.hall-draft-editor label { display:grid; gap:4px; font-size:13px; }.hall-draft-editor input,.hall-draft-editor textarea,.hall-draft-editor select,.hall-draft-editor button { border:1px solid #d7c3a2; border-radius:7px; background:#fffdf6; color:#4a3423; font:inherit; }.hall-draft-editor input,.hall-draft-editor textarea,.hall-draft-editor select { padding:8px; }.hall-draft-editor textarea { min-height:88px; resize:vertical; }.hall-draft-editor button { min-height:32px; padding:0 9px; cursor:pointer; }.hall-draft-editor button:disabled { opacity:.55; cursor:not-allowed; }.draft-materials,.draft-recovery,.draft-confirmation,.hall-case-detail { padding:10px; border:1px solid rgba(109,78,39,.25); border-radius:8px; background:rgba(255,250,238,.65); }.draft-file-list,.draft-recovery { display:grid; gap:6px; }.draft-file-list button,.draft-recovery button { display:grid; gap:2px; text-align:left; padding:7px; }.draft-file-list button.selected { border-color:#7c1f1b; background:#f3e0bc; }.draft-file-list small,.draft-recovery small { color:#765f40; overflow-wrap:anywhere; }.draft-input-list { display:flex; flex-wrap:wrap; gap:6px; }.draft-input-list span { display:inline-flex; align-items:center; gap:4px; padding:4px 6px; border-radius:6px; background:#efe0c6; font-size:12px; }.draft-input-list button { min-height:24px; }.draft-preview-image { max-width:100%; max-height:240px; object-fit:contain; border-radius:6px; background:#fffdf6; } .draft-preview { max-height:150px; overflow:auto; white-space:pre-wrap; padding:8px; background:#fffdf6; border-radius:6px; }.draft-error { color:#a1261d !important; }.draft-saved { color:#3d6641 !important; }.draft-confirmation,.hall-case-detail { display:grid; gap:8px; }.draft-confirmation label { display:flex; align-items:flex-start; gap:6px; }.draft-confirmation button { justify-self:start; background:#7c1f1b; color:#fff8e8; }.hall-case-detail header { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }.case-tabs { display:flex; gap:10px; font-size:12px; color:#765f40; }.case-tabs strong { color:#4a3423; }.case-executions { display:grid; gap:4px; }.case-results-note { border-top:1px solid rgba(109,78,39,.2); padding-top:8px; }.hall-draft-editor footer { justify-content:flex-start; }.hall-draft-editor footer button:first-child { background:#7c1f1b; color:#fff8e8; } @media (max-width:620px) { .hall-draft-editor header { align-items:flex-start; flex-direction:column; }.draft-header-actions { width:100%; justify-content:flex-start; } }
+.hall-draft-editor { max-height: min(60vh, 560px); display:grid; gap:12px; padding:14px 16px 18px; overflow:auto; color:#4a3423; }.hall-draft-editor header,.draft-header-actions,.hall-draft-editor footer,.draft-material-actions { display:flex; align-items:center; justify-content:space-between; gap:8px; }.hall-draft-editor h3,.hall-draft-editor h4 { margin:0; }.hall-draft-editor p { margin:4px 0 0; font-size:12px; line-height:1.5; color:#765f40; }.hall-draft-editor form,.draft-materials { display:grid; gap:10px; }.hall-draft-editor label { display:grid; gap:4px; font-size:13px; }.hall-draft-editor input,.hall-draft-editor textarea,.hall-draft-editor select,.hall-draft-editor button { border:1px solid #d7c3a2; border-radius:7px; background:#fffdf6; color:#4a3423; font:inherit; }.hall-draft-editor input,.hall-draft-editor textarea,.hall-draft-editor select { padding:8px; }.hall-draft-editor textarea { min-height:88px; resize:vertical; }.hall-draft-editor button { min-height:32px; padding:0 9px; cursor:pointer; }.hall-draft-editor button:disabled { opacity:.55; cursor:not-allowed; }.draft-materials,.draft-recovery,.draft-confirmation,.hall-case-detail { padding:10px; border:1px solid rgba(109,78,39,.25); border-radius:8px; background:rgba(255,250,238,.65); }.draft-file-list,.draft-recovery { display:grid; gap:6px; }.draft-file-list button,.draft-recovery button { display:grid; gap:2px; text-align:left; padding:7px; }.draft-file-list button.selected { border-color:#7c1f1b; background:#f3e0bc; }.draft-file-list small,.draft-recovery small { color:#765f40; overflow-wrap:anywhere; }.draft-input-list { display:flex; flex-wrap:wrap; gap:6px; }.draft-input-list span { display:inline-flex; align-items:center; gap:4px; padding:4px 6px; border-radius:6px; background:#efe0c6; font-size:12px; }.draft-input-list button { min-height:24px; }.draft-preview-image { max-width:100%; max-height:240px; object-fit:contain; border-radius:6px; background:#fffdf6; } .draft-preview { max-height:150px; overflow:auto; white-space:pre-wrap; padding:8px; background:#fffdf6; border-radius:6px; }.draft-error { color:#a1261d !important; }.draft-saved { color:#3d6641 !important; }.draft-confirmation,.hall-case-detail { display:grid; gap:8px; }.draft-confirmation label { display:flex; align-items:flex-start; gap:6px; }.draft-confirmation button { justify-self:start; background:#7c1f1b; color:#fff8e8; }.hall-case-detail header { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }.case-executions { display:grid; gap:4px; }.case-results-note { border-top:1px solid rgba(109,78,39,.2); padding-top:8px; }.hall-draft-editor footer { justify-content:flex-start; }.hall-draft-editor footer button:first-child { background:#7c1f1b; color:#fff8e8; } @media (max-width:620px) { .hall-draft-editor header { align-items:flex-start; flex-direction:column; }.draft-header-actions { width:100%; justify-content:flex-start; } }
 </style>
