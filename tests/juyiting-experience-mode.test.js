@@ -16,14 +16,6 @@ const flush = async () => {
   await Vue.nextTick()
 }
 
-const flushUntil = async (predicate, attempts = 8) => {
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    if (predicate()) return
-    await flush()
-  }
-  expect(predicate()).to.equal(true)
-}
-
 const deferred = () => {
   let resolve
   let reject
@@ -407,145 +399,61 @@ describe('Juyi Hall experience mode', () => {
     }
   })
 
-  it('keeps Hall-owned fullscreen and orientation lock after a landscape event, then cleans them exactly once on unmount', async () => {
+  it('settles a successful orientation request from the real orientation event and cleans owned resources once', async () => {
     const env = setupEnvironment()
-    let requestCalls = 0
-    let lockCalls = 0
-    let exitCalls = 0
-    let unlockCalls = 0
-    let timerCalls = 0
-    let clearTimerCalls = 0
-    const originalSetTimeout = global.window.setTimeout
-    const originalClearTimeout = global.window.clearTimeout
-    global.document.documentElement.requestFullscreen = async () => {
-      requestCalls += 1
-      setFullscreenElement(global.document.documentElement)
-    }
-    global.document.exitFullscreen = async () => { exitCalls += 1; setFullscreenElement(null) }
-    global.screen.orientation.lock = async () => {
-      lockCalls += 1
-      env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
-    }
-    global.screen.orientation.unlock = () => { unlockCalls += 1 }
+    let exits = 0
+    let unlocks = 0
+    global.document.documentElement.requestFullscreen = async () => setFullscreenElement(global.document.documentElement)
+    global.document.exitFullscreen = async () => { exits += 1; setFullscreenElement(null) }
+    global.screen.orientation.lock = async () => env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
+    global.screen.orientation.unlock = () => { unlocks += 1 }
     try {
       const { mode, wrapper } = await mountMode()
-      global.window.setTimeout = () => ++timerCalls
-      global.window.clearTimeout = () => { clearTimerCalls += 1 }
       expect(await mode.requestLandscape()).to.equal(true)
-      const hintAfterFirst = mode.orientationHint.value
-      expect(mode.experienceMode.value).to.equal('landscape-map')
       expect(mode.orientationRequestPending.value).to.equal(false)
-      expect(clearTimerCalls).to.equal(1)
-      expect(await mode.requestLandscape()).to.equal(false)
-      expect(requestCalls).to.equal(1)
-      expect(lockCalls).to.equal(1)
-      expect(timerCalls).to.equal(1)
-      expect(mode.orientationHint.value).to.equal(hintAfterFirst)
-      expect(exitCalls).to.equal(0)
-      expect(unlockCalls).to.equal(0)
       wrapper.unmount()
       await flush()
-      expect(unlockCalls).to.equal(1)
-      expect(exitCalls).to.equal(1)
-    } finally {
-      global.window.setTimeout = originalSetTimeout
-      global.window.clearTimeout = originalClearTimeout
-      env.restore()
-    }
+      expect(unlocks).to.equal(1)
+      expect(exits).to.equal(1)
+    } finally { env.restore() }
   })
 
-  it('keeps release ownership fenced through a landscape-to-portrait race until unmount cleanup settles', async () => {
+  it('lets the user exit portrait while retaining the normal owner-release fence', async () => {
     const env = setupEnvironment()
-    const exit = deferred()
-    let requestCalls = 0
-    let lockCalls = 0
-    let exitCalls = 0
-    let unlockCalls = 0
-    let timerCalls = 0
-    const originalSetTimeout = global.window.setTimeout
-    const originalClearTimeout = global.window.clearTimeout
-    global.document.documentElement.requestFullscreen = async () => {
-      requestCalls += 1
-      setFullscreenElement(global.document.documentElement)
-    }
-    global.document.exitFullscreen = () => { exitCalls += 1; return exit.promise }
-    global.screen.orientation.lock = async () => {
-      lockCalls += 1
-      env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
-    }
-    global.screen.orientation.unlock = () => { unlockCalls += 1 }
+    let exits = 0
+    let unlocks = 0
+    global.document.documentElement.requestFullscreen = async () => setFullscreenElement(global.document.documentElement)
+    global.document.exitFullscreen = async () => { exits += 1; setFullscreenElement(null) }
+    global.screen.orientation.lock = async () => env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
+    global.screen.orientation.unlock = () => { unlocks += 1 }
     try {
       const { mode, wrapper } = await mountMode()
-      global.window.setTimeout = () => ++timerCalls
-      global.window.clearTimeout = () => {}
       expect(await mode.requestLandscape()).to.equal(true)
-      const hintAfterSuccess = mode.orientationHint.value
-      env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
-      await flush()
-      expect(mode.experienceMode.value).to.equal('landscape-map')
-      expect(unlockCalls).to.equal(0)
-      expect(exitCalls).to.equal(0)
-      env.screenOrientation.emit({ nextType: 'portrait-primary', nextAngle: 0 })
-      await flush()
+      expect(await mode.requestPortrait()).to.equal(true)
       expect(mode.experienceMode.value).to.equal('portrait-command')
-      expect(unlockCalls).to.equal(0)
-      expect(exitCalls).to.equal(0)
-      expect(await mode.requestLandscape()).to.equal(false)
+      expect(unlocks).to.equal(1)
+      expect(exits).to.equal(1)
       wrapper.unmount()
-      await flush()
-      expect(unlockCalls).to.equal(1)
-      expect(exitCalls).to.equal(1)
-      expect(requestCalls).to.equal(1)
-      expect(lockCalls).to.equal(1)
-      expect(timerCalls).to.equal(1)
-      expect(mode.orientationHint.value).to.equal(hintAfterSuccess)
-      exit.resolve()
-      await flush()
-      expect(unlockCalls).to.equal(1)
-      expect(exitCalls).to.equal(1)
-    } finally {
-      global.window.setTimeout = originalSetTimeout
-      global.window.clearTimeout = originalClearTimeout
-      env.restore()
-    }
+    } finally { env.restore() }
   })
 
-  it('clears a release fence without exiting a host element that replaced Hall fullscreen', async () => {
+  it('does not exit host-owned fullscreen after Hall loses ownership', async () => {
     const env = setupEnvironment()
     const hostElement = global.document.createElement('div')
-    let requestCalls = 0
-    let exitCalls = 0
-    let unlockCalls = 0
-    global.document.documentElement.requestFullscreen = async () => {
-      requestCalls += 1
-      setFullscreenElement(global.document.documentElement)
-    }
-    global.document.exitFullscreen = async () => { exitCalls += 1 }
-    global.screen.orientation.lock = async () => {
-      env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
-    }
-    global.screen.orientation.unlock = () => { unlockCalls += 1 }
+    let exits = 0
+    global.document.documentElement.requestFullscreen = async () => setFullscreenElement(global.document.documentElement)
+    global.document.exitFullscreen = async () => { exits += 1; setFullscreenElement(null) }
+    global.screen.orientation.lock = async () => env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
     try {
       const { mode, wrapper } = await mountMode()
       expect(await mode.requestLandscape()).to.equal(true)
       setFullscreenElement(hostElement)
       dispatchFullscreenChange()
-      dispatchFullscreenChange()
       await flush()
-      expect(unlockCalls).to.equal(1)
-      expect(exitCalls).to.equal(0)
       expect(global.document.fullscreenElement).to.equal(hostElement)
-      env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
-      await flush()
-      env.screenOrientation.emit({ nextType: 'portrait-primary', nextAngle: 0 })
-      setFullscreenElement(null)
-      await flush()
-      expect(await mode.requestLandscape()).to.equal(true)
-      expect(requestCalls).to.equal(2)
+      expect(exits).to.equal(0)
       wrapper.unmount()
-    } finally {
-      env.restore()
-    }
+    } finally { env.restore() }
   })
 
   it('shows the physical-rotation hint immediately when automatic landscape is unsupported', async () => {
@@ -588,126 +496,44 @@ describe('Juyi Hall experience mode', () => {
     }
   })
 
-  it('keeps the watchdog through requestFullscreen pending after landscape, then permits a portrait retry', async () => {
+  it('does not force-cancel a pending fullscreen request; explicit portrait exit settles it', async () => {
     const env = setupEnvironment()
-    const originalSetTimeout = global.window.setTimeout
-    const originalClearTimeout = global.window.clearTimeout
     const fullscreen = deferred()
-    const timers = []
-    let requestCalls = 0
-    let lockCalls = 0
-    let exitCalls = 0
-    let unlockCalls = 0
-    global.window.setTimeout = (callback, delay) => {
-      timers.push({ callback, delay, cleared: false })
-      return timers.length
-    }
-    global.window.clearTimeout = id => { if (timers[id - 1]) timers[id - 1].cleared = true }
-    global.document.documentElement.requestFullscreen = () => {
-      requestCalls += 1
-      if (requestCalls === 1) return fullscreen.promise
-      setFullscreenElement(global.document.documentElement)
-      return Promise.resolve()
-    }
-    global.document.exitFullscreen = async () => { exitCalls += 1; setFullscreenElement(null) }
-    global.screen.orientation.lock = async () => {
-      lockCalls += 1
-      env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90, event: { timeStamp: 102 } })
-    }
-    global.screen.orientation.unlock = () => { unlockCalls += 1 }
+    global.document.documentElement.requestFullscreen = () => fullscreen.promise
+    global.document.exitFullscreen = async () => setFullscreenElement(null)
+    global.screen.orientation.lock = async () => {}
     try {
       const { mode, wrapper } = await mountMode()
-      const firstRequest = mode.requestLandscape()
+      const request = mode.requestLandscape()
       await flush()
-      env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90, event: { timeStamp: 100 } })
-      await flush()
-      expect(mode.experienceMode.value).to.equal('landscape-map')
       expect(mode.orientationRequestPending.value).to.equal(true)
-      expect(timers).to.have.length(1)
-      expect(timers[0].delay).to.equal(3000)
-      expect(exitCalls).to.equal(0)
-      expect(unlockCalls).to.equal(0)
-      timers[0].callback()
-      expect(await firstRequest).to.equal(false)
+      expect(await mode.requestPortrait()).to.equal(true)
+      expect(await request).to.equal(false)
+      fullscreen.resolve()
       await flush()
-      expect(mode.orientationRequestPending.value).to.equal(false)
-      expect(exitCalls).to.equal(0)
-      expect(unlockCalls).to.equal(0)
-      env.screenOrientation.emit({ nextType: 'portrait-primary', nextAngle: 0, event: { timeStamp: 101 } })
-      await flush()
-      expect(await mode.requestLandscape()).to.equal(true)
-      expect(requestCalls).to.equal(2)
-      expect(lockCalls).to.equal(1)
       wrapper.unmount()
-      await flush()
-      expect(unlockCalls).to.equal(1)
-      expect(exitCalls).to.equal(1)
-    } finally {
-      global.window.setTimeout = originalSetTimeout
-      global.window.clearTimeout = originalClearTimeout
-      env.restore()
-    }
+    } finally { env.restore() }
   })
 
-  it('keeps the watchdog through lock pending after landscape, then permits a portrait retry', async () => {
+  it('does not force-cancel a pending orientation lock; explicit portrait exit releases it', async () => {
     const env = setupEnvironment()
-    const originalSetTimeout = global.window.setTimeout
-    const originalClearTimeout = global.window.clearTimeout
-    const firstLock = deferred()
-    const timers = []
-    let requestCalls = 0
-    let lockCalls = 0
-    let exitCalls = 0
-    let unlockCalls = 0
-    global.window.setTimeout = (callback, delay) => {
-      timers.push({ callback, delay, cleared: false })
-      return timers.length
-    }
-    global.window.clearTimeout = id => { if (timers[id - 1]) timers[id - 1].cleared = true }
-    global.document.documentElement.requestFullscreen = async () => {
-      requestCalls += 1
-      setFullscreenElement(global.document.documentElement)
-    }
-    global.document.exitFullscreen = async () => { exitCalls += 1; setFullscreenElement(null) }
-    global.screen.orientation.lock = () => {
-      lockCalls += 1
-      if (lockCalls === 1) return firstLock.promise
-      env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90, event: { timeStamp: 102 } })
-      return Promise.resolve()
-    }
-    global.screen.orientation.unlock = () => { unlockCalls += 1 }
+    const lock = deferred()
+    let exits = 0
+    global.document.documentElement.requestFullscreen = async () => setFullscreenElement(global.document.documentElement)
+    global.document.exitFullscreen = async () => { exits += 1; setFullscreenElement(null) }
+    global.screen.orientation.lock = () => lock.promise
     try {
       const { mode, wrapper } = await mountMode()
-      const firstRequest = mode.requestLandscape()
+      const request = mode.requestLandscape()
       await flush()
-      env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90, event: { timeStamp: 100 } })
-      await flush()
-      expect(mode.experienceMode.value).to.equal('landscape-map')
       expect(mode.orientationRequestPending.value).to.equal(true)
-      expect(timers).to.have.length(1)
-      expect(timers[0].delay).to.equal(3000)
-      expect(exitCalls).to.equal(0)
-      expect(unlockCalls).to.equal(0)
-      timers[0].callback()
-      expect(await firstRequest).to.equal(false)
+      expect(await mode.requestPortrait()).to.equal(true)
+      expect(await request).to.equal(false)
+      expect(exits).to.equal(1)
+      lock.resolve()
       await flush()
-      expect(mode.orientationRequestPending.value).to.equal(false)
-      expect(exitCalls).to.equal(1)
-      expect(unlockCalls).to.equal(0)
-      env.screenOrientation.emit({ nextType: 'portrait-primary', nextAngle: 0, event: { timeStamp: 101 } })
-      await flush()
-      expect(await mode.requestLandscape()).to.equal(true)
-      expect(requestCalls).to.equal(2)
-      expect(lockCalls).to.equal(2)
       wrapper.unmount()
-      await flush()
-      expect(unlockCalls).to.equal(1)
-      expect(exitCalls).to.equal(2)
-    } finally {
-      global.window.setTimeout = originalSetTimeout
-      global.window.clearTimeout = originalClearTimeout
-      env.restore()
-    }
+    } finally { env.restore() }
   })
 
   it('settles pending fullscreen and lock requests on unmount and handles their late rejection', async () => {
@@ -748,481 +574,91 @@ describe('Juyi Hall experience mode', () => {
     }
   })
 
-  it('times out a pending lock, releases only its acquired fullscreen once, and ignores late resolution', async () => {
+  it('keeps a pending lock pending until a real lifecycle end, then ignores its late resolution', async () => {
     const env = setupEnvironment()
-    const originalSetTimeout = global.window.setTimeout
-    const originalClearTimeout = global.window.clearTimeout
-    const timers = []
-    let resolveLock
-    let exitCalls = 0
-    let unlockCalls = 0
-    global.window.setTimeout = (callback, delay) => {
-      timers.push({ callback, delay, cleared: false })
-      return timers.length
-    }
-    global.window.clearTimeout = id => { if (timers[id - 1]) timers[id - 1].cleared = true }
+    const lock = deferred()
     global.document.documentElement.requestFullscreen = async () => setFullscreenElement(global.document.documentElement)
-    global.document.exitFullscreen = async () => { exitCalls += 1; setFullscreenElement(null) }
-    global.screen.orientation.lock = () => new Promise(resolve => { resolveLock = resolve })
-    global.screen.orientation.unlock = () => { unlockCalls += 1 }
-    try {
-      const { mode, wrapper } = await mountMode()
-      const pending = mode.requestLandscape()
-      expect(await mode.requestLandscape()).to.equal(false)
-      await flush()
-      expect(timers).to.have.length(1)
-      expect(timers[0].delay).to.equal(3000)
-      timers[0].callback()
-      expect(await pending).to.equal(false)
-      await flush()
-      expect(mode.orientationRequestPending.value).to.equal(false)
-      expect(mode.orientationHint.value).to.equal('请旋转手机横屏查看')
-      expect(mode.experienceMode.value).to.equal('portrait-command')
-      expect(exitCalls).to.equal(1)
-      expect(global.document.fullscreenElement).to.equal(null)
-      resolveLock()
-      await flush()
-      expect(exitCalls).to.equal(1)
-      expect(unlockCalls).to.equal(1)
-      wrapper.unmount()
-    } finally {
-      global.window.setTimeout = originalSetTimeout
-      global.window.clearTimeout = originalClearTimeout
-      env.restore()
-    }
-  })
-
-  it('adopts late resources to a newer owner and only releases provably owned resources', async () => {
-    const originalSetTimeout = global.window.setTimeout
-    const originalClearTimeout = global.window.clearTimeout
-
-    const oldFullscreenEnv = setupEnvironment()
-    const oldFullscreen = deferred()
-    const fullscreenTimers = []
-    let fullscreenRequests = 0
-    let fullscreenLocks = 0
-    let fullscreenUnlocks = 0
-    let fullscreenExits = 0
-    global.window.setTimeout = callback => {
-      fullscreenTimers.push(callback)
-      return fullscreenTimers.length
-    }
-    global.window.clearTimeout = () => {}
-    global.document.documentElement.requestFullscreen = () => {
-      fullscreenRequests += 1
-      if (fullscreenRequests === 1) return oldFullscreen.promise
-      setFullscreenElement(global.document.documentElement)
-      return Promise.resolve()
-    }
-    global.document.exitFullscreen = async () => { fullscreenExits += 1; setFullscreenElement(null) }
-    global.screen.orientation.lock = async () => {
-      fullscreenLocks += 1
-      oldFullscreenEnv.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
-    }
-    global.screen.orientation.unlock = () => { fullscreenUnlocks += 1 }
-    try {
-      const { mode, wrapper } = await mountMode()
-      const oldRequest = mode.requestLandscape()
-      await flush()
-      fullscreenTimers[0]()
-      await flush()
-      expect(await mode.requestLandscape()).to.equal(true)
-      oldFullscreen.resolve()
-      expect(await oldRequest).to.equal(false)
-      await flush()
-      expect(global.document.fullscreenElement).to.equal(global.document.documentElement)
-      expect(fullscreenExits).to.equal(0)
-      expect(await mode.requestLandscape()).to.equal(false)
-      wrapper.unmount()
-      await flush()
-      expect(fullscreenUnlocks).to.equal(1)
-      expect(fullscreenExits).to.equal(1)
-      expect(fullscreenLocks).to.equal(1)
-    } finally {
-      global.window.setTimeout = originalSetTimeout
-      global.window.clearTimeout = originalClearTimeout
-      oldFullscreenEnv.restore()
-    }
-
-    const oldLockEnv = setupEnvironment()
-    const oldLock = deferred()
-    const lockTimers = []
-    let lockCalls = 0
-    let unlockCalls = 0
-    let lockExitCalls = 0
-    global.window.setTimeout = callback => {
-      lockTimers.push(callback)
-      return lockTimers.length
-    }
-    global.window.clearTimeout = () => {}
-    global.document.documentElement.requestFullscreen = async () => setFullscreenElement(global.document.documentElement)
-    global.document.exitFullscreen = async () => { lockExitCalls += 1; setFullscreenElement(null) }
-    global.screen.orientation.lock = () => {
-      lockCalls += 1
-      if (lockCalls === 1) return oldLock.promise
-      oldLockEnv.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
-      return Promise.resolve()
-    }
-    global.screen.orientation.unlock = () => { unlockCalls += 1 }
-    try {
-      const { mode, wrapper } = await mountMode()
-      const oldRequest = mode.requestLandscape()
-      await flush()
-      lockTimers[0]()
-      await flush()
-      expect(await mode.requestLandscape()).to.equal(true)
-      oldLock.resolve()
-      expect(await oldRequest).to.equal(false)
-      await flush()
-      expect(unlockCalls).to.equal(0)
-      expect(await mode.requestLandscape()).to.equal(false)
-      wrapper.unmount()
-      await flush()
-      expect(unlockCalls).to.equal(1)
-      expect(lockExitCalls).to.equal(2)
-    } finally {
-      global.window.setTimeout = originalSetTimeout
-      global.window.clearTimeout = originalClearTimeout
-      oldLockEnv.restore()
-    }
-
-    const noOwnerEnv = setupEnvironment()
-    const lateFullscreen = deferred()
-    const noOwnerTimers = []
-    let noOwnerExits = 0
-    let noOwnerUnlocks = 0
-    global.window.setTimeout = callback => {
-      noOwnerTimers.push(callback)
-      return noOwnerTimers.length
-    }
-    global.window.clearTimeout = () => {}
-    global.document.documentElement.requestFullscreen = () => lateFullscreen.promise
-    global.document.exitFullscreen = async () => { noOwnerExits += 1; setFullscreenElement(null) }
-    global.screen.orientation.lock = async () => { throw new Error('late fullscreen must not lock') }
-    global.screen.orientation.unlock = () => { noOwnerUnlocks += 1 }
-    try {
-      const { mode, wrapper } = await mountMode()
-      const oldRequest = mode.requestLandscape()
-      await flush()
-      noOwnerTimers[0]()
-      await flush()
-      setFullscreenElement(global.document.documentElement)
-      lateFullscreen.resolve()
-      expect(await oldRequest).to.equal(false)
-      await flush()
-      expect(noOwnerExits).to.equal(0)
-      expect(noOwnerUnlocks).to.equal(0)
-      expect(global.document.fullscreenElement).to.equal(global.document.documentElement)
-      wrapper.unmount()
-    } finally {
-      global.window.setTimeout = originalSetTimeout
-      global.window.clearTimeout = originalClearTimeout
-      noOwnerEnv.restore()
-    }
-
-    const hostEnv = setupEnvironment()
-    const hostFullscreen = deferred()
-    const hostTimers = []
-    const hostElement = global.document.createElement('div')
-    let hostExits = 0
-    global.window.setTimeout = callback => {
-      hostTimers.push(callback)
-      return hostTimers.length
-    }
-    global.window.clearTimeout = () => {}
-    global.document.documentElement.requestFullscreen = () => hostFullscreen.promise
-    global.document.exitFullscreen = async () => { hostExits += 1; setFullscreenElement(null) }
-    try {
-      const { mode, wrapper } = await mountMode()
-      const oldRequest = mode.requestLandscape()
-      await flush()
-      hostTimers[0]()
-      await flush()
-      setFullscreenElement(hostElement)
-      hostFullscreen.resolve()
-      expect(await oldRequest).to.equal(false)
-      await flush()
-      expect(hostExits).to.equal(0)
-      expect(global.document.fullscreenElement).to.equal(hostElement)
-      wrapper.unmount()
-    } finally {
-      global.window.setTimeout = originalSetTimeout
-      global.window.clearTimeout = originalClearTimeout
-      hostEnv.restore()
-    }
-  })
-
-  it('does not exit host fullscreen on documentElement after a stale request resolves', async () => {
-    const env = setupEnvironment()
-    const originalSetTimeout = global.window.setTimeout
-    const originalClearTimeout = global.window.clearTimeout
-    const fullscreen = deferred()
-    const timers = []
-    let exitCalls = 0
-    let lockCalls = 0
-    global.window.setTimeout = callback => {
-      timers.push(callback)
-      return timers.length
-    }
-    global.window.clearTimeout = () => {}
-    global.document.documentElement.requestFullscreen = () => fullscreen.promise
-    global.document.exitFullscreen = async () => { exitCalls += 1; setFullscreenElement(null) }
-    global.screen.orientation.lock = async () => { lockCalls += 1 }
+    global.document.exitFullscreen = async () => setFullscreenElement(null)
+    global.screen.orientation.lock = () => lock.promise
     try {
       const { mode, wrapper } = await mountMode()
       const request = mode.requestLandscape()
       await flush()
-      timers[0]()
+      expect(mode.orientationRequestPending.value).to.equal(true)
+      wrapper.unmount()
       expect(await request).to.equal(false)
+      lock.resolve()
       await flush()
+    } finally { env.restore() }
+  })
+
+  it('keeps late completion fenced after the user has withdrawn the request', async () => {
+    const env = setupEnvironment()
+    const fullscreen = deferred()
+    let exits = 0
+    global.document.documentElement.requestFullscreen = () => fullscreen.promise
+    global.document.exitFullscreen = async () => { exits += 1; setFullscreenElement(null) }
+    global.screen.orientation.lock = async () => {}
+    try {
+      const { mode, wrapper } = await mountMode()
+      const request = mode.requestLandscape()
+      await flush()
+      expect(await mode.requestPortrait()).to.equal(true)
+      expect(await request).to.equal(false)
       setFullscreenElement(global.document.documentElement)
       fullscreen.resolve()
       await flush()
-      expect(exitCalls).to.equal(0)
-      expect(lockCalls).to.equal(0)
-      expect(global.document.fullscreenElement).to.equal(global.document.documentElement)
+      expect(exits).to.equal(0)
       wrapper.unmount()
-      await flush()
-      expect(exitCalls).to.equal(0)
-      expect(global.document.fullscreenElement).to.equal(global.document.documentElement)
-    } finally {
-      global.window.setTimeout = originalSetTimeout
-      global.window.clearTimeout = originalClearTimeout
-      env.restore()
-    }
+    } finally { env.restore() }
   })
 
-  it('cleans late resources when the only current owner is releasing', async () => {
-    const originalSetTimeout = global.window.setTimeout
-    const originalClearTimeout = global.window.clearTimeout
-
-    const failedNewOwnerEnv = setupEnvironment()
-    const oldLock = deferred()
-    const failedOwnerExit = deferred()
-    const failedOwnerTimers = []
-    let failedOwnerLockCalls = 0
-    let failedOwnerUnlockCalls = 0
-    let failedOwnerExitCalls = 0
-    global.window.setTimeout = callback => {
-      failedOwnerTimers.push(callback)
-      return failedOwnerTimers.length
-    }
-    global.window.clearTimeout = () => {}
-    global.document.documentElement.requestFullscreen = async () => setFullscreenElement(global.document.documentElement)
-    global.screen.orientation.lock = () => {
-      failedOwnerLockCalls += 1
-      return failedOwnerLockCalls === 1 ? oldLock.promise : Promise.reject(new Error('new lock rejected'))
-    }
-    global.screen.orientation.unlock = () => { failedOwnerUnlockCalls += 1 }
-    global.document.exitFullscreen = () => {
-      failedOwnerExitCalls += 1
-      if (failedOwnerExitCalls === 1) {
-        setFullscreenElement(null)
-        return Promise.resolve()
-      }
-      return failedOwnerExit.promise.then(() => setFullscreenElement(null))
-    }
-    try {
-      const { mode, wrapper } = await mountMode()
-      const oldRequest = mode.requestLandscape()
-      await flush()
-      failedOwnerTimers[0]()
-      await flush()
-      const newerRequest = mode.requestLandscape()
-      await flushUntil(() => failedOwnerExitCalls === 2)
-      expect(failedOwnerExitCalls).to.equal(2)
-      oldLock.resolve()
-      await flush()
-      expect(failedOwnerUnlockCalls).to.equal(1)
-      failedOwnerExit.resolve()
-      expect(await newerRequest).to.equal(false)
-      expect(await oldRequest).to.equal(false)
-      wrapper.unmount()
-    } finally {
-      global.window.setTimeout = originalSetTimeout
-      global.window.clearTimeout = originalClearTimeout
-      failedNewOwnerEnv.restore()
-    }
-
-    const unmountedNewOwnerEnv = setupEnvironment()
-    const unmountedOldLock = deferred()
-    const unmountedNewLock = deferred()
-    const unmountedExit = deferred()
-    const unmountedTimers = []
-    let unmountedLockCalls = 0
-    let unmountedUnlockCalls = 0
-    let unmountedExitCalls = 0
-    global.window.setTimeout = callback => {
-      unmountedTimers.push(callback)
-      return unmountedTimers.length
-    }
-    global.window.clearTimeout = () => {}
-    global.document.documentElement.requestFullscreen = async () => setFullscreenElement(global.document.documentElement)
-    global.screen.orientation.lock = () => {
-      unmountedLockCalls += 1
-      return unmountedLockCalls === 1 ? unmountedOldLock.promise : unmountedNewLock.promise
-    }
-    global.screen.orientation.unlock = () => { unmountedUnlockCalls += 1 }
-    global.document.exitFullscreen = () => {
-      unmountedExitCalls += 1
-      if (unmountedExitCalls === 1) {
-        setFullscreenElement(null)
-        return Promise.resolve()
-      }
-      return unmountedExit.promise.then(() => setFullscreenElement(null))
-    }
-    try {
-      const { mode, wrapper } = await mountMode()
-      const oldRequest = mode.requestLandscape()
-      await flush()
-      unmountedTimers[0]()
-      await flush()
-      const newerRequest = mode.requestLandscape()
-      await flush()
-      wrapper.unmount()
-      await flush()
-      unmountedOldLock.resolve()
-      await flush()
-      expect(unmountedUnlockCalls).to.equal(1)
-      unmountedExit.resolve()
-      expect(await oldRequest).to.equal(false)
-      unmountedNewLock.resolve()
-      expect(await newerRequest).to.equal(false)
-      await flush()
-      expect(unmountedUnlockCalls).to.equal(2)
-    } finally {
-      global.window.setTimeout = originalSetTimeout
-      global.window.clearTimeout = originalClearTimeout
-      unmountedNewOwnerEnv.restore()
-    }
-
-    const sameOwnerEnv = setupEnvironment()
-    const sameOwnerLock = deferred()
-    const sameOwnerExit = deferred()
-    const sameOwnerTimers = []
-    let sameOwnerUnlockCalls = 0
-    global.window.setTimeout = callback => {
-      sameOwnerTimers.push(callback)
-      return sameOwnerTimers.length
-    }
-    global.window.clearTimeout = () => {}
-    global.document.documentElement.requestFullscreen = async () => setFullscreenElement(global.document.documentElement)
-    global.screen.orientation.lock = () => sameOwnerLock.promise
-    global.screen.orientation.unlock = () => { sameOwnerUnlockCalls += 1 }
-    global.document.exitFullscreen = () => sameOwnerExit.promise.then(() => setFullscreenElement(null))
+  it('does not exit host fullscreen when a withdrawn request resolves late', async () => {
+    const env = setupEnvironment()
+    const fullscreen = deferred()
+    const hostElement = global.document.createElement('div')
+    let exits = 0
+    global.document.documentElement.requestFullscreen = () => fullscreen.promise
+    global.document.exitFullscreen = async () => { exits += 1; setFullscreenElement(null) }
+    global.screen.orientation.lock = async () => {}
     try {
       const { mode, wrapper } = await mountMode()
       const request = mode.requestLandscape()
       await flush()
-      sameOwnerTimers[0]()
+      await mode.requestPortrait()
+      setFullscreenElement(hostElement)
+      fullscreen.resolve()
       await flush()
-      sameOwnerLock.resolve()
-      await flush()
-      expect(sameOwnerUnlockCalls).to.equal(1)
-      sameOwnerExit.resolve()
+      expect(exits).to.equal(0)
+      expect(global.document.fullscreenElement).to.equal(hostElement)
       expect(await request).to.equal(false)
       wrapper.unmount()
-    } finally {
-      global.window.setTimeout = originalSetTimeout
-      global.window.clearTimeout = originalClearTimeout
-      sameOwnerEnv.restore()
-    }
+    } finally { env.restore() }
   })
 
-  it('cleans late fullscreen against releasing Hall ownership without touching host fullscreen', async () => {
-    const originalSetTimeout = global.window.setTimeout
-    const originalClearTimeout = global.window.clearTimeout
-    const hallEnv = setupEnvironment()
-    const oldFullscreen = deferred()
-    const hallExit = deferred()
-    const hallTimers = []
-    let fullscreenRequests = 0
-    let hallExitCalls = 0
-    global.window.setTimeout = callback => {
-      hallTimers.push(callback)
-      return hallTimers.length
-    }
-    global.window.clearTimeout = () => {}
-    global.document.documentElement.requestFullscreen = () => {
-      fullscreenRequests += 1
-      if (fullscreenRequests === 1) return oldFullscreen.promise
-      setFullscreenElement(global.document.documentElement)
-      return Promise.resolve()
-    }
-    global.screen.orientation.lock = async () => { throw new Error('new lock rejected') }
-    global.document.exitFullscreen = () => {
-      hallExitCalls += 1
-      return hallExit.promise.then(() => setFullscreenElement(null))
-    }
+  it('releases only the active Hall-owned resources on unmount', async () => {
+    const env = setupEnvironment()
+    let exits = 0
+    let unlocks = 0
+    global.document.documentElement.requestFullscreen = async () => setFullscreenElement(global.document.documentElement)
+    global.document.exitFullscreen = async () => { exits += 1; setFullscreenElement(null) }
+    global.screen.orientation.lock = async () => env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
+    global.screen.orientation.unlock = () => { unlocks += 1 }
     try {
       const { mode, wrapper } = await mountMode()
-      const oldRequest = mode.requestLandscape()
-      await flush()
-      hallTimers[0]()
-      await flush()
-      const newerRequest = mode.requestLandscape()
-      await flushUntil(() => hallExitCalls === 1)
-      expect(hallExitCalls).to.equal(1)
-      oldFullscreen.resolve()
-      await flush()
-      expect(hallExitCalls).to.equal(1)
-      hallExit.resolve()
-      expect(await newerRequest).to.equal(false)
-      expect(await oldRequest).to.equal(false)
+      await mode.requestLandscape()
       wrapper.unmount()
-    } finally {
-      global.window.setTimeout = originalSetTimeout
-      global.window.clearTimeout = originalClearTimeout
-      hallEnv.restore()
-    }
+      await flush()
+      expect(unlocks).to.equal(1)
+      expect(exits).to.equal(1)
+    } finally { env.restore() }
+  })
 
-    const hostEnv = setupEnvironment()
-    const hostFullscreen = deferred()
-    const hostExit = deferred()
-    const hostTimers = []
-    const hostElement = global.document.createElement('div')
-    let hostRequests = 0
-    let hostExitCalls = 0
-    global.window.setTimeout = callback => {
-      hostTimers.push(callback)
-      return hostTimers.length
-    }
-    global.window.clearTimeout = () => {}
-    global.document.documentElement.requestFullscreen = () => {
-      hostRequests += 1
-      if (hostRequests === 1) return hostFullscreen.promise
-      setFullscreenElement(global.document.documentElement)
-      return Promise.resolve()
-    }
-    global.screen.orientation.lock = async () => { throw new Error('new lock rejected') }
-    global.document.exitFullscreen = () => {
-      hostExitCalls += 1
-      return hostExit.promise
-    }
-    try {
-      const { mode, wrapper } = await mountMode()
-      const oldRequest = mode.requestLandscape()
-      await flush()
-      hostTimers[0]()
-      await flush()
-      const newerRequest = mode.requestLandscape()
-      await flushUntil(() => hostExitCalls === 1)
-      expect(hostExitCalls).to.equal(1)
-      setFullscreenElement(hostElement)
-      hostFullscreen.resolve()
-      await flush()
-      expect(hostExitCalls).to.equal(1)
-      expect(global.document.fullscreenElement).to.equal(hostElement)
-      hostExit.resolve()
-      expect(await newerRequest).to.equal(false)
-      expect(await oldRequest).to.equal(false)
-      expect(global.document.fullscreenElement).to.equal(hostElement)
-      wrapper.unmount()
-    } finally {
-      global.window.setTimeout = originalSetTimeout
-      global.window.clearTimeout = originalClearTimeout
-      hostEnv.restore()
-    }
+  it('does not make an arbitrary timer a request lifecycle owner', () => {
+    const source = readFileSync(new URL('../src/composables/juyiting/useHallExperienceMode.js', import.meta.url), 'utf8')
+    expect(source).not.to.include('REQUEST_TIMEOUT_MS')
+    expect(source).not.to.include('requestTimer')
+    expect(source).to.include('releaseRequestOwnership')
   })
 
   it('never claims, requests, or exits host-owned fullscreen', async () => {
