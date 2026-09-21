@@ -34,12 +34,13 @@ const executionMock = () => ({
 
 describe('personal workspace execution receipt presentation', () => {
   it('mounts the delivery receipt at submission location, shows terminal errors, and keeps file selection navigation working', async () => {
-    const workspace = workspaceMock(); const execution = executionMock()
+    const workspace = workspaceMock(); const execution = executionMock(); let executionOptions
     const component = new Function('Vue', 'deps', script)(Vue, {
-      useApiStore: () => ({ authorizationGeneration: 1 }), useGlobalStore: () => ({ user: { id: 'owner-a' }, getUserId: 'owner-a', getOpenid: '' }),
-      usePersonalWorkspace: () => workspace, usePersonalWorkspaceExecution: () => execution, savePersonalWorkspaceBlob: () => {}
+      useApiStore: () => ({ authorizationGeneration: 1, oauthClientId: 'web-client' }), useGlobalStore: () => ({ user: { id: 'owner-a', tenantId: 'tenant-a' }, getUserId: 'owner-a', getOpenid: '' }),
+      usePersonalWorkspace: () => workspace, usePersonalWorkspaceExecution: options => { executionOptions = options; return execution }, savePersonalWorkspaceBlob: () => {}
     })
     const wrapper = mount(component)
+    assert.equal(executionOptions.identityScope.value, 'tenant-a\u0000web-client\u0000owner-a')
     await wrapper.findAll('.box-actions button')[1].trigger('click')
     assert.match(wrapper.find('.delivery-modal').text(), /本次交付回执/)
     assert.match(wrapper.find('.delivery-modal').text(), /已接受，等待结果/)

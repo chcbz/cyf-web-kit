@@ -145,7 +145,12 @@ const { embedded } = defineProps({ embedded: { type: Boolean, default: false } }
 const apiStore = useApiStore()
 const globalStore = useGlobalStore()
 const identityEpoch = computed(() => apiStore.authorizationGeneration)
-const executionIdentityScope = computed(() => String(globalStore.user?.id || globalStore.user?.openid || globalStore.getUserId || globalStore.getOpenid || ''))
+const executionIdentityScope = computed(() => {
+  const owner = String(globalStore.user?.id || globalStore.user?.openid || globalStore.getUserId || globalStore.getOpenid || '').trim()
+  const client = String(apiStore.oauthClientId || '').trim()
+  const tenant = String(globalStore.user?.tenantId || globalStore.user?.tenantCode || globalStore.user?.tenant || '').trim()
+  return owner && client ? [tenant, client, owner].filter(Boolean).join('\u0000') : ''
+})
 const workspace = usePersonalWorkspace({ identityEpoch })
 const execution = usePersonalWorkspaceExecution({ identityEpoch, identityScope: executionIdentityScope })
 const query = ref('')

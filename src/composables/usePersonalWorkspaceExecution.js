@@ -4,7 +4,7 @@ import { registerIdentityCleanup } from '../utils/identityLifecycle.js'
 
 const MAX_ID_LENGTH = 100
 const RECOVERY_PREFIX = 'cyf.personal-workspace.execution-recovery.v1'
-const CLIENT_KEY = `${RECOVERY_PREFIX}.client`
+const BROWSER_KEY = `${RECOVERY_PREFIX}.browser`
 export const PERSONAL_WORKSPACE_EXECUTION_MIME_TYPES = Object.freeze([
   'image/png', 'image/jpeg', 'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -67,20 +67,20 @@ const sameScope = value => TEXT(value, 256) ? value.trim() : ''
 /** Stores only the original idempotency key and optional execution id; no request contents are persisted. */
 export function createPersonalWorkspaceExecutionRecoveryStore ({ storage = globalThis.localStorage || globalThis.window?.localStorage, scopeKey, keyFactory = randomKey } = {}) {
   const scope = () => sameScope(valueOf(scopeKey))
-  const clientId = () => {
+  const browserId = () => {
     if (!storage) return ''
     try {
-      const existing = storage.getItem(CLIENT_KEY)
+      const existing = storage.getItem(BROWSER_KEY)
       if (ID(existing)) return existing
       const next = keyFactory()
       if (!ID(next)) return ''
-      storage.setItem(CLIENT_KEY, next)
-      return storage.getItem(CLIENT_KEY) === next ? next : ''
+      storage.setItem(BROWSER_KEY, next)
+      return storage.getItem(BROWSER_KEY) === next ? next : ''
     } catch { return '' }
   }
   const storageKey = (ownerOverride = null) => {
-    const owner = sameScope(ownerOverride == null ? scope() : ownerOverride); const client = clientId()
-    return owner && client ? `${RECOVERY_PREFIX}.${encodeURIComponent(owner)}.${encodeURIComponent(client)}` : ''
+    const owner = sameScope(ownerOverride == null ? scope() : ownerOverride); const browser = browserId()
+    return owner && browser ? `${RECOVERY_PREFIX}.${encodeURIComponent(owner)}.${encodeURIComponent(browser)}` : ''
   }
   const valid = value => value && typeof value === 'object' && ID(value.idempotencyKey) &&
     (value.executionId == null || ID(value.executionId)) && (value.uncertain == null || typeof value.uncertain === 'boolean')
