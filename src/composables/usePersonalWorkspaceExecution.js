@@ -83,17 +83,17 @@ export function createPersonalWorkspaceExecutionRecoveryStore ({ storage = globa
     return owner && client ? `${RECOVERY_PREFIX}.${encodeURIComponent(owner)}.${encodeURIComponent(client)}` : ''
   }
   const valid = value => value && typeof value === 'object' && ID(value.idempotencyKey) &&
-    (value.executionId == null || ID(value.executionId))
+    (value.executionId == null || ID(value.executionId)) && (value.uncertain == null || typeof value.uncertain === 'boolean')
   return {
     read () {
       const key = storageKey()
       if (!key || !storage) return null
-      try { const value = JSON.parse(storage.getItem(key) || 'null'); return valid(value) ? { idempotencyKey: value.idempotencyKey, executionId: value.executionId || null } : null } catch { return null }
+      try { const value = JSON.parse(storage.getItem(key) || 'null'); return valid(value) ? { idempotencyKey: value.idempotencyKey, executionId: value.executionId || null, uncertain: value.uncertain === true } : null } catch { return null }
     },
     save (value) {
       const key = storageKey()
       if (!key || !storage || !valid(value)) return false
-      const encoded = JSON.stringify({ idempotencyKey: value.idempotencyKey, executionId: value.executionId || null })
+      const encoded = JSON.stringify({ idempotencyKey: value.idempotencyKey, executionId: value.executionId || null, uncertain: value.uncertain === true })
       try { storage.setItem(key, encoded); return storage.getItem(key) === encoded } catch { return false }
     },
     clear (ownerOverride = null) {
@@ -124,6 +124,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
   const historyState = ref('idle')
   const historyError = ref('')
   const historyNextCursor = ref(null)
+  const unresolvedIntent = ref(null)
   const currentEpoch = computed(() => String(valueOf(identityEpoch) ?? ''))
   const currentScope = computed(() => sameScope(valueOf(identityScope)))
   const recoveryStore = createPersonalWorkspaceExecutionRecoveryStore({ storage, scopeKey: currentScope })
@@ -136,7 +137,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
 
   const selectedAgent = computed(() => agents.value.find(agent => agent.agentId === selectedAgentId.value) || null)
   const selectedExecutionAgent = computed(() => receipt.value ? agents.value.find(agent => agent.agentId === receipt.value.targetAgentId) || null : null)
-  const pending = computed(() => executionState.value === 'creating' || executionState.value === 'reconciling' || executionState.value === 'unknown' || receipt.value?.state === 'QUEUED')
+  const pending = computed(() => Boolean(unresolvedIntent.value) || executionState.value === 'creating' || executionState.value === 'reconciling' || executionState.value === 'unknown' || receipt.value?.state === 'QUEUED')
   const stopPolling = () => { if (polling != null) timerApi.clearTimeout?.(polling); polling = null }
   const reset = () => {
     generation += 1; selectionSequence += 1; stopPolling()
@@ -144,7 +145,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     controllers.clear()
     agents.value = []; rosterState.value = 'idle'; rosterError.value = ''; selectedAgentId.value = ''
     allowedMimeTypes.value = []; inputMimeTypes.value = []; capabilityState.value = 'idle'; capabilityError.value = ''; generationEnabled.value = false
-    execution.value = null; receipt.value = null; executionState.value = 'idle'; error.value = ''; completionNotice.value = ''
+    execution.value = null; receipt.value = null; executionState.value = 'idle'; error.value = ''; completionNotice.value = ''; unresolvedIntent.value = null
     history.value = []; historyState.value = 'idle'; historyError.value = ''; historyNextCursor.value = null
   }
   const clearIdentityState = () => { recoveryStore.clear(); reset() }
@@ -163,10 +164,20 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     receipt.value = { executionId: value.executionId, targetAgentId: value.targetAgentId, state: value.state, outputContentMimeType: value.outputContentMimeType, createdAt: value.createdAt }
     return receipt.value
   }
+  const clearMatchedTerminalIntent = value => {
+    const saved = recoveryStore.read()
+    if (TERMINAL_EXECUTION_STATES.has(value.state) && saved?.executionId === value.executionId) { recoveryStore.clear(); unresolvedIntent.value = null }
+  }
+  const confirmIntent = (intent, executionId) => {
+    if (!intent || !ID(executionId)) return false
+    const saved = recoveryStore.save({ idempotencyKey: intent.idempotencyKey, executionId, uncertain: false })
+    if (saved) unresolvedIntent.value = null
+    return saved
+  }
   const applyExecution = value => {
     if (!validExecution(value)) throw new Error('执行状态返回格式无效，未将其显示为成功。')
     execution.value = value; receipt.value = value; executionState.value = 'ready'
-    if (TERMINAL_EXECUTION_STATES.has(value.state)) recoveryStore.clear()
+    clearMatchedTerminalIntent(value)
     if (value.state === 'OUTPUT_COMMITTED') { stopPolling(); completionNotice.value = '交付件已归档到工作空间。请刷新文件列表领取成果；文件可用性以本次服务端回执和下载结果为准。' } else if (value.state === 'INPUTS_REVOKED') { stopPolling(); completionNotice.value = '输入授权已撤销，本次执行不会再继续。' } else if (value.state === 'FAILED') { stopPolling(); completionNotice.value = ''; error.value = value.failureMessage } else completionNotice.value = ''
     return value
   }
@@ -199,7 +210,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
       const result = applyExecution(value)
       if (!TERMINAL_EXECUTION_STATES.has(result.state) && !disposed && receipt.value?.executionId === executionId) polling = timerApi.setTimeout?.(() => { void poll(executionId) }, pollInterval) ?? null
       return result
-    } catch (cause) { if (cause?.name !== 'AbortError' && snapshot.generation === generation) error.value = errorMessage(cause); return null }
+    } catch (cause) { if (cause?.name !== 'AbortError' && snapshot.generation === generation && sequence === selectionSequence && receipt.value?.executionId === executionId) error.value = errorMessage(cause); return null }
   }
   const startPolling = executionId => { stopPolling(); return poll(executionId) }
   const reconcile = async ({ quiet = false } = {}) => {
@@ -207,11 +218,16 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     if (!pendingIntent) return null
     const snapshot = snapshotNow(); executionState.value = 'reconciling'; if (!quiet) error.value = ''
     try {
-      const result = applyExecution(await request({ url: '/personal-workspace/executions/request', method: 'GET', headers: { 'Idempotency-Key': pendingIntent.idempotencyKey } }, snapshot))
+      const value = await request({ url: '/personal-workspace/executions/request', method: 'GET', headers: { 'Idempotency-Key': pendingIntent.idempotencyKey } }, snapshot)
+      if (!validExecution(value)) throw new Error('执行状态返回格式无效，未将其显示为已确认。')
+      if (!confirmIntent(pendingIntent, value?.executionId)) throw new Error('原执行请求标识无法安全更新，未将其显示为已确认。')
+      const result = applyExecution(value)
       if (!TERMINAL_EXECUTION_STATES.has(result.state)) void startPolling(result.executionId)
       return result
     } catch (cause) {
       if (cause?.name !== 'AbortError' && snapshot.generation === generation) {
+        unresolvedIntent.value = { ...pendingIntent, uncertain: true }
+        recoveryStore.save(unresolvedIntent.value)
         execution.value = null; receipt.value = pendingIntent.executionId ? { executionId: pendingIntent.executionId, targetAgentId: '', state: 'UNKNOWN', outputContentMimeType: '', createdAt: 0 } : null
         executionState.value = 'unknown'; error.value = errorMessage(cause)
       }
@@ -228,11 +244,14 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     if (!agent) { error.value = '请明确选择一个已有 Agent。'; return null }
     if (!TEXT(instruction, 4000)) { error.value = '请填写需求说明。'; return null }
     const snapshot = snapshotNow(); const idempotencyKey = randomKey(); selectionSequence += 1
-    if (!recoveryStore.save({ idempotencyKey })) { error.value = '无法安全保存原请求标识，未发送新的执行请求。'; return null }
+    if (!recoveryStore.save({ idempotencyKey, uncertain: true })) { error.value = '无法安全保存原请求标识，未发送新的执行请求。'; return null }
+    unresolvedIntent.value = { idempotencyKey, executionId: null, uncertain: true }
     stopPolling(); execution.value = null; receipt.value = null; executionState.value = 'creating'; error.value = ''; completionNotice.value = ''
     try {
-      const result = applyExecution(await request({ url: '/personal-workspace/executions', method: 'POST', data: { conversationId, targetAgentId: agent.agentId, taskId, instruction: instruction.trim(), outputContentMimeType, inputs: selections }, headers: { 'Idempotency-Key': idempotencyKey } }, snapshot))
-      if (!TERMINAL_EXECUTION_STATES.has(result.state)) recoveryStore.save({ idempotencyKey, executionId: result.executionId })
+      const value = await request({ url: '/personal-workspace/executions', method: 'POST', data: { conversationId, targetAgentId: agent.agentId, taskId, instruction: instruction.trim(), outputContentMimeType, inputs: selections }, headers: { 'Idempotency-Key': idempotencyKey } }, snapshot)
+      if (!validExecution(value)) throw new Error('执行状态返回格式无效，未将其显示为已确认。')
+      if (!confirmIntent({ idempotencyKey }, value?.executionId)) throw new Error('执行回执无法安全关联到原请求，未将其显示为已确认。')
+      const result = applyExecution(value)
       if (!TERMINAL_EXECUTION_STATES.has(result.state)) void startPolling(result.executionId)
       return result
     } catch (cause) {
@@ -244,7 +263,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     }
   }
   const prepareNewRequest = () => {
-    if (executionState.value === 'creating' || executionState.value === 'reconciling' || executionState.value === 'unknown') { error.value = '原请求尚未确认；请继续查询原请求，不能安全地另起执行。'; return false }
+    if (unresolvedIntent.value || executionState.value === 'creating' || executionState.value === 'reconciling' || executionState.value === 'unknown') { error.value = '原请求尚未确认；请继续查询原请求，不能安全地另起执行。'; return false }
     if (!pending.value) return true
     // This deliberately does not retry, cancel, or alter the server execution.
     recoveryStore.clear(); selectionSequence += 1; stopPolling(); execution.value = null; receipt.value = null; executionState.value = 'idle'; error.value = ''; completionNotice.value = ''
@@ -252,7 +271,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
   }
   const selectHistoryExecution = async executionId => {
     const item = history.value.find(value => value.executionId === executionId)
-    if (!item) return null
+    if (!item || unresolvedIntent.value || executionState.value === 'creating' || executionState.value === 'reconciling') return null
     const snapshot = snapshotNow(); const sequence = ++selectionSequence
     stopPolling(); execution.value = null; applySummary(item); executionState.value = 'loading'; error.value = ''; completionNotice.value = ''
     try {
@@ -264,7 +283,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     } catch (cause) { if (cause?.name !== 'AbortError' && sequence === selectionSequence && snapshot.generation === generation) { executionState.value = 'error'; error.value = errorMessage(cause) } return null }
   }
   const loadHistory = async ({ beforeCreatedAt = null, beforeExecutionId = null, append = false, adopt = false } = {}) => {
-    const snapshot = snapshotNow(); historyState.value = 'loading'; historyError.value = ''
+    const snapshot = snapshotNow(); const selectionAtStart = selectionSequence; historyState.value = 'loading'; historyError.value = ''
     const params = { limit: 20 }
     if (TIMESTAMP(beforeCreatedAt) && ID(beforeExecutionId)) { params.beforeCreatedAt = beforeCreatedAt; params.beforeExecutionId = beforeExecutionId }
     try {
@@ -273,13 +292,13 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
       history.value = append ? [...history.value, ...value.items.filter(item => !history.value.some(old => old.executionId === item.executionId))] : value.items
       historyNextCursor.value = value.nextCursor || null; historyState.value = history.value.length ? 'ready' : 'empty'
       const preferred = receipt.value?.executionId && !TERMINAL_EXECUTION_STATES.has(receipt.value.state) && history.value.some(item => item.executionId === receipt.value.executionId) ? receipt.value.executionId : history.value[0]?.executionId
-      if (adopt && preferred) void selectHistoryExecution(preferred)
+      if (adopt && preferred && !unresolvedIntent.value && selectionAtStart === selectionSequence) void selectHistoryExecution(preferred)
       return history.value
     } catch (cause) { if (cause?.name !== 'AbortError' && snapshot.generation === generation) { historyError.value = errorMessage(cause); historyState.value = 'error' } return [] }
   }
-  const recover = async () => { await reconcile({ quiet: true }); return loadHistory({ adopt: true }) }
+  const recover = async () => { await reconcile({ quiet: true }); return loadHistory({ adopt: !unresolvedIntent.value }) }
   const adoptExecution = value => { try { const result = applyExecution(value); if (!TERMINAL_EXECUTION_STATES.has(result.state)) void startPolling(result.executionId); return result } catch (cause) { error.value = cause?.message || '执行状态返回格式无效，未显示为成功。'; executionState.value = 'error'; return null } }
-  const refreshExecution = () => receipt.value?.executionId ? startPolling(receipt.value.executionId) : reconcile()
+  const refreshExecution = () => unresolvedIntent.value ? reconcile() : receipt.value?.executionId ? startPolling(receipt.value.executionId) : reconcile()
   const revokeInputs = async () => {
     const current = execution.value
     if (!validExecution(current)) { error.value = '请先创建或刷新执行记录。'; return null }
@@ -292,5 +311,5 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
   const dispose = () => { if (disposed) return; disposed = true; unregisterIdentityCleanup(); reset() }
   if (getCurrentInstance()) onBeforeUnmount(dispose)
 
-  return { agents, rosterState, rosterError, selectedAgentId, selectedAgent, selectedExecutionAgent, allowedMimeTypes, inputMimeTypes, capabilityState, capabilityError, generationEnabled, execution, receipt, executionState, error, completionNotice, history, historyState, historyError, historyNextCursor, pending, loadCapabilities, loadAgents, loadHistory, recover, selectAgent, create, prepareNewRequest, adoptExecution, selectHistoryExecution, refreshExecution, revokeInputs, stopPolling, reset, dispose }
+  return { agents, rosterState, rosterError, selectedAgentId, selectedAgent, selectedExecutionAgent, allowedMimeTypes, inputMimeTypes, capabilityState, capabilityError, generationEnabled, execution, receipt, executionState, error, completionNotice, history, historyState, historyError, historyNextCursor, unresolvedIntent, pending, loadCapabilities, loadAgents, loadHistory, recover, selectAgent, create, prepareNewRequest, adoptExecution, selectHistoryExecution, refreshExecution, revokeInputs, stopPolling, reset, dispose }
 }

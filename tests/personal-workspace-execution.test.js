@@ -1,10 +1,10 @@
 import { strict as assert } from 'node:assert'
 import { describe, it } from 'mocha'
 import { ref } from 'vue'
-import { usePersonalWorkspaceExecution } from '../src/composables/usePersonalWorkspaceExecution.js'
+import { createPersonalWorkspaceExecutionRecoveryStore, usePersonalWorkspaceExecution } from '../src/composables/usePersonalWorkspaceExecution.js'
 
 const flushAsync = () => new Promise(resolve => globalThis.setImmediate(resolve))
-const deferred = () => { let resolve; const promise = new Promise(res => { resolve = res }); return { promise, resolve } }
+const deferred = () => { let resolve; let reject; const promise = new Promise((res, rej) => { resolve = res; reject = rej }); return { promise, resolve, reject } }
 
 const executionView = (overrides = {}) => ({
   executionId: 'exec_1', taskId: 'task_1', runId: 'run_1', conversationId: null,
@@ -243,6 +243,113 @@ describe('personal workspace execution receipt and recovery', () => {
     assert.equal(failed.historyState.value, 'error')
     assert.match(failed.historyError.value, /history offline/)
     failed.dispose()
+  })
+
+  it('keeps a persisted 404-unknown original intent through terminal history and blocks a duplicate request', async () => {
+    const storage = memoryStorage(); let posts = 0; let lookups = 0; let detailReads = 0
+    const api = { execute: async options => {
+      if (options.url === '/roster') return { data: { items: [{ agentId: 'agent_1', name: '林冲' }] } }
+      if (options.url.endsWith('/capabilities')) return { data: { allowedMimeTypes: ['image/png'], generationEnabled: true } }
+      if (options.method === 'POST' && options.url === '/personal-workspace/executions') { posts += 1; throw Object.assign(new Error('lost'), { status: 503 }) }
+      if (options.url.endsWith('/request')) { lookups += 1; throw Object.assign(new Error('not found'), { status: 404, code: 'EXECUTION_NOT_FOUND' }) }
+      if (options.url === '/personal-workspace/executions') return { data: { items: [{ executionId: 'exec_terminal', targetAgentId: 'agent_1', state: 'FAILED', outputContentMimeType: 'image/png', createdAt: 1 }], nextCursor: null } }
+      if (options.url.endsWith('/exec_terminal')) { detailReads += 1; return { data: executionView({ executionId: 'exec_terminal', outputContentMimeType: 'image/png', inputs: [], state: 'FAILED', failureCode: 'AGENT_DELIVERY_FAILED', failureMessage: 'other failed' }) } }
+      throw new Error(`unexpected ${options.url}`)
+    } }
+    const first = await readyAdapter(api, { storage })
+    await first.create({ instruction: '原请求', outputContentMimeType: 'image/png' })
+    first.dispose()
+    const second = await readyAdapter(api, { storage })
+    await second.recover()
+    assert.equal(second.historyState.value, 'ready')
+    assert.equal(detailReads, 0)
+    assert.ok(second.unresolvedIntent.value)
+    assert.equal(await second.create({ instruction: '不得重发', outputContentMimeType: 'image/png' }), null)
+    assert.equal(posts, 1)
+    assert.equal(second.prepareNewRequest(), false)
+    assert.ok(lookups >= 2)
+    second.dispose()
+  })
+
+  it('does not let history selection replace a create request that is still unresolved', async () => {
+    const posted = deferred(); let terminalReads = 0
+    const api = { execute: async options => {
+      if (options.url === '/roster') return { data: { items: [{ agentId: 'agent_1', name: '林冲' }] } }
+      if (options.url.endsWith('/capabilities')) return { data: { allowedMimeTypes: ['image/png'], generationEnabled: true } }
+      if (options.url === '/personal-workspace/executions' && options.method === 'GET') return { data: { items: [{ executionId: 'exec_terminal', targetAgentId: 'agent_1', state: 'FAILED', outputContentMimeType: 'image/png', createdAt: 1 }], nextCursor: null } }
+      if (options.url.endsWith('/exec_terminal')) { terminalReads += 1; return { data: executionView({ executionId: 'exec_terminal', outputContentMimeType: 'image/png', inputs: [], state: 'FAILED', failureCode: 'AGENT_DELIVERY_FAILED', failureMessage: 'other failed' }) } }
+      if (options.method === 'POST') return posted.promise
+      throw new Error(`unexpected ${options.url}`)
+    } }
+    const adapter = await readyAdapter(api)
+    await adapter.loadHistory()
+    const creating = adapter.create({ instruction: '仍在提交', outputContentMimeType: 'image/png' })
+    assert.equal(await adapter.selectHistoryExecution('exec_terminal'), null)
+    assert.equal(terminalReads, 0)
+    posted.resolve({ data: executionView({ outputContentMimeType: 'image/png', inputs: [] }) })
+    await creating
+    assert.equal(adapter.receipt.value.executionId, 'exec_1')
+    adapter.dispose()
+  })
+
+  it('does not let a terminal execution for another id erase an unknown original key', async () => {
+    const storage = memoryStorage(); let lookups = 0
+    const adapter = await readyAdapter({ execute: async options => {
+      if (options.url === '/roster') return { data: { items: [{ agentId: 'agent_1', name: '林冲' }] } }
+      if (options.url.endsWith('/capabilities')) return { data: { allowedMimeTypes: ['image/png'], generationEnabled: true } }
+      if (options.method === 'POST') throw Object.assign(new Error('lost'), { status: 503 })
+      if (options.url.endsWith('/request')) { lookups += 1; throw Object.assign(new Error('not found'), { status: 404, code: 'EXECUTION_NOT_FOUND' }) }
+      throw new Error(`unexpected ${options.url}`)
+    } }, { storage })
+    await adapter.create({ instruction: '原请求', outputContentMimeType: 'image/png' })
+    adapter.adoptExecution(executionView({ executionId: 'exec_other', outputContentMimeType: 'image/png', inputs: [], state: 'FAILED', failureCode: 'AGENT_DELIVERY_FAILED', failureMessage: 'other failed' }))
+    const saved = createPersonalWorkspaceExecutionRecoveryStore({ storage, scopeKey: () => 'owner-a' }).read()
+    assert.equal(saved?.uncertain, true)
+    assert.ok(saved?.idempotencyKey)
+    await adapter.refreshExecution()
+    assert.equal(lookups, 2)
+    assert.ok(adapter.unresolvedIntent.value)
+    adapter.dispose()
+  })
+
+  it('does not let a delayed recover adoption override a newer history selection', async () => {
+    const delayedHistory = deferred()
+    const api = { execute: async options => {
+      if (options.url === '/personal-workspace/executions') return delayedHistory.promise
+      if (options.url.endsWith('/exec_user')) return { data: executionView({ executionId: 'exec_user', outputContentMimeType: 'image/png', inputs: [] }) }
+      if (options.url.endsWith('/exec_top')) return { data: executionView({ executionId: 'exec_top', outputContentMimeType: 'image/png', inputs: [] }) }
+      throw new Error(`unexpected ${options.url}`)
+    } }
+    const adapter = usePersonalWorkspaceExecution({ api, identityEpoch: ref('owner-a'), storage: memoryStorage(), timerApi: { setTimeout: () => null, clearTimeout: () => {} } })
+    adapter.history.value = [{ executionId: 'exec_user', targetAgentId: 'agent_1', state: 'QUEUED', outputContentMimeType: 'image/png', createdAt: 1 }]
+    const recovering = adapter.recover()
+    const selected = adapter.selectHistoryExecution('exec_user')
+    await selected
+    delayedHistory.resolve({ data: { items: [{ executionId: 'exec_top', targetAgentId: 'agent_1', state: 'QUEUED', outputContentMimeType: 'image/png', createdAt: 2 }, { executionId: 'exec_user', targetAgentId: 'agent_1', state: 'QUEUED', outputContentMimeType: 'image/png', createdAt: 1 }], nextCursor: null } })
+    await recovering
+    assert.equal(adapter.receipt.value.executionId, 'exec_user')
+    adapter.dispose()
+  })
+
+  it('does not show a stale polling error after history selection changes', async () => {
+    const stalePoll = deferred()
+    const adapter = usePersonalWorkspaceExecution({ api: { execute: options => {
+      if (options.url.endsWith('/exec_old')) return stalePoll.promise
+      if (options.url.endsWith('/exec_new')) return Promise.resolve({ data: executionView({ executionId: 'exec_new', outputContentMimeType: 'image/png', inputs: [] }) })
+      throw new Error(`unexpected ${options.url}`)
+    } }, identityEpoch: ref('owner-a'), storage: memoryStorage(), timerApi: { setTimeout: () => null, clearTimeout: () => {} } })
+    adapter.history.value = [
+      { executionId: 'exec_new', targetAgentId: 'agent_1', state: 'QUEUED', outputContentMimeType: 'image/png', createdAt: 2 },
+      { executionId: 'exec_old', targetAgentId: 'agent_1', state: 'QUEUED', outputContentMimeType: 'image/png', createdAt: 1 }
+    ]
+    adapter.adoptExecution(executionView({ executionId: 'exec_old', outputContentMimeType: 'image/png', inputs: [] }))
+    await Promise.resolve()
+    await adapter.selectHistoryExecution('exec_new')
+    stalePoll.reject(new Error('old poll failed'))
+    await flushAsync()
+    assert.equal(adapter.receipt.value.executionId, 'exec_new')
+    assert.equal(adapter.error.value, '')
+    adapter.dispose()
   })
 
   it('fences an older history selection response behind a newer selection', async () => {

@@ -80,6 +80,7 @@
           :key="item.executionId"
           type="button"
           class="history-row"
+          :disabled="execution.pending.value"
           :class="{ active: execution.receipt.value?.executionId === item.executionId }"
           @click="chooseHistoryExecution(item.executionId)"
         ><span><strong>{{ executionStateText(item.state) }}</strong><small>{{ execution.selectedExecutionAgent.value?.agentId === item.targetAgentId ? execution.selectedExecutionAgent.value?.name : item.targetAgentId }}</small></span><small>{{ item.executionId }}</small></button></div><button
