@@ -1,8 +1,8 @@
 import { computed, unref } from 'vue'
 
-export const classifyPanelLayout = ({ isMobileCoarse, experienceMode }) => {
+export const classifyPanelLayout = ({ isMobileCoarse }) => {
   if (!isMobileCoarse) return 'center-modal'
-  return experienceMode === 'landscape-map' ? 'right-drawer' : 'bottom-drawer'
+  return 'full-window'
 }
 
 const RETURN_ACTIONS = new Set(['agents', 'tasks', 'discussion', 'catalog', 'library'])

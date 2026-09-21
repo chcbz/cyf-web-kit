@@ -1,8 +1,9 @@
 <template>
-  <div ref="hallRootRef" class="juyi-page" tabindex="-1" :style="hallViewportStyle" :class="{ 'is-panel-open': isPanelSessionActive, 'is-virtual-landscape': isVirtualLandscape, [`experience-${experienceMode}`]: true }">
+  <div ref="hallRootRef" class="juyi-page" tabindex="-1" :style="hallViewportStyle" :class="{ 'is-panel-open': isPanelSessionActive, 'is-virtual-landscape': isVirtualLandscape, [`experience-${experienceMode}`]: true, [`home-${homeMode}`]: true }">
     <HallPortraitHome
       ref="portraitHomeRef"
-      v-show="!experienceReady || experienceMode === 'portrait-command'"
+      v-show="!experienceReady || experienceMode === 'portrait-command' || isOverviewHome"
+      :home-mode="homeMode"
       :live-preview-enabled="true"
       :account-avatar="accountAvatar"
       :account-display-name="accountDisplayName"
@@ -26,6 +27,7 @@
       :tasks="tasks"
       :inert="isPanelSessionActive || voiceInteractionLocked ? '' : null"
       :aria-hidden="isPanelSessionActive || voiceInteractionLocked ? 'true' : null"
+      @set-home-mode="setHomeMode"
       @quick-action="handlePortraitQuickAction"
       @open-profile="openProfile"
       @open-workspace="openBabaoBox"
@@ -41,13 +43,13 @@
       @discuss-task="handlePortraitTaskDiscussion"
     />
 
-    <div ref="landscapeTargetRef" v-show="experienceMode === 'landscape-map'" class="hall-live-landscape-target"></div>
+    <div ref="landscapeTargetRef" v-show="experienceMode === 'landscape-map' && !isOverviewHome" class="hall-live-landscape-target"></div>
     <Teleport :to="stageTarget" :disabled="!stageTarget">
     <HallStage
       v-if="stageMounted"
       ref="hallStageRef"
       v-show="experienceReady"
-      :read-only-preview="experienceMode === 'portrait-command'"
+      :read-only-preview="experienceMode === 'portrait-command' || isOverviewHome"
       :account-avatar="accountAvatar"
       :account-display-name="accountDisplayName"
       :account-entry-disabled="accountEntryDisabled"
@@ -57,6 +59,7 @@
       :agent-style="sceneAgentStyle"
       :hidden-agent-count="hiddenAgentCount"
       :experience-mode="experienceMode"
+      :home-mode="homeMode"
       :interaction-locked="isPanelSessionActive || voiceInteractionLocked"
       :is-mobile-coarse="isMobileCoarse"
       :inert="isPanelSessionActive ? '' : null"
@@ -87,6 +90,7 @@
       @open-workspace="openBabaoBox"
       @new-conversation="handleNewHallConversation"
       @open-panel="handleStagePanelOpen"
+      @set-home-mode="setHomeMode"
       @request-landscape="requestLandscape"
       @request-portrait="requestPortrait"
       @open-onboarding="emit('open-onboarding', $event)"
@@ -158,7 +162,22 @@
             >
               <var-icon name="close-circle-outline" />
             </button>
+            <button
+              v-if="panelReturnPanel"
+              class="panel-return"
+              type="button"
+              aria-label="返回上一层"
+              :disabled="voiceInteractionLocked"
+              @click="returnPanel"
+            >返回</button>
             <span :id="panelTitleId">{{ activePanelTitle }}</span>
+            <button
+              class="panel-orientation"
+              type="button"
+              :aria-label="experienceMode === 'landscape-map' ? '切换竖向布局' : '切换横向布局'"
+              :disabled="voiceInteractionLocked || orientationRequestPending"
+              @click="requestPanelOrientation"
+            >{{ orientationRequestPending ? '切换中' : (experienceMode === 'landscape-map' ? '竖向' : '横向') }}</button>
             <button
               v-if="taskWorkspaceEnabled && renderedPanel === 'tasks' && taskWorkspaceSubject"
               class="panel-workspace-link"
@@ -437,6 +456,7 @@ import { useHallData } from '@/composables/juyiting/useHallData'
 import { useHallLibrary } from '@/composables/juyiting/useHallLibrary'
 import { resolveLiveMapPreviewActivation } from '@/composables/juyiting/liveMapPreviewPolicy'
 import { useHallExperienceMode } from '@/composables/juyiting/useHallExperienceMode'
+import { useHallHomeMode } from '@/composables/juyiting/useHallHomeMode'
 import { capturePanelReturnTarget, focusHallPanel, isCurrentPanelGeneration, isSafePanelFocusTarget, resolvePanelReturnTarget, restorePanelFocus, trapPanelFocus, useHallPanels } from '@/composables/juyiting/useHallPanels'
 import { useHallScene } from '@/composables/juyiting/useHallScene'
 import { useHallSceneState } from '@/composables/juyiting/useHallSceneState'
@@ -516,6 +536,7 @@ const activePanel = ref('')
 const renderedPanel = ref('')
 const panelSessionGeneration = ref(0)
 const panelClosingGeneration = ref(0)
+const panelReturnPanel = ref('')
 const isPanelSessionActive = computed(() => Boolean(renderedPanel.value))
 const hallRefreshing = ref(false)
 const experienceReady = ref(false)
@@ -529,6 +550,7 @@ const voiceReplyCorrelation = createHallVoiceReplyCorrelation({
   spokenMessageIds: spokenVoiceReplyIds,
   onReply: message => hallVoice?.completeReply(message)
 })
+const { homeMode, isOverviewHome, setHomeMode } = useHallHomeMode()
 const {
   experienceMode,
   isMobileCoarse,
@@ -574,7 +596,7 @@ const previewSceneBounds = ref({ width: 0, height: 0 })
 // The Stage is created only after a real landscape entry or observed portrait visibility,
 // then remains the sole scene owner until the Hall route unmounts.
 const stageHasMounted = ref(false)
-const stageTarget = computed(() => experienceMode.value === 'portrait-command'
+const stageTarget = computed(() => (experienceMode.value === 'portrait-command' || isOverviewHome.value)
   ? portraitHomeRef.value?.livePreviewTarget || null
   : landscapeTargetRef.value)
 const stageMounted = computed(() => stageHasMounted.value)
@@ -912,7 +934,11 @@ const cancelPanelChatLoad = () => {
 const openPanel = (panel, options = {}) => {
   if (panelDisposed || voiceInteractionLocked.value || !panelWhitelist.has(panel)) return false
   const openingFromClosed = !activePanel.value
+  if (!openingFromClosed && panel !== activePanel.value && panel === 'workspace' && activePanel.value === 'tasks') {
+    panelReturnPanel.value = 'tasks'
+  }
   if (openingFromClosed) {
+    panelReturnPanel.value = ''
     if (!renderedPanel.value) {
       panelSessionOrigin = Object.freeze({
         ...capturePanelReturnTarget(document.activeElement, panel),
@@ -1100,6 +1126,18 @@ const openTaskWorkspace = () => {
   openPanel('workspace')
 }
 
+const requestPanelOrientation = () => {
+  if (voiceInteractionLocked.value || orientationRequestPending.value) return false
+  return experienceMode.value === 'landscape-map' ? requestPortrait() : requestLandscape()
+}
+
+const returnPanel = () => {
+  if (panelDisposed || voiceInteractionLocked.value || !panelReturnPanel.value) return false
+  const parent = panelReturnPanel.value
+  panelReturnPanel.value = ''
+  return openPanel(parent, { silent: true })
+}
+
 const closePanel = () => {
   if (panelDisposed || voiceInteractionLocked.value || !activePanel.value) return false
   cancelPanelChatLoad()
@@ -1113,7 +1151,7 @@ const handlePanelKeydown = (event) => {
   event.stopPropagation()
   if (event.key === 'Escape') {
     event.preventDefault()
-    closePanel()
+    if (!returnPanel()) closePanel()
     return
   }
   trapPanelFocus(event, panelRef.value)
@@ -1141,6 +1179,7 @@ const handlePanelAfterLeave = async (element) => {
   const returnTarget = resolvePanelReturnTarget({ origin: panelSessionOrigin, root: hallRootRef.value })
   restorePanelFocus(returnTarget)
   panelClosingGeneration.value = 0
+  panelReturnPanel.value = ''
   panelSessionOrigin = null
 }
 
@@ -1641,6 +1680,7 @@ onUnmounted(() => {
   panelDisposed = true
   panelSessionGeneration.value += 1
   panelClosingGeneration.value = 0
+  panelReturnPanel.value = ''
   cancelPanelChatLoad()
   const originalElement = panelSessionOrigin?.originalElement
   if (isSafePanelFocusTarget(originalElement) && !hallRootRef.value?.contains(originalElement)) restorePanelFocus(originalElement)
@@ -2278,36 +2318,22 @@ button.hall-room {
   bottom: auto;
   height: min(100%, var(--hall-visual-height, 100%));
   max-height: 100%;
-  align-items: flex-start;
-  justify-content: stretch;
-  padding: 0;
 }
 
-.experience-landscape-map .panel-overlay.is-chat-overlay {
-  align-items: stretch;
-  justify-content: flex-end;
+/* A handling session is one active, near-full work window. Landscape does
+ * not degrade it into a right-side half drawer. */
+.panel-overlay:has(.layout-full-window) {
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
 }
 
-.experience-landscape-map .floating-panel.panel-chat,
-.experience-landscape-map .floating-panel.panel-chat.layout-center-modal,
-.experience-landscape-map .floating-panel.panel-chat.layout-right-drawer,
-.experience-landscape-map .floating-panel.panel-chat.layout-bottom-drawer {
-  width: 50%;
-  max-width: 50%;
-  height: 100%;
-  max-height: 100%;
-  border-radius: 8px 0 0 8px;
-}
-
-.experience-portrait-command .floating-panel.panel-chat,
-.experience-portrait-command .floating-panel.panel-chat.layout-center-modal,
-.experience-portrait-command .floating-panel.panel-chat.layout-right-drawer,
-.experience-portrait-command .floating-panel.panel-chat.layout-bottom-drawer {
-  width: 100%;
-  max-width: 100%;
-  height: 100%;
-  max-height: 100%;
-  border-radius: 0;
+.floating-panel.layout-full-window {
+  width: min(1180px, calc(100% - 24px));
+  max-width: calc(100% - 24px);
+  height: min(calc(100% - 16px), var(--hall-visual-height, 100%));
+  max-height: calc(100% - 16px);
+  border-radius: 10px;
 }
 
 .panel-overlay.is-compact-chat-overlay .panel-title {
@@ -2346,43 +2372,13 @@ button.hall-room {
   isolation: isolate;
 }
 
-.floating-panel.panel-treasure {
+.floating-panel.panel-treasure:not(.layout-full-window) {
   width: min(1040px, calc(100% - 40px));
 }
 
 .floating-panel.layout-center-modal {
   width: min(860px, calc(100% - 40px));
   max-height: calc(100% - 48px);
-}
-
-
-.panel-overlay:has(.layout-right-drawer) {
-  align-items: stretch;
-  justify-content: flex-end;
-  padding: 0;
-}
-
-.floating-panel.layout-right-drawer {
-  width: clamp(45%, 50vw, 55%);
-  max-width: 55%;
-  height: var(--hall-visual-height, 100%);
-  max-height: 100%;
-  border-radius: 8px 0 0 8px;
-}
-
-
-.panel-overlay:has(.layout-bottom-drawer) {
-  align-items: flex-end;
-  padding: 0;
-}
-
-.floating-panel.layout-bottom-drawer {
-  width: 100%;
-  max-width: 100%;
-  height: 72vh;
-  height: min(72vh, calc(var(--hall-visual-height, 100vh) * 0.72));
-  max-height: 75vh;
-  border-radius: 8px 8px 0 0;
 }
 
 
@@ -2416,6 +2412,12 @@ button.hall-room {
   padding: 0 12px;
   background: #efe0c6;
   color: #4a3423;
+}
+
+.panel-return,
+.panel-orientation {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .panel-close {
@@ -2752,11 +2754,22 @@ button.hall-room {
     transform: translateY(8px);
   }
 
-  .floating-panel {
-    width: calc(100% - 16px);
-    max-width: calc(100% - 16px);
-    max-height: 82%;
-    border-radius: 8px 8px 0 0;
+  .floating-panel.layout-full-window {
+    width: calc(100% - 12px);
+    max-width: calc(100% - 12px);
+    height: calc(100% - 8px);
+    max-height: calc(100% - 8px);
+    border-radius: 8px;
+  }
+
+  .panel-title {
+    gap: 6px;
+    padding: 8px 10px;
+  }
+
+  .panel-title button {
+    min-height: 34px;
+    padding: 0 9px;
   }
 
 

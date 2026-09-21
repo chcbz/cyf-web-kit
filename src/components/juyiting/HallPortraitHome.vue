@@ -6,6 +6,7 @@
         <h1>厅中动静</h1>
       </div>
       <div class="portrait-header-actions">
+        <button class="portrait-home-mode" type="button" :aria-pressed="homeMode === 'overview'" @click="emit('set-home-mode', homeMode === 'map' ? 'overview' : 'map')">{{ homeMode === 'map' ? '办事概览' : '厅中实景' }}</button>
         <HallAccountEntry
           class="portrait-header-account"
           :avatar="accountAvatar"
@@ -15,6 +16,8 @@
         />
       </div>
     </header>
+
+    <p class="portrait-home-mode-hint" role="status">{{ homeMode === 'map' ? '厅中实景 · 可切办事概览' : '办事概览 · 地图与当前选择仍保留' }}</p>
 
     <section class="portrait-overview" aria-label="状态概览">
       <div><strong>{{ idleCount }}</strong><span>候命</span></div>
@@ -193,6 +196,7 @@ const props = defineProps({
   accountEntryDisabled: Boolean,
   agents: { type: Array, default: () => [] },
   canStartAgentConversation: { type: Function, required: true },
+  homeMode: { type: String, default: 'map' },
   livePreviewEnabled: Boolean,
   livePreviewError: { type: String, default: '' },
   livePreviewMapHeight: { type: Number, default: 0 },
@@ -211,7 +215,7 @@ const props = defineProps({
   tasks: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['open-profile', 'close-task-detail', 'discuss-task', 'open-task', 'open-onboarding', 'open-task-board', 'quick-action', 'request-landscape', 'retry-live-preview', 'live-preview-visibility-change', 'select-agent', 'start-agent-conversation'])
+const emit = defineEmits(['set-home-mode', 'open-profile', 'close-task-detail', 'discuss-task', 'open-task', 'open-onboarding', 'open-task-board', 'quick-action', 'request-landscape', 'retry-live-preview', 'live-preview-visibility-change', 'select-agent', 'start-agent-conversation'])
 
 const livePreviewTarget = ref(null)
 defineExpose({ livePreviewTarget })
@@ -275,6 +279,25 @@ const openTask = task => emit('open-task', task)
   color: #fff5df;
 }
 
+
+.portrait-home-mode,
+.portrait-home-mode-hint {
+  font: inherit;
+}
+
+.portrait-home-mode {
+  min-height: 36px;
+  border: 1px solid rgba(255, 245, 223, 0.3);
+  border-radius: 8px;
+  background: rgba(255, 245, 223, 0.1);
+  color: inherit;
+}
+
+.portrait-home-mode-hint {
+  margin: -6px 0 0;
+  color: rgba(255, 245, 223, 0.78);
+  font-size: 13px;
+}
 
 .portrait-context-actions {
   flex: 0 0 auto;
@@ -370,6 +393,25 @@ const openTask = task => emit('open-task', task)
 .portrait-context,
 .portrait-overview,
 .portrait-shortcuts,
+.portrait-home-mode,
+.portrait-home-mode-hint {
+  font: inherit;
+}
+
+.portrait-home-mode {
+  min-height: 36px;
+  border: 1px solid rgba(255, 245, 223, 0.3);
+  border-radius: 8px;
+  background: rgba(255, 245, 223, 0.1);
+  color: inherit;
+}
+
+.portrait-home-mode-hint {
+  margin: -6px 0 0;
+  color: rgba(255, 245, 223, 0.78);
+  font-size: 13px;
+}
+
 .portrait-context-actions {
   display: flex;
   align-items: center;

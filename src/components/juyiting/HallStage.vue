@@ -25,6 +25,15 @@
           @open-profile="emitStageAction('open-profile')"
         />
         <button
+          class="tool-action home-mode-action"
+          :disabled="stageInputLocked"
+          :title="homeMode === 'map' ? '查看办事概览' : '返回厅中实景'"
+          @click="emit('set-home-mode', homeMode === 'map' ? 'overview' : 'map')"
+        >
+          <var-icon :name="homeMode === 'map' ? 'view-dashboard-outline' : 'map-outline'" />
+          <span class="tool-label">{{ homeMode === 'map' ? '办事概览' : '厅中实景' }}</span>
+        </button>
+        <button
           class="tool-action babao-action"
           data-tour="landscape-babao-box"
           :disabled="stageInputLocked"
@@ -142,6 +151,7 @@ const props = defineProps({
   agentKey: { type: Function, required: true },
   agentStyle: { type: Function, required: true },
   hiddenAgentCount: { type: Number, default: 0 },
+  homeMode: { type: String, default: 'map' },
   experienceMode: { type: String, default: 'landscape-map' },
   interactionLocked: { type: Boolean, default: false },
   isMobileCoarse: { type: Boolean, default: false },
@@ -179,6 +189,7 @@ const emit = defineEmits([
   'open-panel',
   'request-landscape',
   'request-portrait',
+  'set-home-mode',
   'scene-bounds-change',
   'scene-error',
   'scene-mode-change',

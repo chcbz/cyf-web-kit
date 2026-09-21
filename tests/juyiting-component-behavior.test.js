@@ -286,8 +286,8 @@ describe('JuyiHall component behavior', () => {
     const { classifyPanelLayout } = await import('../src/composables/juyiting/useHallPanels.js')
 
     expect(classifyPanelLayout({ isMobileCoarse: false, experienceMode: 'portrait-command' })).to.equal('center-modal')
-    expect(classifyPanelLayout({ isMobileCoarse: true, experienceMode: 'landscape-map' })).to.equal('right-drawer')
-    expect(classifyPanelLayout({ isMobileCoarse: true, experienceMode: 'portrait-command' })).to.equal('bottom-drawer')
+    expect(classifyPanelLayout({ isMobileCoarse: true, experienceMode: 'landscape-map' })).to.equal('full-window')
+    expect(classifyPanelLayout({ isMobileCoarse: true, experienceMode: 'portrait-command' })).to.equal('full-window')
   })
 
   it('locks every SelectedAgentCard action and pointer surface during voice capture', async () => {
@@ -382,10 +382,10 @@ describe('JuyiHall component behavior', () => {
     }
     const wrapper = mount(Harness)
     await Vue.nextTick()
-    expect(wrapper.classes()).to.include('bottom-drawer')
+    expect(wrapper.classes()).to.include('full-window')
     experienceMode.value = 'landscape-map'
     await Vue.nextTick()
-    expect(wrapper.classes()).to.include('right-drawer')
+    expect(wrapper.classes()).to.include('full-window')
     wrapper.unmount()
   })
 
@@ -394,8 +394,9 @@ describe('JuyiHall component behavior', () => {
 
     expect(source).to.include(':interaction-locked="isPanelSessionActive || voiceInteractionLocked"')
     expect(source).to.include(':class="[`panel-${renderedPanel}`, `layout-${panelLayout}`]"')
-    expect(source).to.include('layout-bottom-drawer')
-    expect(source).to.include('layout-right-drawer')
+    expect(source).to.include('layout-full-window')
+    expect(source).to.include('panel-orientation')
+    expect(source).to.include('panelReturnPanel')
     expect(source).to.include('layout-center-modal')
   })
 
@@ -2488,8 +2489,9 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
     isEconomyPreviewBuildEnabled: () => Boolean(economyCapability), isEconomyPreviewCapability: capability => Boolean(capability && capability.principalScopeFingerprint === economyCapability?.principalScopeFingerprint), loadEconomyPreviewCapability: async () => economyCapability,
     roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
     useHallData: ({ selectedAgent, selectedTask }) => { counters.owners.data += 1; selectedAgent.value = { agentId: 'agent-o04', name: 'sentinel-agent' }; selectedTask.value = counters.initialSelectedTask || { id: 'task-o04', title: 'sentinel-task' }; return hallData },
-    useHallExperienceMode: () => ({ experienceMode: mode, isMobileCoarse: Vue.ref(true), orientationHint: scalar, orientationRequestPending: Vue.ref(false), requestLandscape: asyncNoop }),
-    useHallPanels: ({ experienceMode, isMobileCoarse }) => ({ panelLayout: Vue.computed(() => isMobileCoarse.value ? (experienceMode.value === 'landscape-map' ? 'right-drawer' : 'bottom-drawer') : 'center-modal') }),
+    useHallHomeMode: () => ({ homeMode: Vue.ref('map'), isOverviewHome: Vue.ref(false), setHomeMode: noop }),
+    useHallExperienceMode: () => ({ experienceMode: mode, isMobileCoarse: Vue.ref(true), orientationHint: scalar, orientationRequestPending: Vue.ref(false), requestLandscape: asyncNoop, requestPortrait: asyncNoop }),
+    useHallPanels: ({ isMobileCoarse }) => ({ panelLayout: Vue.computed(() => isMobileCoarse.value ? 'full-window' : 'center-modal') }),
     useHallSceneState: () => ({ setMapRuntime: noop, reset: noop, forwardPhaseEvents: asyncNoop }),
     useHallCommandQueue: () => ({ ready: Vue.ref(false), setSimulation: noop }),
     useHallBackendSceneState: () => ({ start: asyncNoop, stop: noop, dispose: noop, reportPhase: noop }), useHallSceneDebugBridge: () => { counters.owners.debug += 1; return { sentinel: 'debug-owner-o04', republish: noop, stop: noop } },
@@ -2534,10 +2536,10 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
 
       for (let cycle = 0; cycle < 5; cycle += 1) {
         mode.value = 'landscape-map'; await Vue.nextTick()
-        expect(wrapper.find('.floating-panel').classes()).to.include('layout-right-drawer')
+        expect(wrapper.find('.floating-panel').classes()).to.include('layout-full-window')
         expect(wrapper.find('.hall-board').attributes('inert')).to.equal('')
         mode.value = 'portrait-command'; await Vue.nextTick()
-        expect(wrapper.find('.floating-panel').classes()).to.include('layout-bottom-drawer')
+        expect(wrapper.find('.floating-panel').classes()).to.include('layout-full-window')
         expect(wrapper.find('.floating-panel').element).to.equal(floatingPanel)
         expect(wrapper.find('.library-panel-instance').element).to.equal(library)
         expect(wrapper.find('.archive-reader-instance').element).to.equal(archive)

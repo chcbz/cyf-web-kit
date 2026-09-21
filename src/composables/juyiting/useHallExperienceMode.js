@@ -5,8 +5,6 @@ export const resolveHallExperienceMode = ({ isMobileCoarse, isPhysicalLandscape,
   !isMobileCoarse ? 'landscape-map' : (requestedMode || (isPhysicalLandscape ? 'landscape-map' : 'portrait-command'))
 )
 
-const REQUEST_TIMEOUT_MS = 3000
-
 const orientationFromAngle = angle => {
   if (!Number.isFinite(angle)) return null
   return Math.abs(Math.trunc(angle) % 180) === 90
@@ -68,7 +66,6 @@ export const useHallExperienceMode = () => {
   let observedOrientation = { screen: null, media: null, legacy: null }
   let lastAcceptedPhysicalEventStamp = 0
   let requestGeneration = 0
-  let requestTimer = null
   let requestOwnership = null
 
   const readViewport = () => {
@@ -116,12 +113,6 @@ export const useHallExperienceMode = () => {
     return commitPhysicalOrientation(next)
   }
 
-  const clearRequestTimer = token => {
-    if (!requestTimer || (token !== undefined && requestTimer.token !== token)) return
-    window.clearTimeout(requestTimer.id)
-    requestTimer = null
-  }
-
   const settleRequest = (token, result) => {
     const ownership = requestOwnership
     if (!ownership || ownership.token !== token || !ownership.resolveCompletion) return
@@ -132,7 +123,6 @@ export const useHallExperienceMode = () => {
   const completeRequest = token => {
     const ownership = requestOwnership
     if (!isCurrentRequest(token) || !ownership?.acquisitionComplete || !isPhysicalLandscape.value) return false
-    clearRequestTimer(token)
     orientationRequestPending.value = false
     settleRequest(token, true)
     return true
@@ -201,7 +191,6 @@ export const useHallExperienceMode = () => {
   }
 
   const cancelRequest = async (token, { showHint = false } = {}) => {
-    clearRequestTimer(token)
     if (token === requestGeneration) {
       orientationRequestPending.value = false
       if (showHint && isMounted) orientationHint.value = '请旋转手机横屏查看'
@@ -318,15 +307,6 @@ export const useHallExperienceMode = () => {
     }
     orientationRequestPending.value = true
     orientationHint.value = ''
-    requestTimer = {
-      token,
-      id: window.setTimeout(() => {
-        if (isCurrentRequest(token) && orientationRequestPending.value) {
-          void cancelRequest(token, { showHint: true })
-        }
-      }, REQUEST_TIMEOUT_MS)
-    }
-
     void acquireLandscape({ token, fullscreenElement, requestFullscreen, lockOrientation }).catch(() => {
       if (isCurrentRequest(token)) void cancelRequest(token, { showHint: true })
     })
@@ -356,7 +336,6 @@ export const useHallExperienceMode = () => {
     orientationHint.value = ''
     const ownership = requestOwnership
     if (!ownership) return true
-    clearRequestTimer(ownership.token)
     orientationRequestPending.value = false
     settleRequest(ownership.token, false)
     await releaseRequestOwnership(ownership.token)
