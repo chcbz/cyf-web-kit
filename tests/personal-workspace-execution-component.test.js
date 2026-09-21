@@ -70,6 +70,13 @@ describe('personal workspace execution receipt presentation', () => {
     await delivery.find('summary').trigger('click')
     assert.equal(delivery.find('details.execution-history').element.open, true)
     assert.equal(delivery.find('.history-row').element.disabled, false)
+    const queuedReceipt = execution.receipt.value
+    execution.receipt.value = null; execution.executionState.value = 'unknown'; execution.unresolvedIntent.value = { idempotencyKey: 'pending-key' }
+    await Vue.nextTick()
+    assert.match(delivery.text(), /只查询原请求，不会再次提交/)
+    assert.equal(delivery.find('.composer-steps').exists(), false)
+    assert.equal(delivery.findAll('button').find(button => button.text().includes('另起一项新交付')).element.disabled, true)
+    execution.receipt.value = queuedReceipt; execution.executionState.value = 'ready'; execution.unresolvedIntent.value = null
     execution.receipt.value = { ...execution.receipt.value, state: 'FAILED' }; execution.pending.value = false; execution.error.value = 'Agent 未能完成本次交付'
     await Vue.nextTick()
     assert.match(delivery.text(), /交付失败/)
