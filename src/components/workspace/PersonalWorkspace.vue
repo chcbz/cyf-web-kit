@@ -5,7 +5,50 @@
       <p class="workspace-header-note">资料只在你明确提交时，才会授权给所选 Agent。</p>
     </header>
 
-    <section class="modal-stage" :class="{ 'has-child-modal': activeModal !== 'home', 'has-detail-modal': activeModal === 'detail' }" aria-label="百宝箱多层弹窗">
+    <section v-if="embedded" class="treasure-content" :data-view="treasureView">
+      <template v-if="treasureView === 'list'">
+        <div class="treasure-intro"><div><h2>这一箱，都是可继续用的资料</h2><p>独立管理文件；办事中选完资料，仍回到原事项。</p></div><button class="treasure-primary" type="button" @click="treasureView = 'upload'">上传资料</button></div>
+        <nav class="treasure-tabs" aria-label="百宝箱分类"><button v-for="tab in treasureTabs" :key="tab.key" type="button" :aria-pressed="treasureTab === tab.key" @click="changeTreasureTab(tab.key)">{{ tab.label }}</button></nav>
+        <form class="treasure-search" @submit.prevent="refresh"><label><span class="sr-only">搜索文件名称</span><input v-model="query" maxlength="100" placeholder="搜索文件名称" /></label><button type="submit" :disabled="workspace.loading.value">搜索</button></form>
+        <p v-if="workspace.listState.value === 'loading'" role="status">正在翻看资料…</p>
+        <div ref="fileListRef" class="treasure-file-list">
+          <div v-for="file in treasureFiles" :key="file.fileId" class="treasure-file-row"><div><strong>{{ file.displayName }}</strong><p>{{ originText(file.originKind) }} · {{ familyText(file.mediaFamily) }} · v{{ file.latestVersion }}</p></div><button type="button" :data-file-id="file.fileId" :disabled="!detailAllowed || workspace.actionState.value === 'loading-detail'" @click="openTreasureFile(file.fileId)">查看</button></div>
+        </div>
+        <p v-if="!workspace.loading.value && workspace.listState.value !== 'error' && !treasureFiles.length" class="treasure-empty">{{ workspace.nextCursor.value ? '已读取的文件中暂无此分类；可继续读取更多。' : treasureTab === 'trash' ? '回收站为空。' : query.trim() ? '没有找到匹配的文件。' : '这里还没有文件，可上传资料或到事项中查看成果。' }}</p>
+        <p v-if="workspace.listState.value === 'error'" role="alert">文件暂未完整读取，不能据此判断为空。<button type="button" @click="refresh">重新读取</button></p>
+        <button v-if="workspace.nextCursor.value" type="button" :disabled="workspace.loading.value" @click="loadMore">读取更多文件</button>
+      </template>
+      <form v-else-if="treasureView === 'upload'" class="treasure-form" @submit.prevent="uploadTreasure">
+        <p>上传后可在草稿里选用；上传本身不会把资料交给好汉。</p>
+        <label><span>选择资料</span><input type="file" :accept="acceptTypes" @change="onUploadFile" /></label>
+        <label><span>显示名称（可选）</span><input v-model="uploadDisplayName" maxlength="255" placeholder="留空使用文件名称" /></label>
+        <p v-if="uploadFile">{{ uploadFile.name }} · {{ byteText(uploadFile.size) }}</p>
+        <div class="treasure-actions"><button type="button" @click="back">取消</button><button class="treasure-primary" type="submit" :disabled="!uploadFile || workspace.actionState.value === 'uploading'">{{ workspace.actionState.value === 'uploading' ? '正在上传…' : '确认上传' }}</button></div>
+      </form>
+      <template v-else-if="workspace.detail.value">
+        <div class="treasure-file-heading"><div><h2 ref="detailTitleRef" tabindex="-1">{{ workspace.detail.value.file.displayName }}</h2><p>{{ originText(workspace.detail.value.file.originKind) }} · {{ workspace.detail.value.file.state === 'TRASHED' ? '已回收' : '仅自己可见' }}</p></div><button v-if="treasureView === 'preview'" type="button" @click="treasureView = 'manage'">更多管理</button></div>
+        <template v-if="treasureView === 'preview'">
+          <div class="treasure-preview-tools"><label>版本 <select v-model.number="selectedVersion" @change="preview(selectedVersion)"><option v-for="version in workspace.detail.value.versions" :key="version.version" :value="version.version">v{{ version.version }} · {{ version.originalFilename }}</option></select></label><button type="button" @click="download(selectedVersion)">下载</button></div>
+          <p class="treasure-note">本次使用固定的 v{{ selectedVersion }}；以后上传新版本，不会替换已交办的资料。</p>
+          <section class="treasure-preview" aria-label="文件预览" aria-live="polite">
+            <p v-if="workspace.actionState.value === 'loading-preview'">正在读取预览…</p>
+            <template v-else-if="workspace.preview.value.kind === 'parts'"><div class="treasure-preview-tools"><button type="button" :disabled="workspace.preview.value.selectedIndex === 0" @click="workspace.selectPreviewPart(workspace.preview.value.selectedIndex - 1)">上一页</button><span>第 {{ workspace.preview.value.selectedIndex + 1 }} / {{ workspace.preview.value.parts.length }} 页</span><button type="button" :disabled="workspace.preview.value.selectedIndex >= workspace.preview.value.parts.length - 1" @click="workspace.selectPreviewPart(workspace.preview.value.selectedIndex + 1)">下一页</button></div><pre v-if="selectedPreviewPart?.kind === 'text'" v-text="selectedPreviewPart.text"></pre><img v-else-if="selectedPreviewPart?.kind === 'image'" :src="selectedPreviewPart.url" alt="文件固定版本预览" /></template>
+            <pre v-else-if="workspace.preview.value.kind === 'text'" v-text="workspace.preview.value.text"></pre><img v-else-if="workspace.preview.value.kind === 'image'" :src="workspace.preview.value.url" alt="文件固定版本预览" /><p v-else>{{ workspace.preview.value.message || '可下载查看完整文件。' }}</p>
+          </section>
+          <div class="treasure-actions"><button v-if="workspace.detail.value.file.state === 'ACTIVE'" class="treasure-primary" type="button" @click="useForDraft">用于新委托</button><button v-else type="button" @click="treasureView = 'manage'">恢复文件</button></div>
+        </template>
+        <section v-else class="treasure-management">
+          <template v-if="workspace.detail.value.file.state === 'ACTIVE'">
+            <form class="treasure-form" @submit.prevent="rename"><label><span>文件名称</span><input v-model="renameValue" maxlength="255" /></label><button type="submit" :disabled="workspace.actionState.value === 'saving'">保存名称</button></form>
+            <div class="treasure-form"><label><span>上传新版本</span><input type="file" :accept="acceptTypes" @change="onVersionFile" /></label><p>旧版本及已有事项的资料引用会保留。</p><button type="button" :disabled="!versionFile || workspace.actionState.value === 'appending-version'" @click="appendVersion">上传为新版本</button></div>
+            <div class="treasure-manage-danger"><button v-if="!trashUsage" type="button" @click="prepareTrash">移入回收站</button><div v-else role="group" aria-label="回收确认"><p>确认移入回收站？仍可恢复。{{ trashReferenceCount ? `此文件有 ${trashReferenceCount} 个关联引用。` : '' }}</p><div class="treasure-actions"><button type="button" @click="trashUsage = null">取消</button><button type="button" :disabled="workspace.actionState.value === 'saving'" @click="confirmTrash">确认回收</button></div></div></div>
+          </template>
+          <template v-else><p>恢复后可继续在资料列表中使用。本版不提供永久删除。</p><button class="treasure-primary" type="button" @click="restoreTreasure">恢复文件</button></template>
+        </section>
+      </template>
+    </section>
+
+    <section v-if="!embedded" class="modal-stage" :class="{ 'has-child-modal': activeModal !== 'home', 'has-detail-modal': activeModal === 'detail' }" aria-label="百宝箱多层弹窗">
       <section
         v-if="!embedded"
         class="babao-modal box-modal"
@@ -152,7 +195,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useApiStore } from '@/stores/api'
 import { useGlobalStore } from '@/stores/global'
 import { savePersonalWorkspaceBlob, usePersonalWorkspace } from '@/composables/usePersonalWorkspace'
@@ -289,13 +332,55 @@ const prepareNewExecution = () => execution.prepareNewRequest()
 const chooseHistoryExecution = executionId => execution.selectHistoryExecution(executionId)
 const loadMoreExecutionHistory = () => { const cursor = execution.historyNextCursor.value; return cursor ? execution.loadHistory({ beforeCreatedAt: cursor.createdAt, beforeExecutionId: cursor.executionId, append: true, adopt: false }) : Promise.resolve([]) }
 
-const canGoBack = computed(() => activeModal.value === 'detail')
+const treasureView = ref('list')
+const treasureTab = ref('all')
+const treasureTabs = [{ key: 'all', label: '全部' }, { key: 'materials', label: '资料' }, { key: 'results', label: '成果' }, { key: 'trash', label: '回收站' }]
+// The server supports state/query but not originKind. Never declare a category
+// empty while the unfiltered cursor still has pages; expose continuation explicitly.
+const treasureFiles = computed(() => workspace.items.value.filter(file => treasureTab.value === 'materials' ? file.originKind === 'USER_UPLOAD' : treasureTab.value === 'results' ? file.originKind === 'AGENT_DELIVERY' : true))
+const trashUsage = ref(null)
+const trashReferenceCount = computed(() => (trashUsage.value?.taskReferences?.length || 0) + (trashUsage.value?.activeExecutions?.length || 0))
+const changeTreasureTab = key => {
+  treasureTab.value = key
+  const next = key === 'trash' ? 'TRASHED' : 'ACTIVE'
+  if (state.value !== next) { state.value = next; void refresh() }
+}
+const openTreasureFile = async fileId => {
+  const detail = await openFile(fileId)
+  if (!detail || !detailAllowed) return
+  treasureView.value = 'preview'
+  preview(selectedVersion.value)
+  await nextTick()
+  detailTitleRef.value?.focus({ preventScroll: true })
+}
+const uploadTreasure = async () => {
+  const result = await workspace.upload(uploadFile.value, uploadDisplayName.value)
+  if (!result) return
+  uploadFile.value = null; uploadDisplayName.value = ''; treasureView.value = 'list'; activeModal.value = 'library'
+  treasureTab.value = 'all'; state.value = 'ACTIVE'; query.value = ''; await refresh()
+}
+const prepareTrash = async () => { trashUsage.value = await workspace.usage() }
+const confirmTrash = async () => {
+  if (!trashUsage.value) return
+  const result = await workspace.trash(trashUsage.value)
+  if (result) { trashUsage.value = null; treasureView.value = 'list'; backToLibrary(); await refresh() }
+}
+const restoreTreasure = async () => {
+  const result = await workspace.restore()
+  if (result) { treasureView.value = 'list'; backToLibrary(); await refresh() }
+}
+const canGoBack = computed(() => embedded ? treasureView.value !== 'list' : activeModal.value === 'detail')
+const logicalDepth = computed(() => !embedded || treasureView.value === 'list' ? 1 : treasureView.value === 'manage' ? 3 : 2)
+const windowTitle = computed(() => !embedded ? '' : ({ list: '百宝箱', upload: '上传资料', preview: '文件预览', manage: '文件管理' })[treasureView.value])
 const back = () => {
   if (!canGoBack.value) return false
+  if (embedded && treasureView.value === 'manage') { treasureView.value = 'preview'; trashUsage.value = null; return true }
+  treasureView.value = 'list'; trashUsage.value = null
   backToLibrary()
   return true
 }
-defineExpose({ canGoBack, back })
+watch(identityEpoch, () => { treasureView.value = 'list'; treasureTab.value = 'all'; trashUsage.value = null; uploadFile.value = null; versionFile.value = null; query.value = ''; uploadDisplayName.value = ''; renameValue.value = ''; selectedId.value = ''; activeModal.value = embedded ? 'library' : 'home' })
+defineExpose({ canGoBack, back, logicalDepth, windowTitle })
 
 onMounted(() => {
   void refresh()
@@ -374,4 +459,28 @@ onBeforeUnmount(() => { workspace.dispose(); execution.dispose() })
 .is-compact-hall .modal-heading p { display:none; }
 .is-compact-hall .library-tools { margin-top:6px; padding-bottom:6px; }
 .is-compact-hall .filters { margin:6px 0; padding:6px 0; }
+/* Embedded treasure follows the approved list → preview → management flow. */
+.personal-workspace.is-hall-treasure { padding:28px 30px; background:#fff9ed; border-top:0; box-shadow:none; font-size:16px; }
+.treasure-content { max-width:100%; margin:0; }
+.treasure-content h2 { font-size:22px; line-height:1.45; font-weight:500; margin:0 0 6px; overflow-wrap:anywhere; }
+.treasure-content p { margin:6px 0; color:#7b634b; font-size:14px; line-height:1.6; }
+.treasure-intro,.treasure-file-heading { display:flex; gap:16px; align-items:center; justify-content:space-between; margin-bottom:20px; }
+.treasure-content button { min-height:44px; padding:8px 14px; font:inherit; background:transparent; color:#533922; border:1px solid #d5bd98; border-radius:4px; box-shadow:none; cursor:pointer; }
+.treasure-content button:focus-visible,.treasure-content input:focus-visible,.treasure-content select:focus-visible { outline:3px solid #bf8045; outline-offset:2px; }
+.treasure-content button:disabled { opacity:.5; cursor:default; }
+.treasure-content button.treasure-primary { background:#8d402c; color:#fff9ee; border-color:#8d402c; }
+.treasure-tabs { display:flex; gap:8px; border-bottom:1px solid #d6bf99; margin-bottom:18px; }
+.treasure-tabs button { border:0; border-radius:0; }
+.treasure-tabs button[aria-pressed=true] { border-bottom:2px solid #8d402c; color:#8d402c; }
+.treasure-search { display:flex; align-items:center; gap:12px; margin:18px 0 12px; }
+.treasure-search label { width:min(360px,100%); }
+.treasure-content input:not([type=file]),.treasure-content select { padding:10px 12px; min-height:44px; box-sizing:border-box; border:1px solid #d5bd98; border-radius:4px; font:inherit; color:#513922; background:#fffdf8; max-width:100%; }
+.treasure-search input { width:100%; }
+.treasure-file-row { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:20px 0; border-bottom:1px solid #d6bf99; }
+.treasure-file-row>div { min-width:0; overflow-wrap:anywhere; }.treasure-file-row button,.treasure-intro>button { flex:0 0 auto; }
+.treasure-empty { padding:28px 0; }.treasure-form { display:grid; gap:18px; max-width:680px; margin:20px 0; }.treasure-form label { display:grid; gap:8px; }.treasure-form>button { justify-self:start; }
+.treasure-preview-tools,.treasure-actions { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }.treasure-actions { justify-content:flex-end; margin-top:24px; padding-top:18px; border-top:1px solid #d6bf99; }.treasure-preview-tools label { display:flex; gap:8px; align-items:center; min-width:0; }.treasure-preview-tools select { max-width:min(520px,60vw); }
+.treasure-preview { padding:16px 0; min-height:120px; }.treasure-preview pre { white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; }.treasure-preview img { max-width:100%; height:auto; }.treasure-manage-danger { margin-top:32px; padding-top:20px; border-top:1px solid #d6bf99; }
+@media(max-width:600px) { .personal-workspace.is-hall-treasure { padding:20px 16px; }.treasure-intro { align-items:flex-start; }.treasure-content h2 { font-size:19px; }.treasure-tabs { gap:4px; }.treasure-tabs button { padding:8px 12px; }.treasure-file-row { padding:16px 0; } }
+@media(max-height:500px) { .personal-workspace.is-hall-treasure { padding:16px 20px; }.treasure-intro,.treasure-file-heading { margin-bottom:12px; }.treasure-tabs { margin-bottom:10px; }.treasure-file-row { padding:12px 0; } }
 </style>
