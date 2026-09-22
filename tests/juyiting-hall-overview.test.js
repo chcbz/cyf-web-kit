@@ -167,4 +167,37 @@ describe('JYT-UX-W05 independent Hall read model', () => {
       } finally { model.dispose() }
     }
   })
+
+  it('preserves compatible private mark and formal review evidence without conflating action types', async () => {
+    const response = overview()
+    const personalMark = { revision: 0, archived: false, viewedResultRef: null }
+    const review = { code: 'FORMAL_DELIVERY_SUBMITTED', deliveryId: 'delivery-1', workItemId: 'work-1', deliveryVersion: '0', taskVersion: '9007199254740993' }
+    response.sections.recent.partitions.private.items[0].personalMark = personalMark
+    response.sections.recent.partitions.task.items[0].review = review
+    const { model } = harness(async () => response)
+    try {
+      await model.refresh()
+      expect(model.sections.value.recent.partitions.private.items[0].personalMark).to.deep.equal(personalMark)
+      expect(model.sections.value.recent.partitions.task.items[0].review).to.deep.equal(review)
+      expect(model.sections.value.recent.partitions.task.items[0].nextAction).to.equal('OPEN_TASK')
+    } finally { model.dispose() }
+  })
+
+  it('loads archive by independent applicable source and retains an explicit draft archive error instead of empty success', async () => {
+    const { model, calls } = harness(async options => {
+      if (options.url === '/hall/overview') return overview()
+      return page(options.params.kind, options.params.kind === 'draft'
+        ? part([], { status: 'error', errorCode: 'HALL_DRAFT_ARCHIVE_UNAVAILABLE' })
+        : part([{ ...item('PRIVATE_CASE', 'archived-case'), personalMark: { revision: 2, archived: true, viewedResultRef: null } }]), 'archive')
+    })
+    try {
+      await model.refresh()
+      await model.loadPartition('archive', 'private')
+      expect(calls[1].params).to.deep.equal({ kind: 'private', view: 'archive', q: '' })
+      expect(model.sections.value.archive.partitions.private.items[0].personalMark.archived).to.equal(true)
+      expect(await model.loadPartition('archive', 'draft')).to.equal(false)
+      expect(model.sections.value.archive.partitions.draft).to.include({ status: 'error', errorCode: 'HALL_DRAFT_ARCHIVE_UNAVAILABLE', count: null })
+    } finally { model.dispose() }
+  })
+
 })

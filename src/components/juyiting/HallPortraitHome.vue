@@ -1,9 +1,9 @@
 <template>
-  <main class="hall-portrait-home" aria-label="聚义厅掌上首页">
+  <main class="hall-portrait-home" :class="{ 'is-overview-home': homeMode === 'overview', 'is-compact-overview': compact && homeMode === 'overview' }" aria-label="聚义厅掌上首页">
     <header class="portrait-header">
       <div>
         <p class="portrait-eyebrow">聚义厅 · 掌上调度</p>
-        <h1>厅中动静</h1>
+        <h1>{{ homeMode === 'overview' ? '办事概览' : '厅中动静' }}</h1>
       </div>
       <div class="portrait-header-actions">
         <button
@@ -32,6 +32,9 @@
     </section>
 
     <section
+      v-show="homeMode === 'map'"
+      :inert="homeMode !== 'map' ? '' : null"
+      :aria-hidden="homeMode !== 'map' ? 'true' : null"
       data-tour="portrait-preview"
       class="portrait-scene"
       :class="{ 'has-live-preview': livePreviewEnabled }"
@@ -89,7 +92,33 @@
       </template>
     </section>
 
-    <div class="portrait-below-map-scroll" aria-label="地图以下操作区">
+    <div class="portrait-below-map-scroll" :aria-label="homeMode === 'overview' ? '办事操作区' : '地图以下操作区'">
+      <div class="portrait-work-summary">
+        <slot name="overview">
+          <section data-tour="portrait-todos" class="portrait-section portrait-todos" aria-labelledby="portrait-todos-title">
+            <div class="section-heading">
+              <h2 id="portrait-todos-title">待办榜文</h2>
+              <button type="button" @click="emit('quick-action', 'tasks')">查看悬赏榜</button>
+            </div>
+            <div class="portrait-todo-list" aria-label="待办榜文列表">
+              <button
+                v-for="task in todoTasks"
+                :key="task.id"
+                class="portrait-todo"
+                type="button"
+                @click="openTask(task)"
+              >
+                <span :class="taskStateClass(task.status)">{{ taskStatusText(task.status) }}</span>
+                <strong>{{ task.title || '未命名榜文' }}</strong>
+                <small>{{ task.requiredAbilities?.length ? task.requiredAbilities.join(' / ') : '待议定人手' }}</small>
+              </button>
+              <p v-if="!todoTasks.length" class="portrait-empty">眼下无待办榜文，可先点验厅中人手。</p>
+            </div>
+          </section>
+
+        </slot>
+      </div>
+
       <section class="portrait-section" aria-labelledby="portrait-shortcuts-title">
         <div class="section-heading">
           <h2 id="portrait-shortcuts-title">常用入口</h2>
@@ -114,29 +143,7 @@
         </div>
       </section>
 
-      <slot name="overview">
-        <section data-tour="portrait-todos" class="portrait-section portrait-todos" aria-labelledby="portrait-todos-title">
-          <div class="section-heading">
-            <h2 id="portrait-todos-title">待办榜文</h2>
-            <button type="button" @click="emit('quick-action', 'tasks')">查看悬赏榜</button>
-          </div>
-          <div class="portrait-todo-list" aria-label="待办榜文列表">
-            <button
-              v-for="task in todoTasks"
-              :key="task.id"
-              class="portrait-todo"
-              type="button"
-              @click="openTask(task)"
-            >
-              <span :class="taskStateClass(task.status)">{{ taskStatusText(task.status) }}</span>
-              <strong>{{ task.title || '未命名榜文' }}</strong>
-              <small>{{ task.requiredAbilities?.length ? task.requiredAbilities.join(' / ') : '待议定人手' }}</small>
-            </button>
-            <p v-if="!todoTasks.length" class="portrait-empty">眼下无待办榜文，可先点验厅中人手。</p>
-          </div>
-        </section>
 
-      </slot>
 
       <section data-tour="portrait-context" class="portrait-context" aria-label="当前上下文">
         <div>
@@ -222,6 +229,7 @@ const props = defineProps({
   agents: { type: Array, default: () => [] },
   canStartAgentConversation: { type: Function, required: true },
   homeMode: { type: String, default: 'map' },
+  compact: { type: Boolean, default: false },
   livePreviewEnabled: Boolean,
   livePreviewError: { type: String, default: '' },
   livePreviewMapHeight: { type: Number, default: 0 },
@@ -791,5 +799,20 @@ button:disabled {
   .hall-portrait-home { padding-right: 12px; padding-left: 12px; }
   .portrait-context { gap: 8px; }
   .portrait-context strong { max-width: 82px; }
+}
+.portrait-work-summary :deep(.hall-overview) {
+  border-radius: 10px;
+  background: #fff8e8;
+}
+.hall-portrait-home.is-compact-overview {
+  gap: 8px;
+  padding: max(8px, env(safe-area-inset-top)) 12px max(8px, env(safe-area-inset-bottom));
+}
+.is-compact-overview .portrait-eyebrow,
+.is-compact-overview .portrait-home-mode-hint {
+  display: none;
+}
+.is-compact-overview .portrait-header h1 {
+  font-size: 22px;
 }
 </style>

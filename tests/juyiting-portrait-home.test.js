@@ -59,7 +59,7 @@ const quickActions = [
 describe('HallPortraitHome', () => {
   it('keeps first portrait entry outside the melon stage mount path', () => {
     expect(existsSync(portraitHomeUrl)).to.equal(true)
-    expect(hallSource).to.include(`v-show="!experienceReady || experienceMode === 'portrait-command' || isOverviewHome"`)
+    expect(hallSource).to.include('v-show="!experienceReady || experienceMode === \'portrait-command\' || isOverviewHome"')
     expect(hallSource).to.include('v-if="stageMounted"')
     expect(hallSource).to.include('<Teleport :to="stageTarget" :disabled="!stageTarget">')
     expect(hallSource).to.include('const stageHasMounted = ref(false)')
@@ -137,7 +137,7 @@ describe('HallPortraitHome', () => {
     const mapEnd = portraitHomeSource.indexOf('</section>', portraitHomeSource.indexOf('class="portrait-scene"'))
     const belowMapStart = portraitHomeSource.indexOf('class="portrait-below-map-scroll"')
 
-    expect(portraitHomeSource).to.include('class="portrait-below-map-scroll" aria-label="地图以下操作区"')
+    expect(portraitHomeSource).to.include('class="portrait-below-map-scroll" :aria-label="homeMode === \'overview\' ? \'办事操作区\' : \'地图以下操作区\'"')
     expect(belowMapStart).to.be.greaterThan(mapEnd)
     expect(homeStyles).to.include('display: flex')
     expect(homeStyles).to.include('flex-direction: column')
@@ -220,7 +220,6 @@ describe('HallPortraitHome', () => {
     expect(portraitHomeSource).to.include('defineExpose({ livePreviewTarget })')
   })
 
-
   it('renders every eligible current-user roster agent in non-inert preview controls and emits the exact clicked agent', async () => {
     const selected = { agentId: 'linchong', name: '林冲', status: 'online', boundToMe: true, canOperate: true }
     const other = { agentId: 'wuyong', name: '吴用', status: 'busy', boundToMe: true, canOperate: true }
@@ -275,7 +274,6 @@ describe('HallPortraitHome', () => {
     wrapper.unmount()
   })
 
-
   it('keeps the keyed shared dialog outside both orientation shells with full-session shielding', () => {
     expect(hallSource).to.match(/<HallPortraitHome[\s\S]*?<Teleport :to="stageTarget"[\s\S]*?<HallStage[\s\S]*?<transition\s+name="panel"/)
     expect(hallSource).to.include('v-if="activePanel" :key="panelSessionGeneration"')
@@ -286,7 +284,6 @@ describe('HallPortraitHome', () => {
   })
 })
 
-
 it('reserves a stable live preview target without importing the engine', () => {
   expect(portraitHomeSource).to.include('HallLiveMapPreview')
   expect(portraitHomeSource).to.include('livePreviewTarget')
@@ -295,7 +292,6 @@ it('reserves a stable live preview target without importing the engine', () => {
   expect(portraitHomeSource).to.include('.scene-empty.preview-scene-empty')
   expect(portraitHomeSource).not.to.include('juyitingGame')
 })
-
 
 it('compiles the stable preview target CSS and mounts a concrete target node', () => {
   const { descriptor } = parse(portraitHomeSource, { filename: portraitHomeUrl.pathname })
@@ -346,6 +342,41 @@ describe('W05 production overview slot', () => {
       expect(wrapper.find('.independent-overview').text()).to.equal('独立最近事项')
       expect(wrapper.find('[data-portrait-action="messages"]').exists()).to.equal(true)
       expect(wrapper.find('.portrait-scene').exists()).to.equal(true)
+    } finally { wrapper.unmount() }
+  })
+})
+
+describe('A03 actual overview source priority', () => {
+  it('hides but never unmounts the real-preview target and puts the work summary before secondary shortcuts', async () => {
+    let mounts = 0
+    let unmounts = 0
+    const Preview = Vue.defineComponent({ setup: (_props, { slots }) => {
+      Vue.onMounted(() => { mounts += 1 })
+      Vue.onUnmounted(() => { unmounts += 1 })
+      return () => Vue.h('section', { class: 'retained-preview' }, slots.default?.())
+    } })
+    const wrapper = mount(loadPortraitHome(Preview), {
+      props: baseProps({ livePreviewEnabled: true, homeMode: 'map', compact: true }),
+      slots: { overview: '<section class="overview-priority"><button>提出需求</button><h3>最近事项</h3><h3>需要处理</h3></section>' }
+    })
+    try {
+      const target = wrapper.find('.portrait-live-preview-target').element
+      const preview = wrapper.findComponent(Preview).vm
+      await wrapper.setProps({ homeMode: 'overview' })
+      expect(wrapper.classes()).to.include('is-compact-overview')
+      expect(wrapper.find('.portrait-scene').element.style.display).to.equal('none')
+      expect(wrapper.find('.portrait-scene').attributes('inert')).to.equal('')
+      expect(wrapper.find('.portrait-below-map-scroll').element.firstElementChild.className).to.equal('portrait-work-summary')
+      expect(wrapper.find('.portrait-work-summary').text()).to.include('提出需求').and.include('最近事项').and.include('需要处理')
+      expect(wrapper.findComponent(Preview).vm).to.equal(preview)
+      expect(wrapper.find('.portrait-live-preview-target').element).to.equal(target)
+      expect(mounts).to.equal(1)
+      expect(unmounts).to.equal(0)
+      await wrapper.find('.portrait-home-mode').trigger('click')
+      expect(wrapper.emitted('set-home-mode').at(-1)).to.deep.equal(['map'])
+      await wrapper.setProps({ homeMode: 'map' })
+      expect(wrapper.find('.portrait-scene').element.style.display).not.to.equal('none')
+      expect(wrapper.find('.portrait-live-preview-target').element).to.equal(target)
     } finally { wrapper.unmount() }
   })
 })

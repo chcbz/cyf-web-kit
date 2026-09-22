@@ -1,6 +1,7 @@
 import { computed, getCurrentInstance, onBeforeUnmount, ref, unref, watch } from 'vue'
 import { agentApi as defaultAgentApi } from '../useHttp.js'
 import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
+import { validPersonalWorkspaceExecutionCapabilities } from '../usePersonalWorkspaceExecution.js'
 
 const MAX_ID_LENGTH = 100
 const MAX_TEXT_LENGTH = 16000
@@ -12,7 +13,18 @@ const BROWSER_KEY = `${RECOVERY_PREFIX}.browser`
 const ID = value => typeof value === 'string' && value.length > 0 && value.length <= MAX_ID_LENGTH &&
   value === value.trim() && ![...value].some(char => char.codePointAt(0) < 32)
 const TEXT = value => typeof value === 'string' && value.length <= MAX_TEXT_LENGTH
-const OPTIONAL_TEXT = value => value === null || TEXT(value)
+const ISO_CONTROL = code => code < 32 || (code >= 127 && code <= 159)
+const FIELD_TEXT = (value, max) => value === null || (typeof value === 'string' && [...value].length <= max &&
+  ![...value].some(char => ISO_CONTROL(char.codePointAt(0)) && !['\n', '\r', '\t'].includes(char)))
+const OPTIONAL_EXACT = (value, max) => value === null || (typeof value === 'string' && value.length > 0 &&
+  value === value.trim() && [...value].length <= max && ![...value].some(char => ISO_CONTROL(char.codePointAt(0))))
+export const hallDraftFieldError = fields => {
+  if (!FIELD_TEXT(fields?.title, 200)) return '交办名目最多200字，且不能包含控制字符；原输入已保留。'
+  if (!FIELD_TEXT(fields?.instruction, 20000)) return '具体交代最多20000字，且不能包含控制字符；原输入已保留。'
+  if (!OPTIONAL_EXACT(fields?.targetAgentId, 100)) return '请明确选择可用的受托好汉；原选择已保留。'
+  if (!OPTIONAL_EXACT(fields?.outputMime, 160)) return '期望格式标识最多160字，且须完整匹配支持的格式；原值已保留。'
+  return ''
+}
 const VERSION = value => Number.isSafeInteger(value) && value >= 1 && value <= 2147483647
 const REVISION = value => Number.isSafeInteger(value) && value >= 1
 const valueOf = value => typeof value === 'function' ? value() : unref(value)
@@ -30,11 +42,11 @@ const validInputs = inputs => Array.isArray(inputs) && inputs.length <= MAX_INPU
   new Set(inputs.map(input => `${input.fileId}\u0000${input.version}`)).size === inputs.length
 const validEditable = fields => fields && typeof fields === 'object' && !Array.isArray(fields) &&
   ['title', 'instruction', 'targetAgentId', 'outputMime', 'inputs'].every(key => Object.hasOwn(fields, key)) &&
-  OPTIONAL_TEXT(fields.title) && OPTIONAL_TEXT(fields.instruction) && OPTIONAL_TEXT(fields.targetAgentId) && OPTIONAL_TEXT(fields.outputMime) && validInputs(fields.inputs)
+  !hallDraftFieldError(fields) && validInputs(fields.inputs)
 const validSummary = value => value && typeof value === 'object' && ID(value.draftId) && REVISION(value.revision) &&
   value.state === 'EDITING' && Number.isSafeInteger(value.savedAt) && value.savedAt >= 0 &&
-  ['CREATE', 'REVISION', 'TASK_CREATE', 'TASK_ACTION'].includes(value.kind) && OPTIONAL_TEXT(value.title) &&
-  OPTIONAL_TEXT(value.targetAgentId) && OPTIONAL_TEXT(value.outputMime) && value.sourceSummary && typeof value.sourceSummary === 'object'
+  ['CREATE', 'REVISION', 'TASK_CREATE', 'TASK_ACTION'].includes(value.kind) && FIELD_TEXT(value.title, 200) &&
+  OPTIONAL_EXACT(value.targetAgentId, 100) && OPTIONAL_EXACT(value.outputMime, 160) && value.sourceSummary && typeof value.sourceSummary === 'object'
 const validDraft = value => value && typeof value === 'object' && ID(value.draftId) && REVISION(value.revision) &&
   ['EDITING', 'SUBMITTED'].includes(value.state) && Number.isSafeInteger(value.savedAt) && value.savedAt >= 0 &&
   ['CREATE', 'REVISION', 'TASK_CREATE', 'TASK_ACTION'].includes(value.kind) && validEditable(value.editableFields) &&
@@ -75,8 +87,8 @@ const validCase = value => value && typeof value === 'object' && ID(value.caseId
 const normalizedEditable = fields => ({
   title: String(fields?.title || ''),
   instruction: String(fields?.instruction || ''),
-  targetAgentId: String(fields?.targetAgentId || ''),
-  outputMime: String(fields?.outputMime || ''),
+  targetAgentId: fields?.targetAgentId === '' || fields?.targetAgentId == null ? null : fields.targetAgentId,
+  outputMime: fields?.outputMime === '' || fields?.outputMime == null ? null : fields.outputMime,
   inputs: Array.isArray(fields?.inputs) ? fields.inputs.map(input => ({ fileId: input.fileId, version: input.version })) : []
 })
 const errorMessage = error => {
@@ -141,6 +153,10 @@ export function createHallSubmissionRecoveryStore ({ storage = globalThis.localS
 
 /** DRAFT-v1 plus frozen submit/reconciliation contracts; unknown POSTs are never replayed. */
 export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, identityScope = '', storage = globalThis.localStorage || globalThis.window?.localStorage, keyFactory = randomKey } = {}) {
+  const capabilityState = ref('idle')
+  const capabilityError = ref('')
+  const allowedMimeTypes = ref([])
+  const generationEnabled = ref(false)
   const draft = ref(null)
   const state = ref('idle')
   const error = ref('')
@@ -167,6 +183,10 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
     generation += 1
     for (const controller of controllers) controller.abort(abortError('Hall draft identity changed'))
     controllers.clear()
+    capabilityState.value = 'idle'
+    capabilityError.value = ''
+    allowedMimeTypes.value = []
+    generationEnabled.value = false
     draft.value = null
     summaries.value = []
     nextCursor.value = null
@@ -203,10 +223,32 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
     reloadRequired.value = false
     return value
   }
+  const loadCapabilities = async () => {
+    if (!currentScope.value || capabilityState.value === 'loading') return null
+    const snapshot = snapshotNow()
+    capabilityState.value = 'loading'
+    capabilityError.value = ''
+    allowedMimeTypes.value = []
+    generationEnabled.value = false
+    try {
+      const value = await request({ url: '/personal-workspace/executions/capabilities', method: 'GET' }, snapshot)
+      if (!validPersonalWorkspaceExecutionCapabilities(value)) throw new Error('执行格式返回无效')
+      allowedMimeTypes.value = [...value.allowedMimeTypes]
+      generationEnabled.value = value.generationEnabled
+      capabilityState.value = value.allowedMimeTypes.length ? 'ready' : 'empty'
+      return value
+    } catch (cause) {
+      if (cause?.name !== 'AbortError' && snapshot.generation === generation) {
+        capabilityState.value = 'error'
+        capabilityError.value = '暂未读到可用交付格式，草稿和原格式仍保留；请重新读取后再交办。'
+      }
+      return null
+    }
+  }
   const create = async ({ kind = 'CREATE', originRef = 'juyiting', sourceRef = null, caseId = null, taskId = null, conversationId = null, sourceOutputRef = null, ...editable } = {}) => {
     const fields = normalizedEditable(editable)
     if (!validEditable(fields) || !['CREATE', 'REVISION', 'TASK_CREATE', 'TASK_ACTION'].includes(kind) || !TEXT(originRef)) {
-      state.value = 'error'; error.value = '草稿内容或固定版本无效，未发起保存。'; return null
+      state.value = 'error'; error.value = hallDraftFieldError(fields) || '草稿内容或固定版本无效，未发起保存。'; return null
     }
     const snapshot = snapshotNow()
     state.value = 'creating'; error.value = ''
@@ -220,7 +262,7 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
   const save = async editable => {
     const currentDraft = draft.value
     const fields = normalizedEditable(editable)
-    if (!editableDraft(currentDraft) || !validEditable(fields)) { state.value = 'error'; error.value = '请先保存可编辑的草稿，并检查固定版本。'; return null }
+    if (!editableDraft(currentDraft) || !validEditable(fields)) { state.value = 'error'; error.value = hallDraftFieldError(fields) || '请先保存可编辑的草稿，并检查固定版本。'; return null }
     const snapshot = { ...snapshotNow(), draftId: currentDraft.draftId, revision: currentDraft.revision }
     state.value = 'saving'; error.value = ''
     try {
@@ -456,5 +498,5 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
   })
   const dispose = () => { if (!disposed) { disposed = true; unregisterIdentityCleanup(); reset() } }
   if (getCurrentInstance()) onBeforeUnmount(dispose)
-  return { draft, summaries, nextCursor, state, error, reloadRequired, receipt, submissionState, caseView, executionView, submissionRecovery, unresolvedIntent, executionResults, resultsState, resultsError, create, save, list, loadMore, load, discard, submit, reconcileSubmission, loadFormalTask, loadCase, loadExecution, loadResults, reset, dispose }
+  return { capabilityState, capabilityError, allowedMimeTypes, generationEnabled, loadCapabilities, draft, summaries, nextCursor, state, error, reloadRequired, receipt, submissionState, caseView, executionView, submissionRecovery, unresolvedIntent, executionResults, resultsState, resultsError, create, save, list, loadMore, load, discard, submit, reconcileSubmission, loadFormalTask, loadCase, loadExecution, loadResults, reset, dispose }
 }

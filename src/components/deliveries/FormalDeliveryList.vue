@@ -7,9 +7,21 @@
     <p v-if="deliveries.state.value === 'loading'" class="formal-delivery-state" role="status">正式交付读取中…</p>
     <p v-else-if="deliveries.state.value === 'empty'" class="formal-delivery-state">暂无正式交付批次。</p>
     <p v-else-if="deliveries.state.value === 'forbidden'" class="formal-delivery-state is-error">无访问权限。</p>
-    <p v-else-if="deliveries.message.value" class="formal-delivery-state" :class="{ 'is-error': ['conflict', 'unknown', 'error'].includes(deliveries.state.value) }" role="status">{{ deliveries.message.value }} <button v-if="deliveries.refreshRequired.value || deliveries.state.value === 'conflict' || deliveries.state.value === 'unknown'" type="button" @click="deliveries.refresh">刷新确认</button></p>
+    <p
+      v-else-if="deliveries.message.value"
+      class="formal-delivery-state"
+      :class="{ 'is-error': ['conflict', 'unknown', 'error'].includes(deliveries.state.value) }"
+      role="status"
+    >{{ deliveries.message.value }} <button v-if="deliveries.refreshRequired.value || deliveries.state.value === 'conflict' || deliveries.state.value === 'unknown'" type="button" @click="deliveries.refresh">刷新确认</button></p>
 
-    <article v-for="delivery in deliveries.items.value" :key="delivery.deliveryId" class="formal-delivery-card">
+    <p v-if="focusDeliveryId && !deliveries.loading.value && !deliveries.items.value.some(item => item.deliveryId === focusDeliveryId)" role="status">提示中的交付尚未在当前列表核对到，请刷新正式交付；不会用消息摘要代替验收依据。</p>
+    <article
+      v-for="delivery in deliveries.items.value"
+      :key="delivery.deliveryId"
+      class="formal-delivery-card"
+      :class="{ 'is-requested-delivery': delivery.deliveryId === focusDeliveryId }"
+    >
+      <strong v-if="delivery.deliveryId === focusDeliveryId">本次待核对的交付</strong>
       <div class="formal-delivery-head">
         <strong>{{ stateText(delivery.state) }}</strong>
         <span>批次 {{ delivery.deliveryId }} · r{{ delivery.revision }}</span>
@@ -36,16 +48,31 @@
       <form v-if="delivery.state === 'submitted'" class="formal-decision" @submit.prevent="submitDecision(delivery, $event)">
         <h4>验收此正式交付</h4>
         <p>验收通过不会记录说明；要求修改时必须填写说明。</p>
-        <label>要求修改说明（要求修改时必填）<textarea v-model="reviewReasons[delivery.deliveryId]" maxlength="4000" :disabled="isBusy(delivery) || deliveries.refreshRequired.value" /></label>
+        <label>要求修改说明（要求修改时必填）<textarea v-model="reviewReasons[delivery.deliveryId]" maxlength="4000" :disabled="isBusy(delivery) || deliveries.refreshRequired.value"></textarea></label>
         <div>
-          <button type="submit" name="decision" value="accepted" :disabled="isBusy(delivery) || deliveries.refreshRequired.value">{{ isBusy(delivery) ? '提交中…' : '验收通过' }}</button>
-          <button type="submit" name="decision" value="changes_requested" :disabled="isBusy(delivery) || deliveries.refreshRequired.value">要求修改</button>
+          <button
+            type="submit"
+            name="decision"
+            value="accepted"
+            :disabled="isBusy(delivery) || deliveries.refreshRequired.value"
+          >{{ isBusy(delivery) ? '提交中…' : '验收通过' }}</button>
+          <button
+            type="submit"
+            name="decision"
+            value="changes_requested"
+            :disabled="isBusy(delivery) || deliveries.refreshRequired.value"
+          >要求修改</button>
         </div>
       </form>
       <form v-else-if="delivery.state === 'changes_requested' && reworkSource(delivery)" class="formal-rework" @submit.prevent="submitRework(delivery)">
         <h4>按指定版本返工</h4>
         <p>源成果 {{ reworkSource(delivery).outputId }} / 工作空间文件 {{ reworkSource(delivery).fileRef.fileId }} · v{{ reworkSource(delivery).fileRef.fileVersion }}。系统只发送这一固定版本。</p>
-        <label>返工说明<textarea v-model="reworkInstructions[delivery.deliveryId]" maxlength="4000" :disabled="isReworkBusy(delivery) || deliveries.refreshRequired.value" placeholder="例如：按验收意见缩短第 3 页，并增加总结页。" /></label>
+        <label>返工说明<textarea
+          v-model="reworkInstructions[delivery.deliveryId]"
+          maxlength="4000"
+          :disabled="isReworkBusy(delivery) || deliveries.refreshRequired.value"
+          placeholder="例如：按验收意见缩短第 3 页，并增加总结页。"
+        ></textarea></label>
         <p>交付格式：{{ reworkSource(delivery).mimeType }}</p>
         <button type="submit" :disabled="isReworkBusy(delivery) || deliveries.refreshRequired.value || !reworkInstructions[delivery.deliveryId]?.trim()">{{ isReworkBusy(delivery) ? '创建返工中…' : '明确交给 Agent 返工' }}</button>
       </form>
@@ -62,6 +89,7 @@ import { computed, onBeforeUnmount, reactive } from 'vue'
 import { useFormalDeliveries } from '../../composables/useFormalDeliveries.js'
 
 const props = defineProps({
+  focusDeliveryId: { type: String, default: '' },
   taskId: { type: [String, Number], default: '' },
   identityFingerprint: { type: [String, Object, Function], default: '' },
   adapter: { type: Object, default: undefined },
@@ -100,5 +128,5 @@ onBeforeUnmount(() => deliveries.dispose())
 </script>
 
 <style scoped>
-.formal-delivery-list{display:grid;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(117,67,11,.22)}.formal-delivery-list header{display:flex;justify-content:space-between;align-items:center;gap:8px}.formal-delivery-list button{border:1px solid #315d4e;border-radius:5px;padding:5px 9px;color:#fff;background:#315d4e}.formal-delivery-list button[disabled]{opacity:.55}.formal-delivery-state{margin:0;padding:8px;border-radius:6px;background:#f7edcf;color:#765d2d}.formal-delivery-state.is-error{background:#fae7e1;color:#7a3026}.formal-delivery-card{display:grid;gap:6px;padding:10px;border:1px solid #ded3bf;border-radius:8px;background:#fffdf7}.formal-delivery-card p,.formal-delivery-card h4{margin:0}.formal-delivery-head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}.formal-delivery-head span,.formal-delivery-card>p{font-size:12px;color:#6c6258;overflow-wrap:anywhere}.formal-delivery-summary{font-size:14px!important;color:#3d332a!important}.formal-artifacts,.formal-review,.formal-decision,.formal-rework{display:grid;gap:6px;padding-top:8px;border-top:1px solid #eee3d0}.formal-artifacts ul{display:grid;gap:5px;margin:0;padding-left:18px}.formal-artifacts li{display:grid;gap:2px;font-size:12px;overflow-wrap:anywhere}.formal-artifacts li span{color:#6c6258}.formal-review{font-size:13px}.formal-decision label,.formal-rework label{display:grid;gap:4px;font-size:13px}.formal-decision textarea,.formal-rework textarea{min-height:58px;padding:6px;border:1px solid #b8aa94;border-radius:4px;resize:vertical}.formal-decision>div{display:flex;gap:8px;flex-wrap:wrap}.formal-decision button:last-child{background:#7c1f1b;border-color:#7c1f1b}.formal-rework-hint{font-size:13px;color:#765d2d}
+.is-requested-delivery{outline:2px solid #7c1f1b;outline-offset:2px}.formal-delivery-list{display:grid;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(117,67,11,.22)}.formal-delivery-list header{display:flex;justify-content:space-between;align-items:center;gap:8px}.formal-delivery-list button{border:1px solid #315d4e;border-radius:5px;padding:5px 9px;color:#fff;background:#315d4e}.formal-delivery-list button[disabled]{opacity:.55}.formal-delivery-state{margin:0;padding:8px;border-radius:6px;background:#f7edcf;color:#765d2d}.formal-delivery-state.is-error{background:#fae7e1;color:#7a3026}.formal-delivery-card{display:grid;gap:6px;padding:10px;border:1px solid #ded3bf;border-radius:8px;background:#fffdf7}.formal-delivery-card p,.formal-delivery-card h4{margin:0}.formal-delivery-head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}.formal-delivery-head span,.formal-delivery-card>p{font-size:12px;color:#6c6258;overflow-wrap:anywhere}.formal-delivery-summary{font-size:14px!important;color:#3d332a!important}.formal-artifacts,.formal-review,.formal-decision,.formal-rework{display:grid;gap:6px;padding-top:8px;border-top:1px solid #eee3d0}.formal-artifacts ul{display:grid;gap:5px;margin:0;padding-left:18px}.formal-artifacts li{display:grid;gap:2px;font-size:12px;overflow-wrap:anywhere}.formal-artifacts li span{color:#6c6258}.formal-review{font-size:13px}.formal-decision label,.formal-rework label{display:grid;gap:4px;font-size:13px}.formal-decision textarea,.formal-rework textarea{min-height:58px;padding:6px;border:1px solid #b8aa94;border-radius:4px;resize:vertical}.formal-decision>div{display:flex;gap:8px;flex-wrap:wrap}.formal-decision button:last-child{background:#7c1f1b;border-color:#7c1f1b}.formal-rework-hint{font-size:13px;color:#765d2d}
 </style>

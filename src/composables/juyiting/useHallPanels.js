@@ -1,8 +1,10 @@
 import { computed, unref } from 'vue'
 
-export const classifyPanelLayout = ({ isMobileCoarse }) => {
-  if (!isMobileCoarse) return 'center-modal'
-  return 'full-window'
+// Reuse the existing workspace compact-height breakpoint. A03 measured 390px
+// with a fine pointer: pointer type must not force the 164px + 48px modal gutters.
+export const classifyPanelLayout = ({ isMobileCoarse, viewportHeight = 0 }) => {
+  const compactHeight = viewportHeight > 0 && viewportHeight <= 500
+  return isMobileCoarse || compactHeight ? 'full-window' : 'center-modal'
 }
 
 const RETURN_ACTIONS = new Set(['agents', 'tasks', 'discussion', 'catalog', 'library'])
@@ -127,9 +129,10 @@ export const trapPanelFocus = (event, panel) => {
   return false
 }
 
-export const useHallPanels = ({ experienceMode, isMobileCoarse }) => ({
+export const useHallPanels = ({ experienceMode, isMobileCoarse, viewportHeight }) => ({
   panelLayout: computed(() => classifyPanelLayout({
     experienceMode: unref(experienceMode),
-    isMobileCoarse: unref(isMobileCoarse)
+    isMobileCoarse: unref(isMobileCoarse),
+    viewportHeight: unref(viewportHeight)
   }))
 })

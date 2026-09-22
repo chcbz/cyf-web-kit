@@ -4,6 +4,7 @@
       ref="portraitHomeRef"
       v-show="!experienceReady || experienceMode === 'portrait-command' || isOverviewHome"
       :home-mode="homeMode"
+      :compact="isLowHeightPanel"
       :live-preview-enabled="true"
       :account-avatar="accountAvatar"
       :account-display-name="accountDisplayName"
@@ -45,9 +46,11 @@
     >
       <template #overview>
         <HallOverview
-          :enabled="stageMounted && Boolean(hallIdentityScope)"
+          :refresh-key="hallReadRevision"
+          :enabled="Boolean(hallIdentityScope)"
           :identity-scope="hallIdentityScope"
           :identity-epoch="apiStore.authorizationGeneration"
+          @start-draft="openPrivateDraft()"
           @open-item="openOverviewItem"
           @open-task="openOverviewTask"
         />
@@ -144,7 +147,7 @@
     />
 
     <transition name="panel" @after-leave="handlePanelAfterLeave">
-      <div v-if="activePanel" :key="panelSessionGeneration" class="panel-overlay" :class="{ 'is-chat-overlay': renderedPanel === 'chat', 'is-compact-chat-overlay': renderedPanel === 'chat' && isCompactChat }" :data-panel-generation="panelSessionGeneration" @pointerdown.self="closePanel">
+      <div v-if="activePanel" :key="panelSessionGeneration" class="panel-overlay" :class="{ 'is-full-window': panelLayout === 'full-window', 'is-low-height': isLowHeightPanel, 'is-chat-overlay': renderedPanel === 'chat', 'is-compact-chat-overlay': renderedPanel === 'chat' && isCompactChat }" :data-panel-generation="panelSessionGeneration" @pointerdown.self="closePanel">
         <section
           ref="panelRef"
           class="floating-panel"
@@ -224,16 +227,23 @@
             @open-catalog="openPanel('catalog')"
           />
 
+          <section v-if="leaveState !== 'idle'" class="panel-save-warning" role="alert">
+            <p>{{ leaveState === 'saving' ? '正在保存草稿，请稍候…' : '草稿尚未保存，仍留在原处。请重试、继续编辑，或明确放弃未保存的修改。' }}</p>
+            <button type="button" :disabled="leaveState === 'saving'" @click="retryPanelLeave">重试保存并继续</button>
+            <button type="button" @click="cancelPanelLeave">留在当前页</button>
+            <button type="button" :disabled="leaveState === 'saving'" @click="discardPanelChangesAndLeave">放弃未保存修改并继续</button>
+          </section>
+
           <BountyPanel
-            ref="bountyPanelRef"
-            embedded-hall
-            :detail-allowed="canOpenPanelDetail"
             v-if="panelFrames.includes('tasks')"
-            v-show="renderedPanel === 'tasks'"
-            :inert="renderedPanel !== 'tasks' ? '' : null"
-            :aria-hidden="renderedPanel !== 'tasks' ? 'true' : null"
+            v-show="renderedPanel === 'tasks' && !formalTaskRef"
+            ref="bountyPanelRef"
             v-model:task-ability-filter="taskAbilityFilter"
             v-model:task-keyword="taskKeyword"
+            embedded-hall
+            :detail-allowed="canOpenPanelDetail"
+            :inert="renderedPanel !== 'tasks' || formalTaskRef ? '' : null"
+            :aria-hidden="renderedPanel !== 'tasks' || formalTaskRef ? 'true' : null"
             :ability-text="abilityText"
             :can-assign="canAssign"
             :funded-preview-enabled="economyPreviewEnabled"
@@ -243,9 +253,6 @@
             :funded-quote-preview="fundedQuotePreview"
             :funded-claim-state="fundedClaimState"
             :funded-create-recovery="fundedCreateRecovery"
-            @confirm-funded-quote="settleFundedQuote(true)"
-            @cancel-funded-quote="settleFundedQuote(false)"
-            @refresh-funded-claim="refreshFundedClaim"
             :format-time="formatTime"
             :portrait-name="portraitName"
             :portrait-style="portraitStyle"
@@ -265,11 +272,17 @@
             :error-message="tasksError"
             :counts-loading="taskCountsLoading"
             :counts-error-message="taskCountsError"
+            @mark-changed="hallReadRevision += 1"
+            @confirm-funded-quote="settleFundedQuote(true)"
+            @cancel-funded-quote="settleFundedQuote(false)"
+            @refresh-funded-claim="refreshFundedClaim"
             @auto-assign-task="autoAssignTask"
             @assign-task="assignTask"
             @archive-task="archiveTask"
             @brief-selected-task="briefSelectedTask"
             @create-task="createTask"
+            @start-private-draft="openPrivateDraft()"
+            @open-formal-results="openFormalResults"
             @start-formal-draft="openPanel('formalDraft', { restore: true })"
             @resume-funded-create="resumeFundedCreate"
             @cancel-funded-create-recovery="showToast('原资金榜请求仍会保留；请在准备好后明确恢复。')"
@@ -281,6 +294,14 @@
             @select-agent="selectAgent"
             @select-task="selectTask"
             @set-status-filter="setTaskStatusFilter"
+          />
+
+          <FormalDeliveryList
+            v-if="renderedPanel === 'tasks' && formalTaskRef && hallIdentityScope"
+            :key="formalTaskRef.id"
+            :task-id="formalTaskRef.id"
+            :identity-fingerprint="`${hallIdentityScope}:${apiStore.authorizationGeneration}`"
+            :focus-delivery-id="taskReviewRef?.taskId === formalTaskRef.id ? taskReviewRef.deliveryId : ''"
           />
 
           <template v-if="taskWorkspaceEnabled && renderedPanel === 'workspace' && taskWorkspaceSubject">
@@ -306,10 +327,11 @@
           <HallOverview
             v-if="panelFrames.includes('messages')"
             v-show="renderedPanel === 'messages'"
+            :refresh-key="hallReadRevision"
             :inert="renderedPanel !== 'messages' ? '' : null"
             :aria-hidden="renderedPanel !== 'messages' ? 'true' : null"
             messages-only
-            :enabled="stageMounted && Boolean(hallIdentityScope)"
+            :enabled="Boolean(hallIdentityScope)"
             :identity-scope="hallIdentityScope"
             :identity-epoch="apiStore.authorizationGeneration"
             @open-item="openOverviewItem"
@@ -320,19 +342,22 @@
             v-if="panelFrames.includes('item') && overviewItemRef"
             v-show="renderedPanel === 'item'"
             :key="`${overviewItemRef.sourceType}:${overviewItemRef.sourceId}`"
+            ref="itemDraftRef"
             :inert="renderedPanel !== 'item' ? '' : null"
             :aria-hidden="renderedPanel !== 'item' ? 'true' : null"
             :initial-ref="overviewItemRef"
-            @open-task="openOverviewTask"
             :agents="operableRosterAgents"
             :identity-scope="hallIdentityScope"
             :identity-epoch="apiStore.authorizationGeneration"
+            @open-task="openOverviewTask"
+            @changed="hallReadRevision += 1"
             @close="returnPanel() || closePanel()"
           />
 
           <HallDraftEditor
             v-if="panelFrames.includes('formalDraft')"
             v-show="renderedPanel === 'formalDraft'"
+            ref="formalDraftRef"
             :inert="renderedPanel !== 'formalDraft' ? '' : null"
             :aria-hidden="renderedPanel !== 'formalDraft' ? 'true' : null"
             initial-kind="TASK_CREATE"
@@ -342,14 +367,31 @@
             @close="returnPanel() || closePanel()"
           />
 
+          <HallDraftEditor
+            v-if="panelFrames.includes('draft')"
+            v-show="renderedPanel === 'draft'"
+            :key="privateDraftGeneration"
+            ref="privateDraftRef"
+            :inert="renderedPanel !== 'draft' ? '' : null"
+            :aria-hidden="renderedPanel !== 'draft' ? 'true' : null"
+            :initial-context="draftContext"
+            :agents="operableRosterAgents"
+            :identity-scope="hallIdentityScope"
+            :identity-epoch="apiStore.authorizationGeneration"
+            @changed="hallReadRevision += 1"
+            @close="returnPanel() || closePanel()"
+          />
+
           <PersonalWorkspace
             v-if="panelFrames.includes('treasure')"
             v-show="renderedPanel === 'treasure'"
+            ref="treasurePanelRef"
+            :compact="isLowHeightPanel"
             :inert="renderedPanel !== 'treasure' ? '' : null"
             :aria-hidden="renderedPanel !== 'treasure' ? 'true' : null"
-            ref="treasurePanelRef"
             :detail-allowed="canOpenPanelDetail"
             embedded
+            @start-draft="openPrivateDraft"
           />
 
           <PersonaCatalogPanel
@@ -501,20 +543,21 @@
           <LibraryPanel
             v-if="panelFrames.includes('library')"
             v-show="renderedPanel === 'library'"
-            :inert="renderedPanel !== 'library' ? '' : null"
-            :aria-hidden="renderedPanel !== 'library' ? 'true' : null"
+            ref="libraryPanelRef"
             v-model:keyword="libraryKeyword"
             v-model:source-type="librarySourceType"
+            :inert="renderedPanel !== 'library' ? '' : null"
+            :aria-hidden="renderedPanel !== 'library' ? 'true' : null"
             :error-message="libraryErrorMessage"
             :format-time="formatTime"
             :has-searched="libraryHasSearched"
             :loading="libraryLoading"
             :results="libraryResults"
-            ref="libraryPanelRef"
             :detail-allowed="canOpenPanelDetail"
             embedded
             :active="renderedPanel === 'library'"
             :virtual-landscape="isVirtualLandscape"
+            @start-draft="openPrivateDraft"
             @cite-library="citeLibraryItem"
             @search-library="searchLibrary"
           />
@@ -531,6 +574,7 @@
 <script setup>
 import HallOverview from '@/components/juyiting/HallOverview.vue'
 import HallDraftEditor from '@/components/juyiting/HallDraftEditor.vue'
+import FormalDeliveryList from '@/components/deliveries/FormalDeliveryList.vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { useGlobalStore } from '@/stores/global'
@@ -628,7 +672,7 @@ const {
 } = useTaskWorkspaceView(taskWorkspace)
 const personaSetupResult = ref(null)
 const toast = ref('')
-const panelWhitelist = new Set(['agents', 'catalog', 'tasks', 'workspace', 'treasure', 'chat', 'library', 'messages', 'item', 'formalDraft'])
+const panelWhitelist = new Set(['agents', 'catalog', 'tasks', 'workspace', 'treasure', 'chat', 'library', 'messages', 'item', 'formalDraft', 'draft'])
 const activePanel = ref('')
 const renderedPanel = ref('')
 const panelSessionGeneration = ref(0)
@@ -636,7 +680,55 @@ const panelClosingGeneration = ref(0)
 const panelReturnPanel = ref('')
 // Source panes stay mounted only for this navigation session; hidden panes are inert.
 const panelFrames = ref([])
+const privateDraftRef = ref(null)
+const itemDraftRef = ref(null)
+const formalDraftRef = ref(null)
+const draftContext = ref(null)
+const privateDraftGeneration = ref(0)
+const formalTaskRef = ref(null)
+const leaveState = ref('idle')
+let pendingPanelLeave = null
+let bypassPanelSave = false
+const activeDraftEditor = () => ({ draft: privateDraftRef.value, item: itemDraftRef.value, formalDraft: formalDraftRef.value })[renderedPanel.value]
+const cancelPanelLeave = () => {
+  pendingPanelLeave = null
+  leaveState.value = 'idle'
+}
+const retryPanelLeave = async () => {
+  if (!pendingPanelLeave || leaveState.value === 'saving') return false
+  const pending = pendingPanelLeave
+  const generation = panelSessionGeneration.value
+  leaveState.value = 'saving'
+  let saved = false
+  try { saved = await activeDraftEditor()?.saveBeforeLeave() } catch { /* Keep the original form and source on failure. */ }
+  if (pendingPanelLeave !== pending || generation !== panelSessionGeneration.value || panelDisposed) return false
+  if (!saved) { leaveState.value = 'error'; return false }
+  cancelPanelLeave()
+  bypassPanelSave = true
+  try { pending() } finally { bypassPanelSave = false }
+  return true
+}
+const discardPanelChangesAndLeave = () => {
+  if (!pendingPanelLeave || leaveState.value === 'saving') return false
+  const pending = pendingPanelLeave
+  activeDraftEditor()?.discardLocalChanges?.()
+  cancelPanelLeave()
+  bypassPanelSave = true
+  try { pending() } finally { bypassPanelSave = false }
+  return true
+}
+const guardPanelLeave = action => {
+  if (bypassPanelSave) return false
+  if (pendingPanelLeave) return true
+  const editor = activeDraftEditor()
+  if (!editor?.needsSave && !editor?.busy) return false
+  pendingPanelLeave = action
+  void retryPanelLeave()
+  return true
+}
 const overviewItemRef = ref(null)
+const taskReviewRef = ref(null)
+const hallReadRevision = ref(0)
 const bountyPanelRef = ref(null)
 const panelLocations = new Map()
 const treasurePanelRef = ref(null)
@@ -648,7 +740,7 @@ const panelDepth = computed(() => panelFrames.value.length
   + Number(panelFrames.value.includes('library') && Boolean(libraryPanelRef.value?.canGoBack)))
 const canOpenPanelDetail = computed(() => panelDepth.value < 3)
 const panelChildCanReturn = computed(() => {
-  if (renderedPanel.value === 'tasks') return Boolean(bountyPanelRef.value?.canGoBack)
+  if (renderedPanel.value === 'tasks') return Boolean(formalTaskRef.value || bountyPanelRef.value?.canGoBack)
   if (renderedPanel.value === 'treasure') return Boolean(treasurePanelRef.value?.canGoBack)
   if (renderedPanel.value === 'library') return Boolean(libraryPanelRef.value?.canGoBack)
   return false
@@ -684,7 +776,8 @@ const hallViewportStyle = computed(() => {
 })
 // This follows the live visual viewport, including a keyboard-only shrink.
 const isCompactChat = computed(() => resolvedHallViewportHeight.value > 0 && resolvedHallViewportHeight.value <= 320)
-const { panelLayout } = useHallPanels({ experienceMode, isMobileCoarse })
+const isLowHeightPanel = computed(() => resolvedHallViewportHeight.value > 0 && resolvedHallViewportHeight.value <= 500)
+const { panelLayout } = useHallPanels({ experienceMode, isMobileCoarse, viewportHeight: resolvedHallViewportHeight })
 const hallRootRef = ref(null)
 const portraitHomeRef = ref(null)
 const landscapeTargetRef = ref(null)
@@ -693,7 +786,7 @@ const portraitPreviewVisible = ref(false)
 const documentPreviewVisible = ref(typeof document === 'undefined' || !document.hidden)
 // Only the active full-page panel overlay is known to cover the preview.
 // Voice/loading interaction locks remain independent from draw visibility.
-const previewFullyCovered = computed(() => activePanel.value === 'chat' && renderedPanel.value === 'chat')
+const previewFullyCovered = computed(() => isOverviewHome.value || (activePanel.value === 'chat' && renderedPanel.value === 'chat'))
 // Portrait observation gates only first mount. Draw policy is mode-independent:
 // an active landscape ignores a stale offscreen portrait observer, but document
 // hidden and the known full chat overlay still suppress draw in either mode.
@@ -720,7 +813,7 @@ const previewPresentationState = computed(() => (
   previewSceneState.value === 'ready' ? previewDrawActivation.value.state : previewSceneState.value
 ))
 const permitStageMount = () => {
-  if (stageTarget.value && experienceReady.value && (experienceMode.value === 'landscape-map' || previewVisible.value)) {
+  if (!isOverviewHome.value && stageTarget.value && experienceReady.value && (experienceMode.value === 'landscape-map' || previewVisible.value)) {
     stageHasMounted.value = true
   }
 }
@@ -783,6 +876,8 @@ const {
 } = useHallSound()
 
 const activePanelTitle = computed(() => {
+  if (renderedPanel.value === 'draft') return '起草交办'
+  if (renderedPanel.value === 'tasks' && formalTaskRef.value) return '正式成果与验收'
   if (renderedPanel.value === 'formalDraft') return '起草正式任务'
   if (renderedPanel.value === 'messages') return '消息'
   if (renderedPanel.value === 'item') return overviewItemRef.value?.sourceType === 'DRAFT' ? '继续草稿' : '事项进展'
@@ -1054,6 +1149,7 @@ const cancelPanelChatLoad = () => {
 
 const openPanel = (panel, options = {}) => {
   if (panelDisposed || voiceInteractionLocked.value || !panelWhitelist.has(panel)) return false
+  if (panel !== activePanel.value && guardPanelLeave(() => openPanel(panel, options))) return false
   const openingFromClosed = !activePanel.value
   const existingIndex = panelFrames.value.indexOf(panel)
   if (!openingFromClosed && panel !== activePanel.value && existingIndex < 0 && panelDepth.value >= 3) {
@@ -1067,6 +1163,7 @@ const openPanel = (panel, options = {}) => {
     : existingIndex >= 0 ? panelFrames.value.slice(0, existingIndex + 1) : [...panelFrames.value, panel]
   panelReturnPanel.value = panelFrames.value.at(-2) || ''
   if (openingFromClosed) {
+    formalTaskRef.value = null
     panelReturnPanel.value = ''
     if (!renderedPanel.value) {
       panelSessionOrigin = Object.freeze({
@@ -1253,20 +1350,38 @@ const openBabaoBox = () => {
 }
 
 const openOverviewItem = ref => {
+  if (guardPanelLeave(() => openOverviewItem(ref))) return false
   if (!ref || !['DRAFT', 'PRIVATE_CASE', 'LEGACY_EXECUTION'].includes(ref.sourceType)) return false
   if (!openPanel('item', { restore: true })) return false
   overviewItemRef.value = { ...ref }
   return true
 }
 
-const openOverviewTask = async task => {
+const openOverviewTask = async (task, review = null) => {
+  if (guardPanelLeave(() => openOverviewTask(task, review))) return false
   if (!task?.id || !openPanel('tasks', { restore: true })) return false
+  taskReviewRef.value = review ? { ...review, taskId: task.id } : null
   selectedTask.value = task
   await nextTick()
   bountyPanelRef.value?.openTask(task)
+  formalTaskRef.value = review ? task : null
   return true
 }
 
+const openPrivateDraft = (context = {}) => {
+  if (guardPanelLeave(() => openPrivateDraft(context))) return false
+  if (!openPanel('draft', { restore: true })) return false
+  const agent = operableRosterAgents.value.find(agent => agent.agentId === selectedAgent.value?.agentId)
+  draftContext.value = { ...context, targetAgentId: context.targetAgentId || agent?.agentId || '' }
+  privateDraftGeneration.value += 1
+  return true
+}
+const openFormalResults = task => {
+  if (!task?.id) return false
+  formalTaskRef.value = task
+  taskReviewRef.value = null
+  return true
+}
 const openTaskWorkspace = () => {
   if (!taskWorkspaceEnabled || !taskWorkspaceSubject.value?.taskId || !taskWorkspaceSubject.value?.actorAgentId) return
   openPanel('workspace')
@@ -1280,6 +1395,8 @@ const requestPanelOrientation = () => {
 
 const returnPanel = () => {
   if (panelDisposed || voiceInteractionLocked.value) return false
+  if (guardPanelLeave(() => returnPanel() || closePanel())) return true
+  if (renderedPanel.value === 'tasks' && formalTaskRef.value) { formalTaskRef.value = null; return true }
   if (panelChildCanReturn.value) {
     const child = renderedPanel.value === 'tasks' ? bountyPanelRef.value
       : renderedPanel.value === 'treasure' ? treasurePanelRef.value : libraryPanelRef.value
@@ -1291,6 +1408,7 @@ const returnPanel = () => {
 
 const closePanel = () => {
   if (panelDisposed || voiceInteractionLocked.value || !activePanel.value) return false
+  if (guardPanelLeave(closePanel)) return false
   cancelPanelChatLoad()
   panelClosingGeneration.value = panelSessionGeneration.value
   activePanel.value = ''
@@ -1345,7 +1463,11 @@ watch([() => apiStore.authorizationGeneration, hallIdentityScope], () => {
   panelFrames.value = []
   panelReturnPanel.value = ''
   panelLocations.clear()
+  cancelPanelLeave()
+  draftContext.value = null
+  formalTaskRef.value = null
   overviewItemRef.value = null
+  taskReviewRef.value = null
   panelSessionOrigin = null
   resetToPublic({ clearSelection: true })
 }, { flush: 'sync' })
@@ -1637,7 +1759,13 @@ const openProfile = async () => {
     profileNavigationPending = false
   }
 }
-onBeforeRouteLeave(() => approvedHallLeave || confirmLeavingHall())
+onBeforeRouteLeave(() => {
+  const editor = activeDraftEditor()
+  if (!editor) return approvedHallLeave || confirmLeavingHall()
+  const generation = panelSessionGeneration.value
+  return editor.saveBeforeLeave().then(saved => Boolean(saved && generation === panelSessionGeneration.value &&
+    (approvedHallLeave || confirmLeavingHall())))
+})
 
 const applyVoiceTranscript = mode => {
   const next = hallVoice.applyTranscript(mode)
@@ -2487,17 +2615,18 @@ button.hall-room {
 
 /* A handling session is one active, near-full work window. Landscape does
  * not degrade it into a right-side half drawer. */
-.panel-overlay:has(.layout-full-window) {
+.panel-overlay.is-full-window {
   align-items: center;
   justify-content: center;
   padding: 8px 12px;
 }
 
-.floating-panel.layout-full-window {
-  width: min(1180px, calc(100% - 24px));
-  max-width: calc(100% - 24px);
-  height: min(calc(100% - 16px), var(--hall-visual-height, 100%));
-  max-height: calc(100% - 16px);
+.panel-overlay.is-full-window .floating-panel.layout-full-window {
+  /* The overlay owns the only outer gutter; do not subtract it again here. */
+  width: min(1180px, 100%);
+  max-width: 100%;
+  height: 100%;
+  max-height: 100%;
   border-radius: 10px;
 }
 
@@ -2938,5 +3067,35 @@ button.hall-room {
   }
 
 
+}
+/* Use logical visual height as well as pointer-independent full-window sizing.
+ * These rules also apply to a virtual landscape or keyboard-shortened viewport. */
+.panel-overlay.is-low-height .panel-title {
+  gap: 6px;
+  padding: 6px 10px;
+}
+.panel-overlay.is-low-height .panel-title button {
+  min-height: 34px;
+  padding: 0 9px;
+}
+.panel-overlay.is-full-window :deep(.hall-draft-editor) {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+.floating-panel > :deep(.hall-overview),
+.floating-panel > :deep(.formal-delivery-list) {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.panel-save-warning {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  color: #7c1f1b;
+  background: #fff3d8;
+}
+.panel-save-warning p {
+  margin: 0 0 6px;
 }
 </style>

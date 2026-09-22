@@ -48,6 +48,8 @@ describe('JYT-UX-W01 unified Hall shell', () => {
     expect(classifyPanelLayout({ isMobileCoarse: false, experienceMode: 'landscape-map' })).to.equal('center-modal')
     expect(classifyPanelLayout({ isMobileCoarse: true, experienceMode: 'landscape-map' })).to.equal('full-window')
     expect(classifyPanelLayout({ isMobileCoarse: true, experienceMode: 'portrait-command' })).to.equal('full-window')
+    expect(classifyPanelLayout({ isMobileCoarse: false, viewportHeight: 390 })).to.equal('full-window')
+    expect(classifyPanelLayout({ isMobileCoarse: false, viewportHeight: 900 })).to.equal('center-modal')
   })
 
   it('keeps orientation requests event/owner settled, not timer-cancelled', () => {
@@ -74,5 +76,20 @@ describe('JYT-UX-W01 unified Hall shell', () => {
     expect(portrait).to.include('@cancel-orientation="emit(\'cancel-orientation\')"')
     expect(stage).to.include("if (props.orientationRequestPending) {\n    emit('request-portrait')")
     expect(hall).to.include('if (orientationRequestPending.value) return requestPortrait()')
+  })
+})
+
+describe('A03 low-height work-window sizing contract (not browser geometry)', () => {
+  it('has one outer gutter, fills the remaining height, and keeps only the workspace content scroller', () => {
+    const hall = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+    const workspace = readFileSync(new URL('../src/components/workspace/PersonalWorkspace.vue', import.meta.url), 'utf8')
+    const rule = hall.match(/\.panel-overlay\.is-full-window \.floating-panel\.layout-full-window \{([^}]+)\}/)[1]
+    expect(rule).to.include('height: 100%;').and.include('max-height: 100%;').and.include('width: min(1180px, 100%);')
+    expect(rule).not.to.include('calc(')
+    expect(hall).to.include("'is-full-window': panelLayout === 'full-window'")
+    expect(hall).to.include('viewportHeight: resolvedHallViewportHeight')
+    expect(workspace).to.include('.personal-workspace.is-hall-treasure { min-height:0;')
+    expect(workspace).to.include('.is-compact-hall .library-tools { margin-top:6px; padding-bottom:6px; }')
+    expect(workspace).to.include('.is-hall-treasure .babao-modal {\n  position: static;\n  overflow: visible;')
   })
 })

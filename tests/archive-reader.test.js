@@ -379,6 +379,7 @@ const mountArchiveReader = (api, options = {}) => {
   const wrapper = mount(component, {
     attachTo: document.body,
     props: {
+      embedded: options.embedded ?? false,
       disableTeleport: options.disableTeleport ?? true,
       initialView: options.initialView ?? 'reader',
       virtualLandscape: options.virtualLandscape ?? false
@@ -2690,7 +2691,17 @@ describe('archive reader contract behavior', () => {
     const LibraryPanel = loadLibraryPanelSfc(ArchiveReader)
     const mode = Vue.ref('portrait-command')
     const counters = { hallLoads: 0 }
-    const JuyiHall = loadActualHallForIntegration(createHallIntegrationMocks({ mode, LibraryPanel, counters }), 'archive-actual-juyi-hall')
+    const mocks = createHallIntegrationMocks({ mode, LibraryPanel, counters })
+    const DraftProbe = Vue.defineComponent({
+      props: ['initialContext'],
+      setup: (props, { expose }) => {
+        const dirty = Vue.ref(true)
+        expose({ needsSave: dirty, busy: false, saveBeforeLeave: async () => { dirty.value = false; return true } })
+        return () => Vue.h('textarea', { class: 'reading-citation-draft', value: props.initialContext?.instruction })
+      }
+    })
+    mocks.HallDraftEditor = DraftProbe
+    const JuyiHall = loadActualHallForIntegration(mocks, 'archive-actual-juyi-hall')
     const wrapper = mount(JuyiHall, { attachTo: document.body, global: { stubs: { 'var-icon': true, teleport: true } } })
     try {
       await settle()
@@ -2726,6 +2737,24 @@ describe('archive reader contract behavior', () => {
         expect(readerUnmounts).to.equal(0)
       }
       const hall = wrapper.vm
+      await wrapper.findAll('button').find(button => button.text() === '引用当前段落起草交办').trigger('click')
+      await settle()
+      expect(hall.panelDepth).to.equal(3)
+      expect(hall.panelFrames).to.deep.equal(['library', 'draft'])
+      expect(wrapper.findAll('[role="dialog"]')).to.have.length(1)
+      const citation = wrapper.findComponent(DraftProbe).props('initialContext')
+      expect(citation.originRef).to.equal('juyiting:archive')
+      expect(citation.instruction).to.include(location.paragraphId)
+      expect(citation.instruction).not.to.include('五轮旋转仍须保留的批注')
+      expect(wrapper.findComponent(LibraryPanel).attributes('inert')).to.equal('')
+      await wrapper.find('.panel-return').trigger('click')
+      await settle()
+      expect(hall.panelFrames).to.deep.equal(['library'])
+      expect(wrapper.findComponent(ArchiveReader).vm).to.equal(reader.vm)
+      expect(readerState.currentLocation.value).to.equal(location)
+      expect(readerState.progress.value).to.equal(progress)
+      expect(wrapper.find('textarea').element.value).to.equal('五轮旋转仍须保留的批注')
+      expect(api.calls).to.have.length(loadCount)
       // The reader is a retained logical detail, not another modal.
       expect(hall.panelDepth).to.equal(2)
       expect(hall.openPanel('catalog')).to.equal(true)
@@ -2756,4 +2785,31 @@ describe('archive reader contract behavior', () => {
     expect(readerUnmounts).to.equal(1)
   })
 
+})
+
+describe('W04 explicit reading citation continuity', () => {
+  it('copies only the selected paragraph with edition/location attribution, preserving the note and reading instance', async () => {
+    const wrapper = mountArchiveReader(makeApi(), { embedded: true })
+    try {
+      await waitFor(() => wrapper.readerState.chapter.value?.blockId === preface.blockId)
+      const reader = wrapper.readerState
+      const note = wrapper.get('textarea[aria-label="当前段落私人手札"]')
+      await note.setValue('私密手札，不得自动分享')
+      await wrapper.findAll('.reader-paragraph')[1].trigger('click')
+      const location = { ...reader.currentLocation.value }
+      const chapter = reader.chapter.value
+      await wrapper.findAll('button').find(button => button.text() === '引用当前段落起草交办').trigger('click')
+      const context = wrapper.emitted('start-draft')[0][0]
+      expect(context.originRef).to.equal('juyiting:archive')
+      expect(context.instruction).to.include(editionId).and.include(location.paragraphId).and.include('引首第二段')
+      expect(context.instruction).not.to.include('私密手札').and.not.to.include('引首第一段')
+      expect(context.sourceRef).to.equal(undefined)
+      expect(context.inputs).to.deep.equal([])
+      await wrapper.setProps({ active: false })
+      await wrapper.setProps({ active: true, virtualLandscape: true })
+      expect(reader.chapter.value).to.equal(chapter)
+      expect(reader.currentLocation.value).to.deep.equal(location)
+      expect(note.element.value).to.equal('私密手札，不得自动分享')
+    } finally { wrapper.unmount() }
+  })
 })

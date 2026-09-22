@@ -49,9 +49,24 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       expect(wrapper.emitted('open-item').map(event => event[0])).to.deep.equal([
         { sourceType: 'PRIVATE_CASE', sourceId: 'case-a' }, { sourceType: 'LEGACY_EXECUTION', sourceId: 'exec-a' }, { sourceType: 'DRAFT', sourceId: 'draft-a' }
       ])
+      expect(wrapper.findAll('button').some(button => button.text() === '提出需求')).to.equal(false)
       expect(calls).to.have.length(1)
       expect(calls[0]).not.to.have.property('params')
       expect(wrapper.findAll('button').some(button => ['标记已读', '验收', '归档'].includes(button.text()))).to.equal(false)
+    } finally { wrapper.unmount() }
+  })
+
+  it('prioritizes a real draft entry in overview without submitting or waiting for the map', async () => {
+    const calls = []
+    const wrapper = mount(load({ execute: async options => { calls.push(options); return response() } }), { props })
+    try {
+      await settle()
+      expect(wrapper.findAll('.overview-section')).to.have.length(2)
+      const create = wrapper.findAll('button').find(button => button.text() === '提出需求')
+      expect(create.element.compareDocumentPosition(wrapper.find('.overview-sections').element) & Node.DOCUMENT_POSITION_FOLLOWING).not.to.equal(0)
+      await create.trigger('click')
+      expect(wrapper.emitted('start-draft')).to.have.length(1)
+      expect(calls.map(call => [call.method, call.url])).to.deep.equal([['GET', '/hall/overview']])
     } finally { wrapper.unmount() }
   })
 
@@ -97,4 +112,52 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       expect(calls).to.have.length(2)
     } finally { wrapper.unmount() }
   })
+
+  it('offers archive only for private/task sources and reads them without inventing a global count', async () => {
+    const calls = []
+    const wrapper = mount(load({ execute: async options => {
+      calls.push(options)
+      if (options.url === '/hall/overview') return response()
+      const kind = options.params.kind
+      const archived = { ...summary(kind === 'private' ? 'PRIVATE_CASE' : 'TASK', `${kind}-archived`, kind === 'private' ? 'OPEN_CASE' : 'OPEN_TASK'),
+        personalMark: kind === 'private' ? { revision: 1, archived: true, viewedResultRef: null } : null }
+      const part = { items: [archived], status: 'complete', nextCursor: null, count: null, errorCode: null }
+      return { schemaVersion: 1, kind, view: 'archive', q: '', section: { status: 'complete', partitions: { [kind]: part } }, sourceStatus: { [kind]: { status: 'complete', errorCode: null } }, asOf: 100 }
+    } }), { props })
+    try {
+      await settle()
+      await wrapper.findAll('button').find(button => button.text() === '案卷（私人 / 正式）').trigger('click')
+      await settle()
+      expect(wrapper.findAll('.overview-source').map(part => part.attributes('data-source'))).to.deep.equal(['private', 'task'])
+      expect(calls.slice(1).map(call => call.params)).to.deep.equal([
+        { kind: 'private', view: 'archive', q: '' }, { kind: 'task', view: 'archive', q: '' }
+      ])
+      expect(wrapper.text()).to.include('已收入案卷（个人整理）')
+      expect(wrapper.text()).not.to.include('未交办草稿')
+      expect(wrapper.findAll('[data-count]')).to.have.length(0)
+    } finally { wrapper.unmount() }
+  })
+
+  it('routes review evidence to the exact canonical formal task and delivery without an acceptance or private mark call', async () => {
+    const review = { code: 'FORMAL_DELIVERY_SUBMITTED', deliveryId: 'delivery-1', workItemId: 'work-1', deliveryVersion: '0', taskVersion: '9007199254740993' }
+    const calls = []
+    const task = { id: 'task-a', status: 'assigned', title: '原正式任务' }
+    const wrapper = mount(load({ execute: async options => {
+      calls.push(options)
+      if (options.url === '/tasks/task-a') return task
+      const data = response()
+      data.sections.needsAction.partitions.task.items[0].review = review
+      return data
+    } }), { props: { ...props, messagesOnly: true } })
+    try {
+      await settle()
+      expect(wrapper.text()).to.include('正式交付待验收')
+      await wrapper.findAll('button').find(button => button.text() === '查看待验收交付').trigger('click')
+      await settle()
+      expect(wrapper.emitted('open-task')[0]).to.deep.equal([task, review])
+      expect(calls.map(call => call.method)).to.deep.equal(['GET', 'GET'])
+      expect(calls.some(call => call.url.endsWith('/mark'))).to.equal(false)
+    } finally { wrapper.unmount() }
+  })
+
 })

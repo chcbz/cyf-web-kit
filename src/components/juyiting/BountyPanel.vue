@@ -39,7 +39,7 @@
           >
             <span>起草正式任务</span>
           </button>
-          <button class="new-task-button" type="button" @click="showDraftEditor = !showDraftEditor">
+          <button class="new-task-button" type="button" @click="embeddedHall ? $emit('start-private-draft') : showDraftEditor = !showDraftEditor">
             <span>{{ showDraftEditor ? '收起草稿' : '起草交办' }}</span>
           </button>
         </div>
@@ -83,6 +83,7 @@
         :identity-scope="identityScope"
         @close="showDraftEditor = false"
         @open-task="openTask"
+        @changed="$emit('mark-changed')"
       />
 
       <p v-if="loading" class="task-data-state" role="status">悬赏榜读取中…</p>
@@ -203,6 +204,7 @@
                 :authorization-generation="authorizationGeneration"
               />
 
+              <button type="button" @click="$emit('open-formal-results', detailTask)">查看正式成果与验收</button>
               <WorkItemPlanPanel :task="detailTask" :enabled="workItemPlanEnabled" :authorization-generation="authorizationGeneration" />
 
               <div class="ability-tags">
@@ -405,6 +407,9 @@ const emit = defineEmits([
   'refresh-funded-claim',
   'create-task',
   'start-formal-draft',
+  'start-private-draft',
+  'open-formal-results',
+  'mark-changed',
   'resume-funded-create',
   'cancel-funded-create-recovery',
   'discuss-task',

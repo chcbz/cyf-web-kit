@@ -2,80 +2,91 @@
   <section class="hall-overview" :aria-label="messagesOnly ? '消息' : '办事概览'">
     <header>
       <h2>{{ messagesOnly ? '消息 · 需要处理' : '办事概览' }}</h2>
-      <button type="button" :disabled="!enabled || model.state.value === 'loading'" @click="model.refresh">刷新</button>
+      <button v-if="!messagesOnly" type="button" @click="emit('start-draft')">提出需求</button>
+      <button type="button" :disabled="!enabled || model.state.value === 'loading'" @click="refresh">刷新</button>
     </header>
+    <nav v-if="!messagesOnly" aria-label="事项范围">
+      <button type="button" :aria-pressed="!archiveView" @click="archiveView = false">最近与待办</button>
+      <button type="button" :aria-pressed="archiveView" @click="showArchive">案卷（私人 / 正式）</button>
+    </nav>
     <p v-if="messagesOnly">这里列出仍需处理的事项。打开或查看不代表已读、验收或归档。</p>
     <p v-if="!enabled" role="status">身份确认后读取你的事项。</p>
     <p v-if="model.openError.value" role="alert">{{ model.openError.value }}</p>
-    <section
-      v-for="view in views"
-      :key="view"
-      class="overview-section"
-      :aria-label="viewLabels[view]"
-    >
-      <h3>{{ viewLabels[view] }}</h3>
-      <p v-if="model.state.value === 'loading'" role="status">正在读取事项…</p>
-      <p v-else-if="model.sections.value[view].status === 'partial'" role="status">部分来源尚不完整，不能据此判断所有事项均已处理。</p>
-      <p v-else-if="model.sections.value[view].status === 'error'" role="alert">本次未能确认事项，请按来源重试。</p>
+    <div class="overview-sections">
       <section
-        v-for="source in sources"
-        :key="source"
-        class="overview-source"
-        :data-source="source"
+        v-for="view in views"
+        :key="view"
+        class="overview-section"
+        :aria-label="viewLabels[view]"
       >
-        <header><h4>{{ sourceLabels[source] }}</h4></header>
-        <template v-for="(part, index) in [model.sections.value[view].partitions[source]]" :key="index">
-          <p v-if="part.loading" role="status">正在读取此来源…</p>
-          <p v-if="part.readError || part.errorCode" :role="part.status === 'error' ? 'alert' : 'status'">{{ part.readError || sourceError(part.errorCode) }}</p>
-          <p v-if="part.status === 'complete' && !part.items.length && !part.loading" class="overview-empty">{{ view === 'recent' ? '此来源暂无最近事项。' : '此来源暂无需要处理的事项。' }}</p>
-          <article v-for="item in part.items" :key="`${item.ref.sourceType}:${item.ref.sourceId}`" class="overview-item">
-            <strong>{{ item.title || '未命名事项' }}</strong>
-            <span>{{ typeLabels[item.ref.sourceType] }} · {{ statusText(item.status.code) }}</span>
-            <small v-if="item.targetAgent">受托好汉：{{ item.targetAgent.agentId }}</small>
-            <small>状态核对于 {{ formatTime(item.status.observedAt) }}</small>
-            <button
-              v-if="canOpenHallItem(item)"
-              type="button"
-              :disabled="Boolean(model.openingRef.value)"
-              @click="openItem(item)"
-            >{{ actionLabels[item.nextAction] }}</button>
-            <span v-else>当前无可用办理入口。</span>
-          </article>
-          <div class="overview-source-actions">
-            <button
-              v-if="['complete', 'partial', 'error'].includes(part.status)"
-              type="button"
-              :disabled="part.loading || model.state.value === 'loading'"
-              @click="model.loadPartition(view, source)"
-            >{{ part.status === 'complete' ? '刷新此来源' : '重试此来源' }}</button>
-            <button
-              v-if="part.nextCursor"
-              type="button"
-              :disabled="part.loading"
-              @click="model.loadPartition(view, source, { append: true })"
-            >读取此来源更多记录</button>
-          </div>
-        </template>
+        <h3>{{ viewLabels[view] }}</h3>
+        <p v-if="model.state.value === 'loading'" role="status">正在读取事项…</p>
+        <p v-else-if="model.sections.value[view].status === 'partial'" role="status">部分来源尚不完整，不能据此判断所有事项均已处理。</p>
+        <p v-else-if="model.sections.value[view].status === 'error'" role="alert">本次未能确认事项，请按来源重试。</p>
+        <section
+          v-for="source in sourcesFor(view)"
+          :key="source"
+          class="overview-source"
+          :data-source="source"
+        >
+          <header><h4>{{ sourceLabels[source] }}</h4></header>
+          <template v-for="(part, index) in [model.sections.value[view].partitions[source]]" :key="index">
+            <p v-if="part.loading" role="status">正在读取此来源…</p>
+            <p v-if="part.readError || part.errorCode" :role="part.status === 'error' ? 'alert' : 'status'">{{ part.readError || sourceError(part.errorCode) }}</p>
+            <p v-if="part.status === 'complete' && !part.items.length && !part.loading" class="overview-empty">{{ view === 'archive' ? '此来源暂无归档事项。' : view === 'recent' ? '此来源暂无最近事项。' : '此来源暂无需要处理的事项。' }}</p>
+            <article v-for="item in part.items" :key="`${item.ref.sourceType}:${item.ref.sourceId}`" class="overview-item">
+              <strong>{{ item.title || '未命名事项' }}</strong>
+              <span>{{ typeLabels[item.ref.sourceType] }} · {{ statusText(item.status.code) }}</span>
+              <span v-if="item.personalMark?.archived">已收入案卷（个人整理）</span>
+              <span v-if="item.review">正式交付待验收；打开不会代为验收。</span>
+              <small v-if="item.targetAgent">受托好汉：{{ item.targetAgent.agentId }}</small>
+              <small>状态核对于 {{ formatTime(item.status.observedAt) }}</small>
+              <button
+                v-if="canOpenHallItem(item)"
+                type="button"
+                :disabled="Boolean(model.openingRef.value)"
+                @click="openItem(item)"
+              >{{ item.review ? '查看待验收交付' : actionLabels[item.nextAction] }}</button>
+              <span v-else>当前无可用办理入口。</span>
+            </article>
+            <div class="overview-source-actions">
+              <button
+                v-if="['complete', 'partial', 'error'].includes(part.status)"
+                type="button"
+                :disabled="part.loading || model.state.value === 'loading'"
+                @click="model.loadPartition(view, source)"
+              >{{ part.status === 'complete' ? '刷新此来源' : '重试此来源' }}</button>
+              <button
+                v-if="part.nextCursor"
+                type="button"
+                :disabled="part.loading"
+                @click="model.loadPartition(view, source, { append: true })"
+              >读取此来源更多记录</button>
+            </div>
+          </template>
+        </section>
       </section>
-    </section>
+    </div>
   </section>
 </template>
 
 <script setup>
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { canOpenHallItem, HALL_SOURCES, useHallOverview } from '@/composables/juyiting/useHallOverview'
 
 const props = defineProps({
   identityScope: { type: String, default: '' },
   identityEpoch: { type: [Number, String], default: 0 },
   enabled: { type: Boolean, default: false },
-  messagesOnly: { type: Boolean, default: false }
+  messagesOnly: { type: Boolean, default: false },
+  refreshKey: { type: Number, default: 0 }
 })
-const emit = defineEmits(['open-item', 'open-task'])
+const emit = defineEmits(['open-item', 'open-task', 'start-draft'])
 const model = useHallOverview({ identityScope: () => props.identityScope, identityEpoch: () => props.identityEpoch })
-const views = computed(() => props.messagesOnly ? ['needsAction'] : ['recent', 'needsAction'])
-const sources = HALL_SOURCES
-const viewLabels = { recent: '最近事项', needsAction: '需要处理' }
+const archiveView = ref(false)
+const views = computed(() => props.messagesOnly ? ['needsAction'] : archiveView.value ? ['archive'] : ['recent', 'needsAction'])
+const sourcesFor = view => view === 'archive' ? ['private', 'task'] : HALL_SOURCES
+const viewLabels = { recent: '最近事项', needsAction: '需要处理', archive: '案卷' }
 const sourceLabels = { private: '私人交办', task: '正式悬赏', draft: '未交办草稿' }
 const typeLabels = { PRIVATE_CASE: '私人事项', LEGACY_EXECUTION: '原私人交办', TASK: '正式事项', DRAFT: '草稿' }
 const actionLabels = { OPEN_CASE: '查看事项', OPEN_EXECUTION: '查看原交办', OPEN_TASK: '打开原悬赏', EDIT_DRAFT: '继续草稿' }
@@ -88,19 +99,28 @@ const formatTime = value => new Date(value).toLocaleString('zh-CN')
 const sourceError = code => ({
   VIEWED_RESULT_NOT_TRACKED: '成果查看记录尚未纳入，已查看的成果仍可能列在这里。',
   TASK_REVIEW_NOT_PROJECTED: '正式成果的待验收情况尚未完整纳入，请到原悬赏核对。',
+  HALL_DRAFT_ARCHIVE_UNAVAILABLE: '草稿不支持案卷筛选，请回最近事项继续填写。',
+  FORMAL_REVIEW_UNAVAILABLE: '当前暂不能读取正式待验收情况，请进入正式事项核对。',
   ACCESS_UNAVAILABLE: '当前身份无法访问，请重新授权后刷新。'
 })[code] || '此来源暂未完整读取，请重试；不能视为空列表。'
 const openItem = async item => {
   if (!canOpenHallItem(item)) return
   if (item.ref.sourceType === 'TASK') {
     const task = await model.loadTask(item)
-    if (task) emit('open-task', task)
+    if (task) emit('open-task', task, item.review || null)
   } else emit('open-item', { ...item.ref })
 }
-watch([() => props.enabled, () => props.identityScope, () => props.identityEpoch], () => {
-  if (props.enabled && props.identityScope) void model.refresh()
-  else model.reset()
-}, { immediate: true })
+const refreshArchive = () => Promise.all(['private', 'task'].map(source => model.loadPartition('archive', source)))
+const showArchive = () => {
+  archiveView.value = true
+  if (model.state.value !== 'loading') void refreshArchive()
+}
+const refresh = async () => {
+  if (!props.enabled || !props.identityScope) { model.reset(); return }
+  await model.refresh()
+  if (archiveView.value && !props.messagesOnly) await refreshArchive()
+}
+watch([() => props.enabled, () => props.identityScope, () => props.identityEpoch, () => props.refreshKey], refresh, { immediate: true })
 </script>
 
 <style scoped>
@@ -113,4 +133,5 @@ watch([() => props.enabled, () => props.identityScope, () => props.identityEpoch
 .hall-overview button { min-height:36px; border:1px solid #b29a79; border-radius:6px; background:#f5e8cd; color:#5a3923; padding:6px 10px; cursor:pointer; }
 .hall-overview button:disabled { opacity:.55; cursor:default; }
 .overview-empty,.overview-item small { color:#765f40; }
+.overview-sections { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr)); align-items:start; gap:12px; }
 </style>

@@ -466,3 +466,54 @@ describe('JYT-UX-W05 frozen TASK_CREATE receipt boundaries', () => {
     model.dispose()
   })
 })
+
+describe('JYT-UX-W05 field-level DRAFT-v1 limits', () => {
+  it('rejects 201-character titles locally before create or CAS replacement and keeps the saved draft', async () => {
+    const calls = []
+    const { useHallDrafts } = await import('../src/composables/juyiting/useHallDrafts.js')
+    const model = useHallDrafts({ agentApi: { execute: async request => { calls.push(request); return draft() } } })
+    try {
+      expect(await model.create({ ...fields, title: '长'.repeat(201) })).to.equal(null)
+      expect(calls).to.have.length(0)
+      await model.create(fields)
+      expect(await model.save({ ...fields, title: '长'.repeat(201) })).to.equal(null)
+      expect(calls).to.have.length(1)
+      expect(model.draft.value.editableFields.title).to.equal(fields.title)
+      expect(model.error.value).to.include('最多200字')
+    } finally { model.dispose() }
+  })
+
+  it('loads and saves legitimate 16001–20000-character instructions with exact CAS and Unicode code-point title limits', async () => {
+    for (const length of [16001, 20000]) {
+      const calls = []
+      const body = { ...fields, title: '📄'.repeat(200), instruction: '文'.repeat(length) }
+      const { useHallDrafts } = await import('../src/composables/juyiting/useHallDrafts.js')
+      const model = useHallDrafts({ agentApi: { execute: async request => {
+        calls.push(request)
+        return draft({ revision: request.method === 'PUT' ? 2 : 1, editableFields: body })
+      } } })
+      try {
+        expect((await model.load('draft-1')).editableFields.instruction).to.equal(body.instruction)
+        expect((await model.save(body)).revision).to.equal(2)
+        expect(calls[1].data).to.deep.equal(body)
+        expect(calls[1].headers).to.deep.equal({ 'If-Match': '"1"' })
+        expect(await model.save({ ...body, instruction: '文'.repeat(20001) })).to.equal(null)
+        expect(await model.save({ ...body, outputMime: 'x'.repeat(161) })).to.equal(null)
+        expect(calls).to.have.length(2)
+      } finally { model.dispose() }
+    }
+  })
+
+  it('serializes unselected agent and MIME as null, not invalid optional exact empty strings', async () => {
+    const calls = []
+    const { useHallDrafts } = await import('../src/composables/juyiting/useHallDrafts.js')
+    const model = useHallDrafts({ agentApi: { execute: async request => {
+      calls.push(request)
+      return draft({ editableFields: { title: '', instruction: '', targetAgentId: null, outputMime: null, inputs: [] } })
+    } } })
+    try {
+      await model.create({ title: '', instruction: '', targetAgentId: '', outputMime: '', inputs: [] })
+      expect(calls[0].data).to.include({ targetAgentId: null, outputMime: null })
+    } finally { model.dispose() }
+  })
+})

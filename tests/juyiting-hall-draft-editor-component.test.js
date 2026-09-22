@@ -2,6 +2,7 @@ import { expect } from 'chai'
 import { after, before, describe, it } from 'mocha'
 import { readFileSync } from 'node:fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
+import { deliveryTypeText } from '../src/utils/executionFormats.js'
 
 let Vue
 let mount
@@ -21,8 +22,10 @@ const loadEditor = (deps = editorDeps()) => {
     })
     .replace(/^import\s+\{[^}]+\}\s+from\s+['"]@\/composables\/usePersonalWorkspace['"];?\s*$/gm, 'var { savePersonalWorkspaceBlob, usePersonalWorkspace } = deps')
     .replace(/^import\s+\{\s*useHallDrafts\s*\}\s+from\s+['"]@\/composables\/juyiting\/useHallDrafts['"];?\s*$/gm, 'var { useHallDrafts } = deps')
+    .replace(/^import\s+HallPrivateMark\s+from\s+['"]\.\/HallPrivateMark\.vue['"];?\s*$/gm, 'var HallPrivateMark = { name: \'HallPrivateMark\', props: [\'sourceRef\', \'resultRef\', \'identityScope\', \'identityEpoch\'], template: \'<section class="private-mark-test-slot" />\' }')
+    .replace(/^import\s+\{\s*deliveryTypeText\s*\}\s+from\s+['"]@\/utils\/executionFormats['"];?\s*$/gm, 'var { deliveryTypeText } = deps')
     .replace('export default', 'return')
-  return new Function('Vue', 'deps', script)(Vue, deps)
+  return new Function('Vue', 'deps', script)(Vue, { ...deps, deliveryTypeText })
 }
 
 const editorDeps = () => {
@@ -46,6 +49,7 @@ const editorDeps = () => {
   editorState = { draft, receipt, caseView, executionResults, resultsState, resultsError, created, loadedResults, workspaceCalls }
   return {
     useHallDrafts: () => ({
+      capabilityState: Vue.ref('ready'), capabilityError: Vue.ref(''), allowedMimeTypes: Vue.ref(['application/pdf']), generationEnabled: Vue.ref(true), loadCapabilities: async () => true,
       draft, summaries, nextCursor, state, error, reloadRequired, receipt, submissionState, caseView, submissionRecovery, unresolvedIntent, executionResults, resultsState, resultsError,
       create: async fields => {
         created.push(fields)
@@ -127,6 +131,7 @@ describe('JYT-UX-W03 HallDraftEditor boundary', () => {
     expect(editorState.loadedResults).to.deep.equal(['exec-1'])
     expect(wrapper.text()).to.include('结案.pdf')
     expect(wrapper.text()).to.include('缺失.txt')
+    expect(wrapper.findComponent({ name: 'HallPrivateMark' }).props('resultRef')).to.equal(null)
     expect(wrapper.findAll('.hall-result-item').at(1).findAll('button')).to.have.length(0)
     await button(wrapper, '预览').trigger('click')
     await button(wrapper, '下载').trigger('click')
@@ -150,21 +155,25 @@ describe('JYT-UX-W03 HallDraftEditor boundary', () => {
 })
 
 describe('JYT-UX-W05 real editor source restoration', () => {
-  const setupReader = async handler => {
+  const setupReader = async (handler, capabilities = () => ({ allowedMimeTypes: ['application/pdf'], generationEnabled: true })) => {
     const { useHallDrafts } = await import('../src/composables/juyiting/useHallDrafts.js')
     const deps = editorDeps()
     const calls = []
     const writes = []
+    const capabilityCalls = []
     const storageMap = new Map()
     let workspaceRefreshes = 0
     const originalWorkspace = deps.usePersonalWorkspace
     deps.usePersonalWorkspace = () => ({ ...originalWorkspace(), refresh: async () => { workspaceRefreshes += 1; return true } })
     deps.useHallDrafts = options => useHallDrafts({
       ...options,
-      agentApi: { execute: async request => { calls.push(request); return handler(request) } },
+      agentApi: { execute: async request => {
+        if (request.url === '/personal-workspace/executions/capabilities') { capabilityCalls.push(request); return capabilities() }
+        calls.push(request); return handler(request)
+      } },
       storage: { getItem: key => storageMap.get(key) || null, setItem: (key, value) => { writes.push([key, value]); storageMap.set(key, value) }, removeItem: key => storageMap.delete(key) }
     })
-    return { component: loadEditor(deps), calls, writes, entries: () => [...storageMap.entries()], workspaceRefreshes: () => workspaceRefreshes }
+    return { component: loadEditor(deps), calls, capabilityCalls, writes, entries: () => [...storageMap.entries()], workspaceRefreshes: () => workspaceRefreshes }
   }
   const base = { identityEpoch: 1, identityScope: 'tenant\u0000client\u0000owner-a' }
   const settle = async () => { await new Promise(resolve => setTimeout(resolve, 0)); await Vue.nextTick() }
@@ -292,7 +301,7 @@ describe('JYT-UX-W05 real editor source restoration', () => {
       await wrapper.find('form').trigger('submit')
       await settle()
       const create = harness.calls[0]
-      expect(create.data).to.include({ kind: 'TASK_CREATE', targetAgentId: '', outputMime: '', sourceRef: null, conversationId: null })
+      expect(create.data).to.include({ kind: 'TASK_CREATE', targetAgentId: null, outputMime: null, sourceRef: null, conversationId: null })
       expect(create.data.inputs).to.deep.equal([])
       expect(create.data.title).to.equal('名'.repeat(30))
       expect(create.data.instruction).to.equal('述'.repeat(200))
@@ -364,7 +373,7 @@ describe('JYT-UX-W05 real editor source restoration', () => {
       expect(wrapper.find('input[type="checkbox"]').element.disabled).to.equal(true)
       await wrapper.find('form').trigger('submit')
       await settle()
-      expect(calls.at(-1).data).to.include({ targetAgentId: '', outputMime: '' })
+      expect(calls.at(-1).data).to.include({ targetAgentId: null, outputMime: null })
       expect(calls.at(-1).data.inputs).to.deep.equal([])
       await wrapper.find('input[type="checkbox"]').setValue(true)
       await wrapper.find('textarea').setValue('用户后来修改的简述')
@@ -404,7 +413,7 @@ describe('JYT-UX-W05 real editor source restoration', () => {
       await settle()
       expect(wrapper.find('select').element.value).to.equal('private-agent')
       expect(wrapper.find('.draft-materials').exists()).to.equal(true)
-      expect(wrapper.find('input').attributes('maxlength')).to.equal('16000')
+      expect(wrapper.find('input').attributes('maxlength')).to.equal(undefined)
       await wrapper.find('input').setValue('私'.repeat(31))
       await wrapper.find('textarea').setValue('密'.repeat(201))
       await wrapper.find('form').trigger('submit')
@@ -415,4 +424,90 @@ describe('JYT-UX-W05 real editor source restoration', () => {
     } finally { wrapper.unmount() }
   })
 
+  it('renders only capability-backed human-readable formats, preserving unsupported old MIME without replacing it', async () => {
+    const word = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    const { component, calls, capabilityCalls } = await setupReader(() => formalSaved({ outputMime: 'text/plain', targetAgentId: 'agent-a' }, { kind: 'CREATE' }),
+      () => ({ allowedMimeTypes: ['application/pdf', word], generationEnabled: true }))
+    const wrapper = mount(component, { props: { ...base, initialRef: { sourceType: 'DRAFT', sourceId: 'formal-draft' } } })
+    try {
+      await settle()
+      const select = wrapper.find('select[aria-label="期望格式"]')
+      expect(select.element.value).to.equal('text/plain')
+      expect(select.findAll('option').map(option => option.text())).to.include.members(['PDF', 'Word（DOCX）'])
+      expect(select.findAll('option').some(option => option.text().includes('PPT'))).to.equal(false)
+      expect(wrapper.text()).to.include('原格式当前不受支持，仍原样保留')
+      expect(wrapper.find('input[type="checkbox"]').element.disabled).to.equal(true)
+      expect(calls.map(call => call.method)).to.deep.equal(['GET'])
+      expect(capabilityCalls).to.have.length(1)
+      expect(capabilityCalls[0]).to.include({ url: '/personal-workspace/executions/capabilities', method: 'GET' })
+      expect(capabilityCalls[0]).not.to.have.property('params')
+      await select.setValue('application/pdf')
+      expect(wrapper.find('input[type="checkbox"]').element.checked).to.equal(false)
+      expect(wrapper.find('input[type="checkbox"]').element.disabled).to.equal(true)
+    } finally { wrapper.unmount() }
+  })
+
+  it('keeps long saved private text and format visible when capabilities are unavailable, without allowing submission', async () => {
+    const instruction = '合法正文'.repeat(5000)
+    const { component, calls } = await setupReader(request => formalSaved({ title: '原稿', instruction, outputMime: 'application/pdf', targetAgentId: 'agent-a' },
+      { kind: 'CREATE', revision: request.method === 'PUT' ? 2 : 1 }), () => { throw Object.assign(new Error('unavailable'), { status: 503 }) })
+    const wrapper = mount(component, { props: { ...base, initialRef: { sourceType: 'DRAFT', sourceId: 'formal-draft' } } })
+    try {
+      await settle()
+      expect(wrapper.find('textarea').element.value).to.equal(instruction)
+      expect(wrapper.find('select[aria-label="期望格式"]').element.value).to.equal('application/pdf')
+      expect(wrapper.text()).to.include('暂未读到可用交付格式')
+      expect(wrapper.find('input[type="checkbox"]').element.disabled).to.equal(true)
+      await wrapper.find('form').trigger('submit')
+      await settle()
+      expect(calls.at(-1).data.instruction).to.equal(instruction)
+      expect(calls.at(-1).headers).to.deep.equal({ 'If-Match': '"1"' })
+      expect(wrapper.find('textarea').element.value).to.equal(instruction)
+      expect(calls.filter(call => call.url.endsWith('/submit'))).to.have.length(0)
+      await wrapper.find('input').setValue('名'.repeat(201))
+      await wrapper.find('form').trigger('submit')
+      await settle()
+      expect(wrapper.find('input').element.value).to.equal('名'.repeat(201))
+      expect(wrapper.text()).to.include('最多200字')
+      expect(calls.filter(call => call.method === 'PUT')).to.have.length(1)
+    } finally { wrapper.unmount() }
+  })
+
+})
+
+describe('W04 saved-source exit boundary', () => {
+  it('keeps fixed file source and edited text on failed save, then acknowledges only the saved snapshot', async () => {
+    const deps = editorDeps()
+    const model = deps.useHallDrafts()
+    deps.useHallDrafts = () => model
+    let finishSave
+    const commands = []
+    model.create = async command => { commands.push(command); return null }
+    const source = { originRef: 'juyiting:file', sourceRef: { sourceType: 'FILE', sourceId: 'file-source', version: 2 }, inputs: [{ fileId: 'file-source', version: 2 }] }
+    const wrapper = mount(loadEditor(deps), { props: { identityScope: 'client:owner', initialContext: source } })
+    try {
+      await Vue.nextTick()
+      await wrapper.find('textarea').setValue('原交代')
+      expect(await wrapper.vm.saveBeforeLeave()).to.equal(false)
+      expect(wrapper.vm.needsSave).to.equal(true)
+      expect(wrapper.find('textarea').element.value).to.equal('原交代')
+      expect(commands[0]).to.include({ originRef: 'juyiting:file' })
+      expect(commands[0].sourceRef).to.deep.equal(source.sourceRef)
+      expect(commands[0].inputs).to.deep.equal(source.inputs)
+      model.create = command => new Promise(resolve => {
+        finishSave = () => {
+          model.draft.value = { draftId: 'saved-file-draft', revision: 1, state: 'EDITING', editableFields: command }
+          resolve(model.draft.value)
+        }
+      })
+      const pending = wrapper.vm.saveBeforeLeave()
+      await wrapper.find('textarea').setValue('保存途中追加，不得覆盖')
+      finishSave()
+      expect(await pending).to.equal(false)
+      expect(wrapper.find('textarea').element.value).to.equal('保存途中追加，不得覆盖')
+      expect(wrapper.vm.needsSave).to.equal(true)
+      expect(await wrapper.vm.saveBeforeLeave()).to.equal(true)
+      expect(wrapper.vm.needsSave).to.equal(false)
+    } finally { wrapper.unmount() }
+  })
 })

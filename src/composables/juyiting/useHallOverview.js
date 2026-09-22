@@ -3,7 +3,8 @@ import { agentApi as defaultApi } from '../useHttp.js'
 import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
 
 export const HALL_SOURCES = Object.freeze(['private', 'task', 'draft'])
-export const HALL_VIEWS = Object.freeze(['recent', 'needsAction'])
+const OVERVIEW_VIEWS = ['recent', 'needsAction']
+export const HALL_VIEWS = Object.freeze([...OVERVIEW_VIEWS, 'archive'])
 const sourceTypes = { private: ['PRIVATE_CASE', 'LEGACY_EXECUTION'], task: ['TASK'], draft: ['DRAFT'] }
 const actions = { PRIVATE_CASE: 'OPEN_CASE', LEGACY_EXECUTION: 'OPEN_EXECUTION', TASK: 'OPEN_TASK', DRAFT: 'EDIT_DRAFT' }
 const statuses = ['complete', 'partial', 'error']
@@ -22,10 +23,16 @@ const aggregate = partitions => {
 }
 export const canOpenHallItem = item => Boolean(actions[item?.ref?.sourceType] === item?.nextAction && item?.allowedActions?.includes(item.nextAction))
 
+const validResultRef = value => value === null || (id(value?.executionId) && id(value?.manifestId))
+const validMark = value => value && timestamp(value.revision) && typeof value.archived === 'boolean' && validResultRef(value.viewedResultRef)
+const validReview = value => value?.code === 'FORMAL_DELIVERY_SUBMITTED' && id(value.deliveryId) && id(value.workItemId) &&
+  text(value.deliveryVersion) && text(value.taskVersion)
 const validItem = (item, source) => item && sourceTypes[source].includes(item.ref?.sourceType) && id(item.ref.sourceId) &&
   (item.title === null || typeof item.title === 'string') && text(item.status?.code) && text(item.status?.evidenceSource) &&
   timestamp(item.status.observedAt) && (item.targetAgent === null || id(item.targetAgent?.agentId)) &&
-  item.nextAction === actions[item.ref.sourceType] && Array.isArray(item.allowedActions) && item.allowedActions.every(text) && timestamp(item.updatedAt)
+  item.nextAction === actions[item.ref.sourceType] && Array.isArray(item.allowedActions) && item.allowedActions.every(text) && timestamp(item.updatedAt) &&
+  (item.personalMark == null || (source === 'private' && validMark(item.personalMark))) &&
+  (item.review == null || (source === 'task' && validReview(item.review)))
 
 const readPartition = (value, source, sourceStatus, asOf) => {
   if (!value || !statuses.includes(value.status) || value.count !== null || !Array.isArray(value.items) ||
@@ -42,7 +49,7 @@ const readPartition = (value, source, sourceStatus, asOf) => {
 /** Read-only independent partitions. No task-board filters, global totals or browser persistence. */
 export function useHallOverview ({ api = defaultApi, identityEpoch = 0, identityScope = '' } = {}) {
   const sections = ref(sectionsFor())
-  const queries = ref({ recent: '', needsAction: '' })
+  const queries = ref({ recent: '', needsAction: '', archive: '' })
   const state = ref('idle')
   const openingRef = ref(null)
   const openError = ref('')
@@ -58,7 +65,7 @@ export function useHallOverview ({ api = defaultApi, identityEpoch = 0, identity
     controllers.clear()
     sequences.clear()
     sections.value = sectionsFor()
-    queries.value = { recent: '', needsAction: '' }
+    queries.value = { recent: '', needsAction: '', archive: '' }
     state.value = 'idle'
     openingRef.value = null
     openError.value = ''
@@ -100,8 +107,8 @@ export function useHallOverview ({ api = defaultApi, identityEpoch = 0, identity
       // /overview explicitly forbids all query parameters.
       const result = await request({ url: '/hall/overview' }, 'overview')
       if (result?.schemaVersion !== 1) throw new Error('INVALID_RESPONSE')
-      const next = {}
-      for (const view of HALL_VIEWS) {
+      const next = sectionsFor()
+      for (const view of OVERVIEW_VIEWS) {
         const partitions = decode(result.sections?.[view], HALL_SOURCES, result.sourceStatus?.[view], result.asOf)
         next[view] = { status: aggregate(partitions), partitions }
       }
@@ -129,7 +136,7 @@ export function useHallOverview ({ api = defaultApi, identityEpoch = 0, identity
       const result = await request({ url: '/hall/items', params }, `${view}:${source}`)
       if (result?.schemaVersion !== 1 || result.kind !== source || result.view !== view || result.q !== q) throw new Error('INVALID_RESPONSE')
       const decoded = decode(result.section, [source], result.sourceStatus, result.asOf)[source]
-      if (decoded.status === 'error') throw new Error(decoded.errorCode || 'READ_UNAVAILABLE')
+      if (decoded.status === 'error') throw Object.assign(new Error('Partition unavailable'), { partitionCode: decoded.errorCode || 'READ_UNAVAILABLE' })
       if (append) {
         const seen = new Set(previous.items.map(item => `${item.ref.sourceType}:${item.ref.sourceId}`))
         decoded.items = [...previous.items, ...decoded.items.filter(item => !seen.has(`${item.ref.sourceType}:${item.ref.sourceId}`))]
@@ -142,7 +149,7 @@ export function useHallOverview ({ api = defaultApi, identityEpoch = 0, identity
       if (error?.name !== 'AbortError' && ![401, 403].includes(error?.status)) {
         previous.readError = '本次读取未成功；已有记录不是最新确认结果。请重试此来源。'
         previous.status = previous.items.length ? 'partial' : 'error'
-        previous.errorCode = 'READ_UNAVAILABLE'
+        previous.errorCode = error.partitionCode || 'READ_UNAVAILABLE'
         sections.value[view].status = aggregate(sections.value[view].partitions)
       }
       return false

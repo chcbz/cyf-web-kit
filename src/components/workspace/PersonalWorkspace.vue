@@ -1,5 +1,5 @@
 <template>
-  <main class="personal-workspace" :class="{ 'is-hall-treasure': embedded, 'is-progress-view': activeModal === 'delivery' && showDeliveryProgress }">
+  <main class="personal-workspace" :class="{ 'is-hall-treasure': embedded, 'is-compact-hall': embedded && compact, 'is-progress-view': activeModal === 'delivery' && showDeliveryProgress }">
     <header v-if="!embedded" class="workspace-header">
       <div><p class="workspace-eyebrow">聚义厅 · 内堂收纳</p><h1>百宝箱</h1><p>打开一件事，再专心办完它。</p></div>
       <p class="workspace-header-note">资料只在你明确提交时，才会授权给所选 Agent。</p>
@@ -105,6 +105,7 @@
 
       <section v-if="activeModal === 'detail' && workspace.detail.value" class="babao-modal detail-modal" aria-labelledby="workspace-detail-title">
         <div class="modal-heading"><div><p v-if="!embedded" class="section-kicker">第三层 · 文件详情</p><h2 id="workspace-detail-title" ref="detailTitleRef" tabindex="-1">{{ workspace.detail.value.file.displayName }}</h2><p>{{ embedded ? '旧版本仍可查看，上传新版本不会替换已交办的资料。' : '每次只处理一个角度：概况、版本或办事笺。' }}</p></div><button type="button" class="quiet-action" @click="backToLibrary">返回资料柜</button></div>
+        <button v-if="embedded && workspace.detail.value.file.state === 'ACTIVE'" type="button" @click="useForDraft">使用当前固定版本起草交办</button>
         <nav class="detail-tabs" aria-label="文件详情操作"><button type="button" :class="{ active: detailPane === 'summary' }" @click="detailPane = 'summary'">概况</button><button type="button" :class="{ active: detailPane === 'versions' }" @click="detailPane = 'versions'">版本与预览</button><button
           v-if="!embedded && workspace.detail.value.file.state === 'ACTIVE'"
           type="button"
@@ -156,11 +157,23 @@ import { useApiStore } from '@/stores/api'
 import { useGlobalStore } from '@/stores/global'
 import { savePersonalWorkspaceBlob, usePersonalWorkspace } from '@/composables/usePersonalWorkspace'
 import { usePersonalWorkspaceExecution } from '@/composables/usePersonalWorkspaceExecution'
+import { deliveryTypeText } from '@/utils/executionFormats'
 
-const { embedded, detailAllowed } = defineProps({
+const { embedded, detailAllowed, compact } = defineProps({
+  compact: { type: Boolean, default: false },
   embedded: { type: Boolean, default: false },
   detailAllowed: { type: Boolean, default: true }
 })
+const emit = defineEmits(['start-draft'])
+const useForDraft = () => {
+  const file = workspace.detail.value?.file
+  if (file?.state !== 'ACTIVE' || !selectedExecutionVersion.value) return
+  emit('start-draft', {
+    originRef: 'juyiting:file',
+    sourceRef: { sourceType: 'FILE', sourceId: file.fileId, version: selectedVersion.value },
+    inputs: [{ fileId: file.fileId, version: selectedVersion.value }]
+  })
+}
 const apiStore = useApiStore()
 const globalStore = useGlobalStore()
 const identityEpoch = computed(() => apiStore.authorizationGeneration)
@@ -210,7 +223,6 @@ const formatDate = value => Number.isFinite(value) ? new Date(value).toLocaleStr
 const familyText = value => ({ IMAGE: '图片', TEXT: '文本', DOCUMENT: 'Word 文档', SPREADSHEET: 'Excel 表格', PRESENTATION: 'PPT 演示', PDF: 'PDF' })[value] || '文件'
 const originText = value => ({ USER_UPLOAD: '本人上传', AGENT_DELIVERY: 'Agent 交付' })[value] || '来源待确认'
 const executionStateText = value => ({ QUEUED: '已接受，等待结果', OUTPUT_COMMITTED: '交付已归档', FAILED: '交付失败', INPUTS_REVOKED: '输入已撤销', UNKNOWN: '提交结果待确认' })[value] || '状态待确认'
-const deliveryTypeText = value => ({ 'image/png': 'PNG 图片', 'image/jpeg': 'JPEG 图片', 'application/pdf': 'PDF', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word（DOCX）', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel（XLSX）', 'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'PPT（PPTX）' })[value] || '未知交付类型'
 const iconFor = value => ({ IMAGE: '🖼', TEXT: '📝', DOCUMENT: '📄', SPREADSHEET: '📊', PRESENTATION: '📽', PDF: '📕' })[value] || '📁'
 const currentFilters = () => ({ q: query.value.trim(), mediaFamily: mediaFamily.value, state: state.value })
 const refresh = () => workspace.refresh(currentFilters())
@@ -319,7 +331,7 @@ onBeforeUnmount(() => { workspace.dispose(); execution.dispose() })
 }
 
 .personal-workspace { --treasure-ink: #3f2818; --treasure-muted: #806542; --treasure-wood: #6d3f1f; --treasure-wood-dark: #452817; --treasure-line: #d7c3a2; --treasure-paper: #fff8e8; --treasure-red: #8c2f20; flex:1; min-width:0; overflow:auto; padding:20px; color:var(--treasure-ink); background:radial-gradient(circle at 14% 0,rgba(255,255,255,.7),transparent 27%),linear-gradient(135deg,rgba(114,70,35,.12),transparent 36%),#e7d5b5; }
-.personal-workspace.is-hall-treasure { border-top:2px solid rgba(109,63,31,.5); box-shadow:inset 0 10px 22px rgba(64,37,20,.1); }
+.personal-workspace.is-hall-treasure { min-height:0; border-top:2px solid rgba(109,63,31,.5); box-shadow:inset 0 10px 22px rgba(64,37,20,.1); }
 .workspace-header,.modal-stage,.workspace-page-message,.workspace-receipt { max-width:920px; margin-inline:auto; }
 .workspace-header { display:flex; align-items:end; justify-content:space-between; gap:24px; padding:8px 4px 18px; }
 .workspace-header h1 { margin:5px 0; color:var(--treasure-wood-dark); font-family:serif; font-size:clamp(26px,4vw,34px); letter-spacing:.16em; }
@@ -354,4 +366,12 @@ onBeforeUnmount(() => { workspace.dispose(); execution.dispose() })
 .workspace-error { padding:11px; border:1px solid #c88174; border-radius:4px; background:#f7e1d9; color:#7e271c; }.workspace-page-message { margin-top:14px; }.workspace-receipt { margin-top:12px; padding:8px 12px; border-left:3px solid #b88940; background:rgba(255,248,232,.72); color:#694b2a; font-size:14px; }.sr-only { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 @media (max-height:500px) and (min-width:701px) { .personal-workspace.is-progress-view { padding:8px 14px; }.personal-workspace.is-progress-view .workspace-header { display:none; }.personal-workspace.is-progress-view .modal-stage { height:calc(100vh - 16px); min-height:0; padding:10px; }.personal-workspace.is-progress-view .babao-modal { inset:10px; padding:14px; }.personal-workspace.is-progress-view .delivery-modal .modal-heading { padding-bottom:7px; }.personal-workspace.is-progress-view .delivery-modal .section-kicker,.personal-workspace.is-progress-view .delivery-modal .modal-heading p { display:none; }.personal-workspace.is-progress-view .delivery-receipt { margin-top:8px; padding-top:0; border-top:0; }.personal-workspace.is-progress-view .delivery-receipt .file-details { margin:8px 0; }.personal-workspace.is-progress-view .execution-history { margin-top:10px; padding-top:9px; } }
 @media (max-width:700px) { .personal-workspace { padding:13px; }.workspace-header { align-items:flex-start; flex-direction:column; gap:7px; }.workspace-header-note { max-width:none; }.modal-stage { min-height:580px; padding:15px; }.babao-modal { inset:15px; padding:18px; }.child-modal { inset:8px; }.detail-modal { inset:0; }.filters { grid-template-columns:1fr; }.file-details { grid-template-columns:1fr; }.version-row { grid-template-columns:auto minmax(0,1fr); }.version-row small,.version-actions { grid-column:2; justify-content:flex-start; }.file-state { display:none; }.modal-heading { flex-direction:column; }.inline-name input { width:100%; } }
+/* A03: one content scroller; compact the file tools, not their actions. */
+.personal-workspace.is-compact-hall { padding:8px; }
+.is-compact-hall .babao-modal { padding:8px; }
+.is-compact-hall .modal-heading { gap:8px; padding-bottom:6px; }
+.is-compact-hall .modal-heading h2 { margin:0; font-size:18px; }
+.is-compact-hall .modal-heading p { display:none; }
+.is-compact-hall .library-tools { margin-top:6px; padding-bottom:6px; }
+.is-compact-hall .filters { margin:6px 0; padding:6px 0; }
 </style>

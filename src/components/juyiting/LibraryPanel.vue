@@ -49,6 +49,7 @@
       aria-labelledby="library-reader-tab"
       :virtual-landscape="virtualLandscape"
       @navigation-state="readerHasBack = $event"
+      @start-draft="$emit('start-draft', $event)"
     />
 
     <div
@@ -176,7 +177,7 @@ defineProps({
   virtualLandscape: Boolean
 })
 
-defineEmits(['cite-library', 'search-library', 'update:keyword', 'update:sourceType'])
+defineEmits(['start-draft', 'cite-library', 'search-library', 'update:keyword', 'update:sourceType'])
 
 const sourceText = (type = '') => {
   if (type === 'project') return '项目案卷'

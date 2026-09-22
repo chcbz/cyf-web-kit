@@ -321,6 +321,12 @@
 
           <footer class="reader-actions" aria-label="阅读操作">
             <button
+              v-if="embedded"
+              type="button"
+              :disabled="!citationParagraph"
+              @click="citeParagraph"
+            >引用当前段落起草交办</button>
+            <button
               type="button"
               :disabled="!reader.continueLocation || reader.chapterLoading"
               @click="continueReading"
@@ -385,7 +391,7 @@ const { disableTeleport, initialView, virtualLandscape, embedded, active, detail
   virtualLandscape: Boolean
 })
 
-const emit = defineEmits(['navigation-state'])
+const emit = defineEmits(['navigation-state', 'start-draft'])
 
 // The SDK also exposes wx.miniProgram in ordinary browsers; use host markers only.
 const hasReaderCapsule = /MicroMessenger/i.test(globalThis.navigator?.userAgent || '')
@@ -405,6 +411,20 @@ const editingNote = ref(null)
 const actionMessage = ref('')
 const NEW_NOTE_TARGET = Symbol('new-note-target')
 const noteBytes = computed(() => utf8ByteLength(noteText.value))
+// Explicit paragraph snapshot only: never read or share the private note editor.
+const citationParagraph = computed(() => reader.chapter?.paragraphs?.find(paragraph =>
+  paragraph.paragraphId === reader.currentLocation?.paragraphId) || null)
+const citeParagraph = () => {
+  const paragraph = citationParagraph.value
+  const location = reader.currentLocation
+  if (!paragraph?.text || !location) return
+  const source = `${reader.catalog?.title || '典籍'} · ${reader.chapter.title} · ${location.editionId || reader.catalog?.activeEdition?.editionId || ''}/${reader.chapter.blockId}/${paragraph.paragraphId}`
+  emit('start-draft', {
+    originRef: 'juyiting:archive',
+    instruction: `引用来源：${source}\n所选段落：\n${paragraph.text}\n\n交办要求：`,
+    inputs: []
+  })
+}
 const chapterCount = computed(() => reader.catalog?.activeEdition?.chapters?.length || 0)
 const saveLabel = computed(() => ({
   error: '未保存',

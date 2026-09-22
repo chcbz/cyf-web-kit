@@ -37,6 +37,7 @@ const validCapabilities = value => value && typeof value === 'object' && Array.i
   value.allowedMimeTypes.every(validOutputMime) && new Set(value.allowedMimeTypes).size === value.allowedMimeTypes.length &&
   (value.inputMimeTypes == null || (Array.isArray(value.inputMimeTypes) && value.inputMimeTypes.every(validOutputMime) && new Set(value.inputMimeTypes).size === value.inputMimeTypes.length)) &&
   typeof value.generationEnabled === 'boolean'
+export const validPersonalWorkspaceExecutionCapabilities = validCapabilities
 const validInput = value => validSelection(value) && ID(value.inputRef)
 const EXECUTION_STATES = new Set(['QUEUED', 'INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'FAILED'])
 const TERMINAL_EXECUTION_STATES = new Set(['INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'FAILED'])

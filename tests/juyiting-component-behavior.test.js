@@ -8,7 +8,6 @@ import { resolveLiveMapPreviewActivation } from '../src/composables/juyiting/liv
 import { createEconomyRequestIntentStore } from '../src/composables/juyiting/economyRequestIntent.js'
 import { useHallTaskActions } from '../src/composables/juyiting/useHallTaskActions.js'
 
-
 let mount
 let Vue
 let BottomDock
@@ -122,18 +121,18 @@ const loadSfc = (relativePath) => {
     .replace(/^import\s+\{\s*classifyViewportResize\s*\}\s+from\s+['"]@\/game\/camera\/resizePolicy\.js['"];?\s*$/gm, 'var classifyViewportResize = arguments[3]')
     .replace(/^import\s+BountyActionIcon\s+from\s+['"].\/BountyActionIcon\.vue['"];?\s*$/gm, 'var BountyActionIcon = { template: \'<span />\', props: [\'status\'] }')
     .replace(/^import\s+OutputList\s+from\s+['"]\.\.\/outputs\/OutputList\.vue['"];?\s*$/gm, 'var OutputList = { template: \'<section class="output-list-stub" />\', props: [\'source\', \'identityFingerprint\'] }')
-    .replace(/^import\s+TaskMaterialLinks\s+from\s+['"]\.\.\/personal-workspace\/TaskMaterialLinks\.vue['"];?\s*$/gm, `var TaskMaterialLinks = { template: '<section class="task-material-links-stub" />', props: ['taskId', 'identityFingerprint'] }`)
+    .replace(/^import\s+TaskMaterialLinks\s+from\s+['"]\.\.\/personal-workspace\/TaskMaterialLinks\.vue['"];?\s*$/gm, 'var TaskMaterialLinks = { template: \'<section class="task-material-links-stub" />\', props: [\'taskId\', \'identityFingerprint\'] }')
     .replace(/^import\s+\{\s*formatSilverMicro,\s*isCanonicalMicroAmount\s*\}\s+from\s+['"]@\/utils\/silverAmount['"];?\s*$/gm, 'var { formatSilverMicro, isCanonicalMicroAmount } = arguments[4]')
-    .replace(/^import\s+FormalDeliveryList\s+from\s+['"]\.\.\/deliveries\/FormalDeliveryList\.vue['"];?\s*$/gm, `var FormalDeliveryList = { template: '<section class="formal-delivery-list-stub" />', props: ['taskId', 'identityFingerprint'] }`)
-    .replace(/^import\s+WorkItemPlanPanel\s+from\s+['"]\.\/WorkItemPlanPanel\.vue['"];?\s*$/gm, `var WorkItemPlanPanel = { template: '<section class="work-item-plan-stub" />', props: ['task', 'enabled', 'authorizationGeneration'] }`)
-    .replace(/^import\s+TeamRecommendationPanel\s+from\s+['"]\.\/TeamRecommendationPanel\.vue['"];?\s*$/gm, `var TeamRecommendationPanel = { template: '<section class="team-recommendation-stub" />', props: ['task', 'authorizationGeneration'] }`)
-    .replace(/^import\s+HallDraftEditor\s+from\s+['"]\.\/HallDraftEditor\.vue['"];?\s*$/gm, `var HallDraftEditor = { template: '<section class="hall-draft-editor-stub" />', props: ['agents', 'selectedAgent', 'identityEpoch'], emits: ['close'] }`)
-    .replace(/^import\s+HostingRentPanel\s+from\s+['"].\/HostingRentPanel\.vue['"];?\s*$/gm, `var HostingRentPanel = { template: '<section class="hosting-rent-stub" />', props: ['persona', 'resolvePersona'] }`)
+    .replace(/^import\s+FormalDeliveryList\s+from\s+['"]\.\.\/deliveries\/FormalDeliveryList\.vue['"];?\s*$/gm, 'var FormalDeliveryList = { name: \'FormalDeliveryList\', template: \'<section class="formal-delivery-list-stub" />\', props: [\'taskId\', \'identityFingerprint\'] }')
+    .replace(/^import\s+WorkItemPlanPanel\s+from\s+['"]\.\/WorkItemPlanPanel\.vue['"];?\s*$/gm, 'var WorkItemPlanPanel = { template: \'<section class="work-item-plan-stub" />\', props: [\'task\', \'enabled\', \'authorizationGeneration\'] }')
+    .replace(/^import\s+TeamRecommendationPanel\s+from\s+['"]\.\/TeamRecommendationPanel\.vue['"];?\s*$/gm, 'var TeamRecommendationPanel = { template: \'<section class="team-recommendation-stub" />\', props: [\'task\', \'authorizationGeneration\'] }')
+    .replace(/^import\s+HallDraftEditor\s+from\s+['"]\.\/HallDraftEditor\.vue['"];?\s*$/gm, 'var HallDraftEditor = { template: \'<section class="hall-draft-editor-stub" />\', props: [\'agents\', \'selectedAgent\', \'identityEpoch\'], emits: [\'close\'] }')
+    .replace(/^import\s+HostingRentPanel\s+from\s+['"].\/HostingRentPanel\.vue['"];?\s*$/gm, 'var HostingRentPanel = { template: \'<section class="hosting-rent-stub" />\', props: [\'persona\', \'resolvePersona\'] }')
     .replace(/^import\s+ArchiveReader\s+from\s+['"].\/archive\/ArchiveReader\.vue['"];?\s*$/gm, 'var ArchiveReader = { template: \'<section class="archive-reader-stub">典籍阅读</section>\' }')
     .replace(/^import\s+(\w+)\s+from\s+['"]@\/assets\/juyiting\/[^'"]+['"];?\s*$/gm, 'var $1 = \'/mock-juyiting-asset.png\'')
     .replace(/^import\s+\{\s*hallPhysicalScene,\s*hallRoomPropVisuals\s*\}\s+from\s+['"]@\/constants\/juyiting['"];?\s*$/gm, 'var hallRoomPropVisuals = []; var hallPhysicalScene = { interactiveZones: [{ key: \'main\', panel: \'chat\', title: \'忠义堂公议\', subtitle: \'厅前公议 / 众好汉\', x: 50, y: 36, w: 12, h: 7, object: \'plaque\', hitShape: \'plaque\' }, { key: \'agents\', panel: \'agents\', title: \'点将册\', subtitle: \'点将调遣\', x: 21, y: 32, w: 13, h: 7, object: \'ledger\' }, { key: \'tasks\', panel: \'tasks\', title: \'悬赏榜\', subtitle: \'榜文\', x: 76, y: 47, w: 19, h: 18, object: \'notice-rack\' }, { key: \'catalog\', panel: \'catalog\', title: \'招贤令\', subtitle: \'遍请豪杰\', x: 14, y: 68, w: 12, h: 7, object: \'banner-flag\' }, { key: \'library\', panel: \'library\', title: \'案卷阁\', subtitle: \'查卷问典\', x: 82, y: 76, w: 22, h: 18, object: \'scroll-shelf\' }, { key: \'back\', panel: null, title: \'整装处\', subtitle: \'兵甲行囊\', x: 67, y: 26, w: 12, h: 8, object: \'rear-gear\' }] }')
     .replace(/^import\s+HallChatComposer\s+from\s+['"].\/HallChatComposer\.vue['"];?\s*$/gm, 'var HallChatComposer = arguments[1]')
-    .replace(/^import\s+OutputPreview\s+from\s+['"]\.\.\/outputs\/OutputPreview\.vue['"];?\s*$/gm, `var OutputPreview = { template: '<section class="output-preview-stub" />', props: ['item', 'load', 'contextKey'] }`)
+    .replace(/^import\s+OutputPreview\s+from\s+['"]\.\.\/outputs\/OutputPreview\.vue['"];?\s*$/gm, 'var OutputPreview = { template: \'<section class="output-preview-stub" />\', props: [\'item\', \'load\', \'contextKey\'] }')
     .replace(/^import\s+\{\s*outputPreviewKind,\s*outputSource,\s*useOutputs\s*\}\s+from\s+['"]\.\.\/\.\.\/composables\/useOutputs\.js['"];?\s*$/gm, 'var { outputPreviewKind, outputSource, useOutputs } = arguments[5]')
     .replace(/^import\s+\{\s*saveOutputBlob\s*\}\s+from\s+['"]\.\.\/\.\.\/utils\/outputDownload\.js['"];?\s*$/gm, 'var { saveOutputBlob } = arguments[5]')
     .replace(/^import\s+\{\s*useApiStore\s*\}\s+from\s+['"]@\/stores\/api['"];?\s*$/gm, 'var { useApiStore } = arguments[5]')
@@ -142,9 +141,9 @@ const loadSfc = (relativePath) => {
     .replace(/^import\s+\{\s*usePersonalWorkspaceExecution\s*\}\s+from\s+['"]\.\.\/\.\.\/composables\/usePersonalWorkspaceExecution\.js['"];?\s*$/gm, 'var { usePersonalWorkspaceExecution } = arguments[5]')
     .replace(/^import\s+\{\s*usePersonalWorkspaceTaskLinks\s*\}\s+from\s+['"]\.\.\/\.\.\/composables\/usePersonalWorkspaceTaskLinks\.js['"];?\s*$/gm, 'var { usePersonalWorkspaceTaskLinks } = arguments[5]')
     .replace(/^import\s+\{\s*usePersonalWorkspaceConversationLinks\s*\}\s+from\s+['"]\.\.\/\.\.\/composables\/usePersonalWorkspaceConversationLinks\.js['"];?\s*$/gm, 'var { usePersonalWorkspaceConversationLinks } = arguments[5]')
-    .replace(/^import\s+HallConversationHistory\s+from\s+['"]\.\/HallConversationHistory\.vue['"];?\s*$/gm, `var HallConversationHistory = { template: '<section class="hall-conversation-history-stub" />', props: ['conversations', 'deletingId', 'disabled', 'error', 'hasMore', 'loading', 'selectedId'] }`)
-    .replace(/^import\s+HallVoiceControls\s+from\s+['"].\/HallVoiceControls\.vue['"];?\s*$/gm, 'var HallVoiceControls = { template: \'<div class=\"hall-voice-controls-stub\"></div>\', props: [\'voice\'] }')
-    .replace(/^import\s+HallAccountEntry\s+from\s+['"]\.\/HallAccountEntry\.vue['"];?\s*$/gm, `var HallAccountEntry = { name: 'HallAccountEntry', template: '<button class="hall-account-entry-stub" type="button"></button>', props: ['avatar', 'compact', 'displayName', 'disabled'], emits: ['open-profile'] }`)
+    .replace(/^import\s+HallConversationHistory\s+from\s+['"]\.\/HallConversationHistory\.vue['"];?\s*$/gm, 'var HallConversationHistory = { template: \'<section class="hall-conversation-history-stub" />\', props: [\'conversations\', \'deletingId\', \'disabled\', \'error\', \'hasMore\', \'loading\', \'selectedId\'] }')
+    .replace(/^import\s+HallVoiceControls\s+from\s+['"].\/HallVoiceControls\.vue['"];?\s*$/gm, 'var HallVoiceControls = { template: \'<div class="hall-voice-controls-stub"></div>\', props: [\'voice\'] }')
+    .replace(/^import\s+HallAccountEntry\s+from\s+['"]\.\/HallAccountEntry\.vue['"];?\s*$/gm, 'var HallAccountEntry = { name: \'HallAccountEntry\', template: \'<button class="hall-account-entry-stub" type="button"></button>\', props: [\'avatar\', \'compact\', \'displayName\', \'disabled\'], emits: [\'open-profile\'] }')
     .replace(/^import\s+\{\s*marked\s*\}\s+from\s+['"]marked['"];?\s*$/gm, 'var marked = { setOptions: () => {}, parse: value => value }')
     .replace(/^import\s+DOMPurify\s+from\s+['"]dompurify['"];?\s*$/gm, 'var DOMPurify = { sanitize: value => value }')
     .replace('export default', 'return')
@@ -155,7 +154,6 @@ const loadSfc = (relativePath) => {
 const stubs = {
   'var-icon': { template: '<i />' }
 }
-
 
 // ChatPanel's delivery adapters are covered by dedicated contract tests. Component tests
 // substitute network-bound surfaces, keeping this SFC test focused on presentation behavior.
@@ -2188,6 +2186,11 @@ const createFakeGameMelon = ({ deferDeviceReady = false } = {}) => {
   const stateChanges = []
   const deviceReadyCallbacks = []
   let videoInitCalls = 0
+  let completeFutureLoads = false
+  const completeLoads = () => {
+    completeFutureLoads = true
+    loadCallbacks.splice(0).forEach(item => queueMicrotask(item.onload))
+  }
 
   class Stage {}
   class Sprite {}
@@ -2222,7 +2225,8 @@ const createFakeGameMelon = ({ deferDeviceReady = false } = {}) => {
       getImage: () => ({ complete: true }),
       getTMX: () => VALID_HALL_TMX,
       load: (_resource, onload, onerror) => {
-        loadCallbacks.push({ onload, onerror })
+        if (completeFutureLoads) queueMicrotask(onload)
+        else loadCallbacks.push({ onload, onerror })
         return 1
       }
     },
@@ -2241,23 +2245,13 @@ const createFakeGameMelon = ({ deferDeviceReady = false } = {}) => {
     }
   }
 
-  return { deviceReadyCallbacks, loadCallbacks, me, stateChanges, stateSets, videoInitCalls: () => videoInitCalls }
+  return { completeLoads, deviceReadyCallbacks, loadCallbacks, me, stateChanges, stateSets, videoInitCalls: () => videoInitCalls }
 }
 
-const settleMountWithLoaderSuccess = async (fake, mountPromise, timeoutMs = 5_000) => {
-  let settled = false
-  mountPromise.finally(() => {
-    settled = true
-  }).catch(() => {})
-
-  const deadline = Date.now() + timeoutMs
-  while (!settled && Date.now() < deadline) {
-    const callbacks = fake.loadCallbacks.splice(0)
-    callbacks.forEach(item => item.onload())
-    await new Promise(resolve => setTimeout(resolve, 0))
-  }
-
-  if (!settled) throw new Error('timed out draining fake melonJS loader callbacks')
+// The fake loader completes via callbacks, not a wall-clock polling budget.
+// Await the actual mount result so ready/cancellation assertions remain authoritative.
+const settleMountWithLoaderSuccess = (fake, mountPromise) => {
+  fake.completeLoads()
   return mountPromise
 }
 
@@ -2479,6 +2473,7 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
   const hallData = {
     applySceneEvent: noop, applySceneSnapshot: noop, agentFilter: scalar, agents: value, bindPersona: asyncNoop, canAssign: () => true,
     filteredAgents: value, hiddenAgentCount: Vue.ref(0), loadAgents: async () => { counters.loads.agents += 1 }, loadTasks: async () => { counters.loads.tasks += 1 }, loadTaskRecommendations: asyncNoop,
+    operableRosterAgents: Vue.ref([{ agentId: 'agent-o04', name: '显式 roster 好汉' }]),
     mapAgents: value, personaCatalog: value, recommendedAgents: value, setAgentFilter: asyncNoop, setTaskStatusFilter: asyncNoop,
     taskAbilityFilter: scalar, taskAbilityOptions: value, taskKeyword: scalar, tasks: value, taskStatusCount: () => 0, taskStatusFilter: scalar, unbindPersona: asyncNoop, visibleAgents: value
   }
@@ -2506,11 +2501,48 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
     useHallLibrary: () => ({ citeLibraryItem: noop, libraryErrorMessage: scalar, libraryHasSearched: Vue.ref(false), libraryKeyword: scalar, libraryLoading: Vue.ref(false), libraryResults: value, librarySourceType: scalar, searchLibrary: asyncNoop }),
     useTaskWorkspace: () => null, createDisabledTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }), isTaskWorkspaceBuildEnabled: () => false, useTaskWorkspaceView: () => ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: scalar, error: Vue.ref(null), retry: noop }), useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop }),
     portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '',
+    FormalDeliveryList: Vue.defineComponent({ name: 'FormalDeliveryList', props: ['taskId', 'identityFingerprint', 'focusDeliveryId'], setup: () => () => Vue.h('section', { class: 'formal-delivery-probe' }) }),
     HallPortraitHome, HallStage, HallVoiceHud: EmptyPanel, LibraryPanel, AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel, BountyPanel: actualBountyPanel || EmptyPanel, TaskWorkspacePanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PrivateDiscussionPanel: EmptyPanel, PublicDiscussionPanel: EmptyPanel, SelectedAgentCard: EmptyPanel
   }
 }
 
 describe('O04 actual-mounted JuyiHall panel identity', () => {
+  it('W05 locates the existing formal delivery component using review deliveryId, never a private mark', async () => {
+    const mode = Vue.ref('portrait-command')
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const mocks = createActualHallMocks({ mode, mounts: { library: 0, archive: 0 }, counters, actualBountyPanel: BountyPanel })
+    const oldGlobal = mocks.useGlobalStore
+    mocks.useGlobalStore = () => ({ ...oldGlobal(), user: { id: 'owner-a' } })
+    mocks.useApiStore = () => ({ oauthClientId: 'client-a', authorizationGeneration: 1, token: async () => {} })
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+    try {
+      await flushPromises()
+      const state = wrapper.vm.$.setupState
+      await state.openOverviewTask({ id: 'task-a', title: '待验收的正式事项', status: 'assigned' }, {
+        code: 'FORMAL_DELIVERY_SUBMITTED', deliveryId: 'delivery-exact', workItemId: 'work-a', deliveryVersion: '0', taskVersion: '9007199254740993'
+      })
+      await Vue.nextTick()
+      const formal = wrapper.findComponent({ name: 'FormalDeliveryList' })
+      expect(formal.props('taskId')).to.equal('task-a')
+      expect(formal.props('focusDeliveryId')).to.equal('delivery-exact')
+      expect(formal.props('identityFingerprint')).to.equal('client-a\u0000owner-a:1')
+      expect(state.taskReviewRef.taskVersion).to.equal('9007199254740993')
+      expect(wrapper.findComponent(BountyPanel).attributes('inert')).to.equal('')
+      expect(state.panelDepth).to.equal(2)
+      state.returnPanel()
+      await Vue.nextTick()
+      expect(wrapper.find('.formal-delivery-probe').exists()).to.equal(false)
+      expect(wrapper.find('.bounty-modal').text()).to.include('待验收的正式事项')
+      await wrapper.findAll('button').find(button => button.text() === '查看正式成果与验收').trigger('click')
+      expect(wrapper.findComponent({ name: 'FormalDeliveryList' }).props('taskId')).to.equal('task-a')
+      expect(wrapper.find('.hall-private-mark').exists()).to.equal(false)
+      state.closePanel()
+      state.openPanel('tasks')
+      await Vue.nextTick()
+      expect(wrapper.find('.formal-delivery-probe').exists()).to.equal(false)
+    } finally { wrapper.unmount() }
+  })
+
   it('W05 opens a distinct formal draft from the real bounty toolbar and returns without clearing original input or orientation', async () => {
     const mode = Vue.ref('portrait-command')
     const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
@@ -2843,7 +2875,6 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
 
 })
 
-
 describe('V1-8 actual JuyiHall profile route leave guard', () => {
   it('stays on cancellation, confirms a voice-only turn once, and ignores a duplicate profile click while navigation is pending', async () => {
     global.history = global.window.history
@@ -3038,4 +3069,190 @@ describe('W11 R9 actual JuyiHall stale funded acknowledgement', () => {
       })
     }
   }
+})
+
+describe('W04 shared-source save-before-leave wiring', () => {
+  it('retains the file source/detail through failed close, retry, rotation and one-level return; fences identity changes', async () => {
+    const mode = Vue.ref('portrait-command')
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const mocks = createActualHallMocks({ mode, mounts: { library: 0, archive: 0 }, counters })
+    const epoch = Vue.reactive({ authorizationGeneration: 1, oauthClientId: 'client-a', token: async () => {} })
+    const originalGlobal = mocks.useGlobalStore
+    mocks.useGlobalStore = () => ({ ...originalGlobal(), user: { id: 'owner-a' } })
+    mocks.useApiStore = () => epoch
+    let fail = true
+    let calls = 0
+    let complete
+    const needsSave = Vue.ref(true)
+    mocks.HallDraftEditor = Vue.defineComponent({
+      props: ['initialContext'],
+      setup: (props, { expose }) => {
+        expose({ needsSave, busy: false, saveBeforeLeave: async () => {
+          calls += 1
+          if (complete === 'defer') return new Promise(resolve => { complete = resolve })
+          if (fail) return false
+          needsSave.value = false
+          return true
+        }, discardLocalChanges: () => { needsSave.value = false } })
+        return () => Vue.h('textarea', { class: 'source-draft-probe', value: props.initialContext?.instruction || '编辑保留' })
+      }
+    })
+    mocks.PersonalWorkspace = Vue.defineComponent({ setup: (_props, { expose }) => {
+      expose({ canGoBack: true, back: () => true })
+      return () => Vue.h('section', { class: 'file-source-probe' }, '固定旧版本 v2')
+    } })
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+    try {
+      await flushPromises()
+      const state = wrapper.vm.$.setupState
+      state.openPanel('treasure')
+      await Vue.nextTick()
+      const sourceElement = wrapper.find('.file-source-probe').element
+      const context = { originRef: 'juyiting:file', sourceRef: { sourceType: 'FILE', sourceId: 'f', version: 2 }, inputs: [{ fileId: 'f', version: 2 }] }
+      state.openPrivateDraft(context)
+      await Vue.nextTick()
+      expect(state.panelDepth).to.equal(3)
+      expect(sourceElement.hasAttribute('inert')).to.equal(true)
+      await wrapper.find('.panel-return').trigger('click')
+      await flushPromises()
+      expect(calls).to.equal(1)
+      expect(state.renderedPanel).to.equal('draft')
+      expect(wrapper.find('.panel-save-warning').text()).to.include('尚未保存')
+      mode.value = 'landscape-map'
+      await Vue.nextTick()
+      expect(wrapper.findComponent(mocks.HallDraftEditor).props('initialContext').sourceRef).to.deep.equal(context.sourceRef)
+      fail = false
+      await wrapper.findAll('button').find(button => button.text() === '重试保存并继续').trigger('click')
+      await flushPromises()
+      expect(calls).to.equal(2)
+      expect(state.renderedPanel).to.equal('treasure')
+      expect(wrapper.find('.file-source-probe').element).to.equal(sourceElement)
+      expect(sourceElement.hasAttribute('inert')).to.equal(false)
+      needsSave.value = true
+      state.openPrivateDraft(context)
+      await Vue.nextTick()
+      complete = 'defer'
+      await wrapper.find('.panel-close').trigger('click')
+      expect(calls).to.equal(3)
+      epoch.authorizationGeneration = 2
+      await Vue.nextTick()
+      complete(true)
+      await flushPromises()
+      expect(state.activePanel).to.equal('')
+      expect(state.panelFrames).to.deep.equal([])
+      expect(wrapper.find('.source-draft-probe').exists()).to.equal(false)
+    } finally { wrapper.unmount() }
+  })
+
+  it('intercepts navigation and Escape without clearing edits; explicit abandonment does not submit', async () => {
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    let routeLeave
+    const mocks = createActualHallMocks({ mode: Vue.ref('portrait-command'), mounts: { library: 0, archive: 0 }, counters, navigation: { onBeforeRouteLeave: hook => { routeLeave = hook } } })
+    let saves = 0
+    let discards = 0
+    mocks.HallDraftEditor = Vue.defineComponent({ setup: (_props, { expose }) => {
+      expose({ needsSave: true, busy: false, saveBeforeLeave: async () => { saves += 1; return false }, discardLocalChanges: () => { discards += 1 } })
+      return () => Vue.h('textarea', '原文')
+    } })
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+    try {
+      await flushPromises()
+      const state = wrapper.vm.$.setupState
+      state.openPrivateDraft()
+      await Vue.nextTick()
+      expect(await routeLeave()).to.equal(false)
+      expect(state.renderedPanel).to.equal('draft')
+      state.openPanel('library')
+      await flushPromises()
+      expect(state.renderedPanel).to.equal('draft')
+      await wrapper.findAll('button').find(button => button.text() === '留在当前页').trigger('click')
+      await wrapper.find('.floating-panel').trigger('keydown', { key: 'Escape' })
+      await flushPromises()
+      expect(saves).to.equal(3)
+      expect(state.activePanel).to.equal('draft')
+      await wrapper.findAll('button').find(button => button.text() === '放弃未保存修改并继续').trigger('click')
+      expect(discards).to.equal(1)
+      expect(state.activePanel).to.equal('')
+    } finally { wrapper.unmount() }
+  })
+})
+
+describe('A03 real Hall low-height layout wiring', () => {
+  it('enables overview before the map mounts and wires its draft action to the explicit roster while retaining the later map', async () => {
+    const helpers = await import('../src/composables/juyiting/useHallPanels.js')
+    const mode = Vue.ref('landscape-map')
+    const home = Vue.ref('overview')
+    const mocks = createActualHallMocks({ mode, mounts: { library: 0, archive: 0 }, counters: { panelHelpers: helpers } })
+    const oldGlobal = mocks.useGlobalStore
+    mocks.useGlobalStore = () => ({ ...oldGlobal(), user: { id: 'owner-a' } })
+    mocks.useApiStore = () => ({ oauthClientId: 'client-a', authorizationGeneration: 1, token: async () => {} })
+    mocks.useHallHomeMode = () => ({ homeMode: home, isOverviewHome: Vue.computed(() => home.value === 'overview'), setHomeMode: value => { home.value = value } })
+    mocks.HallPortraitHome = Vue.defineComponent({ setup: (_props, { slots, expose }) => {
+      const target = Vue.ref(null)
+      expose({ livePreviewTarget: target })
+      return () => Vue.h('main', [Vue.h('div', { ref: target }), slots.overview?.()])
+    } })
+    mocks.HallOverview = Vue.defineComponent({ props: ['enabled'], emits: ['start-draft'], setup: (props, { emit }) => () =>
+      Vue.h('button', { class: 'overview-create-probe', disabled: !props.enabled, onClick: () => emit('start-draft') }, '提出需求') })
+    mocks.HallDraftEditor = Vue.defineComponent({ props: ['initialContext'], setup: (_props, { expose }) => {
+      expose({ needsSave: false, busy: false, saveBeforeLeave: async () => true })
+      return () => Vue.h('section', '起草交办')
+    } })
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+    try {
+      await flushPromises()
+      const state = wrapper.vm.$.setupState
+      expect(state.stageMounted).to.equal(false)
+      expect(wrapper.findComponent(mocks.HallOverview).props('enabled')).to.equal(true)
+      await wrapper.find('.overview-create-probe').trigger('click')
+      expect(state.renderedPanel).to.equal('draft')
+      expect(wrapper.findComponent(mocks.HallDraftEditor).props('initialContext').targetAgentId).to.equal('agent-o04')
+      const overlay = wrapper.find('.panel-overlay').element
+      state.closePanel()
+      await state.handlePanelAfterLeave(overlay)
+      home.value = 'map'
+      await flushPromises()
+      expect(state.stageMounted).to.equal(true)
+      const stage = wrapper.findComponent(mocks.HallStage).vm
+      home.value = 'overview'
+      await flushPromises()
+      expect(state.stageDrawVisible).to.equal(false)
+      expect(wrapper.findComponent(mocks.HallStage).vm).to.equal(stage)
+      expect(state.selectedAgent.agentId).to.equal('agent-o04')
+      expect(mode.value).to.equal('landscape-map')
+    } finally { wrapper.unmount() }
+  })
+
+  it('uses available height for fine-pointer windows without remounting the selected file pane on resize', async () => {
+    const helpers = await import('../src/composables/juyiting/useHallPanels.js')
+    const counters = { panelHelpers: helpers }
+    const mode = Vue.ref('landscape-map')
+    const height = Vue.ref(390)
+    const mocks = createActualHallMocks({ mode, mounts: { library: 0, archive: 0 }, counters })
+    const oldExperience = mocks.useHallExperienceMode
+    mocks.useHallExperienceMode = () => ({ ...oldExperience(), isMobileCoarse: Vue.ref(false), hallViewportHeight: height })
+    mocks.useHallPanels = helpers.useHallPanels
+    mocks.PersonalWorkspace = Vue.defineComponent({ props: ['compact'], setup: props => () => Vue.h('section', { class: 'height-file-probe' }, String(props.compact)) })
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+    try {
+      await flushPromises()
+      const state = wrapper.vm.$.setupState
+      state.openPanel('treasure')
+      await Vue.nextTick()
+      const pane = wrapper.findComponent(mocks.PersonalWorkspace).vm
+      expect(wrapper.find('.floating-panel').classes()).to.include('layout-full-window')
+      expect(wrapper.find('.panel-overlay').classes()).to.include('is-full-window').and.include('is-low-height')
+      expect(wrapper.findComponent(mocks.PersonalWorkspace).props('compact')).to.equal(true)
+      height.value = 900
+      await Vue.nextTick()
+      expect(wrapper.find('.floating-panel').classes()).to.include('layout-center-modal')
+      expect(wrapper.findComponent(mocks.PersonalWorkspace).vm).to.equal(pane)
+      expect(wrapper.findComponent(mocks.PersonalWorkspace).props('compact')).to.equal(false)
+      height.value = 300
+      await Vue.nextTick()
+      expect(wrapper.find('.floating-panel').classes()).to.include('layout-full-window')
+      expect(wrapper.findComponent(mocks.PersonalWorkspace).vm).to.equal(pane)
+      expect(mode.value).to.equal('landscape-map')
+    } finally { wrapper.unmount() }
+  })
 })
