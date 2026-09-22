@@ -28,9 +28,10 @@
           class="tool-action home-mode-action"
           :disabled="stageInputLocked"
           :title="homeMode === 'map' ? '查看办事概览' : '返回厅中实景'"
+          :aria-label="homeMode === 'map' ? '办事概览' : '厅中实景'"
           @click="emit('set-home-mode', homeMode === 'map' ? 'overview' : 'map')"
         >
-          <var-icon :name="homeMode === 'map' ? 'view-dashboard-outline' : 'map-outline'" />
+          <var-icon :name="homeMode === 'map' ? 'format-list-checkbox' : 'map-marker-outline'" />
           <span class="tool-label">{{ homeMode === 'map' ? '办事概览' : '厅中实景' }}</span>
         </button>
         <button
@@ -50,7 +51,7 @@
           aria-label="打开百宝箱"
           @click="emitStageAction('open-workspace')"
         >
-          <var-icon name="briefcase-variant-outline" />
+          <var-icon name="wrench" />
           <span class="tool-label">百宝箱</span>
         </button>
         <button

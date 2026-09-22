@@ -1207,6 +1207,18 @@ describe('JuyiHall component behavior', () => {
     expect(source).not.to.include('.tool-action span {\n    display: none;')
   })
 
+  it('uses available glyphs and accessible names for immersive overview and toolbox entries', () => {
+    const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
+    const icons = readFileSync(new URL('../node_modules/@varlet/icons/dist/css/varlet-icons.scss', import.meta.url), 'utf8')
+    for (const icon of ['format-list-checkbox', 'map-marker-outline', 'wrench']) {
+      expect(source).to.include(icon)
+      expect(icons).to.include(`.var-icon-${icon}::before`)
+    }
+    expect(source).to.include(`:aria-label="homeMode === 'map' ? '办事概览' : '厅中实景'"`)
+    expect(source).not.to.include('view-dashboard-outline')
+    expect(source).not.to.include('briefcase-variant-outline')
+  })
+
   it('keeps the floating stage header compact so it does not cover the hall map', () => {
     const source = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
     const headerRule = cssRule(source, '.stage-header')
