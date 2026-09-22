@@ -2719,13 +2719,15 @@ describe('archive reader contract behavior', () => {
       await Vue.nextTick()
       expect(wrapper.findAll('[role="dialog"]')).to.have.length(1)
       expect(wrapper.find('.archive-reader-fullscreen').attributes('role')).to.equal('region')
-      expect(wrapper.find('.panel-orientation').exists()).to.equal(true)
+      expect(wrapper.find('.panel-orientation').exists()).to.equal(false)
       const location = readerState.currentLocation.value
       const progress = readerState.progress.value
       const loadCount = api.calls.length
       for (let cycle = 0; cycle < 5; cycle += 1) {
         mode.value = 'landscape-map'; await Vue.nextTick()
+        expect(wrapper.find('.panel-orientation').exists()).to.equal(true)
         mode.value = 'portrait-command'; await Vue.nextTick()
+        expect(wrapper.find('.panel-orientation').exists()).to.equal(false)
         expect(wrapper.find('.floating-panel').element).to.equal(floating)
         expect(wrapper.findComponent(LibraryPanel).vm).to.equal(library.vm)
         expect(wrapper.findComponent(ArchiveReader).vm).to.equal(reader.vm)
