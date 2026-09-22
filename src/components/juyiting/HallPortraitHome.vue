@@ -1,6 +1,6 @@
 <template>
-  <main class="hall-portrait-home" :class="{ 'is-overview-home': homeMode === 'overview', 'is-compact-overview': compact && homeMode === 'overview' }" aria-label="聚义厅掌上首页">
-    <header class="portrait-header">
+  <main class="hall-portrait-home" :class="{ 'is-unified-shell': unifiedShell, 'is-overview-home': homeMode === 'overview', 'is-compact-overview': compact && homeMode === 'overview' }" aria-label="聚义厅掌上首页">
+    <header v-if="!unifiedShell" class="portrait-header">
       <div>
         <p class="portrait-eyebrow">聚义厅 · 掌上调度</p>
         <h1>{{ homeMode === 'overview' ? '办事概览' : '厅中动静' }}</h1>
@@ -22,7 +22,7 @@
       </div>
     </header>
 
-    <p class="portrait-home-mode-hint" role="status">{{ homeMode === 'map' ? '厅中实景 · 可切办事概览' : '办事概览 · 地图与当前选择仍保留' }}</p>
+    <p v-if="!unifiedShell" class="portrait-home-mode-hint" role="status">{{ homeMode === 'map' ? '厅中实景 · 可切办事概览' : '办事概览 · 地图与当前选择仍保留' }}</p>
 
     <section v-if="!$slots.overview" class="portrait-overview" aria-label="状态概览">
       <div><strong>{{ idleCount }}</strong><span>候命</span></div>
@@ -92,7 +92,7 @@
       </template>
     </section>
 
-    <div class="portrait-below-map-scroll" :aria-label="homeMode === 'overview' ? '办事操作区' : '地图以下操作区'">
+    <div v-show="!unifiedShell || homeMode === 'overview'" class="portrait-below-map-scroll" :aria-label="homeMode === 'overview' ? '办事操作区' : '地图以下操作区'">
       <div class="portrait-work-summary">
         <slot name="overview">
           <section data-tour="portrait-todos" class="portrait-section portrait-todos" aria-labelledby="portrait-todos-title">
@@ -119,7 +119,7 @@
         </slot>
       </div>
 
-      <section class="portrait-section" aria-labelledby="portrait-shortcuts-title">
+      <section v-if="!unifiedShell" class="portrait-section" aria-labelledby="portrait-shortcuts-title">
         <div class="section-heading">
           <h2 id="portrait-shortcuts-title">常用入口</h2>
           <div class="section-heading-actions">
@@ -145,7 +145,7 @@
 
 
 
-      <section data-tour="portrait-context" class="portrait-context" aria-label="当前上下文">
+      <section v-if="!unifiedShell" data-tour="portrait-context" class="portrait-context" aria-label="当前上下文">
         <div>
           <span>当前好汉</span>
           <strong>{{ selectedAgent ? agentName(selectedAgent) : '尚未点将' }}</strong>
@@ -223,6 +223,7 @@ import HallAccountEntry from './HallAccountEntry.vue'
 import HallLiveMapPreview from './HallLiveMapPreview.vue'
 
 const props = defineProps({
+  unifiedShell: { type: Boolean, default: false },
   accountAvatar: { type: String, default: '' },
   accountDisplayName: { type: String, default: '' },
   accountEntryDisabled: Boolean,
@@ -815,4 +816,10 @@ button:disabled {
 .is-compact-overview .portrait-header h1 {
   font-size: 22px;
 }
+.hall-portrait-home.is-unified-shell { padding:0; gap:0; height:auto; flex:1 1 0; background:#24190f; }
+.is-unified-shell .portrait-scene.has-live-preview { flex:1 1 0; min-height:0; overflow:hidden; }
+.is-unified-shell .portrait-scene :deep(.hall-live-map-preview) { height:100%; }
+.is-unified-shell .portrait-below-map-scroll { gap:0; }
+.is-unified-shell .portrait-work-summary { width:min(1250px,100%); margin:0 auto; }
+.is-unified-shell .portrait-work-summary :deep(.hall-overview) { border-radius:0; min-height:100%; }
 </style>

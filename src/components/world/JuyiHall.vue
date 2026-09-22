@@ -1,7 +1,35 @@
 <template>
   <div ref="hallRootRef" class="juyi-page" tabindex="-1" :style="hallViewportStyle" :class="{ 'is-panel-open': isPanelSessionActive, 'is-virtual-landscape': isVirtualLandscape, [`experience-${experienceMode}`]: true, [`home-${homeMode}`]: true }">
+    <header class="hall-app-header" :inert="isPanelSessionActive || voiceInteractionLocked ? '' : null" :aria-hidden="isPanelSessionActive ? 'true' : null">
+      <button class="hall-brand" type="button" @click="setHomeMode('map')"><span class="hall-seal">聚</span><span>聚义厅<small>梁山好汉 · 共成其事</small></span></button>
+      <nav class="hall-main-nav" aria-label="聚义厅主导航">
+        <button type="button" :aria-current="!activePanel ? 'page' : null" @click="setHomeMode('map')">聚义厅</button>
+        <button type="button" @click="openPanel('tasks')">悬赏榜</button>
+        <button type="button" @click="handleStagePanelOpen('chat')">厅内议事</button>
+        <button type="button" aria-label="打开百宝箱" @click="openBabaoBox">百宝箱</button>
+      </nav>
+      <div class="hall-header-tools">
+        <button type="button" @click="openPanel('agents')">好汉</button>
+        <button type="button" aria-label="查看消息" @click="openPanel('messages')">消息</button>
+        <button type="button" :disabled="accountEntryDisabled" aria-label="个人中心" @click="openProfile">账户</button>
+      </div>
+    </header>
+    <div class="hall-mode-toolbar" :inert="isPanelSessionActive || voiceInteractionLocked ? '' : null" :aria-hidden="isPanelSessionActive ? 'true' : null">
+      <div class="hall-mode-switch" aria-label="聚义厅视图"><button type="button" :aria-pressed="homeMode === 'map'" @click="setHomeMode('map')">厅中实景</button><button type="button" :aria-pressed="homeMode === 'overview'" @click="setHomeMode('overview')">办事概览</button></div>
+      <span class="hall-mode-hint">地图入口与办事入口，通向同一件事</span>
+      <div class="hall-scene-tools">
+        <button type="button" @click="openPanel('library')">典籍阁</button>
+        <button v-if="homeMode === 'map'" type="button" aria-label="缩小地图" @click="hallStageRef?.zoom(-0.12)">−</button>
+        <button v-if="homeMode === 'map'" type="button" aria-label="放大地图" @click="hallStageRef?.zoom(0.12)">+</button>
+        <button v-if="homeMode === 'map'" type="button" @click="hallStageRef?.resetCamera()">全景</button>
+        <button type="button" aria-label="方向控制" @click="requestPanelOrientation">{{ orientationRequestPending ? '取消切换' : (experienceMode === 'landscape-map' ? '纵向布局' : '横向布局') }}</button>
+        <button class="hall-sound-action" type="button" :aria-pressed="soundEnabled" @click="toggleHallSound">{{ soundEnabled ? '关闭声音' : '开启声音' }}</button>
+        <button class="hall-help-action" type="button" @click="emit('open-onboarding', $event.currentTarget)">怎么开始？</button>
+      </div>
+    </div>
     <HallPortraitHome
       ref="portraitHomeRef"
+      unified-shell
       v-show="!experienceReady || experienceMode === 'portrait-command' || isOverviewHome"
       :home-mode="homeMode"
       :compact="isLowHeightPanel"
@@ -50,6 +78,10 @@
           :enabled="Boolean(hallIdentityScope)"
           :identity-scope="hallIdentityScope"
           :identity-epoch="apiStore.authorizationGeneration"
+          :agents="operableRosterAgents"
+          @set-home-mode="setHomeMode"
+          @open-board="openPanel('tasks')"
+          @start-chat="handleStagePanelOpen('chat')"
           @start-draft="openPrivateDraft()"
           @open-item="openOverviewItem"
           @open-task="openOverviewTask"
@@ -62,6 +94,7 @@
     <HallStage
       v-if="stageMounted"
       ref="hallStageRef"
+      unified-shell
       v-show="experienceReady"
       :read-only-preview="experienceMode === 'portrait-command' || isOverviewHome"
       :account-avatar="accountAvatar"
@@ -139,6 +172,13 @@
       </div>
     </HallStage>
     </Teleport>
+
+    <footer v-if="homeMode === 'map'" class="hall-map-actions" :inert="isPanelSessionActive || voiceInteractionLocked ? '' : null" :aria-hidden="isPanelSessionActive ? 'true' : null">
+      <button class="hall-primary" type="button" @click="openPrivateDraft()">＋ 提出需求</button>
+      <button type="button" @click="handleStagePanelOpen('chat')">先聊一聊</button>
+      <span>不必先懂所有功能，就能开始办事</span>
+      <button class="hall-continue" type="button" @click="setHomeMode('overview')">接着上次办 →</button>
+    </footer>
 
     <HallVoiceHud
       v-if="experienceMode === 'portrait-command' && voiceInteractionLocked && !activePanel"
@@ -740,6 +780,7 @@ const panelDepth = computed(() => panelFrames.value.length
   + Number(panelFrames.value.includes('library') && Boolean(libraryPanelRef.value?.canGoBack)))
 const canOpenPanelDetail = computed(() => panelDepth.value < 3)
 const panelChildCanReturn = computed(() => {
+  if (activeDraftEditor()) return Boolean(activeDraftEditor().canGoBack)
   if (renderedPanel.value === 'tasks') return Boolean(formalTaskRef.value || bountyPanelRef.value?.canGoBack)
   if (renderedPanel.value === 'treasure') return Boolean(treasurePanelRef.value?.canGoBack)
   if (renderedPanel.value === 'library') return Boolean(libraryPanelRef.value?.canGoBack)
@@ -876,7 +917,9 @@ const {
 } = useHallSound()
 
 const activePanelTitle = computed(() => {
-  if (renderedPanel.value === 'draft') return '起草交办'
+  const childTitle = activeDraftEditor()?.windowTitle || (renderedPanel.value === 'treasure' && treasurePanelRef.value?.windowTitle)
+  if (childTitle) return childTitle
+  if (renderedPanel.value === 'draft') return '提出需求'
   if (renderedPanel.value === 'tasks' && formalTaskRef.value) return '正式成果与验收'
   if (renderedPanel.value === 'formalDraft') return '起草正式任务'
   if (renderedPanel.value === 'messages') return '消息'
@@ -886,7 +929,7 @@ const activePanelTitle = computed(() => {
   if (renderedPanel.value === 'tasks') return '悬赏榜'
   if (renderedPanel.value === 'workspace') return '协作工作台'
   if (renderedPanel.value === 'treasure') return '百宝箱'
-  if (renderedPanel.value === 'chat') return '厅前议事'
+  if (renderedPanel.value === 'chat') return '厅内议事'
   if (renderedPanel.value === 'library') return '案卷阁'
   return ''
 })
@@ -1395,6 +1438,8 @@ const requestPanelOrientation = () => {
 
 const returnPanel = () => {
   if (panelDisposed || voiceInteractionLocked.value) return false
+  // Back inside a draft/selection/preview is navigation, not leaving the draft.
+  if (activeDraftEditor()?.canGoBack) return activeDraftEditor().goBack()
   if (guardPanelLeave(() => returnPanel() || closePanel())) return true
   if (renderedPanel.value === 'tasks' && formalTaskRef.value) { formalTaskRef.value = null; return true }
   if (panelChildCanReturn.value) {
@@ -2001,6 +2046,7 @@ onUnmounted(() => {
   position: relative;
   display: flex;
   flex: 1;
+  flex-direction: column;
   min-height: 0;
   height: 100%;
   padding: 0;
@@ -3097,5 +3143,70 @@ button.hall-room {
 }
 .panel-save-warning p {
   margin: 0 0 6px;
+}
+/* The accepted prototype supplies the page architecture; the live Stage remains intact. */
+.hall-app-header,.hall-mode-toolbar,.hall-map-actions { display:flex; align-items:center; gap:16px; flex:0 0 auto; padding:12px 24px; color:#f0dfbd; background:#302015; border-bottom:1px solid #62492c; }
+.hall-app-header { justify-content:space-between; }
+.hall-app-header button,.hall-mode-toolbar button,.hall-map-actions button { font:inherit; color:inherit; cursor:pointer; min-height:44px; padding:8px 14px; border:1px solid #765a36; border-radius:4px; background:transparent; white-space:nowrap; }
+.hall-app-header button:focus-visible,.hall-mode-toolbar button:focus-visible,.hall-map-actions button:focus-visible { outline:3px solid #e6bc69; outline-offset:2px; }
+.hall-app-header .hall-brand { display:flex; gap:12px; align-items:center; padding:0; border:0; font-size:22px; text-align:left; }
+.hall-brand small { display:block; font-size:12px; color:#c4a978; margin-top:4px; }
+.hall-seal { display:grid; place-items:center; background:#8f402c; border:1px solid #b6774d; width:44px; height:44px; }
+.hall-main-nav,.hall-header-tools,.hall-scene-tools { display:flex; align-items:center; gap:8px; }
+.hall-main-nav button { border-color:transparent; }
+.hall-main-nav button[aria-current=page] { border-bottom-color:#e4bf73; border-radius:0; }
+.hall-mode-toolbar { padding:6px 24px; gap:12px; background:#261a10; }
+.hall-mode-switch { display:flex; flex:0 0 auto; }
+.hall-mode-switch button { border-radius:0; }
+.hall-mode-switch button[aria-pressed=true] { background:#71512f; }
+.hall-mode-hint { flex:1; font-size:13px; color:#bea77c; }
+.hall-mode-toolbar .hall-scene-tools { margin-left:auto; gap:6px; }
+.hall-mode-toolbar button { min-height:36px; padding:6px 10px; font-size:14px; }
+.hall-map-actions { border-top:1px solid #62492c; border-bottom:0; padding-bottom:max(12px,env(safe-area-inset-bottom)); }
+.hall-map-actions span { color:#c4a978; font-size:14px; }
+.hall-map-actions .hall-primary { background:#8f402c; border-color:#b4774e; color:#fff8eb; }
+.hall-map-actions .hall-continue { margin-left:auto; }
+.panel-overlay:not(.is-full-window) { padding:32px 24px; }
+.floating-panel.layout-center-modal,.floating-panel.panel-treasure:not(.layout-full-window) { width:min(1040px,100%); height:min(780px,100%); max-height:100%; }
+.panel-title { background:#f3e8d0; padding:14px 22px; min-height:64px; font-weight:500; }
+.panel-title > span { white-space:normal; font-size:20px; }
+.panel-title .panel-close { order:4; border:0; background:transparent; }
+.panel-title .panel-return { order:0; }
+.panel-title .panel-orientation { margin-left:auto; font-size:14px; border:1px solid #c8ad84; background:transparent; }
+.panel-title > span { order:1; }
+.panel-title .panel-orientation { order:2; }
+@media (max-width:1000px) {
+ .hall-mode-hint,.hall-sound-action,.hall-help-action,.hall-brand small { display:none; }
+ .hall-app-header,.hall-map-actions { padding:8px 12px; gap:8px; }
+ .hall-main-nav,.hall-header-tools { gap:2px; }
+ .hall-app-header button { padding:6px 10px; }
+ .hall-mode-toolbar { padding:5px 12px; }
+}
+@media (max-width:600px) {
+ .hall-app-header { flex-wrap:wrap; }
+ .hall-app-header .hall-brand { font-size:19px; }
+ .hall-seal { height:32px; width:32px; }
+ .hall-main-nav { order:3; width:100%; justify-content:space-between; }
+ .hall-main-nav button { flex:1; padding:6px; }
+ .hall-mode-toolbar { flex-wrap:wrap; gap:4px; }
+ .hall-mode-toolbar .hall-scene-tools { flex-wrap:wrap; }
+ .hall-mode-toolbar button { padding:6px; }
+ .hall-map-actions span { display:none; }
+ .hall-map-actions button { padding:8px; font-size:14px; }
+ .panel-overlay.is-full-window { padding:0; }
+ .panel-overlay.is-full-window .floating-panel { border-radius:0; }
+}
+@media (max-height:500px) and (min-width:601px) {
+ .hall-app-header { padding:4px 12px; }
+ .hall-app-header .hall-brand { font-size:18px; }
+ .hall-seal { width:30px; height:30px; }
+ .hall-app-header button { min-height:34px; padding:5px 10px; }
+ .hall-mode-toolbar { padding:3px 12px; }
+ .hall-mode-toolbar button { min-height:32px; padding:4px 8px; }
+ .hall-map-actions { padding:4px 12px; }
+ .hall-map-actions button { min-height:34px; padding:5px 10px; }
+ .hall-map-actions span { font-size:12px; }
+ .panel-title { min-height:44px; padding:6px 12px; }
+ .panel-title > span { font-size:17px; }
 }
 </style>

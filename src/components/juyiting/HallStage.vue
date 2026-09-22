@@ -1,6 +1,6 @@
 <template>
   <section class="hall-stage">
-    <div v-if="!readOnlyPreview" class="stage-header">
+    <div v-if="!readOnlyPreview && !unifiedShell" class="stage-header">
       <div class="stage-heading">
         <div class="eyebrow">梁山泊传令中枢</div>
         <h1>聚义厅</h1>
@@ -154,6 +154,7 @@ import { classifyViewportResize } from '@/game/camera/resizePolicy.js'
 import HallAccountEntry from './HallAccountEntry.vue'
 
 const props = defineProps({
+  unifiedShell: { type: Boolean, default: false },
   accountAvatar: { type: String, default: '' },
   accountDisplayName: { type: String, default: '' },
   accountEntryDisabled: { type: Boolean, default: false },
@@ -1019,7 +1020,19 @@ watch(() => props.selectedAgent, (agent) => {
 })
 
 // Page-owned preview controls delegate to this exact persistent Stage instance.
-defineExpose({ retryScene })
+const zoom = amount => {
+  if (props.interactionLocked || !melonReady.value) return false
+  juyitingGame.zoomBy?.(amount)
+  scheduleReturnRefresh()
+  return true
+}
+const resetCamera = () => {
+  if (props.interactionLocked || !melonReady.value) return false
+  juyitingGame.resetToMainHall?.()
+  scheduleReturnRefresh()
+  return true
+}
+defineExpose({ retryScene, zoom, resetCamera })
 </script>
 
 <style scoped>
