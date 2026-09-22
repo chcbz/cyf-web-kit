@@ -254,6 +254,16 @@ describe('HallPortraitHome', () => {
     wrapper.unmount()
   })
 
+  it('keeps the private-discussion CTA visible in the unified shell', async () => {
+    const eligible = { agentId: 'wuyong', name: '吴用', boundToMe: true, systemAgent: false, canOperate: true }
+    const wrapper = mount(loadPortraitHome(), { props: baseProps({ unifiedShell: true, agents: [eligible], operableAgents: [eligible], selectedAgent: eligible }) })
+    const action = wrapper.get('[data-portrait-action="private-discussion"]')
+    expect(action.text()).to.include('与吴用密议')
+    await action.trigger('click')
+    expect(wrapper.emitted('start-agent-conversation')).to.deep.equal([[eligible]])
+    wrapper.unmount()
+  })
+
   it('guides toward point selection when another eligible self-owned agent exists', async () => {
     const system = { agentId: 'songjiang', name: '宋江', boundToMe: true, systemAgent: true, canOperate: true }
     const eligible = { agentId: 'wuyong', name: '吴用', boundToMe: true, systemAgent: false, canOperate: true }
