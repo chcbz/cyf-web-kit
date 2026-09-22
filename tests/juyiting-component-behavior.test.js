@@ -2507,6 +2507,44 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
 }
 
 describe('O04 actual-mounted JuyiHall panel identity', () => {
+  it('restores landscape immersion, removes portrait map controls, and preserves open panels when rotating', async () => {
+    const mode = Vue.ref('portrait-command')
+    const home = Vue.ref('map')
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const mocks = createActualHallMocks({ mode, mounts: { library: 0, archive: 0 }, counters })
+    mocks.useHallHomeMode = () => ({ homeMode: home, isOverviewHome: Vue.computed(() => home.value === 'overview'), setHomeMode: value => { home.value = value } })
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+    try {
+      await flushPromises()
+      const state = wrapper.vm.$.setupState
+      expect(wrapper.find('.hall-app-header').element.style.display).not.to.equal('none')
+      expect(wrapper.find('[aria-label="方向控制"]').exists()).to.equal(false)
+      expect(wrapper.find('[aria-label="放大地图"]').exists()).to.equal(false)
+      expect(wrapper.find('[aria-label="缩小地图"]').exists()).to.equal(false)
+      expect(wrapper.findAll('.hall-scene-tools button').some(b => b.text() === '全景')).to.equal(false)
+      state.openPanel('library')
+      await Vue.nextTick()
+      expect(wrapper.find('.panel-orientation').exists()).to.equal(false)
+      const panel = wrapper.find('.floating-panel').element
+      mode.value = 'landscape-map'
+      await Vue.nextTick()
+      expect(state.isImmersiveMap).to.equal(true)
+      expect(wrapper.find('.hall-app-header').element.style.display).to.equal('none')
+      expect(wrapper.find('.hall-mode-toolbar').element.style.display).to.equal('none')
+      expect(wrapper.find('.hall-map-actions').exists()).to.equal(false)
+      expect(wrapper.find('.floating-panel').element).to.equal(panel)
+      expect(wrapper.find('.panel-orientation').exists()).to.equal(true)
+      home.value = 'overview'
+      await Vue.nextTick()
+      expect(state.isImmersiveMap).to.equal(false)
+      expect(wrapper.find('.hall-app-header').element.style.display).not.to.equal('none')
+      mode.value = 'portrait-command'
+      await Vue.nextTick()
+      expect(wrapper.find('.panel-orientation').exists()).to.equal(false)
+      expect(wrapper.find('.floating-panel').element).to.equal(panel)
+    } finally { wrapper.unmount() }
+  })
+
   it('W05 locates the existing formal delivery component using review deliveryId, never a private mark', async () => {
     const mode = Vue.ref('portrait-command')
     const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
@@ -2567,9 +2605,10 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
       expect(wrapper.find('.formal-draft-probe').text()).to.equal('TASK_CREATE')
       expect(wrapper.findComponent(mocks.HallDraftEditor).props('selectedAgent')).to.equal(undefined)
       expect(source.hasAttribute('inert')).to.equal(true)
-      expect(wrapper.find('.panel-orientation').exists()).to.equal(true)
+      expect(wrapper.find('.panel-orientation').exists()).to.equal(false)
       mode.value = 'landscape-map'
       await Vue.nextTick()
+      expect(wrapper.find('.panel-orientation').exists()).to.equal(true)
       state.returnPanel()
       await Vue.nextTick()
       expect(wrapper.findComponent(BountyPanel).element).to.equal(source)
@@ -2597,7 +2636,7 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
       expect(wrapper.find('.bounty-source').attributes('inert')).to.equal('')
       expect(state.panelDepth).to.equal(3)
       expect(state.openPanel('treasure')).to.equal(false)
-      expect(wrapper.find('.panel-orientation').exists()).to.equal(true)
+      expect(wrapper.find('.panel-orientation').exists()).to.equal(false)
       state.returnPanel()
       await Vue.nextTick()
       expect(wrapper.find('.bounty-modal').exists()).to.equal(false)

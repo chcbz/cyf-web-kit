@@ -1,6 +1,6 @@
 <template>
-  <div ref="hallRootRef" class="juyi-page" tabindex="-1" :style="hallViewportStyle" :class="{ 'is-panel-open': isPanelSessionActive, 'is-virtual-landscape': isVirtualLandscape, [`experience-${experienceMode}`]: true, [`home-${homeMode}`]: true }">
-    <header class="hall-app-header" :inert="isPanelSessionActive || voiceInteractionLocked ? '' : null" :aria-hidden="isPanelSessionActive ? 'true' : null">
+  <div ref="hallRootRef" class="juyi-page" tabindex="-1" :style="hallViewportStyle" :class="{ 'is-immersive-map': isImmersiveMap, 'is-panel-open': isPanelSessionActive, 'is-virtual-landscape': isVirtualLandscape, [`experience-${experienceMode}`]: true, [`home-${homeMode}`]: true }">
+    <header v-show="!isImmersiveMap" class="hall-app-header" :inert="isPanelSessionActive || voiceInteractionLocked ? '' : null" :aria-hidden="isPanelSessionActive ? 'true' : null">
       <button class="hall-brand" type="button" @click="setHomeMode('map')"><span class="hall-seal">聚</span><span>聚义厅<small>梁山好汉 · 共成其事</small></span></button>
       <nav class="hall-main-nav" aria-label="聚义厅主导航">
         <button type="button" :aria-current="!activePanel ? 'page' : null" @click="setHomeMode('map')">聚义厅</button>
@@ -14,15 +14,15 @@
         <button type="button" :disabled="accountEntryDisabled" aria-label="个人中心" @click="openProfile">账户</button>
       </div>
     </header>
-    <div class="hall-mode-toolbar" :inert="isPanelSessionActive || voiceInteractionLocked ? '' : null" :aria-hidden="isPanelSessionActive ? 'true' : null">
+    <div v-show="!isImmersiveMap" class="hall-mode-toolbar" :inert="isPanelSessionActive || voiceInteractionLocked ? '' : null" :aria-hidden="isPanelSessionActive ? 'true' : null">
       <div class="hall-mode-switch" aria-label="聚义厅视图"><button type="button" :aria-pressed="homeMode === 'map'" @click="setHomeMode('map')">厅中实景</button><button type="button" :aria-pressed="homeMode === 'overview'" @click="setHomeMode('overview')">办事概览</button></div>
       <span class="hall-mode-hint">地图入口与办事入口，通向同一件事</span>
       <div class="hall-scene-tools">
         <button type="button" @click="openPanel('library')">典籍阁</button>
-        <button v-if="homeMode === 'map'" type="button" aria-label="缩小地图" @click="hallStageRef?.zoom(-0.12)">−</button>
-        <button v-if="homeMode === 'map'" type="button" aria-label="放大地图" @click="hallStageRef?.zoom(0.12)">+</button>
-        <button v-if="homeMode === 'map'" type="button" @click="hallStageRef?.resetCamera()">全景</button>
-        <button type="button" aria-label="方向控制" @click="requestPanelOrientation">{{ orientationRequestPending ? '取消切换' : (experienceMode === 'landscape-map' ? '纵向布局' : '横向布局') }}</button>
+        <button v-if="homeMode === 'map' && experienceMode === 'landscape-map'" type="button" aria-label="缩小地图" @click="hallStageRef?.zoom(-0.12)">−</button>
+        <button v-if="homeMode === 'map' && experienceMode === 'landscape-map'" type="button" aria-label="放大地图" @click="hallStageRef?.zoom(0.12)">+</button>
+        <button v-if="homeMode === 'map' && experienceMode === 'landscape-map'" type="button" @click="hallStageRef?.resetCamera()">全景</button>
+        <button v-if="experienceMode === 'landscape-map'" type="button" aria-label="方向控制" @click="requestPanelOrientation">{{ orientationRequestPending ? '取消切换' : (experienceMode === 'landscape-map' ? '纵向布局' : '横向布局') }}</button>
         <button class="hall-sound-action" type="button" :aria-pressed="soundEnabled" @click="toggleHallSound">{{ soundEnabled ? '关闭声音' : '开启声音' }}</button>
         <button class="hall-help-action" type="button" @click="emit('open-onboarding', $event.currentTarget)">怎么开始？</button>
       </div>
@@ -94,7 +94,7 @@
     <HallStage
       v-if="stageMounted"
       ref="hallStageRef"
-      unified-shell
+      :unified-shell="!isImmersiveMap"
       v-show="experienceReady"
       :read-only-preview="experienceMode === 'portrait-command' || isOverviewHome"
       :account-avatar="accountAvatar"
@@ -173,7 +173,7 @@
     </HallStage>
     </Teleport>
 
-    <footer v-if="homeMode === 'map'" class="hall-map-actions" :inert="isPanelSessionActive || voiceInteractionLocked ? '' : null" :aria-hidden="isPanelSessionActive ? 'true' : null">
+    <footer v-if="homeMode === 'map' && !isImmersiveMap" class="hall-map-actions" :inert="isPanelSessionActive || voiceInteractionLocked ? '' : null" :aria-hidden="isPanelSessionActive ? 'true' : null">
       <button class="hall-primary" type="button" @click="openPrivateDraft()">＋ 提出需求</button>
       <button type="button" @click="handleStagePanelOpen('chat')">先聊一聊</button>
       <span>不必先懂所有功能，就能开始办事</span>
@@ -226,6 +226,7 @@
             >返回</button>
             <span :id="panelTitleId">{{ activePanelTitle }}</span>
             <button
+              v-if="experienceMode === 'landscape-map'"
               class="panel-orientation"
               type="button"
               :aria-label="orientationRequestPending ? '取消方向请求' : (experienceMode === 'landscape-map' ? '切换竖向布局' : '切换横向布局')"
@@ -810,6 +811,9 @@ const {
   requestLandscape,
   requestPortrait
 } = useHallExperienceMode()
+// Landscape keeps the existing full-canvas Stage HUD; the business shell belongs
+// to portrait/overview. Use owned presentation mode, not keyboard-shrunk height.
+const isImmersiveMap = computed(() => experienceMode.value === 'landscape-map' && homeMode.value === 'map')
 const resolvedHallViewportHeight = computed(() => Number(hallViewportHeight?.value ?? hallViewportHeight) || 0)
 const hallViewportStyle = computed(() => {
   const height = resolvedHallViewportHeight.value
