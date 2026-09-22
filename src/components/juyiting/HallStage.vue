@@ -34,6 +34,15 @@
           <span class="tool-label">{{ homeMode === 'map' ? '办事概览' : '厅中实景' }}</span>
         </button>
         <button
+          class="tool-action"
+          :disabled="stageInputLocked"
+          aria-label="查看消息"
+          @click="emit('open-panel', 'messages')"
+        >
+          <var-icon name="bell-outline" />
+          <span class="tool-label">消息</span>
+        </button>
+        <button
           class="tool-action babao-action"
           data-tour="landscape-babao-box"
           :disabled="stageInputLocked"
@@ -59,8 +68,8 @@
           data-tour="landscape-onboarding"
           :disabled="stageInputLocked"
           title="重看新手引导"
-          @click="emitOnboarding($event.currentTarget)"
           aria-label="重看新手引导"
+          @click="emitOnboarding($event.currentTarget)"
         >
           <var-icon name="help-circle-outline" aria-hidden="true" />
           <span class="tool-label">引导</span>

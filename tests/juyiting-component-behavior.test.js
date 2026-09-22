@@ -2511,6 +2511,113 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
 }
 
 describe('O04 actual-mounted JuyiHall panel identity', () => {
+  it('W05 opens a distinct formal draft from the real bounty toolbar and returns without clearing original input or orientation', async () => {
+    const mode = Vue.ref('portrait-command')
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const mocks = createActualHallMocks({ mode, mounts: { library: 0, archive: 0 }, counters, actualBountyPanel: BountyPanel })
+    mocks.HallDraftEditor = Vue.defineComponent({
+      props: ['initialKind', 'selectedAgent', 'identityScope'],
+      setup: props => () => Vue.h('section', { class: 'formal-draft-probe' }, props.initialKind)
+    })
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+    try {
+      await flushPromises()
+      const state = wrapper.vm.$.setupState
+      state.openPanel('tasks')
+      await Vue.nextTick()
+      const bounty = wrapper.findComponent(BountyPanel)
+      await bounty.findAll('button').find(button => button.text() === '张榜').trigger('click')
+      await bounty.find('input[name="taskTitle"]').setValue('原张榜尚未提交的名目')
+      const source = bounty.element
+      await bounty.findAll('button').find(button => button.text() === '起草正式任务').trigger('click')
+      await Vue.nextTick()
+      expect(state.panelFrames).to.deep.equal(['tasks', 'formalDraft'])
+      expect(wrapper.find('.formal-draft-probe').text()).to.equal('TASK_CREATE')
+      expect(wrapper.findComponent(mocks.HallDraftEditor).props('selectedAgent')).to.equal(undefined)
+      expect(source.hasAttribute('inert')).to.equal(true)
+      expect(wrapper.find('.panel-orientation').exists()).to.equal(true)
+      mode.value = 'landscape-map'
+      await Vue.nextTick()
+      state.returnPanel()
+      await Vue.nextTick()
+      expect(wrapper.findComponent(BountyPanel).element).to.equal(source)
+      expect(source.hasAttribute('inert')).to.equal(false)
+      expect(bounty.find('input[name="taskTitle"]').element.value).to.equal('原张榜尚未提交的名目')
+      expect(state.panelFrames).to.deep.equal(['tasks'])
+      expect(bounty.emitted('create-task')).to.equal(undefined)
+    } finally { wrapper.unmount() }
+  })
+
+  it('W05 opens the actual formal task detail as the third logical layer and returns one layer at a time', async () => {
+    const mode = Vue.ref('portrait-command')
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const mocks = createActualHallMocks({ mode, mounts: { library: 0, archive: 0 }, counters, actualBountyPanel: BountyPanel })
+    mocks.HallOverview = Vue.defineComponent({ setup: () => () => Vue.h('section', '来源列表') })
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+    try {
+      await flushPromises()
+      const state = wrapper.vm.$.setupState
+      state.openPanel('messages')
+      await Vue.nextTick()
+      await state.openOverviewTask({ id: 'task-from-overview', title: '原正式榜文', status: 'open', requiredAbilities: [] })
+      await Vue.nextTick()
+      expect(wrapper.find('.bounty-modal').text()).to.include('原正式榜文')
+      expect(wrapper.find('.bounty-source').attributes('inert')).to.equal('')
+      expect(state.panelDepth).to.equal(3)
+      expect(state.openPanel('treasure')).to.equal(false)
+      expect(wrapper.find('.panel-orientation').exists()).to.equal(true)
+      state.returnPanel()
+      await Vue.nextTick()
+      expect(wrapper.find('.bounty-modal').exists()).to.equal(false)
+      expect(state.panelFrames).to.deep.equal(['messages', 'tasks'])
+      expect(state.panelDepth).to.equal(2)
+      state.returnPanel()
+      await Vue.nextTick()
+      expect(state.panelFrames).to.deep.equal(['messages'])
+    } finally { wrapper.unmount() }
+  })
+
+  it('W05 restores exact overview refs and canonical tasks without reloading filtered task lists', async () => {
+    const mode = Vue.ref('portrait-command')
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const mocks = createActualHallMocks({ mode, mounts: { library: 0, archive: 0 }, counters })
+    const openedTasks = []
+    mocks.HallOverview = Vue.defineComponent({ setup: () => () => Vue.h('section', { class: 'w05-messages' }, '来源列表') })
+    mocks.HallDraftEditor = Vue.defineComponent({
+      props: ['initialRef'],
+      setup: props => () => Vue.h('section', { class: 'w05-restored-draft' }, `${props.initialRef.sourceType}:${props.initialRef.sourceId}`)
+    })
+    mocks.BountyPanel = Vue.defineComponent({
+      setup (_props, { expose }) {
+        expose({ openTask: task => openedTasks.push(task) })
+        return () => Vue.h('section', { class: 'w05-original-task' }, '原悬赏入口')
+      }
+    })
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+    try {
+      await flushPromises()
+      const state = wrapper.vm.$.setupState
+      state.openPanel('messages')
+      await Vue.nextTick()
+      const source = wrapper.find('.w05-messages').element
+      expect(state.openOverviewItem({ sourceType: 'DRAFT', sourceId: 'draft-exact' })).to.equal(true)
+      await Vue.nextTick()
+      expect(wrapper.find('.w05-restored-draft').text()).to.equal('DRAFT:draft-exact')
+      expect(source.hasAttribute('inert')).to.equal(true)
+      state.returnPanel()
+      await Vue.nextTick()
+      expect(wrapper.find('.w05-messages').element).to.equal(source)
+      expect(source.hasAttribute('inert')).to.equal(false)
+      const canonical = { id: 'task-outside-filter', title: '原榜文', status: 'assigned' }
+      expect(await state.openOverviewTask(canonical)).to.equal(true)
+      expect(openedTasks).to.deep.equal([canonical])
+      expect(state.selectedTask.id).to.equal('task-outside-filter')
+      expect(counters.loads.tasks).to.equal(0)
+      expect(state.panelFrames).to.deep.equal(['messages', 'tasks'])
+      expect(wrapper.findAll('[role="dialog"]')).to.have.length(1)
+    } finally { wrapper.unmount() }
+  })
+
   it('W04 returns from treasure to the same source pane, focus and unsaved text without resetting chat', async () => {
     const mode = Vue.ref('portrait-command')
     const mounts = { library: 0, archive: 0 }

@@ -159,7 +159,7 @@ describe('JYT-UX-W03 Hall draft submission and recovery adapter', () => {
     drafts.dispose()
   })
 
-  it('clears the prior owner recovery entry when identity scope becomes empty', async () => {
+  it('hides the prior owner on logout while retaining the isolated unknown key for reauthorization', async () => {
     const storage = memoryStorage()
     const scope = ref('tenant-a\u0000client-a\u0000owner-a')
     const api = { execute: async request => request.url === '/hall/drafts' ? { data: draft() } : Promise.reject(Object.assign(new Error('lost'), { status: 503 })) }
@@ -169,7 +169,13 @@ describe('JYT-UX-W03 Hall draft submission and recovery adapter', () => {
     await drafts.submit({ authorizationAcknowledgement: true })
     expect(storage.entries().some(([key]) => key.startsWith('cyf.hall.submission-recovery.v1.') && !key.endsWith('.browser'))).to.equal(true)
     scope.value = ''
-    expect(storage.entries().some(([key]) => key.startsWith('cyf.hall.submission-recovery.v1.') && !key.endsWith('.browser'))).to.equal(false)
+    expect(drafts.draft.value).to.equal(null)
+    expect(drafts.submissionRecovery.value).to.equal(null)
+    expect(storage.entries().some(([key]) => key.startsWith('cyf.hall.submission-recovery.v1.') && !key.endsWith('.browser'))).to.equal(true)
+    scope.value = 'tenant-a\u0000client-a\u0000owner-b'
+    expect(drafts.submissionRecovery.value).to.equal(null)
+    scope.value = 'tenant-a\u0000client-a\u0000owner-a'
+    expect(drafts.unresolvedIntent.value.idempotencyKey).to.equal('original-key')
     drafts.dispose()
   })
 
@@ -269,5 +275,194 @@ describe('JYT-UX-W03 Hall draft submission and recovery adapter', () => {
     expect(calls[0].params).to.deep.equal({ cursor })
     expect(await drafts.list({ cursor: `${cursor}x` })).to.equal(false)
     drafts.dispose()
+  })
+})
+
+describe('JYT-UX-W05 frozen TASK_CREATE receipt boundaries', () => {
+  const formalFields = { title: '正式名目', instruction: '正式简述', targetAgentId: null, outputMime: null, inputs: [] }
+  const formalDraft = overrides => draft({ kind: 'TASK_CREATE', editableFields: formalFields, ...overrides })
+  const taskReceipt = overrides => receipt({ ref: { sourceType: 'TASK', sourceId: 'task-1' }, execution: null,
+    task: { taskId: 'task-1', taskVersion: '9007199254740993' }, ...overrides })
+  const make = async handler => {
+    const { useHallDrafts } = await import('../src/composables/juyiting/useHallDrafts.js')
+    const calls = []
+    const storage = memoryStorage()
+    let counter = 0
+    const model = useHallDrafts({ identityScope: 'tenant\u0000client\u0000owner', storage,
+      keyFactory: () => `formal-key-${++counter}`,
+      agentApi: { execute: async request => { calls.push(request); return handler(request) } } })
+    return { model, calls, storage }
+  }
+
+  it('accepts nullable optional DRAFT-v1 fields in saved drafts and recoverable summaries', async () => {
+    const nullable = { title: null, instruction: null, targetAgentId: null, outputMime: null, inputs: [] }
+    const { model, calls } = await make(request => request.method === 'POST'
+      ? formalDraft({ editableFields: nullable })
+      : { items: [{ ...formalDraft(), title: null, targetAgentId: null, outputMime: null }], nextCursor: null })
+    expect((await model.create({ kind: 'TASK_CREATE' })).editableFields).to.deep.equal(nullable)
+    expect(await model.list()).to.equal(true)
+    expect(model.summaries.value[0].kind).to.equal('TASK_CREATE')
+    expect(calls).to.have.length(2)
+    model.dispose()
+  })
+
+  it('accepts TASK_CREATE without execution, keeps exact string taskVersion, and never submits twice', async () => {
+    const { model, calls, storage } = await make(request => request.url === '/hall/drafts' ? formalDraft() : taskReceipt())
+    await model.create({ kind: 'TASK_CREATE', ...formalFields })
+    const [accepted, duplicate] = await Promise.all([
+      model.submit({ authorizationAcknowledgement: true }), model.submit({ authorizationAcknowledgement: true })
+    ])
+    expect(accepted.task.taskVersion).to.equal('9007199254740993')
+    expect(accepted.execution).to.equal(null)
+    expect(duplicate).to.equal(null)
+    expect(model.submissionState.value).to.equal('acknowledged')
+    expect(model.draft.value.state).to.equal('SUBMITTED')
+    expect(model.submissionRecovery.value).to.include({ executionId: null, uncertain: false, kind: 'TASK_CREATE' })
+    expect(model.caseView.value).to.equal(null)
+    expect(model.executionResults.value).to.equal(null)
+    expect(await model.submit({ authorizationAcknowledgement: true })).to.equal(null)
+    expect(calls.filter(call => call.url.endsWith('/submit'))).to.have.length(1)
+    expect(JSON.stringify(storage.entries())).not.to.match(/正式名目|正式简述|taskVersion|editableFields/)
+    model.dispose()
+  })
+
+  it('locks invalid task receipts and never confuses private, TASK_ACTION and TASK_CREATE shapes', async () => {
+    for (const invalid of [
+      taskReceipt({ task: { taskId: 'different-task', taskVersion: '1' } }),
+      taskReceipt({ task: { taskId: 'task-1', taskVersion: 1 } }),
+      taskReceipt({ task: { taskId: 'task-1', taskVersion: '' } }),
+      taskReceipt({ ref: { sourceType: 'PRIVATE_CASE', sourceId: 'task-1' } }),
+      taskReceipt({ execution: execution() }),
+      taskReceipt({ execution: execution(), task: null }),
+      receipt()
+    ]) {
+      const { model, calls } = await make(request => request.url === '/hall/drafts' ? formalDraft() : invalid)
+      await model.create({ kind: 'TASK_CREATE', ...formalFields })
+      expect(await model.submit({ authorizationAcknowledgement: true })).to.equal(null)
+      expect(model.receipt.value).to.equal(null)
+      expect(model.unresolvedIntent.value.kind).to.equal('TASK_CREATE')
+      expect(model.submissionState.value).to.equal('unknown')
+      expect(await model.submit({ authorizationAcknowledgement: true })).to.equal(null)
+      expect(calls.filter(call => call.url.endsWith('/submit'))).to.have.length(1)
+      model.dispose()
+    }
+  })
+
+  it('retains POST503 intent through real identity cleanup and GET401/403, then reads the same task key', async () => {
+    const { useHallDrafts } = await import('../src/composables/juyiting/useHallDrafts.js')
+    const { stopIdentityBoundWork } = await import('../src/utils/identityLifecycle.js')
+    const storage = memoryStorage()
+    const epoch = ref(1)
+    const calls = []
+    let reads = 0
+    const model = useHallDrafts({ identityEpoch: epoch, identityScope: 'tenant\u0000client\u0000owner', storage,
+      keyFactory: () => 'same-original-task-key', agentApi: { execute: async request => {
+        calls.push(request)
+        if (request.url === '/hall/drafts') return formalDraft()
+        if (request.url.endsWith('/submit')) throw Object.assign(new Error('lost'), { status: 503 })
+        if (request.url === '/hall/submissions/request') {
+          reads += 1
+          if (reads <= 2) {
+            stopIdentityBoundWork()
+            throw Object.assign(new Error('reauthorize'), { status: reads === 1 ? 401 : 403 })
+          }
+          return taskReceipt()
+        }
+        throw new Error(`unexpected ${request.url}`)
+      } } })
+    await model.create({ kind: 'TASK_CREATE', ...formalFields })
+    await model.submit({ authorizationAcknowledgement: true })
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await model.reconcileSubmission()
+      expect(model.receipt.value).to.equal(null)
+      expect(model.draft.value).to.equal(null)
+      epoch.value += 1
+      expect(model.unresolvedIntent.value.idempotencyKey).to.equal('same-original-task-key')
+      expect(await model.submit({ authorizationAcknowledgement: true })).to.equal(null)
+    }
+    const accepted = await model.reconcileSubmission()
+    expect(accepted.task.taskVersion).to.equal('9007199254740993')
+    expect(calls.filter(call => call.url.endsWith('/submit'))).to.have.length(1)
+    expect(calls.filter(call => call.url === '/hall/submissions/request').map(call => [call.headers['Idempotency-Key'], call.params, call.data])).to.deep.equal([
+      ['same-original-task-key', undefined, undefined], ['same-original-task-key', undefined, undefined], ['same-original-task-key', undefined, undefined]
+    ])
+    model.dispose()
+  })
+
+  it('rechecks the shared scope intent before another retained pane can post', async () => {
+    const { useHallDrafts } = await import('../src/composables/juyiting/useHallDrafts.js')
+    const storage = memoryStorage()
+    const calls = []
+    const options = { identityScope: 'owner-client', storage, agentApi: { execute: async request => {
+      calls.push(request)
+      if (request.url === '/hall/drafts') return formalDraft()
+      throw Object.assign(new Error('lost'), { status: 503 })
+    } } }
+    const first = useHallDrafts({ ...options, keyFactory: () => 'first-key' })
+    const second = useHallDrafts({ ...options, keyFactory: () => 'second-key' })
+    await first.create({ kind: 'TASK_CREATE', ...formalFields })
+    await second.create({ kind: 'TASK_CREATE', ...formalFields })
+    await first.submit({ authorizationAcknowledgement: true })
+    expect(await second.submit({ authorizationAcknowledgement: true })).to.equal(null)
+    expect(second.unresolvedIntent.value.idempotencyKey).to.equal('first-key')
+    expect(calls.filter(call => call.url.endsWith('/submit'))).to.have.length(1)
+    first.dispose(); second.dispose()
+  })
+
+  it('does not let a late reconciliation of an acknowledged task erase another pane\'s newer unknown intent', async () => {
+    const { useHallDrafts } = await import('../src/composables/juyiting/useHallDrafts.js')
+    const storage = memoryStorage()
+    let finishOldRead
+    let creates = 0
+    const options = { identityScope: 'owner-client', storage, agentApi: { execute: async request => {
+      if (request.url === '/hall/drafts') return formalDraft({ draftId: `draft-${++creates}` })
+      if (request.url === '/hall/submissions/request') return new Promise(resolve => { finishOldRead = () => resolve(taskReceipt()) })
+      if (request.url === '/hall/drafts/draft-1/submit') return taskReceipt()
+      throw Object.assign(new Error('new request lost'), { status: 503 })
+    } } }
+    const first = useHallDrafts({ ...options, keyFactory: () => 'first-key' })
+    const second = useHallDrafts({ ...options, keyFactory: () => 'second-key' })
+    await first.create({ kind: 'TASK_CREATE', ...formalFields })
+    await first.submit({ authorizationAcknowledgement: true })
+    const oldRead = first.reconcileSubmission()
+    await second.create({ kind: 'TASK_CREATE', ...formalFields })
+    await second.submit({ authorizationAcknowledgement: true })
+    finishOldRead()
+    await oldRead
+    expect(first.unresolvedIntent.value.idempotencyKey).to.equal('second-key')
+    expect(second.unresolvedIntent.value.idempotencyKey).to.equal('second-key')
+    const stored = storage.entries().filter(([key]) => !key.endsWith('.browser')).map(([, value]) => JSON.parse(value))
+    expect(stored).to.have.length(1)
+    expect(stored[0]).to.include({ idempotencyKey: 'second-key', uncertain: true, draftId: 'draft-2' })
+    first.dispose(); second.dispose()
+  })
+
+  it('allows explicit correction after original POST422 but not after a refused formal detail read', async () => {
+    let submissions = 0
+    const { model, calls } = await make(request => {
+      if (request.url === '/hall/drafts') return formalDraft()
+      if (request.method === 'PUT') return formalDraft({ revision: 2, editableFields: request.data })
+      if (request.url.endsWith('/submit')) {
+        submissions += 1
+        if (submissions === 1) throw Object.assign(new Error('source rejected'), { status: 422 })
+        return taskReceipt()
+      }
+      throw Object.assign(new Error('read denied'), { status: 403 })
+    })
+    await model.create({ kind: 'TASK_CREATE', ...formalFields })
+    await model.submit({ authorizationAcknowledgement: true })
+    expect(model.unresolvedIntent.value).to.equal(null)
+    expect(model.draft.value.state).to.equal('EDITING')
+    await model.save({ ...formalFields, instruction: '修正简述' })
+    await model.submit({ authorizationAcknowledgement: true })
+    const key = model.submissionRecovery.value.idempotencyKey
+    expect(await model.loadFormalTask()).to.equal(null)
+    expect(model.draft.value.state).to.equal('SUBMITTED')
+    expect(model.submissionRecovery.value.idempotencyKey).to.equal(key)
+    expect(await model.submit({ authorizationAcknowledgement: true })).to.equal(null)
+    expect(calls.filter(call => call.url.endsWith('/submit')).map(call => call.data.expectedRevision)).to.deep.equal([1, 2])
+    expect(new Set(calls.filter(call => call.url.endsWith('/submit')).map(call => call.headers['Idempotency-Key'])).size).to.equal(2)
+    expect(calls.at(-1)).to.include({ method: 'GET', url: '/tasks/task-1' })
+    model.dispose()
   })
 })

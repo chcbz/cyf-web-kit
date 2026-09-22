@@ -1,121 +1,137 @@
 <template>
-  <div class="bounty-panel">
-    <div class="panel-toolbar">
-      <div class="task-search">
+  <div class="bounty-panel" :class="{ 'is-hall-embedded': embeddedHall }">
+    <div
+      v-show="!embeddedHall || !detailTask"
+      :inert="embeddedHall && detailTask ? '' : null"
+      :aria-hidden="embeddedHall && detailTask ? 'true' : null"
+      class="bounty-source"
+    >
+      <div class="panel-toolbar">
+        <div class="task-search">
+          <input
+            :value="taskKeyword"
+            placeholder="查榜号"
+            @input="$emit('update:taskKeyword', $event.target.value.trim())"
+            @keyup.enter="$emit('load-tasks')"
+          />
+          <select
+            :value="taskAbilityFilter"
+            @change="$emit('update:taskAbilityFilter', $event.target.value); $emit('load-tasks')"
+          >
+            <option value="">不拘本领</option>
+            <option v-for="ability in taskAbilityOptions" :key="ability" :value="ability">{{ ability }}</option>
+          </select>
+        </div>
+        <button @click="$emit('load-tasks')">
+          <BountyActionIcon name="refresh" />
+          <span>重查</span>
+        </button>
+        <div class="task-create-actions">
+          <button class="new-task-button" type="button" @click="showCreateForm = !showCreateForm">
+            <BountyActionIcon name="plus" />
+            <span>张榜</span>
+          </button>
+          <button
+            v-if="embeddedHall"
+            class="new-task-button"
+            type="button"
+            @click="$emit('start-formal-draft')"
+          >
+            <span>起草正式任务</span>
+          </button>
+          <button class="new-task-button" type="button" @click="showDraftEditor = !showDraftEditor">
+            <span>{{ showDraftEditor ? '收起草稿' : '起草交办' }}</span>
+          </button>
+        </div>
+      </div>
+
+      <form v-if="showCreateForm" class="task-create-form" @submit.prevent="submitCreateTask">
+        <input v-model.trim="taskForm.title" name="taskTitle" placeholder="榜文名目" />
+        <textarea v-model.trim="taskForm.description" name="taskDescription" placeholder="榜文缘由"></textarea>
+        <input v-model.trim="taskForm.requiredAbilities" name="requiredAbilities" placeholder="所需本领，逗号分隔" />
+        <label v-if="fundedPreviewEnabled" class="funded-create-toggle">
+          <input v-model="taskForm.funded" type="checkbox" /> 资金悬赏（开发预览）
+        </label>
         <input
-          :value="taskKeyword"
-          placeholder="查榜号"
-          @input="$emit('update:taskKeyword', $event.target.value.trim())"
-          @keyup.enter="$emit('load-tasks')"
+          v-if="fundedPreviewEnabled && taskForm.funded"
+          v-model.trim="taskForm.grossBountyAmountMicro"
+          class="gross-bounty-input"
+          name="grossBountyAmountMicro"
+          inputmode="numeric"
+          placeholder="总额（micro-SILVER）"
         />
-        <select
-          :value="taskAbilityFilter"
-          @change="$emit('update:taskAbilityFilter', $event.target.value); $emit('load-tasks')"
-        >
-          <option value="">不拘本领</option>
-          <option v-for="ability in taskAbilityOptions" :key="ability" :value="ability">{{ ability }}</option>
-        </select>
-      </div>
-      <button @click="$emit('load-tasks')">
-        <BountyActionIcon name="refresh" />
-        <span>重查</span>
-      </button>
-      <div class="task-create-actions">
-        <button class="new-task-button" type="button" @click="showCreateForm = !showCreateForm">
-          <BountyActionIcon name="plus" />
-          <span>张榜</span>
-        </button>
-        <button class="new-task-button" type="button" @click="showDraftEditor = !showDraftEditor">
-          <span>{{ showDraftEditor ? '收起草稿' : '起草交办' }}</span>
-        </button>
-      </div>
-    </div>
+        <small v-if="fundedPreviewEnabled && taskForm.funded && !validGrossAmount" class="funded-input-error">请输入规范的非负整数字符串。</small>
+        <section v-if="fundedCreateRecovery" class="funded-create-recovery" role="status">
+          <strong>发现原资金榜请求，结果未知</strong>
+          <p>原榜文名目：{{ fundedCreateRecovery.body.title }}</p>
+          <p>原榜文缘由：{{ fundedCreateRecovery.body.description || '未填写' }}</p>
+          <p>原所需本领：{{ fundedRecoveryAbilities }}</p>
+          <p>原结算规则：{{ fundedCreateRecovery.body.settlementPolicy || '未填写' }}</p>
+          <p>原总额：{{ fundedCreateRecovery.body.grossBountyAmountMicro }} micro-SILVER。</p>
+          <p>当前编辑稿不会提交或替换原请求。</p>
+          <button type="button" @click="$emit('resume-funded-create')">确认按原请求恢复</button>
+          <button type="button" @click="$emit('cancel-funded-create-recovery')">暂不恢复</button>
+        </section>
+        <button type="submit" :disabled="createPending || !taskForm.title || (taskForm.funded && !validGrossAmount)">{{ createPending ? '张榜中…' : '张榜悬赏' }}</button>
+      </form>
 
-    <form v-if="showCreateForm" class="task-create-form" @submit.prevent="submitCreateTask">
-      <input v-model.trim="taskForm.title" name="taskTitle" placeholder="榜文名目" />
-      <textarea v-model.trim="taskForm.description" name="taskDescription" placeholder="榜文缘由"></textarea>
-      <input v-model.trim="taskForm.requiredAbilities" name="requiredAbilities" placeholder="所需本领，逗号分隔" />
-      <label v-if="fundedPreviewEnabled" class="funded-create-toggle">
-        <input v-model="taskForm.funded" type="checkbox" /> 资金悬赏（开发预览）
-      </label>
-      <input
-        v-if="fundedPreviewEnabled && taskForm.funded"
-        v-model.trim="taskForm.grossBountyAmountMicro"
-        class="gross-bounty-input"
-        name="grossBountyAmountMicro"
-        inputmode="numeric"
-        placeholder="总额（micro-SILVER）"
+      <HallDraftEditor
+        v-if="showDraftEditor"
+        :agents="operableAgents"
+        :selected-agent="selectedAgent"
+        :identity-epoch="authorizationGeneration"
+        :identity-scope="identityScope"
+        @close="showDraftEditor = false"
+        @open-task="openTask"
       />
-      <small v-if="fundedPreviewEnabled && taskForm.funded && !validGrossAmount" class="funded-input-error">请输入规范的非负整数字符串。</small>
-      <section v-if="fundedCreateRecovery" class="funded-create-recovery" role="status">
-        <strong>发现原资金榜请求，结果未知</strong>
-        <p>原榜文名目：{{ fundedCreateRecovery.body.title }}</p>
-        <p>原榜文缘由：{{ fundedCreateRecovery.body.description || '未填写' }}</p>
-        <p>原所需本领：{{ fundedRecoveryAbilities }}</p>
-        <p>原结算规则：{{ fundedCreateRecovery.body.settlementPolicy || '未填写' }}</p>
-        <p>原总额：{{ fundedCreateRecovery.body.grossBountyAmountMicro }} micro-SILVER。</p>
-        <p>当前编辑稿不会提交或替换原请求。</p>
-        <button type="button" @click="$emit('resume-funded-create')">确认按原请求恢复</button>
-        <button type="button" @click="$emit('cancel-funded-create-recovery')">暂不恢复</button>
-      </section>
-      <button type="submit" :disabled="createPending || !taskForm.title || (taskForm.funded && !validGrossAmount)">{{ createPending ? '张榜中…' : '张榜悬赏' }}</button>
-    </form>
 
-    <HallDraftEditor
-      v-if="showDraftEditor"
-      :agents="operableAgents"
-      :selected-agent="selectedAgent"
-      :identity-epoch="authorizationGeneration"
-      :identity-scope="identityScope"
-      @close="showDraftEditor = false"
-    />
+      <p v-if="loading" class="task-data-state" role="status">悬赏榜读取中…</p>
+      <p v-else-if="errorMessage" class="task-data-state is-error" role="alert">{{ errorMessage }}</p>
+      <p v-if="countsLoading" class="task-data-state" role="status">榜文数目统计中…</p>
+      <p v-else-if="countsErrorMessage" class="task-data-state is-error" role="alert">{{ countsErrorMessage }}</p>
 
-    <p v-if="loading" class="task-data-state" role="status">悬赏榜读取中…</p>
-    <p v-else-if="errorMessage" class="task-data-state is-error" role="alert">{{ errorMessage }}</p>
-    <p v-if="countsLoading" class="task-data-state" role="status">榜文数目统计中…</p>
-    <p v-else-if="countsErrorMessage" class="task-data-state is-error" role="alert">{{ countsErrorMessage }}</p>
-
-    <div class="task-status-tabs">
-      <button
-        v-for="item in taskStatusFilters"
-        :key="item.value"
-        :class="{ active: taskStatusFilter === item.value }"
-        @click="$emit('set-status-filter', item.value)"
-      >
-        {{ item.label }}
-        <small>{{ taskStatusCount(item.value) }}</small>
-      </button>
-    </div>
-
-    <div class="task-panel-body">
-      <div class="task-list">
-        <article
-          v-for="task in tasks"
-          :key="task.id"
-          class="task-card"
-          :class="{ selected: selectedTask?.id === task.id }"
-          @click="openTask(task)"
+      <div class="task-status-tabs">
+        <button
+          v-for="item in taskStatusFilters"
+          :key="item.value"
+          :class="{ active: taskStatusFilter === item.value }"
+          @click="$emit('set-status-filter', item.value)"
         >
-          <div class="task-head">
-            <strong>{{ task.title }}</strong>
-            <span :class="taskStateClass(task.status)">{{ taskStatusText(task.status) }}</span>
-          </div>
-          <p>{{ task.description || '榜文尚未写明缘由' }}</p>
-          <div class="task-meta">
-            <span>{{ task.id }}</span>
-            <span v-if="task.assignedAgentName">领令：{{ task.assignedAgentName }}</span>
-            <span v-if="task.updatedAt">{{ formatTime(task.updatedAt) }}</span>
-          </div>
-          <p v-if="isFundedTask(task)" class="funding-summary">已托管：{{ formatMoney(task.funding.remainingMicro || task.funding.grossBountyAmountMicro) }}</p>
-          <div class="ability-tags">
-            <span v-for="ability in task.requiredAbilities || []" :key="ability">{{ ability }}</span>
-            <span v-if="!(task.requiredAbilities || []).length">不拘本领</span>
-          </div>
-        </article>
-        <div v-if="!tasks.length" class="empty-list">榜上暂无悬赏，可换个筛法或重查一遍。</div>
+          {{ item.label }}
+          <small>{{ taskStatusCount(item.value) }}</small>
+        </button>
       </div>
-    </div>
 
+      <div class="task-panel-body">
+        <div class="task-list">
+          <article
+            v-for="task in tasks"
+            :key="task.id"
+            class="task-card"
+            :class="{ selected: selectedTask?.id === task.id }"
+            @click="openTask(task)"
+          >
+            <div class="task-head">
+              <strong>{{ task.title }}</strong>
+              <span :class="taskStateClass(task.status)">{{ taskStatusText(task.status) }}</span>
+            </div>
+            <p>{{ task.description || '榜文尚未写明缘由' }}</p>
+            <div class="task-meta">
+              <span>{{ task.id }}</span>
+              <span v-if="task.assignedAgentName">领令：{{ task.assignedAgentName }}</span>
+              <span v-if="task.updatedAt">{{ formatTime(task.updatedAt) }}</span>
+            </div>
+            <p v-if="isFundedTask(task)" class="funding-summary">已托管：{{ formatMoney(task.funding.remainingMicro || task.funding.grossBountyAmountMicro) }}</p>
+            <div class="ability-tags">
+              <span v-for="ability in task.requiredAbilities || []" :key="ability">{{ ability }}</span>
+              <span v-if="!(task.requiredAbilities || []).length">不拘本领</span>
+            </div>
+          </article>
+          <div v-if="!tasks.length" class="empty-list">榜上暂无悬赏，可换个筛法或重查一遍。</div>
+        </div>
+      </div>
+
+    </div>
     <transition name="modal">
       <div v-if="detailTask" class="bounty-modal-overlay" @click.self="closeTask">
         <section class="bounty-modal">
@@ -344,6 +360,8 @@ import HallDraftEditor from './HallDraftEditor.vue'
 import { formatSilverMicro, isCanonicalMicroAmount } from '@/utils/silverAmount'
 
 const props = defineProps({
+  embeddedHall: { type: Boolean, default: false },
+  detailAllowed: { type: Boolean, default: true },
   tasks: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   errorMessage: { type: String, default: '' },
@@ -386,6 +404,7 @@ const emit = defineEmits([
   'cancel-funded-quote',
   'refresh-funded-claim',
   'create-task',
+  'start-formal-draft',
   'resume-funded-create',
   'cancel-funded-create-recovery',
   'discuss-task',
@@ -503,6 +522,7 @@ const toggleAssignee = (agent) => {
 }
 
 const openTask = (task) => {
+  if (props.embeddedHall && !props.detailAllowed && !modalTask.value) return false
   modalTask.value = task
   selectedAssigneeIds.value = taskAssigneeIds(task)
   emit('select-task', task)
@@ -524,6 +544,13 @@ watch(() => props.selectedTask, (task) => {
     selectedAssigneeIds.value = taskAssigneeIds(task)
   }
 })
+const canGoBack = computed(() => Boolean(modalTask.value))
+const back = () => {
+  if (!canGoBack.value) return false
+  closeTask()
+  return true
+}
+defineExpose({ openTask, canGoBack, back })
 </script>
 <style scoped>
 .bounty-panel {
@@ -1270,4 +1297,16 @@ button:disabled {
 .quote-summary { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(117, 67, 11, .22); }
 .settlement-detail { max-height: 180px; margin: 8px 0 0; overflow: auto; white-space: pre-wrap; font-size: 11px; }
 
+.is-hall-embedded .bounty-modal-overlay {
+  position: static;
+  padding: 0;
+  contain: none;
+  transform: none;
+}
+.is-hall-embedded .bounty-modal-overlay::before { display: none; }
+.is-hall-embedded .bounty-modal {
+  max-width: none;
+  max-height: none;
+  box-shadow: none;
+}
 </style>

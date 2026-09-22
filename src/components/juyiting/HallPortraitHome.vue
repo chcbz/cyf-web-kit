@@ -6,7 +6,12 @@
         <h1>厅中动静</h1>
       </div>
       <div class="portrait-header-actions">
-        <button class="portrait-home-mode" type="button" :aria-pressed="homeMode === 'overview'" @click="emit('set-home-mode', homeMode === 'map' ? 'overview' : 'map')">{{ homeMode === 'map' ? '办事概览' : '厅中实景' }}</button>
+        <button
+          class="portrait-home-mode"
+          type="button"
+          :aria-pressed="homeMode === 'overview'"
+          @click="emit('set-home-mode', homeMode === 'map' ? 'overview' : 'map')"
+        >{{ homeMode === 'map' ? '办事概览' : '厅中实景' }}</button>
         <HallAccountEntry
           class="portrait-header-account"
           :avatar="accountAvatar"
@@ -19,15 +24,32 @@
 
     <p class="portrait-home-mode-hint" role="status">{{ homeMode === 'map' ? '厅中实景 · 可切办事概览' : '办事概览 · 地图与当前选择仍保留' }}</p>
 
-    <section class="portrait-overview" aria-label="状态概览">
+    <section v-if="!$slots.overview" class="portrait-overview" aria-label="状态概览">
       <div><strong>{{ idleCount }}</strong><span>候命</span></div>
       <div><strong>{{ busyCount }}</strong><span>办事</span></div>
       <div><strong>{{ issueCount }}</strong><span>异常</span></div>
       <div><strong>{{ openTaskCount }}</strong><span>待办</span></div>
     </section>
 
-    <section data-tour="portrait-preview" class="portrait-scene" :class="{ 'has-live-preview': livePreviewEnabled }" aria-label="聚义厅实景窗口">
-      <HallLiveMapPreview v-if="livePreviewEnabled" :state="livePreviewState" :error-message="livePreviewError" :map-width="livePreviewMapWidth" :map-height="livePreviewMapHeight" :orientation-request-pending="orientationRequestPending" :orientation-hint="orientationHint" @request-landscape="emit('request-landscape')" @cancel-orientation="emit('cancel-orientation')" @retry="emit('retry-live-preview')" @visibility-change="visible => emit('live-preview-visibility-change', visible)">
+    <section
+      data-tour="portrait-preview"
+      class="portrait-scene"
+      :class="{ 'has-live-preview': livePreviewEnabled }"
+      aria-label="聚义厅实景窗口"
+    >
+      <HallLiveMapPreview
+        v-if="livePreviewEnabled"
+        :state="livePreviewState"
+        :error-message="livePreviewError"
+        :map-width="livePreviewMapWidth"
+        :map-height="livePreviewMapHeight"
+        :orientation-request-pending="orientationRequestPending"
+        :orientation-hint="orientationHint"
+        @request-landscape="emit('request-landscape')"
+        @cancel-orientation="emit('cancel-orientation')"
+        @retry="emit('retry-live-preview')"
+        @visibility-change="visible => emit('live-preview-visibility-change', visible)"
+      >
         <template #controls>
           <ul v-if="operableAgents.length" class="scene-agent-list preview-agent-list" aria-label="厅中好汉">
             <li v-for="agent in operableAgents" :key="agentKey(agent)">
@@ -42,28 +64,28 @@
         <div ref="livePreviewTarget" class="portrait-live-preview-target"></div>
       </HallLiveMapPreview>
       <template v-else>
-      <div class="scene-sky" aria-hidden="true"></div>
-      <div class="scene-hall" aria-hidden="true"><span>聚义</span></div>
-      <div class="scene-courtyard" aria-hidden="true"></div>
-      <ul v-if="operableAgents.length" class="scene-agent-list" aria-label="厅中好汉">
-        <li v-for="agent in operableAgents" :key="agentKey(agent)">
-          <button type="button" :aria-pressed="isSelectedAgent(agent)" @click="emit('select-agent', agent)">
-            <span class="agent-dot" :class="statusClass(agent.status)"></span>
-            <span>{{ agentName(agent) }}</span>
-          </button>
-        </li>
-      </ul>
-      <p v-else class="scene-empty">厅前静候点将</p>
-      <button
-        class="landscape-entry"
-        data-tour="portrait-landscape"
-        type="button"
-        :aria-label="orientationRequestPending ? '取消方向请求' : '横屏看全景'"
-        @click="emit(orientationRequestPending ? 'cancel-orientation' : 'request-landscape')"
-      >
-        {{ orientationRequestPending ? '取消切换' : '横屏看全景' }}
-      </button>
-      <p v-if="orientationHint" class="orientation-hint" role="status">{{ orientationHint }}</p>
+        <div class="scene-sky" aria-hidden="true"></div>
+        <div class="scene-hall" aria-hidden="true"><span>聚义</span></div>
+        <div class="scene-courtyard" aria-hidden="true"></div>
+        <ul v-if="operableAgents.length" class="scene-agent-list" aria-label="厅中好汉">
+          <li v-for="agent in operableAgents" :key="agentKey(agent)">
+            <button type="button" :aria-pressed="isSelectedAgent(agent)" @click="emit('select-agent', agent)">
+              <span class="agent-dot" :class="statusClass(agent.status)"></span>
+              <span>{{ agentName(agent) }}</span>
+            </button>
+          </li>
+        </ul>
+        <p v-else class="scene-empty">厅前静候点将</p>
+        <button
+          class="landscape-entry"
+          data-tour="portrait-landscape"
+          type="button"
+          :aria-label="orientationRequestPending ? '取消方向请求' : '横屏看全景'"
+          @click="emit(orientationRequestPending ? 'cancel-orientation' : 'request-landscape')"
+        >
+          {{ orientationRequestPending ? '取消切换' : '横屏看全景' }}
+        </button>
+        <p v-if="orientationHint" class="orientation-hint" role="status">{{ orientationHint }}</p>
       </template>
     </section>
 
@@ -92,26 +114,29 @@
         </div>
       </section>
 
-      <section data-tour="portrait-todos" class="portrait-section portrait-todos" aria-labelledby="portrait-todos-title">
-        <div class="section-heading">
-          <h2 id="portrait-todos-title">待办榜文</h2>
-          <button type="button" @click="emit('quick-action', 'tasks')">查看悬赏榜</button>
-        </div>
-        <div class="portrait-todo-list" aria-label="待办榜文列表">
-          <button
-            v-for="task in todoTasks"
-            :key="task.id"
-            class="portrait-todo"
-            type="button"
-            @click="openTask(task)"
-          >
-            <span :class="taskStateClass(task.status)">{{ taskStatusText(task.status) }}</span>
-            <strong>{{ task.title || '未命名榜文' }}</strong>
-            <small>{{ task.requiredAbilities?.length ? task.requiredAbilities.join(' / ') : '待议定人手' }}</small>
-          </button>
-          <p v-if="!todoTasks.length" class="portrait-empty">眼下无待办榜文，可先点验厅中人手。</p>
-        </div>
-      </section>
+      <slot name="overview">
+        <section data-tour="portrait-todos" class="portrait-section portrait-todos" aria-labelledby="portrait-todos-title">
+          <div class="section-heading">
+            <h2 id="portrait-todos-title">待办榜文</h2>
+            <button type="button" @click="emit('quick-action', 'tasks')">查看悬赏榜</button>
+          </div>
+          <div class="portrait-todo-list" aria-label="待办榜文列表">
+            <button
+              v-for="task in todoTasks"
+              :key="task.id"
+              class="portrait-todo"
+              type="button"
+              @click="openTask(task)"
+            >
+              <span :class="taskStateClass(task.status)">{{ taskStatusText(task.status) }}</span>
+              <strong>{{ task.title || '未命名榜文' }}</strong>
+              <small>{{ task.requiredAbilities?.length ? task.requiredAbilities.join(' / ') : '待议定人手' }}</small>
+            </button>
+            <p v-if="!todoTasks.length" class="portrait-empty">眼下无待办榜文，可先点验厅中人手。</p>
+          </div>
+        </section>
+
+      </slot>
 
       <section data-tour="portrait-context" class="portrait-context" aria-label="当前上下文">
         <div>
@@ -226,7 +251,8 @@ const quickActions = Object.freeze([
   { key: 'discussion', label: '厅前议事', icon: '议' },
   { key: 'catalog', label: '招贤令', icon: '贤' },
   { key: 'library', label: '案卷阁', icon: '卷' },
-  { key: 'treasure', label: '百宝箱', icon: '宝' }
+  { key: 'treasure', label: '百宝箱', icon: '宝' },
+  { key: 'messages', label: '消息', icon: '信' }
 ])
 
 const normalizedStatus = status => String(status || '').toLowerCase()

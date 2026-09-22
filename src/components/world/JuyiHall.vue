@@ -42,7 +42,17 @@
       @close-task-detail="closePortraitTaskDetail"
       @open-task-board="handlePortraitTaskBoard"
       @discuss-task="handlePortraitTaskDiscussion"
-    />
+    >
+      <template #overview>
+        <HallOverview
+          :enabled="stageMounted && Boolean(hallIdentityScope)"
+          :identity-scope="hallIdentityScope"
+          :identity-epoch="apiStore.authorizationGeneration"
+          @open-item="openOverviewItem"
+          @open-task="openOverviewTask"
+        />
+      </template>
+    </HallPortraitHome>
 
     <div ref="landscapeTargetRef" v-show="experienceMode === 'landscape-map' && !isOverviewHome" class="hall-live-landscape-target"></div>
     <Teleport :to="stageTarget" :disabled="!stageTarget">
@@ -215,6 +225,9 @@
           />
 
           <BountyPanel
+            ref="bountyPanelRef"
+            embedded-hall
+            :detail-allowed="canOpenPanelDetail"
             v-if="panelFrames.includes('tasks')"
             v-show="renderedPanel === 'tasks'"
             :inert="renderedPanel !== 'tasks' ? '' : null"
@@ -257,6 +270,7 @@
             @archive-task="archiveTask"
             @brief-selected-task="briefSelectedTask"
             @create-task="createTask"
+            @start-formal-draft="openPanel('formalDraft', { restore: true })"
             @resume-funded-create="resumeFundedCreate"
             @cancel-funded-create-recovery="showToast('原资金榜请求仍会保留；请在准备好后明确恢复。')"
             @cancel-funding="cancelFunding"
@@ -288,6 +302,45 @@
               :identity-epoch="apiStore.authorizationGeneration"
             />
           </template>
+
+          <HallOverview
+            v-if="panelFrames.includes('messages')"
+            v-show="renderedPanel === 'messages'"
+            :inert="renderedPanel !== 'messages' ? '' : null"
+            :aria-hidden="renderedPanel !== 'messages' ? 'true' : null"
+            messages-only
+            :enabled="stageMounted && Boolean(hallIdentityScope)"
+            :identity-scope="hallIdentityScope"
+            :identity-epoch="apiStore.authorizationGeneration"
+            @open-item="openOverviewItem"
+            @open-task="openOverviewTask"
+          />
+
+          <HallDraftEditor
+            v-if="panelFrames.includes('item') && overviewItemRef"
+            v-show="renderedPanel === 'item'"
+            :key="`${overviewItemRef.sourceType}:${overviewItemRef.sourceId}`"
+            :inert="renderedPanel !== 'item' ? '' : null"
+            :aria-hidden="renderedPanel !== 'item' ? 'true' : null"
+            :initial-ref="overviewItemRef"
+            @open-task="openOverviewTask"
+            :agents="operableRosterAgents"
+            :identity-scope="hallIdentityScope"
+            :identity-epoch="apiStore.authorizationGeneration"
+            @close="returnPanel() || closePanel()"
+          />
+
+          <HallDraftEditor
+            v-if="panelFrames.includes('formalDraft')"
+            v-show="renderedPanel === 'formalDraft'"
+            :inert="renderedPanel !== 'formalDraft' ? '' : null"
+            :aria-hidden="renderedPanel !== 'formalDraft' ? 'true' : null"
+            initial-kind="TASK_CREATE"
+            :identity-scope="hallIdentityScope"
+            :identity-epoch="apiStore.authorizationGeneration"
+            @open-task="openOverviewTask"
+            @close="returnPanel() || closePanel()"
+          />
 
           <PersonalWorkspace
             v-if="panelFrames.includes('treasure')"
@@ -476,6 +529,8 @@
 </template>
 
 <script setup>
+import HallOverview from '@/components/juyiting/HallOverview.vue'
+import HallDraftEditor from '@/components/juyiting/HallDraftEditor.vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { useGlobalStore } from '@/stores/global'
@@ -573,7 +628,7 @@ const {
 } = useTaskWorkspaceView(taskWorkspace)
 const personaSetupResult = ref(null)
 const toast = ref('')
-const panelWhitelist = new Set(['agents', 'catalog', 'tasks', 'workspace', 'treasure', 'chat', 'library'])
+const panelWhitelist = new Set(['agents', 'catalog', 'tasks', 'workspace', 'treasure', 'chat', 'library', 'messages', 'item', 'formalDraft'])
 const activePanel = ref('')
 const renderedPanel = ref('')
 const panelSessionGeneration = ref(0)
@@ -581,15 +636,19 @@ const panelClosingGeneration = ref(0)
 const panelReturnPanel = ref('')
 // Source panes stay mounted only for this navigation session; hidden panes are inert.
 const panelFrames = ref([])
+const overviewItemRef = ref(null)
+const bountyPanelRef = ref(null)
 const panelLocations = new Map()
 const treasurePanelRef = ref(null)
 const libraryPanelRef = ref(null)
 // Retained file/reading detail also consumes a logical layer while its source is hidden.
 const panelDepth = computed(() => panelFrames.value.length
+  + Number(panelFrames.value.includes('tasks') && Boolean(bountyPanelRef.value?.canGoBack))
   + Number(panelFrames.value.includes('treasure') && Boolean(treasurePanelRef.value?.canGoBack))
   + Number(panelFrames.value.includes('library') && Boolean(libraryPanelRef.value?.canGoBack)))
 const canOpenPanelDetail = computed(() => panelDepth.value < 3)
 const panelChildCanReturn = computed(() => {
+  if (renderedPanel.value === 'tasks') return Boolean(bountyPanelRef.value?.canGoBack)
   if (renderedPanel.value === 'treasure') return Boolean(treasurePanelRef.value?.canGoBack)
   if (renderedPanel.value === 'library') return Boolean(libraryPanelRef.value?.canGoBack)
   return false
@@ -724,6 +783,9 @@ const {
 } = useHallSound()
 
 const activePanelTitle = computed(() => {
+  if (renderedPanel.value === 'formalDraft') return '起草正式任务'
+  if (renderedPanel.value === 'messages') return '消息'
+  if (renderedPanel.value === 'item') return overviewItemRef.value?.sourceType === 'DRAFT' ? '继续草稿' : '事项进展'
   if (renderedPanel.value === 'agents') return '点将册'
   if (renderedPanel.value === 'catalog') return '招贤令'
   if (renderedPanel.value === 'tasks') return '悬赏榜'
@@ -1144,7 +1206,7 @@ const handlePortraitQuickAction = (action) => {
     handleStagePanelOpen('chat')
     return
   }
-  if (['agents', 'tasks', 'catalog', 'library', 'treasure'].includes(action)) openPanel(action)
+  if (['agents', 'tasks', 'catalog', 'library', 'treasure', 'messages'].includes(action)) openPanel(action)
 }
 
 const closePortraitTaskDetail = () => {
@@ -1190,6 +1252,21 @@ const openBabaoBox = () => {
   return openPanel('treasure')
 }
 
+const openOverviewItem = ref => {
+  if (!ref || !['DRAFT', 'PRIVATE_CASE', 'LEGACY_EXECUTION'].includes(ref.sourceType)) return false
+  if (!openPanel('item', { restore: true })) return false
+  overviewItemRef.value = { ...ref }
+  return true
+}
+
+const openOverviewTask = async task => {
+  if (!task?.id || !openPanel('tasks', { restore: true })) return false
+  selectedTask.value = task
+  await nextTick()
+  bountyPanelRef.value?.openTask(task)
+  return true
+}
+
 const openTaskWorkspace = () => {
   if (!taskWorkspaceEnabled || !taskWorkspaceSubject.value?.taskId || !taskWorkspaceSubject.value?.actorAgentId) return
   openPanel('workspace')
@@ -1204,7 +1281,8 @@ const requestPanelOrientation = () => {
 const returnPanel = () => {
   if (panelDisposed || voiceInteractionLocked.value) return false
   if (panelChildCanReturn.value) {
-    const child = renderedPanel.value === 'treasure' ? treasurePanelRef.value : libraryPanelRef.value
+    const child = renderedPanel.value === 'tasks' ? bountyPanelRef.value
+      : renderedPanel.value === 'treasure' ? treasurePanelRef.value : libraryPanelRef.value
     return child.back()
   }
   if (!panelReturnPanel.value) return false
@@ -1267,6 +1345,7 @@ watch([() => apiStore.authorizationGeneration, hallIdentityScope], () => {
   panelFrames.value = []
   panelReturnPanel.value = ''
   panelLocations.clear()
+  overviewItemRef.value = null
   panelSessionOrigin = null
   resetToPublic({ clearSelection: true })
 }, { flush: 'sync' })

@@ -12,6 +12,7 @@ const BROWSER_KEY = `${RECOVERY_PREFIX}.browser`
 const ID = value => typeof value === 'string' && value.length > 0 && value.length <= MAX_ID_LENGTH &&
   value === value.trim() && ![...value].some(char => char.codePointAt(0) < 32)
 const TEXT = value => typeof value === 'string' && value.length <= MAX_TEXT_LENGTH
+const OPTIONAL_TEXT = value => value === null || TEXT(value)
 const VERSION = value => Number.isSafeInteger(value) && value >= 1 && value <= 2147483647
 const REVISION = value => Number.isSafeInteger(value) && value >= 1
 const valueOf = value => typeof value === 'function' ? value() : unref(value)
@@ -29,11 +30,11 @@ const validInputs = inputs => Array.isArray(inputs) && inputs.length <= MAX_INPU
   new Set(inputs.map(input => `${input.fileId}\u0000${input.version}`)).size === inputs.length
 const validEditable = fields => fields && typeof fields === 'object' && !Array.isArray(fields) &&
   ['title', 'instruction', 'targetAgentId', 'outputMime', 'inputs'].every(key => Object.hasOwn(fields, key)) &&
-  TEXT(fields.title) && TEXT(fields.instruction) && TEXT(fields.targetAgentId) && TEXT(fields.outputMime) && validInputs(fields.inputs)
+  OPTIONAL_TEXT(fields.title) && OPTIONAL_TEXT(fields.instruction) && OPTIONAL_TEXT(fields.targetAgentId) && OPTIONAL_TEXT(fields.outputMime) && validInputs(fields.inputs)
 const validSummary = value => value && typeof value === 'object' && ID(value.draftId) && REVISION(value.revision) &&
   value.state === 'EDITING' && Number.isSafeInteger(value.savedAt) && value.savedAt >= 0 &&
-  ['CREATE', 'REVISION', 'TASK_CREATE', 'TASK_ACTION'].includes(value.kind) && TEXT(value.title) &&
-  TEXT(value.targetAgentId) && TEXT(value.outputMime) && value.sourceSummary && typeof value.sourceSummary === 'object'
+  ['CREATE', 'REVISION', 'TASK_CREATE', 'TASK_ACTION'].includes(value.kind) && OPTIONAL_TEXT(value.title) &&
+  OPTIONAL_TEXT(value.targetAgentId) && OPTIONAL_TEXT(value.outputMime) && value.sourceSummary && typeof value.sourceSummary === 'object'
 const validDraft = value => value && typeof value === 'object' && ID(value.draftId) && REVISION(value.revision) &&
   ['EDITING', 'SUBMITTED'].includes(value.state) && Number.isSafeInteger(value.savedAt) && value.savedAt >= 0 &&
   ['CREATE', 'REVISION', 'TASK_CREATE', 'TASK_ACTION'].includes(value.kind) && validEditable(value.editableFields) &&
@@ -42,9 +43,19 @@ const editableDraft = value => validDraft(value) && value.state === 'EDITING'
 const validRef = value => value && typeof value === 'object' && ['PRIVATE_CASE', 'TASK'].includes(value.sourceType) && ID(value.sourceId)
 const validExecution = value => value && typeof value === 'object' && ID(value.executionId) && ID(value.targetAgentId) &&
   ['QUEUED', 'INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'FAILED'].includes(value.state)
-// B01B currently returns an execution and task:null for both private CREATE/REVISION and TASK_ACTION.
-const validReceipt = value => value && typeof value === 'object' && validRef(value.ref) && validExecution(value.execution) &&
-  value.task == null && Number.isSafeInteger(value.submittedAt) && value.submittedAt >= 0
+// SUBMISSION-v1: TASK_ACTION runs an execution; TASK_CREATE creates only a formal task.
+const validReceipt = (value, kind = null) => {
+  if (!value || typeof value !== 'object' || !validRef(value.ref) ||
+    !Number.isSafeInteger(value.submittedAt) || value.submittedAt < 0) return false
+  const taskCreate = value.ref.sourceType === 'TASK' && value.execution === null &&
+    ID(value.task?.taskId) && value.task.taskId === value.ref.sourceId &&
+    typeof value.task.taskVersion === 'string' && value.task.taskVersion.length > 0
+  const execution = validExecution(value.execution) && value.task === null
+  if (kind === 'TASK_CREATE') return taskCreate
+  if (kind === 'TASK_ACTION') return execution && value.ref.sourceType === 'TASK'
+  if (['CREATE', 'REVISION'].includes(kind)) return execution && value.ref.sourceType === 'PRIVATE_CASE'
+  return taskCreate || execution
+}
 const validResultItem = value => value && typeof value === 'object' && ID(value.outputId) && ID(value.fileId) &&
   VERSION(value.fileVersion) && typeof value.mime === 'string' && value.mime.length > 0 && TEXT(value.filename) &&
   Number.isSafeInteger(value.byteLength) && value.byteLength >= 0 && typeof value.sha256 === 'string' &&
@@ -103,20 +114,21 @@ export function createHallSubmissionRecoveryStore ({ storage = globalThis.localS
   }
   const valid = value => value && typeof value === 'object' && ID(value.idempotencyKey) && ID(value.draftId) &&
     (value.ref == null || validRef(value.ref)) && (value.executionId == null || ID(value.executionId)) &&
-    (value.uncertain == null || typeof value.uncertain === 'boolean')
+    (value.uncertain == null || typeof value.uncertain === 'boolean') &&
+    (value.kind == null || ['CREATE', 'REVISION', 'TASK_CREATE', 'TASK_ACTION'].includes(value.kind))
   return {
     read () {
       const storageKey = key()
       if (!storageKey || !storage) return null
       try {
         const value = JSON.parse(storage.getItem(storageKey) || 'null')
-        return valid(value) ? { idempotencyKey: value.idempotencyKey, draftId: value.draftId, ref: value.ref || null, executionId: value.executionId || null, uncertain: value.uncertain === true } : null
+        return valid(value) ? { idempotencyKey: value.idempotencyKey, draftId: value.draftId, ref: value.ref || null, executionId: value.executionId || null, uncertain: value.uncertain === true, kind: value.kind || null } : null
       } catch { return null }
     },
     save (value) {
       const storageKey = key()
       if (!storageKey || !storage || !valid(value)) return false
-      const encoded = JSON.stringify({ idempotencyKey: value.idempotencyKey, draftId: value.draftId, ref: value.ref || null, executionId: value.executionId || null, uncertain: value.uncertain === true })
+      const encoded = JSON.stringify({ idempotencyKey: value.idempotencyKey, draftId: value.draftId, ref: value.ref || null, executionId: value.executionId || null, uncertain: value.uncertain === true, kind: value.kind || null })
       try { storage.setItem(storageKey, encoded); return storage.getItem(storageKey) === encoded } catch { return false }
     },
     clear (override = null) {
@@ -138,6 +150,7 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
   const receipt = ref(null)
   const submissionState = ref('idle')
   const caseView = ref(null)
+  const executionView = ref(null)
   const submissionRecovery = ref(null)
   const unresolvedIntent = ref(null)
   const executionResults = ref(null)
@@ -149,9 +162,8 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
   const controllers = new Set()
   let generation = 0
   let disposed = false
-  let previousScope = currentScope.value
 
-  const reset = () => {
+  const reset = ({ restoreRecovery = true } = {}) => {
     generation += 1
     for (const controller of controllers) controller.abort(abortError('Hall draft identity changed'))
     controllers.clear()
@@ -164,10 +176,11 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
     receipt.value = null
     submissionState.value = 'idle'
     caseView.value = null
+    executionView.value = null
     executionResults.value = null
     resultsState.value = 'idle'
     resultsError.value = ''
-    submissionRecovery.value = recoveryStore.read()
+    submissionRecovery.value = restoreRecovery ? recoveryStore.read() : null
     unresolvedIntent.value = submissionRecovery.value?.uncertain ? submissionRecovery.value : null
   }
   const snapshotNow = () => ({ generation, epoch: currentEpoch.value, scope: currentScope.value })
@@ -240,7 +253,11 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
     if (!ID(draftId)) return null
     const snapshot = snapshotNow()
     state.value = 'loading'; error.value = ''
-    try { return apply(await request({ url: `/hall/drafts/${encodeURIComponent(draftId)}`, method: 'GET' }, snapshot)) } catch (cause) {
+    try {
+      const value = await request({ url: `/hall/drafts/${encodeURIComponent(draftId)}`, method: 'GET' }, snapshot)
+      if (value?.draftId !== draftId) throw new Error('原草稿尚未核对，未用其他草稿代替。')
+      return apply(value)
+    } catch (cause) {
       if (cause?.name !== 'AbortError' && snapshot.generation === generation) { state.value = 'error'; error.value = errorMessage(cause) }
       return null
     }
@@ -261,6 +278,13 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
     }
   }
   const retainUnknown = intent => {
+    const stored = recoveryStore.read()
+    if (stored && stored.idempotencyKey !== intent.idempotencyKey) {
+      submissionRecovery.value = stored
+      unresolvedIntent.value = stored.uncertain ? stored : null
+      submissionState.value = stored.uncertain ? 'unknown' : 'idle'
+      return
+    }
     unresolvedIntent.value = { ...intent, uncertain: true }
     recoveryStore.save(unresolvedIntent.value)
     submissionRecovery.value = unresolvedIntent.value
@@ -273,12 +297,26 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
     submissionState.value = 'idle'
   }
   const applyReceipt = (value, intent) => {
-    if (!validReceipt(value)) throw new Error('交办回执无效，尚不能显示为已受理。')
+    const kind = intent.kind || (draft.value?.draftId === intent.draftId ? draft.value.kind : null)
+    if (!validReceipt(value, kind)) throw new Error('交办回执无效，尚不能显示为已受理。')
+    caseView.value = null
+    executionView.value = null
+    executionResults.value = null
+    resultsState.value = 'idle'
+    resultsError.value = ''
     receipt.value = value
     submissionState.value = 'acknowledged'
     unresolvedIntent.value = null
-    const saved = { idempotencyKey: intent.idempotencyKey, draftId: intent.draftId, ref: value.ref, executionId: value.execution.executionId, uncertain: false }
-    if (recoveryStore.save(saved)) submissionRecovery.value = saved
+    const saved = { idempotencyKey: intent.idempotencyKey, draftId: intent.draftId, ref: value.ref, executionId: value.execution?.executionId || null, uncertain: false, kind }
+    const stored = recoveryStore.read()
+    if (!stored || stored.idempotencyKey === intent.idempotencyKey) {
+      if (recoveryStore.save(saved)) submissionRecovery.value = saved
+    } else {
+      // A late read of an earlier acknowledged request cannot erase a newer pane's unknown POST.
+      submissionRecovery.value = stored
+      unresolvedIntent.value = stored.uncertain ? stored : null
+      if (stored.uncertain) submissionState.value = 'unknown'
+    }
     if (draft.value?.draftId === intent.draftId && editableDraft(draft.value)) {
       draft.value = { ...draft.value, state: 'SUBMITTED', submissionRef: `${value.ref.sourceType}:${value.ref.sourceId}` }
     }
@@ -291,8 +329,16 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
       error.value = unresolvedIntent.value || submissionState.value === 'submitting' ? '原交办结果仍待确认；请核对原请求，勿重复交办。' : '请先保存草稿并明确确认授权。'
       return null
     }
+    // Another retained Hall pane can have submitted since this model last read recovery.
+    const storedIntent = recoveryStore.read()
+    if (storedIntent?.uncertain || storedIntent?.draftId === currentDraft.draftId) {
+      submissionRecovery.value = storedIntent
+      if (storedIntent.uncertain) retainUnknown(storedIntent)
+      error.value = '原交办已有记录；请核对原请求，勿重复交办。'
+      return null
+    }
     const key = keyFactory()
-    const intent = { idempotencyKey: key, draftId: currentDraft.draftId, uncertain: true }
+    const intent = { idempotencyKey: key, draftId: currentDraft.draftId, kind: currentDraft.kind, uncertain: true }
     if (!ID(key) || !recoveryStore.save(intent)) { error.value = '无法安全保存原交办标识，未发送交办。'; return null }
     const snapshot = { ...snapshotNow(), draftId: currentDraft.draftId, revision: currentDraft.revision }
     unresolvedIntent.value = intent; submissionRecovery.value = intent; submissionState.value = 'submitting'; error.value = ''
@@ -327,6 +373,26 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
       return null
     }
   }
+  const loadFormalTask = async () => {
+    const ref = receipt.value?.ref
+    if (ref?.sourceType !== 'TASK') return null
+    const snapshot = snapshotNow()
+    state.value = 'loading'
+    error.value = ''
+    try {
+      const task = await request({ url: `/tasks/${encodeURIComponent(ref.sourceId)}`, method: 'GET' }, snapshot)
+      if (task?.id !== ref.sourceId || typeof task.status !== 'string') throw new Error('正式事项尚未核对，未用交办回执代替事项详情。')
+      state.value = 'ready'
+      return task
+    } catch (cause) {
+      if (cause?.name !== 'AbortError' && snapshot.generation === generation) {
+        state.value = 'error'
+        error.value = errorMessage(cause)
+      }
+      return null
+    }
+  }
+
   const loadResults = async executionId => {
     if (!ID(executionId)) return null
     const snapshot = snapshotNow()
@@ -352,9 +418,11 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
   const loadCase = async caseId => {
     if (!ID(caseId)) return null
     const snapshot = snapshotNow()
+    caseView.value = null
+    error.value = ''
     try {
       const value = await request({ url: `/hall/cases/${encodeURIComponent(caseId)}`, method: 'GET' }, snapshot)
-      if (!validCase(value)) throw new Error('事项进展回执无效，未展示可能不完整的进展。')
+      if (!validCase(value) || value.caseId !== caseId) throw new Error('事项进展回执无效，未展示可能不完整的进展。')
       caseView.value = value
       return value
     } catch (cause) {
@@ -363,13 +431,30 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
     }
   }
 
+  const loadExecution = async executionId => {
+    if (!ID(executionId)) return null
+    const snapshot = snapshotNow()
+    executionView.value = null
+    error.value = ''
+    try {
+      const value = await request({ url: `/personal-workspace/executions/${encodeURIComponent(executionId)}`, method: 'GET' }, snapshot)
+      if (!validExecution(value) || value.executionId !== executionId) throw new Error('原交办进展未能确认，请重新读取。')
+      executionView.value = value
+      return value
+    } catch (cause) {
+      if (cause?.name !== 'AbortError' && snapshot.generation === generation) error.value = errorMessage(cause)
+      return null
+    }
+  }
+
   watch([currentEpoch, currentScope], () => {
-    if (previousScope && previousScope !== currentScope.value) recoveryStore.clear(previousScope)
-    previousScope = currentScope.value
     reset()
   }, { immediate: true, flush: 'sync' })
-  const unregisterIdentityCleanup = registerIdentityCleanup(() => { recoveryStore.clear(); reset() })
+  const unregisterIdentityCleanup = registerIdentityCleanup(() => {
+    // Auth expiry rejects a read, not the original POST. Retain only the scope-keyed intent.
+    reset({ restoreRecovery: false })
+  })
   const dispose = () => { if (!disposed) { disposed = true; unregisterIdentityCleanup(); reset() } }
   if (getCurrentInstance()) onBeforeUnmount(dispose)
-  return { draft, summaries, nextCursor, state, error, reloadRequired, receipt, submissionState, caseView, submissionRecovery, unresolvedIntent, executionResults, resultsState, resultsError, create, save, list, loadMore, load, discard, submit, reconcileSubmission, loadCase, loadResults, reset, dispose }
+  return { draft, summaries, nextCursor, state, error, reloadRequired, receipt, submissionState, caseView, executionView, submissionRecovery, unresolvedIntent, executionResults, resultsState, resultsError, create, save, list, loadMore, load, discard, submit, reconcileSubmission, loadFormalTask, loadCase, loadExecution, loadResults, reset, dispose }
 }

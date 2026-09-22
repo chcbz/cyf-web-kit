@@ -52,13 +52,14 @@ const quickActions = [
   ['discussion', '厅前议事'],
   ['catalog', '招贤令'],
   ['library', '案卷阁'],
-  ['treasure', '百宝箱']
+  ['treasure', '百宝箱'],
+  ['messages', '消息']
 ]
 
 describe('HallPortraitHome', () => {
   it('keeps first portrait entry outside the melon stage mount path', () => {
     expect(existsSync(portraitHomeUrl)).to.equal(true)
-    expect(hallSource).to.include(`v-show="!experienceReady || experienceMode === 'portrait-command'"`)
+    expect(hallSource).to.include(`v-show="!experienceReady || experienceMode === 'portrait-command' || isOverviewHome"`)
     expect(hallSource).to.include('v-if="stageMounted"')
     expect(hallSource).to.include('<Teleport :to="stageTarget" :disabled="!stageTarget">')
     expect(hallSource).to.include('const stageHasMounted = ref(false)')
@@ -71,7 +72,7 @@ describe('HallPortraitHome', () => {
     expect(hallSource).not.to.include('juyitingGame.mount')
   })
 
-  it('renders all six real quick entries and routes them through the page owner', () => {
+  it('renders all seven real quick entries and routes them through the page owner', () => {
     expect(portraitHomeSource).to.include('const quickActions = Object.freeze([')
     for (const [key, label] of quickActions) {
       expect(portraitHomeSource).to.include(`{ key: '${key}', label: '${label}'`)
@@ -79,7 +80,7 @@ describe('HallPortraitHome', () => {
     expect(portraitHomeSource).to.include("emit('quick-action', action.key)")
     expect(hallSource).to.include('const handlePortraitQuickAction = (action) => {')
     expect(hallSource).to.include("handleStagePanelOpen('chat')")
-    expect(hallSource).to.include("['agents', 'tasks', 'catalog', 'library', 'treasure'].includes(action)")
+    expect(hallSource).to.include("['agents', 'tasks', 'catalog', 'library', 'treasure', 'messages'].includes(action)")
     expect(hallSource).to.include('openBabaoBox()')
     expect(hallSource).to.match(/<HallStage[\s\S]*?@open-workspace="openBabaoBox"/)
     const refresh = hallSource.match(/const refreshHall = async \([^)]*\) => \{([\s\S]*?)\n\}/)?.[1] || ''
@@ -329,4 +330,22 @@ it('compiles the stable preview target CSS and mounts a concrete target node', (
     wrapper?.unmount()
     for (const [key, descriptor] of Object.entries(domDescriptors)) restoreDescriptor(globalThis, key, descriptor)
   }
+})
+
+describe('W05 production overview slot', () => {
+  it('replaces filtered-task summaries and counts while preserving the live map and source context', async () => {
+    const wrapper = mount(loadPortraitHome(), {
+      props: baseProps({ tasks: [{ id: 'filtered-a', title: '榜单过滤结果', status: 'open' }] }),
+      slots: { overview: '<section class="independent-overview">独立最近事项</section>' }
+    })
+    try {
+      expect(wrapper.find('.independent-overview').exists()).to.equal(true)
+      expect(wrapper.find('.portrait-overview').exists()).to.equal(false)
+      expect(wrapper.find('.portrait-todos').exists()).to.equal(false)
+      await wrapper.setProps({ tasks: [] })
+      expect(wrapper.find('.independent-overview').text()).to.equal('独立最近事项')
+      expect(wrapper.find('[data-portrait-action="messages"]').exists()).to.equal(true)
+      expect(wrapper.find('.portrait-scene').exists()).to.equal(true)
+    } finally { wrapper.unmount() }
+  })
 })
