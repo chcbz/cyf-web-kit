@@ -102,7 +102,7 @@ describe('prototype-conformance draft flow', () => {
   })
 
   it('does not claim a receipt when confirm fails and does not submit until explicit authorization', async () => {
-    const wrapper = mount(HallDraftEditor, { props: { identityScope: 'tenant\u0000client\u0000owner' } })
+    const wrapper = mount(HallDraftEditor, { props: { identityScope: 'tenant\u0000client\u0000owner', agents: [{ agentId: 'wuyong', name: '吴用' }] } })
     try {
       await tick()
       await wrapper.find('input').setValue('一页简报')
@@ -113,6 +113,12 @@ describe('prototype-conformance draft flow', () => {
       expect(model.submissions).to.have.length(0)
       const authorization = wrapper.find('.authorization input[type="checkbox"]')
       expect(authorization.exists()).to.equal(true)
+      expect(authorization.element.disabled).to.equal(true)
+      await wrapper.find('select[aria-label="执行好汉"]').setValue('wuyong')
+      expect(button(wrapper, '保存更改')).to.not.equal(undefined)
+      await button(wrapper, '保存更改').trigger('click')
+      await tick()
+      expect(authorization.element.disabled).to.equal(false)
       await authorization.setValue(true)
       await button(wrapper, '确认授权并交办').trigger('click')
       await tick()
