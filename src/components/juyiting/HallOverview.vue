@@ -111,7 +111,7 @@ watch([() => props.enabled, () => props.identityScope, () => props.identityEpoch
 .hall-overview button:focus-visible { outline:3px solid #bb793f; outline-offset:2px; }
 .hall-overview button.primary { background:#8d402c; color:#fff9ee; border-color:#8d402c; }
 .hall-overview button:disabled { opacity:.55; cursor:default; }
-.overview-map-link { flex:0 0 220px; height:132px; background:linear-gradient(140deg,#493423,#20160f) !important; color:#ecd7aa !important; }
+.overview-map-link { flex:0 0 220px; height:132px; background:linear-gradient(0deg,rgba(32,22,15,.9),rgba(32,22,15,.15)),url('../../assets/juyiting/liangshan-hall-physical-bg-v1.png') center/cover !important; color:#ecd7aa !important; }
 .overview-map-link span { display:block; font-size:28px; letter-spacing:8px; margin-bottom:18px; }
 .overview-list-heading { display:flex; justify-content:space-between; align-items:center; margin:24px 0 8px; gap:12px; }
 .overview-list-heading h3 { font-size:21px; font-weight:500; }

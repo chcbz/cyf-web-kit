@@ -40,12 +40,12 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       await settle()
       expect(wrapper.findAll('.overview-section')).to.have.length(1)
       expect(wrapper.text()).not.to.include('最近事项')
-      expect(wrapper.text()).to.include('打开或查看不代表已读、验收或归档')
+      expect(wrapper.text()).to.include('打开不代表已读、验收或归档')
       expect(wrapper.text()).to.include('正式成果的待验收情况尚未完整纳入')
       expect(wrapper.findAll('.overview-empty')).to.have.length(0)
-      await wrapper.findAll('button').find(button => button.text() === '查看事项').trigger('click')
-      await wrapper.findAll('button').find(button => button.text() === '查看原交办').trigger('click')
-      await wrapper.findAll('button').find(button => button.text() === '继续草稿').trigger('click')
+      await wrapper.findAll('.overview-item').find(row => row.text().includes('case-a')).find('button').trigger('click')
+      await wrapper.findAll('.overview-item').find(row => row.text().includes('exec-a')).find('button').trigger('click')
+      await wrapper.findAll('.overview-item').find(row => row.text().includes('draft-a')).find('button').trigger('click')
       expect(wrapper.emitted('open-item').map(event => event[0])).to.deep.equal([
         { sourceType: 'PRIVATE_CASE', sourceId: 'case-a' }, { sourceType: 'LEGACY_EXECUTION', sourceId: 'exec-a' }, { sourceType: 'DRAFT', sourceId: 'draft-a' }
       ])
@@ -61,9 +61,10 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
     const wrapper = mount(load({ execute: async options => { calls.push(options); return response() } }), { props })
     try {
       await settle()
-      expect(wrapper.findAll('.overview-section')).to.have.length(2)
+      expect(wrapper.findAll('.overview-section')).to.have.length(1)
+      expect(wrapper.find('.overview-section').attributes('aria-label')).to.equal('最近事项')
       const create = wrapper.findAll('button').find(button => button.text() === '提出需求')
-      expect(create.element.compareDocumentPosition(wrapper.find('.overview-sections').element) & Node.DOCUMENT_POSITION_FOLLOWING).not.to.equal(0)
+      expect(create.element.compareDocumentPosition(wrapper.find('.overview-section').element) & Node.DOCUMENT_POSITION_FOLLOWING).not.to.equal(0)
       await create.trigger('click')
       expect(wrapper.emitted('start-draft')).to.have.length(1)
       expect(calls.map(call => [call.method, call.url])).to.deep.equal([['GET', '/hall/overview']])
@@ -81,8 +82,8 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
     } }), { props: { ...props, messagesOnly: true } })
     try {
       await settle()
-      expect(wrapper.findAll('button').some(button => button.text() === '继续草稿')).to.equal(false)
-      await wrapper.findAll('button').find(button => button.text() === '打开原悬赏').trigger('click')
+      expect(wrapper.findAll('button').some(button => button.text() === '继续填写')).to.equal(false)
+      await wrapper.findAll('.overview-item').find(row => row.text().includes('task-a')).find('button').trigger('click')
       await settle()
       expect(wrapper.emitted('open-task')[0][0]).to.deep.equal({ id: 'task-a', title: '原榜文', status: 'open' })
       expect(wrapper.emitted('open-item')).to.equal(undefined)
@@ -126,13 +127,13 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
     } }), { props })
     try {
       await settle()
-      await wrapper.findAll('button').find(button => button.text() === '案卷（私人 / 正式）').trigger('click')
+      await wrapper.findAll('button').find(button => button.text() === '案卷').trigger('click')
       await settle()
-      expect(wrapper.findAll('.overview-source').map(part => part.attributes('data-source'))).to.deep.equal(['private', 'task'])
+      expect(wrapper.findAll('.overview-item').map(row => row.find('strong').text())).to.deep.equal(['private-archived', 'task-archived'])
       expect(calls.slice(1).map(call => call.params)).to.deep.equal([
         { kind: 'private', view: 'archive', q: '' }, { kind: 'task', view: 'archive', q: '' }
       ])
-      expect(wrapper.text()).to.include('已收入案卷（个人整理）')
+      expect(wrapper.text()).to.include('已收入案卷')
       expect(wrapper.text()).not.to.include('未交办草稿')
       expect(wrapper.findAll('[data-count]')).to.have.length(0)
     } finally { wrapper.unmount() }
@@ -151,7 +152,7 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
     } }), { props: { ...props, messagesOnly: true } })
     try {
       await settle()
-      expect(wrapper.text()).to.include('正式交付待验收')
+      expect(wrapper.text()).to.include('交付待验收')
       await wrapper.findAll('button').find(button => button.text() === '查看待验收交付').trigger('click')
       await settle()
       expect(wrapper.emitted('open-task')[0]).to.deep.equal([task, review])

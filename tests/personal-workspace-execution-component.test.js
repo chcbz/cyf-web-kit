@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { describe, it } from 'mocha'
 import * as Vue from 'vue'
 import { compileScript, parse } from '@vue/compiler-sfc'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { deliveryTypeText } from '../src/utils/executionFormats.js'
 
 for (const name of ['Element', 'HTMLElement', 'SVGElement', 'Node']) { if (!globalThis[name] && globalThis.window?.[name]) Object.defineProperty(globalThis, name, { value: globalThis.window[name], configurable: true }) }
@@ -96,7 +96,7 @@ describe('personal workspace execution receipt presentation', () => {
     assert.equal(wrapper.find('.detail-modal').exists(), true)
     wrapper.unmount()
   })
-  it('W04 embeds only file browsing, keeps the source list inert in detail, and consumes one local return', async () => {
+  it('prototype embeds light file rows, replaces the active layer and returns to the fixed source file', async () => {
     const workspace = workspaceMock()
     const execution = executionMock()
     let executionLoads = 0
@@ -112,26 +112,27 @@ describe('personal workspace execution receipt presentation', () => {
       await Vue.nextTick()
       await wrapper.setProps({ compact: true })
       assert.equal(wrapper.classes().includes('is-compact-hall'), true)
-      assert.equal(wrapper.find('.library-tools input[type="file"]').exists(), true)
-      assert.equal(wrapper.find('.filters').exists(), true)
+      assert.equal(wrapper.find('input[type="file"]').exists(), false)
+      assert.equal(wrapper.findAll('.treasure-tabs button').length, 4)
+      assert.equal(wrapper.find('.treasure-search').exists(), true)
       assert.equal(wrapper.find('.box-modal').exists(), false)
       assert.equal(wrapper.find('.delivery-modal').exists(), false)
       assert.equal(executionLoads, 0)
-      const list = wrapper.find('.library-modal').element
+      const list = wrapper.find('.treasure-file-list').element
       await wrapper.setProps({ detailAllowed: false })
-      assert.equal(wrapper.find('.file-row').element.disabled, true)
-      await wrapper.find('.file-row').trigger('click')
+      assert.equal(wrapper.find('.treasure-file-row button').element.disabled, true)
+      await wrapper.find('.treasure-file-row button').trigger('click')
       assert.equal(workspace.detail.value, null)
       await wrapper.setProps({ detailAllowed: true })
-      await wrapper.find('.file-row').trigger('click')
-      await Vue.nextTick()
-      assert.equal(wrapper.find('.detail-modal').exists(), true)
-      assert.equal(list.getAttribute('inert'), '')
-      assert.equal(list.getAttribute('aria-hidden'), 'true')
+      await wrapper.find('.treasure-file-row button').trigger('click')
+      await flushPromises(); await Vue.nextTick()
+      assert.equal(wrapper.find('.treasure-content').attributes('data-view'), 'preview')
+      assert.equal(list.isConnected, false)
+      assert.equal(wrapper.find('.treasure-file-list').exists(), false)
       assert.equal(wrapper.text().includes('办事笺'), false)
       workspace.detail.value.versions.push({ version: 2, originalFilename: '新版本.txt', contentMimeType: 'text/plain' })
       workspace.detail.value.file.latestVersion = 2
-      await wrapper.findAll('button').find(button => button.text() === '使用当前固定版本起草交办').trigger('click')
+      await wrapper.findAll('button').find(button => button.text() === '用于新委托').trigger('click')
       assert.deepEqual(wrapper.emitted('start-draft')[0][0], {
         originRef: 'juyiting:file', sourceRef: { sourceType: 'FILE', sourceId: 'file_1', version: 1 },
         inputs: [{ fileId: 'file_1', version: 1 }]
@@ -141,13 +142,37 @@ describe('personal workspace execution receipt presentation', () => {
       assert.equal(wrapper.vm.canGoBack, true)
       assert.equal(wrapper.vm.back(), true)
       await Vue.nextTick()
-      assert.equal(wrapper.find('.library-modal').element, list)
-      assert.equal(list.hasAttribute('inert'), false)
-      assert.equal(document.activeElement, wrapper.find('.file-row').element)
+      assert.equal(wrapper.find('.treasure-content').attributes('data-view'), 'list')
+      assert.equal(wrapper.find('.treasure-file-list').exists(), true)
+      assert.equal(document.activeElement, wrapper.find('.treasure-file-row button').element)
       assert.equal(wrapper.vm.back(), false)
     } finally {
       wrapper.unmount()
     }
+  })
+
+  it('prototype keeps cursor continuation honest and management is a third logical layer with inline recycle confirmation', async () => {
+    const workspace = workspaceMock(); const calls = []; workspace.nextCursor.value = 'next-page'
+    workspace.loadMore = async () => { calls.push('more'); workspace.items.value.push({ fileId: 'out-1', displayName: '成果.pdf', originKind: 'AGENT_DELIVERY', latestVersion: 1, state: 'ACTIVE' }); workspace.nextCursor.value = null }
+    workspace.usage = async () => ({ taskReferences: [{ taskId: 'task-1' }], activeExecutions: [] })
+    workspace.trash = async value => { calls.push(value); return { state: 'TRASHED' } }
+    const component = new Function('Vue', 'deps', script)(Vue, { deliveryTypeText, useApiStore: () => ({ authorizationGeneration: 1, oauthClientId: 'web-client' }), useGlobalStore: () => ({ user: { id: 'owner-a' } }), usePersonalWorkspace: () => workspace, usePersonalWorkspaceExecution: executionMock, savePersonalWorkspaceBlob: () => {} })
+    const wrapper = mount(component, { props: { embedded: true } })
+    const click = async text => { await wrapper.findAll('button').find(b => b.text() === text).trigger('click'); await Vue.nextTick(); await Vue.nextTick() }
+    try {
+      await Vue.nextTick(); await click('成果')
+      assert.match(wrapper.text(), /已读取的文件中暂无此分类/)
+      assert.equal(wrapper.find('.treasure-file-row').exists(), false)
+      await click('读取更多文件'); assert.match(wrapper.text(), /成果.pdf/)
+      await click('查看'); assert.equal(wrapper.vm.logicalDepth, 2)
+      await click('更多管理'); assert.equal(wrapper.vm.logicalDepth, 3)
+      assert.equal(wrapper.find('.treasure-preview').exists(), false)
+      await click('移入回收站'); assert.match(wrapper.text(), /1 个关联引用/)
+      assert.equal(calls.length, 1)
+      await click('取消'); assert.equal(calls.length, 1)
+      await click('移入回收站'); await click('确认回收'); assert.equal(calls.length, 2)
+      assert.equal(wrapper.find('.treasure-content').attributes('data-view'), 'list')
+    } finally { wrapper.unmount() }
   })
 
 })

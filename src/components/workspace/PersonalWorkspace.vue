@@ -1,5 +1,5 @@
 <template>
-  <main class="personal-workspace" :class="{ 'is-hall-treasure': embedded, 'is-compact-hall': embedded && compact, 'is-progress-view': activeModal === 'delivery' && showDeliveryProgress }">
+  <main ref="workspaceRoot" class="personal-workspace" :class="{ 'is-hall-treasure': embedded, 'is-compact-hall': embedded && compact, 'is-progress-view': activeModal === 'delivery' && showDeliveryProgress }">
     <header v-if="!embedded" class="workspace-header">
       <div><p class="workspace-eyebrow">聚义厅 · 内堂收纳</p><h1>百宝箱</h1><p>打开一件事，再专心办完它。</p></div>
       <p class="workspace-header-note">资料只在你明确提交时，才会授权给所选 Agent。</p>
@@ -332,6 +332,8 @@ const prepareNewExecution = () => execution.prepareNewRequest()
 const chooseHistoryExecution = executionId => execution.selectHistoryExecution(executionId)
 const loadMoreExecutionHistory = () => { const cursor = execution.historyNextCursor.value; return cursor ? execution.loadHistory({ beforeCreatedAt: cursor.createdAt, beforeExecutionId: cursor.executionId, append: true, adopt: false }) : Promise.resolve([]) }
 
+const workspaceRoot = ref(null)
+let treasureListScroll = 0
 const treasureView = ref('list')
 const treasureTab = ref('all')
 const treasureTabs = [{ key: 'all', label: '全部' }, { key: 'materials', label: '资料' }, { key: 'results', label: '成果' }, { key: 'trash', label: '回收站' }]
@@ -346,6 +348,7 @@ const changeTreasureTab = key => {
   if (state.value !== next) { state.value = next; void refresh() }
 }
 const openTreasureFile = async fileId => {
+  treasureListScroll = workspaceRoot.value?.scrollTop || 0
   const detail = await openFile(fileId)
   if (!detail || !detailAllowed) return
   treasureView.value = 'preview'
@@ -377,6 +380,7 @@ const back = () => {
   if (embedded && treasureView.value === 'manage') { treasureView.value = 'preview'; trashUsage.value = null; return true }
   treasureView.value = 'list'; trashUsage.value = null
   backToLibrary()
+  nextTick(() => { if (workspaceRoot.value) workspaceRoot.value.scrollTop = treasureListScroll })
   return true
 }
 watch(identityEpoch, () => { treasureView.value = 'list'; treasureTab.value = 'all'; trashUsage.value = null; uploadFile.value = null; versionFile.value = null; query.value = ''; uploadDisplayName.value = ''; renameValue.value = ''; selectedId.value = ''; activeModal.value = embedded ? 'library' : 'home' })

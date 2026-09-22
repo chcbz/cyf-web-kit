@@ -3209,4 +3209,7 @@ button.hall-room {
  .panel-title { min-height:44px; padding:6px 12px; }
  .panel-title > span { font-size:17px; }
 }
+.floating-panel > :deep(.hall-draft-editor) { flex:1; min-height:0; overflow:auto; align-content:start; padding:24px 30px; box-sizing:border-box; overscroll-behavior:contain; }
+@media(max-width:600px) { .floating-panel > :deep(.hall-draft-editor) { padding:20px 16px; } }
+@media(max-height:500px) { .floating-panel > :deep(.hall-draft-editor) { padding:14px 20px; } }
 </style>
