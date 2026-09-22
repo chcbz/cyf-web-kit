@@ -68,6 +68,11 @@ describe('JYT-UX-W01 unified Hall shell', () => {
     expect(source).to.include('layout-full-window')
   })
 
+  it('fills the unified portrait body instead of leaving the old aspect-ratio thumbnail above a blank area', () => {
+    const portrait = readFileSync(new URL('../src/components/juyiting/HallPortraitHome.vue', import.meta.url), 'utf8')
+    expect(portrait).to.include('.is-unified-shell .portrait-scene :deep(.preview-frame) { height:100%; min-height:0; }')
+  })
+
   it('keeps the Portrait Home flex layout and exposes a pending-request exit', () => {
     const portrait = readFileSync(new URL('../src/components/juyiting/HallPortraitHome.vue', import.meta.url), 'utf8')
     const stage = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')

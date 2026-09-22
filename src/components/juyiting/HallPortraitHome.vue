@@ -819,6 +819,8 @@ button:disabled {
 .hall-portrait-home.is-unified-shell { padding:0; gap:0; height:auto; flex:1 1 0; background:#24190f; }
 .is-unified-shell .portrait-scene.has-live-preview { flex:1 1 0; min-height:0; overflow:hidden; }
 .is-unified-shell .portrait-scene :deep(.hall-live-map-preview) { height:100%; }
+/* The unified map is the page body, not the old fixed-aspect dashboard thumbnail. */
+.is-unified-shell .portrait-scene :deep(.preview-frame) { height:100%; min-height:0; }
 .is-unified-shell .portrait-below-map-scroll { gap:0; }
 .is-unified-shell .portrait-work-summary { width:min(1250px,100%); margin:0 auto; }
 .is-unified-shell .portrait-work-summary :deep(.hall-overview) { border-radius:0; min-height:100%; }
