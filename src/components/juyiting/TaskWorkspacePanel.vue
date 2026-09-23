@@ -243,6 +243,7 @@ const requiredAbilitiesPresentation = computed(() => parseRequiredAbilities(task
 const connectionLabels = {
   idle: '等待选择',
   loading: '正在载入',
+  snapshot_ready: '快照已核对',
   live: '实时同步',
   reconnecting: '正在恢复',
   degraded: '服务暂不可用',
@@ -252,6 +253,7 @@ const connectionLabels = {
 const connectionMessages = {
   idle: '尚未开始读取协作状态。',
   loading: '正在读取任务协作快照。',
+  snapshot_ready: '已核对当前任务快照，正在等待实时连接；提交操作时仍由服务端核验权限与工作项版本。',
   live: '协作状态正在实时同步。',
   reconnecting: '连接中断，正在按既有恢复策略重新连接。',
   degraded: '协作服务暂不可用，稍后可手动重新载入。',
@@ -330,6 +332,7 @@ const canRetry = computed(() => ['degraded', 'error'].includes(props.connectionS
   background: #f8e6dc;
 }
 
+.task-connection-badge.is-snapshot_ready,
 .task-connection-badge.is-reconnecting,
 .task-connection-badge.is-resyncing,
 .task-connection-badge.is-loading {

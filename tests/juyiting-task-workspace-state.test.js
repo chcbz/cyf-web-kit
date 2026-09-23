@@ -27,6 +27,40 @@ function deferred () { let resolve; let reject; const promise = new Promise((res
 class FakeDocument extends EventTarget { constructor () { super(); this.visibilityState = 'visible' } }
 
 describe('C06 task workspace state', () => {
+  it('marks only a validated snapshot ready before an idle SSE response opens; scope changes and failures revoke readiness', async () => {
+    const requests = []
+    let failSnapshot = false
+    const instance = useTaskWorkspace({
+      agentApi: { execute: options => {
+        if (options.url.endsWith('/workspace')) return failSnapshot
+          ? Promise.reject(Object.assign(new Error('forbidden'), { status: 403 }))
+          : Promise.resolve(snapshot(V, options.url.includes('task-b') ? 'task-b' : 'task-a'))
+        requests.push(options)
+        return new Promise(resolve => options.signal.addEventListener('abort', resolve, { once: true }))
+      } },
+      documentRef: new FakeDocument(), windowRef: new EventTarget(), snapshotTimeoutMs: 0
+    })
+    await instance.open({ taskId: 'task-a', actorAgentId: 'agent-a' })
+    assert.equal(instance.connectionState.value, 'snapshot_ready')
+    assert.equal(instance.workspace.value.task.taskId, 'task-a')
+    assert.equal(requests.length, 1)
+    requests[0].onStreamOpen({ cancel () {} })
+    assert.equal(instance.connectionState.value, 'live')
+    const changed = instance.open({ taskId: 'task-b', actorAgentId: 'agent-a' })
+    assert.equal(instance.connectionState.value, 'loading')
+    assert.equal(instance.workspace.value.task, null)
+    await changed
+    assert.equal(instance.connectionState.value, 'snapshot_ready')
+    requests[0].onStreamOpen({ cancel () {} })
+    assert.equal(instance.connectionState.value, 'snapshot_ready')
+    failSnapshot = true
+    await instance.retry()
+    assert.equal(instance.connectionState.value, 'error')
+    assert.equal(instance.workspace.value.task, null)
+    instance.close()
+    assert.equal(instance.connectionState.value, 'idle')
+  })
+
   it('keeps canonical Long versions exact without Number coercion', () => {
     assert.equal(parseTaskEventVersion(V), V)
     assert.equal(parseTaskEventVersion('9223372036854775807'), '9223372036854775807')
@@ -295,7 +329,7 @@ describe('C06 task workspace state', () => {
     const api = { execute: options => { calls.push(options); if (options.url.endsWith('/workspace')) return Promise.resolve({ data: { data: snapshot() } }); streamOptions = options; return new Promise(() => {}) } }
     const instance = useTaskWorkspace({ agentApi: api, documentRef: new FakeDocument(), windowRef: new EventTarget() })
     await instance.open({ taskId: 'task-a', actorAgentId: 'agent-a' })
-    assert.equal(instance.connectionState.value, 'loading')
+    assert.equal(instance.connectionState.value, 'snapshot_ready')
     streamOptions.onStreamOpen({ cancel () {} })
     assert.equal(instance.connectionState.value, 'live')
     assert.deepEqual(calls[0].params, { actorAgentId: 'agent-a' })

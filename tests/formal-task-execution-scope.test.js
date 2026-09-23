@@ -31,6 +31,26 @@ describe('formal TASK execution Hall scope', () => {
     })
   })
 
+  it('uses a validated snapshot while SSE headers are pending, without relaxing identity/task/actor checks', () => {
+    const fixture = scopeFixture()
+    fixture.taskWorkspaceConnectionState.value = 'snapshot_ready'
+    assert.equal(fixture.formal.value.formalExecutionAuthorized, true)
+    fixture.taskWorkspaceSubject.value = { taskId: 'task_other', actorAgentId: 'agent_wuyong' }
+    assert.equal(fixture.formal.value.formalExecutionAuthorized, false)
+    fixture.taskWorkspaceSubject.value = { taskId: 'task_395', actorAgentId: 'agent_other' }
+    assert.equal(fixture.formal.value.formalExecutionAuthorized, false)
+    fixture.taskWorkspaceSubject.value = { taskId: 'task_395', actorAgentId: 'agent_wuyong' }
+    fixture.taskWorkspaceSnapshot.value = workspace({ agentId: 'agent_other', workItems: [readyItem()] })
+    assert.equal(fixture.formal.value.formalExecutionAuthorized, false)
+    fixture.taskWorkspaceSnapshot.value = workspace({ workItems: [readyItem({ status: 'running' })] })
+    assert.equal(fixture.formal.value.formalExecutionAuthorized, false)
+    fixture.taskWorkspaceSnapshot.value = workspace({ workItems: [readyItem()] })
+    for (const state of ['loading', 'resyncing', 'degraded', 'error', 'idle']) {
+      fixture.taskWorkspaceConnectionState.value = state
+      assert.equal(fixture.formal.value.formalExecutionAuthorized, false, state)
+    }
+  })
+
   it('does not borrow a conversation from another task', () => {
     const fixture = scopeFixture()
     fixture.chatContext.value = { ...fixture.chatContext.value, conversationScopeKey: 'task:task_other', taskId: 'task_other' }

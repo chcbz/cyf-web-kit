@@ -54,7 +54,7 @@ export function useFormalTaskExecutionScope ({
     const readyRequiredItems = workspaceMatches && Array.isArray(workspace.workItems)
       ? workspace.workItems.filter(item => item?.requiredItem === true && item.status === 'ready' && item.assigneeAgentId === targetAgentId)
       : []
-    const workspaceAvailable = ['live', 'reconnecting'].includes(valueOf(taskWorkspaceConnectionState))
+    const workspaceAvailable = ['snapshot_ready', 'live', 'reconnecting'].includes(valueOf(taskWorkspaceConnectionState))
 
     let authorizationReason = ''
     if (!taskId) authorizationReason = '当前未选定正式榜文，不能关联资料或开始正式办理。'

@@ -14,7 +14,7 @@ describe('C07B task workspace presentation', () => {
   })
 
   it('renders the frozen workspace projections and all connection states without business writes', () => {
-    for (const state of ['idle', 'loading', 'live', 'reconnecting', 'degraded', 'resyncing', 'error']) {
+    for (const state of ['idle', 'loading', 'snapshot_ready', 'live', 'reconnecting', 'degraded', 'resyncing', 'error']) {
       expect(panelSource).to.include(`${state}:`)
     }
     for (const section of ['成员', '工作项', '待处理诉求', '最近成果', '关联会话']) {
