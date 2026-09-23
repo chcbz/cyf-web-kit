@@ -3402,7 +3402,7 @@ button.hall-room {
 .home-overview .hall-app-header .workbench-create-action { background: var(--work-brand); color: var(--work-paper); border-color: var(--work-brand); }
 .home-overview .hall-app-header .workbench-create-action:hover { background: #793326; }
 .home-overview .workbench-mobile-more, .home-overview .workbench-mobile-nav { display: none; }
-.home-overview .workbench-more-menu { position: absolute; top: 62px; right: 15px; z-index: 32; width: min(330px, calc(100vw - 30px)); padding: 12px; background: var(--work-paper); border: 1px solid var(--work-line); border-radius: 10px; box-shadow: 0 18px 38px #242e2b29; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.home-overview .workbench-more-menu { position: absolute; top: 64px; right: 15px; z-index: 32; box-sizing: border-box; width: min(330px, calc(100vw - 30px)); max-height: calc(100% - 64px - 62px - env(safe-area-inset-bottom)); overflow-y: auto; overscroll-behavior: contain; padding: 12px; background: var(--work-paper); border: 1px solid var(--work-line); border-radius: 10px; box-shadow: 0 18px 38px #242e2b29; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .home-overview .workbench-more-menu button { white-space: normal; text-align: left; justify-content: flex-start; }
 .juyi-page.home-overview :deep(.portrait-work-summary) { width: min(1320px, 100%); }
 .juyi-page.home-overview :deep(.hall-overview:not(.is-messages)) { background: var(--work-ground); color: var(--work-ink); }
@@ -3463,6 +3463,7 @@ button.hall-room {
 @media (max-height: 560px) {
   .juyi-page.home-overview { grid-template-rows: 58px minmax(0, 1fr); }
   .home-overview > .hall-app-header { padding-top: 5px; padding-bottom: 5px; }
+  .home-overview .workbench-more-menu { top: 58px; max-height: calc(100% - 58px - 62px - env(safe-area-inset-bottom)); }
   .home-overview .panel-overlay.is-workbench-panel { top: 58px; }
   .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.discussion-brief) { display: none; }
   .home-overview .panel-overlay.is-workbench-panel { padding-top: 0; padding-bottom: 0; }

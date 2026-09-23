@@ -2526,6 +2526,20 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
 }
 
 describe('lightweight workbench real panel navigation', () => {
+  it('keeps the expanded mobile menu within the header and bottom dock on short screens', () => {
+    // jsdom does not lay out CSS: assert the responsive constraints here and
+    // separately verify actual bounding boxes in a browser fixture.
+    const source = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+    const style = parse(source).descriptor.styles.at(-1).content
+    const rule = style.match(/\.home-overview \.workbench-more-menu \{([^}]+)\}/)?.[1]
+    expect(rule).to.include('box-sizing: border-box')
+    expect(rule).to.include('top: 64px')
+    expect(rule).to.include('max-height: calc(100% - 64px - 62px - env(safe-area-inset-bottom))')
+    expect(rule).to.include('overflow-y: auto')
+    const short = style.match(/@media \(max-height: 560px\) \{([\s\S]+?)\n\}/)?.[1]
+    expect(short).to.include('.home-overview .workbench-more-menu { top: 58px; max-height: calc(100% - 58px - 62px - env(safe-area-inset-bottom)); }')
+  })
+
   it('returns focus to the persistent more trigger when its menu item unmounts on first open', async () => {
     const home = Vue.ref('overview')
     const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
