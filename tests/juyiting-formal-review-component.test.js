@@ -20,6 +20,25 @@ const delivery = {
 }
 
 describe('W05 real formal-review component boundary', () => {
+  // This suite must mount independently, not depend on another component test
+  // having populated jsdom constructors on Node's global object first.
+  const previousDomGlobals = new Map()
+  before(() => {
+    for (const name of ['Element', 'HTMLElement', 'SVGElement', 'Node']) {
+      if (globalThis[name]) continue
+      previousDomGlobals.set(name, Object.getOwnPropertyDescriptor(globalThis, name))
+      Object.defineProperty(globalThis, name, {
+        value: globalThis.window[name], writable: true, configurable: true
+      })
+    }
+  })
+  after(() => {
+    for (const [name, descriptor] of previousDomGlobals) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor)
+      else delete globalThis[name]
+    }
+    previousDomGlobals.clear()
+  })
   it('locates only a fetched exact delivery, reports stale summary refs, and never writes on opening or identity changes', async () => {
     const requests = []
     let writes = 0
