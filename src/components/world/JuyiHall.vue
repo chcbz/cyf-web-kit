@@ -50,7 +50,7 @@
       </div>
     </div>
     <nav v-show="isOverviewHome" class="workbench-mobile-nav" aria-label="移动端导航" :inert="voiceInteractionLocked || isPanelSessionActive && !workbenchPrimaryPanelSet.has(renderedPanel) ? '' : null">
-      <button v-for="tab in workbenchMobileTabs" :key="tab.panel" type="button" :data-workbench-tab="tab.panel" :aria-current="workbenchCurrentPage === tab.panel ? 'page' : null" @click="openWorkbenchPage(tab.panel)"><var-icon :name="tab.icon" /><span>{{ tab.label }}</span></button>
+      <button v-for="tab in workbenchMobileTabs" :key="tab.panel" type="button" :data-workbench-tab="tab.panel" :aria-label="tab.label" :aria-current="workbenchCurrentPage === tab.panel ? 'page' : null" @click="openWorkbenchPage(tab.panel)"><var-icon :name="tab.icon" /><span>{{ tab.label }}</span></button>
     </nav>
     <HallPortraitHome
       ref="portraitHomeRef"
@@ -3471,4 +3471,36 @@ button.hall-room {
   .home-overview .panel-overlay.is-workbench-panel .panel-title { min-height: 40px; padding-top: 4px; padding-bottom: 4px; }
   .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-chat-composer) { padding-top: 6px; padding-bottom: 6px; }
 }
+
+/* At 200%-equivalent narrow reflow, keep each action reachable rather than
+   letting min-content widths shift the workbench outside the viewport. */
+@media (max-width: 240px) {
+  .juyi-page.home-overview { grid-template-columns: minmax(0, 1fr); }
+  .home-overview > .hall-app-header { box-sizing: border-box; width: 100%; min-width: 0; flex-wrap: nowrap; padding: 5px 8px; }
+  .home-overview .hall-app-header .hall-header-tools > button:not(.workbench-mobile-more) { display: none; }
+  .home-overview .hall-app-header .hall-brand { flex: 0 1 auto; min-width: 0; }
+  .home-overview .workbench-mobile-nav button:not(:last-child) span { display: none; }
+  .home-overview .workbench-mobile-nav button { padding: 3px; font-size: 10px; }
+  .home-overview .panel-overlay.is-workbench-panel .panel-title > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-chat-composer) { padding-top: 2px; padding-bottom: 2px; }
+  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.composer-textarea) { max-height: 56px; }
+  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.panel-toolbar) { overflow-x: auto; overscroll-behavior-x: contain; }
+  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.panel-toolbar .context-summary),
+  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.panel-toolbar .toolbar-actions) { flex: 0 0 auto; }
+}
+@media (max-width: 180px) {
+  .home-overview .panel-overlay.is-workbench-panel .panel-title { min-height: 36px; padding: 0 8px; }
+  .home-overview .panel-overlay.is-workbench-panel .panel-title > span { display: none; }
+  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.panel-toolbar) { padding: 2px 6px; }
+  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-messages) { padding: 4px 8px; }
+  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.composer-meta span:last-child) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+/* When the entire chat is taller than an extremely short viewport, scroll the
+   work window itself so the composer remains reachable above the fixed dock. */
+@media (max-height: 260px) and (max-width: 760px) {
+  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay > .floating-panel { overflow-y: auto; overscroll-behavior: contain; }
+  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.chat-panel) { flex: 0 0 auto; height: auto; min-height: min-content; }
+  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-messages) { flex: 0 0 auto; min-height: 80px; max-height: 40vh; }
+}
+
 </style>

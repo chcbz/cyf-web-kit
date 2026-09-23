@@ -2542,6 +2542,20 @@ describe('lightweight workbench real panel navigation', () => {
     expect(short).to.include('.home-overview .workbench-more-menu { top: 58px; max-height: calc(100% - 58px - 62px - env(safe-area-inset-bottom)); }')
   })
 
+  it('keeps tiny reflow navigation named and lets short chat windows scroll to the composer', () => {
+    const source = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+    const style = parse(source).descriptor.styles.at(-1).content
+    expect(source).to.include(':data-workbench-tab="tab.panel" :aria-label="tab.label"')
+    const narrow = style.match(/@media \(max-width: 240px\) \{([\s\S]+?)\n\}/)?.[1]
+    expect(narrow).to.include('.workbench-mobile-nav button:not(:last-child) span { display: none; }')
+    expect(narrow).to.include(':deep(.panel-toolbar) { overflow-x: auto;')
+    const veryNarrow = style.match(/@media \(max-width: 180px\) \{([\s\S]+?)\n\}/)?.[1]
+    expect(veryNarrow).to.include(':deep(.hall-messages) { padding: 4px 8px; }')
+    const short = style.match(/@media \(max-height: 260px\) and \(max-width: 760px\) \{([\s\S]+?)\n\}/)?.[1]
+    expect(short).to.include('> .floating-panel { overflow-y: auto;')
+    expect(short).to.include(':deep(.chat-panel) { flex: 0 0 auto; height: auto;')
+  })
+
   it('returns focus to the persistent more trigger when its menu item unmounts on first open', async () => {
     const home = Vue.ref('overview')
     const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
