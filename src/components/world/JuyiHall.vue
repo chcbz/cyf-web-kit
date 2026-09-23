@@ -2043,6 +2043,11 @@ onMounted(async () => {
   // the live hall workflow while that redirect is pending: its protected loaders
   // would otherwise race the redirect and turn authentication into a fetch error.
   if (!await apiStore.token()) return
+  // A valid restored bearer token can survive while the in-memory profile was
+  // cleared. Hydrate it before identity-scoped drafts/capabilities are opened.
+  if (!String(globalStore.getUserId || globalStore.getOpenid || '').trim()) {
+    try { await apiStore.getUserInfo() } catch (error) { log.warn('hall identity hydration failed:', error) }
+  }
   permitStageMount()
   await refreshHall({ silent: true })
   startDialogueBubbles()

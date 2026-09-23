@@ -20,7 +20,7 @@ describe('Juyi Hall conversation material references', () => {
   it('keeps legacy execution support but limits the embedded entrance to file browsing', () => {
     assert.match(workspaceSource, /usePersonalWorkspace/)
     assert.match(workspaceSource, /usePersonalWorkspaceExecution/)
-    assert.match(workspaceSource, /const \{ embedded, detailAllowed \} = defineProps/)
+    assert.match(workspaceSource, /const \{ embedded, detailAllowed, compact \} = defineProps/)
     assert.match(workspaceSource, /百宝箱/)
     assert.match(workspaceSource, /v-if="!embedded && activeModal === 'delivery'"/)
     assert.match(workspaceSource, /if \(!embedded\) \{/)

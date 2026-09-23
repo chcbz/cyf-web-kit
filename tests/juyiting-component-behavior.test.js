@@ -2525,6 +2525,41 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
   }
 }
 
+describe('JuyiHall restored-identity initialization', () => {
+  it('hydrates a retained token without a profile before the initial Hall data load', async () => {
+    const mode = Vue.ref('portrait-command')
+    const order = []
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const mocks = createActualHallMocks({ mode, mounts: { library: 0, archive: 0 }, counters })
+    const originalUseHallData = mocks.useHallData
+    mocks.useGlobalStore = () => ({
+      user: {}, getUserId: '', getOpenid: '',
+      setTitle: () => {}, setShowBack: () => {}, setShowAppBar: () => {}, setShowMore: () => {}
+    })
+    mocks.useApiStore = () => ({
+      authorizationGeneration: 0, oauthClientId: 'client-a',
+      token: async () => 'retained-bearer-token',
+      getUserInfo: async () => { order.push('profile') }
+    })
+    mocks.useHallData = bindings => {
+      const data = originalUseHallData(bindings)
+      const loadAgents = data.loadAgents
+      const loadTasks = data.loadTasks
+      data.loadAgents = async () => { order.push('agents'); return loadAgents() }
+      data.loadTasks = async () => { order.push('tasks'); return loadTasks() }
+      return data
+    }
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+    try {
+      await flushPromises()
+      expect(order[0]).to.equal('profile')
+      expect(order).to.include('agents')
+    } finally {
+      wrapper.unmount()
+    }
+  })
+})
+
 describe('O04 actual-mounted JuyiHall panel identity', () => {
   it('restores landscape immersion, removes portrait map controls, and preserves open panels when rotating', async () => {
     const mode = Vue.ref('portrait-command')
