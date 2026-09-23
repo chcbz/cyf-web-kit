@@ -19,7 +19,7 @@ describe('personal workspace task link adapter', () => {
     const api = { execute: async options => {
       calls.push(options)
       if (options.method === 'GET') return { data: { items: [initial], nextCursor: null } }
-      if (options.method === 'POST') return { data: link({ relationId: 'rel_b', fileId: 'file_b', role: 'REFERENCE' }), headers: { etag: '"rel_b:1"' } }
+      if (options.method === 'POST') return { data: link({ relationId: 'rel_b', fileId: 'file_b', version: 3, role: 'REFERENCE' }), headers: { etag: '"rel_b:1"' } }
       return { data: { link: detached, executionSnapshotsPreserved: true }, headers: { etag: etag(detached) } }
     } }
     const adapter = usePersonalWorkspaceTaskLinks({ api, taskId: ref('task_a'), identityEpoch: ref('owner-a') })
@@ -38,6 +38,52 @@ describe('personal workspace task link adapter', () => {
     assert.ok(calls[2].headers['Idempotency-Key'])
     assert.equal(result.executionSnapshotsPreserved, true)
     assert.equal(adapter.links.value.find(item => item.relationId === 'rel_a').state, 'DETACHED')
+    adapter.dispose()
+  })
+
+  it('confirms a 201 by authenticated readback when cross-origin ETag is not exposed, without repeating the POST', async () => {
+    const calls = []
+    const saved = link({ relationId: 'rel_saved', taskId: 'task_a', fileId: 'file_b', version: 1 })
+    const api = { execute: async options => {
+      calls.push(options.method)
+      return options.method === 'POST'
+        ? { data: saved, status: 201, headers: {} }
+        : { data: { items: [saved], nextCursor: null } }
+    } }
+    const adapter = usePersonalWorkspaceTaskLinks({ api, taskId: ref('task_a'), identityEpoch: ref('owner-a') })
+    assert.equal((await adapter.attach({ fileId: 'file_b', version: 1, role: 'INPUT' })).relationId, 'rel_saved')
+    assert.deepEqual(calls, ['POST', 'GET'])
+    assert.equal(adapter.links.value[0].state, 'ACTIVE')
+    adapter.dispose()
+  })
+
+  it('confirms a detach through a read-only GET when the browser cannot see its ETag', async () => {
+    const calls = []
+    const detached = link({ state: 'DETACHED', relationRevision: 2 })
+    const api = { execute: async options => {
+      calls.push(options.method)
+      return options.method === 'DELETE'
+        ? { data: { link: detached, executionSnapshotsPreserved: true }, headers: {} }
+        : { data: { items: [detached], nextCursor: null } }
+    } }
+    const adapter = usePersonalWorkspaceTaskLinks({ api, taskId: ref('task_a'), identityEpoch: ref('owner-a') })
+    assert.equal((await adapter.detach(link())).link.state, 'DETACHED')
+    assert.deepEqual(calls, ['DELETE', 'GET'])
+    adapter.dispose()
+  })
+
+  it('does not accept a 201 with no ETag when readback does not confirm that exact version', async () => {
+    const calls = []
+    const api = { execute: async options => {
+      calls.push(options.method)
+      return options.method === 'POST'
+        ? { data: link({ fileId: 'file_b', version: 1 }), status: 201, headers: {} }
+        : { data: { items: [link({ fileId: 'file_b', version: 2 })], nextCursor: null } }
+    } }
+    const adapter = usePersonalWorkspaceTaskLinks({ api, taskId: ref('task_a'), identityEpoch: ref('owner-a') })
+    assert.equal(await adapter.attach({ fileId: 'file_b', version: 1, role: 'INPUT' }), null)
+    assert.deepEqual(calls, ['POST', 'GET'])
+    assert.match(adapter.error.value, /不要重复提交/)
     adapter.dispose()
   })
 
