@@ -128,14 +128,16 @@ describe('1.13.2 Babao-box workspace entry', () => {
     }
   })
 
-  it('keeps ChatPanel focused on discussion and delegates workspace work to the explicit Babao entry', async () => {
+  it('offers version-pinned workspace references inline while retaining the Babao entry', async () => {
     const { readFileSync } = await import('node:fs')
     const source = readFileSync(new URL('../src/components/juyiting/ChatPanel.vue', import.meta.url), 'utf8')
     const hall = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
     expect(source).to.include('class="icon-button workspace-entry"')
     expect(source).to.include("$emit('open-workspace')")
     expect(source).to.not.include('usePersonalWorkspaceExecution')
-    expect(source).to.not.include('usePersonalWorkspaceConversationLinks')
+    expect(source).to.include('usePersonalWorkspaceConversationLinks')
+    expect(source).to.include("role: 'REFERENCE'")
+    expect(source).to.include('参看资料：')
     expect(source).to.not.include('<FormalDeliveryList')
     expect(source).to.not.match(/storageUri|leaseToken|runtimeCredential/)
     expect(hall).to.include('<PersonalWorkspace')

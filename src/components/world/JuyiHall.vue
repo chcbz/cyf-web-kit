@@ -81,7 +81,7 @@
           :agents="operableRosterAgents"
           @set-home-mode="setHomeMode"
           @open-board="openPanel('tasks')"
-          @start-chat="handleStagePanelOpen('chat')"
+          @start-chat="startContextConversation"
           @start-draft="openPrivateDraft()"
           @open-item="openOverviewItem"
           @open-task="openOverviewTask"
@@ -159,14 +159,12 @@
           <SelectedAgentCard
             :ability-text="abilityText"
             :agent="selectedAgent"
-            :can-start-chat="canStartAgentConversation(selectedAgent)"
             :locked="voiceInteractionLocked"
             :portrait-name="portraitName"
             :portrait-style="portraitStyle"
             :status-text="statusText"
             @close-card="closeSelectedAgentCard"
             @open-agents="openPanel('agents')"
-            @start-chat="handleStartAgentConversation(selectedAgent)"
           />
         </transition>
       </div>
@@ -175,7 +173,7 @@
 
     <footer v-if="homeMode === 'map' && !isImmersiveMap" class="hall-map-actions" :inert="isPanelSessionActive || voiceInteractionLocked ? '' : null" :aria-hidden="isPanelSessionActive ? 'true' : null">
       <button class="hall-primary" type="button" @click="openPrivateDraft()">＋ 提出需求</button>
-      <button type="button" @click="handleStagePanelOpen('chat')">先聊一聊</button>
+      <button type="button" :aria-label="conversationEntryLabel" @click="startContextConversation">{{ conversationEntryLabel }}</button>
       <span>不必先懂所有功能，就能开始办事</span>
       <button class="hall-continue" type="button" @click="setHomeMode('overview')">接着上次办 →</button>
     </footer>
@@ -479,6 +477,7 @@
             :conversation-history-has-more="conversationHistoryHasMore"
             :conversation-history-loading="conversationHistoryLoading"
             :conversation-id="conversationId"
+            :identity-epoch="apiStore.authorizationGeneration"
             :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
@@ -522,6 +521,7 @@
             :conversation-history-has-more="conversationHistoryHasMore"
             :conversation-history-loading="conversationHistoryLoading"
             :conversation-id="conversationId"
+            :identity-epoch="apiStore.authorizationGeneration"
             :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
@@ -565,6 +565,7 @@
             :conversation-history-has-more="conversationHistoryHasMore"
             :conversation-history-loading="conversationHistoryLoading"
             :conversation-id="conversationId"
+            :identity-epoch="apiStore.authorizationGeneration"
             :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
@@ -866,6 +867,14 @@ const handlePreviewVisibility = visible => {
   portraitPreviewVisible.value = Boolean(visible)
   permitStageMount()
 }
+// `v-show` does not reliably produce a fresh IntersectionObserver record in
+// embedded WebViews. Returning from the overview is an explicit confirmation
+// that the portrait map is visible, so restore its draw gate immediately.
+watch(homeMode, mode => {
+  if (mode !== 'map') return
+  portraitPreviewVisible.value = true
+  permitStageMount()
+})
 const handleDocumentVisibility = () => {
   documentPreviewVisible.value = typeof document === 'undefined' || !document.hidden
 }
@@ -1185,8 +1194,15 @@ const selectTask = async (task) => {
 }
 
 const selectAgent = (agent) => {
+  if (selectedAgent.value?.agentId && selectedAgent.value.agentId === agent?.agentId) {
+    taskWorkspaceBinding.clearExplicitActor()
+    taskWorkspaceBinding.selectExplicitActor(null)
+    playTap()
+    return null
+  }
   taskWorkspaceBinding.selectExplicitActor(agent)
   playAgentSelect()
+  return agent || null
 }
 
 const cancelPanelChatLoad = () => {
@@ -1259,6 +1275,17 @@ const handleStagePanelOpen = (panel) => {
   openPanel(panel)
 }
 
+const conversationEntryLabel = computed(() => {
+  const agent = selectedAgent.value
+  return agent ? `与${portraitShortName(agent)}密议` : '先聊一聊'
+})
+
+const startContextConversation = () => {
+  if (selectedAgent.value) return handleStartAgentConversation(selectedAgent.value)
+  handleStagePanelOpen('chat')
+  return true
+}
+
 const hasExactLandscapeId = value => typeof value === 'string' && value.length > 0
 
 const setLandscapeEntryTarget = target => {
@@ -1308,9 +1335,13 @@ const stagePortraitHotspotTarget = action => {
 
 const handlePortraitAgentSelect = agent => {
   if (voiceInteractionLocked.value) return false
-  selectAgent(agent)
-  if (hasExactLandscapeId(agent?.agentId) && mapAgents.value.some(item => item?.agentId === agent.agentId)) {
-    setLandscapeEntryTarget({ kind: 'agent', agentId: agent.agentId })
+  const selected = selectAgent(agent)
+  if (!selected) {
+    setLandscapeEntryTarget(null)
+    return true
+  }
+  if (hasExactLandscapeId(selected.agentId) && mapAgents.value.some(item => item?.agentId === selected.agentId)) {
+    setLandscapeEntryTarget({ kind: 'agent', agentId: selected.agentId })
     return true
   }
   setLandscapeEntryTarget(null)
@@ -1347,7 +1378,7 @@ const handlePortraitQuickAction = (action) => {
     return
   }
   if (action === 'discussion') {
-    handleStagePanelOpen('chat')
+    startContextConversation()
     return
   }
   if (['agents', 'tasks', 'catalog', 'library', 'treasure', 'messages'].includes(action)) openPanel(action)
@@ -2012,11 +2043,6 @@ onMounted(async () => {
   // the live hall workflow while that redirect is pending: its protected loaders
   // would otherwise race the redirect and turn authentication into a fetch error.
   if (!await apiStore.token()) return
-  // A valid restored bearer token can survive while the in-memory profile was
-  // cleared. Hydrate it before identity-scoped drafts/capabilities are opened.
-  if (!String(globalStore.getUserId || globalStore.getOpenid || '').trim()) {
-    try { await apiStore.getUserInfo() } catch (error) { log.warn('hall identity hydration failed:', error) }
-  }
   permitStageMount()
   await refreshHall({ silent: true })
   startDialogueBubbles()

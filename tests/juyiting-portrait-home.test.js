@@ -244,42 +244,35 @@ describe('HallPortraitHome', () => {
     wrapper.unmount()
   })
 
-  it('mounts an eligible selected-agent private CTA and emits the exact selected agent', async () => {
+  it('uses one selected-agent context CTA and emits the discussion action', async () => {
     const eligible = { agentId: 'wuyong', name: '吴用', boundToMe: true, systemAgent: false, canOperate: true }
     const wrapper = mount(loadPortraitHome(), { props: baseProps({ agents: [eligible], selectedAgent: eligible }) })
-    const action = wrapper.get('[data-portrait-action="private-discussion"]')
+    const action = wrapper.get('[data-portrait-action="context-discussion"]')
     expect(action.text()).to.include('与吴用密议')
     await action.trigger('click')
-    expect(wrapper.emitted('start-agent-conversation')).to.deep.equal([[eligible]])
+    expect(wrapper.emitted('quick-action')).to.deep.equal([['discussion']])
     wrapper.unmount()
   })
 
-  it('keeps the private-discussion CTA visible in the unified shell', async () => {
-    const eligible = { agentId: 'wuyong', name: '吴用', boundToMe: true, systemAgent: false, canOperate: true }
-    const wrapper = mount(loadPortraitHome(), { props: baseProps({ unifiedShell: true, agents: [eligible], operableAgents: [eligible], selectedAgent: eligible }) })
-    const action = wrapper.get('[data-portrait-action="private-discussion"]')
-    expect(action.text()).to.include('与吴用密议')
-    await action.trigger('click')
-    expect(wrapper.emitted('start-agent-conversation')).to.deep.equal([[eligible]])
-    wrapper.unmount()
-  })
-
-  it('guides toward point selection when another eligible self-owned agent exists', async () => {
+  it('keeps the contextual CTA when the selected person cannot join a private discussion', async () => {
     const system = { agentId: 'songjiang', name: '宋江', boundToMe: true, systemAgent: true, canOperate: true }
     const eligible = { agentId: 'wuyong', name: '吴用', boundToMe: true, systemAgent: false, canOperate: true }
     const wrapper = mount(loadPortraitHome(), { props: baseProps({ agents: [system, eligible], operableAgents: [eligible], selectedAgent: system }) })
-    expect(wrapper.find('[data-portrait-action="private-discussion"]').exists()).to.equal(false)
-    await wrapper.get('[data-portrait-action="pick-agent"]').trigger('click')
-    expect(wrapper.emitted('quick-action')).to.deep.equal([['agents']])
+    const action = wrapper.get('[data-portrait-action="context-discussion"]')
+    expect(action.text()).to.include('与宋江密议')
+    await action.trigger('click')
+    expect(wrapper.emitted('quick-action')).to.deep.equal([['discussion']])
     expect(wrapper.emitted('start-agent-conversation')).to.equal(undefined)
     wrapper.unmount()
   })
 
-  it('guides toward recruitment when there is no eligible private-discussion agent', async () => {
+  it('uses public wording when no person is selected', async () => {
     const foreign = { agentId: 'linchong', name: '林冲', boundToMe: false, systemAgent: false, canOperate: true }
-    const wrapper = mount(loadPortraitHome(), { props: baseProps({ agents: [foreign], selectedAgent: foreign }) })
-    await wrapper.get('[data-portrait-action="recruit-agent"]').trigger('click')
-    expect(wrapper.emitted('quick-action')).to.deep.equal([['catalog']])
+    const wrapper = mount(loadPortraitHome(), { props: baseProps({ agents: [foreign], selectedAgent: null }) })
+    const action = wrapper.get('[data-portrait-action="context-discussion"]')
+    expect(action.text()).to.include('先聊一聊')
+    await action.trigger('click')
+    expect(wrapper.emitted('quick-action')).to.deep.equal([['discussion']])
     expect(wrapper.emitted('start-agent-conversation')).to.equal(undefined)
     wrapper.unmount()
   })

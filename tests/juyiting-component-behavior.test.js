@@ -293,7 +293,6 @@ describe('JuyiHall component behavior', () => {
     const props = {
       abilityText: () => '军情推演',
       agent: { agentId: 'wuyong', name: '吴用', status: 'idle' },
-      canStartChat: true,
       locked: true,
       portraitName: () => '智多星',
       portraitStyle: () => ({}),
@@ -305,14 +304,12 @@ describe('JuyiHall component behavior', () => {
     expect(hallSource).to.include(':locked="voiceInteractionLocked"')
     expect(wrapper.attributes('inert')).to.equal('')
     expect(wrapper.attributes('aria-disabled')).to.equal('true')
-    expect(wrapper.findAll('button')).to.have.length(3)
+    expect(wrapper.findAll('button')).to.have.length(2)
     wrapper.findAll('button').forEach(button => expect(button.attributes('disabled')).to.equal(''))
     await wrapper.find('.card-close').trigger('click')
-    await wrapper.find('.card-action.primary').trigger('click')
-    await wrapper.findAll('.card-action')[1].trigger('click')
+    await wrapper.find('.card-action').trigger('click')
     await wrapper.trigger('pointerdown')
     expect(wrapper.emitted('close-card')).to.equal(undefined)
-    expect(wrapper.emitted('start-chat')).to.equal(undefined)
     expect(wrapper.emitted('open-agents')).to.equal(undefined)
 
     await wrapper.setProps({ locked: false })
@@ -320,10 +317,8 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.attributes('aria-disabled')).to.equal(undefined)
     wrapper.findAll('button').forEach(button => expect(button.attributes('disabled')).to.equal(undefined))
     await wrapper.find('.card-close').trigger('click')
-    await wrapper.find('.card-action.primary').trigger('click')
-    await wrapper.findAll('.card-action')[1].trigger('click')
+    await wrapper.find('.card-action').trigger('click')
     expect(wrapper.emitted('close-card')).to.have.length(1)
-    expect(wrapper.emitted('start-chat')).to.have.length(1)
     expect(wrapper.emitted('open-agents')).to.have.length(1)
     wrapper.unmount()
   })
@@ -1869,6 +1864,18 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.emitted('send-message')).to.equal(undefined)
   })
 
+  it('explains that a material reference needs an established conversation', async () => {
+    const wrapper = mount(ChatPanel, {
+      global: { stubs },
+      props: {
+        agents: [], draft: '', messages: [],
+        mentionLabel: agent => agent.name, senderText: message => message.sender
+      }
+    })
+    await wrapper.find('[aria-label="引用资料"]').trigger('click')
+    expect(wrapper.text()).to.include('请先发送一条消息建立话头，再从百宝箱引用资料。')
+  })
+
   it('integrates mentions and clearing into the ChatPanel composer', async () => {
     const agents = [
       { agentId: 'wuyong', name: 'Wu Yong' },
@@ -3264,13 +3271,21 @@ describe('A03 real Hall low-height layout wiring', () => {
       home.value = 'map'
       await flushPromises()
       expect(state.stageMounted).to.equal(true)
+      expect(state.portraitPreviewVisible).to.equal(true)
       const stage = wrapper.findComponent(mocks.HallStage).vm
+      mode.value = 'portrait-command'
+      await flushPromises()
+      expect(wrapper.findComponent(mocks.HallStage).vm).to.equal(stage)
       home.value = 'overview'
       await flushPromises()
       expect(state.stageDrawVisible).to.equal(false)
       expect(wrapper.findComponent(mocks.HallStage).vm).to.equal(stage)
+      home.value = 'map'
+      await flushPromises()
+      expect(state.portraitPreviewVisible).to.equal(true)
+      expect(wrapper.findComponent(mocks.HallStage).vm).to.equal(stage)
       expect(state.selectedAgent.agentId).to.equal('agent-o04')
-      expect(mode.value).to.equal('landscape-map')
+      expect(mode.value).to.equal('portrait-command')
     } finally { wrapper.unmount() }
   })
 

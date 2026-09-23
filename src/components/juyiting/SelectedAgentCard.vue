@@ -25,16 +25,6 @@
       <small>{{ portraitName(agent) }} / {{ statusText(agent.status) }}</small>
       <p>{{ agent.currentTaskTitle || abilityText(agent) }}</p>
       <div class="card-actions">
-        <button
-          v-if="canStartChat"
-          type="button"
-          class="card-action primary"
-          :disabled="locked"
-          @click="emitAction('start-chat')"
-        >
-          <var-icon name="message-text-outline" />
-          <span>密议</span>
-        </button>
         <button type="button" class="card-action" :disabled="locked" @click="emitAction('open-agents')">
           <var-icon name="account-circle" />
           <span>看牌</span>
@@ -48,14 +38,13 @@
 const props = defineProps({
   abilityText: { type: Function, required: true },
   agent: { type: Object, default: null },
-  canStartChat: { type: Boolean, default: true },
   locked: { type: Boolean, default: false },
   portraitName: { type: Function, required: true },
   portraitStyle: { type: Function, required: true },
   statusText: { type: Function, required: true }
 })
 
-const emit = defineEmits(['open-agents', 'start-chat', 'close-card'])
+const emit = defineEmits(['open-agents', 'close-card'])
 
 const emitAction = event => {
   if (!props.locked) emit(event)

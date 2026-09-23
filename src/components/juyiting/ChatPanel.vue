@@ -8,6 +8,18 @@
       </div>
       <div class="toolbar-actions">
         <button
+          class="icon-button material-reference-entry"
+          type="button"
+          title="引用百宝箱资料"
+          aria-label="引用资料"
+          :aria-expanded="materialPickerOpen ? 'true' : 'false'"
+          :disabled="voice?.voiceInteractionLocked"
+          @click="toggleMaterialPicker"
+        >
+          <var-icon name="book-open-page-variant-outline" />
+          <span>引用资料</span>
+        </button>
+        <button
           class="icon-button workspace-entry"
           type="button"
           title="打开百宝箱"
@@ -51,6 +63,66 @@
         </button>
       </div>
     </div>
+
+    <section v-if="materialPickerOpen" class="material-reference-picker" aria-label="引用议事资料">
+      <div class="material-reference-heading">
+        <div>
+          <strong>引用资料</strong>
+          <small>引用会固定到当前话头及所选版本，并写入下一句传话。</small>
+        </div>
+        <button type="button" aria-label="收起引用资料" @click="materialPickerOpen = false">
+          <var-icon name="close" />
+        </button>
+      </div>
+      <p v-if="!hasConversation" class="material-reference-notice">
+        请先发送一条消息建立话头，再从百宝箱引用资料。
+      </p>
+      <template v-else>
+        <p v-if="materialError" class="material-reference-error" role="alert">{{ materialError }}</p>
+        <div v-if="materialLoading" class="material-reference-state">正在查找百宝箱资料…</div>
+        <div v-else-if="!workspace.items.value?.length" class="material-reference-state">
+          百宝箱暂无可引用资料。
+          <button type="button" @click="$emit('open-workspace')">去百宝箱添加</button>
+        </div>
+        <ul v-else class="material-reference-list">
+          <li v-for="file in workspace.items.value" :key="file.fileId">
+            <div class="material-reference-file">
+              <strong :title="file.displayName">{{ file.displayName }}</strong>
+              <small>版本 {{ file.latestVersion }}</small>
+            </div>
+            <button
+              v-if="linkedFileIds.has(`${file.fileId}:${file.latestVersion}`)"
+              type="button"
+              class="material-reference-linked"
+              :disabled="materialActionBusy"
+              @click="removeMaterialReference(linkFor(file))"
+            >
+              移除引用
+            </button>
+            <button
+              v-else
+              type="button"
+              :disabled="materialActionBusy"
+              @click="addMaterialReference(file)"
+            >
+              引用
+            </button>
+          </li>
+        </ul>
+        <div v-if="activeMaterialLinks.length" class="active-material-references">
+          <span>本话头已引用：</span>
+          <button
+            v-for="link in activeMaterialLinks"
+            :key="link.relationId"
+            type="button"
+            :disabled="materialActionBusy"
+            @click="removeMaterialReference(link)"
+          >
+            {{ materialName(link) }} · v{{ link.version }} <var-icon name="close" />
+          </button>
+        </div>
+      </template>
+    </section>
 
     <HallConversationHistory
       v-if="historyOpen"
@@ -121,6 +193,8 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import HallChatComposer from './HallChatComposer.vue'
 import HallConversationHistory from './HallConversationHistory.vue'
+import { usePersonalWorkspace } from '../../composables/usePersonalWorkspace.js'
+import { usePersonalWorkspaceConversationLinks } from '../../composables/usePersonalWorkspaceConversationLinks.js'
 
 marked.setOptions({
   breaks: true,
@@ -146,6 +220,7 @@ const props = defineProps({
   eventStreamRecovering: { type: Boolean, default: false },
   isAwaitingReply: { type: Boolean, default: false },
   isStreaming: { type: Boolean, default: false },
+  identityEpoch: { type: [Number, String], default: 0 },
   mentionLabel: { type: Function, required: true },
   messages: { type: Array, default: () => [] },
   pendingAgentName: { type: String, default: '' },
@@ -178,7 +253,51 @@ const emit = defineEmits([
 
 const messageBoxRef = ref(null)
 const historyOpen = ref(false)
+const materialPickerOpen = ref(false)
 const pendingAuthor = '聚义厅'
+const workspace = usePersonalWorkspace({ identityEpoch: () => props.identityEpoch })
+const materialLinks = usePersonalWorkspaceConversationLinks({
+  conversationId: () => props.conversationId,
+  identityEpoch: () => props.identityEpoch
+})
+const hasConversation = computed(() => Boolean(props.conversationId))
+const materialLoading = computed(() => workspace.loading.value || materialLinks.loading.value)
+const materialActionBusy = computed(() => ['saving', 'removing'].includes(materialLinks.actionState.value))
+const materialError = computed(() => materialLinks.error.value || workspace.error.value)
+const activeMaterialLinks = computed(() => materialLinks.links.value.filter(link => link.state === 'ACTIVE' && link.role === 'REFERENCE'))
+const linkedFileIds = computed(() => new Set(activeMaterialLinks.value.map(link => `${link.fileId}:${link.version}`)))
+const linkFor = file => activeMaterialLinks.value.find(link => link.fileId === file.fileId && link.version === file.latestVersion)
+const materialName = link => workspace.items.value.find(file => file.fileId === link.fileId)?.displayName || `资料 ${link.fileId}`
+const refreshMaterialReferences = async () => {
+  if (!hasConversation.value) return
+  await Promise.all([workspace.refresh({ state: 'ACTIVE' }), materialLinks.load()])
+}
+const toggleMaterialPicker = async () => {
+  materialPickerOpen.value = !materialPickerOpen.value
+  if (materialPickerOpen.value) await refreshMaterialReferences()
+}
+const materialCitation = file => `《${file.displayName}》v${file.latestVersion}`
+const addMaterialReference = async file => {
+  const link = await materialLinks.attach({ fileId: file.fileId, version: file.latestVersion, role: 'REFERENCE' })
+  if (!link) return
+  const citation = materialCitation(file)
+  const draft = props.draft.trim()
+  if (!draft.includes(citation)) emit('update:draft', `${draft ? `${draft}\n\n` : ''}参看资料：${citation}`)
+}
+const removeMaterialReference = async link => {
+  if (!link) return
+  const detached = await materialLinks.detach(link)
+  if (!detached) return
+  const citationLine = `参看资料：${materialName(link)}v${link.version}`
+  if (props.draft.includes(citationLine)) {
+    emit('update:draft', props.draft
+      .split('\n')
+      .filter(line => line !== citationLine)
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim())
+  }
+}
 const toggleHistory = () => {
   historyOpen.value = !historyOpen.value
   if (historyOpen.value) emit('load-history')
@@ -209,6 +328,10 @@ watch(() => props.messages, () => {
     }
   })
 }, { deep: true })
+
+watch(() => props.conversationId, () => {
+  materialPickerOpen.value = false
+})
 </script>
 
 <style scoped>
@@ -303,6 +426,153 @@ button:disabled {
   background: #ead3a9;
   color: #5d361c;
   font-size: 12px;
+}
+
+.material-reference-entry {
+  width: auto;
+  gap: 4px;
+  padding: 0 8px;
+  background: #e7dbc4;
+  color: #604323;
+  font-size: 12px;
+}
+
+.material-reference-entry span {
+  white-space: nowrap;
+}
+
+.material-reference-picker {
+  flex: 0 0 auto;
+  max-height: min(42vh, 270px);
+  overflow-y: auto;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(116, 75, 35, 0.16);
+  background: #f8eedc;
+  color: #4a3423;
+}
+
+.material-reference-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.material-reference-heading strong,
+.material-reference-heading small {
+  display: block;
+}
+
+.material-reference-heading strong {
+  font-size: 13px;
+}
+
+.material-reference-heading small,
+.material-reference-notice,
+.material-reference-state,
+.material-reference-error {
+  margin: 3px 0 0;
+  color: #806441;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.material-reference-heading > button {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 5px;
+  background: transparent;
+  color: #765f40;
+}
+
+.material-reference-error {
+  color: #a23f32;
+}
+
+.material-reference-state button {
+  margin-left: 4px;
+  color: #7f4a22;
+  text-decoration: underline;
+}
+
+.material-reference-list {
+  display: grid;
+  gap: 6px;
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.material-reference-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border: 1px solid rgba(116, 75, 35, 0.14);
+  border-radius: 7px;
+  background: #fffaf0;
+}
+
+.material-reference-file {
+  min-width: 0;
+  flex: 1;
+}
+
+.material-reference-file strong,
+.material-reference-file small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-reference-file strong {
+  font-size: 12px;
+}
+
+.material-reference-file small {
+  margin-top: 2px;
+  color: #8a6f4b;
+  font-size: 11px;
+}
+
+.material-reference-list li > button,
+.active-material-references > button {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border-radius: 5px;
+  background: #e8d3ad;
+  color: #623e20;
+  font-size: 12px;
+}
+
+.material-reference-list li > button.material-reference-linked {
+  background: #eee4d2;
+  color: #765f40;
+}
+
+.active-material-references {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: 9px;
+  color: #806441;
+  font-size: 12px;
+}
+
+.active-material-references > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+}
+
+.active-material-references :deep(.var-icon) {
+  font-size: 13px;
 }
 
 .workspace-entry span {

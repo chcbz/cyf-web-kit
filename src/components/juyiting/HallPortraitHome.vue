@@ -92,40 +92,6 @@
       </template>
     </section>
 
-    <section v-if="unifiedShell" class="portrait-private-entry" aria-label="密议入口">
-      <div>
-        <strong>密议</strong>
-        <small>与自家好汉单独商议</small>
-      </div>
-      <button
-        v-if="selectedAgent && canStartAgentConversation(selectedAgent)"
-        type="button"
-        class="portrait-private-action"
-        data-portrait-action="private-discussion"
-        @click="emit('start-agent-conversation', selectedAgent)"
-      >
-        与{{ agentName(selectedAgent) }}密议
-      </button>
-      <button
-        v-else-if="eligibleAgents.length"
-        type="button"
-        class="portrait-private-guidance"
-        data-portrait-action="pick-agent"
-        @click="emit('quick-action', 'agents')"
-      >
-        先去点将再密议
-      </button>
-      <button
-        v-else
-        type="button"
-        class="portrait-private-guidance"
-        data-portrait-action="recruit-agent"
-        @click="emit('quick-action', 'catalog')"
-      >
-        先去招贤再密议
-      </button>
-    </section>
-
     <div v-show="!unifiedShell || homeMode === 'overview'" class="portrait-below-map-scroll" :aria-label="homeMode === 'overview' ? '办事操作区' : '地图以下操作区'">
       <div class="portrait-work-summary">
         <slot name="overview">
@@ -179,12 +145,7 @@
 
 
 
-      <section
-        v-if="!unifiedShell"
-        data-tour="portrait-context"
-        class="portrait-context"
-        aria-label="当前上下文"
-      >
+      <section v-if="!unifiedShell" data-tour="portrait-context" class="portrait-context" aria-label="当前上下文">
         <div>
           <span>当前好汉</span>
           <strong>{{ selectedAgent ? agentName(selectedAgent) : '尚未点将' }}</strong>
@@ -194,33 +155,8 @@
           <strong>{{ selectedTask?.title || '尚未选定' }}</strong>
         </div>
         <div class="portrait-context-actions">
-          <button type="button" @click="emit('quick-action', 'discussion')">厅前议事</button>
-          <button
-            v-if="selectedAgent && canStartAgentConversation(selectedAgent)"
-            type="button"
-            class="portrait-private-action"
-            data-portrait-action="private-discussion"
-            @click="emit('start-agent-conversation', selectedAgent)"
-          >
-            与{{ agentName(selectedAgent) }}密议
-          </button>
-          <button
-            v-else-if="eligibleAgents.length"
-            type="button"
-            class="portrait-private-guidance"
-            data-portrait-action="pick-agent"
-            @click="emit('quick-action', 'agents')"
-          >
-            先去点将再密议
-          </button>
-          <button
-            v-else
-            type="button"
-            class="portrait-private-guidance"
-            data-portrait-action="recruit-agent"
-            @click="emit('quick-action', 'catalog')"
-          >
-            先去招贤再密议
+          <button type="button" data-portrait-action="context-discussion" @click="emit('quick-action', 'discussion')">
+            {{ selectedAgent ? `与${agentName(selectedAgent)}密议` : '先聊一聊' }}
           </button>
         </div>
       </section>
@@ -308,7 +244,6 @@ const idleCount = computed(() => props.agents.filter(agent => normalizedStatus(a
 const busyCount = computed(() => props.agents.filter(agent => ['busy', 'running'].includes(normalizedStatus(agent.status))).length)
 const issueCount = computed(() => props.agents.filter(agent => ['error', 'offline'].includes(normalizedStatus(agent.status))).length)
 const openTaskCount = computed(() => props.tasks.filter(task => normalizedStatus(task.status) === 'open').length)
-const eligibleAgents = computed(() => props.operableAgents.filter(agent => props.canStartAgentConversation(agent)))
 const todoTasks = computed(() => props.tasks.filter(task => ['open', 'assigned', 'running'].includes(normalizedStatus(task.status))).slice(0, 3))
 const agentKey = agent => agent?.agentId || agent?.name || agent?.personaName || ''
 const isSelectedAgent = agent => {
@@ -387,44 +322,6 @@ const openTask = task => emit('open-task', task)
 .portrait-private-guidance {
   background: rgba(255, 239, 200, 0.13);
   color: #f2ca79;
-}
-
-.portrait-private-entry {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid rgba(255, 229, 173, 0.22);
-  border-radius: 12px;
-  background: rgba(31, 21, 15, 0.78);
-}
-
-.portrait-private-entry strong,
-.portrait-private-entry small {
-  display: block;
-}
-
-.portrait-private-entry strong {
-  color: #fff5df;
-  font-size: 15px;
-}
-
-.portrait-private-entry small {
-  margin-top: 2px;
-  color: rgba(255, 239, 200, 0.72);
-  font-size: 12px;
-}
-
-.portrait-private-entry button {
-  flex: 0 0 auto;
-  min-height: 38px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 8px;
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
 }
 
 .portrait-task-overlay {

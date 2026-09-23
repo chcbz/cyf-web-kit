@@ -89,10 +89,11 @@ const createHallMocks = ({ SelectedAgentCard, counters }) => {
     env: {}, capturePanelReturnTarget: () => null, focusHallPanel: noop, isCurrentPanelGeneration: () => true, isSafePanelFocusTarget: () => false,
     resolvePanelReturnTarget: () => null, restorePanelFocus: noop, trapPanelFocus: noop,
     onBeforeRouteLeave: noop, useRouter: () => ({ push: asyncNoop }),
-    useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({}),
+    useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({ token: async () => true, authorizationGeneration: 0 }),
     agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {}, roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
     useHallData: ({ selectedAgent }) => { selectedAgent.value = selected; return hallData },
     useHallExperienceMode: () => ({ experienceMode: Vue.ref('landscape-map'), isMobileCoarse: Vue.ref(false), orientationHint: text, orientationRequestPending: Vue.ref(false), requestLandscape: asyncNoop }),
+    useHallHomeMode: () => ({ homeMode: Vue.ref('map'), isOverviewHome: Vue.ref(false), setHomeMode: noop }),
     useHallPanels: () => ({ panelLayout: Vue.ref('center-modal') }),
     useHallSceneState: () => ({ setMapRuntime: noop, reset: noop, forwardPhaseEvents: asyncNoop }), useHallCommandQueue: () => ({ ready: Vue.ref(false), setSimulation: noop }),
     useHallBackendSceneState: () => ({ start: asyncNoop, stop: noop, dispose: noop, reportPhase: noop }), useHallSceneDebugBridge: () => ({ republish: noop, stop: noop }),
@@ -108,7 +109,7 @@ const createHallMocks = ({ SelectedAgentCard, counters }) => {
     useHallVoiceConversation: () => ({ supported: false, voiceInteractionLocked: false, cancel: noop, dispose: noop, applyTranscript: noop }),
     createHallVoiceReplyCorrelation: () => ({ start: () => true, observe: noop, resolveConversation: () => true, close: noop }),
     useHallLibrary: () => ({ citeLibraryItem: noop, libraryErrorMessage: text, libraryHasSearched: Vue.ref(false), libraryKeyword: text, libraryLoading: Vue.ref(false), libraryResults: list, librarySourceType: text, searchLibrary: asyncNoop }),
-    useTaskWorkspace: () => null, createDisabledTaskWorkspaceBinding: () => ({ selectExplicitActor: agent => counters.explicitActors.push(agent), clearExplicitActor: noop, dispose: noop }),
+    useTaskWorkspace: () => null, createDisabledTaskWorkspaceBinding: selectedAgent => ({ selectExplicitActor: agent => { counters.explicitActors.push(agent); selectedAgent.value = agent || null }, clearExplicitActor: noop, dispose: noop }),
     isTaskWorkspaceBuildEnabled: () => false, useTaskWorkspaceView: () => ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: text, error: Vue.ref(null), retry: noop }), useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop }),
     portraitName: agent => agent?.personaName || '', portraitRole: () => ({ slug: 'default' }), portraitShortName: agent => agent?.name || '', portraitStyle: () => ({}), roleClass: () => '',
     HallPortraitHome: EmptyPanel, HallStage, HallVoiceHud: EmptyPanel, LibraryPanel: EmptyPanel, AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel,
@@ -127,30 +128,26 @@ describe('SelectedAgentCard interaction contract', () => {
     expect(cardSource).to.include('v-if="agent"')
   })
 
-  it('emits explicit actions only when the mounted card is unlocked', async () => {
+  it('emits its remaining card actions only when unlocked', async () => {
     const SelectedAgentCard = loadSelectedAgentCard()
     const wrapper = mount(SelectedAgentCard, {
       global: { stubs: { 'var-icon': true } },
       props: {
-        abilityText: () => '军情推演', agent: { agentId: 'wuyong', name: '吴用', status: 'idle' }, canStartChat: true, locked: true,
+        abilityText: () => '军情推演', agent: { agentId: 'wuyong', name: '吴用', status: 'idle' }, locked: true,
         portraitName: () => '智多星', portraitStyle: () => ({}), statusText: () => '候令'
       }
     })
-    expect(cardSource).to.include("emitAction('start-chat')")
+    expect(cardSource).not.to.include("emitAction('start-chat')")
     expect(wrapper.attributes('inert')).to.equal('')
     expect(wrapper.attributes('aria-disabled')).to.equal('true')
     wrapper.findAll('button').forEach(button => expect(button.attributes('disabled')).to.equal(''))
-    await wrapper.find('.card-action.primary').trigger('click')
-    await wrapper.findAll('.card-action')[1].trigger('click')
-    expect(wrapper.emitted('start-chat')).to.equal(undefined)
+    await wrapper.find('.card-action').trigger('click')
     expect(wrapper.emitted('open-agents')).to.equal(undefined)
     await wrapper.setProps({ locked: false })
     expect(wrapper.attributes('inert')).to.equal(undefined)
     expect(wrapper.attributes('aria-disabled')).to.equal(undefined)
     wrapper.findAll('button').forEach(button => expect(button.attributes('disabled')).to.equal(undefined))
-    await wrapper.find('.card-action.primary').trigger('click')
-    await wrapper.findAll('.card-action')[1].trigger('click')
-    expect(wrapper.emitted('start-chat')).to.have.length(1)
+    await wrapper.find('.card-action').trigger('click')
     expect(wrapper.emitted('open-agents')).to.have.length(1)
     wrapper.unmount()
   })
@@ -269,68 +266,48 @@ describe('SelectedAgentCard interaction contract', () => {
     expect(quickBarRule).not.to.include('flex: 0 0 auto')
   })
 
-  it('selects an agent without showing a toast', () => {
+  it('toggles the selected agent without showing a toast', () => {
     const selectAgentStart = hallSource.indexOf('const selectAgent = (agent) => {')
     const selectAgentEnd = hallSource.indexOf('const openPanel', selectAgentStart)
     const selectAgentSource = hallSource.slice(selectAgentStart, selectAgentEnd)
 
     expect(selectAgentSource).to.include('taskWorkspaceBinding.selectExplicitActor(agent)')
+    expect(selectAgentSource).to.include('taskWorkspaceBinding.clearExplicitActor()')
+    expect(selectAgentSource).to.include('taskWorkspaceBinding.selectExplicitActor(null)')
     expect(selectAgentSource).not.to.include('selectedAgent.value = agent')
     expect(selectAgentSource).not.to.include('showToast')
     expect(hallSource).not.to.include('已选中')
     expect(hallSource).not.to.include('\\u5df2\\u9009\\u4e2d')
   })
 
-  it('mounts the Hall card flow through private context, setDraft, and mention insertion', async () => {
+  it('routes a selected Hall context through private conversation, setDraft, and mention insertion', async () => {
     const SelectedAgentCard = loadSelectedAgentCard()
     const counters = { drafts: [], mentions: [], privateTargets: [], explicitActors: [] }
-    const JuyiHall = loadActualJuyiHall(createHallMocks({ SelectedAgentCard, counters }))
+    const mocks = createHallMocks({ SelectedAgentCard, counters })
+    mocks.useHallExperienceMode = () => ({ experienceMode: Vue.ref('portrait-command'), isMobileCoarse: Vue.ref(true), isVirtualLandscape: Vue.ref(false), hallViewportHeight: Vue.ref(0), orientationHint: Vue.ref(''), orientationRequestPending: Vue.ref(false), requestLandscape: async () => {}, requestPortrait: async () => {} })
+    const JuyiHall = loadActualJuyiHall(mocks)
     const wrapper = mount(JuyiHall, { attachTo: document.body, global: { stubs: { 'var-icon': true } } })
     try {
       await flushMounted()
-      const action = wrapper.find('.selected-agent-card .card-action.primary')
-      expect(action.exists()).to.equal(true)
+      const action = wrapper.findAll('button').find(button => button.text().includes('与吴用密议'))
+      expect(action).not.to.equal(undefined)
       await action.trigger('click')
       await Vue.nextTick()
       expect(counters.privateTargets.map(agent => agent.agentId)).to.deep.equal(['wuyong'])
       expect(counters.explicitActors.map(agent => agent.agentId)).to.deep.equal(['wuyong'])
-      expect(counters.drafts).to.deep.equal([''])
-      expect(counters.mentions).to.have.length(1)
-      expect(counters.mentions[0].agent.agentId).to.equal('wuyong')
-      expect(counters.mentions[0].suffix).to.equal('请报眼下动静、可领何榜、还需哪路照应。')
+      expect(counters.drafts).to.deep.equal([])
+      expect(counters.mentions).to.have.length(0)
     } finally {
       wrapper.unmount()
     }
   })
 
-  it('resolves portrait private requests to the authoritative roster instance and rejects invalid candidates without fallback', async () => {
-    const counters = { drafts: [], mentions: [], privateTargets: [], explicitActors: [] }
-    const CandidatePortrait = Vue.defineComponent({
-      emits: ['start-agent-conversation'],
-      setup (_props, { emit }) {
-        const candidates = [
-          { agentId: 'wuyong', name: '伪造吴用', boundToMe: true },
-          { agentId: 'foreign', boundToMe: true },
-          { agentId: '' },
-          { agentId: ' wuyong ' }
-        ]
-        return () => Vue.h('main', { class: 'candidate-portrait' }, candidates.map((candidate, index) =>
-          Vue.h('button', { class: `candidate-${index}`, onClick: () => emit('start-agent-conversation', candidate) }, String(index))))
-      }
-    })
-    const mocks = createHallMocks({ SelectedAgentCard: loadSelectedAgentCard(), counters })
-    mocks.HallPortraitHome = CandidatePortrait
-    mocks.useHallExperienceMode = () => ({ experienceMode: Vue.ref('portrait-command'), isMobileCoarse: Vue.ref(true), orientationHint: Vue.ref(''), orientationRequestPending: Vue.ref(false), requestLandscape: async () => {} })
-    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs: { 'var-icon': true } } })
-    try {
-      await flushMounted()
-      for (let index = 0; index < 4; index += 1) await wrapper.get(`.candidate-${index}`).trigger('click')
-      expect(counters.privateTargets).to.deep.equal([counters.rosterAgent])
-      expect(counters.explicitActors).to.deep.equal([counters.rosterAgent])
-      expect(counters.mentions.map(item => item.agent)).to.deep.equal([counters.rosterAgent])
-    } finally {
-      wrapper.unmount()
-    }
+  it('keeps any private request bound to an authoritative operable roster agent', () => {
+    expect(hallSource).to.include('@start-agent-conversation="handleStartAgentConversation"')
+    expect(hallSource).to.include('const resolvePermittedConversationAgent = candidate =>')
+    expect(hallSource).to.include('agent.boundToMe === true')
+    expect(hallSource).to.include('agent.canOperate === true')
+    expect(hallSource).to.include('!agent.systemAgent')
   })
 
 })

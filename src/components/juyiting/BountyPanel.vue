@@ -1304,14 +1304,20 @@ button:disabled {
 
 .is-hall-embedded .bounty-modal-overlay {
   position: static;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 0;
   contain: none;
   transform: none;
 }
 .is-hall-embedded .bounty-modal-overlay::before { display: none; }
 .is-hall-embedded .bounty-modal {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
   max-width: none;
-  max-height: none;
+  max-height: 100%;
   box-shadow: none;
 }
 </style>
