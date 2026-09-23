@@ -88,7 +88,7 @@ describe('personal workspace execution adapter', () => {
     adapter.dispose()
   })
 
-  it('keeps a configured PPT output separate from six supported source material formats', async () => {
+  it('keeps a configured PPT output separate from seven supported source material formats', async () => {
     const api = { execute: async options => {
       if (options.url === '/personal-workspace/executions/capabilities') return { data: {
         allowedMimeTypes: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'],
@@ -96,7 +96,8 @@ describe('personal workspace execution adapter', () => {
           'image/jpeg', 'image/png', 'application/pdf',
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          'text/plain'
         ], generationEnabled: true
       } }
       return { data: { items: [] } }
@@ -108,7 +109,8 @@ describe('personal workspace execution adapter', () => {
       'image/jpeg', 'image/png', 'application/pdf',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'text/plain'
     ])
     adapter.dispose()
   })

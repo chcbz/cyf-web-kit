@@ -11,7 +11,14 @@ export const PERSONAL_WORKSPACE_EXECUTION_MIME_TYPES = Object.freeze([
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation'
 ])
+// Inputs are a separate server-declared contract: plain text may be consumed to create
+// a PDF/Office/image output, but it must never become a selectable delivery format.
+export const PERSONAL_WORKSPACE_EXECUTION_INPUT_MIME_TYPES = Object.freeze([
+  ...PERSONAL_WORKSPACE_EXECUTION_MIME_TYPES,
+  'text/plain'
+])
 const EXECUTION_MIME_TYPES = new Set(PERSONAL_WORKSPACE_EXECUTION_MIME_TYPES)
+const EXECUTION_INPUT_MIME_TYPES = new Set(PERSONAL_WORKSPACE_EXECUTION_INPUT_MIME_TYPES)
 const ID = value => typeof value === 'string' && value.length > 0 && value.length <= MAX_ID_LENGTH && !/^\s|\s$/u.test(value)
 const TEXT = (value, maximum) => typeof value === 'string' && value.trim().length > 0 && value.length <= maximum
 const REVISION = value => (typeof value === 'string' && /^(0|[1-9]\d*)$/u.test(value)) || (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0)
@@ -33,9 +40,10 @@ const normalizeAgent = value => ({
 const validSelection = value => value && typeof value === 'object' && ID(value.fileId) && REVISION(value.version)
 const validSelections = value => Array.isArray(value) && value.length <= 128 && value.every(validSelection) && new Set(value.map(item => item.fileId)).size === value.length
 const validOutputMime = value => EXECUTION_MIME_TYPES.has(value)
+const validInputMime = value => EXECUTION_INPUT_MIME_TYPES.has(value)
 const validCapabilities = value => value && typeof value === 'object' && Array.isArray(value.allowedMimeTypes) &&
   value.allowedMimeTypes.every(validOutputMime) && new Set(value.allowedMimeTypes).size === value.allowedMimeTypes.length &&
-  (value.inputMimeTypes == null || (Array.isArray(value.inputMimeTypes) && value.inputMimeTypes.every(validOutputMime) && new Set(value.inputMimeTypes).size === value.inputMimeTypes.length)) &&
+  (value.inputMimeTypes == null || (Array.isArray(value.inputMimeTypes) && value.inputMimeTypes.every(validInputMime) && new Set(value.inputMimeTypes).size === value.inputMimeTypes.length)) &&
   typeof value.generationEnabled === 'boolean'
 export const validPersonalWorkspaceExecutionCapabilities = validCapabilities
 const validInput = value => validSelection(value) && ID(value.inputRef)

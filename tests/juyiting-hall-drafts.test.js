@@ -22,6 +22,25 @@ const fields = { title: '整理案卷', instruction: '固定版本后保存', ta
 const createSaved = async (adapter, values = fields) => adapter.create(values)
 
 describe('JYT-UX-W03 Hall draft submission and recovery adapter', () => {
+  it('accepts server-declared plain-text input capability without exposing it as an output format', async () => {
+    const api = { execute: async request => {
+      expect(request).to.include({ url: '/personal-workspace/executions/capabilities', method: 'GET' })
+      return { data: {
+        allowedMimeTypes: ['application/pdf'],
+        inputMimeTypes: ['application/pdf', 'text/plain'],
+        generationEnabled: true
+      } }
+    } }
+    const { useHallDrafts } = await import('../src/composables/juyiting/useHallDrafts.js')
+    const drafts = useHallDrafts({ agentApi: api, identityScope: 'tenant-a\u0000client-a\u0000owner-a' })
+    const capabilities = await drafts.loadCapabilities()
+    expect(capabilities.allowedMimeTypes).to.deep.equal(['application/pdf'])
+    expect(capabilities.inputMimeTypes).to.deep.equal(['application/pdf', 'text/plain'])
+    expect(drafts.allowedMimeTypes.value).to.deep.equal(['application/pdf'])
+    expect(drafts.capabilityState.value).to.equal('ready')
+    drafts.dispose()
+  })
+
   it('persists a validated DRAFT-v1 create receipt with exact fixed inputs', async () => {
     const calls = []
     const api = { execute: async request => { calls.push(request); return { data: draft() } } }
