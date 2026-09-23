@@ -2533,6 +2533,8 @@ describe('lightweight workbench real panel navigation', () => {
     const style = parse(source).descriptor.styles.at(-1).content
     const rule = style.match(/\.home-overview \.workbench-more-menu \{([^}]+)\}/)?.[1]
     expect(rule).to.include('box-sizing: border-box')
+    expect(rule).to.include('width: min(330px, calc(100% - 30px))')
+    expect(style).to.include('The absolute containing block is .juyi-page')
     expect(rule).to.include('top: 64px')
     expect(rule).to.include('max-height: calc(100% - 64px - 62px - env(safe-area-inset-bottom))')
     expect(rule).to.include('overflow-y: auto')
