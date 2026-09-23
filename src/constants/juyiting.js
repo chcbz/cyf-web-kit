@@ -14,14 +14,26 @@ export const statusFilters = [
   { label: '失联', value: 'error' }
 ]
 
+// This is the canonical formal-bounty lifecycle presentation. Keep labels, filter
+// values, and styles together so an unrecognised server value never falls back to open.
 export const taskStatusFilters = [
-  { label: '待点将', value: 'open' },
-  { label: '已点将', value: 'assigned' },
-  { label: '在办', value: 'running' },
-  { label: '交令', value: 'completed' },
-  { label: '失手', value: 'failed' },
-  { label: '入档', value: 'archived' }
+  { label: '待点将', value: 'open', className: 'task-state-open' },
+  { label: '筹划中', value: 'planning', className: 'task-state-planning' },
+  { label: '待开工（已点将）', value: 'assigned', className: 'task-state-assigned' },
+  { label: '办理中', value: 'running', className: 'task-state-running' },
+  { label: '待验收', value: 'reviewing', className: 'task-state-reviewing' },
+  { label: '受阻', value: 'blocked', className: 'task-state-blocked' },
+  { label: '已完成', value: 'completed', className: 'task-state-done' },
+  { label: '失败', value: 'failed', className: 'task-state-failed' },
+  { label: '已取消', value: 'cancelled', className: 'task-state-cancelled' },
+  { label: '已归档', value: 'archived', className: 'task-state-archived' }
 ]
+
+const normalizeTaskStatus = status => String(status || '').trim().toLowerCase()
+const taskStatusMeta = status => taskStatusFilters.find(item => item.value === normalizeTaskStatus(status))
+
+export const taskStatusText = status => taskStatusMeta(status)?.label || '状态待核对'
+export const taskStateClass = status => taskStatusMeta(status)?.className || 'task-state-unknown'
 
 export const hallRoomPropVisuals = [
   {

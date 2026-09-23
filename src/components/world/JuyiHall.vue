@@ -428,7 +428,7 @@
             :compact="isLowHeightPanel"
             :inert="renderedPanel !== 'treasure' ? '' : null"
             :aria-hidden="renderedPanel !== 'treasure' ? 'true' : null"
-            :detail-allowed="canOpenPanelDetail"
+            :detail-allowed="true"
             embedded
             @start-draft="openPrivateDraft"
           />
@@ -965,26 +965,11 @@ const statusText = (status = '') => {
   return '候命'
 }
 
-const taskStatusText = (status = '') => {
-  const value = normalizeStatus(status)
-  if (value === 'open') return '待点将'
-  if (value === 'assigned') return '已点将'
-  if (value === 'running') return '在办'
-  if (value === 'completed') return '交令'
-  if (value === 'failed') return '失手'
-  if (value === 'archived') return '入档'
-  return '待点将'
-}
-
-const taskStateClass = (status = '') => {
-  const value = normalizeStatus(status)
-  if (value === 'completed') return 'task-state-done'
-  if (value === 'failed') return 'task-state-failed'
-  if (value === 'archived') return 'task-state-done'
-  if (value === 'running') return 'task-state-running'
-  if (value === 'assigned') return 'task-state-assigned'
-  return 'task-state-open'
-}
+// Use the filter metadata as the single lifecycle presentation contract. `detailAllowed`
+// only controlled panel nesting; file reads still go through PersonalWorkspace's scoped API.
+const taskStatusMeta = status => taskStatusFilters.find(item => item.value === normalizeStatus(status))
+const taskStatusText = status => taskStatusMeta(status)?.label || '状态待核对'
+const taskStateClass = status => taskStatusMeta(status)?.className || 'task-state-unknown'
 
 const abilityText = (agent) => {
   const abilities = agent.abilities || []

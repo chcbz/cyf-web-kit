@@ -1004,10 +1004,16 @@ button:disabled {
 }
 
 .task-state-open,
+.task-state-planning,
 .task-state-assigned,
 .task-state-running,
+.task-state-reviewing,
+.task-state-blocked,
 .task-state-done,
-.task-state-failed {
+.task-state-failed,
+.task-state-cancelled,
+.task-state-archived,
+.task-state-unknown {
   display: inline-flex;
   align-items: center;
   min-height: 22px;
@@ -1017,23 +1023,33 @@ button:disabled {
   font-weight: 700;
 }
 
-.task-state-open {
+.task-state-open,
+.task-state-planning {
   background: rgba(124, 31, 27, 0.12);
   color: #7c1f1b;
 }
 
 .task-state-assigned,
-.task-state-running {
+.task-state-running,
+.task-state-reviewing {
   background: rgba(154, 91, 0, 0.14);
   color: #875200;
 }
 
-.task-state-done {
+.task-state-blocked,
+.task-state-unknown {
+  background: rgba(111, 78, 35, 0.14);
+  color: #6f4e23;
+}
+
+.task-state-done,
+.task-state-archived {
   background: rgba(46, 125, 50, 0.14);
   color: #2e7d32;
 }
 
-.task-state-failed {
+.task-state-failed,
+.task-state-cancelled {
   background: rgba(179, 38, 30, 0.14);
   color: #b3261e;
 }

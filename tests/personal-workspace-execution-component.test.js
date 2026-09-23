@@ -9,6 +9,7 @@ import { deliveryTypeText } from '../src/utils/executionFormats.js'
 for (const name of ['Element', 'HTMLElement', 'SVGElement', 'Node']) { if (!globalThis[name] && globalThis.window?.[name]) Object.defineProperty(globalThis, name, { value: globalThis.window[name], configurable: true }) }
 
 const source = readFileSync(new URL('../src/components/workspace/PersonalWorkspace.vue', import.meta.url), 'utf8')
+const hallSource = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
 const { descriptor } = parse(source, { filename: 'PersonalWorkspace.vue' })
 let script = compileScript(descriptor, { id: 'personal-workspace-execution-component', inlineTemplate: true }).content
 script = script
@@ -119,8 +120,10 @@ describe('personal workspace execution receipt presentation', () => {
       assert.equal(wrapper.find('.delivery-modal').exists(), false)
       assert.equal(executionLoads, 0)
       const list = wrapper.find('.treasure-file-list').element
+      wrapper.element.scrollTop = 47
       await wrapper.setProps({ detailAllowed: false })
       assert.equal(wrapper.find('.treasure-file-row button').element.disabled, true)
+      assert.match(hallSource, /<PersonalWorkspace[\s\S]*?:detail-allowed="true"[\s\S]*?embedded/)
       await wrapper.find('.treasure-file-row button').trigger('click')
       assert.equal(workspace.detail.value, null)
       await wrapper.setProps({ detailAllowed: true })
@@ -144,6 +147,7 @@ describe('personal workspace execution receipt presentation', () => {
       await Vue.nextTick()
       assert.equal(wrapper.find('.treasure-content').attributes('data-view'), 'list')
       assert.equal(wrapper.find('.treasure-file-list').exists(), true)
+      assert.equal(wrapper.element.scrollTop, 47)
       assert.equal(document.activeElement, wrapper.find('.treasure-file-row button').element)
       assert.equal(wrapper.vm.back(), false)
     } finally {
