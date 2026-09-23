@@ -209,6 +209,7 @@ const createActualHallVoiceMocks = ({
     useGlobalStore: () => ({ getJiacn: 'hero', user: { name: 'Tester' }, setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }),
     useApiStore: () => ({ token: async () => 'token' }), agentApi: {}, chatApi, log: { warn: noop, error: noop }, juyitingGame: {},
     roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
+    useHallHomeMode: () => { const homeMode = Vue.ref('map'); return { homeMode, isOverviewHome: Vue.computed(() => homeMode.value === 'overview'), setHomeMode: mode => { homeMode.value = mode } } },
     useHallData: ({ selectedAgent }) => { selectedAgent.value = selectedAgentFixture; return hallData },
     useHallExperienceMode: () => ({ experienceMode: Vue.ref(experienceMode), isMobileCoarse: Vue.ref(false), orientationHint: text, orientationRequestPending: Vue.ref(false), requestLandscape: requestLandscape || asyncNoop }),
     useHallPanels: () => ({ panelLayout: Vue.ref('center-modal') }),

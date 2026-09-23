@@ -1,12 +1,12 @@
 <template>
-  <section class="hall-overview" :aria-label="messagesOnly ? '消息' : '办事概览'">
+  <section class="hall-overview" :class="{ 'is-messages': messagesOnly }" :aria-label="messagesOnly ? '消息' : '办事概览'">
     <header v-if="!messagesOnly" class="overview-hero">
       <div><p class="overview-eyebrow">开始，也能接着上次</p><h2>今天，想办成什么事？</h2><p>说清目标，交给合适的好汉。资料、进展与成果，留在同一件事里。</p>
         <div class="overview-hero-actions"><button class="primary" type="button" @click="emit('start-draft')">提出需求</button><button type="button" @click="emit('start-chat')">先聊一聊</button></div>
       </div>
-      <button class="overview-map-link" type="button" @click="emit('set-home-mode', 'map')"><span aria-hidden="true">聚义厅</span>回到厅中实景 →</button>
     </header>
     <p v-else class="overview-intro">只列出需要你处理的事项。打开不代表已读、验收或归档。</p>
+    <div class="overview-columns"><div class="overview-main">
     <div class="overview-list-heading"><h3>{{ messagesOnly ? '需要我处理' : archiveView ? '案卷' : selectedView === 'needsAction' ? '需要我处理' : '接着上次办' }}</h3><div><button v-if="!messagesOnly" type="button" @click="emit('open-board')">悬赏榜</button><button type="button" :disabled="!enabled || model.state.value === 'loading'" @click="refresh">刷新</button></div></div>
     <nav v-if="!messagesOnly" class="overview-tabs" aria-label="事项范围">
       <button type="button" :aria-pressed="!archiveView && selectedView === 'recent'" @click="openView('recent')">最近事项</button>
@@ -27,6 +27,16 @@
       <p v-if="enabled && isComplete(view) && !rowsFor(view).length" class="overview-empty">{{ hasMore(view) ? '这一页没有事项，可继续读取。' : view === 'archive' ? '暂时没有收入案卷的事项。' : view === 'needsAction' ? '暂时没有需要你处理的事项。' : '还没有开始的事项，先提出一个需求吧。' }}</p>
       <button v-if="hasMore(view)" type="button" @click="loadMore(view)">读取更多事项</button>
     </section>
+    <section v-if="!messagesOnly" class="overview-resource" aria-label="资料入口"><div><strong>资料留在这里，下次不用重找</strong><p>引用已有资料，查看固定版本的成果。</p></div><button type="button" @click="emit('open-workspace')">打开百宝箱 →</button></section>
+    </div><aside v-if="!messagesOnly" class="overview-aside" aria-label="快捷入口">
+      <button class="overview-map-link" type="button" @click="emit('set-home-mode', 'map')"><span aria-hidden="true">聚义厅</span>厅中实景 · 去梁山走一走 →</button>
+      <section class="overview-aside-card"><h3>需要你看一眼</h3><p v-if="model.state.value === 'loading'">正在核对待处理事项…</p><p v-else-if="model.sections.value.needsAction.status !== 'complete'">待处理列表可能不完整，请在事项页核对。</p>
+        <p v-if="!attentionItems.length">{{ model.sections.value.needsAction.status === 'complete' ? '当前没有需要处理的事项。' : '当前没有已确认的待处理项。' }}</p>
+        <button v-for="item in attentionItems" :key="`${item.ref.sourceType}:${item.ref.sourceId}`" type="button" :disabled="!canOpenHallItem(item) || Boolean(model.openingRef.value)" @click="openItem(item)"><span>{{ item.title || '未命名事项' }}<small>{{ item.review ? '交付待验收' : statusText(item.status.code) }}</small></span>→</button>
+        <button class="overview-aside-link" type="button" @click="openView('needsAction')">查看待处理列表 →</button>
+      </section>
+      <section class="overview-aside-card"><h3>找位好汉</h3><p>通过点将册核对实际本领和可用状态。</p><button type="button" @click="emit('open-agents')">打开点将册 →</button></section>
+    </aside></div>
   </section>
 </template>
 
@@ -42,7 +52,7 @@ const props = defineProps({
   refreshKey: { type: Number, default: 0 },
   agents: { type: Array, default: () => [] }
 })
-const emit = defineEmits(['open-item', 'open-task', 'start-draft', 'start-chat', 'open-board', 'set-home-mode'])
+const emit = defineEmits(['open-item', 'open-task', 'start-draft', 'start-chat', 'open-board', 'open-workspace', 'open-agents', 'set-home-mode'])
 const model = useHallOverview({ identityScope: () => props.identityScope, identityEpoch: () => props.identityEpoch })
 const archiveView = ref(false)
 const selectedView = ref('recent')
@@ -58,6 +68,7 @@ const statusText = code => ({
   running: '办理中', completed: '已完成', failed: '未完成', archived: '已归档'
 })[code] || '状态待核对'
 const rowsFor = view => sourcesFor(view).flatMap(source => model.sections.value[view].partitions[source].items).sort((a, b) => b.updatedAt - a.updatedAt)
+const attentionItems = computed(() => rowsFor('needsAction').slice(0, 2))
 const hasMore = view => sourcesFor(view).some(source => model.sections.value[view].partitions[source].nextCursor)
 const isComplete = view => sourcesFor(view).every(source => model.sections.value[view].partitions[source].status === 'complete')
 const issuesFor = view => sourcesFor(view).filter(source => {
@@ -131,6 +142,86 @@ watch([() => props.enabled, () => props.identityScope, () => props.identityEpoch
 .overview-technical small { display:block; margin-top:5px; overflow-wrap:anywhere; }
 .overview-source-error { display:flex; justify-content:space-between; align-items:center; gap:12px; background:#f7eadb; padding:12px; margin:12px 0; font-size:14px; }
 .overview-empty { padding:36px 0; color:#80674a; }
-@media(max-width:600px) { .hall-overview { padding:20px 16px; }.overview-hero h2 { font-size:24px; }.overview-map-link { display:none; }.overview-item { gap:8px; padding:16px 0; }.overview-item>button { padding:8px; font-size:14px; } }
-@media(max-height:500px) { .hall-overview { padding-top:16px; }.overview-hero { padding-bottom:16px; }.overview-map-link { display:none; }.overview-hero h2 { font-size:23px; }.overview-hero-actions { margin-top:12px; } }
+@media(max-width:600px) { .hall-overview.is-messages { padding:20px 16px; } }
+@media(max-height:500px) { .hall-overview.is-messages { padding-top:16px; } }
+/* Genuine hall overview projections in the lightweight workbench. */
+.hall-overview:not(.is-messages) {
+  width: min(1320px, 100%); margin: 0 auto; min-height: 100%;
+  padding: 30px 36px 36px; background: #f5f4f0; color: #242e2b;
+  font: 400 15px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+}
+.hall-overview:not(.is-messages) .overview-hero {
+  display: block; padding: 0 0 26px; border: 0;
+}
+.hall-overview:not(.is-messages) .overview-eyebrow { color: #923f30; font-size: 11px; letter-spacing: .08em; margin-bottom: 8px !important; }
+.hall-overview:not(.is-messages) .overview-hero h2 { color: #242e2b; font: 500 28px/1.5 "Noto Serif CJK SC", "Songti SC", STSong, serif; letter-spacing: .8px; margin: 0 0 6px; }
+.hall-overview:not(.is-messages) .overview-hero p:not(.overview-eyebrow) { color: #68716b; font-size: 14px; }
+.hall-overview:not(.is-messages) .overview-hero-actions { margin-top: 16px; gap: 10px; }
+.hall-overview:not(.is-messages) button { min-height: 42px; border-radius: 7px; border-color: #e3e5dc; color: #242e2b; font-size: 14px; font-weight: 500; }
+.hall-overview:not(.is-messages) button:hover:not(:disabled) { background: #f0f1ea; border-color: #c4cabe; }
+.hall-overview:not(.is-messages) button.primary { background: #923f30; border-color: #923f30; color: #fffefa; }
+.hall-overview:not(.is-messages) button.primary:hover { background: #793326; }
+.hall-overview:not(.is-messages) button:focus-visible { outline: 3px solid #923f3080; outline-offset: 3px; }
+.hall-overview .overview-columns { display: grid; grid-template-columns: minmax(0,1fr) 300px; gap: 24px; align-items: start; }
+.hall-overview.is-messages .overview-columns { grid-template-columns: minmax(0,1fr); }
+.hall-overview .overview-main, .hall-overview .overview-aside { min-width: 0; }
+.hall-overview .overview-main { background: #fffefa; border: 1px solid #e3e5dc; border-radius: 11px; padding: 22px 24px 0; }
+.hall-overview .overview-aside { display: grid; gap: 18px; }
+.hall-overview .overview-list-heading { margin: 0 0 8px; }
+.hall-overview .overview-list-heading h3, .hall-overview .overview-aside h3 { font-size: 16px; font-weight: 500; }
+.hall-overview .overview-list-heading button { font-size: 12px; min-height: 34px; }
+.hall-overview .overview-tabs { gap: 10px; border-color: #e3e5dc; overflow-x: auto; }
+.hall-overview .overview-tabs button { flex: none; font-size: 13px; padding: 12px 8px; white-space: nowrap; }
+.hall-overview .overview-tabs button[aria-pressed=true] { color: #923f30; border-bottom-color: #923f30; }
+.hall-overview .overview-item { padding: 17px 0; border-color: #e3e5dc; }
+.hall-overview .overview-item-title strong { font-size: 15px; font-weight: 500; line-height: 1.55; }
+.hall-overview .overview-item p { font-size: 12px; color: #68716b; margin-top: 7px; }
+.hall-overview .overview-status { font-size: 11px; background: #f9efde; color: #87551c; padding: 3px 7px; border-radius: 4px; }
+.hall-overview .overview-technical { font-size: 11px; color: #68716b; }
+.hall-overview .overview-item > button { font-size: 12px; color: #68716b; }
+.hall-overview .overview-map-link {
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: end;
+  width: 100%; height: 176px; padding: 20px 18px; text-align: left;
+  background: linear-gradient(0deg,#211b13e8,transparent 100%),url('../../assets/juyiting/liangshan-hall-physical-bg-v1.png') center 53%/cover !important;
+  color: #fff9e9 !important; border: 1px solid #cac7b5 !important; border-radius: 11px !important;
+  font: 500 15px/1.5 "Noto Serif CJK SC", "Songti SC", STSong, serif !important;
+}
+.hall-overview .overview-map-link span { margin-bottom: 5px; font-size: 20px; letter-spacing: 3px; }
+.hall-overview .overview-aside-card, .hall-overview .overview-resource { padding: 20px; border: 1px solid #e3e5dc; border-radius: 11px; background: #fffefa; }
+.hall-overview .overview-aside-card h3 { margin: 0 0 8px; }
+.hall-overview .overview-aside-card p, .hall-overview .overview-resource p { color: #68716b; font-size: 12px; line-height: 1.65; margin: 0 0 8px; }
+.hall-overview .overview-aside-card button { display: flex; justify-content: space-between; width: 100%; min-height: 36px; padding: 7px 0; border: 0; background: transparent; text-align: left; font-size: 13px; }
+.hall-overview .overview-aside-card button + button { border-top: 1px solid #e3e5dc; border-radius: 0; }
+.hall-overview .overview-aside-card button span { min-width: 0; overflow-wrap: anywhere; }
+.hall-overview .overview-aside-card button small { display: block; margin-top: 4px; color: #68716b; font-weight: 400; font-size: 11px; }
+.hall-overview .overview-aside-card .overview-aside-link { color: #923f30; }
+.hall-overview .overview-resource { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; }
+.hall-overview .overview-resource strong { display: block; font-size: 14px; font-weight: 500; }
+.hall-overview .overview-resource p { margin: 3px 0 0; }
+.hall-overview .overview-resource button { flex: none; font-size: 12px; }
+.hall-overview .overview-source-error { background: #faeae6; color: #a13f35; }
+.hall-overview .overview-empty { color: #68716b; }
+@media (max-width: 1200px) {
+  .hall-overview:not(.is-messages) { padding: 26px; }
+  .hall-overview .overview-columns { grid-template-columns: minmax(0,1fr) 264px; gap: 18px; }
+}
+@media (max-width: 1000px) {
+  .hall-overview .overview-columns { grid-template-columns: minmax(0,1fr); }
+  .hall-overview .overview-aside { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .hall-overview .overview-map-link { grid-column: 1/-1; height: 165px; }
+}
+@media (max-width: 600px) {
+  .hall-overview:not(.is-messages) { padding: 22px 16px; }
+  .hall-overview:not(.is-messages) .overview-hero h2 { font-size: 25px; letter-spacing: 0; }
+  .hall-overview .overview-hero-actions button { font-size: 12px; padding: 9px 10px; }
+  .hall-overview .overview-main { padding: 18px 16px 0; }
+  .hall-overview .overview-aside { grid-template-columns: minmax(0,1fr); }
+  .hall-overview .overview-map-link { height: 185px; }
+  .hall-overview .overview-item { flex-wrap: wrap; row-gap: 3px; }
+  .hall-overview .overview-item-copy { flex: 1 1 100%; }
+  .hall-overview .overview-item > button { margin-left: auto; }
+  .hall-overview .overview-aside-card { padding: 18px; }
+  .hall-overview .overview-resource { flex-wrap: wrap; padding: 18px 16px; }
+  .hall-overview .overview-resource button { margin-left: auto; }
+}
 </style>

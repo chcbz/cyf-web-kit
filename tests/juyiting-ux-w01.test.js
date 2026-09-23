@@ -31,6 +31,8 @@ describe('JYT-UX-W01 unified Hall shell', () => {
       }
     })
     try {
+      expect(home.homeMode.value).to.equal('overview')
+      expect(home.setHomeMode('map')).to.equal(true)
       expect(home.homeMode.value).to.equal('map')
       expect(resolveHallExperienceMode({ isMobileCoarse: true, isPhysicalLandscape: false })).to.equal('portrait-command')
       expect(home.setHomeMode('overview')).to.equal(true)

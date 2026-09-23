@@ -4,7 +4,7 @@
       v-show="!readerHasBack"
       class="library-tabs"
       role="tablist"
-      aria-label="案卷阁入口"
+      aria-label="典籍阁入口"
     >
       <button
         id="library-reader-tab"
