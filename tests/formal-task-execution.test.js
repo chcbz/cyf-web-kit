@@ -5,7 +5,7 @@ import { FORMAL_TASK_OUTPUT_MIME_TYPE, useFormalTaskExecution } from '../src/com
 
 const executionRecord = (overrides = {}) => ({
   executionId: 'exec_task_1', taskId: 'task_1', runId: 'run_1', conversationId: 'conversation_1', targetAgentId: 'agent_1',
-  state: 'QUEUED', grantRevision: 1, outputContentMimeType: FORMAL_TASK_OUTPUT_MIME_TYPE,
+  state: 'QUEUED', executionMode: 'TASK', businessTaskId: 'task_1', workItemId: 'work_1', workItemState: 'running', grantRevision: 1, outputContentMimeType: FORMAL_TASK_OUTPUT_MIME_TYPE,
   inputs: [{ inputRef: 'input_1', fileId: 'file_1', version: 2 }], runtimeCommand: null, ...overrides
 })
 
@@ -77,5 +77,11 @@ describe('formal TASK execution boundary', () => {
     assert.equal(await formal.recoverOriginalRequest(), null)
     assert.equal(formal.activeExecution.value, null)
     assert.match(formal.scopeError.value, /不一致/)
+
+    for (const mismatch of [{ executionMode: 'PRIVATE' }, { businessTaskId: 'other-task' }, { workItemId: null }]) {
+      mock.state.execution.value = executionRecord(mismatch)
+      assert.equal(await formal.recoverOriginalRequest(), null)
+      assert.equal(formal.activeExecution.value, null)
+    }
   })
 })

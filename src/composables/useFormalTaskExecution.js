@@ -10,7 +10,9 @@ const validId = value => typeof value === 'string' && value.length > 0 && value.
 const validInput = value => value && validId(value.fileId) && Number.isSafeInteger(Number(value.version)) && Number(value.version) > 0
 const scopeText = value => String(valueOf(value) ?? '').trim()
 const sameInputs = (left, right) => left.length === right.length && left.every((item, index) => item.fileId === right[index].fileId && Number(item.version) === Number(right[index].version))
-const scopeMatches = (value, scope) => value && value.taskId === scope.taskId && value.conversationId === scope.conversationId &&
+const scopeMatches = (value, scope) => value && value.executionMode === 'TASK' &&
+  value.businessTaskId === scope.taskId && validId(value.workItemId) &&
+  value.taskId === scope.taskId && value.conversationId === scope.conversationId &&
   value.targetAgentId === scope.targetAgentId && value.outputContentMimeType === FORMAL_TASK_OUTPUT_MIME_TYPE
 
 /**
@@ -88,7 +90,7 @@ export function useFormalTaskExecution ({
     scopeError.value = ''
     await execution.refreshExecution()
     if (execution.execution.value && !isFormalExecution(execution.execution.value)) {
-      scopeError.value = '服务端恢复记录与当前正式 taskId、conversationId、targetAgentId 或 PDF 输出不一致；未显示为本任务执行，也不会重发。'
+      scopeError.value = '服务端恢复记录与当前正式 taskId、TASK 模式、workItemId、conversationId、targetAgentId 或 PDF 输出不一致；未显示为本任务执行，也不会重发。'
       return null
     }
     return activeExecution.value
@@ -113,7 +115,7 @@ export function useFormalTaskExecution ({
     if (!isFormalExecution(result) || !sameInputs(
       result.inputs.map(input => ({ fileId: input.fileId, version: Number(input.version) })), normalized
     )) {
-      scopeError.value = '执行回执未精确回显本任务、会话、目标、PDF 或输入版本；未显示为成功，请仅恢复查询。'
+      scopeError.value = '执行回执未精确回显本任务、TASK 模式、工作项、会话、目标、PDF 或输入版本；未显示为成功，请仅恢复查询。'
       return null
     }
     return result
