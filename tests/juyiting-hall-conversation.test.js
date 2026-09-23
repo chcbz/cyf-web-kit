@@ -1513,3 +1513,77 @@ describe('useHallConversation event-stream recovery policy', () => {
     }
   })
 })
+
+describe('Hall stream transport failure read-only recovery', () => {
+  const options = (chatApi, callbacks = []) => useHallConversation({
+    apiStore: { token: async () => null }, chatApi,
+    chatContext: ref({ conversationScopeType: 'public', conversationScopeKey: 'public', targetAgentIds: [] }),
+    chatMode: ref('public'), globalStore: { getJiacn: 'hero', user: {} },
+    log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}),
+    portraitShortName: agent => agent?.name || '', selectedAgent: ref(null), selectedTask: ref(null),
+    showToast: () => {}, onFinalReply: event => callbacks.push(event)
+  })
+
+  it('does not repeat POST and reads only the same conversation until a new persisted final exists', async () => {
+    const setInterval = window.setInterval
+    const clearInterval = window.clearInterval
+    let poll
+    window.setInterval = callback => { poll = callback; return 12345 }
+    window.clearInterval = () => {}
+    const callbacks = []
+    let readCount = 0
+    let postCount = 0
+    let persistedFinal = false
+    let conversation
+    try {
+      conversation = options({
+        list: async (_url, _search, opts) => opts.onSuccess({ data: [scopedConversation('1001')] }),
+        getById: async (_url, id, opts) => {
+          expect(id).to.equal('1001')
+          readCount += 1
+          opts.onSuccess({ data: [{ id: 'reply-old', senderType: 'agent', content: '旧回话' },
+            ...(persistedFinal ? [{ id: 'reply-new', senderType: 'agent', content: '吴用本次完整回话' }] : [])] })
+        },
+        create: async (_url, _payload, opts) => {
+          postCount += 1
+          opts.onStream(JSON.stringify({ conversationId: '1001' }))
+          throw new Error('net::ERR_HTTP2_PROTOCOL_ERROR')
+        }
+      }, callbacks)
+      await conversation.loadHallMessages()
+      callbacks.length = 0
+      conversation.setDraft('请吴用核对本次任务')
+      expect(await conversation.sendHallMessage()).to.equal(false)
+      expect(postCount).to.equal(1)
+      expect(readCount).to.be.greaterThan(1)
+      expect(conversation.isAwaitingReply.value).to.equal(true)
+      expect(conversation.messages.value.some(message => message.content.includes('尚无可核验'))).to.equal(true)
+      expect(callbacks).to.have.length(0)
+      persistedFinal = true
+      poll()
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(callbacks.map(value => value.messageId)).to.deep.equal(['reply-new'])
+      expect(conversation.isAwaitingReply.value).to.equal(false)
+      expect(postCount).to.equal(1)
+    } finally {
+      conversation?.disposeHallConversation()
+      window.setInterval = setInterval
+      window.clearInterval = clearInterval
+    }
+  })
+
+  it('without a server conversation ID reports unknown outcome instead of false delivery failure or resend', async () => {
+    let posts = 0
+    const conversation = options({ create: async () => { posts += 1; throw new Error('network reset') } })
+    try {
+      conversation.setDraft('first request')
+      expect(await conversation.sendHallMessage()).to.equal(false)
+      expect(posts).to.equal(1)
+      expect(conversation.isAwaitingReply.value).to.equal(false)
+      expect(conversation.messages.value.at(-1).content).to.include('结果未知')
+    } finally {
+      conversation.disposeHallConversation()
+    }
+  })
+})

@@ -55,6 +55,7 @@ export const useHallConversation = ({
   let localMessageSequence = 0
   let streamFinalCandidate = null
   let activeBuiltInTurn = null
+  let recoveringReplyTurn = null
 
   let hallEventController = null
   let hallEventConversationId = ''
@@ -186,6 +187,7 @@ export const useHallConversation = ({
 
   const exactMessageId = message => typeof message?.localId === 'string' && message.localId ? message.localId : ''
   const beginBuiltInTurn = requestConversationId => {
+    recoveringReplyTurn = null
     activeBuiltInTurn = {
       conversationId: requestConversationId || null,
       baselineMessageIds: new Set(messages.value.map(exactMessageId).filter(Boolean)),
@@ -241,6 +243,16 @@ export const useHallConversation = ({
     messages.value = state.messages
     isAwaitingReply.value = state.isAwaitingReply
     isStreaming.value = state.isStreaming
+    if (result.type === 'final' && result.message?.sender === 'AGENT' &&
+        recoveringReplyTurn?.conversationId === event.conversationId) {
+      if (recoveringReplyTurn.baselineMessageIds.has(exactMessageId(result.message))) {
+        isAwaitingReply.value = true
+        return
+      }
+      recoveringReplyTurn = null
+      isAwaitingReply.value = false
+      isStreaming.value = false
+    }
     if (result.type === 'final' && result.message?.sender === 'AGENT' && stageActiveBuiltInFinal({
       message: result.message,
       source: 'agent_event',
@@ -405,6 +417,7 @@ export const useHallConversation = ({
 
   const resetLifecycle = () => {
     lifecycleGeneration += 1
+    recoveringReplyTurn = null
     lifecycleController.abort(new DOMException('Hall identity lifecycle reset', 'AbortError'))
     if (!disposed) lifecycleController = new AbortController()
   }
@@ -526,7 +539,9 @@ export const useHallConversation = ({
         onSuccess: (contentResult) => {
           if (!isCurrentContentLoad()) return
           messages.value = (Array.isArray(contentResult?.data) ? contentResult.data : []).map(normalizeHallMessage).filter(Boolean)
-          const finalAgentReplies = messages.value.filter(message => message.sender === 'AGENT' && !message.streaming && String(message.content || '').trim())
+          const recovery = recoveringReplyTurn?.conversationId === exactId ? recoveringReplyTurn : null
+          const finalAgentReplies = messages.value.filter(message => message.sender === 'AGENT' && !message.streaming &&
+            String(message.content || '').trim() && (!recovery || !recovery.baselineMessageIds.has(exactMessageId(message))))
           loadedConversationScopeSignature = scopeSignature(expectedScope)
           const activeTurnForConversation = Boolean(activeBuiltInTurn && activeBuiltInTurn.conversationId === exactId)
           finalAgentReplies.forEach(message => {
@@ -534,7 +549,22 @@ export const useHallConversation = ({
               notifyFinalReply({ message, source: 'poll_final', replyConversationId: exactId })
             }
           })
-          if (activeTurnForConversation) {
+          if (recovery) {
+            if (finalAgentReplies.length) {
+              recoveringReplyTurn = null
+              isAwaitingReply.value = false
+              isStreaming.value = false
+              stopHallReplyPolling()
+            } else {
+              isAwaitingReply.value = true
+              isStreaming.value = false
+              messages.value.push({
+                localId: `recovery-${exactId}`, sender: 'SYSTEM',
+                content: '正在核对原话头，尚无可核验的最终回话；请勿重复发送。',
+                timestamp: Date.now(), streaming: false
+              })
+            }
+          } else if (activeTurnForConversation) {
             isAwaitingReply.value = true
             isStreaming.value = true
           } else if (hasResolvedAgentReply(messages.value)) {
@@ -835,6 +865,7 @@ export const useHallConversation = ({
     isStreaming.value = false
     isAwaitingReply.value = false
     clearBuiltInTurn()
+    recoveringReplyTurn = null
     if (notify) showToast('已另起厅前话头')
   }
 
@@ -997,13 +1028,27 @@ export const useHallConversation = ({
       log.error('聚义厅消息发送失败', error)
       isStreaming.value = false
       isAwaitingReply.value = false
+      const exactId = exactRuntimeId(conversationId.value)
+      recoveringReplyTurn = exactId ? {
+        conversationId: exactId,
+        baselineMessageIds: new Set(activeBuiltInTurn?.baselineMessageIds || [])
+      } : null
       clearBuiltInTurn()
-      stopHallReplyPolling()
+      if (exactId) {
+        isAwaitingReply.value = true
+        startHallEventStream()
+        startHallReplyPolling(exactId)
+        // Read only: the POST may have been accepted before the transport failed.
+        void loadHallConversationContent(exactId)
+      } else {
+        isAwaitingReply.value = false
+        stopHallReplyPolling()
+      }
       localMessageSequence += 1
       messages.value.push({
         localId: `system-${Date.now()}-${localMessageSequence}`,
         sender: 'SYSTEM',
-        content: '传令未达，请稍后再试',
+        content: exactId ? '传令连接中断，正在原话头核对回话；请勿重复发送。' : '传令连接中断，结果未知；请从话头记录核对，勿直接重发。',
         timestamp: Date.now(),
         streaming: false
       })
