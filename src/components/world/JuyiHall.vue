@@ -289,6 +289,7 @@
             :work-item-plan-enabled="workItemPlanEnabled"
             :authorization-generation="apiStore.authorizationGeneration"
             :identity-scope="hallIdentityScope"
+            :formal-task-execution-context="formalTaskExecutionContext"
             :funded-quote-preview="fundedQuotePreview"
             :funded-claim-state="fundedClaimState"
             :funded-create-recovery="fundedCreateRecovery"
@@ -328,6 +329,8 @@
             @cancel-funding="cancelFunding"
             @load-settlement="loadSettlement"
             @open-workspace="openBabaoBox"
+            @formal-execution-created="hallReadRevision += 1"
+            @formal-execution-recovered="hallReadRevision += 1"
             @discuss-task="discussTask"
             @load-tasks="loadTasks"
             @select-agent="selectAgent"
@@ -644,6 +647,7 @@ import { useTaskWorkspace } from '@/composables/juyiting/useTaskWorkspace'
 import { createDisabledTaskWorkspaceBinding, isTaskWorkspaceBuildEnabled } from '@/composables/juyiting/taskWorkspaceFeature'
 import { useTaskWorkspaceView } from '@/composables/juyiting/useTaskWorkspaceView'
 import { useTaskWorkspaceBinding } from '@/composables/juyiting/useTaskWorkspaceBinding'
+import { useFormalTaskExecutionScope } from '@/composables/useFormalTaskExecutionScope'
 import TaskWorkspacePanel from '@/components/juyiting/TaskWorkspacePanel.vue'
 import ArtifactTransferPanel from '@/components/juyiting/ArtifactTransferPanel.vue'
 import ArtifactOutcomePanel from '@/components/juyiting/ArtifactOutcomePanel.vue'
@@ -1739,6 +1743,18 @@ const {
   onFinalReply: payload => {
     voiceReplyCorrelation.observe(payload)
   }
+})
+
+const formalTaskExecutionContext = useFormalTaskExecutionScope({
+  selectedTask,
+  chatContext,
+  conversationId,
+  identityScope: hallIdentityScope,
+  taskWorkspaceEnabled,
+  taskWorkspaceSubject,
+  taskWorkspaceSnapshot,
+  taskWorkspaceConnectionState,
+  taskWorkspaceError
 })
 
 hallVoice = useHallVoiceConversation({

@@ -17,8 +17,13 @@ const executionMock = () => {
     execution: ref(null), receipt: ref(null), executionState: ref('idle'), error: ref(''), completionNotice: ref(''), history: ref([]), historyState: ref('empty'), historyError: ref(''), historyNextCursor: ref(null), unresolvedIntent: ref(null), pending: ref(false),
     loadCapabilities: async () => null, loadAgents: async () => null, loadHistory: async () => [], recover: async () => [],
     selectAgent: agentId => { if (agentId !== 'agent_1') return false; state.selectedAgentId.value = agentId; return true },
-    create: async payload => { createCalls.push(payload)
-    const value = executionRecord({ inputs: payload.inputs.map((input, index) => ({ inputRef: `input_${index}`, fileId: input.fileId, version: Number(input.version) })) }); state.execution.value = value; state.receipt.value = value; return value },
+    create: async payload => {
+      createCalls.push(payload)
+      const value = executionRecord({ inputs: payload.inputs.map((input, index) => ({ inputRef: `input_${index}`, fileId: input.fileId, version: Number(input.version) })) })
+      state.execution.value = value
+      state.receipt.value = value
+      return value
+    },
     prepareNewRequest: () => true, adoptExecution: value => value, selectHistoryExecution: async () => null, refreshExecution: async () => null, revokeInputs: async () => null, stopPolling: () => {}, reset: () => {}, dispose: () => {}
   }
   return { state, createCalls }
@@ -35,6 +40,8 @@ describe('formal TASK execution boundary', () => {
     const formal = useFormalTaskExecution({ taskId, conversationId, targetAgentId, conversationConfirmed, executionAuthorized, identityEpoch: ref(1), identityScope: ref('owner_a'), executionFactory: () => mock.state })
 
     assert.match(formal.readyReason.value, /conversationId/)
+    const reasoned = useFormalTaskExecution({ taskId, conversationId, targetAgentId, conversationConfirmed, executionAuthorized, executionAuthorizationReason: ref('请先进入本榜文议事；不会使用其他榜文会话。'), identityEpoch: ref(1), identityScope: ref('owner_a'), executionFactory: () => executionMock().state })
+    assert.match(reasoned.readyReason.value, /不会使用其他榜文会话/)
     assert.equal(await formal.begin({ inputs: [{ fileId: 'file_1', version: 2 }], instruction: '请制作正式 PDF', confirmed: true }), null)
     assert.equal(mock.createCalls.length, 0)
 
@@ -43,6 +50,9 @@ describe('formal TASK execution boundary', () => {
     executionAuthorized.value = true
     await formal.refreshReadiness()
     assert.equal(await formal.begin({ inputs: [{ fileId: 'file_1', version: 2 }], instruction: '请制作正式 PDF', confirmed: false }), null)
+    assert.equal(mock.createCalls.length, 0)
+    // A corrected confirmation/input must not remain blocked by the prior recoverable error.
+    assert.equal(await formal.begin({ inputs: [{ fileId: 'file_1', version: 2 }, { fileId: 'file_1', version: 3 }], instruction: '请制作正式 PDF', confirmed: true }), null)
     assert.equal(mock.createCalls.length, 0)
 
     const result = await formal.begin({ inputs: [{ fileId: 'file_1', version: 2 }], instruction: '请制作正式 PDF', confirmed: true })

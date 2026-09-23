@@ -131,6 +131,7 @@ const props = defineProps({
   targetAgentId: { type: String, default: '' },
   conversationConfirmed: { type: Boolean, default: false },
   formalExecutionAuthorized: { type: Boolean, default: false },
+  formalExecutionAuthorizationReason: { type: String, default: '' },
   identityEpoch: { type: [Number, String], default: 0 },
   identityScope: { type: String, default: '' }
 })
@@ -149,6 +150,7 @@ const formal = useFormalTaskExecution({
   targetAgentId: () => props.targetAgentId,
   conversationConfirmed: () => props.conversationConfirmed,
   executionAuthorized: () => props.formalExecutionAuthorized,
+  executionAuthorizationReason: () => props.formalExecutionAuthorizationReason,
   identityEpoch: () => props.identityEpoch,
   identityScope: () => props.identityScope || String(props.identityEpoch)
 })
@@ -205,7 +207,7 @@ const recoverFormalExecution = async () => {
 }
 const loadFormalHistory = () => { void formal.loadFormalHistory() }
 
-watch(() => `${props.identityEpoch}\u0000${props.taskId}\u0000${props.conversationId}\u0000${props.targetAgentId}`, resetSelection, { flush: 'sync' })
+watch(() => `${props.identityEpoch}\u0000${props.taskId}\u0000${props.conversationId}\u0000${props.targetAgentId}\u0000${props.formalExecutionAuthorized}\u0000${props.formalExecutionAuthorizationReason}`, resetSelection, { flush: 'sync' })
 watch(activeInputLinks, values => {
   selectedInputKeys.value = selectedInputKeys.value.filter(key => values.some(link => inputKey(link) === key))
   inputsConfirmed.value = false

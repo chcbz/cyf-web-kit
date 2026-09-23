@@ -32,6 +32,13 @@ const restoreDom = () => {
   }
 }
 
+const formalExecutionStub = () => ({
+  readyReason: Vue.ref('正式执行条件尚未满足。'), stateText: Vue.ref('尚未确认本正式任务的执行记录。'), scopeError: Vue.ref(''), activeExecution: Vue.ref(null),
+  formalHistory: Vue.ref([]), historyState: Vue.ref('idle'), historyError: Vue.ref(''),
+  execution: { pending: Vue.ref(false) }, refreshReadiness: async () => false,
+  recoverOriginalRequest: async () => null, begin: async () => null, loadFormalHistory: async () => [], selectFormalHistory: async () => null, dispose: () => {}
+})
+
 const compile = () => {
   const filename = new URL('../src/components/personal-workspace/TaskMaterialLinks.vue', import.meta.url)
   const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename: filename.pathname })
@@ -41,7 +48,7 @@ const compile = () => {
     .replace(/^import\s+([^\s]+)\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_match, name, path) =>
       `const ${name} = imports[${JSON.stringify(path)}]`)
     .replace('export default', 'return')
-  return imports => new Function('imports', code)(imports)
+  return imports => new Function('imports', code)({ '@/composables/useFormalTaskExecution': { useFormalTaskExecution: formalExecutionStub }, ...imports })
 }
 
 describe('W06 workspace bounty material links', () => {
@@ -81,7 +88,7 @@ describe('W06 workspace bounty material links', () => {
 
     assert.deepEqual(attached, [{ fileId: 'file_a', version: 1, role: 'INPUT' }])
     assert.match(wrapper.text(), /不会启动 Agent 执行/)
-    assert.match(wrapper.text(), /不提供 execution 或 deliverable 查询/)
+    assert.match(wrapper.text(), /明确开始正式办理/)
   })
 
   it('renders a server-returned OUTPUT link as an execution-managed reference without inventing formal delivery', () => {
@@ -113,9 +120,12 @@ describe('W06 workspace bounty material links', () => {
     assert.equal(attach.attributes('disabled'), '')
   })
 
-  it('keeps task material controls out of the bounty detail and preserves the existing task discussion event', () => {
+  it('mounts task material controls in the formal bounty detail while preserving the existing discussion event', () => {
     const bounty = readFileSync(new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url), 'utf8')
-    assert.doesNotMatch(bounty, /TaskMaterialLinks/)
+    assert.match(bounty, /TaskMaterialLinks/)
+    const hall = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+    assert.match(hall, /:formal-task-execution-context="formalTaskExecutionContext"/)
+    assert.match(bounty, /formalTaskExecutionScope\.taskId/)
     assert.match(bounty, /workspace-shortcut/)
     assert.match(bounty, /open-workspace/)
     assert.match(bounty, /@click="\$emit\('discuss-task', detailTask\)"/)

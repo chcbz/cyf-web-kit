@@ -182,10 +182,24 @@
               <section class="workspace-shortcut" aria-label="榜文百宝箱入口">
                 <div>
                   <strong>资料与交付</strong>
-                  <p>文件、版本和交付件统一收在百宝箱，不再挤占榜文详情。</p>
+                  <p>文件、版本和交付件统一收在百宝箱；正式办理只在下方按当前榜文的会话与工作项授权启动。</p>
                 </div>
                 <button type="button" @click="$emit('open-workspace')">打开百宝箱</button>
               </section>
+              <TaskMaterialLinks
+                v-if="formalTaskExecutionScope"
+                :key="formalTaskExecutionScope.taskId"
+                :task-id="formalTaskExecutionScope.taskId"
+                :conversation-id="formalTaskExecutionScope.conversationId"
+                :target-agent-id="formalTaskExecutionScope.targetAgentId"
+                :conversation-confirmed="formalTaskExecutionScope.conversationConfirmed"
+                :formal-execution-authorized="formalTaskExecutionScope.formalExecutionAuthorized"
+                :formal-execution-authorization-reason="formalTaskExecutionScope.authorizationReason"
+                :identity-epoch="authorizationGeneration"
+                :identity-scope="identityScope"
+                @formal-execution-created="$emit('formal-execution-created', $event)"
+                @formal-execution-recovered="$emit('formal-execution-recovered', $event)"
+              />
               <section v-if="isFundedTask(detailTask)" class="funded-preview-details" aria-label="资金悬赏详情">
                 <p class="funding-summary">已托管：{{ formatMoney(detailTask.funding.remainingMicro || detailTask.funding.grossBountyAmountMicro) }}</p>
                 <p>仅可由一位明确好汉按报价领令；组队、宋江代点和旧式点将已禁用。</p>
@@ -359,6 +373,7 @@ import BountyActionIcon from './BountyActionIcon.vue'
 import WorkItemPlanPanel from './WorkItemPlanPanel.vue'
 import TeamRecommendationPanel from './TeamRecommendationPanel.vue'
 import HallDraftEditor from './HallDraftEditor.vue'
+import TaskMaterialLinks from '@/components/personal-workspace/TaskMaterialLinks.vue'
 import { formatSilverMicro, isCanonicalMicroAmount } from '@/utils/silverAmount'
 
 const props = defineProps({
@@ -382,6 +397,7 @@ const props = defineProps({
   workItemPlanEnabled: { type: Boolean, default: false },
   authorizationGeneration: { type: Number, default: 0 },
   identityScope: { type: String, default: '' },
+  formalTaskExecutionContext: { type: Object, default: null },
   fundedQuotePreview: { type: Object, default: null },
   fundedClaimState: { type: Object, default: null },
   fundedCreateRecovery: { type: Object, default: null },
@@ -415,6 +431,8 @@ const emit = defineEmits([
   'discuss-task',
   'load-settlement',
   'open-workspace',
+  'formal-execution-created',
+  'formal-execution-recovered',
   'load-tasks',
   'select-agent',
   'select-task',
@@ -435,6 +453,22 @@ const taskForm = ref({
   grossBountyAmountMicro: ''
 })
 const detailTask = computed(() => modalTask.value)
+// The parent is the only authority for task-scoped discussion/workspace facts.  A
+// detail may never borrow the context of whichever task was previously selected.
+const formalTaskExecutionScope = computed(() => {
+  const taskId = detailTask.value?.id
+  if (!taskId) return null
+  const context = props.formalTaskExecutionContext
+  if (context?.taskId === taskId) return context
+  return {
+    taskId,
+    conversationId: '',
+    targetAgentId: '',
+    conversationConfirmed: false,
+    formalExecutionAuthorized: false,
+    authorizationReason: '当前榜文的正式议事与必需工作项尚未核对；请先进入本榜文议事并明确选择已指派好汉。'
+  }
+})
 const validGrossAmount = computed(() => isCanonicalMicroAmount(taskForm.value.grossBountyAmountMicro))
 const fundedRecoveryAbilities = computed(() => {
   const abilities = props.fundedCreateRecovery?.body?.requiredAbilities

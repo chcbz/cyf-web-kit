@@ -23,6 +23,7 @@ export function useFormalTaskExecution ({
   targetAgentId,
   conversationConfirmed = false,
   executionAuthorized = false,
+  executionAuthorizationReason = '',
   identityEpoch = 0,
   identityScope = identityEpoch,
   executionFactory = usePersonalWorkspaceExecution
@@ -36,7 +37,8 @@ export function useFormalTaskExecution ({
     conversationId: scopeText(conversationId),
     targetAgentId: scopeText(targetAgentId),
     conversationConfirmed: valueOf(conversationConfirmed) === true,
-    executionAuthorized: valueOf(executionAuthorized) === true
+    executionAuthorized: valueOf(executionAuthorized) === true,
+    executionAuthorizationReason: scopeText(executionAuthorizationReason)
   }))
   const scopeKey = computed(() => {
     const scope = currentScope.value
@@ -46,11 +48,11 @@ export function useFormalTaskExecution ({
   const activeExecution = computed(() => scopeMatches(execution.execution.value, currentScope.value) ? execution.execution.value : null)
   const readyReason = computed(() => {
     const scope = currentScope.value
-    if (!validId(scope.taskId)) return '未提供正式 taskId，不能开始执行。'
-    if (!validId(scope.conversationId)) return '尚未提供已确认的正式议事 conversationId，不能开始执行。'
-    if (!scope.conversationConfirmed) return '正式议事尚未由父级确认，不能开始执行。'
-    if (!validId(scope.targetAgentId)) return '尚未提供明确 targetAgentId，不能开始执行。'
-    if (!scope.executionAuthorized) return '当前任务尚未获父级授权进入正式执行，不能开始执行。'
+    if (!validId(scope.taskId)) return scope.executionAuthorizationReason || '未提供正式 taskId，不能开始执行。'
+    if (!validId(scope.conversationId)) return scope.executionAuthorizationReason || '尚未提供已确认的正式议事 conversationId，不能开始执行。'
+    if (!scope.conversationConfirmed) return scope.executionAuthorizationReason || '正式议事尚未由父级确认，不能开始执行。'
+    if (!validId(scope.targetAgentId)) return scope.executionAuthorizationReason || '尚未提供明确 targetAgentId，不能开始执行。'
+    if (!scope.executionAuthorized) return scope.executionAuthorizationReason || '当前任务尚未获父级授权进入正式执行，不能开始执行。'
     if (execution.capabilityState.value === 'loading') return '正在读取执行能力。'
     if (execution.capabilityState.value !== 'ready' || !execution.allowedMimeTypes.value.includes(FORMAL_TASK_OUTPUT_MIME_TYPE)) return '当前能力未确认可生成真实 PDF，不能开始执行。'
     if (execution.rosterState.value === 'loading') return '正在核对目标 Agent。'
@@ -95,6 +97,7 @@ export function useFormalTaskExecution ({
     const normalized = normalizeInputs(inputs)
     if (!confirmed) { scopeError.value = '请确认授权这些固定版本资料用于本次正式 TASK 执行。'; return null }
     if (!normalized) { scopeError.value = '请选择至少一份不重复的固定 INPUT 文件版本。'; return null }
+    scopeError.value = ''
     if (readyReason.value) { scopeError.value = readyReason.value; return null }
     const scope = currentScope.value
     if (!execution.selectAgent(scope.targetAgentId)) { scopeError.value = '指定 targetAgentId 不在当前可访问的 Agent 名册中，未发送执行请求。'; return null }
@@ -139,7 +142,7 @@ export function useFormalTaskExecution ({
 
   watch(() => {
     const scope = currentScope.value
-    return `${scopeKey.value}\u0000${scope.conversationId}\u0000${scope.targetAgentId}\u0000${scope.conversationConfirmed}\u0000${scope.executionAuthorized}`
+    return `${scopeKey.value}\u0000${scope.conversationId}\u0000${scope.targetAgentId}\u0000${scope.conversationConfirmed}\u0000${scope.executionAuthorized}\u0000${scope.executionAuthorizationReason}`
   }, () => { formalHistory.value = []; historyState.value = 'idle'; historyError.value = ''; scopeError.value = '' }, { immediate: true, flush: 'sync' })
 
   return {
