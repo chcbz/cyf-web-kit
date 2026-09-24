@@ -1806,6 +1806,49 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.emitted('archive-task')[0]).to.deep.equal([selectedTask])
   })
 
+  it('keeps completed embedded matters closable by exposing archive and then showing the archived receipt', async () => {
+    const selectedTask = {
+      id: 'task-399',
+      title: 'Mobile closure report',
+      status: 'completed',
+      description: 'Produce and accept a formal PDF',
+      assignedAgentId: 'agent-wuyong',
+      assignedAgentIds: ['agent-wuyong']
+    }
+    const agent = { agentId: 'agent-wuyong', name: '吴用', status: 'online', abilities: ['planning'] }
+    const wrapper = mount(BountyPanel, {
+      global: { stubs },
+      props: {
+        embeddedHall: true,
+        tasks: [selectedTask],
+        selectedTask,
+        selectedAgent: agent,
+        recommendedAgents: [agent],
+        operableAgents: [agent],
+        taskAbilityOptions: ['planning'],
+        taskStatusFilters: [],
+        abilityText: item => (item.abilities || []).join(' / '),
+        canAssign: () => true,
+        formatTime: value => value,
+        portraitName: item => item.name,
+        portraitStyle: () => ({}),
+        taskAgentMatchScore: () => 98,
+        taskStateClass: () => 'task-state-done',
+        taskStatusCount: () => 1,
+        taskStatusText: status => status
+      }
+    })
+
+    await wrapper.find('.task-card').trigger('click')
+    expect(wrapper.find('.matter-archive-action').text()).to.equal('收入案卷')
+    await wrapper.find('.matter-archive-action').trigger('click')
+    expect(wrapper.emitted('archive-task')[0]).to.deep.equal([selectedTask])
+
+    await wrapper.setProps({ tasks: [{ ...selectedTask, status: 'archived' }], selectedTask: { ...selectedTask, status: 'archived' } })
+    expect(wrapper.find('.matter-archive-action').exists()).to.equal(false)
+    expect(wrapper.find('.matter-archive-note').text()).to.include('办事 → 案卷')
+  })
+
   it('keeps discussion disabled for unassigned bounty tasks with a readable hint', async () => {
     const selectedTask = {
       id: 'task-1',
