@@ -111,7 +111,7 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
     useTaskWorkspaceView: () => workspaceState ? ({ subject: workspaceState.subject, workspace: workspaceState.workspace, connectionState: workspaceState.connectionState, error: workspaceState.error, retry: workspaceState.retry }) : ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: text, error: Vue.ref(null), retry: noop }),
     useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }),
     portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '',
-    HallOverview: EmptyPanel, HallDraftEditor: EmptyPanel, FormalDeliveryList: EmptyPanel,
+    HallOverview: EmptyPanel, HallDraftEditor: EmptyPanel, FormalTaskDeliveryPanel: EmptyPanel,
     HallPortraitHome, HallStage, HallVoiceHud: EmptyPanel, LibraryPanel: LibraryPanel || EmptyPanel, TaskWorkspacePanel: TaskWorkspacePanel || EmptyPanel, ArtifactTransferPanel: ArtifactTransferPanel || EmptyPanel, ArtifactOutcomePanel: EmptyPanel,
     AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel, BountyPanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PrivateDiscussionPanel: EmptyPanel, PublicDiscussionPanel: EmptyPanel, SelectedAgentCard: EmptyPanel
   }

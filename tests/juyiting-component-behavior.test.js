@@ -2521,7 +2521,7 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
     useHallLibrary: () => ({ citeLibraryItem: noop, libraryErrorMessage: scalar, libraryHasSearched: Vue.ref(false), libraryKeyword: scalar, libraryLoading: Vue.ref(false), libraryResults: value, librarySourceType: scalar, searchLibrary: asyncNoop }),
     useTaskWorkspace: () => null, createDisabledTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }), isTaskWorkspaceBuildEnabled: () => false, useTaskWorkspaceView: () => ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: scalar, error: Vue.ref(null), retry: noop }), useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop }),
     portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '',
-    FormalDeliveryList: Vue.defineComponent({ name: 'FormalDeliveryList', props: ['taskId', 'identityFingerprint', 'focusDeliveryId'], setup: () => () => Vue.h('section', { class: 'formal-delivery-probe' }) }),
+    FormalTaskDeliveryPanel: Vue.defineComponent({ name: 'FormalTaskDeliveryPanel', props: ['taskId', 'identityFingerprint', 'focusDeliveryId', 'executionContext', 'selectedAgentId'], setup: () => () => Vue.h('section', { class: 'formal-delivery-probe' }) }),
     HallPortraitHome, HallStage, HallVoiceHud: EmptyPanel, LibraryPanel, AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel, BountyPanel: actualBountyPanel || EmptyPanel, TaskWorkspacePanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PrivateDiscussionPanel: EmptyPanel, PublicDiscussionPanel: EmptyPanel, SelectedAgentCard: EmptyPanel
   }
 }
@@ -2743,7 +2743,7 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
         code: 'FORMAL_DELIVERY_SUBMITTED', deliveryId: 'delivery-exact', workItemId: 'work-a', deliveryVersion: '0', taskVersion: '9007199254740993'
       })
       await Vue.nextTick()
-      const formal = wrapper.findComponent({ name: 'FormalDeliveryList' })
+      const formal = wrapper.findComponent({ name: 'FormalTaskDeliveryPanel' })
       expect(formal.props('taskId')).to.equal('task-a')
       expect(formal.props('focusDeliveryId')).to.equal('delivery-exact')
       expect(formal.props('identityFingerprint')).to.equal('client-a\u0000owner-a:1')
@@ -2755,7 +2755,7 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
       expect(wrapper.find('.formal-delivery-probe').exists()).to.equal(false)
       expect(wrapper.find('.bounty-modal').text()).to.include('待验收的正式事项')
       await wrapper.findAll('button').find(button => button.text() === '查看正式成果与验收').trigger('click')
-      expect(wrapper.findComponent({ name: 'FormalDeliveryList' }).props('taskId')).to.equal('task-a')
+      expect(wrapper.findComponent({ name: 'FormalTaskDeliveryPanel' }).props('taskId')).to.equal('task-a')
       expect(wrapper.find('.hall-private-mark').exists()).to.equal(false)
       state.closePanel()
       state.openPanel('tasks')

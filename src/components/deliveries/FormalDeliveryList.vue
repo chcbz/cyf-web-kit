@@ -64,7 +64,7 @@
           >要求修改</button>
         </div>
       </form>
-      <form v-else-if="delivery.state === 'changes_requested' && reworkSource(delivery)" class="formal-rework" @submit.prevent="submitRework(delivery)">
+      <form v-else-if="delivery.state === 'changes_requested' && reworkSource(delivery) && !reworkCreated[delivery.deliveryId]" class="formal-rework" @submit.prevent="submitRework(delivery)">
         <h4>按指定版本返工</h4>
         <p>源成果 {{ reworkSource(delivery).outputId }} / 工作空间文件 {{ reworkSource(delivery).fileRef.fileId }} · v{{ reworkSource(delivery).fileRef.fileVersion }}。系统只发送这一固定版本。</p>
         <label>返工说明<textarea
@@ -76,6 +76,7 @@
         <p>交付格式：{{ reworkSource(delivery).mimeType }}</p>
         <button type="submit" :disabled="isReworkBusy(delivery) || deliveries.refreshRequired.value || !reworkInstructions[delivery.deliveryId]?.trim()">{{ isReworkBusy(delivery) ? '创建返工中…' : '明确交给 Agent 返工' }}</button>
       </form>
+      <p v-else-if="reworkCreated[delivery.deliveryId]" role="status">返工执行已创建，等待 Agent 交付新的正式成果；不会自动重复创建。</p>
       <section v-else-if="delivery.state === 'changes_requested'" class="formal-rework formal-rework-hint">
         <h4>要求修改已记录</h4>
         <p>请进入该悬赏的议事，选择负责 Agent 后基于指定成果版本明确创建返工；不会自动重新调用模型。</p>
@@ -85,7 +86,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, reactive } from 'vue'
+import { computed, onBeforeUnmount, reactive, watch } from 'vue'
 import { useFormalDeliveries } from '../../composables/useFormalDeliveries.js'
 
 const props = defineProps({
@@ -97,14 +98,21 @@ const props = defineProps({
   targetAgentId: { type: String, default: '' },
   outputs: { type: Array, default: () => [] }
 })
-const emit = defineEmits(['rework-created'])
+const emit = defineEmits(['rework-created', 'refreshed'])
 const deliveries = useFormalDeliveries({ taskId: () => String(props.taskId || ''), identityFingerprint: () => props.identityFingerprint, adapter: props.adapter })
 const reviewReasons = reactive({})
 const reworkInstructions = reactive({})
+const reworkCreated = reactive({})
+watch(() => deliveries.items.value, () => emit('refreshed'))
+watch(() => `${props.taskId}:${props.identityFingerprint}:${props.conversationId}:${props.targetAgentId}`, () => {
+  for (const values of [reviewReasons, reworkInstructions, reworkCreated]) {
+    for (const key of Object.keys(values)) delete values[key]
+  }
+})
 const safeOutputs = computed(() => Array.isArray(props.outputs) ? props.outputs : [])
 const isBusy = delivery => deliveries.busyDeliveryId.value === delivery.deliveryId
 const isReworkBusy = delivery => deliveries.reworkBusyDeliveryId.value === delivery.deliveryId
-const reworkSource = delivery => safeOutputs.value.find(output => output && output.formalDeliveryId === delivery.deliveryId && output.formalDecisionVersion === delivery.deliveryVersion && output.formalDeliveryState === 'changes_requested' && output.outputId && output.fileRef?.fileId && output.fileRef?.fileVersion && output.mimeType) || null
+const reworkSource = delivery => props.conversationId && props.targetAgentId && safeOutputs.value.find(output => output && output.formalDeliveryId === delivery.deliveryId && output.formalDecisionVersion === delivery.deliveryVersion && output.formalDeliveryState === 'changes_requested' && output.outputId && output.fileRef?.fileId && output.fileRef?.fileVersion && output.mimeType) || null
 const formatTime = value => { const time = typeof value === 'number' ? value : Date.parse(value); return Number.isFinite(time) ? new Date(time).toLocaleString('zh-CN', { hour12: false }) : '时间不可用' }
 const stateText = state => ({ submitted: '待验收', accepted: '已验收', changes_requested: '要求修改' })[state] || state
 const submitDecision = (delivery, event) => {
@@ -120,6 +128,7 @@ const submitRework = async delivery => {
     instruction: String(reworkInstructions[delivery.deliveryId] || '').trim(), outputContentMimeType: source.mimeType
   })
   if (result) {
+    reworkCreated[delivery.deliveryId] = result.executionId
     reworkInstructions[delivery.deliveryId] = ''
     emit('rework-created', result)
   }

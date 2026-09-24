@@ -71,3 +71,91 @@ describe('W05 real formal-review component boundary', () => {
     } finally { wrapper.unmount() }
   })
 })
+
+// Mount the production Hall boundary, not just a list with invented rework props.
+import { useOutputs } from '../src/composables/useOutputs.js'
+const panelFilename = new URL('../src/components/deliveries/FormalTaskDeliveryPanel.vue', import.meta.url).pathname
+const panelScript = compileScript(parse(readFileSync(panelFilename, 'utf8'), { filename: panelFilename }).descriptor,
+  { id: 'formal-task-delivery-panel', inlineTemplate: true }).content
+  .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
+  .replace(/^import\s+FormalDeliveryList\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { FormalDeliveryList } = deps')
+  .replace(/^import\s+\{\s*useOutputs\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { useOutputs } = deps')
+  .replace('export default', 'return')
+const FormalTaskDeliveryPanel = new Function('Vue', 'deps', panelScript)(Vue, { FormalDeliveryList, useOutputs })
+
+describe('BF19 production formal rework boundary', () => {
+  before(() => { for (const name of ['Element', 'HTMLElement', 'SVGElement', 'Node']) globalThis[name] ||= globalThis.window[name] })
+  const scope = { taskId: 'task-1', conversationId: 'conversation-1', targetAgentId: 'agent-1', conversationConfirmed: true }
+  const output = (state, version) => ({
+    outputId: 'output-1', executionId: 'execution-1', fileId: 'file-1', fileVersion: 3,
+    contentHash: 'a'.repeat(64), contentMimeType: 'application/pdf', byteLength: 128, committedAt: 1,
+    state: 'AVAILABLE', publicationState: 'PUBLISHED', artifactId: 'artifact-1', artifactVersion: 2,
+    formalDeliveryId: 'delivery-1', formalDeliveryRevision: 2, formalDeliveryState: state,
+    formalDecisionVersion: version, formalReviewedAt: version ? 2 : null
+  })
+  it('refreshes exact outputs after decision, sends version 0 not revision 2, and creates rework once', async () => {
+    let current = { ...delivery }
+    const decisions = []; const reworks = []; const reads = []
+    const wrapper = mount(FormalTaskDeliveryPanel, { props: {
+      taskId: 'task-1', identityFingerprint: 'owner:client:1', executionContext: scope, selectedAgentId: 'agent-1',
+      deliveryAdapter: {
+        list: async () => [{ ...current }],
+        decide: async request => { decisions.push(request); current = { ...delivery, state: 'changes_requested', deliveryVersion: 1, reviewedAt: 2, reviewReason: request.reviewReason } },
+        createRework: async request => { reworks.push(request); return { executionId: 'rework-1' } }
+      },
+      outputAdapter: { list: async request => { reads.push(request); return { items: [output(current.state, current.deliveryVersion)] } } }
+    } })
+    try {
+      await flushPromises()
+      await wrapper.find('textarea').setValue('补充应急方案')
+      await wrapper.find('form.formal-decision').trigger('submit', { submitter: { value: 'changes_requested' } })
+      await flushPromises()
+      expect(decisions).to.have.length(1)
+      expect(decisions[0].expectedDeliveryVersion).to.equal(0)
+      expect(wrapper.find('form.formal-rework').exists()).to.equal(true)
+      await wrapper.find('form.formal-rework textarea').setValue('按验收意见新增一页')
+      await wrapper.find('form.formal-rework').trigger('submit')
+      await flushPromises()
+      expect(reworks).to.have.length(1)
+      expect(reworks[0]).to.include({ conversationId: 'conversation-1', targetAgentId: 'agent-1' })
+      expect(reworks[0].delivery.deliveryVersion).to.equal(1)
+      expect(reworks[0].source.fileRef).to.deep.equal({ fileId: 'file-1', fileVersion: '3' })
+      expect(wrapper.find('form.formal-rework').exists()).to.equal(false)
+      expect(wrapper.emitted('rework-created')).to.have.length(1)
+      expect(reads.every(r => r.sourceId === 'conversation-1')).to.equal(true)
+    } finally { wrapper.unmount() }
+  })
+  it('does not borrow foreign task, unconfirmed conversation, or nonselected agent; invalidates stale reads', async () => {
+    let resolveRead; let signal; const writes = []
+    const wrapper = mount(FormalTaskDeliveryPanel, { props: {
+      taskId: 'task-1', identityFingerprint: 'owner:client:1', executionContext: { ...scope, taskId: 'foreign' }, selectedAgentId: 'agent-1',
+      deliveryAdapter: { list: async () => [{ ...delivery, state: 'changes_requested', deliveryVersion: 1, reviewedAt: 2, reviewReason: 'revise' }], createRework: async r => writes.push(r) },
+      outputAdapter: { list: request => { signal = request.signal; return new Promise(resolve => { resolveRead = resolve }) } }
+    } })
+    try {
+      await flushPromises()
+      expect(resolveRead).to.equal(undefined)
+      await wrapper.setProps({ executionContext: { ...scope, conversationConfirmed: false } })
+      await flushPromises(); expect(resolveRead).to.equal(undefined)
+      await wrapper.setProps({ executionContext: scope, selectedAgentId: 'other-agent' })
+      await flushPromises(); expect(resolveRead).to.equal(undefined)
+      await wrapper.setProps({ selectedAgentId: 'agent-1' }); await flushPromises()
+      expect(signal.aborted).to.equal(false)
+      await wrapper.setProps({ identityFingerprint: '', selectedAgentId: '' }); await flushPromises()
+      expect(signal.aborted).to.equal(true)
+      resolveRead({ items: [output('changes_requested', 1)] }); await flushPromises()
+      expect(wrapper.find('form.formal-rework').exists()).to.equal(false)
+      expect(writes).to.have.length(0)
+    } finally { wrapper.unmount() }
+  })
+  it('refuses mismatched decision versions and unrelated/private outputs', async () => {
+    for (const changes of [{ formalDecisionVersion: 2 }, { formalDeliveryId: 'other-delivery' }]) {
+      const wrapper = mount(FormalTaskDeliveryPanel, { props: {
+        taskId: 'task-1', identityFingerprint: 'owner:client:1', executionContext: scope, selectedAgentId: 'agent-1',
+        deliveryAdapter: { list: async () => [{ ...delivery, state: 'changes_requested', deliveryVersion: 1, reviewedAt: 2, reviewReason: 'revise' }] },
+        outputAdapter: { list: async () => ({ items: [{ ...output('changes_requested', 1), ...changes }] }) }
+      } })
+      try { await flushPromises(); expect(wrapper.find('form.formal-rework').exists()).to.equal(false) } finally { wrapper.unmount() }
+    }
+  })
+})

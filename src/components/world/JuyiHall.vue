@@ -365,12 +365,16 @@
             @set-status-filter="setTaskStatusFilter"
           />
 
-          <FormalDeliveryList
+          <FormalTaskDeliveryPanel
             v-if="renderedPanel === 'tasks' && formalTaskRef && hallIdentityScope"
             :key="formalTaskRef.id"
             :task-id="formalTaskRef.id"
             :identity-fingerprint="`${hallIdentityScope}:${apiStore.authorizationGeneration}`"
             :focus-delivery-id="taskReviewRef?.taskId === formalTaskRef.id ? taskReviewRef.deliveryId : ''"
+            :execution-context="formalTaskExecutionContext"
+            :selected-agent-id="selectedAgent?.agentId || ''"
+            @discuss-task="discussTask(formalTaskRef)"
+            @rework-created="hallReadRevision += 1"
           />
 
           <template v-if="taskWorkspaceEnabled && renderedPanel === 'workspace' && taskWorkspaceSubject">
@@ -646,7 +650,7 @@
 <script setup>
 import HallOverview from '@/components/juyiting/HallOverview.vue'
 import HallDraftEditor from '@/components/juyiting/HallDraftEditor.vue'
-import FormalDeliveryList from '@/components/deliveries/FormalDeliveryList.vue'
+import FormalTaskDeliveryPanel from '@/components/deliveries/FormalTaskDeliveryPanel.vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { useGlobalStore } from '@/stores/global'

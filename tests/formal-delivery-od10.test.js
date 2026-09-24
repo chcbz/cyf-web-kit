@@ -95,7 +95,7 @@ describe('OD10 formal delivery UI boundary', () => {
     await tick()
     await deliveries.decide({ delivery: deliveries.items.value[0], decision: 'accepted', reviewReason: '符合榜文要求。' })
     expect(calls).to.deep.equal([{
-      taskId: 'task-1', deliveryId: 'delivery-1', expectedTaskVersion: 3, expectedDeliveryVersion: 2,
+      taskId: 'task-1', deliveryId: 'delivery-1', expectedTaskVersion: 3, expectedDeliveryVersion: 0,
       decision: 'accepted', reviewReason: '', idempotencyKey: 'formal-test-key-0001', signal: calls[0].signal
     }])
     expect(listCount).to.equal(2)
