@@ -103,6 +103,7 @@ const createHallMocks = ({ SelectedAgentCard, counters }) => {
     useHallChatContext: () => ({ chatContext: Vue.ref({ conversationScopeType: 'public', conversationScopeKey: 'public', mode: 'public', participantAgentIds: [], targetAgentIds: [] }), chatMentionAgentIds: list, chatMentionAgents: Vue.ref([selected]), chatMode: Vue.ref('public'), chatTargetText: text, enterBountyDiscussion: noop, enterPrivateConversation: agent => counters.privateTargets.push(agent), resetToPublic: noop, setMentionAgent: noop }),
     useHallScene: () => ({ markAgentSpeaking: noop, markDiscussionStarted: noop, markLibraryCitation: noop, markLibrarySearching: noop, markRecommendedAgents: noop, markTaskArchived: noop, markTaskAssigned: noop, markTaskAutoAssigned: noop, markTaskCreated: noop, resetSceneFeedback: noop, sceneAgents: Vue.ref([selected]), sceneAgentStyle: () => ({}), sceneHotspots: list, syncAfterPersonaChanged: noop }),
     useHallTaskActions: () => ({ archiveTask: asyncNoop, autoAssignTask: asyncNoop, assignTask: asyncNoop, createTask: asyncNoop }),
+    useHallQuickMatter: () => ({ busy: Vue.ref(false), message: Vue.ref(''), submit: async () => null }),
     useHallConversation: () => ({ chatConnectionStatus: text, conversationId: text, draft: conversationDraft, draftRevision: Vue.ref(0), eventStreamRecovering: Vue.ref(false),
       insertAgentMention: (agent, suffix) => { counters.mentions.push({ agent, suffix }); conversationDraft.value = `@${agent.name} ${suffix}` },
       isAwaitingReply: Vue.ref(false), isStreaming: Vue.ref(false), loadHallMessages: asyncNoop, mentionAgent: noop, messages: list, newHallConversation: noop,
@@ -114,7 +115,7 @@ const createHallMocks = ({ SelectedAgentCard, counters }) => {
     useTaskWorkspace: () => null, createDisabledTaskWorkspaceBinding: selectedAgent => ({ selectExplicitActor: agent => { counters.explicitActors.push(agent); selectedAgent.value = agent || null }, clearExplicitActor: noop, dispose: noop }),
     isTaskWorkspaceBuildEnabled: () => false, useTaskWorkspaceView: () => ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: text, error: Vue.ref(null), retry: noop }), useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop }),
     portraitName: agent => agent?.personaName || '', portraitRole: () => ({ slug: 'default' }), portraitShortName: agent => agent?.name || '', portraitStyle: () => ({}), roleClass: () => '',
-    HallPortraitHome: EmptyPanel, HallStage, HallVoiceHud: EmptyPanel, LibraryPanel: EmptyPanel, AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel,
+    HallPortraitHome: EmptyPanel, HallMinePage: EmptyPanel, HallStage, HallVoiceHud: EmptyPanel, LibraryPanel: EmptyPanel, AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel,
     BountyPanel: EmptyPanel, TaskWorkspacePanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PersonalWorkspace: EmptyPanel, PrivateDiscussionPanel: EmptyPanel, PublicDiscussionPanel: EmptyPanel, SelectedAgentCard
   }
 }
@@ -228,7 +229,7 @@ describe('SelectedAgentCard interaction contract', () => {
     expect(hallSource).to.include('.panel-overlay.is-full-window .floating-panel.layout-full-window')
     expect(hallSource).to.include('width: min(1180px, 100%)')
     expect(hallSource).to.include('.home-overview .panel-overlay.is-workbench-panel')
-    expect(hallSource).to.include('inset: 64px 0 calc(62px + env(safe-area-inset-bottom)) 0')
+    expect(hallSource).to.include('inset: 0 0 calc(62px + env(safe-area-inset-bottom)) 0')
     expect(hallSource).to.include("'is-virtual-landscape': isVirtualLandscape")
     expect(compactTitleRule).to.include('padding: 6px 10px')
     expect(hallSource).to.include('.panel-overlay.is-compact-chat-overlay :deep(.discussion-brief)')

@@ -44,6 +44,7 @@ declare module 'vue' {
     HallConversationHistory: typeof import('./components/juyiting/HallConversationHistory.vue')['default']
     HallDraftEditor: typeof import('./components/juyiting/HallDraftEditor.vue')['default']
     HallLiveMapPreview: typeof import('./components/juyiting/HallLiveMapPreview.vue')['default']
+    HallMinePage: typeof import('./components/juyiting/HallMinePage.vue')['default']
     HallOnboarding: typeof import('./components/juyiting/HallOnboarding.vue')['default']
     HallOverview: typeof import('./components/juyiting/HallOverview.vue')['default']
     HallPortraitHome: typeof import('./components/juyiting/HallPortraitHome.vue')['default']

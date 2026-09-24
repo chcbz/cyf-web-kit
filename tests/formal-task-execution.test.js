@@ -65,6 +65,28 @@ describe('formal TASK execution boundary', () => {
     assert.match(formal.stateText.value, /不表示 Provider 已开始/)
   })
 
+  it('allows zero materials only when generation capability is enabled and verifies an empty echoed input set', async () => {
+    const enabled = executionMock()
+    const formal = useFormalTaskExecution({
+      taskId: ref('task_1'), conversationId: ref('conversation_1'), targetAgentId: ref('agent_1'), conversationConfirmed: ref(true), executionAuthorized: ref(true),
+      identityEpoch: ref(1), identityScope: ref('owner_a'), executionFactory: () => enabled.state
+    })
+    const created = await formal.begin({ inputs: [], instruction: '无资料生成正式 PDF', confirmed: true })
+    assert.equal(created?.executionId, 'exec_task_1')
+    assert.deepEqual(enabled.createCalls[0].inputs, [])
+    assert.deepEqual(created.inputs, [])
+
+    const disabled = executionMock()
+    disabled.state.generationEnabled.value = false
+    const blocked = useFormalTaskExecution({
+      taskId: ref('task_1'), conversationId: ref('conversation_1'), targetAgentId: ref('agent_1'), conversationConfirmed: ref(true), executionAuthorized: ref(true),
+      identityEpoch: ref(1), identityScope: ref('owner_a'), executionFactory: () => disabled.state
+    })
+    assert.equal(await blocked.begin({ inputs: [], instruction: '不能无资料生成', confirmed: true }), null)
+    assert.equal(disabled.createCalls.length, 0)
+    assert.match(blocked.scopeError.value, /不支持无资料生成/)
+  })
+
   it('does not display a recovered execution that differs from the confirmed formal scope', async () => {
     const mock = executionMock()
     mock.state.execution.value = executionRecord({ taskId: 'private_task', conversationId: null })

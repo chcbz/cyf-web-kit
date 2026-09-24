@@ -18,14 +18,11 @@
       <nav v-if="isOverviewHome" class="workbench-breadcrumb" aria-label="当前位置"><button type="button" @click="openWorkbenchPage('overview')">我的工作空间</button><var-icon name="chevron-right" aria-hidden="true" /><strong>{{ workbenchCurrentLabel }}</strong></nav>
       <button v-else class="hall-brand" type="button" @click="setHomeMode('overview')"><span class="hall-seal">聚</span><span>聚义厅<small>梁山好汉 · 共成其事</small></span></button>
       <nav class="hall-main-nav" aria-label="聚义厅主导航">
-        <button type="button" :aria-current="isOverviewHome && !activePanel ? 'page' : null" @click="openWorkbenchPage('overview')">办事概览</button>
-        <button type="button" @click="openWorkbenchPage('tasks')">我的事项</button>
-        <button type="button" @click="openWorkbenchPage('chat')">厅内议事</button>
-        <button type="button" aria-label="打开百宝箱" @click="openWorkbenchPage('treasure')">百宝箱</button>
+        <button v-for="tab in workbenchMobileTabs" :key="tab.panel" type="button" :aria-current="workbenchCurrentPage === tab.panel ? 'page' : null" @click="openWorkbenchPage(tab.panel)">{{ tab.label }}</button>
       </nav>
       <div class="hall-header-tools">
-        <button type="button" @click="isOverviewHome ? openWorkbenchPage('agents') : openPanel('agents')">好汉</button>
-        <button class="workbench-message-action" type="button" aria-label="查看消息" @click="isOverviewHome ? openWorkbenchPage('messages') : openPanel('messages')"><var-icon v-if="isOverviewHome" name="bell-outline" aria-hidden="true" /><span v-else>消息</span></button>
+        <button type="button" @click="openPanel('agents', { root: isOverviewHome })">好汉</button>
+        <button class="workbench-message-action" type="button" aria-label="查看消息" @click="openPanel('messages', { root: isOverviewHome })"><var-icon v-if="isOverviewHome" name="bell-outline" aria-hidden="true" /><span v-else>消息</span></button>
         <button class="workbench-create-action" type="button" @click="openPrivateDraft()"><var-icon v-if="isOverviewHome" name="plus" aria-hidden="true" /><span>{{ isOverviewHome ? '提出需求' : '＋ 提出需求' }}</span></button>
         <button class="workbench-account-action" type="button" :disabled="accountEntryDisabled" aria-label="个人中心" @click="openProfile"><var-icon v-if="isOverviewHome" name="account-circle-outline" aria-hidden="true" /><span>账户</span></button>
         <button class="workbench-mobile-more" type="button" aria-label="全部入口" :aria-expanded="workbenchMenuOpen" @click="workbenchMenuOpen = !workbenchMenuOpen"><var-icon name="menu" /></button>
@@ -105,6 +102,9 @@
           :identity-scope="hallIdentityScope"
           :identity-epoch="apiStore.authorizationGeneration"
           :agents="operableRosterAgents"
+          :quick-pending="quickMatter.busy.value"
+          :quick-message="quickMatter.message.value"
+          @quick-request="handleQuickRequest"
           @set-home-mode="setHomeMode"
           @open-board="openPanel('tasks')"
           @open-workspace="openBabaoBox"
@@ -213,14 +213,15 @@
     />
 
     <transition name="panel" @after-leave="handlePanelAfterLeave">
-      <div v-if="activePanel" :key="panelSessionGeneration" class="panel-overlay" :class="{ 'is-full-window': panelLayout === 'full-window', 'is-low-height': isLowHeightPanel, 'is-chat-overlay': renderedPanel === 'chat', 'is-compact-chat-overlay': renderedPanel === 'chat' && isCompactChat, 'is-workbench-panel': isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) }" :data-panel-generation="panelSessionGeneration" @pointerdown.self="closePanel">
+      <div v-if="activePanel" :key="panelSessionGeneration" class="panel-overlay" :class="{ 'is-full-window': panelLayout === 'full-window', 'is-low-height': isLowHeightPanel, 'is-chat-overlay': renderedPanel === 'chat', 'is-compact-chat-overlay': renderedPanel === 'chat' && isCompactChat, 'is-workbench-panel': isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel), 'is-workbench-page': isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) }" :data-panel-generation="panelSessionGeneration" @pointerdown.self="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? null : closePanel()">
         <section
           ref="panelRef"
           class="floating-panel"
           :class="[`panel-${renderedPanel}`, `layout-${panelLayout}`]"
-          role="dialog"
-          :aria-modal="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? 'false' : 'true'"
-          :aria-labelledby="panelTitleId"
+          :role="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? 'region' : 'dialog'"
+          :aria-modal="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? null : 'true'"
+          :aria-labelledby="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? null : panelTitleId"
+          :aria-label="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? workbenchCurrentLabel : null"
           tabindex="-1"
           @wheel.stop
           @pointerdown.stop
@@ -232,7 +233,7 @@
           @input.stop
           @click.stop
         >
-          <div class="panel-title">
+          <div v-if="!(isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel))" class="panel-title">
             <button
               class="panel-close"
               type="button"
@@ -397,6 +398,17 @@
               :identity-epoch="apiStore.authorizationGeneration"
             />
           </template>
+
+          <HallMinePage
+            v-if="panelFrames.includes('mine')"
+            v-show="renderedPanel === 'mine'"
+            :inert="renderedPanel !== 'mine' ? '' : null"
+            :aria-hidden="renderedPanel !== 'mine' ? 'true' : null"
+            :account-entry-disabled="accountEntryDisabled"
+            @open="openPanel($event, { root: true })"
+            @map="openWorkbenchMap"
+            @profile="openProfile"
+          />
 
           <HallOverview
             v-if="panelFrames.includes('messages')"
@@ -650,6 +662,7 @@
 
 <script setup>
 import HallOverview from '@/components/juyiting/HallOverview.vue'
+import HallMinePage from '@/components/juyiting/HallMinePage.vue'
 import HallDraftEditor from '@/components/juyiting/HallDraftEditor.vue'
 import FormalTaskDeliveryPanel from '@/components/deliveries/FormalTaskDeliveryPanel.vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -675,6 +688,7 @@ import { useHallSceneState } from '@/composables/juyiting/useHallSceneState'
 import { useHallSceneDebugBridge } from '@/composables/juyiting/useHallSceneDebugBridge'
 import { useHallSound } from '@/composables/juyiting/useHallSound'
 import { useHallTaskActions } from '@/composables/juyiting/useHallTaskActions'
+import { useHallQuickMatter } from '@/composables/juyiting/useHallQuickMatter'
 import { useTaskWorkspace } from '@/composables/juyiting/useTaskWorkspace'
 import { createDisabledTaskWorkspaceBinding, isTaskWorkspaceBuildEnabled } from '@/composables/juyiting/taskWorkspaceFeature'
 import { useTaskWorkspaceView } from '@/composables/juyiting/useTaskWorkspaceView'
@@ -723,6 +737,11 @@ const hallIdentityScope = computed(() => {
   return owner && client ? [tenant, client, owner].filter(Boolean).join('\u0000') : ''
 })
 
+const quickMatter = useHallQuickMatter({
+  identityScope: hallIdentityScope,
+  identityEpoch: () => apiStore.authorizationGeneration
+})
+
 const selectedAgent = ref(null)
 const selectedTask = ref(null)
 const economyPreviewEnabled = ref(false)
@@ -750,7 +769,7 @@ const {
 } = useTaskWorkspaceView(taskWorkspace)
 const personaSetupResult = ref(null)
 const toast = ref('')
-const panelWhitelist = new Set(['agents', 'catalog', 'tasks', 'workspace', 'treasure', 'chat', 'library', 'messages', 'item', 'formalDraft', 'draft'])
+const panelWhitelist = new Set(['agents', 'catalog', 'tasks', 'workspace', 'treasure', 'chat', 'library', 'messages', 'mine', 'item', 'formalDraft', 'draft'])
 const activePanel = ref('')
 const renderedPanel = ref('')
 const panelSessionGeneration = ref(0)
@@ -839,19 +858,16 @@ const voiceReplyCorrelation = createHallVoiceReplyCorrelation({
 })
 const { homeMode, isOverviewHome, setHomeMode } = useHallHomeMode()
 const workbenchPrimaryTabs = Object.freeze([
-  { panel: 'overview', label: '办事概览', icon: 'home-outline' },
-  { panel: 'tasks', label: '我的事项', icon: 'format-list-checkbox' },
-  { panel: 'chat', label: '厅内议事', icon: 'chat-processing-outline' },
-  { panel: 'agents', label: '点将册', icon: 'account-circle-outline' },
-  { panel: 'treasure', label: '百宝箱', icon: 'file-document-outline' },
-  { panel: 'library', label: '典籍阁', icon: 'notebook' },
-  { panel: 'messages', label: '消息通知', icon: 'bell-outline' }
+  { panel: 'overview', label: '办事', icon: 'home-outline' },
+  { panel: 'tasks', label: '事项', icon: 'format-list-checkbox' },
+  { panel: 'treasure', label: '资料', icon: 'file-document-outline' },
+  { panel: 'mine', label: '我的', icon: 'account-circle-outline' }
 ])
-const workbenchMobileTabs = Object.freeze(workbenchPrimaryTabs.filter(tab => ['overview', 'tasks', 'chat', 'library'].includes(tab.panel)))
+const workbenchMobileTabs = workbenchPrimaryTabs
 const workbenchPrimaryPanelSet = new Set(workbenchPrimaryTabs.map(tab => tab.panel))
 const workbenchMenuOpen = ref(false)
 const workbenchCurrentPage = computed(() => isOverviewHome.value ? (activePanel.value && workbenchPrimaryPanelSet.has(renderedPanel.value) ? renderedPanel.value : 'overview') : '')
-const workbenchCurrentLabel = computed(() => workbenchPrimaryTabs.find(tab => tab.panel === workbenchCurrentPage.value)?.label || '办事概览')
+const workbenchCurrentLabel = computed(() => workbenchPrimaryTabs.find(tab => tab.panel === workbenchCurrentPage.value)?.label || '办事')
 watch(homeMode, () => { workbenchMenuOpen.value = false })
 watch(activePanel, () => { workbenchMenuOpen.value = false })
 
@@ -1524,6 +1540,19 @@ const openOverviewItem = ref => {
   return true
 }
 
+const handleQuickRequest = async request => {
+  const result = await quickMatter.submit(request)
+  if (!result?.task) return false
+  const task = result.task
+  tasks.value = [task, ...tasks.value.filter(item => item.id !== task.id)]
+  selectedTask.value = task
+  hallReadRevision.value += 1
+  await selectTask(task)
+  await openOverviewTask(task)
+  showToast('事项已建立；确认前不会调用 Agent')
+  return true
+}
+
 const openOverviewTask = async (task, review = null) => {
   if (guardPanelLeave(() => openOverviewTask(task, review))) return false
   if (!task?.id || !openPanel('tasks', { restore: true })) return false
@@ -1663,11 +1692,20 @@ const briefSelectedTask = (task = selectedTask.value, agent = selectedAgent.valu
   showToast('议事话头已备')
 }
 
-const discussTask = (task) => {
-  if (!task || !openPanel('chat')) return false
+const discussTask = (task, explicitAgent) => {
+  const assignedIds = [...new Set((Array.isArray(task?.assignedAgentIds) ? task.assignedAgentIds : [task?.assignedAgentId]).filter(Boolean))]
+  const actorAgentId = typeof explicitAgent?.agentId === 'string' ? explicitAgent.agentId : ''
+  const actor = assignedIds.length === 1 && assignedIds[0] === actorAgentId
+    ? operableRosterAgents.value.find(agent => agent.agentId === actorAgentId) || null
+    : null
+  if (!task?.id || !actor || !openPanel('chat')) return false
   enterBountyDiscussion(task)
+  // Clicking the task-scoped button is the user's explicit actor selection. Keep
+  // assignment itself non-authorizing, then bind only this exact task/actor pair.
+  taskWorkspaceBinding.selectExplicitActor(actor)
   markDiscussionStarted(task, chatContext.value?.participantAgentIds || [])
   if (!draft.value.trim()) setDraft(`请就榜文「${task.title}」议事。`)
+  return true
 }
 
 const toggleHallSound = () => {
@@ -3494,9 +3532,8 @@ button.hall-room {
   .home-overview > .hall-app-header { padding-right: 26px; padding-left: 26px; }
 }
 @media (max-width: 760px) {
-  .juyi-page.home-overview { grid-template-columns: minmax(0,1fr); grid-template-rows: 64px minmax(0,1fr); }
-  .home-overview > .hall-workbench-sidebar { display: none; }
-  .home-overview > .hall-app-header { grid-column: 1; grid-row: 1; padding: 10px 16px; }
+  .juyi-page.home-overview { grid-template-columns: minmax(0,1fr); grid-template-rows: minmax(0,1fr); }
+  .home-overview > .hall-workbench-sidebar, .home-overview > .hall-app-header { display: none; }
   .home-overview .hall-app-header .hall-header-tools { gap: 5px; }
   .home-overview .hall-app-header .hall-header-tools > button:first-child, .home-overview .hall-app-header .workbench-create-action { display: none; }
   .home-overview .workbench-breadcrumb button, .home-overview .workbench-breadcrumb > .var-icon { display: none; }
@@ -3504,7 +3541,7 @@ button.hall-room {
   .home-overview .hall-app-header .workbench-account-action { width: 40px; padding: 8px; font-size: 19px; }
   .home-overview .hall-app-header .workbench-account-action span { display: none; }
   .home-overview .hall-app-header .workbench-mobile-more { display: inline-flex; }
-  .juyi-page.home-overview > :deep(.hall-portrait-home.is-unified-shell) { grid-column: 1; grid-row: 2; padding-bottom: calc(62px + env(safe-area-inset-bottom)); }
+  .juyi-page.home-overview > :deep(.hall-portrait-home.is-unified-shell) { grid-column: 1; grid-row: 1; padding-bottom: calc(62px + env(safe-area-inset-bottom)); }
   .home-overview .workbench-mobile-nav {
     position: absolute; z-index: 30; bottom: 0; left: 0; right: 0;
     display: flex; align-items: stretch; box-sizing: border-box; height: calc(62px + env(safe-area-inset-bottom));
@@ -3519,7 +3556,7 @@ button.hall-room {
   .home-overview .workbench-mobile-nav button[aria-current="page"] { color: var(--work-brand); background: #f6eee8; }
   .home-overview .workbench-mobile-nav .var-icon { font-size: 21px; }
   .home-overview .panel-overlay.is-workbench-panel {
-    inset: 64px 0 calc(62px + env(safe-area-inset-bottom)) 0; top: 64px; bottom: calc(62px + env(safe-area-inset-bottom));
+    inset: 0 0 calc(62px + env(safe-area-inset-bottom)) 0; top: 0; bottom: calc(62px + env(safe-area-inset-bottom));
     height: auto; max-height: none; padding: 0;
   }
   .home-overview .panel-overlay.is-workbench-panel > .floating-panel { width: 100%; max-width: none; height: 100%; border: 0; border-radius: 0; }
@@ -3531,10 +3568,9 @@ button.hall-room {
   .home-overview .panel-overlay.is-workbench-panel :deep(.treasure-search) { gap: 8px; }
 }
 @media (max-height: 560px) {
-  .juyi-page.home-overview { grid-template-rows: 58px minmax(0, 1fr); }
-  .home-overview > .hall-app-header { padding-top: 5px; padding-bottom: 5px; }
+  .juyi-page.home-overview { grid-template-rows: minmax(0, 1fr); }
   .home-overview .workbench-more-menu { top: 58px; max-height: calc(100% - 58px - 62px - env(safe-area-inset-bottom)); }
-  .home-overview .panel-overlay.is-workbench-panel { top: 58px; }
+  .home-overview .panel-overlay.is-workbench-panel { top: 0; }
   .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.discussion-brief) { display: none; }
   .home-overview .panel-overlay.is-workbench-panel { padding-top: 0; padding-bottom: 0; }
   .home-overview .panel-overlay.is-workbench-panel .panel-title { min-height: 40px; padding-top: 4px; padding-bottom: 4px; }

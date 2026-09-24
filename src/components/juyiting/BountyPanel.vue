@@ -134,11 +134,12 @@
 
     </div>
     <transition name="modal">
-      <div v-if="detailTask" class="bounty-modal-overlay" @click.self="closeTask">
-        <section class="bounty-modal">
+      <div v-if="detailTask" class="bounty-modal-overlay" :class="{ 'is-embedded-page': embeddedHall }" @click.self="embeddedHall ? null : closeTask()">
+        <section class="bounty-modal" :role="embeddedHall ? 'region' : 'dialog'" :aria-label="embeddedHall ? '事项详情' : null" :aria-modal="embeddedHall ? null : 'true'">
           <div class="bounty-modal-header">
-            <h3>榜文点将</h3>
-            <button class="modal-close" @click="closeTask">
+            <button v-if="embeddedHall" type="button" class="bounty-back-button" @click="closeTask">← 返回事项</button>
+            <h3 v-else>榜文点将</h3>
+            <button v-if="!embeddedHall" class="modal-close" @click="closeTask">
               <BountyActionIcon name="close" />
             </button>
           </div>
@@ -170,7 +171,21 @@
             </p>
             <p v-else-if="fundedClaimState?.taskId === detailTask.id && fundedClaimState.status === 'unresolved'" role="status">原领令结果未知，请由原好汉核对，不要重新取价。</p>
             <div class="modal-task-info">
-              <div class="task-detail-head">
+              <section v-if="embeddedHall" class="matter-advice-card" aria-label="办理建议">
+                <div class="matter-advice-heading"><span>办理建议</span><strong>{{ simpleMatterStatus(detailTask) }}</strong></div>
+                <p class="matter-request">{{ detailTask.description || detailTask.title }}</p>
+                <dl>
+                  <div><dt>预计成果</dt><dd>一份可预览、下载和验收的正式 PDF</dd></div>
+                  <div><dt>建议承办</dt><dd>{{ preferredAgentName || '吴用或林冲' }}</dd></div>
+                  <div><dt>资料</dt><dd>可选；没有资料也可在能力允许时开始办理</dd></div>
+                </dl>
+                <p class="matter-fee-note">创建事项不会执行。实际开始办理和返工前会再次确认 Agent、资料与外部 Provider 可能产生的未知费用。</p>
+                <div v-if="detailTask.status === 'open' && preferredAgents.length" class="matter-agent-actions">
+                  <button v-for="agent in preferredAgents" :key="agent.agentId" type="button" :disabled="!canAssign(detailTask, agent)" @click="$emit('assign-task', detailTask, agent)">交给{{ agentDisplayName(agent) }}</button>
+                </div>
+                <button v-else-if="assignedAgentForTask(detailTask)" type="button" class="matter-primary-action" @click="$emit('discuss-task', detailTask, assignedAgentForTask(detailTask))">与{{ agentDisplayName(assignedAgentForTask(detailTask)) }}进入事项议事</button>
+              </section>
+              <div v-if="!embeddedHall" class="task-detail-head">
                 <div>
                   <strong>{{ detailTask.title }}</strong>
                   <small>{{ detailTask.id }} / {{ taskStatusText(detailTask.status) }}</small>
@@ -178,8 +193,8 @@
                 <span :class="taskStateClass(detailTask.status)">{{ taskStatusText(detailTask.status) }}</span>
               </div>
 
-              <p>{{ detailTask.description || '榜文尚未写明缘由' }}</p>
-              <section class="workspace-shortcut" aria-label="榜文百宝箱入口">
+              <p v-if="!embeddedHall">{{ detailTask.description || '榜文尚未写明缘由' }}</p>
+              <section v-if="!embeddedHall" class="workspace-shortcut" aria-label="榜文百宝箱入口">
                 <div>
                   <strong>资料与交付</strong>
                   <p>文件、版本和交付件统一收在百宝箱；正式办理只在下方按当前榜文的会话与工作项授权启动。</p>
@@ -187,7 +202,7 @@
                 <button type="button" @click="$emit('open-workspace')">打开百宝箱</button>
               </section>
               <TaskMaterialLinks
-                v-if="formalTaskExecutionScope"
+                v-if="formalTaskExecutionScope && (!embeddedHall || taskAssigneeIds(detailTask).length)"
                 :key="formalTaskExecutionScope.taskId"
                 :task-id="formalTaskExecutionScope.taskId"
                 :conversation-id="formalTaskExecutionScope.conversationId"
@@ -197,6 +212,7 @@
                 :formal-execution-authorization-reason="formalTaskExecutionScope.authorizationReason"
                 :identity-epoch="authorizationGeneration"
                 :identity-scope="identityScope"
+                :default-instruction="detailTask.description || detailTask.title"
                 @formal-execution-created="$emit('formal-execution-created', $event)"
                 @formal-execution-recovered="$emit('formal-execution-recovered', $event)"
               />
@@ -214,19 +230,20 @@
               </section>
 
               <TeamRecommendationPanel
+                v-if="!embeddedHall"
                 :task="detailTask"
                 :authorization-generation="authorizationGeneration"
               />
 
-              <button type="button" @click="$emit('open-formal-results', detailTask)">查看正式成果与验收</button>
-              <WorkItemPlanPanel :task="detailTask" :enabled="workItemPlanEnabled" :authorization-generation="authorizationGeneration" />
+              <button v-if="!embeddedHall || detailTask.status !== 'open'" type="button" class="matter-results-action" @click="$emit('open-formal-results', detailTask)">查看正式成果与验收</button>
+              <WorkItemPlanPanel v-if="!embeddedHall" :task="detailTask" :enabled="workItemPlanEnabled" :authorization-generation="authorizationGeneration" />
 
-              <div class="ability-tags">
+              <div v-if="!embeddedHall" class="ability-tags">
                 <span v-for="ability in detailTask.requiredAbilities || []" :key="ability">{{ ability }}</span>
                 <span v-if="!(detailTask.requiredAbilities || []).length">不拘本领</span>
               </div>
 
-              <div class="task-operation-grid">
+              <div v-if="!embeddedHall" class="task-operation-grid">
                 <button
                   :aria-label="agentDisplayName(selectedAgent) ? `点当前好汉 ${agentDisplayName(selectedAgent)} 领令` : '先择好汉再点将'"
                   :disabled="isFundedTask(detailTask) || !canAssign(detailTask, selectedAgent)"
@@ -273,7 +290,7 @@
                   aria-label="进入议事"
                   :disabled="!taskAssigneeIds(detailTask).length"
                   :title="!taskAssigneeIds(detailTask).length ? unassignedDiscussHint : '进入该悬赏的既有议事入口'"
-                  @click="$emit('discuss-task', detailTask)"
+                  @click="$emit('discuss-task', detailTask, assignedAgentForTask(detailTask))"
                 >
                   <BountyActionIcon name="discuss" />
                   <span class="visually-hidden">进入议事</span>
@@ -289,12 +306,12 @@
                   <span class="visually-hidden">收入案卷</span>
                 </button>
               </div>
-              <p v-if="!taskAssigneeIds(detailTask).length" class="task-operation-hint">
+              <p v-if="!embeddedHall && !taskAssigneeIds(detailTask).length" class="task-operation-hint">
                 {{ unassignedDiscussHint }}
               </p>
             </div>
 
-            <div class="modal-agent-scroll">
+            <div v-if="!embeddedHall" class="modal-agent-scroll">
               <div class="section-label">可点好汉</div>
               <div
                 v-for="agent in recommendedAgents"
@@ -455,6 +472,19 @@ const taskForm = ref({
 const detailTask = computed(() => modalTask.value)
 // The parent is the only authority for task-scoped discussion/workspace facts.  A
 // detail may never borrow the context of whichever task was previously selected.
+const assignedAgentForTask = task => {
+  const assignedIds = [...new Set(taskAssigneeIds(task).filter(Boolean))]
+  if (assignedIds.length !== 1) return null
+  return props.operableAgents.find(agent => agent.agentId === assignedIds[0]) || null
+}
+const preferredAgents = computed(() => props.recommendedAgents.filter(agent => ['吴用', '林冲'].some(name => `${agent.name || ''}${agent.displayName || ''}${agent.personaName || ''}`.includes(name))).slice(0, 2))
+const preferredAgentName = computed(() => {
+  const assignedId = taskAssigneeIds(detailTask.value)[0]
+  const assigned = props.operableAgents.find(agent => agent.agentId === assignedId)
+  return agentDisplayName(assigned || preferredAgents.value[0])
+})
+const simpleMatterStatus = task => ({ open: '待确认', assigned: '已受理', claimed: '已受理', queued: '已受理', running: '办理中', in_progress: '办理中', submitted: '待验收', review: '待验收', changes_requested: '待返工确认', completed: '已完成', accepted: '已完成', archived: '已归档', failed: '受阻' })[task?.status] || (taskAssigneeIds(task).length ? '已受理' : '状态待核对')
+
 const formalTaskExecutionScope = computed(() => {
   const taskId = detailTask.value?.id
   if (!taskId) return null
@@ -1370,4 +1400,8 @@ button:disabled {
   max-height: 100%;
   box-shadow: none;
 }
+</style>
+
+<style scoped>
+.bounty-modal-overlay.is-embedded-page{position:static;display:block;width:100%;height:auto;min-height:100%;padding:0;background:#f5f4f0;overflow:visible}.bounty-modal-overlay.is-embedded-page .bounty-modal{width:100%;max-width:none;min-height:100%;max-height:none;border:0;border-radius:0;box-shadow:none;background:#f5f4f0}.bounty-modal-overlay.is-embedded-page .bounty-modal-header{position:sticky;top:0;z-index:3;min-height:48px;padding:6px 16px;border-bottom:1px solid #e3e5dc;background:#fffefa}.bounty-modal-overlay.is-embedded-page .bounty-modal-header h3{font-size:14px;font-weight:500}.bounty-back-button{min-height:44px;padding:0;border:0!important;background:transparent!important;color:#923f30!important;font:500 14px/1 inherit;cursor:pointer}.bounty-modal-overlay.is-embedded-page .bounty-modal-body{padding:16px 16px 96px}.matter-advice-card{display:grid;gap:12px;padding:16px;border:1px solid #eadfd4;border-radius:12px;background:#fffefa}.matter-advice-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.matter-advice-heading span{color:#923f30;font-size:13px;font-weight:600}.matter-advice-heading strong{padding:4px 8px;border-radius:999px;background:#f9efde;color:#87551c;font-size:12px}.matter-request{margin:0!important;font-size:16px!important;color:#242e2b!important}.matter-advice-card dl{display:grid;gap:9px;margin:0}.matter-advice-card dl div{display:grid;grid-template-columns:70px minmax(0,1fr);gap:8px}.matter-advice-card dt{color:#68716b;font-size:12px}.matter-advice-card dd{margin:0;font-size:13px}.matter-fee-note{margin:0!important;padding:10px;border-radius:8px;background:#f6eee8;color:#6f493f!important;font-size:12px!important}.matter-agent-actions{display:flex;gap:8px;flex-wrap:wrap}.matter-primary-action,.matter-results-action{width:100%;min-height:46px;border-radius:8px!important;background:#923f30!important;color:#fffefa!important;border-color:#923f30!important}.matter-agent-actions button{min-height:44px;padding:8px 14px;background:#923f30!important;color:#fffefa!important;border-color:#923f30!important}@media(max-width:620px){.bounty-modal-overlay.is-embedded-page .bounty-modal-body{display:block;padding-inline:12px}.bounty-modal-overlay.is-embedded-page .modal-agent-scroll{margin-top:14px;max-height:none}.matter-advice-card dl div{grid-template-columns:64px minmax(0,1fr)}}
 </style>

@@ -327,9 +327,9 @@ describe('JuyiHall component behavior', () => {
   it('exposes accessible modal dialog wiring and focus lifecycle hooks', () => {
     const source = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
 
-    expect(source).to.include('role="dialog"')
-    expect(source).to.include(':aria-modal="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel)')
-    expect(source).to.include(':aria-labelledby="panelTitleId"')
+    expect(source).to.include(`:role="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? 'region' : 'dialog'"`)
+    expect(source).to.include(`:aria-modal="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? null : 'true'"`)
+    expect(source).to.include(`:aria-labelledby="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? null : panelTitleId"`)
     expect(source).to.include('aria-label="关闭面板"')
     expect(source).to.include('@keydown="handlePanelKeydown"')
     expect(source).to.include('restorePanelFocus')
@@ -1771,6 +1771,7 @@ describe('JuyiHall component behavior', () => {
         selectedTask,
         selectedAgent: null,
         recommendedAgents: agents,
+        operableAgents: agents,
         taskAbilityOptions: ['planning'],
         taskStatusFilters: [],
         abilityText: item => (item.abilities || []).join(' / '),
@@ -1801,7 +1802,7 @@ describe('JuyiHall component behavior', () => {
       description: 'Summarize reports'
     })
     expect(wrapper.emitted('assign-task')[0]).to.deep.equal([selectedTask, agents])
-    expect(wrapper.emitted('discuss-task')[0]).to.deep.equal([selectedTask])
+    expect(wrapper.emitted('discuss-task')[0]).to.deep.equal([selectedTask, agents[0]])
     expect(wrapper.emitted('archive-task')[0]).to.deep.equal([selectedTask])
   })
 
@@ -2515,6 +2516,7 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
     useHallChatContext: () => ({ chatContext: Vue.ref({}), chatMentionAgentIds: Vue.ref([]), chatMentionAgents: value, chatMode: Vue.ref('public'), chatTargetText: scalar, enterBountyDiscussion: noop, enterPrivateConversation: noop, resetToPublic: noop, setMentionAgent: noop }),
     useHallScene: () => ({ markAgentSpeaking: noop, markDiscussionStarted: noop, markLibraryCitation: noop, markLibrarySearching: noop, markRecommendedAgents: noop, markTaskArchived: noop, markTaskAssigned: noop, markTaskAutoAssigned: noop, markTaskCreated: task => { counters.markedTasks ||= []; counters.markedTasks.push(task) }, resetSceneFeedback: noop, sceneAgents: value, sceneAgentStyle: () => ({}), sceneHotspots: value, syncAfterPersonaChanged: noop }),
     useHallTaskActions: () => taskActions || ({ archiveTask: asyncNoop, autoAssignTask: asyncNoop, assignTask: async () => true, createTask: asyncNoop, fundedClaimState: Vue.ref(null), fundedCreateRecovery: Vue.ref(null), refreshFundedClaim: asyncNoop, resumeFundedCreate: asyncNoop }),
+    useHallQuickMatter: () => ({ busy: Vue.ref(false), message: Vue.ref(''), submit: async () => null, reconcile: async () => null }),
     useHallConversation: () => { counters.owners.conversation += 1; return ({ chatConnectionStatus: scalar, conversationId: counters.refs.conversationId, draft: counters.refs.draft, draftRevision: Vue.ref(0), eventStreamRecovering: Vue.ref(false), insertAgentMention: noop, isAwaitingReply: Vue.ref(false), isStreaming: Vue.ref(false), loadHallMessages: async () => { counters.loads.messages += 1 }, mentionAgent: noop, messages: counters.refs.messages, newHallConversation: noop, pendingAgentName: scalar, replyEventSequence: Vue.ref(0), sendHallMessage: asyncNoop, senderText: scalar, setDraft: value => { counters.refs.draft.value = value }, disposeHallConversation: noop, stopHallEventStream: noop, stopHallReplyPolling: noop, stopHallReplyStreaming: noop }) },
     useHallVoiceConversation: () => ({ supported: false, voiceInteractionLocked: navigation?.voiceInteractionLocked ?? false, voiceTurnActive: navigation?.voiceTurnActive ?? false, cancel: noop, dispose: noop, applyTranscript: noop }),
     createHallVoiceReplyCorrelation: () => ({ start: () => true, observe: noop, resolveConversation: () => true, close: noop }),
@@ -2522,7 +2524,7 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
     useTaskWorkspace: () => null, createDisabledTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }), isTaskWorkspaceBuildEnabled: () => false, useTaskWorkspaceView: () => ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: scalar, error: Vue.ref(null), retry: noop }), useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop }),
     portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '',
     FormalTaskDeliveryPanel: Vue.defineComponent({ name: 'FormalTaskDeliveryPanel', props: ['taskId', 'identityFingerprint', 'focusDeliveryId', 'executionContext', 'selectedAgentId'], setup: () => () => Vue.h('section', { class: 'formal-delivery-probe' }) }),
-    HallPortraitHome, HallStage, HallVoiceHud: EmptyPanel, LibraryPanel, AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel, BountyPanel: actualBountyPanel || EmptyPanel, TaskWorkspacePanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PrivateDiscussionPanel: EmptyPanel, PublicDiscussionPanel: EmptyPanel, SelectedAgentCard: EmptyPanel
+    HallPortraitHome, HallStage, HallVoiceHud: EmptyPanel, HallMinePage: EmptyPanel, LibraryPanel, AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel, BountyPanel: actualBountyPanel || EmptyPanel, TaskWorkspacePanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PrivateDiscussionPanel: EmptyPanel, PublicDiscussionPanel: EmptyPanel, SelectedAgentCard: EmptyPanel
   }
 }
 
@@ -2606,13 +2608,13 @@ describe('lightweight workbench real panel navigation', () => {
       await trigger.trigger('click')
       await Vue.nextTick()
       const menuButtons = wrapper.findAll('.workbench-more-menu button')
-      for (const [label, icon] of [['办事概览', 'home-outline'], ['我的事项', 'format-list-checkbox'],
-        ['厅内议事', 'chat-processing-outline'], ['典籍阁', 'notebook'], ['厅中实景', 'map-marker-outline']]) {
+      for (const [label, icon] of [['办事', 'home-outline'], ['事项', 'format-list-checkbox'],
+        ['资料', 'file-document-outline'], ['我的', 'account-circle-outline'], ['厅中实景', 'map-marker-outline']]) {
         expect(menuButtons.find(button => button.text() === label)?.find('i').attributes('name')).to.equal(icon)
       }
       expect(wrapper.find('.hall-header-tools .workbench-message-action i').attributes('name')).to.equal('bell-outline')
       expect(wrapper.find('.hall-header-tools .workbench-account-action i').attributes('name')).to.equal('account-circle-outline')
-      const menuItem = menuButtons.find(button => button.text() === '百宝箱')
+      const menuItem = menuButtons.find(button => button.text() === '资料')
       expect(menuItem).to.exist
       // Simulate mobile WebKit, where tapping a button need not focus it.
       trigger.element.focus()
@@ -2636,14 +2638,15 @@ describe('lightweight workbench real panel navigation', () => {
     const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
     try {
       await flushPromises()
-      const libraryTab = wrapper.find('.hall-workbench-sidebar [data-workbench-tab="library"]')
-      libraryTab.element.focus(); await libraryTab.trigger('click'); await Vue.nextTick()
+      const mineTab = wrapper.find('.hall-workbench-sidebar [data-workbench-tab="mine"]')
+      mineTab.element.focus(); await mineTab.trigger('click'); await Vue.nextTick()
       const taskTab = wrapper.find('.hall-workbench-sidebar [data-workbench-tab="tasks"]')
       taskTab.element.focus(); await taskTab.trigger('click'); await Vue.nextTick()
       expect(wrapper.vm.$.setupState.panelFrames).to.deep.equal(['tasks'])
-      expect(wrapper.find('.workbench-breadcrumb strong').text()).to.equal('我的事项')
-      expect(wrapper.find('.panel-title > span').text()).to.equal('我的事项')
-      expect(wrapper.find('.panel-title [aria-label="关闭面板"] i').attributes('name')).to.equal('window-close')
+      expect(wrapper.find('.workbench-breadcrumb strong').text()).to.equal('事项')
+      expect(wrapper.find('.panel-title').exists()).to.equal(false)
+      expect(wrapper.find('.floating-panel').attributes('role')).to.equal('region')
+      expect(wrapper.find('.floating-panel').attributes('aria-label')).to.equal('事项')
       expect(wrapper.find('.workbench-sidebar-account').attributes('aria-label')).to.equal('个人中心')
       let overlay = wrapper.find('.panel-overlay').element
       wrapper.vm.$.setupState.closePanel(); await wrapper.vm.$.setupState.handlePanelAfterLeave(overlay)
@@ -2652,14 +2655,14 @@ describe('lightweight workbench real panel navigation', () => {
       await wrapper.find('.hall-header-tools [aria-label="查看消息"]').trigger('click'); await Vue.nextTick()
       expect(wrapper.vm.$.setupState.panelFrames).to.deep.equal(['messages'])
       expect(wrapper.find('.panel-return').exists()).to.equal(false)
-      await wrapper.find('.hall-workbench-sidebar [data-workbench-tab="agents"]').trigger('click'); await Vue.nextTick()
+      await wrapper.find('.hall-header-tools > button:first-child').trigger('click'); await Vue.nextTick()
       expect(wrapper.vm.$.setupState.panelFrames).to.deep.equal(['agents'])
       await wrapper.find('.hall-header-tools [aria-label="查看消息"]').trigger('click'); await Vue.nextTick()
       expect(wrapper.vm.$.setupState.panelFrames).to.deep.equal(['messages'])
     } finally { wrapper.unmount() }
   })
 
-  it('reuses the Stage, exposes genuine library from both navs, and restores map on exit', async () => {
+  it('reuses the Stage, exposes the four primary mobile pages, and restores map on exit', async () => {
     const mode = Vue.ref('portrait-command')
     const home = Vue.ref('overview')
     const mounts = { library: 0, archive: 0 }
@@ -2672,15 +2675,15 @@ describe('lightweight workbench real panel navigation', () => {
       const state = wrapper.vm.$.setupState
       expect(wrapper.find('.hall-board').exists()).to.equal(false) // lazy Stage has never been entered
       expect(wrapper.find('.hall-workbench-sidebar').exists()).to.equal(true)
-      await wrapper.find('.workbench-mobile-nav [data-workbench-tab="library"]').trigger('click')
+      expect(wrapper.findAll('.workbench-mobile-nav [data-workbench-tab]').map(tab => tab.attributes('data-workbench-tab'))).to.deep.equal(['overview', 'tasks', 'treasure', 'mine'])
+      await wrapper.find('.workbench-mobile-nav [data-workbench-tab="mine"]').trigger('click')
       await Vue.nextTick()
-      expect(wrapper.find('.panel-library').exists()).to.equal(true)
-      expect(wrapper.find('.floating-panel').attributes('aria-modal')).to.equal('false')
+      expect(wrapper.find('.panel-mine').exists()).to.equal(true)
+      expect(wrapper.find('.floating-panel').attributes('aria-modal')).to.equal(undefined)
+      expect(wrapper.find('.floating-panel').attributes('role')).to.equal('region')
+      expect(wrapper.find('.floating-panel').attributes('aria-label')).to.equal('我的')
       expect(wrapper.find('.hall-app-header').attributes('inert')).to.equal(undefined)
       expect(wrapper.find('.hall-workbench-sidebar').attributes('inert')).to.equal(undefined)
-      expect(wrapper.find('.floating-panel').attributes('aria-labelledby')).to.equal('juyiting-floating-panel-title')
-      expect(wrapper.find('#juyiting-floating-panel-title').text()).to.equal('典籍阁')
-      expect(wrapper.find('.library-panel-instance').exists()).to.equal(true)
       await wrapper.find('.workbench-mobile-nav [data-workbench-tab="tasks"]').trigger('click')
       await Vue.nextTick()
       expect(wrapper.find('.panel-tasks').exists()).to.equal(true)
@@ -2693,7 +2696,7 @@ describe('lightweight workbench real panel navigation', () => {
       expect(state.activePanel).to.equal('')
       expect(wrapper.find('.hall-board').element).to.equal(stage)
       home.value = 'overview'; await Vue.nextTick()
-      await wrapper.find('.workbench-mobile-nav [data-workbench-tab="library"]').trigger('click')
+      await wrapper.find('.workbench-mobile-nav [data-workbench-tab="mine"]').trigger('click')
       await Vue.nextTick()
       expect(wrapper.find('.hall-board').element).to.equal(stage)
     } finally { wrapper.unmount() }

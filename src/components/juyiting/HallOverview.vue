@@ -6,13 +6,23 @@
         <h2>今天，想办成什么事？</h2>
         <p>不必独自忙碌，让合适的好汉与你一起。</p>
       </header>
-      <section class="overview-start-card" aria-label="提出需求">
+      <form class="overview-start-card overview-quick-request" aria-label="一句话提出需求" @submit.prevent="submitQuickRequest">
         <span class="overview-start-mark" aria-hidden="true">事</span>
-        <div class="overview-start-copy"><h3>说一件你想办的事</h3><p>从目标开始，补齐资料，再交给明确的好汉。</p>
-          <div class="overview-hero-actions"><button class="primary" type="button" @click="emit('start-draft')"><var-icon name="plus" aria-hidden="true" />提出需求</button><button type="button" @click="emit('start-chat')"><var-icon name="chat-processing-outline" aria-hidden="true" />先聊一聊</button></div>
+        <div class="overview-start-copy">
+          <h3>说一句你想办成的事</h3>
+          <p>资料不是必选。发送只建立事项，不会自动调用 Agent 或产生办理费用。</p>
+          <label class="quick-request-field">
+            <span class="visually-hidden">一句话需求</span>
+            <textarea v-model="quickRequest" maxlength="200" rows="3" placeholder="例如：整理一份明天活动的执行方案，要能直接发给团队。" :disabled="quickPending"></textarea>
+            <small>{{ [...quickRequest].length }}/200</small>
+          </label>
+          <div class="quick-request-actions">
+            <button type="button" @click="emit('open-workspace')"><var-icon name="paperclip" aria-hidden="true" />资料（可选）</button>
+            <button class="primary" type="submit" :disabled="quickPending || !quickRequest.trim()"><var-icon name="send" aria-hidden="true" />{{ quickPending ? '正在建立事项…' : '开始办事' }}</button>
+          </div>
+          <p v-if="quickMessage" :class="{ 'quick-request-error': quickMessage.includes('未') || quickMessage.includes('待核对') }" role="status">{{ quickMessage }}</p>
         </div>
-        <ol class="overview-start-steps" aria-label="办事步骤"><li><strong>01</strong><span>说清目标</span></li><li><strong>02</strong><span>选好帮手</span></li><li><strong>03</strong><span>收好成果</span></li></ol>
-      </section>
+      </form>
     </template>
     <p v-else class="overview-intro">只列出需要你处理的事项。打开不代表已读、验收或归档。</p>
     <div class="overview-columns"><div class="overview-main">
@@ -59,10 +69,17 @@ const props = defineProps({
   enabled: { type: Boolean, default: false },
   messagesOnly: { type: Boolean, default: false },
   refreshKey: { type: Number, default: 0 },
-  agents: { type: Array, default: () => [] }
+  agents: { type: Array, default: () => [] },
+  quickPending: { type: Boolean, default: false },
+  quickMessage: { type: String, default: '' }
 })
-const emit = defineEmits(['open-item', 'open-task', 'start-draft', 'start-chat', 'open-board', 'open-workspace', 'open-agents', 'set-home-mode'])
+const emit = defineEmits(['open-item', 'open-task', 'quick-request', 'start-draft', 'start-chat', 'open-board', 'open-workspace', 'open-agents', 'set-home-mode'])
 const model = useHallOverview({ identityScope: () => props.identityScope, identityEpoch: () => props.identityEpoch })
+const quickRequest = ref('')
+const submitQuickRequest = () => {
+  const value = quickRequest.value.trim()
+  if (value) emit('quick-request', value)
+}
 const archiveView = ref(false)
 const selectedView = ref('recent')
 const views = computed(() => props.messagesOnly ? ['needsAction'] : archiveView.value ? ['archive'] : [selectedView.value])
@@ -252,4 +269,8 @@ watch([() => props.enabled, () => props.identityScope, () => props.identityEpoch
   .hall-overview .overview-resource { flex-wrap: wrap; padding: 18px 16px; }
   .hall-overview .overview-resource button { margin-left: auto; }
 }
+</style>
+
+<style scoped>
+.overview-quick-request{align-items:flex-start!important}.overview-quick-request .overview-start-copy{width:100%}.quick-request-field{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px;margin-top:14px}.quick-request-field textarea{grid-column:1/-1;width:100%;min-height:92px;box-sizing:border-box;padding:13px 14px;border:1px solid #ccd2c5;border-radius:10px;background:#fff;color:#242e2b;font:400 16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;resize:vertical}.quick-request-field textarea:focus{outline:3px solid #923f3033;border-color:#923f30}.quick-request-field small{grid-column:2;color:#7a827d;margin-top:-34px;margin-right:10px;pointer-events:none}.quick-request-actions{display:flex;justify-content:space-between;gap:10px;margin-top:14px}.quick-request-actions button{display:inline-flex;align-items:center;justify-content:center;gap:6px}.quick-request-actions .primary{margin-left:auto}.quick-request-error{color:#a13f35!important}@media(max-width:600px){.overview-quick-request{display:block!important}.overview-quick-request .overview-start-mark{display:none!important}.quick-request-actions button{flex:1 1 0;padding-inline:8px}}
 </style>

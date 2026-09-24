@@ -105,7 +105,7 @@ describe('JuyiHall collaboration flow contract', () => {
     const pageClassBinding = hallSource.match(/<div[^>]*class="juyi-page"[^>]*:class="([^"]+)"/)
     expect(pageClassBinding?.[1]).to.include("'is-panel-open': isPanelSessionActive")
     expect(pageClassBinding?.[1]).to.include('[`experience-${experienceMode}`]: true')
-    expect(hallSource).to.match(/class="panel-overlay"[^>]*@pointerdown\.self="closePanel"/)
+    expect(hallSource).to.match(/class="panel-overlay"[^>]*@pointerdown\.self="isOverviewHome && workbenchPrimaryPanelSet\.has\(renderedPanel\) \? null : closePanel\(\)"/)
     expect(hallSource).not.to.match(/class="panel-overlay"[^>]*@click\.self="closePanel"/)
     expect(hallSource).to.include('.juyi-page.is-panel-open :deep(.hall-board)')
     expect(hallSource).to.include('animation-play-state: paused !important;')

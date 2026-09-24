@@ -116,7 +116,8 @@ export function useFormalTaskExecution ({
   })
   const isFormalExecution = value => scopeMatches(value, currentScope.value)
   const normalizeInputs = inputs => {
-    if (!Array.isArray(inputs) || !inputs.length || !inputs.every(validInput)) return null
+    if (!Array.isArray(inputs) || !inputs.every(validInput)) return null
+    if (!inputs.length && execution.generationEnabled.value !== true) return null
     const normalized = inputs.map(input => ({ fileId: input.fileId, version: Number(input.version) }))
     if (new Set(normalized.map(input => input.fileId)).size !== normalized.length) return null
     return normalized
@@ -142,8 +143,8 @@ export function useFormalTaskExecution ({
   }
   const begin = async ({ inputs, instruction, confirmed } = {}) => {
     const normalized = normalizeInputs(inputs)
-    if (!confirmed) { scopeError.value = '请确认授权这些固定版本资料用于本次正式 TASK 执行。'; return null }
-    if (!normalized) { scopeError.value = '请选择至少一份不重复的固定 INPUT 文件版本。'; return null }
+    if (!confirmed) { scopeError.value = '请明确确认本次正式 TASK 执行范围与可能产生的外部 Provider 费用。'; return null }
+    if (!normalized) { scopeError.value = execution.generationEnabled.value ? '所选固定 INPUT 文件版本无效。' : '当前执行能力不支持无资料生成，请选择至少一份固定 INPUT 文件版本。'; return null }
     scopeError.value = ''
     if (readyReason.value) { scopeError.value = readyReason.value; return null }
     const scope = currentScope.value
