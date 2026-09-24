@@ -1,3 +1,4 @@
+import { useFormalTaskExecutionScope } from '../src/composables/useFormalTaskExecutionScope.js'
 import { readFileSync } from 'fs'
 import { expect } from 'chai'
 import { compileScript, parse } from '@vue/compiler-sfc'
@@ -93,6 +94,7 @@ const createHallMocks = ({ SelectedAgentCard, counters }) => {
     agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {}, roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
     useHallData: ({ selectedAgent }) => { selectedAgent.value = selected; return hallData },
     useHallExperienceMode: () => ({ experienceMode: Vue.ref('landscape-map'), isMobileCoarse: Vue.ref(false), orientationHint: text, orientationRequestPending: Vue.ref(false), requestLandscape: asyncNoop }),
+    useFormalTaskExecutionScope,
     useHallHomeMode: () => ({ homeMode: Vue.ref('map'), isOverviewHome: Vue.ref(false), setHomeMode: noop }),
     useHallPanels: () => ({ panelLayout: Vue.ref('center-modal') }),
     useHallSceneState: () => ({ setMapRuntime: noop, reset: noop, forwardPhaseEvents: asyncNoop }), useHallCommandQueue: () => ({ ready: Vue.ref(false), setSimulation: noop }),
@@ -217,19 +219,16 @@ describe('SelectedAgentCard interaction contract', () => {
     expect(panelOverlayRule).to.include('max-height: 100%')
     expect(floatingPanelRule).to.include('box-sizing: border-box')
     expect(floatingPanelRule).to.include('max-width: 100%')
-    expect(floatingPanelRule).to.include('width: calc(100% - 16px)')
+    expect(floatingPanelRule).to.include('width: min(860px, 100%)')
     expect(hallSource).to.include("'is-compact-chat-overlay': renderedPanel === 'chat' && isCompactChat")
     expect(hallSource).to.include('resolvedHallViewportHeight.value <= 320')
     expect(chatOverlayRule).to.include('top: 0')
     expect(chatOverlayRule).to.include('bottom: auto')
     expect(chatOverlayRule).to.include('height: min(100%, var(--hall-visual-height, 100%))')
-    expect(chatOverlayRule).to.include('align-items: flex-start')
-    expect(chatOverlayRule).to.include('padding: 0')
-    expect(landscapeChatRule).to.include('width: 50%')
-    expect(landscapeChatRule).to.include('max-width: 50%')
-    expect(landscapeChatRule).to.include('height: 100%')
-    expect(portraitChatRule).to.include('width: 100%')
-    expect(portraitChatRule).to.include('max-width: 100%')
+    expect(hallSource).to.include('.panel-overlay.is-full-window .floating-panel.layout-full-window')
+    expect(hallSource).to.include('width: min(1180px, 100%)')
+    expect(hallSource).to.include('.home-overview .panel-overlay.is-workbench-panel')
+    expect(hallSource).to.include('inset: 64px 0 calc(62px + env(safe-area-inset-bottom)) 0')
     expect(hallSource).to.include("'is-virtual-landscape': isVirtualLandscape")
     expect(compactTitleRule).to.include('padding: 6px 10px')
     expect(hallSource).to.include('.panel-overlay.is-compact-chat-overlay :deep(.discussion-brief)')

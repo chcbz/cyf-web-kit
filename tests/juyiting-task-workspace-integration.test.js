@@ -89,6 +89,7 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
     useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({ authorizationGeneration: 1, token: async () => false }),
     useRouter: () => ({ push: asyncNoop }), onBeforeRouteLeave: noop,
     agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {}, roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
+    useHallHomeMode: () => { const homeMode = Vue.ref('map'); return { homeMode, isOverviewHome: Vue.computed(() => homeMode.value === 'overview'), setHomeMode: mode => { homeMode.value = mode } } },
     useHallData: () => hallData,
     useHallExperienceMode: () => ({ experienceMode: mode, isMobileCoarse: Vue.ref(true), orientationHint: text, orientationRequestPending: Vue.ref(false), requestLandscape: asyncNoop }),
     useHallPanels: HallPanelHelpers.useHallPanels,

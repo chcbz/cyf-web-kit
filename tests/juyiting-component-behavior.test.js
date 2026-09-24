@@ -6,6 +6,7 @@ import { readFileSync } from 'fs'
 import { compileScript, compileTemplate, parse } from '@vue/compiler-sfc'
 import { resolveLiveMapPreviewActivation } from '../src/composables/juyiting/liveMapPreviewPolicy.js'
 import { createEconomyRequestIntentStore } from '../src/composables/juyiting/economyRequestIntent.js'
+import { useFormalTaskExecutionScope } from '../src/composables/useFormalTaskExecutionScope.js'
 import { useHallTaskActions } from '../src/composables/juyiting/useHallTaskActions.js'
 
 let mount
@@ -121,7 +122,7 @@ const loadSfc = (relativePath) => {
     .replace(/^import\s+\{\s*classifyViewportResize\s*\}\s+from\s+['"]@\/game\/camera\/resizePolicy\.js['"];?\s*$/gm, 'var classifyViewportResize = arguments[3]')
     .replace(/^import\s+BountyActionIcon\s+from\s+['"].\/BountyActionIcon\.vue['"];?\s*$/gm, 'var BountyActionIcon = { template: \'<span />\', props: [\'status\'] }')
     .replace(/^import\s+OutputList\s+from\s+['"]\.\.\/outputs\/OutputList\.vue['"];?\s*$/gm, 'var OutputList = { template: \'<section class="output-list-stub" />\', props: [\'source\', \'identityFingerprint\'] }')
-    .replace(/^import\s+TaskMaterialLinks\s+from\s+['"]\.\.\/personal-workspace\/TaskMaterialLinks\.vue['"];?\s*$/gm, 'var TaskMaterialLinks = { template: \'<section class="task-material-links-stub" />\', props: [\'taskId\', \'identityFingerprint\'] }')
+    .replace(/^import\s+TaskMaterialLinks\s+from\s+['"](?:\.\.\/personal-workspace|@\/components\/personal-workspace)\/TaskMaterialLinks\.vue['"];?\s*$/gm, 'var TaskMaterialLinks = { template: \'<section class="task-material-links-stub" />\', props: [\'taskId\', \'identityFingerprint\'] }')
     .replace(/^import\s+\{\s*formatSilverMicro,\s*isCanonicalMicroAmount\s*\}\s+from\s+['"]@\/utils\/silverAmount['"];?\s*$/gm, 'var { formatSilverMicro, isCanonicalMicroAmount } = arguments[4]')
     .replace(/^import\s+FormalDeliveryList\s+from\s+['"]\.\.\/deliveries\/FormalDeliveryList\.vue['"];?\s*$/gm, 'var FormalDeliveryList = { name: \'FormalDeliveryList\', template: \'<section class="formal-delivery-list-stub" />\', props: [\'taskId\', \'identityFingerprint\'] }')
     .replace(/^import\s+WorkItemPlanPanel\s+from\s+['"]\.\/WorkItemPlanPanel\.vue['"];?\s*$/gm, 'var WorkItemPlanPanel = { template: \'<section class="work-item-plan-stub" />\', props: [\'task\', \'enabled\', \'authorizationGeneration\'] }')
@@ -327,7 +328,7 @@ describe('JuyiHall component behavior', () => {
     const source = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
 
     expect(source).to.include('role="dialog"')
-    expect(source).to.include('aria-modal="true"')
+    expect(source).to.include(':aria-modal="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel)')
     expect(source).to.include(':aria-labelledby="panelTitleId"')
     expect(source).to.include('aria-label="关闭面板"')
     expect(source).to.include('@keydown="handlePanelKeydown"')
@@ -2498,7 +2499,7 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
   }
   const panelHelpers = counters.panelHelpers || {}
   return {
-    ...panelHelpers,
+    ...panelHelpers, useFormalTaskExecutionScope,
     env: {}, capturePanelReturnTarget: panelHelpers.capturePanelReturnTarget, focusHallPanel: panelHelpers.focusHallPanel, isCurrentPanelGeneration: panelHelpers.isCurrentPanelGeneration, isSafePanelFocusTarget: panelHelpers.isSafePanelFocusTarget, resolveLiveMapPreviewActivation, resolvePanelReturnTarget: panelHelpers.resolvePanelReturnTarget, restorePanelFocus: panelHelpers.restorePanelFocus, trapPanelFocus: panelHelpers.trapPanelFocus,
     onBeforeRouteLeave: navigation?.onBeforeRouteLeave || noop, useRouter: () => navigation?.router || ({ push: asyncNoop }), confirmHallLeave: navigation?.confirmHallLeave || (() => true), hasMeaningfulHallLeaveWork: navigation?.hasMeaningfulHallLeaveWork || (() => false), useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({ token: asyncNoop }), agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {},
     isEconomyPreviewBuildEnabled: () => Boolean(economyCapability), isEconomyPreviewCapability: capability => Boolean(capability && capability.principalScopeFingerprint === economyCapability?.principalScopeFingerprint), loadEconomyPreviewCapability: async () => economyCapability,
@@ -2557,6 +2558,134 @@ describe('JuyiHall restored-identity initialization', () => {
     } finally {
       wrapper.unmount()
     }
+  })
+})
+
+describe('lightweight workbench real panel navigation', () => {
+  it('keeps the expanded mobile menu within the header and bottom dock on short screens', () => {
+    // jsdom does not lay out CSS: assert the responsive constraints here and
+    // separately verify actual bounding boxes in a browser fixture.
+    const source = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+    const style = parse(source).descriptor.styles.at(-1).content
+    const rule = style.match(/\.home-overview \.workbench-more-menu \{([^}]+)\}/)?.[1]
+    expect(rule).to.include('box-sizing: border-box')
+    expect(rule).to.include('width: min(330px, calc(100% - 30px))')
+    expect(style).to.include('The absolute containing block is .juyi-page')
+    expect(rule).to.include('top: 64px')
+    expect(rule).to.include('max-height: calc(100% - 64px - 62px - env(safe-area-inset-bottom))')
+    expect(rule).to.include('overflow-y: auto')
+    const short = style.match(/@media \(max-height: 560px\) \{([\s\S]+?)\n\}/)?.[1]
+    expect(short).to.include('.home-overview .workbench-more-menu { top: 58px; max-height: calc(100% - 58px - 62px - env(safe-area-inset-bottom)); }')
+  })
+
+  it('keeps tiny reflow navigation named and lets short chat windows scroll to the composer', () => {
+    const source = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+    const style = parse(source).descriptor.styles.at(-1).content
+    expect(source).to.include(':data-workbench-tab="tab.panel" :aria-label="tab.label"')
+    const narrow = style.match(/@media \(max-width: 240px\) \{([\s\S]+?)\n\}/)?.[1]
+    expect(narrow).to.include('.workbench-mobile-nav button:not(:last-child) span { display: none; }')
+    expect(narrow).to.include(':deep(.panel-toolbar) { overflow-x: auto;')
+    const veryNarrow = style.match(/@media \(max-width: 180px\) \{([\s\S]+?)\n\}/)?.[1]
+    expect(veryNarrow).to.include(':deep(.hall-messages) { padding: 4px 8px; }')
+    const short = style.match(/@media \(max-height: 260px\) and \(max-width: 760px\) \{([\s\S]+?)\n\}/)?.[1]
+    expect(short).to.include('> .floating-panel { overflow-y: auto;')
+    expect(short).to.include(':deep(.chat-panel) { flex: 0 0 auto; height: auto;')
+  })
+
+  it('returns focus to the persistent more trigger when its menu item unmounts on first open', async () => {
+    const home = Vue.ref('overview')
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const mocks = createActualHallMocks({ mode: Vue.ref('portrait-command'), mounts: { library: 0, archive: 0 }, counters })
+    mocks.useHallHomeMode = () => ({ homeMode: home, isOverviewHome: Vue.computed(() => home.value === 'overview'), setHomeMode: mode => { home.value = mode } })
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+    try {
+      await flushPromises()
+      const trigger = wrapper.find('.hall-header-tools .workbench-mobile-more')
+      trigger.element.style.display = 'inline-flex' // emulate narrow viewport in jsdom
+      trigger.element.focus()
+      await trigger.trigger('click')
+      await Vue.nextTick()
+      const menuItem = wrapper.findAll('.workbench-more-menu button').find(button => button.text() === '百宝箱')
+      expect(menuItem).to.exist
+      // Simulate mobile WebKit, where tapping a button need not focus it.
+      trigger.element.focus()
+      await menuItem.trigger('click')
+      await Vue.nextTick()
+      expect(wrapper.find('.workbench-more-menu').exists()).to.equal(false)
+      expect(wrapper.vm.$.setupState.panelFrames).to.deep.equal(['treasure'])
+      const overlay = wrapper.find('.panel-overlay').element
+      wrapper.vm.$.setupState.closePanel()
+      await wrapper.vm.$.setupState.handlePanelAfterLeave(overlay)
+      await Vue.nextTick()
+      expect(document.activeElement).to.equal(trigger.element)
+    } finally { wrapper.unmount() }
+  })
+
+  it('treats header utilities as root pages and returns focus to the latest visible workbench tab', async () => {
+    const home = Vue.ref('overview')
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const mocks = createActualHallMocks({ mode: Vue.ref('portrait-command'), mounts: { library: 0, archive: 0 }, counters })
+    mocks.useHallHomeMode = () => ({ homeMode: home, isOverviewHome: Vue.computed(() => home.value === 'overview'), setHomeMode: mode => { home.value = mode } })
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+    try {
+      await flushPromises()
+      const libraryTab = wrapper.find('.hall-workbench-sidebar [data-workbench-tab="library"]')
+      libraryTab.element.focus(); await libraryTab.trigger('click'); await Vue.nextTick()
+      const taskTab = wrapper.find('.hall-workbench-sidebar [data-workbench-tab="tasks"]')
+      taskTab.element.focus(); await taskTab.trigger('click'); await Vue.nextTick()
+      expect(wrapper.vm.$.setupState.panelFrames).to.deep.equal(['tasks'])
+      let overlay = wrapper.find('.panel-overlay').element
+      wrapper.vm.$.setupState.closePanel(); await wrapper.vm.$.setupState.handlePanelAfterLeave(overlay)
+      await Vue.nextTick()
+      expect(document.activeElement).to.equal(taskTab.element)
+      await wrapper.find('.hall-header-tools [aria-label="查看消息"]').trigger('click'); await Vue.nextTick()
+      expect(wrapper.vm.$.setupState.panelFrames).to.deep.equal(['messages'])
+      expect(wrapper.find('.panel-return').exists()).to.equal(false)
+      await wrapper.find('.hall-workbench-sidebar [data-workbench-tab="agents"]').trigger('click'); await Vue.nextTick()
+      expect(wrapper.vm.$.setupState.panelFrames).to.deep.equal(['agents'])
+      await wrapper.find('.hall-header-tools [aria-label="查看消息"]').trigger('click'); await Vue.nextTick()
+      expect(wrapper.vm.$.setupState.panelFrames).to.deep.equal(['messages'])
+    } finally { wrapper.unmount() }
+  })
+
+  it('reuses the Stage, exposes genuine library from both navs, and restores map on exit', async () => {
+    const mode = Vue.ref('portrait-command')
+    const home = Vue.ref('overview')
+    const mounts = { library: 0, archive: 0 }
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const mocks = createActualHallMocks({ mode, mounts, counters })
+    mocks.useHallHomeMode = () => ({ homeMode: home, isOverviewHome: Vue.computed(() => home.value === 'overview'), setHomeMode: value => { home.value = value } })
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+    try {
+      await flushPromises()
+      const state = wrapper.vm.$.setupState
+      expect(wrapper.find('.hall-board').exists()).to.equal(false) // lazy Stage has never been entered
+      expect(wrapper.find('.hall-workbench-sidebar').exists()).to.equal(true)
+      await wrapper.find('.workbench-mobile-nav [data-workbench-tab="library"]').trigger('click')
+      await Vue.nextTick()
+      expect(wrapper.find('.panel-library').exists()).to.equal(true)
+      expect(wrapper.find('.floating-panel').attributes('aria-modal')).to.equal('false')
+      expect(wrapper.find('.hall-app-header').attributes('inert')).to.equal(undefined)
+      expect(wrapper.find('.hall-workbench-sidebar').attributes('inert')).to.equal(undefined)
+      expect(wrapper.find('.floating-panel').attributes('aria-labelledby')).to.equal('juyiting-floating-panel-title')
+      expect(wrapper.find('#juyiting-floating-panel-title').text()).to.equal('典籍阁')
+      expect(wrapper.find('.library-panel-instance').exists()).to.equal(true)
+      await wrapper.find('.workbench-mobile-nav [data-workbench-tab="tasks"]').trigger('click')
+      await Vue.nextTick()
+      expect(wrapper.find('.panel-tasks').exists()).to.equal(true)
+      expect(state.panelFrames).to.deep.equal(['tasks'])
+      await wrapper.find('.workbench-map-entry').trigger('click')
+      mode.value = 'landscape-map'
+      await Vue.nextTick()
+      const stage = wrapper.find('.hall-board').element
+      expect(home.value).to.equal('map')
+      expect(state.activePanel).to.equal('')
+      expect(wrapper.find('.hall-board').element).to.equal(stage)
+      home.value = 'overview'; await Vue.nextTick()
+      await wrapper.find('.workbench-mobile-nav [data-workbench-tab="library"]').trigger('click')
+      await Vue.nextTick()
+      expect(wrapper.find('.hall-board').element).to.equal(stage)
+    } finally { wrapper.unmount() }
   })
 })
 
