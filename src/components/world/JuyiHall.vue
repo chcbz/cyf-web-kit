@@ -24,16 +24,16 @@
       </nav>
       <div class="hall-header-tools">
         <button type="button" @click="isOverviewHome ? openWorkbenchPage('agents') : openPanel('agents')">好汉</button>
-        <button type="button" aria-label="查看消息" @click="isOverviewHome ? openWorkbenchPage('messages') : openPanel('messages')">消息</button>
-        <button class="workbench-create-action" type="button" @click="openPrivateDraft()">＋ 提出需求</button>
-        <button type="button" :disabled="accountEntryDisabled" aria-label="个人中心" @click="openProfile">账户</button>
+        <button class="workbench-message-action" type="button" aria-label="查看消息" @click="isOverviewHome ? openWorkbenchPage('messages') : openPanel('messages')"><var-icon v-if="isOverviewHome" name="bell-outline" aria-hidden="true" /><span v-else>消息</span></button>
+        <button class="workbench-create-action" type="button" @click="openPrivateDraft()"><var-icon v-if="isOverviewHome" name="plus" aria-hidden="true" /><span>{{ isOverviewHome ? '提出需求' : '＋ 提出需求' }}</span></button>
+        <button class="workbench-account-action" type="button" :disabled="accountEntryDisabled" aria-label="个人中心" @click="openProfile"><var-icon v-if="isOverviewHome" name="account-circle-outline" aria-hidden="true" /><span>账户</span></button>
         <button class="workbench-mobile-more" type="button" aria-label="全部入口" :aria-expanded="workbenchMenuOpen" @click="workbenchMenuOpen = !workbenchMenuOpen"><var-icon name="menu" /></button>
       </div>
       <nav v-if="workbenchMenuOpen && isOverviewHome" class="workbench-more-menu" aria-label="全部入口">
-        <button v-for="tab in workbenchPrimaryTabs" :key="tab.panel" type="button" @click="openWorkbenchPage(tab.panel, $event)">{{ tab.label }}</button>
-        <button type="button" @click="openWorkbenchMap">厅中实景</button>
-        <button type="button" :disabled="accountEntryDisabled" @click="workbenchMenuOpen = false; openProfile()">个人中心</button>
-        <button type="button" @click="workbenchMenuOpen = false; emit('open-onboarding', $event.currentTarget)">使用帮助</button>
+        <button v-for="tab in workbenchPrimaryTabs" :key="tab.panel" type="button" @click="openWorkbenchPage(tab.panel, $event)"><var-icon :name="tab.icon" aria-hidden="true" /><span>{{ tab.label }}</span></button>
+        <button type="button" @click="openWorkbenchMap"><var-icon name="map-marker-outline" aria-hidden="true" /><span>厅中实景</span></button>
+        <button type="button" :disabled="accountEntryDisabled" @click="workbenchMenuOpen = false; openProfile()"><var-icon name="account-circle-outline" aria-hidden="true" /><span>个人中心</span></button>
+        <button type="button" @click="workbenchMenuOpen = false; emit('open-onboarding', $event.currentTarget)"><var-icon name="help-circle-outline" aria-hidden="true" /><span>使用帮助</span></button>
       </nav>
     </header>
     <div v-show="!isImmersiveMap" class="hall-mode-toolbar" :inert="isPanelSessionActive || voiceInteractionLocked ? '' : null" :aria-hidden="isPanelSessionActive ? 'true' : null">
@@ -3400,6 +3400,10 @@ button.hall-room {
 .home-overview .hall-app-header .hall-seal, .home-overview .hall-app-header .hall-brand small, .home-overview .hall-app-header .hall-main-nav, .home-overview > .hall-mode-toolbar { display: none; }
 .home-overview .hall-app-header button { min-height: 40px; padding: 8px 12px; border-radius: 7px; color: var(--work-muted); border-color: var(--work-line); }
 .home-overview .hall-app-header .workbench-create-action { background: var(--work-brand); color: var(--work-paper); border-color: var(--work-brand); }
+.home-overview .hall-app-header .workbench-message-action { display: inline-flex; align-items: center; justify-content: center; width: 40px; padding: 8px; font-size: 19px; }
+.home-overview .hall-app-header .workbench-account-action, .home-overview .hall-app-header .workbench-create-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.home-overview .workbench-more-menu button { display: flex; align-items: center; gap: 8px; }
+.home-overview .workbench-more-menu button .var-icon { flex: none; font-size: 19px; }
 .home-overview .hall-app-header .workbench-create-action:hover { background: #793326; }
 .home-overview .workbench-mobile-more, .home-overview .workbench-mobile-nav { display: none; }
 /* The absolute containing block is .juyi-page; percentage width also accounts for classic viewport scrollbars. */
@@ -3437,6 +3441,8 @@ button.hall-room {
   .home-overview > .hall-app-header { grid-column: 1; grid-row: 1; padding: 10px 16px; }
   .home-overview .hall-app-header .hall-header-tools { gap: 5px; }
   .home-overview .hall-app-header .hall-header-tools > button:first-child, .home-overview .hall-app-header .workbench-create-action { display: none; }
+  .home-overview .hall-app-header .workbench-account-action { width: 40px; padding: 8px; font-size: 19px; }
+  .home-overview .hall-app-header .workbench-account-action span { display: none; }
   .home-overview .hall-app-header .workbench-mobile-more { display: inline-flex; }
   .juyi-page.home-overview > :deep(.hall-portrait-home.is-unified-shell) { grid-column: 1; grid-row: 2; padding-bottom: calc(62px + env(safe-area-inset-bottom)); }
   .home-overview .workbench-mobile-nav {

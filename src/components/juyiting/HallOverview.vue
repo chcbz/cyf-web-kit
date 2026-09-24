@@ -2,7 +2,7 @@
   <section class="hall-overview" :class="{ 'is-messages': messagesOnly }" :aria-label="messagesOnly ? '消息' : '办事概览'">
     <header v-if="!messagesOnly" class="overview-hero">
       <div><p class="overview-eyebrow">开始，也能接着上次</p><h2>今天，想办成什么事？</h2><p>说清目标，交给合适的好汉。资料、进展与成果，留在同一件事里。</p>
-        <div class="overview-hero-actions"><button class="primary" type="button" @click="emit('start-draft')">提出需求</button><button type="button" @click="emit('start-chat')">先聊一聊</button></div>
+        <div class="overview-hero-actions"><button class="primary" type="button" @click="emit('start-draft')"><var-icon name="plus" aria-hidden="true" />提出需求</button><button type="button" @click="emit('start-chat')"><var-icon name="chat-processing-outline" aria-hidden="true" />先聊一聊</button></div>
       </div>
     </header>
     <p v-else class="overview-intro">只列出需要你处理的事项。打开不代表已读、验收或归档。</p>
@@ -27,7 +27,7 @@
       <p v-if="enabled && isComplete(view) && !rowsFor(view).length" class="overview-empty">{{ hasMore(view) ? '这一页没有事项，可继续读取。' : view === 'archive' ? '暂时没有收入案卷的事项。' : view === 'needsAction' ? '暂时没有需要你处理的事项。' : '还没有开始的事项，先提出一个需求吧。' }}</p>
       <button v-if="hasMore(view)" type="button" @click="loadMore(view)">读取更多事项</button>
     </section>
-    <section v-if="!messagesOnly" class="overview-resource" aria-label="资料入口"><div><strong>资料留在这里，下次不用重找</strong><p>引用已有资料，查看固定版本的成果。</p></div><button type="button" @click="emit('open-workspace')">打开百宝箱 →</button></section>
+    <section v-if="!messagesOnly" class="overview-resource" aria-label="资料入口"><var-icon class="overview-resource-icon" name="file-document-outline" aria-hidden="true" /><div><strong>资料留在这里，下次不用重找</strong><p>引用已有资料，查看固定版本的成果。</p></div><button type="button" @click="emit('open-workspace')">打开百宝箱 →</button></section>
     </div><aside v-if="!messagesOnly" class="overview-aside" aria-label="快捷入口">
       <button class="overview-map-link" type="button" @click="emit('set-home-mode', 'map')"><span aria-hidden="true">聚义厅</span>厅中实景 · 去梁山走一走 →</button>
       <section class="overview-aside-card"><h3>需要你看一眼</h3><p v-if="model.state.value === 'loading'">正在核对待处理事项…</p><p v-else-if="model.sections.value.needsAction.status !== 'complete'">待处理列表可能不完整，请在事项页核对。</p>
@@ -157,6 +157,8 @@ watch([() => props.enabled, () => props.identityScope, () => props.identityEpoch
 .hall-overview:not(.is-messages) .overview-hero h2 { color: #242e2b; font: 500 28px/1.5 "Noto Serif CJK SC", "Songti SC", STSong, serif; letter-spacing: .8px; margin: 0 0 6px; }
 .hall-overview:not(.is-messages) .overview-hero p:not(.overview-eyebrow) { color: #68716b; font-size: 14px; }
 .hall-overview:not(.is-messages) .overview-hero-actions { margin-top: 16px; gap: 10px; }
+.hall-overview:not(.is-messages) .overview-hero-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+.hall-overview:not(.is-messages) .overview-hero-actions .var-icon { font-size: 16px; }
 .hall-overview:not(.is-messages) button { min-height: 42px; border-radius: 7px; border-color: #e3e5dc; color: #242e2b; font-size: 14px; font-weight: 500; }
 .hall-overview:not(.is-messages) button:hover:not(:disabled) { background: #f0f1ea; border-color: #c4cabe; }
 .hall-overview:not(.is-messages) button.primary { background: #923f30; border-color: #923f30; color: #fffefa; }
@@ -196,6 +198,7 @@ watch([() => props.enabled, () => props.identityScope, () => props.identityEpoch
 .hall-overview .overview-aside-card button small { display: block; margin-top: 4px; color: #68716b; font-weight: 400; font-size: 11px; }
 .hall-overview .overview-aside-card .overview-aside-link { color: #923f30; }
 .hall-overview .overview-resource { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; }
+.hall-overview .overview-resource-icon { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 9px; background: #eaf2ed; color: #21604d; font-size: 22px; }
 .hall-overview .overview-resource strong { display: block; font-size: 14px; font-weight: 500; }
 .hall-overview .overview-resource p { margin: 3px 0 0; }
 .hall-overview .overview-resource button { flex: none; font-size: 12px; }

@@ -2569,7 +2569,14 @@ describe('lightweight workbench real panel navigation', () => {
       trigger.element.focus()
       await trigger.trigger('click')
       await Vue.nextTick()
-      const menuItem = wrapper.findAll('.workbench-more-menu button').find(button => button.text() === '百宝箱')
+      const menuButtons = wrapper.findAll('.workbench-more-menu button')
+      for (const [label, icon] of [['办事概览', 'home-outline'], ['我的事项', 'format-list-checkbox'],
+        ['厅内议事', 'chat-processing-outline'], ['典籍阁', 'notebook'], ['厅中实景', 'map-marker-outline']]) {
+        expect(menuButtons.find(button => button.text() === label)?.find('i').attributes('name')).to.equal(icon)
+      }
+      expect(wrapper.find('.hall-header-tools .workbench-message-action i').attributes('name')).to.equal('bell-outline')
+      expect(wrapper.find('.hall-header-tools .workbench-account-action i').attributes('name')).to.equal('account-circle-outline')
+      const menuItem = menuButtons.find(button => button.text() === '百宝箱')
       expect(menuItem).to.exist
       // Simulate mobile WebKit, where tapping a button need not focus it.
       trigger.element.focus()
