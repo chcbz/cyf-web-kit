@@ -136,3 +136,58 @@ export const useHallPanels = ({ experienceMode, isMobileCoarse, viewportHeight }
     viewportHeight: unref(viewportHeight)
   }))
 })
+
+// Presentation-only chrome resolver. It deliberately receives values rather
+// than refs so it cannot mutate frame, draft, reader, task, or workspace state.
+export const resolveHallNavigationPresentation = ({
+  isMobileCoarse = false,
+  experienceMode = '',
+  isOverviewHome = false,
+  renderedPanel = '',
+  panelReturnPanel = '',
+  formalTaskRef = null,
+  draftCanGoBack = false,
+  bountyCanGoBack = false,
+  treasureCanGoBack = false,
+  libraryCanGoBack = false,
+  portraitTaskDetailOpen = false,
+  isKeyboardActive = false
+} = {}) => {
+  const isPortraitMobile = Boolean(isMobileCoarse && experienceMode === 'portrait-command')
+  const isPrimarySurface = Boolean(isOverviewHome && (!renderedPanel || ['tasks', 'treasure', 'mine'].includes(renderedPanel)))
+  const hasFrameParent = Boolean(panelReturnPanel)
+  const selfOwnedDetail = Boolean(
+    (['draft', 'item', 'formalDraft'].includes(renderedPanel) && draftCanGoBack) ||
+    (renderedPanel === 'tasks' && bountyCanGoBack) ||
+    (renderedPanel === 'library' && libraryCanGoBack) ||
+    portraitTaskDetailOpen
+  )
+  const hallOwnedDetail = Boolean(
+    (renderedPanel === 'tasks' && formalTaskRef) ||
+    (renderedPanel === 'treasure' && treasureCanGoBack) ||
+    renderedPanel === 'workspace' ||
+    (!selfOwnedDetail && hasFrameParent)
+  )
+  const hasChildDetail = selfOwnedDetail || hallOwnedDetail
+  const returnOwner = selfOwnedDetail ? 'self' : (hallOwnedDetail ? 'hall' : 'none')
+  const showWorkbenchDock = Boolean(
+    isOverviewHome && isPrimarySurface && !hasChildDetail && !hasFrameParent && !isKeyboardActive
+  )
+  const showHallReturn = returnOwner === 'hall'
+  // Root workbench pages remain regions, not closeable dialogs. On mobile the
+  // single leading action is either return or close, never both.
+  const showHallClose = Boolean(!isPrimarySurface && (!hasChildDetail || !isPortraitMobile))
+  const showPrimaryChildHeader = Boolean(isPrimarySurface && showHallReturn)
+
+  return Object.freeze({
+    isPortraitMobile,
+    isPrimarySurface,
+    hasChildDetail,
+    hasFrameParent,
+    returnOwner,
+    showWorkbenchDock,
+    showHallReturn,
+    showHallClose,
+    showPrimaryChildHeader
+  })
+}

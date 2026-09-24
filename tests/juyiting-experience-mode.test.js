@@ -790,6 +790,67 @@ describe('Juyi Hall experience mode', () => {
     }
   })
 
+  it('latches keyboard presentation through focus changes and viewport recovery without changing live height', async () => {
+    const originals = {
+      innerWidth: global.window.innerWidth,
+      innerHeight: global.window.innerHeight,
+      visualViewport: global.window.visualViewport
+    }
+    const visualListeners = new Set()
+    let visualWidth = 390
+    let visualHeight = 844
+    Object.defineProperty(global.window, 'innerWidth', { configurable: true, writable: true, value: 390 })
+    Object.defineProperty(global.window, 'innerHeight', { configurable: true, writable: true, value: 844 })
+    Object.defineProperty(global.window, 'visualViewport', { configurable: true, value: {
+      get width() { return visualWidth },
+      get height() { return visualHeight },
+      addEventListener: (_event, listener) => visualListeners.add(listener),
+      removeEventListener: (_event, listener) => visualListeners.delete(listener)
+    } })
+    const env = setupEnvironment({ mediaLandscape: null, screen: false })
+    let wrapper
+    const updateViewport = async () => {
+      visualListeners.forEach(listener => listener(new global.window.Event('resize')))
+      await flush()
+    }
+    try {
+      const mounted = await mountMode()
+      wrapper = mounted.wrapper
+      const first = document.createElement('input')
+      const second = document.createElement('textarea')
+      document.body.append(first, second)
+      first.focus()
+      visualHeight = 724
+      await updateViewport()
+      expect(mounted.mode.keyboardPhase.value).to.equal('open')
+      expect(mounted.mode.isKeyboardActive.value).to.equal(true)
+      expect(mounted.mode.hallViewportHeight.value).to.equal(724)
+      expect(mounted.mode.stableViewportHeight.value).to.equal(844)
+
+      second.focus()
+      await new Promise(resolve => setTimeout(resolve, 1))
+      expect(mounted.mode.keyboardPhase.value).to.equal('open')
+
+      second.blur()
+      await new Promise(resolve => setTimeout(resolve, 1))
+      expect(mounted.mode.keyboardPhase.value).to.equal('closing')
+      expect(mounted.mode.isKeyboardActive.value).to.equal(true)
+
+      visualHeight = 810
+      await updateViewport()
+      expect(mounted.mode.keyboardPhase.value).to.equal('closed')
+      expect(mounted.mode.isKeyboardActive.value).to.equal(false)
+      expect(mounted.mode.stableViewportHeight.value).to.equal(844)
+      first.remove(); second.remove()
+    } finally {
+      wrapper?.unmount()
+      Object.defineProperty(global.window, 'innerWidth', { configurable: true, value: originals.innerWidth })
+      Object.defineProperty(global.window, 'innerHeight', { configurable: true, value: originals.innerHeight })
+      Object.defineProperty(global.window, 'visualViewport', { configurable: true, value: originals.visualViewport })
+      env.restore()
+    }
+  })
+
   it('keeps orientation ownership in the mode composable, not panels or stage', () => {
     const modeSource = readFileSync(new URL('../src/composables/juyiting/useHallExperienceMode.js', import.meta.url), 'utf8')
     const panelsSource = readFileSync(new URL('../src/composables/juyiting/useHallPanels.js', import.meta.url), 'utf8')
@@ -800,6 +861,9 @@ describe('Juyi Hall experience mode', () => {
     expect(modeSource).to.include('const isWeChatWebView')
     expect(modeSource).to.include('const requestPortrait = async () =>')
     expect(modeSource).to.include("visualViewport?.addEventListener?.('resize'")
+    expect(modeSource).to.include("visualViewport?.addEventListener?.('scroll'")
+    expect(modeSource).to.include("globalThis.document?.addEventListener?.('focusin'")
+    expect(modeSource).to.include("keyboardPhase")
     expect(panelsSource).not.to.include('addEventListener')
     expect(panelsSource).not.to.include('matchMedia')
     expect(stageSource).not.to.include("matchMedia?.('(orientation: landscape)')")

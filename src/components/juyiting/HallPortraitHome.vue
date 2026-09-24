@@ -177,7 +177,7 @@
       >
         <div class="task-detail-heading">
           <span :class="taskStateClass(selectedTask.status)">{{ taskStatusText(selectedTask.status) }}</span>
-          <button type="button" aria-label="关闭榜文详情" @click="emit('close-task-detail')">关闭</button>
+          <button type="button" aria-label="返回榜文列表" @click="emit('close-task-detail')">返回</button>
         </div>
         <p class="task-detail-id">榜号 {{ selectedTask.id }}</p>
         <h2>{{ selectedTask.title || '未命名榜文' }}</h2>
@@ -280,7 +280,7 @@ const openTask = task => emit('open-task', task)
   height: min(100%, var(--hall-visual-height, 100%));
   min-height: 0;
   box-sizing: border-box;
-  padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  padding: max(16px, env(safe-area-inset-top)) 16px max(24px, var(--hall-content-bottom-inset, env(safe-area-inset-bottom, 0px)));
   overflow: hidden;
   background:
     radial-gradient(circle at 80% 0%, rgba(234, 180, 84, 0.18), transparent 34%),
@@ -348,7 +348,7 @@ const openTask = task => emit('open-task', task)
   gap: 10px;
   width: 100%;
   max-height: min(78vh, calc(100dvh - 24px));
-  padding: 18px 16px calc(16px + env(safe-area-inset-bottom));
+  padding: 18px 16px calc(16px + var(--hall-safe-bottom, env(safe-area-inset-bottom, 0px)));
   overflow-y: auto;
   overscroll-behavior: contain;
   border: 1px solid rgba(247, 204, 112, 0.5);
@@ -781,7 +781,7 @@ button:disabled {
 }
 .hall-portrait-home.is-compact-overview {
   gap: 8px;
-  padding: max(8px, env(safe-area-inset-top)) 12px max(8px, env(safe-area-inset-bottom));
+  padding: max(8px, env(safe-area-inset-top)) 12px max(8px, var(--hall-content-bottom-inset, env(safe-area-inset-bottom, 0px)));
 }
 .is-compact-overview .portrait-eyebrow,
 .is-compact-overview .portrait-home-mode-hint {

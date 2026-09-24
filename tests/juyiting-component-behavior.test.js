@@ -2617,10 +2617,10 @@ describe('lightweight workbench real panel navigation', () => {
     expect(rule).to.include('width: min(330px, calc(100% - 30px))')
     expect(style).to.include('The absolute containing block is .juyi-page')
     expect(rule).to.include('top: 64px')
-    expect(rule).to.include('max-height: calc(100% - 64px - 62px - env(safe-area-inset-bottom))')
+    expect(rule).to.include('max-height: calc(100% - 64px - var(--hall-content-bottom-inset))')
     expect(rule).to.include('overflow-y: auto')
     const short = style.match(/@media \(max-height: 560px\) \{([\s\S]+?)\n\}/)?.[1]
-    expect(short).to.include('.home-overview .workbench-more-menu { top: 58px; max-height: calc(100% - 58px - 62px - env(safe-area-inset-bottom)); }')
+    expect(short).to.include('.home-overview .workbench-more-menu { top: 58px; max-height: calc(100% - 58px - var(--hall-content-bottom-inset)); }')
   })
 
   it('keeps tiny reflow navigation named and lets short chat windows scroll to the composer', () => {

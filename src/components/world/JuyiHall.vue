@@ -1,5 +1,5 @@
 <template>
-  <div ref="hallRootRef" class="juyi-page" tabindex="-1" :style="hallViewportStyle" :class="{ 'is-immersive-map': isImmersiveMap, 'is-panel-open': isPanelSessionActive, 'is-virtual-landscape': isVirtualLandscape, [`experience-${experienceMode}`]: true, [`home-${homeMode}`]: true }">
+  <div ref="hallRootRef" class="juyi-page" tabindex="-1" :style="hallViewportStyle" :class="{ 'is-immersive-map': isImmersiveMap, 'is-panel-open': isPanelSessionActive, 'is-virtual-landscape': isVirtualLandscape, 'has-workbench-dock': showWorkbenchDock && (Boolean(activePanel) || !renderedPanel), 'is-keyboard-active': hallKeyboardActive, [`experience-${experienceMode}`]: true, [`home-${homeMode}`]: true }">
     <aside v-show="isOverviewHome" class="hall-workbench-sidebar" :inert="voiceInteractionLocked || isPanelSessionActive && !workbenchPrimaryPanelSet.has(renderedPanel) ? '' : null" aria-label="工作台侧栏">
       <button class="workbench-brand" type="button" @click="openWorkbenchPage('overview')"><span class="workbench-seal">聚</span><span>聚义厅<small>一起，把事情办成。</small></span></button>
       <p class="workbench-nav-caption">我的工作空间</p>
@@ -47,7 +47,7 @@
         <button class="hall-help-action" type="button" @click="emit('open-onboarding', $event.currentTarget)">怎么开始？</button>
       </div>
     </div>
-    <nav v-show="isOverviewHome" class="workbench-mobile-nav" aria-label="移动端导航" :inert="voiceInteractionLocked || isPanelSessionActive && !workbenchPrimaryPanelSet.has(renderedPanel) ? '' : null">
+    <nav v-show="showWorkbenchDock && (Boolean(activePanel) || !renderedPanel)" class="workbench-mobile-nav" aria-label="移动端导航" :inert="voiceInteractionLocked || isPanelSessionActive && !workbenchPrimaryPanelSet.has(renderedPanel) ? '' : null">
       <button v-for="tab in workbenchMobileTabs" :key="tab.panel" type="button" :data-workbench-tab="tab.panel" :aria-label="tab.label" :aria-current="workbenchCurrentPage === tab.panel ? 'page' : null" @click="openWorkbenchPage(tab.panel)"><var-icon :name="tab.icon" /><span>{{ tab.label }}</span></button>
     </nav>
     <HallPortraitHome
@@ -233,8 +233,9 @@
           @input.stop
           @click.stop
         >
-          <div v-if="!(isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel))" class="panel-title">
+          <div v-if="!navigationPresentation.isPrimarySurface || navigationPresentation.showPrimaryChildHeader" class="panel-title">
             <button
+              v-if="navigationPresentation.showHallClose"
               class="panel-close"
               type="button"
               aria-label="关闭面板"
@@ -244,7 +245,7 @@
               <var-icon :name="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? 'window-close' : 'close-circle-outline'" aria-hidden="true" />
             </button>
             <button
-              v-if="panelReturnPanel || panelChildCanReturn"
+              v-if="navigationPresentation.showHallReturn"
               class="panel-return"
               type="button"
               aria-label="返回上一层"
@@ -682,7 +683,7 @@ import { useHallLibrary } from '@/composables/juyiting/useHallLibrary'
 import { resolveLiveMapPreviewActivation } from '@/composables/juyiting/liveMapPreviewPolicy'
 import { useHallExperienceMode } from '@/composables/juyiting/useHallExperienceMode'
 import { useHallHomeMode } from '@/composables/juyiting/useHallHomeMode'
-import { capturePanelReturnTarget, focusHallPanel, isCurrentPanelGeneration, isSafePanelFocusTarget, resolvePanelReturnTarget, restorePanelFocus, trapPanelFocus, useHallPanels } from '@/composables/juyiting/useHallPanels'
+import { capturePanelReturnTarget, focusHallPanel, isCurrentPanelGeneration, isSafePanelFocusTarget, resolveHallNavigationPresentation, resolvePanelReturnTarget, restorePanelFocus, trapPanelFocus, useHallPanels } from '@/composables/juyiting/useHallPanels'
 import { useHallScene } from '@/composables/juyiting/useHallScene'
 import { useHallSceneState } from '@/composables/juyiting/useHallSceneState'
 import { useHallSceneDebugBridge } from '@/composables/juyiting/useHallSceneDebugBridge'
@@ -875,6 +876,7 @@ const {
   experienceMode,
   isMobileCoarse,
   isVirtualLandscape,
+  isKeyboardActive: hallKeyboardActive = ref(false),
   orientationHint,
   orientationRequestPending,
   hallViewportHeight,
@@ -893,6 +895,21 @@ const hallViewportStyle = computed(() => {
 const isCompactChat = computed(() => resolvedHallViewportHeight.value > 0 && resolvedHallViewportHeight.value <= 320)
 const isLowHeightPanel = computed(() => resolvedHallViewportHeight.value > 0 && resolvedHallViewportHeight.value <= 500)
 const { panelLayout } = useHallPanels({ experienceMode, isMobileCoarse, viewportHeight: resolvedHallViewportHeight })
+const navigationPresentation = computed(() => resolveHallNavigationPresentation({
+  isMobileCoarse: isMobileCoarse.value,
+  experienceMode: experienceMode.value,
+  isOverviewHome: isOverviewHome.value,
+  renderedPanel: renderedPanel.value,
+  panelReturnPanel: panelReturnPanel.value,
+  formalTaskRef: formalTaskRef.value,
+  draftCanGoBack: Boolean(activeDraftEditor()?.canGoBack),
+  bountyCanGoBack: Boolean(bountyPanelRef.value?.canGoBack),
+  treasureCanGoBack: Boolean(treasurePanelRef.value?.canGoBack),
+  libraryCanGoBack: Boolean(libraryPanelRef.value?.canGoBack),
+  portraitTaskDetailOpen: portraitTaskDetailOpen.value,
+  isKeyboardActive: hallKeyboardActive.value
+}))
+const showWorkbenchDock = computed(() => navigationPresentation.value.showWorkbenchDock)
 const hallRootRef = ref(null)
 const portraitHomeRef = ref(null)
 const landscapeTargetRef = ref(null)
@@ -2224,6 +2241,10 @@ onUnmounted(() => {
 <style scoped>
 .juyi-page {
   --bottom-action-bar-height: 68px;
+  --hall-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --hall-dock-height: 62px;
+  --hall-dock-reserve: 0px;
+  --hall-content-bottom-inset: calc(var(--hall-safe-bottom) + var(--hall-dock-reserve));
   position: relative;
   display: flex;
   flex: 1;
@@ -3395,12 +3416,32 @@ button.hall-room {
 @media(max-height:500px) { .floating-panel > :deep(.hall-draft-editor) { padding:14px 20px; } }
 /* Lightweight workbench: keep all authoritative panels and the single live Stage. */
 .juyi-page.home-overview {
-  --work-paper: #fffefa;
-  --work-ground: #f5f4f0;
-  --work-line: #e3e5dc;
-  --work-ink: #242e2b;
-  --work-muted: #68716b;
-  --work-brand: #923f30;
+  --hall-canvas: #f5f4f0;
+  --hall-surface: #fffefa;
+  --hall-surface-subtle: #f3f3ed;
+  --hall-surface-brand: #f6eee8;
+  --hall-text: #242e2b;
+  --hall-text-muted: #68716b;
+  --hall-border: #e3e5dc;
+  --hall-border-strong: #ccd2c5;
+  --hall-brand: #923f30;
+  --hall-brand-hover: #793326;
+  --hall-positive: #36643b;
+  --hall-warning: #87551c;
+  --hall-danger: #a13f35;
+  --hall-info: #21604d;
+  --hall-radius-sm: 7px;
+  --hall-radius-md: 10px;
+  --hall-radius-lg: 12px;
+  --hall-control-height: 44px;
+  --hall-page-gutter: 16px;
+  --hall-focus-ring: #923f3052;
+  --work-paper: var(--hall-surface);
+  --work-ground: var(--hall-canvas);
+  --work-line: var(--hall-border);
+  --work-ink: var(--hall-text);
+  --work-muted: var(--hall-text-muted);
+  --work-brand: var(--hall-brand);
   display: grid;
   grid-template-columns: 216px minmax(0, 1fr);
   grid-template-rows: 76px minmax(0, 1fr);
@@ -3466,7 +3507,7 @@ button.hall-room {
 .home-overview .hall-app-header .workbench-create-action:hover { background: #793326; }
 .home-overview .workbench-mobile-more, .home-overview .workbench-mobile-nav { display: none; }
 /* The absolute containing block is .juyi-page; percentage width also accounts for classic viewport scrollbars. */
-.home-overview .workbench-more-menu { position: absolute; top: 64px; right: 15px; z-index: 32; box-sizing: border-box; width: min(330px, calc(100% - 30px)); max-height: calc(100% - 64px - 62px - env(safe-area-inset-bottom)); overflow-y: auto; overscroll-behavior: contain; padding: 12px; background: var(--work-paper); border: 1px solid var(--work-line); border-radius: 10px; box-shadow: 0 18px 38px #242e2b29; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.home-overview .workbench-more-menu { position: absolute; top: 64px; right: 15px; z-index: 32; box-sizing: border-box; width: min(330px, calc(100% - 30px)); max-height: calc(100% - 64px - var(--hall-content-bottom-inset)); overflow-y: auto; overscroll-behavior: contain; padding: 12px; background: var(--work-paper); border: 1px solid var(--work-line); border-radius: 10px; box-shadow: 0 18px 38px #242e2b29; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .home-overview .workbench-more-menu button { white-space: normal; text-align: left; justify-content: flex-start; }
 .juyi-page.home-overview :deep(.portrait-work-summary) { width: min(1320px, 100%); }
 .juyi-page.home-overview :deep(.hall-overview:not(.is-messages)) { background: var(--work-ground); color: var(--work-ink); }
@@ -3524,6 +3565,30 @@ button.hall-room {
 .home-overview .panel-overlay.is-workbench-panel :deep(.treasure-content input:focus-visible),
 .home-overview .panel-overlay.is-workbench-panel :deep(.treasure-content button:focus-visible) { outline-color: var(--work-brand); }
 
+.home-overview .panel-overlay.is-workbench-panel :deep(.bounty-panel .panel-toolbar),
+.home-overview .panel-overlay.is-workbench-panel :deep(.agent-panel .panel-toolbar),
+.home-overview .panel-overlay.is-workbench-panel :deep(.library-panel .library-toolbar),
+.home-overview .panel-overlay.is-workbench-panel :deep(.persona-catalog-panel .catalog-toolbar) { gap: 8px; }
+.home-overview .panel-overlay.is-workbench-panel :deep(.bounty-panel button),
+.home-overview .panel-overlay.is-workbench-panel :deep(.agent-panel button),
+.home-overview .panel-overlay.is-workbench-panel :deep(.library-panel button),
+.home-overview .panel-overlay.is-workbench-panel :deep(.hall-draft-editor button),
+.home-overview .panel-overlay.is-workbench-panel :deep(.persona-catalog-panel button),
+.home-overview .panel-overlay.is-workbench-panel :deep(.treasure-content button) { min-height: var(--hall-control-height); border-radius: var(--hall-radius-sm); }
+.home-overview .panel-overlay.is-workbench-panel :deep(.hall-tabs),
+.home-overview .panel-overlay.is-workbench-panel :deep(.library-tabs) { min-height: var(--hall-control-height); border-bottom: 1px solid var(--hall-border); overflow-x: auto; }
+.home-overview .panel-overlay.is-workbench-panel :deep(.hall-tabs button.active),
+.home-overview .panel-overlay.is-workbench-panel :deep(.library-tabs button.active) { color: var(--hall-brand); border-bottom: 2px solid var(--hall-brand); }
+.home-overview .panel-overlay.is-workbench-panel :deep(.task-status-tabs),
+.home-overview .panel-overlay.is-workbench-panel :deep(.status-filter) { overflow-x: auto; flex-wrap: nowrap; }
+@media (max-width: 760px) {
+  .home-overview .panel-overlay.is-workbench-panel :deep(.bounty-panel),
+  .home-overview .panel-overlay.is-workbench-panel :deep(.agent-panel),
+  .home-overview .panel-overlay.is-workbench-panel :deep(.library-panel),
+  .home-overview .panel-overlay.is-workbench-panel :deep(.persona-catalog-panel),
+  .home-overview .panel-overlay.is-workbench-panel :deep(.hall-draft-editor) { --hall-page-gutter: 16px; }
+}
+
 .home-overview button:focus-visible, .home-overview .workbench-more-menu button:focus-visible { outline: 3px solid #923f3080; outline-offset: 3px; }
 @media (max-width: 1200px) {
   .juyi-page.home-overview { grid-template-columns: 192px minmax(0, 1fr); }
@@ -3532,6 +3597,7 @@ button.hall-room {
   .home-overview > .hall-app-header { padding-right: 26px; padding-left: 26px; }
 }
 @media (max-width: 760px) {
+  .juyi-page.has-workbench-dock { --hall-dock-reserve: var(--hall-dock-height); }
   .juyi-page.home-overview { grid-template-columns: minmax(0,1fr); grid-template-rows: minmax(0,1fr); }
   .home-overview > .hall-workbench-sidebar, .home-overview > .hall-app-header { display: none; }
   .home-overview .hall-app-header .hall-header-tools { gap: 5px; }
@@ -3541,11 +3607,11 @@ button.hall-room {
   .home-overview .hall-app-header .workbench-account-action { width: 40px; padding: 8px; font-size: 19px; }
   .home-overview .hall-app-header .workbench-account-action span { display: none; }
   .home-overview .hall-app-header .workbench-mobile-more { display: inline-flex; }
-  .juyi-page.home-overview > :deep(.hall-portrait-home.is-unified-shell) { grid-column: 1; grid-row: 1; padding-bottom: calc(62px + env(safe-area-inset-bottom)); }
+  .juyi-page.home-overview > :deep(.hall-portrait-home.is-unified-shell) { grid-column: 1; grid-row: 1; padding-bottom: var(--hall-content-bottom-inset); }
   .home-overview .workbench-mobile-nav {
     position: absolute; z-index: 30; bottom: 0; left: 0; right: 0;
-    display: flex; align-items: stretch; box-sizing: border-box; height: calc(62px + env(safe-area-inset-bottom));
-    padding: 5px 12px max(5px, env(safe-area-inset-bottom));
+    display: flex; align-items: stretch; box-sizing: border-box; height: calc(var(--hall-dock-height) + var(--hall-safe-bottom));
+    padding: 5px 12px max(5px, var(--hall-safe-bottom));
     border-top: 1px solid var(--work-line); background: var(--work-paper);
   }
   .home-overview .workbench-mobile-nav button {
@@ -3556,7 +3622,7 @@ button.hall-room {
   .home-overview .workbench-mobile-nav button[aria-current="page"] { color: var(--work-brand); background: #f6eee8; }
   .home-overview .workbench-mobile-nav .var-icon { font-size: 21px; }
   .home-overview .panel-overlay.is-workbench-panel {
-    inset: 0 0 calc(62px + env(safe-area-inset-bottom)) 0; top: 0; bottom: calc(62px + env(safe-area-inset-bottom));
+    inset: 0 0 var(--hall-content-bottom-inset) 0; top: 0; bottom: var(--hall-content-bottom-inset);
     height: auto; max-height: none; padding: 0;
   }
   .home-overview .panel-overlay.is-workbench-panel > .floating-panel { width: 100%; max-width: none; height: 100%; border: 0; border-radius: 0; }
@@ -3569,7 +3635,7 @@ button.hall-room {
 }
 @media (max-height: 560px) {
   .juyi-page.home-overview { grid-template-rows: minmax(0, 1fr); }
-  .home-overview .workbench-more-menu { top: 58px; max-height: calc(100% - 58px - 62px - env(safe-area-inset-bottom)); }
+  .home-overview .workbench-more-menu { top: 58px; max-height: calc(100% - 58px - var(--hall-content-bottom-inset)); }
   .home-overview .panel-overlay.is-workbench-panel { top: 0; }
   .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.discussion-brief) { display: none; }
   .home-overview .panel-overlay.is-workbench-panel { padding-top: 0; padding-bottom: 0; }

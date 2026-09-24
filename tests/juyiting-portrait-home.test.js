@@ -163,6 +163,8 @@ describe('HallPortraitHome', () => {
 
     expect(portraitHomeSource).to.include('taskDetailOpen: Boolean')
     expect(portraitHomeSource).to.include('<div v-if="taskDetailOpen && selectedTask" class="portrait-task-overlay">')
+    expect(portraitHomeSource).to.include('aria-label="返回榜文列表"')
+    expect(portraitHomeSource).to.include('>返回</button>')
     expect(portraitHomeSource).to.include('class="portrait-task-backdrop"')
     expect(portraitHomeSource).to.match(/<section[\s\S]*?class="portrait-task-detail"[\s\S]*?role="dialog"[\s\S]*?aria-modal="true"/)
     expect(overlayStyles).to.include('position: fixed')
@@ -172,7 +174,7 @@ describe('HallPortraitHome', () => {
     expect(backdropStyles).to.include('background: rgba(8, 7, 6, 0.68)')
     expect(sheetStyles).to.include('max-height: min(78vh, calc(100dvh - 24px))')
     expect(sheetStyles).to.include('overflow-y: auto')
-    expect(sheetStyles).to.include('env(safe-area-inset-bottom)')
+    expect(sheetStyles).to.include('var(--hall-safe-bottom')
     expect(portraitHomeSource).to.include('min-height: 44px')
     expect(portraitHomeSource).to.include('{{ taskStatusText(selectedTask.status) }}')
     expect(portraitHomeSource).to.include('榜号 {{ selectedTask.id }}')

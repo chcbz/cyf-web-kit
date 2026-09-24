@@ -21,6 +21,9 @@ const orientationFromScreen = orientation => {
 
 const orientationFromLegacyWindow = () => orientationFromAngle(globalThis.window?.orientation)
 
+const EDITABLE_SELECTOR = 'input:not([type=button]):not([type=checkbox]):not([type=radio]):not([type=submit]):not([type=reset]), textarea, select, [contenteditable]:not([contenteditable=\"false\"])'
+const isEditableElement = element => Boolean(element?.matches?.(EDITABLE_SELECTOR) || element?.closest?.(EDITABLE_SELECTOR))
+
 const isWeChatWebView = () => /MicroMessenger/i.test(globalThis.navigator?.userAgent || '') || Boolean(globalThis.wx?.miniProgram)
 
 export const useHallExperienceMode = () => {
@@ -33,6 +36,10 @@ export const useHallExperienceMode = () => {
   // This is presentation-only viewport state. Physical orientation remains owned
   // by Screen Orientation/media/legacy sources below.
   const viewport = ref({ width: 0, height: 0 })
+  const stableViewportHeight = ref(0)
+  const isEditableFocused = ref(false)
+  const keyboardPhase = ref('closed')
+  const isKeyboardActive = computed(() => keyboardPhase.value === 'open' || keyboardPhase.value === 'closing')
   const isNativeOrientationRoute = computed(() => nativeOrientation.value !== null)
   const effectivePhysicalLandscape = computed(() => (
     nativeOrientation.value === 'landscape'
@@ -67,16 +74,65 @@ export const useHallExperienceMode = () => {
   let lastAcceptedPhysicalEventStamp = 0
   let requestGeneration = 0
   let requestOwnership = null
+  let viewportOrientation = null
+  let focusOutFrame = null
+
+  const resetKeyboardBaseline = () => {
+    stableViewportHeight.value = viewport.value.height
+    keyboardPhase.value = 'closed'
+  }
+
+  const updateKeyboardPhase = () => {
+    const height = viewport.value.height
+    if (!height) return
+    if (keyboardPhase.value === 'closed') {
+      stableViewportHeight.value = Math.max(stableViewportHeight.value, height)
+      if (isEditableFocused.value && stableViewportHeight.value - height >= 120) keyboardPhase.value = 'open'
+      return
+    }
+    // Keyboard shrink must never poison the baseline. A larger observed height
+    // may still improve it (browser chrome settling or a restored viewport).
+    stableViewportHeight.value = Math.max(stableViewportHeight.value, height)
+    if (keyboardPhase.value === 'open' && !isEditableFocused.value) keyboardPhase.value = 'closing'
+    if (stableViewportHeight.value - height <= 40) {
+      keyboardPhase.value = 'closed'
+      stableViewportHeight.value = Math.max(stableViewportHeight.value, height)
+    }
+  }
 
   const readViewport = () => {
     const width = Number(visualViewport?.width) || Number(window?.innerWidth) || 0
     const height = Number(visualViewport?.height) || Number(window?.innerHeight) || 0
     viewport.value = { width, height }
+    const nextOrientation = width && height ? (width > height ? 'landscape' : 'portrait') : null
+    if (viewportOrientation !== null && nextOrientation !== null && nextOrientation !== viewportOrientation) {
+      viewportOrientation = nextOrientation
+      resetKeyboardBaseline()
+      return
+    }
+    viewportOrientation = nextOrientation || viewportOrientation
+    updateKeyboardPhase()
+  }
+
+  const handleFocusIn = event => {
+    isEditableFocused.value = isEditableElement(event?.target || globalThis.document?.activeElement)
+    updateKeyboardPhase()
+  }
+
+  const handleFocusOut = () => {
+    if (focusOutFrame !== null) globalThis.cancelAnimationFrame?.(focusOutFrame)
+    const schedule = globalThis.requestAnimationFrame || (callback => globalThis.setTimeout(callback, 0))
+    focusOutFrame = schedule(() => {
+      focusOutFrame = null
+      isEditableFocused.value = isEditableElement(globalThis.document?.activeElement)
+      updateKeyboardPhase()
+    })
   }
 
   const commitPhysicalOrientation = next => {
     if (typeof next !== 'boolean' || next === isPhysicalLandscape.value) return false
     isPhysicalLandscape.value = next
+    resetKeyboardBaseline()
     requestedMode.value = null
     orientationHint.value = ''
     if (next && requestOwnership?.acquisitionComplete) completeRequest(requestOwnership.token)
@@ -385,6 +441,9 @@ export const useHallExperienceMode = () => {
     window.addEventListener?.('orientationchange', handleLegacyOrientationChange)
     window.addEventListener?.('resize', handleViewportResize)
     visualViewport?.addEventListener?.('resize', handleViewportResize)
+    visualViewport?.addEventListener?.('scroll', handleViewportResize)
+    globalThis.document?.addEventListener?.('focusin', handleFocusIn)
+    globalThis.document?.addEventListener?.('focusout', handleFocusOut)
     globalThis.document?.addEventListener?.('fullscreenchange', handleFullscreenChange)
   })
 
@@ -400,6 +459,11 @@ export const useHallExperienceMode = () => {
     window.removeEventListener?.('orientationchange', handleLegacyOrientationChange)
     window.removeEventListener?.('resize', handleViewportResize)
     visualViewport?.removeEventListener?.('resize', handleViewportResize)
+    visualViewport?.removeEventListener?.('scroll', handleViewportResize)
+    globalThis.document?.removeEventListener?.('focusin', handleFocusIn)
+    globalThis.document?.removeEventListener?.('focusout', handleFocusOut)
+    if (focusOutFrame !== null) globalThis.cancelAnimationFrame?.(focusOutFrame)
+    focusOutFrame = null
     globalThis.document?.removeEventListener?.('fullscreenchange', handleFullscreenChange)
     screenOrientation = null
     orientationMedia = null
@@ -416,6 +480,11 @@ export const useHallExperienceMode = () => {
     orientationHint,
     orientationRequestPending,
     hallViewportHeight,
+    viewport,
+    stableViewportHeight,
+    isEditableFocused,
+    keyboardPhase,
+    isKeyboardActive,
     requestLandscape,
     requestPortrait
   }
