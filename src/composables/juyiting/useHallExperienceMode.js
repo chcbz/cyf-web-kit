@@ -75,16 +75,18 @@ export const useHallExperienceMode = () => {
   let requestGeneration = 0
   let requestOwnership = null
   let cancelPendingFocusOut = null
+  let keyboardBaselineResetPending = false
 
-  const resetKeyboardBaseline = () => {
+  const resetKeyboardBaseline = ({ reanchorOnNextViewport = false } = {}) => {
     stableViewportHeight.value = viewport.value.height
     keyboardPhase.value = 'closed'
+    keyboardBaselineResetPending = reanchorOnNextViewport
   }
 
   const commitRequestedMode = next => {
     if (requestedMode.value === next) return false
     requestedMode.value = next
-    resetKeyboardBaseline()
+    resetKeyboardBaseline({ reanchorOnNextViewport: true })
     return true
   }
 
@@ -110,6 +112,15 @@ export const useHallExperienceMode = () => {
     const width = Number(visualViewport?.width) || Number(window?.innerWidth) || 0
     const height = Number(visualViewport?.height) || Number(window?.innerHeight) || 0
     viewport.value = { width, height }
+    // Confirmed orientation can arrive before its viewport resize. Consume that
+    // generation on the first subsequent viewport sample so an old portrait
+    // height cannot survive as the landscape keyboard baseline.
+    if (keyboardBaselineResetPending && height) {
+      stableViewportHeight.value = height
+      keyboardPhase.value = 'closed'
+      keyboardBaselineResetPending = false
+      return
+    }
     // A soft keyboard can make a portrait visual viewport wider than it is tall.
     // Only confirmed orientation/mode commits below may rebuild a smaller baseline.
     updateKeyboardPhase()
@@ -136,10 +147,10 @@ export const useHallExperienceMode = () => {
     cancelPendingFocusOut = () => globalThis.clearTimeout?.(timer)
   }
 
-  const commitPhysicalOrientation = next => {
+  const commitPhysicalOrientation = (next, { reanchorOnNextViewport = true } = {}) => {
     if (typeof next !== 'boolean' || next === isPhysicalLandscape.value) return false
     isPhysicalLandscape.value = next
-    resetKeyboardBaseline()
+    resetKeyboardBaseline({ reanchorOnNextViewport })
     requestedMode.value = null
     orientationHint.value = ''
     if (next && requestOwnership?.acquisitionComplete) completeRequest(requestOwnership.token)
@@ -421,7 +432,7 @@ export const useHallExperienceMode = () => {
     const next = Boolean(coarseMedia?.matches)
     if (next === isMobileCoarse.value) return
     isMobileCoarse.value = next
-    resetKeyboardBaseline()
+    resetKeyboardBaseline({ reanchorOnNextViewport: true })
     if (!next) {
       requestedMode.value = null
       orientationHint.value = ''
@@ -444,7 +455,7 @@ export const useHallExperienceMode = () => {
     }
     lastAcceptedPhysicalEventStamp = 0
     isMobileCoarse.value = Boolean(coarseMedia?.matches)
-    commitPhysicalOrientation(readInitialPhysicalOrientation({ allowInitialViewportFallback: true }))
+    commitPhysicalOrientation(readInitialPhysicalOrientation({ allowInitialViewportFallback: true }), { reanchorOnNextViewport: false })
     screenOrientation?.addEventListener?.('change', handleScreenOrientationChange)
     orientationMedia?.addEventListener?.('change', handleOrientationMediaChange)
     coarseMedia?.addEventListener?.('change', handleCoarseChange)

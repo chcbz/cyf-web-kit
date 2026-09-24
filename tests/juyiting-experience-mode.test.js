@@ -853,6 +853,43 @@ describe('Juyi Hall experience mode', () => {
     }
   })
 
+  it('reanchors the keyboard baseline when confirmed orientation arrives before viewport resize', async () => {
+    const viewportHarness = installViewportHarness()
+    const env = setupEnvironment({ mediaLandscape: false, screen: { type: 'portrait-primary', angle: 0 } })
+    let wrapper
+    const input = document.createElement('input')
+    document.body.append(input)
+    try {
+      const mounted = await mountMode()
+      wrapper = mounted.wrapper
+      expect(mounted.mode.viewport.value).to.deep.equal({ width: 390, height: 844 })
+      expect(mounted.mode.stableViewportHeight.value).to.equal(844)
+
+      env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
+      await flush()
+      expect(mounted.mode.isPhysicalLandscape.value).to.equal(true)
+      expect(mounted.mode.stableViewportHeight.value).to.equal(844)
+
+      viewportHarness.setVisualSize(844, 390)
+      viewportHarness.setWindowSize(844, 390)
+      viewportHarness.emitVisual()
+      await flush()
+      input.focus()
+      await flush()
+
+      expect(mounted.mode.viewport.value).to.deep.equal({ width: 844, height: 390 })
+      expect(mounted.mode.hallViewportHeight.value).to.equal(390)
+      expect(mounted.mode.stableViewportHeight.value).to.equal(390)
+      expect(mounted.mode.isEditableFocused.value).to.equal(true)
+      expect(mounted.mode.keyboardPhase.value).to.equal('closed')
+    } finally {
+      wrapper?.unmount()
+      input.remove()
+      viewportHarness.restore()
+      env.restore()
+    }
+  })
+
   it('does not rebuild the keyboard baseline from aspect inversion and resets only on confirmed orientation', async () => {
     const viewportHarness = installViewportHarness()
     const env = setupEnvironment({ mediaLandscape: false, screen: { type: 'portrait-primary', angle: 0 } })
