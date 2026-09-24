@@ -54,7 +54,10 @@ describe('W05 real formal-review component boundary', () => {
     try {
       await flushPromises()
       expect(wrapper.findAll('.is-requested-delivery')).to.have.length(1)
-      expect(wrapper.find('.is-requested-delivery').text()).to.include('真实读取的正式成果').and.include('artifact-1 · v2')
+      expect(wrapper.find('.is-requested-delivery').text()).to.include('真实读取的正式成果')
+      expect(wrapper.find('.formal-artifacts').text()).to.include('交付报告').and.include('固定版本 v2')
+      expect(wrapper.find('.formal-technical').attributes()).not.to.have.property('open')
+      expect(wrapper.find('.formal-technical').text()).to.include('artifact-1').and.include('a'.repeat(64))
       expect(wrapper.find('form.formal-decision').exists()).to.equal(true)
       await wrapper.setProps({ focusDeliveryId: 'no-longer-readable' })
       expect(wrapper.find('.is-requested-delivery').exists()).to.equal(false)
