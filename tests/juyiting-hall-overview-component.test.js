@@ -63,6 +63,8 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       await settle()
       expect(wrapper.findAll('.overview-section')).to.have.length(1)
       expect(wrapper.find('.overview-section').attributes('aria-label')).to.equal('最近事项')
+      expect(wrapper.find('.overview-start-card').exists()).to.equal(true)
+      expect(wrapper.findAll('.overview-start-steps li').map(step => step.text())).to.deep.equal(['01说清目标', '02选好帮手', '03收好成果'])
       const create = wrapper.findAll('button').find(button => button.text() === '提出需求')
       expect(create.find('var-icon').attributes('name')).to.equal('plus')
       expect(wrapper.findAll('button').find(button => button.text() === '先聊一聊').find('var-icon').attributes('name')).to.equal('chat-processing-outline')

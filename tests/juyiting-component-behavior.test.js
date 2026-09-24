@@ -2605,6 +2605,10 @@ describe('lightweight workbench real panel navigation', () => {
       const taskTab = wrapper.find('.hall-workbench-sidebar [data-workbench-tab="tasks"]')
       taskTab.element.focus(); await taskTab.trigger('click'); await Vue.nextTick()
       expect(wrapper.vm.$.setupState.panelFrames).to.deep.equal(['tasks'])
+      expect(wrapper.find('.workbench-breadcrumb strong').text()).to.equal('我的事项')
+      expect(wrapper.find('.panel-title > span').text()).to.equal('我的事项')
+      expect(wrapper.find('.panel-title [aria-label="关闭面板"] i').attributes('name')).to.equal('window-close')
+      expect(wrapper.find('.workbench-sidebar-account').attributes('aria-label')).to.equal('个人中心')
       let overlay = wrapper.find('.panel-overlay').element
       wrapper.vm.$.setupState.closePanel(); await wrapper.vm.$.setupState.handlePanelAfterLeave(overlay)
       await Vue.nextTick()
