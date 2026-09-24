@@ -35,6 +35,7 @@ declare module 'vue' {
     CoordinationPanel: typeof import('./components/juyiting/CoordinationPanel.vue')['default']
     EconomyReadOnlyPreview: typeof import('./components/economy/EconomyReadOnlyPreview.vue')['default']
     FormalDeliveryList: typeof import('./components/deliveries/FormalDeliveryList.vue')['default']
+    FormalTaskDeliveryPanel: typeof import('./components/deliveries/FormalTaskDeliveryPanel.vue')['default']
     GiftList: typeof import('./components/GiftList.vue')['default']
     GiftPay: typeof import('./components/GiftPay.vue')['default']
     GuestDemo: typeof import('./components/public/GuestDemo.vue')['default']

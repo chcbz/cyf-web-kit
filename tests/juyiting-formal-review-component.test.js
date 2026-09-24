@@ -89,7 +89,7 @@ describe('BF19 production formal rework boundary', () => {
   const output = (state, version) => ({
     outputId: 'output-1', executionId: 'execution-1', fileId: 'file-1', fileVersion: 3,
     contentHash: 'a'.repeat(64), contentMimeType: 'application/pdf', byteLength: 128, committedAt: 1,
-    state: 'AVAILABLE', publicationState: 'PUBLISHED', artifactId: 'artifact-1', artifactVersion: 2,
+    state: 'AVAILABLE', publicationState: 'PUBLISHED', taskId: 'task-1', artifactId: 'artifact-1', artifactVersion: 2,
     formalDeliveryId: 'delivery-1', formalDeliveryRevision: 2, formalDeliveryState: state,
     formalDecisionVersion: version, formalReviewedAt: version ? 2 : null
   })
@@ -149,7 +149,7 @@ describe('BF19 production formal rework boundary', () => {
     } finally { wrapper.unmount() }
   })
   it('refuses mismatched decision versions and unrelated/private outputs', async () => {
-    for (const changes of [{ formalDecisionVersion: 2 }, { formalDeliveryId: 'other-delivery' }]) {
+    for (const changes of [{ formalDecisionVersion: 2 }, { formalDeliveryId: 'other-delivery' }, { taskId: 'other-task' }, { taskId: null }]) {
       const wrapper = mount(FormalTaskDeliveryPanel, { props: {
         taskId: 'task-1', identityFingerprint: 'owner:client:1', executionContext: scope, selectedAgentId: 'agent-1',
         deliveryAdapter: { list: async () => [{ ...delivery, state: 'changes_requested', deliveryVersion: 1, reviewedAt: 2, reviewReason: 'revise' }] },

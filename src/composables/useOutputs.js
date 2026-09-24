@@ -29,7 +29,7 @@ const TASK_DELIVERABLE_FIELDS = new Set([
 const CONVERSATION_DELIVERABLE_FIELDS = new Set([
   'outputId', 'executionId', 'fileId', 'fileVersion', 'contentHash', 'contentMimeType',
   'byteLength', 'committedAt', 'state', 'publicationState', 'formalDeliveryState',
-  'artifactId', 'artifactVersion', 'formalDeliveryId', 'formalDeliveryRevision',
+  'artifactId', 'artifactVersion', 'taskId', 'formalDeliveryId', 'formalDeliveryRevision',
   'formalDecisionVersion', 'formalReviewedAt'
 ])
 const FORMAL_DELIVERY_STATES = new Set(['submitted', 'accepted', 'changes_requested'])
@@ -65,12 +65,12 @@ const conversationDeliverable = value => {
     !exactMime(value.contentMimeType) || !exactByteLength(value.byteLength) || !exactTimestamp(value.committedAt) ||
     value.state !== 'AVAILABLE') return false
   if (value.publicationState === 'WORKSPACE_COMMITTED') {
-    return value.formalDeliveryState === 'NOT_APPLICABLE' &&
+    return value.formalDeliveryState === 'NOT_APPLICABLE' && value.taskId == null &&
       (value.artifactId == null || value.artifactId === '') &&
       (value.artifactVersion == null || value.artifactVersion === '')
   }
   if (value.publicationState !== 'PUBLISHED' || !FORMAL_DELIVERY_STATES.has(value.formalDeliveryState) ||
-    !exactId(value.artifactId) || !exactVersion(value.artifactVersion) || !exactId(value.formalDeliveryId) ||
+    !exactId(value.artifactId) || !exactVersion(value.artifactVersion) || !exactId(value.taskId) || !exactId(value.formalDeliveryId) ||
     !exactVersion(value.formalDeliveryRevision) || !Number.isSafeInteger(value.formalDecisionVersion) ||
     value.formalDecisionVersion < 0 || (value.formalReviewedAt != null && !exactTimestamp(value.formalReviewedAt))) return false
   if (value.formalDeliveryState === 'submitted') return value.formalDecisionVersion === 0 && value.formalReviewedAt == null
@@ -220,8 +220,9 @@ const normalizeItem = (item, sourceType, taskId = null) => {
   if (sourceType === 'conversation') {
     if (!conversationDeliverable(item)) return null
     const taskPublished = item.publicationState === 'PUBLISHED'
+    if (taskPublished && validId(taskId) && item.taskId !== taskId) return null
     const artifactRef = taskPublished
-      ? Object.freeze({ artifactId: item.artifactId, artifactVersion: String(item.artifactVersion), taskId: validId(taskId) ? taskId : '' })
+      ? Object.freeze({ artifactId: item.artifactId, artifactVersion: String(item.artifactVersion), taskId: item.taskId })
       : null
     const fileRef = Object.freeze({ fileId: item.fileId, fileVersion: String(item.fileVersion) })
     return Object.freeze({

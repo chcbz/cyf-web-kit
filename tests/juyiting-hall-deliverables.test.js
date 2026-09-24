@@ -59,7 +59,7 @@ describe('1.13.2 Babao-box workspace entry', () => {
         list: async () => ({
           state: 'AVAILABLE', publicationPending: false, nextCursor: null,
           items: [privateDeliverable({
-            publicationState: 'PUBLISHED', formalDeliveryState: 'submitted',
+            publicationState: 'PUBLISHED', taskId: 'task-1', formalDeliveryState: 'submitted',
             artifactId: 'artifact-1', artifactVersion: 3,
             formalDeliveryId: 'delivery-1', formalDeliveryRevision: 2,
             formalDecisionVersion: 0, formalReviewedAt: null
@@ -77,6 +77,22 @@ describe('1.13.2 Babao-box workspace entry', () => {
       expect(item).not.to.have.any.keys('storageUri', 'leaseToken', 'runtimeCredential', 'content')
     } finally {
       outputs.dispose()
+    }
+  })
+  it('uses the server taskId without a selected task and refuses a conflicting or missing published taskId', async () => {
+    const published = privateDeliverable({
+      publicationState: 'PUBLISHED', formalDeliveryState: 'changes_requested', taskId: 'task-1',
+      artifactId: 'artifact-1', artifactVersion: 1, formalDeliveryId: 'delivery-1',
+      formalDeliveryRevision: 1, formalDecisionVersion: 1, formalReviewedAt: 2
+    })
+    for (const [selectedTask, rowTask, expectedCount] of [[null, 'task-1', 1], ['task-1', 'other-task', 0], ['task-1', null, 0]]) {
+      const outputs = useOutputs({ source: ref({ type: 'conversation', id: 'conversation-1' }), taskId: selectedTask,
+        identityFingerprint: ref('owner-a'), adapter: { list: async () => ({ items: [{ ...published, taskId: rowTask }] }) } })
+      try {
+        await tick()
+        expect(outputs.items.value).to.have.length(expectedCount)
+        if (expectedCount) expect(outputs.items.value[0].artifactRef.taskId).to.equal('task-1')
+      } finally { outputs.dispose() }
     }
   })
   it('shows TASK publication lag as syncing rather than a pseudo-delivery', async () => {
