@@ -98,6 +98,7 @@ export function useFormalTaskExecution ({
     return ''
   })
   const stateText = computed(() => {
+    if (revokeStore.read()?.uncertain) return '原撤销请求结果待核对：请恢复查询原执行，不会重复发送撤销或新执行。'
     if (execution.unresolvedIntent.value || execution.executionState.value === 'unknown') return '原请求结果未知：仅可恢复查询，不能重发。'
     const value = activeExecution.value
     if (!value) return '尚未确认本正式任务的执行记录。'

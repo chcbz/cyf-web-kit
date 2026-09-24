@@ -35,6 +35,7 @@ const restoreDom = () => {
 const formalExecutionStub = () => ({
   readyReason: Vue.ref('正式执行条件尚未满足。'), stateText: Vue.ref('尚未确认本正式任务的执行记录。'), scopeError: Vue.ref(''), activeExecution: Vue.ref(null),
   formalHistory: Vue.ref([]), historyState: Vue.ref('idle'), historyError: Vue.ref(''),
+  canRevoke: Vue.ref(false), revoking: Vue.ref(false), revokeOriginal: async () => null,
   execution: { pending: Vue.ref(false) }, refreshReadiness: async () => false,
   recoverOriginalRequest: async () => null, begin: async () => null, loadFormalHistory: async () => [], selectFormalHistory: async () => null, dispose: () => {}
 })
@@ -118,6 +119,30 @@ describe('W06 workspace bounty material links', () => {
     const attach = wrapper.find('.attach-material')
     assert.equal(attach.exists(), true)
     assert.equal(attach.attributes('disabled'), '')
+  })
+
+  it('requires explicit confirmation to revoke the queued execution and emits the exact receipt', async () => {
+    const calls = []
+    const receipt = { executionId: 'pwe_exact', state: 'INPUTS_REVOKED' }
+    const formal = formalExecutionStub()
+    formal.activeExecution.value = { executionId: 'pwe_exact', state: 'QUEUED' }
+    formal.canRevoke.value = true
+    formal.revokeOriginal = async options => { calls.push(options); return receipt }
+    const workspace = { items: Vue.ref([]), nextCursor: Vue.ref(null), listState: Vue.ref('empty'), loading: Vue.ref(false), error: Vue.ref(''), detail: Vue.ref(null), refresh: async () => true, dispose: () => {} }
+    const links = { links: Vue.ref([]), nextCursor: Vue.ref(null), listState: Vue.ref('empty'), loading: Vue.ref(false), actionState: Vue.ref('idle'), error: Vue.ref(''), load: async () => true, dispose: () => {} }
+    const component = TaskMaterialLinks({ vue: Vue, '@/composables/useFormalTaskExecution': { useFormalTaskExecution: () => formal }, '@/composables/usePersonalWorkspace': { usePersonalWorkspace: () => workspace }, '@/composables/usePersonalWorkspaceTaskLinks': { usePersonalWorkspaceTaskLinks: () => links } })
+    const wrapper = mount(component, { props: { taskId: 'task_a', identityEpoch: 1 } })
+    wrappers.push(wrapper)
+    const button = wrapper.findAll('button').find(node => node.text() === '撤销本次输入授权')
+    assert.equal(button.attributes('disabled'), '')
+    await button.trigger('click')
+    assert.deepEqual(calls, [])
+    await wrapper.get('.formal-confirmation input').setValue(true)
+    assert.equal(button.attributes('disabled'), undefined)
+    await button.trigger('click')
+    assert.deepEqual(calls, [{ confirmed: true }])
+    assert.deepEqual(wrapper.emitted('formal-execution-recovered'), [[receipt]])
+    assert.equal(button.attributes('disabled'), '')
   })
 
   it('mounts task material controls in the formal bounty detail while preserving the existing discussion event', () => {

@@ -122,12 +122,13 @@ describe('formal owner input revocation', () => {
     const second = setup(storage)
     second.mock.state.revokeInputs = async () => { calls++; return null }
     assert.equal(second.formal.canRevoke.value, false)
+    assert.match(second.formal.stateText.value, /原撤销请求结果待核对/)
     assert.equal(await second.formal.revokeOriginal({ confirmed: true }), null)
     assert.equal(calls, 1)
     assert.equal(second.mock.createCalls.length, 0)
     assert.match(second.formal.scopeError.value, /只查询原执行/)
   })
-  it('refuses wrong task, missing durable storage and unconfirmed conversation', async () => {
+  it('refuses wrong task and missing durable storage', async () => {
     const { formal, mock, task } = setup(memory())
     let calls = 0
     mock.state.revokeInputs = async () => { calls++; return null }
