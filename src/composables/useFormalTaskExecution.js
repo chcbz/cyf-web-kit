@@ -51,35 +51,40 @@ export function useFormalTaskExecution ({
   const activeExecution = computed(() => scopeMatches(execution.execution.value, currentScope.value) ? execution.execution.value : null)
   const revoking = ref(false)
   const revokeStore = createPersonalWorkspaceExecutionRecoveryStore({ storage, scopeKey: () => `${scopeKey.value}\u0000revoke` })
+  const revokeRevision = ref(0)
+  const revokeIntent = computed(() => { revokeRevision.value; scopeKey.value; return revokeStore.read() })
+  const clearRevokeIntent = () => { revokeStore.clear(); revokeRevision.value++ }
   const canRevoke = computed(() => Boolean(activeExecution.value?.state === 'QUEUED'
     && currentScope.value.conversationConfirmed && !execution.unresolvedIntent.value && !revoking.value
-    && !revokeStore.read()?.uncertain))
+    && !revokeIntent.value?.uncertain))
   const revokeOriginal = async ({ confirmed = false } = {}) => {
     if (!confirmed) { scopeError.value = '请明确确认撤销本次执行的输入授权。'; return null }
     const current = activeExecution.value
-    const pending = revokeStore.read()
+    const pending = revokeIntent.value
     if (pending?.uncertain) { scopeError.value = '原撤销请求结果待核对，只查询原执行，不重复发送撤销或新执行。'; return null }
     if (!canRevoke.value || !current) return null
     const key = globalThis.crypto?.randomUUID?.() || `formal-revoke-${Date.now()}-${Math.random().toString(36).slice(2)}`
     if (!revokeStore.save({ idempotencyKey: key, executionId: current.executionId, uncertain: true })) {
       scopeError.value = '无法保存撤销请求的恢复标识，未发送请求。'; return null
     }
+    revokeRevision.value++
     const operationScope = scopeKey.value
+    const operationEpoch = valueOf(identityEpoch)
     revoking.value = true; scopeError.value = ''
     try {
       const result = await execution.revokeInputs({ idempotencyKey: key })
-      if (scopeKey.value !== operationScope) return null
+      if (scopeKey.value !== operationScope || valueOf(identityEpoch) !== operationEpoch) return null
       if (result && isFormalExecution(result) && result.executionId === current.executionId && result.state === 'INPUTS_REVOKED') {
-        revokeStore.clear(); return result
+        clearRevokeIntent(); return result
       }
       scopeError.value = '撤销结果待核对，请恢复查询原执行；不会自动重复撤销或发起新执行。'
       return null
-    } finally { if (scopeKey.value === operationScope) revoking.value = false }
+    } finally { if (scopeKey.value === operationScope && valueOf(identityEpoch) === operationEpoch) revoking.value = false }
   }
   watch(() => [scopeKey.value, valueOf(identityEpoch)], () => { revoking.value = false }, { flush: 'sync' })
   watch(activeExecution, value => {
-    const intent = revokeStore.read()
-    if (value && value.executionId === intent?.executionId && ['INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'FAILED'].includes(value.state)) revokeStore.clear()
+    const intent = revokeIntent.value
+    if (value && value.executionId === intent?.executionId && ['INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'FAILED'].includes(value.state)) clearRevokeIntent()
   }, { flush: 'sync' })
   const readyReason = computed(() => {
     const scope = currentScope.value
@@ -87,6 +92,7 @@ export function useFormalTaskExecution ({
     if (!validId(scope.conversationId)) return scope.executionAuthorizationReason || '尚未提供已确认的正式议事 conversationId，不能开始执行。'
     if (!scope.conversationConfirmed) return scope.executionAuthorizationReason || '正式议事尚未由父级确认，不能开始执行。'
     if (!validId(scope.targetAgentId)) return scope.executionAuthorizationReason || '尚未提供明确 targetAgentId，不能开始执行。'
+    if (revoking.value || revokeIntent.value?.uncertain) return '原撤销请求结果待核对，只查询原执行，不能开始新的正式办理。'
     if (!scope.executionAuthorized) return scope.executionAuthorizationReason || '当前任务尚未获父级授权进入正式执行，不能开始执行。'
     if (execution.capabilityState.value === 'loading') return '正在读取执行能力。'
     if (execution.capabilityState.value !== 'ready' || !execution.allowedMimeTypes.value.includes(FORMAL_TASK_OUTPUT_MIME_TYPE)) return '当前能力未确认可生成真实 PDF，不能开始执行。'
@@ -98,7 +104,7 @@ export function useFormalTaskExecution ({
     return ''
   })
   const stateText = computed(() => {
-    if (revokeStore.read()?.uncertain) return '原撤销请求结果待核对：请恢复查询原执行，不会重复发送撤销或新执行。'
+    if (revokeIntent.value?.uncertain) return '原撤销请求结果待核对：请恢复查询原执行，不会重复发送撤销或新执行。'
     if (execution.unresolvedIntent.value || execution.executionState.value === 'unknown') return '原请求结果未知：仅可恢复查询，不能重发。'
     const value = activeExecution.value
     if (!value) return '尚未确认本正式任务的执行记录。'
@@ -122,7 +128,12 @@ export function useFormalTaskExecution ({
   }
   const recoverOriginalRequest = async () => {
     scopeError.value = ''
-    await execution.refreshExecution()
+    const intent = revokeIntent.value
+    if (intent?.uncertain && intent.executionId) {
+      await execution.recoverExecution(intent.executionId)
+    } else {
+      await execution.refreshExecution()
+    }
     if (execution.execution.value && !isFormalExecution(execution.execution.value)) {
       scopeError.value = '服务端恢复记录与当前正式 taskId、TASK 模式、workItemId、conversationId、targetAgentId 或 PDF 输出不一致；未显示为本任务执行，也不会重发。'
       return null

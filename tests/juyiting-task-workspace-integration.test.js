@@ -3,6 +3,9 @@ import { expect } from 'chai'
 import { readFileSync } from 'fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
 import { useTaskWorkspaceView } from '../src/composables/juyiting/useTaskWorkspaceView.js'
+import { useHallHomeMode } from '../src/composables/juyiting/useHallHomeMode.js'
+import { useFormalTaskExecutionScope } from '../src/composables/useFormalTaskExecutionScope.js'
+import { confirmHallLeave, hasMeaningfulHallLeaveWork } from '../src/composables/juyiting/hallAccountNavigation.js'
 import * as HallPanelHelpers from '../src/composables/juyiting/useHallPanels.js'
 import { resolveLiveMapPreviewActivation } from '../src/composables/juyiting/liveMapPreviewPolicy.js'
 import { isEconomyPreviewBuildEnabled } from '../src/utils/silverAmount.js'
@@ -79,7 +82,7 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
   }
   const taskWorkspace = workspaceState || null
   return {
-    ...HallPanelHelpers,
+    ...HallPanelHelpers, useHallHomeMode, useFormalTaskExecutionScope, confirmHallLeave, hasMeaningfulHallLeaveWork,
     resolveLiveMapPreviewActivation, isEconomyPreviewBuildEnabled,
     isEconomyPreviewCapability: () => false, loadEconomyPreviewCapability: async () => null,
     env: { VITE_JUYITING_TASK_WORKSPACE_ENABLED: workspaceState ? 'true' : undefined },
@@ -107,6 +110,7 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
     useTaskWorkspaceView: () => workspaceState ? ({ subject: workspaceState.subject, workspace: workspaceState.workspace, connectionState: workspaceState.connectionState, error: workspaceState.error, retry: workspaceState.retry }) : ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: text, error: Vue.ref(null), retry: noop }),
     useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }),
     portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '',
+    HallOverview: EmptyPanel, HallDraftEditor: EmptyPanel, FormalDeliveryList: EmptyPanel,
     HallPortraitHome, HallStage, HallVoiceHud: EmptyPanel, LibraryPanel: LibraryPanel || EmptyPanel, TaskWorkspacePanel: TaskWorkspacePanel || EmptyPanel, ArtifactTransferPanel: ArtifactTransferPanel || EmptyPanel, ArtifactOutcomePanel: EmptyPanel,
     AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel, BountyPanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PrivateDiscussionPanel: EmptyPanel, PublicDiscussionPanel: EmptyPanel, SelectedAgentCard: EmptyPanel
   }

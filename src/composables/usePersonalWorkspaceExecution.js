@@ -278,19 +278,25 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     recoveryStore.clear(); selectionSequence += 1; stopPolling(); execution.value = null; receipt.value = null; executionState.value = 'idle'; error.value = ''; completionNotice.value = ''
     return true
   }
-  const selectHistoryExecution = async executionId => {
-    const item = history.value.find(value => value.executionId === executionId)
-    if (!item || unresolvedIntent.value || executionState.value === 'creating' || executionState.value === 'reconciling') return null
+  const readExactExecution = async (executionId, item = null) => {
+    if (!ID(executionId) || unresolvedIntent.value || executionState.value === 'creating' || executionState.value === 'reconciling') return null
     const snapshot = snapshotNow(); const sequence = ++selectionSequence
-    stopPolling(); execution.value = null; applySummary(item); executionState.value = 'loading'; error.value = ''; completionNotice.value = ''
+    stopPolling(); execution.value = null; if (item) applySummary(item); executionState.value = 'loading'; error.value = ''; completionNotice.value = ''
     try {
       const value = await request({ url: `/personal-workspace/executions/${encodeURIComponent(executionId)}`, method: 'GET' }, snapshot)
       if (sequence !== selectionSequence || snapshot.generation !== generation) return null
+      if (value?.executionId !== executionId) throw new Error('执行恢复回执与请求编号不一致。')
       const result = applyExecution(value)
       if (!TERMINAL_EXECUTION_STATES.has(result.state)) void startPolling(result.executionId)
       return result
     } catch (cause) { if (cause?.name !== 'AbortError' && sequence === selectionSequence && snapshot.generation === generation) { executionState.value = 'error'; error.value = errorMessage(cause) } return null }
   }
+  const recoverExecution = executionId => readExactExecution(executionId)
+  const selectHistoryExecution = executionId => {
+    const item = history.value.find(value => value.executionId === executionId)
+    return item ? readExactExecution(executionId, item) : Promise.resolve(null)
+  }
+
   const loadHistory = async ({ beforeCreatedAt = null, beforeExecutionId = null, append = false, adopt = false } = {}) => {
     const snapshot = snapshotNow(); const selectionAtStart = selectionSequence; historyState.value = 'loading'; historyError.value = ''
     const params = { limit: 20 }
@@ -320,5 +326,5 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
   const dispose = () => { if (disposed) return; disposed = true; unregisterIdentityCleanup(); reset() }
   if (getCurrentInstance()) onBeforeUnmount(dispose)
 
-  return { agents, rosterState, rosterError, selectedAgentId, selectedAgent, selectedExecutionAgent, allowedMimeTypes, inputMimeTypes, capabilityState, capabilityError, generationEnabled, execution, receipt, executionState, error, completionNotice, history, historyState, historyError, historyNextCursor, unresolvedIntent, pending, loadCapabilities, loadAgents, loadHistory, recover, selectAgent, create, prepareNewRequest, adoptExecution, selectHistoryExecution, refreshExecution, revokeInputs, stopPolling, reset, dispose }
+  return { agents, rosterState, rosterError, selectedAgentId, selectedAgent, selectedExecutionAgent, allowedMimeTypes, inputMimeTypes, capabilityState, capabilityError, generationEnabled, execution, receipt, executionState, error, completionNotice, history, historyState, historyError, historyNextCursor, unresolvedIntent, pending, loadCapabilities, loadAgents, loadHistory, recover, selectAgent, create, prepareNewRequest, adoptExecution, selectHistoryExecution, recoverExecution, refreshExecution, revokeInputs, stopPolling, reset, dispose }
 }
