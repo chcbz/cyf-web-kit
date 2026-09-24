@@ -73,6 +73,39 @@ describe('W05 real formal-review component boundary', () => {
       })
     } finally { wrapper.unmount() }
   })
+
+  it('offers exact preview and download actions only for hash-matched formal artifacts', async () => {
+    const exactOutput = {
+      artifactId: 'artifact-1', artifactVersion: '2', sha256: 'a'.repeat(64), state: 'AVAILABLE',
+      title: 'result.pdf', mimeType: 'application/pdf', byteLength: 128, canPreview: true, canDownload: true
+    }
+    const wrapper = mount(FormalDeliveryList, {
+      props: {
+        taskId: 'task-1', identityFingerprint: 'owner-a:client:1', readOutputs: [exactOutput],
+        adapter: { list: async () => [delivery], decide: async () => {}, createRework: async () => {} }
+      },
+      slots: { preview: '<section class="preview-slot">固定版本预览</section>' }
+    })
+    try {
+      await flushPromises()
+      expect(wrapper.find('.formal-artifact-copy').text()).to.include('result.pdf').and.include('固定版本 v2')
+      const preview = wrapper.find('button[aria-label="预览第 2 版交付报告"]')
+      const download = wrapper.find('button[aria-label="下载第 2 版交付报告"]')
+      expect(preview.exists()).to.equal(true)
+      expect(download.exists()).to.equal(true)
+      expect(preview.attributes('aria-pressed')).to.equal('false')
+      await wrapper.setProps({ previewOutputKey: `artifact-1:2:${'a'.repeat(64)}` })
+      expect(wrapper.find('.formal-inline-preview .preview-slot').text()).to.equal('固定版本预览')
+      expect(preview.attributes('aria-pressed')).to.equal('true')
+      expect(preview.text()).to.equal('收起预览')
+      await preview.trigger('click')
+      await download.trigger('click')
+      expect(wrapper.emitted('preview-output')?.[0]?.[0]).to.deep.equal(exactOutput)
+      expect(wrapper.emitted('download-output')?.[0]?.[0]).to.deep.equal(exactOutput)
+      await wrapper.setProps({ readOutputs: [{ ...exactOutput, sha256: 'b'.repeat(64) }] })
+      expect(wrapper.find('.formal-artifact-actions').exists()).to.equal(false)
+    } finally { wrapper.unmount() }
+  })
 })
 
 // Mount the production Hall boundary, not just a list with invented rework props.
@@ -82,9 +115,15 @@ const panelScript = compileScript(parse(readFileSync(panelFilename, 'utf8'), { f
   { id: 'formal-task-delivery-panel', inlineTemplate: true }).content
   .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
   .replace(/^import\s+FormalDeliveryList\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { FormalDeliveryList } = deps')
+  .replace(/^import\s+OutputPreview\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { OutputPreview } = deps')
   .replace(/^import\s+\{\s*useOutputs\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { useOutputs } = deps')
+  .replace(/^import\s+\{\s*saveOutputBlob\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { saveOutputBlob } = deps')
   .replace('export default', 'return')
-const FormalTaskDeliveryPanel = new Function('Vue', 'deps', panelScript)(Vue, { FormalDeliveryList, useOutputs })
+const FormalTaskDeliveryPanel = new Function('Vue', 'deps', panelScript)(Vue, {
+  FormalDeliveryList, useOutputs,
+  OutputPreview: { props: ['item', 'load', 'contextKey'], template: '<section class="output-preview-stub" />' },
+  saveOutputBlob: () => {}
+})
 
 describe('BF19 production formal rework boundary', () => {
   before(() => { for (const name of ['Element', 'HTMLElement', 'SVGElement', 'Node']) globalThis[name] ||= globalThis.window[name] })
@@ -96,6 +135,11 @@ describe('BF19 production formal rework boundary', () => {
     formalDeliveryId: 'delivery-1', formalDeliveryRevision: 2, formalDeliveryState: state,
     formalDecisionVersion: version, formalReviewedAt: version ? 2 : null
   })
+  const taskOutput = () => ({
+    artifactId: 'artifact-1', taskId: 'task-1', workItemId: 'work-1', producerAgentId: 'agent-1',
+    artifactType: 'document', title: 'result.pdf', contentHash: 'a'.repeat(64), contentByteLength: 128,
+    contentMimeType: 'application/pdf', artifactVersion: 2, visibility: 'task_members', createdAt: 1
+  })
   it('refreshes exact outputs after decision, sends version 0 not revision 2, and creates rework once', async () => {
     let current = { ...delivery }
     const decisions = []; const reworks = []; const reads = []
@@ -106,7 +150,10 @@ describe('BF19 production formal rework boundary', () => {
         decide: async request => { decisions.push(request); current = { ...delivery, state: 'changes_requested', deliveryVersion: 1, reviewedAt: 2, reviewReason: request.reviewReason } },
         createRework: async request => { reworks.push(request); return { executionId: 'rework-1' } }
       },
-      outputAdapter: { list: async request => { reads.push(request); return { items: [output(current.state, current.deliveryVersion)] } } }
+      outputAdapter: { list: async request => {
+        reads.push(request)
+        return { items: request.sourceType === 'task' ? [taskOutput()] : [output(current.state, current.deliveryVersion)] }
+      } }
     } })
     try {
       await flushPromises()
@@ -125,7 +172,8 @@ describe('BF19 production formal rework boundary', () => {
       expect(reworks[0].source.fileRef).to.deep.equal({ fileId: 'file-1', fileVersion: '3' })
       expect(wrapper.find('form.formal-rework').exists()).to.equal(false)
       expect(wrapper.emitted('rework-created')).to.have.length(1)
-      expect(reads.every(r => r.sourceId === 'conversation-1')).to.equal(true)
+      expect(reads.some(r => r.sourceType === 'task' && r.sourceId === 'task-1')).to.equal(true)
+      expect(reads.some(r => r.sourceType === 'conversation' && r.sourceId === 'conversation-1')).to.equal(true)
     } finally { wrapper.unmount() }
   })
   it('does not borrow foreign task, unconfirmed conversation, or nonselected agent; invalidates stale reads', async () => {
@@ -133,7 +181,9 @@ describe('BF19 production formal rework boundary', () => {
     const wrapper = mount(FormalTaskDeliveryPanel, { props: {
       taskId: 'task-1', identityFingerprint: 'owner:client:1', executionContext: { ...scope, taskId: 'foreign' }, selectedAgentId: 'agent-1',
       deliveryAdapter: { list: async () => [{ ...delivery, state: 'changes_requested', deliveryVersion: 1, reviewedAt: 2, reviewReason: 'revise' }], createRework: async r => writes.push(r) },
-      outputAdapter: { list: request => { signal = request.signal; return new Promise(resolve => { resolveRead = resolve }) } }
+      outputAdapter: { list: request => request.sourceType === 'task'
+        ? Promise.resolve({ items: [] })
+        : (signal = request.signal, new Promise(resolve => { resolveRead = resolve })) }
     } })
     try {
       await flushPromises()
