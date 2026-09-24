@@ -3575,9 +3575,9 @@ button.hall-room {
 .home-overview .panel-overlay.is-workbench-panel :deep(.hall-draft-editor button),
 .home-overview .panel-overlay.is-workbench-panel :deep(.persona-catalog-panel button),
 .home-overview .panel-overlay.is-workbench-panel :deep(.treasure-content button) { min-height: var(--hall-control-height); border-radius: var(--hall-radius-sm); }
-.home-overview .panel-overlay.is-workbench-panel :deep(.hall-tabs),
+.home-overview .panel-overlay.is-workbench-panel :deep(.overview-tabs),
 .home-overview .panel-overlay.is-workbench-panel :deep(.library-tabs) { min-height: var(--hall-control-height); border-bottom: 1px solid var(--hall-border); overflow-x: auto; }
-.home-overview .panel-overlay.is-workbench-panel :deep(.hall-tabs button.active),
+.home-overview .panel-overlay.is-workbench-panel :deep(.overview-tabs button[aria-pressed="true"]),
 .home-overview .panel-overlay.is-workbench-panel :deep(.library-tabs button.active) { color: var(--hall-brand); border-bottom: 2px solid var(--hall-brand); }
 .home-overview .panel-overlay.is-workbench-panel :deep(.task-status-tabs),
 .home-overview .panel-overlay.is-workbench-panel :deep(.status-filter) { overflow-x: auto; flex-wrap: nowrap; }
@@ -3633,6 +3633,11 @@ button.hall-room {
   .home-overview .panel-overlay.is-workbench-panel :deep(.treasure-intro > div) { flex: 1 1 190px; min-width: 0; }
   .home-overview .panel-overlay.is-workbench-panel :deep(.treasure-search) { gap: 8px; }
 }
+
+/* Keyboard-visible layouts must never reserve space for the mobile dock; keep
+   the safe-area inset in --hall-content-bottom-inset. */
+.juyi-page.is-keyboard-active { --hall-dock-reserve: 0px; }
+
 @media (max-height: 560px) {
   .juyi-page.home-overview { grid-template-rows: minmax(0, 1fr); }
   .home-overview .workbench-more-menu { top: 58px; max-height: calc(100% - 58px - var(--hall-content-bottom-inset)); }

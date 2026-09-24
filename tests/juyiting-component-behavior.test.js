@@ -2623,6 +2623,19 @@ describe('lightweight workbench real panel navigation', () => {
     expect(short).to.include('.home-overview .workbench-more-menu { top: 58px; max-height: calc(100% - 58px - var(--hall-content-bottom-inset)); }')
   })
 
+  it('targets page-level workbench tabs without changing detail or map tabs', () => {
+    const source = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+    const style = parse(source).descriptor.styles.at(-1).content
+    expect(style).to.include(':deep(.overview-tabs)')
+    expect(style).to.include(':deep(.library-tabs)')
+    expect(style).to.include(':deep(.overview-tabs button[aria-pressed=\"true\"])')
+    expect(style).to.include(':deep(.library-tabs button.active)')
+    expect(style).to.not.include(':deep(.hall-tabs)')
+    expect(style).to.not.include(':deep(.case-tabs)')
+    expect(style).to.include('.juyi-page.is-keyboard-active { --hall-dock-reserve: 0px; }')
+    expect(style).to.include('--hall-content-bottom-inset: calc(var(--hall-safe-bottom) + var(--hall-dock-reserve));')
+  })
+
   it('keeps tiny reflow navigation named and lets short chat windows scroll to the composer', () => {
     const source = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
     const style = parse(source).descriptor.styles.at(-1).content
