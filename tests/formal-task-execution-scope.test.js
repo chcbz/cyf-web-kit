@@ -62,7 +62,7 @@ describe('formal TASK execution Hall scope', () => {
   it('truthfully blocks missing, unavailable, and ambiguous required work-item facts', () => {
     const fixture = scopeFixture()
     fixture.taskWorkspaceSnapshot.value = workspace({ workItems: [] })
-    assert.match(fixture.formal.value.authorizationReason, /没有由该已指派好汉承办的 ready 必需工作项/)
+    assert.match(fixture.formal.value.authorizationReason, /没有可由该已指派好汉领取的 ready 必需工作项/)
 
     fixture.taskWorkspaceSnapshot.value = workspace({ workItems: [readyItem(), readyItem({ workItemId: 'work_2' })] })
     assert.match(fixture.formal.value.authorizationReason, /多个匹配的 ready 必需工作项/)
@@ -71,4 +71,34 @@ describe('formal TASK execution Hall scope', () => {
     fixture.taskWorkspaceError.value = { status: 503 }
     assert.match(fixture.formal.value.authorizationReason, /返回 503/)
   })
+
+  it('BF13 permits a requeued unassigned required item only within the exact assigned task scope', () => {
+    const fixture = scopeFixture()
+    fixture.taskWorkspaceSnapshot.value = workspace({ workItems: [readyItem({ assigneeAgentId: null })] })
+    assert.equal(fixture.formal.value.formalExecutionAuthorized, true)
+    assert.equal(fixture.formal.value.targetAgentId, 'agent_wuyong')
+    fixture.taskWorkspaceSubject.value = { taskId: 'task_395', actorAgentId: 'agent_other' }
+    assert.equal(fixture.formal.value.formalExecutionAuthorized, false)
+    fixture.taskWorkspaceSubject.value = { taskId: 'task_395', actorAgentId: 'agent_wuyong' }
+    fixture.chatContext.value = { ...fixture.chatContext.value, taskId: 'task_other' }
+    assert.equal(fixture.formal.value.formalExecutionAuthorized, false)
+  })
+
+  it('BF13 does not guess absent/empty/foreign assignees or ignore ambiguous claimable items', () => {
+    const fixture = scopeFixture()
+    for (const assigneeAgentId of [undefined, '', 'agent_other']) {
+      fixture.taskWorkspaceSnapshot.value = workspace({ workItems: [readyItem({ assigneeAgentId })] })
+      assert.equal(fixture.formal.value.formalExecutionAuthorized, false)
+    }
+    fixture.taskWorkspaceSnapshot.value = workspace({ workItems: [readyItem(), readyItem({ workItemId: 'work_2', assigneeAgentId: null })] })
+    assert.equal(fixture.formal.value.formalExecutionAuthorized, false)
+    assert.match(fixture.formal.value.authorizationReason, /多个匹配/)
+    for (const status of ['claimed', 'running', 'blocked', 'reviewing', 'done']) {
+      fixture.taskWorkspaceSnapshot.value = workspace({ workItems: [readyItem({ assigneeAgentId: null, status })] })
+      assert.equal(fixture.formal.value.formalExecutionAuthorized, false)
+    }
+    fixture.taskWorkspaceSnapshot.value = workspace({ workItems: [readyItem({ assigneeAgentId: null, requiredItem: false })] })
+    assert.equal(fixture.formal.value.formalExecutionAuthorized, false)
+  })
+
 })

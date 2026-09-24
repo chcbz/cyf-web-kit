@@ -52,7 +52,10 @@ export function useFormalTaskExecutionScope ({
     const workspaceMatches = subjectMatches && workspace?.task?.taskId === taskId &&
       workspace.task.assignedAgentId === targetAgentId
     const readyRequiredItems = workspaceMatches && Array.isArray(workspace.workItems)
-      ? workspace.workItems.filter(item => item?.requiredItem === true && item.status === 'ready' && item.assigneeAgentId === targetAgentId)
+      ? workspace.workItems.filter(item => item?.requiredItem === true && item.status === 'ready' &&
+        // Lease expiry clears the item assignee; task-level assignment above remains authoritative.
+        // Match beginTaskExecution: one required ready item, unassigned or owned by this exact target.
+        (item.assigneeAgentId === null || item.assigneeAgentId === targetAgentId))
       : []
     const workspaceAvailable = ['snapshot_ready', 'live', 'reconnecting'].includes(valueOf(taskWorkspaceConnectionState))
 
@@ -68,7 +71,7 @@ export function useFormalTaskExecutionScope ({
       ? '本榜文协作工作台当前返回 503，未核对必需工作项，不能开始正式办理。'
       : '本榜文协作工作台尚未可用，未核对必需工作项，不能开始正式办理。'
     else if (!workspaceMatches) authorizationReason = '协作工作台快照不属于当前榜文或已指派好汉，不能授权正式执行。'
-    else if (readyRequiredItems.length === 0) authorizationReason = '当前榜文没有由该已指派好汉承办的 ready 必需工作项，不能开始正式办理。'
+    else if (readyRequiredItems.length === 0) authorizationReason = '当前榜文没有可由该已指派好汉领取的 ready 必需工作项，不能开始正式办理。'
     else if (readyRequiredItems.length !== 1) authorizationReason = '当前榜文存在多个匹配的 ready 必需工作项，无法任意选择一个开始正式办理。'
 
     return {
