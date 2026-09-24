@@ -1,10 +1,19 @@
 <template>
   <section class="hall-overview" :class="{ 'is-messages': messagesOnly }" :aria-label="messagesOnly ? '消息' : '办事概览'">
-    <header v-if="!messagesOnly" class="overview-hero">
-      <div><p class="overview-eyebrow">开始，也能接着上次</p><h2>今天，想办成什么事？</h2><p>说清目标，交给合适的好汉。资料、进展与成果，留在同一件事里。</p>
-        <div class="overview-hero-actions"><button class="primary" type="button" @click="emit('start-draft')">提出需求</button><button type="button" @click="emit('start-chat')">先聊一聊</button></div>
-      </div>
-    </header>
+    <template v-if="!messagesOnly">
+      <header class="overview-hero">
+        <p class="overview-eyebrow">聚义厅 · 轻量工作台</p>
+        <h2>今天，想办成什么事？</h2>
+        <p>不必独自忙碌，让合适的好汉与你一起。</p>
+      </header>
+      <section class="overview-start-card" aria-label="提出需求">
+        <span class="overview-start-mark" aria-hidden="true">事</span>
+        <div class="overview-start-copy"><h3>说一件你想办的事</h3><p>从目标开始，补齐资料，再交给明确的好汉。</p>
+          <div class="overview-hero-actions"><button class="primary" type="button" @click="emit('start-draft')"><var-icon name="plus" aria-hidden="true" />提出需求</button><button type="button" @click="emit('start-chat')"><var-icon name="chat-processing-outline" aria-hidden="true" />先聊一聊</button></div>
+        </div>
+        <ol class="overview-start-steps" aria-label="办事步骤"><li><strong>01</strong><span>说清目标</span></li><li><strong>02</strong><span>选好帮手</span></li><li><strong>03</strong><span>收好成果</span></li></ol>
+      </section>
+    </template>
     <p v-else class="overview-intro">只列出需要你处理的事项。打开不代表已读、验收或归档。</p>
     <div class="overview-columns"><div class="overview-main">
     <div class="overview-list-heading"><h3>{{ messagesOnly ? '需要我处理' : archiveView ? '案卷' : selectedView === 'needsAction' ? '需要我处理' : '接着上次办' }}</h3><div><button v-if="!messagesOnly" type="button" @click="emit('open-board')">悬赏榜</button><button type="button" :disabled="!enabled || model.state.value === 'loading'" @click="refresh">刷新</button></div></div>
@@ -27,7 +36,7 @@
       <p v-if="enabled && isComplete(view) && !rowsFor(view).length" class="overview-empty">{{ hasMore(view) ? '这一页没有事项，可继续读取。' : view === 'archive' ? '暂时没有收入案卷的事项。' : view === 'needsAction' ? '暂时没有需要你处理的事项。' : '还没有开始的事项，先提出一个需求吧。' }}</p>
       <button v-if="hasMore(view)" type="button" @click="loadMore(view)">读取更多事项</button>
     </section>
-    <section v-if="!messagesOnly" class="overview-resource" aria-label="资料入口"><div><strong>资料留在这里，下次不用重找</strong><p>引用已有资料，查看固定版本的成果。</p></div><button type="button" @click="emit('open-workspace')">打开百宝箱 →</button></section>
+    <section v-if="!messagesOnly" class="overview-resource" aria-label="资料入口"><var-icon class="overview-resource-icon" name="file-document-outline" aria-hidden="true" /><div><strong>资料留在这里，下次不用重找</strong><p>引用已有资料，查看固定版本的成果。</p></div><button type="button" @click="emit('open-workspace')">打开百宝箱 →</button></section>
     </div><aside v-if="!messagesOnly" class="overview-aside" aria-label="快捷入口">
       <button class="overview-map-link" type="button" @click="emit('set-home-mode', 'map')"><span aria-hidden="true">聚义厅</span>厅中实景 · 去梁山走一走 →</button>
       <section class="overview-aside-card"><h3>需要你看一眼</h3><p v-if="model.state.value === 'loading'">正在核对待处理事项…</p><p v-else-if="model.sections.value.needsAction.status !== 'complete'">待处理列表可能不完整，请在事项页核对。</p>
@@ -156,7 +165,18 @@ watch([() => props.enabled, () => props.identityScope, () => props.identityEpoch
 .hall-overview:not(.is-messages) .overview-eyebrow { color: #923f30; font-size: 11px; letter-spacing: .08em; margin-bottom: 8px !important; }
 .hall-overview:not(.is-messages) .overview-hero h2 { color: #242e2b; font: 500 28px/1.5 "Noto Serif CJK SC", "Songti SC", STSong, serif; letter-spacing: .8px; margin: 0 0 6px; }
 .hall-overview:not(.is-messages) .overview-hero p:not(.overview-eyebrow) { color: #68716b; font-size: 14px; }
+.hall-overview:not(.is-messages) .overview-hero { padding: 0; margin-bottom: 26px; }
+.hall-overview:not(.is-messages) .overview-start-card { display: flex; align-items: center; gap: 24px; min-width: 0; padding: 27px 28px; border: 1px solid #e3e5dc; border-radius: 12px; background: #fffefa; margin-bottom: 26px; }
+.hall-overview:not(.is-messages) .overview-start-mark { flex: 0 0 64px; display: grid; place-items: center; width: 64px; height: 72px; border: 1px solid #e9ded2; border-radius: 50% 50% 8px 8px; background: #faf4ef; color: #923f30; font: 500 34px/1 "Noto Serif CJK SC", "Songti SC", STSong, serif; }
+.hall-overview:not(.is-messages) .overview-start-copy { flex: 1 1 auto; min-width: 0; }
+.hall-overview:not(.is-messages) .overview-start-copy h3 { font-size: 17px; font-weight: 600; }
+.hall-overview:not(.is-messages) .overview-start-copy p { margin-top: 4px; font-size: 13px; color: #68716b; }
+.hall-overview:not(.is-messages) .overview-start-steps { display: flex; flex: none; align-items: center; gap: 22px; margin: 0; padding: 0; list-style: none; }
+.hall-overview:not(.is-messages) .overview-start-steps li { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 70px; color: #68716b; font-size: 12px; }
+.hall-overview:not(.is-messages) .overview-start-steps strong { color: #89918c; font: 400 22px/1.3 "Noto Serif CJK SC", "Songti SC", STSong, serif; }
 .hall-overview:not(.is-messages) .overview-hero-actions { margin-top: 16px; gap: 10px; }
+.hall-overview:not(.is-messages) .overview-hero-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+.hall-overview:not(.is-messages) .overview-hero-actions .var-icon { font-size: 16px; }
 .hall-overview:not(.is-messages) button { min-height: 42px; border-radius: 7px; border-color: #e3e5dc; color: #242e2b; font-size: 14px; font-weight: 500; }
 .hall-overview:not(.is-messages) button:hover:not(:disabled) { background: #f0f1ea; border-color: #c4cabe; }
 .hall-overview:not(.is-messages) button.primary { background: #923f30; border-color: #923f30; color: #fffefa; }
@@ -196,6 +216,7 @@ watch([() => props.enabled, () => props.identityScope, () => props.identityEpoch
 .hall-overview .overview-aside-card button small { display: block; margin-top: 4px; color: #68716b; font-weight: 400; font-size: 11px; }
 .hall-overview .overview-aside-card .overview-aside-link { color: #923f30; }
 .hall-overview .overview-resource { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; }
+.hall-overview .overview-resource-icon { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 9px; background: #eaf2ed; color: #21604d; font-size: 22px; }
 .hall-overview .overview-resource strong { display: block; font-size: 14px; font-weight: 500; }
 .hall-overview .overview-resource p { margin: 3px 0 0; }
 .hall-overview .overview-resource button { flex: none; font-size: 12px; }
@@ -206,12 +227,19 @@ watch([() => props.enabled, () => props.identityScope, () => props.identityEpoch
   .hall-overview .overview-columns { grid-template-columns: minmax(0,1fr) 264px; gap: 18px; }
 }
 @media (max-width: 1000px) {
+  .hall-overview .overview-start-steps { display: none !important; }
   .hall-overview .overview-columns { grid-template-columns: minmax(0,1fr); }
   .hall-overview .overview-aside { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .hall-overview .overview-map-link { grid-column: 1/-1; height: 165px; }
 }
 @media (max-width: 600px) {
   .hall-overview:not(.is-messages) { padding: 22px 16px; }
+  .hall-overview:not(.is-messages) .overview-hero { margin-bottom: 20px; }
+  .hall-overview:not(.is-messages) .overview-start-card { align-items: flex-start; gap: 12px; padding: 20px 18px; margin-bottom: 20px; }
+  .hall-overview:not(.is-messages) .overview-start-mark { flex-basis: 36px; width: 36px; height: 44px; font-size: 24px; }
+  .hall-overview:not(.is-messages) .overview-start-copy h3 { font-size: 16px; }
+  .hall-overview:not(.is-messages) .overview-start-copy p { font-size: 12px; }
+  .hall-overview:not(.is-messages) .overview-hero-actions { flex-wrap: wrap; gap: 8px; }
   .hall-overview:not(.is-messages) .overview-hero h2 { font-size: 25px; letter-spacing: 0; }
   .hall-overview .overview-hero-actions button { font-size: 12px; padding: 9px 10px; }
   .hall-overview .overview-main { padding: 18px 16px 0; }

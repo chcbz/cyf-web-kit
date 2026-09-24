@@ -2605,7 +2605,14 @@ describe('lightweight workbench real panel navigation', () => {
       trigger.element.focus()
       await trigger.trigger('click')
       await Vue.nextTick()
-      const menuItem = wrapper.findAll('.workbench-more-menu button').find(button => button.text() === '百宝箱')
+      const menuButtons = wrapper.findAll('.workbench-more-menu button')
+      for (const [label, icon] of [['办事概览', 'home-outline'], ['我的事项', 'format-list-checkbox'],
+        ['厅内议事', 'chat-processing-outline'], ['典籍阁', 'notebook'], ['厅中实景', 'map-marker-outline']]) {
+        expect(menuButtons.find(button => button.text() === label)?.find('i').attributes('name')).to.equal(icon)
+      }
+      expect(wrapper.find('.hall-header-tools .workbench-message-action i').attributes('name')).to.equal('bell-outline')
+      expect(wrapper.find('.hall-header-tools .workbench-account-action i').attributes('name')).to.equal('account-circle-outline')
+      const menuItem = menuButtons.find(button => button.text() === '百宝箱')
       expect(menuItem).to.exist
       // Simulate mobile WebKit, where tapping a button need not focus it.
       trigger.element.focus()
@@ -2634,6 +2641,10 @@ describe('lightweight workbench real panel navigation', () => {
       const taskTab = wrapper.find('.hall-workbench-sidebar [data-workbench-tab="tasks"]')
       taskTab.element.focus(); await taskTab.trigger('click'); await Vue.nextTick()
       expect(wrapper.vm.$.setupState.panelFrames).to.deep.equal(['tasks'])
+      expect(wrapper.find('.workbench-breadcrumb strong').text()).to.equal('我的事项')
+      expect(wrapper.find('.panel-title > span').text()).to.equal('我的事项')
+      expect(wrapper.find('.panel-title [aria-label="关闭面板"] i').attributes('name')).to.equal('window-close')
+      expect(wrapper.find('.workbench-sidebar-account').attributes('aria-label')).to.equal('个人中心')
       let overlay = wrapper.find('.panel-overlay').element
       wrapper.vm.$.setupState.closePanel(); await wrapper.vm.$.setupState.handlePanelAfterLeave(overlay)
       await Vue.nextTick()

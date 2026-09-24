@@ -10,12 +10,13 @@
         <button class="workbench-map-entry" type="button" @click="openWorkbenchMap"><var-icon name="map-marker-outline" /><span>厅中实景<small>去梁山走一走</small></span><var-icon name="chevron-right" /></button>
         <nav class="workbench-side-nav workbench-side-utility" aria-label="工作台辅助导航">
           <button type="button" @click="emit('open-onboarding', $event.currentTarget)"><var-icon name="help-circle-outline" /><span>使用帮助</span></button>
-          <button type="button" :disabled="accountEntryDisabled" @click="openProfile"><var-icon name="account-circle-outline" /><span>个人中心</span></button>
         </nav>
+        <button class="workbench-sidebar-account" type="button" :disabled="accountEntryDisabled" aria-label="个人中心" @click="openProfile"><img v-if="accountAvatar" :src="accountAvatar" alt="" /><var-icon v-else name="account-circle-outline" aria-hidden="true" /><span>{{ accountDisplayName }}<small>个人中心</small></span><var-icon name="chevron-right" aria-hidden="true" /></button>
       </div>
     </aside>
     <header v-show="!isImmersiveMap" class="hall-app-header" :inert="isPanelSessionActive && !workbenchPrimaryPanelSet.has(renderedPanel) || voiceInteractionLocked ? '' : null" :aria-hidden="isPanelSessionActive && !workbenchPrimaryPanelSet.has(renderedPanel) ? 'true' : null">
-      <button class="hall-brand" type="button" @click="setHomeMode('overview')"><span class="hall-seal">聚</span><span>聚义厅<small>梁山好汉 · 共成其事</small></span></button>
+      <nav v-if="isOverviewHome" class="workbench-breadcrumb" aria-label="当前位置"><button type="button" @click="openWorkbenchPage('overview')">我的工作空间</button><var-icon name="chevron-right" aria-hidden="true" /><strong>{{ workbenchCurrentLabel }}</strong></nav>
+      <button v-else class="hall-brand" type="button" @click="setHomeMode('overview')"><span class="hall-seal">聚</span><span>聚义厅<small>梁山好汉 · 共成其事</small></span></button>
       <nav class="hall-main-nav" aria-label="聚义厅主导航">
         <button type="button" :aria-current="isOverviewHome && !activePanel ? 'page' : null" @click="openWorkbenchPage('overview')">办事概览</button>
         <button type="button" @click="openWorkbenchPage('tasks')">我的事项</button>
@@ -24,16 +25,16 @@
       </nav>
       <div class="hall-header-tools">
         <button type="button" @click="isOverviewHome ? openWorkbenchPage('agents') : openPanel('agents')">好汉</button>
-        <button type="button" aria-label="查看消息" @click="isOverviewHome ? openWorkbenchPage('messages') : openPanel('messages')">消息</button>
-        <button class="workbench-create-action" type="button" @click="openPrivateDraft()">＋ 提出需求</button>
-        <button type="button" :disabled="accountEntryDisabled" aria-label="个人中心" @click="openProfile">账户</button>
+        <button class="workbench-message-action" type="button" aria-label="查看消息" @click="isOverviewHome ? openWorkbenchPage('messages') : openPanel('messages')"><var-icon v-if="isOverviewHome" name="bell-outline" aria-hidden="true" /><span v-else>消息</span></button>
+        <button class="workbench-create-action" type="button" @click="openPrivateDraft()"><var-icon v-if="isOverviewHome" name="plus" aria-hidden="true" /><span>{{ isOverviewHome ? '提出需求' : '＋ 提出需求' }}</span></button>
+        <button class="workbench-account-action" type="button" :disabled="accountEntryDisabled" aria-label="个人中心" @click="openProfile"><var-icon v-if="isOverviewHome" name="account-circle-outline" aria-hidden="true" /><span>账户</span></button>
         <button class="workbench-mobile-more" type="button" aria-label="全部入口" :aria-expanded="workbenchMenuOpen" @click="workbenchMenuOpen = !workbenchMenuOpen"><var-icon name="menu" /></button>
       </div>
       <nav v-if="workbenchMenuOpen && isOverviewHome" class="workbench-more-menu" aria-label="全部入口">
-        <button v-for="tab in workbenchPrimaryTabs" :key="tab.panel" type="button" @click="openWorkbenchPage(tab.panel, $event)">{{ tab.label }}</button>
-        <button type="button" @click="openWorkbenchMap">厅中实景</button>
-        <button type="button" :disabled="accountEntryDisabled" @click="workbenchMenuOpen = false; openProfile()">个人中心</button>
-        <button type="button" @click="workbenchMenuOpen = false; emit('open-onboarding', $event.currentTarget)">使用帮助</button>
+        <button v-for="tab in workbenchPrimaryTabs" :key="tab.panel" type="button" @click="openWorkbenchPage(tab.panel, $event)"><var-icon :name="tab.icon" aria-hidden="true" /><span>{{ tab.label }}</span></button>
+        <button type="button" @click="openWorkbenchMap"><var-icon name="map-marker-outline" aria-hidden="true" /><span>厅中实景</span></button>
+        <button type="button" :disabled="accountEntryDisabled" @click="workbenchMenuOpen = false; openProfile()"><var-icon name="account-circle-outline" aria-hidden="true" /><span>个人中心</span></button>
+        <button type="button" @click="workbenchMenuOpen = false; emit('open-onboarding', $event.currentTarget)"><var-icon name="help-circle-outline" aria-hidden="true" /><span>使用帮助</span></button>
       </nav>
     </header>
     <div v-show="!isImmersiveMap" class="hall-mode-toolbar" :inert="isPanelSessionActive || voiceInteractionLocked ? '' : null" :aria-hidden="isPanelSessionActive ? 'true' : null">
@@ -239,7 +240,7 @@
               :disabled="voiceInteractionLocked"
               @click="closePanel"
             >
-              <var-icon name="close-circle-outline" />
+              <var-icon :name="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? 'window-close' : 'close-circle-outline'" aria-hidden="true" />
             </button>
             <button
               v-if="panelReturnPanel || panelChildCanReturn"
@@ -850,6 +851,7 @@ const workbenchMobileTabs = Object.freeze(workbenchPrimaryTabs.filter(tab => ['o
 const workbenchPrimaryPanelSet = new Set(workbenchPrimaryTabs.map(tab => tab.panel))
 const workbenchMenuOpen = ref(false)
 const workbenchCurrentPage = computed(() => isOverviewHome.value ? (activePanel.value && workbenchPrimaryPanelSet.has(renderedPanel.value) ? renderedPanel.value : 'overview') : '')
+const workbenchCurrentLabel = computed(() => workbenchPrimaryTabs.find(tab => tab.panel === workbenchCurrentPage.value)?.label || '办事概览')
 watch(homeMode, () => { workbenchMenuOpen.value = false })
 watch(activePanel, () => { workbenchMenuOpen.value = false })
 
@@ -990,7 +992,7 @@ const activePanelTitle = computed(() => {
   if (renderedPanel.value === 'item') return overviewItemRef.value?.sourceType === 'DRAFT' ? '继续草稿' : '事项进展'
   if (renderedPanel.value === 'agents') return '点将册'
   if (renderedPanel.value === 'catalog') return '招贤令'
-  if (renderedPanel.value === 'tasks') return '悬赏榜'
+  if (renderedPanel.value === 'tasks') return isOverviewHome.value ? '我的事项' : '悬赏榜'
   if (renderedPanel.value === 'workspace') return '协作工作台'
   if (renderedPanel.value === 'treasure') return '百宝箱'
   if (renderedPanel.value === 'chat') return '厅内议事'
@@ -3402,14 +3404,27 @@ button.hall-room {
 .home-overview .workbench-map-entry { min-height: 66px; margin-bottom: 14px; border: 1px solid var(--work-line); background: var(--work-ground); color: var(--work-ink); }
 .home-overview .workbench-map-entry span { flex: 1; }
 .home-overview .workbench-side-utility { border-top: 1px solid var(--work-line); padding-top: 12px; }
+.home-overview .workbench-sidebar-account { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 52px; margin-top: 14px; padding: 9px 5px; border: 0; border-top: 1px solid var(--work-line); background: transparent; text-align: left; color: var(--work-ink); font: inherit; cursor: pointer; }
+.home-overview .workbench-sidebar-account img, .home-overview .workbench-sidebar-account > .var-icon:first-child { flex: none; width: 32px; height: 32px; border-radius: 50%; object-fit: cover; font-size: 29px; }
+.home-overview .workbench-sidebar-account span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.home-overview .workbench-sidebar-account small { display: block; color: var(--work-muted); font-size: 11px; }
+.home-overview .workbench-sidebar-account > .var-icon:last-child { font-size: 16px; }
 .home-overview > .hall-app-header {
   grid-column: 2; grid-row: 1; min-width: 0; padding: 12px 36px;
   background: var(--work-paper); color: var(--work-ink); border-bottom: 1px solid var(--work-line);
 }
 .home-overview .hall-app-header .hall-brand { font-size: 17px; color: var(--work-ink); }
+.home-overview .workbench-breadcrumb { display: flex; align-items: center; gap: 13px; min-width: 0; color: var(--work-muted); font-size: 13px; }
+.home-overview .workbench-breadcrumb button { min-height: 36px; padding: 0; border: 0; background: none; color: inherit; font: inherit; }
+.home-overview .workbench-breadcrumb strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--work-ink); font-weight: 500; }
+.home-overview .workbench-breadcrumb > .var-icon { font-size: 14px; }
 .home-overview .hall-app-header .hall-seal, .home-overview .hall-app-header .hall-brand small, .home-overview .hall-app-header .hall-main-nav, .home-overview > .hall-mode-toolbar { display: none; }
 .home-overview .hall-app-header button { min-height: 40px; padding: 8px 12px; border-radius: 7px; color: var(--work-muted); border-color: var(--work-line); }
 .home-overview .hall-app-header .workbench-create-action { background: var(--work-brand); color: var(--work-paper); border-color: var(--work-brand); }
+.home-overview .hall-app-header .workbench-message-action { display: inline-flex; align-items: center; justify-content: center; width: 40px; padding: 8px; font-size: 19px; }
+.home-overview .hall-app-header .workbench-account-action, .home-overview .hall-app-header .workbench-create-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.home-overview .workbench-more-menu button { display: flex; align-items: center; gap: 8px; }
+.home-overview .workbench-more-menu button .var-icon { flex: none; font-size: 19px; }
 .home-overview .hall-app-header .workbench-create-action:hover { background: #793326; }
 .home-overview .workbench-mobile-more, .home-overview .workbench-mobile-nav { display: none; }
 /* The absolute containing block is .juyi-page; percentage width also accounts for classic viewport scrollbars. */
@@ -3434,6 +3449,43 @@ button.hall-room {
 .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-messages) { flex: 1 1 auto; min-height: 0; padding: 16px 20px; }
 .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-chat-composer) { padding: 10px 20px 12px; }
 .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.chat-panel) { height: 100%; }
+/* The workbench owns only top-level presentation: nested detail dialogs, map and
+   business authorization/state remain controlled by their original components. */
+.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.chat-panel),
+.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-messages),
+.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-chat-composer) { background: var(--work-paper); color: var(--work-ink); }
+.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.discussion-brief) { background: var(--work-ground); color: var(--work-ink); border-color: var(--work-line); }
+.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.discussion-brief .var-icon) { color: var(--work-brand); }
+.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.panel-toolbar) { border-color: var(--work-line); color: var(--work-muted); }
+.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.panel-toolbar .icon-button) { background: #f3f3ed; color: var(--work-ink); border: 1px solid var(--work-line); }
+.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.panel-toolbar .context-summary strong) { color: var(--work-ink); }
+.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-messages .empty-list) { color: var(--work-muted); }
+.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-message) { background: #f2f2eb; color: var(--work-ink); box-shadow: none; }
+.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-message.USER) { background: #eaf0e6; }
+.home-overview .panel-overlay.is-workbench-panel :deep(.bounty-panel .panel-toolbar) { color: var(--work-muted); }
+.home-overview .panel-overlay.is-workbench-panel :deep(.bounty-panel .task-search input),
+.home-overview .panel-overlay.is-workbench-panel :deep(.bounty-panel .task-search select) { background: var(--work-paper); border-color: #ccd2c5; color: var(--work-ink); }
+.home-overview .panel-overlay.is-workbench-panel :deep(.bounty-panel .panel-toolbar button),
+.home-overview .panel-overlay.is-workbench-panel :deep(.bounty-panel .task-status-tabs button) { background: #f3f3ed; color: var(--work-ink); border: 1px solid var(--work-line); }
+.home-overview .panel-overlay.is-workbench-panel :deep(.bounty-panel .task-status-tabs button.active) { background: #f6eee8; color: var(--work-brand); border-color: #e3d8d0; }
+.home-overview .panel-overlay.is-workbench-panel :deep(.bounty-panel .task-card) { background: var(--work-paper); border: 1px solid var(--work-line); }
+.home-overview .panel-overlay.is-workbench-panel :deep(.bounty-panel .task-card.selected) { background: #f6eee8; }
+.home-overview .panel-overlay.is-workbench-panel :deep(.agent-panel .status-filter button:not(.active)) { background: #f3f3ed; color: var(--work-ink); }
+.home-overview .panel-overlay.is-workbench-panel :deep(.agent-panel .detail-card) { background: #fafbf6; border: 1px solid var(--work-line); color: var(--work-ink); }
+.home-overview .panel-overlay.is-workbench-panel :deep(.library-panel .library-tabs button:not(.active)) { background: #f3f3ed; color: var(--work-ink); }
+.home-overview .panel-overlay.is-workbench-panel :deep(.personal-workspace.is-hall-treasure) { background: var(--work-paper); color: var(--work-ink); }
+.home-overview .panel-overlay.is-workbench-panel :deep(.treasure-content button:not(.treasure-primary)) { color: var(--work-ink); border-color: var(--work-line); border-radius: 7px; }
+.home-overview .panel-overlay.is-workbench-panel :deep(.treasure-content input:not([type=file])) { background: var(--work-paper); border-color: #ccd2c5; color: var(--work-ink); }
+/* Keep the authoritative treasure workflow, but let its search form reflow
+   inside the narrower workbench panel instead of stacking two Chinese glyphs. */
+.home-overview .panel-overlay.is-workbench-panel :deep(.treasure-search label) { flex: 1 1 auto; min-width: 0; width: auto; }
+.home-overview .panel-overlay.is-workbench-panel :deep(.treasure-search button) { flex: 0 0 auto; min-width: 68px; white-space: nowrap; }
+.home-overview .panel-overlay.is-workbench-panel :deep(.treasure-content .treasure-primary) { background: var(--work-brand); border-color: var(--work-brand); color: var(--work-paper); border-radius: 7px; }
+.home-overview .panel-overlay.is-workbench-panel :deep(.treasure-content .treasure-tabs) { border-color: var(--work-line); }
+.home-overview .panel-overlay.is-workbench-panel :deep(.treasure-content .treasure-tabs button[aria-pressed="true"]) { color: var(--work-brand); border-color: var(--work-brand); }
+.home-overview .panel-overlay.is-workbench-panel :deep(.treasure-content input:focus-visible),
+.home-overview .panel-overlay.is-workbench-panel :deep(.treasure-content button:focus-visible) { outline-color: var(--work-brand); }
+
 .home-overview button:focus-visible, .home-overview .workbench-more-menu button:focus-visible { outline: 3px solid #923f3080; outline-offset: 3px; }
 @media (max-width: 1200px) {
   .juyi-page.home-overview { grid-template-columns: 192px minmax(0, 1fr); }
@@ -3447,6 +3499,10 @@ button.hall-room {
   .home-overview > .hall-app-header { grid-column: 1; grid-row: 1; padding: 10px 16px; }
   .home-overview .hall-app-header .hall-header-tools { gap: 5px; }
   .home-overview .hall-app-header .hall-header-tools > button:first-child, .home-overview .hall-app-header .workbench-create-action { display: none; }
+  .home-overview .workbench-breadcrumb button, .home-overview .workbench-breadcrumb > .var-icon { display: none; }
+  .home-overview .workbench-breadcrumb strong { font-size: 15px; }
+  .home-overview .hall-app-header .workbench-account-action { width: 40px; padding: 8px; font-size: 19px; }
+  .home-overview .hall-app-header .workbench-account-action span { display: none; }
   .home-overview .hall-app-header .workbench-mobile-more { display: inline-flex; }
   .juyi-page.home-overview > :deep(.hall-portrait-home.is-unified-shell) { grid-column: 1; grid-row: 2; padding-bottom: calc(62px + env(safe-area-inset-bottom)); }
   .home-overview .workbench-mobile-nav {
@@ -3470,6 +3526,9 @@ button.hall-room {
   .home-overview .panel-overlay.is-workbench-panel .panel-title { min-height: 44px; padding: 6px 16px; }
   .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-chat-composer) { padding: 8px 16px 10px; }
   .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-messages) { padding: 10px 16px; }
+  .home-overview .panel-overlay.is-workbench-panel :deep(.treasure-intro) { flex-wrap: wrap; gap: 12px; }
+  .home-overview .panel-overlay.is-workbench-panel :deep(.treasure-intro > div) { flex: 1 1 190px; min-width: 0; }
+  .home-overview .panel-overlay.is-workbench-panel :deep(.treasure-search) { gap: 8px; }
 }
 @media (max-height: 560px) {
   .juyi-page.home-overview { grid-template-rows: 58px minmax(0, 1fr); }
