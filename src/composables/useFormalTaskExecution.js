@@ -1,5 +1,5 @@
 import { computed, ref, unref, watch } from 'vue'
-import { usePersonalWorkspaceExecution } from './usePersonalWorkspaceExecution.js'
+import { usePersonalWorkspaceExecution, createPersonalWorkspaceExecutionRecoveryStore } from './usePersonalWorkspaceExecution.js'
 
 export const FORMAL_TASK_OUTPUT_MIME_TYPE = 'application/pdf'
 
@@ -28,7 +28,8 @@ export function useFormalTaskExecution ({
   executionAuthorizationReason = '',
   identityEpoch = 0,
   identityScope = identityEpoch,
-  executionFactory = usePersonalWorkspaceExecution
+  executionFactory = usePersonalWorkspaceExecution,
+  storage = globalThis.localStorage || globalThis.window?.localStorage
 } = {}) {
   const formalHistory = ref([])
   const historyState = ref('idle')
@@ -48,6 +49,38 @@ export function useFormalTaskExecution ({
   })
   const execution = executionFactory({ identityEpoch, identityScope: scopeKey })
   const activeExecution = computed(() => scopeMatches(execution.execution.value, currentScope.value) ? execution.execution.value : null)
+  const revoking = ref(false)
+  const revokeStore = createPersonalWorkspaceExecutionRecoveryStore({ storage, scopeKey: () => `${scopeKey.value}\u0000revoke` })
+  const canRevoke = computed(() => Boolean(activeExecution.value?.state === 'QUEUED'
+    && currentScope.value.conversationConfirmed && !execution.unresolvedIntent.value && !revoking.value
+    && !revokeStore.read()?.uncertain))
+  const revokeOriginal = async ({ confirmed = false } = {}) => {
+    if (!confirmed) { scopeError.value = '请明确确认撤销本次执行的输入授权。'; return null }
+    const current = activeExecution.value
+    const pending = revokeStore.read()
+    if (pending?.uncertain) { scopeError.value = '原撤销请求结果待核对，只查询原执行，不重复发送撤销或新执行。'; return null }
+    if (!canRevoke.value || !current) return null
+    const key = globalThis.crypto?.randomUUID?.() || `formal-revoke-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    if (!revokeStore.save({ idempotencyKey: key, executionId: current.executionId, uncertain: true })) {
+      scopeError.value = '无法保存撤销请求的恢复标识，未发送请求。'; return null
+    }
+    const operationScope = scopeKey.value
+    revoking.value = true; scopeError.value = ''
+    try {
+      const result = await execution.revokeInputs({ idempotencyKey: key })
+      if (scopeKey.value !== operationScope) return null
+      if (result && isFormalExecution(result) && result.executionId === current.executionId && result.state === 'INPUTS_REVOKED') {
+        revokeStore.clear(); return result
+      }
+      scopeError.value = '撤销结果待核对，请恢复查询原执行；不会自动重复撤销或发起新执行。'
+      return null
+    } finally { if (scopeKey.value === operationScope) revoking.value = false }
+  }
+  watch(() => [scopeKey.value, valueOf(identityEpoch)], () => { revoking.value = false }, { flush: 'sync' })
+  watch(activeExecution, value => {
+    const intent = revokeStore.read()
+    if (value && value.executionId === intent?.executionId && ['INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'FAILED'].includes(value.state)) revokeStore.clear()
+  }, { flush: 'sync' })
   const readyReason = computed(() => {
     const scope = currentScope.value
     if (!validId(scope.taskId)) return scope.executionAuthorizationReason || '未提供正式 taskId，不能开始执行。'
@@ -70,7 +103,7 @@ export function useFormalTaskExecution ({
     if (!value) return '尚未确认本正式任务的执行记录。'
     if (value.state === 'QUEUED') return '服务端已建立 TASK 执行，正在等待客户端接收或运行；这不表示 Provider 已开始，也不表示已有交付。'
     if (value.state === 'OUTPUT_COMMITTED') return 'TASK runtime 已提交输出；正式交付是否 submitted/accepted 仍须以 formal-deliveries 回执为准。'
-    if (value.state === 'INPUTS_REVOKED') return '本次 TASK 执行的输入授权已撤销，不会继续执行。'
+    if (value.state === 'INPUTS_REVOKED') return '本次 TASK 输入授权已撤销，后续读取和提交将被拒绝；不代表已取消外部调用或免除费用。'
     if (value.state === 'FAILED') return value.failureMessage || '本次 TASK 执行已报告失败。'
     return `执行状态 ${value.state} 尚待核对。`
   })
@@ -149,7 +182,7 @@ export function useFormalTaskExecution ({
 
   return {
     execution, activeExecution, formalHistory, historyState, historyError, scopeError,
-    readyReason, stateText, refreshReadiness, recoverOriginalRequest, begin,
+    readyReason, stateText, refreshReadiness, recoverOriginalRequest, begin, canRevoke, revoking, revokeOriginal,
     loadFormalHistory, selectFormalHistory, dispose: execution.dispose
   }
 }

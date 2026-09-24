@@ -96,8 +96,13 @@
         <div><dt>运行编号</dt><dd>{{ formal.activeExecution.value.runId }}</dd></div>
         <div><dt>状态</dt><dd>{{ formal.activeExecution.value.state }}</dd></div>
       </dl>
+      <label v-if="formal.activeExecution.value?.state === 'QUEUED'" class="formal-confirmation">
+        <input v-model="revokeConfirmed" type="checkbox" :disabled="formal.revoking.value">
+        <span>确认撤销本次执行的输入授权；不会自动重跑，不代表已取消外部调用或免除费用。</span>
+      </label>
       <div class="formal-execution-actions">
-        <button type="button" :disabled="formal.execution.pending.value" @click="recoverFormalExecution">恢复原请求</button>
+        <button v-if="formal.activeExecution.value?.state === 'QUEUED'" type="button" :disabled="!revokeConfirmed || !formal.canRevoke.value" @click="revokeFormalExecution">撤销本次输入授权</button>
+        <button type="button" :disabled="formal.revoking.value" @click="recoverFormalExecution">恢复原请求</button>
         <button type="button" :disabled="formal.execution.pending.value" @click="loadFormalHistory">读取本任务执行历史</button>
       </div>
       <p v-if="formal.historyState.value === 'loading'" class="task-material-note" role="status">正在核对执行历史…</p>
@@ -197,6 +202,13 @@ const attach = async () => {
   if (saved) resetSelection()
 }
 const detach = link => { void links.detach(link) }
+const revokeConfirmed = ref(false)
+const revokeFormalExecution = async () => {
+  const result = await formal.revokeOriginal({ confirmed: revokeConfirmed.value })
+  revokeConfirmed.value = false
+  if (result) emit('formal-execution-recovered', result)
+}
+watch(() => `${props.identityEpoch}\u0000${props.taskId}\u0000${props.conversationId}\u0000${props.targetAgentId}`, () => { revokeConfirmed.value = false }, { flush: 'sync' })
 const beginFormalExecution = async () => {
   const result = await formal.begin({ inputs: selectedInputs.value, instruction: instruction.value, confirmed: inputsConfirmed.value })
   if (result) emit('formal-execution-created', result)

@@ -187,7 +187,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     if (!validExecution(value)) throw new Error('执行状态返回格式无效，未将其显示为成功。')
     execution.value = value; receipt.value = value; executionState.value = 'ready'
     clearMatchedTerminalIntent(value)
-    if (value.state === 'OUTPUT_COMMITTED') { stopPolling(); completionNotice.value = '交付件已归档到工作空间。请刷新文件列表领取成果；文件可用性以本次服务端回执和下载结果为准。' } else if (value.state === 'INPUTS_REVOKED') { stopPolling(); completionNotice.value = '输入授权已撤销，本次执行不会再继续。' } else if (value.state === 'FAILED') { stopPolling(); completionNotice.value = ''; error.value = value.failureMessage } else completionNotice.value = ''
+    if (value.state === 'OUTPUT_COMMITTED') { stopPolling(); completionNotice.value = '交付件已归档到工作空间。请刷新文件列表领取成果；文件可用性以本次服务端回执和下载结果为准。' } else if (value.state === 'INPUTS_REVOKED') { stopPolling(); completionNotice.value = '输入授权已撤销，后续读取和提交将被拒绝；不代表已取消外部调用或免除费用。' } else if (value.state === 'FAILED') { stopPolling(); completionNotice.value = ''; error.value = value.failureMessage } else completionNotice.value = ''
     return value
   }
   const loadCapabilities = async () => {
@@ -308,11 +308,11 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
   const recover = async () => { await reconcile({ quiet: true }); return loadHistory({ adopt: !unresolvedIntent.value }) }
   const adoptExecution = value => { try { const result = applyExecution(value); if (!TERMINAL_EXECUTION_STATES.has(result.state)) void startPolling(result.executionId); return result } catch (cause) { error.value = cause?.message || '执行状态返回格式无效，未显示为成功。'; executionState.value = 'error'; return null } }
   const refreshExecution = () => unresolvedIntent.value ? reconcile() : receipt.value?.executionId ? startPolling(receipt.value.executionId) : reconcile()
-  const revokeInputs = async () => {
+  const revokeInputs = async ({ idempotencyKey = randomKey() } = {}) => {
     const current = execution.value
-    if (!validExecution(current)) { error.value = '请先创建或刷新执行记录。'; return null }
+    if (!validExecution(current) || !ID(idempotencyKey)) { error.value = '请先创建或刷新执行记录。'; return null }
     const snapshot = snapshotNow(); executionState.value = 'revoking'; error.value = ''
-    try { const result = applyExecution(await request({ url: `/personal-workspace/executions/${encodeURIComponent(current.executionId)}/revoke-inputs`, method: 'POST', data: { expectedGrantRevision: current.grantRevision }, headers: { 'Idempotency-Key': randomKey() } }, snapshot)); if (!TERMINAL_EXECUTION_STATES.has(result.state)) void startPolling(result.executionId); return result } catch (cause) { if (cause?.name !== 'AbortError' && snapshot.generation === generation) { error.value = errorMessage(cause); executionState.value = 'error' } return null }
+    try { const result = applyExecution(await request({ url: `/personal-workspace/executions/${encodeURIComponent(current.executionId)}/revoke-inputs`, method: 'POST', data: { expectedGrantRevision: current.grantRevision }, headers: { 'Idempotency-Key': idempotencyKey } }, snapshot)); if (!TERMINAL_EXECUTION_STATES.has(result.state)) void startPolling(result.executionId); return result } catch (cause) { if (cause?.name !== 'AbortError' && snapshot.generation === generation) { error.value = errorMessage(cause); executionState.value = 'error' } return null }
   }
 
   watch([currentEpoch, currentScope], () => { if (previousScope && previousScope !== currentScope.value) recoveryStore.clear(previousScope); previousScope = currentScope.value; reset() }, { immediate: true, flush: 'sync' })

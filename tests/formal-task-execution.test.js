@@ -85,3 +85,70 @@ describe('formal TASK execution boundary', () => {
     }
   })
 })
+
+describe('formal owner input revocation', () => {
+  const memory = () => { const values = new Map(); return { getItem: k => values.get(k) || null, setItem: (k,v) => values.set(k,v), removeItem: k => values.delete(k) } }
+  const setup = (storage, mock = executionMock(), task = ref('task_1')) => {
+    mock.state.execution.value = executionRecord({ grantRevision: 1 })
+    const formal = useFormalTaskExecution({ taskId: task, conversationId: ref('conversation_1'), targetAgentId: ref('agent_1'), conversationConfirmed: ref(true), executionAuthorized: ref(false), identityEpoch: ref(1), identityScope: ref('owner_a'), executionFactory: () => mock.state, storage })
+    return { formal, mock, task }
+  }
+  it('allows explicit exact execution revocation even when no ready work item exists, without creating a new execution', async () => {
+    const { formal, mock } = setup(memory())
+    let calls = 0
+    mock.state.revokeInputs = async ({ idempotencyKey }) => {
+      assert.ok(idempotencyKey.length > 0 && idempotencyKey.length <= 100)
+      calls++
+      const value = executionRecord({ state: 'INPUTS_REVOKED', grantRevision: 2 })
+      mock.state.execution.value = value
+      return value
+    }
+    assert.equal(formal.canRevoke.value, true)
+    assert.equal(await formal.revokeOriginal({ confirmed: false }), null)
+    assert.equal(calls, 0)
+    assert.equal((await formal.revokeOriginal({ confirmed: true })).state, 'INPUTS_REVOKED')
+    assert.equal(calls, 1)
+    assert.equal(formal.canRevoke.value, false)
+    assert.equal(mock.createCalls.length, 0)
+    assert.match(formal.stateText.value, /不代表已取消外部调用或免除费用/)
+  })
+  it('unknown revoke outcome survives remount and never repeats the POST or starts a replacement', async () => {
+    const storage = memory()
+    const first = setup(storage)
+    let calls = 0
+    first.mock.state.revokeInputs = async () => { calls++; return null }
+    assert.equal(await first.formal.revokeOriginal({ confirmed: true }), null)
+    assert.equal(first.formal.canRevoke.value, false)
+    const second = setup(storage)
+    second.mock.state.revokeInputs = async () => { calls++; return null }
+    assert.equal(second.formal.canRevoke.value, false)
+    assert.equal(await second.formal.revokeOriginal({ confirmed: true }), null)
+    assert.equal(calls, 1)
+    assert.equal(second.mock.createCalls.length, 0)
+    assert.match(second.formal.scopeError.value, /只查询原执行/)
+  })
+  it('refuses wrong task, missing durable storage and unconfirmed conversation', async () => {
+    const { formal, mock, task } = setup(memory())
+    let calls = 0
+    mock.state.revokeInputs = async () => { calls++; return null }
+    task.value = 'other-task'
+    assert.equal(formal.canRevoke.value, false)
+    assert.equal(await formal.revokeOriginal({ confirmed: true }), null)
+    const second = setup(null)
+    second.mock.state.revokeInputs = async () => { calls++; return null }
+    assert.equal(await second.formal.revokeOriginal({ confirmed: true }), null)
+    assert.match(second.formal.scopeError.value, /无法保存/)
+    assert.equal(calls, 0)
+  })
+  it('exact terminal readback clears unknown revocation but unrelated history cannot', async () => {
+    const storage = memory(); const { formal, mock } = setup(storage)
+    mock.state.revokeInputs = async () => null
+    await formal.revokeOriginal({ confirmed: true })
+    mock.state.execution.value = executionRecord({ executionId: 'other-exec', state: 'INPUTS_REVOKED' })
+    mock.state.execution.value = executionRecord({ grantRevision: 1 })
+    assert.equal(formal.canRevoke.value, false)
+    mock.state.execution.value = executionRecord({ grantRevision: 2, state: 'INPUTS_REVOKED' })
+    const next = setup(storage)
+    assert.equal(next.formal.canRevoke.value, true)
+  })
+})
