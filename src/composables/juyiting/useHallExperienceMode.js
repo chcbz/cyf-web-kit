@@ -74,12 +74,18 @@ export const useHallExperienceMode = () => {
   let lastAcceptedPhysicalEventStamp = 0
   let requestGeneration = 0
   let requestOwnership = null
-  let viewportOrientation = null
-  let focusOutFrame = null
+  let cancelPendingFocusOut = null
 
   const resetKeyboardBaseline = () => {
     stableViewportHeight.value = viewport.value.height
     keyboardPhase.value = 'closed'
+  }
+
+  const commitRequestedMode = next => {
+    if (requestedMode.value === next) return false
+    requestedMode.value = next
+    resetKeyboardBaseline()
+    return true
   }
 
   const updateKeyboardPhase = () => {
@@ -104,13 +110,8 @@ export const useHallExperienceMode = () => {
     const width = Number(visualViewport?.width) || Number(window?.innerWidth) || 0
     const height = Number(visualViewport?.height) || Number(window?.innerHeight) || 0
     viewport.value = { width, height }
-    const nextOrientation = width && height ? (width > height ? 'landscape' : 'portrait') : null
-    if (viewportOrientation !== null && nextOrientation !== null && nextOrientation !== viewportOrientation) {
-      viewportOrientation = nextOrientation
-      resetKeyboardBaseline()
-      return
-    }
-    viewportOrientation = nextOrientation || viewportOrientation
+    // A soft keyboard can make a portrait visual viewport wider than it is tall.
+    // Only confirmed orientation/mode commits below may rebuild a smaller baseline.
     updateKeyboardPhase()
   }
 
@@ -120,13 +121,19 @@ export const useHallExperienceMode = () => {
   }
 
   const handleFocusOut = () => {
-    if (focusOutFrame !== null) globalThis.cancelAnimationFrame?.(focusOutFrame)
-    const schedule = globalThis.requestAnimationFrame || (callback => globalThis.setTimeout(callback, 0))
-    focusOutFrame = schedule(() => {
-      focusOutFrame = null
+    cancelPendingFocusOut?.()
+    const settleFocus = () => {
+      cancelPendingFocusOut = null
       isEditableFocused.value = isEditableElement(globalThis.document?.activeElement)
       updateKeyboardPhase()
-    })
+    }
+    if (typeof globalThis.requestAnimationFrame === 'function') {
+      const frame = globalThis.requestAnimationFrame(settleFocus)
+      cancelPendingFocusOut = () => globalThis.cancelAnimationFrame?.(frame)
+      return
+    }
+    const timer = globalThis.setTimeout(settleFocus, 0)
+    cancelPendingFocusOut = () => globalThis.clearTimeout?.(timer)
   }
 
   const commitPhysicalOrientation = next => {
@@ -321,14 +328,14 @@ export const useHallExperienceMode = () => {
     // keeps the interactive virtual-landscape fallback.
     if (isWeChatWebView()) {
       if (experienceMode.value === 'landscape-map') return Promise.resolve(false)
-      requestedMode.value = 'landscape-map'
+      commitRequestedMode('landscape-map')
       orientationHint.value = ''
       return Promise.resolve(true)
     }
     // Explicit UI mode wins over a still-landscape physical device. This does
     // not reacquire fullscreen; it only clears the user's portrait override.
     if (requestedMode.value === 'portrait-command' && isPhysicalLandscape.value) {
-      requestedMode.value = null
+      commitRequestedMode(null)
       orientationHint.value = ''
       return Promise.resolve(true)
     }
@@ -382,13 +389,13 @@ export const useHallExperienceMode = () => {
     if (nativeOrientation.value === 'portrait') return false
     if (isWeChatWebView()) {
       if (experienceMode.value === 'portrait-command') return false
-      requestedMode.value = 'portrait-command'
+      commitRequestedMode('portrait-command')
       orientationHint.value = ''
       return true
     }
     // Native unlock is best effort only; retain the explicit command-mode
     // override so the portrait button always changes the shell immediately.
-    requestedMode.value = 'portrait-command'
+    commitRequestedMode('portrait-command')
     orientationHint.value = ''
     const ownership = requestOwnership
     if (!ownership) return true
@@ -411,8 +418,11 @@ export const useHallExperienceMode = () => {
   const handleViewportResize = () => readViewport()
 
   const handleCoarseChange = () => {
-    isMobileCoarse.value = Boolean(coarseMedia?.matches)
-    if (!isMobileCoarse.value) {
+    const next = Boolean(coarseMedia?.matches)
+    if (next === isMobileCoarse.value) return
+    isMobileCoarse.value = next
+    resetKeyboardBaseline()
+    if (!next) {
       requestedMode.value = null
       orientationHint.value = ''
     }
@@ -462,8 +472,8 @@ export const useHallExperienceMode = () => {
     visualViewport?.removeEventListener?.('scroll', handleViewportResize)
     globalThis.document?.removeEventListener?.('focusin', handleFocusIn)
     globalThis.document?.removeEventListener?.('focusout', handleFocusOut)
-    if (focusOutFrame !== null) globalThis.cancelAnimationFrame?.(focusOutFrame)
-    focusOutFrame = null
+    cancelPendingFocusOut?.()
+    cancelPendingFocusOut = null
     globalThis.document?.removeEventListener?.('fullscreenchange', handleFullscreenChange)
     screenOrientation = null
     orientationMedia = null

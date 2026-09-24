@@ -156,20 +156,21 @@ export const resolveHallNavigationPresentation = ({
   const isPortraitMobile = Boolean(isMobileCoarse && experienceMode === 'portrait-command')
   const isPrimarySurface = Boolean(isOverviewHome && (!renderedPanel || ['tasks', 'treasure', 'mine'].includes(renderedPanel)))
   const hasFrameParent = Boolean(panelReturnPanel)
+  const formalTaskDetail = Boolean(renderedPanel === 'tasks' && formalTaskRef)
   const selfOwnedDetail = Boolean(
     (['draft', 'item', 'formalDraft'].includes(renderedPanel) && draftCanGoBack) ||
-    (renderedPanel === 'tasks' && bountyCanGoBack) ||
+    (renderedPanel === 'tasks' && bountyCanGoBack && !formalTaskDetail) ||
     (renderedPanel === 'library' && libraryCanGoBack) ||
     portraitTaskDetailOpen
   )
   const hallOwnedDetail = Boolean(
-    (renderedPanel === 'tasks' && formalTaskRef) ||
+    formalTaskDetail ||
     (renderedPanel === 'treasure' && treasureCanGoBack) ||
     renderedPanel === 'workspace' ||
     (!selfOwnedDetail && hasFrameParent)
   )
   const hasChildDetail = selfOwnedDetail || hallOwnedDetail
-  const returnOwner = selfOwnedDetail ? 'self' : (hallOwnedDetail ? 'hall' : 'none')
+  const returnOwner = hallOwnedDetail ? 'hall' : (selfOwnedDetail ? 'self' : 'none')
   const showWorkbenchDock = Boolean(
     isOverviewHome && isPrimarySurface && !hasChildDetail && !hasFrameParent && !isKeyboardActive
   )

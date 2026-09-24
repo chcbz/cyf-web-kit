@@ -2705,6 +2705,48 @@ describe('lightweight workbench real panel navigation', () => {
     } finally { wrapper.unmount() }
   })
 
+  it('shows a Hall-owned return for formal delivery over an already-open primary task detail', async () => {
+    const home = Vue.ref('overview')
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const mocks = createActualHallMocks({
+      mode: Vue.ref('portrait-command'),
+      mounts: { library: 0, archive: 0 },
+      counters,
+      actualBountyPanel: BountyPanel
+    })
+    mocks.useHallHomeMode = () => ({
+      homeMode: home,
+      isOverviewHome: Vue.computed(() => home.value === 'overview'),
+      setHomeMode: value => { home.value = value }
+    })
+    const oldGlobal = mocks.useGlobalStore
+    mocks.useGlobalStore = () => ({ ...oldGlobal(), user: { id: 'owner-a' } })
+    mocks.useApiStore = () => ({ oauthClientId: 'client-a', authorizationGeneration: 1, token: async () => {} })
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+    try {
+      await flushPromises()
+      const state = wrapper.vm.$.setupState
+      const task = { id: 'task-formal-overlap', title: '保留榜文详情', status: 'assigned' }
+      await state.openOverviewTask(task, {
+        code: 'FORMAL_DELIVERY_SUBMITTED', deliveryId: 'delivery-overlap', taskVersion: '2'
+      })
+      await Vue.nextTick()
+
+      expect(wrapper.find('.bounty-modal').exists()).to.equal(true)
+      expect(wrapper.find('.formal-delivery-probe').exists()).to.equal(true)
+      expect(wrapper.find('.floating-panel').attributes('role')).to.equal('region')
+      expect(wrapper.find('.panel-title').exists()).to.equal(true)
+      expect(wrapper.find('.panel-return').text()).to.equal('返回')
+      expect(wrapper.find('.panel-close').exists()).to.equal(false)
+
+      await wrapper.find('.panel-return').trigger('click')
+      await Vue.nextTick()
+      expect(wrapper.find('.formal-delivery-probe').exists()).to.equal(false)
+      expect(wrapper.find('.bounty-modal').text()).to.include('保留榜文详情')
+      expect(state.panelFrames).to.deep.equal(['tasks'])
+    } finally { wrapper.unmount() }
+  })
+
   it('reuses the Stage, exposes the four primary mobile pages, and restores map on exit', async () => {
     const mode = Vue.ref('portrait-command')
     const home = Vue.ref('overview')
