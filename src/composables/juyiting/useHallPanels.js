@@ -151,7 +151,8 @@ export const resolveHallNavigationPresentation = ({
   treasureCanGoBack = false,
   libraryCanGoBack = false,
   portraitTaskDetailOpen = false,
-  isKeyboardActive = false
+  isKeyboardActive = false,
+  externalRootModalOpen = false
 } = {}) => {
   const isPortraitMobile = Boolean(isMobileCoarse && experienceMode === 'portrait-command')
   const isPrimarySurface = Boolean(isOverviewHome && (!renderedPanel || ['tasks', 'treasure', 'mine'].includes(renderedPanel)))
@@ -172,7 +173,7 @@ export const resolveHallNavigationPresentation = ({
   const hasChildDetail = selfOwnedDetail || hallOwnedDetail
   const returnOwner = hallOwnedDetail ? 'hall' : (selfOwnedDetail ? 'self' : 'none')
   const showWorkbenchDock = Boolean(
-    isOverviewHome && isPrimarySurface && !hasChildDetail && !hasFrameParent && !isKeyboardActive
+    isOverviewHome && isPrimarySurface && !hasChildDetail && !hasFrameParent && !isKeyboardActive && !externalRootModalOpen
   )
   const showHallReturn = returnOwner === 'hall'
   // Root workbench pages remain regions, not closeable dialogs. On mobile the

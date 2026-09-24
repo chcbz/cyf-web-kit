@@ -2607,6 +2607,55 @@ describe('JuyiHall restored-identity initialization', () => {
 })
 
 describe('lightweight workbench real panel navigation', () => {
+  it('suppresses the focusable workbench dock while the root onboarding modal is visible', async () => {
+    const home = Vue.ref('overview')
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const mocks = createActualHallMocks({ mode: Vue.ref('portrait-command'), mounts: { library: 0, archive: 0 }, counters })
+    mocks.useHallHomeMode = () => ({ homeMode: home, isOverviewHome: Vue.computed(() => home.value === 'overview'), setHomeMode: mode => { home.value = mode } })
+    const wrapper = mount(loadActualJuyiHall(mocks), { props: { onboardingVisible: true }, attachTo: document.body, global: { stubs } })
+    try {
+      await flushPromises()
+      expect(wrapper.vm.$.setupState.showWorkbenchDock).to.equal(false)
+      expect(wrapper.find('.workbench-mobile-nav').attributes('style')).to.include('display: none')
+      await wrapper.setProps({ onboardingVisible: false })
+      await Vue.nextTick()
+      expect(wrapper.vm.$.setupState.showWorkbenchDock).to.equal(true)
+      expect(wrapper.find('.workbench-mobile-nav').attributes('style') || '').not.to.include('display: none')
+    } finally { wrapper.unmount() }
+  })
+  it('keeps overview request drafting root-owned while task drafting remains a nested return', async () => {
+    const home = Vue.ref('overview')
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const mocks = createActualHallMocks({ mode: Vue.ref('portrait-command'), mounts: { library: 0, archive: 0 }, counters })
+    mocks.useHallHomeMode = () => ({ homeMode: home, isOverviewHome: Vue.computed(() => home.value === 'overview'), setHomeMode: mode => { home.value = mode } })
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+    try {
+      await flushPromises()
+      const state = wrapper.vm.$.setupState
+      state.openPrivateDraft()
+      await Vue.nextTick()
+      expect(state.panelFrames).to.deep.equal(['draft'])
+      expect(state.panelReturnPanel).to.equal('')
+      expect(state.navigationPresentation.returnOwner).to.equal('none')
+      expect(state.navigationPresentation.showHallClose).to.equal(true)
+      const rootOverlay = wrapper.find('.panel-overlay').element
+      state.closePanel()
+      await state.handlePanelAfterLeave(rootOverlay)
+      await Vue.nextTick()
+
+      state.openPanel('tasks', { root: true })
+      await Vue.nextTick()
+      state.openPrivateDraft()
+      await Vue.nextTick()
+      expect(state.panelFrames).to.deep.equal(['tasks', 'draft'])
+      expect(state.panelReturnPanel).to.equal('tasks')
+      expect(state.navigationPresentation.returnOwner).to.equal('hall')
+      expect(state.returnPanel()).to.equal(true)
+      await Vue.nextTick()
+      expect(state.renderedPanel).to.equal('tasks')
+    } finally { wrapper.unmount() }
+  })
+
   it('keeps the expanded mobile menu within the header and bottom dock on short screens', () => {
     // jsdom does not lay out CSS: assert the responsive constraints here and
     // separately verify actual bounding boxes in a browser fixture.

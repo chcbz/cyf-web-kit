@@ -120,7 +120,7 @@ describe('HallPortraitHome', () => {
     expect(stageSource).to.include("emit('open-onboarding', target)")
     expect(stageSource).not.to.include("$emit('open-onboarding', $event.currentTarget)")
     expect(hallSource).to.include('@open-onboarding="emit(\'open-onboarding\', $event)"')
-    expect(entrySource).to.include('<JuyiHall @open-onboarding="reopen" />')
+    expect(entrySource).to.include('<JuyiHall :onboarding-visible="onboardingState.visible" @open-onboarding="reopen" />')
     expect(entrySource).to.include(':return-focus-target="onboardingReturnFocusTarget"')
     expect(entrySource).to.include('onboardingReturnFocusTarget.value = invoker || null')
     expect(entrySource).not.to.include('class="onboarding-reopen"')

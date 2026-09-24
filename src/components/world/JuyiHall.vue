@@ -213,7 +213,7 @@
     />
 
     <transition name="panel" @after-leave="handlePanelAfterLeave">
-      <div v-if="activePanel" :key="panelSessionGeneration" class="panel-overlay" :class="{ 'is-full-window': panelLayout === 'full-window', 'is-low-height': isLowHeightPanel, 'is-chat-overlay': renderedPanel === 'chat', 'is-compact-chat-overlay': renderedPanel === 'chat' && isCompactChat, 'is-workbench-panel': isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel), 'is-workbench-page': isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) }" :data-panel-generation="panelSessionGeneration" @pointerdown.self="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? null : closePanel()">
+      <div v-if="activePanel" :key="panelSessionGeneration" class="panel-overlay" :class="{ 'is-full-window': panelLayout === 'full-window', 'is-low-height': isLowHeightPanel, 'is-chat-overlay': renderedPanel === 'chat', 'is-compact-chat-overlay': renderedPanel === 'chat' && isCompactChat, 'theme-workbench': isOverviewHome, 'is-workbench-panel': isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel), 'is-workbench-page': isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) }" :data-panel-generation="panelSessionGeneration" @pointerdown.self="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? null : closePanel()">
         <section
           ref="panelRef"
           class="floating-panel"
@@ -722,6 +722,7 @@ import { isEconomyPreviewCapability, loadEconomyPreviewCapability } from '@/util
 import { juyitingGame } from '@/game/index.js'
 
 const emit = defineEmits(['open-onboarding'])
+const props = defineProps({ onboardingVisible: { type: Boolean, default: false } })
 
 const globalStore = useGlobalStore()
 const apiStore = useApiStore()
@@ -907,7 +908,8 @@ const navigationPresentation = computed(() => resolveHallNavigationPresentation(
   treasureCanGoBack: Boolean(treasurePanelRef.value?.canGoBack),
   libraryCanGoBack: Boolean(libraryPanelRef.value?.canGoBack),
   portraitTaskDetailOpen: portraitTaskDetailOpen.value,
-  isKeyboardActive: hallKeyboardActive.value
+  isKeyboardActive: hallKeyboardActive.value,
+  externalRootModalOpen: props.onboardingVisible
 }))
 const showWorkbenchDock = computed(() => navigationPresentation.value.showWorkbenchDock)
 const hallRootRef = ref(null)
@@ -3523,70 +3525,130 @@ button.hall-room {
   flex: 1; width: min(1320px, 100%); max-width: 1320px; height: 100%; max-height: 100%; min-height: 0;
   border: 1px solid var(--work-line); border-radius: 12px; background: var(--work-paper); box-shadow: none;
 }
-.home-overview .panel-overlay.is-workbench-panel .panel-title { min-height: 56px; padding: 10px 20px; background: var(--work-paper); color: var(--work-ink); }
-.home-overview .panel-overlay.is-workbench-panel .panel-title > span { font-size: 20px; }
-.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-messages) { flex: 1 1 auto; min-height: 0; padding: 16px 20px; }
-.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-chat-composer) { padding: 10px 20px 12px; }
-.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.chat-panel) { height: 100%; }
+
+/* Overview-owned overlays retain modal geometry, but use the same semantic
+   workbench palette as primary pages. Map overlays never match this scope. */
+.home-overview .panel-overlay.theme-workbench:not(.is-workbench-panel) > .floating-panel {
+  background: var(--work-paper); color: var(--work-ink); border-color: var(--work-line); box-shadow: 0 18px 38px #242e2b29;
+}
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel),
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel),
+.home-overview .panel-overlay.theme-workbench :deep(.library-panel),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages) { background: var(--work-paper); color: var(--work-ink); }
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .status-filter button.active) { background: var(--hall-surface-brand); color: var(--work-brand); border: 1px solid var(--work-brand); }
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .agent-row) { background: var(--hall-surface-subtle); color: var(--work-ink); border: 1px solid var(--work-line); }
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .agent-row.active) { background: var(--hall-surface-brand); border-color: var(--work-brand); }
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .agent-row small),
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .detail-head small),
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .panel-data-state) { color: var(--work-muted); }
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .ability-tags span) { background: var(--hall-surface-brand); color: var(--work-brand); }
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .catalog-summary),
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .persona-card),
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .catalog-state),
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .access-prompt) { background: var(--work-paper); color: var(--work-ink); border-color: var(--work-line); }
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .persona-card.is-mine),
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .catalog-action.subtle) { background: var(--hall-surface-brand); color: var(--work-brand); border-color: var(--work-brand); }
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .catalog-action.primary) { background: var(--work-brand); border-color: var(--work-brand); color: var(--work-paper); }
+.home-overview .panel-overlay.theme-workbench :deep(.library-panel .library-search),
+.home-overview .panel-overlay.theme-workbench :deep(.library-panel .result-card),
+.home-overview .panel-overlay.theme-workbench :deep(.library-panel .empty-list) { background: var(--hall-surface-subtle); color: var(--work-ink); border-color: var(--work-line); }
+.home-overview .panel-overlay.theme-workbench :deep(.library-panel .library-search input),
+.home-overview .panel-overlay.theme-workbench :deep(.library-panel .library-search select) { background: var(--work-paper); color: var(--work-ink); border-color: var(--work-line); }
+.home-overview .panel-overlay.theme-workbench :deep(.library-panel .library-tabs button.active),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .case-tabs button[aria-pressed=true]) { background: transparent; color: var(--work-brand); border-bottom-color: var(--work-brand); }
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor input),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor textarea),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor select),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .draft-preview) { background: var(--work-paper); color: var(--work-ink); border-color: var(--work-line); }
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .draft-note),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .draft-chips span) { background: var(--hall-surface-brand); color: var(--work-brand); border-color: var(--work-line); }
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .draft-strip),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .draft-actions),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .case-tabs),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .material-picker),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .material-picker article),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .confirmation-grid),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .confirmation-grid > div),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .case-receipt) { border-color: var(--work-line); }
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages) { padding: 24px; }
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages .overview-intro),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages .overview-empty) { color: var(--work-muted); }
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages .overview-main),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages .overview-item),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages .overview-source-error) { background: var(--work-paper); color: var(--work-ink); border-color: var(--work-line); }
+.home-overview .panel-overlay.theme-workbench .panel-title { min-height: 56px; padding: 10px 20px; background: var(--work-paper); color: var(--work-ink); }
+.home-overview .panel-overlay.theme-workbench .panel-title > span { font-size: 20px; }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-messages) { flex: 1 1 auto; min-height: 0; padding: 16px 20px; }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-chat-composer) { padding: 10px 20px 12px; }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.chat-panel) { height: 100%; }
 /* The workbench owns only top-level presentation: nested detail dialogs, map and
    business authorization/state remain controlled by their original components. */
-.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.chat-panel),
-.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-messages),
-.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-chat-composer) { background: var(--work-paper); color: var(--work-ink); }
-.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.discussion-brief) { background: var(--work-ground); color: var(--work-ink); border-color: var(--work-line); }
-.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.discussion-brief .var-icon) { color: var(--work-brand); }
-.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.panel-toolbar) { border-color: var(--work-line); color: var(--work-muted); }
-.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.panel-toolbar .icon-button) { background: #f3f3ed; color: var(--work-ink); border: 1px solid var(--work-line); }
-.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.panel-toolbar .context-summary strong) { color: var(--work-ink); }
-.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-messages .empty-list) { color: var(--work-muted); }
-.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-message) { background: #f2f2eb; color: var(--work-ink); box-shadow: none; }
-.home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-message.USER) { background: #eaf0e6; }
-.home-overview .panel-overlay.is-workbench-panel :deep(.bounty-panel .panel-toolbar) { color: var(--work-muted); }
-.home-overview .panel-overlay.is-workbench-panel :deep(.bounty-panel .task-search input),
-.home-overview .panel-overlay.is-workbench-panel :deep(.bounty-panel .task-search select) { background: var(--work-paper); border-color: #ccd2c5; color: var(--work-ink); }
-.home-overview .panel-overlay.is-workbench-panel :deep(.bounty-panel .panel-toolbar button),
-.home-overview .panel-overlay.is-workbench-panel :deep(.bounty-panel .task-status-tabs button) { background: #f3f3ed; color: var(--work-ink); border: 1px solid var(--work-line); }
-.home-overview .panel-overlay.is-workbench-panel :deep(.bounty-panel .task-status-tabs button.active) { background: #f6eee8; color: var(--work-brand); border-color: #e3d8d0; }
-.home-overview .panel-overlay.is-workbench-panel :deep(.bounty-panel .task-card) { background: var(--work-paper); border: 1px solid var(--work-line); }
-.home-overview .panel-overlay.is-workbench-panel :deep(.bounty-panel .task-card.selected) { background: #f6eee8; }
-.home-overview .panel-overlay.is-workbench-panel :deep(.agent-panel .status-filter button:not(.active)) { background: #f3f3ed; color: var(--work-ink); }
-.home-overview .panel-overlay.is-workbench-panel :deep(.agent-panel .detail-card) { background: #fafbf6; border: 1px solid var(--work-line); color: var(--work-ink); }
-.home-overview .panel-overlay.is-workbench-panel :deep(.library-panel .library-tabs button:not(.active)) { background: #f3f3ed; color: var(--work-ink); }
-.home-overview .panel-overlay.is-workbench-panel :deep(.personal-workspace.is-hall-treasure) { background: var(--work-paper); color: var(--work-ink); }
-.home-overview .panel-overlay.is-workbench-panel :deep(.treasure-content button:not(.treasure-primary)) { color: var(--work-ink); border-color: var(--work-line); border-radius: 7px; }
-.home-overview .panel-overlay.is-workbench-panel :deep(.treasure-content input:not([type=file])) { background: var(--work-paper); border-color: #ccd2c5; color: var(--work-ink); }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.chat-panel),
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-messages),
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-chat-composer) { background: var(--work-paper); color: var(--work-ink); }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.discussion-brief) { background: var(--work-ground); color: var(--work-ink); border-color: var(--work-line); }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.discussion-brief .var-icon) { color: var(--work-brand); }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar) { border-color: var(--work-line); color: var(--work-muted); }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar .icon-button) { background: #f3f3ed; color: var(--work-ink); border: 1px solid var(--work-line); }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar .context-summary strong) { color: var(--work-ink); }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-messages .empty-list) { color: var(--work-muted); }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-message) { background: #f2f2eb; color: var(--work-ink); box-shadow: none; }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-message.USER) { background: #eaf0e6; }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar) { color: var(--work-muted); }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-search input),
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-search select) { background: var(--work-paper); border-color: #ccd2c5; color: var(--work-ink); }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar button),
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs button) { background: #f3f3ed; color: var(--work-ink); border: 1px solid var(--work-line); }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs button.active) { background: #f6eee8; color: var(--work-brand); border-color: #e3d8d0; }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-card) { background: var(--work-paper); border: 1px solid var(--work-line); }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-card.selected) { background: #f6eee8; }
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .status-filter button:not(.active)) { background: #f3f3ed; color: var(--work-ink); }
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .detail-card) { background: #fafbf6; border: 1px solid var(--work-line); color: var(--work-ink); }
+.home-overview .panel-overlay.theme-workbench :deep(.library-panel .library-tabs button:not(.active)) { background: #f3f3ed; color: var(--work-ink); }
+.home-overview .panel-overlay.theme-workbench :deep(.personal-workspace.is-hall-treasure) { background: var(--work-paper); color: var(--work-ink); }
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-content button:not(.treasure-primary)) { color: var(--work-ink); border-color: var(--work-line); border-radius: 7px; }
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-content input:not([type=file])) { background: var(--work-paper); border-color: #ccd2c5; color: var(--work-ink); }
 /* Keep the authoritative treasure workflow, but let its search form reflow
    inside the narrower workbench panel instead of stacking two Chinese glyphs. */
-.home-overview .panel-overlay.is-workbench-panel :deep(.treasure-search label) { flex: 1 1 auto; min-width: 0; width: auto; }
-.home-overview .panel-overlay.is-workbench-panel :deep(.treasure-search button) { flex: 0 0 auto; min-width: 68px; white-space: nowrap; }
-.home-overview .panel-overlay.is-workbench-panel :deep(.treasure-content .treasure-primary) { background: var(--work-brand); border-color: var(--work-brand); color: var(--work-paper); border-radius: 7px; }
-.home-overview .panel-overlay.is-workbench-panel :deep(.treasure-content .treasure-tabs) { border-color: var(--work-line); }
-.home-overview .panel-overlay.is-workbench-panel :deep(.treasure-content .treasure-tabs button[aria-pressed="true"]) { color: var(--work-brand); border-color: var(--work-brand); }
-.home-overview .panel-overlay.is-workbench-panel :deep(.treasure-content input:focus-visible),
-.home-overview .panel-overlay.is-workbench-panel :deep(.treasure-content button:focus-visible) { outline-color: var(--work-brand); }
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-search label) { flex: 1 1 auto; min-width: 0; width: auto; }
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-search button) { flex: 0 0 auto; min-width: 68px; white-space: nowrap; }
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-content .treasure-primary) { background: var(--work-brand); border-color: var(--work-brand); color: var(--work-paper); border-radius: 7px; }
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-content .treasure-tabs) { border-color: var(--work-line); }
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-content .treasure-tabs button[aria-pressed="true"]) { color: var(--work-brand); border-color: var(--work-brand); }
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-content input:focus-visible),
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-content button:focus-visible) { outline-color: var(--work-brand); }
 
-.home-overview .panel-overlay.is-workbench-panel :deep(.bounty-panel .panel-toolbar),
-.home-overview .panel-overlay.is-workbench-panel :deep(.agent-panel .panel-toolbar),
-.home-overview .panel-overlay.is-workbench-panel :deep(.library-panel .library-toolbar),
-.home-overview .panel-overlay.is-workbench-panel :deep(.persona-catalog-panel .catalog-toolbar) { gap: 8px; }
-.home-overview .panel-overlay.is-workbench-panel :deep(.bounty-panel button),
-.home-overview .panel-overlay.is-workbench-panel :deep(.agent-panel button),
-.home-overview .panel-overlay.is-workbench-panel :deep(.library-panel button),
-.home-overview .panel-overlay.is-workbench-panel :deep(.hall-draft-editor button),
-.home-overview .panel-overlay.is-workbench-panel :deep(.persona-catalog-panel button),
-.home-overview .panel-overlay.is-workbench-panel :deep(.treasure-content button) { min-height: var(--hall-control-height); border-radius: var(--hall-radius-sm); }
-.home-overview .panel-overlay.is-workbench-panel :deep(.overview-tabs),
-.home-overview .panel-overlay.is-workbench-panel :deep(.library-tabs) { min-height: var(--hall-control-height); border-bottom: 1px solid var(--hall-border); overflow-x: auto; }
-.home-overview .panel-overlay.is-workbench-panel :deep(.overview-tabs button[aria-pressed="true"]),
-.home-overview .panel-overlay.is-workbench-panel :deep(.library-tabs button.active) { color: var(--hall-brand); border-bottom: 2px solid var(--hall-brand); }
-.home-overview .panel-overlay.is-workbench-panel :deep(.task-status-tabs),
-.home-overview .panel-overlay.is-workbench-panel :deep(.status-filter) { overflow-x: auto; flex-wrap: nowrap; }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar),
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .panel-toolbar),
+.home-overview .panel-overlay.theme-workbench :deep(.library-panel .library-toolbar),
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .catalog-toolbar) { gap: 8px; }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel button),
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel button),
+.home-overview .panel-overlay.theme-workbench :deep(.library-panel button),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor button),
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel button),
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-content button) { min-height: var(--hall-control-height); border-radius: var(--hall-radius-sm); }
+.home-overview .panel-overlay.theme-workbench :deep(.library-panel button),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor button:not(.primary)),
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .catalog-action:not(.primary)),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages button) { background: var(--hall-surface-subtle); color: var(--work-ink); border-color: var(--work-line); }
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .primary),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages button.primary) { background: var(--work-brand); color: var(--work-paper); border-color: var(--work-brand); }
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages button) { min-height: var(--hall-control-height); }
+.home-overview .panel-overlay.theme-workbench :deep(.overview-tabs),
+.home-overview .panel-overlay.theme-workbench :deep(.library-tabs) { min-height: var(--hall-control-height); border-bottom: 1px solid var(--hall-border); overflow-x: auto; }
+.home-overview .panel-overlay.theme-workbench :deep(.overview-tabs button[aria-pressed="true"]),
+.home-overview .panel-overlay.theme-workbench :deep(.library-tabs button.active) { color: var(--hall-brand); border-bottom: 2px solid var(--hall-brand); }
+.home-overview .panel-overlay.theme-workbench :deep(.task-status-tabs),
+.home-overview .panel-overlay.theme-workbench :deep(.status-filter) { overflow-x: auto; flex-wrap: nowrap; }
 @media (max-width: 760px) {
-  .home-overview .panel-overlay.is-workbench-panel :deep(.bounty-panel),
-  .home-overview .panel-overlay.is-workbench-panel :deep(.agent-panel),
-  .home-overview .panel-overlay.is-workbench-panel :deep(.library-panel),
-  .home-overview .panel-overlay.is-workbench-panel :deep(.persona-catalog-panel),
-  .home-overview .panel-overlay.is-workbench-panel :deep(.hall-draft-editor) { --hall-page-gutter: 16px; }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel),
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel),
+  .home-overview .panel-overlay.theme-workbench :deep(.library-panel),
+  .home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel),
+  .home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor) { --hall-page-gutter: 16px; }
+  .home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages) { padding: 16px; }
 }
 
 .home-overview button:focus-visible, .home-overview .workbench-more-menu button:focus-visible { outline: 3px solid #923f3080; outline-offset: 3px; }
@@ -3626,12 +3688,12 @@ button.hall-room {
     height: auto; max-height: none; padding: 0;
   }
   .home-overview .panel-overlay.is-workbench-panel > .floating-panel { width: 100%; max-width: none; height: 100%; border: 0; border-radius: 0; }
-  .home-overview .panel-overlay.is-workbench-panel .panel-title { min-height: 44px; padding: 6px 16px; }
-  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-chat-composer) { padding: 8px 16px 10px; }
-  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-messages) { padding: 10px 16px; }
-  .home-overview .panel-overlay.is-workbench-panel :deep(.treasure-intro) { flex-wrap: wrap; gap: 12px; }
-  .home-overview .panel-overlay.is-workbench-panel :deep(.treasure-intro > div) { flex: 1 1 190px; min-width: 0; }
-  .home-overview .panel-overlay.is-workbench-panel :deep(.treasure-search) { gap: 8px; }
+  .home-overview .panel-overlay.theme-workbench .panel-title { min-height: 44px; padding: 6px 16px; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-chat-composer) { padding: 8px 16px 10px; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-messages) { padding: 10px 16px; }
+  .home-overview .panel-overlay.theme-workbench :deep(.treasure-intro) { flex-wrap: wrap; gap: 12px; }
+  .home-overview .panel-overlay.theme-workbench :deep(.treasure-intro > div) { flex: 1 1 190px; min-width: 0; }
+  .home-overview .panel-overlay.theme-workbench :deep(.treasure-search) { gap: 8px; }
 }
 
 /* Keyboard-visible layouts must never reserve space for the mobile dock; keep
@@ -3642,10 +3704,10 @@ button.hall-room {
   .juyi-page.home-overview { grid-template-rows: minmax(0, 1fr); }
   .home-overview .workbench-more-menu { top: 58px; max-height: calc(100% - 58px - var(--hall-content-bottom-inset)); }
   .home-overview .panel-overlay.is-workbench-panel { top: 0; }
-  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.discussion-brief) { display: none; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.discussion-brief) { display: none; }
   .home-overview .panel-overlay.is-workbench-panel { padding-top: 0; padding-bottom: 0; }
-  .home-overview .panel-overlay.is-workbench-panel .panel-title { min-height: 40px; padding-top: 4px; padding-bottom: 4px; }
-  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-chat-composer) { padding-top: 6px; padding-bottom: 6px; }
+  .home-overview .panel-overlay.theme-workbench .panel-title { min-height: 40px; padding-top: 4px; padding-bottom: 4px; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-chat-composer) { padding-top: 6px; padding-bottom: 6px; }
 }
 
 /* At 200%-equivalent narrow reflow, keep each action reachable rather than
@@ -3657,26 +3719,26 @@ button.hall-room {
   .home-overview .hall-app-header .hall-brand { flex: 0 1 auto; min-width: 0; }
   .home-overview .workbench-mobile-nav button:not(:last-child) span { display: none; }
   .home-overview .workbench-mobile-nav button { padding: 3px; font-size: 10px; }
-  .home-overview .panel-overlay.is-workbench-panel .panel-title > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-chat-composer) { padding-top: 2px; padding-bottom: 2px; }
-  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.composer-textarea) { max-height: 56px; }
-  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.panel-toolbar) { overflow-x: auto; overscroll-behavior-x: contain; }
-  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.panel-toolbar .context-summary),
-  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.panel-toolbar .toolbar-actions) { flex: 0 0 auto; }
+  .home-overview .panel-overlay.theme-workbench .panel-title > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-chat-composer) { padding-top: 2px; padding-bottom: 2px; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.composer-textarea) { max-height: 56px; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar) { overflow-x: auto; overscroll-behavior-x: contain; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar .context-summary),
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar .toolbar-actions) { flex: 0 0 auto; }
 }
 @media (max-width: 180px) {
-  .home-overview .panel-overlay.is-workbench-panel .panel-title { min-height: 36px; padding: 0 8px; }
-  .home-overview .panel-overlay.is-workbench-panel .panel-title > span { display: none; }
-  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.panel-toolbar) { padding: 2px 6px; }
-  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-messages) { padding: 4px 8px; }
-  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.composer-meta span:last-child) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .home-overview .panel-overlay.theme-workbench .panel-title { min-height: 36px; padding: 0 8px; }
+  .home-overview .panel-overlay.theme-workbench .panel-title > span { display: none; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar) { padding: 2px 6px; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-messages) { padding: 4px 8px; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.composer-meta span:last-child) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 /* When the entire chat is taller than an extremely short viewport, scroll the
    work window itself so the composer remains reachable above the fixed dock. */
 @media (max-height: 260px) and (max-width: 760px) {
-  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay > .floating-panel { overflow-y: auto; overscroll-behavior: contain; }
-  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.chat-panel) { flex: 0 0 auto; height: auto; min-height: min-content; }
-  .home-overview .panel-overlay.is-workbench-panel.is-chat-overlay :deep(.hall-messages) { flex: 0 0 auto; min-height: 80px; max-height: 40vh; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay > .floating-panel { overflow-y: auto; overscroll-behavior: contain; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.chat-panel) { flex: 0 0 auto; height: auto; min-height: min-content; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-messages) { flex: 0 0 auto; min-height: 80px; max-height: 40vh; }
 }
 
 </style>
