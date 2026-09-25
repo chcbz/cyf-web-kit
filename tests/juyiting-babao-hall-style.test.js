@@ -28,6 +28,14 @@ describe('1.13.6 Babao-box modal-stack hall presentation', () => {
     assert.doesNotMatch(workspace, /#4f46e5|#eef2ff|#f7f8fc/)
   })
 
+  it('aligns the fixed-version selector and download action on one control row', () => {
+    assert.match(workspace, /class="treasure-version-label">版本/)
+    assert.match(workspace, /\.treasure-version-tools\{display:grid;grid-template-columns:minmax\(0,1fr\) auto;grid-template-rows:auto auto/)
+    assert.match(workspace, /\.treasure-version-tools select\{grid-column:1;grid-row:2/)
+    assert.match(workspace, /\.treasure-version-tools>button\{grid-column:2;grid-row:2;align-self:stretch/)
+    assert.match(workspace, /\.treasure-file-heading h2:focus \{ outline:none; \}/)
+  })
+
   it('keeps the workspace reachable only through the Juyi Hall Babao entry', () => {
     assert.doesNotMatch(profile, /workspace-discovery|PersonalWorkspace/)
     assert.doesNotMatch(router, /path: '\/workspace'|name: 'PersonalWorkspace'/)

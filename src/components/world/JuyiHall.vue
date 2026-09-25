@@ -42,7 +42,6 @@
         <button v-if="homeMode === 'map' && experienceMode === 'landscape-map'" type="button" aria-label="缩小地图" @click="hallStageRef?.zoom(-0.12)">−</button>
         <button v-if="homeMode === 'map' && experienceMode === 'landscape-map'" type="button" aria-label="放大地图" @click="hallStageRef?.zoom(0.12)">+</button>
         <button v-if="homeMode === 'map' && experienceMode === 'landscape-map'" type="button" @click="hallStageRef?.resetCamera()">全景</button>
-        <button v-if="experienceMode === 'landscape-map'" type="button" aria-label="方向控制" @click="requestPanelOrientation">{{ orientationRequestPending ? '取消切换' : (experienceMode === 'landscape-map' ? '纵向布局' : '横向布局') }}</button>
         <button class="hall-sound-action" type="button" :aria-pressed="soundEnabled" @click="toggleHallSound">{{ soundEnabled ? '关闭声音' : '开启声音' }}</button>
         <button class="hall-help-action" type="button" @click="emit('open-onboarding', $event.currentTarget)">怎么开始？</button>
       </div>
@@ -253,14 +252,6 @@
               @click="handleHallReturn"
             >← 返回</button>
             <span :id="panelTitleId">{{ activePanelTitle }}</span>
-            <button
-              v-if="experienceMode === 'landscape-map'"
-              class="panel-orientation"
-              type="button"
-              :aria-label="orientationRequestPending ? '取消方向请求' : (experienceMode === 'landscape-map' ? '切换竖向布局' : '切换横向布局')"
-              :disabled="voiceInteractionLocked"
-              @click="requestPanelOrientation"
-            >{{ orientationRequestPending ? '取消切换' : (experienceMode === 'landscape-map' ? '竖向' : '横向') }}</button>
             <button
               v-if="taskWorkspaceEnabled && renderedPanel === 'tasks' && taskWorkspaceSubject"
               class="panel-workspace-link"
@@ -728,9 +719,25 @@ const globalStore = useGlobalStore()
 const apiStore = useApiStore()
 const router = useRouter()
 const accountAvatar = computed(() => String(globalStore.user?.avatar || '').trim())
+// Historical account records may contain UTF-8 bytes decoded as Latin-1 or an
+// encoded UTF-8 string. Repair only those recognizable cases for Hall labels.
+const looksLikeUtf8Mojibake = value => /[\u00c2-\u00f4][\u0080-\u00bf]/u.test(value)
+const looksLikePercentEncodedUtf8 = value => /%(?:[89a-fA-F][0-9a-fA-F])/.test(value)
+const normalizeAccountText = value => {
+  if (typeof value !== 'string') return ''
+  let normalized = value.trim()
+  if (looksLikePercentEncodedUtf8(normalized)) {
+    try { normalized = decodeURIComponent(normalized).trim() } catch { /* keep malformed legacy values unchanged */ }
+  }
+  if (!normalized || !looksLikeUtf8Mojibake(normalized) || typeof TextDecoder === 'undefined') return normalized
+  const bytes = Array.from(normalized, character => character.charCodeAt(0))
+  if (bytes.some(byte => byte > 0xff)) return normalized
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(bytes)).trim() || normalized } catch { return normalized }
+}
 const accountDisplayName = computed(() => {
   const user = globalStore.user || {}
-  return String(user.nickname || user.username || globalStore.getUserId || '个人中心').trim() || '个人中心'
+  return normalizeAccountText(user.nickname) || normalizeAccountText(user.username)
+    || normalizeAccountText(String(globalStore.getUserId || '')) || '个人中心'
 })
 const hallIdentityScope = computed(() => {
   const owner = String(globalStore.user?.id || globalStore.user?.openid || globalStore.getUserId || globalStore.getOpenid || '').trim()
@@ -1346,7 +1353,11 @@ const openPanel = (panel, options = {}) => {
       const location = options.restore ? panelLocations.get(panel) : null
       if (location && panelRef.value) panelRef.value.scrollTop = location.scrollTop
       if (location && isSafePanelFocusTarget(location.focus)) restorePanelFocus(location.focus)
-      else focusHallPanel(panelRef.value)
+      else if (isOverviewHome.value && workbenchPrimaryPanelSet.has(panel) && panelFrames.value.length === 1) {
+        // Root workbench pages focus their region, not the first input. This
+        // keeps opening “事项” from summoning the mobile software keyboard.
+        panelRef.value?.focus?.({ preventScroll: true })
+      } else focusHallPanel(panelRef.value)
     }
   })
   if (!options.silent) playPanelOpen()
@@ -1600,12 +1611,6 @@ const openFormalResults = task => {
 const openTaskWorkspace = () => {
   if (!taskWorkspaceEnabled || !taskWorkspaceSubject.value?.taskId || !taskWorkspaceSubject.value?.actorAgentId) return
   openPanel('workspace')
-}
-
-const requestPanelOrientation = () => {
-  if (voiceInteractionLocked.value) return false
-  if (orientationRequestPending.value) return requestPortrait()
-  return experienceMode.value === 'landscape-map' ? requestPortrait() : requestLandscape()
 }
 
 const returnPanel = () => {
@@ -2963,8 +2968,7 @@ button.hall-room {
   color: #4a3423;
 }
 
-.panel-return,
-.panel-orientation {
+.panel-return {
   flex: 0 0 auto;
   white-space: nowrap;
 }
@@ -3381,9 +3385,7 @@ button.hall-room {
 .panel-title > span { white-space:normal; font-size:20px; }
 .panel-title .panel-close { order:4; border:0; background:transparent; }
 .panel-title .panel-return { order:0; }
-.panel-title .panel-orientation { margin-left:auto; font-size:14px; border:1px solid #c8ad84; background:transparent; }
 .panel-title > span { order:1; }
-.panel-title .panel-orientation { order:2; }
 @media (max-width:1000px) {
  .hall-mode-hint,.hall-sound-action,.hall-help-action,.hall-brand small { display:none; }
  .hall-app-header,.hall-map-actions { padding:8px 12px; gap:8px; }
@@ -3601,14 +3603,39 @@ button.hall-room {
 .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-messages .empty-list) { color: var(--work-muted); }
 .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-message) { background: #f2f2eb; color: var(--work-ink); box-shadow: none; }
 .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-message.USER) { background: #eaf0e6; }
-.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar) { color: var(--work-muted); }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel) { background: var(--work-paper); color: var(--work-ink); }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar) {
+  align-items: stretch; gap: 10px; padding: 16px 20px; border-bottom: 1px solid var(--work-line); color: var(--work-muted);
+}
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-search) { gap: 10px; }
 .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-search input),
-.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-search select) { background: var(--work-paper); border-color: #ccd2c5; color: var(--work-ink); }
-.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar button),
-.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs button) { background: #f3f3ed; color: var(--work-ink); border: 1px solid var(--work-line); }
-.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs button.active) { background: #f6eee8; color: var(--work-brand); border-color: #e3d8d0; }
-.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-card) { background: var(--work-paper); border: 1px solid var(--work-line); }
-.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-card.selected) { background: #f6eee8; }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-search select) {
+  height: var(--hall-control-height); padding-inline: 12px; border-color: var(--hall-border-strong); border-radius: var(--hall-radius-sm); background: var(--work-paper); color: var(--work-ink);
+}
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar > button),
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-create-actions button) {
+  min-height: var(--hall-control-height); background: var(--hall-surface-subtle); color: var(--work-ink); border: 1px solid var(--work-line);
+}
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-create-actions) { display: grid; grid-template-columns: repeat(3, minmax(0, auto)); gap: 8px; }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-create-actions .new-task-button:first-child) {
+  background: var(--hall-surface-brand); color: var(--work-brand); border-color: #e3d8d0;
+}
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs) {
+  gap: 8px; padding: 12px 20px; border-bottom: 1px solid var(--work-line); scrollbar-width: none;
+}
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs button) {
+  flex: 0 0 auto; min-height: 38px; background: var(--hall-surface-subtle); color: var(--work-muted); border: 1px solid var(--work-line);
+}
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs::-webkit-scrollbar) { display: none; }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs button.active) { background: var(--hall-surface-brand); color: var(--work-brand); border-color: #e3d8d0; }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs small) { min-width: 20px; box-sizing: border-box; background: var(--work-paper); color: inherit; text-align: center; }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-panel-body) { padding: 16px 20px 20px; background: var(--work-ground); }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-card) { margin-bottom: 10px; padding: 16px; border: 1px solid var(--work-line); border-radius: var(--hall-radius-md); background: var(--work-paper); box-shadow: 0 1px 2px rgba(36, 46, 43, .04); }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-card.selected) { background: var(--hall-surface-brand); border-color: #dfcbc1; }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-card p),
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-meta) { color: var(--work-muted); }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .ability-tags span) { background: #eef3eb; color: #4b6650; }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .empty-list) { border: 1px dashed var(--work-line); border-radius: var(--hall-radius-md); background: var(--work-paper); color: var(--work-muted); }
 .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .status-filter button:not(.active)) { background: #f3f3ed; color: var(--work-ink); }
 .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .detail-card) { background: #fafbf6; border: 1px solid var(--work-line); color: var(--work-ink); }
 .home-overview .panel-overlay.theme-workbench :deep(.library-panel .library-tabs button:not(.active)) { background: #f3f3ed; color: var(--work-ink); }
@@ -3655,6 +3682,12 @@ button.hall-room {
   .home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel),
   .home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor) { --hall-page-gutter: 16px; }
   .home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages) { padding: 16px; }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar) { padding: 12px 16px; }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-search) { grid-template-columns: minmax(0, 1fr); }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-create-actions) { width: 100%; grid-template-columns: .75fr 1.35fr 1.05fr; }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-create-actions button) { min-width: 0; padding-inline: 6px; font-size: 13px; line-height: 1.3; }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs) { padding: 10px 16px; }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-panel-body) { padding: 12px 16px 20px; }
 }
 
 .home-overview button:focus-visible, .home-overview .workbench-more-menu button:focus-visible { outline: 3px solid #923f3080; outline-offset: 3px; }
@@ -3695,6 +3728,7 @@ button.hall-room {
   }
   .home-overview .panel-overlay.is-workbench-panel > .floating-panel { width: 100%; max-width: none; height: 100%; border: 0; border-radius: 0; }
   .home-overview .panel-overlay.theme-workbench .panel-title { min-height: 44px; padding: 6px 16px; }
+  .home-overview .panel-overlay.theme-workbench .panel-title > span { font-size: 17px; }
   .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-chat-composer) { padding: 8px 16px 10px; }
   .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-messages) { padding: 10px 16px; }
   .home-overview .panel-overlay.theme-workbench :deep(.treasure-intro) { flex-wrap: wrap; gap: 12px; }
@@ -3745,6 +3779,322 @@ button.hall-room {
   .home-overview .panel-overlay.theme-workbench.is-chat-overlay > .floating-panel { overflow-y: auto; overscroll-behavior: contain; }
   .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.chat-panel) { flex: 0 0 auto; height: auto; min-height: min-content; }
   .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-messages) { flex: 0 0 auto; min-height: 80px; max-height: 40vh; }
+}
+
+/* Final workbench-only presentation polish. These rules intentionally change
+   geometry and visual hierarchy only; business state and actions remain owned
+   by the existing Hall components. */
+.home-overview .panel-overlay.theme-workbench .panel-title .panel-return:focus-visible {
+  outline: 0;
+  border-radius: 0;
+  box-shadow: inset 0 -2px 0 var(--work-brand);
+}
+
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .panel-toolbar) {
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--work-line);
+}
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .panel-toolbar > button) {
+  border: 1px solid var(--work-line);
+  background: var(--hall-surface-subtle);
+  color: var(--work-ink);
+}
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .detail-card) {
+  line-height: 1.65;
+}
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .detail-card:not(:has(.detail-head))) {
+  min-height: 0;
+  padding: 15px 16px;
+  overflow: visible;
+  color: var(--work-muted);
+}
+
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .catalog-summary) {
+  border-bottom: 1px solid var(--work-line);
+}
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .catalog-grid:empty) {
+  display: grid;
+  min-height: 260px;
+  margin: 12px 16px 16px;
+  padding: 28px;
+  place-items: center;
+  border: 1px dashed var(--work-line);
+  border-radius: var(--hall-radius-md);
+  background: var(--hall-surface-subtle);
+  overflow: visible;
+}
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages .overview-source-error) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin: 10px 0;
+  padding: 14px;
+  border: 1px solid #ead8d2;
+  border-radius: var(--hall-radius-sm);
+  line-height: 1.65;
+}
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages .overview-source-error button) {
+  min-width: 72px;
+  padding-inline: 12px;
+  white-space: nowrap;
+}
+
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar) {
+  padding: 9px 12px;
+}
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions) {
+  scrollbar-width: none;
+}
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions::-webkit-scrollbar) {
+  display: none;
+}
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.composer-textarea) {
+  border-color: var(--hall-border-strong);
+  background: var(--work-paper);
+  color: var(--work-ink);
+}
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.composer-target-chip) {
+  border-color: var(--work-line);
+  background: var(--hall-surface-brand);
+  color: var(--work-brand);
+}
+.juyi-page.home-overview:has(.floating-panel.panel-chat) > .toast {
+  bottom: max(150px, calc(env(safe-area-inset-bottom) + 150px));
+  max-width: calc(100% - 32px);
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .draft-error) {
+  padding: 8px 10px;
+  border-left: 3px solid #c45d4c;
+  border-radius: 5px;
+  background: #fff4f1;
+  line-height: 1.55;
+}
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor button:disabled) {
+  border-color: #dfe1da;
+  background: #eceee8;
+  color: #929a94;
+  opacity: 1;
+}
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .primary:disabled) {
+  border-color: #dfe1da;
+  background: #e4e7e1;
+  color: #969d98;
+}
+
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-card) {
+  position: relative;
+  padding-right: 36px;
+  cursor: pointer;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-card::after) {
+  content: '›';
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  color: #9aa19b;
+  font-size: 24px;
+  line-height: 1;
+  transform: translateY(-50%);
+}
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-card:hover) {
+  border-color: #c9cec4;
+  box-shadow: 0 5px 14px rgba(36, 46, 43, .07);
+  transform: translateY(-1px);
+}
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs) {
+  scroll-padding-inline: 16px 44px;
+  padding-right: 44px;
+  background: linear-gradient(90deg, var(--work-paper) 0, var(--work-paper) calc(100% - 28px), rgba(255,254,250,0) 100%);
+}
+
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-content select) {
+  border-color: var(--hall-border-strong);
+  border-radius: var(--hall-radius-sm);
+  background: var(--work-paper);
+  color: var(--work-ink);
+}
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-preview) {
+  min-height: 150px;
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid var(--work-line);
+  border-radius: var(--hall-radius-md);
+  background: #fafbf8;
+  color: var(--work-ink);
+}
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-preview:empty::before) {
+  content: '预览内容将在这里显示';
+  display: grid;
+  min-height: 112px;
+  place-items: center;
+  color: var(--work-muted);
+  font-size: 13px;
+}
+
+@media (max-width: 760px) {
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .panel-toolbar) {
+    gap: 8px;
+    padding: 12px 16px;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .status-filter) {
+    width: 100%;
+    padding-bottom: 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .status-filter::-webkit-scrollbar) { display: none; }
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .panel-toolbar > button) { width: 100%; }
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .panel-toolbar > span) { padding-inline: 2px; }
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel-body) {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 12px 18px;
+    overflow: auto;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .agent-list) {
+    order: 1;
+    flex: 0 0 auto;
+    max-height: 44vh;
+    overflow: auto;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .detail-card) {
+    order: 2;
+    flex: 0 0 auto;
+  }
+
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(108px, .58fr) 44px;
+    gap: 8px;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-search) { display: contents; }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar > button) {
+    width: 44px;
+    min-width: 44px;
+    padding: 0;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar > button span) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-create-actions) {
+    grid-column: 1 / -1;
+    grid-template-columns: .8fr 1.35fr 1.05fr;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs) {
+    padding-left: 16px;
+    padding-right: 42px;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-panel-body) { padding-top: 10px; }
+
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 8px;
+  }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.context-summary) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 6px;
+  }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions) {
+    width: 100%;
+    padding-bottom: 2px;
+    overflow-x: auto;
+  }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions .icon-button) {
+    min-width: 42px;
+    height: 40px;
+  }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions .material-reference-entry),
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions .workspace-entry) {
+    min-width: max-content;
+  }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-chat-composer) {
+    gap: 6px;
+    padding-inline: 12px;
+  }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.composer-context) {
+    gap: 4px;
+  }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.composer-meta) {
+    padding-right: 2px;
+  }
+
+  .home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages .overview-source-error) {
+    grid-template-columns: minmax(0, 1fr) 74px;
+    gap: 10px;
+    padding: 12px;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages .overview-source-error button) {
+    width: 74px;
+    min-width: 74px;
+    padding-inline: 8px;
+    font-size: 13px;
+  }
+
+  .home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .catalog-grid:empty) {
+    min-height: 220px;
+    margin: 12px;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.treasure-preview) {
+    min-height: 128px;
+    padding: 14px;
+  }
+}
+
+@media (max-height: 500px) and (min-width: 601px) {
+  .home-overview .panel-overlay:not(.is-full-window) { padding: 10px 12px; }
+  .home-overview .floating-panel.layout-center-modal,
+  .home-overview .floating-panel.panel-treasure:not(.layout-full-window) {
+    height: calc(100% - 20px);
+    max-height: calc(100% - 20px);
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel-body) {
+    display: grid;
+    grid-template-columns: minmax(260px, .85fr) minmax(0, 1.15fr);
+    gap: 10px;
+    overflow: hidden;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .agent-list) {
+    order: initial;
+    max-height: none;
+    overflow: auto;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .detail-card) {
+    order: initial;
+    overflow: auto;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor form) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 16px;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor form > label),
+  .home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor form > p),
+  .home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor form > section),
+  .home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .draft-actions) {
+    grid-column: 1 / -1;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .draft-actions) {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin-inline: -4px;
+    padding: 10px 4px 4px;
+    background: linear-gradient(180deg, rgba(255,254,250,0), var(--work-paper) 24%);
+  }
 }
 
 </style>
