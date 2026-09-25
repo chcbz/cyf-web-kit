@@ -9,12 +9,12 @@ import { stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 
 const capabilityV2 = { schemaVersion: '2', requestId: true, requestRevision: true, contextSnapshot: true, durableTurns: true, deltaSequence: true, cancel: true, interactionHints: ['chat', 'inspect'] }
 const deferred = () => { let resolve; let reject; const promise = new Promise((ok, fail) => { resolve = ok; reject = fail }); return { promise, resolve, reject } }
-const base = ({ chatApi, apiStore = { authorizationGeneration: 1, token: async () => '' }, metadata, context } = {}) => useHallConversation({
+const base = ({ chatApi, apiStore = { authorizationGeneration: 1, token: async () => '' }, metadata, context, onDelivery } = {}) => useHallConversation({
   apiStore, chatApi: chatApi || {},
   chatContext: context || ref({ conversationScopeType: 'public', conversationScopeKey: 'public', mode: 'public', participantAgentIds: ['a'], targetAgentIds: ['a'], targetAgentId: 'a' }),
   chatMode: ref('public'), globalStore: { user: { username: 'tester' } }, log: { warn () {}, error () {} },
   openPanel () {}, outgoingMetadata: ref(metadata || { inputRefs: [{ type: 'message', id: '9007199254740993', content: 'must never upload' }] }),
-  portraitShortName: agent => agent?.name || '', selectedAgent: ref({ agentId: 'a' }), selectedTask: ref(null), showToast () {}
+  portraitShortName: agent => agent?.name || '', selectedAgent: ref({ agentId: 'a' }), selectedTask: ref(null), showToast () {}, onDelivery
 })
 
 describe('Juyi Hall Codex durable deliberation web contract', () => {
@@ -30,6 +30,24 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     expect(sent[0].body.requestRevision).to.equal('1')
     expect(sent[0].body.interactionHint).to.equal('inspect')
     expect(sent[0].body.inputRefs).to.deep.equal([{ type: 'message', id: '9007199254740993' }])
+    conversation.disposeHallConversation()
+  })
+
+  it('takes the send lock and reserves one requestId before delayed capability negotiation', async () => {
+    const gate = deferred(); const sent = []
+    const conversation = base({ chatApi: {
+      get: async () => gate.promise,
+      create: async (_path, body, options) => { sent.push({ body, options }); options.onStreamEnd() }
+    } })
+    conversation.setDraft('send once')
+    const first = conversation.sendHallMessage()
+    const second = conversation.sendHallMessage()
+    expect(await second).to.equal(false)
+    expect(conversation.isSubmitting.value).to.equal(true)
+    gate.resolve({ data: { data: capabilityV2 } })
+    expect(await first).to.equal(true)
+    expect(sent).to.have.length(1)
+    expect(sent[0].body.requestId).to.equal(sent[0].options.headers['Idempotency-Key'])
     conversation.disposeHallConversation()
   })
 
@@ -89,11 +107,12 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
   })
 
   it('keeps pre-admission status neutral and only renders observed runtime policy', async () => {
-    let statusDuringPost = ''
-    const conversation = base({ chatApi: {
+    let statusDuringPost = ''; let stateDuringPost; const deliveries = []
+    const conversation = base({ onDelivery: delivery => deliveries.push(delivery), chatApi: {
       get: async () => ({ data: { data: capabilityV2 } }),
       create: async (_p, body, options) => {
         statusDuringPost = conversation.deliberationStatus.value
+        stateDuringPost = { submitting: conversation.isSubmitting.value, streaming: conversation.isStreaming.value, awaiting: conversation.isAwaitingReply.value, deliveries: deliveries.length }
         options.onStream(JSON.stringify({ agentDelivery: { agentId: 'a', accepted: true, state: 'QUEUED' }, conversationId: '9007199254740993', requestId: body.requestId, turnId: 'turn-x', route: 'CHAT' }))
         options.onStreamEnd()
       }
@@ -102,6 +121,8 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     await conversation.sendHallMessage()
     expect(statusDuringPost).to.equal('正在提交，等待受理')
     expect(statusDuringPost).not.to.match(/Fast|read-only/i)
+    expect(stateDuringPost).to.deep.equal({ submitting: true, streaming: false, awaiting: false, deliveries: 0 })
+    expect(deliveries).to.have.length(1)
     expect(conversation.deliberationStatus.value).to.equal('CHAT · 排队中')
     conversation.disposeHallConversation()
   })
@@ -136,6 +157,47 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     await conversation.sendHallMessage()
     expect(creates).to.equal(1); expect(requestLookups).to.equal(1)
     expect(conversation.activeTurns.value[0].turnId).to.equal('9007199254740995')
+    conversation.disposeHallConversation()
+  })
+
+  it('keeps terminal unknown-result recovery non-busy when history reload fails', async () => {
+    let requestId; let creates = 0; let contentLoads = 0
+    const conversation = base({ chatApi: {
+      get: async path => {
+        if (path === '/capabilities') return { data: { data: capabilityV2 } }
+        return { data: { data: { requestId, requestRevision: '1', conversationId: '9007199254740993', state: 'COMPLETED',
+          turns: [{ turnId: 'turn-terminal', requestId, state: 'PUBLISHED', stateVersion: '2', lastDeltaSeq: '1' }] } } }
+      },
+      getById: async () => { contentLoads += 1; throw new Error('history unavailable') },
+      create: async (_path, body) => { creates += 1; requestId = body.requestId; throw new TypeError('transport lost') }
+    } })
+    conversation.setDraft('terminal recovery')
+    expect(await conversation.sendHallMessage()).to.equal(false)
+    await Promise.resolve()
+    expect(creates).to.equal(1)
+    expect(contentLoads).to.equal(1)
+    expect(conversation.activeRequest.value.state).to.equal('COMPLETED')
+    expect(conversation.isAwaitingReply.value).to.equal(false)
+    expect(conversation.isStreaming.value).to.equal(false)
+    expect(conversation.isConversationBusy.value).to.equal(false)
+    conversation.disposeHallConversation()
+  })
+
+  it('fails all-pending cancellation when the returned request view is invalid', async () => {
+    let requestId
+    const conversation = base({ chatApi: {
+      get: async () => ({ data: { data: capabilityV2 } }),
+      create: async (_path, body, options) => {
+        requestId = body.requestId
+        for (const turnId of ['turn-a', 'turn-b']) options.onStream(JSON.stringify({ requestId, turnId, state: 'QUEUED', agentDelivery: { agentId: turnId, accepted: true, state: 'QUEUED', turnId }, conversationId: '9007199254740993' }))
+        options.onStreamEnd()
+      },
+      post: async () => ({ data: { data: { requestId: 'different-request', state: 'CANCELLED', turns: [] } } })
+    } })
+    conversation.setDraft('cancel group')
+    await conversation.sendHallMessage()
+    expect(conversation.durableCancelTarget.value).to.deep.equal({ allPending: true })
+    expect(await conversation.cancelDeliberation({ allPending: true })).to.equal(false)
     conversation.disposeHallConversation()
   })
 
@@ -186,6 +248,24 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     expect(isTerminalTurnState('PUBLISHED')).to.equal(true)
   })
 
+  it('ignores stale live stateVersion while allowing a future higher version', () => {
+    let state = reduceDeliberationEvent({ request: { requestId: 'req' }, turns: [] }, { requestId: 'req', turnId: 'turn', state: 'GENERATING', stateVersion: '10' })
+    state = reduceDeliberationEvent(state, { requestId: 'req', turnId: 'turn', state: 'QUEUED', stateVersion: '9' })
+    expect(state.turns[0]).to.include({ state: 'GENERATING', stateVersion: '10' })
+    state = reduceDeliberationEvent(state, { requestId: 'req', turnId: 'turn', state: 'FINAL_PERSISTED', stateVersion: '11' })
+    expect(state.turns[0]).to.include({ state: 'FINAL_PERSISTED', stateVersion: '11' })
+  })
+
+  it('merges replay final into an existing persisted message and removes its placeholder', () => {
+    const state = { conversationId: '9007199254740993', messages: [{ localId: 'message-final', sender: 'AGENT', content: 'persisted', streaming: false }], isAwaitingReply: true, isStreaming: true, turnStates: new Map(), manageTurnBusy: true }
+    appendHallEventMessage(state, { type: 'agent_message_delta', conversationId: state.conversationId, turnId: 'turn-a', deltaSeq: '1', agentId: 'a', content: 'partial' })
+    const result = appendHallEventMessage(state, { type: 'agent_message', conversationId: state.conversationId, turnId: 'turn-a', messageId: 'message-final', senderType: 'agent', agentId: 'a', content: 'authoritative' })
+    expect(result.type).to.equal('final')
+    expect(state.messages.filter(message => message.localId === 'message-final')).to.have.length(1)
+    expect(state.messages).to.have.length(1)
+    expect(state.messages[0].content).to.equal('authoritative')
+  })
+
   it('rejects late delta after final and keeps same-agent turns separate', () => {
     const state = { conversationId: '9007199254740993', messages: [], isAwaitingReply: true, isStreaming: true, manageTurnBusy: true }
     const delta = (turnId, deltaSeq, content) => appendHallEventMessage(state, { type: 'agent_message_delta', conversationId: state.conversationId, turnId, deltaSeq, agentId: 'a', content })
@@ -204,6 +284,41 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     expect(panel).to.include("$emit('cancel-deliberation', durableCancelTarget)")
     expect(hall).to.include('@cancel-deliberation="cancelDeliberation"')
     expect(hall).not.to.include('@cancel-deliberation="cancelDeliberation()"')
+    const sendHandler = hall.slice(hall.indexOf('const handleSendHallMessage'), hall.indexOf('const handleMentionAgent'))
+    expect(sendHandler).not.to.include('收到传令')
+    expect(hall).to.include("onDelivery: ({ agentId }) =>")
+  })
+})
+
+describe('Juyi Hall durable SSE recovery', () => {
+  it('reconnects after a valid resync_required from the committed cursor without a replay storm', async () => {
+    const originalFetch = global.fetch
+    const requests = []; let contentLoads = 0; let conversation
+    const fixture = new TextEncoder().encode('id: 8\ndata: {"type":"resync_required","eventSequence":"8","turnId":"turn-a"}\n\n')
+    global.fetch = async (_url, options) => {
+      requests.push(options)
+      return new Response(new ReadableStream({ start (controller) { controller.enqueue(fixture) } }), { status: 200 })
+    }
+    try {
+      conversation = base({
+        apiStore: { authorizationGeneration: 1, token: async () => 'token' },
+        chatApi: {
+          list: async (_path, _payload, options) => options.onSuccess({ data: [{ id: '9007199254740993', conversationType: 'juyiting', conversationScopeType: 'public', conversationScopeKey: 'public' }] }),
+          getById: async (_path, _id, options) => { contentLoads += 1; options.onSuccess({ data: [] }) }
+        }
+      })
+      await conversation.loadHallMessages()
+      for (let index = 0; index < 12; index += 1) await new Promise(resolve => setImmediate(resolve))
+      expect(requests).to.have.length(2)
+      expect(requests[1].headers['Last-Event-ID']).to.equal('8')
+      expect(contentLoads).to.equal(2)
+      for (let index = 0; index < 4; index += 1) await new Promise(resolve => setImmediate(resolve))
+      expect(requests).to.have.length(2)
+      expect(contentLoads).to.equal(2)
+    } finally {
+      conversation?.disposeHallConversation()
+      global.fetch = originalFetch
+    }
   })
 })
 
@@ -248,6 +363,29 @@ describe('Juyi Hall durable SSE parser', () => {
     expect(result.invalid).to.deep.equal(['cursor_conflict'])
   })
 
+
+  it('commits a valid resync_required cursor before scheduling one authoritative replay', () => {
+    let cursor = '7'; const resyncs = []; const headers = []
+    const connect = fixture => {
+      headers.push(cursor ? { 'Last-Event-ID': cursor } : {})
+      let pending = ''
+      const parser = createHallSseParser({
+        conversationId: '9007199254740993',
+        onEvent: (event, candidate) => {
+          if (event.type === 'resync_required') pending = candidate && BigInt(candidate) > BigInt(cursor) ? candidate : ''
+          return true
+        },
+        onCursor: next => { cursor = next },
+        onCommitted: (event, committed) => { if (event.type === 'resync_required' && pending === committed) resyncs.push(committed) }
+      })
+      parser.push(fixture); parser.finish()
+    }
+    const fixture = 'id: 8\ndata: {"type":"resync_required","eventSequence":"8","turnId":"turn-a"}\n\n'
+    connect(fixture)
+    connect(fixture)
+    expect(resyncs).to.deep.equal(['8'])
+    expect(headers).to.deep.equal([{ 'Last-Event-ID': '7' }, { 'Last-Event-ID': '8' }])
+  })
 
   it('rejects non-canonical cursor and Long event fields without advancing cursor', () => {
     const numeric = parse(['id: 6\ndata: {"type":"agent_message_delta","eventSequence":6,"turnId":"t","deltaSeq":"1","content":"x"}\n\n'])

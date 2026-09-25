@@ -141,10 +141,27 @@ export const appendHallEventMessage = (state, event) => {
     ? event.messageId
     : `event-${event.agentId || 'message'}-${event.timestamp || Date.now()}`
   const streamingMessage = event.senderType === 'agent' ? currentStreamingAgentMessage(state.messages, event) : null
+  const existing = state.messages.find(message => message.localId === localId)
   const finalTurnId = exactTurnId(event)
   if (finalTurnId) {
     const tracker = turnState(state, finalTurnId)
     if (tracker) { tracker.waitingFinal = false; tracker.terminal = true }
+  }
+  if (existing && event.senderType === 'agent') {
+    if (!streamingMessage || streamingMessage === existing) {
+      if (!existing.streaming) return { type: 'duplicate' }
+    } else {
+      state.messages.splice(state.messages.indexOf(streamingMessage), 1)
+    }
+    existing.content = event.content || existing.content
+    existing.timestamp = event.timestamp || existing.timestamp
+    existing.senderName = senderName || existing.senderName
+    existing.agentId = event.agentId || existing.agentId
+    existing.turnId = finalTurnId || existing.turnId
+    existing.streaming = false
+    existing.statusText = '回话已毕'
+    if (!state.manageTurnBusy) { state.isAwaitingReply = false; state.isStreaming = false }
+    return { type: 'final', message: existing, shouldStopPolling: true, toastName: senderName }
   }
   if (streamingMessage && event.senderType === 'agent') {
     streamingMessage.localId = localId
@@ -157,9 +174,6 @@ export const appendHallEventMessage = (state, event) => {
     streamingMessage.statusText = '回话已毕'
     if (!state.manageTurnBusy) { state.isAwaitingReply = false; state.isStreaming = false }
     return { type: 'final', message: streamingMessage, shouldStopPolling: true, toastName: senderName }
-  }
-  if (state.messages.some(message => message.localId === localId)) {
-    return { type: 'duplicate' }
   }
 
   const message = {

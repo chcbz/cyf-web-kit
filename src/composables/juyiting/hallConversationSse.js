@@ -18,7 +18,7 @@ const canonicalField = (event, key, options) => {
   return { present: true, value: canonicalWireString(event[key], options) }
 }
 
-export const createHallSseParser = ({ conversationId, onEvent, onCursor, onInvalid }) => {
+export const createHallSseParser = ({ conversationId, onEvent, onCursor, onCommitted, onInvalid }) => {
   let buffer = ''
   let failed = false
   let frame = emptyFrame()
@@ -69,8 +69,9 @@ export const createHallSseParser = ({ conversationId, onEvent, onCursor, onInval
       return invalid('cursor_conflict')
     }
     const candidate = sequence.value || id || readyCursor
-    if (onEvent?.(event) === false) return invalid('event_rejected')
+    if (onEvent?.(event, candidate) === false) return invalid('event_rejected')
     if (candidate) onCursor?.(candidate)
+    onCommitted?.(event, candidate)
     frame = emptyFrame()
     return true
   }

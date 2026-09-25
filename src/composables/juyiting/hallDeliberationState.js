@@ -24,6 +24,9 @@ const upsertTurn = (turns, patch) => {
   if (!patch.turnId) return turns
   const index = turns.findIndex(turn => turn.turnId === patch.turnId)
   const previous = index >= 0 ? turns[index] : {}
+  const previousVersion = canonicalWireString(previous.stateVersion, { allowZero: true })
+  const patchVersion = canonicalWireString(patch.stateVersion, { allowZero: true })
+  if (previousVersion && patchVersion && BigInt(patchVersion) < BigInt(previousVersion)) return turns
   if (isTerminalTurnState(previous.state)) {
     const previousState = normalizeDeliberationState(previous.state)
     const nextState = normalizeDeliberationState(patch.state)

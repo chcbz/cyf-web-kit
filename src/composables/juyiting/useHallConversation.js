@@ -41,7 +41,8 @@ export const useHallConversation = ({
   selectedAgent,
   selectedTask,
   showToast,
-  onFinalReply
+  onFinalReply,
+  onDelivery
 }) => {
   const messages = ref([])
   const conversationId = ref('')
@@ -58,6 +59,7 @@ export const useHallConversation = ({
   const scopeDrafts = new Map()
   const isStreaming = ref(false)
   const isAwaitingReply = ref(false)
+  const isSubmitting = ref(false)
   const eventStreamRecovering = ref(false)
   const deliberationStatus = ref('')
   const activeRequest = ref(null)
@@ -75,6 +77,7 @@ export const useHallConversation = ({
   let authoritativeResyncPromise = null
   let activeBuiltInTurn = null
   let recoveringReplyTurn = null
+  let activeSendToken = null
 
   let hallEventController = null
   let hallEventConversationId = ''
@@ -187,7 +190,7 @@ export const useHallConversation = ({
   const durableCancelTarget = computed(() => cancellationTarget(activeRequest.value, activeTurns.value))
   const canCancelDurable = computed(() => Boolean(durableCancelTarget.value))
   const canCancelLegacy = computed(() => !activeRequest.value?.requestId && (isStreaming.value || isAwaitingReply.value))
-  const isConversationBusy = computed(() => durableBusy.value || isStreaming.value || isAwaitingReply.value || isConversationLoading.value || Boolean(conversationHistoryDeletingId.value))
+  const isConversationBusy = computed(() => isSubmitting.value || durableBusy.value || isStreaming.value || isAwaitingReply.value || isConversationLoading.value || Boolean(conversationHistoryDeletingId.value))
 
   const pendingAgentName = computed(() => {
     if (!selectedAgent.value) return ''
@@ -206,6 +209,7 @@ export const useHallConversation = ({
   })
 
   const chatConnectionStatus = computed(() => {
+    if (isSubmitting.value) return '正在提交，等待受理'
     if (eventStreamRecovering.value) return '正在续上传令'
     if (deliberationStatus.value) return deliberationStatus.value
     if (isStreaming.value) return '传令中'
@@ -337,7 +341,7 @@ export const useHallConversation = ({
     return reduced.handled
   }
 
-  const appendHallEventMessage = (event) => {
+  const appendHallEventMessage = (event, { deferServerResync = false } = {}) => {
     const durableHandled = applyDeliberationEvent(event)
     const messageEvent = event?.type === 'agent_message_delta' || event?.type === 'agent_message' || event?.type === 'resync_required'
     if (!messageEvent) {
@@ -357,9 +361,13 @@ export const useHallConversation = ({
     messages.value = state.messages
     isAwaitingReply.value = state.isAwaitingReply
     isStreaming.value = state.isStreaming
-    if (['invalid_delta', 'resync_required'].includes(result.type)) {
+    if (result.type === 'invalid_delta') {
       void authoritativeResync(event.conversationId, result.type)
       return false
+    }
+    if (result.type === 'resync_required') {
+      if (!deferServerResync) void authoritativeResync(event.conversationId, result.type, { clearCursor: false })
+      return event.type === 'resync_required'
     }
     if (result.type === 'late_delta') { syncDurablePresentation(); return true }
     if (result.type === 'delta') recordObservation('first_delta', activeRequest.value)
@@ -485,16 +493,29 @@ export const useHallConversation = ({
 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
+      let pendingServerResyncCursor = ''
       const parser = createHallSseParser({
         conversationId: id,
-        onEvent: event => {
+        onEvent: (event, candidateCursor) => {
           if (!guardCurrent(streamGuard)) return false
           if (event.type === 'stream_ready') { hallEventReconnectFailures = 0; return true }
-          const accepted = appendHallEventMessage(event)
+          if (event.type === 'resync_required') {
+            const currentCursor = eventCursors.get(id)
+            pendingServerResyncCursor = candidateCursor && (!currentCursor || BigInt(candidateCursor) > BigInt(currentCursor))
+              ? candidateCursor
+              : ''
+          }
+          const accepted = appendHallEventMessage(event, { deferServerResync: event.type === 'resync_required' })
           if (accepted) hallEventReconnectFailures = 0
           return accepted
         },
         onCursor: cursorValue => eventCursors.set(id, cursorValue),
+        onCommitted: (event, cursorValue) => {
+          if (event.type === 'resync_required' && pendingServerResyncCursor === cursorValue) {
+            pendingServerResyncCursor = ''
+            void authoritativeResync(id, 'resync_required', { clearCursor: false })
+          }
+        },
         onInvalid: reason => { log.warn('聚义厅事件帧无效', reason); void authoritativeResync(id, reason) }
       })
       while (true) {
@@ -554,6 +575,8 @@ export const useHallConversation = ({
     turnStates.clear()
     eventCursors.clear()
     authoritativeResyncPromise = null
+    activeSendToken = null
+    isSubmitting.value = false
   }
 
   const resetLifecycle = () => {
@@ -1026,6 +1049,10 @@ export const useHallConversation = ({
       }
       if (event.agentDelivery || event.type === 'chat_request_replay' || (event.requestId && !['agent_message_delta', 'agent_message', 'resync_required'].includes(event.type))) {
         const handled = applyDeliberationEvent(event)
+        if (event.agentDelivery && (event.agentDelivery.accepted === true || event.agentDelivery.delivered === true)) {
+          isSubmitting.value = false
+          onDelivery?.({ agentId: event.agentDelivery.agentId || event.agentId || '', requestId: event.requestId || '', turnId: event.turnId || event.agentDelivery.turnId || '' })
+        }
         if (event.agentDelivery && event.agentDelivery.accepted !== true) {
           const state = { conversationId: conversationId.value, messages: messages.value, isAwaitingReply: isAwaitingReply.value, isStreaming: isStreaming.value, turnStates, manageTurnBusy: true }
           const result = appendStreamPayload(state, JSON.stringify(event))
@@ -1040,6 +1067,7 @@ export const useHallConversation = ({
         return handled
       }
       if (event.type === 'agent_message' && activeBuiltInTurn) {
+        isSubmitting.value = false
         applyDeliberationEvent(event)
         const state = { conversationId: conversationId.value, messages: messages.value, isAwaitingReply: isAwaitingReply.value,
           isStreaming: isStreaming.value, turnStates, manageTurnBusy: Boolean(activeRequest.value?.requestId) }
@@ -1050,7 +1078,10 @@ export const useHallConversation = ({
         syncDurablePresentation()
         return result.type === 'stream_final'
       }
-      if (['agent_message_delta', 'agent_message', 'resync_required'].includes(event.type)) return appendHallEventMessage(event)
+      if (['agent_message_delta', 'agent_message', 'resync_required'].includes(event.type)) {
+        isSubmitting.value = false
+        return appendHallEventMessage(event)
+      }
     }
     const state = {
       conversationId: conversationId.value, messages: messages.value,
@@ -1070,13 +1101,13 @@ export const useHallConversation = ({
     return !['invalid_conversation', 'invalid_message_id'].includes(result.type)
   }
 
-  const sendHallMessage = async ({
+  const performHallMessageSend = async ({
     content: explicitContent,
     contextSnapshot,
     source = 'text',
     clearDraftRevision,
     onConversationResolved
-  } = {}) => {
+  } = {}, sendToken) => {
     const isVoiceSend = source === 'voice'
     if (isVoiceSend && typeof explicitContent !== 'string') return false
     const content = (isVoiceSend ? explicitContent : String((explicitContent ?? draft.value) || '')).trim()
@@ -1110,7 +1141,7 @@ export const useHallConversation = ({
       : sendContext.targetAgentIds
     const selectedAgentId = isVoiceSend ? sendContext.selectedAgentId : (Object.hasOwn(sendContext, 'selectedAgentId') ? sendContext.selectedAgentId : selectedAgent.value?.agentId)
     const selectedTaskId = isVoiceSend ? sendContext.selectedTaskId : (Object.hasOwn(sendContext, 'selectedTaskId') ? sendContext.selectedTaskId : selectedTask.value?.id)
-    const requestId = capability.v2 ? createStableRequestId() : ''
+    const requestId = capability.v2 ? sendToken.requestId : ''
     const requestRevision = '1'
     const interactionHint = inputRefsFor(metadataSource).length ? 'inspect' : 'chat'
     const request = capability.v2 ? { requestId, requestRevision, observations: [] } : null
@@ -1130,9 +1161,8 @@ export const useHallConversation = ({
       timestamp: Date.now(),
       streaming: false
     })
-    isStreaming.value = true
-    isAwaitingReply.value = true
-    deliberationStatus.value = '正在提交，等待受理'
+    isStreaming.value = false
+    isAwaitingReply.value = false
     activeRequest.value = request ? { ...request, state: 'SUBMITTING' } : null
     activeTurns.value = []
     stopHallReplyPolling()
@@ -1172,10 +1202,16 @@ export const useHallConversation = ({
             return
           }
           hallReplyStreamHandle = handle
-          if (!capability.v2) deliberationStatus.value = capability.fallbackReason || '旧版传令兼容模式'
+          if (!capability.v2) {
+            if (activeSendToken === sendToken) isSubmitting.value = false
+            isStreaming.value = true
+            isAwaitingReply.value = true
+            deliberationStatus.value = capability.fallbackReason || '旧版传令兼容模式'
+          }
         },
         onStream: eventData => {
           if (!isCurrentReplyTurn()) return
+          if (!capability.v2) isAwaitingReply.value = true
           const previousConversationId = conversationId.value
           const accepted = processStream(eventData)
           if (accepted) recordObservation('first_response', request)
@@ -1222,12 +1258,13 @@ export const useHallConversation = ({
         await recoverUnknownRequest(requestId, sendGuard)
       }
       const exactId = exactRuntimeId(conversationId.value)
-      recoveringReplyTurn = exactId ? {
+      const stillBusy = capability.v2 ? deliberationBusy(activeRequest.value, activeTurns.value) : Boolean(exactId)
+      recoveringReplyTurn = exactId && stillBusy ? {
         conversationId: exactId,
         baselineMessageIds: new Set(activeBuiltInTurn?.baselineMessageIds || [])
       } : null
       clearBuiltInTurn()
-      if (exactId) {
+      if (exactId && stillBusy) {
         isAwaitingReply.value = true
         startHallEventStream()
         startHallReplyPolling(exactId)
@@ -1236,12 +1273,15 @@ export const useHallConversation = ({
       } else {
         isAwaitingReply.value = false
         stopHallReplyPolling()
+        if (exactId) void loadHallConversationContent(exactId)
       }
       localMessageSequence += 1
       messages.value.push({
         localId: `system-${Date.now()}-${localMessageSequence}`,
         sender: 'SYSTEM',
-        content: exactId ? '传令连接中断，正在原话头核对回话；请勿重复发送。' : '传令连接中断，结果未知；请从话头记录核对，勿直接重发。',
+        content: exactId && stillBusy
+          ? '传令连接中断，正在原话头核对回话；请勿重复发送。'
+          : exactId ? '传令连接中断，但原请求已核对为终态。' : '传令连接中断，结果未知；请从话头记录核对，勿直接重发。',
         timestamp: Date.now(),
         streaming: false
       })
@@ -1252,6 +1292,27 @@ export const useHallConversation = ({
         hallReplyStreamHandle = null
         hallReplySignalCleanup?.()
         hallReplySignalCleanup = null
+      }
+    }
+  }
+
+  const sendHallMessage = async (options = {}) => {
+    const isVoiceSend = options.source === 'voice'
+    const content = String(isVoiceSend ? (options.content ?? '') : ((options.content ?? draft.value) || '')).trim()
+    if (disposed || !content || activeSendToken || isStreaming.value || isAwaitingReply.value || isConversationLoading.value || conversationHistoryDeletingId.value || conversationLoadError.value) return false
+    const sendToken = Object.freeze({ requestId: createStableRequestId(), generation: lifecycleGeneration })
+    activeSendToken = sendToken
+    isSubmitting.value = true
+    deliberationStatus.value = '正在提交，等待受理'
+    try {
+      return await performHallMessageSend(options, sendToken)
+    } finally {
+      if (activeSendToken === sendToken) {
+        activeSendToken = null
+        isSubmitting.value = false
+        if (!activeRequest.value?.requestId && !isAwaitingReply.value && !isStreaming.value && deliberationStatus.value === '正在提交，等待受理') {
+          deliberationStatus.value = ''
+        }
       }
     }
   }
@@ -1316,12 +1377,12 @@ export const useHallConversation = ({
     }
   }
 
-  const authoritativeResync = (id = conversationId.value, reason = 'resync_required', { restartStream = true } = {}) => {
+  const authoritativeResync = (id = conversationId.value, reason = 'resync_required', { restartStream = true, clearCursor = true } = {}) => {
     const exactId = exactRuntimeId(id)
     if (!exactId || disposed) return Promise.resolve(false)
     if (authoritativeResyncPromise) return authoritativeResyncPromise
     const guard = captureGuard()
-    eventCursors.delete(exactId)
+    if (clearCursor) eventCursors.delete(exactId)
     messages.value = messages.value.filter(message => !message.streaming)
     for (const tracker of turnStates.values()) tracker.waitingFinal = true
     deliberationStatus.value = '正在拉取权威状态'
@@ -1370,7 +1431,7 @@ export const useHallConversation = ({
       } else if (selectedTarget.allPending === true) {
         response = await chatApi.post(`/requests/${request.requestId}/cancel?allPending=true`, { allPending: true }, { autoLoading: false, signal: lifecycleController.signal })
         abortIfStale(guard)
-        applyRequestView(apiData(response), request.requestId)
+        if (!applyRequestView(apiData(response), request.requestId)) return false
       } else return false
       syncDurablePresentation()
       if (deliberationBusy(activeRequest.value, activeTurns.value)) deliberationStatus.value = '取消请求已提交'
@@ -1455,6 +1516,7 @@ export const useHallConversation = ({
     insertAgentMention,
     isAwaitingReply,
     isConversationBusy,
+    isSubmitting,
     isStreaming,
     loadHallConversationHistory,
     loadHallMessages,
