@@ -1425,20 +1425,23 @@ export const useHallConversation = ({
     }
     if (job.inFlight) return
     job.timer = null
+    job.deltaDirty = false
     const inFlight = recoverUnknownRequest(requestId, job.guard)
     job.inFlight = inFlight
     const settle = () => {
       if (requestReadbackJobs.get(requestId) !== job || job.inFlight !== inFlight) return
       job.inFlight = null
-      const pendingMode = job.pendingMode
-      job.pendingMode = ''
+      const forceTrailingImmediate = job.forceTrailingImmediate
+      const deltaDirty = job.deltaDirty
+      job.forceTrailingImmediate = false
+      job.deltaDirty = false
       if (!guardCurrent(job.guard) || activeRequest.value?.requestId !== requestId) {
         requestReadbackJobs.delete(requestId)
         return
       }
-      if (pendingMode === 'immediate') {
+      if (forceTrailingImmediate) {
         Promise.resolve().then(() => runScheduledRequestReadback(requestId, job))
-      } else if (pendingMode === 'debounced') {
+      } else if (deltaDirty) {
         job.timer = window.setTimeout(() => runScheduledRequestReadback(requestId, job), HALL_REQUEST_READBACK_DEBOUNCE_MS)
       } else {
         requestReadbackJobs.delete(requestId)
@@ -1451,7 +1454,7 @@ export const useHallConversation = ({
     if (disposed || typeof requestId !== 'string' || !requestId || activeRequest.value?.requestId !== requestId) return false
     let job = requestReadbackJobs.get(requestId)
     if (!job) {
-      job = { timer: null, inFlight: null, pendingMode: '', guard: captureGuard() }
+      job = { timer: null, inFlight: null, forceTrailingImmediate: false, deltaDirty: false, guard: captureGuard() }
       requestReadbackJobs.set(requestId, job)
     } else {
       job.guard = captureGuard()
@@ -1459,17 +1462,15 @@ export const useHallConversation = ({
     if (immediate) {
       if (job.timer != null) window.clearTimeout(job.timer)
       job.timer = null
-      if (job.inFlight) job.pendingMode = 'immediate'
-      else runScheduledRequestReadback(requestId, job)
+      job.deltaDirty = false
+      if (job.inFlight || requestReadbackInflight.has(requestId)) job.forceTrailingImmediate = true
+      if (!job.inFlight) runScheduledRequestReadback(requestId, job)
       return true
     }
-    if (job.inFlight) {
-      if (job.pendingMode !== 'immediate') job.pendingMode = 'debounced'
-      return true
-    }
-    if (job.timer == null) {
-      job.timer = window.setTimeout(() => runScheduledRequestReadback(requestId, job), HALL_REQUEST_READBACK_DEBOUNCE_MS)
-    }
+    job.deltaDirty = true
+    if (job.inFlight) return true
+    if (job.timer != null) window.clearTimeout(job.timer)
+    job.timer = window.setTimeout(() => runScheduledRequestReadback(requestId, job), HALL_REQUEST_READBACK_DEBOUNCE_MS)
     return true
   }
 

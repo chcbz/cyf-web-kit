@@ -230,6 +230,47 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     conversation.disposeHallConversation()
   })
 
+  it('forces a post-final readback when an unversioned final joins stale post-error recovery', async () => {
+    const stale = deferred(); const fresh = deferred()
+    let requestId; let streamOptions; let requestLookups = 0
+    const conversation = base({ chatApi: {
+      get: async path => {
+        if (path === '/capabilities') return { data: { data: capabilityV2 } }
+        requestLookups += 1
+        return requestLookups === 1 ? stale.promise : fresh.promise
+      },
+      create: async (_path, body, options) => {
+        requestId = body.requestId
+        streamOptions = options
+        options.onStream(JSON.stringify({ type: 'chat_request_replay', requestId, requestRevision: '1', turnId: 'turn-a',
+          conversationId: '9007199254740993', state: 'QUEUED', stateVersion: '1', targetAgentId: 'a', route: 'CHAT' }))
+        throw new TypeError('transport lost after admission')
+      }
+    } })
+    conversation.conversationId.value = '9007199254740993'
+    conversation.setDraft('post-error final race')
+    const sending = conversation.sendHallMessage()
+    await flushReadbacks()
+    expect(requestLookups).to.equal(1)
+    streamOptions.onStream(JSON.stringify({ type: 'agent_message', requestId, requestRevision: '1', turnId: 'turn-a',
+      dispatchId: 'dispatch-turn-a', targetAgentId: 'a', contextSnapshotId: 'snapshot-turn-a',
+      conversationId: '9007199254740993', conversationGeneration: '1', messageId: '91', finalSeq: '1',
+      content: 'transport外终稿', senderType: 'agent', senderName: 'Agent A', occurredAt: '200' }))
+    stale.resolve({ data: { data: durableRequestView({ requestId, state: 'RUNNING', stateVersion: '1',
+      turns: [durableTurnView({ requestId, turnId: 'turn-a', state: 'QUEUED', stateVersion: '1', lastDeltaSeq: '0' })] }) } })
+    await flushReadbacks(16)
+    expect(requestLookups).to.equal(2)
+    expect(conversation.isConversationBusy.value).to.equal(true)
+    fresh.resolve({ data: { data: durableRequestView({ requestId, state: 'COMPLETED', stateVersion: '2',
+      turns: [durableTurnView({ requestId, turnId: 'turn-a', state: 'PUBLISHED', stateVersion: '2', lastDeltaSeq: '1' })] }) } })
+    expect(await sending).to.equal(false)
+    await flushReadbacks(16)
+    expect(requestLookups).to.equal(2)
+    expect(conversation.activeTurns.value[0]).to.include({ state: 'PUBLISHED', stateVersion: '2' })
+    expect(conversation.isConversationBusy.value).to.equal(false)
+    conversation.disposeHallConversation()
+  })
+
   it('coalesces group final readbacks, stays busy after failure, then converges on one pending rerun', async () => {
     const first = deferred(); const second = deferred(); let requestId; let requestLookups = 0
     const conversation = base({ chatApi: {
@@ -307,39 +348,64 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     conversation.disposeHallConversation()
   })
 
-  it('debounces repeated unversioned deltas to one request readback', async () => {
+  it('uses a true trailing debounce for continuous deltas and reads back once after final', async () => {
     const originalSetTimeout = window.setTimeout; const originalClearTimeout = window.clearTimeout
-    const timers = []; let requestId; let requestLookups = 0
-    window.setTimeout = (callback, delay) => { const timer = { callback, delay, cleared: false }; timers.push(timer); return timer }
+    const timers = []; let now = 0; let requestId; let requestLookups = 0
+    window.setTimeout = (callback, delay) => {
+      const timer = { callback, delay, dueAt: now + delay, cleared: false }
+      timers.push(timer)
+      return timer
+    }
     window.clearTimeout = timer => { if (timer) timer.cleared = true }
+    const advance = async milliseconds => {
+      const target = now + milliseconds
+      while (true) {
+        const timer = timers.filter(item => !item.cleared && item.dueAt <= target).sort((left, right) => left.dueAt - right.dueAt)[0]
+        if (!timer) break
+        now = timer.dueAt
+        timer.cleared = true
+        timer.callback()
+        await flushReadbacks()
+      }
+      now = target
+    }
     let conversation
     try {
       conversation = base({ chatApi: {
         get: async path => {
           if (path === '/capabilities') return { data: { data: capabilityV2 } }
           requestLookups += 1
-          return { data: { data: durableRequestView({ requestId, state: 'RUNNING', stateVersion: '1',
-            turns: [durableTurnView({ requestId, turnId: 'turn-a', state: 'QUEUED', stateVersion: '1', lastDeltaSeq: '3' })] }) } }
+          return { data: { data: durableRequestView({ requestId, state: 'COMPLETED', stateVersion: '2',
+            turns: [durableTurnView({ requestId, turnId: 'turn-a', state: 'PUBLISHED', stateVersion: '2', lastDeltaSeq: '12' })] }) } }
         },
         create: async (_path, body, options) => {
           requestId = body.requestId
           options.onStream(JSON.stringify({ type: 'chat_request_replay', requestId, requestRevision: '1', turnId: 'turn-a',
             conversationId: '9007199254740993', state: 'QUEUED', stateVersion: '1', targetAgentId: 'a', route: 'CHAT' }))
-          for (const deltaSeq of ['1', '2', '3']) options.onStream(JSON.stringify({ type: 'agent_message_delta', requestId,
-            requestRevision: '1', turnId: 'turn-a', dispatchId: 'dispatch-turn-a', targetAgentId: 'a',
-            conversationId: '9007199254740993', conversationGeneration: '1', deltaSeq, content: deltaSeq }))
-          const readbackTimers = timers.filter(timer => timer.delay === 250 && !timer.cleared)
-          expect(readbackTimers).to.have.length(1)
-          readbackTimers[0].callback()
+          for (let sequence = 1; sequence <= 12; sequence += 1) {
+            const deltaSeq = String(sequence)
+            options.onStream(JSON.stringify({ type: 'agent_message_delta', requestId, requestRevision: '1', turnId: 'turn-a',
+              dispatchId: 'dispatch-turn-a', targetAgentId: 'a', conversationId: '9007199254740993',
+              conversationGeneration: '1', deltaSeq, content: deltaSeq }))
+            await advance(100)
+            expect(requestLookups).to.equal(0)
+          }
+          expect(timers.filter(timer => timer.delay === 250 && !timer.cleared)).to.have.length(1)
+          options.onStream(JSON.stringify({ type: 'agent_message', requestId, requestRevision: '1', turnId: 'turn-a',
+            dispatchId: 'dispatch-turn-a', targetAgentId: 'a', contextSnapshotId: 'snapshot-turn-a',
+            conversationId: '9007199254740993', conversationGeneration: '1', messageId: '91', finalSeq: '12',
+            content: 'final-after-deltas', senderType: 'agent', senderName: 'Agent A', occurredAt: '200' }))
           await flushReadbacks()
+          expect(requestLookups).to.equal(1)
           options.onStreamEnd()
         }
       } })
       conversation.conversationId.value = '9007199254740993'
-      conversation.setDraft('delta coalescing')
+      conversation.setDraft('delta trailing debounce')
       await conversation.sendHallMessage()
+      await flushReadbacks()
       expect(requestLookups).to.equal(1)
-      expect(conversation.isConversationBusy.value).to.equal(true)
+      expect(conversation.isConversationBusy.value).to.equal(false)
     } finally {
       conversation?.disposeHallConversation()
       window.setTimeout = originalSetTimeout
